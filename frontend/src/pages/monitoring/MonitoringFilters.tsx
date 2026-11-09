@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, CheckCircle, Search } from 'lucide-react'
 
-// The list search box of both tabs (the list pages' h-12 style); it narrows the rows by name.
-export function MonitoringSearch({ value, onChange, placeholder, testId }: { value: string; onChange: (next: string) => void; placeholder: string; testId: string }) {
+// The list search box of both tabs (the list pages' h-12 style); it narrows the rows by name. className places it: on
+// its own line (the default) or in a row of controls.
+export function MonitoringSearch({ value, onChange, placeholder, testId, className = 'mb-4' }: { value: string; onChange: (next: string) => void; placeholder: string; testId: string; className?: string }) {
   return (
-    <div className="relative mb-4">
+    <div className={`relative ${className}`}>
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
       <input
         type="text"
@@ -31,7 +32,8 @@ interface NamespaceFilterProps {
 
 // NamespaceFilter — the namespace dropdown shared by the Pods tab.
 // Encapsulates the click-outside / open / value logic so the parent
-// only sees value/onChange.
+// only sees value/onChange. It sits in the tab's row of controls at the search box's height and a fixed width; its
+// label, no longer drawn above it, is the button's title and the start of its name, before the namespace shown.
 export function NamespaceFilter({ namespaces, value, onChange }: NamespaceFilterProps) {
   const { t } = useTranslation()
   const [isOpen, setIsOpen] = useState(false)
@@ -56,15 +58,14 @@ export function NamespaceFilter({ namespaces, value, onChange }: NamespaceFilter
         : value
 
   return (
-    <div className="mb-6 overflow-visible">
-      <label className="block text-xs font-semibold text-slate-400 mb-1">
-        {t('monitoring.namespace.label')}
-      </label>
-      <div className="relative w-full md:w-64" ref={containerRef}>
+    <div className="relative w-full md:w-64 shrink-0" ref={containerRef}>
         <button
+          type="button"
           onClick={() => setIsOpen(!isOpen)}
           data-testid="monitoring-namespace"
-          className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
+          aria-label={`${t('monitoring.namespace.label')}: ${label}`}
+          title={t('monitoring.namespace.label')}
+          className="h-12 w-full px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
         >
           <span className="text-sm font-medium truncate min-w-0">{label}</span>
           <ChevronDown
@@ -125,7 +126,6 @@ export function NamespaceFilter({ namespaces, value, onChange }: NamespaceFilter
               ))}
           </div>
         )}
-      </div>
     </div>
   )
 }

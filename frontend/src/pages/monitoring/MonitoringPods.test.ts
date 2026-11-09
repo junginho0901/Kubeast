@@ -192,9 +192,94 @@ describe('numbers a refresh of the Pods tab could not replace', () => {
     expect(chat.current?.data).not.toHaveProperty('refresh_failed')
   })
 
+  // A namespace's pods are a page at a time in a box sized to the screen, as the other lists, so the page does not grow
+  // past it; the cards and the floating chat stay about every pod.
+  describe('with more pods than a screen holds', () => {
+    const PODS = Array.from({ length: 70 }, (_, i) => ({ namespace: 'shop', name: `web-${String(i).padStart(2, '0')}`, cpu: '1m', memory: '1Mi', timestamp: '2026-11-07T03:59:15Z' }))
+    const footer = (html: string) => html.match(/data-testid="monitoring-pod-pager"[\s\S]*?(Showing [^<]+|\d+개 중 [^<]+)/)?.[1] ?? null
+    const listed = (html: string) => [...html.matchAll(/data-testid="monitoring-pod-row"[\s\S]*?(web-\d{2})/g)].map((m) => m[1])
+
+    it('draws one fitted page of pods with the footer counting every pod', () => {
+      const html = render(client(PODS, null))
+      // before the box is measured a fitted page is 12 rows (useAdaptiveRowsPerPage)
+      expect({ pods: listed(html), footer: footer(html) }).toEqual({ pods: PODS.slice(0, 12).map((p) => p.name), footer: 'Showing 1-12 of 70' })
+    })
+
+    it('offers the rows-per-page choice of the other lists, in the screen\'s language', () => {
+      const html = render(client(PODS, null), 'ko')
+      expect({ size: html.includes('data-testid="page-size"'), footer: footer(html) }).toEqual({ size: true, footer: '70개 중 1-12 표시' })
+    })
+
+    it('keeps the cards and the floating chat about every pod', () => {
+      const html = render(client(PODS, null))
+      const number = (label: string) => html.split(label)[1]?.match(/text-2xl[^>]*>([^<]*)</)?.[1]
+      expect(number(en.monitoring.pods.totalPods)).toBe('70')
+      expect(chat.current?.data?.pagination).toMatchObject({ total_count: 70 })
+    })
+  })
+
   it('a first read that fails still shows the failure, with no numbers to keep', () => {
     const html = render(client(null, httpError(503)))
     expect(html).toContain('Failed to load pod metrics')
     expect(html).not.toContain('pod-metrics-refresh-failed')
+  })
+})
+
+// The class of the innermost element that holds every one of the marked elements, read from the markup's tags.
+function innermostHolding(html: string, testIds: string[]): string | null {
+  const stack: { cls: string; found: Set<string> }[] = []
+  for (const m of html.matchAll(/<(\/)?([a-zA-Z][\w-]*)([^>]*?)(\/)?>/g)) {
+    const [, closing, tag, attrs, selfClosing] = m
+    if (closing) {
+      const top = stack.pop()
+      if (!top) continue
+      if (testIds.every((id) => top.found.has(id))) return top.cls
+      top.found.forEach((id) => stack.at(-1)?.found.add(id))
+      continue
+    }
+    const found = new Set(testIds.filter((id) => attrs.includes(`data-testid="${id}"`)))
+    if (selfClosing || /^(input|img|br|hr)$/i.test(tag)) {
+      found.forEach((id) => stack.at(-1)?.found.add(id))
+      continue
+    }
+    stack.push({ cls: attrs.match(/class="([^"]*)"/)?.[1] ?? '', found })
+  }
+  return null
+}
+
+// Above the pod table sit the namespace picker, the search and the three cards: the picker and the search share one
+// row of one height, so the table below keeps more of the screen's rows; nothing they said goes.
+describe('what sits above the pod table', () => {
+  beforeEach(() => {
+    picked.done = false
+    vi.useFakeTimers({ toFake: ['Date'], now: NOW })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+  const heightOf = (html: string, testId: string) =>
+    html.match(new RegExp(`<[^>]*data-testid="${testId}"[^>]*>`))?.[0].match(/class="[^"]*\b(h-\d+)\b/)?.[1] ?? null
+
+  it('puts the namespace picker and the search on one row', () => {
+    const row = innermostHolding(render(client(ROWS, null)), ['monitoring-namespace', 'monitoring-pod-search']) ?? ''
+    expect({ row: /\bflex\b/.test(row), card: /\bcard\b/.test(row) }).toEqual({ row: true, card: false })
+  })
+
+  it('gives the picker and the search box one height, the list search boxes\' h-12', () => {
+    const html = render(client(ROWS, null))
+    expect([heightOf(html, 'monitoring-namespace'), heightOf(html, 'monitoring-pod-search')]).toEqual(['h-12', 'h-12'])
+  })
+
+  it('keeps the picker\'s label in its name, before the namespace it shows, in the screen\'s language', () => {
+    const label = (html: string) => html.match(/<button[^>]*data-testid="monitoring-namespace"[^>]*>/)?.[0].match(/aria-label="([^"]*)"/)?.[1] ?? null
+    expect(label(render(client(ROWS, null)))).toBe(`${en.monitoring.namespace.label}: shop`)
+    picked.done = false
+    expect(label(render(client(ROWS, null), 'ko'))).toBe(`${ko.monitoring.namespace.label}: shop`)
+  })
+
+  it('keeps the three cards with their labels and numbers', () => {
+    const html = render(client(ROWS, null))
+    const number = (label: string) => html.split(label)[1]?.match(/text-2xl[^>]*>([^<]*)</)?.[1]
+    expect([number(en.monitoring.pods.totalPods), number(en.monitoring.pods.totalCpu), number(en.monitoring.pods.totalMemory)]).toEqual(['1', '123m', '45Mi'])
   })
 })

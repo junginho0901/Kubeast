@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect } from '@playwright/test'
+import { pageScroll, pagerRange, readEveryPage } from './list-pages'
 
 // Number check of the Timeline on self: the cards count every event of the window, the list holds the newest 500 of
 // the type chosen — with 520 recent Normal events and 5 Warning events two hours old, the Warning list is those 5,
@@ -141,8 +142,19 @@ test.describe('Number check — Timeline', () => {
     await page.getByTestId('timeline-namespace').click()
     await page.getByRole('button', { name: NS, exact: true }).click()
     await expect(page.getByTestId('timeline-events-capped')).toContainText(new RegExp(`500 of the ${total} events|이벤트 ${total}개 중 최신 500개`))
+    // the list is a page at a time in a box sized to the screen: the footer counts every item the count names, the
+    // rows on screen are the range it says, and the page itself does not scroll
+    const items = Number((await page.getByTestId('timeline-count').innerText()).match(/\d+/)?.[0])
+    await expect.poll(async () => {
+      const range = await pagerRange(page, 'timeline-pager')
+      return { total: range.total, start: range.start, rows: range.end - range.start + 1 - (await page.getByTestId('timeline-row').count()) }
+    }, { timeout: 15_000 }).toEqual({ total: items, start: 1, rows: 0 })
+    expect(await pageScroll(page), 'the page scrolls past the screen').toBeLessThanOrEqual(1)
     await page.getByRole('button', { name: 'Warning', exact: true }).click()
     await expect(page.getByTestId('timeline-count')).toHaveText(new RegExp(`^${warnings} items \\(${warnings} events · 0 rollouts\\)$|^${warnings}개 항목\\(이벤트 ${warnings} · 롤아웃 0\\)$`))
     await expect(page.getByTestId('timeline-events-capped')).toHaveCount(0)
+    // a new filter starts at the first page, and every warning is listed over the pages
+    const listed = await readEveryPage(page, 'timeline-pager', () => page.getByTestId('timeline-row').allInnerTexts())
+    expect({ rows: listed.length, fixture: listed.filter((t) => t.includes('E2EWarning')).length }).toEqual({ rows: warnings, fixture: WARNING })
   })
 })

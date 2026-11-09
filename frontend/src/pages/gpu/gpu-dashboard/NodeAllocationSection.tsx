@@ -7,7 +7,12 @@ import { Link } from 'react-router-dom'
 import { Server, ArrowRight } from 'lucide-react'
 import { nodeStatusBadge, nodeStatusParts } from '@/utils/nodeStatus'
 import type { GPUNodeVendor } from '@/services/api'
+import { ListPager } from '@/components/ListPager'
+import { usePagedItems } from '@/hooks/usePagedItems'
 import { nodeVendorText } from '../gpuNumbers'
+
+// Nodes per page of the section: the dashboard scrolls, so a fixed count (as the drawers' tables) rather than a fit
+const NODE_ALLOCATION_PER_PAGE = 10
 
 type NodeAllocItem = {
   name: string
@@ -29,6 +34,7 @@ interface Props {
 }
 
 export function NodeAllocationSection({ nodeAllocation, nodeReadyCount, nodeNotReadyCount, openDetail, tr }: Props) {
+  const { items: pagedNodes, page, totalPages, total, setPage } = usePagedItems(nodeAllocation, NODE_ALLOCATION_PER_PAGE)
   return (
     <div className="xl:col-span-2 rounded-xl border border-slate-700/50 bg-slate-800/30 p-5">
       <div className="flex items-center justify-between mb-4">
@@ -53,8 +59,9 @@ export function NodeAllocationSection({ nodeAllocation, nodeReadyCount, nodeNotR
         </Link>
       </div>
       {nodeAllocation.length > 0 ? (
+        <>
         <div className="space-y-3">
-          {nodeAllocation.map((node) => {
+          {pagedNodes.map((node) => {
             const usedPct = node.gpu_allocatable > 0
               ? Math.round((node.gpu_used / node.gpu_allocatable) * 100)
               : 0
@@ -96,6 +103,10 @@ export function NodeAllocationSection({ nodeAllocation, nodeReadyCount, nodeNotR
             )
           })}
         </div>
+        <div className="mt-3">
+          <ListPager currentPage={page} totalPages={totalPages} total={total} rowsPerPage={NODE_ALLOCATION_PER_PAGE} onPageChange={setPage} showPageSize={false} testId="gpu-node-allocation-pager" />
+        </div>
+        </>
       ) : (
         <p className="text-sm text-slate-400">{tr('gpuDashboardPage.nodeAllocation.empty', 'No GPU nodes available.')}</p>
       )}

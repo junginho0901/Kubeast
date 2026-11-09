@@ -5,7 +5,12 @@
 // status 분포 전부 (count 내림차순) — bar 색상 status 별 분기.
 
 import { Box } from 'lucide-react'
+import { ListPager } from '@/components/ListPager'
+import { usePagedItems } from '@/hooks/usePagedItems'
 import { gpuPodStatusBar } from '../gpuNumbers'
+
+// Nodes per page of GPU Usage by Node: the panel sits above the table, so a fixed count (as the drawers' tables)
+const NODE_USAGE_PER_PAGE = 10
 
 interface NodeUsageEntry {
   podCount: number
@@ -25,6 +30,7 @@ export function GPUPodsCharts({
   total,
   tr,
 }: Props) {
+  const { items: pagedNodes, page, totalPages, total: nodeTotal, setPage } = usePagedItems(nodeGpuUsage, NODE_USAGE_PER_PAGE)
   if (nodeGpuUsage.length === 0 && topStatuses.length === 0) return null
 
   return (
@@ -38,7 +44,7 @@ export function GPUPodsCharts({
             <Box className="w-4 h-4 text-slate-400" />
           </div>
           <div className="space-y-3">
-            {nodeGpuUsage.map(([node, info]) => (
+            {pagedNodes.map(([node, info]) => (
               <div key={node} className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-2.5" data-testid="gpu-pods-node-usage" data-node={node}>
                 <div>
                   <span className="text-sm font-medium text-ink">{node || tr('gpuPods.noNode', 'Not scheduled')}</span>
@@ -51,6 +57,9 @@ export function GPUPodsCharts({
                 </span>
               </div>
             ))}
+          </div>
+          <div className="mt-3">
+            <ListPager currentPage={page} totalPages={totalPages} total={nodeTotal} rowsPerPage={NODE_USAGE_PER_PAGE} onPageChange={setPage} showPageSize={false} testId="gpu-pods-node-usage-pager" />
           </div>
         </div>
       )}

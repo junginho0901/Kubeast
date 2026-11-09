@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { readEveryPage } from './list-pages'
 
 // Number check of the node usage numbers (Monitoring's Nodes tab, the dashboard's top nodes): each node's CPU,
 // memory and their percents are what `kubectl top nodes` prints from the same metrics — CPU rounded up to a
@@ -125,10 +126,12 @@ test.describe('Number check — node usage as kubectl top prints it', () => {
     const answer = page.waitForResponse((r) => r.url().includes('/api/v1/cluster/metrics/nodes') && r.url().includes(`cluster=${CLUSTER}`))
     await page.goto(`${MONITORING.path}?cluster=${MONITORING.cluster}`)
     const drawn = (await (await answer).json()) as NodeRow[]
+    // each node's row, on whichever page of the list it is
     for (const n of drawn) {
-      const card = page.getByTestId('monitoring-node').filter({ hasText: n.name })
-      await expect(card).toContainText(n.cpu_percent ?? '-')
-      await expect(card).toContainText(n.memory_percent ?? '-')
+      const card = page.getByTestId('monitoring-node').filter({ has: page.locator('td:first-child', { hasText: new RegExp(`^\\s*${n.name}\\s*$`) }) })
+      await page.getByTestId('monitoring-node-search').fill(n.name)
+      await expect(card.getByTestId('monitoring-node-cpu-pct')).toHaveText(n.cpu_percent ?? '-')
+      await expect(card.getByTestId('monitoring-node-memory-pct')).toHaveText(n.memory_percent ?? '-')
     }
   })
 
@@ -146,11 +149,13 @@ test.describe('Number check — node usage as kubectl top prints it', () => {
     await page.goto(`${MONITORING.path}?cluster=${MONITORING.cluster}`)
     const total = metrics.length + 1
     const cards = page.getByTestId('monitoring-node')
-    await expect(cards).toHaveCount(total)
-    await expect(cards.last()).toContainText(joined)
-    await expect(cards.last()).not.toContainText('%')
-    await expect(page.getByText(new RegExp(`^(Total ${total} nodes|총 ${total}개 Node)$`))).toHaveCount(1)
     await expect(page.getByTestId('monitoring-node-pager')).toContainText(new RegExp(`of ${total}(?!\\d)|(?<!\\d)${total}개 중`))
+    // every node once over the pages of the list, the one without a sample last
+    const rows = await readEveryPage(page, 'monitoring-node-pager', () => cards.evaluateAll((els) => els.map((e) => (e as HTMLElement).innerText)))
+    expect(rows).toHaveLength(total)
+    expect(rows[total - 1]).toContain(joined)
+    expect(rows[total - 1]).not.toContain('%')
+    await expect(page.getByText(new RegExp(`^(Total ${total} nodes|총 ${total}개 Node)$`))).toHaveCount(1)
   })
 
   test('the Pods tab shows the limits the kubelet gave each pod cgroup', async ({ page, request }) => {
