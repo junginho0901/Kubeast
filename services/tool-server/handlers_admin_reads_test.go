@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -566,9 +567,36 @@ const (
 	hygieneSignOffOld = `{"id":"h1","cluster":"c1","reviewed_by_email":"bob@example.com","reviewed_at":"2026-08-01T00:00:00Z","note":"","counts":{"critical":4,"warning":5,"info":6,"exempt":1}}`
 )
 
+// fakeK8sServiceWithTotal is fakeK8sService whose answer also says how many rows there are (X-Kubeast-Total; "" sends none).
+func fakeK8sServiceWithTotal(t *testing.T, respond func(r *http.Request) (status int, body, total string)) *[]*http.Request {
+	t.Helper()
+	var seen []*http.Request
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r)
+		status, body, total := respond(r)
+		if total != "" {
+			w.Header().Set("X-Kubeast-Total", total)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
+	}))
+	orig := k8sServiceURL
+	k8sServiceURL = srv.URL
+	t.Cleanup(func() { k8sServiceURL = orig; srv.Close() })
+	return &seen
+}
+
+// rowCount is the X-Kubeast-Total of a route that answers every row it has.
+func rowCount(body string) string {
+	var rows []interface{}
+	_ = json.Unmarshal([]byte(body), &rows)
+	return strconv.Itoa(len(rows))
+}
+
 func TestHygieneHistory_TheClustersSignOffsNewestFirst(t *testing.T) {
-	seen := fakeK8sService(t, func(r *http.Request) (int, string) {
-		return 200, listWithCredentials(strings.TrimSuffix(hygieneSignOffNew, "}")+`,"reviewed_by":"u1"}`, hygieneSignOffOld)
+	seen := fakeK8sServiceWithTotal(t, func(r *http.Request) (int, string, string) {
+		return 200, listWithCredentials(strings.TrimSuffix(hygieneSignOffNew, "}")+`,"reviewed_by":"u1"}`, hygieneSignOffOld), "2"
 	})
 	out, err := handleHygieneHistory(ctxFor("c1"), map[string]interface{}{}, bearer())
 	if err != nil {
@@ -576,36 +604,23 @@ func TestHygieneHistory_TheClustersSignOffsNewestFirst(t *testing.T) {
 	}
 	assertNoCredentials(t, "hygiene_history", out)
 	req := (*seen)[0]
-	if req.Method != http.MethodGet || req.URL.Path != "/api/v1/hygiene/history" || req.URL.Query().Get("cluster") != "c1" || req.Header.Get("Authorization") != "Bearer user-token" || req.URL.Query().Has("limit") {
+	q := req.URL.Query()
+	if req.Method != http.MethodGet || req.URL.Path != "/api/v1/hygiene/history" || q.Get("cluster") != "c1" || req.Header.Get("Authorization") != "Bearer user-token" || q.Get("limit") != "100" || q.Get("offset") != "0" {
 		t.Fatalf("request: %s %s %s", req.Method, req.URL.Path, req.URL.RawQuery)
 	}
 	m := decode(t, out)
 	assertSame(t, "rows", m["rows"], "["+hygieneSignOffNew+","+hygieneSignOffOld+"]")
-	if m["cluster"] != "c1" || m["returned"] != float64(2) {
+	if m["cluster"] != "c1" || m["total"] != float64(2) || m["returned"] != float64(2) || m["offset"] != float64(0) {
 		t.Errorf("head: %v", m)
 	}
-	if _, has := m["truncated"]; has {
-		t.Errorf("not cut: %v", m["truncated"])
+	if _, has := m["next_offset"]; has {
+		t.Errorf("every sign-off came, yet a next page: %v", m["next_offset"])
+	}
+	if strings.Index(out, `"rows":`) < strings.Index(out, `"total":`) {
+		t.Errorf("rows before the place: %.200s", out)
 	}
 
-	seen = fakeK8sService(t, func(r *http.Request) (int, string) { return 200, "[" + hygieneSignOffNew + "]" })
-	out, _ = handleHygieneHistory(ctxFor("c1"), map[string]interface{}{"limit": 1}, bearer())
-	if (*seen)[0].URL.Query().Get("limit") != "1" {
-		t.Errorf("limit: %s", (*seen)[0].URL.RawQuery)
-	}
-
-	// The route answers the newest 100: as many rows as that may not be all of them.
-	rows := make([]string, hygieneHistoryCap)
-	for i := range rows {
-		rows[i] = hygieneSignOffOld
-	}
-	fakeK8sService(t, func(r *http.Request) (int, string) { return 200, "[" + strings.Join(rows, ",") + "]" })
-	out, _ = handleHygieneHistory(ctxFor("c1"), nil, bearer())
-	if m := decode(t, out); m["truncated"] != true || m["returned"] != float64(hygieneHistoryCap) {
-		t.Errorf("the newest only: %v %v", m["truncated"], m["returned"])
-	}
-
-	fakeK8sService(t, func(r *http.Request) (int, string) { return 200, "[]" })
+	fakeK8sServiceWithTotal(t, func(r *http.Request) (int, string, string) { return 200, "[]", "0" })
 	out, _ = handleHygieneHistory(ctxFor("c1"), nil, bearer())
 	m = decode(t, out)
 	assertSame(t, "none", m["rows"], "[]")
@@ -625,14 +640,49 @@ func TestHygieneHistory_TheClustersSignOffsNewestFirst(t *testing.T) {
 	}
 }
 
+// The Past sign-offs tab pages on the server and its footer says how many there are: the tool reads the same page and count.
+func TestHygieneHistory_PagesAsThePastSignOffsTabDoes(t *testing.T) {
+	seen := fakeK8sServiceWithTotal(t, func(r *http.Request) (int, string, string) { return 200, "[" + hygieneSignOffOld + "]", "130" })
+	out, err := handleHygieneHistory(ctxFor("c1"), args{"limit": 12, "offset": 24}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q := (*seen)[0].URL.Query(); q.Get("limit") != "12" || q.Get("offset") != "24" {
+		t.Errorf("page asked: %s", (*seen)[0].URL.RawQuery)
+	}
+	m := decode(t, out)
+	if m["total"] != float64(130) || m["returned"] != float64(1) || m["offset"] != float64(24) || m["next_offset"] != float64(25) {
+		t.Errorf("place: total %v returned %v offset %v next_offset %v", m["total"], m["returned"], m["offset"], m["next_offset"])
+	}
+
+	// No limit, or one past what the route answers at most, is the route's most; an offset below zero is the first page.
+	for _, given := range []args{{}, {"limit": 0}, {"limit": hygieneHistoryCap + 1}, {"limit": -5, "offset": -3}} {
+		seen = fakeK8sServiceWithTotal(t, func(r *http.Request) (int, string, string) { return 200, "[]", "0" })
+		if _, err := handleHygieneHistory(ctxFor("c1"), given, bearer()); err != nil {
+			t.Fatal(err)
+		}
+		if q := (*seen)[0].URL.Query(); q.Get("limit") != "100" || q.Get("offset") != "0" {
+			t.Errorf("%v asked %s", given, (*seen)[0].URL.RawQuery)
+		}
+	}
+}
+
+// An answer that does not say how many there are is an error, as on the screen: the rows that came are not the count.
+func TestHygieneHistory_AnAnswerWithoutTheCountIsAnError(t *testing.T) {
+	fakeK8sService(t, func(r *http.Request) (int, string) { return 200, "[" + hygieneSignOffNew + "]" })
+	if _, err := handleHygieneHistory(ctxFor("c1"), nil, bearer()); err == nil || !strings.Contains(err.Error(), "X-Kubeast-Total") {
+		t.Errorf("err = %v", err)
+	}
+}
+
 // hygieneRoutes answers the sign-offs and the settings, each from its own route.
 func hygieneRoutes(t *testing.T, historyStatus int, history string, configStatus int, config string) *[]*http.Request {
 	t.Helper()
-	return fakeK8sService(t, func(r *http.Request) (int, string) {
+	return fakeK8sServiceWithTotal(t, func(r *http.Request) (int, string, string) {
 		if r.URL.Path == "/api/v1/hygiene/config" {
-			return configStatus, config
+			return configStatus, config, ""
 		}
-		return historyStatus, history
+		return historyStatus, history, rowCount(history)
 	})
 }
 

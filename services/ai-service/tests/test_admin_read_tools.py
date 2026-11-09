@@ -122,7 +122,7 @@ def test_a_grant_limited_to_namespaces_is_refused(name):
     ("audit_integrity", {"bogus": 1}, {}),
     ("hygiene_history", {"review_id": "h1", "severity": "critical", "check": "pss-level", "bogus": 1},
      {"review_id": "h1", "severity": "critical", "check": "pss-level"}),
-    ("hygiene_history", {"limit": 10}, {"limit": 10}),
+    ("hygiene_history", {"limit": 10, "offset": 20, "bogus": 1}, {"limit": 10, "offset": 20}),
     ("investigations", {"status": "done", "cluster_id": "alpha", "limit": 5, "offset": 5, "bogus": 1},
      {"status": "done", "cluster_id": "alpha", "limit": 5, "offset": 5}),
     ("investigations", {"investigation_id": "inv-1", "report": "text"}, {"investigation_id": "inv-1"}),

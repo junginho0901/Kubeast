@@ -70,6 +70,18 @@ describe('Settings → Cluster access', () => {
     expect(html()).toMatch(/data-testid="cluster-access-rows-pages"><div[^>]*><span>1-10 \/ 12<\/span>/)
   })
 
+  it('leaves nothing under the clusters while they fit one page, so the list ends on its last cluster', () => {
+    const three = clusters.slice(0, 3)
+    const markup = render(createElement(ClusterAccessSection, { me }), [
+      [['access-requests', 'config'], { enabled: true, max_hours: 8, roles: ['Write'], help_text: '', help_url: '' }],
+      [['clusters-accessible'], three],
+      [['access-requests', 'mine'], []],
+      [myRequestsKey(myRequestsQuery(1)), { items: [], total: 0 }],
+    ])
+    expect(testIds(markup, 'account-cluster-').filter((id) => /^c\d+$/.test(id))).toEqual(['c00', 'c01', 'c02'])
+    expect(markup.match(/data-testid="cluster-access-rows-pages"[^>]*>[^<]*<\/div>/g)).toBeNull()
+  })
+
   it('My requests shows the page the server sent and counts every request', () => {
     expect(testIds(html(), 'my-access-request-')).toEqual(requests.map((r) => r.id))
     expect(html()).toMatch(/data-testid="my-access-requests-pages"><div[^>]*><span>1-10 \/ 12<\/span>/)

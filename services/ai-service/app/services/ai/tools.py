@@ -1425,8 +1425,9 @@ ADMIN_READ_TOOLS: List[Dict] = [
         "function": {
             "name": "hygiene_history",
             "description": (
-                "This cluster's hygiene sign-offs (Cluster → Cluster Hygiene → Past sign-offs; permission resource.hygiene.scan on the cluster or admin.hygiene.read), newest first, at most 100: who "
-                "signed, when, the note and the counts per severity. review_id opens the report one stored, with severity and check filtering its findings as "
+                "This cluster's hygiene sign-offs (Cluster → Cluster Hygiene → Past sign-offs; permission resource.hygiene.scan on the cluster or admin.hygiene.read), newest first: who "
+                "signed, when, the note and the counts per severity. They come a page at a time, as on the tab: total, returned, next_offset; pass offset for the next page "
+                "(limit default and max 100). review_id opens the report one stored, with severity and check filtering its findings as "
                 "in hygiene. The list also says enabled and interval_days, how often a sign-off is due. The hygiene tool answers the report as it is now. "
                 "{\"status\":\"unavailable\"} means the report is off (features.hygiene.enabled)."
             ),
@@ -1437,6 +1438,7 @@ ADMIN_READ_TOOLS: List[Dict] = [
                     "severity": {"type": "string", "description": "With review_id: only findings of this severity (critical, warning or info)"},
                     "check": {"type": "string", "description": "With review_id: only findings of this check id"},
                     "limit": {"type": "integer", "description": "Sign-offs to return (default and max 100)"},
+                    "offset": {"type": "integer", "description": "Skip this many sign-offs (paging)"},
                 },
             },
         },
@@ -1491,7 +1493,7 @@ ADMIN_READ_TOOLS: List[Dict] = [
                 "That a terminal session was recorded and its details (Admin → Session recordings; permission admin.sessions.read), newest first and of every cluster unless "
                 "cluster_id names one: kind (exec or node-shell), user_email, cluster, namespace, target, container, started_at, ended_at, kept_bytes (the size the screen shows: what is kept of it), "
                 "bytes (what was recorded), uploaded_bytes, parts, status (recording, uploading, uploaded, interrupted), truncated and last_error. enabled says whether terminals are recorded now. Its details, never what the terminal "
-                "showed: that opens only on the screen, where each view is audited. There is no total: next_offset says there is more."
+                "showed: that opens only on the screen, where each view is audited. Rows come a page at a time, as on the screen: total (every match), returned, next_offset."
             ),
             "parameters": {
                 "type": "object",

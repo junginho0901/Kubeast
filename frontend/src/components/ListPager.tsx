@@ -8,7 +8,7 @@ interface Props {
   total: number
   rowsPerPage: number
   onPageChange: (page: number) => void
-  /** Off for tables with a fixed page size (admin pages that scroll with the page) */
+  /** Off for a fixed page size: a section of a page that scrolls by design (the GPU overview, chart panels) or a window's list */
   showPageSize?: boolean
   testId?: string
 }

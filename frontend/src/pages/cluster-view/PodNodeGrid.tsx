@@ -71,7 +71,12 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod }: 
       )}
 
       {entries.length > 0 ? (
-        <div ref={listRef} style={{ height: virtualizer.getTotalSize(), position: 'relative' }} data-testid="cluster-view-nodes">
+        <div
+          ref={listRef}
+          style={{ height: virtualizer.getTotalSize(), position: 'relative' }}
+          data-testid="cluster-view-nodes"
+          data-list-bounded="the node map's boxes: drawn as they near the screen, the whole cluster at a glance, not a list to page"
+        >
           {virtualizer.getVirtualItems().map((row) => (
             <div
               key={row.key}

@@ -38,20 +38,20 @@ func assertNoRecordingContent(t *testing.T, out string) {
 	}
 }
 
-// recordingRoutes answers the Session recordings routes; a read of what the terminal showed fails the test.
+// recordingRoutes answers the Session recordings routes, the list with its count; a read of what the terminal showed fails the test.
 func recordingRoutes(t *testing.T, listStatus int, list string, configStatus int, config string) *[]*http.Request {
 	t.Helper()
-	return fakeK8sService(t, func(r *http.Request) (int, string) {
+	return fakeK8sServiceWithTotal(t, func(r *http.Request) (int, string, string) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/cast"):
 			t.Errorf("read what the terminal showed: %s", r.URL)
-			return 200, `fake-terminal-output`
+			return 200, `fake-terminal-output`, ""
 		case r.URL.Path == "/api/v1/recordings/config":
-			return configStatus, config
+			return configStatus, config, ""
 		case r.URL.Path == "/api/v1/recordings":
-			return listStatus, list
+			return listStatus, list, rowCount(list)
 		}
-		return 404, `{"detail":"recording not found"}`
+		return 404, `{"detail":"recording not found"}`, ""
 	})
 }
 
@@ -68,12 +68,12 @@ func TestSessionRecordings_ListsTheDetailsTheScreenListsAcrossClusters(t *testin
 	if _, filtered := list.URL.Query()["cluster"]; filtered {
 		t.Errorf("the list was narrowed to a cluster: %s", list.URL.RawQuery)
 	}
-	if list.URL.Query().Get("limit") != "26" || list.URL.Query().Get("offset") != "" {
-		t.Errorf("a page and one row past it, as the screen asks: %s", list.URL.RawQuery)
+	if list.URL.Query().Get("limit") != "25" || list.URL.Query().Get("offset") != "0" {
+		t.Errorf("one page, as the screen asks: %s", list.URL.RawQuery)
 	}
 	m := decode(t, out)
 	assertSame(t, "rows", m["rows"], "["+recordingRowAShown+","+recordingRowBShown+"]")
-	if m["returned"] != float64(2) || m["offset"] != float64(0) || m["next_offset"] != nil || m["enabled"] != true {
+	if m["total"] != float64(2) || m["returned"] != float64(2) || m["offset"] != float64(0) || m["next_offset"] != nil || m["enabled"] != true {
 		t.Errorf("place: %v", m)
 	}
 	if strings.Index(out, `"rows":`) < strings.Index(out, `"returned":`) {
@@ -84,20 +84,31 @@ func TestSessionRecordings_ListsTheDetailsTheScreenListsAcrossClusters(t *testin
 	}
 }
 
-func TestSessionRecordings_ThereIsNoTotalSoOneRowPastThePageSaysThereIsMore(t *testing.T) {
-	seen := recordingRoutes(t, 200, "["+recordingRowA+","+recordingRowB+"]", 200, `{"enabled":true}`)
+// The screen's footer says how many recordings match (X-Kubeast-Total): the tool reads the same page and count.
+func TestSessionRecordings_PagesWithTheCountTheScreensFooterSays(t *testing.T) {
+	seen := fakeK8sServiceWithTotal(t, func(r *http.Request) (int, string, string) {
+		if r.URL.Path == "/api/v1/recordings/config" {
+			return 200, `{"enabled":true}`, ""
+		}
+		return 200, "[" + recordingRowA + "]", "5"
+	})
 	out := runTool(t, ctxWithPayload("self", holderOf()), "session_recordings", args{"limit": 1, "offset": 3})
 	q := (*seen)[0].URL.Query()
-	if q.Get("limit") != "2" || q.Get("offset") != "3" {
+	if q.Get("limit") != "1" || q.Get("offset") != "3" {
 		t.Errorf("query: %s", (*seen)[0].URL.RawQuery)
 	}
 	m := decode(t, out)
 	assertSame(t, "rows", m["rows"], "["+recordingRowAShown+"]")
-	if m["returned"] != float64(1) || m["offset"] != float64(3) || m["next_offset"] != float64(4) {
+	if m["total"] != float64(5) || m["returned"] != float64(1) || m["offset"] != float64(3) || m["next_offset"] != float64(4) {
 		t.Errorf("place: %v", m)
 	}
-	if _, has := m["total"]; has {
-		t.Errorf("the route counts nothing, so there is no total: %v", m["total"])
+}
+
+// An answer that does not say how many match is an error, as on the screen: the rows that came are not the count.
+func TestSessionRecordings_AnAnswerWithoutTheCountIsAnError(t *testing.T) {
+	fakeK8sService(t, func(r *http.Request) (int, string) { return 200, "[" + recordingRowA + "]" })
+	if _, err := handleSessionRecordings(ctxWithPayload("self", holderOf()), args{}, bearer()); err == nil || !strings.Contains(err.Error(), "X-Kubeast-Total") {
+		t.Errorf("err = %v", err)
 	}
 }
 

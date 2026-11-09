@@ -195,6 +195,7 @@ AI 도구로 한 exec는 터미널이 아니라 명령 하나와 그 결과이�
 - **다시보기**: Admin → Session recordings(권한 `admin.sessions.read`)에서 재생하거나 `.cast`·텍스트 사본을 내려받을 수 있고, Audit Logs의 exec 행에서도 재생할 수 있습니다.
   녹화를 열 때마다 `admin.session.read`가 감사 로그에 남습니다.
   이 권한은 다른 관리 권한과 달리, 받은 권한이 없는 클러스터까지 모든 클러스터의 녹화에 닿습니다. 감사 담당의 일이 클러스터를 넘기 때문입니다. 녹화에는 터미널에 찍힌 내용이 그대로 있고 Secret 값도 있을 수 있으니, 그 클러스터들에 접근을 주듯 주세요.
+  목록은 한 쪽씩 옵니다(`GET /api/v1/cluster/recordings`, `limit`·`offset`). 그 답의 `X-Kubeast-Total` 헤더가 거른 조건에 맞는 녹화 수이고, 목록 꼬리표와 AI 도구 `session_recordings`가 이 수를 보여 줍니다.
 - **재생기와 CSP**: 재생기(asciinema-player)는 터미널을 WebAssembly로 돌립니다.
   그래서 게이트웨이가 보내는 CSP의 `script-src`에는 `'unsafe-eval'`이 아닌 `'wasm-unsafe-eval'`이 들어 있습니다(`helm/kubeast/files/nginx.conf`).
   앞단의 Ingress나 프록시가 CSP 헤더를 덮어쓴다면 같은 값을 허용해야 재생됩니다. 이 값이 빠지면 재생기가 ▶ 버튼과 `--:--`에서 멈춥니다.

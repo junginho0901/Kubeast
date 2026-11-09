@@ -135,6 +135,24 @@
       "pr": "#632"
     },
     {
+      "route": "^/api/v1/auth/access-requests$",
+      "cell": "^\\$header\\.x-kubeast-total$|^\\$\\.\\$(length|order)$|^\\$\\[[^\\]]+\\]\\.(id|user_id|user_email|user_name|cluster_id|cluster_name|role|duration_minutes|reason|status|created_at|decided_by|decided_by_email|decided_at|decision_note|expires_at|ended_at|end_reason)$|^\\$\\[[^\\]]+\\]\\.namespaces(\\.\\$length$|\\.\\$order$|\\[)",
+      "why": "Settings → My requests pages on the server and says its total (limit, offset, X-Kubeast-Total), where v0.7.5 ignored both and sent the newest 50, so the rows past the page are in the old answer only.",
+      "pr": "#745"
+    },
+    {
+      "route": "^/api/v1/cluster/recordings$",
+      "cell": "^\\$header\\.x-kubeast-total$",
+      "why": "Session recordings says how many recordings match the filter, which the list's footer shows.",
+      "pr": "#746"
+    },
+    {
+      "route": "^/api/v1/cluster/hygiene/history$",
+      "cell": "^\\$header\\.x-kubeast-total$|^\\$\\.\\$(length|order)$|^\\$\\[[^\\]]+\\]\\.(id|cluster|reviewed_by|reviewed_by_email|reviewed_at|note)$|^\\$\\[[^\\]]+\\]\\.counts\\.",
+      "why": "Past sign-offs page on the server (offset) and say how many the cluster keeps, where v0.7.5 ignored the offset and sent the newest page again.",
+      "pr": "#746"
+    },
+    {
       "route": "^/api/v1/auth/admin/audit-logs$",
       "cell": "^\\$\\.(as_of|export_limit)$",
       "why": "Audit log pages keep the first read (as_of) and say the CSV's limit.",

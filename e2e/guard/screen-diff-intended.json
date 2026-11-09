@@ -6,6 +6,11 @@
       "pr": "#696"
     },
     {
+      "screen": "^(default|dark|light) · drawer Service \\(namespace under test\\)$",
+      "why": "Endpoint Status lists the ready and not ready addresses under headings of their own, ten a page, with None for none instead of a dash, and Settings behind the drawer has the Node Shell card.",
+      "pr": "#696, #747"
+    },
+    {
       "screen": "^(default|dark|light) · drawer (ClusterRole|ClusterRoleBinding|ConfigMap|CronJob|CustomResourceDefinition|CustomResourceInstance|DaemonSet|Deployment|Endpoints|HorizontalPodAutoscaler|IngressClass|Lease|LimitRange|MutatingAdmissionPolicy|MutatingWebhookConfiguration|Namespace|PersistentVolume|PersistentVolumeClaim|PriorityClass|ReplicaSet|ResourceQuota|Role|RoleBinding|RuntimeClass|Secret|Service|StatefulSet|StorageClass|ValidatingAdmissionPolicy|ValidatingWebhookConfiguration|VolumeAttachment) \\([^)]+\\)$",
       "why": "The drawer opens over Settings, whose new Node Shell card shows at the bottom left of the drawer.",
       "pr": "#696"
@@ -41,14 +46,39 @@
       "pr": "#692, #696, #743"
     },
     {
-      "screen": "^(default|dark|light) · /admin/(access-requests|access-review|ai-models|ai-usage|audit|investigations|organizations|roles|session-recordings|users) on (default|self|test2)$",
+      "screen": "^(default|dark|light) · /admin/(access-requests|ai-usage|roles|users) on (default|self|test2)$",
+      "why": "The list fits the screen with its footer, which now offers the rows-per-page choice, and Cluster Hygiene and Node Shell left the sidebar's Admin group, so the entries after them move up.",
+      "pr": "#696, #745, #746"
+    },
+    {
+      "screen": "^(default|dark|light) · /admin/audit on (default|self|test2)$",
+      "why": "The log fits the screen with its footer, whose rows-per-page choice takes the place of the filters' page size, and Cluster Hygiene and Node Shell left the sidebar's Admin group, so the entries after them move up.",
+      "pr": "#696, #746"
+    },
+    {
+      "screen": "^(default|dark|light) · /admin/(investigations|session-recordings) on (default|self|test2)$",
+      "why": "The list fits the screen with the footer every list has, rows-per-page choice included, in place of its own page buttons, and Cluster Hygiene and Node Shell left the sidebar's Admin group, so the entries after them move up.",
+      "pr": "#696, #746"
+    },
+    {
+      "screen": "^(default|dark|light) · /admin/access-review on (default|self|test2)$",
+      "why": "Each tab of the report and the past reviews page in a list that fits the screen, the sign-off moved from under the table to a header button that opens a window, and Cluster Hygiene and Node Shell left the sidebar's Admin group, so the entries after them move up.",
+      "pr": "#696, #745"
+    },
+    {
+      "screen": "^(default|dark|light) · /admin/organizations on (default|self|test2)$",
+      "why": "Teams are a table that fits the screen with a list footer instead of a column of boxes, and Cluster Hygiene and Node Shell left the sidebar's Admin group, so the entries after them move up.",
+      "pr": "#696, #745"
+    },
+    {
+      "screen": "^(default|dark|light) · /admin/ai-models on (default|self|test2)$",
       "why": "Cluster Hygiene and Node Shell left the sidebar's Admin group, so the entries after them move up.",
       "pr": "#696"
     },
     {
       "screen": "^(default|dark|light) · /admin/clusters on (default|self|test2)$",
-      "why": "Each cluster's Health has its check time under it, which makes the rows taller and wraps Mode and Created by, and the Admin group no longer lists Cluster Hygiene and Node Shell.",
-      "pr": "#695, #696"
+      "why": "Each cluster's Health has its check time under it, which makes the rows taller and wraps Mode and Created by, the list fits the screen with the rows-per-page choice in its footer, and the Admin group no longer lists Cluster Hygiene and Node Shell.",
+      "pr": "#695, #696, #745"
     },
     {
       "screen": "^(default|dark|light) · /cluster/(mutatingadmissionpolicies|mutatingwebhookconfigurations|namespaces|nodes|priorityclasses|runtimeclasses|validatingadmissionpolicies|validatingwebhookconfigurations) on (default|self|test2)$",
@@ -57,8 +87,18 @@
     },
     {
       "screen": "^(default|dark|light) · /cluster/hygiene on (default|self|test2)$",
-      "why": "Cluster Hygiene moved to this address in the Cluster group, where the compared build answers Page not found.",
-      "pr": "#696"
+      "why": "Cluster Hygiene moved to this address in the Cluster group, where the compared build answers Page not found, and its findings and past sign-offs now fit the screen with the sign-off in a window.",
+      "pr": "#696, #746"
+    },
+    {
+      "screen": "^(default|dark|light) · /timeline on (default|self|test2)$",
+      "why": "Change History shows its events a page at a time in a box that fits the screen, with the list footer in place of Load more.",
+      "pr": "#748"
+    },
+    {
+      "screen": "^(default|dark|light) · /monitoring on (default|self|test2)$",
+      "why": "Monitoring fits its tab to the screen, and the Nodes tab lists each node as a table row with usage bars instead of a card, with the rows-per-page choice in its footer.",
+      "pr": "#748"
     },
     {
       "screen": "^(default|dark|light) · /custom-resources/instances on (default|self|test2)$",
@@ -67,8 +107,8 @@
     },
     {
       "screen": "^(default|dark|light) · /gpu/dashboard on test2$",
-      "why": "A line says the device plugin is not under the names Kubeast looks for, and a node's GPU memory carries its unit, MiB.",
-      "pr": "#694"
+      "why": "A line says the device plugin is not under the names Kubeast looks for, a node's GPU memory carries its unit, MiB, and Node allocation and Real-time GPU show their nodes and hosts a page at a time with a list footer.",
+      "pr": "#694, #748"
     },
     {
       "screen": "^(default|dark|light) · /gpu/nodes on test2$",
