@@ -30,6 +30,8 @@ type Store interface {
 	Create(ctx context.Context, r *Review) error
 	// List returns a cluster's sign-offs, newest first, without snapshots.
 	List(ctx context.Context, cluster string, limit int) ([]Review, error)
+	// Page returns limit sign-offs after offset, newest first, without snapshots, and how many the cluster has.
+	Page(ctx context.Context, cluster string, limit, offset int) ([]Review, int, error)
 	Get(ctx context.Context, cluster, id string) (*Review, error)
 }
 
@@ -46,9 +48,26 @@ func (s *pgStore) Create(ctx context.Context, r *Review) error {
 }
 
 func (s *pgStore) List(ctx context.Context, cluster string, limit int) ([]Review, error) {
+	return s.list(ctx, cluster, limit, 0)
+}
+
+func (s *pgStore) Page(ctx context.Context, cluster string, limit, offset int) ([]Review, int, error) {
+	list, err := s.list(ctx, cluster, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	var total int
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM hygiene_reviews WHERE cluster = $1`, cluster).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	return list, total, nil
+}
+
+// list orders by id after the time so a page boundary between sign-offs of one moment does not move.
+func (s *pgStore) list(ctx context.Context, cluster string, limit, offset int) ([]Review, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT id, cluster, reviewed_by, reviewed_by_email, reviewed_at, note, counts
-		   FROM hygiene_reviews WHERE cluster = $1 ORDER BY reviewed_at DESC LIMIT $2`, cluster, limit)
+		   FROM hygiene_reviews WHERE cluster = $1 ORDER BY reviewed_at DESC, id LIMIT $2 OFFSET $3`, cluster, limit, offset)
 	if err != nil {
 		return nil, err
 	}

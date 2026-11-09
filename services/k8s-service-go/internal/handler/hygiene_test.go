@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -39,6 +40,18 @@ func (m *memHygieneStore) List(_ context.Context, clusterID string, limit int) (
 		}
 	}
 	return out, nil
+}
+
+func (m *memHygieneStore) Page(ctx context.Context, clusterID string, limit, offset int) ([]hygiene.Review, int, error) {
+	all, _ := m.List(ctx, clusterID, len(m.reviews))
+	if offset > len(all) {
+		offset = len(all)
+	}
+	end := offset + limit
+	if end > len(all) {
+		end = len(all)
+	}
+	return all[offset:end], len(all), nil
 }
 
 func (m *memHygieneStore) Get(_ context.Context, clusterID, id string) (*hygiene.Review, error) {
@@ -314,5 +327,57 @@ func TestHygieneSignoffHistoryAndSnapshot(t *testing.T) {
 	}
 	if w := snapshot(rev.ID, "other"); w.Code != http.StatusNotFound {
 		t.Errorf("snapshot of another cluster: %d", w.Code)
+	}
+}
+
+// The Past sign-offs tab pages on the server: a page of the cluster's sign-offs, newest first, past the hundred one
+// answer holds, with how many the cluster has in X-Kubeast-Total.
+func TestHygieneHistoryPagesWithTheTotal(t *testing.T) {
+	h, _, reviews := hygieneHandler(true)
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < 130; i++ {
+		reviews.reviews = append(reviews.reviews, hygiene.Review{ID: fmt.Sprintf("r%03d", i), Cluster: "self", ReviewedAt: base.Add(time.Duration(i) * time.Hour)})
+	}
+	reviews.reviews = append(reviews.reviews, hygiene.Review{ID: "elsewhere", Cluster: "other", ReviewedAt: base})
+	page := func(query string) (int, string, []string) {
+		w := httptest.NewRecorder()
+		h.HygieneHistory(w, hygieneRequest(http.MethodGet, "/api/v1/hygiene/history"+query, nil, "admin.hygiene.read"))
+		var list []hygiene.Review
+		if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
+			t.Fatalf("%s: %v %s", query, err, w.Body)
+		}
+		ids := []string{}
+		for _, r := range list {
+			ids = append(ids, r.ID)
+		}
+		return w.Code, w.Header().Get("X-Kubeast-Total"), ids
+	}
+	ids := func(from, to int) []string {
+		out := []string{}
+		for i := from; i >= to; i-- {
+			out = append(out, fmt.Sprintf("r%03d", i))
+		}
+		return out
+	}
+
+	code, total, got := page("?limit=12&offset=120")
+	if code != http.StatusOK || total != "130" || strings.Join(got, ",") != strings.Join(ids(9, 0), ",") {
+		t.Errorf("past the hundred: %d total=%q %v", code, total, got)
+	}
+	code, total, got = page("?limit=12&offset=12")
+	if code != http.StatusOK || total != "130" || strings.Join(got, ",") != strings.Join(ids(117, 106), ",") {
+		t.Errorf("page 2 of 12: %d total=%q %v", code, total, got)
+	}
+	// without a limit the newest hundred, as the AI tool reads it
+	code, total, got = page("")
+	if code != http.StatusOK || total != "130" || strings.Join(got, ",") != strings.Join(ids(129, 30), ",") {
+		t.Errorf("no limit: %d total=%q %d rows", code, total, len(got))
+	}
+	// an offset that is not a page reads from the first; one past the end reads none, with the total
+	if _, total, got = page("?limit=2&offset=-5"); total != "130" || strings.Join(got, ",") != "r129,r128" {
+		t.Errorf("negative offset: total=%q %v", total, got)
+	}
+	if _, total, got = page("?limit=2&offset=500"); total != "130" || len(got) != 0 {
+		t.Errorf("past the end: total=%q %v", total, got)
 	}
 }

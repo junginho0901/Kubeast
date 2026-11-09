@@ -72,7 +72,7 @@ func (m *Manager) List(ctx context.Context, f Filter) ([]Recording, error) {
 		f.Offset = 0
 	}
 	rows, err := m.pool.Query(ctx, `SELECT `+recordingColumns+` FROM session_recordings
-		WHERE ($1 = '' OR user_email ILIKE '%' || $1 || '%' ESCAPE '\') AND ($2 = '' OR cluster = $2) AND ($3 = '' OR kind = $3)
+		WHERE `+recordingMatch+`
 		ORDER BY started_at DESC, id LIMIT $4 OFFSET $5`, likeLiteral(f.User), f.Cluster, f.Kind, f.Limit, f.Offset)
 	if err != nil {
 		return nil, err
@@ -87,6 +87,16 @@ func (m *Manager) List(ctx context.Context, f Filter) ([]Recording, error) {
 		out = append(out, *r)
 	}
 	return out, rows.Err()
+}
+
+// recordingMatch is List's filter ($1 user, $2 cluster, $3 kind), which Count counts by.
+const recordingMatch = `($1 = '' OR user_email ILIKE '%' || $1 || '%' ESCAPE '\') AND ($2 = '' OR cluster = $2) AND ($3 = '' OR kind = $3)`
+
+// Count is how many recordings List's filter matches, whatever the page.
+func (m *Manager) Count(ctx context.Context, f Filter) (int, error) {
+	var n int
+	err := m.pool.QueryRow(ctx, `SELECT count(*) FROM session_recordings WHERE `+recordingMatch, likeLiteral(f.User), f.Cluster, f.Kind).Scan(&n)
+	return n, err
 }
 
 // likeLiteral escapes LIKE's wildcards (and its escape character) so the user

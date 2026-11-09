@@ -4295,8 +4295,7 @@
       "result": "Result",
       "namespace": "Namespace",
       "since": "From",
-      "until": "To",
-      "limit": "Rows per page"
+      "until": "To"
     },
     "apply": "Search",
     "reset": "Reset",
@@ -4789,7 +4788,6 @@
     },
     "loading": "Loading…",
     "open": "Report",
-    "range": "{{from}}–{{to}} of {{total}}",
     "skipReason": "Skipped: {{reason}}",
     "skip": {
       "investigation_cap": "Skipped by the investigation limit",
