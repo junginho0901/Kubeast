@@ -129,6 +129,8 @@ test('after one person signs out, the next one signs in to their own access and 
   await page.goto('/login')
   await signIn(page)
   await page.goto('/admin/users')
+  // the list pages as many rows as fit the screen: find the account by its email
+  await page.getByTestId('admin-users-search').fill(email)
   await expect(page.getByTestId(`user-detail-${email}`)).toHaveCount(1, { timeout: 15000 })
   await page.getByRole('button', { name: /Log out|로그아웃/ }).click()
   await expect(page).toHaveURL(/\/login/)

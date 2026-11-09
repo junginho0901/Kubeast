@@ -6,6 +6,8 @@ import path from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 import { pagerRange, readEveryPage } from './list-pages'
 
+import { turnToRow } from './list-pages'
+
 // Usability and routes from the 2026-10 re-QA (PR-9c): old routes open the current screens, the sidebar groups by
 // scope, Resource Graph opens on a namespace, a list keeps its footer and says why it is empty, the open drawer is
 // in the URL, and the small fixes on User Management, Change History, Helm history, the PV drawer, the YAML status
@@ -112,8 +114,10 @@ test.describe('Usability and routes', () => {
     const total = (await (await audit).json()).total as number
     await expect(page.getByTestId('audit-pager')).toContainText(new RegExp(`of ${total}(?!\\d)|^${total}개 중`), { timeout: 15_000 })
 
+    const recordings = page.waitForResponse((r) => r.url().includes('/api/v1/cluster/recordings?'))
     await page.goto('/admin/session-recordings')
-    await expect(page.getByTestId('recordings-pager')).toContainText(/^1–\d+|Showing 0 of 0|0개 중 0/, { timeout: 15_000 })
+    const counted = Number((await recordings).headers()['x-kubeast-total'])
+    await expect(page.getByTestId('recordings-pager')).toContainText(counted ? new RegExp(`of ${counted}(?!\\d)|^${counted}개 중`) : /Showing 0 of 0|0개 중 0/, { timeout: 15_000 })
   })
 
   test('an Idle workload is neutral, not a warning', async ({ page }) => {
@@ -130,6 +134,8 @@ test.describe('Usability and routes', () => {
     await page.goto('/admin/users')
     await expect(page.getByTestId('admin-users-pager')).toBeVisible({ timeout: 15_000 })
     const self = page.getByTestId('admin-users-self')
+    // the list shows as many rows as fit: with the test accounts of a long run the signed-in one can be on a later page
+    expect(await turnToRow(page, 'admin-users-pager', self), 'the own account is on one of the pages').toBe(true)
     await expect(self).toHaveCount(1)
     expect(await self.getAttribute('title')).toMatch(/own account|자기 자신/)
     await page.getByTestId('admin-users-search').fill('zz-nobody-9c')

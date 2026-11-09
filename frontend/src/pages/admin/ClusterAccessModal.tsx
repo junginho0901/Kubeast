@@ -1,22 +1,26 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { ShieldCheck, Loader2, Trash2, UserPlus, X } from 'lucide-react'
+import { ShieldCheck, Loader2, Search, Trash2, UserPlus, X } from 'lucide-react'
 
 import { ModalOverlay } from '@/components/ModalOverlay'
 import CustomDropdown from '@/components/CustomDropdown'
 import NamespaceScopeInput from '@/components/NamespaceScopeInput'
+import { usePagination } from '@/components/resource-detail/usePagination'
 import { api } from '@/services/api'
 import type { ClusterMeta } from '@/services/api/clusters'
 import { formatTime } from '@/utils/time'
 import { refusalText } from './clusterAccessRefusal'
+import { grantsMatching } from './clusterAccessView'
 
 // Per-cluster access management (the inverse of the user-detail ClusterRoleMatrix):
 // for ONE cluster, list every user granted a role on it and let an admin change
 // the role, revoke it, or add another user. Backed by the same per-user grant API
 // (setUserClusterRole / removeUserClusterRole) plus the reverse list endpoint.
 // Global admins are not shown — they reach every cluster via "*". Changes take
-// effect on the target user's next login (token re-issue).
+// effect on the target user's next login (token re-issue). The grants page ten
+// at a time, as a drawer's table does, so the window stays on the screen; the
+// search looks in every grant.
 //
 // Pending/Member are account-level roles (no cluster perms), so they are not
 // offered as a per-cluster grant.
@@ -52,6 +56,8 @@ export default function ClusterAccessModal({
 
   const grantRoles = useMemo(() => roles.filter((r) => !ACCOUNT_LEVEL_ROLES.has(r.name)), [roles])
   const invalidate = () => queryClient.invalidateQueries({ queryKey: grantsKey })
+  const [search, setSearch] = useState('')
+  const matching = useMemo(() => grantsMatching(grants, search), [grants, search])
 
   const setMutation = useMutation({
     mutationFn: ({ userId, role, namespaces }: { userId: string; role: string; namespaces?: string[] }) =>
@@ -119,6 +125,21 @@ export default function ClusterAccessModal({
           )}
         </p>
 
+        {grants.length > 0 && (
+          <div className="relative mt-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={tr('cluster.access.search', 'Search by name or email…')}
+              aria-label={tr('cluster.access.search', 'Search by name or email…')}
+              data-testid="cluster-access-search"
+              className="h-10 w-full pl-9 pr-3 bg-slate-900/40 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:border-primary-500"
+            />
+          </div>
+        )}
+
         <div className="mt-4 space-y-1.5" data-testid="cluster-access-list">
           {isLoading ? (
             <div className="text-xs text-slate-400 py-2">…</div>
@@ -130,8 +151,14 @@ export default function ClusterAccessModal({
             <div className="text-xs text-slate-400 py-3 text-center">
               {tr('cluster.access.empty', 'No users have access to this cluster yet.')}
             </div>
+          ) : matching.length === 0 ? (
+            <div className="text-xs text-slate-400 py-3 text-center">{t('common.noSearchResults', 'No results found.')}</div>
           ) : (
-            grants.map((g) => (
+            // a new search starts again on its first page
+            <TenAPage key={search} items={matching}>
+              {(page, nav) => (
+              <>
+              {page.map((g) => (
               <div key={g.user_id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-900/40 px-3 py-2">
                 <div className="min-w-0">
                   <div className="text-sm text-ink truncate">{g.name || g.email}</div>
@@ -176,7 +203,11 @@ export default function ClusterAccessModal({
                   </button>
                 </div>
               </div>
-            ))
+            ))}
+              <div data-testid="cluster-access-pages">{nav}</div>
+              </>
+              )}
+            </TenAPage>
           )}
         </div>
 
@@ -248,4 +279,10 @@ export default function ClusterAccessModal({
       </div>
     </ModalOverlay>
   )
+}
+
+// A list paged ten at a time with the drawers' pager; keyed by its search so a new search shows its first page.
+function TenAPage<T>({ items, children }: { items: T[]; children: (page: T[], nav: ReactNode) => ReactNode }) {
+  const { items: page, nav } = usePagination(items, 10)
+  return <>{children(page, nav)}</>
 }

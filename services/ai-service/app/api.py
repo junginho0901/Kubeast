@@ -15,6 +15,7 @@ from app.models.floating_ai import FloatingChatRequest
 from pydantic import ValidationError
 from app.security import require_auth, decode_access_token, bearer_or_cookie
 from app.services.ai.debug_dump import safe_error
+from app.services.sse_keepalive import with_keepalive
 
 logger = logging.getLogger(__name__)
 
@@ -229,12 +230,12 @@ async def session_chat(
 
     try:
         return StreamingResponse(
-            ai_service.session_chat_stream(
+            with_keepalive(ai_service.session_chat_stream(
                 session_id,
                 message,
                 audit_actor=audit_actor,
                 audit_http=audit_http,
-            ),
+            )),
             media_type="text/event-stream",
             headers={
                 "X-Accel-Buffering": "no",
@@ -499,14 +500,14 @@ async def floating_session_chat(
 
     try:
         return StreamingResponse(
-            floating_service.session_chat_stream(
+            with_keepalive(floating_service.session_chat_stream(
                 session_id=session_id,
                 message=body.message,
                 page_context=body.page_context,
                 cluster_name=x_cluster_name,
                 audit_actor=audit_actor,
                 audit_http=audit_http,
-            ),
+            )),
             media_type="text/event-stream",
             headers={
                 "X-Accel-Buffering": "no",
@@ -531,7 +532,7 @@ async def suggest_optimization_stream(
 
     try:
         return StreamingResponse(
-            ai_service.suggest_optimization_stream(namespace, audit_actor=actor, audit_http=http, lang=lang or "en"),
+            with_keepalive(ai_service.suggest_optimization_stream(namespace, audit_actor=actor, audit_http=http, lang=lang or "en")),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",

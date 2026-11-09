@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { turnToRow } from './list-pages'
 
 // Admin edges the v0.7.3 edge QA found: a role with some admin permissions opens those pages only; nobody changes
 // their own cluster access; a role still held is not deleted, and says why; deleting a team clears it from its
@@ -103,6 +104,8 @@ test('a role with the user permissions sees and opens User Management only, not 
   expect((await request.put(`/api/v1/auth/admin/users/${u.id}/cluster-roles/default`, { headers: admin, data: { role: 'Read', namespaces: [] } })).status()).toBeLessThan(300)
   await uiLogin(page, u.email, u.password)
   await page.goto('/admin/users')
+  // the list pages as many rows as fit the screen: find the account by its email
+  await page.getByTestId('admin-users-search').fill(u.email)
   await expect(page.getByTestId(`user-detail-${u.email}`)).toHaveCount(1, { timeout: 15000 })
   await expect(page).toHaveURL(/\/admin\/users/)
   const nav = page.getByTestId('sidebar-nav')
@@ -114,6 +117,7 @@ test('a role with the user permissions sees and opens User Management only, not 
   await expect(page).not.toHaveURL(/\/admin\/audit/, { timeout: 15000 })
   // its own row: cluster access read-only, with the reason
   await page.goto('/admin/users')
+  await page.getByTestId('admin-users-search').fill(u.email)
   await page.getByTestId(`user-detail-${u.email}`).click({ timeout: 15000 })
   await expect(page.getByTestId('cluster-role-matrix-self')).toHaveCount(1, { timeout: 15000 })
 })
@@ -158,6 +162,8 @@ test('a role still held is not deleted, and Role Management says why', async ({ 
   await uiLogin(page, ADMIN_EMAIL, ADMIN_PASSWORD)
   await page.goto('/admin/roles')
   const row = page.locator('tr').filter({ hasText: role.name })
+  // the list pages as many roles as fit the screen; a new role comes last
+  expect(await turnToRow(page, 'roles-pager', row), `${role.name} on a page of Roles`).toBe(true)
   await row.getByRole('button', { name: /delete|삭제/i }).click({ timeout: 15000 })
   await page.getByTestId('confirm-dialog-ok').click()
   await expect(page.getByTestId('admin-roles-delete-error')).toContainText(role.name, { timeout: 15000 })

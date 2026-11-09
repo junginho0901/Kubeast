@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { turnToRow } from './list-pages'
 
 // A custom role (docs/features.md "Roles and permissions"): the sidebar shows only the groups its menu.* permissions name, and the
 // dashboard overview is refused while the cluster has not bound the role's group kubeast:role:<slug> — the counts
@@ -32,6 +33,8 @@ test.describe('custom role in the UI', () => {
     const createdRole = (await role.json()).id
     try {
       await page.goto('/admin/roles')
+      // the list pages as many roles as fit the screen; a new role comes last
+      expect(await turnToRow(page, 'roles-pager', page.locator('tr', { hasText: roleName })), `${roleName} on a page of Roles`).toBe(true)
       await page.locator('tr', { hasText: roleName }).getByTitle(/^(Edit|편집|수정)$/).click()
       const notice = page.getByTestId('role-session-notice')
       const box = (key: RegExp) => page.locator('label').filter({ has: page.locator('span', { hasText: key }) }).locator('input[type="checkbox"]')

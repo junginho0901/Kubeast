@@ -27,7 +27,7 @@ import (
 //   GET  /api/v1/hygiene                 report + last sign-off       read,   audited k8s.hygiene.scan
 //   GET  /api/v1/hygiene?format=csv|json download                     admin.hygiene.export, audited admin.hygiene.export
 //   POST /api/v1/hygiene/signoff {note}  store the report as signed   admin.hygiene.signoff
-//   GET  /api/v1/hygiene/history         sign-offs, newest first      read
+//   GET  /api/v1/hygiene/history         a page of sign-offs, newest first, X-Kubeast-Total   read
 //   GET  /api/v1/hygiene/snapshot/{id}   one sign-off with its report read
 //
 // Read = resource.hygiene.scan on the cluster (an Admin grant holds it; the verb
@@ -232,12 +232,14 @@ func (h *Handler) SignoffHygiene(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusCreated, rev)
 }
 
-// HygieneHistory lists the cluster's sign-offs, newest first.
+// HygieneHistory lists a page of the cluster's sign-offs, newest first (?limit=, at most and by default
+// hygieneHistoryMax, ?offset=); X-Kubeast-Total counts every sign-off of the cluster.
 func (h *Handler) HygieneHistory(w http.ResponseWriter, r *http.Request) {
 	if !h.hygieneReadAllowed(w, r) {
 		return
 	}
 	if h.hygieneStore == nil {
+		w.Header().Set("X-Kubeast-Total", "0")
 		response.JSON(w, http.StatusOK, []hygiene.Review{})
 		return
 	}
@@ -245,11 +247,16 @@ func (h *Handler) HygieneHistory(w http.ResponseWriter, r *http.Request) {
 	if limit <= 0 || limit > hygieneHistoryMax {
 		limit = hygieneHistoryMax
 	}
-	list, err := h.hygieneStore.List(r.Context(), hygieneClusterID(r), limit)
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	if offset < 0 {
+		offset = 0
+	}
+	list, total, err := h.hygieneStore.Page(r.Context(), hygieneClusterID(r), limit, offset)
 	if err != nil {
 		response.InternalError(w, r, err)
 		return
 	}
+	w.Header().Set("X-Kubeast-Total", strconv.Itoa(total))
 	response.JSON(w, http.StatusOK, list)
 }
 

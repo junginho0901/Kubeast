@@ -4,12 +4,62 @@ import { formatPorts } from '@/pages/network/endpoints/endpointHelpers'
 import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { endpointsView } from '../netstoreDetail'
+import { usePagination } from '../usePagination'
 
 interface Props {
   name: string
   namespace?: string
   kind: string
   rawJson?: Record<string, unknown>
+}
+
+// The ready or not-ready targets ten to a page: each address with its target and node, else the addresses alone of an
+// answer that carries no targets.
+function Targets({ targets, fallbackIps, tone }: { targets: any[]; fallbackIps: string[]; tone: 'ready' | 'notReady' }) {
+  const withTargets = Array.isArray(targets) && targets.length > 0
+  const { items: paged, page, nav } = usePagination<any>(withTargets ? targets : (Array.isArray(fallbackIps) ? fallbackIps : []), 10)
+  const testId = tone === 'ready' ? 'endpoints-ready-targets' : 'endpoints-not-ready-targets'
+  if (!withTargets) {
+    if (paged.length === 0) return <p className="text-xs text-slate-400"><Tx>None</Tx></p>
+    return (
+      <div data-testid={testId}>
+        <p className="text-xs text-slate-200 break-all">{paged.join(', ')}</p>
+        {nav}
+      </div>
+    )
+  }
+
+  const borderTone = tone === 'ready' ? 'border-emerald-800/60 bg-emerald-900/10' : 'border-amber-800/60 bg-amber-900/10'
+  return (
+    <div data-testid={testId}>
+      <div className="space-y-1.5">
+        {paged.map((t: any, i: number) => {
+          const ref = t?.target_ref || t?.targetRef
+          const refText = ref?.name ? `${ref.kind || 'Target'}:${ref.name}` : 'targetRef: -'
+          const nodeText = t?.node_name ? `node=${t.node_name}` : null
+          return (
+            <div key={`${tone}-${(page - 1) * 10 + i}`} className={`rounded-sm border px-2 py-1.5 text-xs ${borderTone}`} data-testid="endpoints-target">
+              <p className="text-slate-200 font-mono break-all">{t?.ip || '-'}</p>
+              <p className="text-slate-300 break-all">{refText}</p>
+              {nodeText && <p className="text-slate-400">{nodeText}</p>}
+            </div>
+          )
+        })}
+      </div>
+      {nav}
+    </div>
+  )
+}
+
+// A subset's ready or not-ready addresses as kubectl describe lists them, ten to a page.
+function SubsetAddresses({ label, addresses, testId }: { label: string; addresses: string[]; testId: string }) {
+  const { items: paged, nav } = usePagination(addresses, 10)
+  return (
+    <div data-testid={testId}>
+      <div><span className="text-slate-400"><Tx>{label}</Tx>:</span> {paged.join(', ') || <Tx>None</Tx>}</div>
+      {nav}
+    </div>
+  )
 }
 
 export default function EndpointDetail({ name, namespace, kind, rawJson }: Props) {
@@ -30,31 +80,6 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
   const subsets = view?.subsets ?? []
   const labels = view?.labels ?? {}
   const annotations = view?.annotations ?? {}
-
-  const renderTargets = (targets: any[], fallbackIps: string[], tone: 'ready' | 'notReady') => {
-    if (!Array.isArray(targets) || targets.length === 0) {
-      if (!Array.isArray(fallbackIps) || fallbackIps.length === 0) return <p className="text-xs text-slate-400"><Tx>None</Tx></p>
-      return <p className="text-xs text-slate-200 break-all">{fallbackIps.join(', ')}</p>
-    }
-
-    const borderTone = tone === 'ready' ? 'border-emerald-800/60 bg-emerald-900/10' : 'border-amber-800/60 bg-amber-900/10'
-    return (
-      <div className="space-y-1.5">
-        {targets.map((t: any, i: number) => {
-          const ref = t?.target_ref || t?.targetRef
-          const refText = ref?.name ? `${ref.kind || 'Target'}:${ref.name}` : 'targetRef: -'
-          const nodeText = t?.node_name ? `node=${t.node_name}` : null
-          return (
-            <div key={`${tone}-${i}`} className={`rounded-sm border px-2 py-1.5 text-xs ${borderTone}`}>
-              <p className="text-slate-200 font-mono break-all">{t?.ip || '-'}</p>
-              <p className="text-slate-300 break-all">{refText}</p>
-              {nodeText && <p className="text-slate-400">{nodeText}</p>}
-            </div>
-          )
-        })}
-      </div>
-    )
-  }
 
   return (
     <>
@@ -110,13 +135,13 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
 
       {view && (view.ready_targets.length > 0 || view.ready_addresses.length > 0) && (
         <InfoSection title="Ready Targets">
-          {renderTargets(view.ready_targets, view.ready_addresses, 'ready')}
+          <Targets targets={view.ready_targets} fallbackIps={view.ready_addresses} tone="ready" />
         </InfoSection>
       )}
 
       {view && (view.not_ready_targets.length > 0 || view.not_ready_addresses.length > 0) && (
         <InfoSection title="Not Ready Targets">
-          {renderTargets(view.not_ready_targets, view.not_ready_addresses, 'notReady')}
+          <Targets targets={view.not_ready_targets} fallbackIps={view.not_ready_addresses} tone="notReady" />
         </InfoSection>
       )}
 
@@ -125,9 +150,9 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
         <InfoSection title="Subsets">
           <div className="space-y-2 text-xs">
             {subsets.map((s, i) => (
-              <div key={i} className="rounded-sm border border-slate-800 p-2 space-y-0.5 text-slate-200">
-                <div><span className="text-slate-400"><Tx>Addresses</Tx>:</span> {s.addresses.join(', ') || <Tx>None</Tx>}</div>
-                <div><span className="text-slate-400"><Tx>Not Ready Addresses</Tx>:</span> {s.not_ready_addresses.join(', ') || <Tx>None</Tx>}</div>
+              <div key={i} className="rounded-sm border border-slate-800 p-2 space-y-0.5 text-slate-200" data-testid="endpoints-subset">
+                <SubsetAddresses label="Addresses" addresses={s.addresses} testId="endpoints-subset-addresses" />
+                <SubsetAddresses label="Not Ready Addresses" addresses={s.not_ready_addresses} testId="endpoints-subset-not-ready-addresses" />
                 <div><span className="text-slate-400"><Tx>Ports</Tx>:</span> {s.ports.length ? formatPorts(s.ports) : <Tx>None</Tx>}</div>
               </div>
             ))}

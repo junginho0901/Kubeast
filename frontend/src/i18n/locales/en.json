@@ -2907,6 +2907,9 @@
       "approveAdmin": "Approve as Admin",
       "clearSelection": "Clear",
       "selectPending": "Select all pending users",
+      "selectAllPages": "Select all {{count}} pending users, on every page",
+      "selectAllPages_one": "Select the 1 pending user",
+      "selectedEveryPage": "{{count}} selected, on every page",
       "notChanged": "{{done}} of {{total}} accounts changed. Not changed: {{accounts}}",
       "reasonFailed": "the change failed, the audit log says why",
       "reasonNotFound": "no such account",
@@ -4131,6 +4134,7 @@
     "access": {
       "add": "Add",
       "allAdded": "All users already granted",
+      "search": "Search by name or email…",
       "empty": "No users have access to this cluster yet.",
       "note": "Users granted a role here can access this cluster (deny-by-default for everyone else). Global admins reach every cluster and are not listed. Changes apply after the user logs in again.",
       "revoke": "Revoke",
@@ -4293,8 +4297,7 @@
       "result": "Result",
       "namespace": "Namespace",
       "since": "From",
-      "until": "To",
-      "limit": "Rows per page"
+      "until": "To"
     },
     "apply": "Search",
     "reset": "Reset",
@@ -4787,7 +4790,6 @@
     },
     "loading": "Loading…",
     "open": "Report",
-    "range": "{{from}}–{{to}} of {{total}}",
     "skipReason": "Skipped: {{reason}}",
     "skip": {
       "investigation_cap": "Skipped by the investigation limit",
