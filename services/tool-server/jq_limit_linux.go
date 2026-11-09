@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux && !cgo
 
 package main
 
@@ -9,6 +9,8 @@ import (
 	"strings"
 	"syscall"
 )
+
+const jqAddressLimited = true
 
 // limitAddressSpace lets the run map room bytes past what it has mapped now: the heap reserves its arenas before it
 // writes them, so a step past that fails in mmap before a page is used (setrlimit(2), RLIMIT_AS).

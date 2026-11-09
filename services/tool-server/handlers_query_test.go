@@ -52,8 +52,8 @@ func podListOfAbout1MiB(n int) string {
 // With its heap not watched, a program that asks for more memory than a run may hold is refused when it asks, in one
 // step or many, and ordinary programs over a list of about 1 MiB answer every time.
 func TestJQProgramPastItsMemoryIsRefusedWithItsHeapUnwatched(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skipf("the kernel holds a run to its memory on Linux, where the image runs; on %s the heap watcher alone does", runtime.GOOS)
+	if !jqAddressLimited {
+		t.Skipf("the kernel holds a run to its memory in a Linux build without cgo, as the image is built; on %s with this build the heap watcher alone does (CGO_ENABLED=0 on Linux runs this test)", runtime.GOOS)
 	}
 	prev := jqWatchEvery
 	jqWatchEvery = time.Hour
