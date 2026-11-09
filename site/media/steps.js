@@ -16,10 +16,10 @@ window.KUBEAST_STEPS = {
     "report": 4.6
   },
   "changes": {
-    "graph": 5.8,
+    "graph": 5.7,
     "timeline": 0,
-    "traffic": 8.8,
-    "why": 13.5
+    "traffic": 8.7,
+    "why": 13.4
   },
   "dashboard": {
     "cards": 0,
