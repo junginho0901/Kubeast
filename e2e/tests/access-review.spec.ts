@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { pageScrolls, rowsOfFirstPage } from './list-pages'
 
 // Access review: the admin's report of who has what (accounts, per-cluster
 // grants, API keys, temporary grants, roles), its CSV sections, and the
@@ -215,10 +216,14 @@ test.describe('Access review', () => {
     await expect(page.getByTestId('access-review-last-review')).toBeVisible()
 
     await expect(page.getByTestId('access-review-table')).toBeVisible()
+    // the tables page their rows: the account is found by the search, which looks in every row of the tab
+    const search = page.getByPlaceholder(/Search|검색/)
+    await search.fill(EMAIL)
     await expect(page.getByTestId('access-review-table')).toContainText(EMAIL)
 
     await page.getByTestId('access-review-tab-api_keys').click()
     await expect(page.getByTestId('access-review-table')).toContainText('e2e-review')
+    await search.fill('')
     await page.getByTestId('access-review-tab-roles').click()
     await expect(page.getByTestId('access-review-table')).toContainText('Admin')
     await page.getByTestId('access-review-tab-users').click()
@@ -226,18 +231,56 @@ test.describe('Access review', () => {
     const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('access-review-export').click()])
     expect(download.suggestedFilename()).toMatch(/^access-review-users-.*\.csv$/)
 
+    // the sign-off is a window opened from the page's header, with the same note and button
+    await page.getByTestId('access-review-signoff-open').click()
     await page.getByTestId('access-review-signoff-note').fill(`ui ${stamp}`)
     await page.getByTestId('access-review-signoff').click()
     await expect(page.getByTestId('access-review-signoff-message')).toBeVisible({ timeout: 15000 })
+    await expect(page.getByTestId('access-review-signoff-panel'), 'the window closes once signed off').toHaveCount(0)
 
     await page.getByTestId('access-review-tab-history').click()
     await expect(page.getByTestId('access-review-history-row').first()).toContainText(`ui ${stamp}`)
     await page.getByTestId('access-review-history-row').first().getByRole('button').click()
     await expect(page.getByTestId('access-review-snapshot-banner')).toBeVisible()
+    await search.fill(EMAIL)
     await expect(page.getByTestId('access-review-table')).toContainText(EMAIL)
+    await expect(page.getByTestId('access-review-signoff-open'), 'a stored report is not signed off again').toHaveCount(0)
     await expect(page.getByTestId('access-review-signoff-panel')).toHaveCount(0)
 
     // The menu item is there for admins.
     await expect(page.getByTestId('nav-access-review')).toBeVisible()
+  })
+
+  test('each tab pages every row of the report and the page fits a 1440×900 screen', async ({ page, request }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    const reportAnswer = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/auth/admin/access-review', { timeout: 30_000 })
+    await page.goto('/admin/access-review')
+    const rep = await (await reportAnswer).json()
+    const pager = page.getByTestId('access-review-pager')
+    const rows = page.getByTestId('access-review-row')
+    // a row's first cell names it (email, owner, requester or role)
+    const firstCells = () => rows.evaluateAll((trs) => trs.map((tr) => ((tr as HTMLTableRowElement).cells[0]?.innerText ?? '').trim()))
+    for (const section of ['users', 'cluster_roles', 'api_keys', 'access_requests', 'roles']) {
+      await page.getByTestId(`access-review-tab-${section}`).click()
+      const total = (rep[section] ?? []).length
+      await expect(pager, `${section}: the footer counts every row of the report`).toContainText(total ? `of ${total}` : 'Showing 0 of 0', { timeout: 15_000 })
+      const perPage = await rowsOfFirstPage(pager)
+      const seen: string[] = []
+      const next = pager.getByRole('button', { name: 'Next', exact: true })
+      for (let i = 0; i < 200; i++) {
+        const shown = await firstCells()
+        expect(shown.length, `${section} page ${i + 1}: no more rows than a page`).toBeLessThanOrEqual(Math.max(perPage, 1))
+        seen.push(...shown)
+        if (await next.isDisabled()) break
+        const before = await pager.innerText()
+        await next.click()
+        await expect.poll(() => pager.innerText(), { timeout: 15_000 }).not.toBe(before)
+      }
+      expect(seen.length, `${section}: rows over every page = the report's rows`).toBe(total)
+      expect(await pageScrolls(page), `${section}: the page does not scroll`).toBeLessThanOrEqual(1)
+    }
+    await page.getByTestId('access-review-tab-history').click()
+    await expect(page.getByTestId('access-review-history-pager')).toContainText(/Showing \d+-\d+ of \d+|Showing 0 of 0/)
+    expect(await pageScrolls(page), 'Past reviews: the page does not scroll').toBeLessThanOrEqual(1)
   })
 })

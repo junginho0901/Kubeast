@@ -12,6 +12,8 @@ const PASSWORD = process.env.E2E_USER_PASSWORD || ''
 const CLUSTER = 'default'
 const PW = 'E2e-access-pass1!'
 const stamp = () => Date.now().toString(36)
+// an action that cannot happen (its element gone or held) fails at its own line, not when the whole test runs out
+const ACT = { timeout: 20_000 }
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })
 
@@ -59,10 +61,10 @@ async function enabled(request: APIRequestContext, admin: string): Promise<boole
 }
 
 async function loginUI(page: Page, email: string, password: string): Promise<void> {
-  await page.goto('/login')
-  await page.locator('input[autocomplete="email"]').first().fill(email)
-  await page.locator('input[type="password"]').first().fill(password)
-  await page.locator('button[type="submit"]').first().click()
+  await page.goto('/login', ACT)
+  await page.locator('input[autocomplete="email"]').first().fill(email, ACT)
+  await page.locator('input[type="password"]').first().fill(password, ACT)
+  await page.locator('button[type="submit"]').first().click(ACT)
   await page.waitForFunction(() => !document.querySelector('input[autocomplete="email"]'), { timeout: 20000 })
 }
 
@@ -253,12 +255,12 @@ test.describe('access requests', () => {
       // The requester, in their own session, asks from Settings → Cluster access.
       const p = await ctx.newPage()
       await loginUI(p, reqEmail, PW)
-      await p.goto('/account')
+      await p.goto('/account', ACT)
       await expect(p.getByTestId('account-cluster-access')).toBeVisible({ timeout: 15000 })
-      await p.getByTestId(`access-request-open-${CLUSTER}`).click()
+      await p.getByTestId(`access-request-open-${CLUSTER}`).click(ACT)
       await expect(p.getByTestId('access-request-modal')).toBeVisible()
-      await p.getByTestId('access-request-reason').fill('e2e: ui request')
-      await p.getByTestId('access-request-submit').click()
+      await p.getByTestId('access-request-reason').fill('e2e: ui request', ACT)
+      await p.getByTestId('access-request-submit').click(ACT)
       await expect(p.getByTestId('access-request-notice')).toBeVisible({ timeout: 10000 })
       await expect(p.getByTestId(`account-cluster-pending-${CLUSTER}`)).toBeVisible()
 
@@ -266,22 +268,24 @@ test.describe('access requests', () => {
       const pending = await (await request.get('/api/v1/auth/admin/access-requests?status=pending', { headers: bearer(admin) })).json()
       const id = pending.find((x: any) => x.user_id === requester)?.id
       expect(id, 'the request is pending').toBeTruthy()
-      await page.goto('/admin/access-requests')
+      await page.goto('/admin/access-requests', ACT)
       await expect(page.getByTestId(`access-request-row-${id}`)).toBeVisible({ timeout: 15000 })
       await expect(page.getByTestId('nav-access-requests-badge')).toHaveText(/^[1-9]\d*$/)
-      await page.getByTestId(`access-request-note-${id}`).fill('ui ok')
-      await page.getByTestId(`access-request-approve-${id}`).click()
+      await page.getByTestId(`access-request-note-${id}`).fill('ui ok', ACT)
+      await page.getByTestId(`access-request-approve-${id}`).click(ACT)
       await expect(page.getByTestId(`access-request-row-${id}`)).toHaveCount(0, { timeout: 10000 })
-      await page.getByTestId('access-requests-tab-history').click()
+      // the row left because the list answered, not because the page went away
+      await expect(page.getByTestId('access-requests-pager'), 'the admin page still shows the list').toBeVisible({ timeout: 10000 })
+      await page.getByTestId('access-requests-tab-history').click(ACT)
       await expect(page.getByTestId(`access-request-status-${id}`)).toBeVisible({ timeout: 10000 })
       expect(await clusterRole(request, admin, requester)).toBe('Write')
 
       // The requester's session was revoked: the next navigation lands on the
       // sign-in form; signing in again shows the temporary grant.
-      await p.goto('/account')
+      await p.goto('/account', ACT)
       await expect(p.locator('input[autocomplete="email"]').first()).toBeVisible({ timeout: 20000 })
       await loginUI(p, reqEmail, PW)
-      await p.goto('/account')
+      await p.goto('/account', ACT)
       await expect(p.getByTestId(`account-cluster-until-${CLUSTER}`)).toBeVisible({ timeout: 15000 })
       await expect(p.getByTestId(`access-request-status-${id}`)).toBeVisible()
     } finally {

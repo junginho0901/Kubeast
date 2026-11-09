@@ -29,6 +29,26 @@ test.describe('layout stays put', () => {
     expect([...new Set(rows)].length, `row counts seen: ${[...new Set(rows)].join(', ')}`).toBe(1)
   })
 
+  test('Access review draws one row count from the first frame with rows, a section held whole by the page', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.addInitScript(() => {
+      const w = window as unknown as { __rows: number[] }
+      w.__rows = []
+      const tick = () => {
+        const rows = document.querySelectorAll('[data-testid="access-review-row"]').length
+        if (rows) w.__rows.push(rows)
+        requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    })
+    await page.goto('/admin/access-review')
+    await expect(page.getByTestId('access-review-row').first()).toBeVisible({ timeout: 20_000 })
+    await page.waitForTimeout(1500)
+    const rows = await page.evaluate(() => (window as unknown as { __rows: number[] }).__rows)
+    expect(rows.length, 'frames sampled with rows').toBeGreaterThan(10)
+    expect([...new Set(rows)].length, `row counts seen: ${[...new Set(rows)].join(', ')}`).toBe(1)
+  })
+
   test('the Settings cards do not move when the API keys section and its MCP box arrive', async ({ page }) => {
     const title = EN.account.language.title as string
     await page.addInitScript((text) => {
