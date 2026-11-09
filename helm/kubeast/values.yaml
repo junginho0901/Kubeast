@@ -118,6 +118,8 @@ auth:
     # Extra NetworkPolicy egress rules for auth-service to reach an issuer the
     # default rules do not cover (443 and 6443 are open to every address; a
     # Keycloak on 8443 or 8080 is not). Raw NetworkPolicyEgressRule entries.
+    # An issuer behind a Service in this cluster on EKS VPC CNI: its ClusterIP,
+    # or a podSelector with the Service's own selector labels (§15).
     egress: []
   # Kubernetes user impersonation: k8s-service and tool-server act toward every
   # cluster as the signed-in user (email) in groups kubeast:viewer/operator/admin,
@@ -291,7 +293,7 @@ sessionRecording:
   secret: ""
   spoolVolume: {}          # empty = emptyDir
   fileVolume: {}           # required for storage: file, e.g. {persistentVolumeClaim: {claimName: kubeast-recordings}}
-  egress: []               # extra NetworkPolicy egress rules for k8s-service (an in-cluster store)
+  egress: []               # extra NetworkPolicy egress rules for k8s-service (an in-cluster store: on EKS VPC CNI its Service's ClusterIP, §15)
 
 # --- Gateway API ---
 # The Gateway → Policies page lists every policy kind attached to Gateway API
@@ -455,7 +457,9 @@ audit:
   #
   # Extra NetworkPolicy egress rules for auth-service to reach sinks the
   # default rules do not cover (443 is open; SMTP ports and in-cluster
-  # endpoints are not). Raw NetworkPolicyEgressRule entries.
+  # endpoints are not). Raw NetworkPolicyEgressRule entries. A sink behind a
+  # Service in this cluster on EKS VPC CNI: its ClusterIP, or a podSelector
+  # with the Service's own selector labels (docs/cluster-requirements.md §15).
   sinkEgress: []
   # Where file sinks write (mounted at /var/lib/kubeast-audit in auth-service
   # when a file sink exists; the root filesystem is read-only). An emptyDir
@@ -662,6 +666,11 @@ networkPolicy:
   # LLM gateway). Default is "0.0.0.0/0 except RFC1918" — covers public LLM
   # APIs but blocks internal-only access. A plain CIDR opens port 443;
   # {cidr: 10.1.2.0/24, port: 8000} opens another port.
+  # A model reached through a Service in this cluster: EKS VPC CNI matches the
+  # Service's ClusterIP, not the pods behind it, so list that ClusterIP (or the
+  # service range) with the Service's port; a range of pod addresses lets only
+  # the pod IP through (docs/cluster-requirements.md §15). The same holds for
+  # every egress list below that can name a Service in the cluster.
   allowExternalEgressCIDRs: []
   # Additional kube-apiserver CIDR (any port) for auth-service / k8s-service
   # egress. Ports 443 and 6443 are already open to every address, private and
@@ -712,7 +721,8 @@ features:
     discover: true
     # With networkPolicy on, k8s-service may only reach ports 443 and 6443
     # outside the cluster; an external store on another port needs its
-    # address here ({cidr, port}; a plain CIDR means 443).
+    # address here ({cidr, port}; a plain CIDR means 443). A store named by a
+    # Service of this cluster (url): on EKS VPC CNI its ClusterIP (§15).
     egressCIDRs: []
   # Dashboard quick actions. "Check issues" reads Warning events this many
   # minutes back; "Optimization" sizes requests from this many hours of usage
@@ -884,7 +894,8 @@ features:
     # depend on this switch.)
     logql: false
     # With networkPolicy on, k8s-service reaches outside the cluster on 443
-    # and 6443 only; a store on another port needs {cidr, port} here.
+    # and 6443 only; a store on another port needs {cidr, port} here. A store
+    # behind a Service of this cluster: on EKS VPC CNI its ClusterIP (§15).
     egressCIDRs: []
   # Trace links (off by default). Kubeast stores no traces: a log search line
   # that carries a trace ID gets a link to it (traceUrl), and the Pod drawer a
@@ -931,7 +942,7 @@ features:
     maxTraces: 50
     timeout: 15s
     perUserPerMinute: 20
-    egressCIDRs: []
+    egressCIDRs: []        # {cidr, port} past 443/6443; a Service of this cluster: its ClusterIP on EKS VPC CNI (§15)
   # Network flows from each cluster's Hubble Relay (off by default): Cilium,
   # or Microsoft Retina's Hubble control plane. Shown in the Pod and workload
   # drawers and read by the AI's network_flows. Each entry of clusters is
@@ -943,7 +954,8 @@ features:
   #   proxy:<namespace>/<service>:<port> — the same at another Relay Service;
   #   https://<host>:<port> — the Relay at that address over TLS: tls.existingSecret
   #     holds ca.crt (and tls.crt, tls.key with tls.clientCertificate for mTLS);
-  #     add the address to egressCIDRs;
+  #     add the address to egressCIDRs (a Service of this cluster: its
+  #     ClusterIP on EKS VPC CNI, docs/cluster-requirements.md §15);
   #   calico — Calico's Whisker backend (calico-system/whisker:8443, the
   #     operator's) through that cluster's API server service proxy as the
   #     signed-in user; the cluster must let the API server reach Whisker
@@ -991,7 +1003,8 @@ features:
   # its namespace and address only. Audited as k8s.networkflows.query
   # (provider nfm). limit is the rows asked per category (1-500); endpoint
   # replaces the service's (a stand-in), egress adds NetworkPolicy rules for
-  # it — AWS on 443 is open already.
+  # it — AWS on 443 is open already; a stand-in behind a Service of this
+  # cluster on EKS VPC CNI needs its ClusterIP (§15).
   networkFlowMonitor:
     enabled: false
     region: ""
@@ -1032,7 +1045,7 @@ features:
     perUserPerMinute: 30
     silences: false
     silenceMaxHours: 168
-    egressCIDRs: []
+    egressCIDRs: []        # {cidr, port} past 443/6443; a Service of this cluster: its ClusterIP on EKS VPC CNI (§15)
 
 # Argo CD guard. An object that carries Argo CD's tracking annotation
 # (argocd.argoproj.io/tracking-id, naming the object itself) is badged with

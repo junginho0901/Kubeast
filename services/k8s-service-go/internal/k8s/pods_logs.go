@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // GetPodLogs returns logs for a pod container.
@@ -33,7 +35,8 @@ func (s *Service) GetPodLogs(ctx context.Context, namespace, name, container str
 }
 
 // StreamPodLogs returns a streaming io.ReadCloser for follow-mode pod logs.
-func (s *Service) StreamPodLogs(ctx context.Context, namespace, name, container string, tailLines int64) (io.ReadCloser, error) {
+// A non-zero since reads every line from that second on (the kubelet takes whole seconds).
+func (s *Service) StreamPodLogs(ctx context.Context, namespace, name, container string, tailLines int64, since time.Time) (io.ReadCloser, error) {
 	opts := &corev1.PodLogOptions{
 		Follow:     true,
 		Timestamps: true,
@@ -43,6 +46,10 @@ func (s *Service) StreamPodLogs(ctx context.Context, namespace, name, container 
 	}
 	if tailLines > 0 {
 		opts.TailLines = &tailLines
+	}
+	if !since.IsZero() {
+		t := metav1.NewTime(since)
+		opts.SinceTime = &t
 	}
 
 	req := s.clientsetCtx(ctx).CoreV1().Pods(namespace).GetLogs(name, opts)
