@@ -249,6 +249,16 @@ type drawerAnswerCase struct {
 	After    map[string]interface{} `json:"after"`
 }
 
+// caseAge stands for an object's age, which reads the clock, so the cases do not change with the day they are compared.
+const caseAge = "7d"
+
+func withCaseAge(m map[string]interface{}) map[string]interface{} {
+	if a, ok := m["age"].(string); ok && a != "" {
+		m["age"] = caseAge
+	}
+	return m
+}
+
 func TestDrawerAnswerCasesFixture(t *testing.T) {
 	const perKind = 2
 	api := newOneObjectAPI(t)
@@ -262,9 +272,9 @@ func TestDrawerAnswerCasesFixture(t *testing.T) {
 		cases = append(cases, drawerAnswerCase{
 			Name:     c.name,
 			Resource: c.resource,
-			Before:   api.answer(t, c.resource, c.before),
-			Frame:    liveRow(t, c.resource, c.after),
-			After:    api.answer(t, c.resource, c.after),
+			Before:   withCaseAge(api.answer(t, c.resource, c.before)),
+			Frame:    withCaseAge(liveRow(t, c.resource, c.after)),
+			After:    withCaseAge(api.answer(t, c.resource, c.after)),
 		})
 	}
 	var buf bytes.Buffer
