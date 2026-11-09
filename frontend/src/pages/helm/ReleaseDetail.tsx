@@ -109,16 +109,18 @@ export default function HelmReleaseDetailPage() {
       const yaml = truncate(text)
       if (yaml) tabContent = { [`${tab}_text`]: yaml }
     } else if (tab === 'history') {
-      const items = Array.isArray(historyQuery.data) ? historyQuery.data : []
+      // the newest first, as the History tab lists them, with the history answer's own fields (chartVersion, appVersion)
+      const items = Array.isArray(historyQuery.data) ? [...historyQuery.data].sort((a, b) => b.revision - a.revision) : []
       tabContent = {
-        history: items.slice(0, 20).map((h: any) => ({
+        history: items.slice(0, 20).map((h) => ({
           revision: h.revision,
           updated: h.updated,
           status: h.status,
-          chart: h.chart,
-          app_version: h.app_version,
+          chart_version: h.chartVersion,
+          app_version: h.appVersion,
           description: h.description,
         })),
+        history_total: items.length,
       }
     } else if (tab === 'resources') {
       const items = Array.isArray(resourcesQuery.data) ? resourcesQuery.data : []

@@ -167,7 +167,7 @@ export default function MonitoringPods({
 
   return (
     <div className="card overflow-visible flex-1 min-h-0 flex flex-col">
-      <div className="flex items-start justify-between mb-6 shrink-0">
+      <div className="flex items-start justify-between mb-4 shrink-0">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-slate-700/60">
             <Box className="w-6 h-6 text-slate-300" />
@@ -198,15 +198,17 @@ export default function MonitoringPods({
         )}
       </div>
 
-      <NamespaceFilter
-        namespaces={namespaces}
-        value={selectedNamespace}
-        onChange={setSelectedNamespace}
-      />
-
-      {selectedNamespace && podMetrics && podMetrics.length > 0 && (
-        <MonitoringSearch value={search} onChange={setSearch} placeholder={t('monitoring.pods.searchPlaceholder', 'Search pods by name...')} testId="monitoring-pod-search" />
-      )}
+      {/* one row of controls at one height: the picker first at a fixed width, so it never moves when the search comes */}
+      <div className="flex flex-wrap items-center gap-3 mb-4 shrink-0">
+        <NamespaceFilter
+          namespaces={namespaces}
+          value={selectedNamespace}
+          onChange={setSelectedNamespace}
+        />
+        {selectedNamespace && podMetrics && podMetrics.length > 0 && (
+          <MonitoringSearch className="flex-1 min-w-64" value={search} onChange={setSearch} placeholder={t('monitoring.pods.searchPlaceholder', 'Search pods by name...')} testId="monitoring-pod-search" />
+        )}
+      </div>
 
       {/* 네임스페이스 미선택 시 안내 메시지 */}
       {!selectedNamespace && (
@@ -223,36 +225,21 @@ export default function MonitoringPods({
 
       {selectedNamespace && refreshFailure && <MetricsRefreshFailed failure={refreshFailure} retrying={!metricsUnavailable} testId="pod-metrics-refresh-failed" />}
 
-      {/* The cards keep their place with "-" while a read is under way, so the table below does not jump */}
+      {/* The cards keep their place with "-" while a read is under way, so the table below does not jump; one line
+          each (icon, label, number), so the table keeps more of the screen */}
       {selectedNamespace && (podStats || isLoading) && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="p-4 bg-slate-700 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-400">{t('monitoring.pods.totalPods')}</p>
-                <p className="text-2xl font-bold text-ink mt-1">{podStats ? podStats.totalPods : '-'}</p>
-              </div>
-              <Box className="w-8 h-8 text-slate-500" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 shrink-0">
+          {([
+            [Box, t('monitoring.pods.totalPods'), podStats ? String(podStats.totalPods) : '-'],
+            [Cpu, t('monitoring.pods.totalCpu'), podStats ? `${podStats.totalCpu}m` : '-'],
+            [HardDrive, t('monitoring.pods.totalMemory'), podStats ? `${podStats.totalMemory}Mi` : '-'],
+          ] as const).map(([Icon, label, value]) => (
+            <div key={label} className="px-4 py-2 bg-slate-700 rounded-lg flex items-center gap-3">
+              <Icon className="w-5 h-5 text-slate-500 shrink-0" />
+              <p className="flex-1 min-w-0 text-sm text-slate-400">{label}</p>
+              <p className="text-2xl font-bold text-ink tabular-nums">{value}</p>
             </div>
-          </div>
-          <div className="p-4 bg-slate-700 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-400">{t('monitoring.pods.totalCpu')}</p>
-                <p className="text-2xl font-bold text-ink mt-1">{podStats ? `${podStats.totalCpu}m` : '-'}</p>
-              </div>
-              <Cpu className="w-8 h-8 text-slate-500" />
-            </div>
-          </div>
-          <div className="p-4 bg-slate-700 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-400">{t('monitoring.pods.totalMemory')}</p>
-                <p className="text-2xl font-bold text-ink mt-1">{podStats ? `${podStats.totalMemory}Mi` : '-'}</p>
-              </div>
-              <HardDrive className="w-8 h-8 text-slate-500" />
-            </div>
-          </div>
+          ))}
         </div>
       )}
 

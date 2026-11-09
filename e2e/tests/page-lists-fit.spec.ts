@@ -72,5 +72,11 @@ test.describe('Lists sized to the screen', () => {
     await page.getByTestId('monitoring-namespace').click()
     await page.getByTestId('monitoring-namespace-opt-kube-system').click()
     await fits(page, 'monitoring-pod-pager', '[data-testid="monitoring-pod-row"]')
+    // the picker and the search share one row and the cards one line each, so a fitted page holds at least seven
+    // rows at this size (five when they were stacked)
+    const range = await pagerRange(page, 'monitoring-pod-pager')
+    expect(range.end - range.start + 1, 'rows a fitted page holds').toBeGreaterThanOrEqual(Math.min(7, range.total))
+    const [picker, search] = await Promise.all([page.getByTestId('monitoring-namespace').boundingBox(), page.getByTestId('monitoring-pod-search').boundingBox()])
+    expect({ top: picker?.y, height: picker?.height }, 'one row, one height').toEqual({ top: search?.y, height: search?.height })
   })
 })
