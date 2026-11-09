@@ -28,6 +28,8 @@ test.describe('Monitoring', () => {
       maxDiffPixels: 500,
       mask: [
         page.locator('.bg-slate-700.rounded-lg'),
+        // the node rows' live numbers and bars
+        page.getByTestId('monitoring-node'),
         page.locator('text=/Metrics sampled at|메트릭 기준 수집 시각/'),
         page.locator('text=/Auto refresh every/'),
         page.locator('text=/Data labels/'),

@@ -5,9 +5,15 @@
 // 추출 출처: GPUDashboard.tsx (Phase 4.11) — metricsAvailable && metrics 일 때만
 // 렌더. 본체에서는 한 줄로 호출.
 
+import { useMemo } from 'react'
 import { Activity } from 'lucide-react'
 import type { GPUMetricsData, GPUDeviceMetric } from '@/services/api'
-import { gpuPercentText, gpuRealtimeAverages, gpusReportingUtil, gpuSeriesPod } from '../gpuNumbers'
+import { ListPager } from '@/components/ListPager'
+import { usePagedItems } from '@/hooks/usePagedItems'
+import { gpuPercentText, gpuRealtimeAverages, gpusReportingUtil, gpuSeriesPod, hostsByName } from '../gpuNumbers'
+
+// Hosts per page of the section (a host of 8 GPUs is about 250px): the dashboard scrolls, so a fixed count
+const REALTIME_HOSTS_PER_PAGE = 4
 
 interface Props {
   metricsAvailable: boolean
@@ -20,6 +26,8 @@ interface Props {
 }
 
 export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, gpuPodKeys, tr }: Props) {
+  const hosts = useMemo(() => hostsByName(gpusByHost), [gpusByHost])
+  const { items: pagedHosts, page, totalPages, total, setPage } = usePagedItems(hosts, REALTIME_HOSTS_PER_PAGE)
   if (!metricsAvailable || !metrics) return null
   const podOf = (gpu: GPUDeviceMetric) => gpuSeriesPod(gpu, gpuPodKeys)
   const { util, memory } = gpuRealtimeAverages(metrics)
@@ -85,9 +93,9 @@ export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, 
         </div>
       </div>
 
-      {/* Per-GPU bars by host */}
+      {/* Per-GPU bars by host, a page of hosts at a time */}
       <div className="space-y-3">
-        {[...gpusByHost.entries()].map(([hostname, gpus]) => (
+        {pagedHosts.map(([hostname, gpus]) => (
           <div key={hostname} className="rounded-lg border border-slate-700/50 bg-slate-900/40 p-3" data-testid="gpu-realtime-host" data-host={hostname}>
             <div className="text-xs font-medium text-slate-300 mb-2">{hostname}</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -134,6 +142,11 @@ export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, 
           </div>
         ))}
       </div>
+      {hosts.length > 0 && (
+        <div className="mt-3">
+          <ListPager currentPage={page} totalPages={totalPages} total={total} rowsPerPage={REALTIME_HOSTS_PER_PAGE} onPageChange={setPage} showPageSize={false} testId="gpu-realtime-pager" />
+        </div>
+      )}
     </div>
   )
 }

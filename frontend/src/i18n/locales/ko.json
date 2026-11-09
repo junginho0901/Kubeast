@@ -2109,9 +2109,11 @@
       "cpuUsage": "CPU (사용량)",
       "cpuLimit": "CPU Limit",
       "memoryUsage": "Memory (사용량)",
-      "memoryLimit": "Memory Limit"
-    },
-    "memory": "메모리"
+      "memoryLimit": "Memory Limit",
+      "node": "Node",
+      "cpuPercent": "CPU (할당 가능 대비 %)",
+      "memoryPercent": "Memory (할당 가능 대비 %)"
+    }
   },
   "common": {
     "notAvailable": "N/A",
@@ -3777,14 +3779,12 @@
     "summarizing": "요약 중...",
     "noEvents": "이 기간에 이벤트가 없습니다",
     "noEventsHint": "K8s 이벤트는 기본적으로 약 1시간만 유지됩니다. 더 긴 시간 범위에서는 이벤트가 없을 수 있습니다.",
-    "loadMore": "더 보기",
     "revision": "Revision",
     "changeCause": "변경 원인",
     "repeated": "{{count}}회 반복",
     "resourceFilter": "리소스 종류",
     "refresh": "새로고침",
     "closeSummary": "요약 닫기",
-    "remaining": "({{n}}개 남음)",
     "via": "{{source}} 경유",
     "namespace": "Namespace",
     "listCount": "{{rows}}개 항목(이벤트 {{events}} · 롤아웃 {{rollouts}})",

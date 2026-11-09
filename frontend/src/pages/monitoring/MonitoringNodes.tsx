@@ -6,8 +6,6 @@ import {
   Activity,
   Server,
   RefreshCw,
-  HardDrive,
-  Cpu,
   Clock,
 } from 'lucide-react'
 import {
@@ -23,14 +21,32 @@ import { useCluster } from '@/contexts/ClusterContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { ListPager } from '@/components/ListPager'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { usePagedItems } from '@/hooks/usePagedItems'
 import { MonitoringSearch } from './MonitoringFilters'
 import { MetricsRefreshFailed } from './MetricsRefreshFailed'
 import { metricsRefreshFailure, refreshFailureForChat } from './metricsRefresh'
 import type { NodeMetric } from './types'
 
-// Node cards per page: the page scrolls, so a fixed count (as the admin tables) rather than a fit to the screen.
-const NODES_PER_PAGE = 20
+const COLUMNS = 5
+
+// A node's share of its allocatable as kubectl top prints it, with a bar: the accent, yellow from 60 %, red from 80 %.
+function UsageCell({ text, testId }: { text: string; testId: string }) {
+  // a node without a sample ('-') draws an empty bar
+  const percent = parseFloat(text) || 0
+  const bar = percent >= 80 ? 'bg-red-500' : percent >= 60 ? 'bg-yellow-500' : 'bg-primary-bright'
+  const tone = percent >= 80 ? 'text-red-400' : percent >= 60 ? 'text-yellow-400' : 'text-slate-200'
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex-1 h-2.5 bg-slate-700 rounded-full overflow-hidden">
+        <div className={`h-full transition-all duration-500 ${bar}`} style={{ width: `${Math.min(percent, 100)}%` }} />
+      </div>
+      <span className={`w-12 text-right font-medium tabular-nums ${tone}`} data-testid={testId}>{text}</span>
+    </div>
+  )
+}
 
 interface MonitoringNodesProps {
   metricsUnavailable: boolean
@@ -68,7 +84,6 @@ export default function MonitoringNodes({
   const { currentCluster } = useCluster()
   const { open: openDetail } = useResourceDetail()
   const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
 
   // The node count comes from the node list, not from the metrics samples:
   // without metrics-server the metrics list is empty while the nodes exist.
@@ -177,16 +192,14 @@ export default function MonitoringNodes({
     const q = search.trim().toLowerCase()
     return q ? allNodes.filter((n) => n.name.toLowerCase().includes(q)) : allNodes
   }, [allNodes, search])
-  const totalPages = Math.max(1, Math.ceil(filteredNodes.length / NODES_PER_PAGE))
-  useEffect(() => setPage(1), [search, currentCluster])
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages)
-  }, [page, totalPages])
-  const pagedNodes = filteredNodes.slice((page - 1) * NODES_PER_PAGE, page * NODES_PER_PAGE)
+  // a page at a time in a box sized to the screen, as the list pages; a new search or cluster starts at the first page
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: filteredNodes.length })
+  const { items: pagedNodes, page, totalPages, total, setPage } = usePagedItems(filteredNodes, rowsPerPage, `${search}|${currentCluster}`)
+  const openNode = (name: string) => openDetail({ kind: 'Node', name })
 
   return (
-    <div className="card">
-      <div className="flex items-start justify-between mb-6">
+    <div className="card flex-1 min-h-0 flex flex-col">
+      <div className="flex items-start justify-between mb-6 shrink-0">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-slate-700/60">
             <Server className="w-6 h-6 text-slate-300" />
@@ -225,114 +238,60 @@ export default function MonitoringNodes({
           <p className="text-slate-400">{t('monitoring.loading')}</p>
         </div>
       ) : nodeMetrics && nodeMetrics.length > 0 ? (
-        <div>
+        <div className="flex-1 min-h-0 flex flex-col">
         {refreshFailure && <MetricsRefreshFailed failure={refreshFailure} retrying={!metricsUnavailable} testId="node-metrics-refresh-failed" />}
         <MonitoringSearch value={search} onChange={setSearch} placeholder={t('monitoring.nodes.searchPlaceholder', 'Search nodes by name...')} testId="monitoring-node-search" />
-        {filteredNodes.length === 0 && (
-          <p className="py-12 text-center text-slate-400" data-testid="monitoring-node-empty">{t('common.noSearchResults', 'No results found.')}</p>
-        )}
-        <div className="space-y-6">
-          {pagedNodes.map((node) => {
-            // a node without a sample ('-') draws empty bars
-            const cpuPercent = parseFloat(node.cpu_percent) || 0
-            const memoryPercent = parseFloat(node.memory_percent) || 0
-
-            return (
-              <button
-                type="button"
-                key={node.name}
-                onClick={() => openDetail({ kind: 'Node', name: node.name })}
-                data-testid="monitoring-node"
-                className="block w-full text-left p-4 bg-slate-700 rounded-lg hover:bg-slate-600/80 transition-colors cursor-pointer"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-medium text-ink flex items-center gap-2">
-                    <Server className="w-5 h-5 text-slate-400" />
-                    {node.name}
-                  </h3>
-                  <div className="flex items-center gap-4 text-sm text-slate-300">
-                    <div className="flex items-center gap-2">
-                      <Cpu className="w-4 h-4 text-slate-400" />
-                      <span>{node.cpu}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <HardDrive className="w-4 h-4 text-slate-400" />
-                      <span>{node.memory}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* CPU 사용량 */}
-                <div className="space-y-2 mb-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-400 flex items-center gap-2">
-                      <Cpu className="w-4 h-4" />
-                      CPU
-                    </span>
-                    <span
-                      className={`font-medium ${
-                        cpuPercent >= 80
-                          ? 'text-red-400'
-                          : cpuPercent >= 60
-                            ? 'text-yellow-400'
-                            : 'text-slate-200'
-                      }`}
-                    >
-                      {node.cpu_percent}
-                    </span>
-                  </div>
-                  <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-500 ${
-                        cpuPercent >= 80
-                          ? 'bg-red-500'
-                          : cpuPercent >= 60
-                            ? 'bg-yellow-500'
-                            : 'bg-primary-bright'
-                      }`}
-                      style={{ width: `${Math.min(cpuPercent, 100)}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Memory 사용량 */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-400 flex items-center gap-2">
-                      <HardDrive className="w-4 h-4" />
-                      {t('monitoring.memory', 'Memory')}
-                    </span>
-                    <span
-                      className={`font-medium ${
-                        memoryPercent >= 80
-                          ? 'text-red-400'
-                          : memoryPercent >= 60
-                            ? 'text-yellow-400'
-                            : 'text-slate-200'
-                      }`}
-                    >
-                      {node.memory_percent}
-                    </span>
-                  </div>
-                  <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-500 ${
-                        memoryPercent >= 80
-                          ? 'bg-red-500'
-                          : memoryPercent >= 60
-                            ? 'bg-yellow-500'
-                            : 'bg-primary-bright'
-                      }`}
-                      style={{ width: `${Math.min(memoryPercent, 100)}%` }}
-                    />
-                  </div>
-                </div>
-              </button>
-            )
-          })}
-        </div>
-        <div className="mt-4">
-          <ListPager currentPage={page} totalPages={totalPages} total={filteredNodes.length} rowsPerPage={NODES_PER_PAGE} onPageChange={setPage} showPageSize={false} testId="monitoring-node-pager" />
+        {/* one row a node, the columns kubectl top nodes prints */}
+        <div ref={containerRef} className="flex-1 min-h-0 flex flex-col">
+          <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
+            <table className="w-full text-sm min-w-[760px] table-fixed">
+              <thead ref={theadRef} className="text-slate-400">
+                <tr>
+                  <th className="text-left py-3 px-4">{t('monitoring.table.node', 'Node')}</th>
+                  <th className="text-left py-3 px-4 w-[130px]">{t('monitoring.table.cpuUsage')}</th>
+                  <th className="text-left py-3 px-4 w-[240px]">{t('monitoring.table.cpuPercent', 'CPU (% of allocatable)')}</th>
+                  <th className="text-left py-3 px-4 w-[150px]">{t('monitoring.table.memoryUsage')}</th>
+                  <th className="text-left py-3 px-4 w-[240px]">{t('monitoring.table.memoryPercent', 'Memory (% of allocatable)')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-700">
+                {pagedNodes.map((node, idx) => (
+                  <tr
+                    key={node.name}
+                    ref={idx === 0 ? firstRowRef : undefined}
+                    tabIndex={0}
+                    onClick={() => openNode(node.name)}
+                    // the row opens its Node from the keyboard too, as the card button it replaced did
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter' && e.key !== ' ') return
+                      e.preventDefault()
+                      openNode(node.name)
+                    }}
+                    data-testid="monitoring-node"
+                    className="text-slate-200 hover:bg-slate-700/40 cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-400"
+                  >
+                    <td className="py-3 px-4 font-medium text-ink">
+                      <span className="flex items-center gap-2 min-w-0">
+                        <Server className="w-4 h-4 text-slate-400 shrink-0" />
+                        <span className="truncate" title={node.name}>{node.name}</span>
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 font-mono text-slate-300">{node.cpu}</td>
+                    <td className="py-3 px-4"><UsageCell text={node.cpu_percent} testId="monitoring-node-cpu-pct" /></td>
+                    <td className="py-3 px-4 font-mono text-slate-300">{node.memory}</td>
+                    <td className="py-3 px-4"><UsageCell text={node.memory_percent} testId="monitoring-node-memory-pct" /></td>
+                  </tr>
+                ))}
+                {filteredNodes.length === 0 && (
+                  <tr>
+                    <td colSpan={COLUMNS} className="py-10 px-4 text-center text-slate-400" data-testid="monitoring-node-empty">{t('common.noSearchResults', 'No results found.')}</td>
+                  </tr>
+                )}
+              </tbody>
+              <AdaptiveTableFillerRows count={rowsPerPage - pagedNodes.length - (filteredNodes.length === 0 ? 1 : 0)} columnCount={COLUMNS} />
+            </table>
+          </div>
+          <ListPager currentPage={page} totalPages={totalPages} total={total} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="monitoring-node-pager" />
         </div>
         </div>
       ) : isForbiddenError(error) ? (

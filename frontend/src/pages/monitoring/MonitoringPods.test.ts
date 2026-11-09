@@ -192,6 +192,32 @@ describe('numbers a refresh of the Pods tab could not replace', () => {
     expect(chat.current?.data).not.toHaveProperty('refresh_failed')
   })
 
+  // A namespace's pods are a page at a time in a box sized to the screen, as the other lists, so the page does not grow
+  // past it; the cards and the floating chat stay about every pod.
+  describe('with more pods than a screen holds', () => {
+    const PODS = Array.from({ length: 70 }, (_, i) => ({ namespace: 'shop', name: `web-${String(i).padStart(2, '0')}`, cpu: '1m', memory: '1Mi', timestamp: '2026-11-07T03:59:15Z' }))
+    const footer = (html: string) => html.match(/data-testid="monitoring-pod-pager"[\s\S]*?(Showing [^<]+|\d+개 중 [^<]+)/)?.[1] ?? null
+    const listed = (html: string) => [...html.matchAll(/data-testid="monitoring-pod-row"[\s\S]*?(web-\d{2})/g)].map((m) => m[1])
+
+    it('draws one fitted page of pods with the footer counting every pod', () => {
+      const html = render(client(PODS, null))
+      // before the box is measured a fitted page is 12 rows (useAdaptiveRowsPerPage)
+      expect({ pods: listed(html), footer: footer(html) }).toEqual({ pods: PODS.slice(0, 12).map((p) => p.name), footer: 'Showing 1-12 of 70' })
+    })
+
+    it('offers the rows-per-page choice of the other lists, in the screen\'s language', () => {
+      const html = render(client(PODS, null), 'ko')
+      expect({ size: html.includes('data-testid="page-size"'), footer: footer(html) }).toEqual({ size: true, footer: '70개 중 1-12 표시' })
+    })
+
+    it('keeps the cards and the floating chat about every pod', () => {
+      const html = render(client(PODS, null))
+      const number = (label: string) => html.split(label)[1]?.match(/text-2xl[^>]*>([^<]*)</)?.[1]
+      expect(number(en.monitoring.pods.totalPods)).toBe('70')
+      expect(chat.current?.data?.pagination).toMatchObject({ total_count: 70 })
+    })
+  })
+
   it('a first read that fails still shows the failure, with no numbers to keep', () => {
     const html = render(client(null, httpError(503)))
     expect(html).toContain('Failed to load pod metrics')

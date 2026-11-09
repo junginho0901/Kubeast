@@ -200,7 +200,20 @@ export function gpuPodsByNode(pods: GPUPodInfo[]): [string, { podCount: number; 
     const e = by.get(p.node_name || '') ?? { podCount: 0, totalGpu: 0 }
     by.set(p.node_name || '', { podCount: e.podCount + 1, totalGpu: e.totalGpu + p.gpu_requested })
   }
-  return [...by].sort((a, b) => b[1].totalGpu - a[1].totalGpu)
+  // ties by node name, the pods no node took after them, so the chart's pages keep their nodes between refreshes
+  return [...by].sort((a, b) => b[1].totalGpu - a[1].totalGpu || byNodeName(a[0], b[0]))
+}
+
+// Node and host names in the order people read them (node-2 before node-10); '' (no node) last.
+export function byNodeName(a: string, b: string): number {
+  if (!a || !b) return a ? -1 : b ? 1 : 0
+  return a.localeCompare(b, undefined, { numeric: true })
+}
+
+// The GPUs of each host, hosts by name: a Prometheus answer gives them in any order, and a page of hosts must not
+// change its hosts from one refresh to the next.
+export function hostsByName(gpusByHost: Map<string, GPUDeviceMetric[]>): [string, GPUDeviceMetric[]][] {
+  return [...gpusByHost].sort((a, b) => byNodeName(a[0], b[0]))
 }
 
 // The pods a GPU's DCGM series may name (namespace/name): those asking for GPUs and those an allocated DRA claim is

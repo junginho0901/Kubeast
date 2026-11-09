@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
@@ -14,6 +14,10 @@ import CustomDropdown from '@/components/CustomDropdown'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { detailTarget } from '@/components/resource-detail/crDetail'
 import { useAIContext } from '@/hooks/useAIContext'
+import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { usePagedItems } from '@/hooks/usePagedItems'
+import { ListPager } from '@/components/ListPager'
+import { usePageSize } from '@/utils/pageSize'
 import { absoluteTitle, formatAge, formatDate } from '@/utils/time'
 import { rolloutsCount } from './timelineCards'
 
@@ -42,7 +46,6 @@ export default function Timeline() {
   const [selectedNamespace, setSelectedNamespace] = useState<string>('')
   const [hours, setHours] = useState(24)
   const [eventFilter, setEventFilter] = useState<EventFilter>('all')
-  const [showCount, setShowCount] = useState(50)
 
   const { data: namespaces } = useQuery({
     queryKey: ['namespaces'],
@@ -83,8 +86,15 @@ export default function Timeline() {
     return items
   }, [timeline, eventFilter])
 
-  const visibleItems = mergedItems.slice(0, showCount)
-  const hasMore = mergedItems.length > showCount
+  // A page of the window at a time in a box sized to the screen: Fit counts the rows the box holds (rows that wrap or
+  // a date line take more, and the box scrolls inside), 25/50/100 draw that many.
+  const listRef = useRef<HTMLDivElement>(null)
+  const listBodyRef = useRef<HTMLDivElement>(null)
+  const firstRowRef = useRef<HTMLDivElement>(null)
+  const fitRows = useAdaptiveRowsPerPage(listRef, { bodyRef: listBodyRef, rowRef: firstRowRef, headerHeight: 0, recalculationKey: mergedItems.length })
+  const pageSize = usePageSize()
+  const rowsPerPage = pageSize === 'fit' ? fitRows : pageSize
+  const { items: visibleItems, page, totalPages, total, setPage } = usePagedItems(mergedItems, rowsPerPage, `${namespace}|${hours}|${eventFilter}`)
 
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
@@ -104,7 +114,9 @@ export default function Timeline() {
           listed_events: timeline.events?.length ?? 0, events_matching: timeline.summary.events_matching,
           rollouts_error: timeline.summary.rollouts_error,
         },
-        recent_items: visibleItems.slice(0, 15).map((it) =>
+        // the page of the list on screen; recent_items stays the newest of the whole window, whichever page is open
+        shown: { page, total_pages: totalPages, from: total === 0 ? 0 : (page - 1) * rowsPerPage + 1, to: Math.min(page * rowsPerPage, total), of: total },
+        recent_items: mergedItems.slice(0, 15).map((it) =>
           it.type === 'event'
             ? {
                 kind: 'event',
@@ -125,7 +137,7 @@ export default function Timeline() {
         ),
       },
     }
-  }, [timeline, namespace, allNamespaces, hours, eventFilter, visibleItems])
+  }, [timeline, namespace, allNamespaces, hours, eventFilter, mergedItems, page, totalPages, total, rowsPerPage])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -141,9 +153,9 @@ export default function Timeline() {
   }, [namespaces])
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       {/* Header */}
-      <div>
+      <div className="shrink-0">
         <h1 className="text-xl font-semibold text-gray-900 dark:text-ink">
           {t('timeline.title', 'Change History Timeline')}
         </h1>
@@ -153,7 +165,7 @@ export default function Timeline() {
       </div>
 
       {/* Filter Bar */}
-      <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+      <div className="shrink-0 flex flex-wrap items-center gap-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
         {/* Namespace */}
         <CustomDropdown
           testId="timeline-namespace"
@@ -163,7 +175,7 @@ export default function Timeline() {
             ...namespaceOptions.map((ns: string) => ({ value: ns, label: ns })),
           ]}
           value={namespace}
-          onChange={(v) => { setSelectedNamespace(v); setShowCount(50) }}
+          onChange={(v) => setSelectedNamespace(v)}
           placeholder={t('timeline.namespace', 'Namespace')}
         />
 
@@ -172,7 +184,7 @@ export default function Timeline() {
           {TIME_RANGES.map((tr) => (
             <button
               key={tr.value}
-              onClick={() => { setHours(tr.value); setShowCount(50) }}
+              onClick={() => setHours(tr.value)}
               className={`px-2.5 py-1 text-xs font-medium rounded-sm transition-colors ${
                 hours === tr.value
                   ? 'bg-primary-600 text-white shadow-xs'
@@ -216,7 +228,7 @@ export default function Timeline() {
 
       {/* Summary Cards */}
       {timeline && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="shrink-0 grid grid-cols-2 sm:grid-cols-4 gap-3">
           <SummaryCard
             label={t('timeline.totalEvents', 'Total Events')}
             value={timeline.summary.total_events}
@@ -242,7 +254,7 @@ export default function Timeline() {
 
       {/* Timeline — the list holds events and rollouts, so its count says both */}
       {timeline && mergedItems.length > 0 && (
-        <p className="text-xs text-slate-400" data-testid="timeline-count">
+        <p className="shrink-0 text-xs text-slate-400" data-testid="timeline-count">
           {t('timeline.listCount', {
             rows: mergedItems.length,
             events: mergedItems.filter((it) => it.type === 'event').length,
@@ -252,7 +264,7 @@ export default function Timeline() {
         </p>
       )}
       {timeline && (timeline.summary.events_shown ?? 0) < (timeline.summary.events_matching ?? timeline.summary.total_events) && (
-        <p className="text-xs text-slate-400" data-testid="timeline-events-capped">
+        <p className="shrink-0 text-xs text-slate-400" data-testid="timeline-events-capped">
           {eventFilter === 'all'
             ? t('timeline.eventsCapped', {
                 shown: timeline.summary.events_shown,
@@ -268,11 +280,12 @@ export default function Timeline() {
         </p>
       )}
       {timeline?.summary.rollouts_error && (
-        <p className="text-xs text-amber-400" data-testid="timeline-rollouts-error" title={timeline.summary.rollouts_error}>
+        <p className="shrink-0 text-xs text-amber-400" data-testid="timeline-rollouts-error" title={timeline.summary.rollouts_error}>
           {t('timeline.rolloutsError', 'The rollouts could not be read, so none are listed.')}
         </p>
       )}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+      <div ref={listRef} className="flex-1 min-h-0 flex flex-col bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+        <div ref={listBodyRef} className="flex-1 min-h-0 overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <RefreshCw className="w-5 h-5 animate-spin text-gray-400" />
@@ -312,38 +325,32 @@ export default function Timeline() {
                         </span>
                       </div>
                     )}
-                    {item.type === 'event' ? (
-                      <EventRow
-                        event={item.data}
-                        onResourceClick={handleResourceClick}
-                        showNamespace={allNamespaces}
-                        t={t}
-                      />
-                    ) : (
-                      <RolloutRow
-                        rollout={item.data}
-                        onResourceClick={handleResourceClick}
-                        showNamespace={allNamespaces}
-                        t={t}
-                      />
-                    )}
+                    <div ref={idx === 0 ? firstRowRef : undefined} data-testid="timeline-row">
+                      {item.type === 'event' ? (
+                        <EventRow
+                          event={item.data}
+                          onResourceClick={handleResourceClick}
+                          showNamespace={allNamespaces}
+                          t={t}
+                        />
+                      ) : (
+                        <RolloutRow
+                          rollout={item.data}
+                          onResourceClick={handleResourceClick}
+                          showNamespace={allNamespaces}
+                          t={t}
+                        />
+                      )}
+                    </div>
                   </div>
                 )
               })}
             </div>
-
-            {/* Load More */}
-            {hasMore && (
-              <div className="p-3 text-center border-t border-gray-100 dark:border-gray-700/50">
-                <button
-                  onClick={() => setShowCount((c) => c + 50)}
-                  className="text-xs font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                >
-                  {t('timeline.loadMore', 'Load More')} {t('timeline.remaining', { defaultValue: '({{n}} remaining)', n: mergedItems.length - showCount })}
-                </button>
-              </div>
-            )}
           </div>
+        )}
+        </div>
+        {!isLoading && !isForbiddenError(error) && (
+          <ListPager currentPage={page} totalPages={totalPages} total={total} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="timeline-pager" />
         )}
       </div>
     </div>

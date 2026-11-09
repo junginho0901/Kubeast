@@ -162,7 +162,7 @@ export default function HelmReleaseDetailPage() {
   }
 
   const backToReleases = (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-3 shrink-0">
       <Link
         to="/helm/releases"
         className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-ink"
@@ -200,12 +200,14 @@ export default function HelmReleaseDetailPage() {
   }
 
   const rel = detailQuery.data
+  // the list tabs fit their table and its footer to the screen, as the list pages do; the others keep the page's flow
+  const listTab = tab === 'history' || tab === 'resources'
 
   return (
-    <div className="space-y-4">
+    <div className={listTab ? 'flex flex-col h-[calc(100vh-4rem)] gap-4' : 'space-y-4'}>
       {backToReleases}
 
-      <div className="page-head items-start gap-4">
+      <div className="page-head items-start gap-4 shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{rel.name}</h1>
           <p className="text-slate-400 text-sm mt-1">
@@ -236,7 +238,7 @@ export default function HelmReleaseDetailPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-1 border-b border-slate-700">
+      <div className="flex flex-wrap gap-1 border-b border-slate-700 shrink-0">
         {(['overview', 'values', 'manifest', 'notes', 'history', 'resources'] as TabKey[]).map((k) => (
           <button
             key={k}
