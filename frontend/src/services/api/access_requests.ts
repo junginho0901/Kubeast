@@ -96,6 +96,13 @@ export const accessRequestsApi = {
     return Array.isArray(data) ? data : []
   },
 
+  // One page of the user's own requests, newest first, with the count of all of them.
+  listMyAccessRequestsPage: async (query: { limit: number; offset: number }): Promise<AccessRequestPage> => {
+    const { data, headers } = await client.get('/auth/access-requests', { params: query })
+    if (!Array.isArray(data)) throw new Error('Invalid access requests response')
+    return { items: data, total: totalHeader(headers) }
+  },
+
   cancelAccessRequest: async (id: string): Promise<void> => {
     await client.delete(`/auth/access-requests/${id}`)
   },

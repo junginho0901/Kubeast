@@ -120,6 +120,7 @@ _, _ = h.auditStore.Write(r.Context(), rec)
   주기적으로 실행한다(예: 로그 파일 실시간 보기 = `tail -c +<오프셋>` 2초 폴링, `services/k8s-service-go/internal/handler/logfiles.go`).
   사람이 쓰는 대화형 터미널(Pod exec·노드 셸)은 예외지만, 브라우저가 `exit` 없이 끊기면 서버가 셸에 Ctrl-C·Ctrl-D를 보내고
   끝나기를 잠깐 기다린 뒤 끊는다(`remote_shell.go` `streamShell`) — 이걸 빼면 끊길 때마다 컨테이너에 셸이 남는다.
+  닫지 않고 사라진 브라우저도 같다: 서버는 25초마다 핑을 보내고, 60초 동안 키도 퐁도 없으면 떠난 것으로 본다(`readFrames`).
 - 노드 셸 파드의 로그는 터미널에 찍힌 전부다. 네임스페이스 없는 로그 저장소 읽기(검색·LogQL·레이블·패턴)는 그 클러스터에 `resource.node.shell`이 없으면 질의의 매처로 노드 셸 네임스페이스를 뺀다(`hiddenLogNamespace`).
 - exec 명령은 인자 배열로 넘기고 셸을 거치지 않는다. 사용자 입력이 들어가는 인자는 허용 목록으로 검증하고 `--`로 옵션 파싱을 끝낸다.
 - 로컬 실행은 [docker-compose.yml](docker-compose.yml) 참고.

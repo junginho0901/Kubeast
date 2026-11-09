@@ -11,17 +11,26 @@ import {
   type AccessReviewSignoff,
 } from '@/services/api/access_review'
 import { formatDuration, formatWhen } from './accessRequestFormat'
-import { HISTORY_PER_PAGE, apiKeyTabCount, historyPage, requestsCut } from './accessReviewView'
+import { apiKeyTabCount, historyPage, requestsCut } from './accessReviewView'
 import { ListPager } from '@/components/ListPager'
+import { ModalFrame } from '@/components/ModalFrame'
+import { modalButton } from '@/components/modalStyles'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { pageOf } from '@/utils/listPages'
 import { utcTitle } from '@/utils/time'
 
 // Admin → Access review: the report of who has what (accounts, per-cluster
 // grants, API keys, temporary grants since the last review, roles) with the
 // flags a reviewer looks for, one CSV per section, and the sign-off that
-// records the review was done. A past sign-off opens as the report it stored. Past reviews are paged by the
-// server with the count of every sign-off kept.
+// records the review was done. A past sign-off opens as the report it stored. The page is as high as the screen:
+// each tab's table pages the report's rows in the browser (the answer holds them all), Past reviews are paged by
+// the server with the count of every sign-off kept, each page the rows the table fits.
 
 type Tab = AccessReviewSection | 'history'
+
+const HISTORY_COLUMNS = 5
 
 const FLAG_TONE: Record<string, string> = {
   global_admin: 'bg-red-500/20 text-red-300',
@@ -59,25 +68,17 @@ export default function AccessReview() {
   const [error, setError] = useState<string | null>(null)
   const [viewId, setViewId] = useState<string | null>(null)
   const [pastPage, setPastPage] = useState(1)
+  const [signoffOpen, setSignoffOpen] = useState(false)
+  // a tab's page goes back to 1 with another tab, search or stored report, in the same render
+  const tabPageKey = `${tab}\u0000${search}\u0000${viewId ?? ''}`
+  const [tabPaged, setTabPaged] = useState({ key: tabPageKey, page: 1 })
+  const tabPage = tabPaged.key === tabPageKey ? tabPaged.page : 1
 
   const { data: live, isLoading, isFetching, refetch, error: reportError } = useQuery({
     queryKey: ['access-review', 'report'],
     queryFn: () => api.getAccessReview(),
     retry: false,
   })
-  // read with the page (the tab then opens on rows, not a loading line); a page being read keeps the sign-offs shown before it
-  const pastQuery = historyPage(pastPage)
-  const { data: past, isLoading: historyLoading, isPlaceholderData: pastLoading, error: historyError } = useQuery({
-    queryKey: ['access-review', 'history', pastQuery],
-    queryFn: async () => ({ ...(await api.listAccessReviews(pastQuery)), offset: pastQuery.offset }),
-    placeholderData: keepPreviousData,
-  })
-  const history = past?.items ?? []
-  const pastTotal = past?.total ?? 0
-  const pastPages = Math.max(1, Math.ceil(pastTotal / HISTORY_PER_PAGE))
-  useEffect(() => {
-    if (past && !pastLoading && pastPage > pastPages) setPastPage(pastPages)
-  }, [past, pastLoading, pastPage, pastPages])
   const { data: viewed } = useQuery({
     queryKey: ['access-review', 'snapshot', viewId],
     queryFn: () => api.getAccessReviewSnapshot(viewId as string),
@@ -88,6 +89,7 @@ export default function AccessReview() {
     onSuccess: (rev: AccessReviewSignoff) => {
       setNote('')
       setError(null)
+      setSignoffOpen(false)
       setMessage(tr('accessReview.signoff.saved', 'Review signed off at {{when}}.', { when: formatWhen(rev.reviewed_at) }))
       queryClient.invalidateQueries({ queryKey: ['access-review'] })
     },
@@ -168,6 +170,33 @@ export default function AccessReview() {
     const cols = columns[tab]
     return list.filter((r) => cols.map((c) => (c.text ? c.text(r) : '')).join(' ').toLowerCase().includes(q))
   }, [report, tab, search, columns])
+  // The rows the table fits: measured again with another tab and once rows show (a row's height), not on each page,
+  // so turning pages keeps one page size. A section's rows are known in this render, so the first frame with them is
+  // measured; the sign-offs come from the server with the page size, so they are known an answer later.
+  const [historyRows, setHistoryRows] = useState(false)
+  const rowsShow = tab === 'history' ? historyRows : rows.length > 0
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: `${tab}:${rowsShow}` })
+  // read with the page (the tab then opens on rows, not a loading line); a page being read keeps the sign-offs shown before it
+  const pastQuery = historyPage(pastPage, rowsPerPage)
+  const { data: past, isLoading: historyLoading, isPlaceholderData: pastLoading, error: historyError } = useQuery({
+    queryKey: ['access-review', 'history', pastQuery],
+    queryFn: async () => ({ ...(await api.listAccessReviews(pastQuery)), offset: pastQuery.offset, limit: pastQuery.limit }),
+    placeholderData: keepPreviousData,
+  })
+  const history = past?.items ?? []
+  const pastTotal = past?.total ?? 0
+  // the pager follows the answer on screen, with its page size
+  const pastLimit = past?.limit ?? pastQuery.limit
+  const pastPages = Math.max(1, Math.ceil(pastTotal / pastLimit))
+  useEffect(() => {
+    if (past && !pastLoading && pastPage > pastPages) setPastPage(pastPages)
+  }, [past, pastLoading, pastPage, pastPages])
+  useEffect(() => {
+    if (history.length > 0 !== historyRows) setHistoryRows(history.length > 0)
+  }, [history.length, historyRows])
+  // the answer holds every row of the section: the browser pages them, as many as the table fits
+  const shown = pageOf(rows, tabPage, rowsPerPage)
+  const setTabPage = (p: number) => setTabPaged({ key: tabPageKey, page: p })
 
   const download = (section: AccessReviewSection) => {
     const a = document.createElement('a')
@@ -184,8 +213,8 @@ export default function AccessReview() {
   const keyCount = report ? apiKeyTabCount(report) : null
 
   return (
-    <div className="space-y-4">
-      <div className="page-head items-start gap-4">
+    <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
+      <div className="page-head items-start gap-4 shrink-0">
         <div>
           <div className="flex items-center gap-2">
             <ClipboardCheck className="w-6 h-6 text-primary-400" />
@@ -195,18 +224,33 @@ export default function AccessReview() {
             {tr('accessReview.subtitle', 'Who can do what right now: accounts, per-cluster grants, API keys, temporary grants since the last review, roles. Review, export, sign off.')}
           </p>
         </div>
-        <button
-          onClick={() => refetch()}
-          disabled={isFetching || !!viewId}
-          className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
-          {tr('accessReview.refresh', 'Refresh')}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* signing off stores the report as it stands now, not a stored one being viewed */}
+          {!viewId && (
+            <button
+              type="button"
+              onClick={() => { setError(null); setSignoffOpen(true) }}
+              disabled={!live}
+              data-testid="access-review-signoff-open"
+              className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
+            >
+              <ClipboardCheck className="w-4 h-4" />
+              {tr('accessReview.signoff.button', 'Sign off')}
+            </button>
+          )}
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching || !!viewId}
+            className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+            {tr('accessReview.refresh', 'Refresh')}
+          </button>
+        </div>
       </div>
 
       {viewId && viewed && (
-        <div className="rounded-lg border border-primary-500/40 bg-primary-500/10 p-3 text-sm text-primary-100 flex items-center justify-between gap-3" data-testid="access-review-snapshot-banner">
+        <div className="shrink-0 rounded-lg border border-primary-500/40 bg-primary-500/10 p-3 text-sm text-primary-100 flex items-center justify-between gap-3" data-testid="access-review-snapshot-banner">
           <span>
             <History className="inline w-4 h-4 mr-1" />
             {tr('accessReview.snapshot.viewing', 'Viewing the report as signed off on {{when}} by {{who}}.', { when: formatWhen(viewed.reviewed_at), who: viewed.reviewed_by_email })}
@@ -219,13 +263,13 @@ export default function AccessReview() {
       )}
 
       {reportError && !report && (
-        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200" data-testid="access-review-error">
+        <div className="shrink-0 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200" data-testid="access-review-error">
           {(reportError as any)?.response?.data?.detail || (reportError as Error).message}
         </div>
       )}
 
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3" data-testid="access-review-summary">
+        <div className="shrink-0 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3" data-testid="access-review-summary">
           {([
             ['users', summary.users, 'accessReview.card.users', 'Accounts'],
             // every account whose global role carries "*" or an admin.* permission; beside it the "*" ones
@@ -251,7 +295,7 @@ export default function AccessReview() {
       )}
 
       {report && (
-        <div className="rounded-lg bg-slate-800/50 border border-slate-700 p-3 text-sm flex flex-wrap items-center gap-x-6 gap-y-1" data-testid="access-review-last-review">
+        <div className="shrink-0 rounded-lg bg-slate-800/50 border border-slate-700 p-3 text-sm flex flex-wrap items-center gap-x-6 gap-y-1" data-testid="access-review-last-review">
           <span className="text-slate-300">
             {report.last_review
               ? tr('accessReview.lastReview', 'Last review {{when}} by {{who}}', { when: formatWhen(report.last_review.reviewed_at), who: report.last_review.reviewed_by_email })
@@ -266,10 +310,11 @@ export default function AccessReview() {
           <span className="text-slate-500">
             {tr('accessReview.generatedAt', 'Report as of {{when}}; requests since {{since}}.', { when: formatWhen(report.generated_at), since: formatWhen(report.since) })}
           </span>
+          {message && !viewId && <span className="text-green-300" data-testid="access-review-signoff-message">{message}</span>}
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="shrink-0 flex flex-wrap items-center gap-2">
         {ACCESS_REVIEW_SECTIONS.map((s) => (
           <button
             key={s}
@@ -316,22 +361,16 @@ export default function AccessReview() {
       </div>
 
       {tab === 'access_requests' && cut && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200" data-testid="access-review-requests-cut">
+        <div className="shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200" data-testid="access-review-requests-cut">
           {tr('accessReview.requestsCut', 'The newest {{shown}} of {{total}} requests since {{since}} are listed here and in the CSV.', { shown: cut.shown, total: cut.total, since: formatWhen(cut.since) })}
         </div>
       )}
 
-      {tab === 'history' ? (
-        <div className="rounded-lg bg-slate-800/50 border border-slate-700 overflow-x-auto">
-          {historyLoading ? (
-            <div className="p-6 text-slate-400 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {tr('accessReview.loading', 'Loading...')}</div>
-          ) : historyError && !past ? (
-            <div className="p-6 text-red-300">{(historyError as any)?.response?.data?.detail || (historyError as Error).message}</div>
-          ) : history.length === 0 ? (
-            <div className="p-6 text-slate-400">{tr('accessReview.noHistory', 'No review has been signed off yet.')}</div>
-          ) : (
-            <table className="min-w-full text-sm">
-              <thead className="text-slate-400">
+      <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-lg bg-slate-800/50 border border-slate-700">
+        <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
+          {tab === 'history' ? (
+            <table className="min-w-full text-sm" data-testid="access-review-history-table">
+              <thead ref={theadRef} className="text-slate-400">
                 <tr>
                   <th className="px-3 py-2 text-left">{tr('accessReview.col.reviewedAt', 'Signed off')}</th>
                   <th className="px-3 py-2 text-left">{tr('accessReview.col.reviewedBy', 'By')}</th>
@@ -341,8 +380,8 @@ export default function AccessReview() {
                 </tr>
               </thead>
               <tbody>
-                {history.map((h) => (
-                  <tr key={h.id} className="border-t border-slate-700/60 text-slate-300" data-testid="access-review-history-row">
+                {history.map((h, idx) => (
+                  <tr key={h.id} ref={idx === 0 ? firstRowRef : undefined} className="border-t border-slate-700/60 text-slate-300" data-testid="access-review-history-row">
                     <td className="px-3 py-2 whitespace-nowrap text-ink" title={utcTitle(h.reviewed_at)}>{formatWhen(h.reviewed_at)}</td>
                     <td className="px-3 py-2">{h.reviewed_by_email}</td>
                     <td className="px-3 py-2">{h.note || '-'}</td>
@@ -354,71 +393,100 @@ export default function AccessReview() {
                     </td>
                   </tr>
                 ))}
+                {history.length === 0 && (
+                  <TableEmptyRow colSpan={HISTORY_COLUMNS} resource="access-review-history" className="p-6 text-left text-slate-400">
+                    {historyLoading ? (
+                      <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {tr('accessReview.loading', 'Loading...')}</span>
+                    ) : historyError && !past ? (
+                      <span className="text-red-300">{(historyError as any)?.response?.data?.detail || (historyError as Error).message}</span>
+                    ) : tr('accessReview.noHistory', 'No review has been signed off yet.')}
+                  </TableEmptyRow>
+                )}
               </tbody>
+              <AdaptiveTableFillerRows count={rowsPerPage - history.length} columnCount={HISTORY_COLUMNS} cellClassName="py-2" />
             </table>
-          )}
-          <ListPager
-            currentPage={past ? past.offset / HISTORY_PER_PAGE + 1 : pastPage}
-            totalPages={pastPages}
-            total={pastTotal}
-            rowsPerPage={HISTORY_PER_PAGE}
-            onPageChange={(p) => { if (!pastLoading) setPastPage(p) }}
-            showPageSize={false}
-            testId="access-review-history-pager"
-          />
-        </div>
-      ) : (
-        <div className="rounded-lg bg-slate-800/50 border border-slate-700 overflow-x-auto">
-          {isLoading || (viewId && !viewed) ? (
-            <div className="p-6 text-slate-400 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {tr('accessReview.loading', 'Loading...')}</div>
-          ) : rows.length === 0 ? (
-            <div className="p-6 text-slate-400">{tr('accessReview.empty', 'Nothing to show.')}</div>
           ) : (
             <table className="min-w-full text-sm" data-testid="access-review-table">
-              <thead className="text-slate-400">
+              <thead ref={theadRef} className="text-slate-400">
                 <tr>{columns[tab].map((c) => <th key={c.key} className="px-3 py-2 text-left whitespace-nowrap">{c.label}</th>)}</tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
-                  <tr key={i} className="border-t border-slate-700/60 text-slate-300 align-top" data-testid="access-review-row">
+                {shown.rows.map((r, i) => (
+                  <tr key={i} ref={i === 0 ? firstRowRef : undefined} className="border-t border-slate-700/60 text-slate-300 align-top" data-testid="access-review-row">
                     {columns[tab].map((c) => <td key={c.key} className="px-3 py-2">{c.render(r)}</td>)}
                   </tr>
                 ))}
+                {shown.rows.length === 0 && (
+                  <TableEmptyRow colSpan={columns[tab].length} resource="access-review" className="p-6 text-left text-slate-400">
+                    {isLoading || (viewId && !viewed) ? (
+                      <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {tr('accessReview.loading', 'Loading...')}</span>
+                    ) : tr('accessReview.empty', 'Nothing to show.')}
+                  </TableEmptyRow>
+                )}
               </tbody>
+              <AdaptiveTableFillerRows count={rowsPerPage - shown.rows.length} columnCount={columns[tab].length} cellClassName="py-2" />
             </table>
           )}
         </div>
-      )}
+        {tab === 'history' ? (
+          <ListPager
+            currentPage={past ? past.offset / pastLimit + 1 : pastPage}
+            totalPages={pastPages}
+            total={pastTotal}
+            rowsPerPage={pastLimit}
+            onPageChange={(p) => { if (!pastLoading) setPastPage(p) }}
+            testId="access-review-history-pager"
+          />
+        ) : (
+          <ListPager
+            currentPage={shown.page}
+            totalPages={shown.pages}
+            total={rows.length}
+            rowsPerPage={rowsPerPage}
+            onPageChange={setTabPage}
+            testId="access-review-pager"
+          />
+        )}
+      </div>
 
-      {!viewId && (
-        <div className="rounded-lg bg-slate-800/50 border border-slate-700 p-4 space-y-2" data-testid="access-review-signoff-panel">
-          <div className="text-sm font-medium text-ink">{tr('accessReview.signoff.title', 'Sign off this review')}</div>
-          <p className="text-xs text-slate-400">
-            {tr('accessReview.signoff.hint', 'Stores the report as it stands with your name, the time and your note, so the review can be shown later. Change any access on the Users, Clusters and API keys pages first.')}
-          </p>
+      {signoffOpen && !viewId && (
+        <ModalFrame
+          size="md"
+          title={tr('accessReview.signoff.title', 'Sign off this review')}
+          subtitle={tr('accessReview.signoff.hint', 'Stores the report as it stands with your name, the time and your note, so the review can be shown later. Change any access on the Users, Clusters and API keys pages first.')}
+          onClose={() => setSignoffOpen(false)}
+          busy={signoff.isPending}
+          testId="access-review-signoff-panel"
+          footerStart={error ? <span className="text-red-300" role="alert">{error}</span> : undefined}
+          footer={
+            <>
+              <button type="button" onClick={() => setSignoffOpen(false)} className={modalButton.cancel} disabled={signoff.isPending}>
+                {tr('common.cancel', 'Cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => signoff.mutate()}
+                disabled={signoff.isPending || !live}
+                data-testid="access-review-signoff"
+                className={modalButton.primary}
+              >
+                {signoff.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardCheck className="w-4 h-4" />}
+                {tr('accessReview.signoff.button', 'Sign off')}
+              </button>
+            </>
+          }
+        >
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             maxLength={2000}
-            rows={2}
+            rows={4}
+            autoFocus
             placeholder={tr('accessReview.signoff.notePlaceholder', 'Findings and actions taken (optional)')}
             data-testid="access-review-signoff-note"
             className="w-full px-3 py-2 bg-slate-700 text-ink rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 text-sm"
           />
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => signoff.mutate()}
-              disabled={signoff.isPending || !live}
-              data-testid="access-review-signoff"
-              className="rounded-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-50 px-3 py-1.5 text-sm text-white flex items-center gap-2"
-            >
-              {signoff.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardCheck className="w-4 h-4" />}
-              {tr('accessReview.signoff.button', 'Sign off')}
-            </button>
-            {message && <span className="text-sm text-green-300" data-testid="access-review-signoff-message">{message}</span>}
-            {error && <span className="text-sm text-red-300">{error}</span>}
-          </div>
-        </div>
+        </ModalFrame>
       )}
     </div>
   )

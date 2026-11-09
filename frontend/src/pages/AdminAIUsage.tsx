@@ -8,6 +8,8 @@ import type { AIUsageGroup, AIUsageRow } from '@/services/api'
 import { formatDate, formatTime, parseTypedTime, utcTitle } from '@/utils/time'
 import { DateTextInput } from '@/components/DateTextInput'
 import { ListPager } from '@/components/ListPager'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { avgPromptChars, cachedPercent, isInvestigationRow, usageCuts, usageRowKey, usageTotals } from './aiUsageView'
 
 // Admin view over the ai.chat.complete audit records (chat turns, Optimization
@@ -17,7 +19,7 @@ import { avgPromptChars, cachedPercent, isInvestigationRow, usageCuts, usageRowK
 // looks wrong. Totals and the cut come from the server.
 
 const DAY_MS = 24 * 60 * 60 * 1000
-const PAGE_SIZE = 25
+const COLUMNS = 10
 
 function fmtInt(n: number): string {
   return Number.isFinite(n) ? Math.round(n).toLocaleString() : '-'
@@ -31,7 +33,8 @@ export default function AdminAIUsage() {
   const [sinceDay, setSinceDay] = useState(() => formatDate(Date.now() - 30 * DAY_MS))
   const [untilDay, setUntilDay] = useState(() => formatDate(Date.now()))
   const [group, setGroup] = useState<AIUsageGroup>('user')
-  const [page, setPage] = useState(1)
+  // the first row on screen: a new rows per page (Fit or a choice) shows the page that holds it
+  const [firstRow, setFirstRow] = useState(0)
 
   // Days are inclusive on both ends; the API takes [since, until). A day that is
   // not typed as YYYY-MM-DD yet keeps the last report on screen.
@@ -60,9 +63,10 @@ export default function AdminAIUsage() {
   })
 
   const rows: AIUsageRow[] = useMemo(() => data?.rows ?? [], [data?.rows])
-  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
-  const currentPage = Math.min(page, pageCount)
-  const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ rowHeight: 37, recalculationKey: rows.length })
+  const pageCount = Math.max(1, Math.ceil(rows.length / rowsPerPage))
+  const currentPage = Math.min(Math.floor(firstRow / rowsPerPage) + 1, pageCount)
+  const pageRows = rows.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage)
   const partialTokens = rows.some((r) => r.token_requests < r.requests)
   const totals = usageTotals(data)
   const cuts = usageCuts(data)
@@ -81,8 +85,8 @@ export default function AdminAIUsage() {
   const num = (n: number | undefined) => (n === undefined ? '-' : fmtInt(n))
 
   return (
-    <div className="page-scrolls space-y-4">
-      <div className="page-head items-center">
+    <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
+      <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('adminAIUsage.title', 'AI 사용량')}</h1>
           <p className="text-slate-400 text-sm mt-1">
@@ -99,14 +103,14 @@ export default function AdminAIUsage() {
         </button>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+      <div className="shrink-0 flex flex-wrap items-end gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-4">
         <label className="block text-xs font-semibold text-slate-400">
           {tr('adminAIUsage.since', '시작일')}
-          <DateTextInput value={sinceDay} onChange={(v) => { setSinceDay(v); setPage(1) }} className="h-8" testId="ai-usage-since" />
+          <DateTextInput value={sinceDay} onChange={(v) => { setSinceDay(v); setFirstRow(0) }} className="h-8" testId="ai-usage-since" />
         </label>
         <label className="block text-xs font-semibold text-slate-400">
           {tr('adminAIUsage.until', '종료일')}
-          <DateTextInput value={untilDay} onChange={(v) => { setUntilDay(v); setPage(1) }} className="h-8" testId="ai-usage-until" />
+          <DateTextInput value={untilDay} onChange={(v) => { setUntilDay(v); setFirstRow(0) }} className="h-8" testId="ai-usage-until" />
         </label>
         <CustomDropdown
           size="sm"
@@ -114,7 +118,7 @@ export default function AdminAIUsage() {
           label={tr('adminAIUsage.groupBy', '기준')}
           testId="ai-usage-group"
           value={group}
-          onChange={(v) => { setGroup(v as AIUsageGroup); setPage(1) }}
+          onChange={(v) => { setGroup(v as AIUsageGroup); setFirstRow(0) }}
           options={(['user', 'model', 'cluster'] as AIUsageGroup[]).map((g) => ({ value: g, label: groupLabel[g] }))}
         />
         <div className="ml-auto text-xs text-slate-400 text-right leading-5">
@@ -130,10 +134,10 @@ export default function AdminAIUsage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-800">
-        <div className="overflow-x-auto">
+      <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-lg border border-slate-800">
+        <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
         <table className="min-w-full text-sm" data-testid="ai-usage-table">
-          <thead className="bg-slate-900/60 text-slate-400">
+          <thead ref={theadRef} className="bg-slate-900/60 text-slate-400">
             <tr>
               <th className="px-3 py-2 text-left">{groupLabel[shownGroup]}</th>
               <th className="px-3 py-2 text-right">{tr('adminAIUsage.requests', '요청')}</th>
@@ -150,23 +154,23 @@ export default function AdminAIUsage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={10} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={COLUMNS} className="px-3 py-6 text-center text-slate-500">
                   {tr('common.loading', '불러오는 중…')}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={COLUMNS} className="px-3 py-6 text-center text-slate-500">
                   {tr('common.noSearchResults', 'No results found.')}
                 </td>
               </tr>
             ) : (
-              pageRows.map((r) => {
+              pageRows.map((r, idx) => {
                 const investigation = isInvestigationRow(r)
                 const chars = avgPromptChars(r)
                 const cachedPct = cachedPercent(r)
                 return (
-                <tr key={usageRowKey(r)} className="border-t border-slate-800 hover:bg-slate-900/40">
+                <tr key={usageRowKey(r)} ref={idx === 0 ? firstRowRef : undefined} className="border-t border-slate-800 hover:bg-slate-900/40">
                   <td className="px-3 py-2 text-slate-100">
                     <div className="flex items-center gap-2">
                       <span className="block max-w-[240px] truncate" title={r.key || undefined}>{r.key || '-'}</span>
@@ -210,11 +214,12 @@ export default function AdminAIUsage() {
               })
             )}
           </tbody>
+          <AdaptiveTableFillerRows count={rowsPerPage - pageRows.length} columnCount={COLUMNS} cellClassName="py-2" />
         </table>
         </div>
-        <ListPager currentPage={currentPage} totalPages={pageCount} total={rows.length} rowsPerPage={PAGE_SIZE} onPageChange={setPage} showPageSize={false} testId="ai-usage-pager" />
+        <ListPager currentPage={currentPage} totalPages={pageCount} total={rows.length} rowsPerPage={rowsPerPage} onPageChange={(p) => setFirstRow((p - 1) * rowsPerPage)} testId="ai-usage-pager" />
       </div>
-      <p className="text-xs text-slate-500">
+      <p className="shrink-0 text-xs text-slate-500">
         {cuts.map((c) => (
           <span key={c.source} className="mr-1 text-amber-400" data-testid={`ai-usage-cut-${c.source}`}>
             {tr('adminAIUsage.cut', '{{source}} by {{group}}: {{shown}} of {{groups}} listed, most tokens first; the totals count all {{groups}}.', {

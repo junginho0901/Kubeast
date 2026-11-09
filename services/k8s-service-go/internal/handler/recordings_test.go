@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
@@ -17,6 +18,17 @@ type memAudit struct{ rows []audit.Record }
 func (m *memAudit) Write(_ context.Context, rec audit.Record) (int64, error) {
 	m.rows = append(m.rows, rec)
 	return int64(len(m.rows)), nil
+}
+
+// The list says how many recordings match in X-Kubeast-Total, so the screen counts its pages; an install that never
+// set recording up has none.
+func TestRecordingsListSaysHowManyMatch(t *testing.T) {
+	h := &Handler{auditStore: &memAudit{}}
+	w := httptest.NewRecorder()
+	h.ListRecordings(w, hygieneRequest(http.MethodGet, "/api/v1/recordings?limit=12&offset=24", nil, "admin.sessions.read"))
+	if w.Code != http.StatusOK || w.Header().Get("X-Kubeast-Total") != "0" || strings.TrimSpace(w.Body.String()) != "[]" {
+		t.Fatalf("no recorder: %d total=%q %s", w.Code, w.Header().Get("X-Kubeast-Total"), w.Body)
+	}
 }
 
 // A spool that cannot be opened refuses the session when recording is

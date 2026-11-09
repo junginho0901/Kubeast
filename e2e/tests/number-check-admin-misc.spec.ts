@@ -106,7 +106,7 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
 
       // the screen's own reads of this user's rows
       const isMine = (r: Response) => r.url().includes('/api/v1/auth/admin/audit-logs?') && new URL(r.url()).searchParams.get('actor_email') === email
-      const shown = (p: Page) => p.locator('main tbody tr').evaluateAll((rows) => rows.filter((r) => (r as HTMLTableRowElement).cells.length >= 7)
+      const shown = (p: Page) => p.locator('main tbody:not([aria-hidden="true"]) tr').evaluateAll((rows) => rows.filter((r) => (r as HTMLTableRowElement).cells.length >= 7)
         .map((r) => [0, 1, 3].map((i) => (r as HTMLTableRowElement).cells[i].innerText.trim())))
       const wanted = (a: AuditAnswer) => page.evaluate((items) => {
         const pad = (n: number) => String(n).padStart(2, '0')
@@ -120,9 +120,9 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
       await expect(page.locator('main tbody tr').first()).toBeVisible({ timeout: 15_000 })
       await page.getByPlaceholder('k8s.pod.delete').fill('admin.audit.read')
       await page.getByPlaceholder('user@example.com').fill(email)
-      const perPage = page.locator('label', { hasText: EN.adminAudit.filter.limit })
-      await perPage.locator('button').first().click()
-      await perPage.getByRole('button', { name: /^25$/ }).click()
+      // 25 a page, chosen in the table's footer (kept in this browser until the end of the test)
+      await page.getByTestId('audit-pager').getByTestId('page-size-select').click()
+      await page.getByTestId('audit-pager').getByRole('button', { name: /^25$/ }).click()
       let answer = page.waitForResponse(isMine)
       await page.getByRole('button', { name: new RegExp(`^${EN.adminAudit.apply}$`) }).click()
       const pages: AuditAnswer[] = [await (await answer).json()]
@@ -221,6 +221,7 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
         await expect.poll(() => totalLine.innerText(), { timeout: 15_000 }).toBe(`${entries(all.total)} · ${cut}`)
       })
     } finally {
+      await page.evaluate(() => localStorage.removeItem('kubeast.listPageSize')).catch(() => {})
       await cleanup()
     }
   })
@@ -239,14 +240,21 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
       const list = async (params: Record<string, string>) =>
         (await (await request.get('/api/v1/cluster/recordings', { headers: bearer(admin), params: { cluster: '', ...params } })).json()) as { id: string }[]
       const all = await list({ limit: '500' })
-      test.skip(all.length <= 50, `only ${all.length} recordings: a single page`)
       // the e-mails holding the text typed, "_" as itself
       const literal = Number(psql(`SELECT count(*) FROM session_recordings WHERE strpos(user_email, '${typed}') > 0`))
       expect(literal, `recordings whose user holds ${typed}`).toBe(1)
 
       await page.goto(RECORDINGS.path)
-      const rows = page.getByTestId('recordings-table').locator('tbody tr')
-      await expect(rows).toHaveCount(50, { timeout: 15_000 })
+      // the rows that fit the screen, and how many there are: the footer's range against the database
+      const rows = page.getByTestId('recordings-table').locator('tbody:not([aria-hidden="true"]) tr')
+      const pager = page.getByTestId('recordings-pager')
+      await expect(pager).toContainText(/Showing 1-\d+ of \d+/, { timeout: 15_000 })
+      const [, first, last, total] = (/Showing (\d+)-(\d+) of (\d+)/.exec(await pager.innerText()) ?? []).map(Number)
+      const size = last - first + 1
+      expect.soft(total, 'the recordings counted = the database').toBe(Number(psql('SELECT count(*) FROM session_recordings')))
+      expect.soft(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight), 'the page scrolls by').toBeLessThanOrEqual(1)
+      test.skip(all.length <= size, `only ${all.length} recordings: a single page of ${size}`)
+      await expect(rows).toHaveCount(size, { timeout: 15_000 })
       await page.evaluate((texts) => {
         const w = window as Obj
         w.__recFlash = []
@@ -259,8 +267,8 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
         new MutationObserver(check).observe(body, { subtree: true, childList: true, characterData: true })
       }, [EN.recordings.loading, EN.common.listEmpty])
 
-      await page.getByTestId('recordings-pager').getByRole('button').last().click()
-      await expect(rows.first()).toHaveAttribute('data-testid', `recording-row-${all[50].id}`, { timeout: 15_000 })
+      await pager.getByRole('button', { name: EN.common.next, exact: true }).click()
+      await expect(rows.first()).toHaveAttribute('data-testid', `recording-row-${all[size].id}`, { timeout: 15_000 })
       expect.soft(await page.evaluate(() => (window as Obj).__recFlash.splice(0)), 'no loading or empty row while the next page loads').toEqual([])
 
       await page.getByPlaceholder('user@example.com').fill(typed)
@@ -326,27 +334,41 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
     }
   })
 
-  test('Audit logs: rows per page is the table\'s value, and choosing one reads at once', async ({ page }) => {
-    const reads: { limit: string | null; offset: string | null }[] = []
-    page.on('response', (r) => {
+  test('Audit logs: rows per page fit the screen, and a choice in the footer reads at once from the page holding the first row', async ({ page }) => {
+    const reads: { limit: string | null; offset: string | null; total: number; items: number }[] = []
+    page.on('response', async (r) => {
       if (!r.url().includes('/api/v1/auth/admin/audit-logs?')) return
       const q = new URL(r.url()).searchParams
-      reads.push({ limit: q.get('limit'), offset: q.get('offset') })
+      try {
+        const body = (await r.json()) as { items: unknown[]; total: number }
+        reads.push({ limit: q.get('limit'), offset: q.get('offset'), total: body.total, items: body.items.length })
+      } catch { /* the page went on */ }
     })
-    await page.goto(AUDIT.path)
-    const perPage = page.locator('label', { hasText: EN.adminAudit.filter.limit }).locator('button').first()
-    await expect(perPage, 'the table reads 50 to start with').toHaveText('50', { timeout: 15_000 })
-    await expect.poll(() => reads.at(-1)?.limit, { timeout: 15_000 }).toBe('50')
+    const rows = () => page.locator('main tbody:not([aria-hidden="true"]) tr').evaluateAll((all) => all.filter((r) => (r as HTMLTableRowElement).cells.length >= 7).length)
+    const select = page.getByTestId('audit-pager').getByTestId('page-size-select')
+    try {
+      await page.goto(AUDIT.path)
+      await expect(select, 'Fit to start with').toHaveText(EN.common.pageSize.fit, { timeout: 15_000 })
+      // the table holds the rows of the last read, which asked as many as fit; the page does not scroll
+      await expect.poll(async () => (reads.length ? (await rows()) === reads.at(-1)!.items : false), { timeout: 15_000, message: 'the table holds the last read' }).toBe(true)
+      const fit = reads.at(-1)!
+      expect.soft(fit.items, 'a page of rows that fit').toBe(Math.min(Number(fit.limit), fit.total))
+      expect.soft(Number(fit.limit), 'rows that fit at 1440×900').toBeGreaterThanOrEqual(5)
+      expect.soft(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight), 'the page scrolls by').toBeLessThanOrEqual(1)
+      const pagerBottom = await page.getByTestId('audit-pager').evaluate((el) => el.getBoundingClientRect().bottom)
+      expect.soft(pagerBottom, 'the footer is on screen').toBeLessThanOrEqual(page.viewportSize()!.height)
 
-    const answered = page.waitForResponse((r) => r.url().includes('/api/v1/auth/admin/audit-logs?') && new URL(r.url()).searchParams.get('limit') === '25')
-    await perPage.click()
-    await page.locator('label', { hasText: EN.adminAudit.filter.limit }).getByRole('button', { name: /^25$/ }).click()
-    const answer = (await (await answered).json()) as { items: unknown[]; total: number }
-    expect(reads.at(-1), 'read at once, from the first page, without pressing Search').toEqual({ limit: '25', offset: '0' })
-    await expect(perPage, 'the dropdown').toHaveText('25')
-    const rows = () => page.locator('main tbody tr').evaluateAll((all) => all.filter((r) => (r as HTMLTableRowElement).cells.length >= 7).length)
-    await expect.poll(rows, { timeout: 15_000, message: 'the table holds that many rows' }).toBe(answer.items.length)
-    expect(answer.items.length).toBe(Math.min(25, answer.total))
+      const answered = page.waitForResponse((r) => r.url().includes('/api/v1/auth/admin/audit-logs?') && new URL(r.url()).searchParams.get('limit') === '25')
+      await select.click()
+      await page.getByTestId('audit-pager').getByRole('button', { name: /^25$/ }).click()
+      const answer = (await (await answered).json()) as { items: unknown[]; total: number }
+      expect(reads.at(-1) && { limit: reads.at(-1)!.limit, offset: reads.at(-1)!.offset }, 'read at once, the first page held the first row, without pressing Search').toEqual({ limit: '25', offset: '0' })
+      await expect(select, 'the dropdown').toHaveText('25')
+      await expect.poll(rows, { timeout: 15_000, message: 'the table holds that many rows' }).toBe(answer.items.length)
+      expect(answer.items.length).toBe(Math.min(25, answer.total))
+    } finally {
+      await page.evaluate(() => localStorage.removeItem('kubeast.listPageSize')).catch(() => {})
+    }
   })
 
   test('AI chat: a conversation longer than a page says what it does not show, and reads it above, each message once', async ({ page, request }) => {

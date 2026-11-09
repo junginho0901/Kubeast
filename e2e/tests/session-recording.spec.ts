@@ -166,7 +166,10 @@ test.describe.serial('session recording', () => {
     await expect(page.getByTestId('recording-download-text')).toHaveAttribute('href', new RegExp(`${recordingId}/cast\\?format=text`))
     await page.keyboard.press('Escape')
 
+    // the exec rows only: a page of the rows that fit the screen holds the newest few of every action
     await page.goto('/admin/audit')
+    await page.getByPlaceholder('k8s.pod.delete').fill('k8s.pod.exec')
+    await page.getByRole('button', { name: /^(Search|조회)$/ }).first().click()
     const play = page.getByTestId(`audit-play-${recordingId}`)
     await expect(play).toBeVisible({ timeout: 15_000 })
     await play.click()
@@ -194,35 +197,38 @@ test.describe.serial('session recording', () => {
     }
   })
 
-  // Re-QA #3 and #4: the list pages 50 at a time (it was every row on one
-  // page, and nothing past 200), and an interrupted recording shows the size
-  // that was kept — not the bytes that never left the lost spool file.
+  // Re-QA #3 and #4: the list pages as many rows as fit the screen (it was every row on one page, and nothing past
+  // 200), counted by the server, and an interrupted recording shows the size that was kept — not the bytes that never
+  // left the lost spool file.
   test('the list pages, and an interrupted recording shows what was kept', async ({ page, request }) => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
-    const list = async (params: Record<string, string>) =>
-      (await (await request.get('/api/v1/cluster/recordings', { headers: bearer(admin), params: { cluster: '', ...params } })).json()) as any[]
+    const answer = async (params: Record<string, string>) => request.get('/api/v1/cluster/recordings', { headers: bearer(admin), params: { cluster: '', ...params } })
+    const list = async (params: Record<string, string>) => (await (await answer(params)).json()) as any[]
     const all = await list({ limit: '500' })
-    test.skip(all.length <= 50, `only ${all.length} recordings: a single page`)
     expect((await list({ limit: '2', offset: '1' })).map((r) => r.id), 'the API skips offset rows').toEqual(all.slice(1, 3).map((r) => r.id))
+    const counted = Number((await answer({ limit: '1' })).headers()['x-kubeast-total'])
 
     await page.goto('/admin/session-recordings')
-    const rows = page.getByTestId('recordings-table').locator('tbody tr')
+    const rows = page.getByTestId('recordings-table').locator('tbody:not([aria-hidden="true"]) tr')
     const pager = page.getByTestId('recordings-pager')
-    await expect(rows).toHaveCount(50)
-    await expect(pager).toContainText('1–50')
+    await expect(pager).toContainText(new RegExp(`Showing 1-\\d+ of ${counted}(?!\\d)`), { timeout: 15_000 })
+    const size = Number(/Showing 1-(\d+) of/.exec(await pager.innerText())?.[1])
+    test.skip(all.length <= size, `only ${all.length} recordings: a single page of ${size}`)
+    await expect(rows).toHaveCount(size)
     const go = async (n: number) => {
       for (let cur = 1; cur < n; cur++) {
-        await pager.getByRole('button').last().click()
-        await expect(rows.first()).toHaveAttribute('data-testid', `recording-row-${all[cur * 50].id}`)
+        await pager.getByRole('button', { name: /^(Next|다음)$/ }).click()
+        await expect(rows.first()).toHaveAttribute('data-testid', `recording-row-${all[cur * size].id}`)
       }
     }
     await go(2)
-    await expect(pager).toContainText(`51–${Math.min(100, all.length)}`)
+    await expect(pager).toContainText(`Showing ${size + 1}-${Math.min(2 * size, counted)} of ${counted}`)
 
     const lost = all.find((r) => r.status === 'interrupted' && r.parts === 0 && r.bytes > 0)
     test.skip(!lost, 'no interrupted recording without uploaded parts on this installation')
     await page.goto('/admin/session-recordings')
-    await go(Math.floor(all.indexOf(lost) / 50) + 1)
+    await expect(rows.first()).toHaveAttribute('data-testid', `recording-row-${all[0].id}`, { timeout: 15_000 })
+    await go(Math.floor(all.indexOf(lost) / size) + 1)
     const row = page.getByTestId(`recording-row-${lost.id}`)
     await expect(row.locator('td').nth(5)).toHaveText('0 B')
     await expect(row.locator('td').nth(6).locator('span')).toHaveAttribute('title', /nothing to play|재생할 내용이 없습니다/)

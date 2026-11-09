@@ -293,6 +293,12 @@ describe('how an answer ends', () => {
     expect(state).toMatchObject({ status: 'completed', isStreaming: false, content: 'Two clusters.', error: null, errorKey: null, streamingPhase: null })
   })
 
+  it('a keepalive comment the server sends while the model is quiet adds no letter and ends nothing', async () => {
+    const body = `: keepalive\n\n${sse({ content: 'Two ' })}: keepalive\n\n: keepalive\n\n${sse({ content: 'clusters.' })}: keepalive\n\n${sse('[DONE]')}`
+    const state = await ended(new Response(body))
+    expect(state).toMatchObject({ status: 'completed', isStreaming: false, content: 'Two clusters.', error: null, errorKey: null })
+  })
+
   it('a [DONE] on the last line without its line end is still the end', async () => {
     const state = await ended(new Response(`${sse({ content: 'Two clusters.' })}data: [DONE]`))
     expect(state).toMatchObject({ status: 'completed', content: 'Two clusters.', error: null })

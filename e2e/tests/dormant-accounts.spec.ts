@@ -129,6 +129,8 @@ test.describe('Dormant accounts', () => {
   test('the Users page shows the lock badge, unlocks, and runs a sweep', async ({ page, request }) => {
     psql(`UPDATE auth_users SET dormant_locked_at = NOW() WHERE email = '${MEMBER}'`)
     await page.goto('/admin/users')
+    // the list pages as many rows as fit the screen: find the account by its email
+    await page.getByTestId('admin-users-search').fill(MEMBER)
     await expect(page.getByTestId(`user-detail-${MEMBER}`)).toBeVisible({ timeout: 15000 })
     const row = page.locator('tr').filter({ has: page.getByTestId(`user-detail-${MEMBER}`) })
     await expect(row.getByTestId('user-dormant-badge')).toBeVisible()

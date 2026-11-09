@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Film, Play, RefreshCw } from 'lucide-react'
@@ -6,7 +6,10 @@ import { Film, Play, RefreshCw } from 'lucide-react'
 import { api } from '@/services/api'
 import type { SessionRecording } from '@/services/api/recordings'
 import CustomDropdown from '@/components/CustomDropdown'
+import { ListPager } from '@/components/ListPager'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import RecordingPlayerModal from '@/components/RecordingPlayerModal'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { formatWhen } from './accessRequestFormat'
 import { utcTitle } from '@/utils/time'
 
@@ -19,7 +22,7 @@ function formatBytes(n: number): string {
   return `${(n / (1 << 20)).toFixed(1)} MiB`
 }
 
-const PAGE_SIZE = 50
+const COLUMNS = 8
 
 // An interrupted recording keeps only what was uploaded before the server
 // stopped; the rest was written to a spool file that is gone.
@@ -37,23 +40,30 @@ export default function SessionRecordings() {
   const [user, setUser] = useState('')
   const [kind, setKind] = useState('')
   const [applied, setApplied] = useState({ user: '', kind: '' })
-  const [page, setPage] = useState(1)
+  // the first row on screen: a new rows per page (Fit or a choice) shows the page that holds it
+  const [firstRow, setFirstRow] = useState(0)
   const [playing, setPlaying] = useState<SessionRecording | null>(null)
 
+  // the first row's height is measured once rows have come (recalculationKey)
+  const [rowsIn, setRowsIn] = useState(false)
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ rowHeight: 41, recalculationKey: String(rowsIn) })
+  const page = Math.floor(firstRow / rowsPerPage) + 1
+
   const { data: config } = useQuery({ queryKey: ['recordings', 'config'], queryFn: api.getRecordingsConfig, staleTime: 60_000 })
-  // One row past the page tells whether there is a next page. The rows on
-  // screen stay while another page or search loads, with the range they are.
-  const { data, isLoading, isPlaceholderData, refetch, isFetching } = useQuery({
-    queryKey: ['recordings', 'list', applied, page],
-    queryFn: async () => ({ page, list: await api.listRecordings({ ...applied, limit: PAGE_SIZE + 1, offset: (page - 1) * PAGE_SIZE }) }),
+  // The server counts the matches (X-Kubeast-Total). The rows on screen stay while another page, search or page size
+  // loads, with the range and rows per page they are.
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ['recordings', 'list', applied, page, rowsPerPage],
+    queryFn: async () => ({ page, limit: rowsPerPage, ...(await api.listRecordings({ ...applied, limit: rowsPerPage, offset: (page - 1) * rowsPerPage })) }),
     placeholderData: keepPreviousData,
     refetchInterval: 15_000,
   })
-  const list = data?.list ?? []
-  const rows = list.slice(0, PAGE_SIZE)
-  const hasNext = list.length > PAGE_SIZE
+  const rows = data?.items ?? []
+  const total = data?.total ?? 0
   const shownPage = data?.page ?? page
-  const first = (shownPage - 1) * PAGE_SIZE + 1
+  const shownLimit = data?.limit ?? rowsPerPage
+  const hasRows = rows.length > 0
+  useEffect(() => { if (hasRows) setRowsIn(true) }, [hasRows])
 
   const statusClass: Record<string, string> = {
     recording: 'bg-primary-900/40 text-primary-300 border-primary-800/60',
@@ -63,8 +73,8 @@ export default function SessionRecordings() {
   }
 
   return (
-    <div className="page-scrolls space-y-6">
-      <div className="flex items-start justify-between gap-3">
+    <div className="flex flex-col h-[calc(100vh-4rem)] gap-6">
+      <div className="flex items-start justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary-600/20 rounded-lg">
             <Film className="w-6 h-6 text-primary-400" />
@@ -84,13 +94,13 @@ export default function SessionRecordings() {
       </div>
 
       {config && !config.enabled && (
-        <div className="rounded-lg border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-sm text-amber-200" data-testid="recordings-disabled">
+        <div className="shrink-0 rounded-lg border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-sm text-amber-200" data-testid="recordings-disabled">
           {tr('recordings.disabled', 'Session recording is off on this installation (sessionRecording.enabled). Earlier recordings stay listed.')}
         </div>
       )}
 
-      <div className="card">
-        <div className="flex flex-wrap items-end gap-3 mb-4">
+      <div ref={containerRef} className="card flex-1 min-h-0 flex flex-col">
+        <div className="flex flex-wrap items-end gap-3 mb-4 shrink-0">
           <div>
             <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('recordings.filter.user', 'User')}</label>
             <input
@@ -116,7 +126,7 @@ export default function SessionRecordings() {
             type="button"
             onClick={() => {
               setApplied({ user: user.trim(), kind })
-              setPage(1)
+              setFirstRow(0)
             }}
             className="h-10 rounded-lg bg-primary-600 px-3 text-sm font-medium text-white hover:bg-primary-500"
           >
@@ -124,9 +134,9 @@ export default function SessionRecordings() {
           </button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
           <table className="w-full text-sm" data-testid="recordings-table">
-            <thead className="text-slate-400">
+            <thead ref={theadRef} className="text-slate-400">
               <tr>
                 <th className="px-3 py-2 text-left">{tr('recordings.col.started', 'Started')}</th>
                 <th className="px-3 py-2 text-left">{tr('recordings.col.user', 'User')}</th>
@@ -140,12 +150,12 @@ export default function SessionRecordings() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">{tr('recordings.loading', 'Loading…')}</td></tr>
+                <tr><td colSpan={COLUMNS} className="px-3 py-6 text-center text-slate-500">{tr('recordings.loading', 'Loading…')}</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-400">{tr('common.listEmpty', 'No items.')}</td></tr>
+                <tr><td colSpan={COLUMNS} className="px-3 py-6 text-center text-slate-400">{tr('common.listEmpty', 'No items.')}</td></tr>
               ) : (
-                rows.map((r) => (
-                  <tr key={r.id} className="border-t border-slate-700" data-testid={`recording-row-${r.id}`}>
+                rows.map((r, idx) => (
+                  <tr key={r.id} ref={idx === 0 ? firstRowRef : undefined} className="border-t border-slate-700" data-testid={`recording-row-${r.id}`}>
                     <td className="px-3 py-2 text-slate-300 whitespace-nowrap" title={utcTitle(r.started_at)}>{formatWhen(r.started_at)}</td>
                     <td className="px-3 py-2 text-slate-200"><span className="block max-w-[200px] truncate" title={r.user_email || undefined}>{r.user_email || '-'}</span></td>
                     <td className="px-3 py-2 text-slate-300">{r.kind === 'exec' ? tr('recordings.kind.exec', 'Pod exec') : tr('recordings.kind.nodeShell', 'Node shell')}</td>
@@ -191,24 +201,18 @@ export default function SessionRecordings() {
                 ))
               )}
             </tbody>
+            <AdaptiveTableFillerRows count={rowsPerPage - rows.length} columnCount={COLUMNS} cellClassName="py-2" />
           </table>
         </div>
 
-        {/* The server pages without a total, so the footer shows the range and Prev/Next only — always, like ListPager */}
-        <div className="flex items-center justify-between pt-3 mt-2 border-t border-slate-700" data-testid="recordings-pager">
-          <div className="text-xs text-slate-400">
-            {rows.length > 0 ? `${first}–${first + rows.length - 1}` : tr('common.paginationEmpty', 'Showing 0 of 0')}
-          </div>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-ink hover:border-slate-500">
-              {tr('common.prev', 'Prev')}
-            </button>
-            <span className="text-xs text-slate-300 min-w-[48px] text-center">{shownPage}</span>
-            <button type="button" onClick={() => setPage((p) => p + 1)} disabled={!hasNext || isPlaceholderData} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-ink hover:border-slate-500">
-              {tr('common.next', 'Next')}
-            </button>
-          </div>
-        </div>
+        <ListPager
+          currentPage={shownPage}
+          totalPages={Math.max(1, Math.ceil(total / shownLimit))}
+          total={total}
+          rowsPerPage={shownLimit}
+          onPageChange={(p) => setFirstRow((p - 1) * shownLimit)}
+          testId="recordings-pager"
+        />
       </div>
 
       {playing && (

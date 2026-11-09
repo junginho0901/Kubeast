@@ -274,13 +274,23 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	container := queryParam(r, "container", "")
 	tailLines := queryParamInt(r, "tail_lines", 100)
+	// A reconnecting EventSource names the last line it got: go on after it instead of the tail again.
+	from, resumed := parseLogLineID(r.Header.Get("Last-Event-ID"))
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
 		return
 	}
-	after, _ := json.Marshal(map[string]interface{}{"container": container, "tail_lines": tailLines, "follow": true})
+	read := map[string]interface{}{"container": container, "follow": true}
+	tail, since := int64(tailLines), time.Time{}
+	if resumed {
+		read["resume_from"] = from.String()
+		tail, since = 0, from.at.Truncate(time.Second)
+	} else {
+		read["tail_lines"] = tailLines
+	}
+	after, _ := json.Marshal(read)
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -289,14 +299,17 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
+	keep := startSSEKeepalive(w, flusher)
+	defer keep.stop()
+	w, flusher = keep, keep
 
 	ctx, release := h.holdSession(r.Context())
 	defer release()
-	slog.Info("pod logs sse connected", "namespace", namespace, "pod", name, "container", container)
+	slog.Info("pod logs sse connected", "namespace", namespace, "pod", name, "container", container, "resumed", resumed)
 
 	// Pod 가 초기화 중일 때 retry. SSE 헤더 이미 보냈으므로 retry 실패 시
 	// error 이벤트로 알림.
-	stream, err := h.retryStreamPodLogs(ctx, w, flusher, namespace, name, container, int64(tailLines))
+	stream, err := h.retryStreamPodLogs(ctx, w, flusher, namespace, name, container, tail, since)
 	if err != nil {
 		// 이미 client 에 error 이벤트 전송됨
 		_ = h.recordAuditWithPayload(r, "k8s.pod.logs.read", "pod", name, namespace, err, nil, after)
@@ -314,13 +327,22 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 	// Line scanner — 큰 로그 줄도 받게 64KiB → 1MiB buffer.
 	scanner := bufio.NewScanner(stream)
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	var ids logLineIDs
 	for scanner.Scan() {
 		if ctx.Err() != nil {
 			break
 		}
 		line := scanner.Text()
+		id, numbered := ids.next(line)
+		if resumed && numbered && !id.after(from) {
+			continue // the browser got it before it reconnected
+		}
 		// SSE 메시지 = 한 로그 줄. data: prefix + 빈 줄로 종료.
-		if _, err := fmt.Fprintf(w, "data: %s\n\n", line); err != nil {
+		frame := "data: " + line + "\n\n"
+		if numbered {
+			frame = "id: " + id.String() + "\n" + frame
+		}
+		if _, err := io.WriteString(w, frame); err != nil {
 			slog.Info("pod logs sse write error (client disconnect)", "err", err)
 			return
 		}
@@ -339,12 +361,12 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 // retryStreamPodLogs — Pod 가 ContainerCreating 등 아직 초기화 중인 경우
 // exponential backoff 으로 재시도. 성공 시 io.ReadCloser 반환, 영구 실패 시
 // SSE error 이벤트 전송 후 error 반환.
-func (h *Handler) retryStreamPodLogs(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, namespace, name, container string, tailLines int64) (io.ReadCloser, error) {
+func (h *Handler) retryStreamPodLogs(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, namespace, name, container string, tailLines int64, since time.Time) (io.ReadCloser, error) {
 	const maxRetries = 6
 	backoff := time.Second
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		stream, err := h.svc.StreamPodLogs(ctx, namespace, name, container, tailLines)
+		stream, err := h.svc.StreamPodLogs(ctx, namespace, name, container, tailLines, since)
 		if err == nil {
 			return stream, nil
 		}

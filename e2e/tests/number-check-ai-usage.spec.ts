@@ -72,9 +72,18 @@ function dbUsage(group: Group, since: string, until: string): Record<Source, Sum
 // what the page draws for a number (Math.round(n).toLocaleString() in the browser)
 const formatted = (page: Page, ns: number[]) => page.evaluate((list) => list.map((n) => Math.round(n).toLocaleString()), ns)
 
-// every row of the usage table on the current page: key, investigation badge, requests, prompt, cached, completion, total, "*", tool calls, failures
+// The range a list footer shows ("Showing a-b of n", ListPager), as [a, b, n]; [0, 0, 0] for "Showing 0 of 0".
+async function shownRange(page: Page, pager: string): Promise<[number, number, number]> {
+  const text = await page.getByTestId(pager).innerText()
+  if (text.includes(EN.common.paginationEmpty)) return [0, 0, 0]
+  const m = /Showing (\d+)-(\d+) of (\d+)/.exec(text)
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : [-1, -1, -1]
+}
+
+// every row of the usage table on the current page (not the filler rows under them): key, investigation badge,
+// requests, prompt, cached, completion, total, "*", tool calls, failures
 const usageRowsOnScreen = (page: Page, badge: string) =>
-  page.getByTestId('ai-usage-table').locator('tbody tr').evaluateAll((trs, b) => trs.filter((tr) => (tr as HTMLTableRowElement).cells.length >= 10).map((tr) => {
+  page.getByTestId('ai-usage-table').locator('tbody:not([aria-hidden="true"]) tr').evaluateAll((trs, b) => trs.filter((tr) => (tr as HTMLTableRowElement).cells.length >= 10).map((tr) => {
     const c = (tr as HTMLTableRowElement).cells
     const first = (i: number) => (c[i].firstChild?.textContent ?? '').trim()
     return [c[0].querySelector('span')?.textContent?.trim() ?? '', c[0].innerText.includes(b), first(1), first(2), first(3), first(4), first(5), c[5].innerText.includes('*'), first(6), first(8)]
@@ -130,24 +139,38 @@ test.describe('number check: AI usage and investigations', () => {
         const [requests, prompt, cached, completion, total, tools, failures] = await formatted(page, [r.requests, r.prompt_tokens, r.cached_tokens ?? 0, r.completion_tokens, r.total_tokens, r.tool_calls, r.failures])
         return [r.key || '-', r.source === 'investigation', requests, prompt, typeof r.cached_tokens === 'number' ? cached : '-', completion, total, r.token_requests < r.requests, tools, failures]
       }))
+      // the page fits the screen (Fit): each page is the rows its footer says it shows, the pages follow on
       const rows: Obj[] = []
       const next = page.getByTestId('ai-usage-pager').getByRole('button', { name: EN.common.next, exact: true })
-      for (let p = 0; p < 40; p++) {
+      const onScreen = async () => {
+        const [a, b, n] = await shownRange(page, 'ai-usage-pager')
+        const got = await usageRowsOnScreen(page, badge)
+        return { a, n, rows: got, matches: got.length === b - a + 1 && JSON.stringify(got) === JSON.stringify(want.slice(a - 1, b)) }
+      }
+      for (let p = 0; p <= want.length && want.length > 0; p++) {
         const from = rows.length
+        let shown = await onScreen()
         try {
-          await expect.poll(() => usageRowsOnScreen(page, badge), { timeout: 15_000 }).toEqual(want.slice(from, from + 25))
+          await expect.poll(async () => {
+            shown = await onScreen()
+            return { a: shown.a, n: shown.n, matches: shown.matches }
+          }, { timeout: 15_000 }).toEqual({ a: from + 1, n: want.length, matches: true })
         } catch {
-          expect.soft(await usageRowsOnScreen(page, badge), `${group}: page ${p + 1} = the answer's rows`).toEqual(want.slice(from, from + 25))
+          expect.soft(shown.rows, `${group}: page ${p + 1} (footer from ${shown.a} of ${shown.n}) = the answer's rows from ${from + 1}`).toEqual(want.slice(from, from + Math.max(shown.rows.length, 1)))
         }
-        rows.push(...(await usageRowsOnScreen(page, badge)))
+        if (shown.rows.length === 0) break
+        rows.push(...shown.rows)
         if (await next.isDisabled()) break
         await next.click()
       }
+      if (want.length === 0) expect.soft(await shownRange(page, 'ai-usage-pager'), `${group}: no rows`).toEqual([0, 0, 0])
       expect.soft(rows, `${group}: the rows on every page = the answer's`).toEqual(want)
       expect.soft(rows.filter((r) => r[1]).length, `${group}: alert investigation rows = their groups in the audit rows`).toBe(listed('investigation'))
       const shownTotal = listed('chat') + listed('investigation')
-      const pager = (await page.getByTestId('ai-usage-pager').innerText()).split('\n')[0]
-      expect.soft(pager.startsWith('Showing ') && pager.endsWith(` of ${shownTotal}`), `${group}: pager "${pager}" counts ${shownTotal} rows`).toBe(true)
+      const [, , counted] = await shownRange(page, 'ai-usage-pager')
+      expect.soft(counted, `${group}: the pager counts ${shownTotal} rows`).toBe(shownTotal)
+      // the table and its footer fit the screen: the page does not scroll
+      expect.soft(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight), `${group}: the page scrolls by`).toBeLessThanOrEqual(1)
       expect.soft(await page.getByTestId('ai-usage-table').locator('thead th').first().innerText(), `${group}: the table heading`).toBe(EN.adminAIUsage.group[group])
 
       // the totals line: every group of the period, chat and alert investigations apart
@@ -231,8 +254,13 @@ test.describe('number check: AI usage and investigations', () => {
     const cleanup = () => psql(`DELETE FROM alert_investigations WHERE id LIKE '${PREFIX}%'`)
     const dbCount = (where = '') => Number(psql(`SELECT count(*) FROM alert_investigations${where ? ` WHERE ${where}` : ''}`))
     const pager = page.getByTestId('investigations-pager')
-    const range = async () => (await pager.innerText()).split('\n')[0].trim()
-    const rangeOf = (from: number, to: number, total: number) => (total === 0 ? EN.common.paginationEmpty : fill(EN.investigations.range, { from, to, total }))
+    // the footer's range (ListPager), and the rows per page the screen fits: the limit of its last read
+    const range = async () => {
+      const text = await pager.innerText()
+      return /Showing \d+-\d+ of \d+/.exec(text)?.[0] ?? (text.includes(EN.common.paginationEmpty) ? EN.common.paginationEmpty : text)
+    }
+    const rangeOf = (start: number, end: number, total: number) => (total === 0 ? EN.common.paginationEmpty : fill(EN.common.paginationRange, { start, end, total }))
+    const per = () => Number(lastList?.url?.searchParams?.get('limit') ?? 0)
     const rowIds = () => page.locator('[data-testid^="investigation-row-"]').evaluateAll((trs) => trs.map((t) => t.getAttribute('data-testid')!.slice('investigation-row-'.length)))
     const card = page.locator('main .card').first()
     // until the screen shows what the database says now (alerts can be investigated meanwhile), then the last of both
@@ -247,10 +275,21 @@ test.describe('number check: AI usage and investigations', () => {
       }
       return [got, exp]
     }
+    // the answer to the list request sent last: answers can come back in another order (the first render asks with the
+    // estimated page size and the measured one at the same moment, and the estimate's answer may come second)
     let lastList: Obj = null
+    let sentLists = 0
+    const sentOrder = new Map<unknown, number>()
+    page.on('request', (q) => {
+      if (new URL(q.url()).pathname === INVESTIGATIONS_API && q.method() === 'GET') sentOrder.set(q, ++sentLists)
+    })
     page.on('response', async (r) => {
       if (atPath(r, INVESTIGATIONS_API)) {
-        try { lastList = { url: new URL(r.url()), body: await r.json() } } catch { /* the page went on */ }
+        const order = sentOrder.get(r.request()) ?? 0
+        try {
+          const body = await r.json()
+          if (!lastList || order >= lastList.order) lastList = { url: new URL(r.url()), body, order }
+        } catch { /* the page went on */ }
       }
     })
 
@@ -267,8 +306,11 @@ test.describe('number check: AI usage and investigations', () => {
       await expect(page.locator('[data-testid^="investigation-row-"]').first()).toBeVisible({ timeout: 15_000 })
 
       await test.step('"of total": the screen, the API and the database', async () => {
-        const [got, exp] = await settle(range, () => { const n = dbCount(); return rangeOf(1, Math.min(50, n), n) })
+        const [got, exp] = await settle(range, () => { const n = dbCount(); return rangeOf(1, Math.min(per(), n), n) })
         expect.soft(got, 'all reports: range on screen').toBe(exp)
+        // the rows that fit the screen: the page does not scroll, the footer is in view
+        expect.soft(per(), 'rows per page asked').toBeGreaterThanOrEqual(5)
+        expect.soft(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight), 'the page scrolls by').toBeLessThanOrEqual(1)
         const [apiTotal, dbTotal] = await settle(async () => String(lastList?.body?.total), () => String(dbCount()), 5_000)
         expect.soft(apiTotal, 'all reports: the API total').toBe(dbTotal)
       })
@@ -289,14 +331,14 @@ test.describe('number check: AI usage and investigations', () => {
         const status = page.locator('main label', { hasText: new RegExp(`^${EN.investigations.filter.status}$`) }).locator('xpath=..')
         await status.locator('button').first().click()
         await status.getByRole('button', { name: EN.investigations.status.done, exact: true }).click()
-        const [got, exp] = await settle(range, () => { const n = dbCount("status = 'done'"); return rangeOf(1, Math.min(50, n), n) })
+        const [got, exp] = await settle(range, () => { const n = dbCount("status = 'done'"); return rangeOf(1, Math.min(per(), n), n) })
         expect.soft(got, 'Done picked, no Search: range on screen = the done reports').toBe(exp)
         const doneAnswer = async () => (lastList?.url?.searchParams?.get('status') === 'done' ? String(lastList.body.total) : 'no answer for status=done')
         const [apiTotal, dbTotal] = await settle(doneAnswer, () => String(dbCount("status = 'done'")), 5_000)
         expect.soft(apiTotal, 'the API total of the done reports').toBe(dbTotal)
         await status.locator('button').first().click()
         await status.getByRole('button', { name: EN.investigations.status.all, exact: true }).click()
-        const [back, backExp] = await settle(range, () => { const n = dbCount(); return rangeOf(1, Math.min(50, n), n) })
+        const [back, backExp] = await settle(range, () => { const n = dbCount(); return rangeOf(1, Math.min(per(), n), n) })
         expect.soft(back, 'All picked again: every report').toBe(backExp)
       })
 
@@ -306,32 +348,41 @@ test.describe('number check: AI usage and investigations', () => {
         await page.waitForTimeout(500)
         expect.soft((await card.innerText()).includes(EN.investigations.filter.pending), 'typed, not applied: the note').toBe(true)
         const n = dbCount()
-        expect.soft(await range(), 'typed, not applied: still every report').toBe(rangeOf(1, Math.min(50, n), n))
+        expect.soft(await range(), 'typed, not applied: still every report').toBe(rangeOf(1, Math.min(per(), n), n))
         await input.press('Enter')
-        const [got] = await settle(range, () => rangeOf(1, 50, 60), 10_000)
-        expect.soft(got, 'Enter: the run\'s 60 reports').toBe(rangeOf(1, 50, 60))
+        const [got, exp] = await settle(range, () => rangeOf(1, Math.min(per(), 60), 60), 10_000)
+        expect.soft(got, 'Enter: the run\'s 60 reports').toBe(exp)
         // Search applies it as before (also where Enter did not)
         await page.getByTestId('investigations-search').click()
-        await expect.poll(range, { timeout: 15_000 }).toBe(rangeOf(1, 50, 60))
+        await expect.poll(range, { timeout: 15_000 }).toBe(rangeOf(1, Math.min(per(), 60), 60))
         expect.soft((await card.innerText()).includes(EN.investigations.filter.pending), 'applied: no note').toBe(false)
       })
 
       await test.step('same-time reports page in id order, each once, the table kept between pages', async () => {
-        await expect.poll(rowIds, { timeout: 15_000 }).toHaveLength(50)
-        const first = await rowIds()
-        const api1 = (await (await request.get(INVESTIGATIONS_API, { headers: bearer(admin), params: { cluster, limit: 50, offset: 0 } })).json()) as Obj
-        const api2 = (await (await request.get(INVESTIGATIONS_API, { headers: bearer(admin), params: { cluster, limit: 50, offset: 50 } })).json()) as Obj
-        const apiIds = [...api1.items, ...api2.items].map((r: Obj) => r.id)
+        const size = per()
+        expect(size, 'rows per page the screen asks').toBeGreaterThanOrEqual(5)
+        await expect.poll(rowIds, { timeout: 15_000 }).toHaveLength(Math.min(size, 60))
+        const shown = await rowIds()
         await page.evaluate(() => { (window as Obj).__invFlash = [] })
-        await pager.getByRole('button', { name: EN.common.next, exact: true }).click()
-        await expect.poll(rowIds, { timeout: 15_000 }).toHaveLength(10)
-        const second = await rowIds()
-        const shown = [...first, ...second]
+        const next = pager.getByRole('button', { name: EN.common.next, exact: true })
+        for (let p = 2; shown.length < 60 && p <= 60; p++) {
+          const before = shown.length
+          await next.click()
+          await expect.poll(range, { timeout: 15_000, message: `page ${p}` }).toBe(rangeOf(before + 1, Math.min(before + size, 60), 60))
+          shown.push(...(await rowIds()))
+        }
+        // the API's pages of the same size
+        const apiPages: Obj[] = []
+        for (let offset = 0; offset < 60; offset += size) {
+          apiPages.push(await (await request.get(INVESTIGATIONS_API, { headers: bearer(admin), params: { cluster, limit: size, offset } })).json())
+        }
+        const apiIds = apiPages.flatMap((a) => a.items.map((r: Obj) => r.id))
         expect.soft(shown.filter((id, i) => shown.indexOf(id) !== i), 'reports on two pages').toEqual([])
-        expect.soft(shown, 'the two pages: one received time, newest id first').toEqual(expectedOrder)
+        expect.soft(shown, 'the pages: one received time, newest id first').toEqual(expectedOrder)
         expect.soft(apiIds, 'the API pages: the same order').toEqual(expectedOrder)
-        expect.soft([api1.total, api2.total], 'the API total').toEqual([60, 60])
-        expect.soft(await range(), 'page 2: range').toBe(rangeOf(51, 60, 60))
+        expect.soft(apiPages.map((a) => a.total), 'the API total').toEqual(apiPages.map(() => 60))
+        expect.soft(await range(), 'the last page: range').toBe(rangeOf(Math.floor(59 / size) * size + 1, 60, 60))
+        expect.soft(await next.isDisabled(), 'no page after the last').toBe(true)
         expect.soft(await page.evaluate(() => (window as Obj).__invFlash), 'no loading or empty row while the next page loads').toEqual([])
       })
     } finally {
