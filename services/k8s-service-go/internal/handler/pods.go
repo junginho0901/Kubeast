@@ -137,12 +137,14 @@ func (h *Handler) GetPods(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	labelSelector := queryParam(r, "label_selector", "")
-	data, err := h.svc.GetPods(ctx, namespace, labelSelector)
+	raw, err := h.svc.GetPodsJSON(ctx, namespace, labelSelector)
 	if err != nil {
 		h.handleError(w, err)
 		return
 	}
-	response.JSON(w, http.StatusOK, data)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(raw)
 }
 
 // DescribePod handles GET /api/v1/namespaces/{namespace}/pods/{name}/describe.
