@@ -511,7 +511,9 @@ service:
 | 사용자 네임스페이스 | `podSecurity.hostUsers: false`(기본)를 쓰려면 Kubernetes 1.33 이상과 이를 지원하는 노드 커널(6.3 이상)이 필요합니다. 조건이 맞지 않으면 `true` |
 | 저장소 | 내장 PostgreSQL을 쓰면 PVC — 기본 StorageClass 또는 `postgresql.storageClassName` |
 | 노출 | NodePort(기본)·LoadBalancer, 또는 Ingress 컨트롤러(`ingress.enabled`) |
+| 앞단 프록시·로드 밸런서 | 유휴 시간 제한 30초 초과(AWS ALB 기본값은 60초). 조용한 동안 실시간 목록·터미널·노드 셸·로그 실시간 보기·AI 답은 25초마다, Helm 릴리스 스트림은 30초마다 무언가를 보내므로(WebSocket 핑, SSE 주석 줄) 열린 채 유지됩니다. 게이트웨이 자체는 이들에 600~3 600초를 줍니다 |
 | NetworkPolicy | `networkPolicy.enabled`(기본 켬)는 NetworkPolicy를 지원하는 CNI(Calico·Cilium·EKS VPC CNI 네트워크 정책)에서만 효과가 있습니다 |
+| 클러스터 안 Service로 나가는 연결 | 규칙의 주소를 Service의 ClusterIP와 맞춰 볼지 그 뒤의 파드와 맞춰 볼지는 Kubernetes가 CNI에 맡깁니다. EKS VPC CNI 네트워크 정책은 ClusterIP로(kube-proxy가 주소를 바꾸기 전에) 판단하므로, 파드 주소 범위를 열면 파드 IP로는 닿지만 Service 주소나 그 DNS 이름으로는 닿지 않습니다. 클러스터 안의 모델·LLM 게이트웨이(`networkPolicy.allowExternalEgressCIDRs`), 로그·트레이스·메트릭·알림 저장소(`features.*.egressCIDRs`), 녹화 저장소(`sessionRecording.egress`), OIDC 발급자(`auth.oidc.egress`), 감사 싱크(`audit.sinkEgress`)에 Service로 닿는다면 그 Service의 ClusterIP(`kubectl get svc <이름> -n <네임스페이스> -o jsonpath='{.spec.clusterIP}'`)나 클러스터의 서비스 주소 범위를 Service 포트와 함께 적으세요. 규칙을 그대로 적는 항목에서는 Service 자신의 `spec.selector`와 같은 라벨의 `podSelector`도 됩니다 |
 | 콘솔 메트릭 수집 | `metrics.serviceMonitor`·`metrics.prometheusRule`을 켜려면 prometheus-operator CRD가 필요합니다([metrics.md](metrics.md)) |
 | EKS 외부 클러스터·S3 | IRSA 롤(`aws.irsaRoleArn` 등) |
 | 사설 CA·TLS를 가로채는 프록시 | `customCAs`에 적은 Secret·ConfigMap이 릴리스 네임스페이스에 먼저 있어야 합니다. 없으면 새 파드가 볼륨을 기다리느라 뜨지 않으며, 이전 파드는 계속 응답합니다 |
