@@ -4,7 +4,7 @@
       "screen": "^/gpu/(dashboard|nodes|pods)$",
       "pager": "^gpu-(node-allocation|realtime|nodes-host|pods-node-usage)-pager$",
       "why": "The GPU overview and the chart panels GPU Nodes and GPU Pods open page a fixed number of node and host boxes inside a page that scrolls on purpose, so the footers have no rows-per-page choice.",
-      "pr": "#batch12"
+      "pr": "#748, #749"
     }
   ]
 }
