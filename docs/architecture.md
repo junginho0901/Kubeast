@@ -166,6 +166,7 @@ Known limits of v0.7.6, from these runs:
 - A drawer that follows its object reads its describe again as the object changes, and each person's read waits on the client's rate to the cluster (`multicluster.clientQPS`). During a rollout followed by 100 different people that read takes seconds (above), where a quiet drawer answers in milliseconds.
 - A drawer that follows its object, and a workload's pod table up to 300 pods, each hold one watch on the cluster as that person. They are not shared between people.
 - The AI's event reads (`k8s_get_events`, `timeline`) read pages of events outside `multicluster.eventListConcurrency`.
+- The whole list of a namespace's pods (`GET /api/v1/namespaces/{namespace}/pods`) is made in k8s-service before it is sent. v0.7.5's drawers read it; today's screens read it only for a namespace under their table's line or when the paged read is refused, and a script can call it. One account's reads at one moment share one answer (at most two reads, one after the other); different accounts each make their own, so many accounts reading a large namespace this way at once can take k8s-service past 512 Mi. One read of 50 000 pods holds about 80 MiB besides its 36 MiB answer (`BenchmarkTenReadersOfOneNamespacesPods`). Until a v0.7.6 change it also held every row as a map, about 300 MiB, and ten people of one account opening v0.7.5's ConfigMap drawer in that namespace took k8s-service past 512 Mi in a test.
 
 What sets these limits:
 

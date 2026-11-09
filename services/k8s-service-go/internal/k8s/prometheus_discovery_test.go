@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -25,6 +26,8 @@ type promServer struct {
 	mu       sync.Mutex
 	lists    int
 	queries  int
+	// failing: every Service list answers 500, as an API server that cannot list does.
+	failing bool
 }
 
 func (p *promServer) counts() (lists, queries int) {
@@ -33,27 +36,42 @@ func (p *promServer) counts() (lists, queries int) {
 	return p.lists, p.queries
 }
 
+// become changes what the cluster holds between two calls.
+func (p *promServer) become(found, failing bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.found, p.failing = found, failing
+}
+
 func newPromServer(t *testing.T, found, healthy403 bool) (*kubernetes.Clientset, *promServer) {
 	t.Helper()
 	ps := &promServer{found: found, healthy403: healthy403}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		p := r.URL.Path
+		ps.mu.Lock()
+		found, failing := ps.found, ps.failing
+		ps.mu.Unlock()
 		switch {
 		case strings.HasSuffix(p, "/services"):
 			ps.mu.Lock()
 			ps.lists++
 			ps.mu.Unlock()
+			if failing {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"InternalError","code":500}`))
+				return
+			}
 			if ps.labelled && p == "/api/v1/services" && r.URL.Query().Get("labelSelector") == "app.kubernetes.io/name=prometheus,app.kubernetes.io/component=server" {
 				_, _ = w.Write([]byte(`{"items":[{"metadata":{"name":"prometheus-server","namespace":"o11y"},"spec":{"ports":[{"name":"http","port":80}]}}]}`))
 				return
 			}
-			if ps.found && p == "/api/v1/namespaces/monitoring/services" {
+			if found && p == "/api/v1/namespaces/monitoring/services" {
 				_, _ = w.Write([]byte(`{"items":[{"metadata":{"name":"prometheus","namespace":"monitoring"},"spec":{"ports":[{"name":"web","port":9090}]}}]}`))
 				return
 			}
 			_, _ = w.Write([]byte(`{"items":[]}`))
-		case ps.found && p == "/api/v1/namespaces/monitoring/services/prometheus":
+		case found && p == "/api/v1/namespaces/monitoring/services/prometheus":
 			_, _ = w.Write([]byte(`{"metadata":{"name":"prometheus","namespace":"monitoring"},"spec":{"ports":[{"name":"web","port":9090}]}}`))
 		case ps.healthy403 && strings.HasSuffix(p, "/proxy/-/healthy"):
 			w.WriteHeader(http.StatusForbidden)
@@ -61,7 +79,7 @@ func newPromServer(t *testing.T, found, healthy403 bool) (*kubernetes.Clientset,
 		case ps.labelled && p == "/api/v1/namespaces/o11y/services/prometheus-server:80/proxy/-/healthy":
 			w.Header().Set("Content-Type", "text/plain")
 			_, _ = w.Write([]byte("Prometheus Server is Healthy.\n"))
-		case ps.found && p == "/api/v1/namespaces/monitoring/services/prometheus:9090/proxy/-/healthy":
+		case found && p == "/api/v1/namespaces/monitoring/services/prometheus:9090/proxy/-/healthy":
 			if ps.healthy403 {
 				w.WriteHeader(http.StatusForbidden)
 				_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"Forbidden","code":403}`))
@@ -80,7 +98,8 @@ func newPromServer(t *testing.T, found, healthy403 bool) (*kubernetes.Clientset,
 		}
 	}))
 	t.Cleanup(srv.Close)
-	cs, err := kubernetes.NewForConfig(&rest.Config{Host: srv.URL})
+	// no client rate limit: a second discovery round would otherwise wait for its 5 a second
+	cs, err := kubernetes.NewForConfig(&rest.Config{Host: srv.URL, QPS: -1})
 	if err != nil {
 		t.Fatalf("clientset: %v", err)
 	}
@@ -171,6 +190,128 @@ func TestPrometheusDiscovery_NotFoundProbedOnce(t *testing.T) {
 	// nothing found: the VictoriaMetrics label lists follow the one namespace round
 	if lists, _ := srv.counts(); lists != oneRound+len(VictoriaMetricsServiceLabels) {
 		t.Fatalf("service lists = %d, want one round (%d)", lists, oneRound+len(VictoriaMetricsServiceLabels))
+	}
+}
+
+// missRound is one discovery that finds nothing: the Prometheus labels, the namespaces, then the VictoriaMetrics labels.
+var missRound = oneRound + len(VictoriaMetricsServiceLabels)
+
+// passPromTime moves the cluster's remembered discovery back by d, as d passing would, so no test waits.
+func passPromTime(s *Service, d time.Duration) {
+	c := s.defaultBundle.Load().prom
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.probedAt = c.probedAt.Add(-d)
+}
+
+func promAvailable(s *Service) bool {
+	return s.PrometheusStatus(context.Background())["available"] == true
+}
+
+// A cluster where nothing was found is asked again a minute later, not ten: a Prometheus installed since shows then.
+func TestPrometheusDiscovery_NothingFoundIsAskedAgainAfterAMinute(t *testing.T) {
+	promDiscoveryEnv(t)
+	cs, srv := newPromServer(t, false, false)
+	s := newPromService(cs, nil)
+	if promAvailable(s) {
+		t.Fatal("found in a cluster without one")
+	}
+	srv.become(true, false)
+	passPromTime(s, 59*time.Second)
+	if promAvailable(s) {
+		t.Error("asked again within the minute")
+	}
+	if lists, _ := srv.counts(); lists != missRound {
+		t.Errorf("service lists within the minute = %d, want one discovery (%d)", lists, missRound)
+	}
+	passPromTime(s, 2*time.Second)
+	if !promAvailable(s) {
+		t.Error("not asked again a minute after nothing was found")
+	}
+	if lists, _ := srv.counts(); lists != missRound+oneRound {
+		t.Errorf("service lists after the minute = %d, want a second discovery (%d)", lists, missRound+oneRound)
+	}
+}
+
+// A discovery whose lists failed is remembered for a minute too: an API server that could not answer is asked again.
+func TestPrometheusDiscovery_AFailedDiscoveryIsAskedAgainAfterAMinute(t *testing.T) {
+	promDiscoveryEnv(t)
+	cs, srv := newPromServer(t, true, false)
+	srv.become(true, true)
+	s := newPromService(cs, nil)
+	if st := s.PrometheusStatus(context.Background()); st["available"] != false || st["reason"] != "not_found" {
+		t.Fatalf("status while the lists fail = %v", st)
+	}
+	srv.become(true, false)
+	passPromTime(s, 59*time.Second)
+	if promAvailable(s) {
+		t.Error("asked again within the minute")
+	}
+	if lists, _ := srv.counts(); lists != missRound {
+		t.Errorf("service lists within the minute = %d, want one discovery (%d)", lists, missRound)
+	}
+	passPromTime(s, 2*time.Second)
+	if !promAvailable(s) {
+		t.Error("not asked again a minute after the lists failed")
+	}
+	if lists, _ := srv.counts(); lists != missRound+oneRound {
+		t.Errorf("service lists after the minute = %d, want a second discovery (%d)", lists, missRound+oneRound)
+	}
+}
+
+// A Prometheus found is kept ten minutes, as before: the shorter time is only for a miss.
+func TestPrometheusDiscovery_AFoundServiceIsKeptTenMinutes(t *testing.T) {
+	promDiscoveryEnv(t)
+	cs, srv := newPromServer(t, true, false)
+	s := newPromService(cs, nil)
+	if !promAvailable(s) {
+		t.Fatal("not found")
+	}
+	srv.become(false, false)
+	passPromTime(s, 9*time.Minute+59*time.Second)
+	if !promAvailable(s) {
+		t.Error("asked again within ten minutes of finding it")
+	}
+	if lists, _ := srv.counts(); lists != oneRound {
+		t.Errorf("service lists within ten minutes = %d, want one discovery (%d)", lists, oneRound)
+	}
+	passPromTime(s, 2*time.Second)
+	if promAvailable(s) {
+		t.Error("not asked again ten minutes after finding it")
+	}
+	if lists, _ := srv.counts(); lists != oneRound+missRound {
+		t.Errorf("service lists after ten minutes = %d, want a second discovery (%d)", lists, oneRound+missRound)
+	}
+}
+
+// Callers that come together once the minute is over start one discovery between them, not one each.
+func TestPrometheusDiscovery_CallersAfterTheMinuteShareOneDiscovery(t *testing.T) {
+	promDiscoveryEnv(t)
+	cs, srv := newPromServer(t, false, false)
+	s := newPromService(cs, nil)
+	if promAvailable(s) {
+		t.Fatal("found in a cluster without one")
+	}
+	srv.become(true, false)
+	passPromTime(s, 61*time.Second)
+	const callers = 20
+	found := make([]bool, callers)
+	var wg sync.WaitGroup
+	for i := range callers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			found[i] = promAvailable(s)
+		}()
+	}
+	wg.Wait()
+	for i, ok := range found {
+		if !ok {
+			t.Errorf("caller %d: not found after the minute", i)
+		}
+	}
+	if lists, _ := srv.counts(); lists != missRound+oneRound {
+		t.Errorf("service lists for %d callers = %d, want one more discovery (%d)", callers, lists, missRound+oneRound)
 	}
 }
 

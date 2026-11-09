@@ -142,7 +142,7 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
   - API가 하위 경로에 있으면 `namespace/service:port/경로`처럼 경로까지 적습니다(예: VictoriaMetrics 클러스터 `monitoring/vmselect-main:8481/select/0/prometheus`).
   - Kubeast는 API 서버 프록시로 읽고, 상태 API로 `/-/healthy` 연결 여부와 저장소 종류(`flavor`: prometheus·victoriametrics)를 알려 줍니다.
   - 저장소 종류는 `/-/healthy` 응답 문구로 판단합니다.
-- **클러스터 안 자동 발견**: 아래 순서로 찾습니다. `/-/healthy`가 응답하면 그 Service를 쓰고, 찾은 결과는 클러스터마다 10분 동안 기억합니다.
+- **클러스터 안 자동 발견**: 아래 순서로 찾습니다. `/-/healthy`가 응답하면 그 Service를 쓰고, 결과는 클러스터마다 기억합니다. 찾았으면 10분, 못 찾았거나 찾다가 오류 · 시간 초과가 나면 1분입니다.
   - ① 모든 Namespace에서 레이블로 찾고, Service의 포트를 모두 시도합니다. 레이블 순서는 다음과 같습니다.
     - `kubeast.io/prometheus=true`
     - prometheus 차트 서버(`app.kubernetes.io/name=prometheus,app.kubernetes.io/component=server`, 포트 80)

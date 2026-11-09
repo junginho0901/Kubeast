@@ -78,7 +78,23 @@ type promCache struct {
 // rebuilds the bundle (see Service.Invalidate) drops the cache automatically —
 // the next query re-discovers Prometheus in the fresh cluster.
 
-const promCacheTTL = 10 * time.Minute
+const (
+	promCacheTTL = 10 * time.Minute
+	// promMissTTL is for a discovery that found nothing, failed or ran out of time: a Prometheus starting up shows within it.
+	promMissTTL = time.Minute
+)
+
+// fresh says whether the remembered discovery still answers at now.
+func (c *promCache) fresh(now time.Time) bool {
+	if !c.probed {
+		return false
+	}
+	ttl := promMissTTL
+	if c.svc != nil {
+		ttl = promCacheTTL
+	}
+	return now.Sub(c.probedAt) < ttl
+}
 
 // PrometheusFeatureEnabled reports whether the operator has explicitly
 // enabled Prometheus integration via the PROMETHEUS_ENABLED env var
@@ -312,7 +328,7 @@ func (s *Service) getPromService(ctx context.Context) *promServiceInfo {
 	}
 	c := b.prom
 	c.mu.RLock()
-	if c.probed && time.Since(c.probedAt) < promCacheTTL {
+	if c.fresh(time.Now()) {
 		cached := c.svc
 		c.mu.RUnlock()
 		return cached
@@ -322,20 +338,20 @@ func (s *Service) getPromService(ctx context.Context) *promServiceInfo {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.probed && time.Since(c.probedAt) < promCacheTTL {
+	if c.fresh(time.Now()) {
 		return c.svc
 	}
 
-	c.probed = true
-	c.probedAt = time.Now()
 	c.svc = s.discoverPrometheus(ctx)
+	c.probed, c.probedAt = true, time.Now()
 	return c.svc
 }
 
 // discoverPrometheus scans the TARGET cluster for a Prometheus service. The
 // candidate namespaces are probed concurrently so a cluster WITHOUT Prometheus
 // costs one round-trip, not the sum of all of them (this runs at most once per
-// cluster per promCacheTTL, but a remote cluster makes even one slow). Hits are
+// cluster per promCacheTTL, or promMissTTL after a miss, but a remote cluster
+// makes even one slow). Hits are
 // written by index so the namespace preference order is still honoured.
 // It runs as the discovery identity (client.go discoveryClient), not the
 // caller: the result is remembered for the whole cluster, so a caller who may
