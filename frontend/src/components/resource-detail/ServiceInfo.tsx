@@ -6,6 +6,7 @@ import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, Non
 import { fmtRel, fmtTs } from './detailFormat'
 import { useNamespacePodTable } from './useNamespacePodTable'
 import { usePagination } from './usePagination'
+import { backendPodNames, patternFitsOneQuery, podNamesPattern } from './serviceBackend'
 import { SET_POD_TABLE_WATCH_MAX } from './namespacePodTable'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
@@ -77,6 +78,8 @@ type ServiceDescribe = {
   created_at?: string | null
   conditions?: Array<Record<string, unknown>>
   endpoint_summary?: EndpointSummary | null
+  // each address of the slices, ready or not, with the Pod it points at
+  endpoints?: Array<{ ip?: string; ready?: boolean; target_ref?: { kind?: string; name?: string; namespace?: string } | null }>
   endpoint_slices?: EndpointSliceSummary[]
   events?: Array<Record<string, unknown>>
   events_error?: string
@@ -175,22 +178,21 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
   const labels = (describe?.labels ?? (meta?.labels as Record<string, string> | undefined) ?? {})
   const annotations = (describe?.annotations ?? (meta?.annotations as Record<string, string> | undefined) ?? {})
 
-  // Prometheus service-level metrics — use endpoint pod names from describe data
-  const endpointPodNames = useMemo(() => {
-    const addrs = describe?.endpoint_summary?.ready_addresses
-    if (!Array.isArray(addrs)) return []
-    return addrs.map((a: any) => a?.target_ref?.name).filter(Boolean) as string[]
-  }, [describe?.endpoint_summary?.ready_addresses])
-
-  const podRegex = endpointPodNames.length > 0 ? endpointPodNames.join('|') : ''
+  // Prometheus service-level metrics: the pods of the ready endpoints (the answer's endpoints name each address's Pod)
+  const backendPods = useMemo(() => backendPodNames(describe?.endpoints, namespace ?? ''), [describe?.endpoints, namespace])
+  const podPattern = useMemo(() => podNamesPattern(backendPods), [backendPods])
+  // past what one query carries, only whether Prometheus answers is asked, to say why there are no sums
+  const podsPastQuery = !patternFitsOneQuery(podPattern)
   const promSvcMetrics = usePrometheusQueries(
-    ['service-detail', namespace ?? '', name],
-    [
-      { name: 'cpu', promql: `sum(rate(container_cpu_usage_seconds_total{namespace="${namespace}",pod=~"${podRegex}",container!="",container!="POD"}[5m])) * 1000` },
-      { name: 'memory', promql: `sum(container_memory_working_set_bytes{namespace="${namespace}",pod=~"${podRegex}",container!="",container!="POD"})` },
-      { name: 'pod_count', promql: `count(count by(pod)(container_cpu_usage_seconds_total{namespace="${namespace}",pod=~"${podRegex}",container!="",container!="POD"}))` },
-    ],
-    { enabled: !!name && !!namespace && endpointPodNames.length > 0 },
+    ['service-detail', namespace ?? '', name, podsPastQuery ? 'past-query' : podPattern],
+    podsPastQuery
+      ? [{ name: 'probe', promql: 'vector(1)' }]
+      : [
+        { name: 'cpu', promql: `sum(rate(container_cpu_usage_seconds_total{namespace="${namespace}",pod=~"${podPattern}",container!="",container!="POD"}[5m])) * 1000` },
+        { name: 'memory', promql: `sum(container_memory_working_set_bytes{namespace="${namespace}",pod=~"${podPattern}",container!="",container!="POD"})` },
+        { name: 'pod_count', promql: `count(count by(pod)(container_cpu_usage_seconds_total{namespace="${namespace}",pod=~"${podPattern}",container!="",container!="POD"}))` },
+      ],
+    { enabled: !!name && !!namespace && backendPods.length > 0 },
   )
 
   const getSvcMetric = (n: string): number | null => {
@@ -214,17 +216,23 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
     <>
       {/* Prometheus Backend Pod Metrics */}
       <PrometheusSection available={promSvcMetrics.available} title="Backend Pod Resource Usage">
-        <div className="grid grid-cols-3 gap-3">
-          {getSvcMetric('cpu') !== null && (
-            <MetricCard label="Total CPU" value={getSvcMetric('cpu')!} unit="m" thresholds={{ warn: 500, danger: 1000 }} />
-          )}
-          {getSvcMetric('memory') !== null && (
-            <MetricCard label="Total Memory" value={getSvcMetric('memory')! / (1024 * 1024)} unit=" MiB" thresholds={{ warn: 1024, danger: 2048 }} />
-          )}
-          {getSvcMetric('pod_count') !== null && (
-            <MetricCard label="Backing Pods" value={getSvcMetric('pod_count')!} unit="" thresholds={{ warn: 10, danger: 20 }} />
-          )}
-        </div>
+        {podsPastQuery ? (
+          <p className="text-xs text-slate-400" data-testid="service-backend-pods-past-query">
+            <Tx text="Not shown: the {{n}} pods behind this Service are more than one Prometheus query can name." values={{ n: backendPods.length }} />
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-3">
+            {getSvcMetric('cpu') !== null && (
+              <MetricCard label="Total CPU" value={getSvcMetric('cpu')!} unit="m" thresholds={{ warn: 500, danger: 1000 }} />
+            )}
+            {getSvcMetric('memory') !== null && (
+              <MetricCard label="Total Memory" value={getSvcMetric('memory')! / (1024 * 1024)} unit=" MiB" thresholds={{ warn: 1024, danger: 2048 }} />
+            )}
+            {getSvcMetric('pod_count') !== null && (
+              <MetricCard label="Backing Pods" value={getSvcMetric('pod_count')!} unit="" thresholds={{ warn: 10, danger: 20 }} />
+            )}
+          </div>
+        )}
       </PrometheusSection>
 
       <InfoSection title="Service Info">

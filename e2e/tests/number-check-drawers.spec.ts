@@ -11,7 +11,8 @@ import { test, expect, type Page } from '@playwright/test'
 // tables hold what the object says, what kubectl prints of it (the API server's Table, kubectl's printEvent rules) or
 // what its ResourceQuota counts, and every drawer but the node's has its Events section — "None" when kubectl lists no
 // event about the object. A drawer is read until it matches or 20 s pass, then
-// every difference is listed (expect.soft), and a number on a drawer that nothing here compares fails too.
+// every difference is listed (expect.soft), and a number on a drawer that nothing here compares fails too. A Service
+// drawer's backend pod usage names exactly the pods of its ready endpoints in its Prometheus reads (the answers stood in).
 
 const NS = 'e2e-numbers'
 const kindName = 'kubeast'
@@ -652,5 +653,48 @@ test.describe('number check — drawers', () => {
       }
       if (!same) expect.soft(await diff(), `${t.kind}/${t.ref}`).toEqual([])
     })
+  })
+
+  test('a Service drawer sums the usage of exactly the pods of its ready endpoints', async ({ page }) => {
+    test.setTimeout(120_000)
+    const features = await (await page.request.get('/api/v1/cluster/features?cluster=self')).json()
+    test.skip(features?.prometheus?.enabled === false || features?.prometheus?.namespaceLimited === true, 'the drawer reads no Prometheus on self')
+    // the pods of num-web's ready endpoints, as its EndpointSlices name them
+    const slices: Obj[] = JSON.parse(kubectl(`get endpointslices -n ${NS} -l kubernetes.io/service-name=num-web -o json`)).items
+    const want = [...new Set(slices.flatMap((s) => (s.endpoints ?? [])
+      .filter((e: Obj) => (e.conditions?.ready ?? true) && e.targetRef?.kind === 'Pod' && (e.targetRef.namespace ?? NS) === NS)
+      .map((e: Obj) => String(e.targetRef.name))))].sort()
+    expect(want.length, 'kubectl lists the ready pods of num-web').toBe(3)
+    const others: string[] = JSON.parse(kubectl(`get pods -n ${NS} -o json`)).items.map((p: Obj) => String(p.metadata.name)).filter((p: string) => !want.includes(p))
+    // the drawer's reads stood in: what each names is compared with kubectl, the cards with the answer
+    const answer = { cpu: 12, memory: 5 * 1024 * 1024, pods: want.length }
+    const asked: string[] = []
+    const prometheus = /\/api\/v1\/cluster\/prometheus\/query(\?|$)/
+    await page.route(prometheus, (route) => {
+      const q = new URL(route.request().url()).searchParams.get('query') ?? ''
+      if (!q.includes(`namespace="${NS}"`) || !q.includes('pod=~')) return route.fallback()
+      asked.push(q)
+      const value = q.startsWith('count(') ? answer.pods : q.includes('container_memory_working_set_bytes') ? answer.memory : answer.cpu
+      return route.fulfill({ json: { available: true, results: [{ metric: {}, value }] } })
+    })
+    try {
+      await page.goto(`/?cluster=self&detail=${encodeURIComponent(`Service/${NS}/num-web`)}`)
+      const kindOf = (q: string) => (q.startsWith('count(') ? 'pods' : q.includes('container_memory_working_set_bytes') ? 'memory' : 'cpu')
+      await expect.poll(() => [...new Set(asked.map(kindOf))].sort(), { timeout: 30_000 }).toEqual(['cpu', 'memory', 'pods'])
+      // the pods of the namespace a query's pod=~ matcher takes (Prometheus anchors it; a PromQL string doubles a backslash)
+      const taken = (q: string) => {
+        const m = /pod=~"((?:[^"\\]|\\.)*)"/.exec(q)
+        const re = new RegExp(`^(?:${(m?.[1] ?? '').replace(/\\\\/g, '\\')})$`)
+        return [...want, ...others].filter((p) => re.test(p)).sort()
+      }
+      for (const q of asked) expect(taken(q), q).toEqual(want)
+      const section = page.locator(DRAWER).last().locator('div.rounded-lg', { has: page.locator('h3', { hasText: /^Backend Pod Resource Usage$/ }) }).last()
+      const card = (label: string) => section.locator('div.rounded-lg', { hasText: label })
+      await expect(card('Total CPU')).toContainText('12.0m', { timeout: 20_000 })
+      await expect(card('Total Memory')).toContainText('5.0 MiB')
+      await expect(card('Backing Pods')).toContainText(`${want.length}.0`)
+    } finally {
+      await page.unroute(prometheus)
+    }
   })
 })

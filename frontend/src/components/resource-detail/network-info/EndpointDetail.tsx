@@ -51,6 +51,17 @@ function Targets({ targets, fallbackIps, tone }: { targets: any[]; fallbackIps: 
   )
 }
 
+// A subset's ready or not-ready addresses as kubectl describe lists them, ten to a page.
+function SubsetAddresses({ label, addresses, testId }: { label: string; addresses: string[]; testId: string }) {
+  const { items: paged, nav } = usePagination(addresses, 10)
+  return (
+    <div data-testid={testId}>
+      <div><span className="text-slate-400"><Tx>{label}</Tx>:</span> {paged.join(', ') || <Tx>None</Tx>}</div>
+      {nav}
+    </div>
+  )
+}
+
 export default function EndpointDetail({ name, namespace, kind, rawJson }: Props) {
   // The describe answer (the list's row with the metadata, the subsets and the events), the same whether the drawer
   // was opened from the list or by link
@@ -139,9 +150,9 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
         <InfoSection title="Subsets">
           <div className="space-y-2 text-xs">
             {subsets.map((s, i) => (
-              <div key={i} className="rounded-sm border border-slate-800 p-2 space-y-0.5 text-slate-200">
-                <div><span className="text-slate-400"><Tx>Addresses</Tx>:</span> {s.addresses.join(', ') || <Tx>None</Tx>}</div>
-                <div><span className="text-slate-400"><Tx>Not Ready Addresses</Tx>:</span> {s.not_ready_addresses.join(', ') || <Tx>None</Tx>}</div>
+              <div key={i} className="rounded-sm border border-slate-800 p-2 space-y-0.5 text-slate-200" data-testid="endpoints-subset">
+                <SubsetAddresses label="Addresses" addresses={s.addresses} testId="endpoints-subset-addresses" />
+                <SubsetAddresses label="Not Ready Addresses" addresses={s.not_ready_addresses} testId="endpoints-subset-not-ready-addresses" />
                 <div><span className="text-slate-400"><Tx>Ports</Tx>:</span> {s.ports.length ? formatPorts(s.ports) : <Tx>None</Tx>}</div>
               </div>
             ))}

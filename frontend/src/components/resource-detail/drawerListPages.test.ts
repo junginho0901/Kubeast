@@ -117,6 +117,21 @@ describe('an Endpoints drawer\'s targets', () => {
     expect(render(describe_)).toMatch(/Ready Addresses<\/span><span[^>]*>23</)
   })
 
+  it('draws each subset\'s ready and not-ready addresses ten to a page, each with the range of all of its subset', () => {
+    const html = render({
+      ...describe_,
+      subsets: [
+        { addresses: range(23).map((i) => ({ ip: `10.7.0.${i}` })), not_ready_addresses: range(12).map((i) => ({ ip: `10.8.0.${i}` })), ports: [{ name: 'http', port: 80, protocol: 'TCP' }] },
+        { addresses: range(3).map((i) => ({ ip: `10.9.0.${i}` })), not_ready_addresses: [], ports: [] },
+      ],
+    })
+    expect(shown(html, /10\.7\.0\.\d+/g)).toEqual(range(10).map((i) => `10.7.0.${i}`))
+    expect(shown(html, /10\.8\.0\.\d+/g)).toEqual(range(10).map((i) => `10.8.0.${i}`))
+    expect(shown(html, /10\.9\.0\.\d+/g)).toEqual(range(3).map((i) => `10.9.0.${i}`))
+    // the targets' two pagers, then the first subset's two; the second subset fits a page
+    expect(html.match(/<span>1-10 \/ \d+<\/span>/g)).toEqual([pagerOf(23), pagerOf(12), pagerOf(23), pagerOf(12)])
+  })
+
   it('pages the addresses of an answer without targets too', () => {
     const html = render({ ...describe_, ready_targets: [], not_ready_targets: [] })
     expect(shown(html, /10\.1\.0\.\d+/g)).toHaveLength(10)

@@ -16,8 +16,9 @@ import { everyPage, pagesOf as listPages } from './drawer-pages'
 // nodes are read from a node list stood in for the one kind node; a namespace-scoped grant (stood in /auth/me) is told
 // the RoleBindings elsewhere are not known; and the floating chat gets the ClusterRole's two binding lists whole. The
 // lists the drawers page ten at a time because they grow with the cluster — a binding's subjects, a Service's addresses
-// and EndpointSlices, a slice's endpoints, an Endpoints' targets, an admission policy's bindings, a pod's NetworkPolicies
-// and a workload's per-pod CPU (the Prometheus answer stood in) — are read every page against kubectl too.
+// and EndpointSlices, a slice's endpoints, an Endpoints' targets and subset addresses, an admission policy's bindings,
+// a pod's NetworkPolicies and a workload's per-pod CPU (the Prometheus answer stood in) — are read every page against
+// kubectl too.
 
 const NS = 'e2e-hidden-rows'
 const NS_B = 'e2e-hidden-rows-b'
@@ -605,6 +606,20 @@ test.describe('number check — no drawer row out of reach', () => {
         await openDrawer(page, `Endpoints/${NS_P}/hrp-ep`)
         await comparePages('ready targets', 'endpoints-ready-targets', '[data-testid="endpoints-target"]', ':scope > p', ready)
         await comparePages('not-ready targets', 'endpoints-not-ready-targets', '[data-testid="endpoints-target"]', ':scope > p', notReady)
+        // the one subset as kubectl describe lists it: each page a line of ten of its addresses, with the range of all
+        for (const [what, testId, label, list] of [
+          ['subset addresses', 'endpoints-subset-addresses', 'Addresses', subsets[0]?.addresses ?? []],
+          ['subset not-ready addresses', 'endpoints-subset-not-ready-addresses', 'Not Ready Addresses', subsets[0]?.notReadyAddresses ?? []],
+        ] as const) {
+          const ips: string[] = list.map((a: Obj) => a.ip)
+          const pages = range(Math.ceil(ips.length / 10)).map((p) => ips.slice(p * 10, p * 10 + 10))
+          const scope = drawer().locator('[data-testid="endpoints-subset"]').first().getByTestId(testId)
+          await scope.waitFor({ timeout: 30_000 })
+          await expect.configure({ soft: true }).poll(() => everyPage(scope, ':scope > div:first-child'), { message: what, timeout: 20_000 }).toEqual({
+            items: pages.map((p) => [`${label}: ${p.join(', ')}`]),
+            pagers: pages.map((p, i) => `${i * 10 + 1}-${i * 10 + p.length} / ${ips.length}`),
+          })
+        }
       })
 
       await test.step('ValidatingAdmissionPolicy hrp-vap: every binding', async () => {

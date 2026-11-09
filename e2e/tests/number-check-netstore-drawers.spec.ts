@@ -267,13 +267,15 @@ const KINDS: Kind[] = [
       if (notReady.length) sections['Not Ready Targets'] = section({ cards: paged(notReady).page.map(target), pagers: paged(notReady).pagers })
       // each subset as kubectl describe lists it (a port without a name "-", as the list's Ports column writes it)
       if (subsets.length) {
+        // each subset's addresses ten to a page, a pager for each list past one (number-check-hidden-rows reads every page)
         sections.Subsets = section({
           cards: subsets.map((s) => card({
             lines: {
-              Addresses: ips(s.addresses), 'Not Ready Addresses': ips(s.notReadyAddresses),
+              Addresses: ips(paged(s.addresses ?? []).page), 'Not Ready Addresses': ips(paged(s.notReadyAddresses ?? []).page),
               Ports: (s.ports ?? []).map((p: Obj) => `${p.name || '-'}:${p.port}/${p.protocol}`).join(', ') || 'None',
             },
           })),
+          pagers: subsets.flatMap((s) => [...paged(s.addresses ?? []).pagers, ...paged(s.notReadyAddresses ?? []).pagers]),
         })
       }
       return { badges: {}, counts: {}, sections: { ...sections, ...closing(o, events) } }
