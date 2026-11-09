@@ -249,7 +249,8 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
       const rows = page.getByTestId('recordings-table').locator('tbody:not([aria-hidden="true"]) tr')
       const pager = page.getByTestId('recordings-pager')
       await expect(pager).toContainText(/Showing 1-\d+ of \d+/, { timeout: 15_000 })
-      const [, size, total] = (/Showing (\d+)-(\d+) of (\d+)/.exec(await pager.innerText()) ?? []).map(Number)
+      const [, first, last, total] = (/Showing (\d+)-(\d+) of (\d+)/.exec(await pager.innerText()) ?? []).map(Number)
+      const size = last - first + 1
       expect.soft(total, 'the recordings counted = the database').toBe(Number(psql('SELECT count(*) FROM session_recordings')))
       expect.soft(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight), 'the page scrolls by').toBeLessThanOrEqual(1)
       test.skip(all.length <= size, `only ${all.length} recordings: a single page of ${size}`)
