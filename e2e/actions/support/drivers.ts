@@ -353,6 +353,7 @@ def('team-add', 'auth-service:POST:/admin/organizations', 'admin/organizations',
 })
 
 def('team-delete', 'auth-service:DELETE:/admin/organizations/{id}', 'admin/organizations', async (page) => {
+  await userRow(page, TEAM) // the list pages: turn to the team's page
   const row = page.locator('li, tr, div').filter({ hasText: TEAM }).last()
   await row.getByRole('button').last().click() // the trash button
   await acceptConfirm(page)
@@ -445,6 +446,8 @@ def('cluster-access', 'auth-service:PUT:/admin/users/{user_id}/cluster-roles/{cl
   await d.getByTestId('cluster-access-add-role').click()
   await d.getByTestId('cluster-access-add-role-opt-Write').click()
   await d.getByTestId('cluster-access-add-btn').click()
+  // the window pages its grants: find the new one by its email
+  await d.getByTestId('cluster-access-search').fill(USER_EMAIL)
   await d.getByTestId(`cluster-access-role-${u.id}`).waitFor({ state: 'visible', timeout: 10000 })
   ctx.note = (await d.getByTestId('cluster-access-list').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 160)
 }, async (page) => {
@@ -456,6 +459,7 @@ def('cluster-access-revoke', 'auth-service:DELETE:/admin/users/{user_id}/cluster
   const u = await findUser(page, USER_EMAIL)
   if (!u) throw new Error(`temp user ${USER_EMAIL} missing (user-add must run first)`)
   const d = await openAccessModal(page)
+  await d.getByTestId('cluster-access-search').fill(USER_EMAIL)
   await d.getByTestId(`cluster-access-revoke-${u.id}`).click()
   await d.getByTestId(`cluster-access-role-${u.id}`).waitFor({ state: 'hidden', timeout: 10000 })
   ctx.note = (await d.getByTestId('cluster-access-list').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 120)
@@ -519,6 +523,7 @@ def('role-create', 'auth-service:POST:/admin/roles', 'admin/roles', async (page)
 
 // Admin roles: pencil button on the row → Edit Role modal → description → Save.
 def('role-edit', 'auth-service:PUT:/admin/roles/{id}', 'admin/roles', async (page) => {
+  await userRow(page, QROLE) // the list pages: turn to the role's page
   const row = page.locator('tr, li, div').filter({ hasText: QROLE }).filter({ has: page.locator('button[title="Edit"]') }).last()
   await row.locator('button[title="Edit"]').first().click()
   const d = dialog(page)
@@ -534,7 +539,7 @@ def('role-edit', 'auth-service:PUT:/admin/roles/{id}', 'admin/roles', async (pag
 })
 
 def('role-delete', 'auth-service:DELETE:/admin/roles/{id}', 'admin/roles', async (page) => {
-  const row = page.locator('tr').filter({ hasText: QROLE }).first()
+  const row = await userRow(page, QROLE) // the list pages: turn to the role's page
   const trash = row.locator('button[title="Delete"]')
   if (await trash.count()) {
     await trash.first().click() // custom roles have a trash button

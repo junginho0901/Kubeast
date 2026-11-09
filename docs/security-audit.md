@@ -59,8 +59,9 @@ The access review puts "who can do what right now" on one page for periodic revi
 
 - `sensitive_access` marks a role that reaches a node's shell, a pod's exec or Secret values (`resource.node.shell`, `resource.pod.exec`, `resource.secret.reveal`, or a wildcard covering one). The admin flags do not count these keys. It is not on the Users tab, because a global role's resource keys are not in the account's token.
 - **CSV** download per tab (UTF-8 BOM, formula injection prevented).
+- Each tab pages its rows as the other lists do: the page is as high as the screen, a page holds the rows that fit (or the 25, 50 or 100 chosen in the footer) and the search looks in every row of the tab.
 - Cards at the top show the accounts with admin permissions (with the global admins among them — a global role carrying `*`, who reaches every cluster), dormant accounts, accounts never signed in, keys about to expire and active temporary grants, plus the **last review and next due date** (`intervalDays` later, flagged when past). The API keys tab counts every key, expired ones too (named beside the count); the "Active API keys" card leaves them out.
-- The **Sign off** button saves the whole report as of that moment, with a note (`access_reviews`, kept for `retention.reviewDays`, default 3 years). Past reviews can be opened from the list (25 a page, with how many are kept) and downloaded again as the CSV of that time.
+- The **Sign off** button at the top of the page opens a window that saves the whole report as of that moment, with a note (`access_reviews`, kept for `retention.reviewDays`, default 3 years). Past reviews can be opened from the list (paged like the tabs, with how many are kept) and downloaded again as the CSV of that time.
 - Permissions: `admin.review.read`, `admin.review.export` and `admin.review.signoff`, all included in the system Admin role. The audit actions have the same names. The only write is the sign-off; access itself is changed on the existing screens.
 - To turn it off, set `auth.accessReview.enabled: false`. The menu and API go away.
 - Cost: 7 queries when the page opens, and a snapshot of tens of KB per sign-off.

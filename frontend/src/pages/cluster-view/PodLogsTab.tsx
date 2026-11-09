@@ -20,6 +20,7 @@ import { LogFilesView, LogSourceToggle, type LogSource } from '@/components/LogF
 import { LogSearchView } from '@/components/LogSearchView'
 import { useLogSearchAvailable } from '@/hooks/useLogSearchAvailable'
 import { useLogFilesAvailable } from '@/hooks/useLogFilesAvailable'
+import { takeLogLine, type ShownLine } from './podLogLines'
 
 interface PodLike {
   name: string
@@ -95,8 +96,13 @@ export function PodLogsTab({
     // loading forever.
     es.onopen = () => setIsStreamingLogs(false)
 
+    // The last line shown: after a reconnect the server goes on after it (Last-Event-ID), and one that starts over shows nothing twice.
+    let last: ShownLine | null = null
     es.onmessage = (e) => {
       // SSE 한 메시지 = 로그 한 줄. backend bufio.Scanner 가 split.
+      const next = takeLogLine(last, e.lastEventId, e.data)
+      if (!next) return
+      last = next
       setLogs((prev) => prev + e.data + '\n')
     }
 

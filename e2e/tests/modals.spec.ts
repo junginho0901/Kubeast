@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { turnToRow } from './list-pages'
 
 // Create, edit and confirm windows share one frame (re-QA #19 #38 #53 #66 #68):
 // Escape closes them, Tab stays inside, system objects ask for their name
@@ -95,6 +96,8 @@ test.describe('modal windows', () => {
     try {
       await page.goto('/admin/roles')
       const row = page.locator('tr').filter({ hasText: name })
+      // the list pages as many roles as fit the screen; a new role comes last
+      expect(await turnToRow(page, 'roles-pager', row), `${name} on a page of Roles`).toBe(true)
       await row.locator('button[title="Delete"]').click()
       await expect(page.getByTestId('confirm-dialog')).toContainText(name)
       await page.keyboard.press('Escape')

@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
+import { turnToRow } from './list-pages'
 
 // The floating chat sends what is on screen (page_context) with each question. These tests stop the request in the
 // browser and read that body: no session is created and no model is called.
@@ -314,6 +315,8 @@ test.describe('floating chat — windows and admin screens', () => {
     try {
       const sent = await captureFloating(page)
       await page.goto('/admin/roles')
+      // the list pages as many roles as fit the screen; a new role comes last
+      expect(await turnToRow(page, 'roles-pager', page.locator('tr').filter({ hasText: name })), `${name} on a page of Roles`).toBe(true)
       await page.locator('tr').filter({ hasText: name }).locator('button[title="Delete"]').click()
       await expect(page.getByTestId('confirm-dialog')).toContainText(name)
       const ctx = await ask(page, sent)

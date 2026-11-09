@@ -6,9 +6,11 @@ import { Check, Clock, Loader2, Search, ShieldCheck, X } from 'lucide-react'
 import { api } from '@/services/api'
 import StatusBadge from '@/components/AccessRequestStatusBadge'
 import { ListPager } from '@/components/ListPager'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { formatDuration, formatWhen } from './accessRequestFormat'
-import { REQUESTS_PER_PAGE, accessRequestQuery, pageCount, type AccessRequestTab } from './accessRequestPages'
+import { accessRequestQuery, pageCount, type AccessRequestTab } from './accessRequestPages'
 import { usePendingAccessRequestCount } from '@/hooks/usePendingAccessRequestCount'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { utcTitle } from '@/utils/time'
 import { givesChartBoundRole } from '@/utils/adminAccess'
 import { parsePermissions } from '@/utils/permissions'
@@ -17,8 +19,9 @@ import { parsePermissions } from '@/utils/permissions'
 // pending requests to approve or reject with an optional note, and the
 // history. The server refuses a decision on the reviewer's own request; the
 // row says so instead of offering the buttons. Both tabs search by requester, cluster, role, reason and
-// decider, and page (a fixed count: the page scrolls, and the history only grows). The server searches, pages and
-// counts each tab, so the history reaches its first request; a page being read keeps the rows shown before it.
+// decider, and page: the page is as high as the screen and a page of the table is the rows it fits (or the
+// footer's fixed choice). The server searches, pages and counts each tab, so the history reaches its first
+// request; a page being read keeps the rows shown before it.
 
 export default function AccessRequests() {
   const { t } = useTranslation()
@@ -48,26 +51,40 @@ export default function AccessRequests() {
     chartBound.has(role) && !givesChartBoundRole(parsePermissions(me?.permissions_matrix), me?.cluster_roles, me?.cluster_namespaces, cluster)
   const { data: config } = useQuery({ queryKey: ['access-requests', 'config'], queryFn: api.getAccessRequestsConfig, staleTime: 60_000 })
   const { data: pendingCount = 0 } = usePendingAccessRequestCount({ enabled: true, refetchInterval: 30_000 })
+  // The table takes the screen's height left and the server is asked for the rows it fits: measured again once rows
+  // show (a row's height), not on each page, so turning pages keeps one page size.
+  const [hasRows, setHasRows] = useState(false)
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: `${tab}:${hasRows}` })
   // Both tabs are read (the one not shown at its first page), so switching shows rows at once; each keeps the
   // rows it showed while its next page or search loads.
-  const tabQuery = (k: AccessRequestTab) => accessRequestQuery(k, search, tab === k ? page : 1)
+  const tabQuery = (k: AccessRequestTab) => accessRequestQuery(k, search, tab === k ? page : 1, rowsPerPage)
   const pendingList = useQuery({
     queryKey: ['access-requests', 'admin', 'list', 'pending', tabQuery('pending')],
-    queryFn: async () => ({ ...(await api.adminAccessRequestsPage(tabQuery('pending'))), offset: tabQuery('pending').offset }),
+    queryFn: async () => {
+      const q = tabQuery('pending')
+      return { ...(await api.adminAccessRequestsPage(q)), offset: q.offset, limit: q.limit }
+    },
     placeholderData: keepPreviousData,
     refetchInterval: 30_000,
   })
   const historyList = useQuery({
     queryKey: ['access-requests', 'admin', 'list', 'history', tabQuery('history')],
-    queryFn: async () => ({ ...(await api.adminAccessRequestsPage(tabQuery('history'))), offset: tabQuery('history').offset }),
+    queryFn: async () => {
+      const q = tabQuery('history')
+      return { ...(await api.adminAccessRequestsPage(q)), offset: q.offset, limit: q.limit }
+    },
     placeholderData: keepPreviousData,
   })
   const list = tab === 'pending' ? pendingList : historyList
   const pagedRows = list.data?.items ?? []
   const total = list.data?.total ?? 0
-  const totalPages = pageCount(total, REQUESTS_PER_PAGE)
-  // the pager names the page of the rows shown, and does not turn while the next page loads
-  const shownPage = list.data ? list.data.offset / REQUESTS_PER_PAGE + 1 : page
+  // the pager follows the answer on screen: its page size, and its page, which does not turn while the next loads
+  const shownLimit = list.data?.limit ?? rowsPerPage
+  const totalPages = pageCount(total, shownLimit)
+  const shownPage = list.data ? list.data.offset / shownLimit + 1 : page
+  useEffect(() => {
+    if (pagedRows.length > 0 !== hasRows) setHasRows(pagedRows.length > 0)
+  }, [pagedRows.length, hasRows])
   const turnPage = (p: number) => {
     if (!list.isPlaceholderData) setPage(p)
   }
@@ -93,8 +110,8 @@ export default function AccessRequests() {
   const busy = approve.isPending || reject.isPending
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
+      <div className="shrink-0">
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-6 h-6 text-primary-400" />
           <h1 className="text-3xl font-semibold text-ink">{tr('accessRequests.title', 'Access requests')}</h1>
@@ -112,7 +129,7 @@ export default function AccessRequests() {
         )}
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 shrink-0">
         {(['pending', 'history'] as const).map((k) => (
           <button
             key={k}
@@ -129,7 +146,7 @@ export default function AccessRequests() {
         ))}
       </div>
 
-      <div className="relative">
+      <div className="relative shrink-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
         <input
           type="text"
@@ -142,14 +159,15 @@ export default function AccessRequests() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-800/60 bg-red-900/20 px-4 py-2 text-sm text-red-200" data-testid="access-requests-error">
+        <div className="shrink-0 rounded-lg border border-red-800/60 bg-red-900/20 px-4 py-2 text-sm text-red-200" data-testid="access-requests-error">
           {error}
         </div>
       )}
 
-      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
+      <div ref={containerRef} className="flex-1 min-h-0 flex flex-col bg-slate-800 rounded-xl border border-slate-700">
+        <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
         <table className="w-full text-sm">
-          <thead className="text-slate-400 bg-slate-900/40">
+          <thead ref={theadRef} className="text-slate-400 bg-slate-900/40">
             <tr>
               <th className="px-4 py-3 text-left">{tr('accessRequests.columns.requester', 'Requester')}</th>
               <th className="px-4 py-3 text-left">{tr('accessRequests.columns.cluster', 'Cluster')}</th>
@@ -176,10 +194,10 @@ export default function AccessRequests() {
             ) : pagedRows.length === 0 ? (
               <tr><td colSpan={9} className="px-4 py-6 text-center text-slate-400">{search ? tr('common.noSearchResults', 'No results found.') : tr('common.listEmpty', 'No items.')}</td></tr>
             ) : (
-              pagedRows.map((r) => {
+              pagedRows.map((r, idx) => {
                 const own = me?.id === r.user_id
                 return (
-                  <tr key={r.id} data-testid={`access-request-row-${r.id}`} className="text-slate-200">
+                  <tr key={r.id} ref={idx === 0 ? firstRowRef : undefined} data-testid={`access-request-row-${r.id}`} className="text-slate-200">
                     <td className="px-4 py-3">
                       <div>{r.user_name || r.user_email}</div>
                       <div className="text-xs text-slate-400">{r.user_email}</div>
@@ -245,8 +263,10 @@ export default function AccessRequests() {
               })
             )}
           </tbody>
+          <AdaptiveTableFillerRows count={rowsPerPage - pagedRows.length} columnCount={tab === 'pending' ? 7 : 9} />
         </table>
-        <ListPager currentPage={shownPage} totalPages={totalPages} total={total} rowsPerPage={REQUESTS_PER_PAGE} onPageChange={turnPage} showPageSize={false} testId="access-requests-pager" />
+        </div>
+        <ListPager currentPage={shownPage} totalPages={totalPages} total={total} rowsPerPage={shownLimit} onPageChange={turnPage} testId="access-requests-pager" />
       </div>
     </div>
   )

@@ -13,6 +13,8 @@ beforeAll(async () => {
   await i18n.use(initReactI18next).init({ lng: 'en', resources: { en: { translation: en } }, interpolation: { escapeValue: false } })
 })
 
+const FIT_START = 12
+
 const request = (id: string, role: string) => ({
   id, user_id: 'requester', user_email: 'req@example.com', user_name: 'Req', cluster_id: 'c1', cluster_name: 'one',
   role, duration_minutes: 60, reason: 'needed', status: 'pending', created_at: '2026-11-08T00:00:00Z',
@@ -23,8 +25,9 @@ const render = (me: Record<string, unknown>) => {
   qc.setQueryData(['me'], { id: 'approver', ...me })
   qc.setQueryData(['roles'], [{ name: 'ops', chart_bound: true }, { name: 'Write' }])
   qc.setQueryData(['access-requests', 'config'], { enabled: true, max_hours: 8, roles: ['Write', 'ops'] })
-  qc.setQueryData(['access-requests', 'admin', 'list', 'pending', accessRequestQuery('pending', '', 1)], { items: [request('r1', 'ops'), request('r2', 'Write')], total: 2, offset: 0 })
-  qc.setQueryData(['access-requests', 'admin', 'list', 'history', accessRequestQuery('history', '', 1)], { items: [], total: 0, offset: 0 })
+  // the page asks for the rows its table fits: 12 before it has measured the screen (useAdaptiveRowsPerPage)
+  qc.setQueryData(['access-requests', 'admin', 'list', 'pending', accessRequestQuery('pending', '', 1, FIT_START)], { items: [request('r1', 'ops'), request('r2', 'Write')], total: 2, offset: 0, limit: FIT_START })
+  qc.setQueryData(['access-requests', 'admin', 'list', 'history', accessRequestQuery('history', '', 1, FIT_START)], { items: [], total: 0, offset: 0, limit: FIT_START })
   return renderToStaticMarkup(createElement(I18nextProvider, { i18n }, createElement(QueryClientProvider, { client: qc }, createElement(AccessRequests))))
 }
 

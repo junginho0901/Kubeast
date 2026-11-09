@@ -30,6 +30,8 @@ test('an admin resetting their own password sees it, and signs in again with it'
     await page.waitForFunction(() => !document.querySelector('input[autocomplete="email"]'), { timeout: 20000 })
 
     await page.goto('/admin/users')
+    // the list pages as many rows as fit the screen: find the account by its email
+    await page.getByTestId('admin-users-search').fill(email)
     const row = page.locator('tr').filter({ has: page.getByTestId(`user-detail-${email}`) })
     await row.getByTestId('user-reset-password').click({ timeout: 15000 })
     await page.getByTestId('confirm-dialog-ok').click()
