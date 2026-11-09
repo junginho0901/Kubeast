@@ -275,10 +275,21 @@ test.describe('number check: AI usage and investigations', () => {
       }
       return [got, exp]
     }
+    // the answer to the list request sent last: answers can come back in another order (the first render asks with the
+    // estimated page size and the measured one at the same moment, and the estimate's answer may come second)
     let lastList: Obj = null
+    let sentLists = 0
+    const sentOrder = new Map<unknown, number>()
+    page.on('request', (q) => {
+      if (new URL(q.url()).pathname === INVESTIGATIONS_API && q.method() === 'GET') sentOrder.set(q, ++sentLists)
+    })
     page.on('response', async (r) => {
       if (atPath(r, INVESTIGATIONS_API)) {
-        try { lastList = { url: new URL(r.url()), body: await r.json() } } catch { /* the page went on */ }
+        const order = sentOrder.get(r.request()) ?? 0
+        try {
+          const body = await r.json()
+          if (!lastList || order >= lastList.order) lastList = { url: new URL(r.url()), body, order }
+        } catch { /* the page went on */ }
       }
     })
 
