@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type Page } from '@playwright/test'
+import { pagerRange, readEveryPage } from './list-pages'
 
 // Usability and routes from the 2026-10 re-QA (PR-9c): old routes open the current screens, the sidebar groups by
 // scope, Resource Graph opens on a namespace, a list keeps its footer and says why it is empty, the open drawer is
@@ -150,8 +151,10 @@ test.describe('Usability and routes', () => {
     await page.getByRole('button', { name: /^(History|이력)$/ }).first().click()
     const first = page.locator('main table tbody tr td:first-child')
     await expect(first.nth(1)).toBeVisible({ timeout: 15_000 })
-    const revisions = (await first.allInnerTexts()).map((s) => Number(s.replace(/\D/g, '')))
-    expect(revisions).toEqual([...revisions].sort((a, b) => b - a))
+    // a page at a time: the newest first over every page, each revision once, as many as the footer counts
+    const revisions = (await readEveryPage(page, 'helm-history-pager', () => first.allInnerTexts())).map((s) => Number(s.replace(/\D/g, '')))
+    expect(revisions).toEqual([...new Set(revisions)].sort((a, b) => b - a))
+    expect(revisions.length).toBe((await pagerRange(page, 'helm-history-pager')).total)
   })
 
   test('the YAML status line says read-only until Edit', async ({ page }) => {

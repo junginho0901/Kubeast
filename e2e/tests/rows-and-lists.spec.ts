@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { pagerRange, readEveryPage } from './list-pages'
 
 // Lists that open the resource drawer from a row and search and page their rows: Monitoring's two tabs, Cost,
 // Cluster hygiene, the dashboard's Optimization window, the Nodes page's top-usage cards and the admin Access
@@ -47,8 +48,12 @@ test.describe('Rows that open the drawer, lists that search and page', () => {
     test.skip(nodes.length === 0, 'no node metrics on cluster default')
 
     await page.goto(`/monitoring?cluster=${CLUSTER}`)
-    await expect(page.getByTestId('monitoring-node')).toHaveCount(Math.min(nodes.length, 20))
     await expect(page.getByTestId('monitoring-node-pager')).toContainText(pagerTotal(nodes.length))
+    // a page fitted to the screen: the rows the footer says, and every node once over the pages
+    const range = await pagerRange(page, 'monitoring-node-pager')
+    await expect(page.getByTestId('monitoring-node')).toHaveCount(range.end - range.start + 1)
+    const names = await readEveryPage(page, 'monitoring-node-pager', () => page.getByTestId('monitoring-node').locator('td:first-child').allInnerTexts())
+    expect(names.map((s) => s.trim()).sort()).toEqual(nodes.map((n) => n.name).sort())
 
     await page.getByTestId('monitoring-node-search').fill('no-such-node-e2e')
     await expect(page.getByTestId('monitoring-node')).toHaveCount(0)
@@ -74,8 +79,12 @@ test.describe('Rows that open the drawer, lists that search and page', () => {
     await page.getByRole('button', { name: /pod resources|pod 리소스/i }).first().click()
     await page.getByTestId('monitoring-namespace').click()
     await page.getByTestId(`monitoring-namespace-opt-${NS}`).click()
-    await expect(page.getByTestId('monitoring-pod-row')).toHaveCount(Math.min(metrics.length, 50))
     await expect(page.getByTestId('monitoring-pod-pager')).toContainText(pagerTotal(metrics.length))
+    // a page fitted to the screen: the rows the footer says, and every pod once over the pages
+    const range = await pagerRange(page, 'monitoring-pod-pager')
+    await expect(page.getByTestId('monitoring-pod-row')).toHaveCount(range.end - range.start + 1)
+    const listed = await readEveryPage(page, 'monitoring-pod-pager', () => page.getByTestId('monitoring-pod-row').locator('td:first-child').allInnerTexts())
+    expect(listed.map((s) => s.trim()).sort()).toEqual(metrics.map((m) => m.name).sort())
 
     // A pod whose every container sets a memory limit shows their sum; the CPU column of a pod without one shows "-".
     const limited = metrics.find((m) => memoryLimitMiB(byName.get(m.name)) !== null)

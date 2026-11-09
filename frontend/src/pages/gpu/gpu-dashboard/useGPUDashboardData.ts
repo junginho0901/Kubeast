@@ -9,7 +9,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import type { GPUDashboardData, GPUMetricsData, GPUDeviceMetric } from '@/services/api'
-import { devicePluginBadges, gpuModels } from '../gpuNumbers'
+import { byNodeName, devicePluginBadges, gpuModels } from '../gpuNumbers'
 
 export function useGPUDashboardData() {
   const { data, isLoading, isError, error, refetch } = useQuery<GPUDashboardData>({
@@ -50,10 +50,11 @@ export function useGPUDashboardData() {
 
   const devicePlugins = useMemo(() => devicePluginBadges(data?.device_plugins), [data])
 
-  // Per-node GPU allocation bars: each node's gpu_used is kubectl describe node's Allocated resources (server)
+  // Per-node GPU allocation bars: each node's gpu_used is kubectl describe node's Allocated resources (server); ties by
+  // name, so the section's pages keep their nodes between refreshes
   const nodeAllocation = useMemo(() => {
     if (!data) return []
-    return [...data.gpu_nodes].sort((a, b) => b.gpu_capacity - a.gpu_capacity)
+    return [...data.gpu_nodes].sort((a, b) => b.gpu_capacity - a.gpu_capacity || byNodeName(a.name, b.name))
   }, [data])
 
   // GPU model distribution: each company's GPUs of a node under its own model

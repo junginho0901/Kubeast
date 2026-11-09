@@ -1,6 +1,12 @@
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { GPUDeviceMetric } from '@/services/api'
-import { gpuHostAverages, gpuPercentText } from '../gpuNumbers'
+import { ListPager } from '@/components/ListPager'
+import { usePagedItems } from '@/hooks/usePagedItems'
+import { gpuHostAverages, gpuPercentText, hostsByName } from '../gpuNumbers'
+
+// Hosts per page of the panel (two columns): it sits above the table, so a fixed count rather than a fit
+const NODES_METRICS_HOSTS_PER_PAGE = 4
 
 interface Props {
   gpusByHost: Map<string, GPUDeviceMetric[]>
@@ -10,6 +16,8 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
+  const hosts = useMemo(() => hostsByName(gpusByHost), [gpusByHost])
+  const { items: pagedHosts, page, totalPages, total, setPage } = usePagedItems(hosts, NODES_METRICS_HOSTS_PER_PAGE)
 
   if (gpusByHost.size === 0) return null
 
@@ -22,7 +30,7 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost }: Props) {
         </h2>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {[...gpusByHost.entries()].map(([hostname, gpus]) => {
+        {pagedHosts.map(([hostname, gpus]) => {
           const averages = gpuHostAverages(gpus)
           return (
             <div key={hostname} className="rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-3" data-testid="gpu-nodes-host" data-host={hostname}>
@@ -71,6 +79,9 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost }: Props) {
             </div>
           )
         })}
+      </div>
+      <div className="mt-3">
+        <ListPager currentPage={page} totalPages={totalPages} total={total} rowsPerPage={NODES_METRICS_HOSTS_PER_PAGE} onPageChange={setPage} showPageSize={false} testId="gpu-nodes-host-pager" />
       </div>
     </div>
   )

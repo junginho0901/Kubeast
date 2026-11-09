@@ -1,9 +1,12 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { History as HistoryIcon, Loader2 } from 'lucide-react'
 import { api } from '@/services/api'
 import { usePermission } from '@/hooks/usePermission'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { usePagedItems } from '@/hooks/usePagedItems'
+import { ListPager } from '@/components/ListPager'
 import { formatTime, utcTitle } from '@/utils/time'
 import RollbackModal from '../modals/RollbackModal'
 import RevisionDetailModal from '../modals/RevisionDetailModal'
@@ -28,6 +31,12 @@ export default function HistoryTab({
     enabled: !!namespace && !!name,
   })
 
+  // newest first, whatever order the release storage returned; a release with no history limit keeps hundreds, so a
+  // page at a time, fitted to the screen as the list pages
+  const items = useMemo(() => [...(historyQuery.data ?? [])].sort((a, b) => b.revision - a.revision), [historyQuery.data])
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: items.length })
+  const { items: paged, page, totalPages, total, setPage } = usePagedItems(items, rowsPerPage, `${namespace}/${name}`)
+
   if (historyQuery.isLoading) {
     return (
       <div className="flex items-center justify-center py-10 text-slate-400">
@@ -36,8 +45,6 @@ export default function HistoryTab({
     )
   }
 
-  // newest first, whatever order the release storage returned
-  const items = [...(historyQuery.data ?? [])].sort((a, b) => b.revision - a.revision)
   if (items.length === 0) {
     return <div className="text-sm text-slate-400">{t('helmReleaseDetail.history.empty')}</div>
   }
@@ -46,9 +53,10 @@ export default function HistoryTab({
 
   return (
     <>
-      <div className="overflow-x-auto rounded-lg border border-slate-700">
+      <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-lg border border-slate-700">
+        <div ref={bodyRef} className="overflow-auto flex-1 min-h-0">
         <table className="w-full text-sm">
-          <thead className="bg-slate-800 text-slate-400 text-left">
+          <thead ref={theadRef} className="bg-slate-800 text-slate-400 text-left">
             <tr>
               <th className="px-3 py-2">{t('helmReleaseDetail.history.col.revision', 'Revision')}</th>
               <th className="px-3 py-2">{t('helmReleaseDetail.history.col.status', 'Status')}</th>
@@ -60,11 +68,12 @@ export default function HistoryTab({
             </tr>
           </thead>
           <tbody className="bg-slate-900/40 divide-y divide-slate-800">
-            {items.map((h) => {
+            {paged.map((h, idx) => {
               const isCurrent = h.revision === currentRevision
               return (
                 <tr
                   key={h.revision}
+                  ref={idx === 0 ? firstRowRef : undefined}
                   className="hover:bg-slate-800/60 cursor-pointer"
                   onClick={() => setInspectTarget(h.revision)}
                 >
@@ -105,6 +114,8 @@ export default function HistoryTab({
             })}
           </tbody>
         </table>
+        </div>
+        <ListPager currentPage={page} totalPages={totalPages} total={total} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="helm-history-pager" />
       </div>
 
       {rollbackTarget !== null && (
