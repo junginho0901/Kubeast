@@ -79,8 +79,10 @@ function readSection(page: Page, clickNext = false) {
       title: txt(sec.firstElementChild!.firstElementChild!),
       cards: [...sec.querySelectorAll('div.rounded-sm.border.p-2')].map((c) => {
         const matched = c.querySelector('[data-testid="sa-binding-matched-by"]')
-        return { head: txt(c.firstElementChild!), matchedBy: matched ? txt(matched) : null }
+        const rows = [...c.querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('td')].map(txt))
+        return { head: txt(c.firstElementChild!), matchedBy: matched ? txt(matched) : null, rows }
       }),
+      rulesLoading: [...sec.querySelectorAll('div.rounded-sm.border.p-2')].some((c) => txt(c).includes('Loading rules')),
       pager: pager ? txt(pager) : null,
       more: !!next && !next.disabled,
     }
@@ -90,6 +92,8 @@ function readSection(page: Page, clickNext = false) {
 // Every card, page by page, once the title has its count (the rules load after the bindings).
 async function readCards(page: Page) {
   await expect.poll(async () => (await readSection(page))?.title, { timeout: 30_000 }).toMatch(/^Effective Permissions \(\d+ bindings?\)$/)
+  const rulesShown = () => expect.poll(async () => (await readSection(page))?.rulesLoading, { timeout: 30_000 }).toBe(false)
+  await rulesShown()
   let read = (await readSection(page))!
   const title = read.title
   const cards = [...read.cards]
@@ -97,6 +101,7 @@ async function readCards(page: Page) {
     const pager = read.pager
     await readSection(page, true)
     await expect.poll(async () => (await readSection(page))?.pager, { timeout: 10_000 }).not.toBe(pager)
+    await rulesShown()
     read = (await readSection(page))!
     cards.push(...read.cards)
   }
@@ -144,6 +149,8 @@ test.describe('number check — a ServiceAccount drawer counts what applies to i
     for (const b of BINDINGS.filter((x) => x.applies)) {
       const card = cards.find((c) => c.head === `via ${b.name} → ${b.name}`)
       expect(card?.matchedBy ?? null, b.name).toBe(b.matchedBy ? `Applies through ${b.matchedBy}` : null)
+      // the Role's one rule, its core group written "" as the Role drawer writes it
+      expect(card?.rows, `${b.name} rules`).toEqual([['""', b.resource, 'list', '-']])
     }
 
     // The pod's RBAC tab counts the same bindings.

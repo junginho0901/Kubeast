@@ -1121,6 +1121,7 @@
       "total": "Total",
       "completed": "Completed",
       "running": "Running",
+      "suspended": "Suspended",
       "failed": "Failed"
     },
     "delete": {

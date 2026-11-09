@@ -9,6 +9,7 @@ import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 import { useEffectivePermissions } from './service-account-info/useEffectivePermissions'
+import { ruleApiGroupsText } from './role-info/ruleText'
 import { useNamespacePodTable } from './useNamespacePodTable'
 
 interface Props {
@@ -155,7 +156,7 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
                       <tbody className="divide-y divide-slate-800">
                         {b.rules.map((r, ri) => (
                           <tr key={ri} className="text-slate-200">
-                            <td className="py-1 pr-2 font-mono">{r.apiGroups.length === 0 ? '""' : r.apiGroups.join(', ')}</td>
+                            <td className="py-1 pr-2 font-mono">{ruleApiGroupsText(r.apiGroups)}</td>
                             <td className="py-1 pr-2 font-mono">{r.resources.join(', ') || '-'}</td>
                             <td className="py-1 pr-2 font-mono">{r.verbs.join(', ') || '-'}</td>
                             <td className="py-1 pr-2 font-mono text-slate-400">{r.resourceNames?.join(', ') || '-'}</td>

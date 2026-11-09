@@ -1120,6 +1120,7 @@
       "total": "전체",
       "completed": "완료",
       "running": "실행 중",
+      "suspended": "중지됨",
       "failed": "실패"
     },
     "delete": {

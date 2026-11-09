@@ -195,12 +195,18 @@ const SCREENS: Screen[] = [
     // num-fail's Duration runs on (start to now, as kubectl's printJob) — to the second while the Job is new; num-held never started
     spans: { Duration: (o) => !!o.status.startTime && !o.status.completionTime },
     skip: { Age: AGE },
-    cards: (list) => ({
-      Total: list.length,
-      Completed: list.filter((j) => cond(j, 'Complete') === 'True').length,
-      Failed: list.filter((j) => cond(j, 'Failed') === 'True').length,
-      Running: list.filter((j) => cond(j, 'Complete') !== 'True' && cond(j, 'Failed') !== 'True').length,
-    }),
+    // Suspended as kubectl's printJob reads it: not ended, not being deleted, a Suspended condition
+    cards: (list) => {
+      const ended = (j: Obj) => cond(j, 'Complete') === 'True' || cond(j, 'Failed') === 'True'
+      const suspended = (j: Obj) => !ended(j) && !j.metadata.deletionTimestamp && cond(j, 'Suspended') === 'True'
+      return {
+        Total: list.length,
+        Completed: list.filter((j) => cond(j, 'Complete') === 'True').length,
+        Failed: list.filter((j) => cond(j, 'Failed') === 'True').length,
+        Suspended: list.filter(suspended).length,
+        Running: list.filter((j) => !ended(j) && !suspended(j)).length,
+      }
+    },
   },
   {
     path: '/workloads/cronjobs', api: `/apis/batch/v1/namespaces/${NS}/cronjobs`, plural: 'cronjobs',
@@ -2563,11 +2569,15 @@ test.describe('number check — list screens', () => {
       total: statuses.length,
       completed: statuses.filter((s) => s === 'Complete').length,
       failed: statuses.filter((s) => s === 'Failed').length,
-      running: statuses.filter((s) => s !== 'Complete' && s !== 'Failed').length,
+      suspended: statuses.filter((s) => s === 'Suspended').length,
+      running: statuses.filter((s) => s !== 'Complete' && s !== 'Failed' && s !== 'Suspended').length,
     }
     expect(statuses, 'a suspended Job, which runs no pods, is among them').toContain('Suspended')
     await page.goto(JOBS)
-    await expect.poll(async () => (await readScreen(page)).cards, { timeout: 20_000 }).toMatchObject({ Total: want.total, Completed: want.completed, Running: want.running, Failed: want.failed })
+    await expect.poll(async () => (await readScreen(page)).cards, { timeout: 20_000 }).toMatchObject({ Total: want.total, Completed: want.completed, Running: want.running, Suspended: want.suspended, Failed: want.failed })
+    // the Suspended card in the colour of a suspended row's badge
+    await expect(jobBadge(page, 'num-held')).toHaveClass(/badge-warning/)
+    await expect(page.locator('main div.rounded-lg.border').filter({ hasText: /^(Suspended|중지됨)/ }).first()).toHaveClass(/yellow/)
     await expect.poll(async () => (await ask())?.stats, { timeout: 20_000 }).toEqual(want)
   })
 
