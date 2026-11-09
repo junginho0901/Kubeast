@@ -713,7 +713,16 @@ async function walk(browser: Browser, request: APIRequestContext, role: Role, ce
         const named = bannerKinds(detail.banner).filter((k) => !may.includes(k)).sort()
         add({ screen: p, view: '', check: 'what the notice names', kubeast: named.join(', ') || 'none', cluster: [...wantNamed].sort().join(', ') || 'none', basis, detail })
         if (rule.rule === 'narrowed' && rule.shows) {
-          const shown = await expect.poll(async () => (await main.innerText()).includes(rule.shows!), { timeout: 15_000 }).toBe(true).then(() => true, () => false)
+          const onPage = async () => (await main.innerText()).includes(rule.shows!)
+          let shown = await expect.poll(onPage, { timeout: 15_000 }).toBe(true).then(() => true, () => false)
+          // a paged screen (Change History) can hold the fixture's row on a later page: turn its footer's pages until it shows
+          const next = main.locator('[data-testid$="pager"]').first().getByRole('button', { name: /^(Next|다음)$/ })
+          for (let i = 0; !shown && i < 50 && (await next.count()) > 0 && !(await next.isDisabled()); i++) {
+            const before = await main.innerText()
+            await next.click()
+            await expect.poll(() => main.innerText(), { timeout: 15_000 }).not.toBe(before)
+            shown = await onPage()
+          }
           add({ screen: p, view: '', check: `shows "${rule.shows}"`, kubeast: shown ? 'shown' : 'not shown', cluster: 'shown', basis: `an object of ${NS_A}, which the grant reaches` })
         }
       } else {
