@@ -162,6 +162,8 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 			status = http.StatusConflict
 		} else if errors.Is(err, errForbidden) {
 			status = http.StatusForbidden
+		} else if errors.Is(err, errBusy) {
+			status = http.StatusServiceUnavailable
 		}
 		message := err.Error()
 		release, placed := bigAnswerPlace(r.Context(), writeBy, len(message))
