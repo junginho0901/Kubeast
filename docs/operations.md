@@ -169,7 +169,7 @@ All three cards show read-only results computed by k8s-service (the same numbers
   - When it cannot be found automatically, name it directly in **Service in the cluster** under Admin → Clusters → Edit (`prometheus_service` in `PATCH`), or in the chart's `features.prometheus.service`.
   - The value is `namespace/service:port`, with `…/path` when the API sits under a path. For a VictoriaMetrics cluster, it is `monitoring/vmselect-<name>:8481/select/0/prometheus`.
   - Order: cluster URL → cluster Service → chart URL → chart Service → auto-discovery.
-  - Discovery (which Service, remembered for 10 minutes per cluster) runs as the overview cache identity (`kubeast:cache`, group `kubeast:viewer`) and counts a 403 from `/-/healthy` as "present" — so the result is the same whoever opened it first.
+  - Discovery (which Service, remembered per cluster for 10 minutes, or 1 minute when nothing was found or the search failed) runs as the overview cache identity (`kubeast:cache`, group `kubeast:viewer`) and counts a 403 from `/-/healthy` as "present" — so the result is the same whoever opened it first.
   - The queries themselves go out as the signed-in person. So Read (`kubeast:viewer`) can read only when that Prometheus Service is listed in `auth.impersonation.viewerProxyServices`; otherwise the cluster refuses.
     See the Read row of [Roles and permissions](features.md#roles-and-permissions--what-the-built-in-roles-can-do-and-who-they-act-as-in-the-cluster).
   - Without Prometheus, a single-node VictoriaMetrics is found the same way. Kubeast looks for VM operator `vmsingle` or `victoria-metrics-single` chart labels, and for port 8428 with a name like `*vmsingle*` or `*victoria-metrics*`.

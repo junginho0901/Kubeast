@@ -145,7 +145,7 @@ These read Prometheus:
     - the prometheus chart server (`app.kubernetes.io/name=prometheus,app.kubernetes.io/component=server`, port 80)
     - Prometheus Operator's `prometheus-operated` (`operated-prometheus=true`), trying every port of the Service
   - ② If none is found, Services with `prometheus` in the name on **port 9090**, in the namespaces `monitoring` → `prometheus` → `jupyterhub` → `kube-system` → `gpu-operator` → `observability` → `default`.
-  - Kubeast uses a Service if `/-/healthy` answers, and remembers the result for 10 minutes per cluster.
+  - Kubeast uses a Service if `/-/healthy` answers, and remembers the result per cluster: 10 minutes when one was found, 1 minute when none was found or the search failed or timed out.
   - Discovery runs as the overview cache identity (`kubeast:cache`, `view`), so it must be able to read the Service list of every namespace (as in §1).
 - **Central store** (a Prometheus-compatible API such as Thanos, Mimir or VictoriaMetrics): enter the URL, authentication and cluster label value in Admin → Clusters → Edit.
   The metrics below must then carry that cluster label.

@@ -171,7 +171,7 @@ Helm 릴리스 작업과 새 객체 생성은 가드 대상이 아닙니다. 노
     - 예: VictoriaMetrics 클러스터는 `monitoring/vmselect-<이름>:8481/select/0/prometheus`
     - API로는 `PATCH`의 `prometheus_service`
   - 적용 순서는 클러스터 주소 → 클러스터 Service → 차트 주소 → 차트 Service → 자동 발견입니다.
-  - 어느 Service인지 찾는 작업은 개요 캐시 식별자(`kubeast:cache`, 그룹 `kubeast:viewer`)로 하고, 결과를 클러스터마다 10분 기억합니다.
+  - 어느 Service인지 찾는 작업은 개요 캐시 식별자(`kubeast:cache`, 그룹 `kubeast:viewer`)로 하고, 결과를 클러스터마다 10분 기억합니다(못 찾았거나 찾다가 실패하면 1분).
     - `/-/healthy`가 403이어도 "있음"으로 칩니다. 그래서 누가 먼저 열었든 결과가 같습니다.
   - 질의 자체는 로그인한 사람의 신원으로 나가므로, Read(`kubeast:viewer`)가 읽으려면 `auth.impersonation.viewerProxyServices`에 그 Prometheus Service를 적어야 합니다(적지 않으면 클러스터가 거부, [역할과 권한](features.md#역할과-권한--기본-역할이-무엇을-할-수-있고-클러스터에는-누구로-가나)의 Read 행).
   - Prometheus가 없으면 단일 VictoriaMetrics도 같은 방식으로 찾고, 상태 API가 저장소 종류(`flavor`)를 알려 줍니다.
