@@ -305,6 +305,8 @@ test.describe('the screens say what they know', () => {
       const grants = async () => (await (await request.get(`/api/v1/auth/admin/users/${victim.id}/cluster-roles`, { headers })).json()) as Record<string, string>
 
       await page.goto('/admin/users')
+      // the list pages as many rows as fit the screen: find the account by its email
+      await page.getByTestId('admin-users-search').fill(victim.email)
       await page.getByTestId(`user-detail-${victim.email}`).click()
       await page.getByTestId(`cluster-role-${CLUSTER}`).click()
       await page.getByTestId(`cluster-role-${CLUSTER}-opt-Admin`).click()

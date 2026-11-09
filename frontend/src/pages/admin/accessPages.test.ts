@@ -14,6 +14,13 @@ describe('access request pages', () => {
   it('counts the pages of every match', () => {
     expect([0, 1, 25, 26, 205].map((n) => pageCount(n, 25))).toEqual([1, 1, 1, 2, 9])
   })
+
+  it('asks the server for as many rows as the table fits on the screen', () => {
+    expect(accessRequestQuery('pending', '', 1, 9)).toEqual({ status: 'pending', limit: 9, offset: 0 })
+    expect(accessRequestQuery('history', 'bob', 4, 9)).toEqual({ status: 'decided', q: 'bob', limit: 9, offset: 27 })
+    // the footer's fixed choices
+    expect(accessRequestQuery('history', '', 2, 100)).toEqual({ status: 'decided', limit: 100, offset: 100 })
+  })
 })
 
 const report = (over: Partial<AccessReviewReport>): AccessReviewReport => ({
@@ -29,6 +36,12 @@ describe('access review notes', () => {
   it('pages the past sign-offs', () => {
     expect(historyPage(1)).toEqual({ limit: HISTORY_PER_PAGE, offset: 0 })
     expect(historyPage(18)).toEqual({ limit: 25, offset: 425 })
+  })
+
+  it('asks for as many past sign-offs as the table fits on the screen', () => {
+    expect(historyPage(1, 11)).toEqual({ limit: 11, offset: 0 })
+    expect(historyPage(3, 11)).toEqual({ limit: 11, offset: 22 })
+    expect(historyPage(2, 50)).toEqual({ limit: 50, offset: 50 })
   })
 
   it('counts every API key on the tab and names the expired ones', () => {

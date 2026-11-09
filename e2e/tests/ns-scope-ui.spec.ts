@@ -41,6 +41,8 @@ test.describe('namespace-scoped grants in the UI', () => {
     try {
       userId = await createUser(request, admin, email)
       await page.goto('/admin/users')
+      // the list pages as many rows as fit the screen: find the account by its email
+      await page.getByTestId('admin-users-search').fill(email)
       await page.getByTestId(`user-detail-${email}`).click()
       await expect(page.getByTestId('cluster-role-matrix')).toBeVisible({ timeout: 10_000 })
 
@@ -75,6 +77,8 @@ test.describe('namespace-scoped grants in the UI', () => {
       // And the access review's cluster-roles section names the scope on the grant's row.
       await page.goto('/admin/access-review')
       await page.getByTestId('access-review-tab-cluster_roles').click()
+      // the tab pages its rows: find the grant by the account's email
+      await page.getByPlaceholder(/Search|검색/).fill(email)
       await expect(page.getByTestId('access-review-row').filter({ hasText: email })).toContainText('web')
     } finally {
       if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })

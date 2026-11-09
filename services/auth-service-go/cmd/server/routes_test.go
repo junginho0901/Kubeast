@@ -113,6 +113,8 @@ func newAuthAPIWith(t *testing.T, pending pendingRequest, settings func(*config.
 		pgRule{match: "AND ucr.cluster_id =", oids: []uint32{text, integer, text, stamp, list},
 			rows: [][]any{{"c", 3, "Read", nil, nil}}},
 		pgRule{match: "SELECT COUNT(*) FROM access_requests", oids: []uint32{integer}, rows: [][]any{{0}}},
+		// the count a list of requests answers beside its page (X-Kubeast-Total)
+		pgRule{match: "SELECT COUNT(*)\n\tFROM access_requests ar", oids: []uint32{integer}, rows: [][]any{{0}}},
 		pgRule{match: "DELETE FROM api_keys",
 			oids: []uint32{text, text, text, text, list, text, stamp, stamp, text, stamp},
 			rows: [][]any{{"other-key", "owner", "other", "kbk_other", nil, "Read", later, nil, nil, now}}},
