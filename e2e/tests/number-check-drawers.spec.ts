@@ -11,7 +11,8 @@ import { test, expect, type Page } from '@playwright/test'
 // tables hold what the object says, what kubectl prints of it (the API server's Table, kubectl's printEvent rules) or
 // what its ResourceQuota counts, and every drawer but the node's has its Events section — "None" when kubectl lists no
 // event about the object. A drawer is read until it matches or 20 s pass, then
-// every difference is listed (expect.soft), and a number on a drawer that nothing here compares fails too.
+// every difference is listed (expect.soft), and a number on a drawer that nothing here compares fails too. A Service
+// drawer's backend pod usage names exactly the pods of its ready endpoints in its Prometheus reads (the answers stood in).
 
 const NS = 'e2e-numbers'
 const kindName = 'kubeast'
@@ -106,7 +107,7 @@ const since = (t: string | undefined, to?: string) => ((to ? Date.parse(to) : Da
 
 // events: the Events section, null when the drawer has none — its table's rows and pager total, or its text without one
 type EventsPart = { rows: number; total: number | null; text: string } | null
-type Drawer = { rows: [string, string][]; pairs: Record<string, string>; phases: Record<string, string>; counts: Record<string, number>; text: string; tables: { head: string[]; rows: string[][]; total: number | null }[]; events: EventsPart }
+type Drawer = { rows: [string, string][]; pairs: Record<string, string>; phases: Record<string, string>; counts: Record<string, number>; text: string; tables: { head: string[]; rows: string[][]; total: number | null }[]; events: EventsPart; addresses: Record<string, { shown: string[]; total: number | null }> }
 async function readDrawer(page: Page): Promise<Drawer> {
   return page.locator(DRAWER).last().evaluate((root) => {
     const rows: [string, string][] = []
@@ -139,6 +140,13 @@ async function readDrawer(page: Page): Promise<Drawer> {
       rows: [...tb.querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('td')].map((td) => (td as HTMLElement).innerText.trim())),
       total: total(tb),
     }))
+    // a Service's address lists: the addresses on the page and the pager's total (none while they fit a page)
+    const addresses: Record<string, { shown: string[]; total: number | null }> = {}
+    for (const el of root.querySelectorAll('[data-testid="service-ready-addresses"], [data-testid="service-not-ready-addresses"]')) {
+      const label = (el.querySelector('p') as HTMLElement | null)?.innerText.trim() ?? ''
+      const pager = /\b\d+-\d+ \/ (\d+)\b/.exec((el as HTMLElement).innerText)
+      addresses[label] = { shown: [...el.querySelectorAll('[data-testid="service-address"]')].map((s) => (s as HTMLElement).innerText.trim()), total: pager ? Number(pager[1]) : null }
+    }
     const evTitle = [...root.querySelectorAll('div.rounded-lg.border > div > p:first-child')].find((p) => (p as HTMLElement).innerText.trim() === 'Events')
     const evSec = evTitle?.closest('div.rounded-lg.border')
     const evTable = evSec?.querySelector('table')
@@ -148,7 +156,7 @@ async function readDrawer(page: Page): Promise<Drawer> {
       total: evPager ? Number(evPager[1]) : null,
       text: evTable ? '' : (evSec as HTMLElement).innerText.replace(/^\s*Events\s*/, '').trim(),
     }
-    return { rows, pairs: labelled('span[class*="rounded-full"]'), phases: labelled('span[class*="rounded-sm"][class*="border"]'), counts, text, tables, events }
+    return { rows, pairs: labelled('span[class*="rounded-full"]'), phases: labelled('span[class*="rounded-sm"][class*="border"]'), counts, text, tables, events, addresses }
   })
 }
 const table = (d: Drawer, ...head: string[]) => d.tables.filter((t) => head.every((h, i) => t.head[i] === h))
@@ -438,7 +446,7 @@ const TARGETS: Target[] = [
       const o = one(s, 'Service', name)
       const slices = (s.by.EndpointSlice ?? []).filter((e) => e.metadata.labels?.['kubernetes.io/service-name'] === name)
       const eps = slices.flatMap((e) => e.endpoints ?? [])
-      const addrs = (ready: boolean) => eps.filter((e: Obj) => (e.conditions?.ready ?? true) === ready).flatMap((e: Obj) => e.addresses).sort().join(', ') || '-'
+      const addrs = (ready: boolean): string[] => eps.filter((e: Obj) => (e.conditions?.ready ?? true) === ready).flatMap((e: Obj) => e.addresses).sort()
       const ports = o.spec.ports.map((p: Obj) => `${p.protocol} ${p.port}->${p.targetPort}${p.nodePort ? ` node:${p.nodePort}` : ''}`).join(', ')
       return {
         rows: {
@@ -449,9 +457,16 @@ const TARGETS: Target[] = [
         counts: { 'Matching Pods': matching(s, o.spec.selector).length },
         more: (d) => {
           const out: string[] = []
+          // the list of each, ten to a page: a page that holds them all is every address; past a page, its total is
+          // their count and what it shows is theirs (number-check-hidden-rows reads every page)
           for (const [label, ready] of [['Ready Addresses', true], ['Not Ready Addresses', false]] as const) {
-            const shown = (d.rows.find((r) => r[0] === label)?.[1] ?? '').split(/,\s*/).filter((x) => x && x !== '-').sort().join(', ') || '-'
-            if (shown !== addrs(ready)) out.push(`${label}: drawer ${shown}, EndpointSlices ${addrs(ready)}`)
+            const want = addrs(ready)
+            const list = d.addresses[label]
+            const shown = [...(list?.shown ?? [])].sort()
+            const same = !!list && (list.total === null
+              ? shown.join(', ') === want.join(', ')
+              : list.total === want.length && shown.length === Math.min(10, want.length) && shown.every((a) => want.includes(a)))
+            if (!same) out.push(`${label}: drawer ${list ? `${shown.join(', ') || 'None'}${list.total !== null ? ` of ${list.total}` : ''}` : 'no list'}, EndpointSlices ${want.join(', ') || 'None'}`)
           }
           return out
         },
@@ -638,5 +653,48 @@ test.describe('number check — drawers', () => {
       }
       if (!same) expect.soft(await diff(), `${t.kind}/${t.ref}`).toEqual([])
     })
+  })
+
+  test('a Service drawer sums the usage of exactly the pods of its ready endpoints', async ({ page }) => {
+    test.setTimeout(120_000)
+    const features = await (await page.request.get('/api/v1/cluster/features?cluster=self')).json()
+    test.skip(features?.prometheus?.enabled === false || features?.prometheus?.namespaceLimited === true, 'the drawer reads no Prometheus on self')
+    // the pods of num-web's ready endpoints, as its EndpointSlices name them
+    const slices: Obj[] = JSON.parse(kubectl(`get endpointslices -n ${NS} -l kubernetes.io/service-name=num-web -o json`)).items
+    const want = [...new Set(slices.flatMap((s) => (s.endpoints ?? [])
+      .filter((e: Obj) => (e.conditions?.ready ?? true) && e.targetRef?.kind === 'Pod' && (e.targetRef.namespace ?? NS) === NS)
+      .map((e: Obj) => String(e.targetRef.name))))].sort()
+    expect(want.length, 'kubectl lists the ready pods of num-web').toBe(3)
+    const others: string[] = JSON.parse(kubectl(`get pods -n ${NS} -o json`)).items.map((p: Obj) => String(p.metadata.name)).filter((p: string) => !want.includes(p))
+    // the drawer's reads stood in: what each names is compared with kubectl, the cards with the answer
+    const answer = { cpu: 12, memory: 5 * 1024 * 1024, pods: want.length }
+    const asked: string[] = []
+    const prometheus = /\/api\/v1\/cluster\/prometheus\/query(\?|$)/
+    await page.route(prometheus, (route) => {
+      const q = new URL(route.request().url()).searchParams.get('query') ?? ''
+      if (!q.includes(`namespace="${NS}"`) || !q.includes('pod=~')) return route.fallback()
+      asked.push(q)
+      const value = q.startsWith('count(') ? answer.pods : q.includes('container_memory_working_set_bytes') ? answer.memory : answer.cpu
+      return route.fulfill({ json: { available: true, results: [{ metric: {}, value }] } })
+    })
+    try {
+      await page.goto(`/?cluster=self&detail=${encodeURIComponent(`Service/${NS}/num-web`)}`)
+      const kindOf = (q: string) => (q.startsWith('count(') ? 'pods' : q.includes('container_memory_working_set_bytes') ? 'memory' : 'cpu')
+      await expect.poll(() => [...new Set(asked.map(kindOf))].sort(), { timeout: 30_000 }).toEqual(['cpu', 'memory', 'pods'])
+      // the pods of the namespace a query's pod=~ matcher takes (Prometheus anchors it; a PromQL string doubles a backslash)
+      const taken = (q: string) => {
+        const m = /pod=~"((?:[^"\\]|\\.)*)"/.exec(q)
+        const re = new RegExp(`^(?:${(m?.[1] ?? '').replace(/\\\\/g, '\\')})$`)
+        return [...want, ...others].filter((p) => re.test(p)).sort()
+      }
+      for (const q of asked) expect(taken(q), q).toEqual(want)
+      const section = page.locator(DRAWER).last().locator('div.rounded-lg', { has: page.locator('h3', { hasText: /^Backend Pod Resource Usage$/ }) }).last()
+      const card = (label: string) => section.locator('div.rounded-lg', { hasText: label })
+      await expect(card('Total CPU')).toContainText('12.0m', { timeout: 20_000 })
+      await expect(card('Total Memory')).toContainText('5.0 MiB')
+      await expect(card('Backing Pods')).toContainText(`${want.length}.0`)
+    } finally {
+      await page.unroute(prometheus)
+    }
   })
 })

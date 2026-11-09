@@ -6,13 +6,19 @@ import path from 'node:path'
 
 import { test, expect, type Page } from '@playwright/test'
 
+import { everyPage, pagesOf as listPages } from './drawer-pages'
+
 // No row of a drawer list is out of reach: on self, lists longer than the caps the drawers had (50 rows, 20 nodes) are
 // read page by page and every row compared with the cluster — a Role's RoleBindings and events, a ClusterRole's
 // ClusterRoleBindings and the RoleBindings of every namespace that reference it, a webhook configuration's resources,
 // the pods using a claim (from the claim and from its volume), a ServiceAccount's bindings and the storage topology's
 // lines (kubectl get … -A, the API server's Table, the events kubectl describe lists). A RuntimeClass's schedulable
 // nodes are read from a node list stood in for the one kind node; a namespace-scoped grant (stood in /auth/me) is told
-// the RoleBindings elsewhere are not known; and the floating chat gets the ClusterRole's two binding lists whole.
+// the RoleBindings elsewhere are not known; and the floating chat gets the ClusterRole's two binding lists whole. The
+// lists the drawers page ten at a time because they grow with the cluster — a binding's subjects, a Service's addresses
+// and EndpointSlices, a slice's endpoints, an Endpoints' targets and subset addresses, an admission policy's bindings,
+// a pod's NetworkPolicies and a workload's per-pod CPU (the Prometheus answer stood in) — are read every page against
+// kubectl too.
 
 const NS = 'e2e-hidden-rows'
 const NS_B = 'e2e-hidden-rows-b'
@@ -125,6 +131,82 @@ function fixture(): { objects: Obj[]; pods: Obj[] } {
   return { objects, pods }
 }
 const CLUSTER_OBJECTS = ['clusterrole/hr-crole', 'validatingwebhookconfiguration/hr-vwc', 'runtimeclass/hr-rc']
+
+// The lists the drawers page ten at a time, each past two pages: a binding's subjects, a Service's addresses and
+// EndpointSlices, a slice's endpoints, an Endpoints' targets, an admission policy's bindings and the NetworkPolicies of a
+// pod, in e2e-hidden-rows-p (cluster-scoped objects named hrp-*)
+const NS_P = 'e2e-hidden-rows-p'
+const LABELS_P = { 'kubeast.io/e2e': 'hidden-rows-pages' }
+const M = 23
+const SLICES = 12
+const PAGED_CLUSTER_OBJECTS = ['clusterrole/hrp-crole', 'clusterrolebinding/hrp-crb', 'validatingadmissionpolicy/hrp-vap']
+
+function pagedFixture(): Obj[] {
+  const m = (name: string, namespace?: string) => ({ name, ...(namespace ? { namespace } : {}), labels: LABELS_P })
+  const named = (kind: string, name: string) => ({ kind, apiGroup: RBAC, name })
+  // slice 00 holds 23 endpoints, 15 ready; the other eleven one ready endpoint each (a manager of its own, so no
+  // controller touches them)
+  const slice = (i: number) => ({
+    apiVersion: 'discovery.k8s.io/v1', kind: 'EndpointSlice',
+    metadata: { ...m(`hrp-svc-${pad(i)}`, NS_P), labels: { ...LABELS_P, 'kubernetes.io/service-name': 'hrp-svc', 'endpointslice.kubernetes.io/managed-by': 'e2e.kubeast.io' } },
+    addressType: 'IPv4',
+    ports: [{ name: 'http', port: 8080, protocol: 'TCP' }],
+    endpoints: i === 0
+      ? range(M).map((j) => ({ addresses: [`10.254.0.${j}`], conditions: { ready: j < 15 } }))
+      : [{ addresses: [`10.254.${i}.1`], conditions: { ready: true } }],
+  })
+  return [
+    { apiVersion: 'v1', kind: 'Namespace', metadata: m(NS_P) },
+    { apiVersion: `${RBAC}/v1`, kind: 'ClusterRole', metadata: m('hrp-crole'), rules: [{ apiGroups: [''], resources: ['configmaps'], verbs: ['get'] }] },
+    {
+      apiVersion: `${RBAC}/v1`, kind: 'RoleBinding', metadata: m('hrp-rb', NS_P), roleRef: { apiGroup: RBAC, kind: 'ClusterRole', name: 'hrp-crole' },
+      subjects: [...range(M - 3).map((i) => named('User', `hrp-user-${pad(i)}`)), ...range(3).map((i) => named('Group', `hrp-team-${pad(i)}`))],
+    },
+    {
+      apiVersion: `${RBAC}/v1`, kind: 'ClusterRoleBinding', metadata: m('hrp-crb'), roleRef: { apiGroup: RBAC, kind: 'ClusterRole', name: 'hrp-crole' },
+      subjects: [...range(M - 3).map((i) => named('Group', `hrp-group-${pad(i)}`)), ...range(3).map((i) => ({ kind: 'ServiceAccount', name: `hrp-sa-${i}`, namespace: NS_P }))],
+    },
+    // no selector: its slices are the ones written here
+    { apiVersion: 'v1', kind: 'Service', metadata: m('hrp-svc', NS_P), spec: { ports: [{ name: 'http', port: 80, targetPort: 8080 }] } },
+    ...range(SLICES).map(slice),
+    // no Service of its name, so nothing mirrors it into slices
+    {
+      apiVersion: 'v1', kind: 'Endpoints', metadata: m('hrp-ep', NS_P),
+      subsets: [{
+        addresses: range(M).map((i) => ({ ip: `10.253.0.${i}`, targetRef: { kind: 'Pod', name: `hrp-ghost-${pad(i)}`, namespace: NS_P } })),
+        notReadyAddresses: range(12).map((i) => ({ ip: `10.253.1.${i}` })),
+        ports: [{ name: 'http', port: 8080, protocol: 'TCP' }],
+      }],
+    },
+    // a group no API serves, failurePolicy Ignore
+    {
+      apiVersion: 'admissionregistration.k8s.io/v1', kind: 'ValidatingAdmissionPolicy', metadata: m('hrp-vap'),
+      spec: {
+        failurePolicy: 'Ignore',
+        matchConstraints: { resourceRules: [{ apiGroups: ['hrp.kubeast.io'], apiVersions: ['v1'], operations: ['CREATE'], resources: ['nothings'] }] },
+        validations: [{ expression: 'true' }],
+      },
+    },
+    ...range(12).map((i) => ({
+      apiVersion: 'admissionregistration.k8s.io/v1', kind: 'ValidatingAdmissionPolicyBinding', metadata: m(`hrp-vapb-${pad(i)}`),
+      spec: { policyName: 'hrp-vap', validationActions: ['Audit'] },
+    })),
+    // twelve policies that isolate one pod's ingress, none allowing anything
+    ...range(12).map((i) => ({
+      apiVersion: 'networking.k8s.io/v1', kind: 'NetworkPolicy', metadata: m(`hrp-np-${pad(i)}`, NS_P),
+      spec: { podSelector: { matchLabels: { app: 'hrp-target' } }, policyTypes: ['Ingress'] },
+    })),
+    // no scheduler takes it: it stays Pending and takes nothing
+    {
+      apiVersion: 'v1', kind: 'Pod', metadata: { ...m('hrp-pod', NS_P), labels: { ...LABELS_P, app: 'hrp-target' } },
+      spec: { schedulerName: 'e2e-none', containers: [{ name: 'app', image: 'registry.k8s.io/pause:3.10' }] },
+    },
+    {
+      apiVersion: 'apps/v1', kind: 'Deployment', metadata: m('hrp-web', NS_P),
+      spec: { replicas: 0, selector: { matchLabels: { app: 'hrp-web' } }, template: { metadata: { labels: { app: 'hrp-web' } }, spec: { containers: [{ name: 'app', image: 'registry.k8s.io/pause:3.10' }] } } },
+    },
+  ]
+}
 const ago = (s: number) => new Date(Date.now() - s * 1000).toISOString().replace(/\.\d+Z$/, 'Z')
 
 // A list of a drawer section as read page by page: the section's title, its notes, and per page its rows (table cells,
@@ -453,6 +535,143 @@ test.describe('number check — no drawer row out of reach', () => {
         await page.goto(`/security/clusterroles?cluster=${CLUSTER}&detail=${encodeURIComponent('ClusterRole/hr-crole')}`)
         await page.locator(DRAWER).last().waitFor({ timeout: 20_000 })
         await expect.configure({ soft: true }).poll(ask, { timeout: 30_000 }).toEqual(want)
+      })
+    } finally {
+      cleanup()
+    }
+  })
+
+  test('lists that grow with the cluster are paged ten at a time, every page as the cluster has it', async ({ page }) => {
+    test.setTimeout(600_000)
+    const c = selfCluster()
+    test.skip(!c, `needs the kind cluster ${KIND_CLUSTER} (self)`)
+    const { k } = c!
+    const cleanup = () => {
+      k(`delete namespace ${NS_P} --wait=true --timeout=180s --ignore-not-found`)
+      k(`delete ${PAGED_CLUSTER_OBJECTS.join(' ')} --ignore-not-found --wait=true`)
+      k('delete validatingadmissionpolicybindings -l kubeast.io/e2e=hidden-rows-pages --ignore-not-found --wait=true')
+    }
+    cleanup()
+    const drawer = () => page.locator(DRAWER).last()
+    // every page of a list in the open drawer against what it must read
+    const comparePages = async (what: string, testId: string, items: string, cells: string | undefined, want: Obj[][]) => {
+      const scope = drawer().getByTestId(testId)
+      await scope.waitFor({ timeout: 30_000 })
+      await expect.configure({ soft: true }).poll(() => everyPage(scope, items, cells), { message: what, timeout: 20_000 }).toEqual(listPages(want))
+    }
+    try {
+      k('apply --server-side --field-manager=e2e-hidden-rows -f -', JSON.stringify({ apiVersion: 'v1', kind: 'List', items: pagedFixture() }))
+
+      // a subject card's values: kind, name, then its namespace and API group where it has them
+      const subjectCells = (s: Obj) => [s.kind || '-', s.name || '-', ...(s.namespace ? [s.namespace] : []), ...(s.apiGroup ? [s.apiGroup] : [])]
+      await test.step('RoleBinding hrp-rb and ClusterRoleBinding hrp-crb: every subject', async () => {
+        for (const [ref, get] of [[`RoleBinding/${NS_P}/hrp-rb`, `rolebinding hrp-rb -n ${NS_P}`], ['ClusterRoleBinding/hrp-crb', 'clusterrolebinding hrp-crb']]) {
+          const subjects: Obj[] = JSON.parse(k(`get ${get} -o json`)).subjects ?? []
+          expect(subjects.length, `kubectl lists the subjects of ${ref}`).toBe(M)
+          await openDrawer(page, ref)
+          await comparePages(`${ref} subjects`, 'binding-subjects', '[data-testid="binding-subject"]', '.font-mono, button', subjects.map(subjectCells))
+        }
+      })
+
+      const slices: Obj[] = JSON.parse(k(`get endpointslices -n ${NS_P} -l kubernetes.io/service-name=hrp-svc -o json`)).items
+      await test.step('Service hrp-svc: every ready and not-ready address and every EndpointSlice', async () => {
+        expect(slices.length, 'kubectl lists the slices of hrp-svc').toBe(SLICES)
+        // the slices in the API's order, each endpoint's addresses by its ready condition (unset is ready)
+        const ready = (e: Obj) => e.conditions?.ready ?? true
+        const addresses = (want: boolean) => slices.flatMap((s) => (s.endpoints ?? []).filter((e: Obj) => ready(e) === want).flatMap((e: Obj) => e.addresses)).map((a: string) => [a])
+        const portsText = (s: Obj) => (s.ports ?? []).map((p: Obj) => `${p.name || '-'}:${p.port ?? '-'}${p.protocol ? `/${p.protocol}` : ''}`).join(', ') || '-'
+        await openDrawer(page, `Service/${NS_P}/hrp-svc`)
+        await comparePages('ready addresses', 'service-ready-addresses', '[data-testid="service-address"]', undefined, addresses(true))
+        await comparePages('not-ready addresses', 'service-not-ready-addresses', '[data-testid="service-address"]', undefined, addresses(false))
+        await comparePages('endpoint slices', 'service-endpoint-slices', 'tbody tr', undefined,
+          slices.map((s) => [s.metadata.name, s.addressType, String((s.endpoints ?? []).filter(ready).length), String((s.endpoints ?? []).length), portsText(s)]))
+      })
+
+      await test.step('EndpointSlice hrp-svc-00: every endpoint', async () => {
+        const slice = slices.find((s) => s.metadata.name === 'hrp-svc-00')
+        expect(slice?.endpoints?.length, 'kubectl lists the endpoints of hrp-svc-00').toBe(M)
+        const yesNo = (v: unknown) => (v == null ? 'Unknown' : v ? 'Yes' : 'No')
+        await openDrawer(page, `EndpointSlice/${NS_P}/hrp-svc-00`)
+        await comparePages('endpoints', 'endpointslice-endpoints', '[data-testid="endpointslice-endpoint"]', ':scope > div:first-child, :scope > div:last-child > span',
+          (slice?.endpoints ?? []).map((e: Obj) => [`Addresses: ${(e.addresses ?? []).join(', ') || '-'}`,
+            `Ready: ${yesNo(e.conditions?.ready)}`, `Serving: ${yesNo(e.conditions?.serving)}`, `Terminating: ${yesNo(e.conditions?.terminating)}`]))
+      })
+
+      await test.step('Endpoints hrp-ep: every ready and not-ready target', async () => {
+        const subsets: Obj[] = JSON.parse(k(`get endpoints hrp-ep -n ${NS_P} -o json`)).subsets ?? []
+        const target = (a: Obj) => [a.ip, a.targetRef?.name ? `${a.targetRef.kind || 'Target'}:${a.targetRef.name}` : 'targetRef: -', ...(a.nodeName ? [`node=${a.nodeName}`] : [])]
+        const ready = subsets.flatMap((s) => s.addresses ?? []).map(target)
+        const notReady = subsets.flatMap((s) => s.notReadyAddresses ?? []).map(target)
+        expect([ready.length, notReady.length], 'kubectl lists the addresses of hrp-ep').toEqual([M, 12])
+        await openDrawer(page, `Endpoints/${NS_P}/hrp-ep`)
+        await comparePages('ready targets', 'endpoints-ready-targets', '[data-testid="endpoints-target"]', ':scope > p', ready)
+        await comparePages('not-ready targets', 'endpoints-not-ready-targets', '[data-testid="endpoints-target"]', ':scope > p', notReady)
+        // the one subset as kubectl describe lists it: each page a line of ten of its addresses, with the range of all
+        for (const [what, testId, label, list] of [
+          ['subset addresses', 'endpoints-subset-addresses', 'Addresses', subsets[0]?.addresses ?? []],
+          ['subset not-ready addresses', 'endpoints-subset-not-ready-addresses', 'Not Ready Addresses', subsets[0]?.notReadyAddresses ?? []],
+        ] as const) {
+          const ips: string[] = list.map((a: Obj) => a.ip)
+          const pages = range(Math.ceil(ips.length / 10)).map((p) => ips.slice(p * 10, p * 10 + 10))
+          const scope = drawer().locator('[data-testid="endpoints-subset"]').first().getByTestId(testId)
+          await scope.waitFor({ timeout: 30_000 })
+          await expect.configure({ soft: true }).poll(() => everyPage(scope, ':scope > div:first-child'), { message: what, timeout: 20_000 }).toEqual({
+            items: pages.map((p) => [`${label}: ${p.join(', ')}`]),
+            pagers: pages.map((p, i) => `${i * 10 + 1}-${i * 10 + p.length} / ${ips.length}`),
+          })
+        }
+      })
+
+      await test.step('ValidatingAdmissionPolicy hrp-vap: every binding', async () => {
+        const terms = (s?: Obj) => [
+          ...Object.entries(s?.matchLabels ?? {}).map(([key, v]) => `${key}=${v}`),
+          ...(s?.matchExpressions ?? []).map((e: Obj) => `${e.key} ${e.operator} [${(e.values ?? []).join(', ')}]`),
+        ]
+        const paramRef = (ref?: Obj) => {
+          if (!ref) return '-'
+          const name = ref.namespace ? `${ref.namespace}/${ref.name ?? ''}` : (ref.name ?? '')
+          return `${name || terms(ref.selector).join(', ') || '-'}${ref.parameterNotFoundAction ? ` (${ref.parameterNotFoundAction})` : ''}`
+        }
+        const rule = (r: Obj) => `${(r.apiGroups ?? []).map((g: string) => g || '""').join(',')}/${(r.apiVersions ?? []).join(',')} ${(r.resources ?? []).join(',')} [${(r.operations ?? []).join(',')}]`
+        const bindings: Obj[] = JSON.parse(k('get validatingadmissionpolicybindings -o json')).items.filter((b: Obj) => b.spec?.policyName === 'hrp-vap')
+        expect(bindings.length, 'kubectl lists the bindings of hrp-vap').toBe(12)
+        await openDrawer(page, 'ValidatingAdmissionPolicy/hrp-vap')
+        await comparePages('bindings', 'admission-policy-bindings-list', 'tbody tr', undefined, bindings.map((b) => {
+          const mr = b.spec?.matchResources ?? {}
+          return [b.metadata.name, (b.spec?.validationActions ?? []).join(', ') || '-', paramRef(b.spec?.paramRef), terms(mr.namespaceSelector).join(', ') || '-',
+            (mr.resourceRules ?? []).length ? mr.resourceRules.map(rule).join(' ') : '-']
+        }))
+      })
+
+      await test.step('Pod hrp-pod: every NetworkPolicy that isolates its ingress', async () => {
+        const policies: Obj[] = JSON.parse(k(`get networkpolicies -n ${NS_P} -o json`)).items
+          .filter((p: Obj) => p.spec.podSelector?.matchLabels?.app === 'hrp-target' && (p.spec.policyTypes ?? ['Ingress']).includes('Ingress'))
+          .sort((a: Obj, b: Obj) => (a.metadata.name < b.metadata.name ? -1 : 1))
+        expect(policies.length, 'kubectl lists the policies selecting hrp-pod').toBe(12)
+        await openDrawer(page, `Pod/${NS_P}/hrp-pod`)
+        await comparePages('ingress policies', 'netpol-ingress', '[data-testid="netpol-policy"]', ':scope > button', policies.map((p) => [p.metadata.name]))
+      })
+
+      await test.step('Deployment hrp-web: every pod\'s CPU, busiest first (the Prometheus answer stood in)', async () => {
+        const features = await (await page.request.get(`/api/v1/cluster/features?cluster=${CLUSTER}`)).json()
+        if (features?.prometheus?.enabled === false || features?.prometheus?.namespaceLimited === true) {
+          test.info().annotations.push({ type: 'skipped step', description: 'the cluster\'s Prometheus is off for self' })
+          return
+        }
+        // a value per pod, none the same
+        const samples = range(M).map((i) => ({ metric: { pod: `hrp-web-${pad(i)}` }, value: ((i * 7) % M) * 10 + 5 }))
+        const perPod = /sum by\s*\(pod\)\s*\(rate\(container_cpu_usage_seconds_total/
+        await page.route(/\/api\/v1\/cluster\/prometheus\/query(\?|$)/, (route) => {
+          const query = new URL(route.request().url()).searchParams.get('query') ?? ''
+          return perPod.test(query) && query.includes(`namespace="${NS_P}"`) ? route.fulfill({ json: { available: true, results: samples } }) : route.fallback()
+        })
+        try {
+          await openDrawer(page, `Deployment/${NS_P}/hrp-web`)
+          const busiest = [...samples].sort((a, b) => b.value - a.value)
+          await comparePages('per-pod CPU', 'per-pod-cpu', '[data-testid="per-pod-cpu-row"]', ':scope > span', busiest.map((s) => [s.metric.pod, `${s.value.toFixed(0)}m`]))
+        } finally {
+          await page.unroute(/\/api\/v1\/cluster\/prometheus\/query(\?|$)/)
+        }
       })
     } finally {
       cleanup()

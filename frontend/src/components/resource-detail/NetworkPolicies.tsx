@@ -8,12 +8,14 @@ import { InfoSection } from './DetailCommon'
 import { ResourceLink } from './ResourceLink'
 import NetworkPolicyCheckModal from './NetworkPolicyCheckModal'
 import { peerText, portsText, unevaluatedText, type Tr } from './netpolText'
+import { usePagination } from './usePagination'
 
 // "Network Policies": the NetworkPolicies that select this pod (or a workload's pods by its template),
 // per direction, with what their rules allow, and the window that checks one connection. Nothing is
 // shown when the policies cannot be read.
 
 function DirectionBlock({ title, dir, incoming, namespace, tr }: { title: string; dir: NetpolDirection; incoming: boolean; namespace: string; tr: Tr }) {
+  const { items: paged, nav } = usePagination(dir.policies, 10)
   return (
     <div className="space-y-1.5" data-testid={incoming ? 'netpol-ingress' : 'netpol-egress'}>
       <div className="text-xs font-medium text-slate-300">{title}</div>
@@ -25,7 +27,7 @@ function DirectionBlock({ title, dir, incoming, namespace, tr }: { title: string
             {tr('netpolCheck.isolatedBy', 'Isolated by {{n}} policies: only what their rules allow.', { n: dir.policies.length, count: dir.policies.length })}
           </p>
           <ul className="space-y-1.5">
-            {dir.policies.map((p) => (
+            {paged.map((p) => (
               <li key={p.name} className="rounded-sm border border-slate-800 bg-slate-900/60 px-2.5 py-1.5 text-xs" data-testid="netpol-policy">
                 <ResourceLink kind="NetworkPolicy" name={p.name} namespace={namespace} />
                 {p.rules.length === 0 ? (
@@ -47,6 +49,7 @@ function DirectionBlock({ title, dir, incoming, namespace, tr }: { title: string
               </li>
             ))}
           </ul>
+          {nav}
         </>
       )}
     </div>

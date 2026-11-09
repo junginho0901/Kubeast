@@ -2,9 +2,11 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, Th, Tx } from './DetailCommon'
+import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, NoneText, StatusBadge, SummaryBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useNamespacePodTable } from './useNamespacePodTable'
+import { usePagination } from './usePagination'
+import { backendPodNames, patternFitsOneQuery, podNamesPattern } from './serviceBackend'
 import { SET_POD_TABLE_WATCH_MAX } from './namespacePodTable'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
@@ -76,6 +78,8 @@ type ServiceDescribe = {
   created_at?: string | null
   conditions?: Array<Record<string, unknown>>
   endpoint_summary?: EndpointSummary | null
+  // each address of the slices, ready or not, with the Pod it points at
+  endpoints?: Array<{ ip?: string; ready?: boolean; target_ref?: { kind?: string; name?: string; namespace?: string } | null }>
   endpoint_slices?: EndpointSliceSummary[]
   events?: Array<Record<string, unknown>>
   events_error?: string
@@ -92,6 +96,26 @@ function toPortDisplay(ports: DescribePort[]): string {
       return `${protocol} ${from}->${to}${node}`
     })
     .join(', ')
+}
+
+// The ready or not-ready addresses of the Service's EndpointSlices, ten to a page.
+function AddressList({ label, addresses, testId }: { label: string; addresses: string[]; testId: string }) {
+  const { items: paged, nav } = usePagination(addresses, 10)
+  return (
+    <div data-testid={testId}>
+      <p className="text-[11px] text-slate-400 mb-1"><Tx>{label}</Tx></p>
+      {addresses.length === 0 ? (
+        <NoneText />
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {paged.map((ip, i) => (
+            <span key={`${ip}-${i}`} className="rounded-sm border border-slate-700 bg-slate-800/60 px-2 py-0.5 font-mono text-[11px] text-slate-200" data-testid="service-address">{ip}</span>
+          ))}
+        </div>
+      )}
+      {nav}
+    </div>
+  )
 }
 
 function formatIngress(ingress: Array<{ ip?: string | null; hostname?: string | null }>): string {
@@ -154,22 +178,21 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
   const labels = (describe?.labels ?? (meta?.labels as Record<string, string> | undefined) ?? {})
   const annotations = (describe?.annotations ?? (meta?.annotations as Record<string, string> | undefined) ?? {})
 
-  // Prometheus service-level metrics — use endpoint pod names from describe data
-  const endpointPodNames = useMemo(() => {
-    const addrs = describe?.endpoint_summary?.ready_addresses
-    if (!Array.isArray(addrs)) return []
-    return addrs.map((a: any) => a?.target_ref?.name).filter(Boolean) as string[]
-  }, [describe?.endpoint_summary?.ready_addresses])
-
-  const podRegex = endpointPodNames.length > 0 ? endpointPodNames.join('|') : ''
+  // Prometheus service-level metrics: the pods of the ready endpoints (the answer's endpoints name each address's Pod)
+  const backendPods = useMemo(() => backendPodNames(describe?.endpoints, namespace ?? ''), [describe?.endpoints, namespace])
+  const podPattern = useMemo(() => podNamesPattern(backendPods), [backendPods])
+  // past what one query carries, only whether Prometheus answers is asked, to say why there are no sums
+  const podsPastQuery = !patternFitsOneQuery(podPattern)
   const promSvcMetrics = usePrometheusQueries(
-    ['service-detail', namespace ?? '', name],
-    [
-      { name: 'cpu', promql: `sum(rate(container_cpu_usage_seconds_total{namespace="${namespace}",pod=~"${podRegex}",container!="",container!="POD"}[5m])) * 1000` },
-      { name: 'memory', promql: `sum(container_memory_working_set_bytes{namespace="${namespace}",pod=~"${podRegex}",container!="",container!="POD"})` },
-      { name: 'pod_count', promql: `count(count by(pod)(container_cpu_usage_seconds_total{namespace="${namespace}",pod=~"${podRegex}",container!="",container!="POD"}))` },
-    ],
-    { enabled: !!name && !!namespace && endpointPodNames.length > 0 },
+    ['service-detail', namespace ?? '', name, podsPastQuery ? 'past-query' : podPattern],
+    podsPastQuery
+      ? [{ name: 'probe', promql: 'vector(1)' }]
+      : [
+        { name: 'cpu', promql: `sum(rate(container_cpu_usage_seconds_total{namespace="${namespace}",pod=~"${podPattern}",container!="",container!="POD"}[5m])) * 1000` },
+        { name: 'memory', promql: `sum(container_memory_working_set_bytes{namespace="${namespace}",pod=~"${podPattern}",container!="",container!="POD"})` },
+        { name: 'pod_count', promql: `count(count by(pod)(container_cpu_usage_seconds_total{namespace="${namespace}",pod=~"${podPattern}",container!="",container!="POD"}))` },
+      ],
+    { enabled: !!name && !!namespace && backendPods.length > 0 },
   )
 
   const getSvcMetric = (n: string): number | null => {
@@ -185,6 +208,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
 
   const endpointSummary = describe?.endpoint_summary
   const endpointSlices = Array.isArray(describe?.endpoint_slices) ? describe.endpoint_slices : []
+  const { items: pagedSlices, nav: slicesNav } = usePagination(endpointSlices, 10)
 
   const conditions = Array.isArray(describe?.conditions) ? describe.conditions : []
 
@@ -192,17 +216,23 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
     <>
       {/* Prometheus Backend Pod Metrics */}
       <PrometheusSection available={promSvcMetrics.available} title="Backend Pod Resource Usage">
-        <div className="grid grid-cols-3 gap-3">
-          {getSvcMetric('cpu') !== null && (
-            <MetricCard label="Total CPU" value={getSvcMetric('cpu')!} unit="m" thresholds={{ warn: 500, danger: 1000 }} />
-          )}
-          {getSvcMetric('memory') !== null && (
-            <MetricCard label="Total Memory" value={getSvcMetric('memory')! / (1024 * 1024)} unit=" MiB" thresholds={{ warn: 1024, danger: 2048 }} />
-          )}
-          {getSvcMetric('pod_count') !== null && (
-            <MetricCard label="Backing Pods" value={getSvcMetric('pod_count')!} unit="" thresholds={{ warn: 10, danger: 20 }} />
-          )}
-        </div>
+        {podsPastQuery ? (
+          <p className="text-xs text-slate-400" data-testid="service-backend-pods-past-query">
+            <Tx text="Not shown: the {{n}} pods behind this Service are more than one Prometheus query can name." values={{ n: backendPods.length }} />
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-3">
+            {getSvcMetric('cpu') !== null && (
+              <MetricCard label="Total CPU" value={getSvcMetric('cpu')!} unit="m" thresholds={{ warn: 500, danger: 1000 }} />
+            )}
+            {getSvcMetric('memory') !== null && (
+              <MetricCard label="Total Memory" value={getSvcMetric('memory')! / (1024 * 1024)} unit=" MiB" thresholds={{ warn: 1024, danger: 2048 }} />
+            )}
+            {getSvcMetric('pod_count') !== null && (
+              <MetricCard label="Backing Pods" value={getSvcMetric('pod_count')!} unit="" thresholds={{ warn: 10, danger: 20 }} />
+            )}
+          </div>
+        )}
       </PrometheusSection>
 
       <InfoSection title="Service Info">
@@ -278,15 +308,15 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
           <SummaryBadge label="Not Ready" value={endpointSummary?.not_ready_count ?? 0} color="amber" />
           <SummaryBadge label="Slices" value={endpointSlices.length} color="default" />
         </div>
-        <div className="space-y-2">
-          <InfoRow label="Ready Addresses" value={(endpointSummary?.ready_addresses || []).join(', ') || '-'} />
-          <InfoRow label="Not Ready Addresses" value={(endpointSummary?.not_ready_addresses || []).join(', ') || '-'} />
+        <div className="space-y-3">
+          <AddressList label="Ready Addresses" addresses={endpointSummary?.ready_addresses ?? []} testId="service-ready-addresses" />
+          <AddressList label="Not Ready Addresses" addresses={endpointSummary?.not_ready_addresses ?? []} testId="service-not-ready-addresses" />
         </div>
       </InfoSection>
 
       {endpointSlices.length > 0 && (
         <InfoSection title="Endpoint Slices">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" data-testid="service-endpoint-slices">
             <table className="w-full text-xs table-fixed min-w-[680px]">
               <thead className="text-slate-400">
                 <tr>
@@ -298,7 +328,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {endpointSlices.map((slice, idx) => {
+                {pagedSlices.map((slice, idx) => {
                   const portsText = (slice.ports || [])
                     .map((p) => `${p.name || '-'}:${p.port ?? '-'}${p.protocol ? `/${p.protocol}` : ''}`)
                     .join(', ')
@@ -314,6 +344,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
                 })}
               </tbody>
             </table>
+            {slicesNav}
           </div>
         </InfoSection>
       )}
