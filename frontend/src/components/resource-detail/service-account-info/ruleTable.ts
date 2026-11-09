@@ -13,3 +13,10 @@ export function ruleTableCells(r: RuleEntry): string[] {
     r.resourceNames?.join(', ') || '-',
   ]
 }
+
+// The API server reads a RoleBinding only for a request in its namespace, and a URL has none.
+export function ruleRowNote(bindingKind: 'RoleBinding' | 'ClusterRoleBinding', r: RuleEntry): string | null {
+  return bindingKind === 'RoleBinding' && r.nonResourceURLs.length > 0
+    ? 'Not in effect through a RoleBinding; URLs need a ClusterRoleBinding.'
+    : null
+}

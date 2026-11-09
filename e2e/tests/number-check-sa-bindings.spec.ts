@@ -45,6 +45,11 @@ const BINDINGS: Array<{ name: string; subject: Subject; applies: boolean; matche
 // A ClusterRole of URL and resource rules bound to the ServiceAccount itself; URLs of this run, so nothing else grants them.
 const URLS = `${NS}-urls`
 const URL_RULE = [`/e2e-sa-urls-${stamp}`, `/e2e-sa-urls-${stamp}/*`]
+// Another ClusterRole with URLs of its own, bound to it by a RoleBinding only: no URL, as the API server reads a RoleBinding.
+const RB_URLS = `${NS}-rb-urls`
+const RB_URL_RULE = [`/e2e-sa-rb-urls-${stamp}`]
+const RB_URLS_BINDING = 'urls-by-rolebinding'
+const RB_URL_NOTE = 'Not in effect through a RoleBinding; URLs need a ClusterRoleBinding.'
 const LABEL = 'kubeast.io/e2e=sa-bindings'
 const removeClusterObjects = () => kubectl(['delete', 'clusterrolebinding,clusterrole', '-l', LABEL, '--ignore-not-found', '--wait=false'])
 
@@ -64,6 +69,11 @@ function makeFixture() {
       { apiGroups: [''], resources: ['nodes'], verbs: ['get'] },
     ] },
     { apiVersion: `${RBAC}/v1`, kind: 'ClusterRoleBinding', metadata: { name: URLS, labels }, roleRef: { apiGroup: RBAC, kind: 'ClusterRole', name: URLS }, subjects: [itself] },
+    { apiVersion: `${RBAC}/v1`, kind: 'ClusterRole', metadata: { name: RB_URLS, labels }, rules: [
+      { nonResourceURLs: RB_URL_RULE, verbs: ['get'] },
+      { apiGroups: [''], resources: ['persistentvolumeclaims'], verbs: ['list'] },
+    ] },
+    { apiVersion: `${RBAC}/v1`, kind: 'RoleBinding', metadata: { name: RB_URLS_BINDING, namespace: NS }, roleRef: { apiGroup: RBAC, kind: 'ClusterRole', name: RB_URLS }, subjects: [itself] },
   ] }))
   // Its pod's RBAC tab reads the same ServiceAccount; no node has to run it.
   kubectl(['create', '-f', '-'], JSON.stringify({
@@ -165,6 +175,8 @@ test.describe('number check — a ServiceAccount drawer counts what applies to i
     }
     expect(canGet(URL_RULE[0]), `${URLS} lets it get its URL`).toBe('yes')
     expect(canGet(`/e2e-sa-urls-${stamp}-other`), 'and no URL it does not name').toBe('no')
+    expect(canList('persistentvolumeclaims'), `${RB_URLS_BINDING} applies to it`).toBe('yes')
+    expect(canGet(RB_URL_RULE[0]), `${RB_URLS_BINDING} gives it no URL of ${RB_URLS}`).toBe('no')
 
     await page.goto(`/?cluster=${CLUSTER}&detail=${encodeURIComponent(`ServiceAccount/${NS}/${SA}`)}`)
     await page.locator(DRAWER).last().waitFor({ timeout: 20_000 })
@@ -180,6 +192,9 @@ test.describe('number check — a ServiceAccount drawer counts what applies to i
     // the URLs a rule names in their own column, as kubectl describe's Non-Resource URLs, the resource rule beside it "-" there
     const urlCard = cards.find((c) => c.head === `via ${URLS} → ${URLS}`)
     expect(urlCard?.rows, `${URLS} rules`).toEqual([['-', '-', URL_RULE.join(', '), 'get', '-'], ['""', 'nodes', '-', 'get', '-']])
+    // the same through a RoleBinding: the row of URLs says they are not in effect, the resource row beside it nothing
+    const rbUrlCard = cards.find((c) => c.head === `via ${RB_URLS_BINDING} → ${RB_URLS}`)
+    expect(rbUrlCard?.rows, `${RB_URLS_BINDING} rules`).toEqual([['-', '-', `${RB_URL_RULE.join(', ')} ${RB_URL_NOTE}`, 'get', '-'], ['""', 'persistentvolumeclaims', '-', 'list', '-']])
 
     // The pod's RBAC tab counts the same bindings.
     const admin = await login(request)

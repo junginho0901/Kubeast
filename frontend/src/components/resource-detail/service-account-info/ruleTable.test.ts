@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { RULE_TABLE_COLUMNS, ruleTableCells } from './ruleTable'
+import { RULE_TABLE_COLUMNS, ruleRowNote, ruleTableCells } from './ruleTable'
 import { normalizeRules } from './useEffectivePermissions'
 
 // A bound role's rules as the Effective Permissions table draws them from the drawer's describe answer: column → cell.
@@ -40,5 +40,27 @@ describe('the Effective Permissions rule table', () => {
     for (const r of normalizeRules([{ verbs: ['get'] }, { nonResourceURLs: ['/x'], verbs: ['get'] }])) {
       expect(ruleTableCells(r)).toHaveLength(RULE_TABLE_COLUMNS.length)
     }
+  })
+})
+
+// The API server reads a RoleBinding only for a request in its namespace, and a URL has none (RBAC: "must be in a
+// ClusterRole bound with a ClusterRoleBinding to be effective").
+describe('the note under a rule of URLs', () => {
+  const notes = (bindingKind: 'RoleBinding' | 'ClusterRoleBinding', rules: unknown) => normalizeRules(rules).map((r) => ruleRowNote(bindingKind, r))
+  const rules = [
+    { nonResourceURLs: ['/healthz', '/version'], verbs: ['get'] },
+    { apiGroups: [''], resources: ['pods'], verbs: ['get'] },
+  ]
+
+  it('says a RoleBinding gives no URL, on the row of URLs only', () => {
+    expect(notes('RoleBinding', rules)).toEqual(['Not in effect through a RoleBinding; URLs need a ClusterRoleBinding.', null])
+  })
+
+  it('says nothing under a ClusterRoleBinding, which gives the URLs', () => {
+    expect(notes('ClusterRoleBinding', rules)).toEqual([null, null])
+  })
+
+  it('says nothing on a RoleBinding\'s rows without URLs', () => {
+    expect(notes('RoleBinding', [{ apiGroups: ['apps'], resources: ['deployments'], resourceNames: ['web'], verbs: ['get'] }])).toEqual([null])
   })
 })

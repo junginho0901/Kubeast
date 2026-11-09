@@ -37,7 +37,7 @@
     },
     {
       "screen": "^(default|dark|light) · drawer ServiceAccount \\(namespace under test\\)$",
-      "why": "Effective Permissions counts the bindings of the ServiceAccount's groups too, so the two discovery bindings of system:serviceaccounts show, their API Groups cell writes the groups as the Role drawer does (the core group \"\", a rule naming none -), the rules table has a Non-Resource URLs column after Resources, as kubectl describe heads a PolicyRule, so a rule of URLs shows them, and Settings behind the drawer has the Node Shell card.",
+      "why": "Effective Permissions counts the bindings of the ServiceAccount's groups too, so the two discovery bindings of system:serviceaccounts show, their API Groups cell writes the groups as the Role drawer does (the core group \"\", a rule naming none -), the rules table has a Non-Resource URLs column after Resources, as kubectl describe heads a PolicyRule, so a rule of URLs shows them, under a RoleBinding with a note that they are not in effect there, and Settings behind the drawer has the Node Shell card.",
       "pr": "#692, #696, fix/jobs-suspended-sa-groups"
     },
     {
