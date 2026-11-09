@@ -94,7 +94,7 @@
     - `nodes_stats_summary`·`nodes_log` — kubelet의 stats summary와 로그 질의를 API 서버 프록시로 읽습니다(`admin.nodes.read` + 클러스터 RBAC `nodes/proxy`).
       로그 질의는 kubelet의 `enableSystemLogQuery`가 켜져 있어야 하며, 꺼져 있으면 unavailable로 답합니다.
   - 큰 목록은 다음 도구로 줄여 받습니다.
-    - `k8s_jq_query` — `kubectl get -o json`을 jq로 걸러 필요한 필드만, 환경·파일 접근 없음, 5초 상한. 프로그램은 메모리 상한이 있는 자식 프로세스에서 돕니다(1 MiB 목록이면 약 40 MiB). 긴 range나 반복한 문자열처럼 그보다 많이 만드는 프로그램은 그 이유로 거절하고 tool-server는 그대로 돕니다.
+    - `k8s_jq_query` — `kubectl get -o json`을 jq로 걸러 필요한 필드만, 환경·파일 접근 없음, 5초 상한. 프로그램은 메모리 상한이 있는 자식 프로세스에서 한 번에 하나씩 돕니다(1 MiB 목록이면 약 40 MiB, 리눅스에서는 커널도 그 상한을 겁니다). 긴 range나 반복한 문자열처럼 그보다 많이 만드는 프로그램은 그 이유로 거절하고 tool-server는 그대로 돕니다. 차례를 기다리다 호출 시간이 다 되면 tool-server가 바쁘니 다시 물으라고 답합니다.
     - `k8s_tabular_query` — 고른 열만 표로
     - `k8s_count` — 개수, 그룹별 개수
     - **Secret 값은 이 길로 나가지 않습니다.** `k8s_jq_query`·`k8s_count`는 값을 뺀 목록을 읽습니다. 키 이름은 남고 값은 `<REDACTED:secret>`입니다. kubectl이 직접 계산하는 출력은 먼저 지울 수 없으므로, Secret의 표와 `jsonpath`·`go-template`·`custom-columns` 출력, `.data`로 묶은 개수는 다른 길을 안내하며 거절합니다. 여러 종류를 함께 읽으면 다른 종류의 값은 그대로입니다. 실패한 도구의 글도 답과 똑같이 가립니다.
