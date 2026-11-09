@@ -9,11 +9,12 @@ interface Params {
   name: string
 }
 
-interface RuleEntry {
+export interface RuleEntry {
   apiGroups: string[]
   resources: string[]
   verbs: string[]
   resourceNames?: string[]
+  nonResourceURLs: string[]
 }
 
 export interface BoundRole {
@@ -96,13 +97,14 @@ export function serviceAccountBindings(rbList: unknown, crbList: unknown, namesp
   return [...matched(rbList, 'RoleBinding'), ...matched(crbList, 'ClusterRoleBinding')]
 }
 
-function normalizeRules(rulesRaw: any): RuleEntry[] {
+export function normalizeRules(rulesRaw: any): RuleEntry[] {
   const list = Array.isArray(rulesRaw) ? rulesRaw : []
   return list.map((r: any) => ({
     apiGroups: Array.isArray(r?.apiGroups) ? r.apiGroups : (Array.isArray(r?.api_groups) ? r.api_groups : []),
     resources: Array.isArray(r?.resources) ? r.resources : [],
     verbs: Array.isArray(r?.verbs) ? r.verbs : [],
     resourceNames: Array.isArray(r?.resourceNames) ? r.resourceNames : (Array.isArray(r?.resource_names) ? r.resource_names : undefined),
+    nonResourceURLs: Array.isArray(r?.nonResourceURLs) ? r.nonResourceURLs : [],
   }))
 }
 

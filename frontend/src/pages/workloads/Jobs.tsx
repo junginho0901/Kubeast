@@ -159,7 +159,7 @@ export default function Jobs() {
     const prefix = stats.failed > 0 ? '⚠️ ' : ''
     return {
       source: 'base' as const,
-      summary: `${prefix}${nsLabel} Job ${stats.total}개 (완료 ${stats.completed}, 실행중 ${stats.running}, 실패 ${stats.failed})`,
+      summary: `${prefix}${nsLabel} Job ${stats.total}개 (완료 ${stats.completed}, 실행중 ${stats.running}, 일시중지 ${stats.suspended}, 실패 ${stats.failed})`,
       data: {
         filters: { namespace: selectedNamespace, search: searchQuery || undefined },
         stats,
@@ -261,7 +261,7 @@ spec:
         allNamespacesLabel={tr('jobs.allNamespaces', 'All namespaces')}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('jobs.stats.total', 'Total')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
@@ -273,6 +273,11 @@ spec:
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('jobs.stats.running', 'Running')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{summary.running}</p>
+        </div>
+        {/* yellow as a suspended Job's badge-warning */}
+        <div className="rounded-lg border border-yellow-700/40 bg-yellow-900/10 px-4 py-3">
+          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-yellow-300">{tr('jobs.stats.suspended', 'Suspended')}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{summary.suspended}</p>
         </div>
         <div className="rounded-lg border border-red-700/40 bg-red-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-red-300">{tr('jobs.stats.failed', 'Failed')}</p>

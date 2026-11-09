@@ -195,12 +195,18 @@ const SCREENS: Screen[] = [
     // num-fail's Duration runs on (start to now, as kubectl's printJob) — to the second while the Job is new; num-held never started
     spans: { Duration: (o) => !!o.status.startTime && !o.status.completionTime },
     skip: { Age: AGE },
-    cards: (list) => ({
-      Total: list.length,
-      Completed: list.filter((j) => cond(j, 'Complete') === 'True').length,
-      Failed: list.filter((j) => cond(j, 'Failed') === 'True').length,
-      Running: list.filter((j) => cond(j, 'Complete') !== 'True' && cond(j, 'Failed') !== 'True').length,
-    }),
+    // Suspended as kubectl's printJob reads it: not ended, not being deleted, a Suspended condition
+    cards: (list) => {
+      const ended = (j: Obj) => cond(j, 'Complete') === 'True' || cond(j, 'Failed') === 'True'
+      const suspended = (j: Obj) => !ended(j) && !j.metadata.deletionTimestamp && cond(j, 'Suspended') === 'True'
+      return {
+        Total: list.length,
+        Completed: list.filter((j) => cond(j, 'Complete') === 'True').length,
+        Failed: list.filter((j) => cond(j, 'Failed') === 'True').length,
+        Suspended: list.filter(suspended).length,
+        Running: list.filter((j) => !ended(j) && !suspended(j)).length,
+      }
+    },
   },
   {
     path: '/workloads/cronjobs', api: `/apis/batch/v1/namespaces/${NS}/cronjobs`, plural: 'cronjobs',
@@ -2563,12 +2569,28 @@ test.describe('number check — list screens', () => {
       total: statuses.length,
       completed: statuses.filter((s) => s === 'Complete').length,
       failed: statuses.filter((s) => s === 'Failed').length,
-      running: statuses.filter((s) => s !== 'Complete' && s !== 'Failed').length,
+      suspended: statuses.filter((s) => s === 'Suspended').length,
+      running: statuses.filter((s) => s !== 'Complete' && s !== 'Failed' && s !== 'Suspended').length,
     }
     expect(statuses, 'a suspended Job, which runs no pods, is among them').toContain('Suspended')
     await page.goto(JOBS)
-    await expect.poll(async () => (await readScreen(page)).cards, { timeout: 20_000 }).toMatchObject({ Total: want.total, Completed: want.completed, Running: want.running, Failed: want.failed })
+    await expect.poll(async () => (await readScreen(page)).cards, { timeout: 20_000 }).toMatchObject({ Total: want.total, Completed: want.completed, Running: want.running, Suspended: want.suspended, Failed: want.failed })
+    // the Suspended card in the colour of a suspended row's badge
+    await expect(jobBadge(page, 'num-held')).toHaveClass(/badge-warning/)
+    await expect(page.locator('main div.rounded-lg.border').filter({ hasText: /^(Suspended|중지됨)/ }).first()).toHaveClass(/yellow/)
     await expect.poll(async () => (await ask())?.stats, { timeout: 20_000 }).toEqual(want)
+  })
+
+  // A suspended CronJob, one colour: its Suspend badge and the Suspended card are yellow, as a suspended Job's.
+  test('a suspended CronJob\'s Suspend badge and the Suspended card are drawn yellow', async ({ page }) => {
+    expect(kubectl(`get cronjob num-cron -n ${NS} -o jsonpath='{.spec.suspend}'`), 'kubectl reads').toBe('true')
+    await page.goto(`/workloads/cronjobs?cluster=self&namespace=${NS}`)
+    const badge = page.locator('main tbody tr').filter({ has: page.getByRole('cell', { name: 'num-cron', exact: true }) }).locator('.badge').first()
+    await expect(badge).toHaveText(/^(Yes|예)$/, { timeout: 20_000 })
+    await expect(badge).toHaveClass(/badge-warning/)
+    const card = page.locator('main div.rounded-lg.border').filter({ hasText: /^(Suspended|중지됨)/ }).first()
+    await expect(card).toHaveClass(/yellow/)
+    await expect(card).not.toHaveClass(/amber/)
   })
 
   // The External IP cell is what kubectl prints; the drawer's rows are the spec's external IPs and the load balancer's addresses.

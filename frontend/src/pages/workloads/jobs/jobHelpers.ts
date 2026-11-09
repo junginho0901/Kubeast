@@ -57,15 +57,17 @@ export function jobCompletionsCell(job: { completions_text?: string | null }): s
   return job.completions_text || '-'
 }
 
-// Only a Job that ended is Completed or Failed (FailureTarget is not yet); the rest is Running, so the cards add up to the total.
-export function jobSummary(jobs: Array<{ status: string }>): { total: number; completed: number; running: number; failed: number } {
+// A card counts the rows reading Complete, Failed or Suspended (FailureTarget has not ended); the rest is Running, so the cards add up.
+export function jobSummary(jobs: Array<{ status: string }>): { total: number; completed: number; running: number; suspended: number; failed: number } {
   let completed = 0
   let failed = 0
+  let suspended = 0
   for (const job of jobs) {
     if (job.status === 'Complete') completed += 1
     else if (job.status === 'Failed') failed += 1
+    else if (job.status === 'Suspended') suspended += 1
   }
-  return { total: jobs.length, completed, running: jobs.length - completed - failed, failed }
+  return { total: jobs.length, completed, running: jobs.length - completed - failed - suspended, suspended, failed }
 }
 
 // The floating chat is told the cards' numbers, which read a Job's Status: its failed pods say nothing of whether it has failed.

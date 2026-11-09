@@ -10,6 +10,7 @@ import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { usePermission } from '@/hooks/usePermission'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { useReverseRoleBindings } from './role-info/useReverseRoleBindings'
+import { ruleApiGroupsText } from './role-info/ruleText'
 import { referencedByContext, subjectsText, unreadableText } from './role-info/referencedBy'
 
 interface Props {
@@ -115,7 +116,6 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
         <InfoSection title="Rules">
           <div className="space-y-2">
             {rules.map((rule: any, idx: number) => {
-              const apiGroups = Array.isArray(rule.apiGroups) ? rule.apiGroups : []
               const resources = Array.isArray(rule.resources) ? rule.resources : []
               const verbs = Array.isArray(rule.verbs) ? rule.verbs : []
               const resourceNames = Array.isArray(rule.resourceNames) ? rule.resourceNames : []
@@ -126,11 +126,7 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
                   <div className="text-xs text-slate-300 space-y-1.5">
                     <div>
                       <span className="text-[11px] text-slate-500 mr-2"><Tx>API Groups:</Tx></span>
-                      <span className="font-mono">
-                        {apiGroups.length > 0
-                          ? apiGroups.map((g: string) => g || '""').join(', ')
-                          : '-'}
-                      </span>
+                      <span className="font-mono">{ruleApiGroupsText(rule.apiGroups)}</span>
                     </div>
                     <div>
                       <span className="text-[11px] text-slate-500 mr-2"><Tx>Resources:</Tx></span>

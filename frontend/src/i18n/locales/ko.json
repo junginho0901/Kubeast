@@ -1120,6 +1120,7 @@
       "total": "전체",
       "completed": "완료",
       "running": "실행 중",
+      "suspended": "중지됨",
       "failed": "실패"
     },
     "delete": {
@@ -4854,6 +4855,7 @@
     "Failed to load describe data. Showing summary from list.": "상세 정보를 불러오지 못했습니다. 목록의 요약을 표시합니다.",
     "Failed to load rules: {{error}}": "규칙을 불러오지 못했습니다: {{error}}",
     "Applies through {{subjects}}": "{{subjects}}(으)로 적용됩니다",
+    "Not in effect through a RoleBinding; URLs need a ClusterRoleBinding.": "RoleBinding으로는 효력이 없습니다. URL은 ClusterRoleBinding으로 묶어야 합니다.",
     "Prev": "이전",
     "Next": "다음",
     "Cancel": "취소",
