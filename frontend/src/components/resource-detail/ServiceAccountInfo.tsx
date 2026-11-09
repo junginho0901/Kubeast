@@ -9,7 +9,7 @@ import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 import { useEffectivePermissions } from './service-account-info/useEffectivePermissions'
-import { ruleApiGroupsText } from './role-info/ruleText'
+import { RULE_TABLE_COLUMNS, ruleTableCells } from './service-account-info/ruleTable'
 import { useNamespacePodTable } from './useNamespacePodTable'
 
 interface Props {
@@ -147,19 +147,17 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
                     <table className="w-full text-[11px]">
                       <thead className="text-slate-400">
                         <tr>
-                          <Th className="text-left py-1 pr-2">API Groups</Th>
-                          <Th className="text-left py-1 pr-2">Resources</Th>
-                          <Th className="text-left py-1 pr-2">Verbs</Th>
-                          <Th className="text-left py-1 pr-2">Resource Names</Th>
+                          {RULE_TABLE_COLUMNS.map((column) => (
+                            <Th key={column} className="text-left py-1 pr-2">{column}</Th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800">
                         {b.rules.map((r, ri) => (
                           <tr key={ri} className="text-slate-200">
-                            <td className="py-1 pr-2 font-mono">{ruleApiGroupsText(r.apiGroups)}</td>
-                            <td className="py-1 pr-2 font-mono">{r.resources.join(', ') || '-'}</td>
-                            <td className="py-1 pr-2 font-mono">{r.verbs.join(', ') || '-'}</td>
-                            <td className="py-1 pr-2 font-mono text-slate-400">{r.resourceNames?.join(', ') || '-'}</td>
+                            {ruleTableCells(r).map((cell, ci) => (
+                              <td key={RULE_TABLE_COLUMNS[ci]} className={`py-1 pr-2 font-mono${RULE_TABLE_COLUMNS[ci] === 'Resource Names' ? ' text-slate-400' : ''}`}>{cell}</td>
+                            ))}
                           </tr>
                         ))}
                       </tbody>

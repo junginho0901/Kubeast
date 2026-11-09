@@ -37,7 +37,7 @@
     },
     {
       "screen": "^(default|dark|light) · drawer ServiceAccount \\(namespace under test\\)$",
-      "why": "Effective Permissions counts the bindings of the ServiceAccount's groups too, so the two discovery bindings of system:serviceaccounts show, their API Groups cell writes the groups as the Role drawer does (the core group \"\", a rule naming none -), and Settings behind the drawer has the Node Shell card.",
+      "why": "Effective Permissions counts the bindings of the ServiceAccount's groups too, so the two discovery bindings of system:serviceaccounts show, their API Groups cell writes the groups as the Role drawer does (the core group \"\", a rule naming none -), the rules table has a Non-Resource URLs column after Resources, as kubectl describe heads a PolicyRule, so a rule of URLs shows them, and Settings behind the drawer has the Node Shell card.",
       "pr": "#692, #696, fix/jobs-suspended-sa-groups"
     },
     {
@@ -84,6 +84,11 @@
       "screen": "^(default|dark|light) · /workloads/jobs on (default|test2|self)$",
       "why": "A suspended Job's row reads Suspended as kubectl prints it, and the Jobs list counts it in a Suspended card of its own, yellow as its badge; the Running card is green, as a running Job's badge and the Resource Graph read it, and counts the Jobs neither complete, failed nor suspended, so the five cards add up to the total.",
       "pr": "#685, #697, fix/jobs-suspended-sa-groups"
+    },
+    {
+      "screen": "^(default|dark|light) · /workloads/cronjobs on (default|test2|self)$",
+      "why": "The CronJobs list's Suspended card is yellow, as a suspended CronJob's Suspend badge and the Jobs list's Suspended card, where it was amber.",
+      "pr": "fix/jobs-suspended-sa-groups"
     }
   ]
 }

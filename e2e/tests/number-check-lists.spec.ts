@@ -2581,6 +2581,18 @@ test.describe('number check — list screens', () => {
     await expect.poll(async () => (await ask())?.stats, { timeout: 20_000 }).toEqual(want)
   })
 
+  // A suspended CronJob, one colour: its Suspend badge and the Suspended card are yellow, as a suspended Job's.
+  test('a suspended CronJob\'s Suspend badge and the Suspended card are drawn yellow', async ({ page }) => {
+    expect(kubectl(`get cronjob num-cron -n ${NS} -o jsonpath='{.spec.suspend}'`), 'kubectl reads').toBe('true')
+    await page.goto(`/workloads/cronjobs?cluster=self&namespace=${NS}`)
+    const badge = page.locator('main tbody tr').filter({ has: page.getByRole('cell', { name: 'num-cron', exact: true }) }).locator('.badge').first()
+    await expect(badge).toHaveText(/^(Yes|예)$/, { timeout: 20_000 })
+    await expect(badge).toHaveClass(/badge-warning/)
+    const card = page.locator('main div.rounded-lg.border').filter({ hasText: /^(Suspended|중지됨)/ }).first()
+    await expect(card).toHaveClass(/yellow/)
+    await expect(card).not.toHaveClass(/amber/)
+  })
+
   // The External IP cell is what kubectl prints; the drawer's rows are the spec's external IPs and the load balancer's addresses.
   test('a Service drawer opened from its row reads the object, not the External IP cell', async ({ page }) => {
     const services: [string, string, RegExp][] = [

@@ -42,7 +42,14 @@ const BINDINGS: Array<{ name: string; subject: Subject; applies: boolean; matche
   { name: 'everyone', subject: group('system:authenticated'), applies: false, resource: 'limitranges' },
 ]
 
+// A ClusterRole of URL and resource rules bound to the ServiceAccount itself; URLs of this run, so nothing else grants them.
+const URLS = `${NS}-urls`
+const URL_RULE = [`/e2e-sa-urls-${stamp}`, `/e2e-sa-urls-${stamp}/*`]
+const LABEL = 'kubeast.io/e2e=sa-bindings'
+const removeClusterObjects = () => kubectl(['delete', 'clusterrolebinding,clusterrole', '-l', LABEL, '--ignore-not-found', '--wait=false'])
+
 function makeFixture() {
+  removeClusterObjects()
   kubectl(['create', 'namespace', NS])
   kubectl(['-n', NS, 'create', 'serviceaccount', SA])
   const objects = BINDINGS.flatMap((b) => [
@@ -50,6 +57,14 @@ function makeFixture() {
     { apiVersion: `${RBAC}/v1`, kind: 'RoleBinding', metadata: { name: b.name, namespace: NS }, roleRef: { apiGroup: RBAC, kind: 'Role', name: b.name }, subjects: [b.subject] },
   ])
   kubectl(['create', '-f', '-'], JSON.stringify({ apiVersion: 'v1', kind: 'List', items: objects }))
+  const labels = { 'kubeast.io/e2e': 'sa-bindings' }
+  kubectl(['create', '-f', '-'], JSON.stringify({ apiVersion: 'v1', kind: 'List', items: [
+    { apiVersion: `${RBAC}/v1`, kind: 'ClusterRole', metadata: { name: URLS, labels }, rules: [
+      { nonResourceURLs: URL_RULE, verbs: ['get'] },
+      { apiGroups: [''], resources: ['nodes'], verbs: ['get'] },
+    ] },
+    { apiVersion: `${RBAC}/v1`, kind: 'ClusterRoleBinding', metadata: { name: URLS, labels }, roleRef: { apiGroup: RBAC, kind: 'ClusterRole', name: URLS }, subjects: [itself] },
+  ] }))
   // Its pod's RBAC tab reads the same ServiceAccount; no node has to run it.
   kubectl(['create', '-f', '-'], JSON.stringify({
     apiVersion: 'v1', kind: 'Pod', metadata: { name: 'uses-bot', namespace: NS },
@@ -113,6 +128,7 @@ test.describe('number check — a ServiceAccount drawer counts what applies to i
 
   test.afterAll(() => {
     kubectl(['delete', 'namespace', NS, '--wait=false', '--ignore-not-found'])
+    removeClusterObjects()
   })
 
   test('the bindings of every subject the API server reads as it', async ({ page, request }) => {
@@ -140,6 +156,15 @@ test.describe('number check — a ServiceAccount drawer counts what applies to i
     for (const b of BINDINGS.filter((x) => x.name !== 'everyone')) {
       expect(canList(b.resource), `${b.name} lets it list ${b.resource}`).toBe(b.applies ? 'yes' : 'no')
     }
+    const canGet = (url: string) => {
+      try {
+        return kubectl(['auth', 'can-i', 'get', url, `--as=${asBot}`, '--as-group=system:serviceaccounts', `--as-group=system:serviceaccounts:${NS}`])
+      } catch {
+        return 'no'
+      }
+    }
+    expect(canGet(URL_RULE[0]), `${URLS} lets it get its URL`).toBe('yes')
+    expect(canGet(`/e2e-sa-urls-${stamp}-other`), 'and no URL it does not name').toBe('no')
 
     await page.goto(`/?cluster=${CLUSTER}&detail=${encodeURIComponent(`ServiceAccount/${NS}/${SA}`)}`)
     await page.locator(DRAWER).last().waitFor({ timeout: 20_000 })
@@ -149,9 +174,12 @@ test.describe('number check — a ServiceAccount drawer counts what applies to i
     for (const b of BINDINGS.filter((x) => x.applies)) {
       const card = cards.find((c) => c.head === `via ${b.name} → ${b.name}`)
       expect(card?.matchedBy ?? null, b.name).toBe(b.matchedBy ? `Applies through ${b.matchedBy}` : null)
-      // the Role's one rule, its core group written "" as the Role drawer writes it
-      expect(card?.rows, `${b.name} rules`).toEqual([['""', b.resource, 'list', '-']])
+      // the Role's one rule, its core group written "" as the Role drawer writes it, no URL
+      expect(card?.rows, `${b.name} rules`).toEqual([['""', b.resource, '-', 'list', '-']])
     }
+    // the URLs a rule names in their own column, as kubectl describe's Non-Resource URLs, the resource rule beside it "-" there
+    const urlCard = cards.find((c) => c.head === `via ${URLS} → ${URLS}`)
+    expect(urlCard?.rows, `${URLS} rules`).toEqual([['-', '-', URL_RULE.join(', '), 'get', '-'], ['""', 'nodes', '-', 'get', '-']])
 
     // The pod's RBAC tab counts the same bindings.
     const admin = await login(request)

@@ -277,8 +277,9 @@ spec:
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('cronjobs.stats.active', 'Active')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{summary.active}</p>
         </div>
-        <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('cronjobs.stats.suspended', 'Suspended')}</p>
+        {/* yellow as a suspended CronJob's badge-warning and the Jobs list's Suspended card */}
+        <div className="rounded-lg border border-yellow-700/40 bg-yellow-900/10 px-4 py-3">
+          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-yellow-300">{tr('cronjobs.stats.suspended', 'Suspended')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{summary.suspended}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
