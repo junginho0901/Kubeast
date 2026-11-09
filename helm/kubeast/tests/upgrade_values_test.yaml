@@ -1,0 +1,20 @@
+suite: helm upgrade --reuse-values from an earlier release
+templates:
+  - checks/upgrade-values.yaml
+tests:
+  - it: renders nothing on this chart's own values
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: stops values without a path 0.7.6 added, as v0.7.5's published defaults are
+    set:
+      multicluster.clientQPS: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no multicluster.clientQPS
+  - it: stops values without features.networkFlowMonitor, as before
+    set:
+      features.networkFlowMonitor: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.networkFlowMonitor
