@@ -25,8 +25,15 @@ async function screens(page: Page) {
   await page.goto('/?cluster=self')
   const nav = page.getByTestId('sidebar-nav')
   await expect(nav.locator('a[href^="/"]').first()).toBeAttached()
-  const paths = [...new Set(await nav.locator('a[href^="/"]').evaluateAll((as) => as.map((a) => a.getAttribute('href') ?? '')))]
-  expect(paths.length, 'the sidebar lists every screen').toBeGreaterThan(70)
+  const hrefs = async () => [...new Set(await nav.locator('a[href^="/"]').evaluateAll((as) => as.map((a) => a.getAttribute('href') ?? '')))]
+  // some entries come after the features and permissions answers: read the list once it holds still for a second
+  let paths: string[] = []
+  await expect.poll(async () => {
+    const before = (await hrefs()).length
+    await page.waitForTimeout(1_000)
+    paths = await hrefs()
+    return paths.length === before ? paths.length : 0
+  }, { timeout: 30_000, message: 'the sidebar lists every screen' }).toBeGreaterThan(70)
   return [...paths, '/account']
 }
 
