@@ -20,6 +20,85 @@ interface UseAdaptiveRowsPerPageOptions {
   recalculationKey?: string | number
 }
 
+/** The elements a Fit count reads, as they are when it is worked out. */
+export interface FitBox {
+  container: HTMLElement | null
+  body: HTMLElement | null
+  thead: HTMLElement | null
+  row: HTMLElement | null
+}
+
+export interface FitLimits {
+  rowHeight: number
+  headerHeight: number
+  footerHeight: number
+  minRows: number
+  maxRows: number
+}
+
+// Works the Fit row count out now, again when the box or the window changes size, and hands each count to apply.
+// Once a count came from a real first row it is the page size: turning pages puts other rows and headers of other
+// heights in the table (cells wrap as the page's values do), and a new count there would start the page elsewhere,
+// showing a row twice or skipping one. Until then a change of the table's content counts again, so rows that come
+// after a count made from the estimate are measured. Returns the function that stops watching.
+export function watchFitRows(read: () => FitBox, limits: FitLimits, apply: (rows: number) => void): () => void {
+  const { rowHeight, headerHeight, footerHeight, minRows, maxRows } = limits
+  let frameId = 0
+  let fromRow = false
+  const observers: ResizeObserver[] = []
+
+  const calculate = () => {
+    let availableRows: number
+    const { container, body, thead, row } = read()
+
+    if (body) {
+      // 실측 모드: bodyRef 의 clientHeight = thead + tbody 가 그릴 수 있는
+      // 실제 영역 (flex 배분 결과). 페이지네이션·card padding 등은 이미
+      // 빠져 있으므로 별도 보정 불필요.
+      const bodyHeight = body.clientHeight
+      const th = thead?.offsetHeight ?? headerHeight
+      const rh = row?.offsetHeight ?? rowHeight
+      if (rh <= 0 || bodyHeight <= 0) return
+      availableRows = Math.floor((bodyHeight - th) / rh)
+      fromRow = !!row
+    } else {
+      // 폴백 모드: 기존 동작 유지 (window - rect.top - footerHeight).
+      if (!container) return
+      const rect = container.getBoundingClientRect()
+      const availableHeight = window.innerHeight - rect.top - footerHeight
+      availableRows = Math.floor((availableHeight - headerHeight) / rowHeight) - 1
+    }
+
+    apply(Math.max(minRows, Math.min(maxRows, availableRows)))
+  }
+
+  const scheduleCalculate = () => {
+    if (frameId) cancelAnimationFrame(frameId)
+    frameId = requestAnimationFrame(calculate)
+  }
+
+  calculate()
+  window.addEventListener('resize', scheduleCalculate)
+
+  if (typeof ResizeObserver !== 'undefined') {
+    const { container, body, thead, row } = read()
+    // the border box: a scrollbar showing inside the box (a wider page) is no change of its size
+    const box = new ResizeObserver(() => scheduleCalculate())
+    for (const el of [container, body]) if (el) box.observe(el, { box: 'border-box' })
+    const content = new ResizeObserver(() => {
+      if (!fromRow) scheduleCalculate()
+    })
+    for (const el of [body?.firstElementChild, thead, row]) if (el) content.observe(el)
+    observers.push(box, content)
+  }
+
+  return () => {
+    if (frameId) cancelAnimationFrame(frameId)
+    window.removeEventListener('resize', scheduleCalculate)
+    for (const o of observers) o.disconnect()
+  }
+}
+
 export function useAdaptiveRowsPerPage(
   containerRef: RefObject<HTMLElement | null>,
   options: UseAdaptiveRowsPerPageOptions = {},
@@ -40,72 +119,31 @@ export function useAdaptiveRowsPerPage(
 
   // Before the paint: the first row's real height comes with the rows, so a count worked out from the estimate never
   // reaches the screen. Later size changes wait for the next frame.
-  useLayoutEffect(() => {
-    let frameId = 0
-    let observer: ResizeObserver | null = null
-
-    const calculate = () => {
-      let availableRows: number
-
-      const body = bodyRef?.current
-      if (body) {
-        // 실측 모드: bodyRef 의 clientHeight = thead + tbody 가 그릴 수 있는
-        // 실제 영역 (flex 배분 결과). 페이지네이션·card padding 등은 이미
-        // 빠져 있으므로 별도 보정 불필요.
-        const bodyHeight = body.clientHeight
-        const thead = theadRef?.current?.offsetHeight ?? headerHeight
-        const rh = rowRef?.current?.offsetHeight ?? rowHeight
-        if (rh <= 0 || bodyHeight <= 0) return
-        availableRows = Math.floor((bodyHeight - thead) / rh)
-      } else {
-        // 폴백 모드: 기존 동작 유지 (window - rect.top - footerHeight).
-        const container = containerRef.current
-        if (!container) return
-        const rect = container.getBoundingClientRect()
-        const availableHeight = window.innerHeight - rect.top - footerHeight
-        availableRows = Math.floor((availableHeight - headerHeight) / rowHeight) - 1
-      }
-
-      const nextRows = Math.max(minRows, Math.min(maxRows, availableRows))
-      setRowsPerPage((prev) => (prev === nextRows ? prev : nextRows))
-    }
-
-    const scheduleCalculate = () => {
-      if (frameId) cancelAnimationFrame(frameId)
-      frameId = requestAnimationFrame(calculate)
-    }
-
-    calculate()
-    window.addEventListener('resize', scheduleCalculate)
-
-    if (typeof ResizeObserver !== 'undefined') {
-      observer = new ResizeObserver(() => scheduleCalculate())
-      const targets = [
-        containerRef.current,
-        bodyRef?.current,
-        theadRef?.current,
-        rowRef?.current,
-      ].filter((el): el is HTMLElement => el != null)
-      for (const t of targets) observer.observe(t)
-    }
-
-    return () => {
-      if (frameId) cancelAnimationFrame(frameId)
-      window.removeEventListener('resize', scheduleCalculate)
-      observer?.disconnect()
-    }
-  }, [
-    containerRef,
-    bodyRef,
-    theadRef,
-    rowRef,
-    rowHeight,
-    headerHeight,
-    footerHeight,
-    minRows,
-    maxRows,
-    recalculationKey,
-  ])
+  useLayoutEffect(
+    () =>
+      watchFitRows(
+        () => ({
+          container: containerRef.current,
+          body: bodyRef?.current ?? null,
+          thead: theadRef?.current ?? null,
+          row: rowRef?.current ?? null,
+        }),
+        { rowHeight, headerHeight, footerHeight, minRows, maxRows },
+        (next) => setRowsPerPage((prev) => (prev === next ? prev : next)),
+      ),
+    [
+      containerRef,
+      bodyRef,
+      theadRef,
+      rowRef,
+      rowHeight,
+      headerHeight,
+      footerHeight,
+      minRows,
+      maxRows,
+      recalculationKey,
+    ],
+  )
 
   return rowsPerPage
 }

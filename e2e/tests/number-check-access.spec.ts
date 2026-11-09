@@ -154,13 +154,15 @@ test.describe('number check: access requests and access review', () => {
         soft(await pager.innerText(), 'History: the first page').toContain(range(1, Math.min(perPage, dbDecided), dbDecided))
         const seen: string[] = []
         const next = pager.getByRole('button', { name: EN.common.next, exact: true })
-        for (let i = 0; i < 40; i++) {
+        // until the last page, however few rows fit (five rows a page is 42 pages): a page holds one row at least
+        for (let i = 0; i <= dbDecided; i++) {
           seen.push(...(await shownIds()))
           if (await next.isDisabled()) break
           const before = await pager.innerText()
           await next.click()
           await expect.poll(() => pager.innerText(), { timeout: 15_000, message: `History page ${i + 2}` }).not.toBe(before)
         }
+        soft(await next.isDisabled(), 'History: the last page reached').toBe(true)
         soft(seen.length, 'History: rows over every page = database count of decided requests').toBe(dbDecided)
         soft(seen.filter((id, i) => seen.indexOf(id) !== i), 'History: rows on two pages').toEqual([])
         soft(ids.filter((id) => !seen.includes(id)).length, `History: this run's ${REQUESTS} rejections not on any page`).toBe(0)
@@ -282,12 +284,13 @@ test.describe('number check: access requests and access review', () => {
         const rows = page.getByTestId('access-review-history-row')
         await expect.poll(() => rows.count(), { timeout: 15_000, message: 'Past reviews listed' }).toBeGreaterThan(0)
         const pager = page.getByTestId('access-review-history-pager')
+        const next = pager.getByRole('button', { name: EN.common.next, exact: true })
         const perPage: number[] = []
-        for (let i = 0; i < 100; i++) {
+        // until the last page, however few rows fit: a page holds one row at least
+        for (let i = 0; i <= dbReviews; i++) {
           perPage.push(await rows.count())
           // an older build has no pager: one list
           if ((await pager.count()) === 0) break
-          const next = pager.getByRole('button', { name: EN.common.next, exact: true })
           if (await next.isDisabled()) break
           const before = await pager.innerText()
           await next.click()
@@ -295,6 +298,7 @@ test.describe('number check: access requests and access review', () => {
         }
         soft(perPage.reduce((a, b) => a + b, 0), 'Past reviews: rows over every page = database count of sign-offs').toBe(dbReviews)
         soft(await pager.count(), 'Past reviews: a pager').toBe(1)
+        if (await pager.count()) soft(await next.isDisabled(), 'Past reviews: the last page reached').toBe(true)
         soft(await flashes(page, '__reviewFlash'), 'no loading line when the tab opens or a page turns').toEqual([])
       })
     } finally {

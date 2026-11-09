@@ -79,25 +79,6 @@ export default function AccessReview() {
     queryFn: () => api.getAccessReview(),
     retry: false,
   })
-  // The rows the table fits: measured again with another tab and once rows show (a row's height), not on each page,
-  // so turning pages keeps one page size.
-  const [hasRows, setHasRows] = useState(false)
-  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: `${tab}:${hasRows}` })
-  // read with the page (the tab then opens on rows, not a loading line); a page being read keeps the sign-offs shown before it
-  const pastQuery = historyPage(pastPage, rowsPerPage)
-  const { data: past, isLoading: historyLoading, isPlaceholderData: pastLoading, error: historyError } = useQuery({
-    queryKey: ['access-review', 'history', pastQuery],
-    queryFn: async () => ({ ...(await api.listAccessReviews(pastQuery)), offset: pastQuery.offset, limit: pastQuery.limit }),
-    placeholderData: keepPreviousData,
-  })
-  const history = past?.items ?? []
-  const pastTotal = past?.total ?? 0
-  // the pager follows the answer on screen, with its page size
-  const pastLimit = past?.limit ?? pastQuery.limit
-  const pastPages = Math.max(1, Math.ceil(pastTotal / pastLimit))
-  useEffect(() => {
-    if (past && !pastLoading && pastPage > pastPages) setPastPage(pastPages)
-  }, [past, pastLoading, pastPage, pastPages])
   const { data: viewed } = useQuery({
     queryKey: ['access-review', 'snapshot', viewId],
     queryFn: () => api.getAccessReviewSnapshot(viewId as string),
@@ -189,13 +170,33 @@ export default function AccessReview() {
     const cols = columns[tab]
     return list.filter((r) => cols.map((c) => (c.text ? c.text(r) : '')).join(' ').toLowerCase().includes(q))
   }, [report, tab, search, columns])
+  // The rows the table fits: measured again with another tab and once rows show (a row's height), not on each page,
+  // so turning pages keeps one page size. A section's rows are known in this render, so the first frame with them is
+  // measured; the sign-offs come from the server with the page size, so they are known an answer later.
+  const [historyRows, setHistoryRows] = useState(false)
+  const rowsShow = tab === 'history' ? historyRows : rows.length > 0
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: `${tab}:${rowsShow}` })
+  // read with the page (the tab then opens on rows, not a loading line); a page being read keeps the sign-offs shown before it
+  const pastQuery = historyPage(pastPage, rowsPerPage)
+  const { data: past, isLoading: historyLoading, isPlaceholderData: pastLoading, error: historyError } = useQuery({
+    queryKey: ['access-review', 'history', pastQuery],
+    queryFn: async () => ({ ...(await api.listAccessReviews(pastQuery)), offset: pastQuery.offset, limit: pastQuery.limit }),
+    placeholderData: keepPreviousData,
+  })
+  const history = past?.items ?? []
+  const pastTotal = past?.total ?? 0
+  // the pager follows the answer on screen, with its page size
+  const pastLimit = past?.limit ?? pastQuery.limit
+  const pastPages = Math.max(1, Math.ceil(pastTotal / pastLimit))
+  useEffect(() => {
+    if (past && !pastLoading && pastPage > pastPages) setPastPage(pastPages)
+  }, [past, pastLoading, pastPage, pastPages])
+  useEffect(() => {
+    if (history.length > 0 !== historyRows) setHistoryRows(history.length > 0)
+  }, [history.length, historyRows])
   // the answer holds every row of the section: the browser pages them, as many as the table fits
   const shown = pageOf(rows, tabPage, rowsPerPage)
   const setTabPage = (p: number) => setTabPaged({ key: tabPageKey, page: p })
-  const onScreen = (tab === 'history' ? history.length : shown.rows.length) > 0
-  useEffect(() => {
-    if (onScreen !== hasRows) setHasRows(onScreen)
-  }, [onScreen, hasRows])
 
   const download = (section: AccessReviewSection) => {
     const a = document.createElement('a')
