@@ -4,7 +4,9 @@ import { api } from '@/services/api'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { useAIContext } from '@/hooks/useAIContext'
 import { policyReportsEnabled } from '@/utils/features'
+import type { PolicyReportResult } from '@/services/api/types'
 import { InfoSection, NoneText } from './DetailCommon'
+import { usePagination } from './usePagination'
 import { violationsNameTheResource, violationsQuery, violationsView } from './violationsView'
 
 // "Policy violations": the fail / warn / error rows the cluster's policy reports hold about this
@@ -13,6 +15,7 @@ import { violationsNameTheResource, violationsQuery, violationsView } from './vi
 // feature is off or the cluster has no PolicyReport CRD; reports that could not be read say why.
 
 const RESULT_BADGE: Record<string, string> = { fail: 'badge-error', error: 'badge-error', warn: 'badge-warning' }
+const NO_ROWS: PolicyReportResult[] = []
 
 export default function PolicyViolations({ kind, namespace, name, apiVersion }: { kind: string; namespace: string; name: string; apiVersion?: string }) {
   const { t } = useTranslation()
@@ -43,6 +46,7 @@ export default function PolicyViolations({ kind, namespace, name, apiVersion }: 
       cluster_reports_error: clusterReportsError,
     },
   } : null, [view.show, view.show === 'rows' ? view.rows : null, selectorError, clusterReportsError, kind, name])
+  const { items: pagedRows, nav: rowsNav } = usePagination(view.show === 'rows' ? view.rows : NO_ROWS, 10)
   if (view.show === 'nothing') return null
   const named = violationsNameTheResource(kind)
   return (
@@ -66,28 +70,31 @@ export default function PolicyViolations({ kind, namespace, name, apiVersion }: 
       ) : view.rows.length === 0 ? (
         <div data-testid="policy-violations-none"><NoneText /></div>
       ) : (
-        <table className="w-full text-xs" data-testid="policy-violations">
-          <thead className="text-slate-400">
-            <tr>
-              <th className="text-left py-1 pr-3 font-medium">{tr('policyReports.table.result', 'Result')}</th>
-              <th className="text-left py-1 pr-3 font-medium">{tr('policyReports.table.policy', 'Policy')}</th>
-              <th className="text-left py-1 pr-3 font-medium">{tr('policyReports.table.severity', 'Severity')}</th>
-              {named && <th className="text-left py-1 pr-3 font-medium">{tr('policyReports.table.resource', 'Resource')}</th>}
-              <th className="text-left py-1 font-medium">{tr('policyReports.table.message', 'Message')}</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800">
-            {view.rows.map((r, i) => (
-              <tr key={`${r.report}/${r.policy}/${r.rule}/${i}`} data-testid="policy-violation-row" className="text-slate-200 align-top">
-                <td className="py-1.5 pr-3"><span className={`badge ${RESULT_BADGE[r.result] || 'badge-neutral'}`}>{tr(`policyReports.result.${r.result}`, r.result)}</span></td>
-                <td className="py-1.5 pr-3 font-mono whitespace-nowrap">{r.policy}{r.rule ? <span className="text-slate-500">/{r.rule}</span> : null}</td>
-                <td className="py-1.5 pr-3">{r.severity || '-'}</td>
-                {named && <td className="py-1.5 pr-3 font-mono whitespace-nowrap">{r.kind}/{r.name}</td>}
-                <td className="py-1.5 text-slate-300 break-words">{r.message || '-'}</td>
+        <div data-testid="policy-violations-list">
+          <table className="w-full text-xs" data-testid="policy-violations">
+            <thead className="text-slate-400">
+              <tr>
+                <th className="text-left py-1 pr-3 font-medium">{tr('policyReports.table.result', 'Result')}</th>
+                <th className="text-left py-1 pr-3 font-medium">{tr('policyReports.table.policy', 'Policy')}</th>
+                <th className="text-left py-1 pr-3 font-medium">{tr('policyReports.table.severity', 'Severity')}</th>
+                {named && <th className="text-left py-1 pr-3 font-medium">{tr('policyReports.table.resource', 'Resource')}</th>}
+                <th className="text-left py-1 font-medium">{tr('policyReports.table.message', 'Message')}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {pagedRows.map((r, i) => (
+                <tr key={`${r.report}/${r.policy}/${r.rule}/${i}`} data-testid="policy-violation-row" className="text-slate-200 align-top">
+                  <td className="py-1.5 pr-3"><span className={`badge ${RESULT_BADGE[r.result] || 'badge-neutral'}`}>{tr(`policyReports.result.${r.result}`, r.result)}</span></td>
+                  <td className="py-1.5 pr-3 font-mono whitespace-nowrap">{r.policy}{r.rule ? <span className="text-slate-500">/{r.rule}</span> : null}</td>
+                  <td className="py-1.5 pr-3">{r.severity || '-'}</td>
+                  {named && <td className="py-1.5 pr-3 font-mono whitespace-nowrap">{r.kind}/{r.name}</td>}
+                  <td className="py-1.5 text-slate-300 break-words">{r.message || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {rowsNav}
+        </div>
       )}
     </InfoSection>
   )

@@ -262,8 +262,9 @@ const KINDS: Kind[] = [
         }),
       }
       if (ports.length) sections.Ports = section({ tables: [{ head: ['Name', 'Port', 'Protocol'], rows: ports.map((p) => [p.name || '-', String(p.port), p.protocol || 'TCP']) }] })
-      if (ready.length) sections['Ready Targets'] = section({ cards: ready.map(target) })
-      if (notReady.length) sections['Not Ready Targets'] = section({ cards: notReady.map(target) })
+      // ten to a page (number-check-hidden-rows reads every page)
+      if (ready.length) sections['Ready Targets'] = section({ cards: paged(ready).page.map(target), pagers: paged(ready).pagers })
+      if (notReady.length) sections['Not Ready Targets'] = section({ cards: paged(notReady).page.map(target), pagers: paged(notReady).pagers })
       // each subset as kubectl describe lists it (a port without a name "-", as the list's Ports column writes it)
       if (subsets.length) {
         sections.Subsets = section({

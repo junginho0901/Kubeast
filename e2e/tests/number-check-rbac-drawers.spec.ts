@@ -315,11 +315,13 @@ function policyWant(c: Ctx, validating: boolean): View {
           rows: Object.fromEntries(conditions.map((x) => [dash(x.type), [`${dash(x.status)}${x.reason ? ` · ${x.reason}` : ''}${x.message ? ` · ${x.message}` : ''}`]])),
         }),
       } : {}),
+      // ten to a page (number-check-hidden-rows reads every page)
       Bindings: c.bindings.length
         ? section({
+          marks: pagerMarks(c.bindings.length, 10),
           tables: [{
             head: ['Name', ...(validating ? ['Validation Actions'] : []), 'Param Ref', 'Namespace Selector', 'Resource Rules'],
-            rows: c.bindings.map((b) => {
+            rows: c.bindings.slice(0, 10).map((b) => {
               const mr = b.spec?.matchResources ?? {}
               const brules: Obj[] = mr.resourceRules ?? []
               return [b.metadata.name, ...(validating ? [(b.spec?.validationActions ?? []).join(', ') || '-'] : []), paramRefText(b.spec?.paramRef),
@@ -433,10 +435,12 @@ const KINDS: Kind[] = [
         sections: {
           'Basic Info': section({ rows: rowsOf({ Kind: 'ClusterRoleBinding', Name: o.metadata.name, Created: at(o.metadata.creationTimestamp), UID: o.metadata.uid, 'Resource Version': o.metadata.resourceVersion }) }),
           'Role Reference': section({ rows: rowsOf({ Kind: dash(o.roleRef.kind), Name: dash(o.roleRef.name), 'API Group': dash(o.roleRef.apiGroup) }) }),
+          // the kinds counted over every subject, the subjects ten to a page (number-check-hidden-rows reads every page)
           Subjects: subjects.length
             ? section({
               chips: Object.entries(kinds).map(([k, n]) => `${k}: ${n}`),
-              cards: subjects.map((s) => card({ Kind: dash(s.kind), Name: dash(s.name), ...(s.namespace ? { Namespace: s.namespace } : {}), ...(s.apiGroup ? { 'API Group': s.apiGroup } : {}) })),
+              cards: subjects.slice(0, 10).map((s) => card({ Kind: dash(s.kind), Name: dash(s.name), ...(s.namespace ? { Namespace: s.namespace } : {}), ...(s.apiGroup ? { 'API Group': s.apiGroup } : {}) })),
+              marks: pagerMarks(subjects.length, 10),
             })
             : section({ notes: ['No subjects defined.'] }),
           ...(sa.length ? {

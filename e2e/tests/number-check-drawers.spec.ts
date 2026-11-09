@@ -106,7 +106,7 @@ const since = (t: string | undefined, to?: string) => ((to ? Date.parse(to) : Da
 
 // events: the Events section, null when the drawer has none — its table's rows and pager total, or its text without one
 type EventsPart = { rows: number; total: number | null; text: string } | null
-type Drawer = { rows: [string, string][]; pairs: Record<string, string>; phases: Record<string, string>; counts: Record<string, number>; text: string; tables: { head: string[]; rows: string[][]; total: number | null }[]; events: EventsPart }
+type Drawer = { rows: [string, string][]; pairs: Record<string, string>; phases: Record<string, string>; counts: Record<string, number>; text: string; tables: { head: string[]; rows: string[][]; total: number | null }[]; events: EventsPart; addresses: Record<string, { shown: string[]; total: number | null }> }
 async function readDrawer(page: Page): Promise<Drawer> {
   return page.locator(DRAWER).last().evaluate((root) => {
     const rows: [string, string][] = []
@@ -139,6 +139,13 @@ async function readDrawer(page: Page): Promise<Drawer> {
       rows: [...tb.querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('td')].map((td) => (td as HTMLElement).innerText.trim())),
       total: total(tb),
     }))
+    // a Service's address lists: the addresses on the page and the pager's total (none while they fit a page)
+    const addresses: Record<string, { shown: string[]; total: number | null }> = {}
+    for (const el of root.querySelectorAll('[data-testid="service-ready-addresses"], [data-testid="service-not-ready-addresses"]')) {
+      const label = (el.querySelector('p') as HTMLElement | null)?.innerText.trim() ?? ''
+      const pager = /\b\d+-\d+ \/ (\d+)\b/.exec((el as HTMLElement).innerText)
+      addresses[label] = { shown: [...el.querySelectorAll('[data-testid="service-address"]')].map((s) => (s as HTMLElement).innerText.trim()), total: pager ? Number(pager[1]) : null }
+    }
     const evTitle = [...root.querySelectorAll('div.rounded-lg.border > div > p:first-child')].find((p) => (p as HTMLElement).innerText.trim() === 'Events')
     const evSec = evTitle?.closest('div.rounded-lg.border')
     const evTable = evSec?.querySelector('table')
@@ -148,7 +155,7 @@ async function readDrawer(page: Page): Promise<Drawer> {
       total: evPager ? Number(evPager[1]) : null,
       text: evTable ? '' : (evSec as HTMLElement).innerText.replace(/^\s*Events\s*/, '').trim(),
     }
-    return { rows, pairs: labelled('span[class*="rounded-full"]'), phases: labelled('span[class*="rounded-sm"][class*="border"]'), counts, text, tables, events }
+    return { rows, pairs: labelled('span[class*="rounded-full"]'), phases: labelled('span[class*="rounded-sm"][class*="border"]'), counts, text, tables, events, addresses }
   })
 }
 const table = (d: Drawer, ...head: string[]) => d.tables.filter((t) => head.every((h, i) => t.head[i] === h))
@@ -438,7 +445,7 @@ const TARGETS: Target[] = [
       const o = one(s, 'Service', name)
       const slices = (s.by.EndpointSlice ?? []).filter((e) => e.metadata.labels?.['kubernetes.io/service-name'] === name)
       const eps = slices.flatMap((e) => e.endpoints ?? [])
-      const addrs = (ready: boolean) => eps.filter((e: Obj) => (e.conditions?.ready ?? true) === ready).flatMap((e: Obj) => e.addresses).sort().join(', ') || '-'
+      const addrs = (ready: boolean): string[] => eps.filter((e: Obj) => (e.conditions?.ready ?? true) === ready).flatMap((e: Obj) => e.addresses).sort()
       const ports = o.spec.ports.map((p: Obj) => `${p.protocol} ${p.port}->${p.targetPort}${p.nodePort ? ` node:${p.nodePort}` : ''}`).join(', ')
       return {
         rows: {
@@ -449,9 +456,16 @@ const TARGETS: Target[] = [
         counts: { 'Matching Pods': matching(s, o.spec.selector).length },
         more: (d) => {
           const out: string[] = []
+          // the list of each, ten to a page: a page that holds them all is every address; past a page, its total is
+          // their count and what it shows is theirs (number-check-hidden-rows reads every page)
           for (const [label, ready] of [['Ready Addresses', true], ['Not Ready Addresses', false]] as const) {
-            const shown = (d.rows.find((r) => r[0] === label)?.[1] ?? '').split(/,\s*/).filter((x) => x && x !== '-').sort().join(', ') || '-'
-            if (shown !== addrs(ready)) out.push(`${label}: drawer ${shown}, EndpointSlices ${addrs(ready)}`)
+            const want = addrs(ready)
+            const list = d.addresses[label]
+            const shown = [...(list?.shown ?? [])].sort()
+            const same = !!list && (list.total === null
+              ? shown.join(', ') === want.join(', ')
+              : list.total === want.length && shown.length === Math.min(10, want.length) && shown.every((a) => want.includes(a)))
+            if (!same) out.push(`${label}: drawer ${list ? `${shown.join(', ') || 'None'}${list.total !== null ? ` of ${list.total}` : ''}` : 'no list'}, EndpointSlices ${want.join(', ') || 'None'}`)
           }
           return out
         },

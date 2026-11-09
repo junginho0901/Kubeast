@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { RefreshCw } from 'lucide-react'
 import { api } from '@/services/api'
-import type { NfmMetric, NfmView } from '@/services/api/types'
+import type { NfmMetric, NfmResult, NfmView } from '@/services/api/types'
 import { useCluster } from '@/contexts/ClusterContext'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { usePermission } from '@/hooks/usePermission'
@@ -11,6 +11,7 @@ import { networkFlowMonitorEnabledFor } from '@/utils/features'
 import CustomDropdown from '@/components/CustomDropdown'
 import { InfoSection, NoneText } from './DetailCommon'
 import { formatValue, peerLabel, sides, zones, type TalkerSelf } from './topTalkersText'
+import { usePagination } from './usePagination'
 
 // "Top Talkers": the top contributors of the cluster's Amazon CloudWatch Network Flow Monitor monitor with this
 // pod or workload at either end, in the EKS console flow table's three views (within the cluster, to AWS
@@ -19,6 +20,51 @@ import { formatValue, peerLabel, sides, zones, type TalkerSelf } from './topTalk
 
 const METRICS: NfmMetric[] = ['DATA_TRANSFERRED', 'RETRANSMISSIONS', 'TIMEOUTS']
 const VIEWS: NfmView[] = ['cluster', 'aws', 'external']
+
+type Tr = (key: string, fallback: string, options?: Record<string, unknown>) => string
+
+// The rows ten to a page in the monitor's order; keyed by the view, metric and window so another read starts on page 1.
+function TalkerRows({ res, self, metricLabel, category, tr }: {
+  res: NfmResult
+  self: TalkerSelf
+  metricLabel: (m: NfmMetric) => string
+  category: (c: string) => string
+  tr: Tr
+}) {
+  const { items: paged, page, nav } = usePagination(res.rows, 10)
+  return (
+    <div data-testid="toptalkers-list">
+      <table className="w-full" data-testid="toptalkers-table">
+        <thead className="text-slate-400">
+          <tr>
+            <th className="text-left py-1 pr-2 font-medium">{tr('toptalkers.peer', 'Peer')}</th>
+            {self.kind !== 'Pod' && <th className="text-left py-1 pr-2 font-medium">Pod</th>}
+            <th className="text-left py-1 pr-2 font-medium">{tr('toptalkers.port', 'Port')}</th>
+            <th className="text-left py-1 pr-2 font-medium">{metricLabel(res.metric)}</th>
+            <th className="text-left py-1 pr-2 font-medium">{tr('toptalkers.zones', 'Zones')}</th>
+            <th className="text-left py-1 font-medium">{tr('toptalkers.category.title', 'Category')}</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-800">
+          {paged.map((r, i) => {
+            const { own, peer } = sides(r, self)
+            return (
+              <tr key={(page - 1) * 10 + i} className="text-slate-200 align-top" data-testid="toptalkers-row">
+                <td className="py-1.5 pr-2 font-mono break-all" title={peer.ip} data-testid="toptalkers-peer">{peerLabel(peer, self.namespace)}</td>
+                {self.kind !== 'Pod' && <td className="py-1.5 pr-2 font-mono break-all text-slate-400" data-testid="toptalkers-own">{own.pod || '-'}</td>}
+                <td className="py-1.5 pr-2 font-mono whitespace-nowrap">{r.port || '-'}</td>
+                <td className="py-1.5 pr-2 whitespace-nowrap" title={String(r.value)} data-testid="toptalkers-value">{formatValue(r.value, res.unit)}</td>
+                <td className="py-1.5 pr-2 whitespace-nowrap text-slate-400">{zones(own, peer)}</td>
+                <td className="py-1.5 whitespace-nowrap text-slate-400" data-testid="toptalkers-category">{category(r.category)}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      {nav}
+    </div>
+  )
+}
 
 export default function TopTalkers({ kind, namespace, name }: { kind: string; namespace: string; name: string }) {
   const { t } = useTranslation()
@@ -106,33 +152,7 @@ export default function TopTalkers({ kind, namespace, name }: { kind: string; na
         ) : !res || res.rows.length === 0 ? (
           <div data-testid="toptalkers-none"><NoneText /></div>
         ) : (
-          <table className="w-full" data-testid="toptalkers-table">
-            <thead className="text-slate-400">
-              <tr>
-                <th className="text-left py-1 pr-2 font-medium">{tr('toptalkers.peer', 'Peer')}</th>
-                {kind !== 'Pod' && <th className="text-left py-1 pr-2 font-medium">Pod</th>}
-                <th className="text-left py-1 pr-2 font-medium">{tr('toptalkers.port', 'Port')}</th>
-                <th className="text-left py-1 pr-2 font-medium">{metricLabel(res.metric)}</th>
-                <th className="text-left py-1 pr-2 font-medium">{tr('toptalkers.zones', 'Zones')}</th>
-                <th className="text-left py-1 font-medium">{tr('toptalkers.category.title', 'Category')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
-              {res.rows.map((r, i) => {
-                const { own, peer } = sides(r, self)
-                return (
-                  <tr key={i} className="text-slate-200 align-top" data-testid="toptalkers-row">
-                    <td className="py-1.5 pr-2 font-mono break-all" title={peer.ip} data-testid="toptalkers-peer">{peerLabel(peer, namespace)}</td>
-                    {kind !== 'Pod' && <td className="py-1.5 pr-2 font-mono break-all text-slate-400" data-testid="toptalkers-own">{own.pod || '-'}</td>}
-                    <td className="py-1.5 pr-2 font-mono whitespace-nowrap">{r.port || '-'}</td>
-                    <td className="py-1.5 pr-2 whitespace-nowrap" title={String(r.value)} data-testid="toptalkers-value">{formatValue(r.value, res.unit)}</td>
-                    <td className="py-1.5 pr-2 whitespace-nowrap text-slate-400">{zones(own, peer)}</td>
-                    <td className="py-1.5 whitespace-nowrap text-slate-400" data-testid="toptalkers-category">{category(r.category)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          <TalkerRows key={`${view}/${metric}/${range}`} res={res} self={self} metricLabel={metricLabel} category={category} tr={tr} />
         )}
         {res?.truncated && <p className="text-slate-500">{tr('toptalkers.truncated', 'Network Flow Monitor gave as many rows as were asked in a category: this {{kind}} may have more than these.', { kind })}</p>}
         {res?.redacted && <p className="text-slate-500">{tr('toptalkers.redacted', 'Peers in namespaces whose pods you cannot list show their namespace and address only.')}</p>}

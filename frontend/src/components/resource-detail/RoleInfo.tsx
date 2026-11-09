@@ -83,7 +83,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
 
       {rules.length > 0 && (
         <InfoSection title="Rules">
-          <div className="space-y-2">
+          <div className="space-y-2" data-list-bounded="rules of one object">
             {rules.map((rule: any, idx: number) => {
               const resources = Array.isArray(rule.resources) ? rule.resources : []
               const verbs = Array.isArray(rule.verbs) ? rule.verbs : []

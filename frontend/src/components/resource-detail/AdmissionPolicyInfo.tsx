@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
+import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 // ValidatingAdmissionPolicy / MutatingAdmissionPolicy drawer: the policy's
@@ -142,37 +143,7 @@ export default function AdmissionPolicyInfo({ name, kind }: Props) {
       )}
 
       <InfoSection title="Bindings">
-        {bindings.length === 0 ? <div className="text-xs text-slate-400">-</div> : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs border border-slate-700 rounded-sm" data-testid="admission-policy-bindings">
-              <thead>
-                <tr className="bg-slate-800/60 text-slate-400">
-                  <Th className="text-left px-2 py-1.5">Name</Th>
-                  {validating && <Th className="text-left px-2 py-1.5">Validation Actions</Th>}
-                  <Th className="text-left px-2 py-1.5">Param Ref</Th>
-                  <Th className="text-left px-2 py-1.5">Namespace Selector</Th>
-                  <Th className="text-left px-2 py-1.5">Resource Rules</Th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700">
-                {bindings.map((b) => {
-                  const bs: any = b?.spec || {}
-                  const mr: any = bs.matchResources || {}
-                  const brules: any[] = Array.isArray(mr.resourceRules) ? mr.resourceRules : []
-                  return (
-                    <tr key={b.name} className="text-slate-200">
-                      <td className="px-2 py-1.5 font-medium text-ink break-all">{b.name}</td>
-                      {validating && <td className="px-2 py-1.5">{Array.isArray(bs.validationActions) && bs.validationActions.length > 0 ? bs.validationActions.join(', ') : '-'}</td>}
-                      <td className="px-2 py-1.5 break-all">{paramRefText(bs.paramRef)}</td>
-                      <td className="px-2 py-1.5 break-all">{selectorText(mr.namespaceSelector) || '-'}</td>
-                      <td className="px-2 py-1.5">{brules.length === 0 ? '-' : brules.map((r, i) => <span key={i} className="block">{ruleText(r)}</span>)}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {bindings.length === 0 ? <div className="text-xs text-slate-400">-</div> : <BindingsTable bindings={bindings} validating={validating} />}
       </InfoSection>
 
       <EventsSection events={desc.events} error={desc.events_error} />
@@ -184,6 +155,43 @@ export default function AdmissionPolicyInfo({ name, kind }: Props) {
       <InfoSection title="Annotations">
         <KeyValueTags data={desc.annotations} />
       </InfoSection>
+    </div>
+  )
+}
+
+// The bindings that name the policy, ten to a page.
+function BindingsTable({ bindings, validating }: { bindings: any[]; validating: boolean }) {
+  const { items: paged, nav } = usePagination(bindings, 10)
+  return (
+    <div className="overflow-x-auto" data-testid="admission-policy-bindings-list">
+      <table className="w-full text-xs border border-slate-700 rounded-sm" data-testid="admission-policy-bindings">
+        <thead>
+          <tr className="bg-slate-800/60 text-slate-400">
+            <Th className="text-left px-2 py-1.5">Name</Th>
+            {validating && <Th className="text-left px-2 py-1.5">Validation Actions</Th>}
+            <Th className="text-left px-2 py-1.5">Param Ref</Th>
+            <Th className="text-left px-2 py-1.5">Namespace Selector</Th>
+            <Th className="text-left px-2 py-1.5">Resource Rules</Th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-700">
+          {paged.map((b) => {
+            const bs: any = b?.spec || {}
+            const mr: any = bs.matchResources || {}
+            const brules: any[] = Array.isArray(mr.resourceRules) ? mr.resourceRules : []
+            return (
+              <tr key={b.name} className="text-slate-200">
+                <td className="px-2 py-1.5 font-medium text-ink break-all">{b.name}</td>
+                {validating && <td className="px-2 py-1.5">{Array.isArray(bs.validationActions) && bs.validationActions.length > 0 ? bs.validationActions.join(', ') : '-'}</td>}
+                <td className="px-2 py-1.5 break-all">{paramRefText(bs.paramRef)}</td>
+                <td className="px-2 py-1.5 break-all">{selectorText(mr.namespaceSelector) || '-'}</td>
+                <td className="px-2 py-1.5">{brules.length === 0 ? '-' : brules.map((r, i) => <span key={i} className="block">{ruleText(r)}</span>)}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      {nav}
     </div>
   )
 }

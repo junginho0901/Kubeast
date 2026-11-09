@@ -42,6 +42,7 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
   const labels = ((rawJson?.labels as Record<string, string>) ?? (meta.labels as Record<string, string>) ?? {}) as Record<string, string>
   const annotations = ((rawJson?.annotations as Record<string, string>) ?? (meta.annotations as Record<string, string>) ?? {}) as Record<string, string>
   const endpoints = (rawJson?.endpoints ?? []) as any[]
+  const { items: pagedEndpoints, page: endpointsPage, nav: endpointsNav } = usePagination(endpoints, 10)
   const ports = (rawJson?.ports ?? []) as any[]
   const addressType = String(rawJson?.address_type ?? rawJson?.addressType ?? '-')
   const serviceName = String(rawJson?.service_name ?? labels?.['kubernetes.io/service-name'] ?? '-')
@@ -107,45 +108,48 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
 
       {endpoints.length > 0 && (
         <InfoSection title="Endpoints">
-          <div className="space-y-2">
-            {endpoints.map((ep: any, i: number) => {
-              const addresses = Array.isArray(ep?.addresses) ? ep.addresses : []
-              const ref = ep?.target_ref || ep?.targetRef
-              const refText = ref?.name ? `${ref?.kind || 'Target'}:${ref.name}` : '-'
-              const forZones = hintNames(ep?.hints?.for_zones, ep?.hints?.forZones)
-              const forNodes = hintNames(ep?.hints?.for_nodes, ep?.hints?.forNodes)
-              return (
-                <div key={i} className="rounded-sm border border-slate-800 p-3 space-y-2">
-                  <div className="text-xs text-slate-200 break-all">
-                    <span className="text-slate-400"><Tx>Addresses:</Tx></span> {addresses.length > 0 ? addresses.join(', ') : '-'}
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                    <div className="text-slate-200 break-all"><span className="text-slate-400"><Tx>Hostname:</Tx></span> {ep?.hostname || '-'}</div>
-                    <div className="text-slate-200 break-all"><span className="text-slate-400"><Tx>Node:</Tx></span> {ep?.node_name || ep?.nodeName || '-'}</div>
-                    <div className="text-slate-200 break-all"><span className="text-slate-400"><Tx>Zone:</Tx></span> {ep?.zone || '-'}</div>
-                    <div className="text-slate-200 break-all"><span className="text-slate-400"><Tx>TargetRef:</Tx></span> {refText}</div>
-                  </div>
-                  {/* topology-aware-routing hints — Service annotation 의 topology-aware-hints 가 켜져 있으면 EndpointSlice 에 hints.forZones 가 채워짐 */}
-                  {forZones.length > 0 && (
+          <div data-testid="endpointslice-endpoints">
+            <div className="space-y-2">
+              {pagedEndpoints.map((ep: any, i: number) => {
+                const addresses = Array.isArray(ep?.addresses) ? ep.addresses : []
+                const ref = ep?.target_ref || ep?.targetRef
+                const refText = ref?.name ? `${ref?.kind || 'Target'}:${ref.name}` : '-'
+                const forZones = hintNames(ep?.hints?.for_zones, ep?.hints?.forZones)
+                const forNodes = hintNames(ep?.hints?.for_nodes, ep?.hints?.forNodes)
+                return (
+                  <div key={(endpointsPage - 1) * 10 + i} className="rounded-sm border border-slate-800 p-3 space-y-2" data-testid="endpointslice-endpoint">
                     <div className="text-xs text-slate-200 break-all">
-                      <span className="text-slate-400"><Tx>Hints (for zones):</Tx></span>{' '}
-                      <span className="font-mono">{forZones.join(', ')}</span>
+                      <span className="text-slate-400"><Tx>Addresses:</Tx></span> {addresses.length > 0 ? addresses.join(', ') : '-'}
                     </div>
-                  )}
-                  {forNodes.length > 0 && (
-                    <div className="text-xs text-slate-200 break-all">
-                      <span className="text-slate-400"><Tx>Hints (for nodes):</Tx></span>{' '}
-                      <span className="font-mono">{forNodes.join(', ')}</span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                      <div className="text-slate-200 break-all"><span className="text-slate-400"><Tx>Hostname:</Tx></span> {ep?.hostname || '-'}</div>
+                      <div className="text-slate-200 break-all"><span className="text-slate-400"><Tx>Node:</Tx></span> {ep?.node_name || ep?.nodeName || '-'}</div>
+                      <div className="text-slate-200 break-all"><span className="text-slate-400"><Tx>Zone:</Tx></span> {ep?.zone || '-'}</div>
+                      <div className="text-slate-200 break-all"><span className="text-slate-400"><Tx>TargetRef:</Tx></span> {refText}</div>
                     </div>
-                  )}
-                  <div className="flex flex-wrap gap-1.5 text-[11px]">
-                    <ConditionBadge label="Ready" value={ep?.conditions?.ready} />
-                    <ConditionBadge label="Serving" value={ep?.conditions?.serving} />
-                    <ConditionBadge label="Terminating" value={ep?.conditions?.terminating} />
+                    {/* topology-aware-routing hints — Service annotation 의 topology-aware-hints 가 켜져 있으면 EndpointSlice 에 hints.forZones 가 채워짐 */}
+                    {forZones.length > 0 && (
+                      <div className="text-xs text-slate-200 break-all">
+                        <span className="text-slate-400"><Tx>Hints (for zones):</Tx></span>{' '}
+                        <span className="font-mono">{forZones.join(', ')}</span>
+                      </div>
+                    )}
+                    {forNodes.length > 0 && (
+                      <div className="text-xs text-slate-200 break-all">
+                        <span className="text-slate-400"><Tx>Hints (for nodes):</Tx></span>{' '}
+                        <span className="font-mono">{forNodes.join(', ')}</span>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-1.5 text-[11px]">
+                      <ConditionBadge label="Ready" value={ep?.conditions?.ready} />
+                      <ConditionBadge label="Serving" value={ep?.conditions?.serving} />
+                      <ConditionBadge label="Terminating" value={ep?.conditions?.terminating} />
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
+            {endpointsNav}
           </div>
         </InfoSection>
       )}

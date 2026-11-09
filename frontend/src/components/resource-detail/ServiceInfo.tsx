@@ -2,9 +2,10 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, Th, Tx } from './DetailCommon'
+import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, NoneText, StatusBadge, SummaryBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useNamespacePodTable } from './useNamespacePodTable'
+import { usePagination } from './usePagination'
 import { SET_POD_TABLE_WATCH_MAX } from './namespacePodTable'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
@@ -92,6 +93,26 @@ function toPortDisplay(ports: DescribePort[]): string {
       return `${protocol} ${from}->${to}${node}`
     })
     .join(', ')
+}
+
+// The ready or not-ready addresses of the Service's EndpointSlices, ten to a page.
+function AddressList({ label, addresses, testId }: { label: string; addresses: string[]; testId: string }) {
+  const { items: paged, nav } = usePagination(addresses, 10)
+  return (
+    <div data-testid={testId}>
+      <p className="text-[11px] text-slate-400 mb-1"><Tx>{label}</Tx></p>
+      {addresses.length === 0 ? (
+        <NoneText />
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {paged.map((ip, i) => (
+            <span key={`${ip}-${i}`} className="rounded-sm border border-slate-700 bg-slate-800/60 px-2 py-0.5 font-mono text-[11px] text-slate-200" data-testid="service-address">{ip}</span>
+          ))}
+        </div>
+      )}
+      {nav}
+    </div>
+  )
 }
 
 function formatIngress(ingress: Array<{ ip?: string | null; hostname?: string | null }>): string {
@@ -185,6 +206,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
 
   const endpointSummary = describe?.endpoint_summary
   const endpointSlices = Array.isArray(describe?.endpoint_slices) ? describe.endpoint_slices : []
+  const { items: pagedSlices, nav: slicesNav } = usePagination(endpointSlices, 10)
 
   const conditions = Array.isArray(describe?.conditions) ? describe.conditions : []
 
@@ -278,15 +300,15 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
           <SummaryBadge label="Not Ready" value={endpointSummary?.not_ready_count ?? 0} color="amber" />
           <SummaryBadge label="Slices" value={endpointSlices.length} color="default" />
         </div>
-        <div className="space-y-2">
-          <InfoRow label="Ready Addresses" value={(endpointSummary?.ready_addresses || []).join(', ') || '-'} />
-          <InfoRow label="Not Ready Addresses" value={(endpointSummary?.not_ready_addresses || []).join(', ') || '-'} />
+        <div className="space-y-3">
+          <AddressList label="Ready Addresses" addresses={endpointSummary?.ready_addresses ?? []} testId="service-ready-addresses" />
+          <AddressList label="Not Ready Addresses" addresses={endpointSummary?.not_ready_addresses ?? []} testId="service-not-ready-addresses" />
         </div>
       </InfoSection>
 
       {endpointSlices.length > 0 && (
         <InfoSection title="Endpoint Slices">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" data-testid="service-endpoint-slices">
             <table className="w-full text-xs table-fixed min-w-[680px]">
               <thead className="text-slate-400">
                 <tr>
@@ -298,7 +320,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {endpointSlices.map((slice, idx) => {
+                {pagedSlices.map((slice, idx) => {
                   const portsText = (slice.ports || [])
                     .map((p) => `${p.name || '-'}:${p.port ?? '-'}${p.protocol ? `/${p.protocol}` : ''}`)
                     .join(', ')
@@ -314,6 +336,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
                 })}
               </tbody>
             </table>
+            {slicesNav}
           </div>
         </InfoSection>
       )}
