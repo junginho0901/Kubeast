@@ -32,6 +32,13 @@ describe('admin list pages fit the screen', () => {
     expect(read('pages/admin/AccessRequests.tsx')).toMatch(/accessRequestQuery\([^)]*rowsPerPage\)/)
     expect(read('pages/admin/AccessReview.tsx')).toMatch(/historyPage\([^)]*rowsPerPage\)/)
   })
+
+  // A key set by an effect changes a frame after the rows show, so that frame would draw the rows of the estimate.
+  it('Access review measures a section in the render its rows first come in', () => {
+    const src = read('pages/admin/AccessReview.tsx')
+    const key = /useAdaptiveTable\(\{ recalculationKey: `\$\{tab\}:\$\{(\w+)\}` \}\)/.exec(src)?.[1] ?? ''
+    expect(new RegExp(`const ${key} = [^\\n]*\\brows\\.length > 0`).test(src), `the key ${key || '(none)'} reads the section's rows`).toBe(true)
+  })
 })
 
 describe('lists in windows and on the account page are paged', () => {
