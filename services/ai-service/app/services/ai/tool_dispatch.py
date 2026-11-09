@@ -74,7 +74,7 @@ FEATURE_TOOL_ARGS = {
     "ai_usage": ({"usage_group", "since_time", "until_time"}, set(), {"limit", "offset"}),
     "access_requests": ({"status", "search"}, set(), {"limit", "offset"}),
     "audit_integrity": (set(), set(), set()),
-    "hygiene_history": ({"review_id", "severity", "check"}, set(), {"limit"}),
+    "hygiene_history": ({"review_id", "severity", "check"}, set(), {"limit", "offset"}),
     "investigations": ({"investigation_id", "status", "cluster_id"}, set(), {"limit", "offset"}),
     "ai_models": (set(), {"enabled_only"}, set()),
     "session_recordings": ({"recording_id", "actor_email", "recording_kind", "cluster_id"}, set(), {"limit", "offset"}),

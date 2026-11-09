@@ -198,7 +198,8 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
               </div>
             )
           })}
-          <div data-testid="cluster-access-rows-pages">{rowsNav}</div>
+          {/* only with more than one page: an empty last child would add the list's gap under the last row */}
+          {rowsNav && <div data-testid="cluster-access-rows-pages">{rowsNav}</div>}
         </div>
       )}
 

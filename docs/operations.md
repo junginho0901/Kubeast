@@ -71,6 +71,8 @@ Lists it could not read are not hidden; they are shown as "skipped checks".
   - Signing off per cluster with a note saves the report of that moment as a snapshot (`hygiene_reviews`, kept for `retention.reviewDays`).
   - On the cluster Kubeast runs on, a snapshot a global admin signed reads, for anyone else, without the TLS certificate and Helm release findings of [Kubeast's own namespace](cluster-requirements.md#who-reaches-kubeasts-own-namespace) and without their counts, as that reader's own scan does.
   - The screen shows the last sign-off and the next due date (`intervalDays`, default 30 days).
+  - Past sign-offs come a page at a time, newest first: `GET /api/v1/cluster/hygiene/history?cluster=<id>&limit=<1–100>&offset=<n>`.
+  - Its `X-Kubeast-Total` header is how many sign-offs the cluster keeps; the tab's footer and the AI tool `hygiene_history` give that count.
   - Automation such as n8n can fetch `GET /api/v1/cluster/hygiene?cluster=<id>&format=json` with an API key.
   - A finding's `message` is an English sentence, also in the CSV and snapshot. The screen receives the same content as `message_key` and `message_args`, and shows it in the screen language.
 - Permissions: viewing the report and its history is `resource.hygiene.scan` on that cluster, which an Admin grant there holds and Read and Write do not; a grant limited to namespaces is refused it, since the report spans the cluster. The global role's `admin.hygiene.read` reads every cluster's report. `admin.hygiene.export` and `admin.hygiene.signoff` are global too, so the export and the sign-off are for global Admins and roles that hold them.

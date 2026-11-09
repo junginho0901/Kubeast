@@ -263,7 +263,7 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 - `ai_usage(usage_group, since_time, until_time, limit, offset)` - AI use by user, model or cluster (Admin): requests, tokens, tool calls, with totals over every group
 - `access_requests(status, search, limit, offset)` - Access requests (Admin), pending by default; read only
 - `audit_integrity()` - How far the audit log's hash chain is sealed and its last anchor (Admin); not a check of the chain
-- `hygiene_history(review_id, severity, check, limit)` - This cluster's hygiene sign-offs and how often one is due, or the report one stored (Admin)
+- `hygiene_history(review_id, severity, check, limit, offset)` - This cluster's hygiene sign-offs and how often one is due, or the report one stored (Admin)
 - `investigations(investigation_id, status, cluster_id, limit, offset)` - Alert investigation reports (Admin): the list, or one report, whose reading is recorded
 - `ai_models()` - The AI models (Admin): name, provider, what each runs, limits, whether a key variable is set (`key_env_set`); never an API key, the variable's name or an address
 - `session_recordings(recording_id, actor_email, recording_kind, cluster_id, limit, offset)` - That a terminal was recorded and its details (Admin): who, where, when, size, status; never what the terminal showed

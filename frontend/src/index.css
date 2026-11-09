@@ -419,7 +419,7 @@ body {
     text-overflow: ellipsis;
   }
 
-  /* A page that scrolls past the screen (long admin tables): room under its last row so the floating AI chat
+  /* A page that scrolls past the screen (the dashboard): room under its last row so the floating AI chat
      button (fixed, bottom-right) does not sit on the last values or buttons at the end of the page. Pages
      sized to the screen (list tables) keep their height. */
   .page-scrolls {

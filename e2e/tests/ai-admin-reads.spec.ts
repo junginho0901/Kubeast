@@ -346,14 +346,21 @@ test.describe('the AI reads what the Admin screens read', () => {
     expect(signed.status(), await signed.text()).toBe(201)
     const signoff = await signed.json()
 
-    const listed = (await api(request, admin, `/api/v1/cluster/hygiene/history?cluster=${CLUSTER}`)).body as Obj[]
+    const route = await api(request, admin, `/api/v1/cluster/hygiene/history?cluster=${CLUSTER}&limit=100&offset=0`)
+    const listed = route.body as Obj[]
     const history = await answer(request, admin, 'hygiene_history')
     expect(history.cluster).toBe(CLUSTER)
     expect(history.returned).toBe(listed.length)
     expect(history.rows).toEqual(listed.map(({ reviewed_by: _by, ...row }: Obj) => row))
     expect(history.rows[0].id).toBe(signoff.id)
     expect(history.rows[0].note).toBe(note)
-    expect(history.truncated === true).toBe(listed.length >= 100)
+    // the count the Past sign-offs footer shows, and the page after this one when there is more
+    expect(history.total).toBe(Number(route.total))
+    expect(history.next_offset).toBe(Number(route.total) > listed.length ? listed.length : undefined)
+    const second = await answer(request, admin, 'hygiene_history', { limit: 1, offset: 1 })
+    const routeSecond = (await api(request, admin, `/api/v1/cluster/hygiene/history?cluster=${CLUSTER}&limit=1&offset=1`)).body as Obj[]
+    expect(second.rows.map((r: Obj) => r.id)).toEqual(routeSecond.map((r: Obj) => r.id))
+    expect([second.total, second.offset]).toEqual([Number(route.total), 1])
 
     const stored = (await api(request, admin, `/api/v1/cluster/hygiene/snapshot/${signoff.id}?cluster=${CLUSTER}`)).body
     const opened = await answer(request, admin, 'hygiene_history', { review_id: signoff.id })

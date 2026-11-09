@@ -19,7 +19,7 @@ import (
 
 const (
 	adminPageDefault = 25 // the screens' page
-	// The sign-offs k8s-service answers at most (handler hygieneHistoryMax).
+	// The sign-offs k8s-service answers in one page at most (handler hygieneHistoryMax), and the tool's page when none is asked.
 	hygieneHistoryCap = 100
 	// The access review answers every row of every tab at once: 5 000 requests alone, each with a reason and a note of 500 bytes, take about 6 MiB.
 	// Decoding takes up to 3.5 times the body beside it, on a service whose default limit is 256 Mi, so this stays well below that.
@@ -521,11 +521,16 @@ func handleHygieneHistory(ctx context.Context, args map[string]interface{}, head
 	if reviewID := argString(args, "review_id", ""); reviewID != "" {
 		return hygieneSignedOff(ctx, reviewID, args, headers)
 	}
-	q := url.Values{}
-	if limit := argInt(args, "limit", 0); limit > 0 && limit < hygieneHistoryCap {
-		q.Set("limit", strconv.Itoa(limit))
+	limit := argInt(args, "limit", hygieneHistoryCap)
+	if limit < 1 || limit > hygieneHistoryCap {
+		limit = hygieneHistoryCap
 	}
-	status, body, err := k8sServiceGet(ctx, headers, "/hygiene/history", q)
+	offset := argInt(args, "offset", 0)
+	if offset < 0 {
+		offset = 0
+	}
+	q := url.Values{"limit": {strconv.Itoa(limit)}, "offset": {strconv.Itoa(offset)}}
+	status, answerHeaders, body, err := k8sServiceGetWithHeader(ctx, headers, "/hygiene/history", q)
 	if err != nil {
 		return "", err
 	}
@@ -536,17 +541,17 @@ func handleHygieneHistory(ctx context.Context, args map[string]interface{}, head
 	if out != "" {
 		return hygieneOffAnswer(ctx, out, headers)
 	}
+	total, err := totalOf("hygiene_history", answerHeaders)
+	if err != nil {
+		return "", err
+	}
 	answer := map[string]interface{}{
-		"cluster":  clusterIDFromCtx(ctx),
-		"returned": len(rows),
-		"rows":     signOffRows(rows, []string{"id", "cluster", "reviewed_by_email", "reviewed_at", "note", "counts"}),
+		"cluster": clusterIDFromCtx(ctx),
+		"rows":    signOffRows(rows, []string{"id", "cluster", "reviewed_by_email", "reviewed_at", "note", "counts"}),
 	}
+	placeOf(answer, total, len(rows), offset)
 	addHygieneSettings(ctx, answer, headers)
-	if len(rows) >= hygieneHistoryCap {
-		answer["truncated"] = true
-		answer["note"] = fmt.Sprintf("The newest %d sign-offs of this cluster are listed.", hygieneHistoryCap)
-	}
-	if len(rows) == 0 {
+	if total == 0 {
 		answer["hint"] = "This cluster has not been signed off yet."
 	}
 	return marshalRows(answer)
