@@ -159,6 +159,25 @@ test.describe('AI query tools: jq, tabular, count, and the k8s_diff preview', ()
     expect(pods()).toBe(before)
   })
 
+  test('jq programs asked at once each get their own answer: they take turns, and one past its memory is refused alone', async ({ request }) => {
+    const token = await login(request)
+    test.skip(!(await mcpOn(request, token)), 'the MCP server is off (mcp.enabled)')
+    const pods = () => kubectl(`-n kubeast get pods -l app=tool-server -o jsonpath='{range .items[*]}{.metadata.name}={.status.containerStatuses[0].restartCount}{" "}{end}'`).replace(/'/g, '').trim()
+    const before = pods()
+    expect(before).toMatch(/=\d+/)
+    const names = kubectl(`-n kubeast get pods -o jsonpath='{.items[*].metadata.name}'`).replace(/'/g, '').split(/\s+/).filter(Boolean)
+
+    const programs = ['"a" * 200000000 | length', ...Array.from({ length: 5 }, () => '[.items[].metadata.name] | length')]
+    const answers = await Promise.all(programs.map((jq) => call(request, token, 'k8s_jq_query', { resource_type: 'pods', namespace: 'kubeast', jq })))
+    expect(answers[0].isError, answers[0].text).toBe(true)
+    expect(answers[0].text).toMatch(/jq: the expression needed more memory than a run may hold/)
+    for (const a of answers.slice(1)) {
+      expect(a.isError, a.text).toBe(false)
+      expect(json(a.text).results).toEqual([names.length])
+    }
+    expect(pods()).toBe(before)
+  })
+
   test('a Secret answers every query tool without its values, a ConfigMap read the same way keeps them, and k8s_diff names keys only', async ({ request }) => {
     const admin = await login(request)
     test.skip(!(await mcpOn(request, admin)), 'the MCP server is off (mcp.enabled)')

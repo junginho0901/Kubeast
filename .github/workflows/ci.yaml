@@ -48,6 +48,13 @@ jobs:
       - name: test
         working-directory: ${{ matrix.module }}
         run: go test ./...
+      # The image builds tool-server without cgo, where the jq child's address space limit is set (jq_limit_linux.go).
+      - name: jq tests without cgo
+        if: matrix.module == 'services/tool-server'
+        working-directory: ${{ matrix.module }}
+        env:
+          CGO_ENABLED: "0"
+        run: go test -run 'JQ' .
 
   # The real migrations against PostgreSQL (services/pkg/dbmigrate/*_postgres_test.go):
   # empty database to Required, idempotent re-run, legacy role column conversion.
