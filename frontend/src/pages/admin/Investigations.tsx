@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -8,8 +8,11 @@ import { api } from '@/services/api'
 import type { InvestigationSummary } from '@/services/api/investigations'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { useAIContext } from '@/hooks/useAIContext'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { alertInvestigationEnabled } from '@/utils/features'
 import CustomDropdown from '@/components/CustomDropdown'
+import { ListPager } from '@/components/ListPager'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import InvestigationReportModal from '@/components/InvestigationReportModal'
 import { duration, severityClass, skipReason, statusClass } from '@/utils/investigationFormat'
 import { formatWhen } from './accessRequestFormat'
@@ -19,7 +22,7 @@ import { utcTitle } from '@/utils/time'
 // Admin → Investigations: the reports the alert investigator wrote (features.alertInvestigation).
 // Opening one is audited server-side (ai.investigation.view).
 
-const PAGE_SIZE = 50
+const COLUMNS = 9
 const STATUSES = ['queued', 'running', 'done', 'failed', 'skipped'] as const
 
 export default function Investigations() {
@@ -30,23 +33,34 @@ export default function Investigations() {
   // The status applies when picked; the cluster ID when Search or Enter is pressed (an unfinished ID lists nothing).
   const [cluster, setCluster] = useState('')
   const [applied, setApplied] = useState({ status: '', cluster: '' })
-  const [page, setPage] = useState(1)
+  // the first row on screen: a new rows per page (Fit or a choice) shows the page that holds it
+  const [firstRow, setFirstRow] = useState(0)
   const features = useClusterFeatures()
 
-  // The rows on screen stay while another page or filter loads; the range, page and AI context are theirs.
-  const { data, isLoading, isPlaceholderData, refetch, isFetching } = useQuery({
-    queryKey: ['investigations', 'list', applied, page],
-    queryFn: async () => ({ ...(await api.listInvestigations({ ...applied, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE })), filter: applied, page }),
+  // the first row's height is measured once rows have come (recalculationKey)
+  const [rowsIn, setRowsIn] = useState(false)
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ rowHeight: 57, recalculationKey: String(rowsIn) })
+  const page = Math.floor(firstRow / rowsPerPage) + 1
+
+  // The rows on screen stay while another page, filter or page size loads; the range, page and AI context are theirs.
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ['investigations', 'list', applied, page, rowsPerPage],
+    queryFn: async () => ({
+      ...(await api.listInvestigations({ ...applied, limit: rowsPerPage, offset: (page - 1) * rowsPerPage })),
+      filter: applied, page, limit: rowsPerPage,
+    }),
     placeholderData: keepPreviousData,
     // while something is queued or running, follow it
     refetchInterval: (q) => ((q.state.data?.items ?? []).some((r) => r.status === 'queued' || r.status === 'running') ? 5_000 : 30_000),
   })
-  const view = investigationsView(data, page, PAGE_SIZE)
-  const { rows, total, first, shownPage, shownFilter } = view
+  const view = investigationsView(data, page, rowsPerPage)
+  const { rows, total, shownPage, shownFilter } = view
+  const hasRows = rows.length > 0
+  useEffect(() => { if (hasRows) setRowsIn(true) }, [hasRows])
   const clusterPending = cluster.trim() !== applied.cluster
   const applyCluster = () => {
     setApplied((a) => ({ ...a, cluster: cluster.trim() }))
-    setPage(1)
+    setFirstRow(0)
   }
 
   const open = (id: string | null) => {
@@ -72,8 +86,8 @@ export default function Investigations() {
   } : null, [data, total, shownFilter, shownPage, rows])
 
   return (
-    <div className="page-scrolls space-y-6">
-      <div className="flex items-start justify-between gap-3">
+    <div className="flex flex-col h-[calc(100vh-4rem)] gap-6">
+      <div className="flex items-start justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary-600/20 rounded-lg">
             <Siren className="w-6 h-6 text-primary-400" />
@@ -91,20 +105,20 @@ export default function Investigations() {
       </div>
 
       {features.data && !alertInvestigationEnabled(features.data) && (
-        <div className="rounded-lg border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-sm text-amber-200" data-testid="investigations-disabled">
+        <div className="shrink-0 rounded-lg border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-sm text-amber-200" data-testid="investigations-disabled">
           {tr('investigations.disabled', 'Alert investigation is off on this installation (features.alertInvestigation.enabled). Earlier reports stay listed.')}
         </div>
       )}
 
-      <div className="card">
-        <div className="flex flex-wrap items-end gap-3 mb-4">
+      <div ref={containerRef} className="card flex-1 min-h-0 flex flex-col">
+        <div className="flex flex-wrap items-end gap-3 mb-4 shrink-0">
           <div className="w-44">
             <CustomDropdown
               label={tr('investigations.filter.status', 'Status')}
               value={applied.status}
               onChange={(v) => {
                 setApplied((a) => ({ ...a, status: v }))
-                setPage(1)
+                setFirstRow(0)
               }}
               options={[
                 { value: '', label: tr('investigations.status.all', 'All') },
@@ -139,9 +153,9 @@ export default function Investigations() {
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
           <table className="w-full text-sm" data-testid="investigations-table">
-            <thead className="text-slate-400">
+            <thead ref={theadRef} className="text-slate-400">
               <tr>
                 <th className="px-3 py-2 text-left">{tr('investigations.col.received', 'Received')}</th>
                 <th className="px-3 py-2 text-left">{tr('investigations.col.cluster', 'Cluster')}</th>
@@ -156,12 +170,12 @@ export default function Investigations() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-500">{tr('investigations.loading', 'Loading…')}</td></tr>
+                <tr><td colSpan={COLUMNS} className="px-3 py-6 text-center text-slate-500">{tr('investigations.loading', 'Loading…')}</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-400">{tr('common.listEmpty', 'No items.')}</td></tr>
+                <tr><td colSpan={COLUMNS} className="px-3 py-6 text-center text-slate-400">{tr('common.listEmpty', 'No items.')}</td></tr>
               ) : (
-                rows.map((r) => (
-                  <tr key={r.id} className="border-t border-slate-700" data-testid={`investigation-row-${r.id}`}>
+                rows.map((r, idx) => (
+                  <tr key={r.id} ref={idx === 0 ? firstRowRef : undefined} className="border-t border-slate-700" data-testid={`investigation-row-${r.id}`}>
                     <td className="px-3 py-2 text-slate-300 whitespace-nowrap" title={utcTitle(r.received_at)}>{formatWhen(r.received_at)}</td>
                     <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{r.cluster}</td>
                     <td className="px-3 py-2">
@@ -192,25 +206,18 @@ export default function Investigations() {
                 ))
               )}
             </tbody>
+            <AdaptiveTableFillerRows count={rowsPerPage - rows.length} columnCount={COLUMNS} cellClassName="py-2" />
           </table>
         </div>
 
-        <div className="flex items-center justify-between pt-3 mt-2 border-t border-slate-700" data-testid="investigations-pager">
-          <div className="text-xs text-slate-400">
-            {rows.length > 0
-              ? tr('investigations.range', '{{from}}–{{to}} of {{total}}', { from: first, to: view.last, total })
-              : tr('common.paginationEmpty', 'Showing 0 of 0')}
-          </div>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-ink hover:border-slate-500">
-              {tr('common.prev', 'Prev')}
-            </button>
-            <span className="text-xs text-slate-300 min-w-[48px] text-center">{shownPage}</span>
-            <button type="button" onClick={() => setPage((p) => p + 1)} disabled={!view.hasNext || isPlaceholderData} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-ink hover:border-slate-500">
-              {tr('common.next', 'Next')}
-            </button>
-          </div>
-        </div>
+        <ListPager
+          currentPage={shownPage}
+          totalPages={view.pages}
+          total={total}
+          rowsPerPage={view.limit}
+          onPageChange={(p) => setFirstRow((p - 1) * view.limit)}
+          testId="investigations-pager"
+        />
       </div>
 
       {openId && <InvestigationReportModal id={openId} load={() => api.getInvestigation(openId)} onClose={() => open(null)} />}

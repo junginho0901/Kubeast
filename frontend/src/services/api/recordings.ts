@@ -4,6 +4,7 @@
 // audited (admin.session.read) on every request.
 
 import { client } from './client'
+import { totalHeader } from './access_requests'
 
 export interface RecordingsConfig {
   enabled: boolean
@@ -47,12 +48,14 @@ export const recordingsApi = {
     return { enabled: !!data?.enabled }
   },
 
-  listRecordings: async (filter: RecordingFilter = {}): Promise<SessionRecording[]> => {
+  // One page of recordings and how many match the filter (X-Kubeast-Total).
+  listRecordings: async (filter: RecordingFilter = {}): Promise<{ items: SessionRecording[]; total: number }> => {
     // cluster is a filter here, not the selected cluster the client adds by default
     const params: Record<string, string> = { cluster: '' }
     for (const [k, v] of Object.entries(filter)) if (v) params[k] = String(v)
-    const { data } = await client.get(base, { params })
-    return Array.isArray(data) ? data : []
+    const { data, headers } = await client.get(base, { params })
+    if (!Array.isArray(data)) throw new Error('Invalid recordings response')
+    return { items: data, total: totalHeader(headers) }
   },
 }
 

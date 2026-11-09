@@ -83,7 +83,8 @@ export default function AdminAIModels() {
           {tr('admin.aiModels.empty', 'No model configurations yet. The default environment config is being used.')}
         </div>
       ) : (
-        <div className="space-y-3 mt-4">
+        // configs an admin adds one at a time: no pager (the list guard skips it)
+        <div className="space-y-3 mt-4" data-list-bounded="model configs made by hand">
           {configs?.map((cfg) => {
             const isEditing = editingId === cfg.id
             return (

@@ -163,6 +163,7 @@ test.describe('the screens that left the Admin group', () => {
       await expect(page.getByTestId('hygiene-summary')).toHaveCount(1, { timeout: 60_000 })
       await expect(page.getByTestId('hygiene-export-csv')).toHaveCount(0)
       await expect(page.getByTestId('hygiene-export-json')).toHaveCount(0)
+      await expect(page.getByTestId('hygiene-signoff-open')).toHaveCount(0)
       await expect(page.getByTestId('hygiene-signoff-panel')).toHaveCount(0)
       await expect(page.getByTestId('hygiene-tab-history')).toHaveCount(1)
       // the picker offers the clusters whose report it may read

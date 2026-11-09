@@ -4608,8 +4608,7 @@
       "result": "결과",
       "namespace": "Namespace",
       "since": "시작 시각",
-      "until": "종료 시각",
-      "limit": "페이지당 건수"
+      "until": "종료 시각"
     },
     "apply": "조회",
     "reset": "초기화",
@@ -5411,7 +5410,6 @@
     },
     "loading": "불러오는 중…",
     "open": "보고서",
-    "range": "{{total}}건 중 {{from}}–{{to}}",
     "skipReason": "건너뜀: {{reason}}",
     "skip": {
       "investigation_cap": "조사 한도로 건너뜀",

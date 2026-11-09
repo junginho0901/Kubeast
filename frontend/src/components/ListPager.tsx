@@ -22,8 +22,10 @@ export function ListPager({ currentPage, totalPages, total, rowsPerPage, onPageC
   const { t } = useTranslation()
   const pages = Math.max(1, totalPages)
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0" data-testid={testId}>
-      <div className="flex items-center gap-4 text-xs text-slate-400">
+    // wraps on a narrow screen (the rows-per-page choice, the range and the buttons do not fit 600 px in one row)
+    // instead of widening the page
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 border-t border-slate-700 shrink-0" data-testid={testId}>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-400">
         {showPageSize && <PageSizeSelect />}
         {total === 0
           ? t('common.paginationEmpty', 'Showing 0 of 0')

@@ -5,9 +5,13 @@ import { AlertTriangle, Download, History, Loader2, RefreshCw, ShieldCheck, X } 
 
 import CustomDropdown from '@/components/CustomDropdown'
 import { ListPager } from '@/components/ListPager'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ModalFrame } from '@/components/ModalFrame'
+import { modalButton } from '@/components/modalStyles'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useCluster } from '@/contexts/ClusterContext'
 import { useAIContext } from '@/hooks/useAIContext'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { usePermission } from '@/hooks/usePermission'
 import { api, clustersApi } from '@/services/api'
 import type { HygieneFinding, HygieneReport, HygieneReview, HygieneSeverity } from '@/services/api/hygiene'
@@ -45,14 +49,16 @@ function findingText(tr: Tr, f: HygieneFinding): string {
     : text
 }
 
-// Findings per page: the admin page scrolls, so a fixed count; a report holds up to 5000.
-const FINDINGS_PER_PAGE = 50
+const FINDING_COLUMNS = 5
+const HISTORY_COLUMNS = 5
 
 export default function ClusterHygiene() {
   const { t } = useTranslation()
   const { currentCluster } = useCluster()
   const { open: openDetail } = useResourceDetail()
-  const [page, setPage] = useState(1)
+  // the first row on screen of each list: a new rows per page (Fit or a choice) shows the page that holds it
+  const [findingsFirst, setFindingsFirst] = useState(0)
+  const [historyFirst, setHistoryFirst] = useState(0)
   const tr = (key: string, fallback: string, opts?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...opts })
   const queryClient = useQueryClient()
   const [cluster, setCluster] = useState('')
@@ -61,6 +67,7 @@ export default function ClusterHygiene() {
   const [check, setCheck] = useState('all')
   const [search, setSearch] = useState('')
   const [note, setNote] = useState('')
+  const [signing, setSigning] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [viewId, setViewId] = useState<string | null>(null)
@@ -87,11 +94,26 @@ export default function ClusterHygiene() {
     enabled: !!cluster,
     retry: false,
   })
-  const { data: history = [], isLoading: historyLoading } = useQuery({
-    queryKey: ['hygiene', cluster, 'history'],
-    queryFn: () => api.listHygieneReviews(cluster),
+  // Past sign-offs, a page at a time from the server (it keeps every one; X-Kubeast-Total counts them). The rows on
+  // screen stay while another page or page size loads, never another cluster's; the pager is the answer's.
+  const [historyRowsIn, setHistoryRowsIn] = useState(false)
+  const historyTable = useAdaptiveTable({ rowHeight: 37, recalculationKey: `${tab}:${historyRowsIn}` })
+  const historyPage = Math.floor(historyFirst / historyTable.rowsPerPage) + 1
+  const { data: historyAnswer, isLoading: historyLoading } = useQuery({
+    queryKey: ['hygiene', cluster, 'history', historyPage, historyTable.rowsPerPage],
+    queryFn: async () => ({
+      ...(await api.listHygieneReviews(cluster, { limit: historyTable.rowsPerPage, offset: (historyPage - 1) * historyTable.rowsPerPage })),
+      page: historyPage, limit: historyTable.rowsPerPage,
+    }),
     enabled: !!cluster && (tab === 'history' || !!viewId),
+    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[1] === cluster ? prev : undefined),
   })
+  const history = historyAnswer?.items ?? []
+  const historyTotal = historyAnswer?.total ?? 0
+  const historyShownPage = historyAnswer?.page ?? historyPage
+  const historyLimit = historyAnswer?.limit ?? historyTable.rowsPerPage
+  const historyHasRows = history.length > 0
+  useEffect(() => { if (historyHasRows) setHistoryRowsIn(true) }, [historyHasRows])
   const { data: viewed } = useQuery({
     queryKey: ['hygiene', cluster, 'snapshot', viewId],
     queryFn: () => api.getHygieneSnapshot(cluster, viewId as string),
@@ -102,7 +124,10 @@ export default function ClusterHygiene() {
     onSuccess: (rev: HygieneReview) => {
       setNote('')
       setError(null)
+      setSigning(false)
       setMessage(tr('clusterHygiene.signoff.saved', 'Signed off at {{when}}.', { when: formatWhen(rev.reviewed_at) }))
+      // the newest sign-off is the first of Past sign-offs
+      setHistoryFirst(0)
       queryClient.invalidateQueries({ queryKey: ['hygiene', cluster] })
     },
     onError: (err: any) => setError(err?.response?.data?.detail || tr('clusterHygiene.signoff.failed', 'The sign-off was not saved.')),
@@ -130,9 +155,13 @@ export default function ClusterHygiene() {
     for (const f of matching) n[f.check] = (n[f.check] ?? 0) + 1
     return n
   }, [matching])
-  const totalPages = Math.max(1, Math.ceil(findings.length / FINDINGS_PER_PAGE))
-  useEffect(() => setPage(1), [report, severity, check, search])
-  const pagedFindings = findings.slice((page - 1) * FINDINGS_PER_PAGE, page * FINDINGS_PER_PAGE)
+  // Findings fit the screen (a report holds up to 5000)
+  const findingsTable = useAdaptiveTable({ rowHeight: 41, recalculationKey: `${tab}:${findings.length}` })
+  const findingsPerPage = findingsTable.rowsPerPage
+  const totalPages = Math.max(1, Math.ceil(findings.length / findingsPerPage))
+  useEffect(() => setFindingsFirst(0), [report, severity, check, search])
+  const page = Math.min(Math.floor(findingsFirst / findingsPerPage) + 1, totalPages)
+  const pagedFindings = findings.slice((page - 1) * findingsPerPage, page * findingsPerPage)
   // A finding opens its object in the drawer, which reads the selected cluster: only while this page shows that
   // cluster's report. "API" findings name an API version, not an object.
   const openFinding = (f: HygieneFinding) => {
@@ -169,7 +198,10 @@ export default function ClusterHygiene() {
       cluster, tab, viewing_snapshot: !!viewId, generated_at: report.generated_at,
       server_version: report.server_version, target_version: report.target_version,
       next_due: live?.next_due, due: live?.due, last_reviewed_at: live?.last_review?.reviewed_at,
+      // Past sign-offs: the page on screen, and how many the cluster has
       reviewed_at: tab === 'history' ? history.map((r) => r.reviewed_at) : undefined,
+      sign_offs_total: tab === 'history' && historyAnswer ? historyTotal : undefined,
+      sign_offs_page: tab === 'history' && historyAnswer ? historyShownPage : undefined,
       checks: report.checks.map((c) => ({ id: c.id, severity: c.severity, findings: c.findings, exempt: c.exempt, severities: c.severities })),
       findings_total: total, listed_findings: report.findings.length, truncated: report.truncated || undefined,
       filters: { severity, check, search: search || undefined },
@@ -178,7 +210,15 @@ export default function ClusterHygiene() {
         message: f.message, exempt: f.exempt, exempt_reason: f.exempt_reason,
       })),
     },
-  } : null, [report, cluster, viewId, tab, live, history, severity, check, search, findings, total])
+  } : null, [report, cluster, viewId, tab, live, history, historyAnswer, historyTotal, historyShownPage, severity, check, search, findings, total])
+
+  // the sign-off window says what it is for, not its note
+  const signWindow = signing && !viewId && canSignoff
+  useAIContext(signWindow ? {
+    source: 'HygieneSignoffWindow',
+    summary: `서명 창 — 클러스터 정리 점검 ${cluster}`,
+    data: { action: 'sign off', cluster, error: error ?? undefined },
+  } : null, [signWindow, cluster, error])
 
   const tabClass = (active: boolean) =>
     `rounded-sm px-3 py-1.5 text-sm flex items-center gap-1 ${active ? 'bg-primary-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`
@@ -196,8 +236,8 @@ export default function ClusterHygiene() {
   }
 
   return (
-    <div className="page-scrolls space-y-4">
-      <div className="page-head items-start gap-4">
+    <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
+      <div className="page-head items-start gap-4 shrink-0">
         <div>
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-6 h-6 text-primary-400" />
@@ -213,7 +253,7 @@ export default function ClusterHygiene() {
             <CustomDropdown
               options={clusterOptions}
               value={cluster}
-              onChange={(v) => { setCluster(v); setViewId(null); setMessage(null) }}
+              onChange={(v) => { setCluster(v); setViewId(null); setMessage(null); setHistoryFirst(0) }}
               testId="hygiene-cluster"
             />
           </div>
@@ -229,7 +269,7 @@ export default function ClusterHygiene() {
       </div>
 
       {viewId && viewed && (
-        <div className="rounded-lg border border-primary-500/40 bg-primary-500/10 p-3 text-sm text-primary-100 flex items-center justify-between gap-3" data-testid="hygiene-snapshot-banner">
+        <div className="shrink-0 rounded-lg border border-primary-500/40 bg-primary-500/10 p-3 text-sm text-primary-100 flex items-center justify-between gap-3" data-testid="hygiene-snapshot-banner">
           <span>
             <History className="inline w-4 h-4 mr-1" />
             {tr('clusterHygiene.snapshot.viewing', 'Viewing the report as signed off on {{when}} by {{who}}.', { when: formatWhen(viewed.reviewed_at), who: viewed.reviewed_by_email })}
@@ -242,13 +282,13 @@ export default function ClusterHygiene() {
       )}
 
       {reportError && !report && (
-        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200" data-testid="hygiene-error">
+        <div className="shrink-0 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200" data-testid="hygiene-error">
           {(reportError as any)?.response?.data?.detail || (reportError as Error).message}
         </div>
       )}
 
       {counts && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="hygiene-summary">
+        <div className="shrink-0 grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="hygiene-summary">
           {(['critical', 'warning', 'info', 'exempt'] as const).map((key) => (
             <button
               key={key}
@@ -264,7 +304,7 @@ export default function ClusterHygiene() {
       )}
 
       {report && (
-        <div className="rounded-lg bg-slate-800/50 border border-slate-700 p-3 text-sm flex flex-wrap items-center gap-x-6 gap-y-1" data-testid="hygiene-last-review">
+        <div className="shrink-0 rounded-lg bg-slate-800/50 border border-slate-700 p-3 text-sm flex flex-wrap items-center gap-x-6 gap-y-1" data-testid="hygiene-last-review">
           {!viewId && live && (
             <>
               <span className="text-slate-300">
@@ -295,7 +335,7 @@ export default function ClusterHygiene() {
       )}
 
       {report && report.collectors.length > 0 && (
-        <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm text-yellow-100" data-testid="hygiene-collectors">
+        <div className="shrink-0 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm text-yellow-100" data-testid="hygiene-collectors">
           <div className="font-medium mb-1">{tr('clusterHygiene.collectors', 'Could not read these lists, so their checks were skipped:')}</div>
           <ul className="list-disc pl-5 space-y-0.5">
             {report.collectors.map((c) => <li key={c.what}><span className="font-mono">{c.what}</span> — {c.error}</li>)}
@@ -303,7 +343,7 @@ export default function ClusterHygiene() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="shrink-0 flex flex-wrap items-center gap-2">
         <button onClick={() => setTab('findings')} className={tabClass(tab === 'findings')} data-testid="hygiene-tab-findings">
           {tr('clusterHygiene.tab.findings', 'Findings')} {report ? <span className="text-xs">({total})</span> : null}
         </button>
@@ -313,23 +353,35 @@ export default function ClusterHygiene() {
         <button onClick={() => setTab('history')} className={tabClass(tab === 'history')} data-testid="hygiene-tab-history">
           <History className="w-4 h-4" /> {tr('clusterHygiene.tab.history', 'Past sign-offs')}
         </button>
-        {!viewId && canExport && (
+        {(message || (!viewId && (canExport || canSignoff))) && (
           <div className="ml-auto flex items-center gap-2">
-            <button onClick={() => download('csv')} disabled={!live} data-testid="hygiene-export-csv"
-              className="btn btn-primary flex items-center gap-2 disabled:opacity-50">
-              <Download className="w-4 h-4" /> CSV
-            </button>
-            <button onClick={() => download('json')} disabled={!live} data-testid="hygiene-export-json"
-              className="btn btn-primary flex items-center gap-2 disabled:opacity-50">
-              <Download className="w-4 h-4" /> JSON
-            </button>
+            {message && <span className="text-sm text-green-300" data-testid="hygiene-signoff-message">{message}</span>}
+            {!viewId && canExport && (
+              <>
+                <button onClick={() => download('csv')} disabled={!live} data-testid="hygiene-export-csv"
+                  className="btn btn-primary flex items-center gap-2 disabled:opacity-50">
+                  <Download className="w-4 h-4" /> CSV
+                </button>
+                <button onClick={() => download('json')} disabled={!live} data-testid="hygiene-export-json"
+                  className="btn btn-primary flex items-center gap-2 disabled:opacity-50">
+                  <Download className="w-4 h-4" /> JSON
+                </button>
+              </>
+            )}
+            {/* the sign-off is a window, so the findings keep the screen's height */}
+            {!viewId && canSignoff && (
+              <button onClick={() => { setError(null); setSigning(true) }} disabled={!live} data-testid="hygiene-signoff-open"
+                className="btn btn-primary flex items-center gap-2 disabled:opacity-50">
+                <ShieldCheck className="w-4 h-4" /> {tr('clusterHygiene.signoff.button', 'Sign off')}
+              </button>
+            )}
           </div>
         )}
       </div>
 
       {tab === 'findings' && (
         <>
-          <div className="flex flex-wrap items-end gap-2">
+          <div className="shrink-0 flex flex-wrap items-end gap-2">
             <div className="w-44">
               <CustomDropdown options={severityOptions} value={severity} onChange={(v) => setSeverity(v as SeverityFilter)} testId="hygiene-filter-severity" />
             </div>
@@ -345,18 +397,14 @@ export default function ClusterHygiene() {
             />
           </div>
           {report?.truncated && (
-            <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm text-yellow-100">
+            <div className="shrink-0 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm text-yellow-100">
               {tr('clusterHygiene.truncated', 'Only the {{shown}} most severe of the {{total}} findings are listed; the cards and the Checks tab count all of them.', { shown: report.findings.length, total })}
             </div>
           )}
-          <div className="rounded-lg bg-slate-800/50 border border-slate-700 overflow-x-auto">
-            {isLoading || (viewId && !viewed) ? (
-              <div className="p-6 text-slate-400 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {tr('clusterHygiene.scanning', 'Scanning...')}</div>
-            ) : findings.length === 0 ? (
-              <div className="p-6 text-slate-400">{tr('clusterHygiene.empty', 'Nothing to show.')}</div>
-            ) : (
+          <div ref={findingsTable.containerRef} className="flex-1 min-h-0 flex flex-col rounded-lg bg-slate-800/50 border border-slate-700">
+            <div ref={findingsTable.bodyRef} className="overflow-x-auto flex-1 min-h-0">
               <table className="min-w-full text-sm" data-testid="hygiene-findings-table">
-                <thead className="text-slate-400">
+                <thead ref={findingsTable.theadRef} className="text-slate-400">
                   <tr className="whitespace-nowrap">
                     <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.severity', 'Severity')}</th>
                     <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.check', 'Check')}</th>
@@ -366,11 +414,20 @@ export default function ClusterHygiene() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pagedFindings.map((f, i) => {
+                  {isLoading || (viewId && !viewed) ? (
+                    <tr>
+                      <td colSpan={FINDING_COLUMNS} className="p-6 text-slate-400">
+                        <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {tr('clusterHygiene.scanning', 'Scanning...')}</span>
+                      </td>
+                    </tr>
+                  ) : findings.length === 0 ? (
+                    <tr><td colSpan={FINDING_COLUMNS} className="p-6 text-slate-400">{tr('clusterHygiene.empty', 'Nothing to show.')}</td></tr>
+                  ) : pagedFindings.map((f, i) => {
                     const onOpen = openFinding(f)
                     return (
                     <tr
                       key={`${f.check}-${f.kind}-${f.namespace}-${f.name}-${f.container}-${i}`}
+                      ref={i === 0 ? findingsTable.firstRowRef : undefined}
                       onClick={onOpen ?? undefined}
                       data-openable={onOpen ? 'true' : 'false'}
                       className={`border-t border-slate-700/60 text-slate-300 align-top ${onOpen ? 'cursor-pointer hover:bg-slate-700/30' : ''}`}
@@ -392,18 +449,24 @@ export default function ClusterHygiene() {
                     )
                   })}
                 </tbody>
+                <AdaptiveTableFillerRows count={findingsPerPage - pagedFindings.length} columnCount={FINDING_COLUMNS} cellClassName="py-2" />
               </table>
-            )}
-            {findings.length > 0 && (
-              <ListPager currentPage={page} totalPages={totalPages} total={findings.length} rowsPerPage={FINDINGS_PER_PAGE} onPageChange={setPage} showPageSize={false} testId="hygiene-pager" />
-            )}
+            </div>
+            <ListPager
+              currentPage={page}
+              totalPages={totalPages}
+              total={findings.length}
+              rowsPerPage={findingsPerPage}
+              onPageChange={(p) => setFindingsFirst((p - 1) * findingsPerPage)}
+              testId="hygiene-pager"
+            />
           </div>
         </>
       )}
 
       {tab === 'checks' && report && (
-        <div className="rounded-lg bg-slate-800/50 border border-slate-700 overflow-x-auto">
-          <table className="min-w-full text-sm" data-testid="hygiene-checks-table">
+        <div className="flex-1 min-h-0 overflow-auto rounded-lg bg-slate-800/50 border border-slate-700">
+          <table className="min-w-full text-sm" data-testid="hygiene-checks-table" data-list-bounded="check catalog">
             <thead className="text-slate-400">
               <tr className="whitespace-nowrap">
                 <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.check', 'Check')}</th>
@@ -435,14 +498,10 @@ export default function ClusterHygiene() {
       )}
 
       {tab === 'history' && (
-        <div className="rounded-lg bg-slate-800/50 border border-slate-700 overflow-x-auto">
-          {historyLoading ? (
-            <div className="p-6 text-slate-400 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {tr('clusterHygiene.loading', 'Loading...')}</div>
-          ) : history.length === 0 ? (
-            <div className="p-6 text-slate-400">{tr('clusterHygiene.noHistory', 'This cluster has not been signed off yet.')}</div>
-          ) : (
-            <table className="min-w-full text-sm">
-              <thead className="text-slate-400">
+        <div ref={historyTable.containerRef} className="flex-1 min-h-0 flex flex-col rounded-lg bg-slate-800/50 border border-slate-700">
+          <div ref={historyTable.bodyRef} className="overflow-x-auto flex-1 min-h-0">
+            <table className="min-w-full text-sm" data-testid="hygiene-history-table">
+              <thead ref={historyTable.theadRef} className="text-slate-400">
                 <tr>
                   <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.reviewedAt', 'Signed off')}</th>
                   <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.reviewedBy', 'By')}</th>
@@ -452,8 +511,16 @@ export default function ClusterHygiene() {
                 </tr>
               </thead>
               <tbody>
-                {history.map((h) => (
-                  <tr key={h.id} className="border-t border-slate-700/60 text-slate-300" data-testid="hygiene-history-row">
+                {historyLoading ? (
+                  <tr>
+                    <td colSpan={HISTORY_COLUMNS} className="p-6 text-slate-400">
+                      <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {tr('clusterHygiene.loading', 'Loading...')}</span>
+                    </td>
+                  </tr>
+                ) : history.length === 0 ? (
+                  <tr><td colSpan={HISTORY_COLUMNS} className="p-6 text-slate-400">{tr('clusterHygiene.noHistory', 'This cluster has not been signed off yet.')}</td></tr>
+                ) : history.map((h, i) => (
+                  <tr key={h.id} ref={i === 0 ? historyTable.firstRowRef : undefined} className="border-t border-slate-700/60 text-slate-300" data-testid="hygiene-history-row">
                     <td className="px-3 py-2 whitespace-nowrap text-ink" title={utcTitle(h.reviewed_at)}>{formatWhen(h.reviewed_at)}</td>
                     <td className="px-3 py-2">{h.reviewed_by_email}</td>
                     <td className="px-3 py-2">{h.note || '-'}</td>
@@ -466,40 +533,51 @@ export default function ClusterHygiene() {
                   </tr>
                 ))}
               </tbody>
+              <AdaptiveTableFillerRows count={historyTable.rowsPerPage - history.length} columnCount={HISTORY_COLUMNS} cellClassName="py-2" />
             </table>
-          )}
+          </div>
+          <ListPager
+            currentPage={historyShownPage}
+            totalPages={Math.max(1, Math.ceil(historyTotal / historyLimit))}
+            total={historyTotal}
+            rowsPerPage={historyLimit}
+            onPageChange={(p) => setHistoryFirst((p - 1) * historyLimit)}
+            testId="hygiene-history-pager"
+          />
         </div>
       )}
 
-      {!viewId && canSignoff && (
-        <div className="rounded-lg bg-slate-800/50 border border-slate-700 p-4 space-y-2" data-testid="hygiene-signoff-panel">
-          <div className="text-sm font-medium text-ink">{tr('clusterHygiene.signoff.title', 'Sign off this cluster')}</div>
-          <p className="text-xs text-slate-400">
-            {tr('clusterHygiene.signoff.hint', 'Stores the report as it stands with your name, the time and your note. Fix or exempt findings first (annotations kubeast.io/hygiene-exempt and kubeast.io/hygiene-exempt-reason).')}
-          </p>
+      {signWindow && (
+        <ModalFrame
+          size="md"
+          title={tr('clusterHygiene.signoff.title', 'Sign off this cluster')}
+          subtitle={tr('clusterHygiene.signoff.hint', 'Stores the report as it stands with your name, the time and your note. Fix or exempt findings first (annotations kubeast.io/hygiene-exempt and kubeast.io/hygiene-exempt-reason).')}
+          onClose={() => setSigning(false)}
+          busy={signoff.isPending}
+          testId="hygiene-signoff-panel"
+          footerStart={error ? <span className="text-red-300">{error}</span> : undefined}
+          footer={
+            <>
+              <button type="button" onClick={() => setSigning(false)} disabled={signoff.isPending} className={modalButton.cancel}>
+                {tr('common.cancel', 'Cancel')}
+              </button>
+              <button type="button" onClick={() => signoff.mutate()} disabled={signoff.isPending || !live} data-testid="hygiene-signoff" className={modalButton.primary}>
+                {signoff.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                {tr('clusterHygiene.signoff.button', 'Sign off')}
+              </button>
+            </>
+          }
+        >
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             maxLength={2000}
-            rows={2}
+            rows={4}
             placeholder={tr('clusterHygiene.signoff.notePlaceholder', 'Findings and actions taken (optional)')}
             data-testid="hygiene-signoff-note"
             className="w-full px-3 py-2 bg-slate-700 text-ink rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 text-sm"
           />
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => signoff.mutate()}
-              disabled={signoff.isPending || !live}
-              data-testid="hygiene-signoff"
-              className="rounded-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-50 px-3 py-1.5 text-sm text-white flex items-center gap-2"
-            >
-              {signoff.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-              {tr('clusterHygiene.signoff.button', 'Sign off')}
-            </button>
-            {message && <span className="text-sm text-green-300" data-testid="hygiene-signoff-message">{message}</span>}
-            {error && <span className="text-sm text-red-300">{error}</span>}
-          </div>
-        </div>
+        </ModalFrame>
       )}
     </div>
   )

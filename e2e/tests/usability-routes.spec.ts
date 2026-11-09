@@ -113,8 +113,10 @@ test.describe('Usability and routes', () => {
     const total = (await (await audit).json()).total as number
     await expect(page.getByTestId('audit-pager')).toContainText(new RegExp(`of ${total}(?!\\d)|^${total}개 중`), { timeout: 15_000 })
 
+    const recordings = page.waitForResponse((r) => r.url().includes('/api/v1/cluster/recordings?'))
     await page.goto('/admin/session-recordings')
-    await expect(page.getByTestId('recordings-pager')).toContainText(/^1–\d+|Showing 0 of 0|0개 중 0/, { timeout: 15_000 })
+    const counted = Number((await recordings).headers()['x-kubeast-total'])
+    await expect(page.getByTestId('recordings-pager')).toContainText(counted ? new RegExp(`of ${counted}(?!\\d)|^${counted}개 중`) : /Showing 0 of 0|0개 중 0/, { timeout: 15_000 })
   })
 
   test('an Idle workload is neutral, not a warning', async ({ page }) => {

@@ -1,4 +1,5 @@
 import { client } from './client'
+import { totalHeader } from './access_requests'
 
 // Cluster hygiene report (k8s-service /api/v1/hygiene, gateway /api/v1/cluster/hygiene).
 // Every call names its cluster explicitly: the page picks one, not the header selector.
@@ -101,9 +102,11 @@ export const hygieneApi = {
     return data
   },
 
-  listHygieneReviews: async (cluster: string): Promise<HygieneReview[]> => {
-    const { data } = await client.get('/cluster/hygiene/history', { params: { cluster } })
-    return Array.isArray(data) ? data : []
+  // One page of a cluster's sign-offs, newest first, and how many it has (X-Kubeast-Total).
+  listHygieneReviews: async (cluster: string, page: { limit: number; offset: number }): Promise<{ items: HygieneReview[]; total: number }> => {
+    const { data, headers } = await client.get('/cluster/hygiene/history', { params: { cluster, ...page } })
+    if (!Array.isArray(data)) throw new Error('Invalid hygiene history response')
+    return { items: data, total: totalHeader(headers) }
   },
 
   getHygieneSnapshot: async (cluster: string, id: string): Promise<HygieneReview> => {
