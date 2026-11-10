@@ -409,7 +409,7 @@ export default function AdminUsers() {
             <p className="mt-2 text-sm text-slate-300" data-testid="dormant-sweep-result">{sweepMessage}</p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {pendingRows.length > 0 && (
             <button
               type="button"
@@ -418,7 +418,7 @@ export default function AdminUsers() {
             >
               <Clock className="w-4 h-4" />
               {tr('adminUsers.pendingBtn', 'Pending')}
-              <span className="rounded-full bg-amber-500/90 px-1.5 text-[10px] font-semibold text-slate-900">
+              <span className="rounded-md bg-amber-950 px-1.5 text-xs font-semibold text-amber-300">
                 {pendingRows.length}
               </span>
             </button>
@@ -484,7 +484,7 @@ export default function AdminUsers() {
         />
       </div>
 
-      <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-2xl border border-slate-700 bg-slate-800/50">
+      <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-xl border border-slate-700 bg-slate-800">
         <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
         <table className="w-full text-sm">
           <thead ref={theadRef} className="bg-slate-800 text-slate-400">
@@ -738,7 +738,7 @@ export default function AdminUsers() {
       {pendingModalOpen && (
         <ModalOverlay onClose={() => setPendingModalOpen(false)}>
           <div
-            className="w-full max-w-2xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
+            className="w-full max-w-2xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-hairline bg-slate-800 p-5 shadow-xl"
             role="dialog"
             aria-modal="true"
             data-testid="admin-users-pending-window"
@@ -776,7 +776,7 @@ export default function AdminUsers() {
                     className="h-10 w-full pl-9 pr-3 bg-slate-900/40 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:border-primary-500"
                   />
                 </div>
-                <div className="mt-3 rounded-xl border border-slate-700 overflow-hidden">
+                <div className="mt-3 rounded-lg border border-hairline overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-slate-800 text-slate-400">
                       <tr className="text-left text-slate-300">
@@ -837,7 +837,7 @@ export default function AdminUsers() {
                   </div>
                 )}
 
-                <div className="mt-4 flex items-center gap-3">
+                <div className="mt-4 flex flex-wrap items-center gap-3">
                   {pendingSelectedIds.size > 0 && (
                     <span className="text-xs text-slate-400" data-testid="admin-users-pending-chosen">
                       {tr('adminUsers.bulk.selectedEveryPage', '{{count}} selected, on every page', { count: pendingSelectedIds.size })}
@@ -851,7 +851,7 @@ export default function AdminUsers() {
                     type="button"
                     onClick={() => handlePendingBulkApprove('Member')}
                     disabled={pendingSelectedIds.size === 0 || bulkUpdateRoleMutation.isPending}
-                    className="rounded-lg bg-green-600/80 px-4 py-2 text-xs font-medium text-ink hover:bg-green-600 disabled:opacity-40"
+                    className="rounded-lg bg-green-600 px-4 py-2 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-40"
                   >
                     {tr('adminUsers.bulk.approveMember', 'Approve as Member')}
                   </button>
@@ -859,7 +859,7 @@ export default function AdminUsers() {
                     type="button"
                     onClick={() => handlePendingBulkApprove('Admin')}
                     disabled={pendingSelectedIds.size === 0 || bulkUpdateRoleMutation.isPending}
-                    className="rounded-lg bg-primary-600/80 px-4 py-2 text-xs font-medium text-ink hover:bg-primary-600 disabled:opacity-40"
+                    className="rounded-lg bg-primary-600 px-4 py-2 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-40"
                   >
                     {tr('adminUsers.bulk.approveAdmin', 'Approve as Admin')}
                   </button>
@@ -884,7 +884,7 @@ export default function AdminUsers() {
       {bulkUploadModalOpen && (
         <ModalOverlay onClose={() => { setBulkUploadModalOpen(false); setBulkUploadResult(null) }}>
           <div
-            className="w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
+            className="w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-hairline bg-slate-800 p-5 shadow-xl"
             role="dialog"
             aria-modal="true"
             onClick={(e) => e.stopPropagation()}
@@ -897,8 +897,8 @@ export default function AdminUsers() {
             </p>
 
             <div className="mt-5 space-y-4">
-              <div className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-3">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-600/20 text-xs font-bold text-primary-400">1</span>
+              <div className="flex flex-wrap items-center gap-3 border-b border-hairline py-3">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-medium text-slate-300">1</span>
                 <span className="flex-1 text-sm text-slate-300">{tr('adminUsers.bulkStep1', 'Download CSV template')}</span>
                 <button
                   type="button"
@@ -910,8 +910,8 @@ export default function AdminUsers() {
                 </button>
               </div>
 
-              <div className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-3">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-600/20 text-xs font-bold text-primary-400">2</span>
+              <div className="flex flex-wrap items-center gap-3 border-b border-hairline py-3">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-medium text-slate-300">2</span>
                 <span className="flex-1 text-sm text-slate-300">{tr('adminUsers.bulkStep2', 'Upload filled CSV file')}</span>
                 <input
                   ref={fileInputRef}
@@ -935,7 +935,7 @@ export default function AdminUsers() {
 
               <div className="rounded-lg border border-slate-700 bg-slate-950/40 px-4 py-3">
                 <p className="text-xs text-slate-500 mb-1">{tr('adminUsers.bulkFormat', 'CSV format:')}</p>
-                <code className="text-xs text-slate-400" data-testid="admin-users-bulk-format">{BULK_CSV_HEADER}</code>
+                <code className="text-xs text-slate-400 break-all" data-testid="admin-users-bulk-format">{BULK_CSV_HEADER}</code>
               </div>
 
               {bulkUploadResult && (
@@ -996,7 +996,7 @@ export default function AdminUsers() {
       {resetResult && (
         <ModalOverlay onClose={closeResetResult}>
           <div
-            className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
+            className="w-full max-w-md rounded-xl border border-hairline bg-slate-800 p-5 shadow-xl"
             role="dialog"
             aria-modal="true"
             data-testid="reset-password-result"
@@ -1010,7 +1010,7 @@ export default function AdminUsers() {
                 <h2 className="text-lg font-semibold text-ink">
                   {tr('adminUsers.resetResult.title', 'Password reset')}
                 </h2>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-400 break-all">
                   {tr('adminUsers.resetResult.target', 'Target: {{target}}', { target: resetResult.targetLabel })}
                 </p>
               </div>
@@ -1059,7 +1059,7 @@ export default function AdminUsers() {
               <button
                 type="button"
                 onClick={closeResetResult}
-                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-500"
+                className="btn btn-primary text-sm"
                 data-testid="reset-password-done"
               >
                 {resetResult.self

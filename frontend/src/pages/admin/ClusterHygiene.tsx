@@ -233,7 +233,7 @@ export default function ClusterHygiene() {
   } : null, [signWindow, cluster, error])
 
   const tabClass = (active: boolean) =>
-    `rounded-sm px-3 py-1.5 text-sm flex items-center gap-1 ${active ? 'bg-primary-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`
+    `rounded-lg px-3 py-1.5 text-sm flex items-center gap-1 ${active ? 'bg-primary-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`
   const badge = (f: { severity: HygieneSeverity; exempt?: boolean }, count?: number) => (
     <span className={`inline-flex rounded-sm px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap ${f.exempt ? 'bg-slate-700 text-slate-300' : SEVERITY_TONE[f.severity]}`}>
       {f.exempt ? tr('clusterHygiene.exempt', 'Exempt') : severityLabel(f.severity)}{count !== undefined ? ` ${count}` : ''}
@@ -252,14 +252,14 @@ export default function ClusterHygiene() {
       <div className="page-head items-start gap-4 shrink-0">
         <div>
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-6 h-6 text-primary-400" />
+            <ShieldCheck className="w-6 h-6 text-slate-400" />
             <h1 className="text-3xl font-semibold text-ink">{tr('clusterHygiene.title', 'Cluster hygiene')}</h1>
           </div>
           <p className="text-slate-400 text-sm mt-1">
             {tr('clusterHygiene.subtitle', 'Configuration risks read from the cluster as you: Pod Security Standards, image tags, resources, namespace policy, ServiceAccount tokens, RBAC, TLS expiry and readiness for the next Kubernetes minor. Review, export, sign off.')}
           </p>
         </div>
-        <div className="flex items-end gap-2">
+        <div className="flex flex-wrap items-end gap-2">
           <div className="w-56">
             <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('clusterHygiene.cluster', 'Cluster')}</label>
             <CustomDropdown
@@ -368,7 +368,7 @@ export default function ClusterHygiene() {
           <History className="w-4 h-4" /> {tr('clusterHygiene.tab.history', 'Past sign-offs')}
         </button>
         {(message || (!viewId && (canExport || canSignoff))) && (
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             {message && <span className="text-sm text-green-300" data-testid="hygiene-signoff-message">{message}</span>}
             {!viewId && canExport && (
               <>
@@ -408,7 +408,7 @@ export default function ClusterHygiene() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={tr('clusterHygiene.search', 'Search Namespace, name, message, kind, container, exemption reason...')}
-              className="h-10 px-3 bg-slate-700 text-ink rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 text-sm flex-1 min-w-48"
+              className="h-10 px-3 bg-slate-900 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 text-sm flex-1 min-w-48"
             />
           </div>
           {report?.truncated && (
@@ -595,7 +595,7 @@ export default function ClusterHygiene() {
             rows={4}
             placeholder={tr('clusterHygiene.signoff.notePlaceholder', 'Findings and actions taken (optional)')}
             data-testid="hygiene-signoff-note"
-            className="w-full px-3 py-2 bg-slate-700 text-ink rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 text-sm"
+            className="w-full px-3 py-2 bg-slate-900 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 text-sm"
           />
         </ModalFrame>
       )}

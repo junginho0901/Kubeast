@@ -38,12 +38,12 @@ export default function ModelConfigCard({
     <div
       className={`group relative rounded-xl border px-4 py-3 transition ${
         isEditing
-          ? 'border-primary-500/50 bg-primary-500/5 ring-1 ring-primary-500/20'
+          ? 'border-primary-500/50 bg-slate-800'
           : isActive
-            ? 'border-emerald-500/50 bg-emerald-500/5 ring-1 ring-emerald-500/20'
+            ? 'border-slate-700 bg-slate-800'
             : cfg.enabled
-              ? 'border-slate-800 bg-slate-900/60 hover:border-slate-700'
-              : 'border-slate-800/50 bg-slate-900/30 opacity-60'
+              ? 'border-slate-700 bg-slate-800 hover:border-slate-500'
+              : 'border-slate-700/50 bg-slate-800/50 opacity-60'
       }`}
     >
       {isActive && !isEditing && (
@@ -53,12 +53,12 @@ export default function ModelConfigCard({
         <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl bg-primary-500" />
       )}
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <span className="text-lg">{provDef?.icon || '⚙️'}</span>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-slate-200">{cfg.name}</span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="break-all text-sm font-semibold text-slate-200">{cfg.name}</span>
 
               {isActive && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
@@ -68,7 +68,7 @@ export default function ModelConfigCard({
               )}
 
               {cfg.tier === 'economy' && (
-                <span className="inline-flex rounded-full border border-primary-500/40 bg-primary-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary-300" data-testid="tier-economy">
+                <span className="inline-flex rounded-full border border-slate-600 bg-slate-700/50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300" data-testid="tier-economy">
                   {tr('admin.aiModels.tierEconomy', 'Economy')}
                 </span>
               )}
@@ -79,7 +79,7 @@ export default function ModelConfigCard({
                 </span>
               )}
             </div>
-            <div className="text-xs text-slate-500 mt-0.5">
+            <div className="break-all text-xs text-slate-500 mt-0.5">
               {provDef?.label || cfg.provider} · <code className="text-slate-400">{getModelLabel(cfg.provider, cfg.model)}</code>
               {keyVariable
                 ? <span className="text-emerald-400 ml-1">· 🔑 env: {keyVariable}</span>
@@ -96,7 +96,7 @@ export default function ModelConfigCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           {cfg.enabled && !isActive && (
             <button
               onClick={async () => {

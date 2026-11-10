@@ -88,7 +88,7 @@ export default function AdminClusters() {
       <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink flex items-center gap-2">
-            <Server className="w-6 h-6 text-primary-500" />
+            <Server className="w-6 h-6 text-slate-400" />
             {tr('cluster.admin.title', 'Clusters')}
           </h1>
           <p className="text-sm text-slate-400 mt-1">
@@ -282,10 +282,10 @@ export default function AdminClusters() {
 
       {deleteTarget && (
         <ModalOverlay onClose={() => deleteMutation.isPending || setDeleteTarget(null)}>
-          <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 p-6 shadow-2xl">
-            <h3 className="text-lg font-bold text-ink">{tr('cluster.delete.title', 'Delete cluster')}</h3>
+          <div className="w-full max-w-md rounded-xl border border-hairline bg-slate-800 p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-ink">{tr('cluster.delete.title', 'Delete cluster')}</h3>
             <p className="mt-2 text-sm text-slate-300">
-              {tr('cluster.delete.confirm', 'Remove')} <span className="font-semibold text-ink">{deleteTarget.display_name}</span>
+              {tr('cluster.delete.confirm', 'Remove')} <span className="break-all font-semibold text-ink">{deleteTarget.display_name}</span>
               {deleteTarget.is_self_cluster
                 ? ` — ${tr('cluster.delete.self', 'removed from the multi-cluster view only.')}`
                 : ` — ${tr('cluster.delete.external', 'its stored kubeconfig is deleted too.')}`}
@@ -295,7 +295,7 @@ export default function AdminClusters() {
                 {t('cluster.delete.failed', { defaultValue: 'Not deleted: {{reason}}', reason: failureText(deleteMutation.error) })}
               </p>
             )}
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setDeleteTarget(null)}
@@ -308,7 +308,7 @@ export default function AdminClusters() {
                 data-testid="delete-confirm"
                 onClick={() => deleteMutation.mutate(deleteTarget.id)}
                 disabled={deleteMutation.isPending}
-                className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-500 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {deleteMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
                 {tr('cluster.delete.submit', 'Delete')}

@@ -83,7 +83,7 @@ export default function AdminOrganizations() {
     inputValue: string,
     setInputValue: (v: string) => void,
   ) => (
-    <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-2xl border border-slate-700 bg-slate-800/50 p-5">
+    <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-xl border border-slate-700 bg-slate-800 p-5">
       <h2 className="text-lg font-semibold text-ink shrink-0">{title}</h2>
       <p className="mt-1 text-sm text-slate-400 shrink-0">{subtitle}</p>
 
@@ -117,7 +117,7 @@ export default function AdminOrganizations() {
             }}
             aria-invalid={nameMissing || undefined}
             aria-describedby={nameMissing ? 'team-name-problem' : undefined}
-            className="flex-1 h-10 rounded-lg border border-slate-700 bg-slate-950/40 px-3 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+            className="min-w-0 flex-1 h-10 rounded-lg border border-control bg-slate-900 px-3 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             placeholder={tr('adminOrg.inputPlaceholder', 'Enter name...')}
           />
           <button
@@ -239,7 +239,7 @@ export default function AdminOrganizations() {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="shrink-0">
-        <h1 className="text-3xl font-semibold text-ink">{tr('adminOrg.title', 'Team management')}</h1>
+        <h1 className="text-[28px] leading-9 font-medium text-ink">{tr('adminOrg.title', 'Team management')}</h1>
         <p className="mt-2 text-slate-400">
           {tr('adminOrg.subtitle', 'Manage the list of Teams that users can select during registration.')}
         </p>
@@ -257,18 +257,18 @@ export default function AdminOrganizations() {
       {selectedOrg && (
         <ModalOverlay onClose={() => setSelectedOrg(null)}>
           <div
-            className="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl max-h-[80vh] flex flex-col"
+            className="w-full max-w-2xl rounded-xl border border-hairline bg-slate-800 p-5 shadow-xl max-h-[80vh] flex flex-col"
             role="dialog"
             aria-modal="true"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between mb-5">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-500/10 border border-primary-500/20">
-                  <Users className="h-5 w-5 text-primary-400" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-700">
+                  <Users className="h-5 w-5 text-slate-400" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-ink">{selectedOrg.name}</h2>
+                  <h2 className="text-lg font-semibold text-ink break-all">{selectedOrg.name}</h2>
                   <p className="text-sm text-slate-400">
                     {tr('adminOrg.teamMembers', 'Team members')}
                     <span className="ml-2 text-slate-500">({orgMembers.length})</span>
@@ -285,7 +285,7 @@ export default function AdminOrganizations() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto rounded-xl border border-slate-700/50">
+            <div className="flex-1 min-h-0 overflow-auto rounded-lg border border-hairline">
               {orgMembers.length === 0 ? (
                 <div className="p-8 text-center text-sm text-slate-500">
                   {tr('adminOrg.noMembers', 'No members in this organization.')}
