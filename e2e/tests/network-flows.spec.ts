@@ -39,7 +39,8 @@ type Group = { source: any; destination: any; verdict: string; drop_reason?: str
 
 test.describe('Network flows (Hubble Relay)', () => {
   test.describe.configure({ mode: 'serial' })
-  test.setTimeout(180_000)
+  // a cluster just started waits up to five minutes for its own drops to leave the window (settled)
+  test.setTimeout(480_000)
   const id = Date.now().toString(36)
   const userIds: string[] = []
   let admin = ''
@@ -63,6 +64,19 @@ test.describe('Network flows (Hubble Relay)', () => {
     return { status: res.status(), body: await res.json() }
   }
 
+  // Cilium drops packets of its own while it starts (STALE_OR_UNROUTABLE_IP), which a window reaching back to then
+  // holds beside the policy's: wait until the last minute's drops from stranger are the policy's alone, and read
+  // that minute. What is checked stays the same; only a cluster up for less than five minutes waits.
+  let settledOnce = false
+  async function settled(request: APIRequestContext): Promise<void> {
+    if (settledOnce) return
+    await expect.poll(async () => {
+      const { body } = await flows(request, admin, { kind: 'Deployment', name: 'stranger', since: '1m', verdict: 'dropped' })
+      return [...new Set(((body.groups ?? []) as Group[]).map((g) => g.drop_reason))].join(',')
+    }, { message: 'the last minute of drops from stranger holds only the policy\'s', timeout: 360_000, intervals: [10_000] }).toBe('POLICY_DENIED')
+    settledOnce = true
+  }
+
   test.beforeAll(async ({ request }) => {
     admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const features = await (await request.get(`/api/v1/cluster/features?cluster=${CLUSTER}`, { headers: bearer(admin) })).json()
@@ -79,10 +93,11 @@ test.describe('Network flows (Hubble Relay)', () => {
     // what the cluster has: the policy and the three workloads
     expect(kubectl!(`-n ${NS} get networkpolicy web-only-client -o jsonpath={.spec.ingress[0].from[0].podSelector.matchLabels.app}`)).toBe('client')
     const reader = await user(request, 'read', { role: 'Read' })
+    await settled(request)
     // the traffic runs every 3 s; wait until both connections are in the window
     let groups: Group[] = []
     await expect.poll(async () => {
-      const { status, body } = await flows(request, reader.token, { kind: 'Deployment', name: 'web', since: '5m' })
+      const { status, body } = await flows(request, reader.token, { kind: 'Deployment', name: 'web', since: '1m' })
       expect(status, JSON.stringify(body)).toBe(200)
       groups = body.groups
       return groups.some((g) => g.verdict === 'DROPPED') && groups.some((g) => g.verdict === 'FORWARDED')
@@ -143,9 +158,10 @@ test.describe('Network flows (Hubble Relay)', () => {
     test.skip(!ready, `no network flows for cluster ${CLUSTER} (scripts/kind-cilium.sh up)`)
     const config = await request.get('/api/v1/ai/mcp/config', { headers: bearer(admin) })
     test.skip(!(config.ok() && (await config.json()).enabled), 'the MCP server is off (mcp.enabled)')
+    await settled(request)
     const res = await request.post(MCP, {
       headers: { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json', Authorization: `Bearer ${admin}` },
-      data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'network_flows', arguments: { cluster: CLUSTER, namespace: NS, workload_kind: 'Deployment', workload_name: 'stranger', verdict: 'DROPPED', since: '5m' } } },
+      data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'network_flows', arguments: { cluster: CLUSTER, namespace: NS, workload_kind: 'Deployment', workload_name: 'stranger', verdict: 'DROPPED', since: '1m' } } },
     })
     expect(res.status()).toBe(200)
     const result = (await res.json()).result
