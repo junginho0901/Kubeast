@@ -18,6 +18,8 @@ import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { failureOf } from '@/hooks/useRefresh'
 import { failureText } from '@/utils/failureText'
 import { useConfirm } from '@/services/confirm'
+import { ActionFailure } from '@/components/ActionFailure'
+import { useDownload } from '@/hooks/useDownload'
 
 const SERVICES = ['', 'auth', 'k8s', 'helm', 'ai', 'admin']
 const RESULTS = ['', 'success', 'failure']
@@ -237,17 +239,11 @@ export default function AdminAudit() {
   }
 
   // CSV of everything matching the applied filter (not just this page), the
-  // rows the screen counts. A same-origin link download carries the session
-  // cookie; the server names the file.
+  // rows the screen counts. Taken with the session cookie (hooks/useDownload), so a refusal says why here; the server
+  // names the file.
   const exportCut = auditExportCut(data)
-  const exportCsv = () => {
-    const a = document.createElement('a')
-    a.href = auditExportHref(filter, filter.as_of ?? (isPlaceholderData ? undefined : data?.as_of))
-    a.download = ''
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-  }
+  const { start: startDownload, busy: downloading, failure: downloadFailure } = useDownload()
+  const exportCsv = () => void startDownload('csv', auditExportHref(filter, filter.as_of ?? (isPlaceholderData ? undefined : data?.as_of)), 'audit-logs.csv')
 
   const resultBadge = (result: string) => {
     const isSuccess = result === 'success'
@@ -280,10 +276,11 @@ export default function AdminAudit() {
         <div className="flex items-center gap-2">
           <button
             onClick={exportCsv}
+            disabled={!!downloading}
             data-testid="audit-export-csv"
-            className="btn btn-primary flex items-center gap-2"
+            className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
           >
-            {tr('adminAudit.exportCsv', 'CSV 내보내기')}
+            {downloading ? tr('common.downloading', 'Downloading...') : tr('adminAudit.exportCsv', 'CSV 내보내기')}
           </button>
           <button
             onClick={refresh}
@@ -294,6 +291,8 @@ export default function AdminAudit() {
           </button>
         </div>
       </div>
+
+      <ActionFailure error={downloadFailure?.error} action="download" testId="audit-export-failed" className="shrink-0" />
 
       {integrity?.enabled && (
         <div

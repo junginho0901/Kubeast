@@ -2200,6 +2200,7 @@
     "logsReadFailed": "Could not read the logs: {{reason}}",
     "copyFailed": "Not copied: the browser did not take it. Select the text and copy it yourself.",
     "notCopied": "Not copied",
+    "downloading": "Downloading...",
     "failed": {
       "delete": "Not deleted: {{reason}}",
       "save": "Not saved: {{reason}}",

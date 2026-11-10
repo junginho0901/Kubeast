@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Download, FileText, X } from 'lucide-react'
+import { Download, FileText, Loader2, X } from 'lucide-react'
 
+import { ActionFailure } from '@/components/ActionFailure'
 import { ModalOverlay } from '@/components/ModalOverlay'
+import { useDownload } from '@/hooks/useDownload'
 import { recordingCastUrl, recordingDownloadUrl, recordingTextUrl } from '@/services/api/recordings'
 
 // Replays a terminal session recording (asciicast) in the browser. The player
@@ -22,6 +24,9 @@ export default function RecordingPlayerModal({ recordingId, title, onClose }: Pr
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
   const holder = useRef<HTMLDivElement>(null)
   const [error, setError] = useState<string | null>(null)
+  // the .cast and the text are taken as files with one fetch each: a refusal says why in the window, not in a tab
+  // that the error's JSON would open
+  const { start: startDownload, busy: downloading, failure: downloadFailure } = useDownload()
 
   useEffect(() => {
     let player: PlayerHandle | null = null
@@ -63,25 +68,32 @@ export default function RecordingPlayerModal({ recordingId, title, onClose }: Pr
             {title && <p className="text-xs text-slate-400 truncate">{title}</p>}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <a
-              href={recordingDownloadUrl(recordingId)}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
+            <button
+              type="button"
+              onClick={() => void startDownload('cast', recordingDownloadUrl(recordingId), `${recordingId}.cast`)}
+              disabled={!!downloading}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"
               data-testid="recording-download-cast"
             >
-              <Download className="w-3.5 h-3.5" /> .cast
-            </a>
-            <a
-              href={recordingTextUrl(recordingId)}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
+              {downloading === 'cast' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              {downloading === 'cast' ? tr('common.downloading', 'Downloading...') : '.cast'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void startDownload('text', recordingTextUrl(recordingId), `${recordingId}.txt`)}
+              disabled={!!downloading}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-600 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"
               data-testid="recording-download-text"
             >
-              <FileText className="w-3.5 h-3.5" /> {tr('recordings.player.text', 'Text')}
-            </a>
+              {downloading === 'text' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+              {downloading === 'text' ? tr('common.downloading', 'Downloading...') : tr('recordings.player.text', 'Text')}
+            </button>
             <button type="button" onClick={onClose} className="text-slate-400 hover:text-ink" aria-label={tr('recordings.player.close', 'Close')}>
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
+        <ActionFailure error={downloadFailure?.error} action="download" testId="recording-download-failed" className="mb-3" />
         {error ? (
           <p className="text-sm text-red-300">{error}</p>
         ) : (

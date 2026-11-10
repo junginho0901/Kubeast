@@ -138,7 +138,7 @@ export const accessReviewApi = {
     return data
   },
 
-  // A same-origin link download carries the session cookie; the server names the file.
+  // Taken with the session cookie (hooks/useDownload), so a refusal says why on the page; the server names the file.
   accessReviewExportUrl: (section: AccessReviewSection, opts: { since?: string; reviewId?: string } = {}): string => {
     const params = new URLSearchParams({ section })
     if (opts.since) params.set('since', opts.since)

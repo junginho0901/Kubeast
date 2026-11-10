@@ -24,6 +24,8 @@ import { utcTitle } from '@/utils/time'
 import { failureText } from '@/utils/failureText'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { failureOf } from '@/hooks/useRefresh'
+import { ActionFailure } from '@/components/ActionFailure'
+import { useDownload } from '@/hooks/useDownload'
 
 // Admin → Access review: the report of who has what (accounts, per-cluster
 // grants, API keys, temporary grants since the last review, roles) with the
@@ -203,14 +205,9 @@ export default function AccessReview() {
   const shown = pageOf(rows, tabPage, rowsPerPage)
   const setTabPage = (p: number) => setTabPaged({ key: tabPageKey, page: p })
 
-  const download = (section: AccessReviewSection) => {
-    const a = document.createElement('a')
-    a.href = api.accessReviewExportUrl(section, { reviewId: viewId ?? undefined, since: viewId ? undefined : report?.since })
-    a.download = ''
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-  }
+  const { start: startDownload, busy: downloading, failure: downloadFailure } = useDownload()
+  const download = (section: AccessReviewSection) =>
+    void startDownload(section, api.accessReviewExportUrl(section, { reviewId: viewId ?? undefined, since: viewId ? undefined : report?.since }), `access-review-${section}.csv`)
 
   const sectionLabel = (s: AccessReviewSection) => tr(`accessReview.section.${s}`, s)
   const summary = report?.summary
@@ -357,15 +354,18 @@ export default function AccessReview() {
             />
             <button
               onClick={() => download(tab)}
-              disabled={!report}
+              disabled={!report || !!downloading}
               data-testid="access-review-export"
               className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
             >
-              <Download className="w-4 h-4" /> CSV
+              {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {downloading ? tr('common.downloading', 'Downloading...') : 'CSV'}
             </button>
           </>
         )}
       </div>
+
+      <ActionFailure error={downloadFailure?.error} action="download" testId="access-review-export-failed" className="shrink-0" />
 
       {tab === 'access_requests' && cut && (
         <div className="shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200" data-testid="access-review-requests-cut">
