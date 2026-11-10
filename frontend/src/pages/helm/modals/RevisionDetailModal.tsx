@@ -33,22 +33,22 @@ export default function RevisionDetailModal({
   return (
     <ModalOverlay onClose={onClose}>
       <div
-        className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-4xl mx-auto"
+        className="bg-slate-800 border border-hairline rounded-xl shadow-2xl p-5 w-full max-w-4xl max-h-[calc(100vh-2rem)] overflow-y-auto mx-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-lg font-semibold text-ink mb-1">
           {t('helmReleaseDetail.revision.title', { rev: revision })}
         </h3>
-        <p className="text-sm text-slate-400 mb-4">
+        <p className="text-sm text-slate-400 mb-4 break-words">
           {namespace}/{name} — rev {revision}
           {revision === currentRevision && (
-            <span className="ml-2 rounded-sm bg-primary-600/30 px-1.5 py-0.5 text-[10px] text-primary-200">
+            <span className="ml-2 rounded-md bg-slate-700/50 px-1.5 py-0.5 text-xs text-primary-300">
               {t('helmReleaseDetail.history.current')}
             </span>
           )}
         </p>
 
-        <div className="flex gap-1 border-b border-slate-700 mb-3">
+        <div className="flex flex-wrap gap-1 border-b border-hairline mb-3">
           {(
             [
               ['manifest', t('helmReleaseDetail.tabs.manifest')],
@@ -82,7 +82,7 @@ export default function RevisionDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm text-slate-300 hover:text-ink border border-slate-600 rounded-lg hover:bg-slate-800"
+            className="btn btn-secondary h-9 text-sm"
           >
             {t('helmReleaseDetail.revision.close')}
           </button>
@@ -124,7 +124,7 @@ function SectionPane({
 
   const content = q.data?.content ?? ''
   return (
-    <pre className="max-h-[60vh] overflow-auto rounded-sm bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-slate-200 whitespace-pre">
+    <pre className="max-h-[60vh] overflow-auto rounded-lg bg-slate-900 border border-hairline px-3 py-2 text-xs text-slate-200 whitespace-pre">
       {content || t('common.none', 'None')}
     </pre>
   )

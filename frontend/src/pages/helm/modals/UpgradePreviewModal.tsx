@@ -63,44 +63,44 @@ export default function UpgradePreviewModal({
   return (
     <ModalOverlay onClose={applying ? () => undefined : onClose}>
       <div
-        className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-3xl mx-auto"
+        className="bg-slate-800 border border-hairline rounded-xl shadow-2xl p-5 w-full max-w-3xl max-h-[calc(100vh-2rem)] overflow-y-auto mx-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-lg font-semibold text-ink mb-1">
           {t('helmReleaseDetail.upgrade.title')}
         </h3>
-        <p className="text-sm text-slate-400 mb-4">
+        <p className="text-sm text-slate-400 mb-4 break-words">
           {t('helmReleaseDetail.upgrade.subtitle', { namespace, name })}
         </p>
         {!!preview.kept_masked?.length && (
-          <p className="text-sm text-slate-400 mb-4" data-testid="helm-upgrade-kept-masked">
+          <p className="text-sm text-slate-400 mb-4 break-words" data-testid="helm-upgrade-kept-masked">
             {t('helmReleaseDetail.upgrade.keptMasked', { names: preview.kept_masked.join(', ') })}
           </p>
         )}
         {changedMasked.length > 0 && (
-          <p className="text-sm text-slate-400 mb-4" data-testid="helm-upgrade-changed-masked">
+          <p className="text-sm text-slate-400 mb-4 break-words" data-testid="helm-upgrade-changed-masked">
             {t('helmReleaseDetail.upgrade.changedMasked', { names: changedMasked.join(', ') })}
           </p>
         )}
 
         {preview.failed ? (
-          <div className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200 whitespace-pre-wrap break-words" data-testid="helm-upgrade-preview-failed">{preview.failed}</div>
+          <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200 whitespace-pre-wrap break-words" data-testid="helm-upgrade-preview-failed">{preview.failed}</div>
         ) : noDiff ? (
-          <div className="rounded-sm border border-slate-600 bg-slate-800/40 px-3 py-4 text-sm text-slate-300">
+          <div className="rounded-lg border border-hairline bg-slate-900/40 px-3 py-4 text-sm text-slate-300">
             {noChange ? t('helmReleaseDetail.upgrade.noChange') : t('helmReleaseDetail.upgrade.noDiffValuesChange')}
           </div>
         ) : (
           <DiffView diff={diff} />
         )}
 
-        {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
+        {error && <p className="mt-3 text-sm text-red-300 break-words">{error}</p>}
 
-        <div className="flex justify-end gap-2 mt-4">
+        <div className="flex flex-wrap justify-end gap-2 mt-4">
           <button
             type="button"
             onClick={onClose}
             disabled={applying}
-            className="px-4 py-2 text-sm text-slate-300 hover:text-ink border border-slate-600 rounded-lg hover:bg-slate-800 disabled:opacity-50"
+            className="btn btn-secondary h-9 text-sm disabled:opacity-50"
           >
             {t('helmReleaseDetail.upgrade.cancel')}
           </button>
@@ -108,7 +108,7 @@ export default function UpgradePreviewModal({
             type="button"
             onClick={() => applyMutation.mutate()}
             disabled={applying || noChange || !!preview.failed}
-            className="px-4 py-2 text-sm bg-primary-600 hover:bg-primary-700 text-white rounded-lg disabled:opacity-40 inline-flex items-center gap-2"
+            className="btn btn-primary h-9 text-sm disabled:opacity-40 inline-flex items-center gap-2"
           >
             {applying && <Loader2 className="w-4 h-4 animate-spin" />}
             {applying

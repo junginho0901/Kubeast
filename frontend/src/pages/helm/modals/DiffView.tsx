@@ -26,7 +26,7 @@ export default function DiffView({ diff }: { diff: string }) {
 
   if (!html) {
     return (
-      <pre className="max-h-[50vh] overflow-auto rounded-sm bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-slate-200 whitespace-pre">
+      <pre className="max-h-[50vh] overflow-auto rounded-lg bg-slate-900 border border-hairline px-3 py-2 text-xs text-slate-200 whitespace-pre">
         {diff || t('common.none', 'None')}
       </pre>
     )
@@ -34,7 +34,7 @@ export default function DiffView({ diff }: { diff: string }) {
 
   return (
     <div
-      className="helm-diff2html max-h-[60vh] overflow-auto rounded-sm border border-slate-700 bg-slate-950"
+      className="helm-diff2html max-h-[60vh] overflow-auto rounded-lg border border-hairline bg-slate-900"
       dangerouslySetInnerHTML={{ __html: html }}
     />
   )

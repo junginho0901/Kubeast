@@ -121,9 +121,9 @@ export default function HelmReleasesPage() {
     const n = (v: number) => (helmForbidden || !Array.isArray(data) ? NOT_COUNTED : v)
     return [
       [t('helmReleases.stats.total'), n(stats.total), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [t('helmReleases.stats.deployed'), n(stats.deployed), 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
-      [t('helmReleases.stats.failed'), n(stats.failed), 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
-      [t('helmReleases.stats.pending'), n(stats.pending), 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
+      [t('helmReleases.stats.deployed'), n(stats.deployed), 'border-slate-700 bg-slate-900/50', 'text-emerald-300'],
+      [t('helmReleases.stats.failed'), n(stats.failed), 'border-slate-700 bg-slate-900/50', 'text-rose-300'],
+      [t('helmReleases.stats.pending'), n(stats.pending), 'border-slate-700 bg-slate-900/50', 'text-amber-300'],
       [t('helmReleases.stats.superseded'), n(stats.superseded), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ]
   }, [stats, t, helmForbidden, data])
@@ -199,7 +199,7 @@ export default function HelmReleasesPage() {
       <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{t('helmReleases.title')}</h1>
-          <p className="mt-2 text-slate-400">{t('helmReleases.subtitle')}</p>
+          <p className="mt-1 text-sm text-slate-400">{t('helmReleases.subtitle')}</p>
         </div>
         <button
           onClick={() => void refresh()}
@@ -227,7 +227,7 @@ export default function HelmReleasesPage() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelColor]) => (
           <div key={label} className={`rounded-lg border px-3 py-2.5 ${boxClass}`}>
-            <div className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelColor}`}>{label}</div>
+            <div className={`text-xs leading-4 break-words ${labelColor}`}>{label}</div>
             <div className="mt-1 text-lg font-semibold text-ink">{value}</div>
           </div>
         ))}

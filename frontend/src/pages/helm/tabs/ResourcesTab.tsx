@@ -52,7 +52,7 @@ export default function ResourcesTab({ namespace, name }: { namespace: string; n
   }
 
   return (
-    <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-lg border border-slate-700">
+    <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-xl border border-hairline">
       <div ref={bodyRef} className="overflow-auto flex-1 min-h-0">
         <table className="w-full text-sm">
           <thead ref={theadRef} className="bg-slate-800 text-slate-300 text-left">
@@ -63,7 +63,7 @@ export default function ResourcesTab({ namespace, name }: { namespace: string; n
               <th className="px-3 py-2">{t('helmReleaseDetail.resources.col.namespace', 'Namespace')}</th>
             </tr>
           </thead>
-          <tbody className="bg-slate-900/40 divide-y divide-slate-800">
+          <tbody className="bg-slate-900/40 divide-y divide-hairline">
             {paged.map((r, i) => (
               <tr
                 key={`${r.kind}/${r.namespace ?? ''}/${r.name}/${i}`}

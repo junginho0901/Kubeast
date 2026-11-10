@@ -25,15 +25,15 @@ export default function OverviewTab({ detail }: { detail: HelmReleaseDetail }) {
   })
 
   const row = (label: string, value: string) => (
-    <div className="flex flex-col gap-1 rounded-lg bg-slate-800/40 border border-slate-700 px-4 py-3">
+    <div className="flex min-w-0 flex-col gap-1 border-b border-slate-700/50 px-1 py-3">
       <span className="text-xs text-slate-400">{label}</span>
-      <span className="text-sm text-ink">{value || '-'}</span>
+      <span className="text-sm text-ink break-words">{value || '-'}</span>
     </div>
   )
   const countRow = (label: string, pending: boolean, value: number) => (
-    <div className="flex flex-col gap-1 rounded-lg bg-slate-800/40 border border-slate-700 px-4 py-3">
+    <div className="flex min-w-0 flex-col gap-1 border-b border-slate-700/50 px-1 py-3">
       <span className="text-xs text-slate-400">{label}</span>
-      <span className="text-lg font-semibold text-ink">{pending ? '…' : value}</span>
+      <span className="text-lg font-semibold tabular-nums text-ink">{pending ? '…' : value}</span>
     </div>
   )
 
@@ -42,7 +42,7 @@ export default function OverviewTab({ detail }: { detail: HelmReleaseDetail }) {
   const imageCount = imagesQuery.data?.length ?? 0
 
   return (
-    <div className="space-y-3">
+    <div className="card space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {row(t('helmReleaseDetail.overview.chart'), detail.chart)}
         {row(t('helmReleaseDetail.overview.chartVersion'), detail.chartVersion)}

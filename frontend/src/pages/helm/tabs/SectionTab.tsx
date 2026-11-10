@@ -39,14 +39,14 @@ export default function SectionTab({
   // folding; keep the simple <pre> path for that section.
   if (section === 'notes') {
     return (
-      <pre className="max-h-[70vh] overflow-auto rounded-lg bg-slate-900 border border-slate-700 px-4 py-3 text-xs text-slate-200 whitespace-pre-wrap">
+      <pre className="max-h-[70vh] overflow-auto rounded-lg bg-slate-900 border border-hairline px-4 py-3 text-xs text-slate-200 whitespace-pre-wrap break-words">
         {content || t('common.none', 'None')}
       </pre>
     )
   }
 
   return (
-    <div className="rounded-lg bg-slate-900 border border-slate-700 overflow-hidden">
+    <div className="rounded-lg bg-slate-900 border border-hairline overflow-hidden">
       <Editor
         height="70vh"
         defaultLanguage="yaml"

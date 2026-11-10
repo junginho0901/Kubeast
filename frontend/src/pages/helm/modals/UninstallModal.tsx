@@ -72,13 +72,13 @@ export default function UninstallModal({
   return (
     <ModalOverlay onClose={applying ? () => undefined : onClose}>
       <div
-        className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-2xl mx-auto"
+        className="bg-slate-800 border border-hairline rounded-xl shadow-2xl p-5 w-full max-w-2xl max-h-[calc(100vh-2rem)] overflow-y-auto mx-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-semibold text-ink mb-1">
+        <h3 className="text-lg font-semibold text-ink mb-1 break-words">
           {t('helmReleaseDetail.uninstall.title', { name })}
         </h3>
-        <p className="text-sm text-red-300/80 mb-4">
+        <p className="text-sm text-red-300 mb-4 break-words">
           {t('helmReleaseDetail.uninstall.warning', { count: resources.length })}
         </p>
 
@@ -87,11 +87,11 @@ export default function UninstallModal({
             <Loader2 className="w-5 h-5 animate-spin" />
           </div>
         ) : error && !preview ? (
-          <div className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200 break-words">
             {error}
           </div>
         ) : (
-          <div className="max-h-[40vh] overflow-auto rounded-sm border border-slate-700 bg-slate-950 text-xs">
+          <div className="max-h-[40vh] overflow-auto rounded-lg border border-hairline bg-slate-900 text-xs">
             <table className="w-full">
               <thead className="bg-slate-800 text-slate-300 text-left sticky top-0">
                 <tr>
@@ -100,7 +100,7 @@ export default function UninstallModal({
                   <th className="px-2 py-1">{t('helmReleaseDetail.resources.col.namespace', 'Namespace')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800 text-slate-300">
+              <tbody className="divide-y divide-hairline text-slate-300">
                 {resources.map((r, i) => (
                   <tr key={`${r.kind}/${r.namespace ?? ''}/${r.name}/${i}`}>
                     <td className="px-2 py-1">{r.kind}</td>
@@ -141,21 +141,21 @@ export default function UninstallModal({
             onChange={(e) => setTyped(e.target.value)}
             disabled={applying}
             placeholder={name}
-            className="w-full rounded-sm border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-ink placeholder:text-slate-600 focus:border-red-500 outline-hidden"
+            className="w-full h-10 rounded-lg border border-control bg-slate-900 px-3 py-2 text-sm text-ink placeholder:text-slate-500 focus:border-red-500 focus-visible:ring-1 focus-visible:ring-red-500 outline-hidden"
             autoFocus
           />
         </div>
 
         {error && preview && (
-          <p className="mt-3 text-sm text-red-300">{error}</p>
+          <p className="mt-3 text-sm text-red-300 break-words">{error}</p>
         )}
 
-        <div className="flex justify-end gap-2 mt-4">
+        <div className="flex flex-wrap justify-end gap-2 mt-4">
           <button
             type="button"
             onClick={onClose}
             disabled={applying}
-            className="px-4 py-2 text-sm text-slate-300 hover:text-ink border border-slate-600 rounded-lg hover:bg-slate-800 disabled:opacity-50"
+            className="btn btn-secondary h-9 text-sm disabled:opacity-50"
           >
             {t('helmReleaseDetail.uninstall.cancel')}
           </button>
@@ -163,7 +163,7 @@ export default function UninstallModal({
             type="button"
             onClick={() => applyMutation.mutate()}
             disabled={!nameMatches || applying || loading}
-            className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-40 inline-flex items-center gap-2"
+            className="btn h-9 text-sm bg-red-600 hover:bg-red-700 text-white disabled:opacity-40 inline-flex items-center gap-2"
           >
             {applying && <Loader2 className="w-4 h-4 animate-spin" />}
             {applying
