@@ -535,6 +535,7 @@ export default function Layout() {
                             to={item.href}
                             data-testid={item.testId}
                             title={item.name}
+                            aria-current={isActive ? 'page' : undefined}
                             className={`
                               flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors
                               ${isActive ? 'bg-primary-600 text-white' : 'text-slate-300 hover:bg-slate-700/50 hover:text-ink'}

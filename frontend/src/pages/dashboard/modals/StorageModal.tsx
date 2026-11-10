@@ -188,7 +188,7 @@ export function StorageModal({
                 className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[200px] justify-between"
                 title={tr('dashboard.storage.namespaceFilter', 'Namespace filter')}
               >
-                <span className="text-sm font-medium">
+                <span title={namespaceFilter} className="text-sm font-medium">
                   {namespaceFilter === 'all'
                     ? tr('dashboard.storage.allNamespaces', 'All namespaces')
                     : namespaceFilter}

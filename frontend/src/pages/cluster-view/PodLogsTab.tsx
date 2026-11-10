@@ -223,7 +223,7 @@ export function PodLogsTab({
             onClick={() => setIsContainerDropdownOpen(!isContainerDropdownOpen)}
             className="w-full h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
           >
-            <span className="text-sm font-medium">
+            <span title={selectedContainer} className="text-sm font-medium">
               {selectedContainer || tr('clusterView.logs.selectContainer', 'Select container')}
             </span>
             <ChevronDown

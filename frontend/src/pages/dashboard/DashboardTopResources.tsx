@@ -172,7 +172,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, metric
                   <div className="flex items-center gap-3">
                     <span className="w-5 shrink-0 text-sm text-slate-500 tabular-nums">#{index + 1}</span>
                     <div className="flex-1">
-                      <h3 className="font-medium text-ink">{node.name}</h3>
+                      <h3 title={node.name} className="font-medium text-ink">{node.name}</h3>
                       <div className="flex items-center gap-4 text-sm text-slate-400 mt-1">
                         <span>{tr('dashboard.cpu', 'CPU')}: {node.cpu}</span>
                         <span>{tr('dashboard.memory', 'Memory')}: {node.memory}</span>
