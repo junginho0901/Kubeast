@@ -2193,7 +2193,16 @@
     "listEmpty": "No items.",
     "noSearchResults": "No results found.",
     "objectNotFound": "This object does not exist; it may have been deleted.",
-    "objectForbidden": "You are not allowed to see this object."
+    "objectForbidden": "You are not allowed to see this object.",
+    "failed": {
+      "delete": "Not deleted: {{reason}}",
+      "save": "Not saved: {{reason}}",
+      "change": "Not changed: {{reason}}",
+      "revoke": "Not revoked: {{reason}}",
+      "end": "Not ended: {{reason}}",
+      "cancel": "Not cancelled: {{reason}}",
+      "rollback": "Not rolled back: {{reason}}"
+    }
   },
   "dashboard": {
     "optimization": {
@@ -3630,6 +3639,7 @@
     "runNow": "Run Now",
     "runNowConfirm": "Are you sure you want to trigger a manual job from this CronJob?",
     "runNowSuccess": "Job {{name}} created",
+    "runNowFailed": "Job not created: {{reason}}",
     "ownedJobs": "Jobs",
     "jobName": "Name",
     "jobStatus": "Status",
@@ -3688,7 +3698,7 @@
     "teamSubtitle": "Teams / Groups",
     "inputPlaceholder": "Enter name...",
     "add": "Add",
-    "addError": "Failed to add. It may already exist.",
+    "addError": "Not added: {{reason}}",
     "empty": "No items registered.",
     "deleteConfirm": "Delete team \"{{name}}\"?",
     "deleteDialogTitle": "Delete team",

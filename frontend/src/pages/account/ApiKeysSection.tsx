@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Check, Copy, KeySquare, Loader2 } from 'lucide-react'
 
+import { ActionFailure } from '@/components/ActionFailure'
 import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
@@ -169,7 +170,8 @@ export default function ApiKeysSection() {
         // the keys one person made by hand: left whole, not paged
         <div className="space-y-1.5" data-testid="api-key-list" data-list-bounded="keys a person makes by hand">
           {keys.map((k) => (
-            <div key={k.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-900/40 px-3 py-2" data-testid={`api-key-row-${k.id}`}>
+            <div key={k.id}>
+            <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-900/40 px-3 py-2" data-testid={`api-key-row-${k.id}`}>
               <div className="min-w-0">
                 <div className="text-sm text-ink truncate">
                   <span className="font-medium">{k.name}</span>
@@ -206,12 +208,14 @@ export default function ApiKeysSection() {
                 <button
                   type="button"
                   data-testid={`api-key-revoke-${k.id}`}
-                  onClick={() => setConfirmRevoke(k.id)}
+                  onClick={() => { revoke.reset(); setConfirmRevoke(k.id) }}
                   className="shrink-0 rounded-lg border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700"
                 >
                   {tr('apiKeys.revoke', 'Revoke')}
                 </button>
               )}
+            </div>
+            {revoke.variables === k.id && <ActionFailure error={revoke.error} action="revoke" testId={`api-key-error-${k.id}`} className="mt-1 px-3 text-xs" />}
             </div>
           ))}
         </div>

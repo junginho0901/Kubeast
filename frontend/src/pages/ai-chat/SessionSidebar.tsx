@@ -8,6 +8,7 @@
 // 흡수 예정.
 
 import type { Session } from '@/services/api'
+import { ActionFailure } from '@/components/ActionFailure'
 import { Plus, MessageSquare, Trash2, Edit2, Check, X } from 'lucide-react'
 
 interface ContextMenuState {
@@ -60,6 +61,8 @@ interface Props {
   handleContextMenu: (s: Session, e: React.MouseEvent) => void
   handleCloseContextMenu: () => void
 
+  // a delete or rename the server refused, said above the list
+  listFailure?: { error: unknown; action: 'delete' | 'change' } | null
   t: (key: string, options?: any) => string
 }
 
@@ -93,6 +96,7 @@ export function SessionSidebar({
   contextMenu,
   handleContextMenu,
   handleCloseContextMenu,
+  listFailure = null,
   t,
 }: Props) {
   return (
@@ -156,6 +160,7 @@ export function SessionSidebar({
           )}
         </div>
       
+        {listFailure && <ActionFailure error={listFailure.error} action={listFailure.action} testId="session-list-error" className="mx-3 mt-2 text-xs" />}
         <div className="flex-1 overflow-y-auto p-2" ref={sessionsScrollRef} onScroll={handleSessionsScroll}>
           {sessionsLoading && sessionsList.length === 0 ? (
             <div className="text-slate-400 text-sm text-center py-4">{t('aiChat.loading')}</div>

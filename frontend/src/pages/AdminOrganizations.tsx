@@ -3,8 +3,10 @@ import { api, Member, Organization } from '@/services/api'
 import { Plus, Trash2, Users, X } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ActionFailure } from '@/components/ActionFailure'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { ListPager } from '@/components/ListPager'
+import { failureText } from '@/utils/failureText'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { usePermission } from '@/hooks/usePermission'
@@ -105,9 +107,12 @@ export default function AdminOrganizations() {
       </form>
 
       {createMutation.isError && createMutation.variables?.type === type && (
-        <div className="mt-2 shrink-0 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
-          {tr('adminOrg.addError', 'Failed to add. It may already exist.')}
+        <div role="alert" data-testid="team-add-error" className="mt-2 shrink-0 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200 break-words">
+          {tr('adminOrg.addError', 'Not added: {{reason}}', { reason: failureText(createMutation.error) })}
         </div>
+      )}
+      {deleteMutation.isError && deleteMutation.variables?.type === type && (
+        <ActionFailure error={deleteMutation.error} action="delete" testId="team-delete-error" className="mt-2 shrink-0" />
       )}
 
       <div ref={bodyRef} className="mt-4 overflow-x-auto flex-1 min-h-0">

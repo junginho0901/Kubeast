@@ -60,6 +60,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
     triggerDialogOpen,
     setTriggerDialogOpen,
     triggerToast,
+    setTriggerToast,
     rollbackDialogOpen,
     setRollbackDialogOpen,
     selectedRevision,
@@ -124,7 +125,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
 
       <InfoSection title="Basic Info" actions={isRollbackKind && mayRollback && !writesBlocked ? (
         <button
-          onClick={() => setRollbackDialogOpen(true)}
+          onClick={() => { rollbackMut.reset(); setRollbackDialogOpen(true) }}
           className="text-xs px-2 py-1 rounded-sm border border-slate-700 bg-slate-800 text-ink hover:border-slate-500"
         >
           {tr('rollback.title', 'Rollback')}
@@ -333,6 +334,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
       <WorkloadDialogs
         target={`${kind} ${namespace}/${name}`}
         triggerToast={triggerToast}
+        dismissToast={() => setTriggerToast(null)}
         triggerDialogOpen={triggerDialogOpen}
         setTriggerDialogOpen={setTriggerDialogOpen}
         triggerMut={triggerMut}

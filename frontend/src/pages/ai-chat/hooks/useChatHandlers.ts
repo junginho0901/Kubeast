@@ -297,9 +297,14 @@ export function useChatHandlers({
         await chatStreamManager.stop()
       }
 
-      for (const sessionId of selectedSessionIds) {
-        if (isTempSessionId(sessionId)) continue
-        await deleteSessionMutation.mutateAsync(sessionId)
+      // the first refusal stops here with the selection kept; the list says why (deleteSessionMutation.error)
+      try {
+        for (const sessionId of selectedSessionIds) {
+          if (isTempSessionId(sessionId)) continue
+          await deleteSessionMutation.mutateAsync(sessionId)
+        }
+      } catch {
+        return
       }
 
       setSelectedSessionIds(new Set())

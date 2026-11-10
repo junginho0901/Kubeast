@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Pause, Play, Zap } from 'lucide-react'
+import { ActionFailure } from '@/components/ActionFailure'
 import { InfoSection, InfoRow, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { cronJobDrawerInfo, cronJobNextRunFields, nextRunTitle } from '@/pages/workloads/cronjobs/cronJobHelpers'
@@ -14,7 +15,7 @@ interface Props {
   status: Record<string, unknown>
   canSuspend: boolean
   canTrigger: boolean
-  suspendMut: { isPending: boolean; mutate: (suspend: boolean) => void }
+  suspendMut: { isPending: boolean; mutate: (suspend: boolean) => void; error?: unknown }
   setTriggerDialogOpen: (open: boolean) => void
   ownedJobs?: Array<any>
 }
@@ -91,6 +92,7 @@ export default function WorkloadKindInfo({
           ) : undefined}
         >
           <div className="space-y-2">
+            <ActionFailure error={suspendMut.error} action="change" testId="cronjob-suspend-error" />
             <InfoRow label="Schedule" value={cronJob.schedule} />
             <InfoRow label="Suspend" value={cronJob.suspend} />
             <InfoRow label="Concurrency Policy" value={cronJob.concurrency_policy} />

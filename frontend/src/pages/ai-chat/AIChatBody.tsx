@@ -12,6 +12,7 @@ import { useMessageActions } from './hooks/useMessageActions'
 import { useSessionEditing } from './hooks/useSessionEditing'
 import { useChatHandlers } from './hooks/useChatHandlers'
 import { useAIChat } from './AIChatContext'
+import { sessionListFailure } from './utils'
 
 // AIChat 의 본체 — AIChatProvider 안에서만 mount. 모든 hook 을 호출하고
 // 결과를 SessionSidebar / ChatMain 에 props 로 전달. modal/filter state 는
@@ -75,6 +76,8 @@ export function AIChatBody() {
     handleCloseContextMenu,
     handleSaveEdit,
     handleCancelEdit,
+    renameError,
+    renameSentAt,
   } = useSessionEditing({ isMultiSelectMode })
 
   // 세션 상세 조회 + DB↔UI 동기화 100줄 분기
@@ -190,6 +193,7 @@ export function AIChatBody() {
         contextMenu={contextMenu}
         handleContextMenu={handleContextMenu}
         handleCloseContextMenu={handleCloseContextMenu}
+        listFailure={sessionListFailure(deleteSessionMutation.error, deleteSessionMutation.submittedAt, renameError, renameSentAt)}
         t={t}
       />
 

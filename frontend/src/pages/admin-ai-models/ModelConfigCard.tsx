@@ -11,6 +11,8 @@ interface Props {
   onEdit: (cfg: ModelConfigResponse) => void
   onCancelEdit: () => void
   onDelete: (id: number) => void
+  // this card's delete is on its way: the button waits, so a second confirm cannot send it again
+  deleting?: boolean
   activateMutation: UseMutationResult<unknown, unknown, number, unknown>
 }
 
@@ -20,6 +22,7 @@ export default function ModelConfigCard({
   onEdit,
   onCancelEdit,
   onDelete,
+  deleting = false,
   activateMutation,
 }: Props) {
   const { t } = useTranslation()
@@ -126,7 +129,9 @@ export default function ModelConfigCard({
               })
               if (ok) onDelete(cfg.id)
             }}
-            className="rounded-lg p-1.5 text-slate-500 hover:bg-red-500/10 hover:text-red-400"
+            disabled={deleting}
+            aria-busy={deleting || undefined}
+            className="rounded-lg p-1.5 text-slate-500 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
             title={tr('common.delete', 'Delete')}
           >
             <Trash2 className="h-3.5 w-3.5" />

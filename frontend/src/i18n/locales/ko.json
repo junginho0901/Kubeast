@@ -2193,7 +2193,16 @@
     "listEmpty": "항목이 없습니다.",
     "noSearchResults": "검색 결과가 없습니다.",
     "objectNotFound": "이 객체가 없습니다. 지워졌을 수 있습니다.",
-    "objectForbidden": "이 객체를 볼 권한이 없습니다."
+    "objectForbidden": "이 객체를 볼 권한이 없습니다.",
+    "failed": {
+      "delete": "삭제하지 못했습니다: {{reason}}",
+      "save": "저장하지 못했습니다: {{reason}}",
+      "change": "바꾸지 못했습니다: {{reason}}",
+      "revoke": "폐기하지 못했습니다: {{reason}}",
+      "end": "끝내지 못했습니다: {{reason}}",
+      "cancel": "취소하지 못했습니다: {{reason}}",
+      "rollback": "되돌리지 못했습니다: {{reason}}"
+    }
   },
   "dashboard": {
     "optimization": {
@@ -3741,6 +3750,7 @@
     "runNow": "즉시 실행",
     "runNowConfirm": "이 CronJob에서 수동으로 Job을 생성하시겠습니까?",
     "runNowSuccess": "Job {{name}}이(가) 생성되었습니다",
+    "runNowFailed": "Job을 만들지 못했습니다: {{reason}}",
     "ownedJobs": "Jobs",
     "jobName": "이름",
     "jobStatus": "상태",
@@ -3801,7 +3811,7 @@
     "teamSubtitle": "팀 / 그룹",
     "inputPlaceholder": "이름 입력...",
     "add": "추가",
-    "addError": "추가에 실패했습니다. 이미 존재할 수 있습니다.",
+    "addError": "추가하지 못했습니다: {{reason}}",
     "empty": "등록된 항목이 없습니다.",
     "deleteConfirm": "\"{{name}}\" 팀을 삭제할까요?",
     "deleteDialogTitle": "팀 삭제",

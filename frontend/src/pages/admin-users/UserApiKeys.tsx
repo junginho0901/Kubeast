@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { ActionFailure } from '@/components/ActionFailure'
 import { api } from '@/services/api'
 import { formatScope } from '@/pages/account/apiKeyFormat'
 import { formatWhen } from '@/pages/admin/accessRequestFormat'
@@ -34,7 +35,8 @@ export default function UserApiKeys({ userID, canEdit, tr }: Props) {
           <p className="text-xs text-slate-500">{tr('apiKeys.admin.empty', 'No API keys')}</p>
         ) : (
           keys.map((k) => (
-            <div key={k.id} className="flex items-center justify-between gap-3 text-sm" data-testid={`admin-api-key-${k.id}`}>
+            <div key={k.id}>
+            <div className="flex items-center justify-between gap-3 text-sm" data-testid={`admin-api-key-${k.id}`}>
               <div className="min-w-0">
                 <div className="text-slate-200 truncate">
                   <span className="font-medium">{k.name}</span>
@@ -60,12 +62,14 @@ export default function UserApiKeys({ userID, canEdit, tr }: Props) {
                   <button
                     type="button"
                     data-testid={`admin-api-key-revoke-${k.id}`}
-                    onClick={() => setConfirm(k.id)}
+                    onClick={() => { revoke.reset(); setConfirm(k.id) }}
                     className="shrink-0 rounded-lg border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700"
                   >
                     {tr('apiKeys.revoke', 'Revoke')}
                   </button>
                 ))}
+            </div>
+            {revoke.variables === k.id && <ActionFailure error={revoke.error} action="revoke" testId={`admin-api-key-error-${k.id}`} className="mt-1 text-xs" />}
             </div>
           ))
         )}

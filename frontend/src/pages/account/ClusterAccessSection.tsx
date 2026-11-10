@@ -7,6 +7,7 @@ import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import type { AccessRequest } from '@/services/api/access_requests'
 import type { Member } from '@/services/api/types'
+import { ActionFailure } from '@/components/ActionFailure'
 import CustomDropdown from '@/components/CustomDropdown'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
@@ -236,6 +237,7 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
               </div>
             ))}
           </div>
+          <ActionFailure error={cancel.error} action="cancel" testId="access-request-cancel-error" className="mt-2" />
           <div data-testid="my-access-requests-pages">{pagerNav(Math.min(requestPage, requestPages), MY_REQUESTS_PER_PAGE, requestTotal, turnRequestPage)}</div>
         </div>
       )}
