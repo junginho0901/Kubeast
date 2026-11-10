@@ -4610,6 +4610,7 @@
       "verify": "검증",
       "verifying": "검증 중...",
       "anchorNow": "지금 앵커",
+      "anchored": "✓ #{{from}}~#{{to}} ({{rows}}행) 앵커 기록 → {{sink}}, {{when}}",
       "anchoring": "앵커 중...",
       "ok": "✓ #{{from}}~#{{to}} {{rows}}행 이상 없음, 앵커 {{anchors}}개 일치",
       "bad": "✗ #{{from}}~#{{to}}: {{reason}} (#{{seq}})",

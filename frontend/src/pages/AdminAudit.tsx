@@ -1,7 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { api, AuditLogEntry, AuditLogFilter, AuditVerifyReport } from '@/services/api'
+import { api, AuditLogEntry, AuditLogFilter, AuditVerifyReport, type AuditAnchor } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { usePermission } from '@/hooks/usePermission'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
@@ -144,6 +144,8 @@ export default function AdminAudit() {
     refetchOnWindowFocus: false,
   })
   const [verifyReport, setVerifyReport] = useState<AuditVerifyReport | null>(null)
+  // what the last "Anchor now" wrote
+  const [anchored, setAnchored] = useState<AuditAnchor | null>(null)
   const [integrityError, setIntegrityError] = useState<string | null>(null)
   const failureText = (e: unknown) => {
     const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -153,14 +155,18 @@ export default function AdminAudit() {
     mutationFn: () => api.adminAuditVerify({ anchors: !!integrity?.anchor_sink }),
     onSuccess: (rep) => {
       setVerifyReport(rep)
+      setAnchored(null)
       setIntegrityError(null)
     },
     onError: (e) => setIntegrityError(failureText(e)),
   })
   const anchorMutation = useMutation({
     mutationFn: () => api.adminAuditAnchor(),
-    onSuccess: () => {
+    // the result line says what was written; the last verify's line is not this one's
+    onSuccess: (anchor) => {
       setIntegrityError(null)
+      setVerifyReport(null)
+      setAnchored(anchor)
       refetchIntegrity()
     },
     onError: (e) => setIntegrityError(failureText(e)),
@@ -333,10 +339,20 @@ export default function AdminAudit() {
               </button>
             )}
           </div>
-          {(verifyReport || integrityError) && (
+          {(verifyReport || integrityError || anchored) && (
             <div className="basis-full text-xs" data-testid="audit-integrity-result">
               {integrityError ? (
                 <span className="text-red-400">{integrityError}</span>
+              ) : anchored ? (
+                <span className="text-green-400" title={utcTitle(anchored.created_at) ?? undefined}>
+                  {tr('adminAudit.integrity.anchored', '✓ anchored #{{from}}~#{{to}} ({{rows}} rows) → {{sink}} at {{when}}', {
+                    from: anchored.from_seq,
+                    to: anchored.to_seq,
+                    rows: anchored.rows,
+                    sink: anchored.sink,
+                    when: formatTime(anchored.created_at),
+                  })}
+                </span>
               ) : verifyReport?.ok ? (
                 <span className="text-green-400">
                   {tr('adminAudit.integrity.ok', '✓ #{{from}}~#{{to}} {{rows}}행 이상 없음, 앵커 {{anchors}}개 일치', {

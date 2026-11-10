@@ -4299,6 +4299,7 @@
       "verify": "Verify",
       "verifying": "Verifying...",
       "anchorNow": "Anchor now",
+      "anchored": "✓ anchored #{{from}}~#{{to}} ({{rows}} rows) → {{sink}} at {{when}}",
       "anchoring": "Anchoring...",
       "ok": "✓ #{{from}}–#{{to}}: {{rows}} rows intact, {{anchors}} anchor(s) match",
       "bad": "✗ #{{from}}–#{{to}}: {{reason}} at #{{seq}}",
