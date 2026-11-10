@@ -12,6 +12,7 @@ import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
 import type { PageContextSnapshot } from '@/components/PageContext'
 import { serializeSnapshotForBackend } from '@/utils/aiContext/serializeSnapshot'
 import { chatErrorText } from '@/utils/chatError'
+import { failureText } from '@/utils/failureText'
 
 import { MessageList, type DisplayMessage } from './MessageList'
 import { conversationGone, forgetsConversation, turnsOnScreen } from './turnsOnScreen'
@@ -109,7 +110,8 @@ export function ChatPanel({
         activeSessionId = session.id
         setSessionId(activeSessionId)
       } catch {
-        return
+        // the conversation could not be made: the question goes back in the box, the line above it says why
+        return false
       }
     }
 
@@ -320,6 +322,11 @@ export function ChatPanel({
       {!atBottom && <JumpToLatest onClick={() => scrollToBottom()} />}
       </div>
 
+      {createSessionMutation.error && (
+        <p role="alert" data-testid="floating-start-error" className="shrink-0 px-3 pt-2 text-xs text-red-400 break-words">
+          {t('aiChat.errorSessionCreate', { error: failureText(createSessionMutation.error) })}
+        </p>
+      )}
       <InputArea
         onSubmit={handleSubmit}
         onStop={handleStop}

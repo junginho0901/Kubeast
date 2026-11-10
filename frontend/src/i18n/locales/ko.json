@@ -2196,6 +2196,7 @@
     "objectForbidden": "이 객체를 볼 권한이 없습니다.",
     "refreshFailed": "{{time}}에 새로 읽지 못했습니다: {{reason}}. 보이는 내용은 그 전에 읽은 것입니다.",
     "readFailed": "목록을 읽지 못했습니다: {{reason}}",
+    "logsReadFailed": "로그를 읽지 못했습니다: {{reason}}",
     "copyFailed": "복사하지 못했습니다. 브라우저가 받지 않았습니다. 글을 직접 선택해 복사하세요.",
     "notCopied": "복사 안 됨",
     "failed": {

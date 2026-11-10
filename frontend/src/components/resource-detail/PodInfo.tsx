@@ -28,6 +28,7 @@ import { traceTemplates } from '@/utils/features'
 import { fillTraceTemplate, podServiceName } from '@/utils/traceLinks'
 import PolicyViolations from './PolicyViolations'
 import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
+import { failureText } from '@/utils/failureText'
 import NetworkPolicies from './NetworkPolicies'
 import NetworkFlows from './NetworkFlows'
 import NetworkDrops from './NetworkDrops'
@@ -78,7 +79,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   // A container that keeps crashing counts up BackOff on the event while the Pod reads the same.
   useDrawerFollowsEvents({ describeKey: ['pod-describe', namespace, name], answer: podDescribe, kind: 'Pod', namespace, name })
 
-  const { data: logData, isFetching: logsFetching, refetch: refetchLogs } = useQuery({
+  const { data: logData, isFetching: logsFetching, refetch: refetchLogs, error: logsError } = useQuery({
     queryKey: ['pod-logs', namespace, name, logContainer, logLines],
     queryFn: () => api.getPodLogs(namespace, name, logContainer || undefined, logLines),
     enabled: showLogs && !!logContainer,
@@ -905,7 +906,13 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
           </div>
           {showLogs && (
             <div ref={logRef} className="bg-slate-950 rounded-lg p-3 font-mono text-[11px] text-slate-300 max-h-[400px] overflow-auto whitespace-pre-wrap break-all">
-              {logsFetching ? dl('Loading...') : logData || dl('(no logs)')}
+              {logsFetching ? dl('Loading...') : logsError ? null : logData || dl('(no logs)')}
+              {/* a refused or failed read is not "no logs": its reason (a container not started, no permission) */}
+              {!logsFetching && logsError && (
+                <span role="alert" data-testid="pod-logs-error" className="text-red-400">
+                  {t('common.logsReadFailed', { defaultValue: 'Could not read the logs: {{reason}}', reason: failureText(logsError) })}
+                </span>
+              )}
             </div>
           )}
           </>
