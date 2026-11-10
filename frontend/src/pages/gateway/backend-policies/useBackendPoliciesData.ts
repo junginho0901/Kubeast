@@ -6,6 +6,7 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
+import { useRefresh } from '@/hooks/useRefresh'
 import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -50,7 +51,6 @@ export function useBackendPoliciesData<T extends BackendPolicyLike>({
   const describes = useDescribeReads()
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
-  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const { data: namespaces } = useQuery({
     queryKey: ['namespaces'],
@@ -179,20 +179,13 @@ export function useBackendPoliciesData<T extends BackendPolicyLike>({
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await config.listAll(true)
-        : await config.list(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey })
-      queryClient.setQueryData(queryKey, data)
-    } catch (error) {
-      console.error(`${config.kind} refresh failed:`, error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await config.listAll(true)
+      : await config.list(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey })
+    queryClient.setQueryData(queryKey, data)
+  })
 
   return {
     namespaces,
@@ -203,6 +196,7 @@ export function useBackendPoliciesData<T extends BackendPolicyLike>({
     isLoading,
     isRefreshing,
     handleRefresh,
+    refreshFailure,
     filteredPolicies,
     sortedPolicies,
     pagedPolicies,

@@ -8,6 +8,8 @@ import { RefreshCw, Search, Plus } from 'lucide-react'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useCanCreate } from '@/hooks/useCanCreate'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import {
   sortNamespaces,
   type NamespaceInfo,
@@ -27,7 +29,6 @@ export default function Namespaces() {
   const tr = useCallback((key: string, fallback: string, options?: Record<string, any>) => t(key, { defaultValue: fallback, ...options }), [t])
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -132,16 +133,9 @@ export default function Namespaces() {
     searchQuery,
   })
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      await queryClient.invalidateQueries({ queryKey: ['namespaces'] })
-    } catch (error) {
-      console.error('Namespaces refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['namespaces'] }, { throwOnError: true })
+  })
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
@@ -173,6 +167,8 @@ export default function Namespaces() {
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <div className="relative shrink-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />

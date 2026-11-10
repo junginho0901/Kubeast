@@ -10,6 +10,8 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { printerCellText, type PrinterCell, type PrinterColumn } from './printerCells'
@@ -30,7 +32,6 @@ export default function CustomResourceInstances() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [kindFilter, setKindFilter] = useState('')
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -229,18 +230,11 @@ export default function CustomResourceInstances() {
     return printerCellText(cell, tr('common.yes', 'Yes'), tr('common.no', 'No'))
   }
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = await api.getAllCustomResourceInstances(true)
-      queryClient.removeQueries({ queryKey: ['custom-resources', 'instances'] })
-      queryClient.setQueryData(['custom-resources', 'instances'], data)
-    } catch (error) {
-      console.error('CR instances refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = await api.getAllCustomResourceInstances(true)
+    queryClient.removeQueries({ queryKey: ['custom-resources', 'instances'] })
+    queryClient.setQueryData(['custom-resources', 'instances'], data)
+  })
 
   const showDynamicCols = kindFilter && printerColumns.length > 0
   const baseColCount = kindFilter ? 3 : 5 // name, ns, age when kind filtered; name, ns, kind, group, age otherwise
@@ -260,6 +254,8 @@ export default function CustomResourceInstances() {
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <div className="flex gap-3 shrink-0">
         <div className="relative flex-1">

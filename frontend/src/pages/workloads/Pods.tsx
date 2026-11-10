@@ -17,6 +17,8 @@ import { type SortKey, type SummaryCard } from './pods/podHelpers'
 import { PodFilters } from './pods/PodFilters'
 import { PodTable } from './pods/PodTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 const PAGE_BLOCK = 50
 
@@ -28,7 +30,6 @@ export default function Pods() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -220,17 +221,10 @@ spec:
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      // no revision: the page comes whole whatever changed
-      queryClient.setQueryData(pageKey, await api.getPodPage(pageParams))
-    } catch (error) {
-      console.error('Pods refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    // no revision: the page comes whole whatever changed
+    queryClient.setQueryData(pageKey, await api.getPodPage(pageParams))
+  })
 
   const showNamespaceColumn = selectedNamespace === 'all'
 
@@ -265,6 +259,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <PodFilters
         searchQuery={searchQuery}

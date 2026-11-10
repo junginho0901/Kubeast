@@ -17,6 +17,8 @@ import { applyVPAWatchEvent } from './vpas/vpaWatchNormalize'
 import { VPAFilters } from './vpas/VPAFilters'
 import { VPATable } from './vpas/VPATable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 export default function VPAs() {
   const queryClient = useQueryClient()
@@ -27,7 +29,6 @@ export default function VPAs() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -165,20 +166,13 @@ export default function VPAs() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllVPAs(true)
-        : await api.getVPAs(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['workloads', 'vpas', selectedNamespace] })
-      queryClient.setQueryData(['workloads', 'vpas', selectedNamespace], data)
-    } catch (error) {
-      console.error('VPAs refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllVPAs(true)
+      : await api.getVPAs(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['workloads', 'vpas', selectedNamespace] })
+    queryClient.setQueryData(['workloads', 'vpas', selectedNamespace], data)
+  })
 
   const createVPAYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -237,6 +231,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <VPAFilters
         searchQuery={searchQuery}

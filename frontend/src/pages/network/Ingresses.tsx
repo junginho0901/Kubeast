@@ -24,6 +24,8 @@ import { applyIngressWatchEvent } from './ingresses/ingressWatchNormalize'
 import { IngressFilters } from './ingresses/IngressFilters'
 import { IngressTable } from './ingresses/IngressTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 export default function Ingresses() {
   const queryClient = useQueryClient()
@@ -34,7 +36,6 @@ export default function Ingresses() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -189,20 +190,13 @@ export default function Ingresses() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllIngresses(true)
-        : await api.getIngresses(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['network', 'ingresses', selectedNamespace] })
-      queryClient.setQueryData(['network', 'ingresses', selectedNamespace], data)
-    } catch (error) {
-      console.error('Ingresses refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllIngresses(true)
+      : await api.getIngresses(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['network', 'ingresses', selectedNamespace] })
+    queryClient.setQueryData(['network', 'ingresses', selectedNamespace], data)
+  })
 
   const createIngressYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -259,6 +253,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <IngressFilters
         searchQuery={searchQuery}

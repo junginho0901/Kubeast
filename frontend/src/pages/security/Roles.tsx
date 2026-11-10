@@ -17,6 +17,8 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import { applyRoleWatchEvent } from './roles/roleWatchNormalize'
 
 type SortKey = null | 'name' | 'namespace' | 'rules' | 'age'
@@ -32,7 +34,6 @@ export default function Roles() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -183,20 +184,13 @@ export default function Roles() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllRoles(true)
-        : await api.getRoles(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['security', 'roles', selectedNamespace] })
-      queryClient.setQueryData(['security', 'roles', selectedNamespace], data)
-    } catch (error) {
-      console.error('Roles refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllRoles(true)
+      : await api.getRoles(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['security', 'roles', selectedNamespace] })
+    queryClient.setQueryData(['security', 'roles', selectedNamespace], data)
+  })
 
   const createYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -234,6 +228,8 @@ rules:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 shrink-0">
         <div className="xl:col-span-2">

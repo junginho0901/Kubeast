@@ -6,6 +6,7 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import {
   formatAge,
   formatConditionStatus,
@@ -74,6 +75,7 @@ export default function BackendPoliciesPage<T extends BackendPolicyLike>({
     isLoading,
     isRefreshing,
     handleRefresh,
+    refreshFailure,
     filteredPolicies,
     sortedPolicies,
     pagedPolicies,
@@ -146,6 +148,8 @@ ${yamlBodyTemplate}`
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 shrink-0">
         <div className="xl:col-span-2">

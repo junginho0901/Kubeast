@@ -21,6 +21,8 @@ import { applyPvcWatchEvent } from './pvcs/pvcWatchNormalize'
 import { PVCFilters } from './pvcs/PVCFilters'
 import { PVCTable } from './pvcs/PVCTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 export default function PersistentVolumeClaims() {
   const queryClient = useQueryClient()
@@ -31,7 +33,6 @@ export default function PersistentVolumeClaims() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -191,18 +192,11 @@ export default function PersistentVolumeClaims() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = await api.getPVCs(selectedNamespace === 'all' ? undefined : selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['storage', 'pvcs', selectedNamespace] })
-      queryClient.setQueryData(['storage', 'pvcs', selectedNamespace], data)
-    } catch (error) {
-      console.error('PVC refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = await api.getPVCs(selectedNamespace === 'all' ? undefined : selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['storage', 'pvcs', selectedNamespace] })
+    queryClient.setQueryData(['storage', 'pvcs', selectedNamespace], data)
+  })
 
   const createPvcYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -252,6 +246,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <PVCFilters
         searchQuery={searchQuery}

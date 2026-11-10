@@ -16,6 +16,8 @@ import { parseAgeSeconds, type SortKey } from './statefulsets/statefulSetHelpers
 import { StatefulSetFilters } from './statefulsets/StatefulSetFilters'
 import { StatefulSetTable } from './statefulsets/StatefulSetTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 export default function StatefulSets() {
   const queryClient = useQueryClient()
@@ -26,7 +28,6 @@ export default function StatefulSets() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [sortKey, setSortKey] = useState<SortKey>(null)
@@ -170,20 +171,13 @@ export default function StatefulSets() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllStatefulSets(true)
-        : await api.getStatefulSets(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: listQueryKey })
-      queryClient.setQueryData(listQueryKey, data)
-    } catch (error) {
-      console.error('StatefulSets refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllStatefulSets(true)
+      : await api.getStatefulSets(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: listQueryKey })
+    queryClient.setQueryData(listQueryKey, data)
+  })
 
   const initialYaml = useMemo(() => (
 `apiVersion: apps/v1
@@ -240,6 +234,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <StatefulSetFilters
         searchQuery={searchQuery}

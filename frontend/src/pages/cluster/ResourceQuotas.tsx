@@ -20,6 +20,8 @@ import { applyResourceQuotaWatchEvent } from './resourcequotas/resourceQuotaWatc
 import { ResourceQuotaFilters } from './resourcequotas/ResourceQuotaFilters'
 import { ResourceQuotaTable } from './resourcequotas/ResourceQuotaTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 export default function ResourceQuotas() {
   const queryClient = useQueryClient()
@@ -30,7 +32,6 @@ export default function ResourceQuotas() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -172,20 +173,13 @@ export default function ResourceQuotas() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllResourceQuotas(true)
-        : await api.getResourceQuotas(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['cluster', 'resourcequotas', selectedNamespace] })
-      queryClient.setQueryData(['cluster', 'resourcequotas', selectedNamespace], data)
-    } catch (error) {
-      console.error('ResourceQuotas refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllResourceQuotas(true)
+      : await api.getResourceQuotas(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['cluster', 'resourcequotas', selectedNamespace] })
+    queryClient.setQueryData(['cluster', 'resourcequotas', selectedNamespace], data)
+  })
 
   const createResourceQuotaYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -238,6 +232,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <ResourceQuotaFilters
         searchQuery={searchQuery}

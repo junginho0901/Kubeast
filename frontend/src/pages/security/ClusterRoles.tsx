@@ -12,6 +12,8 @@ import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
@@ -27,7 +29,6 @@ export default function ClusterRoles() {
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -142,18 +143,11 @@ export default function ClusterRoles() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = await api.getClusterRoles(true)
-      queryClient.removeQueries({ queryKey: ['security', 'clusterroles'] })
-      queryClient.setQueryData(['security', 'clusterroles'], data)
-    } catch (error) {
-      console.error('ClusterRoles refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = await api.getClusterRoles(true)
+    queryClient.removeQueries({ queryKey: ['security', 'clusterroles'] })
+    queryClient.setQueryData(['security', 'clusterroles'], data)
+  })
 
   const createYamlTemplate = `apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -185,6 +179,8 @@ rules:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <div className="shrink-0">
         <div className="relative">

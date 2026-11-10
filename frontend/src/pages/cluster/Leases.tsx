@@ -21,6 +21,8 @@ import { applyLeaseWatchEvent } from './leases/leaseWatchNormalize'
 import { LeaseFilters } from './leases/LeaseFilters'
 import { LeaseTable } from './leases/LeaseTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 export default function Leases() {
   const queryClient = useQueryClient()
@@ -31,7 +33,6 @@ export default function Leases() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -175,20 +176,13 @@ export default function Leases() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllLeases(true)
-        : await api.getLeases(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['cluster', 'leases', selectedNamespace] })
-      queryClient.setQueryData(['cluster', 'leases', selectedNamespace], data)
-    } catch (error) {
-      console.error('Leases refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllLeases(true)
+      : await api.getLeases(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['cluster', 'leases', selectedNamespace] })
+    queryClient.setQueryData(['cluster', 'leases', selectedNamespace], data)
+  })
 
   const createLeaseYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -238,6 +232,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <LeaseFilters
         searchQuery={searchQuery}

@@ -1,9 +1,10 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, isForbiddenError } from '@/services/api'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { useRefresh } from '@/hooks/useRefresh'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import type { GPUDashboardData, GPUMetricsData, GPUDeviceMetric, GPUNodeInfo } from '@/services/api'
@@ -21,8 +22,6 @@ interface UseGPUNodesDataParams {
 export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: UseGPUNodesDataParams) {
   const { t } = useTranslation()
   const tr = useCallback((key: string, fallback: string, options?: Record<string, any>) => t(key, { defaultValue: fallback, ...options }), [t])
-
-  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const { data, isLoading, error, refetch } = useQuery<GPUDashboardData>({
     queryKey: ['gpu', 'dashboard'],
@@ -148,21 +147,16 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      await refetch()
-    } catch (error) {
-      console.error('GPU nodes refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const r = await refetch()
+    if (r.error) throw r.error
+  })
 
   return {
     isLoading,
     isRefreshing,
     handleRefresh,
+    refreshFailure,
     metricsAvailable,
     gpusByHost,
     summaryCards,

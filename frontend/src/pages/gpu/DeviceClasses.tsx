@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import { Plus, RefreshCw, Search } from 'lucide-react'
 import { useDeviceClassesData } from './device-classes/useDeviceClassesData'
 import type { SortKey } from './device-classes/deviceClassesHelpers'
@@ -22,6 +23,7 @@ export default function DeviceClasses() {
     isLoading,
     isRefreshing,
     handleRefresh,
+    refreshFailure,
     canCreate,
     filteredDeviceClasses,
     sortedDeviceClasses,
@@ -98,6 +100,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <div className="relative shrink-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />

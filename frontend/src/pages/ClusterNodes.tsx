@@ -8,6 +8,8 @@ import { Plus, RefreshCw, Search } from 'lucide-react'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useCanCreate } from '@/hooks/useCanCreate'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import {
   nodeYamlTemplate,
@@ -30,7 +32,6 @@ export default function ClusterNodes() {
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [metricsAvailable] = useState(true)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<SortDir>('asc')
@@ -127,24 +128,17 @@ export default function ClusterNodes() {
     metricsMap,
   })
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const [nodesData, metricsData] = await Promise.all([
-        api.getNodes(true),
-        metricsAvailable ? api.getNodeMetrics() : Promise.resolve([]),
-      ])
-      queryClient.removeQueries({ queryKey: ['cluster', 'nodes'] })
-      queryClient.setQueryData(['cluster', 'nodes'], nodesData)
-      if (metricsAvailable) {
-        queryClient.setQueryData(['cluster', 'node-metrics'], metricsData)
-      }
-    } catch (error) {
-      console.error('Nodes refresh failed:', error)
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const [nodesData, metricsData] = await Promise.all([
+      api.getNodes(true),
+      metricsAvailable ? api.getNodeMetrics() : Promise.resolve([]),
+    ])
+    queryClient.removeQueries({ queryKey: ['cluster', 'nodes'] })
+    queryClient.setQueryData(['cluster', 'nodes'], nodesData)
+    if (metricsAvailable) {
+      queryClient.setQueryData(['cluster', 'node-metrics'], metricsData)
     }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  })
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
@@ -176,6 +170,8 @@ export default function ClusterNodes() {
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <div className="relative shrink-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />

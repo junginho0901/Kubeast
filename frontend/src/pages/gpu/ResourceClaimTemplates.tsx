@@ -20,6 +20,8 @@ import { applyResourceClaimTemplateWatchEvent } from './resourceclaimtemplates/r
 import { ResourceClaimTemplatesFilters } from './resourceclaimtemplates/ResourceClaimTemplatesFilters'
 import { ResourceClaimTemplatesTable } from './resourceclaimtemplates/ResourceClaimTemplatesTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 export default function ResourceClaimTemplates() {
   const queryClient = useQueryClient()
@@ -31,7 +33,6 @@ export default function ResourceClaimTemplates() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -169,20 +170,13 @@ export default function ResourceClaimTemplates() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllResourceClaimTemplates(true)
-        : await api.getResourceClaimTemplates(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['gpu', 'resourceclaimtemplates', selectedNamespace] })
-      queryClient.setQueryData(['gpu', 'resourceclaimtemplates', selectedNamespace], data)
-    } catch (error) {
-      console.error('ResourceClaimTemplates refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllResourceClaimTemplates(true)
+      : await api.getResourceClaimTemplates(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['gpu', 'resourceclaimtemplates', selectedNamespace] })
+    queryClient.setQueryData(['gpu', 'resourceclaimtemplates', selectedNamespace], data)
+  })
 
   const createResourceClaimTemplateYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -233,6 +227,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <ResourceClaimTemplatesFilters
         searchQuery={searchQuery}

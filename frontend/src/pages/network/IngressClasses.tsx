@@ -9,6 +9,8 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -30,7 +32,6 @@ export default function IngressClasses() {
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -165,18 +166,11 @@ export default function IngressClasses() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = await api.getIngressClasses(true)
-      queryClient.removeQueries({ queryKey: ['network', 'ingressclasses'] })
-      queryClient.setQueryData(['network', 'ingressclasses'], data)
-    } catch (error) {
-      console.error('IngressClasses refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = await api.getIngressClasses(true)
+    queryClient.removeQueries({ queryKey: ['network', 'ingressclasses'] })
+    queryClient.setQueryData(['network', 'ingressclasses'], data)
+  })
 
   const createIngressClassYamlTemplate = useMemo(() => {
     return `apiVersion: networking.k8s.io/v1
@@ -218,6 +212,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <IngressClassFilters
         searchQuery={searchQuery}

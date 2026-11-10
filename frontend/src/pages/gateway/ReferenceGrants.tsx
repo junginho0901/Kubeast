@@ -23,6 +23,8 @@ import { applyReferenceGrantWatchEvent } from './referencegrants/referenceGrantW
 import { ReferenceGrantFilters } from './referencegrants/ReferenceGrantFilters'
 import { ReferenceGrantTable } from './referencegrants/ReferenceGrantTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 export default function ReferenceGrants() {
   const queryClient = useQueryClient()
@@ -34,7 +36,6 @@ export default function ReferenceGrants() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -183,20 +184,13 @@ export default function ReferenceGrants() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllReferenceGrants(true)
-        : await api.getReferenceGrants(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['gateway', 'referencegrants', selectedNamespace] })
-      queryClient.setQueryData(['gateway', 'referencegrants', selectedNamespace], data)
-    } catch (error) {
-      console.error('ReferenceGrants refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllReferenceGrants(true)
+      : await api.getReferenceGrants(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['gateway', 'referencegrants', selectedNamespace] })
+    queryClient.setQueryData(['gateway', 'referencegrants', selectedNamespace], data)
+  })
 
   const createReferenceGrantYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -248,6 +242,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <ReferenceGrantFilters
         searchQuery={searchQuery}

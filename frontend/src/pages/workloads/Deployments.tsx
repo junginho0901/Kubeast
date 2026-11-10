@@ -23,6 +23,8 @@ import { DeploymentFilters } from './deployments/DeploymentFilters'
 import { DeploymentTable } from './deployments/DeploymentTable'
 import { workloadStatusText } from '@/utils/workloadStatus'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 export default function Deployments() {
   const queryClient = useQueryClient()
@@ -33,7 +35,6 @@ export default function Deployments() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -213,20 +214,13 @@ export default function Deployments() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllDeployments(true)
-        : await api.getDeployments(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['workloads', 'deployments', selectedNamespace] })
-      queryClient.setQueryData(['workloads', 'deployments', selectedNamespace], data)
-    } catch (error) {
-      console.error('Deployments refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllDeployments(true)
+      : await api.getDeployments(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['workloads', 'deployments', selectedNamespace] })
+    queryClient.setQueryData(['workloads', 'deployments', selectedNamespace], data)
+  })
 
   const createDeploymentYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -289,6 +283,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <DeploymentFilters
         searchQuery={searchQuery}

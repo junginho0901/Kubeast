@@ -20,6 +20,8 @@ import { applyCronJobWatchEvent } from './cronjobs/cronJobWatchNormalize'
 import { CronJobFilters } from './cronjobs/CronJobFilters'
 import { CronJobTable } from './cronjobs/CronJobTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 export default function CronJobs() {
   const queryClient = useQueryClient()
@@ -30,7 +32,6 @@ export default function CronJobs() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -186,20 +187,13 @@ export default function CronJobs() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllCronJobs(true)
-        : await api.getCronJobs(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['workloads', 'cronjobs', selectedNamespace] })
-      queryClient.setQueryData(['workloads', 'cronjobs', selectedNamespace], data)
-    } catch (error) {
-      console.error('CronJobs refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllCronJobs(true)
+      : await api.getCronJobs(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['workloads', 'cronjobs', selectedNamespace] })
+    queryClient.setQueryData(['workloads', 'cronjobs', selectedNamespace], data)
+  })
 
   const createCronJobYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -257,6 +251,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <CronJobFilters
         searchQuery={searchQuery}
