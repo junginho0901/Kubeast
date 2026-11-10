@@ -15,6 +15,7 @@ import EditClusterDialog from './EditClusterDialog'
 import ClusterAccessModal from './ClusterAccessModal'
 import { healthChecked, testOutcome, type TestOutcome } from './clusterTest'
 import { healthDotClass } from '@/utils/clusterHealth'
+import { failureText } from '@/utils/failureText'
 
 // Admin > Clusters (step 11): list every registered cluster with register /
 // connection-test / delete. Registration & deletion are rollout-free, so the
@@ -213,7 +214,7 @@ export default function AdminClusters() {
                       <button
                         type="button"
                         data-testid={`delete-cluster-${c.id}`}
-                        onClick={() => setDeleteTarget(c)}
+                        onClick={() => { deleteMutation.reset(); setDeleteTarget(c) }}
                         className="btn-row-danger"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -266,6 +267,11 @@ export default function AdminClusters() {
                 ? ` — ${tr('cluster.delete.self', 'removed from the multi-cluster view only.')}`
                 : ` — ${tr('cluster.delete.external', 'its stored kubeconfig is deleted too.')}`}
             </p>
+            {deleteMutation.isError && (
+              <p role="alert" data-testid="delete-cluster-error" className="mt-3 text-sm text-red-400 break-words">
+                {t('cluster.delete.failed', { defaultValue: 'Not deleted: {{reason}}', reason: failureText(deleteMutation.error) })}
+              </p>
+            )}
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"

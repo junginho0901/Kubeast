@@ -354,6 +354,38 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
     await expect(line('default'), 'a line is of this visit').toHaveText('')
   })
 
+  test('Clusters: a refused Delete and a failed store Check say why, and nothing is deleted', async ({ page, request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const ids = async () => (((await (await request.get('/api/v1/clusters', { headers: bearer(admin), params: { cluster: '' } })).json()).items ?? []) as { id: string }[]).map((c) => c.id).sort()
+    const before = await ids()
+    test.skip(!before.includes('default'), 'needs the cluster default')
+    const reason = 'e2e stand-in: the cluster is in use'
+    // the answers are stood in in the browser: the server is never asked to delete
+    await page.route((url) => url.pathname === '/api/v1/clusters/default', (route) =>
+      route.request().method() === 'DELETE' ? route.fulfill({ status: 409, json: { detail: reason } }) : route.fallback())
+    await page.goto(CLUSTERS.path)
+    await page.getByTestId('delete-cluster-default').click()
+    await page.getByTestId('delete-confirm').click()
+    await expect(page.getByTestId('delete-cluster-error')).toHaveText(EN.cluster.delete.failed.replace('{{reason}}', reason))
+    await expect(page.getByTestId('delete-confirm'), 'the window stays for another try or Cancel').toBeEnabled()
+    expect(await ids(), 'nothing deleted').toEqual(before)
+    await page.getByRole('button', { name: EN.common.cancel, exact: true }).click()
+    await page.getByTestId('delete-cluster-default').click()
+    await expect(page.getByTestId('delete-cluster-error'), "a window opened again does not carry the last try's reason").toHaveCount(0)
+    await page.getByRole('button', { name: EN.common.cancel, exact: true }).click()
+
+    // Edit → Check: a store status the server refused names the server's reason, not the browser's status line
+    const storeReason = 'e2e stand-in: the store did not answer'
+    for (const p of ['/api/v1/cluster/prometheus/status', '/api/v1/cluster/logsearch/status']) {
+      await page.route((url) => url.pathname === p, (route) => route.fulfill({ status: 502, json: { detail: storeReason } }))
+    }
+    await page.getByTestId('edit-cluster-default').click()
+    await page.getByTestId('edit-prometheus-check').click()
+    await expect(page.getByTestId('edit-prometheus-status')).toHaveText(EN.cluster.edit.prometheus.resultNone.replace('{{message}}', storeReason))
+    await page.getByTestId('edit-logsearch-check').click()
+    await expect(page.getByTestId('edit-logsearch-status')).toHaveText(EN.cluster.edit.logSearch.resultNone.replace('{{message}}', storeReason))
+  })
+
   test('Clusters: the Health column says when the check it shows was made, the time the API answers', async ({ page }) => {
     const answered = page.waitForResponse((r) => /\/api\/v1\/clusters(\?|$)/.test(r.url()) && !r.url().includes('accessibleOnly') && r.request().method() === 'GET')
     await page.goto(CLUSTERS.path)

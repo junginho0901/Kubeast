@@ -4131,7 +4131,8 @@
       "confirm": "Remove",
       "self": "removed from the multi-cluster view only.",
       "external": "its stored kubeconfig is deleted too.",
-      "submit": "Delete"
+      "submit": "Delete",
+      "failed": "Not deleted: {{reason}}"
     },
     "access": {
       "add": "Add",
