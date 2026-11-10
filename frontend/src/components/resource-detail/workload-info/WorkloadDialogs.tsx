@@ -66,21 +66,21 @@ export default function WorkloadDialogs({
 
       {triggerDialogOpen && (
         <ModalOverlay onClose={() => { if (!triggerMut.isPending) setTriggerDialogOpen(false) }}>
-          <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-ink mb-3">{tr('cronjob.runNow', 'Run Now')}</h3>
+          <div className="bg-slate-800 border border-hairline rounded-xl shadow-xl p-5 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-ink mb-3">{tr('cronjob.runNow', 'Run Now')}</h3>
             <p className="text-sm text-slate-300 mb-6">
               {tr('cronjob.runNowConfirm', 'Are you sure you want to trigger a manual job from this CronJob?')}
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-wrap justify-end gap-3">
               <button
                 onClick={() => setTriggerDialogOpen(false)}
                 disabled={triggerMut.isPending}
-                className="px-3 py-1.5 text-sm rounded-sm border border-slate-600 text-slate-300 hover:bg-slate-800"
+                className="btn btn-secondary"
               >{tr('rollback.cancel', 'Cancel')}</button>
               <button
                 onClick={() => triggerMut.mutate()}
                 disabled={triggerMut.isPending}
-                className="px-3 py-1.5 text-sm rounded-sm bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50"
+                className="btn btn-primary disabled:opacity-50"
               >{triggerMut.isPending ? '...' : tr('cronjob.runNow', 'Run Now')}</button>
             </div>
           </div>
@@ -89,8 +89,8 @@ export default function WorkloadDialogs({
 
       {rollbackDialogOpen && (
         <ModalOverlay onClose={() => { if (!rollbackMut.isPending) setRollbackDialogOpen(false) }}>
-          <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-ink mb-3">{tr('rollback.title', 'Rollback')}</h3>
+          <div className="bg-slate-800 border border-hairline rounded-xl shadow-xl p-5 w-full max-w-lg" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-ink mb-3">{tr('rollback.title', 'Rollback')}</h3>
             <p className="text-sm text-slate-400 mb-4">{tr('rollback.selectRevision', 'Select a revision to rollback to')}</p>
             {!revisions ? (
               <p className="text-xs text-slate-400 py-4 text-center"><Tx>Loading...</Tx></p>
@@ -101,9 +101,9 @@ export default function WorkloadDialogs({
                 {revisions.map((rev: any) => (
                   <label
                     key={rev.revision}
-                    className={`flex items-center gap-3 px-3 py-2 rounded-sm cursor-pointer text-xs ${
-                      rev.is_current ? 'opacity-50 cursor-not-allowed bg-slate-800/30' : 'hover:bg-slate-800/60'
-                    } ${selectedRevision === rev.revision ? 'bg-primary-900/30 border border-primary-700' : 'border border-transparent'}`}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-xs ${
+                      rev.is_current ? 'opacity-50 cursor-not-allowed bg-slate-700/30' : 'hover:bg-slate-700/60'
+                    } ${selectedRevision === rev.revision ? 'bg-slate-700/60 border border-primary-500' : 'border border-transparent'}`}
                   >
                     <input
                       type="radio"
@@ -129,16 +129,16 @@ export default function WorkloadDialogs({
               </div>
             )}
             <ActionFailure error={rollbackMut.error} action="rollback" testId="rollback-error" className="mt-3" />
-            <div className="flex justify-end gap-3 mt-4">
+            <div className="flex flex-wrap justify-end gap-3 mt-4">
               <button
                 onClick={() => { setRollbackDialogOpen(false); setSelectedRevision(null) }}
                 disabled={rollbackMut.isPending}
-                className="px-3 py-1.5 text-sm rounded-sm border border-slate-600 text-slate-300 hover:bg-slate-800"
+                className="btn btn-secondary"
               >{tr('rollback.cancel', 'Cancel')}</button>
               <button
                 onClick={() => { if (selectedRevision != null) rollbackMut.mutate(selectedRevision) }}
                 disabled={rollbackMut.isPending || selectedRevision == null}
-                className="px-3 py-1.5 text-sm rounded-sm bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+                className="btn bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
               >{rollbackMut.isPending ? '...' : tr('rollback.confirm', 'Rollback')}</button>
             </div>
           </div>

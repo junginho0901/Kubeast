@@ -103,7 +103,7 @@ export default function IngressClassDetail({ name, rawJson }: Props) {
         <InfoSection title="Finalizers">
           <div className="flex flex-wrap gap-1.5">
             {finalizers.map((f, i) => (
-              <span data-detail-chip="" key={`${f}-${i}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">{f}</span>
+              <span key={`${f}-${i}`} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-200">{f}</span>
             ))}
           </div>
         </InfoSection>

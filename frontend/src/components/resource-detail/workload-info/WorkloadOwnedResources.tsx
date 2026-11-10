@@ -133,7 +133,7 @@ export default function WorkloadOwnedResources({
                       <td className="py-2 pr-2 font-mono">{pod.restart_count ?? 0}</td>
                       <td className="py-2 pr-2 font-mono truncate" title={pod.node_name || undefined}>{pod.node_name || '-'}</td>
                       {pvcsEnabled && (
-                        <td className="py-2 pr-2 text-[11px]">
+                        <td className="py-2 pr-2 text-xs">
                           {pvcEntries.length === 0 ? (
                             <span className="text-slate-500">-</span>
                           ) : (

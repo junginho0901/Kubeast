@@ -110,8 +110,8 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
         <InfoSection title="Rules">
           <div className="space-y-3">
             {rules.map((rule: any, i: number) => (
-              <div data-detail-card="" key={i} className="rounded-sm border border-slate-800 p-3">
-                <p className="text-xs text-ink font-medium mb-2">{rule.host || '*'}</p>
+              <div key={i} data-detail-card="" className="border-t border-hairline pt-3">
+                <p className="text-xs text-ink font-medium mb-2 break-all">{rule.host || '*'}</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead className="text-slate-400"><tr><Th className="text-left py-1">Path</Th><Th className="text-left py-1">Type</Th><Th className="text-left py-1">Backend</Th></tr></thead>
@@ -190,10 +190,10 @@ function IngressLatencyMetrics({ name, namespace }: { name: string; namespace?: 
   return (
     <PrometheusSection available={metrics.available} failure={metrics.failure} title="Response Time">
       {!hasAny ? (
-        <div className="text-[11px] text-slate-500">
+        <div className="text-xs text-slate-500">
           <Tx>Requires nginx-ingress-controller with metrics scraped.</Tx></div>
       ) : (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {p50 !== null && (
             <MetricCard label="P50" value={toDisplay(p50)!} unit={unit} thresholds={{ warn: useMs ? 200 : 0.2, danger: useMs ? 500 : 0.5 }} />
           )}

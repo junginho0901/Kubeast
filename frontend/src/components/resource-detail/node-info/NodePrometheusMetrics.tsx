@@ -46,7 +46,7 @@ export default function NodePrometheusMetrics({ name, addresses = [], tr }: Node
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {(findNodeValue('disk_read') !== null || findNodeValue('disk_write') !== null) && (
           <div className="space-y-2">
-            <div className="text-[11px] text-slate-400 font-medium"><Tx>Disk I/O</Tx></div>
+            <div className="text-xs text-slate-400 font-medium"><Tx>Disk I/O</Tx></div>
             {findNodeValue('disk_read') !== null && (
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-400"><Tx>Read</Tx></span>
@@ -63,7 +63,7 @@ export default function NodePrometheusMetrics({ name, addresses = [], tr }: Node
         )}
         {(findNodeValue('network_rx') !== null || findNodeValue('network_tx') !== null) && (
           <div className="space-y-2">
-            <div className="text-[11px] text-slate-400 font-medium"><Tx>Network I/O</Tx></div>
+            <div className="text-xs text-slate-400 font-medium"><Tx>Network I/O</Tx></div>
             {findNodeValue('network_rx') !== null && (
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-400"><Tx>Receive</Tx></span>
@@ -108,7 +108,7 @@ function NodeResourceTrend({ name, cpuQuery, memoryQuery }: { name: string; cpuQ
   return (
     <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+        <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
           <span><Tx>24h CPU%</Tx></span>
           {cpuStats && (
             <span className="font-mono"><Tx text="avg {{avg}} · max {{max}}" values={{ avg: cpuStats.avg.toFixed(1), max: cpuStats.max.toFixed(1) }} /></span>
@@ -120,17 +120,17 @@ function NodeResourceTrend({ name, cpuQuery, memoryQuery }: { name: string; cpuQ
             width={420}
             height={50}
             stroke="var(--color-primary-bright)"
-            fillFrom="color-mix(in srgb, var(--color-primary-bright) 28%, transparent)"
+            fillFrom="transparent"
             fillTo="transparent"
             min={0}
             max={100}
           />
         ) : (
-          <div className="text-[10px] text-slate-500"><Tx>(no data)</Tx></div>
+          <div className="text-xs text-slate-500"><Tx>(no data)</Tx></div>
         )}
       </div>
       <div>
-        <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+        <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
           <span><Tx>24h Memory%</Tx></span>
           {memStats && (
             <span className="font-mono"><Tx text="avg {{avg}} · max {{max}}" values={{ avg: memStats.avg.toFixed(1), max: memStats.max.toFixed(1) }} /></span>
@@ -142,13 +142,13 @@ function NodeResourceTrend({ name, cpuQuery, memoryQuery }: { name: string; cpuQ
             width={420}
             height={50}
             stroke="var(--color-primary-bright)"
-            fillFrom="color-mix(in srgb, var(--color-primary-bright) 28%, transparent)"
+            fillFrom="transparent"
             fillTo="transparent"
             min={0}
             max={100}
           />
         ) : (
-          <div className="text-[10px] text-slate-500"><Tx>(no data)</Tx></div>
+          <div className="text-xs text-slate-500"><Tx>(no data)</Tx></div>
         )}
       </div>
     </div>
