@@ -12,13 +12,13 @@ export default function ComingSoon({ title, description }: ComingSoonProps) {
 
   return (
     <div className="min-h-[calc(100vh-4rem)]">
-      <div className="mx-auto max-w-3xl rounded-2xl border border-slate-700 bg-slate-800/40 p-10 shadow-xs">
+      <div className="card mx-auto max-w-3xl">
         <div className="text-xs text-slate-400">{t('comingSoon.badge', 'Coming Soon')}</div>
-        <h1 className="mt-3 text-3xl font-semibold text-ink">{title}</h1>
+        <h1 className="mt-3 text-[28px] leading-9 font-medium text-ink [overflow-wrap:anywhere]">{title}</h1>
         <p className="mt-4 text-slate-300">
           {description || t('comingSoon.description', 'This section is being prepared. The sidebar structure is ready and features will be filled in next.')}
         </p>
-        <div className="mt-6 text-sm text-slate-500">
+        <div className="mt-6 text-sm text-slate-400 [overflow-wrap:anywhere]">
           {t('comingSoon.route', 'Route:')} <span className="font-mono text-slate-300">{location.pathname}</span>
         </div>
       </div>

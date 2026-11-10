@@ -74,13 +74,13 @@ export default function SavedSearches({ query, resources, namespace, onLoad }: P
   }
 
   return (
-    <div className="flex items-center gap-2" ref={boxRef}>
+    <div className="flex flex-wrap items-center gap-2" ref={boxRef}>
       <button
         type="button"
         onClick={() => setEditing({ name: query.trim().slice(0, 60) })}
         disabled={!query.trim()}
         data-testid="saved-search-save"
-        className="h-10 px-3 rounded-lg border border-slate-600 bg-slate-800 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+        className="btn btn-secondary h-10 text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
       >
         <BookmarkPlus className="w-4 h-4" />
         {t('advancedSearch.saved.save', 'Save search')}
@@ -91,7 +91,7 @@ export default function SavedSearches({ query, resources, namespace, onLoad }: P
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           data-testid="saved-search-toggle"
-          className="h-10 px-3 rounded-lg border border-slate-600 bg-slate-800 text-sm text-slate-200 hover:bg-slate-700 flex items-center gap-2"
+          className="btn btn-secondary h-10 text-sm flex items-center gap-2"
         >
           <Bookmark className="w-4 h-4" />
           {t('advancedSearch.saved.list', 'Saved searches')}
@@ -99,12 +99,12 @@ export default function SavedSearches({ query, resources, namespace, onLoad }: P
           <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
         {open && (
-          <div className="absolute right-0 top-full mt-2 z-100 w-[min(28rem,90vw)] max-h-80 overflow-y-auto rounded-lg border border-slate-600 bg-slate-700 shadow-xl" data-testid="saved-search-menu">
+          <div className="absolute right-0 top-full mt-2 z-100 w-[min(28rem,90vw)] max-h-80 overflow-y-auto rounded-lg border border-hairline bg-slate-800 shadow-xl" data-testid="saved-search-menu">
             {searches.length === 0 ? (
               <p className="px-4 py-3 text-sm text-slate-400">{t('advancedSearch.saved.empty', 'No saved searches yet.')}</p>
             ) : (
               searches.map((s) => (
-                <div key={s.id} className="group flex items-start gap-2 px-3 py-2 hover:bg-slate-600/60" data-testid="saved-search-item">
+                <div key={s.id} className="group flex items-start gap-2 px-3 py-2 hover:bg-slate-700" data-testid="saved-search-item">
                   <button
                     type="button"
                     onClick={() => {
@@ -126,7 +126,7 @@ export default function SavedSearches({ query, resources, namespace, onLoad }: P
                     title={t('advancedSearch.saved.rename', 'Rename')}
                     aria-label={t('advancedSearch.saved.rename', 'Rename')}
                     data-testid="saved-search-rename"
-                    className="p-1 rounded-sm text-slate-400 hover:text-ink hover:bg-slate-600"
+                    className="p-1 rounded-lg text-slate-400 hover:text-ink hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-primary-400"
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
@@ -136,14 +136,14 @@ export default function SavedSearches({ query, resources, namespace, onLoad }: P
                     title={t('advancedSearch.saved.delete', 'Delete')}
                     aria-label={t('advancedSearch.saved.delete', 'Delete')}
                     data-testid="saved-search-delete"
-                    className="p-1 rounded-sm text-slate-400 hover:text-red-300 hover:bg-slate-600"
+                    className="p-1 rounded-lg text-slate-400 hover:text-red-300 hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-primary-400"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               ))
             )}
-            <p className="px-4 py-2 border-t border-slate-600 text-[11px] text-slate-400">
+            <p className="px-4 py-2 border-t border-hairline text-xs text-slate-400">
               {t('advancedSearch.saved.hint', 'Kept in this browser, up to {{max}}.', { max: MAX_SAVED })}
             </p>
           </div>
@@ -180,7 +180,7 @@ export default function SavedSearches({ query, resources, namespace, onLoad }: P
               if (e.key === 'Enter') submit()
             }}
             data-testid="saved-search-name"
-            className="h-10 w-full px-3 rounded-lg border border-slate-600 bg-slate-900 text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+            className="h-10 w-full px-3 rounded-lg border border-control bg-slate-900 text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-400"
           />
         </ModalFrame>
       )}

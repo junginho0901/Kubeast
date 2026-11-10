@@ -89,15 +89,15 @@ export default function SearchExamples({ onSelect }: Props) {
           <button
             key={i}
             onClick={() => onSelect(ex.types, ex.query)}
-            className="group flex flex-col items-start gap-1 px-4 py-3 rounded-xl bg-slate-800/50 border border-slate-700/50 hover:border-primary-500/30 hover:bg-slate-800 transition-all text-left"
+            className="group flex max-w-full flex-col items-start gap-1 px-4 py-3 rounded-lg bg-slate-800 border border-control hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 transition-colors text-left"
           >
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-primary-500/10 text-primary-400 font-semibold">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-slate-900 text-slate-300 font-semibold">
                 {ex.types.length === 0 ? t('advancedSearch.examplesAll', 'All') : ex.label}
               </span>
               <span className="text-xs text-slate-500">{t(`advancedSearch.examples.${ex.key}`, ex.description)}</span>
             </div>
-            <code className="text-xs text-slate-300 font-mono group-hover:text-primary-300 transition-colors">
+            <code className="text-xs text-slate-300 font-mono [overflow-wrap:anywhere] group-hover:text-ink transition-colors">
               {ex.query}
             </code>
           </button>

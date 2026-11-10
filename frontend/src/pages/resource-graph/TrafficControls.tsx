@@ -5,7 +5,7 @@ import type { GraphView, TrafficSource } from './traffic'
 // The header's switch between the objects (structure), who talks to whom (traffic) and both, with the
 // traffic's source and a refresh. Traffic is read when it is switched on and on refresh only.
 
-const segment = (on: boolean) => `px-2.5 py-1.5 rounded-md text-xs transition-colors ${on ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-ink'}`
+const segment = (on: boolean) => `px-2.5 py-1.5 rounded-md text-xs transition-colors ${on ? 'bg-slate-700 text-ink ring-1 ring-inset ring-primary-400' : 'text-slate-400 hover:text-ink hover:bg-slate-700/50'}`
 
 export function TrafficControls({ view, setView, sources, source, setSource, metricsFailure, onRefresh, fetching }: {
   view: GraphView
@@ -27,7 +27,7 @@ export function TrafficControls({ view, setView, sources, source, setSource, met
   }
   return (
     <>
-      <div className="flex items-center gap-1 bg-slate-700 rounded-lg p-0.5" role="group" aria-label={t('resourceGraph.traffic.viewLabel', 'What the lines show')}>
+      <div className="flex flex-wrap items-center gap-1 bg-slate-900/50 rounded-lg p-0.5" role="group" aria-label={t('resourceGraph.traffic.viewLabel', 'What the lines show')}>
         {views.map(([v, label]) => (
           <button key={v} type="button" onClick={() => setView(v)} className={segment(view === v)} aria-pressed={view === v} data-testid={`graph-view-${v}`}>
             {t(`resourceGraph.traffic.view.${v}`, label)}
@@ -37,7 +37,7 @@ export function TrafficControls({ view, setView, sources, source, setSource, met
       {view !== 'structure' && (
         <>
           {sources.length > 0 && (
-            <div className="flex items-center gap-1 bg-slate-700 rounded-lg p-0.5" role="group" aria-label={t('resourceGraph.traffic.sourceLabel', 'Traffic source')}>
+            <div className="flex flex-wrap items-center gap-1 bg-slate-900/50 rounded-lg p-0.5" role="group" aria-label={t('resourceGraph.traffic.sourceLabel', 'Traffic source')}>
               {sources.map((s) => (
                 <button key={s} type="button" onClick={() => setSource(s)} className={segment(source === s)} aria-pressed={source === s} data-testid={`traffic-source-${s}`}>
                   {sourceLabel[s]}
@@ -53,7 +53,7 @@ export function TrafficControls({ view, setView, sources, source, setSource, met
           <button
             type="button"
             onClick={onRefresh}
-            className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-600 bg-slate-700 text-slate-200 hover:bg-slate-600"
+            className="btn btn-secondary h-9 w-9 p-0 inline-flex items-center justify-center"
             aria-label={t('resourceGraph.traffic.refresh', 'Read the traffic again')}
             title={t('resourceGraph.traffic.refresh', 'Read the traffic again')}
             data-testid="traffic-refresh"

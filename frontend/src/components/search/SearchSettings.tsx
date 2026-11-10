@@ -35,7 +35,7 @@ export default function SearchSettings({
       <button
         ref={buttonRef}
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm text-slate-300 transition-colors"
+        className="btn btn-secondary h-10 flex items-center gap-2 text-sm"
       >
         <Settings className="w-4 h-4" />
         {t('advancedSearch.settings', 'Settings')}
@@ -44,7 +44,7 @@ export default function SearchSettings({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute top-full left-0 mt-2 z-50 w-80 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl p-4 space-y-4">
+          <div className="absolute top-full left-0 mt-2 z-50 w-72 max-w-[calc(100vw-2rem)] bg-slate-800 border border-hairline rounded-xl shadow-xl p-5 space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">
                 {t('advancedSearch.maxItemsLabel', 'Max items per resource')}
@@ -55,7 +55,7 @@ export default function SearchSettings({
                 min={1}
                 max={10000}
                 defaultValue={maxItemsPerResource}
-                className="w-full h-10 px-3 rounded-lg bg-slate-900 border border-slate-600 text-ink text-sm focus:outline-hidden focus:border-primary-500"
+                className="w-full h-10 px-3 rounded-lg bg-slate-900 border border-control text-ink text-sm focus:outline-hidden focus:border-primary-400 focus:ring-1 focus:ring-primary-400"
               />
               <p className="mt-1 text-[11px] text-slate-500">
                 {t('advancedSearch.maxItemsHelp', 'Resources exceeding this limit will be excluded to prevent slowdowns.')}
@@ -81,7 +81,7 @@ export default function SearchSettings({
 
             <button
               onClick={save}
-              className="w-full py-2 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium transition-colors"
+              className="btn btn-primary w-full text-sm"
             >
               {t('advancedSearch.save', 'Save')}
             </button>

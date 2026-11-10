@@ -171,9 +171,9 @@ subjects:
       <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('clusterRoleBindingsPage.title', 'Cluster Role Bindings')}</h1>
-          <p className="mt-2 text-slate-400">{tr('clusterRoleBindingsPage.subtitle', 'Manage ClusterRoleBindings across the cluster.')}</p>
+          <p className="mt-1 text-sm text-slate-400">{tr('clusterRoleBindingsPage.subtitle', 'Manage ClusterRoleBindings across the cluster.')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canCreate && (
             <button type="button" onClick={() => setCreateDialogOpen(true)} className="btn btn-primary flex items-center gap-2">
               <Plus className="w-4 h-4" />
@@ -199,7 +199,7 @@ subjects:
       <div className="grid grid-cols-2 gap-3 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
           <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
-            <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
+            <p className={`text-xs leading-4 break-words ${labelClass}`}>{label}</p>
             <p className="text-lg text-ink font-semibold mt-1">{value}</p>
           </div>
         ))}
