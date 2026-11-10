@@ -42,7 +42,7 @@ Helm 차트(`oci://ghcr.io/<owner>/charts/kubeast`)도 `helm push`한 뒤 그 OC
 ## 이미지 검증 (Verifying an image)
 
 ```bash
-IMG=ghcr.io/junginho0901/kubeast-auth-service:v0.7.5
+IMG=ghcr.io/junginho0901/kubeast-auth-service:v0.7.6
 
 # 출처 증명과 SBOM attestation (GitHub CLI 2.49+)
 gh attestation verify oci://$IMG -R junginho0901/Kubeast
