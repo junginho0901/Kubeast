@@ -378,8 +378,8 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
           if (!isDeleting) handlePodContextMenu(event, pod)
         }}
         disabled={isDeleting}
-        className={`p-3 bg-slate-700 rounded-lg transition-colors text-left ${focused ? 'ring-2 ring-primary-400' : hit ? 'ring-1 ring-primary-400' : ''} ${
-          isDeleting ? 'opacity-60 cursor-not-allowed' : 'hover:bg-slate-600'
+        className={`min-w-0 min-h-[132px] p-3 bg-slate-800 border border-hairline rounded-lg transition-colors text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-400 ${focused ? 'ring-2 ring-primary-400' : hit ? 'ring-1 ring-primary-400' : ''} ${
+          isDeleting ? 'opacity-60 cursor-not-allowed' : 'hover:bg-slate-700'
         }`}
       >
         <div className="flex items-start justify-between mb-2">
@@ -390,14 +390,14 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
             getHealthIcon(health.level, health.reason)
           )}
         </div>
-        <div className="text-sm font-medium text-ink truncate" title={pod.name}>
+        <div className="min-w-0 text-sm font-medium text-ink break-all line-clamp-2" title={pod.name}>
           {pod.name}
         </div>
-        <div title={pod.namespace} className="text-xs text-slate-300 mt-1">{pod.namespace}</div>
-        <div className={`text-xs mt-1 min-h-[16px] ${isDeleting ? 'text-amber-400' : 'text-slate-300'}`}>
+        <div title={pod.namespace} className="text-xs text-slate-400 mt-1 break-all">{pod.namespace}</div>
+        <div className={`text-xs mt-1 min-h-[16px] break-words ${isDeleting ? 'text-amber-400' : 'text-slate-300'}`}>
           {isDeleting ? tr('clusterView.podDeleting', 'Deleting...') : health.reason}
         </div>
-        <div className="text-xs text-yellow-400 mt-1 min-h-[16px]">
+        <div className="text-xs text-yellow-400 mt-1 min-h-[16px] tabular-nums">
           {pod.restart_count > 0 &&
             tr('clusterView.restarts', 'Restarts: {{count}}', { count: pod.restart_count })}
         </div>
@@ -424,11 +424,11 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
       onNavigate?.()
     }
     return (
-      <div className="card" data-testid="cluster-view-node" data-node={entry.node}>
-        <div className="flex flex-wrap items-center gap-3 mb-4">
-          <Server className="w-6 h-6 text-slate-400" />
-          <h2 className="text-xl font-semibold text-ink">{entry.label}</h2>
-          <span className="badge badge-secondary">
+      <div className="border-t border-hairline pt-4" data-testid="cluster-view-node" data-node={entry.node}>
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <Server className="w-4 h-4 text-slate-400 shrink-0" />
+          <h2 className="text-base font-medium text-ink break-all">{entry.label}</h2>
+          <span className="badge badge-neutral tabular-nums">
             {tr('clusterView.nodePodsCount', '{{count}} Pods', { count })}
           </span>
           {statusBadges}
@@ -457,11 +457,11 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
   const drawn = ordered.slice(shownPage.start, shownPage.end)
   return (
     <>
-      <div className="card" data-testid="cluster-view-node" data-node={entry.node}>
-        <div className="flex flex-wrap items-center gap-3 mb-4">
-          <Server className="w-6 h-6 text-slate-400" />
-          <h2 className="text-xl font-semibold text-ink">{entry.label}</h2>
-          <span className="badge badge-secondary">
+      <div className="border-t border-hairline pt-4" data-testid="cluster-view-node" data-node={entry.node}>
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <Server className="w-4 h-4 text-slate-400 shrink-0" />
+          <h2 className="text-base font-medium text-ink break-all">{entry.label}</h2>
+          <span className="badge badge-neutral tabular-nums">
             {tr('clusterView.nodePodsCount', '{{count}} Pods', { count: pods ? list.length : entry.counts.total })}
           </span>
           {statusBadges}

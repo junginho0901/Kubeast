@@ -19,20 +19,20 @@ export function ClusterViewHeader({ namespaces }: Props) {
           {tr('clusterView.subtitle', 'Review pod placement across nodes')}
         </p>
       </div>
-      <div className="flex items-center gap-3">
-        <div className="relative">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-0">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
             placeholder={tr('clusterView.searchPlaceholder', 'Search pod name, namespace, node or IP...')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-10 pl-10 pr-4 bg-slate-700 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors w-64"
+            className="h-10 pl-10 pr-10 bg-slate-800 text-sm text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 transition-colors w-64 max-w-full"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-slate-600 rounded-sm transition-colors"
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-slate-600 rounded-lg focus-visible:outline-2 focus-visible:outline-primary-500 transition-colors"
               aria-label={tr('common.clearSearch', 'Clear the search')}
             >
               <X className="w-4 h-4 text-slate-400" />

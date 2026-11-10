@@ -35,14 +35,14 @@ export function PodDetailTabs({ isAdmin }: Props) {
   }
 
   const tabClass = (t: DetailTab) =>
-    `px-4 py-2 font-medium transition-colors flex items-center gap-2 ${
+    `focus-visible:outline-2 focus-visible:outline-primary-500 px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${
       activeTab === t
         ? 'text-primary-400 border-b-2 border-primary-400'
         : 'text-slate-400 hover:text-ink'
     }`
 
   return (
-    <div className="flex gap-2 px-6 pt-4 border-b border-slate-700">
+    <div className="flex gap-1 px-5 pt-2 border-b border-slate-700/70 overflow-x-auto shrink-0">
       <button onClick={() => selectTab('summary')} className={tabClass('summary')}>
         {tr('clusterView.tabs.summary', 'Summary')}
       </button>

@@ -60,14 +60,14 @@ export function PodDeleteModal({ pod, force, error, isDeleting, onForceChange, o
         <Trans
           i18nKey="podDeleteModal.question"
           values={{ name: pod.name }}
-          components={{ kbd: <kbd className="px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-100" /> }}
+          components={{ kbd: <kbd className="px-1.5 py-0.5 rounded-lg bg-slate-700 text-slate-100 break-all" /> }}
         />
       </p>
       <p className="text-sm text-slate-400 mt-3 break-keep">
         {t('podDeleteModal.warning')}
       </p>
 
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <input
           id="force-delete-checkbox"
           type="checkbox"
@@ -94,7 +94,7 @@ export function PodDeleteModal({ pod, force, error, isDeleting, onForceChange, o
       )}
 
       {error && (
-        <div className="mt-4 text-sm text-red-400">{error}</div>
+        <div className="mt-4 text-sm text-red-400 break-words">{error}</div>
       )}
     </ModalFrame>
   )

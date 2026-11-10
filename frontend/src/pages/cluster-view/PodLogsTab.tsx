@@ -191,15 +191,15 @@ export function PodLogsTab({
 
   // 컨테이너 선택 - 커스텀 드롭다운 (컨테이너 출력·로그 파일 공용)
   const containerPicker = (
-        <div className={showFiles || showSearch ? 'relative min-w-[200px]' : 'flex-1 relative'} ref={containerDropdownRef}>
+        <div className={showFiles || showSearch ? 'relative min-w-0 w-full sm:w-[200px]' : 'flex-1 min-w-[160px] relative'} ref={containerDropdownRef}>
           <label className="block text-xs font-semibold text-slate-400 mb-1">
             {tr('clusterView.logs.containerLabel', 'Container')}
           </label>
           <button
             onClick={() => setIsContainerDropdownOpen(!isContainerDropdownOpen)}
-            className="w-full h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
+            className="w-full h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
           >
-            <span title={selectedContainer} className="text-sm font-medium">
+            <span className="text-sm min-w-0 truncate font-medium" title={selectedContainer}>
               {selectedContainer || tr('clusterView.logs.selectContainer', 'Select container')}
             </span>
             <ChevronDown
@@ -221,7 +221,7 @@ export function PodLogsTab({
                     value={containerSearchQuery}
                     onChange={(e) => onContainerSearchChange(e.target.value)}
                     onClick={(e) => e.stopPropagation()}
-                    className="w-full h-8 pl-8 pr-8 bg-slate-600 text-ink rounded-sm text-sm border border-slate-500 focus:outline-hidden focus:border-primary-500 transition-colors"
+                    className="w-full h-8 pl-8 pr-8 bg-slate-600 text-ink rounded-lg text-sm border border-control focus:outline-hidden focus:border-primary-500 transition-colors"
                   />
                   {containerSearchQuery && (
                     <button
@@ -229,7 +229,7 @@ export function PodLogsTab({
                         e.stopPropagation()
                         onContainerSearchChange('')
                       }}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 p-0.5 hover:bg-slate-500 rounded-sm transition-colors"
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 p-0.5 hover:bg-slate-500 rounded-lg transition-colors"
                       aria-label={tr('common.clearSearch', 'Clear the search')}
                     >
                       <X className="w-3 h-3 text-slate-400" />
@@ -261,7 +261,7 @@ export function PodLogsTab({
                       {selectedContainer === container.name && (
                         <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />
                       )}
-                      <span className={selectedContainer === container.name ? 'font-medium' : ''}>
+                      <span className={selectedContainer === container.name ? 'font-medium break-all' : 'break-all'}>
                         {container.name}
                       </span>
                     </button>
@@ -306,7 +306,7 @@ export function PodLogsTab({
       ) : (
       <>
       {/* 컨테이너 선택 및 다운로드 - 고정 */}
-      <div className="flex items-end gap-4 pb-4 shrink-0 border-b border-slate-700">
+      <div className="flex flex-wrap items-end gap-4 pb-4 shrink-0 border-b border-slate-700">
         {containerPicker}
 
         {/* 다운로드 줄 수 선택 - 커스텀 드롭다운 */}
@@ -316,9 +316,9 @@ export function PodLogsTab({
           </label>
           <button
             onClick={() => setIsTailLinesDropdownOpen(!isTailLinesDropdownOpen)}
-            className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between min-w-[150px]"
+            className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-colors flex items-center gap-2 justify-between min-w-[150px]"
           >
-            <span className="text-sm font-medium">
+            <span className="text-sm min-w-0 break-all font-medium">
               {tr('clusterView.logs.linesCount', '{{count}} lines', { count: downloadTailLines })}
             </span>
             <ChevronDown
@@ -342,7 +342,7 @@ export function PodLogsTab({
                   {downloadTailLines === lines && (
                     <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />
                   )}
-                  <span className={downloadTailLines === lines ? 'font-medium' : ''}>
+                  <span className={downloadTailLines === lines ? 'font-medium break-all' : 'break-all'}>
                     {tr('clusterView.logs.linesCount', '{{count}} lines', { count: lines })}
                   </span>
                 </button>

@@ -19,7 +19,7 @@ export function NamespaceDropdown({ namespaces }: Props) {
     <div className="relative" ref={namespaceDropdownRef}>
       <button
         onClick={() => setIsNamespaceDropdownOpen(!isNamespaceDropdownOpen)}
-        className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 w-[220px] justify-between"
+        className="h-10 px-4 bg-slate-800 hover:bg-slate-700 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-colors flex items-center gap-2 w-[220px] max-w-full justify-between"
       >
         <span className="text-sm font-medium truncate min-w-0">
           {selectedNamespace === 'all'
@@ -45,7 +45,7 @@ export function NamespaceDropdown({ namespaces }: Props) {
             {selectedNamespace === 'all' && (
               <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />
             )}
-            <span className={selectedNamespace === 'all' ? 'font-medium' : ''}>
+            <span className={selectedNamespace === 'all' ? 'font-medium break-all' : 'break-all'}>
               {tr('clusterView.allNamespaces', 'All namespaces')}
             </span>
           </button>
@@ -61,7 +61,7 @@ export function NamespaceDropdown({ namespaces }: Props) {
               {selectedNamespace === ns.name && (
                 <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />
               )}
-              <span className={selectedNamespace === ns.name ? 'font-medium' : ''}>
+              <span className={selectedNamespace === ns.name ? 'font-medium break-all' : 'break-all'}>
                 {ns.name}
               </span>
             </button>
