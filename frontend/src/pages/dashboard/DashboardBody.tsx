@@ -157,8 +157,9 @@ export function DashboardBody() {
       { name: 'cpu', promql: clusterNodes.cpu },
       { name: 'memory', promql: clusterNodes.memory },
       { name: 'disk', promql: clusterNodes.filesystem },
-      // each namespace/pod once: two kube-state-metrics, or one scraped twice, would count every pod twice
-      { name: 'pod_count', promql: 'count(count by (namespace, pod) (kube_pod_info))' },
+      // the pods holding a node's pod slot — placed on a node and not finished, as kubectl describe node's
+      // Non-terminated Pods — each namespace/pod once (two kube-state-metrics, or one scraped twice, count twice)
+      { name: 'pod_count', promql: 'count(count by (namespace, pod) (kube_pod_status_phase{phase=~"Pending|Running"} == 1) and on (namespace, pod) kube_pod_info{node!=""})' },
       { name: 'pod_capacity', promql: 'sum(max by (node) (kube_node_status_allocatable{resource="pods"}))' },
     ],
     { refetchInterval: 30000 },

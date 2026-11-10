@@ -72,7 +72,7 @@ export function PrometheusClusterMetrics({ title, cpu, memory, disk, podCount, p
         <Slot
           testId="cluster-metric-pods"
           label={t('dashboard.pods', 'Pods')}
-          title={t('dashboard.podsSource', { defaultValue: "Pods the cluster's Prometheus counts (kube-state-metrics kube_pod_info, each namespace/pod once) of the pods its nodes can take (allocatable). The Pods card above counts the Kubernetes API." })}
+          title={t('dashboard.podsSource', { defaultValue: "Pods on nodes and not finished, as the cluster's Prometheus counts them (kube-state-metrics, each namespace/pod once), of the pods the nodes can take (allocatable). The Pods card above counts every pod from the Kubernetes API." })}
           value={pods?.percent ?? null}
           figure={pods?.text}
           normalClass="bg-primary-bright"

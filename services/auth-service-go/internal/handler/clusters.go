@@ -518,8 +518,11 @@ func (h *ClustersHandler) TestCluster(w http.ResponseWriter, r *http.Request) {
 	if result.Healthy {
 		status = "healthy"
 	}
-	if uerr := h.registry.UpdateHealth(r.Context(), id, status); uerr != nil {
-		slog.Warn("cluster: update health failed", "id", id, "err", uerr)
+	// a probe refused for this caller leaves the health everyone sees as it was
+	if !result.Refused {
+		if uerr := h.registry.UpdateHealth(r.Context(), id, status); uerr != nil {
+			slog.Warn("cluster: update health failed", "id", id, "err", uerr)
+		}
 	}
 	// Clusters registered without an API server address get the one the probe saw.
 	if result.Server != "" {
@@ -579,7 +582,7 @@ func (h *ClustersHandler) checkInfo(r *http.Request, info *cluster.Info) model.C
 		}
 		probe, err := probeCluster(r, h.cfg, info.ID)
 		if err != nil {
-			return model.ClusterConnectionResult{Healthy: false, Message: err.Error()}
+			return probeFailed(err)
 		}
 		return model.ClusterConnectionResult{Healthy: true, ServerVersion: probe.ServerVersion}
 	}
@@ -596,9 +599,16 @@ func (h *ClustersHandler) checkInfo(r *http.Request, info *cluster.Info) model.C
 		return model.ClusterConnectionResult{Healthy: false, Message: "no kubeconfig available"}
 	}
 	if err != nil {
-		return model.ClusterConnectionResult{Healthy: false, Message: err.Error()}
+		return probeFailed(err)
 	}
 	return model.ClusterConnectionResult{Healthy: true, ServerVersion: probe.ServerVersion, Server: probe.Server}
+}
+
+// probeFailed: why the probe did not answer; one refused for this caller is marked so, as it says nothing of the
+// cluster's health.
+func probeFailed(err error) model.ClusterConnectionResult {
+	var refused probeRefused
+	return model.ClusterConnectionResult{Healthy: false, Message: err.Error(), Refused: errors.As(err, &refused)}
 }
 
 // validateKubeconfigYAML performs the cheap structural checks (valid YAML with

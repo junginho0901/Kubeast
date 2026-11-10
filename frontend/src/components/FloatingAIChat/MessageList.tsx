@@ -1,4 +1,4 @@
-import { Fragment, memo, useState, type ReactNode } from 'react'
+import { Fragment, memo, useRef, useState, type ReactNode } from 'react'
 import { Check, Copy, X } from 'lucide-react'
 import { copyText } from '@/utils/clipboard'
 import { useTranslation } from 'react-i18next'
@@ -119,6 +119,7 @@ const MessageBubble = memo(function MessageBubble({ role, content, pending, tool
 function CopyAnswer({ content }: { content: string }) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState<boolean | null>(null)
+  const copyTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const label = copied
     ? t('floatingChat.copied', { defaultValue: 'Copied' })
     : copied === false ? t('common.notCopied', { defaultValue: 'Not copied' }) : t('floatingChat.copy', { defaultValue: 'Copy' })
@@ -128,7 +129,9 @@ function CopyAnswer({ content }: { content: string }) {
       onClick={async () => {
         const ok = await copyText(stripToolDetails(content))
         setCopied(ok)
-        setTimeout(() => setCopied(null), ok ? 1500 : 3000)
+        // the last copy's own timer: an earlier one does not clear it
+        clearTimeout(copyTimer.current)
+        copyTimer.current = setTimeout(() => setCopied(null), ok ? 1500 : 3000)
       }}
       aria-label={label}
       title={label}

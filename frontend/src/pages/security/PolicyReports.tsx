@@ -204,7 +204,8 @@ export default function PolicyReports() {
   // Force refresh: past the server's one-minute cache, so a fix shows up as soon as the engine reports it.
   const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
     await queryClient.invalidateQueries({ queryKey: ['cluster', 'policyreports', 'status'] }, { throwOnError: true })
-    if (installed) {
+    // as the status just read it, not as it was when the button was drawn
+    if ((queryClient.getQueryData(['cluster', 'policyreports', 'status']) as { installed?: boolean } | undefined)?.installed === true) {
       queryClient.setQueryData(['cluster', 'policyreports', 'summary', namespace], await api.getPolicyReportSummary(namespace, true))
       if (tab === 'results') queryClient.setQueryData(resultsKey, await api.getPolicyReportResults(resultsParams, true))
     }

@@ -64,7 +64,7 @@ test.describe('a list whose read failed says so', () => {
     const lift = await failReads(page, '/api/v1/auth/admin/audit-logs')
     await page.getByRole('button', { name: EN.adminAudit.refresh, exact: true }).click()
     const line = page.getByTestId('refresh-failed')
-    await expect(line).toContainText(`: ${REASON}. What is shown is from the read before.`, { timeout: 20_000 })
+    await expect(line).toHaveText(new RegExp(`^Refresh failed at \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}: ${REASON}$`), { timeout: 20_000 })
     expect(await page.locator('tbody tr').count(), 'the rows stay').toBe(before)
     await lift()
     await page.getByRole('button', { name: EN.adminAudit.refresh, exact: true }).click()

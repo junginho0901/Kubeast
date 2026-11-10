@@ -2194,7 +2194,7 @@
     "noSearchResults": "검색 결과가 없습니다.",
     "objectNotFound": "이 객체가 없습니다. 지워졌을 수 있습니다.",
     "objectForbidden": "이 객체를 볼 권한이 없습니다.",
-    "refreshFailed": "{{time}}에 새로 읽지 못했습니다: {{reason}}. 보이는 내용은 그 전에 읽은 것입니다.",
+    "refreshFailed": "{{time}}에 새로 읽지 못했습니다: {{reason}}",
     "readFailed": "목록을 읽지 못했습니다: {{reason}}",
     "logsReadFailed": "로그를 읽지 못했습니다: {{reason}}",
     "copyFailed": "복사하지 못했습니다. 브라우저가 받지 않았습니다. 글을 직접 선택해 복사하세요.",
@@ -2370,7 +2370,7 @@
     "cpu": "CPU",
     "memory": "메모리",
     "metricMissing": "Prometheus에 {{what}} 데이터가 없습니다",
-    "podsSource": "클러스터 Prometheus가 센 Pod 수(kube-state-metrics kube_pod_info, namespace/pod마다 한 번) / Node들이 받을 수 있는 Pod 수(allocatable). 위 Pods 카드는 Kubernetes API에서 셉니다.",
+    "podsSource": "Node에 올라가 끝나지 않은 Pod 수(클러스터 Prometheus · kube-state-metrics, namespace/pod마다 한 번) / Node들이 받을 수 있는 Pod 수(allocatable). 위 Pods 카드는 Kubernetes API의 모든 Pod를 셉니다.",
     "topNodes": {
       "title": "리소스 사용 상위 3개 Node",
       "metricsError": "Node 메트릭을 가져오지 못했습니다"

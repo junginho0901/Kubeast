@@ -218,6 +218,7 @@ export function useChatHandlers({
   }
 
   const handleNewChat = () => {
+    setStopSaveFailure(null)
     // 세션을 미리 생성하지 않고, 선택만 해제 (첫 질문 시 자동 생성)
     setSelectedSessionId(null)
     setViewSessionId(null)
@@ -228,6 +229,8 @@ export function useChatHandlers({
   }
 
   const handleSelectSession = (sessionId: string) => {
+    // the "Not saved" line is the conversation it was stopped in
+    if (sessionId !== selectedSessionId) setStopSaveFailure(null)
     if (isMultiSelectMode) {
       const newSelected = new Set(selectedSessionIds)
       if (newSelected.has(sessionId)) {

@@ -5,6 +5,7 @@ import { Check, Copy, KeySquare, Loader2 } from 'lucide-react'
 
 import { ActionFailure } from '@/components/ActionFailure'
 import { copyText } from '@/utils/clipboard'
+import { failureText } from '@/utils/failureText'
 import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
@@ -77,7 +78,7 @@ export default function ApiKeysSection() {
       setCopyFailed(false)
       queryClient.invalidateQueries({ queryKey: ['api-keys', 'mine'] })
     },
-    onError: (err: any) => setError(err?.response?.data?.detail || tr('apiKeys.failed', 'The key was not created.')),
+    onError: (err: unknown) => setError(`${tr('apiKeys.failed', 'The key was not created.')} ${failureText(err)}`),
   })
   const revoke = useMutation({
     mutationFn: (id: string) => api.deleteAPIKey(id),

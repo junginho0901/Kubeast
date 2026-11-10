@@ -305,8 +305,10 @@ test.describe('Number check — the Cluster Resource Utilization Pods slot', () 
     // the nodes' allocatable pods, as the slot's second number
     const room = kubectlB(`get nodes -o jsonpath='{range .items[*]}{.status.allocatable.pods}{"\\n"}{end}'`)
       .split('\n').filter(Boolean).reduce((s, n) => s + Number(n), 0)
+    // the pods holding a slot: placed on a node and not finished, as kubectl describe node's Non-terminated Pods
     await expect.poll(async () => {
-      const pods = kubectlB('get pods -A --no-headers').split('\n').filter(Boolean).length
+      const pods = kubectlB(`get pods -A --field-selector=status.phase!=Succeeded,status.phase!=Failed -o jsonpath='{range .items[*]}{.spec.nodeName}{"\\n"}{end}'`)
+        .split('\n').filter(Boolean).length
       return `${(await slot.locator('span.font-mono').textContent())?.trim()} | kubectl ${pods} / ${room}`
     }, { timeout: 120_000, intervals: [10_000] }).toMatch(/^(\d+ \/ \d+) \| kubectl \1$/)
   })

@@ -152,6 +152,8 @@ export default function Cost() {
 
   const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
     await queryClient.invalidateQueries({ queryKey: ['cluster', 'cost-status'] }, { throwOnError: true })
+    // a cluster the status just read as without OpenCost has no costs to read again: its card says so
+    if ((queryClient.getQueryData(['cluster', 'cost-status']) as { available?: boolean } | undefined)?.available !== true) return
     // the server keeps an answer a minute: ask it to read OpenCost again for the window and grouping on screen
     queryClient.setQueryData(['cluster', 'cost', win, aggregate], await api.getCost(win, aggregate, true))
     await queryClient.invalidateQueries({ queryKey: ['cluster', 'cost'], predicate: (q) => q.queryKey[2] !== win || q.queryKey[3] !== aggregate }, { throwOnError: true })

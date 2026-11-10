@@ -3,8 +3,8 @@ import path from 'node:path'
 
 import { test, expect } from '@playwright/test'
 
-// A list's Refresh that fails says so under the header — when, the server's reason, and that what is shown is
-// from the read before — and the rows stay; a Refresh that works takes the line away. The screens are a sample of
+// A list's Refresh that fails says so under the header — when and the server's reason — until a Refresh that
+// works takes the line away, or the page moves to another namespace or cluster. The screens are a sample of
 // the 55 that read through hooks/useRefresh, one per way they read (a direct API read, invalidateQueries with
 // throwOnError, a query's refetch, a hook a page draws), plus the Dashboard's own Refresh. After the page has
 // loaded, every cluster read is answered 503 in the browser; the server is not asked.
@@ -39,7 +39,7 @@ test.describe("a list's Refresh that fails says so", () => {
       await page.route(reads, fail)
       await refresh.click()
       const line = page.getByTestId('refresh-failed')
-      await expect(line).toContainText(`: ${REASON}. ${EN.common.refreshFailed.split('. ').pop()}`, { timeout: 30_000 })
+      await expect(line).toHaveText(new RegExp(`^${EN.common.refreshFailed.split('{{time}}')[0]}\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}: ${REASON}$`), { timeout: 30_000 })
       await page.waitForTimeout(4_000)
       await expect(line, 'it stays until a read works').toContainText(REASON)
       await page.unroute(reads, fail)

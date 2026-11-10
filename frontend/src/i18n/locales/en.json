@@ -2194,7 +2194,7 @@
     "noSearchResults": "No results found.",
     "objectNotFound": "This object does not exist; it may have been deleted.",
     "objectForbidden": "You are not allowed to see this object.",
-    "refreshFailed": "Refresh failed at {{time}}: {{reason}}. What is shown is from the read before.",
+    "refreshFailed": "Refresh failed at {{time}}: {{reason}}",
     "readFailed": "Could not read the list: {{reason}}",
     "logsReadFailed": "Could not read the logs: {{reason}}",
     "copyFailed": "Not copied: the browser did not take it. Select the text and copy it yourself.",
@@ -2371,7 +2371,7 @@
     "cpu": "CPU",
     "memory": "Memory",
     "metricMissing": "No {{what}} data from Prometheus",
-    "podsSource": "Pods the cluster's Prometheus counts (kube-state-metrics kube_pod_info, each namespace/pod once) of the pods its nodes can take (allocatable). The Pods card above counts the Kubernetes API.",
+    "podsSource": "Pods on nodes and not finished, as the cluster's Prometheus counts them (kube-state-metrics, each namespace/pod once), of the pods the nodes can take (allocatable). The Pods card above counts every pod from the Kubernetes API.",
     "topNodes": {
       "title": "Top 3 nodes by resource usage",
       "metricsError": "Failed to fetch node metrics"

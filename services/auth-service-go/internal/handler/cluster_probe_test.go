@@ -64,6 +64,17 @@ func TestARegisteredSelfClusterIsDialed(t *testing.T) {
 		t.Fatalf("refused: checkInfo = %+v", got)
 	}
 
+	// k8s-service refusing this caller (403) is no answer about the cluster: marked so the health is not written
+	status, answer = http.StatusForbidden, `{"detail":"forbidden: no access to cluster self"}`
+	got = h.checkInfo(r, self)
+	if got.Healthy || !got.Refused || got.Message != "forbidden: no access to cluster self" {
+		t.Fatalf("refused: checkInfo = %+v", got)
+	}
+	status = http.StatusBadRequest
+	if got = h.checkInfo(r, self); got.Refused {
+		t.Fatalf("a cluster that does not answer is not a refusal: %+v", got)
+	}
+
 	// before registration there is no id to dial by
 	asked = 0
 	got = h.checkInfo(r, &cluster.Info{Mode: cluster.ModeInCluster, InCluster: true})

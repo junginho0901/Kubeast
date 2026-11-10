@@ -342,7 +342,7 @@ export function ChatPanel({
         onStop={handleStop}
         isStreaming={isStreaming}
         disabled={disabled}
-        onNewChat={sessionId ? () => setSessionId(null) : undefined}
+        onNewChat={sessionId ? () => { setStopSaveFailure(null); setSessionId(null) } : undefined}
       />
     </div>
   )

@@ -60,6 +60,11 @@ func probeCluster(r *http.Request, cfg config.Config, id cluster.ID) (probeResul
 	return callProbe(r, cfg, fmt.Sprintf("/internal/clusters/%s/validate", id), nil)
 }
 
+// probeRefused: k8s-service would not dial the cluster for this caller (403) — not an answer about the cluster.
+type probeRefused struct{ detail string }
+
+func (e probeRefused) Error() string { return e.detail }
+
 func callProbe(r *http.Request, cfg config.Config, path string, body []byte) (probeResult, error) {
 	base := strings.TrimRight(cfg.K8sServiceURL, "/")
 	if base == "" {
@@ -87,6 +92,9 @@ func callProbe(r *http.Request, cfg config.Config, path string, body []byte) (pr
 	if resp.StatusCode != http.StatusOK {
 		if out.Detail == "" {
 			out.Detail = fmt.Sprintf("k8s-service returned %d", resp.StatusCode)
+		}
+		if resp.StatusCode == http.StatusForbidden {
+			return probeResult{}, probeRefused{out.Detail}
 		}
 		return probeResult{}, errors.New(out.Detail)
 	}

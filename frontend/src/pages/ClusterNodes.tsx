@@ -128,14 +128,16 @@ export default function ClusterNodes() {
     metricsMap,
   })
 
+  // the nodes are the list: their read failing is the Refresh failing. The usage columns come from metrics-server,
+  // which a cluster may not run; their read failing keeps the last usage and is not the list's failure
   const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
     const [nodesData, metricsData] = await Promise.all([
       api.getNodes(true),
-      metricsAvailable ? api.getNodeMetrics() : Promise.resolve([]),
+      metricsAvailable ? api.getNodeMetrics().catch(() => null) : Promise.resolve(null),
     ])
     queryClient.removeQueries({ queryKey: ['cluster', 'nodes'] })
     queryClient.setQueryData(['cluster', 'nodes'], nodesData)
-    if (metricsAvailable) {
+    if (metricsData) {
       queryClient.setQueryData(['cluster', 'node-metrics'], metricsData)
     }
   })

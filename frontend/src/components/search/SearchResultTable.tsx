@@ -32,6 +32,7 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
   const [notCopiedIdx, setNotCopiedIdx] = useState<number | null>(null)
+  const copyTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const [pageSize, setPageSize] = useState(15)
 
   const calcPageSize = useCallback(() => {
@@ -73,7 +74,9 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
     const ok = await copyText(name)
     setCopiedIdx(ok ? idx : null)
     setNotCopiedIdx(ok ? null : idx)
-    setTimeout(() => { setCopiedIdx(null); setNotCopiedIdx(null) }, ok ? 1500 : 3000)
+    // the last copy's own timer: an earlier row's does not clear it
+    clearTimeout(copyTimer.current)
+    copyTimer.current = setTimeout(() => { setCopiedIdx(null); setNotCopiedIdx(null) }, ok ? 1500 : 3000)
   }
 
   const columns: { key: SortKey; label: string; className: string }[] = [

@@ -26,9 +26,9 @@ describe("a page's Refresh", () => {
     expect(await readFailure(() => Promise.resolve([1, 2]), () => at)).toBeNull()
   })
 
-  it('says under the header when it failed, why, and that what is shown is older', () => {
+  it('says under the header when it failed and why', () => {
     const html = renderToStaticMarkup(createElement(I18nextProvider, { i18n }, createElement(RefreshFailure, { failure: { reason: 'k8s-service unreachable', at: at.toISOString() } })))
-    expect(html).toMatch(/Refresh failed at 2026-11-10 \d{2}:00:07: k8s-service unreachable\. What is shown is from the read before\./)
+    expect(html).toMatch(/Refresh failed at 2026-11-10 \d{2}:00:07: k8s-service unreachable</)
     expect(html).toContain('role="alert"')
     expect(renderToStaticMarkup(createElement(I18nextProvider, { i18n }, createElement(RefreshFailure, { failure: null })))).toBe('')
   })

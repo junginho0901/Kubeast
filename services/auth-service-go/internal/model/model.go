@@ -348,6 +348,8 @@ type ClusterConnectionResult struct {
 	ServerVersion string `json:"server_version,omitempty"`
 	Server        string `json:"server,omitempty"`
 	Message       string `json:"message,omitempty"`
+	// Refused: the caller may not dial this cluster (k8s-service answered 403), which says nothing of its health.
+	Refused bool `json:"refused,omitempty"`
 }
 
 // ClusterSwitchRequest is the payload for POST /api/v1/audit/cluster-switch.

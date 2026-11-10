@@ -15,6 +15,7 @@ import RecordingPlayerModal from '@/components/RecordingPlayerModal'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { failureOf } from '@/hooks/useRefresh'
+import { failureText } from '@/utils/failureText'
 
 const SERVICES = ['', 'auth', 'k8s', 'helm', 'ai', 'admin']
 const RESULTS = ['', 'success', 'failure']
@@ -147,10 +148,6 @@ export default function AdminAudit() {
   // what the last "Anchor now" wrote
   const [anchored, setAnchored] = useState<AuditAnchor | null>(null)
   const [integrityError, setIntegrityError] = useState<string | null>(null)
-  const failureText = (e: unknown) => {
-    const err = e as { response?: { data?: { detail?: string } }; message?: string }
-    return err?.response?.data?.detail || err?.message || 'failed'
-  }
   const verifyMutation = useMutation({
     mutationFn: () => api.adminAuditVerify({ anchors: !!integrity?.anchor_sink }),
     onSuccess: (rep) => {

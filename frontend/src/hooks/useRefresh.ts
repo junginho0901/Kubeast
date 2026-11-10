@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 
 import { failureText } from '@/utils/failureText'
 
@@ -24,10 +25,17 @@ export async function readFailure(read: () => Promise<unknown>, now: () => Date 
 
 // A page's Refresh: runs the read (which must reject when it fails — invalidateQueries and refetchQueries do so only
 // with { throwOnError: true }), turns the spinner for at least REFRESH_SPIN_MS, and keeps why the last read failed
-// and when, until a read succeeds. The rows on screen stay; RefreshFailure says they are from before.
+// and when, until a read succeeds or the address changes (another namespace, cluster or page: the failure was not
+// about what that shows). RefreshFailure says it under the header.
 export function useRefresh(read: () => Promise<unknown>): { refresh: () => Promise<void>; refreshing: boolean; failure: RefreshFailed | null } {
   const [refreshing, setRefreshing] = useState(false)
   const [failure, setFailure] = useState<RefreshFailed | null>(null)
+  const { pathname, search } = useLocation()
+  const [shownAt, setShownAt] = useState(pathname + search)
+  if (shownAt !== pathname + search) {
+    setShownAt(pathname + search)
+    if (failure) setFailure(null)
+  }
   const running = useRef(false)
   const readRef = useRef(read)
   readRef.current = read

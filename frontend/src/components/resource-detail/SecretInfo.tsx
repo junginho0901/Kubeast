@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Eye, EyeOff, Copy, Check, ShieldCheck, Container, X } from 'lucide-react'
@@ -383,6 +383,7 @@ function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; s
   const [visible, setVisible] = useState(false)
   const [copied, setCopied] = useState(false)
   const [notCopied, setNotCopied] = useState(false)
+  const copyTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const sizeStr = size !== undefined ? `${size} bytes` : ''
 
   const handleCopy = async () => {
@@ -390,7 +391,9 @@ function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; s
     const ok = await copyText(value)
     setCopied(ok)
     setNotCopied(!ok)
-    setTimeout(() => { setCopied(false); setNotCopied(false) }, ok ? 1500 : 3000)
+    // the last copy's own timer: an earlier one does not clear it
+    clearTimeout(copyTimer.current)
+    copyTimer.current = setTimeout(() => { setCopied(false); setNotCopied(false) }, ok ? 1500 : 3000)
   }
 
   return (
