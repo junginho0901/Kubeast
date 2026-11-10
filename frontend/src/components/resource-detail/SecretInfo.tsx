@@ -169,13 +169,13 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
           <InfoRow label="Name" value={name} />
           <InfoRow label="Namespace" value={namespace} />
           <InfoRow label={tr('secretInfo.type', 'Type')} value={
-            <span data-detail-chip="" className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] font-mono">
+            <span data-detail-chip="" className="inline-flex rounded-lg border border-control bg-slate-800 px-2 py-0.5 text-xs font-mono">
               {secretType}
             </span>
           } />
           <InfoRow label={tr('secretInfo.created', 'Created')} value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
-          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{describe.uid}</span>} />}
-          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px]">{describe.resource_version}</span>} />}
+          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-xs break-all">{describe.uid}</span>} />}
+          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-xs">{describe.resource_version}</span>} />}
           {immutable !== undefined && (
             <InfoRow label={tr('secretInfo.immutable', 'Immutable')} value={immutable ? 'Yes' : 'No'} />
           )}
@@ -187,7 +187,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
         <InfoSection title={tr('secretInfo.tlsCertInfo', 'TLS Certificate Info')}>
           <div className="space-y-2">
             <InfoRow label={tr('secretInfo.type', 'Type')} value={
-              <span data-detail-chip="" className="inline-flex items-center gap-1.5 rounded-sm border border-emerald-700/50 bg-emerald-900/30 px-2 py-0.5 text-[11px] font-mono text-emerald-300">
+              <span data-detail-chip="" className="inline-flex items-center gap-1.5 rounded-sm border border-emerald-700/50 bg-emerald-900/30 px-2 py-0.5 text-xs font-mono text-emerald-300">
                 <ShieldCheck className="w-3 h-3" /> TLS
               </span>
             } />
@@ -196,7 +196,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
                 {tlsInfo.hasCert ? (
                   <>
                     {tlsInfo.certSize !== undefined && <span className="font-mono">{tlsInfo.certSize} bytes</span>}
-                    {tlsInfo.isPem && <span className="ml-2 text-[10px] text-emerald-400/80"><Tx>(PEM format)</Tx></span>}
+                    {tlsInfo.isPem && <span className="ml-2 text-xs text-emerald-400/80"><Tx>(PEM format)</Tx></span>}
                   </>
                 ) : <span className="text-slate-500 italic"><Tx>not present</Tx></span>}
               </span>
@@ -209,7 +209,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
               </span>
             } />
             <div className="mt-1 px-1">
-              <p className="text-[10px] text-slate-500 italic">
+              <p className="text-xs text-slate-500 italic">
                 {tr('secretInfo.tlsHint', 'Use `openssl x509 -in tls.crt -text -noout` for full certificate details.')}
               </p>
             </div>
@@ -221,17 +221,17 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
         <InfoSection title={tr('secretInfo.dockerConfigInfo', 'Docker Registry Info')}>
           <div className="space-y-2">
             <InfoRow label={tr('secretInfo.type', 'Type')} value={
-              <span data-detail-chip="" className="inline-flex items-center gap-1.5 rounded-sm border border-slate-600 bg-slate-800 px-2 py-0.5 text-[11px] font-mono text-slate-300">
+              <span data-detail-chip="" className="inline-flex items-center gap-1.5 rounded-sm border border-slate-600 bg-slate-800 px-2 py-0.5 text-xs font-mono text-slate-300">
                 <Container className="w-3 h-3" /> Docker Config
               </span>
             } />
             <InfoRow label={tr('secretInfo.registries', 'Registries')} value={
               <div className="space-y-1">
                 {dockerInfo.registries.map((reg) => (
-                  <div key={reg.url} className="flex items-center gap-2 text-xs">
+                  <div key={reg.url} className="flex flex-wrap items-center gap-2 text-xs">
                     <span className="font-mono text-slate-200 break-all">{reg.url}</span>
                     {reg.username && (
-                      <span className="text-[10px] text-slate-400">
+                      <span className="text-xs text-slate-400">
                         ({tr('secretInfo.user', 'user')}: <span className="font-mono text-slate-300">{reg.username}</span>)
                       </span>
                     )}
@@ -245,7 +245,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
 
       <InfoSection title={`${tr('secretInfo.data', 'Data')} (${filteredDataKeys.length}${dataSearch ? ` / ${dataKeys.length}` : ''})`}>
         {!canReveal && (
-          <p className="text-[11px] text-amber-400/80 mb-2">{tr('secretInfo.maskedHint', 'Values are hidden without the resource.secret.reveal permission.')}</p>
+          <p className="text-xs text-amber-400/80 mb-2">{tr('secretInfo.maskedHint', 'Values are hidden without the resource.secret.reveal permission.')}</p>
         )}
 
         {dataKeys.length > DATA_PER_PAGE && (
@@ -255,7 +255,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
               placeholder={tr('secretInfo.searchKeys', 'Search keys...')}
               value={dataSearch}
               onChange={(e) => { setDataSearch(e.target.value); setDataPage(1) }}
-              className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-sm text-xs text-ink placeholder-slate-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500"
+              className="w-full h-8 px-3 bg-slate-800 border border-control rounded-lg text-sm text-ink placeholder-slate-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500"
             />
           </div>
         )}
@@ -278,10 +278,10 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
 
         {filteredDataKeys.length > DATA_PER_PAGE && (
           <div className="flex items-center justify-between mt-2">
-            <span className="text-[10px] text-slate-500">{dataPage} / {dataTotalPages}</span>
+            <span className="text-xs text-slate-500">{dataPage} / {dataTotalPages}</span>
             <div className="flex gap-1">
-              <button type="button" onClick={() => setDataPage((p) => Math.max(1, p - 1))} disabled={dataPage <= 1} className="px-2 py-0.5 text-[10px] rounded-sm border border-slate-700 text-slate-400 disabled:opacity-40"><Tx>Prev</Tx></button>
-              <button type="button" onClick={() => setDataPage((p) => Math.min(dataTotalPages, p + 1))} disabled={dataPage >= dataTotalPages} className="px-2 py-0.5 text-[10px] rounded-sm border border-slate-700 text-slate-400 disabled:opacity-40"><Tx>Next</Tx></button>
+              <button type="button" onClick={() => setDataPage((p) => Math.max(1, p - 1))} disabled={dataPage <= 1} className="px-2 py-0.5 text-xs rounded-lg border border-control text-slate-400 disabled:opacity-40"><Tx>Prev</Tx></button>
+              <button type="button" onClick={() => setDataPage((p) => Math.min(dataTotalPages, p + 1))} disabled={dataPage >= dataTotalPages} className="px-2 py-0.5 text-xs rounded-lg border border-control text-slate-400 disabled:opacity-40"><Tx>Next</Tx></button>
             </div>
           </div>
         )}
@@ -291,9 +291,9 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
         <InfoSection title={tr('secretInfo.ownerReferences', 'Owner References')}>
           <div className="space-y-1">
             {ownerRefs.map((ref) => (
-              <div key={ref.uid} className="flex items-center gap-2 text-xs">
-                <span data-detail-chip="" className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-slate-300">{ref.kind}</span>
-                <span className="text-ink font-medium">{ref.name}</span>
+              <div key={ref.uid} className="flex flex-wrap items-center gap-2 text-xs">
+                <span data-detail-chip="" className="inline-flex rounded-lg border border-control bg-slate-800 px-2 py-0.5 font-mono text-slate-300">{ref.kind}</span>
+                <span className="text-ink font-medium break-all">{ref.name}</span>
               </div>
             ))}
           </div>
@@ -354,9 +354,9 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
                 if (inMount) tags.push('mount')
                 if (inPull) tags.push('imagePullSecret')
                 return (
-                  <div key={`${sa.namespace}/${sa.name}`} className="flex items-center gap-2">
+                  <div key={`${sa.namespace}/${sa.name}`} className="flex flex-wrap items-center gap-2">
                     <ResourceLink kind="ServiceAccount" name={sa.name} namespace={sa.namespace} />
-                    <span className="text-[10px] text-slate-400">({tags.join(', ')})</span>
+                    <span className="text-xs text-slate-400">({tags.join(', ')})</span>
                   </div>
                 )
               })}
@@ -407,11 +407,11 @@ function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; s
   }
 
   return (
-    <div data-detail-card="" className="rounded-sm border border-slate-800 bg-slate-900/40">
-      <div className="flex items-center justify-between px-3 py-2">
+    <div data-detail-card="" className="border-b border-hairline">
+      <div className="flex flex-wrap items-center justify-between gap-2 py-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <span className="font-mono text-xs text-slate-200 break-all">{dataKey}</span>
-          {sizeStr && <span className="text-[10px] text-slate-500 shrink-0">{sizeStr}</span>}
+          {sizeStr && <span className="text-xs text-slate-500 shrink-0">{sizeStr}</span>}
         </div>
         <div className="flex items-center gap-1 shrink-0 ml-2">
           {!canReveal ? (
@@ -424,7 +424,7 @@ function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; s
               <button
                 type="button"
                 onClick={() => setVisible((v) => !v)}
-                className="p-1 rounded-sm hover:bg-slate-700 text-slate-400 hover:text-ink transition-colors"
+                className="p-1 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-ink transition-colors"
                 title={dl(visible ? 'Hide' : 'Show')}
               >
                 {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -433,7 +433,7 @@ function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; s
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="p-1 rounded-sm hover:bg-slate-700 text-slate-400 hover:text-ink transition-colors"
+                  className="p-1 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-ink transition-colors"
                   title={notCopied ? t('common.copyFailed', { defaultValue: 'Not copied: the browser did not take it. Select the text and copy it yourself.' }) : dl('Copy value')}
                 >
                   {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : notCopied ? <X className="w-3.5 h-3.5 text-red-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -449,8 +449,8 @@ function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; s
         </div>
       </div>
       {visible && canReveal && value !== undefined && (
-        <div className="px-3 pb-2 border-t border-slate-800">
-          <pre className="text-[11px] text-slate-300 whitespace-pre-wrap wrap-break-word mt-1.5 max-h-[200px] overflow-y-auto font-mono">
+        <div className="px-3 pb-2 border-t border-hairline">
+          <pre className="text-xs text-slate-300 whitespace-pre-wrap wrap-break-word mt-1.5 max-h-[200px] overflow-y-auto font-mono">
             {value || <span className="text-slate-600 italic"><Tx>(empty)</Tx></span>}
           </pre>
         </div>

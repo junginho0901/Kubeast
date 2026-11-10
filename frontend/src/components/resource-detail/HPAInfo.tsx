@@ -231,11 +231,11 @@ function HPAScalingHistory({ name, namespace }: { name: string; namespace: strin
   return (
     <PrometheusSection available={available} failure={available ? null : prometheusNotAnswering(error)} title="Scaling History (24h)">
       {series.length === 0 ? (
-        <div className="text-[11px] text-slate-500">
+        <div className="text-xs text-slate-500">
           <Tx>Requires kube-state-metrics with HPA series scraped.</Tx></div>
       ) : (
         <div className="space-y-2">
-          <div className="flex items-center justify-between text-[11px] text-slate-400">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
             <span><Tx text={rescales === 1 ? '1 rescale · {{samples}} samples' : '{{n}} rescales · {{samples}} samples'} values={{ n: rescales, samples: series.length }} /></span>
             <span className="font-mono"><Tx text="min {{min}} · max {{max}}" values={{ min: minReplicas, max: maxReplicas }} /></span>
           </div>
@@ -243,9 +243,9 @@ function HPAScalingHistory({ name, namespace }: { name: string; namespace: strin
             points={series}
             width={480}
             height={56}
-            stroke="#34d399"
-            fillFrom="rgba(52, 211, 153, 0.30)"
-            fillTo="rgba(52, 211, 153, 0)"
+            stroke="var(--color-primary-bright)"
+            fillFrom="transparent"
+            fillTo="transparent"
           />
         </div>
       )}

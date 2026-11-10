@@ -50,9 +50,9 @@ export function ObjectUnreadable({ kind, name, namespace, notFound = false }: { 
 export function InfoSection({ title, titleValues, children, actions }: { title: string; titleValues?: LabelValues; children: ReactNode; actions?: ReactNode }) {
   const ds = useDetailSection()
   return (
-    <div data-detail-section="" className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-xs text-slate-400">{ds(title, titleValues)}</p>
+    <div data-detail-section="" className="border-t border-hairline pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <p className="text-lg font-semibold text-ink">{ds(title, titleValues)}</p>
         {actions}
       </div>
       {children}
@@ -67,15 +67,15 @@ const isYesNo = (v: unknown): v is 'Yes' | 'No' => v === 'Yes' || v === 'No'
 export function InfoRow({ label, value, asIs }: { label: string; value: ReactNode; asIs?: boolean }) {
   const dl = useDetailLabel()
   return (
-    <div data-detail-row="" className="grid grid-cols-1 md:grid-cols-[140px_1fr] gap-1 text-xs text-slate-200">
-      <span className="text-slate-400 shrink-0">{asIs ? label : dl(label)}</span>
-      <span className="text-ink font-medium break-all">{isYesNo(value) ? dl(value) : typeof value === 'string' ? value.trim() || '-' : typeof value === 'number' ? value : value ?? '-'}</span>
+    <div data-detail-row="" className="grid grid-cols-1 md:grid-cols-[140px_minmax(0,1fr)] gap-1 text-sm text-slate-200">
+      <span className="text-xs text-slate-400 shrink-0 break-words">{asIs ? label : dl(label)}</span>
+      <span className="min-w-0 text-ink font-medium break-all">{isYesNo(value) ? dl(value) : typeof value === 'string' ? value.trim() || '-' : typeof value === 'number' ? value : value ?? '-'}</span>
     </div>
   )
 }
 
 export function InfoGrid({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-200">{children}</div>
+  return <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-200">{children}</div>
 }
 
 // label: the text on screen when it differs from the value the colour is picked from.
@@ -91,13 +91,13 @@ export function StatusBadge({ status, label }: { status: string; label?: string 
 export function SummaryBadge({ label, value, color }: { label: string; value: string | number; color?: 'green' | 'amber' | 'red' | 'default' }) {
   const dl = useDetailLabel()
   const c = {
-    green: 'border-emerald-500/60 text-emerald-300',
-    amber: 'border-amber-500/60 text-amber-300',
-    red: 'border-red-500/60 text-red-300',
-    default: 'border-slate-600 text-slate-300',
+    green: 'text-emerald-300',
+    amber: 'text-amber-300',
+    red: 'text-red-300',
+    default: 'text-slate-300',
   }
   return (
-    <span data-summary-badge="" className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${c[color || 'default']}`}>
+    <span data-summary-badge="" className={`inline-flex items-center gap-1 py-0.5 text-xs font-medium tabular-nums ${c[color || 'default']}`}>
       {dl(label)}: {isYesNo(value) ? dl(value) : value}
     </span>
   )
@@ -110,11 +110,11 @@ export function KeyValueTags({ data, emptyText = 'None' }: { data?: Record<strin
   return (
     <div className="flex flex-wrap gap-2 text-xs text-slate-200">
       {entries.map(([key, value]) => (
-        <span data-detail-tag="" key={`${key}=${value}`} className="relative inline-flex items-center rounded-full border border-slate-700 bg-slate-800/80 px-2 py-1 max-w-full group">
+        <span key={`${key}=${value}`} data-detail-tag="" className="relative inline-flex items-center rounded-md bg-slate-700/50 px-2 py-1 max-w-full group">
           <span className="font-mono text-slate-300 max-w-[160px] truncate">{key}</span>
           <span className="mx-1 text-slate-500">:</span>
           <span className="max-w-[260px] truncate">{value}</span>
-          <span className="pointer-events-none absolute left-0 top-full mt-1 z-20 hidden w-max max-w-[520px] rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-200 shadow-lg group-hover:block">
+          <span className="pointer-events-none absolute left-0 top-full mt-1 z-20 hidden w-max max-w-[min(520px,calc(100vw-4rem))] rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 shadow-lg group-hover:block">
             <span className="wrap-break-word">{`${key}: ${value}`}</span>
           </span>
         </span>
@@ -214,7 +214,7 @@ export function EventsSection({ events, error, loading, title = 'Events' }: { ev
 export function UsageCard({ label, value, percent, color }: { label: string; value: string; percent: number; color: string }) {
   const dl = useDetailLabel()
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-3">
+    <div className="border-l border-hairline px-4 py-2">
       <p className="text-xs text-slate-400">{dl(label)}</p>
       <p className="text-base text-ink mt-1">{value}</p>
       <div className="mt-3 w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">

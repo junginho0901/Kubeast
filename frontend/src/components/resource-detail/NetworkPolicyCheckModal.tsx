@@ -63,7 +63,7 @@ function CheckRow({ c, res, tr }: { c: NetpolCheck; res: NetpolCheckResult; tr: 
   const src = res.source.name || res.source.ref
   const dst = res.destination.name || res.destination.ref
   return (
-    <li className="rounded-sm border border-slate-800 bg-slate-900/60 p-2.5 space-y-1" data-testid="netpol-check-row">
+    <li className="border-b border-hairline py-3 space-y-1" data-testid="netpol-check-row">
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className={`badge ${RESULT_BADGE[c.result]}`} data-testid="netpol-check-result">{resultLabel(c.result, tr)}</span>
         <span className="font-mono text-slate-200">{c.protocol} {c.port || '-'}</span>
@@ -162,7 +162,7 @@ export default function NetworkPolicyCheckModal({ self, selfName, namespace, onC
         </>
       }
     >
-      <div className="px-6 pb-4 space-y-4">
+      <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <CustomDropdown
             label={tr('netpolCheck.direction', 'Direction')}
@@ -220,7 +220,7 @@ export default function NetworkPolicyCheckModal({ self, selfName, namespace, onC
                 <datalist id="netpol-check-name-matches">
                   {(podMatches.data?.items ?? []).map((p) => <option key={p.name} value={p.name} />)}
                 </datalist>
-                <p className="mt-1 text-[11px] text-slate-400" data-testid="netpol-check-name-many">
+                <p className="mt-1 text-xs text-slate-400" data-testid="netpol-check-name-many">
                   {podCount.data
                     ? tr('netpolCheck.manyPods', 'This namespace has {{total}} pods, too many to list: type a name, and up to {{shown}} that match it are suggested.', { total: podCount.data.stats.total, shown: POD_SUGGESTIONS })
                     : tr('netpolCheck.podsUncounted', 'The pods of this namespace could not be counted: type a name, and up to {{shown}} that match it are suggested.', { shown: POD_SUGGESTIONS })}
@@ -255,7 +255,7 @@ export default function NetworkPolicyCheckModal({ self, selfName, namespace, onC
         {errorText && <p className="text-xs text-red-300 break-words" data-testid="netpol-check-error">{errorText}</p>}
         {res && (
           <div className="space-y-2" data-testid="netpol-check-answer">
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className={`badge ${RESULT_BADGE[res.result]}`} data-testid="netpol-check-overall">{resultLabel(res.result, tr)}</span>
               <span className="text-slate-300 font-mono break-all">{res.source.ref} → {res.destination.ref}</span>
             </div>

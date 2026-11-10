@@ -75,8 +75,8 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
           <InfoRow label="Name" value={name} />
           <InfoRow label="Namespace" value={namespace} />
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
-          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{describe.uid}</span>} />}
-          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px]">{describe.resource_version}</span>} />}
+          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-xs break-all">{describe.uid}</span>} />}
+          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-xs">{describe.resource_version}</span>} />}
         </div>
       </InfoSection>
 

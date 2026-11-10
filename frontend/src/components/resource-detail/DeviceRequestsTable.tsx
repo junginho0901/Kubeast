@@ -21,7 +21,7 @@ export function DeviceRequestsTable({ requests }: { requests: unknown }) {
             <tr key={idx} className="text-slate-200">
               <td className="py-1 pr-2 wrap-break-word">{r.name}</td>
               <td className="py-1 pr-2 wrap-break-word">{r.deviceClass}</td>
-              <td className="py-1 pr-2 wrap-break-word font-mono text-[11px]">{r.selectors.length > 0 ? r.selectors.join('; ') : '-'}</td>
+              <td className="py-1 pr-2 wrap-break-word font-mono text-xs">{r.selectors.length > 0 ? r.selectors.join('; ') : '-'}</td>
               <td className="py-1 pr-2">{r.count}</td>
               <td className="py-1 pr-2 wrap-break-word">{r.allocationMode}</td>
             </tr>

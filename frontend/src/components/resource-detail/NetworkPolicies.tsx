@@ -28,7 +28,7 @@ function DirectionBlock({ title, dir, incoming, namespace, tr }: { title: string
           </p>
           <ul className="space-y-1.5">
             {paged.map((p) => (
-              <li key={p.name} className="rounded-sm border border-slate-800 bg-slate-900/60 px-2.5 py-1.5 text-xs" data-testid="netpol-policy">
+              <li key={p.name} className="border-b border-hairline py-2 text-xs break-words" data-testid="netpol-policy">
                 <ResourceLink kind="NetworkPolicy" name={p.name} namespace={namespace} />
                 {p.rules.length === 0 ? (
                   <span className="ml-2 text-red-300">{tr('netpolCheck.noRules', 'No rules: denies all.')}</span>
@@ -76,7 +76,7 @@ export default function NetworkPolicies({ kind, namespace, name }: { kind: strin
           type="button"
           onClick={() => setChecking(true)}
           data-testid="netpol-check-open"
-          className="flex items-center gap-1 h-7 px-2.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-200 text-[11px] hover:bg-slate-700 transition-colors"
+          className="flex items-center gap-1 h-7 px-2.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-200 text-xs hover:bg-slate-700 transition-colors"
         >
           <ShieldCheck className="w-3.5 h-3.5" />
           {tr('netpolCheck.open', 'Check a connection')}

@@ -61,7 +61,7 @@ export default function GenericInfo({ name, namespace, kind, apiVersion, rawJson
           {namespace && <InfoRow label="Namespace" value={namespace} />}
           <InfoRow label="API Version" value={String(rawJson?.apiVersion ?? '-')} />
           <InfoRow label="Created" value={meta.creationTimestamp ? `${fmtTs(meta.creationTimestamp as string)} (${fmtRel(meta.creationTimestamp as string)})` : '-'} />
-          {typeof meta.uid === 'string' && <InfoRow label="UID" value={<span className="font-mono text-[11px]">{meta.uid}</span>} />}
+          {typeof meta.uid === 'string' && <InfoRow label="UID" value={<span className="font-mono text-xs">{meta.uid}</span>} />}
         </div>
       </InfoSection>
 
@@ -96,7 +96,7 @@ export default function GenericInfo({ name, namespace, kind, apiVersion, rawJson
                 <p className="text-xs text-slate-500 mb-1"><Tx>Containers</Tx></p>
                 <div className="space-y-1">
                   {(spec.containers as any[]).map((c: any, i: number) => (
-                    <div key={i} className="text-xs text-slate-300">
+                    <div key={i} className="text-xs text-slate-300 break-words">
                       <span className="font-medium">{c.name}</span>
                       <span className="text-slate-500 ml-2">{c.image}</span>
                     </div>
@@ -108,7 +108,7 @@ export default function GenericInfo({ name, namespace, kind, apiVersion, rawJson
               <div className="mt-2">
                 <p className="text-xs text-slate-500 mb-1"><Tx>Ports</Tx></p>
                 {(spec.ports as any[]).map((p: any, i: number) => (
-                  <div key={i} className="text-xs text-slate-300">
+                  <div key={i} className="text-xs text-slate-300 break-words">
                     {p.name && <span className="font-medium">{p.name}: </span>}
                     {p.port}{p.targetPort ? ` → ${p.targetPort}` : ''} {p.protocol && `(${p.protocol})`}
                   </div>

@@ -33,8 +33,8 @@ function TalkerRows({ res, self, metricLabel, category, tr }: {
 }) {
   const { items: paged, page, nav } = usePagination(res.rows, 10)
   return (
-    <div data-testid="toptalkers-list">
-      <table className="w-full" data-testid="toptalkers-table">
+    <div className="overflow-x-auto" data-testid="toptalkers-list">
+      <table className="w-full min-w-[680px]" data-testid="toptalkers-table">
         <thead className="text-slate-400">
           <tr>
             <th className="text-left py-1 pr-2 font-medium">{tr('toptalkers.peer', 'Peer')}</th>
@@ -103,7 +103,7 @@ export default function TopTalkers({ kind, namespace, name }: { kind: string; na
     <InfoSection
       title="Top Talkers"
       actions={asked ? (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <CustomDropdown
             size="sm"
             value={view}
@@ -137,11 +137,11 @@ export default function TopTalkers({ kind, namespace, name }: { kind: string; na
     >
       <div className="space-y-2 text-xs" data-testid="toptalkers-section">
         {!asked ? (
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <p className="text-slate-400">
               {tr('toptalkers.intro', "Who this {{kind}} exchanges the most data with, and where retransmissions happen, from the cluster's Network Flow Monitor (AWS). Reading them is recorded in the audit log.", { kind })}
             </p>
-            <button type="button" className="shrink-0 h-7 px-2.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-200 text-[11px] hover:bg-slate-700" onClick={() => setAsked(true)} data-testid="toptalkers-load">
+            <button type="button" className="shrink-0 h-7 px-2.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-200 text-xs hover:bg-slate-700" onClick={() => setAsked(true)} data-testid="toptalkers-load">
               {tr('toptalkers.load', 'Show top talkers')}
             </button>
           </div>

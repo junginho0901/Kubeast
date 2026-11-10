@@ -32,17 +32,17 @@ function CollapsibleJson({ label, data }: { label: string; data: unknown }) {
     : json
 
   return (
-    <div data-detail-card="" className="rounded-sm border border-slate-800 bg-slate-950/60">
+    <div data-detail-card="" className="rounded-lg bg-slate-800">
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-slate-800/40 transition-colors"
+        className="w-full flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs hover:bg-slate-800/40 transition-colors"
       >
         <span className="text-slate-400 font-medium">{label} <span className="text-slate-600 ml-1"><Tx text="({{n}} keys)" values={{ n: typeof data === 'object' && data ? Object.keys(data as object).length : 0 }} /></span></span>
-        <span className="text-slate-500 text-[11px]">{open ? '▼ ' : '▶ '}<Tx>{open ? 'collapse' : 'expand'}</Tx></span>
+        <span className="text-slate-500 text-xs">{open ? '▼ ' : '▶ '}<Tx>{open ? 'collapse' : 'expand'}</Tx></span>
       </button>
       <div className="px-3 pb-2">
-        <pre className="text-[11px] font-mono text-slate-300 whitespace-pre-wrap break-all max-h-[400px] overflow-y-auto">
+        <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap break-all max-h-[400px] overflow-y-auto">
           {open ? json : preview}
         </pre>
       </div>
@@ -52,17 +52,17 @@ function CollapsibleJson({ label, data }: { label: string; data: unknown }) {
 
 function renderValue(value: unknown, depth = 0): React.ReactNode {
   if (value === null || value === undefined) return <span className="text-slate-500">-</span>
-  if (typeof value === 'boolean') return <span className="font-mono text-[11px]">{value.toString()}</span>
-  if (typeof value === 'number') return <span className="font-mono text-[11px]">{value}</span>
+  if (typeof value === 'boolean') return <span className="font-mono text-xs">{value.toString()}</span>
+  if (typeof value === 'number') return <span className="font-mono text-xs">{value}</span>
   if (typeof value === 'string') {
     // an RFC 3339 time (lastSyncTime …) reads like every other time on screen, the value as written on hover
     if (RFC3339.test(value) && formatTime(value) !== '-') {
-      return <span className="font-mono text-[11px]" title={value}>{`${formatTime(value)} (${formatAge(value)})`}</span>
+      return <span className="font-mono text-xs" title={value}>{`${formatTime(value)} (${formatAge(value)})`}</span>
     }
     if (value.length > 200) {
-      return <span className="font-mono text-[11px] break-all whitespace-pre-wrap">{value}</span>
+      return <span className="font-mono text-xs break-all whitespace-pre-wrap">{value}</span>
     }
-    return <span className="font-mono text-[11px] wrap-break-word">{value}</span>
+    return <span className="font-mono text-xs wrap-break-word">{value}</span>
   }
 
   if (Array.isArray(value)) {
@@ -71,7 +71,7 @@ function renderValue(value: unknown, depth = 0): React.ReactNode {
       return (
         <div className="inline-flex flex-wrap gap-1">
           {value.map((v, i) => (
-            <span data-detail-chip="" key={i} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+            <span key={i} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-100 font-mono">
               {String(v)}
             </span>
           ))}
@@ -85,7 +85,7 @@ function renderValue(value: unknown, depth = 0): React.ReactNode {
     return (
       <div className="space-y-1.5 mt-1">
         {value.map((item, i) => (
-          <div data-detail-card="" key={i} className="rounded-sm border border-slate-800 bg-slate-900/40 p-2">
+          <div key={i} data-detail-card="" className="border-b border-hairline py-2">
             {renderValue(item, depth + 1)}
           </div>
         ))}
@@ -115,7 +115,7 @@ function renderValue(value: unknown, depth = 0): React.ReactNode {
     )
   }
 
-  return <span className="font-mono text-[11px]">{String(value)}</span>
+  return <span className="font-mono text-xs">{String(value)}</span>
 }
 
 export default function CustomResourceInstanceInfo({ name, namespace, rawJson }: Props) {
@@ -211,8 +211,8 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
           <InfoRow label="API Version" value={describe?.api_version || `${group}/${version}`} />
           <InfoRow label="CRD" value={crdName || '-'} />
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
-          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{describe.uid}</span>} />}
-          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px]">{describe.resource_version}</span>} />}
+          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-xs break-all">{describe.uid}</span>} />}
+          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-xs">{describe.resource_version}</span>} />}
         </div>
       </InfoSection>
 
@@ -225,7 +225,7 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
                 key={cell.name}
                 label={cell.name}
                 asIs
-                value={<span className="font-mono text-[11px]">{printerCellText(cell, tr('common.yes', 'Yes'), tr('common.no', 'No'))}</span>}
+                value={<span className="font-mono text-xs">{printerCellText(cell, tr('common.yes', 'Yes'), tr('common.no', 'No'))}</span>}
               />
             ))}
           </div>
@@ -277,7 +277,7 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
         <InfoSection title={tr('crInstanceInfo.ownerReferences', 'Owner References')}>
           <div className="space-y-2">
             {ownerRefs.map((ref: any, idx: number) => (
-              <div data-detail-card="" key={idx} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 text-xs text-slate-300 space-y-1">
+              <div key={idx} data-detail-card="" className="border-b border-hairline py-3 break-words text-xs text-slate-300 space-y-1">
                 <div><span className="text-slate-500 mr-2"><Tx>Kind:</Tx></span>{ref.kind}</div>
                 <div><span className="text-slate-500 mr-2"><Tx>Name:</Tx></span>{ref.name}</div>
               </div>
@@ -291,7 +291,7 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
         <InfoSection title={tr('crInstanceInfo.finalizers', 'Finalizers')}>
           <div className="inline-flex flex-wrap gap-1">
             {finalizers.map((f: string) => (
-              <span data-detail-chip="" key={f} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono break-all">{f}</span>
+              <span key={f} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-100 font-mono break-all">{f}</span>
             ))}
           </div>
         </InfoSection>

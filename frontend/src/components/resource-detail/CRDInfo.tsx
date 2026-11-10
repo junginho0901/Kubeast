@@ -114,7 +114,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
           <InfoRow label={tr('crdInfo.group', 'Group')} value={describe?.group || '-'} />
           <InfoRow label={tr('crdInfo.scope', 'Scope')} value={
             describe?.scope ? (
-              <span className={`inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium ${
+              <span className={`inline-flex px-2 py-0.5 rounded-sm text-xs font-medium ${
                 'bg-slate-700 text-slate-300'
               }`}>
                 {describe.scope}
@@ -129,7 +129,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
             <InfoRow label={tr('crdInfo.shortNames', 'Short Names')} value={
               <div className="inline-flex flex-wrap gap-1">
                 {shortNames.map((n: string) => (
-                  <span data-detail-chip="" key={n} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{n}</span>
+                  <span key={n} data-detail-chip="" className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-100 font-mono">{n}</span>
                 ))}
               </div>
             } />
@@ -138,7 +138,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
             <InfoRow label={tr('crdInfo.categories', 'Categories')} value={
               <div className="inline-flex flex-wrap gap-1">
                 {categories.map((c: string) => (
-                  <span data-detail-chip="" key={c} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{c}</span>
+                  <span key={c} data-detail-chip="" className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-100 font-mono">{c}</span>
                 ))}
               </div>
             } />
@@ -147,14 +147,14 @@ export default function CRDInfo({ name, rawJson }: Props) {
             <InfoRow label={tr('crdInfo.subresources', 'Subresources')} value={
               <div className="inline-flex flex-wrap gap-1">
                 {subresources.map((s) => (
-                  <span data-detail-chip="" key={s} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{s}</span>
+                  <span key={s} data-detail-chip="" className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-100 font-mono">{s}</span>
                 ))}
               </div>
             } />
           )}
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
-          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{describe.uid}</span>} />}
-          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px]">{describe.resource_version}</span>} />}
+          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-xs break-all">{describe.uid}</span>} />}
+          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-xs">{describe.resource_version}</span>} />}
         </div>
       </InfoSection>
 
@@ -180,23 +180,23 @@ export default function CRDInfo({ name, rawJson }: Props) {
         <InfoSection title={tr('crdInfo.versions', 'Versions')}>
           <div className="space-y-2">
             {versions.map((ver: any) => (
-              <div data-detail-card="" key={ver.name} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-1.5">
+              <div key={ver.name} data-detail-card="" className="border-b border-hairline py-3 space-y-1.5">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-ink">{ver.name}</span>
                   {ver.storage && (
-                    <span className="inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium bg-green-900/40 text-green-300"><Tx>Storage</Tx></span>
+                    <span className="inline-flex px-2 py-0.5 rounded-sm text-xs font-medium bg-green-900/40 text-green-300"><Tx>Storage</Tx></span>
                   )}
                   {ver.served && (
-                    <span className="inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium bg-primary-900/40 text-primary-300"><Tx>Served</Tx></span>
+                    <span className="inline-flex px-2 py-0.5 rounded-sm text-xs font-medium bg-primary-900/40 text-primary-300"><Tx>Served</Tx></span>
                   )}
                   {!ver.served && (
-                    <span className="inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium bg-slate-800 text-slate-400"><Tx>Not Served</Tx></span>
+                    <span className="inline-flex px-2 py-0.5 rounded-sm text-xs font-medium bg-slate-800 text-slate-400"><Tx>Not Served</Tx></span>
                   )}
                 </div>
                 {/* describe.versions[].additionalPrinterColumns 는 backend 가 spec 의 원형을 그대로 forward 함 — verified */}
                 {Array.isArray(ver.additionalPrinterColumns) && ver.additionalPrinterColumns.length > 0 && (
                   <div className="mt-2">
-                    <p className="text-[11px] text-slate-500 mb-1"><Tx>Additional Printer Columns</Tx></p>
+                    <p className="text-xs text-slate-500 mb-1"><Tx>Additional Printer Columns</Tx></p>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
@@ -211,7 +211,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
                             <tr key={idx} className="text-slate-300">
                               <td className="py-1 pr-3 font-mono">{col.name}</td>
                               <td className="py-1 pr-3">{col.type}</td>
-                              <td className="py-1 font-mono text-[11px] break-all">{col.jsonPath}</td>
+                              <td className="py-1 font-mono text-xs break-all">{col.jsonPath}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -230,7 +230,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
         <InfoSection title={tr('crdInfo.storedVersions', 'Stored Versions')}>
           <div className="inline-flex flex-wrap gap-1">
             {storedVersions.map((v: string) => (
-              <span data-detail-chip="" key={v} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{v}</span>
+              <span key={v} data-detail-chip="" className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-100 font-mono">{v}</span>
             ))}
           </div>
         </InfoSection>
@@ -263,7 +263,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
                 placeholder={tr('crdInfo.searchInstances', 'Search instances...')}
                 value={instanceSearch}
                 onChange={(e) => setInstanceSearch(e.target.value)}
-                className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-sm text-xs text-ink placeholder-slate-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500"
+                className="h-8 w-full px-3 bg-slate-800 border border-control rounded-lg text-sm text-ink placeholder-slate-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500"
               />
             </div>
           )}

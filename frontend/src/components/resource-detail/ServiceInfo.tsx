@@ -105,13 +105,13 @@ function AddressList({ label, addresses, testId }: { label: string; addresses: s
   const { items: paged, nav } = usePagination(addresses, 10)
   return (
     <div data-testid={testId}>
-      <p className="text-[11px] text-slate-400 mb-1"><Tx>{label}</Tx></p>
+      <p className="text-xs text-slate-400 mb-1"><Tx>{label}</Tx></p>
       {addresses.length === 0 ? (
         <NoneText />
       ) : (
         <div className="flex flex-wrap gap-1.5">
           {paged.map((ip, i) => (
-            <span data-detail-chip="" key={`${ip}-${i}`} className="rounded-sm border border-slate-700 bg-slate-800/60 px-2 py-0.5 font-mono text-[11px] text-slate-200" data-testid="service-address">{ip}</span>
+            <span key={`${ip}-${i}`} data-detail-chip="" className="max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 font-mono text-xs text-slate-200" data-testid="service-address">{ip}</span>
           ))}
         </div>
       )}
@@ -230,7 +230,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
             <Tx text="Not shown: the {{n}} pods behind this Service would take {{queries}} Prometheus queries." values={{ n: serverSums.data.pods, queries: serverSums.data.queries }} />
           </p>
         ) : (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {getSvcMetric('cpu') !== null && (
               <MetricCard label="Total CPU" value={getSvcMetric('cpu')!} unit="m" thresholds={{ warn: 500, danger: 1000 }} />
             )}

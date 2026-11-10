@@ -80,8 +80,8 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
           <InfoRow label="Name" value={name} />
           <InfoRow label="Namespace" value={namespace} />
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
-          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{describe.uid}</span>} />}
-          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px]">{describe.resource_version}</span>} />}
+          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-xs break-all">{describe.uid}</span>} />}
+          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-xs">{describe.resource_version}</span>} />}
           <InfoRow label="Rules Count" value={describe ? String(describe.rules_count ?? rules.length) : '—'} />
         </div>
       </InfoSection>
@@ -95,21 +95,21 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
               const resourceNames = Array.isArray(rule.resourceNames) ? rule.resourceNames : []
 
               return (
-                <div data-detail-card="" key={idx} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-2">
-                  <div className="text-xs text-slate-300 space-y-1.5">
+                <div key={idx} data-detail-card="" className="border-b border-hairline py-3 space-y-2">
+                  <div className="text-xs text-slate-300 space-y-1.5 break-words">
                     <div>
-                      <span className="text-[11px] text-slate-500 mr-2"><Tx>API Groups:</Tx></span>
+                      <span className="text-xs text-slate-500 mr-2"><Tx>API Groups:</Tx></span>
                       <span className="font-mono">{ruleApiGroupsText(rule.apiGroups)}</span>
                     </div>
                     <div>
-                      <span className="text-[11px] text-slate-500 mr-2"><Tx>Resources:</Tx></span>
+                      <span className="text-xs text-slate-500 mr-2"><Tx>Resources:</Tx></span>
                       <span className="font-mono">{resources.join(', ') || '-'}</span>
                     </div>
                     <div>
-                      <span className="text-[11px] text-slate-500 mr-2"><Tx>Verbs:</Tx></span>
+                      <span className="text-xs text-slate-500 mr-2"><Tx>Verbs:</Tx></span>
                       <div className="inline-flex flex-wrap gap-1 mt-0.5">
                         {verbs.map((verb: string) => (
-                          <span data-detail-chip="" key={verb} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                          <span key={verb} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-100 font-mono">
                             {verb}
                           </span>
                         ))}
@@ -117,7 +117,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
                     </div>
                     {resourceNames.length > 0 && (
                       <div>
-                        <span className="text-[11px] text-slate-500 mr-2"><Tx>Resource Names:</Tx></span>
+                        <span className="text-xs text-slate-500 mr-2"><Tx>Resource Names:</Tx></span>
                         <span className="font-mono">{resourceNames.join(', ')}</span>
                       </div>
                     )}
@@ -131,7 +131,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
 
       {ruleConflicts.length > 0 && (
         <InfoSection title="Rule Conflict Warnings ({{n}})" titleValues={{ n: ruleConflicts.length }}>
-          <p className="text-[11px] text-amber-300 mb-2">
+          <p className="text-xs text-amber-300 mb-2">
             <Tx>Same (apiGroup, resource) is covered by multiple rules — verbs are unioned at evaluation time but the duplication may be unintentional.</Tx></p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">

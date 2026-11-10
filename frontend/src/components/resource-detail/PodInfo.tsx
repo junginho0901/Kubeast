@@ -283,21 +283,21 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             rel="noopener noreferrer"
             data-testid="pod-traces-link"
             title={t('clusterView.logSearch.tracesTitle', 'Search the traces of {{service}} in a new tab', { service: podService })}
-            className="ml-auto flex items-center gap-1 h-7 px-2.5 rounded-lg border border-primary-700 bg-primary-900/30 text-primary-300 text-[11px] hover:bg-primary-800/40 transition-colors"
+            className="ml-auto btn-row text-primary-400"
           >
             <Waypoints className="w-3.5 h-3.5" />
             {t('clusterView.logSearch.traces', 'Traces')}
           </a>
         )}
         {canExec && phase === 'Running' && containerNames.length > 0 && (
-          <div className={`flex items-center gap-2 ${tracesHref ? '' : 'ml-auto'}`}>
+          <div className={`flex flex-wrap items-center gap-2 ${tracesHref ? '' : 'ml-auto'}`}>
             {/* Container 커스텀 드롭다운 */}
             <div className="relative" ref={execContainerRef}>
               <button
                 onClick={() => { setIsExecContainerOpen(!isExecContainerOpen); setIsExecShellOpen(false) }}
-                className="h-7 px-2.5 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden transition-colors flex items-center gap-1.5 min-w-[120px] justify-between"
+                className="h-8 max-w-full px-2.5 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 transition-colors flex items-center gap-1.5 min-w-[120px] justify-between"
               >
-                <span className="text-[11px] font-medium truncate">{execSelectContainer || containerNames[0]}</span>
+                <span className="text-xs font-medium truncate">{execSelectContainer || containerNames[0]}</span>
                 <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isExecContainerOpen ? 'rotate-180' : ''}`} />
               </button>
               {isExecContainerOpen && (
@@ -306,7 +306,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                     <button
                       key={n}
                       onClick={() => { setExecSelectContainer(n); setIsExecContainerOpen(false) }}
-                      className="w-full px-2.5 py-1.5 text-left text-[11px] text-ink hover:bg-slate-600 transition-colors flex items-center gap-1.5 first:rounded-t-lg last:rounded-b-lg"
+                      className="w-full px-2.5 py-1.5 text-left text-xs text-ink hover:bg-slate-600 transition-colors flex items-center gap-1.5 first:rounded-t-lg last:rounded-b-lg"
                     >
                       {(execSelectContainer || containerNames[0]) === n && <CheckCircle className="w-3 h-3 text-primary-400 shrink-0" />}
                       <span className={(execSelectContainer || containerNames[0]) === n ? 'font-medium' : ''}>{n}</span>
@@ -319,9 +319,9 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             <div className="relative" ref={execShellRef}>
               <button
                 onClick={() => { setIsExecShellOpen(!isExecShellOpen); setIsExecContainerOpen(false) }}
-                className="h-7 px-2.5 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden transition-colors flex items-center gap-1.5 min-w-[90px] justify-between"
+                className="h-8 max-w-full px-2.5 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 transition-colors flex items-center gap-1.5 min-w-[90px] justify-between"
               >
-                <span className="text-[11px] font-medium">{execCommand}</span>
+                <span className="text-xs font-medium">{execCommand}</span>
                 <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isExecShellOpen ? 'rotate-180' : ''}`} />
               </button>
               {isExecShellOpen && (
@@ -330,7 +330,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                     <button
                       key={sh}
                       onClick={() => { setExecCommand(sh); setIsExecShellOpen(false) }}
-                      className="w-full px-2.5 py-1.5 text-left text-[11px] text-ink hover:bg-slate-600 transition-colors flex items-center gap-1.5 first:rounded-t-lg last:rounded-b-lg"
+                      className="w-full px-2.5 py-1.5 text-left text-xs text-ink hover:bg-slate-600 transition-colors flex items-center gap-1.5 first:rounded-t-lg last:rounded-b-lg"
                     >
                       {execCommand === sh && <CheckCircle className="w-3 h-3 text-primary-400 shrink-0" />}
                       <span className={execCommand === sh ? 'font-medium' : ''}>{sh}</span>
@@ -341,7 +341,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             </div>
             <button
               onClick={() => setExecTarget(execSelectContainer || containerNames[0])}
-              className="flex items-center gap-1 h-7 px-2.5 rounded-lg border border-emerald-700 bg-emerald-900/40 text-emerald-300 text-[11px] hover:bg-emerald-800/60 transition-colors"
+              className="btn-row"
             >
               <Terminal className="w-3.5 h-3.5" />
               Exec
@@ -353,8 +353,8 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       {/* Top Summary */}
       <InfoSection title="Top">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <div data-detail-card="" className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
-            <div className="text-[11px] text-slate-400"><Tx>Status</Tx></div>
+          <div data-detail-card="" className="min-w-0 border-l border-hairline px-3 py-2">
+            <div className="text-xs text-slate-400"><Tx>Status</Tx></div>
             <div className="mt-1 text-xs text-ink font-medium truncate" title={statusNotReady ? undefined : podStatus} data-testid="pod-drawer-status">
               {statusNotReady ? (
                 <span className="badge badge-warning" title={t('pods.table.notReadyHint', { ready: `${readyContainers}/${totalContainers}`, defaultValue: 'Not ready ({{ready}})' })} data-testid="pod-drawer-status-not-ready">
@@ -363,20 +363,20 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
               ) : (podStatus || '-')}
             </div>
           </div>
-          <div data-detail-card="" className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
-            <div className="text-[11px] text-slate-400"><Tx>Ready</Tx></div>
+          <div data-detail-card="" className="min-w-0 border-l border-hairline px-3 py-2">
+            <div className="text-xs text-slate-400"><Tx>Ready</Tx></div>
             <div className="mt-1 text-xs text-ink font-medium">{`${readyContainers}/${Math.max(totalContainers, 0)}`}</div>
           </div>
-          <div data-detail-card="" className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
-            <div className="text-[11px] text-slate-400"><Tx>Waiting</Tx></div>
+          <div data-detail-card="" className="min-w-0 border-l border-hairline px-3 py-2">
+            <div className="text-xs text-slate-400"><Tx>Waiting</Tx></div>
             <div className="mt-1 text-xs text-ink font-medium">{waitingCount}</div>
           </div>
-          <div data-detail-card="" className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
-            <div className="text-[11px] text-slate-400"><Tx>CrashLoop</Tx></div>
+          <div data-detail-card="" className="min-w-0 border-l border-hairline px-3 py-2">
+            <div className="text-xs text-slate-400"><Tx>CrashLoop</Tx></div>
             <div className={`mt-1 text-xs font-medium ${crashLoopCount > 0 ? 'text-red-300' : 'text-ink'}`}>{crashLoopCount}</div>
           </div>
-          <div data-detail-card="" className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
-            <div className="text-[11px] text-slate-400"><Tx>Terminated</Tx></div>
+          <div data-detail-card="" className="min-w-0 border-l border-hairline px-3 py-2">
+            <div className="text-xs text-slate-400"><Tx>Terminated</Tx></div>
             <div className="mt-1 text-xs text-ink font-medium">{terminatedCount}</div>
           </div>
         </div>
@@ -402,7 +402,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
           {priority != null && <InfoRow label="Priority" value={String(priority)} />}
           {priorityClass && <InfoRow label="Priority Class" value={<ResourceLink kind="PriorityClass" name={priorityClass} />} />}
           {nominatedNode && <InfoRow label="Nominated Node" value={nominatedNode} />}
-          {podDescribe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{podDescribe.uid}</span>} />}
+          {podDescribe?.uid && <InfoRow label="UID" value={<span className="font-mono text-xs break-all">{podDescribe.uid}</span>} />}
         </div>
       </InfoSection>
 
@@ -485,7 +485,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             const cpuLimitMillis = cpuLimitStr ? (cpuLimitStr.endsWith('m') ? parseFloat(cpuLimitStr) : parseFloat(cpuLimitStr) * 1000) : null
             const memLimitMB = memLimitStr ? (memLimitStr.endsWith('Gi') ? parseFloat(memLimitStr) * 1024 : memLimitStr.endsWith('Mi') ? parseFloat(memLimitStr) : parseFloat(memLimitStr) / (1024 * 1024)) : null
             return (
-              <div key={c.name} className="rounded-lg border border-slate-700/50 bg-slate-900/40 p-3">
+              <div key={c.name} className="border-t border-hairline pt-3">
                 <div className="text-xs font-medium text-slate-300 mb-2">{c.name}</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {cpuMillis !== null && (
@@ -566,12 +566,12 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
           return terms.map((term: any, ti: number) => (
             <div key={ti} className="space-y-1">
               {Array.isArray(term.matchExpressions) && term.matchExpressions.map((expr: any, ei: number) => (
-                <span data-detail-chip="" key={ei} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono mr-1 mb-1">
+                <span key={ei} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-100 font-mono mr-1 mb-1">
                   {expr.key} {expr.operator} {Array.isArray(expr.values) ? expr.values.join(', ') : ''}
                 </span>
               ))}
               {Array.isArray(term.matchFields) && term.matchFields.map((field: any, fi: number) => (
-                <span data-detail-chip="" key={`f-${fi}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono mr-1 mb-1">
+                <span key={`f-${fi}`} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-100 font-mono mr-1 mb-1">
                   {field.key} {field.operator} {Array.isArray(field.values) ? field.values.join(', ') : ''}
                 </span>
               ))}
@@ -585,7 +585,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             const selectors = t.labelSelector?.matchExpressions || []
             const labels = t.labelSelector?.matchLabels ? Object.entries(t.labelSelector.matchLabels) : []
             return (
-              <div data-detail-card="" key={`${prefix}-${ti}`} className="rounded-sm border border-slate-800 bg-slate-900/40 p-2 space-y-1 text-xs">
+              <div key={`${prefix}-${ti}`} data-detail-card="" className="border-b border-hairline py-2 space-y-1 text-xs">
                 {t.topologyKey && <div className="text-slate-400">topologyKey: <span className="text-slate-200 font-mono">{t.topologyKey}</span></div>}
                 {Array.isArray(t.namespaces) && t.namespaces.length > 0 && (
                   <div className="text-slate-400">namespaces: <span className="text-slate-200 font-mono">{t.namespaces.join(', ')}</span></div>
@@ -593,7 +593,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                 {labels.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {labels.map(([k, v]) => (
-                      <span data-detail-chip="" key={`${k}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                      <span key={`${k}`} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-100 font-mono">
                         {k}={String(v)}
                       </span>
                     ))}
@@ -602,7 +602,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                 {selectors.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {selectors.map((expr: any, ei: number) => (
-                      <span data-detail-chip="" key={ei} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                      <span key={ei} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-100 font-mono">
                         {expr.key} {expr.operator} {Array.isArray(expr.values) ? expr.values.join(', ') : ''}
                       </span>
                     ))}
@@ -625,13 +625,13 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                 <div className="space-y-2">
                   {reqTerms && (
                     <div>
-                      <div className="text-[11px] text-slate-500 mb-1">{tr('pod.affinity.required', 'Required')}</div>
+                      <div className="text-xs text-slate-500 mb-1">{tr('pod.affinity.required', 'Required')}</div>
                       {renderNodeSelectorTerms(reqTerms)}
                     </div>
                   )}
                   {Array.isArray(prefTerms) && prefTerms.length > 0 && (
                     <div>
-                      <div className="text-[11px] text-slate-500 mb-1">{tr('pod.affinity.preferred', 'Preferred')}</div>
+                      <div className="text-xs text-slate-500 mb-1">{tr('pod.affinity.preferred', 'Preferred')}</div>
                       {prefTerms.map((pref: any, pi: number) => (
                         <div key={pi} className="space-y-1">
                           <span className="text-slate-400 text-xs">weight={pref.weight}</span>
@@ -656,13 +656,13 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
               <div className="space-y-2">
                 {Array.isArray(reqTerms) && reqTerms.length > 0 && (
                   <div>
-                    <div className="text-[11px] text-slate-500 mb-1">{tr('pod.affinity.required', 'Required')}</div>
+                    <div className="text-xs text-slate-500 mb-1">{tr('pod.affinity.required', 'Required')}</div>
                     {renderPodAffinityTerms(reqTerms, 'req')}
                   </div>
                 )}
                 {Array.isArray(prefTerms) && prefTerms.length > 0 && (
                   <div>
-                    <div className="text-[11px] text-slate-500 mb-1">{tr('pod.affinity.preferred', 'Preferred')}</div>
+                    <div className="text-xs text-slate-500 mb-1">{tr('pod.affinity.preferred', 'Preferred')}</div>
                     {renderPodAffinityTerms(prefTerms, 'pref')}
                   </div>
                 )}
@@ -824,7 +824,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
               />
             )}
             {finalizers.length > 0 && (
-              <InfoRow label="Finalizers" value={<span className="font-mono text-[11px] break-all">{finalizers.join(', ')}</span>} />
+              <InfoRow label="Finalizers" value={<span className="font-mono text-xs break-all">{finalizers.join(', ')}</span>} />
             )}
           </div>
         </InfoSection>
@@ -900,14 +900,14 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             />
             <button
               onClick={() => { setShowLogs(true); refetchLogs() }}
-              className="text-xs px-3 py-1 rounded-sm border border-slate-700 bg-slate-800 text-ink hover:border-slate-500 flex items-center gap-1"
+              className="btn-row"
             >
               {logsFetching ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
               {dl(showLogs ? 'Refresh' : 'Load Logs')}
             </button>
           </div>
           {showLogs && (
-            <div ref={logRef} className="bg-slate-950 rounded-lg p-3 font-mono text-[11px] text-slate-300 max-h-[400px] overflow-auto whitespace-pre-wrap break-all">
+            <div ref={logRef} className="bg-slate-950 rounded-lg p-3 font-mono text-xs text-slate-300 max-h-[400px] overflow-auto whitespace-pre-wrap break-all">
               {logsFetching ? dl('Loading...') : logsError ? null : logData || dl('(no logs)')}
               {/* a refused or failed read is not "no logs": its reason (a container not started, no permission) */}
               {!logsFetching && logsError && (
@@ -926,7 +926,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       {execTarget && (
         <ModalOverlay onClose={() => setExecTarget(null)}>
           <div
-            className="bg-slate-800 rounded-lg w-full max-w-4xl h-[70vh] overflow-hidden"
+            className="bg-slate-800 border border-hairline rounded-xl w-full max-w-4xl h-[70vh] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <PodExecTerminal

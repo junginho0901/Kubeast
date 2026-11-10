@@ -194,8 +194,8 @@ export default function NamespaceInfo({ name }: Props) {
             label="Created"
             value={nsDescribe.created_at ? `${fmtTs(nsDescribe.created_at)} (${fmtRel(nsDescribe.created_at)})` : '-'}
           />
-          {nsDescribe.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px]">{nsDescribe.uid}</span>} />}
-          {nsDescribe.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px]">{nsDescribe.resource_version}</span>} />}
+          {nsDescribe.uid && <InfoRow label="UID" value={<span className="font-mono text-xs">{nsDescribe.uid}</span>} />}
+          {nsDescribe.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-xs">{nsDescribe.resource_version}</span>} />}
           {nsDescribe.deletion_timestamp && <InfoRow label="Deletion Timestamp" value={`${fmtTs(nsDescribe.deletion_timestamp)} (${fmtRel(nsDescribe.deletion_timestamp)})`} />}
         </div>
       </InfoSection>
@@ -210,7 +210,7 @@ export default function NamespaceInfo({ name }: Props) {
         <InfoSection title="Lifecycle">
           <div className="space-y-2">
             {Array.isArray(nsDescribe.finalizers) && nsDescribe.finalizers.length > 0 && (
-              <InfoRow label="Finalizers" value={<span className="font-mono text-[11px] break-all">{nsDescribe.finalizers.join(', ')}</span>} />
+              <InfoRow label="Finalizers" value={<span className="font-mono text-xs break-all">{nsDescribe.finalizers.join(', ')}</span>} />
             )}
             {Array.isArray(nsDescribe.owner_references) && nsDescribe.owner_references.length > 0 && (
               <InfoRow
@@ -250,7 +250,7 @@ export default function NamespaceInfo({ name }: Props) {
                 ? 'border-amber-700 bg-amber-900/20 text-amber-300'
                 : 'border-red-700 bg-red-900/20 text-red-300'
               return (
-                <span data-detail-chip="" key={phase} className={`rounded-sm border px-2 py-0.5 text-[11px] ${color}`}>
+                <span key={phase} data-detail-chip="" className={`rounded-sm border px-2 py-0.5 text-xs ${color}`}>
                   {phase}: <span className="font-mono">{String(count)}</span>
                 </span>
               )
@@ -302,7 +302,7 @@ export default function NamespaceInfo({ name }: Props) {
         {Array.isArray(resourceQuotas) && resourceQuotas.length > 0 ? (
           <div className="space-y-3">
             {resourceQuotas.map(rq => (
-              <div data-detail-card="" key={rq.name} className="rounded-sm border border-slate-800 p-3">
+              <div key={rq.name} data-detail-card="" className="border-t border-hairline pt-3">
                 <p className="text-xs text-ink font-medium mb-2">{rq.name}</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs table-fixed min-w-[360px]">
@@ -329,11 +329,11 @@ export default function NamespaceInfo({ name }: Props) {
         {Array.isArray(limitRanges) && limitRanges.length > 0 ? (
           <div className="space-y-3">
             {limitRanges.map((lr: any) => (
-              <div data-detail-card="" key={lr.name} className="rounded-sm border border-slate-800 p-3">
+              <div key={lr.name} data-detail-card="" className="border-t border-hairline pt-3">
                 <p className="text-xs text-ink font-medium mb-2">{lr.name}</p>
                 {lr.limits?.map((lim: any, li: number) => (
                   <div key={li} className="overflow-x-auto mb-2">
-                    <p className="text-[11px] text-slate-400 mb-1">Type: {lim.type || '-'}</p>
+                    <p className="text-xs text-slate-400 mb-1">Type: {lim.type || '-'}</p>
                     <table className="w-full text-xs table-fixed min-w-[480px]">
                       <thead className="text-slate-400"><tr><Th className="text-left py-1 w-[20%]">Resource</Th><Th className="text-left py-1 w-[20%]">Min</Th><Th className="text-left py-1 w-[20%]">Max</Th><Th className="text-left py-1 w-[20%]">Default</Th><Th className="text-left py-1 w-[20%]">Default Req</Th></tr></thead>
                       <tbody className="divide-y divide-slate-800">
@@ -368,7 +368,7 @@ export default function NamespaceInfo({ name }: Props) {
               value={podFilter}
               onChange={e => setPodFilter(e.target.value)}
               placeholder={dl('Filter...')}
-              className="pl-6 pr-2 py-1 text-[11px] bg-slate-800 border border-slate-700 rounded-sm text-ink placeholder-slate-500 focus:outline-hidden w-36"
+              className="h-8 pl-6 pr-2 text-xs bg-slate-800 border border-control rounded-lg text-ink placeholder-slate-500 focus:outline-hidden w-36"
             />
           </div>
         }
@@ -410,13 +410,13 @@ export default function NamespaceInfo({ name }: Props) {
                 <button
                   onClick={() => setPodPage((p) => Math.max(1, p - 1))}
                   disabled={podPage <= 1}
-                  className="px-2 py-1 rounded-sm border border-slate-700 disabled:opacity-40"
+                  className="px-2 py-1 rounded-lg border border-control disabled:opacity-40"
                 >
                   <Tx>Prev</Tx></button>
                 <button
                   onClick={() => setPodPage((p) => Math.min(podTotalPages, p + 1))}
                   disabled={podPage >= podTotalPages}
-                  className="px-2 py-1 rounded-sm border border-slate-700 disabled:opacity-40"
+                  className="px-2 py-1 rounded-lg border border-control disabled:opacity-40"
                 >
                   <Tx>Next</Tx></button>
               </div>

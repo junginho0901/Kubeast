@@ -128,7 +128,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
       <InfoSection title="Basic Info" actions={isRollbackKind && mayRollback && !writesBlocked ? (
         <button
           onClick={() => { rollbackMut.reset(); setRollbackDialogOpen(true) }}
-          className="text-xs px-2 py-1 rounded-sm border border-slate-700 bg-slate-800 text-ink hover:border-slate-500"
+          className="btn-row"
         >
           {tr('rollback.title', 'Rollback')}
         </button>
@@ -138,8 +138,8 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
           <InfoRow label="Name" value={name} />
           {namespace && <InfoRow label="Namespace" value={namespace} />}
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
-          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{describe.uid}</span>} />}
-          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px]">{describe.resource_version}</span>} />}
+          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-xs break-all">{describe.uid}</span>} />}
+          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-xs">{describe.resource_version}</span>} />}
           {describe?.generation != null && <InfoRow label="Generation" value={String(describe.generation)} />}
           {describe?.observed_generation != null && <InfoRow label="Observed Generation" value={String(describe.observed_generation)} />}
         </div>
@@ -229,7 +229,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
         <InfoSection title="Volume Claim Templates">
           <div className="space-y-2 text-xs text-slate-200">
             {volumeClaimTemplates.map((vct: any, idx: number) => (
-              <div data-detail-card="" key={`${vct.name || 'vct'}-${idx}`} className="rounded-sm border border-slate-800 p-2 space-y-1">
+              <div key={`${vct.name || 'vct'}-${idx}`} data-detail-card="" className="border-b border-hairline py-2 space-y-1 break-words">
                 <div className="font-medium text-ink">{vct.name || '-'}</div>
                 <div>StorageClass: {vct.storage_class_name || vct.spec?.storageClassName || '-'}</div>
                 <div>

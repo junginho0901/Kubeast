@@ -150,9 +150,9 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
 
       {(dupFrom.length > 0 || dupTo.length > 0) && (
         <InfoSection title="Rule Conflict Warnings ({{n}})" titleValues={{ n: dupFrom.length + dupTo.length }}>
-          <p className="text-[11px] text-amber-300 mb-2">
+          <p className="text-xs text-amber-300 mb-2">
             <Tx>Duplicate from/to entries — admission silently unions them, so duplicates may indicate spec mistakes.</Tx></p>
-          <div className="space-y-1 text-xs text-slate-200">
+          <div className="space-y-1 text-xs text-slate-200 break-words">
             {dupFrom.map((d) => {
               const [g, k, ns] = d.key.split('|')
               return <div key={`from-${d.key}`}>From: <span className="font-mono">{g || '""'}/{k || '?'}/{ns || '?'}</span> × {d.count}</div>
