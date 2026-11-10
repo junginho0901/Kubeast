@@ -37,6 +37,8 @@ async function stays(page: Page, testId: string, text: string): Promise<void> {
 }
 
 test.describe('a refused write says why where it was pressed', () => {
+  // each line is held for 6 s after it shows (stays), some cases twice
+  test.setTimeout(90_000)
   test('Account → API keys: Revoke', async ({ page, request }) => {
     const admin = await login(request)
     const config = await (await request.get('/api/v1/auth/api-keys/config', { headers: bearer(admin) })).json()
@@ -57,17 +59,27 @@ test.describe('a refused write says why where it was pressed', () => {
     }
   })
 
-  test('Teams: Add and Delete', async ({ page }) => {
-    await refuse(page, (p) => p.startsWith('/api/v1/auth/admin/organizations'))
-    await page.goto('/admin/organizations')
-    await page.getByPlaceholder(EN.adminOrg.inputPlaceholder).fill(`e2e-af-${RUN}`)
-    await page.getByPlaceholder(EN.adminOrg.inputPlaceholder).press('Enter')
-    await stays(page, 'team-add-error', EN.adminOrg.addError.replace('{{reason}}', REASON))
-    const rows = page.getByTestId('teams-table').locator('tbody tr').filter({ has: page.getByTitle(EN.adminOrg.deleteTitle) })
-    test.skip((await rows.count()) === 0, 'no team to press Delete on')
-    await rows.first().getByTitle(EN.adminOrg.deleteTitle).click()
-    await page.getByTestId('confirm-dialog-ok').click()
-    await stays(page, 'team-delete-error', failed('delete'))
+  test('Teams: Add and Delete', async ({ page, request }) => {
+    // a team of the run to press Delete on (made through the API, which the page's stand-in does not answer)
+    const admin = await login(request)
+    const name = `e2e-af-del-${RUN}`
+    const made = await request.post('/api/v1/auth/admin/organizations', { headers: bearer(admin), data: { type: 'team', name } })
+    expect(made.status(), await made.text()).toBe(201)
+    const id = (await made.json()).id as number
+    try {
+      await refuse(page, (p) => p.startsWith('/api/v1/auth/admin/organizations'))
+      await page.goto('/admin/organizations')
+      await page.getByPlaceholder(EN.adminOrg.inputPlaceholder).fill(`e2e-af-${RUN}`)
+      await page.getByPlaceholder(EN.adminOrg.inputPlaceholder).press('Enter')
+      await stays(page, 'team-add-error', EN.adminOrg.addError.replace('{{reason}}', REASON))
+      const row = page.getByTestId('teams-table').locator('tbody tr').filter({ hasText: name })
+      await row.getByTitle(EN.adminOrg.deleteTitle).click()
+      await page.getByTestId('confirm-dialog-ok').click()
+      await stays(page, 'team-delete-error', failed('delete'))
+      await expect(row, 'the team is still listed').toHaveCount(1)
+    } finally {
+      await request.delete(`/api/v1/auth/admin/organizations/${id}`, { headers: bearer(admin), failOnStatusCode: false })
+    }
   })
 
   test('AI Models: Delete and Activate', async ({ page, request }) => {
@@ -91,7 +103,7 @@ test.describe('a refused write says why where it was pressed', () => {
 
   test('CronJob drawer: Suspend and Run Now', async ({ page }) => {
     await refuse(page, (p) => p.startsWith('/api/v1/cluster/namespaces/default/cronjobs/e2e-fixture'))
-    await page.goto(`/namespaces?cluster=self&detail=${encodeURIComponent('CronJob/default/e2e-fixture')}`)
+    await page.goto(`/cluster/namespaces?cluster=self&detail=${encodeURIComponent('CronJob/default/e2e-fixture')}`)
     const toggle = page.getByRole('button', { name: new RegExp(`^(${EN.cronjob.suspend}|${EN.cronjob.resume})$`) })
     test.skip(!(await toggle.waitFor({ timeout: 20_000 }).then(() => true, () => false)), 'the fixture CronJob drawer shows no Suspend')
     await toggle.click()
@@ -109,7 +121,7 @@ test.describe('a refused write says why where it was pressed', () => {
     const node = ((Array.isArray(nodes) ? nodes : nodes.items) as { name: string }[])[0]?.name
     test.skip(!node, 'no node listed on self')
     await refuse(page, (p) => p === `/api/v1/cluster/nodes/${node}/cordon` || p === `/api/v1/cluster/nodes/${node}/uncordon`)
-    await page.goto(`/namespaces?cluster=self&detail=${encodeURIComponent(`Node/${node}`)}`)
+    await page.goto(`/cluster/namespaces?cluster=self&detail=${encodeURIComponent(`Node/${node}`)}`)
     await page.getByRole('button', { name: new RegExp(`^(${EN.nodes.actions.cordon}|${EN.nodes.actions.uncordon})$`) }).click({ timeout: 20_000 })
     await stays(page, 'node-cordon-error', failed('change'))
   })
@@ -129,7 +141,7 @@ test.describe('a refused write says why where it was pressed', () => {
 
   test('Namespaces: Create names why it was refused', async ({ page }) => {
     await refuse(page, (p) => p === '/api/v1/cluster/namespaces')
-    await page.goto('/namespaces?cluster=self')
+    await page.goto('/cluster/namespaces?cluster=self')
     await page.getByRole('button', { name: EN.namespaces.create.button }).click()
     await page.getByPlaceholder(EN.namespaces.create.namePlaceholder).fill(`e2e-af-${RUN}`)
     await page.getByTestId('namespace-create-dialog').getByRole('button', { name: EN.namespaces.create.submit, exact: true }).click()

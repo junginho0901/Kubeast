@@ -124,7 +124,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
             <Route index element={<Dashboard />} />
-            <Route path="namespaces" element={<Navigate to="/cluster/namespaces" replace />} />
+            <Route path="namespaces" element={<MovedScreen to="/cluster/namespaces" />} />
             <Route path="cluster/namespaces" element={<Namespaces />} />
             <Route path="cluster/resource-graph" element={<ResourceGraph />} />
             <Route path="timeline" element={<Timeline />} />

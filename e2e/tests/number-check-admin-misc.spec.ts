@@ -334,10 +334,12 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
       { status: 200, json: { healthy: false, message: 'connection failed: e2e stand-in, dial tcp 10.0.0.1:6443: i/o timeout' }, want: `${EN.cluster.admin.testFailed}: connection failed: e2e stand-in, dial tcp 10.0.0.1:6443: i/o timeout` },
       { status: 403, json: { detail: 'forbidden: e2e stand-in refusal' }, want: `${EN.cluster.admin.testFailed}: forbidden: e2e stand-in refusal` },
     ]
+    const testPath = (u: URL) => u.pathname === '/api/v1/clusters/default/test'
     for (const a of answers) {
       let release!: () => void
       const held = new Promise<void>((r) => { release = r })
-      await page.route('**/api/v1/clusters/default/test', async (route) => { await held; await route.fulfill({ status: a.status, json: a.json }) })
+      // by path: the app adds ?cluster= to every request
+      await page.route(testPath, async (route) => { await held; await route.fulfill({ status: a.status, json: a.json }) })
       await testButton('default').click()
       await expect(testButton('default'), 'waiting').toBeDisabled()
       await expect(testButton('default')).toHaveAttribute('aria-busy', 'true')
@@ -345,7 +347,7 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
       await expect(line('default')).toHaveText(a.want, { timeout: 15_000 })
       await expect(line('default').locator('span')).toHaveClass(/text-red-400/)
       await expect(testButton('default'), 'done').toBeEnabled()
-      await page.unroute('**/api/v1/clusters/default/test')
+      await page.unroute(testPath)
     }
 
     await page.reload()
