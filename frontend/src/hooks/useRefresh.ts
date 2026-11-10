@@ -7,6 +7,11 @@ export type RefreshFailed = { reason: string; at: string }
 // The spinner shows at least this long, so a read that answers at once is still seen to have run.
 export const REFRESH_SPIN_MS = 500
 
+// A query's own failure as RefreshFailure shows it (useQuery's error and errorUpdatedAt), for a list that reads by
+// itself — a poll, a refetch — and keeps its rows when a read fails.
+export const failureOf = (error: unknown, errorUpdatedAt: number): RefreshFailed | null =>
+  error ? { reason: failureText(error), at: new Date(errorUpdatedAt || Date.now()).toISOString() } : null
+
 // One read: why it failed and when, or null when it worked.
 export async function readFailure(read: () => Promise<unknown>, now: () => Date = () => new Date()): Promise<RefreshFailed | null> {
   try {

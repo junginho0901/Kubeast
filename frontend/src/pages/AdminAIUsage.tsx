@@ -11,6 +11,9 @@ import { ListPager } from '@/components/ListPager'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { avgPromptChars, cachedPercent, isInvestigationRow, usageCuts, usageRowKey, usageTotals } from './aiUsageView'
+import { RefreshFailure } from '@/components/RefreshFailure'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
+import { failureOf } from '@/hooks/useRefresh'
 
 // Admin view over the ai.chat.complete audit records (chat turns, Optimization
 // explanations) and, in rows of their own, the ai.investigation.run records:
@@ -51,7 +54,7 @@ export default function AdminAIUsage() {
     }
   }, [sinceDay, untilDay, group])
 
-  const { data, isLoading, isFetching, refetch } = useQuery({
+  const { data, isLoading, isFetching, refetch, error: listError, errorUpdatedAt } = useQuery({
     queryKey: ['admin-ai-usage', query],
     queryFn: () => api.adminAIUsage(query),
     enabled: rangeOk,
@@ -134,6 +137,7 @@ export default function AdminAIUsage() {
         </div>
       </div>
 
+      <RefreshFailure failure={rows.length ? failureOf(listError, errorUpdatedAt) : null} />
       <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-lg border border-slate-800">
         <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
         <table className="min-w-full text-sm" data-testid="ai-usage-table">
@@ -159,11 +163,7 @@ export default function AdminAIUsage() {
                 </td>
               </tr>
             ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={COLUMNS} className="px-3 py-6 text-center text-slate-500">
-                  {tr('common.noSearchResults', 'No results found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={COLUMNS} resource="ai-usage" searching error={listError} onRetry={() => void refetch()} className="px-3 py-6 text-center text-slate-500" />
             ) : (
               pageRows.map((r, idx) => {
                 const investigation = isInvestigationRow(r)

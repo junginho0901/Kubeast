@@ -26,6 +26,8 @@ import { severityClass, skipReason, statusClass as investigationClass } from '@/
 import { investigateErrorText, investigateNowView } from '@/utils/investigateNow'
 import { formatAge, formatTime, utcTitle } from '@/utils/time'
 import { failureText } from '@/utils/failureText'
+import { RefreshFailure } from '@/components/RefreshFailure'
+import { failureOf } from '@/hooks/useRefresh'
 
 // Alerts: every alert Alertmanager sent for the selected cluster (features.alertInvestigation's webhook), firing or
 // resolved, for whoever reads the cluster as a whole. Resolving is the alert rule's: the marks here (acknowledged,
@@ -74,7 +76,7 @@ export default function AlertInbox() {
   const filter = { status, severity, mine, open: openOnly, q: search, limit: rowsPerPage, offset: (page - 1) * rowsPerPage }
   // The rows on screen stay while another tab, page or search loads (never another cluster's); the pager, the counts
   // and the AI context follow the answer's own filter and page.
-  const { data, isLoading, isFetching, error, refetch } = useQuery({
+  const { data, isLoading, isFetching, error, errorUpdatedAt, refetch } = useQuery({
     queryKey: ['alert-inbox', 'list', currentCluster, filter],
     queryFn: async () => ({ ...(await api.listAlertInbox(filter)), filter, page }),
     placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[2] === currentCluster ? prev : undefined),
@@ -184,6 +186,7 @@ export default function AlertInbox() {
           {tr('alertInbox.disabled', 'The alert webhook is off on this installation (features.alertInvestigation.enabled), so no alerts come in.')}
         </div>
       )}
+      <RefreshFailure failure={!forbidden && rows.length ? failureOf(error, errorUpdatedAt) : null} />
       {forbidden && (
         <div className="shrink-0 rounded-lg border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-sm text-amber-200" data-testid="alert-inbox-forbidden">
           {tr('alertInbox.forbidden', 'Alerts cover the whole cluster: they are shown to users who can read this cluster without a namespace limit.')}
@@ -333,7 +336,7 @@ export default function AlertInbox() {
                   </td>
                 </tr>
               )}
-              {!isLoading && rows.length === 0 && <TableEmptyRow colSpan={COLUMNS} resource="alerts" searching={!!search} />}
+              {!isLoading && rows.length === 0 && <TableEmptyRow colSpan={COLUMNS} resource="alerts" searching={!!search} error={forbidden ? undefined : error} onRetry={() => void refetch()} />}
             </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - rows.length} columnCount={COLUMNS} />
           </table>

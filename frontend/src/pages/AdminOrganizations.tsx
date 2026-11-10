@@ -7,6 +7,8 @@ import { ActionFailure } from '@/components/ActionFailure'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { ListPager } from '@/components/ListPager'
 import { failureText } from '@/utils/failureText'
+import { RefreshFailure } from '@/components/RefreshFailure'
+import { failureOf } from '@/hooks/useRefresh'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { usePermission } from '@/hooks/usePermission'
@@ -31,7 +33,7 @@ export default function AdminOrganizations() {
   const { has: hasPerm } = usePermission()
   const canListUsers = hasPerm('admin.users.read')
 
-  const { data: teams = [] } = useQuery({
+  const { data: teams = [], error: teamsError, errorUpdatedAt: teamsErrorAt, refetch: readTeamsAgain } = useQuery({
     queryKey: ['organizations', 'team'],
     queryFn: () => api.listOrganizations('team'),
   })
@@ -114,6 +116,7 @@ export default function AdminOrganizations() {
       {deleteMutation.isError && deleteMutation.variables?.type === type && (
         <ActionFailure error={deleteMutation.error} action="delete" testId="team-delete-error" className="mt-2 shrink-0" />
       )}
+      <RefreshFailure failure={items.length ? failureOf(teamsError, teamsErrorAt) : null} className="mt-2" />
 
       <div ref={bodyRef} className="mt-4 overflow-x-auto flex-1 min-h-0">
         <table className="w-full text-sm" data-testid="teams-table">
@@ -175,7 +178,7 @@ export default function AdminOrganizations() {
           )
         })}
             {items.length === 0 && (
-              <TableEmptyRow colSpan={TEAM_COLUMNS} resource="admin-teams" className="px-4 py-2 text-left text-sm text-slate-500">
+              <TableEmptyRow colSpan={TEAM_COLUMNS} resource="admin-teams" className="px-4 py-2 text-left text-sm text-slate-500" error={teamsError} onRetry={() => void readTeamsAgain()}>
                 {tr('adminOrg.empty', 'No items registered.')}
               </TableEmptyRow>
             )}

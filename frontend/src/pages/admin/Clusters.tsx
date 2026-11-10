@@ -16,6 +16,8 @@ import ClusterAccessModal from './ClusterAccessModal'
 import { healthChecked, testOutcome, type TestOutcome } from './clusterTest'
 import { healthDotClass } from '@/utils/clusterHealth'
 import { failureText } from '@/utils/failureText'
+import { RefreshFailure } from '@/components/RefreshFailure'
+import { failureOf } from '@/hooks/useRefresh'
 
 // Admin > Clusters (step 11): list every registered cluster with register /
 // connection-test / delete. Registration & deletion are rollout-free, so the
@@ -36,7 +38,7 @@ export default function AdminClusters() {
   const [testResults, setTestResults] = useState<Record<string, TestOutcome>>({})
   const [testing, setTesting] = useState<Record<string, boolean>>({})
 
-  const { data: clusters = [], isLoading } = useQuery({
+  const { data: clusters = [], isLoading, error: listError, errorUpdatedAt, refetch: readAgain } = useQuery({
     queryKey: ['clusters-all'],
     queryFn: () => clustersApi.listClusters(false),
     staleTime: 30_000,
@@ -99,6 +101,8 @@ export default function AdminClusters() {
         </button>
       </div>
 
+      <RefreshFailure failure={clusters.length ? failureOf(listError, errorUpdatedAt) : null} />
+
       <div ref={containerRef} className="card overflow-hidden p-0 flex-1 min-h-0 flex flex-col">
         {/* Horizontal scroll so the action buttons (Test/Access/Edit/Delete) are
             never clipped on a narrow / portrait viewport. */}
@@ -120,7 +124,7 @@ export default function AdminClusters() {
                 <td colSpan={6} className="px-4 py-6 text-center text-slate-400">…</td>
               </tr>
             )}
-            {!isLoading && clusters.length === 0 && <TableEmptyRow colSpan={CLUSTER_COLUMNS} resource="admin-clusters" />}
+            {!isLoading && clusters.length === 0 && <TableEmptyRow colSpan={CLUSTER_COLUMNS} resource="admin-clusters" error={listError} onRetry={() => void readAgain()} />}
             {shown.rows.map((c, idx) => {
               const tested = testResults[c.id]
               const testedText = tested

@@ -12,6 +12,9 @@ import { DateTextInput } from '@/components/DateTextInput'
 import { ListPager } from '@/components/ListPager'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import RecordingPlayerModal from '@/components/RecordingPlayerModal'
+import { RefreshFailure } from '@/components/RefreshFailure'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
+import { failureOf } from '@/hooks/useRefresh'
 
 const SERVICES = ['', 'auth', 'k8s', 'helm', 'ai', 'admin']
 const RESULTS = ['', 'success', 'failure']
@@ -117,7 +120,7 @@ export default function AdminAudit() {
 
   const queryClient = useQueryClient()
   // The answer carries the read it answers: the pager counts with its rows per page while another loads.
-  const { data, isLoading, isFetching, isPlaceholderData, refetch } = useQuery({
+  const { data, isLoading, isFetching, isPlaceholderData, refetch, error: listError, errorUpdatedAt } = useQuery({
     queryKey: ['admin-audit-logs', request],
     queryFn: async () => ({ ...(await api.adminListAuditLogs(request)), request }),
     enabled: measured,
@@ -477,6 +480,7 @@ export default function AdminAudit() {
       {/* Table */}
       {/* overflow-x-auto — 폭 좁은 모니터 (세로 모드 등) 에서 가로 스크롤 가능.
           table 의 min-w-[1000px] 로 컬럼이 너무 압축되지 않게 보장. */}
+      <RefreshFailure failure={items.length ? failureOf(listError, errorUpdatedAt) : null} />
       <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-lg bg-slate-800/30 border border-slate-700">
         <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
         <table className="w-full min-w-[1000px] text-sm">
@@ -501,11 +505,7 @@ export default function AdminAudit() {
               </tr>
             )}
             {!isLoading && items.length === 0 && (
-              <tr>
-                <td colSpan={COLUMNS} className="px-3 py-6 text-center text-slate-400">
-                  {tr('common.noSearchResults', 'No results found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={COLUMNS} resource="admin-audit" searching error={listError} onRetry={() => void refetch()} className="px-3 py-6 text-center text-slate-400" />
             )}
             {items.map((entry, idx) => (
               <AuditRow

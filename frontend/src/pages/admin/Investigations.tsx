@@ -18,6 +18,9 @@ import { duration, severityClass, skipReason, statusClass } from '@/utils/invest
 import { formatWhen } from './accessRequestFormat'
 import { investigationsView } from './investigationsView'
 import { utcTitle } from '@/utils/time'
+import { RefreshFailure } from '@/components/RefreshFailure'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
+import { failureOf } from '@/hooks/useRefresh'
 
 // Admin → Investigations: the reports the alert investigator wrote (features.alertInvestigation).
 // Opening one is audited server-side (ai.investigation.view).
@@ -43,7 +46,7 @@ export default function Investigations() {
   const page = Math.floor(firstRow / rowsPerPage) + 1
 
   // The rows on screen stay while another page, filter or page size loads; the range, page and AI context are theirs.
-  const { data, isLoading, refetch, isFetching } = useQuery({
+  const { data, isLoading, refetch, isFetching, error: listError, errorUpdatedAt } = useQuery({
     queryKey: ['investigations', 'list', applied, page, rowsPerPage],
     queryFn: async () => ({
       ...(await api.listInvestigations({ ...applied, limit: rowsPerPage, offset: (page - 1) * rowsPerPage })),
@@ -110,6 +113,7 @@ export default function Investigations() {
         </div>
       )}
 
+      <RefreshFailure failure={rows.length ? failureOf(listError, errorUpdatedAt) : null} />
       <div ref={containerRef} className="card flex-1 min-h-0 flex flex-col">
         <div className="flex flex-wrap items-end gap-3 mb-4 shrink-0">
           <div className="w-44">
@@ -172,7 +176,7 @@ export default function Investigations() {
               {isLoading ? (
                 <tr><td colSpan={COLUMNS} className="px-3 py-6 text-center text-slate-500">{tr('investigations.loading', 'Loading…')}</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={COLUMNS} className="px-3 py-6 text-center text-slate-400">{tr('common.listEmpty', 'No items.')}</td></tr>
+                <TableEmptyRow colSpan={COLUMNS} resource="investigations" error={listError} onRetry={() => void refetch()} className="px-3 py-6 text-center text-slate-400" />
               ) : (
                 rows.map((r, idx) => (
                   <tr key={r.id} ref={idx === 0 ? firstRowRef : undefined} className="border-t border-slate-700" data-testid={`investigation-row-${r.id}`}>

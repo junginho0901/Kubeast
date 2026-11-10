@@ -12,6 +12,9 @@ import RecordingPlayerModal from '@/components/RecordingPlayerModal'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { formatWhen } from './accessRequestFormat'
 import { utcTitle } from '@/utils/time'
+import { RefreshFailure } from '@/components/RefreshFailure'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
+import { failureOf } from '@/hooks/useRefresh'
 
 // Admin → Session recordings: recorded pod exec / node shell terminals (the
 // output the user saw). Opening one replays it; every read is audited.
@@ -52,7 +55,7 @@ export default function SessionRecordings() {
   const { data: config } = useQuery({ queryKey: ['recordings', 'config'], queryFn: api.getRecordingsConfig, staleTime: 60_000 })
   // The server counts the matches (X-Kubeast-Total). The rows on screen stay while another page, search or page size
   // loads, with the range and rows per page they are.
-  const { data, isLoading, refetch, isFetching } = useQuery({
+  const { data, isLoading, refetch, isFetching, error: listError, errorUpdatedAt } = useQuery({
     queryKey: ['recordings', 'list', applied, page, rowsPerPage],
     queryFn: async () => ({ page, limit: rowsPerPage, ...(await api.listRecordings({ ...applied, limit: rowsPerPage, offset: (page - 1) * rowsPerPage })) }),
     placeholderData: keepPreviousData,
@@ -99,6 +102,7 @@ export default function SessionRecordings() {
         </div>
       )}
 
+      <RefreshFailure failure={rows.length ? failureOf(listError, errorUpdatedAt) : null} />
       <div ref={containerRef} className="card flex-1 min-h-0 flex flex-col">
         <div className="flex flex-wrap items-end gap-3 mb-4 shrink-0">
           <div>
@@ -152,7 +156,7 @@ export default function SessionRecordings() {
               {isLoading ? (
                 <tr><td colSpan={COLUMNS} className="px-3 py-6 text-center text-slate-500">{tr('recordings.loading', 'Loading…')}</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={COLUMNS} className="px-3 py-6 text-center text-slate-400">{tr('common.listEmpty', 'No items.')}</td></tr>
+                <TableEmptyRow colSpan={COLUMNS} resource="recordings" error={listError} onRetry={() => void refetch()} className="px-3 py-6 text-center text-slate-400" />
               ) : (
                 rows.map((r, idx) => (
                   <tr key={r.id} ref={idx === 0 ? firstRowRef : undefined} className="border-t border-slate-700" data-testid={`recording-row-${r.id}`}>
