@@ -7,6 +7,9 @@ import { useCluster } from '@/contexts/ClusterContext'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { usePermission } from '@/hooks/usePermission'
 import CustomDropdown from '@/components/CustomDropdown'
+import { RefreshFailure } from '@/components/RefreshFailure'
+import { failureOf } from '@/hooks/useRefresh'
+import { failureText } from '@/utils/failureText'
 import { InfoSection } from './DetailCommon'
 import NetworkPolicyCheckModal, { type NetpolCheckInitial } from './NetworkPolicyCheckModal'
 import { checkInitial, peerLabel, rows } from './netdropText'
@@ -34,6 +37,16 @@ export default function NetworkDrops({ kind, namespace, name }: { kind: string; 
     refetchOnWindowFocus: false,
   })
   const res = drops.data
+  // a first read that failed is said, not hidden as "nothing to show"
+  if (on && !res && drops.error) {
+    return (
+      <InfoSection title="Network Drops">
+        <p role="alert" data-testid="netdrop-read-error" className="text-xs text-red-400 break-words">
+          {tr('common.readFailed', 'Could not read the list: {{reason}}', { reason: failureText(drops.error) })}
+        </p>
+      </InfoSection>
+    )
+  }
   if (!on || !res || (!res.available && res.reason !== 'no_context_labels')) return null
   const list = res.available ? rows(res) : []
   const notes = new Set(res.notes ?? [])
@@ -56,6 +69,7 @@ export default function NetworkDrops({ kind, namespace, name }: { kind: string; 
       ) : undefined}
     >
       <div className="space-y-2 text-xs" data-testid="netdrop-section">
+        <RefreshFailure failure={failureOf(drops.error, drops.errorUpdatedAt)} className="text-xs" />
         {!res.available ? (
           <p className="text-slate-400" data-testid="netdrop-no-labels">{tr('netdrops.noLabels', "The cluster's Hubble drop metric has no pod or workload labels, so drops cannot be shown per workload. See the cluster requirements (Hubble metrics).")}</p>
         ) : (

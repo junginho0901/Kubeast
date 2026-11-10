@@ -74,6 +74,7 @@ import CustomResourceInstanceInfo from './resource-detail/CustomResourceInstance
 import GenericInfo from './resource-detail/GenericInfo'
 import PolicyViolations from './resource-detail/PolicyViolations'
 import { violationsAfterInfo, violationsApiVersion } from './resource-detail/violationsView'
+import { failureText } from '@/utils/failureText'
 
 const SYSTEM_REASON_EN: Record<SystemReason, string> = {
   immortalNamespace: 'Kubernetes keeps this namespace.',
@@ -428,7 +429,7 @@ export default function ResourceDetailDrawer() {
                 canEdit={canEditYaml && !argoBlocked && !unreadable}
                 isLoading={yamlLoading}
                 isRefreshing={yamlFetching}
-                error={yamlError ? t('common.yamlError', { defaultValue: 'Failed to load YAML.' }) : null}
+                error={yamlError ? `${t('common.yamlError', { defaultValue: 'Failed to load YAML.' })} ${failureText(yamlError)}` : null}
                 onRefresh={() => setYamlRefreshNonce(prev => prev + 1)}
                 onApply={canEditYaml && !argoBlocked && !unreadable ? handleApplyYamlGuarded : undefined}
                 onApplySuccess={() => {

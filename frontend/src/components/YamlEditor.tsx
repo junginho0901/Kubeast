@@ -216,7 +216,7 @@ export default function YamlEditor({
       {isLoading && !value ? (
         <div className="px-5 py-8 text-slate-400 text-sm">{labels.loading}</div>
       ) : error ? (
-        <div className="px-5 py-8 text-red-400 text-sm">{labels.error}</div>
+        <div className="px-5 py-8 text-red-400 text-sm break-words" role="alert" data-testid="yaml-read-error">{error || labels.error}</div>
       ) : (
         <div className="relative flex-1 min-h-[520px]">
           {toast && (

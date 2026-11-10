@@ -25,6 +25,7 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [preview, setPreview] = useState<HelmUpgradeResponse | null>(null)
+  const [previewing, setPreviewing] = useState(false)
 
   const current = valuesQuery.data?.content ?? ''
 
@@ -94,8 +95,11 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
           </button>
           <button
             type="button"
-            disabled={draft === current}
+            disabled={draft === current || previewing}
+            aria-busy={previewing || undefined}
             onClick={async () => {
+              // the dry run takes seconds: the button waits, so it is not sent twice
+              setPreviewing(true)
               try {
                 const r = await api.helm.upgradeValues(namespace, name, {
                   values: draft,
@@ -104,10 +108,13 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
                 setPreview(r)
               } catch (err: any) {
                 setPreview(failedPreview(err))
+              } finally {
+                setPreviewing(false)
               }
             }}
             className="inline-flex items-center gap-1.5 rounded-sm bg-primary-600 hover:bg-primary-700 px-3 py-1.5 text-sm text-white disabled:opacity-40"
           >
+            {previewing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             {t('helmReleaseDetail.upgrade.preview')}
           </button>
         </div>
