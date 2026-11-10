@@ -31,7 +31,7 @@ export function DashboardSkeleton() {
   ]
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header — identical to real, version line is a pulse placeholder */}
       <div className="page-head items-start">
         <div>
@@ -51,12 +51,12 @@ export function DashboardSkeleton() {
       </div>
 
       {/* Stats grid — exact same card markup, value replaced with pulse */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {skeletonStats.map((s) => (
-          <div key={s.label} className="card">
+          <div key={s.label} className="card p-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-400">{s.label}</p>
+                <p className="text-xs font-medium text-slate-400">{s.label}</p>
                 {/* same as: <p className="mt-2 text-2xl font-semibold text-ink">12</p> */}
                 <p className="mt-2 text-2xl font-semibold leading-none">
                   <span className="inline-block h-[1em] w-[1.6em] rounded-sm bg-slate-700 animate-pulse align-baseline" />
@@ -77,14 +77,10 @@ export function DashboardSkeleton() {
           <div key={chart.title} className="card">
             <h2 className="text-lg font-semibold text-ink">{chart.title}</h2>
             <p className="text-sm text-slate-400 mt-1 mb-4">{chart.sub}</p>
-            <svg width="100%" height={340} viewBox="0 0 540 340" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-              <line x1={40} y1={304} x2={524} y2={304} stroke="var(--color-slate-600)" strokeWidth={1} />
+            <svg width="100%" height={180} viewBox="0 0 540 180" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
               {chart.bars.map((pct, j) => {
-                const groupW = 484 / chart.bars.length
-                const bw = Math.min(groupW * 0.5, 48)
-                const bx = 40 + j * groupW + (groupW - bw) / 2
-                const barH = (pct / 100) * 280
-                return <rect key={j} className="animate-pulse" x={bx} y={304 - barH} width={bw} height={barH} rx={3} fill="var(--color-slate-700)" />
+                const y = 8 + (j + 0.5) * 164 / chart.bars.length
+                return <rect key={j} className="animate-pulse" x={100} y={y - 3} width={(pct / 100) * 404} height={6} rx={3} fill="var(--color-slate-700)" />
               })}
             </svg>
           </div>
@@ -161,9 +157,9 @@ export function DashboardSkeleton() {
       {/* Nodes — real title, card shape matches real layout */}
       <div className="card">
         <h2 className="text-lg font-semibold text-ink mb-4">{tr('dashboard.nodes.title', 'Nodes')}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[400px] overflow-y-auto">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="p-3 border border-slate-700 rounded-md">
+            <div key={i} className="p-3 border-l border-slate-700">
               <div className="flex items-start gap-2 mb-2">
                 <div className="w-4 h-4 rounded-full bg-slate-700 mt-0.5 animate-pulse" />
                 <div className="flex-1 min-w-0">
