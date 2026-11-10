@@ -692,7 +692,7 @@ test.describe('number check — drawers', () => {
       const card = (label: string) => section.locator('div.rounded-lg', { hasText: label })
       await expect(card('Total CPU')).toContainText('12.0m', { timeout: 20_000 })
       await expect(card('Total Memory')).toContainText('5.0 MiB')
-      await expect(card('Backing Pods')).toContainText(`${want.length}.0`)
+      await expect(card('Backing Pods').locator('div.text-lg')).toHaveText(`${want.length}`)
     } finally {
       await page.unroute(prometheus)
     }

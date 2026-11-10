@@ -104,7 +104,7 @@ export default function WorkloadReplicasSection({
             />
           )}
           {getWorkloadMetric('restarts') !== null && (
-            <MetricCard label="Total Restarts" value={getWorkloadMetric('restarts')!} unit="" thresholds={{ warn: 5, danger: 20 }} />
+            <MetricCard label="Total Restarts" value={getWorkloadMetric('restarts')!} unit="" whole thresholds={{ warn: 5, danger: 20 }} />
           )}
         </div>
         {promWorkloadMetrics.data['cpu_per_pod']?.results && promWorkloadMetrics.data['cpu_per_pod'].results.length > 0 && (
