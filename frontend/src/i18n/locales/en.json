@@ -4088,6 +4088,8 @@
       "apiServer": "API server",
       "health": "Health",
       "healthChecked": "Checked {{time}}",
+      "testPassed": "Test passed",
+      "testFailed": "Test failed",
       "createdBy": "Created by",
       "actions": "Actions",
       "test": "Test",

@@ -1,20 +1,28 @@
 import { describe, expect, it } from 'vitest'
 
-import { healthChecked, shownTest } from './clusterTest'
+import { healthChecked, testOutcome } from './clusterTest'
 
-describe('a cluster Test result in the Health column', () => {
-  const held = { healthy: true, server_version: 'v1.35.0', listAt: 1000 }
+describe('what a cluster Test found', () => {
+  const at = '2026-11-10T04:20:15Z'
 
-  it('stands for the list answer read right after the test', () => {
-    expect(shownTest(held, 1000)).toBe(held)
+  it('is the version the server read when it connected', () => {
+    expect(testOutcome({ healthy: true, server_version: 'v1.35.0', server: 'https://10.0.0.1:6443' }, null, at)).toEqual({ healthy: true, detail: 'v1.35.0', at })
   })
 
-  it('gives way to the server health once a newer answer comes', () => {
-    expect(shownTest(held, 2000)).toBeNull()
+  it("is the server's reason when it could not connect (its field is message)", () => {
+    expect(testOutcome({ healthy: false, message: 'connection failed: dial tcp 10.0.0.1:6443: i/o timeout' }, null, at))
+      .toEqual({ healthy: false, detail: 'connection failed: dial tcp 10.0.0.1:6443: i/o timeout', at })
   })
 
-  it('is nothing before a test', () => {
-    expect(shownTest(undefined, 1000)).toBeNull()
+  it('is why the request failed when there was no answer to read', () => {
+    const refused = { response: { status: 403, data: { detail: 'forbidden: admin.clusters.list required' } }, message: 'Request failed with status code 403' }
+    expect(testOutcome(null, refused, at)).toEqual({ healthy: false, detail: 'forbidden: admin.clusters.list required', at })
+    expect(testOutcome(null, new Error('Network Error'), at)).toEqual({ healthy: false, detail: 'Network Error', at })
+  })
+
+  it('is empty-handed, not wrong, when the server gave nothing more', () => {
+    expect(testOutcome({ healthy: false }, null, at).detail).toBe('')
+    expect(testOutcome({ healthy: true }, null, at).detail).toBe('')
   })
 })
 

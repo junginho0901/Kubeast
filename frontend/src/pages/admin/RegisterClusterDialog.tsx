@@ -6,6 +6,7 @@ import { Upload, CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
 import { clustersApi, type ConnectionResult } from '@/services/api/clusters'
+import { failureText } from '@/utils/failureText'
 
 interface Props {
   onClose: () => void
@@ -53,7 +54,7 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
     try {
       setTest(await clustersApi.validateCluster(kubeconfig))
     } catch (e) {
-      setTest({ healthy: false, error: (e as Error).message })
+      setTest({ healthy: false, message: failureText(e) })
     } finally {
       setTesting(false)
     }
@@ -79,8 +80,7 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
       )
       onRegistered()
     } catch (e) {
-      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(detail || (e as Error).message)
+      setError(failureText(e))
     } finally {
       setSubmitting(false)
     }
@@ -195,9 +195,9 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
                   {tr('cluster.register.test', 'Test connection')}
                 </button>
                 {test && (
-                  <span className={`flex items-center gap-1 text-sm ${test.healthy ? 'text-green-400' : 'text-red-400'}`}>
-                    {test.healthy ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                    {test.healthy ? test.server_version || 'OK' : test.error || tr('cluster.register.testFailed', 'Failed')}
+                  <span role="status" data-testid="register-test-result" className={`flex items-center gap-1 text-sm min-w-0 ${test.healthy ? 'text-green-400' : 'text-red-400'}`}>
+                    {test.healthy ? <CheckCircle className="w-4 h-4 shrink-0" /> : <XCircle className="w-4 h-4 shrink-0" />}
+                    <span className="break-words">{test.healthy ? test.server_version || 'OK' : test.message || tr('cluster.register.testFailed', 'Failed')}</span>
                   </span>
                 )}
               </div>

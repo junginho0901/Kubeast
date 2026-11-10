@@ -1,14 +1,15 @@
 import type { ConnectionResult } from '@/services/api/clusters'
+import { failureText } from '@/utils/failureText'
 import { formatTime, utcTitle } from '@/utils/time'
 
-// A Test result with the cluster list answer it was read with (dataUpdatedAt).
-export type HeldTest = ConnectionResult & { listAt: number }
+// What a Test pressed on this page found, and when. It stays under the cluster's health until that cluster's next
+// Test (the Health column above it is the server's, which the Test wrote).
+export type TestOutcome = { healthy: boolean; detail: string; at: string }
 
-// The Test result stands in the Health column for the list answer read after
-// it (the health the test wrote); a newer answer — another Test, an edit, a
-// refetch — shows the server's health again.
-export function shownTest(held: HeldTest | undefined, listUpdatedAt: number): ConnectionResult | null {
-  return held && held.listAt === listUpdatedAt ? held : null
+// The server's answer (the version it read, or why it could not connect), or why the request itself failed.
+export function testOutcome(res: ConnectionResult | null, err: unknown, at: string): TestOutcome {
+  if (!res) return { healthy: false, detail: failureText(err), at }
+  return { healthy: res.healthy, detail: (res.healthy ? res.server_version : res.message) ?? '', at }
 }
 
 // When the cluster's health was last checked (the server's background check or a Test), as the Health column writes

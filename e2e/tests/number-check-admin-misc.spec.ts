@@ -11,7 +11,8 @@ import { test, expect, type APIRequestContext, type Page, type Response } from '
 //   the rows the screen counts, the end minute counts the whole minute, and a filter past the CSV limit says so.
 // - Session recordings: two rows the spec writes (e2e-n4d-rec-*) whose users differ in one character, found by a
 //   filter holding "_" as text; the rows stay on screen while the next page or search loads.
-// - Clusters: a Test result stands until the next list answer, then the server's health.
+// - Clusters: a Test leaves a line of what it found (self's version kubectl reads, a failure's reason) until that
+//   cluster's next Test; the Health column is the server's.
 // - AI chat: each session card's message count is the session API's.
 
 const AUDIT = { path: '/admin/audit' }
@@ -282,38 +283,75 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
     }
   })
 
-  test('Clusters: a Test result stands until the next list answer, then the server health', async ({ page, request }) => {
-    test.setTimeout(90_000)
+  test('Clusters: a Test leaves a line of what it found, the reason when it failed, until the next Test of that cluster', async ({ page, request }) => {
+    test.setTimeout(120_000)
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     type Meta = { id: string; display_name: string; health_status?: string }
+    type Result = { healthy: boolean; server_version?: string; server?: string; message?: string }
     const clusters = async () => ((await (await request.get('/api/v1/clusters', { headers: bearer(admin), params: { cluster: '' } })).json()).items ?? []) as Meta[]
     const before = await clusters()
-    const other = before.find((c) => c.id === 'default')
-    const self = before.find((c) => c.id === 'self')
-    test.skip(!other || !self, 'needs the clusters self and default')
+    test.skip(!before.some((c) => c.id === 'default') || !before.some((c) => c.id === 'self'), 'needs the clusters self and default')
     const health = (status?: string) => (status ? EN.cluster.admin.healthValue[status] ?? status : '-')
+    const said = (r: Result) => {
+      const word = r.healthy ? EN.cluster.admin.testPassed : EN.cluster.admin.testFailed
+      const detail = r.healthy ? r.server_version : r.message
+      return detail ? `${word}: ${detail}` : word
+    }
+    // the cluster self is: what kubectl version reads of it
+    const selfVersion = JSON.parse(execFileSync('kubectl', ['--kubeconfig', kcPath, '--context', 'kind-kubeast', 'version', '-o', 'json'], { encoding: 'utf8' })).serverVersion.gitVersion as string
     await page.goto(CLUSTERS.path)
     // a cluster's row: the one holding its Access button
     const row = (id: string) => page.getByTestId('clusters-table').locator('tbody tr').filter({ has: page.getByTestId(`access-cluster-${id}`) })
-    // the status itself; the time of the last check is the line under it
+    // the status itself (the server's); the time of the last check and the Test's line are under it
     const cell = (id: string) => row(id).locator('td').nth(3).locator('> span').first()
-    await expect(cell('default')).toHaveText(health(other!.health_status), { timeout: 15_000 })
+    const line = (id: string) => page.getByTestId(`cluster-test-result-${id}`)
+    const testButton = (id: string) => row(id).getByRole('button', { name: EN.cluster.admin.test, exact: true })
+    const press = async (id: string) => {
+      const tested = page.waitForResponse((r) => new URL(r.url()).pathname === `/api/v1/clusters/${id}/test` && r.request().method() === 'POST')
+      const listed = page.waitForResponse((r) => /\/api\/v1\/clusters(\?|$)/.test(r.url()) && !r.url().includes('accessibleOnly') && r.request().method() === 'GET')
+      await testButton(id).click()
+      const res = await tested
+      const list = ((await (await listed).json()).items ?? []) as Meta[]
+      return { status: res.status(), body: (await res.json()) as Result, list }
+    }
+    await expect(line('default'), 'no line before a Test').toHaveText('')
 
-    const tested = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/clusters/default/test' && r.request().method() === 'POST')
-    await row('default').getByRole('button', { name: EN.cluster.admin.test, exact: true }).click()
-    const res = (await (await tested).json()) as { healthy: boolean; server_version?: string }
-    const testText = res.healthy ? res.server_version || EN.cluster.admin.healthValue.healthy : EN.cluster.admin.healthValue.unreachable
-    await expect(cell('default'), 'the Test result').toHaveText(testText, { timeout: 15_000 })
+    const d = await press('default')
+    expect(d.status).toBe(200)
+    await expect(line('default'), 'the Test of default').toHaveText(said(d.body), { timeout: 15_000 })
+    await expect(cell('default'), 'the health the Test wrote').toHaveText(health(d.list.find((c) => c.id === 'default')?.health_status))
 
-    // another Test reads the list again: default shows what the server holds now
-    const listed = page.waitForResponse((r) => /\/api\/v1\/clusters(\?|$)/.test(r.url()) && !r.url().includes('accessibleOnly') && r.request().method() === 'GET')
-    await row('self').getByRole('button', { name: EN.cluster.admin.test, exact: true }).click()
-    const now = (((await (await listed).json()).items ?? []) as Meta[]).find((c) => c.id === 'default')
-    await expect(cell('default'), 'default after the next list answer').toHaveText(health(now?.health_status), { timeout: 15_000 })
+    // self is dialed (it used to answer healthy without asking): the version kubectl reads
+    const s = await press('self')
+    expect(s.body, 'self answers what its API server is').toMatchObject({ healthy: true, server_version: selfVersion })
+    expect(s.body.server, 'the in-cluster Service address is not put on the row').toBeUndefined()
+    await expect(line('self')).toHaveText(`${EN.cluster.admin.testPassed}: ${selfVersion}`, { timeout: 15_000 })
+    await expect(line('default'), "default's line stays through another cluster's Test").toHaveText(said(d.body))
+
+    // a failure says why: the server's reason for a cluster it could not reach, the refusal's for a request refused;
+    // the button says it is waiting meanwhile
+    const answers = [
+      { status: 200, json: { healthy: false, message: 'connection failed: e2e stand-in, dial tcp 10.0.0.1:6443: i/o timeout' }, want: `${EN.cluster.admin.testFailed}: connection failed: e2e stand-in, dial tcp 10.0.0.1:6443: i/o timeout` },
+      { status: 403, json: { detail: 'forbidden: e2e stand-in refusal' }, want: `${EN.cluster.admin.testFailed}: forbidden: e2e stand-in refusal` },
+    ]
+    for (const a of answers) {
+      let release!: () => void
+      const held = new Promise<void>((r) => { release = r })
+      await page.route('**/api/v1/clusters/default/test', async (route) => { await held; await route.fulfill({ status: a.status, json: a.json }) })
+      await testButton('default').click()
+      await expect(testButton('default'), 'waiting').toBeDisabled()
+      await expect(testButton('default')).toHaveAttribute('aria-busy', 'true')
+      release()
+      await expect(line('default')).toHaveText(a.want, { timeout: 15_000 })
+      await expect(line('default').locator('span')).toHaveClass(/text-red-400/)
+      await expect(testButton('default'), 'done').toBeEnabled()
+      await page.unroute('**/api/v1/clusters/default/test')
+    }
 
     await page.reload()
-    const after = (await clusters()).find((c) => c.id === 'default')
-    await expect(cell('default'), 'after a reload').toHaveText(health(after?.health_status), { timeout: 15_000 })
+    const after = await clusters()
+    await expect(cell('default'), 'after a reload').toHaveText(health(after.find((c) => c.id === 'default')?.health_status), { timeout: 15_000 })
+    await expect(line('default'), 'a line is of this visit').toHaveText('')
   })
 
   test('Clusters: the Health column says when the check it shows was made, the time the API answers', async ({ page }) => {

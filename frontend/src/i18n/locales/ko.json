@@ -4458,6 +4458,8 @@
       "apiServer": "API 서버",
       "health": "상태",
       "healthChecked": "검사 {{time}}",
+      "testPassed": "테스트 통과",
+      "testFailed": "테스트 실패",
       "createdBy": "등록자",
       "actions": "작업",
       "test": "테스트",
