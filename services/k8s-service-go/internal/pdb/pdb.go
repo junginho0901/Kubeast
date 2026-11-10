@@ -36,6 +36,8 @@ func Info(p *policyv1.PodDisruptionBudget) map[string]interface{} {
 		selector = p.Spec.Selector.MatchLabels
 	}
 	result["selector"] = selector
+	// policy/v1: no selector protects no pod and an empty one every pod of the namespace, and both read {} above.
+	result["has_selector"] = p.Spec.Selector != nil
 
 	if p.Spec.Selector != nil && len(p.Spec.Selector.MatchExpressions) > 0 {
 		exprs := make([]map[string]interface{}, 0, len(p.Spec.Selector.MatchExpressions))

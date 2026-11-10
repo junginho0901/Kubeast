@@ -1,6 +1,9 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
 import { test, expect } from '@playwright/test'
 
-import { compileRules, flatten, sortCells, type Answer } from './response-compare'
+import { compileRules, flatten, sortCells, type Answer, type IgnoreRule } from './response-compare'
 
 // The comparison on its own: each kind of change must come out as what it is. No browser, no cluster.
 
@@ -71,6 +74,15 @@ test.describe('the response comparison', () => {
     expect(counted.real).toEqual([{ cell: '$.events[Pod/n/a/Failed/m].count', kind: 'changed', old: '1', new: '2' }])
   })
 
+  test('a catalog\'s groups pair by their category, so a group inserted in the middle is that group only', () => {
+    const group = (category: string, ...keys: string[]) => ({ category, permissions: keys.map((key) => ({ key, description: key })) })
+    const old = answer([group('All', '*'), group('Pod', 'resource.pod.exec'), group('Admin', 'admin.*')])
+    const fresh = answer([group('All', '*'), group('Cluster', 'resource.hygiene.scan'), group('Pod', 'resource.pod.exec'), group('Admin', 'admin.*')])
+    const cells = sortCells(old, fresh, old).real.map((d) => d.cell)
+    expect(cells.filter((c) => !c.startsWith('$[Cluster]')).sort()).toEqual(['$.$length', '$.$order'])
+    expect(cells).toContain('$[Cluster].permissions[resource.hygiene.scan].key')
+  })
+
   test('a rollout\'s revisions are rows of their own', () => {
     const rollout = (revision: number, replicas: number) => ({ name: 'web', namespace: 'n', revision, replicas })
     const s = sortCells(answer([rollout(1, 2), rollout(2, 3)]), answer([rollout(1, 2), rollout(2, 4)]), answer([rollout(1, 2), rollout(2, 3)]))
@@ -78,9 +90,31 @@ test.describe('the response comparison', () => {
   })
 
   test('an ignore rule can be for one user\'s answers', () => {
-    const match = compileRules([{ route: '^/x$', cell: '.', user: '^nsread$', why: 'because', pr: '#1' }])
+    const match = compileRules([{ route: '^/x$', cell: '^\\$\\.a', user: '^nsread$', why: 'because', pr: '#1' }])
     expect(match('/x', '$.a', 'nsread')?.pr).toBe('#1')
     expect(match('/x', '$.a', 'viewer')).toBeNull()
+  })
+
+  test('a rule for a route the old build did not have keeps a server error of the new build a real difference', () => {
+    const rules = compileRules([{ route: '^/api/v1/cluster/pods/page$', cell: '.', newStatus: '^200$', why: 'new route', pr: '#1' }])
+    const known = (fresh: Answer) => {
+      const sorted = sortCells(answer({ detail: 'Not Found' }, 404), fresh, answer({ detail: 'Not Found' }, 404))
+      return sorted.real.filter((d) => !rules('/api/v1/cluster/pods/page', d.cell, '', String(fresh.status))).map((d) => d.cell).sort()
+    }
+    expect(known(answer({ detail: 'database unavailable' }, 500))).toEqual(['$.detail', '$status'])
+    expect(known(answer({ items: [], total: 0 }))).toEqual([])
+  })
+
+  test('a rule that takes in $status names the status the new build answers, or it is refused', () => {
+    expect(() => compileRules([{ route: 'x', cell: '.', why: 'z', pr: '#1' }])).toThrow(/names newStatus/)
+    expect(() => compileRules([{ route: 'x', cell: '^\\$status$', why: 'z', pr: '#1' }])).toThrow(/names newStatus/)
+    expect(() => compileRules([{ route: 'x', cell: '^\\$\\.a', why: 'z', pr: '#1' }])).not.toThrow()
+  })
+
+  test('the ignore list of the response comparison compiles', () => {
+    const file = JSON.parse(fs.readFileSync(path.join(__dirname, 'response-diff-ignore.json'), 'utf8')) as { rules: IgnoreRule[] }
+    expect(() => compileRules(file.rules)).not.toThrow()
+    expect(file.rules.length).toBeGreaterThan(0)
   })
 
   test('an ignore rule names the route and cell; one with no reason or PR is refused', () => {

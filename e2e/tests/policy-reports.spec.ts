@@ -197,7 +197,10 @@ test.describe('policy reports', () => {
     const forFirst = await (await page.request.get(`/api/v1/cluster/namespaces/${NS}/policyreports/resource?cluster=default&kind=${first.kind}&name=${first.name}`)).json()
     await page.getByTestId('policy-report-row').first().click()
     await expect(page.getByTestId('policy-violations')).toBeVisible({ timeout: 20_000 })
-    await expect(page.getByTestId('policy-violation-row')).toHaveCount(forFirst.rows.filter((r: Row) => ['fail', 'warn', 'error'].includes(r.result)).length)
+    // ten to a page, with the range of all past one
+    const failing = forFirst.rows.filter((r: Row) => ['fail', 'warn', 'error'].includes(r.result)).length
+    await expect(page.getByTestId('policy-violation-row')).toHaveCount(Math.min(failing, 10))
+    if (failing > 10) await expect(page.getByTestId('policy-violations-list')).toContainText(`1-10 / ${failing}`)
 
     await page.goto('/security/policyreports?cluster=self')
     await expect(page.getByTestId('policy-reports-not-installed')).toBeVisible({ timeout: 15_000 })

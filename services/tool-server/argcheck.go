@@ -521,8 +521,9 @@ func checkAPIGroup(field, v string) error {
 }
 
 var (
-	// custom-columns: HEADER:.json.path pairs separated by commas.
-	columnsRe   = regexp.MustCompile(`^[A-Za-z0-9_-]+:\.[A-Za-z0-9_.\[\]*'"/-]+(,[A-Za-z0-9_-]+:\.[A-Za-z0-9_.\[\]*'"/-]+)*$`)
+	// custom-columns: HEADER:.json.path pairs separated by commas, the path in kubectl's JSONPath with its filters and
+	// slices ([?(@.type=="Ready")], [-1], [1:3]); kubectl gets it as one argument and no brace reaches it.
+	columnsRe   = regexp.MustCompile(`^[A-Za-z0-9_-]+:\.[A-Za-z0-9_.\[\]*'"/?@()=!<>: -]+(,[A-Za-z0-9_-]+:\.[A-Za-z0-9_.\[\]*'"/?@()=!<>: -]+)*$`)
 	fieldPathRe = regexp.MustCompile(`^\.[A-Za-z0-9_.\[\]*-]+$`)
 )
 

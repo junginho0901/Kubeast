@@ -69,7 +69,10 @@ Lists it could not read are not hidden; they are shown as "skipped checks".
 - **Export and sign-off**:
   - Download CSV (BOM, CRLF, formula characters neutralized) or JSON.
   - Signing off per cluster with a note saves the report of that moment as a snapshot (`hygiene_reviews`, kept for `retention.reviewDays`).
+  - On the cluster Kubeast runs on, a snapshot a global admin signed reads, for anyone else, without the TLS certificate and Helm release findings of [Kubeast's own namespace](cluster-requirements.md#who-reaches-kubeasts-own-namespace) and without their counts, as that reader's own scan does.
   - The screen shows the last sign-off and the next due date (`intervalDays`, default 30 days).
+  - Past sign-offs come a page at a time, newest first: `GET /api/v1/cluster/hygiene/history?cluster=<id>&limit=<1–100>&offset=<n>`.
+  - Its `X-Kubeast-Total` header is how many sign-offs the cluster keeps; the tab's footer and the AI tool `hygiene_history` give that count.
   - Automation such as n8n can fetch `GET /api/v1/cluster/hygiene?cluster=<id>&format=json` with an API key.
   - A finding's `message` is an English sentence, also in the CSV and snapshot. The screen receives the same content as `message_key` and `message_args`, and shows it in the screen language.
 - Permissions: viewing the report and its history is `resource.hygiene.scan` on that cluster, which an Admin grant there holds and Read and Write do not; a grant limited to namespaces is refused it, since the report spans the cluster. The global role's `admin.hygiene.read` reads every cluster's report. `admin.hygiene.export` and `admin.hygiene.signoff` are global too, so the export and the sign-off are for global Admins and roles that hold them.
@@ -168,7 +171,7 @@ All three cards show read-only results computed by k8s-service (the same numbers
   - When it cannot be found automatically, name it directly in **Service in the cluster** under Admin → Clusters → Edit (`prometheus_service` in `PATCH`), or in the chart's `features.prometheus.service`.
   - The value is `namespace/service:port`, with `…/path` when the API sits under a path. For a VictoriaMetrics cluster, it is `monitoring/vmselect-<name>:8481/select/0/prometheus`.
   - Order: cluster URL → cluster Service → chart URL → chart Service → auto-discovery.
-  - Discovery (which Service, remembered for 10 minutes per cluster) runs as the overview cache identity (`kubeast:cache`, group `kubeast:viewer`) and counts a 403 from `/-/healthy` as "present" — so the result is the same whoever opened it first.
+  - Discovery (which Service, remembered per cluster for 10 minutes, or 1 minute when nothing was found or the search failed) runs as the overview cache identity (`kubeast:cache`, group `kubeast:viewer`) and counts a 403 from `/-/healthy` as "present" — so the result is the same whoever opened it first.
   - The queries themselves go out as the signed-in person. So Read (`kubeast:viewer`) can read only when that Prometheus Service is listed in `auth.impersonation.viewerProxyServices`; otherwise the cluster refuses.
     See the Read row of [Roles and permissions](features.md#roles-and-permissions--what-the-built-in-roles-can-do-and-who-they-act-as-in-the-cluster).
   - Without Prometheus, a single-node VictoriaMetrics is found the same way. Kubeast looks for VM operator `vmsingle` or `victoria-metrics-single` chart labels, and for port 8428 with a name like `*vmsingle*` or `*victoria-metrics*`.

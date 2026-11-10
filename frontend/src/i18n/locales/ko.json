@@ -353,6 +353,7 @@
       "reject": "거절",
       "notePlaceholder": "메모 (선택)",
       "own": "본인 요청 — 다른 관리자가 결정해야 합니다.",
+      "chartBound": "차트가 이 역할을 클러스터에 바인딩합니다. 전역 관리자나 이 클러스터의 Admin만 승인할 수 있습니다.",
       "failed": "결정을 저장하지 못했습니다."
     },
     "mine": {
@@ -1119,6 +1120,7 @@
       "total": "전체",
       "completed": "완료",
       "running": "실행 중",
+      "suspended": "중지됨",
       "failed": "실패"
     },
     "delete": {
@@ -2107,9 +2109,11 @@
       "cpuUsage": "CPU (사용량)",
       "cpuLimit": "CPU Limit",
       "memoryUsage": "Memory (사용량)",
-      "memoryLimit": "Memory Limit"
-    },
-    "memory": "메모리"
+      "memoryLimit": "Memory Limit",
+      "node": "Node",
+      "cpuPercent": "CPU (할당 가능 대비 %)",
+      "memoryPercent": "Memory (할당 가능 대비 %)"
+    }
   },
   "common": {
     "notAvailable": "N/A",
@@ -2905,7 +2909,8 @@
       "self": "내 계정입니다. 내 클러스터 권한은 다른 관리자가 바꾸거나 접근 요청으로 받습니다.",
       "readError": "이 사용자의 클러스터 접근 권한을 읽지 못했습니다: {{reason}}",
       "rolesError": "역할을 읽지 못해 고를 수 없습니다: {{reason}}",
-      "changeError": "바꾸지 못했습니다: {{reason}}"
+      "changeError": "바꾸지 못했습니다: {{reason}}",
+      "chartBound": "전역 관리자나 이 클러스터의 Admin이 부여"
     }
   },
   "adminUsers": {
@@ -2992,6 +2997,8 @@
       "approveAdmin": "Admin으로 승인",
       "clearSelection": "선택 해제",
       "selectPending": "대기 중인 사용자 전체 선택",
+      "selectAllPages": "모든 페이지의 대기 중인 사용자 {{count}}명 전체 선택",
+      "selectedEveryPage": "모든 페이지에서 {{count}}명 선택됨",
       "notChanged": "계정 {{total}}개 중 {{done}}개를 바꿨습니다. 바꾸지 못한 계정: {{accounts}}",
       "reasonFailed": "변경 실패, 까닭은 감사 로그에 있습니다",
       "reasonNotFound": "없는 계정",
@@ -3774,14 +3781,12 @@
     "summarizing": "요약 중...",
     "noEvents": "이 기간에 이벤트가 없습니다",
     "noEventsHint": "K8s 이벤트는 기본적으로 약 1시간만 유지됩니다. 더 긴 시간 범위에서는 이벤트가 없을 수 있습니다.",
-    "loadMore": "더 보기",
     "revision": "Revision",
     "changeCause": "변경 원인",
     "repeated": "{{count}}회 반복",
     "resourceFilter": "리소스 종류",
     "refresh": "새로고침",
     "closeSummary": "요약 닫기",
-    "remaining": "({{n}}개 남음)",
     "via": "{{source}} 경유",
     "namespace": "Namespace",
     "listCount": "{{rows}}개 항목(이벤트 {{events}} · 롤아웃 {{rollouts}})",
@@ -4501,6 +4506,7 @@
     "access": {
       "add": "추가",
       "allAdded": "모든 사용자에게 이미 부여됨",
+      "search": "이름이나 이메일로 찾기…",
       "empty": "이 클러스터에 접근할 수 있는 사용자가 아직 없습니다.",
       "note": "여기서 역할을 받은 사용자만 이 클러스터에 접근할 수 있습니다(나머지는 기본 거부). 전역 관리자는 모든 클러스터에 접근하며 목록에 나오지 않습니다. 변경은 사용자가 다시 로그인한 뒤 적용됩니다.",
       "revoke": "회수",
@@ -4602,8 +4608,7 @@
       "result": "결과",
       "namespace": "Namespace",
       "since": "시작 시각",
-      "until": "종료 시각",
-      "limit": "페이지당 건수"
+      "until": "종료 시각"
     },
     "apply": "조회",
     "reset": "초기화",
@@ -4852,6 +4857,7 @@
     "Failed to load describe data. Showing summary from list.": "상세 정보를 불러오지 못했습니다. 목록의 요약을 표시합니다.",
     "Failed to load rules: {{error}}": "규칙을 불러오지 못했습니다: {{error}}",
     "Applies through {{subjects}}": "{{subjects}}(으)로 적용됩니다",
+    "Not in effect through a RoleBinding; URLs need a ClusterRoleBinding.": "RoleBinding으로는 효력이 없습니다. URL은 ClusterRoleBinding으로 묶어야 합니다.",
     "Prev": "이전",
     "Next": "다음",
     "Cancel": "취소",
@@ -4977,6 +4983,8 @@
     "No pod in this namespace references this ResourceClaim.": "이 Namespace에 이 ResourceClaim을 참조하는 Pod가 없습니다.",
     "No pod in this namespace uses this ServiceAccount.": "이 Namespace에 이 ServiceAccount를 쓰는 Pod가 없습니다.",
     "No pod matches this selector.": "이 셀렉터에 맞는 Pod가 없습니다.",
+    "This PodDisruptionBudget has no selector, so it protects no pod.": "이 PodDisruptionBudget에는 셀렉터가 없어 보호하는 Pod가 없습니다.",
+    "The selector is empty, so this PodDisruptionBudget protects every pod of its namespace.": "셀렉터가 비어 있어 이 PodDisruptionBudget은 Namespace의 모든 Pod를 보호합니다.",
     "No pods match this selector.": "이 셀렉터에 맞는 Pod가 없습니다.",
     "No pods match this podSelector.": "이 podSelector에 맞는 Pod가 없습니다.",
     "No pod uses any of the bound ServiceAccounts.": "묶인 ServiceAccount를 쓰는 Pod가 없습니다.",
@@ -5011,6 +5019,7 @@
     "Backend Pod Resource Usage": "백엔드 Pod 리소스 사용량",
     "Real-time Resource Usage": "실시간 리소스 사용량",
     "Metrics from the cluster's Prometheus need a grant on the whole cluster.": "클러스터의 Prometheus 지표는 클러스터 전체 권한이 있어야 볼 수 있습니다.",
+    "Not shown: the {{n}} pods behind this Service are more than one Prometheus query can name.": "표시하지 않습니다. 이 Service 뒤의 Pod {{n}}개는 Prometheus 질의 하나에 다 담을 수 없습니다.",
     "Scaling History (24h)": "스케일링 이력 (24시간)",
     "Response Time": "응답 시간",
     "24h CPU%": "24시간 CPU%",
@@ -5402,7 +5411,6 @@
     },
     "loading": "불러오는 중…",
     "open": "보고서",
-    "range": "{{total}}건 중 {{from}}–{{to}}",
     "skipReason": "건너뜀: {{reason}}",
     "skip": {
       "investigation_cap": "조사 한도로 건너뜀",

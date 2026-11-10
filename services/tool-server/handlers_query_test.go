@@ -4,8 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
@@ -14,6 +19,187 @@ const queryPodList = `{"apiVersion":"v1","kind":"List","items":[
  {"metadata":{"name":"web-1","namespace":"shop"},"status":{"phase":"Running"},"spec":{"nodeName":"n1"}},
  {"metadata":{"name":"web-2","namespace":"shop"},"status":{"phase":"Pending"},"spec":{"nodeName":"n2"}},
  {"metadata":{"name":"api-1","namespace":"db"},"status":{"phase":"Running"},"spec":{"nodeName":"n1"}}]}`
+
+// A jq program that builds more than a run may hold step by step is stopped with that reason, and the next program runs
+// as before.
+func TestJQProgramThatOutgrowsItsMemoryIsStopped(t *testing.T) {
+	for _, expr := range []string{
+		`[range(6000000)] | length`,
+		`reduce range(27) as $i ("a"; . + .) | length`,
+	} {
+		fakeKubectl(t, func(args []string) (string, error) { return queryPodList, nil })
+		out, err := handleJQQuery(ctxFor("c1"), map[string]interface{}{"resource_type": "pods", "namespace": "shop", "jq": expr}, bearer())
+		if !errors.Is(err, errBadRequest) || !strings.Contains(err.Error(), "memory") {
+			t.Errorf("%s: want a refusal for its memory, got %v %.200s", expr, err, out)
+		}
+	}
+	fakeKubectl(t, func(args []string) (string, error) { return queryPodList, nil })
+	out, err := handleJQQuery(ctxFor("c1"), map[string]interface{}{"resource_type": "pods", "namespace": "shop", "jq": `[.items[].metadata.name] | length`}, bearer())
+	if err != nil || !strings.Contains(out, `"results":[3]`) {
+		t.Fatalf("the next program: %v %s", err, out)
+	}
+}
+
+// podListOfAbout1MiB is a kubectl list of n pods on 300 nodes, 908 KB at 4 000: about the tool output cap.
+func podListOfAbout1MiB(n int) string {
+	items := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		items = append(items, fmt.Sprintf(`{"metadata":{"name":"web-%05d","namespace":"shop","labels":{"app":"web"}},"spec":{"nodeName":"node-%03d","containers":[{"name":"app","image":"registry.example.test/web:1.2.3"}]},"status":{"phase":"Running","podIP":"10.0.0.1"}}`, i, i%300))
+	}
+	return `{"apiVersion":"v1","kind":"List","items":[` + strings.Join(items, ",") + `]}`
+}
+
+// With its heap not watched, a program that asks for more memory than a run may hold is refused when it asks, in one
+// step or many, and ordinary programs over a list of about 1 MiB answer every time.
+func TestJQProgramPastItsMemoryIsRefusedWithItsHeapUnwatched(t *testing.T) {
+	if !jqAddressLimited {
+		t.Skipf("the kernel holds a run to its memory in a Linux build without cgo, as the image is built; on %s with this build the heap watcher alone does (CGO_ENABLED=0 on Linux runs this test)", runtime.GOOS)
+	}
+	prev := jqWatchEvery
+	jqWatchEvery = time.Hour
+	t.Cleanup(func() { jqWatchEvery = prev })
+	for _, expr := range []string{
+		`"a" * 200000000 | length`,
+		`[range(6000000)] | length`,
+		`reduce range(27) as $i ("a"; . + .) | length`,
+	} {
+		fakeKubectl(t, func(args []string) (string, error) { return queryPodList, nil })
+		out, err := handleJQQuery(ctxFor("c1"), map[string]interface{}{"resource_type": "pods", "namespace": "shop", "jq": expr}, bearer())
+		if !errors.Is(err, errBadRequest) || !strings.Contains(err.Error(), "memory") {
+			t.Errorf("%s: want a refusal for its memory, got %v %.200s", expr, err, out)
+		}
+	}
+	big := podListOfAbout1MiB(4000)
+	for _, c := range []struct{ expr, want string }{
+		{`[.items[] | .spec.nodeName] | group_by(.) | map({node: .[0], pods: length}) | length`, `"results":[300]`},
+		{`[.items[] | {name: .metadata.name, node: .spec.nodeName, image: .spec.containers[0].image}] | length`, `"results":[4000]`},
+		{`.items | map(select(.status.phase == "Running")) | length`, `"results":[4000]`},
+	} {
+		for i := 0; i < 2; i++ {
+			fakeKubectl(t, func(args []string) (string, error) { return big, nil })
+			out, err := handleJQQuery(ctxFor("c1"), map[string]interface{}{"resource_type": "pods", "namespace": "shop", "jq": c.expr}, bearer())
+			if err != nil || !strings.Contains(out, c.want) {
+				t.Errorf("%s over %d bytes, run %d: %v %.300s", c.expr, len(big), i+1, err, out)
+			}
+		}
+	}
+}
+
+// jq programs run one at a time: one that comes while another runs waits for its turn, then answers as it does alone.
+func TestJQProgramsRunOneAtATime(t *testing.T) {
+	if n := jqRuns.Cap(); n != 1 {
+		t.Errorf("%d jq programs may run at once, want 1", n)
+	}
+	release, err := jqRuns.Take(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	fakeKubectl(t, func(args []string) (string, error) { return queryPodList, nil })
+	type answer struct {
+		out string
+		err error
+	}
+	done := make(chan answer, 1)
+	go func() {
+		out, err := handleJQQuery(ctxFor("c1"), map[string]interface{}{"resource_type": "pods", "namespace": "shop", "jq": `[.items[].metadata.name] | length`}, bearer())
+		done <- answer{out, err}
+	}()
+	select {
+	case a := <-done:
+		release()
+		t.Fatalf("answered while another program ran: %v %.200s", a.err, a.out)
+	case <-time.After(500 * time.Millisecond):
+	}
+	release()
+	select {
+	case a := <-done:
+		if a.err != nil || !strings.Contains(a.out, `"results":[3]`) {
+			t.Fatalf("after its turn came: %v %.200s", a.err, a.out)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("no answer 10 s after the running program ended")
+	}
+}
+
+// A jq program that finds no turn before its call's time runs out is not run: its caller is told, once that time is
+// over, that tool-server was busy and to ask again.
+func TestJQProgramThatFindsNoTurnInItsCallsTimeIsABusyRefusal(t *testing.T) {
+	for i := 0; i < jqRuns.Cap(); i++ {
+		release, err := jqRuns.Take(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer release()
+	}
+	fakeKubectl(t, func(args []string) (string, error) { return queryPodList, nil })
+	ctx, cancel := context.WithTimeout(ctxFor("c1"), 300*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	out, err := handleJQQuery(ctx, map[string]interface{}{"resource_type": "pods", "namespace": "shop", "jq": `[.items[].metadata.name] | length`}, bearer())
+	took := time.Since(start)
+	if !errors.Is(err, errBusy) || !strings.Contains(err.Error(), "busy") || !strings.Contains(err.Error(), "ask again") {
+		t.Errorf("want a busy refusal that asks to ask again, got %v %.200s", err, out)
+	}
+	if took < 250*time.Millisecond {
+		t.Errorf("refused after %s, before its call's time ran out", took)
+	}
+}
+
+// The caller of a jq program that found no turn gets a 503 saying tool-server was busy, with the identity the call
+// reached the cluster as, as the caller of a big answer that found no place does.
+func TestHandleCallAnswersAJQProgramWithNoTurnAsBusy(t *testing.T) {
+	resetKubeconfigCache()
+	_, restore := mockK8sService(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"kubeconfig":"","in_cluster":true}`))
+	})
+	t.Cleanup(restore)
+	prev := toolAuth
+	toolAuth = fakeValidator{payload: auth.TokenPayload{UserID: "u1", Email: "reader@example.com",
+		Perms: auth.PermissionMatrix{"prod": {"ai.tool.*", "resource.objects.read"}}, Roles: map[string]string{"prod": "Read"}}}
+	t.Cleanup(func() { toolAuth = prev })
+	shortCalls(t, 300*time.Millisecond)
+	for i := 0; i < jqRuns.Cap(); i++ {
+		release, err := jqRuns.Take(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer release()
+	}
+	tools := map[string]ToolDefinition{"k8s_jq_query": {
+		Name: "k8s_jq_query",
+		Handler: func(ctx context.Context, _ map[string]interface{}, _ http.Header) (string, error) {
+			_, err := runJQ(ctx, `.items | length`, 1, map[string]interface{}{"items": []interface{}{}})
+			return "", err
+		},
+	}}
+	req := httptest.NewRequest(http.MethodPost, "/call", strings.NewReader(`{"name":"k8s_jq_query","arguments":{"cluster":"prod","resource_type":"pods","namespace":"shop","jq":".items | length"}}`))
+	req.Header.Set("Authorization", "Bearer t")
+	rec := httptest.NewRecorder()
+	handleCall(rec, req, tools)
+	var answer ToolCallResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &answer); err != nil {
+		t.Fatalf("status %d, not JSON (%v): %.200s", rec.Code, err, rec.Body.String())
+	}
+	if rec.Code != http.StatusServiceUnavailable || !strings.Contains(answer.Error, "busy") || !strings.Contains(answer.Error, "ask again") || answer.Access == nil {
+		t.Errorf("status %d, error %q, access %v", rec.Code, answer.Error, answer.Access)
+	}
+}
+
+// A jq program that runs past the time limit is stopped with that reason.
+func TestJQProgramThatRunsPastItsTimeIsStopped(t *testing.T) {
+	prev := jqTimeout
+	jqTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { jqTimeout = prev })
+	fakeKubectl(t, func(args []string) (string, error) { return queryPodList, nil })
+	start := time.Now()
+	_, err := handleJQQuery(ctxFor("c1"), map[string]interface{}{"resource_type": "pods", "namespace": "shop", "jq": `until(false; .)`}, bearer())
+	if !errors.Is(err, errBadRequest) || !strings.Contains(err.Error(), "took longer than 300ms") {
+		t.Fatalf("want a refusal for its time, got %v", err)
+	}
+	if took := time.Since(start); took > 3*time.Second {
+		t.Fatalf("stopped after %s", took)
+	}
+}
 
 func TestJQQuery_FilterCapsAndErrors(t *testing.T) {
 	calls := fakeKubectl(t, func(args []string) (string, error) { return "Warning: deprecated\n" + queryPodList, nil })
@@ -140,6 +326,9 @@ func TestCount_GroupBy(t *testing.T) {
 func TestQueryArgsAndGate(t *testing.T) {
 	for _, args := range []map[string]interface{}{
 		{"jq": `.items[] | select(.status.phase == "Running")`}, {"columns": "NAME:.metadata.name,IMG:.spec.containers[*].image"},
+		// kubectl's JSONPath filters and negative indices (an AI eval run on 2026-11-08 wrote these and was refused)
+		{"columns": `NAME:.metadata.name,STATUS:.status.conditions[-1].type,READY:.status.conditions[?(@.type=="Ready")].status,TAINTS:.spec.taints`},
+		{"columns": `PORT:.spec.ports[?(@.port >= 1000)].port,LAST:.status.conditions[-2:].type`},
 		{"sort_by": ".metadata.creationTimestamp"}, {"group_by": ".spec.nodeName"}, {"label_selector": "app=web,tier!=db"}, {"label_selector": "env in (prod,staging)"},
 	} {
 		if err := validateToolArgs(args); err != nil {
@@ -148,6 +337,7 @@ func TestQueryArgsAndGate(t *testing.T) {
 	}
 	for _, args := range []map[string]interface{}{
 		{"jq": strings.Repeat(".", 1001)}, {"columns": "NAME"}, {"columns": "NAME:.a;rm"}, {"sort_by": "metadata.name"}, {"group_by": ".a b"},
+		{"columns": "N:{.metadata.name}"}, {"columns": "N:.a`x`"}, {"columns": "N:.a$(x)"}, {"columns": "N:.a\nb"}, {"columns": "N:.a\\b"},
 		{"label_selector": "--all"}, {"label_selector": "a\nb"},
 	} {
 		if err := validateToolArgs(args); !errors.Is(err, errBadRequest) {

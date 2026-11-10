@@ -98,7 +98,7 @@ export function ClusterNodeMap({ entries, onSelect, tr }: Props) {
   const h = hover !== null ? entries[hover] : null
 
   return (
-    <div className="card" data-testid="cluster-view-map">
+    <div className="card" data-testid="cluster-view-map" data-list-bounded="node map: the whole cluster at a glance, not a list to page">
       <div ref={wrapRef} className="w-full">
         <canvas
           ref={canvasRef}

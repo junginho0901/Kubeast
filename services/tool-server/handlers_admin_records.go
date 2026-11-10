@@ -236,17 +236,14 @@ func handleSessionRecordings(ctx context.Context, args map[string]interface{}, h
 		return marshalOrdered(map[string]interface{}{"note": recordingsOutputNote, "recording": recordingDetails(reply)}, []string{"note"}, nil)
 	}
 	limit, offset := adminPage(args)
-	// The route counts nothing: one row past the page says there is more, as on the screen.
-	q := url.Values{"limit": {strconv.Itoa(limit + 1)}}
-	if offset > 0 {
-		q.Set("offset", strconv.Itoa(offset))
-	}
+	// One page and how many match (X-Kubeast-Total), as the screen's footer reads them.
+	q := url.Values{"limit": {strconv.Itoa(limit)}, "offset": {strconv.Itoa(offset)}}
 	for name, arg := range map[string]string{"user": "actor_email", "kind": "recording_kind", "cluster": "cluster_id"} {
 		if value := argString(args, arg, ""); value != "" {
 			q.Set(name, value)
 		}
 	}
-	status, _, body, err := k8sServiceRead(ctx, headers, "/recordings", q)
+	status, answerHeaders, body, err := k8sServiceRead(ctx, headers, "/recordings", q)
 	if err != nil {
 		return "", err
 	}
@@ -254,12 +251,12 @@ func handleSessionRecordings(ctx context.Context, args map[string]interface{}, h
 	if err != nil || out != "" {
 		return out, err
 	}
-	answer := map[string]interface{}{"offset": offset, "note": recordingsOutputNote}
-	if len(rows) > limit {
-		rows = rows[:limit]
-		answer["next_offset"] = offset + limit
+	total, err := totalOf("session_recordings", answerHeaders)
+	if err != nil {
+		return "", err
 	}
-	answer["returned"] = len(rows)
+	answer := map[string]interface{}{"note": recordingsOutputNote}
+	placeOf(answer, total, len(rows), offset)
 	details := make([]interface{}, 0, len(rows))
 	for _, r := range rows {
 		if row, ok := r.(map[string]interface{}); ok {

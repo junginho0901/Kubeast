@@ -48,6 +48,13 @@ jobs:
       - name: test
         working-directory: ${{ matrix.module }}
         run: go test ./...
+      # The image builds tool-server without cgo, where the jq child's address space limit is set (jq_limit_linux.go).
+      - name: jq tests without cgo
+        if: matrix.module == 'services/tool-server'
+        working-directory: ${{ matrix.module }}
+        env:
+          CGO_ENABLED: "0"
+        run: go test -run 'JQ' .
 
   # The real migrations against PostgreSQL (services/pkg/dbmigrate/*_postgres_test.go):
   # empty database to Required, idempotent re-run, legacy role column conversion.
@@ -144,8 +151,21 @@ jobs:
       # Rendered-manifest assertions (helm/kubeast/tests/*_test.yaml): switch
       # defaults, migrations hook Job, PVC retention, replica guards, secrets.
       - name: helm unittest
+        timeout-minutes: 10
         run: |
-          helm plugin install https://github.com/helm-unittest/helm-unittest.git --verify=false --version 1.1.2
+          # The plugin's install hook downloads its release from GitHub without retrying: five tries, 10 s apart.
+          for attempt in 1 2 3 4 5; do
+            if timeout 120 helm plugin install https://github.com/helm-unittest/helm-unittest.git --verify=false --version 1.1.2; then
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "::error::helm-unittest 1.1.2 did not install in $attempt tries" >&2
+              exit 1
+            fi
+            echo "helm-unittest install try $attempt failed; trying again in 10 s" >&2
+            helm plugin uninstall unittest >/dev/null 2>&1 || true
+            sleep 10
+          done
           helm unittest helm/kubeast
       # `helm upgrade --reuse-values` from every release: stops with the upgrade hint or loses nothing.
       - name: upgrade from earlier releases
@@ -153,11 +173,13 @@ jobs:
           git fetch --no-tags --depth=1 origin '+refs/tags/v*:refs/tags/v*'
           scripts/chart-upgrade-values.sh
       - name: kubeconform
+        timeout-minutes: 10
         env:
           KUBECONFORM_VERSION: v0.8.0
           KUBECONFORM_SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883
         run: |
-          curl -sSfL -o kubeconform.tar.gz "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          curl -fL --no-progress-meter --retry 5 --retry-delay 10 --retry-all-errors --retry-max-time 120 --connect-timeout 20 --max-time 120 \
+            -o kubeconform.tar.gz "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
           echo "${KUBECONFORM_SHA256}  kubeconform.tar.gz" | sha256sum -c -
           tar xzf kubeconform.tar.gz
           helm template kubeast helm/kubeast --namespace kubeast --set pdb.enabled=true \
@@ -272,8 +294,10 @@ jobs:
       ZEITGEIST_SHA256: b004b91e0ad881732f2ba0e63def2e3c35950323e221b50c50cbad75b3f5c2b1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: |
-          curl -sSfL -o zeitgeist "https://github.com/kubernetes-sigs/zeitgeist/releases/download/${ZEITGEIST_VERSION}/zeitgeist-amd64-linux"
+      - timeout-minutes: 10
+        run: |
+          curl -fL --no-progress-meter --retry 5 --retry-delay 10 --retry-all-errors --retry-max-time 120 --connect-timeout 20 --max-time 120 \
+            -o zeitgeist "https://github.com/kubernetes-sigs/zeitgeist/releases/download/${ZEITGEIST_VERSION}/zeitgeist-amd64-linux"
           echo "${ZEITGEIST_SHA256}  zeitgeist" | sha256sum -c -
           chmod +x zeitgeist
           ./zeitgeist validate --local-only --base-path . --config deploy/dependencies.yaml

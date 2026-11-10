@@ -11,7 +11,10 @@ import {
   Clock,
 } from 'lucide-react'
 import { ListPager } from '@/components/ListPager'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { usePagedItems } from '@/hooks/usePagedItems'
 import { cpuToMillis, memoryToBytes } from '@/utils/resourceQuantity'
 import { usageTone } from './podUsage'
 import {
@@ -35,9 +38,8 @@ interface MonitoringPodsProps {
   namespaces: { name: string }[] | undefined
 }
 
-// Pod rows per page: the page scrolls, so a fixed count (as the admin tables) rather than a fit to the screen.
-const PODS_PER_PAGE = 50
 const MIB = 1024 ** 2
+const COLUMNS = 6
 
 const getLatestMetricTimestamp = (
   items: Array<{ timestamp?: string }> | undefined | null,
@@ -64,7 +66,6 @@ export default function MonitoringPods({
   const { t } = useTranslation()
   const [selectedNamespace, setSelectedNamespace] = useState<string>('')
   const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
   const { currentCluster } = useCluster()
   const { open: openDetail } = useResourceDetail()
 
@@ -157,18 +158,16 @@ export default function MonitoringPods({
     const q = search.trim().toLowerCase()
     return q ? rows.filter((r) => r.metric.name.toLowerCase().includes(q)) : rows
   }, [rows, search])
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PODS_PER_PAGE))
-  useEffect(() => setPage(1), [search, selectedNamespace, currentCluster])
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages)
-  }, [page, totalPages])
-  const pagedRows = filteredRows.slice((page - 1) * PODS_PER_PAGE, page * PODS_PER_PAGE)
+  // a page at a time in a box sized to the screen, as the list pages; a new search, namespace or cluster starts at the
+  // first page
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: filteredRows.length })
+  const { items: pagedRows, page, totalPages, total, setPage } = usePagedItems(filteredRows, rowsPerPage, `${search}|${selectedNamespace}|${currentCluster}`)
 
   const latestPodMetricTime = getLatestMetricTimestamp(podMetrics)
 
   return (
-    <div className="card overflow-visible">
-      <div className="flex items-start justify-between mb-6">
+    <div className="card overflow-visible flex-1 min-h-0 flex flex-col">
+      <div className="flex items-start justify-between mb-4 shrink-0">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-slate-700/60">
             <Box className="w-6 h-6 text-slate-300" />
@@ -199,15 +198,17 @@ export default function MonitoringPods({
         )}
       </div>
 
-      <NamespaceFilter
-        namespaces={namespaces}
-        value={selectedNamespace}
-        onChange={setSelectedNamespace}
-      />
-
-      {selectedNamespace && podMetrics && podMetrics.length > 0 && (
-        <MonitoringSearch value={search} onChange={setSearch} placeholder={t('monitoring.pods.searchPlaceholder', 'Search pods by name...')} testId="monitoring-pod-search" />
-      )}
+      {/* one row of controls at one height: the picker first at a fixed width, so it never moves when the search comes */}
+      <div className="flex flex-wrap items-center gap-3 mb-4 shrink-0">
+        <NamespaceFilter
+          namespaces={namespaces}
+          value={selectedNamespace}
+          onChange={setSelectedNamespace}
+        />
+        {selectedNamespace && podMetrics && podMetrics.length > 0 && (
+          <MonitoringSearch className="flex-1 min-w-64" value={search} onChange={setSearch} placeholder={t('monitoring.pods.searchPlaceholder', 'Search pods by name...')} testId="monitoring-pod-search" />
+        )}
+      </div>
 
       {/* 네임스페이스 미선택 시 안내 메시지 */}
       {!selectedNamespace && (
@@ -224,36 +225,21 @@ export default function MonitoringPods({
 
       {selectedNamespace && refreshFailure && <MetricsRefreshFailed failure={refreshFailure} retrying={!metricsUnavailable} testId="pod-metrics-refresh-failed" />}
 
-      {/* The cards keep their place with "-" while a read is under way, so the table below does not jump */}
+      {/* The cards keep their place with "-" while a read is under way, so the table below does not jump; one line
+          each (icon, label, number), so the table keeps more of the screen */}
       {selectedNamespace && (podStats || isLoading) && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="p-4 bg-slate-700 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-400">{t('monitoring.pods.totalPods')}</p>
-                <p className="text-2xl font-bold text-ink mt-1">{podStats ? podStats.totalPods : '-'}</p>
-              </div>
-              <Box className="w-8 h-8 text-slate-500" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 shrink-0">
+          {([
+            [Box, t('monitoring.pods.totalPods'), podStats ? String(podStats.totalPods) : '-'],
+            [Cpu, t('monitoring.pods.totalCpu'), podStats ? `${podStats.totalCpu}m` : '-'],
+            [HardDrive, t('monitoring.pods.totalMemory'), podStats ? `${podStats.totalMemory}Mi` : '-'],
+          ] as const).map(([Icon, label, value]) => (
+            <div key={label} className="px-4 py-2 bg-slate-700 rounded-lg flex items-center gap-3">
+              <Icon className="w-5 h-5 text-slate-500 shrink-0" />
+              <p className="flex-1 min-w-0 text-sm text-slate-400">{label}</p>
+              <p className="text-2xl font-bold text-ink tabular-nums">{value}</p>
             </div>
-          </div>
-          <div className="p-4 bg-slate-700 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-400">{t('monitoring.pods.totalCpu')}</p>
-                <p className="text-2xl font-bold text-ink mt-1">{podStats ? `${podStats.totalCpu}m` : '-'}</p>
-              </div>
-              <Cpu className="w-8 h-8 text-slate-500" />
-            </div>
-          </div>
-          <div className="p-4 bg-slate-700 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-400">{t('monitoring.pods.totalMemory')}</p>
-                <p className="text-2xl font-bold text-ink mt-1">{podStats ? `${podStats.totalMemory}Mi` : '-'}</p>
-              </div>
-              <HardDrive className="w-8 h-8 text-slate-500" />
-            </div>
-          </div>
+          ))}
         </div>
       )}
 
@@ -263,9 +249,10 @@ export default function MonitoringPods({
           <p className="text-slate-400">{t('monitoring.loading')}</p>
         </div>
       ) : selectedNamespace && podMetrics && podMetrics.length > 0 ? (
-        <div className="overflow-x-auto">
+        <div ref={containerRef} className="flex-1 min-h-0 flex flex-col">
+          <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
           <table className="w-full">
-            <thead>
+            <thead ref={theadRef}>
               <tr className="border-b border-slate-700">
                 <th className="text-left py-3 px-4 text-slate-400 font-medium">
                   {t('monitoring.table.pod')}
@@ -300,9 +287,10 @@ export default function MonitoringPods({
               </tr>
             </thead>
             <tbody>
-              {pagedRows.map(({ metric: podMetric, cpuLimit, memoryLimit, cpuPct, memoryPct }) => (
+              {pagedRows.map(({ metric: podMetric, cpuLimit, memoryLimit, cpuPct, memoryPct }, idx) => (
                 <tr
                   key={`${podMetric.namespace}-${podMetric.name}`}
+                  ref={idx === 0 ? firstRowRef : undefined}
                   onClick={() => openDetail({ kind: 'Pod', name: podMetric.name, namespace: podMetric.namespace })}
                   data-testid="monitoring-pod-row"
                   className="border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer"
@@ -337,14 +325,16 @@ export default function MonitoringPods({
               ))}
               {filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-10 px-4 text-center text-slate-400" data-testid="monitoring-pod-empty">
+                  <td colSpan={COLUMNS} className="py-10 px-4 text-center text-slate-400" data-testid="monitoring-pod-empty">
                     {t('common.noSearchResults', 'No results found.')}
                   </td>
                 </tr>
               )}
             </tbody>
+            <AdaptiveTableFillerRows count={rowsPerPage - pagedRows.length - (filteredRows.length === 0 ? 1 : 0)} columnCount={COLUMNS} />
           </table>
-          <ListPager currentPage={page} totalPages={totalPages} total={filteredRows.length} rowsPerPage={PODS_PER_PAGE} onPageChange={setPage} showPageSize={false} testId="monitoring-pod-pager" />
+          </div>
+          <ListPager currentPage={page} totalPages={totalPages} total={total} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="monitoring-pod-pager" />
         </div>
       ) : selectedNamespace && error && !isMetricsUnavailableError(error) ? (
         <div className="text-center py-12">

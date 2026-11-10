@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { readEveryPage } from './list-pages'
 
 // AMD's and Intel's GPUs on the GPU Dashboard, GPU Nodes, GPU Pods, the Node drawer and in the floating chat, counted
 // by the rules NVIDIA's are (number-check-gpu.spec.ts): the GPU resources of the three companies Kubernetes' "Schedule
@@ -316,23 +317,31 @@ test.describe('number check — AMD and Intel GPUs on the GPU screens', () => {
     await prepare(page)
     await fixtureThere()
     await page.goto(url('/gpu/dashboard'))
-    const got = () => page.evaluate(() => {
-      const text = (el: Element | null) => (el as HTMLElement | null)?.innerText.trim() ?? null
-      const all = (sel: string) => [...document.querySelectorAll(sel)]
-      return {
-        cards: Object.fromEntries(all('[data-testid="gpu-summary-card"]').map((c) => [text(c.querySelector('p')), text(c.querySelector('[data-testid="gpu-summary-value"]'))])),
-        vendors: text(document.querySelector('[data-testid="gpu-summary-vendors"]')),
-        note: text(document.querySelector('[data-testid="gpu-summary-note"]')),
-        readiness: text(document.querySelector('[data-testid="gpu-node-readiness"]')),
-        nodes: Object.fromEntries(all('[data-testid="gpu-node-allocation"]').map((n) => [n.getAttribute('data-node'), {
+    const got = async () => {
+      // Node allocation is a page of nodes at a time: every page's bars, by node name
+      const nodes = Object.fromEntries((await readEveryPage(page, 'gpu-node-allocation-pager', () => page.locator('[data-testid="gpu-node-allocation"]').evaluateAll((els) => els.map((n) => {
+        const text = (el: Element | null) => (el as HTMLElement | null)?.innerText.trim() ?? null
+        return [n.getAttribute('data-node') ?? '', {
           value: text(n.querySelector('[data-testid="gpu-node-allocation-value"]')),
           status: [...n.querySelectorAll('.badge')].map((b) => (b.textContent ?? '').trim()).join(','),
           models: text(n.querySelector('[data-testid="gpu-node-allocation-models"]')),
-        }])),
-        models: all('[data-testid="gpu-model-row"]').map((r) => [...r.querySelectorAll('span')].slice(0, 2).map((s) => text(s))).sort(),
-        podTotal: text(document.querySelector('[data-testid="gpu-pod-status-total"]')),
-      }
-    })
+        }] as const
+      })))).sort(([a], [b]) => a.localeCompare(b)))
+      const rest = await page.evaluate(() => {
+        const text = (el: Element | null) => (el as HTMLElement | null)?.innerText.trim() ?? null
+        const all = (sel: string) => [...document.querySelectorAll(sel)]
+        return {
+          cards: Object.fromEntries(all('[data-testid="gpu-summary-card"]').map((c) => [text(c.querySelector('p')), text(c.querySelector('[data-testid="gpu-summary-value"]'))])),
+          vendors: text(document.querySelector('[data-testid="gpu-summary-vendors"]')),
+          note: text(document.querySelector('[data-testid="gpu-summary-note"]')),
+          readiness: text(document.querySelector('[data-testid="gpu-node-readiness"]')),
+          models: all('[data-testid="gpu-model-row"]').map((r) => [...r.querySelectorAll('span')].slice(0, 2).map((s) => text(s))).sort(),
+          podTotal: text(document.querySelector('[data-testid="gpu-pod-status-total"]')),
+        }
+      })
+      // the keys in want()'s order: the comparison reads both as JSON
+      return { cards: rest.cards, vendors: rest.vendors, note: rest.note, readiness: rest.readiness, nodes, models: rest.models, podTotal: rest.podTotal }
+    }
     const want = async () => {
       const c = await cluster()
       const cap = c.nodes.reduce((s, n) => s + n.capacity, 0)
@@ -345,7 +354,7 @@ test.describe('number check — AMD and Intel GPUs on the GPU screens', () => {
         vendors: vendorTotals(c).filter((v) => v.capacity > 0).map((v) => `${v.vendor} ${v.capacity}`).join(' · '),
         note: c.waiting > 0 ? `+${c.waiting} requested by pods waiting for a node` : null,
         readiness: `${ready} Ready${c.nodes.length - ready > 0 ? ` / ${c.nodes.length - ready} Not Ready` : ''}`,
-        nodes: Object.fromEntries(c.nodes.map((n) => [n.name, {
+        nodes: Object.fromEntries([...c.nodes].sort((a, b) => a.name.localeCompare(b.name)).map((n) => [n.name, {
           value: `${n.used}/${n.allocatable}(${pct(n.used, n.allocatable)}%)`, status: n.status,
           // the company before its model, not again when the model's label starts with the company's name
           models: n.vendors.map((v) => `${v.model?.toLowerCase().startsWith(v.vendor.toLowerCase()) ? v.model : `${v.vendor} ${v.model ?? 'Unknown'}`}${v.memory ? ` • ${v.memory}` : ''}`).join(' / '),

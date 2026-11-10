@@ -51,33 +51,44 @@ func (r *pagedRead) done() {
 	}
 }
 
+// eachPage lists with opts a page at a time and gives each page to keep. A read past its first page takes its place
+// among bigReadSlots before the next page and waits holding the continue token only: the reads waiting for a place
+// together held a page each, 16 MiB for 256 pods of 64 KiB (TestAReadWaitingForItsNextPageHoldsNoPageItAlreadyRead).
+func eachPage[L metav1.ListInterface](ctx context.Context, opts metav1.ListOptions, list func(metav1.ListOptions) (L, error), keep func(L)) error {
+	var read pagedRead
+	defer read.done()
+	for {
+		page, err := list(opts)
+		if err != nil {
+			return err
+		}
+		keep(page)
+		// page is not used after this line, so the collector may take it while the read waits
+		if opts.Continue = page.GetContinue(); opts.Continue == "" {
+			return nil
+		}
+		opts.ResourceVersion, opts.ResourceVersionMatch = "", ""
+		if err := read.nextPage(ctx); err != nil {
+			return err
+		}
+	}
+}
+
 // eachPod calls fn for every pod of namespace ("" for all) that opts selects, podListChunk at a time, as the
 // client's identity: a caller keeps what it needs from each page instead of the whole list. A namespace of 50 000
 // pods as one list took k8s-service past its 512 Mi from one request (the GPU dashboard, the Namespace and ReplicaSet
 // drawers). An expired continue token on a later page is an error, as in eachEvent.
 func eachPod(ctx context.Context, pods corev1client.PodsGetter, namespace string, opts metav1.ListOptions, fn func(*corev1.Pod)) error {
-	var read pagedRead
-	defer read.done()
 	if opts.Limit == 0 {
 		opts.Limit = podListChunk
 	}
-	for {
-		l, err := pods.Pods(namespace).List(ctx, opts)
-		if err != nil {
-			return err
-		}
+	return eachPage(ctx, opts, func(o metav1.ListOptions) (*corev1.PodList, error) {
+		return pods.Pods(namespace).List(ctx, o)
+	}, func(l *corev1.PodList) {
 		for i := range l.Items {
 			fn(&l.Items[i])
 		}
-		if l.Continue == "" {
-			return nil
-		}
-		if err := read.nextPage(ctx); err != nil {
-			return err
-		}
-		opts.Continue = l.Continue
-		opts.ResourceVersion, opts.ResourceVersionMatch = "", ""
-	}
+	})
 }
 
 // countList is how many objects a list holds without reading them: a first page of one item and the API server's

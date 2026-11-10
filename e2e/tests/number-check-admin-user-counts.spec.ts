@@ -2,12 +2,14 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { rowsOfFirstPage, turnToRow } from './list-pages'
 
 // The admin screens count every user, not the first page the users API answers (200): with more than 200 accounts,
 // a team's member count and members, a role's user count and users, the Users list with its pager and the users
 // Cluster access offers are each compared with every user the API lists page by page. The spec makes a team, a
 // custom role and 205 users in both, and removes them after; a run cut short is cleaned up by the next one (the
-// e2e-uc- names).
+// e2e-uc- names). The Teams, Roles and Users lists page as many rows as fit the screen: the team and the role are
+// found by turning their pages, and the Users pages are as long as its first.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -18,7 +20,6 @@ const N = 205
 // users per bulk request: each password is hashed, so a request of 100 can take longer than is pleasant
 const BATCH = 25
 const PW = 'E2e-ucount-Zq7x'
-const USERS_PAGE = 25
 const TEAMS = { path: '/admin/organizations' }
 const ROLES = { path: '/admin/roles' }
 const USERS = { path: '/admin/users' }
@@ -125,6 +126,7 @@ test.describe('number check — admin screens count every user', () => {
 
       await test.step('Teams: the member count and every member', async () => {
         await page.goto(TEAMS.path)
+        expect(await turnToRow(page, 'teams-pager', page.getByTestId('teams-table').locator('tr', { hasText: team })), `${team} on a page of Teams`).toBe(true)
         await settled(() => badge(page, team), String(inTeam.length), `${team} member count`)
         await page.locator('button', { has: page.locator('span', { hasText: new RegExp(`^${team}$`) }) }).first().click()
         await settled(() => membersWindow(page, team), {
@@ -135,6 +137,7 @@ test.describe('number check — admin screens count every user', () => {
 
       await test.step('Roles: the user count and every user with the role', async () => {
         await page.goto(ROLES.path)
+        expect(await turnToRow(page, 'roles-pager', page.getByTestId('roles-table').locator('tr', { hasText: roleName })), `${roleName} on a page of Roles`).toBe(true)
         await settled(() => badge(page, roleName), String(withRole.length), `${roleName} user count`)
         await page.locator('button', { has: page.locator('span', { hasText: new RegExp(`^${roleName}$`) }) }).first().click()
         await settled(() => membersWindow(page, roleName), {
@@ -150,13 +153,18 @@ test.describe('number check — admin screens count every user', () => {
         await search.waitFor()
         await search.fill(`${PREFIX}${run}`)
         const pager = page.getByTestId('admin-users-pager')
+        await expect.poll(() => pager.innerText(), { timeout: 20_000, message: 'Users pager counts the search' }).toContain(`of ${mine.length}`)
+        // as many rows as fit the screen, the same on every page
+        const USERS_PAGE = await rowsOfFirstPage(pager)
+        expect(USERS_PAGE, 'rows of a Users page').toBeGreaterThan(0)
         const range = (p: number) => EN.common.paginationRange
           .replace('{{start}}', String((p - 1) * USERS_PAGE + 1)).replace('{{end}}', String(Math.min(p * USERS_PAGE, mine.length))).replace('{{total}}', String(mine.length))
         const read = () => page.evaluate(() => {
           const txt = (el: Element) => (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim()
           const pagerEl = document.querySelector('[data-testid="admin-users-pager"]')
           return {
-            range: pagerEl?.firstElementChild ? txt(pagerEl.firstElementChild) : null,
+            // the range beside the rows-per-page choice
+            range: pagerEl ? (txt(pagerEl).match(/Showing \d+-\d+ of \d+/) ?? [null])[0] : null,
             emails: [...document.querySelectorAll('[data-testid^="user-detail-"]')].map((b) => (b.getAttribute('data-testid') ?? '').slice('user-detail-'.length)),
           }
         })

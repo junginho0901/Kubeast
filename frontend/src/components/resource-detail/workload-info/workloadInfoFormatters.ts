@@ -2,6 +2,13 @@ export function boolText(value: unknown): string {
   return value ? 'Yes' : 'No'
 }
 
+export type PodSample = { value: number; metric?: Record<string, string> }
+
+// Every pod's CPU, busiest first so the first page is the top ten, then by name so a page keeps its order.
+export function busiestFirst(results: PodSample[]): PodSample[] {
+  return [...results].sort((a, b) => b.value - a.value || String(a.metric?.pod ?? '').localeCompare(String(b.metric?.pod ?? '')))
+}
+
 export function formatContainerCommand(command: unknown, args: unknown): string {
   const cmd = Array.isArray(command) ? command : []
   const argv = Array.isArray(args) ? args : []

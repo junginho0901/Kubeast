@@ -133,6 +133,11 @@ test.describe('the AI reads what the Admin screens read of Kubeast\'s own record
       const second = await answer(request, admin, 'session_recordings', { actor_email: `e2e-p5-${run}`, limit: 1, offset: 1 })
       expect(second.rows.map((r: Obj) => r.id)).toEqual([ids[0]])
       expect(second.next_offset).toBeUndefined()
+      // how many match, as the screen's footer says it (the route's X-Kubeast-Total)
+      const counted = await request.get('/api/v1/cluster/recordings', { headers: bearer(admin), params: { cluster: '', user: `e2e-p5-${run}`, limit: '1' } })
+      const total = Number(counted.headers()['x-kubeast-total'])
+      expect(total).toBe(2)
+      expect([every.total, first.total, second.total]).toEqual([total, total, total])
 
       const one = await call(request, admin, 'session_recordings', { recording_id: ids[0] })
       expect(one.isError, one.text).toBe(false)

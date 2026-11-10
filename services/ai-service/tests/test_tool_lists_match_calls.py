@@ -213,3 +213,16 @@ def test_ai_models_takes_the_routes_enabled_only():
 
 def test_session_recordings_says_what_its_size_field_is():
     assert "kept_bytes" in _admin_read("session_recordings")["description"]
+
+
+def test_session_recordings_says_how_many_match_as_the_screens_footer_does():
+    description = _admin_read("session_recordings")["description"]
+    assert "total" in description and "next_offset" in description
+    assert "There is no total" not in description
+
+
+def test_hygiene_history_pages_as_the_past_sign_offs_tab_does():
+    tool = _admin_read("hygiene_history")
+    assert tool["parameters"]["properties"]["offset"]["type"] == "integer"
+    assert "total" in tool["description"] and "next_offset" in tool["description"]
+    assert "offset" in FEATURE_TOOL_ARGS["hygiene_history"][2]

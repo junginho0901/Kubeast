@@ -1254,6 +1254,7 @@
    "events": [],
    "expected_pods": 3,
    "generation": 0,
+   "has_selector": true,
    "labels": {
     "team": "a"
    },
@@ -1273,6 +1274,7 @@
    "desired_healthy": 2,
    "disruptions_allowed": 1,
    "expected_pods": 3,
+   "has_selector": true,
    "labels": null,
    "match_expressions": [
     {
@@ -1298,6 +1300,7 @@
    "events": [],
    "expected_pods": 3,
    "generation": 0,
+   "has_selector": true,
    "labels": null,
    "match_expressions": [
     {
@@ -1329,6 +1332,7 @@
    "events": [],
    "expected_pods": 3,
    "generation": 0,
+   "has_selector": true,
    "labels": null,
    "match_expressions": [
     {
@@ -1352,6 +1356,7 @@
    "desired_healthy": 2,
    "disruptions_allowed": 1,
    "expected_pods": 3,
+   "has_selector": true,
    "labels": {
     "team": "a"
    },
@@ -1373,6 +1378,7 @@
    "events": [],
    "expected_pods": 3,
    "generation": 0,
+   "has_selector": true,
    "labels": {
     "team": "a"
    },
@@ -1935,6 +1941,7 @@
     "service_account_name": "",
     "tolerations": []
    },
+   "selector": {},
    "start_time": "2026-11-06T11:00:00Z",
    "status": "Running",
    "succeeded": 0,
@@ -2009,6 +2016,7 @@
     "service_account_name": "",
     "tolerations": []
    },
+   "selector": {},
    "start_time": "2026-11-06T11:00:00Z",
    "status": "Running",
    "succeeded": 0,
@@ -2071,6 +2079,7 @@
     "service_account_name": "",
     "tolerations": []
    },
+   "selector": {},
    "start_time": "2026-11-06T11:00:00Z",
    "status": "Running",
    "succeeded": 0,
@@ -2166,6 +2175,7 @@
     "service_account_name": "",
     "tolerations": []
    },
+   "selector": {},
    "status": "Suspended",
    "succeeded": 0,
    "suspend": true,
@@ -3996,6 +4006,494 @@
    "target_ref_kind": "Deployment",
    "target_ref_name": "web",
    "uid": ""
+  }
+ },
+ {
+  "name": "a node that gained a label keeps its conditions",
+  "resource": "nodes",
+  "before": {
+   "addresses": [
+    {
+     "address": "10.0.0.1",
+     "type": "InternalIP"
+    }
+   ],
+   "age": "7d",
+   "allocatable": {
+    "cpu": "3900m",
+    "memory": "7Gi",
+    "pods": "110"
+   },
+   "allocated_resources": [
+    {
+     "limits": "0 (0%)",
+     "requests": "0 (0%)",
+     "resource": "cpu"
+    },
+    {
+     "limits": "0 (0%)",
+     "requests": "0 (0%)",
+     "resource": "memory"
+    },
+    {
+     "limits": "0 (0%)",
+     "requests": "0 (0%)",
+     "resource": "ephemeral-storage"
+    }
+   ],
+   "annotations": null,
+   "capacity": {
+    "cpu": "4",
+    "memory": "8Gi",
+    "pods": "110"
+   },
+   "conditions": [
+    {
+     "last_heartbeat_time": "2026-11-08T11:59:00Z",
+     "last_transition_time": "2026-11-01T00:00:00Z",
+     "message": "kubelet has sufficient memory available",
+     "reason": "KubeletHasSufficientMemory",
+     "status": "False",
+     "type": "MemoryPressure"
+    },
+    {
+     "last_heartbeat_time": "2026-11-08T11:59:00Z",
+     "last_transition_time": "2026-11-01T00:01:00Z",
+     "message": "kubelet is posting ready status",
+     "reason": "KubeletReady",
+     "status": "True",
+     "type": "Ready"
+    }
+   ],
+   "container_runtime": "containerd://2.1.0",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "",
+   "images": [],
+   "internal_ip": "10.0.0.1",
+   "kernel_version": "6.8.0",
+   "kubelet_version": "v1.37.0",
+   "labels": {
+    "node-role.kubernetes.io/control-plane": "",
+    "node-role.kubernetes.io/gpu": "",
+    "node-role.kubernetes.io/infra": ""
+   },
+   "name": "node-a",
+   "os_image": "Ubuntu 24.04",
+   "pod_cidr": "10.244.0.0/24",
+   "pod_cidrs": null,
+   "roles": [
+    "control-plane",
+    "gpu",
+    "infra"
+   ],
+   "status": "Ready",
+   "system_info": {
+    "architecture": "",
+    "boot_id": "",
+    "container_runtime_version": "containerd://2.1.0",
+    "kernel_version": "6.8.0",
+    "kubelet_version": "v1.37.0",
+    "machine_id": "",
+    "operating_system": "",
+    "os_image": "Ubuntu 24.04",
+    "system_uuid": ""
+   },
+   "taints": [],
+   "unschedulable": false,
+   "version": "v1.37.0",
+   "volumes_attached": [],
+   "volumes_in_use": []
+  },
+  "frame": {
+   "age": "7d",
+   "allocatable": {
+    "cpu": "3900m",
+    "memory": "7Gi",
+    "pods": "110"
+   },
+   "capacity": {
+    "cpu": "4",
+    "memory": "8Gi",
+    "pods": "110"
+   },
+   "conditions": [
+    {
+     "reason": "KubeletHasSufficientMemory",
+     "status": "False",
+     "type": "MemoryPressure"
+    },
+    {
+     "reason": "KubeletReady",
+     "status": "True",
+     "type": "Ready"
+    }
+   ],
+   "container_runtime": "containerd://2.1.0",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "",
+   "internal_ip": "10.0.0.1",
+   "kernel_version": "6.8.0",
+   "kubelet_version": "v1.37.0",
+   "labels": {
+    "node-role.kubernetes.io/control-plane": "",
+    "node-role.kubernetes.io/gpu": "",
+    "node-role.kubernetes.io/infra": "",
+    "team": "a"
+   },
+   "name": "node-a",
+   "os_image": "Ubuntu 24.04",
+   "roles": [
+    "control-plane",
+    "gpu",
+    "infra"
+   ],
+   "status": "Ready",
+   "taints": [],
+   "unschedulable": false,
+   "version": "v1.37.0"
+  },
+  "after": {
+   "addresses": [
+    {
+     "address": "10.0.0.1",
+     "type": "InternalIP"
+    }
+   ],
+   "age": "7d",
+   "allocatable": {
+    "cpu": "3900m",
+    "memory": "7Gi",
+    "pods": "110"
+   },
+   "allocated_resources": [
+    {
+     "limits": "0 (0%)",
+     "requests": "0 (0%)",
+     "resource": "cpu"
+    },
+    {
+     "limits": "0 (0%)",
+     "requests": "0 (0%)",
+     "resource": "memory"
+    },
+    {
+     "limits": "0 (0%)",
+     "requests": "0 (0%)",
+     "resource": "ephemeral-storage"
+    }
+   ],
+   "annotations": null,
+   "capacity": {
+    "cpu": "4",
+    "memory": "8Gi",
+    "pods": "110"
+   },
+   "conditions": [
+    {
+     "last_heartbeat_time": "2026-11-08T11:59:00Z",
+     "last_transition_time": "2026-11-01T00:00:00Z",
+     "message": "kubelet has sufficient memory available",
+     "reason": "KubeletHasSufficientMemory",
+     "status": "False",
+     "type": "MemoryPressure"
+    },
+    {
+     "last_heartbeat_time": "2026-11-08T12:04:00Z",
+     "last_transition_time": "2026-11-01T00:01:00Z",
+     "message": "kubelet is posting ready status",
+     "reason": "KubeletReady",
+     "status": "True",
+     "type": "Ready"
+    }
+   ],
+   "container_runtime": "containerd://2.1.0",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "",
+   "images": [],
+   "internal_ip": "10.0.0.1",
+   "kernel_version": "6.8.0",
+   "kubelet_version": "v1.37.0",
+   "labels": {
+    "node-role.kubernetes.io/control-plane": "",
+    "node-role.kubernetes.io/gpu": "",
+    "node-role.kubernetes.io/infra": "",
+    "team": "a"
+   },
+   "name": "node-a",
+   "os_image": "Ubuntu 24.04",
+   "pod_cidr": "10.244.0.0/24",
+   "pod_cidrs": null,
+   "roles": [
+    "control-plane",
+    "gpu",
+    "infra"
+   ],
+   "status": "Ready",
+   "system_info": {
+    "architecture": "",
+    "boot_id": "",
+    "container_runtime_version": "containerd://2.1.0",
+    "kernel_version": "6.8.0",
+    "kubelet_version": "v1.37.0",
+    "machine_id": "",
+    "operating_system": "",
+    "os_image": "Ubuntu 24.04",
+    "system_uuid": ""
+   },
+   "taints": [],
+   "unschedulable": false,
+   "version": "v1.37.0",
+   "volumes_attached": [],
+   "volumes_in_use": []
+  }
+ },
+ {
+  "name": "a node whose kubelet stopped reporting is cordoned and not ready",
+  "resource": "nodes",
+  "before": {
+   "addresses": [
+    {
+     "address": "10.0.0.1",
+     "type": "InternalIP"
+    }
+   ],
+   "age": "7d",
+   "allocatable": {
+    "cpu": "3900m",
+    "memory": "7Gi",
+    "pods": "110"
+   },
+   "allocated_resources": [
+    {
+     "limits": "0 (0%)",
+     "requests": "0 (0%)",
+     "resource": "cpu"
+    },
+    {
+     "limits": "0 (0%)",
+     "requests": "0 (0%)",
+     "resource": "memory"
+    },
+    {
+     "limits": "0 (0%)",
+     "requests": "0 (0%)",
+     "resource": "ephemeral-storage"
+    }
+   ],
+   "annotations": null,
+   "capacity": {
+    "cpu": "4",
+    "memory": "8Gi",
+    "pods": "110"
+   },
+   "conditions": [
+    {
+     "last_heartbeat_time": "2026-11-08T11:59:00Z",
+     "last_transition_time": "2026-11-01T00:00:00Z",
+     "message": "kubelet has sufficient memory available",
+     "reason": "KubeletHasSufficientMemory",
+     "status": "False",
+     "type": "MemoryPressure"
+    },
+    {
+     "last_heartbeat_time": "2026-11-08T11:59:00Z",
+     "last_transition_time": "2026-11-01T00:01:00Z",
+     "message": "kubelet is posting ready status",
+     "reason": "KubeletReady",
+     "status": "True",
+     "type": "Ready"
+    }
+   ],
+   "container_runtime": "containerd://2.1.0",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "",
+   "images": [],
+   "internal_ip": "10.0.0.1",
+   "kernel_version": "6.8.0",
+   "kubelet_version": "v1.37.0",
+   "labels": {
+    "node-role.kubernetes.io/control-plane": "",
+    "node-role.kubernetes.io/gpu": "",
+    "node-role.kubernetes.io/infra": ""
+   },
+   "name": "node-a",
+   "os_image": "Ubuntu 24.04",
+   "pod_cidr": "10.244.0.0/24",
+   "pod_cidrs": null,
+   "roles": [
+    "control-plane",
+    "gpu",
+    "infra"
+   ],
+   "status": "Ready",
+   "system_info": {
+    "architecture": "",
+    "boot_id": "",
+    "container_runtime_version": "containerd://2.1.0",
+    "kernel_version": "6.8.0",
+    "kubelet_version": "v1.37.0",
+    "machine_id": "",
+    "operating_system": "",
+    "os_image": "Ubuntu 24.04",
+    "system_uuid": ""
+   },
+   "taints": [],
+   "unschedulable": false,
+   "version": "v1.37.0",
+   "volumes_attached": [],
+   "volumes_in_use": []
+  },
+  "frame": {
+   "age": "7d",
+   "allocatable": {
+    "cpu": "3900m",
+    "memory": "7Gi",
+    "pods": "110"
+   },
+   "capacity": {
+    "cpu": "4",
+    "memory": "8Gi",
+    "pods": "110"
+   },
+   "conditions": [
+    {
+     "reason": "KubeletHasSufficientMemory",
+     "status": "False",
+     "type": "MemoryPressure"
+    },
+    {
+     "reason": "NodeStatusUnknown",
+     "status": "Unknown",
+     "type": "Ready"
+    }
+   ],
+   "container_runtime": "containerd://2.1.0",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "",
+   "internal_ip": "10.0.0.1",
+   "kernel_version": "6.8.0",
+   "kubelet_version": "v1.37.0",
+   "labels": {
+    "node-role.kubernetes.io/control-plane": "",
+    "node-role.kubernetes.io/gpu": "",
+    "node-role.kubernetes.io/infra": ""
+   },
+   "name": "node-a",
+   "os_image": "Ubuntu 24.04",
+   "roles": [
+    "control-plane",
+    "gpu",
+    "infra"
+   ],
+   "status": "NotReady,SchedulingDisabled",
+   "taints": [
+    {
+     "effect": "NoSchedule",
+     "key": "node.kubernetes.io/unreachable",
+     "value": ""
+    }
+   ],
+   "unschedulable": true,
+   "version": "v1.37.0"
+  },
+  "after": {
+   "addresses": [
+    {
+     "address": "10.0.0.1",
+     "type": "InternalIP"
+    }
+   ],
+   "age": "7d",
+   "allocatable": {
+    "cpu": "3900m",
+    "memory": "7Gi",
+    "pods": "110"
+   },
+   "allocated_resources": [
+    {
+     "limits": "0 (0%)",
+     "requests": "0 (0%)",
+     "resource": "cpu"
+    },
+    {
+     "limits": "0 (0%)",
+     "requests": "0 (0%)",
+     "resource": "memory"
+    },
+    {
+     "limits": "0 (0%)",
+     "requests": "0 (0%)",
+     "resource": "ephemeral-storage"
+    }
+   ],
+   "annotations": null,
+   "capacity": {
+    "cpu": "4",
+    "memory": "8Gi",
+    "pods": "110"
+   },
+   "conditions": [
+    {
+     "last_heartbeat_time": "2026-11-08T11:59:00Z",
+     "last_transition_time": "2026-11-01T00:00:00Z",
+     "message": "kubelet has sufficient memory available",
+     "reason": "KubeletHasSufficientMemory",
+     "status": "False",
+     "type": "MemoryPressure"
+    },
+    {
+     "last_heartbeat_time": "2026-11-08T11:59:00Z",
+     "last_transition_time": "2026-11-08T12:00:40Z",
+     "message": "Kubelet stopped posting node status.",
+     "reason": "NodeStatusUnknown",
+     "status": "Unknown",
+     "type": "Ready"
+    }
+   ],
+   "container_runtime": "containerd://2.1.0",
+   "created_at": "2026-11-01T00:00:00Z",
+   "external_ip": "",
+   "images": [],
+   "internal_ip": "10.0.0.1",
+   "kernel_version": "6.8.0",
+   "kubelet_version": "v1.37.0",
+   "labels": {
+    "node-role.kubernetes.io/control-plane": "",
+    "node-role.kubernetes.io/gpu": "",
+    "node-role.kubernetes.io/infra": ""
+   },
+   "name": "node-a",
+   "os_image": "Ubuntu 24.04",
+   "pod_cidr": "10.244.0.0/24",
+   "pod_cidrs": null,
+   "roles": [
+    "control-plane",
+    "gpu",
+    "infra"
+   ],
+   "status": "NotReady,SchedulingDisabled",
+   "system_info": {
+    "architecture": "",
+    "boot_id": "",
+    "container_runtime_version": "containerd://2.1.0",
+    "kernel_version": "6.8.0",
+    "kubelet_version": "v1.37.0",
+    "machine_id": "",
+    "operating_system": "",
+    "os_image": "Ubuntu 24.04",
+    "system_uuid": ""
+   },
+   "taints": [
+    {
+     "effect": "NoSchedule",
+     "key": "node.kubernetes.io/unreachable",
+     "value": ""
+    }
+   ],
+   "unschedulable": true,
+   "version": "v1.37.0",
+   "volumes_attached": [],
+   "volumes_in_use": []
   }
  }
 ]

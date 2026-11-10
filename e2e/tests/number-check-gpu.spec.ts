@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { readEveryPage } from './list-pages'
 
 // The GPU Dashboard, GPU Nodes and GPU Pods screens' numbers are the cluster's, on test2 with fake GPUs
 // (scripts/kind-gpu.sh up: the node advertises nvidia.com/gpu and nvidia.com/mig-1g.5gb with GPU Feature Discovery's
@@ -378,6 +379,12 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
 
   async function dashboardDiff(page: Page): Promise<string[]> {
     const c = await cluster()
+    // Node allocation is a page of nodes at a time: every page's bars
+    const nodeBars = await readEveryPage(page, 'gpu-node-allocation-pager', () => page.locator('[data-testid="gpu-node-allocation"]').evaluateAll((els) => els.map((n) => [
+      n.getAttribute('data-node') ?? '', {
+        value: (n.querySelector('[data-testid="gpu-node-allocation-value"]') as HTMLElement | null)?.innerText.trim() ?? null,
+        status: [...n.querySelectorAll('.badge')].map((b) => (b.textContent ?? '').trim()).join(','),
+      }] as const)))
     const got = await page.evaluate(() => {
       const text = (el: Element | null) => (el as HTMLElement | null)?.innerText.trim() ?? null
       const all = (sel: string) => [...document.querySelectorAll(sel)]
@@ -385,10 +392,6 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
         cards: Object.fromEntries(all('[data-testid="gpu-summary-card"]').map((c) => [text(c.querySelector('p')), text(c.querySelector('[data-testid="gpu-summary-value"]'))])),
         note: text(document.querySelector('[data-testid="gpu-summary-note"]')),
         readiness: text(document.querySelector('[data-testid="gpu-node-readiness"]')),
-        nodes: Object.fromEntries(all('[data-testid="gpu-node-allocation"]').map((n) => [n.getAttribute('data-node'), {
-          value: text(n.querySelector('[data-testid="gpu-node-allocation-value"]')),
-          status: [...n.querySelectorAll('.badge')].map((b) => (b.textContent ?? '').trim()).join(','),
-        }])),
         models: all('[data-testid="gpu-model-row"]').map((r) => [...r.querySelectorAll('span')].slice(0, 2).map((s) => text(s))),
         podTotal: text(document.querySelector('[data-testid="gpu-pod-status-total"]')),
         statuses: all('[data-testid="gpu-pod-status-row"]').map((r) => [text(r.querySelector('.badge')), text(r.querySelector('span:last-child'))]),
@@ -418,7 +421,9 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     same('cards', got.cards, want.cards)
     same('waiting', got.note, want.note)
     same('readiness', got.readiness, want.readiness)
-    same('node bars', got.nodes, want.nodes)
+    const byName = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b)))
+    same('node bars', byName(Object.fromEntries(nodeBars)), byName(want.nodes))
+    same('node bars listed once', nodeBars.length, c.nodes.length)
     same('models', [...got.models].sort(), want.models)
     same('pod status total', got.podTotal, want.podTotal)
     same('pod statuses', [...got.statuses].sort(), want.statuses)
@@ -587,11 +592,12 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     const avgCore = Object.fromEntries(promQuery(`avg by (p_host) (${coalesce('DCGM_FI_DEV_GPU_UTIL')})`).map((s) => [s.metric.p_host, Math.round(Number(s.value[1]))]))
     const avgMem = Object.fromEntries(promQuery(`avg by (p_host) (${coalesce('DCGM_FI_DEV_FB_USED / (DCGM_FI_DEV_FB_USED + DCGM_FI_DEV_FB_FREE) * 100')})`).map((s) => [s.metric.p_host, Math.round(Number(s.value[1]))]))
     expect(hosts, 'hostname and Hostname name one host').toEqual([NODE])
-    const readHosts = () => page.locator('[data-testid="gpu-nodes-host"]').evaluateAll((els) => Object.fromEntries(els.map((h) => [h.getAttribute('data-host'), {
+    // the hosts are a page at a time: every page's
+    const readHosts = async () => Object.fromEntries(await readEveryPage(page, 'gpu-nodes-host-pager', () => page.locator('[data-testid="gpu-nodes-host"]').evaluateAll((els) => els.map((h) => [h.getAttribute('data-host') ?? '', {
       gpus: Object.fromEntries([...h.querySelectorAll('[data-testid="gpu-nodes-gpu"]')].map((g) => [g.getAttribute('data-uuid'),
         [g.querySelector('[data-testid="gpu-nodes-core"]')?.textContent, g.querySelector('[data-testid="gpu-nodes-mem"]')?.textContent]])),
       avg: [h.querySelector('[data-testid="gpu-nodes-avg-core"]')?.textContent, h.querySelector('[data-testid="gpu-nodes-avg-mem"]')?.textContent],
-    }])))
+    }] as const))))
     await expect.poll(readHosts, { timeout: 45_000, message: 'real-time GPUs by host' }).toEqual(Object.fromEntries(hosts.map((h) => [h, {
       gpus: Object.fromEntries(Object.entries(perGpu).map(([u, v]) => [u, [`${Math.round(v)}%`, `${Math.round(memPct[u])}%`]])),
       avg: [`Avg Core: ${avgCore[h]}%`, `Avg Mem: ${avgMem[h]}%`],
@@ -653,10 +659,12 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     // more than the five statuses and four nodes the charts used to cut to
     expect({ statuses: [...statuses.keys()].sort(), nodes: byNode.size }, 'the fixture\'s statuses and nodes')
       .toEqual({ statuses: ['Completed', 'Error', 'Init:0/1', 'Init:Error', 'Pending', 'Running'], nodes: 5 })
-    const charts = () => page.evaluate(() => ({
-      nodes: [...document.querySelectorAll('[data-testid="gpu-pods-node-usage"]')].map((r) => [r.getAttribute('data-node'), (r as HTMLElement).innerText.replace(/\s+/g, '')]).sort(),
-      statuses: [...document.querySelectorAll('[data-testid="gpu-pods-status-row"]')].map((r) => (r as HTMLElement).innerText.replace(/\s+/g, '')).sort(),
-    }))
+    // GPU Usage by Node is a page of nodes at a time: every page's
+    const charts = async () => ({
+      nodes: (await readEveryPage(page, 'gpu-pods-node-usage-pager', () => page.locator('[data-testid="gpu-pods-node-usage"]').evaluateAll((els) =>
+        els.map((r) => [r.getAttribute('data-node'), (r as HTMLElement).innerText.replace(/\s+/g, '')])))).sort(),
+      statuses: await page.locator('[data-testid="gpu-pods-status-row"]').evaluateAll((els) => els.map((r) => (r as HTMLElement).innerText.replace(/\s+/g, '')).sort()),
+    })
     await expect.poll(charts, { timeout: 20_000, message: 'GPU Pods charts' }).toEqual({
       nodes: [...byNode].map(([n, e]) => [n, `${n || 'Notscheduled'}${e.pods}pod${e.pods === 1 ? '' : 's'}${e.gpus}GPU${e.gpus === 1 ? '' : 's'}`]).sort(),
       statuses: [...statuses].map(([s, n]) => `${s}${n}(${pct(n, c.pods.length)}%)`).sort(),
@@ -734,21 +742,27 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     expect({ asks: c.pods.some((p) => p.key === `${NS}/gpu-dra`), gpu8: want.gpus['GPU-e2e-num-8']?.pod }, 'GPU 8')
       .toEqual({ asks: false, gpu8: `Pod: ${NS}/gpu-dra` })
     await page.goto(url('/gpu/dashboard'))
-    await expect.poll(() => page.evaluate(() => {
-      const text = (sel: string, root: ParentNode = document) => (root.querySelector(sel) as HTMLElement | null)?.innerText.trim() ?? null
-      return {
-        detected: text('[data-testid="gpu-realtime-detected"]'),
-        count: text('[data-testid="gpu-realtime-count"]'),
-        avgUtil: text('[data-testid="gpu-realtime-avg-util"]'),
-        avgMem: text('[data-testid="gpu-realtime-avg-mem"]'),
-        memUsed: text('[data-testid="gpu-realtime-mem-used"]'),
-        memTotal: text('[data-testid="gpu-realtime-mem-total"]'),
-        gpus: Object.fromEntries([...document.querySelectorAll('[data-testid="gpu-realtime-gpu"]')].map((g) => [g.getAttribute('data-uuid'), {
+    await expect.poll(async () => ({
+      ...(await page.evaluate(() => {
+        const text = (sel: string) => (document.querySelector(sel) as HTMLElement | null)?.innerText.trim() ?? null
+        return {
+          detected: text('[data-testid="gpu-realtime-detected"]'),
+          count: text('[data-testid="gpu-realtime-count"]'),
+          avgUtil: text('[data-testid="gpu-realtime-avg-util"]'),
+          avgMem: text('[data-testid="gpu-realtime-avg-mem"]'),
+          memUsed: text('[data-testid="gpu-realtime-mem-used"]'),
+          memTotal: text('[data-testid="gpu-realtime-mem-total"]'),
+        }
+      })),
+      // the hosts are a page at a time: every page's GPUs
+      gpus: Object.fromEntries(await readEveryPage(page, 'gpu-realtime-pager', () => page.locator('[data-testid="gpu-realtime-gpu"]').evaluateAll((els) => els.map((g) => {
+        const text = (sel: string) => (g.querySelector(sel) as HTMLElement | null)?.innerText.trim() ?? null
+        return [g.getAttribute('data-uuid') ?? '', {
           host: g.closest('[data-testid="gpu-realtime-host"]')?.getAttribute('data-host'),
-          core: text('[data-testid="gpu-realtime-core"]', g), mem: text('[data-testid="gpu-realtime-mem"]', g),
-          temp: text('[data-testid="gpu-realtime-temp"]', g), pod: text('[data-testid="gpu-realtime-pod"]', g),
-        }])),
-      }
+          core: text('[data-testid="gpu-realtime-core"]'), mem: text('[data-testid="gpu-realtime-mem"]'),
+          temp: text('[data-testid="gpu-realtime-temp"]'), pod: text('[data-testid="gpu-realtime-pod"]'),
+        }] as const
+      })))),
     }), { timeout: 45_000, message: 'real-time GPU metrics' }).toEqual(want)
   })
 

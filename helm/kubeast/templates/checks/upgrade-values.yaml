@@ -2,8 +2,10 @@
 `helm upgrade --reuse-values` renders this chart on the values of the release it upgrades: that version's defaults,
 without what later versions added. Helm renders the deepest paths first, so this file stops such an upgrade with the
 fix before a template fails on a missing value. scripts/chart-upgrade-values.sh (CI) says when a path belongs here.
+A published chart's defaults also hold its release's image tag, which such an upgrade would keep, so each release
+names a path it added (multicluster.clientQPS: 0.7.6).
 */}}
-{{- range list "features.networkFlowMonitor" }}
+{{- range list "features.networkFlowMonitor" "multicluster.clientQPS" }}
 {{- $node := $.Values }}
 {{- $found := true }}
 {{- range splitList "." . }}

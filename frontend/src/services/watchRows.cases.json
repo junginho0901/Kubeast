@@ -1190,6 +1190,7 @@
    "desired_healthy": 2,
    "disruptions_allowed": 1,
    "expected_pods": 3,
+   "has_selector": true,
    "labels": {
     "team": "a"
    },
@@ -1207,6 +1208,7 @@
    "desired_healthy": 2,
    "disruptions_allowed": 1,
    "expected_pods": 3,
+   "has_selector": true,
    "labels": null,
    "match_expressions": [
     {
@@ -1228,6 +1230,7 @@
    "desired_healthy": 2,
    "disruptions_allowed": 1,
    "expected_pods": 3,
+   "has_selector": true,
    "labels": null,
    "match_expressions": [
     {
@@ -1263,6 +1266,7 @@
    "desired_healthy": 2,
    "disruptions_allowed": 1,
    "expected_pods": 3,
+   "has_selector": true,
    "labels": null,
    "match_expressions": [
     {
@@ -1284,6 +1288,7 @@
    "desired_healthy": 2,
    "disruptions_allowed": 1,
    "expected_pods": 3,
+   "has_selector": true,
    "labels": {
     "team": "a"
    },
@@ -1301,6 +1306,7 @@
    "desired_healthy": 2,
    "disruptions_allowed": 1,
    "expected_pods": 3,
+   "has_selector": true,
    "labels": {
     "team": "a"
    },
@@ -1334,6 +1340,7 @@
    "desired_healthy": 2,
    "disruptions_allowed": 1,
    "expected_pods": 3,
+   "has_selector": true,
    "labels": {
     "team": "a"
    },
@@ -1351,6 +1358,7 @@
    "desired_healthy": 0,
    "disruptions_allowed": 0,
    "expected_pods": 0,
+   "has_selector": false,
    "labels": null,
    "min_available": "50%",
    "name": "web",
@@ -1363,6 +1371,7 @@
    "desired_healthy": 0,
    "disruptions_allowed": 0,
    "expected_pods": 0,
+   "has_selector": false,
    "labels": null,
    "min_available": "50%",
    "name": "web",

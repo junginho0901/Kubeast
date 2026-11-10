@@ -28,10 +28,12 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags="-w -s" -o /
 # the project's release binary is built with an older Go whose standard library
 # has published CVEs, and the release image scan gate would flag them.
 # (its go.mod carries replace directives, so it is built inside its own module
-# checkout rather than with `go install pkg@version`.)
+# checkout rather than with `go install pkg@version`.) Its golang.org/x/net v0.61.0
+# (CVE-2026-78661) is raised to v0.62.0 while a release still requires it.
 RUN git clone --quiet --depth 1 --branch "v${AWS_IAM_AUTHENTICATOR_VERSION}" \
       https://github.com/kubernetes-sigs/aws-iam-authenticator /build/aws-iam-authenticator \
     && cd /build/aws-iam-authenticator \
+    && if [ "$(go list -m -f '{{.Version}}' golang.org/x/net)" = v0.61.0 ]; then go get golang.org/x/net@v0.62.0; fi \
     && CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
          -ldflags="-w -s -X sigs.k8s.io/aws-iam-authenticator/pkg.Version=v${AWS_IAM_AUTHENTICATOR_VERSION}" \
          -o /out/aws-iam-authenticator ./cmd/aws-iam-authenticator

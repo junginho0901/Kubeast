@@ -37,7 +37,8 @@ test.describe('multi-cluster RBAC UI (step 12)', () => {
       await page.goto('/admin/users')
       await page.waitForLoadState('domcontentloaded')
 
-      // open the user's detail → the per-cluster matrix is shown for non-admins
+      // open the user's detail → the per-cluster matrix is shown for non-admins (the list pages: find it by email)
+      await page.getByTestId('admin-users-search').fill(email)
       await page.getByTestId(`user-detail-${email}`).click()
       await expect(page.getByTestId('cluster-role-matrix')).toBeVisible({ timeout: 10000 })
 

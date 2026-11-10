@@ -166,7 +166,8 @@ export default function ApiKeysSection() {
       {keys.length === 0 ? (
         <p className="text-sm text-slate-400">{tr('apiKeys.empty', 'No keys yet.')}</p>
       ) : (
-        <div className="space-y-1.5" data-testid="api-key-list">
+        // the keys one person made by hand: left whole, not paged
+        <div className="space-y-1.5" data-testid="api-key-list" data-list-bounded="keys a person makes by hand">
           {keys.map((k) => (
             <div key={k.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-900/40 px-3 py-2" data-testid={`api-key-row-${k.id}`}>
               <div className="min-w-0">

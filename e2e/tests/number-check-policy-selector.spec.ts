@@ -5,6 +5,8 @@ import path from 'node:path'
 
 import { test, expect, type Page } from '@playwright/test'
 
+import { everyPage, pagesOf, type Pages } from './drawer-pages'
+
 // A policy report's result may pick its resources by label (resourceSelector) instead of naming them. On `default`, in
 // a namespace of its run with a hand-written report (Kyverno's report controller leaves those alone): each object whose
 // labels match has the row in its drawer, one that does not says "None", a Deployment's section takes its pods' rows
@@ -38,7 +40,12 @@ const FIXTURE = [
   REPORT,
 ]
 
-const rowsIn = (page: Page) => page.locator(DRAWER).last().getByTestId('policy-violation-row').evaluateAll((rows) => rows.map((tr) => [...(tr as HTMLTableRowElement).cells].map((td) => td.innerText.trim())))
+// the section's rows on every page (ten to a page) and each page's range; none while the drawer has no rows
+async function pagesIn(page: Page): Promise<Pages> {
+  const list = page.locator(DRAWER).last().getByTestId('policy-violations-list')
+  return (await list.count()) === 0 ? { items: [], pagers: [] } : everyPage(list, '[data-testid="policy-violation-row"]')
+}
+const rowsIn = async (page: Page) => (await pagesIn(page)).items
 
 test.describe('number check — policy results that pick by label', () => {
   test.beforeAll(() => {
@@ -88,6 +95,32 @@ test.describe('number check — policy results that pick by label', () => {
       const rows = (await res.json()).rows as { policy: string; selector?: string; name: string }[]
       expect(rows.map((r) => [r.policy, r.selector, r.name]).sort()).toEqual([['sel-canary', 'app=sel-canary', ''], ['sel-web', 'app=web', '']])
     })
+  })
+
+  test('a drawer of more results than a page lists every one, page by page, as the report has them', async ({ page }) => {
+    test.setTimeout(120_000)
+    // a namespace of its own: the first test holds every result of NS
+    const ns = `${NS}-many`
+    const results = Array.from({ length: 23 }, (_, i) => ({
+      policy: `many-${String(i).padStart(2, '0')}`, rule: 'r', result: 'fail', source: 'e2e', message: `failure ${i}`,
+      resources: [{ apiVersion: 'v1', kind: 'ConfigMap', name: 'cm-many', namespace: ns }],
+    }))
+    try {
+      kubectl(`create namespace ${ns}`)
+      kubectl('create -f -', JSON.stringify({ apiVersion: 'v1', kind: 'List', items: [
+        { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: 'cm-many', namespace: ns }, data: { k: 'v' } },
+        { apiVersion: 'wgpolicyk8s.io/v1alpha2', kind: 'PolicyReport', metadata: { name: 'e2e-polsel-many', namespace: ns }, results },
+      ] }))
+      // the report as stored, in the drawer's order of a resource's rows (result, then policy)
+      const stored = (JSON.parse(kubectl(`get policyreport e2e-polsel-many -n ${ns} -o json`)).results ?? []) as { policy: string; rule?: string; result: string; severity?: string; message?: string }[]
+      const want = stored.filter((r) => ['fail', 'warn', 'error'].includes(r.result)).sort((a, b) => (a.policy < b.policy ? -1 : a.policy > b.policy ? 1 : 0))
+        .map((r) => [r.result, `${r.policy}${r.rule ? `/${r.rule}` : ''}`, r.severity || '-', r.message || '-'])
+      expect(want, 'the report keeps its 23 failures').toHaveLength(23)
+      await page.goto(`/?cluster=${CLUSTER}&detail=${encodeURIComponent(`ConfigMap/${ns}/cm-many`)}`)
+      await expect.poll(() => pagesIn(page), { timeout: 30_000 }).toEqual(pagesOf(want))
+    } finally {
+      kubectl(`delete namespace ${ns} --wait=false --ignore-not-found`)
+    }
   })
 
   test('a ClusterPolicyReport naming an object of a namespace is in that object\'s drawer', async ({ page, request }) => {

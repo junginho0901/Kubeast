@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { aiEnabled } from '@/utils/features'
+import { myRequestsKey, myRequestsQuery } from './myRequestPages'
 
 // The Settings page's Cluster access and API keys sections show only once the server has answered, and what follows
 // them moves when they do. The page shows them and what follows together, so nothing moves under the reader.
@@ -26,6 +27,9 @@ export function useAccountSectionsReady(): boolean {
   const accessOn = !!access.data?.enabled
   const keysOn = !!keys.data?.enabled
   const myRequests = useQuery({ queryKey: ['access-requests', 'mine'], queryFn: api.listMyAccessRequests, enabled: accessOn })
+  // My requests' first page, the section's own read of it
+  const firstRequests = myRequestsQuery(1)
+  const myRequestPage = useQuery({ queryKey: myRequestsKey(firstRequests), queryFn: () => api.listMyAccessRequestsPage(firstRequests), enabled: accessOn })
   const myKeys = useQuery({ queryKey: ['api-keys', 'mine'], queryFn: api.listMyAPIKeys, enabled: keysOn })
   const read = (q: { isFetched: boolean; failureCount: number }, asked = true): SectionRead => ({ asked, fetched: q.isFetched, failures: q.failureCount })
 
@@ -34,5 +38,5 @@ export function useAccountSectionsReady(): boolean {
     const timer = setTimeout(() => setWaited(true), MOST_WAIT_MS)
     return () => clearTimeout(timer)
   }, [])
-  return waited || sectionsAnswered([read(access), read(keys), read(mcp, aiOn), read(myRequests, accessOn), read(myKeys, keysOn)])
+  return waited || sectionsAnswered([read(access), read(keys), read(mcp, aiOn), read(myRequests, accessOn), read(myRequestPage, accessOn), read(myKeys, keysOn)])
 }

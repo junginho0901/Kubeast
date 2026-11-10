@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test'
 
+import { pagerRange, readEveryPage } from './list-pages'
+
 // Monitoring page — split in Phase 0 (Monitoring.tsx 739 → 93 + 4
 // sub-files). Both tabs (Nodes / Pods) are mounted on demand so we
 // exercise both.
@@ -28,6 +30,8 @@ test.describe('Monitoring', () => {
       maxDiffPixels: 500,
       mask: [
         page.locator('.bg-slate-700.rounded-lg'),
+        // the node rows' live numbers and bars
+        page.getByTestId('monitoring-node'),
         page.locator('text=/Metrics sampled at|메트릭 기준 수집 시각/'),
         page.locator('text=/Auto refresh every/'),
         page.locator('text=/Data labels/'),
@@ -112,12 +116,18 @@ test.describe('Monitoring', () => {
       await page.getByTestId('monitoring-namespace').click()
       await page.getByTestId('monitoring-namespace-opt-kube-system').click()
       await expect.poll(() => page.getByTestId('monitoring-pod-row').count(), { timeout: 30_000 }).toBeGreaterThan(0)
-      const rows = await page.getByTestId('monitoring-pod-row').count()
+      const names = () => page.getByTestId('monitoring-pod-row').locator('td:nth-child(1)').allInnerTexts()
+      const before = await names()
+      const total = (await pagerRange(page, 'monitoring-pod-pager')).total
 
       failing = true
       const notice = page.getByTestId('pod-metrics-refresh-failed')
       await expect(notice).toContainText(OLD_VALUES, { timeout: 30_000 })
-      expect(await page.getByTestId('monitoring-pod-row').count(), 'the rows stay').toBe(rows)
+      // the notice takes a row's height, so the Fit page may hold one row less; the rows are the same pods
+      const after = await names()
+      expect(after.length, 'the rows stay').toBeGreaterThan(0)
+      expect(after, 'the rows stay').toEqual(before.slice(0, after.length))
+      expect((await pagerRange(page, 'monitoring-pod-pager')).total, 'the count stays').toBe(total)
       await expect(page.getByTestId('pod-metrics-error')).toHaveCount(0)
 
       failing = false
@@ -149,7 +159,7 @@ test.describe('Monitoring', () => {
 
       release()
       await expect.poll(() => rows.count(), { timeout: 30_000 }).toBeGreaterThan(0)
-      const namespaces = await rows.locator('td:nth-child(2)').allInnerTexts()
+      const namespaces = await readEveryPage(page, 'monitoring-pod-pager', () => rows.locator('td:nth-child(2)').allInnerTexts())
       expect([...new Set(namespaces)]).toEqual(['monitoring'])
       expect(await numbers.first().innerText()).toBe(String(namespaces.length))
     })

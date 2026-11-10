@@ -354,6 +354,7 @@
       "reject": "Reject",
       "notePlaceholder": "Note (optional)",
       "own": "Your own request — another admin must decide.",
+      "chartBound": "The chart binds this role on the cluster: only a global admin or an Admin of this cluster can approve it.",
       "failed": "The decision was not saved."
     },
     "mine": {
@@ -1120,6 +1121,7 @@
       "total": "Total",
       "completed": "Completed",
       "running": "Running",
+      "suspended": "Suspended",
       "failed": "Failed"
     },
     "delete": {
@@ -2114,7 +2116,10 @@
       "cpuUsage": "CPU (usage)",
       "cpuLimit": "CPU limit",
       "memoryUsage": "Memory (usage)",
-      "memoryLimit": "Memory limit"
+      "memoryLimit": "Memory limit",
+      "node": "Node",
+      "cpuPercent": "CPU (% of allocatable)",
+      "memoryPercent": "Memory (% of allocatable)"
     }
   },
   "common": {
@@ -2902,6 +2907,9 @@
       "approveAdmin": "Approve as Admin",
       "clearSelection": "Clear",
       "selectPending": "Select all pending users",
+      "selectAllPages": "Select all {{count}} pending users, on every page",
+      "selectAllPages_one": "Select the 1 pending user",
+      "selectedEveryPage": "{{count}} selected, on every page",
       "notChanged": "{{done}} of {{total}} accounts changed. Not changed: {{accounts}}",
       "reasonFailed": "the change failed, the audit log says why",
       "reasonNotFound": "no such account",
@@ -3662,7 +3670,6 @@
     "summarizing": "Summarizing...",
     "noEvents": "No events in this period",
     "noEventsHint": "K8s events typically have a ~1 hour TTL. Older events may not be available.",
-    "loadMore": "Load More",
     "revision": "Revision",
     "changeCause": "Change Cause",
     "repeated": "{{count}} times",
@@ -4127,6 +4134,7 @@
     "access": {
       "add": "Add",
       "allAdded": "All users already granted",
+      "search": "Search by name or email…",
       "empty": "No users have access to this cluster yet.",
       "note": "Users granted a role here can access this cluster (deny-by-default for everyone else). Global admins reach every cluster and are not listed. Changes apply after the user logs in again.",
       "revoke": "Revoke",
@@ -4204,7 +4212,8 @@
       "self": "This is your own account: your cluster access is changed by another admin or through an access request.",
       "readError": "Could not read this user's cluster access: {{reason}}",
       "rolesError": "Could not read the roles, so none can be chosen: {{reason}}",
-      "changeError": "Not changed: {{reason}}"
+      "changeError": "Not changed: {{reason}}",
+      "chartBound": "a global admin or this cluster's Admin grants it"
     },
     "aiModels": {
       "add": "Add Model",
@@ -4288,8 +4297,7 @@
       "result": "Result",
       "namespace": "Namespace",
       "since": "From",
-      "until": "To",
-      "limit": "Rows per page"
+      "until": "To"
     },
     "apply": "Search",
     "reset": "Reset",
@@ -4782,7 +4790,6 @@
     },
     "loading": "Loading…",
     "open": "Report",
-    "range": "{{from}}–{{to}} of {{total}}",
     "skipReason": "Skipped: {{reason}}",
     "skip": {
       "investigation_cap": "Skipped by the investigation limit",

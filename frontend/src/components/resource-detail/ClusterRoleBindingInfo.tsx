@@ -6,6 +6,7 @@ import { fmtRel, fmtTs } from './detailFormat'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { useServerPods } from './useServerPods'
 import { ResourceLink } from './ResourceLink'
+import { BindingSubjects } from './role-info/BindingSubjects'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
@@ -72,62 +73,7 @@ export default function ClusterRoleBindingInfo({ name, rawJson }: Props) {
         </div>
       </InfoSection>
 
-      {subjects.length > 0 && (
-        <InfoSection title="Subjects ({{n}})" titleValues={{ n: subjects.length }}>
-          <div className="flex flex-wrap gap-1.5 mb-2">
-            {(() => {
-              const counts: Record<string, number> = {}
-              for (const s of subjects as any[]) {
-                const k = String(s?.kind || 'Unknown')
-                counts[k] = (counts[k] || 0) + 1
-              }
-              return Object.entries(counts).map(([k, c]) => (
-                <span key={k} className="rounded-sm border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] text-slate-200">
-                  {k}: <span className="font-mono">{String(c)}</span>
-                </span>
-              ))
-            })()}
-          </div>
-          <div className="space-y-2">
-            {subjects.map((subj: any, idx: number) => (
-              <div key={idx} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-1.5">
-                <div className="text-xs text-slate-300 space-y-1">
-                  <div>
-                    <span className="text-[11px] text-slate-500 mr-2"><Tx>Kind:</Tx></span>
-                    <span className="font-mono">{subj.kind || '-'}</span>
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-slate-500 mr-2"><Tx>Name:</Tx></span>
-                    {subj.kind === 'ServiceAccount' && subj.name && subj.namespace ? (
-                      <ResourceLink kind="ServiceAccount" name={subj.name} namespace={subj.namespace} />
-                    ) : (
-                      <span className="font-mono">{subj.name || '-'}</span>
-                    )}
-                  </div>
-                  {subj.namespace && (
-                    <div>
-                      <span className="text-[11px] text-slate-500 mr-2"><Tx>Namespace:</Tx></span>
-                      <span className="font-mono">{subj.namespace}</span>
-                    </div>
-                  )}
-                  {subj.apiGroup && (
-                    <div>
-                      <span className="text-[11px] text-slate-500 mr-2"><Tx>API Group:</Tx></span>
-                      <span className="font-mono">{subj.apiGroup}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </InfoSection>
-      )}
-
-      {subjects.length === 0 && (
-        <InfoSection title="Subjects">
-          <p className="text-xs text-slate-500"><Tx>No subjects defined.</Tx></p>
-        </InfoSection>
-      )}
+      <BindingSubjects subjects={subjects} />
 
       {saSubjects.length > 0 && (
         <InfoSection title="Bound Pods via ServiceAccount Subjects ({{n}})" titleValues={{ n: boundTotal }}>

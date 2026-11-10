@@ -1,18 +1,21 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, AuditLogEntry, AuditLogFilter, AuditVerifyReport } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { usePermission } from '@/hooks/usePermission'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { CheckCircle, ChevronDown, ChevronUp, Play, Search } from 'lucide-react'
 import { endOfMinuteISO, formatTime, parseTypedTime, utcTitle } from '@/utils/time'
 import { auditExportCut, auditExportHref, auditLimitFilter, auditPageFilter } from './adminAuditPages'
 import { DateTextInput } from '@/components/DateTextInput'
 import { ListPager } from '@/components/ListPager'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import RecordingPlayerModal from '@/components/RecordingPlayerModal'
 
 const SERVICES = ['', 'auth', 'k8s', 'helm', 'ai', 'admin']
 const RESULTS = ['', 'success', 'failure']
+const COLUMNS = 8
 
 // Custom dropdown — Kubeast 의 다른 곳 (ClusterView NamespaceDropdown / PodLogsTab
 // Container dropdown 등) 과 동일 패턴. 외부 클릭 / ESC 로 close.
@@ -93,7 +96,9 @@ export default function AdminAudit() {
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
 
-  const [filter, setFilter] = useState<AuditLogFilter>({ limit: 50, offset: 0 })
+  // The applied filter, the first row on screen (offset) and the first page's as_of; the rows per page are the table's
+  // (auditLimitFilter).
+  const [filter, setFilter] = useState<AuditLogFilter>({ offset: 0 })
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [playing, setPlaying] = useState<{ id: string; title: string } | null>(null)
 
@@ -102,10 +107,20 @@ export default function AdminAudit() {
   const [sinceText, setSinceText] = useState(() => (filter.since ? formatTime(filter.since).slice(0, 16) : ''))
   const [untilText, setUntilText] = useState(() => (filter.until ? formatTime(filter.until).slice(0, 16) : ''))
 
+  // Rows per page from the screen's height (Fit) or the footer's choice. Each read writes an audit row, so the first
+  // waits until the rows that fit are worked out (before the paint), and the row height is measured once rows came.
+  const [rowsIn, setRowsIn] = useState(false)
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ rowHeight: 38, recalculationKey: String(rowsIn) })
+  const [measured, setMeasured] = useState(false)
+  useLayoutEffect(() => setMeasured(true), [])
+  const request = auditLimitFilter(filter, rowsPerPage)
+
   const queryClient = useQueryClient()
+  // The answer carries the read it answers: the pager counts with its rows per page while another loads.
   const { data, isLoading, isFetching, isPlaceholderData, refetch } = useQuery({
-    queryKey: ['admin-audit-logs', filter],
-    queryFn: () => api.adminListAuditLogs(filter),
+    queryKey: ['admin-audit-logs', request],
+    queryFn: async () => ({ ...(await api.adminListAuditLogs(request)), request }),
+    enabled: measured,
     placeholderData: keepPreviousData,
     // Audit log list is a read that itself produces an audit record
     // ("admin.audit.read"), so we want to poll sparingly. 60s is the minimum
@@ -158,10 +173,14 @@ export default function AdminAudit() {
 
   const total = data?.total ?? 0
   const items: AuditLogEntry[] = data?.items ?? []
-  const limit = filter.limit ?? 50
-  const offset = filter.offset ?? 0
+  const shown = data?.request ?? request
+  const limit = shown.limit ?? rowsPerPage
+  const offset = shown.offset ?? 0
   const page = Math.floor(offset / limit) + 1
   const totalPages = Math.max(1, Math.ceil(total / limit))
+  const hasRows = items.length > 0
+  // once: an empty answer later keeps the measured height, so it asks no other page size
+  useEffect(() => { if (hasRows) setRowsIn(true) }, [hasRows])
 
   // The time range is typed as local YYYY-MM-DD HH:mm; the API takes RFC 3339,
   // the end minute up to its last instant (the API's until includes it).
@@ -181,7 +200,7 @@ export default function AdminAudit() {
   }
 
   const resetFilter = () => {
-    const next: AuditLogFilter = { limit, offset: 0 }
+    const next: AuditLogFilter = { offset: 0 }
     setDraft(next)
     setSinceText('')
     setUntilText('')
@@ -239,8 +258,8 @@ export default function AdminAudit() {
   }
 
   return (
-    <div className="page-scrolls space-y-4">
-      <div className="page-head items-center">
+    <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
+      <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('adminAudit.title', '감사 로그')}</h1>
           <p className="text-slate-400 text-sm mt-1">
@@ -267,7 +286,7 @@ export default function AdminAudit() {
 
       {integrity?.enabled && (
         <div
-          className="rounded-lg bg-slate-800/50 border border-slate-700 px-4 py-3 flex flex-wrap items-center gap-3 text-sm"
+          className="shrink-0 rounded-lg bg-slate-800/50 border border-slate-700 px-4 py-3 flex flex-wrap items-center gap-3 text-sm"
           data-testid="audit-integrity"
         >
           <span className="text-slate-300" title={tr('adminAudit.integrity.sealedTitle', 'Rows up to this number are chained by hash: a changed or removed row breaks the chain (Verify checks it)')}>
@@ -340,7 +359,7 @@ export default function AdminAudit() {
       )}
 
       {/* Filters */}
-      <div className="rounded-lg bg-slate-800/50 border border-slate-700 p-4">
+      <div className="shrink-0 rounded-lg bg-slate-800/50 border border-slate-700 p-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <label className="flex flex-col text-xs font-semibold text-slate-400">
             {tr('adminAudit.filter.service', 'Area')}
@@ -427,20 +446,6 @@ export default function AdminAudit() {
             {tr('adminAudit.filter.until', '종료 시각')}
             <DateTextInput withTime value={untilText} onChange={setUntilText} testId="audit-filter-until" />
           </label>
-
-          <label className="flex flex-col text-xs font-semibold text-slate-400">
-            {tr('adminAudit.filter.limit', '페이지당 건수')}
-            <CustomDropdown
-              value={limit}
-              onChange={(v) => {
-                setDraft({ ...draft, limit: Number(v) })
-                setFilter(auditLimitFilter(filter, Number(v)))
-                setExpandedId(null)
-              }}
-              options={[25, 50, 100, 200].map((n) => ({ value: n, label: String(n) }))}
-              minWidth="min-w-[140px]"
-            />
-          </label>
         </div>
 
         <div className="flex gap-2 mt-3">
@@ -472,10 +477,10 @@ export default function AdminAudit() {
       {/* Table */}
       {/* overflow-x-auto — 폭 좁은 모니터 (세로 모드 등) 에서 가로 스크롤 가능.
           table 의 min-w-[1000px] 로 컬럼이 너무 압축되지 않게 보장. */}
-      <div className="rounded-lg bg-slate-800/30 border border-slate-700">
-        <div className="overflow-x-auto">
+      <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-lg bg-slate-800/30 border border-slate-700">
+        <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
         <table className="w-full min-w-[1000px] text-sm">
-          <thead className="bg-slate-800 text-slate-400">
+          <thead ref={theadRef} className="bg-slate-800 text-slate-400">
             <tr>
               <th className="px-3 py-2 text-left">{tr('adminAudit.col.time', '시각')}</th>
               <th className="px-3 py-2 text-left">{tr('adminAudit.col.actor', '사용자')}</th>
@@ -490,21 +495,22 @@ export default function AdminAudit() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
+                <td colSpan={COLUMNS} className="px-3 py-6 text-center text-slate-400">
                   {tr('adminAudit.loading', '불러오는 중...')}
                 </td>
               </tr>
             )}
             {!isLoading && items.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
+                <td colSpan={COLUMNS} className="px-3 py-6 text-center text-slate-400">
                   {tr('common.noSearchResults', 'No results found.')}
                 </td>
               </tr>
             )}
-            {items.map((entry) => (
+            {items.map((entry, idx) => (
               <AuditRow
                 key={entry.ID}
+                rowRef={idx === 0 ? firstRowRef : undefined}
                 entry={entry}
                 expanded={expandedId === entry.ID}
                 onToggle={() => setExpandedId(expandedId === entry.ID ? null : entry.ID)}
@@ -515,9 +521,10 @@ export default function AdminAudit() {
               />
             ))}
           </tbody>
+          <AdaptiveTableFillerRows count={rowsPerPage - items.length} columnCount={COLUMNS} cellClassName="py-2" />
         </table>
         </div>
-        <ListPager currentPage={page} totalPages={totalPages} total={total} rowsPerPage={limit} onPageChange={goPage} showPageSize={false} testId="audit-pager" />
+        <ListPager currentPage={page} totalPages={totalPages} total={total} rowsPerPage={limit} onPageChange={goPage} testId="audit-pager" />
       </div>
       {playing && <RecordingPlayerModal recordingId={playing.id} title={playing.title} onClose={() => setPlaying(null)} />}
     </div>
@@ -534,6 +541,8 @@ function recordingIdOf(entry: AuditLogEntry): string | null {
 
 interface AuditRowProps {
   entry: AuditLogEntry
+  // the first row's, measured for the rows that fit (useAdaptiveTable)
+  rowRef?: React.Ref<HTMLTableRowElement>
   expanded: boolean
   onToggle: () => void
   resultBadge: (result: string) => React.ReactNode
@@ -542,7 +551,7 @@ interface AuditRowProps {
   playLabel: string
 }
 
-function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, playLabel }: AuditRowProps) {
+function AuditRow({ entry, rowRef, expanded, onToggle, resultBadge, fmtTime, onPlay, playLabel }: AuditRowProps) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
   // kubectl's kind/name form: a bare ID such as a role's "589" says nothing without its type
@@ -554,6 +563,7 @@ function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, pla
   return (
     <>
       <tr
+        ref={rowRef}
         className={`border-t border-slate-700 hover:bg-slate-800/50 cursor-pointer ${
           entry.Result === 'failure' ? 'bg-red-950/20' : ''
         }`}

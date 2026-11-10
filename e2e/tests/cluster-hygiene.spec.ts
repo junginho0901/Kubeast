@@ -161,9 +161,12 @@ test.describe('cluster hygiene report', () => {
         await expect(page.getByTestId('hygiene-finding-row').first()).toBeVisible({ timeout: 30_000 })
         await page.getByTestId('hygiene-card-critical').click()
         await expect(page.getByTestId('hygiene-finding-row').filter({ hasText: 'expiring' })).toBeVisible()
+        // the sign-off is a window over the findings, which keep the screen's height
+        await page.getByTestId('hygiene-signoff-open').click()
         await page.getByTestId('hygiene-signoff-note').fill(`e2e ${stamp}`)
         await page.getByTestId('hygiene-signoff').click()
         await expect(page.getByTestId('hygiene-signoff-message')).toBeVisible({ timeout: 30_000 })
+        await expect(page.getByTestId('hygiene-signoff-panel'), 'the window closes once saved').toHaveCount(0)
         await page.getByTestId('hygiene-tab-history').click()
         const row = page.getByTestId('hygiene-history-row').filter({ hasText: `e2e ${stamp}` })
         await expect(row).toBeVisible()

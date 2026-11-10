@@ -179,19 +179,51 @@ func (h *AuthHandler) CreateAccessRequest(w http.ResponseWriter, r *http.Request
 	response.JSON(w, http.StatusCreated, created)
 }
 
-// ListMyAccessRequests returns the signed-in user's requests, newest first.
+// myAccessRequestsLimit is the page the user's own list answers without ?limit=.
+const myAccessRequestsLimit = 50
+
+// ListMyAccessRequests returns the signed-in user's requests, newest first:
+// ?limit= (0–500; 0 lists none) and ?offset=. X-Kubeast-Total counts all of
+// them, so the Settings page reaches the ones past a page.
 func (h *AuthHandler) ListMyAccessRequests(w http.ResponseWriter, r *http.Request) {
 	payload, ok := auth.FromContext(r.Context())
 	if !ok {
 		response.Error(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
-	items, err := h.repo.ListAccessRequests(r.Context(), repository.AccessRequestFilter{UserID: payload.UserID, Limit: 50})
+	f, err := myAccessRequestListFilter(r.URL.Query(), payload.UserID)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	items := []repository.AccessRequest{}
+	if f.Limit > 0 {
+		if items, err = h.repo.ListAccessRequests(r.Context(), f); err != nil {
+			response.InternalError(w, r, err)
+			return
+		}
+	}
+	total, err := h.repo.CountAccessRequests(r.Context(), f)
 	if err != nil {
 		response.InternalError(w, r, err)
 		return
 	}
+	w.Header().Set("X-Kubeast-Total", strconv.Itoa(total))
 	response.JSON(w, http.StatusOK, items)
+}
+
+// myAccessRequestListFilter reads the signed-in user's list query: a page of
+// that user's own requests, whatever else the query names.
+func myAccessRequestListFilter(q url.Values, userID string) (repository.AccessRequestFilter, error) {
+	f := repository.AccessRequestFilter{UserID: userID}
+	var err error
+	if f.Limit, err = boundedQueryInt(q, "limit", myAccessRequestsLimit, 0, 500); err != nil {
+		return f, err
+	}
+	if f.Offset, err = boundedQueryInt(q, "offset", 0, 0, math.MaxInt32); err != nil {
+		return f, err
+	}
+	return f, nil
 }
 
 // CancelAccessRequest withdraws the signed-in user's own pending request.
@@ -363,6 +395,11 @@ func (h *AuthHandler) decideAccessRequest(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if err := h.chartBoundGrantCeiling(payload, req.Role, req.ClusterID); err != nil {
+		h.auditAccessRequest(r, action, payload, req, after, err)
+		response.Error(w, http.StatusForbidden, err.Error())
+		return
+	}
 	// Ceiling, as for a direct grant: the approver must hold everything the
 	// role gives on this cluster.
 	perms, err := h.repo.GetPermissionsByRoleID(ctx, req.RoleID)

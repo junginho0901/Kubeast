@@ -51,6 +51,22 @@ async function login(request: APIRequestContext, email: string, password: string
   return (await res.json()).access_token
 }
 
+async function mcpOn(request: APIRequestContext, token: string) {
+  const config = await request.get('/api/v1/ai/mcp/config', { headers: bearer(token) })
+  return config.ok() && (await config.json()).enabled
+}
+
+async function mcpCall(request: APIRequestContext, token: string, name: string, args: Record<string, unknown>) {
+  const res = await request.post('/api/v1/ai/mcp', {
+    headers: { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: { cluster: CLUSTER, ...args } } },
+    failOnStatusCode: false,
+  })
+  expect(res.status(), `${name}: ${await res.text()}`).toBe(200)
+  const result = (await res.json()).result
+  return { isError: !!result.isError, text: result.content?.[0]?.text as string }
+}
+
 type SecretObject = { data: Record<string, string>; metadata: { annotations: Record<string, string>; labels?: Record<string, string> } }
 const secret = () => JSON.parse(kubectl(`-n ${NS} get secret ${SECRET} -o json`)) as SecretObject
 
@@ -69,7 +85,7 @@ test.describe('a Secret editor without reveal', () => {
     expect(lastApplied, 'the fixture keeps its values in the annotation').toContain(VALUE)
 
     const role = await request.post('/api/v1/auth/admin/roles', { headers: bearer(admin), data: { name: ROLE, description: 'e2e',
-      permissions: ['menu.dashboard', 'menu.configuration', 'resource.objects.read', 'resource.*.edit', 'resource.*.create'] } })
+      permissions: ['menu.dashboard', 'menu.configuration', 'resource.objects.read', 'resource.*.edit', 'resource.*.create', 'ai.mcp.use', 'ai.tool.k8s_diff'] } })
     expect(role.status(), await role.text()).toBe(201)
     roleId = (await role.json()).id
     // What auth.impersonation.customRoles renders, done by hand: the service account may act as this group.
@@ -107,6 +123,36 @@ test.describe('a Secret editor without reveal', () => {
     const rows = (Array.isArray(body) ? body : body.items ?? []) as { After?: unknown }[]
     return rows.map((r) => (typeof r.After === 'string' ? JSON.parse(r.After) : r.After) as { kept_masked?: string[]; yaml_len?: number })
   }
+
+  // First in the file: the Secret still holds the values beforeAll wrote.
+  test('the AI\'s k8s_diff compares no value for the editor, so a right value reads as a wrong one; an admin\'s is compared', async ({ request }) => {
+    test.skip(!(await mcpOn(request, admin)), 'the MCP server is off (mcp.enabled)')
+    const editor = await login(request, EMAIL, PW)
+    const WRONG = `fake-wrong-value-${run}`
+    const manifest = (password: string) =>
+      `apiVersion: v1\nkind: Secret\nmetadata:\n  name: ${SECRET}\n  namespace: ${NS}\ntype: Opaque\nstringData:\n  password: ${password}\n  user: ${OTHER}\n`
+    const preview = async (token: string, password: string) => {
+      const answer = await mcpCall(request, token, 'k8s_diff', { yaml_content: manifest(password) })
+      expect(answer.isError, answer.text).toBe(false)
+      for (const value of [VALUE, OTHER, WRONG, b64(VALUE), b64(OTHER), b64(WRONG)]) expect(answer.text, value).not.toContain(value)
+      return JSON.parse(answer.text) as { status: string; lines_added: number; lines_removed: number; diff: string; values_not_compared?: string }
+    }
+    const view = (a: Awaited<ReturnType<typeof preview>>) => [a.status, a.lines_added, a.lines_removed, a.diff, a.values_not_compared]
+
+    const right = await preview(editor, VALUE)
+    const wrong = await preview(editor, WRONG)
+    expect(view(right)).toEqual(view(wrong))
+    expect([right.status, right.lines_added, right.lines_removed]).toEqual(['changed', 2, 2])
+    expect(right.values_not_compared).toContain('resource.secret.reveal')
+    expect(right.values_not_compared).toContain('password, user')
+
+    const adminRight = await preview(admin, VALUE)
+    const adminWrong = await preview(admin, WRONG)
+    expect([adminRight.status, adminRight.values_not_compared]).toEqual(['unchanged', undefined])
+    expect([adminWrong.status, adminWrong.lines_added, adminWrong.lines_removed]).toEqual(['changed', 1, 1])
+    // a preview applies nothing
+    wantValuesKept()
+  })
 
   test('the values stay on the screen\'s save and on the API\'s, and what was changed is written', async ({ page, request }) => {
     test.setTimeout(180_000)

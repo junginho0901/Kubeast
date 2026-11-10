@@ -88,11 +88,21 @@ func attachURL(cs kubernetes.Interface, namespace, pod, container string) *url.U
 
 // readFrames reads the browser's frames from conn (the socket's only reader)
 // until it fails — the browser went away — and then closes the channel.
+// It pings the browser meanwhile; no key and no pong for terminalPongWait
+// is a browser gone without closing.
 func readFrames(ctx context.Context, conn *websocket.Conn) <-chan []byte {
 	in := make(chan []byte)
+	reading := make(chan struct{})
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(terminalPongWait))
+	})
+	go pingTerminal(ctx, conn, reading)
 	go func() {
 		defer close(in)
+		defer close(reading)
 		for {
+			// Set before each read: time spent handing a frame to a busy shell is not silence.
+			_ = conn.SetReadDeadline(time.Now().Add(terminalPongWait))
 			_, data, err := conn.ReadMessage()
 			if err != nil {
 				return
@@ -148,10 +158,10 @@ func sessionEndNotice(code, lang string) string {
 	}
 }
 
-func hangUp(w io.Writer) {
+func hangUp(w io.Writer, pause time.Duration) {
 	for i, key := range shellHangup {
 		if i > 0 {
-			time.Sleep(shellHangupPause)
+			time.Sleep(pause)
 		}
 		if _, err := w.Write(key); err != nil {
 			return
@@ -179,6 +189,8 @@ func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cf
 	if err != nil {
 		return err
 	}
+	// Read once: the hang-up below can outlive this call.
+	grace, pause := shellHangupGrace, shellHangupPause
 	held := ctx
 	ctx, cancel := context.WithCancel(context.WithoutCancel(held))
 	defer cancel()
@@ -220,10 +232,10 @@ func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cf
 				return
 			}
 		}
-		go hangUp(stdinW)
+		go hangUp(stdinW, pause)
 		select {
 		case <-streamDone:
-		case <-time.After(shellHangupGrace):
+		case <-time.After(grace):
 		}
 	}()
 

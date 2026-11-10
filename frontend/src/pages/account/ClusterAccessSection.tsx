@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useState } from 'react'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { KeyRound, Loader2 } from 'lucide-react'
 
@@ -12,14 +12,19 @@ import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
 import StatusBadge from '@/components/AccessRequestStatusBadge'
 import AccessHelp from '@/components/AccessHelp'
+import { usePagination } from '@/components/resource-detail/usePagination'
+import { pagerNav } from '@/components/resource-detail/useServerPods'
 import { formatDuration, formatWhen } from '@/pages/admin/accessRequestFormat'
 import { parseNamespaceList } from '@/utils/namespaceScope'
+import { MY_REQUESTS_PER_PAGE, myRequestsKey, myRequestsQuery } from './myRequestPages'
 
 // Settings → Cluster access: the signed-in user's role on each cluster, a
 // "request temporary access" modal (role, duration, reason) and their
 // requests. Shown only while the installation has access requests on. An
 // approval signs the user out (their token is revoked); the next sign-in
-// carries the role until it expires.
+// carries the role until it expires. Both lists page ten at a time as a
+// drawer's tables do: the clusters in the browser, the requests on the server,
+// which counts them all.
 
 const DURATIONS = [30, 60, 120, 240, 480]
 
@@ -36,12 +41,34 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
     staleTime: 30_000,
     enabled,
   })
+  // the newest requests say which cluster has one pending or approved now
   const { data: mine = [] } = useQuery({
     queryKey: ['access-requests', 'mine'],
     queryFn: api.listMyAccessRequests,
     refetchInterval: 30_000,
     enabled,
   })
+  // My requests: one page of every request, the page being read keeps the rows shown before it
+  const [requestPage, setRequestPage] = useState(1)
+  const requestQuery = myRequestsQuery(requestPage)
+  const { data: requests, isPlaceholderData: requestsTurning } = useQuery({
+    queryKey: myRequestsKey(requestQuery),
+    queryFn: () => api.listMyAccessRequestsPage(requestQuery),
+    placeholderData: keepPreviousData,
+    refetchInterval: 30_000,
+    enabled,
+  })
+  const requestRows = requests?.items ?? []
+  const requestTotal = requests?.total ?? 0
+  const requestPages = Math.max(1, Math.ceil(requestTotal / MY_REQUESTS_PER_PAGE))
+  // a cancel that empties the last page shows the page before it
+  useEffect(() => {
+    if (requests && !requestsTurning && requestPage > requestPages) setRequestPage(requestPages)
+  }, [requests, requestsTurning, requestPage, requestPages])
+  // the pager does not turn while the next page loads
+  const turnRequestPage = (next: (page: number) => number) => {
+    if (!requestsTurning) setRequestPage(next)
+  }
 
   // only "*" reaches every cluster; admin.* keys open admin pages and still need a grant per cluster
   const isGlobalAdmin = (me?.permissions_matrix?.['*'] ?? []).includes('*')
@@ -60,6 +87,10 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
   const [namespaces, setNamespaces] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  // one line per cluster the user reaches, ten a page
+  const clusterRoles = me?.cluster_roles
+  const rows = useMemo(() => clusters.map((c) => ({ cluster: c, role: clusterRoles?.[c.id] ?? '' })), [clusters, clusterRoles])
+  const { items: shownRows, nav: rowsNav } = usePagination(rows, 10)
   // A namespace-scoped grant may only ask within its namespaces; the field is prefilled and required then.
   const myNamespaces = me?.cluster_namespaces ?? {}
   const scopedTo = target ? myNamespaces[target] : undefined
@@ -101,7 +132,6 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
 
   const pendingFor = (clusterId: string) => mine.find((r) => r.cluster_id === clusterId && r.status === 'pending')
   const activeFor = (clusterId: string) => mine.find((r) => r.cluster_id === clusterId && r.status === 'approved')
-  const rows = clusters.map((c) => ({ cluster: c, role: myRoles[c.id] ?? '' }))
 
   return (
     <div className="card" data-testid="account-cluster-access">
@@ -133,8 +163,8 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
           <AccessHelp className="mt-2 text-sm" />
         </div>
       ) : (
-        <div className="space-y-1.5">
-          {rows.map(({ cluster, role: current }) => {
+        <div className="space-y-1.5" data-testid="cluster-access-rows">
+          {shownRows.map(({ cluster, role: current }) => {
             const pending = pendingFor(cluster.id)
             const active = activeFor(cluster.id)
             const requestable = (config?.roles ?? []).some((r) => r !== current)
@@ -168,14 +198,16 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
               </div>
             )
           })}
+          {/* only with more than one page: an empty last child would add the list's gap under the last row */}
+          {rowsNav && <div data-testid="cluster-access-rows-pages">{rowsNav}</div>}
         </div>
       )}
 
-      {mine.length > 0 && (
+      {requestTotal > 0 && (
         <div className="mt-5">
           <h3 className="text-sm font-semibold text-slate-200 mb-2">{tr('accessRequests.mine.list', 'My requests')}</h3>
           <div className="space-y-1.5" data-testid="my-access-requests">
-            {mine.map((r: AccessRequest) => (
+            {requestRows.map((r: AccessRequest) => (
               <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-700/60 px-3 py-2 text-sm" data-testid={`my-access-request-${r.id}`}>
                 <div className="min-w-0">
                   <div className="text-slate-200 truncate">
@@ -204,6 +236,7 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
               </div>
             ))}
           </div>
+          <div data-testid="my-access-requests-pages">{pagerNav(Math.min(requestPage, requestPages), MY_REQUESTS_PER_PAGE, requestTotal, turnRequestPage)}</div>
         </div>
       )}
 

@@ -27,7 +27,7 @@ import (
 //   GET  /api/v1/hygiene                 report + last sign-off       read,   audited k8s.hygiene.scan
 //   GET  /api/v1/hygiene?format=csv|json download                     admin.hygiene.export, audited admin.hygiene.export
 //   POST /api/v1/hygiene/signoff {note}  store the report as signed   admin.hygiene.signoff
-//   GET  /api/v1/hygiene/history         sign-offs, newest first      read
+//   GET  /api/v1/hygiene/history         a page of sign-offs, newest first, X-Kubeast-Total   read
 //   GET  /api/v1/hygiene/snapshot/{id}   one sign-off with its report read
 //
 // Read = resource.hygiene.scan on the cluster (an Admin grant holds it; the verb
@@ -232,12 +232,14 @@ func (h *Handler) SignoffHygiene(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusCreated, rev)
 }
 
-// HygieneHistory lists the cluster's sign-offs, newest first.
+// HygieneHistory lists a page of the cluster's sign-offs, newest first (?limit=, at most and by default
+// hygieneHistoryMax, ?offset=); X-Kubeast-Total counts every sign-off of the cluster.
 func (h *Handler) HygieneHistory(w http.ResponseWriter, r *http.Request) {
 	if !h.hygieneReadAllowed(w, r) {
 		return
 	}
 	if h.hygieneStore == nil {
+		w.Header().Set("X-Kubeast-Total", "0")
 		response.JSON(w, http.StatusOK, []hygiene.Review{})
 		return
 	}
@@ -245,11 +247,16 @@ func (h *Handler) HygieneHistory(w http.ResponseWriter, r *http.Request) {
 	if limit <= 0 || limit > hygieneHistoryMax {
 		limit = hygieneHistoryMax
 	}
-	list, err := h.hygieneStore.List(r.Context(), hygieneClusterID(r), limit)
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	if offset < 0 {
+		offset = 0
+	}
+	list, total, err := h.hygieneStore.Page(r.Context(), hygieneClusterID(r), limit, offset)
 	if err != nil {
 		response.InternalError(w, r, err)
 		return
 	}
+	w.Header().Set("X-Kubeast-Total", strconv.Itoa(total))
 	response.JSON(w, http.StatusOK, list)
 }
 
@@ -281,7 +288,120 @@ func (h *Handler) HygieneSnapshot(w http.ResponseWriter, r *http.Request) {
 		response.InternalError(w, r, err)
 		return
 	}
+	if install := h.svc.ProtectedNamespaces(r.Context()).Install; install != "" && !isGlobalAdmin(r) {
+		if rev.Snapshot, err = withoutSecretsOf(rev.Snapshot, install); err != nil {
+			response.InternalError(w, r, err)
+			return
+		}
+	}
 	response.JSON(w, http.StatusOK, rev)
+}
+
+func isGlobalAdmin(r *http.Request) bool {
+	p, ok := auth.FromContext(r.Context())
+	return ok && auth.MatchAny(p.Perms["*"], "*")
+}
+
+// secretChecks are the checks read from Secrets: TLS Secrets, and the releases Helm keeps in Secrets.
+var secretChecks = map[string]bool{"tls.expiry": true, "upgrade.removed-api.helm": true}
+
+// withoutSecretsOf drops a stored report's findings read from Secrets in namespace, which only a global admin's scan reads (protectedns), counts too; edited as JSON so an older report gains no field.
+func withoutSecretsOf(snapshot json.RawMessage, namespace string) (json.RawMessage, error) {
+	var outer map[string]json.RawMessage
+	if err := json.Unmarshal(snapshot, &outer); err != nil {
+		return nil, err
+	}
+	var report map[string]json.RawMessage
+	if err := json.Unmarshal(outer["report"], &report); err != nil {
+		return nil, err
+	}
+	var findings []json.RawMessage
+	if err := json.Unmarshal(report["findings"], &findings); err != nil {
+		return nil, err
+	}
+	type left struct {
+		check, severity string
+		exempt          bool
+	}
+	kept := make([]json.RawMessage, 0, len(findings))
+	var out []left
+	for _, raw := range findings {
+		var f k8s.HygieneFinding
+		if err := json.Unmarshal(raw, &f); err != nil {
+			return nil, err
+		}
+		if secretChecks[f.Check] && f.Namespace == namespace {
+			out = append(out, left{f.Check, f.Severity, f.Exempt})
+			continue
+		}
+		kept = append(kept, raw)
+	}
+	if len(out) == 0 {
+		return snapshot, nil
+	}
+	var counts map[string]int
+	if err := json.Unmarshal(report["counts"], &counts); err != nil {
+		return nil, err
+	}
+	var checks []map[string]json.RawMessage
+	if err := json.Unmarshal(report["checks"], &checks); err != nil {
+		return nil, err
+	}
+	for _, f := range out {
+		switch {
+		case f.exempt:
+			counts["exempt"]--
+		case f.severity == k8s.HygieneCritical || f.severity == k8s.HygieneWarning:
+			counts[f.severity]--
+		default:
+			counts[k8s.HygieneInfo]--
+		}
+		for _, c := range checks {
+			var id string
+			_ = json.Unmarshal(c["id"], &id)
+			if id != f.check {
+				continue
+			}
+			if f.exempt {
+				c["exempt"] = addTo(c["exempt"], -1)
+				continue
+			}
+			c["findings"] = addTo(c["findings"], -1)
+			var sev map[string]int
+			if _ = json.Unmarshal(c["severities"], &sev); sev == nil {
+				sev = map[string]int{}
+			}
+			if sev[f.severity]--; sev[f.severity] <= 0 {
+				delete(sev, f.severity)
+			}
+			if len(sev) == 0 {
+				delete(c, "severities")
+			} else {
+				c["severities"], _ = json.Marshal(sev)
+			}
+		}
+	}
+	var err error
+	if report["findings"], err = json.Marshal(kept); err != nil {
+		return nil, err
+	}
+	if report["counts"], err = json.Marshal(counts); err != nil {
+		return nil, err
+	}
+	if report["checks"], err = json.Marshal(checks); err != nil {
+		return nil, err
+	}
+	if outer["report"], err = json.Marshal(report); err != nil {
+		return nil, err
+	}
+	return json.Marshal(outer)
+}
+
+func addTo(raw json.RawMessage, n int) json.RawMessage {
+	var v int
+	_ = json.Unmarshal(raw, &v)
+	out, _ := json.Marshal(v + n)
+	return out
 }
 
 // writeHygieneCSV writes the findings as a spreadsheet-friendly file (UTF-8

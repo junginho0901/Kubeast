@@ -277,4 +277,13 @@ func TestPostgresListPages(t *testing.T) {
 	if got := page(2, -3); len(got) != 2 || got[0] != ids[4] {
 		t.Fatalf("negative offset = %v, want the first page", got)
 	}
+	// the count the list's pages are taken from, under the same filter
+	for _, c := range []struct {
+		filter Filter
+		want   int
+	}{{Filter{}, 5}, {Filter{Kind: "exec"}, 5}, {Filter{Kind: "node-shell"}, 0}, {Filter{Cluster: "other"}, 0}, {Filter{Limit: 2, Offset: 4}, 5}} {
+		if n, err := m.Count(ctx, c.filter); err != nil || n != c.want {
+			t.Fatalf("count %+v = %d, %v; want %d", c.filter, n, err, c.want)
+		}
+	}
 }

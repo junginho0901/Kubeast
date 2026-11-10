@@ -13,7 +13,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/itchyny/gojq"
 
@@ -23,7 +22,6 @@ import (
 const (
 	jqResultsCap   = 200
 	jqOutputCap    = 256 << 10
-	jqTimeout      = 5 * time.Second
 	tabularRowsCap = 200
 	countGroupsCap = 100
 )
@@ -109,7 +107,8 @@ func itemsOf(list map[string]interface{}) []interface{} {
 // expression sees the whole list object ({"items": [...]}), so `.items[] |
 // select(...) | .metadata.name` is the usual shape. Environment access is
 // off (gojq's library default already yields an empty env; the loader below
-// makes that explicit); results are capped.
+// makes that explicit); results are capped, and the program runs in a child
+// process held to a memory budget and a time limit (jq_worker.go).
 func handleJQQuery(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
 	expr := strings.TrimSpace(argString(args, "jq", ""))
 	if expr == "" {
@@ -119,8 +118,8 @@ func handleJQQuery(ctx context.Context, args map[string]interface{}, headers htt
 	if err != nil {
 		return "", wrapBadRequest("jq: " + err.Error())
 	}
-	code, err := gojq.Compile(query, gojq.WithEnvironLoader(func() []string { return nil }))
-	if err != nil {
+	// Checked here so a program that does not compile reaches no kubectl; it runs in a child (jq_worker.go).
+	if _, err := gojq.Compile(query, gojq.WithEnvironLoader(func() []string { return nil })); err != nil {
 		return "", wrapBadRequest("jq: " + err.Error())
 	}
 	limit := argInt(args, "limit", 50)
@@ -144,46 +143,21 @@ func handleJQQuery(ctx context.Context, args map[string]interface{}, headers htt
 	if err != nil || res != "" {
 		return res, err
 	}
-	runCtx, cancel := context.WithTimeout(ctx, jqTimeout)
-	defer cancel()
-	results := make([]interface{}, 0, limit)
-	matches := 0
-	size := 0
-	truncated := false
-	iter := code.RunWithContext(runCtx, list)
-	for {
-		v, ok := iter.Next()
-		if !ok {
-			break
-		}
-		if jqErr, isErr := v.(error); isErr {
-			if runCtx.Err() != nil {
-				return "", wrapBadRequest("jq: the expression took longer than 5s")
-			}
-			return "", wrapBadRequest("jq: " + jqErr.Error())
-		}
-		matches++
-		if len(results) >= limit {
-			truncated = true
-			continue
-		}
-		raw, _ := json.Marshal(v)
-		if size+len(raw) > jqOutputCap {
-			truncated = true
-			continue
-		}
-		size += len(raw)
-		results = append(results, v)
+	total := len(itemsOf(list))
+	answer, err := runJQ(ctx, expr, limit, list)
+	if err != nil {
+		return "", err
 	}
+	matches := answer.Matches
 	out := map[string]interface{}{
 		"jq":                    expr,
 		"resource_type":         argString(args, "resource_type", ""),
 		"scope":                 scope,
-		"total_items_processed": len(itemsOf(list)),
+		"total_items_processed": total,
 		"matches_found":         matches,
-		"results":               results,
+		"results":               answer.Results,
 	}
-	if truncated {
+	if answer.Truncated {
 		out["truncated"] = true
 	}
 	if matches == 0 {
@@ -280,6 +254,9 @@ func handleCount(ctx context.Context, args map[string]interface{}, headers http.
 		namespace := argString(args, "namespace", "")
 		if size, ok, err := listSize(ctx, headers, argString(args, "resource_type", ""), namespace, namespace == "",
 			argString(args, "label_selector", ""), argString(args, "field_selector", "")); err == nil && ok {
+			if size.unknown {
+				return listTooLarge(argString(args, "resource_type", ""), scope, size)
+			}
 			out := map[string]interface{}{"resource_type": argString(args, "resource_type", ""), "scope": scope}
 			if size.atLeast {
 				out["count_at_least"] = size.count

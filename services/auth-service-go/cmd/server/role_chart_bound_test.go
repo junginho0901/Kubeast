@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"strings"
 	"testing"
@@ -142,5 +144,30 @@ func TestRoleRenameIntoANameTheChartBindsIsForAGlobalAdmin(t *testing.T) {
 				wantCeilingRow(t, api, "admin.roles.update")
 			}
 		})
+	}
+}
+
+// The role list names the custom roles the chart binds, whose grant the screens offer only to who may give it; the
+// built-in names the chart binds for grants limited to namespaces are not among them.
+func TestTheRoleListNamesTheRolesTheChartBinds(t *testing.T) {
+	row := func(id int, name string, system bool) []any { return []any{id, name, "", system, pgNow(), pgNow()} }
+	api := newAuthAPIWith(t, pendingRequest{owner: "requester"}, chartBindsOpsSRE,
+		pgRule{match: "description, is_system, created_at, updated_at FROM roles ORDER BY id",
+			oids: []uint32{integerOID, textOID, textOID, booleanOID, stampOID, stampOID},
+			rows: [][]any{row(roleRead, "Read", true), row(roleCustom, "plain", false), row(roleChartBound, "ops", false)}})
+	w := api.call(api.actor(auth.PermissionMatrix{"c": {readPerm}}, nil), http.MethodGet, "/roles", "")
+	var roles []struct {
+		Name       string `json:"name"`
+		ChartBound bool   `json:"chart_bound"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &roles); err != nil || w.Code != http.StatusOK {
+		t.Fatalf("%d %s: %v", w.Code, w.Body.String(), err)
+	}
+	got := map[string]bool{}
+	for _, r := range roles {
+		got[r.Name] = r.ChartBound
+	}
+	if want := map[string]bool{"Read": false, "plain": false, "ops": true}; !maps.Equal(got, want) {
+		t.Fatalf("chart_bound %v, want %v", got, want)
 	}
 }

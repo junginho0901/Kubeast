@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -66,6 +67,12 @@ type proxyRun struct {
 // kubectlProxy is started once at boot; nil keeps kubectl talking to the
 // cluster directly (with --as), without a request list.
 var kubectlProxy *kubeProxy
+
+// errKubectlProxyNotStarted refuses the kubectl tools when the proxy was to run and did not start: nothing would read their requests.
+var errKubectlProxyNotStarted = errors.New("the kubectl tools are off: tool-server's kubectl proxy, which holds each request kubectl sends, did not start (its log says why). Restart tool-server; the other tools work")
+
+// kubectlProxyRefusal is errKubectlProxyNotStarted after a failed start; nil with the proxy running or turned off (TOOL_SERVER_KUBECTL_PROXY=false).
+var kubectlProxyRefusal error
 
 func startKubeProxy() (*kubeProxy, error) {
 	cert, caPEM, err := loopbackCertificate()
@@ -158,6 +165,7 @@ func (p *kubeProxy) prepare(cluster, realKubeconfig string, impersonate rest.Imp
 	}, nil
 }
 
+// The context names default: without it kubectl in this pod takes POD_NAMESPACE, Kubeast's own, for a call naming none.
 const proxyKubeconfig = `apiVersion: v1
 kind: Config
 clusters:
@@ -167,7 +175,7 @@ clusters:
     certificate-authority-data: %s
 contexts:
 - name: kubeast
-  context: {cluster: kubeast, user: kubeast}
+  context: {cluster: kubeast, user: kubeast, namespace: default}
 current-context: kubeast
 users:
 - name: kubeast

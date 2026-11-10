@@ -9,6 +9,7 @@ import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 import { useEffectivePermissions } from './service-account-info/useEffectivePermissions'
+import { RULE_TABLE_COLUMNS, ruleRowNote, ruleTableCells } from './service-account-info/ruleTable'
 import { useNamespacePodTable } from './useNamespacePodTable'
 
 interface Props {
@@ -146,21 +147,27 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
                     <table className="w-full text-[11px]">
                       <thead className="text-slate-400">
                         <tr>
-                          <Th className="text-left py-1 pr-2">API Groups</Th>
-                          <Th className="text-left py-1 pr-2">Resources</Th>
-                          <Th className="text-left py-1 pr-2">Verbs</Th>
-                          <Th className="text-left py-1 pr-2">Resource Names</Th>
+                          {RULE_TABLE_COLUMNS.map((column) => (
+                            <Th key={column} className="text-left py-1 pr-2">{column}</Th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800">
-                        {b.rules.map((r, ri) => (
-                          <tr key={ri} className="text-slate-200">
-                            <td className="py-1 pr-2 font-mono">{r.apiGroups.length === 0 ? '""' : r.apiGroups.join(', ')}</td>
-                            <td className="py-1 pr-2 font-mono">{r.resources.join(', ') || '-'}</td>
-                            <td className="py-1 pr-2 font-mono">{r.verbs.join(', ') || '-'}</td>
-                            <td className="py-1 pr-2 font-mono text-slate-400">{r.resourceNames?.join(', ') || '-'}</td>
-                          </tr>
-                        ))}
+                        {b.rules.map((r, ri) => {
+                          const note = ruleRowNote(b.binding_kind, r)
+                          return (
+                            <tr key={ri} className="text-slate-200">
+                              {ruleTableCells(r).map((cell, ci) => (
+                                <td key={RULE_TABLE_COLUMNS[ci]} className={`py-1 pr-2 font-mono${RULE_TABLE_COLUMNS[ci] === 'Resource Names' ? ' text-slate-400' : ''}`}>
+                                  {cell}
+                                  {note && RULE_TABLE_COLUMNS[ci] === 'Non-Resource URLs' && (
+                                    <span className="block mt-0.5 font-sans text-[10px] leading-4 text-amber-300" data-testid="sa-rule-url-note"><Tx text={note} /></span>
+                                  )}
+                                </td>
+                              ))}
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>

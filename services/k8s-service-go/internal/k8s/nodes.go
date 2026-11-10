@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -360,6 +361,8 @@ func formatNodeSummary(node *corev1.Node) map[string]interface{} {
 	if len(roles) == 0 {
 		roles = append(roles, "<none>")
 	}
+	// kubectl's order (printers.go findNodeRoles, a sorted set), the same in the live update (ws nodeToInfo)
+	sort.Strings(roles)
 
 	// Internal IP & External IP
 	internalIP := ""

@@ -18,11 +18,13 @@ import (
 const maskedWriteShown = 5
 
 var (
-	writePlaceholder  = regexp.MustCompile(`(?:<|\\u003[cC])REDACTED:([^<>\s"'\\]*)(?:>|\\u003[eE])`)
+	// A masked value (its name may hold spaces: a key's name, k8s_diff's "new value") and a personal-data address (REDACTION_PII).
+	writePlaceholder  = regexp.MustCompile(`(?:<|\\u003[cC])(REDACTED:[^<>"'\\\r\n]*|EMAIL_[0-9]+)(?:>|\\u003[eE])`)
 	writeEncodedToken = regexp.MustCompile(`[A-Za-z0-9+/]{16,}={0,2}`)
-	// k8s-service's Secret mask means nothing outside a Secret, where three stars may be a value.
-	writeSecretKindYAML = regexp.MustCompile(`(?m)^[ \t]*(?:-[ \t]+)?["']?kind["']?[ \t]*:[ \t]*["']?Secret["']?[ \t]*\r?$`)
-	writeSecretKindJSON = regexp.MustCompile(`"kind"\s*:\s*"Secret"`)
+	// k8s-service's Secret mask means nothing outside a Secret, where three stars may be a value. A SecretList's items
+	// without a kind of their own are Secrets to kubectl.
+	writeSecretKindYAML = regexp.MustCompile(`(?m)^[ \t]*(?:-[ \t]+)?["']?kind["']?[ \t]*:[ \t]*["']?Secret(?:List)?["']?[ \t]*\r?$`)
+	writeSecretKindJSON = regexp.MustCompile(`"kind"\s*:\s*"Secret(?:List)?"`)
 	writeMaskYAML       = regexp.MustCompile(`(?m)^[ \t]*(?:-[ \t]+)?["']?[A-Za-z0-9._/\-]+["']?[ \t]*:[ \t]*["']?\*\*\*["']?[ \t]*\r?$`)
 	writeMaskJSON       = regexp.MustCompile(`"[A-Za-z0-9._/\-]+"\s*:\s*"\*\*\*"`)
 	// base64 of the mask, without and with the quotes an older YAML window saved it with
@@ -67,7 +69,7 @@ func placeholdersInWrite(args map[string]interface{}) []string {
 	}
 	for _, text := range writeArgumentTexts(args) {
 		for _, m := range writePlaceholder.FindAllStringSubmatch(text, -1) {
-			add("<REDACTED:" + m[1] + ">")
+			add("<" + m[1] + ">")
 		}
 		for _, token := range writeEncodedToken.FindAllString(text, -1) {
 			decoded, err := base64.StdEncoding.DecodeString(token)
@@ -75,7 +77,7 @@ func placeholdersInWrite(args map[string]interface{}) []string {
 				continue
 			}
 			for _, m := range writePlaceholder.FindAllStringSubmatch(string(decoded), -1) {
-				add("<REDACTED:" + m[1] + ">")
+				add("<" + m[1] + ">")
 			}
 		}
 		for _, document := range strings.Split(text, "\n---") {

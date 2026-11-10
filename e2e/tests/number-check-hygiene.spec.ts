@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -8,7 +8,8 @@ import { test, expect, type Page } from '@playwright/test'
 // Number check of Cluster hygiene on self: a check's "(N)" in the picker is the rows picking it lists (exempt
 // findings too under "All severities"), the Checks tab gives a check's findings by their own severity as the cards
 // count them (a certificate five days from expiry is critical in the warning check tls.expiry), and with more findings than the
-// report lists (5000) the Findings tab counts all of them and the note says how many are listed.
+// report lists (5000) the Findings tab counts all of them and the note says how many are listed. Past sign-offs page on
+// the server: 105 written to the database for the run (e2e-hyg-hist-*, removed after) are each on a page, newest first.
 
 const HYGIENE = { path: '/cluster/hygiene', cluster: 'self' }
 const NS = 'e2e-hygiene-counts'
@@ -18,6 +19,8 @@ const kcPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-number-hygie
 fs.writeFileSync(kcPath, execSync('kind get kubeconfig --name kubeast', { encoding: 'utf8' }), { mode: 0o600 })
 const kubectl = (args: string, input?: string) =>
   execSync(`kubectl --kubeconfig ${kcPath} ${args}`, { encoding: 'utf8', input, stdio: ['pipe', 'pipe', 'pipe'], maxBuffer: 64 << 20 }).trim()
+const psql = (sql: string) =>
+  execFileSync('kubectl', ['--kubeconfig', kcPath, '--context', 'kind-kubeast', '-n', 'kubeast', 'exec', 'deploy/postgres', '--', 'psql', '-U', 'kubeast', '-d', 'kubeast', '-tAc', sql], { encoding: 'utf8' }).trim()
 
 // a certificate that expires in five days: critical (the dev install's critical line is seven days)
 function shortLivedCert(dir: string): { crt: string; key: string } {
@@ -152,15 +155,63 @@ test.describe('Number check — Cluster hygiene', () => {
     // the screen: the rows of rollout-image, each message with its pods ("N Pods" above one)
     await open(page)
     await page.getByPlaceholder(/Search Namespace, name, message|Namespace, 이름, 내용 검색/).fill('rollout-image')
+    // every page of the rows that fit the screen
+    const pager = page.getByTestId('hygiene-pager')
+    await expect(pager).toContainText(/Showing 1-\d+ of \d+|(?<!\d)\d+개 중 1-\d+/, { timeout: 30_000 })
+    const rangeText = async () => /Showing \d+-\d+ of \d+|\d+개 중 \d+-\d+/.exec(await pager.innerText())?.[0] ?? ''
     const onScreen: Record<string, number> = {}
-    for (const row of await page.getByTestId('hygiene-finding-row').filter({ hasText: /image e2e\.local\/web/ }).all()) {
-      const cells = row.locator('td')
-      const object = await cells.nth(3).innerText()
-      const message = (await cells.nth(4).innerText()).split('\n')[0].trim()
-      const n = object.match(/(\d+) Pods|Pod (\d+)개/)
-      onScreen[message] = (onScreen[message] ?? 0) + Number(n?.[1] ?? n?.[2] ?? 1)
+    const next = pager.getByRole('button', { name: /^(Next|다음)$/ })
+    for (let p = 0; p < 50; p++) {
+      for (const row of await page.getByTestId('hygiene-finding-row').filter({ hasText: /image e2e\.local\/web/ }).all()) {
+        const cells = row.locator('td')
+        const object = await cells.nth(3).innerText()
+        const message = (await cells.nth(4).innerText()).split('\n')[0].trim()
+        const n = object.match(/(\d+) Pods|Pod (\d+)개/)
+        onScreen[message] = (onScreen[message] ?? 0) + Number(n?.[1] ?? n?.[2] ?? 1)
+      }
+      if (await next.isDisabled()) break
+      const before = await rangeText()
+      await next.click()
+      await expect.poll(rangeText, { message: `page ${p + 2}` }).not.toBe(before)
     }
     expect.soft(onScreen, 'the screen rows').toEqual(wantImage)
+  })
+
+  test('past sign-offs page on the server: every sign-off the cluster keeps, past the hundred one answer holds, newest first', async ({ page }) => {
+    test.setTimeout(180_000)
+    const run = Date.now().toString(36)
+    const prefix = 'e2e-hyg-hist-'
+    const note = (i: number) => `e2e history ${run} ${String(i).padStart(3, '0')}`
+    psql(`DELETE FROM hygiene_reviews WHERE id LIKE '${prefix}%'`)
+    try {
+      // 105 sign-offs a minute apart, as the server writes them (UTC, no snapshot needed for the list)
+      psql(`INSERT INTO hygiene_reviews (id, cluster, reviewed_by_email, reviewed_at, note)
+            SELECT format('${prefix}${run}-%s', lpad(i::text, 3, '0')), '${HYGIENE.cluster}', 'e2e-hist@kubeast.local',
+                   date_trunc('second', now() at time zone 'utc') - make_interval(mins => i + 1), format('e2e history ${run} %s', lpad(i::text, 3, '0'))
+              FROM generate_series(0, 104) AS i`)
+      const total = Number(psql(`SELECT count(*) FROM hygiene_reviews WHERE cluster = '${HYGIENE.cluster}'`))
+      expect(total, 'the cluster keeps the 105 of the run').toBeGreaterThanOrEqual(105)
+
+      await open(page)
+      await page.getByTestId('hygiene-tab-history').click()
+      const pager = page.getByTestId('hygiene-history-pager')
+      await expect(pager, 'every sign-off counted').toContainText(pagerTotal(total), { timeout: 30_000 })
+      expect.soft(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight), 'the page scrolls by').toBeLessThanOrEqual(1)
+      const rangeText = async () => /Showing \d+-\d+ of \d+|\d+개 중 \d+-\d+/.exec(await pager.innerText())?.[0] ?? ''
+      const next = pager.getByRole('button', { name: /^(Next|다음)$/ })
+      const notes: string[] = []
+      for (let p = 0; p < 200; p++) {
+        notes.push(...(await page.getByTestId('hygiene-history-row').evaluateAll((trs) => trs.map((tr) => (tr as HTMLTableRowElement).cells[2].innerText.trim()))))
+        if (await next.isDisabled()) break
+        const before = await rangeText()
+        await next.click()
+        await expect.poll(rangeText, { message: `page ${p + 2}` }).not.toBe(before)
+      }
+      expect.soft(notes.length, 'every sign-off on one page or another').toBe(total)
+      expect.soft(notes.filter((n) => n.startsWith(`e2e history ${run} `)), 'the run\'s sign-offs, newest first, each once').toEqual(Array.from({ length: 105 }, (_, i) => note(i)))
+    } finally {
+      psql(`DELETE FROM hygiene_reviews WHERE id LIKE '${prefix}%'`)
+    }
   })
 
   test('with more findings than the report lists, the tab counts all of them and the note says how many are listed', async ({ page }) => {

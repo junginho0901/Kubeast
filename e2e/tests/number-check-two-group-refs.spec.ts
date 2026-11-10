@@ -5,6 +5,8 @@ import path from 'node:path'
 
 import { test, expect, type Locator, type Page } from '@playwright/test'
 
+import { everyPage } from './drawer-pages'
+
 // One Kind of two groups with one name, where a screen picked by Kind and name: on default, a StatefulSet of apps/v1
 // and one of a group of this run's own (as OpenKruise's Advanced StatefulSet is Kind StatefulSet of apps.kruise.io),
 // both named web-<run>, each controlling its pause pods, and a hand-written PolicyReport about both and their pods. The
@@ -185,8 +187,10 @@ test.describe('number check — one Kind of two groups where a screen picked by 
         // this run
         const violations = async (query: string) => {
           await page.goto(`/?cluster=default&detail=${query}`)
-          const shown = page.locator(DRAWER).last().getByTestId('policy-violation-row').filter({ hasText: RUN })
-          return async () => (await shown.locator('td:last-child').allInnerTexts()).map((t) => t.trim()).sort()
+          // the rows of every page (ten to a page) that name this run, their messages
+          const list = page.locator(DRAWER).last().getByTestId('policy-violations-list')
+          return async () => ((await list.count()) === 0 ? [] : (await everyPage(list, '[data-testid="policy-violation-row"]')).items)
+            .filter((cells) => cells.some((c) => c.includes(RUN))).map((cells) => cells[cells.length - 1]).sort()
         }
         for (const [what, query, want] of [
           ['the apps/v1 StatefulSet', encodeURIComponent(`StatefulSet/${NS}/${STS}`), ['the apps/v1 statefulset fails', `pod ${BUILTIN_POD} fails`]],

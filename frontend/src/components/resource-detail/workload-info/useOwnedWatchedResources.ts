@@ -7,12 +7,15 @@ import { applyReplicaSetWatchEvent } from '@/pages/workloads/replicasets/replica
 import { applyJobWatchEvent } from '@/pages/workloads/jobs/jobWatchNormalize'
 import { useNamespacePodTable, type PodTableRow } from '../useNamespacePodTable'
 import { SET_POD_TABLE_WATCH_MAX } from '../namespacePodTable'
+import { selectorText } from '../netpolText'
 
 interface Params {
   kind: string
   namespace?: string
   name: string
+  // the selector's matchLabels (undefined while its answer is on its way) and matchExpressions
   selector?: Record<string, string>
+  selectorExpressions?: { key: string; operator: string; values?: string[] }[]
   volumeClaimTemplates?: Array<any>
 }
 
@@ -31,11 +34,6 @@ export interface OwnedResources {
   pvcsEnabled: boolean
 }
 
-function selectorToString(selector?: Record<string, string>): string {
-  if (!selector) return ''
-  return Object.entries(selector).map(([k, v]) => `${k}=${v}`).join(',')
-}
-
 // The pod's controller, else its first owner: the owner a server pod row keeps (pod_index.go), so the whole read and the
 // server's pages list the same pods.
 export function podOwnedBy(pod: PodInfo, kind: string, name: string): boolean {
@@ -48,8 +46,12 @@ export function podOwnedBy(pod: PodInfo, kind: string, name: string): boolean {
 // ReplicaSet / StatefulSet detail. Pods are the label selector's for a Deployment and,
 // for the others, the ones they control; read as the drawers' namespace tables are
 // (useNamespacePodTable): whole and live while few, else the server's pages.
-export function useOwnedWatchedResources({ kind, namespace, name, selector, volumeClaimTemplates }: Params): OwnedResources {
-  const selectorStr = useMemo(() => selectorToString(selector), [selector])
+export function useOwnedWatchedResources({ kind, namespace, name, selector, selectorExpressions, volumeClaimTemplates }: Params): OwnedResources {
+  // the whole selector, as the controller selects (the same text as a PDB's and a NetworkPolicy's drawer)
+  const selectorStr = useMemo(
+    () => (selector ? selectorText({ matchLabels: selector, matchExpressions: selectorExpressions }) : ''),
+    [selector, selectorExpressions],
+  )
 
   const podsKind = kind === 'DaemonSet' || kind === 'ReplicaSet' || kind === 'StatefulSet' || kind === 'Job' || kind === 'Deployment'
   const podsEnabled = podsKind && !!namespace && !!selectorStr

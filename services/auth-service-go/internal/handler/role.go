@@ -157,8 +157,22 @@ func (h *RoleHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
 		response.InternalError(w, r, err)
 		return
 	}
-	response.JSON(w, http.StatusOK, roles)
+	type listedRole struct {
+		model.RoleWithPermissions
+		// ChartBound: a grant of this role takes a global admin or an Admin of the cluster (chartBoundGrantCeiling).
+		ChartBound bool `json:"chart_bound,omitempty"`
+	}
+	out := make([]listedRole, 0, len(roles))
+	for _, role := range roles {
+		slug := auth.RoleGroupSlug(role.Name)
+		_, bound := h.boundSlugs[slug]
+		out = append(out, listedRole{RoleWithPermissions: role, ChartBound: bound && !builtinSlug(slug)})
+	}
+	response.JSON(w, http.StatusOK, out)
 }
+
+// builtinSlug: Read, Write and Admin, which the chart binds only for their grants limited to namespaces.
+func builtinSlug(slug string) bool { return slug == "read" || slug == "write" || slug == "admin" }
 
 // ListPermissions handles GET /auth/permissions (UI checkbox grid)
 func (h *RoleHandler) ListPermissions(w http.ResponseWriter, r *http.Request) {

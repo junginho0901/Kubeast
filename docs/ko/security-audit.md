@@ -59,12 +59,13 @@ curl -s "https://console.example.com/api/v1/cluster/overview?cluster=prod" \
 
 - `sensitive_access`는 노드 셸·파드 exec·Secret 값에 닿는 역할을 표시합니다(`resource.node.shell`, `resource.pod.exec`, `resource.secret.reveal` 또는 이를 포함하는 와일드카드). 관리자 플래그는 이 권한을 세지 않습니다. 사용자 탭에는 없습니다. 전역 역할의 리소스 권한은 그 계정의 토큰에 담기지 않기 때문입니다.
 - 탭마다 **CSV**로 내려받을 수 있습니다(UTF-8 BOM, 수식 주입 방지).
+- 탭마다 다른 목록처럼 페이지를 나눕니다. 화면 높이에 맞춘 페이지에 들어가는 행만큼(또는 목록 아래 "페이지당 건수"에서 고른 25·50·100건) 보이고, 검색은 그 탭의 모든 행에서 찾습니다.
 - 상단 카드에는 다음이 나옵니다.
   - 관리 권한 있는 계정(그중 전체 관리자 — 전역 역할에 `*`가 있어 모든 클러스터에 접근 — 수를 옆에), 휴면 계정, 한 번도 로그인 안 한 계정, 만료가 임박한 키, 활성 임시 권한의 수
   - API 키 탭의 수는 만료된 키까지 셉니다(만료 수를 옆에 표시). "활성 API 키" 카드는 만료 키를 뺍니다.
   - **마지막 검토·다음 기한**(`intervalDays` 뒤, 기한이 지나면 표시)
-- **검토 완료** 버튼을 누르면 그 시점의 보고서 전체를 메모와 함께 저장합니다(`access_reviews`, 보존 기간 `retention.reviewDays`, 기본 3년).
-  지난 검토는 목록(한 쪽 25건, 보관된 전체 수 표시)에서 열어 볼 수 있고, 당시의 CSV로 다시 내려받을 수 있습니다.
+- 페이지 위쪽 **검토 완료** 버튼은 창을 열고, 그 창에서 그 시점의 보고서 전체를 메모와 함께 저장합니다(`access_reviews`, 보존 기간 `retention.reviewDays`, 기본 3년).
+  지난 검토는 목록(탭과 같이 페이지를 나눔, 보관된 전체 수 표시)에서 열어 볼 수 있고, 당시의 CSV로 다시 내려받을 수 있습니다.
 - 권한은 `admin.review.read` · `admin.review.export` · `admin.review.signoff`이고(시스템 Admin 역할에 포함), 감사 액션도 같은 이름입니다.
   이 기능의 쓰기 동작은 서명뿐이며, 권한 변경은 기존 화면에서 합니다.
 - 끄려면 `auth.accessReview.enabled: false`로 설정하세요. 메뉴와 API가 사라집니다.
@@ -194,6 +195,7 @@ AI 도구로 한 exec는 터미널이 아니라 명령 하나와 그 결과이�
 - **다시보기**: Admin → Session recordings(권한 `admin.sessions.read`)에서 재생하거나 `.cast`·텍스트 사본을 내려받을 수 있고, Audit Logs의 exec 행에서도 재생할 수 있습니다.
   녹화를 열 때마다 `admin.session.read`가 감사 로그에 남습니다.
   이 권한은 다른 관리 권한과 달리, 받은 권한이 없는 클러스터까지 모든 클러스터의 녹화에 닿습니다. 감사 담당의 일이 클러스터를 넘기 때문입니다. 녹화에는 터미널에 찍힌 내용이 그대로 있고 Secret 값도 있을 수 있으니, 그 클러스터들에 접근을 주듯 주세요.
+  목록은 한 쪽씩 옵니다(`GET /api/v1/cluster/recordings`, `limit`·`offset`). 그 답의 `X-Kubeast-Total` 헤더가 거른 조건에 맞는 녹화 수이고, 목록 꼬리표와 AI 도구 `session_recordings`가 이 수를 보여 줍니다.
 - **재생기와 CSP**: 재생기(asciinema-player)는 터미널을 WebAssembly로 돌립니다.
   그래서 게이트웨이가 보내는 CSP의 `script-src`에는 `'unsafe-eval'`이 아닌 `'wasm-unsafe-eval'`이 들어 있습니다(`helm/kubeast/files/nginx.conf`).
   앞단의 Ingress나 프록시가 CSP 헤더를 덮어쓴다면 같은 값을 허용해야 재생됩니다. 이 값이 빠지면 재생기가 ▶ 버튼과 `--:--`에서 멈춥니다.
@@ -237,4 +239,6 @@ AI 도구 호출마다 클러스터가 그 호출을 누구로 봤는지와 그 
   - 요청마다 클러스터 자격 증명, 그 사람의 impersonation, 새 `Audit-ID`를 붙여 보내고 목록에 남깁니다.
   - exec·attach·port-forward·로그 스트림도 같은 중계를 거칩니다. 업그레이드된 연결(exec)은 끝날 때 상태 101로 남습니다.
   - kubectl 자체의 탐색 요청(`/api`·`/apis`·`/openapi`)은 중계를 거치지만 목록에는 넣지 않습니다.
-  - tool-server에 `TOOL_SERVER_KUBECTL_PROXY=false`를 주면 kubectl이 `--as`로 클러스터에 바로 붙고, 목록은 없습니다. 그러면 요청을 읽는 곳이 없으므로 [Kubeast 자체 Namespace와 노드 셸의 Namespace](cluster-requirements.md#kubeast-자체-namespace에-누가-닿는가)는 kubectl 인자로 판단하고, Kubeast가 도는 클러스터에서 모든 Namespace의 Secret 목록은 전역 관리자가 아니면 거절합니다.
+  - tool-server에 `TOOL_SERVER_KUBECTL_PROXY=false`를 주면 kubectl이 `--as`로 클러스터에 바로 붙고, 목록은 없습니다. 그러면 요청을 읽는 곳이 없으므로 [Kubeast 자체 Namespace와 노드 셸의 Namespace](cluster-requirements.md#kubeast-자체-namespace에-누가-닿는가)는 kubectl 인자로 판단하고(`pods,secrets`처럼 쉼표로 적은 종류는 하나씩), Kubeast가 도는 클러스터에서 모든 Namespace의 Secret 목록은 전역 관리자가 아니면 거절합니다.
+  - 변수를 그대로 두어 켜져야 할 중계가 시작에 실패하면, 직접 붙지 않고 tool-server를 다시 시작할 때까지 kubectl 도구가 그 까닭과 함께 거절됩니다. 다른 도구와 화면은 그대로입니다.
+  - 두 길 모두 Namespace를 적지 않은 호출은 `default`에서 동작합니다. kubectl이 읽는 kubeconfig의 context에 `kubectl config set-context --namespace`처럼 적어 두고, 등록한 kubeconfig가 적은 Namespace는 쓰지 않습니다. 적지 않으면 tool-server 파드 안의 kubectl은 파드 자신의 Namespace를 씁니다.

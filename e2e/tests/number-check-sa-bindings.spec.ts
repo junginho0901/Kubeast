@@ -42,7 +42,19 @@ const BINDINGS: Array<{ name: string; subject: Subject; applies: boolean; matche
   { name: 'everyone', subject: group('system:authenticated'), applies: false, resource: 'limitranges' },
 ]
 
+// A ClusterRole of URL and resource rules bound to the ServiceAccount itself; URLs of this run, so nothing else grants them.
+const URLS = `${NS}-urls`
+const URL_RULE = [`/e2e-sa-urls-${stamp}`, `/e2e-sa-urls-${stamp}/*`]
+// Another ClusterRole with URLs of its own, bound to it by a RoleBinding only: no URL, as the API server reads a RoleBinding.
+const RB_URLS = `${NS}-rb-urls`
+const RB_URL_RULE = [`/e2e-sa-rb-urls-${stamp}`]
+const RB_URLS_BINDING = 'urls-by-rolebinding'
+const RB_URL_NOTE = 'Not in effect through a RoleBinding; URLs need a ClusterRoleBinding.'
+const LABEL = 'kubeast.io/e2e=sa-bindings'
+const removeClusterObjects = () => kubectl(['delete', 'clusterrolebinding,clusterrole', '-l', LABEL, '--ignore-not-found', '--wait=false'])
+
 function makeFixture() {
+  removeClusterObjects()
   kubectl(['create', 'namespace', NS])
   kubectl(['-n', NS, 'create', 'serviceaccount', SA])
   const objects = BINDINGS.flatMap((b) => [
@@ -50,6 +62,19 @@ function makeFixture() {
     { apiVersion: `${RBAC}/v1`, kind: 'RoleBinding', metadata: { name: b.name, namespace: NS }, roleRef: { apiGroup: RBAC, kind: 'Role', name: b.name }, subjects: [b.subject] },
   ])
   kubectl(['create', '-f', '-'], JSON.stringify({ apiVersion: 'v1', kind: 'List', items: objects }))
+  const labels = { 'kubeast.io/e2e': 'sa-bindings' }
+  kubectl(['create', '-f', '-'], JSON.stringify({ apiVersion: 'v1', kind: 'List', items: [
+    { apiVersion: `${RBAC}/v1`, kind: 'ClusterRole', metadata: { name: URLS, labels }, rules: [
+      { nonResourceURLs: URL_RULE, verbs: ['get'] },
+      { apiGroups: [''], resources: ['nodes'], verbs: ['get'] },
+    ] },
+    { apiVersion: `${RBAC}/v1`, kind: 'ClusterRoleBinding', metadata: { name: URLS, labels }, roleRef: { apiGroup: RBAC, kind: 'ClusterRole', name: URLS }, subjects: [itself] },
+    { apiVersion: `${RBAC}/v1`, kind: 'ClusterRole', metadata: { name: RB_URLS, labels }, rules: [
+      { nonResourceURLs: RB_URL_RULE, verbs: ['get'] },
+      { apiGroups: [''], resources: ['persistentvolumeclaims'], verbs: ['list'] },
+    ] },
+    { apiVersion: `${RBAC}/v1`, kind: 'RoleBinding', metadata: { name: RB_URLS_BINDING, namespace: NS }, roleRef: { apiGroup: RBAC, kind: 'ClusterRole', name: RB_URLS }, subjects: [itself] },
+  ] }))
   // Its pod's RBAC tab reads the same ServiceAccount; no node has to run it.
   kubectl(['create', '-f', '-'], JSON.stringify({
     apiVersion: 'v1', kind: 'Pod', metadata: { name: 'uses-bot', namespace: NS },
@@ -79,8 +104,10 @@ function readSection(page: Page, clickNext = false) {
       title: txt(sec.firstElementChild!.firstElementChild!),
       cards: [...sec.querySelectorAll('div.rounded-sm.border.p-2')].map((c) => {
         const matched = c.querySelector('[data-testid="sa-binding-matched-by"]')
-        return { head: txt(c.firstElementChild!), matchedBy: matched ? txt(matched) : null }
+        const rows = [...c.querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('td')].map(txt))
+        return { head: txt(c.firstElementChild!), matchedBy: matched ? txt(matched) : null, rows }
       }),
+      rulesLoading: [...sec.querySelectorAll('div.rounded-sm.border.p-2')].some((c) => txt(c).includes('Loading rules')),
       pager: pager ? txt(pager) : null,
       more: !!next && !next.disabled,
     }
@@ -90,6 +117,8 @@ function readSection(page: Page, clickNext = false) {
 // Every card, page by page, once the title has its count (the rules load after the bindings).
 async function readCards(page: Page) {
   await expect.poll(async () => (await readSection(page))?.title, { timeout: 30_000 }).toMatch(/^Effective Permissions \(\d+ bindings?\)$/)
+  const rulesShown = () => expect.poll(async () => (await readSection(page))?.rulesLoading, { timeout: 30_000 }).toBe(false)
+  await rulesShown()
   let read = (await readSection(page))!
   const title = read.title
   const cards = [...read.cards]
@@ -97,6 +126,7 @@ async function readCards(page: Page) {
     const pager = read.pager
     await readSection(page, true)
     await expect.poll(async () => (await readSection(page))?.pager, { timeout: 10_000 }).not.toBe(pager)
+    await rulesShown()
     read = (await readSection(page))!
     cards.push(...read.cards)
   }
@@ -108,6 +138,7 @@ test.describe('number check — a ServiceAccount drawer counts what applies to i
 
   test.afterAll(() => {
     kubectl(['delete', 'namespace', NS, '--wait=false', '--ignore-not-found'])
+    removeClusterObjects()
   })
 
   test('the bindings of every subject the API server reads as it', async ({ page, request }) => {
@@ -135,6 +166,17 @@ test.describe('number check — a ServiceAccount drawer counts what applies to i
     for (const b of BINDINGS.filter((x) => x.name !== 'everyone')) {
       expect(canList(b.resource), `${b.name} lets it list ${b.resource}`).toBe(b.applies ? 'yes' : 'no')
     }
+    const canGet = (url: string) => {
+      try {
+        return kubectl(['auth', 'can-i', 'get', url, `--as=${asBot}`, '--as-group=system:serviceaccounts', `--as-group=system:serviceaccounts:${NS}`])
+      } catch {
+        return 'no'
+      }
+    }
+    expect(canGet(URL_RULE[0]), `${URLS} lets it get its URL`).toBe('yes')
+    expect(canGet(`/e2e-sa-urls-${stamp}-other`), 'and no URL it does not name').toBe('no')
+    expect(canList('persistentvolumeclaims'), `${RB_URLS_BINDING} applies to it`).toBe('yes')
+    expect(canGet(RB_URL_RULE[0]), `${RB_URLS_BINDING} gives it no URL of ${RB_URLS}`).toBe('no')
 
     await page.goto(`/?cluster=${CLUSTER}&detail=${encodeURIComponent(`ServiceAccount/${NS}/${SA}`)}`)
     await page.locator(DRAWER).last().waitFor({ timeout: 20_000 })
@@ -144,7 +186,15 @@ test.describe('number check — a ServiceAccount drawer counts what applies to i
     for (const b of BINDINGS.filter((x) => x.applies)) {
       const card = cards.find((c) => c.head === `via ${b.name} → ${b.name}`)
       expect(card?.matchedBy ?? null, b.name).toBe(b.matchedBy ? `Applies through ${b.matchedBy}` : null)
+      // the Role's one rule, its core group written "" as the Role drawer writes it, no URL
+      expect(card?.rows, `${b.name} rules`).toEqual([['""', b.resource, '-', 'list', '-']])
     }
+    // the URLs a rule names in their own column, as kubectl describe's Non-Resource URLs, the resource rule beside it "-" there
+    const urlCard = cards.find((c) => c.head === `via ${URLS} → ${URLS}`)
+    expect(urlCard?.rows, `${URLS} rules`).toEqual([['-', '-', URL_RULE.join(', '), 'get', '-'], ['""', 'nodes', '-', 'get', '-']])
+    // the same through a RoleBinding: the row of URLs says they are not in effect, the resource row beside it nothing
+    const rbUrlCard = cards.find((c) => c.head === `via ${RB_URLS_BINDING} → ${RB_URLS}`)
+    expect(rbUrlCard?.rows, `${RB_URLS_BINDING} rules`).toEqual([['-', '-', `${RB_URL_RULE.join(', ')} ${RB_URL_NOTE}`, 'get', '-'], ['""', 'persistentvolumeclaims', '-', 'list', '-']])
 
     // The pod's RBAC tab counts the same bindings.
     const admin = await login(request)

@@ -152,4 +152,45 @@ describe('the Monitoring Nodes tab', () => {
       expect(chat.current?.data).not.toHaveProperty('refresh_failed')
     })
   })
+
+  // A big cluster's nodes are a page at a time in a box sized to the screen, as the other lists, so the page does
+  // not grow past it; the header's total and the floating chat stay about every node.
+  describe('a cluster with more nodes than a screen holds', () => {
+    const NODES = Array.from({ length: 30 }, (_, i) => ({
+      name: `node-${String(i).padStart(2, '0')}`, cpu: `${100 + i}m`, cpu_percent: `${i}%`, memory: `${200 + i}Mi`, memory_percent: `${i + 1}%`,
+    }))
+    const many = () => {
+      const qc = seeded()
+      qc.setQueryData(['nodes', 'c1'], NODES.map((n) => ({ name: n.name })))
+      qc.setQueryData(KEY, NODES)
+      return qc
+    }
+    const footer = (html: string) => html.match(/data-testid="monitoring-node-pager"[\s\S]*?(Showing [^<]+|\d+개 중 [^<]+)/)?.[1] ?? null
+    const opened = (html: string) => [...html.matchAll(/data-testid="monitoring-node"[\s\S]*?(node-\d{2})/g)].map((m) => m[1])
+
+    it('draws one fitted page of nodes with the footer counting every node', () => {
+      const html = render(many())
+      // before the box is measured a fitted page is 12 rows (useAdaptiveRowsPerPage)
+      expect({ nodes: opened(html), footer: footer(html) }).toEqual({ nodes: NODES.slice(0, 12).map((n) => n.name), footer: 'Showing 1-12 of 30' })
+    })
+
+    it('offers the rows-per-page choice of the other lists, in the screen\'s language', () => {
+      const html = render(many(), 'ko')
+      expect({ size: html.includes('data-testid="page-size"'), footer: footer(html) }).toEqual({ size: true, footer: '30개 중 1-12 표시' })
+    })
+
+    it('shows each node\'s usage as kubectl top prints it, and opens it from the keyboard too', () => {
+      const html = render(many())
+      const row = html.split('data-testid="monitoring-node"')[1] ?? ''
+      expect(['100m', '0%', '200Mi', '1%'].every((v) => row.split('data-testid="monitoring-node"')[0].includes(`>${v}<`))).toBe(true)
+      const opener = html.match(/<(\w+)[^>]*data-testid="monitoring-node"[^>]*>/)?.[0] ?? ''
+      expect(opener.startsWith('<button') || opener.includes('tabindex="0"')).toBe(true)
+    })
+
+    it('keeps the total of every node in the header and tells the floating chat about all of them', () => {
+      const html = render(many())
+      expect(html).toContain('Total 30 nodes')
+      expect(chat.current?.data?.pagination).toMatchObject({ total_count: 30 })
+    })
+  })
 })

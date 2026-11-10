@@ -32,9 +32,12 @@ spec:
           env:
             - name: MIGRATE_ONLY
               value: "true"
+            # kubeast-config's values: a pre-install hook runs before the release creates that ConfigMap.
+            {{- range $key, $value := (include (print $.Template.BasePath "/configmap.yaml") . | fromYaml).data }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
           envFrom:
-            - configMapRef:
-                name: kubeast-config
             - secretRef:
                 name: {{ include "kubeast.secretsName" . }}
           {{- include "kubeast.dbCAVolumeMountsBlock" . | nindent 10 }}

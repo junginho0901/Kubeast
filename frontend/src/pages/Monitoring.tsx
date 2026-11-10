@@ -34,10 +34,11 @@ export default function Monitoring() {
     }
   }, [metricsUnavailable, queryClient])
 
+  // sized to the screen: each tab's list fits its rows and footer in the space left, as the list pages do
   return (
-    <div className="space-y-8">
+    <div className="flex flex-col h-[calc(100vh-4rem)] gap-6">
       {/* Header */}
-      <div className="page-head items-start">
+      <div className="page-head items-start shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{t('monitoring.title')}</h1>
           <p className="mt-2 text-slate-400">{t('monitoring.subtitle')}</p>
@@ -71,7 +72,7 @@ export default function Monitoring() {
       </div>
 
       {metricsUnavailable && (
-        <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-300">
+        <div className="shrink-0 rounded-lg border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-300">
           {t('monitoring.metricsUnavailable', 'Metrics server not available for this cluster')}
         </div>
       )}

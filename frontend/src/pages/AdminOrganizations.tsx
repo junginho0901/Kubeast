@@ -4,8 +4,17 @@ import { Plus, Trash2, Users, X } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ModalOverlay } from '@/components/ModalOverlay'
+import { ListPager } from '@/components/ListPager'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { usePermission } from '@/hooks/usePermission'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useConfirm } from '@/services/confirm'
+import { pageOf } from '@/utils/listPages'
+
+// Admin → Teams: the teams users pick from, each with its member count. The page is as high as the screen and the
+// list pages the teams, as many as fit (or the footer's fixed choice).
+const TEAM_COLUMNS = 2
 
 export default function AdminOrganizations() {
   const queryClient = useQueryClient()
@@ -36,6 +45,10 @@ export default function AdminOrganizations() {
     ? allUsers.filter((u) => u.team === selectedOrg.name)
     : []
 
+  const [page, setPage] = useState(1)
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: teams.length })
+  const shown = pageOf(teams, page, rowsPerPage)
+
   const createMutation = useMutation({
     mutationFn: ({ type, name }: { type: 'team'; name: string }) => api.adminCreateOrganization(type, name),
     onSuccess: (_data, vars) => {
@@ -59,12 +72,12 @@ export default function AdminOrganizations() {
     inputValue: string,
     setInputValue: (v: string) => void,
   ) => (
-    <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-5">
-      <h2 className="text-lg font-semibold text-ink">{title}</h2>
-      <p className="mt-1 text-sm text-slate-400">{subtitle}</p>
+    <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-2xl border border-slate-700 bg-slate-800/50 p-5">
+      <h2 className="text-lg font-semibold text-ink shrink-0">{title}</h2>
+      <p className="mt-1 text-sm text-slate-400 shrink-0">{subtitle}</p>
 
       <form
-        className="mt-4 flex gap-2"
+        className="mt-4 flex gap-2 shrink-0"
         onSubmit={(e) => {
           e.preventDefault()
           const name = inputValue.trim()
@@ -92,29 +105,36 @@ export default function AdminOrganizations() {
       </form>
 
       {createMutation.isError && createMutation.variables?.type === type && (
-        <div className="mt-2 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+        <div className="mt-2 shrink-0 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
           {tr('adminOrg.addError', 'Failed to add. It may already exist.')}
         </div>
       )}
 
-      <div className="mt-4 space-y-1">
-        {items.length === 0 && (
-          <p className="text-sm text-slate-500 py-2">{tr('adminOrg.empty', 'No items registered.')}</p>
-        )}
-        {items.map((item) => {
+      <div ref={bodyRef} className="mt-4 overflow-x-auto flex-1 min-h-0">
+        <table className="w-full text-sm" data-testid="teams-table">
+          <thead ref={theadRef} className="text-slate-400">
+            <tr className="text-left">
+              <th className="px-4 py-2.5">{tr('adminOrg.col.name', 'Name')}</th>
+              <th className="px-4 py-2.5 w-14" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-700/50">
+        {shown.rows.map((item, idx) => {
           const memberCount = canListUsers
             ? allUsers.filter((u) => u.team === item.name).length
             : null
           return (
-            <div
+            <tr
               key={item.id}
-              className="flex items-center justify-between rounded-lg border border-slate-700/50 bg-slate-900/30 px-4 py-2.5 hover:bg-slate-900/60 transition-colors"
+              ref={idx === 0 ? firstRowRef : undefined}
+              className="hover:bg-slate-900/60 transition-colors"
             >
+              <td className="px-4 py-2.5">
               <button
                 type="button"
                 onClick={() => setSelectedOrg(item)}
                 disabled={!canListUsers}
-                className="flex-1 flex items-center gap-2 text-left text-sm text-slate-200 hover:text-primary-300 disabled:cursor-default disabled:hover:text-slate-200"
+                className="flex items-center gap-2 text-left text-sm text-slate-200 hover:text-primary-300 disabled:cursor-default disabled:hover:text-slate-200"
                 title={canListUsers ? tr('adminOrg.viewMembers', 'View members') : ''}
               >
                 <span>{item.name}</span>
@@ -125,6 +145,8 @@ export default function AdminOrganizations() {
                   </span>
                 )}
               </button>
+              </td>
+              <td className="px-4 py-2.5 text-right">
               <button
                 type="button"
                 onClick={async () => {
@@ -143,32 +165,40 @@ export default function AdminOrganizations() {
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
-            </div>
+              </td>
+            </tr>
           )
         })}
+            {items.length === 0 && (
+              <TableEmptyRow colSpan={TEAM_COLUMNS} resource="admin-teams" className="px-4 py-2 text-left text-sm text-slate-500">
+                {tr('adminOrg.empty', 'No items registered.')}
+              </TableEmptyRow>
+            )}
+          </tbody>
+          <AdaptiveTableFillerRows count={rowsPerPage - shown.rows.length} columnCount={TEAM_COLUMNS} cellClassName="py-2.5" />
+        </table>
       </div>
+      <ListPager currentPage={shown.page} totalPages={shown.pages} total={items.length} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="teams-pager" />
     </div>
   )
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
+      <div className="shrink-0">
         <h1 className="text-3xl font-semibold text-ink">{tr('adminOrg.title', 'Team management')}</h1>
         <p className="mt-2 text-slate-400">
           {tr('adminOrg.subtitle', 'Manage the list of Teams that users can select during registration.')}
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6">
-        {renderSection(
-          tr('adminOrg.teamTitle', 'Team'),
-          tr('adminOrg.teamSubtitle', 'Teams / Groups'),
-          teams,
-          'team',
-          newTeam,
-          setNewTeam,
-        )}
-      </div>
+      {renderSection(
+        tr('adminOrg.teamTitle', 'Team'),
+        tr('adminOrg.teamSubtitle', 'Teams / Groups'),
+        teams,
+        'team',
+        newTeam,
+        setNewTeam,
+      )}
 
       {selectedOrg && (
         <ModalOverlay onClose={() => setSelectedOrg(null)}>

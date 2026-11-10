@@ -77,7 +77,7 @@ func handleGetResources(ctx context.Context, args map[string]interface{}, header
 		case scope == "":
 			scope = "default"
 		}
-		if size, ok, err := listSize(ctx, headers, resourceType, namespace, allNamespaces, "", ""); err == nil && ok && size.count > listMax {
+		if size, ok, err := listSize(ctx, headers, resourceType, namespace, allNamespaces, "", ""); err == nil && ok && size.tooMany() {
 			return listTooLarge(resourceType, scope, size)
 		}
 	}

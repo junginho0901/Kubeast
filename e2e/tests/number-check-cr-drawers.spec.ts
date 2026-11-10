@@ -7,6 +7,7 @@ import path from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 
 import { arg } from './number-check.gateway-shared'
+import { goToPageWith } from './list-pages'
 import { CR_CRD, GWPOL_CRD, VPA17_MISSING, crInstances, numbersPolicies, vpa17, vpaFixture, vpaPrintsWideColumns, writeNumbersPolicyStatus, writeVpaStatus, writeWidgetStatus } from './number-check.cr-shared'
 
 // The VPA, CustomResourceDefinition and custom resource drawers, the drawer of a kind Kubeast has no view for, and the
@@ -686,7 +687,11 @@ test.describe('number check — VPA, CRD, custom resource and fallback drawers',
           await p.goto('/timeline?cluster=test2')
           await p.getByTestId('timeline-namespace').click()
           await p.locator('.absolute.top-full button', { hasText: new RegExp(`^\\s*${NS}\\s*$`) }).click()
-          await p.getByRole('button', { name: 'Widget/num-w1', exact: true }).first().click({ timeout: 20_000 })
+          // the list is a page at a time: the page that holds the widget's event
+          const widget = p.getByRole('button', { name: 'Widget/num-w1', exact: true })
+          await p.getByTestId('timeline-row').first().waitFor({ timeout: 20_000 })
+          await goToPageWith(p, 'timeline-pager', async () => (await widget.count()) > 0)
+          await widget.first().click({ timeout: 20_000 })
         },
       }, 'Widget.numbers.kubeast.io/num-w1', async () => customResourceWant(await customResource('widgets.numbers.kubeast.io', 'num-w1')))
       for (const name of ['num-gp-1', 'num-gp-2']) {

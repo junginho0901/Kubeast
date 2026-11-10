@@ -78,7 +78,12 @@ test.describe('AI usage accounting', () => {
     await page.goto('/admin/ai-usage')
     await page.waitForLoadState('networkidle')
     await expect(page.getByRole('heading', { name: /AI 사용량|AI Usage/i })).toBeVisible()
-    await expect(page.getByTestId('ai-usage-table').getByText(EMAIL, { exact: true })).toBeVisible({ timeout: 15_000 })
+    // on whichever page of the rows that fit the screen it falls (most tokens first)
+    const mineOnScreen = page.getByTestId('ai-usage-table').getByText(EMAIL, { exact: true })
+    const next = page.getByTestId('ai-usage-pager').getByRole('button', { name: /^(Next|다음)$/ })
+    await expect(page.getByTestId('ai-usage-table').locator('tbody:not([aria-hidden="true"]) tr td').first()).not.toHaveText(/^(Loading|불러오는 중)/, { timeout: 15_000 })
+    for (let p = 0; p < 100 && (await mineOnScreen.count()) === 0 && !(await next.isDisabled()); p++) await next.click()
+    await expect(mineOnScreen).toBeVisible({ timeout: 15_000 })
   })
 
   test('an Optimization AI explanation is recorded as ai.chat.complete with phase optimization', async ({ request }) => {

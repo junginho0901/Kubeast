@@ -4,6 +4,11 @@ import { useTranslation } from 'react-i18next'
 import { Plus, Trash2, Activity, Loader2, Server, Pencil, Users } from 'lucide-react'
 
 import { ModalOverlay } from '@/components/ModalOverlay'
+import { ListPager } from '@/components/ListPager'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { pageOf } from '@/utils/listPages'
 import { clustersApi, type ClusterMeta, type ConnectionResult } from '@/services/api/clusters'
 import RegisterClusterDialog from './RegisterClusterDialog'
 import EditClusterDialog from './EditClusterDialog'
@@ -14,6 +19,10 @@ import { healthDotClass } from '@/utils/clusterHealth'
 // Admin > Clusters (step 11): list every registered cluster with register /
 // connection-test / delete. Registration & deletion are rollout-free, so the
 // picker (clusters-accessible) is invalidated right after to reflect changes.
+// The page is as high as the screen; the table pages the clusters, as many as
+// fit (or the footer's fixed choice).
+const CLUSTER_COLUMNS = 6
+
 export default function AdminClusters() {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
@@ -31,6 +40,10 @@ export default function AdminClusters() {
     queryFn: () => clustersApi.listClusters(false),
     staleTime: 30_000,
   })
+
+  const [page, setPage] = useState(1)
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: `${isLoading}:${clusters.length}` })
+  const shown = pageOf(clusters, page, rowsPerPage)
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['clusters-all'] })
@@ -62,8 +75,8 @@ export default function AdminClusters() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="page-head items-center">
+    <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
+      <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink flex items-center gap-2">
             <Server className="w-6 h-6 text-primary-500" />
@@ -84,12 +97,12 @@ export default function AdminClusters() {
         </button>
       </div>
 
-      <div className="card overflow-hidden p-0">
+      <div ref={containerRef} className="card overflow-hidden p-0 flex-1 min-h-0 flex flex-col">
         {/* Horizontal scroll so the action buttons (Test/Access/Edit/Delete) are
             never clipped on a narrow / portrait viewport. */}
-        <div className="overflow-x-auto">
+        <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
         <table data-testid="clusters-table" className="w-full text-sm min-w-[820px]">
-          <thead className="bg-slate-900/40 text-slate-400">
+          <thead ref={theadRef} className="bg-slate-900/40 text-slate-400">
             <tr>
               <th className="text-left px-4 py-3">{tr('cluster.admin.name', 'Name')}</th>
               <th className="text-left px-4 py-3">{tr('cluster.admin.mode', 'Mode')}</th>
@@ -105,18 +118,12 @@ export default function AdminClusters() {
                 <td colSpan={6} className="px-4 py-6 text-center text-slate-400">…</td>
               </tr>
             )}
-            {!isLoading && clusters.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
-                  {tr('common.listEmpty', 'No items.')}
-                </td>
-              </tr>
-            )}
-            {clusters.map((c) => {
+            {!isLoading && clusters.length === 0 && <TableEmptyRow colSpan={CLUSTER_COLUMNS} resource="admin-clusters" />}
+            {shown.rows.map((c, idx) => {
               const res = shownTest(testResults[c.id], dataUpdatedAt)
               const checked = healthChecked(c.last_healthcheck_at)
               return (
-                <tr key={c.id} className="text-ink">
+                <tr key={c.id} ref={idx === 0 ? firstRowRef : undefined} className="text-ink">
                   <td className="px-4 py-3">
                     {c.display_name}
                     {c.is_self_cluster && (
@@ -205,8 +212,10 @@ export default function AdminClusters() {
               )
             })}
           </tbody>
+          <AdaptiveTableFillerRows count={rowsPerPage - shown.rows.length} columnCount={CLUSTER_COLUMNS} />
         </table>
         </div>
+        <ListPager currentPage={shown.page} totalPages={shown.pages} total={clusters.length} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="clusters-pager" />
       </div>
 
       {registerOpen && (

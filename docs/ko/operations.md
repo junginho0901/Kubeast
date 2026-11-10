@@ -67,7 +67,10 @@ Kubeast는 정책을 만들거나 데이터를 저장하지 않습니다.
 - **내보내기·서명**:
   - CSV(BOM·CRLF, 수식 문자 무력화)나 JSON으로 내려받을 수 있습니다.
   - 클러스터별로 메모와 함께 서명하면 그 순간의 보고서가 스냅샷으로 저장됩니다(`hygiene_reviews`, `retention.reviewDays` 동안 보관).
+  - Kubeast가 도는 클러스터에서 전역 관리자가 서명한 스냅샷은 다른 사람에게 [Kubeast 자체 Namespace](cluster-requirements.md#kubeast-자체-namespace에-누가-닿는가)의 TLS 인증서·Helm release 발견과 그 건수를 빼고 보입니다. 그 사람이 직접 돌린 점검과 같습니다.
   - 화면에는 마지막 서명과 다음 기한(`intervalDays`, 기본 30일)이 보입니다.
+  - 지난 서명은 최신 것부터 한 쪽씩 옵니다: `GET /api/v1/cluster/hygiene/history?cluster=<id>&limit=<1–100>&offset=<n>`.
+  - 그 답의 `X-Kubeast-Total` 헤더가 그 클러스터에 남은 서명 수이고, 탭의 목록 꼬리표와 AI 도구 `hygiene_history`가 이 수를 보여 줍니다.
   - n8n 같은 자동화는 API 키로 `GET /api/v1/cluster/hygiene?cluster=<id>&format=json`을 호출해 가져가면 됩니다.
   - 항목의 `message`는 영어 문장이고 CSV와 스냅샷에도 이 문장이 들어갑니다. 화면은 같은 내용을 `message_key`·`message_args`로 받아 화면 언어로 보여 줍니다.
 - 권한: 보고서와 이력 보기는 그 클러스터의 `resource.hygiene.scan`입니다. 그 클러스터의 Admin 부여에 들어 있고 Read·Write에는 없습니다. 보고서가 클러스터 전체를 읽으므로 네임스페이스로 한정한 부여는 거절합니다. 전역 역할의 `admin.hygiene.read`는 모든 클러스터의 보고서를 읽습니다. `admin.hygiene.export`·`admin.hygiene.signoff`도 전역이라, 내보내기와 서명은 전체 관리자와 이 키를 가진 역할의 몫입니다.
@@ -170,7 +173,7 @@ Helm 릴리스 작업과 새 객체 생성은 가드 대상이 아닙니다. 노
     - 예: VictoriaMetrics 클러스터는 `monitoring/vmselect-<이름>:8481/select/0/prometheus`
     - API로는 `PATCH`의 `prometheus_service`
   - 적용 순서는 클러스터 주소 → 클러스터 Service → 차트 주소 → 차트 Service → 자동 발견입니다.
-  - 어느 Service인지 찾는 작업은 개요 캐시 식별자(`kubeast:cache`, 그룹 `kubeast:viewer`)로 하고, 결과를 클러스터마다 10분 기억합니다.
+  - 어느 Service인지 찾는 작업은 개요 캐시 식별자(`kubeast:cache`, 그룹 `kubeast:viewer`)로 하고, 결과를 클러스터마다 10분 기억합니다(못 찾았거나 찾다가 실패하면 1분).
     - `/-/healthy`가 403이어도 "있음"으로 칩니다. 그래서 누가 먼저 열었든 결과가 같습니다.
   - 질의 자체는 로그인한 사람의 신원으로 나가므로, Read(`kubeast:viewer`)가 읽으려면 `auth.impersonation.viewerProxyServices`에 그 Prometheus Service를 적어야 합니다(적지 않으면 클러스터가 거부, [역할과 권한](features.md#역할과-권한--기본-역할이-무엇을-할-수-있고-클러스터에는-누구로-가나)의 Read 행).
   - Prometheus가 없으면 단일 VictoriaMetrics도 같은 방식으로 찾고, 상태 API가 저장소 종류(`flavor`)를 알려 줍니다.

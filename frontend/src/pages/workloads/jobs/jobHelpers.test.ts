@@ -79,19 +79,19 @@ describe('what the floating chat is told of the Jobs', () => {
   const job = (status: string, counts: { active?: number; succeeded?: number; failed?: number } = {}) => ({ status, active: 0, succeeded: 0, failed: 0, ...counts })
 
   it('counts a Job retrying after a failed pod as Running', () => {
-    expect(jobChatStats([job('Running', { active: 1, failed: 1 })])).toEqual({ total: 1, completed: 0, running: 1, failed: 0 })
+    expect(jobChatStats([job('Running', { active: 1, failed: 1 })])).toEqual({ total: 1, completed: 0, running: 1, suspended: 0, failed: 0 })
   })
 
-  it('counts a suspended Job, which has no pods running', () => {
-    expect(jobChatStats([job('Suspended')])).toEqual({ total: 1, completed: 0, running: 1, failed: 0 })
+  it('counts a suspended Job, which has no pods running, as Suspended', () => {
+    expect(jobChatStats([job('Suspended')])).toEqual({ total: 1, completed: 0, running: 0, suspended: 1, failed: 0 })
   })
 
   it('counts a Job past its deadline as Failed, whose pods were deleted and did not fail', () => {
-    expect(jobChatStats([job('Failed')])).toEqual({ total: 1, completed: 0, running: 0, failed: 1 })
+    expect(jobChatStats([job('Failed')])).toEqual({ total: 1, completed: 0, running: 0, suspended: 0, failed: 1 })
   })
 
   it('counts a Job that succeeded on a later try as Completed', () => {
-    expect(jobChatStats([job('Complete', { succeeded: 1, failed: 2 })])).toEqual({ total: 1, completed: 1, running: 0, failed: 0 })
+    expect(jobChatStats([job('Complete', { succeeded: 1, failed: 2 })])).toEqual({ total: 1, completed: 1, running: 0, suspended: 0, failed: 0 })
   })
 
   it('is the same numbers as the cards for every status kubectl prints', () => {
@@ -178,32 +178,39 @@ describe('jobCompletionsCell', () => {
   })
 })
 
-// Completed and Failed are the Jobs that reached that condition, as e2e number-check-lists counts them; every other Job
-// has not ended, and sits in Running, so the cards add up to the total.
+// Completed and Failed are the Jobs that reached that condition and Suspended the Jobs whose row reads Suspended, as e2e
+// number-check-lists counts them; every other Job has not ended, and sits in Running, so the cards add up to the total.
 describe('jobSummary', () => {
   const statuses = (...list: string[]) => list.map((status) => ({ status }))
 
   it('counts a Job on its way to Failed as not ended yet', () => {
-    expect(jobSummary(statuses('FailureTarget'))).toEqual({ total: 1, completed: 0, running: 1, failed: 0 })
+    expect(jobSummary(statuses('FailureTarget'))).toEqual({ total: 1, completed: 0, running: 1, suspended: 0, failed: 0 })
   })
 
   it('counts a Job on its way to Complete as not ended yet', () => {
-    expect(jobSummary(statuses('SuccessCriteriaMet'))).toEqual({ total: 1, completed: 0, running: 1, failed: 0 })
+    expect(jobSummary(statuses('SuccessCriteriaMet'))).toEqual({ total: 1, completed: 0, running: 1, suspended: 0, failed: 0 })
   })
 
   it('counts a Job being deleted as not ended yet', () => {
-    expect(jobSummary(statuses('Terminating'))).toEqual({ total: 1, completed: 0, running: 1, failed: 0 })
+    expect(jobSummary(statuses('Terminating'))).toEqual({ total: 1, completed: 0, running: 1, suspended: 0, failed: 0 })
   })
 
-  it('counts a suspended Job as not ended yet', () => {
-    expect(jobSummary(statuses('Suspended'))).toEqual({ total: 1, completed: 0, running: 1, failed: 0 })
+  it('counts a suspended Job as Suspended, not Running', () => {
+    expect(jobSummary(statuses('Suspended'))).toEqual({ total: 1, completed: 0, running: 0, suspended: 1, failed: 0 })
+  })
+
+  it('counts in Running no Job whose row reads Suspended', () => {
+    const rows = statuses('Suspended', 'Suspended', 'Complete')
+    const got = jobSummary(rows)
+    expect(got.running).toBe(rows.filter((r) => r.status === 'Running').length)
+    expect(got.suspended).toBe(2)
   })
 
   it('adds up to the total for every status kubectl prints', () => {
     const list = statuses('Complete', 'Failed', 'Running', 'Suspended', 'Terminating', 'FailureTarget', 'SuccessCriteriaMet')
     const got = jobSummary(list)
-    expect(got).toEqual({ total: 7, completed: 1, running: 5, failed: 1 })
-    expect(got.completed + got.running + got.failed).toBe(got.total)
+    expect(got).toEqual({ total: 7, completed: 1, running: 4, suspended: 1, failed: 1 })
+    expect(got.completed + got.running + got.suspended + got.failed).toBe(got.total)
   })
 })
 

@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import AxeBuilder from '@axe-core/playwright'
 import { test, expect, type Page } from '@playwright/test'
+
+import { footersThatFit, listProblems, listsOnScreen, readExemptions, skippedTables } from './list-guard'
 
 // Every screen the sidebar lists (the admin ones too) and the account page, in each colour mode:
 // - a header row (.page-head) whose title and buttons do not fit sends the buttons to the next line instead of pushing
@@ -7,17 +12,28 @@ import { test, expect, type Page } from '@playwright/test'
 // - the buttons placed in a header row are btn-primary, and buttons with words on them look the same for one job
 //   (a grey Create on the kinds a controller makes, four looks for Delete, three for CSV);
 // - text is readable: axe-core's color-contrast rule (WCAG 2.2 SC 1.4.3, 4.5:1 or 3:1 for large text), on the screens
-//   and on a stored AI answer with its tool boxes open (prose-invert was white on the light mode's off-white).
+//   and on a stored AI answer with its tool boxes open (prose-invert was white on the light mode's off-white);
+// - at 1440×900 a table of rows has a list footer in its card and a page with a list footer does not scroll
+//   (list-guard.ts; Access review's tabs once listed 500 accounts down the page and Admin → Users' footer sat two
+//   screens down).
 
 const MODES = ['default', 'dark', 'light'] as const
 const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
+const LIST_EXEMPTIONS = readExemptions(JSON.parse(readFileSync(join(__dirname, 'list-guard-exempt.json'), 'utf8')))
 
 async function screens(page: Page) {
   await page.goto('/?cluster=self')
   const nav = page.getByTestId('sidebar-nav')
   await expect(nav.locator('a[href^="/"]').first()).toBeAttached()
-  const paths = [...new Set(await nav.locator('a[href^="/"]').evaluateAll((as) => as.map((a) => a.getAttribute('href') ?? '')))]
-  expect(paths.length, 'the sidebar lists every screen').toBeGreaterThan(70)
+  const hrefs = async () => [...new Set(await nav.locator('a[href^="/"]').evaluateAll((as) => as.map((a) => a.getAttribute('href') ?? '')))]
+  // some entries come after the features and permissions answers: read the list once it holds still for a second
+  let paths: string[] = []
+  await expect.poll(async () => {
+    const before = (await hrefs()).length
+    await page.waitForTimeout(1_000)
+    paths = await hrefs()
+    return paths.length === before ? paths.length : 0
+  }, { timeout: 30_000, message: 'the sidebar lists every screen' }).toBeGreaterThan(70)
   return [...paths, '/account']
 }
 
@@ -39,6 +55,17 @@ async function lowContrast(page: Page, where: string, include?: string) {
     const d = (n.any[0]?.data ?? {}) as { fgColor?: string; bgColor?: string; contrastRatio?: number }
     return `${where}: ${n.target.join(' ')} (${d.fgColor} on ${d.bgColor}, ${d.contrastRatio}:1)`
   }))
+}
+
+// How far the page scrolls past the screen, read again for a moment while it does (a list still coming in).
+async function pageOverflow(page: Page): Promise<number> {
+  let over = 0
+  for (let i = 0; i < 4; i++) {
+    over = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight)
+    if (over <= 1) break
+    await page.waitForTimeout(500)
+  }
+  return over
 }
 
 // the job of a button with words on it, from the words (English or Korean)
@@ -75,6 +102,20 @@ test.describe('every screen in every colour mode', () => {
       }
     }
     expect(slid).toEqual([])
+  })
+
+  test('at 1440×900 a table of rows has its list footer, and a page with a list footer fits the screen', async ({ page }) => {
+    test.setTimeout(600_000)
+    await page.setViewportSize({ width: 1440, height: 900 })
+    const found: string[] = []
+    for (const screen of await screens(page)) {
+      await open(page, screen, 'default')
+      await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {})
+      const lists = await page.evaluate(listsOnScreen, { skip: skippedTables(screen, LIST_EXEMPTIONS) })
+      const overflow = footersThatFit(screen, lists, LIST_EXEMPTIONS).length > 0 ? await pageOverflow(page) : null
+      found.push(...listProblems(screen, lists, LIST_EXEMPTIONS, overflow))
+    }
+    expect(found, 'lists that grow with the data without pages, and list pages that scroll').toEqual([])
   })
 
   for (const mode of MODES) {

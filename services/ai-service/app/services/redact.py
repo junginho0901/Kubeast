@@ -1237,13 +1237,14 @@ def _mask_secret_fields(value: dict, stats: Stats) -> None:
 def redact_object(value: Any, opts: Optional[Options] = None, _secret: bool = False, _stats: Optional[Stats] = None) -> Tuple[Any, Stats]:
     """Redact a decoded JSON/YAML value in place: credential-looking keys lose
     their values, a container env entry's value follows its name, every string
-    goes through redact_text, and a mapping with kind: Secret loses
-    data/stringData wherever they sit under it, with the last-applied annotation
-    of any annotations under it."""
+    goes through redact_text, and a mapping with kind: Secret (or an item
+    without a kind in a SecretList) loses data/stringData wherever they sit
+    under it, with the last-applied annotation of any annotations under it."""
     stats = _stats if _stats is not None else Stats()
     o = opts or from_env()
     if isinstance(value, dict):
         secret = _secret or value.get("kind") == "Secret"
+        secret_list = value.get("kind") == "SecretList"
         skip = set()
         if secret:
             _mask_secret_fields(value, stats)
@@ -1270,6 +1271,12 @@ def redact_object(value: Any, opts: Optional[Options] = None, _secret: bool = Fa
                     if _holds_credential(k, item):
                         v[i] = "<REDACTED:" + k + ">"
                         stats.add("key_name", 1)
+            if secret_list and k == "items" and isinstance(v, list):
+                # A typed list's items carry no kind of their own; kubectl reads them as the list's (apimachinery decodeToList).
+                for i, item in enumerate(v):
+                    own_kind = isinstance(item, dict) and isinstance(item.get("kind"), str) and item["kind"] != ""
+                    v[i], _ = redact_object(item, o, secret or (isinstance(item, dict) and not own_kind), stats)
+                continue
             value[k], _ = redact_object(v, o, secret, stats)
         return value, stats
     if isinstance(value, list):

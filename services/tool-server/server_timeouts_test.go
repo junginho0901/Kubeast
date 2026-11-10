@@ -9,8 +9,9 @@ import (
 	"time"
 )
 
-// A tool's answer reaches ai-service: a read of k8s-service ends inside the call's time, the call's time and its
-// answer's write inside the server's write limit, and that inside the time ai-service waits (tool_server_client.py).
+// A tool's answer reaches ai-service: a read of k8s-service ends inside the call's time, the call's time, a big answer's
+// wait for its place past it and its write inside the server's write limit, and that inside the time ai-service waits
+// (tool_server_client.py).
 func TestAToolsAnswerIsWrittenBeforeItsCallerStopsWaiting(t *testing.T) {
 	src, err := os.ReadFile("../ai-service/app/services/tool_server_client.py")
 	if err != nil {
@@ -26,7 +27,8 @@ func TestAToolsAnswerIsWrittenBeforeItsCallerStopsWaiting(t *testing.T) {
 	}
 	caller := time.Duration(seconds * float64(time.Second))
 	write := newHTTPServer("0", http.NotFoundHandler()).WriteTimeout
-	if !(featureHTTP.Timeout < defaultTimeout && defaultTimeout < write && write < caller) {
-		t.Errorf("k8s-service read %v, call %v, write limit %v, ai-service waits %v: want each inside the next", featureHTTP.Timeout, defaultTimeout, write, caller)
+	placeBy := write - answerWriteMargin
+	if !(featureHTTP.Timeout < defaultTimeout && defaultTimeout < placeBy && placeBy < write && write < caller) {
+		t.Errorf("k8s-service read %v, call %v, big answer's place by %v, write limit %v, ai-service waits %v: want each inside the next", featureHTTP.Timeout, defaultTimeout, placeBy, write, caller)
 	}
 }

@@ -2,6 +2,7 @@ package ws
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -66,6 +67,8 @@ func nodeToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	if len(roles) == 0 {
 		roles = append(roles, "<none>")
 	}
+	// kubectl's order, as formatNodeSummary: in a map's order the opening update of a Node drawer differed from its answer
+	sort.Strings(roles)
 
 	var internalIP, externalIP string
 	if status != nil {
