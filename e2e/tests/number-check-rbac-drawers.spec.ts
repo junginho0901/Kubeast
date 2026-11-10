@@ -66,18 +66,18 @@ async function readDrawer(page: Page): Promise<View> {
       return out
     }
     const view: View = { badges: {}, counts: {}, sections: {} }
-    for (const b of root.querySelectorAll('span.rounded-full')) {
+    for (const b of root.querySelectorAll('[data-summary-badge]')) {
       const bm = has(b, 'py-0.5') ? /^([^:]+): (.*)$/.exec(txt(b)) : null
       if (bm) view.badges[bm[1]] = bm[2]
     }
-    for (const sec of root.querySelectorAll('div.rounded-lg.border')) {
+    for (const sec of root.querySelectorAll('[data-detail-section]')) {
       const title = sec.firstElementChild?.firstElementChild
       if (!title || title.tagName !== 'P') continue
       const m = /^(.*) \((\d+)\)$/.exec(txt(title))
       const name = m ? m[1] : txt(title)
       if (m) view.counts[name] = Number(m[2])
       const divs = [...sec.querySelectorAll('div')]
-      const cards = divs.filter((d) => has(d, 'rounded-sm', 'border'))
+      const cards = divs.filter((d) => d.hasAttribute('data-detail-card'))
       const inCard = (el: Element) => cards.some((c) => c.contains(el))
       const within = (el: Element, selector: string) => {
         const c = el.closest(selector)
@@ -86,7 +86,7 @@ async function readDrawer(page: Page): Promise<View> {
       const rows: Record<string, string[]> = {}
       for (const g of divs.filter((d) => has(d, 'grid') && !inCard(d))) {
         const spans = [...g.children].filter((c) => c.tagName === 'SPAN')
-        if (spans.length === 2 && g.children.length === 2 && has(spans[0], 'text-slate-400')) (rows[txt(spans[0])] ??= []).push(txt(spans[1]))
+        if (spans.length === 2 && g.children.length === 2 && g.hasAttribute('data-detail-row')) (rows[txt(spans[0])] ??= []).push(txt(spans[1]))
       }
       const spans = [...sec.querySelectorAll('span')]
       view.sections[name] = {
@@ -96,15 +96,15 @@ async function readDrawer(page: Page): Promise<View> {
           return { lines: Object.keys(lines).length ? lines : { '#': txt(c) }, tables: [...c.querySelectorAll('table')].map(tableOf) }
         }),
         tables: [...sec.querySelectorAll('table')].filter((t) => !inCard(t)).map(tableOf),
-        chips: spans.filter((s) => has(s, 'rounded-sm', 'border')).map(txt),
+        chips: spans.filter((s) => s.hasAttribute('data-detail-chip')).map(txt),
         // a key=value tag: its key and its value, not the tooltip
-        tags: spans.filter((s) => has(s, 'rounded-full') && !has(s, 'py-0.5'))
+        tags: spans.filter((s) => s.hasAttribute('data-detail-tag'))
           .map((s) => (s.children.length >= 3 ? `${txt(s.children[0])}=${txt(s.children[2])}` : txt(s))),
         notes: [...sec.querySelectorAll('p')].filter((p) => p !== title && !inCard(p)).map(txt),
         lines: linesOf(divs.filter((d) => !inCard(d))),
         marks: [...sec.querySelectorAll('span, div, button')]
           .filter((el) => el.children.length === 0 && txt(el) !== '' && !inCard(el)
-            && !['table', 'p', 'div.grid', 'span.rounded-full', 'span.rounded-sm.border'].some((s) => within(el, s)))
+            && !['table', 'p', 'div.grid', '[data-detail-tag]', '[data-summary-badge]', '[data-detail-chip]'].some((s) => within(el, s)))
           .map(txt),
       }
     }
@@ -675,7 +675,7 @@ test.describe('number check — cluster configuration, RBAC and admission drawer
         } else {
           await page.goto(`${x.list}?cluster=${CLUSTER}${x.namespaced ? `&namespace=${NS}` : ''}`)
           // the list's search box, then the row's name cell (the names here have no regular expression characters)
-          await page.locator('main input.h-12').first().fill(name)
+          await page.locator('main input[type="text"][placeholder]').first().fill(name)
           const exact = { hasText: new RegExp(`^\\s*${name}\\s*$`) }
           await page.locator('main tbody tr').filter({ has: page.locator('td', exact) }).first().locator('td', exact).click({ timeout: 20_000 })
         }

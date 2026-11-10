@@ -39,7 +39,7 @@ const byPhase = (p: KPod) => !namesError(p) && !p.metadata.deletionTimestamp
 
 const rows = (page: Page) => page.locator('table tbody tr.cursor-pointer')
 const card = async (page: Page, label: RegExp) =>
-  Number(await page.locator('div.rounded-lg.border').filter({ has: page.getByText(label) }).locator('.text-lg').first().innerText())
+  Number(await page.locator('main').getByText(label, { exact: true }).locator('xpath=parent::div[count(*)=2]/*[2]').innerText())
 const search = (page: Page) => page.getByPlaceholder(/Search pods|파드/i)
 
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {

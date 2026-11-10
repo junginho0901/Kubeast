@@ -75,12 +75,12 @@ async function readView(page: Page): Promise<View> {
   const sections = await page.locator(DRAWER).last().evaluate((root, titles) => {
     const words = (el: Element) => (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim()
     const out: Record<string, Record<string, string>> = {}
-    for (const sec of root.querySelectorAll('div.rounded-lg.border')) {
+    for (const sec of root.querySelectorAll('[data-detail-section]')) {
       const title = sec.firstElementChild?.firstElementChild
       if (!title || title.tagName !== 'P' || !titles.includes(words(title))) continue
       const rows: Record<string, string> = {}
       for (const g of sec.querySelectorAll('div.grid')) {
-        if (g.children.length === 2 && [...g.children].every((c) => c.tagName === 'SPAN') && g.children[0].classList.contains('text-slate-400')) {
+        if (g.children.length === 2 && [...g.children].every((c) => c.tagName === 'SPAN') && g.hasAttribute('data-detail-row')) {
           rows[words(g.children[0])] = words(g.children[1])
         }
       }
@@ -378,7 +378,7 @@ test.describe('number check — one Kind of two groups where a screen picked by 
         const backendRow = (drawer: Locator, group: string) => drawer.locator('table').filter({ has: page.locator('th', { hasText: /^Weight$/ }) })
           .locator('tbody tr').filter({ has: page.locator('td:nth-child(4)', { hasText: new RegExp(`^${group.replace(/\./g, '\\.')}$`) }) })
         const parentLink = (drawer: Locator, section: string) => route.kind === 'HTTPRoute'
-          ? drawer.locator('div.rounded-sm.border').filter({ hasText: `section=${section}` }).getByRole('button', { name: WIDGET, exact: true })
+          ? drawer.locator('[data-detail-card]').filter({ hasText: `section=${section}` }).getByRole('button', { name: WIDGET, exact: true })
           : drawer.locator('table').filter({ has: page.locator('th', { hasText: /^Section$/ }) }).locator('tbody tr')
             .filter({ has: page.locator('td:nth-child(5)', { hasText: new RegExp(`^${section}$`) }) }).getByRole('button', { name: WIDGET, exact: true })
 

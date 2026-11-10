@@ -228,8 +228,8 @@ test.describe('the screens say what they know', () => {
     })
     await page.goto(`/timeline?cluster=${CLUSTER}`)
     await expect(page.getByTestId('timeline-rollouts-error')).toHaveAttribute('title', 'replicasets is forbidden', { timeout: 20_000 })
-    const card = page.locator('div.border.rounded-lg').filter({ has: page.getByText(/^(Rollouts|롤아웃)$/) })
-    await expect(card.locator('p.text-2xl')).toHaveText('-')
+    const card = page.locator('main').getByText(/^(Rollouts|롤아웃)$/, { exact: true }).locator('xpath=..')
+    await expect(card.locator(':scope > :last-child')).toHaveText('-')
   })
 
   test('Prometheus with no DCGM series is "-" on the GPU cards, and a plugin not found names its company', async ({ page }) => {

@@ -86,20 +86,20 @@ async function readDrawer(page: Page): Promise<View> {
       return out
     }
     const view: View = { badges: {}, rows: {}, counts: {}, sections: {} }
-    for (const sec of root.querySelectorAll('div.rounded-lg.border')) {
+    for (const sec of root.querySelectorAll('[data-detail-section]')) {
       const title = sec.firstElementChild?.firstElementChild
       if (!title || title.tagName !== 'P') continue
       const m = /^(.*) \((\d+)\)$/.exec(txt(title))
       const name = m ? m[1] : txt(title)
       if (m) view.counts[name] = Number(m[2])
-      const cards = [...sec.querySelectorAll('div')].filter((d) => has(d, 'rounded-sm', 'border'))
+      const cards = [...sec.querySelectorAll('div')].filter((d) => d.hasAttribute('data-detail-card'))
       const inCard = (el: Element) => cards.some((c) => c.contains(el))
       const divs = [...sec.querySelectorAll('div')]
       for (const g of divs.filter((d) => has(d, 'grid'))) {
         const spans = [...g.children].filter((c) => c.tagName === 'SPAN')
-        if (spans.length === 2 && g.children.length === 2 && has(spans[0], 'text-slate-400')) (view.rows[txt(spans[0])] ??= []).push(txt(spans[1]))
+        if (spans.length === 2 && g.children.length === 2 && g.hasAttribute('data-detail-row')) (view.rows[txt(spans[0])] ??= []).push(txt(spans[1]))
       }
-      for (const b of sec.querySelectorAll('span.rounded-full')) {
+      for (const b of sec.querySelectorAll('[data-summary-badge]')) {
         const bm = b.className.includes('py-0.5') ? /^([^:]+): (.*)$/.exec(txt(b)) : null
         if (bm) view.badges[bm[1]] = bm[2]
       }
@@ -109,7 +109,7 @@ async function readDrawer(page: Page): Promise<View> {
           return { lines: Object.keys(lines).length ? lines : { '#': txt(c) }, tables: [...c.querySelectorAll('table')].map(tableOf) }
         }),
         tables: [...sec.querySelectorAll('table')].filter((t) => !inCard(t)).map(tableOf),
-        chips: [...sec.querySelectorAll('span')].filter((s) => has(s, 'rounded-sm', 'border')).map(txt),
+        chips: [...sec.querySelectorAll('span')].filter((s) => s.hasAttribute('data-detail-chip')).map(txt),
         notes: [...sec.querySelectorAll('p')].filter((p) => p !== title && !inCard(p)).map(txt),
         lines: linesOf(divs.filter((d) => !inCard(d))),
       }

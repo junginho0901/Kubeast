@@ -279,7 +279,7 @@ test.describe('number check — AMD and Intel GPUs on the GPU screens', () => {
       const rows = [...document.querySelectorAll('main table tbody tr')].map((tr) => [...tr.querySelectorAll('td')].map(cell))
         .filter((r) => r.length === heads.length && r.some((c) => c !== ''))
       const cards: Record<string, string> = {}
-      for (const b of document.querySelectorAll('main div.rounded-lg.border')) {
+      for (const b of document.querySelectorAll('main [data-list-summary-card]')) {
         const lines = [...b.children] as HTMLElement[]
         if (lines.length === 2 && /^(\d+|-)$/.test(lines[1].innerText.trim())) cards[lines[0].innerText.trim()] = lines[1].innerText.trim()
       }
@@ -539,7 +539,7 @@ test.describe('number check — AMD and Intel GPUs on the GPU screens', () => {
       await page.goto(url('/gpu/nodes', `&detail=${encodeURIComponent(`Node/${name}`)}`))
       await page.locator(DRAWER).last().waitFor({ timeout: 20_000 })
       await expect.poll(() => page.locator(DRAWER).last().evaluate((root) => {
-        for (const p of root.querySelectorAll('div.rounded-lg.border > div.flex > p.text-xs')) {
+        for (const p of root.querySelectorAll('[data-detail-section] > div:first-child > p')) {
           if ((p as HTMLElement).innerText.trim() !== 'GPU Info') continue
           return [...p.parentElement!.parentElement!.querySelectorAll('div.grid')].map((g) => [...g.children].map((s) => (s as HTMLElement).innerText.trim()))
         }

@@ -82,7 +82,7 @@ const CARDS: Record<string, RegExp> = {
   Error: /^(Error|오류)$/, Restarted: /^(Restarted|재시작 이력)$/, Completed: /^(Completed|완료)$/,
 }
 const card = async (page: Page, label: RegExp) =>
-  Number(await page.locator('div.rounded-lg.border').filter({ has: page.getByText(label) }).locator('.text-lg').first().innerText())
+  Number(await page.locator('main').getByText(label, { exact: true }).locator('xpath=parent::div[count(*)=2]/*[2]').innerText())
 const screenCards = async (page: Page) => {
   const out: Record<string, number> = {}
   for (const [name, label] of Object.entries(CARDS)) out[name] = await card(page, label)
@@ -169,7 +169,7 @@ test.describe('Pods being deleted', () => {
     for (const [name, want] of [['term-ready', 'Terminating'], ['term-init', 'Terminating'], ['gated', 'SchedulingGated'], ['done-held', 'Completed']] as const) {
       expect(statuses(NS)[name]).toBe(want)
       await page.goto(`/workloads/pods?cluster=${CLUSTER}&namespace=${NS}&detail=${encodeURIComponent(`Pod/${NS}/${name}`)}`)
-      const tile = page.locator('div.rounded-sm.border').filter({ has: page.getByText(/^(Status|상태)$/) }).first().locator('div').nth(1)
+      const tile = page.getByTestId('pod-drawer-status')
       await expect(tile).toHaveText(want, { timeout: 20_000 })
     }
   })
