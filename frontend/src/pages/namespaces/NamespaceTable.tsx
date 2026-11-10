@@ -104,7 +104,7 @@ export default function NamespaceTable({
                         ? labelEntries.slice(0, 2).map(([k, v]) => (
                             <span
                               key={k}
-                              className="inline-block rounded-full border border-slate-700 bg-slate-800/80 px-2 py-0.5 text-slate-300 truncate max-w-[160px]"
+                              className="inline-block rounded-lg bg-slate-700/40 px-2 py-0.5 text-slate-300 truncate max-w-[160px]"
                               title={`${k}=${v}`}
                             >
                               {`${k}=${v}`}

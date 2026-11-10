@@ -41,7 +41,7 @@ export function ResourceQuotaFilters({
             placeholder={tr('resourceQuotas.searchPlaceholder', 'Search resource quotas by name or namespace...')}
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="h-10 w-full pl-10 pr-4 bg-slate-700 border border-control rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
       </div>
@@ -49,7 +49,7 @@ export function ResourceQuotaFilters({
         <button
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
-          className="h-12 w-full flex items-center justify-between px-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink"
+          className="h-10 w-full flex items-center justify-between px-4 bg-slate-700 border border-control rounded-lg text-sm text-ink"
         >
           <span className="truncate">
             {selectedNamespace === 'all'
@@ -62,7 +62,7 @@ export function ResourceQuotaFilters({
           <div className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto rounded-lg bg-slate-800 border border-slate-600 shadow-xl">
             <button
               type="button"
-              className={`w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 ${
+              className={`w-full break-all text-left px-4 py-2.5 text-sm hover:bg-slate-700 ${
                 selectedNamespace === 'all' ? 'text-primary-400 font-medium' : 'text-ink'
               }`}
               onClick={() => { onNamespaceChange('all'); setIsOpen(false) }}
@@ -73,7 +73,7 @@ export function ResourceQuotaFilters({
               <button
                 key={ns.name}
                 type="button"
-                className={`w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 ${
+                className={`w-full break-all text-left px-4 py-2.5 text-sm hover:bg-slate-700 ${
                   selectedNamespace === ns.name ? 'text-primary-400 font-medium' : 'text-ink'
                 }`}
                 onClick={() => { onNamespaceChange(ns.name); setIsOpen(false) }}

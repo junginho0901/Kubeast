@@ -202,19 +202,19 @@ export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             data-testid="admission-policies-search"
-            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="h-10 w-full pl-10 pr-4 bg-slate-700 border border-control rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 shrink-0">
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('admissionPolicies.stats.total', 'Total Policies')}</p>
-          <p className="text-lg text-ink font-semibold mt-1" data-testid="admission-policies-total">{cards.total}</p>
+      <div className="grid grid-cols-2 gap-x-0 gap-y-1 rounded-lg border border-slate-700/70 bg-slate-800 shrink-0">
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-slate-400">{tr('admissionPolicies.stats.total', 'Total Policies')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1" data-testid="admission-policies-total">{cards.total}</p>
         </div>
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('admissionPolicies.stats.bindings', 'Total Bindings')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.bindings}</p>
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-slate-400">{tr('admissionPolicies.stats.bindings', 'Total Bindings')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.bindings}</p>
         </div>
       </div>
 

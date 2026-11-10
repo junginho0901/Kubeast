@@ -151,7 +151,7 @@ export default function ClusterNodes() {
           <h1 className="text-3xl font-semibold text-ink">{tr('nodes.title', 'Nodes')}</h1>
           <p className="mt-2 text-slate-400">{tr('nodes.subtitle', 'Inspect cluster node status and capacity.')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canCreate && (
             <button
               type="button"
@@ -184,7 +184,7 @@ export default function ClusterNodes() {
           placeholder={tr('nodes.searchPlaceholder', 'Search nodes by name...')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="h-10 w-full pl-10 pr-4 bg-slate-700 border border-control rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         />
       </div>
 

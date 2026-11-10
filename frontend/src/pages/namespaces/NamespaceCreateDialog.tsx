@@ -77,14 +77,14 @@ export default function NamespaceCreateDialog({ onClose, onCreated, tr }: Props)
           }
         }}
         placeholder={tr('namespaces.create.namePlaceholder', 'Enter namespace name')}
-        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+        className="w-full h-10 px-3 text-sm bg-slate-800 border border-control rounded-lg text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500"
         autoFocus
       />
       <p className="mt-1 text-xs text-slate-400">
         {tr('namespaces.create.nameHelp', 'Lowercase, numbers, and hyphens only (max 63 chars)')}
       </p>
       {newNsName && !isValidNsName(newNsName) && (
-        <p className="mt-1 text-xs text-red-400">
+        <p className="mt-1 text-xs text-red-400 break-words">
           {newNsName.length > 63
             ? tr('namespaces.create.nameTooLong', 'Name must be 63 characters or less.')
             : tr('namespaces.create.nameInvalid', 'Invalid name.')}

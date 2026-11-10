@@ -205,12 +205,12 @@ webhooks:
             {tr('mutatingWebhooks.subtitle', 'Manage mutating admission webhook configurations in the cluster.')}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canCreate && (
             <button
               type="button"
               onClick={() => setCreateDialogOpen(true)}
-              className="btn btn-primary flex items-center gap-2"
+              className="btn btn-primary max-w-full whitespace-normal flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               {tr('mutatingWebhooks.create', 'Create MutatingWebhookConfiguration')}
@@ -239,19 +239,19 @@ webhooks:
             placeholder={tr('mutatingWebhooks.searchPlaceholder', 'Search by name...')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="h-10 w-full pl-10 pr-4 bg-slate-700 border border-control rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 shrink-0">
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('mutatingWebhooks.stats.total', 'Total Configurations')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
+      <div className="grid grid-cols-2 gap-x-0 gap-y-1 rounded-lg border border-slate-700/70 bg-slate-800 shrink-0">
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-slate-400">{tr('mutatingWebhooks.stats.total', 'Total Configurations')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.total}</p>
         </div>
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('mutatingWebhooks.stats.totalWebhooks', 'Total Webhooks')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.totalWebhooks}</p>
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-slate-400">{tr('mutatingWebhooks.stats.totalWebhooks', 'Total Webhooks')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.totalWebhooks}</p>
         </div>
       </div>
 

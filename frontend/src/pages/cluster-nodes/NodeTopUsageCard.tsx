@@ -41,8 +41,8 @@ export default function NodeTopUsageCard({
 
   return (
     <div className="card shrink-0">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-ink">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-semibold text-ink">
           {tr('nodes.top.title', 'Top nodes by resource usage')}
         </h2>
         <Server className="w-4 h-4 text-slate-400" />
@@ -54,7 +54,7 @@ export default function NodeTopUsageCard({
       ) : isMetricsError ? (
         <p className="text-sm text-slate-400">{tr('nodes.top.error', 'Metrics unavailable')}</p>
       ) : topNodes.length > 0 ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {topNodes.map((node, index) => {
             const cpuPercent = parseFloat(node.cpu_percent)
             const memPercent = parseFloat(node.memory_percent)
@@ -64,18 +64,18 @@ export default function NodeTopUsageCard({
                 key={node.name}
                 onClick={() => openDetail({ kind: 'Node', name: node.name })}
                 data-testid="node-top-usage"
-                className="block w-full text-left rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-3 hover:bg-slate-800 transition-colors cursor-pointer"
+                className="block min-w-0 w-full text-left rounded-lg px-3 py-2 hover:bg-slate-700/50 transition-colors cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-400"
               >
-                <div className="flex items-center justify-between text-sm text-ink">
-                  <span className="font-medium">#{index + 1} {node.name}</span>
-                  <span className="text-xs text-slate-400">{node.cpu} / {node.memory}</span>
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm text-ink">
+                  <span className="min-w-0 font-medium break-all">#{index + 1} {node.name}</span>
+                  <span className="text-xs text-slate-400 tabular-nums">{node.cpu} / {node.memory}</span>
                 </div>
                 <div className="mt-3 space-y-2">
                   <div className="text-xs text-slate-400 flex items-center justify-between">
                     <span>CPU</span>
                     <span className="font-medium text-slate-200">{node.cpu_percent}</span>
                   </div>
-                  <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="w-full h-2.5 bg-slate-700 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full ${cpuPercent >= 80 ? 'bg-red-500' : cpuPercent >= 60 ? 'bg-amber-500' : 'bg-primary-bright'}`}
                       style={{ width: `${Math.min(cpuPercent, 100)}%` }}
@@ -85,7 +85,7 @@ export default function NodeTopUsageCard({
                     <span>MEM</span>
                     <span className="font-medium text-slate-200">{node.memory_percent}</span>
                   </div>
-                  <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="w-full h-2.5 bg-slate-700 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full ${memPercent >= 80 ? 'bg-red-500' : memPercent >= 60 ? 'bg-amber-500' : 'bg-primary-bright'}`}
                       style={{ width: `${Math.min(memPercent, 100)}%` }}
