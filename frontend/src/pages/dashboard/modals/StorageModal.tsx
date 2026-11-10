@@ -112,13 +112,13 @@ export function StorageModal({
   return (
     <ModalOverlay onClose={onClose}>
       <div
-        className="bg-slate-800 rounded-lg max-w-5xl w-full h-[80vh] overflow-hidden flex flex-col"
+        className="bg-slate-800 rounded-xl border border-hairline shadow-xl max-w-5xl w-full h-[80vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6 border-b border-slate-700">
-          <div className="flex items-center justify-between mb-4">
+        <div className="p-5 border-b border-hairline shrink-0">
+          <div className="flex items-start justify-between gap-3 mb-4">
             <div>
-              <h2 className="text-xl font-semibold text-ink">
+              <h2 className="text-lg font-semibold text-ink">
                 {tr('dashboard.storage.title', 'Storage analysis')}
               </h2>
               <p className="text-sm text-slate-400">
@@ -135,10 +135,10 @@ export function StorageModal({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 mb-4">
-            <span className="badge badge-info">
+            <span className="badge badge-neutral">
               {tr('dashboard.storage.pvcCount', 'PVC {{count}}', { count: sortedPVCs.length })}
             </span>
-            <span className="badge badge-info">
+            <span className="badge badge-neutral">
               {tr('dashboard.storage.pvCount', 'PV {{count}}', { count: sortedPVs.length })}
             </span>
             {Object.entries(pvcStatusCounts).map(([status, count]) => (
@@ -186,10 +186,10 @@ export function StorageModal({
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[200px] justify-between"
+                className="h-10 px-4 bg-slate-900 hover:bg-slate-700 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 w-[220px] max-w-full justify-between"
                 title={tr('dashboard.storage.namespaceFilter', 'Namespace filter')}
               >
-                <span title={namespaceFilter} className="text-sm font-medium">
+                <span className="text-sm font-medium truncate min-w-0" title={namespaceFilter}>
                   {namespaceFilter === 'all'
                     ? tr('dashboard.storage.allNamespaces', 'All namespaces')
                     : namespaceFilter}
@@ -244,7 +244,7 @@ export function StorageModal({
                 : tr('dashboard.storage.searchPvsPlaceholder', 'Search (name/status/capacity/StorageClass/reclaim policy/claim)...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-10 pr-10 bg-slate-700 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors"
+              className="w-full h-10 pl-10 pr-10 bg-slate-900 text-sm text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 transition-colors"
             />
             {searchQuery && (
               <button
@@ -258,7 +258,7 @@ export function StorageModal({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-full min-h-[240px]">
               <RefreshCw className="w-7 h-7 text-primary-400 animate-spin mb-3" />
@@ -399,7 +399,7 @@ export function StorageModal({
                     <div className="divide-y divide-slate-700 rounded-lg border border-slate-700 overflow-hidden">
                       {shown.rows.map((edge: any) => (
                         <div key={edge.id} className="p-3 bg-slate-900/20">
-                          <p className="text-xs text-slate-300">
+                          <p className="text-xs text-slate-300 break-all">
                             {edge.source} → {edge.target}
                             {edge.label ? ` · ${edge.label}` : ''}
                           </p>

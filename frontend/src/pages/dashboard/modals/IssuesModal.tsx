@@ -101,13 +101,13 @@ export function IssuesModal({
   return (
     <ModalOverlay onClose={onClose}>
       <div
-        className="bg-slate-800 rounded-lg max-w-4xl w-full h-[80vh] overflow-hidden flex flex-col"
+        className="bg-slate-800 rounded-xl border border-hairline shadow-xl max-w-4xl w-full h-[80vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6 border-b border-slate-700">
-          <div className="flex items-center justify-between mb-4">
+        <div className="max-h-[50%] overflow-y-auto p-5 border-b border-hairline shrink-0">
+          <div className="flex items-start justify-between gap-3 mb-4">
             <div>
-              <h2 className="text-xl font-semibold text-ink">{tr('dashboard.issues.title', 'Issues')}</h2>
+              <h2 className="text-lg font-semibold text-ink">{tr('dashboard.issues.title', 'Issues')}</h2>
               <p className="text-sm text-slate-400">
                 {tr(
                   'dashboard.issues.subtitle',
@@ -127,7 +127,7 @@ export function IssuesModal({
 
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <span className="text-xs text-slate-400">{tr('dashboard.issues.totalLabel', 'Total')}</span>
-            <span className="badge badge-info" data-testid="issues-total">
+            <span className="badge badge-neutral" data-testid="issues-total">
               {issuesSummary.total !== issuesSummary.all
                 ? tr('dashboard.resourceModal.totalFiltered', '{{shown}} of {{count}}', { shown: issuesSummary.total, count: issuesSummary.all })
                 : tr('dashboard.issues.totalCount', '{{count}}', { count: issuesSummary.total })}
@@ -143,10 +143,10 @@ export function IssuesModal({
           </div>
 
           <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-stretch">
-            <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-slate-700 bg-slate-900/20 sm:w-72">
+            <div className="flex flex-wrap items-center justify-between gap-3 py-2 sm:w-72">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-slate-200">{tr('dashboard.issues.window', 'Events window')}</p>
-                <p className="text-xs text-slate-400 truncate">
+                <p className="text-xs text-slate-400">
                   {tr('dashboard.issues.windowHint', 'Warning events newer than this are attached to their object.')}
                 </p>
               </div>
@@ -166,12 +166,12 @@ export function IssuesModal({
               </div>
             </div>
 
-            <label className="flex flex-1 items-center justify-between gap-3 p-3 rounded-lg border border-slate-700 bg-slate-900/20">
+            <label className="flex flex-1 items-center justify-between gap-3 py-2">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-slate-200">
                   {tr('dashboard.issues.includeRestarts', 'Include restart history')}
                 </p>
-                <p className="text-xs text-slate-400 truncate">
+                <p className="text-xs text-slate-400">
                   {tr(
                     'dashboard.issues.includeRestartsHint',
                     'Include past restarts for currently healthy (Running/Ready) pods as Info.',
@@ -194,7 +194,7 @@ export function IssuesModal({
               placeholder={tr('dashboard.issues.searchPlaceholder', 'Search issues (name/namespace/kind/severity/message)...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-10 pr-10 bg-slate-700 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors"
+              className="w-full h-10 pl-10 pr-10 bg-slate-900 text-sm text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 transition-colors"
             />
             {searchQuery && (
               <button
@@ -208,7 +208,7 @@ export function IssuesModal({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-full min-h-[240px]">
               <RefreshCw className="w-7 h-7 text-primary-400 animate-spin mb-3" />
