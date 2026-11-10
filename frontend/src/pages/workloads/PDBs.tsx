@@ -203,7 +203,7 @@ spec:
             {tr('pdbs.subtitle', 'Manage pod disruption budgets across namespaces.')}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canCreate && (
             <button
               type="button"
@@ -239,18 +239,18 @@ spec:
         allNamespacesLabel={tr('pdbs.allNamespaces', 'All namespaces')}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 shrink-0">
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('pdbs.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-0 gap-y-1 rounded-lg border border-slate-700/70 bg-slate-800 shrink-0">
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-slate-400">{tr('pdbs.stats.total', 'Total')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.total}</p>
         </div>
-        <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('pdbs.stats.healthy', 'Healthy')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.healthy}</p>
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('pdbs.stats.healthy', 'Healthy')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.healthy}</p>
         </div>
-        <div className="rounded-lg border border-red-700/40 bg-red-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-red-300">{tr('pdbs.stats.disrupted', 'Disrupted')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.disrupted}</p>
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-red-300">{tr('pdbs.stats.disrupted', 'Disrupted')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.disrupted}</p>
         </div>
       </div>
 

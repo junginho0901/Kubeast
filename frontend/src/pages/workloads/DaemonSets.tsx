@@ -245,7 +245,7 @@ spec:
             {tr('daemonsets.subtitle', 'Inspect scheduling health for DaemonSets across namespaces.')}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canCreate && (
             <button
               type="button"
@@ -281,26 +281,26 @@ spec:
         allNamespacesLabel={tr('daemonsets.allNamespaces', 'All namespaces')}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 shrink-0">
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('daemonsets.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-0 gap-y-1 rounded-lg border border-slate-700/70 bg-slate-800 shrink-0">
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-slate-400">{tr('daemonsets.stats.total', 'Total')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.total}</p>
         </div>
-        <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('daemonsets.stats.healthy', 'Healthy')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.healthy}</p>
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('daemonsets.stats.healthy', 'Healthy')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.healthy}</p>
         </div>
-        <div className="rounded-lg border border-slate-600/50 bg-slate-800/30 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-300">{tr('daemonsets.stats.idle', 'Idle')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.idle}</p>
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-slate-300">{tr('daemonsets.stats.idle', 'Idle')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.idle}</p>
         </div>
-        <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('daemonsets.stats.degraded', 'Degraded')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.degraded}</p>
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-amber-300">{tr('daemonsets.stats.degraded', 'Degraded')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.degraded}</p>
         </div>
-        <div className="rounded-lg border border-red-700/40 bg-red-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-red-300">{tr('daemonsets.stats.unavailable', 'Unavailable')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.unavailable}</p>
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-red-300">{tr('daemonsets.stats.unavailable', 'Unavailable')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.unavailable}</p>
         </div>
       </div>
 
