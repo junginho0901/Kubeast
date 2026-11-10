@@ -289,10 +289,10 @@ export default function NamespaceInfo({ name }: Props) {
             />
           )}
           {getNsMetricValue('pod_count') !== null && (
-            <MetricCard label="Pods" value={getNsMetricValue('pod_count')!} unit="" thresholds={{ warn: 50, danger: 100 }} />
+            <MetricCard label="Pods" value={getNsMetricValue('pod_count')!} unit="" whole thresholds={{ warn: 50, danger: 100 }} />
           )}
           {getNsMetricValue('restart_total') !== null && (
-            <MetricCard label="Total Restarts" value={getNsMetricValue('restart_total')!} unit="" thresholds={{ warn: 10, danger: 50 }} />
+            <MetricCard label="Total Restarts" value={getNsMetricValue('restart_total')!} unit="" whole thresholds={{ warn: 10, danger: 50 }} />
           )}
         </div>
       </PrometheusSection>

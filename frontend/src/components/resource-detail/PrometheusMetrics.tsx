@@ -41,18 +41,20 @@ export function MetricBar({
 }
 
 /**
- * A compact metric card showing a single value with a bar.
+ * A compact metric card showing a single value with a bar. A count (`whole`) reads as a whole number.
  */
 export function MetricCard({
   label,
   value,
   unit = '%',
+  whole = false,
   subtext,
   thresholds,
 }: {
   label: string
   value: number
   unit?: string
+  whole?: boolean
   subtext?: string
   thresholds?: { warn: number; danger: number }
 }) {
@@ -66,7 +68,7 @@ export function MetricCard({
     <div className={`rounded-lg border px-3 py-2.5 ${color}`}>
       <div className="text-[11px] text-slate-400"><Tx>{label}</Tx></div>
       <div className="mt-1 text-lg font-semibold">
-        {unit === '%' ? Math.round(value) : value.toFixed(1)}{unit}
+        {whole || unit === '%' ? Math.round(value) : value.toFixed(1)}{unit}
       </div>
       {subtext && <div className="text-[10px] text-slate-500">{subtext}</div>}
     </div>

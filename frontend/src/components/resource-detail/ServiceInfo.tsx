@@ -229,7 +229,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
               <MetricCard label="Total Memory" value={getSvcMetric('memory')! / (1024 * 1024)} unit=" MiB" thresholds={{ warn: 1024, danger: 2048 }} />
             )}
             {getSvcMetric('pod_count') !== null && (
-              <MetricCard label="Backing Pods" value={getSvcMetric('pod_count')!} unit="" thresholds={{ warn: 10, danger: 20 }} />
+              <MetricCard label="Backing Pods" value={getSvcMetric('pod_count')!} unit="" whole thresholds={{ warn: 10, danger: 20 }} />
             )}
           </div>
         )}

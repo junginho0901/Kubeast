@@ -83,7 +83,7 @@ describe('a Service drawer\'s backend pod usage', () => {
     expect(r.html).toContain('Backend Pod Resource Usage')
     expect(r.html).toMatch(/Total CPU<\/div><div[^>]*>12\.0m</)
     expect(r.html).toMatch(/Total Memory<\/div><div[^>]*>3\.0 MiB</)
-    expect(r.html).toMatch(/Backing Pods<\/div><div[^>]*>2\.0</)
+    expect(r.html).toMatch(/Backing Pods<\/div><div[^>]*>2</)
   })
 
   it('does not ask for the pods of a Service past what one query can name, and says so', () => {
