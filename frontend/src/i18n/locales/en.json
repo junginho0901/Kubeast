@@ -2194,6 +2194,8 @@
     "noSearchResults": "No results found.",
     "objectNotFound": "This object does not exist; it may have been deleted.",
     "objectForbidden": "You are not allowed to see this object.",
+    "refreshFailed": "Refresh failed at {{time}}: {{reason}}. What is shown is from the read before.",
+    "readFailed": "Could not read the list: {{reason}}",
     "failed": {
       "delete": "Not deleted: {{reason}}",
       "save": "Not saved: {{reason}}",

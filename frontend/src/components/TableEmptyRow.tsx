@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { useForbidden } from '@/services/forbiddenStore'
 import { useListStatus } from '@/services/listStatusStore'
+import { failureText } from '@/utils/failureText'
 import { forbiddenResourceFromUrl, isBuiltinApi } from '@/utils/forbiddenResource'
 
 interface Props {
@@ -14,6 +15,9 @@ interface Props {
   /** Replaces the shared empty text (tables that are not a plain list) */
   children?: ReactNode
   className?: string
+  /** The list's own read failed — a read outside /cluster/, which the list status does not follow: its reason, with a retry */
+  error?: unknown
+  onRetry?: () => void
 }
 
 // The empty row of a list table. "No items" would read as "the cluster has
@@ -22,7 +26,7 @@ interface Props {
 // as DRA or the admission policies, the cluster does not serve it), the list
 // failed on the server (with a retry), or the request answered 403. Otherwise
 // one shared text: no items, or no search results while the search box has text.
-export function TableEmptyRow({ colSpan, resource, searching = false, children, className = 'py-6 px-4 text-center text-slate-400' }: Props) {
+export function TableEmptyRow({ colSpan, resource, searching = false, children, className = 'py-6 px-4 text-center text-slate-400', error, onRetry }: Props) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const forbidden = useForbidden(resource)
@@ -32,7 +36,25 @@ export function TableEmptyRow({ colSpan, resource, searching = false, children, 
   let body: ReactNode =
     children ?? (searching ? t('common.noSearchResults', 'No results found.') : t('common.listEmpty', 'No items.'))
   let testId: string | undefined
-  if (status?.state === 'notInstalled') {
+  const retry = (
+    <button
+      type="button"
+      onClick={() => (onRetry ? onRetry() : void queryClient.refetchQueries({ type: 'active' }))}
+      className="ml-3 rounded-sm border border-slate-600 px-2 py-0.5 text-xs text-slate-200 hover:border-slate-400"
+      data-testid="table-load-error-retry"
+    >
+      {t('common.retry', { defaultValue: 'Retry' })}
+    </button>
+  )
+  if (error) {
+    testId = 'table-load-error'
+    body = (
+      <>
+        {t('common.readFailed', { defaultValue: 'Could not read the list: {{reason}}', reason: failureText(error) })}
+        {retry}
+      </>
+    )
+  } else if (status?.state === 'notInstalled') {
     testId = 'table-not-installed'
     body = isBuiltinApi(resource)
       ? t('common.notServedEmpty', {
@@ -50,14 +72,7 @@ export function TableEmptyRow({ colSpan, resource, searching = false, children, 
         {status.code
           ? t('common.loadErrorEmpty', { resource: kind, code: status.code, defaultValue: 'Could not load {{resource}} (server error {{code}}).' })
           : t('common.loadErrorEmptyNetwork', { resource: kind, defaultValue: 'Could not load {{resource}} (no response from the server).' })}
-        <button
-          type="button"
-          onClick={() => void queryClient.refetchQueries({ type: 'active' })}
-          className="ml-3 rounded-sm border border-slate-600 px-2 py-0.5 text-xs text-slate-200 hover:border-slate-400"
-          data-testid="table-load-error-retry"
-        >
-          {t('common.retry', { defaultValue: 'Retry' })}
-        </button>
+        {retry}
       </>
     )
   } else if (forbidden) {
