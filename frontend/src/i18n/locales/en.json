@@ -1748,6 +1748,7 @@
     "emptyTitle": "Start a new chat",
     "emptySubtitle": "Click a question below or type your own.",
     "resultZipDownload": "Download result ZIP",
+    "resultZipCut": "Some results in the ZIP are cut: no whole copy of them could be read.",
     "copyMessage": "Copy",
     "chart": {
       "viewLarger": "View larger",
@@ -2206,7 +2207,8 @@
       "revoke": "Not revoked: {{reason}}",
       "end": "Not ended: {{reason}}",
       "cancel": "Not cancelled: {{reason}}",
-      "rollback": "Not rolled back: {{reason}}"
+      "rollback": "Not rolled back: {{reason}}",
+      "download": "Not downloaded: {{reason}}"
     }
   },
   "dashboard": {

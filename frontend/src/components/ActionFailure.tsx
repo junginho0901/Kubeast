@@ -2,9 +2,10 @@ import { useTranslation } from 'react-i18next'
 
 import { failureText } from '@/utils/failureText'
 
-export type FailedAction = 'delete' | 'save' | 'change' | 'revoke' | 'end' | 'cancel' | 'rollback'
+export type FailedAction = 'delete' | 'save' | 'change' | 'revoke' | 'end' | 'cancel' | 'rollback' | 'download'
 
 const FALLBACK: Record<FailedAction, string> = {
+  download: 'Not downloaded: {{reason}}',
   delete: 'Not deleted: {{reason}}',
   save: 'Not saved: {{reason}}',
   change: 'Not changed: {{reason}}',

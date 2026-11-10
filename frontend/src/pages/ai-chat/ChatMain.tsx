@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { TFunction } from 'i18next'
 import type { SessionDetail } from '@/services/api/types'
 import type { Message } from './types'
+import type { ExportOutcome } from './exportToolCalls'
 import { ChatWelcome } from './ChatWelcome'
 import { MessageInput } from './MessageInput'
 import { MessagesList } from './MessagesList'
@@ -19,7 +20,7 @@ interface Props {
   isStreaming: boolean
   copiedMessageKey: string | null
   onCopy: (message: Message, key: string) => void
-  onDownloadJson: (message: Message) => void
+  onDownloadJson: (message: Message) => Promise<ExportOutcome>
   onSend: (q?: string) => void
   onStop: () => void
   // why the stopped answer was not saved (it stays on screen, but not in the conversation)

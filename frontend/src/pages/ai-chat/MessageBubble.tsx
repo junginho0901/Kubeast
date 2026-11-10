@@ -1,8 +1,10 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { User, Check, Copy } from 'lucide-react'
 import { turnUsageText } from '@/utils/turnUsage'
 import type { TFunction } from 'i18next'
 import type { Message } from './types'
+import type { ExportOutcome } from './exportToolCalls'
+import { ActionFailure } from '@/components/ActionFailure'
 import { truncateToolResultsInContent } from './messageContent'
 import { ApprovalCard } from './ApprovalCard'
 import { ChatCharts } from '@/components/ChatChart'
@@ -17,7 +19,7 @@ interface Props {
   idx: number
   copiedMessageKey: string | null
   onCopy: (message: Message, key: string) => void
-  onDownloadJson: (message: Message) => void
+  onDownloadJson: (message: Message) => Promise<ExportOutcome>
   t: TFunction
 }
 
@@ -28,6 +30,8 @@ export const MessageBubble = memo(function MessageBubble({ message, idx, copiedM
   const showCopyButton = settled && Boolean(message.content)
   const usage = message.role === 'assistant' && !message.isTemporary ? turnUsageText(t, message.usage) : null
   const isCopied = copiedMessageKey === messageKey
+  // the ZIP being made, then what came of it until the next press: why none was made, or that some results are cut
+  const [zip, setZip] = useState<{ busy: boolean; outcome: ExportOutcome | null }>({ busy: false, outcome: null })
   return (
     <div className={`flex gap-3 p-6 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
       {message.role === 'user' ? (
@@ -152,14 +156,26 @@ export const MessageBubble = memo(function MessageBubble({ message, idx, copiedM
                     onClick={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
-                      onDownloadJson(message)
+                      setZip({ busy: true, outcome: null })
+                      void onDownloadJson(message).then((outcome) => setZip({ busy: false, outcome }))
                     }}
-                    className="px-2.5 py-1 text-xs rounded-sm bg-slate-600 hover:bg-slate-500 text-slate-100"
+                    disabled={zip.busy}
+                    aria-busy={zip.busy}
+                    className="px-2.5 py-1 text-xs rounded-sm bg-slate-600 hover:bg-slate-500 text-slate-100 disabled:opacity-60 disabled:cursor-wait"
+                    data-testid="result-zip-download"
                   >
                     {t('aiChat.resultZipDownload')}
                   </button>
                 )}
               </div>
+              {zip.outcome?.kind === 'failed' && (
+                <ActionFailure error={zip.outcome.error} action="download" testId="result-zip-failed" className="mt-1 text-right text-xs" />
+              )}
+              {zip.outcome?.kind === 'cut' && (
+                <p className="mt-1 text-right text-xs text-amber-400" data-testid="result-zip-cut">
+                  {t('aiChat.resultZipCut')}
+                </p>
+              )}
             </div>
           </div>
         )}

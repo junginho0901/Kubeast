@@ -1748,6 +1748,7 @@
     "emptyTitle": "새 대화를 시작하세요",
     "emptySubtitle": "아래 질문을 클릭하거나 직접 입력하세요.",
     "resultZipDownload": "Result ZIP 다운로드",
+    "resultZipCut": "ZIP의 일부 결과는 잘려 있습니다. 전체 결과를 읽지 못했습니다.",
     "copyMessage": "복사",
     "chart": {
       "viewLarger": "크게 보기",
@@ -2206,7 +2207,8 @@
       "revoke": "폐기하지 못했습니다: {{reason}}",
       "end": "끝내지 못했습니다: {{reason}}",
       "cancel": "취소하지 못했습니다: {{reason}}",
-      "rollback": "되돌리지 못했습니다: {{reason}}"
+      "rollback": "되돌리지 못했습니다: {{reason}}",
+      "download": "다운로드하지 못했습니다: {{reason}}"
     }
   },
   "dashboard": {

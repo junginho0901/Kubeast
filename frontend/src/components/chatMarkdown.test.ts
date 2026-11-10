@@ -14,7 +14,7 @@ const t = ((key: string) => key) as unknown as TFunction
 
 function aiChat(content: string, extra: Partial<Message> = {}) {
   const message = { role: 'assistant', content, ...extra } as Message
-  return renderToStaticMarkup(createElement(MessageBubble, { message, idx: 0, copiedMessageKey: null, onCopy: () => {}, onDownloadJson: () => {}, t }))
+  return renderToStaticMarkup(createElement(MessageBubble, { message, idx: 0, copiedMessageKey: null, onCopy: () => {}, onDownloadJson: async () => ({ kind: 'nothing' as const }), t }))
 }
 
 const floating = (content: string, toolCalls?: unknown[]) =>
