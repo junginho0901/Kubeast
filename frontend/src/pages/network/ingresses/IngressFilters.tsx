@@ -60,7 +60,7 @@ export function IngressFilters({
           <span className="text-sm font-medium truncate min-w-0">
             {selectedNamespace === 'all' ? allNamespacesLabel : selectedNamespace}
           </span>
-          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isNamespaceDropdownOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`w-4 h-4 shrink-0 text-slate-400 transition-transform ${isNamespaceDropdownOpen ? 'rotate-180' : ''}`} />
         </button>
         {isNamespaceDropdownOpen && (
           <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-100 max-h-[240px] overflow-y-auto">
@@ -86,7 +86,7 @@ export function IngressFilters({
                 className="w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
               >
                 {selectedNamespace === ns.name && <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />}
-                <span className={selectedNamespace === ns.name ? 'font-medium' : ''}>{ns.name}</span>
+                <span className={selectedNamespace === ns.name ? 'font-medium break-all' : 'break-all'}>{ns.name}</span>
               </button>
             ))}
           </div>

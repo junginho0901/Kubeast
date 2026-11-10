@@ -101,8 +101,8 @@ export default function Endpoints() {
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       [tr('endpointsPage.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('endpointsPage.stats.withReady', 'With Ready'), cards.withReady, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
-      [tr('endpointsPage.stats.withNotReady', 'With NotReady'), cards.withNotReady, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
+      [tr('endpointsPage.stats.withReady', 'With Ready'), cards.withReady, 'border-slate-700 bg-slate-900/50', 'text-emerald-300'],
+      [tr('endpointsPage.stats.withNotReady', 'With NotReady'), cards.withNotReady, 'border-slate-700 bg-slate-900/50', 'text-amber-300'],
       [tr('endpointsPage.stats.totalAddresses', 'Total Addresses'), cards.totalAddresses, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
     [cards.total, cards.totalAddresses, cards.withNotReady, cards.withReady, tr],
@@ -228,9 +228,9 @@ subsets:
             {tr('endpointsPage.title', 'Endpoints')}
             <span className="ml-3 align-middle text-xs font-medium text-slate-400 border border-slate-600 rounded px-1.5 py-0.5" data-testid="endpoints-deprecated">{tr('endpointsPage.deprecated', 'API deprecated since Kubernetes 1.33')}</span>
           </h1>
-          <p className="mt-2 text-slate-400">{tr('endpointsPage.subtitle', 'Inspect and manage Endpoints across namespaces. Service details and the resource graph read EndpointSlices.')}</p>
+          <p className="mt-1 text-sm text-slate-400">{tr('endpointsPage.subtitle', 'Inspect and manage Endpoints across namespaces. Service details and the resource graph read EndpointSlices.')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canCreate && (
             <button
               type="button"
@@ -270,7 +270,7 @@ subsets:
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
           <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
-            <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
+            <p className={`text-xs leading-4 break-words ${labelClass}`}>{label}</p>
             <p className="text-lg text-ink font-semibold mt-1">{value}</p>
           </div>
         ))}
