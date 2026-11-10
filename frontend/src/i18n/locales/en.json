@@ -4602,7 +4602,10 @@
     "failed": "Failed to create resource",
     "cancel": "Cancel",
     "create": "Create",
-    "creating": "Creating..."
+    "creating": "Creating...",
+    "created": "Created: {{objects}}",
+    "createdMore": "and {{count}} more",
+    "madeBefore": "Created before it stopped: {{objects}}"
   },
   "podDeleteModal": {
     "title": "Delete pod",

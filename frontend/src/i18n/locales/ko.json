@@ -4716,7 +4716,10 @@
     "failed": "리소스 생성에 실패했습니다",
     "cancel": "취소",
     "create": "생성",
-    "creating": "생성 중..."
+    "creating": "생성 중...",
+    "created": "생성했습니다: {{objects}}",
+    "createdMore": "외 {{count}}개",
+    "madeBefore": "멈추기 전에 생성했습니다: {{objects}}"
   },
   "podDeleteModal": {
     "title": "Pod 삭제",
