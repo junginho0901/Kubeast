@@ -493,10 +493,13 @@ test.describe('permission ceiling (M16)', () => {
     try {
       for (const email of [`system:anonymous-${ts}@kubeast.local`, `kubeast:cache-${ts}@kubeast.local`, ` e2e-space-${ts}@kubeast.local`, `e2e-space-${ts}@kubeast.local `, `e2e space-${ts}@kubeast.local`]) {
         const res = await request.post('/api/v1/auth/admin/users', { headers: admin, data: account(email), failOnStatusCode: false })
+        // a build that takes the name leaves no account behind
+        if (res.ok()) made.push((await res.json()).id)
         expect.soft(res.status(), `create ${JSON.stringify(email)}`).toBe(400)
         expect.soft(await res.text(), `${JSON.stringify(email)} says why`).toContain('colon')
         const bulk = await request.post('/api/v1/auth/admin/users/bulk', { headers: admin, data: { users: [account(email)] }, failOnStatusCode: false })
         const body = await bulk.json()
+        for (const u of body.created ?? []) if (u?.id) made.push(u.id)
         expect.soft(body.errors?.length, `bulk ${JSON.stringify(email)}`).toBe(1)
         expect.soft(body.created ?? [], `bulk ${JSON.stringify(email)} made nothing`).toEqual([])
       }

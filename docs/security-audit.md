@@ -43,7 +43,7 @@ A terminal, a followed log and a live list are authenticated when they open. The
 - A terminal or followed log ended this way leaves a `k8s.session.end` row.
 - If the version cannot be read (the database is down), connections keep running for 5 minutes and then end.
 - A session with no activity keeps its open connections while the above holds. The token's expiry alone ends nothing, or a followed log would stop every `auth.tokenTTLMinutes`.
-- Changing what a custom role allows does not end connections opened under it.
+- Taking a permission from a custom role moves the `token_version` of the accounts holding it, so their open connections end within that interval; adding one or changing the description ends nothing.
 
 ## Access review
 
