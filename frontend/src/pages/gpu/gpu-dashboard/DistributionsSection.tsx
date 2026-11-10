@@ -20,10 +20,10 @@ export function DistributionsSection({ data, modelDistribution, podStatusDist, t
   return (
     <div className="flex flex-col gap-4">
       {/* GPU Model Distribution */}
-      <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-5">
+      <div className="card">
         <div className="flex items-center gap-2 mb-4">
           <Monitor className="h-4 w-4 text-slate-400" />
-          <h2 className="text-sm font-semibold text-ink">
+          <h2 className="text-lg font-semibold text-ink">
             {tr('gpuDashboardPage.modelDist.title', 'GPU Models')}
           </h2>
         </div>
@@ -36,7 +36,7 @@ export function DistributionsSection({ data, modelDistribution, podStatusDist, t
               return (
                 <div key={model} data-testid="gpu-model-row">
                   <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="text-slate-300 truncate">{model}</span>
+                    <span className="min-w-0 text-slate-300 break-words">{model}</span>
                     <span className="text-xs text-slate-400 ml-2 whitespace-nowrap">{gpuCount} GPU ({pct}%)</span>
                   </div>
                   <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
@@ -52,11 +52,11 @@ export function DistributionsSection({ data, modelDistribution, podStatusDist, t
       </div>
 
       {/* Pod Status Distribution */}
-      <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
+      <div className="card">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div className="flex flex-wrap items-center gap-2">
             <Box className="h-4 w-4 text-slate-400" />
-            <h2 className="text-sm font-semibold text-ink">
+            <h2 className="text-lg font-semibold text-ink">
               {tr('gpuDashboardPage.podStatus.title', 'Pod Status')}
             </h2>
             <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300" data-testid="gpu-pod-status-total">

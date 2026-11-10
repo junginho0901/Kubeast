@@ -36,7 +36,7 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost, metricsFailure = n
     <div className="card shrink-0">
       <div className="flex items-center gap-2 mb-4">
         <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-        <h2 className="text-sm font-semibold text-ink">
+        <h2 className="text-lg font-semibold text-ink">
           {tr('gpuNodes.realtimeMetrics', 'Real-time GPU Utilization')}
         </h2>
       </div>
@@ -44,46 +44,46 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost, metricsFailure = n
         {pagedHosts.map(([hostname, gpus]) => {
           const averages = gpuHostAverages(gpus)
           return (
-            <div key={hostname} className="rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-3" data-testid="gpu-nodes-host" data-host={hostname}>
+            <div key={hostname} className="min-w-0 border-t border-slate-700/50 pt-3" data-testid="gpu-nodes-host" data-host={hostname}>
               <div className="flex items-center justify-between text-sm text-ink mb-3">
-                <span className="font-medium">{hostname}</span>
-                <span className="text-xs text-slate-400">{gpus.length} GPU{gpus.length !== 1 ? 's' : ''}</span>
+                <span className="font-medium break-all">{hostname}</span>
+                <span className="text-xs text-slate-400 shrink-0 ml-2">{gpus.length} GPU{gpus.length !== 1 ? 's' : ''}</span>
               </div>
               <div className="space-y-2">
                 {gpus.map((gpu) => (
                   <div key={gpu.uuid} className="flex items-center gap-3" data-testid="gpu-nodes-gpu" data-uuid={gpu.uuid}>
                     <span className="text-xs text-slate-400 w-16 shrink-0">GPU {gpu.gpu}</span>
-                    <div className="flex-1 space-y-1">
+                    <div className="flex-1 min-w-0 space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-slate-500 w-7">{tr('gpuDashboardPage.realtime.core', 'Core')}</span>
-                        <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+                        <span className="text-xs text-slate-500 w-7 shrink-0">{tr('gpuDashboardPage.realtime.core', 'Core')}</span>
+                        <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full ${(gpu.gpu_util ?? 0) >= 80 ? 'bg-red-500' : (gpu.gpu_util ?? 0) >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
                             style={{ width: `${Math.min(gpu.gpu_util ?? 0, 100)}%` }}
                           />
                         </div>
-                        <span className="text-[10px] font-mono text-slate-300 w-10 text-right" data-testid="gpu-nodes-core">{gpuPercentText(gpu.gpu_util)}</span>
+                        <span className="text-xs font-mono text-slate-300 w-10 shrink-0 text-right" data-testid="gpu-nodes-core">{gpuPercentText(gpu.gpu_util)}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-slate-500 w-7">{tr('gpuDashboardPage.realtime.mem', 'Mem')}</span>
-                        <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+                        <span className="text-xs text-slate-500 w-7 shrink-0">{tr('gpuDashboardPage.realtime.mem', 'Mem')}</span>
+                        <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full ${(gpu.memory_util_percent ?? 0) >= 80 ? 'bg-red-500' : (gpu.memory_util_percent ?? 0) >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
                             style={{ width: `${Math.min(gpu.memory_util_percent ?? 0, 100)}%` }}
                           />
                         </div>
-                        <span className="text-[10px] font-mono text-slate-300 w-10 text-right" data-testid="gpu-nodes-mem">{gpuPercentText(gpu.memory_util_percent)}</span>
+                        <span className="text-xs font-mono text-slate-300 w-10 shrink-0 text-right" data-testid="gpu-nodes-mem">{gpuPercentText(gpu.memory_util_percent)}</span>
                       </div>
                     </div>
                     {gpu.memory_temp !== null && gpu.memory_temp > 0 && (
-                      <span className={`text-[10px] w-10 text-right ${gpu.memory_temp >= 85 ? 'text-red-400' : gpu.memory_temp >= 70 ? 'text-amber-400' : 'text-slate-400'}`}>
+                      <span className={`text-xs w-10 shrink-0 text-right ${gpu.memory_temp >= 85 ? 'text-red-400' : gpu.memory_temp >= 70 ? 'text-amber-400' : 'text-slate-400'}`}>
                         {gpu.memory_temp}°C
                       </span>
                     )}
                   </div>
                 ))}
               </div>
-              <div className="mt-2 pt-2 border-t border-slate-700/50 flex gap-4 text-[10px] text-slate-500">
+              <div className="mt-2 pt-2 border-t border-slate-700/50 flex flex-wrap gap-4 text-xs text-slate-500">
                 <span data-testid="gpu-nodes-avg-core">{tr('gpuNodes.avgCore', 'Avg Core')}: {gpuPercentText(averages.util)}</span>
                 <span data-testid="gpu-nodes-avg-mem">{tr('gpuNodes.avgMem', 'Avg Mem')}: {gpuPercentText(averages.memory)}</span>
               </div>

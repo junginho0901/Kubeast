@@ -38,15 +38,15 @@ export function GPUPodsCharts({
       {nodeGpuUsage.length > 0 && (
         <div className="card">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-ink">
+            <h2 className="text-lg font-semibold text-ink">
               {tr('gpuPods.nodeUsage', 'GPU Usage by Node')}
             </h2>
             <Box className="w-4 h-4 text-slate-400" />
           </div>
-          <div className="space-y-3" data-list="GPU nodes">
+          <div className="divide-y divide-slate-700/50" data-list="GPU nodes">
             {pagedNodes.map(([node, info]) => (
-              <div key={node} className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-2.5" data-testid="gpu-pods-node-usage" data-node={node}>
-                <div>
+              <div key={node} className="flex flex-wrap items-center justify-between gap-2 py-2.5" data-testid="gpu-pods-node-usage" data-node={node}>
+                <div className="min-w-0 break-words">
                   <span className="text-sm font-medium text-ink">{node || tr('gpuPods.noNode', 'Not scheduled')}</span>
                   <span className="ml-2 text-xs text-slate-400">
                     {info.podCount === 1 ? tr('gpuPods.podCountOne', '{{n}} pod', { n: info.podCount }) : tr('gpuPods.podCount', '{{n}} pods', { n: info.podCount })}
@@ -67,7 +67,7 @@ export function GPUPodsCharts({
       {topStatuses.length > 0 && (
         <div className="card">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-ink">
+            <h2 className="text-lg font-semibold text-ink">
               {tr('gpuPods.statusDistribution', 'Status Distribution')}
             </h2>
           </div>

@@ -66,9 +66,9 @@ export default function GPUNodes() {
       <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('gpuNodes.title', 'GPU Nodes')}</h1>
-          <p className="mt-2 text-slate-400">{tr('gpuNodes.subtitle', 'GPU node status, capacity, and model information.')}</p>
+          <p className="mt-1 text-sm text-slate-400">{tr('gpuNodes.subtitle', 'GPU node status, capacity, and model information.')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setShowCharts((prev) => !prev)}
             aria-pressed={showCharts}
@@ -106,8 +106,8 @@ export default function GPUNodes() {
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelColor]) => (
-          <div data-list-summary-card="" key={label} className={`rounded-lg border px-3 py-2.5 ${boxClass}`}>
-            <div className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelColor}`}>{label}</div>
+          <div key={label} data-list-summary-card="" className={`rounded-lg border px-3 py-2.5 ${boxClass}`}>
+            <div className={`text-xs leading-4 break-words ${labelColor}`}>{label}</div>
             <div className="mt-1 text-lg font-semibold text-ink">{value}</div>
           </div>
         ))}

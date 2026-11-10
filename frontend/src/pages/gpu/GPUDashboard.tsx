@@ -142,14 +142,14 @@ export default function GPUDashboard() {
   const gpuPodKeys = gpuHolderPods(data)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="page-head items-center">
         <div>
           <h1 className="text-3xl font-semibold text-ink">
             {tr('gpuDashboardPage.title', 'GPU Dashboard')}
           </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-1 text-sm text-slate-400">
             {tr('gpuDashboardPage.subtitle', 'GPU resource overview across the cluster')}
           </p>
         </div>

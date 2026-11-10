@@ -13,10 +13,10 @@ function StatusBadge({ enabled, label, testId }: { enabled: boolean; label: stri
   return (
     <span
       data-testid={testId}
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
+      className={`inline-flex items-center gap-1.5 py-1 text-xs font-medium ${
         enabled
-          ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20'
-          : 'bg-slate-500/10 text-slate-400 ring-1 ring-slate-500/20'
+          ? 'text-emerald-400'
+          : 'text-slate-400'
       }`}
     >
       {enabled ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
@@ -95,15 +95,15 @@ export function SummaryCardsRow({ data, allocationRate, devicePlugins, tr }: Pro
             <div
               key={card.label}
               data-testid="gpu-summary-card"
-              className={`rounded-xl border ${card.border} bg-slate-800/50 p-5 transition-colors hover:bg-slate-800/80`}
+              className={`rounded-xl border ${card.border} bg-slate-800/50 p-4`}
             >
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-slate-400">{card.label}</p>
-                <div className={`rounded-lg p-2 ${card.iconBg}`}>
+                <div className="p-1">
                   <Icon className={`h-4 w-4 ${card.iconColor}`} />
                 </div>
               </div>
-              <p className="mt-2 text-3xl font-bold text-ink" data-testid="gpu-summary-value">{card.value}</p>
+              <p className="mt-2 text-2xl font-semibold tabular-nums text-ink" data-testid="gpu-summary-value">{card.value}</p>
               {card.vendors && <p className="mt-1 text-xs text-slate-400" data-testid="gpu-summary-vendors">{card.vendors}</p>}
               {card.note && <p className="mt-1 text-xs text-slate-400" data-testid="gpu-summary-note">{card.note}</p>}
               {card.bar && (
