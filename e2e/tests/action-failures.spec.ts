@@ -114,6 +114,28 @@ test.describe('a refused write says why where it was pressed', () => {
     await stays(page, 'node-cordon-error', failed('change'))
   })
 
+  test('Account: Change password names why it was refused', async ({ page }) => {
+    const seen = await refuse(page, (p) => p === '/api/v1/auth/change-password')
+    await page.goto('/account')
+    await page.getByRole('button', { name: EN.account.password.open }).click()
+    const inputs = page.getByTestId('password-dialog').locator('input[type="password"]')
+    await inputs.nth(0).fill('e2e-not-the-password')
+    await inputs.nth(1).fill('E2e-af-new-Passw0rd!')
+    await inputs.nth(2).fill('E2e-af-new-Passw0rd!')
+    await page.getByRole('button', { name: EN.account.password.submit }).click()
+    await stays(page, 'password-error', EN.account.password.failed.replace('{{reason}}', REASON))
+    expect(seen, 'the request went out once and the server was not asked').toEqual(['POST /api/v1/auth/change-password'])
+  })
+
+  test('Namespaces: Create names why it was refused', async ({ page }) => {
+    await refuse(page, (p) => p === '/api/v1/cluster/namespaces')
+    await page.goto('/namespaces?cluster=self')
+    await page.getByRole('button', { name: EN.namespaces.create.button }).click()
+    await page.getByPlaceholder(EN.namespaces.create.namePlaceholder).fill(`e2e-af-${RUN}`)
+    await page.getByTestId('namespace-create-dialog').getByRole('button', { name: EN.namespaces.create.submit, exact: true }).click()
+    await stays(page, 'namespace-create-error', EN.namespaces.create.error.replace('{{reason}}', REASON))
+  })
+
   test('AI Chat: Delete and Rename of a conversation', async ({ page, request }) => {
     const admin = await login(request)
     const made = await request.post('/api/v1/sessions', { headers: bearer(admin), data: { title: `e2e-af-${RUN}` }, failOnStatusCode: false })

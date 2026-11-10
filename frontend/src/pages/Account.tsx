@@ -10,6 +10,7 @@ import ApiKeysSection from './account/ApiKeysSection'
 import { useAccountSectionsReady } from './account/accountReady'
 import NodeShellSection from './account/NodeShellSection'
 import { COLOR_MODES, setColorMode, useColorMode } from '@/utils/colorMode'
+import { failureText } from '@/utils/failureText'
 
 export default function Account() {
   const queryClient = useQueryClient()
@@ -283,8 +284,8 @@ export default function Account() {
             )}
 
             {(localError || changePasswordMutation.isError) && (
-              <div className="mb-4 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
-                {localError ?? tr('account.password.failed', 'Failed to change password.')}
+              <div role="alert" data-testid="password-error" className="mb-4 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200 break-words">
+                {localError ?? tr('account.password.failed', 'Password not changed: {{reason}}', { reason: failureText(changePasswordMutation.error) })}
               </div>
             )}
 

@@ -25,6 +25,7 @@ import { alertResource, liveLineOf, liveStateOf, severityChoices, silenceStart, 
 import { severityClass, skipReason, statusClass as investigationClass } from '@/utils/investigationFormat'
 import { investigateErrorText, investigateNowView } from '@/utils/investigateNow'
 import { formatAge, formatTime, utcTitle } from '@/utils/time'
+import { failureText } from '@/utils/failureText'
 
 // Alerts: every alert Alertmanager sent for the selected cluster (features.alertInvestigation's webhook), firing or
 // resolved, for whoever reads the cluster as a whole. Resolving is the alert rule's: the marks here (acknowledged,
@@ -542,7 +543,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
                 <div className="mt-2 rounded-lg border border-red-800/60 bg-red-900/20 px-3 py-2 text-sm text-red-200" data-testid="alert-save-error">
                   {failed.response?.status === 503
                     ? tr('alertInbox.auditUnavailable', 'Not saved: the audit log cannot take the record right now.')
-                    : tr('alertInbox.saveFailed', 'Not saved.')}
+                    : tr('alertInbox.saveFailed', 'Not saved: {{reason}}', { reason: failureText(failed) })}
                 </div>
               )}
             </section>

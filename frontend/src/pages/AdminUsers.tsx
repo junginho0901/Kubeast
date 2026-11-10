@@ -22,6 +22,7 @@ import { UserDetailModal } from './admin-users/UserDetailModal'
 import { bulkRoleFailures, bulkRoleFailureText, readBulkRoleAnswer } from './admin-users/bulkRole'
 import { BULK_CSV_HEADER, bulkCreateFailureRows, bulkCreateFailures, bulkCreateSummary, bulkCsvTemplate, exampleBulkPassword, parseBulkCsv, readBulkCreateAnswer, type ParsedBulkCsv } from './admin-users/bulkCreate'
 import { roleMenuOpensUp } from './admin-users/roleMenu'
+import { failureText } from '@/utils/failureText'
 import { allPendingSelected, toggleAllPending as toggleAllPendingIds, toggleOnePending } from './admin-users/pendingSelection'
 
 const USER_COLUMNS = 6
@@ -143,7 +144,7 @@ export default function AdminUsers() {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       setSweepMessage(tr('adminUsers.sweepDone', 'Sweep done: {{count}} account(s) locked.', { count: res.locked }))
     },
-    onError: () => setSweepMessage(tr('adminUsers.sweepFailed', 'The sweep failed.')),
+    onError: (err) => setSweepMessage(tr('adminUsers.sweepFailed', 'The sweep failed: {{reason}}', { reason: failureText(err) })),
   })
   const unlockMutation = useMutation({
     mutationFn: ({ userId }: { userId: string }) => api.adminUnlockUser(userId),

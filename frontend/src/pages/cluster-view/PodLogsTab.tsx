@@ -21,6 +21,7 @@ import { LogSearchView } from '@/components/LogSearchView'
 import { useLogSearchAvailable } from '@/hooks/useLogSearchAvailable'
 import { useLogFilesAvailable } from '@/hooks/useLogFilesAvailable'
 import { takeLogLine, type ShownLine } from './podLogLines'
+import { failureText } from '@/utils/failureText'
 
 interface PodLike {
   name: string
@@ -51,7 +52,8 @@ export function PodLogsTab({
   const [isTailLinesDropdownOpen, setIsTailLinesDropdownOpen] = useState(false)
   const [downloadTailLines, setDownloadTailLines] = useState<number>(1000)
   const [isDownloading, setIsDownloading] = useState(false)
-  const [downloadFailed, setDownloadFailed] = useState(false)
+  // why the last download failed ('' while it has not)
+  const [downloadFailed, setDownloadFailed] = useState('')
   const logFilesAvailable = useLogFilesAvailable(pod.namespace)
   const logSearchAvailable = useLogSearchAvailable()
   const [source, setSource] = useState<LogSource>('stdout')
@@ -179,7 +181,7 @@ export function PodLogsTab({
   const handleDownloadLogs = async () => {
     if (!selectedContainer) return
     setIsDownloading(true)
-    setDownloadFailed(false)
+    setDownloadFailed('')
     try {
       const downloadedLogs = await api.getPodLogs(
         pod.namespace,
@@ -205,7 +207,7 @@ export function PodLogsTab({
       URL.revokeObjectURL(url)
     } catch (error) {
       console.error('Log download failed:', error)
-      setDownloadFailed(true)
+      setDownloadFailed(failureText(error))
     } finally {
       setIsDownloading(false)
     }
@@ -388,7 +390,7 @@ export function PodLogsTab({
               : tr('clusterView.logs.download', 'Download')}
           </button>
           {downloadFailed && (
-            <span className="text-xs text-red-400" role="alert">{tr('clusterView.logs.downloadError', 'Failed to download logs.')}</span>
+            <span className="text-xs text-red-400 break-words" role="alert" data-testid="pod-logs-download-error">{tr('clusterView.logs.downloadError', 'Logs not downloaded: {{reason}}', { reason: downloadFailed })}</span>
           )}
         </div>
       </div>
