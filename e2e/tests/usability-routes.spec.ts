@@ -32,7 +32,8 @@ test.describe('Usability and routes', () => {
   test('old routes open the current screens', async ({ page }) => {
     await page.goto('/namespaces')
     await expect(page).toHaveURL(/\/cluster\/namespaces$/)
-    await expect(page.locator('nav a[href="/cluster/namespaces"]')).toHaveClass(/bg-primary-600/)
+    await expect(page.locator('nav a[href="/cluster/namespaces"]')).toHaveAttribute('aria-current', 'page')
+    await expect(page.locator('nav a[href="/cluster/namespaces"]')).toHaveClass(/bg-slate-700/)
     await page.goto('/resources/default')
     await expect(page).toHaveURL(/\/workloads\/pods$/)
     await page.goto('/network/default')

@@ -54,7 +54,7 @@ function assertNoCriticalErrors(errors: string[]) {
 
 async function openFirstPod(page: Page) {
   await page.waitForTimeout(2000)
-  const firstPod = page.locator('div.card button:has(svg.lucide-box)').first()
+  const firstPod = page.getByTestId('cluster-view-node').locator('button:has(svg.lucide-box)').first()
   if ((await firstPod.count()) === 0) return null
   await firstPod.click()
   await expect(page.locator('button').filter({ has: page.locator('svg.lucide-x.w-5') }).first())
@@ -89,7 +89,7 @@ test.describe('SSE migration — Pod Logs', () => {
     const errors = await gotoClusterView(page)
     await page.waitForTimeout(2000)
 
-    const pods = page.locator('div.card button:has(svg.lucide-box)')
+    const pods = page.getByTestId('cluster-view-node').locator('button:has(svg.lucide-box)')
     const count = await pods.count()
     test.skip(count < 3, '3개 이상 Pod 필요')
 
@@ -148,7 +148,7 @@ test.describe('SSE migration — Pod Logs', () => {
 
     // 다시 Pod 클릭 → 로그 영역 mount
     await page.waitForTimeout(2000)
-    const pods = page.locator('div.card button:has(svg.lucide-box)')
+    const pods = page.getByTestId('cluster-view-node').locator('button:has(svg.lucide-box)')
     await expect(pods.first()).toBeVisible({ timeout: 10000 })
     await pods.first().click()
     await expect(page.locator('pre.whitespace-pre-wrap').first()).toBeVisible({ timeout: 10000 })

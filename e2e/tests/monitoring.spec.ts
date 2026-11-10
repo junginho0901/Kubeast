@@ -150,7 +150,7 @@ test.describe('Monitoring', () => {
       await page.getByTestId('monitoring-namespace-opt-kube-system').click()
       const rows = page.getByTestId('monitoring-pod-row')
       await expect.poll(() => rows.count(), { timeout: 30_000 }).toBeGreaterThan(0)
-      const numbers = page.locator('.bg-slate-700.rounded-lg p.text-2xl')
+      const numbers = page.locator('.card').filter({ has: page.getByTestId('monitoring-namespace') }).locator('p.tabular-nums')
       await expect(numbers).toHaveCount(3)
       await expect(numbers.first()).not.toHaveText('-')
 

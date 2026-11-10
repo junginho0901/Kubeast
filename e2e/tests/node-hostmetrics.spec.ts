@@ -101,9 +101,9 @@ test.describe('node values from OpenTelemetry hostmetrics', () => {
   test('the node drawer and the dashboard fill from hostmetrics', async ({ request, page }) => {
     await page.goto(`/cluster/nodes?cluster=${SELF}`)
     await page.getByRole('cell', { name: node, exact: true }).first().click({ timeout: 30_000 })
-    const section = page.locator('div.rounded-lg').filter({ has: page.getByText(/Real-time Metrics|실시간/i) }).first()
+    const section = page.getByRole('heading', { name: /Real-time Metrics|실시간/i }).locator('xpath=../..')
     await expect(section).toContainText(/CPU Usage/, { timeout: 30_000 })
-    const card = (label: string) => section.locator('div.rounded-lg.border.px-3').filter({ hasText: label }).first()
+    const card = (label: string) => section.getByText(label, { exact: true }).locator('xpath=..')
     const shown = async (label: string) => parseFloat(((await card(label).textContent()) ?? '').replace(label, ''))
     // The card and a fresh query of the same figure agree (the page refetches every 30 s).
     const sel = `k8s_node_name="${node}"`

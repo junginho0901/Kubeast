@@ -126,7 +126,7 @@ test.describe('Grafana in front of the stores', () => {
     const node = kubectlSecond(`get nodes -o jsonpath='{.items[0].metadata.name}'`)
     await page.goto(`/cluster/nodes?cluster=${CLUSTER}`)
     await page.getByRole('cell', { name: node, exact: true }).first().click({ timeout: 30_000 })
-    const section = page.locator('div.rounded-lg').filter({ has: page.getByText(/Real-time Metrics|실시간/i) }).first()
+    const section = page.getByRole('heading', { name: /Real-time Metrics|실시간/i }).locator('xpath=../..')
     await expect(section).toContainText(/CPU Usage[\s\S]*\d+(\.\d+)?\s*%/, { timeout: 30_000 })
     await expect(section).toContainText(/Memory Usage[\s\S]*\d+(\.\d+)?\s*%/)
   })

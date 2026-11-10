@@ -176,7 +176,7 @@ test.describe('Log files view', () => {
     await page.goto(`/cluster-view?cluster=${CLUSTER}`)
     await expect(page.getByRole('heading', { name: /클러스터 뷰|Cluster view/i })).toBeVisible({ timeout: 15000 })
     await page.getByPlaceholder(/Search pod name|Pod 이름/i).fill('e2e-logfile-writer')
-    await page.locator('div.card button', { hasText: 'e2e-logfile-writer' }).first().click()
+    await page.getByTestId('cluster-view-node').getByRole('button').filter({ hasText: 'e2e-logfile-writer' }).first().click()
 
     // Container output of this app is empty — the reason the view exists. Once
     // connected the tab says so instead of loading forever.

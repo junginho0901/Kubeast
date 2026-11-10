@@ -39,9 +39,9 @@ test.describe('ClusterView refactor — Context / hook 분리 회귀', () => {
   test('Pod 카드 클릭 → 상세 모달 + Logs 탭 default + ESC close', async ({ page }) => {
     const errors = await gotoClusterView(page)
 
-    // 노드 카드 안에 첫 Pod 버튼 찾기. card 내부의 grid 안 button.
+    // 노드 구역 안의 첫 Pod 버튼 찾기.
     await page.waitForTimeout(2000)  // pod load
-    const firstPodButton = page.locator('div.card button:has(svg.lucide-box)').first()
+    const firstPodButton = page.getByTestId('cluster-view-node').locator('button:has(svg.lucide-box)').first()
     if ((await firstPodButton.count()) === 0) {
       test.skip(true, 'Pod 카드 없음')
       return
@@ -53,7 +53,7 @@ test.describe('ClusterView refactor — Context / hook 분리 회귀', () => {
     const modalCloseBtn = page.locator('button').filter({ has: page.locator('svg.lucide-x.w-5') }).first()
     await expect(modalCloseBtn).toBeVisible({ timeout: 10000 })
     // the modal is the pod that was clicked (the node cards have h2 titles too)
-    await expect(page.locator('h2.text-xl').filter({ hasText: podName! })).toHaveCount(1)
+    await expect(page.getByRole('heading', { level: 2, name: podName!, exact: true })).toHaveCount(1)
 
     // Logs 탭 default 표시 — the selected tab
     const logsTab = page.locator('button').filter({ hasText: /^Logs$|^로그$/i }).first()
@@ -70,13 +70,14 @@ test.describe('ClusterView refactor — Context / hook 분리 회귀', () => {
     const errors = await gotoClusterView(page)
 
     await page.waitForTimeout(2000)
-    const firstPodButton = page.locator('div.card button:has(svg.lucide-box)').first()
+    const firstPodButton = page.getByTestId('cluster-view-node').locator('button:has(svg.lucide-box)').first()
     if ((await firstPodButton.count()) === 0) {
       test.skip(true, 'Pod 카드 없음')
       return
     }
+    const podName = await firstPodButton.locator('[title]').first().getAttribute('title')
     await firstPodButton.click()
-    await expect(page.locator('h2.text-xl').filter({ hasText: /-/ }).first()).toBeVisible({ timeout: 10000 })
+    await expect(page.getByRole('heading', { level: 2, name: podName!, exact: true })).toBeVisible({ timeout: 10000 })
 
     // Summary → Describe → Manifest → RBAC → Summary 순회. selectTab 단일 setter 가
     // 5 boolean 을 동시 reset 안 하면 두 탭이 동시 active 됨 → exclusive 확인.

@@ -47,7 +47,7 @@ test.describe('ai_service refactor regression', () => {
     // the answer starts (right after the click the input can still be enabled), then ends
     await expect(input).toBeDisabled({ timeout: 15_000 })
     await expect(input).toBeEnabled({ timeout: 60_000 })
-    const lastAssistant = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
+    const lastAssistant = page.getByTestId('assistant-avatar').locator('..').last()
     const text = (await lastAssistant.innerText()).trim()
     expect(text.length).toBeGreaterThan(0)
     expect(text).toMatch(/[가-힣]/)
@@ -66,7 +66,7 @@ test.describe('ai_service refactor regression', () => {
     await expect(input).toBeDisabled({ timeout: 15_000 })
     await expect(input).toBeEnabled({ timeout: 90_000 })
 
-    const lastAssistant = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
+    const lastAssistant = page.getByTestId('assistant-avatar').locator('..').last()
     expect(await lastAssistant.locator('.md-details').count()).toBeGreaterThan(0)
     const answer = await answerText(lastAssistant)
     expect(pods.some((p) => answer.includes(p)), `the answer names one of ${pods.join(', ')}:\n${answer}`).toBe(true)
@@ -90,7 +90,7 @@ test.describe('ai_service refactor regression', () => {
     // the SSE really stopped: the answer does not grow any more (stopped before the first word, there is no answer
     // bubble at all). The answer is measured without the action row under it, which opens after the stop and adds
     // "Stopped · usage not available"
-    const assistants = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)')
+    const assistants = page.getByTestId('assistant-avatar').locator('..')
     const answerLength = () => assistants.last().evaluate((el) => {
       const copy = el.cloneNode(true) as HTMLElement
       copy.querySelectorAll('[data-testid="message-actions-row"]').forEach((row) => row.remove())
@@ -143,7 +143,7 @@ test.describe('ai_service refactor regression', () => {
     await page.getByRole('button', { name: SEND_RE }).click()
     await expect(input).toBeDisabled({ timeout: 15_000 })
     await expect(input).toBeEnabled({ timeout: 60_000 })
-    const answer = (await page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last().innerText()).trim()
+    const answer = (await page.getByTestId('assistant-avatar').locator('..').last().innerText()).trim()
     expect(answer.length).toBeGreaterThan(0)
   })
 })

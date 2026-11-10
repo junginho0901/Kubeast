@@ -89,7 +89,7 @@ test.describe('Dashboard refactor — UI verification', () => {
     // useDashboardIssues 가 정상 동작했다면: total count badge 또는 'No issues' 둘 중 하나
     // With zero issues both render (badge "0" and the empty text), so take the
     // first match — strict mode rejects an `or` that resolves to two elements.
-    const totalBadge = page.locator('.badge.badge-info').first()
+    const totalBadge = page.getByTestId('issues-total')
     const empty = page.getByText(/No issues|문제\s*없음/i).first()
     await expect(totalBadge.or(empty).first()).toBeVisible({ timeout: 5000 })
     // the issues API answered and the modal shows its count
@@ -177,7 +177,7 @@ test.describe('Dashboard refactor — UI verification', () => {
 
     // 검색 input — modalSearchQuery state update + getFilteredResources 재계산: nothing matches, then all come back
     const searchInput = page.getByPlaceholder(/^(Search\.\.\.|검색\.\.\.)$/).last()
-    const cards = page.locator('div.p-4.bg-slate-700.rounded-lg.cursor-pointer')
+    const cards = page.getByTestId('resource-modal-pod-status')
     await expect(cards.first()).toBeVisible({ timeout: 10000 })
     const all = await cards.count()
     await searchInput.fill('zz-no-such-pod-9c')
