@@ -22,7 +22,7 @@ function ConditionBadge({ label, value }: { label: string; value: unknown }) {
     : isOn
       ? 'border-emerald-700/60 bg-emerald-900/20 text-emerald-300'
       : 'border-amber-700/60 bg-amber-900/20 text-amber-300'
-  return <span className={`inline-flex items-center rounded-sm px-2 py-0.5 border ${cls}`}>{label}: <Tx>{isUnknown ? 'Unknown' : isOn ? 'Yes' : 'No'}</Tx></span>
+  return <span data-detail-chip="" className={`inline-flex items-center rounded-sm px-2 py-0.5 border ${cls}`}>{label}: <Tx>{isUnknown ? 'Unknown' : isOn ? 'Yes' : 'No'}</Tx></span>
 }
 
 // an endpoint's zone or node hints: names from a list row, [{ name }] from the object opened by link
@@ -122,7 +122,7 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
                 const forZones = hintNames(ep?.hints?.for_zones, ep?.hints?.forZones)
                 const forNodes = hintNames(ep?.hints?.for_nodes, ep?.hints?.forNodes)
                 return (
-                  <div key={(endpointsPage - 1) * 10 + i} className="rounded-sm border border-slate-800 p-3 space-y-2" data-testid="endpointslice-endpoint">
+                  <div data-detail-card="" key={(endpointsPage - 1) * 10 + i} className="rounded-sm border border-slate-800 p-3 space-y-2" data-testid="endpointslice-endpoint">
                     <div className="text-xs text-slate-200 break-all">
                       <span className="text-slate-400"><Tx>Addresses:</Tx></span> {addresses.length > 0 ? addresses.join(', ') : '-'}
                     </div>

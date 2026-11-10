@@ -169,7 +169,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
           <InfoRow label="Name" value={name} />
           <InfoRow label="Namespace" value={namespace} />
           <InfoRow label={tr('secretInfo.type', 'Type')} value={
-            <span className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] font-mono">
+            <span data-detail-chip="" className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] font-mono">
               {secretType}
             </span>
           } />
@@ -187,7 +187,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
         <InfoSection title={tr('secretInfo.tlsCertInfo', 'TLS Certificate Info')}>
           <div className="space-y-2">
             <InfoRow label={tr('secretInfo.type', 'Type')} value={
-              <span className="inline-flex items-center gap-1.5 rounded-sm border border-emerald-700/50 bg-emerald-900/30 px-2 py-0.5 text-[11px] font-mono text-emerald-300">
+              <span data-detail-chip="" className="inline-flex items-center gap-1.5 rounded-sm border border-emerald-700/50 bg-emerald-900/30 px-2 py-0.5 text-[11px] font-mono text-emerald-300">
                 <ShieldCheck className="w-3 h-3" /> TLS
               </span>
             } />
@@ -221,7 +221,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
         <InfoSection title={tr('secretInfo.dockerConfigInfo', 'Docker Registry Info')}>
           <div className="space-y-2">
             <InfoRow label={tr('secretInfo.type', 'Type')} value={
-              <span className="inline-flex items-center gap-1.5 rounded-sm border border-slate-600 bg-slate-800 px-2 py-0.5 text-[11px] font-mono text-slate-300">
+              <span data-detail-chip="" className="inline-flex items-center gap-1.5 rounded-sm border border-slate-600 bg-slate-800 px-2 py-0.5 text-[11px] font-mono text-slate-300">
                 <Container className="w-3 h-3" /> Docker Config
               </span>
             } />
@@ -292,7 +292,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
           <div className="space-y-1">
             {ownerRefs.map((ref) => (
               <div key={ref.uid} className="flex items-center gap-2 text-xs">
-                <span className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-slate-300">{ref.kind}</span>
+                <span data-detail-chip="" className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-slate-300">{ref.kind}</span>
                 <span className="text-ink font-medium">{ref.name}</span>
               </div>
             ))}
@@ -407,7 +407,7 @@ function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; s
   }
 
   return (
-    <div className="rounded-sm border border-slate-800 bg-slate-900/40">
+    <div data-detail-card="" className="rounded-sm border border-slate-800 bg-slate-900/40">
       <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <span className="font-mono text-xs text-slate-200 break-all">{dataKey}</span>

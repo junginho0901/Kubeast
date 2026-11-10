@@ -35,7 +35,7 @@ export const MessageBubble = memo(function MessageBubble({ message, idx, copyRes
   // the ZIP being made, then what came of it until the next press: why none was made, or that some results are cut
   const [zip, setZip] = useState<{ busy: boolean; outcome: ExportOutcome | null }>({ busy: false, outcome: null })
   return (
-    <div className={`flex gap-3 p-6 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
+    <div data-message-role={message.role} data-testid="chat-message" className={`flex gap-3 p-6 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
       {message.role === 'user' ? (
         <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-primary-500">
           <User className="w-5 h-5 text-ink" />

@@ -243,19 +243,19 @@ spec:
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
+        <div data-list-summary-card="" className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('resourceClaimsPage.stats.total', 'Total')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
         </div>
-        <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
+        <div data-list-summary-card="" className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('resourceClaimsPage.stats.allocated', 'Allocated')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{summary.allocated}</p>
         </div>
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
+        <div data-list-summary-card="" className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('resourceClaimsPage.stats.reserved', 'Reserved')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{summary.reserved}</p>
         </div>
-        <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
+        <div data-list-summary-card="" className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('resourceClaimsPage.stats.pending', 'Pending')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{summary.pending}</p>
         </div>

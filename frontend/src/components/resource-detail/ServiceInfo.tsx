@@ -111,7 +111,7 @@ function AddressList({ label, addresses, testId }: { label: string; addresses: s
       ) : (
         <div className="flex flex-wrap gap-1.5">
           {paged.map((ip, i) => (
-            <span key={`${ip}-${i}`} className="rounded-sm border border-slate-700 bg-slate-800/60 px-2 py-0.5 font-mono text-[11px] text-slate-200" data-testid="service-address">{ip}</span>
+            <span data-detail-chip="" key={`${ip}-${i}`} className="rounded-sm border border-slate-700 bg-slate-800/60 px-2 py-0.5 font-mono text-[11px] text-slate-200" data-testid="service-address">{ip}</span>
           ))}
         </div>
       )}

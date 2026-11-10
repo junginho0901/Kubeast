@@ -250,7 +250,7 @@ export default function NamespaceInfo({ name }: Props) {
                 ? 'border-amber-700 bg-amber-900/20 text-amber-300'
                 : 'border-red-700 bg-red-900/20 text-red-300'
               return (
-                <span key={phase} className={`rounded-sm border px-2 py-0.5 text-[11px] ${color}`}>
+                <span data-detail-chip="" key={phase} className={`rounded-sm border px-2 py-0.5 text-[11px] ${color}`}>
                   {phase}: <span className="font-mono">{String(count)}</span>
                 </span>
               )
@@ -302,7 +302,7 @@ export default function NamespaceInfo({ name }: Props) {
         {Array.isArray(resourceQuotas) && resourceQuotas.length > 0 ? (
           <div className="space-y-3">
             {resourceQuotas.map(rq => (
-              <div key={rq.name} className="rounded-sm border border-slate-800 p-3">
+              <div data-detail-card="" key={rq.name} className="rounded-sm border border-slate-800 p-3">
                 <p className="text-xs text-ink font-medium mb-2">{rq.name}</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs table-fixed min-w-[360px]">
@@ -329,7 +329,7 @@ export default function NamespaceInfo({ name }: Props) {
         {Array.isArray(limitRanges) && limitRanges.length > 0 ? (
           <div className="space-y-3">
             {limitRanges.map((lr: any) => (
-              <div key={lr.name} className="rounded-sm border border-slate-800 p-3">
+              <div data-detail-card="" key={lr.name} className="rounded-sm border border-slate-800 p-3">
                 <p className="text-xs text-ink font-medium mb-2">{lr.name}</p>
                 {lr.limits?.map((lim: any, li: number) => (
                   <div key={li} className="overflow-x-auto mb-2">

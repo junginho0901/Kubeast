@@ -240,7 +240,7 @@ spec:
       />
 
       <div className="grid grid-cols-1 gap-3 shrink-0">
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
+        <div data-list-summary-card="" className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('resourceClaimTemplatesPage.stats.total', 'Total')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
         </div>

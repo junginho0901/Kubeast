@@ -142,7 +142,7 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
         <InfoSection title="Mount Options">
           <div className="flex flex-wrap gap-2">
             {mountOptions.map((opt, idx) => (
-              <span key={`${opt}-${idx}`} className="text-[11px] rounded-full border border-slate-700 bg-slate-800/80 px-2 py-1">{String(opt)}</span>
+              <span data-detail-tag="" key={`${opt}-${idx}`} className="text-[11px] rounded-full border border-slate-700 bg-slate-800/80 px-2 py-1">{String(opt)}</span>
             ))}
           </div>
         </InfoSection>

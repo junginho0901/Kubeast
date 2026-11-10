@@ -112,7 +112,7 @@ export default function ResourceQuotaInfo({ name, namespace }: Props) {
         <InfoSection title="Scopes">
           <div className="flex flex-wrap gap-2 text-xs text-slate-200">
             {scopes.map((scope, idx) => (
-              <span key={`${scope}-${idx}`} className="inline-flex items-center rounded-full border border-slate-700 bg-slate-800/80 px-2 py-1">
+              <span data-detail-tag="" key={`${scope}-${idx}`} className="inline-flex items-center rounded-full border border-slate-700 bg-slate-800/80 px-2 py-1">
                 {scope}
               </span>
             ))}
@@ -125,7 +125,7 @@ export default function ResourceQuotaInfo({ name, namespace }: Props) {
         <InfoSection title="Scope Selector">
           <div className="space-y-2">
             {scopeSelector.map((expr: any, idx: number) => (
-              <div key={idx} className="text-xs text-slate-200 rounded-sm border border-slate-700 bg-slate-800/80 px-3 py-2">
+              <div data-detail-card="" key={idx} className="text-xs text-slate-200 rounded-sm border border-slate-700 bg-slate-800/80 px-3 py-2">
                 <InfoRow label="Scope Name" value={expr.scope_name || expr.scopeName || '-'} />
                 <InfoRow label="Operator" value={expr.operator || '-'} />
                 {(expr.values || []).length > 0 && (

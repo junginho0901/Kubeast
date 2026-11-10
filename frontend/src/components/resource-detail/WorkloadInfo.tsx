@@ -229,7 +229,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
         <InfoSection title="Volume Claim Templates">
           <div className="space-y-2 text-xs text-slate-200">
             {volumeClaimTemplates.map((vct: any, idx: number) => (
-              <div key={`${vct.name || 'vct'}-${idx}`} className="rounded-sm border border-slate-800 p-2 space-y-1">
+              <div data-detail-card="" key={`${vct.name || 'vct'}-${idx}`} className="rounded-sm border border-slate-800 p-2 space-y-1">
                 <div className="font-medium text-ink">{vct.name || '-'}</div>
                 <div>StorageClass: {vct.storage_class_name || vct.spec?.storageClassName || '-'}</div>
                 <div>
