@@ -7,6 +7,7 @@ import { MessageInput } from './MessageInput'
 import { MessagesList } from './MessagesList'
 import { ChatHeader } from './ChatHeader'
 import { useAIChat } from './AIChatContext'
+import { ActionFailure } from '@/components/ActionFailure'
 
 // AIChat 우측 패널 — Header / (Welcome | MessagesList) / MessageInput.
 // 메시지 0개 + selectedSession 없거나 임시 일 때 welcome 화면, 아니면 messages 리스트.
@@ -21,6 +22,8 @@ interface Props {
   onDownloadJson: (message: Message) => void
   onSend: (q?: string) => void
   onStop: () => void
+  // why the stopped answer was not saved (it stays on screen, but not in the conversation)
+  stopSaveFailure?: unknown
   t: TFunction
 }
 
@@ -32,6 +35,7 @@ export function ChatMain({
   onDownloadJson,
   onSend,
   onStop,
+  stopSaveFailure = null,
   t,
 }: Props) {
   const { messages, input, setInput, selectedSessionId } = useAIChat()
@@ -62,6 +66,7 @@ export function ChatMain({
         />
       )}
 
+      <ActionFailure error={stopSaveFailure} action="save" testId="chat-stop-save-error" className="px-6 pb-2" />
       <MessageInput
         value={input}
         onChange={setInput}

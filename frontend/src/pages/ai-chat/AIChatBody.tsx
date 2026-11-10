@@ -129,6 +129,7 @@ export function AIChatBody() {
   // 메인 핸들러 swarm
   const {
     handleStop,
+    stopSaveFailure,
     handleSend,
     handleNewChat,
     handleSelectSession,
@@ -205,6 +206,7 @@ export function AIChatBody() {
         onDownloadJson={handleDownloadJson}
         onSend={handleSend}
         onStop={handleStop}
+        stopSaveFailure={stopSaveFailure}
         t={t}
       />
     </div>

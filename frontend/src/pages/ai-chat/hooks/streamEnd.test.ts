@@ -20,6 +20,7 @@ vi.mock('react', async (importOriginal) => ({
     effect()
   },
   useRef: (value: unknown) => ({ current: refs.length ? refs.shift() : value }),
+  useState: (value: unknown) => [value, () => {}],
 }))
 
 vi.mock('@tanstack/react-query', () => ({

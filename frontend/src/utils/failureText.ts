@@ -1,3 +1,9 @@
+// A fetch() answer that was not ok, in the shape failureText reads (the JSON body's detail, else the status).
+export async function responseFailure(res: Response): Promise<unknown> {
+  const data = await res.json().catch(() => null)
+  return { response: { status: res.status, data }, message: `Request failed with status code ${res.status}` }
+}
+
 // What a failed request says on screen: the server's reason (`detail`, as services/pkg/response and FastAPI write it;
 // FastAPI's field errors are a list of `msg`), else the request's own error ("Network Error", "Request failed with
 // status code 502" for a gateway page that is not JSON).
