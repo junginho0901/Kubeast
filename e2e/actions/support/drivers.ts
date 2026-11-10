@@ -9,7 +9,7 @@
 // temporary user, so the shared admin storageState stays valid for the rest of the run.
 import type { Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { BASE_URL, EXTRA_KIND, NS, NS2, TARGET_CLUSTER, exists, jsonpath, kubectl, sleep, until } from './env'
+import { BASE_URL, EXTRA_KIND, NS, NS2, TARGET_CLUSTER, exists, jsonpath, kubectl, requireKubeconfig, sleep, until } from './env'
 import {
   acceptConfirm,
   api,
@@ -779,6 +779,34 @@ def('endpointslice-delete', 'k8s-service:DELETE:/api/v1/namespaces/{namespace}/e
   const uid = jsonpath(['endpointslice', ctx.name], '{.metadata.uid}')
   return { ok: uid !== ctx.uid, detail: uid === ctx.uid ? `${ctx.name} same object (not deleted)` : `${ctx.name} deleted — the endpointslice controller recreates one` }
 })
+
+// A Node and a VolumeAttachment of the run's own, made right before their delete: no kubelet serves the Node (no
+// kubernetes.io/os label, so no DaemonSet lands there) and no CSI driver takes the attachment, so the deletes touch
+// nothing the cluster or the other drivers use. What the screen did not delete is removed after the check.
+const FAKE_NODE = `qa-fake-node-${STAMP}`
+const FAKE_VA = `qa-fake-va-${STAMP}`
+function applyDoc(doc: string): void {
+  execFileSync('kubectl', ['apply', '-f', '-'], { input: doc, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, KUBECONFIG: requireKubeconfig() } })
+}
+for (const [key, p, route, kind, name, doc] of [
+  ['node-delete', '/api/v1/nodes/{name}', 'cluster/nodes', 'node', FAKE_NODE,
+    `apiVersion: v1\nkind: Node\nmetadata: {name: ${FAKE_NODE}, labels: {qa-sweep/fake: "true"}}\nspec: {taints: [{key: qa-sweep/fake, effect: NoSchedule}]}\n`],
+  ['volumeattachment-delete', '/api/v1/volumeattachments/{name}', 'storage?tab=volumeattachments', 'volumeattachment', FAKE_VA,
+    `apiVersion: storage.k8s.io/v1\nkind: VolumeAttachment\nmetadata: {name: ${FAKE_VA}}\nspec: {attacher: qa.example.com, nodeName: ${FAKE_NODE}, source: {persistentVolumeName: qa-none}}\n`],
+] as const) {
+  def(key, `k8s-service:DELETE:${p}`, route, async (page) => {
+    applyDoc(doc)
+    await page.reload()
+    await openRow(page, name)
+    await clickButton(page, /^delete\b|^삭제/i)
+    await confirmDialog(page, /^delete$|^삭제$/i, name)
+    await until(() => !kubectl(['get', kind, name, '-o', 'name']).ok, 15000)
+  }, () => {
+    const left = kubectl(['get', kind, name, '-o', 'name']).ok
+    if (left) kubectl(['delete', kind, name, '--wait=false'])
+    return { ok: !left, detail: left ? `${kind}/${name} still present (removed after the check)` : `${kind}/${name} deleted` }
+  })
+}
 
 // ---------- ai-service model configs (admin) ----------
 // The model form is an inline panel ("New Model"), not a modal.
