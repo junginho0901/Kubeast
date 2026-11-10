@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Film, Play, RefreshCw } from 'lucide-react'
@@ -12,6 +12,7 @@ import RecordingPlayerModal from '@/components/RecordingPlayerModal'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { formatWhen } from './accessRequestFormat'
 import { utcTitle } from '@/utils/time'
+import { answerPageSize, serverPageRead } from '@/utils/fitServerPage'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { failureOf } from '@/hooks/useRefresh'
@@ -49,24 +50,28 @@ export default function SessionRecordings() {
 
   // the first row's height is measured once rows have come (recalculationKey)
   const [rowsIn, setRowsIn] = useState(false)
-  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ rowHeight: 41, recalculationKey: String(rowsIn) })
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage, fit } = useAdaptiveTable({ rowHeight: 41, recalculationKey: String(rowsIn) })
   const page = Math.floor(firstRow / rowsPerPage) + 1
+  // with Fit the first page is one block cut at the rows that fit (utils/fitServerPage), so opening the list is one read
+  const read = serverPageRead(page, rowsPerPage, fit)
 
   const { data: config } = useQuery({ queryKey: ['recordings', 'config'], queryFn: api.getRecordingsConfig, staleTime: 60_000 })
   // The server counts the matches (X-Kubeast-Total). The rows on screen stay while another page, search or page size
   // loads, with the range and rows per page they are.
   const { data, isLoading, refetch, isFetching, error: listError, errorUpdatedAt } = useQuery({
-    queryKey: ['recordings', 'list', applied, page, rowsPerPage],
-    queryFn: async () => ({ page, limit: rowsPerPage, ...(await api.listRecordings({ ...applied, limit: rowsPerPage, offset: (page - 1) * rowsPerPage })) }),
+    queryKey: ['recordings', 'list', applied, page, read],
+    queryFn: async () => ({ page, limit: read.limit, ...(await api.listRecordings({ ...applied, ...read })) }),
     placeholderData: keepPreviousData,
     refetchInterval: 15_000,
   })
-  const rows = data?.items ?? []
   const total = data?.total ?? 0
   const shownPage = data?.page ?? page
-  const shownLimit = data?.limit ?? rowsPerPage
+  // the answer's page size: a first-page block is cut at the rows that fit
+  const shownLimit = data ? answerPageSize({ offset: (data.page - 1) * data.limit, limit: data.limit }, rowsPerPage) : rowsPerPage
+  const rows = (data?.items ?? []).slice(0, shownLimit)
   const hasRows = rows.length > 0
-  useEffect(() => { if (hasRows) setRowsIn(true) }, [hasRows])
+  // once, in the render the rows first come in, so the row height is measured before that frame is painted
+  if (hasRows && !rowsIn) setRowsIn(true)
 
   const statusClass: Record<string, string> = {
     recording: 'bg-primary-900/40 text-primary-300 border-primary-800/60',

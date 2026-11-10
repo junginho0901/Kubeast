@@ -1,4 +1,5 @@
 import type { InvestigationSummary } from '@/services/api/investigations'
+import { answerPageSize } from '@/utils/fitServerPage'
 
 // What the Investigations list draws from one answer. While another page, filter or page size
 // loads the previous answer stays on screen, so the range, page, rows per page and filter come
@@ -20,11 +21,12 @@ export interface InvestigationsAnswer {
 
 const NO_FILTER: InvestigationsFilter = { status: '', cluster: '' }
 
+// With Fit the first page is read as one block (utils/fitServerPage): it is cut at the rows that fit now.
 export function investigationsView(data: InvestigationsAnswer | undefined, page: number, pageSize: number) {
-  const rows = data?.items ?? []
   const total = data?.total ?? 0
   const shownPage = data?.page ?? page
-  const limit = data?.limit ?? pageSize
+  const limit = data ? answerPageSize({ offset: (data.page - 1) * data.limit, limit: data.limit }, pageSize) : pageSize
+  const rows = (data?.items ?? []).slice(0, limit)
   const first = (shownPage - 1) * limit + 1
   const last = first + rows.length - 1
   return {

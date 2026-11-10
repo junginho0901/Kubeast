@@ -24,7 +24,7 @@ export function ListPager({ currentPage, totalPages, total, rowsPerPage, onPageC
   return (
     // wraps on a narrow screen (the rows-per-page choice, the range and the buttons do not fit 600 px in one row)
     // instead of widening the page
-    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 border-t border-slate-700 shrink-0" data-testid={testId}>
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 border-t border-slate-700 shrink-0" data-testid={testId} data-rows-per-page={rowsPerPage}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-400">
         {showPageSize && <PageSizeSelect />}
         {total === 0

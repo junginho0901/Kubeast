@@ -29,9 +29,33 @@ describe('admin list pages fit the screen', () => {
   })
 
   it('the server-paged lists ask for the rows the table fits', () => {
-    expect(read('pages/admin/AccessRequests.tsx')).toMatch(/accessRequestQuery\([^)]*rowsPerPage\)/)
-    expect(read('pages/admin/AccessReview.tsx')).toMatch(/historyPage\([^)]*rowsPerPage\)/)
+    expect(read('pages/admin/AccessRequests.tsx')).toMatch(/accessRequestQuery\([^)]*rowsPerPage, fit\)/)
+    expect(read('pages/admin/AccessReview.tsx')).toMatch(/historyPage\([^)]*rowsPerPage, fit\)/)
   })
+
+  // With Fit the first page is one block cut at the rows that fit (utils/fitServerPage): opening the list is one read,
+  // not one for the count from the estimate and another for the measured one. Each page cuts the answer to its size.
+  it.each([
+    ['pages/AdminAudit.tsx', /auditLimitFilter\(filter, rowsPerPage, fit\)/, 'pages/AdminAudit.tsx'],
+    ['pages/admin/AccessRequests.tsx', /accessRequestQuery\([^)]*rowsPerPage, fit\)/, 'pages/admin/AccessRequests.tsx'],
+    ['pages/admin/AccessReview.tsx', /historyPage\(pastPage, rowsPerPage, fit\)/, 'pages/admin/AccessReview.tsx'],
+    ['pages/admin/Investigations.tsx', /serverPageRead\(page, rowsPerPage, fit\)/, 'pages/admin/investigationsView.ts'],
+    ['pages/admin/SessionRecordings.tsx', /serverPageRead\(page, rowsPerPage, fit\)/, 'pages/admin/SessionRecordings.tsx'],
+  ])('%s reads its first page as one block and shows the rows that fit', (file, read_, shownIn) => {
+    expect(read(file)).toMatch(read_)
+    const shown = read(shownIn)
+    expect(shown.includes('answerPageSize('), 'the page size of the answer on screen').toBe(true)
+    expect(shown).toMatch(/\.slice\(0, \w+\)/)
+  })
+
+  // A key set by an effect changes a frame after the rows show, so that frame would draw the rows of the estimate.
+  it.each(['pages/AdminAudit.tsx', 'pages/admin/AccessRequests.tsx', 'pages/admin/Investigations.tsx', 'pages/admin/SessionRecordings.tsx'])(
+    '%s measures the rows in the render they first come in', (file) => {
+      const src = read(file)
+      expect(src).not.toMatch(/useEffect\(\(\) => \{\s*if \(hasRows\)/)
+      expect(src).toMatch(/if \((?:hasRows && !rowsIn\) setRowsIn\(true\)|pagedRows\.length > 0 !== hasRows\) setHasRows)/)
+    },
+  )
 
   // A key set by an effect changes a frame after the rows show, so that frame would draw the rows of the estimate.
   it('Access review measures a section in the render its rows first come in', () => {

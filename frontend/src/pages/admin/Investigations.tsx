@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -17,6 +17,7 @@ import InvestigationReportModal from '@/components/InvestigationReportModal'
 import { duration, severityClass, skipReason, statusClass } from '@/utils/investigationFormat'
 import { formatWhen } from './accessRequestFormat'
 import { investigationsView } from './investigationsView'
+import { serverPageRead } from '@/utils/fitServerPage'
 import { utcTitle } from '@/utils/time'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
@@ -42,15 +43,17 @@ export default function Investigations() {
 
   // the first row's height is measured once rows have come (recalculationKey)
   const [rowsIn, setRowsIn] = useState(false)
-  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ rowHeight: 57, recalculationKey: String(rowsIn) })
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage, fit } = useAdaptiveTable({ rowHeight: 57, recalculationKey: String(rowsIn) })
   const page = Math.floor(firstRow / rowsPerPage) + 1
+  // with Fit the first page is one block cut at the rows that fit (utils/fitServerPage), so opening the list is one read
+  const read = serverPageRead(page, rowsPerPage, fit)
 
   // The rows on screen stay while another page, filter or page size loads; the range, page and AI context are theirs.
   const { data, isLoading, refetch, isFetching, error: listError, errorUpdatedAt } = useQuery({
-    queryKey: ['investigations', 'list', applied, page, rowsPerPage],
+    queryKey: ['investigations', 'list', applied, page, read],
     queryFn: async () => ({
-      ...(await api.listInvestigations({ ...applied, limit: rowsPerPage, offset: (page - 1) * rowsPerPage })),
-      filter: applied, page, limit: rowsPerPage,
+      ...(await api.listInvestigations({ ...applied, ...read })),
+      filter: applied, page, limit: read.limit,
     }),
     placeholderData: keepPreviousData,
     // while something is queued or running, follow it
@@ -59,7 +62,8 @@ export default function Investigations() {
   const view = investigationsView(data, page, rowsPerPage)
   const { rows, total, shownPage, shownFilter } = view
   const hasRows = rows.length > 0
-  useEffect(() => { if (hasRows) setRowsIn(true) }, [hasRows])
+  // once, in the render the rows first come in, so the row height is measured before that frame is painted
+  if (hasRows && !rowsIn) setRowsIn(true)
   const clusterPending = cluster.trim() !== applied.cluster
   const applyCluster = () => {
     setApplied((a) => ({ ...a, cluster: cluster.trim() }))

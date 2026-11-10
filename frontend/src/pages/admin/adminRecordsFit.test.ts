@@ -19,7 +19,7 @@ function render(page: ComponentType): string {
 
 // The classes of the page's outer box, and whether a list footer holds the rows-per-page choice.
 const outer = (markup: string) => (/^<div class="([^"]*)"/.exec(markup)?.[1] ?? '').split(/\s+/)
-const pagerChoice = (markup: string, testId: string) => new RegExp(`data-testid="${testId}"><div[^>]*><div[^>]*data-testid="page-size"`).test(markup)
+const pagerChoice = (markup: string, testId: string) => new RegExp(`data-testid="${testId}"[^>]*><div[^>]*><div[^>]*data-testid="page-size"`).test(markup)
 
 describe('the admin record lists fit the screen', () => {
   const pages: [string, ComponentType, string][] = [

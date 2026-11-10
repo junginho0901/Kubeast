@@ -12,6 +12,7 @@ import {
 } from '@/services/api/access_review'
 import { formatDuration, formatWhen } from './accessRequestFormat'
 import { apiKeyTabCount, historyPage, requestsCut } from './accessReviewView'
+import { answerPageSize } from '@/utils/fitServerPage'
 import { ListPager } from '@/components/ListPager'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
@@ -178,25 +179,26 @@ export default function AccessReview() {
   // measured; the sign-offs come from the server with the page size, so they are known an answer later.
   const [historyRows, setHistoryRows] = useState(false)
   const rowsShow = tab === 'history' ? historyRows : rows.length > 0
-  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: `${tab}:${rowsShow}` })
-  // read with the page (the tab then opens on rows, not a loading line); a page being read keeps the sign-offs shown before it
-  const pastQuery = historyPage(pastPage, rowsPerPage)
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage, fit } = useAdaptiveTable({ recalculationKey: `${tab}:${rowsShow}` })
+  // read with the page (the tab then opens on rows, not a loading line); a page being read keeps the sign-offs shown
+  // before it. With Fit the first page is one block, so the count the Users tab gives reads it as well as the
+  // History tab's own.
+  const pastQuery = historyPage(pastPage, rowsPerPage, fit)
   const { data: past, isLoading: historyLoading, isPlaceholderData: pastLoading, error: historyError } = useQuery({
     queryKey: ['access-review', 'history', pastQuery],
     queryFn: async () => ({ ...(await api.listAccessReviews(pastQuery)), offset: pastQuery.offset, limit: pastQuery.limit }),
     placeholderData: keepPreviousData,
   })
-  const history = past?.items ?? []
   const pastTotal = past?.total ?? 0
-  // the pager follows the answer on screen, with its page size
-  const pastLimit = past?.limit ?? pastQuery.limit
+  // the pager follows the answer on screen, with its page size (a first-page block cut at the rows that fit)
+  const pastLimit = past ? answerPageSize(past, rowsPerPage) : rowsPerPage
+  const history = (past?.items ?? []).slice(0, pastLimit)
   const pastPages = Math.max(1, Math.ceil(pastTotal / pastLimit))
   useEffect(() => {
     if (past && !pastLoading && pastPage > pastPages) setPastPage(pastPages)
   }, [past, pastLoading, pastPage, pastPages])
-  useEffect(() => {
-    if (history.length > 0 !== historyRows) setHistoryRows(history.length > 0)
-  }, [history.length, historyRows])
+  // in the render the sign-offs come in, so the row height is measured before that frame is painted
+  if (history.length > 0 !== historyRows) setHistoryRows(history.length > 0)
   // the answer holds every row of the section: the browser pages them, as many as the table fits
   const shown = pageOf(rows, tabPage, rowsPerPage)
   const setTabPage = (p: number) => setTabPaged({ key: tabPageKey, page: p })
