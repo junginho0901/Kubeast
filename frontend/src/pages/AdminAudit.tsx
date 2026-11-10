@@ -17,6 +17,7 @@ import { RefreshFailure } from '@/components/RefreshFailure'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { failureOf } from '@/hooks/useRefresh'
 import { failureText } from '@/utils/failureText'
+import { useConfirm } from '@/services/confirm'
 
 const SERVICES = ['', 'auth', 'k8s', 'helm', 'ai', 'admin']
 const RESULTS = ['', 'success', 'failure']
@@ -158,6 +159,7 @@ export default function AdminAudit() {
     },
     onError: (e) => setIntegrityError(failureText(e)),
   })
+  const confirm = useConfirm()
   const anchorMutation = useMutation({
     mutationFn: () => api.adminAuditAnchor(),
     // the result line says what was written; the last verify's line is not this one's
@@ -329,7 +331,15 @@ export default function AdminAudit() {
             {integrity.anchor_sink && (
               <button
                 type="button"
-                onClick={() => anchorMutation.mutate()}
+                onClick={async () => {
+                  // it writes outside the database at once: say what and where before it runs
+                  const ok = await confirm({
+                    title: tr('adminAudit.integrity.anchorConfirmTitle', 'Anchor now'),
+                    message: tr('adminAudit.integrity.anchorConfirm', 'Write the head of the hash chain to {{sink}} now? The anchor stays there and in the audit log; anchors are also written on their own schedule.', { sink: integrity.anchor_sink }),
+                    confirmLabel: tr('adminAudit.integrity.anchorNow', 'Anchor now'),
+                  })
+                  if (ok) anchorMutation.mutate()
+                }}
                 disabled={anchorMutation.isPending}
                 data-testid="audit-integrity-anchor"
                 title={tr('adminAudit.integrity.anchorNowTitle', 'Write the head of the hash chain to the anchor sink now (it is also written on its own schedule)')}

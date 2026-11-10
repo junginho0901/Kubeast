@@ -137,7 +137,14 @@ test.describe('Audit log integrity', () => {
       // The strip's text can repeat (same second, no new rows), so the new anchor is checked by id.
       const lastAnchorId = async () => (await (await request.get('/api/v1/auth/admin/audit/integrity', { headers: bearer(admin) })).json()).last_anchor?.id ?? 0
       const before = await lastAnchorId()
+      // it writes outside the database, so it asks first: Cancel writes nothing, the confirm writes one anchor
       await page.getByTestId('audit-integrity-anchor').click()
+      await expect(page.getByTestId('confirm-dialog')).toContainText(status.anchor_sink)
+      await page.getByTestId('confirm-dialog').getByRole('button', { name: /^(Cancel|취소)$/ }).click()
+      await page.waitForTimeout(1_500)
+      expect(await lastAnchorId(), 'Cancel wrote no anchor').toBe(before)
+      await page.getByTestId('audit-integrity-anchor').click()
+      await page.getByTestId('confirm-dialog-ok').click()
       await expect.poll(lastAnchorId, { timeout: 15_000 }).toBeGreaterThan(before)
       await expect(page.getByTestId('audit-integrity-anchor-state')).toContainText('#')
     }

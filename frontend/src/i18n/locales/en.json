@@ -4312,6 +4312,8 @@
       "ok": "✓ #{{from}}–#{{to}}: {{rows}} rows intact, {{anchors}} anchor(s) match",
       "bad": "✗ #{{from}}–#{{to}}: {{reason}} at #{{seq}}",
       "anchorNowTitle": "Write the head of the hash chain to the anchor sink now (it is also written on its own schedule)",
+      "anchorConfirmTitle": "Anchor now",
+      "anchorConfirm": "Write the head of the hash chain to {{sink}} now? The anchor stays there and in the audit log; anchors are also written on their own schedule.",
       "sealedTitle": "Rows up to this number are chained by hash: a changed or removed row breaks the chain (Verify checks it)",
       "anchorTitle": "An anchor is a copy of the chain head written outside the database (the sink), so the chain can be checked against it"
     },
