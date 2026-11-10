@@ -99,7 +99,15 @@ export default function ModelConfigCard({
         <div className="flex items-center gap-1">
           {cfg.enabled && !isActive && (
             <button
-              onClick={() => activateMutation.mutate(cfg.id)}
+              onClick={async () => {
+                // it changes the model every chat uses: say so before it runs
+                const ok = await confirm({
+                  title: tr('admin.aiModels.activateTitle', 'Use this model for every chat'),
+                  message: tr('admin.aiModels.activateConfirm', 'Make "{{name}}" the model every chat uses? The model in use now stops being the default.', { name: cfg.name }),
+                  confirmLabel: tr('admin.aiModels.activate', 'Activate'),
+                })
+                if (ok) activateMutation.mutate(cfg.id)
+              }}
               disabled={activateMutation.isPending}
               className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-slate-400 hover:bg-emerald-500/10 hover:text-emerald-400 transition"
               title={tr('admin.aiModels.setActive', 'Set as Active')}

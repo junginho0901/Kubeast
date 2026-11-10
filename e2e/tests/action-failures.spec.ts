@@ -97,6 +97,7 @@ test.describe('a refused write says why where it was pressed', () => {
     const idle = configs.find((c) => c.enabled && !(c.used_for ?? []).includes('chat'))
     if (idle) {
       await page.getByRole('button', { name: /^Activate$/ }).first().click()
+      await page.getByTestId('confirm-dialog-ok').click()
       await expect(page.locator('[data-testid^="ai-model-activate-error-"]')).toHaveText(failed('change'), { timeout: 15_000 })
     }
   })

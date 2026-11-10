@@ -418,7 +418,16 @@ export default function AdminUsers() {
           {dormantConfig?.enabled && (
             <button
               type="button"
-              onClick={() => sweepMutation.mutate()}
+              onClick={async () => {
+                // it locks accounts at once: say what it does and to whom before it runs
+                const ok = await confirm({
+                  title: tr('adminUsers.sweepConfirmTitle', 'Sweep dormant accounts now'),
+                  message: tr('adminUsers.sweepConfirm', 'Lock every account with no sign-in or API key use for {{days}} days now? A locked account signs in again only after an admin unlocks it.', { days: dormantConfig.days }),
+                  confirmLabel: tr('adminUsers.sweepDormant', 'Sweep dormant now'),
+                  danger: true,
+                })
+                if (ok) sweepMutation.mutate()
+              }}
               disabled={sweepMutation.isPending}
               data-testid="dormant-sweep-now"
               className="btn btn-primary flex items-center gap-2 disabled:opacity-50"

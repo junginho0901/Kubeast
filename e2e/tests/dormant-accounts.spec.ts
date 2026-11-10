@@ -140,7 +140,13 @@ test.describe('Dormant accounts', () => {
     await expect(row.getByTestId('user-dormant-badge')).toHaveCount(0, { timeout: 15000 })
     expect((await listed(request, admin, MEMBER)).dormant_locked_at).toBeUndefined()
 
+    // it locks accounts: a confirm says so first, and Cancel sweeps nothing
     await page.getByTestId('dormant-sweep-now').click()
+    await expect(page.getByTestId('confirm-dialog-ok')).toBeVisible()
+    await page.getByRole('button', { name: /^(Cancel|취소)$/ }).last().click()
+    await expect(page.getByTestId('dormant-sweep-result'), 'cancelled: no sweep ran').toHaveCount(0)
+    await page.getByTestId('dormant-sweep-now').click()
+    await page.getByTestId('confirm-dialog-ok').click()
     await expect(page.getByTestId('dormant-sweep-result')).toBeVisible({ timeout: 15000 })
   })
 })
