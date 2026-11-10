@@ -70,7 +70,8 @@ test.describe('a list whose read failed says so', () => {
 
   test('/admin/audit: a Refresh that fails keeps the rows and says they are from before', async ({ page }) => {
     await page.goto('/admin/audit')
-    await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 20_000 })
+    // a row of the log (its time), not the Loading row the table shows first
+    await expect(page.locator('tbody tr').first()).toContainText(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/, { timeout: 20_000 })
     // the rows by what they say (the line above the table takes a row's height from Fit, so not by count)
     const firstRow = async () => (await page.locator('tbody tr').first().innerText()).trim()
     const before = await firstRow()
