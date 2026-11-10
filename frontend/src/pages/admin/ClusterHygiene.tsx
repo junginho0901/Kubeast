@@ -20,6 +20,9 @@ import { formatWhen } from './accessRequestFormat'
 import { readsHygiene } from '@/utils/adminAccess'
 import { hygieneFindingTarget } from '@/utils/detailTargets'
 import { utcTitle } from '@/utils/time'
+import { failureText } from '@/utils/failureText'
+import { RefreshFailure } from '@/components/RefreshFailure'
+import { failureOf } from '@/hooks/useRefresh'
 
 // Cluster → Cluster hygiene: configuration risks of one cluster (Pod Security
 // Standards, image tags, resources, namespace policy, service account tokens,
@@ -88,7 +91,7 @@ export default function ClusterHygiene() {
     setCluster(ids.includes(current) ? current : ids[0])
   }, [clusterIds, cluster])
 
-  const { data: live, isLoading, isFetching, refetch, error: reportError } = useQuery({
+  const { data: live, isLoading, isFetching, refetch, error: reportError, errorUpdatedAt: reportErrorAt } = useQuery({
     queryKey: ['hygiene', cluster, 'report'],
     queryFn: () => api.getHygiene(cluster),
     enabled: !!cluster,
@@ -283,9 +286,11 @@ export default function ClusterHygiene() {
 
       {reportError && !report && (
         <div className="shrink-0 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200" data-testid="hygiene-error">
-          {(reportError as any)?.response?.data?.detail || (reportError as Error).message}
+          {failureText(reportError)}
         </div>
       )}
+      {/* a Refresh that failed while a report is on screen: that report is the one before */}
+      <RefreshFailure failure={!viewId && live ? failureOf(reportError, reportErrorAt) : null} />
 
       {counts && (
         <div className="shrink-0 grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="hygiene-summary">

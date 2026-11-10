@@ -20,6 +20,9 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { pageOf } from '@/utils/listPages'
 import { utcTitle } from '@/utils/time'
+import { failureText } from '@/utils/failureText'
+import { RefreshFailure } from '@/components/RefreshFailure'
+import { failureOf } from '@/hooks/useRefresh'
 
 // Admin → Access review: the report of who has what (accounts, per-cluster
 // grants, API keys, temporary grants since the last review, roles) with the
@@ -74,7 +77,7 @@ export default function AccessReview() {
   const [tabPaged, setTabPaged] = useState({ key: tabPageKey, page: 1 })
   const tabPage = tabPaged.key === tabPageKey ? tabPaged.page : 1
 
-  const { data: live, isLoading, isFetching, refetch, error: reportError } = useQuery({
+  const { data: live, isLoading, isFetching, refetch, error: reportError, errorUpdatedAt: reportErrorAt } = useQuery({
     queryKey: ['access-review', 'report'],
     queryFn: () => api.getAccessReview(),
     retry: false,
@@ -264,9 +267,11 @@ export default function AccessReview() {
 
       {reportError && !report && (
         <div className="shrink-0 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200" data-testid="access-review-error">
-          {(reportError as any)?.response?.data?.detail || (reportError as Error).message}
+          {failureText(reportError)}
         </div>
       )}
+      {/* a Refresh that failed while a report is on screen: that report is the one before */}
+      <RefreshFailure failure={!viewId && live ? failureOf(reportError, reportErrorAt) : null} />
 
       {summary && (
         <div className="shrink-0 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3" data-testid="access-review-summary">
