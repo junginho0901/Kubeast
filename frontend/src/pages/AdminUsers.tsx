@@ -23,6 +23,7 @@ import { bulkRoleFailures, bulkRoleFailureText, readBulkRoleAnswer } from './adm
 import { BULK_CSV_HEADER, bulkCreateFailureRows, bulkCreateFailures, bulkCreateSummary, bulkCsvTemplate, exampleBulkPassword, parseBulkCsv, readBulkCreateAnswer, type ParsedBulkCsv } from './admin-users/bulkCreate'
 import { roleMenuOpensUp } from './admin-users/roleMenu'
 import { failureText } from '@/utils/failureText'
+import { copyText } from '@/utils/clipboard'
 import { allPendingSelected, toggleAllPending as toggleAllPendingIds, toggleOnePending } from './admin-users/pendingSelection'
 
 const USER_COLUMNS = 6
@@ -121,6 +122,8 @@ export default function AdminUsers() {
   // 비번 재발급 결과 (1회용 평문) — 모달로 한 번 보여주고 닫히면 잊어버림
   const [resetResult, setResetResult] = useState<{ targetLabel: string; password: string; self: boolean } | null>(null)
   const [resetCopied, setResetCopied] = useState(false)
+  // the password is shown only this once: a refused copy says so and stays
+  const [resetCopyFailed, setResetCopyFailed] = useState(false)
   const navigate = useNavigate()
   // One's own reset: the server kept this session so the window could show the password; closing it signs out
   // to the login page, where the new password signs in.
@@ -163,6 +166,7 @@ export default function AdminUsers() {
     onSuccess: ({ res, targetLabel }, { userId }) => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       setResetCopied(false)
+      setResetCopyFailed(false)
       setResetResult({ targetLabel, password: res.temporary_password, self: !!me?.id && userId === me.id })
     },
     onError: showActionError,
@@ -995,13 +999,11 @@ export default function AdminUsers() {
               <button
                 type="button"
                 onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(resetResult.password)
-                    setResetCopied(true)
-                    setTimeout(() => setResetCopied(false), 2000)
-                  } catch {
-                    /* clipboard API unavailable — silently ignore */
-                  }
+                  const ok = await copyText(resetResult.password)
+                  setResetCopyFailed(!ok)
+                  if (!ok) return
+                  setResetCopied(true)
+                  setTimeout(() => setResetCopied(false), 2000)
                 }}
                 className="inline-flex items-center gap-1 rounded-sm border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
               >
@@ -1011,6 +1013,11 @@ export default function AdminUsers() {
                   : tr('adminUsers.resetResult.copy', 'Copy')}
               </button>
             </div>
+            {resetCopyFailed && (
+              <p role="alert" data-testid="reset-password-copy-failed" className="mt-2 text-xs text-red-400">
+                {tr('common.copyFailed', 'Not copied: the browser did not take it. Select the text and copy it yourself.')}
+              </p>
+            )}
 
             <div className="mt-5 flex justify-end">
               <button

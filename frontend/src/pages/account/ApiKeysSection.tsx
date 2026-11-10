@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Check, Copy, KeySquare, Loader2 } from 'lucide-react'
 
 import { ActionFailure } from '@/components/ActionFailure'
+import { copyText } from '@/utils/clipboard'
 import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
@@ -48,6 +49,8 @@ export default function ApiKeysSection() {
   const [error, setError] = useState<string | null>(null)
   const [created, setCreated] = useState<CreatedAPIKey | null>(null)
   const [copied, setCopied] = useState(false)
+  // the key is shown only this once: a refused copy says so and stays
+  const [copyFailed, setCopyFailed] = useState(false)
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null)
 
   const openModal = () => {
@@ -71,6 +74,7 @@ export default function ApiKeysSection() {
       setOpen(false)
       setCreated(key)
       setCopied(false)
+      setCopyFailed(false)
       queryClient.invalidateQueries({ queryKey: ['api-keys', 'mine'] })
     },
     onError: (err: any) => setError(err?.response?.data?.detail || tr('apiKeys.failed', 'The key was not created.')),
@@ -87,12 +91,9 @@ export default function ApiKeysSection() {
 
   const copy = async () => {
     if (!created) return
-    try {
-      await navigator.clipboard.writeText(created.key)
-      setCopied(true)
-    } catch {
-      setCopied(false)
-    }
+    const ok = await copyText(created.key)
+    setCopied(ok)
+    setCopyFailed(!ok)
   }
   const toggle = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))
   const allLabel = tr('apiKeys.allClusters', 'All clusters you can reach')
@@ -161,6 +162,11 @@ export default function ApiKeysSection() {
               {tr('apiKeys.done', 'Done')}
             </button>
           </div>
+          {copyFailed && (
+            <p role="alert" data-testid="api-key-copy-failed" className="mt-2 text-xs text-red-400">
+              {tr('common.copyFailed', 'Not copied: the browser did not take it. Select the text and copy it yourself.')}
+            </p>
+          )}
         </div>
       )}
 

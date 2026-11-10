@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Check } from 'lucide-react'
 import Editor from '@/components/monaco/CodeEditor'
+import { copyText } from '@/utils/clipboard'
 
 type Labels = {
   title: string
@@ -54,12 +56,14 @@ export default function YamlEditor({
   labels,
   note,
 }: YamlEditorProps) {
+  const { t } = useTranslation()
   const [draft, setDraft] = useState(value || '')
   const [isEditing, setIsEditing] = useState(false)
   const [isApplying, setIsApplying] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
   const [applySuccess, setApplySuccess] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [copyFailed, setCopyFailed] = useState(false)
   const [opened, setOpened] = useState('')
   const isReady = !isLoading && !error && value !== undefined
   const editorOptions = useMemo(
@@ -89,6 +93,12 @@ export default function YamlEditor({
   }, [copied])
 
   useEffect(() => {
+    if (!copyFailed) return
+    const timer = setTimeout(() => setCopyFailed(false), 3000)
+    return () => clearTimeout(timer)
+  }, [copyFailed])
+
+  useEffect(() => {
     if (!applySuccess) return
     const timer = setTimeout(() => setApplySuccess(false), 3000)
     return () => clearTimeout(timer)
@@ -102,19 +112,9 @@ export default function YamlEditor({
 
   const handleCopy = async () => {
     if (!draft) return
-    try {
-      await navigator.clipboard.writeText(draft)
-    } catch {
-      const textarea = document.createElement('textarea')
-      textarea.value = draft
-      textarea.style.position = 'fixed'
-      textarea.style.left = '-9999px'
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textarea)
-    }
-    setCopied(true)
+    const ok = await copyText(draft)
+    setCopied(ok)
+    setCopyFailed(!ok)
   }
 
   const handleEditorChange = (nextValue?: string) => {
@@ -162,10 +162,12 @@ export default function YamlEditor({
             onClick={handleCopy}
             disabled={!isReady || !draft}
             className={`relative inline-flex items-center justify-center px-2.5 py-1 text-xs rounded-sm border border-slate-700 min-w-[52px] disabled:opacity-50 transition-colors ${
-              copied ? 'text-emerald-300 border-emerald-500/40' : 'text-slate-300 hover:text-ink hover:border-slate-500'
+              copied ? 'text-emerald-300 border-emerald-500/40' : copyFailed ? 'text-red-400 border-red-500/40' : 'text-slate-300 hover:text-ink hover:border-slate-500'
             }`}
+            title={copyFailed ? t('common.copyFailed', { defaultValue: 'Not copied: the browser did not take it. Select the text and copy it yourself.' }) : undefined}
+            data-testid="yaml-copy"
           >
-            <span className={copied ? 'opacity-0' : 'opacity-100'}>{labels.copy}</span>
+            <span className={copied ? 'opacity-0' : 'opacity-100'}>{copyFailed ? t('common.notCopied', { defaultValue: 'Not copied' }) : labels.copy}</span>
             <Check className={`absolute w-3 h-3 ${copied ? 'opacity-100' : 'opacity-0'}`} />
           </button>
           {canEdit && (
