@@ -197,13 +197,13 @@ export default function MonitoringNodes({
 
   return (
     <div className="card flex-1 min-h-0 flex flex-col">
-      <div className="flex items-start justify-between mb-6 shrink-0">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-6 shrink-0">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-slate-700/60">
             <Server className="w-6 h-6 text-slate-300" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-ink">{t('monitoring.nodes.title')}</h2>
+            <h2 className="text-lg font-semibold text-ink">{t('monitoring.nodes.title')}</h2>
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 text-right">

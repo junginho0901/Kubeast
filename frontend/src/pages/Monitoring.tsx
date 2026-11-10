@@ -29,7 +29,7 @@ export default function Monitoring() {
 
   // sized to the screen: each tab's list fits its rows and footer in the space left, as the list pages do
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] gap-6">
+    <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       {/* Header */}
       <div className="page-head items-start shrink-0">
         <div>
