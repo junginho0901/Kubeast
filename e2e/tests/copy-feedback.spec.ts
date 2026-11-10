@@ -110,7 +110,7 @@ test.describe('a Copy that went through says so and keeps saying it', () => {
 
   test("a Secret value: Copied beside the button, still there 3 s on, and the clipboard holds the value", async ({ page }) => {
     await page.goto(`/configuration/secrets?cluster=self&namespace=default&detail=${encodeURIComponent(`Secret/default/${SECRET}`)}`)
-    const row = page.locator('div.rounded-sm', { hasText: 'token' }).filter({ has: page.getByTitle(/Copy value|값 복사/) }).first()
+    const row = page.locator('[data-detail-card]', { hasText: 'token' }).filter({ has: page.getByTitle(/Copy value|값 복사/) }).first()
     await row.getByTitle(/Copy value|값 복사/).click({ timeout: 30_000 })
     const result = row.getByTestId('secret-copy-result')
     await expect(result).toHaveText(EN.common.copied)
