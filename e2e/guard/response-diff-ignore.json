@@ -14,9 +14,9 @@
     },
     {
       "route": "^/api/v1/cluster/cost$",
-      "cell": "\\.(minutes|cpu_core_hours|ram_byte_hours)$",
-      "why": "OpenCost's window runs up to the moment a build filled its minute of the answer. number-check-cost.spec.ts holds these numbers to OpenCost.",
-      "pr": "#651"
+      "cell": "\\.(minutes|cpu_core_hours|ram_byte_hours|[a-z]+_cost|[a-z]+_efficiency)$",
+      "why": "OpenCost's window runs up to the moment a build filled its minute of the answer, and so do the costs and efficiencies over it. number-check-cost.spec.ts holds these numbers to OpenCost.",
+      "pr": "#651, #756"
     },
     {
       "route": "^/api/v1/cluster/prometheus/query(_range)?$",
