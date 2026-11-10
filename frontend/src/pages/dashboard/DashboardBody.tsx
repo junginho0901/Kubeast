@@ -156,7 +156,9 @@ export function DashboardBody() {
       { name: 'cpu', promql: clusterNodes.cpu },
       { name: 'memory', promql: clusterNodes.memory },
       { name: 'disk', promql: clusterNodes.filesystem },
-      { name: 'pod_count', promql: 'count(kube_pod_info)' },
+      // each namespace/pod once: two kube-state-metrics, or one scraped twice, would count every pod twice
+      { name: 'pod_count', promql: 'count(count by (namespace, pod) (kube_pod_info))' },
+      { name: 'pod_capacity', promql: 'sum(max by (node) (kube_node_status_allocatable{resource="pods"}))' },
     ],
     { refetchInterval: 30000 },
   )
@@ -495,6 +497,7 @@ export function DashboardBody() {
           memory={getClusterMetric('memory')}
           disk={getClusterMetric('disk')}
           podCount={getClusterMetric('pod_count')}
+          podCapacity={getClusterMetric('pod_capacity')}
         />
       )}
 

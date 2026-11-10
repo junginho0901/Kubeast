@@ -2370,6 +2370,8 @@
     },
     "cpu": "CPU",
     "memory": "Memory",
+    "metricMissing": "No {{what}} data from Prometheus",
+    "podsSource": "Pods the cluster's Prometheus counts (kube-state-metrics kube_pod_info, each namespace/pod once) of the pods its nodes can take (allocatable). The Pods card above counts the Kubernetes API.",
     "topNodes": {
       "title": "Top 3 nodes by resource usage",
       "metricsError": "Failed to fetch node metrics"

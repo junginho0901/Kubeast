@@ -289,3 +289,25 @@ spec: {storageClassName: ${NS}-claim, accessModes: [ReadWriteOnce], resources: {
     }).toPass({ timeout: 90_000 })
   })
 })
+
+test.describe('Number check — the Cluster Resource Utilization Pods slot', () => {
+  test("default's slot is the pods kubectl lists, of the pods its nodes can take", async ({ page }) => {
+    const kcB = path.join(path.dirname(kcPath), 'kubeconfig-b-pods')
+    try {
+      fs.writeFileSync(kcB, execSync('kind get kubeconfig --name kubeast-b', { encoding: 'utf8' }), { mode: 0o600 })
+    } catch {
+      test.skip(true, 'kind cluster kubeast-b not found')
+    }
+    const kubectlB = (args: string) => execSync(`kubectl --kubeconfig ${kcB} ${args}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+    await page.goto('/?cluster=default')
+    const slot = page.getByTestId('cluster-metric-pods')
+    test.skip(!(await slot.waitFor({ timeout: 30_000 }).then(() => true, () => false)), 'no Prometheus card on default')
+    // the nodes' allocatable pods, as the slot's second number
+    const room = kubectlB(`get nodes -o jsonpath='{range .items[*]}{.status.allocatable.pods}{"\\n"}{end}'`)
+      .split('\n').filter(Boolean).reduce((s, n) => s + Number(n), 0)
+    await expect.poll(async () => {
+      const pods = kubectlB('get pods -A --no-headers').split('\n').filter(Boolean).length
+      return `${(await slot.locator('span.font-mono').textContent())?.trim()} | kubectl ${pods} / ${room}`
+    }, { timeout: 120_000, intervals: [10_000] }).toMatch(/^(\d+ \/ \d+) \| kubectl \1$/)
+  })
+})
