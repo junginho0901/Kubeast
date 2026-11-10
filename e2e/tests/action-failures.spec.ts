@@ -150,13 +150,15 @@ test.describe('a refused write says why where it was pressed', () => {
 
   test('AI Chat: Delete and Rename of a conversation', async ({ page, request }) => {
     const admin = await login(request)
-    const made = await request.post('/api/v1/sessions', { headers: bearer(admin), data: { title: `e2e-af-${RUN}` }, failOnStatusCode: false })
+    // the list is the conversations of the cluster on screen, so the conversation is made on that cluster
+    const made = await request.post('/api/v1/sessions?cluster=self', { headers: bearer(admin), data: { title: `e2e-af-${RUN}` }, failOnStatusCode: false })
     test.skip(!made.ok(), `no conversation could be made: ${made.status()}`)
     const id = (await made.json()).id as string
     try {
       await refuse(page, (p) => p === `/api/v1/sessions/${id}`, ['PATCH', 'DELETE'])
-      await page.goto('/ai-chat')
+      await page.goto('/ai-chat?cluster=self')
       const row = page.getByTitle(`e2e-af-${RUN}`).first()
+      await expect(row, 'the conversation is in the list').toHaveCount(1, { timeout: 20_000 })
       await row.click({ button: 'right' })
       await page.getByRole('button', { name: EN.aiChat.delete, exact: true }).last().click()
       await page.getByTestId('confirm-dialog-ok').click()
