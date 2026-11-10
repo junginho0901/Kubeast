@@ -23,6 +23,7 @@ import { ResourceModal } from './modals/ResourceModal'
 import { StorageModal } from './modals/StorageModal'
 import { useDashboardQueries } from './hooks/useDashboardQueries'
 import { useDashboardRefresh } from './hooks/useDashboardRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import { useOptimizationStream } from './hooks/useOptimizationStream'
 import { useDashboardIssues } from './hooks/useDashboardIssues'
 import { useDashboardStorage } from './hooks/useDashboardStorage'
@@ -41,7 +42,7 @@ export function DashboardBody() {
   const { t } = useTranslation()
   const { open: openDetail } = useResourceDetail()
   const tr = (key: string, fallback: string, options?: Record<string, any>) => t(key, { defaultValue: fallback, ...options })
-  const { isRefreshing, handleRefresh } = useDashboardRefresh()
+  const { isRefreshing, handleRefresh, refreshFailure } = useDashboardRefresh()
 
   // Modal / filter state — DashboardContext 에서 lifted.
   const {
@@ -480,6 +481,7 @@ export function DashboardBody() {
         isRefreshing={isRefreshing}
         onRefresh={handleRefresh}
       />
+      <RefreshFailure failure={refreshFailure} />
 
       <StatsGrid stats={stats} onStatClick={handleStatClick} />
 
