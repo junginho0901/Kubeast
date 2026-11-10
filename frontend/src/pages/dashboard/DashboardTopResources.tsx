@@ -96,12 +96,13 @@ export function DashboardTopResources({ topResources, isLoading, isError, metric
               </button>
             ))}
           </div>
-        ) : topResources?.pod_error ? (
-          // 메트릭 수집 실패 (Node 메트릭은 있을 수 있음)
-          <div className="text-center py-12">
+        ) : topResources?.pod_metrics_error ? (
+          // 메트릭 수집 실패 (Node 메트릭은 있을 수 있음) — the server's pod_metrics_error, with its reason
+          <div className="text-center py-12" data-testid="top-pods-metrics-error">
             <div className="flex flex-col items-center gap-2">
               <AlertCircle className="w-8 h-8 text-yellow-400" />
               <p className="text-slate-400">{tr('dashboard.topPods.metricsError', 'Failed to fetch pod metrics')}</p>
+              <p className="text-xs text-slate-500 break-words">{topResources.pod_metrics_error}</p>
               <p className="text-xs text-slate-500">{tr('dashboard.metricsServerHint', 'Check metrics-server status')}</p>
             </div>
           </div>
@@ -231,12 +232,13 @@ export function DashboardTopResources({ topResources, isLoading, isError, metric
               )
             })}
           </div>
-        ) : topResources?.node_error ? (
-          // 메트릭 수집 실패 (파드 메트릭은 있을 수 있음)
-          <div className="text-center py-12">
+        ) : topResources?.node_metrics_error ? (
+          // 메트릭 수집 실패 (파드 메트릭은 있을 수 있음) — the server's node_metrics_error, with its reason
+          <div className="text-center py-12" data-testid="top-nodes-metrics-error">
             <div className="flex flex-col items-center gap-2">
               <AlertCircle className="w-8 h-8 text-yellow-400" />
               <p className="text-slate-400">{tr('dashboard.topNodes.metricsError', 'Failed to fetch node metrics')}</p>
+              <p className="text-xs text-slate-500 break-words">{topResources.node_metrics_error}</p>
               <p className="text-xs text-slate-500">{tr('dashboard.metricsServerHint', 'Check metrics-server status')}</p>
             </div>
           </div>

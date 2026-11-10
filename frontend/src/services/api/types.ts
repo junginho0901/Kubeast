@@ -2082,8 +2082,6 @@ export interface TopResources {
     memory: string
     memory_percent: string
   }>
-  pod_error?: boolean
-  node_error?: boolean
 }
 
 

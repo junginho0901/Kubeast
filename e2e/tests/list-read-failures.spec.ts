@@ -57,6 +57,17 @@ test.describe('a list whose read failed says so', () => {
     await expect(page.getByTestId('timeline-read-error')).toHaveCount(0, { timeout: 20_000 })
   })
 
+  test("Dashboard → Top resources: pods the metrics API could not list say so with the server's reason", async ({ page }) => {
+    // the answer k8s-service gives when the pod metrics read failed and the node one worked (pod_metrics_error)
+    await page.route((u) => u.pathname === '/api/v1/cluster/metrics/top-resources', (route) => route.fulfill({
+      json: { top_pods: [], top_nodes: [{ name: 'e2e-node', cpu: '100m', cpu_percent: '5%', memory: '200Mi', memory_percent: '10%' }], pod_metrics_error: REASON },
+    }))
+    await page.goto('/?cluster=self')
+    const card = page.getByTestId('top-pods-metrics-error')
+    await expect(card).toContainText(EN.dashboard.topPods.metricsError, { timeout: 30_000 })
+    await expect(card).toContainText(REASON)
+  })
+
   test('/admin/audit: a Refresh that fails keeps the rows and says they are from before', async ({ page }) => {
     await page.goto('/admin/audit')
     await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 20_000 })
