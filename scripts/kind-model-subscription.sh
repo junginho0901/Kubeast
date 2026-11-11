@@ -30,6 +30,15 @@ helm_up() {
     --reset-then-reuse-values "$@" --wait --timeout 5m | grep -E "REVISION|STATUS"
 }
 set_default() { k patch modelconfig "$1" --type merge -p "{\"spec\":{\"isDefault\":$2}}" >/dev/null 2>&1 || true; }
+# Every other default down, or the controller's resyncs make whichever it reads last the default.
+only_default() {
+  local mc
+  for mc in $(k get modelconfig -o jsonpath='{range .items[?(@.spec.isDefault==true)]}{.metadata.name}{" "}{end}'); do
+    [ "$mc" = "$1" ] || set_default "$mc" false
+  done
+}
+# A pod reads the Secret's keys when it starts, and the upgrade starts none when ai.apiKeysSecret already names it.
+restart_ai() { k rollout restart deploy/ai-service >/dev/null && k rollout status deploy/ai-service --timeout 5m >/dev/null; }
 
 case "${1:-}" in
   up)
@@ -45,8 +54,9 @@ case "${1:-}" in
     echo "═══ Kubeast: ai.apiKeysSecret=$SECRET, ai.providers.claudeCode.enabled=true ═══"
     helm_up --set ai.apiKeysSecret="$SECRET" --set ai.providers.claudeCode.enabled=true \
       --set-string ai.providers.claudeCode.imageTagSuffix=
+    restart_ai
     echo "═══ ModelConfig claude-subscription ($MODEL) as the default ═══"
-    set_default "$OLLAMA_MC" false
+    only_default claude-subscription
     k apply -f - <<EOF
 apiVersion: ai.kubeast.io/v1alpha1
 kind: ModelConfig
