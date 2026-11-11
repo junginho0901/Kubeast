@@ -50,7 +50,7 @@ test.describe('Create from YAML says what it made', () => {
     await expect(line).toHaveText(`Created: ConfigMap/e2e-yc-a (${NS})`)
     expect(kubectl(`-n ${NS} get configmap e2e-yc-a -o name`)).toBe('configmap/e2e-yc-a')
     // the list shows default: the object is not in it, the line is what says it was made — and it stays
-    await expect(page.locator('tbody')).not.toContainText('e2e-yc-a')
+    await expect(page.locator('tbody:not([aria-hidden="true"])')).not.toContainText('e2e-yc-a')
     await page.waitForTimeout(8_000)
     await expect(line).toHaveText(`Created: ConfigMap/e2e-yc-a (${NS})`)
     await page.getByTestId('yaml-created-close').click()
@@ -76,7 +76,7 @@ test.describe('Create from YAML says what it made', () => {
     await expect(dialog.getByTestId('yaml-create-made-before')).toHaveText(`Created before it stopped: ConfigMap/e2e-yc-b (${NS})`)
     expect(kubectl(`-n ${NS} get configmap e2e-yc-b -o name`)).toBe('configmap/e2e-yc-b')
     // the list behind the window reads what was made
-    await expect(page.locator('tbody')).toContainText('e2e-yc-b', { timeout: 15_000 })
+    await expect(page.locator('tbody:not([aria-hidden="true"])')).toContainText('e2e-yc-b', { timeout: 15_000 })
 
     // the same YAML again stops at its first object: nothing made, nothing named
     await dialog.getByRole('button', { name: 'Create', exact: true }).click()
