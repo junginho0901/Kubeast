@@ -13,7 +13,7 @@ function kubectlFor(kindName: string) {
   const kubeconfig = execSync(`kind get kubeconfig --name ${kindName}`, { encoding: 'utf8' })
   const kcPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-phase5-')), 'kubeconfig')
   fs.writeFileSync(kcPath, kubeconfig, { mode: 0o600 })
-  return (args: string) => execSync(`kubectl --kubeconfig ${kcPath} ${args}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 }).trim()
+  return (args: string, input?: string) => execSync(`kubectl --kubeconfig ${kcPath} ${args}`, { encoding: 'utf8', input, stdio: ['pipe', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 }).trim()
 }
 const kubectl = kubectlFor('kubeast')
 
@@ -50,17 +50,25 @@ test.describe('Phase 5 — detail modal sections', () => {
     await expectCount(page, 'Matching Pods', expected)
   })
 
-  test('페이지네이션 — PriorityClass system-node-critical', async ({ page }) => {
-    await openDrawer(page, '/cluster/priorityclasses', 'system-node-critical')
-    const usingSection = page.locator('text=/Used By Pods \\(\\d+\\)/').first()
-    await usingSection.waitFor({ timeout: 15000 })
-    const total = parseInt((await usingSection.innerText()).match(/\((\d+)\)/)?.[1] ?? '0', 10)
-    test.skip(total <= 10, `Pods ${total}개 → 페이지네이션 무의미`)
-
-    await expect(page.locator(`text=/1-10 \\/ ${total}/`).first()).toBeVisible()
-    await page.locator('button:has-text("Next")').first().click()
-    // the next page of the pods
-    await expect(page.locator(`text=/11-\\d+ \\/ ${total}/`).first()).toContainText(`11-${Math.min(20, total)} / ${total}`)
+  // a PriorityClass of the run that twelve pods no node takes use, so its drawer's pod list has a second page
+  test('페이지네이션 — PriorityClass 하나를 쓰는 파드 12개', async ({ page }) => {
+    const NAME = 'e2e-p5-pc'
+    const pod = (i: number) => `apiVersion: v1\nkind: Pod\nmetadata: {name: ${NAME}-${String(i).padStart(2, '0')}, namespace: ${NAME}}\n` +
+      `spec: {priorityClassName: ${NAME}, nodeSelector: {e2e-p5-pc: none}, containers: [{name: app, image: 'busybox:1.37'}]}`
+    kubectl(`delete namespace/${NAME} priorityclass/${NAME} --ignore-not-found --timeout=120s`)
+    kubectl('apply -f -', [`apiVersion: scheduling.k8s.io/v1\nkind: PriorityClass\nmetadata: {name: ${NAME}}\nvalue: 1000`,
+      `apiVersion: v1\nkind: Namespace\nmetadata: {name: ${NAME}}`, ...Array.from({ length: 12 }, (_, i) => pod(i + 1))].join('\n---\n'))
+    try {
+      const total = pods(NAME).filter((p) => p.spec.priorityClassName === NAME).length
+      expect(total).toBe(12)
+      await openDrawer(page, '/cluster/priorityclasses', NAME)
+      await expectCount(page, 'Used By Pods', total)
+      await expect(page.locator(`text=/1-10 \\/ ${total}/`).first()).toBeVisible()
+      await page.locator(DRAWER).last().locator('button:has-text("Next")').first().click()
+      await expect(page.locator(`text=/11-\\d+ \\/ ${total}/`).first()).toContainText(`11-${total} / ${total}`)
+    } finally {
+      kubectl(`delete namespace/${NAME} priorityclass/${NAME} --ignore-not-found --wait=false`)
+    }
   })
 
   test('5.4 — ConfigMap kube-root-ca.crt Used By Pods', async ({ page }) => {

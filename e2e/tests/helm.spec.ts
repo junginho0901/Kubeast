@@ -1,11 +1,25 @@
+import { execSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import zlib from 'node:zlib'
+
 import { test, expect } from '@playwright/test'
 
 // Helm Releases page — streams release updates over a long-lived SSE
 // connection (helm/releases/stream). Since step 04b made that stream
 // cluster-aware and actually long-lived, the page never reaches
 // 'networkidle' — wait on DOM mount + the heading instead (same pattern as
-// sse-migration.spec.ts). Captures the list view + (if any release exists)
-// the detail page.
+// sse-migration.spec.ts). Captures the list view and holds the detail of this
+// install's own release to Helm's record.
+
+function kubectlFor(kindName: string) {
+  const kubeconfig = execSync(`kind get kubeconfig --name ${kindName}`, { encoding: 'utf8' })
+  const kcPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-helm-')), 'kubeconfig')
+  fs.writeFileSync(kcPath, kubeconfig, { mode: 0o600 })
+  return (args: string) => execSync(`kubectl --kubeconfig ${kcPath} ${args}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 }).trim()
+}
+const kubectl = kubectlFor('kubeast')
 
 test.describe('Helm Releases', () => {
   test('list — initial render', async ({ page }) => {
@@ -19,25 +33,20 @@ test.describe('Helm Releases', () => {
     })
   })
 
-  test('detail — first release if present', async ({ page }) => {
-    await page.goto('/helm/releases')
-    await page.waitForLoadState('domcontentloaded')
-    await expect(page.locator('h1.text-3xl').first()).toContainText(/helm/i)
-
-    // Find the first release row link (if any).
-    const firstRow = page.locator('tbody tr').first()
-    const hasReleases = (await firstRow.count()) > 0
-
-    test.skip(!hasReleases, 'no releases in this cluster — skipping detail snapshot')
-
-    await firstRow.click()
-    await page.waitForLoadState('domcontentloaded')
-    await expect(page.locator('h1.text-3xl').first()).toBeVisible()
-
-    await expect(page).toHaveScreenshot('helm-release-detail.png', {
-      fullPage: true,
-      animations: 'disabled',
-    })
+  // The release is this install itself (kubeast in namespace kubeast on cluster self): the line under its name is the
+  // chart, its version and the revision of the release Helm has deployed, read from Helm's own record (the release
+  // Secret, base64 of gzipped JSON)
+  test('detail — the kubeast release says the chart and revision Helm deployed', async ({ page }) => {
+    const detail = await page.request.get('/api/v1/helm/releases/kubeast/kubeast?cluster=self', { failOnStatusCode: false })
+    test.skip(!detail.ok(), `no Helm release kubeast/kubeast on cluster self (${detail.status()})`)
+    const deployed = JSON.parse(kubectl('-n kubeast get secrets -l owner=helm,name=kubeast,status=deployed -o json')).items
+    expect(deployed, 'one deployed revision').toHaveLength(1)
+    const release = JSON.parse(zlib.gunzipSync(Buffer.from(Buffer.from(deployed[0].data.release, 'base64').toString(), 'base64')).toString())
+    await page.goto('/helm/releases/kubeast/kubeast?cluster=self')
+    const title = page.locator('h1.text-3xl').first()
+    await expect(title).toHaveText('kubeast', { timeout: 30_000 })
+    await expect(title.locator('xpath=following-sibling::p[1]'))
+      .toHaveText(`kubeast · ${release.chart.metadata.name}@${release.chart.metadata.version} · rev ${release.version}`)
   })
 
   // The release is this install itself (kubeast in namespace kubeast on cluster self) and the failure is the browser's
