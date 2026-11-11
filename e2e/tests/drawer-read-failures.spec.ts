@@ -105,13 +105,17 @@ test.describe('what a drawer could not read is not 0 or None', () => {
     page.route((u) => pick(u.pathname), (route) =>
       route.request().method() === 'GET' ? route.fulfill({ status: 503, json: { detail: REASON } }) : route.fallback())
 
-  test('a Pod opened from the Pods list: the reason, not 0 containers', async ({ page }) => {
+  test('a Pod opened from the Pods list: the reason, and the readiness the list shows, not 0 ready', async ({ page }) => {
     await failing(page, (p) => p.startsWith('/api/v1/cluster/') && p.endsWith('/describe'))
     await page.goto('/workloads/pods?cluster=self&namespace=kube-system')
-    await page.locator('tbody:not([aria-hidden="true"]) tr').filter({ hasText: 'etcd-kubeast-control-plane' }).first().click()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr').filter({ hasText: 'etcd-kubeast-control-plane' }).first()
+    const listed = (await row.innerText()).match(/\b(\d+\/\d+)\b/)?.[1]
+    expect(listed, "the list row's Ready").toMatch(/^\d+\/\d+$/)
+    await row.click()
     const drawer = page.locator(DRAWER).last()
     await expect(drawer.getByTestId('describe-failed')).toContainText(SAID, { timeout: 30_000 })
-    await expect(drawer.getByText('Containers', { exact: true }), 'no counts drawn from nothing').toHaveCount(0)
+    // the drawer reads the object itself: its Top tile counts ready containers from the object's status, as the list does
+    await expect(drawer.getByText('Ready', { exact: true }).first().locator('xpath=..'), 'ready as the list says').toContainText(listed!)
   })
 
   test("a Namespace's pods that could not be listed", async ({ page }) => {
@@ -119,7 +123,7 @@ test.describe('what a drawer could not read is not 0 or None', () => {
     await page.goto(`/?cluster=self&detail=${encodeURIComponent('Namespace/kube-system')}`)
     const drawer = page.locator(DRAWER).last()
     await expect(drawer.getByTestId('list-read-failed')).toHaveText(EN.common.readFailed.replace('{{reason}}', REASON), { timeout: 30_000 })
-    await expect(drawer.getByText('Pods', { exact: true }).first().locator('xpath=..'), 'a count not read is not 0').toContainText('—')
+    await expect(drawer.getByText('Pods: —', { exact: true }), 'a count not read is not 0').toHaveCount(1)
   })
 
   test("an IngressClass's Ingresses that could not be listed", async ({ page }) => {

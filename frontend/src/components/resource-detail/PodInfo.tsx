@@ -234,11 +234,14 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const tracesHref = fillTraceTemplate(traceTemplates(features)?.searchUrl, { service: podService, namespace, pod: name, cluster: currentCluster })
   const finalizers = (podDescribe?.finalizers as string[] | undefined) || (meta.finalizers as string[] | undefined) || []
   const readyPair = String(podDescribe?.ready || '').match(/^(\d+)\/(\d+)$/)
-  const readyContainers = readyPair ? Number(readyPair[1]) || 0 : containers.filter((c: any) => c.ready).length
+  // without the describe answer the containers are the spec's, which hold no ready or state: those are the object's
+  // containerStatuses, so a pod that is 1/1 does not read 0/1 and Not ready
+  const statusRows = (!podDescribe && Array.isArray(status.containerStatuses) ? status.containerStatuses : containers) as any[]
+  const readyContainers = readyPair ? Number(readyPair[1]) || 0 : statusRows.filter((c: any) => c.ready).length
   const totalContainers = readyPair ? Number(readyPair[2]) || 0 : containers.length
-  const waitingCount = containers.filter((c: any) => Boolean(c?.state?.waiting)).length
-  const terminatedCount = containers.filter((c: any) => Boolean(c?.state?.terminated)).length
-  const crashLoopCount = containers.filter((c: any) => c?.state?.waiting?.reason === 'CrashLoopBackOff').length
+  const waitingCount = statusRows.filter((c: any) => Boolean(c?.state?.waiting)).length
+  const terminatedCount = statusRows.filter((c: any) => Boolean(c?.state?.terminated)).length
+  const crashLoopCount = statusRows.filter((c: any) => c?.state?.waiting?.reason === 'CrashLoopBackOff').length
   const podStatus = podDrawerStatus(podDescribe, phase)
   const statusNotReady = runningNotReady({ status: podStatus, ready: `${readyContainers}/${totalContainers}` })
   const lastStates = useMemo(() => podLastStates(containers), [containers])

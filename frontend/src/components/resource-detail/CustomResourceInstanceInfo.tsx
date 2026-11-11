@@ -179,11 +179,11 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
   // refused or gone: the drawers' notice; any other failure draws what it has, as before
   const gone = (error as { response?: { status?: number } } | null)?.response?.status === 404
   if (isForbiddenError(error) || gone) return <ObjectUnreadable kind={crKind} name={name} namespace={namespace} notFound={gone} />
-  // any other failure: its spec, status and conditions come from this answer only
-  if (error && !describe) return <DescribeFailure error={error} className="py-4" />
 
   return (
     <div className="space-y-4">
+      {/* any other failure: the reason; what shows is the row, and the spec, status and conditions it does not hold stay out */}
+      <DescribeFailure error={describe ? null : error} showingRow />
       <DescribeStale error={error} readAt={dataUpdatedAt} />
       <InfoSection title={tr('crInstanceInfo.basicInfo', 'Basic Info')}>
         <div className="space-y-2">
