@@ -457,7 +457,7 @@ export function OptimizationModal({
               </span>
             )}
             {!!streamError && (
-              <span className="text-xs text-red-300 wrap-break-word">
+              <span className="text-xs text-red-300 wrap-break-word" data-testid="optimization-stream-error">
                 {tr('dashboard.optimization.streamError', 'Stream error')}: {streamError}
               </span>
             )}

@@ -430,12 +430,15 @@ async def _list_provider_models(request: dict) -> dict:
     try:
         return {"models": await _list_models(provider, api_key, base, verify, judged=bool(user_base_url))}
     except httpx.HTTPStatusError as e:
-        return {"models": [], "error": f"the provider answered {e.response.status_code}"}
+        # the status and the provider's own message, the key masked — as the connection test says it
+        return {"models": [], "error": _provider_refusal(e.response, api_key)}
     except Exception as e:
         refused = model_config_policy.refused_address(e)
         if refused is not None:
             return {"models": [], "error": refused.detail}
         if "CERTIFICATE_VERIFY_FAILED" in str(e):
             return {"models": [], "error": "the provider's TLS certificate is not trusted: add its CA (chart customCAs, or this model's CA)"}
-        return {"models": [], "error": type(e).__name__}
+        # the exception's words beside its name, the key masked ("ConnectError" alone named no cause)
+        detail = safe_error(str(e), [api_key])[:_REFUSAL_MESSAGE_CHARS].strip()
+        return {"models": [], "error": f"{type(e).__name__}: {detail}" if detail else type(e).__name__}
 

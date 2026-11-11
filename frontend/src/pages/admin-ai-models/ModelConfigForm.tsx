@@ -153,6 +153,12 @@ export default function ModelConfigForm({ form, inModal }: Props) {
               className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />
           )}
+          {/* typed by hand, or a list with no candidates: why the provider's list is not here still shows */}
+          {(formCustomModel || currentModelOptions.length === 0) && !modelList.noList && !modelList.loading && modelList.error && (
+            <p className="mt-1 text-[10px] text-slate-500 break-words" data-testid="model-list-failed" title={modelList.error}>
+              {t('admin.aiModels.modelsListFailed', { reason: modelList.error, defaultValue: "The provider's model list could not be read: {{reason}}" })}
+            </p>
+          )}
           {currentProviderDef.modelHintKey && (
             <p className="mt-1 text-[10px] text-slate-500" data-testid="model-hint">{t(currentProviderDef.modelHintKey)}</p>
           )}

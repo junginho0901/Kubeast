@@ -1,4 +1,4 @@
-import { Fragment, memo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, memo, useState, type ReactNode } from 'react'
 import { Check, Copy, X } from 'lucide-react'
 import { copyText } from '@/utils/clipboard'
 import { useTranslation } from 'react-i18next'
@@ -115,23 +115,20 @@ const MessageBubble = memo(function MessageBubble({ role, content, pending, tool
 })
 
 // The finished answer's copy control, in the empty space at the bubble's bottom right: faint until pointed at, a
-// check for 1.5 s after copying; it fades in where it stands when the answer ends.
+// Copied (or Not copied) beside it until the next press; it fades in where it stands when the answer ends.
 function CopyAnswer({ content }: { content: string }) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState<boolean | null>(null)
-  const copyTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const label = copied
     ? t('floatingChat.copied', { defaultValue: 'Copied' })
     : copied === false ? t('common.notCopied', { defaultValue: 'Not copied' }) : t('floatingChat.copy', { defaultValue: 'Copy' })
   return (
+    <>
     <button
       type="button"
       onClick={async () => {
-        const ok = await copyText(stripToolDetails(content))
-        setCopied(ok)
-        // the last copy's own timer: an earlier one does not clear it
-        clearTimeout(copyTimer.current)
-        copyTimer.current = setTimeout(() => setCopied(null), ok ? 1500 : 3000)
+        // the result stays until the next press, as a pressed button's result does on every screen
+        setCopied(await copyText(stripToolDetails(content)))
       }}
       aria-label={label}
       title={label}
@@ -140,5 +137,9 @@ function CopyAnswer({ content }: { content: string }) {
     >
       {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : copied === false ? <X className="h-3.5 w-3.5 text-red-400" /> : <Copy className="h-3.5 w-3.5" />}
     </button>
+    {copied !== null && (
+      <span role="status" data-testid="floating-copy-result" className={`text-[10px] ${copied ? 'text-emerald-300' : 'text-red-400'}`}>{label}</span>
+    )}
+    </>
   )
 }

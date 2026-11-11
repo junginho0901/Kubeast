@@ -9,6 +9,7 @@ import { clusterHeaders } from '../clusterRef'
 
 import { client } from './client'
 import type { OptimizationStreamHandlers } from './types'
+import { failureText, responseFailure } from '@/utils/failureText'
 
 export interface ToolApproval {
   id: string
@@ -69,7 +70,8 @@ export const aiApi = {
     }
 
     if (!response.ok) {
-      const message = `HTTP ${response.status}`
+      // the server's reason (its detail — a refusal names what is missing), as the other failure lines read it
+      const message = failureText(await responseFailure(response))
       onError?.(message)
       throw new Error(message)
     }

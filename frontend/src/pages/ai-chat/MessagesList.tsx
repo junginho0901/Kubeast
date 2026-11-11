@@ -11,6 +11,7 @@ import { useStickToBottom } from '@/hooks/useStickToBottom'
 import { useEarlierMessages } from '@/hooks/useEarlierMessages'
 import EarlierMessages from '@/components/EarlierMessages'
 import JumpToLatest from '@/components/JumpToLatest'
+import type { CopyResult } from './hooks/useMessageActions'
 
 // 메시지 리스트. 맨 아래에 있을 때만 새 글을 따라가고, 위로 올리면 멈추고 "맨 아래로" 버튼을 보인다.
 // 새 질문을 보내면 부드럽게 맨 아래로. 말풍선 key 는 대화 + 순서 — 답이 끝나 서버 목록으로 바뀔 때
@@ -18,13 +19,13 @@ import JumpToLatest from '@/components/JumpToLatest'
 
 interface Props {
   sessionDetail?: SessionDetail
-  copiedMessageKey: string | null
+  copyResult: CopyResult | null
   onCopy: (message: Message, key: string) => void
   onDownloadJson: (message: Message) => Promise<ExportOutcome>
   t: TFunction
 }
 
-export function MessagesList({ sessionDetail, copiedMessageKey, onCopy, onDownloadJson, t }: Props) {
+export function MessagesList({ sessionDetail, copyResult, onCopy, onDownloadJson, t }: Props) {
   const { messages, setMessages, messagesEndRef, selectedSessionId } = useAIChat()
   const { ref, atBottom, scrollToBottom } = useStickToBottom<HTMLDivElement>([messages])
 
@@ -61,7 +62,7 @@ export function MessagesList({ sessionDetail, copiedMessageKey, onCopy, onDownlo
             key={`${selectedSessionId ?? 'new'}:${idx - above}`}
             message={message}
             idx={idx}
-            copiedMessageKey={copiedMessageKey}
+            copyResult={copyResult}
             onCopy={onCopy}
             onDownloadJson={onDownloadJson}
             t={t}

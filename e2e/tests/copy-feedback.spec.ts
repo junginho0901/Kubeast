@@ -1,4 +1,6 @@
+import { execSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type Page } from '@playwright/test'
@@ -45,5 +47,43 @@ test.describe('a refused Copy says so', () => {
     await copy.click()
     await expect(copy).toHaveText(EN.common.notCopied)
     await expect(copy).toHaveAttribute('title', EN.common.copyFailed)
+  })
+})
+
+// A Copy that went through says Copied and keeps saying it — three seconds on too, until the next press or a change —
+// as a pressed button's result does on every screen (it was a check for 1.2–1.5 s). The Secret is one of this run in
+// `default` on `self`, removed after.
+test.describe('a Copy that went through says so and keeps saying it', () => {
+  const kubeconfig = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-copy-')), 'kubeconfig')
+  const SECRET = `e2e-copy-${Date.now().toString(36)}`
+  test.beforeAll(() => {
+    fs.writeFileSync(kubeconfig, execSync('kind get kubeconfig --name kubeast', { encoding: 'utf8' }), { mode: 0o600 })
+    execSync(`kubectl --kubeconfig ${kubeconfig} -n default create secret generic ${SECRET} --from-literal=token=e2e-copy-value`, { stdio: 'pipe' })
+  })
+  test.afterAll(() => {
+    execSync(`kubectl --kubeconfig ${kubeconfig} -n default delete secret ${SECRET} --ignore-not-found`, { stdio: 'pipe' })
+  })
+
+  test("a drawer's YAML tab: Copied, still there 3 s on", async ({ page }) => {
+    await page.goto(`/cluster/namespaces?cluster=self&detail=${encodeURIComponent('ConfigMap/default/kube-root-ca.crt')}`)
+    await page.getByRole('button', { name: 'YAML', exact: true }).click({ timeout: 20_000 })
+    const copy = page.getByTestId('yaml-copy')
+    await expect(copy).toBeEnabled({ timeout: 20_000 })
+    await copy.click()
+    await expect(copy).toHaveText(EN.common.copied)
+    await page.waitForTimeout(3_500)
+    await expect(copy, 'it stays').toHaveText(EN.common.copied)
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('ca.crt')
+  })
+
+  test("a Secret value: Copied beside the button, still there 3 s on, and the clipboard holds the value", async ({ page }) => {
+    await page.goto(`/configuration/secrets?cluster=self&namespace=default&detail=${encodeURIComponent(`Secret/default/${SECRET}`)}`)
+    const row = page.locator('div.rounded-sm', { hasText: 'token' }).filter({ has: page.getByTitle(/Copy value|값 복사/) }).first()
+    await row.getByTitle(/Copy value|값 복사/).click({ timeout: 30_000 })
+    const result = row.getByTestId('secret-copy-result')
+    await expect(result).toHaveText(EN.common.copied)
+    await page.waitForTimeout(3_500)
+    await expect(result, 'it stays').toHaveText(EN.common.copied)
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('e2e-copy-value')
   })
 })

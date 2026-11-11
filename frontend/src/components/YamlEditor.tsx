@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check } from 'lucide-react'
 import Editor from '@/components/monaco/CodeEditor'
 import { copyText } from '@/utils/clipboard'
 
@@ -86,17 +85,12 @@ export default function YamlEditor({
     }
   }, [value, isEditing])
 
+  // Copied stays until the text changes or the next press, as a pressed button's result does on every screen
   useEffect(() => {
-    if (!copied) return
-    const timer = setTimeout(() => setCopied(false), 1200)
-    return () => clearTimeout(timer)
-  }, [copied])
+    setCopied(false)
+    setCopyFailed(false)
+  }, [draft])
 
-  useEffect(() => {
-    if (!copyFailed) return
-    const timer = setTimeout(() => setCopyFailed(false), 3000)
-    return () => clearTimeout(timer)
-  }, [copyFailed])
 
   useEffect(() => {
     if (!applySuccess) return
@@ -167,8 +161,7 @@ export default function YamlEditor({
             title={copyFailed ? t('common.copyFailed', { defaultValue: 'Not copied: the browser did not take it. Select the text and copy it yourself.' }) : undefined}
             data-testid="yaml-copy"
           >
-            <span className={copied ? 'opacity-0' : 'opacity-100'}>{copyFailed ? t('common.notCopied', { defaultValue: 'Not copied' }) : labels.copy}</span>
-            <Check className={`absolute w-3 h-3 ${copied ? 'opacity-100' : 'opacity-0'}`} />
+            {copied ? t('common.copied', { defaultValue: 'Copied' }) : copyFailed ? t('common.notCopied', { defaultValue: 'Not copied' }) : labels.copy}
           </button>
           {canEdit && (
             <>

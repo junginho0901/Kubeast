@@ -938,7 +938,8 @@ async def test_the_connection_test_on_a_providers_own_address_is_not_judged(name
 async def test_the_model_list_on_a_providers_own_address_is_not_judged(names, wire, keys):
     names.answer("api.openai.com", PRIVATE)
     out = await LIST_ROUTE({"provider": "openai", "api_key_env": "OPENAI_API_KEY"})
-    assert out == {"models": [], "error": "ConnectError"}
+    assert out["models"] == [] and out["error"].startswith("ConnectError")
+    assert PRIVATE not in out["error"]
     assert wire.dialled == [PRIVATE]
 
 

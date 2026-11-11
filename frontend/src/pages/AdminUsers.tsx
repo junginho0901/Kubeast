@@ -1011,8 +1011,8 @@ export default function AdminUsers() {
                   const ok = await copyText(resetResult.password)
                   setResetCopyFailed(!ok)
                   if (!ok) return
+                  // Copied stays on the button while the window shows this password
                   setResetCopied(true)
-                  setTimeout(() => setResetCopied(false), 2000)
                 }}
                 className="inline-flex items-center gap-1 rounded-sm border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
               >

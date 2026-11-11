@@ -2206,6 +2206,7 @@
     "logsReadFailed": "Could not read the logs: {{reason}}",
     "copyFailed": "Not copied: the browser did not take it. Select the text and copy it yourself.",
     "notCopied": "Not copied",
+    "copied": "Copied",
     "downloading": "Downloading...",
     "failed": {
       "delete": "Not deleted: {{reason}}",
@@ -4276,6 +4277,7 @@
       "modelsFromProvider": "From the provider ({{count}})",
       "modelsBuiltIn": "Built-in list — the provider's list could not be read",
       "modelsBuiltInWhy": "Built-in list — the provider's list could not be read: {{reason}}",
+      "modelsListFailed": "The provider's model list could not be read: {{reason}}",
       "modelsNoList": "Built-in list — Claude Code has no model list",
       "subscriptionTitle": "Personal use only",
       "subscriptionTerms": "A Claude Pro/Max subscription is for its owner's own use (Anthropic's terms). Use it only in a Kubeast that you alone use, not in an install shared with a team or other users.",

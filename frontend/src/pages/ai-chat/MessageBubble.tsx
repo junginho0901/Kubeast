@@ -9,6 +9,7 @@ import { truncateToolResultsInContent } from './messageContent'
 import { ApprovalCard } from './ApprovalCard'
 import { ChatCharts } from '@/components/ChatChart'
 import { ChatAnswerMarkdown } from '@/components/ChatAnswerMarkdown'
+import type { CopyResult } from './hooks/useMessageActions'
 
 // 단일 메시지 말풍선 — user / assistant(Kubeast 아이콘) 아바타 + 콘텐츠 + 답변 대기 중인 로딩 점 +
 // (assistant 의 경우) 아래쪽 사용량 / Copy / Download ZIP 줄. 그 줄은 답이 나오는 동안 닫혀 있다가
@@ -17,19 +18,20 @@ import { ChatAnswerMarkdown } from '@/components/ChatAnswerMarkdown'
 interface Props {
   message: Message
   idx: number
-  copiedMessageKey: string | null
+  copyResult: CopyResult | null
   onCopy: (message: Message, key: string) => void
   onDownloadJson: (message: Message) => Promise<ExportOutcome>
   t: TFunction
 }
 
 // memo: while an answer comes the list is drawn every few milliseconds, and the bubbles above it have not changed.
-export const MessageBubble = memo(function MessageBubble({ message, idx, copiedMessageKey, onCopy, onDownloadJson, t }: Props) {
+export const MessageBubble = memo(function MessageBubble({ message, idx, copyResult, onCopy, onDownloadJson, t }: Props) {
   const messageKey = message.id != null ? `db-${message.id}` : `tmp-${idx}`
   const settled = message.role === 'assistant' && !message.isTemporary
   const showCopyButton = settled && Boolean(message.content)
   const usage = message.role === 'assistant' && !message.isTemporary ? turnUsageText(t, message.usage) : null
-  const isCopied = copiedMessageKey === messageKey
+  const isCopied = copyResult?.key === messageKey && copyResult.ok
+  const notCopied = copyResult?.key === messageKey && !copyResult.ok
   // the ZIP being made, then what came of it until the next press: why none was made, or that some results are cut
   const [zip, setZip] = useState<{ busy: boolean; outcome: ExportOutcome | null }>({ busy: false, outcome: null })
   return (
@@ -144,10 +146,11 @@ export const MessageBubble = memo(function MessageBubble({ message, idx, copiedM
                       onCopy(message, messageKey)
                     }}
                     className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-sm bg-slate-600 hover:bg-slate-500 text-slate-100"
-                    title={isCopied ? t('aiChat.copied') : t('aiChat.copyMessage')}
+                    title={isCopied ? t('aiChat.copied') : notCopied ? t('common.copyFailed') : t('aiChat.copyMessage')}
+                    data-testid="chat-copy"
                   >
                     {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{isCopied ? t('aiChat.copied') : t('aiChat.copyMessage')}</span>
+                    <span>{isCopied ? t('aiChat.copied') : notCopied ? t('common.notCopied') : t('aiChat.copyMessage')}</span>
                   </button>
                 )}
                 {message.content && message.toolCalls && message.toolCalls.length > 0 && (
