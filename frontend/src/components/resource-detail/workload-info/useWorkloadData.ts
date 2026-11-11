@@ -36,7 +36,7 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
   const { has } = usePermission()
 
   const needsDescribe = (kind === 'Deployment' || kind === 'StatefulSet' || kind === 'DaemonSet' || kind === 'ReplicaSet' || kind === 'Job' || kind === 'CronJob') && !!namespace && !!name
-  const { data: describe, isLoading, isError } = useQuery({
+  const { data: describe, isLoading, isError, error: describeError } = useQuery({
     queryKey: ['workload-describe', kind, namespace, name],
     queryFn: () => {
       if (kind === 'Deployment') return api.describeDeployment(namespace as string, name)
@@ -304,6 +304,7 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
     describe,
     isLoading,
     isError,
+    describeError,
     needsDescribe,
     ownedJobs,
     owned,

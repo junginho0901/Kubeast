@@ -6,6 +6,7 @@ import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { configParameterMap } from './draText'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { DescribeFailure } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -32,7 +33,7 @@ type DeviceClassDescribe = {
 
 export default function DeviceClassInfo({ name, rawJson }: Props) {
   const { open: openDetail } = useResourceDetail()
-  const { data: describe, isLoading, isError } = useQuery({
+  const { data: describe, isLoading, error: describeError } = useQuery({
     queryKey: ['deviceclass-describe', name],
     queryFn: () => api.describeDeviceClass(name) as Promise<DeviceClassDescribe>,
     enabled: !!name,
@@ -71,7 +72,7 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
     <>
       <InfoSection title="DeviceClass Info">
         {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading DeviceClass details...</Tx></p>}
-        {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
+        <DescribeFailure error={describeError} showingRow className="mb-2" />
         <div className="space-y-2">
           <InfoRow label="Name" value={describe?.name || name} />
           <InfoRow label="Extended Resource Name" value={describe?.extended_resource_name || '-'} />

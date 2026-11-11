@@ -9,6 +9,7 @@ import { usePrometheusRangeQuery } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, Sparkline } from './PrometheusMetrics'
 import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
+import { DescribeFailure } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -18,7 +19,7 @@ interface Props {
 
 export default function HPAInfo({ name, namespace }: Props) {
   const dl = useDetailLabel()
-  const { data: desc, isLoading } = useQuery({
+  const { data: desc, isLoading, error: describeError } = useQuery({
     queryKey: ['hpa-describe', namespace, name],
     queryFn: () => api.describeHPA(namespace, name),
     staleTime: 10_000,
@@ -39,6 +40,8 @@ export default function HPAInfo({ name, namespace }: Props) {
   }
 
   if (!desc) {
+    // a read that failed is not an object with no data
+    if (describeError) return <DescribeFailure error={describeError} className="py-4" />
     return <div className="text-xs text-slate-400 py-4 text-center"><Tx>No data</Tx></div>
   }
 

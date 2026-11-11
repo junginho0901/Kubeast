@@ -5,6 +5,7 @@ import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { VPA_POLICY_EXTRA_HEAD, vpaEvictionText, vpaPolicyExtraRows, vpaRecommendersText, vpaStartupBoostText, vpaValue } from './vpaDetail'
+import { DescribeFailure } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -13,7 +14,7 @@ interface Props {
 }
 
 export default function VPAInfo({ name, namespace }: Props) {
-  const { data: desc, isLoading } = useQuery({
+  const { data: desc, isLoading, error: describeError } = useQuery({
     queryKey: ['vpa-describe', namespace, name],
     queryFn: () => api.describeVPA(namespace, name),
     staleTime: 10_000,
@@ -55,6 +56,8 @@ export default function VPAInfo({ name, namespace }: Props) {
   }
 
   if (!desc) {
+    // a read that failed is not an object with no data
+    if (describeError) return <DescribeFailure error={describeError} className="py-4" />
     return <div className="text-xs text-slate-400 py-4 text-center"><Tx>No data</Tx></div>
   }
 

@@ -288,6 +288,7 @@ export function useNodeData(name: string) {
     nodeDescribe,
     isLoading,
     isError,
+    describeError: error,
     forbidden: isForbiddenError(error),
     metricForNode,
     cpuP,

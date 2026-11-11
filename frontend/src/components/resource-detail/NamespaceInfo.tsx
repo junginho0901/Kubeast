@@ -13,6 +13,7 @@ import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
 import { useAIContext } from '@/hooks/useAIContext'
 import { buildResourceLink } from '@/utils/resourceLink'
+import { DescribeFailure } from './DescribeFailure'
 
 interface Props { name: string }
 
@@ -170,7 +171,7 @@ export default function NamespaceInfo({ name }: Props) {
 
   if (isLoading) return <p className="text-slate-400">{tr('namespaces.detail.loading', 'Loading...')}</p>
   if (isForbiddenError(error)) return <ObjectUnreadable kind="Namespace" name={name} />
-  if (isError) return <p className="text-red-400">{tr('namespaces.detail.error', 'Failed to load.')}</p>
+  if (isError) return <DescribeFailure error={error} />
   if (!nsDescribe) return <p className="text-slate-400">{tr('namespaces.detail.notFound', 'Not found.')}</p>
 
   return (

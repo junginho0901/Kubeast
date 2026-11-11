@@ -6,6 +6,7 @@ import { fmtRel, fmtTs } from './detailFormat'
 import { conditionStatus, conditionSummary } from './gatewayDetail'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import type { GatewayClassInfo as GatewayClassRow } from '@/services/api'
+import { DescribeFailure } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -41,7 +42,7 @@ function formatParametersRef(parametersRef: Record<string, unknown> | null | und
 }
 
 export default function GatewayClassInfo({ name, rawJson }: Props) {
-  const { data: describe, isLoading, isError } = useQuery({
+  const { data: describe, isLoading, error: describeError } = useQuery({
     queryKey: ['gatewayclass-describe', name],
     queryFn: () => api.describeGatewayClass(name) as Promise<GatewayClassDescribe>,
     enabled: !!name,
@@ -76,7 +77,7 @@ export default function GatewayClassInfo({ name, rawJson }: Props) {
     <>
       <InfoSection title="GatewayClass Info">
         {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading gateway class details...</Tx></p>}
-        {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
+        <DescribeFailure error={describeError} showingRow className="mb-2" />
         <div className="flex flex-wrap gap-2 mb-3">
           <SummaryBadge label="Status" value={statusText} color="default" />
           <SummaryBadge label="Accepted" value={accepted} color={accepted === 'True' ? 'green' : 'amber'} />

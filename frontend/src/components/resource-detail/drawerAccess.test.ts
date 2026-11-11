@@ -174,8 +174,8 @@ describe('a drawer the caller may not read says so, whichever view read it', () 
   const crRaw = { kind: 'GuardCheck', group: 'g.kubeast.io', version: 'v1', crd_name: 'guardchecks.g.kubeast.io' }
   const crKey = ['cr-instance-describe', 'g.kubeast.io', 'v1', 'guardchecks', 'ns-b', 'gc']
   const views: [string, () => ReactElement, unknown[], string][] = [
-    ['Node', () => createElement(NodeInfo, { name: 'n1' }), ['cluster', 'nodes', 'describe', 'n1'], en.nodes.detail.error],
-    ['Namespace', () => createElement(NamespaceInfo, { name: 'ns-b' }), ['namespace-describe', 'ns-b'], en.namespaces.detail.error],
+    ['Node', () => createElement(NodeInfo, { name: 'n1' }), ['cluster', 'nodes', 'describe', 'n1'], 'Could not read the details: HTTP 500'],
+    ['Namespace', () => createElement(NamespaceInfo, { name: 'ns-b' }), ['namespace-describe', 'ns-b'], 'Could not read the details: HTTP 500'],
     ['custom resource', () => createElement(CustomResourceInstanceInfo, { name: 'gc', namespace: 'ns-b', rawJson: crRaw }), crKey, 'Basic Info'],
   ]
   for (const [what, view, key, other] of views) {
@@ -185,7 +185,7 @@ describe('a drawer the caller may not read says so, whichever view read it', () 
       expect(html).not.toContain(other)
     })
 
-    it(`${what}: another failure (500) is drawn as before`, () => {
+    it(`${what}: another failure (500) says it could not read the details, with the reason`, () => {
       const html = render(view(), [[key, failed(500)]])
       expect(notice(html)).toBe('no notice')
       expect(html).toContain(other)

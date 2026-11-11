@@ -46,7 +46,7 @@ test.describe('Dashboard lists', () => {
     const describe = page.waitForResponse((r) => r.url().includes(`/cluster/nodes/${expected[0]}/describe`))
     await nodesCard(page).locator('button').filter({ hasText: expected[0] }).first().click()
     expect((await describe).status()).toBe(200)
-    await expect(page.getByText('Failed to load node details')).toHaveCount(0)
+    await expect(page.getByTestId('describe-failed'), 'the drawer read its node').toHaveCount(0)
     await ctx.close()
   })
 

@@ -5,6 +5,7 @@ import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, Non
 import { fmtRel, fmtTs } from './detailFormat'
 import { formatParentRef } from './gatewayDetail'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { DescribeFailure } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -28,7 +29,7 @@ function text(value: unknown): string {
 
 export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props) {
   const enabled = !!name && !!namespace
-  const { data: describe, isLoading, isError } = useQuery({
+  const { data: describe, isLoading, error: describeError } = useQuery({
     queryKey: ['backendtlspolicy-describe', namespace, name],
     queryFn: () => api.describeBackendTLSPolicy(namespace as string, name) as Promise<BackendTLSPolicyDescribe>,
     enabled,
@@ -56,7 +57,7 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
     <>
       <InfoSection title="BackendTLSPolicy Info">
         {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading details...</Tx></p>}
-        {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
+        <DescribeFailure error={describeError} showingRow className="mb-2" />
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
           {namespace && <InfoRow label="Namespace" value={namespace} />}

@@ -123,15 +123,14 @@ async function deleteButtons(drawer: Locator, kind: string, want: number, why: s
   await expect.soft(drawer.getByRole('button', { name: tr('common.deleteKind', { kind }), exact: true }), why).toHaveCount(want, { timeout: 5_000 })
 }
 
-// What a refused or missing object's drawer says: the notice's words, a load error's, or nothing ("blank").
+// What a refused or missing object's drawer says: the notice's words, its failed read's line, or nothing ("blank").
 async function refusal(drawer: Locator): Promise<string> {
-  const errors = [tr('nodes.detail.error'), tr('namespaces.detail.error')]
   const notice = drawer.getByTestId('detail-unreadable')
-  await expect(notice.or(drawer.getByText(errors[0], { exact: true })).or(drawer.getByText(errors[1], { exact: true })).first())
-    .toBeVisible({ timeout: 20_000 }).catch(() => {})
+  const failed = drawer.getByTestId('describe-failed')
+  await expect(notice.or(failed).first()).toBeVisible({ timeout: 20_000 }).catch(() => {})
   if ((await notice.count()) > 0) return (await notice.innerText()).trim()
-  const text = await drawer.innerText()
-  return errors.find((e) => text.includes(e)) ?? 'blank'
+  if ((await failed.count()) > 0) return (await failed.innerText()).trim()
+  return 'blank'
 }
 
 test.describe('buttons and drawers follow the cluster\'s answer', () => {

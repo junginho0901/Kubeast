@@ -9,6 +9,7 @@ import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { useReverseRoleBindings } from './role-info/useReverseRoleBindings'
 import { subjectsText, unreadableText } from './role-info/referencedBy'
 import { ruleApiGroupsText } from './role-info/ruleText'
+import { DescribeFailure } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -20,7 +21,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
 
-  const { data: describe, isLoading } = useQuery({
+  const { data: describe, isLoading, error: describeError } = useQuery({
     queryKey: ['role-describe', namespace, name],
     queryFn: () => api.describeRole(namespace, name),
     enabled: !!namespace && !!name,
@@ -69,6 +70,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
 
   return (
     <div className="space-y-4">
+      {!describe && <DescribeFailure error={describeError} showingRow />}
       <InfoSection title="Basic Info">
         <div className="space-y-2">
           <InfoRow label="Kind" value="Role" />
@@ -77,7 +79,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
           {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{describe.uid}</span>} />}
           {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px]">{describe.resource_version}</span>} />}
-          <InfoRow label="Rules Count" value={String(describe?.rules_count ?? rules.length)} />
+          <InfoRow label="Rules Count" value={describe ? String(describe.rules_count ?? rules.length) : '—'} />
         </div>
       </InfoSection>
 

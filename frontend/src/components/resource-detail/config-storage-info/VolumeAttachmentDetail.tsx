@@ -6,6 +6,7 @@ import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
 import { volumeAttachmentState } from '../netstoreDetail'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { DescribeFailure } from '../DescribeFailure'
 
 interface VolumeAttachmentDescribeResponse {
   uid?: string
@@ -40,7 +41,7 @@ interface VolumeAttachmentDescribeResponse {
 
 export default function VolumeAttachmentDetail({ name, rawJson }: { name: string; rawJson?: Record<string, unknown> }) {
   const { open: openDetail } = useResourceDetail()
-  const { data: describe, isLoading, isError } = useQuery({
+  const { data: describe, isLoading, error: describeError } = useQuery({
     queryKey: ['volumeattachment-describe', name],
     queryFn: () => api.describeVolumeAttachment(name) as Promise<VolumeAttachmentDescribeResponse>,
     enabled: !!name,
@@ -139,7 +140,7 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
         </div>
       </InfoSection>
       {isLoading && <p className="text-xs text-slate-400"><Tx>Loading details...</Tx></p>}
-      {isError && <p className="text-xs text-amber-300"><Tx>Some detailed VolumeAttachment fields are unavailable right now.</Tx></p>}
+      <DescribeFailure error={describeError} showingRow />
 
       {(attachErrorMessage || detachErrorMessage) && (
         <InfoSection title="Attach/Detach Errors">

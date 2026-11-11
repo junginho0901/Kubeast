@@ -6,6 +6,7 @@ import { usePagination } from './usePagination'
 import { DeviceRequestsTable } from './DeviceRequestsTable'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { DescribeFailure } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -40,7 +41,7 @@ const text = (v: unknown) => (v != null && v !== '' ? String(v) : '-')
 export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
   const enabled = !!name && !!namespace
   const { open: openDetail } = useResourceDetail()
-  const { data: describe, isLoading, isError } = useQuery({
+  const { data: describe, isLoading, error: describeError } = useQuery({
     queryKey: ['resourceclaim-describe', namespace, name],
     queryFn: () => api.describeResourceClaim(namespace, name) as Promise<ResourceClaimDescribe>,
     enabled,
@@ -76,7 +77,7 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
     <>
       <InfoSection title="Claim Info">
         {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading ResourceClaim details...</Tx></p>}
-        {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
+        <DescribeFailure error={describeError} showingRow className="mb-2" />
         <div className="space-y-2">
           <InfoRow label="Name" value={describe?.name || name} />
           <InfoRow label="Namespace" value={describe?.namespace || namespace} />

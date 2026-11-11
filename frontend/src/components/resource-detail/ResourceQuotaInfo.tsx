@@ -5,6 +5,7 @@ import { fmtRel } from './detailFormat'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { quotaPercent } from '@/utils/resourceQuantity'
+import { DescribeFailure } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -13,7 +14,7 @@ interface Props {
 }
 
 export default function ResourceQuotaInfo({ name, namespace }: Props) {
-  const { data: desc, isLoading } = useQuery({
+  const { data: desc, isLoading, error: describeError } = useQuery({
     queryKey: ['resourcequota-describe', namespace, name],
     queryFn: () => api.describeResourceQuota(namespace, name),
     staleTime: 10_000,
@@ -33,6 +34,8 @@ export default function ResourceQuotaInfo({ name, namespace }: Props) {
   }
 
   if (!desc) {
+    // a read that failed is not an object with no data
+    if (describeError) return <DescribeFailure error={describeError} className="py-4" />
     return <div className="text-xs text-slate-400 py-4 text-center"><Tx>No data</Tx></div>
   }
 

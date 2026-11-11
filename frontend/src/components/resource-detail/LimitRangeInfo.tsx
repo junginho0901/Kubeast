@@ -8,6 +8,7 @@ import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { DescribeFailure } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -23,7 +24,7 @@ const typeColors: Record<string, 'green' | 'amber' | 'red' | 'default'> = {
 
 export default function LimitRangeInfo({ name, namespace }: Props) {
   const { open: openDetail } = useResourceDetail()
-  const { data: desc, isLoading } = useQuery({
+  const { data: desc, isLoading, error: describeError } = useQuery({
     queryKey: ['limitrange-describe', namespace, name],
     queryFn: () => api.describeLimitRange(namespace, name),
     staleTime: 10_000,
@@ -66,6 +67,8 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
   }
 
   if (!desc) {
+    // a read that failed is not an object with no data
+    if (describeError) return <DescribeFailure error={describeError} className="py-4" />
     return <div className="text-xs text-slate-400 py-4 text-center"><Tx>No data</Tx></div>
   }
 
