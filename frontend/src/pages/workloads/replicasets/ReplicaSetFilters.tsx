@@ -1,11 +1,12 @@
 // ReplicaSets 페이지의 검색 + 네임스페이스 드롭다운 필터
 //
 // frontend/src/pages/workloads/ReplicaSets.tsx 의 Search input + Namespace dropdown
-// + click-outside useEffect 추출. dropdown 의 ref/effect 는 이 컴포넌트 자체
+// + useDismiss 추출. dropdown 의 ref/effect 는 이 컴포넌트 자체
 // 보유.
 
-import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react'
+import { Dispatch, SetStateAction, useRef, useState } from 'react'
 import { CheckCircle, ChevronDown, Search } from 'lucide-react'
+import { useDismiss } from '@/hooks/useDismiss'
 
 interface NamespaceLite {
   name: string
@@ -33,16 +34,7 @@ export function ReplicaSetFilters({
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!isNamespaceDropdownOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (namespaceDropdownRef.current && !namespaceDropdownRef.current.contains(event.target as Node)) {
-        setIsNamespaceDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isNamespaceDropdownOpen])
+  useDismiss(isNamespaceDropdownOpen, namespaceDropdownRef, setIsNamespaceDropdownOpen)
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 shrink-0">

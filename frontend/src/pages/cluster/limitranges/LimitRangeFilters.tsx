@@ -1,11 +1,12 @@
 // LimitRanges 페이지 상단 필터 (검색 + namespace dropdown).
 //
 // LimitRanges.tsx 본체에서 분리. search input + namespace dropdown +
-// click-outside useEffect 를 자체 보유. 부모는 controlled props 만 전달.
+// useDismiss 를 자체 보유. 부모는 controlled props 만 전달.
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, Search } from 'lucide-react'
+import { useDismiss } from '@/hooks/useDismiss'
 
 interface LimitRangeFiltersProps {
   searchQuery: string
@@ -28,16 +29,7 @@ export function LimitRangeFilters({
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!isOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isOpen])
+  useDismiss(isOpen, dropdownRef, setIsOpen)
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 shrink-0">

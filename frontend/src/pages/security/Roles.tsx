@@ -20,6 +20,7 @@ import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { applyRoleWatchEvent } from './roles/roleWatchNormalize'
+import { useDismiss } from '@/hooks/useDismiss'
 
 type SortKey = null | 'name' | 'namespace' | 'rules' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
@@ -74,16 +75,7 @@ export default function Roles() {
     },
   })
 
-  useEffect(() => {
-    if (!isNamespaceDropdownOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (namespaceDropdownRef.current && !namespaceDropdownRef.current.contains(event.target as Node)) {
-        setIsNamespaceDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isNamespaceDropdownOpen])
+  useDismiss(isNamespaceDropdownOpen, namespaceDropdownRef, setIsNamespaceDropdownOpen)
 
   const filteredItems = useMemo(() => {
     if (!Array.isArray(roles)) return [] as RoleInfo[]

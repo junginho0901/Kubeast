@@ -21,6 +21,7 @@ import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { applyServiceAccountWatchEvent } from './serviceaccounts/serviceAccountWatchNormalize'
+import { useDismiss } from '@/hooks/useDismiss'
 
 type SortKey = null | 'name' | 'namespace' | 'secrets' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
@@ -78,16 +79,7 @@ export default function ServiceAccounts() {
     },
   })
 
-  useEffect(() => {
-    if (!isNamespaceDropdownOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (namespaceDropdownRef.current && !namespaceDropdownRef.current.contains(event.target as Node)) {
-        setIsNamespaceDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isNamespaceDropdownOpen])
+  useDismiss(isNamespaceDropdownOpen, namespaceDropdownRef, setIsNamespaceDropdownOpen)
 
   const filteredItems = useMemo(() => {
     if (!Array.isArray(serviceAccounts)) return [] as ServiceAccountInfo[]
