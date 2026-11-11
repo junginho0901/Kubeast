@@ -9,6 +9,7 @@ import { modalButton } from '@/components/modalStyles'
 import { clustersApi, type ConnectionResult } from '@/services/api/clusters'
 import { failureText } from '@/utils/failureText'
 import { urlProblem } from '@/utils/urlField'
+import { NAME_MAX } from '@/utils/nameLimits'
 
 interface Props {
   onClose: () => void
@@ -138,6 +139,7 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
             <input
               data-testid="register-name"
               value={displayName}
+              maxLength={NAME_MAX}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="prod-seoul"
               className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-ink"

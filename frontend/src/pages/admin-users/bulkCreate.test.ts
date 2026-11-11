@@ -82,6 +82,13 @@ describe('the rows of the CSV', () => {
   const roles = [{ id: 1, name: 'Member' }, { id: 2, name: 'Admin' }, { id: 3, name: 'read' }]
   const csv = (...rows: string[]) => ['﻿# Available Team: web', '# role (account level): Admin, Member', 'name,email,password,role,team', ...rows, ''].join('\n')
 
+  it('holds a name to 255 characters, as one account and the server do', () => {
+    const at = (n: number) => '가'.repeat(n)
+    const parsed = parseBulkCsv(csv(`${at(255)},ann@example.com,fake-pass-1`, `${at(256)},bob@example.com,fake-pass-2`), roles)
+    expect(parsed.users.map((u) => u.email)).toEqual(['ann@example.com'])
+    expect(parsed.failed).toEqual([{ email: 'bob@example.com', reason: 'name_length' }])
+  })
+
   it('sends the rows it can read, with their role and team', () => {
     expect(parseBulkCsv(csv('Ann,ann@example.com,fake-pass-1,Admin,web', ' Bob , bob@example.com ,fake-pass-2,Member,'), roles)).toEqual({
       users: [

@@ -45,6 +45,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if msg := nameTooLong("name", req.Name, userNameMax); msg != "" {
+		response.Error(w, http.StatusBadRequest, msg)
+		return
+	}
 
 	// Validate Team against organizations if provided
 	if req.Team != nil && strings.TrimSpace(*req.Team) != "" {

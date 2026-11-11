@@ -10,6 +10,7 @@ import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
 import CustomDropdown from '@/components/CustomDropdown'
 import { createRefusalText } from './bulkCreate'
+import { USER_NAME_MAX } from '@/utils/nameLimits'
 
 interface NewUser {
   name: string
@@ -87,6 +88,7 @@ export function CreateUserModal({
           <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('adminUsers.form.name', 'Name')}</label>
           <input
             value={newUser.name}
+            maxLength={USER_NAME_MAX}
             onChange={(e) => onChangeNewUser((p) => ({ ...p, name: e.target.value }))}
             className={inputClass}
             placeholder={tr('adminUsers.form.namePlaceholder', 'Jane Doe')}

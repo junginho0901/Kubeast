@@ -180,6 +180,10 @@ func (h *AuthHandler) AdminBulkCreateUsers(w http.ResponseWriter, r *http.Reques
 			leftOut(u.Email, "", model.BulkCreateFailedFields, "", "Missing required fields (name, email, password)")
 			continue
 		}
+		if msg := nameTooLong("name", u.Name, userNameMax); msg != "" {
+			leftOut(u.Email, "", model.BulkCreateFailedNameLength, "", msg)
+			continue
+		}
 		if err := checkAccountName(u.Email); err != nil {
 			leftOut(u.Email, "", model.BulkCreateFailedName, "", err.Error())
 			continue
@@ -294,6 +298,10 @@ func (h *AuthHandler) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 
 	if req.Name == "" {
 		refuse(http.StatusBadRequest, "", model.BulkCreateFailedFields, "", "Name required")
+		return
+	}
+	if msg := nameTooLong("name", req.Name, userNameMax); msg != "" {
+		refuse(http.StatusBadRequest, "", model.BulkCreateFailedNameLength, "", msg)
 		return
 	}
 	if !strings.Contains(req.Email, "@") {
@@ -449,6 +457,10 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		trimmed := strings.TrimSpace(*req.Name)
 		if trimmed == "" {
 			response.Error(w, http.StatusBadRequest, "Name cannot be empty")
+			return
+		}
+		if msg := nameTooLong("name", trimmed, userNameMax); msg != "" {
+			response.Error(w, http.StatusBadRequest, msg)
 			return
 		}
 		req.Name = &trimmed

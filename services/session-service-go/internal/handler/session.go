@@ -3,10 +3,12 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -20,6 +22,9 @@ import (
 
 // messagesPage is how many messages one read of a conversation holds.
 const messagesPage = 100
+
+// sessionTitleMax is the longest title a rename takes, in characters.
+const sessionTitleMax = 100
 
 // sessionStore is what the handler needs of repository.Repository.
 type sessionStore interface {
@@ -149,6 +154,10 @@ func (h *SessionHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	title := req.Title
 	if title == "" {
 		title = "New Chat"
+	}
+	if utf8.RuneCountInString(title) > sessionTitleMax {
+		response.Error(w, http.StatusBadRequest, fmt.Sprintf("title: up to %d characters", sessionTitleMax))
+		return
 	}
 
 	cluster := r.URL.Query().Get("cluster")
@@ -292,6 +301,11 @@ func (h *SessionHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	var req model.UpdateSessionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.Error(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	// a title a person reads: up to 100 characters, as auth-service holds a role's or a cluster's name
+	if utf8.RuneCountInString(req.Title) > sessionTitleMax {
+		response.Error(w, http.StatusBadRequest, fmt.Sprintf("title: up to %d characters", sessionTitleMax))
 		return
 	}
 

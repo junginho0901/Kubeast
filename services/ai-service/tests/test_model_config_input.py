@@ -113,3 +113,13 @@ async def test_the_update_route_answers_it_as_400(monkeypatch):
         await api_module.update_model_config(2, None, payload=Admin(), request={"name": "first"})
     assert exc.value.status_code == 400 and exc.value.detail == "Model config name already exists"
     assert recorded == ["failure"]
+
+
+def test_a_name_is_up_to_100_characters_on_create_and_update():
+    hundred = "가" * 100
+    assert ModelConfigCreate(name=hundred, model="m").name == hundred
+    assert ModelConfigUpdate(name=hundred).name == hundred
+    for make in (lambda: ModelConfigCreate(name=hundred + "가", model="m"), lambda: ModelConfigUpdate(name=hundred + "가")):
+        with pytest.raises(ValidationError) as exc:
+            make()
+        assert "name: up to 100 characters" in str(exc.value)

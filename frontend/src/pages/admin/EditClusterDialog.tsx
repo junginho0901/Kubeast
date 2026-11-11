@@ -10,6 +10,7 @@ import { api } from '@/services/api'
 import type { LogSearchStatus, PrometheusStatus } from '@/services/api/types'
 import { failureText } from '@/utils/failureText'
 import { urlProblem } from '@/utils/urlField'
+import { NAME_MAX } from '@/utils/nameLimits'
 
 // Edit a registered cluster: rename, (external only) rotate its kubeconfig
 // when credentials change, and name an external Prometheus source and the
@@ -193,6 +194,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
         <input
           data-testid="edit-name"
           value={displayName}
+          maxLength={NAME_MAX}
           onChange={(e) => setDisplayName(e.target.value)}
           className={inputClass}
         />

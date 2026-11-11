@@ -196,6 +196,10 @@ func (h *RoleHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "Name required")
 		return
 	}
+	if msg := nameTooLong("name", req.Name, nameMax); msg != "" {
+		response.Error(w, http.StatusBadRequest, msg)
+		return
+	}
 	if unknown := unknownPermissions(req.Permissions); len(unknown) > 0 {
 		response.Error(w, http.StatusBadRequest, "Unknown permissions: "+strings.Join(unknown, ", "))
 		return
@@ -258,6 +262,10 @@ func (h *RoleHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 	var req model.UpdateRolePermissionsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.Error(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if msg := nameTooLong("name", req.Name, nameMax); msg != "" {
+		response.Error(w, http.StatusBadRequest, msg)
 		return
 	}
 

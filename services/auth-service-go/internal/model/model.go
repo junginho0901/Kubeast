@@ -226,14 +226,15 @@ type BulkCreateUserRequest struct {
 
 // Why a bulk creation left an account out. The screen words them from its catalog.
 const (
-	BulkCreateFailedFields   = "missing_fields"
-	BulkCreateFailedName     = "name"
-	BulkCreateFailedPassword = "password"
-	BulkCreateFailedRole     = "role"
-	BulkCreateFailedCeiling  = "ceiling"
-	BulkCreateFailedTeam     = "team"
-	BulkCreateFailedExists   = "exists"
-	BulkCreateFailedWrite    = "failed"
+	BulkCreateFailedFields     = "missing_fields"
+	BulkCreateFailedName       = "name"
+	BulkCreateFailedNameLength = "name_length"
+	BulkCreateFailedPassword   = "password"
+	BulkCreateFailedRole       = "role"
+	BulkCreateFailedCeiling    = "ceiling"
+	BulkCreateFailedTeam       = "team"
+	BulkCreateFailedExists     = "exists"
+	BulkCreateFailedWrite      = "failed"
 )
 
 // BulkCreateFailure is one account a bulk creation left out; Detail is what the reason's words cannot say.

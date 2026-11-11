@@ -17,6 +17,7 @@ import { customRoleGroup, roleEditEndsSessions } from '@/utils/roleGroup'
 import { useConfirm } from '@/services/confirm'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { failureOf } from '@/hooks/useRefresh'
+import { NAME_MAX } from '@/utils/nameLimits'
 
 type PermCategory = { category: string; permissions: Array<{ key: string; description: string }> }
 
@@ -421,6 +422,7 @@ export default function AdminRoles() {
                 </label>
                 <input
                   value={formName}
+                  maxLength={NAME_MAX}
                   onChange={(e) => setFormName(e.target.value)}
                   disabled={editingRole?.is_system}
                   className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
