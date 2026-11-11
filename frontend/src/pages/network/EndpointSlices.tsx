@@ -13,7 +13,6 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
 import {
-  formatEndpointPreview,
   formatPorts,
   parseAgeSeconds,
   resolveNotReadyCount,
@@ -85,7 +84,8 @@ export default function EndpointSlices() {
       || es.namespace.toLowerCase().includes(q)
       || String(es.service_name || '').toLowerCase().includes(q)
       || String(es.address_type || '').toLowerCase().includes(q)
-      || formatEndpointPreview(es).toLowerCase().includes(q)
+      // every address, not the column's first three
+      || (Array.isArray(es.endpoints) ? es.endpoints : []).flatMap((ep) => ep.addresses || []).join(' ').toLowerCase().includes(q)
       || formatPorts(es.ports).toLowerCase().includes(q)
       || String(es.endpoints_total).includes(q)
       || String(es.endpoints_ready).includes(q)

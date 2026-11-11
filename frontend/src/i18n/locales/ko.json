@@ -387,7 +387,7 @@
     "durationMin": "{{m}}분",
     "durationH": "{{h}}시간",
     "durationHMin": "{{h}}시간 {{m}}분",
-    "searchPlaceholder": "요청자, 클러스터, 역할 검색..."
+    "searchPlaceholder": "요청자, 클러스터, 역할, 사유, 처리자 검색..."
   },
   "nav": {
     "accessRequests": "Access Requests",
@@ -638,7 +638,7 @@
     "createTitle": "YAML로 Endpoints 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "이름, Namespace, 주소, 포트, Ready 수로 Endpoints 검색...",
+    "searchPlaceholder": "이름, Namespace, 주소, 포트, Ready · Not Ready 수로 Endpoints 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 Endpoints가 검색되었습니다.",
     "table": {
@@ -2030,7 +2030,7 @@
     },
     "searchPlaceholder": "정책 또는 분류로 검색...",
     "searchNamespaces": "Namespace로 검색...",
-    "searchResults": "정책·규칙·리소스·Namespace·메시지로 검색...",
+    "searchResults": "정책·규칙·리소스 이름이나 셀렉터·Namespace·메시지로 검색...",
     "source": "보고서 {{reports}}개 · {{time}}",
     "table": {
       "policy": "정책",
@@ -2345,7 +2345,7 @@
       "windowHint": "이 시간 안의 Warning 이벤트를 해당 객체에 붙입니다.",
       "includeRestarts": "재시작 기록 포함",
       "includeRestartsHint": "현재 정상(Running/Ready)인 Pod의 과거 재시작도 정보로 포함합니다.",
-      "searchPlaceholder": "이슈 검색(이름/Namespace/메시지)...",
+      "searchPlaceholder": "이슈 검색(이름/Namespace/종류/심각도/메시지)...",
       "loading": "이슈 수집 중...",
       "error": "이슈를 수집하지 못했습니다",
       "none": "이슈가 없습니다",
@@ -2436,7 +2436,8 @@
       },
       "namespaceFilter": "Namespace 필터",
       "allNamespaces": "전체 Namespace",
-      "searchPlaceholder": "검색(이름/Namespace/상태/StorageClass/볼륨/용량/Reclaim Policy/Claim)...",
+      "searchPlaceholder": "검색(이름/Namespace/상태/StorageClass/볼륨/용량)...",
+      "searchPvsPlaceholder": "검색(이름/상태/용량/StorageClass/Reclaim Policy/Claim)...",
       "loading": "스토리지 데이터를 불러오는 중...",
       "noPVC": "표시할 PVC가 없습니다",
       "pvLabel": "PV",
@@ -5315,7 +5316,7 @@
       "mine": "내 담당",
       "open": "조치 안 된 것"
     },
-    "searchPlaceholder": "알림 이름·네임스페이스·레이블·요약·담당자로 검색...",
+    "searchPlaceholder": "알림 이름·네임스페이스·레이블·어노테이션·담당자로 검색...",
     "col": {
       "status": "상태",
       "alert": "알림",

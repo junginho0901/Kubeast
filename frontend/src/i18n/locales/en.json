@@ -388,7 +388,7 @@
     "durationMin": "{{m}} min",
     "durationH": "{{h}} h",
     "durationHMin": "{{h}} h {{m}} min",
-    "searchPlaceholder": "Search by requester, cluster or role..."
+    "searchPlaceholder": "Search by requester, cluster, role, reason or reviewer..."
   },
   "nav": {
     "accessRequests": "Access Requests",
@@ -639,7 +639,7 @@
     "createTitle": "Create Endpoints from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search endpoints by name, namespace, address, port or ready count...",
+    "searchPlaceholder": "Search endpoints by name, namespace, address, port or ready or not-ready count...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} endpoint{{suffix}} match.",
     "table": {
@@ -2036,7 +2036,7 @@
     },
     "searchPlaceholder": "Search by policy or category...",
     "searchNamespaces": "Search by namespace...",
-    "searchResults": "Search by policy, rule, resource, namespace or message...",
+    "searchResults": "Search by policy, rule, resource name or selector, namespace or message...",
     "source": "{{reports}} reports · {{time}}",
     "table": {
       "policy": "Policy",
@@ -2347,7 +2347,7 @@
       "windowHint": "Warning events newer than this are attached to their object.",
       "includeRestarts": "Include restart history",
       "includeRestartsHint": "Include past restarts for currently healthy (Running/Ready) pods as Info.",
-      "searchPlaceholder": "Search issues (name/namespace/message)...",
+      "searchPlaceholder": "Search issues (name/namespace/kind/severity/message)...",
       "loading": "Collecting issues...",
       "error": "Failed to collect issues",
       "none": "No issues detected",
@@ -2438,7 +2438,8 @@
       },
       "namespaceFilter": "Namespace filter",
       "allNamespaces": "All namespaces",
-      "searchPlaceholder": "Search (name/namespace/status/StorageClass/volume/capacity/reclaim policy/claim)...",
+      "searchPlaceholder": "Search (name/namespace/status/StorageClass/volume/capacity)...",
+      "searchPvsPlaceholder": "Search (name/status/capacity/StorageClass/reclaim policy/claim)...",
       "loading": "Loading storage data...",
       "noPVC": "No PVCs to display",
       "pvLabel": "PV",
@@ -4698,7 +4699,7 @@
       "mine": "Assigned to me",
       "open": "Not done"
     },
-    "searchPlaceholder": "Search by alert name, namespace, label, summary or assignee...",
+    "searchPlaceholder": "Search by alert name, namespace, label, annotation or assignee...",
     "col": {
       "status": "Status",
       "alert": "Alert",

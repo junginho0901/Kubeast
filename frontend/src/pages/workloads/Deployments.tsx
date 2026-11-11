@@ -76,7 +76,7 @@ export default function Deployments() {
     return deployments.filter((dep) =>
       dep.name.toLowerCase().includes(q) ||
       dep.namespace.toLowerCase().includes(q) ||
-      (dep.image || '').toLowerCase().includes(q) ||
+      (dep.images?.length ? dep.images : [dep.image || '']).join(' ').toLowerCase().includes(q) ||
       workloadStatusText(label, dep.status).includes(q),
     )
   }, [deployments, searchQuery, t])
