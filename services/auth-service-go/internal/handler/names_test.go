@@ -91,3 +91,22 @@ func TestABulkCreationHoldsEachNameToItsLimit(t *testing.T) {
 		t.Fatalf("%d %s", w.Code, w.Body.String())
 	}
 }
+
+// On an update the value the object already holds is not checked again: a name stored before the limit came can be
+// sent back with an edit beside it (the role and AI Models windows send it on every save), and a changed one is held
+// to the limit.
+func TestAStoredNameSentBackIsNotCheckedAgain(t *testing.T) {
+	long := strings.Repeat("가", 120)
+	if msg := changedNameTooLong("name", long, long, nameMax); msg != "" {
+		t.Errorf("the stored name sent back: %q", msg)
+	}
+	if msg := changedNameTooLong("name", " "+long+" ", long, nameMax); msg != "" {
+		t.Errorf("the stored name sent back trimmed differently: %q", msg)
+	}
+	if msg := changedNameTooLong("name", long+"가", long, nameMax); msg != "name: up to 100 characters" {
+		t.Errorf("a changed name past the limit: %q", msg)
+	}
+	if msg := changedNameTooLong("name", long, "", userNameMax); msg != "" {
+		t.Errorf("a new name within the limit: %q", msg)
+	}
+}
