@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -88,7 +89,8 @@ func TestResolveKindUsesTheDocumentVersion(t *testing.T) {
 			t.Errorf("ResolveKind(%s, %s) = %v %v %v, want %s", c.apiVersion, c.kind, gvr, namespaced, err, c.want)
 		}
 	}
-	if _, _, err := s.ResolveKind(ctx, "resource.k8s.io/v1beta1", "DeviceClass"); err == nil || !strings.Contains(err.Error(), "not served") {
+	// a version the cluster does not serve is the caller's to fix (a 400), in kubectl's words
+	if _, _, err := s.ResolveKind(ctx, "resource.k8s.io/v1beta1", "DeviceClass"); !errors.Is(err, ErrBadInput) || !strings.Contains(err.Error(), `no matches for kind "DeviceClass" in version "resource.k8s.io/v1beta1"`) {
 		t.Errorf("unserved version: %v", err)
 	}
 }

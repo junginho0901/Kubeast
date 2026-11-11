@@ -70,7 +70,7 @@ export const clusterApi = {
     return data
   },
 
-  applyNamespaceYaml: async (name: string, yaml: string, opened?: YamlOpened): Promise<{ status: string }> => {
+  applyNamespaceYaml: async (name: string, yaml: string, opened?: YamlOpened): Promise<{ status: string; unchanged?: boolean }> => {
     const { data } = await client.post(`/cluster/namespaces/${name}/yaml/apply`, { yaml, opened })
     return data
   },
@@ -137,7 +137,7 @@ export const clusterApi = {
     return data
   },
 
-  applyResourceYaml: async (resourceType: string, name: string, yaml: string, namespace?: string, opened?: YamlOpened): Promise<{ status: string; kept_masked?: string[] }> => {
+  applyResourceYaml: async (resourceType: string, name: string, yaml: string, namespace?: string, opened?: YamlOpened): Promise<{ status: string; kept_masked?: string[]; unchanged?: boolean }> => {
     const { data } = await client.post('/cluster/resources/yaml/apply', {
       resource_type: resourceType,
       resource_name: name,
@@ -196,7 +196,7 @@ export const clusterApi = {
     return data
   },
 
-  applyNodeYaml: async (name: string, yaml: string, opened?: YamlOpened): Promise<{ status: string }> => {
+  applyNodeYaml: async (name: string, yaml: string, opened?: YamlOpened): Promise<{ status: string; unchanged?: boolean }> => {
     const { data } = await client.post(`/cluster/nodes/${name}/yaml/apply`, { yaml, opened })
     return data
   },

@@ -2143,6 +2143,8 @@
     "apply": "적용",
     "applying": "적용 중...",
     "applied": "적용됨",
+    "unchanged": "바뀐 것이 없습니다. 개체가 이미 이 YAML과 같습니다.",
+    "yamlNoCrd": "이 커스텀 리소스는 CustomResourceDefinition 이름이 없어 여기서 저장할 수 없습니다.",
     "applyError": "적용에 실패했습니다.",
     "readonly": "읽기 전용",
     "yamlError": "YAML을 불러오지 못했습니다.",

@@ -200,11 +200,11 @@ export default function ResourceDetailDrawer() {
   const argo = argoCfg?.enabled ? { managed: argoManaged, url: argoManaged ? argoAppUrl(argoCfg, argoManaged.app) : null, blocked: argoBlocked } : undefined
   const argoWarnText = t('common.gitops.confirm', { app: argoManaged?.app ?? '', defaultValue: 'Argo CD application "{{app}}" manages this object; a change made here is reverted on the next sync. Change it in Git instead. Continue anyway?' })
   const confirm = useConfirm()
-  const keptMaskedRef = useRef(0)
+  const appliedRef = useRef({ kept: 0, unchanged: false })
   const handleApplyYamlGuarded = async (rawYaml: string, opened: string) => {
-    keptMaskedRef.current = 0
+    appliedRef.current = { kept: 0, unchanged: false }
     if (argoManaged && !argoBlocked && !(await confirm({ title: t('common.gitops.confirmTitle', { defaultValue: 'Managed by Argo CD' }), message: argoWarnText, confirmLabel: t('common.gitops.applyAnyway', { defaultValue: 'Apply anyway' }) }))) return false
-    keptMaskedRef.current = await handleApplyYaml(rawYaml, opened)
+    appliedRef.current = await handleApplyYaml(rawYaml, opened)
     return true
   }
 
@@ -434,8 +434,10 @@ export default function ResourceDetailDrawer() {
                 onApply={canEditYaml && !argoBlocked && !unreadable ? handleApplyYamlGuarded : undefined}
                 onApplySuccess={() => {
                   invalidateAfterApply()
-                  const kept = keptMaskedRef.current
-                  setApplyToast({ type: 'success', message: kept > 0 ? t('secretInfo.appliedKeptMasked', { count: kept, defaultValue: 'Applied. Hidden values left as they were: {{count}}' }) : t('common.applied', { defaultValue: 'Applied' }) })
+                  const { kept, unchanged } = appliedRef.current
+                  setApplyToast({ type: 'success', message: unchanged
+                    ? t('common.unchanged', { defaultValue: 'Unchanged: the object is already as this YAML says.' })
+                    : kept > 0 ? t('secretInfo.appliedKeptMasked', { count: kept, defaultValue: 'Applied. Hidden values left as they were: {{count}}' }) : t('common.applied', { defaultValue: 'Applied' }) })
                 }}
                 onApplyError={(msg) => setApplyToast({ type: 'error', message: msg || t('common.applyError', { defaultValue: 'Apply failed.' }) })}
                 onDirtyChange={setIsYamlDirty}

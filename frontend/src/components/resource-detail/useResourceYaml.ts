@@ -3,6 +3,7 @@
 // useQuery (yaml fetch) + nonce-based 강제 갱신 + dirty 상태 + apply + invalidate.
 // invalidateAfterApply 는 kind 별로 다른 query cache 를 invalidate (~150줄).
 
+import i18next from 'i18next'
 import { useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -53,22 +54,26 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
     retry: 1,
   })
 
-  // Answers how many of a Secret's masked values the server left as they were.
-  const handleApplyYaml = async (rawYaml: string, opened?: string): Promise<number> => {
+  // Answers how many of a Secret's masked values the server left as they were, and whether the object was already
+  // as the text says (kubectl apply's "unchanged": the server wrote nothing).
+  const handleApplyYaml = async (rawYaml: string, opened?: string): Promise<{ kept: number; unchanged: boolean }> => {
     const asSaved = (text: string) => (kind === 'Secret' && canEditYaml ? encodeSecretYaml(text) : text)
     const yaml = asSaved(rawYaml)
     // what left this text leaves the object: a merge patch alone would leave what it does not name
     const began = opened === undefined ? undefined : yamlOpenedOf(asSaved(opened), yaml)
-    if (kind === 'Node') await api.applyNodeYaml(name, yaml, began)
-    else if (kind === 'Namespace') await api.applyNamespaceYaml(name, yaml, began)
-    else if (kind === 'CustomResourceDefinition') await api.applyResourceYaml('customresourcedefinitions', name, yaml, undefined, began)
+    let answer: { unchanged?: boolean; kept_masked?: string[] } | undefined
+    if (kind === 'Node') answer = await api.applyNodeYaml(name, yaml, began)
+    else if (kind === 'Namespace') answer = await api.applyNamespaceYaml(name, yaml, began)
+    else if (kind === 'CustomResourceDefinition') answer = await api.applyResourceYaml('customresourcedefinitions', name, yaml, undefined, began)
     else if (kind === 'CustomResourceInstance') {
       const rj = target?.rawJson as Record<string, unknown> | undefined
       const crdN = (rj?.crd_name as string) || ''
-      if (crdN) await api.applyResourceYaml(crdN, name, yaml, ns || undefined, began)
+      // with no CRD to name it by nothing would be sent, which must not read as applied
+      if (!crdN) throw new Error(i18next.t('common.yamlNoCrd', { defaultValue: 'This custom resource does not name its CustomResourceDefinition, so it cannot be saved here.' }))
+      answer = await api.applyResourceYaml(crdN, name, yaml, ns || undefined, began)
     }
-    else return (await api.applyResourceYaml(drawerResourceType(kind), name, yaml, ns || undefined, began))?.kept_masked?.length ?? 0
-    return 0
+    else answer = await api.applyResourceYaml(drawerResourceType(kind), name, yaml, ns || undefined, began)
+    return { kept: answer?.kept_masked?.length ?? 0, unchanged: answer?.unchanged === true }
   }
 
   const invalidateAfterApply = useCallback(() => {

@@ -83,4 +83,26 @@ test.describe('Create from YAML says what it made', () => {
     await expect(dialog.getByTestId('yaml-create-error')).toContainText('create ConfigMap e2e-yc-b', { timeout: 15_000 })
     await expect(dialog.getByTestId('yaml-create-made-before')).toHaveCount(0)
   })
+
+  // What was typed wrong is the caller's to fix: the window stays with kubectl's words for it (a 400, not the decoder's
+  // text in a server error), a Korean line reads whole, and a YAML of comments only does not close as a create.
+  test('a YAML that holds no object stays open with the reason and makes nothing', async ({ page }) => {
+    await page.goto(`/configuration/configmaps?cluster=${CLUSTER}&namespace=${NS}`)
+    const dialog = page.getByTestId('yaml-create-dialog')
+    const before = kubectl(`-n ${NS} get configmaps -o name`)
+    const answers: number[] = []
+    page.on('response', (r) => { if (new URL(r.url()).pathname === '/api/v1/cluster/resources/yaml/create') answers.push(r.status()) })
+    for (const [yaml, reason] of [
+      ['한국어로 쓴 글', 'document 1 (line 1) is text, not an object with apiVersion, kind and metadata'],
+      ['# 메모만 있음\n---', 'no objects passed to create: the YAML holds only comments or empty documents'],
+      [`apiVersion: v1\nmetadata: {name: e2e-yc-nokind, namespace: ${NS}}`, 'document 1: kind not set'],
+      [`apiVersion: v1\nkind: NoSuchKind\nmetadata: {name: e2e-yc-x, namespace: ${NS}}`, 'document 1: no matches for kind "NoSuchKind" in version "v1" on this cluster (ensure CRDs are installed first)'],
+    ]) {
+      await createFromYaml(page, yaml)
+      await expect(dialog.getByTestId('yaml-create-error'), yaml).toHaveText(reason, { timeout: 15_000 })
+    }
+    expect(answers).toEqual([400, 400, 400, 400])
+    await expect(page.getByTestId('yaml-created')).toHaveCount(0)
+    expect(kubectl(`-n ${NS} get configmaps -o name`), 'nothing was made').toBe(before)
+  })
 })

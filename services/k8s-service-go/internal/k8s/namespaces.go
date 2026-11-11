@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 
-	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -421,14 +420,14 @@ func (s *Service) ApplyNamespaceYAML(ctx context.Context, name, opened, yamlStr 
 		return nil, fmt.Errorf("get namespace %s: %w", name, err)
 	}
 
-	var parsed map[string]interface{}
-	if err := yaml.Unmarshal([]byte(yamlStr), &parsed); err != nil {
-		return nil, fmt.Errorf("parse YAML: %w", err)
+	parsed, err := editedObject(yamlStr)
+	if err != nil {
+		return nil, err
 	}
 
 	metadata, ok := parsed["metadata"].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("invalid YAML: missing metadata")
+		return nil, badInput("metadata not set: a Namespace's labels and annotations are written under metadata")
 	}
 
 	openedMetadata, _ := openedObject(opened)["metadata"].(map[string]interface{})
@@ -452,6 +451,8 @@ func (s *Service) ApplyNamespaceYAML(ctx context.Context, name, opened, yamlStr 
 		"labels":      updated.Labels,
 		"annotations": updated.Annotations,
 		"created_at":  toISO(&updated.CreationTimestamp),
+		// an update that changed nothing is not written: the version read before it stays
+		"unchanged": updated.ResourceVersion == ns.ResourceVersion,
 	}, nil
 }
 

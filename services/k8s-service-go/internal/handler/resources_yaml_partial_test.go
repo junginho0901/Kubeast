@@ -61,3 +61,46 @@ func TestYAMLCreateStoppedPartWayNamesWhatItMade(t *testing.T) {
 		t.Fatalf("first refused: %d %+v", code, got)
 	}
 }
+
+// What the caller wrote wrong is a 400 with its reason and no write: text that is not an object, a YAML of comments
+// only (which made nothing and answered 200 before), a kind left out and one the cluster does not serve; a document
+// after one that was made still answers it as made.
+func TestYAMLCreateOfTextThatIsNoObjectIsA400(t *testing.T) {
+	type answer struct {
+		Detail  string                   `json:"detail"`
+		Created []map[string]interface{} `json:"created"`
+	}
+	cases := []struct{ name, yaml, detail string }{
+		{"text", "한국어 글\n", "document 1 (line 1) is text, not an object with apiVersion, kind and metadata"},
+		{"comments only", "# a note\n---\n", "no objects passed to create: the YAML holds only comments or empty documents"},
+		{"no kind", "apiVersion: v1\nmetadata: {name: x}\n", "document 1: kind not set"},
+		{"kind not served", "apiVersion: v1\nkind: ForbiddenThing\nmetadata: {name: x}\n", `document 1: no matches for kind "ForbiddenThing" in version "v1"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := newArgoCluster(t)
+			rig := newArgoRigWith(t, a, argoOff, argoWriter(), config.Config{})
+			w := rig.do("POST", "/api/v1/resources/yaml/create", jsonBody(t, map[string]string{"yaml": tc.yaml}))
+			var got answer
+			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+				t.Fatalf("answer %d %q: %v", w.Code, w.Body.String(), err)
+			}
+			if w.Code != http.StatusBadRequest || !strings.HasPrefix(got.Detail, tc.detail) || got.Created != nil {
+				t.Fatalf("answer %d %+v, want 400 %q", w.Code, got, tc.detail)
+			}
+			if writes := a.seenWrites(); len(writes) != 0 {
+				t.Fatalf("writes %v", writes)
+			}
+		})
+	}
+
+	a := newArgoCluster(t)
+	rig := newArgoRigWith(t, a, argoOff, argoWriter(), config.Config{})
+	w := rig.do("POST", "/api/v1/resources/yaml/create", jsonBody(t, map[string]string{"yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: first\n  namespace: shop\n---\njust text\n"}))
+	var got answer
+	_ = json.Unmarshal(w.Body.Bytes(), &got)
+	if w.Code != http.StatusBadRequest || got.Detail != "document 2 (line 7) is text, not an object with apiVersion, kind and metadata" ||
+		len(got.Created) != 1 || got.Created[0]["kind"] != "ConfigMap" {
+		t.Fatalf("made before the text: %d %+v", w.Code, got)
+	}
+}
