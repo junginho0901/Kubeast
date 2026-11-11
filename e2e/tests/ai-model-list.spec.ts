@@ -30,6 +30,26 @@ test.describe('AI model list from the provider', () => {
     await expect(source).toHaveAttribute('title', 'audit unavailable')
   })
 
+  // A CA field that holds no PEM certificate is the admin's to fix: the list line and Test say so (they answered 500
+  // when ssl refused it). Save refuses it with the same words (test_model_config_input.py).
+  test('a CA that is not a certificate is named on the list line and on Test', async ({ page }) => {
+    const NOT_PEM = 'CA certificate: not a certificate in PEM form (-----BEGIN CERTIFICATE----- … -----END CERTIFICATE-----)'
+    await page.goto('/admin/ai-models')
+    await page.getByRole('button', { name: 'Add Model' }).first().click()
+    await page.getByTestId('provider-select').click()
+    await page.getByTestId('provider-option-ollama').click()
+    await page.getByPlaceholder(/localhost:11434|api\.example\.com/).fill(STUB)
+    await page.locator('details', { hasText: /Advanced|고급/ }).locator('summary').click()
+    await page.getByPlaceholder(/-----BEGIN CERTIFICATE-----/).fill('한국어 인증서 아님')
+    await expect(page.getByTestId('model-list-source')).toHaveText(new RegExp(`(Built-in list|기본 목록).*${NOT_PEM.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), { timeout: 15_000 })
+
+    const tested = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/ai/model-configs/test')
+    await page.getByRole('button', { name: /^(Test|연결 테스트)$/ }).click()
+    const answer = await tested
+    expect([answer.status(), (await answer.json()).detail]).toEqual([400, NOT_PEM])
+    await expect(page.getByText(NOT_PEM, { exact: true })).toHaveCount(1)
+  })
+
   test('the form says which address was refused when connecting, on the list and on Test', async ({ page }) => {
     test.skip(!hasStandIn(), STAND_IN_SKIP)
     await page.goto('/admin/ai-models')

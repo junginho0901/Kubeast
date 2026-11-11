@@ -19,7 +19,7 @@ from app.services.ai.debug_dump import safe_error
 from app.services import claude_code, model_config_policy
 from app.services.anthropic_messages import API_VERSION as ANTHROPIC_VERSION, api_root as anthropic_root
 from app.services.model_http import model_client
-from app.services.tls import build_verify
+from app.services.tls import build_verify, ca_cert_problem
 
 public_router = APIRouter()
 admin_router = APIRouter(dependencies=[Depends(require_admin)])
@@ -280,6 +280,9 @@ async def _test_model_connection(request: dict) -> dict:
         if not api_key:
             raise HTTPException(status_code=400, detail=f"environment variable {api_key_env} is not set in ai-service")
     model = body.get("model", "")
+    ca_problem = ca_cert_problem(body.get("ca_cert"))
+    if ca_problem:
+        raise HTTPException(status_code=400, detail=ca_problem)
     verify = build_verify(body.get("tls_verify", True), body.get("ca_cert"))
     user_base_url = (body.get("base_url") or "").strip()
 
@@ -388,6 +391,10 @@ async def _list_provider_models(request: dict) -> dict:
     provider = (body.get("provider") or "openai").strip().lower()
     api_key_env = (body.get("api_key_env") or "").strip()
     user_base_url = (body.get("base_url") or "").strip()
+    ca_problem = ca_cert_problem(body.get("ca_cert"))
+    if ca_problem:
+        # what the form's list line shows, as for the other reasons the list could not be read
+        return {"models": [], "error": ca_problem}
     verify = build_verify(body.get("tls_verify", True), body.get("ca_cert"))
     try:
         model_config_policy.check_api_key_env(api_key_env)

@@ -25,6 +25,15 @@ def _check_limits(options):
     return options
 
 
+def _check_ca_cert(ca_cert):
+    from app.services.tls import ca_cert_problem
+
+    problem = ca_cert_problem(ca_cert)
+    if problem:
+        raise ValueError(problem)
+    return ca_cert
+
+
 class ModelConfigCreate(BaseModel):
     name: str = Field(..., min_length=1)
     provider: str = "openai"
@@ -58,6 +67,11 @@ class ModelConfigCreate(BaseModel):
     def _limits_in_range(cls, options):
         return _check_limits(options)
 
+    @field_validator("ca_cert")
+    @classmethod
+    def _ca_cert_is_pem(cls, ca_cert):
+        return _check_ca_cert(ca_cert)
+
 
 class ModelConfigUpdate(BaseModel):
     name: Optional[str] = None
@@ -87,6 +101,11 @@ class ModelConfigUpdate(BaseModel):
     @classmethod
     def _limits_in_range(cls, options):
         return _check_limits(options)
+
+    @field_validator("ca_cert")
+    @classmethod
+    def _ca_cert_is_pem(cls, ca_cert):
+        return _check_ca_cert(ca_cert)
 
 
 class ModelConfigResponse(BaseModel):
