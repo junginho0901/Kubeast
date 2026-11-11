@@ -1,10 +1,17 @@
 {{- /*
 `helm upgrade --reuse-values` renders this chart on the values of the release it upgrades: that version's defaults,
-without what later versions added. Helm renders the deepest paths first, so this file stops such an upgrade with the
-fix before a template fails on a missing value. scripts/chart-upgrade-values.sh (CI) says when a path belongs here.
-A published chart's defaults also hold its release's image tag, which such an upgrade would keep, so each release
-names a path it added (multicluster.clientQPS: 0.7.6).
+without what later versions added, and with its image tag. Helm renders the deepest paths first, so this file stops
+such an upgrade with the fix before a template fails on a missing value. A published chart's defaults carry the
+version they belong to (`chartVersion`, which the release writes), so values from another release stop here even when
+it added no path; the list below still names paths a values file must hold. scripts/chart-upgrade-values.sh (CI)
+says when a path belongs there.
 */}}
+{{- $hint := "Upgrade with --reset-then-reuse-values instead (your values are kept, this chart's new defaults are added)." }}
+{{- if not (hasKey .Values "chartVersion") }}
+{{- fail (printf "the values have no chartVersion: they come from an earlier Kubeast chart, which --reuse-values keeps. %s" $hint) }}
+{{- else if and .Values.chartVersion (ne (toString .Values.chartVersion) .Chart.Version) }}
+{{- fail (printf "the values say chartVersion %s and this chart is %s: they come from an earlier Kubeast chart, kept by --reuse-values or by a values file copied from it. %s Leave chartVersion and global.imageTag out of a values file of your own." (toString .Values.chartVersion) .Chart.Version $hint) }}
+{{- end }}
 {{- range list "features.networkFlowMonitor" "multicluster.clientQPS" }}
 {{- $node := $.Values }}
 {{- $found := true }}
@@ -16,6 +23,6 @@ names a path it added (multicluster.clientQPS: 0.7.6).
 {{- end }}
 {{- end }}
 {{- if not $found }}
-{{- fail (printf "the values have no %s: they come from an earlier Kubeast chart, which --reuse-values keeps. Upgrade with --reset-then-reuse-values instead (your values are kept, this chart's new defaults are added)." .) }}
+{{- fail (printf "the values have no %s: they come from an earlier Kubeast chart, which --reuse-values keeps. %s" . $hint) }}
 {{- end }}
 {{- end }}

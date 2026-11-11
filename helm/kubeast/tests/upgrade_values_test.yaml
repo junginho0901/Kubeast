@@ -6,6 +6,28 @@ tests:
     asserts:
       - hasDocuments:
           count: 0
+  - it: stops values without chartVersion, as every release's up to 0.7.6 are
+    set:
+      chartVersion: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no chartVersion
+  - it: stops values of another release, which added no path, as v0.7.7's published defaults are under 0.7.8
+    chart:
+      version: 0.7.8
+    set:
+      chartVersion: 0.7.7
+    asserts:
+      - failedTemplate:
+          errorPattern: the values say chartVersion 0.7.7 and this chart is 0.7.8
+  - it: renders nothing on a published chart's own defaults
+    chart:
+      version: 0.7.8
+    set:
+      chartVersion: 0.7.8
+    asserts:
+      - hasDocuments:
+          count: 0
   - it: stops values without a path 0.7.6 added, as v0.7.5's published defaults are
     set:
       multicluster.clientQPS: null
