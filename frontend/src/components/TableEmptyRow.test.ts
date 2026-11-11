@@ -7,6 +7,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 
 import en from '../i18n/locales/en.json'
 import { TableEmptyRow } from './TableEmptyRow'
+import { recordListStatus, resetListStatus } from '../services/listStatusStore'
 
 const i18n = i18next.createInstance()
 beforeAll(async () => {
@@ -24,6 +25,15 @@ describe("a list table's empty row", () => {
     expect(html).toContain('data-testid="table-load-error"')
     expect(html).toContain('data-testid="table-load-error-retry"')
     expect(html).not.toContain('No items.')
+  })
+
+  it("a list the API client saw fail on the server says the server's reason beside its code", () => {
+    resetListStatus()
+    recordListStatus({ url: '/cluster/deployments/all', state: 'error', code: 500, reason: 'list deployments: etcd timed out' })
+    expect(render({ colSpan: 4, resource: 'deployments' })).toContain('Could not load Deployment (server error 500): list deployments: etcd timed out')
+    recordListStatus({ url: '/cluster/deployments/all', state: 'error', code: 502 })
+    expect(render({ colSpan: 4, resource: 'deployments' })).toContain('Could not load Deployment (server error 502).')
+    resetListStatus()
   })
 
   it('is the shared empty text when the read worked', () => {

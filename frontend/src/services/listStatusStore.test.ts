@@ -14,6 +14,13 @@ describe('listStatusStore', () => {
     expect(getListStatus('deployments')).toBeUndefined()
   })
 
+  it("keeps the server's reason with the failure, and a later failure's own reason", () => {
+    recordListStatus({ url: '/cluster/pods/all', state: 'error', code: 500, reason: 'list pods: etcd timed out' })
+    expect(getListStatus('pods')).toEqual({ state: 'error', code: 500, reason: 'list pods: etcd timed out' })
+    recordListStatus({ url: '/cluster/pods/all', state: 'error', code: 500, reason: 'list pods: context canceled' })
+    expect(getListStatus('pods')).toEqual({ state: 'error', code: 500, reason: 'list pods: context canceled' })
+  })
+
   it('marks a kind the cluster does not serve', () => {
     recordListStatus({ url: '/cluster/namespaces/default/httproutes', state: 'notInstalled' })
     expect(getListStatus('httproutes')).toEqual({ state: 'notInstalled' })

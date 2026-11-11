@@ -10,6 +10,7 @@ import { useNamespacePodTable } from './useNamespacePodTable'
 import { SET_POD_TABLE_WATCH_MAX } from './namespacePodTable'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
+import { DescribeFailure } from './DescribeFailure'
 
 // The API server applies the selector to the whole read: every row it gives is a match.
 const keepEvery = () => true
@@ -22,7 +23,7 @@ interface Props {
 
 export default function PDBInfo({ name, namespace }: Props) {
   const { open: openDetail } = useResourceDetail()
-  const { data: desc, isLoading } = useQuery({
+  const { data: desc, isLoading, error: describeError } = useQuery({
     queryKey: ['pdb-describe', namespace, name],
     queryFn: () => api.describePDB(namespace, name),
     staleTime: 10_000,
@@ -61,6 +62,8 @@ export default function PDBInfo({ name, namespace }: Props) {
   }
 
   if (!desc) {
+    // a read that failed is not an object with no data
+    if (describeError) return <DescribeFailure error={describeError} className="py-4" />
     return <div className="text-xs text-slate-400 py-4 text-center"><Tx>No data</Tx></div>
   }
 

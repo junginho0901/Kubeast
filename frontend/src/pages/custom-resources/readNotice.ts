@@ -23,11 +23,17 @@ export function crReadNotice(forbidden: string[] | undefined, failed: CustomReso
   for (const f of failed ?? []) byCode.set(f.code, [...(byCode.get(f.code) ?? []), f])
   for (const [code, list] of [...byCode].sort((a, b) => a[0] - b[0])) {
     const resource = list.map((f) => f.kind).join(', ')
+    // each kind's own reason in the line, not only on hover
+    const reason = list.filter((f) => f.error).map((f) => (list.length > 1 ? `${f.kind}: ${f.error}` : f.error)).join('; ')
     lines.push({
       testId: 'cr-instances-load-error',
       text: code
-        ? tr('common.loadErrorEmpty', 'Could not load {{resource}} (server error {{code}}).', { resource, code })
-        : tr('common.loadErrorEmptyNetwork', 'Could not load {{resource}} (no response from the server).', { resource }),
+        ? reason
+          ? tr('common.loadErrorEmptyReason', 'Could not load {{resource}} (server error {{code}}): {{reason}}', { resource, code, reason })
+          : tr('common.loadErrorEmpty', 'Could not load {{resource}} (server error {{code}}).', { resource, code })
+        : reason
+          ? tr('common.loadErrorEmptyNetworkReason', 'Could not load {{resource}} (no response from the server): {{reason}}', { resource, reason })
+          : tr('common.loadErrorEmptyNetwork', 'Could not load {{resource}} (no response from the server).', { resource }),
       title: list.map((f) => `${f.kind}: ${f.error}`).join('\n'),
     })
   }

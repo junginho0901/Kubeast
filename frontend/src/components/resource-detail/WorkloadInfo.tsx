@@ -22,6 +22,7 @@ import WorkloadOwnedResources from './workload-info/WorkloadOwnedResources'
 import WorkloadContainers from './workload-info/WorkloadContainers'
 import WorkloadAffinity from './workload-info/WorkloadAffinity'
 import WorkloadDialogs from './workload-info/WorkloadDialogs'
+import { DescribeFailure } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -49,7 +50,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
   const {
     describe,
     isLoading,
-    isError,
+    describeError,
     needsDescribe,
     ownedJobs,
     owned,
@@ -158,11 +159,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
         daemonSetStatus={daemonSetStatus}
       />
 
-      {needsDescribe && isError && (
-        <p className="text-xs text-amber-300">
-          {tr('common.describeUnavailable', 'Some detailed fields are unavailable right now.')}
-        </p>
-      )}
+      {needsDescribe && <DescribeFailure error={describeError} showingRow />}
 
       <WorkloadKindInfo
         isJob={isJob}

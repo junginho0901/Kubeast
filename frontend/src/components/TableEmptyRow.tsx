@@ -69,7 +69,9 @@ export function TableEmptyRow({ colSpan, resource, searching = false, children, 
     testId = 'table-load-error'
     body = (
       <>
-        {status.code
+        {status.code && status.reason
+          ? t('common.loadErrorEmptyReason', { resource: kind, code: status.code, reason: status.reason, defaultValue: 'Could not load {{resource}} (server error {{code}}): {{reason}}' })
+          : status.code
           ? t('common.loadErrorEmpty', { resource: kind, code: status.code, defaultValue: 'Could not load {{resource}} (server error {{code}}).' })
           : t('common.loadErrorEmptyNetwork', { resource: kind, defaultValue: 'Could not load {{resource}} (no response from the server).' })}
         {retry}

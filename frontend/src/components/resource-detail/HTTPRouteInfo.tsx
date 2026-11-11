@@ -7,6 +7,7 @@ import { backendRefGroup, conditionStatus, conditionSummary, formatParentRef, pa
 import { GroupRefLink } from './GroupRefLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import type { HTTPRouteInfo as HTTPRouteRow } from '@/services/api'
+import { DescribeFailure } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -31,7 +32,7 @@ function text(value: unknown): string {
 
 export default function HTTPRouteInfo({ name, namespace, rawJson }: Props) {
   const enabled = !!name && !!namespace
-  const { data: describe, isLoading, isError } = useQuery({
+  const { data: describe, isLoading, error: describeError } = useQuery({
     queryKey: ['httproute-describe', namespace, name],
     queryFn: () => api.describeHTTPRoute(namespace as string, name) as Promise<HTTPRouteDescribe>,
     enabled,
@@ -99,7 +100,7 @@ export default function HTTPRouteInfo({ name, namespace, rawJson }: Props) {
     <>
       <InfoSection title="HTTPRoute Info">
         {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading HTTPRoute details...</Tx></p>}
-        {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
+        <DescribeFailure error={describeError} showingRow className="mb-2" />
         <div className="flex flex-wrap gap-2 mb-3">
           <SummaryBadge label="Status" value={statusText} color="default" />
           <SummaryBadge label="Accepted" value={accepted} color={accepted === 'True' ? 'green' : 'amber'} />

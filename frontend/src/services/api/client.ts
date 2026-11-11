@@ -75,7 +75,9 @@ client.interceptors.response.use(
     // missing is a known state with its own notices, not a failure.
     if (isClusterRead(error?.config) && (status === undefined || status >= 500) && !axios.isCancel(error) &&
         !isMetricsUnavailableResponse(error)) {
-      dispatchListStatus({ url, state: 'error', code: status })
+      // the server's own reason when it wrote one (a 5xx of k8s-service carries `detail`), not the client's "status code"
+      const detail = error?.response?.data?.detail
+      dispatchListStatus({ url, state: 'error', code: status, reason: typeof detail === 'string' && detail.trim() ? detail.trim() : undefined })
     }
     return Promise.reject(error)
   },
@@ -86,7 +88,7 @@ export const FORBIDDEN_EVENT = 'kubeast:forbidden'
 
 /** Dispatched on window for every GET /cluster/... outcome other than 403: ok, not installed, failed (5xx / network). */
 export const LIST_STATUS_EVENT = 'kubeast:list-status'
-export type ListStatusDetail = { url: string; state: 'ok' | 'notInstalled' | 'error'; code?: number }
+export type ListStatusDetail = { url: string; state: 'ok' | 'notInstalled' | 'error'; code?: number; reason?: string }
 
 const METRICS_UNAVAILABLE = 'metrics_unavailable'
 

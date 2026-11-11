@@ -14,6 +14,7 @@ import { useAIContext } from '@/hooks/useAIContext'
 import { buildResourceLink } from '@/utils/resourceLink'
 
 import { formatBytes } from '../utils'
+import { failureText } from '@/utils/failureText'
 
 interface Props {
   open: boolean
@@ -419,7 +420,7 @@ export function StorageModal({
                 <div className="text-center py-12">
                   <p className="text-slate-400">{tr('dashboard.storage.topologyError', 'Failed to load topology')}</p>
                   <p className="text-xs text-slate-500 mt-2">
-                    {(storageTopologyError as any)?.message || tr('dashboard.unknownError', 'Unknown error')}
+                    {failureText(storageTopologyError)}
                   </p>
                 </div>
               ) : (

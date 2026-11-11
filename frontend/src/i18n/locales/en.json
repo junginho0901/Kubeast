@@ -1641,7 +1641,6 @@
         "unsaved": "You have unsaved YAML changes. Discard them?"
       },
       "loading": "Loading node details...",
-      "error": "Failed to load node details.",
       "notFound": "Node details not found.",
       "cpuUsage": "CPU Usage",
       "memoryUsage": "Memory Usage",
@@ -2132,7 +2131,9 @@
     "notInstalledEmpty": "{{resource}} is not installed on this cluster (no CustomResourceDefinition).",
     "notServedEmpty": "{{resource}} is not served by this cluster (a built-in Kubernetes API that its version does not have or that is turned off).",
     "loadErrorEmpty": "Could not load {{resource}} (server error {{code}}).",
+    "loadErrorEmptyReason": "Could not load {{resource}} (server error {{code}}): {{reason}}",
     "loadErrorEmptyNetwork": "Could not load {{resource}} (no response from the server).",
+    "loadErrorEmptyNetworkReason": "Could not load {{resource}} (no response from the server): {{reason}}",
     "retry": "Retry",
     "deleteKind": "Delete {{kind}}",
     "deleteKindConfirm": "Are you sure you want to delete {{kind}} \"{{name}}\"?",
@@ -2199,6 +2200,8 @@
     "objectForbidden": "You are not allowed to see this object.",
     "refreshFailed": "Refresh failed at {{time}}: {{reason}}",
     "readFailed": "Could not read the list: {{reason}}",
+    "describeFailed": "Could not read the details: {{reason}}",
+    "describeFailedRow": "Could not read the details: {{reason}} Showing what the list's row holds.",
     "logsReadFailed": "Could not read the logs: {{reason}}",
     "copyFailed": "Not copied: the browser did not take it. Select the text and copy it yourself.",
     "notCopied": "Not copied",
@@ -2367,7 +2370,6 @@
     },
     "autoRefresh": "Auto refresh every 5 seconds",
     "topResources": {
-      "error": "Failed to fetch data",
       "empty": "No resource usage data"
     },
     "metrics": {
@@ -2441,7 +2443,6 @@
       "topologyError": "Failed to load topology",
       "topologyUnavailable": "Topology data is unavailable"
     },
-    "unknownError": "Unknown error",
     "resourceModal": {
       "loading": "Loading...",
       "total": "Total {{count}}",
@@ -2745,7 +2746,6 @@
       "title": "Namespace details",
       "subtitle": "Details from kubectl describe namespace {{name}}",
       "loading": "Loading namespace details...",
-      "error": "Failed to load namespace details.",
       "notFound": "Namespace details not found.",
       "basicInfo": "Basic information",
       "name": "Name",
@@ -2862,7 +2862,6 @@
     "sweepFailed": "The sweep failed: {{reason}}",
     "actionFailed": "The action failed.",
     "loading": "Loading...",
-    "loadError": "Failed to load users.",
     "title": "User Management",
     "subtitle": "Change account levels (Pending, Member, Admin). Read and Write are granted per cluster.",
     "table": {
@@ -3048,8 +3047,7 @@
     "volumeAttachment": {
       "infoTitle": "VolumeAttachments are created for CSI volumes that require attach/detach. (e.g., NFS may not create them)",
       "infoLine1": "VolumeAttachments are created for CSI volumes that require attach/detach.",
-      "infoLine2": "(e.g., NFS may not create them)",
-      "loadError": "Failed to load VolumeAttachments. (This may be restricted by cluster permissions or environment)"
+      "infoLine2": "(e.g., NFS may not create them)"
     },
     "pvc": {
       "linkHint": "Click to view PV/StorageClass links",

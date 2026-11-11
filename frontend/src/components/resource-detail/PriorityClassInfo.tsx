@@ -10,6 +10,7 @@ import { preemptionPolicy } from './clusterDetail'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
+import { DescribeFailure } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -18,7 +19,7 @@ interface Props {
 
 export default function PriorityClassInfo({ name }: Props) {
   const { open: openDetail } = useResourceDetail()
-  const { data: desc, isLoading } = useQuery({
+  const { data: desc, isLoading, error: describeError } = useQuery({
     queryKey: ['priorityclass-describe', name],
     queryFn: () => api.describePriorityClass(name),
     staleTime: 10_000,
@@ -57,6 +58,8 @@ export default function PriorityClassInfo({ name }: Props) {
   }
 
   if (!desc) {
+    // a read that failed is not an object with no data
+    if (describeError) return <DescribeFailure error={describeError} className="py-4" />
     return <div className="text-xs text-slate-400 py-4 text-center"><Tx>No data</Tx></div>
   }
 

@@ -24,6 +24,7 @@ import {
 import { applyVolumeAttachmentWatchEvent } from './volumeattachments/volumeAttachmentWatchNormalize'
 import { VolumeAttachmentFilters } from './volumeattachments/VolumeAttachmentFilters'
 import { VolumeAttachmentTable } from './volumeattachments/VolumeAttachmentTable'
+import { failureText } from '@/utils/failureText'
 
 export default function VolumeAttachments() {
   const queryClient = useQueryClient()
@@ -42,6 +43,7 @@ export default function VolumeAttachments() {
     data: volumeAttachments,
     isLoading,
     isError,
+    error: readError,
   } = useQuery({
     queryKey: ['storage', 'volumeattachments'],
     queryFn: () => api.getVolumeAttachments(false),
@@ -269,11 +271,8 @@ spec:
       <div className="card flex-1 min-h-0 flex flex-col" ref={tableContainerRef}>
         {isError && (
           <div className="px-4 py-3 border-b border-slate-800">
-            <p className="text-xs text-amber-300">
-              {tr(
-                'storage.volumeAttachment.loadError',
-                'Failed to load VolumeAttachments. (This may be restricted by cluster permissions or environment)',
-              )}
+            <p className="text-xs text-amber-300 break-words" data-testid="volumeattachments-read-failed">
+              {tr('common.readFailed', 'Could not read the list: {{reason}}', { reason: failureText(readError) })}
             </p>
           </div>
         )}

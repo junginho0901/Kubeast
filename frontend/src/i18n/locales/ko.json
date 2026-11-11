@@ -1642,7 +1642,6 @@
         "unsaved": "저장되지 않은 YAML 변경사항이 있습니다. 폐기할까요?"
       },
       "loading": "Node 상세 불러오는 중...",
-      "error": "Node 상세를 불러오지 못했습니다.",
       "notFound": "Node 상세 정보가 없습니다.",
       "cpuUsage": "CPU 사용량",
       "memoryUsage": "메모리 사용량",
@@ -2125,7 +2124,9 @@
     "notInstalledEmpty": "이 클러스터에는 {{resource}}이(가) 설치되어 있지 않습니다(CustomResourceDefinition 없음).",
     "notServedEmpty": "이 클러스터는 {{resource}} API를 제공하지 않습니다(이 Kubernetes 버전에 없거나 꺼져 있는 내장 API).",
     "loadErrorEmpty": "{{resource}}: 불러오지 못했습니다(서버 오류 {{code}}).",
+    "loadErrorEmptyReason": "{{resource}}: 불러오지 못했습니다(서버 오류 {{code}}): {{reason}}",
     "loadErrorEmptyNetwork": "{{resource}}: 불러오지 못했습니다(서버 응답 없음).",
+    "loadErrorEmptyNetworkReason": "{{resource}}: 불러오지 못했습니다(서버 응답 없음): {{reason}}",
     "retry": "다시 시도",
     "deleteKind": "{{kind}} 삭제",
     "deleteKindConfirm": "{{kind}} \"{{name}}\" 삭제를 진행할까요?",
@@ -2175,7 +2176,6 @@
     "noOptions": "옵션 없음",
     "loadingEditor": "에디터 불러오는 중...",
     "back": "뒤로",
-    "describeUnavailable": "지금은 상세 필드 일부를 볼 수 없습니다.",
     "no": "아니요",
     "yes": "예",
     "save": "저장",
@@ -2199,6 +2199,8 @@
     "objectForbidden": "이 객체를 볼 권한이 없습니다.",
     "refreshFailed": "{{time}}에 새로 읽지 못했습니다: {{reason}}",
     "readFailed": "목록을 읽지 못했습니다: {{reason}}",
+    "describeFailed": "상세 정보를 읽지 못했습니다: {{reason}}",
+    "describeFailedRow": "상세 정보를 읽지 못했습니다: {{reason}} 목록 줄에 있는 값만 보입니다.",
     "logsReadFailed": "로그를 읽지 못했습니다: {{reason}}",
     "copyFailed": "복사하지 못했습니다. 브라우저가 받지 않았습니다. 글을 직접 선택해 복사하세요.",
     "notCopied": "복사 안 됨",
@@ -2366,7 +2368,6 @@
     },
     "autoRefresh": "5초마다 자동 갱신",
     "topResources": {
-      "error": "데이터를 가져오지 못했습니다",
       "empty": "리소스 사용량 데이터가 없습니다"
     },
     "metrics": {
@@ -2440,7 +2441,6 @@
       "topologyError": "토폴로지 로드 실패",
       "topologyUnavailable": "토폴로지 데이터를 사용할 수 없습니다"
     },
-    "unknownError": "알 수 없는 오류",
     "resourceModal": {
       "loading": "불러오는 중...",
       "total": "총 {{count}}",
@@ -2746,7 +2746,6 @@
       "title": "Namespace 상세",
       "subtitle": "kubectl describe namespace {{name}} 결과",
       "loading": "Namespace 상세 불러오는 중...",
-      "error": "Namespace 상세를 불러오지 못했습니다.",
       "notFound": "Namespace 상세 정보가 없습니다.",
       "basicInfo": "기본 정보",
       "name": "이름",
@@ -2955,7 +2954,6 @@
     "sweepFailed": "점검에 실패했습니다: {{reason}}",
     "actionFailed": "작업에 실패했습니다.",
     "loading": "불러오는 중...",
-    "loadError": "유저 목록을 불러오지 못했습니다.",
     "title": "User Management",
     "subtitle": "계정 등급(Pending·Member·Admin)을 바꿉니다. Read·Write는 클러스터마다 줍니다.",
     "table": {
@@ -3141,8 +3139,7 @@
     "volumeAttachment": {
       "infoTitle": "VolumeAttachment는 attach/detach가 필요한 CSI 볼륨에서 생성됩니다. (예: NFS 계열은 생성되지 않을 수 있음)",
       "infoLine1": "VolumeAttachment는 attach/detach가 필요한 CSI 볼륨에서 생성됩니다.",
-      "infoLine2": "(예: NFS 계열은 생성되지 않을 수 있음)",
-      "loadError": "VolumeAttachment 조회에 실패했습니다. (클러스터 권한/환경에 따라 불가할 수 있습니다)"
+      "infoLine2": "(예: NFS 계열은 생성되지 않을 수 있음)"
     },
     "pvc": {
       "linkHint": "클릭하면 PV/StorageClass 연결 정보를 확인합니다",
@@ -4889,7 +4886,6 @@
     "Loading ResourceClaim details...": "ResourceClaim 상세 정보 불러오는 중...",
     "Loading ResourceClaimTemplate details...": "ResourceClaimTemplate 상세 정보 불러오는 중...",
     "Loading ResourceSlice details...": "ResourceSlice 상세 정보 불러오는 중...",
-    "Failed to load describe data. Showing summary from list.": "상세 정보를 불러오지 못했습니다. 목록의 요약을 표시합니다.",
     "Failed to load rules: {{error}}": "규칙을 불러오지 못했습니다: {{error}}",
     "Applies through {{subjects}}": "{{subjects}}(으)로 적용됩니다",
     "Not in effect through a RoleBinding; URLs need a ClusterRoleBinding.": "RoleBinding으로는 효력이 없습니다. URL은 ClusterRoleBinding으로 묶어야 합니다.",
@@ -4935,6 +4931,7 @@
     "Rule Conflict Warnings ({{n}})": "규칙 충돌 경고 ({{n}})",
     "Owned ReplicaSets ({{n}})": "소유한 ReplicaSet ({{n}})",
     "Peer Instances ({{n}})": "같은 종류의 인스턴스 ({{n}})",
+    "Custom Resources": "커스텀 리소스",
     "Custom Resources ({{n}})": "커스텀 리소스 ({{n}})",
     "Peer EndpointSlices for {{service}} ({{n}})": "{{service}}의 다른 EndpointSlice ({{n}})",
     "Related PersistentVolumes ({{n}})": "관련 PersistentVolume ({{n}})",
@@ -5024,10 +5021,6 @@
     "No pods match this podSelector.": "이 podSelector에 맞는 Pod가 없습니다.",
     "No pod uses any of the bound ServiceAccounts.": "묶인 ServiceAccount를 쓰는 Pod가 없습니다.",
     "No replica sets owned by this deployment yet.": "이 Deployment가 소유한 ReplicaSet이 아직 없습니다.",
-    "Some detailed PV fields are unavailable right now.": "지금은 PV 상세 필드 일부를 볼 수 없습니다.",
-    "Some detailed PVC fields are unavailable right now.": "지금은 PVC 상세 필드 일부를 볼 수 없습니다.",
-    "Some detailed StorageClass fields are unavailable right now.": "지금은 StorageClass 상세 필드 일부를 볼 수 없습니다.",
-    "Some detailed VolumeAttachment fields are unavailable right now.": "지금은 VolumeAttachment 상세 필드 일부를 볼 수 없습니다.",
     "Active": "활성",
     "Expired": "만료됨",
     "Active Jobs": "실행 중인 Job",

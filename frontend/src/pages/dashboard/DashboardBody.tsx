@@ -130,6 +130,7 @@ export function DashboardBody() {
     topResources,
     isLoadingTopResources,
     isTopResourcesError,
+    topResourcesError,
     modalNodes,
     isLoadingNodes,
     metricsUnavailable,
@@ -508,6 +509,7 @@ export function DashboardBody() {
         topResources={topResources}
         isLoading={isLoadingTopResources}
         isError={isTopResourcesError}
+        error={topResourcesError}
         metricsUnavailable={metricsUnavailable}
       />
 

@@ -168,8 +168,9 @@ test.describe('Monitoring', () => {
       let failing = true
       await page.route('**/api/v1/cluster/metrics/top-resources*', (route) => (failing ? route.fulfill(gateway503) : route.continue()))
       await page.goto('/?cluster=default')
-      const failed = page.getByText(/^(Failed to fetch data|데이터를 가져오지 못했습니다)$/)
-      await expect(failed.first()).toHaveText(/Failed to fetch data|데이터를 가져오지 못했습니다/, { timeout: 30_000 })
+      // the card says the read failed and why (the gateway's page has no reason, so the request's own words)
+      const failed = page.getByTestId('top-resources-read-failed')
+      await expect(failed.first()).toHaveText(/^(Could not read the list: |목록을 읽지 못했습니다: ).*503/, { timeout: 30_000 })
       await expect(page.getByText(MISSING)).toHaveCount(0)
 
       failing = false

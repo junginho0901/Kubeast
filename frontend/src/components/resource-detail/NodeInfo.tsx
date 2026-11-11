@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsSection, SummaryBadge, Th, NoneText, Tx, ObjectUnreadable } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
+import { DescribeFailure } from './DescribeFailure'
 import { useNodeData } from './node-info/useNodeData'
 import { nodeAllocatedView, readyChangedAt } from './node-info/nodeAllocated'
 import NodeActions from './node-info/NodeActions'
@@ -20,6 +21,7 @@ export default function NodeInfo({ name }: Props) {
     nodeDescribe,
     isLoading,
     isError,
+    describeError,
     forbidden,
     metricForNode,
     cpuP,
@@ -41,7 +43,7 @@ export default function NodeInfo({ name }: Props) {
 
   if (isLoading) return <p className="text-slate-400">{tr('nodes.detail.loading', 'Loading node details...')}</p>
   if (forbidden) return <ObjectUnreadable kind="Node" name={name} />
-  if (isError) return <p className="text-red-400">{tr('nodes.detail.error', 'Failed to load node details.')}</p>
+  if (isError) return <DescribeFailure error={describeError} />
   if (!nodeDescribe) return <p className="text-slate-400">{tr('nodes.detail.notFound', 'Node details not found.')}</p>
 
   const allocated = nodeAllocatedView(nodeDescribe)

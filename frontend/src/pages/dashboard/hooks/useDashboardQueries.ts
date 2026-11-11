@@ -311,6 +311,7 @@ export function useDashboardQueries({
     topResources,
     isLoadingTopResources,
     isTopResourcesError,
+    topResourcesError,
     modalNodes,
     isLoadingNodes,
     metricsUnavailable,
