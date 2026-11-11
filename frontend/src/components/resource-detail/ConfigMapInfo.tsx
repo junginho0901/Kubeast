@@ -9,6 +9,7 @@ import { fmtRel, fmtTs } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
 import { useNamespacePodTable } from './useNamespacePodTable'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { DescribeFailure } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -23,7 +24,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
   const { open: openDetail } = useResourceDetail()
 
-  const { data: describe, isLoading } = useQuery({
+  const { data: describe, isLoading, error: describeError } = useQuery({
     queryKey: ['configmap-describe', namespace, name],
     queryFn: () => api.describeConfigMap(namespace, name),
     enabled: !!namespace && !!name,
@@ -76,6 +77,8 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
   }
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
+  // nothing below was read: the bindings, keys and versions come from the describe answer only
+  if (describeError) return <DescribeFailure error={describeError} className="py-4" />
 
   return (
     <div className="space-y-4">

@@ -1,4 +1,6 @@
+import { execSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect } from '@playwright/test'
@@ -6,12 +8,15 @@ import { test, expect } from '@playwright/test'
 // A drawer whose own read (describe) failed says so where its fields would be, with the server's reason, instead of a
 // fixed sentence ("Failed to load describe data", "Some detailed fields are unavailable"), "No data" or a value it
 // never read: a Role's Rules Count is "—", not 0. Every describe read is answered 503 in the browser with a reason of
-// its own, so nothing on the cluster changes; the objects are ones a kind dev cluster always has on `self`.
+// its own, so nothing on the cluster changes; the objects are ones a kind dev cluster always has on `self`, but for an
+// IngressClass, which the dev cluster has none of: one is made for the run (a controller no one runs) and removed.
 
 const EN = JSON.parse(fs.readFileSync(path.join(__dirname, '../../frontend/src/i18n/locales/en.json'), 'utf8'))
 const REASON = 'e2e stand-in: the API server did not answer'
 const SAID = EN.common.describeFailed.replace('{{reason}}', REASON)
 const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+
+const INGRESS_CLASS = `e2e-read-failures-${Date.now().toString(36)}`
 
 const DRAWERS: { what: string; detail: string; notShown?: string }[] = [
   { what: 'Role', detail: 'Role/kube-system/extension-apiserver-authentication-reader' },
@@ -22,6 +27,17 @@ const DRAWERS: { what: string; detail: string; notShown?: string }[] = [
   { what: 'StorageClass', detail: 'StorageClass/standard', notShown: 'Some detailed StorageClass fields are unavailable right now.' },
   { what: 'Node', detail: 'Node/kubeast-control-plane', notShown: 'Failed to load node details.' },
   { what: 'Namespace', detail: 'Namespace/default', notShown: 'Failed to load.' },
+  { what: 'ClusterRoleBinding', detail: 'ClusterRoleBinding/cluster-admin' },
+  { what: 'RoleBinding', detail: 'RoleBinding/kube-system/kube-proxy' },
+  { what: 'ConfigMap', detail: 'ConfigMap/kube-system/coredns' },
+  { what: 'Secret', detail: 'Secret/kubeast/kubeast-ai-keys' },
+  { what: 'ServiceAccount', detail: 'ServiceAccount/kube-system/coredns' },
+  { what: 'CustomResourceDefinition', detail: 'CustomResourceDefinition/modelconfigs.ai.kubeast.io' },
+  { what: 'Pod', detail: 'Pod/kube-system/etcd-kubeast-control-plane' },
+  { what: 'EndpointSlice', detail: 'EndpointSlice/default/kubernetes' },
+  { what: 'IngressClass', detail: `IngressClass/${INGRESS_CLASS}` },
+  { what: 'Ingress', detail: 'Ingress/default/e2e-fixture' },
+  { what: 'NetworkPolicy', detail: 'NetworkPolicy/kubeast/kubeast-allow-dns' },
 ]
 
 // A CRD drawer whose objects could not be listed says so instead of leaving its Custom Resources section out. The CRD is
@@ -52,6 +68,15 @@ for (const d of [
 }
 
 test.describe("a drawer whose own read failed says why", () => {
+  const kubeconfig = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-drawer-reads-')), 'kubeconfig')
+  const ingressClass = `{"apiVersion":"networking.k8s.io/v1","kind":"IngressClass","metadata":{"name":"${INGRESS_CLASS}"},"spec":{"controller":"example.com/e2e-none"}}`
+  test.beforeAll(() => {
+    fs.writeFileSync(kubeconfig, execSync('kind get kubeconfig --name kubeast', { encoding: 'utf8' }), { mode: 0o600 })
+    execSync(`kubectl --kubeconfig ${kubeconfig} create -f -`, { input: ingressClass, stdio: ['pipe', 'pipe', 'pipe'] })
+  })
+  test.afterAll(() => {
+    execSync(`kubectl --kubeconfig ${kubeconfig} delete ingressclass ${INGRESS_CLASS} --ignore-not-found`, { stdio: 'pipe' })
+  })
   for (const d of DRAWERS) {
     test(`${d.what}: the reason where its fields would be`, async ({ page }) => {
       await page.route((u) => u.pathname.startsWith('/api/v1/cluster/') && u.pathname.endsWith('/describe'), (route) =>

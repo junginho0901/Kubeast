@@ -10,6 +10,7 @@ import { BindingSubjects } from './role-info/BindingSubjects'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
+import { DescribeFailure } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -21,7 +22,7 @@ export default function ClusterRoleBindingInfo({ name, rawJson }: Props) {
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
   const { open: openDetail } = useResourceDetail()
 
-  const { data: describe, isLoading } = useQuery({
+  const { data: describe, isLoading, error: describeError } = useQuery({
     queryKey: ['clusterrolebinding-describe', name],
     queryFn: () => api.describeClusterRoleBinding(name),
     enabled: !!name,
@@ -52,6 +53,8 @@ export default function ClusterRoleBindingInfo({ name, rawJson }: Props) {
   )
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
+  // nothing below was read: the bindings, keys and versions come from the describe answer only
+  if (describeError) return <DescribeFailure error={describeError} className="py-4" />
 
   return (
     <div className="space-y-4">

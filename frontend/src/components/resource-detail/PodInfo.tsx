@@ -33,6 +33,7 @@ import NetworkPolicies from './NetworkPolicies'
 import NetworkFlows from './NetworkFlows'
 import NetworkDrops from './NetworkDrops'
 import TopTalkers from './TopTalkers'
+import { DescribeFailure } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -70,7 +71,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const canExec = useCanI('resource.pod.exec', 'create', { group: '', resource: 'pods', subresource: 'exec', namespace, name })
   const canEditPod = useCanI('resource.pod.edit', 'patch', { group: '', resource: 'pods', namespace, name })
 
-  const { data: podDescribe, isLoading } = useQuery({
+  const { data: podDescribe, isLoading, error: describeError } = useQuery({
     queryKey: ['pod-describe', namespace, name],
     queryFn: () => api.describePod(namespace, name),
     enabled: !!name && !!namespace,
@@ -269,6 +270,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
 
   return (
     <>
+      <DescribeFailure error={describeError} showingRow />
       {/* Summary Badges */}
       <div className="flex flex-wrap items-center gap-2">
         <SummaryBadge label="Phase" value={phase} color={phase === 'Running' ? 'green' : phase === 'Pending' ? 'amber' : phase === 'Failed' ? 'red' : 'default'} />
