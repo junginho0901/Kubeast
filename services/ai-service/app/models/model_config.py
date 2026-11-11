@@ -25,6 +25,17 @@ def _check_limits(options):
     return options
 
 
+# A name a person reads: up to 100 characters, as auth-service holds a role's, a team's and a cluster's (nameMax), in its
+# words.
+NAME_MAX = 100
+
+
+def _check_name(name):
+    if name is not None and len(name) > NAME_MAX:
+        raise ValueError(f"name: up to {NAME_MAX} characters")
+    return name
+
+
 def _check_ca_cert(ca_cert):
     from app.services.tls import ca_cert_problem
 
@@ -72,6 +83,11 @@ class ModelConfigCreate(BaseModel):
     def _ca_cert_is_pem(cls, ca_cert):
         return _check_ca_cert(ca_cert)
 
+    @field_validator("name")
+    @classmethod
+    def _name_fits(cls, name):
+        return _check_name(name)
+
 
 class ModelConfigUpdate(BaseModel):
     name: Optional[str] = None
@@ -106,6 +122,11 @@ class ModelConfigUpdate(BaseModel):
     @classmethod
     def _ca_cert_is_pem(cls, ca_cert):
         return _check_ca_cert(ca_cert)
+
+    @field_validator("name")
+    @classmethod
+    def _name_fits(cls, name):
+        return _check_name(name)
 
 
 class ModelConfigResponse(BaseModel):

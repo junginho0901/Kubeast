@@ -6,7 +6,8 @@ import { test, expect } from '@playwright/test'
 // A URL field says what the server would refuse before Save, Register or Test sends it (utils/urlField):
 // Admin → Clusters → Edit (Prometheus and Loki URLs — http or https with a host, no user, no query), Register (the API
 // server URL, host:port too, as a kubeconfig's server) and AI Models (Base URL — the provider's list is not asked for
-// such an address). Nothing is saved. An API key's name is counted in characters, as its field counts it.
+// such an address). Nothing is saved. An API key's name is counted in characters, as its field counts it, and a role's
+// and a team's name are up to 100 characters on the screen and on the server (utils/nameLimits; the made ones removed).
 
 const EN = JSON.parse(fs.readFileSync(path.join(__dirname, '../../frontend/src/i18n/locales/en.json'), 'utf8'))
 const P = EN.common.urlProblem
@@ -97,6 +98,32 @@ test.describe('a URL field says what the server would refuse', () => {
       expect([tooLong.status(), (await tooLong.json()).detail]).toEqual([400, 'name is required (up to 64 characters)'])
     } finally {
       if (body.id) expect((await page.request.delete(`/api/v1/auth/api-keys/${body.id}`, { headers: XRW })).status()).toBe(204)
+    }
+  })
+
+  test('Roles and Teams: a name is up to 100 characters, on the field and on the server', async ({ page }) => {
+    const run = Date.now().toString(36)
+    const name = (n: number) => `e2e-${run}-`.padEnd(n, '가')
+    const made: string[] = []
+    try {
+      await page.goto('/admin/roles')
+      await page.getByRole('button', { name: /^(Create Role|역할 생성)$/ }).first().click()
+      await expect(page.getByPlaceholder(/InfraManager/)).toHaveAttribute('maxlength', '100')
+      const tooLong = await page.request.post('/api/v1/auth/admin/roles', { headers: XRW, data: { name: name(101), permissions: ['menu.dashboard'] } })
+      expect([tooLong.status(), (await tooLong.json()).detail]).toEqual([400, 'name: up to 100 characters'])
+      const role = await page.request.post('/api/v1/auth/admin/roles', { headers: XRW, data: { name: name(100), permissions: ['menu.dashboard'] } })
+      const roleBody = await role.json()
+      if (roleBody.id) made.push(`/api/v1/auth/admin/roles/${roleBody.id}`)
+      expect([role.status(), roleBody.name]).toEqual([201, name(100)])
+
+      const team = await page.request.post('/api/v1/auth/admin/organizations', { headers: XRW, data: { type: 'team', name: name(101) } })
+      expect([team.status(), (await team.json()).detail]).toEqual([400, 'name: up to 100 characters'])
+      const kept = await page.request.post('/api/v1/auth/admin/organizations', { headers: XRW, data: { type: 'team', name: name(100) } })
+      const teamBody = await kept.json()
+      if (teamBody.id) made.push(`/api/v1/auth/admin/organizations/${teamBody.id}`)
+      expect([kept.status(), teamBody.name]).toEqual([201, name(100)])
+    } finally {
+      for (const url of made) expect((await page.request.delete(url, { headers: XRW })).ok(), url).toBe(true)
     }
   })
 })

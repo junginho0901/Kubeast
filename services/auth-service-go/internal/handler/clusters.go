@@ -128,6 +128,10 @@ func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request
 		response.Error(w, http.StatusBadRequest, "display_name required")
 		return
 	}
+	if msg := nameTooLong("display_name", req.DisplayName, nameMax); msg != "" {
+		response.Error(w, http.StatusBadRequest, msg)
+		return
+	}
 	if cluster.Slugify(req.DisplayName) == "" {
 		response.Error(w, http.StatusBadRequest, "display_name must contain alphanumeric characters")
 		return
@@ -263,6 +267,12 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 	if req.DisplayName != nil && strings.TrimSpace(*req.DisplayName) == "" {
 		response.Error(w, http.StatusBadRequest, "display_name cannot be empty")
 		return
+	}
+	if req.DisplayName != nil {
+		if msg := nameTooLong("display_name", *req.DisplayName, nameMax); msg != "" {
+			response.Error(w, http.StatusBadRequest, msg)
+			return
+		}
 	}
 	if err := validateAPIServerURL(req.APIServerURL); err != nil {
 		h.audit(r, "admin.cluster.update", payload, string(id), nil, map[string]string{"api_server_url": "refused"}, err)

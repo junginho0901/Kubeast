@@ -16,6 +16,7 @@ import {
 import { useProviderAvailability } from '@/hooks/useProviderAvailability'
 import { providerOptions } from './helpers'
 import type { ModelFormState } from './useModelForm'
+import { NAME_MAX } from '@/utils/nameLimits'
 
 interface Props {
   form: ModelFormState
@@ -88,6 +89,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
           <input
             type="text"
             value={formName}
+            maxLength={NAME_MAX}
             onChange={(e) => setFormName(e.target.value)}
             placeholder={tr('admin.aiModels.namePlaceholder', 'e.g. my-gpt4')}
             className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"

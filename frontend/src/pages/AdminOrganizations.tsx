@@ -15,6 +15,7 @@ import { usePermission } from '@/hooks/usePermission'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useConfirm } from '@/services/confirm'
 import { pageOf } from '@/utils/listPages'
+import { NAME_MAX } from '@/utils/nameLimits'
 
 // Admin → Teams: the teams users pick from, each with its member count. The page is as high as the screen and the
 // list pages the teams, as many as fit (or the footer's fixed choice).
@@ -94,6 +95,7 @@ export default function AdminOrganizations() {
       >
         <input
           value={inputValue}
+          maxLength={NAME_MAX}
           onChange={(e) => setInputValue(e.target.value)}
           className="flex-1 h-10 rounded-lg border border-slate-700 bg-slate-950/40 px-3 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
           placeholder={tr('adminOrg.inputPlaceholder', 'Enter name...')}

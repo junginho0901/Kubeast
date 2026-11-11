@@ -13,6 +13,7 @@ import UserApiKeys from './UserApiKeys'
 import { Pencil, X } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import CustomDropdown from '@/components/CustomDropdown'
+import { USER_NAME_MAX } from '@/utils/nameLimits'
 
 interface DetailDraft {
   name: string
@@ -115,6 +116,7 @@ export function UserDetailModal({
               {detailEditing ? (
                 <input
                   value={detailDraft.name}
+                  maxLength={USER_NAME_MAX}
                   onChange={(e) => setDetailDraft((p) => ({ ...p, name: e.target.value }))}
                   className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-600"
                 />

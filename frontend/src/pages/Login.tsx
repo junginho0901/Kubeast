@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import CustomDropdown from '@/components/CustomDropdown'
 import { LoginHero } from '@/components/login/LoginHero'
 import { LOGIN_WORDS } from '@/components/login/features'
+import { USER_NAME_MAX } from '@/utils/nameLimits'
 
 type Mode = 'login' | 'register'
 
@@ -275,6 +276,7 @@ export default function Login() {
                     </label>
                     <input
                       value={name}
+                      maxLength={USER_NAME_MAX}
                       onChange={(e) => setName(e.target.value)}
                       className="login-field w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 lg:py-2.5 text-sm lg:text-base text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
                       placeholder={tr('login.form.namePlaceholder', 'Jane Doe')}

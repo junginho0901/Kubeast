@@ -10,6 +10,7 @@
 import type { Session } from '@/services/api'
 import { ActionFailure } from '@/components/ActionFailure'
 import { Plus, MessageSquare, Trash2, Edit2, Check, X } from 'lucide-react'
+import { NAME_MAX } from '@/utils/nameLimits'
 
 interface ContextMenuState {
   x: number
@@ -241,6 +242,7 @@ export function SessionSidebar({
                         <input
                           type="text"
                           value={editingTitle}
+                          maxLength={NAME_MAX}
                           onChange={(e) => setEditingTitle(e.target.value)}
                           className="flex-1 px-2 py-1 text-sm bg-slate-600 border border-slate-500 rounded-sm text-ink min-w-0"
                           autoFocus

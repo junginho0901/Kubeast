@@ -51,6 +51,10 @@ func (h *AuthHandler) AdminCreateOrganization(w http.ResponseWriter, r *http.Req
 		response.Error(w, http.StatusBadRequest, "name required")
 		return
 	}
+	if msg := nameTooLong("name", strings.TrimSpace(req.Name), nameMax); msg != "" {
+		response.Error(w, http.StatusBadRequest, msg)
+		return
+	}
 
 	org, err := h.repo.CreateOrganization(r.Context(), req.Type, strings.TrimSpace(req.Name))
 	ev := auditEvent{action: "admin.organizations.create", targetType: "organization",
