@@ -239,10 +239,10 @@ export default function NamespaceInfo({ name }: Props) {
 
       {/* Labels & Annotations */}
       <InfoSection title={tr('namespaces.detail.labels', 'Labels')}>
-        <KeyValueTags data={nsDescribe.labels} />
+        <KeyValueTags data={nsDescribe.labels ?? undefined} />
       </InfoSection>
       <InfoSection title={tr('namespaces.detail.annotations', 'Annotations')}>
-        <KeyValueTags data={nsDescribe.annotations} />
+        <KeyValueTags data={nsDescribe.annotations ?? undefined} />
       </InfoSection>
 
       {resourceSummary && resourceSummary.podCount > 0 && (

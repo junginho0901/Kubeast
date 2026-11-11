@@ -92,7 +92,7 @@ export default function GPUDashboard() {
           })),
           avg_gpu_util: averages?.util,
           // the average leaves out the GPUs reporting no utilization, as the card's title says
-          ...(metrics && reportingUtil > 0 && reportingUtil < metrics.gpu_count ? { avg_gpu_util_of: `${reportingUtil} of ${metrics.gpu_count} GPUs` } : {}),
+          ...(metrics && reportingUtil > 0 && reportingUtil < (metrics.gpu_count ?? 0) ? { avg_gpu_util_of: `${reportingUtil} of ${metrics.gpu_count} GPUs` } : {}),
           avg_memory_util: averages?.memory,
         },
         nodes: data.gpu_nodes as Array<typeof data.gpu_nodes[number] & Record<string, unknown>>,

@@ -107,7 +107,7 @@ export interface HelmTestHookResult {
 
 export interface HelmTestResponse {
   success: boolean
-  hooks: HelmTestHookResult[]
+  hooks: HelmTestHookResult[] | null
   // Helm's message when a hook failed
   error?: string
 }

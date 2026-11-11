@@ -105,7 +105,7 @@ export interface NamespaceInfo {
   status: string
   created_at: string
   labels: Record<string, string>
-  resource_count: Record<string, number>
+  resource_count?: Record<string, number>
 }
 
 export interface NamespaceCondition {
@@ -123,15 +123,15 @@ export interface NamespaceDescribe {
   uid?: string
   resource_version?: string
   deletion_timestamp?: string | null
-  finalizers?: string[]
+  finalizers?: string[] | null
   owner_references?: Array<{
     kind?: string | null
     name?: string | null
     uid?: string | null
     controller?: boolean | null
   }>
-  labels: Record<string, string>
-  annotations: Record<string, string>
+  labels: Record<string, string> | null
+  annotations: Record<string, string> | null
   conditions: NamespaceCondition[]
   // absent when the events could not be listed, with the reason in events_error
   events?: Array<{
@@ -208,7 +208,7 @@ export interface ServiceInfo {
     node_port?: number | null
     protocol: string
   }>
-  selector: Record<string, string>
+  selector: Record<string, string> | null
   created_at: string
 }
 
@@ -232,8 +232,8 @@ export interface IngressInfo {
     }>
   }>
   backends: string[]
-  labels?: Record<string, string>
-  annotations?: Record<string, string>
+  labels?: Record<string, string> | null
+  annotations?: Record<string, string> | null
   created_at?: string | null
 }
 
@@ -248,9 +248,9 @@ export interface IngressClassInfo {
     scope?: string | null
     namespace?: string | null
   } | null
-  labels?: Record<string, string>
-  annotations?: Record<string, string>
-  finalizers?: string[]
+  labels?: Record<string, string> | null
+  annotations?: Record<string, string> | null
+  finalizers?: string[] | null
   created_at?: string | null
 }
 
@@ -325,8 +325,8 @@ export interface EndpointSliceInfo {
       uid?: string | null
     } | null
   }>
-  labels?: Record<string, string>
-  annotations?: Record<string, string>
+  labels?: Record<string, string> | null
+  annotations?: Record<string, string> | null
   created_at?: string | null
 }
 
@@ -334,8 +334,8 @@ export interface NetworkPolicyInfo {
   name: string
   namespace: string
   pod_selector: {
-    match_labels: Record<string, string>
-    match_expressions: Array<{
+    match_labels?: Record<string, string>
+    match_expressions?: Array<{
       key?: string | null
       operator?: string | null
       values?: string[] | null
@@ -351,16 +351,16 @@ export interface NetworkPolicyInfo {
     from: Array<{
       ip_block?: { cidr?: string | null; except?: string[] } | null
       namespace_selector?: {
-        match_labels: Record<string, string>
-        match_expressions: Array<{
+        match_labels?: Record<string, string>
+        match_expressions?: Array<{
           key?: string | null
           operator?: string | null
           values?: string[] | null
         }>
       } | null
       pod_selector?: {
-        match_labels: Record<string, string>
-        match_expressions: Array<{
+        match_labels?: Record<string, string>
+        match_expressions?: Array<{
           key?: string | null
           operator?: string | null
           values?: string[] | null
@@ -377,16 +377,16 @@ export interface NetworkPolicyInfo {
     to: Array<{
       ip_block?: { cidr?: string | null; except?: string[] } | null
       namespace_selector?: {
-        match_labels: Record<string, string>
-        match_expressions: Array<{
+        match_labels?: Record<string, string>
+        match_expressions?: Array<{
           key?: string | null
           operator?: string | null
           values?: string[] | null
         }>
       } | null
       pod_selector?: {
-        match_labels: Record<string, string>
-        match_expressions: Array<{
+        match_labels?: Record<string, string>
+        match_expressions?: Array<{
           key?: string | null
           operator?: string | null
           values?: string[] | null
@@ -399,9 +399,9 @@ export interface NetworkPolicyInfo {
       end_port?: number | null
     }>
   }>
-  labels?: Record<string, string>
-  annotations?: Record<string, string>
-  finalizers?: string[]
+  labels?: Record<string, string> | null
+  annotations?: Record<string, string> | null
+  finalizers?: string[] | null
   created_at?: string | null
 }
 
@@ -525,7 +525,7 @@ export interface GatewayPolicyItem {
   plural: string
   scope: string
   source: 'label' | 'builtin' | 'configured' | string
-  labels?: Record<string, string>
+  labels?: Record<string, string> | null
   created_at?: string | null
   targets: GatewayPolicyTarget[]
   accepted?: boolean
@@ -640,13 +640,14 @@ export interface GPUDeviceMetric {
 
 export interface GPUMetricsData {
   available: boolean
-  gpu_count: number
+  // left out with available false (no Prometheus or no GPU series)
+  gpu_count?: number
   // of the GPUs that have the value; null with none
-  avg_gpu_util: number | null
-  avg_memory_util: number | null
-  total_memory_used_mb: number | null
-  total_memory_free_mb: number | null
-  total_memory_mb: number | null
+  avg_gpu_util?: number | null
+  avg_memory_util?: number | null
+  total_memory_used_mb?: number | null
+  total_memory_free_mb?: number | null
+  total_memory_mb?: number | null
   gpus: GPUDeviceMetric[]
 }
 
@@ -1399,7 +1400,7 @@ export interface DeploymentInfo {
   unavailable_replicas?: number
   image: string
   images?: string[]
-  labels: Record<string, string>
+  labels: Record<string, string> | null
   selector: Record<string, string>
   created_at: string
   status: string
@@ -1454,7 +1455,7 @@ export interface DaemonSetInfo {
   available: number
   misscheduled: number
   unavailable: number
-  node_selector?: Record<string, string>
+  node_selector?: Record<string, string> | null
   images?: string[]
   status: string
   created_at?: string | null
@@ -1516,7 +1517,7 @@ export interface HPAInfo {
   desired_replicas?: number | null
   scaling_active?: boolean
   metrics: Array<Record<string, any>>
-  conditions: Array<Record<string, any>>
+  conditions?: Array<Record<string, any>>
   last_scale_time?: string | null
   created_at: string
 }
@@ -1528,9 +1529,9 @@ export interface VPAInfo {
   target_ref_kind: string
   target_ref_name: string
   update_mode: string
-  container_policies?: Array<Record<string, any>>
-  conditions?: Array<Record<string, any>>
-  recommendations?: Array<Record<string, any>>
+  container_policies?: Array<Record<string, any>> | null
+  conditions?: Array<Record<string, any>> | null
+  recommendations?: Array<Record<string, any>> | null
   cpu_target: string
   memory_target: string
   provided: string
@@ -1584,7 +1585,7 @@ export interface LeaseInfo {
   lease_transitions?: number
   renew_time?: string
   acquire_time?: string
-  labels?: Record<string, string>
+  labels?: Record<string, string> | null
   created_at: string
 }
 
@@ -1593,7 +1594,7 @@ export interface ResourceQuotaInfo {
   namespace: string
   status_hard: Record<string, string>
   status_used: Record<string, string>
-  labels?: Record<string, string>
+  labels?: Record<string, string> | null
   created_at: string
 }
 
@@ -1607,7 +1608,7 @@ export interface LimitRangeInfo {
     max?: Record<string, string>
     min?: Record<string, string>
   }>
-  labels?: Record<string, string>
+  labels?: Record<string, string> | null
   created_at: string
 }
 
@@ -1636,7 +1637,7 @@ export interface PodInfo {
   pod_ip?: string
   containers: Array<any>
   init_containers?: Array<any>
-  labels: Record<string, string>
+  labels: Record<string, string> | null
   created_at: string
   restart_count: number
   ready: string
@@ -1840,7 +1841,7 @@ export interface PVInfo {
   claim_ref?: {
     namespace?: string
     name?: string
-  }
+  } | null
   volume_mode?: string | null
   source?: string | null
   driver?: string | null
@@ -1858,12 +1859,13 @@ export interface StorageClassInfo {
   volume_binding_mode?: string | null
   allow_volume_expansion?: boolean | null
   is_default: boolean
-  parameters: Record<string, any>
+  parameters: Record<string, any> | null
   mount_options?: string[] | null
-  allowed_topologies?: string[] | null
-  labels?: Record<string, string>
-  annotations?: Record<string, string>
-  finalizers?: string[]
+  // the describe answer's topology terms (k8s storage_class.go)
+  allowed_topologies?: Array<{ match_label_expressions: Array<{ key: string; values: string[] | null }> }> | null
+  labels?: Record<string, string> | null
+  annotations?: Record<string, string> | null
+  finalizers?: string[] | null
   created_at?: string | null
 }
 
@@ -2090,7 +2092,7 @@ export type UserRole = 'admin' | 'read' | 'write' | 'pending'
 export interface AuthRoleInfo {
   id: number
   name: string
-  permissions: string[]
+  permissions: string[] | null
 }
 
 export interface RoleWithDetails {
@@ -2109,7 +2111,7 @@ export interface Member {
   id: string
   name: string
   email?: string
-  team?: string
+  team?: string | null
   role: AuthRoleInfo | null
   created_at: string
   updated_at: string
@@ -2221,6 +2223,17 @@ export interface YamlOpened {
   head: number
   tail: number
   lines: string[]
+}
+
+// What a YAML window's apply answers (k8s-service applyResourceYAML): the object, the line kubectl would print and
+// whether the patch wrote nothing.
+export interface YamlApplied {
+  name: string
+  namespace?: string
+  kind: string
+  api_version: string
+  message: string
+  unchanged?: boolean
 }
 
 export interface BulkCreateFailure {
