@@ -3,6 +3,7 @@ import { Bot, Loader2, Plus } from 'lucide-react'
 import { useModelForm } from './admin-ai-models/useModelForm'
 import ModelConfigForm from './admin-ai-models/ModelConfigForm'
 import ModelConfigCard from './admin-ai-models/ModelConfigCard'
+import { ActionFailure } from '@/components/ActionFailure'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
 import { useProviderAvailability } from '@/hooks/useProviderAvailability'
@@ -95,8 +96,11 @@ export default function AdminAIModels() {
                   onEdit={openEditForm}
                   onCancelEdit={resetForm}
                   onDelete={deleteMutation.mutate}
+                  deleting={deleteMutation.isPending && deleteMutation.variables === cfg.id}
                   activateMutation={activateMutation}
                 />
+                {deleteMutation.variables === cfg.id && <ActionFailure error={deleteMutation.error} action="delete" testId={`ai-model-delete-error-${cfg.id}`} className="mt-1 px-1" />}
+                {activateMutation.variables === cfg.id && <ActionFailure error={activateMutation.error} action="change" testId={`ai-model-activate-error-${cfg.id}`} className="mt-1 px-1" />}
                 {isEditing && <ModelConfigForm form={form} />}
               </div>
             )

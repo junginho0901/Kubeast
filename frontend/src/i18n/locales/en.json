@@ -2193,7 +2193,21 @@
     "listEmpty": "No items.",
     "noSearchResults": "No results found.",
     "objectNotFound": "This object does not exist; it may have been deleted.",
-    "objectForbidden": "You are not allowed to see this object."
+    "objectForbidden": "You are not allowed to see this object.",
+    "refreshFailed": "Refresh failed at {{time}}: {{reason}}",
+    "readFailed": "Could not read the list: {{reason}}",
+    "logsReadFailed": "Could not read the logs: {{reason}}",
+    "copyFailed": "Not copied: the browser did not take it. Select the text and copy it yourself.",
+    "notCopied": "Not copied",
+    "failed": {
+      "delete": "Not deleted: {{reason}}",
+      "save": "Not saved: {{reason}}",
+      "change": "Not changed: {{reason}}",
+      "revoke": "Not revoked: {{reason}}",
+      "end": "Not ended: {{reason}}",
+      "cancel": "Not cancelled: {{reason}}",
+      "rollback": "Not rolled back: {{reason}}"
+    }
   },
   "dashboard": {
     "optimization": {
@@ -2356,6 +2370,8 @@
     },
     "cpu": "CPU",
     "memory": "Memory",
+    "metricMissing": "No {{what}} data from Prometheus",
+    "podsSource": "Pods on nodes and not finished, as the cluster's Prometheus counts them (kube-state-metrics, each namespace/pod once), of the pods the nodes can take (allocatable). The Pods card above counts every pod from the Kubernetes API.",
     "topNodes": {
       "title": "Top 3 nodes by resource usage",
       "metricsError": "Failed to fetch node metrics"
@@ -2535,7 +2551,7 @@
       "streamError": "An error occurred while streaming logs.",
       "fetchError": "Failed to load logs.",
       "errorLabel": "Error",
-      "downloadError": "Failed to download logs.",
+      "downloadError": "Logs not downloaded: {{reason}}",
       "containerLabel": "Container",
       "selectContainer": "Select container",
       "containerSearchPlaceholder": "Search containers...",
@@ -2809,7 +2825,7 @@
       "submit": "Create",
       "cancel": "Cancel",
       "success": "Namespace '{{name}}' created successfully.",
-      "error": "Failed to create namespace.",
+      "error": "Namespace not created: {{reason}}",
       "exists": "Namespace already exists."
     },
     "delete": {
@@ -2836,7 +2852,7 @@
     "sweeping": "Sweeping...",
     "sweepTitle": "Lock accounts with no sign-in or API key use for {{days}} days (runs daily on its own)",
     "sweepDone": "Sweep done: {{count}} account(s) locked.",
-    "sweepFailed": "The sweep failed.",
+    "sweepFailed": "The sweep failed: {{reason}}",
     "actionFailed": "The action failed.",
     "loading": "Loading...",
     "loadError": "Failed to load users.",
@@ -2973,7 +2989,7 @@
       "mismatch": "New passwords do not match.",
       "title": "Change password",
       "subtitle": "Verify your current password",
-      "failed": "Failed to change password.",
+      "failed": "Password not changed: {{reason}}",
       "open": "Change password",
       "cancel": "Cancel",
       "close": "Close",
@@ -3630,6 +3646,7 @@
     "runNow": "Run Now",
     "runNowConfirm": "Are you sure you want to trigger a manual job from this CronJob?",
     "runNowSuccess": "Job {{name}} created",
+    "runNowFailed": "Job not created: {{reason}}",
     "ownedJobs": "Jobs",
     "jobName": "Name",
     "jobStatus": "Status",
@@ -3688,7 +3705,7 @@
     "teamSubtitle": "Teams / Groups",
     "inputPlaceholder": "Enter name...",
     "add": "Add",
-    "addError": "Failed to add. It may already exist.",
+    "addError": "Not added: {{reason}}",
     "empty": "No items registered.",
     "deleteConfirm": "Delete team \"{{name}}\"?",
     "deleteDialogTitle": "Delete team",
@@ -4088,6 +4105,8 @@
       "apiServer": "API server",
       "health": "Health",
       "healthChecked": "Checked {{time}}",
+      "testPassed": "Test passed",
+      "testFailed": "Test failed",
       "createdBy": "Created by",
       "actions": "Actions",
       "test": "Test",
@@ -4129,7 +4148,8 @@
       "confirm": "Remove",
       "self": "removed from the multi-cluster view only.",
       "external": "its stored kubeconfig is deleted too.",
-      "submit": "Delete"
+      "submit": "Delete",
+      "failed": "Not deleted: {{reason}}"
     },
     "access": {
       "add": "Add",
@@ -4281,6 +4301,7 @@
       "verify": "Verify",
       "verifying": "Verifying...",
       "anchorNow": "Anchor now",
+      "anchored": "✓ anchored #{{from}}~#{{to}} ({{rows}} rows) → {{sink}} at {{when}}",
       "anchoring": "Anchoring...",
       "ok": "✓ #{{from}}–#{{to}}: {{rows}} rows intact, {{anchors}} anchor(s) match",
       "bad": "✗ #{{from}}–#{{to}}: {{reason}} at #{{seq}}",
@@ -4742,7 +4763,7 @@
     "note": "Note",
     "noteBy": "Last written by {{who}} · {{when}}",
     "auditUnavailable": "Not saved: the audit log cannot take the record right now.",
-    "saveFailed": "Not saved.",
+    "saveFailed": "Not saved: {{reason}}",
     "noInvestigation": "Not investigated (only firing alerts of the investigated severities are, within the hourly cap and token budget).",
     "noInvestigationAutomaticOff": "Not investigated: automatic investigations are off on this installation (features.alertInvestigation.automatic).",
     "investigateNow": {

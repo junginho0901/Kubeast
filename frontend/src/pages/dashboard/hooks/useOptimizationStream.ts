@@ -14,6 +14,7 @@ import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { aiEnabled } from '@/utils/features'
 
 import { chatErrorText } from '@/utils/chatError'
+import { copyText } from '@/utils/clipboard'
 import { unwrapOuterMarkdownFence } from '../utils'
 
 interface UsageInfo {
@@ -202,14 +203,10 @@ export function useOptimizationStream() {
     const text = `${optimizationObservedContent}${unwrapOuterMarkdownFence(optimizationAnswerContent)}`.trim()
     if (!text) return
 
-    try {
-      await navigator.clipboard.writeText(text)
-      setOptimizationCopied(true)
-      setTimeout(() => setOptimizationCopied(false), 1500)
-    } catch (error) {
-      console.error('❌ 클립보드 복사 실패:', error)
-      setOptimizationCopied(false)
-    }
+    // the check only after the copy went through
+    if (!(await copyText(text))) return
+    setOptimizationCopied(true)
+    setTimeout(() => setOptimizationCopied(false), 1500)
   }
 
   const handleStopOptimizationSuggestions = () => {

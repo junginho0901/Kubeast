@@ -2193,7 +2193,21 @@
     "listEmpty": "항목이 없습니다.",
     "noSearchResults": "검색 결과가 없습니다.",
     "objectNotFound": "이 객체가 없습니다. 지워졌을 수 있습니다.",
-    "objectForbidden": "이 객체를 볼 권한이 없습니다."
+    "objectForbidden": "이 객체를 볼 권한이 없습니다.",
+    "refreshFailed": "{{time}}에 새로 읽지 못했습니다: {{reason}}",
+    "readFailed": "목록을 읽지 못했습니다: {{reason}}",
+    "logsReadFailed": "로그를 읽지 못했습니다: {{reason}}",
+    "copyFailed": "복사하지 못했습니다. 브라우저가 받지 않았습니다. 글을 직접 선택해 복사하세요.",
+    "notCopied": "복사 안 됨",
+    "failed": {
+      "delete": "삭제하지 못했습니다: {{reason}}",
+      "save": "저장하지 못했습니다: {{reason}}",
+      "change": "바꾸지 못했습니다: {{reason}}",
+      "revoke": "폐기하지 못했습니다: {{reason}}",
+      "end": "끝내지 못했습니다: {{reason}}",
+      "cancel": "취소하지 못했습니다: {{reason}}",
+      "rollback": "되돌리지 못했습니다: {{reason}}"
+    }
   },
   "dashboard": {
     "optimization": {
@@ -2355,6 +2369,8 @@
     },
     "cpu": "CPU",
     "memory": "메모리",
+    "metricMissing": "Prometheus에 {{what}} 데이터가 없습니다",
+    "podsSource": "Node에 올라가 끝나지 않은 Pod 수(클러스터 Prometheus · kube-state-metrics, namespace/pod마다 한 번) / Node들이 받을 수 있는 Pod 수(allocatable). 위 Pods 카드는 Kubernetes API의 모든 Pod를 셉니다.",
     "topNodes": {
       "title": "리소스 사용 상위 3개 Node",
       "metricsError": "Node 메트릭을 가져오지 못했습니다"
@@ -2537,7 +2553,7 @@
       "streamError": "로그 스트리밍 중 오류가 발생했습니다.",
       "fetchError": "로그를 불러오는 데 실패했습니다.",
       "errorLabel": "오류",
-      "downloadError": "로그 다운로드에 실패했습니다.",
+      "downloadError": "로그를 받지 못했습니다: {{reason}}",
       "containerLabel": "컨테이너",
       "selectContainer": "컨테이너 선택",
       "containerSearchPlaceholder": "컨테이너 검색...",
@@ -2810,7 +2826,7 @@
       "submit": "생성",
       "cancel": "취소",
       "success": "Namespace '{{name}}'이(가) 생성되었습니다.",
-      "error": "Namespace 생성에 실패했습니다.",
+      "error": "Namespace를 만들지 못했습니다: {{reason}}",
       "exists": "이미 존재하는 Namespace입니다."
     },
     "delete": {
@@ -2927,7 +2943,7 @@
     "sweeping": "점검 중...",
     "sweepTitle": "{{days}}일 동안 로그인·API 키 사용이 없는 계정을 잠급니다(매일 자동으로도 실행)",
     "sweepDone": "점검 완료: {{count}}개 계정을 잠갔습니다.",
-    "sweepFailed": "점검에 실패했습니다.",
+    "sweepFailed": "점검에 실패했습니다: {{reason}}",
     "actionFailed": "작업에 실패했습니다.",
     "loading": "불러오는 중...",
     "loadError": "유저 목록을 불러오지 못했습니다.",
@@ -3063,7 +3079,7 @@
       "mismatch": "새 비밀번호가 일치하지 않습니다.",
       "title": "비밀번호 변경",
       "subtitle": "현재 비밀번호를 확인합니다.",
-      "failed": "비밀번호 변경에 실패했습니다.",
+      "failed": "비밀번호를 바꾸지 못했습니다: {{reason}}",
       "open": "비밀번호 변경",
       "cancel": "취소",
       "close": "닫기",
@@ -3741,6 +3757,7 @@
     "runNow": "즉시 실행",
     "runNowConfirm": "이 CronJob에서 수동으로 Job을 생성하시겠습니까?",
     "runNowSuccess": "Job {{name}}이(가) 생성되었습니다",
+    "runNowFailed": "Job을 만들지 못했습니다: {{reason}}",
     "ownedJobs": "Jobs",
     "jobName": "이름",
     "jobStatus": "상태",
@@ -3801,7 +3818,7 @@
     "teamSubtitle": "팀 / 그룹",
     "inputPlaceholder": "이름 입력...",
     "add": "추가",
-    "addError": "추가에 실패했습니다. 이미 존재할 수 있습니다.",
+    "addError": "추가하지 못했습니다: {{reason}}",
     "empty": "등록된 항목이 없습니다.",
     "deleteConfirm": "\"{{name}}\" 팀을 삭제할까요?",
     "deleteDialogTitle": "팀 삭제",
@@ -4458,6 +4475,8 @@
       "apiServer": "API 서버",
       "health": "상태",
       "healthChecked": "검사 {{time}}",
+      "testPassed": "테스트 통과",
+      "testFailed": "테스트 실패",
       "createdBy": "등록자",
       "actions": "작업",
       "test": "테스트",
@@ -4501,7 +4520,8 @@
       "confirm": "삭제:",
       "self": "멀티클러스터 화면에서만 제거됩니다.",
       "external": "저장된 kubeconfig도 함께 삭제됩니다.",
-      "submit": "삭제"
+      "submit": "삭제",
+      "failed": "삭제하지 못했습니다: {{reason}}"
     },
     "access": {
       "add": "추가",
@@ -4592,6 +4612,7 @@
       "verify": "검증",
       "verifying": "검증 중...",
       "anchorNow": "지금 앵커",
+      "anchored": "✓ #{{from}}~#{{to}} ({{rows}}행) 앵커 기록 → {{sink}}, {{when}}",
       "anchoring": "앵커 중...",
       "ok": "✓ #{{from}}~#{{to}} {{rows}}행 이상 없음, 앵커 {{anchors}}개 일치",
       "bad": "✗ #{{from}}~#{{to}}: {{reason}} (#{{seq}})",
@@ -5363,7 +5384,7 @@
     "note": "메모",
     "noteBy": "마지막 작성 {{who}} · {{when}}",
     "auditUnavailable": "저장하지 않았습니다. 지금 감사 로그에 기록할 수 없습니다.",
-    "saveFailed": "저장하지 않았습니다.",
+    "saveFailed": "저장하지 않았습니다: {{reason}}",
     "noInvestigation": "조사하지 않았습니다(조사 대상 심각도의 울리는 알림만, 시간당 상한과 토큰 예산 안에서 조사합니다).",
     "noInvestigationAutomaticOff": "조사하지 않았습니다. 이 설치에서 자동 조사가 꺼져 있습니다(features.alertInvestigation.automatic).",
     "investigateNow": {

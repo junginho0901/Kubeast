@@ -23,6 +23,8 @@ import { applyEndpointSliceWatchEvent } from './endpointslices/endpointSliceWatc
 import { EndpointSliceFilters } from './endpointslices/EndpointSliceFilters'
 import { EndpointSliceTable } from './endpointslices/EndpointSliceTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
 
@@ -35,7 +37,6 @@ export default function EndpointSlices() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -216,20 +217,13 @@ export default function EndpointSlices() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllEndpointSlices(true)
-        : await api.getEndpointSlices(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['network', 'endpointslices', selectedNamespace] })
-      queryClient.setQueryData(['network', 'endpointslices', selectedNamespace], data)
-    } catch (error) {
-      console.error('EndpointSlices refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllEndpointSlices(true)
+      : await api.getEndpointSlices(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['network', 'endpointslices', selectedNamespace] })
+    queryClient.setQueryData(['network', 'endpointslices', selectedNamespace], data)
+  })
 
   const createEndpointSliceYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -286,6 +280,8 @@ endpoints:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <EndpointSliceFilters
         searchQuery={searchQuery}

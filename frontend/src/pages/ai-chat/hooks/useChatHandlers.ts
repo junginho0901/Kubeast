@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { UseMutationResult } from '@tanstack/react-query'
+import { responseFailure } from '@/utils/failureText'
 import type { TFunction } from 'i18next'
 import type { Session } from '@/services/api'
 import { chatStreamManager, ChatStreamState } from '@/services/chatStreamManager'
@@ -64,6 +66,8 @@ export function useChatHandlers({
 }: Params) {
   const queryClient = useQueryClient()
   const confirm = useConfirm()
+  // why the last stopped answer was not saved; cleared by the next question
+  const [stopSaveFailure, setStopSaveFailure] = useState<unknown>(null)
 
   const handleStop = async () => {
     const snapshot = chatStreamManager.getState()
@@ -102,11 +106,15 @@ export function useChatHandlers({
         }
 
         if (response.ok) {
+          setStopSaveFailure(null)
           await queryClient.refetchQueries({ queryKey: ['session', snapshot.sessionId] })
           await queryClient.invalidateQueries({ queryKey: ['sessions'] })
+        } else {
+          setStopSaveFailure(await responseFailure(response))
         }
       } catch (error) {
-        console.error('[ERROR] Failed to save stopped messages:', error)
+        // the stopped answer stays on screen but will not be there when the conversation is opened again: say so
+        setStopSaveFailure(error)
       }
     }
 
@@ -117,6 +125,7 @@ export function useChatHandlers({
   const handleSend = async (messageToSend?: string) => {
     const message = messageToSend || input.trim()
     if (!message || isStreaming) return
+    setStopSaveFailure(null)
 
     const userMessage = message
     const initialTitle = userMessage.length > 50 ? `${userMessage.slice(0, 50)}...` : userMessage
@@ -209,6 +218,7 @@ export function useChatHandlers({
   }
 
   const handleNewChat = () => {
+    setStopSaveFailure(null)
     // 세션을 미리 생성하지 않고, 선택만 해제 (첫 질문 시 자동 생성)
     setSelectedSessionId(null)
     setViewSessionId(null)
@@ -219,6 +229,8 @@ export function useChatHandlers({
   }
 
   const handleSelectSession = (sessionId: string) => {
+    // the "Not saved" line is the conversation it was stopped in
+    if (sessionId !== selectedSessionId) setStopSaveFailure(null)
     if (isMultiSelectMode) {
       const newSelected = new Set(selectedSessionIds)
       if (newSelected.has(sessionId)) {
@@ -297,9 +309,14 @@ export function useChatHandlers({
         await chatStreamManager.stop()
       }
 
-      for (const sessionId of selectedSessionIds) {
-        if (isTempSessionId(sessionId)) continue
-        await deleteSessionMutation.mutateAsync(sessionId)
+      // the first refusal stops here with the selection kept; the list says why (deleteSessionMutation.error)
+      try {
+        for (const sessionId of selectedSessionIds) {
+          if (isTempSessionId(sessionId)) continue
+          await deleteSessionMutation.mutateAsync(sessionId)
+        }
+      } catch {
+        return
       }
 
       setSelectedSessionIds(new Set())
@@ -327,6 +344,7 @@ export function useChatHandlers({
   }
 
   return {
+    stopSaveFailure,
     handleStop,
     handleSend,
     handleNewChat,

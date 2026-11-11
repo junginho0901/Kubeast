@@ -9,6 +9,8 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
@@ -48,7 +50,6 @@ export default function Policies() {
   const [searchQuery, setSearchQuery] = useState('')
   const [kindFilter, setKindFilter] = useState('')
   const [namespaceFilter, setNamespaceFilter] = useState('')
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -181,17 +182,10 @@ export default function Policies() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const fresh = await api.getAllGatewayPolicies()
-      queryClient.setQueryData(QUERY_KEY, fresh)
-    } catch (error) {
-      console.error('gateway policies refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const fresh = await api.getAllGatewayPolicies()
+    queryClient.setQueryData(QUERY_KEY, fresh)
+  })
 
   const sourceLabel = (source: string) => {
     if (source === 'label') return tr('policiesPage.source.label', 'labelled CRD')
@@ -215,6 +209,8 @@ export default function Policies() {
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <div className="flex gap-3 shrink-0">
         <div className="relative flex-1">

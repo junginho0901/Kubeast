@@ -26,6 +26,8 @@ import { applyJobWatchEvent } from './jobs/jobWatchNormalize'
 import { JobFilters } from './jobs/JobFilters'
 import { JobTable } from './jobs/JobTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 export default function Jobs() {
   const queryClient = useQueryClient()
@@ -36,7 +38,6 @@ export default function Jobs() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -182,20 +183,13 @@ export default function Jobs() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllJobs(true)
-        : await api.getJobs(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['workloads', 'jobs', selectedNamespace] })
-      queryClient.setQueryData(['workloads', 'jobs', selectedNamespace], data)
-    } catch (error) {
-      console.error('Jobs refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllJobs(true)
+      : await api.getJobs(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['workloads', 'jobs', selectedNamespace] })
+    queryClient.setQueryData(['workloads', 'jobs', selectedNamespace], data)
+  })
 
   const createJobYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -250,6 +244,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <JobFilters
         searchQuery={searchQuery}

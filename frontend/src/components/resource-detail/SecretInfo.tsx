@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Eye, EyeOff, Copy, Check, ShieldCheck, Container } from 'lucide-react'
+import { Eye, EyeOff, Copy, Check, ShieldCheck, Container, X } from 'lucide-react'
+import { copyText } from '@/utils/clipboard'
 import { api } from '@/services/api'
 import type { ServiceAccountInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
@@ -378,17 +379,21 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
 
 function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; size?: number; value?: string; canReveal: boolean }) {
   const dl = useDetailLabel()
+  const { t } = useTranslation()
   const [visible, setVisible] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [notCopied, setNotCopied] = useState(false)
+  const copyTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const sizeStr = size !== undefined ? `${size} bytes` : ''
 
   const handleCopy = async () => {
     if (!value) return
-    try {
-      await navigator.clipboard.writeText(value)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch { /* ignore */ }
+    const ok = await copyText(value)
+    setCopied(ok)
+    setNotCopied(!ok)
+    // the last copy's own timer: an earlier one does not clear it
+    clearTimeout(copyTimer.current)
+    copyTimer.current = setTimeout(() => { setCopied(false); setNotCopied(false) }, ok ? 1500 : 3000)
   }
 
   return (
@@ -419,9 +424,9 @@ function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; s
                   type="button"
                   onClick={handleCopy}
                   className="p-1 rounded-sm hover:bg-slate-700 text-slate-400 hover:text-ink transition-colors"
-                  title={dl('Copy value')}
+                  title={notCopied ? t('common.copyFailed', { defaultValue: 'Not copied: the browser did not take it. Select the text and copy it yourself.' }) : dl('Copy value')}
                 >
-                  {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : notCopied ? <X className="w-3.5 h-3.5 text-red-400" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
               )}
             </>

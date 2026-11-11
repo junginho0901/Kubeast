@@ -17,6 +17,8 @@ import { applyPDBWatchEvent } from './pdbs/pdbWatchNormalize'
 import { PDBFilters } from './pdbs/PDBFilters'
 import { PDBTable } from './pdbs/PDBTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 export default function PDBs() {
   const queryClient = useQueryClient()
@@ -27,7 +29,6 @@ export default function PDBs() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -168,20 +169,13 @@ export default function PDBs() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllPDBs(true)
-        : await api.getPDBs(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['workloads', 'pdbs', selectedNamespace] })
-      queryClient.setQueryData(['workloads', 'pdbs', selectedNamespace], data)
-    } catch (error) {
-      console.error('PDBs refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllPDBs(true)
+      : await api.getPDBs(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['workloads', 'pdbs', selectedNamespace] })
+    queryClient.setQueryData(['workloads', 'pdbs', selectedNamespace], data)
+  })
 
   const createPDBYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -232,6 +226,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <PDBFilters
         searchQuery={searchQuery}

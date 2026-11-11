@@ -13,8 +13,11 @@ import { clustersApi, type ClusterMeta, type ConnectionResult } from '@/services
 import RegisterClusterDialog from './RegisterClusterDialog'
 import EditClusterDialog from './EditClusterDialog'
 import ClusterAccessModal from './ClusterAccessModal'
-import { healthChecked, shownTest, type HeldTest } from './clusterTest'
+import { healthChecked, testOutcome, type TestOutcome } from './clusterTest'
 import { healthDotClass } from '@/utils/clusterHealth'
+import { failureText } from '@/utils/failureText'
+import { RefreshFailure } from '@/components/RefreshFailure'
+import { failureOf } from '@/hooks/useRefresh'
 
 // Admin > Clusters (step 11): list every registered cluster with register /
 // connection-test / delete. Registration & deletion are rollout-free, so the
@@ -32,10 +35,10 @@ export default function AdminClusters() {
   const [deleteTarget, setDeleteTarget] = useState<ClusterMeta | null>(null)
   const [editTarget, setEditTarget] = useState<ClusterMeta | null>(null)
   const [accessTarget, setAccessTarget] = useState<ClusterMeta | null>(null)
-  const [testResults, setTestResults] = useState<Record<string, HeldTest>>({})
-  const [testingId, setTestingId] = useState<string | null>(null)
+  const [testResults, setTestResults] = useState<Record<string, TestOutcome>>({})
+  const [testing, setTesting] = useState<Record<string, boolean>>({})
 
-  const { data: clusters = [], isLoading, dataUpdatedAt } = useQuery({
+  const { data: clusters = [], isLoading, error: listError, errorUpdatedAt, refetch: readAgain } = useQuery({
     queryKey: ['clusters-all'],
     queryFn: () => clustersApi.listClusters(false),
     staleTime: 30_000,
@@ -59,19 +62,20 @@ export default function AdminClusters() {
   })
 
   const runTest = async (id: string) => {
-    setTestingId(id)
-    let res: ConnectionResult
+    setTesting((p) => ({ ...p, [id]: true }))
+    let res: ConnectionResult | null = null
+    let err: unknown = null
     try {
       res = await clustersApi.testCluster(id)
     } catch (e) {
-      res = { healthy: false, error: (e as Error).message }
+      err = e
     }
-    // read the list again (the test wrote its health) and hold the result for that answer
+    const outcome = testOutcome(res, err, new Date().toISOString())
+    // read the list again: the Health column is the health the test wrote
     await queryClient.refetchQueries({ queryKey: ['clusters-all'], exact: true })
     queryClient.invalidateQueries({ queryKey: ['clusters-accessible'] })
-    const listAt = queryClient.getQueryState(['clusters-all'])?.dataUpdatedAt ?? 0
-    setTestResults((p) => ({ ...p, [id]: { ...res, listAt } }))
-    setTestingId(null)
+    setTestResults((p) => ({ ...p, [id]: outcome }))
+    setTesting((p) => ({ ...p, [id]: false }))
   }
 
   return (
@@ -97,6 +101,8 @@ export default function AdminClusters() {
         </button>
       </div>
 
+      <RefreshFailure failure={clusters.length ? failureOf(listError, errorUpdatedAt) : null} />
+
       <div ref={containerRef} className="card overflow-hidden p-0 flex-1 min-h-0 flex flex-col">
         {/* Horizontal scroll so the action buttons (Test/Access/Edit/Delete) are
             never clipped on a narrow / portrait viewport. */}
@@ -118,9 +124,12 @@ export default function AdminClusters() {
                 <td colSpan={6} className="px-4 py-6 text-center text-slate-400">…</td>
               </tr>
             )}
-            {!isLoading && clusters.length === 0 && <TableEmptyRow colSpan={CLUSTER_COLUMNS} resource="admin-clusters" />}
+            {!isLoading && clusters.length === 0 && <TableEmptyRow colSpan={CLUSTER_COLUMNS} resource="admin-clusters" error={listError} onRetry={() => void readAgain()} />}
             {shown.rows.map((c, idx) => {
-              const res = shownTest(testResults[c.id], dataUpdatedAt)
+              const tested = testResults[c.id]
+              const testedText = tested
+                ? `${tested.healthy ? tr('cluster.admin.testPassed', 'Test passed') : tr('cluster.admin.testFailed', 'Test failed')}${tested.detail ? `: ${tested.detail}` : ''}`
+                : ''
               const checked = healthChecked(c.last_healthcheck_at)
               return (
                 <tr key={c.id} ref={idx === 0 ? firstRowRef : undefined} className="text-ink">
@@ -151,11 +160,9 @@ export default function AdminClusters() {
                   </td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${healthDotClass(res ? (res.healthy ? 'healthy' : 'unhealthy') : c.health_status)}`} />
+                      <span className={`w-2 h-2 rounded-full ${healthDotClass(c.health_status)}`} />
                       <span className="text-slate-300">
-                        {res
-                          ? (res.healthy ? res.server_version || tr('cluster.admin.healthValue.healthy', 'Healthy') : tr('cluster.admin.healthValue.unreachable', 'Unreachable'))
-                          : c.health_status ? tr(`cluster.admin.healthValue.${c.health_status}`, c.health_status) : '-'}
+                        {c.health_status ? tr(`cluster.admin.healthValue.${c.health_status}`, c.health_status) : '-'}
                       </span>
                     </span>
                     {checked && (
@@ -163,6 +170,16 @@ export default function AdminClusters() {
                         {t('cluster.admin.healthChecked', { defaultValue: 'Checked {{time}}', time: checked.text })}
                       </span>
                     )}
+                    <span role="status" className="block" data-testid={`cluster-test-result-${c.id}`}>
+                      {tested && (
+                        <span
+                          className={`block mt-0.5 text-xs truncate max-w-[260px] ${tested.healthy ? 'text-green-400' : 'text-red-400'}`}
+                          title={`${testedText}\n${healthChecked(tested.at)?.text ?? ''}`}
+                        >
+                          {testedText}
+                        </span>
+                      )}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-slate-400">{c.created_by || '-'}</td>
                   <td className="px-4 py-3">
@@ -170,11 +187,12 @@ export default function AdminClusters() {
                       <button
                         type="button"
                         onClick={() => runTest(c.id)}
-                        disabled={testingId === c.id}
+                        disabled={testing[c.id]}
+                        aria-busy={testing[c.id] || undefined}
                         className="btn-row"
                         title={tr('cluster.admin.test', 'Test connection')}
                       >
-                        {testingId === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
+                        {testing[c.id] ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
                         {tr('cluster.admin.test', 'Test')}
                       </button>
                       <button
@@ -200,7 +218,7 @@ export default function AdminClusters() {
                       <button
                         type="button"
                         data-testid={`delete-cluster-${c.id}`}
-                        onClick={() => setDeleteTarget(c)}
+                        onClick={() => { deleteMutation.reset(); setDeleteTarget(c) }}
                         className="btn-row-danger"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -253,6 +271,11 @@ export default function AdminClusters() {
                 ? ` — ${tr('cluster.delete.self', 'removed from the multi-cluster view only.')}`
                 : ` — ${tr('cluster.delete.external', 'its stored kubeconfig is deleted too.')}`}
             </p>
+            {deleteMutation.isError && (
+              <p role="alert" data-testid="delete-cluster-error" className="mt-3 text-sm text-red-400 break-words">
+                {t('cluster.delete.failed', { defaultValue: 'Not deleted: {{reason}}', reason: failureText(deleteMutation.error) })}
+              </p>
+            )}
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"

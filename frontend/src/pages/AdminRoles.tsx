@@ -15,6 +15,8 @@ import { pageOf } from '@/utils/listPages'
 import { newRolePermissions, roleReadsNoList } from '@/utils/permissions'
 import { customRoleGroup, roleEditEndsSessions } from '@/utils/roleGroup'
 import { useConfirm } from '@/services/confirm'
+import { RefreshFailure } from '@/components/RefreshFailure'
+import { failureOf } from '@/hooks/useRefresh'
 
 type PermCategory = { category: string; permissions: Array<{ key: string; description: string }> }
 
@@ -43,7 +45,7 @@ export default function AdminRoles() {
   const { has: hasPerm, permissions: myPermissions } = usePermission()
   const canListUsers = hasPerm('admin.users.read')
 
-  const { data: roles = [], isLoading } = useQuery({
+  const { data: roles = [], isLoading, error: rolesError, errorUpdatedAt: rolesErrorAt, refetch: readRolesAgain } = useQuery({
     queryKey: ['roles'],
     queryFn: api.listRoles,
   })
@@ -184,6 +186,8 @@ export default function AdminRoles() {
         </div>
       )}
 
+      <RefreshFailure failure={roles.length ? failureOf(rolesError, rolesErrorAt) : null} />
+
       {isLoading ? (
         <div className="text-slate-400 text-sm">{tr('adminRoles.loading', 'Loading...')}</div>
       ) : (
@@ -289,7 +293,7 @@ export default function AdminRoles() {
                 </tr>
                 )
               })}
-              {roles.length === 0 && <TableEmptyRow colSpan={ROLE_COLUMNS} resource="admin-roles" />}
+              {roles.length === 0 && <TableEmptyRow colSpan={ROLE_COLUMNS} resource="admin-roles" error={rolesError} onRetry={() => void readRolesAgain()} />}
             </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - shown.rows.length} columnCount={ROLE_COLUMNS} />
           </table>

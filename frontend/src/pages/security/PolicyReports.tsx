@@ -10,6 +10,8 @@ import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import CustomDropdown from '@/components/CustomDropdown'
 import { useAIContext } from '@/hooks/useAIContext'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { policyResultTarget } from '@/utils/detailTargets'
 import { formatTime, utcTitle } from '@/utils/time'
@@ -43,7 +45,6 @@ export default function PolicyReports() {
   const policySource = cut < 0 ? '' : policyFilter.slice(0, cut)
   const policy = cut < 0 ? '' : policyFilter.slice(cut + 1)
   const [searchQuery, setSearchQuery] = useState('')
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -201,20 +202,14 @@ export default function PolicyReports() {
   useAIContext(aiSnapshot, [aiSnapshot])
 
   // Force refresh: past the server's one-minute cache, so a fix shows up as soon as the engine reports it.
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      await queryClient.invalidateQueries({ queryKey: ['cluster', 'policyreports', 'status'] })
-      if (installed) {
-        queryClient.setQueryData(['cluster', 'policyreports', 'summary', namespace], await api.getPolicyReportSummary(namespace, true))
-        if (tab === 'results') queryClient.setQueryData(resultsKey, await api.getPolicyReportResults(resultsParams, true))
-      }
-    } catch (error) {
-      console.error('policy reports refresh failed:', error)
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['cluster', 'policyreports', 'status'] }, { throwOnError: true })
+    // as the status just read it, not as it was when the button was drawn
+    if ((queryClient.getQueryData(['cluster', 'policyreports', 'status']) as { installed?: boolean } | undefined)?.installed === true) {
+      queryClient.setQueryData(['cluster', 'policyreports', 'summary', namespace], await api.getPolicyReportSummary(namespace, true))
+      if (tab === 'results') queryClient.setQueryData(resultsKey, await api.getPolicyReportResults(resultsParams, true))
     }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  })
 
   const openRow = (r: PolicyReportResult) => {
     const target = policyResultTarget(r)
@@ -289,6 +284,8 @@ export default function PolicyReports() {
           {tr('policyReports.refresh', 'Refresh')}
         </button>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       {notInstalled ? (
         <div className="card p-6" data-testid="policy-reports-not-installed">

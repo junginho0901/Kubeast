@@ -24,6 +24,8 @@ import { applyNetworkPolicyWatchEvent } from './networkpolicies/networkPolicyWat
 import { NetworkPolicyFilters } from './networkpolicies/NetworkPolicyFilters'
 import { NetworkPolicyTable } from './networkpolicies/NetworkPolicyTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
 
@@ -36,7 +38,6 @@ export default function NetworkPolicies() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -206,20 +207,13 @@ export default function NetworkPolicies() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllNetworkPolicies(true)
-        : await api.getNetworkPolicies(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['network', 'networkpolicies', selectedNamespace] })
-      queryClient.setQueryData(['network', 'networkpolicies', selectedNamespace], data)
-    } catch (error) {
-      console.error('Network policies refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllNetworkPolicies(true)
+      : await api.getNetworkPolicies(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['network', 'networkpolicies', selectedNamespace] })
+    queryClient.setQueryData(['network', 'networkpolicies', selectedNamespace], data)
+  })
 
   const createNetworkPolicyYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -272,6 +266,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <NetworkPolicyFilters
         searchQuery={searchQuery}

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Eye, ChevronLeft, ChevronRight, Copy, Check, ArrowUpDown } from 'lucide-react'
+import { Eye, ChevronLeft, ChevronRight, Copy, Check, ArrowUpDown, X } from 'lucide-react'
+import { copyText } from '@/utils/clipboard'
 import { SearchResult, SearchSortKey, compareResults } from './searchEngine'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { detailTarget } from '@/components/resource-detail/crDetail'
@@ -30,6 +31,8 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
+  const [notCopiedIdx, setNotCopiedIdx] = useState<number | null>(null)
+  const copyTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const [pageSize, setPageSize] = useState(15)
 
   const calcPageSize = useCallback(() => {
@@ -66,10 +69,14 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
     setPage(0)
   }
 
-  const copyName = (name: string, idx: number) => {
-    navigator.clipboard.writeText(name)
-    setCopiedIdx(idx)
-    setTimeout(() => setCopiedIdx(null), 1500)
+  // the check only after the copy went through; "Not copied" on the button when it did not
+  const copyName = async (name: string, idx: number) => {
+    const ok = await copyText(name)
+    setCopiedIdx(ok ? idx : null)
+    setNotCopiedIdx(ok ? null : idx)
+    // the last copy's own timer: an earlier row's does not clear it
+    clearTimeout(copyTimer.current)
+    copyTimer.current = setTimeout(() => { setCopiedIdx(null); setNotCopiedIdx(null) }, ok ? 1500 : 3000)
   }
 
   const columns: { key: SortKey; label: string; className: string }[] = [
@@ -147,11 +154,11 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
                         {item.name}
                       </button>
                       <button
-                        onClick={() => copyName(item.name, globalIdx)}
+                        onClick={() => void copyName(item.name, globalIdx)}
                         className="shrink-0 p-0.5 text-slate-500 hover:text-ink transition-colors"
-                        title={t('advancedSearch.copyName', 'Copy name')}
+                        title={notCopiedIdx === globalIdx ? t('common.copyFailed', 'Not copied: the browser did not take it. Select the text and copy it yourself.') : t('advancedSearch.copyName', 'Copy name')}
                       >
-                        {copiedIdx === globalIdx ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        {copiedIdx === globalIdx ? <Check className="w-3 h-3 text-emerald-400" /> : notCopiedIdx === globalIdx ? <X className="w-3 h-3 text-red-400" /> : <Copy className="w-3 h-3" />}
                       </button>
                     </div>
                   </td>

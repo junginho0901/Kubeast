@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import CustomDropdown from '@/components/CustomDropdown'
 import ClaudeSubscriptionNotice from '@/components/ClaudeSubscriptionNotice'
+import { ActionFailure } from '@/components/ActionFailure'
 import {
   Check,
   AlertCircle,
@@ -47,6 +48,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
     currentModelOptions,
     modelList,
     isSaving,
+    saveError,
     resetForm,
     handleProviderChange,
     handleSubmit,
@@ -376,6 +378,8 @@ export default function ModelConfigForm({ form, inModal }: Props) {
           </button>
         </div>}
       </div>
+
+      <ActionFailure error={saveError} action="save" testId="ai-model-save-error" />
 
       {/* A new key in the Secret reaches ai-service only after a restart — only for a new model */}
       {!editingId && testResult && !testResult.success && (

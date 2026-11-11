@@ -17,6 +17,8 @@ import { useReleasesAISnapshot } from './releases/useReleasesAISnapshot'
 import ReleaseFilters from './releases/ReleaseFilters'
 import ReleaseTable from './releases/ReleaseTable'
 import { isProtectedNamespaceError } from '@/utils/protectedNamespace'
+import { RefreshFailure } from '@/components/RefreshFailure'
+import { useRefresh } from '@/hooks/useRefresh'
 
 export default function HelmReleasesPage() {
   const { t } = useTranslation()
@@ -42,11 +44,11 @@ export default function HelmReleasesPage() {
     [cluster, namespace],
   )
   const queryClient = useQueryClient()
-  const refresh = () => queryClient.fetchQuery({
+  const { refresh, failure: refreshFailure } = useRefresh(() => queryClient.fetchQuery({
     queryKey,
     queryFn: () => api.helm.listReleases({ ...(namespace ? { namespace } : {}), force_refresh: true }),
     staleTime: 0,
-  }).catch(() => undefined)
+  }))
 
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey,
@@ -197,6 +199,8 @@ export default function HelmReleasesPage() {
           {t('helmReleases.refresh')}
         </button>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <ReleaseFilters
         searchQuery={q}

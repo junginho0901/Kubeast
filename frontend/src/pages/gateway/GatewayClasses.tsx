@@ -9,6 +9,8 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -31,7 +33,6 @@ export default function GatewayClasses() {
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -167,18 +168,11 @@ export default function GatewayClasses() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = await api.getGatewayClasses(true)
-      queryClient.removeQueries({ queryKey: ['gateway', 'gatewayclasses'] })
-      queryClient.setQueryData(['gateway', 'gatewayclasses'], data)
-    } catch (error) {
-      console.error('GatewayClasses refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = await api.getGatewayClasses(true)
+    queryClient.removeQueries({ queryKey: ['gateway', 'gatewayclasses'] })
+    queryClient.setQueryData(['gateway', 'gatewayclasses'], data)
+  })
 
   const createGatewayClassYamlTemplate = useMemo(() => {
     return `apiVersion: gateway.networking.k8s.io/v1
@@ -220,6 +214,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <GatewayClassFilters
         searchQuery={searchQuery}

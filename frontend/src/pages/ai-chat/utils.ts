@@ -7,3 +7,13 @@
  */
 export const isTempSessionId = (id: string | null) =>
   typeof id === 'string' && id.startsWith('temp:')
+
+// The conversation list's failure line: the delete or rename refused last (by when each was sent).
+export function sessionListFailure(
+  deleteError: unknown, deleteSentAt: number, renameError: unknown, renameSentAt: number,
+): { error: unknown; action: 'delete' | 'change' } | null {
+  const del = deleteError ? { error: deleteError, action: 'delete' as const, at: deleteSentAt } : null
+  const ren = renameError ? { error: renameError, action: 'change' as const, at: renameSentAt } : null
+  const last = del && ren ? (del.at >= ren.at ? del : ren) : del ?? ren
+  return last ? { error: last.error, action: last.action } : null
+}

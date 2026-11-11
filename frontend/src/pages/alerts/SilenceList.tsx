@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 
+import { ActionFailure } from '@/components/ActionFailure'
 import { api } from '@/services/api'
 import { useConfirm } from '@/services/confirm'
 import { useCluster } from '@/contexts/ClusterContext'
@@ -91,6 +92,7 @@ export default function SilenceList({ canExpire }: { canExpire: boolean }) {
                     {tr('alertInbox.silence.expire', 'End now')}
                   </button>
                 )}
+                {expire.variables === s.id && <ActionFailure error={expire.error} action="end" testId="silence-expire-error" className="mt-1 text-xs text-left" />}
               </td>
             </tr>
           ))}

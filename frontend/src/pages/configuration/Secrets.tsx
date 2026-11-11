@@ -18,6 +18,8 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import { isProtectedNamespaceError } from '@/utils/protectedNamespace'
 import { applySecretWatchEvent } from './secrets/secretWatchNormalize'
 
@@ -34,7 +36,6 @@ export default function Secrets() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -205,20 +206,13 @@ export default function Secrets() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllSecrets(true)
-        : await api.getSecrets(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['configuration', 'secrets', selectedNamespace] })
-      queryClient.setQueryData(['configuration', 'secrets', selectedNamespace], data)
-    } catch (error) {
-      console.error('Secrets refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllSecrets(true)
+      : await api.getSecrets(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['configuration', 'secrets', selectedNamespace] })
+    queryClient.setQueryData(['configuration', 'secrets', selectedNamespace], data)
+  })
 
   const createYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -256,6 +250,8 @@ stringData:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 shrink-0">
         <div className="xl:col-span-2">

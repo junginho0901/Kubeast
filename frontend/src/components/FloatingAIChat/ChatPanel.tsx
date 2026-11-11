@@ -12,6 +12,8 @@ import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
 import type { PageContextSnapshot } from '@/components/PageContext'
 import { serializeSnapshotForBackend } from '@/utils/aiContext/serializeSnapshot'
 import { chatErrorText } from '@/utils/chatError'
+import { failureText, responseFailure } from '@/utils/failureText'
+import { ActionFailure } from '@/components/ActionFailure'
 
 import { MessageList, type DisplayMessage } from './MessageList'
 import { conversationGone, forgetsConversation, turnsOnScreen } from './turnsOnScreen'
@@ -100,7 +102,11 @@ export function ChatPanel({
     }
   }, [streamState.status, sessionId, queryClient])
 
+  // why the last stopped answer was not saved; cleared by the next question
+  const [stopSaveFailure, setStopSaveFailure] = useState<unknown>(null)
+
   const handleSubmit = async (message: string) => {
+    setStopSaveFailure(null)
     // 세션이 없으면 즉시 생성 (지연 생성 — D22). One the server no longer has is left here, with the turn that found out.
     let activeSessionId = sessionGone ? null : sessionId
     if (!activeSessionId) {
@@ -109,7 +115,8 @@ export function ChatPanel({
         activeSessionId = session.id
         setSessionId(activeSessionId)
       } catch {
-        return
+        // the conversation could not be made: the question goes back in the box, the line above it says why
+        return false
       }
     }
 
@@ -181,12 +188,16 @@ export function ChatPanel({
         return
       }
       if (response.ok) {
+        setStopSaveFailure(null)
         await queryClient.invalidateQueries({
           queryKey: ['floating-session-detail', snapshot.sessionId],
         })
+      } else {
+        setStopSaveFailure(await responseFailure(response))
       }
-    } catch {
-      // 저장 실패 시 사용자 화면에는 stream 멈춘 그대로 표시되므로 무해
+    } catch (error) {
+      // the stopped answer stays on screen but will not be there when the conversation is opened again: say so
+      setStopSaveFailure(error)
     }
   }
 
@@ -320,12 +331,18 @@ export function ChatPanel({
       {!atBottom && <JumpToLatest onClick={() => scrollToBottom()} />}
       </div>
 
+      <ActionFailure error={stopSaveFailure} action="save" testId="floating-stop-save-error" className="shrink-0 px-3 pt-2 text-xs" />
+      {createSessionMutation.error && (
+        <p role="alert" data-testid="floating-start-error" className="shrink-0 px-3 pt-2 text-xs text-red-400 break-words">
+          {t('aiChat.errorSessionCreate', { error: failureText(createSessionMutation.error) })}
+        </p>
+      )}
       <InputArea
         onSubmit={handleSubmit}
         onStop={handleStop}
         isStreaming={isStreaming}
         disabled={disabled}
-        onNewChat={sessionId ? () => setSessionId(null) : undefined}
+        onNewChat={sessionId ? () => { setStopSaveFailure(null); setSessionId(null) } : undefined}
       />
     </div>
   )

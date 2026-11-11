@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RefreshCw, Search, BarChart3, ChevronDown, ChevronUp } from 'lucide-react'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import { useGPUNodesData } from './gpu-nodes/useGPUNodesData'
 import type { SortKey } from './gpu-nodes/gpuNodesHelpers'
 import GPUNodesModelDistribution from './gpu-nodes/GPUNodesModelDistribution'
@@ -22,6 +23,7 @@ export default function GPUNodes() {
     isLoading,
     isRefreshing,
     handleRefresh,
+    refreshFailure,
     metricsAvailable,
     gpusByHost,
     summaryCards,
@@ -85,6 +87,8 @@ export default function GPUNodes() {
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       {/* Search */}
       <div className="relative shrink-0">

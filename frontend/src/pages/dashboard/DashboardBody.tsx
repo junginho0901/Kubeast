@@ -23,6 +23,7 @@ import { ResourceModal } from './modals/ResourceModal'
 import { StorageModal } from './modals/StorageModal'
 import { useDashboardQueries } from './hooks/useDashboardQueries'
 import { useDashboardRefresh } from './hooks/useDashboardRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import { useOptimizationStream } from './hooks/useOptimizationStream'
 import { useDashboardIssues } from './hooks/useDashboardIssues'
 import { useDashboardStorage } from './hooks/useDashboardStorage'
@@ -41,7 +42,7 @@ export function DashboardBody() {
   const { t } = useTranslation()
   const { open: openDetail } = useResourceDetail()
   const tr = (key: string, fallback: string, options?: Record<string, any>) => t(key, { defaultValue: fallback, ...options })
-  const { isRefreshing, handleRefresh } = useDashboardRefresh()
+  const { isRefreshing, handleRefresh, refreshFailure } = useDashboardRefresh()
 
   // Modal / filter state — DashboardContext 에서 lifted.
   const {
@@ -156,7 +157,10 @@ export function DashboardBody() {
       { name: 'cpu', promql: clusterNodes.cpu },
       { name: 'memory', promql: clusterNodes.memory },
       { name: 'disk', promql: clusterNodes.filesystem },
-      { name: 'pod_count', promql: 'count(kube_pod_info)' },
+      // the pods holding a node's pod slot — placed on a node and not finished, as kubectl describe node's
+      // Non-terminated Pods — each namespace/pod once (two kube-state-metrics, or one scraped twice, count twice)
+      { name: 'pod_count', promql: 'count(count by (namespace, pod) (kube_pod_status_phase{phase=~"Pending|Running"} == 1) and on (namespace, pod) kube_pod_info{node!=""})' },
+      { name: 'pod_capacity', promql: 'sum(max by (node) (kube_node_status_allocatable{resource="pods"}))' },
     ],
     { refetchInterval: 30000 },
   )
@@ -478,6 +482,7 @@ export function DashboardBody() {
         isRefreshing={isRefreshing}
         onRefresh={handleRefresh}
       />
+      <RefreshFailure failure={refreshFailure} />
 
       <StatsGrid stats={stats} onStatClick={handleStatClick} />
 
@@ -495,6 +500,7 @@ export function DashboardBody() {
           memory={getClusterMetric('memory')}
           disk={getClusterMetric('disk')}
           podCount={getClusterMetric('pod_count')}
+          podCapacity={getClusterMetric('pod_capacity')}
         />
       )}
 

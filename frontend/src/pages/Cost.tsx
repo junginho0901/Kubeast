@@ -10,6 +10,8 @@ import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import CustomDropdown from '@/components/CustomDropdown'
 import { useAIContext } from '@/hooks/useAIContext'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { formatMoney, formatPercent } from '@/utils/money'
 import { costOutsideCards, hasCostOutside, type CostOutside } from '@/utils/costParts'
@@ -35,7 +37,6 @@ export default function Cost() {
   const [win, setWin] = useState<CostWindow>('24h')
   const [aggregate, setAggregate] = useState<CostAggregate>('namespace')
   const [searchQuery, setSearchQuery] = useState('')
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -149,19 +150,14 @@ export default function Cost() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      await queryClient.invalidateQueries({ queryKey: ['cluster', 'cost-status'] })
-      // the server keeps an answer a minute: ask it to read OpenCost again for the window and grouping on screen
-      queryClient.setQueryData(['cluster', 'cost', win, aggregate], await api.getCost(win, aggregate, true))
-      await queryClient.invalidateQueries({ queryKey: ['cluster', 'cost'], predicate: (q) => q.queryKey[2] !== win || q.queryKey[3] !== aggregate })
-    } catch (error) {
-      console.error('cost refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['cluster', 'cost-status'] }, { throwOnError: true })
+    // a cluster the status just read as without OpenCost has no costs to read again: its card says so
+    if ((queryClient.getQueryData(['cluster', 'cost-status']) as { available?: boolean } | undefined)?.available !== true) return
+    // the server keeps an answer a minute: ask it to read OpenCost again for the window and grouping on screen
+    queryClient.setQueryData(['cluster', 'cost', win, aggregate], await api.getCost(win, aggregate, true))
+    await queryClient.invalidateQueries({ queryKey: ['cluster', 'cost'], predicate: (q) => q.queryKey[2] !== win || q.queryKey[3] !== aggregate }, { throwOnError: true })
+  })
 
   const rowName = (r: CostRow) => (r.name === '__unallocated__' ? tr('cost.noController', 'No controller') : r.name)
   // The server's reason (a cluster that refused the proxy for this user, OpenCost not answering): shown under the error row.
@@ -215,6 +211,8 @@ export default function Cost() {
           {tr('cost.refresh', 'Refresh')}
         </button>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       {notInstalled ? (
         <div className="card p-6" data-testid="cost-not-installed">

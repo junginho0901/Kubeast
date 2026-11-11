@@ -7,6 +7,7 @@ import { modalButton } from '@/components/modalStyles'
 import { clustersApi, type ClusterMeta, type ClusterPatch } from '@/services/api/clusters'
 import { api } from '@/services/api'
 import type { LogSearchStatus, PrometheusStatus } from '@/services/api/types'
+import { failureText } from '@/utils/failureText'
 
 // Edit a registered cluster: rename, (external only) rotate its kubeconfig
 // when credentials change, and name an external Prometheus source and the
@@ -103,8 +104,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
       await clustersApi.updateCluster(cluster.id, patch)
       onSaved()
     } catch (e: unknown) {
-      const resp = (e as { response?: { data?: { detail?: string } } }).response
-      setError(resp?.data?.detail ?? (e as Error).message)
+      setError(failureText(e))
     } finally {
       setSaving(false)
     }
@@ -116,7 +116,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
     try {
       setStatus(await api.getPrometheusStatus(cluster.id))
     } catch (e: unknown) {
-      setStatus({ available: false, source: 'none', message: (e as Error).message })
+      setStatus({ available: false, source: 'none', message: failureText(e) })
     } finally {
       setChecking(false)
     }
@@ -128,7 +128,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
     try {
       setLsStatus(await api.getLogSearchStatus(cluster.id))
     } catch (e: unknown) {
-      setLsStatus({ available: false, source: 'none', message: (e as Error).message })
+      setLsStatus({ available: false, source: 'none', message: failureText(e) })
     } finally {
       setLsChecking(false)
     }

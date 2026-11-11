@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useAIContext } from '@/hooks/useAIContext'
 import { api } from '@/services/api'
+import { failureText } from '@/utils/failureText'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { usePermission } from '@/hooks/usePermission'
 import { replicaSetOwnerRow } from '../netstoreDetail'
@@ -159,10 +160,10 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
       qc.invalidateQueries({ queryKey: ['workload-describe', kind, namespace, name] })
       setTimeout(() => setTriggerToast(null), 3000)
     },
-    onError: () => {
+    // a refusal stays until it is closed, with the server's reason
+    onError: (err) => {
       setTriggerDialogOpen(false)
-      setTriggerToast({ type: 'error', message: 'Failed to trigger job' })
-      setTimeout(() => setTriggerToast(null), 3000)
+      setTriggerToast({ type: 'error', message: tr('cronjob.runNowFailed', 'Job not created: {{reason}}', { reason: failureText(err) }) })
     },
   })
 
@@ -176,9 +177,11 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
 
   const rollbackMut = useMutation({
     mutationFn: (revision: number) => api.rollbackWorkload(namespace as string, name, kind, revision),
-    onSuccess: () => {
+    onSuccess: (_data, revision) => {
       setRollbackDialogOpen(false)
       setSelectedRevision(null)
+      setTriggerToast({ type: 'success', message: tr('rollback.success', 'Rollback to revision {{revision}} initiated', { revision }) })
+      setTimeout(() => setTriggerToast(null), 5000)
       qc.invalidateQueries({ queryKey: ['workload-describe', kind, namespace, name] })
     },
   })

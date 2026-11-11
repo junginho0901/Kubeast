@@ -22,6 +22,8 @@ import { applyEndpointWatchEvent } from './endpoints/endpointWatchNormalize'
 import { EndpointFilters } from './endpoints/EndpointFilters'
 import { EndpointTable } from './endpoints/EndpointTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
 
@@ -33,7 +35,6 @@ export default function Endpoints() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -192,20 +193,13 @@ export default function Endpoints() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllEndpoints(true)
-        : await api.getEndpoints(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['network', 'endpoints', selectedNamespace] })
-      queryClient.setQueryData(['network', 'endpoints', selectedNamespace], data)
-    } catch (error) {
-      console.error('Endpoints refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllEndpoints(true)
+      : await api.getEndpoints(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['network', 'endpoints', selectedNamespace] })
+    queryClient.setQueryData(['network', 'endpoints', selectedNamespace], data)
+  })
 
   const createEndpointYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -260,6 +254,8 @@ subsets:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <EndpointFilters
         searchQuery={searchQuery}

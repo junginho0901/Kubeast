@@ -12,6 +12,8 @@ import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
@@ -42,7 +44,6 @@ export default function RuntimeClasses() {
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -171,18 +172,11 @@ export default function RuntimeClasses() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = await api.getRuntimeClasses(true)
-      queryClient.removeQueries({ queryKey: ['cluster', 'runtimeclasses'] })
-      queryClient.setQueryData(['cluster', 'runtimeclasses'], data)
-    } catch (error) {
-      console.error('RuntimeClasses refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = await api.getRuntimeClasses(true)
+    queryClient.removeQueries({ queryKey: ['cluster', 'runtimeclasses'] })
+    queryClient.setQueryData(['cluster', 'runtimeclasses'], data)
+  })
 
   const createRCYamlTemplate = `apiVersion: node.k8s.io/v1
 kind: RuntimeClass
@@ -223,6 +217,8 @@ handler: runc
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <div className="shrink-0">
         <div className="relative">

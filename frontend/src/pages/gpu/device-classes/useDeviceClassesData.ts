@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type DeviceClassItem } from '@/services/api'
 import { useDescribeReads } from '@/services/pacedReads'
@@ -6,6 +6,7 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
+import { useRefresh } from '@/hooks/useRefresh'
 import { useForbidden } from '@/services/forbiddenStore'
 import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -26,7 +27,6 @@ interface UseParams {
 export function useDeviceClassesData({ searchQuery, sortKey, sortDir, currentPage }: UseParams) {
   const queryClient = useQueryClient()
   const describes = useDescribeReads()
-  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const { data: deviceClasses, isLoading } = useQuery({
     queryKey: ['gpu', 'deviceclasses'],
@@ -131,24 +131,18 @@ export function useDeviceClassesData({ searchQuery, sortKey, sortDir, currentPag
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = await api.getDeviceClasses(true)
-      queryClient.removeQueries({ queryKey: ['gpu', 'deviceclasses'] })
-      queryClient.setQueryData(['gpu', 'deviceclasses'], data)
-    } catch (error) {
-      console.error('DeviceClasses refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = await api.getDeviceClasses(true)
+    queryClient.removeQueries({ queryKey: ['gpu', 'deviceclasses'] })
+    queryClient.setQueryData(['gpu', 'deviceclasses'], data)
+  })
 
   return {
     queryClient,
     isLoading,
     isRefreshing,
     handleRefresh,
+    refreshFailure,
     canCreate,
     filteredDeviceClasses,
     sortedDeviceClasses,

@@ -518,8 +518,11 @@ func (h *ClustersHandler) TestCluster(w http.ResponseWriter, r *http.Request) {
 	if result.Healthy {
 		status = "healthy"
 	}
-	if uerr := h.registry.UpdateHealth(r.Context(), id, status); uerr != nil {
-		slog.Warn("cluster: update health failed", "id", id, "err", uerr)
+	// a probe refused for this caller leaves the health everyone sees as it was
+	if !result.Refused {
+		if uerr := h.registry.UpdateHealth(r.Context(), id, status); uerr != nil {
+			slog.Warn("cluster: update health failed", "id", id, "err", uerr)
+		}
 	}
 	// Clusters registered without an API server address get the one the probe saw.
 	if result.Server != "" {
@@ -564,16 +567,24 @@ func (h *ClustersHandler) ValidateCluster(w http.ResponseWriter, r *http.Request
 	response.JSON(w, http.StatusOK, h.checkInfo(r, &cluster.Info{Mode: cluster.ModeExternal, KubeconfigBlob: *req.Kubeconfig}))
 }
 
-// checkInfo runs a connectivity check against the resolved cluster connection.
-// Self/in-cluster validation only confirms kubeast is in-cluster (the
-// ServiceAccount is implicitly trusted); external clusters are dialed by
-// k8s-service (a registered cluster by id, a candidate kubeconfig by value).
+// checkInfo runs a connectivity check against the resolved cluster connection,
+// dialed by k8s-service (a registered cluster by id, a candidate kubeconfig by
+// value). A self cluster not registered yet has nothing to dial by and is
+// trusted (kubeast runs in it); a registered one is dialed with the
+// ServiceAccount, its in-cluster Service address left out of the answer.
 func (h *ClustersHandler) checkInfo(r *http.Request, info *cluster.Info) model.ClusterConnectionResult {
 	if info.InCluster || info.Mode == cluster.ModeInCluster {
 		if h.cfg.DeploymentMode == "docker" {
 			return model.ClusterConnectionResult{Healthy: false, Message: "self cluster is only available in k8s mode"}
 		}
-		return model.ClusterConnectionResult{Healthy: true, Message: "in-cluster ServiceAccount"}
+		if info.ID == "" {
+			return model.ClusterConnectionResult{Healthy: true, Message: "in-cluster ServiceAccount"}
+		}
+		probe, err := probeCluster(r, h.cfg, info.ID)
+		if err != nil {
+			return probeFailed(err)
+		}
+		return model.ClusterConnectionResult{Healthy: true, ServerVersion: probe.ServerVersion}
 	}
 	var (
 		probe probeResult
@@ -588,9 +599,16 @@ func (h *ClustersHandler) checkInfo(r *http.Request, info *cluster.Info) model.C
 		return model.ClusterConnectionResult{Healthy: false, Message: "no kubeconfig available"}
 	}
 	if err != nil {
-		return model.ClusterConnectionResult{Healthy: false, Message: err.Error()}
+		return probeFailed(err)
 	}
 	return model.ClusterConnectionResult{Healthy: true, ServerVersion: probe.ServerVersion, Server: probe.Server}
+}
+
+// probeFailed: why the probe did not answer; one refused for this caller is marked so, as it says nothing of the
+// cluster's health.
+func probeFailed(err error) model.ClusterConnectionResult {
+	var refused probeRefused
+	return model.ClusterConnectionResult{Healthy: false, Message: err.Error(), Refused: errors.As(err, &refused)}
 }
 
 // validateKubeconfigYAML performs the cheap structural checks (valid YAML with

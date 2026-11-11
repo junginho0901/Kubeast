@@ -4,6 +4,7 @@ import { modalButton } from '@/components/modalStyles'
 import { useAIContext } from '@/hooks/useAIContext'
 import { api } from '@/services/api'
 import { isValidNsName } from './namespaceHelpers'
+import { failureText } from '@/utils/failureText'
 
 interface Props {
   onClose: () => void
@@ -35,7 +36,7 @@ export default function NamespaceCreateDialog({ onClose, onCreated, tr }: Props)
       if (detail.includes('already exists')) {
         setCreateError(tr('namespaces.create.exists', 'Namespace already exists.'))
       } else {
-        setCreateError(tr('namespaces.create.error', 'Failed to create namespace.'))
+        setCreateError(tr('namespaces.create.error', 'Namespace not created: {{reason}}', { reason: failureText(err) }))
       }
     } finally {
       setIsCreating(false)
@@ -89,7 +90,7 @@ export default function NamespaceCreateDialog({ onClose, onCreated, tr }: Props)
             : tr('namespaces.create.nameInvalid', 'Invalid name.')}
         </p>
       )}
-      {createError && <p className="mt-1 text-xs text-red-400">{createError}</p>}
+      {createError && <p role="alert" data-testid="namespace-create-error" className="mt-1 text-xs text-red-400 break-words">{createError}</p>}
     </ModalFrame>
   )
 }

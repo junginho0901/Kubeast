@@ -1,5 +1,6 @@
-import { Fragment, memo, useState, type ReactNode } from 'react'
-import { Check, Copy } from 'lucide-react'
+import { Fragment, memo, useRef, useState, type ReactNode } from 'react'
+import { Check, Copy, X } from 'lucide-react'
+import { copyText } from '@/utils/clipboard'
 import { useTranslation } from 'react-i18next'
 import { stripToolDetails } from '@/services/chatTextUtils'
 import { ChatCharts } from '@/components/ChatChart'
@@ -117,26 +118,27 @@ const MessageBubble = memo(function MessageBubble({ role, content, pending, tool
 // check for 1.5 s after copying; it fades in where it stands when the answer ends.
 function CopyAnswer({ content }: { content: string }) {
   const { t } = useTranslation()
-  const [copied, setCopied] = useState(false)
-  const label = copied ? t('floatingChat.copied', { defaultValue: 'Copied' }) : t('floatingChat.copy', { defaultValue: 'Copy' })
+  const [copied, setCopied] = useState<boolean | null>(null)
+  const copyTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const label = copied
+    ? t('floatingChat.copied', { defaultValue: 'Copied' })
+    : copied === false ? t('common.notCopied', { defaultValue: 'Not copied' }) : t('floatingChat.copy', { defaultValue: 'Copy' })
   return (
     <button
       type="button"
       onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(stripToolDetails(content))
-          setCopied(true)
-          setTimeout(() => setCopied(false), 1500)
-        } catch {
-          // clipboard refused (insecure context): nothing to show
-        }
+        const ok = await copyText(stripToolDetails(content))
+        setCopied(ok)
+        // the last copy's own timer: an earlier one does not clear it
+        clearTimeout(copyTimer.current)
+        copyTimer.current = setTimeout(() => setCopied(null), ok ? 1500 : 3000)
       }}
       aria-label={label}
       title={label}
       data-testid="floating-copy"
       className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-50 transition-opacity duration-200 hover:bg-slate-800 hover:text-slate-200 hover:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none starting:opacity-0"
     >
-      {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : copied === false ? <X className="h-3.5 w-3.5 text-red-400" /> : <Copy className="h-3.5 w-3.5" />}
     </button>
   )
 }

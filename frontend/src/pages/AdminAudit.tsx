@@ -1,7 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { api, AuditLogEntry, AuditLogFilter, AuditVerifyReport } from '@/services/api'
+import { api, AuditLogEntry, AuditLogFilter, AuditVerifyReport, type AuditAnchor } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { usePermission } from '@/hooks/usePermission'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
@@ -12,6 +12,10 @@ import { DateTextInput } from '@/components/DateTextInput'
 import { ListPager } from '@/components/ListPager'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import RecordingPlayerModal from '@/components/RecordingPlayerModal'
+import { RefreshFailure } from '@/components/RefreshFailure'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
+import { failureOf } from '@/hooks/useRefresh'
+import { failureText } from '@/utils/failureText'
 
 const SERVICES = ['', 'auth', 'k8s', 'helm', 'ai', 'admin']
 const RESULTS = ['', 'success', 'failure']
@@ -117,7 +121,7 @@ export default function AdminAudit() {
 
   const queryClient = useQueryClient()
   // The answer carries the read it answers: the pager counts with its rows per page while another loads.
-  const { data, isLoading, isFetching, isPlaceholderData, refetch } = useQuery({
+  const { data, isLoading, isFetching, isPlaceholderData, refetch, error: listError, errorUpdatedAt } = useQuery({
     queryKey: ['admin-audit-logs', request],
     queryFn: async () => ({ ...(await api.adminListAuditLogs(request)), request }),
     enabled: measured,
@@ -141,23 +145,25 @@ export default function AdminAudit() {
     refetchOnWindowFocus: false,
   })
   const [verifyReport, setVerifyReport] = useState<AuditVerifyReport | null>(null)
+  // what the last "Anchor now" wrote
+  const [anchored, setAnchored] = useState<AuditAnchor | null>(null)
   const [integrityError, setIntegrityError] = useState<string | null>(null)
-  const failureText = (e: unknown) => {
-    const err = e as { response?: { data?: { detail?: string } }; message?: string }
-    return err?.response?.data?.detail || err?.message || 'failed'
-  }
   const verifyMutation = useMutation({
     mutationFn: () => api.adminAuditVerify({ anchors: !!integrity?.anchor_sink }),
     onSuccess: (rep) => {
       setVerifyReport(rep)
+      setAnchored(null)
       setIntegrityError(null)
     },
     onError: (e) => setIntegrityError(failureText(e)),
   })
   const anchorMutation = useMutation({
     mutationFn: () => api.adminAuditAnchor(),
-    onSuccess: () => {
+    // the result line says what was written; the last verify's line is not this one's
+    onSuccess: (anchor) => {
       setIntegrityError(null)
+      setVerifyReport(null)
+      setAnchored(anchor)
       refetchIntegrity()
     },
     onError: (e) => setIntegrityError(failureText(e)),
@@ -330,10 +336,20 @@ export default function AdminAudit() {
               </button>
             )}
           </div>
-          {(verifyReport || integrityError) && (
+          {(verifyReport || integrityError || anchored) && (
             <div className="basis-full text-xs" data-testid="audit-integrity-result">
               {integrityError ? (
                 <span className="text-red-400">{integrityError}</span>
+              ) : anchored ? (
+                <span className="text-green-400" title={utcTitle(anchored.created_at) ?? undefined}>
+                  {tr('adminAudit.integrity.anchored', '✓ anchored #{{from}}~#{{to}} ({{rows}} rows) → {{sink}} at {{when}}', {
+                    from: anchored.from_seq,
+                    to: anchored.to_seq,
+                    rows: anchored.rows,
+                    sink: anchored.sink,
+                    when: formatTime(anchored.created_at),
+                  })}
+                </span>
               ) : verifyReport?.ok ? (
                 <span className="text-green-400">
                   {tr('adminAudit.integrity.ok', '✓ #{{from}}~#{{to}} {{rows}}행 이상 없음, 앵커 {{anchors}}개 일치', {
@@ -477,6 +493,7 @@ export default function AdminAudit() {
       {/* Table */}
       {/* overflow-x-auto — 폭 좁은 모니터 (세로 모드 등) 에서 가로 스크롤 가능.
           table 의 min-w-[1000px] 로 컬럼이 너무 압축되지 않게 보장. */}
+      <RefreshFailure failure={items.length ? failureOf(listError, errorUpdatedAt) : null} />
       <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-lg bg-slate-800/30 border border-slate-700">
         <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
         <table className="w-full min-w-[1000px] text-sm">
@@ -501,11 +518,7 @@ export default function AdminAudit() {
               </tr>
             )}
             {!isLoading && items.length === 0 && (
-              <tr>
-                <td colSpan={COLUMNS} className="px-3 py-6 text-center text-slate-400">
-                  {tr('common.noSearchResults', 'No results found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={COLUMNS} resource="admin-audit" searching error={listError} onRetry={() => void refetch()} className="px-3 py-6 text-center text-slate-400" />
             )}
             {items.map((entry, idx) => (
               <AuditRow

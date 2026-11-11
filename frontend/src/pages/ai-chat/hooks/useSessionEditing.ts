@@ -29,6 +29,8 @@ interface Result {
   handleCloseContextMenu: () => void
   handleSaveEdit: (sessionId: string) => void
   handleCancelEdit: () => void
+  renameError: unknown
+  renameSentAt: number
 }
 
 export function useSessionEditing({ isMultiSelectMode }: Params): Result {
@@ -50,6 +52,7 @@ export function useSessionEditing({ isMultiSelectMode }: Params): Result {
 
   const handleEditSession = (session: Session, e?: React.MouseEvent) => {
     if (e) e.stopPropagation()
+    updateSessionMutation.reset()
     setEditingSessionId(session.id)
     setEditingTitle(session.title)
     setContextMenu(null)
@@ -77,6 +80,7 @@ export function useSessionEditing({ isMultiSelectMode }: Params): Result {
   }
 
   const handleCancelEdit = () => {
+    updateSessionMutation.reset()
     setEditingSessionId(null)
     setEditingTitle('')
   }
@@ -92,5 +96,8 @@ export function useSessionEditing({ isMultiSelectMode }: Params): Result {
     handleCloseContextMenu,
     handleSaveEdit,
     handleCancelEdit,
+    // why the last rename was refused (the title stays in its field), and when it was sent
+    renameError: updateSessionMutation.error,
+    renameSentAt: updateSessionMutation.submittedAt,
   }
 }

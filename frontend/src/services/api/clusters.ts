@@ -53,10 +53,12 @@ export interface ClusterPatch {
   log_search_auth?: { type: 'none' | 'bearer' | 'basic'; token?: string; username?: string; password?: string }
 }
 
+// model.ClusterConnectionResult: why it failed is `message`; `server` is the API server address the probe saw.
 export interface ConnectionResult {
   healthy: boolean
   server_version?: string
-  error?: string
+  server?: string
+  message?: string
 }
 
 export type DeploymentMode = 'k8s' | 'docker'

@@ -11,6 +11,8 @@ import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
@@ -51,7 +53,6 @@ export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind 
   const ns = validating ? 'admissionPolicies.validating' : 'admissionPolicies.mutating'
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -156,18 +157,11 @@ export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind 
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = await fetchList(true)
-      queryClient.removeQueries({ queryKey: ['cluster', plural] })
-      queryClient.setQueryData(['cluster', plural], data)
-    } catch (error) {
-      console.error(`${kind} refresh failed:`, error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = await fetchList(true)
+    queryClient.removeQueries({ queryKey: ['cluster', plural] })
+    queryClient.setQueryData(['cluster', plural], data)
+  })
 
   const columnCount = 6
   return (
@@ -197,6 +191,8 @@ export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind 
           {tr('admissionPolicies.refresh', 'Refresh')}
         </button>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <div className="shrink-0">
         <div className="relative">

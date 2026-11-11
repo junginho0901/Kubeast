@@ -7,6 +7,7 @@ import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import type { AccessRequest } from '@/services/api/access_requests'
 import type { Member } from '@/services/api/types'
+import { ActionFailure } from '@/components/ActionFailure'
 import CustomDropdown from '@/components/CustomDropdown'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
@@ -104,6 +105,8 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
     setReason('')
     setNamespaces((myNamespaces[clusterId] ?? []).join(', '))
     setError(null)
+    // "Request sent" was the last request's; it goes with the next action
+    setNotice(null)
     setTarget(clusterId)
   }
 
@@ -226,7 +229,7 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
                       type="button"
                       data-testid={`access-request-cancel-${r.id}`}
                       disabled={cancel.isPending}
-                      onClick={() => cancel.mutate(r.id)}
+                      onClick={() => { setNotice(null); cancel.mutate(r.id) }}
                       className="rounded-lg border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-50"
                     >
                       {tr('accessRequests.mine.cancel', 'Cancel')}
@@ -236,6 +239,7 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
               </div>
             ))}
           </div>
+          <ActionFailure error={cancel.error} action="cancel" testId="access-request-cancel-error" className="mt-2" />
           <div data-testid="my-access-requests-pages">{pagerNav(Math.min(requestPage, requestPages), MY_REQUESTS_PER_PAGE, requestTotal, turnRequestPage)}</div>
         </div>
       )}

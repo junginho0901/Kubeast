@@ -20,6 +20,9 @@ import { ListPager } from '@/components/ListPager'
 import { usePageSize } from '@/utils/pageSize'
 import { absoluteTitle, formatAge, formatDate } from '@/utils/time'
 import { rolloutsCount } from './timelineCards'
+import { RefreshFailure } from '@/components/RefreshFailure'
+import { failureOf } from '@/hooks/useRefresh'
+import { failureText } from '@/utils/failureText'
 
 const TIME_RANGES = [
   { value: 1, label: '1h' },
@@ -60,7 +63,7 @@ export default function Timeline() {
   // the server lists the newest events of the type chosen, so a Warning list is the newest warnings, not the
   // warnings among the newest events
   const eventType = eventFilter === 'all' ? undefined : eventFilter
-  const { data: timeline, isLoading, error, refetch } = useQuery({
+  const { data: timeline, isLoading, isFetching, error, errorUpdatedAt, refetch } = useQuery({
     queryKey: ['timeline', allNamespaces ? '*' : namespace, hours, eventFilter],
     queryFn: () => (allNamespaces ? api.getClusterTimeline(hours, 500, eventType) : api.getNamespaceTimeline(namespace, hours, 500, eventType)),
     staleTime: 15000,
@@ -221,7 +224,7 @@ export default function Timeline() {
           className="btn btn-primary flex items-center gap-2"
           title={t('timeline.refresh', 'Refresh')}
         >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
           {t('timeline.refresh', 'Refresh')}
         </button>
       </div>
@@ -284,6 +287,7 @@ export default function Timeline() {
           {t('timeline.rolloutsError', 'The rollouts could not be read, so none are listed.')}
         </p>
       )}
+      <RefreshFailure failure={timeline && !isForbiddenError(error) ? failureOf(error, errorUpdatedAt) : null} />
       <div ref={listRef} className="flex-1 min-h-0 flex flex-col bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
         <div ref={listBodyRef} className="flex-1 min-h-0 overflow-y-auto">
         {isLoading ? (
@@ -294,6 +298,15 @@ export default function Timeline() {
           <div className="text-center py-16">
             <p className="text-sm text-gray-500 dark:text-gray-400" data-testid="timeline-forbidden">
               {t('common.forbiddenEmpty', { resource: forbiddenResourceFromUrl('/cluster/timeline'), defaultValue: 'You do not have permission to view {{resource}} in this cluster.' })}
+            </p>
+          </div>
+        ) : error && !timeline ? (
+          <div className="text-center py-16">
+            <p className="text-sm text-red-400 break-words" role="alert" data-testid="timeline-read-error">
+              {t('common.readFailed', { defaultValue: 'Could not read the list: {{reason}}', reason: failureText(error) })}
+              <button type="button" onClick={() => void refetch()} className="ml-3 rounded-sm border border-slate-600 px-2 py-0.5 text-xs text-slate-200 hover:border-slate-400">
+                {t('common.retry', { defaultValue: 'Retry' })}
+              </button>
             </p>
           </div>
         ) : visibleItems.length === 0 ? (

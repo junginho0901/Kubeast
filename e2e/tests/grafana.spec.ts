@@ -108,15 +108,17 @@ test.describe('Grafana in front of the stores', () => {
     expect(byJob(viaGrafana)).toEqual(byJob(direct))
     for (const r of (await promQuery(request, admin, 'up')).results) expect(r.metric.cluster, JSON.stringify(r.metric)).toBe('kubeast-b')
 
-    // The dashboard's pod count is count(kube_pod_info) read through Grafana.
+    // The dashboard's Pods slot is the pods on nodes and not finished as kube-state-metrics counts them, each once, of
+    // the nodes' allocatable pods, read through Grafana.
     await page.goto(`/?cluster=${CLUSTER}`)
     const card = page.locator('div.card').filter({ has: page.getByRole('heading', { name: /Cluster Resource Utilization|클러스터 리소스/ }) })
     await expect(card).toContainText(/CPU/, { timeout: 30_000 })
     await expect
       .poll(async () => {
-        const pods = (await promQuery(request, admin, 'count(kube_pod_info)')).results[0]?.value
-        const shown = (await card.locator('div.text-2xl').last().textContent())?.trim()
-        return shown === String(Math.round(pods))
+        const pods = (await promQuery(request, admin, 'count(count by (namespace, pod) (kube_pod_status_phase{phase=~"Pending|Running"} == 1) and on (namespace, pod) kube_pod_info{node!=""})')).results[0]?.value
+        const room = (await promQuery(request, admin, 'sum(max by (node) (kube_node_status_allocatable{resource="pods"}))')).results[0]?.value
+        const shown = (await card.getByTestId('cluster-metric-pods').locator('span.font-mono').textContent())?.trim()
+        return shown === (room ? `${Math.round(pods)} / ${Math.round(room)}` : String(Math.round(pods)))
       }, { timeout: 60_000, intervals: [5_000] })
       .toBe(true)
 

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import i18next from 'i18next'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import en from '../../i18n/locales/en.json'
 import VolumeAttachments from './VolumeAttachments'
@@ -29,7 +30,7 @@ beforeEach(() => { layers.length = 0 })
 function open(rows: unknown[]): { html: string; layer: Layer } {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, retryOnMount: false, staleTime: Infinity } } })
   client.setQueryData(['storage', 'volumeattachments'], rows)
-  const html = renderToStaticMarkup(createElement(I18nextProvider, { i18n }, createElement(QueryClientProvider, { client }, createElement(VolumeAttachments))))
+  const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(I18nextProvider, { i18n }, createElement(QueryClientProvider, { client }, createElement(VolumeAttachments)))))
   return { html, layer: layers[layers.length - 1] }
 }
 

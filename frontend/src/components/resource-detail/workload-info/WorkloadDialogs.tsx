@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { ActionFailure } from '@/components/ActionFailure'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useAIContext } from '@/hooks/useAIContext'
 import { fmtRel } from '../detailFormat'
@@ -13,12 +14,13 @@ interface Props {
   // "<Kind> <namespace>/<name>", for the floating chat
   target: string
   triggerToast: TriggerToast | null
+  dismissToast: () => void
   triggerDialogOpen: boolean
   setTriggerDialogOpen: (open: boolean) => void
   triggerMut: { isPending: boolean; mutate: () => void }
   rollbackDialogOpen: boolean
   setRollbackDialogOpen: (open: boolean) => void
-  rollbackMut: { isPending: boolean; mutate: (revision: number) => void }
+  rollbackMut: { isPending: boolean; mutate: (revision: number) => void; error?: unknown }
   revisions: any
   selectedRevision: number | null
   setSelectedRevision: (revision: number | null) => void
@@ -27,6 +29,7 @@ interface Props {
 export default function WorkloadDialogs({
   target,
   triggerToast,
+  dismissToast,
   triggerDialogOpen,
   setTriggerDialogOpen,
   triggerMut,
@@ -50,11 +53,14 @@ export default function WorkloadDialogs({
     <>
       {triggerToast && (
         <div
-          className={`fixed bottom-4 right-4 z-50 px-4 py-2 rounded-lg text-sm shadow-lg ${
+          role={triggerToast.type === 'error' ? 'alert' : 'status'}
+          data-testid="workload-action-toast"
+          className={`fixed bottom-4 right-4 z-50 max-w-md flex items-start gap-3 px-4 py-2 rounded-lg text-sm shadow-lg ${
             triggerToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
           }`}
         >
-          {triggerToast.message}
+          <span className="break-words">{triggerToast.message}</span>
+          <button type="button" onClick={dismissToast} aria-label={tr('common.close', 'Close')} className="shrink-0 opacity-80 hover:opacity-100">✕</button>
         </div>
       )}
 
@@ -122,6 +128,7 @@ export default function WorkloadDialogs({
                 ))}
               </div>
             )}
+            <ActionFailure error={rollbackMut.error} action="rollback" testId="rollback-error" className="mt-3" />
             <div className="flex justify-end gap-3 mt-4">
               <button
                 onClick={() => { setRollbackDialogOpen(false); setSelectedRevision(null) }}

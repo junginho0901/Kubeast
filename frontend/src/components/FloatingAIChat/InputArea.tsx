@@ -4,7 +4,8 @@ import { Plus, Send, Square } from 'lucide-react'
 import { useAutoGrowTextarea, useChatTextareaKeys } from '@/hooks/useChatTextarea'
 
 interface InputAreaProps {
-  onSubmit: (message: string) => void
+  /** false (or a promise of it): the question was not sent, so it goes back in the box */
+  onSubmit: (message: string) => unknown
   onStop: () => void
   isStreaming: boolean
   disabled?: boolean
@@ -25,8 +26,11 @@ export function InputArea({ onSubmit, onStop, isStreaming, disabled, onNewChat }
     e?.preventDefault()
     const trimmed = value.trim()
     if (!trimmed || isStreaming) return
-    onSubmit(trimmed)
+    const sent = onSubmit(trimmed)
     setValue('')
+    void Promise.resolve(sent).then((ok) => {
+      if (ok === false) setValue((now) => now || trimmed)
+    })
   }
 
   const keys = useChatTextareaKeys(ref, setValue, () => handleSubmit())

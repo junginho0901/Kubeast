@@ -106,6 +106,8 @@ export function useModelForm() {
   }
 
   const resetForm = () => {
+    createMutation.reset()
+    updateMutation.reset()
     setEditingId(null)
     setIsCreating(false)
     setFormName('')
@@ -247,6 +249,8 @@ export function useModelForm() {
   }
 
   const isSaving = createMutation.isPending || updateMutation.isPending
+  // why the last Create or Update was refused; the form stays open with it
+  const saveError = createMutation.error ?? updateMutation.error
 
   return {
     configs,
@@ -274,6 +278,7 @@ export function useModelForm() {
     currentModelOptions,
     modelList,
     isSaving,
+    saveError,
     deleteMutation,
     activateMutation,
     resetForm,

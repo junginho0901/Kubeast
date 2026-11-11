@@ -21,6 +21,8 @@ import { applyGatewayWatchEvent } from './gateways/gatewayWatchNormalize'
 import { GatewayFilters } from './gateways/GatewayFilters'
 import { GatewayTable } from './gateways/GatewayTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 export default function Gateways() {
   const queryClient = useQueryClient()
@@ -32,7 +34,6 @@ export default function Gateways() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -191,20 +192,13 @@ export default function Gateways() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllGateways(true)
-        : await api.getGateways(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['gateway', 'gateways', selectedNamespace] })
-      queryClient.setQueryData(['gateway', 'gateways', selectedNamespace], data)
-    } catch (error) {
-      console.error('Gateways refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllGateways(true)
+      : await api.getGateways(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['gateway', 'gateways', selectedNamespace] })
+    queryClient.setQueryData(['gateway', 'gateways', selectedNamespace], data)
+  })
 
   const createGatewayYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -254,6 +248,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <GatewayFilters
         searchQuery={searchQuery}

@@ -1,4 +1,5 @@
 import { AlertTriangle, CheckCircle2, Clock, Loader2 } from 'lucide-react'
+import { ActionFailure } from '@/components/ActionFailure'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import NodeShellTerminal from '@/components/NodeShellTerminal'
 import { useAIContext } from '@/hooks/useAIContext'
@@ -61,7 +62,7 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
         <div className="flex flex-wrap gap-2">
           {has('resource.node.cordon') && (
             <button
-              onClick={() => nodeDescribe.unschedulable ? uncordonMut.mutate(name) : cordonMut.mutate(name)}
+              onClick={() => { cordonMut.reset(); uncordonMut.reset(); if (nodeDescribe.unschedulable) uncordonMut.mutate(name); else cordonMut.mutate(name) }}
               disabled={isSchedulingMut || isDrainMut}
               className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-ink hover:border-slate-500 disabled:opacity-60"
             >
@@ -90,6 +91,8 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
           )}
         </div>
       )}
+
+      <ActionFailure error={cordonMut.error ?? uncordonMut.error} action="change" testId="node-cordon-error" />
 
       {/* Drain Status Banner */}
       {showDrainStatus && (

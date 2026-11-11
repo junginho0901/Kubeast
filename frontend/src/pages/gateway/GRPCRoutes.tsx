@@ -22,6 +22,8 @@ import { applyGRPCRouteWatchEvent } from './grpcroutes/grpcRouteWatchNormalize'
 import { GRPCRouteFilters } from './grpcroutes/GRPCRouteFilters'
 import { GRPCRouteTable } from './grpcroutes/GRPCRouteTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { useRefresh } from '@/hooks/useRefresh'
+import { RefreshFailure } from '@/components/RefreshFailure'
 
 export default function GRPCRoutes() {
   const queryClient = useQueryClient()
@@ -33,7 +35,6 @@ export default function GRPCRoutes() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -191,20 +192,13 @@ export default function GRPCRoutes() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllGRPCRoutes(true)
-        : await api.getGRPCRoutes(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['gateway', 'grpcroutes', selectedNamespace] })
-      queryClient.setQueryData(['gateway', 'grpcroutes', selectedNamespace], data)
-    } catch (error) {
-      console.error('GRPCRoutes refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
+    const data = selectedNamespace === 'all'
+      ? await api.getAllGRPCRoutes(true)
+      : await api.getGRPCRoutes(selectedNamespace, true)
+    queryClient.removeQueries({ queryKey: ['gateway', 'grpcroutes', selectedNamespace] })
+    queryClient.setQueryData(['gateway', 'grpcroutes', selectedNamespace], data)
+  })
 
   const createGRPCRouteYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
@@ -259,6 +253,8 @@ spec:
           </button>
         </div>
       </div>
+
+      <RefreshFailure failure={refreshFailure} />
 
       <GRPCRouteFilters
         searchQuery={searchQuery}
