@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -18,10 +19,10 @@ import (
 )
 
 // Each node's pods by colour, the pods not scheduled under "", the search on
-// name or namespace as the page searched (not on the node).
+// name, namespace, node or IP as the Pods list's.
 func TestPodNodeSummary_CountsAndSearch(t *testing.T) {
 	rows := []*podRow{
-		row("a", "web-1", func(r *podRow) { r.node = "n1"; r.health = podHealthOK }),
+		row("a", "web-1", func(r *podRow) { r.node = "n1"; r.health = podHealthOK; r.podIP = "10.244.0.206" }),
 		row("a", "web-2", func(r *podRow) { r.node = "n1"; r.health = podHealthError }),
 		row("beta", "db-0", func(r *podRow) { r.node = "n2"; r.health = podHealthWarn }),
 		row("beta", "pending-0", func(r *podRow) { r.node = ""; r.health = podHealthWarn }),
@@ -37,8 +38,20 @@ func TestPodNodeSummary_CountsAndSearch(t *testing.T) {
 	if got := podNodeSummary(rows, "beta"); got.Total != 2 {
 		t.Fatalf("q=beta matches the namespace: %+v", got)
 	}
-	if got := podNodeSummary(rows, "n1"); got.Total != 0 || len(got.Nodes) != 0 || got.Nodes == nil {
-		t.Fatalf("q=n1 does not match a node name: %+v", got)
+	if got := podNodeSummary(rows, "n1"); got.Total != 2 || len(got.Nodes) != 1 || got.Nodes[0].Node != "n1" {
+		t.Fatalf("q=n1 matches the node's pods: %+v", got)
+	}
+	if got := podNodeSummary(rows, "10.244.0.206"); got.Total != 1 || len(got.Nodes) != 1 || got.Nodes[0] != (PodNodeCount{Node: "n1", Total: 1, OK: 1}) {
+		t.Fatalf("q=an IP matches its pod: %+v", got)
+	}
+	if got := podNodeSummary(rows, "nothing"); got.Total != 0 || len(got.Nodes) != 0 || got.Nodes == nil {
+		t.Fatalf("q=nothing: %+v", got)
+	}
+	// the Pods list finds the same pods by each of the four fields
+	for _, q := range []string{"web", "beta", "n1", "10.244.0.206"} {
+		if page := buildPodPage(rows, PodPageQuery{Search: q}, time.Now()); page.Total != podNodeSummary(rows, q).Total {
+			t.Fatalf("q=%s: the Pods list found %d, the map %d", q, page.Total, podNodeSummary(rows, q).Total)
+		}
 	}
 }
 
