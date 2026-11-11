@@ -5,6 +5,11 @@ global:
   imageTag: "v0.1.0"
   imagePullPolicy: IfNotPresent
 
+# The chart version these defaults belong to, which the release writes. Values holding another (an upgrade with
+# --reuse-values, or a values file copied from `helm show values`) stop the upgrade with the --reset-then-reuse-values
+# hint (templates/checks/upgrade-values.yaml). Leave it out of a values file of your own.
+chartVersion: ""
+
 # --- Admin account (created on first boot) ---
 # password 를 비워두면 helm install 시 자동 생성 (randAlphaNum 20).
 # 생성된 비번은 다음 명령으로 확인:

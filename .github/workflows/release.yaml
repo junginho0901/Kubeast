@@ -329,6 +329,7 @@ jobs:
           sed -i "s/^version:.*/version: ${TAG#v}/" helm/kubeast/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"${TAG#v}\"/" helm/kubeast/Chart.yaml
           sed -i "s/imageTag:.*/imageTag: \"$TAG\"/" helm/kubeast/values.yaml
+          sed -i "s/^chartVersion:.*/chartVersion: \"${TAG#v}\"/" helm/kubeast/values.yaml
         env:
           TAG: ${{ steps.version.outputs.tag }}
 
