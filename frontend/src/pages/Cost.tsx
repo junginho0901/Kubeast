@@ -260,7 +260,7 @@ export default function Cost() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
               <input
                 type="text"
-                placeholder={tr('cost.searchPlaceholder', 'Search by name...')}
+                placeholder={tr('cost.searchPlaceholder', 'Search by name, namespace or kind...')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 data-testid="cost-search"

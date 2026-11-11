@@ -46,7 +46,7 @@
     "exempt": "예외",
     "exemptReason": "예외: {{reason}}",
     "pods": "Pod {{count}}개",
-    "search": "Namespace, 이름, 내용 검색...",
+    "search": "Namespace, 이름, 내용, 종류, 컨테이너, 예외 사유 검색...",
     "truncated": "발견 {{total}}건 중 심각한 순으로 {{shown}}건만 목록에 넣었습니다. 카드와 점검 항목 탭은 전부 셉니다.",
     "collectors": "다음 목록을 읽지 못해 해당 점검을 건너뛰었습니다:",
     "lastReview": "마지막 서명 {{when}} · {{who}}",
@@ -387,7 +387,7 @@
     "durationMin": "{{m}}분",
     "durationH": "{{h}}시간",
     "durationHMin": "{{h}}시간 {{m}}분",
-    "searchPlaceholder": "요청자, 클러스터, 역할 검색..."
+    "searchPlaceholder": "요청자, 클러스터, 역할, 사유, 처리자 검색..."
   },
   "nav": {
     "accessRequests": "Access Requests",
@@ -513,7 +513,7 @@
     "createTitle": "YAML로 Pod 생성",
     "delete": "Pod 삭제",
     "deleteTitle": "Pod 삭제",
-    "searchPlaceholder": "Pod 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, Node, IP로 Pod 검색...",
     "refresh": "새로고침",
     "forceRefreshTitle": "새로고침 (강제 갱신)",
     "allNamespaces": "전체 Namespace",
@@ -575,7 +575,7 @@
     "createTitle": "YAML로 Deployment 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "Deployment 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, 이미지, 상태로 Deployment 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 Deployment가 검색되었습니다.",
     "table": {
@@ -606,7 +606,7 @@
     "createTitle": "YAML로 Service 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "Service 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, 유형, IP, 포트, 셀렉터로 Service 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 Service가 검색되었습니다.",
     "table": {
@@ -638,7 +638,7 @@
     "createTitle": "YAML로 Endpoints 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "Endpoints 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, 주소, 포트, Ready · Not Ready 수로 Endpoints 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 Endpoints가 검색되었습니다.",
     "table": {
@@ -668,7 +668,7 @@
     "createTitle": "YAML로 EndpointSlice 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "EndpointSlice 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, Service, 주소 유형, 엔드포인트, 포트, 개수로 EndpointSlice 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 EndpointSlice가 검색되었습니다.",
     "table": {
@@ -701,7 +701,7 @@
     "createTitle": "YAML로 Ingress 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "Ingress 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, Class, 호스트, 백엔드, 주소, 규칙으로 Ingress 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 Ingress가 검색되었습니다.",
     "table": {
@@ -731,7 +731,7 @@
     "createTitle": "YAML로 IngressClass 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "IngressClass 이름 검색...",
+    "searchPlaceholder": "이름, 컨트롤러, 파라미터로 IngressClass 검색...",
     "matchCount": "{{count}}개의 IngressClass가 검색되었습니다.",
     "table": {
       "name": "이름",
@@ -758,7 +758,7 @@
     "createTitle": "YAML로 NetworkPolicy 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "NetworkPolicy 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, Pod 셀렉터, 정책 유형, 규칙 수, 기본 거부로 NetworkPolicy 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 NetworkPolicy이 검색되었습니다.",
     "table": {
@@ -789,7 +789,7 @@
     "createTitle": "YAML로 Gateway 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "Gateway 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, Class, 상태, 개수로 Gateway 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 Gateway가 검색되었습니다.",
     "table": {
@@ -820,7 +820,7 @@
     "createTitle": "YAML로 GatewayClass 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "GatewayClass 이름 검색...",
+    "searchPlaceholder": "이름, 컨트롤러, 상태, 파라미터로 GatewayClass 검색...",
     "matchCount": "{{count}}개의 GatewayClass가 검색되었습니다.",
     "table": {
       "name": "이름",
@@ -847,7 +847,7 @@
     "createTitle": "YAML로 HTTPRoute 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "HTTPRoute 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, 호스트 이름, 상태, 개수로 HTTPRoute 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 HTTPRoute가 검색되었습니다.",
     "table": {
@@ -878,7 +878,7 @@
     "createTitle": "YAML로 GRPCRoute 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "GRPCRoute 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, 호스트 이름, 상태로 GRPCRoute 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 GRPCRoute가 검색되었습니다.",
     "table": {
@@ -909,7 +909,7 @@
     "createTitle": "YAML로 ReferenceGrant 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "ReferenceGrant 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, From, To로 ReferenceGrant 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 ReferenceGrant가 검색되었습니다.",
     "table": {
@@ -937,7 +937,7 @@
     "createTitle": "YAML로 BackendTLSPolicy 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "BackendTLSPolicy 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, 대상으로 BackendTLSPolicy 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 BackendTLSPolicy가 검색되었습니다.",
     "table": {
@@ -962,7 +962,7 @@
     "subtitle": "클러스터에 설치된 모든 구현체의 Gateway API 정책을 한곳에서 봅니다.",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "이름, Namespace, 종류, 대상으로 검색...",
+    "searchPlaceholder": "이름, Namespace, 종류, 그룹, 대상으로 검색...",
     "allKinds": "전체 종류",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개가 검색되었습니다.",
@@ -1001,7 +1001,7 @@
     "createTitle": "YAML로 StatefulSet 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "StatefulSet 이름 검색...",
+    "searchPlaceholder": "이름, Namespace로 StatefulSet 검색...",
     "allNamespaces": "전체 Namespace",
     "table": {
       "namespace": "Namespace",
@@ -1032,7 +1032,7 @@
     "createTitle": "YAML로 DaemonSet 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "DaemonSet 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, 상태, 셀렉터, 이미지로 DaemonSet 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 DaemonSet이 검색되었습니다.",
     "table": {
@@ -1067,7 +1067,7 @@
     "createTitle": "YAML로 ReplicaSet 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "ReplicaSet 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, 소유자, 상태, 이미지, 컨테이너, 셀렉터로 ReplicaSet 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 ReplicaSet이 검색되었습니다.",
     "table": {
@@ -1103,7 +1103,7 @@
     "createTitle": "YAML로 Job 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "Job 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, 상태, 컨테이너, 이미지로 Job 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 Job이 검색되었습니다.",
     "table": {
@@ -1135,7 +1135,7 @@
     "createTitle": "YAML로 CronJob 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "CronJob 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, 스케줄, Concurrency Policy, 컨테이너, 이미지로 CronJob 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 CronJob이 검색되었습니다.",
     "table": {
@@ -1171,7 +1171,7 @@
     "createTitle": "YAML로 HPA 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "HPA 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, 대상으로 HPA 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 HPA가 검색되었습니다",
     "table": {
@@ -1200,7 +1200,7 @@
     "createTitle": "YAML로 VPA 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "VPA 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, 대상으로 VPA 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 VPA가 검색되었습니다",
     "table": {
@@ -1232,7 +1232,7 @@
     "createTitle": "YAML로 PDB 생성",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "searchPlaceholder": "이름으로 PDB 검색...",
+    "searchPlaceholder": "이름, Namespace로 PDB 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개 PDB 일치.",
     "table": {
@@ -1262,7 +1262,7 @@
     "createTitle": "YAML로 PriorityClass 생성",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "searchPlaceholder": "이름으로 PriorityClass 검색...",
+    "searchPlaceholder": "이름, 설명, Preemption Policy로 PriorityClass 검색...",
     "matchCount": "{{count}}개 PriorityClass 일치.",
     "table": {
       "name": "이름",
@@ -1349,7 +1349,7 @@
     "createTitle": "YAML로 Lease 생성",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "searchPlaceholder": "이름 또는 홀더로 Lease 검색...",
+    "searchPlaceholder": "이름, Namespace, 보유자로 Lease 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개 Lease 일치.",
     "table": {
@@ -1376,7 +1376,7 @@
     "createTitle": "YAML로 ResourceQuota 생성",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "searchPlaceholder": "이름으로 ResourceQuota 검색...",
+    "searchPlaceholder": "이름, Namespace로 ResourceQuota 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개 ResourceQuota 일치.",
     "table": {
@@ -1402,7 +1402,7 @@
     "createTitle": "YAML로 LimitRange 생성",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "searchPlaceholder": "이름으로 LimitRange 검색...",
+    "searchPlaceholder": "이름, Namespace로 LimitRange 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개 LimitRange 일치.",
     "table": {
@@ -1428,7 +1428,7 @@
     "createTitle": "YAML로 PersistentVolumeClaim 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "PVC 이름 검색...",
+    "searchPlaceholder": "이름, Namespace, 상태, StorageClass, 볼륨, 용량, Access Mode로 PVC 검색...",
     "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 PVC가 검색되었습니다.",
     "table": {
@@ -1460,7 +1460,7 @@
     "createTitle": "YAML로 PersistentVolume 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "PV 이름 검색...",
+    "searchPlaceholder": "이름, 상태, StorageClass, Reclaim Policy, 용량, Volume Mode, 소스, 드라이버, Node Affinity, 클레임, Access Mode로 PV 검색...",
     "matchCount": "{{count}}개의 PV가 검색되었습니다.",
     "table": {
       "name": "이름",
@@ -1494,7 +1494,7 @@
     "createTitle": "YAML로 StorageClass 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "StorageClass 이름 검색...",
+    "searchPlaceholder": "이름, Provisioner, Reclaim Policy, Binding Mode, 파라미터, Mount Option으로 StorageClass 검색...",
     "matchCount": "{{count}}개의 StorageClass가 검색되었습니다.",
     "table": {
       "name": "이름",
@@ -1524,7 +1524,7 @@
     "createTitle": "YAML로 VolumeAttachment 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "이름, PV, Node, Attacher로 VolumeAttachment 검색...",
+    "searchPlaceholder": "이름, PV, Node, Attacher, 상태, 오류로 VolumeAttachment 검색...",
     "matchCount": "{{count}}개의 VolumeAttachment가 검색되었습니다.",
     "table": {
       "name": "이름",
@@ -1829,7 +1829,7 @@
       "namespace": "Namespace별",
       "controller": "워크로드별"
     },
-    "searchPlaceholder": "이름으로 검색...",
+    "searchPlaceholder": "이름, Namespace, 종류로 검색...",
     "stats": {
       "total": "총 비용",
       "cpu": "CPU",
@@ -2028,8 +2028,9 @@
       "error": "error",
       "skip": "skip"
     },
-    "searchPlaceholder": "이름으로 검색...",
-    "searchResults": "정책·규칙·리소스·메시지로 검색...",
+    "searchPlaceholder": "정책 또는 분류로 검색...",
+    "searchNamespaces": "Namespace로 검색...",
+    "searchResults": "정책·규칙·리소스 이름이나 셀렉터·Namespace·메시지로 검색...",
     "source": "보고서 {{reports}}개 · {{time}}",
     "table": {
       "policy": "정책",
@@ -2344,7 +2345,7 @@
       "windowHint": "이 시간 안의 Warning 이벤트를 해당 객체에 붙입니다.",
       "includeRestarts": "재시작 기록 포함",
       "includeRestartsHint": "현재 정상(Running/Ready)인 Pod의 과거 재시작도 정보로 포함합니다.",
-      "searchPlaceholder": "이슈 검색(이름/Namespace/메시지)...",
+      "searchPlaceholder": "이슈 검색(이름/Namespace/종류/심각도/메시지)...",
       "loading": "이슈 수집 중...",
       "error": "이슈를 수집하지 못했습니다",
       "none": "이슈가 없습니다",
@@ -2435,7 +2436,8 @@
       },
       "namespaceFilter": "Namespace 필터",
       "allNamespaces": "전체 Namespace",
-      "searchPlaceholder": "검색(이름/상태/StorageClass/Claim)...",
+      "searchPlaceholder": "검색(이름/Namespace/상태/StorageClass/볼륨/용량)...",
+      "searchPvsPlaceholder": "검색(이름/상태/용량/StorageClass/Reclaim Policy/Claim)...",
       "loading": "스토리지 데이터를 불러오는 중...",
       "noPVC": "표시할 PVC가 없습니다",
       "pvLabel": "PV",
@@ -2644,7 +2646,7 @@
     },
     "title": "Cluster View",
     "subtitle": "Node별 Pod 배치를 확인합니다.",
-    "searchPlaceholder": "Pod 이름 검색...",
+    "searchPlaceholder": "Pod 이름, Namespace, Node, IP 검색...",
     "allNamespaces": "전체 Namespace",
     "loading": "데이터를 불러오는 중...",
     "searchResults": "검색 결과",
@@ -4217,7 +4219,7 @@
     "createTitle": "YAML로 ResourceClaim 생성",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "searchPlaceholder": "ResourceClaim 이름으로 검색...",
+    "searchPlaceholder": "ResourceClaim 이름, Namespace, 상태로 검색...",
     "matchCount": "{{count}}개의 ResourceClaim이 일치합니다.",
     "allNamespaces": "전체 Namespace",
     "stats": {
@@ -4241,7 +4243,7 @@
     "createTitle": "YAML로 ResourceClaimTemplate 생성",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "searchPlaceholder": "ResourceClaimTemplate 이름으로 검색...",
+    "searchPlaceholder": "ResourceClaimTemplate 이름, Namespace로 검색...",
     "matchCount": "{{count}}개의 ResourceClaimTemplate이 일치합니다.",
     "allNamespaces": "전체 Namespace",
     "stats": {
@@ -4279,7 +4281,7 @@
     "subtitle": "클러스터에 설치된 Helm Release를 조회하고 관리합니다.",
     "refresh": "새로고침",
     "allNamespaces": "전체 Namespace",
-    "searchPlaceholder": "Release 이름 검색...",
+    "searchPlaceholder": "Release 또는 Chart 이름 검색...",
     "matchCount": "{{count}}개의 Release가 검색되었습니다.",
     "forbidden": "Helm은 Release 기록을 Secret에 둡니다. 이 클러스터에서 지금 역할로는 Secret을 읽을 수 없어(Read는 못 읽음) Release를 볼 수 없습니다. Write 이상이나 Secret을 읽는 역할이 필요합니다.",
     "protected": "Helm은 Release 기록을 Secret에 둡니다. 이 Namespace에는 Kubeast 자체 자격 증명이 있어 전역 관리자만 읽을 수 있습니다.",
@@ -5314,7 +5316,7 @@
       "mine": "내 담당",
       "open": "조치 안 된 것"
     },
-    "searchPlaceholder": "알림 이름·네임스페이스·레이블·요약·담당자로 검색...",
+    "searchPlaceholder": "알림 이름·네임스페이스·레이블·어노테이션·담당자로 검색...",
     "col": {
       "status": "상태",
       "alert": "알림",

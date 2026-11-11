@@ -220,7 +220,7 @@ spec:
       <GatewayClassFilters
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        searchPlaceholder={tr('gatewayClassesPage.searchPlaceholder', 'Search gateway classes by name...')}
+        searchPlaceholder={tr('gatewayClassesPage.searchPlaceholder', 'Search gateway classes by name, controller, status or parameters...')}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">

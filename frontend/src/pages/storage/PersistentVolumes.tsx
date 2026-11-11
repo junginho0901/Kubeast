@@ -254,7 +254,7 @@ spec:
       <PVFilters
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        searchPlaceholder={tr('pvs.searchPlaceholder', 'Search PVs by name...')}
+        searchPlaceholder={tr('pvs.searchPlaceholder', 'Search PVs by name, status, StorageClass, reclaim policy, capacity, volume mode, source, driver, node affinity, claim or access mode...')}
       />
 
       <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 shrink-0">

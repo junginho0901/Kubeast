@@ -256,7 +256,7 @@ spec:
       <VolumeAttachmentFilters
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        searchPlaceholder={tr('volumeattachments.searchPlaceholder', 'Search VolumeAttachments by name, PV, node, or attacher...')}
+        searchPlaceholder={tr('volumeattachments.searchPlaceholder', 'Search VolumeAttachments by name, PV, node, attacher, status or error...')}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">

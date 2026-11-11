@@ -66,7 +66,6 @@ export default function IngressClasses() {
       item.name.toLowerCase().includes(q)
       || String(item.controller || '').toLowerCase().includes(q)
       || formatParameters(item).toLowerCase().includes(q)
-      || String(item.is_default).toLowerCase().includes(q)
     ))
   }, [ingressClasses, searchQuery])
 
@@ -218,7 +217,7 @@ spec:
       <IngressClassFilters
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        searchPlaceholder={tr('ingressClassesPage.searchPlaceholder', 'Search ingress classes by name...')}
+        searchPlaceholder={tr('ingressClassesPage.searchPlaceholder', 'Search ingress classes by name, controller or parameters...')}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">

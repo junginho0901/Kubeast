@@ -262,7 +262,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('grpcRoutesPage.searchPlaceholder', 'Search GRPCRoutes by name...')}
+        searchPlaceholder={tr('grpcRoutesPage.searchPlaceholder', 'Search GRPCRoutes by name, namespace, hostname or status...')}
         allNamespacesLabel={tr('grpcRoutesPage.allNamespaces', 'All namespaces')}
       />
 

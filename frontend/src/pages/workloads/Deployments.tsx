@@ -76,7 +76,7 @@ export default function Deployments() {
     return deployments.filter((dep) =>
       dep.name.toLowerCase().includes(q) ||
       dep.namespace.toLowerCase().includes(q) ||
-      (dep.image || '').toLowerCase().includes(q) ||
+      (dep.images?.length ? dep.images : [dep.image || '']).join(' ').toLowerCase().includes(q) ||
       workloadStatusText(label, dep.status).includes(q),
     )
   }, [deployments, searchQuery, t])
@@ -292,7 +292,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('deployments.searchPlaceholder', 'Search deployments by name...')}
+        searchPlaceholder={tr('deployments.searchPlaceholder', 'Search deployments by name, namespace, image or status...')}
         allNamespacesLabel={tr('deployments.allNamespaces', 'All namespaces')}
       />
 

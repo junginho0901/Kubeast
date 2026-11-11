@@ -268,7 +268,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('pods.searchPlaceholder', 'Search pods by name...')}
+        searchPlaceholder={tr('pods.searchPlaceholder', 'Search pods by name, namespace, node or IP...')}
         allNamespacesLabel={tr('pods.allNamespaces', 'All namespaces')}
       />
 

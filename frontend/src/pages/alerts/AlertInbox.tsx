@@ -210,7 +210,7 @@ export default function AlertInbox() {
           type="text"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          placeholder={tr('alertInbox.searchPlaceholder', 'Search by alert name, namespace, label, summary or assignee...')}
+          placeholder={tr('alertInbox.searchPlaceholder', 'Search by alert name, namespace, label, annotation or assignee...')}
           maxLength={200}
           data-testid="alert-inbox-search"
           className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"

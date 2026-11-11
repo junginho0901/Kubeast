@@ -278,7 +278,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('replicasets.searchPlaceholder', 'Search replicasets by name...')}
+        searchPlaceholder={tr('replicasets.searchPlaceholder', 'Search replicasets by name, namespace, owner, status, image, container or selector...')}
         allNamespacesLabel={tr('replicasets.allNamespaces', 'All namespaces')}
       />
 

@@ -46,7 +46,7 @@
     "exempt": "Exempt",
     "exemptReason": "Exempt: {{reason}}",
     "pods": "{{count}} Pods",
-    "search": "Search Namespace, name, message...",
+    "search": "Search Namespace, name, message, kind, container, exemption reason...",
     "truncated": "Only the {{shown}} most severe of the {{total}} findings are listed; the cards and the Checks tab count all of them.",
     "collectors": "Could not read these lists, so their checks were skipped:",
     "lastReview": "Last sign-off {{when}} by {{who}}",
@@ -388,7 +388,7 @@
     "durationMin": "{{m}} min",
     "durationH": "{{h}} h",
     "durationHMin": "{{h}} h {{m}} min",
-    "searchPlaceholder": "Search by requester, cluster or role..."
+    "searchPlaceholder": "Search by requester, cluster, role, reason or reviewer..."
   },
   "nav": {
     "accessRequests": "Access Requests",
@@ -510,7 +510,7 @@
     "title": "Pods",
     "subtitle": "Inspect pod health and placement across namespaces.",
     "topStatusReasons": "Top status reasons",
-    "searchPlaceholder": "Search pods by name...",
+    "searchPlaceholder": "Search pods by name, namespace, node or IP...",
     "refresh": "Refresh",
     "forceRefreshTitle": "Force refresh",
     "allNamespaces": "All namespaces",
@@ -576,7 +576,7 @@
     "createTitle": "Create Deployment from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search deployments by name...",
+    "searchPlaceholder": "Search deployments by name, namespace, image or status...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} deployment{{suffix}} match.",
     "table": {
@@ -607,7 +607,7 @@
     "createTitle": "Create Service from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search services by name...",
+    "searchPlaceholder": "Search services by name, namespace, type, IP, port or selector...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} service{{suffix}} match.",
     "table": {
@@ -639,7 +639,7 @@
     "createTitle": "Create Endpoints from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search endpoints by name...",
+    "searchPlaceholder": "Search endpoints by name, namespace, address, port or ready or not-ready count...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} endpoint{{suffix}} match.",
     "table": {
@@ -669,7 +669,7 @@
     "createTitle": "Create EndpointSlice from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search endpoint slices by name...",
+    "searchPlaceholder": "Search endpoint slices by name, namespace, service, address type, endpoint, port or count...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} endpoint slice{{suffix}} match.",
     "table": {
@@ -702,7 +702,7 @@
     "createTitle": "Create Ingress from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search ingresses by name...",
+    "searchPlaceholder": "Search ingresses by name, namespace, class, host, backend, address or rule...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} ingress{{suffix}} match.",
     "table": {
@@ -732,7 +732,7 @@
     "createTitle": "Create IngressClass from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search ingress classes by name...",
+    "searchPlaceholder": "Search ingress classes by name, controller or parameters...",
     "matchCount": "{{count}} ingress class{{suffix}} match.",
     "table": {
       "name": "Name",
@@ -759,7 +759,7 @@
     "createTitle": "Create NetworkPolicy from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search network policies by name...",
+    "searchPlaceholder": "Search network policies by name, namespace, pod selector, policy type, rule count or default deny...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} network polic{{suffix}} match.",
     "table": {
@@ -790,7 +790,7 @@
     "createTitle": "Create Gateway from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search gateways by name...",
+    "searchPlaceholder": "Search gateways by name, namespace, class, status or count...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} gateway{{suffix}} match.",
     "table": {
@@ -821,7 +821,7 @@
     "createTitle": "Create GatewayClass from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search gateway classes by name...",
+    "searchPlaceholder": "Search gateway classes by name, controller, status or parameters...",
     "matchCount": "{{count}} gateway class{{suffix}} match.",
     "table": {
       "name": "Name",
@@ -848,7 +848,7 @@
     "createTitle": "Create HTTPRoute from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search HTTPRoutes by name...",
+    "searchPlaceholder": "Search HTTPRoutes by name, namespace, hostname, status or count...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} HTTPRoute{{suffix}} match.",
     "table": {
@@ -879,7 +879,7 @@
     "createTitle": "Create GRPCRoute from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search GRPCRoutes by name...",
+    "searchPlaceholder": "Search GRPCRoutes by name, namespace, hostname or status...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} GRPCRoute{{suffix}} match.",
     "table": {
@@ -910,7 +910,7 @@
     "createTitle": "Create ReferenceGrant from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search ReferenceGrants by name...",
+    "searchPlaceholder": "Search ReferenceGrants by name, namespace, from or to...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} ReferenceGrant{{suffix}} match.",
     "table": {
@@ -938,7 +938,7 @@
     "createTitle": "Create BackendTLSPolicy from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search BackendTLSPolicies by name...",
+    "searchPlaceholder": "Search BackendTLSPolicies by name, namespace or target...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} BackendTLSPolic{{suffix}} match.",
     "table": {
@@ -963,7 +963,7 @@
     "subtitle": "Policies attached to Gateway API objects, from every implementation installed on the cluster.",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search by name, namespace, kind, or target...",
+    "searchPlaceholder": "Search by name, namespace, kind, group, or target...",
     "allKinds": "All kinds",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} result(s) match.",
@@ -1002,7 +1002,7 @@
     "createTitle": "Create StatefulSet from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search StatefulSets by name...",
+    "searchPlaceholder": "Search StatefulSets by name or namespace...",
     "allNamespaces": "All namespaces",
     "table": {
       "namespace": "Namespace",
@@ -1033,7 +1033,7 @@
     "createTitle": "Create DaemonSet from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search daemonsets by name...",
+    "searchPlaceholder": "Search daemonsets by name, namespace, status, selector or image...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} daemonset{{suffix}} match.",
     "table": {
@@ -1068,7 +1068,7 @@
     "createTitle": "Create ReplicaSet from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search replicasets by name...",
+    "searchPlaceholder": "Search replicasets by name, namespace, owner, status, image, container or selector...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} replicaset{{suffix}} match.",
     "table": {
@@ -1104,7 +1104,7 @@
     "createTitle": "Create Job from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search jobs by name...",
+    "searchPlaceholder": "Search jobs by name, namespace, status, container or image...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} job{{suffix}} match.",
     "table": {
@@ -1136,7 +1136,7 @@
     "createTitle": "Create CronJob from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search cronjobs by name...",
+    "searchPlaceholder": "Search cronjobs by name, namespace, schedule, concurrency policy, container or image...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} cronjob{{suffix}} match.",
     "table": {
@@ -1172,7 +1172,7 @@
     "createTitle": "Create HPA from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search HPAs by name...",
+    "searchPlaceholder": "Search HPAs by name, namespace or target...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} HPA{{suffix}} match.",
     "table": {
@@ -1201,7 +1201,7 @@
     "createTitle": "Create VPA from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search VPAs by name...",
+    "searchPlaceholder": "Search VPAs by name, namespace or target...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} VPA{{suffix}} match.",
     "table": {
@@ -1233,7 +1233,7 @@
     "createTitle": "Create PDB from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search PDBs by name...",
+    "searchPlaceholder": "Search PDBs by name or namespace...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} PDB{{suffix}} match.",
     "table": {
@@ -1263,7 +1263,7 @@
     "createTitle": "Create Priority Class from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search priority classes by name...",
+    "searchPlaceholder": "Search priority classes by name, description or preemption policy...",
     "matchCount": "{{count}} priority class{{suffix}} match.",
     "table": {
       "name": "Name",
@@ -1350,7 +1350,7 @@
     "createTitle": "Create Lease from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search leases by name or holder...",
+    "searchPlaceholder": "Search leases by name, namespace or holder...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} lease{{suffix}} match.",
     "table": {
@@ -1377,7 +1377,7 @@
     "createTitle": "Create ResourceQuota from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search resource quotas by name...",
+    "searchPlaceholder": "Search resource quotas by name or namespace...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} resource quota{{suffix}} match.",
     "table": {
@@ -1403,7 +1403,7 @@
     "createTitle": "Create LimitRange from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search limit ranges by name...",
+    "searchPlaceholder": "Search limit ranges by name or namespace...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} limit range{{suffix}} match.",
     "table": {
@@ -1429,7 +1429,7 @@
     "createTitle": "Create PersistentVolumeClaim from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search PVCs by name...",
+    "searchPlaceholder": "Search PVCs by name, namespace, status, StorageClass, volume, size or access mode...",
     "allNamespaces": "All namespaces",
     "matchCount": "{{count}} pvc{{suffix}} match.",
     "table": {
@@ -1461,7 +1461,7 @@
     "createTitle": "Create PersistentVolume from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search PVs by name...",
+    "searchPlaceholder": "Search PVs by name, status, StorageClass, reclaim policy, capacity, volume mode, source, driver, node affinity, claim or access mode...",
     "matchCount": "{{count}} pv{{suffix}} match.",
     "table": {
       "name": "Name",
@@ -1495,7 +1495,7 @@
     "createTitle": "Create StorageClass from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search StorageClasses by name...",
+    "searchPlaceholder": "Search StorageClasses by name, provisioner, reclaim policy, binding mode, parameter or mount option...",
     "matchCount": "{{count}} storage class{{suffix}} match.",
     "table": {
       "name": "Name",
@@ -1525,7 +1525,7 @@
     "createTitle": "Create VolumeAttachment from YAML",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search VolumeAttachments by name, PV, node, or attacher...",
+    "searchPlaceholder": "Search VolumeAttachments by name, PV, node, attacher, status or error...",
     "matchCount": "{{count}} volume attachment{{suffix}} match.",
     "table": {
       "name": "Name",
@@ -1831,7 +1831,7 @@
       "namespace": "By namespace",
       "controller": "By workload"
     },
-    "searchPlaceholder": "Search by name...",
+    "searchPlaceholder": "Search by name, namespace or kind...",
     "stats": {
       "total": "Total cost",
       "cpu": "CPU",
@@ -2034,8 +2034,9 @@
       "error": "error",
       "skip": "skip"
     },
-    "searchPlaceholder": "Search by name...",
-    "searchResults": "Search by policy, rule, resource or message...",
+    "searchPlaceholder": "Search by policy or category...",
+    "searchNamespaces": "Search by namespace...",
+    "searchResults": "Search by policy, rule, resource name or selector, namespace or message...",
     "source": "{{reports}} reports · {{time}}",
     "table": {
       "policy": "Policy",
@@ -2346,7 +2347,7 @@
       "windowHint": "Warning events newer than this are attached to their object.",
       "includeRestarts": "Include restart history",
       "includeRestartsHint": "Include past restarts for currently healthy (Running/Ready) pods as Info.",
-      "searchPlaceholder": "Search issues (name/namespace/message)...",
+      "searchPlaceholder": "Search issues (name/namespace/kind/severity/message)...",
       "loading": "Collecting issues...",
       "error": "Failed to collect issues",
       "none": "No issues detected",
@@ -2437,7 +2438,8 @@
       },
       "namespaceFilter": "Namespace filter",
       "allNamespaces": "All namespaces",
-      "searchPlaceholder": "Search (name/status/StorageClass/Claim)...",
+      "searchPlaceholder": "Search (name/namespace/status/StorageClass/volume/capacity)...",
+      "searchPvsPlaceholder": "Search (name/status/capacity/StorageClass/reclaim policy/claim)...",
       "loading": "Loading storage data...",
       "noPVC": "No PVCs to display",
       "pvLabel": "PV",
@@ -2644,7 +2646,7 @@
     },
     "title": "Cluster View",
     "subtitle": "Review pod placement across nodes",
-    "searchPlaceholder": "Search pod name...",
+    "searchPlaceholder": "Search pod name, namespace, node or IP...",
     "allNamespaces": "All namespaces",
     "loading": "Loading data...",
     "searchResults": "Results",
@@ -3919,7 +3921,7 @@
     "subtitle": "Inspect and manage Helm releases installed in the cluster.",
     "refresh": "Refresh",
     "allNamespaces": "All namespaces",
-    "searchPlaceholder": "Search release name...",
+    "searchPlaceholder": "Search release or chart name...",
     "matchCount": "{{count}} release(s) match.",
     "forbidden": "Helm keeps release records in Secrets, and your role in this cluster cannot read Secrets (Read cannot). Viewing releases needs Write or a role that reads Secrets.",
     "protected": "Helm keeps release records in Secrets, and this namespace holds Kubeast's own credentials, so only a global admin can read them.",
@@ -4505,7 +4507,7 @@
     "matchCount_one": "{{count}} ResourceClaimTemplate matched.",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search by ResourceClaimTemplate name...",
+    "searchPlaceholder": "Search by ResourceClaimTemplate name or namespace...",
     "stats": {
       "total": "Total"
     },
@@ -4526,7 +4528,7 @@
     "matchCount_one": "{{count}} ResourceClaim matched.",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search by ResourceClaim name...",
+    "searchPlaceholder": "Search by ResourceClaim name, namespace or state...",
     "stats": {
       "allocated": "Allocated",
       "pending": "Pending",
@@ -4697,7 +4699,7 @@
       "mine": "Assigned to me",
       "open": "Not done"
     },
-    "searchPlaceholder": "Search by alert name, namespace, label, summary or assignee...",
+    "searchPlaceholder": "Search by alert name, namespace, label, annotation or assignee...",
     "col": {
       "status": "Status",
       "alert": "Alert",

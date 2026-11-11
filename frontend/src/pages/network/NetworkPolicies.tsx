@@ -275,7 +275,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('networkPoliciesPage.searchPlaceholder', 'Search network policies by name...')}
+        searchPlaceholder={tr('networkPoliciesPage.searchPlaceholder', 'Search network policies by name, namespace, pod selector, policy type, rule count or default deny...')}
         allNamespacesLabel={tr('networkPoliciesPage.allNamespaces', 'All namespaces')}
       />
 

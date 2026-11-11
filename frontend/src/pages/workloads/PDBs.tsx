@@ -235,7 +235,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('pdbs.searchPlaceholder', 'Search PDBs by name...')}
+        searchPlaceholder={tr('pdbs.searchPlaceholder', 'Search PDBs by name or namespace...')}
         allNamespacesLabel={tr('pdbs.allNamespaces', 'All namespaces')}
       />
 

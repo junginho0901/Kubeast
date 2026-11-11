@@ -40,7 +40,7 @@ export default function BackendTLSPolicies() {
         subtitle: tr('backendTLSPoliciesPage.subtitle', 'Inspect and manage Gateway API BackendTLSPolicy resources across namespaces.'),
         createButton: tr('backendTLSPoliciesPage.create', 'Create BackendTLSPolicy'),
         refreshTitle: tr('backendTLSPoliciesPage.refreshTitle', 'Force refresh'),
-        searchPlaceholder: tr('backendTLSPoliciesPage.searchPlaceholder', 'Search BackendTLSPolicies by name...'),
+        searchPlaceholder: tr('backendTLSPoliciesPage.searchPlaceholder', 'Search BackendTLSPolicies by name, namespace or target...'),
         allNamespaces: tr('backendTLSPoliciesPage.allNamespaces', 'All namespaces'),
         statsTotal: tr('backendTLSPoliciesPage.stats.total', 'Total'),
         statsAccepted: tr('backendTLSPoliciesPage.stats.accepted', 'Accepted'),

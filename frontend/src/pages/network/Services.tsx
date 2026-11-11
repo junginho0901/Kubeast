@@ -267,7 +267,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('servicesPage.searchPlaceholder', 'Search services by name...')}
+        searchPlaceholder={tr('servicesPage.searchPlaceholder', 'Search services by name, namespace, type, IP, port or selector...')}
         allNamespacesLabel={tr('servicesPage.allNamespaces', 'All namespaces')}
       />
 

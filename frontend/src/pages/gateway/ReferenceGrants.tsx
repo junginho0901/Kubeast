@@ -251,7 +251,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('referenceGrantsPage.searchPlaceholder', 'Search ReferenceGrants by name...')}
+        searchPlaceholder={tr('referenceGrantsPage.searchPlaceholder', 'Search ReferenceGrants by name, namespace, from or to...')}
         allNamespacesLabel={tr('referenceGrantsPage.allNamespaces', 'All namespaces')}
       />
 

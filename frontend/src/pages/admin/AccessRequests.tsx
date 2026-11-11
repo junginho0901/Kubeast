@@ -153,7 +153,7 @@ export default function AccessRequests() {
           type="text"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          placeholder={tr('accessRequests.searchPlaceholder', 'Search by requester, cluster or role...')}
+          placeholder={tr('accessRequests.searchPlaceholder', 'Search by requester, cluster, role, reason or reviewer...')}
           data-testid="access-requests-search"
           className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         />

@@ -63,7 +63,7 @@ export default function StatefulSets() {
     const items = Array.isArray(statefulsets) ? statefulsets : []
     if (!searchQuery.trim()) return items
     const q = searchQuery.toLowerCase()
-    return items.filter((sts) => sts.name.toLowerCase().includes(q))
+    return items.filter((sts) => sts.name.toLowerCase().includes(q) || sts.namespace.toLowerCase().includes(q))
   }, [statefulsets, searchQuery])
 
   const summary = useMemo(() => {
@@ -243,7 +243,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('statefulsets.searchPlaceholder', 'Search StatefulSets by name...')}
+        searchPlaceholder={tr('statefulsets.searchPlaceholder', 'Search StatefulSets by name or namespace...')}
         allNamespacesLabel={tr('statefulsets.allNamespaces', 'All namespaces')}
       />
 

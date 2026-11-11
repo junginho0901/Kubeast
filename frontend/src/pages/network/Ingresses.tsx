@@ -262,7 +262,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('ingressesPage.searchPlaceholder', 'Search ingresses by name...')}
+        searchPlaceholder={tr('ingressesPage.searchPlaceholder', 'Search ingresses by name, namespace, class, host, backend, address or rule...')}
         allNamespacesLabel={tr('ingressesPage.allNamespaces', 'All namespaces')}
       />
 

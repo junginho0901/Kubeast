@@ -158,8 +158,11 @@ function NodeBox({ entry, canDeletePod }: { entry: NodeEntry; canDeletePod: bool
   const q = searchQuery.trim().toLowerCase()
   const shown = useMemo(() => {
     const list = Array.isArray(pods) ? pods : []
-    return q ? list.filter((pod) => pod.name.toLowerCase().includes(q) || pod.namespace.toLowerCase().includes(q)) : list
-  }, [pods, q])
+    // the fields the server's search reads (pods_page.go): name, namespace, node and pod IP — a box found by its node
+    // or an IP shows those pods, not none
+    return q ? list.filter((pod) => pod.name.toLowerCase().includes(q) || pod.namespace.toLowerCase().includes(q)
+      || String(pod.node_name || entry.node).toLowerCase().includes(q) || String(pod.pod_ip || '').toLowerCase().includes(q)) : list
+  }, [pods, q, entry.node])
 
   const handlePodClick = (pod: any) => {
     const detail = podToDetail(pod)

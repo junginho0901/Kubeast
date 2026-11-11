@@ -69,9 +69,7 @@ export default function StorageClasses() {
         || String(sc.provisioner || '').toLowerCase().includes(q)
         || String(sc.reclaim_policy || '').toLowerCase().includes(q)
         || String(sc.volume_binding_mode || '').toLowerCase().includes(q)
-        || String(sc.allow_volume_expansion ?? '').toLowerCase().includes(q)
-        || String(sc.is_default).toLowerCase().includes(q)
-        || Object.keys(sc.parameters || {}).join(',').toLowerCase().includes(q)
+        || Object.entries(sc.parameters || {}).map(([k, v]) => `${k}=${v}`).join(',').toLowerCase().includes(q)
         || (sc.mount_options || []).join(',').toLowerCase().includes(q)
     })
   }, [storageClasses, searchQuery])
@@ -231,7 +229,7 @@ allowVolumeExpansion: true
       <StorageClassFilters
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        searchPlaceholder={tr('storageclasses.searchPlaceholder', 'Search StorageClasses by name...')}
+        searchPlaceholder={tr('storageclasses.searchPlaceholder', 'Search StorageClasses by name, provisioner, reclaim policy, binding mode, parameter or mount option...')}
       />
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 shrink-0">

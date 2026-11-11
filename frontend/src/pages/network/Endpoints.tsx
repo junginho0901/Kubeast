@@ -263,7 +263,7 @@ subsets:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('endpointsPage.searchPlaceholder', 'Search endpoints by name...')}
+        searchPlaceholder={tr('endpointsPage.searchPlaceholder', 'Search endpoints by name, namespace, address, port or ready or not-ready count...')}
         allNamespacesLabel={tr('endpointsPage.allNamespaces', 'All namespaces')}
       />
 
