@@ -38,7 +38,7 @@ test.describe('a refused Copy says so', () => {
 
   test("a drawer's YAML tab: Not copied, not Copied", async ({ page }) => {
     await refuseClipboard(page)
-    await page.goto(`/namespaces?cluster=self&detail=${encodeURIComponent('ConfigMap/default/kube-root-ca.crt')}`)
+    await page.goto(`/cluster/namespaces?cluster=self&detail=${encodeURIComponent('ConfigMap/default/kube-root-ca.crt')}`)
     await page.getByRole('button', { name: 'YAML', exact: true }).click({ timeout: 20_000 })
     const copy = page.getByTestId('yaml-copy')
     await expect(copy).toBeEnabled({ timeout: 20_000 })

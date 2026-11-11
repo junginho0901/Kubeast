@@ -8,6 +8,7 @@ import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { CheckCircle, ChevronDown, ChevronUp, Play, Search } from 'lucide-react'
 import { endOfMinuteISO, formatTime, parseTypedTime, utcTitle } from '@/utils/time'
 import { auditExportCut, auditExportHref, auditLimitFilter, auditPageFilter } from './adminAuditPages'
+import { answerPageSize } from '@/utils/fitServerPage'
 import { DateTextInput } from '@/components/DateTextInput'
 import { ListPager } from '@/components/ListPager'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
@@ -16,6 +17,9 @@ import { RefreshFailure } from '@/components/RefreshFailure'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { failureOf } from '@/hooks/useRefresh'
 import { failureText } from '@/utils/failureText'
+import { useConfirm } from '@/services/confirm'
+import { ActionFailure } from '@/components/ActionFailure'
+import { useDownload } from '@/hooks/useDownload'
 
 const SERVICES = ['', 'auth', 'k8s', 'helm', 'ai', 'admin']
 const RESULTS = ['', 'success', 'failure']
@@ -114,10 +118,10 @@ export default function AdminAudit() {
   // Rows per page from the screen's height (Fit) or the footer's choice. Each read writes an audit row, so the first
   // waits until the rows that fit are worked out (before the paint), and the row height is measured once rows came.
   const [rowsIn, setRowsIn] = useState(false)
-  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ rowHeight: 38, recalculationKey: String(rowsIn) })
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage, fit } = useAdaptiveTable({ rowHeight: 38, recalculationKey: String(rowsIn) })
   const [measured, setMeasured] = useState(false)
   useLayoutEffect(() => setMeasured(true), [])
-  const request = auditLimitFilter(filter, rowsPerPage)
+  const request = auditLimitFilter(filter, rowsPerPage, fit)
 
   const queryClient = useQueryClient()
   // The answer carries the read it answers: the pager counts with its rows per page while another loads.
@@ -157,6 +161,7 @@ export default function AdminAudit() {
     },
     onError: (e) => setIntegrityError(failureText(e)),
   })
+  const confirm = useConfirm()
   const anchorMutation = useMutation({
     mutationFn: () => api.adminAuditAnchor(),
     // the result line says what was written; the last verify's line is not this one's
@@ -178,15 +183,17 @@ export default function AdminAudit() {
   })
 
   const total = data?.total ?? 0
-  const items: AuditLogEntry[] = data?.items ?? []
   const shown = data?.request ?? request
-  const limit = shown.limit ?? rowsPerPage
   const offset = shown.offset ?? 0
+  // the answer's page size: a first-page block is cut at the rows that fit
+  const limit = answerPageSize({ offset, limit: shown.limit ?? rowsPerPage }, rowsPerPage)
+  const items: AuditLogEntry[] = (data?.items ?? []).slice(0, limit)
   const page = Math.floor(offset / limit) + 1
   const totalPages = Math.max(1, Math.ceil(total / limit))
   const hasRows = items.length > 0
-  // once: an empty answer later keeps the measured height, so it asks no other page size
-  useEffect(() => { if (hasRows) setRowsIn(true) }, [hasRows])
+  // once, in the render the rows first come in, so the row height is measured before that frame is painted (a count
+  // from the estimate never shows); an empty answer later keeps the measured height
+  if (hasRows && !rowsIn) setRowsIn(true)
 
   // The time range is typed as local YYYY-MM-DD HH:mm; the API takes RFC 3339,
   // the end minute up to its last instant (the API's until includes it).
@@ -232,17 +239,11 @@ export default function AdminAudit() {
   }
 
   // CSV of everything matching the applied filter (not just this page), the
-  // rows the screen counts. A same-origin link download carries the session
-  // cookie; the server names the file.
+  // rows the screen counts. Taken with the session cookie (hooks/useDownload), so a refusal says why here; the server
+  // names the file.
   const exportCut = auditExportCut(data)
-  const exportCsv = () => {
-    const a = document.createElement('a')
-    a.href = auditExportHref(filter, filter.as_of ?? (isPlaceholderData ? undefined : data?.as_of))
-    a.download = ''
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-  }
+  const { start: startDownload, busy: downloading, failure: downloadFailure } = useDownload()
+  const exportCsv = () => void startDownload('csv', auditExportHref(filter, filter.as_of ?? (isPlaceholderData ? undefined : data?.as_of)), 'audit-logs.csv')
 
   const resultBadge = (result: string) => {
     const isSuccess = result === 'success'
@@ -275,10 +276,11 @@ export default function AdminAudit() {
         <div className="flex items-center gap-2">
           <button
             onClick={exportCsv}
+            disabled={!!downloading}
             data-testid="audit-export-csv"
-            className="btn btn-primary flex items-center gap-2"
+            className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
           >
-            {tr('adminAudit.exportCsv', 'CSV 내보내기')}
+            {downloading ? tr('common.downloading', 'Downloading...') : tr('adminAudit.exportCsv', 'CSV 내보내기')}
           </button>
           <button
             onClick={refresh}
@@ -289,6 +291,8 @@ export default function AdminAudit() {
           </button>
         </div>
       </div>
+
+      <ActionFailure error={downloadFailure?.error} action="download" testId="audit-export-failed" className="shrink-0" />
 
       {integrity?.enabled && (
         <div
@@ -326,7 +330,15 @@ export default function AdminAudit() {
             {integrity.anchor_sink && (
               <button
                 type="button"
-                onClick={() => anchorMutation.mutate()}
+                onClick={async () => {
+                  // it writes outside the database at once: say what and where before it runs
+                  const ok = await confirm({
+                    title: tr('adminAudit.integrity.anchorConfirmTitle', 'Anchor now'),
+                    message: tr('adminAudit.integrity.anchorConfirm', 'Write the head of the hash chain to {{sink}} now? The anchor stays there and in the audit log; anchors are also written on their own schedule.', { sink: integrity.anchor_sink }),
+                    confirmLabel: tr('adminAudit.integrity.anchorNow', 'Anchor now'),
+                  })
+                  if (ok) anchorMutation.mutate()
+                }}
                 disabled={anchorMutation.isPending}
                 data-testid="audit-integrity-anchor"
                 title={tr('adminAudit.integrity.anchorNowTitle', 'Write the head of the hash chain to the anchor sink now (it is also written on its own schedule)')}

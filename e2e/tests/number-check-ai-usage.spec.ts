@@ -254,29 +254,29 @@ test.describe('number check: AI usage and investigations', () => {
     const cleanup = () => psql(`DELETE FROM alert_investigations WHERE id LIKE '${PREFIX}%'`)
     const dbCount = (where = '') => Number(psql(`SELECT count(*) FROM alert_investigations${where ? ` WHERE ${where}` : ''}`))
     const pager = page.getByTestId('investigations-pager')
-    // the footer's range (ListPager), and the rows per page the screen fits: the limit of its last read
+    // the footer's range (ListPager), and the rows per page the screen fits: the footer's own (the first page is read
+    // as one block and cut at the rows that fit, so its read's limit is not the page size)
     const range = async () => {
       const text = await pager.innerText()
       return /Showing \d+-\d+ of \d+/.exec(text)?.[0] ?? (text.includes(EN.common.paginationEmpty) ? EN.common.paginationEmpty : text)
     }
     const rangeOf = (start: number, end: number, total: number) => (total === 0 ? EN.common.paginationEmpty : fill(EN.common.paginationRange, { start, end, total }))
-    const per = () => Number(lastList?.url?.searchParams?.get('limit') ?? 0)
+    const per = async () => Number((await pager.getAttribute('data-rows-per-page')) ?? 0)
     const rowIds = () => page.locator('[data-testid^="investigation-row-"]').evaluateAll((trs) => trs.map((t) => t.getAttribute('data-testid')!.slice('investigation-row-'.length)))
     const card = page.locator('main .card').first()
     // until the screen shows what the database says now (alerts can be investigated meanwhile), then the last of both
-    const settle = async (what: () => Promise<string>, want: () => string, ms = 15_000) => {
+    const settle = async (what: () => Promise<string>, want: () => string | Promise<string>, ms = 15_000) => {
       const end = Date.now() + ms
       let got = await what()
-      let exp = want()
+      let exp = await want()
       while (got !== exp && Date.now() < end) {
         await page.waitForTimeout(300)
         got = await what()
-        exp = want()
+        exp = await want()
       }
       return [got, exp]
     }
-    // the answer to the list request sent last: answers can come back in another order (the first render asks with the
-    // estimated page size and the measured one at the same moment, and the estimate's answer may come second)
+    // the answer to the list request sent last: answers to a filter changed twice quickly can come back in another order
     let lastList: Obj = null
     let sentLists = 0
     const sentOrder = new Map<unknown, number>()
@@ -306,10 +306,11 @@ test.describe('number check: AI usage and investigations', () => {
       await expect(page.locator('[data-testid^="investigation-row-"]').first()).toBeVisible({ timeout: 15_000 })
 
       await test.step('"of total": the screen, the API and the database', async () => {
-        const [got, exp] = await settle(range, () => { const n = dbCount(); return rangeOf(1, Math.min(per(), n), n) })
+        const [got, exp] = await settle(range, async () => { const n = dbCount(); return rangeOf(1, Math.min(await per(), n), n) })
         expect.soft(got, 'all reports: range on screen').toBe(exp)
         // the rows that fit the screen: the page does not scroll, the footer is in view
-        expect.soft(per(), 'rows per page asked').toBeGreaterThanOrEqual(5)
+        expect.soft(await per(), 'rows per page shown').toBeGreaterThanOrEqual(5)
+        expect.soft(await page.locator('[data-testid^="investigation-row-"]').count(), 'the rows on screen are the page size').toBe(Math.min(await per(), dbCount()))
         expect.soft(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight), 'the page scrolls by').toBeLessThanOrEqual(1)
         const [apiTotal, dbTotal] = await settle(async () => String(lastList?.body?.total), () => String(dbCount()), 5_000)
         expect.soft(apiTotal, 'all reports: the API total').toBe(dbTotal)
@@ -331,14 +332,14 @@ test.describe('number check: AI usage and investigations', () => {
         const status = page.locator('main label', { hasText: new RegExp(`^${EN.investigations.filter.status}$`) }).locator('xpath=..')
         await status.locator('button').first().click()
         await status.getByRole('button', { name: EN.investigations.status.done, exact: true }).click()
-        const [got, exp] = await settle(range, () => { const n = dbCount("status = 'done'"); return rangeOf(1, Math.min(per(), n), n) })
+        const [got, exp] = await settle(range, async () => { const n = dbCount("status = 'done'"); return rangeOf(1, Math.min(await per(), n), n) })
         expect.soft(got, 'Done picked, no Search: range on screen = the done reports').toBe(exp)
         const doneAnswer = async () => (lastList?.url?.searchParams?.get('status') === 'done' ? String(lastList.body.total) : 'no answer for status=done')
         const [apiTotal, dbTotal] = await settle(doneAnswer, () => String(dbCount("status = 'done'")), 5_000)
         expect.soft(apiTotal, 'the API total of the done reports').toBe(dbTotal)
         await status.locator('button').first().click()
         await status.getByRole('button', { name: EN.investigations.status.all, exact: true }).click()
-        const [back, backExp] = await settle(range, () => { const n = dbCount(); return rangeOf(1, Math.min(per(), n), n) })
+        const [back, backExp] = await settle(range, async () => { const n = dbCount(); return rangeOf(1, Math.min(await per(), n), n) })
         expect.soft(back, 'All picked again: every report').toBe(backExp)
       })
 
@@ -348,19 +349,20 @@ test.describe('number check: AI usage and investigations', () => {
         await page.waitForTimeout(500)
         expect.soft((await card.innerText()).includes(EN.investigations.filter.pending), 'typed, not applied: the note').toBe(true)
         const n = dbCount()
-        expect.soft(await range(), 'typed, not applied: still every report').toBe(rangeOf(1, Math.min(per(), n), n))
+        expect.soft(await range(), 'typed, not applied: still every report').toBe(rangeOf(1, Math.min(await per(), n), n))
         await input.press('Enter')
-        const [got, exp] = await settle(range, () => rangeOf(1, Math.min(per(), 60), 60), 10_000)
+        const [got, exp] = await settle(range, async () => rangeOf(1, Math.min(await per(), 60), 60), 10_000)
         expect.soft(got, 'Enter: the run\'s 60 reports').toBe(exp)
         // Search applies it as before (also where Enter did not)
         await page.getByTestId('investigations-search').click()
-        await expect.poll(range, { timeout: 15_000 }).toBe(rangeOf(1, Math.min(per(), 60), 60))
+        const size60 = Math.min(await per(), 60)
+        await expect.poll(range, { timeout: 15_000 }).toBe(rangeOf(1, size60, 60))
         expect.soft((await card.innerText()).includes(EN.investigations.filter.pending), 'applied: no note').toBe(false)
       })
 
       await test.step('same-time reports page in id order, each once, the table kept between pages', async () => {
-        const size = per()
-        expect(size, 'rows per page the screen asks').toBeGreaterThanOrEqual(5)
+        const size = await per()
+        expect(size, 'rows per page the screen shows').toBeGreaterThanOrEqual(5)
         await expect.poll(rowIds, { timeout: 15_000 }).toHaveLength(Math.min(size, 60))
         const shown = await rowIds()
         await page.evaluate(() => { (window as Obj).__invFlash = [] })

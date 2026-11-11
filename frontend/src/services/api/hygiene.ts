@@ -93,7 +93,7 @@ export const hygieneApi = {
     return data
   },
 
-  // A same-origin link download carries the session cookie; the server names the file.
+  // Taken with the session cookie (hooks/useDownload), so a refusal says why on the page; the server names the file.
   hygieneExportUrl: (cluster: string, format: 'csv' | 'json'): string =>
     `/api/v1/cluster/hygiene?${new URLSearchParams({ cluster, format }).toString()}`,
 

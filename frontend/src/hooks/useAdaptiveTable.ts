@@ -140,5 +140,5 @@ export function useAdaptiveTable(options: UseAdaptiveTableOptions = {}) {
   // the rows-per-page choice in the footer (PageSizeSelect): fit the screen, or a fixed count that scrolls
   const pageSize = usePageSize()
 
-  return { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage: pageSize === 'fit' ? fitRows : pageSize }
+  return { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage: pageSize === 'fit' ? fitRows : pageSize, fit: pageSize === 'fit' }
 }

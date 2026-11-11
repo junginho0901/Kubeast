@@ -9,6 +9,7 @@ import { ListPager } from '@/components/ListPager'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { formatDuration, formatWhen } from './accessRequestFormat'
 import { accessRequestQuery, pageCount, type AccessRequestTab } from './accessRequestPages'
+import { answerPageSize } from '@/utils/fitServerPage'
 import { usePendingAccessRequestCount } from '@/hooks/usePendingAccessRequestCount'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { utcTitle } from '@/utils/time'
@@ -54,10 +55,10 @@ export default function AccessRequests() {
   // The table takes the screen's height left and the server is asked for the rows it fits: measured again once rows
   // show (a row's height), not on each page, so turning pages keeps one page size.
   const [hasRows, setHasRows] = useState(false)
-  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: `${tab}:${hasRows}` })
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage, fit } = useAdaptiveTable({ recalculationKey: `${tab}:${hasRows}` })
   // Both tabs are read (the one not shown at its first page), so switching shows rows at once; each keeps the
   // rows it showed while its next page or search loads.
-  const tabQuery = (k: AccessRequestTab) => accessRequestQuery(k, search, tab === k ? page : 1, rowsPerPage)
+  const tabQuery = (k: AccessRequestTab) => accessRequestQuery(k, search, tab === k ? page : 1, rowsPerPage, fit)
   const pendingList = useQuery({
     queryKey: ['access-requests', 'admin', 'list', 'pending', tabQuery('pending')],
     queryFn: async () => {
@@ -76,15 +77,15 @@ export default function AccessRequests() {
     placeholderData: keepPreviousData,
   })
   const list = tab === 'pending' ? pendingList : historyList
-  const pagedRows = list.data?.items ?? []
   const total = list.data?.total ?? 0
-  // the pager follows the answer on screen: its page size, and its page, which does not turn while the next loads
-  const shownLimit = list.data?.limit ?? rowsPerPage
+  // the pager follows the answer on screen: its page size (a first-page block cut at the rows that fit), and its
+  // page, which does not turn while the next loads
+  const shownLimit = list.data ? answerPageSize(list.data, rowsPerPage) : rowsPerPage
+  const pagedRows = (list.data?.items ?? []).slice(0, shownLimit)
   const totalPages = pageCount(total, shownLimit)
   const shownPage = list.data ? list.data.offset / shownLimit + 1 : page
-  useEffect(() => {
-    if (pagedRows.length > 0 !== hasRows) setHasRows(pagedRows.length > 0)
-  }, [pagedRows.length, hasRows])
+  // in the render the rows come in, so the row height is measured before that frame is painted
+  if (pagedRows.length > 0 !== hasRows) setHasRows(pagedRows.length > 0)
   const turnPage = (p: number) => {
     if (!list.isPlaceholderData) setPage(p)
   }

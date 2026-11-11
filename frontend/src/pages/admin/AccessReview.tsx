@@ -12,6 +12,7 @@ import {
 } from '@/services/api/access_review'
 import { formatDuration, formatWhen } from './accessRequestFormat'
 import { apiKeyTabCount, historyPage, requestsCut } from './accessReviewView'
+import { answerPageSize } from '@/utils/fitServerPage'
 import { ListPager } from '@/components/ListPager'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
@@ -23,6 +24,8 @@ import { utcTitle } from '@/utils/time'
 import { failureText } from '@/utils/failureText'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { failureOf } from '@/hooks/useRefresh'
+import { ActionFailure } from '@/components/ActionFailure'
+import { useDownload } from '@/hooks/useDownload'
 
 // Admin → Access review: the report of who has what (accounts, per-cluster
 // grants, API keys, temporary grants since the last review, roles) with the
@@ -178,37 +181,33 @@ export default function AccessReview() {
   // measured; the sign-offs come from the server with the page size, so they are known an answer later.
   const [historyRows, setHistoryRows] = useState(false)
   const rowsShow = tab === 'history' ? historyRows : rows.length > 0
-  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: `${tab}:${rowsShow}` })
-  // read with the page (the tab then opens on rows, not a loading line); a page being read keeps the sign-offs shown before it
-  const pastQuery = historyPage(pastPage, rowsPerPage)
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage, fit } = useAdaptiveTable({ recalculationKey: `${tab}:${rowsShow}` })
+  // read with the page (the tab then opens on rows, not a loading line); a page being read keeps the sign-offs shown
+  // before it. With Fit the first page is one block, so the count the Users tab gives reads it as well as the
+  // History tab's own.
+  const pastQuery = historyPage(pastPage, rowsPerPage, fit)
   const { data: past, isLoading: historyLoading, isPlaceholderData: pastLoading, error: historyError } = useQuery({
     queryKey: ['access-review', 'history', pastQuery],
     queryFn: async () => ({ ...(await api.listAccessReviews(pastQuery)), offset: pastQuery.offset, limit: pastQuery.limit }),
     placeholderData: keepPreviousData,
   })
-  const history = past?.items ?? []
   const pastTotal = past?.total ?? 0
-  // the pager follows the answer on screen, with its page size
-  const pastLimit = past?.limit ?? pastQuery.limit
+  // the pager follows the answer on screen, with its page size (a first-page block cut at the rows that fit)
+  const pastLimit = past ? answerPageSize(past, rowsPerPage) : rowsPerPage
+  const history = (past?.items ?? []).slice(0, pastLimit)
   const pastPages = Math.max(1, Math.ceil(pastTotal / pastLimit))
   useEffect(() => {
     if (past && !pastLoading && pastPage > pastPages) setPastPage(pastPages)
   }, [past, pastLoading, pastPage, pastPages])
-  useEffect(() => {
-    if (history.length > 0 !== historyRows) setHistoryRows(history.length > 0)
-  }, [history.length, historyRows])
+  // in the render the sign-offs come in, so the row height is measured before that frame is painted
+  if (history.length > 0 !== historyRows) setHistoryRows(history.length > 0)
   // the answer holds every row of the section: the browser pages them, as many as the table fits
   const shown = pageOf(rows, tabPage, rowsPerPage)
   const setTabPage = (p: number) => setTabPaged({ key: tabPageKey, page: p })
 
-  const download = (section: AccessReviewSection) => {
-    const a = document.createElement('a')
-    a.href = api.accessReviewExportUrl(section, { reviewId: viewId ?? undefined, since: viewId ? undefined : report?.since })
-    a.download = ''
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-  }
+  const { start: startDownload, busy: downloading, failure: downloadFailure } = useDownload()
+  const download = (section: AccessReviewSection) =>
+    void startDownload(section, api.accessReviewExportUrl(section, { reviewId: viewId ?? undefined, since: viewId ? undefined : report?.since }), `access-review-${section}.csv`)
 
   const sectionLabel = (s: AccessReviewSection) => tr(`accessReview.section.${s}`, s)
   const summary = report?.summary
@@ -355,15 +354,18 @@ export default function AccessReview() {
             />
             <button
               onClick={() => download(tab)}
-              disabled={!report}
+              disabled={!report || !!downloading}
               data-testid="access-review-export"
               className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
             >
-              <Download className="w-4 h-4" /> CSV
+              {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {downloading ? tr('common.downloading', 'Downloading...') : 'CSV'}
             </button>
           </>
         )}
       </div>
+
+      <ActionFailure error={downloadFailure?.error} action="download" testId="access-review-export-failed" className="shrink-0" />
 
       {tab === 'access_requests' && cut && (
         <div className="shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200" data-testid="access-review-requests-cut">

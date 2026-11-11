@@ -148,14 +148,11 @@ export const clusterApi = {
     return data
   },
 
+  // the answer is what was made, one entry an object; a refusal after some were made holds them as `created`
   createResourcesFromYaml: async (
     yaml: string,
     namespace?: string,
-  ): Promise<{
-    status: string
-    count: number
-    created: Array<{ apiVersion: string; kind: string; name: string; namespace?: string | null }>
-  }> => {
+  ): Promise<Array<{ api_version: string; kind: string; name: string; namespace?: string | null; message: string }>> => {
     const { data } = await client.post('/cluster/resources/yaml/create', {
       yaml,
       namespace: namespace && namespace !== '-' ? namespace : undefined,

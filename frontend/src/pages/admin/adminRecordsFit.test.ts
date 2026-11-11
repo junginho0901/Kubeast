@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
+import ConfirmProvider from '@/components/ConfirmProvider'
 import { PageContextProvider } from '@/components/PageContextProvider'
 import AdminAIUsage from '../AdminAIUsage'
 import AdminAudit from '../AdminAudit'
@@ -13,13 +14,14 @@ import SessionRecordings from './SessionRecordings'
 // The first paint of a page, before any answer.
 function render(page: ComponentType): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const screen = createElement(PageContextProvider, null, createElement(page))
+  // as in App: the shared confirm window under the page context (Audit's Anchor now asks first)
+  const screen = createElement(PageContextProvider, null, createElement(ConfirmProvider, null, createElement(page)))
   return renderToStaticMarkup(createElement(QueryClientProvider, { client }, createElement(MemoryRouter, null, screen)))
 }
 
 // The classes of the page's outer box, and whether a list footer holds the rows-per-page choice.
 const outer = (markup: string) => (/^<div class="([^"]*)"/.exec(markup)?.[1] ?? '').split(/\s+/)
-const pagerChoice = (markup: string, testId: string) => new RegExp(`data-testid="${testId}"><div[^>]*><div[^>]*data-testid="page-size"`).test(markup)
+const pagerChoice = (markup: string, testId: string) => new RegExp(`data-testid="${testId}"[^>]*><div[^>]*><div[^>]*data-testid="page-size"`).test(markup)
 
 describe('the admin record lists fit the screen', () => {
   const pages: [string, ComponentType, string][] = [

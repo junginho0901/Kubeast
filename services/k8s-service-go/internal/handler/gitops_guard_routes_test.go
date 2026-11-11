@@ -77,6 +77,7 @@ type argoCluster struct {
 	trackedBy     map[string]string // "<plural>/<name>" or a name → the Application that tracks it; "*" tracks every name
 	absent        map[string]bool   // object names the cluster does not have
 	readFails     map[string]int    // object name → the status a read of it answers
+	writeFails    map[string]int    // plural → the status a create or change of that kind answers
 	unserved      map[string]bool   // group versions the cluster does not serve
 	brokenGroups  map[string]bool   // group versions whose discovery fails, as an aggregated API that is down does
 	discoveryDown bool              // the group list itself fails
@@ -86,7 +87,7 @@ type argoCluster struct {
 
 func newArgoCluster(t *testing.T) *argoCluster {
 	t.Helper()
-	a := &argoCluster{trackedBy: map[string]string{}, absent: map[string]bool{}, readFails: map[string]int{}, unserved: map[string]bool{}, brokenGroups: map[string]bool{}}
+	a := &argoCluster{trackedBy: map[string]string{}, absent: map[string]bool{}, readFails: map[string]int{}, writeFails: map[string]int{}, unserved: map[string]bool{}, brokenGroups: map[string]bool{}}
 	a.srv = httptest.NewServer(http.HandlerFunc(a.serve))
 	t.Cleanup(a.srv.Close)
 	return a
@@ -151,6 +152,11 @@ func (a *argoCluster) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodGet {
+		if status, failing := a.writeFails[parts[0]]; failing {
+			reason := map[int]string{403: "Forbidden", 409: "AlreadyExists", 422: "Invalid"}[status]
+			writeJSON(w, status, map[string]interface{}{"kind": "Status", "apiVersion": "v1", "status": "Failure", "reason": reason, "code": status, "message": "this write fails: " + reason})
+			return
+		}
 		a.writes = append(a.writes, r.Method+" "+r.URL.Path)
 		name := "created"
 		if len(parts) > 1 {

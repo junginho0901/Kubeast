@@ -1748,6 +1748,7 @@
     "emptyTitle": "새 대화를 시작하세요",
     "emptySubtitle": "아래 질문을 클릭하거나 직접 입력하세요.",
     "resultZipDownload": "Result ZIP 다운로드",
+    "resultZipCut": "ZIP의 일부 결과는 잘려 있습니다. 전체 결과를 읽지 못했습니다.",
     "copyMessage": "복사",
     "chart": {
       "viewLarger": "크게 보기",
@@ -2199,6 +2200,7 @@
     "logsReadFailed": "로그를 읽지 못했습니다: {{reason}}",
     "copyFailed": "복사하지 못했습니다. 브라우저가 받지 않았습니다. 글을 직접 선택해 복사하세요.",
     "notCopied": "복사 안 됨",
+    "downloading": "다운로드 중...",
     "failed": {
       "delete": "삭제하지 못했습니다: {{reason}}",
       "save": "저장하지 못했습니다: {{reason}}",
@@ -2206,7 +2208,8 @@
       "revoke": "폐기하지 못했습니다: {{reason}}",
       "end": "끝내지 못했습니다: {{reason}}",
       "cancel": "취소하지 못했습니다: {{reason}}",
-      "rollback": "되돌리지 못했습니다: {{reason}}"
+      "rollback": "되돌리지 못했습니다: {{reason}}",
+      "download": "다운로드하지 못했습니다: {{reason}}"
     }
   },
   "dashboard": {
@@ -2879,6 +2882,8 @@
       "editTitle": "편집",
       "deleteConfirm": "\"{{name}}\" 모델을 삭제할까요?",
       "deleteTitle": "모델 삭제",
+      "activateTitle": "모든 채팅에 이 모델 쓰기",
+      "activateConfirm": "모든 채팅이 쓰는 모델을 \"{{name}}\"(으)로 바꿀까요? 지금 쓰는 모델은 기본에서 빠집니다.",
       "name": "이름",
       "namePlaceholder": "예: my-gpt4",
       "provider": "프로바이더",
@@ -2940,6 +2945,8 @@
     "unlockConfirm": "이 계정의 잠금을 풀까요?\n\n대상: {{target}}",
     "unlockDialogTitle": "계정 잠금 해제",
     "sweepDormant": "휴면 계정 지금 점검",
+    "sweepConfirmTitle": "휴면 계정 지금 점검",
+    "sweepConfirm": "{{days}}일 동안 로그인·API 키 사용이 없는 계정을 지금 모두 잠글까요? 잠긴 계정은 관리자가 풀어야 다시 로그인합니다.",
     "sweeping": "점검 중...",
     "sweepTitle": "{{days}}일 동안 로그인·API 키 사용이 없는 계정을 잠급니다(매일 자동으로도 실행)",
     "sweepDone": "점검 완료: {{count}}개 계정을 잠갔습니다.",
@@ -4617,6 +4624,8 @@
       "ok": "✓ #{{from}}~#{{to}} {{rows}}행 이상 없음, 앵커 {{anchors}}개 일치",
       "bad": "✗ #{{from}}~#{{to}}: {{reason}} (#{{seq}})",
       "anchorNowTitle": "해시 체인의 머리를 지금 앵커 싱크에 기록합니다(정해진 주기로도 기록됩니다).",
+      "anchorConfirmTitle": "지금 앵커",
+      "anchorConfirm": "해시 체인의 머리를 지금 {{sink}}에 기록할까요? 앵커는 그곳과 감사 로그에 남고, 정해진 주기로도 기록됩니다.",
       "sealedTitle": "이 번호까지의 행은 해시로 이어져 있어, 행이 바뀌거나 지워지면 체인이 끊깁니다(검증으로 확인).",
       "anchorTitle": "앵커는 체인 머리를 데이터베이스 밖(싱크)에 적어 둔 사본으로, 체인을 그것과 대조할 수 있습니다."
     },
@@ -4708,7 +4717,10 @@
     "failed": "리소스 생성에 실패했습니다",
     "cancel": "취소",
     "create": "생성",
-    "creating": "생성 중..."
+    "creating": "생성 중...",
+    "created": "생성했습니다: {{objects}}",
+    "createdMore": "외 {{count}}개",
+    "madeBefore": "멈추기 전에 생성했습니다: {{objects}}"
   },
   "podDeleteModal": {
     "title": "Pod 삭제",

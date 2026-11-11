@@ -271,7 +271,18 @@ func (h *Handler) CreateResourcesFromYAML(w http.ResponseWriter, r *http.Request
 			"default_namespace": body.Namespace,
 			"objects":           objects,
 			"objects_total":     total,
+			"objects_created":   len(data),
 		}))
+	if err != nil && len(data) > 0 {
+		// the documents before the one it stopped at stay made: the refusal names them, so a partial create is not
+		// read as nothing made (and pressing Create again as "already exists")
+		status := statusForError(err)
+		if failure, ok := w.(clusterFailureNoter); ok && status == http.StatusServiceUnavailable {
+			failure.noteClusterFailure()
+		}
+		response.JSON(w, status, map[string]interface{}{"detail": response.Public(err), "created": data})
+		return
+	}
 	if err != nil {
 		h.handleError(w, err)
 		return

@@ -25,9 +25,12 @@ const render = (me: Record<string, unknown>) => {
   qc.setQueryData(['me'], { id: 'approver', ...me })
   qc.setQueryData(['roles'], [{ name: 'ops', chart_bound: true }, { name: 'Write' }])
   qc.setQueryData(['access-requests', 'config'], { enabled: true, max_hours: 8, roles: ['Write', 'ops'] })
-  // the page asks for the rows its table fits: 12 before it has measured the screen (useAdaptiveRowsPerPage)
-  qc.setQueryData(['access-requests', 'admin', 'list', 'pending', accessRequestQuery('pending', '', 1, FIT_START)], { items: [request('r1', 'ops'), request('r2', 'Write')], total: 2, offset: 0, limit: FIT_START })
-  qc.setQueryData(['access-requests', 'admin', 'list', 'history', accessRequestQuery('history', '', 1, FIT_START)], { items: [], total: 0, offset: 0, limit: FIT_START })
+  // with Fit the page reads its first page as one block whatever it has measured (utils/fitServerPage), and shows the
+  // rows that fit: 12 before it has measured the screen (useAdaptiveRowsPerPage)
+  const pending = accessRequestQuery('pending', '', 1, FIT_START, true)
+  const history = accessRequestQuery('history', '', 1, FIT_START, true)
+  qc.setQueryData(['access-requests', 'admin', 'list', 'pending', pending], { items: [request('r1', 'ops'), request('r2', 'Write')], total: 2, offset: pending.offset, limit: pending.limit })
+  qc.setQueryData(['access-requests', 'admin', 'list', 'history', history], { items: [], total: 0, offset: history.offset, limit: history.limit })
   return renderToStaticMarkup(createElement(I18nextProvider, { i18n }, createElement(QueryClientProvider, { client: qc }, createElement(AccessRequests))))
 }
 

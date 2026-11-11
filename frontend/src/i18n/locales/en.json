@@ -1748,6 +1748,7 @@
     "emptyTitle": "Start a new chat",
     "emptySubtitle": "Click a question below or type your own.",
     "resultZipDownload": "Download result ZIP",
+    "resultZipCut": "Some results in the ZIP are cut: no whole copy of them could be read.",
     "copyMessage": "Copy",
     "chart": {
       "viewLarger": "View larger",
@@ -2199,6 +2200,7 @@
     "logsReadFailed": "Could not read the logs: {{reason}}",
     "copyFailed": "Not copied: the browser did not take it. Select the text and copy it yourself.",
     "notCopied": "Not copied",
+    "downloading": "Downloading...",
     "failed": {
       "delete": "Not deleted: {{reason}}",
       "save": "Not saved: {{reason}}",
@@ -2206,7 +2208,8 @@
       "revoke": "Not revoked: {{reason}}",
       "end": "Not ended: {{reason}}",
       "cancel": "Not cancelled: {{reason}}",
-      "rollback": "Not rolled back: {{reason}}"
+      "rollback": "Not rolled back: {{reason}}",
+      "download": "Not downloaded: {{reason}}"
     }
   },
   "dashboard": {
@@ -2849,6 +2852,8 @@
     "unlockConfirm": "Unlock this account?\n\nTarget: {{target}}",
     "unlockDialogTitle": "Unlock account",
     "sweepDormant": "Sweep dormant now",
+    "sweepConfirmTitle": "Sweep dormant accounts now",
+    "sweepConfirm": "Lock every account with no sign-in or API key use for {{days}} days now? A locked account signs in again only after an admin unlocks it.",
     "sweeping": "Sweeping...",
     "sweepTitle": "Lock accounts with no sign-in or API key use for {{days}} days (runs daily on its own)",
     "sweepDone": "Sweep done: {{count}} account(s) locked.",
@@ -4241,6 +4246,8 @@
       "azureEndpointHint": "The v1 endpoint, ending in /openai/v1/. Deployment URLs and api-version are not supported.",
       "deleteConfirm": "Delete model \"{{name}}\"?",
       "deleteTitle": "Delete model",
+      "activateTitle": "Use this model for every chat",
+      "activateConfirm": "Make \"{{name}}\" the model every chat uses? The model in use now stops being the default.",
       "advanced": "Advanced (local / self-hosted)",
       "maxTokens": "Answer length (tokens)",
       "maxTokensHint": "Empty: 4,096 for chat answers, 2,048 for each alert investigation step. A reasoning model counts its reasoning in it.",
@@ -4306,6 +4313,8 @@
       "ok": "✓ #{{from}}–#{{to}}: {{rows}} rows intact, {{anchors}} anchor(s) match",
       "bad": "✗ #{{from}}–#{{to}}: {{reason}} at #{{seq}}",
       "anchorNowTitle": "Write the head of the hash chain to the anchor sink now (it is also written on its own schedule)",
+      "anchorConfirmTitle": "Anchor now",
+      "anchorConfirm": "Write the head of the hash chain to {{sink}} now? The anchor stays there and in the audit log; anchors are also written on their own schedule.",
       "sealedTitle": "Rows up to this number are chained by hash: a changed or removed row breaks the chain (Verify checks it)",
       "anchorTitle": "An anchor is a copy of the chain head written outside the database (the sink), so the chain can be checked against it"
     },
@@ -4594,7 +4603,10 @@
     "failed": "Failed to create resource",
     "cancel": "Cancel",
     "create": "Create",
-    "creating": "Creating..."
+    "creating": "Creating...",
+    "created": "Created: {{objects}}",
+    "createdMore": "and {{count}} more",
+    "madeBefore": "Created before it stopped: {{objects}}"
   },
   "podDeleteModal": {
     "title": "Delete pod",

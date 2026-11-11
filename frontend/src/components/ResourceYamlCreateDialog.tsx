@@ -5,6 +5,7 @@ import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton, yamlEditorHeight } from '@/components/modalStyles'
 import { useAIContext } from '@/hooks/useAIContext'
 import { api } from '@/services/api'
+import { announceCreated, createdOf, createdText, type CreatedObject } from '@/services/createdNoticeStore'
 
 const CLUSTER_SCOPED_KINDS = new Set([
   'Namespace', 'Node', 'PersistentVolume', 'StorageClass', 'VolumeAttachment', 'IngressClass',
@@ -32,6 +33,8 @@ export default function ResourceYamlCreateDialog({
   const [yaml, setYaml] = useState(initialYaml)
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // a YAML of several objects is created in order and stops at the first the cluster refuses: those before it stay
+  const [madeBefore, setMadeBefore] = useState<CreatedObject[]>([])
 
   useEffect(() => {
     setYaml(initialYaml)
@@ -41,8 +44,8 @@ export default function ResourceYamlCreateDialog({
   useAIContext({
     source: 'ResourceYamlCreateDialog',
     summary: `생성 창 — ${title}${namespace ? ` (${namespace})` : ''}`,
-    data: { action: 'create', title, namespace, error: error ?? undefined },
-  }, [title, namespace, error])
+    data: { action: 'create', title, namespace, error: error ?? undefined, created_before_error: madeBefore.length ? madeBefore : undefined },
+  }, [title, namespace, error, madeBefore])
 
   // The namespace hint only makes sense for namespaced kinds; the sample YAML
   // every caller passes starts with the kind, so read it from there.
@@ -69,13 +72,19 @@ export default function ResourceYamlCreateDialog({
     if (!yaml.trim() || isCreating) return
     setIsCreating(true)
     setError(null)
+    setMadeBefore([])
     try {
-      await api.createResourcesFromYaml(yaml, namespace)
+      const created = await api.createResourcesFromYaml(yaml, namespace)
+      announceCreated(window.location.pathname, createdOf(created))
       onCreated?.()
       onClose()
     } catch (err: any) {
       const detail = err?.response?.data?.detail || err?.message || t('yamlCreate.failed', { defaultValue: 'Failed to create resource' })
       setError(String(detail))
+      const made = createdOf(err?.response?.data)
+      setMadeBefore(made)
+      // what was made is in the cluster now: the list behind the window reads it
+      if (made.length) onCreated?.()
     } finally {
       setIsCreating(false)
     }
@@ -116,8 +125,13 @@ export default function ResourceYamlCreateDialog({
       </div>
 
       {error && (
-        <p className="mt-3 text-sm text-red-400 wrap-break-word whitespace-pre-wrap">
+        <p data-testid="yaml-create-error" className="mt-3 text-sm text-red-400 wrap-break-word whitespace-pre-wrap">
           {error}
+        </p>
+      )}
+      {error && madeBefore.length > 0 && (
+        <p data-testid="yaml-create-made-before" className="mt-1 text-sm text-emerald-300 wrap-break-word">
+          {t('yamlCreate.madeBefore', { defaultValue: 'Created before it stopped: {{objects}}', objects: madeBefore.map(createdText).join(', ') })}
         </p>
       )}
     </ModalFrame>

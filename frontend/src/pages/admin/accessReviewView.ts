@@ -1,4 +1,5 @@
 import type { AccessReviewReport } from '@/services/api/access_review'
+import { serverPageRead } from '@/utils/fitServerPage'
 
 // What the access review page says beside its tables: the page of past sign-offs to read (as many as the table
 // fits, or the footer's fixed choice), the API keys tab's count (every key, the expired ones named, unlike the
@@ -7,9 +8,9 @@ import type { AccessReviewReport } from '@/services/api/access_review'
 
 export const HISTORY_PER_PAGE = 25
 
-export function historyPage(page: number, perPage = HISTORY_PER_PAGE): { limit: number; offset: number } {
-  const limit = Math.max(1, Math.floor(perPage))
-  return { limit, offset: (Math.max(1, page) - 1) * limit }
+// with Fit the first page is one block cut at the rows that fit (utils/fitServerPage)
+export function historyPage(page: number, perPage = HISTORY_PER_PAGE, fit = false): { limit: number; offset: number } {
+  return serverPageRead(page, perPage, fit)
 }
 
 export function apiKeyTabCount(report: AccessReviewReport): { all: number; expired: number } {

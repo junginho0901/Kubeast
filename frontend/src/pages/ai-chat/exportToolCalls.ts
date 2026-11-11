@@ -34,9 +34,13 @@ interface Args {
   getCurrentMessages: () => Message[]
 }
 
-export async function exportToolCallsAsZip({ message, sessionId, t: _t, getCurrentMessages }: Args) {
+// What the bubble says under the button: nothing for a ZIP of whole results, that some are cut when no whole copy
+// could be read, or why no ZIP was made.
+export type ExportOutcome = { kind: 'nothing' | 'done' | 'cut' } | { kind: 'failed'; error: unknown }
+
+export async function exportToolCallsAsZip({ message, sessionId, t: _t, getCurrentMessages }: Args): Promise<ExportOutcome> {
   if (!message.toolCalls || message.toolCalls.length === 0) {
-    return
+    return { kind: 'nothing' }
   }
 
   try {
@@ -146,9 +150,7 @@ export async function exportToolCallsAsZip({ message, sessionId, t: _t, getCurre
       }
     }
 
-    if (hasTruncatedToolCalls(toolCalls)) {
-      console.warn('[WARN] Downloading truncated tool results (full results not available).')
-    }
+    const cut = hasTruncatedToolCalls(toolCalls)
     const now = new Date()
     const pad = (n: number) => n.toString().padStart(2, '0')
     const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(
@@ -242,7 +244,8 @@ export async function exportToolCallsAsZip({ message, sessionId, t: _t, getCurre
 
     const zipBlob = await zip.generateAsync({ type: 'blob' })
     await downloadZip(zipBlob, `tool_results_${timestamp}.zip`)
+    return { kind: cut ? 'cut' : 'done' }
   } catch (err) {
-    console.error('[ERROR] Failed to download JSON:', err)
+    return { kind: 'failed', error: err }
   }
 }

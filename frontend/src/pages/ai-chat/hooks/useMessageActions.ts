@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { stripToolDetails } from '@/services/chatTextUtils'
 import { copyText } from '@/utils/clipboard'
-import { exportToolCallsAsZip } from '../exportToolCalls'
+import { exportToolCallsAsZip, type ExportOutcome } from '../exportToolCalls'
 import type { Message } from '../types'
 
 // 메시지 단위 액션: 복사 / 결과 zip 다운로드. 복사 1.5s 시각 피드백 (copiedMessageKey).
@@ -17,7 +17,7 @@ interface Params {
 interface Result {
   copiedMessageKey: string | null
   handleCopyMessage: (message: Message, key: string) => Promise<void>
-  handleDownloadJson: (message: Message) => Promise<void>
+  handleDownloadJson: (message: Message) => Promise<ExportOutcome>
 }
 
 export function useMessageActions({
@@ -40,7 +40,7 @@ export function useMessageActions({
 
   const handleDownloadJson = useCallback(async (message: Message) => {
     const sessionId = viewSessionId || selectedSessionId
-    await exportToolCallsAsZip({
+    return exportToolCallsAsZip({
       message,
       sessionId,
       t,

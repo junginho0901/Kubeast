@@ -334,10 +334,12 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
       { status: 200, json: { healthy: false, message: 'connection failed: e2e stand-in, dial tcp 10.0.0.1:6443: i/o timeout' }, want: `${EN.cluster.admin.testFailed}: connection failed: e2e stand-in, dial tcp 10.0.0.1:6443: i/o timeout` },
       { status: 403, json: { detail: 'forbidden: e2e stand-in refusal' }, want: `${EN.cluster.admin.testFailed}: forbidden: e2e stand-in refusal` },
     ]
+    const testPath = (u: URL) => u.pathname === '/api/v1/clusters/default/test'
     for (const a of answers) {
       let release!: () => void
       const held = new Promise<void>((r) => { release = r })
-      await page.route('**/api/v1/clusters/default/test', async (route) => { await held; await route.fulfill({ status: a.status, json: a.json }) })
+      // by path: the app adds ?cluster= to every request
+      await page.route(testPath, async (route) => { await held; await route.fulfill({ status: a.status, json: a.json }) })
       await testButton('default').click()
       await expect(testButton('default'), 'waiting').toBeDisabled()
       await expect(testButton('default')).toHaveAttribute('aria-busy', 'true')
@@ -345,7 +347,7 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
       await expect(line('default')).toHaveText(a.want, { timeout: 15_000 })
       await expect(line('default').locator('span')).toHaveClass(/text-red-400/)
       await expect(testButton('default'), 'done').toBeEnabled()
-      await page.unroute('**/api/v1/clusters/default/test')
+      await page.unroute(testPath)
     }
 
     await page.reload()
@@ -419,11 +421,16 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
     try {
       await page.goto(AUDIT.path)
       await expect(select, 'Fit to start with').toHaveText(EN.common.pageSize.fit, { timeout: 15_000 })
-      // the table holds the rows of the last read, which asked as many as fit; the page does not scroll
-      await expect.poll(async () => (reads.length ? (await rows()) === reads.at(-1)!.items : false), { timeout: 15_000, message: 'the table holds the last read' }).toBe(true)
-      const fit = reads.at(-1)!
-      expect.soft(fit.items, 'a page of rows that fit').toBe(Math.min(Number(fit.limit), fit.total))
-      expect.soft(Number(fit.limit), 'rows that fit at 1440×900').toBeGreaterThanOrEqual(5)
+      // Opening the log is one read (each read writes an audit row): the first page as one block, cut at the rows that
+      // fit (utils/fitServerPage) — not one read for a count from an estimate and another for the measured one.
+      await expect.poll(async () => (reads.length ? await rows() : 0), { timeout: 15_000, message: 'the rows came' }).toBeGreaterThan(0)
+      await page.waitForTimeout(1_500)
+      expect(reads.map((r) => ({ limit: r.limit, offset: r.offset })), 'one read on opening, the first page as one block').toEqual([{ limit: '50', offset: '0' }])
+      const fitRows = Number(await page.getByTestId('audit-pager').getAttribute('data-rows-per-page'))
+      const total = reads[0].total
+      expect.soft(fitRows, 'rows that fit at 1440×900').toBeGreaterThanOrEqual(5)
+      expect.soft(await rows(), 'the table shows the rows that fit').toBe(Math.min(fitRows, total))
+      await expect.soft(page.getByTestId('audit-pager'), 'the range is the rows shown').toContainText(`1-${Math.min(fitRows, total)} of ${total}`)
       expect.soft(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight), 'the page scrolls by').toBeLessThanOrEqual(1)
       const pagerBottom = await page.getByTestId('audit-pager').evaluate((el) => el.getBoundingClientRect().bottom)
       expect.soft(pagerBottom, 'the footer is on screen').toBeLessThanOrEqual(page.viewportSize()!.height)

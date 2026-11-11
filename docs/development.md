@@ -20,7 +20,7 @@
 ├── deploy/examples/target-cluster/   # example values for target-cluster prerequisites (Prometheus·OpenCost charts, per-cluster RBAC values — docs/cluster-requirements.md)
 ├── docs/                            # operations docs (cluster prerequisites·SSO·metrics·audit·backup·supply chain)
 ├── e2e/                             # Playwright E2E (against a live cluster)
-│   ├── actions/                     # opt-in action suite — 92 UI actions + kubectl checks (E2E_ACTIONS=1 --project=actions)
+│   ├── actions/                     # opt-in action suite — 94 UI actions + kubectl checks (E2E_ACTIONS=1 --project=actions)
 │   └── demo/                        # scripts that record the project site's clips (E2E_DEMO=1 --project=demo, scripts/site-media.sh)
 ├── scripts/                         # build/deploy/dev scripts
 ├── site/                            # project site (GitHub Pages, .github/workflows/pages.yaml)
@@ -94,7 +94,7 @@ Prerequisites (without them, the spec does not fail but skips and records the re
 - **Audit sink and session recording specs** — `deploy/kind/devtools.yaml` (S3 stand-in, Mailpit, webhook receiver) and the sinks and `sessionRecording.enabled` in the dev values.
 - A reset removes all of the data above, so create it again.
 
-`e2e/actions/` is an opt-in action suite. It runs 92 UI actions against the second cluster and checks them with `kubectl`, which takes about 12 minutes.
+`e2e/actions/` is an opt-in action suite. It runs 94 UI actions against the second cluster and checks them with `kubectl`, which takes about 12 minutes.
 
 It is not part of the default run. Run it with `E2E_ACTIONS=1 npx playwright test --project=actions`. Prerequisites are in [e2e/actions/README.md](../e2e/actions/README.md).
 

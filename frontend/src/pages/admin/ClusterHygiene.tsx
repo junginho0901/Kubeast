@@ -23,6 +23,8 @@ import { utcTitle } from '@/utils/time'
 import { failureText } from '@/utils/failureText'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { failureOf } from '@/hooks/useRefresh'
+import { ActionFailure } from '@/components/ActionFailure'
+import { useDownload } from '@/hooks/useDownload'
 
 // Cluster → Cluster hygiene: configuration risks of one cluster (Pod Security
 // Standards, image tags, resources, namespace policy, service account tokens,
@@ -172,14 +174,8 @@ export default function ClusterHygiene() {
     return target ? () => openDetail(target) : null
   }
 
-  const download = (format: 'csv' | 'json') => {
-    const a = document.createElement('a')
-    a.href = api.hygieneExportUrl(cluster, format)
-    a.download = ''
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-  }
+  const { start: startDownload, busy: downloading, failure: downloadFailure } = useDownload()
+  const download = (format: 'csv' | 'json') => void startDownload(format, api.hygieneExportUrl(cluster, format), `hygiene-${cluster}.${format}`)
 
   const clusterOptions = clusters.map((c) => ({ value: c.id, label: c.display_name || c.id, testId: `hygiene-cluster-opt-${c.id}` }))
   const severityOptions = (['all', 'critical', 'warning', 'info', 'exempt'] as SeverityFilter[]).map((s) => ({
@@ -363,14 +359,13 @@ export default function ClusterHygiene() {
             {message && <span className="text-sm text-green-300" data-testid="hygiene-signoff-message">{message}</span>}
             {!viewId && canExport && (
               <>
-                <button onClick={() => download('csv')} disabled={!live} data-testid="hygiene-export-csv"
-                  className="btn btn-primary flex items-center gap-2 disabled:opacity-50">
-                  <Download className="w-4 h-4" /> CSV
-                </button>
-                <button onClick={() => download('json')} disabled={!live} data-testid="hygiene-export-json"
-                  className="btn btn-primary flex items-center gap-2 disabled:opacity-50">
-                  <Download className="w-4 h-4" /> JSON
-                </button>
+                {(['csv', 'json'] as const).map((format) => (
+                  <button key={format} onClick={() => download(format)} disabled={!live || !!downloading} data-testid={`hygiene-export-${format}`}
+                    className="btn btn-primary flex items-center gap-2 disabled:opacity-50">
+                    {downloading === format ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    {downloading === format ? tr('common.downloading', 'Downloading...') : format.toUpperCase()}
+                  </button>
+                ))}
               </>
             )}
             {/* the sign-off is a window, so the findings keep the screen's height */}
@@ -383,6 +378,8 @@ export default function ClusterHygiene() {
           </div>
         )}
       </div>
+
+      <ActionFailure error={downloadFailure?.error} action="download" testId="hygiene-export-failed" className="shrink-0" />
 
       {tab === 'findings' && (
         <>

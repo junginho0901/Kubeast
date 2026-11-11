@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { TFunction } from 'i18next'
 import type { Message } from './types'
+import type { ExportOutcome } from './exportToolCalls'
 import { MessageBubble } from './MessageBubble'
 import { useAIChat } from './AIChatContext'
 import { dbMessageToMessage } from './hooks/useSessionDetailSync'
@@ -19,7 +20,7 @@ interface Props {
   sessionDetail?: SessionDetail
   copiedMessageKey: string | null
   onCopy: (message: Message, key: string) => void
-  onDownloadJson: (message: Message) => void
+  onDownloadJson: (message: Message) => Promise<ExportOutcome>
   t: TFunction
 }
 

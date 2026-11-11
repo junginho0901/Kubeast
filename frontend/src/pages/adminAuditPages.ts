@@ -1,4 +1,5 @@
 import type { AuditLogFilter, AuditLogListResponse } from '@/services/api'
+import { serverPageRead } from '@/utils/fitServerPage'
 
 // Another page of the same read: the as_of the first page answered keeps its
 // rows, so rows written meanwhile (each read writes one) do not shift them. A
@@ -9,8 +10,10 @@ export function auditPageFilter(filter: AuditLogFilter, offset: number, answer?:
 
 // The read for a rows per page (the screen's Fit or the footer's choice): the page that holds the first row on
 // screen, of the same read (as_of), so a new size neither goes back to the first page nor lets rows written since in.
-export function auditLimitFilter(filter: AuditLogFilter, limit: number): AuditLogFilter {
-  return { ...filter, limit, offset: Math.floor((filter.offset ?? 0) / limit) * limit }
+// With Fit the first page is one block cut at the rows that fit (utils/fitServerPage), so opening the log is one read
+// and one audit row.
+export function auditLimitFilter(filter: AuditLogFilter, limit: number, fit = false): AuditLogFilter {
+  return { ...filter, ...serverPageRead(Math.floor((filter.offset ?? 0) / limit) + 1, limit, fit) }
 }
 
 // The CSV of the applied filter, of the rows the screen counts (as_of).

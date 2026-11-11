@@ -1,3 +1,5 @@
+import fs from 'node:fs'
+
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 
 // Terminal session recording: with sessionRecording on (the dev kind install
@@ -163,7 +165,19 @@ test.describe.serial('session recording', () => {
     // Playback, not just the player: the terminal is WebAssembly and only runs when the gateway's CSP lets it compile.
     await expect(modal.locator('.ap-overlay-start')).toHaveCount(0, { timeout: 15_000 })
     await expect(modal.locator('.ap-timer')).toHaveText(/\d\d:\d\d/, { timeout: 15_000 })
-    await expect(page.getByTestId('recording-download-text')).toHaveAttribute('href', new RegExp(`${recordingId}/cast\\?format=text`))
+    // the text is a file the window takes (hooks/useDownload): saved under the server's name, and a refusal says why
+    // in the window instead of opening the error in the tab
+    const [text] = await Promise.all([page.waitForEvent('download'), page.getByTestId('recording-download-text').click()])
+    expect(text.suggestedFilename()).toBe(`${recordingId}.txt`)
+    expect(fs.readFileSync((await text.path()) as string, 'utf8').length).toBeGreaterThan(0)
+    const textUrl = (u: URL) => u.pathname.endsWith(`/recordings/${encodeURIComponent(recordingId)}/cast`) && u.searchParams.get('format') === 'text'
+    await page.route(textUrl, (r) => r.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ detail: 'e2e: the text is refused' }) }))
+    const before = page.url()
+    await page.getByTestId('recording-download-text').click()
+    await expect(page.getByTestId('recording-download-failed')).toHaveText('Not downloaded: e2e: the text is refused')
+    expect(page.url()).toBe(before)
+    await expect(modal).toBeVisible()
+    await page.unroute(textUrl)
     await page.keyboard.press('Escape')
 
     // the exec rows only: a page of the rows that fit the screen holds the newest few of every action
