@@ -395,7 +395,7 @@ export default function NamespaceInfo({ name }: Props) {
                   })}
                   {pagedPods.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-3 text-slate-400"><NoneText className="" /></td>
+                      <td colSpan={6} className="py-3 text-slate-400">{podFilter.trim() ? tr('common.noSearchResults', 'No results found.') : <NoneText className="" />}</td>
                     </tr>
                   )}
                 </tbody>

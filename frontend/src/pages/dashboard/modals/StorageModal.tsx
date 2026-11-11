@@ -266,7 +266,7 @@ export function StorageModal({
           ) : activeTab === 'pvcs' ? (
             sortedPVCs.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-slate-400">{tr('dashboard.storage.noPVC', 'No PVCs to display')}</p>
+                <p className="text-slate-400">{searchQuery.trim() ? tr('common.noSearchResults', 'No results found.') : tr('dashboard.storage.noPVC', 'No PVCs to display')}</p>
               </div>
             ) : (
               <div className="divide-y divide-slate-700 rounded-lg border border-slate-700 overflow-hidden">
@@ -333,7 +333,7 @@ export function StorageModal({
           ) : activeTab === 'pvs' ? (
             sortedPVs.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-slate-400">{tr('dashboard.storage.noPV', 'No PVs to display')}</p>
+                <p className="text-slate-400">{searchQuery.trim() ? tr('common.noSearchResults', 'No results found.') : tr('dashboard.storage.noPV', 'No PVs to display')}</p>
               </div>
             ) : (
               <div className="divide-y divide-slate-700 rounded-lg border border-slate-700 overflow-hidden">

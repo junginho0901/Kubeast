@@ -188,7 +188,7 @@ export function ResourceModal({
                     <div className="text-center py-12">
                       <p className="text-slate-400">
                         {searchQuery
-                          ? tr('dashboard.resourceModal.noSearchResults', 'No results found')
+                          ? tr('common.noSearchResults', 'No results found.')
                           : tr('dashboard.resourceModal.noNamespaces', 'No namespaces')}
                       </p>
                     </div>
@@ -242,7 +242,7 @@ export function ResourceModal({
                     <div className="text-center py-12">
                       <p className="text-slate-400">
                         {searchQuery
-                          ? tr('dashboard.resourceModal.noSearchResults', 'No results found')
+                          ? tr('common.noSearchResults', 'No results found.')
                           : tr('dashboard.resourceModal.noPods', 'No pods')}
                       </p>
                     </div>
@@ -274,7 +274,7 @@ export function ResourceModal({
                     <div className="text-center py-12">
                       <p className="text-slate-400">
                         {searchQuery
-                          ? tr('dashboard.resourceModal.noSearchResults', 'No results found')
+                          ? tr('common.noSearchResults', 'No results found.')
                           : tr('dashboard.resourceModal.noServices', 'No services')}
                       </p>
                     </div>
@@ -309,7 +309,7 @@ export function ResourceModal({
                     <div className="text-center py-12">
                       <p className="text-slate-400">
                         {searchQuery
-                          ? tr('dashboard.resourceModal.noSearchResults', 'No results found')
+                          ? tr('common.noSearchResults', 'No results found.')
                           : tr('dashboard.resourceModal.noDeployments', 'No deployments')}
                       </p>
                     </div>
@@ -344,7 +344,7 @@ export function ResourceModal({
                     <div className="text-center py-12">
                       <p className="text-slate-400">
                         {searchQuery
-                          ? tr('dashboard.resourceModal.noSearchResults', 'No results found')
+                          ? tr('common.noSearchResults', 'No results found.')
                           : tr('dashboard.resourceModal.noPVCs', 'No PVCs')}
                       </p>
                     </div>
@@ -382,7 +382,7 @@ export function ResourceModal({
                     <div className="text-center py-12">
                       <p className="text-slate-400">
                         {searchQuery
-                          ? tr('dashboard.resourceModal.noSearchResults', 'No results found')
+                          ? tr('common.noSearchResults', 'No results found.')
                           : tr('dashboard.resourceModal.noNodes', 'No nodes')}
                       </p>
                     </div>

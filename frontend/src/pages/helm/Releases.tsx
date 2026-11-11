@@ -237,6 +237,7 @@ export default function HelmReleasesPage() {
         <ReleaseTable
           paged={paged}
           sortedCount={sorted.length}
+          searching={!!q.trim() && items.length > 0}
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={handleSort}

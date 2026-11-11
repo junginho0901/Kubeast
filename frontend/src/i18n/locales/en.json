@@ -2196,6 +2196,7 @@
     },
     "listEmpty": "No items.",
     "noSearchResults": "No results found.",
+    "clearSearch": "Clear the search",
     "objectNotFound": "This object does not exist; it may have been deleted.",
     "objectForbidden": "You are not allowed to see this object.",
     "refreshFailed": "Refresh failed at {{time}}: {{reason}}",
@@ -2449,7 +2450,6 @@
       "totalFiltered": "{{shown}} of {{count}}",
       "searchPlaceholder": "Search...",
       "namespaceSummary": "Pods: {{pods}} | Services: {{services}} | Deployments: {{deployments}}",
-      "noSearchResults": "No results found",
       "noNamespaces": "No namespaces",
       "noPods": "No pods",
       "typeLabel": "Type",
@@ -2561,7 +2561,6 @@
       "containerLabel": "Container",
       "selectContainer": "Select container",
       "containerSearchPlaceholder": "Search containers...",
-      "noSearchResults": "No results found",
       "noContainers": "No containers",
       "downloadLines": "Log download lines",
       "linesCount": "{{count}} lines",
@@ -2680,7 +2679,6 @@
       },
       "imageLabel": "Image",
       "restartsLabel": "Restarts",
-      "noSearchResults": "No results found",
       "none": "No containers"
     },
     "health": {
@@ -3561,7 +3559,6 @@
     "dataKeys": "Data Keys",
     "data": "Data",
     "searchKeys": "Search keys...",
-    "noMatchingKeys": "No matching keys.",
     "noData": "No data entries.",
     "ownerReferences": "Owner References",
     "maskedHint": "Values are hidden without the resource.secret.reveal permission.",
@@ -3629,8 +3626,7 @@
     "storedVersions": "Stored Versions",
     "conditions": "Conditions",
     "subresources": "Subresources",
-    "searchInstances": "Search instances...",
-    "noInstances": "No instances found."
+    "searchInstances": "Search instances..."
   },
   "crInstanceInfo": {
     "basicInfo": "Basic Info",

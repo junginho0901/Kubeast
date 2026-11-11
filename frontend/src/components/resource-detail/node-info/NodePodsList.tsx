@@ -65,7 +65,7 @@ export default function NodePodsList({
                 <td className="py-2 pr-2">{fmtPodAge(pod.created_at)}</td>
               </tr>
             ))}
-            {pagedPods.length === 0 && <tr><td colSpan={7} className="py-4 text-slate-400"><Tx>None</Tx></td></tr>}
+            {pagedPods.length === 0 && <tr><td colSpan={7} className="py-4 text-slate-400">{podFilter.trim() ? tr('common.noSearchResults', 'No results found.') : <Tx>None</Tx>}</td></tr>}
           </tbody>
         </table>
       </div>

@@ -267,7 +267,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
             ))}
           </div>
         ) : (
-          <p className="text-xs text-slate-500">{dataSearch ? tr('secretInfo.noMatchingKeys', 'No matching keys.') : tr('secretInfo.noData', 'No data entries.')}</p>
+          <p className="text-xs text-slate-500">{dataSearch ? tr('common.noSearchResults', 'No results found.') : tr('secretInfo.noData', 'No data entries.')}</p>
         )}
 
         {filteredDataKeys.length > DATA_PER_PAGE && (

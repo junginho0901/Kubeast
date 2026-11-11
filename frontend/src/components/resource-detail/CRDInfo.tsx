@@ -264,7 +264,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
           {crInstances.length === 0 ? (
             <p className="text-xs text-slate-400"><NoneText className="" /></p>
           ) : filteredInstances.length === 0 ? (
-            <p className="text-xs text-slate-500">{tr('crdInfo.noInstances', 'No instances found.')}</p>
+            <p className="text-xs text-slate-500">{tr('common.noSearchResults', 'No results found.')}</p>
           ) : (
             <>
               <div className="overflow-x-auto">
