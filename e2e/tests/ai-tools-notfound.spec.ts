@@ -133,7 +133,8 @@ test.describe('AI read tools: misses are results, not errors', () => {
     // grep keeps matching lines and reports the count; a nonsense needle matches nothing.
     const grep = await call(request, token, 'k8s_get_pod_logs', { pod_name: pod, namespace: 'kubeast', grep: 'zz-no-such-text-zz', since: '24h' })
     expect(grep.isError).toBeFalsy()
-    expect(grep.text).toMatch(/^# grep "zz-no-such-text-zz": 0 of \d+ lines matched$/)
+    // a day of a busy auth-service is past the tool's 1 MiB of log: the newest part is read and the line above says so
+    expect(grep.text).toMatch(/^(… \[older lines cut by tool-server: this read is larger than \d+ bytes and the newest lines follow; narrow it with since, tail_lines, grep or container\]\n)?# grep "zz-no-such-text-zz": 0 of \d+ lines matched$/)
 
     // Events narrowed to one object: every row is about it (or there are none yet).
     const events = json((await call(request, token, 'k8s_get_events', { namespace: 'kubeast', kind: 'pods', name: pod })).text)

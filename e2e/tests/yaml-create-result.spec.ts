@@ -28,9 +28,13 @@ async function createFromYaml(page: Page, yaml: string): Promise<void> {
   if (!(await dialog.isVisible())) await page.getByRole('button', { name: 'Create ConfigMap', exact: true }).click()
   await expect(dialog).toBeVisible()
   await dialog.locator('.monaco-editor').first().click()
-  await page.keyboard.press('ControlOrMeta+A')
+  // Monaco reads its keys from the page's user agent (the chromium project's is Windows), not the machine as ControlOrMeta does
+  const mac = await page.evaluate(() => navigator.userAgent.includes('Macintosh'))
+  await page.keyboard.press(mac ? 'Meta+A' : 'Control+A')
   await page.keyboard.press('Delete')
   await page.keyboard.insertText(yaml)
+  const lines = await dialog.locator('.monaco-editor .view-lines').first().evaluate((el) => (el as HTMLElement).innerText.replace(/ /g, ' ').trim())
+  expect(lines, 'the editor holds the YAML typed, nothing of the template').toBe(yaml)
   await dialog.getByRole('button', { name: 'Create', exact: true }).click()
 }
 
