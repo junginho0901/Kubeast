@@ -2226,7 +2226,7 @@ export interface YamlOpened {
 export interface BulkCreateFailure {
   email: string
   // cluster_role: said by the screen before anything is sent, the rest by the server too
-  reason: 'missing_fields' | 'name' | 'password' | 'role' | 'cluster_role' | 'ceiling' | 'team' | 'exists' | 'failed'
+  reason: 'missing_fields' | 'name' | 'name_length' | 'password' | 'role' | 'cluster_role' | 'ceiling' | 'team' | 'exists' | 'failed'
   detail?: string
 }
 

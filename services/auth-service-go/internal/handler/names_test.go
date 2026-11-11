@@ -73,3 +73,21 @@ func TestNamesAreHeldToTheirLengthInCharacters(t *testing.T) {
 		})
 	}
 }
+
+// A bulk creation holds each row's name to the same 255 characters: a longer one is left out with its own reason and
+// goes no further than the checks.
+func TestABulkCreationHoldsEachNameToItsLimit(t *testing.T) {
+	h := &AuthHandler{auditStore: &memAuditStore{}}
+	w := httptest.NewRecorder()
+	reached := reachedTheRegistry(func() {
+		h.AdminBulkCreateUsers(w, adminRequest("/auth/admin/users/bulk", map[string]any{"users": []map[string]any{
+			{"name": strings.Repeat("가", 256), "email": "long@example.com", "password": "e2e-Fake-pass-1"},
+		}}))
+	})
+	if reached {
+		t.Fatal("a row past the limit went on to the store")
+	}
+	if !strings.Contains(w.Body.String(), `"reason":"name_length"`) || !strings.Contains(w.Body.String(), "long@example.com") {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+}

@@ -2914,6 +2914,7 @@
     "bulkFailure": {
       "missingFields": "name, email and password are required",
       "name": "this name cannot be a Kubernetes user: no colon, space or control character",
+      "nameLength": "the name is up to 255 characters",
       "password": "the password does not meet the policy",
       "role": "no such role",
       "clusterRole": "Read and Write are granted per cluster and give nothing as an account level: make the account Member and grant the role on a cluster",

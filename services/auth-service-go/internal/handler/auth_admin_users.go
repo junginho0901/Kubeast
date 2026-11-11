@@ -180,6 +180,10 @@ func (h *AuthHandler) AdminBulkCreateUsers(w http.ResponseWriter, r *http.Reques
 			leftOut(u.Email, "", model.BulkCreateFailedFields, "", "Missing required fields (name, email, password)")
 			continue
 		}
+		if msg := nameTooLong("name", u.Name, userNameMax); msg != "" {
+			leftOut(u.Email, "", model.BulkCreateFailedNameLength, "", msg)
+			continue
+		}
 		if err := checkAccountName(u.Email); err != nil {
 			leftOut(u.Email, "", model.BulkCreateFailedName, "", err.Error())
 			continue
@@ -297,7 +301,7 @@ func (h *AuthHandler) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if msg := nameTooLong("name", req.Name, userNameMax); msg != "" {
-		refuse(http.StatusBadRequest, "", model.BulkCreateFailedFields, "", msg)
+		refuse(http.StatusBadRequest, "", model.BulkCreateFailedNameLength, "", msg)
 		return
 	}
 	if !strings.Contains(req.Email, "@") {

@@ -1,6 +1,7 @@
 import type { TFunction } from 'i18next'
 
 import type { BulkCreateAnswer, BulkCreateFailure } from '@/services/api'
+import { USER_NAME_MAX } from '@/utils/nameLimits'
 
 export interface BulkCsvUser {
   name: string
@@ -52,6 +53,9 @@ export function parseBulkCsv(text: string, roles: Array<{ id: number; name: stri
     const role = roles.find((r) => r.name === roleName)
     if (!name || !email || !password) {
       parsed.failed.push({ email, reason: 'missing_fields' })
+    } else if (Array.from(name).length > USER_NAME_MAX) {
+      // counted in characters, as the server counts it (one account's field stops at the same number)
+      parsed.failed.push({ email, reason: 'name_length' })
     } else if (!role) {
       parsed.failed.push({ email, reason: 'role', detail: roleName })
     } else if (CLUSTER_ROLES.includes(role.name)) {
@@ -85,6 +89,8 @@ function reasonText(t: (key: string, fallback: string) => string, reason: BulkCr
       return t('adminUsers.bulkFailure.missingFields', 'name, email and password are required')
     case 'name':
       return t('adminUsers.bulkFailure.name', 'this name cannot be a Kubernetes user: no colon, space or control character')
+    case 'name_length':
+      return t('adminUsers.bulkFailure.nameLength', `the name is up to ${USER_NAME_MAX} characters`)
     case 'password':
       return t('adminUsers.bulkFailure.password', 'the password does not meet the policy')
     case 'role':

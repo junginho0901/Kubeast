@@ -155,6 +155,10 @@ func (h *SessionHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	if title == "" {
 		title = "New Chat"
 	}
+	if utf8.RuneCountInString(title) > sessionTitleMax {
+		response.Error(w, http.StatusBadRequest, fmt.Sprintf("title: up to %d characters", sessionTitleMax))
+		return
+	}
 
 	cluster := r.URL.Query().Get("cluster")
 	sessionID := uuid.New().String()
