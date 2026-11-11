@@ -3,7 +3,39 @@
 // `messages.length === 0 && (!selectedSessionId || isTempSessionId(...))` 조건은
 // 부모가 판정 + conditional render. 이 컴포넌트는 항상 렌더 가능.
 
+import { Component } from 'react'
 import ParticleWaveLoader from '@/components/ParticleWaveLoader'
+
+function hasWebGL2(): boolean {
+  if (typeof document === 'undefined') return false
+  try {
+    const context = document.createElement('canvas').getContext('webgl2')
+    if (!context) return false
+    context.getExtension('WEBGL_lose_context')?.loseContext()
+    return true
+  } catch {
+    return false
+  }
+}
+
+class WelcomeParticles extends Component<Record<string, never>, { available: boolean }> {
+  state = { available: hasWebGL2() }
+
+  static getDerivedStateFromError() {
+    return { available: false }
+  }
+
+  render() {
+    if (!this.state.available) {
+      return (
+        <div className="w-[clamp(220px,24vh,360px)] h-[clamp(220px,24vh,360px)] flex items-center justify-center" aria-hidden="true">
+          <img src="/icon.svg" alt="" className="h-16 w-16" />
+        </div>
+      )
+    }
+    return <ParticleWaveLoader className="w-[clamp(220px,24vh,360px)] h-[clamp(220px,24vh,360px)]" />
+  }
+}
 
 interface Props {
   emptyTitle: string
@@ -17,7 +49,7 @@ export function ChatWelcome({ emptyTitle, emptySubtitle, questions, onSelectQues
     <div className="flex-1 flex flex-col items-center justify-center px-4 py-10 sm:px-6 lg:px-10">
       <div className="w-full max-w-4xl flex flex-col items-center">
         <div className="mb-6">
-          <ParticleWaveLoader className="w-[clamp(220px,24vh,360px)] h-[clamp(220px,24vh,360px)]" />
+          <WelcomeParticles />
         </div>
         <h2 className="text-2xl sm:text-3xl font-semibold text-ink mb-2 text-center">
           {emptyTitle}
