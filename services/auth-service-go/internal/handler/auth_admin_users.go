@@ -459,7 +459,7 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 			response.Error(w, http.StatusBadRequest, "Name cannot be empty")
 			return
 		}
-		if msg := nameTooLong("name", trimmed, userNameMax); msg != "" {
+		if msg := changedNameTooLong("name", trimmed, target.Name, userNameMax); msg != "" {
 			response.Error(w, http.StatusBadRequest, msg)
 			return
 		}

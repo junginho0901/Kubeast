@@ -264,7 +264,7 @@ func (h *RoleHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	if msg := nameTooLong("name", req.Name, nameMax); msg != "" {
+	if msg := changedNameTooLong("name", req.Name, existing.Name, nameMax); msg != "" {
 		response.Error(w, http.StatusBadRequest, msg)
 		return
 	}

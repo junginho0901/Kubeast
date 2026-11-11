@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -19,4 +20,13 @@ func nameTooLong(field, value string, max int) string {
 		return fmt.Sprintf("%s: up to %d characters", field, max)
 	}
 	return ""
+}
+
+// changedNameTooLong is nameTooLong on an update: the value the object already holds is not checked again, so a name
+// stored before the limit came keeps working until it is changed.
+func changedNameTooLong(field, value, stored string, max int) string {
+	if strings.TrimSpace(value) == strings.TrimSpace(stored) {
+		return ""
+	}
+	return nameTooLong(field, value, max)
 }

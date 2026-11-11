@@ -303,8 +303,9 @@ func (h *SessionHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	// a title a person reads: up to 100 characters, as auth-service holds a role's or a cluster's name
-	if utf8.RuneCountInString(req.Title) > sessionTitleMax {
+	// a title a person reads: up to 100 characters, as auth-service holds a role's or a cluster's name; the title the
+	// conversation already has is not checked again
+	if req.Title != existing.Title && utf8.RuneCountInString(req.Title) > sessionTitleMax {
 		response.Error(w, http.StatusBadRequest, fmt.Sprintf("title: up to %d characters", sessionTitleMax))
 		return
 	}

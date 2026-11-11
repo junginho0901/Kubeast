@@ -123,3 +123,25 @@ def test_a_name_is_up_to_100_characters_on_create_and_update():
         with pytest.raises(ValidationError) as exc:
             make()
         assert "name: up to 100 characters" in str(exc.value)
+
+
+def test_a_name_or_ca_the_config_already_holds_is_not_checked_again():
+    from types import SimpleNamespace
+
+    from app.api import _without_stored_values
+
+    long_name, not_pem = "가" * 120, "not a certificate"
+    stored = SimpleNamespace(name=long_name, ca_cert=not_pem)
+    # the form sends both on every save: what is stored goes out of the update and is not checked
+    kept = _without_stored_values({"name": long_name, "ca_cert": not_pem + "\n", "model": "m2"}, stored)
+    assert kept == {"model": "m2"}
+    assert ModelConfigUpdate(**kept).model_dump(exclude_unset=True) == {"model": "m2"}
+    # a changed one is checked as before
+    with pytest.raises(ValidationError) as exc:
+        ModelConfigUpdate(**_without_stored_values({"name": long_name + "가"}, stored))
+    assert "name: up to 100 characters" in str(exc.value)
+    with pytest.raises(ValidationError):
+        ModelConfigUpdate(**_without_stored_values({"ca_cert": "other text"}, stored))
+    # emptying the CA still removes it, and a new config has nothing stored
+    assert _without_stored_values({"ca_cert": None}, stored) == {"ca_cert": None}
+    assert _without_stored_values({"name": long_name}, None) == {"name": long_name}
