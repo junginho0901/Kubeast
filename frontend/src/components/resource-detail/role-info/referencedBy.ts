@@ -49,11 +49,12 @@ export function subjectsText(subjects: Subject[]): string {
   return subjects.length === 0 ? '-' : subjects.map((s) => `${s.kind || '?'}/${s.name || '-'}`).join(', ')
 }
 
-// What a Referenced By section says when its list could not be read, instead of a count it does not have
+// What a Referenced By section says when its list could not be read, with the server's reason, instead of a count it
+// does not have
 export function unreadableText(forbidden: boolean): string {
   return forbidden
-    ? 'You may not list {{kind}} here, so the bindings that reference this {{role}} cannot be shown.'
-    : 'Could not load {{kind}}, so the bindings that reference this {{role}} cannot be shown.'
+    ? 'You may not list {{kind}} here, so the bindings that reference this {{role}} cannot be shown: {{reason}}'
+    : 'Could not load {{kind}}, so the bindings that reference this {{role}} cannot be shown: {{reason}}'
 }
 
 export interface ReferencedByList {

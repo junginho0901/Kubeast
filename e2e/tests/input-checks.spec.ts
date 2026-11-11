@@ -1,0 +1,102 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
+import { test, expect } from '@playwright/test'
+
+// A URL field says what the server would refuse before Save, Register or Test sends it (utils/urlField):
+// Admin → Clusters → Edit (Prometheus and Loki URLs — http or https with a host, no user, no query), Register (the API
+// server URL, host:port too, as a kubeconfig's server) and AI Models (Base URL — the provider's list is not asked for
+// such an address). Nothing is saved. An API key's name is counted in characters, as its field counts it.
+
+const EN = JSON.parse(fs.readFileSync(path.join(__dirname, '../../frontend/src/i18n/locales/en.json'), 'utf8'))
+const P = EN.common.urlProblem
+const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
+const STUB = 'http://model-stub.kubeast-devtools.svc.cluster.local:8090/ok/v1'
+
+test.describe('a URL field says what the server would refuse', () => {
+  test('Edit cluster: the Prometheus and Loki URLs, with Save waiting', async ({ page }) => {
+    const writes: string[] = []
+    page.on('request', (r) => { if (r.method() === 'PATCH' && new URL(r.url()).pathname.startsWith('/api/v1/clusters/')) writes.push(r.url()) })
+    await page.goto('/admin/clusters')
+    await page.getByTestId('edit-cluster-default').click()
+    const save = page.getByTestId('edit-submit')
+    const prom = page.getByTestId('edit-prometheus-url')
+    const promProblem = page.getByTestId('edit-prometheus-url-problem')
+    const stored = await prom.inputValue()
+
+    for (const [typed, said] of [
+      ['metrics.example.com/prometheus', P.notHttp],
+      ['https://bob:pw@metrics.example.com', P.credentials],
+      ['https://metrics.example.com/prometheus?x=1', P.query],
+    ]) {
+      await prom.fill(typed)
+      await expect(promProblem, typed).toHaveText(said)
+      await expect(save).toBeDisabled()
+    }
+    await prom.fill('https://metrics.example.com/prometheus')
+    await expect(promProblem).toHaveCount(0)
+    await expect(save).toBeEnabled()
+    await prom.fill(stored)
+
+    const loki = page.getByTestId('edit-logsearch-url')
+    await loki.fill('loki:3100')
+    await expect(page.getByTestId('edit-logsearch-url-problem')).toHaveText(P.notHttp)
+    await expect(save).toBeDisabled()
+    expect(writes).toEqual([])
+  })
+
+  test('Register cluster: the API server URL takes host:port and the server says the same', async ({ page }) => {
+    await page.goto('/admin/clusters')
+    await page.getByTestId('register-cluster-btn').click()
+    const api = page.getByTestId('register-api-server')
+    const problem = page.getByTestId('register-api-server-problem')
+    await api.fill('not an address')
+    await expect(problem).toHaveText(P.notHttp)
+    await api.fill('bob:pw@10.0.0.1:6443')
+    await expect(problem).toHaveText(P.credentials)
+    await api.fill('10.0.0.1:6443')
+    await expect(problem).toHaveCount(0)
+
+    const res = await page.request.post('/api/v1/clusters', {
+      headers: XRW, data: { mode: 'external', display_name: 'e2e-api-url', kubeconfig: 'x', api_server_url: 'not an address' },
+    })
+    expect([res.status(), (await res.json()).detail]).toEqual([400, 'api_server_url: not a server address (https://host:port, or host:port)'])
+  })
+
+  test('AI Models: a Base URL that is no http or https URL asks the provider for nothing and Test waits', async ({ page }) => {
+    const asked: string[] = []
+    page.on('request', (r) => {
+      if (r.method() === 'POST' && new URL(r.url()).pathname === '/api/v1/ai/model-configs/models') asked.push(r.postDataJSON()?.base_url ?? '')
+    })
+    await page.goto('/admin/ai-models')
+    await page.getByRole('button', { name: 'Add Model' }).first().click()
+    await page.getByTestId('provider-select').click()
+    await page.getByTestId('provider-option-ollama').click()
+    const base = page.getByTestId('model-base-url')
+    await base.fill('ftp://models.example.com')
+    await expect(page.getByTestId('model-base-url-problem')).toHaveText(P.notHttp)
+    await expect(page.getByRole('button', { name: /^(Test|연결 테스트)$/ })).toBeDisabled()
+    await page.waitForTimeout(1_500) // past the list's 500 ms wait after typing
+    expect(asked).not.toContain('ftp://models.example.com')
+
+    await base.fill(STUB)
+    await expect(page.getByTestId('model-base-url-problem')).toHaveCount(0)
+    await expect.poll(() => asked, { timeout: 15_000 }).toContain(STUB)
+  })
+
+  test("API key: a name of 22 Korean letters, which the field takes, is not refused as longer than 64", async ({ page }) => {
+    await page.goto('/account')
+    const config = await (await page.request.get('/api/v1/auth/api-keys/config', { headers: XRW })).json()
+    test.skip(!config.enabled, 'API keys are off on this install')
+    const name = '자동화'.repeat(7) + '키' // 22 letters, 66 bytes
+    const created = await page.request.post('/api/v1/auth/api-keys', { headers: XRW, data: { name, expires_in_days: 1 } })
+    const body = await created.json()
+    try {
+      expect([created.status(), body.name]).toEqual([201, name])
+      const tooLong = await page.request.post('/api/v1/auth/api-keys', { headers: XRW, data: { name: '키'.repeat(65), expires_in_days: 1 } })
+      expect([tooLong.status(), (await tooLong.json()).detail]).toEqual([400, 'name is required (up to 64 characters)'])
+    } finally {
+      if (body.id) expect((await page.request.delete(`/api/v1/auth/api-keys/${body.id}`, { headers: XRW })).status()).toBe(204)
+    }
+  })
+})

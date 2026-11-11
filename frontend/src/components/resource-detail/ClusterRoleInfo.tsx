@@ -166,7 +166,7 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
 
       <InfoSection title={crbError ? 'Referenced By ClusterRoleBindings' : 'Referenced By ClusterRoleBindings ({{n}})'} titleValues={{ n: referencedBy.length }}>
         {crbError ? (
-          <p className="text-xs text-amber-300"><Tx text={unreadableText(crbError.forbidden)} values={{ kind: 'ClusterRoleBindings', role: 'ClusterRole' }} /></p>
+          <p role="alert" data-testid="referenced-by-read-failed" className="text-xs text-amber-300 break-words"><Tx text={unreadableText(crbError.forbidden)} values={{ kind: 'ClusterRoleBindings', role: 'ClusterRole', reason: crbError.message }} /></p>
         ) : referencedBy.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No ClusterRoleBinding references this ClusterRole.</Tx></p>
         ) : (
@@ -201,7 +201,7 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
           </p>
         )}
         {rbError ? (
-          <p className="text-xs text-amber-300"><Tx text={unreadableText(rbError.forbidden)} values={{ kind: 'RoleBindings', role: 'ClusterRole' }} /></p>
+          <p role="alert" data-testid="referenced-by-read-failed" className="text-xs text-amber-300 break-words"><Tx text={unreadableText(rbError.forbidden)} values={{ kind: 'RoleBindings', role: 'ClusterRole', reason: rbError.message }} /></p>
         ) : roleBindings.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No RoleBinding references this ClusterRole.</Tx></p>
         ) : (

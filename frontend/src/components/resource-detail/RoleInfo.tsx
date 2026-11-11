@@ -155,7 +155,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
 
       <InfoSection title={rbError ? 'Referenced By RoleBindings' : 'Referenced By RoleBindings ({{n}})'} titleValues={{ n: referencedBy.length }}>
         {rbError ? (
-          <p className="text-xs text-amber-300"><Tx text={unreadableText(rbError.forbidden)} values={{ kind: 'RoleBindings', role: 'Role' }} /></p>
+          <p role="alert" data-testid="referenced-by-read-failed" className="text-xs text-amber-300 break-words"><Tx text={unreadableText(rbError.forbidden)} values={{ kind: 'RoleBindings', role: 'Role', reason: rbError.message }} /></p>
         ) : referencedBy.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No RoleBinding in this namespace references this Role.</Tx></p>
         ) : (

@@ -34,6 +34,23 @@ test("a CRD drawer whose custom resources could not be listed says why", async (
   await expect(drawer.getByTestId('crd-instances-read-failed')).toHaveText(EN.common.readFailed.replace('{{reason}}', REASON), { timeout: 30_000 })
 })
 
+// A Role's and a ClusterRole's Referenced By whose binding list the cluster refused says the server's reason beside
+// the fixed sentence, not "Request failed with status code 403". The refusal is answered in the browser.
+for (const d of [
+  { what: 'Role', detail: 'Role/kube-system/extension-apiserver-authentication-reader', list: '/api/v1/cluster/namespaces/kube-system/rolebindings', kind: 'RoleBindings' },
+  { what: 'ClusterRole', detail: 'ClusterRole/view', list: '/api/v1/cluster/clusterrolebindings', kind: 'ClusterRoleBindings' },
+]) {
+  test(`${d.what}: Referenced By says why its bindings could not be listed`, async ({ page }) => {
+    const REFUSED = 'e2e stand-in: bindings may not be listed by this identity'
+    await page.route((u) => u.pathname === d.list, (route) =>
+      route.request().method() === 'GET' ? route.fulfill({ status: 403, json: { detail: REFUSED } }) : route.fallback())
+    await page.goto(`/?cluster=self&detail=${encodeURIComponent(d.detail)}`)
+    const line = page.locator(DRAWER).last().getByTestId('referenced-by-read-failed').first()
+    await expect(line).toHaveText(`You may not list ${d.kind} here, so the bindings that reference this ${d.what} cannot be shown: ${REFUSED}`, { timeout: 30_000 })
+    await expect(line).not.toContainText('status code')
+  })
+}
+
 test.describe("a drawer whose own read failed says why", () => {
   for (const d of DRAWERS) {
     test(`${d.what}: the reason where its fields would be`, async ({ page }) => {

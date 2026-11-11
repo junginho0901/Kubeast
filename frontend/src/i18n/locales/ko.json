@@ -2196,6 +2196,11 @@
     "listEmpty": "항목이 없습니다.",
     "noSearchResults": "검색 결과가 없습니다.",
     "clearSearch": "검색 지우기",
+    "urlProblem": {
+      "notHttp": "http 또는 https 주소가 아닙니다. http:// 또는 https://와 호스트로 시작하세요.",
+      "credentials": "주소에 사용자 이름이나 비밀번호를 넣지 않습니다.",
+      "query": "주소에 질의(?…)나 조각(#…)을 넣지 않습니다."
+    },
     "objectNotFound": "이 객체가 없습니다. 지워졌을 수 있습니다.",
     "objectForbidden": "이 객체를 볼 권한이 없습니다.",
     "refreshFailed": "{{time}}에 새로 읽지 못했습니다: {{reason}}",
@@ -4993,8 +4998,8 @@
     "No RoleBinding in this namespace references this Role.": "이 Namespace에 이 Role을 참조하는 RoleBinding이 없습니다.",
     "No RoleBinding references this ClusterRole.": "이 ClusterRole을 참조하는 RoleBinding이 없습니다.",
     "Your access to this cluster covers only the namespaces {{namespaces}}, so only RoleBindings there are listed; how many RoleBindings in other namespaces reference this ClusterRole is not known.": "이 클러스터에서 볼 수 있는 Namespace가 {{namespaces}}뿐이라 그 안의 RoleBinding만 보입니다. 다른 Namespace에서 이 ClusterRole을 참조하는 RoleBinding이 몇 개인지는 알 수 없습니다.",
-    "You may not list {{kind}} here, so the bindings that reference this {{role}} cannot be shown.": "{{kind}} 목록을 볼 권한이 없어 이 {{role}}을 참조하는 바인딩을 보여 줄 수 없습니다.",
-    "Could not load {{kind}}, so the bindings that reference this {{role}} cannot be shown.": "{{kind}}: 불러오지 못해 이 {{role}}을 참조하는 바인딩을 보여 줄 수 없습니다.",
+    "You may not list {{kind}} here, so the bindings that reference this {{role}} cannot be shown: {{reason}}": "{{kind}} 목록을 볼 권한이 없어 이 {{role}}을 참조하는 바인딩을 보여 줄 수 없습니다: {{reason}}",
+    "Could not load {{kind}}, so the bindings that reference this {{role}} cannot be shown: {{reason}}": "{{kind}} 목록을 불러오지 못해 이 {{role}}을 참조하는 바인딩을 보여 줄 수 없습니다: {{reason}}",
     "No RoleBinding or ClusterRoleBinding binds this ServiceAccount.": "이 ServiceAccount를 묶는 RoleBinding·ClusterRoleBinding이 없습니다.",
     "You may not list {{kinds}} here, so the bindings of this ServiceAccount cannot all be checked.": "{{kinds}} 목록을 볼 권한이 없어 이 ServiceAccount의 바인딩을 다 확인할 수 없습니다.",
     "Could not load {{kinds}}, so the bindings of this ServiceAccount cannot all be checked.": "{{kinds}}: 불러오지 못해 이 ServiceAccount의 바인딩을 다 확인할 수 없습니다.",

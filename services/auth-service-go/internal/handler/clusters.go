@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -92,10 +93,21 @@ func (h *ClustersHandler) ListClusters(w http.ResponseWriter, r *http.Request) {
 }
 
 // validateAPIServerURL refuses an address with a user or password in it, which would go to the screens and the audit
-// rows. The error does not repeat the address.
+// rows, and text that is no address of a server: an http or https URL with a host, or host:port with no scheme, to
+// which client-go's DefaultServerURL adds one for a kubeconfig's server. The error does not repeat the address.
 func validateAPIServerURL(raw *string) error {
-	if raw != nil && cluster.WithoutURLUser(*raw) != *raw {
+	if raw == nil || strings.TrimSpace(*raw) == "" {
+		return nil
+	}
+	if cluster.WithoutURLUser(*raw) != *raw {
 		return errors.New("api_server_url: put credentials in the kubeconfig, not in the URL")
+	}
+	written := strings.TrimSpace(*raw)
+	if !strings.Contains(written, "://") {
+		written = "https://" + written
+	}
+	if u, err := url.Parse(written); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+		return errors.New("api_server_url: not a server address (https://host:port, or host:port)")
 	}
 	return nil
 }

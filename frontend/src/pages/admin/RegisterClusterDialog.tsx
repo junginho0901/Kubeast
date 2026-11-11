@@ -4,9 +4,11 @@ import { useTranslation } from 'react-i18next'
 import { Upload, CheckCircle, XCircle, Loader2 } from 'lucide-react'
 
 import { ModalFrame } from '@/components/ModalFrame'
+import { UrlFieldProblem } from '@/components/UrlFieldProblem'
 import { modalButton } from '@/components/modalStyles'
 import { clustersApi, type ConnectionResult } from '@/services/api/clusters'
 import { failureText } from '@/utils/failureText'
+import { urlProblem } from '@/utils/urlField'
 
 interface Props {
   onClose: () => void
@@ -60,9 +62,10 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
     }
   }
 
+  const apiServerProblem = urlProblem(apiServerURL, { hostPort: true })
   const canRegister =
     displayName.trim() !== '' &&
-    (tab === 'self' ? !selfDisabled : kubeconfig.trim() !== '' && test?.healthy === true)
+    (tab === 'self' ? !selfDisabled : kubeconfig.trim() !== '' && test?.healthy === true && !apiServerProblem)
 
   const register = async () => {
     setSubmitting(true)
@@ -178,11 +181,13 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
                   {tr('cluster.register.apiServerOptional', 'API server URL (optional)')}
                 </label>
                 <input
+                  data-testid="register-api-server"
                   value={apiServerURL}
                   onChange={(e) => setApiServerURL(e.target.value)}
                   placeholder={tr('cluster.register.apiServerPlaceholder', 'Empty = the server in the kubeconfig')}
                   className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-ink"
                 />
+                <UrlFieldProblem problem={apiServerProblem} testId="register-api-server-problem" />
               </div>
               <div className="flex items-center gap-3">
                 <button
