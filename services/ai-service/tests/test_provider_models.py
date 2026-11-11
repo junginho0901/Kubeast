@@ -62,9 +62,10 @@ async def test_no_list_gives_an_empty_answer_with_the_reason(monkeypatch):
     assert out["models"] == [] and "ANTHROPIC_API_KEY is not set" in out["error"]
 
     monkeypatch.setenv("ANTHROPIC_API_KEY", "bad")
-    serve(monkeypatch, lambda r: httpx.Response(401, json={"type": "error", "error": {"type": "authentication_error"}}))
+    # the provider's own words beside the status, as the connection test gives them
+    serve(monkeypatch, lambda r: httpx.Response(401, json={"type": "error", "error": {"type": "authentication_error", "message": "invalid x-api-key"}}))
     out = await api_public._list_provider_models({"provider": "anthropic", "api_key_env": "ANTHROPIC_API_KEY"})
-    assert out == {"models": [], "error": "the provider answered 401"}
+    assert out == {"models": [], "error": "HTTP 401: invalid x-api-key"}
 
     monkeypatch.setenv("KUBEAST_AI_KEY_AZURE", "x")
     out = await api_public._list_provider_models({"provider": "azure", "api_key_env": "KUBEAST_AI_KEY_AZURE"})

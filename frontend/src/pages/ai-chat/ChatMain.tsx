@@ -9,6 +9,7 @@ import { MessagesList } from './MessagesList'
 import { ChatHeader } from './ChatHeader'
 import { useAIChat } from './AIChatContext'
 import { ActionFailure } from '@/components/ActionFailure'
+import type { CopyResult } from './hooks/useMessageActions'
 
 // AIChat 우측 패널 — Header / (Welcome | MessagesList) / MessageInput.
 // 메시지 0개 + selectedSession 없거나 임시 일 때 welcome 화면, 아니면 messages 리스트.
@@ -18,7 +19,7 @@ const isTempSessionId = (id: string | null) => typeof id === 'string' && id.star
 interface Props {
   sessionDetail?: SessionDetail
   isStreaming: boolean
-  copiedMessageKey: string | null
+  copyResult: CopyResult | null
   onCopy: (message: Message, key: string) => void
   onDownloadJson: (message: Message) => Promise<ExportOutcome>
   onSend: (q?: string) => void
@@ -31,7 +32,7 @@ interface Props {
 export function ChatMain({
   sessionDetail,
   isStreaming,
-  copiedMessageKey,
+  copyResult,
   onCopy,
   onDownloadJson,
   onSend,
@@ -60,7 +61,7 @@ export function ChatMain({
       ) : (
         <MessagesList
           sessionDetail={sessionDetail}
-          copiedMessageKey={copiedMessageKey}
+          copyResult={copyResult}
           onCopy={onCopy}
           onDownloadJson={onDownloadJson}
           t={t}

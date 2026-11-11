@@ -2205,6 +2205,7 @@
     "logsReadFailed": "로그를 읽지 못했습니다: {{reason}}",
     "copyFailed": "복사하지 못했습니다. 브라우저가 받지 않았습니다. 글을 직접 선택해 복사하세요.",
     "notCopied": "복사 안 됨",
+    "copied": "복사됨",
     "downloading": "다운로드 중...",
     "failed": {
       "delete": "삭제하지 못했습니다: {{reason}}",
@@ -2907,6 +2908,7 @@
       "modelsFromProvider": "프로바이더에서 불러온 목록({{count}}개)",
       "modelsBuiltIn": "기본 목록 — 프로바이더 목록을 불러오지 못했습니다",
       "modelsBuiltInWhy": "기본 목록 — 프로바이더 목록을 불러오지 못했습니다: {{reason}}",
+      "modelsListFailed": "공급자의 모델 목록을 읽지 못했습니다: {{reason}}",
       "modelsNoList": "기본 목록 — Claude Code는 모델 목록을 제공하지 않습니다",
       "subscriptionTitle": "개인용으로만 쓰세요",
       "subscriptionTerms": "Claude Pro/Max 구독은 본인만 쓰도록 되어 있습니다(Anthropic 약관). 혼자 쓰는 Kubeast에서만 쓰고, 팀이나 다른 사용자와 함께 쓰는 설치에는 넣지 마세요.",

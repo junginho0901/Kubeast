@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { UseMutationResult } from '@tanstack/react-query'
-import { responseFailure } from '@/utils/failureText'
+import { failureText, responseFailure } from '@/utils/failureText'
 import type { TFunction } from 'i18next'
 import type { Session } from '@/services/api'
 import { chatStreamManager, ChatStreamState } from '@/services/chatStreamManager'
@@ -178,7 +178,7 @@ export function useChatHandlers({
         setMessages((prev) => prev.filter((msg) => !msg.isTemporary))
         setMessages((prev) => [
           ...prev,
-          { role: 'assistant', content: t('aiChat.errorAnswer', { error: String(error) }) },
+          { role: 'assistant', content: t('aiChat.errorAnswer', { error: failureText(error) }) },
         ])
       })
     }
@@ -210,7 +210,7 @@ export function useChatHandlers({
           setMessages((prev) => prev.filter((msg) => !msg.isTemporary))
           setMessages((prev) => [
             ...prev,
-            { role: 'assistant', content: t('aiChat.errorSessionCreate', { error: String(error) }) },
+            { role: 'assistant', content: t('aiChat.errorSessionCreate', { error: failureText(error) }) },
           ])
         },
       },

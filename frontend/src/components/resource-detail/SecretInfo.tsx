@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Eye, EyeOff, Copy, Check, ShieldCheck, Container, X } from 'lucide-react'
@@ -383,17 +383,14 @@ function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; s
   const [visible, setVisible] = useState(false)
   const [copied, setCopied] = useState(false)
   const [notCopied, setNotCopied] = useState(false)
-  const copyTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const sizeStr = size !== undefined ? `${size} bytes` : ''
 
+  // the result stays beside the button until the next press, as a pressed button's result does on every screen
   const handleCopy = async () => {
     if (!value) return
     const ok = await copyText(value)
     setCopied(ok)
     setNotCopied(!ok)
-    // the last copy's own timer: an earlier one does not clear it
-    clearTimeout(copyTimer.current)
-    copyTimer.current = setTimeout(() => { setCopied(false); setNotCopied(false) }, ok ? 1500 : 3000)
   }
 
   return (
@@ -428,6 +425,11 @@ function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; s
                 >
                   {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : notCopied ? <X className="w-3.5 h-3.5 text-red-400" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
+              )}
+              {(copied || notCopied) && (
+                <span role="status" data-testid="secret-copy-result" className={`text-[10px] ${copied ? 'text-emerald-300' : 'text-red-400'}`}>
+                  {copied ? t('common.copied', { defaultValue: 'Copied' }) : t('common.notCopied', { defaultValue: 'Not copied' })}
+                </span>
               )}
             </>
           )}

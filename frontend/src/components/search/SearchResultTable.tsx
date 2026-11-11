@@ -32,7 +32,6 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
   const [notCopiedIdx, setNotCopiedIdx] = useState<number | null>(null)
-  const copyTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const [pageSize, setPageSize] = useState(15)
 
   const calcPageSize = useCallback(() => {
@@ -69,14 +68,11 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
     setPage(0)
   }
 
-  // the check only after the copy went through; "Not copied" on the button when it did not
+  // the result stays on the row last copied until the next copy, as a pressed button's result does on every screen
   const copyName = async (name: string, idx: number) => {
     const ok = await copyText(name)
     setCopiedIdx(ok ? idx : null)
     setNotCopiedIdx(ok ? null : idx)
-    // the last copy's own timer: an earlier row's does not clear it
-    clearTimeout(copyTimer.current)
-    copyTimer.current = setTimeout(() => { setCopiedIdx(null); setNotCopiedIdx(null) }, ok ? 1500 : 3000)
   }
 
   const columns: { key: SortKey; label: string; className: string }[] = [
@@ -160,6 +156,11 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
                       >
                         {copiedIdx === globalIdx ? <Check className="w-3 h-3 text-emerald-400" /> : notCopiedIdx === globalIdx ? <X className="w-3 h-3 text-red-400" /> : <Copy className="w-3 h-3" />}
                       </button>
+                      {(copiedIdx === globalIdx || notCopiedIdx === globalIdx) && (
+                        <span role="status" data-testid="search-copy-result" className={`shrink-0 text-[10px] ${copiedIdx === globalIdx ? 'text-emerald-300' : 'text-red-400'}`}>
+                          {copiedIdx === globalIdx ? t('common.copied', 'Copied') : t('common.notCopied', 'Not copied')}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-2 text-slate-400 truncate">

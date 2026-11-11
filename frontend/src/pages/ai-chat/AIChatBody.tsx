@@ -119,7 +119,7 @@ export function AIChatBody() {
   })
 
   // 메시지 단위 액션 (복사 / zip)
-  const { copiedMessageKey, handleCopyMessage, handleDownloadJson } = useMessageActions({
+  const { copyResult, handleCopyMessage, handleDownloadJson } = useMessageActions({
     viewSessionId,
     selectedSessionId,
     messagesRef,
@@ -201,7 +201,7 @@ export function AIChatBody() {
       <ChatMain
         sessionDetail={sessionDetail}
         isStreaming={isStreaming}
-        copiedMessageKey={copiedMessageKey}
+        copyResult={copyResult}
         onCopy={handleCopyMessage}
         onDownloadJson={handleDownloadJson}
         onSend={handleSend}

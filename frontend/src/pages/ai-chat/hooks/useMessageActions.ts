@@ -5,7 +5,12 @@ import { copyText } from '@/utils/clipboard'
 import { exportToolCallsAsZip, type ExportOutcome } from '../exportToolCalls'
 import type { Message } from '../types'
 
-// 메시지 단위 액션: 복사 / 결과 zip 다운로드. 복사 1.5s 시각 피드백 (copiedMessageKey).
+// 메시지 단위 액션: 복사 / 결과 zip 다운로드. 복사 결과(copyResult)는 다음 복사까지 그 말풍선에 남는다.
+
+export interface CopyResult {
+  key: string
+  ok: boolean
+}
 
 interface Params {
   viewSessionId: string | null
@@ -15,7 +20,7 @@ interface Params {
 }
 
 interface Result {
-  copiedMessageKey: string | null
+  copyResult: CopyResult | null
   handleCopyMessage: (message: Message, key: string) => Promise<void>
   handleDownloadJson: (message: Message) => Promise<ExportOutcome>
 }
@@ -26,16 +31,13 @@ export function useMessageActions({
   messagesRef,
   t,
 }: Params): Result {
-  const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null)
+  const [copyResult, setCopyResult] = useState<CopyResult | null>(null)
 
   // the same functions from draw to draw, or every bubble would be drawn again for each letter of an answer
   const handleCopyMessage = useCallback(async (message: Message, key: string) => {
-    // the bubble's check only after the copy went through
-    if (!(await copyText(stripToolDetails(message.content || '')))) return
-    setCopiedMessageKey(key)
-    setTimeout(() => {
-      setCopiedMessageKey((curr) => (curr === key ? null : curr))
-    }, 1500)
+    // Copied only after the copy went through, Not copied when it did not; either stays until the next copy
+    const ok = await copyText(stripToolDetails(message.content || ''))
+    setCopyResult({ key, ok })
   }, [])
 
   const handleDownloadJson = useCallback(async (message: Message) => {
@@ -48,5 +50,5 @@ export function useMessageActions({
     })
   }, [viewSessionId, selectedSessionId, messagesRef, t])
 
-  return { copiedMessageKey, handleCopyMessage, handleDownloadJson }
+  return { copyResult, handleCopyMessage, handleDownloadJson }
 }
