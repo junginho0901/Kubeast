@@ -37,6 +37,7 @@ import { clustersApi } from '@/services/api/clusters'
 import { logoutSession } from '@/services/auth'
 import ForbiddenBanner from './ForbiddenBanner'
 import WatchProblemNotice from './WatchProblemNotice'
+import { CreatedNotice } from './CreatedNotice'
 import AccessHelp from './AccessHelp'
 import { ResourceDetailProvider } from './ResourceDetailProvider'
 import ResourceDetailDrawer from './LazyResourceDetailDrawer'
@@ -621,6 +622,7 @@ export default function Layout() {
             {/* with no cluster to reach, the page below says so: no "in this cluster" notice above it */}
             {!noAccessibleCluster && <ForbiddenBanner clusterKey={currentCluster || 'default'} />}
             {!noAccessibleCluster && <WatchProblemNotice />}
+            <CreatedNotice fallback pathname={location.pathname} />
             {noAccessibleCluster ? (
               <div
                 data-testid="no-accessible-cluster"
