@@ -84,4 +84,13 @@ test.describe('a list whose read failed says so', () => {
     await page.getByRole('button', { name: EN.adminAudit.refresh, exact: true }).click()
     await expect(line, 'a read that works takes the line away').toHaveCount(0, { timeout: 20_000 })
   })
+
+  test("a drawer's YAML tab whose read failed says the server's reason", async ({ page }) => {
+    const lift = await failReads(page, '/api/v1/cluster/resources/yaml')
+    await page.goto(`/configuration/configmaps?cluster=self&namespace=default&detail=${encodeURIComponent('ConfigMap/default/kube-root-ca.crt')}`)
+    const drawer = page.locator('div[class*="fixed"][class*="inset-y-0"][class*="right-0"]').last()
+    await drawer.getByRole('button', { name: 'YAML', exact: true }).click({ timeout: 30_000 })
+    await expect(drawer.getByTestId('yaml-read-error')).toHaveText(`${EN.common.yamlError} ${REASON}`, { timeout: 30_000 })
+    await lift()
+  })
 })

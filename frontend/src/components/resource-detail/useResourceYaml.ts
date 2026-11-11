@@ -33,7 +33,7 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
   const ns = target?.namespace ?? null
   const name = target?.name ?? ''
 
-  const { data: yamlData, isLoading: yamlLoading, isFetching: yamlFetching, isError: yamlError } = useQuery({
+  const { data: yamlData, isLoading: yamlLoading, isFetching: yamlFetching, error: yamlError } = useQuery({
     queryKey: ['resource-yaml', kind, ns, name, yamlRefreshNonce],
     queryFn: async () => {
       if (kind === 'Node') return api.getNodeYaml(name, yamlRefreshNonce > 0)
