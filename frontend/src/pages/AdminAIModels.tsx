@@ -62,7 +62,7 @@ export default function AdminAIModels() {
               <button type="button" onClick={resetForm} className={modalButton.cancel} disabled={form.isSaving}>
                 {tr('common.cancel', 'Cancel')}
               </button>
-              <button type="button" onClick={form.handleSubmit} disabled={form.isSaving || !form.formName || !form.formModel || !!unavailableReason}
+              <button type="button" onClick={form.handleSubmit} disabled={form.isSaving || !form.formName || !form.formModel || !!unavailableReason || !!form.baseUrlProblem}
                 title={unavailableReason ?? undefined} className={modalButton.primary}>
                 {form.isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                 {tr('admin.aiModels.create', 'Create')}

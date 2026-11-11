@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import CustomDropdown from '@/components/CustomDropdown'
 import ClaudeSubscriptionNotice from '@/components/ClaudeSubscriptionNotice'
 import { ActionFailure } from '@/components/ActionFailure'
+import { UrlFieldProblem } from '@/components/UrlFieldProblem'
 import {
   Check,
   AlertCircle,
@@ -31,7 +32,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
     formProvider,
     formModel, setFormModel,
     formCustomModel, setFormCustomModel,
-    formBaseUrl, setFormBaseUrl,
+    formBaseUrl, setFormBaseUrl, baseUrlProblem,
     formApiKeyEnv, setFormApiKeyEnv,
     formEnabled, setFormEnabled,
     formIsDefault, setFormIsDefault,
@@ -175,8 +176,10 @@ export default function ModelConfigForm({ form, inModal }: Props) {
               value={formBaseUrl}
               onChange={(e) => setFormBaseUrl(e.target.value)}
               placeholder={currentProviderDef.baseUrlPlaceholder || 'https://api.example.com/v1'}
+              data-testid="model-base-url"
               className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />
+            <UrlFieldProblem problem={baseUrlProblem} testId="model-base-url-problem" />
             {currentProviderDef.baseUrlHintKey && (
               <p className="mt-1 text-[10px] text-slate-500" data-testid="base-url-hint">{t(currentProviderDef.baseUrlHintKey)}</p>
             )}
@@ -351,7 +354,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
       <div className="flex items-center gap-3 pt-2">
         <button
           onClick={handleTest}
-          disabled={testing || !formModel || !!unavailableReason}
+          disabled={testing || !formModel || !!unavailableReason || !!baseUrlProblem}
           title={unavailableReason ?? undefined}
           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-slate-600 disabled:opacity-50"
         >
@@ -375,7 +378,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={isSaving || !formName || !formModel || !!unavailableReason}
+            disabled={isSaving || !formName || !formModel || !!unavailableReason || !!baseUrlProblem}
             title={unavailableReason ?? undefined}
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-500 disabled:opacity-50"
           >

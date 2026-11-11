@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ModelConfigResponse } from '@/services/api'
 import { PROVIDER_CATALOG, getProvider, type ProviderDef } from '@/constants/modelCatalog'
+import { urlProblem } from '@/utils/urlField'
 import { buildOptions, modelListError, modelOptions, splitLimits, type LimitsError } from './helpers'
 
 export function useModelForm() {
@@ -70,6 +71,8 @@ export function useModelForm() {
   })
 
   const currentProviderDef: ProviderDef = getProvider(formProvider) ?? PROVIDER_CATALOG[0]
+  // checked as ai-service checks it, so a half-typed address asks the provider for nothing and Test and Save wait
+  const baseUrlProblem = currentProviderDef.needsBaseUrl ? urlProblem(formBaseUrl) : null
   // The provider's own model list for the open form; the built-in list when it cannot be had.
   const [listBaseUrl, setListBaseUrl] = useState(formBaseUrl)
   const [listCaCert, setListCaCert] = useState(formCaCert.trim())
@@ -84,7 +87,7 @@ export function useModelForm() {
   const providerModels = useQuery({
     queryKey: ['provider-models', formProvider, listBaseUrl, formApiKeyEnv, listCaCert],
     queryFn: () => api.listProviderModels({ provider: formProvider, base_url: listBaseUrl || undefined, api_key_env: formApiKeyEnv || undefined, ca_cert: listCaCert || undefined }),
-    enabled: formOpen && formProvider !== 'custom' && formProvider !== 'claude-code',
+    enabled: formOpen && formProvider !== 'custom' && formProvider !== 'claude-code' && !urlProblem(listBaseUrl),
     staleTime: 5 * 60_000,
     retry: false,
   })
@@ -261,7 +264,7 @@ export function useModelForm() {
     formProvider,
     formModel, setFormModel,
     formCustomModel, setFormCustomModel,
-    formBaseUrl, setFormBaseUrl,
+    formBaseUrl, setFormBaseUrl, baseUrlProblem,
     formApiKeyEnv, setFormApiKeyEnv,
     formEnabled, setFormEnabled,
     formIsDefault, setFormIsDefault,

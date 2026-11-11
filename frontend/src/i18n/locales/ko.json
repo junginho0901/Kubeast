@@ -2196,6 +2196,11 @@
     "listEmpty": "항목이 없습니다.",
     "noSearchResults": "검색 결과가 없습니다.",
     "clearSearch": "검색 지우기",
+    "urlProblem": {
+      "notHttp": "http 또는 https 주소가 아닙니다. http:// 또는 https://와 호스트로 시작하세요.",
+      "credentials": "주소에 사용자 이름이나 비밀번호를 넣지 않습니다.",
+      "query": "주소에 질의(?…)나 조각(#…)을 넣지 않습니다."
+    },
     "objectNotFound": "이 객체가 없습니다. 지워졌을 수 있습니다.",
     "objectForbidden": "이 객체를 볼 권한이 없습니다.",
     "refreshFailed": "{{time}}에 새로 읽지 못했습니다: {{reason}}",

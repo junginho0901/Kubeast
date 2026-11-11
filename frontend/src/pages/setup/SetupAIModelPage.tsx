@@ -9,7 +9,9 @@ import {
 } from '@/constants/modelCatalog'
 import CustomDropdown, { type DropdownOption } from '@/components/CustomDropdown'
 import ClaudeSubscriptionNotice from '@/components/ClaudeSubscriptionNotice'
+import { UrlFieldProblem } from '@/components/UrlFieldProblem'
 import { useProviderAvailability } from '@/hooks/useProviderAvailability'
+import { urlProblem } from '@/utils/urlField'
 
 interface SetupAIModelPageProps {
   navigatingRef: MutableRefObject<boolean>
@@ -46,6 +48,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
   const currentProviderDef: ProviderDef = getProvider(selectedProvider) ?? PROVIDER_CATALOG[0]
   const unavailable = useProviderAvailability()
   const unavailableReason = unavailable[selectedProvider] ?? null
+  const baseUrlProblem = currentProviderDef.needsBaseUrl ? urlProblem(aiBaseUrl) : null
 
   const modelDropdownOptions: DropdownOption[] = useMemo(
     () =>
@@ -243,8 +246,10 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
               value={aiBaseUrl}
               onChange={(e) => setAiBaseUrl(e.target.value)}
               placeholder={currentProviderDef.baseUrlPlaceholder || 'https://api.example.com/v1'}
+              data-testid="setup-base-url"
               className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />
+            <UrlFieldProblem problem={baseUrlProblem} testId="setup-base-url-problem" />
             {currentProviderDef.baseUrlHintKey && (
               <p className="mt-1 text-[10px] text-slate-500" data-testid="base-url-hint">{tr(currentProviderDef.baseUrlHintKey, '')}</p>
             )}
@@ -256,7 +261,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
           <button
             type="button"
             onClick={handleTestConnection}
-            disabled={aiTesting || !aiModel || !!unavailableReason}
+            disabled={aiTesting || !aiModel || !!unavailableReason || !!baseUrlProblem}
             title={unavailableReason ?? undefined}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-slate-600 disabled:opacity-50"
           >
@@ -310,7 +315,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
         <button
           type="button"
           onClick={handleSaveModel}
-          disabled={aiSaving || !aiModel || !!unavailableReason}
+          disabled={aiSaving || !aiModel || !!unavailableReason || !!baseUrlProblem}
           title={unavailableReason ?? undefined}
           className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
         >

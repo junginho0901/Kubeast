@@ -3,11 +3,13 @@ import { useTranslation } from 'react-i18next'
 import { Upload, Loader2, Activity } from 'lucide-react'
 
 import { ModalFrame } from '@/components/ModalFrame'
+import { UrlFieldProblem } from '@/components/UrlFieldProblem'
 import { modalButton } from '@/components/modalStyles'
 import { clustersApi, type ClusterMeta, type ClusterPatch } from '@/services/api/clusters'
 import { api } from '@/services/api'
 import type { LogSearchStatus, PrometheusStatus } from '@/services/api/types'
 import { failureText } from '@/utils/failureText'
+import { urlProblem } from '@/utils/urlField'
 
 // Edit a registered cluster: rename, (external only) rotate its kubeconfig
 // when credentials change, and name an external Prometheus source and the
@@ -67,6 +69,8 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
   const authChanged = authType !== (cluster.prometheus_auth ? 'keep' : 'none')
   const authComplete = authType === 'bearer' ? token.trim() !== '' : authType === 'basic' ? username !== '' && password !== '' : true
   const serviceValid = promService.trim() === '' || PROM_SERVICE_RE.test(promService.trim())
+  const promUrlProblem = urlProblem(promUrl, { noQuery: true })
+  const lsUrlProblem = urlProblem(lsUrl, { noQuery: true })
   const lsAuthChanged = lsAuthType !== (cluster.log_search_auth ? 'keep' : 'none')
   const lsAuthComplete = lsAuthType === 'bearer' ? lsToken.trim() !== '' : lsAuthType === 'basic' ? lsUsername !== '' && lsPassword !== '' : true
   const dirty =
@@ -80,7 +84,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
     lsTenant.trim() !== (cluster.log_search_tenant ?? '') ||
     lsLabel.trim() !== (cluster.log_search_cluster_label ?? '') ||
     lsAuthChanged
-  const canSave = displayName.trim() !== '' && dirty && authComplete && lsAuthComplete && serviceValid && !saving
+  const canSave = displayName.trim() !== '' && dirty && authComplete && lsAuthComplete && serviceValid && !promUrlProblem && !lsUrlProblem && !saving
 
   const save = async () => {
     setSaving(true)
@@ -248,6 +252,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
             placeholder={tr('cluster.edit.prometheus.urlPlaceholder', 'https://metrics.example.com/prometheus')}
             className={inputClass}
           />
+          <UrlFieldProblem problem={promUrlProblem} testId="edit-prometheus-url-problem" />
           <label className={`${labelClass} mt-3`}>{tr('cluster.edit.prometheus.label', 'Cluster label value')}</label>
           <input
             data-testid="edit-prometheus-label"
@@ -322,6 +327,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
             placeholder={tr('cluster.edit.logSearch.urlPlaceholder', 'https://loki.example.com')}
             className={inputClass}
           />
+          <UrlFieldProblem problem={lsUrlProblem} testId="edit-logsearch-url-problem" />
           <label className={`${labelClass} mt-3`}>{tr('cluster.edit.logSearch.tenant', 'Tenant (X-Scope-OrgID)')}</label>
           <input data-testid="edit-logsearch-tenant" value={lsTenant} onChange={(e) => setLsTenant(e.target.value)} className={inputClass} />
           <p className="mt-1 text-[11px] text-slate-500">{tr('cluster.edit.logSearch.tenantHint', 'For a multi-tenant Loki. Leave empty otherwise.')}</p>

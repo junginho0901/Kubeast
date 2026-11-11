@@ -2197,6 +2197,11 @@
     "listEmpty": "No items.",
     "noSearchResults": "No results found.",
     "clearSearch": "Clear the search",
+    "urlProblem": {
+      "notHttp": "Not an http or https URL: start with http:// or https:// and a host.",
+      "credentials": "No user or password in the URL.",
+      "query": "No query string (?…) or fragment (#…) in the URL."
+    },
     "objectNotFound": "This object does not exist; it may have been deleted.",
     "objectForbidden": "You are not allowed to see this object.",
     "refreshFailed": "Refresh failed at {{time}}: {{reason}}",

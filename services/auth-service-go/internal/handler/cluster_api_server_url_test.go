@@ -148,3 +148,34 @@ func TestAProbeOfAnOrdinaryServerReportsItAsItIs(t *testing.T) {
 		t.Errorf("checkInfo = %+v", got)
 	}
 }
+
+// Text that is no server address is refused on both paths before anything is stored, with the form the field takes.
+func TestAnAPIServerURLThatIsNoAddressIsRefused(t *testing.T) {
+	for _, raw := range []string{"not an address", "ftp://10.0.0.1:6443", "https://", "http://:6443"} {
+		t.Run(raw, func(t *testing.T) {
+			h := &ClustersHandler{auditStore: &memAuditStore{}, cfg: config.Config{K8sServiceURL: acceptingProbe(t, "https://10.0.0.1:6443")}}
+			body, _ := json.Marshal(map[string]any{"mode": "external", "display_name": "prod", "kubeconfig": plainKubeconfig, "api_server_url": raw})
+			w := httptest.NewRecorder()
+			r := clusterAdmin(httptest.NewRequest(http.MethodPost, "/api/v1/clusters", strings.NewReader(string(body))))
+			if reachedTheRegistry(func() { h.RegisterCluster(w, r) }) {
+				t.Fatal("registered")
+			}
+			if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "api_server_url: not a server address (https://host:port, or host:port)") {
+				t.Errorf("register: %d %s", w.Code, w.Body.String())
+			}
+
+			body, _ = json.Marshal(map[string]any{"api_server_url": raw})
+			r = clusterAdmin(httptest.NewRequest(http.MethodPatch, "/api/v1/clusters/b", strings.NewReader(string(body))))
+			rc := chi.NewRouteContext()
+			rc.URLParams.Add("id", "b")
+			r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rc))
+			w = httptest.NewRecorder()
+			if reachedTheRegistry(func() { h.UpdateCluster(w, r) }) {
+				t.Fatal("updated")
+			}
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("update: %d %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}

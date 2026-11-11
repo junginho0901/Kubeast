@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -115,7 +116,8 @@ func (h *AuthHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(req.Name)
-	if name == "" || len(name) > apiKeyNameMax {
+	// counted in characters, as the screen's field counts them, not in bytes (22 Korean letters are 66)
+	if name == "" || utf8.RuneCountInString(name) > apiKeyNameMax {
 		response.Error(w, http.StatusBadRequest, fmt.Sprintf("name is required (up to %d characters)", apiKeyNameMax))
 		return
 	}
