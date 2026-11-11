@@ -69,7 +69,7 @@ export default function AdminUsers() {
   const { has: hasPerm } = usePermission()
   const canEditUsers = hasPerm('admin.users.update')
 
-  const { teamOptions, roles, me, users, isLoading, isError } = useAdminUserData({ reauthModalOpen })
+  const { teamOptions, roles, me, users, isLoading, isError, error: usersError } = useAdminUserData({ reauthModalOpen })
 
   // A row action the server refuses says why: e.g. an account that holds more than this admin.
   const [actionError, setActionError] = useState<string | null>(null)
@@ -319,7 +319,7 @@ export default function AdminUsers() {
   }
 
   if (isError) {
-    return <div className="text-slate-300">{tr('adminUsers.loadError', 'Failed to load users.')}</div>
+    return <div role="alert" data-testid="users-read-failed" className="text-red-400 break-words">{tr('common.readFailed', 'Could not read the list: {{reason}}', { reason: failureText(usersError) })}</div>
   }
 
   const isBlocked = reauthModalOpen

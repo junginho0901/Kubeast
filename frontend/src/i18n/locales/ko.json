@@ -2124,6 +2124,7 @@
     "notInstalledEmpty": "이 클러스터에는 {{resource}}이(가) 설치되어 있지 않습니다(CustomResourceDefinition 없음).",
     "notServedEmpty": "이 클러스터는 {{resource}} API를 제공하지 않습니다(이 Kubernetes 버전에 없거나 꺼져 있는 내장 API).",
     "loadErrorEmpty": "{{resource}}: 불러오지 못했습니다(서버 오류 {{code}}).",
+    "loadErrorEmptyReason": "{{resource}}: 불러오지 못했습니다(서버 오류 {{code}}): {{reason}}",
     "loadErrorEmptyNetwork": "{{resource}}: 불러오지 못했습니다(서버 응답 없음).",
     "retry": "다시 시도",
     "deleteKind": "{{kind}} 삭제",
@@ -2366,7 +2367,6 @@
     },
     "autoRefresh": "5초마다 자동 갱신",
     "topResources": {
-      "error": "데이터를 가져오지 못했습니다",
       "empty": "리소스 사용량 데이터가 없습니다"
     },
     "metrics": {
@@ -2440,7 +2440,6 @@
       "topologyError": "토폴로지 로드 실패",
       "topologyUnavailable": "토폴로지 데이터를 사용할 수 없습니다"
     },
-    "unknownError": "알 수 없는 오류",
     "resourceModal": {
       "loading": "불러오는 중...",
       "total": "총 {{count}}",
@@ -2954,7 +2953,6 @@
     "sweepFailed": "점검에 실패했습니다: {{reason}}",
     "actionFailed": "작업에 실패했습니다.",
     "loading": "불러오는 중...",
-    "loadError": "유저 목록을 불러오지 못했습니다.",
     "title": "User Management",
     "subtitle": "계정 등급(Pending·Member·Admin)을 바꿉니다. Read·Write는 클러스터마다 줍니다.",
     "table": {

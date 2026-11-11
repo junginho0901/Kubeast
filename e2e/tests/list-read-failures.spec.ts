@@ -85,6 +85,24 @@ test.describe('a list whose read failed says so', () => {
     await expect(line, 'a read that works takes the line away').toHaveCount(0, { timeout: 20_000 })
   })
 
+  test("a cluster list the server failed says its code and the server's reason, not an empty list", async ({ page }) => {
+    const lift = await failReads(page, '/api/v1/cluster/namespaces/default/configmaps')
+    await page.goto('/configuration/configmaps?cluster=self&namespace=default')
+    await expect(page.getByTestId('table-load-error')).toContainText(`Could not load ConfigMap (server error 503): ${REASON}`, { timeout: 20_000 })
+    await lift()
+  })
+
+  test("Users and the dashboard's top resources say the server's reason when their read failed", async ({ page }) => {
+    const liftUsers = await failReads(page, '/api/v1/auth/admin/users')
+    await page.goto('/admin/users')
+    await expect(page.getByTestId('users-read-failed')).toHaveText(readFailed, { timeout: 20_000 })
+    await liftUsers()
+    const liftTop = await failReads(page, '/api/v1/cluster/metrics/top-resources')
+    await page.goto('/?cluster=self')
+    await expect(page.getByTestId('top-resources-read-failed').first()).toHaveText(readFailed, { timeout: 30_000 })
+    await liftTop()
+  })
+
   test("a drawer's YAML tab whose read failed says the server's reason", async ({ page }) => {
     const lift = await failReads(page, '/api/v1/cluster/resources/yaml')
     await page.goto(`/configuration/configmaps?cluster=self&namespace=default&detail=${encodeURIComponent('ConfigMap/default/kube-root-ca.crt')}`)

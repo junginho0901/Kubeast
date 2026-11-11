@@ -3,6 +3,7 @@ import { api } from '@/services/api'
 import type { RoleBindingInfo, ClusterRoleBindingInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { applyClusterRoleBindingWatchEvent, applyRoleBindingWatchEvent } from '@/pages/security/rolebindings/roleBindingWatchNormalize'
+import { failureText } from '@/utils/failureText'
 
 interface Params {
   namespace: string
@@ -196,7 +197,7 @@ export function useEffectivePermissions({ namespace, name }: Params): {
       matched_by: b.matched_by,
       rules: desc ? normalizeRules(desc?.rules) : [],
       loading: !!q?.isLoading,
-      error: q?.error ? String(q.error) : undefined,
+      error: q?.error ? failureText(q.error) : undefined,
     }
   })
 

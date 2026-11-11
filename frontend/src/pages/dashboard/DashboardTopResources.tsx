@@ -10,15 +10,17 @@ import { AlertCircle } from 'lucide-react'
 
 import { TopResources } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { failureText } from '@/utils/failureText'
 
 interface Props {
   topResources: TopResources | undefined
   isLoading: boolean
   isError: boolean
+  error?: unknown
   metricsUnavailable: boolean
 }
 
-export function DashboardTopResources({ topResources, isLoading, isError, metricsUnavailable }: Props) {
+export function DashboardTopResources({ topResources, isLoading, isError, error, metricsUnavailable }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
@@ -61,7 +63,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, metric
           <div className="text-center py-12">
             <div className="flex flex-col items-center gap-2">
               <AlertCircle className="w-8 h-8 text-red-400" />
-              <p className="text-slate-400">{tr('dashboard.topResources.error', 'Failed to fetch data')}</p>
+              <p className="text-slate-400 break-words" data-testid="top-resources-read-failed">{tr('common.readFailed', 'Could not read the list: {{reason}}', { reason: failureText(error) })}</p>
             </div>
           </div>
         ) : topResources?.top_pods && topResources.top_pods.length > 0 ? (
@@ -153,7 +155,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, metric
           <div className="text-center py-12">
             <div className="flex flex-col items-center gap-2">
               <AlertCircle className="w-8 h-8 text-red-400" />
-              <p className="text-slate-400">{tr('dashboard.topResources.error', 'Failed to fetch data')}</p>
+              <p className="text-slate-400 break-words" data-testid="top-resources-read-failed">{tr('common.readFailed', 'Could not read the list: {{reason}}', { reason: failureText(error) })}</p>
             </div>
           </div>
         ) : topResources?.top_nodes && topResources.top_nodes.length > 0 ? (

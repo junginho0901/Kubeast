@@ -2131,6 +2131,7 @@
     "notInstalledEmpty": "{{resource}} is not installed on this cluster (no CustomResourceDefinition).",
     "notServedEmpty": "{{resource}} is not served by this cluster (a built-in Kubernetes API that its version does not have or that is turned off).",
     "loadErrorEmpty": "Could not load {{resource}} (server error {{code}}).",
+    "loadErrorEmptyReason": "Could not load {{resource}} (server error {{code}}): {{reason}}",
     "loadErrorEmptyNetwork": "Could not load {{resource}} (no response from the server).",
     "retry": "Retry",
     "deleteKind": "Delete {{kind}}",
@@ -2368,7 +2369,6 @@
     },
     "autoRefresh": "Auto refresh every 5 seconds",
     "topResources": {
-      "error": "Failed to fetch data",
       "empty": "No resource usage data"
     },
     "metrics": {
@@ -2442,7 +2442,6 @@
       "topologyError": "Failed to load topology",
       "topologyUnavailable": "Topology data is unavailable"
     },
-    "unknownError": "Unknown error",
     "resourceModal": {
       "loading": "Loading...",
       "total": "Total {{count}}",
@@ -2862,7 +2861,6 @@
     "sweepFailed": "The sweep failed: {{reason}}",
     "actionFailed": "The action failed.",
     "loading": "Loading...",
-    "loadError": "Failed to load users.",
     "title": "User Management",
     "subtitle": "Change account levels (Pending, Member, Admin). Read and Write are granted per cluster.",
     "table": {

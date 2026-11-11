@@ -13,7 +13,7 @@ import { useSyncExternalStore } from 'react'
 import { FORBIDDEN_EVENT, LIST_STATUS_EVENT, type ListStatusDetail } from './api/client'
 import { listSegmentFromUrl } from '@/utils/forbiddenResource'
 
-export type ListStatus = { state: 'notInstalled' } | { state: 'error'; code?: number }
+export type ListStatus = { state: 'notInstalled' } | { state: 'error'; code?: number; reason?: string }
 
 const statuses = new Map<string, ListStatus>()
 const answered = new Set<string>()
@@ -44,8 +44,8 @@ export function recordListStatus(d: ListStatusDetail): void {
     if (prev?.state === 'notInstalled' && !first) return
     statuses.set(seg, { state: 'notInstalled' })
   } else {
-    if (prev?.state === 'error' && prev.code === d.code && !first) return
-    statuses.set(seg, { state: 'error', code: d.code })
+    if (prev?.state === 'error' && prev.code === d.code && prev.reason === d.reason && !first) return
+    statuses.set(seg, { state: 'error', code: d.code, reason: d.reason })
   }
   notify()
 }

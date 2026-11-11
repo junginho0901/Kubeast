@@ -17,6 +17,7 @@ import type { SavedSearch } from '@/components/search/savedSearchStore'
 import { rememberPrinterStatus, searchWithExpression, toSearchResult, SearchResult } from '@/components/search/searchEngine'
 import { useAIContext } from '@/hooks/useAIContext'
 import { buildResourceLink } from '@/utils/resourceLink'
+import { failureText } from '@/utils/failureText'
 
 const STORAGE_KEY_RESOURCES = 'advanced-search-resources'
 
@@ -127,7 +128,7 @@ export default function AdvancedSearch() {
             else if (resp?.truncated) cut.push({ type, limit: resp.limit, remaining: resp.remaining })
           } catch (err: any) {
             if (err?.name === 'CanceledError' || err?.name === 'AbortError') return
-            errors.push({ type, error: err?.message ?? 'Failed' })
+            errors.push({ type, error: failureText(err) })
           }
         })
         await Promise.all(fetches)

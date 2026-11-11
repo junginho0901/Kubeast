@@ -31,7 +31,7 @@ export function useAdminUserData({ reauthModalOpen }: Args) {
   })
 
   // every user: the page searches, sorts, pages and counts them in the browser
-  const { data: users, isLoading, isError } = useQuery({
+  const { data: users, isLoading, isError, error } = useQuery({
     queryKey: ['admin-users', 'all'],
     queryFn: api.adminListAllUsers,
     staleTime: 5000,
@@ -39,5 +39,5 @@ export function useAdminUserData({ reauthModalOpen }: Args) {
     enabled: !reauthModalOpen,
   })
 
-  return { teamOptions, roles, me, users, isLoading, isError }
+  return { teamOptions, roles, me, users, isLoading, isError, error }
 }
