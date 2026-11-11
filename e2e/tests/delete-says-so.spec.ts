@@ -72,7 +72,8 @@ test.describe('A delete says what it deleted', () => {
   })
 
   test('a pod deleted from Cluster View\'s menu is named deleted at the top of the page, until another page opens', async ({ page }) => {
-    kubectl(`-n ${NS} run e2e-ds-pod --image=busybox:1.37 --image-pull-policy=IfNotPresent --restart=Never -- sleep 3600`)
+    // sleep ignores SIGTERM: no grace period, so the pod goes within the test's time
+    kubectl(`-n ${NS} run e2e-ds-pod --image=busybox:1.37 --image-pull-policy=IfNotPresent --restart=Never --overrides='{"spec":{"terminationGracePeriodSeconds":0}}' -- sleep 3600`)
     kubectl(`-n ${NS} wait --for=condition=Ready pod/e2e-ds-pod --timeout=120s`)
     await page.goto(`/cluster-view?cluster=${CLUSTER}`)
     await expect(page.getByTestId('cluster-view-map')).toBeVisible()
@@ -87,7 +88,7 @@ test.describe('A delete says what it deleted', () => {
     const notice = page.getByTestId('yaml-created')
     await expect(notice).toHaveCount(1)
     await expect(notice.locator('p')).toHaveText([`Deleted: Pod/e2e-ds-pod (${NS})`])
-    await expect.poll(gone('pod/e2e-ds-pod'), { timeout: 60_000 }).toBe(true)
+    await expect.poll(gone('pod/e2e-ds-pod'), { timeout: 20_000 }).toBe(true)
     await expect(notice.locator('p')).toHaveText([`Deleted: Pod/e2e-ds-pod (${NS})`])
 
     await page.getByRole('link', { name: 'Dashboard', exact: true }).first().click()
