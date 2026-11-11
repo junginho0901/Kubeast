@@ -158,7 +158,7 @@ export function PodSummaryTab({
             <div className="text-center py-8">
               <p className="text-slate-400">
                 {containerSearchQuery
-                  ? tr('clusterView.containers.noSearchResults', 'No results found')
+                  ? tr('common.noSearchResults', 'No results found.')
                   : tr('clusterView.containers.none', 'No containers')}
               </p>
             </div>

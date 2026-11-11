@@ -18,6 +18,8 @@ import {
 interface Props {
   paged: HelmReleaseSummary[]
   sortedCount: number
+  // the search box holds text and the cluster has releases: none matching is not none installed
+  searching?: boolean
   sortKey: SortKey
   sortDir: SortDir
   onSort: (key: NonNullable<SortKey>) => void
@@ -32,6 +34,7 @@ interface Props {
 }
 
 export default function ReleaseTable({
+  searching = false,
   paged,
   sortedCount,
   sortKey,
@@ -59,7 +62,9 @@ export default function ReleaseTable({
   if (sortedCount === 0) {
     return (
       <div className="flex-1 min-h-0 flex items-start">
-        <EmptyState />
+        {searching
+          ? <p className="w-full py-16 text-center text-sm text-slate-400" data-testid="helm-no-search-results">{t('common.noSearchResults', { defaultValue: 'No results found.' })}</p>
+          : <EmptyState />}
       </div>
     )
   }

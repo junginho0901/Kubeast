@@ -292,7 +292,7 @@ export function PodLogsTab({
               ) : (
                 <div className="p-4 text-center text-sm text-slate-400">
                   {containerSearchQuery
-                    ? tr('clusterView.logs.noSearchResults', 'No results found')
+                    ? tr('common.noSearchResults', 'No results found.')
                     : tr('clusterView.logs.noContainers', 'No containers')}
                 </div>
               )}

@@ -137,7 +137,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
             })}
           </div>
         ) : (
-          <p className="text-xs text-slate-500"><Tx>{dataSearch ? 'No matching keys.' : 'No data entries.'}</Tx></p>
+          <p className="text-xs text-slate-500">{dataSearch ? t('common.noSearchResults', { defaultValue: 'No results found.' }) : <Tx>No data entries.</Tx>}</p>
         )}
 
         {filteredDataKeys.length > DATA_PER_PAGE && (

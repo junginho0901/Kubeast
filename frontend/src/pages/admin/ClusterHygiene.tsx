@@ -423,7 +423,12 @@ export default function ClusterHygiene() {
                       </td>
                     </tr>
                   ) : findings.length === 0 ? (
-                    <tr><td colSpan={FINDING_COLUMNS} className="p-6 text-slate-400">{tr('clusterHygiene.empty', 'Nothing to show.')}</td></tr>
+                    <tr><td colSpan={FINDING_COLUMNS} className="p-6 text-slate-400" data-testid="hygiene-empty">
+                      {/* a report with findings that the filters or the search leave none of is not a clean report */}
+                      {(report?.findings.length ?? 0) > 0
+                        ? t('common.noSearchResults', { defaultValue: 'No results found.' })
+                        : tr('clusterHygiene.empty', 'Nothing to show.')}
+                    </td></tr>
                   ) : pagedFindings.map((f, i) => {
                     const onOpen = openFinding(f)
                     return (

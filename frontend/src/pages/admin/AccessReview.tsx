@@ -427,7 +427,7 @@ export default function AccessReview() {
                   <TableEmptyRow colSpan={columns[tab].length} resource="access-review" className="p-6 text-left text-slate-400">
                     {isLoading || (viewId && !viewed) ? (
                       <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {tr('accessReview.loading', 'Loading...')}</span>
-                    ) : tr('accessReview.empty', 'Nothing to show.')}
+                    ) : search.trim() ? tr('common.noSearchResults', 'No results found.') : tr('accessReview.empty', 'Nothing to show.')}
                   </TableEmptyRow>
                 )}
               </tbody>

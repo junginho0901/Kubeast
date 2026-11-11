@@ -208,6 +208,14 @@ export function IssuesModal({
               <p className="text-slate-300 font-medium">{tr('dashboard.issues.error', 'Failed to collect issues')}</p>
               <p className="text-sm text-slate-400 mt-1 wrap-break-word">{error}</p>
             </div>
+          ) : sortedIssues.length === 0 && searchQuery.trim() ? (
+            // a search that kept none of them is not a cluster without issues: no green check
+            <div className="flex flex-col items-center justify-center h-full min-h-[240px]" data-testid="issues-no-search-results">
+              <p className="text-slate-300 font-medium">{tr('common.noSearchResults', 'No results found.')}</p>
+              <button type="button" onClick={() => setSearchQuery('')} className="mt-2 text-sm text-primary-400 hover:underline">
+                {tr('common.clearSearch', 'Clear the search')}
+              </button>
+            </div>
           ) : sortedIssues.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full min-h-[240px]">
               <CheckCircle className="w-9 h-9 text-green-400 mb-3" />
