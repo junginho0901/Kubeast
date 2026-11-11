@@ -1,5 +1,5 @@
-# The number check's custom resource kind, on test2: a Widget of its own group, next to test2's widgets.qa.example.com
-# (Kind Widget too), with printer columns of every type — a list, a filter, a field outside spec and status, a date and
+# The number check's custom resource kind, on test2: a Widget of its own group, next to the list check's
+# widgets.peer.kubeast.io (Kind Widget too), with printer columns of every type — a list, a filter, a field outside spec and status, a date and
 # a wide (priority 1) column. Made by number-check-lists.spec.ts and removed after; its instances are in
 # number-check.cr-instances.yaml.
 apiVersion: apiextensions.k8s.io/v1
