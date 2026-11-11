@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { failureText } from '@/utils/failureText'
 import { normalizeBinding, referencingBindings, type ReverseBinding } from './referencedBy'
 
 export type { ReverseBinding } from './referencedBy'
@@ -76,7 +77,7 @@ export function useReverseRoleBindings({ kind, namespace, name, via = 'ClusterRo
 
   const bindings = useMemo(() => referencingBindings(Array.isArray(data) ? data : [], kind, name), [data, kind, name])
   const status = (error as { response?: { status?: number } } | null)?.response?.status
-  const message = error ? String((error as { message?: string }).message ?? error) : null
+  const message = error ? failureText(error) : null
   const failure = useMemo(() => (message === null ? null : { message, forbidden: status === 403 }), [message, status])
   return { bindings, enabled, error: failure }
 }
