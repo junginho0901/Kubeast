@@ -81,6 +81,8 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
       <InfoSection title="Related ResourceClaims ({{n}})" titleValues={{ n: describe?.related_claims ? relatedClaims.length : '-' }}>
         {describe?.related_claims_error ? (
           <p className="text-xs text-red-400">{describe.related_claims_error}</p>
+        ) : describeError && !describe ? (
+          <p className="text-xs text-slate-500">—</p>
         ) : relatedClaims.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No pod in this namespace has a ResourceClaim made from this template.</Tx></p>
         ) : (
@@ -178,7 +180,7 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
               {JSON.stringify(claimSpec, null, 2)}
             </pre>
           ) : (
-            <p className="text-xs text-slate-400"><Tx>No claim spec</Tx></p>
+            describeError && !describe ? <p className="text-xs text-slate-500">—</p> : <p className="text-xs text-slate-400"><Tx>No claim spec</Tx></p>
           )}
         </InfoSection>
       )}

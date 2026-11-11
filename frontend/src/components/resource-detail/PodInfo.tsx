@@ -267,6 +267,8 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   }, [isExecContainerOpen, isExecShellOpen])
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
+  // the Pods list's row holds no spec or status: without the describe answer the counts and tables would be 0 and None
+  if (describeError && !rawJson?.spec) return <DescribeFailure error={describeError} className="py-4" />
 
   return (
     <>

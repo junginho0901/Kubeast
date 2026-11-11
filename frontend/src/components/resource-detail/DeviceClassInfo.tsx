@@ -121,6 +121,8 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
       <InfoSection title="Used By ResourceClaims ({{n}})" titleValues={{ n: describe?.used_by ? usingClaims.length : '-' }}>
         {describe?.used_by_error ? (
           <p className="text-xs text-red-400">{describe.used_by_error}</p>
+        ) : describeError && !describe ? (
+          <p className="text-xs text-slate-500">—</p>
         ) : usingClaims.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No ResourceClaim in the cluster references this DeviceClass.</Tx></p>
         ) : (

@@ -13,6 +13,7 @@ const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { useWatchChanges } from '@/services/useWatchChanges'
+import { DescribeFailure } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -178,6 +179,8 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
   // refused or gone: the drawers' notice; any other failure draws what it has, as before
   const gone = (error as { response?: { status?: number } } | null)?.response?.status === 404
   if (isForbiddenError(error) || gone) return <ObjectUnreadable kind={crKind} name={name} namespace={namespace} notFound={gone} />
+  // any other failure: its spec, status and conditions come from this answer only
+  if (error) return <DescribeFailure error={error} className="py-4" />
 
   return (
     <div className="space-y-4">

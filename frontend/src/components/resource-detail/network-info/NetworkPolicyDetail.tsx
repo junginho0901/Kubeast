@@ -91,6 +91,9 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
     )
   }
 
+  // neither the answer nor a row: an empty selector would read as a policy over every pod
+  if (!object && describeError) return <DescribeFailure error={describeError} className="py-4" />
+
   return (
     <>
       <InfoSection title="NetworkPolicy Info">

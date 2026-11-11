@@ -147,6 +147,8 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
       <InfoSection title="Using Pods ({{n}})" titleValues={{ n: describe?.using_pods ? usingPods.length : '-' }}>
         {describe?.using_pods_error ? (
           <p className="text-xs text-red-400">{describe.using_pods_error}</p>
+        ) : describeError && !describe ? (
+          <p className="text-xs text-slate-500">—</p>
         ) : usingPods.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No pod in this namespace references this ResourceClaim.</Tx></p>
         ) : (

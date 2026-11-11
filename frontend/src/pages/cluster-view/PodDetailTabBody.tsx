@@ -2,6 +2,7 @@ import { PodSummaryTab } from './PodSummaryTab'
 import { PodLogsTab } from './PodLogsTab'
 import { PodDescribeTab } from './PodDescribeTab'
 import { PodRbacTab } from './PodRbacTab'
+import { DescribeFailure } from '@/components/resource-detail/DescribeFailure'
 import { PodExecPanel } from './PodExecPanel'
 import { useClusterView } from './ClusterViewContext'
 
@@ -11,9 +12,10 @@ import { useClusterView } from './ClusterViewContext'
 interface Props {
   manifest: string | undefined
   describeData: any
+  describeError?: unknown
 }
 
-export function PodDetailTabBody({ manifest, describeData }: Props) {
+export function PodDetailTabBody({ manifest, describeData, describeError }: Props) {
   const {
     tr,
     na,
@@ -61,6 +63,7 @@ export function PodDetailTabBody({ manifest, describeData }: Props) {
         />
       )}
 
+      {activeTab === 'describe' && !describeData && <DescribeFailure error={describeError} className="py-4" />}
       {activeTab === 'describe' && describeData && (
         <PodDescribeTab data={describeData} na={na} tr={tr} />
       )}

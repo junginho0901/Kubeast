@@ -13,6 +13,7 @@ interface Params {
 interface Result {
   manifest: string | undefined
   describeData: any
+  describeError: unknown
 }
 
 export function usePodDetailQueries({ selectedPod, showManifest, showDescribe }: Params): Result {
@@ -28,7 +29,7 @@ export function usePodDetailQueries({ selectedPod, showManifest, showDescribe }:
     enabled: showManifest && !!selectedPod,
   })
 
-  const { data: describeData } = useQuery({
+  const { data: describeData, error: describeError } = useQuery({
     queryKey: ['pod-describe', selectedPod?.namespace, selectedPod?.name],
     queryFn: async () => {
       if (!selectedPod) return null
@@ -37,5 +38,5 @@ export function usePodDetailQueries({ selectedPod, showManifest, showDescribe }:
     enabled: showDescribe && !!selectedPod,
   })
 
-  return { manifest, describeData }
+  return { manifest, describeData, describeError }
 }

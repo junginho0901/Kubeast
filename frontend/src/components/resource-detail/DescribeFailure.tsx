@@ -17,3 +17,15 @@ export function DescribeFailure({ error, showingRow = false, className = '' }: {
     </p>
   )
 }
+
+// A list the drawer reads beside its object (the pods of a namespace, the Ingresses of a class) that failed: the reason
+// where the rows would be, never "None" or a count of 0.
+export function ListReadFailure({ error, testId = 'list-read-failed' }: { error: unknown; testId?: string }) {
+  const { t } = useTranslation()
+  if (!error) return null
+  return (
+    <p role="alert" data-testid={testId} className="text-xs text-red-400 break-words">
+      {t('common.readFailed', { defaultValue: 'Could not read the list: {{reason}}', reason: failureText(error) })}
+    </p>
+  )
+}

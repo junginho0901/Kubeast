@@ -304,15 +304,22 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
       </InfoSection>
 
       <InfoSection title="Endpoint Status">
-        <div className="flex flex-wrap gap-2 mb-3">
-          <SummaryBadge label="Ready" value={endpointSummary?.ready_count ?? 0} color="green" />
-          <SummaryBadge label="Not Ready" value={endpointSummary?.not_ready_count ?? 0} color="amber" />
-          <SummaryBadge label="Slices" value={endpointSlices.length} color="default" />
-        </div>
-        <div className="space-y-3">
-          <AddressList label="Ready Addresses" addresses={endpointSummary?.ready_addresses ?? []} testId="service-ready-addresses" />
-          <AddressList label="Not Ready Addresses" addresses={endpointSummary?.not_ready_addresses ?? []} testId="service-not-ready-addresses" />
-        </div>
+        {/* the endpoints come from the describe answer only: not read is not 0 Ready and no addresses */}
+        {describeError && !describe ? (
+          <p className="text-xs text-slate-500" data-testid="service-endpoints-unread">—</p>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2 mb-3">
+              <SummaryBadge label="Ready" value={endpointSummary?.ready_count ?? 0} color="green" />
+              <SummaryBadge label="Not Ready" value={endpointSummary?.not_ready_count ?? 0} color="amber" />
+              <SummaryBadge label="Slices" value={endpointSlices.length} color="default" />
+            </div>
+            <div className="space-y-3">
+              <AddressList label="Ready Addresses" addresses={endpointSummary?.ready_addresses ?? []} testId="service-ready-addresses" />
+              <AddressList label="Not Ready Addresses" addresses={endpointSummary?.not_ready_addresses ?? []} testId="service-not-ready-addresses" />
+            </div>
+          </>
+        )}
       </InfoSection>
 
       {endpointSlices.length > 0 && (

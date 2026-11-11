@@ -126,13 +126,15 @@ export default function ResourceSliceInfo({ name, rawJson }: Props) {
         </InfoSection>
       ) : (
         <InfoSection title="Devices">
-          <p className="text-xs text-slate-400"><Tx>No devices</Tx></p>
+          {describeError ? <p className="text-xs text-slate-500">—</p> : <p className="text-xs text-slate-400"><Tx>No devices</Tx></p>}
         </InfoSection>
       )}
 
       <InfoSection title="Device Allocations ({{n}})" titleValues={{ n: describe?.allocations ? allocations.length : '-' }}>
         {describe?.allocations_error ? (
           <p className="text-xs text-red-400">{describe.allocations_error}</p>
+        ) : describeError && !describe ? (
+          <p className="text-xs text-slate-500">—</p>
         ) : allocations.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No ResourceClaim currently allocates a device from this slice.</Tx></p>
         ) : (

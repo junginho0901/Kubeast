@@ -4,7 +4,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
-import { DescribeFailure } from '../DescribeFailure'
+import { DescribeFailure, ListReadFailure } from '../DescribeFailure'
 
 interface Props {
   name: string
@@ -14,7 +14,7 @@ interface Props {
 export default function IngressClassDetail({ name, rawJson }: Props) {
   const { open: openDetail } = useResourceDetail()
   // every Ingress of the class (the server cut at 50 before), paged here
-  const { data: usedByIngresses } = useQuery({
+  const { data: usedByIngresses, error: usedByError } = useQuery({
     queryKey: ['ingressclass-used-by', name],
     queryFn: () => api.listIngressesByClass(name),
     enabled: !!name,
@@ -62,8 +62,10 @@ export default function IngressClassDetail({ name, rawJson }: Props) {
         </div>
       </InfoSection>
 
-      <InfoSection title="Used By Ingresses ({{n}})" titleValues={{ n: usedList.length }}>
-        {usedList.length === 0 ? (
+      <InfoSection title={usedByError && !Array.isArray(usedByIngresses) ? 'Used By Ingresses' : 'Used By Ingresses ({{n}})'} titleValues={{ n: usedList.length }}>
+        {usedByError && !Array.isArray(usedByIngresses) ? (
+          <ListReadFailure error={usedByError} />
+        ) : usedList.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No Ingress in the cluster uses this IngressClass.</Tx></p>
         ) : (
           <div className="overflow-x-auto">

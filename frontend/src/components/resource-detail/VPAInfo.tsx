@@ -38,7 +38,7 @@ export default function VPAInfo({ name, namespace }: Props) {
       default: return null
     }
   })()
-  const { data: targetDescribe } = useQuery({
+  const { data: targetDescribe, error: targetError } = useQuery({
     queryKey: ['vpa-target', namespace, targetKind, targetName],
     queryFn: targetDescribeFn!,
     enabled: !!targetDescribeFn,
@@ -108,6 +108,10 @@ export default function VPAInfo({ name, namespace }: Props) {
                 </span>
               }
             />
+          )}
+          {/* the target's read failed: its status is not known, not left out */}
+          {!targetStatus && targetError && (
+            <InfoRow label="Target Status" value={<DescribeFailure error={targetError} />} />
           )}
         </div>
       </InfoSection>

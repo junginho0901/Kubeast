@@ -45,7 +45,7 @@ export function ClusterViewBody() {
 
   // Data queries
   const { namespaces, summary, nodes, isLoading } = useClusterPodsQuery({ selectedNamespace, search })
-  const { manifest, describeData } = usePodDetailQueries({ selectedPod, showManifest, showDescribe })
+  const { manifest, describeData, describeError } = usePodDetailQueries({ selectedPod, showManifest, showDescribe })
 
   // AI floating widget snapshot
   useClusterAIContext({ nodes, summary, selectedNamespace, search })
@@ -91,7 +91,7 @@ export function ClusterViewBody() {
         onDelete={openDeleteModal}
       />
 
-      <PodDetailModal isAdmin={isAdmin} manifest={manifest} describeData={describeData} />
+      <PodDetailModal isAdmin={isAdmin} manifest={manifest} describeData={describeData} describeError={describeError} />
 
       <PodDeleteModal
         pod={deleteTargetPod}
