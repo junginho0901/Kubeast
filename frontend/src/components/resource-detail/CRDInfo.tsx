@@ -9,6 +9,7 @@ import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { LIVE_ROWS_MAX, useWatchChanges } from '@/services/useWatchChanges'
 import { formatAge } from '@/utils/time'
+import { failureText } from '@/utils/failureText'
 
 interface Props {
   name: string
@@ -45,7 +46,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
     alsoRead: [['crd-instances', group, storageVersion, plural]],
   })
 
-  const { data: crInstances } = useQuery({
+  const { data: crInstances, error: instancesError } = useQuery({
     queryKey: ['crd-instances', group, storageVersion, plural],
     queryFn: () => api.getCustomResourceInstances(group, storageVersion, plural),
     enabled: !!group && !!storageVersion && !!plural,
@@ -236,7 +237,14 @@ export default function CRDInfo({ name, rawJson }: Props) {
         </InfoSection>
       )}
 
-      {/* CR Instances sub-list */}
+      {/* CR Instances sub-list — one that could not be read says so instead of leaving the section out */}
+      {!Array.isArray(crInstances) && !!instancesError && (
+        <InfoSection title="Custom Resources">
+          <p role="alert" data-testid="crd-instances-read-failed" className="text-xs text-red-400 break-words">
+            {t('common.readFailed', { defaultValue: 'Could not read the list: {{reason}}', reason: failureText(instancesError) })}
+          </p>
+        </InfoSection>
+      )}
       {Array.isArray(crInstances) && (
         <InfoSection title="Custom Resources ({{n}})" titleValues={{ n: crInstances.length }}>
           {!followsInstances && (

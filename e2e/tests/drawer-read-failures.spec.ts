@@ -24,6 +24,16 @@ const DRAWERS: { what: string; detail: string; notShown?: string }[] = [
   { what: 'Namespace', detail: 'Namespace/default', notShown: 'Failed to load.' },
 ]
 
+// A CRD drawer whose objects could not be listed says so instead of leaving its Custom Resources section out. The CRD is
+// Kubeast's own ModelConfig, which the dev install serves on `self`.
+test("a CRD drawer whose custom resources could not be listed says why", async ({ page }) => {
+  await page.route((u) => u.pathname === '/api/v1/cluster/custom-resources/ai.kubeast.io/v1alpha1/modelconfigs', (route) =>
+    route.request().method() === 'GET' ? route.fulfill({ status: 503, json: { detail: REASON } }) : route.fallback())
+  await page.goto(`/?cluster=self&detail=${encodeURIComponent('CustomResourceDefinition/modelconfigs.ai.kubeast.io')}`)
+  const drawer = page.locator(DRAWER).last()
+  await expect(drawer.getByTestId('crd-instances-read-failed')).toHaveText(EN.common.readFailed.replace('{{reason}}', REASON), { timeout: 30_000 })
+})
+
 test.describe("a drawer whose own read failed says why", () => {
   for (const d of DRAWERS) {
     test(`${d.what}: the reason where its fields would be`, async ({ page }) => {
