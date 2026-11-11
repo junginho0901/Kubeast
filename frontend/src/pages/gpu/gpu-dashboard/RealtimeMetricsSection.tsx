@@ -35,7 +35,7 @@ export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, 
   const memoryTotalMb = metrics.total_memory_mb ?? 0
   const reportingUtil = gpusReportingUtil(metrics.gpus ?? [])
   // what the average leaves out, on the card only while it leaves some GPUs out and has others to average
-  const utilTitle = reportingUtil > 0 && reportingUtil < metrics.gpu_count
+  const utilTitle = reportingUtil > 0 && reportingUtil < (metrics.gpu_count ?? 0)
     ? tr('gpuDashboardPage.realtime.avgUtilOf', 'The {{n}} of {{total}} GPUs that report utilization', { n: reportingUtil, total: metrics.gpu_count })
     : undefined
 
@@ -89,7 +89,7 @@ export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, 
         </div>
         <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 px-3 py-2.5">
           <div className="text-[11px] text-slate-400">{tr('gpuDashboardPage.realtime.gpuCount', 'Physical GPUs')}</div>
-          <div className="mt-1 text-lg font-semibold text-ink" data-testid="gpu-realtime-count">{metrics.gpu_count > 0 ? metrics.gpu_count : '-'}</div>
+          <div className="mt-1 text-lg font-semibold text-ink" data-testid="gpu-realtime-count">{(metrics.gpu_count ?? 0) > 0 ? metrics.gpu_count : '-'}</div>
         </div>
       </div>
 

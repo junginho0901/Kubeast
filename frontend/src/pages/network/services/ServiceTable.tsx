@@ -139,7 +139,7 @@ export function ServiceTable({
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{svc.cluster_ip || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{svc.external_ip || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatPorts(svc.ports)}</span></td>
-                <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{formatSelector(svc.selector)}</span></td>
+                <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{formatSelector(svc.selector ?? {})}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(svc.created_at)}</td>
               </tr>
             ))}

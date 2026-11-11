@@ -48,8 +48,8 @@ export function formatDefaultDeny(policy: NetworkPolicyInfo): string {
 
 export function networkPolicyToRawJson(policy: NetworkPolicyInfo): Record<string, unknown> {
   const toSelector = (selector?: {
-    match_labels: Record<string, string>
-    match_expressions: Array<{ key?: string | null; operator?: string | null; values?: string[] | null }>
+    match_labels?: Record<string, string>
+    match_expressions?: Array<{ key?: string | null; operator?: string | null; values?: string[] | null }>
   } | null) => ({
     matchLabels: selector?.match_labels || {},
     matchExpressions: Array.isArray(selector?.match_expressions)

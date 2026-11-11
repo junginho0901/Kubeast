@@ -6,7 +6,7 @@
 import axios from 'axios'
 
 import { client } from './client'
-import type { YamlOpened } from './types'
+import type { YamlApplied, YamlOpened } from './types'
 import type {
   ClusterIssuesResponse,
   ClusterOverview,
@@ -95,7 +95,7 @@ export const clusterApi = {
     return data
   },
 
-  deleteNamespace: async (name: string): Promise<{ status: string; name: string }> => {
+  deleteNamespace: async (name: string): Promise<{ deleted: boolean }> => {
     const { data } = await client.delete(`/cluster/namespaces/${name}`)
     return data
   },
@@ -137,7 +137,7 @@ export const clusterApi = {
     return data
   },
 
-  applyResourceYaml: async (resourceType: string, name: string, yaml: string, namespace?: string, opened?: YamlOpened): Promise<{ status: string; kept_masked?: string[]; unchanged?: boolean }> => {
+  applyResourceYaml: async (resourceType: string, name: string, yaml: string, namespace?: string, opened?: YamlOpened): Promise<YamlApplied & { kept_masked?: string[] }> => {
     const { data } = await client.post('/cluster/resources/yaml/apply', {
       resource_type: resourceType,
       resource_name: name,
@@ -196,7 +196,7 @@ export const clusterApi = {
     return data
   },
 
-  applyNodeYaml: async (name: string, yaml: string, opened?: YamlOpened): Promise<{ status: string; unchanged?: boolean }> => {
+  applyNodeYaml: async (name: string, yaml: string, opened?: YamlOpened): Promise<YamlApplied> => {
     const { data } = await client.post(`/cluster/nodes/${name}/yaml/apply`, { yaml, opened })
     return data
   },

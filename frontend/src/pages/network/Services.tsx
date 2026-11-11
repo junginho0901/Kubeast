@@ -88,7 +88,7 @@ export default function Services() {
         || String(svc.cluster_ip || '').toLowerCase().includes(q)
         || String(svc.external_ip || '').toLowerCase().includes(q)
         || formatPorts(svc.ports).toLowerCase().includes(q)
-        || formatSelector(svc.selector).toLowerCase().includes(q)
+        || formatSelector(svc.selector ?? {}).toLowerCase().includes(q)
     })
   }, [services, searchQuery])
 
@@ -125,7 +125,7 @@ export default function Services() {
         case 'ports':
           return formatPorts(svc.ports)
         case 'selector':
-          return formatSelector(svc.selector)
+          return formatSelector(svc.selector ?? {})
         case 'age':
           return parseAgeSeconds(svc.created_at)
         default:

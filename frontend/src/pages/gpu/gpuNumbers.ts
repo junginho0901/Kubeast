@@ -259,8 +259,8 @@ export function missingPluginVendors(badges: DevicePluginBadge[]): GPUVendor[] {
 // floating chat null.
 export function gpuRealtimeAverages(metrics: Pick<GPUMetricsData, 'gpu_count' | 'avg_gpu_util' | 'avg_memory_util' | 'total_memory_mb'>) {
   return {
-    util: metrics.gpu_count > 0 ? metrics.avg_gpu_util : null,
-    memory: (metrics.total_memory_mb ?? 0) > 0 ? metrics.avg_memory_util : null,
+    util: (metrics.gpu_count ?? 0) > 0 ? (metrics.avg_gpu_util ?? null) : null,
+    memory: (metrics.total_memory_mb ?? 0) > 0 ? (metrics.avg_memory_util ?? null) : null,
   }
 }
 

@@ -19,7 +19,7 @@ export default function TestResultModal({
   onClose: () => void
 }) {
   const { t } = useTranslation()
-  const [result, setResult] = useState<HelmTestResponse | null>(null)
+  const [result, setResult] = useState<(HelmTestResponse & { hooks: NonNullable<HelmTestResponse['hooks']> }) | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const runMutation = useMutation({

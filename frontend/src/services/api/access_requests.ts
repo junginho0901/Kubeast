@@ -18,6 +18,9 @@ export interface AccessRequestsConfig {
 export type AccessRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'expired'
 export type AccessRequestEndReason = 'expired' | 'not_reviewed' | 'revoked' | 'superseded'
 
+// When the read after saving fails the server answers what it has: the id, and on a create the status.
+export type AccessRequestSaved = AccessRequest | { id: string; status?: AccessRequest['status'] }
+
 export interface AccessRequest {
   id: string
   user_id: string
@@ -86,7 +89,7 @@ export const accessRequestsApi = {
     }
   },
 
-  createAccessRequest: async (input: CreateAccessRequestInput): Promise<AccessRequest> => {
+  createAccessRequest: async (input: CreateAccessRequestInput): Promise<AccessRequestSaved> => {
     const { data } = await client.post('/auth/access-requests', input)
     return data
   },
@@ -113,12 +116,12 @@ export const accessRequestsApi = {
     return { items: data, total: totalHeader(headers) }
   },
 
-  adminApproveAccessRequest: async (id: string, note = ''): Promise<AccessRequest> => {
+  adminApproveAccessRequest: async (id: string, note = ''): Promise<AccessRequestSaved> => {
     const { data } = await client.post(`/auth/admin/access-requests/${id}/approve`, { note })
     return data
   },
 
-  adminRejectAccessRequest: async (id: string, note = ''): Promise<AccessRequest> => {
+  adminRejectAccessRequest: async (id: string, note = ''): Promise<AccessRequestSaved> => {
     const { data } = await client.post(`/auth/admin/access-requests/${id}/reject`, { note })
     return data
   },
