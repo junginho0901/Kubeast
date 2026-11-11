@@ -649,6 +649,19 @@ def _check_model_config_policy(data: dict, current=None) -> None:
 # See main.py for registration.
 
 
+def _without_stored_values(request: dict, current) -> dict:
+    """The update less a name or CA equal to what the config holds: the form sends both on every save, and one stored
+    before its check came keeps working until it is changed."""
+    if current is None:
+        return request
+    kept = dict(request)
+    for field in ("name", "ca_cert"):
+        sent, stored = kept.get(field), getattr(current, field, None)
+        if isinstance(sent, str) and stored is not None and sent.strip() == str(stored).strip():
+            kept.pop(field)
+    return kept
+
+
 @router.patch("/model-configs/{config_id}")
 async def update_model_config(config_id: int, raw: Request, payload=Depends(require_auth), request: dict = None):
     from app.database import get_db_service
@@ -662,7 +675,7 @@ async def update_model_config(config_id: int, raw: Request, payload=Depends(requ
     name = current.name if current else str(config_id)
     try:
         try:
-            data = ModelConfigUpdate(**(request or {})).model_dump(exclude_unset=True)
+            data = ModelConfigUpdate(**_without_stored_values(request or {}, current)).model_dump(exclude_unset=True)
         except ValidationError as e:
             raise HTTPException(status_code=400, detail=_validation_message(e))
         _check_model_config_policy(data, current)

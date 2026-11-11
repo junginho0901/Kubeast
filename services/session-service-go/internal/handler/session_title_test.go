@@ -40,3 +40,23 @@ func TestANewConversationTakesATitleOfUpTo100Characters(t *testing.T) {
 		t.Fatalf("101 letters: %d %s, %d made", w.Code, w.Body.String(), len(store.sessions))
 	}
 }
+
+// A title the conversation already has is not checked again, so one stored before the limit came can be sent back;
+// a changed one is held to it.
+func TestATitleTheConversationAlreadyHasIsNotCheckedAgain(t *testing.T) {
+	owner := auth.TokenPayload{UserID: "u1", Email: "dev@example.com"}
+	long := strings.Repeat("가", 120)
+	store := &fakeSessions{sessions: map[string]*model.Session{"s1": {ID: "s1", UserID: "u1", Title: long}}}
+	h := &SessionHandler{repo: store, auditStore: &memAudit{}}
+
+	w := httptest.NewRecorder()
+	h.UpdateSession(w, sessionRequest(http.MethodPatch, "s1", `{"title":"`+long+`"}`, owner))
+	if w.Code != http.StatusOK || store.sessions["s1"].Title != long {
+		t.Fatalf("the stored title sent back: %d %s", w.Code, w.Body.String())
+	}
+	w = httptest.NewRecorder()
+	h.UpdateSession(w, sessionRequest(http.MethodPatch, "s1", `{"title":"`+long+`가"}`, owner))
+	if w.Code != http.StatusBadRequest || store.sessions["s1"].Title != long {
+		t.Fatalf("a longer title: %d %s", w.Code, w.Body.String())
+	}
+}
