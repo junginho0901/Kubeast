@@ -170,6 +170,9 @@ export default function ResourceGraph() {
     return { pods, groups, apart }
   }, [graphData])
   const graphErrorCode = (graphError as { response?: { status?: number } } | null)?.response?.status
+  // the server's own reason when it wrote one, not the client's "status code" text
+  const graphErrorDetail = (graphError as { response?: { data?: { detail?: unknown } } } | null)?.response?.data?.detail
+  const graphErrorReason = typeof graphErrorDetail === 'string' && graphErrorDetail.trim() ? graphErrorDetail.trim() : ''
   const forbiddenKinds = graphData?.forbidden_kinds ?? []
 
   // Read once when switched on, and on refresh: a Relay read is recorded in the audit log.
@@ -425,7 +428,9 @@ export default function ResourceGraph() {
           <div className="w-full h-full flex flex-col items-center justify-center text-slate-400" data-testid="resource-graph-error">
             <Info className="w-12 h-12 mb-3" />
             <p className="text-sm">
-              {graphErrorCode
+              {graphErrorCode && graphErrorReason
+                ? t('common.loadErrorEmptyReason', { resource: 'Resource Graph', code: graphErrorCode, reason: graphErrorReason, defaultValue: 'Could not load {{resource}} (server error {{code}}): {{reason}}' })
+                : graphErrorCode
                 ? t('common.loadErrorEmpty', { resource: 'Resource Graph', code: graphErrorCode, defaultValue: 'Could not load {{resource}} (server error {{code}}).' })
                 : t('common.loadErrorEmptyNetwork', { resource: 'Resource Graph', defaultValue: 'Could not load {{resource}} (no response from the server).' })}
             </p>

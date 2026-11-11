@@ -2126,6 +2126,7 @@
     "loadErrorEmpty": "{{resource}}: 불러오지 못했습니다(서버 오류 {{code}}).",
     "loadErrorEmptyReason": "{{resource}}: 불러오지 못했습니다(서버 오류 {{code}}): {{reason}}",
     "loadErrorEmptyNetwork": "{{resource}}: 불러오지 못했습니다(서버 응답 없음).",
+    "loadErrorEmptyNetworkReason": "{{resource}}: 불러오지 못했습니다(서버 응답 없음): {{reason}}",
     "retry": "다시 시도",
     "deleteKind": "{{kind}} 삭제",
     "deleteKindConfirm": "{{kind}} \"{{name}}\" 삭제를 진행할까요?",
@@ -3138,8 +3139,7 @@
     "volumeAttachment": {
       "infoTitle": "VolumeAttachment는 attach/detach가 필요한 CSI 볼륨에서 생성됩니다. (예: NFS 계열은 생성되지 않을 수 있음)",
       "infoLine1": "VolumeAttachment는 attach/detach가 필요한 CSI 볼륨에서 생성됩니다.",
-      "infoLine2": "(예: NFS 계열은 생성되지 않을 수 있음)",
-      "loadError": "VolumeAttachment 조회에 실패했습니다. (클러스터 권한/환경에 따라 불가할 수 있습니다)"
+      "infoLine2": "(예: NFS 계열은 생성되지 않을 수 있음)"
     },
     "pvc": {
       "linkHint": "클릭하면 PV/StorageClass 연결 정보를 확인합니다",

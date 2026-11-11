@@ -103,6 +103,17 @@ test.describe('a list whose read failed says so', () => {
     await liftTop()
   })
 
+  test("VolumeAttachments and the Resource Graph say the server's reason when their read failed", async ({ page }) => {
+    const liftVa = await failReads(page, '/api/v1/cluster/volumeattachments')
+    await page.goto('/storage?tab=volumeattachments&cluster=self')
+    await expect(page.getByTestId('volumeattachments-read-failed')).toHaveText(readFailed, { timeout: 20_000 })
+    await liftVa()
+    const liftGraph = await failReads(page, '/api/v1/resource-graph')
+    await page.goto('/cluster/resource-graph?cluster=self&namespace=default')
+    await expect(page.getByTestId('resource-graph-error')).toContainText(`Could not load Resource Graph (server error 503): ${REASON}`, { timeout: 30_000 })
+    await liftGraph()
+  })
+
   test("a drawer's YAML tab whose read failed says the server's reason", async ({ page }) => {
     const lift = await failReads(page, '/api/v1/cluster/resources/yaml')
     await page.goto(`/configuration/configmaps?cluster=self&namespace=default&detail=${encodeURIComponent('ConfigMap/default/kube-root-ca.crt')}`)

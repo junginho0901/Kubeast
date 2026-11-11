@@ -25,7 +25,7 @@ describe('the custom resource instances notice', () => {
     expect(crReadNotice(['GuardCheck'], undefined, await trFor('ko'))[0].text).toBe('GuardCheck: 이 클러스터에서 볼 권한이 없습니다.')
   })
 
-  it('names the kinds whose list failed otherwise, one line per status, each message on hover', async () => {
+  it('names the kinds whose list failed otherwise, one line per status, the reason of each kind in it', async () => {
     const failed = [
       { kind: 'Thing', code: 500, error: 'conversion webhook failed' },
       { kind: 'Slow', code: 0, error: 'context deadline exceeded' },
@@ -33,9 +33,9 @@ describe('the custom resource instances notice', () => {
     ]
     expect(crReadNotice(['GuardCheck'], failed, await trFor('en'))).toEqual([
       { testId: 'cr-instances-forbidden', text: 'You do not have permission to view GuardCheck in this cluster.' },
-      { testId: 'cr-instances-load-error', text: 'Could not load Slow (no response from the server).', title: 'Slow: context deadline exceeded' },
-      { testId: 'cr-instances-load-error', text: 'Could not load Thing, Other (server error 500).', title: 'Thing: conversion webhook failed\nOther: etcdserver: request timed out' },
+      { testId: 'cr-instances-load-error', text: 'Could not load Slow (no response from the server): context deadline exceeded', title: 'Slow: context deadline exceeded' },
+      { testId: 'cr-instances-load-error', text: 'Could not load Thing, Other (server error 500): Thing: conversion webhook failed; Other: etcdserver: request timed out', title: 'Thing: conversion webhook failed\nOther: etcdserver: request timed out' },
     ])
-    expect(crReadNotice(undefined, failed.slice(0, 1), await trFor('ko'))[0].text).toBe('Thing: 불러오지 못했습니다(서버 오류 500).')
+    expect(crReadNotice(undefined, failed.slice(0, 1), await trFor('ko'))[0].text).toBe('Thing: 불러오지 못했습니다(서버 오류 500): conversion webhook failed')
   })
 })

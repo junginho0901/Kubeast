@@ -2133,6 +2133,7 @@
     "loadErrorEmpty": "Could not load {{resource}} (server error {{code}}).",
     "loadErrorEmptyReason": "Could not load {{resource}} (server error {{code}}): {{reason}}",
     "loadErrorEmptyNetwork": "Could not load {{resource}} (no response from the server).",
+    "loadErrorEmptyNetworkReason": "Could not load {{resource}} (no response from the server): {{reason}}",
     "retry": "Retry",
     "deleteKind": "Delete {{kind}}",
     "deleteKindConfirm": "Are you sure you want to delete {{kind}} \"{{name}}\"?",
@@ -3046,8 +3047,7 @@
     "volumeAttachment": {
       "infoTitle": "VolumeAttachments are created for CSI volumes that require attach/detach. (e.g., NFS may not create them)",
       "infoLine1": "VolumeAttachments are created for CSI volumes that require attach/detach.",
-      "infoLine2": "(e.g., NFS may not create them)",
-      "loadError": "Failed to load VolumeAttachments. (This may be restricted by cluster permissions or environment)"
+      "infoLine2": "(e.g., NFS may not create them)"
     },
     "pvc": {
       "linkHint": "Click to view PV/StorageClass links",
