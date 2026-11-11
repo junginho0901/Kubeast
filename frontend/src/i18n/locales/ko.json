@@ -2207,6 +2207,7 @@
     "readFailed": "목록을 읽지 못했습니다: {{reason}}",
     "describeFailed": "상세 정보를 읽지 못했습니다: {{reason}}",
     "describeFailedRow": "상세 정보를 읽지 못했습니다: {{reason}} 목록 줄에 있는 값만 보입니다.",
+    "describeRefreshFailed": "상세를 다시 읽지 못했습니다: {{reason}} 보이는 값은 {{time}}에 읽은 것입니다.",
     "logsReadFailed": "로그를 읽지 못했습니다: {{reason}}",
     "copyFailed": "복사하지 못했습니다. 브라우저가 받지 않았습니다. 글을 직접 선택해 복사하세요.",
     "notCopied": "복사 안 됨",

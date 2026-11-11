@@ -10,7 +10,7 @@ import { BindingSubjects } from './role-info/BindingSubjects'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -23,7 +23,7 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
   const { open: openDetail } = useResourceDetail()
 
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['rolebinding-describe', namespace, name],
     queryFn: () => api.describeRoleBinding(namespace, name),
     enabled: !!namespace && !!name,
@@ -62,10 +62,11 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
   // nothing below was read: the bindings, keys and versions come from the describe answer only
-  if (describeError) return <DescribeFailure error={describeError} className="py-4" />
+  if (describeError && !describe) return <DescribeFailure error={describeError} className="py-4" />
 
   return (
     <div className="space-y-4">
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       <InfoSection title="Basic Info">
         <div className="space-y-2">
           <InfoRow label="Kind" value="RoleBinding" />

@@ -33,7 +33,7 @@ import NetworkPolicies from './NetworkPolicies'
 import NetworkFlows from './NetworkFlows'
 import NetworkDrops from './NetworkDrops'
 import TopTalkers from './TopTalkers'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -71,7 +71,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const canExec = useCanI('resource.pod.exec', 'create', { group: '', resource: 'pods', subresource: 'exec', namespace, name })
   const canEditPod = useCanI('resource.pod.edit', 'patch', { group: '', resource: 'pods', namespace, name })
 
-  const { data: podDescribe, isLoading, error: describeError } = useQuery({
+  const { data: podDescribe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['pod-describe', namespace, name],
     queryFn: () => api.describePod(namespace, name),
     enabled: !!name && !!namespace,
@@ -268,11 +268,12 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
   // the Pods list's row holds no spec or status: without the describe answer the counts and tables would be 0 and None
-  if (describeError && !rawJson?.spec) return <DescribeFailure error={describeError} className="py-4" />
+  if (describeError && !podDescribe && !rawJson?.spec) return <DescribeFailure error={describeError} className="py-4" />
 
   return (
     <>
-      <DescribeFailure error={describeError} showingRow />
+      <DescribeFailure error={podDescribe ? null : describeError} showingRow />
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       {/* Summary Badges */}
       <div className="flex flex-wrap items-center gap-2">
         <SummaryBadge label="Phase" value={phase} color={phase === 'Running' ? 'green' : phase === 'Pending' ? 'amber' : phase === 'Failed' ? 'red' : 'default'} />

@@ -5,7 +5,7 @@ import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { eventsForAI, fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
-import { DescribeFailure, ListReadFailure } from '../DescribeFailure'
+import { DescribeFailure, ListReadFailure, DescribeStale } from '../DescribeFailure'
 
 interface Props {
   name: string
@@ -32,7 +32,7 @@ function hintNames(listed: unknown, raw: unknown): string[] {
 
 export default function EndpointSliceDetail({ name, namespace, rawJson }: Props) {
   // the events kubectl describe lists about the slice
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['endpointslice-describe', namespace, name],
     queryFn: () => api.describeEndpointSlice(namespace as string, name),
     enabled: !!name && !!namespace,
@@ -68,7 +68,8 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
   return (
     <>
       <InfoSection title="EndpointSlice Info">
-        <DescribeFailure error={describeError} showingRow className="mb-2" />
+        <DescribeFailure error={describe ? null : describeError} showingRow className="mb-2" />
+        <DescribeStale error={describeError} readAt={dataUpdatedAt} />
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
           {namespace && <InfoRow label="Namespace" value={namespace} />}

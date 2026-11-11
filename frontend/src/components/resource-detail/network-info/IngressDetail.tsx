@@ -7,7 +7,7 @@ import { backendPort, backendService } from '@/utils/ingressBackend'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { PrometheusSection, MetricCard } from '../PrometheusMetrics'
-import { DescribeFailure } from '../DescribeFailure'
+import { DescribeFailure, DescribeStale } from '../DescribeFailure'
 
 interface Props {
   name: string
@@ -17,7 +17,7 @@ interface Props {
 
 export default function IngressDetail({ name, namespace, rawJson }: Props) {
   // the events kubectl describe lists about the Ingress
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['ingress-describe', namespace, name],
     queryFn: () => api.describeIngress(namespace as string, name),
     enabled: !!name && !!namespace,
@@ -45,7 +45,8 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
   return (
     <>
       <InfoSection title="Ingress Info">
-        <DescribeFailure error={describeError} showingRow className="mb-2" />
+        <DescribeFailure error={describe ? null : describeError} showingRow className="mb-2" />
+        <DescribeStale error={describeError} readAt={dataUpdatedAt} />
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
           {namespace && <InfoRow label="Namespace" value={namespace} />}

@@ -138,3 +138,22 @@ test.describe('what a drawer could not read is not 0 or None', () => {
     await expect(drawer.getByTestId('service-ready-addresses')).toHaveCount(0)
   })
 })
+
+// A drawer that follows its object and whose next read fails keeps what it read and says so, with the reason and when
+// that was read, instead of showing the old answer as the object now (D-17); the line goes once a read comes back. A
+// Lease's drawer reads every 5 s. The failing reads are answered in the browser.
+test('a drawer whose read again failed says so and keeps what it read', async ({ page }) => {
+  await page.goto(`/?cluster=self&detail=${encodeURIComponent('Lease/kube-system/kube-controller-manager')}`)
+  const drawer = page.locator(DRAWER).last()
+  await expect(drawer.getByText('kube-controller-manager', { exact: false }).first()).toBeVisible({ timeout: 30_000 })
+  const holder = await drawer.getByText('Holder Identity', { exact: true }).locator('xpath=..').innerText()
+  const failing = (u: URL) => u.pathname.startsWith('/api/v1/cluster/') && u.pathname.endsWith('/describe')
+  await page.route(failing, (route) => (route.request().method() === 'GET' ? route.fulfill({ status: 503, json: { detail: REASON } }) : route.fallback()))
+  const stale = drawer.getByTestId('describe-stale')
+  await expect(stale).toContainText(`Could not read the details again: ${REASON}`, { timeout: 30_000 })
+  await expect(stale).toContainText(/What shows was read at \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\./)
+  expect(await drawer.getByText('Holder Identity', { exact: true }).locator('xpath=..').innerText(), 'the last answer stays').toBe(holder)
+  await page.unroute(failing)
+  await expect(stale).toHaveCount(0, { timeout: 30_000 })
+})
+

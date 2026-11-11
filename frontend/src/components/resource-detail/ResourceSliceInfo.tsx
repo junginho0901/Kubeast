@@ -6,7 +6,7 @@ import { usePagination } from './usePagination'
 import { draValueMap } from './draText'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -37,7 +37,7 @@ const text = (v: unknown) => (v != null && v !== '' ? String(v) : '-')
 
 export default function ResourceSliceInfo({ name, rawJson }: Props) {
   const { open: openDetail } = useResourceDetail()
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['resourceslice-describe', name],
     queryFn: () => api.describeResourceSlice(name) as Promise<ResourceSliceDescribe>,
     enabled: !!name,
@@ -70,7 +70,8 @@ export default function ResourceSliceInfo({ name, rawJson }: Props) {
     <>
       <InfoSection title="Slice Info">
         {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading ResourceSlice details...</Tx></p>}
-        <DescribeFailure error={describeError} showingRow className="mb-2" />
+        <DescribeFailure error={describe ? null : describeError} showingRow className="mb-2" />
+        <DescribeStale error={describeError} readAt={dataUpdatedAt} />
         <div className="space-y-2">
           <InfoRow label="Name" value={describe?.name || name} />
           <InfoRow label="Node Name" value={describe?.node_name || '-'} />
@@ -126,7 +127,7 @@ export default function ResourceSliceInfo({ name, rawJson }: Props) {
         </InfoSection>
       ) : (
         <InfoSection title="Devices">
-          {describeError ? <p className="text-xs text-slate-500">—</p> : <p className="text-xs text-slate-400"><Tx>No devices</Tx></p>}
+          {describeError && !describe ? <p className="text-xs text-slate-500">—</p> : <p className="text-xs text-slate-400"><Tx>No devices</Tx></p>}
         </InfoSection>
       )}
 

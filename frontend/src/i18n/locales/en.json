@@ -2208,6 +2208,7 @@
     "readFailed": "Could not read the list: {{reason}}",
     "describeFailed": "Could not read the details: {{reason}}",
     "describeFailedRow": "Could not read the details: {{reason}} Showing what the list's row holds.",
+    "describeRefreshFailed": "Could not read the details again: {{reason}} What shows was read at {{time}}.",
     "logsReadFailed": "Could not read the logs: {{reason}}",
     "copyFailed": "Not copied: the browser did not take it. Select the text and copy it yourself.",
     "notCopied": "Not copied",

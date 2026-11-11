@@ -10,7 +10,7 @@ import { preemptionPolicy } from './clusterDetail'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -19,7 +19,7 @@ interface Props {
 
 export default function PriorityClassInfo({ name }: Props) {
   const { open: openDetail } = useResourceDetail()
-  const { data: desc, isLoading, error: describeError } = useQuery({
+  const { data: desc, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['priorityclass-describe', name],
     queryFn: () => api.describePriorityClass(name),
     staleTime: 10_000,
@@ -75,6 +75,7 @@ export default function PriorityClassInfo({ name }: Props) {
 
   return (
     <div className="space-y-4">
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       {/* Summary Badges */}
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Value" value={value} color={value > 0 ? 'green' : 'default'} />

@@ -4,7 +4,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
-import { DescribeFailure, ListReadFailure } from '../DescribeFailure'
+import { DescribeFailure, ListReadFailure, DescribeStale } from '../DescribeFailure'
 
 interface Props {
   name: string
@@ -21,7 +21,7 @@ export default function IngressClassDetail({ name, rawJson }: Props) {
     staleTime: 10_000,
   })
   // the events kubectl describe lists about the class
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['ingressclass-describe', name],
     queryFn: () => api.describeIngressClass(name),
     enabled: !!name,
@@ -52,7 +52,8 @@ export default function IngressClassDetail({ name, rawJson }: Props) {
   return (
     <>
       <InfoSection title="IngressClass Info">
-        <DescribeFailure error={describeError} showingRow className="mb-2" />
+        <DescribeFailure error={describe ? null : describeError} showingRow className="mb-2" />
+        <DescribeStale error={describeError} readAt={dataUpdatedAt} />
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
           <InfoRow label="Controller" value={String(spec.controller ?? rawJson?.controller ?? '-')} />

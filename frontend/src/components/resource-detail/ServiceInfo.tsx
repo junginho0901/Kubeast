@@ -12,7 +12,7 @@ import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 // The API server applies the selector to the whole read: every row it gives is a match.
 const keepEvery = () => true
@@ -129,7 +129,7 @@ function formatIngress(ingress: Array<{ ip?: string | null; hostname?: string | 
 export default function ServiceInfo({ name, namespace, rawJson }: Props) {
   const enabled = !!name && !!namespace
   const { open: openDetail } = useResourceDetail()
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['service-describe', namespace, name],
     queryFn: () => api.describeService(namespace as string, name) as Promise<ServiceDescribe>,
     enabled,
@@ -238,7 +238,8 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
 
       <InfoSection title="Service Info">
         {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading service details...</Tx></p>}
-        <DescribeFailure error={describeError} showingRow className="mb-2" />
+        <DescribeFailure error={describe ? null : describeError} showingRow className="mb-2" />
+        <DescribeStale error={describeError} readAt={dataUpdatedAt} />
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
           {namespace && <InfoRow label="Namespace" value={namespace} />}

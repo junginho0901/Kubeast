@@ -5,7 +5,7 @@ import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../De
 import { fmtRel, fmtTs } from '../detailFormat'
 import { endpointsView } from '../netstoreDetail'
 import { usePagination } from '../usePagination'
-import { DescribeFailure } from '../DescribeFailure'
+import { DescribeFailure, DescribeStale } from '../DescribeFailure'
 
 interface Props {
   name: string
@@ -66,7 +66,7 @@ function SubsetAddresses({ label, addresses, testId }: { label: string; addresse
 export default function EndpointDetail({ name, namespace, kind, rawJson }: Props) {
   // The describe answer (the list's row with the metadata, the subsets and the events), the same whether the drawer
   // was opened from the list or by link
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['endpoints-describe', namespace, name],
     queryFn: () => api.describeEndpoint(namespace as string, name),
     enabled: !!name && !!namespace,
@@ -106,7 +106,8 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
         </div>
         {isLoading && <p className="text-xs text-slate-400 mt-2"><Tx>Loading details...</Tx></p>}
-        <DescribeFailure error={describeError} showingRow={!!view} className="mt-2" />
+        <DescribeFailure error={describe ? null : describeError} showingRow={!!view} className="mt-2" />
+        <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       </InfoSection>
 
       {ports.length > 0 && (

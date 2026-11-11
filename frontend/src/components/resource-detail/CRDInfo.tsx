@@ -10,7 +10,7 @@ import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { LIVE_ROWS_MAX, useWatchChanges } from '@/services/useWatchChanges'
 import { formatAge } from '@/utils/time'
 import { failureText } from '@/utils/failureText'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -21,7 +21,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
 
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['crd-describe', name],
     queryFn: () => api.describeCRD(name),
     enabled: !!name,
@@ -100,10 +100,11 @@ export default function CRDInfo({ name, rawJson }: Props) {
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
   // nothing below was read: the bindings, keys and versions come from the describe answer only
-  if (describeError) return <DescribeFailure error={describeError} className="py-4" />
+  if (describeError && !describe) return <DescribeFailure error={describeError} className="py-4" />
 
   return (
     <div className="space-y-4">
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       <InfoSection title={tr('crdInfo.basicInfo', 'Basic Info')}>
         <div className="space-y-2">
           <InfoRow label="Kind" value="CustomResourceDefinition" />

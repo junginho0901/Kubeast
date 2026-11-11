@@ -18,7 +18,7 @@ import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 import { secretDescribeForAI } from './secretDescribeForAI'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { useNamespacePodTable } from './useNamespacePodTable'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -64,7 +64,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
   })
   const { items: pagedUsingSAs, nav: usingSAsNav } = usePagination(usingSAs, 10)
 
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['secret-describe', namespace, name],
     queryFn: () => api.describeSecret(namespace, name),
     enabled: !!namespace && !!name,
@@ -156,10 +156,11 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
   // nothing below was read: the bindings, keys and versions come from the describe answer only
-  if (describeError) return <DescribeFailure error={describeError} className="py-4" />
+  if (describeError && !describe) return <DescribeFailure error={describeError} className="py-4" />
 
   return (
     <div className="space-y-4">
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       <InfoSection title={tr('secretInfo.basicInfo', 'Basic Info')}>
         <div className="space-y-2">
           <InfoRow label="Kind" value="Secret" />

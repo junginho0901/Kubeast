@@ -10,7 +10,7 @@ import { useNamespacePodTable } from './useNamespacePodTable'
 import { SET_POD_TABLE_WATCH_MAX } from './namespacePodTable'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 // The API server applies the selector to the whole read: every row it gives is a match.
 const keepEvery = () => true
@@ -23,7 +23,7 @@ interface Props {
 
 export default function PDBInfo({ name, namespace }: Props) {
   const { open: openDetail } = useResourceDetail()
-  const { data: desc, isLoading, error: describeError } = useQuery({
+  const { data: desc, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['pdb-describe', namespace, name],
     queryFn: () => api.describePDB(namespace, name),
     staleTime: 10_000,
@@ -83,6 +83,7 @@ export default function PDBInfo({ name, namespace }: Props) {
 
   return (
     <div className="space-y-4">
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       {/* Summary Badges */}
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Current Healthy" value={currentHealthy} color={isHealthy ? 'green' : 'red'} />

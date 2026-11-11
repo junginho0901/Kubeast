@@ -7,7 +7,7 @@ import { webhookAffected, type WebhookRule } from './clusterDetail'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -18,7 +18,7 @@ interface Props {
 export default function WebhookConfigInfo({ name, kind }: Props) {
   const isMutating = kind === 'MutatingWebhookConfiguration'
 
-  const { data: desc, isLoading, error: describeError } = useQuery({
+  const { data: desc, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: [isMutating ? 'mutatingwebhookconfiguration-describe' : 'validatingwebhookconfiguration-describe', name],
     queryFn: () =>
       isMutating
@@ -54,6 +54,7 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
 
   return (
     <div className="space-y-4">
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       {/* Summary Badges */}
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Webhooks" value={webhooks.length} color={webhooks.length > 0 ? 'green' : 'default'} />

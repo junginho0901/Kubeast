@@ -6,7 +6,7 @@ import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
 import { volumeAttachmentState } from '../netstoreDetail'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
-import { DescribeFailure } from '../DescribeFailure'
+import { DescribeFailure, DescribeStale } from '../DescribeFailure'
 
 interface VolumeAttachmentDescribeResponse {
   uid?: string
@@ -41,7 +41,7 @@ interface VolumeAttachmentDescribeResponse {
 
 export default function VolumeAttachmentDetail({ name, rawJson }: { name: string; rawJson?: Record<string, unknown> }) {
   const { open: openDetail } = useResourceDetail()
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['volumeattachment-describe', name],
     queryFn: () => api.describeVolumeAttachment(name) as Promise<VolumeAttachmentDescribeResponse>,
     enabled: !!name,
@@ -140,7 +140,8 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
         </div>
       </InfoSection>
       {isLoading && <p className="text-xs text-slate-400"><Tx>Loading details...</Tx></p>}
-      <DescribeFailure error={describeError} showingRow />
+      <DescribeFailure error={describe ? null : describeError} showingRow />
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
 
       {(attachErrorMessage || detachErrorMessage) && (
         <InfoSection title="Attach/Detach Errors">

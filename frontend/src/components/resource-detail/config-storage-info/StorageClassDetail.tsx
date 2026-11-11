@@ -6,7 +6,7 @@ import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
 import { allowedTopologyLines } from '../netstoreDetail'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
-import { DescribeFailure } from '../DescribeFailure'
+import { DescribeFailure, DescribeStale } from '../DescribeFailure'
 
 interface StorageClassRelatedPV {
   name?: string | null
@@ -55,7 +55,7 @@ interface StorageClassDescribeResponse {
 
 export default function StorageClassDetail({ name, rawJson }: { name: string; rawJson?: Record<string, unknown> }) {
   const { open: openDetail } = useResourceDetail()
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['storageclass-describe', name],
     queryFn: () => api.describeStorageClass(name) as Promise<StorageClassDescribeResponse>,
     enabled: !!name,
@@ -128,7 +128,8 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
         </div>
       </InfoSection>
       {isLoading && <p className="text-xs text-slate-400"><Tx>Loading details...</Tx></p>}
-      <DescribeFailure error={describeError} showingRow />
+      <DescribeFailure error={describe ? null : describeError} showingRow />
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
 
       {Object.keys(parameters).length > 0 && (
         <InfoSection title="Parameters">

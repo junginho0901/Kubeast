@@ -4,7 +4,7 @@ import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, Tx
 import { fmtRel } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 // ValidatingAdmissionPolicy / MutatingAdmissionPolicy drawer: the policy's
 // spec as the API writes it (match constraints, conditions, variables, the
@@ -18,7 +18,7 @@ interface Props {
 export default function AdmissionPolicyInfo({ name, kind }: Props) {
   const validating = kind === 'ValidatingAdmissionPolicy'
 
-  const { data: desc, isLoading, error: describeError } = useQuery({
+  const { data: desc, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['admissionpolicy-describe', kind, name],
     queryFn: () => (validating ? api.describeValidatingAdmissionPolicy(name) : api.describeMutatingAdmissionPolicy(name)),
     staleTime: 10_000,
@@ -53,6 +53,7 @@ export default function AdmissionPolicyInfo({ name, kind }: Props) {
 
   return (
     <div className="space-y-4" data-testid="admission-policy-info">
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label={validating ? 'Validations' : 'Mutations'} value={ruleCount} color={ruleCount > 0 ? 'green' : 'default'} />
         <SummaryBadge label="Bindings" value={bindings.length} color={bindings.length > 0 ? 'green' : 'amber'} />
