@@ -6,7 +6,7 @@ import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { configParameterMap } from './draText'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -33,7 +33,7 @@ type DeviceClassDescribe = {
 
 export default function DeviceClassInfo({ name, rawJson }: Props) {
   const { open: openDetail } = useResourceDetail()
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['deviceclass-describe', name],
     queryFn: () => api.describeDeviceClass(name) as Promise<DeviceClassDescribe>,
     enabled: !!name,
@@ -72,7 +72,8 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
     <>
       <InfoSection title="DeviceClass Info">
         {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading DeviceClass details...</Tx></p>}
-        <DescribeFailure error={describeError} showingRow className="mb-2" />
+        <DescribeFailure error={describe ? null : describeError} showingRow className="mb-2" />
+        <DescribeStale error={describeError} readAt={dataUpdatedAt} />
         <div className="space-y-2">
           <InfoRow label="Name" value={describe?.name || name} />
           <InfoRow label="Extended Resource Name" value={describe?.extended_resource_name || '-'} />
@@ -121,6 +122,8 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
       <InfoSection title="Used By ResourceClaims ({{n}})" titleValues={{ n: describe?.used_by ? usingClaims.length : '-' }}>
         {describe?.used_by_error ? (
           <p className="text-xs text-red-400">{describe.used_by_error}</p>
+        ) : describeError && !describe ? (
+          <p className="text-xs text-slate-500">—</p>
         ) : usingClaims.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No ResourceClaim in the cluster references this DeviceClass.</Tx></p>
         ) : (

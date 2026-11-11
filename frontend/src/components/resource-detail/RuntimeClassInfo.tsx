@@ -10,7 +10,7 @@ import { ResourceLink } from './ResourceLink'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -20,7 +20,7 @@ interface Props {
 export default function RuntimeClassInfo({ name }: Props) {
   const dl = useDetailLabel()
   const { open: openDetail } = useResourceDetail()
-  const { data: desc, isLoading, error: describeError } = useQuery({
+  const { data: desc, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['runtimeclass-describe', name],
     queryFn: () => api.describeRuntimeClass(name),
     staleTime: 10_000,
@@ -76,6 +76,7 @@ export default function RuntimeClassInfo({ name }: Props) {
 
   return (
     <div className="space-y-4">
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       {/* Summary Badges */}
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Handler" value={handler} color="green" />

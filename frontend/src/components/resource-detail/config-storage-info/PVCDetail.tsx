@@ -6,7 +6,7 @@ import { fmtRel, fmtTs } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
 import { usePagination } from '../usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
-import { DescribeFailure } from '../DescribeFailure'
+import { DescribeFailure, DescribeStale } from '../DescribeFailure'
 
 interface PVCDataSourceRef {
   kind?: string | null
@@ -75,7 +75,7 @@ function formatDataSourceRef(ref?: PVCDataSourceRef | null): string {
 
 export default function PVCDetail({ name, namespace, rawJson }: { name: string; namespace?: string; rawJson?: Record<string, unknown> }) {
   const { open: openDetail } = useResourceDetail()
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['pvc-describe', namespace, name],
     queryFn: () => api.describePVC(namespace as string, name) as Promise<PVCDescribeResponse>,
     enabled: !!namespace && !!name,
@@ -156,7 +156,8 @@ export default function PVCDetail({ name, namespace, rawJson }: { name: string; 
         </div>
       </InfoSection>
       {isLoading && <p className="text-xs text-slate-400"><Tx>Loading details...</Tx></p>}
-      <DescribeFailure error={describeError} showingRow />
+      <DescribeFailure error={describe ? null : describeError} showingRow />
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       {boundPv?.name && (
         <InfoSection title="Bound PersistentVolume">
           <div className="space-y-2">

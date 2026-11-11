@@ -9,7 +9,7 @@ import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { useReverseRoleBindings } from './role-info/useReverseRoleBindings'
 import { subjectsText, unreadableText } from './role-info/referencedBy'
 import { ruleApiGroupsText } from './role-info/ruleText'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -21,7 +21,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
 
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['role-describe', namespace, name],
     queryFn: () => api.describeRole(namespace, name),
     enabled: !!namespace && !!name,
@@ -70,6 +70,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
 
   return (
     <div className="space-y-4">
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       {!describe && <DescribeFailure error={describeError} showingRow />}
       <InfoSection title="Basic Info">
         <div className="space-y-2">

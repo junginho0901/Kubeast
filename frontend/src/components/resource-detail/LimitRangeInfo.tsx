@@ -8,7 +8,7 @@ import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -24,7 +24,7 @@ const typeColors: Record<string, 'green' | 'amber' | 'red' | 'default'> = {
 
 export default function LimitRangeInfo({ name, namespace }: Props) {
   const { open: openDetail } = useResourceDetail()
-  const { data: desc, isLoading, error: describeError } = useQuery({
+  const { data: desc, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['limitrange-describe', namespace, name],
     queryFn: () => api.describeLimitRange(namespace, name),
     staleTime: 10_000,
@@ -77,6 +77,7 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
 
   return (
     <div className="space-y-4">
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       {/* Summary Badges */}
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Limit Types" value={limits.length} color="default" />

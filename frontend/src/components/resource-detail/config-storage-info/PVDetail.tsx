@@ -6,7 +6,7 @@ import { fmtRel, fmtTs } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
 import { usePagination } from '../usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
-import { DescribeFailure } from '../DescribeFailure'
+import { DescribeFailure, DescribeStale } from '../DescribeFailure'
 
 // spec.nodeAffinity (the server sends it as JSON) the way kubectl describe pv prints it: one line per required term,
 // "key operator [values]". Anything else stays as the server wrote it.
@@ -84,7 +84,7 @@ interface PVDescribeResponse {
 
 export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Record<string, unknown> }) {
   const { open: openDetail } = useResourceDetail()
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['pv-describe', name],
     queryFn: () => api.describePV(name) as Promise<PVDescribeResponse>,
     enabled: !!name,
@@ -171,7 +171,8 @@ export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Re
         </div>
       </InfoSection>
       {isLoading && <p className="text-xs text-slate-400"><Tx>Loading details...</Tx></p>}
-      <DescribeFailure error={describeError} showingRow />
+      <DescribeFailure error={describe ? null : describeError} showingRow />
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       {csiVolumeAttributes && Object.keys(csiVolumeAttributes).length > 0 && (
         <InfoSection title="Volume Attributes">
           <KeyValueTags data={csiVolumeAttributes} />

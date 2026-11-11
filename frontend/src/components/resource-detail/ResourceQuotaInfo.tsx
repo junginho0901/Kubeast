@@ -5,7 +5,7 @@ import { fmtRel } from './detailFormat'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { quotaPercent } from '@/utils/resourceQuantity'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -14,7 +14,7 @@ interface Props {
 }
 
 export default function ResourceQuotaInfo({ name, namespace }: Props) {
-  const { data: desc, isLoading, error: describeError } = useQuery({
+  const { data: desc, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['resourcequota-describe', namespace, name],
     queryFn: () => api.describeResourceQuota(namespace, name),
     staleTime: 10_000,
@@ -47,6 +47,7 @@ export default function ResourceQuotaInfo({ name, namespace }: Props) {
 
   return (
     <div className="space-y-4">
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       {/* Summary Badges */}
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Resources" value={resourceKeys.length} color={resourceKeys.length > 0 ? 'green' : 'default'} />

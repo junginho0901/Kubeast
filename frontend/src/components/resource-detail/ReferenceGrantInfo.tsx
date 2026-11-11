@@ -4,7 +4,7 @@ import { EventsSection, InfoSection, InfoRow, KeyValueTags, NoneText, Th, Tx } f
 import { fmtRel, fmtTs } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import type { ReferenceGrantInfo as ReferenceGrantRow } from '@/services/api'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -29,7 +29,7 @@ function text(value: unknown): string {
 
 export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) {
   const enabled = !!name && !!namespace
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['referencegrant-describe', namespace, name],
     queryFn: () => api.describeReferenceGrant(namespace as string, name) as Promise<ReferenceGrantDescribe>,
     enabled,
@@ -81,7 +81,8 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
     <>
       <InfoSection title="ReferenceGrant Info">
         {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading ReferenceGrant details...</Tx></p>}
-        <DescribeFailure error={describeError} showingRow className="mb-2" />
+        <DescribeFailure error={describe ? null : describeError} showingRow className="mb-2" />
+        <DescribeStale error={describeError} readAt={dataUpdatedAt} />
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
           {namespace && <InfoRow label="Namespace" value={namespace} />}

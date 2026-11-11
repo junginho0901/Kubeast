@@ -9,7 +9,7 @@ import { usePrometheusRangeQuery } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, Sparkline } from './PrometheusMetrics'
 import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -19,7 +19,7 @@ interface Props {
 
 export default function HPAInfo({ name, namespace }: Props) {
   const dl = useDetailLabel()
-  const { data: desc, isLoading, error: describeError } = useQuery({
+  const { data: desc, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['hpa-describe', namespace, name],
     queryFn: () => api.describeHPA(namespace, name),
     staleTime: 10_000,
@@ -58,6 +58,7 @@ export default function HPAInfo({ name, namespace }: Props) {
 
   return (
     <div className="space-y-4">
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       {/* Summary Badges */}
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Current" value={currentReplicas} color={currentReplicas > 0 ? 'green' : 'default'} />

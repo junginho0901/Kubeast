@@ -7,7 +7,7 @@ import { usePagination } from './usePagination'
 import { DeviceRequestsTable } from './DeviceRequestsTable'
 import { configParameterMap } from './draText'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -38,7 +38,7 @@ const text = (v: unknown) => (v != null && v !== '' ? String(v) : '-')
 export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: Props) {
   const enabled = !!name && !!namespace
   const { open: openDetail } = useResourceDetail()
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['resourceclaimtemplate-describe', namespace, name],
     queryFn: () => api.describeResourceClaimTemplate(namespace, name) as Promise<ResourceClaimTemplateDescribe>,
     enabled,
@@ -70,7 +70,8 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
     <>
       <InfoSection title="Template Info">
         {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading ResourceClaimTemplate details...</Tx></p>}
-        <DescribeFailure error={describeError} showingRow className="mb-2" />
+        <DescribeFailure error={describe ? null : describeError} showingRow className="mb-2" />
+        <DescribeStale error={describeError} readAt={dataUpdatedAt} />
         <div className="space-y-2">
           <InfoRow label="Name" value={describe?.name || name} />
           <InfoRow label="Namespace" value={describe?.namespace || namespace} />
@@ -81,6 +82,8 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
       <InfoSection title="Related ResourceClaims ({{n}})" titleValues={{ n: describe?.related_claims ? relatedClaims.length : '-' }}>
         {describe?.related_claims_error ? (
           <p className="text-xs text-red-400">{describe.related_claims_error}</p>
+        ) : describeError && !describe ? (
+          <p className="text-xs text-slate-500">—</p>
         ) : relatedClaims.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No pod in this namespace has a ResourceClaim made from this template.</Tx></p>
         ) : (
@@ -178,7 +181,7 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
               {JSON.stringify(claimSpec, null, 2)}
             </pre>
           ) : (
-            <p className="text-xs text-slate-400"><Tx>No claim spec</Tx></p>
+            describeError && !describe ? <p className="text-xs text-slate-500">—</p> : <p className="text-xs text-slate-400"><Tx>No claim spec</Tx></p>
           )}
         </InfoSection>
       )}

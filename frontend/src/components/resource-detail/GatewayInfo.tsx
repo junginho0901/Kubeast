@@ -7,7 +7,7 @@ import { conditionStatus, conditionSummary } from './gatewayDetail'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import type { GatewayInfo as GatewayRow } from '@/services/api'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -32,7 +32,7 @@ function text(value: unknown): string {
 
 export default function GatewayInfo({ name, namespace, rawJson }: Props) {
   const enabled = !!name && !!namespace
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['gateway-describe', namespace, name],
     queryFn: () => api.describeGateway(namespace as string, name) as Promise<GatewayDescribe>,
     enabled,
@@ -96,7 +96,8 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
     <>
       <InfoSection title="Gateway Info">
         {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading gateway details...</Tx></p>}
-        <DescribeFailure error={describeError} showingRow className="mb-2" />
+        <DescribeFailure error={describe ? null : describeError} showingRow className="mb-2" />
+        <DescribeStale error={describeError} readAt={dataUpdatedAt} />
         <div className="flex flex-wrap gap-2 mb-3">
           <SummaryBadge label="Status" value={statusText} color="default" />
           <SummaryBadge label="Programmed" value={programmed} color={programmed === 'True' ? 'green' : 'amber'} />

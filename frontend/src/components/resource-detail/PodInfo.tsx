@@ -33,6 +33,7 @@ import NetworkPolicies from './NetworkPolicies'
 import NetworkFlows from './NetworkFlows'
 import NetworkDrops from './NetworkDrops'
 import TopTalkers from './TopTalkers'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -70,7 +71,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const canExec = useCanI('resource.pod.exec', 'create', { group: '', resource: 'pods', subresource: 'exec', namespace, name })
   const canEditPod = useCanI('resource.pod.edit', 'patch', { group: '', resource: 'pods', namespace, name })
 
-  const { data: podDescribe, isLoading } = useQuery({
+  const { data: podDescribe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['pod-describe', namespace, name],
     queryFn: () => api.describePod(namespace, name),
     enabled: !!name && !!namespace,
@@ -233,11 +234,14 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const tracesHref = fillTraceTemplate(traceTemplates(features)?.searchUrl, { service: podService, namespace, pod: name, cluster: currentCluster })
   const finalizers = (podDescribe?.finalizers as string[] | undefined) || (meta.finalizers as string[] | undefined) || []
   const readyPair = String(podDescribe?.ready || '').match(/^(\d+)\/(\d+)$/)
-  const readyContainers = readyPair ? Number(readyPair[1]) || 0 : containers.filter((c: any) => c.ready).length
+  // without the describe answer the containers are the spec's, which hold no ready or state: those are the object's
+  // containerStatuses, so a pod that is 1/1 does not read 0/1 and Not ready
+  const statusRows = (!podDescribe && Array.isArray(status.containerStatuses) ? status.containerStatuses : containers) as any[]
+  const readyContainers = readyPair ? Number(readyPair[1]) || 0 : statusRows.filter((c: any) => c.ready).length
   const totalContainers = readyPair ? Number(readyPair[2]) || 0 : containers.length
-  const waitingCount = containers.filter((c: any) => Boolean(c?.state?.waiting)).length
-  const terminatedCount = containers.filter((c: any) => Boolean(c?.state?.terminated)).length
-  const crashLoopCount = containers.filter((c: any) => c?.state?.waiting?.reason === 'CrashLoopBackOff').length
+  const waitingCount = statusRows.filter((c: any) => Boolean(c?.state?.waiting)).length
+  const terminatedCount = statusRows.filter((c: any) => Boolean(c?.state?.terminated)).length
+  const crashLoopCount = statusRows.filter((c: any) => c?.state?.waiting?.reason === 'CrashLoopBackOff').length
   const podStatus = podDrawerStatus(podDescribe, phase)
   const statusNotReady = runningNotReady({ status: podStatus, ready: `${readyContainers}/${totalContainers}` })
   const lastStates = useMemo(() => podLastStates(containers), [containers])
@@ -266,9 +270,13 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   }, [isExecContainerOpen, isExecShellOpen])
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
+  // the Pods list's row holds no spec or status: without the describe answer the counts and tables would be 0 and None
+  if (describeError && !podDescribe && !rawJson?.spec) return <DescribeFailure error={describeError} className="py-4" />
 
   return (
     <>
+      <DescribeFailure error={podDescribe ? null : describeError} showingRow />
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       {/* Summary Badges */}
       <div className="flex flex-wrap items-center gap-2">
         <SummaryBadge label="Phase" value={phase} color={phase === 'Running' ? 'green' : phase === 'Pending' ? 'amber' : phase === 'Failed' ? 'red' : 'default'} />

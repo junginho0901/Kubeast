@@ -5,6 +5,7 @@ import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { eventsForAI, fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
+import { DescribeFailure, ListReadFailure, DescribeStale } from '../DescribeFailure'
 
 interface Props {
   name: string
@@ -31,7 +32,7 @@ function hintNames(listed: unknown, raw: unknown): string[] {
 
 export default function EndpointSliceDetail({ name, namespace, rawJson }: Props) {
   // the events kubectl describe lists about the slice
-  const { data: describe, isLoading } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['endpointslice-describe', namespace, name],
     queryFn: () => api.describeEndpointSlice(namespace as string, name),
     enabled: !!name && !!namespace,
@@ -52,7 +53,7 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
   const notReady = Number(rawJson?.endpoints_not_ready ?? Math.max(total - ready, 0))
 
   const { open: openDetail } = useResourceDetail()
-  const { data: nsSlices } = useQuery({
+  const { data: nsSlices, error: peersError } = useQuery({
     queryKey: ['endpointslice-peers', namespace, serviceName],
     queryFn: () => api.getEndpointSlices(namespace as string),
     enabled: !!namespace && serviceName !== '-',
@@ -67,6 +68,8 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
   return (
     <>
       <InfoSection title="EndpointSlice Info">
+        <DescribeFailure error={describe ? null : describeError} showingRow className="mb-2" />
+        <DescribeStale error={describeError} readAt={dataUpdatedAt} />
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
           {namespace && <InfoRow label="Namespace" value={namespace} />}
@@ -155,8 +158,10 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
       )}
 
       {serviceName !== '-' && (
-        <InfoSection title="Peer EndpointSlices for {{service}} ({{n}})" titleValues={{ service: serviceName, n: peerSlices.length }}>
-          {peerSlices.length === 0 ? (
+        <InfoSection title={peersError && !Array.isArray(nsSlices) ? 'Peer EndpointSlices for {{service}}' : 'Peer EndpointSlices for {{service}} ({{n}})'} titleValues={{ service: serviceName, n: peerSlices.length }}>
+          {peersError && !Array.isArray(nsSlices) ? (
+            <ListReadFailure error={peersError} />
+          ) : peerSlices.length === 0 ? (
             <p className="text-xs text-slate-400"><Tx>No other EndpointSlice for this Service in the namespace.</Tx></p>
           ) : (
             <div className="overflow-x-auto">

@@ -13,7 +13,8 @@ import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
 import { useAIContext } from '@/hooks/useAIContext'
 import { buildResourceLink } from '@/utils/resourceLink'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, ListReadFailure } from './DescribeFailure'
+import { failureText } from '@/utils/failureText'
 
 interface Props { name: string }
 
@@ -31,19 +32,19 @@ export default function NamespaceInfo({ name }: Props) {
     enabled: !!name,
   })
 
-  const { data: resourceQuotas } = useQuery({
+  const { data: resourceQuotas, error: quotasError } = useQuery({
     queryKey: ['namespace-rq', name],
     queryFn: () => api.getNamespaceResourceQuotas(name),
     enabled: !!name,
   })
 
-  const { data: limitRanges } = useQuery({
+  const { data: limitRanges, error: limitRangesError } = useQuery({
     queryKey: ['namespace-lr', name],
     queryFn: () => api.getNamespaceLimitRanges(name),
     enabled: !!name,
   })
 
-  const { data: nsPods } = useQuery({
+  const { data: nsPods, error: podsError } = useQuery({
     queryKey: ['namespace-pods', name],
     queryFn: () => api.getNamespacePods(name),
     enabled: !!name,
@@ -81,10 +82,14 @@ export default function NamespaceInfo({ name }: Props) {
           .slice(0, 5)
           .map((rq) => ({ name: rq.name, hard: rq.hard, used: rq.used })),
         limit_ranges: (lrArr as Array<{ name: string }>).slice(0, 5).map((l) => ({ name: l.name })),
+        // a list that could not be read is not an empty one
+        ...(podsError && !Array.isArray(nsPods) ? { pods_total: null, pods_error: failureText(podsError) } : {}),
+        ...(quotasError && !Array.isArray(resourceQuotas) ? { resource_quotas_error: failureText(quotasError) } : {}),
+        ...(limitRangesError && !Array.isArray(limitRanges) ? { limit_ranges_error: failureText(limitRangesError) } : {}),
         recent_events: events.slice(0, 10),
       },
     }
-  }, [name, nsDescribe, nsPods, resourceQuotas, limitRanges])
+  }, [name, nsDescribe, nsPods, resourceQuotas, limitRanges, podsError, quotasError, limitRangesError])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -181,9 +186,9 @@ export default function NamespaceInfo({ name }: Props) {
         <SummaryBadge label="Status" value={nsDescribe.status || '-'} color={nsDescribe.status === 'Active' ? 'green' : 'amber'} />
         <SummaryBadge label="Labels" value={Object.keys(nsDescribe.labels || {}).length} />
         <SummaryBadge label="Annotations" value={Object.keys(nsDescribe.annotations || {}).length} />
-        <SummaryBadge label="Quotas" value={Array.isArray(resourceQuotas) ? resourceQuotas.length : 0} />
-        <SummaryBadge label="LimitRanges" value={Array.isArray(limitRanges) ? limitRanges.length : 0} />
-        <SummaryBadge label="Pods" value={Array.isArray(nsPods) ? nsPods.length : 0} />
+        <SummaryBadge label="Quotas" value={Array.isArray(resourceQuotas) ? resourceQuotas.length : quotasError ? '—' : 0} />
+        <SummaryBadge label="LimitRanges" value={Array.isArray(limitRanges) ? limitRanges.length : limitRangesError ? '—' : 0} />
+        <SummaryBadge label="Pods" value={Array.isArray(nsPods) ? nsPods.length : podsError ? '—' : 0} />
       </div>
 
       {/* Basic Info */}
@@ -322,7 +327,7 @@ export default function NamespaceInfo({ name }: Props) {
               </div>
             ))}
           </div>
-        ) : <NoneText />}
+        ) : quotasError ? <ListReadFailure error={quotasError} /> : <NoneText />}
       </InfoSection>
 
       {/* Limit Ranges */}
@@ -354,7 +359,7 @@ export default function NamespaceInfo({ name }: Props) {
               </div>
             ))}
           </div>
-        ) : <NoneText />}
+        ) : limitRangesError ? <ListReadFailure error={limitRangesError} /> : <NoneText />}
       </InfoSection>
 
       {/* Pods */}
@@ -423,7 +428,7 @@ export default function NamespaceInfo({ name }: Props) {
               </div>
             </div>
           </div>
-        ) : <NoneText />}
+        ) : podsError ? <ListReadFailure error={podsError} /> : <NoneText />}
       </InfoSection>
 
       {/* Events */}

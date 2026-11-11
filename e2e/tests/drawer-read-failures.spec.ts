@@ -1,4 +1,6 @@
+import { execSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect } from '@playwright/test'
@@ -6,12 +8,15 @@ import { test, expect } from '@playwright/test'
 // A drawer whose own read (describe) failed says so where its fields would be, with the server's reason, instead of a
 // fixed sentence ("Failed to load describe data", "Some detailed fields are unavailable"), "No data" or a value it
 // never read: a Role's Rules Count is "—", not 0. Every describe read is answered 503 in the browser with a reason of
-// its own, so nothing on the cluster changes; the objects are ones a kind dev cluster always has on `self`.
+// its own, so nothing on the cluster changes; the objects are ones a kind dev cluster always has on `self`, but for an
+// IngressClass, which the dev cluster has none of: one is made for the run (a controller no one runs) and removed.
 
 const EN = JSON.parse(fs.readFileSync(path.join(__dirname, '../../frontend/src/i18n/locales/en.json'), 'utf8'))
 const REASON = 'e2e stand-in: the API server did not answer'
 const SAID = EN.common.describeFailed.replace('{{reason}}', REASON)
 const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+
+const INGRESS_CLASS = `e2e-read-failures-${Date.now().toString(36)}`
 
 const DRAWERS: { what: string; detail: string; notShown?: string }[] = [
   { what: 'Role', detail: 'Role/kube-system/extension-apiserver-authentication-reader' },
@@ -22,7 +27,28 @@ const DRAWERS: { what: string; detail: string; notShown?: string }[] = [
   { what: 'StorageClass', detail: 'StorageClass/standard', notShown: 'Some detailed StorageClass fields are unavailable right now.' },
   { what: 'Node', detail: 'Node/kubeast-control-plane', notShown: 'Failed to load node details.' },
   { what: 'Namespace', detail: 'Namespace/default', notShown: 'Failed to load.' },
+  { what: 'ClusterRoleBinding', detail: 'ClusterRoleBinding/cluster-admin' },
+  { what: 'RoleBinding', detail: 'RoleBinding/kube-system/kube-proxy' },
+  { what: 'ConfigMap', detail: 'ConfigMap/kube-system/coredns' },
+  { what: 'Secret', detail: 'Secret/kubeast/kubeast-ai-keys' },
+  { what: 'ServiceAccount', detail: 'ServiceAccount/kube-system/coredns' },
+  { what: 'CustomResourceDefinition', detail: 'CustomResourceDefinition/modelconfigs.ai.kubeast.io' },
+  { what: 'Pod', detail: 'Pod/kube-system/etcd-kubeast-control-plane' },
+  { what: 'EndpointSlice', detail: 'EndpointSlice/default/kubernetes' },
+  { what: 'IngressClass', detail: `IngressClass/${INGRESS_CLASS}` },
+  { what: 'Ingress', detail: 'Ingress/default/e2e-fixture' },
+  { what: 'NetworkPolicy', detail: 'NetworkPolicy/kubeast/kubeast-allow-dns' },
 ]
+
+const kubeconfig = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-drawer-reads-')), 'kubeconfig')
+const ingressClass = `{"apiVersion":"networking.k8s.io/v1","kind":"IngressClass","metadata":{"name":"${INGRESS_CLASS}"},"spec":{"controller":"example.com/e2e-none"}}`
+test.beforeAll(() => {
+  fs.writeFileSync(kubeconfig, execSync('kind get kubeconfig --name kubeast', { encoding: 'utf8' }), { mode: 0o600 })
+  execSync(`kubectl --kubeconfig ${kubeconfig} create -f -`, { input: ingressClass, stdio: ['pipe', 'pipe', 'pipe'] })
+})
+test.afterAll(() => {
+  execSync(`kubectl --kubeconfig ${kubeconfig} delete ingressclass ${INGRESS_CLASS} --ignore-not-found`, { stdio: 'pipe' })
+})
 
 // A CRD drawer whose objects could not be listed says so instead of leaving its Custom Resources section out. The CRD is
 // Kubeast's own ModelConfig, which the dev install serves on `self`.
@@ -70,3 +96,68 @@ test.describe("a drawer whose own read failed says why", () => {
     })
   }
 })
+
+// What a drawer reads beside its object, and what only its describe answer holds, says why it is missing instead of 0
+// or None: a Pod opened from the Pods list (whose row holds no spec), a Namespace's pods, an IngressClass's Ingresses
+// and a Service's endpoints. Each read is answered in the browser; nothing on the cluster changes.
+test.describe('what a drawer could not read is not 0 or None', () => {
+  const failing = (page: import('@playwright/test').Page, pick: (path: string) => boolean) =>
+    page.route((u) => pick(u.pathname), (route) =>
+      route.request().method() === 'GET' ? route.fulfill({ status: 503, json: { detail: REASON } }) : route.fallback())
+
+  test('a Pod opened from the Pods list: the reason, and the readiness the list shows, not 0 ready', async ({ page }) => {
+    await failing(page, (p) => p.startsWith('/api/v1/cluster/') && p.endsWith('/describe'))
+    await page.goto('/workloads/pods?cluster=self&namespace=kube-system')
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr').filter({ hasText: 'etcd-kubeast-control-plane' }).first()
+    const listed = (await row.innerText()).match(/\b(\d+\/\d+)\b/)?.[1]
+    expect(listed, "the list row's Ready").toMatch(/^\d+\/\d+$/)
+    await row.click()
+    const drawer = page.locator(DRAWER).last()
+    await expect(drawer.getByTestId('describe-failed')).toContainText(SAID, { timeout: 30_000 })
+    // the drawer reads the object itself: its Top tile counts ready containers from the object's status, as the list does
+    await expect(drawer.getByText('Ready', { exact: true }).first().locator('xpath=..'), 'ready as the list says').toContainText(listed!)
+  })
+
+  test("a Namespace's pods that could not be listed", async ({ page }) => {
+    await failing(page, (p) => p === '/api/v1/cluster/namespaces/kube-system/owned-pods')
+    await page.goto(`/?cluster=self&detail=${encodeURIComponent('Namespace/kube-system')}`)
+    const drawer = page.locator(DRAWER).last()
+    await expect(drawer.getByTestId('list-read-failed')).toHaveText(EN.common.readFailed.replace('{{reason}}', REASON), { timeout: 30_000 })
+    await expect(drawer.getByText('Pods: —', { exact: true }), 'a count not read is not 0').toHaveCount(1)
+  })
+
+  test("an IngressClass's Ingresses that could not be listed", async ({ page }) => {
+    await failing(page, (p) => p === `/api/v1/cluster/ingressclasses/${INGRESS_CLASS}/ingresses`)
+    await page.goto(`/?cluster=self&detail=${encodeURIComponent(`IngressClass/${INGRESS_CLASS}`)}`)
+    const drawer = page.locator(DRAWER).last()
+    await expect(drawer.getByTestId('list-read-failed')).toHaveText(EN.common.readFailed.replace('{{reason}}', REASON), { timeout: 30_000 })
+    await expect(drawer.getByText('No Ingress in the cluster uses this IngressClass.', { exact: true })).toHaveCount(0)
+  })
+
+  test("a Service whose describe failed: its endpoints are not 0 Ready", async ({ page }) => {
+    await failing(page, (p) => p.startsWith('/api/v1/cluster/') && p.endsWith('/describe'))
+    await page.goto(`/?cluster=self&detail=${encodeURIComponent('Service/default/kubernetes')}`)
+    const drawer = page.locator(DRAWER).last()
+    await expect(drawer.getByTestId('service-endpoints-unread')).toHaveText('—', { timeout: 30_000 })
+    await expect(drawer.getByTestId('service-ready-addresses')).toHaveCount(0)
+  })
+})
+
+// A drawer that follows its object and whose next read fails keeps what it read and says so, with the reason and when
+// that was read, instead of showing the old answer as the object now (D-17); the line goes once a read comes back. A
+// Lease's drawer reads every 5 s. The failing reads are answered in the browser.
+test('a drawer whose read again failed says so and keeps what it read', async ({ page }) => {
+  await page.goto(`/?cluster=self&detail=${encodeURIComponent('Lease/kube-system/kube-controller-manager')}`)
+  const drawer = page.locator(DRAWER).last()
+  await expect(drawer.getByText('kube-controller-manager', { exact: false }).first()).toBeVisible({ timeout: 30_000 })
+  const holder = await drawer.getByText('Holder Identity', { exact: true }).locator('xpath=..').innerText()
+  const failing = (u: URL) => u.pathname.startsWith('/api/v1/cluster/') && u.pathname.endsWith('/describe')
+  await page.route(failing, (route) => (route.request().method() === 'GET' ? route.fulfill({ status: 503, json: { detail: REASON } }) : route.fallback()))
+  const stale = drawer.getByTestId('describe-stale')
+  await expect(stale).toContainText(`Could not read the details again: ${REASON}`, { timeout: 30_000 })
+  await expect(stale).toContainText(/What shows was read at \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\./)
+  expect(await drawer.getByText('Holder Identity', { exact: true }).locator('xpath=..').innerText(), 'the last answer stays').toBe(holder)
+  await page.unroute(failing)
+  await expect(stale).toHaveCount(0, { timeout: 30_000 })
+})
+

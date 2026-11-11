@@ -12,7 +12,7 @@ import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { useReverseRoleBindings } from './role-info/useReverseRoleBindings'
 import { ruleApiGroupsText } from './role-info/ruleText'
 import { referencedByContext, subjectsText, unreadableText } from './role-info/referencedBy'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -23,7 +23,7 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
 
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['clusterrole-describe', name],
     queryFn: () => api.describeClusterRole(name),
     enabled: !!name,
@@ -61,6 +61,7 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
 
   return (
     <div className="space-y-4">
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       {!describe && <DescribeFailure error={describeError} showingRow />}
       <InfoSection title="Basic Info">
         <div className="space-y-2">

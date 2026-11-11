@@ -5,7 +5,7 @@ import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { VPA_POLICY_EXTRA_HEAD, vpaEvictionText, vpaPolicyExtraRows, vpaRecommendersText, vpaStartupBoostText, vpaValue } from './vpaDetail'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -14,7 +14,7 @@ interface Props {
 }
 
 export default function VPAInfo({ name, namespace }: Props) {
-  const { data: desc, isLoading, error: describeError } = useQuery({
+  const { data: desc, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['vpa-describe', namespace, name],
     queryFn: () => api.describeVPA(namespace, name),
     staleTime: 10_000,
@@ -38,7 +38,7 @@ export default function VPAInfo({ name, namespace }: Props) {
       default: return null
     }
   })()
-  const { data: targetDescribe } = useQuery({
+  const { data: targetDescribe, error: targetError } = useQuery({
     queryKey: ['vpa-target', namespace, targetKind, targetName],
     queryFn: targetDescribeFn!,
     enabled: !!targetDescribeFn,
@@ -68,6 +68,7 @@ export default function VPAInfo({ name, namespace }: Props) {
 
   return (
     <div className="space-y-4">
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       {/* Summary Badges */}
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Mode" value={desc.update_mode || '-'} color="default" />
@@ -108,6 +109,10 @@ export default function VPAInfo({ name, namespace }: Props) {
                 </span>
               }
             />
+          )}
+          {/* the target's read failed: its status is not known, not left out */}
+          {!targetStatus && targetError && (
+            <InfoRow label="Target Status" value={<DescribeFailure error={targetError} />} />
           )}
         </div>
       </InfoSection>

@@ -7,7 +7,7 @@ import { leaseHolderState } from './clusterDetail'
 import { useDetailLabel } from './useDetailLabel'
 import { humanDuration } from '@/utils/time'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -19,7 +19,7 @@ export default function LeaseInfo({ name, namespace }: Props) {
   const dl = useDetailLabel()
   // a holder renews its lease every few seconds: the lease is read again every 5 s and the holder state, the
   // durations and the ages follow the clock, so an open drawer does not keep the moment it was opened
-  const { data: desc, isLoading, error: describeError } = useQuery({
+  const { data: desc, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['lease-describe', namespace, name],
     queryFn: () => api.describeLease(namespace, name),
     staleTime: 5_000,
@@ -60,6 +60,7 @@ export default function LeaseInfo({ name, namespace }: Props) {
 
   return (
     <div className="space-y-4">
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       {/* Summary Badges */}
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Holder" value={dl(holder)} color={holder === 'Active' ? 'green' : holder === 'Expired' ? 'amber' : 'default'} />

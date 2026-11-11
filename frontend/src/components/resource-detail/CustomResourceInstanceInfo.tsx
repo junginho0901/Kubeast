@@ -13,6 +13,7 @@ const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { useWatchChanges } from '@/services/useWatchChanges'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -126,7 +127,7 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
   const crdName = (rawJson?.crd_name as string) || ''
   const plural = crdName ? crdName.split('.')[0] : ''
 
-  const { data: describe, isLoading, error } = useQuery({
+  const { data: describe, isLoading, error, dataUpdatedAt } = useQuery({
     queryKey: ['cr-instance-describe', group, version, plural, namespace || '-', name],
     queryFn: () => api.describeCustomResourceInstance(group, version, plural, namespace || '-', name),
     enabled: !!name && !!group && !!version && !!plural,
@@ -181,6 +182,9 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
 
   return (
     <div className="space-y-4">
+      {/* any other failure: the reason; what shows is the row, and the spec, status and conditions it does not hold stay out */}
+      <DescribeFailure error={describe ? null : error} showingRow />
+      <DescribeStale error={error} readAt={dataUpdatedAt} />
       <InfoSection title={tr('crInstanceInfo.basicInfo', 'Basic Info')}>
         <div className="space-y-2">
           <InfoRow label="Kind" value={describe?.kind || rawJson?.kind as string || '-'} />

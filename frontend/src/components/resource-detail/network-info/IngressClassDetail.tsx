@@ -4,6 +4,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
+import { DescribeFailure, ListReadFailure, DescribeStale } from '../DescribeFailure'
 
 interface Props {
   name: string
@@ -13,14 +14,14 @@ interface Props {
 export default function IngressClassDetail({ name, rawJson }: Props) {
   const { open: openDetail } = useResourceDetail()
   // every Ingress of the class (the server cut at 50 before), paged here
-  const { data: usedByIngresses } = useQuery({
+  const { data: usedByIngresses, error: usedByError } = useQuery({
     queryKey: ['ingressclass-used-by', name],
     queryFn: () => api.listIngressesByClass(name),
     enabled: !!name,
     staleTime: 10_000,
   })
   // the events kubectl describe lists about the class
-  const { data: describe, isLoading } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['ingressclass-describe', name],
     queryFn: () => api.describeIngressClass(name),
     enabled: !!name,
@@ -51,6 +52,8 @@ export default function IngressClassDetail({ name, rawJson }: Props) {
   return (
     <>
       <InfoSection title="IngressClass Info">
+        <DescribeFailure error={describe ? null : describeError} showingRow className="mb-2" />
+        <DescribeStale error={describeError} readAt={dataUpdatedAt} />
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
           <InfoRow label="Controller" value={String(spec.controller ?? rawJson?.controller ?? '-')} />
@@ -60,8 +63,10 @@ export default function IngressClassDetail({ name, rawJson }: Props) {
         </div>
       </InfoSection>
 
-      <InfoSection title="Used By Ingresses ({{n}})" titleValues={{ n: usedList.length }}>
-        {usedList.length === 0 ? (
+      <InfoSection title={usedByError && !Array.isArray(usedByIngresses) ? 'Used By Ingresses' : 'Used By Ingresses ({{n}})'} titleValues={{ n: usedList.length }}>
+        {usedByError && !Array.isArray(usedByIngresses) ? (
+          <ListReadFailure error={usedByError} />
+        ) : usedList.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No Ingress in the cluster uses this IngressClass.</Tx></p>
         ) : (
           <div className="overflow-x-auto">

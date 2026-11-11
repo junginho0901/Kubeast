@@ -12,6 +12,7 @@ import { eventsForAI, fmtRel, fmtTs } from '../detailFormat'
 import { useNamespacePodTable } from '../useNamespacePodTable'
 import { peerOf, peerText, portOf, portsText, selectorText, type Tr } from '../netpolText'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
+import { DescribeFailure, DescribeStale } from '../DescribeFailure'
 
 interface Props {
   name: string
@@ -22,7 +23,7 @@ interface Props {
 export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props) {
   const { open: openDetail } = useResourceDetail()
   const describeKey = ['networkpolicy-describe', namespace, name]
-  const { data: describe, isLoading: describeLoading } = useQuery({
+  const { data: describe, isLoading: describeLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: describeKey,
     queryFn: () => api.describeNetworkPolicy(namespace as string, name),
     enabled: !!namespace && !!name,
@@ -90,9 +91,14 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
     )
   }
 
+  // neither the answer nor a row: an empty selector would read as a policy over every pod
+  if (!object && describeError) return <DescribeFailure error={describeError} className="py-4" />
+
   return (
     <>
       <InfoSection title="NetworkPolicy Info">
+        <DescribeFailure error={describe ? null : describeError} showingRow className="mb-2" />
+        <DescribeStale error={describeError} readAt={dataUpdatedAt} />
         {(isDefaultDenyIngress || isDefaultDenyEgress) && (
           <div className="flex flex-wrap gap-2 mb-3">
             {isDefaultDenyIngress && <span className="badge badge-warning"><Tx>Default Deny Ingress</Tx></span>}

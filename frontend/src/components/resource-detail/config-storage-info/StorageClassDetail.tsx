@@ -6,7 +6,7 @@ import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
 import { allowedTopologyLines } from '../netstoreDetail'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
-import { DescribeFailure } from '../DescribeFailure'
+import { DescribeFailure, DescribeStale } from '../DescribeFailure'
 
 interface StorageClassRelatedPV {
   name?: string | null
@@ -55,7 +55,7 @@ interface StorageClassDescribeResponse {
 
 export default function StorageClassDetail({ name, rawJson }: { name: string; rawJson?: Record<string, unknown> }) {
   const { open: openDetail } = useResourceDetail()
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['storageclass-describe', name],
     queryFn: () => api.describeStorageClass(name) as Promise<StorageClassDescribeResponse>,
     enabled: !!name,
@@ -73,6 +73,14 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
     : (Array.isArray(rawJson?.mountOptions) ? rawJson?.mountOptions : [])
   const allowedTopologies = allowedTopologyLines(describe?.allowed_topologies)
   const finalizers = Array.isArray(describe?.finalizers) ? describe.finalizers : []
+  // without the describe answer, the list's row (is_default) or the object's annotation; neither is not read
+  const isDefault = describe
+    ? !!describe.is_default
+    : typeof rawJson?.is_default === 'boolean'
+      ? rawJson.is_default
+      : rawJson?.metadata
+        ? annotations['storageclass.kubernetes.io/is-default-class'] === 'true' || annotations['storageclass.beta.kubernetes.io/is-default-class'] === 'true'
+        : undefined
   const relatedPVs = Array.isArray(describe?.related_pvs) ? describe.related_pvs : []
   const relatedPVCs = Array.isArray(describe?.related_pvcs) ? describe.related_pvcs : []
   // every related volume and claim, paged (the tables cut at 50 without a word before)
@@ -102,7 +110,7 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
           <InfoRow label="Provisioner" value={String(describe?.provisioner ?? rawJson?.provisioner ?? '-')} />
-          <InfoRow label="Default Class" value={describe?.is_default ? 'Yes' : 'No'} />
+          <InfoRow label="Default Class" value={isDefault === undefined ? '—' : isDefault ? 'Yes' : 'No'} />
           <InfoRow label="Reclaim Policy" value={String(describe?.reclaim_policy ?? rawJson?.reclaimPolicy ?? '-')} />
           <InfoRow label="Volume Binding Mode" value={String(describe?.volume_binding_mode ?? rawJson?.volumeBindingMode ?? '-')} />
           <InfoRow label="Allow Expansion" value={(describe?.allow_volume_expansion ?? rawJson?.allowVolumeExpansion) ? 'Yes' : 'No'} />
@@ -120,7 +128,8 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
         </div>
       </InfoSection>
       {isLoading && <p className="text-xs text-slate-400"><Tx>Loading details...</Tx></p>}
-      <DescribeFailure error={describeError} showingRow />
+      <DescribeFailure error={describe ? null : describeError} showingRow />
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
 
       {Object.keys(parameters).length > 0 && (
         <InfoSection title="Parameters">

@@ -7,7 +7,7 @@ import { backendRefGroup, conditionStatus, conditionSummary, formatParentRef, pa
 import { GroupRefLink } from './GroupRefLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import type { GRPCRouteInfo as GRPCRouteRow } from '@/services/api'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -32,7 +32,7 @@ function text(value: unknown): string {
 
 export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
   const enabled = !!name && !!namespace
-  const { data: describe, isLoading, error: describeError } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['grpcroute-describe', namespace, name],
     queryFn: () => api.describeGRPCRoute(namespace as string, name) as Promise<GRPCRouteDescribe>,
     enabled,
@@ -100,7 +100,8 @@ export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
     <>
       <InfoSection title="GRPCRoute Info">
         {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading GRPCRoute details...</Tx></p>}
-        <DescribeFailure error={describeError} showingRow className="mb-2" />
+        <DescribeFailure error={describe ? null : describeError} showingRow className="mb-2" />
+        <DescribeStale error={describeError} readAt={dataUpdatedAt} />
         <div className="flex flex-wrap gap-2 mb-3">
           <SummaryBadge label="Status" value={statusText} color="default" />
           <SummaryBadge label="Accepted" value={accepted} color={accepted === 'True' ? 'green' : 'amber'} />

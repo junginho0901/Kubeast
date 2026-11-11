@@ -22,7 +22,7 @@ import WorkloadOwnedResources from './workload-info/WorkloadOwnedResources'
 import WorkloadContainers from './workload-info/WorkloadContainers'
 import WorkloadAffinity from './workload-info/WorkloadAffinity'
 import WorkloadDialogs from './workload-info/WorkloadDialogs'
-import { DescribeFailure } from './DescribeFailure'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -51,6 +51,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
     describe,
     isLoading,
     describeError,
+    dataUpdatedAt,
     needsDescribe,
     ownedJobs,
     owned,
@@ -159,7 +160,8 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
         daemonSetStatus={daemonSetStatus}
       />
 
-      {needsDescribe && <DescribeFailure error={describeError} showingRow />}
+      {needsDescribe && <DescribeFailure error={describe ? null : describeError} showingRow />}
+      {needsDescribe && <DescribeStale error={describeError} readAt={dataUpdatedAt} />}
 
       <WorkloadKindInfo
         isJob={isJob}

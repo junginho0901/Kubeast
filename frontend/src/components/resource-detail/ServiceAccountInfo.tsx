@@ -11,6 +11,7 @@ import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 import { useEffectivePermissions } from './service-account-info/useEffectivePermissions'
 import { RULE_TABLE_COLUMNS, ruleRowNote, ruleTableCells } from './service-account-info/ruleTable'
 import { useNamespacePodTable } from './useNamespacePodTable'
+import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
   name: string
@@ -36,7 +37,7 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
   const { bound: effectivePerms, loading: effectivePermsLoading, unreadable } = useEffectivePermissions({ namespace, name })
   const { items: pagedEffectivePerms, nav: effectivePermsNav } = usePagination(effectivePerms, 5)
 
-  const { data: describe, isLoading } = useQuery({
+  const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['serviceaccount-describe', namespace, name],
     queryFn: () => api.describeServiceAccount(namespace, name),
     enabled: !!namespace && !!name,
@@ -54,9 +55,12 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
   const automount = describe?.automount_service_account_token
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
+  // nothing below was read: the bindings, keys and versions come from the describe answer only
+  if (describeError && !describe) return <DescribeFailure error={describeError} className="py-4" />
 
   return (
     <div className="space-y-4">
+      <DescribeStale error={describeError} readAt={dataUpdatedAt} />
       <InfoSection title="Basic Info">
         <div className="space-y-2">
           <InfoRow label="Kind" value="ServiceAccount" />

@@ -13,9 +13,10 @@ interface Props {
   isAdmin: boolean
   manifest: string | undefined
   describeData: any
+  describeError?: unknown
 }
 
-export function PodDetailModal({ isAdmin, manifest, describeData }: Props) {
+export function PodDetailModal({ isAdmin, manifest, describeData, describeError }: Props) {
   const { selectedPod, closeDetailModal, activeTab } = useClusterView()
 
   useAIContext(selectedPod ? {
@@ -57,7 +58,7 @@ export function PodDetailModal({ isAdmin, manifest, describeData }: Props) {
         </div>
 
         <PodDetailTabs isAdmin={isAdmin} />
-        <PodDetailTabBody manifest={manifest} describeData={describeData} />
+        <PodDetailTabBody manifest={manifest} describeData={describeData} describeError={describeError} />
       </div>
     </ModalOverlay>
   )
