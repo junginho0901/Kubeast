@@ -604,6 +604,13 @@ class DatabaseService:
             config = result.scalar_one_or_none()
             if not config:
                 return None
+            # the name is unique: another config's name is refused as on create, not left to the database's constraint
+            if data.get("name") and data["name"] != config.name:
+                taken = await db.execute(
+                    select(ModelConfig).where(ModelConfig.name == data["name"], ModelConfig.id != config_id)
+                )
+                if taken.scalar_one_or_none():
+                    raise ValueError("Model config name already exists")
 
             for key, value in data.items():
                 setattr(config, key, value)

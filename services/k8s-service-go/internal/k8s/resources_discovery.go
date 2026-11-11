@@ -192,7 +192,7 @@ func (s *Service) ResourceKind(ctx context.Context, resourceType string) (string
 func (s *Service) ResolveKind(ctx context.Context, apiVersion, kind string) (schema.GroupVersionResource, bool, error) {
 	gv, err := schema.ParseGroupVersion(apiVersion)
 	if err != nil {
-		return schema.GroupVersionResource{}, false, fmt.Errorf("invalid apiVersion %q: %w", apiVersion, err)
+		return schema.GroupVersionResource{}, false, badInput("%v", err)
 	}
 	lists, read, err := s.apiResources(ctx)
 	if err != nil {
@@ -209,7 +209,8 @@ func (s *Service) ResolveKind(ctx context.Context, apiVersion, kind string) (sch
 			return gvr, namespaced, nil
 		}
 	}
-	return schema.GroupVersionResource{}, false, fmt.Errorf("%s %s is not served by this cluster", apiVersion, kind)
+	// kubectl's words for a kind discovery does not list, then what it suggests
+	return schema.GroupVersionResource{}, false, badInput("no matches for kind %q in version %q on this cluster (ensure CRDs are installed first)", kind, apiVersion)
 }
 
 func kindIn(lists []metav1.APIResourceList, gv schema.GroupVersion, kind string) (schema.GroupVersionResource, bool, bool) {

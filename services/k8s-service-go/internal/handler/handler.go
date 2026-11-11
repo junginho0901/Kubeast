@@ -209,6 +209,9 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 // registry failures.
 func statusForError(err error) int {
 	switch {
+	case errors.Is(err, k8s.ErrBadInput):
+		// the caller's own text, whatever words it holds ("forbidden" in a kind's name is not a refusal)
+		return http.StatusBadRequest
 	case errors.Is(err, k8s.ErrNoUser), apierrors.IsUnauthorized(err):
 		return http.StatusUnauthorized
 	case apierrors.IsForbidden(err):

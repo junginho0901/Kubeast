@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -136,13 +137,15 @@ func (s *Service) applyResourceYAML(ctx context.Context, resourceType, namespace
 	}
 
 	// Parse YAML to JSON for the patch
-	var parsed interface{}
-	if err := yaml.Unmarshal([]byte(yamlStr), &parsed); err != nil {
-		return nil, fmt.Errorf("parse YAML: %w", err)
+	// an emptied window would go as a patch of nothing and answer "updated"
+	object, err := editedObject(yamlStr)
+	if err != nil {
+		return nil, err
 	}
 	before := openedObject(opened)
-	object, isObject := parsed.(map[string]interface{})
-	if isObject && prepare != nil {
+	// the version the window was opened at: a patch the API server took without a write leaves it as it was
+	sentVersion := nestedString(object, "metadata", "resourceVersion")
+	if prepare != nil {
 		prepare(object, before)
 	}
 
@@ -156,9 +159,9 @@ func (s *Service) applyResourceYAML(ctx context.Context, resourceType, namespace
 	} else {
 		// A window left with no object in it takes nothing out: a difference would name every line.
 		patchType = patchTypeOf(gvk)
-		patchData, err = json.Marshal(parsed)
+		patchData, err = json.Marshal(object)
 		if err != nil {
-			return nil, fmt.Errorf("marshal patch: %w", err)
+			return nil, badInput("the YAML has a field whose name is not text")
 		}
 	}
 
@@ -174,12 +177,20 @@ func (s *Service) applyResourceYAML(ctx context.Context, resourceType, namespace
 
 	s.dropCached(ctx, fmt.Sprintf("yaml|%s|%s|%s", gvr.Resource, ns, name))
 
+	// kubectl apply's "unchanged": the object is at the version the window held, so this patch wrote nothing. A version
+	// that moved may be another writer's, so that reads as updated.
+	unchanged := sentVersion != "" && patched.GetResourceVersion() == sentVersion
+	message := fmt.Sprintf("%s %s updated", resourceType, name)
+	if unchanged {
+		message = fmt.Sprintf("%s %s unchanged", resourceType, name)
+	}
 	return map[string]interface{}{
 		"name":        patched.GetName(),
 		"namespace":   patched.GetNamespace(),
 		"kind":        patched.GetKind(),
 		"api_version": patched.GetAPIVersion(),
-		"message":     fmt.Sprintf("%s %s updated", resourceType, name),
+		"message":     message,
+		"unchanged":   unchanged,
 	}, nil
 }
 
@@ -250,6 +261,10 @@ func (s *Service) CreateResourcesFromYAML(ctx context.Context, yamlStr, defaultN
 		})
 		return nil
 	})
+	if err == nil && len(results) == 0 {
+		// comments, separators or empty documents only: kubectl's "no objects passed to create", not a create of nothing
+		return nil, badInput("no objects passed to create: the YAML holds only comments or empty documents")
+	}
 	return results, err
 }
 
@@ -341,14 +356,14 @@ func (s *Service) eachCreateDocument(ctx context.Context, yamlStr, defaultNamesp
 	reader := bufio.NewReader(bytes.NewBufferString(yamlStr))
 	decoder := yaml.NewDecoder(reader)
 
-	for {
+	for doc := 1; ; doc++ {
 		var rawObj map[string]interface{}
 		err := decoder.Decode(&rawObj)
 		if err == io.EOF {
 			return nil
 		}
 		if err != nil {
-			return fmt.Errorf("decode YAML document: %w", err)
+			return yamlReadError(doc, err)
 		}
 		if rawObj == nil {
 			continue
@@ -357,7 +372,7 @@ func (s *Service) eachCreateDocument(ctx context.Context, yamlStr, defaultNamesp
 		// Convert to JSON for the unstructured object
 		jsonData, err := json.Marshal(rawObj)
 		if err != nil {
-			return fmt.Errorf("marshal to JSON: %w", err)
+			return badInput("document %d has a field whose name is not text", doc)
 		}
 
 		obj := &unstructured.Unstructured{}
@@ -366,14 +381,17 @@ func (s *Service) eachCreateDocument(ctx context.Context, yamlStr, defaultNamesp
 		}
 
 		// Resolve the GVR from the object's apiVersion and kind
-		apiVersion := obj.GetAPIVersion()
-		kind := obj.GetKind()
+		apiVersion, _ := obj.Object["apiVersion"].(string)
+		kind, _ := obj.Object["kind"].(string)
 		if apiVersion == "" || kind == "" {
-			return fmt.Errorf("YAML document missing apiVersion or kind")
+			return badInput("document %d: %s", doc, missingTypeFields(apiVersion, kind))
 		}
 
 		gvr, namespaced, err := s.ResolveKind(ctx, apiVersion, kind)
 		if err != nil {
+			if errors.Is(err, ErrBadInput) {
+				return badInput("document %d: %s", doc, err)
+			}
 			return err
 		}
 

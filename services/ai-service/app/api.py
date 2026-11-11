@@ -674,7 +674,10 @@ async def update_model_config(config_id: int, raw: Request, payload=Depends(requ
             stored = (current.extra_headers or {}) if current else {}
             data["extra_headers"] = {k: (stored.get(k, v) if v == MASK else v) for k, v in data["extra_headers"].items()}
         before = model_config_audit.view(current)
-        config = await db.update_model_config(config_id, data)
+        try:
+            config = await db.update_model_config(config_id, data)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         if not config:
             raise HTTPException(status_code=404, detail="Model config not found")
     except HTTPException as e:

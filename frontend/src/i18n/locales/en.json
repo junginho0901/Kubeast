@@ -2140,6 +2140,8 @@
     "unknown": "Unknown",
     "close": "Close",
     "applied": "Applied",
+    "unchanged": "Unchanged: the object is already as this YAML says.",
+    "yamlNoCrd": "This custom resource does not name its CustomResourceDefinition, so it cannot be saved here.",
     "apply": "Apply",
     "applyError": "Failed to apply.",
     "applying": "Applying...",

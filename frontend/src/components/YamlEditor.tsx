@@ -221,6 +221,8 @@ export default function YamlEditor({
         <div className="relative flex-1 min-h-[520px]">
           {toast && (
             <div
+              data-testid="yaml-apply-toast"
+              data-type={toast.type}
               className={`pointer-events-none absolute right-3 top-3 z-10 rounded-lg border px-3 py-1.5 text-xs shadow-lg ${
                 toast.type === 'success'
                   ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'

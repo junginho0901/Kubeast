@@ -28,6 +28,20 @@ def _custom_ca_files() -> tuple[str, ...]:
     return tuple(files)
 
 
+def ca_cert_problem(ca_cert: Optional[str]) -> Optional[str]:
+    """Why a model's CA certificate cannot be used, or None: what the CA field holds must be PEM certificates, which
+    ``build_verify`` loads; text that is not one is the caller's to fix, not a server error."""
+    text = (ca_cert or "").strip()
+    if not text:
+        return None
+    try:
+        ssl.create_default_context().load_verify_locations(cadata=text)
+    except (ssl.SSLError, ValueError, TypeError):
+        # the parser's own words name OpenSSL's source lines; a letter outside ASCII is a TypeError
+        return "CA certificate: not a certificate in PEM form (-----BEGIN CERTIFICATE----- … -----END CERTIFICATE-----)"
+    return None
+
+
 def build_verify(tls_verify: bool = True, ca_cert: Optional[str] = None) -> Union[bool, ssl.SSLContext]:
     """The ``verify`` argument for an httpx client.
 

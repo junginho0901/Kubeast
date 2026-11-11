@@ -163,11 +163,38 @@ test.describe('a line taken out of a YAML window', () => {
     expect(objectOf(`-n ${NS} get configmap whole`).data).toEqual({ keep: '1', 'gone-key': '2' })
   })
 
-  test('a window left empty takes nothing out', async ({ request }) => {
+  test('a window left empty or holding no object is refused with the reason, and the object stays', async ({ request }) => {
     kubectl('create -f -', JSON.stringify(CONFIG_MAP('empty')))
     const opened = await yamlOf(request, 'configmaps', 'empty', NS)
-    await applyResource(request, 'configmaps', 'empty', NS, opened, '# nothing here\n')
+    for (const [yaml, detail] of [
+      ['# nothing here\n', 'the YAML is empty: there is nothing to apply'],
+      ['', 'the YAML is empty: there is nothing to apply'],
+      ['   \n', 'the YAML is empty: there is nothing to apply'],
+      ['a', 'the YAML is text, not an object with apiVersion, kind and metadata'],
+      ['- a', 'the YAML is a list, not an object with apiVersion, kind and metadata'],
+    ]) {
+      const res = await applyResource(request, 'configmaps', 'empty', NS, opened, yaml)
+      expect([res.status(), (await res.json()).detail], JSON.stringify(yaml)).toEqual([400, detail])
+    }
+    const ns = await request.post(`/api/v1/cluster/namespaces/${NS}/yaml/apply?cluster=${CLUSTER}`, { headers, data: { yaml: '' } })
+    expect([ns.status(), (await ns.json()).detail], 'a Namespace window the same').toEqual([400, 'the YAML is empty: there is nothing to apply'])
     expect(objectOf(`-n ${NS} get configmap empty`).data).toEqual({ keep: '1', 'gone-key': '2' })
+  })
+
+  test('a save that changes nothing answers unchanged, a save that changes something does not', async ({ request }) => {
+    kubectl('create -f -', JSON.stringify(CONFIG_MAP('same')))
+    const opened = await yamlOf(request, 'configmaps', 'same', NS)
+    const version = objectOf(`-n ${NS} get configmap same`).metadata.resourceVersion
+    const same = await applyResource(request, 'configmaps', 'same', NS, opened, opened)
+    expect(same.status(), await same.text()).toBe(200)
+    expect((await same.json()).unchanged).toBe(true)
+    expect(objectOf(`-n ${NS} get configmap same`).metadata.resourceVersion, 'nothing was written').toBe(version)
+    const edited = opened.replace(/keep: ["']1["']/, 'keep: "2"')
+    expect(edited, 'the data value is in the text').not.toBe(opened)
+    const changed = await applyResource(request, 'configmaps', 'same', NS, opened, edited)
+    expect(changed.status(), await changed.text()).toBe(200)
+    expect((await changed.json()).unchanged).toBe(false)
+    expect(objectOf(`-n ${NS} get configmap same`).data.keep).toBe('2')
   })
 
   test('a Node loses a label line', async ({ request }) => {
@@ -242,6 +269,33 @@ test.describe('a line taken out of a YAML window', () => {
     await page.goto(`/?cluster=${CLUSTER}&detail=${encodeURIComponent(`ConfigMap/${NS}/window`)}`)
     await deleteLineInWindow(page, opened, 'gone-key:')
     expect(objectOf(`-n ${NS} get configmap window`).data).toEqual({ keep: '1' })
+  })
+
+  test('in the window: Apply with nothing changed says Unchanged, an emptied window says why and saves nothing', async ({ page, request }) => {
+    kubectl('create -f -', JSON.stringify(CONFIG_MAP('window-same')))
+    await yamlOf(request, 'configmaps', 'window-same', NS)
+    const version = objectOf(`-n ${NS} get configmap window-same`).metadata.resourceVersion
+    await page.goto(`/?cluster=${CLUSTER}&detail=${encodeURIComponent(`ConfigMap/${NS}/window-same`)}`)
+    const drawer = page.locator(DRAWER).last()
+    await drawer.getByRole('button', { name: 'YAML', exact: true }).click({ timeout: 30_000 })
+    await expect(drawer.locator('.monaco-editor .view-lines').first()).toContainText('gone-key:', { timeout: 30_000 })
+    await drawer.getByRole('button', { name: /^(edit|편집)$/i }).click()
+    await drawer.getByRole('button', { name: /^(apply|적용)$/i }).click()
+    const toast = drawer.getByTestId('yaml-apply-toast')
+    await expect(toast).toHaveText('Unchanged: the object is already as this YAML says.', { timeout: 30_000 })
+    await expect(toast).toHaveAttribute('data-type', 'success')
+    expect(objectOf(`-n ${NS} get configmap window-same`).metadata.resourceVersion).toBe(version)
+
+    await drawer.getByRole('button', { name: /^(edit|편집)$/i }).click()
+    await drawer.locator('.monaco-editor').first().click()
+    const mac = await page.evaluate(() => navigator.userAgent.includes('Macintosh'))
+    await page.keyboard.press(mac ? 'Meta+A' : 'Control+A')
+    await page.keyboard.press('Delete')
+    await expect(drawer.locator('.monaco-editor .view-lines').first()).not.toContainText('gone-key:')
+    await drawer.getByRole('button', { name: /^(apply|적용)$/i }).click()
+    await expect(toast).toHaveText('the YAML is empty: there is nothing to apply', { timeout: 30_000 })
+    await expect(toast).toHaveAttribute('data-type', 'error')
+    expect(objectOf(`-n ${NS} get configmap window-same`).data).toEqual({ keep: '1', 'gone-key': '2' })
   })
 
   test('in the window: a custom resource saves and its key leaves', async ({ page, request }) => {

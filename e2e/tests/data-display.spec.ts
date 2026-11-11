@@ -95,8 +95,8 @@ test.describe('data display matches the cluster', () => {
       const beta = await request.post(`/api/v1/cluster/resources/yaml/create?cluster=${CLUSTER}`, {
         headers, data: { yaml: 'apiVersion: resource.k8s.io/v1beta1\nkind: DeviceClass\nmetadata: {name: e2e-data-display-beta}\n', namespace: '' },
       })
-      expect(beta.ok()).toBeFalsy()
-      expect((await beta.json()).detail).toContain('resource.k8s.io/v1beta1 DeviceClass is not served')
+      // a version the cluster does not serve is the caller's to fix: a 400 in kubectl's words
+      expect([beta.status(), (await beta.json()).detail]).toEqual([400, 'document 1: no matches for kind "DeviceClass" in version "resource.k8s.io/v1beta1" on this cluster (ensure CRDs are installed first)'])
     } finally {
       kubectl('-n default delete hpa e2e-data-display-v1 --ignore-not-found')
     }
