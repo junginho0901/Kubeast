@@ -34,6 +34,7 @@ import NetworkFlows from './NetworkFlows'
 import NetworkDrops from './NetworkDrops'
 import TopTalkers from './TopTalkers'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
+import { useDismiss } from '@/hooks/useDismiss'
 
 interface Props {
   name: string
@@ -258,16 +259,8 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
     }
   }, [logContainer, containerNames])
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (execContainerRef.current && !execContainerRef.current.contains(event.target as Node)) setIsExecContainerOpen(false)
-      if (execShellRef.current && !execShellRef.current.contains(event.target as Node)) setIsExecShellOpen(false)
-    }
-    if (isExecContainerOpen || isExecShellOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isExecContainerOpen, isExecShellOpen])
+  useDismiss(isExecContainerOpen, execContainerRef, setIsExecContainerOpen)
+  useDismiss(isExecShellOpen, execShellRef, setIsExecShellOpen)
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
   // the Pods list's row holds no spec or status: without the describe answer the counts and tables would be 0 and None

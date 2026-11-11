@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, Member, type BulkCreateAnswer } from '@/services/api'
 import { CheckCircle, ChevronDown, ChevronUp, Clock, Copy, Download, KeyRound, Lock, Plus, RotateCcw, Search, Trash2, Unlock, Upload } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ListPager } from '@/components/ListPager'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
@@ -25,6 +25,7 @@ import { roleMenuOpensUp } from './admin-users/roleMenu'
 import { failureText } from '@/utils/failureText'
 import { copyText } from '@/utils/clipboard'
 import { allPendingSelected, toggleAllPending as toggleAllPendingIds, toggleOnePending } from './admin-users/pendingSelection'
+import { useDismiss } from '@/hooks/useDismiss'
 
 const USER_COLUMNS = 6
 
@@ -38,6 +39,7 @@ export default function AdminUsers() {
   const [page, setPage] = useState(1)
   const [roleDrafts, setRoleDrafts] = useState<Record<string, number>>({})
   const [openRoleDropdownUserId, setOpenRoleDropdownUserId] = useState<string | null>(null)
+  const closeRoleDropdown = useCallback(() => setOpenRoleDropdownUserId(null), [])
   const [roleMenuUp, setRoleMenuUp] = useState(false)
   const roleDropdownRef = useRef<HTMLDivElement | null>(null)
   const [reauthModalOpen, setReauthModalOpen] = useState(false)
@@ -260,16 +262,7 @@ export default function AdminUsers() {
     roleDropdownRef.current = null
   }, [openRoleDropdownUserId])
 
-  useEffect(() => {
-    if (!openRoleDropdownUserId) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (roleDropdownRef.current && !roleDropdownRef.current.contains(event.target as Node)) {
-        setOpenRoleDropdownUserId(null)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [openRoleDropdownUserId])
+  useDismiss(Boolean(openRoleDropdownUserId), roleDropdownRef, closeRoleDropdown)
 
   const rows: Member[] = useMemo(() => (Array.isArray(users) ? users : []), [users])
 
