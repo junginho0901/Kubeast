@@ -231,7 +231,7 @@ allowVolumeExpansion: true
       <StorageClassFilters
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        searchPlaceholder={tr('storageclasses.searchPlaceholder', 'Search StorageClasses by name...')}
+        searchPlaceholder={tr('storageclasses.searchPlaceholder', 'Search StorageClasses by name, provisioner, reclaim policy, binding mode, parameter or mount option...')}
       />
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 shrink-0">

@@ -260,7 +260,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('cronjobs.searchPlaceholder', 'Search cronjobs by name...')}
+        searchPlaceholder={tr('cronjobs.searchPlaceholder', 'Search cronjobs by name, namespace, schedule, concurrency policy, container or image...')}
         allNamespacesLabel={tr('cronjobs.allNamespaces', 'All namespaces')}
       />
 

@@ -359,7 +359,7 @@ export default function PolicyReports() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
               <input
                 type="text"
-                placeholder={tab === 'results' ? tr('policyReports.searchResults', 'Search by policy, rule, resource or message...') : tr('policyReports.searchPlaceholder', 'Search by name...')}
+                placeholder={tab === 'results' ? tr('policyReports.searchResults', 'Search by policy, rule, resource, namespace or message...') : tab === 'namespaces' ? tr('policyReports.searchNamespaces', 'Search by namespace...') : tr('policyReports.searchPlaceholder', 'Search by policy or category...')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 data-testid="policy-reports-search"

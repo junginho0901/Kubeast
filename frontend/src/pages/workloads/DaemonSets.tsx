@@ -277,7 +277,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('daemonsets.searchPlaceholder', 'Search daemonsets by name...')}
+        searchPlaceholder={tr('daemonsets.searchPlaceholder', 'Search daemonsets by name, namespace, status, selector or image...')}
         allNamespacesLabel={tr('daemonsets.allNamespaces', 'All namespaces')}
       />
 

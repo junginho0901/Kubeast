@@ -257,7 +257,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('gatewaysPage.searchPlaceholder', 'Search gateways by name...')}
+        searchPlaceholder={tr('gatewaysPage.searchPlaceholder', 'Search gateways by name, namespace, class, status or count...')}
         allNamespacesLabel={tr('gatewaysPage.allNamespaces', 'All namespaces')}
       />
 

@@ -281,7 +281,7 @@ test.describe('number check — the drawer a screen opens for one Kind of two gr
         await p.getByTestId('hygiene-cluster').click()
         await p.getByTestId('hygiene-cluster-opt-default').click()
         await p.getByTestId('hygiene-summary').waitFor({ timeout: 90_000 })
-        await p.getByPlaceholder(say('clusterHygiene.search', 'Search Namespace, name, message...')).fill(WIDGET)
+        await p.getByPlaceholder(say('clusterHygiene.search', 'Search Namespace, name, message, kind, container, exemption reason...')).fill(WIDGET)
         // the one check: the rows of both Widgets on the first page of the rows that fit the screen
         await p.getByTestId('hygiene-filter-check').click()
         await p.getByRole('button', { name: new RegExp(`^${say('clusterHygiene.checks.resources.memory-limit', 'No memory limit')} \\(\\d+\\)$`) }).click()

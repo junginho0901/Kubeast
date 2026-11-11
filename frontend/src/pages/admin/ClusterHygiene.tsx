@@ -394,7 +394,7 @@ export default function ClusterHygiene() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={tr('clusterHygiene.search', 'Search Namespace, name, message...')}
+              placeholder={tr('clusterHygiene.search', 'Search Namespace, name, message, kind, container, exemption reason...')}
               className="h-10 px-3 bg-slate-700 text-ink rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 text-sm flex-1 min-w-48"
             />
           </div>

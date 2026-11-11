@@ -240,7 +240,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('hpas.searchPlaceholder', 'Search HPAs by name...')}
+        searchPlaceholder={tr('hpas.searchPlaceholder', 'Search HPAs by name, namespace or target...')}
         allNamespacesLabel={tr('hpas.allNamespaces', 'All namespaces')}
       />
 

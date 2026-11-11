@@ -218,7 +218,7 @@ spec:
       <IngressClassFilters
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        searchPlaceholder={tr('ingressClassesPage.searchPlaceholder', 'Search ingress classes by name...')}
+        searchPlaceholder={tr('ingressClassesPage.searchPlaceholder', 'Search ingress classes by name, controller or parameters...')}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">

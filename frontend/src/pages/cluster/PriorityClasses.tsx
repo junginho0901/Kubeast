@@ -240,7 +240,7 @@ description: "Sample priority class"
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input
             type="text"
-            placeholder={tr('priorityClasses.searchPlaceholder', 'Search priority classes by name...')}
+            placeholder={tr('priorityClasses.searchPlaceholder', 'Search priority classes by name, description or preemption policy...')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"

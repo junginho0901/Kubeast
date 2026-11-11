@@ -255,7 +255,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('pvcs.searchPlaceholder', 'Search PVCs by name...')}
+        searchPlaceholder={tr('pvcs.searchPlaceholder', 'Search PVCs by name, namespace, status, StorageClass, volume, size or access mode...')}
         allNamespacesLabel={tr('pvcs.allNamespaces', 'All namespaces')}
       />
 

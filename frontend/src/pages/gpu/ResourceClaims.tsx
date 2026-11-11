@@ -239,7 +239,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('resourceClaimsPage.searchPlaceholder', 'Search ResourceClaims by name...')}
+        searchPlaceholder={tr('resourceClaimsPage.searchPlaceholder', 'Search by ResourceClaim name, namespace or state...')}
         allNamespacesLabel={tr('resourceClaimsPage.allNamespaces', 'All namespaces')}
       />
 

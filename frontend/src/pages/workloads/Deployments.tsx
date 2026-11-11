@@ -292,7 +292,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('deployments.searchPlaceholder', 'Search deployments by name...')}
+        searchPlaceholder={tr('deployments.searchPlaceholder', 'Search deployments by name, namespace, image or status...')}
         allNamespacesLabel={tr('deployments.allNamespaces', 'All namespaces')}
       />
 

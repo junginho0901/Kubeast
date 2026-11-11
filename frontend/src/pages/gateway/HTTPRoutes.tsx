@@ -267,7 +267,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('httpRoutesPage.searchPlaceholder', 'Search HTTPRoutes by name...')}
+        searchPlaceholder={tr('httpRoutesPage.searchPlaceholder', 'Search HTTPRoutes by name, namespace, hostname, status or count...')}
         allNamespacesLabel={tr('httpRoutesPage.allNamespaces', 'All namespaces')}
       />
 

@@ -240,7 +240,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('vpas.searchPlaceholder', 'Search VPAs by name...')}
+        searchPlaceholder={tr('vpas.searchPlaceholder', 'Search VPAs by name, namespace or target...')}
         allNamespacesLabel={tr('vpas.allNamespaces', 'All namespaces')}
       />
 

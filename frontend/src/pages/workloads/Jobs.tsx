@@ -253,7 +253,7 @@ spec:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('jobs.searchPlaceholder', 'Search jobs by name...')}
+        searchPlaceholder={tr('jobs.searchPlaceholder', 'Search jobs by name, namespace, status, container or image...')}
         allNamespacesLabel={tr('jobs.allNamespaces', 'All namespaces')}
       />
 

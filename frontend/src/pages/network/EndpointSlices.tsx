@@ -289,7 +289,7 @@ endpoints:
         selectedNamespace={selectedNamespace}
         setSelectedNamespace={setSelectedNamespace}
         namespaces={namespaces}
-        searchPlaceholder={tr('endpointSlicesPage.searchPlaceholder', 'Search endpoint slices by name...')}
+        searchPlaceholder={tr('endpointSlicesPage.searchPlaceholder', 'Search endpoint slices by name, namespace, service, address type, endpoint, port or count...')}
         allNamespacesLabel={tr('endpointSlicesPage.allNamespaces', 'All namespaces')}
       />
 
