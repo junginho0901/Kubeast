@@ -10,6 +10,7 @@ import { useRefresh } from '@/hooks/useRefresh'
 import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
+import { countsOf } from '@/utils/listCounts'
 import {
   applyWatchEvent,
   formatTargetRefs,
@@ -121,6 +122,7 @@ export function useBackendPoliciesData<T extends BackendPolicyLike>({
     }
     return { total, accepted, withTargetRefs }
   }, [filteredPolicies])
+  const cards = countsOf(policies, summary)
 
   const sortedPolicies = useMemo(() => {
     if (!sortKey) return filteredPolicies
@@ -201,6 +203,7 @@ export function useBackendPoliciesData<T extends BackendPolicyLike>({
     sortedPolicies,
     pagedPolicies,
     summary,
+    cards,
     rowsPerPage,
     totalPages,
     tableContainerRef: adaptive.containerRef,

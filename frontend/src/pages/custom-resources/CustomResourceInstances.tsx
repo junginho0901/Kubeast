@@ -19,9 +19,10 @@ import { crReadNotice } from './readNotice'
 import { withRowsOfKind } from './rowsOfKind'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search, ShieldAlert, AlertTriangle } from 'lucide-react'
 import CustomDropdown from '@/components/CustomDropdown'
+import { countsOf } from '@/utils/listCounts'
 
 type SortKey = null | 'name' | 'namespace' | 'kind' | 'group' | 'age' | string
-type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
+type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
 
 
 export default function CustomResourceInstances() {
@@ -127,14 +128,15 @@ export default function CustomResourceInstances() {
     }
     return { total, kinds: kinds.size, namespaces: namespaces.size }
   }, [filteredItems])
+  const cards = countsOf(instances, summary)
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
-      [tr('crInstancesPage.stats.total', 'Total Instances'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('crInstancesPage.stats.kinds', 'Unique Kinds'), summary.kinds, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('crInstancesPage.stats.namespaces', 'Namespaces'), summary.namespaces, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('crInstancesPage.stats.total', 'Total Instances'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('crInstancesPage.stats.kinds', 'Unique Kinds'), cards.kinds, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('crInstancesPage.stats.namespaces', 'Namespaces'), cards.namespaces, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
-    [summary.total, summary.kinds, summary.namespaces, tr],
+    [cards.total, cards.kinds, cards.namespaces, tr],
   )
 
   const handleSort = (key: NonNullable<SortKey>) => {

@@ -19,9 +19,10 @@ import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { applyRoleBindingWatchEvent } from './rolebindings/roleBindingWatchNormalize'
+import { countsOf } from '@/utils/listCounts'
 
 type SortKey = null | 'name' | 'namespace' | 'roleRef' | 'subjects' | 'age'
-type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
+type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
 
 export default function RoleBindings() {
   const queryClient = useQueryClient()
@@ -93,13 +94,14 @@ export default function RoleBindings() {
     for (const rb of filteredItems) totalSubjects += rb.subjects_count
     return { total, totalSubjects }
   }, [filteredItems])
+  const cards = countsOf(roleBindings, summary)
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
-      [tr('roleBindingsPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('roleBindingsPage.stats.totalSubjects', 'Total Subjects'), summary.totalSubjects, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('roleBindingsPage.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('roleBindingsPage.stats.totalSubjects', 'Total Subjects'), cards.totalSubjects, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
-    [summary.total, summary.totalSubjects, tr],
+    [cards.total, cards.totalSubjects, tr],
   )
 
   const handleSort = (key: NonNullable<SortKey>) => {

@@ -15,6 +15,7 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 import CustomDropdown from '@/components/CustomDropdown'
+import { countsOf } from '@/utils/listCounts'
 
 // Gateway → Policies: one table of every policy object attached to Gateway
 // API resources, whichever implementation owns the kind (label-discovered
@@ -23,7 +24,7 @@ import CustomDropdown from '@/components/CustomDropdown'
 // upstream BackendTLSPolicy has its own drawer.
 
 type SortKey = null | 'kind' | 'name' | 'namespace' | 'target' | 'age'
-type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
+type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
 // a kind is its Kind within its group: two implementations may name a policy kind alike
 const kindKey = (k: { group: string; kind: string }) => `${k.group}/${k.kind}`
 
@@ -101,14 +102,15 @@ export default function Policies() {
     }
     return { total: filteredItems.length, kinds: kindSet.size, accepted }
   }, [filteredItems])
+  const cards = countsOf(data?.items, summary)
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
-      [tr('policiesPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('policiesPage.stats.kinds', 'Kinds'), summary.kinds, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('policiesPage.stats.accepted', 'Accepted'), summary.accepted, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
+      [tr('policiesPage.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('policiesPage.stats.kinds', 'Kinds'), cards.kinds, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('policiesPage.stats.accepted', 'Accepted'), cards.accepted, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
     ],
-    [summary.total, summary.kinds, summary.accepted, tr],
+    [cards.total, cards.kinds, cards.accepted, tr],
   )
 
   const handleSort = (key: NonNullable<SortKey>) => {

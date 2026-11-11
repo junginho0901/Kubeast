@@ -21,9 +21,10 @@ import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { applyConfigMapWatchEvent } from './configmaps/configMapWatchNormalize'
+import { countsOf } from '@/utils/listCounts'
 
 type SortKey = null | 'name' | 'namespace' | 'dataCount' | 'age'
-type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
+type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
 
 export default function ConfigMaps() {
   const queryClient = useQueryClient()
@@ -106,13 +107,14 @@ export default function ConfigMaps() {
     for (const cm of filteredItems) totalKeys += cm.data_count
     return { total, totalKeys }
   }, [filteredItems])
+  const cards = countsOf(configMaps, summary)
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
-      [tr('configMapsPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('configMapsPage.stats.totalKeys', 'Total Data Keys'), summary.totalKeys, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('configMapsPage.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('configMapsPage.stats.totalKeys', 'Total Data Keys'), cards.totalKeys, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
-    [summary.total, summary.totalKeys, tr],
+    [cards.total, cards.totalKeys, tr],
   )
 
   const handleSort = (key: NonNullable<SortKey>) => {
