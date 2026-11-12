@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useDescribeReads } from '@/services/pacedReads'
@@ -10,6 +10,7 @@ import { useRefresh } from '@/hooks/useRefresh'
 import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
+import { countsOf } from '@/utils/listCounts'
 import {
   applyWatchEvent,
   formatTargetRefs,
@@ -17,6 +18,7 @@ import {
   type BackendPolicyLike,
   type SortKey,
 } from './helpers'
+import { useDismiss } from '@/hooks/useDismiss'
 
 export interface BackendPolicyConfig<T extends BackendPolicyLike> {
   kind: string
@@ -87,16 +89,7 @@ export function useBackendPoliciesData<T extends BackendPolicyLike>({
     },
   })
 
-  useEffect(() => {
-    if (!isNamespaceDropdownOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (namespaceDropdownRef.current && !namespaceDropdownRef.current.contains(event.target as Node)) {
-        setIsNamespaceDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isNamespaceDropdownOpen])
+  useDismiss(isNamespaceDropdownOpen, namespaceDropdownRef, setIsNamespaceDropdownOpen)
 
   const filteredPolicies = useMemo(() => {
     if (!Array.isArray(policies)) return [] as T[]
@@ -121,6 +114,7 @@ export function useBackendPoliciesData<T extends BackendPolicyLike>({
     }
     return { total, accepted, withTargetRefs }
   }, [filteredPolicies])
+  const cards = countsOf(policies, summary)
 
   const sortedPolicies = useMemo(() => {
     if (!sortKey) return filteredPolicies
@@ -201,6 +195,7 @@ export function useBackendPoliciesData<T extends BackendPolicyLike>({
     sortedPolicies,
     pagedPolicies,
     summary,
+    cards,
     rowsPerPage,
     totalPages,
     tableContainerRef: adaptive.containerRef,

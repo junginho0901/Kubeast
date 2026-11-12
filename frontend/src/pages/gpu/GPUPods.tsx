@@ -15,6 +15,7 @@ import { RefreshCw, BarChart3, ChevronDown, ChevronUp } from 'lucide-react'
 
 import type { GPUDashboardData, GPUMetricsData, GPUPodInfo } from '@/services/api'
 import { parseAgeSeconds, type SortKey, type SummaryCard } from './gpupods/gpuPodsHelpers'
+import { NOT_COUNTED } from '@/utils/listCounts'
 import { GPUPodsFilters } from './gpupods/GPUPodsFilters'
 import { GPUPodsTable } from './gpupods/GPUPodsTable'
 import { GPUPodsCharts } from './gpupods/GPUPodsCharts'
@@ -79,7 +80,7 @@ export default function GPUPods() {
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => {
-      const n = (v: number) => (forbidden ? '-' : v)
+      const n = (v: number) => (forbidden || !data ? NOT_COUNTED : v)
       return [
         [tr('gpuPods.stats.total', 'Total Pods'), n(stats.total), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
         [tr('gpuPods.stats.running', 'Running'), n(stats.running), 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
@@ -89,7 +90,7 @@ export default function GPUPods() {
         [tr('gpuPods.stats.namespaces', 'Namespaces'), n(stats.namespaces), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
       ]
     },
-    [stats, tr, forbidden],
+    [stats, tr, forbidden, data],
   )
 
   // GPU usage per node: every node

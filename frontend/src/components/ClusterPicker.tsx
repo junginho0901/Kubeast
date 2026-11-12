@@ -6,6 +6,7 @@ import { ChevronDown, Server, Check } from 'lucide-react'
 import { clustersApi, type ClusterMeta } from '@/services/api/clusters'
 import { useCluster } from '@/contexts/ClusterContext'
 import { healthDotClass } from '@/utils/clusterHealth'
+import { useDismiss } from '@/hooks/useDismiss'
 
 // Sidebar cluster picker (step 11). Lists only the clusters the user can access
 // (accessibleOnly — step 08 filter); selecting one drives ClusterContext, which
@@ -45,15 +46,8 @@ export default function ClusterPicker() {
     }
   }, [currentCluster, clusters, isLoading, setCurrentCluster])
 
-  // Close the dropdown on outside click.
-  useEffect(() => {
-    if (!open) return
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [open])
+  // Close the dropdown on a press outside or Escape.
+  useDismiss(open, ref, setOpen)
 
   const selected: ClusterMeta | undefined = clusters.find((c) => c.id === currentCluster)
 

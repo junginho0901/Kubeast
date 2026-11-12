@@ -16,6 +16,7 @@ import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
+import { countsOf } from '@/utils/listCounts'
 
 // Cluster → Validating / Mutating Admission Policies: the admissionregistration.k8s.io/v1
 // policies with their bindings, read-only (create and edit go through YAML).
@@ -75,6 +76,7 @@ export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind 
     total: filtered.length,
     bindings: filtered.reduce((n, item) => n + item.bindings_count, 0),
   }), [filtered])
+  const cards = countsOf(items, summary)
 
   const handleSort = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) {
@@ -211,11 +213,11 @@ export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind 
       <div className="grid grid-cols-2 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('admissionPolicies.stats.total', 'Total Policies')}</p>
-          <p className="text-lg text-ink font-semibold mt-1" data-testid="admission-policies-total">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1" data-testid="admission-policies-total">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('admissionPolicies.stats.bindings', 'Total Bindings')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.bindings}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.bindings}</p>
         </div>
       </div>
 

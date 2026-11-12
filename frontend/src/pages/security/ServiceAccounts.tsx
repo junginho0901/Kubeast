@@ -21,9 +21,11 @@ import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { applyServiceAccountWatchEvent } from './serviceaccounts/serviceAccountWatchNormalize'
+import { countsOf } from '@/utils/listCounts'
+import { useDismiss } from '@/hooks/useDismiss'
 
 type SortKey = null | 'name' | 'namespace' | 'secrets' | 'age'
-type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
+type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
 
 export default function ServiceAccounts() {
   const queryClient = useQueryClient()
@@ -78,16 +80,7 @@ export default function ServiceAccounts() {
     },
   })
 
-  useEffect(() => {
-    if (!isNamespaceDropdownOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (namespaceDropdownRef.current && !namespaceDropdownRef.current.contains(event.target as Node)) {
-        setIsNamespaceDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isNamespaceDropdownOpen])
+  useDismiss(isNamespaceDropdownOpen, namespaceDropdownRef, setIsNamespaceDropdownOpen)
 
   const filteredItems = useMemo(() => {
     if (!Array.isArray(serviceAccounts)) return [] as ServiceAccountInfo[]
@@ -110,13 +103,14 @@ export default function ServiceAccounts() {
     }
     return { total, withPullSecrets }
   }, [filteredItems])
+  const cards = countsOf(serviceAccounts, summary)
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
-      [tr('serviceAccountsPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('serviceAccountsPage.stats.withPullSecrets', 'With Image Pull Secrets'), summary.withPullSecrets, 'border-slate-700 bg-slate-900/50', 'text-slate-300'],
+      [tr('serviceAccountsPage.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('serviceAccountsPage.stats.withPullSecrets', 'With Image Pull Secrets'), cards.withPullSecrets, 'border-slate-700 bg-slate-900/50', 'text-slate-300'],
     ],
-    [summary.total, summary.withPullSecrets, tr],
+    [cards.total, cards.withPullSecrets, tr],
   )
 
   const handleSort = (key: NonNullable<SortKey>) => {

@@ -11,6 +11,7 @@ import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { useWritesRefusedIn } from '@/hooks/useCanCreate'
 import { useForbidden } from '@/services/forbiddenStore'
+import { countsOf } from '@/utils/listCounts'
 import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -88,8 +89,8 @@ export default function ResourceClaimTemplates() {
   }, [resourceClaimTemplates, searchQuery])
 
   const summary = useMemo(() => {
-    return { total: forbidden ? '-' : filteredResourceClaimTemplates.length }
-  }, [filteredResourceClaimTemplates, forbidden])
+    return countsOf(forbidden ? undefined : resourceClaimTemplates, { total: filteredResourceClaimTemplates.length })
+  }, [resourceClaimTemplates, filteredResourceClaimTemplates, forbidden])
 
   const sortedResourceClaimTemplates = useMemo(() => {
     if (!sortKey) return filteredResourceClaimTemplates

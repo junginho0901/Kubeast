@@ -26,8 +26,9 @@ import { NetworkPolicyTable } from './networkpolicies/NetworkPolicyTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
+import { countsOf } from '@/utils/listCounts'
 
-type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
+type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
 
 export default function NetworkPolicies() {
   const queryClient = useQueryClient()
@@ -108,15 +109,16 @@ export default function NetworkPolicies() {
 
     return { total, defaultDenyIngress, defaultDenyEgress, selectsAllPods }
   }, [filteredPolicies])
+  const cards = countsOf(policies, summary)
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
-      [tr('networkPoliciesPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('networkPoliciesPage.stats.defaultDenyIngress', 'Default Deny Ingress'), summary.defaultDenyIngress, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
-      [tr('networkPoliciesPage.stats.defaultDenyEgress', 'Default Deny Egress'), summary.defaultDenyEgress, 'border-orange-700/40 bg-orange-900/10', 'text-orange-300'],
-      [tr('networkPoliciesPage.stats.selectsAllPods', 'Selects All Pods'), summary.selectsAllPods, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('networkPoliciesPage.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('networkPoliciesPage.stats.defaultDenyIngress', 'Default Deny Ingress'), cards.defaultDenyIngress, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
+      [tr('networkPoliciesPage.stats.defaultDenyEgress', 'Default Deny Egress'), cards.defaultDenyEgress, 'border-orange-700/40 bg-orange-900/10', 'text-orange-300'],
+      [tr('networkPoliciesPage.stats.selectsAllPods', 'Selects All Pods'), cards.selectsAllPods, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
-    [summary.defaultDenyEgress, summary.defaultDenyIngress, summary.selectsAllPods, summary.total, tr],
+    [cards.defaultDenyEgress, cards.defaultDenyIngress, cards.selectsAllPods, cards.total, tr],
   )
 
   const sortedPolicies = useMemo(() => {

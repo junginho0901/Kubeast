@@ -19,6 +19,7 @@ import { PDBTable } from './pdbs/PDBTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
+import { countsOf } from '@/utils/listCounts'
 
 export default function PDBs() {
   const queryClient = useQueryClient()
@@ -84,6 +85,7 @@ export default function PDBs() {
 
     return { total, healthy, disrupted }
   }, [filteredPDBs])
+  const cards = countsOf(pdbs, summary)
 
   const sortedPDBs = useMemo(() => {
     if (!sortKey) return filteredPDBs
@@ -242,15 +244,15 @@ spec:
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('pdbs.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('pdbs.stats.healthy', 'Healthy')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.healthy}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.healthy}</p>
         </div>
         <div className="rounded-lg border border-red-700/40 bg-red-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-red-300">{tr('pdbs.stats.disrupted', 'Disrupted')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.disrupted}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.disrupted}</p>
         </div>
       </div>
 

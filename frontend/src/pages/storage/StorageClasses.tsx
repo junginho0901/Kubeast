@@ -22,6 +22,7 @@ import {
 import { applyStorageClassWatchEvent } from './storageclasses/storageClassWatchNormalize'
 import { StorageClassFilters } from './storageclasses/StorageClassFilters'
 import { StorageClassTable } from './storageclasses/StorageClassTable'
+import { countsOf } from '@/utils/listCounts'
 
 export default function StorageClasses() {
   const queryClient = useQueryClient()
@@ -90,6 +91,7 @@ export default function StorageClasses() {
 
     return { total, defaults, expandable, waitForFirstConsumer }
   }, [filteredStorageClasses])
+  const cards = countsOf(storageClasses, summary)
 
   const sortedStorageClasses = useMemo(() => {
     if (!sortKey) return filteredStorageClasses
@@ -235,19 +237,19 @@ allowVolumeExpansion: true
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('storageclasses.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('storageclasses.stats.default', 'Default')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.defaults}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.defaults}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('storageclasses.stats.expandable', 'Expandable')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.expandable}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.expandable}</p>
         </div>
         <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('storageclasses.stats.waitForFirstConsumer', 'WaitForFirstConsumer')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.waitForFirstConsumer}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.waitForFirstConsumer}</p>
         </div>
       </div>
 

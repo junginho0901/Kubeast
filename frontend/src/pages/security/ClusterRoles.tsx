@@ -18,9 +18,10 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { applyClusterRoleWatchEvent } from './clusterroles/clusterRoleWatchNormalize'
+import { countsOf } from '@/utils/listCounts'
 
 type SortKey = null | 'name' | 'rules' | 'age'
-type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
+type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
 
 export default function ClusterRoles() {
   const queryClient = useQueryClient()
@@ -63,13 +64,14 @@ export default function ClusterRoles() {
     for (const cr of filteredItems) totalRules += cr.rules_count
     return { total, totalRules }
   }, [filteredItems])
+  const cards = countsOf(clusterRoles, summary)
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
-      [tr('clusterRolesPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('clusterRolesPage.stats.totalRules', 'Total Rules'), summary.totalRules, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('clusterRolesPage.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('clusterRolesPage.stats.totalRules', 'Total Rules'), cards.totalRules, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
-    [summary.total, summary.totalRules, tr],
+    [cards.total, cards.totalRules, tr],
   )
 
   const handleSort = (key: NonNullable<SortKey>) => {

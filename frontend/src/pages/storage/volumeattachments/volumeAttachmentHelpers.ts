@@ -9,7 +9,7 @@
 import type { VolumeAttachmentInfo } from '@/services/api'
 
 export type SortKey = null | 'name' | 'attacher' | 'pv' | 'node' | 'attached' | 'error' | 'age'
-export type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
+export type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
 
 export { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
 

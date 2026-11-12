@@ -18,9 +18,10 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { applyClusterRoleBindingWatchEvent } from './rolebindings/roleBindingWatchNormalize'
+import { countsOf } from '@/utils/listCounts'
 
 type SortKey = null | 'name' | 'roleRef' | 'subjects' | 'age'
-type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
+type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
 
 export default function ClusterRoleBindings() {
   const queryClient = useQueryClient()
@@ -65,13 +66,14 @@ export default function ClusterRoleBindings() {
     for (const crb of filteredItems) totalSubjects += crb.subjects_count
     return { total, totalSubjects }
   }, [filteredItems])
+  const cards = countsOf(clusterRoleBindings, summary)
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
-      [tr('clusterRoleBindingsPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('clusterRoleBindingsPage.stats.totalSubjects', 'Total Subjects'), summary.totalSubjects, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('clusterRoleBindingsPage.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('clusterRoleBindingsPage.stats.totalSubjects', 'Total Subjects'), cards.totalSubjects, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
-    [summary.total, summary.totalSubjects, tr],
+    [cards.total, cards.totalSubjects, tr],
   )
 
   const handleSort = (key: NonNullable<SortKey>) => {

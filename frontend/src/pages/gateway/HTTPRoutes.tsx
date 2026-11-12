@@ -24,6 +24,7 @@ import { HTTPRouteTable } from './httproutes/HTTPRouteTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
+import { countsOf } from '@/utils/listCounts'
 
 export default function HTTPRoutes() {
   const queryClient = useQueryClient()
@@ -104,6 +105,7 @@ export default function HTTPRoutes() {
 
     return { total, accepted, resolvedRefs, withHostnames }
   }, [filteredHTTPRoutes])
+  const cards = countsOf(httpRoutes, summary)
 
   const sortedHTTPRoutes = useMemo(() => {
     if (!sortKey) return filteredHTTPRoutes
@@ -274,19 +276,19 @@ spec:
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('httpRoutesPage.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('httpRoutesPage.stats.accepted', 'Accepted')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.accepted}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.accepted}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('httpRoutesPage.stats.resolvedRefs', 'ResolvedRefs')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.resolvedRefs}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.resolvedRefs}</p>
         </div>
         <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('httpRoutesPage.stats.withHostnames', 'With Hostnames')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.withHostnames}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.withHostnames}</p>
         </div>
       </div>
 

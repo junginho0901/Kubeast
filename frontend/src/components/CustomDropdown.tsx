@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Trans } from 'react-i18next'
 import { ChevronDown, CheckCircle } from 'lucide-react'
+import { useDismiss } from '@/hooks/useDismiss'
 
 export interface DropdownOption {
   value: string
@@ -62,17 +63,8 @@ export default function CustomDropdown({
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // close on outside click
-  useEffect(() => {
-    if (!isOpen) return
-    const handle = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handle)
-    return () => document.removeEventListener('mousedown', handle)
-  }, [isOpen])
+  // close on a press outside or Escape
+  useDismiss(isOpen, containerRef, setIsOpen)
 
   const hasListHints = options.some((o) => o.listHint)
   const selected = options.find((o) => o.value === value)

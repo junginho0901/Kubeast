@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, CheckCircle, Search } from 'lucide-react'
+import { useDismiss } from '@/hooks/useDismiss'
 
 // The list search box of both tabs (the list pages' h-12 style); it narrows the rows by name. className places it: on
 // its own line (the default) or in a row of controls.
@@ -39,16 +40,7 @@ export function NamespaceFilter({ namespaces, value, onChange }: NamespaceFilter
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!isOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isOpen])
+  useDismiss(isOpen, containerRef, setIsOpen)
 
   const label =
     value === ''
