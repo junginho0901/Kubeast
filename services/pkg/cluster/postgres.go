@@ -11,7 +11,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"k8s.io/client-go/rest"
 )
 
 // PostgresRegistry is a Registry backed by the `clusters` table (owned by
@@ -383,9 +382,12 @@ func (r *PostgresRegistry) ClusterIDByUID(ctx context.Context, uid string) (ID, 
 }
 
 // AddSelf registers the cluster kubeast itself runs in, using the in-cluster
-// ServiceAccount (no kubeconfig secret). Fails if not running in-cluster.
+// ServiceAccount (no kubeconfig secret). Fails if not running in-cluster, and with
+// a *SameClusterError when a kubeconfig of this cluster is registered already.
+// The row keeps the cluster's kube-system UID, as an external one does; one that
+// cannot be read leaves it empty for FillSelfUID.
 func (r *PostgresRegistry) AddSelf(ctx context.Context, displayName, createdBy string) (*Meta, error) {
-	if _, err := rest.InClusterConfig(); err != nil {
+	if _, err := inClusterConfig(); err != nil {
 		return nil, fmt.Errorf("cluster: not running in-cluster, cannot register self: %w", err)
 	}
 	id := ID(Slugify(displayName))
@@ -399,10 +401,20 @@ func (r *PostgresRegistry) AddSelf(ctx context.Context, displayName, createdBy s
 	if exists {
 		return nil, ErrAlreadyExists
 	}
+	uid, uerr := SelfUID(ctx)
+	if uerr != nil {
+		slog.Warn("cluster: kube-system UID of this cluster not read, registered without it", "id", id, "err", uerr)
+		uid = ""
+	}
+	if uid != "" {
+		if existing, ferr := r.ClusterIDByUID(ctx, uid); ferr == nil {
+			return nil, &SameClusterError{ID: existing}
+		}
+	}
 	_, err = r.pool.Exec(ctx, `
-		INSERT INTO clusters (id, display_name, mode, kubeconfig_secret_name, is_self_cluster, created_by)
-		VALUES ($1, $2, $3, NULL, true, $4)`,
-		id, displayName, string(ModeInCluster), createdBy)
+		INSERT INTO clusters (id, display_name, mode, kubeconfig_secret_name, cluster_uid, is_self_cluster, created_by)
+		VALUES ($1, $2, $3, NULL, $4, true, $5)`,
+		id, displayName, string(ModeInCluster), nullIfEmpty(uid), createdBy)
 	if err != nil {
 		return nil, fmt.Errorf("insert self cluster: %w", err)
 	}

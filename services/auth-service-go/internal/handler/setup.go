@@ -141,7 +141,10 @@ func (h *SetupHandler) PostSetup(w http.ResponseWriter, r *http.Request) {
 		nil, map[string]any{"mode": req.Mode, "display_name": setupClusterDisplayName, "via": "setup"}, regErr)
 	if regErr != nil {
 		status := http.StatusInternalServerError
-		if req.Mode == "in_cluster" {
+		var same *cluster.SameClusterError
+		if errors.As(regErr, &same) {
+			status = http.StatusConflict
+		} else if req.Mode == "in_cluster" {
 			status = http.StatusBadRequest
 		}
 		response.Error(w, status, "Failed to register cluster: "+regErr.Error())

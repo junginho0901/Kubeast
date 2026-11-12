@@ -168,8 +168,12 @@ func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request
 		uid = probe.UID
 		// Reject a kubeconfig that points at a cluster we already manage (same
 		// physical cluster under a different name) — matched by the kube-system
-		// namespace UID fingerprint.
+		// namespace UID fingerprint, which an in-cluster row registered without one
+		// gets first.
 		if uid != "" {
+			if ferr := h.registry.FillSelfUID(r.Context()); ferr != nil {
+				slog.Warn("cluster: in-cluster rows without a kube-system UID stay without one", "err", ferr)
+			}
 			if existing, ferr := h.registry.ClusterIDByUID(r.Context(), uid); ferr == nil {
 				h.audit(r, "admin.cluster.register", payload, string(existing), nil, map[string]string{"display_name": req.DisplayName},
 					errors.New("the same cluster is already registered"))
@@ -194,7 +198,8 @@ func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request
 
 	if err != nil {
 		status := http.StatusInternalServerError
-		if errors.Is(err, cluster.ErrAlreadyExists) {
+		var same *cluster.SameClusterError
+		if errors.Is(err, cluster.ErrAlreadyExists) || errors.As(err, &same) {
 			status = http.StatusConflict
 		} else if req.Mode == "self" {
 			// Self registration only fails on bad input (not running in-cluster).

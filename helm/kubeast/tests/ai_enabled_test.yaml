@@ -93,7 +93,7 @@ tests:
           count: 0
         template: model-config-crd.yaml
       - hasDocuments:
-          count: 7
+          count: 9
         template: rbac.yaml
       - hasDocuments:
           count: 9

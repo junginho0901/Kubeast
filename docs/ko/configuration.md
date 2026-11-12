@@ -38,6 +38,7 @@ auth:
   # Kubeast 자격증명에는 ClusterRole kubeast-impersonator만 있으면 됩니다.
   # 설치된 클러스터의 k8s-service와 tool-server ServiceAccount도 이 ClusterRole과 kubeconfig Secret 읽기 Role만 받습니다.
   # false면 예전처럼 cluster-admin을 받습니다.
+  # auth-service는 그 클러스터의 kube-system 네임스페이스를 읽을(get) 수 있습니다. 그 UID로 같은 클러스터가 kubeconfig로 두 번 등록되는 것을 막습니다.
   # 커스텀 역할(Read/Write/Admin 외)을 클러스터에 부여하면 그룹 kubeast:role:<slug>로 동작합니다.
   # 위 RBAC은 고정 그룹 4개만 impersonate를 허용하므로, 그 그룹을 허용하려면 customRoles에 적으세요.
   # 그 그룹은 항목에 적은 ClusterRole에 묶입니다. 등록 클러스터마다 같은 렌더를 적용하세요:

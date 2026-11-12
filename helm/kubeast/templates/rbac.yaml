@@ -115,6 +115,36 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: auth-service-setup
+---
+# The kube-system namespace UID of the cluster Kubeast runs in, the fingerprint an
+# in-cluster registration keeps so a kubeconfig of the same cluster is refused
+# (services/pkg/cluster SelfUID); that one namespace, get only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-auth-service-self-uid
+  labels:
+    {{- include "kubeast.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    resourceNames: ["kube-system"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-auth-service-self-uid
+  labels:
+    {{- include "kubeast.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: auth-service
+    namespace: {{ include "kubeast.namespace" . }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-auth-service-self-uid
 {{- if .Values.ai.enabled }}
 ---
 apiVersion: v1

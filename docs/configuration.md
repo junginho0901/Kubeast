@@ -38,7 +38,8 @@ auth:
   #   scripts/render-target-rbac.sh -f values.yaml -f <that cluster's values> | kubectl --context <cluster> apply -f -
   # Kubeast credentials need only the ClusterRole kubeast-impersonator. The k8s-service and tool-server
   # ServiceAccounts in the cluster Kubeast is installed in also get only this, plus a Role to read the
-  # kubeconfig Secret. When false, they get cluster-admin as before.
+  # kubeconfig Secret. When false, they get cluster-admin as before. auth-service may get the kube-system
+  # namespace of that cluster (its UID, so a kubeconfig of the same cluster is not registered twice).
   # A custom role (other than Read/Write/Admin) granted on a cluster acts as the group kubeast:role:<slug>.
   # The RBAC above allows impersonating only the 4 fixed groups, so list the role in customRoles:
   # that group is then allowed and bound to the listed ClusterRoles.
