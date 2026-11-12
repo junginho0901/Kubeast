@@ -22,6 +22,7 @@ import {
 import { applyIngressClassWatchEvent } from './ingressclasses/ingressClassWatchNormalize'
 import { IngressClassFilters } from './ingressclasses/IngressClassFilters'
 import { IngressClassTable } from './ingressclasses/IngressClassTable'
+import { countsOf } from '@/utils/listCounts'
 
 export default function IngressClasses() {
   const queryClient = useQueryClient()
@@ -83,6 +84,7 @@ export default function IngressClasses() {
 
     return { total, defaults, withParameters, withAnnotations }
   }, [filteredIngressClasses])
+  const cards = countsOf(ingressClasses, summary)
 
   const sortedIngressClasses = useMemo(() => {
     if (!sortKey) return filteredIngressClasses
@@ -223,19 +225,19 @@ spec:
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('ingressClassesPage.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('ingressClassesPage.stats.default', 'Default')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.defaults}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.defaults}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('ingressClassesPage.stats.withParameters', 'With Parameters')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.withParameters}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.withParameters}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-300">{tr('ingressClassesPage.stats.withAnnotations', 'With Annotations')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.withAnnotations}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.withAnnotations}</p>
         </div>
       </div>
 

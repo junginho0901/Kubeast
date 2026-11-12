@@ -5,7 +5,7 @@
 // is owned by this component (ref + useEffect) so the parent
 // doesn't have to thread a ref through props.
 
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle, ChevronDown, RefreshCw, Search, X } from 'lucide-react'
 
@@ -15,6 +15,7 @@ import { buildResourceLink } from '@/utils/resourceLink'
 
 import { formatBytes } from '../utils'
 import { failureText } from '@/utils/failureText'
+import { useDismiss } from '@/hooks/useDismiss'
 
 interface Props {
   open: boolean
@@ -76,21 +77,7 @@ export function StorageModal({
 
   // Outside-click → close namespace dropdown.
   const dropdownRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!isDropdownOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [isDropdownOpen, setIsDropdownOpen])
+  useDismiss(isDropdownOpen, dropdownRef, setIsDropdownOpen)
 
   const pvTab = activeTab === 'pvs'
   useAIContext(open && !isLoading ? {

@@ -23,6 +23,7 @@ import {
 import { applyPvWatchEvent } from './pvs/pvWatchNormalize'
 import { PVFilters } from './pvs/PVFilters'
 import { PVTable } from './pvs/PVTable'
+import { countsOf } from '@/utils/listCounts'
 
 export default function PersistentVolumes() {
   const queryClient = useQueryClient()
@@ -95,6 +96,7 @@ export default function PersistentVolumes() {
 
     return { total, bound, available, released, failed }
   }, [filteredPVs])
+  const cards = countsOf(pvs, summary)
 
   const sortedPVs = useMemo(() => {
     if (!sortKey) return filteredPVs
@@ -260,23 +262,23 @@ spec:
       <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('pvs.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('pvs.stats.bound', 'Bound')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.bound}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.bound}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('pvs.stats.available', 'Available')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.available}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.available}</p>
         </div>
         <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('pvs.stats.released', 'Released')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.released}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.released}</p>
         </div>
         <div className="rounded-lg border border-red-700/40 bg-red-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-red-300">{tr('pvs.stats.failed', 'Failed')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.failed}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.failed}</p>
         </div>
       </div>
 

@@ -25,6 +25,7 @@ import { workloadStatusText } from '@/utils/workloadStatus'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
+import { countsOf } from '@/utils/listCounts'
 
 export default function Deployments() {
   const queryClient = useQueryClient()
@@ -97,6 +98,7 @@ export default function Deployments() {
 
     return { total, healthy, degraded, unavailable }
   }, [filteredDeployments])
+  const cards = countsOf(deployments, summary)
 
   const sortedDeployments = useMemo(() => {
     if (!sortKey) return filteredDeployments
@@ -299,19 +301,19 @@ spec:
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('deployments.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('deployments.stats.healthy', 'Healthy')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.healthy}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.healthy}</p>
         </div>
         <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('deployments.stats.degraded', 'Degraded')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.degraded}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.degraded}</p>
         </div>
         <div className="rounded-lg border border-red-700/40 bg-red-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-red-300">{tr('deployments.stats.unavailable', 'Unavailable')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.unavailable}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.unavailable}</p>
         </div>
       </div>
 

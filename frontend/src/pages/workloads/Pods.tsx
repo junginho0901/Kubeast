@@ -19,6 +19,7 @@ import { PodTable } from './pods/PodTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
+import { NOT_COUNTED } from '@/utils/listCounts'
 
 const PAGE_BLOCK = 50
 
@@ -112,17 +113,20 @@ export default function Pods() {
   }, [page?.stats])
 
   const summaryCards = useMemo<SummaryCard[]>(
-    () => [
-      [tr('pods.stats.total', 'Total'), podStats.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('pods.stats.ready', 'Ready'), podStats.ready, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
-      [tr('pods.stats.notReady', 'Not Ready'), podStats.notReady, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
-      [tr('pods.stats.pending', 'Pending'), podStats.pending, 'border-yellow-700/40 bg-yellow-900/10', 'text-yellow-300'],
-      [tr('pods.stats.terminating', 'Terminating'), podStats.terminating, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
-      [tr('pods.stats.error', 'Error'), podStats.error, 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
-      [tr('pods.stats.restarted', 'Restarted'), podStats.restarted, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('pods.stats.completed', 'Completed'), podStats.completed, 'border-slate-600/50 bg-slate-800/30', 'text-slate-300'],
-    ],
-    [podStats.completed, podStats.error, podStats.notReady, podStats.pending, podStats.ready, podStats.restarted, podStats.terminating, podStats.total, tr],
+    () => {
+      const n = (v: number) => (page ? v : NOT_COUNTED)
+      return [
+        [tr('pods.stats.total', 'Total'), n(podStats.total), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+        [tr('pods.stats.ready', 'Ready'), n(podStats.ready), 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
+        [tr('pods.stats.notReady', 'Not Ready'), n(podStats.notReady), 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
+        [tr('pods.stats.pending', 'Pending'), n(podStats.pending), 'border-yellow-700/40 bg-yellow-900/10', 'text-yellow-300'],
+        [tr('pods.stats.terminating', 'Terminating'), n(podStats.terminating), 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
+        [tr('pods.stats.error', 'Error'), n(podStats.error), 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
+        [tr('pods.stats.restarted', 'Restarted'), n(podStats.restarted), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+        [tr('pods.stats.completed', 'Completed'), n(podStats.completed), 'border-slate-600/50 bg-slate-800/30', 'text-slate-300'],
+      ]
+    },
+    [podStats.completed, podStats.error, podStats.notReady, podStats.pending, podStats.ready, podStats.restarted, podStats.terminating, podStats.total, tr, page],
   )
 
   const createPodYamlTemplate = useMemo(() => {

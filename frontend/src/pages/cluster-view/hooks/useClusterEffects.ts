@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useClusterView } from '../ClusterViewContext'
+import { useDismiss } from '@/hooks/useDismiss'
 
 // ClusterView 의 5 useEffect 묶음:
 // 1) ESC → 메뉴 → delete 모달 → detail 모달 순서로 close
@@ -45,32 +46,9 @@ export function useClusterEffects() {
   }, [podContextMenu, setPodContextMenu])
 
   // 3) namespace dropdown 외부 클릭 close
-  useEffect(() => {
-    if (!isNamespaceDropdownOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        namespaceDropdownRef.current &&
-        !namespaceDropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsNamespaceDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isNamespaceDropdownOpen, namespaceDropdownRef, setIsNamespaceDropdownOpen])
+  useDismiss(isNamespaceDropdownOpen, namespaceDropdownRef, setIsNamespaceDropdownOpen)
 
   // 4) exec container/shell dropdown 외부 클릭 close
-  useEffect(() => {
-    if (!isExecContainerDropdownOpen && !isExecShellDropdownOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (execContainerDropdownRef.current && !execContainerDropdownRef.current.contains(event.target as Node)) {
-        setIsExecContainerDropdownOpen(false)
-      }
-      if (execShellDropdownRef.current && !execShellDropdownRef.current.contains(event.target as Node)) {
-        setIsExecShellDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isExecContainerDropdownOpen, isExecShellDropdownOpen, execContainerDropdownRef, execShellDropdownRef, setIsExecContainerDropdownOpen, setIsExecShellDropdownOpen])
+  useDismiss(isExecContainerDropdownOpen, execContainerDropdownRef, setIsExecContainerDropdownOpen)
+  useDismiss(isExecShellDropdownOpen, execShellDropdownRef, setIsExecShellDropdownOpen)
 }

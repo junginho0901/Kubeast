@@ -25,6 +25,7 @@ import { applyVolumeAttachmentWatchEvent } from './volumeattachments/volumeAttac
 import { VolumeAttachmentFilters } from './volumeattachments/VolumeAttachmentFilters'
 import { VolumeAttachmentTable } from './volumeattachments/VolumeAttachmentTable'
 import { failureText } from '@/utils/failureText'
+import { countsOf } from '@/utils/listCounts'
 
 export default function VolumeAttachments() {
   const queryClient = useQueryClient()
@@ -96,15 +97,16 @@ export default function VolumeAttachments() {
 
     return { total, attached, detached, errors }
   }, [filteredVolumeAttachments])
+  const cards = countsOf(volumeAttachments, summary)
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
-      [tr('volumeattachments.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('volumeattachments.stats.attached', 'Attached'), summary.attached, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
-      [tr('volumeattachments.stats.detached', 'Detached'), summary.detached, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
-      [tr('volumeattachments.stats.errors', 'Errors'), summary.errors, 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
+      [tr('volumeattachments.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('volumeattachments.stats.attached', 'Attached'), cards.attached, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
+      [tr('volumeattachments.stats.detached', 'Detached'), cards.detached, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
+      [tr('volumeattachments.stats.errors', 'Errors'), cards.errors, 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
     ],
-    [summary.attached, summary.detached, summary.errors, summary.total, tr],
+    [cards.attached, cards.detached, cards.errors, cards.total, tr],
   )
 
   const sortedVolumeAttachments = useMemo(() => {

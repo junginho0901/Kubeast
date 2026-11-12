@@ -11,6 +11,7 @@ import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { useWritesRefusedIn } from '@/hooks/useCanCreate'
 import { useForbidden } from '@/services/forbiddenStore'
+import { countsOf } from '@/utils/listCounts'
 import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -90,8 +91,8 @@ export default function ResourceClaims() {
 
   const summary = useMemo(() => {
     const cards = claimCards(filteredResourceClaims)
-    return forbidden ? { total: '-', allocated: '-', reserved: '-', pending: '-' } : cards
-  }, [filteredResourceClaims, forbidden])
+    return countsOf(forbidden ? undefined : resourceClaims, cards)
+  }, [resourceClaims, filteredResourceClaims, forbidden])
 
   const sortedResourceClaims = useMemo(() => {
     if (!sortKey) return filteredResourceClaims

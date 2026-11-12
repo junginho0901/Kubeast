@@ -23,6 +23,7 @@ import { GatewayTable } from './gateways/GatewayTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
+import { countsOf } from '@/utils/listCounts'
 
 export default function Gateways() {
   const queryClient = useQueryClient()
@@ -101,6 +102,7 @@ export default function Gateways() {
     }
     return { total, programmed, accepted, withAddress }
   }, [filteredGateways])
+  const cards = countsOf(gateways, summary)
 
   const sortedGateways = useMemo(() => {
     if (!sortKey) return filteredGateways
@@ -264,19 +266,19 @@ spec:
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('gatewaysPage.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('gatewaysPage.stats.programmed', 'Programmed')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.programmed}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.programmed}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('gatewaysPage.stats.accepted', 'Accepted')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.accepted}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.accepted}</p>
         </div>
         <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('gatewaysPage.stats.withAddress', 'With Address')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.withAddress}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.withAddress}</p>
         </div>
       </div>
 

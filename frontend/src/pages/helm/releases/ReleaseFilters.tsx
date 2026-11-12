@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle, ChevronDown, Search } from 'lucide-react'
+import { useDismiss } from '@/hooks/useDismiss'
 
 interface Props {
   searchQuery: string
@@ -21,14 +22,7 @@ export default function ReleaseFilters({
   const [nsOpen, setNsOpen] = useState(false)
   const nsRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!nsOpen) return
-    const onClick = (e: MouseEvent) => {
-      if (nsRef.current && !nsRef.current.contains(e.target as Node)) setNsOpen(false)
-    }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [nsOpen])
+  useDismiss(nsOpen, nsRef, setNsOpen)
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 shrink-0">

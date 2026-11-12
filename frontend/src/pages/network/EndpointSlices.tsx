@@ -24,8 +24,9 @@ import { EndpointSliceTable } from './endpointslices/EndpointSliceTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
+import { countsOf } from '@/utils/listCounts'
 
-type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
+type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
 
 export default function EndpointSlices() {
   const queryClient = useQueryClient()
@@ -109,15 +110,16 @@ export default function EndpointSlices() {
 
     return { total, withReady, withNotReady, totalEndpoints }
   }, [filteredEndpointSlices])
+  const cards = countsOf(endpointSlices, summary)
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
-      [tr('endpointSlicesPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('endpointSlicesPage.stats.withReady', 'With Ready'), summary.withReady, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
-      [tr('endpointSlicesPage.stats.withNotReady', 'With Not Ready'), summary.withNotReady, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
-      [tr('endpointSlicesPage.stats.totalEndpoints', 'Total Endpoints'), summary.totalEndpoints, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('endpointSlicesPage.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('endpointSlicesPage.stats.withReady', 'With Ready'), cards.withReady, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
+      [tr('endpointSlicesPage.stats.withNotReady', 'With Not Ready'), cards.withNotReady, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
+      [tr('endpointSlicesPage.stats.totalEndpoints', 'Total Endpoints'), cards.totalEndpoints, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
-    [summary.total, summary.totalEndpoints, summary.withNotReady, summary.withReady, tr],
+    [cards.total, cards.totalEndpoints, cards.withNotReady, cards.withReady, tr],
   )
 
   const sortedEndpointSlices = useMemo(() => {

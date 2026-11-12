@@ -18,6 +18,7 @@ import { StatefulSetTable } from './statefulsets/StatefulSetTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
+import { countsOf } from '@/utils/listCounts'
 
 export default function StatefulSets() {
   const queryClient = useQueryClient()
@@ -85,6 +86,7 @@ export default function StatefulSets() {
     }
     return { total, healthy, idle, degraded, unavailable }
   }, [filtered])
+  const cards = countsOf(statefulsets, summary)
 
   const sorted = useMemo(() => {
     if (!sortKey) return filtered
@@ -250,23 +252,23 @@ spec:
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-xs text-slate-400">{tr('statefulsets.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-xs text-emerald-300">{tr('statefulsets.stats.healthy', 'Healthy')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.healthy}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.healthy}</p>
         </div>
         <div className="rounded-lg border border-slate-600/50 bg-slate-800/30 px-4 py-3">
           <p className="text-xs text-slate-300">{tr('statefulsets.stats.idle', 'Idle')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.idle}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.idle}</p>
         </div>
         <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
           <p className="text-xs text-amber-300">{tr('statefulsets.stats.degraded', 'Degraded')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.degraded}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.degraded}</p>
         </div>
         <div className="rounded-lg border border-red-700/40 bg-red-900/10 px-4 py-3">
           <p className="text-xs text-red-300">{tr('statefulsets.stats.unavailable', 'Unavailable')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.unavailable}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.unavailable}</p>
         </div>
       </div>
 
