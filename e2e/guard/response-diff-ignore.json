@@ -29,6 +29,18 @@
       "cell": "\\.claude-code\\.",
       "why": "The dev image is built WITH_CLAUDE_CODE and the compared release tag is the one without it, not a difference in the code.",
       "pr": "#651"
+    },
+    {
+      "route": "^/api/v1/cluster/namespaces/[^/]+/secrets/[^/]+/describe$",
+      "cell": "^\\$\\.annotations\\.kubectl\\.kubernetes\\.io/last-applied-configuration$",
+      "why": "A Secret's describe gives kubectl's last-applied annotation as *** to every caller; v0.7.6 gave it whole to a caller who may reveal.",
+      "pr": "#781"
+    },
+    {
+      "route": "^live /apis/coordination\\.k8s\\.io/v1/leases$",
+      "cell": "^\\$\\.items(\\.\\$length$|\\[/[^\\]]+#2\\]\\.)",
+      "why": "Every lease's holder renews it every few seconds; whether a renewal falls inside a build's first live frame is timing, so one build's frame can hold a lease twice and count one more.",
+      "pr": "#783"
     }
   ]
 }

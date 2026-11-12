@@ -14,6 +14,21 @@
       "screen": "/admin/clusters on",
       "selector": "[data-testid^=\"cluster-health-checked-\"]",
       "why": "When the background check last ran, which moves by itself."
+    },
+    {
+      "screen": "/admin/audit on",
+      "selector": "table",
+      "why": "Each look at this page writes an admin.audit.read row, so its newest rows move with every look, and the header's columns, which the rows size, with them."
+    },
+    {
+      "screen": "/admin/audit on",
+      "selector": "div.mt-3:has(> span.ml-auto.text-xs)",
+      "why": "The count of rows, which every look raises. Its width moves with the digits, so the whole row it ends is covered, Search and Reset with it."
+    },
+    {
+      "screen": "/admin/audit on",
+      "selector": "[data-testid=\"audit-pager\"]",
+      "why": "The pager's total, which every look raises."
     }
   ]
 }
