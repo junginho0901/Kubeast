@@ -201,6 +201,22 @@ test.describe.serial('Secret exposure — generic resource paths and Helm text',
     expect(await auditRows(request, admin, 'k8s.secret.reveal', readerEmail)).toHaveLength(0)
   })
 
+  test('the drawer shows that annotation as *** to someone who may reveal, and a value only under Show', async ({ page }) => {
+    await page.goto(`/configuration/secrets?cluster=${CLUSTER}&namespace=${NS}&detail=${encodeURIComponent(`Secret/${NS}/${secretName}`)}`)
+    const drawer = page.locator('[class*="max-w-[740px]"]')
+    // an annotation tag is its key, ":" and its value (KeyValueTags)
+    const tag = (key: string) => drawer.locator('span.rounded-full').filter({ has: page.locator('span.font-mono', { hasText: new RegExp(`^${key.replace(/\./g, '\\.')}$`) }) })
+    await expect(tag('kubectl.kubernetes.io/last-applied-configuration').locator('span.truncate').nth(1)).toHaveText('***', { timeout: 30_000 })
+    await expect(tag('e2e-team').locator('span.truncate').nth(1)).toHaveText('shop')
+    expect(await page.content(), 'the page holds neither the copy nor a value before Show').not.toContain(lastAppliedValue)
+    expect(await page.content()).not.toContain(secretValue)
+
+    const row = drawer.locator('div.rounded-sm.border-slate-800').filter({ has: page.locator('span.font-mono', { hasText: /^password$/ }) })
+    await row.getByTitle(/^(Show|보기)$/).click()
+    await expect(row).toContainText(secretValue)
+    expect(await page.content(), 'Show opens the value, never the copy').not.toContain(lastAppliedValue)
+  })
+
   test('the copy kubectl apply keeps in an annotation is masked with the values, and the annotation stays listed', async ({ request }) => {
     const paths = [
       `/api/v1/cluster/resources/yaml?cluster=${CLUSTER}&resource_type=secrets&namespace=${NS}&resource_name=${secretName}`,
@@ -219,7 +235,15 @@ test.describe.serial('Secret exposure — generic resource paths and Helm text',
 
       const asAdmin = await request.get(p, { headers: admin })
       expect(asAdmin.status(), await asAdmin.text()).toBe(200)
-      expect(await asAdmin.text(), `${p}: reveal keeps it`).toContain(lastAppliedValue)
+      const adminText = await asAdmin.text()
+      if (p.includes('/describe')) {
+        // the drawer's Info reads a describe: the values it repeats stay under Show there (Codex QA Q13)
+        expect(adminText, `${p}: a describe masks it for everyone`).not.toContain(lastAppliedValue)
+        expect(adminText, p).toContain('kubectl.kubernetes.io/last-applied-configuration')
+        expect(adminText, `${p}: the values come under data_values`).toContain(secretValue)
+      } else {
+        expect(adminText, `${p}: reveal keeps it`).toContain(lastAppliedValue)
+      }
     }
     expect(await auditRows(request, admin, 'k8s.secret.reveal', readerEmail)).toHaveLength(0)
 
