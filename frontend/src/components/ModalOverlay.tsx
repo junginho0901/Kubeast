@@ -20,7 +20,9 @@ export function ModalOverlay({ children, onClose, closeOnOverlayClick = true, zI
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isTop()) return
-      if (e.key === 'Escape' && onClose) onClose()
+      // the Escape that closed this window goes no further: the drawer under it listens on window and, once this
+      // window has left the stack, would read itself as the top one
+      if (e.key === 'Escape' && onClose) { e.stopPropagation(); onClose() }
       // Tab cycles inside the top-most modal (an editor that took the key, e.g. Monaco indenting, is left alone)
       if (e.key === 'Tab' && !e.defaultPrevented && overlayRef.current) {
         const list = focusables(overlayRef.current)
