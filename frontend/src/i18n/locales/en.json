@@ -5,8 +5,10 @@
     "create": "Create key",
     "name": "Name",
     "namePlaceholder": "e.g. deploy pipeline",
+    "nameBlank": "Enter a name: spaces alone are not one.",
     "expires": "Expires in (days)",
     "expiresHint": "up to {{max}}",
+    "daysRange": "Enter the expiry as a whole number of days from 1 to {{max}}.",
     "clusters": "Clusters",
     "clustersHint": "None selected = every cluster you can reach.",
     "allClusters": "All clusters you can reach",
@@ -4615,7 +4617,8 @@
     "creating": "Creating...",
     "created": "Created: {{objects}}",
     "createdMore": "and {{count}} more",
-    "madeBefore": "Created before it stopped: {{objects}}"
+    "madeBefore": "Created before it stopped: {{objects}}",
+    "empty": "Nothing to create: enter the YAML of an object."
   },
   "podDeleteModal": {
     "title": "Delete pod",
