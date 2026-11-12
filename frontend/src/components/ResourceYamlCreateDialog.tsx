@@ -123,6 +123,11 @@ export default function ResourceYamlCreateDialog({
           options={editorOptions}
         />
       </div>
+      {!yaml.trim() && (
+        <p role="alert" data-testid="yaml-create-empty" className="mt-1 text-[11px] text-red-400">
+          {t('yamlCreate.empty', { defaultValue: 'Nothing to create: enter the YAML of an object.' })}
+        </p>
+      )}
 
       {error && (
         <p data-testid="yaml-create-error" className="mt-3 text-sm text-red-400 wrap-break-word whitespace-pre-wrap">

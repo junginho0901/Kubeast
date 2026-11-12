@@ -23,7 +23,7 @@ const kubectl = kubectlFor('kubeast')
 
 const configMap = (name: string) => `apiVersion: v1\nkind: ConfigMap\nmetadata: {name: ${name}, namespace: ${NS}}\ndata: {k: v}`
 
-async function createFromYaml(page: Page, yaml: string): Promise<void> {
+async function typeYaml(page: Page, yaml: string): Promise<void> {
   const dialog = page.getByTestId('yaml-create-dialog')
   if (!(await dialog.isVisible())) await page.getByRole('button', { name: 'Create ConfigMap', exact: true }).click()
   await expect(dialog).toBeVisible()
@@ -32,10 +32,14 @@ async function createFromYaml(page: Page, yaml: string): Promise<void> {
   const mac = await page.evaluate(() => navigator.userAgent.includes('Macintosh'))
   await page.keyboard.press(mac ? 'Meta+A' : 'Control+A')
   await page.keyboard.press('Delete')
-  await page.keyboard.insertText(yaml)
+  if (yaml) await page.keyboard.insertText(yaml)
   const lines = await dialog.locator('.monaco-editor .view-lines').first().evaluate((el) => (el as HTMLElement).innerText.replace(/ /g, ' ').trim())
-  expect(lines, 'the editor holds the YAML typed, nothing of the template').toBe(yaml)
-  await dialog.getByRole('button', { name: 'Create', exact: true }).click()
+  expect(lines, 'the editor holds the YAML typed, nothing of the template').toBe(yaml.trim())
+}
+
+async function createFromYaml(page: Page, yaml: string): Promise<void> {
+  await typeYaml(page, yaml)
+  await page.getByTestId('yaml-create-dialog').getByRole('button', { name: 'Create', exact: true }).click()
 }
 
 test.describe('Create from YAML says what it made', () => {
@@ -104,5 +108,28 @@ test.describe('Create from YAML says what it made', () => {
     expect(answers).toEqual([400, 400, 400, 400])
     await expect(page.getByTestId('yaml-created')).toHaveCount(0)
     expect(kubectl(`-n ${NS} get configmaps -o name`), 'nothing was made').toBe(before)
+  })
+
+  // An emptied window, or one of spaces and line breaks only, has nothing to send: Create waits and the line under the
+  // editor says why, and goes once there is YAML to send.
+  test('an empty window says there is nothing to create while Create waits', async ({ page }) => {
+    await page.goto(`/configuration/configmaps?cluster=${CLUSTER}&namespace=${NS}`)
+    const dialog = page.getByTestId('yaml-create-dialog')
+    const create = dialog.getByRole('button', { name: 'Create', exact: true })
+    const empty = dialog.getByTestId('yaml-create-empty')
+    const sent: string[] = []
+    page.on('request', (r) => { if (new URL(r.url()).pathname === '/api/v1/cluster/resources/yaml/create') sent.push(r.method()) })
+    for (const yaml of ['', '   \n\n  ']) {
+      await typeYaml(page, yaml)
+      await expect(empty, JSON.stringify(yaml)).toHaveText('Nothing to create: enter the YAML of an object.')
+      await expect(create, JSON.stringify(yaml)).toBeDisabled()
+    }
+    await typeYaml(page, configMap('e2e-yc-empty'))
+    await expect(empty).toHaveCount(0)
+    await expect(create).toBeEnabled()
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    expect(sent, 'nothing was sent').toEqual([])
+    expect(kubectl(`-n ${NS} get configmap e2e-yc-empty --ignore-not-found -o name`), 'nothing was made').toBe('')
   })
 })

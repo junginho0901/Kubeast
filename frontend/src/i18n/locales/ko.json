@@ -5,8 +5,10 @@
     "create": "키 발급",
     "name": "이름",
     "namePlaceholder": "예: 배포 파이프라인",
+    "nameBlank": "이름을 입력하세요. 공백만으로는 이름이 되지 않습니다.",
     "expires": "만료(일)",
     "expiresHint": "최대 {{max}}일",
+    "daysRange": "만료는 1~{{max}}일 사이의 정수로 입력하세요.",
     "clusters": "클러스터",
     "clustersHint": "아무것도 고르지 않으면 내가 접근할 수 있는 모든 클러스터.",
     "allClusters": "접근 가능한 모든 클러스터",
@@ -4728,7 +4730,8 @@
     "creating": "생성 중...",
     "created": "생성했습니다: {{objects}}",
     "createdMore": "외 {{count}}개",
-    "madeBefore": "멈추기 전에 생성했습니다: {{objects}}"
+    "madeBefore": "멈추기 전에 생성했습니다: {{objects}}",
+    "empty": "만들 것이 없습니다. 개체의 YAML을 입력하세요."
   },
   "podDeleteModal": {
     "title": "Pod 삭제",
