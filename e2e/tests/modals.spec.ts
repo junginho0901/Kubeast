@@ -59,6 +59,20 @@ test.describe('modal windows', () => {
     })
   }
 
+  test("Escape on a drawer's Delete window closes that window and leaves the drawer; the next one closes the drawer", async ({ page }) => {
+    // Codex QA Q14: the window left the stack on its Escape, and the same key then closed the drawer under it
+    await openDrawerDelete(page, '/configuration/configmaps?cluster=self', 'kube-root-ca.crt', 'ConfigMap')
+    const drawer = page.locator('[class*="max-w-[740px]"]')
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('delete-dialog')).toHaveCount(0)
+    await page.waitForTimeout(1_000)
+    await expect(drawer, 'the drawer stays').toHaveCount(1)
+    await expect(page).toHaveURL(/[?&]detail=ConfigMap/)
+    await page.keyboard.press('Escape')
+    await expect(drawer).toHaveCount(0)
+    await expect(page).not.toHaveURL(/[?&]detail=/)
+  })
+
   test('a system object asks for its name before the delete; an ordinary one does not (#38)', async ({ page }) => {
     await openDrawerDelete(page, '/workloads/daemonsets?cluster=self', 'kindnet', 'DaemonSet')
     const confirm = page.getByTestId('delete-dialog-confirm')
