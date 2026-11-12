@@ -383,7 +383,7 @@ func (r *PostgresRegistry) ClusterIDByUID(ctx context.Context, uid string) (ID, 
 
 // AddSelf registers the cluster kubeast itself runs in, using the in-cluster
 // ServiceAccount (no kubeconfig secret). Fails if not running in-cluster, and with
-// a *SameClusterError when a kubeconfig of this cluster is registered already.
+// a *SameClusterError when this cluster is registered already, in-cluster or by a kubeconfig.
 // The row keeps the cluster's kube-system UID, as an external one does; one that
 // cannot be read leaves it empty for FillSelfUID.
 func (r *PostgresRegistry) AddSelf(ctx context.Context, displayName, createdBy string) (*Meta, error) {
@@ -400,6 +400,14 @@ func (r *PostgresRegistry) AddSelf(ctx context.Context, displayName, createdBy s
 	}
 	if exists {
 		return nil, ErrAlreadyExists
+	}
+	// Every in-cluster row is the cluster Kubeast runs in, so a second one is the same cluster under another name.
+	var self string
+	switch err := r.pool.QueryRow(ctx, `SELECT id FROM clusters WHERE is_self_cluster LIMIT 1`).Scan(&self); {
+	case err == nil:
+		return nil, &SameClusterError{ID: ID(self)}
+	case !errors.Is(err, pgx.ErrNoRows):
+		return nil, err
 	}
 	uid, uerr := SelfUID(ctx)
 	if uerr != nil {

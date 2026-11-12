@@ -13,8 +13,8 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 // "without a token" case really is unauthenticated.
 test.use({ storageState: { cookies: [], origins: [] } })
 //
-// The spec registers and deletes a throwaway "self" cluster; it is self-
-// cleaning (beforeAll + afterAll best-effort delete). Like the rest of the
+// The spec asks for a second "self" cluster, which is refused; beforeAll and
+// afterAll still delete one an older build let through. Like the rest of the
 // suite it runs serially (workers: 1) against the live kind gateway.
 
 const EMAIL = process.env.E2E_USER_EMAIL || 'admin'
@@ -86,44 +86,36 @@ test.describe('multi-cluster — cluster CRUD API (step 07)', () => {
     expect(res.status()).toBe(400)
   })
 
-  test('register → list → test → delete (self cluster, rollout-free)', async ({ request }) => {
-    // register: a self cluster uses the in-cluster ServiceAccount (valid on kind)
+  test('the cluster Kubeast runs in is registered once: a second self cluster is refused, the first is tested', async ({ request }) => {
+    const items = async () => (await (await request.get('/api/v1/clusters', { headers: auth })).json()).items as { id: string; is_self_cluster: boolean }[]
+    const before = await items()
+    const self = before.find((c) => c.is_self_cluster)
+    expect(self, 'the dev registry holds the kind cluster itself in-cluster').toBeTruthy()
+
+    // another name for it: the same cluster, refused with the name it has
     const reg = await request.post('/api/v1/clusters', {
       headers: auth,
       data: { mode: 'self', display_name: TEST_DISPLAY_NAME },
       failOnStatusCode: false,
     })
-    expect(reg.status(), 'self registration should 201 on an in-cluster deploy').toBe(201)
-    const created = await reg.json()
-    expect(created.id).toBe(TEST_ID)
-    expect(created.is_self_cluster).toBe(true)
+    expect(reg.status()).toBe(409)
+    expect((await reg.json()).detail).toBe(`This cluster is already registered as '${self!.id}'.`)
 
-    // duplicate id is rejected
+    // its own name: the id is taken
     const dup = await request.post('/api/v1/clusters', {
       headers: auth,
-      data: { mode: 'self', display_name: TEST_DISPLAY_NAME },
+      data: { mode: 'self', display_name: self!.id },
       failOnStatusCode: false,
     })
     expect(dup.status()).toBe(409)
 
-    // list now includes it
-    const list = await request.get('/api/v1/clusters', { headers: auth })
-    const ids = (await list.json()).items.map((c: { id: string }) => c.id)
-    expect(ids).toContain(TEST_ID)
+    // the list is as it was
+    expect((await items()).map((c) => c.id).sort()).toEqual(before.map((c) => c.id).sort())
 
-    // test connection — self cluster reachable via the ServiceAccount
-    const probe = await request.post(`/api/v1/clusters/${TEST_ID}/test`, { headers: auth })
+    // test connection — the self cluster reachable via the ServiceAccount
+    const probe = await request.post(`/api/v1/clusters/${self!.id}/test`, { headers: auth })
     expect(probe.status()).toBe(200)
     expect((await probe.json()).healthy).toBe(true)
-
-    // delete
-    const del = await request.delete(`/api/v1/clusters/${TEST_ID}`, { headers: auth })
-    expect(del.status()).toBe(204)
-
-    // gone from the registry
-    const after = await request.get('/api/v1/clusters', { headers: auth })
-    const idsAfter = (await after.json()).items.map((c: { id: string }) => c.id)
-    expect(idsAfter).not.toContain(TEST_ID)
   })
 
   test('POST /audit/cluster-switch — 204 for an authed user', async ({ request }) => {

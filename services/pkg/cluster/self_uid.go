@@ -31,11 +31,12 @@ var SelfUID = func(ctx context.Context) (string, error) {
 	return string(ns.UID), nil
 }
 
-// SameClusterError is a registration of a cluster already registered under another id, matched by its kube-system UID.
+// SameClusterError is an in-cluster registration of a cluster already registered under another id: in-cluster, or by a
+// kubeconfig whose kube-system UID is this cluster's.
 type SameClusterError struct{ ID ID }
 
 func (e *SameClusterError) Error() string {
-	return fmt.Sprintf("the same cluster is already registered as '%s'", e.ID)
+	return fmt.Sprintf("This cluster is already registered as '%s'.", e.ID)
 }
 
 // FillSelfUID records the kube-system UID on the in-cluster rows registered without one (by a release before the

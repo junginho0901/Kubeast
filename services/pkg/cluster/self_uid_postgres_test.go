@@ -108,6 +108,23 @@ func TestPostgres_AnInClusterRegistrationOfAClusterRegisteredByKubeconfigIsRefus
 	}
 }
 
+func TestPostgres_ASecondInClusterRegistrationIsRefused(t *testing.T) {
+	reg, pool := migratedRegistry(t)
+	standIn(t, "uid-a", nil)
+	// as a release before this one wrote it: no cluster_uid, so only being in-cluster tells it is this cluster
+	if _, err := pool.Exec(context.Background(), `INSERT INTO clusters (id, display_name, mode, is_self_cluster) VALUES ('self', 'self', 'in_cluster', true)`); err != nil {
+		t.Fatal(err)
+	}
+	_, err := reg.AddSelf(context.Background(), "another name", "admin")
+	var same *SameClusterError
+	if !errors.As(err, &same) || same.ID != "self" {
+		t.Fatalf("AddSelf = %v, want the same cluster as 'self'", err)
+	}
+	if _, err := reg.AddSelf(context.Background(), "self", "admin"); !errors.Is(err, ErrAlreadyExists) {
+		t.Fatalf("AddSelf of the same name = %v, want ErrAlreadyExists", err)
+	}
+}
+
 func TestPostgres_AnOlderInClusterRowGetsItsUIDOnceAndIsMatched(t *testing.T) {
 	reg, pool := migratedRegistry(t)
 	reads := standIn(t, "uid-a", nil)

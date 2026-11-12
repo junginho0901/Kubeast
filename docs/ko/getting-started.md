@@ -142,7 +142,7 @@ docker compose exec auth-service /app/server reset-admin
 먼저 `admin` 계정으로 로그인하세요. 등록된 클러스터가 없으면 로그인하자마자 `/setup` 마법사로 이동합니다.
 마법사와 그 API에는 관리자 권한이 필요합니다. **로그인한 뒤 바로 비밀번호를 바꾸세요.**
 
-- **In-cluster** — Kubeast가 실행 중인 클러스터에 ServiceAccount 권한으로 자동 연결합니다. 그 클러스터는 이렇게 연결하세요. 그러면 Kubeast가 자기가 도는 클러스터임을 알고 [자기 Namespace를 전역 관리자로 제한](cluster-requirements.md#kubeast-자체-namespace에-누가-닿는가)합니다. 같은 클러스터를 kubeconfig로 연결해도 `kube-system` UID로 알아봅니다.
+- **In-cluster** — Kubeast가 실행 중인 클러스터에 ServiceAccount 권한으로 자동 연결합니다. 그 클러스터는 이렇게 연결하세요. 그러면 Kubeast가 자기가 도는 클러스터임을 알고 [자기 Namespace를 전역 관리자로 제한](cluster-requirements.md#kubeast-자체-namespace에-누가-닿는가)합니다. 같은 클러스터를 kubeconfig로 연결해도 `kube-system` UID로 알아봅니다. 한 클러스터는 한 번만 등록됩니다. 같은 클러스터를 In-cluster로든 kubeconfig로든 다시 등록하면 이미 등록된 이름을 알려 주며 거절합니다.
 - **External** — 다른 클러스터의 kubeconfig를 등록합니다(멀티클러스터). API 서버 주소를 비워 두면 연결을 확인할 때 실제로 접속한 주소가 채워지고, 주소 없이 등록된 클러스터는 **Admin > Clusters**에서 연결 테스트를 하면 채워집니다.
 
 **Kubeast가 도는 클러스터의 역할은 그 클러스터 전체에 대한 쿠버네티스 권한입니다**. Write는 모든 Namespace에서 `edit`으로, Admin은 `cluster-admin`으로 동작합니다.
