@@ -41,8 +41,11 @@ case "${1:-}" in
     KEY_FILE="${2:?usage: kind-model-haiku.sh up <key-file>}"
     [ -s "$KEY_FILE" ] || { echo "key file is empty: $KEY_FILE" >&2; exit 1; }
     echo "═══ Secret $SECRET (key from $KEY_FILE, $(tr -d '[:space:]' < "$KEY_FILE" | wc -c | tr -d ' ') chars) ═══"
+    # Server-side: a client-side apply copies the key into the last-applied annotation, which an earlier run left too.
     k create secret generic "$SECRET" --dry-run=client -o yaml \
-      --from-file=ANTHROPIC_API_KEY=<(tr -d '[:space:]' < "$KEY_FILE") | k apply -f - >/dev/null
+      --from-file=ANTHROPIC_API_KEY=<(tr -d '[:space:]' < "$KEY_FILE") \
+      | k apply --server-side --force-conflicts --field-manager=kind-model-haiku -f - >/dev/null
+    k annotate secret "$SECRET" kubectl.kubernetes.io/last-applied-configuration- >/dev/null 2>&1 || true
     echo "═══ Kubeast: ai.apiKeysSecret=$SECRET ═══"
     helm_up --set ai.apiKeysSecret="$SECRET"
     restart_ai
