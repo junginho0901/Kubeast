@@ -12,6 +12,7 @@ import ClaudeSubscriptionNotice from '@/components/ClaudeSubscriptionNotice'
 import { UrlFieldProblem } from '@/components/UrlFieldProblem'
 import { useProviderAvailability } from '@/hooks/useProviderAvailability'
 import { urlProblem } from '@/utils/urlField'
+import { failureText } from '@/utils/failureText'
 
 interface SetupAIModelPageProps {
   navigatingRef: MutableRefObject<boolean>
@@ -75,9 +76,8 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
         tls_verify: true,
       })
       setAiTestResult(result)
-    } catch (e: any) {
-      const detail = e?.response?.data?.detail
-      setAiTestResult({ success: false, message: (typeof detail === 'string' && detail) || e?.message || 'Connection failed' })
+    } catch (e: unknown) {
+      setAiTestResult({ success: false, message: failureText(e) })
     } finally {
       setAiTesting(false)
     }
@@ -102,9 +102,8 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
       setTimeout(() => {
         navigate('/', { replace: true })
       }, 400)
-    } catch (e: any) {
-      const detail = e?.response?.data?.detail
-      setAiError(detail || e?.message || 'Failed to save model configuration')
+    } catch (e: unknown) {
+      setAiError(failureText(e))
     } finally {
       setAiSaving(false)
     }

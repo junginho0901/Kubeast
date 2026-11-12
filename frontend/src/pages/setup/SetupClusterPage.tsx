@@ -10,6 +10,7 @@ interface SetupClusterPageProps {
   isApplying: boolean
   isBusy: boolean
   isLoadingStatus: boolean
+  inClusterOff: boolean
   canSubmit: boolean
   onSubmit: () => void
   tr: (key: string, fallback: string) => string
@@ -24,6 +25,7 @@ export default function SetupClusterPage({
   isApplying,
   isBusy,
   isLoadingStatus,
+  inClusterOff,
   canSubmit,
   onSubmit,
   tr,
@@ -59,8 +61,10 @@ export default function SetupClusterPage({
       <div className="grid gap-4 md:grid-cols-2">
         <button
           type="button"
-          onClick={() => setMode('in_cluster')}
-          className={`rounded-2xl border px-4 py-5 text-left transition ${
+          data-testid="setup-option-in-cluster"
+          onClick={() => !inClusterOff && setMode('in_cluster')}
+          disabled={inClusterOff}
+          className={`rounded-2xl border px-4 py-5 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
             mode === 'in_cluster'
               ? 'border-primary-500/60 bg-primary-500/10'
               : 'border-slate-800 bg-slate-900/40 hover:border-slate-700'
@@ -71,7 +75,9 @@ export default function SetupClusterPage({
             {tr('setup.option.incluster.title', 'Use this cluster')}
           </div>
           <p className="mt-2 text-xs text-slate-400">
-            {tr('setup.option.incluster.desc', 'Manage the cluster where this solution is installed.')}
+            {inClusterOff
+              ? tr('cluster.register.selfDockerDisabled', 'Not available in docker mode')
+              : tr('setup.option.incluster.desc', 'Manage the cluster where this solution is installed.')}
           </p>
         </button>
 
