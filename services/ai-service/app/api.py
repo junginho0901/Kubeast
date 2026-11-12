@@ -136,10 +136,12 @@ def _new_ai_service(resolved):
 async def _active_model_config():
     """The active config, or a 503 saying why it cannot run (a refused address, no key in ai-service, provider fields refused), never a bare 500."""
     from app.services.model_config_policy import AddressRefused
-    from app.services.model_config_service import ModelConfigUnusable, resolve_model_config
+    from app.services.model_config_service import ModelConfigUnusable, NoModelConfigured, resolve_model_config
 
     try:
         return await resolve_model_config()
+    except NoModelConfigured as e:
+        raise HTTPException(status_code=503, detail=f"{e}.") from e
     except (AddressRefused, ModelConfigUnusable) as e:
         logger.warning("active model config refused: %s", getattr(e, "detail", e))
         raise HTTPException(status_code=503, detail=f"{e}. An administrator runs Test on this model in Admin → AI Models to see why.") from e

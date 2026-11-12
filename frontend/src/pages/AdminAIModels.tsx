@@ -81,7 +81,7 @@ export default function AdminAIModels() {
         </div>
       ) : !configs?.length && !isCreating ? (
         <div className="text-center py-12 text-sm text-slate-500">
-          {tr('admin.aiModels.empty', 'No model configurations yet. The default environment config is being used.')}
+          {tr('admin.aiModels.empty', "No models registered. Until one is added, the AI runs on the chart's ai.* values if they name a key or an address, and otherwise says no model is set up.")}
         </div>
       ) : (
         // configs an admin adds one at a time: no pager (the list guard skips it)

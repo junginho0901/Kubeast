@@ -37,6 +37,13 @@ class ModelConfigUnusable(ValueError):
     """The config cannot run as stored (no key in ai-service, provider fields refused): a request on it is refused with this reason."""
 
 
+class NoModelConfigured(ModelConfigUnusable):
+    """No config is stored and the chart's ai.* values name neither a key nor an address: nothing is sent to a provider."""
+
+
+NO_MODEL_CONFIGURED = "No AI model is set up yet: an administrator adds one in Admin → AI Models"
+
+
 @dataclass(frozen=True)
 class ResolvedModelConfig:
     provider: str
@@ -75,6 +82,9 @@ def _build_resolved(config: Optional[ModelConfig]) -> ResolvedModelConfig:
     if not config:
         # 환경변수 fallback (DB에 모델 설정이 없을 때)
         fallback_base_url = (settings.OPENAI_BASE_URL or "").strip() or None
+        if not settings.OPENAI_API_KEY and not fallback_base_url:
+            # a fresh install: the request would go to OpenAI with a placeholder key (provider_adapter) and the question with it
+            raise NoModelConfigured(NO_MODEL_CONFIGURED)
         remember_secret(settings.OPENAI_API_KEY)
         return ResolvedModelConfig(
             provider="openai",

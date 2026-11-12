@@ -4277,7 +4277,7 @@
       "caCert": "CA certificate (PEM)",
       "caCertHint": "Trust a self-signed CA for HTTPS self-hosted endpoints. Leave empty to use system CAs.",
       "edit": "Edit Model",
-      "empty": "No models registered.",
+      "empty": "No models registered. Until one is added, the AI runs on the chart's ai.* values if they name a key or an address, and otherwise says no model is set up.",
       "new": "New Model",
       "options": "Generation options (JSON)",
       "optionsHint": "Standard params (temperature, top_p, seed, max_tokens) are sent to all providers. Provider-specific keys (e.g. num_ctx) are best-effort and may be ignored over OpenAI-compatible endpoints.",
