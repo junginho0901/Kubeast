@@ -17,8 +17,8 @@
     },
     {
       "screen": "/admin/audit on",
-      "selector": "table tbody",
-      "why": "Each look at this page writes an admin.audit.read row, so its newest rows move with every look."
+      "selector": "table",
+      "why": "Each look at this page writes an admin.audit.read row, so its newest rows move with every look, and the header's columns, which the rows size, with them."
     },
     {
       "screen": "/admin/audit on",
