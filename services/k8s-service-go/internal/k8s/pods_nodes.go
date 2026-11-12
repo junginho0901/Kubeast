@@ -42,8 +42,8 @@ type PodNodeSummary struct {
 }
 
 // GetPodNodeSummary counts the caller's pods per node in namespace ("" =
-// every namespace it may see) whose name or namespace has q, as the page's
-// search did.
+// every namespace it may see) whose name, namespace, node or IP has q, as the
+// Pods list's search reads them.
 func (s *Service) GetPodNodeSummary(ctx context.Context, namespace, q, revision string) (*PodNodeSummary, error) {
 	set, err := s.callerPodRows(ctx, namespace, revision)
 	if err != nil {
@@ -63,7 +63,7 @@ func podNodeSummary(rows []*podRow, q string) *PodNodeSummary {
 	byNode := map[string]*PodNodeCount{}
 	total := 0
 	for _, r := range rows {
-		if needle != "" && !strings.Contains(r.name, needle) && !strings.Contains(r.namespace, needle) {
+		if needle != "" && !podRowHas(r, needle) {
 			continue
 		}
 		c := byNode[r.node]

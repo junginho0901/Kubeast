@@ -7,10 +7,11 @@ import { test, expect, type Page } from '@playwright/test'
 
 // Number check of Cluster View on cluster `self`: the map's legend adds up to the cluster's pods; with a namespace
 // chosen each node's cell, box badge and the Unscheduled box are the pods kubectl lists on that node, in the colours
-// the cards draw; the search counts the pods whose name or namespace has the text, out of all; a grant limited to a
-// namespace maps that namespace's pods; and the floating chat is told the same numbers, a node ready as kubectl prints
-// it. The colour of a pod is Kubeast's rule (podHealth), so against kubectl only the sums are compared, and the split
-// against the cards and the pods made here, whose colours are known.
+// the cards draw; the search counts the pods whose name, namespace, node or IP has the text, out of all, and each
+// node's box draws those on it; a grant limited to a namespace maps that namespace's pods; and the floating chat is
+// told the same numbers, a node ready as kubectl prints it. The colour of a pod is Kubeast's rule (podHealth), so
+// against kubectl only the sums are compared, and the split against the cards and the pods made here, whose colours
+// are known.
 
 const SCREENS = [{ path: '/cluster-view', cluster: 'self' }]
 const CLUSTER = SCREENS[0].cluster
@@ -40,7 +41,7 @@ function kubectlFor(kindName: string) {
 }
 const k = kubectlFor('kubeast')
 
-type Pod = { metadata: { name: string; namespace: string; deletionTimestamp?: string }; spec: { nodeName?: string } }
+type Pod = { metadata: { name: string; namespace: string; deletionTimestamp?: string }; spec: { nodeName?: string }; status?: { podIP?: string } }
 const pods = (scope: string): Pod[] => JSON.parse(k(`get pods ${scope} -o json`)).items
 // pods per node ("" = not scheduled), by name for a stable comparison
 const perNode = (list: Pod[]) => {
@@ -129,7 +130,7 @@ test.describe('Cluster View — number check', () => {
     await expect(nodeBox(page, '').locator('h2')).toHaveText(/Unscheduled|스케줄/)
   })
 
-  test('the search counts the pods whose name or namespace has the text, out of all', async ({ page }) => {
+  test('the search counts the pods whose name, namespace, node or IP has the text, out of all', async ({ page }) => {
     await page.goto(`/cluster-view?cluster=${CLUSTER}`)
     await expect(page.getByTestId('cluster-view-map')).toBeVisible()
     await chooseNamespace(page, NS)
@@ -145,6 +146,19 @@ test.describe('Cluster View — number check', () => {
     for (const [node, total] of Object.entries(perNode(runs))) {
       await expect(nodeBox(page, node).locator('button')).toHaveCount(total, { timeout: 15_000 })
       expect.soft(await badge(page, node), `badge of ${node} while searching`).toBe(total)
+    }
+
+    // a pod's IP and its node's name, which the server's search reads too: each node's box draws the pods found on it
+    const runPod = nsPods.find((p) => p.metadata.name === 'e2e-cv-run-1')
+    const ip = runPod?.status?.podIP ?? ''
+    expect(ip, 'e2e-cv-run-1 has an IP').toMatch(/^[\d.:a-f]+$/)
+    for (const text of [ip, runPod?.spec.nodeName ?? '']) {
+      await search.fill(text)
+      const hits = nsPods.filter((p) => [p.metadata.name, p.metadata.namespace, p.spec.nodeName ?? '', p.status?.podIP ?? ''].some((v) => v.includes(text)))
+      await expect.poll(async () => cellTotals(await mapCells(page)), { message: `map while searching ${text}`, timeout: 10_000 }).toEqual(perNode(hits))
+      for (const [node, total] of Object.entries(perNode(hits))) {
+        if (node) await expect(nodeBox(page, node).locator('button'), `pods drawn on ${node} for ${text}`).toHaveCount(total, { timeout: 15_000 })
+      }
     }
 
     // the namespace's name: all six, so no "(out of …)"
