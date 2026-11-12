@@ -90,6 +90,10 @@ export default function ApiKeysSection() {
 
   if (!enabled) return null
 
+  // what the server refuses (CreateAPIKey), said under its field while Issue key waits
+  const nameBlank = name !== '' && name.trim() === ''
+  const daysOk = Number.isInteger(days) && days >= 1 && days <= maxDays
+
   const copy = async () => {
     if (!created) return
     const ok = await copyText(created.key)
@@ -243,7 +247,7 @@ export default function ApiKeysSection() {
               <button
                 type="button"
                 data-testid="api-key-submit"
-                disabled={create.isPending || name.trim() === '' || days < 1 || days > maxDays}
+                disabled={create.isPending || name.trim() === '' || !daysOk}
                 onClick={() => create.mutate()}
                 className={modalButton.primary}
               >
@@ -264,6 +268,11 @@ export default function ApiKeysSection() {
                   placeholder={tr('apiKeys.namePlaceholder', 'e.g. deploy pipeline')}
                   className="w-full h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-ink"
                 />
+                {nameBlank && (
+                  <p role="alert" data-testid="api-key-name-problem" className="mt-1 text-[11px] text-red-400">
+                    {tr('apiKeys.nameBlank', 'Enter a name: spaces alone are not one.')}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">
@@ -279,6 +288,11 @@ export default function ApiKeysSection() {
                   onChange={(e) => setDays(Number(e.target.value))}
                   className="w-full h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-ink"
                 />
+                {!daysOk && (
+                  <p role="alert" data-testid="api-key-days-problem" className="mt-1 text-[11px] text-red-400">
+                    {tr('apiKeys.daysRange', 'Enter the expiry as a whole number of days from 1 to {{max}}.', { max: maxDays })}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('apiKeys.clusters', 'Clusters')}</label>
