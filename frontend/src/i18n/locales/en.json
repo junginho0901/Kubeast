@@ -3158,7 +3158,7 @@
       "placeholder": "Paste kubeconfig content here..."
     },
     "submit": "Continue",
-    "submit.loading": "Applying...",
+    "submitLoading": "Applying...",
     "steps": {
       "validate": "Validate",
       "save": "Save config",
@@ -3174,7 +3174,8 @@
     },
     "errors": {
       "failed": "Failed to apply setup.",
-      "timeout": "Cluster connection timed out. Please check the kubeconfig and try again."
+      "timeout": "Cluster connection timed out. Please check the kubeconfig and try again.",
+      "timeoutInCluster": "Connecting to this cluster timed out. Check that the Kubeast pods are running, then try again."
     },
     "wizard": {
       "cluster": "Cluster",
