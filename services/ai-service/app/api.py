@@ -133,6 +133,18 @@ def _new_ai_service(resolved):
     )
 
 
+async def _active_model_config():
+    """The active config, or a 503 saying why it cannot run (a refused address, no key in ai-service, provider fields refused), never a bare 500."""
+    from app.services.model_config_policy import AddressRefused
+    from app.services.model_config_service import ModelConfigUnusable, resolve_model_config
+
+    try:
+        return await resolve_model_config()
+    except (AddressRefused, ModelConfigUnusable) as e:
+        logger.warning("active model config refused: %s", getattr(e, "detail", e))
+        raise HTTPException(status_code=503, detail=f"{e}. An administrator runs Test on this model in Admin → AI Models to see why.") from e
+
+
 async def _build_ai_service(authorization: str, cluster_name: Optional[str] = None, tier: str = "default"):
     """
     Return an AIService that reuses the LLM client if the active model
@@ -147,14 +159,9 @@ async def _build_ai_service(authorization: str, cluster_name: Optional[str] = No
     """
     global _cached_ai_config_hash, _cached_ai_service, _cached_economy_hash, _cached_economy_service
 
-    from app.services.model_config_policy import AddressRefused
-    from app.services.model_config_service import resolve_economy_model_config, resolve_model_config
+    from app.services.model_config_service import resolve_economy_model_config
 
-    try:
-        resolved = await resolve_model_config()
-    except AddressRefused as e:
-        logger.warning("active model config refused: %s", e.detail)
-        raise HTTPException(status_code=503, detail=f"{e}. An administrator runs Test on this model in Admin → AI Models to see why.") from e
+    resolved = await _active_model_config()
     config_hash = _config_hash(resolved)
     if _cached_ai_service is None or config_hash != _cached_ai_config_hash:
         # Config changed or first call — build the LLM client once. The cached
@@ -547,9 +554,8 @@ async def suggest_optimization_stream(
 async def get_config():
     """AI 서비스 설정 정보 조회"""
     from app.config import settings
-    from app.services.model_config_service import resolve_model_config
-    
-    resolved = await resolve_model_config()
+
+    resolved = await _active_model_config()
     return {
         "model": resolved.model,
         "app_name": settings.APP_NAME,
