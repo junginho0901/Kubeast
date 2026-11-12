@@ -22,9 +22,11 @@ import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { isProtectedNamespaceError } from '@/utils/protectedNamespace'
 import { applySecretWatchEvent } from './secrets/secretWatchNormalize'
+import { countsOf } from '@/utils/listCounts'
+import { useDismiss } from '@/hooks/useDismiss'
 
 type SortKey = null | 'name' | 'namespace' | 'type' | 'data' | 'age'
-type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
+type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
 
 export default function Secrets() {
   const queryClient = useQueryClient()
@@ -83,16 +85,7 @@ export default function Secrets() {
     },
   })
 
-  useEffect(() => {
-    if (!isNamespaceDropdownOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (namespaceDropdownRef.current && !namespaceDropdownRef.current.contains(event.target as Node)) {
-        setIsNamespaceDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isNamespaceDropdownOpen])
+  useDismiss(isNamespaceDropdownOpen, namespaceDropdownRef, setIsNamespaceDropdownOpen)
 
   const filteredItems = useMemo(() => {
     if (!Array.isArray(secrets)) return [] as SecretInfo[]
@@ -119,13 +112,14 @@ export default function Secrets() {
     const opaque = typeDistribution.get('Opaque') ?? 0
     return { total, opaque }
   }, [filteredItems, typeDistribution])
+  const cards = countsOf(secrets, summary)
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
-      [tr('secretsPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('secretsPage.stats.opaque', 'Opaque'), summary.opaque, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('secretsPage.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('secretsPage.stats.opaque', 'Opaque'), cards.opaque, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
-    [summary.total, summary.opaque, tr],
+    [cards.total, cards.opaque, tr],
   )
 
   const handleSort = (key: NonNullable<SortKey>) => {

@@ -25,6 +25,7 @@ import { ReferenceGrantTable } from './referencegrants/ReferenceGrantTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
+import { countsOf } from '@/utils/listCounts'
 
 export default function ReferenceGrants() {
   const queryClient = useQueryClient()
@@ -102,6 +103,7 @@ export default function ReferenceGrants() {
 
     return { total, withFrom, withTo, withLabels }
   }, [filteredReferenceGrants])
+  const cards = countsOf(referenceGrants, summary)
 
   const sortedReferenceGrants = useMemo(() => {
     if (!sortKey) return filteredReferenceGrants
@@ -258,19 +260,19 @@ spec:
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('referenceGrantsPage.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('referenceGrantsPage.stats.withFrom', 'With From')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.withFrom}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.withFrom}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('referenceGrantsPage.stats.withTo', 'With To')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.withTo}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.withTo}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-300">{tr('referenceGrantsPage.stats.withLabels', 'With Labels')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.withLabels}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.withLabels}</p>
         </div>
       </div>
 

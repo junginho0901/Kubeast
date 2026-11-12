@@ -5,6 +5,7 @@ import { api, type ResourceSliceItem } from '@/services/api'
 import { useDescribeReads } from '@/services/pacedReads'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useForbidden } from '@/services/forbiddenStore'
+import { countsOf } from '@/utils/listCounts'
 import { applyResourceSliceWatchEvent } from './resourceslices/resourceSlicesWatch'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
@@ -77,8 +78,8 @@ export default function ResourceSlices() {
       totalDevices += item.device_count ?? 0
     }
 
-    return forbidden ? { total: '-', totalDevices: '-' } : { total, totalDevices }
-  }, [filteredResourceSlices, forbidden])
+    return countsOf(forbidden ? undefined : resourceSlices, { total, totalDevices })
+  }, [resourceSlices, filteredResourceSlices, forbidden])
 
   const handleSort = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) {

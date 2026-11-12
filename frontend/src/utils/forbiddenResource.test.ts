@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { forbiddenResourceFromUrl, isBuiltinApi, joinResources } from './forbiddenResource'
+import { forbiddenResourceFromUrl, isBuiltinApi, joinResources, listNamespaceFromUrl } from './forbiddenResource'
 
 describe('forbiddenResourceFromUrl', () => {
   // Re-QA #42: Kubernetes kind names, not lowercase plurals ("vertical pod autoscalers을(를)")
@@ -42,5 +42,16 @@ describe('isBuiltinApi', () => {
     const crd = ['vpas', 'gateways', 'gatewayclasses', 'httproutes', 'grpcroutes', 'referencegrants', 'backendtlspolicies', 'policyreports']
     expect(builtin.filter(isBuiltinApi)).toEqual(builtin)
     expect(crd.filter(isBuiltinApi)).toEqual([])
+  })
+})
+
+describe('listNamespaceFromUrl', () => {
+  it('reads the namespace of a namespaced path and none across the cluster', () => {
+    expect(listNamespaceFromUrl('/cluster/namespaces/web/configmaps?cluster=self')).toBe('web')
+    expect(listNamespaceFromUrl('/cluster/namespaces/web/secrets/db/describe')).toBe('web')
+    expect(listNamespaceFromUrl('http://localhost:30080/api/v1/cluster/namespaces/web/pods')).toBe('web')
+    expect(listNamespaceFromUrl('/cluster/configmaps/all')).toBeNull()
+    expect(listNamespaceFromUrl('/cluster/namespaces')).toBeNull()
+    expect(listNamespaceFromUrl('/cluster/namespaces/web')).toBeNull()
   })
 })

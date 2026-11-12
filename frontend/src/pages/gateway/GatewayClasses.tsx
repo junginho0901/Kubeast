@@ -23,6 +23,7 @@ import {
 import { applyGatewayClassWatchEvent } from './gatewayclasses/gatewayClassWatchNormalize'
 import { GatewayClassFilters } from './gatewayclasses/GatewayClassFilters'
 import { GatewayClassTable } from './gatewayclasses/GatewayClassTable'
+import { countsOf } from '@/utils/listCounts'
 
 export default function GatewayClasses() {
   const queryClient = useQueryClient()
@@ -87,6 +88,7 @@ export default function GatewayClasses() {
 
     return { total, accepted, withParameters, withAnnotations }
   }, [filteredGatewayClasses])
+  const cards = countsOf(gatewayClasses, summary)
 
   const sortedGatewayClasses = useMemo(() => {
     if (!sortKey) return filteredGatewayClasses
@@ -226,19 +228,19 @@ spec:
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('gatewayClassesPage.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('gatewayClassesPage.stats.accepted', 'Accepted')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.accepted}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.accepted}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('gatewayClassesPage.stats.withParameters', 'With Parameters')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.withParameters}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.withParameters}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-300">{tr('gatewayClassesPage.stats.withAnnotations', 'With Annotations')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.withAnnotations}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.withAnnotations}</p>
         </div>
       </div>
 

@@ -11,6 +11,7 @@ import { useForbidden } from '@/services/forbiddenStore'
 import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
+import { countsOf } from '@/utils/listCounts'
 import {
   applyDeviceClassWatchEvent,
   parseAgeSeconds,
@@ -61,7 +62,7 @@ export function useDeviceClassesData({ searchQuery, sortKey, sortDir, currentPag
     ))
   }, [deviceClasses, searchQuery])
 
-  const summary = useMemo(() => ({ total: forbidden ? '-' : filteredDeviceClasses.length }), [filteredDeviceClasses, forbidden])
+  const summary = useMemo(() => countsOf(forbidden ? undefined : deviceClasses, { total: filteredDeviceClasses.length }), [deviceClasses, filteredDeviceClasses, forbidden])
 
   const sortedDeviceClasses = useMemo(() => {
     if (!sortKey) return filteredDeviceClasses

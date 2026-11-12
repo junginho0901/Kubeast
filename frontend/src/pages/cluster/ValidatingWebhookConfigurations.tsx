@@ -18,6 +18,7 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { applyWebhookConfigWatchEvent } from './webhooks/webhookConfigWatchNormalize'
+import { countsOf } from '@/utils/listCounts'
 
 type SortKey = null | 'name' | 'webhooksCount' | 'age'
 
@@ -76,6 +77,7 @@ export default function ValidatingWebhookConfigurations() {
     }
     return { total, totalWebhooks }
   }, [filtered])
+  const cards = countsOf(items, summary)
 
   const handleSort = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) {
@@ -247,11 +249,11 @@ webhooks:
       <div className="grid grid-cols-2 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('validatingWebhooks.stats.total', 'Total Configurations')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('validatingWebhooks.stats.totalWebhooks', 'Total Webhooks')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.totalWebhooks}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.totalWebhooks}</p>
         </div>
       </div>
 

@@ -4,7 +4,7 @@
 // table query and the streaming state are owned by the parent; the
 // dropdown's outside-click detection is local to this component.
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
@@ -34,6 +34,7 @@ import { useConfirm } from '@/services/confirm'
 
 import { formatBytes, formatMillicores, optimizationApply, optimizationResizeRequest } from '../utils'
 import { formatMoney } from '@/utils/money'
+import { useDismiss } from '@/hooks/useDismiss'
 
 interface UsageInfo {
   completion_tokens?: number
@@ -171,21 +172,7 @@ export function OptimizationModal({
 
   // Outside-click → close namespace dropdown.
   const dropdownRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!isDropdownOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [isDropdownOpen, setIsDropdownOpen])
+  useDismiss(isDropdownOpen, dropdownRef, setIsDropdownOpen)
 
   useAIContext(open && table ? {
     source: 'OptimizationModal',

@@ -9,6 +9,7 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import type { GPUDashboardData, GPUMetricsData, GPUDeviceMetric, GPUNodeInfo } from '@/services/api'
 import { sortGPUNodes, type SortKey, type SummaryCard } from './gpuNodesHelpers'
+import { NOT_COUNTED } from '@/utils/listCounts'
 import { gpuModels, gpuNodeCounts, gpuVendorCounts, vendorNames } from '../gpuNumbers'
 import { nodeReadiness } from '@/utils/nodeStatus'
 
@@ -81,7 +82,7 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => {
-      const n = (v: number) => (forbidden ? '-' : v)
+      const n = (v: number) => (forbidden || !data ? NOT_COUNTED : v)
       return [
         [tr('gpuNodes.stats.total', 'Total Nodes'), n(stats.total), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
         [tr('gpuNodes.stats.ready', 'Ready'), n(stats.ready), 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
@@ -91,7 +92,7 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
         [tr('gpuNodes.stats.used', 'Used'), n(stats.totalUsed), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
       ]
     },
-    [stats, tr, forbidden],
+    [stats, tr, forbidden, data],
   )
 
   // every model, its nodes' capacity, allocatable and GPUs in use (kubectl describe node's Allocated resources), each

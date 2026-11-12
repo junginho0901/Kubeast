@@ -199,6 +199,13 @@ func searchWords(q string) []string {
 
 func normalizeWords(s string) string { return strings.Join(searchWords(s), " ") }
 
+// podRowHas is the search of the Pods list and the Cluster View map: needle (lower-case) in the pod's name, namespace,
+// node or IP. Names, namespaces and nodes are lower-case DNS names.
+func podRowHas(r *podRow, needle string) bool {
+	return strings.Contains(r.name, needle) || strings.Contains(r.namespace, needle) ||
+		strings.Contains(r.node, needle) || strings.Contains(strings.ToLower(r.podIP), needle)
+}
+
 // wordsMatchPod: every word in the pod's name, or every word in one label's "key value".
 func wordsMatchPod(words []string, r *podRow) bool {
 	all := func(hay string) bool {
@@ -648,9 +655,7 @@ func buildPodPage(rows []*podRow, q PodPageQuery, now time.Time) *PodPage {
 	} else if needle := strings.ToLower(strings.TrimSpace(q.Search)); needle != "" {
 		matched = make([]*podRow, 0, len(rows))
 		for _, r := range rows {
-			// names, namespaces and nodes are lower-case DNS names
-			if strings.Contains(r.name, needle) || strings.Contains(r.namespace, needle) ||
-				strings.Contains(r.node, needle) || strings.Contains(strings.ToLower(r.podIP), needle) {
+			if podRowHas(r, needle) {
 				matched = append(matched, r)
 			}
 		}

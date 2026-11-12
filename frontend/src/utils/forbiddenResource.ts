@@ -96,6 +96,13 @@ export function listSegmentFromUrl(url: string): string {
   return parts[0]
 }
 
+/** The namespace a /namespaces/{ns}/{kind}… path reads, null for a read across the cluster. */
+export function listNamespaceFromUrl(url: string): string | null {
+  const path = url.replace(/^https?:\/\/[^/]+/, '').split('?')[0]
+  const parts = path.replace(/^\/api\/v1/, '').replace(/^\/cluster\//, '').split('/').filter(Boolean)
+  return parts[0] === 'namespaces' && parts.length >= 3 ? parts[1] : null
+}
+
 /** Dedupes and sorts resource names for display: "Role, RoleBinding". */
 export function joinResources(names: Iterable<string>): string {
   return Array.from(new Set(names)).sort().join(', ')

@@ -3,7 +3,7 @@
 // Status 열과 요약 카드 숫자는 k8s-service 가 계산해 보낸다 (pods_page.go, podrow 의 ListView).
 
 export type SortKey = null | 'name' | 'ready' | 'status' | 'restarts' | 'pod_ip' | 'node_name' | 'age'
-export type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
+export type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
 
 export { formatAge } from '@/utils/time'
 
