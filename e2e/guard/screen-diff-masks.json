@@ -22,8 +22,8 @@
     },
     {
       "screen": "/admin/audit on",
-      "selector": "span.ml-auto.text-xs",
-      "why": "The count of rows, which every look raises."
+      "selector": "div.mt-3:has(> span.ml-auto.text-xs)",
+      "why": "The count of rows, which every look raises. Its width moves with the digits, so the whole row it ends is covered, Search and Reset with it."
     },
     {
       "screen": "/admin/audit on",
