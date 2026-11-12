@@ -23,7 +23,7 @@
     "dagre": "^0.8.5",
     "diff2html": "^3.4.56",
     "elkjs": "^0.12.1",
-    "i18next": "^26.7.1",
+    "i18next": "^27.1.0",
     "i18next-browser-languagedetector": "^8.3.0",
     "jsep": "^1.6.0",
     "jszip": "^3.10.2",
