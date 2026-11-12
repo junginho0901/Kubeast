@@ -4,7 +4,7 @@
 // Group By + Issues + Filter toggle + Filter panel) 추출. dropdown click-outside
 // useEffect 도 자체 보유.
 
-import { Dispatch, ReactNode, SetStateAction, useEffect, useRef } from 'react'
+import { Dispatch, ReactNode, SetStateAction, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle, ChevronDown, Filter, Search, X } from 'lucide-react'
 import type { ResourceGraphEdgeType } from '@/services/api'
@@ -16,6 +16,7 @@ import {
   SOURCE_GROUPS,
   type GroupBy,
 } from './constants'
+import { useDismiss } from '@/hooks/useDismiss'
 
 interface NamespaceLite {
   name: string
@@ -85,17 +86,8 @@ export function ResourceGraphHeader({
   const { t } = useTranslation()
   const nsDropdownRef = useRef<HTMLDivElement>(null)
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    if (!isNsDropdownOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (nsDropdownRef.current && !nsDropdownRef.current.contains(event.target as globalThis.Node)) {
-        setIsNsDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isNsDropdownOpen, setIsNsDropdownOpen])
+  // Close the dropdown on a press outside or Escape
+  useDismiss(isNsDropdownOpen, nsDropdownRef, setIsNsDropdownOpen)
 
   const toggleNs = (ns: string) => {
     setSelectedNamespaces(prev => {

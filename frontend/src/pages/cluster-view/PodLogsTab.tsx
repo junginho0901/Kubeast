@@ -22,6 +22,7 @@ import { useLogSearchAvailable } from '@/hooks/useLogSearchAvailable'
 import { useLogFilesAvailable } from '@/hooks/useLogFilesAvailable'
 import { takeLogLine, type ShownLine } from './podLogLines'
 import { failureText } from '@/utils/failureText'
+import { useDismiss } from '@/hooks/useDismiss'
 
 interface PodLike {
   name: string
@@ -147,36 +148,10 @@ export function PodLogsTab({
   }, [logs])
 
   // 컨테이너 드롭다운 외부 클릭
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        containerDropdownRef.current &&
-        !containerDropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsContainerDropdownOpen(false)
-      }
-    }
-    if (isContainerDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isContainerDropdownOpen])
+  useDismiss(isContainerDropdownOpen, containerDropdownRef, setIsContainerDropdownOpen)
 
   // 줄 수 드롭다운 외부 클릭
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        tailLinesDropdownRef.current &&
-        !tailLinesDropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsTailLinesDropdownOpen(false)
-      }
-    }
-    if (isTailLinesDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isTailLinesDropdownOpen])
+  useDismiss(isTailLinesDropdownOpen, tailLinesDropdownRef, setIsTailLinesDropdownOpen)
 
   const handleDownloadLogs = async () => {
     if (!selectedContainer) return

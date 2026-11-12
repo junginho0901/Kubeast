@@ -6,7 +6,7 @@ export interface NamespaceInfo {
   resource_count: Record<string, number>
 }
 
-export type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
+export type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
 
 export type SortKey = null | 'name' | 'status' | 'age'
 

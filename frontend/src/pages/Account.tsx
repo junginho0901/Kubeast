@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { api } from '@/services/api'
 import { ChevronDown, KeyRound, Languages, Palette, User } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -11,6 +11,7 @@ import { useAccountSectionsReady } from './account/accountReady'
 import NodeShellSection from './account/NodeShellSection'
 import { COLOR_MODES, setColorMode, useColorMode } from '@/utils/colorMode'
 import { failureText } from '@/utils/failureText'
+import { useDismiss } from '@/hooks/useDismiss'
 
 export default function Account() {
   const queryClient = useQueryClient()
@@ -53,16 +54,7 @@ export default function Account() {
     void i18n.changeLanguage(next)
   }
 
-  useEffect(() => {
-    if (!isLanguageDropdownOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (languageDropdownRef.current && !languageDropdownRef.current.contains(event.target as Node)) {
-        setIsLanguageDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isLanguageDropdownOpen])
+  useDismiss(isLanguageDropdownOpen, languageDropdownRef, setIsLanguageDropdownOpen)
 
   const closePasswordModal = () => {
     setPasswordModalOpen(false)

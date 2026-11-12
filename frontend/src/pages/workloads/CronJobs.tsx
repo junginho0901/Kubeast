@@ -22,6 +22,7 @@ import { CronJobTable } from './cronjobs/CronJobTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
+import { countsOf } from '@/utils/listCounts'
 
 export default function CronJobs() {
   const queryClient = useQueryClient()
@@ -95,6 +96,7 @@ export default function CronJobs() {
 
     return { total, active, suspended, scheduled }
   }, [filteredCronJobs])
+  const cards = countsOf(cronjobs, summary)
 
   const sortedCronJobs = useMemo(() => {
     if (!sortKey) return filteredCronJobs
@@ -267,20 +269,20 @@ spec:
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('cronjobs.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('cronjobs.stats.active', 'Active')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.active}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.active}</p>
         </div>
         {/* yellow as a suspended CronJob's badge-warning and the Jobs list's Suspended card */}
         <div className="rounded-lg border border-yellow-700/40 bg-yellow-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-yellow-300">{tr('cronjobs.stats.suspended', 'Suspended')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.suspended}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.suspended}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('cronjobs.stats.scheduled', 'Scheduled')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.scheduled}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.scheduled}</p>
         </div>
       </div>
 

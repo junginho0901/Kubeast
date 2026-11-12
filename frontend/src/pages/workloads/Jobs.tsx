@@ -28,6 +28,7 @@ import { JobTable } from './jobs/JobTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
+import { countsOf } from '@/utils/listCounts'
 
 export default function Jobs() {
   const queryClient = useQueryClient()
@@ -92,6 +93,7 @@ export default function Jobs() {
   }, [normalizedJobs, searchQuery])
 
   const summary = useMemo(() => jobSummary(filteredJobs), [filteredJobs])
+  const cards = countsOf(jobs, summary)
 
   const sortedJobs = useMemo(() => {
     if (!sortKey) return filteredJobs
@@ -260,24 +262,24 @@ spec:
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('jobs.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('jobs.stats.completed', 'Completed')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.completed}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.completed}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('jobs.stats.running', 'Running')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.running}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.running}</p>
         </div>
         {/* yellow as a suspended Job's badge-warning */}
         <div className="rounded-lg border border-yellow-700/40 bg-yellow-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-yellow-300">{tr('jobs.stats.suspended', 'Suspended')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.suspended}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.suspended}</p>
         </div>
         <div className="rounded-lg border border-red-700/40 bg-red-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-red-300">{tr('jobs.stats.failed', 'Failed')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.failed}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.failed}</p>
         </div>
       </div>
 

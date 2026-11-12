@@ -18,6 +18,7 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { applyRuntimeClassWatchEvent } from './runtimeclasses/runtimeClassWatchNormalize'
+import { countsOf } from '@/utils/listCounts'
 
 type SortKey = null | 'name' | 'handler' | 'age'
 
@@ -78,6 +79,7 @@ export default function RuntimeClasses() {
     const handlers = new Set(filteredRCs.map((rc) => rc.handler))
     return { total, uniqueHandlers: handlers.size }
   }, [filteredRCs])
+  const cards = countsOf(runtimeClasses, summary)
 
   const handleSort = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) {
@@ -236,11 +238,11 @@ handler: runc
       <div className="grid grid-cols-2 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('runtimeClasses.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('runtimeClasses.stats.uniqueHandlers', 'Unique Handlers')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.uniqueHandlers}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.uniqueHandlers}</p>
         </div>
       </div>
 

@@ -23,6 +23,7 @@ import { LimitRangeTable } from './limitranges/LimitRangeTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
+import { countsOf } from '@/utils/listCounts'
 
 export default function LimitRanges() {
   const queryClient = useQueryClient()
@@ -86,6 +87,7 @@ export default function LimitRanges() {
     }
     return { total, containerLimits, podLimits }
   }, [filteredLimitRanges])
+  const cards = countsOf(limitRanges, summary)
 
   const handleSort = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) {
@@ -256,15 +258,15 @@ spec:
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('limitRanges.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('limitRanges.stats.containerLimits', 'Container Limits')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.containerLimits}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.containerLimits}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('limitRanges.stats.podLimits', 'Pod Limits')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.podLimits}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.podLimits}</p>
         </div>
       </div>
 

@@ -20,6 +20,7 @@ import {
 import { useNamespacesAISnapshot } from './namespaces/useNamespacesAISnapshot'
 import NamespaceCreateDialog from './namespaces/NamespaceCreateDialog'
 import NamespaceTable from './namespaces/NamespaceTable'
+import { countsOf } from '@/utils/listCounts'
 
 export default function Namespaces() {
   const queryClient = useQueryClient()
@@ -88,15 +89,16 @@ export default function Namespaces() {
 
     return { total, active, terminating }
   }, [filteredNamespaces])
+  const cards = countsOf(namespaces, namespaceStats)
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
-      [tr('namespaces.stats.total', 'Total'), namespaceStats.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('namespaces.stats.active', 'Active'), namespaceStats.active, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
-      [tr('namespaces.stats.terminating', 'Terminating'), namespaceStats.terminating, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
+      [tr('namespaces.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('namespaces.stats.active', 'Active'), cards.active, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
+      [tr('namespaces.stats.terminating', 'Terminating'), cards.terminating, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
       // no "With Labels": every Namespace carries kubernetes.io/metadata.name, so it always equalled Total
     ],
-    [namespaceStats.active, namespaceStats.terminating, namespaceStats.total, tr],
+    [cards.active, cards.terminating, cards.total, tr],
   )
 
   const sortedNamespaces = useMemo(
