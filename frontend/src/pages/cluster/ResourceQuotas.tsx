@@ -22,6 +22,7 @@ import { ResourceQuotaTable } from './resourcequotas/ResourceQuotaTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
+import { countsOf } from '@/utils/listCounts'
 
 export default function ResourceQuotas() {
   const queryClient = useQueryClient()
@@ -84,6 +85,7 @@ export default function ResourceQuotas() {
     }
     return { total, withCpu, withMemory }
   }, [filteredResourceQuotas])
+  const cards = countsOf(resourceQuotas, summary)
 
   const handleSort = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) {
@@ -246,15 +248,15 @@ spec:
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('resourceQuotas.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('resourceQuotas.stats.withCpu', 'With CPU Quotas')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.withCpu}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.withCpu}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('resourceQuotas.stats.withMemory', 'With Memory Quotas')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.withMemory}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.withMemory}</p>
         </div>
       </div>
 

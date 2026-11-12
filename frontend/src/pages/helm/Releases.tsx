@@ -19,6 +19,7 @@ import ReleaseTable from './releases/ReleaseTable'
 import { isProtectedNamespaceError } from '@/utils/protectedNamespace'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { useRefresh } from '@/hooks/useRefresh'
+import { NOT_COUNTED } from '@/utils/listCounts'
 
 export default function HelmReleasesPage() {
   const { t } = useTranslation()
@@ -108,7 +109,7 @@ export default function HelmReleasesPage() {
 
   const summaryCards = useMemo<SummaryCard[]>(() => {
     // a list the cluster refused counts nothing: the cards say "-", not 0
-    const n = (v: number) => (helmForbidden ? '-' : v)
+    const n = (v: number) => (helmForbidden || !Array.isArray(data) ? NOT_COUNTED : v)
     return [
       [t('helmReleases.stats.total'), n(stats.total), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
       [t('helmReleases.stats.deployed'), n(stats.deployed), 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
@@ -116,7 +117,7 @@ export default function HelmReleasesPage() {
       [t('helmReleases.stats.pending'), n(stats.pending), 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
       [t('helmReleases.stats.superseded'), n(stats.superseded), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ]
-  }, [stats, t, helmForbidden])
+  }, [stats, t, helmForbidden, data])
 
   // The picker offers the cluster's namespaces, as the other list pages do: a list read for one namespace holds that
   // namespace only, so picking from it left no way to the others.

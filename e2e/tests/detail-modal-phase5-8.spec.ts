@@ -76,13 +76,20 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
     await expect(drawer).toContainText('ca.crt')
   })
 
-  test('MEDIUM Node Volumes (Attached / In Use) section', async ({ page }) => {
+  // kind runs no CSI attacher, so the run writes one attached volume into the node's status and takes it out after:
+  // only the attach/detach controller writes that field, for volumes it attached, and the kubelet leaves it
+  test('MEDIUM Node Volumes (Attached) section', async ({ page }) => {
     const node = firstName('get nodes')
-    const attached = kubectl(`get node ${node} -o jsonpath='{.status.volumesAttached[*].name}'`)
-    const drawer = await openDrawer(page, '/cluster/nodes', node)
-    test.skip(!attached, 'no volume attached to the kind node (no CSI attacher)')
-    await expect(drawer.locator('text=/^Volumes$/').first()).toBeVisible()
-    await expect(drawer).toContainText(attached.split(' ')[0])
+    const volume = 'kubernetes.io/csi/e2e.kubeast.io^e2e-attached-volume'
+    kubectl(`patch node ${node} --subresource=status --type=merge -p '{"status":{"volumesAttached":[{"name":"${volume}","devicePath":""}]}}'`)
+    try {
+      expect(kubectl(`get node ${node} -o jsonpath='{.status.volumesAttached[*].name}'`)).toBe(volume)
+      const drawer = await openDrawer(page, '/cluster/nodes', node)
+      await expect(drawer.locator('text=/^Volumes$/').first()).toBeVisible()
+      await expect(drawer).toContainText(volume)
+    } finally {
+      kubectl(`patch node ${node} --subresource=status --type=merge -p '{"status":{"volumesAttached":null}}'`)
+    }
   })
 
   test('MEDIUM EndpointSlice hints.forZones (있으면)', async ({ page }) => {

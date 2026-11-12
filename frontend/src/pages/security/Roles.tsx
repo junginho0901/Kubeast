@@ -20,9 +20,11 @@ import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { applyRoleWatchEvent } from './roles/roleWatchNormalize'
+import { countsOf } from '@/utils/listCounts'
+import { useDismiss } from '@/hooks/useDismiss'
 
 type SortKey = null | 'name' | 'namespace' | 'rules' | 'age'
-type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
+type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
 
 export default function Roles() {
   const queryClient = useQueryClient()
@@ -74,16 +76,7 @@ export default function Roles() {
     },
   })
 
-  useEffect(() => {
-    if (!isNamespaceDropdownOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (namespaceDropdownRef.current && !namespaceDropdownRef.current.contains(event.target as Node)) {
-        setIsNamespaceDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isNamespaceDropdownOpen])
+  useDismiss(isNamespaceDropdownOpen, namespaceDropdownRef, setIsNamespaceDropdownOpen)
 
   const filteredItems = useMemo(() => {
     if (!Array.isArray(roles)) return [] as RoleInfo[]
@@ -102,13 +95,14 @@ export default function Roles() {
     for (const role of filteredItems) totalRules += role.rules_count
     return { total, totalRules }
   }, [filteredItems])
+  const cards = countsOf(roles, summary)
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
-      [tr('rolesPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('rolesPage.stats.totalRules', 'Total Rules'), summary.totalRules, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('rolesPage.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('rolesPage.stats.totalRules', 'Total Rules'), cards.totalRules, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
-    [summary.total, summary.totalRules, tr],
+    [cards.total, cards.totalRules, tr],
   )
 
   const handleSort = (key: NonNullable<SortKey>) => {

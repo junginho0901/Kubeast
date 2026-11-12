@@ -23,6 +23,7 @@ import { LeaseTable } from './leases/LeaseTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
+import { countsOf } from '@/utils/listCounts'
 
 export default function Leases() {
   const queryClient = useQueryClient()
@@ -86,6 +87,7 @@ export default function Leases() {
     }
     return { total, withHolder, withoutHolder: total - withHolder }
   }, [filteredLeases])
+  const cards = countsOf(leases, summary)
 
   const handleSort = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) {
@@ -246,15 +248,15 @@ spec:
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('leases.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('leases.stats.withHolder', 'With Holder')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.withHolder}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.withHolder}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('leases.stats.withoutHolder', 'Without Holder')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.withoutHolder}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.withoutHolder}</p>
         </div>
       </div>
 

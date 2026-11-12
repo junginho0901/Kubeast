@@ -19,9 +19,10 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { crdVersionsText } from './crdVersions'
 import { applyCRDWatchEvent } from './crdWatchNormalize'
+import { countsOf } from '@/utils/listCounts'
 
 type SortKey = null | 'name' | 'group' | 'version' | 'scope' | 'kind' | 'age'
-type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
+type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
 
 export default function CustomResourceDefinitions() {
   const queryClient = useQueryClient()
@@ -71,14 +72,15 @@ export default function CustomResourceDefinitions() {
     }
     return { total, namespaced, cluster }
   }, [filteredItems])
+  const cards = countsOf(crds, summary)
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
-      [tr('crdPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('crdPage.stats.namespaced', 'Namespaced'), summary.namespaced, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('crdPage.stats.cluster', 'Cluster-scoped'), summary.cluster, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('crdPage.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('crdPage.stats.namespaced', 'Namespaced'), cards.namespaced, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('crdPage.stats.cluster', 'Cluster-scoped'), cards.cluster, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
-    [summary.total, summary.namespaced, summary.cluster, tr],
+    [cards.total, cards.namespaced, cards.cluster, tr],
   )
 
   const handleSort = (key: NonNullable<SortKey>) => {

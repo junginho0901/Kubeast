@@ -214,7 +214,12 @@ test.describe('the pod tables of a Service, a PodDisruptionBudget and the worklo
     const shown = await protectedShown(every)
     expect(shown.length, 'the first page of the table').toBe(Math.min(10, pods.length))
     expect(shown.filter((p) => !pods.includes(p)), 'every pod on the page is one of the namespace').toEqual([])
-    await expect.poll(() => kubectl(`-n ${NS} get pdb every-pod -o jsonpath='{.status.expectedPods}'`), { message: 'the disruption controller expects every pod', timeout: 30_000 }).toBe(String(pods.length))
+    // a pod here matches several budgets and the controller recounts one of them, picked arbitrarily, per pod change: touch this one so it recounts
+    const recounted = () => {
+      kubectl(`-n ${NS} annotate pdb every-pod e2e-recount=${Date.now()} --overwrite`)
+      return kubectl(`-n ${NS} get pdb every-pod -o jsonpath='{.status.expectedPods}'`)
+    }
+    await expect.poll(recounted, { message: 'the disruption controller expects every pod', timeout: 30_000 }).toBe(String(pods.length))
     await expect.poll(() => asked.list(), { timeout: 10_000 }).toEqual(['read (all)', 'watch (all)'])
 
     asked.reset()

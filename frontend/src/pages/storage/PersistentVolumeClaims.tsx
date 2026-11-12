@@ -23,6 +23,7 @@ import { PVCTable } from './pvcs/PVCTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
+import { countsOf } from '@/utils/listCounts'
 
 export default function PersistentVolumeClaims() {
   const queryClient = useQueryClient()
@@ -93,6 +94,7 @@ export default function PersistentVolumeClaims() {
 
     return { total, bound, pending, lost }
   }, [filteredPVCs])
+  const cards = countsOf(pvcs, summary)
 
   const sortedPVCs = useMemo(() => {
     if (!sortKey) return filteredPVCs
@@ -262,19 +264,19 @@ spec:
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('pvcs.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('pvcs.stats.bound', 'Bound')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.bound}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.bound}</p>
         </div>
         <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('pvcs.stats.pending', 'Pending')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.pending}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.pending}</p>
         </div>
         <div className="rounded-lg border border-red-700/40 bg-red-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-red-300">{tr('pvcs.stats.lost', 'Lost')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{summary.lost}</p>
+          <p className="text-lg text-ink font-semibold mt-1">{cards.lost}</p>
         </div>
       </div>
 

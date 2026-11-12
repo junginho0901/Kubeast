@@ -1,4 +1,7 @@
+import { execFileSync, execSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 
@@ -11,6 +14,10 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
 const stamp = () => Date.now().toString(36)
+const kcPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-session-recording-')), 'kubeconfig')
+fs.writeFileSync(kcPath, execSync('kind get kubeconfig --name kubeast', { encoding: 'utf8' }), { mode: 0o600 })
+const psql = (sql: string) =>
+  execFileSync('kubectl', ['--kubeconfig', kcPath, '--context', 'kind-kubeast', '-n', 'kubeast', 'exec', 'deploy/postgres', '--', 'psql', '-U', 'kubeast', '-d', 'kubeast', '-tAc', sql], { encoding: 'utf8' }).trim()
 
 type Frame = { channel: number; text: string }
 
@@ -214,38 +221,48 @@ test.describe.serial('session recording', () => {
   // Re-QA #3 and #4: the list pages as many rows as fit the screen (it was every row on one page, and nothing past
   // 200), counted by the server, and an interrupted recording shows the size that was kept — not the bytes that never
   // left the lost spool file.
+  // The interrupted one is a row the run writes as the recorder leaves one whose spool file was lost: bytes written
+  // locally, no part uploaded (e2e-rec-lost-*, removed after).
   test('the list pages, and an interrupted recording shows what was kept', async ({ page, request }) => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
-    const answer = async (params: Record<string, string>) => request.get('/api/v1/cluster/recordings', { headers: bearer(admin), params: { cluster: '', ...params } })
-    const list = async (params: Record<string, string>) => (await (await answer(params)).json()) as any[]
-    const all = await list({ limit: '500' })
-    expect((await list({ limit: '2', offset: '1' })).map((r) => r.id), 'the API skips offset rows').toEqual(all.slice(1, 3).map((r) => r.id))
-    const counted = Number((await answer({ limit: '1' })).headers()['x-kubeast-total'])
+    const lostId = `e2e-rec-lost-${stamp()}`
+    psql(`DELETE FROM session_recordings WHERE id LIKE 'e2e-rec-lost-%'`)
+    psql(`INSERT INTO session_recordings (id, kind, user_email, cluster, target, storage, status, bytes, uploaded_bytes, parts, started_at, ended_at)
+      VALUES ('${lostId}', 'exec', 'e2e-rec-lost@kubeast.local', 'self', 'e2e-rec-lost', 's3', 'interrupted', 4096, 0, 0, now(), now())`)
+    try {
+      const answer = async (params: Record<string, string>) => request.get('/api/v1/cluster/recordings', { headers: bearer(admin), params: { cluster: '', ...params } })
+      const list = async (params: Record<string, string>) => (await (await answer(params)).json()) as any[]
+      const all = await list({ limit: '500' })
+      expect((await list({ limit: '2', offset: '1' })).map((r) => r.id), 'the API skips offset rows').toEqual(all.slice(1, 3).map((r) => r.id))
+      const counted = Number((await answer({ limit: '1' })).headers()['x-kubeast-total'])
 
-    await page.goto('/admin/session-recordings')
-    const rows = page.getByTestId('recordings-table').locator('tbody:not([aria-hidden="true"]) tr')
-    const pager = page.getByTestId('recordings-pager')
-    await expect(pager).toContainText(new RegExp(`Showing 1-\\d+ of ${counted}(?!\\d)`), { timeout: 15_000 })
-    const size = Number(/Showing 1-(\d+) of/.exec(await pager.innerText())?.[1])
-    test.skip(all.length <= size, `only ${all.length} recordings: a single page of ${size}`)
-    await expect(rows).toHaveCount(size)
-    const go = async (n: number) => {
-      for (let cur = 1; cur < n; cur++) {
-        await pager.getByRole('button', { name: /^(Next|다음)$/ }).click()
-        await expect(rows.first()).toHaveAttribute('data-testid', `recording-row-${all[cur * size].id}`)
+      await page.goto('/admin/session-recordings')
+      const rows = page.getByTestId('recordings-table').locator('tbody:not([aria-hidden="true"]) tr')
+      const pager = page.getByTestId('recordings-pager')
+      await expect(pager).toContainText(new RegExp(`Showing 1-\\d+ of ${counted}(?!\\d)`), { timeout: 15_000 })
+      const size = Number(/Showing 1-(\d+) of/.exec(await pager.innerText())?.[1])
+      test.skip(all.length <= size, `only ${all.length} recordings: a single page of ${size}`)
+      await expect(rows).toHaveCount(size)
+      const go = async (n: number) => {
+        for (let cur = 1; cur < n; cur++) {
+          await pager.getByRole('button', { name: /^(Next|다음)$/ }).click()
+          await expect(rows.first()).toHaveAttribute('data-testid', `recording-row-${all[cur * size].id}`)
+        }
       }
-    }
-    await go(2)
-    await expect(pager).toContainText(`Showing ${size + 1}-${Math.min(2 * size, counted)} of ${counted}`)
+      await go(2)
+      await expect(pager).toContainText(`Showing ${size + 1}-${Math.min(2 * size, counted)} of ${counted}`)
 
-    const lost = all.find((r) => r.status === 'interrupted' && r.parts === 0 && r.bytes > 0)
-    test.skip(!lost, 'no interrupted recording without uploaded parts on this installation')
-    await page.goto('/admin/session-recordings')
-    await expect(rows.first()).toHaveAttribute('data-testid', `recording-row-${all[0].id}`, { timeout: 15_000 })
-    await go(Math.floor(all.indexOf(lost) / size) + 1)
-    const row = page.getByTestId(`recording-row-${lost.id}`)
-    await expect(row.locator('td').nth(5)).toHaveText('0 B')
-    await expect(row.locator('td').nth(6).locator('span')).toHaveAttribute('title', /nothing to play|재생할 내용이 없습니다/)
-    await expect(page.getByTestId(`recording-play-${lost.id}`)).toBeDisabled()
+      const lost = all.find((r) => r.id === lostId)
+      expect(lost, 'the interrupted recording the run wrote').toMatchObject({ status: 'interrupted', parts: 0, bytes: 4096 })
+      await page.goto('/admin/session-recordings')
+      await expect(rows.first()).toHaveAttribute('data-testid', `recording-row-${all[0].id}`, { timeout: 15_000 })
+      await go(Math.floor(all.indexOf(lost) / size) + 1)
+      const row = page.getByTestId(`recording-row-${lost.id}`)
+      await expect(row.locator('td').nth(5)).toHaveText('0 B')
+      await expect(row.locator('td').nth(6).locator('span')).toHaveAttribute('title', /nothing to play|재생할 내용이 없습니다/)
+      await expect(page.getByTestId(`recording-play-${lost.id}`)).toBeDisabled()
+    } finally {
+      psql(`DELETE FROM session_recordings WHERE id = '${lostId}'`)
+    }
   })
 })

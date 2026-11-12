@@ -688,13 +688,22 @@ const registeredOn = async (page: Page, id: string) => {
 }
 
 // the custom resource instances screen on test2: number-check.cr-crd.yaml's Widget (number-check.cr-shared.ts) sits next
-// to test2's widgets.qa.example.com, whose Kind is Widget too; one CRD's columns are its printer columns as the API
-// server prints them
+// to a Widget of the group peer.kubeast.io made here with one instance (the picker lists the kinds of the instances; the
+// action suite's widgets.qa.example.com is there only until that suite deletes it); one CRD's columns are its printer
+// columns as the API server prints them
+const PEER_CRD = 'widgets.peer.kubeast.io'
+const PEER = (ns: string) => [
+  { apiVersion: 'apiextensions.k8s.io/v1', kind: 'CustomResourceDefinition', metadata: { name: PEER_CRD }, spec: {
+    group: 'peer.kubeast.io', scope: 'Namespaced', names: { kind: 'Widget', plural: 'widgets', singular: 'widget' },
+    versions: [{ name: 'v1', served: true, storage: true, schema: { openAPIV3Schema: { type: 'object', 'x-kubernetes-preserve-unknown-fields': true } } }],
+  } },
+  { apiVersion: 'peer.kubeast.io/v1', kind: 'Widget', metadata: { name: 'num-peer-1', namespace: ns } },
+].map((o) => JSON.stringify(o))
 const CR_SCREEN: Screen = {
   path: '/custom-resources/instances', api: '/apis/numbers.kubeast.io/v1/widgets', plural: 'widgets.numbers.kubeast.io', allNamespaces: true, cluster: 'test2',
   prepare: async (page) => {
     await page.getByTestId('cr-instances-kind').click()
-    // the picker tells the two Widget kinds apart by group; without that entry the plain "Widget" is read on
+    // the picker tells the Widget kinds apart by group; without that entry the plain "Widget" is read on
     const named = page.getByRole('button', { name: 'Widget (numbers.kubeast.io)', exact: true })
     const told = await named.waitFor({ timeout: 10_000 }).then(() => true, () => false)
     expect.soft(told, 'the kind picker names the group of a Kind two CRDs share').toBe(true)
@@ -1105,9 +1114,12 @@ test.describe('number check — list screens', () => {
     test.skip(!(await registeredOn(page, 'test2')), 'needs the kind cluster test2, registered as test2')
     const t2 = on('test2')
     t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', CR_CRD)
+    const [peerCrd, peerWidget] = PEER(NS)
+    t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', peerCrd)
     try {
-      t2.kubectl('wait --for=condition=Established crd/widgets.numbers.kubeast.io --timeout=60s')
+      t2.kubectl(`wait --for=condition=Established crd/widgets.numbers.kubeast.io crd/${PEER_CRD} --timeout=60s`)
       t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', crInstances(NS))
+      t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', peerWidget)
       writeWidgetStatus(t2.kubectl, NS)
       await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
       await page.setViewportSize({ width: 2560, height: 1200 })
@@ -1133,7 +1145,7 @@ test.describe('number check — list screens', () => {
       await test.step(`${CR_SCREEN.path} · Widget (numbers.kubeast.io)`, () => compareScreen(page, CR_SCREEN, 'one CRD'))
     } finally {
       t2.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)
-      t2.kubectl('delete crd/widgets.numbers.kubeast.io --ignore-not-found')
+      t2.kubectl(`delete crd/widgets.numbers.kubeast.io crd/${PEER_CRD} --ignore-not-found`)
     }
   })
 
