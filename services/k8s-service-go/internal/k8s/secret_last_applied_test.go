@@ -15,7 +15,8 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-// A Secret applied with kubectl keeps a copy of its values in this annotation, plain stringData included.
+// A Secret applied with kubectl keeps a copy of its values in this annotation, plain stringData included. The YAML shows
+// it with the values to a caller who may reveal; a describe (the drawer's Info) masks it for everyone.
 func TestSecretReadsHideTheLastAppliedCopyWithoutReveal(t *testing.T) {
 	const value = "fake-last-applied-value"
 	const lastKey = "kubectl.kubernetes.io/last-applied-configuration"
@@ -55,7 +56,7 @@ func TestSecretReadsHideTheLastAppliedCopyWithoutReveal(t *testing.T) {
 		if _, listed := got[lastKey]; !listed || got["team"] != "shop" {
 			t.Errorf("describe reveal=%v: the annotation stays listed and the others stay: %v", reveal, got)
 		}
-		if strings.Contains(got[lastKey], value) != reveal {
+		if got[lastKey] != SecretMask {
 			t.Errorf("describe reveal=%v: %q", reveal, got[lastKey])
 		}
 		yaml, err := s.GetSecretYAML(ctx, "shop", "db", reveal)

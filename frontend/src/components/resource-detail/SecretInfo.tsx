@@ -82,7 +82,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const labels = (describe?.labels as Record<string, string> | undefined) ?? (meta.labels as Record<string, string> | undefined) ?? {}
-  const annotations = (describe?.annotations as Record<string, string> | undefined) ?? (meta.annotations as Record<string, string> | undefined) ?? {}
+  const annotations = withoutLastAppliedValues((describe?.annotations as Record<string, string> | undefined) ?? (meta.annotations as Record<string, string> | undefined) ?? {})
   const createdAt = (describe?.created_at as string | undefined) ?? (meta.creationTimestamp as string | undefined)
   const secretType = (describe?.type as string | undefined) ?? (rawJson?.type as string | undefined) ?? '-'
   const dataKeys = useMemo(
@@ -379,6 +379,13 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
       <EventsSection events={describe?.events} error={describe?.events_error} loading={isLoading} />
     </div>
   )
+}
+
+// kubectl apply keeps the Secret it applied in this annotation, values included: it reads as the describe answer gives
+// it (***), also from the object read before that answer, so a value shows only under Show.
+const LAST_APPLIED = 'kubectl.kubernetes.io/last-applied-configuration'
+function withoutLastAppliedValues(annotations: Record<string, string>): Record<string, string> {
+  return LAST_APPLIED in annotations ? { ...annotations, [LAST_APPLIED]: '***' } : annotations
 }
 
 function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; size?: number; value?: string; canReveal: boolean }) {

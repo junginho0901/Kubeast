@@ -150,7 +150,7 @@ func (s *Service) DescribeSecret(ctx context.Context, namespace, name string, ca
 	result := secretrow.Info(secret)
 	result["data_sizes"] = dataSizes
 	result["can_reveal"] = canReveal
-	result["annotations"] = secretAnnotations(secret.Annotations, canReveal)
+	result["annotations"] = secretAnnotations(secret.Annotations)
 	result["uid"] = string(secret.UID)
 	result["resource_version"] = secret.ResourceVersion
 
@@ -240,9 +240,10 @@ func MaskSecretObject(obj map[string]interface{}) {
 	}
 }
 
-// secretAnnotations is a Secret's annotations for a describe answer, the last-applied one masked without reveal.
-func secretAnnotations(annotations map[string]string, canReveal bool) map[string]string {
-	if _, ok := annotations[lastAppliedAnnotation]; canReveal || !ok {
+// secretAnnotations is a Secret's annotations for a describe answer, the last-applied one masked for every caller:
+// with reveal its values are in data_values, which the screen hides until Show (kubectl describe leaves it out).
+func secretAnnotations(annotations map[string]string) map[string]string {
+	if _, ok := annotations[lastAppliedAnnotation]; !ok {
 		return annotations
 	}
 	out := make(map[string]string, len(annotations))

@@ -49,8 +49,11 @@ case "${1:-}" in
       exit 1
     }
     echo "═══ Secret $SECRET (token from $TOKEN_FILE, $(tr -d '[:space:]' < "$TOKEN_FILE" | wc -c | tr -d ' ') chars) ═══"
+    # Server-side: a client-side apply copies the token into the last-applied annotation, which an earlier run left too.
     k create secret generic "$SECRET" --dry-run=client -o yaml \
-      --from-file=CLAUDE_CODE_OAUTH_TOKEN=<(tr -d '[:space:]' < "$TOKEN_FILE") | k apply -f - >/dev/null
+      --from-file=CLAUDE_CODE_OAUTH_TOKEN=<(tr -d '[:space:]' < "$TOKEN_FILE") \
+      | k apply --server-side --force-conflicts --field-manager=kind-model-subscription -f - >/dev/null
+    k annotate secret "$SECRET" kubectl.kubernetes.io/last-applied-configuration- >/dev/null 2>&1 || true
     echo "═══ Kubeast: ai.apiKeysSecret=$SECRET, ai.providers.claudeCode.enabled=true ═══"
     helm_up --set ai.apiKeysSecret="$SECRET" --set ai.providers.claudeCode.enabled=true \
       --set-string ai.providers.claudeCode.imageTagSuffix=
