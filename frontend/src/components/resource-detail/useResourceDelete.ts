@@ -10,6 +10,7 @@ import { flushSync } from 'react-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/services/api'
+import { announceDeleted } from '@/services/createdNoticeStore'
 
 interface Target {
   kind: string
@@ -244,6 +245,8 @@ export function useResourceDelete({ target, close }: Args) {
       setDeleteDialogOpen(false)
       setDeleteError(null)
       flushSync(() => close())
+      // the drawer is gone, so the page says what was deleted (components/CreatedNotice)
+      announceDeleted(window.location.pathname, { kind, name, namespace: ns })
       if (kind === 'Pod' && ns) {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['workloads', 'pods'] }),

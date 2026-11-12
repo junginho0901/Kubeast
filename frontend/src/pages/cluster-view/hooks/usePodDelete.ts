@@ -1,5 +1,7 @@
 import { useCallback } from 'react'
 import { api } from '@/services/api'
+import { announceDeleted } from '@/services/createdNoticeStore'
+import { failureText } from '@/utils/failureText'
 import { useClusterView } from '../ClusterViewContext'
 
 // Pod 삭제 — UI 상태 (deletingPods Set) 와 함께 처리.
@@ -32,13 +34,14 @@ export function usePodDelete() {
         closeDetailModal()
       }
       closeDeleteModal()
-    } catch (error: any) {
+      announceDeleted(window.location.pathname, { kind: 'Pod', name: target.name, namespace: target.namespace })
+    } catch (error) {
       setDeletingPods((prev) => {
         const next = new Set(prev)
         next.delete(podKey)
         return next
       })
-      setDeleteError(error?.response?.data?.detail || error?.message || '삭제에 실패했습니다.')
+      setDeleteError(failureText(error))
     } finally {
       setIsDeletingPod(false)
     }

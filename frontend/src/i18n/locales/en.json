@@ -2141,6 +2141,7 @@
     "deleteKindConfirmNs": "Are you sure you want to delete {{kind}} \"{{name}}\" in \"{{namespace}}\"?",
     "unknown": "Unknown",
     "close": "Close",
+    "deletedObjects": "Deleted: {{objects}}",
     "applied": "Applied",
     "unchanged": "Unchanged: the object is already as this YAML says.",
     "yamlNoCrd": "This custom resource does not name its CustomResourceDefinition, so it cannot be saved here.",

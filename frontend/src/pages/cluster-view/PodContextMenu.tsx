@@ -5,6 +5,7 @@
 // 컴포넌트는 메뉴 UI 와 클릭 라우팅만 담당.
 
 import { Terminal, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { PodInfo } from '@/services/api'
 
 export interface PodContextMenuState {
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export function PodContextMenu({ menu, isAdmin, onClose, onExec, onDelete }: Props) {
+  const { t } = useTranslation()
   if (!menu) return null
   return (
     <>
@@ -62,7 +64,7 @@ export function PodContextMenu({ menu, isAdmin, onClose, onExec, onDelete }: Pro
           role="menuitem"
         >
           <Trash2 className="w-4 h-4" />
-          삭제
+          {t('common.delete', { defaultValue: 'Delete' })}
         </button>
       </div>
     </>
