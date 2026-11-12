@@ -22,7 +22,7 @@ async function failReads(page: Page, pathname: string, when: (u: URL) => boolean
   return () => page.unroute(match, handler)
 }
 
-const LISTS: { screen: string; read: string; when?: (u: URL) => boolean }[] = [
+const LISTS: { screen: string; read: string; when?: (u: URL) => boolean; readsAgain?: true }[] = [
   { screen: '/admin/clusters', read: '/api/v1/clusters', when: (u) => !u.searchParams.has('accessibleOnly') },
   { screen: '/admin/roles', read: '/api/v1/auth/roles' },
   { screen: '/admin/organizations', read: '/api/v1/auth/organizations' },
@@ -30,7 +30,9 @@ const LISTS: { screen: string; read: string; when?: (u: URL) => boolean }[] = [
   { screen: '/admin/session-recordings', read: '/api/v1/cluster/recordings' },
   { screen: '/admin/ai-usage', read: '/api/v1/auth/admin/ai-usage' },
   { screen: '/admin/investigations', read: '/api/v1/ai/investigations' },
-  { screen: '/alerts?cluster=self', read: '/api/v1/alerts/inbox' },
+  // Alerts reads its list again by itself every 30 s: under load that read can come between lifting the stand-in
+  // and Retry and take the row away first, which is the list read again too
+  { screen: '/alerts?cluster=self', read: '/api/v1/alerts/inbox', readsAgain: true },
 ]
 
 test.describe('a list whose read failed says so', () => {
@@ -43,7 +45,8 @@ test.describe('a list whose read failed says so', () => {
       await expect(row).toContainText(readFailed, { timeout: 20_000 })
       await expect(page.getByText(EN.common.listEmpty, { exact: true }), 'no "No items." beside it').toHaveCount(0)
       await lift()
-      await row.getByTestId('table-load-error-retry').click()
+      const retry = row.getByTestId('table-load-error-retry').click({ timeout: l.readsAgain ? 5_000 : undefined })
+      await (l.readsAgain ? retry.catch(() => undefined) : retry)
       await expect(page.getByTestId('table-load-error'), 'Retry read the list again').toHaveCount(0, { timeout: 20_000 })
     })
   }
