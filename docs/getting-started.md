@@ -92,6 +92,29 @@ helm uninstall kubeast -n kubeast      # K8s
 ./install-docker.sh --uninstall        # Docker
 ```
 
+`helm uninstall` leaves what holds your data, so installing the release again in the same namespace takes it up:
+
+| Stays | What it holds |
+|---|---|
+| PersistentVolumeClaim `kubeast-postgres-data` | The database (`postgresql.persistence.resourcePolicy: keep`) |
+| Secret `kubeast-secrets` | The database and admin passwords, the AI keys set in the values, the webhook and internal tokens |
+| Secret `kubeast-auth-keys` | The keys that sign sign-in tokens |
+| Secrets labelled `app.kubernetes.io/managed-by=kubeast` | What Kubeast wrote for registered clusters: each one's kubeconfig, a store's authorization header |
+| CustomResourceDefinition `modelconfigs.ai.kubeast.io` | The kind of AI models written as resources, and those resources |
+| Namespace `kubeast` | Helm does not delete a namespace |
+
+To remove all of it after `helm uninstall`:
+
+```bash
+kubectl delete namespace kubeast                  # the claim and the Secrets with it
+kubectl delete crd modelconfigs.ai.kubeast.io     # every ModelConfig with it
+```
+
+- The database's volume goes with its claim unless its StorageClass keeps volumes (`reclaimPolicy: Retain`); then delete the PersistentVolume as well.
+- Secrets you made yourself (`secrets.existingSecret`, `auth.signingKey.existingSecret`) and an external database are not touched.
+- With the node shell on, each cluster it was used on keeps the namespace `kubeast-node-shell` ([cluster requirements §9](cluster-requirements.md#9-node-shell)).
+- Docker: `--uninstall` deletes the containers and the database volume. `.env` in the checkout, with the passwords and keys, stays until you delete it.
+
 ---
 
 ## First setup after installation
