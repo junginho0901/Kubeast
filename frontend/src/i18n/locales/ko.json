@@ -3251,7 +3251,7 @@
       "placeholder": "kubeconfig 내용을 붙여넣어 주세요..."
     },
     "submit": "계속",
-    "submit.loading": "적용 중...",
+    "submitLoading": "적용 중...",
     "steps": {
       "validate": "검증",
       "save": "설정 저장",
@@ -3267,7 +3267,8 @@
     },
     "errors": {
       "failed": "설정 적용에 실패했습니다.",
-      "timeout": "클러스터 연결 시간이 초과되었습니다. kubeconfig를 확인한 뒤 다시 시도해주세요."
+      "timeout": "클러스터 연결 시간이 초과되었습니다. kubeconfig를 확인한 뒤 다시 시도해주세요.",
+      "timeoutInCluster": "이 클러스터 연결 시간이 초과되었습니다. Kubeast 파드가 실행 중인지 확인한 뒤 다시 시도하세요."
     },
     "wizard": {
       "cluster": "클러스터",
