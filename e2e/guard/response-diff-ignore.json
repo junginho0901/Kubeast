@@ -40,7 +40,7 @@
       "route": "^live /apis/coordination\\.k8s\\.io/v1/leases$",
       "cell": "^\\$\\.items\\[/kube-node-lease/[^\\]]+#2\\]\\.",
       "why": "A node renews its lease every 10 seconds; whether a renewal falls inside a build's first live frame is timing, so one build's frame can hold that lease twice.",
-      "pr": "#PR"
+      "pr": "#783"
     }
   ]
 }
