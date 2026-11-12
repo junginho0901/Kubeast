@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import { clustersApi } from '@/services/api/clusters'
 import { useTranslation } from 'react-i18next'
 import { Bot, Check, ChevronRight, Database } from 'lucide-react'
 import SetupClusterPage from './setup/SetupClusterPage'
@@ -23,6 +24,16 @@ export default function Setup() {
     queryKey: ['setup-status-full'],
     queryFn: api.getSetupStatusFull,
   })
+  // A Docker install runs in no cluster, so "Use this cluster" cannot work there (the Register window closes it too).
+  const { data: deploymentMode, isLoading: isLoadingDeployment } = useQuery({
+    queryKey: ['deployment-mode'],
+    queryFn: () => clustersApi.getDeploymentMode(),
+    staleTime: 5 * 60_000,
+  })
+  const inClusterOff = deploymentMode === 'docker'
+  useEffect(() => {
+    if (inClusterOff && mode === 'in_cluster') setMode('external')
+  }, [inClusterOff, mode])
 
   const {
     error,
@@ -95,8 +106,9 @@ export default function Setup() {
             error={error}
             isApplying={isApplying}
             isBusy={isBusy}
-            isLoadingStatus={isLoadingStatus}
-            canSubmit={canSubmit}
+            isLoadingStatus={isLoadingStatus || isLoadingDeployment}
+            inClusterOff={inClusterOff}
+            canSubmit={canSubmit && !(inClusterOff && mode === 'in_cluster')}
             onSubmit={handleClusterSubmit}
             tr={tr}
           />

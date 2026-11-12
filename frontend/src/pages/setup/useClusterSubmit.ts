@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import { failureText } from '@/utils/failureText'
 import type { SetupMode, StepPhase } from './types'
 
 interface UseClusterSubmitOpts {
@@ -45,10 +46,8 @@ export function useClusterSubmit({
       markComplete('save')
       setCurrentStep('rollout')
     },
-    onError: (err: any) => {
-      setError(
-        err?.response?.data?.detail || tr('setup.errors.failed', 'Failed to apply setup.')
-      )
+    onError: (err: unknown) => {
+      setError(failureText(err))
       setIsApplying(false)
       setCurrentStep(null)
       setCompletedSteps(new Set())
@@ -131,10 +130,15 @@ export function useClusterSubmit({
           setCurrentStep(null)
           pollingRef.current = false
           setError(
-            tr(
-              'setup.errors.timeout',
-              'Cluster connection timed out. Please check the kubeconfig and try again.'
-            )
+            mode === 'in_cluster'
+              ? tr(
+                  'setup.errors.timeoutInCluster',
+                  'Connecting to this cluster timed out. Check that the Kubeast pods are running, then try again.'
+                )
+              : tr(
+                  'setup.errors.timeout',
+                  'Cluster connection timed out. Please check the kubeconfig and try again.'
+                )
           )
         }
         return
