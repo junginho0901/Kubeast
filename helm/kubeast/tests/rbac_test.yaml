@@ -56,14 +56,39 @@ tests:
           pattern: cluster-admin
         documentIndex: 3
       - hasDocuments:
-          count: 8
+          count: 10
+
+  - it: lets auth-service get the kube-system namespace and nothing else of the cluster (the in-cluster UID)
+    asserts:
+      - isKind:
+          of: ClusterRole
+        documentIndex: 7
+      - equal:
+          path: rules
+          value:
+            - apiGroups: [""]
+              resources: ["namespaces"]
+              resourceNames: ["kube-system"]
+              verbs: ["get"]
+        documentIndex: 7
+      - isKind:
+          of: ClusterRoleBinding
+        documentIndex: 8
+      - equal:
+          path: roleRef.name
+          value: RELEASE-NAME-auth-service-self-uid
+        documentIndex: 8
+      - equal:
+          path: subjects[0].name
+          value: auth-service
+        documentIndex: 8
 
   - it: keeps the legacy cluster-admin and wildcard bindings when impersonation is off
     set:
       auth.impersonation.enabled: false
     asserts:
       - hasDocuments:
-          count: 8
+          count: 10
       - isKind:
           of: ClusterRoleBinding
         documentIndex: 1
@@ -77,12 +102,12 @@ tests:
         documentIndex: 1
       - isKind:
           of: ClusterRole
-        documentIndex: 6
+        documentIndex: 8
       - equal:
           path: rules[0].verbs
           value: ["*"]
-        documentIndex: 6
+        documentIndex: 8
       - equal:
           path: roleRef.name
           value: RELEASE-NAME-tool-server
-        documentIndex: 7
+        documentIndex: 9

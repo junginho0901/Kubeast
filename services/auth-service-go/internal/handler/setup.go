@@ -140,6 +140,11 @@ func (h *SetupHandler) PostSetup(w http.ResponseWriter, r *http.Request) {
 	writeClusterAudit(h.auditStore, r, "admin.cluster.register", payload, setupClusterDisplayName,
 		nil, map[string]any{"mode": req.Mode, "display_name": setupClusterDisplayName, "via": "setup"}, regErr)
 	if regErr != nil {
+		var same *cluster.SameClusterError
+		if errors.As(regErr, &same) {
+			response.Error(w, http.StatusConflict, same.Error())
+			return
+		}
 		status := http.StatusInternalServerError
 		if req.Mode == "in_cluster" {
 			status = http.StatusBadRequest

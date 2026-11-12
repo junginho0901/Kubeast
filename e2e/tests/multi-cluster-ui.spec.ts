@@ -57,9 +57,11 @@ test.describe('multi-cluster UI — picker + admin clusters (step 11)', () => {
     await expect(page.getByTestId('cluster-picker')).toContainText('default')
   })
 
-  test('register a self cluster via the dialog → appears → delete (self-cleaning)', async ({ page }) => {
+  test('a second self cluster from the dialog is refused with the name it has', async ({ page }) => {
     const name = `e2e-ui-self-${Date.now()}`
-    const slug = name // Slugify keeps lowercase + digits + dashes unchanged
+    const items = (await (await page.request.get('/api/v1/clusters', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })).json()).items as { id: string; is_self_cluster: boolean }[]
+    const self = items.find((c) => c.is_self_cluster)
+    expect(self, 'the dev registry holds the kind cluster itself in-cluster').toBeTruthy()
 
     await page.goto('/admin/clusters')
     await page.waitForLoadState('domcontentloaded')
@@ -70,15 +72,15 @@ test.describe('multi-cluster UI — picker + admin clusters (step 11)', () => {
     await expect(selfTab).toBeEnabled()
     await selfTab.click()
     await page.getByTestId('register-name').fill(name)
+    const answered = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/clusters' && r.request().method() === 'POST')
     await page.getByTestId('register-submit').click()
+    expect((await answered).status()).toBe(409)
 
-    // rollout-free: the new cluster shows up in the table right away
-    await expect(page.getByTestId('clusters-table')).toContainText(name, { timeout: 15000 })
-
-    // delete it → gone
-    await page.getByTestId(`delete-cluster-${slug}`).click()
-    await page.getByTestId('delete-confirm').click()
-    await expect(page.getByTestId('clusters-table')).not.toContainText(name, { timeout: 15000 })
+    // the window stays open with the reason, and the table gets no new row
+    await expect(page.getByText(`This cluster is already registered as '${self!.id}'.`)).toBeVisible()
+    await expect(page.getByTestId('register-name')).toHaveValue(name)
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('clusters-table')).not.toContainText(name)
   })
 })
 
