@@ -4,7 +4,7 @@
 # images changed. The old services call each other through hostAliases, because some of their addresses are in the code
 # (ai-service's K8S_SERVICE_URL) and nginx resolves its upstreams through /etc/hosts.
 #
-#   scripts/before-stack.sh up v0.7.6     # ghcr.io/junginho0901/kubeast-<service>:v0.7.6 (a released tag)
+#   scripts/before-stack.sh up v0.7.7     # ghcr.io/junginho0901/kubeast-<service>:v0.7.7 (a released tag)
 #   scripts/before-stack.sh up local      # the images the dev install runs, to see a comparison of a build with itself
 #   scripts/before-stack.sh status
 #   scripts/before-stack.sh down          # run the usual e2e only after this: it counts what the namespace holds
