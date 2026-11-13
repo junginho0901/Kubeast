@@ -16,6 +16,7 @@ import { newRolePermissions, roleReadsNoList } from '@/utils/permissions'
 import { customRoleGroup, roleEditEndsSessions } from '@/utils/roleGroup'
 import { useConfirm } from '@/services/confirm'
 import { RefreshFailure } from '@/components/RefreshFailure'
+import { announceCreated } from '@/services/createdNoticeStore'
 import { failureOf } from '@/hooks/useRefresh'
 import { NAME_MAX } from '@/utils/nameLimits'
 
@@ -74,9 +75,11 @@ export default function AdminRoles() {
 
   const createMutation = useMutation({
     mutationFn: (req: { name: string; description: string; permissions: string[] }) => api.adminCreateRole(req),
-    onSuccess: () => {
+    onSuccess: (_, req) => {
       queryClient.invalidateQueries({ queryKey: ['roles'] })
       closeModal()
+      // the new role may sit on another page of the list: the line under the header names it
+      announceCreated(window.location.pathname, [{ kind: 'Role', name: req.name }])
     },
     // The server says why (unknown permission, permission ceiling): show it.
     onError: (err: any) => setFormError(err?.response?.data?.detail || tr('adminRoles.createError', 'Failed to create role')),
