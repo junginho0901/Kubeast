@@ -553,7 +553,7 @@ podSecurity:
   seccompProfile: RuntimeDefault
   hostUsers: false
   # Root filesystem read-only; every path a container writes is an emptyDir
-  # (auth keys, tool-server /tmp kubeconfig, nginx /tmp, postgres socket, redis /data).
+  # (tool-server /tmp kubeconfig, nginx /tmp, postgres socket, redis /data); the auth keys are a read-only Secret.
   readOnlyRootFilesystem: true
 
 # --- Availability ---
