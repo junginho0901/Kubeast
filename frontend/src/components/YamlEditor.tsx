@@ -138,16 +138,16 @@ export default function YamlEditor({
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex min-w-0 flex-col h-full">
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3">
-        <p className="text-xs text-slate-400 truncate">{labels.title}</p>
-        <div className="flex items-center gap-2 shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4 pb-3">
+        <p className="min-w-0 text-xs text-slate-400 [overflow-wrap:anywhere]">{labels.title}</p>
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={onRefresh}
             disabled={!isReady || isRefreshing}
-            className="px-2.5 py-1 text-xs rounded-sm border border-slate-700 text-slate-300 hover:text-ink hover:border-slate-500 disabled:opacity-50 transition-colors"
+            className="btn-row"
           >
             {labels.refresh}
           </button>
@@ -155,8 +155,8 @@ export default function YamlEditor({
             type="button"
             onClick={handleCopy}
             disabled={!isReady || !draft}
-            className={`relative inline-flex items-center justify-center px-2.5 py-1 text-xs rounded-sm border border-slate-700 min-w-[52px] disabled:opacity-50 transition-colors ${
-              copied ? 'text-emerald-300 border-emerald-500/40' : copyFailed ? 'text-red-400 border-red-500/40' : 'text-slate-300 hover:text-ink hover:border-slate-500'
+            className={`relative inline-flex items-center justify-center px-2.5 py-1 text-xs rounded-lg border min-w-[52px] disabled:opacity-50 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 ${
+              copied ? 'text-emerald-300 border-emerald-500/40' : copyFailed ? 'text-red-400 border-red-500/40' : 'border-control bg-slate-800 text-slate-300 hover:text-ink hover:bg-slate-700'
             }`}
             title={copyFailed ? t('common.copyFailed', { defaultValue: 'Not copied: the browser did not take it. Select the text and copy it yourself.' }) : undefined}
             data-testid="yaml-copy"
@@ -171,7 +171,7 @@ export default function YamlEditor({
                     type="button"
                     onClick={handleApply}
                     disabled={isApplying || !isReady}
-                    className="px-2.5 py-1 text-xs rounded-sm border border-primary-600 bg-primary-600/20 text-primary-300 hover:bg-primary-600/30 disabled:opacity-50 transition-colors"
+                    className="px-2.5 py-1 text-xs rounded-lg border border-primary-600 bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400"
                   >
                     {isApplying ? labels.applying : labels.apply}
                   </button>
@@ -182,7 +182,7 @@ export default function YamlEditor({
                       setDraft(value || '')
                     }}
                     disabled={!isReady}
-                    className="px-2.5 py-1 text-xs rounded-sm border border-slate-700 text-slate-300 hover:text-ink hover:border-slate-500 transition-colors"
+                    className="btn-row"
                   >
                     {labels.cancel}
                   </button>
@@ -195,7 +195,7 @@ export default function YamlEditor({
                     setIsEditing(true)
                   }}
                   disabled={!isReady}
-                  className="px-2.5 py-1 text-xs rounded-sm border border-slate-700 text-slate-300 hover:text-ink hover:border-slate-500 disabled:opacity-50 transition-colors"
+                  className="btn-row"
                 >
                   {labels.edit}
                 </button>
@@ -211,12 +211,12 @@ export default function YamlEditor({
       ) : error ? (
         <div className="px-5 py-8 text-red-400 text-sm break-words" role="alert" data-testid="yaml-read-error">{error || labels.error}</div>
       ) : (
-        <div className="relative flex-1 min-h-[520px]">
+        <div className="relative min-w-0 flex-1 min-h-[520px]">
           {toast && (
             <div
               data-testid="yaml-apply-toast"
               data-type={toast.type}
-              className={`pointer-events-none absolute right-3 top-3 z-10 rounded-lg border px-3 py-1.5 text-xs shadow-lg ${
+              className={`pointer-events-none absolute right-3 top-3 z-10 max-w-[calc(100%-1.5rem)] rounded-lg border px-3 py-1.5 text-xs [overflow-wrap:anywhere] shadow-lg ${
                 toast.type === 'success'
                   ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'
                   : 'border-red-500/40 bg-red-500/15 text-red-200'
@@ -225,7 +225,7 @@ export default function YamlEditor({
               {toast.message}
             </div>
           )}
-          <div className="h-full min-h-[520px] border-y border-slate-700 overflow-hidden">
+          <div className="h-full min-h-[520px] border-y border-hairline overflow-hidden">
             <Editor
               height="100%"
               theme="vs-dark"
@@ -240,14 +240,14 @@ export default function YamlEditor({
       )}
 
       {/* Footer hints */}
-      <div className="px-5 py-3 space-y-1">
+      <div className="px-5 py-3 space-y-1 [overflow-wrap:anywhere]">
         {isRefreshing && (
-          <p className="text-[11px] text-slate-500">{labels.refreshing}</p>
+          <p className="text-xs text-slate-400">{labels.refreshing}</p>
         )}
-        <p className="text-[11px] text-slate-500">
+        <p className="text-xs text-slate-400">
           {canEdit && isEditing ? labels.editHint : labels.readonly}
         </p>
-        {note && <p className="text-[11px] text-slate-500" data-testid="yaml-editor-note">{note}</p>}
+        {note && <p className="text-xs text-slate-400" data-testid="yaml-editor-note">{note}</p>}
         {applyError && <p className="text-xs text-red-400">{applyError}</p>}
         {showInlineApplied && applySuccess && !toast && (
           <p className="text-xs text-emerald-300">{labels.applied}</p>

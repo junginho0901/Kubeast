@@ -161,9 +161,9 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
   }, [nodeName, namespace, image, attempt])
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-slate-700 px-4 py-2">
-        <div>
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-hairline px-4 py-2">
+        <div className="min-w-0 [overflow-wrap:anywhere]">
           <p className="text-sm font-semibold text-ink">
             {title || t('nodes.shell.title', 'Shell: {{node}}', { node: nodeName })}
           </p>
@@ -195,7 +195,7 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
           )}
           <button
             type="button"
-            className="text-slate-400 hover:text-ink"
+            className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400"
             aria-label={t('common.close', 'Close')}
             onClick={() => {
               try {
@@ -210,7 +210,7 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
           </button>
         </div>
       </div>
-      <div className="flex-1 bg-slate-950" ref={containerRef} />
+      <div className="min-h-0 min-w-0 flex-1 bg-slate-950" ref={containerRef} />
     </div>
   )
 }

@@ -46,7 +46,7 @@ export function LogSourceToggle({
     <div
       role="group"
       aria-label={t('clusterView.logFiles.sourceLabel', 'Log source')}
-      className="inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-1"
+      className="inline-flex max-w-full flex-wrap gap-1 rounded-lg border border-control bg-slate-900 p-1"
     >
       {options.map((o) => (
         <button
@@ -55,7 +55,7 @@ export function LogSourceToggle({
           data-testid={`log-source-${o.v}`}
           aria-pressed={value === o.v}
           onClick={() => onChange(o.v)}
-          className={`${item} rounded-md whitespace-nowrap transition-colors ${
+          className={`${item} rounded-lg whitespace-nowrap focus-visible:outline-2 focus-visible:outline-primary-400 transition-colors ${
             value === o.v ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-ink hover:bg-slate-800'
           }`}
         >
@@ -201,7 +201,7 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
   else body = content.data?.content || t('clusterView.logFiles.emptyFile', 'The file is empty.')
 
   return (
-    <div className={sm ? 'space-y-2' : 'flex flex-col h-full'}>
+    <div className={sm ? 'min-w-0 space-y-2' : 'flex min-h-0 min-w-0 flex-col h-full'}>
       <div className={sm ? 'flex flex-wrap items-center gap-2' : 'flex flex-wrap items-end gap-4 pb-4 shrink-0 border-b border-slate-700'}>
         {leading}
         <CustomDropdown
@@ -239,10 +239,10 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
                 setStreamNote(null)
                 setFollow((f) => !f)
               }}
-              className={`${buttonSize} rounded-lg border whitespace-nowrap flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`${buttonSize} rounded-lg border whitespace-nowrap flex items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 follow
                   ? 'bg-primary-600 border-primary-500 text-white hover:bg-primary-700'
-                  : 'bg-slate-700 border-slate-600 text-ink hover:bg-slate-600'
+                  : 'bg-slate-800 border-control text-ink hover:bg-slate-700'
               }`}
             >
               <Radio className={`${sm ? 'w-3 h-3' : 'w-4 h-4'} ${follow ? 'animate-pulse' : ''}`} />
@@ -257,7 +257,7 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
                 void list.refetch()
                 void content.refetch()
               }}
-              className={`${buttonSize} rounded-lg border border-slate-600 bg-slate-700 text-ink hover:bg-slate-600 whitespace-nowrap flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+              className={`${buttonSize} rounded-lg border border-control bg-slate-800 text-ink hover:bg-slate-700 whitespace-nowrap flex items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               <RefreshCw className={`${sm ? 'w-3 h-3' : 'w-4 h-4'} ${content.isFetching ? 'animate-spin' : ''}`} />
               {t('clusterView.logFiles.refresh', 'Refresh')}
@@ -278,8 +278,8 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
         data-testid="logfile-output"
         className={
           sm
-            ? 'bg-slate-950 rounded-lg p-3 font-mono text-[11px] text-slate-300 max-h-[400px] overflow-auto'
-            : 'flex-1 bg-slate-900 rounded-lg p-4 mt-3 font-mono text-sm text-slate-300 overflow-x-auto overflow-y-auto'
+            ? 'bg-slate-900 border border-hairline rounded-lg p-3 font-mono text-xs text-slate-300 max-h-[400px] overflow-auto'
+            : 'flex-1 min-h-0 bg-slate-900 border border-hairline rounded-lg p-4 mt-3 font-mono text-sm text-slate-300 overflow-x-auto overflow-y-auto'
         }
       >
         <pre className={sm ? 'whitespace-pre-wrap break-all' : 'whitespace-pre-wrap wrap-break-word'}>{body}</pre>

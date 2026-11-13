@@ -196,9 +196,9 @@ export default function PodExecTerminal({ podName, namespace, container, command
   }, [podName, namespace, container, command, attempt])
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-slate-700 px-4 py-2">
-        <div>
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-hairline px-4 py-2">
+        <div className="min-w-0 [overflow-wrap:anywhere]">
           <p className="text-sm font-semibold text-ink">
             {t('pods.exec.title', {
               defaultValue: 'Exec: {{pod}} / {{container}}',
@@ -232,7 +232,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
           )}
           <button
             type="button"
-            className="text-slate-400 hover:text-ink"
+            className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400"
             aria-label={t('common.close', { defaultValue: 'Close' })}
             onClick={() => {
               try {
@@ -247,7 +247,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
           </button>
         </div>
       </div>
-      <div className="flex-1 bg-slate-950" ref={containerRef} />
+      <div className="min-h-0 min-w-0 flex-1 bg-slate-950" ref={containerRef} />
     </div>
   )
 }
