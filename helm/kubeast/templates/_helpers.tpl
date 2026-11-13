@@ -174,6 +174,11 @@ hostUsers: false
 {{- end }}
 {{- end -}}
 
+{{/* Secret volume file mode: 0440 is read through the fsGroup above, which podSecurity off leaves to the platform. */}}
+{{- define "kubeast.secretMode" -}}
+{{- if .Values.podSecurity.enabled }}0440{{ else }}0444{{ end }}
+{{- end -}}
+
 {{- define "kubeast.containerSecurityContext" -}}
 {{- if .Values.podSecurity.enabled }}
 securityContext:
@@ -285,7 +290,7 @@ annotations:
 - name: recording-secret
   secret:
     secretName: {{ .Values.sessionRecording.secret }}
-    defaultMode: 0440
+    defaultMode: {{ include "kubeast.secretMode" . }}
 {{- end }}
 {{- end }}
 {{- end -}}
