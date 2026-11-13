@@ -30,7 +30,7 @@ interface Message {
 interface Args {
   message: Message
   sessionId: string | null
-  t: (key: string, opts?: any) => string
+  t: (key: string) => string
   getCurrentMessages: () => Message[]
 }
 
