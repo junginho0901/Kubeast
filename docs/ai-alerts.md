@@ -110,7 +110,7 @@ Without it, or with AI off, a cluster with an alert store still has **Alerts** i
   - Every alert of a message is kept, however many the message carries.
   - When the cluster has an alert store (`features.alertStore`), Alertmanager's current state (Silenced, Inhibited, Not in Alertmanager) is shown too. When the store's list was cut at `alertStore.maxAlerts` before the alert, the row says Unknown and the alert window says so with the store's numbers; the window also says when the store has not answered, failed, or the cluster has none.
 - **Silence**: needs an alert store on the cluster and `features.alertStore.silences: true`. This is off by default; the store credentials need write permission (Editor for Grafana).
-  - People with the permission `resource.alert.silence` (Write and Admin by default, not Read) use **Silence** in the alert window.
+  - People with the permission `resource.alert.silence` (Write and Admin by default, not Read) use **Silence** in the alert window, or **New silence** on the Silences tab, which starts from one empty condition.
   - They set conditions starting from the alert's name, Namespace and object labels (`=`, `!=`, `=~`, `!~`, add and remove), a duration (at most `silenceMaxHours` 168) and a reason (required). They preview the **alerts it would mute now**, and then create it.
   - The server adds the cluster condition (`<clusterLabel>="<value>"`) to every silence, so it cannot mute other clusters' alerts.
   - A silence made only of conditions that also match an empty label (e.g. `alertname=~".*"`) cannot be created. Alertmanager has the same rule.

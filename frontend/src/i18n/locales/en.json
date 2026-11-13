@@ -4748,6 +4748,7 @@
     },
     "silence": {
       "tab": "Silences",
+      "new": "New silence",
       "title": "Silence alerts",
       "subtitle": "In the alert store for this cluster: alerts matching every condition are not sent while the silence lasts.",
       "conditions": "Label conditions",

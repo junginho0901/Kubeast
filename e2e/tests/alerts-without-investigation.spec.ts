@@ -5,7 +5,7 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 
 // The Alerts page with alert investigation off and the alert store on (cluster default in the dev values, silences on).
 // The inbox is ai-service's and answers only with investigation on, so the page asks nothing of it, says why in one
-// line, and shows the store's silences, which are listed and ended as with the inbox. Investigation off, and AI off,
+// line, and shows the store's silences, which are listed, made and ended there. Investigation off, and AI off,
 // are stood in on the features' answer; the silences are made through the API on the second cluster's Alertmanager.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
@@ -98,6 +98,36 @@ test.describe('the Alerts page without alert investigation', () => {
     await expect(row).toHaveCount(0)
     expect(await listed(request), 'ended in the store').not.toContain(id)
     expect(calls, 'nothing asked of the inbox').toEqual([])
+  })
+
+  test('investigation off: New silence on the Silences tab makes one in the store', async ({ page, request }) => {
+    const comment = `e2e new silence ${RUN}`
+    const name = `E2ENewSilence${RUN}`
+    const before = await listed(request)
+    await standIn(page, { alertInvestigation: { enabled: false } })
+    await page.goto(`/alerts?cluster=${CLUSTER}`)
+
+    await page.getByTestId('silence-new').click()
+    const modal = page.getByTestId('silence-modal')
+    await expect(modal.getByTestId('silence-matcher'), 'one empty condition to start from').toHaveCount(1)
+    const matcher = modal.getByTestId('silence-matcher').first()
+    await expect(matcher.locator('input').first()).toHaveValue('')
+    await matcher.locator('input').first().fill('alertname')
+    await matcher.locator('input').last().fill(name)
+    await modal.getByTestId('silence-comment').fill(comment)
+    await modal.getByTestId('silence-create').click()
+    await expect(modal).toHaveCount(0)
+
+    type Listed = { id: string; comment: string; matchers: string[]; createdBy: string }
+    let one: Listed | undefined
+    await expect.poll(async () => {
+      const res = await request.get('/api/v1/alertstore/silences', { headers: bearer(admin), params: { cluster: CLUSTER } })
+      one = ((await res.json()).silences as Listed[]).find((s) => s.comment === comment && !before.includes(s.id))
+      return one?.matchers.includes(`alertname="${name}"`) ?? false
+    }, { timeout: 15_000 }).toBe(true)
+    made.push(one!.id)
+    expect(one!.createdBy).toContain(ADMIN_EMAIL)
+    await expect(page.getByTestId(`silence-row-${one!.id}`)).toContainText(comment)
   })
 
   test('AI off: the line names ai.enabled, the page is not the AI notice, the silences are there', async ({ page, request }) => {

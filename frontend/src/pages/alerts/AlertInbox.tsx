@@ -61,6 +61,7 @@ export default function AlertInbox() {
   const queryClient = useQueryClient()
   const [status, setStatus] = useState('')
   const [showSilences, setShowSilences] = useState(false)
+  const [newSilence, setNewSilence] = useState(false)
   const [severity, setSeverity] = useState('')
   const [mine, setMine] = useState(false)
   const [openOnly, setOpenOnly] = useState(false)
@@ -280,6 +281,11 @@ export default function AlertInbox() {
           <input type="checkbox" checked={openOnly} onChange={(e) => setOpenOnly(e.target.checked)} data-testid="alert-filter-open" />
           {tr('alertInbox.filter.open', 'Not done')}
         </label>
+        {silencesShown && silenceWith && (
+          <button type="button" onClick={() => setNewSilence(true)} className="btn btn-primary ml-auto flex items-center gap-2" data-testid="silence-new">
+            <BellOff className="w-4 h-4" /> {tr('alertInbox.silence.new', 'New silence')}
+          </button>
+        )}
       </div>
 
       {silencesShown && storeOn && <SilenceList canExpire={!!silenceWith} />}
@@ -376,6 +382,7 @@ export default function AlertInbox() {
         <ListPager currentPage={shown.page} totalPages={totalPages} total={total} rowsPerPage={shown.limit} onPageChange={setPage} />
       </div>
 
+      {newSilence && silenceWith && <SilenceModal initial={{}} maxHours={silenceWith.maxHours} onClose={() => setNewSilence(false)} />}
       {openId && inbox === 'on' && <AlertDetailModal id={openId} store={storeRead} silenceWith={silenceWith} onClose={() => open(null)} />}
     </div>
   )
