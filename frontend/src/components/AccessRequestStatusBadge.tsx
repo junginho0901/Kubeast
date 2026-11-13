@@ -18,12 +18,12 @@ export default function AccessRequestStatusBadge({ request }: { request: AccessR
   const reason = request.end_reason ? tr(`accessRequests.endReason.${request.end_reason}`, request.end_reason) : ''
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_CLASS[request.status] ?? STATUS_CLASS.expired}`}
+      className={`inline-flex flex-wrap items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_CLASS[request.status] ?? STATUS_CLASS.expired}`}
       data-testid={`access-request-status-${request.id}`}
       title={reason}
     >
       {label}
-      {reason && <span className="text-[10px] opacity-75">· {reason}</span>}
+      {reason && <span className="text-[11px]">· {reason}</span>}
     </span>
   )
 }

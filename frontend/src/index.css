@@ -61,16 +61,6 @@
 
 /* Role names keep the current values inline, including local colour-mode scopes. */
 @theme inline {
-  --color-console-success-fill: color-mix(in oklab, var(--color-green-500) 20%, transparent);
-  --color-console-success-line: color-mix(in oklab, var(--color-green-500) 30%, transparent);
-  --color-console-warning-fill: color-mix(in oklab, var(--color-yellow-500) 20%, transparent);
-  --color-console-warning-line: color-mix(in oklab, var(--color-yellow-500) 30%, transparent);
-  --color-console-error-fill: color-mix(in oklab, var(--color-red-500) 20%, transparent);
-  --color-console-error-line: color-mix(in oklab, var(--color-red-500) 30%, transparent);
-  --color-console-info-fill: color-mix(in oklab, var(--color-primary-500) 20%, transparent);
-  --color-console-info-line: color-mix(in oklab, var(--color-primary-500) 30%, transparent);
-  --color-console-neutral-fill: color-mix(in oklab, var(--color-slate-500) 20%, transparent);
-  --color-console-neutral-line: color-mix(in oklab, var(--color-slate-500) 30%, transparent);
   --color-console-tool-fill: color-mix(in oklab, var(--color-slate-800) 50%, transparent);
   --color-console-tool-line: var(--color-slate-600);
   --color-console-tool-nested-fill: color-mix(in oklab, var(--color-slate-800) 30%, transparent);
@@ -552,24 +542,24 @@ body {
   }
 
   .badge-success {
-    @apply bg-console-success-fill text-green-400 border border-console-success-line;
+    @apply bg-green-500/10 text-green-400 border border-transparent;
   }
 
   .badge-warning {
-    @apply bg-console-warning-fill text-yellow-400 border border-console-warning-line;
+    @apply bg-yellow-500/10 text-yellow-400 border border-transparent;
   }
 
   .badge-error {
-    @apply bg-console-error-fill text-red-400 border border-console-error-line;
+    @apply bg-red-500/10 text-red-400 border border-transparent;
   }
 
   .badge-info {
-    @apply bg-console-info-fill text-primary-300 border border-console-info-line;
+    @apply bg-primary-500/10 text-primary-300 border border-transparent;
   }
 
   /* a state that needs no attention (Idle: scaled to zero) */
   .badge-neutral {
-    @apply bg-console-neutral-fill text-slate-300 border border-console-neutral-line;
+    @apply bg-slate-700/50 text-slate-300 border border-transparent;
   }
 }
 
