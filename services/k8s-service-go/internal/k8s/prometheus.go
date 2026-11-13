@@ -14,6 +14,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -544,6 +545,11 @@ func (s *Service) prometheusViaProxyUncached(ctx context.Context, info *promServ
 	if err != nil {
 		var statusCode int
 		result.StatusCode(&statusCode)
+		// The proxy's 5xx or timeout is the Prometheus Service not answering, not the cluster: an upstream error (502),
+		// which the cluster's breaker does not count, as the external store's and metrics-server's are.
+		if statusCode >= http.StatusInternalServerError || apierrors.IsServiceUnavailable(err) || apierrors.IsTimeout(err) || apierrors.IsServerTimeout(err) {
+			return nil, fmt.Errorf("%w: prometheus proxy request failed (status %d): %v", ErrPrometheusUpstream, statusCode, err)
+		}
 		return nil, fmt.Errorf("prometheus proxy request failed (status %d): %w", statusCode, err)
 	}
 
