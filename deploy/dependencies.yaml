@@ -331,6 +331,46 @@ dependencies:
       - path: scripts/kind-tracing.sh
         match: '^JAEGER_IMAGE='
 
+  # Fault injection for the hard AI cases (scripts/kind-chaos.sh): the chart's images follow its version.
+  - name: chaos-mesh-chart
+    version: 2.8.7
+    upstream:
+      flavour: helm
+      repo: https://charts.chaos-mesh.org
+      chart: chaos-mesh
+    refPaths:
+      - path: scripts/kind-chaos.sh
+        match: '^CHAOS_MESH_CHART_VERSION='
+      - path: deploy/kind/chaos-mesh-values.yaml
+        match: 'chart chaos-mesh/chaos-mesh [0-9]'
+
+  # No upstream check: the image PodChaos's pod-failure runs in place of a container (scripts/kind-chaos.sh).
+  - name: pause
+    version: "3.10"
+    refPaths:
+      - path: scripts/kind-chaos.sh
+        match: '^PAUSE_IMAGE='
+
+  # The services the hard AI cases break (scripts/kind-otel-demo.sh): the chart version leads, the app and its
+  # collector follow it.
+  - name: opentelemetry-demo-chart
+    version: 0.42.6
+    upstream:
+      flavour: helm
+      repo: https://open-telemetry.github.io/opentelemetry-helm-charts
+      chart: opentelemetry-demo
+    refPaths:
+      - path: scripts/kind-otel-demo.sh
+        match: '^DEMO_CHART_VERSION='
+      - path: deploy/kind/otel-demo-values.yaml
+        match: 'opentelemetry-demo [0-9]'
+
+  - name: opentelemetry-demo
+    version: 3.1.0
+    refPaths:
+      - path: deploy/kind/otel-demo-values.yaml
+        match: '\(app [0-9]'
+
   - name: victoriametrics
     version: v1.155.0
     upstream:

@@ -49,6 +49,49 @@ The model is the dev install's default: `scripts/kind-model-subscription.sh up <
 | 11 | a rollout stuck on a readiness probe | |
 | 12 | a PVC Pending on a missing StorageClass | |
 
+## Hard cases
+
+A case with any of these fields runs in stages in one setup (`scripts/ai_eval_rca.py`); a case without them runs
+as above.
+
+| Field | |
+|---|---|
+| `question_vague` | the same problem without the symptom named, asked as its own chat after `question` |
+| `answer_format` | `rca_block_v0`: each question asks for a fenced `rca` JSON block at the end, scored against `truth.json` |
+| `baseline_seconds` | normal running after `wait` (and `settle_seconds`), before the fault |
+| `inject_cmds` | shell steps that make the fault (`$NS`, and `$CASE_DIR` the case folder); `INJECT_TIME` is taken before the first; a failing step is a setup failure |
+| `inject_wait`, `inject_wait_seconds` | a condition polled until the fault shows (240 s by default); still false, a setup failure |
+| `fault_start_at` | `inject` (default) or `setup`: where `ask_after_seconds` counts from |
+| `ask_after_seconds` | a number or a list of seconds after the fault start; at each, every question form `--repeat` times |
+| `fault_duration_seconds` | `undo_cmds` this long after the injection (`UNDO_TIME`), the namespace kept |
+| `undo_cmds` | shell steps that take the fault back; otherwise run after the last question |
+| `cooldown_seconds` | a pause after the teardown |
+| `hidden` | `true`: run only with `--hidden`, and the table shows only the total |
+
+Order: namespace, `setup.yaml` (`SETUP_TIME`), `setup_cmds`, `wait`, `settle_seconds` + `baseline_seconds`,
+`inject_cmds`, `inject_wait`, the asks (a `fault_duration_seconds` undo at its time), `undo_cmds`, the namespace
+deleted, `cleanup_cmds`, `cooldown_seconds`. `--keep` leaves a case as it ends: no undo, no deletion.
+
+`truth.json` holds `control`, `fault_start` and `fault_end` (`{{SETUP_TIME}}`, `{{INJECT_TIME}}`, `{{UNDO_TIME}}`,
+filled into `<out>/<time>-truth/<id>.json`), `time_tolerance_seconds`, `causes` (`resource` as
+`Kind/namespace/name`, `kind`, `accept_resources` and `accept_kinds`), `path` (`resource`, `role`, `required`,
+`accept`), `also_ok` and `decoys` (`*` and `<…>` stand for a generated part of a name). The last `rca` block passes
+when it names every truth cause with an accepted kind and no decoy as a cause; a control passes only with
+`no_fault` and no cause other than kind `none`. Its score is 1 less 0.25 for each other cause outside `also_ok`.
+Reported beside it: `started_at` within the tolerance, the required path hops in order, and the causes whose
+`evidence` points at no call that answered. `expect` is still checked, as `prose_pass`.
+
+```bash
+scripts/kind-logsearch.sh up && scripts/kind-tracing.sh up   # the stores the demo writes to
+scripts/kind-chaos.sh up                                     # Chaos Mesh in kubeast-b
+scripts/kind-otel-demo.sh up                                 # the OpenTelemetry demo in kubeast-b
+python3 scripts/ai-eval.py --cases evals/ai-hard --list      # the cases and what is wrong with their fields; no cluster
+python3 scripts/ai-eval.py --cases evals/ai-hard --out /tmp/ai-eval-hard 06
+python3 scripts/ai-eval.py --cases evals/ai-hard --out /tmp/ai-eval-hard --repeat 3 --hidden
+python3 scripts/test_ai_eval_rca.py                          # the scoring checks, or pytest on that file
+scripts/kind-otel-demo.sh down && scripts/kind-chaos.sh down
+```
+
 ## Results
 
 2026-10-19, the dev install, one run per case unless noted. Tokens are the turn's sum as the provider reports it (the

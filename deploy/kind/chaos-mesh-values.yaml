@@ -1,0 +1,16 @@
+# Chaos Mesh for the hard AI cases on kind (scripts/kind-chaos.sh): chart chaos-mesh/chaos-mesh 2.8.7 (app v2.8.7)
+# rendered with `helm template --include-crds` and applied server-side in the second cluster (kubeast-b), so that
+# cluster keeps no Helm release (helm-cluster-switch.spec.ts). A kind node runs containerd, whose socket the chaos
+# daemon needs (Chaos Mesh's Helm install page, Containerd tab). One controller instead of three and no dashboard:
+# the cases apply their experiments as objects. The DNS server stays for DNSChaos. The pause image PodChaos's
+# pod-failure puts in place is pinned by the script (--set).
+controllerManager:
+  replicaCount: 1
+chaosDaemon:
+  runtime: containerd
+  socketPath: /run/containerd/containerd.sock
+dashboard:
+  create: false
+dnsServer:
+  create: true
+  replicas: 1

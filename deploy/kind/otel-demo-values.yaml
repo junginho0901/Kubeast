@@ -1,0 +1,63 @@
+# The OpenTelemetry demo (Astronomy Shop) for the hard AI cases on kind (scripts/kind-otel-demo.sh): chart
+# open-telemetry/opentelemetry-demo 0.42.6 (app 3.1.0) rendered with `helm template` and applied server-side in the
+# second cluster (kubeast-b), which keeps no Helm release. The chart's own Jaeger, Prometheus, Grafana and OpenSearch
+# are off. Its collector (the chart's own version) sends traces to the dev Tempo (scripts/kind-tracing.sh) and logs to
+# the log-search Loki (scripts/kind-logsearch.sh), with k8s.cluster.name kubeast-b, the name Kubeast scopes those
+# stores by; the log-search collector also reads these pods' stdout into the same Loki. Metrics go to `nop` unless
+# DEMO_METRICS=1 sends them to the dev Prometheus (a 384 Mi pod keeping 2 h, deploy/kind/second-cluster.yaml).
+jaeger:
+  enabled: false
+prometheus:
+  enabled: false
+grafana:
+  enabled: false
+opensearch:
+  enabled: false
+
+opentelemetry-collector:
+  clusterRole:
+    name: astronomy-shop-otel-collector
+    clusterRoleBinding:
+      name: astronomy-shop-otel-collector
+  # The dev Prometheus already scrapes the kubelet, cAdvisor and kube-state-metrics.
+  presets:
+    hostMetrics:
+      enabled: false
+    kubeletMetrics:
+      enabled: false
+    clusterMetrics:
+      enabled: false
+  config:
+    exporters:
+      otlp_grpc/tempo:
+        endpoint: tempo.tempo.svc:4317
+        tls:
+          insecure: true
+        sending_queue:
+          batch: {}
+      otlp_http/loki:
+        endpoint: http://loki.loki.svc:3100/otlp
+        sending_queue:
+          batch: {}
+      prometheus_remote_write:
+        endpoint: http://prometheus.monitoring.svc:9090/api/v1/write
+        external_labels:
+          cluster: kubeast-b
+      nop: {}
+    processors:
+      resource:
+        attributes:
+          - key: service.instance.id
+            from_attribute: k8s.pod.uid
+            action: insert
+          - key: k8s.cluster.name
+            value: kubeast-b
+            action: upsert
+    service:
+      pipelines:
+        traces:
+          exporters: [otlp_grpc/tempo, span_metrics]
+        metrics:
+          exporters: [nop]
+        logs:
+          exporters: [otlp_http/loki]
