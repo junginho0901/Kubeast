@@ -146,6 +146,45 @@ test.describe('what keeps up by itself', () => {
     kubectl(`-n ${NS} delete event pod.e2e-live --ignore-not-found`)
   })
 
+  // A drawer with no other follower: of a namespace's kind, of the cluster's (its events in any namespace, as kubectl
+  // describe lists them) and the Namespace's own (read in the namespace itself, as k8s-service's describe reads them).
+  for (const target of [
+    { kind: 'ConfigMap', name: () => 'alpha', namespace: NS, url: () => `/configuration/configmaps?cluster=self&namespace=${NS}&detail=${encodeURIComponent(`ConfigMap/${NS}/alpha`)}`, describe: /\/configmaps\/alpha\/describe/ },
+    { kind: 'StorageClass', name: () => `e2e-live-evsc-${STAMP}`, namespace: '', url: () => `/storage?tab=storageclasses&cluster=self&detail=${encodeURIComponent(`StorageClass/e2e-live-evsc-${STAMP}`)}`, describe: new RegExp(`/storageclasses/e2e-live-evsc-${STAMP}/describe`) },
+    { kind: 'Namespace', name: () => NS, namespace: '', url: () => `/cluster/namespaces?cluster=self&detail=${encodeURIComponent(`Namespace/${NS}`)}`, describe: new RegExp(`/namespaces/${NS}/describe`) },
+  ]) {
+    test(`a ${target.kind}'s Events count up while it stays as it is, and its answer is not read for that`, async ({ page }) => {
+      test.setTimeout(120_000)
+      const name = target.name()
+      if (target.kind === 'StorageClass') kubectl('apply -f -', JSON.stringify({ apiVersion: 'storage.k8s.io/v1', kind: 'StorageClass', metadata: { name }, provisioner: 'kubernetes.io/no-provisioner' }))
+      const eventOf = (count: number) => JSON.stringify({
+        apiVersion: 'v1', kind: 'Event', metadata: { name: `${target.kind.toLowerCase()}.e2e-live`, namespace: NS },
+        involvedObject: { kind: target.kind, name, ...(target.namespace ? { namespace: target.namespace } : {}) },
+        type: 'Warning', reason: 'E2ELiveCountUp', message: 'told by the run', count,
+        firstTimestamp: FIRST_SEEN, lastTimestamp: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), source: { component: 'e2e-live' },
+      })
+      try {
+        const describes = requests(page, target.describe)
+        await page.goto(target.url())
+        const drawer = page.locator(DRAWER).last()
+        await expect(drawer.getByText('Events', { exact: true }).first()).toBeVisible({ timeout: 20_000 })
+        await expect.poll(() => describes.length, { timeout: 20_000 }).toBeGreaterThan(0)
+        await page.waitForTimeout(3_000)
+        const before = describes.length
+
+        kubectl('apply -f -', eventOf(1))
+        const row = drawer.locator('tr').filter({ hasText: 'E2ELiveCountUp' })
+        await expect(row).toHaveCount(1, { timeout: 20_000 })
+        kubectl('apply -f -', eventOf(7))
+        await expect.poll(async () => (await row.locator('td').last().innerText()).trim(), { timeout: 20_000 }).toBe(kubectl(`-n ${NS} get event ${target.kind.toLowerCase()}.e2e-live -o 'jsonpath={.count}'`))
+        expect(describes.length, 'the frame is the row').toBe(before)
+      } finally {
+        kubectl(`-n ${NS} delete event ${target.kind.toLowerCase()}.e2e-live --ignore-not-found`)
+        if (target.kind === 'StorageClass') kubectl(`delete storageclass ${name} --ignore-not-found`)
+      }
+    })
+  }
+
   test('a pod\'s RBAC tab shows a binding made while it is open, and takes it away when it is gone', async ({ page }) => {
     test.setTimeout(150_000)
     kubectl(`-n ${NS} create role e2e-live-role --verb=get --resource=pods`)
