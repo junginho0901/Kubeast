@@ -158,9 +158,13 @@ test.describe('what keeps up by itself', () => {
       const name = target.name()
       if (target.kind === 'StorageClass') kubectl('apply -f -', JSON.stringify({ apiVersion: 'storage.k8s.io/v1', kind: 'StorageClass', metadata: { name }, provisioner: 'kubernetes.io/no-provisioner' }))
       const uid = kubectl(`${target.namespace ? `-n ${target.namespace} ` : ''}get ${target.kind.toLowerCase()} ${name} -o 'jsonpath={.metadata.uid}'`)
+      // the API server keeps an event of a cluster object in default (involvedObject.namespace empty) and one about a
+      // Namespace in that namespace, naming it there
+      const evNs = target.kind === 'StorageClass' ? 'default' : NS
+      const involvedNs = target.kind === 'StorageClass' ? '' : NS
       const eventOf = (count: number) => JSON.stringify({
-        apiVersion: 'v1', kind: 'Event', metadata: { name: `${target.kind.toLowerCase()}.e2e-live`, namespace: NS },
-        involvedObject: { kind: target.kind, name, uid, ...(target.namespace ? { namespace: target.namespace } : {}) },
+        apiVersion: 'v1', kind: 'Event', metadata: { name: `${target.kind.toLowerCase()}.e2e-live`, namespace: evNs },
+        involvedObject: { kind: target.kind, name, uid, ...(involvedNs ? { namespace: involvedNs } : {}) },
         type: 'Warning', reason: 'E2ELiveCountUp', message: 'told by the run', count,
         firstTimestamp: FIRST_SEEN, lastTimestamp: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), source: { component: 'e2e-live' },
       })
@@ -177,10 +181,10 @@ test.describe('what keeps up by itself', () => {
         const row = drawer.locator('tr').filter({ hasText: 'E2ELiveCountUp' })
         await expect(row).toHaveCount(1, { timeout: 20_000 })
         kubectl('apply -f -', eventOf(7))
-        await expect.poll(async () => (await row.locator('td').last().innerText()).trim(), { timeout: 20_000 }).toBe(kubectl(`-n ${NS} get event ${target.kind.toLowerCase()}.e2e-live -o 'jsonpath={.count}'`))
+        await expect.poll(async () => (await row.locator('td').last().innerText()).trim(), { timeout: 20_000 }).toBe(kubectl(`-n ${evNs} get event ${target.kind.toLowerCase()}.e2e-live -o 'jsonpath={.count}'`))
         expect(describes.length, 'the frame is the row').toBe(before)
       } finally {
-        kubectl(`-n ${NS} delete event ${target.kind.toLowerCase()}.e2e-live --ignore-not-found`)
+        kubectl(`-n ${evNs} delete event ${target.kind.toLowerCase()}.e2e-live --ignore-not-found`)
         if (target.kind === 'StorageClass') kubectl(`delete storageclass ${name} --ignore-not-found`)
       }
     })
