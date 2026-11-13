@@ -127,6 +127,11 @@ type Config struct {
 	// manifests fit well under the default 4 MiB.
 	MaxRequestBodyBytes int
 
+	// StreamDrainSeconds is how long a server being replaced (SIGTERM) gives its open terminals to end on their own
+	// after telling them, ending the followed logs at once (internal/drain). Below 0 (unset): no drain, they are cut
+	// when the process exits, as before. The chart sets it with streams.enabled.
+	StreamDrainSeconds int
+
 	// Node shell: privileged debug pod on a node. Off unless enabled; the pod
 	// always runs in NodeShellNamespace with an image from NodeShellImages.
 	NodeShellEnabled    bool
@@ -211,6 +216,8 @@ func Load() Config {
 		WSMaxSubscriptionsPerConn: pkgconfig.GetEnvInt("WS_MAX_SUBSCRIPTIONS_PER_CONN", 50),
 		WSWatchStartConcurrency:   pkgconfig.GetEnvInt("WS_WATCH_START_CONCURRENCY", 16),
 		MaxRequestBodyBytes:       pkgconfig.GetEnvInt("MAX_REQUEST_BODY_BYTES", 4<<20),
+
+		StreamDrainSeconds: pkgconfig.GetEnvInt("STREAM_DRAIN_SECONDS", -1),
 
 		NodeShellEnabled:    pkgconfig.GetEnvBool("NODE_SHELL_ENABLED", false),
 		NodeShellNamespace:  pkgconfig.GetEnv("NODE_SHELL_NAMESPACE", "kubeast-node-shell"),

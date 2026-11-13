@@ -265,6 +265,10 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 		h.handleError(w, err)
 		return
 	}
+	// A server being replaced sends the browser on before it reads or writes anything.
+	if h.refuseWhileLeaving(w) {
+		return
+	}
 	// A sensitive read: not served while the audit store cannot record it.
 	if rerr := h.auditReady(r); rerr != nil {
 		h.refuseUnaudited(w, r, rerr)
@@ -305,6 +309,8 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 
 	ctx, release := h.holdSession(r.Context())
 	defer release()
+	ctx, leave := h.drain.HoldStream(ctx)
+	defer leave()
 	slog.Info("pod logs sse connected", "namespace", namespace, "pod", name, "container", container, "resumed", resumed)
 
 	// Pod 가 초기화 중일 때 retry. SSE 헤더 이미 보냈으므로 retry 실패 시

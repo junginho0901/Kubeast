@@ -2,6 +2,7 @@
  "k8s-service": {
   "/": {"excluded": "The service saying it runs, for whoever opens its address: no cluster data and no screen reads it."},
   "/health": {"excluded": "The kubelet's probe of this service: no cluster data and no screen reads it."},
+  "/ready": {"excluded": "The readiness probe of this service, unready while it is being replaced: no cluster data and no screen reads it."},
   "/metrics": {"excluded": "Prometheus scraping this service's own request counters, not what a screen shows of a cluster."},
   "/api/v1/alertstore/alerts": {"tool": "alerts_list", "args": {}},
   "/api/v1/alertstore/silences": {"tool": "alerts_list", "args": {"silences": true}},

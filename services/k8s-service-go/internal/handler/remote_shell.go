@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/url"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drain"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	corev1 "k8s.io/api/core/v1"
@@ -158,6 +160,37 @@ func sessionEndNotice(code, lang string) string {
 	}
 }
 
+// serverLeavingNotice is the line a terminal gets when its server starts leaving: in how long it closes, in the
+// screen's language. Part of the recording, as the other notices.
+func serverLeavingNotice(in time.Duration, lang string) string {
+	secs := max(0, int((in+time.Second/2)/time.Second))
+	if strings.HasPrefix(strings.ToLower(lang), "ko") {
+		return fmt.Sprintf("\r\n[Kubeast] 서버를 교체하고 있습니다. 이 터미널은 %d초 뒤 닫힙니다. 하던 일을 마치고 새 터미널을 여세요.\r\n", secs)
+	}
+	return fmt.Sprintf("\r\n[Kubeast] This server is being replaced: this terminal closes in %d s. Finish what you are doing, then open a new terminal.\r\n", secs)
+}
+
+// serverLeftNotice is the line a terminal ends with when its server was replaced.
+func serverLeftNotice(lang string) string {
+	if strings.HasPrefix(strings.ToLower(lang), "ko") {
+		return "\r\n[Kubeast] 서버가 교체되어 이 터미널을 닫았습니다. 계속하려면 새 터미널을 여세요.\r\n"
+	}
+	return "\r\n[Kubeast] This terminal was closed: the server was replaced. Open a new terminal to continue.\r\n"
+}
+
+// serverEnded says why a held terminal ended when the server ended it — its session stopped standing
+// (auth.LiveSessions) or the server is being replaced (drain) — with the line, close code and reason it gets. ok is
+// false for any other end: the browser went away, the shell exited.
+func serverEnded(ctx context.Context, lang string) (notice string, closeCode int, reason string, ok bool) {
+	if code := auth.SessionEndCode(ctx); code != "" {
+		return sessionEndNotice(code, lang), auth.SessionEndedCloseCode, code, true
+	}
+	if drain.Ended(ctx) {
+		return serverLeftNotice(lang), drain.CloseCode, drain.Code, true
+	}
+	return "", 0, "", false
+}
+
 func hangUp(w io.Writer, pause time.Duration) {
 	for i, key := range shellHangup {
 		if i > 0 {
@@ -181,9 +214,11 @@ func hangUp(w io.Writer, pause time.Duration) {
 // also written to the recording, after a one-line notice that it is — in
 // lang, the screen's language the page sent.
 //
-// A ctx ended by the session (auth.LiveSessions) says why on the terminal and
-// closes the socket, which from here on is a browser going away: the shell is
-// hung up, not left running in the container.
+// A ctx ended by the session (auth.LiveSessions) or by the server leaving
+// (drain) says why on the terminal and closes the socket, which from here on is
+// a browser going away: the shell is hung up, not left running in the
+// container. A server that starts leaving first says, on the terminal, when it
+// will close (drain.Warning).
 func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cfg *rest.Config, u *url.URL, rec *recording.Session, lang string) error {
 	exec, err := newShellExecutor(cfg, u)
 	if err != nil {
@@ -197,17 +232,25 @@ func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cf
 
 	out := &shellWriter{conn: conn, rec: rec}
 	go func() {
-		select {
-		case <-ctx.Done():
-		case <-held.Done():
-			code := auth.SessionEndCode(held)
-			if code == "" {
-				cancel()
+		warned, closeAt := drain.Warning(held)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-warned:
+				warned = nil
+				_, _ = out.channel(shellStderr).Write([]byte(serverLeavingNotice(time.Until(closeAt()), lang)))
+			case <-held.Done():
+				notice, closeCode, reason, ended := serverEnded(held, lang)
+				if !ended {
+					cancel()
+					return
+				}
+				_, _ = out.channel(shellStderr).Write([]byte(notice))
+				_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(closeCode, reason), time.Now().Add(time.Second))
+				_ = conn.Close()
 				return
 			}
-			_, _ = out.channel(shellStderr).Write([]byte(sessionEndNotice(code, lang)))
-			_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(auth.SessionEndedCloseCode, code), time.Now().Add(time.Second))
-			_ = conn.Close()
 		}
 	}()
 	if rec != nil {
@@ -252,7 +295,7 @@ func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cf
 		_, _ = out.channel(shellError).Write([]byte(exit.Error()))
 		return nil
 	}
-	if auth.SessionEndCode(held) != "" {
+	if _, _, _, ended := serverEnded(held, ""); ended {
 		return nil
 	}
 	return err

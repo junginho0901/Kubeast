@@ -171,6 +171,14 @@ func (m *Manager) kick() {
 	}
 }
 
+// UploadNow asks Run to upload what the live recordings hold now instead of at the next part (a server about to be
+// replaced). It does not wait.
+func (m *Manager) UploadNow() {
+	if m.Enabled() {
+		m.kick()
+	}
+}
+
 // Run recovers recordings left by a previous process, then uploads parts
 // every ChunkSeconds and whenever a session ends, until ctx ends.
 func (m *Manager) Run(ctx context.Context) {
