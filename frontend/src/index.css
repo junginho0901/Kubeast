@@ -59,15 +59,6 @@
   }
 }
 
-/* Role names keep the current values inline, including local colour-mode scopes. */
-@theme inline {
-  --color-console-tool-fill: color-mix(in oklab, var(--color-slate-800) 50%, transparent);
-  --color-console-tool-line: var(--color-slate-600);
-  --color-console-tool-nested-fill: color-mix(in oklab, var(--color-slate-800) 30%, transparent);
-  --color-console-tool-nested-line: color-mix(in oklab, var(--color-slate-600) 50%, transparent);
-  --color-console-tool-code-fill: color-mix(in oklab, var(--color-slate-900) 50%, transparent);
-}
-
 /* Colour modes (DESIGN.md, utils/colorMode.ts): the data-color-mode attribute on <html> swaps the neutral ladders;
    utilities read the variables, so class names stay the same in every mode. gray-* takes the same ladder.
    default — deep navy: Tailwind's slate with the surfaces one step down, so the page is the sign-in ground
@@ -617,11 +608,16 @@ body {
 
 /* Tool Call 스타일 - KAgent 스타일 (components/MarkdownDisclosure.tsx) */
 .prose .md-details {
-  @apply my-2 rounded-lg border border-console-tool-line bg-console-tool-fill overflow-hidden;
+  @apply my-2 rounded-lg border border-hairline bg-slate-800 overflow-hidden;
 }
 
 .prose .md-summary {
   @apply flex w-full items-center px-4 py-2.5 text-left cursor-pointer select-none font-medium text-slate-200 hover:bg-slate-700/50 transition-colors;
+}
+
+.prose .md-summary:focus-visible {
+  outline: 2px solid var(--color-primary-400);
+  outline-offset: -2px;
 }
 
 .prose .md-summary::before {
@@ -637,12 +633,12 @@ body {
 }
 
 .prose .md-details[data-open] > .md-summary {
-  @apply border-b border-console-tool-line;
+  @apply border-b border-hairline;
 }
 
 /* 중첩된 details (Arguments, Results) */
 .prose .md-details .md-details {
-  @apply my-2 mx-4 rounded-sm border border-console-tool-nested-line bg-console-tool-nested-fill;
+  @apply my-2 mx-4 rounded-none border-0 border-l border-hairline bg-transparent;
 }
 
 .prose .md-details .md-details > .md-summary {
@@ -656,7 +652,7 @@ body {
 
 /* 코드 블록 스타일 - 가로 스크롤 가능하되 말풍선 너비 제한 */
 .prose .md-details pre {
-  @apply my-2 mx-4 rounded-sm bg-console-tool-code-fill;
+  @apply my-2 mx-4 rounded-lg bg-slate-900;
   overflow-x: auto !important;
   max-width: 100% !important;
   white-space: pre !important;
