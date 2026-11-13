@@ -6,6 +6,7 @@ import useWorkloadDataSrc from './workload-info/useWorkloadData.ts?raw'
 import hpaInfoSrc from './HPAInfo.tsx?raw'
 import podInfoSrc from './PodInfo.tsx?raw'
 import namespaceInfoSrc from './NamespaceInfo.tsx?raw'
+import hookSrc from './useDrawerFollowsEvents.ts?raw'
 import useNodeDataSrc from './node-info/useNodeData.ts?raw'
 
 // an event as the answer lists it, told apart by reason here
@@ -123,8 +124,11 @@ describe('the drawers whose events follow', () => {
   })
 
   it('a Namespace\'s by its UID once the answer has it, and a Node\'s kept to its UID and name', () => {
-    expect(namespaceInfoSrc).toContain("drawerEventSelector('Namespace', name, nsUid)")
-    expect(namespaceInfoSrc).toContain('enabled: !!name && !!nsUid')
+    const nsHook = namespaceInfoSrc.match(/useDrawerFollowsEvents\(\{[^}]*\}\)/)?.[0] ?? ''
+    expect(nsHook).toContain('answer: nsDescribe')
+    expect(nsHook).toContain("kind: 'Namespace'")
+    expect(hookSrc).toContain('const uid = options.uid ?? answer?.uid')
+    expect(hookSrc).toContain('drawerEventSelector(kind, name, uid)')
     expect(useNodeDataSrc).toContain('if (!nodeEventNamesNode(obj, name, nodeUid)) return prev ?? items')
     expect(useNodeDataSrc).toContain('enabled: !!name && !!nodeUid')
   })
