@@ -61,7 +61,6 @@
 
 /* Role names keep the current values inline, including local colour-mode scopes. */
 @theme inline {
-  --spacing-console-sidebar-fade: 24px;
   --color-console-success-fill: color-mix(in oklab, var(--color-green-500) 20%, transparent);
   --color-console-success-line: color-mix(in oklab, var(--color-green-500) 30%, transparent);
   --color-console-warning-fill: color-mix(in oklab, var(--color-yellow-500) 20%, transparent);
@@ -508,10 +507,14 @@ body {
     @apply inline-flex items-center gap-1.5 rounded-lg border border-red-800/60 bg-red-950/20 px-2.5 py-1.5 text-xs text-red-200 hover:bg-red-950/40 disabled:opacity-50;
   }
 
-  /* The sidebar menu scrolls: a fade over its bottom 24px shows that items go on below the account box. At the
-     end of the list only the menu's own bottom padding (py-6 = 24px) sits under the fade. */
+  /* The sidebar menu scrolls: a fade over its bottom padding shows that more items follow. */
   .sidebar-nav {
-    mask-image: linear-gradient(to bottom, #000 calc(100% - var(--spacing-console-sidebar-fade)), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+  }
+
+  .sidebar-selected::before {
+    content: '';
+    @apply absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary-400;
   }
 
   /* useAdaptiveTable marks the scroll wrapper while the table overflows it:
