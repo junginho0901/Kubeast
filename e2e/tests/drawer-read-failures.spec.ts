@@ -9,7 +9,8 @@ import { test, expect } from '@playwright/test'
 // fixed sentence ("Failed to load describe data", "Some detailed fields are unavailable"), "No data" or a value it
 // never read: a Role's Rules Count is "—", not 0. Every describe read is answered 503 in the browser with a reason of
 // its own, so nothing on the cluster changes; the objects are ones a kind dev cluster always has on `self`, but for an
-// IngressClass, which the dev cluster has none of: one is made for the run (a controller no one runs) and removed.
+// IngressClass and a PodTemplate (a kind with no drawer of its own), which the dev cluster has none of: one of each is
+// made for the run (a controller no one runs, a template no controller uses) and removed.
 
 const EN = JSON.parse(fs.readFileSync(path.join(__dirname, '../../frontend/src/i18n/locales/en.json'), 'utf8'))
 const REASON = 'e2e stand-in: the API server did not answer'
@@ -17,6 +18,7 @@ const SAID = EN.common.describeFailed.replace('{{reason}}', REASON)
 const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
 
 const INGRESS_CLASS = `e2e-read-failures-${Date.now().toString(36)}`
+const POD_TEMPLATE = INGRESS_CLASS
 
 const DRAWERS: { what: string; detail: string; notShown?: string }[] = [
   { what: 'Role', detail: 'Role/kube-system/extension-apiserver-authentication-reader' },
@@ -38,16 +40,20 @@ const DRAWERS: { what: string; detail: string; notShown?: string }[] = [
   { what: 'IngressClass', detail: `IngressClass/${INGRESS_CLASS}` },
   { what: 'Ingress', detail: 'Ingress/default/e2e-fixture' },
   { what: 'NetworkPolicy', detail: 'NetworkPolicy/kubeast/kubeast-allow-dns' },
+  { what: 'PodTemplate (no drawer of its own)', detail: `PodTemplate/default/${POD_TEMPLATE}` },
 ]
 
 const kubeconfig = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-drawer-reads-')), 'kubeconfig')
 const ingressClass = `{"apiVersion":"networking.k8s.io/v1","kind":"IngressClass","metadata":{"name":"${INGRESS_CLASS}"},"spec":{"controller":"example.com/e2e-none"}}`
+const podTemplate = `{"apiVersion":"v1","kind":"PodTemplate","metadata":{"name":"${POD_TEMPLATE}","namespace":"default"},"template":{"metadata":{"labels":{"app":"e2e-read-failures"}},"spec":{"containers":[{"name":"c","image":"registry.k8s.io/pause:3.10"}]}}}`
 test.beforeAll(() => {
   fs.writeFileSync(kubeconfig, execSync('kind get kubeconfig --name kubeast', { encoding: 'utf8' }), { mode: 0o600 })
   execSync(`kubectl --kubeconfig ${kubeconfig} create -f -`, { input: ingressClass, stdio: ['pipe', 'pipe', 'pipe'] })
+  execSync(`kubectl --kubeconfig ${kubeconfig} create -f -`, { input: podTemplate, stdio: ['pipe', 'pipe', 'pipe'] })
 })
 test.afterAll(() => {
   execSync(`kubectl --kubeconfig ${kubeconfig} delete ingressclass ${INGRESS_CLASS} --ignore-not-found`, { stdio: 'pipe' })
+  execSync(`kubectl --kubeconfig ${kubeconfig} -n default delete podtemplate ${POD_TEMPLATE} --ignore-not-found`, { stdio: 'pipe' })
 })
 
 // A CRD drawer whose objects could not be listed says so instead of leaving its Custom Resources section out. The CRD is

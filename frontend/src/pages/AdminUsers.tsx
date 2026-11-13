@@ -26,6 +26,8 @@ import { failureText } from '@/utils/failureText'
 import { copyText } from '@/utils/clipboard'
 import { allPendingSelected, toggleAllPending as toggleAllPendingIds, toggleOnePending } from './admin-users/pendingSelection'
 import { useDismiss } from '@/hooks/useDismiss'
+import { announceCreated } from '@/services/createdNoticeStore'
+import { CreatedNotice } from '@/components/CreatedNotice'
 
 const USER_COLUMNS = 6
 
@@ -194,6 +196,8 @@ export default function AdminUsers() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       setCreateModalOpen(false)
+      // the new account may sit on another page of the list: the line at the top of the page names it
+      announceCreated(window.location.pathname, [{ kind: 'User', name: `${newUser.name} (${newUser.email})` }])
       setNewUser({ name: '', email: '', password: '', role_id: 0, team: '' })
     },
   })
@@ -454,6 +458,8 @@ export default function AdminUsers() {
           {actionError}
         </div>
       )}
+      {/* an account just added: named here, inside the page's height, until closed or another page opens */}
+      <CreatedNotice />
 
       <div className="relative shrink-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
