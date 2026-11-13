@@ -2,6 +2,7 @@ package routes
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"regexp"
 	"sort"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
 )
@@ -22,10 +24,17 @@ var streamRoutes = []string{
 	"GET /api/v1/nodes/{name}/debug-shell/ws",
 }
 
-func streamOnlyRouter() *chi.Mux {
+func roleRouter(role config.Role) *chi.Mux {
 	r := chi.NewRouter()
-	r.Group(func(g chi.Router) { RegisterStreams(g, &handler.Handler{}) })
+	r.Group(func(g chi.Router) { RegisterRole(g, &handler.Handler{}, ws.NewMultiplexer(nil), role) })
 	return r
+}
+
+func roleRoutes(t *testing.T, role config.Role) map[string]bool {
+	t.Helper()
+	got := map[string]bool{}
+	walkRoutes(t, roleRouter(role), func(method, route string) { got[method+" "+route] = true })
+	return got
 }
 
 func sortedKeys(m map[string]bool) []string {
@@ -37,20 +46,86 @@ func sortedKeys(m map[string]bool) []string {
 	return keys
 }
 
-func TestTheStreamRoutesAreTheTerminalsAndTheFollowedLogsAndTheServiceStillServesThem(t *testing.T) {
-	streams := map[string]bool{}
-	walkRoutes(t, streamOnlyRouter(), func(method, route string) { streams[method+" "+route] = true })
-	if got := sortedKeys(streams); strings.Join(got, "\n") != strings.Join(streamRoutes, "\n") {
-		t.Fatalf("RegisterStreams serves\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(streamRoutes, "\n"))
+func TestAStreamServerServesTheTerminalsAndTheFollowedLogsOnly(t *testing.T) {
+	got := sortedKeys(roleRoutes(t, config.RoleStream))
+	if strings.Join(got, "\n") != strings.Join(streamRoutes, "\n") {
+		t.Fatalf("role stream serves\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(streamRoutes, "\n"))
 	}
+}
+
+func TestTheWholeServiceIsTheAPIAndTheStreamsWithNothingInBoth(t *testing.T) {
+	all, api, stream := roleRoutes(t, config.RoleAll), roleRoutes(t, config.RoleAPI), roleRoutes(t, config.RoleStream)
+	for route := range stream {
+		if api[route] {
+			t.Errorf("%s is served by both api and stream", route)
+		}
+	}
+	union := map[string]bool{}
+	for route := range api {
+		union[route] = true
+	}
+	for route := range stream {
+		union[route] = true
+	}
+	if a, u := strings.Join(sortedKeys(all), "\n"), strings.Join(sortedKeys(union), "\n"); a != u {
+		t.Fatalf("role all serves %d routes, api and stream together %d", len(all), len(union))
+	}
+	// Register is what main.go called before the roles: the whole service.
 	r := chi.NewRouter()
 	Register(r, &handler.Handler{}, ws.NewMultiplexer(nil))
-	all := map[string]bool{}
-	walkRoutes(t, r, func(method, route string) { all[method+" "+route] = true })
-	for _, route := range streamRoutes {
-		if !all[route] {
-			t.Errorf("Register no longer serves %s", route)
+	before := map[string]bool{}
+	walkRoutes(t, r, func(method, route string) { before[method+" "+route] = true })
+	if len(before) != len(all) {
+		t.Fatalf("Register serves %d routes, role all %d", len(before), len(all))
+	}
+}
+
+func TestARouteOfTheOtherRoleIsNotFound(t *testing.T) {
+	cases := []struct {
+		role   config.Role
+		method string
+		path   string
+	}{
+		{config.RoleAPI, http.MethodGet, "/api/v1/namespaces/default/pods/web/exec/ws"},
+		{config.RoleAPI, http.MethodGet, "/api/v1/namespaces/default/pods/web/logs/stream"},
+		{config.RoleAPI, http.MethodGet, "/api/v1/namespaces/default/pods/web/logfiles/stream"},
+		{config.RoleAPI, http.MethodGet, "/api/v1/nodes/n1/debug-shell/ws"},
+		{config.RoleStream, http.MethodGet, "/api/v1/pods/all"},
+		{config.RoleStream, http.MethodGet, "/api/v1/namespaces/default/pods/web/logs"},
+		{config.RoleStream, http.MethodGet, "/api/v1/wsMultiplexer"},
+		{config.RoleStream, http.MethodDelete, "/api/v1/namespaces/default/pods/web"},
+	}
+	for _, c := range cases {
+		rec := httptest.NewRecorder()
+		roleRouter(c.role).ServeHTTP(rec, httptest.NewRequest(c.method, c.path, nil))
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("role %s: %s %s = %d, want 404", c.role, c.method, c.path, rec.Code)
 		}
+	}
+}
+
+// main.go is where a role leaves out what it does not serve; these lines are the whole difference besides the routes.
+func TestTheServerLeavesOutWhatItsRoleDoesNotServe(t *testing.T) {
+	raw, err := os.ReadFile("../../cmd/server/main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(raw)
+	for _, line := range []string{
+		"role, roleErr := config.ParseRole(cfg.ServerRole)",
+		"NoInformers:        !role.ServesAPI(),",
+		"if role.ServesAPI() && cfg.HealthcheckIntervalSec > 0 {",
+		"if recorder.Enabled() && role.ServesStreams() {\n\t\tslog.Info(\"session recording enabled\"",
+		"if recorder.Enabled() && role.ServesStreams() {\n\t\tm.Gauge(\"kubeast_session_recording_pending_bytes\"",
+		"routes.RegisterRole(r, h, wsMux, role)",
+	} {
+		if !strings.Contains(src, line) {
+			t.Errorf("main.go lacks %q", line)
+		}
+	}
+	// the recordings' and the /internal routes' groups
+	if n := strings.Count(src, "r.Group(func(r chi.Router) {\n\t\tif !role.ServesAPI() {\n\t\t\treturn\n\t\t}"); n != 2 {
+		t.Errorf("%d groups return for a server without the API, want 2", n)
 	}
 }
 
@@ -137,7 +212,7 @@ func upstreamPath(l nginxLocation, path string) string {
 
 func TestEachStreamTheScreensOpenReachesAStreamRouteThroughALocationThatKeepsItOpen(t *testing.T) {
 	locs := nginxLocations(t)
-	stream := streamOnlyRouter()
+	stream := roleRouter(config.RoleStream)
 	for _, path := range []string{
 		// as the screens open them (PodExecTerminal, PodLogsTab, LogFilesView, NodeShellTerminal)
 		"/api/v1/cluster/namespaces/default/pods/web-0/exec/ws",
