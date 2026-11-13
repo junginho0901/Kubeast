@@ -1394,6 +1394,8 @@ export interface DeploymentInfo {
   name: string
   namespace: string
   replicas: number
+  // status.replicas: the pods its ReplicaSets hold, kubectl describe's "total"
+  current_replicas?: number
   ready_replicas: number
   available_replicas: number
   updated_replicas: number
