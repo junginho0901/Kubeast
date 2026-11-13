@@ -100,6 +100,8 @@ The inbox shows the alerts sent by Alertmanager (or Grafana alerting), **firing 
 
 Alerts come in through the same webhook as the investigation above, so `features.alertInvestigation.enabled` (with AI on) is required. To receive resolutions, set `send_resolved: true` (the default) on the webhook.
 
+Without it, or with AI off, a cluster with an alert store still has **Alerts** in the menu: the page says why no alerts come in, asks nothing of the inbox and shows the **Silences** tab.
+
 - **Who**: people who read the selected cluster without a Namespace limit (`resource.pod.read` on that cluster). This is the same rule as the AI alert tool and alert store reads.
   - The alert's AI investigation report can be opened here too, and each opening records `ai.investigation.view`.
 - **One row = one alert**: the same cluster, fingerprint and `startsAt`.

@@ -5297,6 +5297,7 @@
     "subtitle": "Alertmanager가 이 클러스터에 대해 보낸 알림을 울리는 중·해결됨 모두 보여 줍니다. 해결은 알림 규칙이 정하고, 여기의 처리 표시는 Kubeast 안에만 남습니다.",
     "refresh": "새로고침",
     "disabled": "이 설치에서 알림 웹훅이 꺼져 있어(features.alertInvestigation.enabled) 알림이 들어오지 않습니다.",
+    "disabledNoAI": "알림 웹훅은 AI가 있어야 하는 알림 조사의 일부인데, 이 설치에서는 AI가 꺼져 있어(ai.enabled) 알림이 들어오지 않습니다.",
     "forbidden": "알림은 클러스터 전체에 걸쳐 있어, 이 클러스터를 네임스페이스 제한 없이 읽을 수 있는 사용자에게만 보입니다.",
     "storeLimited": "Alertmanager 상태를 잠시 못 읽었습니다(요청 한도). {{seconds}}초 뒤 다시 읽습니다.",
     "storeFailed": "Alertmanager 상태를 읽지 못했습니다: {{reason}}",

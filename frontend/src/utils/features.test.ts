@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aiEnabled, alertInvestigationEnabled, costEnabled, logSearchEnabledFor, policyReportsEnabled, traceTemplates } from './features'
+import { aiEnabled, alertInvestigationEnabled, alertStoreEnabledFor, costEnabled, logSearchEnabledFor, policyReportsEnabled, traceTemplates } from './features'
 
 describe('aiEnabled', () => {
   it('is off only when the server says so', () => {
@@ -46,6 +46,17 @@ describe('logSearchEnabledFor', () => {
     expect(logSearchEnabledFor({ prometheus: { enabled: false }, logSearch: { enabled: false, clusters: ['self'] } }, 'self')).toBe(false)
     expect(logSearchEnabledFor({ prometheus: { enabled: false } }, 'self')).toBe(false)
     expect(logSearchEnabledFor(undefined, 'self')).toBe(false)
+  })
+})
+
+describe('alertStoreEnabledFor', () => {
+  it('is on only for a cluster the alert store holds, whatever alert investigation says', () => {
+    const on = { prometheus: { enabled: false }, alertInvestigation: { enabled: false }, alertStore: { enabled: true, clusters: ['default'], silences: true } }
+    expect(alertStoreEnabledFor(on, 'default')).toBe(true)
+    expect(alertStoreEnabledFor(on, 'self')).toBe(false)
+    expect(alertStoreEnabledFor(on, '')).toBe(false)
+    expect(alertStoreEnabledFor({ prometheus: { enabled: false }, alertStore: { enabled: false, clusters: ['default'] } }, 'default')).toBe(false)
+    expect(alertStoreEnabledFor(undefined, 'default')).toBe(false)
   })
 })
 

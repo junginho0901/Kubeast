@@ -33,6 +33,11 @@ export function networkFlowMonitorEnabledFor(features: ClusterFeatures | null | 
   return features?.networkFlowMonitor?.enabled === true && !!clusterId && (features.networkFlowMonitor.clusters ?? []).includes(clusterId)
 }
 
+// Chart features.alertStore for this cluster: Kubeast reads its Alertmanager (the Alerts page's live state and Silences tab). Unknown counts as off.
+export function alertStoreEnabledFor(features: ClusterFeatures | null | undefined, clusterId: string): boolean {
+  return features?.alertStore?.enabled === true && !!clusterId && (features.alertStore.clusters ?? []).includes(clusterId)
+}
+
 // Chart features.tracing: the URL templates of trace links, or undefined when off. Unknown counts as off.
 export function traceTemplates(features?: ClusterFeatures | null): { traceUrl?: string; searchUrl?: string } | undefined {
   const t = features?.tracing

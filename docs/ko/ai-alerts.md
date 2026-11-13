@@ -98,6 +98,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 
 Alertmanager(또는 Grafana 알림)가 보낸 알림을 **울리는 중인 것과 해결된 것 모두, 심각도와 상관없이** 클러스터마다 한 목록으로 보여 줍니다(메뉴 Core → **Alerts**).
 위 조사와 같은 웹훅으로 들어오므로 `features.alertInvestigation.enabled`(AI도 켜져 있어야 함)가 필요하고, 해결 소식을 받으려면 웹훅에 `send_resolved: true`(기본값)를 설정하세요.
+그것이 꺼져 있거나 AI가 꺼져 있어도 알림 저장소가 있는 클러스터에는 메뉴에 **Alerts**가 남습니다. 페이지는 알림이 들어오지 않는 이유를 말하고, 받은편지함은 묻지 않고, **무음** 탭을 보여 줍니다.
 
 - **누가**: 선택한 클러스터를 Namespace 제한 없이 읽을 수 있는 사람(그 클러스터의 `resource.pod.read`)이 봅니다. AI 알림 도구, 알림 저장소 읽기와 같은 기준입니다.
   - 그 알림의 AI 조사 보고서도 여기서 열 수 있고, 열 때마다 `ai.investigation.view`가 남습니다.
