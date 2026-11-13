@@ -9,8 +9,8 @@ import { test, expect, type Page } from '@playwright/test'
 // cluster the picker selects, not of the server's default cluster asked while the selection was empty; the card
 // shows at most 8 nodes, those not Ready first, and links to the Nodes page; the node bars put every node under its
 // readiness as kubectl prints it (a cordoned node under Ready, its card and window rows with both parts); the window
-// behind a stat card pages its list 50 at a time. The stand-in tests give the page lists dev does not have, through
-// page.route; the cordon test cordons test2's node for its run.
+// behind a stat card, the Issues window and the Storage window page their lists 50 at a time. The stand-in tests give
+// the page lists dev does not have, through page.route; the cordon test cordons test2's node for its run.
 
 const nodesCard = (page: Page) => page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Nodes', exact: true }) })
 const nodeNames = (page: Page) => nodesCard(page).locator('button p[title]').evaluateAll((els) => els.map((e) => e.getAttribute('title')))
@@ -186,6 +186,40 @@ test.describe('Dashboard lists', () => {
     await expect(page.getByTestId('resource-modal-total')).toHaveText(new RegExp(`^(${kept} of ${names.length}|${names.length}개 중 ${kept}개)$`))
     await page.getByPlaceholder(/Search|검색/).last().fill('')
     await expect(page.getByTestId('resource-modal-total')).toHaveText(new RegExp(`^(Total ${names.length}|총 ${names.length})$`))
+  })
+
+  test('the Issues and Storage windows page their rows 50 at a time, the kind headings keeping the whole count', async ({ page }) => {
+    const pad = (i: number) => String(i).padStart(3, '0')
+    // 70 pods and 50 Jobs with issues, 120 claims: the answers stood in, as a cluster in trouble gives them
+    const issues = [
+      ...Array.from({ length: 70 }, (_, i) => ({ id: `Pod/e2e-lists/e2e-ipod-${pad(i)}`, kind: 'Pod', namespace: 'e2e-lists', name: `e2e-ipod-${pad(i)}`, severity: 'warning', reason: 'BackOff' })),
+      ...Array.from({ length: 50 }, (_, i) => ({ id: `Job/e2e-lists/e2e-ijob-${pad(i)}`, kind: 'Job', namespace: 'e2e-lists', name: `e2e-ijob-${pad(i)}`, severity: 'warning', reason: 'BackoffLimitExceeded' })),
+    ]
+    await page.route(/\/api\/v1\/cluster\/issues(\?|$)/, (route) => route.fulfill({ json: { window_minutes: 60, generated_at: new Date().toISOString(), issues } }))
+    const pvcs = Array.from({ length: 120 }, (_, i) => ({ name: `e2e-claim-${pad(i)}`, namespace: 'e2e-lists', status: 'Bound', capacity: '1Gi', storage_class: 'standard', volume_name: `pv-${pad(i)}` }))
+    await page.route(/\/api\/v1\/cluster\/pvcs(\?|$)/, (route) => route.fulfill({ json: pvcs }))
+    const range = (testId: string) => page.getByTestId(testId).locator('div').first().innerText()
+
+    await page.goto('/')
+    await page.locator('button').filter({ hasText: /Check issues|이슈 확인/ }).first().click()
+    const rows = page.getByTestId('issue-row')
+    await expect.poll(() => range('issues-pager')).toMatch(/1-50 of 120|120개 중 1-50/)
+    await expect(rows).toHaveCount(50)
+    // the Pod heading counts all 70 pods while the page shows 50 of them
+    await expect(page.getByTestId('issues-kind-Pod').locator('h3 + span')).toHaveText('70')
+    await page.getByTestId('issues-pager').getByRole('button').last().click()
+    await expect.poll(() => range('issues-pager')).toMatch(/51-100 of 120|120개 중 51-100/)
+    await expect(page.getByTestId('issues-kind-Pod').getByTestId('issue-row')).toHaveCount(20)
+    await expect(page.getByTestId('issues-kind-Job').getByTestId('issue-row')).toHaveCount(30)
+    // a search starts again from the first page
+    await page.getByPlaceholder(/Search issues|이슈 검색/).fill('e2e-ijob-04')
+    await expect.poll(() => range('issues-pager')).toMatch(/1-10 of 10|10개 중 1-10/)
+    await page.keyboard.press('Escape')
+
+    await page.locator('button').filter({ hasText: /Storage analysis|스토리지 분석/ }).first().click()
+    await expect.poll(() => range('storage-pager')).toMatch(/1-50 of 120|120개 중 1-50/)
+    await expect(page.getByText('e2e-claim-049', { exact: true })).toBeVisible()
+    await expect(page.getByText('e2e-claim-050', { exact: true })).toHaveCount(0)
   })
 
   test('the Issues total says how many of how many while a search narrows the list', async ({ page }) => {
