@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
   AlertCircle,
+  Check,
   CheckCircle,
   ChevronDown,
   Copy,
@@ -65,6 +66,7 @@ interface Props {
   // Streaming state
   isStreaming: boolean
   copied: boolean
+  copyFailed: boolean
   fullMarkdown: string
   observedMarkdown: string
   answerMarkdown: string
@@ -104,6 +106,7 @@ export function OptimizationModal({
   tableError,
   isStreaming,
   copied,
+  copyFailed,
   fullMarkdown,
   observedMarkdown,
   answerMarkdown,
@@ -375,13 +378,20 @@ export function OptimizationModal({
               <button
                 onClick={onCopy}
                 disabled={!fullMarkdown}
-                className="h-9 px-3 rounded-lg text-xs font-medium transition-colors bg-slate-700 hover:bg-slate-600 text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
-                title={tr('dashboard.optimization.copyTitle', 'Copy result')}
+                className={`h-9 px-3 rounded-lg text-xs font-medium transition-colors bg-slate-700 hover:bg-slate-600 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2 ${
+                  copied ? 'text-emerald-300' : copyFailed ? 'text-red-400' : 'text-slate-200'
+                }`}
+                title={copyFailed
+                  ? t('common.copyFailed', { defaultValue: 'Not copied: the browser did not take it. Select the text and copy it yourself.' })
+                  : tr('dashboard.optimization.copyTitle', 'Copy result')}
+                data-testid="optimization-copy"
               >
-                <Copy className="w-4 h-4" />
+                {copied ? <Check className="w-4 h-4" /> : copyFailed ? <X className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 {copied
                   ? tr('dashboard.optimization.copied', 'Copied')
-                  : tr('dashboard.optimization.copy', 'Copy')}
+                  : copyFailed
+                    ? t('common.notCopied', { defaultValue: 'Not copied' })
+                    : tr('dashboard.optimization.copy', 'Copy')}
               </button>
             </div>
           </div>
