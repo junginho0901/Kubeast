@@ -42,15 +42,15 @@ export function ModalFrame({ title, subtitle, icon, size = 'md', onClose, busy, 
         aria-modal="true"
         aria-labelledby={titleId}
         data-testid={testId}
-        className={`w-full ${WIDTH[size]} max-h-[calc(100vh-2rem)] flex flex-col rounded-xl border border-slate-700 bg-slate-900 shadow-2xl`}
+        className={`w-full ${WIDTH[size]} max-h-[calc(100vh-2rem)] flex flex-col rounded-xl border border-hairline bg-slate-800 shadow-xl`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4">
+        <div className="flex shrink-0 items-start justify-between gap-4 px-5 pt-5 pb-4">
           <div className="flex items-start gap-3 min-w-0">
             {icon}
             <div className="min-w-0">
-              <h2 id={titleId} className="text-lg font-semibold text-ink break-keep">{title}</h2>
-              {subtitle && <p className="mt-1 text-sm text-slate-400 break-keep">{subtitle}</p>}
+              <h2 id={titleId} className="text-lg font-semibold text-ink [overflow-wrap:anywhere]">{title}</h2>
+              {subtitle && <p className="mt-1 text-sm text-slate-400 [overflow-wrap:anywhere]">{subtitle}</p>}
             </div>
           </div>
           <button
@@ -58,14 +58,14 @@ export function ModalFrame({ title, subtitle, icon, size = 'md', onClose, busy, 
             onClick={close}
             disabled={busy}
             aria-label={t('common.close', { defaultValue: 'Close' })}
-            className="shrink-0 rounded-lg p-1 text-slate-400 hover:text-ink hover:bg-slate-800 disabled:opacity-50"
+            className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:text-ink hover:bg-slate-700 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
-        {children && <div className={`px-6 pb-1 ${BODY[body]}`}>{children}</div>}
-        <div className="flex items-center justify-end gap-2 px-6 pt-4 pb-5">
-          {footerStart && <div className="mr-auto min-w-0 text-sm text-slate-400">{footerStart}</div>}
+        {children && <div className={`min-w-0 px-5 pb-1 ${BODY[body]}`}>{children}</div>}
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 px-5 pt-4 pb-5">
+          {footerStart && <div className="mr-auto min-w-0 text-sm text-slate-400 [overflow-wrap:anywhere]">{footerStart}</div>}
           {footer}
         </div>
       </div>

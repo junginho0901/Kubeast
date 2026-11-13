@@ -113,7 +113,7 @@ export default function ResourceYamlCreateDialog({
         </>
       }
     >
-      <div className="border border-slate-700 rounded-lg overflow-hidden" style={{ height: yamlEditorHeight(yaml) }}>
+      <div className="border border-control rounded-lg overflow-hidden" style={{ height: yamlEditorHeight(yaml) }}>
         <Editor
           height="100%"
           theme="vs-dark"
