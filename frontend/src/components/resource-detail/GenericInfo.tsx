@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, Tx } from './DetailCommon'
+import { DescribeFailure } from './DescribeFailure'
 import { fmtRel, fmtTs } from './detailFormat'
 import { genericObjectLayer } from './drawerObjectLayer'
 import { kindToPlural } from './utils'
@@ -41,6 +42,8 @@ export default function GenericInfo({ name, namespace, kind, rawJson }: Props) {
 
   return (
     <>
+      {/* a describe that failed: the reason, and that what shows is the object as it was read, not its describe */}
+      <DescribeFailure error={describe ? null : error} showingRow className="mb-2" />
       <InfoSection title="Basic Info">
         <div className="space-y-2">
           <InfoRow label="Kind" value={kind} />
