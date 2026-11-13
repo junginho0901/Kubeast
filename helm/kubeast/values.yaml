@@ -567,6 +567,21 @@ replicas:
   frontend: 1
   toolServer: 1
   gateway: 1
+# --- Terminals and followed logs on their own server ---
+# Off: k8s-service serves everything, as before. On: a second Deployment of the
+# same image, k8s-service-stream (SERVER_ROLE stream), takes pod exec, the node
+# shell and the followed logs, and k8s-service (SERVER_ROLE api) the rest, so a
+# rollout of either does not cut the other's connections and a crowd of
+# terminals does not slow the lists. The gateway sends those paths to the new
+# Service. When k8s-service-stream is replaced it ends the followed logs at once
+# (the browser reconnects and goes on after the last line), tells each terminal
+# when it will close, and waits drainSeconds for them before closing the rest.
+# sessionRecording.storage file is refused with it (s3 or database).
+streams:
+  enabled: false
+  replicas: 1        # must stay 1 for now (recording recovery, client caches)
+  drainSeconds: 60   # how long open terminals get to end on their own
+  preStopSeconds: 10 # out of the Service's endpoints before the drain starts
 # PDB is off while replicas are 1 (a minAvailable PDB would block node drains).
 pdb:
   enabled: false
@@ -585,6 +600,10 @@ resources:
     limits: { memory: 1Gi }
   # 1Gi when many people use a large cluster at once: docs/architecture.md "Many different people on a large cluster".
   k8sService:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  # streams.enabled only; not measured yet, k8sService's for a start
+  k8sServiceStream:
     requests: { cpu: 100m, memory: 128Mi }
     limits: { memory: 512Mi }
   sessionService:

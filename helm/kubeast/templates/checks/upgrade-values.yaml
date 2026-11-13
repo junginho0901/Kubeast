@@ -12,7 +12,7 @@ says when a path belongs there.
 {{- else if and .Values.chartVersion (ne (toString .Values.chartVersion) .Chart.Version) }}
 {{- fail (printf "the values say chartVersion %s and this chart is %s: they come from an earlier Kubeast chart, kept by --reuse-values or by a values file copied from it. %s Leave chartVersion and global.imageTag out of a values file of your own." (toString .Values.chartVersion) .Chart.Version $hint) }}
 {{- end }}
-{{- range list "features.networkFlowMonitor" "multicluster.clientQPS" }}
+{{- range list "features.networkFlowMonitor" "multicluster.clientQPS" "streams" }}
 {{- $node := $.Values }}
 {{- $found := true }}
 {{- range splitList "." . }}

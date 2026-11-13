@@ -135,6 +135,10 @@ replicas:
   gateway: 1
 pdb:
   enabled: false
+# 터미널과 실시간 로그를 따로 맡는 서버, 기본 꺼짐(docs/ko/operations.md "터미널과 실시간 로그를 따로 맡는 서버")
+streams:
+  enabled: false
+  drainSeconds: 60       # 그 서버가 교체될 때 열린 터미널을 기다리는 시간
 topologySpread:
   enabled: true
 resources:               # 컨테이너별 requests / memory limit(전체 목록은 values.yaml)

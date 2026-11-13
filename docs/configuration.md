@@ -137,6 +137,11 @@ replicas:
   gateway: 1
 pdb:
   enabled: false
+# Terminals and followed logs on a server of their own, off by default (docs/operations.md
+# "Terminals and followed logs on their own server")
+streams:
+  enabled: false
+  drainSeconds: 60       # how long open terminals get to end when that server is replaced
 topologySpread:
   enabled: true
 resources:               # per-container requests / memory limit (the full list is in values.yaml)

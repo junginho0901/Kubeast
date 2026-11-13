@@ -45,6 +45,7 @@ NGINX 게이트웨이가 모든 요청을 받아 각 마이크로서비스로 �
 | `auth-service` | Go | 8004 | 인증, JWT/JWKS, 조직/팀/RBAC, 클러스터 레지스트리 |
 | `ai-service` | Python (FastAPI) | 8001 | LLM 연동, 스트리밍 채팅, 최적화 제안, Tool calling |
 | `k8s-service` | Go | 8002 | K8s 리소스 CRUD, WS 로그/exec, 토폴로지, Helm, GPU/DRA, 멀티클러스터 풀 |
+| `k8s-service-stream` | Go | 8002 | `streams.enabled`일 때만: k8s-service와 같은 이미지(`SERVER_ROLE=stream`)로 Pod exec·노드 셸·실시간 로그를 맡음 |
 | `session-service` | Go | 8003 | 채팅 세션 / 메시지 기록 |
 | `tool-server` | Go | — | AI 도구 호출 백엔드 (kubectl 실행) |
 | `model-config-controller` | Go (controller-runtime) | — | `ModelConfig` CRD 컨트롤러 |

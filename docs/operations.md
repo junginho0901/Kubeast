@@ -351,6 +351,31 @@ features:
 For development (kind): run `scripts/kind-logsearch.sh up`, then `scripts/kind-tracing.sh up`. This puts Jaeger 2.22 in the second cluster.
 The links open at `localhost:16686` after `kubectl port-forward -n tracing svc/jaeger 16686` (kubeast-b).
 
+## Terminals and followed logs on their own server
+
+With `streams.enabled: true` a second Deployment, `k8s-service-stream`, runs the same image as k8s-service in another role (`SERVER_ROLE=stream`, as Loki and Mimir run one binary with `-target`).
+It serves pod exec, the node shell and the followed logs (a container's output, a log file); k8s-service (`SERVER_ROLE=api`) serves everything else, the live lists included.
+The gateway sends the four stream locations of `files/nginx.conf` to the new Service, so a rollout of one does not cut the other's connections and many open terminals do not slow the lists.
+Off (the default), k8s-service serves everything, as before.
+
+```yaml
+streams:
+  enabled: true
+  drainSeconds: 60     # how long open terminals get to end on their own
+  preStopSeconds: 10   # out of the Service's endpoints before the drain starts
+resources:
+  k8sServiceStream:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
+```
+
+- **When k8s-service-stream is replaced** (a rollout, a node drain): the new pod is ready first (`maxSurge: 1`, `maxUnavailable: 0`). The old one waits `preStopSeconds`, then on SIGTERM answers `/ready` with 503, ends the followed logs at once — the browser reconnects and goes on after the last line it got — and writes on each terminal when it will close. A terminal still open after `drainSeconds` is closed with that reason (close code 1001, `server_shutdown`) and offers Reconnect. `terminationGracePeriodSeconds` is `preStopSeconds + drainSeconds + 15`.
+- **Same identity**: both Deployments use the `k8s-service` service account, so the IRSA role and the recording store's credentials (`sessionRecording.secret`) apply to both: the stream server writes the recordings, k8s-service reads them. The spool volume is mounted on the stream server only.
+- **Refused with it**: `sessionRecording.storage: file` (one volume, two pods) and `streams.replicas` above 1.
+- **NetworkPolicy**: `k8s-service-stream` takes connections from the gateway only, and reaches the database, Redis, auth-service, the clusters' API servers and `sessionRecording.egress`.
+- **In front of the gateway**: a load balancer's deregistration delay should end before the gateway pod does (AWS ALB: 300 s by default), and an Envoy Gateway route to the console should not cut a stream at its request timeout (15 s by default).
+- **Metrics**: `kubeast_terminals_open` and `kubeast_followed_logs_open` on each server.
+
 ## Adding trusted CAs (private CAs, TLS-intercepting proxies)
 
 For outbound TLS (Loki, external Prometheus, OIDC issuer, Google API, audit sinks, LLM endpoints), Kubeast services trust only the public CAs in the image.
