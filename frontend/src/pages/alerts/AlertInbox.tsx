@@ -116,6 +116,10 @@ export default function AlertInbox() {
   const limitedSeconds = storeLimitedSeconds(limitedUntil, now)
   // what the alert window says about Alertmanager now; while the features are not known yet, as loading
   const storeRead = { on: storeOn || !features.data, answer: store, failed: storeQuery.isError, limited: limitedSeconds }
+  // the last read failed for another reason than the request limit: the rows keep what the store said before, if it did
+  const storeFailed = storeQuery.isError && !storeLimited(storeQuery.error)
+    ? { reason: failureText(storeQuery.error), shownFrom: store ? storeQuery.dataUpdatedAt : null }
+    : null
   const cut = storeCut(store)
   const rows = data?.items ?? []
   const total = data?.total ?? 0
@@ -144,6 +148,10 @@ export default function AlertInbox() {
       alert_store_cut: cut ?? undefined,
       // the store refused the last read (the request limit): "live" is what it last said, or left out; when it is read again
       alert_store_limited: limitedUntil !== null ? { read_again_at: new Date(limitedUntil).toISOString() } : undefined,
+      // the last read of the store failed: "live" is what it said at shown_from, or left out
+      alert_store_failed: storeFailed
+        ? { reason: storeFailed.reason, shown_from: storeFailed.shownFrom !== null ? new Date(storeFailed.shownFrom).toISOString() : undefined }
+        : undefined,
       items: rows.map((r) => ({
         alertname: r.alertname, severity: r.severity, namespace: r.namespace || undefined, status: r.status,
         live: liveStateOf(r, store) ?? undefined, summary: r.summary || undefined, starts_at: r.starts_at,
@@ -152,7 +160,7 @@ export default function AlertInbox() {
         investigation_skip: r.investigation?.status === 'skipped' ? r.investigation.skip_reason || undefined : undefined,
       })),
     },
-  } : null, [data, store, currentCluster, limitedUntil])
+  } : null, [data, store, currentCluster, limitedUntil, storeFailed?.reason, storeFailed?.shownFrom])
 
   const statusLabel = (s: string) => tr(`alertInbox.status.${s}`, s)
   const tab = (value: string, label: string, count?: number) => (
@@ -201,6 +209,14 @@ export default function AlertInbox() {
       {limitedSeconds !== null && !showSilences && (
         <div className="shrink-0 rounded-lg border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-sm text-amber-200" data-testid="alert-store-limited">
           {tr('alertInbox.storeLimited', 'Alertmanager\'s state could not be read for now (request limit). Reading again in {{seconds}} s.', { seconds: limitedSeconds })}
+        </div>
+      )}
+
+      {storeFailed && !showSilences && (
+        <div className="shrink-0 rounded-lg border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-sm text-amber-200" data-testid="alert-store-failed">
+          {storeFailed.shownFrom !== null
+            ? tr('alertInbox.storeFailedShown', 'Alertmanager\'s state could not be read: {{reason}}. What it said at {{time}} is shown.', { reason: storeFailed.reason, time: formatTime(storeFailed.shownFrom) })
+            : tr('alertInbox.storeFailed', 'Alertmanager\'s state could not be read: {{reason}}', { reason: storeFailed.reason })}
         </div>
       )}
 

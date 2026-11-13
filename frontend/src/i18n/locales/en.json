@@ -4681,6 +4681,8 @@
     "disabled": "The alert webhook is off on this installation (features.alertInvestigation.enabled), so no alerts come in.",
     "forbidden": "Alerts cover the whole cluster: they are shown to users who can read this cluster without a namespace limit.",
     "storeLimited": "Alertmanager's state could not be read for now (request limit). Reading again in {{seconds}} s.",
+    "storeFailed": "Alertmanager's state could not be read: {{reason}}",
+    "storeFailedShown": "Alertmanager's state could not be read: {{reason}}. What it said at {{time}} is shown.",
     "storeCut": "The alert store sent the first {{listed}} of its {{total}} alerts for this cluster (its limit, alertStore.maxAlerts): for an alert not among them, what Alertmanager says now is not shown.",
     "status": {
       "firing": "Firing",
