@@ -1,3 +1,9 @@
 {
-  "rules": []
+  "rules": [
+    {
+      "screen": "^\\w+ · /admin/(organizations|roles|clusters) on ",
+      "why": "Teams, Roles and Clusters have a search box above their list, which takes a row of the fitted table.",
+      "pr": "fix/w3-screen-search"
+    }
+  ]
 }
