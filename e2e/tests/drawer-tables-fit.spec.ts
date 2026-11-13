@@ -44,7 +44,7 @@ spec:
   selector: { app: fit-web }
   ports:
     - { name: http, port: 80, targetPort: 8080, appProtocol: kubernetes.io/h2c }
-    - { name: metrics-endpoint, port: 9090, targetPort: metrics-endpoint, protocol: TCP }
+    - { name: metrics-endpoint, port: 9090, targetPort: metrics-http, protocol: TCP }
     - { name: dns, port: 53, targetPort: 5353, protocol: UDP }
 ---
 apiVersion: policy/v1
