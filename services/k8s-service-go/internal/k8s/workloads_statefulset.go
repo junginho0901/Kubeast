@@ -146,7 +146,7 @@ func (s *Service) DescribeStatefulSet(ctx context.Context, namespace, name strin
 	result["volume_claim_templates"] = vcts
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(sts.UID))
 
 	// Conditions
 	conditions := make([]map[string]interface{}, 0, len(sts.Status.Conditions))

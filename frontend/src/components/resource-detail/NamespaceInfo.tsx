@@ -7,6 +7,7 @@ import { Search } from 'lucide-react'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, SummaryBadge, Th, NoneText, Tx, ObjectUnreadable } from './DetailCommon'
 import { eventsNewestFirst, fmtRel, fmtTs } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
+import { drawerEventSelector } from './useDrawerFollowsEvents'
 import { namespacePodBadge, namespacePodsLayer } from './namespacePods'
 import { ResourceLink } from './ResourceLink'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
@@ -104,11 +105,13 @@ export default function NamespaceInfo({ name }: Props) {
     return items
   }
 
+  // the events naming the namespace's UID, as the answer keeps them
+  const nsUid = (nsDescribe as { uid?: string } | undefined)?.uid
   useKubeWatchList({
-    enabled: !!name,
+    enabled: !!name && !!nsUid,
     queryKey: ['namespace-events', name],
     path: '/api/v1/events',
-    query: `watch=1&fieldSelector=${encodeURIComponent(`involvedObject.kind=Namespace,involvedObject.name=${name}`)}`,
+    query: `watch=1&fieldSelector=${encodeURIComponent(drawerEventSelector('Namespace', name, nsUid))}`,
     applyEvent: applyNsEvent,
   })
 

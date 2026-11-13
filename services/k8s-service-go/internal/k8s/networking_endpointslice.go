@@ -40,7 +40,7 @@ func (s *Service) DescribeEndpointSlice(ctx context.Context, namespace, name str
 	}
 
 	result := endpointslice.Info(es)
-	s.setObjectEvents(ctx, result, namespace, "EndpointSlice", name)
+	s.setObjectEvents(ctx, result, namespace, "EndpointSlice", name, about(es.UID))
 	return result, nil
 }
 

@@ -4099,6 +4099,7 @@
     "system_uuid": ""
    },
    "taints": [],
+   "uid": "",
    "unschedulable": false,
    "version": "v1.37.0",
    "volumes_attached": [],
@@ -4241,6 +4242,7 @@
     "system_uuid": ""
    },
    "taints": [],
+   "uid": "",
    "unschedulable": false,
    "version": "v1.37.0",
    "volumes_attached": [],
@@ -4338,6 +4340,7 @@
     "system_uuid": ""
    },
    "taints": [],
+   "uid": "",
    "unschedulable": false,
    "version": "v1.37.0",
    "volumes_attached": [],
@@ -4490,6 +4493,7 @@
      "value": ""
     }
    ],
+   "uid": "",
    "unschedulable": true,
    "version": "v1.37.0",
    "volumes_attached": [],

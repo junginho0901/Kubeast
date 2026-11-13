@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
 import { applyWatchMessage } from '@/services/useKubeWatchList'
-import { applyEventFrame } from './useDrawerFollowsEvents'
+import { applyEventFrame, drawerEventSelector, nodeEventNamesNode } from './useDrawerFollowsEvents'
 import useWorkloadDataSrc from './workload-info/useWorkloadData.ts?raw'
 import hpaInfoSrc from './HPAInfo.tsx?raw'
 import podInfoSrc from './PodInfo.tsx?raw'
+import namespaceInfoSrc from './NamespaceInfo.tsx?raw'
+import useNodeDataSrc from './node-info/useNodeData.ts?raw'
 
 // an event as the answer lists it, told apart by reason here
 const row = (reason: string, count: number, last: string) => ({
@@ -90,12 +92,41 @@ describe('a frame of an event on the answer in the cache', () => {
   })
 })
 
+// kubectl describe lists an object's events by its name, kind and UID (client-go GetFieldSelector): the watch asks the
+// same, so an event of an earlier object of the same name does not join the table.
+describe('the events a drawer follows', () => {
+  it('names the object\'s UID beside its name and kind', () => {
+    expect(drawerEventSelector('Deployment', 'web', 'u-1')).toBe('involvedObject.kind=Deployment,involvedObject.name=web,involvedObject.uid=u-1')
+  })
+
+  it('names no UID for an object the answer gives none, as kubectl leaves it out', () => {
+    for (const uid of [undefined, '', null, 7]) expect(drawerEventSelector('Deployment', 'web', uid)).toBe('involvedObject.kind=Deployment,involvedObject.name=web')
+  })
+
+  it('keeps a node\'s frames to those naming its UID or its name', () => {
+    const frame = (uid?: string) => ({ reason: 'NodeReady', involved_object: { kind: 'Node', name: 'n1', namespace: '', uid } })
+    expect(nodeEventNamesNode(frame('node-uid'), 'n1', 'node-uid')).toBe(true)
+    expect(nodeEventNamesNode(frame('n1'), 'n1', 'node-uid')).toBe(true)
+    expect(nodeEventNamesNode(frame('old-node-uid'), 'n1', 'node-uid')).toBe(false)
+    expect(nodeEventNamesNode(frame(undefined), 'n1', 'node-uid')).toBe(false)
+    expect(nodeEventNamesNode(frame(''), 'n1', undefined)).toBe(false)
+  })
+})
+
 describe('the drawers whose events follow', () => {
-  it('a Pod\'s, as its own object in its own namespace', () => {
+  it('a Pod\'s, as its own object in its own namespace, a mirror pod\'s by its static pod\'s UID', () => {
     const hook = podInfoSrc.match(/useDrawerFollowsEvents\(\{[^}]*\}\)/)?.[0] ?? ''
     expect(hook).toContain("describeKey: ['pod-describe', namespace, name]")
     expect(hook).toContain('answer: podDescribe')
     expect(hook).toContain("kind: 'Pod'")
+    expect(hook).toContain("uid: podDescribe?.annotations?.['kubernetes.io/config.mirror']")
+  })
+
+  it('a Namespace\'s by its UID once the answer has it, and a Node\'s kept to its UID and name', () => {
+    expect(namespaceInfoSrc).toContain("drawerEventSelector('Namespace', name, nsUid)")
+    expect(namespaceInfoSrc).toContain('enabled: !!name && !!nsUid')
+    expect(useNodeDataSrc).toContain('if (!nodeEventNamesNode(obj, name, nodeUid)) return prev ?? items')
+    expect(useNodeDataSrc).toContain('enabled: !!name && !!nodeUid')
   })
 
   it('a workload\'s and an HPA\'s', () => {
