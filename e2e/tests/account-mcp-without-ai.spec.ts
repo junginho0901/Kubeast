@@ -3,7 +3,8 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 // The Settings page's API key card and the MCP options in it. With chart ai.enabled off there is no ai-service, and
 // /api/v1/ai/mcp/config is the gateway's 503 after its 3 s connect timeout: the card asks nothing of it and says in the
 // options' place that MCP needs AI. With AI on and ai-service not answering, the card says the gateway's reason there.
-// Both are stood in on cluster self (the features' ai.enabled, the MCP config's answer); nothing on the cluster moves.
+// The AI pages behind AIGate, opened by address with AI off, wait for the features and ask ai-service nothing.
+// All of it is stood in on cluster self (the features' ai.enabled, the MCP config's answer); nothing on the cluster moves.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -42,6 +43,20 @@ test.describe('the API key card when AI is off or does not answer', () => {
     // the gateway would have answered by now had it been asked
     await page.waitForTimeout(4_000)
     expect(asked, 'no request to the absent ai-service').toEqual([])
+  })
+
+  test('AI off: the AI pages opened by address show the notice and send no /api/v1/ai/ request', async ({ page }) => {
+    const asked: string[] = []
+    page.on('request', (r) => { const p = new URL(r.url()).pathname; if (p.startsWith('/api/v1/ai/')) asked.push(p) })
+    await page.route(FEATURES, async (route) => {
+      const res = await route.fetch()
+      await route.fulfill({ response: res, json: { ...(await res.json()), ai: { enabled: false }, alertInvestigation: { enabled: false } } })
+    })
+    for (const path of ['/ai-chat', '/admin/ai-models', '/admin/investigations']) {
+      await page.goto(`${path}?cluster=${CLUSTER}`)
+      await expect(page.getByTestId('ai-disabled-notice'), path).toContainText(/^(AI is off in this installation|이 설치에서는 AI가 꺼져 있습니다)/, { timeout: 20_000 })
+    }
+    expect(asked, 'nothing asked of the absent ai-service').toEqual([])
   })
 
   test('AI on, ai-service not answering: the gateway\'s reason in the options\' place', async ({ page }) => {

@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
-import type { ClusterFeatures } from '@/services/api/types'
-import { aiEnabled } from '@/utils/features'
+import { useAIState, useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { myRequestsKey, myRequestsQuery } from './myRequestPages'
 
 // The Settings page's Cluster access and API keys sections show only once the server has answered, and what follows
@@ -16,17 +14,11 @@ export function sectionsAnswered(reads: SectionRead[]): boolean {
   return reads.every((r) => !r.asked || r.fetched || r.failures > 0)
 }
 
-// MCP is asked once the features have come (their placeholder says nothing of AI) and AI is on: off, the gateway takes 3 s to answer 503.
-export type MCPRead = 'wait' | 'ask' | 'aiOff'
-export function mcpRead(features: ClusterFeatures | undefined, featuresPlaceholder: boolean): MCPRead {
-  if (featuresPlaceholder) return 'wait'
-  return aiEnabled(features) ? 'ask' : 'aiOff'
-}
-
+// MCP is asked once the features say AI is on: with AI off the gateway takes 3 s to answer 503.
 export function useMCPConfig() {
   const features = useClusterFeatures()
-  const state = mcpRead(features.data, features.isPlaceholderData)
-  const query = useQuery({ queryKey: ['ai', 'mcp-config'], queryFn: api.getMCPConfig, staleTime: 60_000, enabled: state === 'ask' })
+  const state = useAIState()
+  const query = useQuery({ queryKey: ['ai', 'mcp-config'], queryFn: api.getMCPConfig, staleTime: 60_000, enabled: state === 'on' })
   return { state, query, featuresFailures: features.failureCount }
 }
 
@@ -52,5 +44,5 @@ export function useAccountSectionsReady(): boolean {
     const timer = setTimeout(() => setWaited(true), MOST_WAIT_MS)
     return () => clearTimeout(timer)
   }, [])
-  return waited || sectionsAnswered([read(access), read(keys), { asked: true, fetched: mcp.state !== 'wait', failures: mcp.featuresFailures }, read(mcp.query, mcp.state === 'ask'), read(myRequests, accessOn), read(myRequestPage, accessOn), read(myKeys, keysOn)])
+  return waited || sectionsAnswered([read(access), read(keys), { asked: true, fetched: mcp.state !== 'wait', failures: mcp.featuresFailures }, read(mcp.query, mcp.state === 'on'), read(myRequests, accessOn), read(myRequestPage, accessOn), read(myKeys, keysOn)])
 }

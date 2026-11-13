@@ -138,17 +138,17 @@ export default function ApiKeysSection() {
         </button>
       </div>
 
-      {mcpState === 'aiOff' && (
+      {mcpState === 'off' && (
         <p className="mb-4 text-sm text-slate-400" data-testid="api-key-mcp-ai-off">
           {tr('apiKeys.mcp.aiOff', 'Connecting an AI agent (MCP) needs AI, which is off on this installation (ai.enabled).')}
         </p>
       )}
-      {mcpState === 'ask' && mcpQuery.isError && !mcp && (
+      {mcpState === 'on' && mcpQuery.isError && !mcp && (
         <p className="mb-4 text-sm text-slate-400" data-testid="api-key-mcp-failed">
           {tr('apiKeys.mcp.readFailed', 'Could not read whether AI agents (MCP) can connect: {{reason}}', { reason: failureText(mcpQuery.error) })}
         </p>
       )}
-      {mcpState !== 'aiOff' && mcp?.enabled && (
+      {mcpState !== 'off' && mcp?.enabled && (
         <div className="mb-4 rounded-lg border border-slate-700 bg-slate-900/40 p-3" data-testid="api-key-mcp">
           <div className="text-sm font-semibold text-slate-200">{tr('apiKeys.mcp.title', 'Connect an AI agent (MCP)')}</div>
           <p className="mt-1 text-sm text-slate-400">
