@@ -57,6 +57,32 @@
   }
 }
 
+/* Role names keep the current values inline, including local colour-mode scopes. */
+@theme inline {
+  --color-console-card-fill: var(--color-slate-800);
+  --color-console-card-line: color-mix(in oklab, var(--color-slate-700) 70%, transparent);
+  --spacing-console-card: calc(var(--spacing) * 6);
+  --color-console-secondary-fill: var(--color-slate-700);
+  --color-console-secondary-hover: var(--color-slate-600);
+  --color-console-row-line: var(--color-slate-600);
+  --spacing-console-sidebar-fade: 24px;
+  --color-console-success-fill: color-mix(in oklab, var(--color-green-500) 20%, transparent);
+  --color-console-success-line: color-mix(in oklab, var(--color-green-500) 30%, transparent);
+  --color-console-warning-fill: color-mix(in oklab, var(--color-yellow-500) 20%, transparent);
+  --color-console-warning-line: color-mix(in oklab, var(--color-yellow-500) 30%, transparent);
+  --color-console-error-fill: color-mix(in oklab, var(--color-red-500) 20%, transparent);
+  --color-console-error-line: color-mix(in oklab, var(--color-red-500) 30%, transparent);
+  --color-console-info-fill: color-mix(in oklab, var(--color-primary-500) 20%, transparent);
+  --color-console-info-line: color-mix(in oklab, var(--color-primary-500) 30%, transparent);
+  --color-console-neutral-fill: color-mix(in oklab, var(--color-slate-500) 20%, transparent);
+  --color-console-neutral-line: color-mix(in oklab, var(--color-slate-500) 30%, transparent);
+  --color-console-tool-fill: color-mix(in oklab, var(--color-slate-800) 50%, transparent);
+  --color-console-tool-line: var(--color-slate-600);
+  --color-console-tool-nested-fill: color-mix(in oklab, var(--color-slate-800) 30%, transparent);
+  --color-console-tool-nested-line: color-mix(in oklab, var(--color-slate-600) 50%, transparent);
+  --color-console-tool-code-fill: color-mix(in oklab, var(--color-slate-900) 50%, transparent);
+}
+
 /* Colour modes (DESIGN.md, utils/colorMode.ts): the data-color-mode attribute on <html> swaps the neutral ladders;
    utilities read the variables, so class names stay the same in every mode. gray-* takes the same ladder.
    default — deep navy: Tailwind's slate with the surfaces one step down, so the page is the sign-in ground
@@ -366,7 +392,7 @@ body {
 @layer components {
   /* flat: depth comes from the ladder's steps and a hairline, not a shadow */
   .card {
-    @apply bg-slate-800 rounded-xl p-6 border border-slate-700/70;
+    @apply bg-console-card-fill rounded-xl p-console-card border border-console-card-line;
   }
 
   .btn {
@@ -379,7 +405,7 @@ body {
   }
 
   .btn-secondary {
-    @apply bg-slate-700 hover:bg-slate-600 text-ink;
+    @apply bg-console-secondary-fill hover:bg-console-secondary-hover text-ink;
   }
 
   .badge {
@@ -457,7 +483,7 @@ body {
   /* A small action in a table row, on a card or in a drawer header (Test, Edit, Delete …): one size and shape on every
      screen; btn-row-danger is the one that deletes. */
   .btn-row {
-    @apply inline-flex items-center gap-1.5 rounded-lg border border-slate-600 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-slate-700/40 disabled:opacity-50;
+    @apply inline-flex items-center gap-1.5 rounded-lg border border-console-row-line px-2.5 py-1.5 text-xs text-slate-200 hover:bg-slate-700/40 disabled:opacity-50;
   }
   .btn-row-danger {
     @apply inline-flex items-center gap-1.5 rounded-lg border border-red-800/60 bg-red-950/20 px-2.5 py-1.5 text-xs text-red-200 hover:bg-red-950/40 disabled:opacity-50;
@@ -466,7 +492,7 @@ body {
   /* The sidebar menu scrolls: a fade over its bottom 24px shows that items go on below the account box. At the
      end of the list only the menu's own bottom padding (py-6 = 24px) sits under the fade. */
   .sidebar-nav {
-    mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - var(--spacing-console-sidebar-fade)), transparent);
   }
 
   /* useAdaptiveTable marks the scroll wrapper while the table overflows it:
@@ -504,24 +530,24 @@ body {
   }
 
   .badge-success {
-    @apply bg-green-500/20 text-green-400 border border-green-500/30;
+    @apply bg-console-success-fill text-green-400 border border-console-success-line;
   }
 
   .badge-warning {
-    @apply bg-yellow-500/20 text-yellow-400 border border-yellow-500/30;
+    @apply bg-console-warning-fill text-yellow-400 border border-console-warning-line;
   }
 
   .badge-error {
-    @apply bg-red-500/20 text-red-400 border border-red-500/30;
+    @apply bg-console-error-fill text-red-400 border border-console-error-line;
   }
 
   .badge-info {
-    @apply bg-primary-500/20 text-primary-300 border border-primary-500/30;
+    @apply bg-console-info-fill text-primary-300 border border-console-info-line;
   }
 
   /* a state that needs no attention (Idle: scaled to zero) */
   .badge-neutral {
-    @apply bg-slate-500/20 text-slate-300 border border-slate-500/30;
+    @apply bg-console-neutral-fill text-slate-300 border border-console-neutral-line;
   }
 }
 
@@ -572,7 +598,7 @@ body {
 
 /* Tool Call 스타일 - KAgent 스타일 (components/MarkdownDisclosure.tsx) */
 .prose .md-details {
-  @apply my-2 rounded-lg border border-slate-600 bg-slate-800/50 overflow-hidden;
+  @apply my-2 rounded-lg border border-console-tool-line bg-console-tool-fill overflow-hidden;
 }
 
 .prose .md-summary {
@@ -592,12 +618,12 @@ body {
 }
 
 .prose .md-details[data-open] > .md-summary {
-  @apply border-b border-slate-600;
+  @apply border-b border-console-tool-line;
 }
 
 /* 중첩된 details (Arguments, Results) */
 .prose .md-details .md-details {
-  @apply my-2 mx-4 rounded-sm border border-slate-600/50 bg-slate-800/30;
+  @apply my-2 mx-4 rounded-sm border border-console-tool-nested-line bg-console-tool-nested-fill;
 }
 
 .prose .md-details .md-details > .md-summary {
@@ -611,7 +637,7 @@ body {
 
 /* 코드 블록 스타일 - 가로 스크롤 가능하되 말풍선 너비 제한 */
 .prose .md-details pre {
-  @apply my-2 mx-4 rounded-sm bg-slate-900/50;
+  @apply my-2 mx-4 rounded-sm bg-console-tool-code-fill;
   overflow-x: auto !important;
   max-width: 100% !important;
   white-space: pre !important;
