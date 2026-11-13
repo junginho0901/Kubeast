@@ -286,7 +286,7 @@ export function ChatPanel({
       data-testid="floating-chat-panel"
       tabIndex={-1}
       onKeyDown={handleKeyDown}
-      className={`fixed bottom-6 right-6 z-1300 flex h-[min(70vh,640px)] w-[min(92vw,440px)] flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900/95 shadow-2xl shadow-black/40 backdrop-blur-sm transition-all duration-200 ease-out motion-reduce:transition-none origin-bottom-right focus:outline-hidden ${
+      className={`fixed bottom-6 right-6 z-1300 flex h-[min(70vh,640px)] w-[min(92vw,440px)] flex-col overflow-hidden rounded-xl border border-hairline bg-slate-900 shadow-xl transition-all duration-200 ease-out motion-reduce:transition-none origin-bottom-right focus:outline-hidden ${
         docked ? 'min-[1348px]:right-[756px] min-[1348px]:w-[min(440px,calc(100vw-1028px))]' : ''
       } ${
         visible
@@ -309,7 +309,7 @@ export function ChatPanel({
         <button
           type="button"
           onClick={onClose}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-ink"
           aria-label={t('floatingChat.closeAriaLabel', { defaultValue: 'Close' })}
         >
           <X className="h-4 w-4" />

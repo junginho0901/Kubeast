@@ -50,7 +50,7 @@ export function InputArea({ inputRef: ref, onSubmit, onStop, isStreaming, disabl
             ref.current?.focus()
           }}
           disabled={isStreaming}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
           aria-label={t('aiChat.newChat', { defaultValue: 'New Chat' })}
           title={t('aiChat.newChat', { defaultValue: 'New Chat' })}
         >
@@ -67,13 +67,13 @@ export function InputArea({ inputRef: ref, onSubmit, onStop, isStreaming, disabl
         placeholder={t('floatingChat.inputPlaceholder', { defaultValue: 'Ask about this page...' })}
         rows={1}
         disabled={disabled}
-        className="min-h-9 flex-1 resize-none rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-primary-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
+        className="min-h-9 min-w-0 flex-1 resize-none rounded-lg border border-control bg-slate-800 px-3 py-2 text-sm text-ink placeholder:text-slate-500 focus:border-primary-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
       />
       {isStreaming ? (
         <button
           type="button"
           onClick={onStop}
-          className="flex h-9 w-9 items-center justify-center rounded-md bg-red-600 text-white hover:bg-red-500"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-700"
           aria-label={t('floatingChat.stopAriaLabel', { defaultValue: 'Stop' })}
           title={t('floatingChat.stopAriaLabel', { defaultValue: 'Stop' })}
         >
@@ -83,7 +83,7 @@ export function InputArea({ inputRef: ref, onSubmit, onStop, isStreaming, disabl
         <button
           type="submit"
           disabled={disabled || value.trim().length === 0}
-          className="flex h-9 w-9 items-center justify-center rounded-md bg-primary-600 text-white hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
           aria-label={t('floatingChat.sendAriaLabel', { defaultValue: 'Send' })}
           title={t('floatingChat.sendAriaLabel', { defaultValue: 'Send' })}
         >

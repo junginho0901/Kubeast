@@ -30,7 +30,7 @@ export function ToggleButton({ onClick, visible, docked, buttonRef }: ToggleButt
       tabIndex={visible ? 0 : -1}
       aria-hidden={!visible}
       data-testid="floating-chat-toggle"
-      className={`fixed bottom-6 right-6 z-1300 flex h-12 w-12 items-center justify-center rounded-full bg-primary-600 text-white shadow-lg shadow-primary-900/40 transition-all duration-200 ease-out motion-reduce:transition-none hover:bg-primary-500 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-400 ${
+      className={`fixed bottom-6 right-6 z-1300 flex h-12 w-12 items-center justify-center rounded-xl border border-control bg-slate-800 text-primary-400 shadow-sm transition-all duration-200 ease-out motion-reduce:transition-none hover:bg-slate-700 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-400 ${
         docked ? 'min-[1348px]:right-[756px]' : ''
       } ${
         visible

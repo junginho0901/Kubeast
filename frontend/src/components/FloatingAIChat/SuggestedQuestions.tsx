@@ -54,7 +54,7 @@ export function SuggestedQuestions({ pageType, onPick }: SuggestedQuestionsProps
             key={q}
             type="button"
             onClick={() => onPick(q)}
-            className="text-left rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-xs text-slate-200 transition-colors hover:border-primary-500/60 hover:bg-primary-600/10 hover:text-primary-300"
+            className="text-left rounded-lg border border-control bg-slate-800 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-700 hover:text-ink"
           >
             {q}
           </button>
