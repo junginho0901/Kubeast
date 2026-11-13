@@ -90,6 +90,29 @@ helm uninstall kubeast -n kubeast      # K8s
 ./install-docker.sh --uninstall        # Docker
 ```
 
+`helm uninstall`은 데이터가 든 것을 남깁니다. 그래서 같은 네임스페이스에 릴리스를 다시 설치하면 이어서 씁니다.
+
+| 남는 것 | 담긴 것 |
+|---|---|
+| PersistentVolumeClaim `kubeast-postgres-data` | 데이터베이스(`postgresql.persistence.resourcePolicy: keep`) |
+| Secret `kubeast-secrets` | 데이터베이스·관리자 비밀번호, values에 넣은 AI 키, 웹훅·내부 토큰 |
+| Secret `kubeast-auth-keys` | 로그인 토큰에 서명하는 키 |
+| 레이블 `app.kubernetes.io/managed-by=kubeast`가 붙은 Secret | Kubeast가 등록한 클러스터마다 쓴 것: 그 kubeconfig, 저장소의 인증 헤더 |
+| CustomResourceDefinition `modelconfigs.ai.kubeast.io` | 리소스로 쓰는 AI 모델의 종류와 그 리소스 |
+| Namespace `kubeast` | Helm은 네임스페이스를 지우지 않습니다 |
+
+`helm uninstall` 뒤에 전부 지우려면:
+
+```bash
+kubectl delete namespace kubeast                  # 클레임과 Secret이 같이 지워짐
+kubectl delete crd modelconfigs.ai.kubeast.io     # ModelConfig가 전부 같이 지워짐
+```
+
+- 데이터베이스 볼륨은 클레임과 같이 지워집니다. StorageClass가 볼륨을 남기면(`reclaimPolicy: Retain`) PersistentVolume도 지우세요.
+- 직접 만든 Secret(`secrets.existingSecret`, `auth.signingKey.existingSecret`)과 외부 데이터베이스는 건드리지 않습니다.
+- 노드 셸을 켰다면, 노드 셸을 쓴 클러스터마다 네임스페이스 `kubeast-node-shell`이 남습니다([클러스터 요구 사항 §9](cluster-requirements.md#9-노드-셸)).
+- Docker: `--uninstall`은 컨테이너와 데이터베이스 볼륨을 지웁니다. 체크아웃 폴더의 `.env`(비밀번호·키가 든 파일)는 직접 지울 때까지 남습니다.
+
 ---
 
 ## 설치 후 첫 설정
