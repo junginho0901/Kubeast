@@ -90,7 +90,7 @@ export default function WorkloadReplicasSection({
         </InfoGrid>
       </InfoSection>
 
-      <PrometheusSection available={promWorkloadMetrics.available} title="Real-time Resource Usage">
+      <PrometheusSection available={promWorkloadMetrics.available} failure={promWorkloadMetrics.failure} title="Real-time Resource Usage">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           {getWorkloadMetric('cpu') !== null && (
             <MetricCard label="Total CPU" value={getWorkloadMetric('cpu')!} unit="m" thresholds={{ warn: 1000, danger: 2000 }} />

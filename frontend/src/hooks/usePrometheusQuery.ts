@@ -39,6 +39,14 @@ export function prometheusReadable(features: ClusterFeatures | undefined): boole
   return features?.prometheus?.enabled !== false && features?.prometheus?.namespaceLimited !== true
 }
 
+// A read's error when the cluster's Prometheus is set but did not answer — the server's 5xx (502 with its reason) or no
+// answer at all; null for anything else (a refusal is not the store's silence).
+export function prometheusNotAnswering(err: unknown): unknown {
+  if (!err) return null
+  const status = (err as { response?: { status?: number } }).response?.status
+  return status === undefined || status >= 500 ? err : null
+}
+
 /**
  * Generic hook for querying Prometheus via the backend proxy.
  * Returns { available, results } or undefined while loading.
@@ -108,14 +116,18 @@ export function usePrometheusQueries(
   const data: Record<string, PrometheusQueryResponse | undefined> = {}
   let isLoading = false
   let available = false
+  let failure: unknown = null
 
   for (let i = 0; i < queries.length; i++) {
     data[queries[i].name] = results[i].data
     if (results[i].isLoading) isLoading = true
     if (results[i].data?.available) available = true
+    if (failure === null) failure = prometheusNotAnswering(results[i].error)
   }
 
-  return { data, isLoading, available }
+  // A Prometheus that is set but did not answer is an error (the server's 502 and its reason); one the cluster
+  // does not have is `available: false` with no error, which the sections leave out as before.
+  return { data, isLoading, available, failure: available ? null : failure }
 }
 
 /**

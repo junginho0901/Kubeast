@@ -28,6 +28,7 @@ export default function GPUDashboard() {
     data,
     metrics,
     metricsAvailable,
+    metricsFailure,
     gpusByHost,
     allocationRate,
     devicePlugins,
@@ -170,6 +171,7 @@ export default function GPUDashboard() {
 
       <RealtimeMetricsSection
         metricsAvailable={metricsAvailable}
+        metricsFailure={metricsFailure}
         metrics={metrics}
         gpusByHost={gpusByHost}
         gpuPodKeys={gpuPodKeys}

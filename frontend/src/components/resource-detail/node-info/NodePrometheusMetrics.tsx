@@ -26,7 +26,7 @@ export default function NodePrometheusMetrics({ name, addresses = [], tr }: Node
   }
 
   return (
-    <PrometheusSection available={promNodeMetrics.available} title={tr('nodes.detail.prometheus', 'Real-time Metrics')}>
+    <PrometheusSection available={promNodeMetrics.available} failure={promNodeMetrics.failure} title={tr('nodes.detail.prometheus', 'Real-time Metrics')}>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
         {findNodeValue('cpu') !== null && (
           <MetricCard label="CPU Usage" value={findNodeValue('cpu')!} unit="%" />

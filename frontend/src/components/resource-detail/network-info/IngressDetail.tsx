@@ -188,7 +188,7 @@ function IngressLatencyMetrics({ name, namespace }: { name: string; namespace?: 
   const unit = useMs ? 'ms' : 's'
 
   return (
-    <PrometheusSection available={metrics.available} title="Response Time">
+    <PrometheusSection available={metrics.available} failure={metrics.failure} title="Response Time">
       {!hasAny ? (
         <div className="text-[11px] text-slate-500">
           <Tx>Requires nginx-ingress-controller with metrics scraped.</Tx></div>

@@ -14,7 +14,7 @@ import { DashboardTopResources } from './DashboardTopResources'
 import { DashboardPodNodeStatus } from './DashboardPodNodeStatus'
 import { DashboardNodeList } from './DashboardNodeList'
 import { StatsGrid } from './StatsGrid'
-import { PrometheusClusterMetrics } from './PrometheusClusterMetrics'
+import { PrometheusClusterMetrics, PrometheusClusterMetricsFailure } from './PrometheusClusterMetrics'
 import { namespaceCounts } from './namespaceCounts'
 import { issueTarget } from './issues'
 import { IssuesModal } from './modals/IssuesModal'
@@ -494,7 +494,7 @@ export function DashboardBody() {
         onNodeStatusClick={handleNodeStatusClick}
       />
 
-      {promCluster.available && (
+      {promCluster.available ? (
         <PrometheusClusterMetrics
           title={tr('dashboard.clusterMetrics', 'Cluster Resource Utilization')}
           cpu={getClusterMetric('cpu')}
@@ -503,7 +503,9 @@ export function DashboardBody() {
           podCount={getClusterMetric('pod_count')}
           podCapacity={getClusterMetric('pod_capacity')}
         />
-      )}
+      ) : promCluster.failure ? (
+        <PrometheusClusterMetricsFailure title={tr('dashboard.clusterMetrics', 'Cluster Resource Utilization')} failure={promCluster.failure} />
+      ) : null}
 
       <DashboardTopResources
         topResources={topResources}
