@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
+import type { ClusterFeatures } from '@/services/api/types'
 import { aiEnabled } from '@/utils/features'
 import { myRequestsKey, myRequestsQuery } from './myRequestPages'
 
@@ -15,6 +16,20 @@ export function sectionsAnswered(reads: SectionRead[]): boolean {
   return reads.every((r) => !r.asked || r.fetched || r.failures > 0)
 }
 
+// MCP is asked once the features have come (their placeholder says nothing of AI) and AI is on: off, the gateway takes 3 s to answer 503.
+export type MCPRead = 'wait' | 'ask' | 'aiOff'
+export function mcpRead(features: ClusterFeatures | undefined, featuresPlaceholder: boolean): MCPRead {
+  if (featuresPlaceholder) return 'wait'
+  return aiEnabled(features) ? 'ask' : 'aiOff'
+}
+
+export function useMCPConfig() {
+  const features = useClusterFeatures()
+  const state = mcpRead(features.data, features.isPlaceholderData)
+  const query = useQuery({ queryKey: ['ai', 'mcp-config'], queryFn: api.getMCPConfig, staleTime: 60_000, enabled: state === 'ask' })
+  return { state, query, featuresFailures: features.failureCount }
+}
+
 // A read that hangs does not keep the page's settings away for long.
 const MOST_WAIT_MS = 1000
 
@@ -22,8 +37,7 @@ const MOST_WAIT_MS = 1000
 export function useAccountSectionsReady(): boolean {
   const access = useQuery({ queryKey: ['access-requests', 'config'], queryFn: api.getAccessRequestsConfig, staleTime: 60_000 })
   const keys = useQuery({ queryKey: ['api-keys', 'config'], queryFn: api.getAPIKeysConfig, staleTime: 60_000 })
-  const aiOn = aiEnabled(useClusterFeatures().data)
-  const mcp = useQuery({ queryKey: ['ai', 'mcp-config'], queryFn: api.getMCPConfig, staleTime: 60_000, enabled: aiOn })
+  const mcp = useMCPConfig()
   const accessOn = !!access.data?.enabled
   const keysOn = !!keys.data?.enabled
   const myRequests = useQuery({ queryKey: ['access-requests', 'mine'], queryFn: api.listMyAccessRequests, enabled: accessOn })
@@ -38,5 +52,5 @@ export function useAccountSectionsReady(): boolean {
     const timer = setTimeout(() => setWaited(true), MOST_WAIT_MS)
     return () => clearTimeout(timer)
   }, [])
-  return waited || sectionsAnswered([read(access), read(keys), read(mcp, aiOn), read(myRequests, accessOn), read(myRequestPage, accessOn), read(myKeys, keysOn)])
+  return waited || sectionsAnswered([read(access), read(keys), { asked: true, fetched: mcp.state !== 'wait', failures: mcp.featuresFailures }, read(mcp.query, mcp.state === 'ask'), read(myRequests, accessOn), read(myRequestPage, accessOn), read(myKeys, keysOn)])
 }
