@@ -281,7 +281,7 @@ export default function NamespaceInfo({ name }: Props) {
       )}
 
       {/* Prometheus Real-time Namespace Metrics */}
-      <PrometheusSection available={promNsMetrics.available} title="Real-time Resource Usage">
+      <PrometheusSection available={promNsMetrics.available} failure={promNsMetrics.failure} title="Real-time Resource Usage">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {getNsMetricValue('cpu') !== null && (
             <MetricCard label="CPU Usage" value={getNsMetricValue('cpu')!} unit="m" thresholds={{ warn: 2000, danger: 4000 }} />

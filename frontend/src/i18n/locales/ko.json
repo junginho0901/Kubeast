@@ -2389,6 +2389,7 @@
     "cpu": "CPU",
     "memory": "메모리",
     "metricMissing": "Prometheus에 {{what}} 데이터가 없습니다",
+    "prometheusNotAnswering": "Prometheus가 응답하지 않았습니다: {{reason}}",
     "podsSource": "Node에 올라가 끝나지 않은 Pod 수(클러스터 Prometheus · kube-state-metrics, namespace/pod마다 한 번) / Node들이 받을 수 있는 Pod 수(allocatable). 위 Pods 카드는 Kubernetes API의 모든 Pod를 셉니다.",
     "topNodes": {
       "title": "리소스 사용 상위 3개 Node",
@@ -4107,6 +4108,7 @@
       "live": "실시간",
       "detectedOne": "GPU {{n}}개 감지",
       "detected": "GPU {{n}}개 감지",
+      "notAnswering": "Prometheus가 응답하지 않았습니다: {{reason}}",
       "core": "코어",
       "mem": "메모리",
       "temp": "온도",
@@ -5061,6 +5063,7 @@
     "Backend Pod Resource Usage": "백엔드 Pod 리소스 사용량",
     "Real-time Resource Usage": "실시간 리소스 사용량",
     "Metrics from the cluster's Prometheus need a grant on the whole cluster.": "클러스터의 Prometheus 지표는 클러스터 전체 권한이 있어야 볼 수 있습니다.",
+    "Prometheus did not answer: {{reason}}": "Prometheus가 응답하지 않았습니다: {{reason}}",
     "Not shown: the {{n}} pods behind this Service are more than one Prometheus query can name.": "표시하지 않습니다. 이 Service 뒤의 Pod {{n}}개는 Prometheus 질의 하나에 다 담을 수 없습니다.",
     "Scaling History (24h)": "스케일링 이력 (24시간)",
     "Response Time": "응답 시간",
