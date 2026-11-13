@@ -7,7 +7,8 @@ global:
 
 # The chart version these defaults belong to, which the release writes. Values holding another (an upgrade with
 # --reuse-values, or a values file copied from `helm show values`) stop the upgrade with the --reset-then-reuse-values
-# hint (templates/checks/upgrade-values.yaml). Leave it out of a values file of your own.
+# hint (templates/checks/upgrade-values.yaml), and so does a global.imageTag of another release (vX.Y.Z), which a values
+# file copied from 0.7.6 or earlier holds. Leave both out of a values file of your own.
 chartVersion: ""
 
 # --- Admin account (created on first boot) ---
