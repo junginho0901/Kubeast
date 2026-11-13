@@ -78,6 +78,12 @@ func (h *RoleHandler) roleNameConflict(ctx context.Context, name string, id int)
 		if other.ID == id || auth.RoleGroupSlug(other.Name) != slug {
 			continue
 		}
+		if other.Name == name && other.IsSystem {
+			return fmt.Sprintf("Role %q already exists: it is a built-in role", name), nil
+		}
+		if other.Name == name {
+			return fmt.Sprintf("Role %q already exists. Choose another name", name), nil
+		}
 		if other.IsSystem {
 			return fmt.Sprintf("Role name %q is taken: it is the built-in role %s apart from letter case or spaces", name, other.Name), nil
 		}

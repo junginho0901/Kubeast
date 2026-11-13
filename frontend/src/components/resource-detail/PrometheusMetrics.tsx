@@ -1,4 +1,5 @@
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
+import { failureText } from '@/utils/failureText'
 import { Tx } from './DetailCommon'
 
 /**
@@ -83,10 +84,13 @@ export function PrometheusSection({
   available,
   title,
   children,
+  failure = null,
 }: {
   available: boolean
   title: string
   children: React.ReactNode
+  // the query's error when the cluster's Prometheus is set but did not answer
+  failure?: unknown
 }) {
   const features = useClusterFeatures()
   if (features.data?.prometheus?.namespaceLimited) {
@@ -94,6 +98,14 @@ export function PrometheusSection({
       <div className="mt-4 rounded-lg border border-slate-700/50 bg-slate-800/30 p-4" data-testid="prometheus-namespace-limited">
         <h3 className="text-xs font-semibold text-slate-300 mb-2"><Tx>{title}</Tx></h3>
         <p className="text-xs text-slate-400"><Tx>Metrics from the cluster's Prometheus need a grant on the whole cluster.</Tx></p>
+      </div>
+    )
+  }
+  if (!available && failure) {
+    return (
+      <div className="mt-4 rounded-lg border border-slate-700/50 bg-slate-800/30 p-4" data-testid="prometheus-not-answering">
+        <h3 className="text-xs font-semibold text-slate-300 mb-2"><Tx>{title}</Tx></h3>
+        <p className="text-xs text-slate-400"><Tx text="Prometheus did not answer: {{reason}}" values={{ reason: failureText(failure) }} /></p>
       </div>
     )
   }

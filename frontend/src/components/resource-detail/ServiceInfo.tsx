@@ -216,7 +216,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
   return (
     <>
       {/* Prometheus Backend Pod Metrics */}
-      <PrometheusSection available={promSvcMetrics.available} title="Backend Pod Resource Usage">
+      <PrometheusSection available={promSvcMetrics.available} failure={promSvcMetrics.failure} title="Backend Pod Resource Usage">
         {podsPastQuery ? (
           <p className="text-xs text-slate-400" data-testid="service-backend-pods-past-query">
             <Tx text="Not shown: the {{n}} pods behind this Service are more than one Prometheus query can name." values={{ n: backendPods.length }} />

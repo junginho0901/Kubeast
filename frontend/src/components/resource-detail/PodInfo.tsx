@@ -473,7 +473,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       )}
 
       {/* Prometheus Real-time Container Metrics */}
-      <PrometheusSection available={promPodMetrics.available} title="Real-time Resource Usage">
+      <PrometheusSection available={promPodMetrics.available} failure={promPodMetrics.failure} title="Real-time Resource Usage">
         <div className="space-y-3">
           {containers.map((c: any) => {
             const cpuMillis = getContainerCpuMillis(c.name)
