@@ -35,4 +35,5 @@ func Register(r chi.Router, h *handler.Handler, wsMux *ws.Multiplexer) {
 	RegisterCustomResources(r, h)
 	RegisterMetrics(r, h)
 	RegisterWS(r, wsMux)
+	RegisterStreams(r, h)
 }

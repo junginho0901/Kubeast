@@ -66,7 +66,6 @@ func RegisterCluster(r chi.Router, h *handler.Handler) {
 	r.Post("/api/v1/nodes/{name}/uncordon", h.UncordonNode)
 	r.Post("/api/v1/nodes/{name}/drain", h.DrainNode)
 	r.Get("/api/v1/nodes/{name}/drain/status", h.DrainNodeStatus)
-	r.Get("/api/v1/nodes/{name}/debug-shell/ws", h.NodeDebugShellWS)
 
 	// Events
 	r.Get("/api/v1/events", h.GetEvents)
