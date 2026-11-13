@@ -205,12 +205,15 @@ test.describe('Dashboard lists', () => {
     const rows = page.getByTestId('issue-row')
     await expect.poll(() => range('issues-pager')).toMatch(/1-50 of 120|120개 중 1-50/)
     await expect(rows).toHaveCount(50)
-    // the Pod heading counts all 70 pods while the page shows 50 of them
-    await expect(page.getByTestId('issues-kind-Pod').locator('h3 + span')).toHaveText('70')
+    // kinds come in the dashboard's order (issues.ts kindRank): Job before Pod, so the first page is the 50 Jobs
+    await expect(page.getByTestId('issues-kind-Job').getByTestId('issue-row')).toHaveCount(50)
+    await expect(page.getByTestId('issues-kind-Pod')).toHaveCount(0)
     await page.getByTestId('issues-pager').getByRole('button').last().click()
     await expect.poll(() => range('issues-pager')).toMatch(/51-100 of 120|120개 중 51-100/)
-    await expect(page.getByTestId('issues-kind-Pod').getByTestId('issue-row')).toHaveCount(20)
-    await expect(page.getByTestId('issues-kind-Job').getByTestId('issue-row')).toHaveCount(30)
+    // the Pod heading counts all 70 pods while the page shows 50 of them
+    await expect(page.getByTestId('issues-kind-Pod').locator('h3 + span')).toHaveText('70')
+    await expect(page.getByTestId('issues-kind-Pod').getByTestId('issue-row')).toHaveCount(50)
+    await expect(page.getByTestId('issues-kind-Job')).toHaveCount(0)
     // a search starts again from the first page
     await page.getByPlaceholder(/Search issues|이슈 검색/).fill('e2e-ijob-04')
     await expect.poll(() => range('issues-pager')).toMatch(/1-10 of 10|10개 중 1-10/)
