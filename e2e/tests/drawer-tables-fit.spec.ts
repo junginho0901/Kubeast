@@ -108,11 +108,14 @@ test.describe('Drawer tables fit the drawer', () => {
     await page.setViewportSize({ width: 1440, height: 900 })
     const pv = kubectl(`get pvc fit-claim -n ${NS} -o jsonpath={.spec.volumeName}`)
     expect(pv, 'the claim is bound to a volume').toMatch(/^pvc-/)
+    const rs = kubectl(`get rs -n ${NS} -l app=fit-web -o jsonpath={.items[0].metadata.name}`)
     // each drawer, with a header of the table it is opened for: read once that table is on screen
+    // (a Deployment lists its ReplicaSets; the pod table is the ReplicaSet's)
     const drawers: [string, string][] = [
       [`Pod/${NS}/fit-mount`, 'Last Transition'],
       [`PodDisruptionBudget/${NS}/fit-pdb`, 'Observed Generation'],
-      [`Deployment/${NS}/fit-web`, 'Restarts'],
+      [`Deployment/${NS}/fit-web`, 'Available'],
+      [`ReplicaSet/${NS}/${rs}`, 'Restarts'],
       [`Service/${NS}/fit-web`, 'AppProtocol'],
       [`PersistentVolumeClaim/${NS}/fit-claim`, 'Mounted As'],
       [`PersistentVolume/${pv}`, 'Mounted As'],
