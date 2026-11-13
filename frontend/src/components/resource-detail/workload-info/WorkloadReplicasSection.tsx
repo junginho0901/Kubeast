@@ -19,6 +19,8 @@ interface DaemonSetStatus {
 
 interface PromMetrics {
   available: boolean
+  // set when the cluster's Prometheus is set but did not answer (usePrometheusQueries)
+  failure?: unknown
   data: Record<string, { available: boolean; results?: Array<{ value: number; metric?: Record<string, string> }> } | undefined>
 }
 
