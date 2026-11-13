@@ -678,6 +678,18 @@ export interface PrometheusQueryResponse {
   results: PrometheusQueryResult[]
 }
 
+// GET /cluster/namespaces/{ns}/services/{name}/backend-usage — the Service drawer's three sums, added up on the server
+// over as many queries as the pods behind it take; a sum with no series is null.
+export interface ServiceBackendUsage {
+  available: boolean
+  pods: number
+  queries: number
+  past_queries?: boolean
+  cpu_millicores: number | null
+  memory_bytes: number | null
+  pod_count: number | null
+}
+
 // GET /cluster/logsearch/status — where the cluster's log search reads from.
 export interface LogSearchStatus {
   available: boolean
