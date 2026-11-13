@@ -3095,6 +3095,12 @@
     "expired": "Stopped: the session reached its maximum lifetime. Sign in again.",
     "unverified": "Stopped: the session could not be verified. Sign in again."
   },
+  "serverShutdown": {
+    "terminalReplaced": "The server was replaced. Reconnect to open a new terminal.",
+    "terminalLost": "The connection to the server was lost. Reconnect to open a new terminal.",
+    "reconnect": "Reconnect",
+    "followStopped": "Following stopped: the server was replaced. Turn Follow on again to go on."
+  },
   "login": {
     "sessionEnded": "Your session ended: your account or access may have changed, or the session timed out. Sign in again.",
     "errors": {
