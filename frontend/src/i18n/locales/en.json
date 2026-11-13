@@ -21,6 +21,7 @@
     "done": "Done",
     "empty": "No keys yet.",
     "revoke": "Revoke",
+    "revoked": "Revoked: {{name}}",
     "confirmRevoke": "Revoke now",
     "expiresAt": "expires {{time}}",
     "lastUsed": "last used {{time}}",

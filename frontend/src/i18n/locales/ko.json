@@ -21,6 +21,7 @@
     "done": "확인",
     "empty": "발급한 키가 없습니다.",
     "revoke": "폐기",
+    "revoked": "폐기했습니다: {{name}}",
     "confirmRevoke": "지금 폐기",
     "expiresAt": "만료 {{time}}",
     "lastUsed": "마지막 사용 {{time}}",

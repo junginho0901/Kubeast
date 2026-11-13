@@ -14,7 +14,7 @@
 태그가 붙은 스크립트를 내려받아 내용을 확인한 뒤 실행하세요. 검토하지 않은 스크립트를 `curl | bash`로 바로 실행하지 마세요.
 
 ```bash
-curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.6/install.sh
+curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.7/install.sh
 less install.sh
 bash install.sh
 ```
@@ -32,7 +32,7 @@ bash install.sh --load-balancer
 bash install.sh --namespace my-ns
 
 # 차트 버전 지정
-bash install.sh --version 0.7.6
+bash install.sh --version 0.7.7
 ```
 
 > 필요한 것: `kubectl`, `helm`, 접근할 수 있는 Kubernetes 클러스터
@@ -40,19 +40,19 @@ bash install.sh --version 0.7.6
 ### 옵션 2. Helm 직접 사용
 
 ```bash
-helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.6 \
+helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
   --namespace kubeast --create-namespace \
   --set ai.openaiApiKey=$OPENAI_API_KEY     # 선택: 나중에 UI에서도 등록 가능
 
 # 가장 가볍게: AI·캐시 없이 콘솔·관리·감사만 (파드 6개, docs/ko/architecture.md "자원 사용량")
-helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.6 -n kubeast --create-namespace \
-  -f https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.6/helm/kubeast/values-minimal.yaml
+helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 -n kubeast --create-namespace \
+  -f https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.7/helm/kubeast/values-minimal.yaml
 ```
 
 ### 옵션 3. Docker Compose (클러스터 없이 단일 호스트)
 
 ```bash
-git clone --branch v0.7.6 --depth 1 https://github.com/junginho0901/Kubeast.git
+git clone --branch v0.7.7 --depth 1 https://github.com/junginho0901/Kubeast.git
 cd Kubeast
 
 ./install-docker.sh
@@ -77,11 +77,11 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ### 업그레이드
 
 ```bash
-helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.6 \
+helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
   -n kubeast --reset-then-reuse-values
 ```
 
-`--reset-then-reuse-values`는 직접 넣은 값을 그대로 두고 새 버전에 생긴 값을 더합니다. `--reuse-values`는 처음 설치한 버전의 기본값을 그대로 써서 뒤 버전에 생긴 값이 빠집니다. 차트는 그런 업그레이드를 이 안내와 함께 멈추고, 릴리스는 그대로 둡니다.
+`--reset-then-reuse-values`는 직접 넣은 값을 그대로 두고 새 버전에 생긴 값을 더합니다. `--reuse-values`는 처음 설치한 버전의 기본값을 그대로 써서 뒤 버전에 생긴 값이 빠집니다. 차트는 그런 업그레이드를 이 안내와 함께 멈추고, 릴리스는 그대로 둡니다. `helm show values`에서 복사한 값 파일도 0.7.7부터는 같은 식으로 멈춥니다. 0.7.6 이하에서 복사한 파일은 `chartVersion`이 없어 멈추지 않지만, 그 안의 `global.imageTag`가 그 버전의 이미지를 남깁니다. 직접 쓰는 값 파일에는 `chartVersion`과 `global.imageTag`를 넣지 마세요.
 
 ### 제거
 

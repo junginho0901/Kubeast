@@ -81,6 +81,7 @@ export function DashboardBody() {
     isOptimizationNamespaceDropdownOpen,
     setIsOptimizationNamespaceDropdownOpen,
     optimizationCopied,
+    optimizationCopyFailed,
     isOptimizationStreaming,
     optimizationObservedContent,
     optimizationAnswerContent,
@@ -540,6 +541,7 @@ export function DashboardBody() {
         tableError={optimizationTableError ? ((optimizationTableError as any)?.response?.data?.detail || (optimizationTableError as Error).message) : undefined}
         isStreaming={isOptimizationStreaming}
         copied={optimizationCopied}
+        copyFailed={optimizationCopyFailed}
         fullMarkdown={optimizationMarkdown}
         observedMarkdown={optimizationObservedMarkdown}
         answerMarkdown={optimizationAnswerMarkdown}
