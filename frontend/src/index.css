@@ -34,6 +34,7 @@
 
   /* ink: text on a surface (white here, near-black in light); text-white is for text on a filled colour */
   --color-ink: #fff;
+  --color-hairline: #303a49;
 
   --font-sans: InterVariable, Inter, system-ui, sans-serif;
 
@@ -59,9 +60,6 @@
 
 /* Role names keep the current values inline, including local colour-mode scopes. */
 @theme inline {
-  --color-console-card-fill: var(--color-slate-800);
-  --color-console-card-line: color-mix(in oklab, var(--color-slate-700) 70%, transparent);
-  --spacing-console-card: calc(var(--spacing) * 6);
   --color-console-secondary-fill: var(--color-slate-700);
   --color-console-secondary-hover: var(--color-slate-600);
   --color-console-row-line: var(--color-slate-600);
@@ -118,7 +116,13 @@
     --color-gray-950: oklch(12.9% 0.042 264.695);
   }
 
+  :root:not([data-color-mode]),
+  :root[data-color-mode='default'] {
+    --color-hairline: #303a49;
+  }
+
   :root[data-color-mode='dark'] {
+    --color-hairline: #363636;
     --color-ink: #fff;
     --color-slate-50: #fafafa;
     --color-slate-100: #f3f3f3;
@@ -150,6 +154,7 @@
      Tailwind's 950-800 of the same hue and the dark tints and borders (800-950) its 200-50, so text keeps 4.5:1 on
      its tint (axe-core color-contrast over every screen). Inside a filled colour ink is white again (below). */
   :root[data-color-mode='light'] {
+    --color-hairline: #d8e0e7;
     color-scheme: light;
     --color-ink: #1f2328;
     --color-slate-50: #1f2328;
@@ -392,7 +397,12 @@ body {
 @layer components {
   /* flat: depth comes from the ladder's steps and a hairline, not a shadow */
   .card {
-    @apply bg-console-card-fill rounded-xl p-console-card border border-console-card-line;
+    @apply bg-slate-800 rounded-xl p-5 border border-hairline;
+  }
+
+  /* Standalone list cards already pad their cells and footer. The surrounding padding only duplicates that space. */
+  .card:has(> div:first-child > table) {
+    padding: 0;
   }
 
   .btn {
