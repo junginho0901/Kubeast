@@ -38,6 +38,8 @@ export function useOptimizationStream() {
   const [optimizationNamespace, setOptimizationNamespace] = useState<string>('default')
   const [isOptimizationNamespaceDropdownOpen, setIsOptimizationNamespaceDropdownOpen] = useState(false)
   const [optimizationCopied, setOptimizationCopied] = useState(false)
+  // a refused copy says so; both words stay until the next press or a new answer
+  const [optimizationCopyFailed, setOptimizationCopyFailed] = useState(false)
   const optimizationAbortRef = useRef<AbortController | null>(null)
   const [isOptimizationStreaming, setIsOptimizationStreaming] = useState(false)
   const [optimizationObservedContent, setOptimizationObservedContent] = useState('')
@@ -59,6 +61,7 @@ export function useOptimizationStream() {
   const openOptimizationModal = (initialNamespace: string) => {
     setIsOptimizationNamespaceDropdownOpen(false)
     setOptimizationCopied(false)
+    setOptimizationCopyFailed(false)
     optimizationAbortRef.current?.abort()
     optimizationAbortRef.current = null
     if (optimizationStreamRafRef.current) {
@@ -81,6 +84,7 @@ export function useOptimizationStream() {
     setIsOptimizationModalOpen(false)
     setIsOptimizationNamespaceDropdownOpen(false)
     setOptimizationCopied(false)
+    setOptimizationCopyFailed(false)
     optimizationAbortRef.current?.abort()
     optimizationAbortRef.current = null
     if (optimizationStreamRafRef.current) {
@@ -129,6 +133,7 @@ export function useOptimizationStream() {
     // Chart ai.enabled off: the table still shows the observed values; no suggestion stream (the gateway would answer 503).
     if (!optimizationNamespace || !aiEnabled(features)) return
     setOptimizationCopied(false)
+    setOptimizationCopyFailed(false)
     setIsOptimizationNamespaceDropdownOpen(false)
     optimizationAbortRef.current?.abort()
     const controller = new AbortController()
@@ -203,10 +208,10 @@ export function useOptimizationStream() {
     const text = `${optimizationObservedContent}${unwrapOuterMarkdownFence(optimizationAnswerContent)}`.trim()
     if (!text) return
 
-    // the check only after the copy went through
-    if (!(await copyText(text))) return
-    setOptimizationCopied(true)
-    setTimeout(() => setOptimizationCopied(false), 1500)
+    // Copied only when the copy went through, Not copied when it did not; the word stays (no timer)
+    const ok = await copyText(text)
+    setOptimizationCopied(ok)
+    setOptimizationCopyFailed(!ok)
   }
 
   const handleStopOptimizationSuggestions = () => {
@@ -241,6 +246,7 @@ export function useOptimizationStream() {
     isOptimizationNamespaceDropdownOpen,
     setIsOptimizationNamespaceDropdownOpen,
     optimizationCopied,
+    optimizationCopyFailed,
     isOptimizationStreaming,
     optimizationObservedContent,
     optimizationAnswerContent,

@@ -5,6 +5,7 @@
 // props 가 많은 이유: tab 상태 / 삭제 버튼 콜백 / 닫기·뒤로가기 lifecycle
 // 이 모두 부모 (drawer) 가 관리하기 때문. 구조만 분리하는 thin presentational.
 
+import type { TFunction } from 'i18next'
 import { ArrowLeft, X, Info, FileCode, Trash2 } from 'lucide-react'
 import { kindIconComponent } from '@/components/kindIcons'
 import { TabId } from './utils'
@@ -26,7 +27,7 @@ interface Props {
   onGoBack: () => void
   onTabChange: (tab: TabId) => void
   onDeleteClick: () => void
-  t: (key: string, opts?: any) => string
+  t: TFunction
 }
 
 export function ResourceDetailHeader({
