@@ -44,7 +44,7 @@ export function TableEmptyRow({ colSpan, resource, searching = false, children, 
     <button
       type="button"
       onClick={() => (onRetry ? onRetry() : void queryClient.refetchQueries({ type: 'active' }))}
-      className="ml-3 rounded-sm border border-slate-600 px-2 py-0.5 text-xs text-slate-200 hover:border-slate-400"
+      className="ml-3 rounded-lg border border-control px-2 py-1 text-xs text-slate-200 hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400"
       data-testid="table-load-error-retry"
     >
       {t('common.retry', { defaultValue: 'Retry' })}

@@ -15,7 +15,7 @@
 }
 
 /* Colours: see DESIGN.md. primary is the one sky accent, the same in every colour mode; primary-600, the fill of
-   buttons and selections, is the brightest sky that keeps white text at 4.5:1 (#027ac0, 4.6:1). The neutral
+   primary actions, is the brightest sky that keeps white text at 4.5:1 (#027ac0, 4.6:1). The neutral
    ladders slate-* and gray-* are set per colour mode below. */
 @theme {
   --color-primary-50: #f0f9ff;
@@ -35,6 +35,7 @@
   /* ink: text on a surface (white here, near-black in light); text-white is for text on a filled colour */
   --color-ink: #fff;
   --color-hairline: #303a49;
+  --color-control: #718096;
 
   --font-sans: InterVariable, Inter, system-ui, sans-serif;
 
@@ -60,9 +61,6 @@
 
 /* Role names keep the current values inline, including local colour-mode scopes. */
 @theme inline {
-  --color-console-secondary-fill: var(--color-slate-700);
-  --color-console-secondary-hover: var(--color-slate-600);
-  --color-console-row-line: var(--color-slate-600);
   --spacing-console-sidebar-fade: 24px;
   --color-console-success-fill: color-mix(in oklab, var(--color-green-500) 20%, transparent);
   --color-console-success-line: color-mix(in oklab, var(--color-green-500) 30%, transparent);
@@ -119,10 +117,12 @@
   :root:not([data-color-mode]),
   :root[data-color-mode='default'] {
     --color-hairline: #303a49;
+    --color-control: #718096;
   }
 
   :root[data-color-mode='dark'] {
     --color-hairline: #363636;
+    --color-control: #7b7b7b;
     --color-ink: #fff;
     --color-slate-50: #fafafa;
     --color-slate-100: #f3f3f3;
@@ -155,6 +155,7 @@
      its tint (axe-core color-contrast over every screen). Inside a filled colour ink is white again (below). */
   :root[data-color-mode='light'] {
     --color-hairline: #d8e0e7;
+    --color-control: #788593;
     color-scheme: light;
     --color-ink: #1f2328;
     --color-slate-50: #1f2328;
@@ -415,7 +416,15 @@ body {
   }
 
   .btn-secondary {
-    @apply bg-console-secondary-fill hover:bg-console-secondary-hover text-ink;
+    @apply bg-slate-800 hover:bg-slate-700 text-ink;
+    box-shadow: inset 0 0 0 1px var(--color-control);
+  }
+
+  .btn:focus-visible,
+  .btn-row:focus-visible,
+  .btn-row-danger:focus-visible {
+    outline: 2px solid var(--color-primary-400);
+    outline-offset: 2px;
   }
 
   .badge {
@@ -493,7 +502,7 @@ body {
   /* A small action in a table row, on a card or in a drawer header (Test, Edit, Delete …): one size and shape on every
      screen; btn-row-danger is the one that deletes. */
   .btn-row {
-    @apply inline-flex items-center gap-1.5 rounded-lg border border-console-row-line px-2.5 py-1.5 text-xs text-slate-200 hover:bg-slate-700/40 disabled:opacity-50;
+    @apply inline-flex items-center gap-1.5 rounded-lg border border-control px-2.5 py-1.5 text-xs text-slate-200 hover:bg-slate-700/40 disabled:opacity-50;
   }
   .btn-row-danger {
     @apply inline-flex items-center gap-1.5 rounded-lg border border-red-800/60 bg-red-950/20 px-2.5 py-1.5 text-xs text-red-200 hover:bg-red-950/40 disabled:opacity-50;
