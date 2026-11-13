@@ -103,6 +103,36 @@ test.describe('what keeps up by itself', () => {
     await expect.poll(() => describes.length, { timeout: 15_000 }).toBe(2)
   })
 
+  // The class rows are the describe answer's, which reads the IngressClass the Ingress names; the list's row has no
+  // controller, and the answer is read again when the Ingress changes.
+  test('an Ingress drawer says its class\'s controller as the IngressClass has it, and follows a change of class', async ({ page }) => {
+    test.setTimeout(120_000)
+    const CLASS = `e2e-live-ic-${STAMP}`
+    const classed = (spec: object, annotations?: Record<string, string>) => JSON.stringify({
+      apiVersion: 'networking.k8s.io/v1', kind: 'Ingress', metadata: { name: 'classed', namespace: NS, ...(annotations ? { annotations } : {}) },
+      spec: { ...spec, rules: [{ host: 'classed.example.com', http: { paths: [{ path: '/', pathType: 'Prefix', backend: { service: { name: 'web', port: { number: 80 } } } }] } }] },
+    })
+    kubectl('apply -f -', JSON.stringify({ apiVersion: 'networking.k8s.io/v1', kind: 'IngressClass', metadata: { name: CLASS }, spec: { controller: 'example.com/e2e-live' } }))
+    try {
+      kubectl('apply -f -', classed({ ingressClassName: CLASS }))
+      await page.goto(`/network/ingresses?cluster=self&namespace=${NS}`)
+      await page.locator('main tbody tr').filter({ hasText: 'classed' }).first().click()
+      const drawer = page.locator(DRAWER).last()
+      const value = (label: string) => drawer.locator('span.shrink-0', { hasText: new RegExp(`^${label}$`) }).locator('xpath=following-sibling::span[1]')
+      await expect(value('Class Controller')).toHaveText(kubectl(`get ingressclass ${CLASS} -o 'jsonpath={.spec.controller}'`), { timeout: 20_000 })
+      await expect(value('Class Source')).toHaveText('spec')
+      await expect(value('Class Default')).toHaveText('No')
+
+      // the class by annotation now, which names no IngressClass the answer reads
+      kubectl('apply -f -', classed({}, { 'kubernetes.io/ingress.class': 'other' }))
+      await expect(value('Class Source')).toHaveText('annotation', { timeout: 30_000 })
+      await expect(value('Class Controller')).toHaveText('-')
+    } finally {
+      kubectl(`-n ${NS} delete ingress classed --ignore-not-found`)
+      kubectl(`delete ingressclass ${CLASS} --ignore-not-found`)
+    }
+  })
+
   test('a Deployment\'s Events count up while it stays as it is, and its answer is not read for that', async ({ page }) => {
     test.setTimeout(120_000)
     const describes = requests(page, /\/deployments\/web\/describe/)
