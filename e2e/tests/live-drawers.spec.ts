@@ -157,9 +157,10 @@ test.describe('what keeps up by itself', () => {
       test.setTimeout(120_000)
       const name = target.name()
       if (target.kind === 'StorageClass') kubectl('apply -f -', JSON.stringify({ apiVersion: 'storage.k8s.io/v1', kind: 'StorageClass', metadata: { name }, provisioner: 'kubernetes.io/no-provisioner' }))
+      const uid = kubectl(`${target.namespace ? `-n ${target.namespace} ` : ''}get ${target.kind.toLowerCase()} ${name} -o 'jsonpath={.metadata.uid}'`)
       const eventOf = (count: number) => JSON.stringify({
         apiVersion: 'v1', kind: 'Event', metadata: { name: `${target.kind.toLowerCase()}.e2e-live`, namespace: NS },
-        involvedObject: { kind: target.kind, name, ...(target.namespace ? { namespace: target.namespace } : {}) },
+        involvedObject: { kind: target.kind, name, uid, ...(target.namespace ? { namespace: target.namespace } : {}) },
         type: 'Warning', reason: 'E2ELiveCountUp', message: 'told by the run', count,
         firstTimestamp: FIRST_SEEN, lastTimestamp: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), source: { component: 'e2e-live' },
       })
