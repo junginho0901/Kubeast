@@ -563,6 +563,13 @@ body {
   }
 }
 
+/* After the utility layer: existing text-3xl/font-semibold page titles keep one shared size and weight. */
+.page-head h1.text-3xl {
+  font-size: 1.75rem;
+  line-height: 2.25rem;
+  font-weight: 500;
+}
+
 /* Text the AI writes (chat answers, the floating chat, investigation reports, the optimization answer) is prose-invert,
    whose colours are for a dark ground only: on the light mode's off-white the headings, bold text, code, table headers
    and tool boxes were near white. Its colours follow the colour mode's tokens, the same values in the default mode. */
