@@ -769,6 +769,102 @@ describe('WebSocketMultiplexer', () => {
     })
   })
 
+  // Signing out and signing in close the multiplexer (services/auth onSessionChange): a socket stays the identity it
+  // opened as, so the next person's watches go on a socket opened with their cookie.
+  describe('closed when the person signed in changes', () => {
+    const a = { type: 'REQUEST' as const, clusterId: 'self', path: '/api/v1/namespaces/team-a/configmaps', query: 'watch=1' }
+    const b = { ...a, path: '/api/v1/namespaces/team-b/configmaps' }
+    const opened = async (mux: WebSocketMultiplexer, msg = a, listener = vi.fn()) => {
+      const sub = mux.subscribe(msg, listener)
+      await flush()
+      const ws = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+      ws.simulateOpen()
+      await sub
+      return { ws, listener }
+    }
+
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
+
+    it('lets go of the socket and every watch, and reconnects to none of them', async () => {
+      const mux = new WebSocketMultiplexer()
+      const closed = vi.fn()
+      mux.onSocketClosed(closed)
+      const { ws } = await opened(mux)
+
+      mux.close()
+      expect(ws.readyState).toBe(MockWebSocket.CLOSED)
+      expect(closed).toHaveBeenCalledTimes(1)
+      expect(mux.follows(a.clusterId, a.path, a.query)).toBe(false)
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(MockWebSocket.instances).toHaveLength(1)
+    })
+
+    it('the next subscription opens a socket of its own, which asks only for that watch and feeds only it', async () => {
+      const mux = new WebSocketMultiplexer()
+      const { ws: first, listener: before } = await opened(mux)
+
+      mux.close()
+      const { ws: next, listener: after } = await opened(mux, b)
+      expect(next).not.toBe(first)
+      expect(next.sent.map((m) => JSON.parse(m))).toEqual([b])
+      next.simulateMessage({ type: 'DATA', clusterId: a.clusterId, path: a.path, query: a.query, data: { type: 'ADDED', object: { name: 'cm-a' } } })
+      next.simulateMessage({ type: 'DATA', clusterId: b.clusterId, path: b.path, query: b.query, data: { type: 'ADDED', object: { name: 'cm-b' } } })
+      expect(before).not.toHaveBeenCalled()
+      expect(after).toHaveBeenCalledTimes(1)
+    })
+
+    it('the closed socket telling of its end only later leaves the next socket and its watches alone', async () => {
+      const fetchMe = vi.fn(async () => ({ status: 200 }))
+      vi.stubGlobal('fetch', fetchMe)
+      const mux = new WebSocketMultiplexer()
+      const closed = vi.fn()
+      mux.onSocketClosed(closed)
+      const { ws: first } = await opened(mux)
+      // a browser tells of the close with an event that comes after close() returns
+      first.close = () => {
+        first.readyState = MockWebSocket.CLOSING
+      }
+
+      mux.close()
+      const { ws: next } = await opened(mux, b)
+      first.simulateServerClose(4401)
+      await vi.advanceTimersByTimeAsync(0)
+      await flush()
+      expect(closed).toHaveBeenCalledTimes(1)
+      expect(fetchMe).not.toHaveBeenCalled()
+      const c = { ...a, path: '/api/v1/namespaces/team-c/configmaps' }
+      await mux.subscribe(c, vi.fn())
+      expect(MockWebSocket.instances).toHaveLength(2)
+      expect(next.sent.map((m) => JSON.parse(m))).toEqual([b, c])
+    })
+
+    it('a subscription waiting for the socket closed before it opened ends without an error and asks for nothing', async () => {
+      const mux = new WebSocketMultiplexer()
+      const sub = mux.subscribe(a, vi.fn())
+      await flush()
+      const first = MockWebSocket.instances[0]
+
+      mux.close()
+      const unsubscribe = await sub
+      unsubscribe()
+      expect(first.readyState).toBe(MockWebSocket.CLOSED)
+      expect(first.sent).toEqual([])
+    })
+
+    it('takes away what the closed watches said on screen', async () => {
+      resetWatchProblems()
+      const mux = new WebSocketMultiplexer()
+      const { ws } = await opened(mux)
+      ws.simulateMessage({ type: 'ERROR', clusterId: a.clusterId, path: a.path, query: a.query, error: { message: 'configmaps is forbidden', reason: 'forbidden' } })
+      expect(getWatchProblem()).toBe('forbidden')
+
+      mux.close()
+      expect(getWatchProblem()).toBeUndefined()
+    })
+  })
+
   describe('the session of a socket ended', () => {
     // A fresh module each time: services/auth signs out once per page load, and remembers it in a module variable.
     const freshMux = async () => {
