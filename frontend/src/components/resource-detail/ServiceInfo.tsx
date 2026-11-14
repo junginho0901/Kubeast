@@ -5,6 +5,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, NoneText, StatusBadge, SummaryBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useNamespacePodTable } from './useNamespacePodTable'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { usePagination } from './usePagination'
 import { backendPodNames, patternFitsOneQuery, podNamesPattern } from './serviceBackend'
 import { SET_POD_TABLE_WATCH_MAX } from './namespacePodTable'
@@ -135,6 +136,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
     enabled,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['service-describe', namespace, name], answer: describe, kind: 'Service', namespace, name })
 
   useResourceDetailOverlay({ kind: 'Service', name, namespace, describe })
 

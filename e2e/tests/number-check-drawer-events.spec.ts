@@ -98,6 +98,7 @@ const WRITTEN: [string, string, string, string, string, number][] = [
   ['IngressClass', 'networking.k8s.io/v1', 'drev-ic-events', 'Claimed', 'Normal', 2],
 ]
 const eventName = (name: string, reason: string) => `${name}.drev-${reason.toLowerCase()}`
+const EARLIER = 'E2EEarlierObject'
 
 // the drawers read: kind, namespace ('' for a cluster-scoped object), name
 const TARGETS: [string, string, string][] = [
@@ -132,12 +133,13 @@ async function readEvents(page: Page): Promise<Events> {
   })
 }
 
-// What kubectl describe lists about the object — the events of its kind and name, in its namespace (a Namespace's in
-// itself), a cluster-scoped object's in every namespace — as the section shows them: newest first, ten to a page,
+// What kubectl describe lists about the object — the events of its kind, name and UID, in its namespace (a Namespace's
+// in itself), a cluster-scoped object's in every namespace — as the section shows them: newest first, ten to a page,
 // "None" without any. Rows of one time compare in any order.
 function eventsWant(kind: string, ns: string, name: string): NonNullable<Events> {
   const where = kind === 'Namespace' ? `-n ${name}` : ns ? `-n ${ns}` : '-A'
-  const items: Obj[] = JSON.parse(kubectl(`get events ${where} --field-selector involvedObject.name=${name},involvedObject.kind=${kind} -o json`)).items
+  const uid = kubectl(`get ${kind.toLowerCase()} ${name} ${ns ? `-n ${ns}` : ''} -o jsonpath={.metadata.uid}`)
+  const items: Obj[] = JSON.parse(kubectl(`get events ${where} --field-selector involvedObject.name=${name},involvedObject.kind=${kind},involvedObject.uid=${uid} -o json`)).items
   const last = (e: Obj) => Date.parse(e.series?.lastObservedTime ?? e.lastTimestamp ?? e.eventTime ?? e.firstTimestamp ?? '') || 0
   const rows = items.slice().sort((a, b) => last(b) - last(a)).map((e) => [e.type || '-', e.reason || '-', e.message || '-'])
   return { rows: rows.slice(0, 10), pager: rows.length > 10 ? `1-10 / ${rows.length}` : null, text: rows.length ? '' : 'None' }
@@ -185,7 +187,9 @@ test.describe('number check — every drawer\'s Events section', () => {
         reason, message: `${reason} by the e2e run`, type, count: 1, firstTimestamp: at, lastTimestamp: at, source: { component: 'e2e' },
       }
     })
-    kubectl('create -f -', JSON.stringify({ apiVersion: 'v1', kind: 'List', items }))
+    // and one about an earlier ConfigMap of the same name, which kubectl describe does not list
+    const earlier = { ...items[0], metadata: { ...items[0].metadata, name: eventName('drev-cm-events', 'EarlierObject') }, reason: EARLIER, involvedObject: { ...items[0].involvedObject, uid: '00000000-0000-4000-8000-0000000e2e01' } }
+    kubectl('create -f -', JSON.stringify({ apiVersion: 'v1', kind: 'List', items: [...items, earlier] }))
     // settled: the bound claim bound, the waiting claim's event recorded
     const deadline = Date.now() + 90_000
     for (;;) {
@@ -215,6 +219,7 @@ test.describe('number check — every drawer\'s Events section', () => {
       await page.goto(link(kind, ns, name))
       await page.locator(DRAWER).last().waitFor({ timeout: 20_000 })
       await compareEvents(page, `${kind}/${name}`, () => eventsWant(kind, ns, name))
+      if (name === 'drev-cm-events') expect((await readEvents(page))?.rows.map((r) => r[1]) ?? [], 'an earlier ConfigMap\'s event').not.toContain(EARLIER)
     })
   })
 
