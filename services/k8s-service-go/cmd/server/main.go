@@ -423,7 +423,7 @@ func main() {
 	slog.Info("server stopped")
 }
 
-// Both waits fit the pod's grace period, 30 s by default (the chart sets none).
+// Both waits fit the 30 s the chart's grace period (35 s) leaves after its 5 s preStop wait.
 const (
 	serverShutdownWait   = 15 * time.Second
 	recorderShutdownWait = 10 * time.Second

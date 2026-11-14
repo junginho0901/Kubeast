@@ -246,6 +246,18 @@ startupProbe:
   failureThreshold: {{ div 180 $period }}
 {{- end -}}
 
+{{/* A pod behind a Service answers 5 s more while its endpoint leaves kube-proxy, then gets SIGTERM with the 30 s its shutdown fits in. */}}
+{{- define "kubeast.preStop" -}}
+lifecycle:
+  preStop:
+    sleep:
+      seconds: 5
+{{- end -}}
+
+{{- define "kubeast.terminationGrace" -}}
+terminationGracePeriodSeconds: 35
+{{- end -}}
+
 {{/*
 Annotations of one of the chart's ServiceAccounts: serviceAccounts.<key>.annotations,
 over the aws.irsaRoleArn role when eksAuth (k8s-service and tool-server run

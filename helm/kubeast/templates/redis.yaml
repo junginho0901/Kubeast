@@ -17,6 +17,7 @@ spec:
         app: redis
     spec:
       automountServiceAccountToken: false
+      {{- include "kubeast.terminationGrace" . | nindent 6 }}
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 999) | nindent 6 }}
       containers:
         - name: redis
@@ -37,6 +38,7 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+          {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             exec:
               command: ["sh", "-c", "redis-cli --no-auth-warning -a \"$REDIS_PASSWORD\" ping | grep -q PONG"]

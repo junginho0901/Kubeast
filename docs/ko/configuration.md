@@ -133,6 +133,7 @@ podSecurity:
   readOnlyRootFilesystem: true
 
 # 가용성 — replicas를 2 이상으로 올릴 때는 pdb.enabled: true로 두세요
+# Service 뒤의 파드는 종료 요청 뒤 5초 더 응답하고(preStop sleep, Kubernetes 1.30 이상) 그다음 30초 안에 종료합니다(grace 35초)
 replicas:
   gateway: 1
 pdb:

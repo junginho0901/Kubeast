@@ -136,6 +136,7 @@ podSecurity:
   readOnlyRootFilesystem: true
 
 # Availability: set pdb.enabled: true when you raise replicas to 2 or more
+# Every pod behind a Service answers 5 s after it is told to stop (preStop sleep, Kubernetes 1.30 or later), then has 30 s to shut down (grace 35 s)
 replicas:
   gateway: 1
 pdb:

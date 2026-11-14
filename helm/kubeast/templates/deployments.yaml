@@ -19,6 +19,7 @@ spec:
         checksum/config: {{ include "kubeast.configChecksum" . }}
     spec:
       serviceAccountName: auth-service
+      {{- include "kubeast.terminationGrace" . | nindent 6 }}
       # fsGroup lets uid 65532 read the 0440 Secret-mounted signing key
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532 "fsGroup" 65532) | nindent 6 }}
       {{- include "kubeast.topologySpread" (dict "root" $ "app" "auth-service") | nindent 6 }}
@@ -80,6 +81,7 @@ spec:
             {{- include "kubeast.dbCAVolumeMount" . | nindent 12 }}
             {{- include "kubeast.customCAVolumeMount" . | nindent 12 }}
           {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8004) | nindent 10 }}
+          {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /health
@@ -157,6 +159,7 @@ spec:
         checksum/config: {{ include "kubeast.configChecksum" . }}
     spec:
       automountServiceAccountToken: false
+      {{- include "kubeast.terminationGrace" . | nindent 6 }}
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}
       {{- include "kubeast.topologySpread" (dict "root" $ "app" "ai-service") | nindent 6 }}
       containers:
@@ -186,6 +189,7 @@ spec:
               mountPath: /tmp
             {{- include "kubeast.dbCAVolumeMount" . | nindent 12 }}
             {{- include "kubeast.customCAVolumeMount" . | nindent 12 }}
+          {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /api/v1/ai/health
@@ -229,6 +233,7 @@ spec:
         checksum/config: {{ include "kubeast.configChecksum" . }}
     spec:
       serviceAccountName: k8s-service
+      {{- include "kubeast.terminationGrace" . | nindent 6 }}
       # recording on: fsGroup lets uid 65532 read the 0440 recording Secret and write a spool/store PVC
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532 "fsGroup" (ternary 65532 0 .Values.sessionRecording.enabled)) | nindent 6 }}
       {{- include "kubeast.topologySpread" (dict "root" $ "app" "k8s-service") | nindent 6 }}
@@ -333,6 +338,7 @@ spec:
             {{- end }}
           {{- end }}
           {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8002) | nindent 10 }}
+          {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /health
@@ -383,6 +389,7 @@ spec:
         checksum/config: {{ include "kubeast.configChecksum" . }}
     spec:
       automountServiceAccountToken: false
+      {{- include "kubeast.terminationGrace" . | nindent 6 }}
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}
       {{- include "kubeast.topologySpread" (dict "root" $ "app" "session-service") | nindent 6 }}
       containers:
@@ -404,6 +411,7 @@ spec:
           {{- end }}
           {{- include "kubeast.serviceVolumeMountsBlock" . | nindent 10 }}
           {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8003) | nindent 10 }}
+          {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /health
@@ -437,6 +445,7 @@ spec:
         app: frontend
     spec:
       automountServiceAccountToken: false
+      {{- include "kubeast.terminationGrace" . | nindent 6 }}
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 101) | nindent 6 }}
       {{- include "kubeast.topologySpread" (dict "root" $ "app" "frontend") | nindent 6 }}
       containers:
@@ -450,6 +459,7 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+          {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /
@@ -491,6 +501,7 @@ spec:
         checksum/config: {{ include "kubeast.configChecksum" . }}
     spec:
       serviceAccountName: tool-server
+      {{- include "kubeast.terminationGrace" . | nindent 6 }}
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}
       {{- include "kubeast.topologySpread" (dict "root" $ "app" "tool-server") | nindent 6 }}
       containers:
@@ -528,6 +539,7 @@ spec:
             - name: tmp
               mountPath: /tmp
             {{- include "kubeast.customCAVolumeMount" . | nindent 12 }}
+          {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /health
