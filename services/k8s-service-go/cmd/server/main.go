@@ -71,18 +71,6 @@ func main() {
 	// Init Redis cache
 	redisCache := cache.New(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisPassword)
 
-	// A cluster invalidated on one replica is dropped on every replica (internal/clustersync). The versions are read
-	// before any cluster is cached here. Without REDIS_HOST a change stays on the replica that took it, as before.
-	var changes *clustersync.Sync
-	if cfg.RedisHost != "" {
-		changes = clustersync.New(redis.NewClient(cache.Options(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisPassword)))
-		if redisCache.IsConnected() {
-			if err := changes.Load(context.Background()); err != nil {
-				slog.Warn("clustersync: versions not read at start, taken on the first read", "err", err)
-			}
-		}
-	}
-
 	// Shared Postgres pool: the audit log and the cluster registry.
 	bootCtx, bootCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer bootCancel()
@@ -152,12 +140,17 @@ func main() {
 		slog.Error("failed to initialize k8s service", "err", err)
 		os.Exit(1)
 	}
-	if changes != nil {
-		k8sSvc.SetChangeNotifier(changes)
-		syncCtx, syncCancel := context.WithCancel(context.Background())
-		defer syncCancel()
-		go changes.Run(syncCtx, k8sSvc.DropCluster)
+	// A cluster changed in the registry is dropped on every replica (internal/clustersync): each reads the clusters'
+	// config_version every 5 s, and with Redis the replica auth-service tells notifies the others at once.
+	var notices *redis.Client
+	if cfg.RedisHost != "" {
+		notices = redis.NewClient(cache.Options(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisPassword))
 	}
+	changes := clustersync.New(registry, notices)
+	k8sSvc.SetChangeNotifier(changes)
+	syncCtx, syncCancel := context.WithCancel(context.Background())
+	defer syncCancel()
+	go changes.Run(syncCtx, k8sSvc)
 	// Init JWT validator
 	jwtValidator := auth.NewJWTValidator(auth.JWKSConfig{
 		JWKSURL:         cfg.AuthJWKSURL,

@@ -250,7 +250,8 @@ func (h *ClustersHandler) DeleteCluster(w http.ResponseWriter, r *http.Request) 
 	h.audit(r, "admin.cluster.delete", payload, string(id), before, map[string]any{"deleted": true}, nil)
 	// Drop k8s-service's cached client bundle and tool-server's cached
 	// kubeconfig so a re-registration under the same id is not served from the
-	// old kubeconfig.
+	// old kubeconfig. A k8s-service process the call misses drops the bundle
+	// when its read of the versions no longer has the row.
 	h.invalidateK8sBundle(r, id)
 	h.invalidateToolServer(r, id)
 	w.WriteHeader(http.StatusNoContent)
@@ -324,10 +325,11 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 			response.Error(w, http.StatusInternalServerError, "store kubeconfig: "+werr.Error())
 			return
 		}
-		if newUID != "" {
-			if uerr := h.registry.SetClusterUID(r.Context(), id, newUID); uerr != nil {
-				slog.Warn("cluster: set uid after rotation failed", "id", id, "err", uerr)
-			}
+		// A new config_version (and the UID, when the probe read one): every
+		// k8s-service process reads the versions and drops a connection built
+		// from an older one, also when the call below reaches none of them.
+		if uerr := h.registry.KubeconfigReplaced(r.Context(), id, newUID); uerr != nil {
+			slog.Warn("cluster: record kubeconfig replacement failed", "id", id, "err", uerr)
 		}
 		// Drop downstream caches so the new kubeconfig takes effect immediately:
 		// k8s-service's client bundle (UI) AND tool-server's kubeconfig cache (AI
@@ -450,7 +452,9 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	// A changed Prometheus source or log store takes effect on the next query:
-	// k8s-service keeps both on its per-cluster bundle.
+	// k8s-service keeps both on its per-cluster bundle. UpdateMeta set a new
+	// config_version for it, which every k8s-service process reads; the call
+	// tells one of them at once.
 	if req.PrometheusURL != nil || req.PrometheusClusterLabel != nil || req.PrometheusAuth != nil || req.PrometheusService != nil ||
 		req.LogSearchURL != nil || req.LogSearchTenant != nil || req.LogSearchClusterLabel != nil || req.LogSearchAuth != nil {
 		h.invalidateK8sBundle(r, id)
@@ -466,8 +470,8 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 
 // invalidateK8sBundle tells k8s-service to drop its cached client bundle for id
 // (after a kubeconfig rotation) by calling its internal endpoint, forwarding the
-// admin's token. Best-effort: a failure leaves a stale bundle that self-heals on
-// the next connection error, so it never blocks the rotation response.
+// admin's token. Best-effort: the processes it misses drop the bundle within
+// seconds from the cluster's config_version, so it never blocks the response.
 func (h *ClustersHandler) invalidateK8sBundle(r *http.Request, id cluster.ID) {
 	base := strings.TrimRight(h.cfg.K8sServiceURL, "/")
 	if base == "" {

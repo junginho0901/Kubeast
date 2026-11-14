@@ -71,6 +71,11 @@ type clientBundle struct {
 	events        flight.Group[*corev1.EventList]
 	eventsRefused sync.Map
 
+	// configVersion is the registry's config_version of the Info this bundle
+	// was built from (internal/clustersync drops it once the registry has
+	// another).
+	configVersion int64
+
 	// cacheClient is the identity the overview informers watch as; inf is the
 	// running set, if any (informer_cache.go). id names the cluster in logs.
 	id          cluster.ID
@@ -124,7 +129,7 @@ type Service struct {
 
 	cache *cache.Cache
 
-	// changes tells the other replicas of a cluster this one invalidated (internal/clustersync); nil without Redis.
+	// changes tells the other replicas of a cluster this one invalidated (internal/clustersync).
 	changes ChangeNotifier
 
 	// These discovery caches are PER CLUSTER — Gateway/DRA CRD versions and the
@@ -318,19 +323,20 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	}
 	promExt, promSvc := promSourceFromInfo(info)
 	return &clientBundle{
-		clientset:   clientset,
-		authz:       authz,
-		dynamic:     dynClient,
-		discovery:   clientset.Discovery(),
-		restConfig:  cfg,
-		prom:        &promCache{},
-		promExt:     promExt,
-		promSvc:     promSvc,
-		logStore:    logStoreFromInfo(info),
-		cost:        &costCache{},
-		id:          info.ID,
-		protected:   protected,
-		cacheClient: cacheClient,
+		clientset:     clientset,
+		authz:         authz,
+		dynamic:       dynClient,
+		discovery:     clientset.Discovery(),
+		restConfig:    cfg,
+		prom:          &promCache{},
+		promExt:       promExt,
+		promSvc:       promSvc,
+		logStore:      logStoreFromInfo(info),
+		cost:          &costCache{},
+		configVersion: info.ConfigVersion,
+		id:            info.ID,
+		protected:     protected,
+		cacheClient:   cacheClient,
 	}, nil
 }
 
@@ -449,6 +455,31 @@ func (s *Service) DropCluster(id cluster.ID) {
 	if s.cache != nil && !s.cache.IsConnected() {
 		_ = s.cache.FlushAll(context.Background())
 	}
+}
+
+// ClusterVersions is the config_version each cluster this process keeps a bundle of was built from.
+func (s *Service) ClusterVersions() map[cluster.ID]int64 {
+	p := s.pool()
+	out := make(map[cluster.ID]int64, p.Len())
+	for _, id := range p.Keys() {
+		if b, ok := p.Peek(id); ok {
+			out[id] = b.configVersion
+		}
+	}
+	return out
+}
+
+// DropStale is Invalidate for a change read from the registry's versions (internal/clustersync): the bundle of id built
+// from builtFrom goes, a bundle built since stays. No replica may have been told of the change, so the cache goes
+// everywhere, as on the replica auth-service tells; the others are not told, each reads the versions itself.
+func (s *Service) DropStale(id cluster.ID, builtFrom int64) {
+	p := s.pool()
+	if b, ok := p.Peek(id); ok && b.configVersion == builtFrom {
+		p.Remove(id) // evict callback Closes the bundle
+	}
+	s.defaultBundle.Store(nil)
+	s.MarkClusterUp(id)
+	s.invalidateCaches()
 }
 
 func (s *Service) dropBundle(id cluster.ID) {

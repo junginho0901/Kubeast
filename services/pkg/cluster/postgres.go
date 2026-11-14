@@ -91,10 +91,10 @@ func (r *PostgresRegistry) Get(ctx context.Context, id ID) (*Info, error) {
 	err := r.pool.QueryRow(ctx, `
 		SELECT id, display_name, mode, kubeconfig_secret_name, api_server_url, is_self_cluster,
 		       prometheus_url, prometheus_auth_secret_name, prometheus_cluster_label, prometheus_service,
-		       log_search_url, log_search_auth_secret_name, log_search_tenant, log_search_cluster_label
+		       log_search_url, log_search_auth_secret_name, log_search_tenant, log_search_cluster_label, config_version
 		FROM clusters WHERE id = $1`, id,
 	).Scan(&info.ID, &info.DisplayName, &mode, &secretName, &apiURL, &info.IsSelfCluster, &promURL, &promSecret, &promLabel, &promSvc,
-		&lsURL, &lsSecret, &lsTenant, &lsLabel)
+		&lsURL, &lsSecret, &lsTenant, &lsLabel, &info.ConfigVersion)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -168,6 +168,31 @@ func (r *PostgresRegistry) Default(ctx context.Context) (ID, error) {
 		return "", err
 	}
 	return id, nil
+}
+
+// Versions returns every registered cluster's config_version, by id: one read
+// of the clusters table, a row per cluster. A cluster with no entry is gone.
+// The row is read in Get before the Secrets, and auth-service writes a Secret
+// before the statement that sets the new version, so an Info whose
+// ConfigVersion equals the one here holds what that version names.
+func (r *PostgresRegistry) Versions(ctx context.Context) (map[ID]int64, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id, config_version FROM clusters`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[ID]int64{}
+	for rows.Next() {
+		var (
+			id ID
+			v  int64
+		)
+		if err := rows.Scan(&id, &v); err != nil {
+			return nil, err
+		}
+		out[id] = v
+	}
+	return out, rows.Err()
 }
 
 // --- Admin metadata view (no kubeconfig blob) ---
@@ -511,8 +536,19 @@ func (r *PostgresRegistry) PrometheusAuthSecretName(ctx context.Context, id ID) 
 	return *name, nil
 }
 
+// changesConnection is whether the patch changes what k8s-service builds a
+// cluster's connection from: the Prometheus source and the log store, kept on
+// its per-cluster bundle. The display name and the API server URL, which is
+// shown only, do not.
+func (p MetaPatch) changesConnection() bool {
+	return p.PrometheusURL != nil || p.PrometheusAuthSecretName != nil || p.PrometheusClusterLabel != nil || p.PrometheusService != nil ||
+		p.LogSearchURL != nil || p.LogSearchAuthSecretName != nil || p.LogSearchTenant != nil || p.LogSearchClusterLabel != nil
+}
+
 // UpdateMeta updates the mutable metadata of a cluster (display name, the
 // display-only API server URL and the Prometheus source). The ID is immutable.
+// A patch that changes the connection (changesConnection) sets a new
+// config_version in the same statement.
 func (r *PostgresRegistry) UpdateMeta(ctx context.Context, id ID, patch MetaPatch) (*Meta, error) {
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE clusters
@@ -526,9 +562,10 @@ func (r *PostgresRegistry) UpdateMeta(ctx context.Context, id ID, patch MetaPatc
 		    log_search_auth_secret_name = CASE WHEN $9::varchar IS NULL THEN log_search_auth_secret_name ELSE NULLIF($9, '') END,
 		    log_search_tenant           = CASE WHEN $10::varchar IS NULL THEN log_search_tenant ELSE NULLIF($10, '') END,
 		    log_search_cluster_label    = CASE WHEN $11::varchar IS NULL THEN log_search_cluster_label ELSE NULLIF($11, '') END,
+		    config_version              = CASE WHEN $12 THEN nextval('cluster_config_version_seq') ELSE config_version END,
 		    updated_at                  = NOW()
 		WHERE id = $1`, id, patch.DisplayName, patch.APIServerURL, patch.PrometheusURL, patch.PrometheusAuthSecretName, patch.PrometheusClusterLabel, patch.PrometheusService,
-		patch.LogSearchURL, patch.LogSearchAuthSecretName, patch.LogSearchTenant, patch.LogSearchClusterLabel)
+		patch.LogSearchURL, patch.LogSearchAuthSecretName, patch.LogSearchTenant, patch.LogSearchClusterLabel, patch.changesConnection())
 	if err != nil {
 		return nil, err
 	}
@@ -555,13 +592,23 @@ func (r *PostgresRegistry) ClusterUID(ctx context.Context, id ID) (string, error
 	return *uid, nil
 }
 
-// SetClusterUID records a cluster's fingerprint (kube-system namespace UID),
-// e.g. backfilling a legacy row on its first kubeconfig rotation.
-func (r *PostgresRegistry) SetClusterUID(ctx context.Context, id ID, uid string) error {
-	_, err := r.pool.Exec(ctx, `
-		UPDATE clusters SET cluster_uid = $2, updated_at = NOW() WHERE id = $1`,
+// KubeconfigReplaced records that cluster id's kubeconfig Secret was written
+// again: a new config_version and, when uid is not empty, the cluster's
+// fingerprint (kube-system namespace UID), e.g. backfilling a legacy row on
+// its first rotation. Call it after the Secret is written (Versions).
+func (r *PostgresRegistry) KubeconfigReplaced(ctx context.Context, id ID, uid string) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE clusters
+		SET cluster_uid = COALESCE($2, cluster_uid), config_version = nextval('cluster_config_version_seq'), updated_at = NOW()
+		WHERE id = $1`,
 		id, nullIfEmpty(uid))
-	return err
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // UpdateHealth records the outcome of a connectivity check.

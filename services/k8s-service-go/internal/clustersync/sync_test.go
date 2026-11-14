@@ -2,6 +2,8 @@ package clustersync
 
 import (
 	"context"
+	"errors"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -12,48 +14,117 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
-// replica is one k8s-service's Sync and the clusters it dropped, in order.
+// registry is the clusters table's versions; err makes a read fail.
+type registry struct {
+	mu       sync.Mutex
+	versions map[cluster.ID]int64
+	err      error
+	reads    int
+}
+
+func (g *registry) Versions(context.Context) (map[cluster.ID]int64, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.reads++
+	if g.err != nil {
+		return nil, g.err
+	}
+	out := make(map[cluster.ID]int64, len(g.versions))
+	for id, v := range g.versions {
+		out[id] = v
+	}
+	return out, nil
+}
+
+func (g *registry) set(id cluster.ID, v int64) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.versions == nil {
+		g.versions = map[cluster.ID]int64{}
+	}
+	g.versions[id] = v
+}
+
+func (g *registry) remove(id cluster.ID) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	delete(g.versions, id)
+}
+
+// replica is one k8s-service: the version each kept bundle was built from, and what it dropped. A dropped bundle is
+// built again only on use, so it stays out of kept.
 type replica struct {
 	*Sync
 	mu      sync.Mutex
-	dropped []cluster.ID
+	kept    map[cluster.ID]int64
+	stale   []string
+	notices []cluster.ID
 }
 
-func (r *replica) drop(id cluster.ID) {
-	r.mu.Lock()
-	r.dropped = append(r.dropped, id)
-	r.mu.Unlock()
-}
-
-func (r *replica) drops() []cluster.ID {
+func (r *replica) ClusterVersions() map[cluster.ID]int64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return append([]cluster.ID(nil), r.dropped...)
+	out := make(map[cluster.ID]int64, len(r.kept))
+	for id, v := range r.kept {
+		out[id] = v
+	}
+	return out
 }
 
-func newReplica(t *testing.T, mr *miniredis.Miniredis, every time.Duration) *replica {
+func (r *replica) DropStale(id cluster.ID, builtFrom int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.kept[id] == builtFrom {
+		delete(r.kept, id)
+	}
+	r.stale = append(r.stale, string(id))
+}
+
+func (r *replica) DropCluster(id cluster.ID) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.kept, id)
+	r.notices = append(r.notices, id)
+}
+
+func (r *replica) build(id cluster.ID, v int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.kept[id] = v
+}
+
+func (r *replica) staleDrops() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := append([]string(nil), r.stale...)
+	sort.Strings(out)
+	return out
+}
+
+func (r *replica) noticeDrops() []cluster.ID {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]cluster.ID(nil), r.notices...)
+}
+
+func newReplica(t *testing.T, g *registry, mr *miniredis.Miniredis, every time.Duration) *replica {
 	t.Helper()
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: -1})
-	t.Cleanup(func() { _ = rdb.Close() })
-	r := &replica{Sync: New(rdb)}
+	var rdb *redis.Client
+	if mr != nil {
+		rdb = redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: -1})
+		t.Cleanup(func() { _ = rdb.Close() })
+	}
+	r := &replica{Sync: New(g, rdb), kept: map[cluster.ID]int64{}}
 	r.Every = every
 	return r
 }
 
-// start loads and runs r until the test ends.
-func (r *replica) start(t *testing.T) {
-	t.Helper()
-	if err := r.Load(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	r.run(t)
-}
-
+// run runs r until the test ends.
 func (r *replica) run(t *testing.T) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	go func() { r.Run(ctx, r.drop); close(done) }()
+	go func() { r.Run(ctx, r); close(done) }()
 	t.Cleanup(func() { cancel(); <-done })
 }
 
@@ -73,7 +144,7 @@ func eventually(t *testing.T, ok func() bool) {
 	}
 }
 
-func equal(a, b []cluster.ID) bool {
+func equal[T comparable](a, b []T) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -85,158 +156,120 @@ func equal(a, b []cluster.ID) bool {
 	return true
 }
 
-// The replica auth-service told counts the change; each other replica drops the cluster once, on the notice, and
-// its later reads of the versions drop nothing more. The replica that counted it drops nothing here: it already did.
-func TestAChangeIsDroppedOnceOnEveryOtherReplica(t *testing.T) {
-	mr := miniredis.RunT(t)
-	a, b, c := newReplica(t, mr, 30*time.Millisecond), newReplica(t, mr, 30*time.Millisecond), newReplica(t, mr, 30*time.Millisecond)
-	a.start(t)
-	b.start(t)
-	c.start(t)
-	waitSubscribers(t, mr, 3)
-
-	a.Changed("prod")
-	want := []cluster.ID{"prod"}
-	eventually(t, func() bool { return equal(b.drops(), want) && equal(c.drops(), want) })
-	time.Sleep(200 * time.Millisecond) // several reads of the versions
-	if got := b.drops(); !equal(got, want) {
-		t.Errorf("b dropped %v, want %v", got, want)
+// A read of the versions drops each bundle built from another version and each of a cluster gone, and keeps the
+// bundles built from the version the registry has.
+func TestABundleBuiltFromAnotherVersionOrOfAClusterGoneIsDropped(t *testing.T) {
+	g := &registry{versions: map[cluster.ID]int64{"prod": 8, "dev": 3}}
+	r := newReplica(t, g, nil, time.Hour)
+	r.build("prod", 7) // built before the change
+	r.build("dev", 3)  // current
+	r.build("old", 4)  // deleted since
+	r.build("re", 0)   // deleted and registered again: a new row, a new value
+	g.set("re", 12)
+	r.Compare(context.Background(), r)
+	if got, want := r.staleDrops(), []string{"old", "prod", "re"}; !equal(got, want) {
+		t.Fatalf("dropped %v, want %v", got, want)
 	}
-	if got := c.drops(); !equal(got, want) {
-		t.Errorf("c dropped %v, want %v", got, want)
+	if got := r.ClusterVersions(); len(got) != 1 || got["dev"] != 3 {
+		t.Fatalf("kept %v, want dev at 3", got)
 	}
-	if got := a.drops(); len(got) != 0 {
-		t.Errorf("a dropped %v on its own change", got)
-	}
-	if got := mr.HGet(VersionsKey, "c:prod"); got != "1" {
-		t.Errorf("version %q, want 1", got)
+	r.build("prod", 8) // built again from the new row
+	r.Compare(context.Background(), r)
+	if got := r.staleDrops(); len(got) != 3 {
+		t.Fatalf("the rebuilt bundle was dropped too: %v", got)
 	}
 }
 
-// A replica that was not subscribed when the change was counted finds it in the versions as soon as it subscribes.
-func TestANoticeMissedIsReadFromTheVersions(t *testing.T) {
-	mr := miniredis.RunT(t)
-	a := newReplica(t, mr, time.Hour)
-	b := newReplica(t, mr, time.Hour) // no timed read: only the read on subscribing finds it
-	a.start(t)
-	if err := b.Load(context.Background()); err != nil {
-		t.Fatal(err)
+// A read that fails drops nothing; the next one that works compares as usual.
+func TestAVersionsReadThatFailsDropsNothing(t *testing.T) {
+	g := &registry{versions: map[cluster.ID]int64{"prod": 2}, err: errors.New("database down")}
+	r := newReplica(t, g, nil, time.Hour)
+	r.build("prod", 1)
+	r.Compare(context.Background(), r)
+	if got := r.staleDrops(); len(got) != 0 {
+		t.Fatalf("dropped %v on a failed read", got)
 	}
-
-	a.Changed("prod")
-	a.Changed("dev")
-	b.run(t)
-	eventually(t, func() bool { return len(b.drops()) == 2 })
-	time.Sleep(100 * time.Millisecond)
-	if got := b.drops(); len(got) != 2 || got[0] == got[1] {
-		t.Fatalf("b dropped %v, want prod and dev once each", got)
+	g.mu.Lock()
+	g.err = nil
+	g.mu.Unlock()
+	r.Compare(context.Background(), r)
+	if got := r.staleDrops(); !equal(got, []string{"prod"}) {
+		t.Fatalf("dropped %v after the read came back", got)
 	}
 }
 
-// What was counted before a replica read the versions is in what it reads from the registry: it drops nothing.
-func TestChangesBeforeLoadAreNotDropped(t *testing.T) {
-	mr := miniredis.RunT(t)
-	a := newReplica(t, mr, time.Hour)
-	a.start(t)
-	a.Changed("prod")
-	a.Changed("prod")
-
-	b := newReplica(t, mr, 20*time.Millisecond)
-	b.start(t)
-	waitSubscribers(t, mr, 2)
-	time.Sleep(150 * time.Millisecond)
-	if got := b.drops(); len(got) != 0 {
-		t.Fatalf("b dropped %v at start", got)
+// Without Redis the versions alone reach the replica, on its timer.
+func TestWithoutRedisTheVersionsStillReachTheReplica(t *testing.T) {
+	g := &registry{versions: map[cluster.ID]int64{"prod": 1}}
+	r := newReplica(t, g, nil, 20*time.Millisecond)
+	r.build("prod", 1)
+	r.Changed("prod") // no Redis: nothing to publish, nothing panics
+	r.run(t)
+	time.Sleep(60 * time.Millisecond)
+	if got := r.staleDrops(); len(got) != 0 {
+		t.Fatalf("dropped %v with nothing changed", got)
 	}
+	g.set("prod", 2)
+	eventually(t, func() bool { return equal(r.staleDrops(), []string{"prod"}) })
 }
 
-// Redis that lost its data starts the versions again under a new epoch: a change after that is dropped even where its
-// version is lower than the one seen before, and a cluster not changed since is not.
-func TestVersionsLostInRedisStartANewEpoch(t *testing.T) {
+// The replica auth-service told publishes a notice; each other replica drops the cluster on it, at once, and the
+// publisher, which dropped it already, does not hear its own.
+func TestANoticeDropsTheClusterOnTheOtherReplicasNotOnItsOwn(t *testing.T) {
 	mr := miniredis.RunT(t)
-	a, b := newReplica(t, mr, 20*time.Millisecond), newReplica(t, mr, 20*time.Millisecond)
-	a.start(t)
-	b.start(t)
-	waitSubscribers(t, mr, 2)
+	g := &registry{versions: map[cluster.ID]int64{"prod": 1, "dev": 1}}
+	var rs []*replica
 	for range 3 {
-		a.Changed("prod")
+		r := newReplica(t, g, mr, time.Hour) // no timed read: only the notice can drop it
+		r.build("prod", 1)
+		r.build("dev", 1)
+		r.run(t)
+		rs = append(rs, r)
 	}
-	a.Changed("dev")
-	eventually(t, func() bool { return len(b.drops()) == 4 })
-	before := mr.HGet(VersionsKey, epochField)
+	waitSubscribers(t, mr, 3)
+	// the reads made on subscribing found nothing changed
+	for i, r := range rs {
+		if got := r.staleDrops(); len(got) != 0 {
+			t.Fatalf("replica %d dropped %v on subscribing", i, got)
+		}
+	}
 
-	mr.FlushAll()
-	time.Sleep(100 * time.Millisecond) // reads of an empty hash change nothing
-	a.Changed("prod")
-	eventually(t, func() bool { return len(b.drops()) == 5 })
-	time.Sleep(100 * time.Millisecond)
-	got := b.drops()
-	if len(got) != 5 || got[4] != "prod" {
-		t.Fatalf("b dropped %v, want prod once more and not dev", got)
+	rs[0].Changed("prod")
+	want := []cluster.ID{"prod"}
+	eventually(t, func() bool { return equal(rs[1].noticeDrops(), want) && equal(rs[2].noticeDrops(), want) })
+	time.Sleep(50 * time.Millisecond)
+	if got := rs[0].noticeDrops(); len(got) != 0 {
+		t.Errorf("the publisher dropped %v on its own notice", got)
 	}
-	if after := mr.HGet(VersionsKey, epochField); after == "" || after == before {
-		t.Fatalf("epoch %q after %q", after, before)
-	}
-	if v := mr.HGet(VersionsKey, "c:prod"); v != "1" {
-		t.Fatalf("prod version %q, want 1 in the new epoch", v)
+	for i, r := range rs {
+		if _, ok := r.ClusterVersions()["dev"]; !ok {
+			t.Errorf("replica %d dropped dev", i)
+		}
 	}
 }
 
-// A change Redis does not take is dropped on the replica that took it and counted on its next read once Redis
-// answers, so the others still drop it.
-func TestAChangeRedisDidNotTakeIsCountedLater(t *testing.T) {
+// A replica that subscribes, again or for the first time, reads the versions at once: a notice sent while it was
+// not subscribed is gone, the version is not.
+func TestASubscriptionReadsTheVersionsAtOnce(t *testing.T) {
 	mr := miniredis.RunT(t)
-	a, b := newReplica(t, mr, 20*time.Millisecond), newReplica(t, mr, 20*time.Millisecond)
-	a.start(t)
-	b.start(t)
-	waitSubscribers(t, mr, 2)
-
-	mr.SetError("LOADING Redis is loading the dataset in memory")
-	a.Changed("prod")
-	time.Sleep(100 * time.Millisecond)
-	if got := b.drops(); len(got) != 0 {
-		t.Fatalf("b dropped %v while Redis refused", got)
-	}
-	mr.SetError("")
-	eventually(t, func() bool { return equal(b.drops(), []cluster.ID{"prod"}) })
-	time.Sleep(100 * time.Millisecond)
-	if got := b.drops(); !equal(got, []cluster.ID{"prod"}) {
-		t.Fatalf("b dropped %v, want prod once", got)
-	}
-	if got := a.drops(); len(got) != 0 {
-		t.Fatalf("a dropped %v", got)
-	}
+	g := &registry{versions: map[cluster.ID]int64{"prod": 2}}
+	r := newReplica(t, g, mr, time.Hour)
+	r.build("prod", 1)
+	r.run(t)
+	eventually(t, func() bool { return equal(r.staleDrops(), []string{"prod"}) })
 }
 
-// A replica that could not read the versions at start takes them on its first read without dropping, and drops what
-// changes after.
-func TestAReplicaThatCouldNotLoadTakesTheVersionsOnItsFirstRead(t *testing.T) {
-	mr := miniredis.RunT(t)
-	a := newReplica(t, mr, time.Hour)
-	a.start(t)
-	a.Changed("prod")
-
-	b := newReplica(t, mr, 20*time.Millisecond)
-	b.run(t) // no Load
-	waitSubscribers(t, mr, 2)
-	time.Sleep(100 * time.Millisecond)
-	if got := b.drops(); len(got) != 0 {
-		t.Fatalf("b dropped %v on its first read", got)
-	}
-	a.Changed("prod")
-	eventually(t, func() bool { return equal(b.drops(), []cluster.ID{"prod"}) })
-}
-
-// Two installs sharing one Redis on two databases keep their notices and versions apart: pub/sub ignores the
-// database number, the channel names it.
+// Two installs sharing one Redis on two databases keep their notices apart: pub/sub ignores the database number, the
+// channel names it.
 func TestInstallsOnTwoDatabasesDoNotHearEachOther(t *testing.T) {
 	mr := miniredis.RunT(t)
+	g := &registry{versions: map[cluster.ID]int64{"prod": 1}}
 	onDB := func(db int) *replica {
 		rdb := redis.NewClient(&redis.Options{Addr: mr.Addr(), DB: db, MaxRetries: -1})
 		t.Cleanup(func() { _ = rdb.Close() })
-		r := &replica{Sync: New(rdb)}
-		r.Every = 20 * time.Millisecond
-		r.start(t)
+		r := &replica{Sync: New(g, rdb), kept: map[cluster.ID]int64{"prod": 1}}
+		r.Every = time.Hour
+		r.run(t)
 		return r
 	}
 	a, b := onDB(0), onDB(1)
@@ -249,7 +282,7 @@ func TestInstallsOnTwoDatabasesDoNotHearEachOther(t *testing.T) {
 	})
 	a.Changed("prod")
 	time.Sleep(150 * time.Millisecond)
-	if got := b.drops(); len(got) != 0 {
+	if got := b.noticeDrops(); len(got) != 0 {
 		t.Fatalf("the install on db 1 dropped %v", got)
 	}
 }
@@ -257,20 +290,21 @@ func TestInstallsOnTwoDatabasesDoNotHearEachOther(t *testing.T) {
 // A notice that is not one of ours changes nothing.
 func TestANoticeNotUnderstoodIsIgnored(t *testing.T) {
 	mr := miniredis.RunT(t)
-	b := newReplica(t, mr, time.Hour)
-	b.start(t)
+	g := &registry{}
+	b := newReplica(t, g, mr, time.Hour)
+	b.run(t)
 	waitSubscribers(t, mr, 1)
 	mr.Publish(ChannelFor(0), "not json")
-	mr.Publish(ChannelFor(0), `{"epoch":"","cluster":"prod","version":1}`)
+	mr.Publish(ChannelFor(0), `{"from":"someone"}`)
 	time.Sleep(100 * time.Millisecond)
-	if got := b.drops(); len(got) != 0 {
+	if got := b.noticeDrops(); len(got) != 0 {
 		t.Fatalf("dropped %v", got)
 	}
 }
 
 func TestSpreadStaysWithinAFifth(t *testing.T) {
 	for range 1000 {
-		if d := spread(30 * time.Second); d < 24*time.Second || d > 36*time.Second {
+		if d := spread(DefaultEvery); d < 4*time.Second || d > 6*time.Second {
 			t.Fatalf("spread %v", d)
 		}
 	}
