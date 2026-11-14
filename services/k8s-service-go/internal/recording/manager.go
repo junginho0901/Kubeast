@@ -37,6 +37,18 @@ const (
 	maxBackoff   = 5 * time.Minute
 	// an unreachable store must fail a part, not hold the uploader for every session
 	partPutTimeout = 30 * time.Second
+
+	// The owner of a recording refreshes its row's heartbeat this often; a row
+	// whose heartbeat is ownerStaleAfter old (four missed beats) has no live
+	// owner. Every recoverEvery each recorder takes such rows.
+	heartbeatEvery  = 15 * time.Second
+	ownerStaleAfter = time.Minute
+	recoverEvery    = 30 * time.Second
+	beatTimeout     = 5 * time.Second
+	// A row written before rows had owners is taken once this process has run
+	// this long: a rolling update stops the old pod within its grace period
+	// after the new one is ready.
+	unownedAfter = 5 * time.Minute
 )
 
 type tracked struct {
@@ -59,12 +71,21 @@ type Manager struct {
 	cfg        Config
 	store      Store
 	pool       *pgxpool.Pool
+	rows       index
+	owner      string // this process in the rows it writes: host name and a random suffix
+	started    time.Time
 	now        func() time.Time
 	putTimeout time.Duration
 
-	mu     sync.Mutex
-	active map[string]*tracked
-	wake   chan struct{}
+	beatEvery, staleAfter, recoverEvery, unownedAfter time.Duration
+
+	mu       sync.Mutex
+	active   map[string]*tracked
+	wake     chan struct{}
+	flushing chan struct{} // one slot: the flush, recovery or hand-over that holds it
+
+	beatMu     sync.Mutex
+	handedOver bool // under beatMu: Shutdown gave this process's rows up, no more beats
 
 	failures    atomic.Int64
 	uploaded    atomic.Int64
@@ -73,7 +94,10 @@ type Manager struct {
 
 // New builds the manager; with recording off it returns a disabled manager.
 func New(cfg Config, pool *pgxpool.Pool) (*Manager, error) {
-	m := &Manager{cfg: cfg, pool: pool, now: time.Now, putTimeout: partPutTimeout, active: map[string]*tracked{}, wake: make(chan struct{}, 1)}
+	m := &Manager{cfg: cfg, pool: pool, rows: pgIndex{pool}, owner: processOwner(), now: time.Now, putTimeout: partPutTimeout,
+		beatEvery: heartbeatEvery, staleAfter: ownerStaleAfter, recoverEvery: recoverEvery, unownedAfter: unownedAfter,
+		active: map[string]*tracked{}, wake: make(chan struct{}, 1), flushing: make(chan struct{}, 1)}
+	m.started = m.now()
 	if !cfg.Enabled {
 		return m, nil
 	}
@@ -87,6 +111,16 @@ func New(cfg Config, pool *pgxpool.Pool) (*Manager, error) {
 	m.store = st
 	m.lastSuccess.Store(time.Now().Unix())
 	return m, nil
+}
+
+// processOwner names this process apart from every other, the pod's earlier
+// containers too: the host name (the pod's) and a random suffix.
+func processOwner() string {
+	id := uuid.NewString()[:8]
+	if host, err := os.Hostname(); err == nil && host != "" {
+		return host + "/" + id
+	}
+	return id
 }
 
 func (m *Manager) Enabled() bool  { return m != nil && m.cfg.Enabled }
@@ -110,10 +144,7 @@ func (m *Manager) Start(ctx context.Context, meta Meta) (*Session, error) {
 		return nil, fmt.Errorf("recording spool: %w", err)
 	}
 	location := m.store.Location(meta)
-	if _, err := m.pool.Exec(ctx, `
-		INSERT INTO session_recordings (id, kind, user_id, user_email, cluster, namespace, target, container, storage, location, started_at, status)
-		VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), $5, NULLIF($6,''), $7, NULLIF($8,''), $9, $10, $11, 'recording')`,
-		meta.ID, meta.Kind, meta.UserID, meta.UserEmail, meta.Cluster, meta.Namespace, meta.Target, meta.Container, m.cfg.Storage, location, meta.StartedAt); err != nil {
+	if err := m.rows.insert(ctx, meta, m.cfg.Storage, location, m.owner); err != nil {
 		s.Close()
 		_ = os.Remove(path)
 		return nil, fmt.Errorf("recording index: %w", err)
@@ -143,7 +174,7 @@ func (m *Manager) Abort(s *Session) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, _ = m.pool.Exec(ctx, `DELETE FROM session_recordings WHERE id = $1`, s.ID)
+	_ = m.rows.remove(ctx, s.ID)
 }
 
 func (m *Manager) ended(s *Session) {
@@ -160,7 +191,7 @@ func (m *Manager) ended(s *Session) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	size := fileSize(t.path)
-	_, _ = m.pool.Exec(ctx, `UPDATE session_recordings SET ended_at = NOW(), bytes = $2, truncated = $3, status = 'uploading', updated_at = NOW() WHERE id = $1`, s.ID, size, t.truncated)
+	_ = m.rows.ended(ctx, s.ID, size, t.truncated)
 	m.kick()
 }
 
@@ -171,23 +202,69 @@ func (m *Manager) kick() {
 	}
 }
 
-// Run recovers recordings left by a previous process, then uploads parts
-// every ChunkSeconds and whenever a session ends, until ctx ends.
+// Run keeps this process's rows alive, takes over the recordings no live
+// process holds (at start and every recoverEvery), and uploads parts every
+// ChunkSeconds and whenever a session ends, until ctx ends.
 func (m *Manager) Run(ctx context.Context) {
 	if !m.Enabled() {
 		return
 	}
+	beating := make(chan struct{})
+	go func() {
+		defer close(beating)
+		m.keepAlive(ctx)
+	}()
+	defer func() { <-beating }()
 	m.recover(ctx)
 	t := time.NewTicker(time.Duration(m.cfg.ChunkSeconds) * time.Second)
+	defer t.Stop()
+	look := time.NewTicker(m.recoverEvery)
+	defer look.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-look.C:
+			m.recover(ctx)
+			continue
+		case <-t.C:
+		case <-m.wake:
+		}
+		m.flush(ctx)
+	}
+}
+
+// keepAlive refreshes the heartbeat of the rows this process holds, on its
+// own goroutine so that a flush waiting on a slow store does not hold it back.
+func (m *Manager) keepAlive(ctx context.Context) {
+	t := time.NewTicker(m.beatEvery)
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-		case <-m.wake:
+			m.beat(ctx)
 		}
-		m.flush(ctx)
+	}
+}
+
+func (m *Manager) beat(ctx context.Context) {
+	m.beatMu.Lock()
+	defer m.beatMu.Unlock()
+	if m.handedOver {
+		return
+	}
+	m.mu.Lock()
+	n := len(m.active)
+	m.mu.Unlock()
+	if n == 0 {
+		return
+	}
+	bctx, cancel := context.WithTimeout(ctx, beatTimeout)
+	defer cancel()
+	if err := m.rows.beat(bctx, m.owner); err != nil {
+		slog.Warn("recording: heartbeat", "err", err)
 	}
 }
 
@@ -210,48 +287,110 @@ func (m *Manager) Shutdown(ctx context.Context) {
 		s.Close()
 	}
 	m.flush(ctx)
+	m.handOver(ctx)
 }
 
-// recover picks up rows a previous process left mid-way: the spool file is
-// uploaded and the recording marked interrupted (the session was cut off).
-func (m *Manager) recover(ctx context.Context) {
-	rows, err := m.pool.Query(ctx, `SELECT id, kind, cluster, target, location, uploaded_bytes, parts, status, started_at FROM session_recordings WHERE status IN ('recording', 'uploading')`)
-	if err != nil {
-		slog.Warn("recording: recovery query", "err", err)
+// handOver clears the heartbeat of this process's rows still open (an upload
+// that failed or ran out of time), so another recorder takes them at its next
+// look instead of after staleAfter. It keeps the flush slot: nothing of this
+// process uploads, takes a row or beats after it. A flush still under way when
+// ctx ends keeps the rows, and they go stale instead.
+func (m *Manager) handOver(ctx context.Context) {
+	select {
+	case m.flushing <- struct{}{}:
+	case <-ctx.Done():
 		return
 	}
-	var found []*tracked
-	for rows.Next() {
-		var t tracked
-		var status string
-		if err := rows.Scan(&t.meta.ID, &t.meta.Kind, &t.meta.Cluster, &t.meta.Target, &t.location, &t.offset, &t.parts, &status, &t.meta.StartedAt); err != nil {
+	m.beatMu.Lock()
+	defer m.beatMu.Unlock()
+	m.handedOver = true
+	if err := m.rows.handOver(ctx, m.owner); err != nil {
+		slog.Warn("recording: hand-over", "err", err)
+	}
+}
+
+// recover takes the rows of recordings no live process holds and returns how
+// many it took. Taking one is a conditional update on the owner and heartbeat
+// it read, so of two recorders looking at once one gets it. A recording whose
+// spool file this process holds is uploaded, and marked interrupted if it was
+// still recording (the session was cut off); one whose file is elsewhere is
+// closed out with the parts uploaded before.
+func (m *Manager) recover(ctx context.Context) int {
+	select {
+	case m.flushing <- struct{}{}:
+	case <-ctx.Done():
+		return 0
+	}
+	defer func() { <-m.flushing }()
+	open, now, err := m.rows.open(ctx)
+	if err != nil {
+		slog.Warn("recording: recovery query", "err", err)
+		return 0
+	}
+	taken := 0
+	for _, r := range open {
+		if !m.takeable(r, now) {
 			continue
 		}
-		t.path = filepath.Join(m.cfg.SpoolDir, t.meta.ID+".cast")
-		t.ended = true
-		t.interrupted = status == "recording"
-		found = append(found, &t)
-	}
-	rows.Close()
-	for _, t := range found {
+		ok, err := m.rows.take(ctx, r, m.owner)
+		if err != nil {
+			slog.Warn("recording: taking a recording over", "id", r.id, "err", err)
+		}
+		if !ok {
+			continue
+		}
+		taken++
+		t := &tracked{
+			meta:     Meta{ID: r.id, Kind: r.kind, Cluster: r.cluster, Target: r.target, StartedAt: r.startedAt},
+			location: r.location, offset: r.uploaded, parts: r.parts,
+			path: filepath.Join(m.cfg.SpoolDir, r.id+".cast"), ended: true, interrupted: r.status == "recording",
+		}
 		if _, err := os.Stat(t.path); err != nil {
-			_, _ = m.pool.Exec(ctx, `UPDATE session_recordings SET status = 'interrupted', ended_at = COALESCE(ended_at, NOW()), bytes = GREATEST(bytes, uploaded_bytes), last_error = 'spool file lost; parts uploaded before are kept', updated_at = NOW() WHERE id = $1`, t.meta.ID)
+			_ = m.rows.lost(ctx, r.id, m.owner)
 			continue
 		}
 		if t.interrupted {
-			_, _ = m.pool.Exec(ctx, `UPDATE session_recordings SET ended_at = COALESCE(ended_at, NOW()), bytes = $2, updated_at = NOW() WHERE id = $1`, t.meta.ID, fileSize(t.path))
+			_ = m.rows.cutOff(ctx, r.id, fileSize(t.path))
 		}
 		m.mu.Lock()
-		m.active[t.meta.ID] = t
+		m.active[r.id] = t
 		m.mu.Unlock()
-		slog.Info("recording: resuming upload left by the previous process", "id", t.meta.ID, "interrupted", t.interrupted)
+		slog.Info("recording: resuming upload left by another process", "id", r.id, "interrupted", t.interrupted, "previous_owner", r.owner)
+	}
+	return taken
+}
+
+// takeable: a row no live process holds. Its owner handed it over at
+// shutdown (no heartbeat) or stopped beating staleAfter ago; a row written
+// before rows had owners waits until this process has run unownedAfter. A row
+// this process holds is never taken, also when another took it from it.
+func (m *Manager) takeable(r openRow, now time.Time) bool {
+	m.mu.Lock()
+	_, held := m.active[r.id]
+	m.mu.Unlock()
+	switch {
+	case held || r.owner == m.owner:
+		return false
+	case r.owner == "":
+		return m.now().Sub(m.started) >= m.unownedAfter
+	case r.heartbeat == nil:
+		return true
+	default:
+		return now.Sub(*r.heartbeat) >= m.staleAfter
 	}
 }
 
 // flush uploads every tracked recording's new bytes as parts. A live
 // recording uploads whole lines only; an ended one uploads the rest and is
-// closed out.
+// closed out. One runs at a time: Run's and Shutdown's would both send the
+// same part and count it twice.
 func (m *Manager) flush(ctx context.Context) {
+	select {
+	case m.flushing <- struct{}{}:
+	case <-ctx.Done():
+		return
+	}
+	defer func() { <-m.flushing }()
 	m.mu.Lock()
 	list := make([]*tracked, 0, len(m.active))
 	for _, t := range m.active {
@@ -274,7 +413,7 @@ func (m *Manager) flush(ctx context.Context) {
 				t.backoff = maxBackoff
 			}
 			t.nextTry = now.Add(t.backoff)
-			_, _ = m.pool.Exec(ctx, `UPDATE session_recordings SET last_error = $2, updated_at = NOW() WHERE id = $1`, t.meta.ID, truncateErr(err))
+			_ = m.rows.failed(ctx, t.meta.ID, truncateErr(err))
 			slog.Warn("recording: upload failed; retrying", "id", t.meta.ID, "err", err, "retry_in", t.backoff.String())
 			continue
 		}
@@ -284,7 +423,7 @@ func (m *Manager) flush(ctx context.Context) {
 			if t.interrupted {
 				status = "interrupted"
 			}
-			_, _ = m.pool.Exec(ctx, `UPDATE session_recordings SET status = $2, last_error = NULL, updated_at = NOW() WHERE id = $1`, t.meta.ID, status)
+			_ = m.rows.finished(ctx, t.meta.ID, status)
 			_ = os.Remove(t.path)
 			m.mu.Lock()
 			delete(m.active, t.meta.ID)
@@ -332,16 +471,14 @@ func (m *Manager) uploadNew(ctx context.Context, t *tracked, ended bool) error {
 		if err != nil {
 			return err
 		}
+		// under mu for PendingBytes; flush is the only writer
+		m.mu.Lock()
 		t.offset += int64(len(buf))
 		t.parts++
+		m.mu.Unlock()
 		m.uploaded.Add(int64(len(buf)))
 		m.lastSuccess.Store(m.now().Unix())
-		status := "recording"
-		if ended {
-			status = "uploading"
-		}
-		if _, err := m.pool.Exec(ctx, `UPDATE session_recordings SET uploaded_bytes = $2, parts = $3, status = CASE WHEN status = 'recording' THEN $4 ELSE status END, last_error = NULL, updated_at = NOW() WHERE id = $1`,
-			t.meta.ID, t.offset, t.parts, status); err != nil {
+		if err := m.rows.uploaded(ctx, t.meta.ID, t.offset, t.parts, ended); err != nil {
 			return err
 		}
 	}

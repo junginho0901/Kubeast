@@ -10,22 +10,26 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// lookupStub answers a version that a test can move, or an error.
+// lookupStub answers a version and signed-out sign-ins that a test can move, or an error.
 type lookupStub struct {
-	version atomic.Int32
-	err     atomic.Value // error
-	calls   atomic.Int32
-	lastKey atomic.Value // string
+	version   atomic.Int32
+	signedOut atomic.Value // []int64
+	err       atomic.Value // error
+	calls     atomic.Int32
+	lastKey   atomic.Value // string
 }
 
-func (l *lookupStub) lookup(_ context.Context, userID, apiKeyID string) (int, error) {
+func (l *lookupStub) lookup(_ context.Context, userID, apiKeyID string) (SessionState, error) {
 	l.calls.Add(1)
 	l.lastKey.Store(userID + "|" + apiKeyID)
 	if e, _ := l.err.Load().(*errBox); e != nil && e.err != nil {
-		return 0, e.err
+		return SessionState{}, e.err
 	}
-	return int(l.version.Load()), nil
+	out, _ := l.signedOut.Load().([]int64)
+	return SessionState{Version: int(l.version.Load()), SignedOut: out}, nil
 }
+
+func (l *lookupStub) signOut(authTimes ...int64) { l.signedOut.Store(authTimes) }
 
 type errBox struct{ err error }
 
@@ -67,6 +71,57 @@ func TestAMovedTokenVersionEndsAnOpenConnection(t *testing.T) {
 	l.version.Store(6)
 	if got := waitEnded(t, held); got != SessionRevoked {
 		t.Fatalf("code = %q, want %q", got, SessionRevoked)
+	}
+}
+
+func TestASignOutEndsAnOpenConnectionOfThatSignInAtItsNextCheck(t *testing.T) {
+	l := &lookupStub{}
+	l.version.Store(5)
+	signedIn := time.Now().Add(-time.Hour).Unix()
+	held, release := fastSessions(l, 8*time.Hour).Hold(context.Background(), TokenPayload{UserID: "u1", TokenVersion: 5, AuthTime: signedIn})
+	defer release()
+	stillHeld(t, held, 30*time.Millisecond)
+	l.signOut(signedIn)
+	if got := waitEnded(t, held); got != SessionSignedOut {
+		t.Fatalf("code = %q, want %q", got, SessionSignedOut)
+	}
+}
+
+func TestASignOutLeavesTheUsersOtherSignInsAndKeyTokensOpen(t *testing.T) {
+	l := &lookupStub{}
+	l.version.Store(5)
+	ended := time.Now().Add(-2 * time.Hour).Unix()
+	s := fastSessions(l, 8*time.Hour)
+	signedOut, release1 := s.Hold(context.Background(), TokenPayload{UserID: "u1", TokenVersion: 5, AuthTime: ended})
+	defer release1()
+	other, release2 := s.Hold(context.Background(), TokenPayload{UserID: "u1", TokenVersion: 5, AuthTime: ended + 1})
+	defer release2()
+	// A key's token of the same second is no sign-in.
+	key, release3 := s.Hold(context.Background(), TokenPayload{UserID: "u1", TokenVersion: 5, AuthTime: ended, APIKeyID: "k1"})
+	defer release3()
+	l.signOut(ended)
+	if got := waitEnded(t, signedOut); got != SessionSignedOut {
+		t.Fatalf("code = %q, want %q", got, SessionSignedOut)
+	}
+	stillHeld(t, other, 60*time.Millisecond)
+	stillHeld(t, key, time.Millisecond)
+}
+
+func TestASignOutSeenBeforeAnOutageStillEndsTheConnection(t *testing.T) {
+	l := &lookupStub{}
+	l.version.Store(5)
+	ended := time.Now().Add(-time.Hour).Unix()
+	l.signOut(ended)
+	s := fastSessions(l, 0)
+	if err := s.check(context.Background(), TokenPayload{UserID: "u1", TokenVersion: 5, AuthTime: ended + 60}); err != nil {
+		t.Fatal(err)
+	}
+	l.fail(errors.New("connection refused"))
+	time.Sleep(5 * time.Millisecond)
+	err := s.check(context.Background(), TokenPayload{UserID: "u1", TokenVersion: 5, AuthTime: ended})
+	var gone *SessionEndError
+	if !errors.As(err, &gone) || gone.Code != SessionSignedOut {
+		t.Fatalf("err = %v, want signed out", err)
 	}
 }
 
@@ -268,7 +323,7 @@ func TestValidateCarriesTheTokensExpiry(t *testing.T) {
 // Nothing above the check's goroutine recovers: a panic there ends the connection it holds and not the service.
 func TestAPanicInTheSessionCheckEndsThatConnection(t *testing.T) {
 	s := NewLiveSessions(LiveSessionConfig{
-		Lookup:     func(context.Context, string, string) (int, error) { panic("the store answered nonsense") },
+		Lookup:     func(context.Context, string, string) (SessionState, error) { panic("the store answered nonsense") },
 		CheckEvery: 5 * time.Millisecond, CacheTTL: time.Millisecond, StaleTTL: 150 * time.Millisecond,
 	})
 	held, release := s.Hold(context.Background(), TokenPayload{UserID: "u1", TokenVersion: 5})
