@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { stripToolDetails } from '@/services/chatTextUtils'
 import { ChatCharts } from '@/components/ChatChart'
 import { ChatAnswerMarkdown } from '@/components/ChatAnswerMarkdown'
+import { maskValuesOf, type MaskValues } from '@/services/maskValues'
 
 export interface DisplayMessage {
   // 'error' = why a turn failed, in its place under that turn
@@ -16,6 +17,9 @@ export interface DisplayMessage {
   toolCalls?: unknown[]
   // a saved answer that ended by an error (its usage says so): what came before the error
   failed?: boolean
+  // a saved message's id, and the values behind the answer's placeholders while it is the stream's (services/maskValues)
+  id?: number
+  maskValues?: MaskValues | null
 }
 
 interface MessageListProps {
@@ -61,7 +65,8 @@ export function MessageList({ messages, emptyExtras }: MessageListProps) {
         </div>
       ) : (
         <Fragment key={position}>
-          <MessageBubble role={msg.role} content={msg.content} pending={msg.pending} toolCalls={msg.toolCalls} />
+          <MessageBubble role={msg.role} content={msg.content} pending={msg.pending} toolCalls={msg.toolCalls}
+            values={msg.maskValues ?? maskValuesOf(msg.id)} />
           {/* the error itself is not saved: once this page is read again, this is what is left of it */}
           {msg.failed && messages[position + 1]?.role !== 'error' && (
             <div className="rounded-md border border-red-700/50 bg-red-900/20 px-3 py-2 text-xs text-red-300" data-testid="floating-answer-failed">
@@ -79,10 +84,11 @@ interface MessageBubbleProps {
   content: string
   pending?: boolean
   toolCalls?: unknown[]
+  values?: MaskValues | null
 }
 
 // memo: while an answer comes the list is drawn every few milliseconds, and the bubbles above it have not changed.
-const MessageBubble = memo(function MessageBubble({ role, content, pending, toolCalls }: MessageBubbleProps) {
+const MessageBubble = memo(function MessageBubble({ role, content, pending, toolCalls, values }: MessageBubbleProps) {
   if (role === 'user') {
     return (
       <div className="flex justify-end">
@@ -98,7 +104,7 @@ const MessageBubble = memo(function MessageBubble({ role, content, pending, tool
       <div className={`min-w-0 max-w-[80%] rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-100 ${pending ? 'opacity-90' : ''}`}>
         {content ? (
           <div className="chat-md floating-md prose prose-invert prose-sm max-w-none wrap-break-word">
-            <ChatAnswerMarkdown content={content} />
+            <ChatAnswerMarkdown content={content} values={values} />
             <ChatCharts toolCalls={toolCalls} />
           </div>
         ) : (

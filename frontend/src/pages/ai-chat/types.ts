@@ -4,6 +4,7 @@
 // - toolCalls: assistant 메시지의 tool 호출 결과 (DB tool_calls 컬럼 그대로)
 // - streamingPhase: 임시 assistant 메시지의 스트리밍 단계 (waiting/tools/answer)
 
+import type { MaskValues } from '@/services/maskValues'
 import type { TurnUsage } from '@/utils/turnUsage'
 
 export interface Message {
@@ -14,4 +15,5 @@ export interface Message {
   toolCalls?: any[]
   streamingPhase?: 'waiting' | 'tools' | 'answer'
   usage?: TurnUsage | null    // the answered turn's tokens (DB messages.usage)
+  maskValues?: MaskValues | null  // the answer's placeholder values while it is the stream's (services/maskValues)
 }
