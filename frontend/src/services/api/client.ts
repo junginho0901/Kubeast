@@ -23,11 +23,10 @@ client.interceptors.request.use((config) => {
   // Inject the selected cluster (step 09). An explicit cluster on the call wins;
   // an empty selection omits it so the server uses its default cluster.
   const cid = getCurrentClusterID()
-  if (cid) {
-    const params = (config.params ?? {}) as Record<string, unknown>
-    if (params.cluster === undefined) {
-      config.params = { ...params, cluster: cid }
-    }
+  const params = (config.params ?? {}) as Record<string, unknown>
+  config.sentUnder = { cluster: cid, namesCluster: params.cluster !== undefined }
+  if (cid && params.cluster === undefined) {
+    config.params = { ...params, cluster: cid }
   }
   return config
 })
@@ -37,8 +36,30 @@ declare module 'axios' {
     // false on a read beside a screen's list (the GPU metrics next to the GPU lists, a drawer's Prometheus sums): its
     // answer, failure or refusal is not the list's, so it does not go into the list status or forbidden state of its API segment
     listStatus?: false
+    // set by the client as the request goes out: the cluster selected then, and whether the call named a cluster of its own
+    sentUnder?: { cluster: string; namesCluster: boolean }
   }
 }
+
+// The services whose answers are not a cluster's: they take the cluster the client adds and answer the same.
+const CLUSTER_FREE_PATHS = ['/auth/', '/clusters', '/sessions', '/ai/', '/system/', '/audit/']
+
+/** The message of the cancel a read of the cluster selected before ends with (axios.isCancel is true for it). */
+export const CLUSTER_LEFT = 'another cluster was selected while this read was on its way'
+
+// A read of the selected cluster that answers once another one is selected: the screen has moved on, so its answer,
+// failure or refusal reaches nothing — not a Refresh writing the old cluster's rows into the cache, nor a status
+// store — as a watch frame of another cluster reaches nothing (watchMultiplexer.dispatch).
+const leftBehind = (config: { method?: string; url?: string; sentUnder?: { cluster: string; namesCluster: boolean } } | undefined): boolean => {
+  const sent = config?.sentUnder
+  if (!sent || sent.namesCluster || sent.cluster === getCurrentClusterID()) return false
+  const url = String(config?.url || '')
+  return String(config?.method || 'get').toLowerCase() === 'get' && !CLUSTER_FREE_PATHS.some((p) => url.startsWith(p))
+}
+
+/** False for a status event of a request sent while another cluster was selected: the stores drop it. */
+export const ofSelectedCluster = (detail: { cluster?: string } | null | undefined): boolean =>
+  detail?.cluster === undefined || detail.cluster === getCurrentClusterID()
 
 // A cluster read whose outcome is the list status of its segment (services/listStatusStore): every GET under
 // /cluster/ but the reads that say `listStatus: false`.
@@ -53,17 +74,20 @@ const dispatchListStatus = (detail: ListStatusDetail) => {
 
 client.interceptors.response.use(
   (response) => {
+    if (leftBehind(response.config)) return Promise.reject(new axios.CanceledError(CLUSTER_LEFT, response.config, response.request))
     // A cluster read that answered: "not installed" when the server says the
     // cluster does not serve the kind, otherwise it clears an earlier failure.
     if (isListRead(response.config)) {
       const url = String(response.config.url)
-      dispatchListStatus(response.headers?.['x-kubeast-not-installed'] ? { url, state: 'notInstalled' } : { url, state: 'ok' })
+      const cluster = response.config.sentUnder?.cluster
+      dispatchListStatus(response.headers?.['x-kubeast-not-installed'] ? { url, state: 'notInstalled', cluster } : { url, state: 'ok', cluster })
     }
     return response
   },
   (error) => {
     const status = error?.response?.status
     const url = String(error?.config?.url || '')
+    const cluster: string | undefined = error?.config?.sentUnder?.cluster
     // /auth/me is the session probe: RequireAuth turns its 401 into an in-app
     // redirect to /login, so it must not trigger the page reload below.
     const isAuthRequest =
@@ -71,12 +95,15 @@ client.interceptors.response.use(
     if (status === 401 && !isAuthRequest) {
       handleUnauthorized()
     }
+    if (leftBehind(error?.config) && !axios.isCancel(error)) {
+      return Promise.reject(new axios.CanceledError(CLUSTER_LEFT, error.config, error.request))
+    }
     // A 403 on a cluster read means the signed-in user's cluster role does not
     // cover that kind. Pages render an empty list in that case; the banner in
     // Layout listens for this event so the page says "no permission" instead of
     // "nothing here". A read saying `listStatus: false` is named in the banner but refuses no list (`list: false`).
     if (status === 403 && String(error?.config?.method || 'get').toLowerCase() === 'get' && url.startsWith('/cluster/')) {
-      const detail: ForbiddenDetail = { url, detail: error?.response?.data?.detail, list: isListRead(error?.config) }
+      const detail: ForbiddenDetail = { url, detail: error?.response?.data?.detail, list: isListRead(error?.config), cluster }
       try {
         window.dispatchEvent(new CustomEvent(FORBIDDEN_EVENT, { detail }))
       } catch { /* non-browser */ }
@@ -88,7 +115,7 @@ client.interceptors.response.use(
         !isMetricsUnavailableResponse(error)) {
       // the server's own reason when it wrote one (a 5xx of k8s-service carries `detail`), not the client's "status code"
       const detail = error?.response?.data?.detail
-      dispatchListStatus({ url, state: 'error', code: status, reason: typeof detail === 'string' && detail.trim() ? detail.trim() : undefined })
+      dispatchListStatus({ url, state: 'error', code: status, reason: typeof detail === 'string' && detail.trim() ? detail.trim() : undefined, cluster })
     }
     return Promise.reject(error)
   },
@@ -96,12 +123,12 @@ client.interceptors.response.use(
 
 /** Dispatched on window for every 403 on a GET /cluster/... request (detail: ForbiddenDetail). */
 export const FORBIDDEN_EVENT = 'kubeast:forbidden'
-/** `list` is false for a read saying `listStatus: false`: its refusal is not the list's. */
-export type ForbiddenDetail = { url: string; detail?: unknown; list: boolean }
+/** `list` is false for a read saying `listStatus: false`: its refusal is not the list's. `cluster`: the one selected when the request went out. */
+export type ForbiddenDetail = { url: string; detail?: unknown; list: boolean; cluster?: string }
 
 /** Dispatched on window for every GET /cluster/... outcome other than 403 (a read saying `listStatus: false` aside): ok, not installed, failed (5xx / network). */
 export const LIST_STATUS_EVENT = 'kubeast:list-status'
-export type ListStatusDetail = { url: string; state: 'ok' | 'notInstalled' | 'error'; code?: number; reason?: string }
+export type ListStatusDetail = { url: string; state: 'ok' | 'notInstalled' | 'error'; code?: number; reason?: string; cluster?: string }
 
 const METRICS_UNAVAILABLE = 'metrics_unavailable'
 
