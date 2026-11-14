@@ -95,3 +95,23 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].env
           content: {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+
+  - it: starts PostgreSQL with max_connections from postgresql.maxConnections (300 by default)
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args
+          value: [postgres, -c, max_connections=300]
+
+  - it: takes another max_connections
+    set:
+      postgresql.maxConnections: 500
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args
+          value: [postgres, -c, max_connections=500]

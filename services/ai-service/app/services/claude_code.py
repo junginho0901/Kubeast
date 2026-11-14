@@ -14,8 +14,12 @@ settings files, and every variable this service inherited blanked except PATH, l
 so the model keys and the database URL never reach it. The token reaches it only as
 ``CLAUDE_CODE_OAUTH_TOKEN``. Off by default (``AI_CLAUDE_CODE_ENABLED``, chart
 ``ai.providers.claudeCode.enabled``) and meant for an install one person uses with their own subscription:
-Anthropic's terms keep subscriptions to individual use. Runs wait for a free slot: the chat's
-(``AI_CLAUDE_CODE_MAX_CONCURRENT``) or the investigator's own one, so an investigation never holds up a chat.
+Anthropic's terms keep subscriptions to individual use. Runs wait for a free slot: the investigator's own one per
+server, so an investigation never holds up a chat, or a chat slot of this server (``AI_CLAUDE_CODE_MAX_CONCURRENT``,
+the memory each process takes) and then one of the install's (``AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL``, shared by every
+replica through the database: app.services.claude_code_slots), so the subscription's use stays within one limit
+however many servers run. A chat run waits for those at most ``AI_CLAUDE_CODE_QUEUE_WAIT`` seconds, the chat stream
+saying so with ``{"queued": true}``, and then ends as busy (ClaudeCodeBusy).
 """
 from __future__ import annotations
 
@@ -25,11 +29,13 @@ import logging
 import os
 import tempfile
 from collections import deque
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Sequence
 
 from app.config import settings
+from app.services import claude_code_slots
 from app.services.prompt_fence import inside_arrows
 from app.services.audit_target import shown_tool_args
 
@@ -50,6 +56,8 @@ ToolRunner = Callable[[str, dict, int, int], Awaitable[tuple[list[str], str]]]
 # Concurrency lanes: "chat" (chat, floating assistant, plain completions) and "investigation" (one worker, one run).
 _semaphores: dict[str, asyncio.Semaphore] = {}
 
+BUSY_MESSAGE = "Claude Code is busy; ask again in a moment."
+
 
 class ClaudeCodeError(RuntimeError):
     """Claude Code is off or missing, refused the token, or ended without an answer. subscription_error is the SDK's
@@ -62,12 +70,34 @@ class ClaudeCodeError(RuntimeError):
         self.resets_at = resets_at
 
 
+class ClaudeCodeBusy(ClaudeCodeError):
+    """No chat slot came free within queue_wait(); model_errors.classify reads it as busy (aiChat.error.claudeCodeBusy)."""
+
+    busy = True
+
+    def __init__(self):
+        super().__init__(BUSY_MESSAGE)
+
+
 def enabled() -> bool:
     return bool(getattr(settings, "AI_CLAUDE_CODE_ENABLED", False))
 
 
 def max_concurrent() -> int:
     return max(1, int(getattr(settings, "AI_CLAUDE_CODE_MAX_CONCURRENT", 1) or 1))
+
+
+def max_concurrent_total() -> int:
+    """The install's chat slots across every replica; 0 (the default) is maxConcurrent, so one server runs as many
+    as before."""
+    total = int(getattr(settings, "AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL", 0) or 0)
+    return total if total > 0 else max_concurrent()
+
+
+def queue_wait() -> float:
+    """How long a chat run waits for its slots before it ends as busy (default 60 s; 0 = not at all)."""
+    value = getattr(settings, "AI_CLAUDE_CODE_QUEUE_WAIT", None)
+    return float(max(0, int(60 if value is None else value)))
 
 
 def turn_timeout() -> float:
@@ -101,6 +131,56 @@ def _sem(lane: str = "chat") -> asyncio.Semaphore:
     if lane not in _semaphores:
         _semaphores[lane] = asyncio.Semaphore(max_concurrent() if lane == "chat" else 1)
     return _semaphores[lane]
+
+
+async def _database():
+    from app.database import get_db_service
+    return await get_db_service()
+
+
+@asynccontextmanager
+async def _slot(lane: str, on_wait: Optional[Callable[[bool], None]] = None):
+    """A run's place. The investigator's lane: one per server, outside the install-wide limit. The chat's: a slot of
+    this server first, then one of the install's, always in that order, so a run holding one never waits for one a
+    run waiting for its first holds. A chat run waits for both at most queue_wait() in all: it calls on_wait(True)
+    once when it has to wait and on_wait(False) when it starts, and raises ClaudeCodeBusy past the wait. A run
+    cancelled while it waits (the client went) leaves the queue holding no slot."""
+    if lane != "chat":
+        async with _sem(lane):
+            yield
+        return
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + queue_wait()
+    waited = False
+
+    def waiting() -> None:
+        nonlocal waited
+        if not waited:
+            waited = True
+            if on_wait is not None:
+                on_wait(True)
+
+    sem = _sem("chat")
+    if sem.locked():
+        waiting()
+    try:
+        async with asyncio.timeout_at(deadline):
+            await sem.acquire()
+    except TimeoutError:
+        raise ClaudeCodeBusy() from None
+    try:
+        db = await _database()
+        async with AsyncExitStack() as stack:
+            try:
+                await stack.enter_async_context(
+                    claude_code_slots.held(db, "chat", max_concurrent_total(), deadline, waiting))
+            except claude_code_slots.Busy:
+                raise ClaudeCodeBusy() from None
+            if waited and on_wait is not None:
+                on_wait(False)
+            yield
+    finally:
+        sem.release()
 
 
 def _content_text(content: Any) -> str:
@@ -230,11 +310,13 @@ def _result_error(result, seen: Optional[dict] = None) -> Optional[ClaudeCodeErr
     return ClaudeCodeError(f"Claude Code{status}: {message.strip()[:600]}", **(seen or {}))
 
 
-async def _run(sdk, prompt: str, options, on_message: Callable[[Any], None], stderr: deque, lane: str = "chat"):
-    """One Claude Code run within its lane's concurrency limit and the turn timeout; returns its result message."""
+async def _run(sdk, prompt: str, options, on_message: Callable[[Any], None], stderr: deque, lane: str = "chat",
+               on_wait: Optional[Callable[[bool], None]] = None):
+    """One Claude Code run within its lane's concurrency limits and the turn timeout; returns its result message.
+    on_wait hears when the run waits for a slot and when it starts (_slot)."""
     result = None
     seen: dict = {}
-    async with _sem(lane):
+    async with _slot(lane, on_wait):
         try:
             async with asyncio.timeout(turn_timeout()):
                 async for message in sdk.query(prompt=prompt, options=options):
@@ -480,6 +562,9 @@ class ClaudeCodeChat:
             for piece in pieces.feed(message):
                 queue.put_nowait(("text", piece))
 
+        def on_wait(waiting: bool) -> None:  # both chats show a waiting line from true to false
+            queue.put_nowait(("sse", _sse({"queued": waiting})))
+
         async def pump() -> None:
             stderr: deque = deque(maxlen=STDERR_LINES)
             try:
@@ -487,7 +572,7 @@ class ClaudeCodeChat:
                     options = _options(sdk, model=model or self.model, system_prompt=system_prompt, token=self._token,
                                        workdir=workdir, server=server, allowed=[TOOL_PREFIX + n for n in names],
                                        turns=turn_limit or max_turns(), stderr=stderr.append, partial=True)
-                    queue.put_nowait((done, await _run(sdk, prompt, options, on_message, stderr, lane)))
+                    queue.put_nowait((done, await _run(sdk, prompt, options, on_message, stderr, lane, on_wait)))
             except Exception as e:  # handed to the consumer; cancellation is not caught
                 queue.put_nowait((done, e))
 

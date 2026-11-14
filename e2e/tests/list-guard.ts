@@ -1,9 +1,11 @@
 // The list rule of every screen (decided 2026-11-09): a table whose rows grow with the data has the list footer
-// (ListPager), and a page with a list footer fits the screen. screen-consistency.spec.ts runs listsOnScreen on each
-// sidebar screen and holds what it finds with listProblems; list-guard-exempt.json names what the DOM cannot mark.
+// (ListPager), and so does a list of boxes, which marks itself `data-list` since it is not a table; a page with a list
+// footer fits the screen. screen-consistency.spec.ts runs listsOnScreen on each sidebar screen and holds what it finds
+// with listProblems; list-guard-exempt.json names what the DOM cannot mark.
 
 export type ListsOnScreen = {
-  // tables with rows of data and no list footer in their card, each as "<where> (<first header cells>)"
+  // tables with rows of data and data-list lists with items, and no list footer in their card, each as
+  // "<where> (<first header cells>)" or "<where> (data-list <its value>)"
   unpaged: string[]
   // the list footers shown (data-testid ending in "pager") and whether each offers the rows-per-page choice
   pagers: { id: string; chooser: boolean }[]
@@ -22,7 +24,8 @@ export type GuardNode = {
 
 // Runs in the page (page.evaluate sends its text, so it uses nothing from outside itself) or on any GuardNode tree.
 // A row of data is a tbody row that is neither a filler row (aria-hidden) nor a notice row (one cell over several
-// columns: empty, loading, error); a table's card is the largest box around it that holds no other table.
+// columns: empty, loading, error); an item of a data-list list is a child element that is not aria-hidden; a list's
+// card is the largest box around it that holds no other table or data-list list.
 export function listsOnScreen(arg: { root?: GuardNode; skip?: string[] }): ListsOnScreen {
   const root = arg.root ?? (document.querySelector('main') as unknown as GuardNode | null)
   if (!root) return { unpaged: [], pagers: [] }
@@ -43,23 +46,26 @@ export function listsOnScreen(arg: { root?: GuardNode; skip?: string[] }): Lists
     return out
   }
   const all = below(root)
-  const tables = all.filter((e) => tag(e) === 'table' && shown(e))
+  const isTable = (el: GuardNode) => tag(el) === 'table'
+  const lists = all.filter((e) => (isTable(e) || e.getAttribute('data-list') !== null) && shown(e))
   const unpaged: string[] = []
-  for (const table of tables) {
-    if (upToRoot(table).some((e) => (e.getAttribute('data-list-bounded') ?? '').trim() !== '')) continue
-    if (typeof table.closest === 'function' && skip.some((s) => table.closest!(s))) continue
-    const rows = kids(table)
-      .filter((b) => tag(b) === 'tbody' && b.getAttribute('aria-hidden') !== 'true')
-      .flatMap(kids)
-      .filter((tr) => tag(tr) === 'tr' && !(kids(tr).length === 1 && Number(kids(tr)[0].getAttribute('colspan') ?? '1') > 1))
-    if (rows.length === 0) continue
-    const others = tables.filter((t) => t !== table && !inside(t, table) && !inside(table, t))
-    let card = table
+  for (const list of lists) {
+    if (upToRoot(list).some((e) => (e.getAttribute('data-list-bounded') ?? '').trim() !== '')) continue
+    if (typeof list.closest === 'function' && skip.some((s) => list.closest!(s))) continue
+    const items = isTable(list)
+      ? kids(list)
+        .filter((b) => tag(b) === 'tbody' && b.getAttribute('aria-hidden') !== 'true')
+        .flatMap(kids)
+        .filter((tr) => tag(tr) === 'tr' && !(kids(tr).length === 1 && Number(kids(tr)[0].getAttribute('colspan') ?? '1') > 1))
+      : kids(list).filter((c) => c.getAttribute('aria-hidden') !== 'true')
+    if (items.length === 0) continue
+    const others = lists.filter((t) => t !== list && !inside(t, list) && !inside(list, t))
+    let card = list
     while (card.parentElement && card.parentElement !== root && !others.some((t) => inside(t, card.parentElement!))) card = card.parentElement
     if ([card, ...below(card)].some(isPager)) continue
-    const where = upToRoot(table).map(testId).find((id) => id !== '') || 'a table'
-    const heads = below(table).filter((e) => tag(e) === 'th').slice(0, 4).map((e) => (e.textContent ?? '').replace(/\s+/g, ' ').trim())
-    unpaged.push(`${where} (${heads.join(' | ')})`)
+    const where = upToRoot(list).map(testId).find((id) => id !== '') || (isTable(list) ? 'a table' : 'a list')
+    const heads = below(list).filter((e) => tag(e) === 'th').slice(0, 4).map((e) => (e.textContent ?? '').replace(/\s+/g, ' ').trim())
+    unpaged.push(isTable(list) ? `${where} (${heads.join(' | ')})` : `${where} (data-list ${list.getAttribute('data-list')})`)
   }
   const pagers = all.filter(isPager).map((p) => ({ id: testId(p), chooser: below(p).some((e) => testId(e) === 'page-size') }))
   return { unpaged, pagers }

@@ -10,7 +10,8 @@ import { test, expect, type APIRequestContext, type Page, type Response } from '
 //   it writes more holds each row once and the total of the first read, Refresh shows the rows since, the CSV holds
 //   the rows the screen counts, the end minute counts the whole minute, and a filter past the CSV limit says so.
 // - Session recordings: two rows the spec writes (e2e-n4d-rec-*) whose users differ in one character, found by a
-//   filter holding "_" as text; the rows stay on screen while the next page or search loads.
+//   filter holding "_" as text; the rows stay on screen while the next page loads, and another user filter shows the
+//   loading line and none of the rows before it while its answer is held.
 // - Clusters: a Test leaves a line of what it found (self's version kubectl reads, a failure's reason) until that
 //   cluster's next Test; the Health column is the server's.
 // - AI chat: each session card's message count is the session API's.
@@ -227,7 +228,7 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
     }
   })
 
-  test('Session recordings: the user filter takes _ as text, and the rows stay while the next page or search loads', async ({ page, request }) => {
+  test('Session recordings: the user filter takes _ as text, the rows stay while the next page loads and not while another filter does', async ({ page, request }) => {
     test.setTimeout(120_000)
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const run = Date.now().toString(36)
@@ -272,12 +273,35 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
       await expect(rows.first()).toHaveAttribute('data-testid', `recording-row-${all[size].id}`, { timeout: 15_000 })
       expect.soft(await page.evaluate(() => (window as Obj).__recFlash.splice(0)), 'no loading or empty row while the next page loads').toEqual([])
 
-      await page.getByPlaceholder('user@example.com').fill(typed)
-      await page.getByRole('button', { name: new RegExp(`^${EN.recordings.filter.apply}$`) }).click()
-      const ofRows = () => rows.evaluateAll((trs) => trs.map((tr) => tr.getAttribute('data-testid')))
+      // another user filter: the loading line and none of the rows before it while its answer is held
+      const ofRows = () => rows.evaluateAll((trs) => trs.map((tr) => tr.getAttribute('data-testid')).filter((id): id is string => !!id?.startsWith('recording-row-')))
+      const before = await ofRows()
+      const isSearch = (url: URL) => url.pathname === '/api/v1/cluster/recordings' && url.searchParams.get('user') === typed
+      let release = () => {}
+      const gate = new Promise<void>((resolve) => { release = resolve })
+      let held = 0
+      const hold = async (route: Obj) => {
+        held++
+        await gate
+        try { await route.continue() } catch { /* the page went on */ }
+      }
+      await page.route(isSearch, hold)
+      try {
+        await page.getByPlaceholder('user@example.com').fill(typed)
+        await page.getByRole('button', { name: new RegExp(`^${EN.recordings.filter.apply}$`) }).click()
+        await expect.poll(() => held, { message: 'the search answer is held' }).toBeGreaterThan(0)
+        await expect(page.getByTestId('recordings-table').locator('tbody').first()).toContainText(EN.recordings.loading)
+        const shown = await ofRows()
+        expect.soft(shown.filter((id) => before.includes(id)), 'rows of the page before while the search answer is held').toEqual([])
+        expect.soft(shown, 'rows while the search answer is held').toEqual([])
+        expect.soft(await pager.innerText(), 'the footer while the search answer is held').toContain(EN.common.paginationEmpty)
+      } finally {
+        release()
+        await page.unroute(isSearch, hold)
+      }
       await expect.poll(ofRows, { timeout: 15_000, message: `the rows of ${typed}` }).toEqual([`recording-row-${ids[0]}`])
       expect.soft((await list({ user: typed })).map((r) => `recording-row-${r.id}`), 'the API answers the same').toEqual([`recording-row-${ids[0]}`])
-      expect.soft(await page.evaluate(() => (window as Obj).__recFlash), 'no loading or empty row while the search loads').toEqual([])
+      expect.soft((await page.evaluate(() => (window as Obj).__recFlash as string[])).filter((f) => f !== EN.recordings.loading), 'between the two answers: only the loading line').toEqual([])
     } finally {
       psql(`DELETE FROM session_recordings WHERE id LIKE '${PREFIX}rec-%'`)
     }

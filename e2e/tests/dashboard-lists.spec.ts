@@ -9,14 +9,22 @@ import { test, expect, type Page } from '@playwright/test'
 // cluster the picker selects, not of the server's default cluster asked while the selection was empty; the card
 // shows at most 8 nodes, those not Ready first, and links to the Nodes page; the node bars put every node under its
 // readiness as kubectl prints it (a cordoned node under Ready, its card and window rows with both parts); the window
-// behind a stat card, the Issues window and the Storage window page their lists 50 at a time. The stand-in tests give
-// the page lists dev does not have, through page.route; the cordon test cordons test2's node for its run.
+// behind a stat card, the Issues window and the Storage window page their lists 50 at a time; the Pods window opened
+// for a phase shows no row or count of the phase, search or page before it while its answer is held. The stand-in
+// tests give the page lists dev does not have, through page.route; the cordon test cordons test2's node for its run.
 
 const nodesCard = (page: Page) => page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Nodes', exact: true }) })
 const nodeNames = (page: Page) => nodesCard(page).locator('button p[title]').evaluateAll((els) => els.map((e) => e.getAttribute('title')))
 const pagerText = (page: Page) => page.getByTestId('resource-modal-pager').locator('div').first().innerText()
 const nodeBars = (page: Page) => page.locator('.card').filter({ has: page.getByRole('heading', { name: /^Node (status|상태)$/ }) }).locator('svg title').allTextContents()
 const readiness = (status: string) => { const first = status.split(',')[0]; return first === 'Ready' || first === 'NotReady' ? first : 'Unknown' }
+const EN = JSON.parse(fs.readFileSync(path.join(__dirname, '../../frontend/src/i18n/locales/en.json'), 'utf8'))
+// the Pods window's rows: each row's name is the heading next to its status badge
+const podRows = (page: Page) => page.getByTestId('resource-modal-pod-status').evaluateAll((els) => els.map((e) => {
+  let row = e.parentElement
+  while (row && !row.querySelector('h3')) row = row.parentElement
+  return row?.querySelector('h3')?.textContent ?? ''
+}))
 
 function kubectlFor(kindName: string) {
   const kubeconfig = execSync(`kind get kubeconfig --name ${kindName}`, { encoding: 'utf8' })
@@ -153,6 +161,138 @@ test.describe('Dashboard lists', () => {
     // a search starts again from the first page
     await page.getByPlaceholder(/Search|검색/).last().fill('e2e-pod-1')
     await expect.poll(() => pagerText(page)).toMatch(/1-21 of 21|21개 중 1-21/)
+  })
+
+  test('the Pods window opened for a phase shows no row or count of the window before it while its answer is held', async ({ page }) => {
+    const row = (name: string, phase: string) => ({
+      name, namespace: 'e2e-lists', phase, status: phase === 'Succeeded' ? 'Completed' : phase === 'Failed' ? 'Error' : 'Running',
+      ready: phase === 'Running' ? '1/1' : '0/1', restart_count: 0, node_name: 'e2e-node', pod_ip: '', created_at: '', containers: [],
+    })
+    const pods = [
+      ...Array.from({ length: 60 }, (_, i) => row(`e2e-run-${String(i + 1).padStart(3, '0')}`, 'Running')),
+      row('e2e-failed-1', 'Failed'), row('e2e-failed-2', 'Failed'),
+      row('e2e-done-1', 'Succeeded'), row('e2e-done-2', 'Succeeded'), row('e2e-done-3', 'Succeeded'),
+    ]
+    const FAILED = ['e2e-failed-1', 'e2e-failed-2']
+    const DONE = ['e2e-done-1', 'e2e-done-2', 'e2e-done-3']
+    // the window's reads (the floating chat's problem pods are the sort=health ones); a held phase's answer waits for the test
+    const asked: { phase: string | null; q: string | null; offset: string | null }[] = []
+    const held = new Map<string, (() => void)[]>()
+    const release = (phase: string) => {
+      for (const go of held.get(phase) ?? []) go()
+      held.delete(phase)
+    }
+    await page.route(/\/api\/v1\/cluster\/pods\/page(\?|$)/, async (route) => {
+      const u = new URL(route.request().url())
+      const phase = u.searchParams.get('phase')
+      if (u.searchParams.get('sort') !== 'health') asked.push({ phase, q: u.searchParams.get('q'), offset: u.searchParams.get('offset') })
+      const waits = phase ? held.get(phase) : undefined
+      if (waits) await new Promise<void>((resolve) => waits.push(resolve))
+      const q = (u.searchParams.get('q') ?? '').toLowerCase()
+      const offset = Number(u.searchParams.get('offset') ?? 0)
+      const limit = Number(u.searchParams.get('limit') ?? 50)
+      const matched = pods.filter((p) => (!phase || p.phase === phase) && p.name.includes(q))
+      try {
+        await route.fulfill({ json: {
+          items: matched.slice(offset, offset + limit), total: matched.length,
+          stats: { total: pods.length, ready: 60, not_ready: 0, pending: 0, terminating: 0, error: 2, restarted: 0, completed: 3, top_reasons: [] },
+          revision: '', source: 'index',
+        } })
+      } catch { /* the page went on */ }
+    })
+    const total = page.getByTestId('resource-modal-total')
+    const podCard = page.locator('.card').filter({ has: page.getByRole('heading', { name: /^Pod (status|상태)$/ }) })
+    const openPhase = (phase: string) => podCard.locator('svg g').filter({ has: page.locator('title', { hasText: new RegExp(`^${phase}:`) }) }).first().click()
+    // every row name and total line the window draws from here on, recorded in the page so no moment between two answers is missed
+    const drawn = () => page.evaluate(() => (window as unknown as { __drawn: { rows: string[]; totals: string[] } }).__drawn)
+    const watchFromNow = () => page.evaluate(() => {
+      const w = window as unknown as { __drawn: { rows: string[]; totals: string[] }; __watch?: MutationObserver }
+      w.__drawn = { rows: [], totals: [] }
+      w.__watch?.disconnect()
+      const note = () => {
+        for (const badge of document.querySelectorAll('[data-testid="resource-modal-pod-status"]')) {
+          let el = badge.parentElement
+          while (el && !el.querySelector('h3')) el = el.parentElement
+          const name = el?.querySelector('h3')?.textContent ?? ''
+          if (!w.__drawn.rows.includes(name)) w.__drawn.rows.push(name)
+        }
+        const line = document.querySelector('[data-testid="resource-modal-total"]')?.textContent
+        if (line && w.__drawn.totals[w.__drawn.totals.length - 1] !== line) w.__drawn.totals.push(line)
+      }
+      w.__watch = new MutationObserver(note)
+      w.__watch.observe(document.body, { subtree: true, childList: true, characterData: true })
+      note()
+    })
+    const closeWindow = async () => {
+      await page.keyboard.press('Escape')
+      await expect(total).toHaveCount(0)
+    }
+
+    try {
+      await page.goto('/')
+      await page.getByTestId('stat-pods').click()
+      await expect.poll(() => pagerText(page)).toMatch(/1-50 of 65/)
+      // a search and its second page, which the next window must neither show nor ask with
+      await page.getByPlaceholder(/Search|검색/).last().fill('run-0')
+      await expect.poll(() => pagerText(page)).toMatch(/1-50 of 60/)
+      await page.getByTestId('resource-modal-pager').getByRole('button').last().click()
+      await expect.poll(() => pagerText(page)).toMatch(/51-60 of 60/)
+
+      await test.step('every pod, then Failed: the loading line while its answer is held, then the Failed rows', async () => {
+        await closeWindow()
+        held.set('Failed', [])
+        const before = asked.length
+        await watchFromNow()
+        await openPhase('Failed')
+        await expect.poll(() => held.get('Failed')?.length ?? 0, { message: 'the Failed answer is held' }).toBe(1)
+        await expect(total).toHaveText(EN.dashboard.resourceModal.loading)
+        await expect(page.getByText(EN.dashboard.loading, { exact: true })).toHaveCount(1)
+        await expect(page.getByTestId('resource-modal-pod-status')).toHaveCount(0)
+        await expect(page.getByPlaceholder(/Search|검색/).last()).toHaveValue('')
+        release('Failed')
+        await expect.poll(() => podRows(page)).toEqual(FAILED)
+        await expect(total).toHaveText('2 of 65')
+        expect(await drawn(), 'what the window drew from the click on').toEqual({ rows: FAILED, totals: [EN.dashboard.resourceModal.loading, '2 of 65'] })
+        // asked with no search and from the first row (a later refresh asks the same): never with the search or page of the window before
+        const failedReads = [...new Set(asked.slice(before).filter((a) => a.phase === 'Failed').map((a) => JSON.stringify(a)))]
+        expect(failedReads).toEqual([JSON.stringify({ phase: 'Failed', q: null, offset: '0' })])
+      })
+
+      await test.step('Succeeded, then Failed again: only the phase chosen, Failed from what was read before', async () => {
+        await closeWindow()
+        held.set('Succeeded', [])
+        await watchFromNow()
+        await openPhase('Succeeded')
+        await expect.poll(() => held.get('Succeeded')?.length ?? 0, { message: 'the Succeeded answer is held' }).toBe(1)
+        await expect(total).toHaveText(EN.dashboard.resourceModal.loading)
+        await expect(page.getByTestId('resource-modal-pod-status')).toHaveCount(0)
+        release('Succeeded')
+        await expect.poll(() => podRows(page)).toEqual(DONE)
+        expect(await drawn(), 'what the Succeeded window drew').toEqual({ rows: DONE, totals: [EN.dashboard.resourceModal.loading, '3 of 65'] })
+
+        await closeWindow()
+        await watchFromNow()
+        await openPhase('Failed')
+        await expect.poll(() => podRows(page)).toEqual(FAILED)
+        await expect(total).toHaveText('2 of 65')
+        const again = await drawn()
+        expect(again.rows, 'the rows the Failed window drew again').toEqual(FAILED)
+        expect(again.totals.filter((t) => t !== EN.dashboard.resourceModal.loading && t !== '2 of 65'), 'another count on the way').toEqual([])
+      })
+
+      await test.step('every pod again: no phase, search or count of the windows before', async () => {
+        await closeWindow()
+        await watchFromNow()
+        await page.getByTestId('stat-pods').click()
+        await expect.poll(() => pagerText(page)).toMatch(/1-50 of 65/)
+        await expect(total).toHaveText('Total 65')
+        const all = await drawn()
+        expect(all.rows.filter((n) => !n.startsWith('e2e-run-')), 'rows of another phase on the way').toEqual([])
+        expect(all.totals.filter((t) => t !== EN.dashboard.resourceModal.loading && t !== 'Total 65'), 'another count on the way').toEqual([])
+      })
+    } finally {
+      for (const phase of [...held.keys()]) release(phase)
+    }
   })
 
   test('the Namespaces window counts each namespace’s pods, Services and Deployments as kubectl lists them, and a search says how many of how many', async ({ page }) => {

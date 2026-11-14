@@ -56,49 +56,6 @@ export function useOptimizationStream() {
   const [optimizationUsage, setOptimizationUsage] = useState<UsageInfo | null>(null)
   const [optimizationMeta, setOptimizationMeta] = useState<MetaInfo | null>(null)
 
-  // 모달 자체의 state reset + open. 부모는 다른 모달 닫고 이걸 호출.
-  // initialNamespace 는 부모가 allNamespaces 보고 결정 (default 우선).
-  const openOptimizationModal = (initialNamespace: string) => {
-    setIsOptimizationNamespaceDropdownOpen(false)
-    setOptimizationCopied(false)
-    setOptimizationCopyFailed(false)
-    optimizationAbortRef.current?.abort()
-    optimizationAbortRef.current = null
-    if (optimizationStreamRafRef.current) {
-      window.cancelAnimationFrame(optimizationStreamRafRef.current)
-      optimizationStreamRafRef.current = null
-    }
-    optimizationStreamPendingRef.current = ''
-    optimizationStreamDoneRef.current = false
-    setIsOptimizationStreaming(false)
-    setOptimizationObservedContent('')
-    setOptimizationAnswerContent('')
-    setOptimizationStreamError('')
-
-    setOptimizationNamespace(initialNamespace)
-
-    setIsOptimizationModalOpen(true)
-  }
-
-  const handleCloseOptimizationModal = () => {
-    setIsOptimizationModalOpen(false)
-    setIsOptimizationNamespaceDropdownOpen(false)
-    setOptimizationCopied(false)
-    setOptimizationCopyFailed(false)
-    optimizationAbortRef.current?.abort()
-    optimizationAbortRef.current = null
-    if (optimizationStreamRafRef.current) {
-      window.cancelAnimationFrame(optimizationStreamRafRef.current)
-      optimizationStreamRafRef.current = null
-    }
-    optimizationStreamPendingRef.current = ''
-    optimizationStreamDoneRef.current = false
-    setIsOptimizationStreaming(false)
-    setOptimizationObservedContent('')
-    setOptimizationAnswerContent('')
-    setOptimizationStreamError('')
-  }
-
   const stopOptimizationTypewriter = () => {
     if (optimizationTypewriterRef.current !== null) {
       clearInterval(optimizationTypewriterRef.current)
@@ -129,6 +86,54 @@ export function useOptimizationStream() {
     optimizationTypewriterRef.current = window.setInterval(drainOptimizationQueue, 30)
   }
 
+  // What an answer leaves on screen goes, the stream still writing too (its later callbacks find their controller aborted).
+  // Opening, closing and another namespace each ask a new question: none keeps the words, usage or meta of the one before.
+  const resetOptimizationAnswer = () => {
+    setOptimizationCopied(false)
+    setOptimizationCopyFailed(false)
+    optimizationAbortRef.current?.abort()
+    optimizationAbortRef.current = null
+    if (optimizationStreamRafRef.current) {
+      window.cancelAnimationFrame(optimizationStreamRafRef.current)
+      optimizationStreamRafRef.current = null
+    }
+    stopOptimizationTypewriter()
+    optimizationCharQueueRef.current.length = 0
+    optimizationStreamPendingRef.current = ''
+    optimizationStreamDoneRef.current = false
+    optimizationMetaReceivedRef.current = false
+    optimizationUsageReceivedRef.current = false
+    setIsOptimizationStreaming(false)
+    setOptimizationObservedContent('')
+    setOptimizationAnswerContent('')
+    setOptimizationStreamError('')
+    setOptimizationUsage(null)
+    setOptimizationMeta(null)
+  }
+
+  // 모달 자체의 state reset + open. 부모는 다른 모달 닫고 이걸 호출.
+  // initialNamespace 는 부모가 allNamespaces 보고 결정 (default 우선).
+  const openOptimizationModal = (initialNamespace: string) => {
+    setIsOptimizationNamespaceDropdownOpen(false)
+    resetOptimizationAnswer()
+    setOptimizationNamespace(initialNamespace)
+    setIsOptimizationModalOpen(true)
+  }
+
+  const handleCloseOptimizationModal = () => {
+    setIsOptimizationModalOpen(false)
+    setIsOptimizationNamespaceDropdownOpen(false)
+    resetOptimizationAnswer()
+  }
+
+  // The window's namespace picker and the page (a namespace that went) both change it here: the answer was about the
+  // namespace before, so it goes with it, on screen and in what the floating chat is told.
+  const changeOptimizationNamespace = (namespace: string) => {
+    if (namespace === optimizationNamespace) return
+    resetOptimizationAnswer()
+    setOptimizationNamespace(namespace)
+  }
+
   const handleRunOptimizationSuggestions = () => {
     // Chart ai.enabled off: the table still shows the observed values; no suggestion stream (the gateway would answer 503).
     if (!optimizationNamespace || !aiEnabled(features)) return
@@ -156,10 +161,12 @@ export function useOptimizationStream() {
       .suggestOptimizationStream(optimizationNamespace, {
         signal: controller.signal,
         onObserved: (content) => {
+          if (controller.signal.aborted) return
           // Observed data 표는 한 번에 표시 (타자 효과 적용 X)
           setOptimizationObservedContent((prev) => prev + content)
         },
         onContent: (chunk) => {
+          if (controller.signal.aborted) return
           // 타자기 큐에 글자 추가
           for (const ch of chunk) {
             optimizationCharQueueRef.current.push(ch)
@@ -167,17 +174,21 @@ export function useOptimizationStream() {
           startOptimizationTypewriter()
         },
         onUsage: (usage) => {
+          if (controller.signal.aborted) return
           optimizationUsageReceivedRef.current = true
           setOptimizationUsage(usage)
         },
         onMeta: (meta) => {
+          if (controller.signal.aborted) return
           optimizationMetaReceivedRef.current = true
           setOptimizationMeta(meta)
         },
         onError: (message, key, args) => {
+          if (controller.signal.aborted) return
           setOptimizationStreamError(chatErrorText(t, message, key, args))
         },
         onDone: () => {
+          if (controller.signal.aborted) return
           if (!optimizationMetaReceivedRef.current) {
             setOptimizationStreamError((prev) => prev || tr(
               'dashboard.optimization.missingMeta',
@@ -193,7 +204,7 @@ export function useOptimizationStream() {
         },
       })
       .catch((error) => {
-        if ((error as any)?.name === 'AbortError') return
+        if ((error as any)?.name === 'AbortError' || controller.signal.aborted) return
         setOptimizationStreamError(error instanceof Error ? error.message : String(error))
         stopOptimizationTypewriter()
         optimizationCharQueueRef.current.length = 0
@@ -242,7 +253,7 @@ export function useOptimizationStream() {
     isOptimizationModalOpen,
     setIsOptimizationModalOpen,
     optimizationNamespace,
-    setOptimizationNamespace,
+    setOptimizationNamespace: changeOptimizationNamespace,
     isOptimizationNamespaceDropdownOpen,
     setIsOptimizationNamespaceDropdownOpen,
     optimizationCopied,

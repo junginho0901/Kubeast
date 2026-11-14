@@ -13,15 +13,15 @@ import { test, expect, type Page } from '@playwright/test'
 // external 'default' cluster has no such namespace. The exact same prompt must
 // therefore yield cluster-specific answers — listing our pods on self, and not
 // listing them on default. (LLM phrasing is non-deterministic; we assert only on
-// the presence/absence of stable pod-name prefixes.)
+// the presence/absence of our pods' names.)
 
 const PLACEHOLDER_RE = /메시지|message/i
 const SEND_RE = /^전송$|^send$/i
 const ASSISTANT_MSG = 'div.flex.gap-3.p-6:not(.flex-row-reverse)'
 
-// Stable name prefixes of pods that exist ONLY in this kind cluster's `kubeast`
-// namespace — never in the external 'default' cluster.
-const OUR_PODS = /ai-service|tool-server|k8s-service|auth-service|session-service/i
+// Names of pods that exist ONLY in this kind cluster's `kubeast` namespace — never in the external 'default' cluster:
+// <Deployment>-<template hash>-<5>, since a tool's own note or the model's prose may name a service without a pod.
+const OUR_PODS = /\b(ai-service|tool-server|k8s-service|auth-service|session-service)-[a-z0-9]{6,10}-[a-z0-9]{5}\b/i
 
 const LIST_PODS_QUERY = 'kubeast 네임스페이스에 있는 모든 파드의 이름을 나열해줘'
 

@@ -157,12 +157,12 @@ describe('the drawer\'s Delete button', () => {
     WRITE.forEach((p) => granted.add(p))
     const yes: Seed = [['can-i', '', 'delete', RBAC, 'clusterroles', '', 'cr'], true]
     expect(deleteButtons(drawer({ kind: 'ClusterRole', name: 'cr' }, [yes]), 'ClusterRole'), 'read in flight').toBe(0)
-    expect(deleteButtons(drawer({ kind: 'ClusterRole', name: 'cr' }, [yes, [['resource-json', 'ClusterRole', undefined, 'cr'], { metadata: { name: 'cr' } }]]), 'ClusterRole'), 'read').toBe(1)
+    expect(deleteButtons(drawer({ kind: 'ClusterRole', name: 'cr' }, [yes, [['resource-json', 'ClusterRole', undefined, 'cr', 'clusterroles.rbac.authorization.k8s.io'], { metadata: { name: 'cr' } }]]), 'ClusterRole'), 'read').toBe(1)
   })
 
   it('an object opened by link that the caller may not read: the notice, no Delete (as before)', () => {
     WRITE.forEach((p) => granted.add(p))
-    const html = drawer({ kind: 'ClusterRole', name: 'cr' }, [[['resource-json', 'ClusterRole', undefined, 'cr'], failed(403)], [['can-i', '', 'delete', RBAC, 'clusterroles', '', 'cr'], true]])
+    const html = drawer({ kind: 'ClusterRole', name: 'cr' }, [[['resource-json', 'ClusterRole', undefined, 'cr', 'clusterroles.rbac.authorization.k8s.io'], failed(403)], [['can-i', '', 'delete', RBAC, 'clusterroles', '', 'cr'], true]])
     expect(html).toContain(NOTICE)
     expect(html).toContain(en.common.objectForbidden)
     expect(deleteButtons(html, 'ClusterRole')).toBe(0)

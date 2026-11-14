@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -422,6 +424,101 @@ func TestRoleRenameCannotShareAKubernetesGroup(t *testing.T) {
 				t.Errorf("role written = %v with status %d", wrote, w.Code)
 			}
 		})
+	}
+}
+
+// A refused name comes with what the role form says under its field: the role
+// holding it, whether that is a built-in and whether the names are the same.
+func TestTakenRoleNameSaysWhichRoleHoldsIt(t *testing.T) {
+	global := auth.PermissionMatrix{"*": {"*"}}
+	for _, c := range []struct {
+		name     string
+		role     string
+		builtin  bool
+		sameName bool
+	}{
+		{"ADMIN", "Admin", true, false},
+		{"Read", "Read", true, true},
+		{"custom", "custom", false, true},
+		{"A!B", "a b", false, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			api := newAuthAPI(t, pendingRequest{owner: "requester"}, roleNameRules()...)
+			w := api.call(api.actor(global, nil), http.MethodPost, "/admin/roles", fmt.Sprintf(`{"name":%q,"permissions":[]}`, c.name))
+			var got struct {
+				Detail   string `json:"detail"`
+				Code     string `json:"code"`
+				Role     string `json:"role"`
+				Builtin  bool   `json:"builtin"`
+				SameName bool   `json:"same_name"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || w.Code != http.StatusBadRequest {
+				t.Fatalf("%d %s: %v", w.Code, w.Body.String(), err)
+			}
+			if got.Code != "role_name_taken" || got.Role != c.role || got.Builtin != c.builtin || got.SameName != c.sameName || got.Detail == "" {
+				t.Fatalf("answer %+v, want role %q builtin %v same_name %v", got, c.role, c.builtin, c.sameName)
+			}
+		})
+	}
+}
+
+// Two saves at one moment can both pass the check; the database's index of
+// names ignoring case (migration 00025) or its unique name refuses the second,
+// which reads as a taken name with its audit row, not as a server error.
+func TestRoleNameTheDatabaseRefusesReadsAsTaken(t *testing.T) {
+	global := auth.PermissionMatrix{"*": {"*"}}
+	for _, c := range []struct {
+		name, method, path, body, constraint, action string
+	}{
+		{"a new role, ignoring case", http.MethodPost, "/admin/roles", `{"name":"team-reader","permissions":[]}`, "roles_name_folded_key", "admin.roles.create"},
+		{"a new role, as written", http.MethodPost, "/admin/roles", `{"name":"team-reader","permissions":[]}`, "roles_name_key", "admin.roles.create"},
+		{"a rename", http.MethodPut, fmt.Sprintf("/admin/roles/%d", roleCustom), `{"name":"renamed","permissions":[]}`, "roles_name_folded_key", "admin.roles.update"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			api := newAuthAPI(t, pendingRequest{owner: "requester"}, roleNameRules()...)
+			api.db.refuseOn("INSERT INTO roles", "23505", c.constraint)
+			api.db.refuseOn("UPDATE roles SET", "23505", c.constraint)
+			w := api.call(api.actor(global, nil), c.method, c.path, c.body)
+			if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), `"code":"role_name_taken"`) || !strings.Contains(w.Body.String(), "taken by another role") {
+				t.Fatalf("%d %s, want 400 role_name_taken", w.Code, w.Body.String())
+			}
+			if rows := api.store.failures(c.action); len(rows) != 1 || !strings.Contains(rows[0].Error, "taken by another role") {
+				t.Errorf("audit failures = %+v, want one saying the name is taken", rows)
+			}
+		})
+	}
+	// Another refusal of the database stays a server error.
+	api := newAuthAPI(t, pendingRequest{owner: "requester"}, roleNameRules()...)
+	api.db.refuseOn("INSERT INTO roles", "23505", "role_permissions_role_id_permission_key")
+	if w := api.call(api.actor(global, nil), http.MethodPost, "/admin/roles", `{"name":"team-reader","permissions":[]}`); w.Code != http.StatusInternalServerError {
+		t.Errorf("%d %s, want 500 for another constraint", w.Code, w.Body.String())
+	}
+}
+
+// The role list names the role a custom role stored before the rule acts as on
+// a cluster, a built-in first, so the pickers can say so.
+func TestListedRolesSayWhichRoleTheyShareAGroupWith(t *testing.T) {
+	row := func(id int, name string, system bool) []any { return []any{id, name, "", system, pgNow(), pgNow()} }
+	api := newAuthAPI(t, pendingRequest{owner: "requester"},
+		pgRule{match: "description, is_system, created_at, updated_at FROM roles ORDER BY id",
+			oids: []uint32{integerOID, textOID, textOID, booleanOID, stampOID, stampOID},
+			rows: [][]any{row(roleRead, "Read", true), row(roleAdmin, "Admin", true), row(roleCustom, "custom", false),
+				row(roleStoredAdmin, "ADMIN", false), row(9, "admin", false), row(15, "a b", false), row(18, "a-b", false)}})
+	w := api.call(api.actor(auth.PermissionMatrix{"c": {readPerm}}, nil), http.MethodGet, "/roles", "")
+	var roles []struct {
+		Name        string `json:"name"`
+		SameGroupAs string `json:"same_group_as"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &roles); err != nil || w.Code != http.StatusOK {
+		t.Fatalf("%d %s: %v", w.Code, w.Body.String(), err)
+	}
+	got := map[string]string{}
+	for _, r := range roles {
+		got[r.Name] = r.SameGroupAs
+	}
+	want := map[string]string{"Read": "", "Admin": "", "custom": "", "ADMIN": "Admin", "admin": "Admin", "a b": "a-b", "a-b": "a b"}
+	if !maps.Equal(got, want) {
+		t.Fatalf("same_group_as %v, want %v", got, want)
 	}
 }
 

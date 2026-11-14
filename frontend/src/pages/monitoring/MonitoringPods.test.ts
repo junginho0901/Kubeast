@@ -225,6 +225,46 @@ describe('numbers a refresh of the Pods tab could not replace', () => {
   })
 })
 
+// A read the cluster refused (403, the cluster's words in detail) is not a failure: the tab says so with that reason, keeps
+// no numbers read before it and asks it no more on its 5 s, until it is opened again or another cluster or namespace is
+// chosen, each a query of its own.
+describe('a pod metrics read the cluster refused', () => {
+  const REFUSED = 'pods.metrics.k8s.io is forbidden: User "u1" cannot list resource "pods" in API group "metrics.k8s.io" in the namespace "shop"'
+  beforeEach(() => {
+    picked.done = false
+    vi.useFakeTimers({ toFake: ['Date'], now: NOW })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('says so in the cluster\'s words instead of a failure that retries', () => {
+    const html = render(client(null, httpError(403, { detail: REFUSED })))
+    expect(html).toContain('data-testid="pod-metrics-forbidden"')
+    expect(html).toContain('You do not have permission to view metrics in this cluster.')
+    expect(html).toContain(REFUSED.replace(/"/g, '&quot;'))
+    expect(html).not.toContain('Failed to load pod metrics')
+    expect(html).not.toContain('Retrying automatically')
+  })
+
+  it('shows no numbers read before it, nor a failed refresh', () => {
+    const html = render(client(ROWS, httpError(403, { detail: REFUSED })))
+    expect(html).toContain('data-testid="pod-metrics-forbidden"')
+    expect(html).not.toContain('123m')
+    expect(html).not.toContain('pod-metrics-refresh-failed')
+  })
+
+  it('is not asked again on the tab\'s 5 s, nor tried again; a failure is, as before', () => {
+    read.options.length = 0
+    render(client(null, null))
+    const options = read.options.filter((o) => o.queryKey[0] === 'pod-metrics').at(-1)
+    expect(options.queryKey).toEqual(KEY)
+    expect(options.refetchInterval({ state: { error: httpError(403, { detail: REFUSED }) } })).toBe(false)
+    expect(options.refetchInterval({ state: { error: httpError(503) } })).toBe(5000)
+    expect([options.retry(0, httpError(403)), options.retry(0, httpError(503)), options.retry(2, httpError(503))]).toEqual([false, true, false])
+  })
+})
+
 // The class of the innermost element that holds every one of the marked elements, read from the markup's tags.
 function innermostHolding(html: string, testIds: string[]): string | null {
   const stack: { cls: string; found: Set<string> }[] = []

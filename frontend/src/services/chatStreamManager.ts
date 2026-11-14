@@ -1,4 +1,4 @@
-import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
+import { getAuthHeaders, handleUnauthorized, onSessionChange } from '@/services/auth'
 import { closingFence } from '@/services/chatTextUtils'
 import { clusterHeaders } from '@/services/clusterRef'
 import { accessSection } from '@/services/toolAccess'
@@ -34,6 +34,9 @@ export interface ChatStreamState {
   content: string
   toolCalls: any[]
   streamingPhase: StreamingPhase | null
+  // The answer waits for its turn (the server's `queued` event: every Claude Code slot is taken), shown as a line in
+  // both chats until the run starts
+  queued: boolean
   error: string | null
   // A refusal the server writes for the screen (token budget): catalog key and values (utils/chatError)
   errorKey: string | null
@@ -54,6 +57,7 @@ const initialState: ChatStreamState = {
   content: '',
   toolCalls: [],
   streamingPhase: null,
+  queued: false,
   error: null,
   errorKey: null,
   errorArgs: null,
@@ -198,6 +202,8 @@ export class ChatStreamManager {
   private _toolBlocks: { start: number; resultAt: number }[] = []
   // The save of an answer whose stream was cut, which the next question waits for (_keepCutAnswer).
   private _keepingCut: Promise<void> | null = null
+  // Counts resets: a run started before the last one writes nothing more (reset).
+  private _run = 0
   private static readonly TICK_MS = 16 // 드레인 간격 (ms) — one screen refresh
 
   constructor(options: ChatStreamManagerOptions = {}) {
@@ -299,7 +305,7 @@ export class ChatStreamManager {
   // The answer failed: the letters that came stay in content, and an answer the user already stopped stays stopped.
   private _fail = (patch: Partial<ChatStreamState>) => {
     if (this.state.status !== 'streaming') return
-    this.setState({ status: 'error', isStreaming: false, streamingPhase: null, ...patch }, true)
+    this.setState({ status: 'error', isStreaming: false, streamingPhase: null, queued: false, ...patch }, true)
   }
 
   // The content with the n-th tool's result and 🔐 line in its block, once; the blocks after it move by what went in.
@@ -351,8 +357,24 @@ export class ChatStreamManager {
     }
 
     if (this.state.status === 'streaming') {
-      this.setState({ status: 'aborted', isStreaming: false }, true)
+      this.setState({ status: 'aborted', isStreaming: false, queued: false }, true)
     }
+  }
+
+  // Back to what a new tab has: the answer on its way is cancelled and nothing of this conversation stays — the person
+  // signed in changed (services/auth onSessionChange). Unlike stop, nothing is kept to save.
+  reset = () => {
+    this._run += 1
+    this.abortController?.abort()
+    this.abortController = null
+    this._stopTypewriter()
+    this._charQueue.length = 0
+    this._streamDone = false
+    this._pendingDonePatch = null
+    this._toolBlocks = []
+    this._keepingCut = null
+    this.state = { ...initialState, updatedAt: Date.now() }
+    this.notify()
   }
 
   startSessionChat = async (
@@ -365,7 +387,9 @@ export class ChatStreamManager {
       throw new Error('이미 답변 생성 중입니다. 먼저 중단해 주세요.')
     }
 
-    this.abortController = new AbortController()
+    const run = this._run
+    const controller = new AbortController()
+    this.abortController = controller
     this._stopTypewriter()
     this._charQueue.length = 0
     this._streamDone = false
@@ -379,6 +403,7 @@ export class ChatStreamManager {
       content: '',
       toolCalls: [],
       streamingPhase: 'waiting',
+      queued: false,
       error: null,
       errorKey: null,
       errorArgs: null,
@@ -391,6 +416,7 @@ export class ChatStreamManager {
       const keeping = this._keepingCut
       this._keepingCut = null
       if (keeping) await keeping
+      if (run !== this._run) return
 
       const endpointTemplate =
         this.options.endpoint ?? '/api/v1/ai/sessions/{sessionId}/chat'
@@ -412,7 +438,7 @@ export class ChatStreamManager {
           ...getAuthHeaders(),
           ...extraHeaders,
         },
-        signal: this.abortController.signal,
+        signal: controller.signal,
       }
 
       if (useBodyJson) {
@@ -420,6 +446,7 @@ export class ChatStreamManager {
       }
 
       const response = await fetch(url, init)
+      if (run !== this._run) return
 
       if (response.status === 401) {
         handleUnauthorized()
@@ -439,6 +466,7 @@ export class ChatStreamManager {
 
       for (;;) {
         const { done, value } = await reader.read()
+        if (run !== this._run) return
         if (done) break
 
         const chunk = decoder.decode(value, { stream: true })
@@ -454,12 +482,17 @@ export class ChatStreamManager {
 
           const dataStr = line.slice(6)
           if (dataStr === '[DONE]') {
-            this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null })
+            this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null, queued: false })
             return
           }
 
           try {
             const data = JSON.parse(dataStr)
+
+            if (typeof data.queued === 'boolean') {
+              this.setState({ queued: data.queued })
+              continue
+            }
 
             if (data.model_info) {
               console.info(
@@ -584,7 +617,7 @@ export class ChatStreamManager {
 
       // Every answer the server finishes ends with [DONE] or an error event: a stream without either was cut off.
       if (buffer.trim() === 'data: [DONE]') {
-        this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null })
+        this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null, queued: false })
       } else if (this.state.content || this._charQueue.length > 0) {
         this._fail({ error: STREAM_CUT, errorKey: 'streamCut' })
         this._keepCutAnswer()
@@ -592,8 +625,10 @@ export class ChatStreamManager {
         this._fail({ error: STREAM_EMPTY, errorKey: 'streamEmpty' })
       }
     } catch (error: any) {
+      // reset cancelled this run: the state is a new tab's now
+      if (run !== this._run) return
       if (error?.name === 'AbortError') {
-        this.setState({ status: 'aborted', isStreaming: false, streamingPhase: null }, true)
+        this.setState({ status: 'aborted', isStreaming: false, streamingPhase: null, queued: false }, true)
         return
       }
 
@@ -601,9 +636,11 @@ export class ChatStreamManager {
       // a read that broke part way: the letters that came, as a stream that closed early
       this._keepCutAnswer()
     } finally {
-      this.abortController = null
+      // a run that ended after the next one started leaves that one's controller to it
+      if (this.abortController === controller) this.abortController = null
     }
   }
 }
 
 export const chatStreamManager = new ChatStreamManager({ extraHeaders: clusterHeaders, bodyJson: true })
+onSessionChange(chatStreamManager.reset)

@@ -83,6 +83,27 @@ test.describe('the response comparison', () => {
     expect(cells).toContain('$[Cluster].permissions[resource.hygiene.scan].key')
   })
 
+  test('discovery lists pair by their groupVersion: the same lists in another order are the order cell only', () => {
+    const list = (groupVersion: string, ...kinds: string[]) =>
+      ({ groupVersion, resources: kinds.map((kind) => ({ name: `${kind.toLowerCase()}s`, kind, namespaced: true, verbs: ['get', 'list'] })) })
+    const old = answer([list('apps/v1', 'Deployment'), list('v1', 'Pod', 'Service')])
+    const moved = sortCells(old, answer([list('v1', 'Pod', 'Service'), list('apps/v1', 'Deployment')]), old)
+    expect(moved.real.map((d) => d.cell)).toEqual(['$.$order'])
+    const changed = sortCells(old, answer([list('v1', 'Pod'), list('apps/v1', 'Deployment')]), old)
+    expect(changed.real.map((d) => d.cell).sort()).toEqual([
+      '$.$order',
+      '$[v1].resources.$length',
+      '$[v1].resources.$order',
+      '$[v1].resources[Service//services].kind',
+      '$[v1].resources[Service//services].name',
+      '$[v1].resources[Service//services].namespaced',
+      '$[v1].resources[Service//services].verbs.$length',
+      '$[v1].resources[Service//services].verbs.$order',
+      '$[v1].resources[Service//services].verbs[get]',
+      '$[v1].resources[Service//services].verbs[list]',
+    ])
+  })
+
   test('a rollout\'s revisions are rows of their own', () => {
     const rollout = (revision: number, replicas: number) => ({ name: 'web', namespace: 'n', revision, replicas })
     const s = sortCells(answer([rollout(1, 2), rollout(2, 3)]), answer([rollout(1, 2), rollout(2, 4)]), answer([rollout(1, 2), rollout(2, 3)]))

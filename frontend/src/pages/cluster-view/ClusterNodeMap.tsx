@@ -5,7 +5,7 @@ import { GAP, layoutMap } from './nodeMapLayout'
 // Every node at a glance: a cell per node in the boxes' order, a dot per pod in the cards' colour (errors first, then
 // warnings, then the rest, so a problem is never at the end of a cell). Canvas 2D, one fillRect per dot — static, so
 // 100 000 dots draw in milliseconds. The cell is large enough to hold the busiest node's dots, so no pod is left out.
-// A click scrolls to that node's box.
+// While the boxes take more than one page, the cells of the page shown are outlined. A click goes to that node's box.
 
 function cssColor(name: string, fallback: string): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
@@ -14,11 +14,14 @@ function cssColor(name: string, fallback: string): string {
 
 interface Props {
   entries: NodeEntry[]
+  /** the cells of the boxes' page shown, [pageStart, pageEnd) in the map's order; equal when nothing is outlined */
+  pageStart: number
+  pageEnd: number
   onSelect: (index: number) => void
   tr: (key: string, fallback: string, options?: Record<string, any>) => string
 }
 
-export function ClusterNodeMap({ entries, onSelect, tr }: Props) {
+export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, tr }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [width, setWidth] = useState(0)
@@ -75,12 +78,19 @@ export function ClusterNodeMap({ entries, onSelect, tr }: Props) {
         }
       })
     }
+    if (pageEnd > pageStart) {
+      ctx.strokeStyle = cssColor('--color-ink', '#fff')
+      ctx.lineWidth = 1
+      for (let i = pageStart; i < Math.min(pageEnd, entries.length); i++) {
+        ctx.strokeRect((i % cols) * (cell + GAP) + 0.5, Math.floor(i / cols) * (cell + GAP) + 0.5, cell - 1, cell - 1)
+      }
+    }
     if (hover !== null && hover < entries.length) {
       ctx.strokeStyle = cssColor('--color-primary-400', '#38bdf8')
       ctx.lineWidth = 2
       ctx.strokeRect((hover % cols) * (cell + GAP) + 1, Math.floor(hover / cols) * (cell + GAP) + 1, cell - 2, cell - 2)
     }
-  }, [entries, layout, width, hover, mode])
+  }, [entries, layout, width, hover, mode, pageStart, pageEnd])
 
   const indexAt = (ev: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = ev.currentTarget.getBoundingClientRect()
@@ -98,13 +108,14 @@ export function ClusterNodeMap({ entries, onSelect, tr }: Props) {
   const h = hover !== null ? entries[hover] : null
 
   return (
-    <div className="card" data-testid="cluster-view-map" data-list-bounded="node map: the whole cluster at a glance, not a list to page">
+    <div className="card" data-testid="cluster-view-map" data-list-bounded="one canvas of every node: about 194 px tall at 1,000 nodes, about 1.5 screens at 5,000">
       <div ref={wrapRef} className="w-full">
         <canvas
           ref={canvasRef}
           role="img"
           aria-label={tr('clusterView.map.aria', 'Node map: {{nodes}} nodes, {{pods}} pods ({{error}} errors, {{warn}} warnings)', { nodes: entries.length, pods: totals.pods, error: totals.error, warn: totals.warn })}
           data-cells={JSON.stringify(entries.map((e) => [e.node, e.counts.ok, e.counts.warn, e.counts.error]))}
+          data-page-cells={pageEnd > pageStart ? `${pageStart},${pageEnd}` : undefined}
           style={{ width: '100%', height: layout.height, cursor: h ? 'pointer' : 'default' }}
           onMouseMove={(ev) => setHover(indexAt(ev))}
           onMouseLeave={() => setHover(null)}
@@ -124,7 +135,11 @@ export function ClusterNodeMap({ entries, onSelect, tr }: Props) {
             <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm bg-red-400" />{tr('clusterView.map.error', 'Error')} {totals.error}</span>
             <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm bg-yellow-400" />{tr('clusterView.map.warn', 'Warning')} {totals.warn}</span>
             <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm bg-green-400" />{tr('clusterView.map.ok', 'Healthy')} {totals.pods - totals.error - totals.warn}</span>
-            <span>{tr('clusterView.map.hint', 'A cell is a node, a dot a pod. Click a cell to go to the node.')}</span>
+            <span>
+              {pageEnd > pageStart
+                ? tr('clusterView.map.hintPaged', 'A cell is a node, a dot a pod; the outlined cells are the boxes below. Click a cell to go to the node.')
+                : tr('clusterView.map.hint', 'A cell is a node, a dot a pod. Click a cell to go to the node.')}
+            </span>
           </>
         )}
       </div>

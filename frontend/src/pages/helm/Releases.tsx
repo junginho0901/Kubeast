@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Loader2, RefreshCw } from 'lucide-react'
@@ -51,13 +51,11 @@ export default function HelmReleasesPage() {
     staleTime: 0,
   }))
 
+  // Another namespace or cluster waits for its own answer, as on first open: the releases of the one before are not
+  // its releases.
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey,
     queryFn: () => api.helm.listReleases(namespace ? { namespace } : undefined),
-    // keepPreviousData for smooth namespace-filter changes, but only within the
-    // same cluster so a switch never lingers on the prior cluster's releases.
-    placeholderData: (prev, prevQuery) =>
-      prevQuery && prevQuery.queryKey[1] === cluster ? prev : undefined,
     staleTime: Infinity,
   })
 
@@ -66,11 +64,22 @@ export default function HelmReleasesPage() {
   const helmForbidden =
     (error as { response?: { status?: number } } | null)?.response?.status === 403
 
+  // When the stream says it missed something, the list is read past the server's 30 s cache of it, as Refresh reads it:
+  // a release uninstalled outside Kubeast stays in that cache.
+  const readAgain = useCallback(() => {
+    void queryClient.fetchQuery({
+      queryKey,
+      queryFn: () => api.helm.listReleases({ ...(namespace ? { namespace } : {}), force_refresh: true }),
+      staleTime: 0,
+    }).catch(() => {})
+  }, [queryClient, queryKey, namespace])
+
   useHelmWatchList({
     cluster,
     namespace: namespace || undefined,
     enabled: !isLoading && !helmForbidden,
     queryKey,
+    onResync: readAgain,
   })
 
   const items: HelmReleaseSummary[] = useMemo(() => data ?? [], [data])

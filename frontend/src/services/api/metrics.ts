@@ -42,10 +42,11 @@ export const metricsApi = {
     }
   },
 
-  getTopResources: async (podLimit: number = 5, nodeLimit: number = 3): Promise<TopResources> => {
+  // skip: "pods", "nodes" or both, a part the cluster refused, which the dashboard keeps from that answer
+  getTopResources: async (podLimit: number = 5, nodeLimit: number = 3, skip?: string): Promise<TopResources> => {
     try {
       const { data } = await client.get('/cluster/metrics/top-resources', {
-        params: { pod_limit: podLimit, node_limit: nodeLimit },
+        params: { pod_limit: podLimit, node_limit: nodeLimit, ...(skip ? { skip } : {}) },
       })
       return data
     } catch (error: any) {

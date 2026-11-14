@@ -46,6 +46,12 @@ func (s *chainStore) Rows(_ context.Context, from, to int64, _ int) ([]auditchai
 	return out, nil
 }
 func (s *chainStore) LastAnchor(context.Context) (*auditchain.Anchor, error) { return nil, nil }
+func (s *chainStore) LastAnchorBy(context.Context, string) (*auditchain.Anchor, error) {
+	return nil, nil
+}
+func (s *chainStore) AnchorLocked(_ context.Context, fn func(auditchain.Store) error) error {
+	return fn(s)
+}
 func (s *chainStore) AnchorsIn(context.Context, int64, int64) ([]auditchain.Anchor, error) {
 	return nil, nil
 }

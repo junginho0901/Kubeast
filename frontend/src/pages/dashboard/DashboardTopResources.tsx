@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { AlertCircle } from 'lucide-react'
 
 import { TopResources } from '@/services/api'
+import { RefusedMetrics } from '@/components/RefusedMetrics'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { failureText } from '@/utils/failureText'
 
@@ -98,6 +99,8 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
               </button>
             ))}
           </div>
+        ) : topResources?.pod_metrics_refused ? (
+          <RefusedMetrics path="/cluster/metrics/pods" reason={topResources.pod_metrics_error} testId="top-pods-refused" />
         ) : topResources?.pod_metrics_error ? (
           // 메트릭 수집 실패 (Node 메트릭은 있을 수 있음) — the server's pod_metrics_error, with its reason
           <div className="text-center py-12" data-testid="top-pods-metrics-error">
@@ -234,6 +237,8 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
               )
             })}
           </div>
+        ) : topResources?.node_metrics_refused ? (
+          <RefusedMetrics path="/cluster/metrics/nodes" reason={topResources.node_metrics_error} testId="top-nodes-refused" />
         ) : topResources?.node_metrics_error ? (
           // 메트릭 수집 실패 (파드 메트릭은 있을 수 있음) — the server's node_metrics_error, with its reason
           <div className="text-center py-12" data-testid="top-nodes-metrics-error">

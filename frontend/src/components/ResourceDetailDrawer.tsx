@@ -28,7 +28,7 @@ import { ModalFrame } from './ModalFrame'
 import { modalButton } from './modalStyles'
 import { TypeToConfirm, WarningBox } from './TypeToConfirm'
 import { systemObject, type SystemReason } from './resource-detail/systemObject'
-import { customResourceTarget, deleteTarget, drawerResourceType, needsCustomResourceLookup } from './resource-detail/crDetail'
+import { customResourceTarget, deleteTarget, drawerObjectKey, needsCustomResourceLookup, objectResourceType } from './resource-detail/crDetail'
 import { drawerObjectLayer, followsObjectForChat, objectReadInterval } from './resource-detail/drawerObjectLayer'
 import { drawerBody, useDrawerFollowsRead } from './resource-detail/useDrawerFollowsRead'
 import { DrawerObjectReadContext } from './resource-detail/drawerObjectRead'
@@ -103,12 +103,14 @@ export default function ResourceDetailDrawer() {
   const target = useMemo(() => (asked && crLookup ? customResourceTarget(asked, crds) : asked), [asked, crLookup, crds])
   const { isTop: isTopModal, zIndex } = useModalStackEntry(!!target)
   const [tab, setTab] = useState<TabId>('info')
-  const [applyToast, setApplyToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  // a save's line names the object it saved: one that ends after the drawer moved on is not shown on the next object
+  const [applyToast, setApplyToast] = useState<{ of: string; type: 'success' | 'error'; message: string } | null>(null)
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
 
   const ns = target?.namespace
   const name = target?.name ?? ''
   const kind = target?.kind ?? ''
+  const objectId = target ? drawerObjectKey(target) : ''
   // The generic custom-resource drawer shows the object's own kind when the caller passes it.
   const crKind = kind === 'CustomResourceInstance' ? target?.rawJson?.kind : undefined
   const displayKind = typeof crKind === 'string' && crKind ? crKind : kind
@@ -125,11 +127,15 @@ export default function ResourceDetailDrawer() {
     setDeleteDialogOpen,
     deleteError,
     setDeleteError,
-    deleteMutation,
+    deleteObject,
+    deletePending,
   } = useResourceDelete({
-    target: target ? { kind: target.kind, namespace: target.namespace ?? null, name: target.name, rawJson: (target as any).rawJson } : null,
+    target: target ? { kind: target.kind, namespace: target.namespace ?? null, name: target.name, apiVersion: target.apiVersion, rawJson: (target as any).rawJson } : null,
     close,
   })
+  // the Delete window is for the object it was opened on: the drawer moved to another (back, forward, a link) closes it
+  const [deleteFor, setDeleteFor] = useState('')
+  if (deleteDialogOpen && deleteFor !== objectId) setDeleteDialogOpen(false)
   const features = useClusterFeatures().data
   // features.admissionPolicies.readOnly: the server refuses a policy apply, so the editor stays read-only too.
   const policyLocked = !!features?.admissionPolicies?.readOnly &&
@@ -151,7 +157,7 @@ export default function ResourceDetailDrawer() {
     handleApplyYaml,
     invalidateAfterApply,
   } = useResourceYaml({
-    target: target ? { kind: target.kind, namespace: target.namespace ?? null, name: target.name, rawJson: (target as any).rawJson } : null,
+    target: target ? { kind: target.kind, namespace: target.namespace ?? null, name: target.name, apiVersion: target.apiVersion, rawJson: (target as any).rawJson } : null,
     tab,
     canEditYaml,
   })
@@ -171,11 +177,13 @@ export default function ResourceDetailDrawer() {
   // watches its object reads this when the object changes; without a watch that answers it is read on the clock.
   const followsForChat = !!target && tab === 'info' && !resolving && !!name && followsObjectForChat(kind)
   const [objectWatchAnswers, setObjectWatchAnswers] = useState(false)
-  const objectKey = useMemo(() => ['resource-json', kind, ns, name], [kind, ns, name])
+  // a kind with no drawer of its own is read in the group the caller or its row named, and kept under it
+  const objectType = target ? objectResourceType(target) : ''
+  const objectKey = useMemo(() => ['resource-json', kind, ns, name, objectType], [kind, ns, name, objectType])
   const objectRead = useMemo(() => (followsForChat ? { key: objectKey, setWatchAnswers: setObjectWatchAnswers } : null), [followsForChat, objectKey])
   const { data: fetchedRawJson, dataUpdatedAt: rawJsonReadAt, isFetching: rawJsonFetching, error: rawJsonError } = useQuery({
     queryKey: objectKey,
-    queryFn: () => api.getResourceJson(drawerResourceType(kind), name, ns || undefined),
+    queryFn: () => api.getResourceJson(objectType, name, ns || undefined),
     enabled: needsRawJsonFetch || followsForChat,
     staleTime: 30_000,
     refetchInterval: (query) => objectReadInterval(followsForChat, query.state.error, objectWatchAnswers),
@@ -365,7 +373,7 @@ export default function ResourceDetailDrawer() {
     if (CONFIG_STORAGE_KINDS.has(kind)) return <ConfigStorageInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} />
     // the other views load what they show; this one shows only the object, so it waits for the object
     if (linkPending) return <p className="text-slate-400">{t('common.loading', 'Loading...')}</p>
-    return <GenericInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} />
+    return <GenericInfo name={name} namespace={ns} kind={kind} apiVersion={target.apiVersion} rawJson={effectiveRawJson} />
   }
 
   return (
@@ -403,6 +411,7 @@ export default function ResourceDetailDrawer() {
           onDeleteClick={() => {
             setDeleteError(null)
             setTypedName('')
+            setDeleteFor(objectId)
             setDeleteDialogOpen(true)
           }}
           t={t}
@@ -412,7 +421,8 @@ export default function ResourceDetailDrawer() {
         <div ref={contentScrollRef} className="flex-1 overflow-y-auto overflow-x-hidden">
           {tab === 'info' && (
             <DrawerObjectReadContext.Provider value={objectRead}>
-            <div className="p-5 space-y-6 text-sm">
+            {/* keyed by the object: what a view holds (a value shown, a log or shell window, a page of a list) starts over for the next one */}
+            <div className="p-5 space-y-6 text-sm" key={objectId}>
               {unreadable ? (
                 <ObjectUnreadable kind={displayKind} name={name} namespace={ns} notFound={loadStatus === 404} />
               ) : renderInfoContent()}
@@ -424,7 +434,7 @@ export default function ResourceDetailDrawer() {
           {tab === 'yaml' && (
             <div className="h-full">
               <YamlEditor
-                key={`${kind}-${name}-${ns || ''}`}
+                key={objectId}
                 value={kind === 'Secret' && canEditYaml && yamlData?.yaml ? decodeSecretYaml(yamlData.yaml) : yamlData?.yaml || ''}
                 canEdit={canEditYaml && !argoBlocked && !unreadable}
                 isLoading={yamlLoading}
@@ -435,14 +445,14 @@ export default function ResourceDetailDrawer() {
                 onApplySuccess={() => {
                   invalidateAfterApply()
                   const { kept, unchanged } = appliedRef.current
-                  setApplyToast({ type: 'success', message: unchanged
+                  setApplyToast({ of: objectId, type: 'success', message: unchanged
                     ? t('common.unchanged', { defaultValue: 'Unchanged: the object is already as this YAML says.' })
                     : kept > 0 ? t('secretInfo.appliedKeptMasked', { count: kept, defaultValue: 'Applied. Hidden values left as they were: {{count}}' }) : t('common.applied', { defaultValue: 'Applied' }) })
                 }}
-                onApplyError={(msg) => setApplyToast({ type: 'error', message: msg || t('common.applyError', { defaultValue: 'Apply failed.' }) })}
+                onApplyError={(msg) => setApplyToast({ of: objectId, type: 'error', message: msg || t('common.applyError', { defaultValue: 'Apply failed.' }) })}
                 onDirtyChange={setIsYamlDirty}
                 showInlineApplied={false}
-                toast={applyToast}
+                toast={applyToast?.of === objectId ? applyToast : null}
                 note={kind === 'Secret' && canEditYaml && !argoBlocked && !unreadable && !hasPermission('resource.secret.reveal') ? t('secretInfo.yamlMaskedNote', { defaultValue: 'A value shown as *** stays as it is when you save, as long as its line is there. To change one, write the new value over it. To remove one, delete its line.' }) : undefined}
                 labels={{
                   title: `${displayKind}: ${name}`,
@@ -470,7 +480,7 @@ export default function ResourceDetailDrawer() {
           size="sm"
           title={t('common.deleteKind', { kind: displayKind, defaultValue: 'Delete {{kind}}' })}
           onClose={() => setDeleteDialogOpen(false)}
-          busy={deleteMutation.isPending}
+          busy={deletePending}
           testId="delete-dialog"
           footer={system.blocked ? (
             <button type="button" className={modalButton.cancel} onClick={() => setDeleteDialogOpen(false)}>
@@ -478,17 +488,17 @@ export default function ResourceDetailDrawer() {
             </button>
           ) : (
             <>
-              <button type="button" className={modalButton.cancel} onClick={() => setDeleteDialogOpen(false)} disabled={deleteMutation.isPending}>
+              <button type="button" className={modalButton.cancel} onClick={() => setDeleteDialogOpen(false)} disabled={deletePending}>
                 {t('common.cancel', { defaultValue: 'Cancel' })}
               </button>
               <button
                 type="button"
                 data-testid="delete-dialog-confirm"
                 className={modalButton.danger}
-                onClick={() => deleteMutation.mutate()}
-                disabled={deleteMutation.isPending || systemMetaPending || (system.reasons.length > 0 && typedName !== name)}
+                onClick={deleteObject}
+                disabled={deletePending || systemMetaPending || (system.reasons.length > 0 && typedName !== name)}
               >
-                {deleteMutation.isPending
+                {deletePending
                   ? t('common.deleting', { defaultValue: 'Deleting...' })
                   : t('common.delete', { defaultValue: 'Delete' })}
               </button>

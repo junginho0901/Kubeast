@@ -42,6 +42,24 @@ spec:
       targetPort: 8002
   selector:
     app: k8s-service
+{{- if .Values.streams.enabled }}
+---
+# the terminals and followed logs (streams.enabled); the gateway's stream locations proxy here
+apiVersion: v1
+kind: Service
+metadata:
+  name: k8s-service-stream
+  labels:
+    kubeast.io/metrics: "true"
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  ports:
+    - name: http
+      port: 8002
+      targetPort: 8002
+  selector:
+    app: k8s-service-stream
+{{- end }}
 ---
 apiVersion: v1
 kind: Service

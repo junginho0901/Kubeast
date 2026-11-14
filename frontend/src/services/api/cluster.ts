@@ -6,7 +6,7 @@
 import axios from 'axios'
 
 import { client } from './client'
-import type { YamlApplied, YamlOpened } from './types'
+import type { DrainStatusAnswer, YamlApplied, YamlOpened } from './types'
 import type {
   ClusterIssuesResponse,
   ClusterOverview,
@@ -223,7 +223,7 @@ export const clusterApi = {
   getNodeDrainStatus: async (
     name: string,
     drainId: string,
-  ): Promise<{ id: string; node: string; status: string; message?: string | null }> => {
+  ): Promise<DrainStatusAnswer> => {
     const { data } = await client.get(`/cluster/nodes/${name}/drain/status`, {
       params: { drain_id: drainId },
     })

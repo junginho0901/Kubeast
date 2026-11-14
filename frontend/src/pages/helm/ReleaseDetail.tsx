@@ -20,7 +20,16 @@ import { isProtectedNamespaceError } from '@/utils/protectedNamespace'
 
 type TabKey = 'overview' | 'values' | 'manifest' | 'notes' | 'history' | 'resources'
 
+// One page per release: the route keeps its element when only the address's namespace or name changes (a drawer's Helm
+// badge, back, forward) or the cluster does, so the page is keyed by all three and the next release opens on its own
+// tab with none of the windows or edits of the one before.
 export default function HelmReleaseDetailPage() {
+  const { namespace = '', name = '' } = useParams<{ namespace: string; name: string }>()
+  const { currentCluster } = useCluster()
+  return <HelmReleaseDetail key={JSON.stringify([currentCluster, namespace, name])} />
+}
+
+function HelmReleaseDetail() {
   const { t } = useTranslation()
   const { has } = usePermission()
   const { namespace = '', name = '' } = useParams<{ namespace: string; name: string }>()
@@ -61,6 +70,12 @@ export default function HelmReleaseDetailPage() {
     },
     [namespace, name, queryClient],
   )
+  // The stream started over and cannot say what changed meanwhile: this release's queries on screen are read again.
+  const handleHelmResync = useCallback(() => {
+    for (const part of ['helm-release', 'helm-section', 'helm-history', 'helm-resources']) {
+      queryClient.invalidateQueries({ queryKey: [part, namespace, name] })
+    }
+  }, [namespace, name, queryClient])
 
   useHelmWatchList({
     cluster: currentCluster || 'default',
@@ -68,6 +83,7 @@ export default function HelmReleaseDetailPage() {
     enabled: !!namespace && !!name,
     queryKey: null,
     onEvent: handleHelmEvent,
+    onResync: handleHelmResync,
   })
 
   // 활성 탭 별로 상세 데이터를 함께 fetch — TanStack Query 가 자식 탭 컴포넌트와

@@ -119,6 +119,7 @@ export function IssuesModal({
             <button
               onClick={onClose}
               className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+              aria-label={tr('common.close', 'Close')}
             >
               <X className="w-5 h-5 text-slate-400" />
             </button>
@@ -199,6 +200,7 @@ export function IssuesModal({
               <button
                 onClick={() => setSearchQuery('')}
                 className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-slate-600 rounded-sm transition-colors"
+                aria-label={tr('common.clearSearch', 'Clear the search')}
               >
                 <X className="w-4 h-4 text-slate-400" />
               </button>

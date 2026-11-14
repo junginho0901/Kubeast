@@ -28,6 +28,12 @@ def _validation_message(err: ValidationError) -> str:
     return msg[len("Value error, "):] if msg.startswith("Value error, ") else msg
 
 
+def _stream_start_failed(stream: str, err: Exception) -> HTTPException:
+    """The error goes to the log; the caller reads a fixed message, as response.Public keeps internal text out in Go."""
+    logger.error("%s stream could not start: %s", stream, safe_error(err))
+    return HTTPException(status_code=500, detail="the answer stream could not start")
+
+
 def _extract_audit_meta(request: Request, authorization: str) -> tuple[dict, dict]:
     """authorization 토큰 + 요청 헤더에서 audit actor/http 메타 추출.
 
@@ -227,8 +233,6 @@ async def session_chat(
     사용자가 쓴 문장(붙여 넣은 비밀 포함)이 게이트웨이·uvicorn 접근 로그에 그대로
     남으므로 `?message=` 는 더 받지 않는다(422).
     """
-    from app.database import get_db_service
-
     message = body.message
     if not message.strip():
         raise HTTPException(status_code=422, detail="message required")
@@ -252,7 +256,7 @@ async def session_chat(
             },
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _stream_start_failed("session chat", e) from e
 
 
 # ---- AI write-tool approvals (H2) ----
@@ -524,7 +528,7 @@ async def floating_session_chat(
             },
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _stream_start_failed("floating chat", e) from e
 
 
 @router.get("/suggest-optimization/stream")
@@ -549,7 +553,7 @@ async def suggest_optimization_stream(
             },
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _stream_start_failed("optimization", e) from e
 
 
 @router.get("/config")

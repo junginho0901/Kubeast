@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { focusManager, notifyManager, QueryClient, QueryObserver } from '@tanstack/react-query'
-import { applyWatchFrames, applyWatchMessage, followList, frameHolder } from './useKubeWatchList'
+import { applyWatchFrames, applyWatchMessage, followList, frameHolder, LIST_GATHER_MS } from './useKubeWatchList'
 import { watchMultiplexer } from './watchMultiplexer'
 import { applyLeaseWatchEvent } from '@/pages/cluster/leases/leaseWatchNormalize'
 import { applyReplicaSetWatchEvent } from '@/pages/workloads/replicasets/replicaSetWatchNormalize'
@@ -715,6 +715,40 @@ describe('a list the server has no room to follow', () => {
     list.stop()
   })
 
+  // Each tab of each browser starts over when the server or its socket does: the one nobody looks at waits.
+  it('a RESYNC in a hidden tab reads the list once the tab shows again', async () => {
+    const list = follow()
+    await vi.advanceTimersByTimeAsync(0)
+    focusManager.setFocused(false)
+    frames.get('/api/v1/namespaces/demo/configmaps')!(frame('RESYNC'))
+    list.queryFn.mockClear()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(list.queryFn).toHaveBeenCalledTimes(0)
+    focusManager.setFocused(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(list.queryFn).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(list.queryFn).toHaveBeenCalledTimes(1)
+    list.stop()
+  })
+
+  it('a RESYNC waiting for a hidden tab is forgotten with the list', async () => {
+    const client = new QueryClient()
+    const queryFn = vi.fn(async () => [{ name: 'web', namespace: 'demo' }])
+    const stopObserver = new QueryObserver(client, { queryKey: listKey, queryFn }).subscribe(() => {})
+    const stopList = followList(client, { clusterId: 'self', paths: ['/api/v1/namespaces/demo/configmaps'], query: 'watch=1', queryKey: listKey })
+    await vi.advanceTimersByTimeAsync(0)
+    focusManager.setFocused(false)
+    frames.get('/api/v1/namespaces/demo/configmaps')!(frame('RESYNC'))
+    await vi.advanceTimersByTimeAsync(10_000)
+    stopList()
+    queryFn.mockClear()
+    focusManager.setFocused(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(queryFn).toHaveBeenCalledTimes(0)
+    stopObserver()
+  })
+
   it('a RESYNC waiting for its time is forgotten with the list', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.9999)
     const list = follow()
@@ -724,5 +758,326 @@ describe('a list the server has no room to follow', () => {
     list.queryFn.mockClear()
     await vi.advanceTimersByTimeAsync(10_000)
     expect(list.queryFn).toHaveBeenCalledTimes(0)
+  })
+})
+
+// A Cluster View box leaves the screen and comes back: its query keeps the pods it had for its staleTime (10 s) and does
+// not read them again, and a new watch sends the pods there are, not those deleted while the box was away.
+describe('a list shown again after nobody followed it', () => {
+  type Row = { name: string; namespace: string; node_name: string }
+  const boxKey = ['cluster-view', 'node-pods', 'node-1', 'all']
+  const path = '/api/v1/pods'
+  const boxQuery = `watch=1&fieldSelector=${encodeURIComponent('spec.nodeName=node-1')}`
+  const pod = (name: string): Row => ({ name, namespace: 'demo', node_name: 'node-1' })
+  let asked: { msg: { resync?: boolean }; listener: (message: unknown) => void }[] = []
+  let followed = false
+
+  beforeEach(() => {
+    asked = []
+    followed = false
+    vi.useFakeTimers()
+    // the reads a RESYNC asks for at 2.5 s
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
+    vi.spyOn(watchMultiplexer, 'subscribe').mockImplementation(async (msg, listener) => {
+      asked.push({ msg, listener: listener as (message: unknown) => void })
+      return () => {}
+    })
+    vi.spyOn(watchMultiplexer, 'unsubscribe').mockImplementation(() => {})
+    vi.spyOn(watchMultiplexer, 'onSocketClosed').mockImplementation(() => () => {})
+    vi.spyOn(watchMultiplexer, 'answers').mockImplementation(() => false)
+    vi.spyOn(watchMultiplexer, 'follows').mockImplementation(() => followed)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  // What the server's followWatch answers a REQUEST with: one RESYNC first when it says it missed something, once the
+  // watch is on, then an ADDED for each pod there is now.
+  const serve = (names: Iterable<string>) => {
+    const { msg, listener } = asked[asked.length - 1]
+    const frame = { clusterId: 'self', path, query: boxQuery }
+    if (msg.resync) listener({ ...frame, type: 'RESYNC' })
+    for (const name of names) listener({ ...frame, type: 'DATA', data: { type: 'ADDED', object: pod(name) } })
+  }
+
+  function box(client: QueryClient, queryFn: () => Promise<Row[]>, shown?: string[][]) {
+    const stopObserver = new QueryObserver(client, { queryKey: boxKey, queryFn, staleTime: 10_000 }).subscribe((result) => {
+      shown?.push(result.data?.map((row) => row.name) ?? [])
+    })
+    const stopList = followList(client, { clusterId: 'self', paths: [path], query: boxQuery, queryKey: boxKey, gatherEveryMs: LIST_GATHER_MS })
+    return () => {
+      stopList()
+      stopObserver()
+    }
+  }
+  const names = (client: QueryClient) => (client.getQueryData(boxKey) as Row[]).map((row) => row.name)
+
+  it('a pod deleted while the box was away is gone after it comes back, its rows on screen until the list answers', async () => {
+    const pods = new Set(['web-a', 'web-b', 'web-c'])
+    const client = new QueryClient()
+    const queryFn = vi.fn(async () => [...pods].map(pod))
+    const away = box(client, queryFn)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(asked[0].msg.resync).toBeUndefined()
+    serve(pods)
+    await vi.advanceTimersByTimeAsync(LIST_GATHER_MS)
+    expect(names(client)).toEqual(['web-a', 'web-b', 'web-c'])
+
+    away()
+    pods.delete('web-b')
+    await vi.advanceTimersByTimeAsync(3000)
+
+    const shown: string[][] = []
+    const stop = box(client, queryFn, shown)
+    await vi.advanceTimersByTimeAsync(0)
+    // within its staleTime the query reads nothing; the watch asks for the RESYNC
+    expect(queryFn).toHaveBeenCalledTimes(1)
+    expect(asked[1].msg).toMatchObject({ type: 'REQUEST', path, query: boxQuery, resync: true })
+    serve(pods)
+    await vi.advanceTimersByTimeAsync(LIST_GATHER_MS)
+    expect(names(client)).toEqual(['web-a', 'web-b', 'web-c'])
+
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(queryFn).toHaveBeenCalledTimes(2)
+    expect(names(client)).toEqual(['web-a', 'web-c'])
+    expect(shown.length).toBeGreaterThan(0)
+    expect(shown.every((rows) => rows.length > 0)).toBe(true)
+    stop()
+  })
+
+  it('a box back after its staleTime is read by its query once, and asks for no RESYNC', async () => {
+    const client = new QueryClient()
+    const queryFn = vi.fn(async () => [pod('web-a')])
+    const away = box(client, queryFn)
+    await vi.advanceTimersByTimeAsync(0)
+    serve(['web-a'])
+    await vi.advanceTimersByTimeAsync(LIST_GATHER_MS)
+    away()
+    await vi.advanceTimersByTimeAsync(12_000)
+
+    const stop = box(client, queryFn)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(asked[1].msg.resync).toBeUndefined()
+    serve(['web-a'])
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(queryFn).toHaveBeenCalledTimes(2)
+    stop()
+  })
+
+  it('a list read again since its last follower stopped asks for nothing', async () => {
+    const client = new QueryClient()
+    const queryFn = vi.fn(async () => [pod('web-a')])
+    const away = box(client, queryFn)
+    await vi.advanceTimersByTimeAsync(0)
+    away()
+    await vi.advanceTimersByTimeAsync(1000)
+    await client.fetchQuery({ queryKey: boxKey, queryFn, staleTime: 0 })
+
+    const stop = box(client, queryFn)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(asked[1].msg.resync).toBeUndefined()
+    stop()
+  })
+
+  // A watch another list keeps on is on already: the server sends no RESYNC for a list that joins it, so it is read from
+  // here, once and within the same spread.
+  it('a list that joins a watch already on is read once, within five seconds', async () => {
+    const client = new QueryClient()
+    const queryFn = vi.fn(async () => [pod('web-a')])
+    const away = box(client, queryFn)
+    await vi.advanceTimersByTimeAsync(0)
+    away()
+    await vi.advanceTimersByTimeAsync(1000)
+
+    followed = true
+    const stop = box(client, queryFn)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(queryFn).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(queryFn).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(queryFn).toHaveBeenCalledTimes(2)
+    stop()
+  })
+})
+
+describe('frames that come while a list is read', () => {
+  const listKey = ['workloads', 'pods', 'demo']
+  const path = '/api/v1/namespaces/demo/pods'
+  const pod = (name: string, status = 'Running') => ({ name, namespace: 'demo', status })
+  const names = (rows: unknown) => (rows as { name: string }[]).map((row) => row.name)
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+  let listener: ((message: unknown) => void) | undefined
+
+  beforeEach(() => {
+    listener = undefined
+    vi.spyOn(watchMultiplexer, 'subscribe').mockImplementation(async (_msg, l) => {
+      listener = l as (message: unknown) => void
+      return () => {}
+    })
+    vi.spyOn(watchMultiplexer, 'unsubscribe').mockImplementation(() => {})
+    vi.spyOn(watchMultiplexer, 'onSocketClosed').mockImplementation(() => () => {})
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  // Each read waits for the answer the test gives it, so a frame can come while the read is on its way.
+  function open(gatherEveryMs?: number) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const answers: Array<{ resolve: (rows: unknown[]) => void; reject: (err: Error) => void }> = []
+    const queryFn = vi.fn(() => new Promise<unknown[]>((resolve, reject) => answers.push({ resolve, reject })))
+    const stopObserver = new QueryObserver(client, { queryKey: listKey, queryFn }).subscribe(() => {})
+    const stopList = followList(client, { clusterId: 'self', paths: [path], query: 'watch=1', queryKey: listKey, gatherEveryMs })
+    const settle = () => sleep(gatherEveryMs ? gatherEveryMs + 10 : 5)
+    return {
+      client,
+      queryFn,
+      rows: () => client.getQueryData(listKey),
+      send: async (type: string, object: object) => {
+        listener!(frame('DATA', { path, data: { type, object } }))
+        await settle()
+      },
+      answer: async (rows: unknown[]) => {
+        answers.shift()!.resolve(rows)
+        await settle()
+      },
+      fail: async () => {
+        answers.shift()!.reject(new Error('read failed'))
+        await settle()
+      },
+      readAgain: async () => {
+        void client.invalidateQueries({ queryKey: listKey })
+        await sleep(0)
+      },
+      stop: () => {
+        stopList()
+        stopObserver()
+      },
+    }
+  }
+
+  // The answer was made before the pod went, and came after its DELETED: the row stayed until the list's next read.
+  it('a pod deleted while a RESYNC read is on its way is gone once the answer comes', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    const list = open()
+    await list.answer([pod('web'), pod('worker')])
+    listener!(frame('RESYNC', { path }))
+    await sleep(5)
+    expect(list.queryFn).toHaveBeenCalledTimes(2)
+    await list.send('DELETED', pod('worker'))
+    expect(names(list.rows())).toEqual(['web'])
+    await list.answer([pod('web'), pod('worker')])
+    expect(names(list.rows())).toEqual(['web'])
+    list.stop()
+  })
+
+  it('a pod made while the list is read is there once the answer comes, where the next read puts it', async () => {
+    const list = open()
+    await list.answer([pod('api'), pod('web')])
+    await list.readAgain()
+    await list.send('ADDED', pod('cache'))
+    await list.answer([pod('api'), pod('web')])
+    expect(names(list.rows())).toEqual(['api', 'cache', 'web'])
+    list.stop()
+  })
+
+  it('a change that comes while the list is read stays once the answer comes', async () => {
+    const list = open()
+    await list.answer([pod('web', 'Pending')])
+    await list.readAgain()
+    await list.send('MODIFIED', pod('web', 'Running'))
+    await list.answer([pod('web', 'Pending')])
+    expect(list.rows()).toEqual([pod('web', 'Running')])
+    list.stop()
+  })
+
+  // Rows carry no version, so a frame older than the answer is applied too; the frame of what changed after it follows on
+  // the same watch, which has gone on since before the read.
+  it('a frame older than the answer brings a deleted row back only until that row\'s next frame', async () => {
+    const list = open()
+    await list.answer([pod('web'), pod('worker', 'Running')])
+    await list.readAgain()
+    await list.send('MODIFIED', pod('worker', 'Terminating'))
+    await list.answer([pod('web')])
+    expect(names(list.rows())).toEqual(['web', 'worker'])
+    await list.send('DELETED', pod('worker', 'Terminating'))
+    expect(names(list.rows())).toEqual(['web'])
+    list.stop()
+  })
+
+  it('frames that came before a read are not applied again to its answer', async () => {
+    const list = open()
+    await list.answer([pod('web'), pod('worker')])
+    await list.send('DELETED', pod('worker'))
+    await list.readAgain()
+    await list.answer([pod('web'), pod('worker-2')])
+    expect(names(list.rows())).toEqual(['web', 'worker-2'])
+    list.stop()
+  })
+
+  it('a read that fails leaves its frames out of the next answer', async () => {
+    const list = open()
+    await list.answer([pod('web')])
+    await list.readAgain()
+    await list.send('ADDED', pod('job-1'))
+    await list.fail()
+    expect(names(list.rows())).toEqual(['job-1', 'web'])
+    await list.readAgain()
+    await list.answer([pod('web')])
+    expect(names(list.rows())).toEqual(['web'])
+    list.stop()
+  })
+
+  it('frames that come before the first answer are applied to it', async () => {
+    const list = open()
+    await list.send('MODIFIED', pod('web', 'Running'))
+    await list.send('DELETED', pod('worker'))
+    expect(list.rows()).toBeUndefined()
+    await list.answer([pod('web', 'Pending'), pod('worker')])
+    expect(list.rows()).toEqual([pod('web', 'Running')])
+    list.stop()
+  })
+
+  it('a list that gathers its frames applies them again to the answer too', async () => {
+    const list = open(10)
+    await list.answer([pod('web'), pod('worker')])
+    await list.readAgain()
+    await list.send('DELETED', pod('worker'))
+    await list.send('ADDED', pod('cache'))
+    await list.answer([pod('web'), pod('worker')])
+    expect(names(list.rows())).toEqual(['cache', 'web'])
+    list.stop()
+  })
+
+  // React reads the query once the notifications of a change are out: the answer and the frames applied to it are one.
+  it('the screen gets the answer with the frames on it, never the answer alone', async () => {
+    const list = open()
+    await list.answer([pod('web'), pod('worker')])
+    const observer = new QueryObserver(list.client, { queryKey: listKey, enabled: false })
+    const seen: string[][] = []
+    const stopSeen = observer.subscribe(notifyManager.batchCalls(() => seen.push(names(observer.getCurrentResult().data))))
+    await list.readAgain()
+    await list.send('DELETED', pod('worker'))
+    seen.length = 0
+    await list.answer([pod('web'), pod('worker')])
+    expect(seen.length).toBeGreaterThan(0)
+    expect(seen.every((rows) => !rows.includes('worker'))).toBe(true)
+    stopSeen()
+    list.stop()
+  })
+
+  it('applies nothing once the list is gone', async () => {
+    const list = open()
+    await list.answer([pod('web'), pod('worker')])
+    await list.readAgain()
+    await list.send('DELETED', pod('worker'))
+    // another screen keeps the query, so the read goes on without this list
+    const stopKeep = new QueryObserver(list.client, { queryKey: listKey, enabled: false }).subscribe(() => {})
+    list.stop()
+    await list.answer([pod('web'), pod('worker')])
+    expect(names(list.rows())).toEqual(['web', 'worker'])
+    stopKeep()
   })
 })

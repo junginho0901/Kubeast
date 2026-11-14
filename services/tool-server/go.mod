@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	github.com/itchyny/gojq v0.12.20
 	github.com/junginho0901/kubeast/services/pkg v0.0.0
+	github.com/redis/go-redis/v9 v9.23.0
 	k8s.io/apimachinery v0.37.2
 	k8s.io/client-go v0.37.2
 )
@@ -34,6 +35,7 @@ require (
 	github.com/prometheus/procfs v0.22.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	go.uber.org/atomic v1.12.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/oauth2 v0.38.0 // indirect

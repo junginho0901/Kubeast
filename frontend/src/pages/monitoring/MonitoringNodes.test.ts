@@ -12,6 +12,12 @@ import MonitoringNodes from './MonitoringNodes'
 // gave none (metrics-server is missing or not answering) or the caller may not read them.
 
 vi.mock('@/contexts/ClusterContext', () => ({ useCluster: () => ({ currentCluster: 'c1' }) }))
+// the options the tab reads with
+const seen = vi.hoisted(() => ({ options: [] as any[] }))
+vi.mock('@tanstack/react-query', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@tanstack/react-query')>()
+  return { ...real, useQuery: (options: any, client?: never) => { seen.options.push(options); return real.useQuery(options, client) } }
+})
 vi.mock('@/components/ResourceDetailContext', () => ({ useResourceDetail: () => ({ open: () => {} }) }))
 const chat: { current: { summary?: string; data?: Record<string, unknown> } | null } = { current: null }
 vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: { summary?: string; data?: Record<string, unknown> } | null) => { chat.current = input } }))
@@ -84,6 +90,36 @@ describe('the Monitoring Nodes tab', () => {
     expect(html).toContain('node-metrics-forbidden')
     expect(html).not.toContain(FAILED)
     expect(html).not.toContain(NOT_AVAILABLE)
+  })
+
+  describe('a read the cluster refused', () => {
+    const REFUSED = 'nodes.metrics.k8s.io is forbidden: User "u1" cannot list resource "nodes" in API group "metrics.k8s.io" at the cluster scope'
+
+    it('says so in the cluster\'s words, in place of the numbers', () => {
+      const html = render(failed(httpError(403, { detail: REFUSED })))
+      expect(html).toContain('data-testid="node-metrics-forbidden"')
+      expect(html).toContain('You do not have permission to view metrics in this cluster.')
+      expect(html).toContain(REFUSED.replace(/"/g, '&quot;'))
+      expect(html).not.toContain('Retrying automatically')
+    })
+
+    it('after numbers were on screen shows the refusal, not the old numbers as a failed refresh', () => {
+      const html = render(failed(httpError(403, { detail: REFUSED }), [{ name: 'n1', cpu: '100m', cpu_percent: '5%', memory: '10Mi', memory_percent: '1%' }]))
+      expect(html).toContain('data-testid="node-metrics-forbidden"')
+      expect(html).not.toContain('100m')
+      expect(html).not.toContain('node-metrics-refresh-failed')
+      expect(chat.current).toBeNull()
+    })
+
+    it('is not asked again on the tab\'s 5 s, nor tried again; a failure is, as before', () => {
+      seen.options.length = 0
+      render(seeded())
+      const options = seen.options.filter((o) => o.queryKey[0] === 'node-metrics').at(-1)
+      expect(options.refetchInterval({ state: { error: httpError(403, { detail: REFUSED }) } })).toBe(false)
+      expect(options.refetchInterval({ state: { error: httpError(503) } })).toBe(5000)
+      expect(options.refetchInterval({ state: { error: null } })).toBe(5000)
+      expect([options.retry(0, httpError(403)), options.retry(0, httpError(503)), options.retry(2, httpError(503))]).toEqual([false, true, false])
+    })
   })
 
   it('a failed refresh keeps the last numbers on screen', () => {

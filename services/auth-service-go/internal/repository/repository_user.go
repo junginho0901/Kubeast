@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 func (r *Repository) CreateUser(ctx context.Context, u *model.User) error {
@@ -60,22 +61,55 @@ func (r *Repository) GetTokenVersion(ctx context.Context, id string) (int, error
 	return v, err
 }
 
-// TokenVersionFor is GetTokenVersion for a presented token: one an API key was
-// exchanged for (apiKeyID set) is revoked with the key, so a key deleted or
-// past its expiry answers ErrAPIKeyNotFound and the token stops working on the
-// validators' next check instead of at its own expiry.
-func (r *Repository) TokenVersionFor(ctx context.Context, userID, apiKeyID string) (int, error) {
+// SessionStateFor is what a presented token is checked against: the user's
+// token_version and signed-out sign-ins in one statement
+// (auth.SessionStateQuery). A token an API key was exchanged for (apiKeyID
+// set) is revoked with the key, so a key deleted or past its expiry answers
+// ErrAPIKeyNotFound and the token stops working on the validators' next check
+// instead of at its own expiry.
+func (r *Repository) SessionStateFor(ctx context.Context, userID, apiKeyID string) (auth.SessionState, error) {
 	if apiKeyID != "" {
 		var expires time.Time
 		err := r.pool.QueryRow(ctx, `SELECT expires_at FROM api_keys WHERE id = $1 AND user_id = $2`, apiKeyID, userID).Scan(&expires)
 		if errors.Is(err, pgx.ErrNoRows) || (err == nil && !expires.After(time.Now())) {
-			return 0, ErrAPIKeyNotFound
+			return auth.SessionState{}, ErrAPIKeyNotFound
 		}
 		if err != nil {
-			return 0, err
+			return auth.SessionState{}, err
 		}
 	}
-	return r.GetTokenVersion(ctx, userID)
+	var state auth.SessionState
+	err := r.pool.QueryRow(ctx, auth.SessionStateQuery, userID).Scan(&state.Version, &state.SignedOut)
+	return state, err
+}
+
+// EndSignIn records that the user's sign-in at authTime (the auth_time its
+// tokens carry) was signed out. Signing out again is no change, and a user
+// who is gone has nothing to end: every token of theirs is refused already.
+func (r *Repository) EndSignIn(ctx context.Context, userID string, authTime int64) error {
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO ended_sign_ins (user_id, auth_time) VALUES ($1, $2) ON CONFLICT (user_id, auth_time) DO NOTHING`,
+		userID, authTime,
+	)
+	if IsForeignKeyViolation(err) {
+		return nil
+	}
+	return err
+}
+
+// DeleteEndedSignIns deletes up to batch signed-out sign-ins that ended more
+// than keep ago, by the database's clock as ended_at was written, and says how
+// many it deleted.
+func (r *Repository) DeleteEndedSignIns(ctx context.Context, keep time.Duration, batch int) (int64, error) {
+	tag, err := r.pool.Exec(ctx,
+		`DELETE FROM ended_sign_ins WHERE (user_id, auth_time) IN (
+		   SELECT user_id, auth_time FROM ended_sign_ins WHERE ended_at < NOW() - make_interval(secs => $1) ORDER BY ended_at LIMIT $2)`,
+		keep.Seconds(), batch,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
 }
 
 // BumpTokenVersion invalidates every token issued to the user so far.

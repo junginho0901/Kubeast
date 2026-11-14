@@ -93,6 +93,61 @@ tests:
         template: gateway.yaml
         documentIndex: 1
 
+  - it: keeps idle connections to every service and asks for an upgrade only for a WebSocket
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'map \$http_upgrade \$connection_upgrade \{\s+default upgrade;\s+'''' +'''';\s+\}'
+        template: gateway.yaml
+        documentIndex: 0
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'proxy_set_header Connection +(''upgrade''|"[Uu]pgrade"|upgrade|close)'
+        template: gateway.yaml
+        documentIndex: 0
+      # every location that passes Upgrade sends Connection from the map, right after it
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'proxy_set_header Upgrade \$http_upgrade;\s+proxy_set_header (?:[^C]|C[^o])'
+        template: gateway.yaml
+        documentIndex: 0
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'upstream k8s-service \{\s+server k8s-service:8002;\s+keepalive 64;'
+        template: gateway.yaml
+        documentIndex: 0
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'upstream auth-service \{\s+server auth-service:8004;\s+keepalive 32;\s+keepalive_timeout 50s;'
+        template: gateway.yaml
+        documentIndex: 0
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'upstream session-service \{\s+server session-service:8003;\s+keepalive 32;\s+keepalive_timeout 50s;'
+        template: gateway.yaml
+        documentIndex: 0
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'upstream ai-service \{\s+server ai-service:8001;\s+keepalive 32;\s+keepalive_timeout 4s;'
+        template: gateway.yaml
+        documentIndex: 0
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'upstream frontend \{\s+server frontend:5173;\s+keepalive 32;'
+        template: gateway.yaml
+        documentIndex: 0
+      # "local" would keep each location's connections to itself
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'keepalive \d+ local'
+        template: gateway.yaml
+        documentIndex: 0
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'listen 8000 backlog=4096;'
+        template: gateway.yaml
+        documentIndex: 0
+
   - it: throttles the sign-in endpoints per client address
     asserts:
       - matchRegex:
@@ -142,12 +197,12 @@ tests:
     asserts:
       - matchRegex:
           path: data["nginx.conf"]
-          pattern: 'location ~ \^/api/v1/cluster/namespaces/\[\^/\]\+/pods/\[\^/\]\+/\(exec/ws\|logs/stream\|logfiles/stream\)\$ \{\s+rewrite \^/api/v1/cluster/namespaces/\(\.\*\)\$ /api/v1/namespaces/\$1 break;\s+proxy_pass http://k8s-service;\s+proxy_http_version 1\.1;\s+proxy_set_header Upgrade \$http_upgrade;\s+proxy_set_header Connection ''upgrade'';\s+proxy_set_header Host \$host;\s+proxy_set_header X-Real-IP \$remote_addr;\s+proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;\s+proxy_set_header X-Forwarded-Proto \$forwarded_proto;\s+proxy_cache_bypass \$http_upgrade;\s+proxy_read_timeout 3600s;\s+proxy_send_timeout 3600s;\s+\}[\s\S]*location ~ \^/api/v1/cluster/namespaces/\(\.\*\)\$ \{'
+          pattern: 'location ~ \^/api/v1/cluster/namespaces/\[\^/\]\+/pods/\[\^/\]\+/\(exec/ws\|logs/stream\|logfiles/stream\)\$ \{\s+rewrite \^/api/v1/cluster/namespaces/\(\.\*\)\$ /api/v1/namespaces/\$1 break;\s+proxy_pass http://k8s-service;\s+proxy_http_version 1\.1;\s+proxy_set_header Upgrade \$http_upgrade;\s+proxy_set_header Connection \$connection_upgrade;\s+proxy_set_header Host \$host;\s+proxy_set_header X-Real-IP \$remote_addr;\s+proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;\s+proxy_set_header X-Forwarded-Proto \$forwarded_proto;\s+proxy_cache_bypass \$http_upgrade;\s+proxy_read_timeout 3600s;\s+proxy_send_timeout 3600s;\s+\}[\s\S]*location ~ \^/api/v1/cluster/namespaces/\(\.\*\)\$ \{'
         template: gateway.yaml
         documentIndex: 0
       - matchRegex:
           path: data["nginx.conf"]
-          pattern: 'location ~ \^/api/v1/namespaces/\[\^/\]\+/pods/\[\^/\]\+/\(exec/ws\|logs/stream\|logfiles/stream\)\$ \{\s+proxy_pass http://k8s-service;\s+proxy_http_version 1\.1;\s+proxy_set_header Upgrade \$http_upgrade;\s+proxy_set_header Connection ''upgrade'';\s+proxy_set_header Host \$host;\s+proxy_set_header X-Real-IP \$remote_addr;\s+proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;\s+proxy_set_header X-Forwarded-Proto \$forwarded_proto;\s+proxy_cache_bypass \$http_upgrade;\s+proxy_read_timeout 3600s;\s+proxy_send_timeout 3600s;\s+\}'
+          pattern: 'location ~ \^/api/v1/namespaces/\[\^/\]\+/pods/\[\^/\]\+/\(exec/ws\|logs/stream\|logfiles/stream\)\$ \{\s+proxy_pass http://k8s-service;\s+proxy_http_version 1\.1;\s+proxy_set_header Upgrade \$http_upgrade;\s+proxy_set_header Connection \$connection_upgrade;\s+proxy_set_header Host \$host;\s+proxy_set_header X-Real-IP \$remote_addr;\s+proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;\s+proxy_set_header X-Forwarded-Proto \$forwarded_proto;\s+proxy_cache_bypass \$http_upgrade;\s+proxy_read_timeout 3600s;\s+proxy_send_timeout 3600s;\s+\}'
         template: gateway.yaml
         documentIndex: 0
 
@@ -181,3 +236,74 @@ tests:
           pattern: '/api/v1/helm/releases/watch'
         template: gateway.yaml
         documentIndex: 0
+
+  - it: logs nginx's default access log lines unless gateway.accessLog.upstreamTimes is on
+    asserts:
+      - notExists:
+          path: data["accesslog.conf"]
+        template: gateway.yaml
+        documentIndex: 0
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'log_format|access_log +[^o ]'
+        template: gateway.yaml
+        documentIndex: 0
+      - notContains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: nginx-config
+            mountPath: /etc/nginx/conf.d/kubeast/accesslog.conf
+            subPath: accesslog.conf
+        template: gateway.yaml
+        documentIndex: 1
+
+  - it: with gateway.accessLog.upstreamTimes, logs the combined fields and how long the service took, beside an unchanged nginx.conf
+    set:
+      gateway.accessLog.upstreamTimes: true
+    asserts:
+      - equal:
+          path: data["accesslog.conf"]
+          value: |
+            log_format upstream_times '$remote_addr - $remote_user [$time_local] '
+                                      '"$request" $status $body_bytes_sent '
+                                      '"$http_referer" "$http_user_agent" '
+                                      '$request_time $upstream_connect_time $upstream_header_time '
+                                      '$upstream_response_time $upstream_addr $remote_port';
+            access_log /var/log/nginx/access.log upstream_times;
+        template: gateway.yaml
+        documentIndex: 0
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'log_format|access_log +[^o ]'
+        template: gateway.yaml
+        documentIndex: 0
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'include /etc/nginx/conf.d/kubeast/\*\.conf;'
+        template: gateway.yaml
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: nginx-config
+            mountPath: /etc/nginx/conf.d/kubeast/accesslog.conf
+            subPath: accesslog.conf
+        template: gateway.yaml
+        documentIndex: 1
+
+  - it: renders the default access log from values without gateway.accessLog (an earlier release's, kept by --reuse-values)
+    set:
+      gateway.accessLog: null
+    asserts:
+      - notExists:
+          path: data["accesslog.conf"]
+        template: gateway.yaml
+        documentIndex: 0
+      - notContains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: nginx-config
+            mountPath: /etc/nginx/conf.d/kubeast/accesslog.conf
+            subPath: accesslog.conf
+        template: gateway.yaml
+        documentIndex: 1

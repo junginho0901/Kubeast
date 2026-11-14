@@ -23,6 +23,7 @@ import { useLogFilesAvailable } from '@/hooks/useLogFilesAvailable'
 import { takeLogLine, type ShownLine } from './podLogLines'
 import { failureText } from '@/utils/failureText'
 import { useDismiss } from '@/hooks/useDismiss'
+import { useResultFor } from '@/hooks/useResultFor'
 
 interface PodLike {
   name: string
@@ -53,8 +54,8 @@ export function PodLogsTab({
   const [isTailLinesDropdownOpen, setIsTailLinesDropdownOpen] = useState(false)
   const [downloadTailLines, setDownloadTailLines] = useState<number>(1000)
   const [isDownloading, setIsDownloading] = useState(false)
-  // why the last download failed ('' while it has not)
-  const [downloadFailed, setDownloadFailed] = useState('')
+  // why the last download of this container failed (none while it has not, or for another container)
+  const [downloadFailed, setDownloadFailed] = useResultFor<string>([pod.namespace, pod.name, selectedContainer])
   const logFilesAvailable = useLogFilesAvailable(pod.namespace)
   const logSearchAvailable = useLogSearchAvailable()
   const [source, setSource] = useState<LogSource>('stdout')
@@ -156,7 +157,7 @@ export function PodLogsTab({
   const handleDownloadLogs = async () => {
     if (!selectedContainer) return
     setIsDownloading(true)
-    setDownloadFailed('')
+    setDownloadFailed(null)
     try {
       const downloadedLogs = await api.getPodLogs(
         pod.namespace,
@@ -229,6 +230,7 @@ export function PodLogsTab({
                         onContainerSearchChange('')
                       }}
                       className="absolute right-2 top-1/2 transform -translate-y-1/2 p-0.5 hover:bg-slate-500 rounded-sm transition-colors"
+                      aria-label={tr('common.clearSearch', 'Clear the search')}
                     >
                       <X className="w-3 h-3 text-slate-400" />
                     </button>

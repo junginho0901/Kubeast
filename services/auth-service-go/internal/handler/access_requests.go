@@ -97,6 +97,8 @@ func (h *AuthHandler) CreateAccessRequest(w http.ResponseWriter, r *http.Request
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// the listed role's own name: a built-in listed in other capitals is the built-in
+	in.Role, _ = requestedRole(in.Role, h.cfg.AccessRequests.Roles)
 	ctx := r.Context()
 
 	// Escalation only: the user must already hold a role on the cluster.
@@ -111,7 +113,7 @@ func (h *AuthHandler) CreateAccessRequest(w http.ResponseWriter, r *http.Request
 		response.Error(w, http.StatusForbidden, "You have no access to this cluster to escalate; ask an admin for a grant first")
 		return
 	}
-	if strings.EqualFold(grant.Role, in.Role) {
+	if grant.Role == in.Role {
 		response.Error(w, http.StatusBadRequest, "You already hold this role on the cluster")
 		return
 	}
@@ -395,6 +397,17 @@ func (h *AuthHandler) decideAccessRequest(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// A role sharing another role's group is not given any more, by a grant or an approval.
+	shared, err := sharedGroupOf(ctx, h.repo, req.RoleID)
+	if err != nil {
+		response.InternalError(w, r, err)
+		return
+	}
+	if shared != nil {
+		h.auditAccessRequest(r, action, payload, req, after, shared)
+		refuseSharedGroupRole(w, shared)
+		return
+	}
 	if err := h.chartBoundGrantCeiling(payload, req.Role, req.ClusterID); err != nil {
 		h.auditAccessRequest(r, action, payload, req, after, err)
 		response.Error(w, http.StatusForbidden, err.Error())

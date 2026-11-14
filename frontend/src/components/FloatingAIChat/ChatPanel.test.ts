@@ -524,6 +524,24 @@ describe('the floating chat keeps an answer on screen when it ends', () => {
     expect(html).toContain('data-testid="floating-waiting"')
   })
 
+  it('waiting for its turn, the dots with the waiting line until the run starts', async () => {
+    const waiting = (events: unknown[]) => (_url: string, init: RequestInit) => new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(sse(...events)))
+        init.signal?.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')))
+      },
+    }))
+    await ask('how many clusters?', waiting([{ queued: true }]))
+    let html = panel()
+    expect(rows(html)).toEqual(['how many clusters?', 'Waiting for a turn — another question is running'])
+    expect(html).toContain('data-testid="floating-waiting-turn"')
+    await floatingChatStreamManager.stop()
+    await ask('how many clusters?', waiting([{ queued: true }, { queued: false }]), 0, `${session}-b`)
+    html = panel(undefined, `${session}-b`)
+    expect(html).toContain('data-testid="floating-waiting"')
+    expect(html).not.toContain('data-testid="floating-waiting-turn"')
+  })
+
   it('an answer that ended stays until the saved messages have it', async () => {
     await ask('how many clusters?', answered('Two clusters.'))
     const html = panel()

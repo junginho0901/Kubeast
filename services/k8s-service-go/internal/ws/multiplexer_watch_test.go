@@ -37,12 +37,22 @@ func muxOn(t *testing.T, api http.HandlerFunc) *Multiplexer {
 	t.Helper()
 	server := httptest.NewServer(api)
 	t.Cleanup(server.Close)
-	d, err := dynamic.NewForConfig(&rest.Config{Host: server.URL, QPS: -1})
+	cfg := &rest.Config{Host: server.URL, QPS: -1}
+	d, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewMultiplexer(fakeClients{d})
+	return NewMultiplexer(configClients{fakeClients{d}, cfg})
 }
+
+// configClients is fakeClients with the REST config its client was made of, as the k8s Service gives it, so the watches
+// go through the client that decodes what the rows read (watchClient).
+type configClients struct {
+	fakeClients
+	cfg *rest.Config
+}
+
+func (p configClients) RESTConfigFor(context.Context) (*rest.Config, error) { return p.cfg, nil }
 
 // eventThenHold sends one pod event and keeps the watch open, as a quiet cluster does.
 func eventThenHold(w http.ResponseWriter, r *http.Request) {
@@ -266,7 +276,7 @@ func TestExpiredResourceVersionIsNotAskedForAgain(t *testing.T) {
 			})
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			out := make(chan ResponseMessage, 100)
+			out := make(chan *ResponseMessage, 100)
 			done := make(chan struct{})
 			go func() { defer close(done); watchInto(ctx, m, "/api/v1/pods", "watch=1", out) }()
 
@@ -300,7 +310,7 @@ func TestExpiredResourceVersionAsksTheClientToReadTheListAgain(t *testing.T) {
 			})
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			out := make(chan ResponseMessage, 100)
+			out := make(chan *ResponseMessage, 100)
 			done := make(chan struct{})
 			go func() { defer close(done); watchInto(ctx, m, "/api/v1/pods", "watch=1", out) }()
 
@@ -347,7 +357,7 @@ func TestBookmarkMovesTheResumePointAndStaysOnTheServer(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	out := make(chan ResponseMessage, 100)
+	out := make(chan *ResponseMessage, 100)
 	done := make(chan struct{})
 	go func() { defer close(done); watchInto(ctx, m, "/api/v1/pods", "watch=1", out) }()
 
@@ -400,9 +410,9 @@ func TestCanceledWatchEndsWithItsSendQueueFull(t *testing.T) {
 			m := muxOn(t, c.api)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			out := make(chan ResponseMessage, 256)
+			out := make(chan *ResponseMessage, 256)
 			for len(out) < cap(out) {
-				out <- ResponseMessage{Type: "ALREADY-QUEUED"}
+				out <- &ResponseMessage{Type: "ALREADY-QUEUED"}
 			}
 			done := make(chan struct{})
 			go func() { defer close(done); watchInto(ctx, m, c.path, "watch=1", out) }()
@@ -432,7 +442,7 @@ func TestCanceledWatchDoesNotWaitOutItsRetryDelay(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	out := make(chan ResponseMessage, 256)
+	out := make(chan *ResponseMessage, 256)
 	done := make(chan struct{})
 	go func() { defer close(done); watchInto(ctx, m, "/api/v1/pods", "watch=1", out) }()
 	<-failed
@@ -546,7 +556,7 @@ func TestFramesNameNoClusterWhenTheRequestNamedNone(t *testing.T) {
 }
 
 // watchInto runs a watch of the default cluster as the multiplexer does.
-func watchInto(ctx context.Context, m *Multiplexer, path, query string, out chan<- ResponseMessage) {
+func watchInto(ctx context.Context, m *Multiplexer, path, query string, out chan<- *ResponseMessage) {
 	m.runWatch(ctx, RequestMessage{Path: path, Query: query}, out)
 }
 

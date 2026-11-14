@@ -60,7 +60,7 @@ export function NodeAllocationSection({ nodeAllocation, nodeReadyCount, nodeNotR
       </div>
       {nodeAllocation.length > 0 ? (
         <>
-        <div className="space-y-3">
+        <div className="space-y-3" data-list="GPU nodes">
           {pagedNodes.map((node) => {
             const usedPct = node.gpu_allocatable > 0
               ? Math.round((node.gpu_used / node.gpu_allocatable) * 100)

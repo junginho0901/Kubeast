@@ -5,17 +5,23 @@ import { Box, Loader2, Search, Server } from 'lucide-react'
 import { api, type PodInfo } from '@/services/api'
 import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useWritesRefusedIn } from '@/hooks/useCanCreate'
+import { usePagedItems } from '@/hooks/usePagedItems'
+import { ListPager } from '@/components/ListPager'
 import { getPodHealth, getHealthIcon } from './podHealth'
 import { useClusterView } from './ClusterViewContext'
 import { pickMainContainer, podToDetail } from './types'
 import { ClusterNodeMap } from './ClusterNodeMap'
+import { NODE_BOXES_PER_PAGE, boxPageOf, cellsOfPage } from './nodeBoxPages'
 import type { NodeEntry } from './hooks/useClusterDerived'
 
-// The node map, then a box per node with its pod cards. The boxes scroll as one page but only those near the screen
-// are drawn (TanStack Virtual, window scroll, each box measured once drawn), and a drawn box fetches its node's pods and
-// watches them (fieldSelector spec.nodeName) — so the page holds the pods on screen, not the cluster's, and what is on
-// screen changes as soon as the cluster does. The search is counted by the server (the map and the boxes listed); a
-// box shows its pods the search matches. Click a card → the detail window on Logs; right click → the menu.
+// The node map, then a box per node with its pod cards, NODE_BOXES_PER_PAGE boxes a page in the map's order (the
+// footer has no rows-per-page choice: a box can be taller than the screen). The map draws every node and outlines the
+// cells of the page shown; a click on a cell opens that node's page and brings its box to the top. Inside the page only
+// the boxes near the screen are drawn (TanStack Virtual, window scroll, each box measured once drawn), and a drawn box
+// fetches its node's pods and watches them (fieldSelector spec.nodeName) — so the page holds at most a page of nodes'
+// pods, and what is on screen changes as soon as the cluster does. The search is counted by the server (the map and
+// the boxes listed, paged over the nodes it matched); a box shows its pods the search matches. Click a card → the detail
+// window on Logs; right click → the menu.
 
 interface Props {
   entries: NodeEntry[]
@@ -28,7 +34,17 @@ interface Props {
 const SUBSCRIBE_AFTER_MS = 150 // a box scrolled past does not open a watch
 
 export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod }: Props) {
-  const { tr, searchQuery } = useClusterView()
+  const { tr, searchQuery, selectedNamespace } = useClusterView()
+
+  // a new search or namespace starts at the first page; a refresh of the same nodes keeps the page
+  const { items: pageEntries, page, totalPages, total, setPage } = usePagedItems(entries, NODE_BOXES_PER_PAGE, `${selectedNamespace}\n${searchQuery.trim()}`)
+  const outlined = totalPages > 1 ? cellsOfPage(page, entries.length) : { start: 0, end: 0 }
+  // the box brought to the top once its page is drawn: a map cell's node, or the first box of a page turned to
+  const [scrollTo, setScrollTo] = useState<{ at: number } | null>(null)
+  const goTo = (p: number, at: number) => {
+    setPage(p)
+    setScrollTo({ at })
+  }
 
   const listRef = useRef<HTMLDivElement>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
@@ -36,17 +52,31 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod }: 
     setScrollMargin(listRef.current?.offsetTop ?? 0)
   }, [searchQuery, entries.length])
   const virtualizer = useWindowVirtualizer({
-    count: entries.length,
+    count: pageEntries.length,
     // header and padding, then one row of cards per six pods (the server's count); the drawn box is measured
-    estimateSize: (i) => 120 + Math.ceil(entries[i].counts.total / 6) * 144,
+    estimateSize: (i) => 120 + Math.ceil(pageEntries[i].counts.total / 6) * 144,
     overscan: 3,
     scrollMargin,
-    getItemKey: (i) => entries[i].node || '~unscheduled',
+    getItemKey: (i) => pageEntries[i].node || '~unscheduled',
   })
+  useEffect(() => {
+    if (!scrollTo || pageEntries.length === 0) return
+    virtualizer.scrollToIndex(Math.min(scrollTo.at, pageEntries.length - 1), { align: 'start' })
+    setScrollTo(null)
+  }, [scrollTo, virtualizer, pageEntries.length])
 
   return (
     <div className="space-y-6">
-      <ClusterNodeMap entries={entries} tr={tr} onSelect={(i) => virtualizer.scrollToIndex(i, { align: 'start' })} />
+      <ClusterNodeMap
+        entries={entries}
+        tr={tr}
+        pageStart={outlined.start}
+        pageEnd={outlined.end}
+        onSelect={(i) => {
+          const at = boxPageOf(i)
+          goTo(at.page, at.at)
+        }}
+      />
 
       {searchQuery && (
         <div className="text-sm text-slate-400" data-testid="cluster-view-search-count">
@@ -75,17 +105,17 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod }: 
           ref={listRef}
           style={{ height: virtualizer.getTotalSize(), position: 'relative' }}
           data-testid="cluster-view-nodes"
-          data-list-bounded="the node map's boxes: drawn as they near the screen, the whole cluster at a glance, not a list to page"
+          data-list="node boxes"
         >
           {virtualizer.getVirtualItems().map((row) => (
             <div
               key={row.key}
               data-index={row.index}
               ref={virtualizer.measureElement}
-              className={`absolute left-0 top-0 w-full ${row.index < entries.length - 1 ? 'pb-6' : ''}`}
+              className={`absolute left-0 top-0 w-full ${row.index < pageEntries.length - 1 ? 'pb-6' : ''}`}
               style={{ transform: `translateY(${row.start - virtualizer.options.scrollMargin}px)` }}
             >
-              <NodeBox entry={entries[row.index]} canDeletePod={canDeletePod} />
+              <NodeBox entry={pageEntries[row.index]} canDeletePod={canDeletePod} />
             </div>
           ))}
         </div>
@@ -97,6 +127,16 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod }: 
           </div>
         )
       )}
+
+      <ListPager
+        currentPage={page}
+        totalPages={totalPages}
+        total={total}
+        rowsPerPage={NODE_BOXES_PER_PAGE}
+        onPageChange={(p) => goTo(p, 0)}
+        showPageSize={false}
+        testId="cluster-view-nodes-pager"
+      />
     </div>
   )
 }

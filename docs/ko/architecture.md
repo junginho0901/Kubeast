@@ -45,12 +45,15 @@ NGINX 게이트웨이가 모든 요청을 받아 각 마이크로서비스로 �
 | `auth-service` | Go | 8004 | 인증, JWT/JWKS, 조직/팀/RBAC, 클러스터 레지스트리 |
 | `ai-service` | Python (FastAPI) | 8001 | LLM 연동, 스트리밍 채팅, 최적화 제안, Tool calling |
 | `k8s-service` | Go | 8002 | K8s 리소스 CRUD, WS 로그/exec, 토폴로지, Helm, GPU/DRA, 멀티클러스터 풀 |
+| `k8s-service-stream` | Go | 8002 | `streams.enabled`일 때만: k8s-service와 같은 이미지(`SERVER_ROLE=stream`)로 Pod exec·노드 셸·실시간 로그를 맡음 |
 | `session-service` | Go | 8003 | 채팅 세션 / 메시지 기록 |
 | `tool-server` | Go | — | AI 도구 호출 백엔드 (kubectl 실행) |
 | `model-config-controller` | Go (controller-runtime) | — | `ModelConfig` CRD 컨트롤러 |
 | `frontend` | React + Vite + TS | 5173 | UI (prod는 정적 빌드를 nginx로 서빙) |
 | `postgres` | — | 5432 | 메인 DB (durable state) — PostgreSQL 18 |
-| `redis` | — | 6379 | k8s-service 캐시 — Valkey 9.1(Redis 프로토콜). `redis.enabled: false`면 k8s-service가 메모리에 캐시합니다 |
+| `redis` | — | 6379 | k8s-service 캐시 — Valkey 9.1(Redis 프로토콜). k8s-service와 tool-server(클러스터 바뀜 알림만)가 각자 자기 Redis 사용자로 로그인하고, 이 둘만 연결할 수 있습니다([Redis 사용자](configuration.md#redis-사용자)). `redis.enabled: false`면 k8s-service가 메모리에 캐시합니다 |
+
+k8s-service는 Redis에 캐시를 키 앞머리 `kubeast:cache:` 아래에 쓰고, 모든 항목은 최대 1시간 뒤에 만료됩니다. 클러스터 등록이 바뀌면 그 앞머리의 키만 지우므로(`SCAN`과 `UNLINK`) 같은 Redis 데이터베이스의 다른 키는 남습니다. 시작할 때 Redis가 답하지 않은 k8s-service는 메모리에 캐시하고 5초마다 Redis에 다시 묻다가, 답하면 캐시를 Redis로 옮깁니다. 어느 클러스터가 바뀌었는지는 Redis가 아니라 PostgreSQL에 둡니다. auth-service가 kubeconfig를 바꾸거나 Prometheus·로그 저장소 설정을 바꾸는 데이터베이스 거래에서 클러스터의 `config_version`을 새 값으로 바꿉니다. 이 거래는 Secret을 쓴 뒤에만 반영되고, 실패하면 오류로 답하며 둘 다 그대로 둡니다. 모든 k8s-service가 5초마다 이 값을 읽어 다른 값으로 만든 연결과 지운 클러스터의 연결을 버립니다. Redis가 있으면 auth-service가 알린 k8s-service가 다른 k8s-service에도 바로 알립니다(채널 `kubeast:clusters:changed:<db>`).
 
 ## 컨테이너 이미지
 
@@ -105,7 +108,7 @@ ghcr.io/junginho0901/kubeast-model-config-controller-go
 | 켜는 것 | 늘어나는 파드 | 놀 때 메모리 | 백그라운드 작업 |
 | --- | --- | --- | --- |
 | `ai.enabled` (기본 켬) | 3 — ai-service · tool-server · ModelConfig 컨트롤러 | +약 155 MiB | 컨트롤러가 ModelConfig를 감시합니다. ai-service·tool-server는 요청이 올 때만 일합니다 |
-| `redis.enabled` (기본 켬) | 1 | +9 MiB | 없음 — 끄면 k8s-service가 메모리에 캐시합니다(Redis를 쓰는 곳은 k8s-service뿐) |
+| `redis.enabled` (기본 켬) | 1 | +9 MiB | 없음 — 끄면 k8s-service가 메모리에 캐시하고, tool-server의 kubeconfig는 클러스터 바뀜 알림 없이 10초에 만료됩니다 |
 | `mcp.enabled` | 0 | ai-service 안에서 약 +15 MiB(MCP SDK) | 없음 |
 | `features.alertInvestigation` | 0 | 0 | 없음 — 알림 웹훅이 올 때만 조사 |
 | `sessionRecording.enabled` | 0 | 0 | exec·노드 셸이 열려 있는 동안 녹화 조각을 업로드 |
@@ -121,8 +124,9 @@ ghcr.io/junginho0901/kubeast-model-config-controller-go
   - `dormantAccounts`를 켜면 24시간마다 휴면 계정 잠금
   - S3 싱크를 지정했다면 24시간마다 감사 앵커
 - k8s-service
-  - 60초마다 등록된 클러스터별 상태 확인(`multicluster.healthcheckIntervalSec`)
+  - 60초마다 등록된 클러스터별 상태 확인(`multicluster.healthcheckIntervalSec`). 확인은 서버마다 자기 빠른 실패 판단에 쓰고, `clusters.health_status`는 PostgreSQL advisory lock(따로 연 연결 하나)을 잡은 서버 한 대만 씀
   - 오래 쓰지 않은 클러스터의 informer 캐시 정리
+  - 노드 드레인을 맡은 동안 5초마다 살아 있음을 적음 · 10초마다 맡은 서버가 멈춘 드레인을 중단됨으로 적음 · 1시간마다 하루 전에 끝난 드레인 지움(`node_drains`)
 
 표의 MCP, 알림 조사, 세션 녹화, 노드 셸, `features.*` 줄은 코드를 보고 적은 값입니다. 파드가 생기지 않아 따로 재지 않았고, MCP 값은 2026-10-13에 측정했습니다.
 
@@ -154,7 +158,7 @@ v0.7.6 코드로 2026-11-08에 잰 값입니다. k8s-service 하나를 차트 �
 이 시험에서 나온 v0.7.6의 알려진 한계는 다음과 같습니다.
 
 - 위의 100명 동시 접속: k8s-service는 요청에 답을 다 냈습니다. 같은 날 앞선 시험에서 k8s-service가 게이트웨이로 가는 소켓에 46 MB를 못 보낸 채 재전송하고 있었고, 조용한 구간에도 k8s-service와 auth-service가 6분에 약 4 200번 재전송했습니다. Kubeast보다 노트북 kind 망 쪽으로 보이지만, 실제 클러스터에서는 아직 재지 않았습니다.
-- 객체를 따라가는 드로어는 객체가 바뀔 때 describe를 다시 읽고, 사람마다의 그 읽기는 클러스터로 가는 클라이언트 속도(`multicluster.clientQPS`)에 줄을 섭니다. 서로 다른 100명이 롤아웃을 따라가는 동안에는 그 읽기가 몇 초 걸립니다(위 표). 조용한 드로어는 밀리초 안에 답합니다.
+- 객체를 따라가는 드로어는 객체가 바뀔 때 describe를 다시 읽고, 사람마다의 그 읽기는 클러스터로 가는 클라이언트 속도(`multicluster.clientQPS`)에 줄을 섭니다. 거기서 기다린 시간은 `kubeast_k8s_client_rate_wait_seconds`([메트릭](metrics.md))로 봅니다. 서로 다른 100명이 롤아웃을 따라가는 동안에는 그 읽기가 몇 초 걸립니다(위 표). 조용한 드로어는 밀리초 안에 답합니다.
 - 객체를 따라가는 드로어와, 파드 300개까지의 워크로드 파드 표는 각각 그 사람으로 클러스터 watch 하나를 씁니다. 사람끼리 나눠 쓰지 않습니다.
 - AI의 이벤트 읽기(`k8s_get_events` · `timeline`)는 `multicluster.eventListConcurrency` 밖에서 이벤트를 쪽 단위로 읽습니다.
 - 네임스페이스 파드 전체 목록(`GET /api/v1/namespaces/{namespace}/pods`)은 k8s-service가 다 만든 뒤 보냅니다. v0.7.5의 드로어가 이 길로 읽었고, 지금 화면은 표의 선 아래인 네임스페이스이거나 쪽 읽기가 거부될 때만 이 길로 읽으며, 스크립트도 이 API를 부를 수 있습니다. 한 계정이 같은 순간에 읽으면 답 하나를 나눠 받지만(차례로 많아야 두 번 읽음), 다른 계정은 각자 만듭니다. 그래서 많은 계정이 큰 네임스페이스를 이 길로 한꺼번에 읽으면 k8s-service가 512 Mi를 넘을 수 있습니다. 파드 50 000개를 한 번 읽으면 답 36 MiB 말고 약 80 MiB를 더 쥡니다(`BenchmarkTenReadersOfOneNamespacesPods`). v0.7.6의 한 고침 전에는 줄마다 map도 쥐어 약 300 MiB였고, 한 계정 10명이 그 네임스페이스에서 v0.7.5의 ConfigMap 드로어를 열자 시험에서 k8s-service가 512 Mi를 넘었습니다.
@@ -168,3 +172,4 @@ v0.7.6 코드로 2026-11-08에 잰 값입니다. k8s-service 하나를 차트 �
 - 여러 쪽 읽기(`multicluster.bigReadConcurrency`)는 자리를 기다리는 동안 읽은 쪽을 쥐지 않고 다음 쪽의 위치만 쥡니다. 2026-11-08 전에는 기다리는 읽기마다 쪽 하나를 쥐었습니다(파드 256개 × 64 KiB에 16 MiB).
 - Pods 화면은 3초마다 페이지를 다시 읽고, 화면이 세는 파드(고른 네임스페이스, 전체면 사용자가 볼 수 있는 모든 네임스페이스의 파드)가 10 000개를 넘으면 10초마다 읽습니다. 그래서 큰 클러스터에서는 k8s-service가 받은 변경이 10초 안에 화면에 보입니다. 읽을 때마다 가진 판 번호를 보내고 k8s-service가 가진 행에서 답을 받습니다. 사용자가 볼 수 있는 행이 안 바뀌었으면 정렬하기 전에 `unchanged`로 답합니다. 클러스터로 가는 요청이 아닙니다(위 표: 서로 다른 500명이 파드 50 000개에서 켜 둔 동안 p95 16 ms). 행을 사용자 신원으로 받는 동안(informer 동기화 전, `kubeast:cache`가 파드를 watch할 수 없을 때)은 30초마다 읽습니다.
 - Pods 화면 · 노드 지도 · 노드 목록이 파드 행을 다루는 일은 CPU 수만큼, 많아야 8개가 한꺼번에 돕니다. 차트가 CPU limit을 두지 않아 Go는 노드의 CPU를 모두 세고, 하나가 파드 50 000개에서 행 약 2 MB를 쥡니다. k8s-service 환경 변수 `POD_ROW_CONCURRENCY`로 다른 수를 정할 수 있습니다.
+- 게이트웨이는 서비스로 가는 연결을 다음 요청에 다시 쓰려고 쉬는 채로 둡니다. 모든 경로가 나눠 쓰고, 워커마다 k8s-service로 64개, 다른 서비스로 32개까지입니다. 쉬는 연결은 서비스보다 먼저 닫습니다(auth-service · session-service는 60초, ai-service의 uvicorn은 5초에 닫음). 진행 중인 요청은 연결을 하나씩 쥐므로, 한꺼번에 몰린 요청은 그 수를 넘는 만큼 새 연결을 엽니다. 아직 받지 않은 연결은 4 096개까지 줄을 섭니다(`listen … backlog`, nginx 기본값 511). 커널은 이 수를 파드 네트워크 네임스페이스의 `net.core.somaxconn`으로 자르고, 그 기본값은 Linux 5.4부터 4 096입니다.

@@ -101,6 +101,7 @@ func newAuthAPIWith(t *testing.T, pending pendingRequest, settings func(*config.
 	text, integer, stamp := uint32(pgtype.TextOID), uint32(pgtype.Int4OID), uint32(pgtype.TimestamptzOID)
 	list, boolean := uint32(pgtype.TextArrayOID), uint32(pgtype.BoolOID)
 	db, pool := startFakePG(t, append(extra,
+		sessionState(0),
 		pgRule{match: "SELECT token_version FROM auth_users", oids: []uint32{integer}, rows: [][]any{{0}}},
 		pgRule{match: "SELECT expires_at FROM api_keys", oids: []uint32{stamp}, rows: [][]any{{later}}},
 		pgRule{match: "FROM auth_users u JOIN roles r ON r.id = u.role_id",
@@ -144,8 +145,8 @@ func newAuthAPIWith(t *testing.T, pending pendingRequest, settings func(*config.
 	authHandler := handler.NewAuthHandler(repo, mgr, cfg, store)
 	roleHandler := handler.NewRoleHandler(repo, store, cfg.ImpersonationCustomRoles)
 	setupHandler := handler.NewSetupHandler(cfg, nil, nil, store)
-	authMiddleware := security.AuthMiddleware(mgr, repo.TokenVersionFor, "kubeast.token")
-	clusterListAuth := security.InvestigatorReadMiddleware(mgr, repo.TokenVersionFor, "kubeast.token", cfg.AlertInvestigationEnabled)
+	authMiddleware := security.AuthMiddleware(mgr, repo.SessionStateFor, "kubeast.token")
+	clusterListAuth := security.InvestigatorReadMiddleware(mgr, repo.SessionStateFor, "kubeast.token", cfg.AlertInvestigationEnabled)
 	r := chi.NewRouter()
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		publicAuthRoutes(r, authHandler, setupHandler, cfg.InternalAPIToken)

@@ -5,6 +5,7 @@ rate        too many requests for now (passes in a while)
 auth        the key or token is invalid, expired or lacks permission
 unavailable the provider is overloaded, down, timed out or unreachable
 address     this service refused the model's address, and nothing was sent
+busy        every Claude Code slot stayed taken for the queue wait (claude_code.ClaudeCodeBusy); nothing was sent
 other       anything else (a bad request, a model that does not exist …)
 
 Read from the OpenAI SDK's exceptions (OpenAI, Gemini, Azure OpenAI, Ollama and other OpenAI-compatible
@@ -20,12 +21,12 @@ from typing import Optional
 
 from app.services.model_config_policy import refused_address
 
-CREDIT, RATE, AUTH, UNAVAILABLE, ADDRESS, OTHER = "credit", "rate", "auth", "unavailable", "address", "other"
+CREDIT, RATE, AUTH, UNAVAILABLE, ADDRESS, BUSY, OTHER = "credit", "rate", "auth", "unavailable", "address", "busy", "other"
 
 # Catalog keys the screen translates (aiChat.error.<key>).
 ERROR_KEYS = {
     CREDIT: "modelCredit", RATE: "modelRateLimit", AUTH: "modelAuth", UNAVAILABLE: "modelUnavailable",
-    ADDRESS: "modelAddress", OTHER: "modelCall",
+    ADDRESS: "modelAddress", BUSY: "claudeCodeBusy", OTHER: "modelCall",
 }
 
 _CREDIT_WORDS = re.compile(
@@ -91,6 +92,8 @@ def classify(err: BaseException) -> Refusal:
     """The kind of refusal err is; OTHER when it says nothing the providers document."""
     if refused_address(err) is not None:
         return Refusal(ADDRESS)
+    if getattr(err, "busy", False) is True:
+        return Refusal(BUSY)
     sub_kind = getattr(err, "subscription_error", None)
     resets_at = getattr(err, "resets_at", None)
     retry_at = datetime.fromtimestamp(resets_at, timezone.utc) if isinstance(resets_at, (int, float)) and resets_at > 0 else None

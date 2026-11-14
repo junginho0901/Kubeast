@@ -252,7 +252,12 @@ test.describe('permission ceiling (M16)', () => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const ts = Date.now().toString(36)
     const roles: number[] = []
-    const create = (name: string) => request.post('/api/v1/auth/admin/roles', { headers: admin, data: { name, permissions: ['menu.dashboard'] }, failOnStatusCode: false })
+    // every role this test makes is removed after it, also one made where a refusal was expected (a build without the rule)
+    const create = async (name: string) => {
+      const res = await request.post('/api/v1/auth/admin/roles', { headers: admin, data: { name, permissions: ['menu.dashboard'] }, failOnStatusCode: false })
+      if (res.status() === 201) roles.push((await res.json()).id)
+      return res
+    }
     const update = (id: number, name: string) => request.put(`/api/v1/auth/admin/roles/${id}`, { headers: admin, data: { name, description: 'e2e', permissions: ['menu.dashboard'] }, failOnStatusCode: false })
     try {
       const before = await (await request.get('/api/v1/auth/roles', { headers: admin })).json()
@@ -263,7 +268,6 @@ test.describe('permission ceiling (M16)', () => {
       }
       const first = await create(`e2e name ${ts}`)
       expect(first.status(), await first.text()).toBe(201)
-      roles.push((await first.json()).id)
       const folded = await create(`e2e-name-${ts}`)
       expect.soft(folded.status(), 'the same group as another role').toBe(400)
       expect.soft(await folded.text(), 'it names that role').toContain(`e2e name ${ts}`)
@@ -271,11 +275,13 @@ test.describe('permission ceiling (M16)', () => {
       expect.soft(same.status(), 'the same name again').toBe(400)
       expect.soft((await same.json()).detail, 'it says the role exists').toBe(`Role "e2e name ${ts}" already exists. Choose another name`)
       expect.soft((await (await create('Read')).json()).detail, 'a built-in name as written').toBe('Role "Read" already exists: it is a built-in role')
+      // what the role form says under its field comes with the refusal
+      const { code, role: holder, builtin, same_name: sameName } = await (await create('ADMIN')).json()
+      expect.soft({ code, holder, builtin, sameName }, 'the role holding the name').toEqual({ code: 'role_name_taken', holder: 'Admin', builtin: true, sameName: false })
 
       const normal = await create(`e2e-other-${ts}`)
       expect(normal.status(), await normal.text()).toBe(201)
       const otherId = (await normal.json()).id as number
-      roles.push(otherId)
       expect.soft((await update(otherId, 'ADMIN')).status(), 'rename to a built-in in capitals').toBe(400)
       expect.soft((await update(otherId, `E2E-NAME-${ts}`)).status(), 'rename to another role\'s group').toBe(400)
       expect.soft((await update(otherId, `e2e-other-${ts}`)).status(), 'the same name').toBe(200)

@@ -32,6 +32,8 @@ interface Props {
   currentPage: number
   setCurrentPage: Dispatch<SetStateAction<number>>
   searching?: boolean
+  // an answer is on screen to count: the footer gives no 0 while the first one, or another namespace's, is read
+  counted: boolean
   totalPages: number
   rowsPerPage: number
   tableContainerRef: RefObject<HTMLDivElement | null>
@@ -54,6 +56,7 @@ export function PodTable({
   currentPage,
   setCurrentPage,
   searching,
+  counted,
   totalPages,
   rowsPerPage,
   tableContainerRef,
@@ -184,7 +187,7 @@ export function PodTable({
           <AdaptiveTableFillerRows count={rowsPerPage - pagedPods.length} columnCount={7 + (showNamespaceColumn ? 1 : 0)} />
         </table>
       </div>
-      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedPodsLength} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedPodsLength} counted={counted} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
     </div>
   )
 }

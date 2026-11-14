@@ -3,6 +3,7 @@ X-Kubeast-Access header, never worked out in ai-service; shown as the 🔐 line 
 ai.tool.call row. A tool that reaches no cluster shows none — not the previous call's."""
 import base64
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
@@ -26,31 +27,17 @@ def test_from_header_reads_base64url_json_without_padding():
     assert access.from_header(base64.urlsafe_b64encode(b"[1]").decode()) is None
 
 
-@pytest.mark.parametrize("value, want", [
-    ({**READ, "mode": "read"},
-     "<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> "
-     "<code>kubeast:viewer</code> · role Read · whole cluster · read-only</p>"),
-    ({**READ, "role": "Write", "groups": ["kubeast:authenticated", "kubeast:role:write"], "namespaces": ["shop", "payments"], "mode": "write"},
-     "<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> "
-     "<code>kubeast:role:write</code> · role Write · namespaces shop, payments · write</p>"),
-    ({**READ, "role": "*", "groups": ["kubeast:admin", "kubeast:authenticated"]},
-     "<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:admin</code> "
-     "<code>kubeast:authenticated</code> · global admin · whole cluster · read-only</p>"),
-    ({**READ, "kind": "api_key", "api_key": "k-1"},
-     "<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> (API key) · groups <code>kubeast:authenticated</code> "
-     "<code>kubeast:viewer</code> · role Read · whole cluster · read-only</p>"),
-    ({"cluster": "prod", "kind": "investigator", "user": "kubeast:investigator", "groups": ["kubeast:investigator"], "impersonation": True},
-     "<p><strong>🔐 Ran as:</strong> <code>kubeast:investigator</code> · groups <code>kubeast:investigator</code> · "
-     "alert investigator · read-only</p>"),
-    ({"cluster": "prod", "kind": "person", "role": "Read", "impersonation": False},
-     "<p><strong>🔐 Ran as:</strong> ⚠️ Kubeast's own credential, not this user's permissions (impersonation is off) · "
-     "role Read · whole cluster · read-only</p>"),
-    ({**READ, "role": ""},
-     "<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> "
-     "<code>kubeast:viewer</code> · no role in this cluster · whole cluster · read-only</p>"),
-])
-def test_line(value, want):
-    assert access.line(value) == want
+# The frontend's cases (frontend/src/services/toolAccess.cases.json, which chatStreamManager.test.ts runs over
+# toolAccess.ts): the saved answer's 🔐 line is the one the chat showed, a role of a built-in's name in other forms
+# shown as stored and as giving no role group among them.
+ACCESS_LINES = json.loads(
+    (Path(__file__).resolve().parents[3] / "frontend" / "src" / "services" / "toolAccess.cases.json").read_text(encoding="utf-8")
+)["cases"]
+
+
+@pytest.mark.parametrize("case", ACCESS_LINES, ids=[c["name"] for c in ACCESS_LINES])
+def test_line(case):
+    assert access.line(case["access"]) == case["line"]
 
 
 def test_line_escapes_what_the_token_carries():

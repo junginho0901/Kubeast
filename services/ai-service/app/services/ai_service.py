@@ -3,23 +3,17 @@ AI 트러블슈팅 서비스
 """
 from bisect import bisect_right
 from typing import Callable, List, Dict, Optional, Any
-import httpx
 import re
 import json
 import os
-import sys
 import time
 from app.config import settings
-from datetime import datetime
-from app.security import decode_access_token
 from app.services.k8s_client import K8sServiceClient
 from app.services.tool_server_client import ToolServerClient
 from app.services.provider_adapter import ProviderAdapter
-from app.services.ai.prompts import SYSTEM_MESSAGE
-from app.services.ai.tools import K8S_READONLY_TOOLS, K8S_WRITE_TOOLS
 from app.services.ai.language import detect_response_language, build_language_directive
 from app.services.ai.tool_dispatch import execute_function_with_context
-from app.services.ai import formatters, permissions
+from app.services.ai import formatters, permissions, tool_replay
 from app.services.ai import streaming as streaming_module
 
 
@@ -199,6 +193,8 @@ class AIService:
 
     async def _call_tool_server(self, function_name: str, function_args: Dict, approval_id: Optional[str] = None,
                                 approval_token: Optional[str] = None) -> str:
+        if tool_replay.serving():
+            return tool_replay.refused_call()
         # Every tool call is pinned to the request's active cluster; a cluster
         # the model wrote into the args is discarded (and logged), so a prompt
         # can never steer a tool at a cluster the user did not select.
@@ -334,4 +330,9 @@ class AIService:
         function_args: Dict,
         tool_context: ToolContext
     ) -> str:
-        return await execute_function_with_context(self, function_name, function_args, tool_context)
+        # The chat, Claude Code and the alert investigator all come here: tool_replay records or replays the answer
+        # when AI_TOOL_REPLAY_MODE asks for it, and only runs the call when it is off or recording.
+        return await tool_replay.answer(
+            self, function_name, function_args,
+            lambda: execute_function_with_context(self, function_name, function_args, tool_context),
+        )

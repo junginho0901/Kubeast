@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -56,6 +57,14 @@ func status(t *testing.T, pool *pgxpool.Pool, id string) (st string, parts int, 
 		t.Fatal(err)
 	}
 	return
+}
+
+// stopBeats moves a row's heartbeat back by d, as if its owner had stopped then.
+func stopBeats(t *testing.T, pool *pgxpool.Pool, id string, d time.Duration) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(), `UPDATE session_recordings SET heartbeat_at = heartbeat_at - make_interval(secs => $2) WHERE id = $1`, id, d.Seconds()); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestPostgresFileStoreUploadsPartsWhileRunningAndOnClose(t *testing.T) {
@@ -116,7 +125,8 @@ func TestPostgresRecoveryUploadsWhatThePreviousProcessLeft(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.Output([]byte("uname -a\r\nLinux\r\n"))
-	// the process dies here: no Close, no flush
+	// the process dies here: no Close, no flush, no more beats
+	stopBeats(t, pool, s.ID, 2*ownerStaleAfter)
 	m2, _ := New(cfg, pool)
 	m2.recover(ctx)
 	m2.flush(ctx)
@@ -134,6 +144,7 @@ func TestPostgresRecoveryUploadsWhatThePreviousProcessLeft(t *testing.T) {
 	s2.Output([]byte("ls\r\n"))
 	m2.flush(ctx)
 	_ = os.Remove(filepath.Join(cfg.SpoolDir, s2.ID+".cast"))
+	stopBeats(t, pool, s2.ID, 2*ownerStaleAfter)
 	m3, _ := New(cfg, pool)
 	m3.recover(ctx)
 	if st, parts, _ := status(t, pool, s2.ID); st != "interrupted" || parts != 1 {
@@ -143,6 +154,87 @@ func TestPostgresRecoveryUploadsWhatThePreviousProcessLeft(t *testing.T) {
 	_ = pool.QueryRow(ctx, `SELECT bytes, uploaded_bytes FROM session_recordings WHERE id = $1`, s2.ID).Scan(&size, &uploaded)
 	if size == 0 || size != uploaded {
 		t.Fatalf("lost spool keeps the uploaded size: bytes %d uploaded %d", size, uploaded)
+	}
+}
+
+// The owner and heartbeat statements: a live owner keeps its row, its beat moves
+// the heartbeat, of two recorders one takes a row whose owner stopped, a row
+// from before owners waits, and a handed-over row is taken at once.
+func TestPostgresRecoveryTakesOnlyRowsNoLiveProcessHolds(t *testing.T) {
+	pool := freshDB(t)
+	ctx := context.Background()
+	dir := t.TempDir()
+	server := func(spool string) *Manager {
+		m, err := New(Config{Enabled: true, MaxBytes: 1 << 20, ChunkSeconds: 30, SpoolDir: filepath.Join(dir, spool), Storage: "database"}, pool)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	row := func(id string) (st, owner string, lastError *string, beatAge *float64) {
+		t.Helper()
+		if err := pool.QueryRow(ctx, `SELECT status, COALESCE(owner, ''), last_error, EXTRACT(EPOCH FROM LOCALTIMESTAMP - heartbeat_at)::float8 FROM session_recordings WHERE id = $1`, id).
+			Scan(&st, &owner, &lastError, &beatAge); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	owner := server("owner")
+	s, err := owner.Start(ctx, Meta{Kind: "exec", Cluster: "default", Target: "p"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Output([]byte("ls\r\n"))
+	b, c := server("b"), server("c")
+	if n := b.recover(ctx); n != 0 {
+		t.Fatalf("a live owner's row taken: %d", n)
+	}
+	if st, o, _, age := row(s.ID); st != "recording" || o != owner.owner || age == nil || *age > 5 {
+		t.Fatalf("live row: %s owner %q heartbeat age %v", st, o, age)
+	}
+	stopBeats(t, pool, s.ID, 30*time.Second)
+	owner.beat(ctx)
+	if _, _, _, age := row(s.ID); age == nil || *age > 5 {
+		t.Fatalf("heartbeat age after a beat: %v", age)
+	}
+
+	stopBeats(t, pool, s.ID, 2*ownerStaleAfter)
+	var nb, nc int
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); nb = b.recover(ctx) }()
+	go func() { defer wg.Done(); nc = c.recover(ctx) }()
+	wg.Wait()
+	winner := b
+	if nc == 1 {
+		winner = c
+	}
+	if st, o, lastErr, _ := row(s.ID); nb+nc != 1 || st != "interrupted" || o != winner.owner || lastErr == nil || !strings.HasPrefix(*lastErr, "spool file lost") {
+		t.Fatalf("taken %d and %d; row %s owner %q error %v", nb, nc, st, o, lastErr)
+	}
+
+	if _, err := pool.Exec(ctx, `INSERT INTO session_recordings (id, kind, cluster, target, storage, status) VALUES ('before-owners', 'exec', 'default', 'p', 'database', 'recording')`); err != nil {
+		t.Fatal(err)
+	}
+	if n := b.recover(ctx); n != 0 {
+		t.Fatalf("a row from before owners taken at start: %d", n)
+	}
+	b.started = b.started.Add(-unownedAfter)
+	if n := b.recover(ctx); n != 1 {
+		t.Fatalf("a row from before owners after %s: taken %d", unownedAfter, n)
+	}
+
+	h := server("h")
+	s2, err := h.Start(ctx, Meta{Kind: "exec", Cluster: "default", Target: "q"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.handOver(ctx)
+	if _, _, _, age := row(s2.ID); age != nil {
+		t.Fatalf("heartbeat after the hand-over: %v s old", *age)
+	}
+	if n := c.recover(ctx); n != 1 {
+		t.Fatalf("a handed-over row: taken %d", n)
 	}
 }
 

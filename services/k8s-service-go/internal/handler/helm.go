@@ -116,9 +116,7 @@ func (h *Handler) GetHelmRevisionSection(w http.ResponseWriter, r *http.Request)
 	}
 	ns := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	rev := queryParamInt(r, "_ignored", 0) // satisfied by URL path param below
-	revStr := chi.URLParam(r, "revision")
-	rev = parsePositiveInt(revStr, 0)
+	rev := parsePositiveInt(chi.URLParam(r, "revision"), 0)
 	if rev <= 0 {
 		response.Error(w, http.StatusBadRequest, "invalid revision")
 		return

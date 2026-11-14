@@ -142,6 +142,9 @@ func (a *clusterAPI) serve(w http.ResponseWriter, r *http.Request) {
 	if name != "" {
 		verb = "get"
 	}
+	if resource == "namespaces" && name != "" {
+		namespace = name // a namespace's read is in the namespace of its own name, as the API server reads its path
+	}
 	a.note(apiCall{user: user, groups: groups, verb: verb, resource: resource, namespace: namespace, selector: selector})
 	if user == overviewCacheUser {
 		a.mu.Lock()

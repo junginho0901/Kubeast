@@ -2,6 +2,7 @@
 AI Service - OpenAI 통합 및 AI 기능 전담
 Port: 8001
 """
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -19,7 +20,12 @@ from app.config import settings
 from app.security import require_auth
 from app import metrics as console_metrics
 from app import mcp_flags
+from app.services.ai import tool_replay
 import uvicorn
+
+# Recorded tool answers for AI evaluation (AI_TOOL_REPLAY_MODE, off by default): read once here, and a setting that
+# cannot be used stops the start — record and replay need AI_TOOL_REPLAY_TEST_INSTALL=true.
+tool_replay.start()
 
 # The MCP server (MCP_ENABLED): external AI agents reach the clusters through
 # Kubeast as the signed-in user. Its session manager runs for the app's lifetime.
@@ -31,13 +37,16 @@ if mcp_flags.mcp_enabled():
     _mcp = mcp_server.KubeastMCPServer()
 
 
+# How long the lifespan's end waits for the investigation worker, after uvicorn's --timeout-graceful-shutdown (Dockerfile),
+# inside the 30 s the chart's grace period leaves after its preStop wait.
+WORKER_STOP_SECONDS = 4
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # Alert investigation (features.alertInvestigation): one worker, only while on.
     stop, worker_task = None, None
     if investigation_settings.load().enabled:
-        import asyncio
-
         from app.services.investigation.runner import worker
 
         stop = asyncio.Event()
@@ -52,6 +61,11 @@ async def lifespan(_app: FastAPI):
         if worker_task is not None:
             stop.set()
             worker_task.cancel()
+            # The worker puts a run it held back in the queue (runner.requeue_on_stop) before the process goes.
+            try:
+                await asyncio.wait_for(worker_task, timeout=WORKER_STOP_SECONDS)
+            except (asyncio.CancelledError, Exception):
+                pass
 
 
 app = FastAPI(

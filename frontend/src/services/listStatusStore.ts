@@ -10,7 +10,7 @@
 // forbidden store on every route or cluster change.
 
 import { useSyncExternalStore } from 'react'
-import { FORBIDDEN_EVENT, LIST_STATUS_EVENT, type ForbiddenDetail, type ListStatusDetail } from './api/client'
+import { FORBIDDEN_EVENT, LIST_STATUS_EVENT, ofSelectedCluster, type ForbiddenDetail, type ListStatusDetail } from './api/client'
 import { listSegmentFromUrl } from '@/utils/forbiddenResource'
 
 export type ListStatus = { state: 'notInstalled' } | { state: 'error'; code?: number; reason?: string }
@@ -56,15 +56,17 @@ export function recordListForbidden(url: string): void {
   if (seg && markAnswered(seg)) notify()
 }
 
+// An outcome of a request sent while another cluster was selected is not this cluster's (a late timeout, 403 or answer
+// of the cluster just left), so it is dropped.
 if (typeof window !== 'undefined') {
   window.addEventListener(LIST_STATUS_EVENT, (e: Event) => {
     const d = (e as CustomEvent<ListStatusDetail>).detail
-    if (d?.url) recordListStatus(d)
+    if (d?.url && ofSelectedCluster(d)) recordListStatus(d)
   })
   window.addEventListener(FORBIDDEN_EVENT, (e: Event) => {
     const d = (e as CustomEvent<Partial<ForbiddenDetail>>).detail
     // a refused read beside the list (`listStatus: false`) is not the list's answer
-    if (d?.url && d.list !== false) recordListForbidden(d.url)
+    if (d?.url && d.list !== false && ofSelectedCluster(d)) recordListForbidden(d.url)
   })
 }
 

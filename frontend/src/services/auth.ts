@@ -51,18 +51,42 @@ export function getAuthHeaders(): Record<string, string> {
   return { ...CSRF_HEADER }
 }
 
+// What the tab holds for the person signed in outside the query cache — the live watch socket, the chat answers on
+// their way — registers here. A socket stays the identity it opened as and an answer goes on as its question's asker,
+// so both are let go when that person signs out and again when someone signs in (a session can end without a sign-out).
+const sessionResets = new Set<() => void>()
+
+export function onSessionChange(reset: () => void): void {
+  sessionResets.add(reset)
+}
+
+export function resetSessionState(): void {
+  for (const reset of sessionResets) {
+    try {
+      reset()
+    } catch (err) {
+      console.warn('session state reset failed', err)
+    }
+  }
+}
+
 // Ends the server session (the cookie is cleared by the response). Best-effort:
 // if the call fails the cookie simply expires with the token. The tab's floating
-// chat conversation is forgotten too, so the next sign-in starts a new one.
-export function logoutSession(): Promise<void> {
+// chat conversation is forgotten too, so the next sign-in starts a new one, and
+// the live connection and the chat streams of this session stop (resetSessionState).
+export function logoutSession({ asked }: { asked: boolean } = { asked: true }): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve()
+  resetSessionState()
   forgetFloatingChat()
   try {
     window.localStorage.removeItem(SIGNED_IN_KEY)
   } catch {
     // storage off
   }
-  return fetch('/api/v1/auth/logout', {
+  // `asked`: the person signed out, and the server ends the sign-in too, so the person's other tabs and any copy of the
+  // token stop. A sign-out the app makes on its own — after the server refused a request, or after a change that
+  // already ended the account's tokens — only clears the cookie (`end_sign_in=false`).
+  return fetch(asked ? '/api/v1/auth/logout' : '/api/v1/auth/logout?end_sign_in=false', {
     method: 'POST',
     headers: CSRF_HEADER,
     credentials: 'same-origin',
@@ -181,7 +205,8 @@ export function handleUnauthorized() {
   handlingUnauthorized = true
 
   noteSessionEnded()
-  void logoutSession()
+  // The server refused a request, possibly for a reason other than the sign-in: the cookie goes, the sign-in is not ended.
+  void logoutSession({ asked: false })
 
   try {
     const path = window.location.pathname + window.location.search

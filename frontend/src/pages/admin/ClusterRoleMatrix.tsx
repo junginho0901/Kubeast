@@ -10,6 +10,7 @@ import NamespaceScopeInput from '@/components/NamespaceScopeInput'
 import { usePermission } from '@/hooks/usePermission'
 import { givesChartBoundRole } from '@/utils/adminAccess'
 import { refusalText } from './clusterAccessRefusal'
+import { sameGroupRefusal } from '@/utils/roleGroup'
 
 interface Props {
   userID: string
@@ -64,12 +65,19 @@ export default function ClusterRoleMatrix({ userID, canEdit: canEditUsers, userI
     queryClient.invalidateQueries({ queryKey: ['user-cluster-grants', userID] })
   }
 
+  // a role sharing another role's group is refused with role_same_group: said in the viewer's language
+  const grantRefusal = (err: unknown) => {
+    const shared = sameGroupRefusal(err)
+    return shared
+      ? tr('adminRoles.sameGroupRefused', 'Role "{{role}}" is not given on a cluster: its name differs from role "{{other}}" only in letter case, spaces or punctuation. Rename it in Role Management first.', shared)
+      : refusalText(err)
+  }
   const setMutation = useMutation({
     mutationFn: ({ clusterId, role, namespaces }: { clusterId: string; role: string; namespaces?: string[] }) =>
       api.setUserClusterRole(userID, clusterId, role, namespaces ?? namespacesOf(clusterId)),
     onMutate: () => setRefusal(null),
     onSuccess: invalidate,
-    onError: (err) => setRefusal(refusalText(err)),
+    onError: (err) => setRefusal(grantRefusal(err)),
   })
   const removeMutation = useMutation({
     mutationFn: (clusterId: string) => api.removeUserClusterRole(userID, clusterId),
@@ -166,12 +174,15 @@ export default function ClusterRoleMatrix({ userID, canEdit: canEditUsers, userI
                       .filter((r) => !['Pending', 'Member'].includes(r.name))
                       .map((r) => {
                         const held = !!r.chart_bound && chartBoundHeld(c.id)
+                        // auth-service refuses a role sharing another role's group (role_same_group)
                         return {
                           value: r.name,
                           label: r.name,
                           testId: `cluster-role-${c.id}-opt-${r.name}`,
-                          disabled: held,
-                          listHint: held ? tr('admin.userClusterRoles.chartBound', "a global admin or this cluster's Admin grants it") : undefined,
+                          disabled: held || !!r.same_group_as,
+                          listHint: r.same_group_as
+                            ? tr('adminRoles.sameGroupHint', 'not grantable: same name as {{role}} apart from letter case or spaces', { role: r.same_group_as })
+                            : held ? tr('admin.userClusterRoles.chartBound', "a global admin or this cluster's Admin grants it") : undefined,
                         }
                       }),
                   ]}

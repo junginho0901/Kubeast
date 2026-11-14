@@ -93,7 +93,7 @@ func withPassOverLimit(t *testing.T, d time.Duration) {
 // A check asked again while later requests keep coming faster than the rate gets its token once it has waited the bound.
 func TestACheckAskedAgainWaitsNoLongerThanTheBound(t *testing.T) {
 	withPassOverLimit(t, 10*time.Second)
-	l := newTurnLimiter(100, 1)
+	l := newTurnLimiter(100, 1, clientWait.forLimiter(limiterUser))
 	reqs := []turnRequest{{at: 0, person: -1}, {at: time.Millisecond, again: true, person: 1}}
 	for at := 2 * time.Millisecond; at < 20*time.Second; at += 5 * time.Millisecond {
 		reqs = append(reqs, turnRequest{at: at, person: -1})
@@ -126,7 +126,7 @@ func TestTurnsKeepTheRateAndEveryRequest(t *testing.T) {
 		reqs = append(reqs, turnRequest{at: 2 * time.Second, person: 3000 + i})
 	}
 	start := time.Unix(0, 0)
-	grants := runTurns(newTurnLimiter(100, 200), start, reqs, 0)
+	grants := runTurns(newTurnLimiter(100, 200, clientWait.forLimiter(limiterUser)), start, reqs, 0)
 	if len(grants) != len(reqs) {
 		t.Fatalf("%d tokens given for %d requests", len(grants), len(reqs))
 	}
@@ -160,7 +160,7 @@ func TestTurnsKeepTheRateAndEveryRequest(t *testing.T) {
 	t.Logf("%d requests, the last token at %v as client-go's bucket", len(reqs), times[len(times)-1])
 }
 
-// A crowd of first screens: 100 people (80 wide, 10 with 5 namespaces, 10 with 20, the calls the code makes counted in TestFirstScreensOfOnePersonListNoPodsAsThatPerson, eight side by side each) while 500 open screens ask their checks again at 59 a second, on the client's 100 a second and burst of 200.
+// A crowd of first screens: 100 people (80 wide, 10 with 5 namespaces, 10 with 20, the calls the code made on 2026-11-08 as TestFirstScreensOfOnePersonListNoPodsAsThatPerson counted them, eight side by side each) while 500 open screens ask their checks again at 59 a second, on the client's 100 a second and burst of 200.
 func TestACrowdsFirstChecksFinishSoonerAndChecksAskedAgainWaitAtMostTheBound(t *testing.T) {
 	crowd := func(wide, five, twenty int) []turnRequest {
 		var reqs []turnRequest
@@ -195,7 +195,7 @@ func TestACrowdsFirstChecksFinishSoonerAndChecksAskedAgainWaitAtMostTheBound(t *
 				reqs[i].again = false
 			}
 		}
-		grants := runTurns(newTurnLimiter(100, 200), time.Unix(0, 0), reqs, 10*time.Millisecond)
+		grants := runTurns(newTurnLimiter(100, 200, clientWait.forLimiter(limiterUser)), time.Unix(0, 0), reqs, 10*time.Millisecond)
 		done := map[int]time.Duration{}
 		var againWaits []time.Duration
 		for _, g := range grants {
@@ -242,7 +242,7 @@ func TestACrowdsFirstChecksFinishSoonerAndChecksAskedAgainWaitAtMostTheBound(t *
 
 // A request that leaves while waiting takes no token and the next one gets it at once; a request that leaves with a token gives it back.
 func TestAWaitThatEndsWithItsRequestLeavesItsTokenToTheNext(t *testing.T) {
-	l := newTurnLimiter(5, 1)
+	l := newTurnLimiter(5, 1, clientWait.forLimiter(limiterUser))
 	if err := l.Wait(context.Background()); err != nil {
 		t.Fatal(err)
 	}

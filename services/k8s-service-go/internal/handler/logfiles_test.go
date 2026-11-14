@@ -100,6 +100,9 @@ func TestLogFilesGates(t *testing.T) {
 		if w.Code != http.StatusNotFound || decodeLogFileError(t, w) != "disabled" {
 			t.Errorf("%s disabled: %d %s", name, w.Code, w.Body)
 		}
+		if len(*calls) != 0 || len(store.rows) != 0 {
+			t.Errorf("%s disabled: rows=%+v calls=%v", name, store.rows, *calls)
+		}
 		h, store, calls = logFileHandler(t, true, never)
 		w = httptest.NewRecorder()
 		route(h)(w, logFileRequest(target, "apps", "resource.pod.read", "resource.pod.exec"))

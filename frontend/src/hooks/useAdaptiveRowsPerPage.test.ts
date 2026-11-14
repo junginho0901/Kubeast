@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { type FitBox, watchFitRows } from './useAdaptiveRowsPerPage'
+import { FIT_LIMITS, type FitBox, watchFitRows } from './useAdaptiveRowsPerPage'
 
-// A list's Fit row count is one number once rows show: turning pages (a first row or a header of another height) keeps
-// it, so a page starts where the one before ended. The box or the window changing size works it out again.
+// A list's Fit row count is the rows that end inside the table's box, each at its own height, once rows show: turning
+// pages (rows or a header of other heights) keeps it, so a page starts where the one before ended. The box or the
+// window changing size works it out again.
 
 type Box = 'content-box' | 'border-box'
 
@@ -55,50 +56,135 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const LIMITS = { rowHeight: 46, headerHeight: 44, footerHeight: 92, minRows: 5, maxRows: 50 }
+// the hook's own limits: the estimate of 46 px a row, at least one row and at most 50
+const LIMITS = FIT_LIMITS
+const TOP = 100 // where the box starts on the page
 
-// a table box of 440 px with a header of 36 px; the first row's height as the test says
-function table(rowHeight: number | null) {
-  const tableEl = { offsetHeight: 0 }
-  const box = {
-    container: { clientHeight: 520 },
-    body: { clientHeight: 440, firstElementChild: tableEl },
-    thead: { offsetHeight: 36 },
-    row: rowHeight === null ? null : { offsetHeight: rowHeight },
-  }
-  const counts: number[] = []
-  const stop = watchFitRows(() => box as unknown as FitBox, LIMITS, (n) => counts.push(n))
-  return { box, tableEl, counts, last: () => counts[counts.length - 1], stop }
+interface FakeRow {
+  offsetHeight: number
+  nextElementSibling: FakeRow | null
+  getBoundingClientRect(): { top: number; bottom: number; height: number }
 }
 
+// A table box of 440 px (scroll box, header and rows inside it) with a header of 36 px and, under it, rows of the
+// heights given: what a page draws. `draw` puts other rows in (a new page, more rows of the same page).
+function table(heights: number[] | null, size: { box?: number; header?: number } = {}) {
+  const tableEl = { offsetHeight: 0 }
+  const body = {
+    clientHeight: size.box ?? 440,
+    clientTop: 0,
+    scrollTop: 0,
+    firstElementChild: tableEl,
+    getBoundingClientRect: () => ({ top: TOP }),
+  }
+  const thead = { offsetHeight: size.header ?? 36 }
+  const rowsOf = (hs: number[]): FakeRow | null => {
+    const rows: FakeRow[] = hs.map((h, i) => ({
+      offsetHeight: Math.round(h),
+      nextElementSibling: null,
+      getBoundingClientRect: () => {
+        const top = TOP - body.scrollTop + thead.offsetHeight + hs.slice(0, i).reduce((a, b) => a + b, 0)
+        return { top, bottom: top + h, height: h }
+      },
+    }))
+    rows.forEach((r, i) => { r.nextElementSibling = rows[i + 1] ?? null })
+    return rows[0] ?? null
+  }
+  const box = { container: { clientHeight: 520 }, body, thead, row: heights === null ? null : rowsOf(heights) }
+  const counts: number[] = []
+  // what the page draws: a count that changes it starts a render
+  let drawn = 12
+  const watch = watchFitRows(() => box as unknown as FitBox, LIMITS, (n) => {
+    counts.push(n)
+    const changed = n !== drawn
+    drawn = n
+    return changed
+  })
+  const draw = (hs: number[]) => { box.row = rowsOf(hs) }
+  return { box, tableEl, counts, draw, last: () => counts[counts.length - 1], watch }
+}
+
+const rowsOfHeight = (h: number, n = 12) => Array.from({ length: n }, () => h)
+
 describe('watchFitRows: the Fit row count', () => {
-  it('fits the rows of the first row height into the box', () => {
-    const t = table(60)
-    expect(t.last()).toBe(6) // (440 - 36) / 60
+  it('fits the rows drawn into the box', () => {
+    const t = table(rowsOfHeight(60))
+    expect(t.last()).toBe(6) // 36 + 6 × 60 = 396 ≤ 440, the seventh ends at 456
   })
 
-  it('keeps the count when the next page puts a taller first row in the same row element', () => {
-    const t = table(60)
-    t.box.row!.offsetHeight = 81
-    FakeResizeObserver.resize(t.box.row!)
-    flushFrames()
+  it('counts only the rows that end inside the box, each at its own height (the Alerts inbox at 1440×900)', () => {
+    // rows of the first page as the inbox draws them: names and summaries wrap, so they differ
+    const t = table([100.5, 85, 101, 101, 100.5, 85, 101, 85, 100.5], { box: 481, header: 64 })
+    expect(t.last()).toBe(4) // 64 + 387.5 = 451.5 ≤ 481; the fifth ends at 552
+  })
+
+  it('does not count taller rows after a short first one as fitting', () => {
+    const t = table([45, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90])
+    expect(t.last()).toBe(4) // 36 + 45 + 3 × 90 = 351; the fifth ends at 441
+  })
+
+  it('takes rows past the last one drawn at the tallest height drawn, then measures them in the render that draws them', () => {
+    const t = table([40, 50, 40])
+    expect(t.last()).toBe(8) // 166 drawn, 274 px left: five more at 50 px
+    t.draw([40, 50, 40, 40, 40, 120, 40, 40])
+    t.watch.check()
+    expect(t.last()).toBe(7) // the eighth ends at 446
+    t.draw(rowsOfHeight(90, 7)) // the next page
+    t.watch.check()
+    expect(t.counts).toEqual([8, 7])
+  })
+
+  it('measures a list shorter than the box once more, then keeps its count', () => {
+    const t = table([60, 60, 60])
+    expect(t.last()).toBe(6) // 216 drawn, 224 px left: three more at 60 px
+    t.watch.check() // the render of that count draws the same three rows
+    expect(t.last()).toBe(6)
+    t.draw([90, 90, 90, 90]) // a row more and taller rows come later
+    t.watch.check()
+    expect(t.counts).toEqual([6, 6])
+  })
+
+  it('counts from the drawn rows before the paint once rows come after a count made from the estimate', () => {
+    const t = table(null)
+    expect(t.last()).toBe(8) // (440 - 36) / 46, the estimate
+    t.draw(rowsOfHeight(60, 8))
+    t.watch.check()
     expect(t.last()).toBe(6)
   })
 
-  it('keeps the count when the next page brings a first row of its own', () => {
-    const t = table(60)
+  it('reads a box scrolled down from its top', () => {
+    const t = table(rowsOfHeight(60))
+    t.box.body.scrollTop = 100
+    t.box.body.clientHeight = 600
+    FakeResizeObserver.resize(t.box.body)
+    flushFrames()
+    expect(t.last()).toBe(9) // 36 + 9 × 60 = 576 ≤ 600
+  })
+
+  it('keeps the count when the next page puts a taller first row in the same row element', () => {
+    const t = table(rowsOfHeight(60))
+    t.box.row!.getBoundingClientRect = () => ({ top: TOP + 36, bottom: TOP + 36 + 81, height: 81 })
+    FakeResizeObserver.resize(t.box.row!)
+    flushFrames()
+    t.watch.check()
+    expect(t.last()).toBe(6)
+  })
+
+  it('keeps the count when the next page brings rows of their own', () => {
+    const t = table(rowsOfHeight(60))
     const before = t.box.row!
-    t.box.row = { offsetHeight: 81 }
+    t.draw(rowsOfHeight(81, 6))
     before.offsetHeight = 0 // the row of the page before left the table
     FakeResizeObserver.resize(before)
     FakeResizeObserver.resize(t.tableEl)
     flushFrames()
+    t.watch.check()
     expect(t.last()).toBe(6)
   })
 
   it('keeps the count when a header wraps to another height on the next page', () => {
-    const t = table(67)
-    expect(t.last()).toBe(6) // (440 - 36) / 67
+    const t = table(rowsOfHeight(67))
+    expect(t.last()).toBe(6) // 36 + 6 × 67 = 438
     t.box.thead.offsetHeight = 56
     FakeResizeObserver.resize(t.box.thead)
     flushFrames()
@@ -106,7 +192,7 @@ describe('watchFitRows: the Fit row count', () => {
   })
 
   it('keeps the count when a scrollbar shows under a wider page', () => {
-    const t = table(67)
+    const t = table(rowsOfHeight(67))
     t.box.body.clientHeight = 425 // the scrollbar takes its room inside the box, the box keeps its size
     FakeResizeObserver.resize(t.box.body, 'content-box')
     flushFrames()
@@ -114,25 +200,25 @@ describe('watchFitRows: the Fit row count', () => {
   })
 
   it('counts again when the box itself changes size', () => {
-    const t = table(60)
+    const t = table(rowsOfHeight(60))
     t.box.body.clientHeight = 600
     FakeResizeObserver.resize(t.box.body)
     flushFrames()
-    expect(t.last()).toBe(9) // (600 - 36) / 60
+    expect(t.last()).toBe(9) // 36 + 9 × 60 = 576
   })
 
-  it('counts again when the window changes size', () => {
-    const t = table(60)
+  it('counts again when the window changes size, to fewer than five rows when only those fit', () => {
+    const t = table(rowsOfHeight(60))
     t.box.body.clientHeight = 300
     for (const l of resizeListeners) l()
     flushFrames()
-    expect(t.last()).toBe(5) // (300 - 36) / 60 = 4, held to the five rows at least
+    expect(t.last()).toBe(4) // 36 + 4 × 60 = 276; the fifth would end at 336
   })
 
-  it('counts from the first row once rows come after a count made from the estimate', () => {
+  it('counts again from the drawn rows when rows come after a count made from the estimate', () => {
     const t = table(null)
-    expect(t.last()).toBe(8) // (440 - 36) / 46, the estimate
-    t.box.row = { offsetHeight: 60 }
+    expect(t.last()).toBe(8)
+    t.draw(rowsOfHeight(60, 8))
     t.tableEl.offsetHeight = 400
     FakeResizeObserver.resize(t.tableEl)
     flushFrames()
@@ -140,8 +226,8 @@ describe('watchFitRows: the Fit row count', () => {
   })
 
   it('stops watching when stopped', () => {
-    const t = table(60)
-    t.stop()
+    const t = table(rowsOfHeight(60))
+    t.watch.stop()
     t.box.body.clientHeight = 600
     FakeResizeObserver.resize(t.box.body)
     for (const l of resizeListeners) l()
