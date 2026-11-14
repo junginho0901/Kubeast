@@ -13,6 +13,7 @@ import { UrlFieldProblem } from '@/components/UrlFieldProblem'
 import { useProviderAvailability } from '@/hooks/useProviderAvailability'
 import { urlProblem } from '@/utils/urlField'
 import { failureText } from '@/utils/failureText'
+import { useResultFor } from '@/hooks/useResultFor'
 
 interface SetupAIModelPageProps {
   navigatingRef: MutableRefObject<boolean>
@@ -29,7 +30,10 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
   const [aiApiKeyEnv, setAiApiKeyEnv] = useState(PROVIDER_CATALOG[0].defaultApiKeyEnv)
   const [aiBaseUrl, setAiBaseUrl] = useState('')
   const [aiTesting, setAiTesting] = useState(false)
-  const [aiTestResult, setAiTestResult] = useState<{ success: boolean; message: string } | null>(null)
+  // the Test answer, of the values it tested (provider, model, base URL, key variable): an edit of any drops it
+  const [aiTestResult, setAiTestResult] = useResultFor<{ success: boolean; message: string }>(
+    [selectedProvider, aiModel, aiBaseUrl.trim(), aiApiKeyEnv.trim()],
+  )
   const [aiSaving, setAiSaving] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
 

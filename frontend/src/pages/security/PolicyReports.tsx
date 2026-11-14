@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api } from '@/services/api'
 import type { PolicyReportNamespaceRow, PolicyReportPolicyRow, PolicyReportResult, PolicyReportResults, PolicyReportSummary } from '@/services/api/types'
@@ -15,6 +15,7 @@ import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { policyResultTarget } from '@/utils/detailTargets'
 import { formatTime, utcTitle } from '@/utils/time'
+import { keepSameRead } from '@/utils/keepSameRead'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 
 // Security → Policy Reports: what the cluster's policy engine (Kyverno, Trivy Operator, …) wrote into
@@ -141,18 +142,24 @@ export default function PolicyReports() {
   const { containerRef: tableContainerRef, bodyRef: tableBodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({
     recalculationKey: tab === 'results' ? tab : `${tab}:${tab === 'policies' ? sortedPolicies.length : sortedNamespaces.length}`,
   })
-  // the results tab asks the server for the page on screen, in the order of its header
+  // the results tab asks the server for the page on screen, in the order of its header, and searches once typing pauses
+  const [resultsSearch, setResultsSearch] = useState('')
+  useEffect(() => {
+    const id = setTimeout(() => setResultsSearch(searchQuery), 250)
+    return () => clearTimeout(id)
+  }, [searchQuery])
   const resultsSort = sortKey === 'result' || sortKey === 'policy' || sortKey === 'namespace' || sortKey === 'name' ? sortKey : undefined
   const resultsParams = {
-    namespace, policy, source: policySource, result: RESULT_PARAM[resultFilter], severity, search: searchQuery,
+    namespace, policy, source: policySource, result: RESULT_PARAM[resultFilter], severity, search: resultsSearch,
     offset: (currentPage - 1) * rowsPerPage, limit: rowsPerPage, sort: resultsSort, dir: sortDir,
   }
   const resultsKey = ['cluster', 'policyreports', 'results', resultsParams]
+  // the rows stay while another page or order of them loads; another filter or search waits for its own answer
   const resultsQuery = useQuery({
     queryKey: resultsKey,
     queryFn: () => api.getPolicyReportResults(resultsParams),
     enabled: installed && tab === 'results',
-    placeholderData: keepPreviousData,
+    placeholderData: keepSameRead(resultsKey, ['offset', 'limit', 'sort', 'dir']),
     retry: false,
   })
   const results = useMemo<PolicyReportResults | null>(

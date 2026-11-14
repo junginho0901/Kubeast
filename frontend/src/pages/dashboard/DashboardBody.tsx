@@ -64,14 +64,23 @@ export function DashboardBody() {
     closeStorageModal,
   } = useDashboard()
 
-  // The Pods window's search reaches the server after a pause; its page goes back to 1 when what it shows changes.
-  const [podSearch, setPodSearch] = useState('')
-  const [podPageNo, setPodPageNo] = useState(1)
+  // The Pods window's search reaches the server after a pause, an empty one at once (a window closed and opened again
+  // asks with none); its page goes back to 1 in the same render when what it shows changes, so no read asks the old page.
+  const [typedPodSearch, setTypedPodSearch] = useState('')
   useEffect(() => {
-    const id = setTimeout(() => setPodSearch(modalSearchQuery.trim()), 250)
+    const q = modalSearchQuery.trim()
+    if (!q) {
+      setTypedPodSearch('')
+      return
+    }
+    const id = setTimeout(() => setTypedPodSearch(q), 250)
     return () => clearTimeout(id)
   }, [modalSearchQuery])
-  useEffect(() => setPodPageNo(1), [selectedResourceType, podSearch, selectedPodStatus])
+  const podSearch = modalSearchQuery.trim() ? typedPodSearch : ''
+  const podPageFor = `${selectedResourceType}\u0000${podSearch}\u0000${selectedPodStatus}`
+  const [podPaged, setPodPaged] = useState({ key: podPageFor, page: 1 })
+  const podPageNo = podPaged.key === podPageFor ? podPaged.page : 1
+  const setPodPageNo = (page: number) => setPodPaged({ key: podPageFor, page })
 
   const {
     isOptimizationModalOpen,

@@ -1,6 +1,7 @@
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import type { PodNodeSummary } from '@/services/api'
+import { keepSameRead } from '@/utils/keepSameRead'
 
 // The namespaces, the nodes and the node map: how many pods each node has and their colours, counted by k8s-service
 // (pods_nodes.go) so the page never holds every pod of a large cluster. Each node box fetches and watches its own
@@ -28,7 +29,8 @@ export function useClusterPodsQuery({ selectedNamespace, search }: Params) {
       const next = await api.getPodNodeSummary({ ...params, revision: prev?.revision || undefined })
       return next.unchanged && prev ? prev : next
     },
-    placeholderData: keepPreviousData,
+    // another namespace's map waits for its own answer; a search keeps the boxes (and their watches) while it is counted
+    placeholderData: keepSameRead(key, ['q']),
     // listed counts (no revision) cost the cluster a list: ask less often
     refetchInterval: (query) => {
       const d = query.state.data
