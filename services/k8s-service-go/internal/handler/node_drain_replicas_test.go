@@ -115,3 +115,40 @@ func TestTheAnswerTellsNoCordonedNodeFromNotRead(t *testing.T) {
 		}
 	}
 }
+
+// Once the server has begun to shut down a new drain answers 503 and leaves a failure row; nothing runs.
+func TestADrainIsRefusedOnceTheServerShutsDown(t *testing.T) {
+	svc, err := k8s.NewService(context.Background(), guardRegistry{}, false, nil, k8s.ServiceOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	db := drains.NewMemory(nil)
+	rows := make(drainRows, 4)
+	tr := drains.NewTracker(db, rows)
+	h := &Handler{svc: svc, auditStore: rows, drains: tr}
+	tr.Shutdown(context.Background())
+
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/nodes/n1/drain", nil)
+	rc := chi.NewRouteContext()
+	rc.URLParams.Add("name", "n1")
+	ctx := context.WithValue(r.Context(), chi.RouteCtxKey, rc)
+	ctx = auth.WithPayload(ctx, auth.TokenPayload{UserID: "u1", Email: "ops@example.com", Perms: auth.PermissionMatrix{"a": {"resource.node.drain"}}})
+	w := httptest.NewRecorder()
+	h.DrainNode(w, r.WithContext(cluster.WithID(ctx, "a")))
+	if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "shutting down") {
+		t.Fatalf("drain during shutdown: %d %s, want 503", w.Code, w.Body)
+	}
+	select {
+	case rec := <-rows:
+		if rec.Action != "k8s.node.drain" || rec.Result != audit.ResultFailure || !strings.Contains(rec.Error, "shutting down") || rec.ActorUserID != "u1" {
+			t.Fatalf("audit row %+v", rec)
+		}
+	default:
+		t.Fatal("no audit row for the refused drain")
+	}
+	select {
+	case rec := <-rows:
+		t.Fatalf("a second audit row: %+v", rec)
+	case <-time.After(100 * time.Millisecond):
+	}
+}

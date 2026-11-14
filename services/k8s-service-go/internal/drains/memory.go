@@ -157,3 +157,5 @@ func (m *Memory) Purge(_ context.Context, keep time.Duration, batch int) (int64,
 	}
 	return n, nil
 }
+
+func (m *Memory) Ping(context.Context) error { return nil }

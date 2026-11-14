@@ -2,8 +2,10 @@ package drains
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -40,6 +42,24 @@ func (c *clock) add(d time.Duration) {
 	c.mu.Lock()
 	c.t = c.t.Add(d)
 	c.mu.Unlock()
+}
+
+// onClock makes the trackers read c (the stores they share read it too).
+func onClock(c *clock, trs ...*Tracker) {
+	for _, tr := range trs {
+		tr.now = c.now
+	}
+}
+
+// inContact gives the trackers a run of answered database calls staleAfter long ending now, as a
+// replica that has been up a while has: they may judge another server's drain from here.
+func inContact(trs ...*Tracker) {
+	for _, tr := range trs {
+		now := tr.now()
+		tr.mu.Lock()
+		tr.contactSince, tr.contactLast = now.Add(-tr.staleAfter), now
+		tr.mu.Unlock()
+	}
 }
 
 func base(node string) audit.Record {
@@ -121,14 +141,15 @@ func TestTwoServersReadTheSameDrain(t *testing.T) {
 	}
 }
 
-// The server running a drain stops beating: within the stale time another server reads it as
-// interrupted, writes its finished row once with the start request's actor, and the owner, back,
-// stops the drain and writes no end over it.
+// The server running a drain stops beating: within the stale time another server, reading it every
+// second as the drain window does, reads it as interrupted, writes its finished row once with the
+// start request's actor, and the owner, back, stops the drain and writes no end over it.
 func TestAStoppedOwnerReadsAsInterruptedWithinTheStaleTime(t *testing.T) {
 	c := &clock{t: time.Date(2026, 11, 14, 21, 0, 0, 0, time.UTC)}
 	db := NewMemory(c.now)
 	rows := &auditRows{}
 	a, b := NewTracker(db, rows), NewTracker(db, rows)
+	onClock(c, a, b)
 	running := begin(t, a, "d1", "n1")
 
 	for range 6 { // a beats every 5 s: never stale
@@ -138,9 +159,11 @@ func TestAStoppedOwnerReadsAsInterruptedWithinTheStaleTime(t *testing.T) {
 			t.Fatalf("while a beats: %+v", r)
 		}
 	}
-	c.add(a.staleAfter) // a stops: exactly the stale time is not past
-	if r := status(t, b, "d1"); r.Status != StatusPending {
-		t.Fatalf("at the stale time: %+v", r)
+	for i := range int(a.staleAfter / time.Second) { // a stops: up to exactly the stale time it is not past
+		c.add(time.Second)
+		if r := status(t, b, "d1"); r.Status != StatusPending {
+			t.Fatalf("%d s after the last beat: %+v", i+1, r)
+		}
 	}
 	c.add(time.Second)
 	r := status(t, b, "d1")
@@ -178,8 +201,10 @@ func TestAnOwnersEndAfterAnotherServerMarkedItWritesNothing(t *testing.T) {
 	db := NewMemory(c.now)
 	rows := &auditRows{}
 	a, b := NewTracker(db, rows), NewTracker(db, rows)
+	onClock(c, a, b)
 	begin(t, a, "d1", "n1")
 	c.add(a.staleAfter + time.Second)
+	inContact(b)
 	if r := status(t, b, "d1"); r.Status != StatusInterrupted {
 		t.Fatalf("past the stale time: %+v", r)
 	}
@@ -204,6 +229,8 @@ func TestOneTakerWhenServersMarkAtOnce(t *testing.T) {
 	start := make(chan struct{})
 	for i := range 8 {
 		tr := NewTracker(db, rows)
+		onClock(c, tr)
+		inContact(tr)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -255,11 +282,13 @@ func TestTheSweepMarksUnreadDrainsAndOldRowsGo(t *testing.T) {
 	db := NewMemory(c.now)
 	rows := &auditRows{}
 	a, b := NewTracker(db, rows), NewTracker(db, rows)
+	onClock(c, a, b)
 	begin(t, a, "old", "n1")
 	a.Finish("old", StatusSuccess, "drain completed")
 	begin(t, a, "lost", "n2")
 	c.add(a.staleAfter + time.Second)
 	begin(t, a, "live", "n3")
+	inContact(b)
 	b.sweep(context.Background())
 	if r := status(t, b, "lost"); r.Status != StatusInterrupted {
 		t.Fatalf("the unread stale drain: %+v", r)
@@ -330,6 +359,8 @@ func TestAMarkFromAGoneRequestStillWritesItsRow(t *testing.T) {
 	reqCtx, leave := context.WithCancel(context.Background())
 	rows := &ctxRows{}
 	reader := NewTracker(goneAfterRead{Memory: db, leave: leave}, rows)
+	onClock(c, reader)
+	inContact(reader)
 	r, err := reader.Status(reqCtx, "d1")
 	if err != nil || r == nil || r.Status != StatusInterrupted {
 		t.Fatalf("status from a gone request: %+v %v", r, err)
@@ -409,6 +440,278 @@ func TestTheHeartbeatGoesOnWhileTheCleanupIsSlow(t *testing.T) {
 		case <-store.beats:
 		case <-time.After(2 * time.Second):
 			t.Fatalf("beat %d did not come while the purge was held", i+1)
+		}
+	}
+}
+
+// pausable is a store whose calls fail while down is set: a database that stopped answering this
+// server (a pausable of its own) or every server (one down shared by all).
+type pausable struct {
+	Store
+	down *atomic.Bool
+}
+
+var errNoAnswer = errors.New("the database did not answer")
+
+func (p pausable) Get(ctx context.Context, id string, staleAfter time.Duration) (*Row, error) {
+	if p.down.Load() {
+		return nil, errNoAnswer
+	}
+	return p.Store.Get(ctx, id, staleAfter)
+}
+
+func (p pausable) Beat(ctx context.Context, owner string) ([]string, error) {
+	if p.down.Load() {
+		return nil, errNoAnswer
+	}
+	return p.Store.Beat(ctx, owner)
+}
+
+func (p pausable) Interrupt(ctx context.Context, id string, staleAfter time.Duration, message string) ([]Row, error) {
+	if p.down.Load() {
+		return nil, errNoAnswer
+	}
+	return p.Store.Interrupt(ctx, id, staleAfter, message)
+}
+
+func (p pausable) Ping(ctx context.Context) error {
+	if p.down.Load() {
+		return errNoAnswer
+	}
+	return p.Store.Ping(ctx)
+}
+
+// ready is tr.Ready with a deadline d away.
+func ready(tr *Tracker, d time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), d)
+	defer cancel()
+	return tr.Ready(ctx)
+}
+
+// The database stops answering every server for 30 s (its pod moved, as when the node drained is the
+// one it ran on): the owner holds its evictions; when the database is back nobody marks the drain —
+// not a read whose first answer finds the heartbeat 30 s old, on the other server or the owner, nor a
+// sweep — and the owner's next beat re-claims it and lets the evictions go on.
+func TestADatabasePauseInterruptsNoDrain(t *testing.T) {
+	c := &clock{t: time.Date(2026, 11, 15, 5, 0, 0, 0, time.UTC)}
+	down := &atomic.Bool{}
+	db := pausable{Store: NewMemory(c.now), down: down}
+	rows := &auditRows{}
+	a, b := NewTracker(db, rows), NewTracker(db, rows)
+	onClock(c, a, b)
+	running := begin(t, a, "d1", "n1")
+	inContact(a, b)
+	ctx := context.Background()
+
+	down.Store(true)
+	for i := 1; i <= 30; i++ {
+		c.add(time.Second)
+		if i%5 == 0 {
+			a.beat(ctx)
+		}
+		if _, err := b.Status(ctx, "d1"); err == nil {
+			t.Fatal("a read answered while the database was down")
+		}
+		if i%10 == 0 {
+			b.sweep(ctx)
+		}
+	}
+	if err := ready(a, 20*time.Millisecond); !errors.Is(err, ErrHeld) {
+		t.Fatalf("the owner's evictions after 30 s without a saved beat: %v, want held", err)
+	}
+
+	down.Store(false)
+	for name, tr := range map[string]*Tracker{"the other server": b, "the owner": a} {
+		if r := status(t, tr, "d1"); r.Status != StatusPending || !r.Open() {
+			t.Fatalf("%s reads right after the pause: %+v", name, r)
+		}
+	}
+	b.sweep(ctx)
+	a.beat(ctx)
+	if running.Err() != nil {
+		t.Fatal("the owner stopped its drain after the pause")
+	}
+	if err := ready(a, time.Second); err != nil {
+		t.Fatalf("the owner's evictions after its beat was saved again: %v", err)
+	}
+	for i := 1; i <= 30; i++ { // b is in contact for longer than the stale time and a beats: it stays running
+		c.add(time.Second)
+		if i%5 == 0 {
+			a.beat(ctx)
+		}
+		if r := status(t, b, "d1"); r.Status != StatusPending {
+			t.Fatalf("%d s after the pause: %+v", i, r)
+		}
+	}
+	if got := rows.all(); len(got) != 0 {
+		t.Fatalf("finished rows %+v", got)
+	}
+}
+
+// Only the owner loses the database while the other server still reaches it: the owner holds its
+// evictions from 15 s without a saved beat, before the other server can read the drain as interrupted
+// (past 20 s), so "interrupted" means nothing is evicting; back, its beat no longer finds the drain and
+// stops it.
+func TestAnOwnerCutOffHoldsItsEvictionsBeforeAnotherServerMarksIt(t *testing.T) {
+	c := &clock{t: time.Date(2026, 11, 15, 5, 0, 0, 0, time.UTC)}
+	mem := NewMemory(c.now)
+	cut := &atomic.Bool{}
+	rows := &auditRows{}
+	a, b := NewTracker(pausable{Store: mem, down: cut}, rows), NewTracker(mem, rows)
+	onClock(c, a, b)
+	running := begin(t, a, "d1", "n1")
+	inContact(b)
+	ctx := context.Background()
+
+	cut.Store(true)
+	holdFrom, markFrom := int(a.holdAfter/time.Second), int(a.staleAfter/time.Second)+1
+	for i := 1; i <= markFrom; i++ {
+		c.add(time.Second)
+		if i%5 == 0 {
+			a.beat(ctx)
+		}
+		if held := errors.Is(ready(a, 10*time.Millisecond), ErrHeld); held != (i >= holdFrom) {
+			t.Fatalf("%d s without a saved beat: held %v", i, held)
+		}
+		if r := status(t, b, "d1"); (r.Status == StatusInterrupted) != (i >= markFrom) {
+			t.Fatalf("%d s without a saved beat, the other server reads %+v", i, r)
+		}
+	}
+
+	waiting := make(chan error, 1)
+	go func() { waiting <- a.Ready(running) }()
+	cut.Store(false)
+	a.beat(ctx)
+	select {
+	case err := <-waiting:
+		if err == nil {
+			t.Fatal("the held evictions went on after the other server marked the drain")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the held drain was not stopped when its owner's beat no longer found it")
+	}
+	if running.Err() == nil {
+		t.Fatal("the owner did not stop the drain")
+	}
+	if got := rows.all(); len(got) != 1 || got[0].Error != MessageOwnerGone {
+		t.Fatalf("finished rows %+v", got)
+	}
+}
+
+// A server judges another's drain only after its own calls have answered without a break for the stale
+// time: a failed call, or a gap between answers longer than a pause that leaves a beating owner's row
+// stale, starts the count again.
+func TestAJudgmentNeedsTheStaleTimeOfUnbrokenContact(t *testing.T) {
+	c := &clock{t: time.Date(2026, 11, 15, 5, 0, 0, 0, time.UTC)}
+	tr := NewTracker(NewMemory(c.now), nil)
+	onClock(c, tr)
+	call := func(after time.Duration, err error) {
+		c.add(after)
+		tr.answered(err)
+	}
+	if tr.inContact() {
+		t.Fatal("in contact before any call answered")
+	}
+	for _, step := range []struct {
+		after time.Duration
+		err   error
+		want  bool
+		what  string
+	}{
+		{0, nil, false, "first answer"},
+		{10 * time.Second, nil, false, "10 s of answers"},
+		{10 * time.Second, nil, true, "20 s of answers 10 s apart"},
+		{time.Second, errNoAnswer, false, "a call failed"},
+		{10 * time.Second, nil, false, "first answer after the failure"},
+		{10 * time.Second, nil, false, "10 s after it"},
+		{10 * time.Second, nil, true, "20 s after it"},
+		{tr.contactGap + time.Second, nil, false, "an answer after a longer gap"},
+		{10 * time.Second, nil, false, "10 s after the gap"},
+		{10 * time.Second, nil, true, "20 s after the gap"},
+	} {
+		call(step.after, step.err)
+		if got := tr.inContact(); got != step.want {
+			t.Fatalf("%s: in contact %v, want %v", step.what, got, step.want)
+		}
+	}
+	c.add(tr.contactGap + time.Second)
+	if tr.inContact() {
+		t.Fatal("in contact with no call answered for longer than the gap")
+	}
+}
+
+// Once shutdown begins a new drain is refused and nothing is stored.
+func TestShutdownRefusesNewDrains(t *testing.T) {
+	db := NewMemory(nil)
+	a := NewTracker(db, nil)
+	a.Shutdown(context.Background())
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := a.Begin(context.Background(), Row{ID: "d1", Cluster: "self", Node: "n1"}, base("n1"), cancel); !errors.Is(err, ErrShuttingDown) {
+		t.Fatalf("begin after shutdown: %v, want ErrShuttingDown", err)
+	}
+	if r, _ := db.Get(context.Background(), "d1", staleAfter); r != nil {
+		t.Fatalf("a refused drain was stored: %+v", r)
+	}
+}
+
+// slowInsert holds the insert of one drain until release: before storing its row (stored then tells
+// the call came) or after.
+type slowInsert struct {
+	*Memory
+	id              string
+	storeFirst      bool
+	stored, release chan struct{}
+}
+
+func (s slowInsert) Insert(ctx context.Context, r Row) error {
+	if r.ID != s.id {
+		return s.Memory.Insert(ctx, r)
+	}
+	var err error
+	if s.storeFirst {
+		err = s.Memory.Insert(ctx, r)
+	}
+	close(s.stored)
+	<-s.release
+	if !s.storeFirst {
+		err = s.Memory.Insert(ctx, r)
+	}
+	return err
+}
+
+// A drain whose insert is on its way when shutdown begins is refused too, whether its row lands before
+// shutdown marks this server's rows or after: the row ends interrupted and has no finished audit row
+// (its request answers 503 with a row of its own); the drain already running is stopped with its row.
+func TestADrainInsertedAsShutdownBeginsIsRefused(t *testing.T) {
+	for _, storeFirst := range []bool{true, false} {
+		mem := NewMemory(nil)
+		store := slowInsert{Memory: mem, id: "d2", storeFirst: storeFirst, stored: make(chan struct{}), release: make(chan struct{})}
+		rows := &auditRows{}
+		a := NewTracker(store, rows)
+		running := begin(t, a, "d1", "n1")
+		refused := make(chan error, 1)
+		go func() {
+			_, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			refused <- a.Begin(context.Background(), Row{ID: "d2", Cluster: "self", Node: "n2"}, base("n2"), cancel)
+		}()
+		<-store.stored
+		a.Shutdown(context.Background())
+		close(store.release)
+		if err := <-refused; !errors.Is(err, ErrShuttingDown) {
+			t.Fatalf("row stored first %v: begin %v, want ErrShuttingDown", storeFirst, err)
+		}
+		if running.Err() == nil {
+			t.Fatalf("row stored first %v: the running drain was not stopped", storeFirst)
+		}
+		for _, id := range []string{"d1", "d2"} {
+			if r, _ := mem.Get(context.Background(), id, staleAfter); r == nil || r.Status != StatusInterrupted || r.Message != MessageOwnerShutdown || r.Open() {
+				t.Fatalf("row stored first %v: %s is %+v", storeFirst, id, r)
+			}
+		}
+		if got := rows.all(); len(got) != 1 || got[0].TargetID != "n1" {
+			t.Fatalf("row stored first %v: finished rows %+v", storeFirst, got)
 		}
 	}
 }

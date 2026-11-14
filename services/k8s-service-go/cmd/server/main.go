@@ -434,6 +434,7 @@ func main() {
 	<-done
 	slog.Info("shutting down server...")
 	// The drains this process runs end with it: say so at once rather than when their heartbeat goes stale.
+	// A drain asked for from here on answers 503 (the server still takes requests until srv.Shutdown).
 	drainShutdown, drainShutdownCancel := context.WithTimeout(context.Background(), drainShutdownWait)
 	drainTracker.Shutdown(drainShutdown)
 	drainShutdownCancel()
