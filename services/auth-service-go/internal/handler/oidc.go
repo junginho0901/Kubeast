@@ -441,6 +441,11 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		h.oidcFail(w, r, "oidc_email_invalid", claims.Email, err)
 		return
 	}
+	var missing *missingRoleError
+	if errors.As(err, &missing) {
+		h.oidcFailWith(w, r, "oidc_role_missing", claims.Email, err, map[string]any{"role": missing.role, "setting": missing.setting})
+		return
+	}
 	if err != nil {
 		h.oidcFail(w, r, "oidc_provision", claims.Email, err)
 		return
@@ -489,6 +494,16 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, st.Next, http.StatusFound)
 }
 
+// missingRoleError is an account level a chart setting names (auth.oidc.roleMapping, auth.oidc.defaultRole) that no
+// role holds by that exact name: the sign-in fails as oidc_role_missing, its log line and failure row naming both.
+type missingRoleError struct {
+	role, setting string
+}
+
+func (e *missingRoleError) Error() string {
+	return fmt.Sprintf("role %q named by %s does not exist", e.role, e.setting)
+}
+
 // provisionOIDCUser finds or creates the user for the verified claims and,
 // when SyncRoles is on and the token carries a groups claim, re-applies the
 // group → role mapping and the per-cluster grants: the identity provider is
@@ -497,9 +512,9 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 // (Google), roles stay as an admin set them.
 func (h *AuthHandler) provisionOIDCUser(r *http.Request, claims oidcClaims) (*model.User, error) {
 	ctx := r.Context()
-	mapped := mapRole(claims.Groups, h.cfg.OIDC.RoleMapping)
+	mapped, setting := mapRole(claims.Groups, h.cfg.OIDC.RoleMapping), "auth.oidc.roleMapping"
 	if mapped == "" {
-		mapped = h.cfg.OIDC.DefaultRole
+		mapped, setting = h.cfg.OIDC.DefaultRole, "auth.oidc.defaultRole"
 	}
 	user, err := h.repo.GetUserByEmail(ctx, claims.Email)
 	if err != nil {
@@ -514,10 +529,12 @@ func (h *AuthHandler) provisionOIDCUser(r *http.Request, claims oidcClaims) (*mo
 		if err := checkAccountName(claims.Email); err != nil {
 			return nil, err
 		}
-		roleName := mapped
-		role, err := h.repo.GetRoleByName(ctx, roleName)
-		if err != nil || role == nil {
-			return nil, fmt.Errorf("role %q not found", roleName)
+		role, err := h.repo.GetRoleByName(ctx, mapped)
+		if err != nil {
+			return nil, err
+		}
+		if role == nil {
+			return nil, &missingRoleError{role: mapped, setting: setting}
 		}
 		name := claims.Name
 		if name == "" {
@@ -542,8 +559,11 @@ func (h *AuthHandler) provisionOIDCUser(r *http.Request, claims oidcClaims) (*mo
 			jsonRaw(map[string]any{"method": "oidc", "role": role.Name, "groups": claims.Groups}))
 	} else if h.cfg.OIDC.SyncRoles && claims.HasGroups && mapped != user.RoleName {
 		role, err := h.repo.GetRoleByName(ctx, mapped)
-		if err != nil || role == nil {
-			return nil, fmt.Errorf("role %q not found", mapped)
+		if err != nil {
+			return nil, err
+		}
+		if role == nil {
+			return nil, &missingRoleError{role: mapped, setting: setting}
 		}
 		before := jsonRaw(map[string]any{"role": user.RoleName})
 		if err := h.repo.UpdateUserRoleEndingTokens(ctx, user.ID, role.ID); err != nil {
@@ -685,12 +705,20 @@ func (h *AuthHandler) syncClusterGrants(r *http.Request, user *model.User, want 
 // oidcFail records the failure and sends the browser back to the login page
 // with a short error code (details stay in the log and the audit row).
 func (h *AuthHandler) oidcFail(w http.ResponseWriter, r *http.Request, code, email string, err error) {
+	h.oidcFailWith(w, r, code, email, err, nil)
+}
+
+// oidcFailWith is oidcFail whose failure row carries more fields in after.
+func (h *AuthHandler) oidcFailWith(w http.ResponseWriter, r *http.Request, code, email string, err error, fields map[string]any) {
 	slog.Warn("oidc: login failed", "code", code, "err", err)
 	var target *string
 	if email != "" {
 		target = &email
 	}
-	h.writeAuditFailure(r, "user.login.failed", nil, nil, nil, target, code,
-		jsonRaw(map[string]any{"method": "oidc", "reason": code}))
+	after := map[string]any{"method": "oidc", "reason": code}
+	for k, v := range fields {
+		after[k] = v
+	}
+	h.writeAuditFailure(r, "user.login.failed", nil, nil, nil, target, code, jsonRaw(after))
 	http.Redirect(w, r, "/login?error="+url.QueryEscape(code), http.StatusFound)
 }

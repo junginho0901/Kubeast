@@ -3207,6 +3207,7 @@
       "ssoEmailUnverified": "인증 제공자가 이 이메일을 확인하지 않았습니다.",
       "ssoEmailInvalid": "이 이름으로는 계정을 만들 수 없습니다. 콜론·공백·제어 문자를 쓸 수 없습니다.",
       "ssoNoEmail": "인증 제공자가 이메일 주소를 돌려주지 않았습니다.",
+      "ssoRoleMissing": "이 로그인에 주어지는 역할(auth.oidc.roleMapping 또는 auth.oidc.defaultRole)이 없습니다. 관리자에게 문의하세요. 서버 로그에 그 역할 이름이 있습니다.",
       "tokenTooLarge": "클러스터마다 다른 역할이 너무 많아 로그인 토큰에 담을 수 없습니다. 관리자에게 역할 정리를 요청하세요."
     },
     "sso": {
