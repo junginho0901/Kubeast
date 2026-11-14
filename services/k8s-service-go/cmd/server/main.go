@@ -469,7 +469,8 @@ func main() {
 	slog.Info("server stopped")
 }
 
-// Both waits come after the drain and fit the pod's grace period: 30 s by default, or the drain's wait + 30 s
+// Both waits come after the preStop wait (podShutdown.preStopSeconds; streams.preStopSeconds on the stream server)
+// and the drain, and fit the grace period the chart leaves after them: 30 s, or the drain's wait + 30 s
 // (streamCloseWait, then these two) where STREAM_DRAIN_SECONDS is set.
 const (
 	serverShutdownWait   = 15 * time.Second

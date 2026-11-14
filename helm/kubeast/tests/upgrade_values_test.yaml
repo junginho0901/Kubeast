@@ -83,3 +83,9 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no features.networkFlowMonitor
+  - it: stops values without a path 0.7.8 added, as v0.7.7's published defaults are
+    set:
+      podShutdown: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no podShutdown.preStopSeconds
