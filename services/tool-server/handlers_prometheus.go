@@ -128,6 +128,18 @@ func handlePrometheusLabels(ctx context.Context, args map[string]interface{}, he
 		result["truncated"] = true
 		result["hint"] = "The list is cut. Add a matcher to the selector to narrow it before relying on it."
 	}
+	cut, window := "", ""
+	if reply.Truncated {
+		unit := "names"
+		if label != "" {
+			unit = "values"
+		}
+		cut = cutUnknown(found, unit, "k8s-service stops at the limit")
+	}
+	if strings.TrimSpace(argString(args, "since", "")) == "" && reply.Since != "" {
+		window = "No since was given: labels of the series seen in the last " + spanText(reply.Since) + " were read (the default)."
+	}
+	addDetails(result, cut, window, "")
 	return marshalJSON(result)
 }
 
@@ -174,6 +186,7 @@ func handlePrometheusRules(ctx context.Context, args map[string]interface{}, hea
 	}
 	result := map[string]interface{}{"rules_total": len(reply.Rules), "states": counts}
 	if len(rules) > promRulesCap {
+		addDetails(result, cutOf(promRulesCap, len(rules), "rules the filters keep"), "", "")
 		rules = rules[:promRulesCap]
 		result["truncated"] = true
 		result["hint"] = "More rules than shown. Filter by rule (part of the name), rule_type or active_only."
@@ -219,6 +232,14 @@ func handlePrometheusTargets(ctx context.Context, args map[string]interface{}, h
 	}
 	targets := append(down, rest...)
 	result := map[string]interface{}{"source": reply.Source, "health": counts, "total": len(reply.Targets)}
+	switch {
+	case len(targets) > promTargetsCap:
+		addDetails(result, cutOf(promTargetsCap, len(targets), "targets the filters keep"), "", "")
+	case len(reply.Targets) == 0:
+		addDetails(result, "", "", targetsNoneReason)
+	case len(targets) == 0:
+		addDetails(result, "", "", fmt.Sprintf(targetsFilteredReason, len(reply.Targets)))
+	}
 	if len(targets) > promTargetsCap {
 		targets = targets[:promTargetsCap]
 		result["truncated"] = true

@@ -22,6 +22,10 @@ SUMMED_NOTE = ("The whole result is longer than you can read, so each series is 
                "(topk, sum by) or narrow the window and query again.")
 
 
+# the keys tool-server adds with ai.toolResultDetails that a summary keeps (result_details.go)
+RESULT_DETAIL_KEYS = ("cut", "default_window", "empty_reason")
+
+
 def for_model(chart: dict[str, Any], shown_to_user: bool = True) -> str:
     """What the model reads instead of every point of a range result: per series the low, high, average and last
     value with a coarse profile — the whole result would be cut at the model's limit and read as missing data. For a
@@ -52,6 +56,7 @@ def for_model(chart: dict[str, Any], shown_to_user: bool = True) -> str:
         "start": chart["start"], "end": chart["end"], "step_seconds": chart["step_seconds"],
         "common_labels": chart["common_labels"], "series": series,
         "hidden_series": chart["hidden_series"], "truncated": chart["truncated"],
+        **chart.get("result_details", {}),
     }, ensure_ascii=False)
 
 
@@ -94,7 +99,7 @@ def chart_from_result(args: dict[str, Any], result: str) -> Optional[dict[str, A
                  or args.get("promql") or args.get("logql") or args.get("traceql") or "")
     unit = str(args.get("unit") or "").strip().lower()
     title = str(args.get("title") or "").strip()[:MAX_TITLE] or promql[:MAX_TITLE]
-    return {
+    chart = {
         "title": title,
         "unit": unit if unit in CHART_UNITS else "",
         "promql": promql,
@@ -106,3 +111,8 @@ def chart_from_result(args: dict[str, Any], result: str) -> Optional[dict[str, A
         "hidden_series": hidden,
         "truncated": bool(data.get("truncated")),
     }
+    # ai.toolResultDetails: what tool-server said of the cut and the window goes on to the model with the summary
+    details = {k: data[k] for k in RESULT_DETAIL_KEYS if isinstance(data.get(k), str)}
+    if details:
+        chart["result_details"] = details
+    return chart

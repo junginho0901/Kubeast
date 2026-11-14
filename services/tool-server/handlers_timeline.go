@@ -199,6 +199,13 @@ func handleTimeline(ctx context.Context, args map[string]interface{}, headers ht
 	if window.note != "" {
 		result["window_note"] = window.note
 	}
+	if argString(args, "since_time", "") == "" {
+		end := "now"
+		if !window.until.IsZero() {
+			end = "until_time"
+		}
+		addDetails(result, "", fmt.Sprintf("No since_time was given: the %s before %s was read (the default).", shortSpan(timelineDefaultSpan), end), "")
+	}
 	if note := timelineEventsNote(len(kept), len(events), matching, inRange, narrowed, eventType); note != "" {
 		result["events_note"] = note
 	}
@@ -240,6 +247,6 @@ func handleTimeline(ctx context.Context, args map[string]interface{}, headers ht
 		result["hint"] = "Nothing in this window. Kubernetes events typically have a ~1 hour TTL, so an older window can be empty though things happened."
 	}
 	return marshalOrdered(result,
-		[]string{"namespace", "object", "event_type", "window_note", "summary", "events_note", "narrowed", "rollouts_total", "rollouts_note", "hint"},
+		[]string{"namespace", "object", "event_type", "window_note", "default_window", "summary", "events_note", "narrowed", "rollouts_total", "rollouts_note", "hint"},
 		[]string{"rollout_history", "events"})
 }
