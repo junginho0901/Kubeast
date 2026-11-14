@@ -260,21 +260,31 @@ export function frameHolder(deliver: (message: any) => void, everyMs: number, de
   }
 }
 
-// The reads a list's RESYNCs ask for: one at a time, and none once the list is gone.
+// The reads a list's RESYNCs ask for: one at a time, and none once the list is gone. Every tab of a browser starts over
+// when its socket does: a hidden tab, which draws nothing, reads once it shows again.
 function resyncReads() {
   let timer: ReturnType<typeof setTimeout> | undefined
+  let stopWaitingToShow: (() => void) | undefined
+  const stop = () => {
+    if (timer !== undefined) clearTimeout(timer)
+    timer = undefined
+    stopWaitingToShow?.()
+    stopWaitingToShow = undefined
+  }
   return {
     later(read: () => void) {
-      if (timer !== undefined) return
+      if (timer !== undefined || stopWaitingToShow) return
       timer = setTimeout(() => {
         timer = undefined
-        read()
+        if (focusManager.isFocused()) return read()
+        stopWaitingToShow = focusManager.subscribe(() => {
+          if (!focusManager.isFocused()) return
+          stop()
+          read()
+        })
       }, resyncWait())
     },
-    stop() {
-      if (timer !== undefined) clearTimeout(timer)
-      timer = undefined
-    },
+    stop,
   }
 }
 
