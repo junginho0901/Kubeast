@@ -200,6 +200,40 @@ test.describe('what a screen asks of the server', () => {
     await expect.poll(describes.count, { timeout: 30_000, message: 'reads after its own row changed' }).toBeGreaterThan(before)
   })
 
+  // The page shows another namespace, so its rows cannot speak for the drawer's pod: the drawer's own read of the object
+  // follows it, and another pod moving the page's revision reads nothing of it.
+  test('an open Pod drawer whose pod is not on the Pods page reads when its own object changes, not when the page\'s pods do', async ({ page }) => {
+    test.setTimeout(150_000)
+    const VIEW = `${NS}-view`
+    kubectl('apply -f -', `apiVersion: v1\nkind: Namespace\nmetadata: {name: ${VIEW}}`)
+    try {
+      kubectl('apply -f -', pod('away-one'))
+      kubectl('apply -f -', pod('shown-one').replace(`"namespace":"${NS}"`, `"namespace":"${VIEW}"`))
+      kubectl(`-n ${NS} wait pod away-one --for=condition=Ready --timeout=60s`)
+      kubectl(`-n ${VIEW} wait pod shown-one --for=condition=Ready --timeout=60s`)
+      const describes = counter(page, (u) => u.pathname === `/api/v1/cluster/namespaces/${NS}/pods/away-one/describe`)
+      await page.goto(`/workloads/pods?cluster=self&namespace=${VIEW}&detail=Pod/${NS}/away-one`)
+      const rows = page.locator('main tbody tr')
+      await expect(rows.filter({ hasText: 'shown-one' }), 'the page shows the other namespace').toHaveCount(1, { timeout: 20_000 })
+      await expect(rows.filter({ hasText: 'away-one' }), 'the drawer\'s pod is not on the page').toHaveCount(0)
+      await expect.poll(describes.count, { timeout: 20_000 }).toBeGreaterThanOrEqual(1)
+      await page.waitForTimeout(5_000)
+      const before = describes.count()
+
+      kubectl(`-n ${VIEW} delete pod shown-one --wait=false`)
+      await expect(rows.filter({ hasText: 'shown-one' }), 'the page saw its pod go').toHaveCount(0, { timeout: 30_000 })
+      await page.waitForTimeout(8_000)
+      expect(describes.count(), 'reads after a pod of the page changed').toBe(before)
+
+      kubectl(`-n ${NS} label pod away-one kubeast.io/e2e-reads=changed`)
+      await expect.poll(describes.count, { timeout: 30_000, message: 'reads after its own object changed' }).toBeGreaterThan(before)
+      await expect(page.locator(DRAWER).last().getByText('kubeast.io/e2e-reads').first()).toBeVisible({ timeout: 10_000 })
+    } finally {
+      kubectl(`-n ${NS} delete pod away-one --ignore-not-found --wait=false`)
+      kubectl(`delete namespace ${VIEW} --ignore-not-found --wait=false`)
+    }
+  })
+
   test('a list the server has no room to follow says why, is read on the clock and follows again by itself', async ({ page }) => {
     test.setTimeout(420_000)
     const path = `/api/v1/namespaces/${NS}/configmaps`

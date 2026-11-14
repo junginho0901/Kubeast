@@ -2391,6 +2391,7 @@
     "cpu": "CPU",
     "memory": "Memory",
     "metricMissing": "No {{what}} data from Prometheus",
+    "prometheusNotAnswering": "Prometheus did not answer: {{reason}}",
     "podsSource": "Pods on nodes and not finished, as the cluster's Prometheus counts them (kube-state-metrics, each namespace/pod once), of the pods the nodes can take (allocatable). The Pods card above counts every pod from the Kubernetes API.",
     "topNodes": {
       "title": "Top 3 nodes by resource usage",
@@ -2942,6 +2943,7 @@
       "clearSelection": "Clear",
       "selectPending": "Select all pending users",
       "selectAllPages": "Select all {{count}} pending users, on every page",
+      "selectAllFound": "Select all {{count}} pending users the search finds, on every page",
       "selectAllPages_one": "Select the 1 pending user",
       "selectedEveryPage": "{{count}} selected, on every page",
       "notChanged": "{{done}} of {{total}} accounts changed. Not changed: {{accounts}}",
@@ -3720,6 +3722,7 @@
     "teamTitle": "Team",
     "teamSubtitle": "Teams / Groups",
     "inputPlaceholder": "Enter name...",
+    "searchPlaceholder": "Search teams by name...",
     "add": "Add",
     "addError": "Not added: {{reason}}",
     "empty": "No items registered.",
@@ -3907,6 +3910,7 @@
       }
     },
     "viewUsers": "View users with this role",
+    "searchPlaceholder": "Search roles by name, description or permission...",
     "sessionNotice": "Saving this ends the sessions and API key tokens of the people holding this role, so they sign in again. You too, if you hold it.",
     "menuNote": "Hides the group in the sidebar. Its screens and the AI's reads stay open: the permissions below and the cluster decide those.",
     "usersWithRole": "Users with this global (account-level) role",
@@ -4119,6 +4123,7 @@
       "name": "Name",
       "mode": "Mode",
       "apiServer": "API server",
+      "searchPlaceholder": "Search clusters by name, API server or creator...",
       "health": "Health",
       "healthChecked": "Checked {{time}}",
       "testPassed": "Test passed",
@@ -4411,6 +4416,7 @@
       "avgUtilOf": "The {{n}} of {{total}} GPUs that report utilization",
       "gpuCount": "Physical GPUs",
       "memUsed": "Memory Used",
+      "notAnswering": "Prometheus did not answer: {{reason}}",
       "title": "Real-time GPU Metrics"
     },
     "recentPods": {
@@ -4679,6 +4685,8 @@
     "disabled": "The alert webhook is off on this installation (features.alertInvestigation.enabled), so no alerts come in.",
     "forbidden": "Alerts cover the whole cluster: they are shown to users who can read this cluster without a namespace limit.",
     "storeLimited": "Alertmanager's state could not be read for now (request limit). Reading again in {{seconds}} s.",
+    "storeFailed": "Alertmanager's state could not be read: {{reason}}",
+    "storeFailedShown": "Alertmanager's state could not be read: {{reason}}. What it said at {{time}} is shown.",
     "storeCut": "The alert store sent the first {{listed}} of its {{total}} alerts for this cluster (its limit, alertStore.maxAlerts): for an alert not among them, what Alertmanager says now is not shown.",
     "status": {
       "firing": "Firing",

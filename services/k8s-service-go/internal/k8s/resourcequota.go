@@ -89,7 +89,7 @@ func (s *Service) DescribeResourceQuota(ctx context.Context, namespace, name str
 	}
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(rq.UID))
 
 	return result, nil
 }

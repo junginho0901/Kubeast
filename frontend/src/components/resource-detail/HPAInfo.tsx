@@ -5,7 +5,7 @@ import { fmtRel } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
-import { usePrometheusRangeQuery } from '@/hooks/usePrometheusQuery'
+import { prometheusNotAnswering, usePrometheusRangeQuery } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, Sparkline } from './PrometheusMetrics'
 import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
@@ -207,7 +207,7 @@ function HPAScalingHistory({ name, namespace }: { name: string; namespace: strin
   const escName = name.replace(/"/g, '\\"')
   const escNs = namespace.replace(/"/g, '\\"')
   const promql = `kube_horizontalpodautoscaler_status_current_replicas{horizontalpodautoscaler="${escName}",namespace="${escNs}"}`
-  const { data } = usePrometheusRangeQuery(['hpa-replicas', namespace, name], promql, {
+  const { data, error } = usePrometheusRangeQuery(['hpa-replicas', namespace, name], promql, {
     step: 300, // 5-minute resolution → 288 points over 24h
   })
 
@@ -228,7 +228,7 @@ function HPAScalingHistory({ name, namespace }: { name: string; namespace: strin
   if (!Number.isFinite(maxReplicas)) maxReplicas = 0
 
   return (
-    <PrometheusSection available={available} title="Scaling History (24h)">
+    <PrometheusSection available={available} failure={available ? null : prometheusNotAnswering(error)} title="Scaling History (24h)">
       {series.length === 0 ? (
         <div className="text-[11px] text-slate-500">
           <Tx>Requires kube-state-metrics with HPA series scraped.</Tx></div>

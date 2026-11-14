@@ -57,7 +57,7 @@ func (s *Service) DescribeRole(ctx context.Context, namespace, name string) (map
 	result := formatRoleDetail(role)
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(role.UID))
 
 	return result, nil
 }

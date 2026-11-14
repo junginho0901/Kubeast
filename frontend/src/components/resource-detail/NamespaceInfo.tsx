@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, isForbiddenError } from '@/services/api'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { Search } from 'lucide-react'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, SummaryBadge, Th, NoneText, Tx, ObjectUnreadable } from './DetailCommon'
 import { eventsNewestFirst, fmtRel, fmtTs } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { namespacePodBadge, namespacePodsLayer } from './namespacePods'
 import { ResourceLink } from './ResourceLink'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
@@ -31,6 +31,8 @@ export default function NamespaceInfo({ name }: Props) {
     queryFn: () => api.describeNamespace(name),
     enabled: !!name,
   })
+  // the answer reads a Namespace's events in that namespace (k8s-service DescribeNamespace)
+  useDrawerFollowsEvents({ describeKey: ['namespace-describe', name], answer: nsDescribe, kind: 'Namespace', namespace: name, name })
 
   const { data: resourceQuotas, error: quotasError } = useQuery({
     queryKey: ['namespace-rq', name],
@@ -92,25 +94,6 @@ export default function NamespaceInfo({ name }: Props) {
   }, [name, nsDescribe, nsPods, resourceQuotas, limitRanges, podsError, quotasError, limitRangesError])
 
   useAIContext(aiSnapshot, [aiSnapshot])
-
-  const applyNsEvent = (prev: any[] | undefined, event: { type?: string; object?: any }) => {
-    const items = Array.isArray(prev) ? [...prev] : []
-    const obj = event?.object
-    if (!obj) return items
-    const key = `${obj?.reason || ''}:${obj?.message || ''}`
-    const idx = items.findIndex(i => `${i?.reason || ''}:${i?.message || ''}` === key)
-    if (event.type === 'DELETED') { if (idx >= 0) items.splice(idx, 1); return items }
-    if (idx >= 0) items[idx] = obj; else items.push(obj)
-    return items
-  }
-
-  useKubeWatchList({
-    enabled: !!name,
-    queryKey: ['namespace-events', name],
-    path: '/api/v1/events',
-    query: `watch=1&fieldSelector=${encodeURIComponent(`involvedObject.kind=Namespace,involvedObject.name=${name}`)}`,
-    applyEvent: applyNsEvent,
-  })
 
   const sortedEvents = useMemo(() => eventsNewestFirst(nsDescribe?.events), [nsDescribe?.events])
 
@@ -281,7 +264,7 @@ export default function NamespaceInfo({ name }: Props) {
       )}
 
       {/* Prometheus Real-time Namespace Metrics */}
-      <PrometheusSection available={promNsMetrics.available} title="Real-time Resource Usage">
+      <PrometheusSection available={promNsMetrics.available} failure={promNsMetrics.failure} title="Real-time Resource Usage">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {getNsMetricValue('cpu') !== null && (
             <MetricCard label="CPU Usage" value={getNsMetricValue('cpu')!} unit="m" thresholds={{ warn: 2000, danger: 4000 }} />

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type DeploymentInfo } from '@/services/api'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
@@ -67,6 +67,7 @@ export default function Deployments() {
       : `/apis/apps/v1/namespaces/${selectedNamespace}/deployments`,
     query: 'watch=1',
     applyEvent: (prev, event) => applyDeploymentWatchEvent(prev as DeploymentInfo[] | undefined, event),
+    gatherEveryMs: LIST_GATHER_MS,
   })
 
   const filteredDeployments = useMemo(() => {

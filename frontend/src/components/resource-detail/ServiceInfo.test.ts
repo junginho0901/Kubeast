@@ -12,6 +12,7 @@ import ServiceInfo from './ServiceInfo'
 vi.mock('@/hooks/useAIContext', () => ({ useAIContext: () => {} }))
 vi.mock('@/hooks/usePrometheusQuery', () => ({
   usePrometheusQueries: () => ({ available: false, data: {} }),
+  useServiceBackendUsage: () => ({ data: undefined, available: false, failure: null }),
   useClusterFeatures: () => ({ data: undefined }),
 }))
 

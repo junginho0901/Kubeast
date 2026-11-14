@@ -1,5 +1,5 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
-import { api, type PrometheusQueryResponse, type PrometheusRangeResponse, type ClusterFeatures } from '@/services/api'
+import { api, type PrometheusQueryResponse, type PrometheusRangeResponse, type ClusterFeatures, type ServiceBackendUsage } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { useCluster } from '@/contexts/ClusterContext'
 
@@ -37,6 +37,14 @@ export function useClusterFeatures() {
 // limited to namespaces is refused the cluster's Prometheus (features.prometheus.namespaceLimited).
 export function prometheusReadable(features: ClusterFeatures | undefined): boolean {
   return features?.prometheus?.enabled !== false && features?.prometheus?.namespaceLimited !== true
+}
+
+// A read's error when the cluster's Prometheus is set but did not answer — the server's 5xx (502 with its reason) or no
+// answer at all; null for anything else (a refusal is not the store's silence).
+export function prometheusNotAnswering(err: unknown): unknown {
+  if (!err) return null
+  const status = (err as { response?: { status?: number } }).response?.status
+  return status === undefined || status >= 500 ? err : null
 }
 
 /**
@@ -108,14 +116,18 @@ export function usePrometheusQueries(
   const data: Record<string, PrometheusQueryResponse | undefined> = {}
   let isLoading = false
   let available = false
+  let failure: unknown = null
 
   for (let i = 0; i < queries.length; i++) {
     data[queries[i].name] = results[i].data
     if (results[i].isLoading) isLoading = true
     if (results[i].data?.available) available = true
+    if (failure === null) failure = prometheusNotAnswering(results[i].error)
   }
 
-  return { data, isLoading, available }
+  // A Prometheus that is set but did not answer is an error (the server's 502 and its reason); one the cluster
+  // does not have is `available: false` with no error, which the sections leave out as before.
+  return { data, isLoading, available, failure: available ? null : failure }
 }
 
 /**
@@ -154,4 +166,28 @@ export function usePrometheusRangeQuery(
     staleTime: 60 * 1000,
     placeholderData: promEnabled ? undefined : { available: false, results: [] },
   })
+}
+
+/**
+ * The Service drawer's backend pod sums as the server adds them up (GET …/services/{name}/backend-usage), for a Service
+ * whose pods one query from the screen cannot name. Same gating as the other Prometheus reads; `available` and `failure`
+ * as usePrometheusQueries gives them, for `PrometheusSection`.
+ */
+export function useServiceBackendUsage(namespace: string, name: string, options?: { enabled?: boolean }) {
+  const features = useClusterFeatures()
+  const promEnabled = prometheusReadable(features.data)
+  // the features' placeholder says "on" while they load: ask once they have come (or failed)
+  const featuresIn = features.isFetched
+  const { currentCluster } = useCluster()
+  const query = useQuery<ServiceBackendUsage>({
+    queryKey: ['prometheus', currentCluster || 'default', 'service-backend-usage', namespace, name],
+    queryFn: () => api.serviceBackendUsage(namespace, name),
+    refetchInterval: 30000,
+    enabled: (options?.enabled ?? true) && featuresIn && promEnabled,
+    retry: 1,
+    retryDelay: 2000,
+    staleTime: 10000,
+  })
+  const available = !!query.data?.available
+  return { data: query.data, available, failure: available ? null : prometheusNotAnswering(query.error) }
 }

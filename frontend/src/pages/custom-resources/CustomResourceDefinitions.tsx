@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api, type CRDInfo } from '@/services/api'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
@@ -48,6 +48,7 @@ export default function CustomResourceDefinitions() {
     path: '/apis/apiextensions.k8s.io/v1/customresourcedefinitions',
     query: 'watch=1',
     applyEvent: (prev, event) => applyCRDWatchEvent(prev as CRDInfo[] | undefined, event),
+    gatherEveryMs: LIST_GATHER_MS,
   })
 
   const filteredItems = useMemo(() => {

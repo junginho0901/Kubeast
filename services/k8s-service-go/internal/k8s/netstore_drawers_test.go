@@ -83,7 +83,7 @@ func TestDescribeEndpoints_SubsetsAndEvents(t *testing.T) {
 	s := netstoreAPI(t, map[string]interface{}{
 		"/api/v1/namespaces/ns/endpoints/hand": ep,
 		"/api/v1/namespaces/ns/events": &corev1.EventList{Items: []corev1.Event{
-			netstoreEvent("Endpoints", "hand", "Mirrored", time.Minute), netstoreEvent("Service", "hand", "Elsewhere", time.Second),
+			withUID("ep-uid", netstoreEvent("Endpoints", "hand", "Mirrored", time.Minute)), netstoreEvent("Service", "hand", "Elsewhere", time.Second), withUID("ep-before", netstoreEvent("Endpoints", "hand", "OfTheOneBefore", time.Second)),
 		}},
 	})
 	out, err := s.DescribeEndpoints(context.Background(), "ns", "hand")
@@ -118,7 +118,7 @@ func TestIngressClass_EveryUserAndEvents(t *testing.T) {
 	s := netstoreAPI(t, map[string]interface{}{
 		"/apis/networking.k8s.io/v1/ingresses":             ings,
 		"/apis/networking.k8s.io/v1/ingressclasses/num-ic": &networkingv1.IngressClass{ObjectMeta: metav1.ObjectMeta{Name: cls, UID: "ic-uid"}, Spec: networkingv1.IngressClassSpec{Controller: "numbers.kubeast.io/ingress"}},
-		"/api/v1/events": &corev1.EventList{Items: []corev1.Event{netstoreEvent("IngressClass", cls, "Seen", time.Minute), netstoreEvent("Ingress", cls, "Elsewhere", time.Minute)}},
+		"/api/v1/events": &corev1.EventList{Items: []corev1.Event{withUID("ic-uid", netstoreEvent("IngressClass", cls, "Seen", time.Minute)), netstoreEvent("Ingress", cls, "Elsewhere", time.Minute), netstoreEvent("IngressClass", cls, "NamesNoUID", time.Minute)}},
 	})
 	users, err := s.ListIngressesByClass(context.Background(), cls)
 	if err != nil {

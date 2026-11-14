@@ -9,6 +9,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import type { GPUDashboardData, GPUMetricsData, GPUDeviceMetric } from '@/services/api'
+import { prometheusNotAnswering } from '@/hooks/usePrometheusQuery'
 import { byNodeName, devicePluginBadges, gpuModels } from '../gpuNumbers'
 
 export function useGPUDashboardData() {
@@ -20,7 +21,7 @@ export function useGPUDashboardData() {
     retryDelay: 1000,
   })
 
-  const { data: metrics } = useQuery<GPUMetricsData>({
+  const { data: metrics, error: metricsError } = useQuery<GPUMetricsData>({
     queryKey: ['gpu', 'metrics'],
     queryFn: () => api.getGPUMetrics(),
     refetchInterval: 15000,
@@ -29,6 +30,7 @@ export function useGPUDashboardData() {
   })
 
   const metricsAvailable = metrics?.available ?? false
+  const metricsFailure = metricsAvailable ? null : prometheusNotAnswering(metricsError)
 
   // Per-GPU metrics grouped by hostname
   const gpusByHost = useMemo(() => {
@@ -89,6 +91,7 @@ export function useGPUDashboardData() {
     data,
     metrics,
     metricsAvailable,
+    metricsFailure,
     gpusByHost,
     allocationRate,
     devicePlugins,

@@ -3,11 +3,13 @@ import { api } from '@/services/api'
 import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { eventsForAI, fmtRel, fmtTs } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
+import { useDrawerFollowsEvents } from '../useDrawerFollowsEvents'
 import { backendPort, backendService } from '@/utils/ingressBackend'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { PrometheusSection, MetricCard } from '../PrometheusMetrics'
 import { DescribeFailure, DescribeStale } from '../DescribeFailure'
+import { ingressClassRows } from '../netstoreDetail'
 
 interface Props {
   name: string
@@ -23,6 +25,7 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
     enabled: !!name && !!namespace,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['ingress-describe', namespace, name], answer: describe, kind: 'Ingress', namespace, name })
   useResourceDetailOverlay({ kind: 'Ingress', name, namespace, extras: { spec: rawJson?.spec, status: rawJson?.status, ...eventsForAI(describe) } })
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
@@ -31,10 +34,7 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
   const rules = (spec.rules ?? []) as any[]
   const tls = (spec.tls ?? []) as any[]
   const defaultBackend = spec.defaultBackend as any
-  const classSource = String(rawJson?.class_source ?? '-')
-  const classController = String(rawJson?.class_controller ?? '-')
-  const classDefaultRaw = rawJson?.class_is_default
-  const classIsDefault = classDefaultRaw == null ? '-' : classDefaultRaw ? 'Yes' : 'No'
+  const { source: classSource, controller: classController, isDefault: classIsDefault } = ingressClassRows(describe, rawJson)
   const lbIngress = ((status.loadBalancer as any)?.ingress ?? []) as any[]
   const lbAddresses = lbIngress.map((a: any) => (a?.ip && a?.hostname ? `${a.ip} (${a.hostname})` : a?.ip || a?.hostname)).filter(Boolean)
   const lbPortStatuses = lbIngress.flatMap((a: any) => {
@@ -188,7 +188,7 @@ function IngressLatencyMetrics({ name, namespace }: { name: string; namespace?: 
   const unit = useMs ? 'ms' : 's'
 
   return (
-    <PrometheusSection available={metrics.available} title="Response Time">
+    <PrometheusSection available={metrics.available} failure={metrics.failure} title="Response Time">
       {!hasAny ? (
         <div className="text-[11px] text-slate-500">
           <Tx>Requires nginx-ingress-controller with metrics scraped.</Tx></div>
