@@ -379,7 +379,9 @@ spec:
             {{- end }}
           {{- end }}
           {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8002) | nindent 10 }}
+          {{- if $api }}
           {{- include "kubeast.preStop" $ | nindent 10 }}
+          {{- end }}
           readinessProbe:
             httpGet:
               {{- if not $api }}
@@ -396,7 +398,8 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 30
           {{- if not $api }}
-          # out of the Service's endpoints before SIGTERM starts the drain (sleep action: the image has no shell)
+          # out of the Service's endpoints before SIGTERM starts the drain (sleep action: the image has no shell);
+          # streams.preStopSeconds is this container's one preStop wait, podShutdown.preStopSeconds is the api server's
           lifecycle:
             preStop:
               sleep:

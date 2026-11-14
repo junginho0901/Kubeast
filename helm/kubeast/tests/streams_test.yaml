@@ -40,7 +40,7 @@ tests:
         template: configmap.yaml
         documentSelector: {path: metadata.name, value: kubeast-config}
 
-  - it: drains the one default k8s-service too — the wait from streams.drainSeconds, a grace period of the wait + 30, no preStop
+  - it: drains the one default k8s-service too — the wait from streams.drainSeconds, a grace period past the wait, podShutdown's preStop
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
@@ -53,9 +53,10 @@ tests:
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
       # the Deployment's default rollout (maxSurge 1, maxUnavailable 0 for one replica) brings the new pod up first,
-      # and the lists keep answering on /health while the old one drains
-      - notExists:
+      # and the lists keep answering on /health while the old one drains; the preStop wait is podShutdown's
+      - equal:
           path: spec.template.spec.containers[0].lifecycle
+          value: {preStop: {sleep: {seconds: 5}}}
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
       - equal:
@@ -139,8 +140,8 @@ tests:
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service-stream}
       - equal:
-          path: spec.template.spec.containers[0].lifecycle.preStop.sleep.seconds
-          value: 10
+          path: spec.template.spec.containers[0].lifecycle
+          value: {preStop: {sleep: {seconds: 10}}}
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service-stream}
       - equal:
@@ -170,8 +171,9 @@ tests:
           any: true
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
-      - notExists:
+      - equal:
           path: spec.template.spec.containers[0].lifecycle
+          value: {preStop: {sleep: {seconds: 5}}}
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
       - notExists:
