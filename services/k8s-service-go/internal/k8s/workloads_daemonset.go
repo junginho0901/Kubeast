@@ -109,7 +109,7 @@ func (s *Service) DescribeDaemonSet(ctx context.Context, namespace, name string)
 	result["pod_template"] = formatPodTemplate(ds.Spec.Template)
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(ds.UID))
 
 	// Conditions
 	conditions := make([]map[string]interface{}, 0, len(ds.Status.Conditions))

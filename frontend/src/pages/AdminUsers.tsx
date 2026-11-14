@@ -24,7 +24,8 @@ import { BULK_CSV_HEADER, bulkCreateFailureRows, bulkCreateFailures, bulkCreateS
 import { roleMenuOpensUp } from './admin-users/roleMenu'
 import { failureText } from '@/utils/failureText'
 import { copyText } from '@/utils/clipboard'
-import { allPendingSelected, toggleAllPending as toggleAllPendingIds, toggleOnePending } from './admin-users/pendingSelection'
+import { allPendingSelected, toggleAllFound, toggleAllPending as toggleAllPendingIds, toggleOnePending } from './admin-users/pendingSelection'
+import { usersMatching } from './admin/adminListSearch'
 import { useDismiss } from '@/hooks/useDismiss'
 import { announceCreated } from '@/services/createdNoticeStore'
 import { CreatedNotice } from '@/components/CreatedNotice'
@@ -51,6 +52,7 @@ export default function AdminUsers() {
   // Pending modal
   const [pendingModalOpen, setPendingModalOpen] = useState(false)
   const [pendingSelectedIds, setPendingSelectedIds] = useState<Set<string>>(new Set())
+  const [pendingSearch, setPendingSearch] = useState('')
 
   // Bulk upload
   const [bulkUploadModalOpen, setBulkUploadModalOpen] = useState(false)
@@ -295,7 +297,7 @@ export default function AdminUsers() {
   const query = search.trim().toLowerCase()
   const filteredRows = useMemo(
     () => (query
-      ? sortedRows.filter((u) => [u.name, u.email, u.team].some((v) => (v ?? '').toLowerCase().includes(query)))
+      ? usersMatching(sortedRows, query)
       : sortedRows),
     [sortedRows, query],
   )
@@ -305,8 +307,12 @@ export default function AdminUsers() {
   // role names are stored capitalized ("Pending"), so compare without case
   const pendingRows = useMemo(() => rows.filter((u) => u.role?.name?.toLowerCase() === 'pending'), [rows])
   const pendingIds = useMemo(() => pendingRows.map((u) => u.id), [pendingRows])
+  // the window's search reads every pending account, not only the page shown
+  const pendingFound = useMemo(() => usersMatching(pendingRows, pendingSearch), [pendingRows, pendingSearch])
+  const pendingFoundIds = useMemo(() => pendingFound.map((u) => u.id), [pendingFound])
+  const pendingSearching = pendingSearch.trim() !== ''
   // the Pending window pages its accounts as a drawer's table does; the choice is kept by id across its pages
-  const { items: pendingPageRows, nav: pendingNav } = usePagination(pendingRows, 10)
+  const { items: pendingPageRows, nav: pendingNav } = usePagination(pendingFound, 10)
   // a bulk upload's rows that were not created (up to the server's 100 a request), ten at a time
   const bulkFailureLines = useMemo(() => (bulkUploadResult ? bulkCreateFailureRows(t, bulkUploadResult.failed) : []), [bulkUploadResult, t])
   const { items: bulkFailureRows, nav: bulkFailureNav } = usePagination(bulkFailureLines, 10)
@@ -374,8 +380,11 @@ export default function AdminUsers() {
   }
 
   const togglePendingSelect = (id: string) => setPendingSelectedIds((prev) => toggleOnePending(prev, id))
-  // every pending account, on every page of the window
-  const toggleAllPending = () => setPendingSelectedIds((prev) => toggleAllPendingIds(prev, pendingIds))
+  // every pending account, on every page of the window — or, with text in its search, every account it finds
+  const toggleAllPending = () => setPendingSelectedIds((prev) => (pendingSearching ? toggleAllFound(prev, pendingFoundIds) : toggleAllPendingIds(prev, pendingIds)))
+  const selectAllLabel = pendingSearching
+    ? tr('adminUsers.bulk.selectAllFound', 'Select all {{count}} pending users the search finds, on every page', { count: pendingFoundIds.length })
+    : tr('adminUsers.bulk.selectAllPages', 'Select all {{count}} pending users, on every page', { count: pendingIds.length })
 
   const handlePendingBulkApprove = (roleName: string) => {
     // every account chosen, on any page; one gone meanwhile is sent too, so the answer names it
@@ -402,7 +411,7 @@ export default function AdminUsers() {
           {pendingRows.length > 0 && (
             <button
               type="button"
-              onClick={() => { setPendingSelectedIds(new Set()); setPendingModalOpen(true) }}
+              onClick={() => { setPendingSelectedIds(new Set()); setPendingSearch(''); setPendingModalOpen(true) }}
               className="btn btn-primary flex items-center gap-2"
             >
               <Clock className="w-4 h-4" />
@@ -753,17 +762,29 @@ export default function AdminUsers() {
               </div>
             ) : (
               <>
-                <div className="mt-5 rounded-xl border border-slate-700 overflow-hidden">
+                <div className="relative mt-5">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={pendingSearch}
+                    onChange={(e) => setPendingSearch(e.target.value)}
+                    placeholder={tr('adminUsers.searchPlaceholder', 'Search by name, email or team...')}
+                    aria-label={tr('adminUsers.searchPlaceholder', 'Search by name, email or team...')}
+                    data-testid="admin-users-pending-search"
+                    className="h-10 w-full pl-9 pr-3 bg-slate-900/40 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:border-primary-500"
+                  />
+                </div>
+                <div className="mt-3 rounded-xl border border-slate-700 overflow-hidden">
                   <table className="w-full text-sm">
                     <thead className="bg-slate-800 text-slate-400">
                       <tr className="text-left text-slate-300">
                         <th className="px-3 py-2.5 w-10">
                           <input
                             type="checkbox"
-                            checked={allPendingSelected(pendingSelectedIds, pendingIds)}
+                            checked={allPendingSelected(pendingSelectedIds, pendingSearching ? pendingFoundIds : pendingIds)}
                             onChange={toggleAllPending}
-                            title={tr('adminUsers.bulk.selectAllPages', 'Select all {{count}} pending users, on every page', { count: pendingIds.length })}
-                            aria-label={tr('adminUsers.bulk.selectAllPages', 'Select all {{count}} pending users, on every page', { count: pendingIds.length })}
+                            title={selectAllLabel}
+                            aria-label={selectAllLabel}
                             data-testid="admin-users-pending-select-all"
                             className="h-4 w-4 rounded-sm border-slate-600 bg-slate-900 text-primary-600 focus:ring-primary-600 focus:ring-offset-0"
                           />
@@ -798,6 +819,11 @@ export default function AdminUsers() {
                           </tr>
                         )
                       })}
+                      {pendingFound.length === 0 && (
+                        <tr data-testid="admin-users-pending-no-results">
+                          <td colSpan={4} className="px-3 py-6 text-center text-slate-400">{tr('common.noSearchResults', 'No results found.')}</td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>

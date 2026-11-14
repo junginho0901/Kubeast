@@ -15,7 +15,7 @@ import { footersThatFit, listProblems, listsOnScreen, readExemptions, skippedTab
 //   and on a stored AI answer with its tool boxes open (prose-invert was white on the light mode's off-white);
 // - at 1440×900 a table of rows has a list footer in its card and a page with a list footer does not scroll
 //   (list-guard.ts; Access review's tabs once listed 500 accounts down the page and Admin → Users' footer sat two
-//   screens down).
+//   screens down), also on the Silences tab and test2's GPU screens.
 
 const MODES = ['default', 'dark', 'light'] as const
 const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
@@ -114,6 +114,39 @@ test.describe('every screen in every colour mode', () => {
       const lists = await page.evaluate(listsOnScreen, { skip: skippedTables(screen, LIST_EXEMPTIONS) })
       const overflow = footersThatFit(screen, lists, LIST_EXEMPTIONS).length > 0 ? await pageOverflow(page) : null
       found.push(...listProblems(screen, lists, LIST_EXEMPTIONS, overflow))
+    }
+    expect(found, 'lists that grow with the data without pages, and list pages that scroll').toEqual([])
+  })
+
+  // The list rule on what the loop above does not open: a tab behind a click (Alerts → Silences) and the GPU screens
+  // on test2, the cluster with GPUs (scripts/kind-gpu.sh up; the loop opens self, which has none).
+  async function listsAt(page: Page, path: string, label: string): Promise<string[]> {
+    await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {})
+    const lists = await page.evaluate(listsOnScreen, { skip: skippedTables(path, LIST_EXEMPTIONS) })
+    const overflow = footersThatFit(path, lists, LIST_EXEMPTIONS).length > 0 ? await pageOverflow(page) : null
+    return listProblems(path, lists, LIST_EXEMPTIONS, overflow).map((p) => `${label}: ${p}`)
+  }
+
+  test('at 1440×900 the Silences tab keeps the list rule', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await open(page, '/alerts', 'default')
+    const tab = page.getByTestId('alert-tab-silences')
+    test.skip((await tab.count()) === 0, 'the alert store\'s silences are off (features.alertStore.silences)')
+    await tab.click()
+    await expect(page.getByTestId('silences-pager'), 'the tab has the list footer').toContainText(/Showing \d+-\d+ of \d+|Showing 0 of 0/, { timeout: 15_000 })
+    expect(await listsAt(page, '/alerts', 'Silences tab')).toEqual([])
+  })
+
+  test('at 1440×900 the GPU screens on test2 keep the list rule', async ({ page }) => {
+    test.setTimeout(120_000)
+    await page.setViewportSize({ width: 1440, height: 900 })
+    const clusters = ((await (await page.request.get('/api/v1/clusters', { headers: XRW })).json()).items ?? []) as { id: string }[]
+    test.skip(!clusters.some((c) => c.id === 'test2'), 'test2 is not registered (scripts/add-kind-cluster.sh test2)')
+    const found: string[] = []
+    for (const path of ['/gpu/dashboard', '/gpu/nodes', '/gpu/pods']) {
+      await page.goto(`${path}?cluster=test2`)
+      await expect(page.locator('main h1').first()).toBeVisible()
+      found.push(...(await listsAt(page, path, 'test2')))
     }
     expect(found, 'lists that grow with the data without pages, and list pages that scroll').toEqual([])
   })

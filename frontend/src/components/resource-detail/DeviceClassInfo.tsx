@@ -5,6 +5,7 @@ import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from './Det
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { configParameterMap } from './draText'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
@@ -39,6 +40,7 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
     enabled: !!name,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['deviceclass-describe', name], answer: describe, kind: 'DeviceClass', name })
 
   useResourceDetailOverlay({ kind: 'DeviceClass', name, describe })
 

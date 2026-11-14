@@ -43,16 +43,40 @@ export function applyEventFrame(answer: any, event: WatchEvent): any {
   return { ...answer, events: eventsNewestFirst(next) }
 }
 
+// Where the describe answer read the object's events (k8s-service objectEvents): its namespace, or every namespace for an
+// object of the cluster.
+export function drawerEventsPath(namespace: string | undefined): string {
+  return namespace ? `/api/v1/namespaces/${namespace}/events` : '/api/v1/events'
+}
+
+// The field selector of the events about one object as kubectl describe writes it (client-go GetFieldSelector): its
+// name and kind, and its UID when it has one, so an event of an earlier object of the same name is not about this one.
+export function drawerEventSelector(kind: string, name: string, uid?: unknown): string {
+  const fields = [`involvedObject.kind=${kind}`, `involvedObject.name=${name}`]
+  if (typeof uid === 'string' && uid) fields.push(`involvedObject.uid=${uid}`)
+  return fields.join(',')
+}
+
 // useDrawerFollowsEvents keeps a drawer's Events moving while its object stays as it is: a warning that repeats counts up
 // on the event alone, which useDrawerFollowsObject never hears of. It opens once the answer has come, so what the watch
 // opens with finds it, and not for an answer that says the events could not be read: the watch would be refused too.
-export function useDrawerFollowsEvents(options: { describeKey: QueryKey; answer: any; kind: string; namespace?: string; name: string }) {
+// `namespace` is where the answer read them, none for an object of the cluster. It follows the events naming the answer's
+// UID (`uid` when the events name another, as a mirror pod's do), the ones the server kept in the answer.
+export function useDrawerFollowsEvents(options: { describeKey: QueryKey; answer: any; kind: string; namespace?: string; name: string; uid?: string }) {
   const { describeKey, answer, kind, namespace, name } = options
+  const uid = options.uid ?? answer?.uid
   useKubeWatchList({
-    enabled: !!namespace && !!name && Array.isArray(answer?.events),
+    enabled: !!kind && !!name && Array.isArray(answer?.events),
     queryKey: describeKey as any[],
-    path: `/api/v1/namespaces/${namespace}/events`,
-    query: `watch=1&fieldSelector=${encodeURIComponent(`involvedObject.kind=${kind},involvedObject.name=${name}`)}`,
+    path: drawerEventsPath(namespace),
+    query: `watch=1&fieldSelector=${encodeURIComponent(drawerEventSelector(kind, name, uid))}`,
     applyEvent: (prev, event) => applyEventFrame(prev, event),
   })
+}
+
+// Whether an event frame is about a node: it names the node's UID, or its name, which the kubelet writes in place of the
+// UID (kubectl describe node lists both; the server's eventToInfo carries involved_object.uid).
+export function nodeEventNamesNode(frame: any, name: string, nodeUid?: string): boolean {
+  const uid = frame?.involved_object?.uid
+  return typeof uid === 'string' && uid !== '' && (uid === name || uid === nodeUid)
 }
