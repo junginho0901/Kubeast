@@ -33,7 +33,7 @@ import { optimizationRowTarget } from '@/utils/detailTargets'
 import { aiEnabled } from '@/utils/features'
 import { useConfirm } from '@/services/confirm'
 
-import { formatBytes, formatMillicores, optimizationApply, optimizationResizeRequest } from '../utils'
+import { formatBytes, formatMillicores, optimizationApply, optimizationResizeRequest, optimizationRowKey } from '../utils'
 import { formatMoney } from '@/utils/money'
 import { useDismiss } from '@/hooks/useDismiss'
 
@@ -135,7 +135,7 @@ export function OptimizationModal({
   const canResize = !!features?.inPlaceResize?.enabled && !!features?.inPlaceResize?.serverSupports && has('resource.pod.edit')
   // The cluster has an OpenCost: the server priced each row's requests (cost.go).
   const priced = !!table?.pricing
-  const rowKey = (row: OptimizationRow) => `${row.kind}/${row.api_version ?? ''}/${row.name}/${row.container}`
+  const rowKey = optimizationRowKey
   const [resizeResults, setResizeResults] = useState<Record<string, ResizeResult | { error: string }>>({})
   const resize = useMutation({
     mutationFn: (row: OptimizationRow) => api.resizeOptimization(row.namespace, optimizationResizeRequest(row)),

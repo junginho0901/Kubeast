@@ -18,6 +18,12 @@ export function optimizationResizeRequest(row: OptimizationRow): ResizeRequest {
   }
 }
 
+// The row an Apply's result is shown on: one workload's container in one namespace, so a workload of the same name in the
+// namespace picked next does not show it.
+export function optimizationRowKey(row: OptimizationRow): string {
+  return `${row.namespace}/${row.kind}/${row.api_version ?? ''}/${row.name}/${row.container}`
+}
+
 export type OptimizationApply = 'apply' | 'kind' | null
 
 // What a row's Apply cell shows: the button when the server resizes that kind (resize_kinds, k8s ResizeKindAllowed),
