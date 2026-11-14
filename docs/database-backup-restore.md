@@ -47,6 +47,8 @@ postgresql:
     key: ca.crt
 ```
 
+Behind PgBouncer, use session pooling or connect directly: k8s-service and auth-service each pick one replica for a job with a session advisory lock held on one connection, which transaction pooling does not keep to one server session.
+
 ## Backing up the in-cluster database
 
 Two independent layers; use both.
