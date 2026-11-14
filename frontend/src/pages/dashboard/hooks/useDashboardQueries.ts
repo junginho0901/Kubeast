@@ -11,7 +11,7 @@
 // pure (no UI state of its own besides metricsUnavailable, which is
 // genuinely about the data layer).
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
@@ -26,6 +26,7 @@ import { useCluster } from '@/contexts/ClusterContext'
 import { keepSameRead } from '@/utils/keepSameRead'
 
 import type { ResourceType } from '../types'
+import { readTopResources, topResourcesPollMs, type TopRefusals } from '../topResourcesRead'
 
 export const DASHBOARD_POD_PAGE = 50
 // the server's most groups (PodGroupTopMax): past it the rest is one "(other)" and those namespaces get no pod count
@@ -66,6 +67,8 @@ export function useDashboardQueries({
   // reference e.g. ['cluster-overview'] still match. 'default' mirrors the server fallback.
   const ck = currentCluster || 'default'
   const [metricsUnavailable, setMetricsUnavailable] = useState(() => isMetricsDisabled())
+  // what the cluster refused of the top pods and nodes since this page opened
+  const topRefusals = useRef<TopRefusals>({ ck })
 
   const { data: overview, isLoading, isError: isOverviewError } = useQuery({
     queryKey: ['cluster-overview', ck],
@@ -203,38 +206,11 @@ export function useDashboardQueries({
     error: topResourcesError,
   } = useQuery<TopResources>({
     queryKey: ['top-resources', ck],
-    queryFn: async () => {
-      const result = await api.getTopResources(5, 3)
-      // 백엔드에서 빈 배열을 반환한 경우(일시적 실패) 이전 데이터 유지를 위해
-      // 유효한 데이터가 있는지 확인
-      const hasValidData = (result.top_pods && result.top_pods.length > 0) ||
-                          (result.top_nodes && result.top_nodes.length > 0)
-
-      if (!hasValidData) {
-        // The k8s-service answers 200 with empty lists and the metrics API
-        // error when the cluster has no metrics-server ("could not find the
-        // requested resource"). Surface that as the metrics-unavailable state
-        // (same shape as the 503 the other metrics endpoints raise) instead of
-        // a generic fetch failure.
-        const apiErr = `${result.pod_metrics_error || ''} ${result.node_metrics_error || ''}`
-        if (/could not find the requested resource/i.test(apiErr)) {
-          const unavailable: any = new Error('metrics server not available')
-          unavailable.response = { status: 503, data: { code: 'metrics_unavailable' } }
-          throw unavailable
-        }
-        // 빈 데이터면 에러를 throw하여 React Query가 이전 데이터를 유지하도록
-        // placeholderData가 이전 데이터를 반환하도록 함
-        throw new Error('No valid metrics data available')
-      }
-
-      return result
-    },
+    // a part the cluster refused is kept and not asked again until the page opens again (topResourcesRead)
+    queryFn: () => readTopResources(ck, (skip) => api.getTopResources(5, 3, skip), topRefusals),
     enabled: !metricsUnavailable && !isMetricsDisabled(),
     staleTime: 5000, // 5초간 fresh 상태 유지
-    refetchInterval: () => {
-      if (metricsUnavailable || isMetricsDisabled()) return false
-      return 5000
-    },
+    refetchInterval: () => topResourcesPollMs(topRefusals.current, ck, metricsUnavailable || isMetricsDisabled()),
     placeholderData: (previousData, previousQuery) => {
       // Keep the prior frame to avoid flicker on the 5s refetch — but ONLY within
       // the same cluster. The key's 2nd segment is the cluster; if it differs,

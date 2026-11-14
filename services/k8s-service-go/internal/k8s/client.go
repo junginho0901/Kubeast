@@ -70,6 +70,8 @@ type clientBundle struct {
 	// events is one read of an object's events as kubeast:cache for everyone asking; eventsRefused the namespaces it was refused, until when
 	events        flight.Group[*corev1.EventList]
 	eventsRefused sync.Map
+	// metricsMissing is this cluster's answer that it does not serve metrics.k8s.io, until when it stands (metrics.go)
+	metricsMissing atomic.Pointer[metricsMiss]
 
 	// configVersion is the registry's config_version of the Info this bundle
 	// was built from (internal/clustersync drops it once the registry has

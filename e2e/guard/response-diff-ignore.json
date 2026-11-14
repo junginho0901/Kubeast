@@ -71,6 +71,13 @@
       "cell": "^\\$\\[[^\\]]+\\]\\.same_group_as$",
       "why": "A custom role whose name differs from another role's only in letter case, spaces or punctuation carries same_group_as, the role it acts as on a cluster (a built-in first, else the oldest), which the pickers name; v0.7.7 did not send it.",
       "pr": "#865"
+    },
+    {
+      "route": "^/api/v1/cluster/metrics/top-resources$",
+      "cell": "^\\$\\.(pod|node)_metrics_(error|refused)$",
+      "user": "^nsread$",
+      "why": "The namespace-limited Read user is refused metrics.k8s.io on self; the dashboard's top resources now give the cluster's words and a refused mark for each part where the old build, reading the answer without its body, said \"unknown\".",
+      "pr": "#889"
     }
   ]
 }
