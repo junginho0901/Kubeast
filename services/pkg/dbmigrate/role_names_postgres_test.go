@@ -71,7 +71,7 @@ func TestPostgresRoleNamesOneGroupEach(t *testing.T) {
 		{"u-admin-grant", ids["Member"]}, {"u-ops-grant", ids["Member"]}, {"u-temporary", ids["Member"]}, {"u-restore", ids["Member"]},
 		{"u-global", ids["ADMIN"]}, {"u-requested", ids["Member"]}, {"u-team", ids["Member"]},
 	} {
-		exec(`INSERT INTO auth_users (id, name, email, role_id, password_hash) VALUES ($1, $1, $1 || '@example.com', $2, 'x')`, u.id, u.global)
+		exec(`INSERT INTO auth_users (id, name, email, role_id, password_hash) VALUES ($1, $1, $2, $3, 'x')`, u.id, u.id+"@example.com", u.global)
 	}
 	grant := `INSERT INTO user_cluster_roles (user_id, cluster_id, role_id, namespaces, expires_at, restore_role_id, restore_namespaces, request_id)
 	          VALUES ($1, 'c', $2, $3, $4, $5, $6, $7)`
