@@ -11,6 +11,8 @@
 #   SCENARIO=external-db scripts/upgrade-rehearsal.sh
 #   REPLICAS=3 scripts/upgrade-rehearsal.sh            # after the upgrade, every service at 3 replicas
 #   KEEP=1 scripts/upgrade-rehearsal.sh                # leave the cluster (scripts/upgrade-rehearsal.sh --delete removes it)
+#   REQUIRE=all scripts/upgrade-rehearsal.sh --build   # a release run: a check waiting for a change not in the checkout fails
+#   scripts/upgrade-rehearsal.sh --plan                # no cluster: which change each check waits for, and the render stops
 #
 # Scenarios:
 #   default          the chart's own Secrets, PostgreSQL and Redis.
@@ -22,13 +24,22 @@
 #                    session, or transaction; POOLER=0 connects to PostgreSQL directly).
 #
 # What it checks after the upgrade: the migrations reach the newest file of services/pkg/dbmigrate/migrations; what
-# was made on FROM_VERSION reads back the same (users, teams, custom roles including names a built-in has in other
-# letters, grants, API keys, access requests, conversations, recordings, the audit chain) and the old passwords and
-# key still sign in; readiness and liveness probes, preStop and the rollout strategy of each Deployment; the requests
-# sent every second during the upgrade (non-2xx and hangs, apart from the bundled PostgreSQL's restart); that
-# `--reuse-values` and a values file copied from FROM_VERSION stop with the --reset-then-reuse-values hint; a drain
-# running during the upgrade; a second upgrade to the same chart with one value changed; and, with REPLICAS, more than
-# one replica. A check whose feature is not in this checkout's chart or migrations is a SKIP row naming its change.
+# was made on FROM_VERSION reads back the same (users, teams, custom roles, grants, API keys, access requests,
+# conversations, recordings, the audit chain) and the old passwords and key still sign in; custom roles whose names a
+# built-in or an older role has in other letters or with spaces around (stored straight into the table, with a grant
+# and a pending access request) renamed <name>-renamed-<id>, their grant removed, their request ended role_renamed,
+# one audit row by system/migration for each, and a new role of such a name refused; readiness and liveness probes,
+# preStop and the rollout strategy of each Deployment; the requests sent every second during the upgrade (non-2xx and
+# hangs, apart from the bundled PostgreSQL's restart); that `--reuse-values` and a values file copied from FROM_VERSION
+# stop with the --reset-then-reuse-values hint, values setting pdb.minAvailable stop with what replaces it, and auth,
+# session and ai at 4 replicas stop at the database connection sum while 3 render; a drain running during the upgrade;
+# a second upgrade to the same chart with one value changed; and, with REPLICAS, more than one replica.
+#
+# A check whose change is not in this checkout (chart values, a check template or a migration's schema; never a
+# migration file number, which changes at merge) is a SKIP row naming that change's PR. REQUIRE lists the changes a
+# run must hold ("856 858 865 866 867 868 901", commas or spaces, or "all"): the run stops before making its cluster
+# when the checkout lacks one, and a SKIP of one is a FAIL row. --plan prints that list against the checkout and runs
+# the render stops with `helm template` on the install's values, without a cluster.
 #
 # Inputs (environment): SCENARIO, FROM_VERSION (0.7.7), RC_TAG (the tag the release workflow's chart edits run with,
 # v0.7.8-rc.1), IMAGE_TAG (rc-<HEAD, 8>), REPLICAS (1), HOST_PORT (30392), REH_CLUSTER (kubeast-reh), REH_OUT
@@ -37,7 +48,7 @@
 # as CALICO_NODE_HOOK), DOCKER_BUILD_ARGS (with --build), PROBE_TIMEOUT (10 s: a request
 # that has no answer by then is a hang), PG_GRACE (20 s after the bundled PostgreSQL is ready again), POOLER_IMAGE,
 # POOLER_MODE, POOLER, EXTRA_VALUES (a values file of no secret added to the FROM_VERSION install, e.g.
-# migrations.mode: job with SCENARIO=external-db), KEEP, ALLOW_DIRTY, ALLOW_PARALLEL.
+# migrations.mode: job with SCENARIO=external-db), REQUIRE, KEEP, ALLOW_DIRTY, ALLOW_PARALLEL.
 #
 # Safety: every kubectl and helm call names the rehearsal's kubeconfig file ($REH_OUT/kubeconfig) and its context;
 # the current context is never read. Cluster names must start with kubeast-reh. Passwords, tokens and keys are read
@@ -77,11 +88,16 @@ IMAGES="auth-service k8s-service session-service tool-server ai-service frontend
 MIGRATIONS="$ROOT/services/pkg/dbmigrate/migrations"
 HEAD8="$(git -C "$ROOT" rev-parse --short=8 HEAD)"
 IMAGE_TAG="${IMAGE_TAG:-rc-$HEAD8}"
-OUT="${REH_OUT:-$ROOT/.rehearsal/$SCENARIO-$(date +%Y%m%d-%H%M%S)}"
+PLAN=0
+[ "${1:-}" = --plan ] && PLAN=1
+OUT="${REH_OUT:-$ROOT/.rehearsal/$([ "$PLAN" = 1 ] && echo plan || echo "$SCENARIO")-$(date +%Y%m%d-%H%M%S)}"
 KC="$OUT/kubeconfig"
 RES="$OUT/results.tsv"
 CHART="$OUT/chart-rc"
+CHART_VALUES="$OUT/chart-values.json"
 APP_SECRET=kubeast-secrets
+LOOKALIKE='rehearsal: stored before the name rule'
+REQUIRE_LIST=" $(printf '%s' "${REQUIRE:-}" | tr ',#' '  ') "
 CREATED=0
 BG_PIDS=""
 TMP_VALUES=""
@@ -114,7 +130,10 @@ check_code() { # check_code AREA NAME "CODES" — CODE is one of CODES
 none_bad() { # none_bad AREA NAME BAD PASS_DETAIL FAIL_PREFIX — PASS when BAD (the names that fail) is empty
   if [ -z "$3" ]; then row "$1" "$2" PASS "$4"; else row "$1" "$2" FAIL "$5 $3"; fi
 }
-skip() { row "$1" "$2" SKIP "$3"; }
+skip() { # skip AREA NAME CHANGE WHY — the check waits for that change (a PR number); with the change in REQUIRE, a FAIL
+  if required "$3"; then row "$1" "$2" FAIL "REQUIRE names #$3, not in the candidate: $4"
+  else row "$1" "$2" SKIP "waits for #$3: $4"; fi
+}
 info() { row "$1" "$2" INFO "$3"; }
 
 print_table() {
@@ -126,10 +145,16 @@ print_table() {
   f=$(awk -F'\t' '$3 == "FAIL"' "$RES" | wc -l | tr -d ' ')
   s=$(awk -F'\t' '$3 == "SKIP"' "$RES" | wc -l | tr -d ' ')
   echo
-  echo "scenario $SCENARIO · from $FROM_VERSION · candidate $HEAD8 (chart ${RC_TAG#v}, images $IMAGE_TAG) · replicas $REPLICAS"
+  if [ "$PLAN" = 1 ]; then
+    echo "plan of checkout $HEAD8 (no cluster; renders of helm/kubeast on the default scenario's install values) · REQUIRE ${REQUIRE:-none}"
+  else
+    echo "scenario $SCENARIO · from $FROM_VERSION · candidate $HEAD8 (chart ${RC_TAG#v}, images $IMAGE_TAG) · replicas $REPLICAS · REQUIRE ${REQUIRE:-none}"
+  fi
   echo "PASS $p · FAIL $f · SKIP $s · results $RES"
-  [ "$s" = 0 ] || echo "each SKIP names the change it waits for: not in this checkout's chart or migrations"
-  if [ "$f" = 0 ] && [ "${COMPLETE:-0}" = 1 ]; then echo "RESULT: PASS"; else echo "RESULT: FAIL"; fi | tee "$OUT/verdict.txt"
+  [ "$s" = 0 ] || echo "each SKIP names the change it waits for (not in this checkout); REQUIRE=<those numbers> makes them fail"
+  local word=RESULT
+  [ "$PLAN" = 1 ] && word=PLAN
+  if [ "$f" = 0 ] && [ "${COMPLETE:-0}" = 1 ]; then echo "$word: PASS"; else echo "$word: FAIL"; fi | tee "$OUT/verdict.txt"
 }
 
 stop_bg() {
@@ -147,6 +172,8 @@ cleanup() {
   stop_bg
   [ -n "$TMP_VALUES" ] && rm -f "$TMP_VALUES"
   print_table
+  # the exit status says the verdict too
+  [ "$rc" = 0 ] && [ -s "$OUT/verdict.txt" ] && grep -q ': FAIL' "$OUT/verdict.txt" && rc=1
   if [ "$CREATED" = 1 ]; then
     if [ "${KEEP:-0}" = 1 ]; then
       say "KEEP=1: cluster $CLUSTER stays (kubeconfig $KC; REH_OUT=$OUT scripts/upgrade-rehearsal.sh --delete)"
@@ -235,10 +262,68 @@ newpw() { # 24 letters and digits, none of the password policy's weak fragments
   done
 }
 
-# --- what the candidate holds: a SKIP row names the change a missing feature belongs to ---
-has_value() { hc get values -a -o json 2>/dev/null | jq -e --arg p "$1" 'getpath($p | split(".")) != null' > /dev/null; }
+# --- what the candidate holds: each change a check waits for, by what in the checkout shows it (a SKIP row names it) ---
+CHANGES="856 858 865 866 867 868 901"
+change_says() { # change_says CHANGE — the checks that wait for it
+  case $1 in
+    856) echo "preStop sleep and grace period; the second upgrade (B)" ;;
+    858) echo "a drain whose server was replaced reads interrupted (B)" ;;
+    865) echo "role names one per group: renames, removed grants, ended requests, audit rows" ;;
+    866) echo "Redis users" ;;
+    867) echo "more than one replica of every service (C)" ;;
+    868) echo "PostgreSQL max_connections and restart; the connection sum stops a render" ;;
+    901) echo "probe paths, rollout strategy, PDBs; values setting pdb.minAvailable stop" ;;
+  esac
+}
+in_checkout() { # in_checkout CHANGE
+  case $1 in
+    856) chart_has podShutdown.preStopSeconds ;;
+    858) migrations_have 'CREATE TABLE[^(]*node_drains' ;;
+    865) migrations_have 'roles_name_group_key' ;;
+    866) chart_has redis.acl.enabled ;;
+    867) chart_has autoscaling ;;
+    868) chart_has postgresql.maxConnections && [ -f "$ROOT/helm/kubeast/templates/checks/db-connections.yaml" ] ;;
+    901) chart_has pdb.maxUnavailable ;;
+    *) return 1 ;;
+  esac
+}
+required() { case "$REQUIRE_LIST" in *" all "*|*" $1 "*) return 0 ;; esac; return 1; }
+require_names() { # REQUIRE names only changes some check waits for
+  local c
+  for c in $REQUIRE_LIST; do
+    case " all $CHANGES " in *" $c "*) ;; *) stop "REQUIRE: no check waits for #$c (the changes: $CHANGES, or all)" ;; esac
+  done
+}
+require_held() { # before a run makes its cluster: the checkout holds every change REQUIRE names
+  local c missing=""
+  for c in $CHANGES; do required "$c" && ! in_checkout "$c" && missing="$missing #$c"; done
+  [ -z "$missing" ] || stop "REQUIRE names changes this checkout does not hold:$missing (--plan lists what each check waits for)"
+}
+plan() { # --plan: the changes against the checkout, and the render stops on the default scenario's install values
+  local c
+  for c in $CHANGES; do
+    if in_checkout "$c"; then info plan "#$c $(change_says "$c")" "in this checkout"
+    else skip plan "$(change_says "$c")" "$c" "not in this checkout"; fi
+  done
+  write_values_from
+  removed_value_checks render
+  db_connection_checks render
+}
+# The checkout chart's values.yaml as JSON, as Helm reads it (scripts/values-paths.sh of #908 does the same).
+chart_values() {
+  local c="$OUT/values-json-chart" t
+  for t in helm jq; do command -v "$t" > /dev/null || stop "$t is not installed"; done
+  mkdir -p "$c/templates"
+  printf 'apiVersion: v2\nname: values-json\nversion: 0.0.0\n' > "$c/Chart.yaml"
+  printf '# {{ toJson .Values }}\n' > "$c/templates/values.yaml"
+  helm template values-json "$c" -f "$ROOT/helm/kubeast/values.yaml" 2>/dev/null | sed -n 's/^# {/{/p' > "$CHART_VALUES"
+  rm -rf "$c"
+  [ -s "$CHART_VALUES" ] || stop "helm/kubeast/values.yaml did not render as JSON"
+}
+chart_has() { jq -e --arg p "$1" 'getpath($p | split(".")) != null' "$CHART_VALUES" > /dev/null; }
+chart_value() { jq -r --arg p "$1" 'getpath($p | split(".")) // empty' "$CHART_VALUES"; }
+migrations_have() { grep -qE "$1" "$MIGRATIONS"/*.sql 2>/dev/null; }
 value_of() { hc get values -a -o json 2>/dev/null | jq -r --arg p "$1" 'getpath($p | split(".")) // empty'; }
-has_migration() { local f; for f in "$MIGRATIONS"/[0-9]*"$1"*.sql; do [ -e "$f" ] && return 0; done; return 1; }
 newest_migration() { local f n=""; for f in "$MIGRATIONS"/[0-9][0-9][0-9][0-9][0-9]_*.sql; do n=${f##*/}; done; printf '%s' "${n%%_*}"; }
 db_version() { psql_q "SELECT version_id FROM goose_db_version WHERE is_applied ORDER BY id DESC LIMIT 1" 2>/dev/null; }
 
@@ -382,7 +467,7 @@ EOF
 }
 
 # --- 3. install FROM_VERSION as a user does ---
-install_from() {
+write_values_from() {
   cat > "$OUT/values-from.yaml" <<EOF
 # What install.sh sets, plus what the test data needs: access requests, custom roles that act on the cluster,
 # session recording (stored in the database without a bucket).
@@ -404,6 +489,9 @@ auth:
 sessionRecording:
   enabled: true
 EOF
+}
+install_from() {
+  write_values_from
   local extra=()
   if [ "$SCENARIO" = existing-secret ]; then
     # The Secret a user would manage: the chart's own render of kubeast-secrets, under another name.
@@ -475,11 +563,16 @@ seed() {
   # refuses them when made, but an install can hold them from before that rule, so they go straight into the table.
   local rid
   for v in "ADMIN" " read " "RH-OPS"; do
-    rid=$(psql_q "INSERT INTO roles (name, description) VALUES ('$v', 'rehearsal: stored before the name rule') RETURNING id" | head -1)
+    rid=$(psql_q "INSERT INTO roles (name, description) VALUES ('$v', '$LOOKALIKE') RETURNING id" | head -1)
     [ -n "$rid" ] || stop "insert role '$v'"
     psql_q "INSERT INTO role_permissions (role_id, permission) VALUES ($rid, 'menu.dashboard')" > /dev/null || stop "permission of role '$v'"
     [ "$v" = ADMIN ] && R_ADMIN_LIKE=$rid
+    [ "$v" = RH-OPS ] && R_RHOPS_LIKE=$rid
   done
+  # A pending access request for one of them, as a request made before the rule leaves it.
+  psql_q "INSERT INTO access_requests (id, user_id, cluster_id, role_id, duration_minutes, reason, status)
+          VALUES ('ar-reh-lookalike', '$ID3', '$CLUSTER_ID', $R_RHOPS_LIKE, 60, 'rehearsal: pending for the stored role RH-OPS', 'pending')" > /dev/null \
+    || stop "insert the access request for RH-OPS"
   # The grant through the API when FROM_VERSION takes the name as that role; else (refused, or given to the
   # built-in) the row goes into the table.
   grant 4 ADMIN
@@ -513,7 +606,7 @@ seed() {
     || stop "insert the recording rows"
   unset U1_PW U2_PW U3_PW U4_PW
   for n in 1 2 3 4; do printf -v "T$n" '%s' ""; done
-  info seed "data on $FROM_VERSION" "4 users · roles rh-ops rh-reader + stored ADMIN, ' read ', RH-OPS · grants · 2 keys (1 revoked) · 2 access requests · 1 conversation · 2 recordings"
+  info seed "data on $FROM_VERSION" "4 users · roles rh-ops rh-reader + stored ADMIN, ' read ', RH-OPS · grants (rh-u4 ADMIN) · 2 keys (1 revoked) · 3 access requests (1 pending for RH-OPS) · 1 conversation · 2 recordings"
 }
 
 # snapshot WHEN: what the checks compare, names and states only (no secret, no row of a person's content)
@@ -524,9 +617,15 @@ snapshot() {
   jqb "$LIST | [.[] | select(.email | endswith(\"@$DOMAIN\")) | \"\(.email) \(.name)\"] | sort | .[]" > "$d/users.txt"
   call GET "/api/v1/auth/organizations?type=team" "$ATOK"
   jqb "$LIST | [.[] | .name | select(startswith(\"rh-\"))] | sort | .[]" > "$d/teams.txt"
-  psql_q "SELECT '[' || name || ']' FROM roles WHERE NOT is_system ORDER BY name" > "$d/roles.txt"
-  psql_q "SELECT u.email || ' ' || g.cluster_id || ' [' || r.name || ']' FROM user_cluster_roles g JOIN auth_users u ON u.id = g.user_id JOIN roles r ON r.id = g.role_id WHERE u.email LIKE '%@$DOMAIN' ORDER BY 1" > "$d/grants.txt"
-  psql_q "SELECT reason || ' ' || status FROM access_requests WHERE reason LIKE 'rehearsal%' ORDER BY 1" > "$d/access-requests.txt"
+  psql_q "SELECT id || ' [' || name || ']' FROM roles WHERE NOT is_system ORDER BY id" > "$d/roles.txt"
+  psql_q "SELECT u.email || ' ' || g.cluster_id || ' ' || r.id || ' [' || r.name || ']' FROM user_cluster_roles g JOIN auth_users u ON u.id = g.user_id JOIN roles r ON r.id = g.role_id WHERE u.email LIKE '%@$DOMAIN' ORDER BY 1" > "$d/grants.txt"
+  psql_q "SELECT role_id || ' ' || status || ' ' || coalesce(end_reason, '-') || ' ' || reason FROM access_requests WHERE reason LIKE 'rehearsal%' ORDER BY reason" > "$d/access-requests.txt"
+  # the roles stored before the name rule, and what an upgrade with #865 ends for them: "<grants> <requests>"
+  psql_q "SELECT id || ' [' || name || ']' FROM roles WHERE description = '$LOOKALIKE' ORDER BY id" > "$d/lookalike-roles.txt"
+  psql_q "WITH l AS (SELECT id FROM roles WHERE description = '$LOOKALIKE')
+          SELECT ((SELECT count(*) FROM user_cluster_roles WHERE role_id IN (SELECT id FROM l))
+                + (SELECT count(*) FROM user_cluster_roles WHERE restore_role_id IN (SELECT id FROM l) AND role_id NOT IN (SELECT id FROM l)))::text
+               || ' ' || (SELECT count(*) FROM access_requests WHERE role_id IN (SELECT id FROM l) AND status IN ('pending', 'approved'))::text" > "$d/lookalike-holds.txt"
   psql_q "SELECT id || ' ' || storage FROM session_recordings WHERE id LIKE 'rec-reh-%' ORDER BY 1" > "$d/recordings.txt"
   psql_q "SELECT id || ' ' || status FROM session_recordings WHERE id LIKE 'rec-reh-%' ORDER BY 1" > "$d/recording-status.txt"
   psql_q "SELECT title FROM sessions WHERE title LIKE 'rh-%' ORDER BY 1" > "$d/conversations.txt"
@@ -537,13 +636,33 @@ snapshot() {
   db_version > "$d/db-version.txt"
   BODY=""
 }
+# expected_after: with #865, what the before snapshot reads as once its migration has run (the migration's comment
+# says it): a role stored before the name rule is "<name trimmed>-renamed-<id>", its grants are gone (none of the seed's
+# is a temporary grant, which would go back to the role it restores instead) and its pending or approved requests are
+# expired with end_reason role_renamed. The other lines stay as they were.
+expected_after() {
+  local e="$OUT/expected" ids
+  rm -rf "$e"
+  in_checkout 865 || return 0
+  mkdir -p "$e"
+  ids=$(awk '{print $1}' "$OUT/before/lookalike-roles.txt" | tr '\n' ' ')
+  awk -v ids="$ids" 'BEGIN { n = split(ids, a, " "); for (i = 1; i <= n; i++) l[a[i]] = 1 }
+    ($1 in l) { s = $0; sub(/^[0-9]+ \[/, "", s); sub(/\]$/, "", s); gsub(/^ +| +$/, "", s); print $1 " [" s "-renamed-" $1 "]"; next }
+    { print }' "$OUT/before/roles.txt" > "$e/roles.txt"
+  awk -v ids="$ids" 'BEGIN { n = split(ids, a, " "); for (i = 1; i <= n; i++) l[a[i]] = 1 } !($3 in l)' "$OUT/before/grants.txt" > "$e/grants.txt"
+  awk -v ids="$ids" 'BEGIN { n = split(ids, a, " "); for (i = 1; i <= n; i++) l[a[i]] = 1 }
+    ($1 in l) && ($2 == "pending" || $2 == "approved") { $2 = "expired"; $3 = "role_renamed" } { print }' "$OUT/before/access-requests.txt" > "$e/access-requests.txt"
+}
 compare_snapshots() {
-  local f
+  local f want name
+  expected_after
   for f in users teams roles grants access-requests recordings conversations api-keys; do
-    if diff -q "$OUT/before/$f.txt" "$OUT/after/$f.txt" > /dev/null; then
-      row data "$f read back the same" PASS "$(wc -l < "$OUT/after/$f.txt" | tr -d ' ') lines"
+    want="$OUT/before/$f.txt"; name="$f read back the same"
+    if [ -f "$OUT/expected/$f.txt" ]; then want="$OUT/expected/$f.txt"; name="$f read back the same but for #865's changes"; fi
+    if diff -q "$want" "$OUT/after/$f.txt" > /dev/null; then
+      row data "$name" PASS "$(wc -l < "$OUT/after/$f.txt" | tr -d ' ') lines"
     else
-      row data "$f read back the same" FAIL "$(diff "$OUT/before/$f.txt" "$OUT/after/$f.txt" | grep '^[<>]' | head -3 | tr '\n' ' ')"
+      row data "$name" FAIL "$(diff "$want" "$OUT/after/$f.txt" | grep '^[<>]' | head -3 | tr '\n' ' ')"
     fi
   done
   [ -s "$OUT/before/users.txt" ] || row data "users snapshot has rows" FAIL "empty before snapshot"
@@ -583,6 +702,44 @@ live_checks() {
   oldest=$(jqb '.oldest_seq'); sealed=$(jqb '.sealed_through_seq')
   call POST /api/v1/auth/admin/audit/integrity/verify "$ATOK" "{\"from_seq\":${oldest:-0},\"to_seq\":${sealed:-0}}"
   check "$a" "the audit chain verifies (seq $oldest to $sealed)" true "$(jqb '.ok')"
+  BODY=""
+}
+
+# role_checks: #865 (one role per group, its migration's comment says what it does to the roles stored before): the
+# schema it adds, each stored look-alike renamed "<name trimmed>-renamed-<id>" while rh-ops (made first, through the
+# API) keeps its name, their grants removed, their pending and approved requests ended role_renamed, the audit rows by
+# system/migration counted per action against what the before snapshot held, and the name rule on a new role.
+role_checks() {
+  if ! in_checkout 865; then
+    skip roles "role names one per group: renames, grants, requests, audit rows" 865 "no migration makes roles_name_group_key"
+    return
+  fi
+  local l="(SELECT id FROM roles WHERE description = '$LOOKALIKE')" want holds n_grants n_requests n_renamed
+  check roles "the database has role_group_slug(text) and the unique index roles_name_group_key" "t t" \
+    "$(psql_q "SELECT (to_regprocedure('role_group_slug(text)') IS NOT NULL)::text || ' ' || EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'roles_name_group_key')::text" | sed 's/true/t/g; s/false/f/g')"
+  want=$(awk '{ s = $0; sub(/^[0-9]+ \[/, "", s); sub(/\]$/, "", s); gsub(/^ +| +$/, "", s); printf "%s%s [%s-renamed-%s]", (NR > 1 ? "," : ""), $1, s, $1 }' "$OUT/before/lookalike-roles.txt")
+  check roles "ADMIN, ' read ', RH-OPS stored before the rule are <name>-renamed-<id>" "$want" \
+    "$(psql_q "SELECT string_agg(id || ' [' || name || ']', ',' ORDER BY id) FROM roles WHERE id IN $l")"
+  check roles "rh-ops, made first in its group, keeps its name" "$(grep ' \[rh-ops\]$' "$OUT/before/roles.txt" | tr '\n' ',' | sed 's/,$//')" \
+    "$(psql_q "SELECT string_agg(id || ' [' || name || ']', ',' ORDER BY id) FROM roles WHERE role_group_slug(name) = 'rh-ops'")"
+  holds=$(cat "$OUT/before/lookalike-holds.txt")
+  n_grants=${holds%% *}; n_requests=${holds##* }
+  n_renamed=$(grep -c . "$OUT/before/lookalike-roles.txt")
+  check roles "grants of the renamed roles removed (before: $n_grants, rh-u4's ADMIN)" 0 \
+    "$(psql_q "SELECT count(*) FROM user_cluster_roles WHERE role_id IN $l OR restore_role_id IN $l")"
+  check roles "their pending and approved requests ended role_renamed (before: $n_requests)" "ended $n_requests · open 0" \
+    "$(psql_q "SELECT 'ended ' || count(*) FILTER (WHERE status = 'expired' AND end_reason = 'role_renamed') || ' · open ' || count(*) FILTER (WHERE status IN ('pending', 'approved')) FROM access_requests WHERE role_id IN $l")"
+  check roles "audit rows by system/migration, per action" \
+    "admin.roles.update $n_renamed · user.cluster_role.unset $n_grants · access.request.expire $n_requests" \
+    "$(psql_q "SELECT 'admin.roles.update ' || count(*) FILTER (WHERE action = 'admin.roles.update' AND target_type = 'role' AND target_id IN (SELECT id::text FROM roles WHERE description = '$LOOKALIKE') AND after->>'reason' = 'same_group')
+                  || ' · user.cluster_role.unset ' || count(*) FILTER (WHERE action = 'user.cluster_role.unset' AND after->>'reason' = 'role_renamed')
+                  || ' · access.request.expire ' || count(*) FILTER (WHERE action = 'access.request.expire' AND after->>'end_reason' = 'role_renamed')
+               FROM auth_audit_logs WHERE actor_user_id = 'system' AND actor_email = 'migration'")"
+  admin_login
+  call GET /api/v1/auth/roles "$ATOK"
+  check roles "GET /auth/roles: no role shares a group (same_group_as)" 0 "$(jqb "$LIST | map(select((.same_group_as // \"\") != \"\")) | length")"
+  call POST /api/v1/auth/admin/roles "$ATOK" '{"name":"Rh-Ops","description":"rehearsal: refused","permissions":["menu.dashboard"]}'
+  check roles "a new role Rh-Ops (group of rh-ops) is refused" "400 role_name_taken rh-ops" "$CODE $(jqb '.code // empty') $(jqb '.role // empty')"
   BODY=""
 }
 
@@ -694,7 +851,87 @@ upgrade_values_checks() {
   else
     row upgrade "a values file copied from $FROM_VERSION stops with the hint" FAIL "helm exit $rc: $out"
   fi
-  check upgrade "release left as it was by both dry runs" "kubeast-$FROM_VERSION 1" "$(hc list -o json | jq -r '.[] | select(.name == "kubeast") | "\(.chart) \(.revision)"')"
+  removed_value_checks upgrade
+  db_connection_checks upgrade
+  check upgrade "release left as it was by the dry runs" "kubeast-$FROM_VERSION 1" "$(hc list -o json | jq -r '.[] | select(.name == "kubeast") | "\(.chart) \(.revision)"')"
+}
+
+# render ARGS... — the candidate on the install's values with ARGS added, as the upgrade renders it: a client dry run
+# of `helm upgrade --reset-then-reuse-values` (--plan: `helm template` of the checkout's chart on values-from.yaml).
+# Sets RC, ERR (the error lines) and NOTES_SUM (the connection sum NOTES.txt prints for an external database); a
+# render that goes through holds the release's Secrets, so the rest is not kept.
+render() {
+  local full
+  if [ "$PLAN" = 1 ]; then
+    full=$(helm template kubeast "$ROOT/helm/kubeast" -n "$NS" -f "$OUT/values-from.yaml" "$@" 2>&1); RC=$?
+  else
+    full=$(hc upgrade kubeast "$CHART" --reset-then-reuse-values "$@" --dry-run=client 2>&1); RC=$?
+  fi
+  ERR=$(printf '%s\n' "$full" | grep -E '^Error|execution error' | head -3)
+  NOTES_SUM=$(printf '%s\n' "$full" | sed -n 's/.*can hold up to \([0-9][0-9]*\) connections.*/\1/p' | head -1)
+  full=""
+}
+
+# removed_value_checks AREA — values that still set pdb.minAvailable stop the render with what replaces it. The message
+# is read from the check template that lists the path ("pdb.minAvailable" "<instead>": #901's upgrade-values.yaml, or
+# removed-values.yaml once #908 has moved it there).
+removed_value_checks() {
+  local a=$1 f src="" instead=""
+  if ! in_checkout 901; then skip "$a" "values setting pdb.minAvailable stop" 901 "pdb.maxUnavailable not in the chart"; return; fi
+  for f in "$ROOT"/helm/kubeast/templates/checks/*.yaml; do
+    instead=$(sed -nE 's/.*"pdb\.minAvailable"[[:space:]]+"([^"]+)".*/\1/p' "$f" | head -1)
+    [ -n "$instead" ] && { src=${f#"$ROOT/helm/kubeast/"}; break; }
+  done
+  if [ -z "$instead" ]; then
+    row "$a" "values setting pdb.minAvailable stop" FAIL "no template in helm/kubeast/templates/checks lists pdb.minAvailable"
+    return
+  fi
+  render --set pdb.minAvailable=1
+  printf '%s\n' "$ERR" > "$OUT/pdb-minavailable.txt"
+  if [ "$RC" != 0 ] && printf '%s' "$ERR" | grep -qF 'pdb.minAvailable' && printf '%s' "$ERR" | grep -qF -- "$instead"; then
+    row "$a" "values setting pdb.minAvailable stop with what replaces it" PASS "helm exit $RC · message of $src: ${instead%% (*}"
+  else
+    row "$a" "values setting pdb.minAvailable stop with what replaces it" FAIL "helm exit $RC (want the message of $src): $ERR"
+  fi
+}
+
+# db_connection_checks AREA — auth, session and ai at 4 replicas stop the render at the chart's PostgreSQL connection
+# check (templates/checks/db-connections.yaml) with the sum it works out; at 3 they render. The numbers are the chart's:
+# the sum from its message, the limit from postgresql.maxConnections. With an external database the chart does not
+# stop and NOTES.txt prints the sum.
+db_connection_checks() {
+  local a=$1 k total max want set3=() set4=()
+  if ! in_checkout 868; then skip "$a" "the connection sum stops a render past postgresql.maxConnections" 868 "checks/db-connections.yaml not in the chart"; return; fi
+  for k in authService sessionService aiService; do set3+=(--set "replicas.$k=3"); set4+=(--set "replicas.$k=4"); done
+  if [ "$SCENARIO" = external-db ] && [ "$PLAN" != 1 ]; then
+    render "${set4[@]}"
+    if [ "$RC" = 0 ] && [ -n "$NOTES_SUM" ]; then
+      info "$a" "auth, session and ai at 4 replicas, external database" "renders; NOTES.txt: the pods can hold up to $NOTES_SUM connections"
+    else
+      row "$a" "auth, session and ai at 4 replicas render with an external database" FAIL "helm exit $RC, NOTES sum '${NOTES_SUM}': $ERR"
+    fi
+    return
+  fi
+  want=$(chart_value postgresql.maxConnections)
+  render "${set4[@]}"
+  printf '%s\n' "$ERR" > "$OUT/db-connections-4.txt"
+  total=$(printf '%s' "$ERR" | sed -n 's/.*can hold up to \([0-9][0-9]*\) database connections.*/\1/p' | head -1)
+  max=$(printf '%s' "$ERR" | sed -n 's/.*postgresql\.maxConnections=\([0-9][0-9]*\).*/\1/p' | head -1)
+  if [ "$RC" != 0 ] && [ -n "$total" ] && [ -n "$max" ] && [ "$max" = "$want" ] && [ "$total" -gt "$max" ]; then
+    row "$a" "auth, session and ai at 4 replicas stop at the connection sum" PASS "the pods can hold up to $total connections > postgresql.maxConnections $max"
+  else
+    row "$a" "auth, session and ai at 4 replicas stop at the connection sum" FAIL "helm exit $RC, sum '$total', limit '$max' (values.yaml $want): $ERR"
+  fi
+  render "${set3[@]}"
+  if [ "$RC" = 0 ]; then
+    row "$a" "auth, session and ai at 3 replicas render" PASS "helm exit 0"
+    # the sum at 3, as the same check prints it once the limit is below it
+    render "${set3[@]}" --set postgresql.maxConnections=20
+    total=$(printf '%s' "$ERR" | sed -n 's/.*can hold up to \([0-9][0-9]*\) database connections.*/\1/p' | head -1)
+    info "$a" "connection sum at 3 replicas of auth, session and ai" "${total:-not printed} (postgresql.maxConnections $want)"
+  else
+    row "$a" "auth, session and ai at 3 replicas render" FAIL "helm exit $RC: $ERR"
+  fi
 }
 
 # --- 8. requests during an upgrade: every second, each target once, in parallel; a request with no answer after
@@ -824,7 +1061,7 @@ spec_checks() { # spec_checks PHASE
   bad=$(jq -r '[.items[] | select(.kind == "Deployment") | select((.spec.template.spec.containers[0].readinessProbe == null) or (.spec.template.spec.containers[0].livenessProbe == null)) | .metadata.name] | join(" ")' "$json")
   if [ -z "$bad" ]; then row "$a" "every Deployment has a readiness and a liveness probe" PASS "$(jq '[.items[] | select(.kind == "Deployment")] | length' "$json") Deployments"
   else row "$a" "every Deployment has a readiness and a liveness probe" FAIL "missing on: $bad"; fi
-  if has_value pdb.maxUnavailable; then
+  if in_checkout 901; then
     bad=$(jq -r '[.items[] | select(.kind == "Deployment" and (.metadata.name | IN("auth-service", "k8s-service", "session-service"))) | .spec.template.spec.containers[0] | select(.readinessProbe.httpGet.path != "/readyz" or .livenessProbe.httpGet.path != "/livez") | .name] | join(" ")' "$json")
     none_bad "$a" "Go services: readiness /readyz, liveness /livez" "$bad" "auth-service k8s-service session-service" "other paths on:"
     bad=$(jq -r '[.items[] | select(.kind == "Deployment") | select(if (.metadata.name | IN("postgres", "redis")) then .spec.strategy.type != "Recreate" else (.spec.strategy.type != "RollingUpdate" or (.spec.strategy.rollingUpdate.maxUnavailable | tostring) != "0" or (.spec.strategy.rollingUpdate.maxSurge | tostring) != "1") end) | .metadata.name] | join(" ")' "$json")
@@ -832,9 +1069,9 @@ spec_checks() { # spec_checks PHASE
     bad=$(jq -r '[.items[] | select(.kind == "Deployment" and .spec.replicas > 1) | .metadata.name] as $many | [.items[] | select(.kind == "PodDisruptionBudget") | .spec.selector.matchLabels.app] as $pdb | ($many - $pdb) | join(" ")' "$json")
     none_bad "$a" "a PodDisruptionBudget for each Deployment past one replica" "$bad" "$(jq '[.items[] | select(.kind == "PodDisruptionBudget")] | length' "$json") PDBs" "none for:"
   else
-    skip "$a" "probe paths, rollout strategy, PDB past one replica" "pdb.maxUnavailable not in the chart (M-6 not in the candidate)"
+    skip "$a" "probe paths, rollout strategy, PDB past one replica" 901 "pdb.maxUnavailable not in the chart"
   fi
-  if has_value podShutdown.preStopSeconds; then
+  if in_checkout 856; then
     pre=$(value_of podShutdown.preStopSeconds)
     # every Deployment a Service selects, except the bundled PostgreSQL
     bad=$(jq -r --argjson s "${pre:-0}" '[.items[] | select(.kind == "Service" and .metadata.name != "postgres") | .spec.selector.app] as $apps
@@ -842,7 +1079,7 @@ spec_checks() { # spec_checks PHASE
          | select(($p.containers[0].lifecycle.preStop.sleep.seconds // 0) != $s or ($p.terminationGracePeriodSeconds // 30) < ($s + 30)) | .metadata.name] | join(" ")' "$json")
     none_bad "$a" "preStop sleep $pre s and grace ≥ $((pre + 30)) s behind each Service" "$bad" "every Deployment behind a Service but postgres" "not on:"
   else
-    skip "$a" "preStop and grace period" "podShutdown.preStopSeconds not in the chart (#856 not in the candidate)"
+    skip "$a" "preStop and grace period" 856 "podShutdown.preStopSeconds not in the chart"
   fi
 }
 
@@ -876,15 +1113,24 @@ case "${1:-}" in
   --delete)
     [ -n "${REH_OUT:-}" ] || { echo "REH_OUT=<the run's folder> scripts/upgrade-rehearsal.sh --delete"; exit 2; }
     delete_cluster && echo "deleted $CLUSTER"; exit $? ;;
-  --build|"") ;;
+  --build|--plan|"") ;;
   *) awk 'NR > 1 && /^#/ {sub(/^# ?/, ""); print; next} NR > 1 {exit}' "$0"; exit 2 ;;
 esac
 case "$SCENARIO" in default|existing-secret|external-db) ;; *) stop "SCENARIO is default, existing-secret or external-db" ;; esac
 case "$REPLICAS" in 1|2|3) ;; *) stop "REPLICAS is 1, 2 or 3" ;; esac
+require_names
 mkdir -p "$OUT"; : > "$RES"
 exec > >(tee -a "$OUT/run.log") 2>&1
 trap cleanup EXIT
 trap 'exit 130' INT TERM
+chart_values
+if [ "$PLAN" = 1 ]; then
+  say "upgrade rehearsal plan: checkout $HEAD8, out $OUT"
+  plan
+  COMPLETE=1
+  exit 0
+fi
+require_held
 say "upgrade rehearsal: scenario $SCENARIO, $FROM_VERSION -> $HEAD8 (chart ${RC_TAG#v}, images $IMAGE_TAG), out $OUT"
 [ "${1:-}" = --build ] && build_images
 
@@ -912,7 +1158,7 @@ info A "auth-service migration lines" "$(wc -l < "$OUT/A-migrations.log" | tr -d
 check A "every Kubeast image is $IMAGE_TAG" 7 "$(kc -n "$NS" get deploy -o json | jq "[.items[].spec.template.spec.containers[0].image | select(endswith(\":$IMAGE_TAG\"))] | length")"
 if [ "$SCENARIO" != external-db ]; then
   PG_UID_AFTER=$(kc -n "$NS" get pods -l app=postgres -o jsonpath='{.items[0].metadata.uid}' 2>/dev/null)
-  if has_value postgresql.maxConnections; then
+  if in_checkout 868; then
     if [ "$PG_UID_BEFORE" != "$PG_UID_AFTER" ]; then
       row A "bundled PostgreSQL restarted once (#868)" PASS "new pod, restarts $(kc -n "$NS" get pods -l app=postgres -o jsonpath='{.items[0].status.containerStatuses[0].restartCount}')"
     else
@@ -920,7 +1166,7 @@ if [ "$SCENARIO" != external-db ]; then
     fi
     check A "PostgreSQL max_connections = postgresql.maxConnections" "$(value_of postgresql.maxConnections)" "$(psql_q 'SHOW max_connections')"
   else
-    skip A "bundled PostgreSQL restart and max_connections" "postgresql.maxConnections not in the chart (#868 not in the candidate)"
+    skip A "bundled PostgreSQL restart and max_connections" 868 "postgresql.maxConnections not in the chart"
   fi
 else
   n=$(kc -n "$DB_NS" logs deploy/pgbouncer --since=30m 2>/dev/null | grep -ci 'unsupported startup parameter')
@@ -929,17 +1175,7 @@ fi
 snapshot after
 compare_snapshots
 live_checks after
-if has_migration role_names; then
-  check roles "stored names a role already has ignoring case are marked name_kept (#865)" "[ read ] t,[ADMIN] t,[RH-OPS] t" \
-    "$(psql_q "SELECT string_agg('[' || name || '] ' || name_kept::text, ',' ORDER BY name COLLATE \"C\") FROM roles WHERE name IN ('ADMIN', ' read ', 'RH-OPS')" | sed 's/true/t/g; s/false/f/g')"
-  admin_login
-  call GET /api/v1/auth/roles "$ATOK"
-  check roles "GET /auth/roles names the group ADMIN shares (same_group_as)" yes "$(jqb "$LIST | map(select(.name == \"ADMIN\")) | .[0].same_group_as | if (. == null or . == \"\" or . == []) then \"no\" else \"yes\" end")"
-  call PUT "/api/v1/auth/admin/users/$(psql_q "SELECT id FROM auth_users WHERE email = 'rh-u1@$DOMAIN'")/cluster-roles/$CLUSTER_ID" "$ATOK" '{"role":"ADMIN"}'
-  check roles "a new grant of the stored role ADMIN is refused (role_same_group)" "400 role_same_group" "$CODE $(jqb '.code // empty')"
-else
-  skip roles "name_kept · same_group_as · role_same_group" "no role_names migration (#865 not in the candidate)"
-fi
+role_checks
 admin_login
 call GET "/api/v1/nodes/$WORKER/drain/status?cluster=$CLUSTER_ID&drain_id=$DRAIN_A" "$ATOK"
 if [ $(( PHASE_T0 - DRAIN_A_T )) -lt 240 ]; then
@@ -949,14 +1185,14 @@ else
   info A "the $FROM_VERSION drain after the upgrade" "not in flight at the replacement (started $(( PHASE_T0 - DRAIN_A_T ))s before)"
 fi
 spec_checks A
-if has_value redis.acl.enabled; then
+if in_checkout 866; then
   if [ "$SCENARIO" = existing-secret ]; then redis_checks A single; else redis_checks A users; fi
 else
-  skip A "Redis users" "redis.acl not in the chart (#866 not in the candidate)"
+  skip A "Redis users" 866 "redis.acl not in the chart"
 fi
 
 # existing-secret: the Redis users' keys added to the app Secret, then from a Secret of their own
-if [ "$SCENARIO" = existing-secret ] && has_value redis.acl.enabled; then
+if [ "$SCENARIO" = existing-secret ] && in_checkout 866; then
   (
     P1=$(openssl rand -hex 24); P2=$(openssl rand -hex 24); P3=$(openssl rand -hex 24); export P1 P2 P3
     kc -n "$NS" get secret "$APP_SECRET" -o json \
@@ -975,8 +1211,8 @@ if [ "$SCENARIO" = existing-secret ] && has_value redis.acl.enabled; then
 fi
 
 # B: candidate -> candidate with one value changed, a drain running on the candidate meanwhile
-if has_value podShutdown.preStopSeconds; then
-  if has_migration node_drains; then
+if in_checkout 856; then
+  if in_checkout 858; then
     start_drain; DRAIN_B=$DRAIN_ID
     upgrade_phase B --reset-then-reuse-values --set podShutdown.preStopSeconds=$(( $(value_of podShutdown.preStopSeconds) + 1 ))
     admin_login
@@ -989,18 +1225,18 @@ if has_value podShutdown.preStopSeconds; then
     check B "a drain whose server was replaced reads interrupted (#858)" interrupted "$st"
     check B "its answer names $WORKER as still cordoned" yes "$(jqb "(.cordoned_nodes // []) | if any(.[]; . == \"$WORKER\") then \"yes\" else \"no\" end")"
   else
-    skip B "drain interrupted" "no node_drains migration (#858 not in the candidate)"
+    skip B "drain interrupted" 858 "no migration makes the table node_drains"
     upgrade_phase B --reset-then-reuse-values --set podShutdown.preStopSeconds=$(( $(value_of podShutdown.preStopSeconds) + 1 ))
   fi
   check B "migrations unchanged by the second upgrade" "$WANT_DB" "$(db_version)"
   spec_checks B
 else
-  skip B "second upgrade to the same chart" "podShutdown.preStopSeconds not in the chart (#856 not in the candidate)"
+  skip B "second upgrade to the same chart" 856 "podShutdown.preStopSeconds not in the chart"
 fi
 
 # C: more than one replica of every service
-if [ "$REPLICAS" -gt 1 ] && ! has_value autoscaling; then
-  skip C "$REPLICAS replicas" "autoscaling not in the chart (#867 not in the candidate; the chart refuses k8s-service past 1 without it)"
+if [ "$REPLICAS" -gt 1 ] && ! in_checkout 867; then
+  skip C "$REPLICAS replicas" 867 "autoscaling not in the chart (the chart refuses k8s-service past 1 without it)"
 elif [ "$REPLICAS" -gt 1 ]; then
   set_args=()
   for k in authService aiService k8sService sessionService frontend toolServer gateway; do set_args+=(--set "replicas.$k=$REPLICAS"); done
