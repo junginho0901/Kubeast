@@ -83,6 +83,12 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no features.alertInvestigation.evidenceCheck
+  - it: stops values without the tool result details switch
+    set:
+      ai.toolResultDetails: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.toolResultDetails
   - it: stops values without a path 0.7.6 added, as v0.7.5's published defaults are
     set:
       multicluster.clientQPS: null

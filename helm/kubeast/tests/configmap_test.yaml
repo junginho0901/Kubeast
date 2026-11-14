@@ -825,4 +825,16 @@ tests:
           value: "true"
       - equal:
           path: data.ALERT_INVESTIGATION_EVIDENCE_CHECK
+  - it: keeps the tool result details off by default
+    asserts:
+      - equal:
+          path: data.AI_TOOL_RESULT_DETAILS
+          value: "false"
+
+  - it: passes the tool result details switch as it is set
+    set:
+      ai.toolResultDetails: true
+    asserts:
+      - equal:
+          path: data.AI_TOOL_RESULT_DETAILS
           value: "true"

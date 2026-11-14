@@ -80,6 +80,9 @@
     - 설치에서 켜지 않았을 때: `features.anomalyRank.enabled`가 꺼진 `anomaly_rank`
     - 그 사람에게 k8s-service가 확인하는 권한(`resource.hygiene.scan` 또는 `admin.hygiene.read`·`resource.helm.read`·`resource.policyreport.read`·`resource.cost.read`·`resource.networkflow.read`)이 없을 때
   - 결과가 길면 시리즈 100개, 점 120개, 로그 200줄, 행 200개, 그래프 노드 200개/엣지 400개, 텍스트 64 KB에서 자릅니다.
+  - `ai.toolResultDetails`(기본 꺼짐)를 켜면 결과에 이미 가진 것만으로(더 읽지 않음) 다음을 붙입니다.
+    - 지표·로그·트레이스·타임라인 도구: `cut`은 잘린 결과에서 보인 양("시리즈 340개 중 100개", 저장소가 한도에서 멈추고 남은 수를 알려 주지 않으면 "200줄, 전체 수는 모름"), `default_window`는 호출이 시간 범위를 정하지 않았을 때 읽은 범위(1시간, 타임라인은 24시간), `empty_reason`은 빈 결과가 까닭을 말하지 않던 곳의 까닭(순간 `prometheus_query`는 마지막 5분의 샘플만 읽음, 수집 대상 없음)입니다.
+    - 채팅과 알림 조사의 모든 읽기 도구: 결과 앞에 `console_links` — 호출과 결과가 가리키는 오브젝트의 콘솔 경로(그 종류 목록 화면에서 연 드로어 `?detail=<Kind>/<namespace>/<name>`, Pod 드로어에는 로그와 지표가 있음 · Alerts의 알림 · 네임스페이스의 Resource Graph)로, 모델이 답에 링크로 붙일 수 있습니다. 상대 경로이고 콘솔 자신의 화면과 Kubernetes 이름 규칙을 따르는 이름으로만 만들므로, 링크는 읽은 그 콘솔을 엽니다. 트레이스 화면은 없어 트레이스에는 링크가 없습니다.
   - 범위 질의 결과(`prometheus_query`·`loki_query` 지표 질의)가 모델이 한 번에 읽는 길이(모델의 도구 결과 최대 길이, 정하지 않으면 6,000자)를 넘으면, 자르는 대신 값이 큰 시리즈 10개의 최저·최고·평균·마지막 값과 12점 개요로 줄여서 줍니다.
     그래프로 그린 결과도 같은 요약을 씁니다.
   - `gitops_status`는 Argo CD Application CR을 그 사람 권한으로 읽어 sync, health, 마지막 operation, 오류 조건, OutOfSync 리소스를 앱별로 정리합니다.

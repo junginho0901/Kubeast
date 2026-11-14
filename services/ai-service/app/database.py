@@ -156,7 +156,7 @@ class AlertInvestigation(Base):
     # times a stopping ai-service put it back in the queue; a second stop ends it failed (00029)
     stop_requeues = Column(Integer, nullable=False, default=0, server_default="0")
     # what the server read of the report's rca block and the hypothesis ledger, null without
-    # features.alertInvestigation.ledger (00029, investigation/result.py)
+    # features.alertInvestigation.ledger (00030, investigation/result.py)
     result = Column(JSON, nullable=True)
 
 
@@ -205,7 +205,7 @@ class ClaudeCodeSlot(Base):
 
 # Schema version this build needs — the newest file in
 # services/pkg/dbmigrate/migrations (goose records it in goose_db_version).
-REQUIRED_SCHEMA_VERSION = 29
+REQUIRED_SCHEMA_VERSION = 30
 
 
 async def read_schema_version(engine) -> int:

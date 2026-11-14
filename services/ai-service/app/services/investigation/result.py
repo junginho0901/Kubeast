@@ -5,7 +5,7 @@ With either on, the report ends with one fenced rca block (investigation/rca.py)
 the calls that show it), the path from the cause to the symptom, what was ruled out, whether there is a fault at all,
 and with the ledger its hypotheses (investigation/ledger.py). The causes, path, ruled-out and no-fault keys are the
 shape the AI evaluation reads. The server takes the block out of the report and keeps what it read in the row's
-`result` (dbmigrate 00029), each call number given with its tool, so the report window, the floating chat, the MCP
+`result` (dbmigrate 00030), each call number given with its tool, so the report window, the floating chat, the MCP
 `investigations` read and the AI evaluation stay with the calls they came from; without the ledger `hypotheses` is
 empty. With both switches off nothing here runs and `result` stays null.
 """
