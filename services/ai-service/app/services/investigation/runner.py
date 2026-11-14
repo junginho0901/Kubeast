@@ -165,7 +165,8 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     context = ToolContext(session_id=f"investigation:{row.id}")
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language)},
-        {"role": "user", "content": inv_prompt.alert_message(cluster=row.cluster, alert=alert_view(row))},
+        {"role": "user", "content": inv_prompt.alert_message(
+            cluster=row.cluster, alert=alert_view(row), numbers=getattr(service.tool_server, "numbers", None))},
     ]
     tool_log: list[dict[str, Any]] = []
 

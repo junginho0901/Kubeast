@@ -140,6 +140,30 @@
    "refused": ["<EMAIL_2>"]
   },
   {
+   "name": "apply a ConfigMap holding a phone number read as a numbered placeholder",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: app\n  namespace: shop\ndata:\n  ONCALL: <PHONE_1>\n  OWNER_ID: <RRN_2>\n"},
+   "refused": ["<PHONE_1>", "<RRN_2>"]
+  },
+  {
+   "name": "patch text escaping a numbered card placeholder",
+   "tool": "k8s_patch_resource",
+   "args": {"resource_type": "deployment", "resource_name": "web", "namespace": "shop", "patch": "{\"metadata\":{\"annotations\":{\"billing\":\"\\u003cCARD_3\\u003e\"}}}"},
+   "refused": ["<CARD_3>"]
+  },
+  {
+   "name": "apply a Secret with numbered placeholders inside encoded values",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: contact\n  namespace: shop\ndata:\n  oncall: b3duZXI6IDxQSE9ORV80Pg==\n  billing: Y29udGFjdD08Q0FSRF8xMj4=\n"},
+   "refused": ["<PHONE_4>", "<CARD_12>"]
+  },
+  {
+   "name": "names of the kinds in angle brackets without a number",
+   "tool": "k8s_apply_manifest",
+   "args": {"yaml_content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: app\n  namespace: shop\ndata:\n  template: <PHONE_NUMBER> <CARD> <RRN_> <SSN_1>\n"},
+   "refused": []
+  },
+  {
    "name": "apply a SecretList whose items hold the screen's mask",
    "tool": "k8s_apply_manifest",
    "args": {"yaml_content": "apiVersion: v1\nkind: SecretList\nitems:\n- metadata:\n    name: db\n    namespace: shop\n  stringData:\n    password: '***'\n"},

@@ -18,8 +18,9 @@ import (
 const maskedWriteShown = 5
 
 var (
-	// A masked value (its name may hold spaces: a key's name, k8s_diff's "new value") and a personal-data address (REDACTION_PII).
-	writePlaceholder  = regexp.MustCompile(`(?:<|\\u003[cC])(REDACTED:[^<>"'\\\r\n]*|EMAIL_[0-9]+)(?:>|\\u003[eE])`)
+	// A masked value (its name may hold spaces: a key's name, k8s_diff's "new value") and a numbered personal-data value
+	// (REDACTION_PII: services/pkg/redact numberedKinds).
+	writePlaceholder  = regexp.MustCompile(`(?:<|\\u003[cC])(REDACTED:[^<>"'\\\r\n]*|(?:EMAIL|PHONE|RRN|CARD)_[0-9]+)(?:>|\\u003[eE])`)
 	writeEncodedToken = regexp.MustCompile(`[A-Za-z0-9+/]{16,}={0,2}`)
 	// k8s-service's Secret mask means nothing outside a Secret, where three stars may be a value. A SecretList's items
 	// without a kind of their own are Secrets to kubectl.

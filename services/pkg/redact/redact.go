@@ -543,7 +543,7 @@ func valueLooksHarmless(v string) bool {
 	if v == "" || v == "null" || v == "~" || v == "[]" || v == "{}" || v == "[" || v == "{" || v == "|" || v == ">" || v == "|-" || v == ">-" {
 		return true
 	}
-	if strings.HasPrefix(v, "<REDACTED") || strings.HasPrefix(v, "<set to the key") || strings.HasPrefix(v, "<EMAIL") {
+	if strings.HasPrefix(v, "<REDACTED") || strings.HasPrefix(v, "<set to the key") || isNumberedPlaceholder(v) {
 		return true
 	}
 	switch strings.ToLower(v) {
@@ -791,8 +791,14 @@ var (
 )
 
 // Text redacts free text (kubectl output, logs, YAML, JSON). Secret documents
-// are stripped even when o.Enabled is false.
+// are stripped even when o.Enabled is false. The personal-data numbers start at 1 for each text.
 func Text(s string, o Options) (string, Stats) {
+	return TextNumbered(s, o, nil)
+}
+
+// TextNumbered is Text numbering personal data with n, which keeps a value's number across the texts it is given; nil
+// starts a table for this text.
+func TextNumbered(s string, o Options, n *Numbers) (string, Stats) {
 	var st Stats
 	if s == "" {
 		return s, st
@@ -884,31 +890,27 @@ func Text(s string, o Options) (string, Stats) {
 		s = replaceOnCredentialLines(inlineQuoted, s, maskInlineQuoted, &st, "key_name")
 		s = replaceOnCredentialLines(inlinePair, s, maskInlinePair, &st, "key_name")
 	}
-	return redactPII(s, o, &st), st
+	return redactPII(s, o, &st, n), st
 }
 
-// redactPII applies the personal-data rules; one address keeps one placeholder across the text it is given.
-func redactPII(s string, o Options, st *Stats) string {
+// redactPII applies the personal-data rules: each value gets the placeholder of its kind with its number in n
+// (<EMAIL_1>, <RRN_1>, <CARD_1>, <PHONE_1>), the same number wherever n meets it again.
+func redactPII(s string, o Options, st *Stats, n *Numbers) string {
 	if !o.PII {
 		return s
 	}
-	if o.on("email") {
-		seen := map[string]int{}
-		s = replaceCount(emailAddr, s, func(m string) string {
-			if _, ok := seen[m]; !ok {
-				seen[m] = len(seen) + 1
-			}
-			return fmt.Sprintf("<EMAIL_%d>", seen[m])
-		}, st, "email")
+	if n == nil {
+		n = &Numbers{}
 	}
-	if o.on("rrn") {
-		s = replaceCount(krRRN, s, func(string) string { return "<REDACTED:rrn>" }, st, "rrn")
-	}
-	if o.on("card") {
-		s = replaceCount(cardNum, s, func(string) string { return "<REDACTED:card>" }, st, "card")
-	}
-	if o.on("phone") {
-		s = replaceCount(krPhone, s, func(string) string { return "<REDACTED:phone>" }, st, "phone")
+	n.startAfterHeld(s)
+	for _, rule := range []struct {
+		kind string
+		re   *regexp.Regexp
+	}{{"email", emailAddr}, {"rrn", krRRN}, {"card", cardNum}, {"phone", krPhone}} {
+		if o.on(rule.kind) {
+			kind := rule.kind
+			s = replaceCount(rule.re, s, func(m string) string { return n.placeholder(kind, m) }, st, kind)
+		}
 	}
 	return s
 }
