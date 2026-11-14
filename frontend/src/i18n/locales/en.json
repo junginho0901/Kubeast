@@ -4901,7 +4901,7 @@
     "result": {
       "title": "Result and hypotheses",
       "missing": "The report did not end with a result block the server could read, so it has no causes or hypotheses to show.",
-      "askedAgain": "The model was asked once more without tools, because a hypothesis was not closed or the block was missing.",
+      "askedAgain": "The model was asked once more without tools, because a cause or a hypothesis was not shown by the calls or the block was missing.",
       "askFailed": "The model was asked once more without tools and that call failed: this is the first report.",
       "noFault": "The report finds no fault.",
       "causes": "Causes",

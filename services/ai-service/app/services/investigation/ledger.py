@@ -1,6 +1,6 @@
 """The hypothesis ledger of an investigation (features.alertInvestigation.ledger, off by default).
 
-The rca block (investigation/result.py) carries the hypotheses the model weighed: each with what it says, the object
+The rca block (investigation/rca.py, the one mechanism this ledger shares with the evidence check) carries the hypotheses the model weighed: each with what it says, the object
 it is about, its state — cause, symptom, ruled_out or blocked — and the calls whose results speak for it and against
 it. Tool calls are not tagged with a hypothesis as they run (that would change every tool's definition): the model
 ties calls to hypotheses at the end, by their numbers. The server then holds each hypothesis to this run's calls:
@@ -11,43 +11,24 @@ ties calls to hypotheses at the end, by their numbers. The server then holds eac
 - every number names a call of this run; a state outside the four is open.
 
 A report whose hypotheses are not all closed (or that has none while it finds a fault) is asked for once more,
-without tools. What is still open after that stays in the result with its reasons, which the report window shows.
+without tools (with the evidence check's problems in the same message when that is on). What is still open after that
+stays in the result (investigation/result.py) with its reasons, which the report window shows.
 """
 
 from __future__ import annotations
 
-import json
 from typing import Any, Optional
 
+from app.services.investigation import rca
 from app.services.investigation import result as inv_result
+from app.services.investigation.rca import FINAL_NOTE  # noqa: F401 - the shared block
 
 STATES = ("cause", "symptom", "ruled_out", "blocked")
 OPEN = "open"
 MAX_HYPOTHESES = 12
-_ARGS_CHARS = 200
 
-INSTRUCTION = (
-    "\n\nEach tool result starts with its call number, as [call 3]. At the very end of the report, after the headings, add "
-    "one fenced code block tagged rca holding one JSON object:\n"
-    "```rca\n"
-    '{"no_fault": false,\n'
-    ' "causes": [{"resource": "Kind/namespace/name", "kind": "crash|oom|image|config_change|rollout|network_policy|dns|'
-    'resource_limit|quota|node|dependency_down|dependency_slow|storage|none", "started_at": "RFC3339 time or null", '
-    '"evidence": [1, 3]}],\n'
-    ' "path": ["Kind/namespace/name of the cause", "...", "Kind/namespace/name where the symptom shows"],\n'
-    ' "ruled_out": ["Kind/namespace/name"],\n'
-    ' "hypotheses": [{"id": "h1", "statement": "one sentence", "resource": "Kind/namespace/name", '
-    '"state": "cause|symptom|ruled_out|blocked", "for": [2], "against": [4], "blocked": "why it could not be checked"}]}\n'
-    "```\n"
-    "List every hypothesis you weighed, the ones you set aside too. Close each one: cause or symptom with the calls whose "
-    "results show it under \"for\", ruled_out with the calls that show it is not the cause under \"against\", blocked with "
-    "the reason it could not be checked (a refused or missing tool) under \"blocked\". \"evidence\", \"for\" and "
-    "\"against\" hold call numbers only. If you find no fault, answer \"no_fault\": true and \"causes\": []. The server "
-    "checks the block against this investigation's calls, takes it out of the report and shows the hypotheses as a table "
-    "under it: do not write that table yourself."
-)
-
-FINAL_NOTE = " End it with the rca block."
+# The instruction with the ledger alone; the runner asks rca.instruction for the switches that are on.
+INSTRUCTION = rca.instruction(evidence=False, hypotheses=True)
 
 
 def _state(value: Any) -> str:
@@ -95,13 +76,9 @@ def check(block: Optional[dict], tool_log: list[dict[str, Any]]) -> list[dict[st
 
 
 def needs_asking(status: str, block: Optional[dict], hypotheses: list[dict[str, Any]]) -> bool:
-    """Whether the report is asked for once more: no valid block, a hypothesis not closed, or none at all while the
-    block finds a fault."""
-    if status != "ok":
-        return True
-    if any(not h["closed"] for h in hypotheses):
-        return True
-    return not hypotheses and (block or {}).get("no_fault") is not True
+    """Whether the report is asked for once more with the ledger alone: no valid block, a hypothesis not closed, or
+    none at all while the block finds a fault (rca.check's failures)."""
+    return status != "ok" or bool(rca.hypothesis_failures(block, hypotheses))
 
 
 _REASONS = {
@@ -118,23 +95,7 @@ def reason_text(problem: dict[str, Any]) -> str:
 
 
 def ask_again(status: str, block: Optional[dict], hypotheses: list[dict[str, Any]], tool_log: list[dict[str, Any]]) -> str:
-    """The second ask, without tools: the whole report again, every hypothesis closed."""
-    if status != "ok":
-        head = "Your report did not end with a valid rca block, so the server could not read its hypotheses."
-    elif not hypotheses:
-        head = 'Your rca block lists no hypotheses while "no_fault" is not true.'
-    else:
-        head = "The server checked the hypotheses against this investigation's calls. These are not closed:\n" + "\n".join(
-            f"- {h['id']} ({h['statement'] or '-'}): " + "; ".join(reason_text(p) for p in h.get("problems") or [])
-            for h in hypotheses if not h["closed"])
-    calls = "\n".join(
-        f"[call {i}] {e.get('tool', '')} "
-        f"{json.dumps(e.get('args') or {}, ensure_ascii=False, sort_keys=True, default=str)[:_ARGS_CHARS]} — "
-        + ("failed" if e.get("error") else "answered")
-        for i, e in enumerate(tool_log, 1))
-    return (
-        f"{head}\n\nThe calls of this investigation:\n{calls or '(none)'}\n\n"
-        "Write the whole report again, under the same headings, ending with the rca block. Close every hypothesis: give "
-        "the calls that show it, mark it ruled_out with the calls that show it is not the cause, or mark it blocked with "
-        "the reason. No tools now."
-    )
+    """The second ask with the ledger alone (rca.ask_again): the whole report again, every hypothesis closed."""
+    checked = rca.Checked("", block, status, hypotheses=hypotheses,
+                          failures=rca.hypothesis_failures(block, hypotheses) if status == "ok" else [])
+    return rca.ask_again(checked, rca.rows(tool_log), evidence=False, ledger=True)

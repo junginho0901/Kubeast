@@ -1,20 +1,20 @@
-"""The structured result of an investigation (features.alertInvestigation.ledger, off by default).
+"""The structured result of an investigation (features.alertInvestigation.evidenceCheck or ledger, both off by
+default).
 
-With it on, each tool result the model reads starts with its call number ([call 3]: the call's place in the run's
-tool_calls, step 0's read included), and the report ends with one fenced rca block — the causes (resource, kind,
-start, the calls that show it), the path from the cause to the symptom, what was ruled out, whether there is a fault
-at all, and the hypotheses of the ledger (investigation/ledger.py). The causes, path, ruled-out and no-fault keys are
-the shape the AI evaluation reads. The server takes the block out of the report and keeps what it read in the row's
-`result` (dbmigrate 00029), each call number given with its tool, so the report window, the floating chat and the
-MCP `investigations` read stay with the calls they came from. Without the switch nothing here runs and `result`
-stays null.
+With either on, the report ends with one fenced rca block (investigation/rca.py) — the causes (resource, kind, start,
+the calls that show it), the path from the cause to the symptom, what was ruled out, whether there is a fault at all,
+and with the ledger its hypotheses (investigation/ledger.py). The causes, path, ruled-out and no-fault keys are the
+shape the AI evaluation reads. The server takes the block out of the report and keeps what it read in the row's
+`result` (dbmigrate 00029), each call number given with its tool, so the report window, the floating chat, the MCP
+`investigations` read and the AI evaluation stay with the calls they came from; without the ledger `hypotheses` is
+empty. With both switches off nothing here runs and `result` stays null.
 """
 
 from __future__ import annotations
 
-import json
-import re
 from typing import Any, Optional
+
+from app.services.investigation.rca import split  # noqa: F401 - the shared block, read here by older callers
 
 VERSION = 1
 TAG = "rca"
@@ -24,23 +24,6 @@ MAX_PATH = 12
 MAX_RULED_OUT = 20
 MAX_CALLS = 20
 MAX_TEXT = 300
-
-_BLOCK = re.compile(r"```[ \t]*rca[ \t]*\r?\n(.*?)```", re.S)
-
-
-def split(answer: str) -> tuple[str, Optional[dict], str]:
-    """(the answer without its rca blocks, the last block's object, "ok" | "missing" | "invalid")."""
-    blocks = _BLOCK.findall(answer or "")
-    report = _BLOCK.sub("", answer or "").rstrip()
-    if not blocks:
-        return report, None, "missing"
-    try:
-        block = json.loads(blocks[-1])
-    except ValueError:
-        return report, None, "invalid"
-    if not isinstance(block, dict):
-        return report, None, "invalid"
-    return report, block, "ok"
 
 
 def text(value: Any) -> str:
@@ -83,8 +66,10 @@ def _names(values: Any, limit: int) -> list[str]:
 
 
 def shape(block: Optional[dict], status: str, tool_log: list[dict[str, Any]], hypotheses: list[dict[str, Any]],
-          *, asked_again: bool = False, ask_failed: bool = False) -> dict[str, Any]:
-    """The row's `result`: what the server read of the block, with each call number given as its call."""
+          *, asked_again: bool = False, ask_failed: bool = False,
+          failures: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
+    """The row's `result`: what the server read of the block, with each call number given as its call. `failures`:
+    what the checks still found wrong (rca.check), kept when given."""
     block = block if isinstance(block, dict) else {}
     causes = []
     for c in (block.get("causes") if isinstance(block.get("causes"), list) else [])[:MAX_CAUSES]:
@@ -106,4 +91,6 @@ def shape(block: Optional[dict], status: str, tool_log: list[dict[str, Any]], hy
     }
     if ask_failed:
         out["ask_failed"] = True
+    if failures is not None:
+        out["failures"] = failures
     return out

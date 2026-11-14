@@ -1,9 +1,9 @@
 """The evidence check of an investigation's report (features.alertInvestigation.evidenceCheck, off by default).
 
-With it on, each tool result the model reads starts with its call number ([call 3]), and the report ends with an rca
-block: one fenced JSON object of causes (resource, kind, start, the numbers of the calls that show it), the path from
-the cause to the symptom, what was ruled out and whether there is a fault at all — the same shape the AI evaluation
-asks for. Before the report is kept, the server holds each cause to this run's calls:
+With it on, the report ends with an rca block (investigation/rca.py, the one mechanism this check shares with the
+hypothesis ledger): one fenced JSON object of causes (resource, kind, start, the numbers of the calls that show it),
+the path from the cause to the symptom, what was ruled out and whether there is a fault at all — the same shape the AI
+evaluation asks for. Before the report is kept, the server holds each cause to this run's calls:
 
 - each number names a call of this run that answered without an error (a refused repeat stands for the call it
   repeated);
@@ -12,48 +12,27 @@ asks for. Before the report is kept, the server holds each cause to this run's c
 - the cause does not start after the alert did.
 
 When a cause fails, or the block is missing, the model is asked once more without tools to mark such a cause as a
-hypothesis or give the call that shows it. What still fails is listed under the report by the server, as not
-verified. The block itself is taken out of the report that is kept.
+hypothesis or give the call that shows it (with the ledger's problems in the same message when that is on). What still
+fails is listed under the report by the server, as not verified. The block itself is taken out of the report that is
+kept.
 """
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-KINDS = ("crash", "oom", "image", "config_change", "rollout", "network_policy", "dns", "resource_limit", "quota", "node",
-         "dependency_down", "dependency_slow", "storage", "none")
+from app.services.investigation import rca
+from app.services.investigation.numbers import tag  # noqa: F401 - the numbers the causes name
+from app.services.investigation.rca import KINDS, FINAL_NOTE, split  # noqa: F401 - the shared block
 
-INSTRUCTION = (
-    "\n\nEach tool result starts with its call number, as [call 3]. At the very end of the report, after the headings, add "
-    "one fenced code block tagged rca holding one JSON object:\n"
-    "```rca\n"
-    '{"no_fault": false,\n'
-    f' "causes": [{{"resource": "Kind/namespace/name", "kind": "{"|".join(KINDS)}", '
-    '"started_at": "RFC3339 time or null", "evidence": [1, 3]}],\n'
-    ' "path": ["Kind/namespace/name of the cause", "...", "Kind/namespace/name where the symptom shows"],\n'
-    ' "ruled_out": ["Kind/namespace/name"]}\n'
-    "```\n"
-    '"evidence" lists the numbers of the calls whose results show the cause. A cause no result shows is a hypothesis: '
-    'say so in the report and leave it out of "causes". If you find no fault, answer "no_fault": true and "causes": []. '
-    "The server checks the block against this investigation's calls and takes it out of the report that is kept."
-)
-
-FINAL_NOTE = " End it with the rca block."
+# The instruction with this check alone; the runner asks rca.instruction for the switches that are on.
+INSTRUCTION = rca.instruction(evidence=True, hypotheses=False)
 
 # A cause may be given a little after the alert's start: the alert's time and the model's are both rounded.
 START_TOLERANCE = timedelta(seconds=120)
-
-_BLOCK = re.compile(r"```[ \t]*rca[ \t]*\r?\n(.*?)```", re.S)
-_ARGS_CHARS = 200
-
-
-def tag(number: int, text: str) -> str:
-    return f"[call {number}]\n{text}"
-
 
 @dataclass
 class Read:
@@ -71,21 +50,6 @@ class Problem:
     resource: str
     reason: str                  # no_evidence | bad_calls | name_missing | after_alert
     values: dict[str, Any] = field(default_factory=dict)
-
-
-def split(answer: str) -> tuple[str, Optional[dict], str]:
-    """(the answer without its rca blocks, the last block's object, "ok" | "missing" | "invalid")."""
-    blocks = _BLOCK.findall(answer or "")
-    report = _BLOCK.sub("", answer or "").rstrip()
-    if not blocks:
-        return report, None, "missing"
-    try:
-        block = json.loads(blocks[-1])
-    except ValueError:
-        return report, None, "invalid"
-    if not isinstance(block, dict) or not isinstance(block.get("causes") or [], list):
-        return report, None, "invalid"
-    return report, block, "ok"
 
 
 def resource_name(resource: str) -> str:
@@ -185,22 +149,11 @@ def reason_text(p: Problem, language: str = "en") -> str:
 
 
 def ask_again(status: str, problems: list[Problem], reads: list[Read]) -> str:
-    """The second ask, without tools: the report again, causes no call shows marked as hypotheses."""
-    if status != "ok":
-        head = "Your report did not end with a valid rca block, so the server could not check its causes."
-    else:
-        head = "The server checked the rca block against this investigation's calls. These causes are not shown by them:\n" + "\n".join(
-            f"- {p.resource or '(no resource)'}: {reason_text(p)}" for p in problems)
-    calls = "\n".join(
-        f"[call {i}] {r.tool} {json.dumps(r.args, ensure_ascii=False, sort_keys=True, default=str)[:_ARGS_CHARS]} — "
-        + ("the same read as call " + str(r.same_as) if r.same_as else "failed" if r.failed else "answered")
-        for i, r in enumerate(reads, 1))
-    return (
-        f"{head}\n\nThe calls of this investigation:\n{calls or '(none)'}\n\n"
-        "Write the whole report again, under the same headings, ending with the rca block. A cause that no call shows is a "
-        "hypothesis: say so in the report and leave it out of \"causes\"; when another call does show it, give that call's "
-        "number. No tools now."
-    )
+    """The second ask with this check alone (rca.ask_again): the report again, causes no call shows marked as
+    hypotheses."""
+    calls = [(r.tool, r.args, f"the same read as call {r.same_as}" if r.same_as else "failed" if r.failed else "answered")
+             for r in reads]
+    return rca.ask_again(rca.Checked("", None, status, cause_problems=problems), calls, evidence=True, ledger=False)
 
 
 _NOTE = {

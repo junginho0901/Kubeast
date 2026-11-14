@@ -68,7 +68,7 @@ export function resultNotes(result: InvestigationResult, tr: Tr): string[] {
   if (result.asked_again) {
     notes.push(result.ask_failed
       ? tr('investigations.result.askFailed', 'The model was asked once more without tools and that call failed: this is the first report.')
-      : tr('investigations.result.askedAgain', 'The model was asked once more without tools, because a hypothesis was not closed or the block was missing.'))
+      : tr('investigations.result.askedAgain', 'The model was asked once more without tools, because a cause or a hypothesis was not shown by the calls or the block was missing.'))
   }
   return notes
 }

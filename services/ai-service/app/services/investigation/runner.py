@@ -13,11 +13,12 @@ with changes_first what changed in the change window, read as step 0 before the
 first model call (investigation/windows.py). With any of rules, changes_first,
 evidence_check or ledger on, each tool result the model reads starts with its call
 number, step 0 being call 1 (investigation/numbers.py). With ai.refuseRepeatedReads a read
-repeated within the run is not run again (app/services/ai/repeats.py); with
-evidence_check the report's causes are held to the run's calls before it is kept
-(investigation/evidence.py). With ledger on, the report ends with the rca block: the runner takes it out, asks
-once more without tools while a hypothesis is open, and returns what it read as `result` (investigation/result.py,
-investigation/ledger.py).
+repeated within the run is not run again (app/services/ai/repeats.py). With
+evidence_check or ledger on, the report ends with the rca block (investigation/rca.py):
+the runner takes it out once, holds its causes to the run's calls (evidence_check,
+investigation/evidence.py) and its hypotheses to their states (ledger,
+investigation/ledger.py), asks once more without tools with every problem of both in
+one message, and returns what it read as `result` (investigation/result.py).
 """
 
 from __future__ import annotations
@@ -45,8 +46,8 @@ from app.services.investigation import evidence
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import settings as inv_settings
 from app.services.investigation import inbox, skip_reasons, store
-from app.services.investigation import ledger as inv_ledger
 from app.services.investigation import numbers
+from app.services.investigation import rca
 from app.services.investigation import result as inv_result
 from app.services.investigation import webhook
 from app.services.investigation import windows as inv_windows
@@ -148,41 +149,50 @@ def used_fields(progress: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-async def verify_report(service, messages: list[dict[str, Any]], answer: str, reads: list, row, cfg, *, remaining,
-                        usage: dict[str, Any], progress: dict[str, Any]) -> tuple[str, int]:
-    """The evidence check (investigation/evidence.py): (the report to keep, the model calls it added — 0 or 1).
+async def settle(service, messages: list[dict[str, Any]], answer: str, *, tool_log: list[dict[str, Any]],
+                 reads: Optional[list], same_as: dict[int, int], row, cfg, remaining, usage: dict[str, Any],
+                 progress: dict[str, Any]) -> tuple[str, dict[str, Any], int]:
+    """The rca block, once for evidenceCheck and ledger (investigation/rca.py): (the report to keep, the row's
+    `result`, the model calls it added — 0 or 1).
 
-    A cause that no call of the run shows, or a report without its rca block, gets one more model call without tools
-    asking for the report again; its answer replaces the first only when it ends with a valid block. What still fails
-    is listed under the report. The block is taken out of the kept report. A second call that fails or finds the time
-    up leaves the first answer with that list."""
+    The answer is split once and the checks of the switches that are on read that one block. While one finds a
+    problem, one model call without tools asks for the report again with every problem of both in one message; its
+    answer replaces the first only when it has text and a block that can be read, and is checked the same way. A
+    second call that fails or finds the time up leaves the first answer. With evidenceCheck the causes still not
+    shown are listed under the report; with the ledger the hypotheses stay in `result` with their reasons."""
     from app.services.ai.tool_turn import answer_once
 
-    report, block, status = evidence.split(answer)
-    causes, problems = evidence.check(block, reads, row.starts_at) if block is not None else (0, [])
-    summary: dict[str, Any] = {"block": status, "causes": causes, "unsupported": len(problems), "asked_again": False}
-    if status == "ok" and not problems:
-        progress["evidence"] = {**summary, "block_after": status, "causes_after": causes, "unverified": 0}
-        return report, 0
-    summary["asked_again"] = True
-    again = messages + [{"role": "assistant", "content": answer},
-                        {"role": "user", "content": evidence.ask_again(status, problems, reads)}]
-    try:
-        second = await answer_once(service, again, remaining=remaining, lane="investigation", usage=usage)
-    except Exception as e:  # the model or the clock: the first answer stands, with what was not verified
-        log.warning("investigation %s: the evidence check's second call failed: %s", row.id, clean_error(e))
-        second = ""
-    if second:
-        report2, block2, status2 = evidence.split(second)
-        if block2 is not None:
-            report, status = report2, status2
-            causes, problems = evidence.check(block2, reads, row.starts_at)
-    # unverified: the causes listed under the report; None when the kept report has no block to check
-    progress["evidence"] = {**summary, "block_after": status, "causes_after": causes,
-                            "unverified": len(problems) if status == "ok" else None}
-    if status == "ok" and not problems:
-        return report, 1
-    return report + evidence.note(status, problems, cfg.language), 1
+    def check(text: str) -> rca.Checked:
+        return rca.check(text, tool_log=tool_log, reads=reads, alert_start=row.starts_at, evidence=cfg.evidence_check,
+                         ledger=cfg.ledger)
+
+    first = kept = check(answer)
+    asked = ask_failed = False
+    if first.failures:
+        asked = True
+        ask = rca.ask_again(first, rca.rows(tool_log, same_as), evidence=cfg.evidence_check, ledger=cfg.ledger)
+        try:
+            second = await answer_once(service, messages + [{"role": "assistant", "content": answer},
+                                                            {"role": "user", "content": ask}],
+                                       remaining=remaining, lane="investigation", usage=usage)
+        except Exception as e:  # the model or the clock: the first answer stands
+            log.warning("investigation %s: the second ask failed: %s", row.id, clean_error(e))
+            second, ask_failed = "", True
+        if second:
+            again = check(second)
+            if again.status == "ok" and again.report.strip():
+                kept = again
+    report = kept.report
+    if cfg.evidence_check:
+        # unverified: the causes listed under the report; None when the kept report has no block to check
+        progress["evidence"] = {"block": first.status, "causes": first.causes, "unsupported": len(first.cause_problems),
+                                "asked_again": asked, "block_after": kept.status, "causes_after": kept.causes,
+                                "unverified": len(kept.cause_problems) if kept.status == "ok" else None}
+        if kept.status != "ok" or kept.cause_problems:
+            report += evidence.note(kept.status, kept.cause_problems, cfg.language)
+    result = inv_result.shape(kept.block, kept.status, tool_log, kept.hypotheses, asked_again=asked, ask_failed=ask_failed,
+                              failures=kept.failures)
+    return report, result, int(asked)
 
 
 async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Optional[dict[str, Any]] = None) -> dict[str, Any]:
@@ -219,6 +229,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     repeats = repeats_mod.RepeatGuard() if repeats_mod.enabled() else None
     # What each call returned to the model, by its place in tool_log, for the evidence check; kept only while the run lasts.
     reads: Optional[list[evidence.Read]] = [] if cfg.evidence_check else None
+    same_as: dict[int, int] = {}  # a refused repeat's number → the number of the call it repeated
 
     async def call_tool(name: str, args: dict, step: int) -> tuple[str, Any, dict[str, Any]]:
         """The text the model reads, the tool's own answer (None when it did not run) and the call's log entry."""
@@ -259,6 +270,8 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
                 entry["requests"] = requests
         tool_log.append(entry)
         number = len(tool_log)  # the call's number, before another call can append
+        if seen is not None and seen.call is not None:
+            same_as[number] = seen.call
         read = None
         if reads is not None:
             read = evidence.Read(name, args, same_as=seen.call if seen is not None else None)
@@ -333,30 +346,26 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         if cfg.changes_first:
             first.append(await changes_first(windows))
     system = inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language, rules=cfg.rules)
-    if cfg.ledger or cfg.evidence_check:
-        tail = (inv_ledger.INSTRUCTION if cfg.ledger else "") + (evidence.INSTRUCTION if cfg.evidence_check else "")
+    if rca.on(cfg):
+        tail = rca.instruction(evidence=cfg.evidence_check, hypotheses=cfg.ledger)
     else:
         tail = numbers.NOTE if numbered else ""
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system + tail},
         {"role": "user", "content": inv_prompt.alert_message(cluster=row.cluster, alert=alert_view(row), context="\n\n".join(first))},
     ]
-    final_message = (inv_prompt.final_step_message(cfg.rules) + (inv_ledger.FINAL_NOTE if cfg.ledger else "")
-                     + (evidence.FINAL_NOTE if cfg.evidence_check else ""))
+    final_message = inv_prompt.final_step_message(cfg.rules) + (rca.FINAL_NOTE if rca.on(cfg) else "")
     turn = await run_tool_turn(service, messages, tools, run_tool, max_steps=cfg.max_steps, final_message=final_message,
                                remaining=remaining, lane="investigation", usage=progress["usage"])
     usage = turn.usage
     if not turn.answer:
         raise InvestigationError("the model returned no report")
     answer, steps, extra = turn.answer, turn.steps, {}
-    if reads is not None:
-        answer, asked = await verify_report(service, messages, answer, reads, row, cfg, remaining=remaining,
-                                            usage=usage, progress=progress)
+    if rca.on(cfg):
+        answer, extra["result"], asked = await settle(service, messages, answer, tool_log=tool_log, reads=reads,
+                                                      same_as=same_as, row=row, cfg=cfg, remaining=remaining,
+                                                      usage=usage, progress=progress)
         steps += asked
-    if cfg.ledger:
-        answer, result, asked = await settle_result(service, messages, answer, tool_log, remaining, progress["usage"], row.id)
-        steps += 1 if asked else 0
-        extra["result"] = result
     return {
         "report": answer + (inv_prompt.step_zero_note(unused, cfg.language) if unused else ""),
         "tool_calls": tool_log,
@@ -368,45 +377,6 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         "total_tokens": usage["total_tokens"] if usage["seen"] else None,
         **extra,
     }
-
-
-async def answer_without_tools(service, messages: list[dict[str, Any]], remaining, usage: dict[str, Any]) -> str:
-    """One more model call with no tools offered, on either loop's provider; its tokens count in the run's usage."""
-    from app.services.ai import usage as usage_acct
-
-    if getattr(service, "provider", None) == "claude-code":
-        done = await asyncio.wait_for(service.client.claude_code.complete(messages, lane="investigation"), timeout=remaining())
-        usage_acct.add_usage(usage, done.usage, prompt_chars=usage_acct.prompt_chars(messages, None))
-        return (done.text or "").strip()
-    resp = await asyncio.wait_for(
-        service.client.chat.completions.create(model=service.model, messages=messages, temperature=0.2,
-                                               max_tokens=limits.answer_tokens(service, 2048), timeout=min(120.0, remaining())),
-        timeout=remaining())
-    usage_acct.add_usage(usage, getattr(resp, "usage", None), prompt_chars=usage_acct.prompt_chars(messages, None))
-    return (resp.choices[0].message.content or "").strip()
-
-
-async def settle_result(service, messages: list[dict[str, Any]], answer: str, tool_log: list[dict[str, Any]], remaining,
-                        usage: dict[str, Any], inv_id: str) -> tuple[str, dict[str, Any], bool]:
-    """(the report without its rca block, the row's result, whether the model was asked again). A report whose block
-    is missing or holds a hypothesis that is not closed is asked for once more without tools; the second answer is
-    taken when its block can be read. A second call that fails keeps the first report."""
-    report, block, status = inv_result.split(answer)
-    hypotheses = inv_ledger.check(block, tool_log)
-    if not inv_ledger.needs_asking(status, block, hypotheses):
-        return report, inv_result.shape(block, status, tool_log, hypotheses), False
-    ask = inv_ledger.ask_again(status, block, hypotheses, tool_log)
-    try:
-        again = await answer_without_tools(
-            service, messages + [{"role": "assistant", "content": answer}, {"role": "user", "content": ask}], remaining, usage)
-    except Exception as e:  # the report is there; the second ask is not worth the run
-        log.warning("investigation %s: second ask failed: %s", inv_id, clean_error(e))
-        return report, inv_result.shape(block, status, tool_log, hypotheses, asked_again=True, ask_failed=True), True
-    report2, block2, status2 = inv_result.split(again)
-    if status2 == "ok" and report2.strip():
-        report, block, status = report2, block2, status2
-        hypotheses = inv_ledger.check(block, tool_log)
-    return report, inv_result.shape(block, status, tool_log, hypotheses, asked_again=True), True
 
 
 async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:

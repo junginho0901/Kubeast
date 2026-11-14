@@ -6,7 +6,8 @@ from datetime import datetime
 
 import pytest
 
-from app.services.investigation import evidence
+from app.services.investigation import evidence, numbers
+from app.services.investigation import rca as rca_block
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import runner
 from app.services.investigation.settings import InvestigationSettings, load
@@ -265,9 +266,13 @@ def never_checked(monkeypatch):
     def boom(*a, **k):
         raise AssertionError("the evidence check ran with evidenceCheck off")
 
-    for name in ("split", "check", "tag", "ask_again", "note"):
+    # what the runner calls for the check: the shared block (rca), the numbers and the check's own parts
+    for name in ("split", "check", "instruction", "ask_again"):
+        monkeypatch.setattr(rca_block, name, boom)
+    for name in ("check", "ask_again", "note"):
         monkeypatch.setattr(evidence, name, boom)
-    monkeypatch.setattr(runner, "verify_report", boom)
+    monkeypatch.setattr(numbers, "tag", boom)
+    monkeypatch.setattr(runner, "settle", boom)
 
 
 @pytest.mark.asyncio
