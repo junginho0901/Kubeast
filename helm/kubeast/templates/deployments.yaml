@@ -79,6 +79,7 @@ spec:
             {{- end }}
             {{- include "kubeast.dbCAVolumeMount" . | nindent 12 }}
             {{- include "kubeast.customCAVolumeMount" . | nindent 12 }}
+          {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8004) | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /health
@@ -95,12 +96,12 @@ spec:
         - name: auth-keys
           secret:
             secretName: {{ .Values.auth.signingKey.existingSecret | default "kubeast-auth-keys" }}
-            defaultMode: 0440
+            defaultMode: {{ include "kubeast.secretMode" $ }}
         {{- if include "kubeast.googleGroups" . }}
         - name: google-groups
           secret:
             secretName: {{ .Values.auth.oidc.googleGroups.credentialsSecret }}
-            defaultMode: 0440
+            defaultMode: {{ include "kubeast.secretMode" $ }}
             items:
               - key: credentials.json
                 path: credentials.json
@@ -123,7 +124,7 @@ spec:
         - name: audit-sink-{{ .name }}
           secret:
             secretName: {{ .secret }}
-            defaultMode: 0440
+            defaultMode: {{ include "kubeast.secretMode" $ }}
         {{- end }}
         {{- end }}
         {{- if include "kubeast.auditFileSinks" . }}
@@ -371,6 +372,7 @@ spec:
               readOnly: true
             {{- end }}
           {{- end }}
+          {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8002) | nindent 10 }}
           readinessProbe:
             httpGet:
               {{- if not $api }}
@@ -452,6 +454,7 @@ spec:
             {{- . | trim | nindent 12 }}
           {{- end }}
           {{- include "kubeast.serviceVolumeMountsBlock" . | nindent 10 }}
+          {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8003) | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /health

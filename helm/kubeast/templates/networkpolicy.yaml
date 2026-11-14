@@ -604,6 +604,26 @@ spec:
   policyTypes: [Egress]
   egress:
 {{- include "kubeast.np.postgresEgress" . }}
+---
+# the same rule as a hook one weight before the Job: release resources land only after the pre-install/pre-upgrade hooks
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-migrate-hook
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded,hook-failed
+spec:
+  podSelector:
+    matchLabels:
+      app: kubeast-migrate
+  policyTypes: [Egress]
+  egress:
+{{- include "kubeast.np.postgresEgress" . }}
 {{- end }}
 {{- if and .Values.metrics.enabled .Values.metrics.networkPolicy.from }}
 ---

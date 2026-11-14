@@ -4,13 +4,21 @@ without what later versions added, and with its image tag. Helm renders the deep
 such an upgrade with the fix before a template fails on a missing value. A published chart's defaults carry the
 version they belong to (`chartVersion`, which the release writes), so values from another release stop here even when
 it added no path; the list below still names paths a values file must hold. scripts/chart-upgrade-values.sh (CI)
-says when a path belongs there.
+says when a path belongs there. A values file copied from 0.7.6 or earlier holds no chartVersion and takes this
+chart's, but its global.imageTag is that release's tag, which a published chart stops too: a release tag, with or
+without its digest, must be this chart's; a tag that is not a release's (an image built by hand) goes on.
 */}}
 {{- $hint := "Upgrade with --reset-then-reuse-values instead (your values are kept, this chart's new defaults are added)." }}
 {{- if not (hasKey .Values "chartVersion") }}
 {{- fail (printf "the values have no chartVersion: they come from an earlier Kubeast chart, which --reuse-values keeps. %s" $hint) }}
 {{- else if and .Values.chartVersion (ne (toString .Values.chartVersion) .Chart.Version) }}
 {{- fail (printf "the values say chartVersion %s and this chart is %s: they come from an earlier Kubeast chart, kept by --reuse-values or by a values file copied from it. %s Leave chartVersion and global.imageTag out of a values file of your own." (toString .Values.chartVersion) .Chart.Version $hint) }}
+{{- else if .Values.chartVersion }}
+{{- $tag := toString .Values.global.imageTag }}
+{{- $release := regexReplaceAll "@sha256:[0-9a-f]{64}$" $tag "" }}
+{{- if and (regexMatch "^v[0-9]+\\.[0-9]+\\.[0-9]+$" $release) (ne $release (printf "v%s" .Chart.Version)) }}
+{{- fail (printf "the values say global.imageTag %s and this chart is %s: they come from an earlier Kubeast chart, by a values file copied from it, and would keep its images. Leave chartVersion and global.imageTag out of a values file of your own, or set global.imageTag to v%s." $tag .Chart.Version .Chart.Version) }}
+{{- end }}
 {{- end }}
 {{- range list "features.networkFlowMonitor" "multicluster.clientQPS" "streams" }}
 {{- $node := $.Values }}

@@ -3,7 +3,11 @@ import { fileURLToPath } from 'node:url'
 import { createElement, createRef, type ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import i18next from 'i18next'
+import { I18nextProvider, initReactI18next } from 'react-i18next'
+import { beforeAll, describe, expect, it } from 'vitest'
+import en from '../../i18n/locales/en.json'
 import type { GPUDashboardData, GPUDeviceMetric, GPUMetricsData } from '@/services/api'
 import { DistributionsSection } from './gpu-dashboard/DistributionsSection'
 import { GPUPodsCharts } from './gpupods/GPUPodsCharts'
@@ -149,6 +153,61 @@ describe('a GPU that reports only some of its series', () => {
     expect(unread).not.toContain('>0%<')
     expect(unread).not.toContain('NaN')
     expect(table({ gpus: 1, gpu_util: 0, memory_util_percent: 0 })).toContain('>0%<')
+  })
+})
+
+// The cluster's Prometheus is set but did not answer (the metrics read's 502 with its reason): GPU Nodes' real-time panel
+// and GPU Pods' metric columns say "Prometheus did not answer: <reason>" where their numbers go, as the dashboard's
+// section does, and the list's empty row stays the list's ("No items." on a cluster with no GPUs).
+describe('GPU metrics from a Prometheus that did not answer', () => {
+  const i18n = i18next.createInstance()
+  beforeAll(async () => {
+    await i18n.use(initReactI18next).init({ lng: 'en', resources: { en: { translation: en } }, interpolation: { escapeValue: false } })
+  })
+  const reason ='GPU metric gpu_util: metrics store error: prometheus request failed (status 503): store down'
+  const failure = { response: { status: 502, data: { detail: reason } }, message: 'Request failed with status code 502' }
+  const podsTable = (props: { pods?: unknown[]; metricsAvailable?: boolean; metricsFailure?: unknown }) => html(createElement(QueryClientProvider, { client: new QueryClient() },
+    createElement(GPUPodsTable, {
+      pagedPods: props.pods ?? [], sortedPodsLength: (props.pods ?? []).length, isLoading: false, metricsAvailable: props.metricsAvailable ?? false, metricsFailure: props.metricsFailure,
+      podMetricsMap: new Map(), showCharts: false, sortKey: null, setSortKey: () => {}, sortDir: 'asc', setSortDir: () => {}, currentPage: 1, setCurrentPage: () => {},
+      totalPages: 1, rowsPerPage: 25, tableContainerRef: createRef(), tableBodyRef: createRef(), theadRef: createRef(), firstRowRef: createRef(), openDetail: () => {}, tr,
+    } as unknown as Parameters<typeof GPUPodsTable>[0])))
+
+  it("GPU Nodes' real-time panel says why in its place, also with no GPU to show", () => {
+    const m = html(createElement(I18nextProvider, { i18n }, createElement(GPUNodesRealtimeMetrics, { gpusByHost: new Map(), metricsFailure: failure })))
+    expect(m).toBe(`<div class="card shrink-0" data-testid="gpu-realtime-not-answering"><h2 class="text-sm font-semibold text-ink mb-2">Real-time GPU Utilization</h2><p class="text-xs text-slate-400">Prometheus did not answer: ${reason}</p></div>`)
+  })
+
+  it('GPU Pods with no pods: the metric columns say why and the empty row is the empty list', () => {
+    const m = podsTable({ metricsFailure: failure })
+    expect(text(m, 'gpu-pods-metrics-not-answering')).toBe(`Prometheus did not answer: ${reason}`)
+    expect(m).toContain('No items.')
+    expect(m).toContain('colSpan="9"')
+    expect(m).not.toContain('table-load-error')
+  })
+
+  it('GPU Pods with pods: no number under the line', () => {
+    const m = podsTable({ pods: [{ name: 'p', namespace: 'ml', phase: 'Running', status: 'Running', gpu_requested: 1 }], metricsFailure: failure })
+    expect(text(m, 'gpu-pods-metrics-not-answering')).toBe(`Prometheus did not answer: ${reason}`)
+    const row = m.split('<tbody')[1].split('</tr>')[0]
+    const cells = [...row.matchAll(/<td[^>]*>(.*?)<\/td>/g)].map((c) => c[1].replace(/<[^>]+>/g, ''))
+    expect(cells.length).toBe(9)
+    expect(cells.slice(7)).toEqual(['-', '-'])
+  })
+
+  it('a cluster with no Prometheus has neither the columns nor the line', () => {
+    const m = podsTable({})
+    expect(m).not.toContain('gpu-pods-metrics-not-answering')
+    expect(m).not.toContain('Prometheus did not answer')
+    expect(m).toContain('colSpan="7"')
+    expect(html(createElement(GPUNodesRealtimeMetrics, { gpusByHost: new Map() }))).toBe('')
+  })
+
+  it('both screens read the failure as the dashboard does (a refusal is not the store not answering)', () => {
+    for (const file of ['./GPUPods.tsx', './gpu-nodes/useGPUNodesData.ts', './gpu-dashboard/useGPUDashboardData.ts']) {
+      const src = readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8')
+      expect(src, file).toContain('const metricsFailure = metricsAvailable ? null : prometheusNotAnswering(metricsError)')
+    }
   })
 })
 

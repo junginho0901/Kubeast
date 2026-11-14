@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useIsFetching, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { BellOff, BellRing, Bot, Check, ExternalLink, FileSearch, Loader2, RefreshCw, Search, UserCheck } from 'lucide-react'
 
@@ -20,8 +20,8 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import InvestigationReportModal from '@/components/InvestigationReportModal'
 import SilenceList from './SilenceList'
 import SilenceModal from './SilenceModal'
-import { alertInvestigationEnabled } from '@/utils/features'
-import { alertResource, liveLineOf, liveStateOf, severityChoices, silenceStart, storeCut, storeLimited, storeLimitedSeconds, storeRefetchMs, type LiveState } from '@/utils/alertInbox'
+import { alertStoreEnabledFor } from '@/utils/features'
+import { alertResource, inboxState, liveLineOf, liveStateOf, severityChoices, silenceStart, storeCut, storeLimited, storeLimitedSeconds, storeRefetchMs, type LiveState } from '@/utils/alertInbox'
 import { severityClass, skipReason, statusClass as investigationClass } from '@/utils/investigationFormat'
 import { investigateErrorText, investigateNowView } from '@/utils/investigateNow'
 import { formatAge, formatTime, utcTitle } from '@/utils/time'
@@ -58,8 +58,10 @@ export default function AlertInbox() {
   const features = useClusterFeatures()
   const { open: openDetail } = useResourceDetail()
   const { has } = usePermission()
+  const queryClient = useQueryClient()
   const [status, setStatus] = useState('')
   const [showSilences, setShowSilences] = useState(false)
+  const [newSilence, setNewSilence] = useState(false)
   const [severity, setSeverity] = useState('')
   const [mine, setMine] = useState(false)
   const [openOnly, setOpenOnly] = useState(false)
@@ -73,6 +75,7 @@ export default function AlertInbox() {
   const [page, setPage] = useState(1)
   const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: status })
 
+  const inbox = inboxState(features.data, features.isPlaceholderData)
   const filter = { status, severity, mine, open: openOnly, q: search, limit: rowsPerPage, offset: (page - 1) * rowsPerPage }
   // The rows on screen stay while another tab, page or search loads (never another cluster's); the pager, the counts
   // and the AI context follow the answer's own filter and page.
@@ -82,8 +85,13 @@ export default function AlertInbox() {
     placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[2] === currentCluster ? prev : undefined),
     refetchInterval: 30_000,
     retry: false,
+    enabled: inbox === 'on',
   })
-  const storeOn = !!currentCluster && !!features.data?.alertStore?.enabled && (features.data.alertStore.clusters ?? []).includes(currentCluster)
+  const storeOn = alertStoreEnabledFor(features.data, currentCluster)
+  // without the inbox the page is the store's silences
+  const inboxOff = inbox === 'off' || inbox === 'aiOff'
+  const silencesShown = showSilences || inboxOff
+  const silencesFetching = useIsFetching({ queryKey: ['alert-inbox', 'silences'] }) > 0
   // making and ending silences: the store takes writes (features.alertStore.silences) and the user holds resource.alert.silence
   const silenceWith = storeOn && features.data?.alertStore?.silences && has('resource.alert.silence')
     ? { maxHours: features.data.alertStore.silenceMaxHours ?? 168, clusterLabel: features.data.alertStore.clusterLabel ?? 'cluster' }
@@ -91,7 +99,7 @@ export default function AlertInbox() {
   const storeQuery = useQuery({
     queryKey: ['alert-inbox', 'store', currentCluster],
     queryFn: api.listAlertStoreAlerts,
-    enabled: storeOn,
+    enabled: storeOn && !inboxOff,
     // read again when the server said after a refusal at the request limit, not at the next minute
     refetchInterval: (q) => storeRefetchMs(q.state.error),
     retry: false,
@@ -138,7 +146,10 @@ export default function AlertInbox() {
     setParams(next, { replace: true })
   }
 
-  useAIContext(data ? {
+  useAIContext(inboxOff ? {
+    summary: `알림 수신함 없음 — ${inbox === 'aiOff' ? 'AI(ai.enabled)' : '알림 조사(features.alertInvestigation.enabled)'}가 꺼져 있어 들어오는 알림이 없음`,
+    data: { cluster: currentCluster, inbox_off: inbox === 'aiOff' ? 'ai.enabled' : 'features.alertInvestigation.enabled' },
+  } : data ? {
     summary: `알림 ${total}건 (울리는 중 ${counts.firing}, 상태 확인 안 됨 ${counts.stale}, 해결됨 ${counts.resolved})${shown.status ? ` — ${shown.status}만` : ''}`,
     data: {
       cluster: currentCluster,
@@ -160,7 +171,7 @@ export default function AlertInbox() {
         investigation_skip: r.investigation?.status === 'skipped' ? r.investigation.skip_reason || undefined : undefined,
       })),
     },
-  } : null, [data, store, currentCluster, limitedUntil, storeFailed?.reason, storeFailed?.shownFrom])
+  } : null, [inbox, data, store, currentCluster, limitedUntil, storeFailed?.reason, storeFailed?.shownFrom])
 
   const statusLabel = (s: string) => tr(`alertInbox.status.${s}`, s)
   const tab = (value: string, label: string, count?: number) => (
@@ -169,9 +180,9 @@ export default function AlertInbox() {
       type="button"
       onClick={() => { setStatus(value); setShowSilences(false) }}
       data-testid={`alert-tab-${value || 'all'}`}
-      className={`h-10 rounded-lg border px-3 text-sm ${!showSilences && status === value ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}
+      className={`h-10 rounded-lg border px-3 text-sm ${!silencesShown && status === value ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}
     >
-      {label}{count !== undefined && <span className={`ml-2 text-xs ${!showSilences && status === value ? 'text-white' : 'text-slate-400'}`}>{count}</span>}
+      {label}{count !== undefined && <span className={`ml-2 text-xs ${!silencesShown && status === value ? 'text-white' : 'text-slate-400'}`}>{count}</span>}
     </button>
   )
 
@@ -184,14 +195,16 @@ export default function AlertInbox() {
             {tr('alertInbox.subtitle', 'Every alert Alertmanager sent for this cluster, firing or resolved. The alert rule decides when it resolves; the marks here are kept in Kubeast.')}
           </p>
         </div>
-        <button type="button" onClick={() => refetch()} className="btn btn-primary flex items-center gap-2">
-          <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} /> {tr('alertInbox.refresh', 'Refresh')}
+        <button type="button" onClick={() => void (inboxOff ? queryClient.invalidateQueries({ queryKey: ['alert-inbox'] }) : refetch())} className="btn btn-primary flex items-center gap-2">
+          <RefreshCw className={`w-4 h-4 ${(inboxOff ? silencesFetching : isFetching) ? 'animate-spin' : ''}`} /> {tr('alertInbox.refresh', 'Refresh')}
         </button>
       </div>
 
-      {features.data && !alertInvestigationEnabled(features.data) && (
+      {inboxOff && (
         <div className="shrink-0 rounded-lg border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-sm text-amber-200" data-testid="alert-inbox-disabled">
-          {tr('alertInbox.disabled', 'The alert webhook is off on this installation (features.alertInvestigation.enabled), so no alerts come in.')}
+          {inbox === 'aiOff'
+            ? tr('alertInbox.disabledNoAI', 'The alert webhook is part of alert investigation, which needs AI: AI is off on this installation (ai.enabled), so no alerts come in.')
+            : tr('alertInbox.disabled', 'The alert webhook is off on this installation (features.alertInvestigation.enabled), so no alerts come in.')}
         </div>
       )}
       <RefreshFailure failure={!forbidden && rows.length ? failureOf(error, errorUpdatedAt) : null} />
@@ -200,19 +213,19 @@ export default function AlertInbox() {
           {tr('alertInbox.forbidden', 'Alerts cover the whole cluster: they are shown to users who can read this cluster without a namespace limit.')}
         </div>
       )}
-      {cut && !showSilences && (
+      {cut && !silencesShown && (
         <div className="shrink-0 rounded-lg border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-sm text-amber-200">
           {tr('alertInbox.storeCut', 'The alert store sent the first {{listed}} of its {{total}} alerts for this cluster (its limit, alertStore.maxAlerts): for an alert not among them, what Alertmanager says now is not shown.', cut)}
         </div>
       )}
 
-      {limitedSeconds !== null && !showSilences && (
+      {limitedSeconds !== null && !silencesShown && (
         <div className="shrink-0 rounded-lg border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-sm text-amber-200" data-testid="alert-store-limited">
           {tr('alertInbox.storeLimited', 'Alertmanager\'s state could not be read for now (request limit). Reading again in {{seconds}} s.', { seconds: limitedSeconds })}
         </div>
       )}
 
-      {storeFailed && !showSilences && (
+      {storeFailed && !silencesShown && (
         <div className="shrink-0 rounded-lg border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-sm text-amber-200" data-testid="alert-store-failed">
           {storeFailed.shownFrom !== null
             ? tr('alertInbox.storeFailedShown', 'Alertmanager\'s state could not be read: {{reason}}. What it said at {{time}} is shown.', { reason: storeFailed.reason, time: formatTime(storeFailed.shownFrom) })
@@ -220,7 +233,7 @@ export default function AlertInbox() {
         </div>
       )}
 
-      <div className={`relative shrink-0 ${showSilences ? 'hidden' : ''}`}>
+      <div className={`relative shrink-0 ${silencesShown ? 'hidden' : ''}`}>
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
         <input
           type="text"
@@ -234,21 +247,25 @@ export default function AlertInbox() {
       </div>
 
       <div className="flex flex-wrap items-end gap-3 shrink-0">
-        {tab('firing', statusLabel('firing'), counts.firing)}
-        {tab('stale', statusLabel('stale'), counts.stale)}
-        {tab('resolved', statusLabel('resolved'), counts.resolved)}
-        {tab('', tr('alertInbox.status.all', 'All'), counts.firing + counts.stale + counts.resolved)}
+        {!inboxOff && (
+          <>
+            {tab('firing', statusLabel('firing'), counts.firing)}
+            {tab('stale', statusLabel('stale'), counts.stale)}
+            {tab('resolved', statusLabel('resolved'), counts.resolved)}
+            {tab('', tr('alertInbox.status.all', 'All'), counts.firing + counts.stale + counts.resolved)}
+          </>
+        )}
         {storeOn && (
           <button
             type="button"
             onClick={() => setShowSilences(true)}
             data-testid="alert-tab-silences"
-            className={`h-10 inline-flex items-center gap-1 rounded-lg border px-3 text-sm ${showSilences ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}
+            className={`h-10 inline-flex items-center gap-1 rounded-lg border px-3 text-sm ${silencesShown ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}
           >
             <BellOff className="w-4 h-4" /> {tr('alertInbox.silence.tab', 'Silences')}
           </button>
         )}
-        <div className={`w-40 ${showSilences ? 'hidden' : ''}`}>
+        <div className={`w-40 ${silencesShown ? 'hidden' : ''}`}>
           <CustomDropdown
             label={tr('alertInbox.filter.severity', 'Severity')}
             value={severity}
@@ -256,18 +273,23 @@ export default function AlertInbox() {
             options={[{ value: '', label: tr('alertInbox.status.all', 'All') }, ...severities.map((s) => ({ value: s, label: s }))]}
           />
         </div>
-        <label className={`flex h-10 items-center gap-2 text-sm text-slate-300 ${showSilences ? 'hidden' : ''}`}>
+        <label className={`flex h-10 items-center gap-2 text-sm text-slate-300 ${silencesShown ? 'hidden' : ''}`}>
           <input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} data-testid="alert-filter-mine" />
           {tr('alertInbox.filter.mine', 'Assigned to me')}
         </label>
-        <label className={`flex h-10 items-center gap-2 text-sm text-slate-300 ${showSilences ? 'hidden' : ''}`}>
+        <label className={`flex h-10 items-center gap-2 text-sm text-slate-300 ${silencesShown ? 'hidden' : ''}`}>
           <input type="checkbox" checked={openOnly} onChange={(e) => setOpenOnly(e.target.checked)} data-testid="alert-filter-open" />
           {tr('alertInbox.filter.open', 'Not done')}
         </label>
+        {silencesShown && silenceWith && (
+          <button type="button" onClick={() => setNewSilence(true)} className="btn btn-primary ml-auto flex items-center gap-2" data-testid="silence-new">
+            <BellOff className="w-4 h-4" /> {tr('alertInbox.silence.new', 'New silence')}
+          </button>
+        )}
       </div>
 
-      {showSilences && <SilenceList canExpire={!!silenceWith} />}
-      <div ref={containerRef} className={`card flex-1 min-h-0 flex flex-col ${showSilences ? 'hidden' : ''}`}>
+      {silencesShown && storeOn && <SilenceList canExpire={!!silenceWith} />}
+      <div ref={containerRef} className={`card flex-1 min-h-0 flex flex-col ${silencesShown ? 'hidden' : ''}`}>
         <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
           <table className="w-full text-sm min-w-[820px] table-fixed" data-testid="alert-inbox-table">
             <thead ref={theadRef} className="text-slate-400">
@@ -345,14 +367,14 @@ export default function AlertInbox() {
                   </tr>
                 )
               })}
-              {isLoading && (
+              {(isLoading || inbox === 'wait') && (
                 <tr>
                   <td colSpan={COLUMNS} className="py-10 px-4 text-center text-slate-400">
                     <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />{tr('common.loading', 'Loading…')}</span>
                   </td>
                 </tr>
               )}
-              {!isLoading && rows.length === 0 && <TableEmptyRow colSpan={COLUMNS} resource="alerts" searching={!!search} error={forbidden ? undefined : error} onRetry={() => void refetch()} />}
+              {!isLoading && inbox === 'on' && rows.length === 0 && <TableEmptyRow colSpan={COLUMNS} resource="alerts" searching={!!search} error={forbidden ? undefined : error} onRetry={() => void refetch()} />}
             </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - rows.length} columnCount={COLUMNS} />
           </table>
@@ -360,7 +382,8 @@ export default function AlertInbox() {
         <ListPager currentPage={shown.page} totalPages={totalPages} total={total} rowsPerPage={shown.limit} onPageChange={setPage} />
       </div>
 
-      {openId && <AlertDetailModal id={openId} store={storeRead} silenceWith={silenceWith} onClose={() => open(null)} />}
+      {newSilence && silenceWith && <SilenceModal initial={{}} maxHours={silenceWith.maxHours} onClose={() => setNewSilence(false)} />}
+      {openId && inbox === 'on' && <AlertDetailModal id={openId} store={storeRead} silenceWith={silenceWith} onClose={() => open(null)} />}
     </div>
   )
 }

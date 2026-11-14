@@ -18,6 +18,7 @@ import type {
   TrafficResult,
   NetpolEffective,
   NetworkPolicyInfo,
+  ServiceBackendUsage,
   ServiceInfo,
 } from './types'
 
@@ -39,6 +40,12 @@ export const networkApi = {
 
   describeService: async (namespace: string, name: string): Promise<any> => {
     const { data } = await client.get(`/cluster/namespaces/${namespace}/services/${name}/describe`)
+    return data
+  },
+
+  serviceBackendUsage: async (namespace: string, name: string): Promise<ServiceBackendUsage> => {
+    // a Prometheus read of the drawer, not the Services list: its failure is said in its section (PrometheusSection)
+    const { data } = await client.get(`/cluster/namespaces/${encodeURIComponent(namespace)}/services/${encodeURIComponent(name)}/backend-usage`, { listStatus: false })
     return data
   },
 

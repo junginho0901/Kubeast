@@ -4,9 +4,11 @@ import { pageScrolls } from './list-pages'
 // The admin lists and the Settings page's lists that grow with the data are paged. A list page is as high as the
 // screen at 1440×900: its table, its footer (with the rows-per-page choice) and nothing below them, so the page
 // does not scroll. A window pages its rows ten at a time as the drawers do and keeps every row reachable: the
-// Pending window (its header box chooses every pending account, on every page), the Cluster access window (its
-// search looks in every grant) and the bulk upload's rows not created; Settings → My requests pages through every
-// request the server counts. Users, grants and requests are made for the run (e2e-fit- names) and removed.
+// Pending window (its header box chooses every pending account, on every page; its search finds an account on any
+// page and the box then chooses what it found), the Cluster access window (its search looks in every grant) and the
+// bulk upload's rows not created; Teams, Roles and Clusters search every row, not only the page shown; Settings → My
+// requests pages through every request the server counts. Users, teams, grants and requests are made for the run
+// (e2e-fit- names) and removed.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -161,6 +163,94 @@ test.describe('admin lists page and fit the screen', () => {
       await expect(win.getByTestId('admin-users-pending-chosen'), 'none chosen on any page').toHaveCount(0)
     } finally {
       await cleanup(request, admin)
+    }
+  })
+
+  test('Users: the Pending window search finds an account on any page and its header box chooses only what it found', async ({ page, request }) => {
+    test.setTimeout(120_000)
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    await cleanup(request, admin)
+    try {
+      const tag = `pfind-${Date.now().toString(36)}`
+      const made = await makeUsers(request, admin, tag, 14, 'Pending')
+      // two pending accounts the search does not find, so the header box has others to leave alone
+      await makeUsers(request, admin, `pother-${Date.now().toString(36)}`, 2, 'Pending')
+      const pending = (await allUsers(request, admin)).filter((u) => String(u.role?.name ?? '').toLowerCase() === 'pending')
+      expect(pending.length, 'pending accounts past one page of the window').toBeGreaterThan(10)
+
+      await page.goto('/admin/users')
+      await page.getByRole('button', { name: /Pending|대기/ }).first().click()
+      const win = page.getByTestId('admin-users-pending-window')
+      const rows = win.getByTestId('admin-users-pending-row')
+      const emails = () => rows.locator('td:nth-child(3)').allInnerTexts()
+      await expect(rows).toHaveCount(10, { timeout: 15_000 })
+
+      // the last account made sits past the first page; its email finds it alone
+      const last = made[made.length - 1]
+      await win.getByTestId('admin-users-pending-search').fill(last.email)
+      await expect.poll(emails, { message: 'the search finds the account wherever its page was' }).toEqual([last.email])
+
+      // the run's tag finds the fourteen made, over two pages; the header box chooses those, not the other pending ones
+      const found = pending.filter((u) => [u.name, u.email, u.team].some((v) => String(v ?? '').toLowerCase().includes(tag)))
+      expect(found.length, 'the accounts the tag names').toBe(14)
+      await win.getByTestId('admin-users-pending-search').fill(tag)
+      await expect(win.getByTestId('admin-users-pending-pages')).toContainText(`1-10 / ${found.length}`)
+      await win.getByTestId('admin-users-pending-select-all').check()
+      await expect(win.getByTestId('admin-users-pending-chosen')).toHaveText(`${found.length} selected, on every page`)
+      // with the search emptied, the other pending accounts are still unchosen
+      await win.getByTestId('admin-users-pending-search').fill('')
+      await expect(win.getByTestId('admin-users-pending-select-all')).not.toBeChecked()
+      await expect(win.getByTestId('admin-users-pending-chosen')).toHaveText(`${found.length} selected, on every page`)
+
+      await win.getByTestId('admin-users-pending-search').fill('nobody-e2e-fit-at-all')
+      await expect(rows).toHaveCount(0)
+      await expect(win.getByTestId('admin-users-pending-no-results')).toHaveText('No results found.')
+    } finally {
+      await cleanup(request, admin)
+    }
+  })
+
+  test('Teams, Roles and Clusters: each search reads every row, not only the page shown', async ({ page, request }) => {
+    test.setTimeout(120_000)
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const tag = `${PREFIX}t${Date.now().toString(36)}`
+    const teamIds: number[] = []
+    const range = (testId: string) => page.getByTestId(testId).locator('div').first()
+    const names = (testId: string) => page.getByTestId(testId).locator('tbody tr td:first-child button > span:first-child').allInnerTexts()
+    // teams of a run that stopped
+    for (const t of (await (await request.get('/api/v1/auth/organizations?type=team', { headers: bearer(admin) })).json()) as Obj[]) {
+      if (String(t.name).startsWith(PREFIX)) await request.delete(`/api/v1/auth/admin/organizations/${t.id}`, { headers: bearer(admin), failOnStatusCode: false })
+    }
+    try {
+      for (let i = 0; i < 30; i++) {
+        const res = await request.post('/api/v1/auth/admin/organizations', { headers: bearer(admin), data: { type: 'team', name: `${tag}-${String(i).padStart(2, '0')}` } })
+        expect(res.ok(), `create team ${i}: ${await res.text()}`).toBeTruthy()
+        teamIds.push((await res.json()).id)
+      }
+      await page.setViewportSize({ width: 1440, height: 900 })
+      await page.goto('/admin/organizations')
+      await page.getByTestId('teams-search').fill(`${tag}-27`)
+      await expect(range('teams-pager')).toHaveText(/Showing 1-1 of 1$/)
+      await expect.poll(() => names('teams-table')).toEqual([`${tag}-27`])
+      await page.getByTestId('teams-search').fill(tag)
+      await expect(range('teams-pager')).toHaveText(/Showing 1-\d+ of 30$/)
+
+      // a permission past the five a row shows: the roles holding it, as the API lists them
+      const roles = (await (await request.get('/api/v1/auth/roles', { headers: bearer(admin) })).json()) as Obj[]
+      const key = 'admin.audit.read'
+      const holding = roles.filter((r) => (r.permissions ?? []).includes(key) || String(r.name).toLowerCase().includes(key) || String(r.description ?? '').toLowerCase().includes(key))
+      await page.goto('/admin/roles')
+      await page.getByTestId('roles-search').fill(key)
+      await expect(range('roles-pager')).toHaveText(holding.length ? new RegExp(`Showing 1-\\d+ of ${holding.length}$`) : /Showing 0 of 0$/)
+
+      // the cluster Kubeast runs in by the "In-cluster" its row shows
+      const clusters = ((await (await request.get('/api/v1/clusters', { headers: bearer(admin) })).json()).items ?? []) as Obj[]
+      const inCluster = clusters.filter((c) => c.is_self_cluster && !c.api_server_url)
+      await page.goto('/admin/clusters')
+      await page.getByTestId('clusters-search').fill('In-cluster')
+      await expect(range('clusters-pager')).toHaveText(inCluster.length ? new RegExp(`Showing 1-${inCluster.length} of ${inCluster.length}$`) : /Showing 0 of 0$/)
+    } finally {
+      for (const id of teamIds) await request.delete(`/api/v1/auth/admin/organizations/${id}`, { headers: bearer(admin), failOnStatusCode: false })
     }
   })
 

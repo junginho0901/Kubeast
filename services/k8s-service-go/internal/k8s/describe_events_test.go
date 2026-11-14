@@ -30,32 +30,32 @@ func TestSetEvents(t *testing.T) {
 		gatewayEvent("ns", "Pod", "p", "New", now),
 	}}
 	out := map[string]interface{}{}
-	setEvents(out, listed, nil)
+	setEvents(out, listed, nil, about())
 	if got := reasons(out); !reflect.DeepEqual(got, []string{"New", "Old"}) || out["events_error"] != nil {
 		t.Errorf("listed: events %v, events_error %#v", got, out["events_error"])
 	}
 
 	out = map[string]interface{}{}
-	setEvents(out, &corev1.EventList{}, nil)
+	setEvents(out, &corev1.EventList{}, nil, about())
 	if raw, _ := json.Marshal(out); string(raw) != `{"events":[]}` {
 		t.Errorf("none: %s, want an empty list", raw)
 	}
 
 	out = map[string]interface{}{"events": []map[string]interface{}{}}
-	setEvents(out, nil, errors.New(`events is forbidden: User "u" cannot list resource "events"`))
+	setEvents(out, nil, errors.New(`events is forbidden: User "u" cannot list resource "events"`), about())
 	if raw, _ := json.Marshal(out); string(raw) != `{"events_error":"events is forbidden: User \"u\" cannot list resource \"events\""}` {
 		t.Errorf("refused: %s, want the reason and no list", raw)
 	}
 
 	// a 403 whose Status has no message: client-go's error text is empty
 	out = map[string]interface{}{}
-	setEvents(out, nil, &apierrors.StatusError{ErrStatus: metav1.Status{Status: metav1.StatusFailure, Reason: metav1.StatusReasonForbidden, Code: 403}})
+	setEvents(out, nil, &apierrors.StatusError{ErrStatus: metav1.Status{Status: metav1.StatusFailure, Reason: metav1.StatusReasonForbidden, Code: 403}}, about())
 	if out["events_error"] != "events could not be listed: Forbidden" {
 		t.Errorf("refused without a message: events_error %#v", out["events_error"])
 	}
 
 	out = map[string]interface{}{}
-	setEvents(out, nil, nil)
+	setEvents(out, nil, nil, about())
 	checkEventsRefused(t, out)
 }
 
@@ -74,7 +74,7 @@ func TestDescribeEvents_ThroughSetEvents(t *testing.T) {
 		}
 		for _, loc := range bypass.FindAllIndex(b, -1) {
 			// the node events API answers its list, or its error to the handler
-			if f == "nodes.go" && strings.HasPrefix(string(b[loc[0]:]), "formatEventList(events.Items), nil") {
+			if f == "nodes.go" && strings.HasPrefix(string(b[loc[0]:]), "formatEventList(items), nil") {
 				continue
 			}
 			line := strings.Count(string(b[:loc[0]]), "\n") + 1

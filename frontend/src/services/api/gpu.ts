@@ -25,9 +25,9 @@ export const gpuApi = {
     return data
   },
 
-  // GPU Metrics (Prometheus / DCGM)
+  // GPU Metrics (Prometheus / DCGM). Not the GPU lists: its failure is said in the metrics' place, not in their empty row.
   getGPUMetrics: async (): Promise<GPUMetricsData> => {
-    const { data } = await client.get('/cluster/gpu/metrics')
+    const { data } = await client.get('/cluster/gpu/metrics', { listStatus: false })
     return data
   },
 
