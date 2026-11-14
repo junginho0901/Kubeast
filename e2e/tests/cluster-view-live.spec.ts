@@ -12,7 +12,8 @@ import { test, expect, type Page } from '@playwright/test'
 // map's colours against the cards', a pod made, deleted and replaced, a search that finds a pod on the last of 200
 // nodes the page never drew, only the boxes of the page near the screen watching, a map cell opening the node's own view
 // (kept in the address) and All nodes going back to its page, every pod of a 250-pod node on the five pages of its own
-// view, and a search opening that view on the page of the pod it found.
+// view, a search opening that view on the page of the pod it found, and the NotReady and cordoned marks the node list
+// gives (stood in: no spec changes the dev cluster's node).
 
 const CLUSTER = 'self'
 
@@ -249,24 +250,45 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
     await expect(big.locator('[data-testid="cluster-view-pod"][data-match="true"]')).toHaveCount(1)
   })
 
-  test('a node cordoned and uncordoned shows and drops its mark at once, on its cell, in the legend and on its box', async ({ page }) => {
-    // the node list follows the cluster through its watch: kubectl's STATUS gains and loses SchedulingDisabled
-    const node = kubectl('get nodes -o jsonpath={.items[0].metadata.name}')
-    try {
-      await page.goto(`/cluster-view?cluster=${CLUSTER}`)
-      const canvas = page.getByTestId('cluster-view-map').locator('canvas')
-      await expect(canvas).toBeVisible()
-      await expect(page.getByTestId('cluster-view-map-cordoned')).toHaveCount(0)
-      kubectl(`cordon ${node}`)
-      await expect(canvas).toHaveAttribute('data-node-marks', JSON.stringify({ [node]: 'Ready,SchedulingDisabled' }), { timeout: 15_000 })
-      await expect(page.getByTestId('cluster-view-map-cordoned')).toContainText('1')
-      await expect(box(page, node).getByTestId('cluster-view-node-status')).toHaveText(['SchedulingDisabled'])
-      kubectl(`uncordon ${node}`)
-      await expect(canvas).not.toHaveAttribute('data-node-marks', /./, { timeout: 15_000 })
-      await expect(box(page, node).getByTestId('cluster-view-node-status')).toHaveCount(0)
-    } finally {
-      tryKubectl(`uncordon ${node}`)
-    }
+  test('a node not Ready or cordoned is marked on its cell, in the legend and on its box, as the node list says', async ({ page }) => {
+    // the map, the boxes and the node list stood in (the dev cluster's node is never changed): kubectl's STATUS per node
+    const status: Record<string, string> = { 'e2e-mark-a': 'Ready', 'e2e-mark-b': 'NotReady', 'e2e-mark-c': 'Ready,SchedulingDisabled', 'e2e-mark-d': 'Unknown,SchedulingDisabled' }
+    const names = Object.keys(status)
+    await page.route('**/api/v1/cluster/pods/nodes?**', (route) => route.fulfill({
+      json: { nodes: names.map((node) => ({ node, total: 2, ok: 2, warn: 0, error: 0 })), total: 8, all: 8, revision: 'e2e-marks', source: 'index' },
+    }))
+    await page.route('**/api/v1/cluster/pods/on-node?**', (route) => {
+      const n = new URL(route.request().url()).searchParams.get('node') ?? ''
+      return route.fulfill({ json: [0, 1].map((i) => podStandIn(n, `${n}-p${i}`)) })
+    })
+    await page.route(/\/api\/v1\/cluster\/nodes(\?|$)/, async (route) => {
+      const real = await (await route.fetch()).json() as Record<string, unknown>[]
+      return route.fulfill({ json: names.map((name) => ({ ...real[0], name, status: status[name], roles: [] })) })
+    })
+    const canvas = page.getByTestId('cluster-view-map').locator('canvas')
+    const badges = (node: string) => box(page, node).getByTestId('cluster-view-node-status')
+
+    await page.goto(`/cluster-view?cluster=${CLUSTER}`)
+    await expect(canvas).toHaveAttribute('data-node-marks', JSON.stringify({ 'e2e-mark-b': 'NotReady', 'e2e-mark-c': 'Ready,SchedulingDisabled', 'e2e-mark-d': 'Unknown,SchedulingDisabled' }))
+    await expect(page.getByTestId('cluster-view-map-not-ready')).toHaveText(/(Node not Ready|Ready가 아닌 Node) 2/)
+    await expect(page.getByTestId('cluster-view-map-cordoned')).toHaveText(/SchedulingDisabled 2/)
+    await expect(badges('e2e-mark-a')).toHaveCount(0)
+    await expect(badges('e2e-mark-b')).toHaveText(['NotReady'])
+    await expect(badges('e2e-mark-c')).toHaveText(['SchedulingDisabled'])
+    await expect(badges('e2e-mark-d')).toHaveText(['Unknown', 'SchedulingDisabled'])
+    // the node's own view says it too
+    await page.goto(`/cluster-view?cluster=${CLUSTER}&node=e2e-mark-b`)
+    await expect(page.getByTestId('cluster-view-node')).toHaveCount(1)
+    await expect(badges('e2e-mark-b')).toHaveText(['NotReady'])
+
+    // the list says b is Ready again and c no longer cordoned: their marks go
+    status['e2e-mark-b'] = 'Ready'
+    status['e2e-mark-c'] = 'Ready'
+    await page.goto(`/cluster-view?cluster=${CLUSTER}`)
+    await expect(canvas).toHaveAttribute('data-node-marks', JSON.stringify({ 'e2e-mark-d': 'Unknown,SchedulingDisabled' }))
+    await expect(page.getByTestId('cluster-view-map-not-ready')).toHaveText(/(Node not Ready|Ready가 아닌 Node) 1/)
+    await expect(badges('e2e-mark-b')).toHaveCount(0)
+    await expect(badges('e2e-mark-c')).toHaveCount(0)
   })
 
   test('a cell of the map opens its node\'s own view, and All nodes brings the overview back', async ({ page }) => {
