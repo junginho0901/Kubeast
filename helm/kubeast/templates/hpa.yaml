@@ -1,0 +1,32 @@
+{{- /* autoscaling.<service>.enabled: one HPA on CPU for that Deployment; templates/checks/replicas.yaml checks its values. */}}
+{{- range $key, $app := include "kubeast.scaledServices" . | fromJson }}
+{{- $hpa := index $.Values.autoscaling $key | default dict }}
+{{- if $hpa.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $app }}
+  labels:
+    app: {{ $app }}
+    {{- include "kubeast.labels" $ | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $app }}
+  minReplicas: {{ int $hpa.minReplicas }}
+  maxReplicas: {{ int $hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ int $hpa.targetCPUUtilizationPercentage }}
+  {{- with $hpa.behavior }}
+  behavior:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}
