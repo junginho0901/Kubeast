@@ -8,8 +8,9 @@ export type StreamingPhase = 'waiting' | 'tools' | 'answer'
 export type ChatStreamStatus = 'idle' | 'streaming' | 'completed' | 'aborted' | 'error'
 
 // A turn of this conversation that failed or was stopped before the current one. The server never saves a failed turn's
-// error, perhaps not its question, and its letters only when it saw the failure (a stream cut on the way it did not); a
-// stopped turn's letters only if the page's save reaches it. A screen drawn from the saved messages has the rest only from here.
+// error, perhaps not its question, and its letters when it saw the failure (a stream cut on the way it did not: the page
+// saves those, _keepCutAnswer); a stopped or cut turn's letters only if the page's save reaches it. A screen drawn from the
+// saved messages has the rest only from here.
 export interface FailedTurn {
   question: string
   content: string
@@ -195,6 +196,8 @@ export class ChatStreamManager {
   // Where each tool block of this answer starts and where its result goes. Kept, not read back from the text: a result,
   // the arguments or the answer can hold the same words.
   private _toolBlocks: { start: number; resultAt: number }[] = []
+  // The save of an answer whose stream was cut, which the next question waits for (_keepCutAnswer).
+  private _keepingCut: Promise<void> | null = null
   private static readonly TICK_MS = 16 // 드레인 간격 (ms) — one screen refresh
 
   constructor(options: ChatStreamManagerOptions = {}) {
@@ -315,6 +318,21 @@ export class ChatStreamManager {
     return filled
   }
 
+  // A stream that ended with neither [DONE] nor an error event: ai-service saw no failure to save the answer with (its pod
+  // went, or the connection was cut), so it is saved as it shows, marked failed, as the answer to its question.
+  // session-service adds it only while that question is the newest message: when only the end was lost, ai-service has
+  // saved the whole answer already. A save that fails leaves the answer on screen only, as before.
+  private _keepCutAnswer = () => {
+    const { status, sessionId, userMessage, content, toolCalls } = this.state
+    if (status !== 'error' || !sessionId || userMessage === null || !content) return
+    const answer = { role: 'assistant', content, tool_calls: toolCalls.length > 0 ? toolCalls : undefined, failed: true, answers: userMessage }
+    this._keepingCut = fetch(`/api/v1/sessions/${encodeURIComponent(sessionId)}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ messages: [answer] }),
+    }).then(() => undefined, () => undefined)
+  }
+
   // The failed turns of a conversation as its next question is sent: the one that just failed or was stopped joins them.
   private _failedTurnsBefore = (sessionId: string, savedMessages: number): FailedTurn[] => {
     const { status, userMessage, content, toolCalls, error, errorKey, errorArgs, savedBefore, failedTurns } = this.state
@@ -369,6 +387,11 @@ export class ChatStreamManager {
     })
 
     try {
+      // a cut answer before this question is saved before ai-service saves the question
+      const keeping = this._keepingCut
+      this._keepingCut = null
+      if (keeping) await keeping
+
       const endpointTemplate =
         this.options.endpoint ?? '/api/v1/ai/sessions/{sessionId}/chat'
       const endpoint = endpointTemplate.replace(
@@ -564,6 +587,7 @@ export class ChatStreamManager {
         this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null })
       } else if (this.state.content || this._charQueue.length > 0) {
         this._fail({ error: STREAM_CUT, errorKey: 'streamCut' })
+        this._keepCutAnswer()
       } else {
         this._fail({ error: STREAM_EMPTY, errorKey: 'streamEmpty' })
       }
@@ -574,6 +598,8 @@ export class ChatStreamManager {
       }
 
       this._fail({ error: String(error) })
+      // a read that broke part way: the letters that came, as a stream that closed early
+      this._keepCutAnswer()
     } finally {
       this.abortController = null
     }

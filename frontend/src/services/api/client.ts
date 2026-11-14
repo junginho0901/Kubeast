@@ -35,7 +35,7 @@ client.interceptors.request.use((config) => {
 declare module 'axios' {
   interface AxiosRequestConfig {
     // false on a read beside a screen's list (the GPU metrics next to the GPU lists, a drawer's Prometheus sums): its
-    // answer or failure is not the list's, so it does not go into the list status of its API segment
+    // answer, failure or refusal is not the list's, so it does not go into the list status or forbidden state of its API segment
     listStatus?: false
   }
 }
@@ -74,10 +74,11 @@ client.interceptors.response.use(
     // A 403 on a cluster read means the signed-in user's cluster role does not
     // cover that kind. Pages render an empty list in that case; the banner in
     // Layout listens for this event so the page says "no permission" instead of
-    // "nothing here".
+    // "nothing here". A read saying `listStatus: false` is named in the banner but refuses no list (`list: false`).
     if (status === 403 && String(error?.config?.method || 'get').toLowerCase() === 'get' && url.startsWith('/cluster/')) {
+      const detail: ForbiddenDetail = { url, detail: error?.response?.data?.detail, list: isListRead(error?.config) }
       try {
-        window.dispatchEvent(new CustomEvent(FORBIDDEN_EVENT, { detail: { url, detail: error?.response?.data?.detail } }))
+        window.dispatchEvent(new CustomEvent(FORBIDDEN_EVENT, { detail }))
       } catch { /* non-browser */ }
     }
     // A cluster read that failed on the server or on the way (5xx, timeout):
@@ -93,8 +94,10 @@ client.interceptors.response.use(
   },
 )
 
-/** Dispatched on window for every 403 on a GET /cluster/... request (detail: { url, detail }). */
+/** Dispatched on window for every 403 on a GET /cluster/... request (detail: ForbiddenDetail). */
 export const FORBIDDEN_EVENT = 'kubeast:forbidden'
+/** `list` is false for a read saying `listStatus: false`: its refusal is not the list's. */
+export type ForbiddenDetail = { url: string; detail?: unknown; list: boolean }
 
 /** Dispatched on window for every GET /cluster/... outcome other than 403 (a read saying `listStatus: false` aside): ok, not installed, failed (5xx / network). */
 export const LIST_STATUS_EVENT = 'kubeast:list-status'

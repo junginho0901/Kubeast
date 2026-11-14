@@ -8,8 +8,9 @@ import { test, expect, type APIRequestContext, type Browser, type Page } from '@
 // What an open window and a list keep up with by themselves, on cluster `self` in a namespace of this run's, and what that
 // costs the server: an Ingress drawer follows its object on the read it already makes, a workload's Events move on their
 // own frames, a pod's RBAC tab and a CRD's instances read again only when something changed, a Node's Allocated Resources
-// follow its pods, a new row goes where the next read puts it, and a grant limited to namespaces follows a kind of the
-// cluster its RBAC lets it list, with one watch. It does not skip. The objects and the user are removed after.
+// follow its pods, a Namespace drawer follows its object from any page, a new row goes where the next read puts it, and a
+// grant limited to namespaces follows a kind of the cluster its RBAC lets it list, with one watch. It does not skip. The
+// objects and the user are removed after.
 
 const NS = 'e2e-live-drawers'
 const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
@@ -332,6 +333,52 @@ test.describe('what keeps up by itself', () => {
       expect(kubectl(`get node ${node} -o 'jsonpath={.status.conditions[?(@.type=="Ready")].lastTransitionTime}'`), 'a label leaves the Ready condition as it was').toBe(readyAt)
     } finally {
       kubectl(`label node ${node} ${label}-`)
+    }
+  })
+
+  // Opened from another page nothing else follows a Namespace: its drawer watches it, the label from the frame at once and
+  // the annotation from the answer read once for the change.
+  test('a Namespace drawer opened from another page shows a label and an annotation made while it is open', async ({ page }) => {
+    test.setTimeout(120_000)
+    const describes = requests(page, new RegExp(`/cluster/namespaces/${NS}/describe`))
+    const label = `e2e-live-ns-${STAMP}`
+    const note = `e2e-live-note-${STAMP}`
+    await page.goto(`/?cluster=self&detail=${encodeURIComponent(`Namespace/${NS}`)}`)
+    const drawer = page.locator(DRAWER).last()
+    await expect(drawer.getByText('Active').first()).toBeVisible({ timeout: 20_000 })
+    await page.waitForTimeout(5_000)
+    expect(describes.length, 'a namespace that stays as it is is not read again').toBe(1)
+    try {
+      kubectl(`label namespace ${NS} ${label}=yes --overwrite`)
+      await expect(drawer.getByText(label, { exact: true })).toHaveCount(1, { timeout: 20_000 })
+      kubectl(`annotate namespace ${NS} ${note}=told --overwrite`)
+      await expect(drawer.getByText(note, { exact: true })).toHaveCount(1, { timeout: 20_000 })
+      await page.waitForTimeout(6_000)
+      expect(describes.length, 'one read for each change at most').toBeLessThanOrEqual(3)
+    } finally {
+      kubectl(`label namespace ${NS} ${label}-`)
+      kubectl(`annotate namespace ${NS} ${note}-`)
+    }
+  })
+
+  // On the Namespaces page the drawer shares the page's watch, and the page leaves the reading to the drawer.
+  test('a Namespace drawer on the Namespaces page reads once for a change, not once for the page and once for itself', async ({ page }) => {
+    test.setTimeout(120_000)
+    const describes = requests(page, new RegExp(`/cluster/namespaces/${NS}/describe`))
+    const label = `e2e-live-ns-page-${STAMP}`
+    await page.goto(`/cluster/namespaces?cluster=self&detail=${encodeURIComponent(`Namespace/${NS}`)}`)
+    const drawer = page.locator(DRAWER).last()
+    await expect(drawer.getByText('Active').first()).toBeVisible({ timeout: 20_000 })
+    await page.waitForTimeout(5_000)
+    const before = describes.length
+    try {
+      kubectl(`label namespace ${NS} ${label}=yes --overwrite`)
+      await expect(drawer.getByText(label, { exact: true })).toHaveCount(1, { timeout: 20_000 })
+      await expect.poll(() => describes.length, { timeout: 15_000 }).toBeGreaterThan(before)
+      await page.waitForTimeout(6_000)
+      expect(describes.length - before, 'one read of the answer').toBe(1)
+    } finally {
+      kubectl(`label namespace ${NS} ${label}-`)
     }
   })
 
