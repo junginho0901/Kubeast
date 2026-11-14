@@ -4,7 +4,7 @@
 // table query and the streaming state are owned by the parent; the
 // dropdown's outside-click detection is local to this component.
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
@@ -36,7 +36,6 @@ import { useConfirm } from '@/services/confirm'
 import { formatBytes, formatMillicores, optimizationApply, optimizationResizeRequest } from '../utils'
 import { formatMoney } from '@/utils/money'
 import { useDismiss } from '@/hooks/useDismiss'
-import { useResizeResults } from './useResizeResults'
 
 interface UsageInfo {
   completion_tokens?: number
@@ -136,8 +135,8 @@ export function OptimizationModal({
   const canResize = !!features?.inPlaceResize?.enabled && !!features?.inPlaceResize?.serverSupports && has('resource.pod.edit')
   // The cluster has an OpenCost: the server priced each row's requests (cost.go).
   const priced = !!table?.pricing
-  const rowKey = (row: OptimizationRow) => `${row.namespace}/${row.kind}/${row.api_version ?? ''}/${row.name}/${row.container}`
-  const [resizeResults, setResizeResults] = useResizeResults<ResizeResult | { error: string }>(open, namespace)
+  const rowKey = (row: OptimizationRow) => `${row.kind}/${row.api_version ?? ''}/${row.name}/${row.container}`
+  const [resizeResults, setResizeResults] = useState<Record<string, ResizeResult | { error: string }>>({})
   const resize = useMutation({
     mutationFn: (row: OptimizationRow) => api.resizeOptimization(row.namespace, optimizationResizeRequest(row)),
     onSuccess: (res, row) => {

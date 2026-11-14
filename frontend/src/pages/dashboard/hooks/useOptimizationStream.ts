@@ -56,9 +56,10 @@ export function useOptimizationStream() {
   const [optimizationUsage, setOptimizationUsage] = useState<UsageInfo | null>(null)
   const [optimizationMeta, setOptimizationMeta] = useState<MetaInfo | null>(null)
 
-  // The answer (its observed table, text, usage, error and Copy word) is of the namespace it was asked for: opening the
-  // window, closing it and choosing another namespace stop the stream and drop it, letters still queued too.
-  const dropOptimizationAnswer = () => {
+  // 모달 자체의 state reset + open. 부모는 다른 모달 닫고 이걸 호출.
+  // initialNamespace 는 부모가 allNamespaces 보고 결정 (default 우선).
+  const openOptimizationModal = (initialNamespace: string) => {
+    setIsOptimizationNamespaceDropdownOpen(false)
     setOptimizationCopied(false)
     setOptimizationCopyFailed(false)
     optimizationAbortRef.current?.abort()
@@ -67,23 +68,12 @@ export function useOptimizationStream() {
       window.cancelAnimationFrame(optimizationStreamRafRef.current)
       optimizationStreamRafRef.current = null
     }
-    stopOptimizationTypewriter()
-    optimizationCharQueueRef.current.length = 0
     optimizationStreamPendingRef.current = ''
     optimizationStreamDoneRef.current = false
     setIsOptimizationStreaming(false)
     setOptimizationObservedContent('')
     setOptimizationAnswerContent('')
     setOptimizationStreamError('')
-    setOptimizationUsage(null)
-    setOptimizationMeta(null)
-  }
-
-  // 모달 자체의 state reset + open. 부모는 다른 모달 닫고 이걸 호출.
-  // initialNamespace 는 부모가 allNamespaces 보고 결정 (default 우선).
-  const openOptimizationModal = (initialNamespace: string) => {
-    setIsOptimizationNamespaceDropdownOpen(false)
-    dropOptimizationAnswer()
 
     setOptimizationNamespace(initialNamespace)
 
@@ -93,14 +83,20 @@ export function useOptimizationStream() {
   const handleCloseOptimizationModal = () => {
     setIsOptimizationModalOpen(false)
     setIsOptimizationNamespaceDropdownOpen(false)
-    dropOptimizationAnswer()
-  }
-
-  // another namespace: its table and, when asked, its own answer — not the one asked for the namespace before
-  const chooseOptimizationNamespace = (namespace: string) => {
-    if (namespace === optimizationNamespace) return
-    dropOptimizationAnswer()
-    setOptimizationNamespace(namespace)
+    setOptimizationCopied(false)
+    setOptimizationCopyFailed(false)
+    optimizationAbortRef.current?.abort()
+    optimizationAbortRef.current = null
+    if (optimizationStreamRafRef.current) {
+      window.cancelAnimationFrame(optimizationStreamRafRef.current)
+      optimizationStreamRafRef.current = null
+    }
+    optimizationStreamPendingRef.current = ''
+    optimizationStreamDoneRef.current = false
+    setIsOptimizationStreaming(false)
+    setOptimizationObservedContent('')
+    setOptimizationAnswerContent('')
+    setOptimizationStreamError('')
   }
 
   const stopOptimizationTypewriter = () => {
@@ -246,7 +242,7 @@ export function useOptimizationStream() {
     isOptimizationModalOpen,
     setIsOptimizationModalOpen,
     optimizationNamespace,
-    chooseOptimizationNamespace,
+    setOptimizationNamespace,
     isOptimizationNamespaceDropdownOpen,
     setIsOptimizationNamespaceDropdownOpen,
     optimizationCopied,

@@ -86,7 +86,7 @@ export function DashboardBody() {
     isOptimizationModalOpen,
     setIsOptimizationModalOpen,
     optimizationNamespace,
-    chooseOptimizationNamespace,
+    setOptimizationNamespace,
     isOptimizationNamespaceDropdownOpen,
     setIsOptimizationNamespaceDropdownOpen,
     optimizationCopied,
@@ -249,9 +249,9 @@ export function DashboardBody() {
     if (!Array.isArray(allNamespaces) || allNamespaces.length === 0) return
     const namespaceNames = allNamespaces.map((ns: any) => String(ns?.name ?? '')).filter(Boolean)
     if (!namespaceNames.includes(optimizationNamespace)) {
-      chooseOptimizationNamespace(namespaceNames.includes('default') ? 'default' : namespaceNames[0])
+      setOptimizationNamespace(namespaceNames.includes('default') ? 'default' : namespaceNames[0])
     }
-  }, [isOptimizationModalOpen, allNamespaces, optimizationNamespace, chooseOptimizationNamespace])
+  }, [isOptimizationModalOpen, allNamespaces, optimizationNamespace, setOptimizationNamespace])
 
   const handleNodeClick = (node: any) => {
     openDetail({ kind: 'Node', name: node.name })
@@ -540,7 +540,7 @@ export function DashboardBody() {
         open={isOptimizationModalOpen}
         onClose={handleCloseOptimizationModal}
         namespace={optimizationNamespace}
-        setNamespace={chooseOptimizationNamespace}
+        setNamespace={setOptimizationNamespace}
         namespaces={optimizationNamespaces}
         isLoadingNamespaces={isLoadingAllNamespaces}
         isDropdownOpen={isOptimizationNamespaceDropdownOpen}

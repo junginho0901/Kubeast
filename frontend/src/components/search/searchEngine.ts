@@ -124,19 +124,3 @@ export function toSearchResult(item: Record<string, unknown>): SearchResult {
     raw: item,
   }
 }
-
-// A search's answer with what it searched: the expression and the items it ran over (another namespace or set of
-// types reads other items).
-export interface SearchAnswer {
-  query: string
-  items: readonly unknown[]
-  results: SearchResult[]
-  timeMs: number | null
-}
-
-// The answer the page draws for the expression and items it shows: an answer of another expression, namespace or set
-// of types is none — also in the render a deferred value has not caught up — so its rows, count and time never
-// stand for this search's.
-export function answerFor(answer: SearchAnswer | null, query: string, items: readonly unknown[]): SearchAnswer | null {
-  return answer && answer.query === query && answer.items === items ? answer : null
-}
