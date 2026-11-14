@@ -59,6 +59,18 @@
       "cell": "^\\$\\.uid$",
       "why": "A Node's describe answer carries its UID, which the Node drawer keeps followed events to beside the node's name; v0.7.7 did not send it.",
       "pr": "#815"
+    },
+    {
+      "route": "^/api/v1/cluster/nodes/[^/]+/drain/status$",
+      "cell": "^\\$\\.(pods_total|pods_done|finished_at|cordoned_nodes)(\\.|\\[|$)",
+      "why": "A drain's status answer is read from the node_drains table and carries pods_total, pods_done, finished_at and cordoned_nodes (null, or the drain's nodes still cordoned once it failed or was interrupted); v0.7.7 answered from the server's memory without them.",
+      "pr": "#858"
+    },
+    {
+      "route": "^/api/v1/auth/roles$",
+      "cell": "^\\$\\[[^\\]]+\\]\\.same_group_as$",
+      "why": "A custom role whose name differs from another role's only in letter case, spaces or punctuation carries same_group_as, the role it acts as on a cluster (a built-in first, else the oldest), which the pickers name; v0.7.7 did not send it.",
+      "pr": "#865"
     }
   ]
 }
