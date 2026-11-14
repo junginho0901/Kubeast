@@ -98,6 +98,22 @@ npx playwright test cluster-hygiene.spec.ts   # 스펙 하나
 `e2e/actions/`는 UI 동작 92개를 두 번째 클러스터에 실행하고 `kubectl`로 결과를 확인하는 옵트인 동작 스위트(약 12분)라서 기본 실행에 들어가지 않습니다.
 `E2E_ACTIONS=1 npx playwright test --project=actions`로 실행하고, 전제 조건은 [e2e/actions/README.md](../../e2e/actions/README.md)를 보세요.
 
+### AI 평가용 고장·데모 서비스
+
+`scripts/ai-eval.py`의 어려운 문제에는 고장 주입과 서로 부르는 서비스가 필요합니다. 스크립트 둘이 이것을 두 번째 클러스터에 올리며, 둘 다 e2e 전제 조건은 아닙니다.
+
+- `scripts/kind-chaos.sh up|down`: Chaos Mesh 2.8.8(파드 죽임·실패, 네트워크 지연·손실·차단, DNS 오류, CPU·메모리 부하).
+  - 차트를 `deploy/kind/chaos-values.yaml`(kind 노드의 containerd 런타임과 소켓)로 렌더해 server-side로 적용하므로 `default`에 Helm 릴리스가 생기지 않습니다.
+  - 같은 버전·값으로 `up`을 다시 하면 아무것도 하지 않습니다. `down`은 실험을 먼저 모두 지우고 `up`이 만든 것을 지웁니다.
+- `scripts/kind-otel-demo.sh up|down`: OpenTelemetry Demo(차트 0.42.6), 네임스페이스 `otel-demo`.
+  - `scripts/kind-logsearch.sh up`과 `scripts/kind-tracing.sh up`을 먼저 실행하세요.
+  - 데모에 딸린 Jaeger·Grafana·Prometheus·OpenSearch는 끕니다. 데모 수집기는 트레이스를 그 Tempo로, 로그를 그 Loki로, 지표를 두 번째 클러스터의 Prometheus로 보냅니다(`OTELDEMO_METRICS=0`이면 지표는 보내지 않습니다).
+  - 첫 `up`은 Docker VM의 사용 가능 메모리가 렌더의 메모리 limit 합(약 6.7 GiB)보다 적으면 거절합니다. 더 가벼운 대안인 Online Boutique는 스크립트 머리말에 적혀 있습니다.
+  - 서비스가 출력도 하고 OTLP로도 보내는 줄은 Loki에 두 번 들어갑니다.
+  - 지표를 보낼 때는 `up`이 데모의 알림 규칙(`deploy/kind/otel-demo-rules.json`: 오류율, 95번째 백분위 지연, 재시작)도 그 Prometheus에 넣고 `down`이 뺍니다. 이 알림에는 `kubeast_eval="otel-demo"`가 붙고, 그 Prometheus가 Alertmanager로 보내는 알림은 이것뿐이며, Alertmanager는 이를 `default`의 웹훅으로 보냅니다. 예전 개발 설치에서는 `deploy/kind/second-cluster.yaml`을 먼저 다시 적용하세요.
+- TLS를 검사하는 프록시 뒤라면 `CILIUM_NODE_HOOK`처럼 `CHAOS_NODE_HOOK` 또는 `OTELDEMO_NODE_HOOK`을 설정하세요. 클러스터 이름을 받는 명령이며, 이미지를 받기 전에 실행됩니다.
+- 문제 칸, 실행 순서, `evals/ai-hard/`의 문제 10개는 [evals/ai/README.md](../../evals/ai/README.md)의 "Hard cases"에 있습니다.
+
 ### 소개 사이트 (`site/`)
 
 [https://junginho0901.github.io/Kubeast/](https://junginho0901.github.io/Kubeast/)에는 정적 페이지 `site/`(`index.html`·`style.css`·`app.js`·`particles.js`, 영어·한국어 전환)가 올라갑니다.

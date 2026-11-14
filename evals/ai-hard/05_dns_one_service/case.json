@@ -1,0 +1,37 @@
+{
+ "id": "05_dns_one_service",
+ "title": "One service's DNS settings break its short-name calls",
+ "group": "hidden_cause",
+ "cluster": "default",
+ "namespace": "shop-05",
+ "question": "default 클러스터 shop-05에서 storefront가 재고 조회를 못 한대. 원인이 뭐야?",
+ "question_vague": "default 클러스터 shop-05 서비스 일부가 안 된다는데 원인 찾아줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "dnsConfig",
+   "dnsPolicy",
+   "ndots",
+   "search",
+   "검색 ?도메인"
+  ],
+  [
+   "storefront"
+  ]
+ ],
+ "tools": [],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/inventory deploy/catalog deploy/storefront deploy/reports --timeout=10s",
+ "wait_seconds": 240,
+ "baseline_seconds": 180,
+ "inject_cmds": [
+  "DNS=$(kubectl -n kube-system get svc kube-dns -o jsonpath='{.spec.clusterIP}') && kubectl -n $NS patch deploy storefront --type=strategic -p \"$(sed s/KUBE_DNS_IP/$DNS/ $CASE_DIR/inject-patch.yaml)\""
+ ],
+ "inject_wait": "kubectl -n $NS logs deploy/storefront --since=20s | grep 'request failed' | grep -q 'upstream=inventory'",
+ "inject_wait_seconds": 180,
+ "ask_after_seconds": [300],
+ "undo_cmds": [
+  "kubectl -n $NS rollout undo deploy/storefront"
+ ],
+ "cooldown_seconds": 30,
+ "timeout_seconds": 420
+}

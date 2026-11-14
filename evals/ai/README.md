@@ -78,6 +78,81 @@ restart; the start line in the log says how many recordings the directory held t
 | 11 | a rollout stuck on a readiness probe | |
 | 12 | a PVC Pending on a missing StorageClass | |
 
+## Hard cases
+
+A case with any of these fields runs in stages in one setup (`scripts/ai_eval_rca.py`); a case without them runs
+as above.
+
+| Field | |
+|---|---|
+| `question_vague` | the same problem without the symptom named, asked as its own chat after `question` |
+| `answer_format` | `rca_block_v0`: each question asks for a fenced `rca` JSON block at the end, scored against `truth.json` |
+| `baseline_seconds` | normal running after `wait` (and `settle_seconds`), before the fault |
+| `inject_cmds` | shell steps that make the fault (`$NS`, and `$CASE_DIR` the case folder); `INJECT_TIME` is taken before the first; a failing step is a setup failure |
+| `inject_wait`, `inject_wait_seconds` | a condition polled until the fault shows (240 s by default); still false, a setup failure |
+| `fault_start_at` | `inject` (default) or `setup`: where `ask_after_seconds` counts from |
+| `ask_after_seconds` | a number or a list of seconds after the fault start; at each, every question form `--repeat` times |
+| `fault_duration_seconds` | `undo_cmds` this long after the injection (`UNDO_TIME`), the namespace kept |
+| `undo_cmds` | shell steps that take the fault back; otherwise run after the last question |
+| `cooldown_seconds` | a pause after the teardown |
+| `hidden` | `true`: run only with `--hidden`, and the table shows only the total |
+| `group` | `hidden_cause`, `trap`, `control` or `past`, for people reading the results; the runner does not read it |
+
+Order: namespace, `setup.yaml` (`SETUP_TIME`), `setup_cmds`, `wait`, `settle_seconds` + `baseline_seconds`,
+`inject_cmds`, `inject_wait`, the asks (a `fault_duration_seconds` undo at its time), `undo_cmds`, the namespace
+deleted, `cleanup_cmds`, `cooldown_seconds`. `--keep` leaves a case as it ends: no undo, no deletion.
+
+`truth.json` holds `control`, `fault_start` and `fault_end` (`{{SETUP_TIME}}`, `{{INJECT_TIME}}`, `{{UNDO_TIME}}`,
+filled into `<out>/<time>-truth/<id>.json`), `time_tolerance_seconds`, `causes` (`resource` as
+`Kind/namespace/name`, `kind`, `accept_resources` and `accept_kinds`), `path` (`resource`, `role`, `required`,
+`accept`), `also_ok` and `decoys` (`*` and `<…>` stand for a generated part of a name). The last `rca` block passes
+when it names every truth cause with an accepted kind and no decoy as a cause; a control passes only with
+`no_fault` and no cause other than kind `none`. Its score is 1 less 0.25 for each other cause outside `also_ok`.
+Reported beside it: `started_at` within the tolerance, the required path hops in order, and the causes whose
+`evidence` points at no call that answered. `expect` is still checked, as `prose_pass`. A truth's `symptom`,
+`distractor_at`, `variants_note` and a hop's `note` are for people.
+
+`evals/ai-hard/` holds ten cases made of plain Kubernetes objects. Each folder has `case.json`, `truth.json`, the
+manifests it applies and `NOTES.md`: what the AI has to notice, the trap, how it is scored and what is unsure. None
+has run on a cluster yet, so their sizes and waits are first guesses for the first run to measure. They use only
+`docker.io/library/busybox:1.38.0`, namespaces `shop-NN` (and `edge-15`), business names and no Secret. The fault
+comes from data or settings, never from a branch in the code, and nothing a case applies names it
+(`scripts/test_ai_eval_cases.py`). Their answers lean on logs: run `scripts/kind-logsearch.sh up` first. The numbers
+leave room for the cases that need the OpenTelemetry demo or Chaos Mesh (01–03, 07, 10, 11), not written yet.
+
+| Case | Group | Problem | Needs on dev besides logs |
+|---|---|---|---|
+| 04 | hidden cause | a new NetworkPolicy leaves one caller with no allow to one backend; both sides look healthy | `self`, whose kindnet enforces NetworkPolicy |
+| 05 | hidden cause | one workload is rolled out with its own `dnsConfig`; only its short-name calls fail | |
+| 06 | hidden cause | a rollout to a new ConfigMap with a bad value, held at 4 old and 2 new pods; asked at 5 and 65 minutes | |
+| 08 | hidden cause, hidden | a scale-up fills the ResourceQuota; a CronJob's pods cannot be created and the data goes stale | |
+| 09 | hidden cause | a 25m CPU limit makes one service slow with no error; a busier pod is the decoy | the second cluster's Prometheus (cAdvisor, kube-state-metrics) |
+| 12 | trap | an old crash-looping pod with a DNS-looking error, and a quiet in-place ConfigMap edit | |
+| 13 | control | no fault; one unrelated container restart five minutes before the question | |
+| 14 | control | no fault; a clean rollout four minutes before the question | |
+| 15 | control, hidden | no fault; traffic from another namespace rises fivefold and the HPA scales out | the second cluster's metrics-server and Prometheus |
+| 16 | past | a Deployment scaled to 0 for five minutes, then back; asked at 6 and 70 minutes | the second cluster's Prometheus |
+
+```bash
+scripts/kind-logsearch.sh up && scripts/kind-tracing.sh up   # the stores the demo writes to
+scripts/kind-chaos.sh up                                     # Chaos Mesh in kubeast-b
+scripts/kind-otel-demo.sh up                                 # the OpenTelemetry demo in kubeast-b, and its alert rules
+python3 scripts/ai-eval.py --cases evals/ai-hard --list      # the cases and what is wrong with their fields; no cluster
+python3 scripts/ai-eval.py --cases evals/ai-hard --out /tmp/ai-eval-hard 06
+python3 scripts/ai-eval.py --cases evals/ai-hard --out /tmp/ai-eval-hard --repeat 3 --hidden
+python3 scripts/test_ai_eval_rca.py                          # the scoring checks, or pytest on that file
+python3 scripts/test_ai_eval_cases.py                        # the case folders and the demo's alert rules; no cluster
+scripts/kind-otel-demo.sh down && scripts/kind-chaos.sh down
+```
+
+The demo's alert rules (`deploy/kind/otel-demo-rules.json`) are each service's error rate and 95th percentile
+latency from the span metrics, and container restarts in `otel-demo`. With metrics on, `kind-otel-demo.sh up` puts
+them into the second cluster's Prometheus and `down` takes them out. They carry `kubeast_eval="otel-demo"`, the only
+alerts that Prometheus sends to Alertmanager (`deploy/kind/second-cluster.yaml`), whose default route posts them to
+the webhook for `default`, so a firing rule starts an investigation (severity `warning`). The e2e specs pick alerts by
+`kubeast_e2e`, `e2e_run` or names of their own and do not see these. The thresholds (5 %, 1000 ms) are not measured
+on kind yet.
+
 ## Results
 
 2026-10-19, the dev install, one run per case unless noted. Tokens are the turn's sum as the provider reports it (the

@@ -169,6 +169,19 @@ jobs:
         env:
           DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
 
+  # scripts/ai-eval.py's scoring and the hard cases of evals/ai-hard with the demo's alert rules: standard library only,
+  # no cluster.
+  ai-eval-scripts:
+    name: ai-eval scripts (stdlib tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - run: python -I scripts/test_ai_eval_rca.py
+      - run: python -I scripts/test_ai_eval_cases.py
+
   frontend:
     name: frontend (tsc + vitest)
     runs-on: ubuntu-latest
