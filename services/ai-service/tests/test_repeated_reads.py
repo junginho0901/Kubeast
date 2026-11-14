@@ -14,7 +14,7 @@ from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import runner
 from tests.test_alert_investigation import (FakeClaudeCode, FakeService, FakeSubscriptionService, cfg, completion,
                                             install_loop, row, tool_call)
-from tests.test_claude_code import OK, make_sdk
+from tests.test_claude_code import OK, make_sdk, slots_db  # noqa: F401 (slots_db: a fixture)
 from tests.test_investigation_window import STARTED, STEP_ZERO_ARGS, ChangesService, at_now
 
 PODS = {"resource_type": "pods", "namespace": "apps"}
@@ -326,7 +326,7 @@ async def test_the_api_key_chat_refuses_the_same_read_in_its_next_step(monkeypat
 
 
 @pytest.mark.asyncio
-async def test_the_subscription_chat_refuses_the_same_read_through_the_same_call(monkeypatch, refuse):
+async def test_the_subscription_chat_refuses_the_same_read_through_the_same_call(monkeypatch, refuse, slots_db):
     monkeypatch.setattr(claude_code.settings, "AI_CLAUDE_CODE_ENABLED", True, raising=False)
     monkeypatch.setattr(claude_code, "_semaphores", {})
     sdk = make_sdk([("call", "k8s_get_resources", dict(PODS)), ("call", "k8s_get_resources", dict(PODS)),

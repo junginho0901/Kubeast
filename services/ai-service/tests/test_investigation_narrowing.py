@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.services.ai import features as feature_gate
+from app.services.investigation import numbers
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import runner
 from app.services.investigation import settings as inv_settings
@@ -244,5 +245,6 @@ async def test_both_switches_on_narrow_first_and_ask_for_the_calls(monkeypatch):
     service = NarrowService([completion(content="## Summary\nok")])
     out = await run(monkeypatch, service, rules=True, changes_first=True, narrow_first=True, call_paths=True)
     system, first = service.completions.calls[0]["messages"][0]["content"], first_message(service)
-    assert system == inv_prompt.system_prompt(cluster="self", namespace="apps", language="en", rules=True, call_paths=True)
+    # the rules number the calls (investigation/numbers.py), so the system prompt ends with the note on call numbers
+    assert system == inv_prompt.system_prompt(cluster="self", namespace="apps", language="en", rules=True, call_paths=True) + numbers.NOTE
     assert first.index("<<<CHANGES") < first.index("<<<NARROWING") and [c["step"] for c in out["tool_calls"]] == [0, 0]
