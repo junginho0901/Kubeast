@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import { Box, Loader2, Search, Server } from 'lucide-react'
 import { api, type PodInfo } from '@/services/api'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useWritesRefusedIn } from '@/hooks/useCanCreate'
 import { getPodHealth, getHealthIcon } from './podHealth'
 import { useClusterView } from './ClusterViewContext'
@@ -135,6 +135,7 @@ function NodeBox({ entry, canDeletePod }: { entry: NodeEntry; canDeletePod: bool
     queryKey,
     path: namespace ? `/api/v1/namespaces/${namespace}/pods` : '/api/v1/pods',
     query: `watch=1&fieldSelector=${encodeURIComponent(`spec.nodeName=${entry.node}`)}`,
+    gatherEveryMs: LIST_GATHER_MS,
   })
 
   // a pod being deleted keeps its mark until it leaves this node's list

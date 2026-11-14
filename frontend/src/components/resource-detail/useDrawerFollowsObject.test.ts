@@ -648,7 +648,8 @@ describe('how often an open drawer reads', () => {
 // What only the answer holds waits for its read: within a second of a change, within five while changes keep coming.
 // Written by kind, so a new field that waits is seen here.
 const READ_BRINGS: Record<string, string[]> = {
-  deployments: ['conditions', 'pod_template', 'replicas_status.current'],
+  // the row's current_replicas moves replicas_status.current with the frame
+  deployments: ['conditions', 'pod_template'],
   statefulsets: ['pod_template'],
   daemonsets: ['pod_template'],
   replicasets: [],
@@ -746,6 +747,20 @@ describe('what a live update changes in an open drawer before its answer is read
     follower.onEvent({ type: 'MODIFIED', object: { name: 'web', replicas: 3, ready_replicas: 2, updated_replicas: 1, available_replicas: 2 } })
     follower.stop()
     expect((client.getQueryData(describeKey) as { replicas_status: unknown }).replicas_status).toEqual({ desired: 3, current: 2, ready: 2, updated: 1, available: 2 })
+  })
+
+  // A rollout holds the old ReplicaSet's pods beside the new one's: kubectl describe's "total", the Deployment row's
+  // current_replicas, moves with the frame.
+  it('moves a Deployment\'s Current with the frame, as its row says the pods it holds', () => {
+    const client = new QueryClient()
+    client.setQueryData(describeKey, {
+      name: 'web', replicas: 3, current_replicas: 3, ready_replicas: 3, updated_replicas: 3, available_replicas: 3,
+      replicas_status: { desired: 3, current: 3, ready: 3, updated: 3, available: 3 },
+    })
+    const follower = objectFollower(client, describeKey)
+    follower.onEvent({ type: 'MODIFIED', object: { name: 'web', replicas: 3, current_replicas: 4, ready_replicas: 3, updated_replicas: 1, available_replicas: 3 } })
+    follower.stop()
+    expect((client.getQueryData(describeKey) as { replicas_status: unknown }).replicas_status).toEqual({ desired: 3, current: 4, ready: 3, updated: 1, available: 3 })
   })
 })
 

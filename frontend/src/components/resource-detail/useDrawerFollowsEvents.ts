@@ -43,6 +43,12 @@ export function applyEventFrame(answer: any, event: WatchEvent): any {
   return { ...answer, events: eventsNewestFirst(next) }
 }
 
+// Where the describe answer read the object's events (k8s-service objectEvents): its namespace, or every namespace for an
+// object of the cluster.
+export function drawerEventsPath(namespace: string | undefined): string {
+  return namespace ? `/api/v1/namespaces/${namespace}/events` : '/api/v1/events'
+}
+
 // The field selector of the events about one object as kubectl describe writes it (client-go GetFieldSelector): its
 // name and kind, and its UID when it has one, so an event of an earlier object of the same name is not about this one.
 export function drawerEventSelector(kind: string, name: string, uid?: unknown): string {
@@ -54,15 +60,15 @@ export function drawerEventSelector(kind: string, name: string, uid?: unknown): 
 // useDrawerFollowsEvents keeps a drawer's Events moving while its object stays as it is: a warning that repeats counts up
 // on the event alone, which useDrawerFollowsObject never hears of. It opens once the answer has come, so what the watch
 // opens with finds it, and not for an answer that says the events could not be read: the watch would be refused too.
-// It follows the events naming the answer's UID (`uid` when the events name another, as a mirror pod's do), the ones the
-// server kept in the answer.
+// `namespace` is where the answer read them, none for an object of the cluster. It follows the events naming the answer's
+// UID (`uid` when the events name another, as a mirror pod's do), the ones the server kept in the answer.
 export function useDrawerFollowsEvents(options: { describeKey: QueryKey; answer: any; kind: string; namespace?: string; name: string; uid?: string }) {
   const { describeKey, answer, kind, namespace, name } = options
   const uid = options.uid ?? answer?.uid
   useKubeWatchList({
-    enabled: !!namespace && !!name && Array.isArray(answer?.events),
+    enabled: !!kind && !!name && Array.isArray(answer?.events),
     queryKey: describeKey as any[],
-    path: `/api/v1/namespaces/${namespace}/events`,
+    path: drawerEventsPath(namespace),
     query: `watch=1&fieldSelector=${encodeURIComponent(drawerEventSelector(kind, name, uid))}`,
     applyEvent: (prev, event) => applyEventFrame(prev, event),
   })

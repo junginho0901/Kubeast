@@ -4,6 +4,7 @@ import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags
 import { fmtRel } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useServerPods } from './useServerPods'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
@@ -32,6 +33,7 @@ export default function RuntimeClassInfo({ name }: Props) {
     path: '/apis/node.k8s.io/v1/runtimeclasses',
     name,
   })
+  useDrawerFollowsEvents({ describeKey: ['runtimeclass-describe', name], answer: desc, kind: 'RuntimeClass', name })
 
   const { items: pagedPods, total: usingTotal, nav: podsNav } = useServerPods(name ? { runtime_class: name } : null)
 
