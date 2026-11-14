@@ -5,6 +5,7 @@ import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, No
 import { fmtRel } from './detailFormat'
 import { limitRangeViolationsLayer, limitRangeViolationsSummary, violatingPodCount, violationsUnread } from './limitRangeViolations'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -37,6 +38,7 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
     name,
     alsoRead: [['limitrange-violations', namespace, name]],
   })
+  useDrawerFollowsEvents({ describeKey: ['limitrange-describe', namespace, name], answer: desc, kind: 'LimitRange', namespace, name })
 
   const { data: violations, error: violationsError } = useQuery({
     queryKey: ['limitrange-violations', namespace, name],
