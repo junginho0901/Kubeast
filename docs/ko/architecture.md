@@ -125,6 +125,8 @@ ghcr.io/junginho0901/kubeast-model-config-controller-go
 - k8s-service
   - 60초마다 등록된 클러스터별 상태 확인(`multicluster.healthcheckIntervalSec`)
   - 오래 쓰지 않은 클러스터의 informer 캐시 정리
+  - 레플리카마다 5초(앞뒤 1초)마다 DB에서 등록된 클러스터의 `config_version` 읽기, 쿼리 하나(`internal/clustersync`). Redis가 있으면 다른 레플리카의 클러스터 변경 알림도 구독
+  - 켜질 때 Redis가 답하지 않았으면 답할 때까지 5초마다 다시 묻기(답하면 캐시를 Redis로 옮김)
 
 표의 MCP, 알림 조사, 세션 녹화, 노드 셸, `features.*` 줄은 코드를 보고 적은 값입니다. 파드가 생기지 않아 따로 재지 않았고, MCP 값은 2026-10-13에 측정했습니다.
 

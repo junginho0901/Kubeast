@@ -125,6 +125,8 @@ Work that always runs:
 - k8s-service:
   - checks the health of each registered cluster every 60 seconds (`multicluster.healthcheckIntervalSec`)
   - cleans up the informer caches of clusters not used for a long time
+  - on each replica, reads every registered cluster's `config_version` from the database every 5 seconds, give or take a second, one query (`internal/clustersync`); with Redis it also follows the other replicas' cluster change notices
+  - when Redis did not answer at start, asks it again every 5 seconds until it answers, then moves the cache there
 
 The MCP, alert investigation, session recording, node shell and `features.*` rows are based on the code. They create no pods, so they were not measured separately. The MCP value was measured on 2026-10-13.
 
