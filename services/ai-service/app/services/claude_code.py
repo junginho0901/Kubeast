@@ -14,8 +14,11 @@ settings files, and every variable this service inherited blanked except PATH, l
 so the model keys and the database URL never reach it. The token reaches it only as
 ``CLAUDE_CODE_OAUTH_TOKEN``. Off by default (``AI_CLAUDE_CODE_ENABLED``, chart
 ``ai.providers.claudeCode.enabled``) and meant for an install one person uses with their own subscription:
-Anthropic's terms keep subscriptions to individual use. Runs wait for a free slot: the chat's
-(``AI_CLAUDE_CODE_MAX_CONCURRENT``) or the investigator's own one, so an investigation never holds up a chat.
+Anthropic's terms keep subscriptions to individual use. Runs wait for a free slot: the investigator's own one per
+server, so an investigation never holds up a chat, or a chat slot of this server (``AI_CLAUDE_CODE_MAX_CONCURRENT``,
+the memory each process takes) and then one of the install's (``AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL``, shared by every
+replica through the database: app.services.claude_code_slots), so the subscription's use stays within one limit
+however many servers run.
 """
 from __future__ import annotations
 
@@ -25,11 +28,13 @@ import logging
 import os
 import tempfile
 from collections import deque
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Sequence
 
 from app.config import settings
+from app.services import claude_code_slots
 from app.services.prompt_fence import inside_arrows
 from app.services.audit_target import shown_tool_args
 
@@ -70,6 +75,13 @@ def max_concurrent() -> int:
     return max(1, int(getattr(settings, "AI_CLAUDE_CODE_MAX_CONCURRENT", 1) or 1))
 
 
+def max_concurrent_total() -> int:
+    """The install's chat slots across every replica; 0 (the default) is maxConcurrent, so one server runs as many
+    as before."""
+    total = int(getattr(settings, "AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL", 0) or 0)
+    return total if total > 0 else max_concurrent()
+
+
 def turn_timeout() -> float:
     return float(max(30, int(getattr(settings, "AI_CLAUDE_CODE_TURN_TIMEOUT", 300) or 300)))
 
@@ -101,6 +113,26 @@ def _sem(lane: str = "chat") -> asyncio.Semaphore:
     if lane not in _semaphores:
         _semaphores[lane] = asyncio.Semaphore(max_concurrent() if lane == "chat" else 1)
     return _semaphores[lane]
+
+
+async def _database():
+    from app.database import get_db_service
+    return await get_db_service()
+
+
+@asynccontextmanager
+async def _slot(lane: str):
+    """A run's place. The investigator's lane: one per server, outside the install-wide limit. The chat's: a slot of
+    this server first, then one of the install's, always in that order, so a run holding one never waits for one a
+    run waiting for its first holds."""
+    if lane != "chat":
+        async with _sem(lane):
+            yield
+        return
+    async with _sem("chat"):
+        db = await _database()
+        async with claude_code_slots.held(db, "chat", max_concurrent_total()):
+            yield
 
 
 def _content_text(content: Any) -> str:
@@ -231,10 +263,10 @@ def _result_error(result, seen: Optional[dict] = None) -> Optional[ClaudeCodeErr
 
 
 async def _run(sdk, prompt: str, options, on_message: Callable[[Any], None], stderr: deque, lane: str = "chat"):
-    """One Claude Code run within its lane's concurrency limit and the turn timeout; returns its result message."""
+    """One Claude Code run within its lane's concurrency limits and the turn timeout; returns its result message."""
     result = None
     seen: dict = {}
-    async with _sem(lane):
+    async with _slot(lane):
         try:
             async with asyncio.timeout(turn_timeout()):
                 async for message in sdk.query(prompt=prompt, options=options):

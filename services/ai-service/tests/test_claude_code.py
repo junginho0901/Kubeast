@@ -140,7 +140,24 @@ TOOLS = [
 
 
 @pytest.fixture
-def on(monkeypatch):
+async def slots_db(tmp_path, monkeypatch):
+    """A sqlite database of its own holding the install-wide slots the chat lane takes."""
+    from app.database import DatabaseService
+    from app.services import claude_code_slots
+
+    db = DatabaseService(f"sqlite+aiosqlite:///{tmp_path}/slots.db")
+    await db.init_db()
+    monkeypatch.setattr(claude_code_slots, "_made", {})
+
+    async def database():
+        return db
+    monkeypatch.setattr(claude_code, "_database", database)
+    yield db
+    await db.engine.dispose()
+
+
+@pytest.fixture
+def on(monkeypatch, slots_db):
     """The provider switched on, with fresh concurrency limits."""
     monkeypatch.setattr(claude_code.settings, "AI_CLAUDE_CODE_ENABLED", True, raising=False)
     monkeypatch.setattr(claude_code, "_semaphores", {})
