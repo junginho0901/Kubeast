@@ -147,7 +147,7 @@ async def test_two_calls_at_once_end_with_one_number_for_each_value():
 
     async def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
-        seen.append(body["masks"])
+        seen.append(json.loads(request.content)["masks"])  # as sent: the table below is numbered into
         if len(seen) == 2:
             both_sent.set()
         await both_sent.wait()
