@@ -42,6 +42,7 @@ A "target cluster" is a cluster Kubeast manages, including the cluster it is ins
 | Network drops (drawers, AI `network_drops`) | The Hubble drop metric with workload labels in the cluster's Prometheus — §17 | Prometheus (§3) | The section is not shown; the tool says the metric is missing |
 | Resource Graph traffic lines | Recent flows (§16), or the Hubble TCP and drop metrics with workload labels in the cluster's Prometheus — §18 | `features.networkFlows` or Prometheus | The switch is not shown; a missing metric is named in the graph |
 | Top talkers (drawers, AI `network_top_flows`) | An Amazon CloudWatch Network Flow Monitor monitor for the EKS cluster, Kubeast's AWS identity allowed to query it, the user's `list` on pods — §19 | `features.networkFlowMonitor.enabled` (off) | The section and the tool are left out and the API returns 404; without `list` on pods, 403; when AWS refuses Kubeast's identity, 502 |
+| AI call graph (`resource_graph` with include calls) | The traces' service graph metrics (Tempo metrics-generator or the OpenTelemetry Collector's servicegraph connector) and the Hubble metrics of §18 in the cluster's Prometheus — §20 | `features.callGraph.enabled` (off) | The tool is offered without include calls; a missing metric or permission is named per source in the answer |
 
 ## 1. Permissions (RBAC) — every target cluster
 
@@ -674,6 +675,15 @@ For the drawers' "Top Talkers" and the AI tool `network_top_flows` (`features.ne
 - **Who may read**: holders of `resource.networkflow.read` whom the cluster lets `list` pods in the namespace (Kubeast asks with a SelfSubjectAccessReview as the user). A peer in a namespace whose pods the user cannot list, or outside a namespace-limited grant, shows its namespace and address only. Each read is recorded as `k8s.networkflows.query` with `provider: nfm`.
 - **Check**: `aws networkflowmonitor list-monitors --region <region>` shows the monitor, and a Pod drawer → Top Talkers → Show top talkers lists rows.
 - **Verified**: against a stand-in of the API in the development cluster (`deploy/kind/devtools.yaml`, e2e `network-top-flows.spec.ts`) with the AWS SDK for Go v2 client; not yet against a real monitor.
+
+## 20. Call graph (AI `resource_graph` with include calls)
+
+With `features.callGraph.enabled` (off by default), the AI tool `resource_graph` takes `include: ["calls"]` and `since` (1m–24h, default 1h) and adds who calls whom among the namespace's workloads, the failing ones that call nothing failing first, and the paths from them to the failing workloads that call them (cause → … → symptom). Alert investigations are told to read it when several workloads fail. Two sources, both from the cluster's Prometheus (§3), read as the user; each one missing is named in the answer and the other is still read.
+
+- **Traces**: the service graph metrics `traces_service_graph_request_total`, `traces_service_graph_request_failed_total` and `traces_service_graph_request_server_seconds_bucket` (labels `client`, `server`). Tempo's metrics-generator (`service-graphs` processor, remote write to that Prometheus) and the OpenTelemetry Collector's or Grafana Alloy's `servicegraph` connector write them. With the dimension `k8s.namespace.name` added on both sides (`client_k8s_namespace_name`, `server_k8s_namespace_name`; Tempo `enable_client_server_prefix: true`) the queries keep to the namespace; without it Kubeast reads the busiest 500 edges and keeps those touching the namespace. A service name is placed on a workload by the dimensions `k8s.deployment.name`, `k8s.statefulset.name` or `k8s.daemonset.name` when present, else by a workload of that name, else by a Service of that name and the workloads its selector picks; one that fits none keeps its service name. A grant limited to namespaces does not get this source, as it gets no Prometheus read (§3): without the namespace dimension the metric names every namespace's services.
+- **Network**: the Hubble TCP and drop metrics the traffic lines read (§18), for holders of `resource.networkflow.read`. The Relay's recent flows are not read here (the AI reads them with `network_flows`).
+- Reads per call: one label read and three queries for the traces, the traffic lines' reads (§18). Nothing is read with the switch off.
+- **Check**: `topk(10, sum by (client, server) (increase(traces_service_graph_request_total[1h])))` in Prometheus.
 
 ## Verified versions (2026-10-13)
 
