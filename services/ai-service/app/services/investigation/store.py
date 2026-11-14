@@ -212,7 +212,8 @@ async def alert_locked(db, cluster: str, fingerprint: str, starts_at: Optional[d
 
 
 # The pg_advisory_xact_lock key of the hourly cap: a fixed number no other lock of the database uses (auth-service's
-# auditchain takes 7_432_119_027 and 7_432_119_028, its audit sinks 0x6b62617564736e6b).
+# auditchain takes 7_432_119_027 and 7_432_119_028, its audit sinks 0x6b62617564736e6b; k8s-service's
+# healthStatusLockKey 0x6b62686c74687374, through internal/pglock, is the replica writing clusters.health_status).
 HOURLY_CAP_LOCK = 0x4B55424541535448  # "KUBEASTH"
 
 
