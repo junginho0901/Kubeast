@@ -51,6 +51,7 @@ var namespaceRoutes = map[string]scopeRule{
 	"GET /api/v1/resource-graph":   scopeQueryList,
 	"GET /api/v1/networktraffic":   scopeSelfChecked,
 	"GET /api/v1/timeline":         scopeNarrowed,
+	"GET /api/v1/timeline/changes": scopeNarrowed,
 	"GET /api/v1/topology/storage": scopeNarrowed,
 
 	// Any kind by name

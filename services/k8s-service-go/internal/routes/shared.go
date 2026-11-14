@@ -92,6 +92,8 @@ var sharedReadRoutes = routeSet(
 	"/api/v1/timeline",
 	"/api/v1/namespaces/{namespace}/timeline",
 	"/api/v1/namespaces/{namespace}/timeline/{kind}/{name}",
+	"/api/v1/timeline/changes",
+	"/api/v1/namespaces/{namespace}/timeline/changes",
 )
 
 // notSharedDescribes write a row for each caller's reveal of a Secret, which one run cannot stand for.

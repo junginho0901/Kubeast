@@ -241,6 +241,7 @@ GET /api/v1/namespaces/{namespace}/statefulsets/{name}/describe path
 GET /api/v1/namespaces/{namespace}/statefulsets/{name}/revisions path
 GET /api/v1/namespaces/{namespace}/statefulsets/{name}/yaml path
 GET /api/v1/namespaces/{namespace}/timeline path
+GET /api/v1/namespaces/{namespace}/timeline/changes path
 GET /api/v1/namespaces/{namespace}/timeline/{kind}/{name} path
 GET /api/v1/namespaces/{namespace}/traces/compare path
 GET /api/v1/namespaces/{namespace}/traces/metrics path
@@ -312,6 +313,7 @@ GET /api/v1/storageclasses cluster-object
 GET /api/v1/storageclasses/{name} narrowed
 GET /api/v1/storageclasses/{name}/describe narrowed
 GET /api/v1/timeline narrowed
+GET /api/v1/timeline/changes narrowed
 GET /api/v1/topology/deployment/{namespace}/{deployment_name} path
 GET /api/v1/topology/namespace/{namespace} path
 GET /api/v1/topology/service/{namespace}/{service_name} path
