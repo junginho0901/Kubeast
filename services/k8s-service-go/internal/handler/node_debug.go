@@ -265,6 +265,7 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		writeShellStatus(conn, shellStatus{Status: shellAuditUnavailable})
 		return
 	}
+	// Deferred after the hold, so the recording closes before the hold is let go (endTerminal).
 	defer rec.Close()
 	writeShellStatus(conn, shellStatus{Status: shellStarting})
 

@@ -52,9 +52,13 @@ func sayStreamEnded(ctx context.Context, w http.ResponseWriter, flusher http.Flu
 	return true
 }
 
-// auditSessionEnd writes the row of a connection its session ended; other ends are the user's own and have none.
+// auditSessionEnd writes the row of a connection its session ended, and of a terminal the server's leaving closed
+// (reason server_leaving; a followed log reconnects by itself and has none). Other ends are the user's own and have none.
 func (h *Handler) auditSessionEnd(ctx context.Context, r *http.Request, targetType, target, namespace, stream string) {
 	code := auth.SessionEndCode(ctx)
+	if code == "" && probe.IsLeaving(ctx) && (stream == "exec" || stream == "node-shell") {
+		code = probe.LeavingReason
+	}
 	if code == "" {
 		return
 	}

@@ -4,13 +4,18 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/junginho0901/kubeast/services/pkg/probe"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/remotecommand"
 )
 
 // A terminal whose server leaves (SIGTERM) says so, closes with 1012 and hangs its shell up, as the browser going away
@@ -96,5 +101,75 @@ func TestHoldSessionEndsWhenTheServerLeaves(t *testing.T) {
 	release()
 	if p.Held() != 0 {
 		t.Fatalf("held = %d after the release", p.Held())
+	}
+}
+
+// The handler itself: an exec terminal the server's leaving closed leaves a k8s.session.end row with server_leaving,
+// beside the row that opened it, and lets go of its hold.
+func TestAnExecTerminalTheServerLeavingClosedLeavesItsRow(t *testing.T) {
+	var version atomic.Int32
+	h, store := liveHandler(t, func(http.ResponseWriter, *http.Request) {}, &version)
+	p := probe.New()
+	h.SetLeaving(p)
+	fake := &fakeExecutor{endOnEOT: true}
+	orig := newShellExecutor
+	newShellExecutor = func(*rest.Config, *url.URL) (remotecommand.Executor, error) { return fake, nil }
+	t.Cleanup(func() { newShellExecutor = orig })
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.PodExecWS(w, withLogFileContext(r, "apps", "resource.pod.exec"))
+	}))
+	defer srv.Close()
+	c, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"?container=app", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	readFrame(t, c) // ready
+	readFrame(t, c) // prompt
+
+	p.Leave()
+
+	if ch, s := readFrame(t, c); ch != shellStderr || !strings.Contains(s, "the server is restarting") {
+		t.Fatalf("notice frame = %d %q", ch, s)
+	}
+	_ = c.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_, _, err = c.ReadMessage()
+	var closed *websocket.CloseError
+	if !errors.As(err, &closed) || closed.Code != websocket.CloseServiceRestart {
+		t.Fatalf("after the notice: %v", err)
+	}
+	if row := store.sessionEndRow(t); row["stream"] != "exec" || row["reason"] != probe.LeavingReason {
+		t.Fatalf("session end row = %v", row)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if !p.Wait(ctx) {
+		t.Fatalf("the terminal still holds the server (held %d)", p.Held())
+	}
+}
+
+// closeOrder is a recording that notes how many connections still held the server when it closed.
+type closeOrder struct {
+	p        *probe.Probe
+	heldThen int64
+	closed   bool
+}
+
+func (c *closeOrder) Close() {
+	c.heldThen, c.closed = c.p.Held(), true
+}
+
+// The recording closes while the terminal still holds the server, so the recorder's Shutdown, which runs once no hold
+// is left, never takes it for a recording the server cut off.
+func TestATerminalClosesItsRecordingBeforeItLetsGoOfTheServer(t *testing.T) {
+	p := probe.New()
+	_, release := p.Hold(context.Background())
+	rec := &closeOrder{p: p}
+	endTerminal(rec, release)
+	if !rec.closed || rec.heldThen != 1 {
+		t.Fatalf("closed %v with %d held, want closed while its hold stood", rec.closed, rec.heldThen)
+	}
+	if p.Held() != 0 {
+		t.Fatalf("held = %d after endTerminal", p.Held())
 	}
 }

@@ -84,7 +84,7 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	ctx, release := h.holdSession(ctx)
-	defer release()
+	defer endTerminal(rec, release)
 
 	// The exec runs on the request's cluster as the signed-in user: the
 	// executor builds its transport from this config, identity included.
