@@ -31,6 +31,21 @@ type memEntry struct {
 	expires time.Time
 }
 
+// KeptPrefix starts the keys FlushAll leaves in Redis: what the replicas keep there for each other
+// (internal/clustersync), not a cached answer.
+const KeptPrefix = "kubeast:sync:"
+
+// Options is the connection New makes, for another client of the same Redis.
+func Options(host string, port, db int, password string) *redis.Options {
+	return &redis.Options{
+		Addr:        fmt.Sprintf("%s:%d", host, port),
+		Password:    password,
+		DB:          db,
+		DialTimeout: 5 * time.Second,
+		ReadTimeout: 5 * time.Second,
+	}
+}
+
 // New connects to Redis at host:port (password empty = no AUTH, the local
 // docker/kind setups) and falls back to the in-memory cache when it is not
 // reachable. An empty host is no Redis at all: the in-memory cache, no attempt.
@@ -43,13 +58,7 @@ func New(host string, port, db int, password string) *Cache {
 		return c
 	}
 
-	rdb := redis.NewClient(&redis.Options{
-		Addr:        fmt.Sprintf("%s:%d", host, port),
-		Password:    password,
-		DB:          db,
-		DialTimeout: 5 * time.Second,
-		ReadTimeout: 5 * time.Second,
-	})
+	rdb := redis.NewClient(Options(host, port, db, password))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -190,14 +199,47 @@ func (c *Cache) IsConnected() bool {
 
 // FlushAll drops every entry. Use sparingly — only when cached data may no
 // longer reflect reality (e.g. after the underlying K8s cluster changes).
+// In Redis it deletes every key of the database but those under KeptPrefix.
 func (c *Cache) FlushAll(ctx context.Context) error {
 	if c.connected {
-		return c.rdb.FlushDB(ctx).Err()
+		return flushKeeping(ctx, c.rdb, KeptPrefix)
 	}
 	c.mu.Lock()
 	c.mem = make(map[string]memEntry)
 	c.mu.Unlock()
 	return nil
+}
+
+// flushBatch is how many keys one SCAN step asks for and one UNLINK removes.
+const flushBatch = 1000
+
+// flushKeeping unlinks every key of the database but those starting with keep. A key written during the scan may
+// stay, as one written right after a FLUSHDB would.
+func flushKeeping(ctx context.Context, rdb *redis.Client, keep string) error {
+	batch := make([]string, 0, flushBatch)
+	unlink := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		err := rdb.Unlink(ctx, batch...).Err()
+		batch = batch[:0]
+		return err
+	}
+	iter := rdb.Scan(ctx, 0, "*", flushBatch).Iterator()
+	for iter.Next(ctx) {
+		if key := iter.Val(); !strings.HasPrefix(key, keep) {
+			batch = append(batch, key)
+		}
+		if len(batch) == flushBatch {
+			if err := unlink(); err != nil {
+				return err
+			}
+		}
+	}
+	if err := iter.Err(); err != nil {
+		return err
+	}
+	return unlink()
 }
 
 // cacheName is a key without its cluster and identity parts (k8s.Service

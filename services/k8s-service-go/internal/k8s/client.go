@@ -124,6 +124,9 @@ type Service struct {
 
 	cache *cache.Cache
 
+	// changes tells the other replicas of a cluster this one invalidated (internal/clustersync); nil without Redis.
+	changes ChangeNotifier
+
 	// These discovery caches are PER CLUSTER — Gateway/DRA CRD versions and the
 	// API-resource set differ between clusters, so they're keyed by cluster.ID to
 	// stop one cluster's discovery from being served for another.
@@ -420,16 +423,41 @@ func (s *Service) ClusterKubeconfig(ctx context.Context, id cluster.ID) (blob st
 	return info.KubeconfigBlob, false, nil
 }
 
+// ChangeNotifier tells the other replicas that this one invalidated a cluster (internal/clustersync).
+type ChangeNotifier interface {
+	Changed(id cluster.ID)
+}
+
+// SetChangeNotifier makes Invalidate tell the other replicas; without one it acts on this replica only.
+func (s *Service) SetChangeNotifier(n ChangeNotifier) { s.changes = n }
+
 // Invalidate drops a cluster's cached bundle (e.g. after a kubeconfig rotation)
 // so the next access rebuilds it from the registry — no rollout required.
 func (s *Service) Invalidate(id cluster.ID) {
+	s.dropBundle(id)
+	s.invalidateCaches()
+	if s.changes != nil {
+		s.changes.Changed(id)
+	}
+}
+
+// DropCluster is Invalidate for a change another replica took. That replica flushed the cache in Redis, so this one
+// flushes only a cache of its own (Redis did not answer at start) and tells no one.
+func (s *Service) DropCluster(id cluster.ID) {
+	s.dropBundle(id)
+	s.dropDerivedCaches()
+	if s.cache != nil && !s.cache.IsConnected() {
+		_ = s.cache.FlushAll(context.Background())
+	}
+}
+
+func (s *Service) dropBundle(id cluster.ID) {
 	s.pool().Remove(id) // evict callback Closes the bundle
 	s.defaultBundle.Store(nil)
 	// Reset the breaker: invalidation (e.g. a kubeconfig rotation that fixes a
 	// down cluster) gives the cluster a fresh chance, so the next request is
 	// actually tried instead of fail-fast 503'd until the next health poll.
 	s.MarkClusterUp(id)
-	s.invalidateCaches()
 }
 
 // defaultClientBundle resolves (and caches) the default cluster's bundle for the
@@ -446,8 +474,17 @@ func (s *Service) defaultClientBundle() *clientBundle {
 	return b
 }
 
-// invalidateCaches clears state derived from a clientBundle.
+// invalidateCaches clears state derived from a clientBundle, and the cache.
 func (s *Service) invalidateCaches() {
+	s.dropDerivedCaches()
+	if s.cache != nil {
+		// Best-effort: ignore errors from Redis flush.
+		_ = s.cache.FlushAll(context.Background())
+	}
+}
+
+// dropDerivedCaches clears the discovery, Prometheus and access check answers this process keeps.
+func (s *Service) dropDerivedCaches() {
 	s.apiResourcesMu.Lock()
 	s.apiResourcesCache = map[cluster.ID][]metav1.APIResourceList{}
 	s.apiResourcesAt = map[cluster.ID]time.Time{}
@@ -459,11 +496,6 @@ func (s *Service) invalidateCaches() {
 
 	s.promQ.clear()
 	s.accessAnswers.clear()
-
-	if s.cache != nil {
-		// Best-effort: ignore errors from Redis flush.
-		_ = s.cache.FlushAll(context.Background())
-	}
 }
 
 // --- Context-less accessors (default cluster) ---

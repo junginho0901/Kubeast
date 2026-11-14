@@ -15,11 +15,13 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/redis/go-redis/v9"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/alerts"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/clustersync"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
@@ -68,6 +70,18 @@ func main() {
 
 	// Init Redis cache
 	redisCache := cache.New(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisPassword)
+
+	// A cluster invalidated on one replica is dropped on every replica (internal/clustersync). The versions are read
+	// before any cluster is cached here. Without REDIS_HOST a change stays on the replica that took it, as before.
+	var changes *clustersync.Sync
+	if cfg.RedisHost != "" {
+		changes = clustersync.New(redis.NewClient(cache.Options(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisPassword)))
+		if redisCache.IsConnected() {
+			if err := changes.Load(context.Background()); err != nil {
+				slog.Warn("clustersync: versions not read at start, taken on the first read", "err", err)
+			}
+		}
+	}
 
 	// Shared Postgres pool: the audit log and the cluster registry.
 	bootCtx, bootCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -137,6 +151,12 @@ func main() {
 	if err != nil {
 		slog.Error("failed to initialize k8s service", "err", err)
 		os.Exit(1)
+	}
+	if changes != nil {
+		k8sSvc.SetChangeNotifier(changes)
+		syncCtx, syncCancel := context.WithCancel(context.Background())
+		defer syncCancel()
+		go changes.Run(syncCtx, k8sSvc.DropCluster)
 	}
 	// Init JWT validator
 	jwtValidator := auth.NewJWTValidator(auth.JWKSConfig{
