@@ -443,9 +443,10 @@ test.describe('A code block the answer left open, and a stopped answer', () => {
       await expect(answer).not.toContainText(LONG_ANSWER)
       const saved = savedStop(page)
       await page.getByRole('button', { name: /^중단$|^stop$/i }).click()
-      const posted = (await saved).postDataJSON() as { messages: { content: string; stopped: boolean }[] }
+      const posted = (await saved).postDataJSON() as { messages: { content: string; stopped: boolean; answers: string }[] }
       expect(posted.messages).toHaveLength(1)
       expect(posted.messages[0].stopped).toBe(true)
+      expect(posted.messages[0].answers, 'saved only while its question is the newest message').toBe(QUESTION)
       expect(posted.messages[0].content.endsWith(LONG_ANSWER)).toBe(true)
       await page.clock.resume()
       await expect(page.locator(ASSISTANT).last()).toContainText(LONG_ANSWER)
@@ -469,8 +470,9 @@ test.describe('A code block the answer left open, and a stopped answer', () => {
       await expect(answer).not.toContainText(LONG_ANSWER)
       const saved = savedStop(page)
       await page.getByTestId('floating-chat-panel').getByRole('button', { name: /^중지$|^stop$/i }).click()
-      const posted = (await saved).postDataJSON() as { messages: { content: string }[] }
+      const posted = (await saved).postDataJSON() as { messages: { content: string; answers: string }[] }
       expect(posted.messages).toHaveLength(1)
+      expect(posted.messages[0].answers, 'saved only while its question is the newest message').toBe(QUESTION)
       expect(posted.messages[0].content.endsWith(LONG_ANSWER)).toBe(true)
       await page.clock.resume()
       await expect(page.getByTestId('floating-answer').last()).toContainText(LONG_ANSWER)
