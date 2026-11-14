@@ -105,7 +105,7 @@ export function RealtimeMetricsSection({ metricsAvailable, metricsFailure = null
       </div>
 
       {/* Per-GPU bars by host, a page of hosts at a time */}
-      <div className="space-y-3">
+      <div className="space-y-3" data-list="GPU hosts">
         {pagedHosts.map(([hostname, gpus]) => (
           <div key={hostname} className="rounded-lg border border-slate-700/50 bg-slate-900/40 p-3" data-testid="gpu-realtime-host" data-host={hostname}>
             <div className="text-xs font-medium text-slate-300 mb-2">{hostname}</div>
