@@ -395,8 +395,9 @@ async def test_off_an_investigation_runs_both_reads_and_reads_as_before(monkeypa
     install_loop(monkeypatch, service, audits)
     out = await runner.investigate(cfg(max_steps=5), row())
     assert service.executed == [("k8s_get_pod_logs", LOGS)] * 2
-    assert out["tool_calls"] == [{"tool": "k8s_get_pod_logs", "args": LOGS, "step": 1},
-                                 {"tool": "k8s_get_pod_logs", "args": LOGS, "step": 2}]
+    read = len("NAME READY\npod-1 0/1")  # result_chars, which every read that ran has
+    assert out["tool_calls"] == [{"tool": "k8s_get_pod_logs", "args": LOGS, "step": 1, "result_chars": read},
+                                 {"tool": "k8s_get_pod_logs", "args": LOGS, "step": 2, "result_chars": read}]
     messages = service.completions.calls[0]["messages"]
     assert messages[0]["content"] == inv_prompt.system_prompt(cluster="self", namespace="apps", language="en")
     assert [m["content"] for m in messages if m["role"] == "tool"] == ["NAME READY\npod-1 0/1"] * 2
