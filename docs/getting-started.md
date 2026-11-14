@@ -68,6 +68,7 @@ The script prints the address and the admin password once sign-in answers.
   - For a kind cluster, paste `kind get kubeconfig --internal --name <cluster>` and connect the containers that talk to it to kind's network: `docker network connect kind <dir>-auth-service-1`, and the same for `k8s-service` and `tool-server` (`<dir>` is the checkout folder's name, the Compose project).
 - Only the gateway port is published. Reach the other services with `docker compose exec`.
 - Running the script again (for example with another `--port`) keeps the passwords and keys in `.env`, because the database volume keeps the password it was created with.
+- Stopping or replacing a container (`docker compose stop`, `up` with a new image) gives each Kubeast service 35 s to finish (`stop_grace_period`), the chart's grace period with the default `podShutdown.preStopSeconds: 5`. Docker's default of 10 s would stop it in the middle of its shutdown.
 
 `docker-compose` pulls the published images. By default it uses the version of the tag you checked out; set `KUBEAST_TAG` to change it.
 To build from source:

@@ -1,5 +1,7 @@
 # Only the gateway is published. Every other service is reachable inside msa-network only;
 # use `docker compose exec` (or an override file) to reach one directly.
+# stop_grace_period 35s is the chart's grace period (30 s + podShutdown.preStopSeconds 5): Docker's own 10 s would
+# stop a service in the middle of its shutdown.
 services:
   # The services run as UID 65532; Docker creates named volumes owned by root.
   volume-init:
@@ -45,6 +47,7 @@ services:
       timeout: 3s
       retries: 5
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # Auth Service (Go)
   auth-service:
@@ -78,6 +81,7 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # AI Service
   ai-service:
@@ -110,6 +114,7 @@ services:
       auth-service:
         condition: service_started
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # K8s Service (Go)
   k8s-service:
@@ -144,6 +149,7 @@ services:
       auth-service:
         condition: service_started
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # Session Service (Go)
   session-service:
@@ -164,6 +170,7 @@ services:
       auth-service:
         condition: service_started
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # Tool Server (K8s tool executor)
   tool-server:
@@ -188,6 +195,7 @@ services:
       auth-service:
         condition: service_started
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # API Gateway (NGINX)
   gateway:
@@ -206,6 +214,7 @@ services:
       - session-service
       - frontend
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # Frontend
   frontend:
@@ -213,6 +222,7 @@ services:
     networks:
       - msa-network
     restart: unless-stopped
+    stop_grace_period: 35s
 
 networks:
   msa-network:
