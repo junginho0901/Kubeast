@@ -4,7 +4,7 @@
 // (formatMatchReason / getBindingMatchPathText) 보유. 순수 함수는 rbacUtils.ts 에서 import.
 
 import { useState } from 'react'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useWatchChanges } from '@/services/useWatchChanges'
@@ -193,6 +193,7 @@ function RbacBindingSection({ testId, keyPrefix, title, broadTitle, broadHint, l
 export function PodRbacTab({ pod, tr }: Props) {
   const [includeAuthenticatedGroup, setIncludeAuthenticatedGroup] = useState(false)
 
+  // The toggle asks again and waits for its own answer: the bindings read with the other choice are not this one's.
   const { data: rbacData, isLoading: isRbacLoading, error: rbacError } = useQuery({
     queryKey: ['pod-rbac', pod.namespace, pod.name, includeAuthenticatedGroup],
     queryFn: async () => {
@@ -200,8 +201,6 @@ export function PodRbacTab({ pod, tr }: Props) {
         include_authenticated: includeAuthenticatedGroup,
       })
     },
-    // The toggle asks again: what it showed stays until the new answer comes, so the page does not blink.
-    placeholderData: keepPreviousData,
   })
   useWatchChanges({
     enabled: !!rbacData,

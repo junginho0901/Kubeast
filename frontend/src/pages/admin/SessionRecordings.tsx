@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Film, Play, RefreshCw } from 'lucide-react'
 
@@ -13,6 +13,7 @@ import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { formatWhen } from './accessRequestFormat'
 import { utcTitle } from '@/utils/time'
 import { answerPageSize, serverPageRead } from '@/utils/fitServerPage'
+import { keepSameRead } from '@/utils/keepSameRead'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { failureOf } from '@/hooks/useRefresh'
@@ -56,12 +57,13 @@ export default function SessionRecordings() {
   const read = serverPageRead(page, rowsPerPage, fit)
 
   const { data: config } = useQuery({ queryKey: ['recordings', 'config'], queryFn: api.getRecordingsConfig, staleTime: 60_000 })
-  // The server counts the matches (X-Kubeast-Total). The rows on screen stay while another page, search or page size
-  // loads, with the range and rows per page they are.
+  // The server counts the matches (X-Kubeast-Total). The rows on screen stay while another page or page size loads,
+  // with the range and rows per page they are; another user or kind waits for its own answer.
+  const listKey = ['recordings', 'list', applied, page, read]
   const { data, isLoading, refetch, isFetching, error: listError, errorUpdatedAt } = useQuery({
-    queryKey: ['recordings', 'list', applied, page, read],
+    queryKey: listKey,
     queryFn: async () => ({ page, limit: read.limit, ...(await api.listRecordings({ ...applied, ...read })) }),
-    placeholderData: keepPreviousData,
+    placeholderData: keepSameRead(listKey, [3, 4]),
     refetchInterval: 15_000,
   })
   const total = data?.total ?? 0

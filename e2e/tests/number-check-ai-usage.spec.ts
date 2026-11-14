@@ -8,8 +8,9 @@ import { test, expect, type APIRequestContext, type Page, type Response } from '
 // Number check of two of Kubeast's own screens against the API and the database:
 // - AI Usage: for each grouping (user, model, cluster) the rows on every page are the answer's, the answer's group
 //   counts and totals are the audit rows' (ai.chat.complete and, in rows of their own, ai.investigation.run) in the
-//   period the screen sent, the totals line and the pager say the same, and the table keeps the rows it shows —
-//   under their own heading — while another grouping loads.
+//   period the screen sent, the totals line and the pager say the same; another grouping shows the loading line and
+//   none of the rows, totals or count of the one before while its answer is held, and a day not typed whole asks
+//   nothing and keeps the first page of the same grouping.
 // - Investigations: "of total" is the API's and the database's, the status applies when picked, the cluster ID when
 //   Search or Enter is pressed (and says so before), and 60 reports of one received time (inv-e2e-n4b-*, written to the
 //   database for the run) page in id order with none twice and no empty table between pages.
@@ -199,48 +200,114 @@ test.describe('number check: AI usage and investigations', () => {
       await checkGroup('user', answer, db)
     })
 
-    await test.step('to model: the rows on screen stay, under their own heading, until the model answer comes', async () => {
-      await page.evaluate((args) => {
-        const w = window as Obj
-        w.__usageFlash = []
-        const body = document.querySelector('[data-testid="ai-usage-table"] tbody')!
-        const check = () => {
-          const rows = body.querySelectorAll('tr')
-          const text = (body as HTMLElement).innerText
-          if (rows.length === 0 || text.includes(args.loading) || text.includes(args.none)) w.__usageFlash.push(rows.length === 0 ? '(no rows)' : text.slice(0, 40))
+    // From here on, every moment the table shows no row, the loading line or "no results", recorded in the page so no
+    // moment between two answers is missed; and every row key it draws.
+    const watchFromNow = () => page.evaluate((args) => {
+      const w = window as Obj
+      w.__usageFlash = []
+      w.__usageKeys = []
+      w.__usageWatch?.disconnect()
+      const body = document.querySelector('[data-testid="ai-usage-table"] tbody')!
+      const check = () => {
+        const rows = body.querySelectorAll('tr')
+        const text = (body as HTMLElement).innerText
+        if (rows.length === 0 || text.includes(args.loading) || text.includes(args.none)) w.__usageFlash.push(rows.length === 0 ? '(no rows)' : text.includes(args.loading) ? args.loading : text.slice(0, 40))
+        for (const tr of rows) {
+          const key = (tr as HTMLTableRowElement).cells.length >= 10 ? (tr as HTMLTableRowElement).cells[0].querySelector('span')?.textContent?.trim() : undefined
+          if (key !== undefined && !w.__usageKeys.includes(key)) w.__usageKeys.push(key)
         }
-        new MutationObserver(check).observe(body, { subtree: true, childList: true, characterData: true })
-      }, { loading: EN.common.loading, none: EN.common.noSearchResults })
-      const isModel = (url: URL) => url.pathname === USAGE_API && url.searchParams.get('group') === 'model'
-      const slow = async (route: Obj) => {
-        await new Promise((r) => setTimeout(r, 2_000))
+      }
+      w.__usageWatch = new MutationObserver(check)
+      w.__usageWatch.observe(body, { subtree: true, childList: true, characterData: true })
+    }, { loading: EN.common.loading, none: EN.common.noSearchResults })
+    const watched = () => page.evaluate(() => ({ flash: (window as Obj).__usageFlash as string[], keys: (window as Obj).__usageKeys as string[] }))
+    const totalsLine = async () => (await page.locator('main .ml-auto.text-xs').first().innerText()).split('\n').map((l) => l.trim()).filter(Boolean)
+    const u = EN.adminAIUsage
+    const noTotals = [
+      `${u.totals}: - ${u.requests} · - ${u.tokens} · - ${u.toolCalls}`,
+      `${u.source.chat}: - ${u.tokens} (- ${u.requests}) · ${u.source.investigation}: - ${u.tokens} (- ${u.runs})`,
+    ]
+
+    // a grouping held until the test lets it go: the loading line, the grouping's heading, no row, total or count of
+    // the grouping before it; then its own rows
+    const heldGrouping = async (group: Group, before: Obj) => {
+      const isGroup = (url: URL) => url.pathname === USAGE_API && url.searchParams.get('group') === group
+      let release = () => {}
+      const gate = new Promise<void>((resolve) => { release = resolve })
+      let held = 0
+      const hold = async (route: Obj) => {
+        held++
+        await gate
         try { await route.continue() } catch { /* the page went on */ }
       }
-      await page.route(isModel, slow)
+      await watchFromNow()
+      await page.route(isGroup, hold)
       try {
-        const { answer, db } = await settled('model', async () => {
+        const settledAnswer = settled(group, async () => {
           await groupDropdown.click()
-          await pick(EN.adminAIUsage.group.model).click()
-          await page.waitForTimeout(700)
-          // the page went back to 1; the user answer's first page is what is drawn
-          expect.soft(await page.getByTestId('ai-usage-table').locator('thead th').first().innerText(), 'while the model answer loads: the heading of the rows shown').toBe(EN.adminAIUsage.group.user)
-          expect.soft((await usageRowsOnScreen(page, badge))[0]?.[0], 'while the model answer loads: the user rows stay').toBe(userAnswer?.rows?.[0]?.key || '-')
+          await pick(u.group[group]).click()
+          await expect.poll(() => held, { message: `the ${group} answer is held` }).toBeGreaterThan(0)
+          await expect(page.getByTestId('ai-usage-table').locator('tbody').first()).toContainText(EN.common.loading)
+          expect.soft(await page.getByTestId('ai-usage-table').locator('thead th').first().innerText(), `while the ${group} answer is held: the heading`).toBe(u.group[group])
+          expect.soft(await usageRowsOnScreen(page, badge), `while the ${group} answer is held: rows`).toEqual([])
+          expect.soft(await totalsLine(), `while the ${group} answer is held: the totals line`).toEqual(noTotals)
+          expect.soft(await shownRange(page, 'ai-usage-pager'), `while the ${group} answer is held: the pager`).toEqual([0, 0, 0])
+          release()
         })
-        await expect.poll(() => page.getByTestId('ai-usage-table').locator('thead th').first().innerText(), { timeout: 15_000 }).toBe(EN.adminAIUsage.group.model)
-        expect.soft(await page.evaluate(() => (window as Obj).__usageFlash), 'the table never emptied while the grouping changed').toEqual([])
-        await checkGroup('model', answer, db)
+        const out = await settledAnswer
+        await expect.poll(() => page.getByTestId('ai-usage-table').locator('thead th').first().innerText(), { timeout: 15_000 }).toBe(u.group[group])
+        const seen = await watched()
+        const beforeKeys = new Set(((before?.rows ?? []) as Obj[]).map((r) => r.key || '-'))
+        const ownKeys = new Set(((out.answer?.rows ?? []) as Obj[]).map((r) => r.key || '-'))
+        expect.soft(seen.keys.filter((k) => beforeKeys.has(k) && !ownKeys.has(k)), `rows of the grouping before drawn after the ${group} pick`).toEqual([])
+        expect.soft(seen.flash.filter((f) => f !== EN.common.loading), `the table between the two answers: only the loading line`).toEqual([])
+        return out
       } finally {
-        await page.unroute(isModel, slow)
+        release()
+        await page.unroute(isGroup, hold)
       }
+    }
+
+    let modelAnswer: Obj = null
+    await test.step('to model: the loading line and none of the user rows or totals while the model answer is held, then the model rows', async () => {
+      const { answer, db } = await heldGrouping('model', userAnswer)
+      modelAnswer = answer
+      await checkGroup('model', answer, db)
     })
 
-    await test.step('grouped by cluster', async () => {
-      const { answer, db } = await settled('cluster', async () => {
-        await groupDropdown.click()
-        await pick(EN.adminAIUsage.group.cluster).click()
-      })
+    let clusterAnswer: Obj = null
+    await test.step('to cluster: the same, from the model rows', async () => {
+      const { answer, db } = await heldGrouping('cluster', modelAnswer)
+      clusterAnswer = answer
       await checkGroup('cluster', answer, db)
-      expect.soft(await page.evaluate(() => (window as Obj).__usageFlash), 'the table never emptied while the grouping changed').toEqual([])
+    })
+
+    await test.step('a day not typed whole yet asks nothing and keeps the first page of the same grouping', async () => {
+      const keysOnScreen = async () => (await usageRowsOnScreen(page, badge)).map((r) => r[0])
+      const firstKeys = (n: number) => ((clusterAnswer?.rows ?? []) as Obj[]).slice(0, n).map((r) => r.key || '-')
+      let asked = 0
+      const count = (r: { url: () => string; method: () => string }) => {
+        if (new URL(r.url()).pathname === USAGE_API && r.method() === 'GET') asked++
+      }
+      page.on('request', count)
+      const since = page.getByTestId('ai-usage-since')
+      const typed = await since.inputValue()
+      try {
+        await since.fill(typed.slice(0, 7))
+        await page.waitForTimeout(700)
+        const keys = await keysOnScreen()
+        expect.soft(keys.length > 0 || (clusterAnswer?.rows ?? []).length === 0, 'rows while the day is not whole').toBe(true)
+        expect.soft(keys, 'the rows while the day is not whole: the cluster answer\'s first page').toEqual(firstKeys(keys.length))
+        expect.soft(await page.getByTestId('ai-usage-table').locator('thead th').first().innerText(), 'the heading while the day is not whole').toBe(u.group.cluster)
+        expect.soft(asked, 'reads while the day is not whole').toBe(0)
+      } finally {
+        page.off('request', count)
+        await since.fill(typed)
+      }
+      await expect.poll(async () => {
+        const keys = await keysOnScreen()
+        return JSON.stringify(keys) === JSON.stringify(firstKeys(keys.length))
+      }, { timeout: 15_000, message: 'the whole day again: the cluster answer\'s first page' }).toBe(true)
     })
   })
 
@@ -328,10 +395,29 @@ test.describe('number check: AI usage and investigations', () => {
         new MutationObserver(check).observe(body, { subtree: true, childList: true, characterData: true })
       }, { loading: EN.investigations.loading, none: EN.common.listEmpty })
 
-      await test.step('a status applies when picked', async () => {
+      await test.step('a status applies when picked: the loading line and none of the rows before it while its answer is held', async () => {
         const status = page.locator('main label', { hasText: new RegExp(`^${EN.investigations.filter.status}$`) }).locator('xpath=..')
-        await status.locator('button').first().click()
-        await status.getByRole('button', { name: EN.investigations.status.done, exact: true }).click()
+        const isDone = (url: URL) => url.pathname === INVESTIGATIONS_API && url.searchParams.get('status') === 'done'
+        let release = () => {}
+        const gate = new Promise<void>((resolve) => { release = resolve })
+        let held = 0
+        const hold = async (route: Obj) => {
+          held++
+          await gate
+          try { await route.continue() } catch { /* the page went on */ }
+        }
+        await page.route(isDone, hold)
+        try {
+          await status.locator('button').first().click()
+          await status.getByRole('button', { name: EN.investigations.status.done, exact: true }).click()
+          await expect.poll(() => held, { message: 'the done answer is held' }).toBeGreaterThan(0)
+          await expect(page.getByTestId('investigations-table').locator('tbody').first()).toContainText(EN.investigations.loading)
+          expect.soft(await rowIds(), 'rows of every status while the done answer is held').toEqual([])
+          expect.soft(await range(), 'the footer while the done answer is held').toBe(EN.common.paginationEmpty)
+        } finally {
+          release()
+          await page.unroute(isDone, hold)
+        }
         const [got, exp] = await settle(range, async () => { const n = dbCount("status = 'done'"); return rangeOf(1, Math.min(await per(), n), n) })
         expect.soft(got, 'Done picked, no Search: range on screen = the done reports').toBe(exp)
         const doneAnswer = async () => (lastList?.url?.searchParams?.get('status') === 'done' ? String(lastList.body.total) : 'no answer for status=done')
