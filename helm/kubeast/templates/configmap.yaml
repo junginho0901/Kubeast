@@ -187,6 +187,7 @@ data:
   ANOMALY_RANK_TIMEOUT_SEC: {{ dig "timeoutSeconds" 20 $anomalyRank | int64 | quote }}
   ANOMALY_RANK_CONCURRENCY: {{ dig "concurrency" 4 $anomalyRank | int64 | quote }}
   ANOMALY_RANK_CACHE_SEC: {{ dig "cacheSeconds" 60 $anomalyRank | int64 | quote }}
+  ANOMALY_RANK_LOG_MAX_BYTES: {{ dig "logMaxBytes" 10737418240 $anomalyRank | int64 | quote }}
   {{- with .Values.features.alertInvestigation }}
   ALERT_INVESTIGATION_SEVERITIES: {{ join "," .severities | quote }}
   ALERT_INVESTIGATION_DEDUPE_HOURS: {{ .dedupeHours | int64 | quote }}
@@ -253,6 +254,7 @@ data:
   LOG_SEARCH_TIMEOUT: {{ .timeout | quote }}
   LOG_SEARCH_PER_USER_PER_MINUTE: {{ .perUserPerMinute | quote }}
   LOG_SEARCH_LOGQL: {{ .logql | default false | quote }}
+  LOG_SEARCH_QUERY_MAX_BYTES: {{ dig "queryMaxBytes" 0 . | int64 | quote }}
 {{- end }}
 {{- end }}
 {{- with .Values.features.tracing }}

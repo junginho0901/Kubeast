@@ -42,7 +42,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 예
 | 최근 흐름(드로어, AI `network_flows`) | TLS로 서비스하는 Cilium Hubble Relay, Relay Service의 `services/proxy` create 권한 — §16 | `features.networkFlows.enabled`(끔) | 칸과 도구가 빠지고 API는 404. 클러스터 권한이 없으면 403 |
 | 네트워크 차단(드로어, AI `network_drops`) | 클러스터 Prometheus에 워크로드 레이블이 붙은 Hubble 차단 지표 — §17 | Prometheus(§3) | 칸이 나오지 않고, 도구는 지표가 없다고 알려 줌 |
 | Resource Graph 통신 선 | 최근 흐름(§16), 또는 클러스터 Prometheus에 워크로드 레이블이 붙은 Hubble TCP·차단 지표 — §18 | `features.networkFlows` 또는 Prometheus | 전환이 나오지 않고, 없는 지표는 그래프에서 알려 줌 |
-| 미리 좁히기(AI `anomaly_rank`) | 이슈 점검처럼 읽는 파드·워크로드·이벤트·노드, 지표 검사에는 클러스터 Prometheus의 kube-state-metrics·cAdvisor 시리즈 — §3 | `features.anomalyRank.enabled`(끔) | 도구가 빠지고 API는 404. Prometheus나 그 시리즈가 없으면 지표 검사는 못 함으로 적히고, 네임스페이스로 한정된 권한에도 못 함으로 적힘 |
+| 미리 좁히기(AI `anomaly_rank`) | 이슈 점검처럼 읽는 파드·워크로드·이벤트·노드, 지표 검사에는 클러스터 Prometheus의 kube-state-metrics·cAdvisor 시리즈 — §3, 로그 검사에는 index stats와 패턴을 주는 로그 저장소, 트레이스 검사에는 TraceQL 지표를 주는 트레이스 저장소 — §14 | `features.anomalyRank.enabled`(끔) | 도구가 빠지고 API는 404. Prometheus나 그 시리즈가 없으면 지표 검사는 못 함으로 적히고, 네임스페이스로 한정된 권한에도 못 함으로 적힘. 로그·트레이스 저장소가 없거나 `get pods/log`가 없으면 그 검사들은 못 함으로 적힘 |
 | 상위 통신(드로어, AI `network_top_flows`) | EKS 클러스터의 Amazon CloudWatch Network Flow Monitor 모니터, 그 모니터를 조회할 수 있는 Kubeast의 AWS 신원, 사용자의 파드 `list` 권한 — §19 | `features.networkFlowMonitor.enabled`(끔) | 칸과 도구가 빠지고 API는 404. 파드 `list` 권한이 없으면 403. AWS가 Kubeast의 신원을 거부하면 502 |
 
 ## 1. 권한(RBAC) — 모든 대상 클러스터
@@ -434,11 +434,19 @@ receivers:
 
 ## 14. 로그 저장소 (로그 검색)
 
-Kubeast는 Loki의 `query_range`(AI의 `loki_query`는 메트릭 쿼리도 사용)·`labels`·`label/<이름>/values`·`patterns`를 읽기만 합니다.
+Kubeast는 Loki의 `query_range`(AI의 `loki_query`는 메트릭 쿼리도 사용)·`labels`·`label/<이름>/values`·`patterns`·`index/stats`(AI의 미리 좁히기 `anomaly_rank`가 로그 검사 전에, `features.logSearch.queryMaxBytes`를 정하면 `loki_query`도)를 읽기만 합니다.
 모두 GET이므로 Grafana 데이터소스 프록시로도 읽을 수 있습니다. Loki와 수집기는 설치하지 않습니다.
 
 패턴(`loki_patterns`)을 쓰려면 Loki에 `pattern_ingester: enabled: true`가 있어야 하며, 없으면 그 도구만 "없음"으로 답합니다.
 Loki는 최근 3시간치 중 창 안에서 30줄 이상 나온 패턴만 돌려줍니다.
+
+미리 좁히기의 로그 검사(`anomaly_rank`):
+
+- 먼저 `index/stats`로 기간과 그 앞 구간의 그 네임스페이스 스트림 양을 묻습니다. `features.anomalyRank.logMaxBytes`(10 GiB)를 넘거나, 줄이 하나도 없거나, Loki가 그 API를 주지 않으면 두 검사 모두 못 함으로 적힙니다.
+- 오류 모양 검사는 같은 스트림의 `patterns`를 두 구간에 걸쳐 읽습니다. Loki의 `level`이 error·fatal·critical이거나, level이 없고 모양에 `error`·`exception`·`fatal`·`panic`이 있으면 오류 모양으로 칩니다. 앞 구간의 패턴이 Loki에 없으면(위의 최근 3시간) 못 함으로 적힙니다.
+- 오류 줄 수 검사는 `sum by (<컨테이너 라벨>) (count_over_time({…} |~ "(?i)(error|exception|fatal|panic)" [<기간>]))`를 기간 길이를 step으로 한 번 돌립니다. 스트림에 `features.logSearch.labels`의 컨테이너 라벨이 있어야 합니다.
+- 워크로드를 주면 두 검사 모두 파드 라벨(`<이름>-.*`)로 그 파드만 봅니다.
+- 로그 도구와 같은 문을 지납니다: `resource.pod.read`, 그 네임스페이스의 `get pods/log`, 노드 셸 네임스페이스는 `resource.node.shell`이 있는 사람만, 두 구간 합이 `features.logSearch.maxRange` 안. 답 하나가 사용자별 횟수 제한의 검색 한 번이고 `k8s.pod.logs.logql` 감사 행 하나입니다.
 
 - **수집기**: 대상 클러스터의 컨테이너 로그를 Loki로 보내는 수집기가 있어야 합니다.
   - 라벨 이름이 `features.logSearch.labels`와 맞아야 합니다. 기본값은 Loki가 OTLP로 받은 로그에 붙이는 `k8s_cluster_name`·`k8s_namespace_name`·`k8s_pod_name`·`k8s_container_name`입니다.
@@ -464,6 +472,10 @@ Loki는 최근 3시간치 중 창 안에서 30줄 이상 나온 패턴만 돌려
   - TraceQL 지표(`traces_metrics`)는 Tempo 3.x에서 기본으로 제공됩니다. 2.x에서는 metrics-generator `local-blocks`가 필요합니다.
   - 지표에서는 Tempo `query_frontend.query_end_cutoff`(기본 30초)와 step만큼 최근 구간이 빠집니다. 이 값은 `/status/config`에서 확인할 수 있습니다.
   - 읽기 권한은 로그 검색과 같이 사용자 신원의 `get pods/log`입니다.
+  - 미리 좁히기의 트레이스 검사(`anomaly_rank`)는 기간과 그 앞 구간에 TraceQL 지표 질의 셋을 돌립니다: `{ kind = server } | count_over_time()`, 같은 질의에 `status = error`, `quantile_over_time(duration, .9)` — 모두 `by (resource.service.name)`.
+    스팬에 span kind와 `service.name`이, 워크로드를 주면 리소스에 `k8s.pod.name`(`<이름>-.*`)이 있어야 합니다.
+    step은 각 구간을 정분 경계에서 4~120칸으로 나누고, 구간 경계에 걸친 칸은 읽지 않습니다.
+    TraceQL 지표가 없거나 두 구간 합이 `features.traceStore.maxRange`를 넘으면 못 함으로 적힙니다. 답 하나가 `k8s.traces.query` 감사 행 하나입니다.
 - **AI 알림 읽기**(`features.alertStore`를 쓸 때): Kubeast는 알림 저장소의 `/api/v2/alerts`(매처 `filter`)와 `/api/v2/silences`를 GET으로 읽습니다.
   - 무음 쓰기를 켜면 아래 항목의 요청이 더해집니다.
   - 읽을 수 있는 저장소는 다음과 같습니다.

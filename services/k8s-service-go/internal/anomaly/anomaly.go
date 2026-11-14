@@ -1,6 +1,6 @@
 // Package anomaly ranks what differs in a namespace between a window and the window of the same length right before it:
-// failing objects, container terminations by reason, restarts, CPU throttling and memory against the limit, node
-// pressure. It parses the window, builds the PromQL and turns the reads into findings; the caller runs the reads as the
+// failing objects, container terminations by reason, restarts, CPU throttling and memory against the limit, error log
+// shapes and counts, requests, errors and latency of the services' server spans, node pressure. It parses the window, builds the PromQL and turns the reads into findings; the caller runs the reads as the
 // user. A check that could not run says why, so a missing source does not read as "normal".
 package anomaly
 
@@ -21,11 +21,23 @@ const (
 	CheckRestarts        = "restarts"
 	CheckMemoryNearLimit = "memory_near_limit"
 	CheckCPUThrottling   = "cpu_throttling"
+	CheckErrorLogShapes  = "error_log_patterns"
+	CheckErrorLogCounts  = "error_log_counts"
+	CheckTraceErrors     = "trace_errors"
+	CheckTraceLatency    = "trace_latency"
+	CheckTraceRequests   = "trace_requests"
 	CheckNodePressure    = "node_pressure"
 )
 
 // Checks lists every check in tie order.
-var Checks = []string{CheckIssues, CheckCrashReasons, CheckRestarts, CheckMemoryNearLimit, CheckCPUThrottling, CheckNodePressure}
+var Checks = []string{CheckIssues, CheckCrashReasons, CheckRestarts, CheckMemoryNearLimit, CheckCPUThrottling,
+	CheckErrorLogShapes, CheckErrorLogCounts, CheckTraceErrors, CheckTraceLatency, CheckTraceRequests, CheckNodePressure}
+
+// LogChecks are the checks that read the log store, TraceChecks those that read the trace store.
+var (
+	LogChecks   = []string{CheckErrorLogShapes, CheckErrorLogCounts}
+	TraceChecks = []string{CheckTraceErrors, CheckTraceLatency, CheckTraceRequests}
+)
 
 const (
 	VerdictAnomalous = "anomalous"

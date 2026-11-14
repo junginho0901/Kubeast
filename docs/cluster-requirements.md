@@ -42,7 +42,7 @@ A "target cluster" is a cluster Kubeast manages, including the cluster it is ins
 | Recent flows (drawers, AI `network_flows`) | Cilium Hubble Relay serving TLS, `create` on `services/proxy` for the Relay Service — §16 | `features.networkFlows.enabled` (off) | The section and the tool are left out and the API returns 404; without the cluster permission, 403 |
 | Network drops (drawers, AI `network_drops`) | The Hubble drop metric with workload labels in the cluster's Prometheus — §17 | Prometheus (§3) | The section is not shown; the tool says the metric is missing |
 | Resource Graph traffic lines | Recent flows (§16), or the Hubble TCP and drop metrics with workload labels in the cluster's Prometheus — §18 | `features.networkFlows` or Prometheus | The switch is not shown; a missing metric is named in the graph |
-| Narrowing (AI `anomaly_rank`) | The pods, workloads, events and nodes it reads as the issue check does; for the metric checks, kube-state-metrics and cAdvisor series in the cluster's Prometheus — §3 | `features.anomalyRank.enabled` (off) | The tool is left out and the API returns 404; without Prometheus or those series the metric checks are listed as not run, and a grant limited to namespaces gets them as not run too |
+| Narrowing (AI `anomaly_rank`) | The pods, workloads, events and nodes it reads as the issue check does; for the metric checks, kube-state-metrics and cAdvisor series in the cluster's Prometheus — §3; for the log checks, the log store with index stats and patterns, for the trace checks, the trace store with TraceQL metrics — §14 | `features.anomalyRank.enabled` (off) | The tool is left out and the API returns 404; without Prometheus or those series the metric checks are listed as not run, and a grant limited to namespaces gets them as not run too; without a log or trace store, or without `get pods/log`, those checks are listed as not run |
 | Top talkers (drawers, AI `network_top_flows`) | An Amazon CloudWatch Network Flow Monitor monitor for the EKS cluster, Kubeast's AWS identity allowed to query it, the user's `list` on pods — §19 | `features.networkFlowMonitor.enabled` (off) | The section and the tool are left out and the API returns 404; without `list` on pods, 403; when AWS refuses Kubeast's identity, 502 |
 
 ## 1. Permissions (RBAC) — every target cluster
@@ -423,11 +423,20 @@ Kubeast only reads these Loki APIs, all with GET, so the Grafana data source pro
 - `labels`
 - `label/<name>/values`
 - `patterns`
+- `index/stats`, for the AI's narrowing (`anomaly_rank`) before its log checks, and for `loki_query` when `features.logSearch.queryMaxBytes` is set
 
 It does not install Loki or a collector.
 
 Patterns (`loki_patterns`) need `pattern_ingester: enabled: true` in Loki. Without it, only that tool answers "none".
 Loki returns only patterns with 30 or more lines in the window, for the last 3 hours.
+
+The narrowing's log checks (`anomaly_rank`):
+
+- They ask `index/stats` for the namespace's streams over the window and the one before first. Past `features.anomalyRank.logMaxBytes` (10 GiB), with no line there, or when Loki does not serve it, both checks are listed as not run.
+- The error shape check reads `patterns` for the same streams over both windows. A shape counts as an error when Loki's `level` is error, fatal or critical, or when there is no level and the shape holds `error`, `exception`, `fatal` or `panic`. When Loki holds no pattern for the window before (the last 3 hours, above), the check is listed as not run.
+- The error line check runs `sum by (<container label>) (count_over_time({…} |~ "(?i)(error|exception|fatal|panic)" [<window>]))` once, with a step of the window's length. It needs the container label of `features.logSearch.labels` on the streams.
+- With a workload, both narrow to its pods by the pod label (`<name>-.*`).
+- They pass the log tools' door: `resource.pod.read`, `get pods/log` in the namespace, the node shell namespace only for holders of `resource.node.shell`, and both windows within `features.logSearch.maxRange`. Each answer is one search of the per-user rate and one `k8s.pod.logs.logql` audit row.
 
 - **Collector**: something that sends the target cluster's container logs to Loki.
   - The label names must match `features.logSearch.labels`. The defaults are `k8s_cluster_name`, `k8s_namespace_name`, `k8s_pod_name` and `k8s_container_name`, which Loki puts on logs it receives over OTLP.
@@ -452,6 +461,10 @@ Loki returns only patterns with 30 or more lines in the window, for the last 3 h
   - TraceQL metrics (`traces_metrics`) are built in on Tempo 3.x. Tempo 2.x needs the metrics-generator `local-blocks`.
   - Metrics leave out the most recent part of the range, by Tempo's `query_frontend.query_end_cutoff` (default 30 seconds) and the step. To check, see that value in `/status/config`.
   - Read permission is the same as for log search: `get pods/log` as the user's identity.
+  - The narrowing's trace checks (`anomaly_rank`) run three TraceQL metrics queries over the window and the one before: `{ kind = server } | count_over_time()`, the same with `status = error`, and `quantile_over_time(duration, .9)`, each `by (resource.service.name)`.
+    The spans need their span kind and `service.name`; with a workload, `k8s.pod.name` on the resource (`<name>-.*`).
+    The step cuts each window into 4 to 120 steps on whole minutes, and the steps on a window's bound are not read.
+    Without TraceQL metrics, or past `features.traceStore.maxRange` over both windows, they are listed as not run. Each answer is one `k8s.traces.query` audit row.
 - **AI alert reading** (`features.alertStore`, when used): Kubeast reads the alert store's `/api/v2/alerts` (matcher `filter`) and `/api/v2/silences` with GET. When silence writing is on, it also writes (next item).
   - The store can be Alertmanager API v2, an Alertmanager through the Grafana data source proxy, or Grafana alerting's Alertmanager-compatible API (`/api/alertmanager/grafana/api/v2/…`).
   - On Grafana 13.2.4 and again on 13.3.0, that API was confirmed to answer 200 with Viewer. `…/status` is 403 for Viewer, so it is not used.

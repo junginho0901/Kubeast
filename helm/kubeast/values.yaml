@@ -956,10 +956,15 @@ features:
   # /namespaces/{namespace}/anomalies, read as the caller like a list): what
   # differs in one namespace between a window and the window of the same length
   # before it — failing objects, terminations by reason, restarts, CPU
-  # throttling, memory against the limit, node pressure — ranked, at most ten.
-  # The metric checks read the cluster's Prometheus (kube-state-metrics and
-  # cAdvisor names); without it they are listed as not run. Off: the route
-  # answers 404, reads nothing and the AI is not offered the tool.
+  # throttling, memory against the limit, error log shapes and counts, the
+  # services' requests, failed requests and p90 from their server spans, node
+  # pressure — ranked, at most ten. The metric checks read the cluster's
+  # Prometheus (kube-state-metrics and cAdvisor names), the log checks the log
+  # store (features.logSearch) and the trace checks the trace store
+  # (features.traceStore), each through the door of its own tools
+  # (resource.pod.read, get pods/log, audited as k8s.pod.logs.logql and
+  # k8s.traces.query); without one, its checks are listed as not run. Off: the
+  # route answers 404, reads nothing and the AI is not offered the tool.
   anomalyRank:
     enabled: false
     maxQueries: 12           # store queries one answer may make
@@ -967,6 +972,9 @@ features:
     timeoutSeconds: 20       # the whole answer
     concurrency: 4           # checks at once
     cacheSeconds: 60         # the same caller, namespace and window answered from memory
+    # The log checks ask the log store's index first (Loki's index stats) and
+    # do not read past this many bytes over both windows (10 GiB).
+    logMaxBytes: 10737418240
   # Cluster hygiene report (Cluster → Cluster Hygiene, permissions
   # resource.hygiene.scan on the cluster, admin.hygiene.read/export/signoff
   # globally): Pod Security Standards, image tags,
@@ -1053,6 +1061,10 @@ features:
     # k8s.pod.logs.logql. Off unless asked. (The AI's loki_* tools do not
     # depend on this switch.)
     logql: false
+    # The AI's loki_query asks the store's index first (Loki's index stats,
+    # mcp-grafana's lokiguard way) and is refused, with how to narrow it, past
+    # this many bytes. 0 = not asked: the query runs as it always did.
+    queryMaxBytes: 0
     # With networkPolicy on, k8s-service reaches outside the cluster on 443
     # and 6443 only; a store on another port needs {cidr, port} here. A store
     # behind a Service of this cluster: on EKS VPC CNI its ClusterIP (§15).

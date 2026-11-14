@@ -46,7 +46,7 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - `k8s_find_resource`: 이름 조각·레이블로 여러 종류·전체 네임스페이스에서 리소스 찾기 (이름을 대충 알 때, not_found 뒤 한 번)
 - `k8s_explain`: 리소스 종류·필드의 스키마 설명 (kubectl explain) — 필드 이름을 추측하지 말고 확인
 - `issues`: 클러스터·네임스페이스에 지금 무엇이 잘못됐는지 한 번에(파드·워크로드·노드·PVC·경고 이벤트, 심각도별 개수) — "문제 있어?"·"상태 어때?"류 질문의 **첫 호출**
-- `anomaly_rank`: 한 네임스페이스(또는 워크로드 하나)가 앞 같은 길이 구간과 무엇이 달라졌나를 서버가 순위로(지금 고장 · 종료 이유별 수 · 재시작 · CPU 걸림 · 메모리 limit 근처 · 노드 압박, 최대 10개, 새로 나타난 것 먼저). `normal`은 아무것도 못 찾은 검사, `not_run`은 못 한 검사와 까닭 — 못 한 것은 정상이 아님 (켜진 설치에서만 제공)
+- `anomaly_rank`: 한 네임스페이스(또는 워크로드 하나)가 앞 같은 길이 구간과 무엇이 달라졌나를 서버가 순위로(지금 고장 · 종료 이유별 수 · 재시작 · CPU 걸림 · 메모리 limit 근처 · 오류 로그 모양·줄 수 · 서비스별 요청·실패 비율·p90 · 노드 압박, 최대 10개, 새로 나타난 것 먼저). `normal`은 아무것도 못 찾은 검사, `not_run`은 못 한 검사와 까닭 — 못 한 것은 정상이 아님 (켜진 설치에서만 제공)
 - `prometheus_query`: PromQL 즉시·범위 질의 — 사용량 추이·오류율·재시작 수 (이 클러스터에 Prometheus가 있을 때만 제공)
 - `prometheus_metrics` · `prometheus_labels`: Prometheus에 있는 지표 이름(타입·설명)과 레이블 이름·값 찾기 — PromQL을 짜기 전에
 - `prometheus_rules`: 알림·기록 규칙과 지금 울리는 알림(식·`for`·상태) — 알림을 조사할 때 먼저
@@ -231,7 +231,7 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 
 **Cluster Overview:**
 - `issues(namespace, severity, window_minutes)` - What is failing right now: pods, workloads, nodes, PVCs, Warning events, with counts — the first call for "what's wrong?"
-- `anomaly_rank(namespace, since_time, until_time, workload_kind, workload_name)` - What differs in one namespace from the window before, ranked by the server (failing objects, terminations by reason, restarts, CPU throttling, memory near the limit, node pressure); not_run is not normal; offered only where it is turned on
+- `anomaly_rank(namespace, since_time, until_time, workload_kind, workload_name)` - What differs in one namespace from the window before, ranked by the server (failing objects, terminations by reason, restarts, CPU throttling, memory near the limit, error log shapes and counts, services' requests, failures and p90, node pressure); not_run is not normal; offered only where it is turned on
 - `prometheus_query(promql, range, since, since_time, until_time, step)` - PromQL through the cluster's Prometheus (trend with range=true); offered only where Prometheus exists
 - `prometheus_metrics(pattern, limit)` / `prometheus_labels(selector, label, since, limit)` - Find metric names (type, help) and label names or values before writing PromQL
 - `prometheus_rules(rule, rule_type, active_only)` - Alerting and recording rules with state and active alerts — first when investigating an alert
