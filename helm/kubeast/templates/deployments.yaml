@@ -7,7 +7,7 @@ metadata:
     app: auth-service
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicas.authService }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "authService") | nindent 2 }}
   selector:
     matchLabels:
       app: auth-service
@@ -147,7 +147,7 @@ metadata:
     app: ai-service
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicas.aiService }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "aiService") | nindent 2 }}
   selector:
     matchLabels:
       app: ai-service
@@ -229,10 +229,7 @@ metadata:
     {{- include "kubeast.labels" $ | nindent 4 }}
 spec:
   {{- if $api }}
-  {{- if gt (int $.Values.replicas.k8sService) 1 }}
-  {{- fail "replicas.k8sService must be 1: node drain progress and per-cluster client caches live in process memory" }}
-  {{- end }}
-  replicas: {{ $.Values.replicas.k8sService }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "k8sService") | nindent 2 }}
   {{- else }}
   {{- if gt (int $.Values.streams.replicas) 1 }}
   {{- fail "streams.replicas must be 1: more than one stream server is not supported yet" }}
@@ -440,7 +437,7 @@ metadata:
     app: session-service
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicas.sessionService }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "sessionService") | nindent 2 }}
   selector:
     matchLabels:
       app: session-service
@@ -498,7 +495,7 @@ metadata:
     app: frontend
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicas.frontend }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "frontend") | nindent 2 }}
   selector:
     matchLabels:
       app: frontend
@@ -549,10 +546,7 @@ metadata:
     app: tool-server
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  {{- if gt (int .Values.replicas.toolServer) 1 }}
-  {{- fail "replicas.toolServer must be 1: the per-cluster kubeconfig cache and its invalidation endpoint are per process" }}
-  {{- end }}
-  replicas: {{ .Values.replicas.toolServer }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "toolServer") | nindent 2 }}
   selector:
     matchLabels:
       app: tool-server
