@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { focusManager, notifyManager, useQueryClient, type Query, type QueryClient } from '@tanstack/react-query'
+import { focusManager, hashKey, notifyManager, useQueryClient, type Query, type QueryClient } from '@tanstack/react-query'
 import { watchMultiplexer } from './watchMultiplexer'
 import { getCurrentClusterID } from './clusterRef'
 
@@ -315,6 +315,41 @@ export function followQuery(queryClient: QueryClient, queryKey: readonly unknown
   }
 }
 
+// A read's answer replaces the rows, and it may have been made before a frame that came while the read was on its way: the
+// frames applied during a read are applied again to its answer, in the order they came, within the notification that
+// brings it. Rows carry no version, so a frame older than the answer is applied too; the watch has gone on since before
+// the read (the server sends RESYNC once the new watch is on), so the frame of what changed after it follows.
+function framesDuringReads(queryClient: QueryClient, queryKey: readonly unknown[], applyAgain: (events: WatchEvent[]) => void) {
+  const queryHash = hashKey(queryKey)
+  let held: WatchEvent[] = []
+  const stopCache = queryClient.getQueryCache().subscribe((event) => {
+    if (event.type !== 'updated' || event.query.queryHash !== queryHash) return
+    // setQueryData writes are manual: only a read's answer replaces what the frames wrote
+    if (event.action.type === 'success' && !event.action.manual) {
+      const events = held
+      held = []
+      if (events.length > 0) applyAgain(events)
+    } else if (event.action.type === 'error') {
+      held = []
+    }
+  })
+  return {
+    // the frames of one delivery, as they are applied
+    delivered(events: WatchEvent[]) {
+      const status = queryClient.getQueryCache().get(queryHash)?.state.fetchStatus
+      if (status === undefined || status === 'idle') {
+        held = []
+        return
+      }
+      for (const event of events) held.push(event)
+    },
+    stop() {
+      stopCache()
+      held = []
+    },
+  }
+}
+
 // Reads a list on the clock while the limit refuses any of its watches; a hidden tab reads it when it shows again.
 function limitReads(read: () => void) {
   const refused = new Set<string>()
@@ -367,11 +402,27 @@ export function followList(
   const { clusterId, paths, query, queryKey, gatherEveryMs, listensOnly } = options
   const resync = resyncReads()
   const poll = limitReads(() => void queryClient.invalidateQueries({ queryKey }))
-  const deliver = (message: any) =>
+  const gathers = !!gatherEveryMs
+  // what the frames did during a read, done again to its answer with the apply they had; onEvent is not told twice
+  const reads = listensOnly
+    ? undefined
+    : framesDuringReads(queryClient, queryKey, (events) => {
+        const apply = options.applyEvent?.() ?? applyWatchEvent
+        queryClient.setQueryData(queryKey, (prev: any) => {
+          if (prev === undefined) return undefined
+          if (gathers) return mergeEvents(prev, events, apply)
+          return events.reduce((rows, event) => placeNewRow(rows, apply(rows, event)), prev)
+        })
+      })
+  const deliver = (message: any) => {
+    reads?.delivered(message?.type === 'DATA' ? [message.data] : [])
     applyWatchMessage(queryClient, queryKey, message, options.applyEvent?.(), options.onEvent?.(), options.onResync?.(), listensOnly, resync.later)
-  const deliverAll = (messages: any[]) =>
+  }
+  const deliverAll = (messages: any[]) => {
+    reads?.delivered(messages.filter((message) => message?.type === 'DATA').map((message) => message.data))
     applyWatchFrames(queryClient, queryKey, messages, options.applyEvent?.(), options.onEvent?.(), options.onResync?.(), listensOnly, resync.later)
-  const holder = gatherEveryMs ? frameHolder(deliver, gatherEveryMs, deliverAll) : null
+  }
+  const holder = gathers ? frameHolder(deliver, gatherEveryMs, deliverAll) : null
   const answering = (answers: boolean) => options.onAnswering?.()?.(answers)
   const handle = (message: any) => {
     poll.onFrame(message)
@@ -401,6 +452,7 @@ export function followList(
 
   return () => {
     holder?.stop()
+    reads?.stop()
     resync.stop()
     follow?.stop()
     poll.stop()
