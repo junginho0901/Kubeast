@@ -298,13 +298,13 @@ func main() {
 	h.SetDrain(streams)
 
 	// Console metrics (services/pkg/metrics): HTTP by route pattern, the audit
-	// store's readiness and write failures, live WebSocket subscriptions.
+	// store's readiness and write failures, live watches, open terminals and followed logs.
 	m := metrics.New("k8s")
 	m.Route = metrics.ChiRoute
 	if s, ok := any(auditStore).(audit.Statuser); ok {
 		m.AuditStore(s)
 	}
-	m.Gauge("kubeast_ws_subscriptions", "Live WebSocket subscriptions (logs, exec, watches) across all connections.",
+	m.Gauge("kubeast_ws_subscriptions", "Live watches counted against WS_MAX_SUBSCRIPTIONS: the live lists' WebSocket subscriptions across all connections and the Helm releases streams' Secret watches.",
 		func() float64 { return float64(wsMux.SubscriptionCount()) })
 	m.Gauge("kubeast_terminals_open", "Open terminals (pod exec, node shell).",
 		func() float64 { terminals, _ := streams.Open(); return float64(terminals) })

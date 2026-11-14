@@ -129,7 +129,7 @@ type Config struct {
 
 	// StreamDrainSeconds is how long a server being replaced (SIGTERM) gives its open terminals to end on their own
 	// after telling them, ending the followed logs at once (internal/drain). Below 0 (unset): no drain, they are cut
-	// when the process exits, as before. The chart sets it with streams.enabled.
+	// when the process exits, as before. The chart sets it (streams.drainSeconds) on the server that opens terminals.
 	StreamDrainSeconds int
 
 	// Node shell: privileged debug pod on a node. Off unless enabled; the pod
