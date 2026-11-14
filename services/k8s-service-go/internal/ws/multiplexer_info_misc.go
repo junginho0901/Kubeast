@@ -44,10 +44,12 @@ func eventToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 
 	involved := map[string]interface{}{}
 	if io, ok := obj.Object["involvedObject"].(map[string]interface{}); ok {
+		// uid: a drawer keeps to the events naming its object's UID, as kubectl describe does (a Node's also its name)
 		involved = map[string]interface{}{
 			"kind":      io["kind"],
 			"name":      io["name"],
 			"namespace": io["namespace"],
+			"uid":       io["uid"],
 		}
 	}
 

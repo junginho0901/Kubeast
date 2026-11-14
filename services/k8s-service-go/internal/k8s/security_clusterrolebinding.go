@@ -44,7 +44,7 @@ func (s *Service) DescribeClusterRoleBinding(ctx context.Context, name string) (
 	}
 
 	result := formatClusterRoleBindingDetail(crb)
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(crb.UID))
 
 	return result, nil
 }
