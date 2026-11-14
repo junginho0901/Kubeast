@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -250,6 +252,63 @@ func TestKubeconfigForCtx_PrefersCtxOverGlobal(t *testing.T) {
 	}
 	if got := kubeconfigForCtx(withKubeconfigPath(context.Background(), "/per/req")); got != "/per/req" {
 		t.Errorf("per-request ctx = %q, want /per/req", got)
+	}
+}
+
+// A kubectl run reads a cluster's kubeconfig while another call writes it again (every 10 s per person and cluster):
+// it reads the old file or the new one whole, the path is never missing, and no temporary file stays behind.
+func TestWriteKubeconfigFileNeverShowsAFileBeingWritten(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("TMPDIR", dir)
+	path, err := writeKubeconfigFile("c-whole", "first")
+	if err != nil {
+		t.Fatalf("first write: %v", err)
+	}
+	if filepath.Dir(path) != filepath.Clean(dir) {
+		t.Fatalf("written to %s, want a file in %s", path, dir)
+	}
+	big := strings.Repeat("a", 1<<20)
+	small := strings.Repeat("b", 1<<16)
+	done := make(chan error, 1)
+	go func() {
+		for i := 0; i < 100; i++ {
+			blob := big
+			if i%2 == 1 {
+				blob = small
+			}
+			if _, err := writeKubeconfigFile("c-whole", blob); err != nil {
+				done <- err
+				return
+			}
+		}
+		done <- nil
+	}()
+	for reads := 0; ; reads++ {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %d while writing: %v", reads, err)
+		}
+		if s := string(data); s != "first" && s != big && s != small {
+			t.Fatalf("read %d got %d bytes, a file being written", reads, len(data))
+		}
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatalf("write: %v", err)
+			}
+			info, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if perm := info.Mode().Perm(); perm != 0o600 {
+				t.Errorf("kubeconfig perms = %o, want 600", perm)
+			}
+			if left, _ := filepath.Glob(filepath.Join(dir, "*.tmp-*")); len(left) != 0 {
+				t.Errorf("temporary files left: %v", left)
+			}
+			return
+		default:
+		}
 	}
 }
 

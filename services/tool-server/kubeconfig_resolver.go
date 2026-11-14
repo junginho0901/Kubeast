@@ -258,11 +258,32 @@ func namespaceDefault(blob string) string {
 	return string(out)
 }
 
+// writeKubeconfigFile writes the kubeconfig to a new file in the same directory, mode 0600, and renames it over the
+// cluster's path, so a kubectl run reading that path gets the old file or the new one whole, never one being written.
+// The temporary name holds a dot, which sanitizeID never leaves, so it is no cluster's path.
 func writeKubeconfigFile(clusterID, blob string) (string, error) {
 	path := filepath.Join(os.TempDir(), "tool-server-kubeconfig-"+sanitizeID(clusterID))
-	if err := os.WriteFile(path, []byte(blob), 0o600); err != nil {
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
+	if err != nil {
 		return "", err
 	}
+	renamed := false
+	defer func() {
+		if !renamed {
+			_ = os.Remove(tmp.Name())
+		}
+	}()
+	if _, err := tmp.WriteString(blob); err != nil {
+		_ = tmp.Close()
+		return "", err
+	}
+	if err := tmp.Close(); err != nil {
+		return "", err
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return "", err
+	}
+	renamed = true
 	return path, nil
 }
 
