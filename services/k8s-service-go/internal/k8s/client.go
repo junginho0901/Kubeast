@@ -70,6 +70,8 @@ type clientBundle struct {
 	// events is one read of an object's events as kubeast:cache for everyone asking; eventsRefused the namespaces it was refused, until when
 	events        flight.Group[*corev1.EventList]
 	eventsRefused sync.Map
+	// metricsMissing is this cluster's answer that it does not serve metrics.k8s.io, until when it stands (metrics.go)
+	metricsMissing atomic.Pointer[metricsMiss]
 
 	// cacheClient is the identity the overview informers watch as; inf is the
 	// running set, if any (informer_cache.go). id names the cluster in logs.
