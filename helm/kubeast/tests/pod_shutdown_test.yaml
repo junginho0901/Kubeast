@@ -1,6 +1,7 @@
 suite: pod shutdown — a pod behind a Service answers while its endpoint leaves, then stops
 # grace = the preStop wait + the waits after SIGTERM + 5 s (kubeast.graceSeconds): 25 s for each shutdown (tool-server 25 s,
-# k8s-service 15 s + 10 s for the recorder), and on a k8s-service that holds terminals the drain's wait + its 5 s close wait.
+# k8s-service 3 s for the node drains, 12 s for the server, 10 s for the recorder), and on a k8s-service that holds
+# terminals the drain's wait + its 5 s close wait.
 templates:
   - deployments.yaml
   - gateway.yaml
