@@ -356,7 +356,7 @@ The links open at `localhost:16686` after `kubectl port-forward -n tracing svc/j
 With `streams.enabled: true` a second Deployment, `k8s-service-stream`, runs the same image as k8s-service in another role (`SERVER_ROLE=stream`, as Loki and Mimir run one binary with `-target`).
 It serves pod exec, the node shell and the followed logs (a container's output, a log file); k8s-service (`SERVER_ROLE=api`) serves everything else, the live lists included.
 The gateway sends the four stream locations of `files/nginx.conf` to the new Service, so a rollout of one does not cut the other's connections and many open terminals do not slow the lists.
-Off (the default), k8s-service serves everything, as before.
+Off (the default), k8s-service serves everything, as before, and drains its terminals the same way when it is replaced (below), without the preStop sleep: `terminationGracePeriodSeconds` is `drainSeconds + 15` (75 s by default), and with no terminal open it does not wait.
 
 ```yaml
 streams:

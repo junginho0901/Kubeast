@@ -20,10 +20,6 @@ tests:
           path: spec.strategy
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
-      - notExists:
-          path: spec.template.spec.terminationGracePeriodSeconds
-        template: deployments.yaml
-        documentSelector: {path: metadata.name, value: k8s-service}
       - equal:
           path: spec.template.spec.containers[0].readinessProbe.httpGet.path
           value: /health
@@ -43,6 +39,45 @@ tests:
           value: k8s-service,tool-server
         template: configmap.yaml
         documentSelector: {path: metadata.name, value: kubeast-config}
+
+  - it: drains the one default k8s-service too — the wait from streams.drainSeconds, a grace period of the wait + 15, no preStop
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: STREAM_DRAIN_SECONDS, value: "60"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 75
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      # the Deployment's default rollout (maxSurge 1, maxUnavailable 0 for one replica) brings the new pod up first,
+      # and the lists keep answering on /health while the old one drains
+      - notExists:
+          path: spec.template.spec.containers[0].lifecycle
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /health
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+
+  - it: takes the default k8s-service's wait from streams.drainSeconds and keeps its grace period past it
+    set:
+      streams.drainSeconds: 120
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: STREAM_DRAIN_SECONDS, value: "120"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 135
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
 
   - it: renders no stream Service by default
     template: services.yaml
@@ -128,7 +163,7 @@ tests:
           value: /health
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service-stream}
-      # the api server keeps today's shutdown
+      # the api server holds no terminal: no drain, Kubernetes' grace period
       - notContains:
           path: spec.template.spec.containers[0].env
           content: {name: STREAM_DRAIN_SECONDS}
@@ -137,6 +172,10 @@ tests:
         documentSelector: {path: metadata.name, value: k8s-service}
       - notExists:
           path: spec.template.spec.containers[0].lifecycle
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - notExists:
+          path: spec.template.spec.terminationGracePeriodSeconds
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
 

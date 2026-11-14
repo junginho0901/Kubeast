@@ -345,7 +345,7 @@ features:
 `streams.enabled: true`이면 두 번째 Deployment `k8s-service-stream`이 k8s-service와 같은 이미지를 다른 역할(`SERVER_ROLE=stream`)로 돌립니다(Loki·Mimir가 한 바이너리를 `-target`으로 띄우는 것과 같은 방식).
 이 서버가 Pod exec, 노드 셸, 실시간 로그(컨테이너 출력, 로그 파일)를 맡고, k8s-service(`SERVER_ROLE=api`)가 실시간 목록을 포함한 나머지를 맡습니다.
 게이트웨이는 `files/nginx.conf`의 스트림 location 넷을 새 Service로 보내므로, 한쪽을 배포해도 다른 쪽 연결이 끊기지 않고 터미널이 많이 열려도 목록이 느려지지 않습니다.
-꺼져 있으면(기본) 예전처럼 k8s-service가 전부 맡습니다.
+꺼져 있으면(기본) 예전처럼 k8s-service가 전부 맡고, 교체될 때 아래와 같은 방식으로 터미널을 차례로 끝냅니다(preStop 대기는 없음). `terminationGracePeriodSeconds`는 `drainSeconds + 15`(기본 75초)이고, 열린 터미널이 없으면 기다리지 않습니다.
 
 ```yaml
 streams:
