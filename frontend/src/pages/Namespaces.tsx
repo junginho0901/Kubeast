@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { useDescribeReads } from '@/services/pacedReads'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { RefreshCw, Search, Plus } from 'lucide-react'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
@@ -46,6 +46,7 @@ export default function Namespaces() {
     queryKey: ['namespaces'],
     path: '/api/v1/namespaces',
     query: 'watch=1',
+    gatherEveryMs: LIST_GATHER_MS,
     onEvent: (event) => {
       const name = event?.object?.name || event?.object?.metadata?.name
       if (name) {

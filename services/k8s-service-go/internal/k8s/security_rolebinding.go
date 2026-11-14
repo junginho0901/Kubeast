@@ -57,7 +57,7 @@ func (s *Service) DescribeRoleBinding(ctx context.Context, namespace, name strin
 	result := formatRoleBindingDetail(rb)
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(rb.UID))
 
 	return result, nil
 }
