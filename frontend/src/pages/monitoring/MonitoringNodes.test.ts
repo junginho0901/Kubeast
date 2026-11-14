@@ -108,7 +108,9 @@ describe('the Monitoring Nodes tab', () => {
       expect(html).toContain('data-testid="node-metrics-forbidden"')
       expect(html).not.toContain('100m')
       expect(html).not.toContain('node-metrics-refresh-failed')
-      expect(chat.current).toBeNull()
+      // the floating chat is told the refusal with the cluster's reason, and none of the old numbers
+      expect(chat.current?.summary).toBe('노드 모니터링 — 메트릭 볼 권한 없음')
+      expect(chat.current?.data).toEqual({ tab: 'nodes', metrics_refused: { reason: REFUSED } })
     })
 
     it('is not asked again on the tab\'s 5 s, nor tried again; a failure is, as before', () => {

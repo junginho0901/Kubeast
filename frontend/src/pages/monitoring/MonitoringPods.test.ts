@@ -252,6 +252,9 @@ describe('a pod metrics read the cluster refused', () => {
     expect(html).toContain('data-testid="pod-metrics-forbidden"')
     expect(html).not.toContain('123m')
     expect(html).not.toContain('pod-metrics-refresh-failed')
+    // the floating chat is told the refusal with the cluster's reason, and none of the old numbers
+    expect(chat.current?.summary).toBe('Pod 모니터링 — shop 메트릭 볼 권한 없음')
+    expect(chat.current?.data).toEqual({ tab: 'pods', filters: { namespace: 'shop' }, metrics_refused: { reason: REFUSED } })
   })
 
   it('is not asked again on the tab\'s 5 s, nor tried again; a failure is, as before', () => {

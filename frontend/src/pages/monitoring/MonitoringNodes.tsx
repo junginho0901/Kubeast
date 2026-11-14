@@ -101,8 +101,8 @@ export default function MonitoringNodes({
     placeholderData: (prev, prevQuery) =>
       prevQuery && prevQuery.queryKey[1] === currentCluster ? prev : undefined,
   })
-  // a refusal shows in place of the numbers, those read before it too
-  const refusal = metricsRefusal(error)
+  // a refusal shows in place of the numbers, those read before it too, and goes to the floating chat as that
+  const refusal = useMemo(() => metricsRefusal(error), [error])
   const nodeMetrics = refusal ? undefined : nodeMetricsRead
 
   useEffect(() => {
@@ -127,6 +127,7 @@ export default function MonitoringNodes({
 
   // 플로팅 AI 위젯용 스냅샷 — 노드 메트릭 요약
   const aiSnapshot = useMemo(() => {
+    if (refusal) return { source: 'base' as const, summary: '노드 모니터링 — 메트릭 볼 권한 없음', data: { tab: 'nodes', metrics_refused: refusal } }
     if (!Array.isArray(nodeMetrics)) return null
     const items = [...allNodes].sort(
       (a, b) => (parsePercent(b.cpu_percent) ?? 0) - (parsePercent(a.cpu_percent) ?? 0),
@@ -176,7 +177,7 @@ export default function MonitoringNodes({
         }),
       },
     }
-  }, [nodeMetrics, allNodes, refreshFailure])
+  }, [nodeMetrics, allNodes, refreshFailure, refusal])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 

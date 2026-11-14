@@ -79,8 +79,8 @@ export default function MonitoringPods({
     ...metricsReadPace(() => metricsUnavailable || isMetricsDisabled()),
     enabled: !!selectedNamespace && !metricsUnavailable && !isMetricsDisabled(),
   })
-  // a refusal shows in place of the numbers, those read before it too
-  const refusal = metricsRefusal(error)
+  // a refusal shows in place of the numbers, those read before it too, and goes to the floating chat as that
+  const refusal = useMemo(() => metricsRefusal(error), [error])
   const podMetrics = refusal ? undefined : podMetricsRead
 
   useEffect(() => {
@@ -94,6 +94,9 @@ export default function MonitoringPods({
 
   // 플로팅 AI 위젯용 스냅샷 — Pod 메트릭 요약
   const aiSnapshot = useMemo(() => {
+    if (selectedNamespace && refusal) {
+      return { source: 'base' as const, summary: `Pod 모니터링 — ${selectedNamespace === 'all' ? '전체' : selectedNamespace} 메트릭 볼 권한 없음`, data: { tab: 'pods', filters: { namespace: selectedNamespace }, metrics_refused: refusal } }
+    }
     if (!Array.isArray(podMetrics)) return null
     const items = [...podMetrics].sort((a, b) => {
       const aCpu = Number(String(a.cpu).replace(/[^0-9.]/g, '')) || 0
@@ -118,7 +121,7 @@ export default function MonitoringPods({
         }),
       },
     }
-  }, [podMetrics, selectedNamespace, refreshFailure])
+  }, [podMetrics, selectedNamespace, refreshFailure, refusal])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
