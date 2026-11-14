@@ -83,3 +83,9 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no features.networkFlowMonitor
+  - it: stops values without redis.acl, as v0.7.7's are (the Redis users)
+    set:
+      redis.acl: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no redis.acl

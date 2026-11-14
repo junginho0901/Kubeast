@@ -35,6 +35,12 @@ type memEntry struct {
 // docker/kind setups) and falls back to the in-memory cache when it is not
 // reachable. An empty host is no Redis at all: the in-memory cache, no attempt.
 func New(host string, port, db int, password string) *Cache {
+	return NewWithUser(host, port, db, "", password)
+}
+
+// NewWithUser is New signing in as a Redis ACL user (REDIS_USERNAME, the chart's redis.acl); an empty username signs
+// in with the password alone, as New does.
+func NewWithUser(host string, port, db int, username, password string) *Cache {
 	c := &Cache{
 		mem: make(map[string]memEntry),
 	}
@@ -45,6 +51,7 @@ func New(host string, port, db int, password string) *Cache {
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr:        fmt.Sprintf("%s:%d", host, port),
+		Username:    username,
 		Password:    password,
 		DB:          db,
 		DialTimeout: 5 * time.Second,

@@ -19,6 +19,35 @@ app.kubernetes.io/part-of: kubeast
 {{ .Values.secrets.existingSecret | default "kubeast-secrets" }}
 {{- end -}}
 
+{{- /* "true" when the chart's Redis runs one user per service (redis.acl). */ -}}
+{{- define "kubeast.redisAcl" -}}
+{{- if and .Values.redis.enabled .Values.redis.acl.enabled }}true{{ end -}}
+{{- end -}}
+
+{{- /* The Secret holding the Redis users' passwords: the chart's kubeast-redis-users, or secrets.existingSecret. */ -}}
+{{- define "kubeast.redisUsersSecretName" -}}
+{{ .Values.secrets.existingSecret | default "kubeast-redis-users" }}
+{{- end -}}
+
+{{/*
+The chart's Redis users (Valkey ACL file). The redis pod's first container adds each password's SHA-256 where
+${k8s_service} and ${probe} stand, so no password is in this text, the pod spec or Valkey's arguments.
+- default: off and allowed nothing, so a connection that has not signed in as a user below gets NOAUTH. AUTH and
+  HELLO, which sign in, take no rule.
+- k8s-service: keys and channels under kubeast: only, and the commands of internal/cache and internal/clustersync —
+  single-key reads, writes and deletes, SCAN for the pattern deletes, the hash commands, MULTI/EXEC, publish and
+  subscribe, PING and SELECT (REDIS_DB). go-redis's CLIENT SETINFO and CLIENT MAINT_NOTIFICATIONS on connect are
+  refused, which it ignores. No FLUSHALL, FLUSHDB, KEYS, CONFIG, DEBUG, ACL, MONITOR, EVAL or SCRIPT.
+- probe: PING, for the readiness and liveness probes.
+Every command named must exist in the image's Valkey, or Valkey refuses the file and does not start. A command the
+code starts to use is added here with a case in tests/redis_test.yaml.
+*/}}
+{{- define "kubeast.redisUsersAcl" -}}
+user default off resetkeys resetchannels -@all
+user k8s-service on #${k8s_service} resetkeys ~kubeast:* resetchannels &kubeast:* -@all +ping +select +get +set +del +unlink +scan +hget +hgetall +hset +hsetnx +hincrby +hdel +multi +exec +discard +publish +subscribe +unsubscribe
+user probe on #${probe} resetkeys resetchannels -@all +ping
+{{- end -}}
+
 {{/*
 DATABASE_URL — the one URL every service reads. The Go services (pgx) and the
 ai-service (asyncpg, via app/db_ssl.py) both take libpq's sslmode / sslrootcert

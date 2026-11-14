@@ -1,8 +1,167 @@
-suite: redis — requirepass from kubeast-secrets
+suite: redis — one Valkey user per service (redis.acl), or requirepass from kubeast-secrets
 templates:
   - redis.yaml
 tests:
-  - it: starts redis with requirepass and probes with the same password
+  - it: starts Valkey on the ACL file the acl container writes, with no password in its arguments or environment but the probe's
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args
+          value: ["--aclfile", "/run/kubeast/redis-acl/users.acl"]
+      - equal:
+          path: spec.template.spec.containers[0].env
+          value:
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: kubeast-redis-users
+                  key: REDIS_PROBE_PASSWORD
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: acl
+            mountPath: /run/kubeast/redis-acl
+            readOnly: true
+      - equal:
+          path: spec.template.spec.initContainers[0].name
+          value: acl
+      - equal:
+          path: spec.template.spec.initContainers[0].command
+          value: ["sh", "-c"]
+
+  - it: writes the default user off with nothing allowed, k8s-service on kubeast keys and channels with its commands, and probe with PING only
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: '(?m)^user default off resetkeys resetchannels -@all$'
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: '(?m)^user k8s-service on #\$\{k8s_service\} resetkeys ~kubeast:\* resetchannels &kubeast:\* -@all \+ping \+select \+get \+set \+del \+unlink \+scan \+hget \+hgetall \+hset \+hsetnx \+hincrby \+hdel \+multi \+exec \+discard \+publish \+subscribe \+unsubscribe$'
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: '(?m)^user probe on #\$\{probe\} resetkeys resetchannels -@all \+ping$'
+      # these three lines and no other
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: 'users\.acl <<EOF\nuser default [^\n]*\nuser k8s-service [^\n]*\nuser probe [^\n]*\nEOF\n'
+
+  - it: gives no user every key, channel or command, a password in clear, or a command that empties or reconfigures Redis
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - notMatchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: '(?im)^user [^\n]*(~\*|&\*|allkeys|allchannels|allcommands|\+@|nopass| >)'
+      - notMatchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: '(?im)^user [^\n]*\+(flushall|flushdb|keys|config|debug|acl|monitor|eval|evalsha|script|function|shutdown|save|bgsave|bgrewriteaof|replicaof|slaveof|module|migrate|restore|sort|swapdb|move|rename|client)\b'
+
+  - it: hashes each password file with SHA-256 and stops with what to add when one is missing
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: 'sha256sum < "/run/kubeast/redis-passwords/\$1" \| cut -d'' '' -f1'
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: 'k8s_service=\$\(hash REDIS_K8S_SERVICE_PASSWORD\)\nprobe=\$\(hash REDIS_PROBE_PASSWORD\)'
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: '\$1 is not in Secret kubeast-redis-users; add it'
+      - contains:
+          path: spec.template.spec.initContainers[0].volumeMounts
+          content:
+            name: passwords
+            mountPath: /run/kubeast/redis-passwords
+            readOnly: true
+
+  - it: reads the two passwords from kubeast-redis-users 0440 through fsGroup 999 and keeps the ACL file in memory
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 999
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: passwords
+            secret:
+              secretName: kubeast-redis-users
+              defaultMode: 0440
+              optional: true
+              items:
+                - key: REDIS_K8S_SERVICE_PASSWORD
+                  path: REDIS_K8S_SERVICE_PASSWORD
+                - key: REDIS_PROBE_PASSWORD
+                  path: REDIS_PROBE_PASSWORD
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: acl
+            emptyDir:
+              medium: Memory
+              sizeLimit: 1Mi
+      - matchRegex:
+          path: spec.template.metadata.annotations["checksum/redis-users"]
+          pattern: ^[0-9a-f]{64}$
+
+  - it: probes as probe, the password from REDISCLI_AUTH, never on the command line
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.exec.command
+          value: ["sh", "-c", "redis-cli --user probe ping | grep -q PONG"]
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.exec.command
+          value: ["sh", "-c", "redis-cli --user probe ping | grep -q PONG"]
+
+  - it: reads the users' passwords from secrets.existingSecret when one is given
+    set:
+      secrets.existingSecret: company-kubeast
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.name
+          value: company-kubeast
+      - equal:
+          path: spec.template.spec.volumes[2].secret.secretName
+          value: company-kubeast
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: is not in Secret company-kubeast; add it
+
+  - it: with podSecurity.enabled=false mounts the password files 0444 and sets no uid or fsGroup
+    set:
+      podSecurity.enabled: false
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - notExists:
+          path: spec.template.spec.securityContext
+      - notExists:
+          path: spec.template.spec.initContainers[0].securityContext
+      - equal:
+          path: spec.template.spec.volumes[2].secret.defaultMode
+          value: 0444
+
+  - it: with redis.acl.enabled=false starts Valkey with requirepass and probes with the same password, as before
+    set:
+      redis.acl.enabled: false
     documentSelector:
       path: kind
       value: Deployment
@@ -21,9 +180,21 @@ tests:
       - matchRegex:
           path: spec.template.spec.containers[0].readinessProbe.exec.command[2]
           pattern: 'redis-cli --no-auth-warning -a "\$REDIS_PASSWORD" ping'
+      - notExists:
+          path: spec.template.spec.initContainers
+      - notExists:
+          path: spec.template.metadata.annotations
+      - notExists:
+          path: spec.template.spec.securityContext.fsGroup
+      - equal:
+          path: spec.template.spec.volumes
+          value:
+            - name: data
+              emptyDir: {}
 
-  - it: reads the password from secrets.existingSecret when one is given
+  - it: with redis.acl.enabled=false reads requirepass from secrets.existingSecret when one is given
     set:
+      redis.acl.enabled: false
       secrets.existingSecret: company-kubeast
     documentSelector:
       path: kind
@@ -40,4 +211,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
+          value: valkey/valkey:9.1-alpine
+      - equal:
+          path: spec.template.spec.initContainers[0].image
           value: valkey/valkey:9.1-alpine
