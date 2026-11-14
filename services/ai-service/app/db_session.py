@@ -2,9 +2,9 @@
 
 The same DB_* variables and defaults as the Go services (services/pkg/dbsession, the chart's
 postgresql.sessionLimits), in milliseconds; 0 sets nothing, so the database's own setting applies.
-They are SET on each new connection (SQLAlchemy's pool "connect" event), not sent as startup
-parameters, so a pooler that refuses unknown startup parameters (PgBouncer by default) still
-connects. PostgreSQL's default for each is 0 (no limit), so without them a statement that does not
+They are SET on each new connection (SQLAlchemy's pool "connect" event, in autocommit so a rollback
+does not undo them), not sent as startup parameters, so a pooler that refuses unknown startup
+parameters (PgBouncer by default) still connects. PostgreSQL's default for each is 0 (no limit), so without them a statement that does not
 end, or a transaction left open, keeps its locks and its pool connection.
 """
 from __future__ import annotations
@@ -59,14 +59,25 @@ def pool_args(environ: Optional[Mapping[str, str]] = None) -> dict[str, int]:
 
 
 def on_connect(stmts: list[str]) -> Callable[[Any, Any], None]:
-    """A pool "connect" listener that runs stmts on each new DBAPI connection, one statement at a time."""
+    """A pool "connect" listener that runs stmts on each new DBAPI connection, one statement at a time, in autocommit.
+
+    The DBAPI connection (SQLAlchemy's asyncpg adapter) begins a transaction at its first statement, and a SET inside
+    it is undone when that transaction rolls back: a first use that only reads, or the pool's reset on return, would
+    leave the connection without its limits. So the SETs run outside a transaction, the way SQLAlchemy's PostgreSQL
+    documentation sets search_path ("Setting Alternate Search Paths on Connect").
+    """
 
     def run(dbapi_connection: Any, _connection_record: Any) -> None:
-        cursor = dbapi_connection.cursor()
+        autocommit = dbapi_connection.autocommit
+        dbapi_connection.autocommit = True
         try:
-            for stmt in stmts:
-                cursor.execute(stmt)
+            cursor = dbapi_connection.cursor()
+            try:
+                for stmt in stmts:
+                    cursor.execute(stmt)
+            finally:
+                cursor.close()
         finally:
-            cursor.close()
+            dbapi_connection.autocommit = autocommit
 
     return run

@@ -25,12 +25,13 @@ def no_db_vars(monkeypatch):
 
 
 class FakeCursor:
-    def __init__(self, seen):
-        self.seen = seen
+    def __init__(self, conn):
+        self.conn = conn
         self.closed = False
 
     def execute(self, stmt):
-        self.seen.append(stmt)
+        self.conn.seen.append(stmt)
+        self.conn.autocommit_at.append(self.conn.autocommit)
 
     def close(self):
         self.closed = True
@@ -39,10 +40,12 @@ class FakeCursor:
 class FakeDBAPIConnection:
     def __init__(self):
         self.seen = []
+        self.autocommit_at = []
+        self.autocommit = False
         self.cursors = []
 
     def cursor(self):
-        c = FakeCursor(self.seen)
+        c = FakeCursor(self)
         self.cursors.append(c)
         return c
 
@@ -98,6 +101,33 @@ def test_postgres_engine_sets_the_limits_on_each_new_connection(no_db_vars):
     conn = FakeDBAPIConnection()
     svc.on_connect(conn, None)
     assert conn.seen == DEFAULTS
+    assert all(c.closed for c in conn.cursors)
+
+
+def test_the_limits_are_set_in_autocommit_and_the_mode_is_put_back():
+    # A SET inside the transaction the DBAPI begins at its first statement is undone when that transaction rolls
+    # back (a first use that only reads, the pool's reset on return): the SETs run in autocommit.
+    conn = FakeDBAPIConnection()
+    db_session.on_connect(DEFAULTS)(conn, None)
+    assert conn.autocommit_at == [True, True, True]
+    assert conn.autocommit is False
+
+
+def test_autocommit_is_put_back_when_a_set_fails():
+    class Refused(FakeDBAPIConnection):
+        def cursor(self):
+            c = super().cursor()
+
+            def execute(stmt):
+                raise RuntimeError("refused")
+
+            c.execute = execute
+            return c
+
+    conn = Refused()
+    with pytest.raises(RuntimeError):
+        db_session.on_connect(DEFAULTS)(conn, None)
+    assert conn.autocommit is False
     assert all(c.closed for c in conn.cursors)
 
 
