@@ -250,11 +250,13 @@ def investigation_cards(settings: Settings, *, alertname: str, labels: Optional[
     return render(picked, offered_names(tools), source=INVESTIGATION_SOURCE)
 
 
-def chat_note(message: str, tools: Iterable[Mapping[str, Any]], settings: Optional[Settings] = None) -> Optional[str]:
-    """A system message for this chat turn, or None with the switch off or when the question names no failure a card
-    knows. Only this turn reads it; the history keeps none."""
+def chat_cards(message: str, tools: Iterable[Mapping[str, Any]],
+               settings: Optional[Settings] = None) -> tuple[Optional[str], Optional[list[str]]]:
+    """A system message for this chat turn (None when the question names no failure a card knows) and the kinds in it
+    for the turn's ai.chat.complete row; (None, None) with the switch off. Only this turn reads it; the history keeps
+    none."""
     settings = settings if settings is not None else load()
     if not settings.chat:
-        return None
-    text, _ = render(pick(settings.cards, texts=[message or ""]), offered_names(tools), source=CHAT_SOURCE)
-    return text or None
+        return None, None
+    text, kinds = render(pick(settings.cards, texts=[message or ""]), offered_names(tools), source=CHAT_SOURCE)
+    return text or None, kinds

@@ -377,6 +377,7 @@ async def _audit_chat_complete(
     phase: str = "chat",
     target_type: str = "session",
     target_id: Optional[str] = None,
+    rule_cards: Optional[list] = None,
 ) -> None:
     """ai.chat.complete — one record per chat turn (and per Optimization-page
     AI explanation, `phase: optimization`) with the token usage summed over
@@ -407,6 +408,7 @@ async def _audit_chat_complete(
             finish_reason=finish_reason,
             message_length=message_length,
             phase=phase,
+            rule_cards=rule_cards,
         ),
         request_ip=(audit_http or {}).get("ip"),
         user_agent=(audit_http or {}).get("user_agent"),
@@ -683,6 +685,7 @@ async def session_chat_stream(
     iteration = 0
     turn_active = False     # ai.chat.send written: a turn exists to account for
     turn_completed = False  # ai.chat.complete written: never write it twice
+    card_kinds = None       # ai.ruleCards.chat: the kinds of the cards this turn was given (None when off)
     # What the turn has written, for a failure at any point (_keep_failed_answer).
     db = None
     parts: list = []
@@ -853,7 +856,8 @@ async def session_chat_stream(
                 messages.append({"role": "system", "content": note})
         # ai.ruleCards.chat: the checks of a failure the question names, with the tools this turn offers (this turn only).
         from app.services import rule_cards
-        if card_note := rule_cards.chat_note(message, tools):
+        card_note, card_kinds = rule_cards.chat_cards(message, tools)
+        if card_note:
             messages.append({"role": "system", "content": card_note})
 
         # 모델 정보를 스트림 첫 이벤트로 전송 (브라우저 콘솔에서 확인용)
@@ -902,7 +906,7 @@ async def session_chat_stream(
                     service, session_id, audit_actor, audit_http,
                     turn_usage=turn_usage, tool_calls=cc_turn.tool_calls, iterations=cc_turn.turns,
                     started=turn_started, finish_reason=None, message_length=0,
-                    result="failure", error=safe_error(cc_error),
+                    result="failure", error=safe_error(cc_error), rule_cards=card_kinds,
                 )
                 turn_completed = True
                 yield "data: [DONE]\n\n"
@@ -1013,7 +1017,7 @@ async def session_chat_stream(
                     service, session_id, audit_actor, audit_http,
                     turn_usage=turn_usage, tool_calls=turn_tool_calls, iterations=iteration,
                     started=turn_started, finish_reason=None, message_length=0,
-                    result="failure", error=safe_error(api_error),
+                    result="failure", error=safe_error(api_error), rule_cards=card_kinds,
                 )
                 turn_completed = True
                 yield "data: [DONE]\n\n"
@@ -1160,7 +1164,7 @@ async def session_chat_stream(
             service, session_id, audit_actor, audit_http,
             turn_usage=turn_usage, tool_calls=turn_tool_calls, iterations=iteration,
             started=turn_started, finish_reason=turn_finish_reason,
-            message_length=answer_length,
+            message_length=answer_length, rule_cards=card_kinds,
         )
         turn_completed = True
         
@@ -1193,7 +1197,7 @@ async def session_chat_stream(
             _spawn(_audit_chat_complete(
                 service, session_id, audit_actor, audit_http,
                 turn_usage=turn_usage, tool_calls=turn_tool_calls, iterations=iteration,
-                started=turn_started, finish_reason="cancelled", message_length=0,
+                started=turn_started, finish_reason="cancelled", message_length=0, rule_cards=card_kinds,
             ))
         raise
     except Exception as e:

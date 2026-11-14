@@ -166,7 +166,10 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     tools = await feature_gate.gate_tools(readonly_tool_filter(service._get_tools_definition()), service)
     context = ToolContext(session_id=f"investigation:{row.id}")
     # ai.ruleCards.investigations: at most two cards the alert's name and labels pick, beside the alert.
-    cards, _kinds = rule_cards.investigation_cards(rule_cards.load(), alertname=row.alertname, labels=row.labels, tools=tools)
+    card_settings = rule_cards.load()
+    cards, kinds = rule_cards.investigation_cards(card_settings, alertname=row.alertname, labels=row.labels, tools=tools)
+    if card_settings.investigations:
+        progress["rule_cards"] = kinds
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language)},
         {"role": "user", "content": inv_prompt.alert_message(cluster=row.cluster, alert=alert_view(row), context=cards)},
@@ -299,6 +302,8 @@ async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:
             "link": link,
             # the person who asked for it in the Alerts inbox (ai.investigation.request); None for the webhook's
             "requested_by": getattr(row, "requested_by", "") or None,
+            # ai.ruleCards.investigations: the kinds of the cards in the first message (not their text); absent when off
+            **({"rule_cards": progress["rule_cards"]} if "rule_cards" in progress else {}),
         },
     )
     log.info("investigation %s %s in %dms", row.id, status, duration_ms)

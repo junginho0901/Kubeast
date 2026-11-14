@@ -261,11 +261,40 @@ async def test_an_alert_no_card_knows_leaves_the_first_message_as_it_was(monkeyp
     assert first_message(service) == inv_prompt.alert_message(cluster="self", alert=runner.alert_view(r))
 
 
+async def run_row(monkeypatch, r):
+    """The ai.investigation.run row's `after` of one run of `r`."""
+    service = DescribingService([completion(content="## Summary\nok")])
+    audits = []
+    install_loop(monkeypatch, service, audits)
+
+    async def finish(db, inv_id, **f):
+        return None
+
+    monkeypatch.setattr(runner.store, "finish", finish)
+    assert await runner.run_one(cfg(max_steps=5), None, r) == "done"
+    assert audits[-1]["action"] == "ai.investigation.run"
+    return audits[-1]["after"]
+
+
+@pytest.mark.asyncio
+async def test_the_run_row_names_the_kinds_of_the_cards_it_was_given_and_nothing_with_the_switch_off(monkeypatch):
+    crash = row(labels={"alertname": "KubePodCrashLooping", "reason": "OOMKilled"})
+    monkeypatch.delenv("AI_RULE_CARDS_INVESTIGATIONS", raising=False)
+    off = await run_row(monkeypatch, crash)
+    assert "rule_cards" not in off
+    monkeypatch.setenv("AI_RULE_CARDS_INVESTIGATIONS", "true")
+    on = await run_row(monkeypatch, crash)
+    assert on["rule_cards"] == ["crash", "oom"]  # kinds only: no title or check text
+    assert {k: v for k, v in on.items() if k not in ("rule_cards", "duration_ms")} == {k: v for k, v in off.items() if k != "duration_ms"}
+    none = await run_row(monkeypatch, row(alertname="Watchdog", labels={"alertname": "Watchdog", "job": "node-exporter"}))
+    assert none["rule_cards"] == []
+
+
 # --- a chat turn --------------------------------------------------------------------------------------------------
 
 
-async def chat_turn(monkeypatch, message, tool_names=("k8s_describe_resource", "prometheus_query")):
-    """One chat turn whose model answers at once: the messages it was sent."""
+async def chat_turn(monkeypatch, message, tool_names=("k8s_describe_resource", "prometheus_query"), audits=None):
+    """One chat turn whose model answers at once: the messages it was sent (its audit rows into `audits` when given)."""
     from app.services.ai import streaming
 
     calls = []
@@ -293,6 +322,8 @@ async def chat_turn(monkeypatch, message, tool_names=("k8s_describe_resource", "
         return DB()
 
     async def no_audit(**kw):
+        if audits is not None:
+            audits.append(kw)
         return True
 
     async def no_budget(*a, **kw):
@@ -321,7 +352,8 @@ async def chat_turn(monkeypatch, message, tool_names=("k8s_describe_resource", "
         _filter_tools_for_output_preference=lambda tools, message: tools,
         _execute_function_with_context=None,
     )
-    events = parsed([e async for e in streaming.session_chat_stream(service, "s1", message)])
+    actor = {"user_id": "u1", "email": "dev@example.com"} if audits is not None else None
+    events = parsed([e async for e in streaming.session_chat_stream(service, "s1", message, audit_actor=actor)])
     assert events[-1] == "[DONE]", events
     return calls[0]
 
@@ -348,9 +380,29 @@ async def test_with_the_switch_on_a_question_naming_a_failure_gets_its_card_for_
     assert [m["role"] for m in sent] == ["system", "user", "system"]
 
 
+@pytest.mark.asyncio
+async def test_the_chat_turns_row_names_the_kinds_of_its_cards_and_nothing_with_the_switch_off(monkeypatch):
+    def complete(audits):
+        return [a["after"] for a in audits if a["action"] == "ai.chat.complete"][0]
+
+    monkeypatch.delenv("AI_RULE_CARDS_CHAT", raising=False)
+    off = []
+    await chat_turn(monkeypatch, "why is web OOMKilled?", audits=off)
+    assert "rule_cards" not in complete(off)
+    monkeypatch.setenv("AI_RULE_CARDS_CHAT", "true")
+    on = []
+    await chat_turn(monkeypatch, "why is web OOMKilled?", audits=on)
+    assert complete(on)["rule_cards"] == ["oom"]
+    assert set(complete(on)) - set(complete(off)) == {"rule_cards"}
+    none = []
+    await chat_turn(monkeypatch, "how many pods are there?", audits=none)
+    assert complete(none)["rule_cards"] == []
+
+
 def test_the_chat_note_follows_its_own_switch():
     tools = [{"function": {"name": "k8s_get_pod_logs"}}]
     on = rule_cards.Settings(chat=True, investigations=False, cards=DEFAULTS)
-    assert 'Card "crash"' in rule_cards.chat_note("pod is in CrashLoopBackOff", tools, on)
-    assert rule_cards.chat_note("pod is in CrashLoopBackOff", tools, rule_cards.Settings(investigations=True, cards=DEFAULTS)) is None
-    assert rule_cards.chat_note("pod is in CrashLoopBackOff", [], on) is None
+    note, kinds = rule_cards.chat_cards("pod is in CrashLoopBackOff", tools, on)
+    assert 'Card "crash"' in note and kinds == ["crash"]
+    assert rule_cards.chat_cards("pod is in CrashLoopBackOff", tools, rule_cards.Settings(investigations=True, cards=DEFAULTS)) == (None, None)
+    assert rule_cards.chat_cards("pod is in CrashLoopBackOff", [], on) == (None, [])
