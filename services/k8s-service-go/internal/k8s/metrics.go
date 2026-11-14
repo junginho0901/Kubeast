@@ -10,11 +10,11 @@ import (
 	"sort"
 	"strings"
 	"sync/atomic"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 	"github.com/junginho0901/kubeast/services/pkg/response"
@@ -337,47 +337,28 @@ func (s *Service) podMetricItems(ctx context.Context, namespace string) ([]podMe
 	return resp.Items, nil
 }
 
-// metricsMissTTL is how long a cluster's answer that it does not serve metrics.k8s.io is given without asking, as
-// promMissTTL is for a Prometheus not found: a metrics-server installed since shows within it.
-const metricsMissTTL = time.Minute
-
-// metricsMiss is a cluster's answer that it does not serve metrics.k8s.io, and until when it is given without asking.
-type metricsMiss struct {
-	err   error
-	until time.Time
-}
+// metricsGroup is the API group metrics-server serves.
+const metricsGroup = "metrics.k8s.io"
 
 // metricsListRead is metricsRequest for one of the metrics.k8s.io lists of top-resources and Monitoring's Nodes and Pods
-// tabs. A list names no object that could be missing, so its 404 saying "the server could not find the requested
-// resource" is the API not served on that cluster. The cluster's bundle keeps that answer and gives it to every caller of
-// the cluster for metricsMissTTL without a request; then one caller asks again while the others keep the answer until
-// it comes. Whether an API group is served is what discovery shows every signed-in identity, so the answer is no one
-// caller's.
+// tabs, asked only of a cluster whose API discovery serves metrics.k8s.io (servesGroup). On a cluster without
+// metrics-server every caller gets, without a request, the answer the API server gives an identity it lets list them:
+// the 404 for a path no API group serves, "the server could not find the requested resource". The API server refuses a
+// list (403) before it looks for the path, so asking would give a caller it refuses its refusal and the others the 404;
+// discovery is the same for every signed-in identity. On a cluster that serves metrics.k8s.io each caller's own answer
+// stands: its rows, its refusal, a failure.
 func (s *Service) metricsListRead(ctx context.Context, path string) ([]byte, int, error) {
-	b := s.bundleForCtx(ctx)
-	if b == nil {
-		return s.metricsRequest(ctx, path)
+	if !s.servesGroup(ctx, metricsGroup) {
+		accesstrail.Cached(ctx, "metrics.k8s.io not served: the cluster's API discovery, read within the last minute")
+		return nil, http.StatusNotFound, metricsAPINotServed()
 	}
-	asking := false
-	for m := b.metricsMissing.Load(); m != nil; m = b.metricsMissing.Load() {
-		if time.Now().Before(m.until) {
-			accesstrail.Cached(ctx, "metrics.k8s.io not served: this cluster's answer within the last minute")
-			return nil, http.StatusNotFound, m.err
-		}
-		if b.metricsMissing.CompareAndSwap(m, &metricsMiss{err: m.err, until: time.Now().Add(metricsMissTTL)}) {
-			asking = true
-			break
-		}
-	}
-	body, status, err := s.metricsRequest(ctx, path)
-	switch {
-	case metricsNotServed(status, err):
-		b.metricsMissing.Store(&metricsMiss{err: err, until: time.Now().Add(metricsMissTTL)})
-	case asking || (err == nil && b.metricsMissing.Load() != nil):
-		// served now, or an answer that says nothing of it (refused, cut off): the next callers ask for themselves
-		b.metricsMissing.Store(nil)
-	}
-	return body, status, err
+	return s.metricsRequest(ctx, path)
+}
+
+// metricsAPINotServed is the error RawRequest makes of the API server's 404 for a metrics.k8s.io list on a cluster that
+// does not serve the group.
+func metricsAPINotServed() error {
+	return apierrors.NewGenericServerResponse(http.StatusNotFound, http.MethodGet, schema.GroupResource{}, "", "", 0, true)
 }
 
 // metricsRequest is RawRequest that gives a failure as the cluster wrote it: RawRequest leaves the body of a failure

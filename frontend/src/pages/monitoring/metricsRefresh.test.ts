@@ -14,7 +14,7 @@ import { METRICS_NOT_SERVED_MS, metricsReadPace, metricsRefreshFailure, metricsR
 const NODES_REFUSED = 'nodes.metrics.k8s.io is forbidden: User "u1" cannot list resource "nodes" in API group "metrics.k8s.io" at the cluster scope'
 const httpError = (status: number, data?: unknown) => Object.assign(new Error(`HTTP ${status}`), { response: { status, data } })
 const ROWS = [{ name: 'n1', cpu: '100m', cpu_percent: '5%', memory: '10Mi', memory_percent: '1%' }]
-// k8s-service's answer for a cluster without metrics-server, kept on its side for a minute (metricsMissTTL)
+// k8s-service's answer for a cluster without metrics-server, from its discovery kept on its side for a minute (apiResourcesTTL)
 const NOT_SERVED = () => httpError(404, { detail: 'the server could not find the requested resource' })
 
 // The Nodes tab's query (MonitoringNodes): its key and pace, on a client of its own, the cluster's answer standing in

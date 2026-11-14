@@ -116,6 +116,7 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 ## 2. metrics-server
 
 노드 목록, Monitoring 화면, 노드 드로어의 사용량과, Prometheus가 없을 때 최적화 표에 나오는 사용량(순간값)은 `metrics.k8s.io`에서 읽습니다.
+Kubeast는 원래 읽는 클러스터의 API discovery로 이를 찾습니다. discovery에 `metrics.k8s.io`가 없으면 모든 사용자에게 metrics-server를 사용할 수 없다고 알리고 metrics 목록은 묻지 않습니다. 나중에 설치한 metrics-server는 1분 안에 보입니다.
 
 - 설치: [metrics-server 차트](https://artifacthub.io/packages/helm/metrics-server/metrics-server) `3.14.0`(앱 0.9.0)
   - `helm install metrics-server metrics-server/metrics-server --version 3.14.0 -n kube-system`

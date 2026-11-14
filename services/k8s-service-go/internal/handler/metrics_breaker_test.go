@@ -123,14 +123,46 @@ func TestMetricsReadOfAnUnreachableClusterStillCounts(t *testing.T) {
 	}
 }
 
-// Without metrics-server the group is not served (404). Monitoring's reads say so as top-resources does, a 404 with
-// "the server could not find the requested resource", where they answered an empty list the tabs asked again every 5 s.
-// The cluster's answer is kept for the minute top-resources keeps it, so both reads, every namespace and a grant limited
-// to namespaces ask the cluster once within it.
+// serveDiscovery answers API discovery as a legacy (not aggregated) API server: core v1 and, with metrics,
+// metrics.k8s.io/v1beta1 (metrics-server installed). It counts the discovery reads (the group list asked) in reads.
+func serveDiscovery(w http.ResponseWriter, r *http.Request, metrics bool, reads *atomic.Int64) bool {
+	const metricsGV = `{"groupVersion":"metrics.k8s.io/v1beta1","version":"v1beta1"}`
+	w.Header().Set("Content-Type", "application/json")
+	switch r.URL.Path {
+	case "/api":
+		_, _ = w.Write([]byte(`{"kind":"APIVersions","versions":["v1"]}`))
+	case "/api/v1":
+		_, _ = w.Write([]byte(`{"kind":"APIResourceList","groupVersion":"v1","resources":[{"name":"nodes","singularName":"node","namespaced":false,"kind":"Node","verbs":["get","list"]}]}`))
+	case "/apis":
+		reads.Add(1)
+		groups := ""
+		if metrics {
+			groups = `{"name":"metrics.k8s.io","versions":[` + metricsGV + `],"preferredVersion":` + metricsGV + `}`
+		}
+		_, _ = w.Write([]byte(`{"kind":"APIGroupList","apiVersion":"v1","groups":[` + groups + `]}`))
+	case "/apis/metrics.k8s.io/v1beta1":
+		if !metrics {
+			http.NotFound(w, r)
+			return true
+		}
+		_, _ = w.Write([]byte(`{"kind":"APIResourceList","groupVersion":"metrics.k8s.io/v1beta1","resources":[{"name":"nodes","namespaced":false,"kind":"NodeMetrics","verbs":["get","list"]},{"name":"pods","namespaced":true,"kind":"PodMetrics","verbs":["get","list"]}]}`))
+	default:
+		return false
+	}
+	return true
+}
+
+// Without metrics-server the group is not served. Monitoring's reads say so as top-resources does, a 404 with "the
+// server could not find the requested resource", where they answered an empty list the tabs asked again every 5 s. The
+// cluster's discovery, which lists no metrics.k8s.io, says it for every caller: both reads, every namespace and a grant
+// limited to namespaces ask the cluster no list, and discovery is read once.
 func TestMonitoringMetricsOfAClusterWithoutTheMetricsAPISayNotServed(t *testing.T) {
 	const notFound = "the server could not find the requested resource"
-	var asked atomic.Int64
+	var asked, discovery atomic.Int64
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if serveDiscovery(w, r, false, &discovery) {
+			return
+		}
 		if strings.HasPrefix(r.URL.Path, "/apis/metrics.k8s.io/") {
 			asked.Add(1)
 		}
@@ -170,8 +202,8 @@ func TestMonitoringMetricsOfAClusterWithoutTheMetricsAPISayNotServed(t *testing.
 		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || rec.Code != http.StatusNotFound || body.Detail != notFound {
 			t.Fatalf("%s: %d %s, want 404 %q", c.name, rec.Code, rec.Body.String(), notFound)
 		}
-		if got := asked.Load(); got != 1 {
-			t.Fatalf("%s: %d metrics.k8s.io lists asked in all, want 1 within the minute", c.name, got)
+		if got, reads := asked.Load(), discovery.Load(); got != 0 || reads != 1 {
+			t.Fatalf("%s: %d metrics.k8s.io lists asked and %d discovery reads in all, want none and one", c.name, got, reads)
 		}
 	}
 	if h.svc.ClusterDown("c1") {
@@ -179,8 +211,9 @@ func TestMonitoringMetricsOfAClusterWithoutTheMetricsAPISayNotServed(t *testing.
 	}
 }
 
-// A grant limited to namespaces asking first gets the same answer: the namespaces' 404s are the API not served, not
-// namespaces the cluster does not have, which would read as no rows.
+// Where discovery could not be read (this stand-in answers 404 for the group list too) a grant limited to namespaces
+// asks the cluster and gets the same answer from its 404s: the API not served, not namespaces the cluster does not have,
+// which would read as no rows.
 func TestMonitoringPodMetricsOfALimitedGrantWithoutTheMetricsAPISayNotServed(t *testing.T) {
 	api := httptest.NewServer(http.NotFoundHandler())
 	defer api.Close()
