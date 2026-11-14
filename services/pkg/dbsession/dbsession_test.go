@@ -97,8 +97,9 @@ func TestMigrationStatementsHaveNoStatementOrLockLimit(t *testing.T) {
 	if got := Defaults.MigrationStatements(); got != want {
 		t.Fatalf("MigrationStatements() = %q, want %q", got, want)
 	}
-	if got := (Limits{}).MigrationStatements(); got != "" {
-		t.Fatalf("MigrationStatements() with every limit 0 = %q, want none", got)
+	// Every variable at 0 (the limits on the role, behind RDS Proxy): the migrations still lift the role's limits.
+	if got, want := (Limits{}).MigrationStatements(), "SET statement_timeout = 0; SET lock_timeout = 0"; got != want {
+		t.Fatalf("MigrationStatements() with every limit 0 = %q, want %q", got, want)
 	}
 }
 
@@ -167,6 +168,20 @@ func TestNoLimitsSendNothing(t *testing.T) {
 	}
 	if q := srv.Queries(); len(q) != 0 {
 		t.Fatalf("queries with every limit 0 = %q", q)
+	}
+}
+
+// With every variable at 0 the limits may be on the role (behind RDS Proxy); the migration connections set the
+// statement and lock limits to 0 all the same.
+func TestApplyMigrationsWithEveryLimitZeroStillLiftsTheStatementAndLockLimits(t *testing.T) {
+	srv := dbsessiontest.Start(t)
+	cfg := parse(t, srv.URL())
+	Limits{}.ApplyMigrations(cfg)
+	if _, err := connect(t, cfg); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	if q := srv.Queries(); len(q) != 1 || q[0] != "SET statement_timeout = 0; SET lock_timeout = 0" {
+		t.Fatalf("queries after connecting = %q", q)
 	}
 }
 

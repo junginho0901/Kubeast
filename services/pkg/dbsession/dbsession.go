@@ -11,7 +11,7 @@
 //
 // The advisory-lock connections (audit sinks) sit idle outside a transaction and run short statements, so these
 // limits leave them alone; idle_session_timeout, which would close them, is never set. Schema migrations run
-// without the statement and lock limits (ApplyMigrations).
+// without the statement and lock limits, also when the role or the database sets them (ApplyMigrations).
 package dbsession
 
 import (
@@ -96,17 +96,11 @@ func (l Limits) Statements() string {
 }
 
 // MigrationStatements is Statements for the connections that run the schema migrations. A migration may rewrite a
-// large table and waits for its table locks, so statement_timeout and lock_timeout are set to 0 (none), over any
-// role or database setting, wherever l sets them for the other connections; where l leaves one unset, nothing is
-// set. idle_in_transaction_session_timeout is l's.
+// large table and waits for its table locks, so statement_timeout and lock_timeout are always set to 0 (none), over
+// any role or database setting, whatever l holds: with the variables at 0 and the limits on the role (behind RDS
+// Proxy), the migrations would otherwise run under the role's limits. idle_in_transaction_session_timeout is l's.
 func (l Limits) MigrationStatements() string {
-	var s []string
-	if l.StatementTimeout > 0 {
-		s = append(s, "SET "+ParamStatementTimeout+" = 0")
-	}
-	if l.LockTimeout > 0 {
-		s = append(s, "SET "+ParamLockTimeout+" = 0")
-	}
+	s := []string{"SET " + ParamStatementTimeout + " = 0", "SET " + ParamLockTimeout + " = 0"}
 	s = appendSet(s, ParamIdleInTransaction, l.IdleInTransaction)
 	return strings.Join(s, "; ")
 }
