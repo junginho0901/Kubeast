@@ -73,7 +73,15 @@ var (
 	kcHTTP           = &http.Client{Timeout: 10 * time.Second}
 )
 
-const kubeconfigTTL = 5 * time.Minute
+// kubeconfigTTL is how long a fetched kubeconfig is reused for one person and cluster. auth-service tells one
+// tool-server replica to drop a rotated or deleted cluster's kubeconfig, so this is how long another replica can still
+// use it. Each refetch is one k8s-service call: one database read and one Secret read, one audit row
+// (k8s.cluster.kubeconfig.read), and the person's access to the cluster checked again; the multi-replica load test
+// measures what that costs.
+const kubeconfigTTL = 10 * time.Second
+
+// kcNow is the resolver's clock (tests move it).
+var kcNow = time.Now
 
 // inClusterKubeconfigYAML targets the local API server using this pod's mounted
 // ServiceAccount CA. The user identity is supplied by kubectl's --token (the
@@ -134,7 +142,7 @@ func resolveClusterAccess(ctx context.Context, clusterID string, headers http.He
 	key := kcCacheKey(clusterID, headers)
 
 	kcCacheMu.Lock()
-	if c, ok := kcCache[key]; ok && time.Now().Before(c.expiry) {
+	if c, ok := kcCache[key]; ok && kcNow().Before(c.expiry) {
 		kcCacheMu.Unlock()
 		return c.path, c.protected, nil
 	}
@@ -160,7 +168,7 @@ func resolveClusterAccess(ctx context.Context, clusterID string, headers http.He
 	}
 
 	kcCacheMu.Lock()
-	kcCache[key] = cachedKubeconfig{path: path, protected: protected, expiry: time.Now().Add(kubeconfigTTL)}
+	kcCache[key] = cachedKubeconfig{path: path, protected: protected, expiry: kcNow().Add(kubeconfigTTL)}
 	kcCacheMu.Unlock()
 	return path, protected, nil
 }

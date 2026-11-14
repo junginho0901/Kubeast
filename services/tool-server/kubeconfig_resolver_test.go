@@ -8,6 +8,7 @@ import (
 	"os"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -170,6 +171,37 @@ func TestResolveClusterKubeconfig_CachesWithinTTL(t *testing.T) {
 	if n := atomic.LoadInt32(&calls); n != 1 {
 		t.Errorf("k8s-service hit %d times, want 1 (cached within TTL)", n)
 	}
+}
+
+// A kubeconfig a replica was not told to drop is fetched again within 10 s: the line the multi-replica test holds
+// every tool-server replica to after a kubeconfig change or a cluster delete.
+func TestResolveClusterKubeconfig_FetchesAgainAfterTenSeconds(t *testing.T) {
+	resetKubeconfigCache()
+	now := time.Unix(1_700_000_000, 0)
+	prevNow := kcNow
+	kcNow = func() time.Time { return now }
+	defer func() { kcNow = prevNow }()
+	var calls int32
+	_, restore := mockK8sService(t, func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		_, _ = w.Write([]byte(`{"kubeconfig":"","in_cluster":true}`))
+	})
+	defer restore()
+
+	resolve := func(step string, want int32) {
+		t.Helper()
+		if _, err := resolveClusterKubeconfig(context.Background(), "self", http.Header{}); err != nil {
+			t.Fatalf("%s: resolve: %v", step, err)
+		}
+		if n := atomic.LoadInt32(&calls); n != want {
+			t.Fatalf("%s: k8s-service hit %d times, want %d", step, n, want)
+		}
+	}
+	resolve("first call", 1)
+	now = now.Add(10*time.Second - time.Millisecond)
+	resolve("just under 10 s later", 1)
+	now = now.Add(time.Millisecond)
+	resolve("10 s later", 2)
 }
 
 func TestResolveClusterKubeconfig_ForwardsAuthorization(t *testing.T) {
