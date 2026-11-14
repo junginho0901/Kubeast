@@ -134,7 +134,7 @@ async def test_off_changes_nothing(mode, tmp_path):
     directory = mode("off", tmp_path / "never")
     service = make_service()
     assert await call(service) == ANSWER
-    assert len(service.tool_server.calls) == 1
+    assert len(service.tool_server.calls) == 1 and not hasattr(service, tool_replay.OUTCOME_ATTR)
     assert not directory.exists(), "off writes no recording and makes no directory"
     assert tool_replay.settings() == tool_replay.Settings() and not tool_replay.serving()
     assert tool_replay.call_fields(service, True) == {} and tool_replay.call_fields(service, False) == {}

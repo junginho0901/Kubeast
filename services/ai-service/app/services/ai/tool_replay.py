@@ -211,9 +211,9 @@ def _refusal(service, status: str, message: str) -> str:
 async def answer(service, tool: str, args: Any, run: Callable[[], Awaitable[str]]) -> str:
     """The tool's answer as the mode gives it; `run` is the live call."""
     s = _settings
-    setattr(service, OUTCOME_ATTR, None)
     if s.mode == OFF or s.directory is None:
         return await run()
+    setattr(service, OUTCOME_ATTR, None)
     from app.services.ai import permissions
 
     call_args = args if isinstance(args, dict) else {}
