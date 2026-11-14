@@ -1,3 +1,4 @@
+{{- $accessLog := include "kubeast.gatewayAccessLog" . -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -29,6 +30,12 @@ data:
         server k8s-service-stream:8002;
     }
 {{- end }}
+{{- if $accessLog }}
+  # gateway.accessLog.upstreamTimes: nginx's default access log lines with how
+  # long the service took added (kubeast.gatewayAccessLog in _helpers.tpl).
+  accesslog.conf: |
+    {{- $accessLog | nindent 4 }}
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -47,7 +54,7 @@ spec:
       labels:
         app: gateway
       annotations:
-        checksum/nginx-config: {{ print (include "kubeast.gatewayNginxConf" .) (toJson .Values.gateway.trustedProxies) | sha256sum }}
+        checksum/nginx-config: {{ print (include "kubeast.gatewayNginxConf" .) (toJson .Values.gateway.trustedProxies) $accessLog | sha256sum }}
     spec:
       automountServiceAccountToken: false
       {{- include "kubeast.terminationGrace" . | nindent 6 }}
@@ -73,6 +80,11 @@ spec:
             - name: nginx-config
               mountPath: /etc/nginx/conf.d/kubeast/streams.conf
               subPath: streams.conf
+            {{- end }}
+            {{- if $accessLog }}
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/kubeast/accesslog.conf
+              subPath: accesslog.conf
             {{- end }}
             - name: tmp
               mountPath: /tmp
