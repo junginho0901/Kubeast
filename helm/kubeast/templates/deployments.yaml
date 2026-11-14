@@ -379,7 +379,7 @@ spec:
             {{- end }}
           {{- end }}
           {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8002) | nindent 10 }}
-          {{- include "kubeast.preStop" . | nindent 10 }}
+          {{- include "kubeast.preStop" $ | nindent 10 }}
           readinessProbe:
             httpGet:
               {{- if not $api }}
