@@ -41,7 +41,7 @@ func (s *Service) DescribeNetworkPolicy(ctx context.Context, namespace, name str
 
 	// the row already includes all fields
 	result := netpolrow.Info(np)
-	s.setObjectEvents(ctx, result, namespace, "NetworkPolicy", name)
+	s.setObjectEvents(ctx, result, namespace, "NetworkPolicy", name, about(np.UID))
 	return result, nil
 }
 

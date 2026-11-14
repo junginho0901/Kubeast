@@ -1,7 +1,8 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
-import { api, type PrometheusQueryResponse, type PrometheusRangeResponse, type ClusterFeatures } from '@/services/api'
+import { api, type PrometheusQueryResponse, type PrometheusRangeResponse, type ClusterFeatures, type ServiceBackendUsage } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { useCluster } from '@/contexts/ClusterContext'
+import { aiState, type AIState } from '@/utils/features'
 
 /**
  * Fetch cluster-level feature flags (e.g. Prometheus enabled/disabled) once
@@ -31,6 +32,13 @@ export function useClusterFeatures() {
     // so behavior matches pre-toggle deployments.
     placeholderData: { prometheus: { enabled: true } },
   })
+}
+
+// ai.enabled once the features have answered (aiState); the cluster list is the read the features wait for.
+export function useAIState(): AIState {
+  const features = useClusterFeatures()
+  const clusters = useQuery({ queryKey: ['clusters-accessible'], queryFn: () => clustersApi.listClusters(true), staleTime: 30_000 })
+  return aiState(features.data, features.isPlaceholderData, clusters.isError)
 }
 
 // The hooks ask only while the cluster's toggle is on and the caller's grant covers the whole cluster: a grant
@@ -166,4 +174,28 @@ export function usePrometheusRangeQuery(
     staleTime: 60 * 1000,
     placeholderData: promEnabled ? undefined : { available: false, results: [] },
   })
+}
+
+/**
+ * The Service drawer's backend pod sums as the server adds them up (GET …/services/{name}/backend-usage), for a Service
+ * whose pods one query from the screen cannot name. Same gating as the other Prometheus reads; `available` and `failure`
+ * as usePrometheusQueries gives them, for `PrometheusSection`.
+ */
+export function useServiceBackendUsage(namespace: string, name: string, options?: { enabled?: boolean }) {
+  const features = useClusterFeatures()
+  const promEnabled = prometheusReadable(features.data)
+  // the features' placeholder says "on" while they load: ask once they have come (or failed)
+  const featuresIn = features.isFetched
+  const { currentCluster } = useCluster()
+  const query = useQuery<ServiceBackendUsage>({
+    queryKey: ['prometheus', currentCluster || 'default', 'service-backend-usage', namespace, name],
+    queryFn: () => api.serviceBackendUsage(namespace, name),
+    refetchInterval: 30000,
+    enabled: (options?.enabled ?? true) && featuresIn && promEnabled,
+    retry: 1,
+    retryDelay: 2000,
+    staleTime: 10000,
+  })
+  const available = !!query.data?.available
+  return { data: query.data, available, failure: available ? null : prometheusNotAnswering(query.error) }
 }

@@ -4,6 +4,7 @@ import type { BackendTLSPolicyInfo as BackendTLSPolicyRow } from '@/services/api
 import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, NoneText, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { formatParentRef } from './gatewayDetail'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
@@ -35,6 +36,7 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
     enabled,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['backendtlspolicy-describe', namespace, name], answer: describe, kind: 'BackendTLSPolicy', namespace, name })
 
   useResourceDetailOverlay({ kind: 'BackendTLSPolicy', name, namespace, describe })
 

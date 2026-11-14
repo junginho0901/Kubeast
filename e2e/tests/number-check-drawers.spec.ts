@@ -55,7 +55,7 @@ const KINDS = 'deploy,sts,ds,rs,job,cronjob,pod,svc,endpointslices.discovery.k8s
 const NODE = 'kubeast-control-plane'
 
 // Everything in the namespace in one read, and what kubectl prints of the pods, Jobs and the events
-type Snap = { by: Record<string, Obj[]>; namespace: Obj; node: Obj; nodePods: Obj[]; podTable: Record<string, string>[]; jobTable: Record<string, string>[]; events: Record<string, string>[] }
+type Snap = { by: Record<string, Obj[]>; namespace: Obj; node: Obj; nodePods: Obj[]; podTable: Record<string, string>[]; jobTable: Record<string, string>[]; events: Record<string, string>[]; eventObjects: Obj[] }
 async function snapshot(): Promise<Snap> {
   const by: Record<string, Obj[]> = {}
   for (const o of JSON.parse(kubectl(`get ${KINDS} -n ${NS} -o json`)).items) (by[o.kind] ??= []).push(o)
@@ -67,6 +67,7 @@ async function snapshot(): Promise<Snap> {
     podTable: await tableRows(`/api/v1/namespaces/${NS}/pods`),
     jobTable: await tableRows(`/apis/batch/v1/namespaces/${NS}/jobs`),
     events: await tableRows(`/api/v1/namespaces/${NS}/events`),
+    eventObjects: JSON.parse(kubectl(`get events -n ${NS} -o json`)).items,
   }
 }
 const one = (s: Snap, kind: string, name: string): Obj => (s.by[kind] ?? []).find((o) => o.metadata.name === name)
@@ -183,7 +184,7 @@ type Want = {
   counts?: Record<string, number>
   // the rest (tables, titles): each returns the differences it found
   more?: (d: Drawer) => string[]
-  // how many events kubectl lists about the object (involvedObject kind and name): the drawer's Events section is
+  // how many events kubectl lists about the object (involvedObject kind, name and UID): the drawer's Events section is
   // always there, "None" when there are none, else a row each (ten to a page)
   events?: number
   // numbers on the drawer not compared, with why
@@ -631,9 +632,9 @@ test.describe('number check — drawers', () => {
       const want = (s: Snap): Want => {
         const o = t.kind === 'Node' ? s.node : t.kind === 'Namespace' ? s.namespace : one(s, t.kind, t.ref.split('/')[1])
         const w = t.want(s)
-        // the events kubectl lists about it in the namespace (a node's are recorded elsewhere)
-        const about = `${t.kind.toLowerCase()}/${o?.metadata.name}`
-        const events = t.kind === 'Node' ? {} : { events: s.events.filter((e) => e.Object === about).length }
+        // the events kubectl describe lists about it in the namespace — its kind, name and UID (a node's are recorded elsewhere)
+        const about = (e: Obj) => e.involvedObject?.kind === t.kind && e.involvedObject?.name === o?.metadata.name && e.involvedObject?.uid === o?.metadata.uid
+        const events = t.kind === 'Node' ? {} : { events: s.eventObjects.filter(about).length }
         return { ...w, ...events, ifShown: { 'Resource Version': o?.metadata.resourceVersion ?? '', ...w.ifShown }, spans: { Created: since(o?.metadata.creationTimestamp), ...w.spans } }
       }
       // the cluster read before and after the drawer, so a value that moves (a crashing pod's restarts) matches one of them
@@ -696,5 +697,40 @@ test.describe('number check — drawers', () => {
     } finally {
       await page.unroute(prometheus)
     }
+  })
+
+  // The sums the drawer reads from the server for a Service past one query: the same three queries over the same pods,
+  // asked of Prometheus here directly at the same moment (a scrape between the two reads is asked again).
+  test('the server sums the usage of the pods of a Service\'s ready endpoints as the drawer\'s queries do', async ({ page }) => {
+    test.setTimeout(120_000)
+    const features = await (await page.request.get('/api/v1/cluster/features?cluster=self')).json()
+    test.skip(features?.prometheus?.enabled === false || features?.prometheus?.namespaceLimited === true, 'the drawer reads no Prometheus on self')
+    const slices: Obj[] = JSON.parse(kubectl(`get endpointslices -n ${NS} -l kubernetes.io/service-name=num-web -o json`)).items
+    const want = [...new Set(slices.flatMap((s) => (s.endpoints ?? [])
+      .filter((e: Obj) => (e.conditions?.ready ?? true) && e.targetRef?.kind === 'Pod' && (e.targetRef.namespace ?? NS) === NS)
+      .map((e: Obj) => String(e.targetRef.name))))].sort()
+    expect(want.length, 'kubectl lists the ready pods of num-web').toBe(3)
+    const server = async () => (await page.request.get(`/api/v1/cluster/namespaces/${NS}/services/num-web/backend-usage`, { params: { cluster: 'self' } })).json()
+    const first = await server()
+    test.skip(first.available !== true, 'no Prometheus answers for self')
+    expect(first.pods).toBe(want.length)
+    expect(first.queries).toBe(3)
+    // a PromQL string doubles the backslash of an escaped dot
+    const pods = want.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, (c) => `\\\\${c}`)).join('|')
+    const sel = `{namespace="${NS}",pod=~"${pods}",container!="",container!="POD"}`
+    const queries = [
+      `sum(rate(container_cpu_usage_seconds_total${sel}[5m])) * 1000`,
+      `sum(container_memory_working_set_bytes${sel})`,
+      `count(count by(pod)(container_cpu_usage_seconds_total${sel}))`,
+    ]
+    const direct = async (query: string) => {
+      const body = await (await page.request.get('/api/v1/cluster/prometheus/query', { params: { query, cluster: 'self' } })).json()
+      return body?.results?.[0]?.value ?? null
+    }
+    await expect.poll(async () => {
+      const [sums, ...asked] = await Promise.all([server(), ...queries.map(direct)])
+      const got = [sums.cpu_millicores, sums.memory_bytes, sums.pod_count]
+      return JSON.stringify(got) === JSON.stringify(asked) ? 'same' : JSON.stringify({ server: got, prometheus: asked })
+    }, { timeout: 60_000, intervals: [2000] }).toBe('same')
   })
 })

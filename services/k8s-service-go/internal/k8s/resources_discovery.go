@@ -115,29 +115,42 @@ func (s *Service) newerAPIResources(ctx context.Context, read time.Time) bool {
 	return true
 }
 
-// preferredFirst orders discovery lists so each group's preferred version comes
-// before its other versions (then by group/version), since discovery returns
-// them in no fixed order and the first match wins in resolveResourceMatch.
+// preferredFirst orders discovery lists as kubectl's RESTMapper ranks them (client-go restmapper.NewDiscoveryRESTMapper):
+// core v1 first, then the groups in the order discovery names them, each group's preferred version before its other
+// versions in the group's own order. Aggregated discovery gives the lists in no fixed order, and the first match wins in
+// matchResource; a list of a version the groups do not name goes last, by group/version.
 func preferredFirst(groups []*metav1.APIGroup, lists []*metav1.APIResourceList) []metav1.APIResourceList {
-	preferred := make(map[string]bool, len(groups))
-	for _, g := range groups {
-		if g != nil {
-			preferred[g.PreferredVersion.GroupVersion] = true
-		}
-	}
-	result := make([]metav1.APIResourceList, 0, len(lists))
+	byVersion := make(map[string]*metav1.APIResourceList, len(lists))
 	for _, list := range lists {
 		if list != nil {
-			result = append(result, *list)
+			byVersion[list.GroupVersion] = list
 		}
 	}
-	sort.SliceStable(result, func(i, j int) bool {
-		pi, pj := preferred[result[i].GroupVersion], preferred[result[j].GroupVersion]
-		if pi != pj {
-			return pi
+	result := make([]metav1.APIResourceList, 0, len(byVersion))
+	take := func(groupVersion string) {
+		if list, ok := byVersion[groupVersion]; ok {
+			result = append(result, *list)
+			delete(byVersion, groupVersion)
 		}
-		return result[i].GroupVersion < result[j].GroupVersion
-	})
+	}
+	take("v1")
+	for _, g := range groups {
+		if g == nil {
+			continue
+		}
+		take(g.PreferredVersion.GroupVersion)
+		for _, v := range g.Versions {
+			take(v.GroupVersion)
+		}
+	}
+	rest := make([]string, 0, len(byVersion))
+	for groupVersion := range byVersion {
+		rest = append(rest, groupVersion)
+	}
+	sort.Strings(rest)
+	for _, groupVersion := range rest {
+		take(groupVersion)
+	}
 	return result
 }
 
@@ -251,77 +264,48 @@ func (s *Service) resolveResourceMatch(ctx context.Context, resourceType string)
 	return m, err
 }
 
+// matchResource finds a resource type in lists ordered by preferredFirst as kubectl's mapper finds it (cli-runtime
+// Builder.mappingFor over client-go's shortcut expander and PriorityRESTMapper): a plural or singular name in any group
+// first, then a short name, each the first in that order. Kubeast also takes a kind after both, which kubectl reads only
+// in the core group; subresources are never a match. A ".group" after the name keeps to that group.
 func matchResource(lists []metav1.APIResourceList, resourceType string) (resourceMatch, error) {
-	// Split into resource name and optional group
 	parts := strings.SplitN(resourceType, ".", 2)
 	searchName := strings.ToLower(parts[0])
 	searchGroup := ""
 	if len(parts) > 1 {
 		searchGroup = parts[1]
 	}
-
-	// Two-pass: prefer core/apps/batch groups first, then fall back to any match
-	var coreMatch, anyMatch *resourceMatch
-
-	for _, list := range lists {
-		gv, err := schema.ParseGroupVersion(list.GroupVersion)
-		if err != nil {
-			continue
+	byName := func(r metav1.APIResource) bool {
+		singular := r.SingularName
+		if singular == "" {
+			// a server that lists no singular: client-go guesses the lower-case kind
+			singular = r.Kind
 		}
-
-		// If group was specified, must match
-		if searchGroup != "" && gv.Group != searchGroup {
-			continue
-		}
-
-		for _, r := range list.APIResources {
-			nameLower := strings.ToLower(r.Name)
-			kindLower := strings.ToLower(r.Kind)
-
-			matched := nameLower == searchName || kindLower == searchName ||
-				strings.ToLower(r.SingularName) == searchName
-
-			// Check short names
-			if !matched {
-				for _, sn := range r.ShortNames {
-					if strings.ToLower(sn) == searchName {
-						matched = true
-						break
-					}
-				}
+		return strings.ToLower(r.Name) == searchName || strings.ToLower(singular) == searchName
+	}
+	byShortName := func(r metav1.APIResource) bool {
+		for _, sn := range r.ShortNames {
+			if strings.ToLower(sn) == searchName {
+				return true
 			}
-
-			if matched {
-				m := &resourceMatch{
-					gvr: schema.GroupVersionResource{
-						Group:    gv.Group,
-						Version:  gv.Version,
-						Resource: r.Name,
-					},
-					namespaced: r.Namespaced,
-					kind:       r.Kind,
+		}
+		return false
+	}
+	byKind := func(r metav1.APIResource) bool { return strings.ToLower(r.Kind) == searchName }
+	for _, matches := range []func(metav1.APIResource) bool{byName, byShortName, byKind} {
+		for _, list := range lists {
+			gv, err := schema.ParseGroupVersion(list.GroupVersion)
+			if err != nil || (searchGroup != "" && gv.Group != searchGroup) {
+				continue
+			}
+			for _, r := range list.APIResources {
+				if strings.Contains(r.Name, "/") || !matches(r) {
+					continue
 				}
-				// Prefer core API groups (empty, apps, batch, networking.k8s.io, etc.)
-				if gv.Group == "" || gv.Group == "apps" || gv.Group == "batch" ||
-					gv.Group == "networking.k8s.io" || gv.Group == "rbac.authorization.k8s.io" ||
-					gv.Group == "storage.k8s.io" || gv.Group == "policy" {
-					if coreMatch == nil {
-						coreMatch = m
-					}
-				} else if anyMatch == nil {
-					anyMatch = m
-				}
+				return resourceMatch{gvr: gv.WithResource(r.Name), namespaced: r.Namespaced, kind: r.Kind}, nil
 			}
 		}
 	}
-
-	if coreMatch != nil {
-		return *coreMatch, nil
-	}
-	if anyMatch != nil {
-		return *anyMatch, nil
-	}
-
 	return resourceMatch{}, fmt.Errorf("resource type %q %w", resourceType, errResourceTypeNotServed)
 }
 

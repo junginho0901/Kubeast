@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
 import type { PodPage } from './api'
 import { podPagePollEvery, podRowChanged, readPodPageSince } from './podPageRead'
+import { followsObjectForChat } from '@/components/resource-detail/drawerObjectLayer'
+import { answerKeyOf } from '@/components/resource-detail/useDrawerFollowsRead'
 import dashboardQueriesSrc from '@/pages/dashboard/hooks/useDashboardQueries.ts?raw'
 import podGroupListSrc from '@/pages/resource-graph/PodGroupList.tsx?raw'
 import useServerPodsSrc from '@/components/resource-detail/useServerPods.tsx?raw'
@@ -111,9 +113,13 @@ describe('whether the row of an open Pod drawer changed', () => {
     expect(podRowChanged([row('web-1', 'Running', 0, 'other'), row('web-1')], [row('web-1', 'Pending', 0, 'other'), row('web-1')], pod)).toBe(false)
   })
 
-  // The block on screen does not hold it, so the rows cannot say; a read of the drawer is what it always was.
-  it('says yes when neither page holds its row', () => {
-    expect(podRowChanged([row('web-2')], [row('web-3')], pod)).toBe(true)
+  // The block on screen does not hold it, so the rows cannot say: each poll whose revision moved for another pod read the
+  // answer again before. The drawer reads its object every ten seconds and its answer when the object's version moves.
+  it('says no when neither page holds its row, which the drawer follows on its own read', () => {
+    expect(podRowChanged([row('web-2')], [row('web-3')], pod)).toBe(false)
+    expect(podRowChanged(undefined, [row('web-3')], pod)).toBe(false)
+    expect(followsObjectForChat('Pod')).toBe(true)
+    expect(answerKeyOf('Pod', pod.namespace, pod.name)).toEqual(['pod-describe', pod.namespace, pod.name])
   })
 
   it('the Pods page reads only the open Pod drawer\'s answer, only when that says so', () => {

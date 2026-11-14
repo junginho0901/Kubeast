@@ -33,11 +33,11 @@ const ingress = (host: string) => JSON.stringify({
   apiVersion: 'networking.k8s.io/v1', kind: 'Ingress', metadata: { name: 'web', namespace: NS },
   spec: { rules: [{ host, http: { paths: [{ path: '/', pathType: 'Prefix', backend: { service: { name: 'web', port: { number: 80 } } } }] } }] },
 })
-// an event counts up under one first time, as a recorder writes it
+// an event counts up under one first time, as a recorder writes it, naming the object's UID
 const FIRST_SEEN = new Date(Date.now() - 60_000).toISOString().replace(/\.\d+Z$/, 'Z')
 const event = (count: number) => JSON.stringify({
   apiVersion: 'v1', kind: 'Event', metadata: { name: 'web.e2e-live', namespace: NS },
-  involvedObject: { kind: 'Deployment', name: 'web', namespace: NS, apiVersion: 'apps/v1' },
+  involvedObject: { kind: 'Deployment', name: 'web', namespace: NS, apiVersion: 'apps/v1', uid: kubectl(`-n ${NS} get deployment web -o 'jsonpath={.metadata.uid}'`) },
   reason: 'E2ELiveWarning', message: 'told by the run', type: 'Warning', count,
   firstTimestamp: FIRST_SEEN, lastTimestamp: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), source: { component: 'e2e-live' },
 })
@@ -103,6 +103,36 @@ test.describe('what keeps up by itself', () => {
     await expect.poll(() => describes.length, { timeout: 15_000 }).toBe(2)
   })
 
+  // The class rows are the describe answer's, which reads the IngressClass the Ingress names; the list's row has no
+  // controller, and the answer is read again when the Ingress changes.
+  test('an Ingress drawer says its class\'s controller as the IngressClass has it, and follows a change of class', async ({ page }) => {
+    test.setTimeout(120_000)
+    const CLASS = `e2e-live-ic-${STAMP}`
+    const classed = (spec: object, annotations?: Record<string, string>) => JSON.stringify({
+      apiVersion: 'networking.k8s.io/v1', kind: 'Ingress', metadata: { name: 'classed', namespace: NS, ...(annotations ? { annotations } : {}) },
+      spec: { ...spec, rules: [{ host: 'classed.example.com', http: { paths: [{ path: '/', pathType: 'Prefix', backend: { service: { name: 'web', port: { number: 80 } } } }] } }] },
+    })
+    kubectl('apply -f -', JSON.stringify({ apiVersion: 'networking.k8s.io/v1', kind: 'IngressClass', metadata: { name: CLASS }, spec: { controller: 'example.com/e2e-live' } }))
+    try {
+      kubectl('apply -f -', classed({ ingressClassName: CLASS }))
+      await page.goto(`/network/ingresses?cluster=self&namespace=${NS}`)
+      await page.locator('main tbody tr').filter({ hasText: 'classed' }).first().click()
+      const drawer = page.locator(DRAWER).last()
+      const value = (label: string) => drawer.locator('span.shrink-0', { hasText: new RegExp(`^${label}$`) }).locator('xpath=following-sibling::span[1]')
+      await expect(value('Class Controller')).toHaveText(kubectl(`get ingressclass ${CLASS} -o 'jsonpath={.spec.controller}'`), { timeout: 20_000 })
+      await expect(value('Class Source')).toHaveText('spec')
+      await expect(value('Class Default')).toHaveText('No')
+
+      // the class by annotation now, which names no IngressClass the answer reads
+      kubectl('apply -f -', classed({}, { 'kubernetes.io/ingress.class': 'other' }))
+      await expect(value('Class Source')).toHaveText('annotation', { timeout: 30_000 })
+      await expect(value('Class Controller')).toHaveText('-')
+    } finally {
+      kubectl(`-n ${NS} delete ingress classed --ignore-not-found`)
+      kubectl(`delete ingressclass ${CLASS} --ignore-not-found`)
+    }
+  })
+
   test('a Deployment\'s Events count up while it stays as it is, and its answer is not read for that', async ({ page }) => {
     test.setTimeout(120_000)
     const describes = requests(page, /\/deployments\/web\/describe/)
@@ -118,6 +148,24 @@ test.describe('what keeps up by itself', () => {
     kubectl('apply -f -', event(7))
     await expect.poll(async () => (await row.locator('td').last().innerText()).trim(), { timeout: 20_000 }).toBe(kubectl(`-n ${NS} get event web.e2e-live -o 'jsonpath={.count}'`))
     expect(describes.length, 'the frame is the row').toBe(before)
+
+    // an event of an earlier Deployment of the same name, which kubectl describe leaves out (its UID is another), does
+    // not join the table; one of this Deployment written after it does, so the watch was still on
+    const earlier = JSON.parse(event(1))
+    earlier.metadata.name = 'web.e2e-earlier'
+    earlier.reason = 'E2EEarlierObject'
+    earlier.involvedObject.uid = '00000000-0000-4000-8000-0000000e2e02'
+    kubectl('apply -f -', JSON.stringify(earlier))
+    const after = JSON.parse(event(1))
+    after.metadata.name = 'web.e2e-after'
+    after.reason = 'E2EAfterTheEarlier'
+    kubectl('apply -f -', JSON.stringify(after))
+    await expect(drawer.locator('tr').filter({ hasText: 'E2EAfterTheEarlier' })).toHaveCount(1, { timeout: 20_000 })
+    await expect(drawer.locator('tr').filter({ hasText: 'E2EEarlierObject' })).toHaveCount(0)
+    const describedUid = kubectl(`-n ${NS} get deployment web -o 'jsonpath={.metadata.uid}'`)
+    const kubectlLists = JSON.parse(kubectl(`-n ${NS} get events --field-selector involvedObject.name=web,involvedObject.kind=Deployment,involvedObject.uid=${describedUid} -o json`)).items.map((e: { reason: string }) => e.reason)
+    expect(kubectlLists, 'kubectl describe lists the later event, not the earlier object\'s').toEqual(expect.arrayContaining(['E2EAfterTheEarlier']))
+    expect(kubectlLists).not.toContain('E2EEarlierObject')
   })
 
   test('a Pod\'s Events count up while it stays as it is, and its answer is not read for that', async ({ page }) => {
@@ -125,7 +173,7 @@ test.describe('what keeps up by itself', () => {
     const podName = kubectl(`-n ${NS} get pod -l app=web -o 'jsonpath={.items[0].metadata.name}'`)
     const eventOf = (count: number) => JSON.stringify({
       apiVersion: 'v1', kind: 'Event', metadata: { name: 'pod.e2e-live', namespace: NS },
-      involvedObject: { apiVersion: 'v1', kind: 'Pod', name: podName, namespace: NS },
+      involvedObject: { apiVersion: 'v1', kind: 'Pod', name: podName, namespace: NS, uid: kubectl(`-n ${NS} get pod ${podName} -o 'jsonpath={.metadata.uid}'`) },
       type: 'Warning', reason: 'E2ELiveBackOff', message: 'Back-off restarting failed container', count,
       firstTimestamp: '2026-11-07T00:00:00Z', lastTimestamp: new Date().toISOString(), source: { component: 'kubelet' },
     })
@@ -145,6 +193,50 @@ test.describe('what keeps up by itself', () => {
     expect(describes.length, 'the frame is the row').toBe(before)
     kubectl(`-n ${NS} delete event pod.e2e-live --ignore-not-found`)
   })
+
+  // A drawer with no other follower: of a namespace's kind, of the cluster's (its events in any namespace, as kubectl
+  // describe lists them) and the Namespace's own (read in the namespace itself, as k8s-service's describe reads them).
+  for (const target of [
+    { kind: 'ConfigMap', name: () => 'alpha', namespace: NS, url: () => `/configuration/configmaps?cluster=self&namespace=${NS}&detail=${encodeURIComponent(`ConfigMap/${NS}/alpha`)}`, describe: /\/configmaps\/alpha\/describe/ },
+    { kind: 'StorageClass', name: () => `e2e-live-evsc-${STAMP}`, namespace: '', url: () => `/storage?tab=storageclasses&cluster=self&detail=${encodeURIComponent(`StorageClass/e2e-live-evsc-${STAMP}`)}`, describe: new RegExp(`/storageclasses/e2e-live-evsc-${STAMP}/describe`) },
+    { kind: 'Namespace', name: () => NS, namespace: '', url: () => `/cluster/namespaces?cluster=self&detail=${encodeURIComponent(`Namespace/${NS}`)}`, describe: new RegExp(`/namespaces/${NS}/describe`) },
+  ]) {
+    test(`a ${target.kind}'s Events count up while it stays as it is, and its answer is not read for that`, async ({ page }) => {
+      test.setTimeout(120_000)
+      const name = target.name()
+      if (target.kind === 'StorageClass') kubectl('apply -f -', JSON.stringify({ apiVersion: 'storage.k8s.io/v1', kind: 'StorageClass', metadata: { name }, provisioner: 'kubernetes.io/no-provisioner' }))
+      const uid = kubectl(`${target.namespace ? `-n ${target.namespace} ` : ''}get ${target.kind.toLowerCase()} ${name} -o 'jsonpath={.metadata.uid}'`)
+      // the API server keeps an event of a cluster object in default (involvedObject.namespace empty) and one about a
+      // Namespace in that namespace, naming it there
+      const evNs = target.kind === 'StorageClass' ? 'default' : NS
+      const involvedNs = target.kind === 'StorageClass' ? '' : NS
+      const eventOf = (count: number) => JSON.stringify({
+        apiVersion: 'v1', kind: 'Event', metadata: { name: `${target.kind.toLowerCase()}.e2e-live`, namespace: evNs },
+        involvedObject: { kind: target.kind, name, uid, ...(involvedNs ? { namespace: involvedNs } : {}) },
+        type: 'Warning', reason: 'E2ELiveCountUp', message: 'told by the run', count,
+        firstTimestamp: FIRST_SEEN, lastTimestamp: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), source: { component: 'e2e-live' },
+      })
+      try {
+        const describes = requests(page, target.describe)
+        await page.goto(target.url())
+        const drawer = page.locator(DRAWER).last()
+        await expect(drawer.getByText('Events', { exact: true }).first()).toBeVisible({ timeout: 20_000 })
+        await expect.poll(() => describes.length, { timeout: 20_000 }).toBeGreaterThan(0)
+        await page.waitForTimeout(3_000)
+        const before = describes.length
+
+        kubectl('apply -f -', eventOf(1))
+        const row = drawer.locator('tr').filter({ hasText: 'E2ELiveCountUp' })
+        await expect(row).toHaveCount(1, { timeout: 20_000 })
+        kubectl('apply -f -', eventOf(7))
+        await expect.poll(async () => (await row.locator('td').last().innerText()).trim(), { timeout: 20_000 }).toBe(kubectl(`-n ${evNs} get event ${target.kind.toLowerCase()}.e2e-live -o 'jsonpath={.count}'`))
+        expect(describes.length, 'the frame is the row').toBe(before)
+      } finally {
+        kubectl(`-n ${evNs} delete event ${target.kind.toLowerCase()}.e2e-live --ignore-not-found`)
+        if (target.kind === 'StorageClass') kubectl(`delete storageclass ${name} --ignore-not-found`)
+      }
+    })
+  }
 
   test('a pod\'s RBAC tab shows a binding made while it is open, and takes it away when it is gone', async ({ page }) => {
     test.setTimeout(150_000)
