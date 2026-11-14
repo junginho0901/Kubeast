@@ -8,9 +8,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.services.investigation import inbox, store
+from app.services.investigation import inbox, store, webhook
+from app.services.investigation.settings import InvestigationSettings
 
-NOW = datetime(2026, 10, 20, 3, 0, 0)
+NOW =datetime(2026, 10, 20, 3, 0, 0)
 STARTS = datetime(2026, 10, 20, 2, 50, 0)
 
 
@@ -525,3 +526,58 @@ async def test_investigate_now_queues_nothing_without_its_audit_row(monkeypatch,
     c, _ = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR, enabled=False)
     assert c.post(press).status_code == 404
     assert (await store.list_rows(sqlite_db))[1] == 0
+
+
+# --- Alertmanager's clock and ai-service's --------------------------------------------------------------------------
+
+AM_STARTS = datetime(2026, 10, 20, 2, 50, 0, 123456)  # startsAt by Alertmanager's clock (it sends nanoseconds)
+BEHIND = AM_STARTS - timedelta(seconds=30)  # ai-service's clock as the notification comes: a minute behind, after group_wait
+
+
+async def a_firing_while_behind(monkeypatch, db, fp="fp1", **settings):
+    """One firing alert through the webhook while ai-service's clock reads BEHIND."""
+    monkeypatch.setattr(store, "utcnow", lambda: BEHIND)
+    msg = webhook.AmWebhook(
+        version="4", groupKey="{}:{alertname=\"X\"}", status="firing", receiver="kubeast", externalURL="http://am:9093",
+        alerts=[webhook.AmAlert(status="firing", labels=labels(), annotations={"summary": "api-1 restarts"},
+                                startsAt="2026-10-20T02:50:00.123456789Z", fingerprint=fp, generatorURL="http://prometheus/graph")],
+    )
+    await webhook.gate_and_queue(db, InvestigationSettings(enabled=True, max_per_hour=0, daily_token_budget=0, **settings), "self", msg, BEHIND)
+    row = next(r for r in (await rows_of(db))[0] if r.fingerprint == fp)
+    assert row.starts_at == AM_STARTS
+    return row
+
+
+@pytest.mark.asyncio
+async def test_an_alert_shows_its_investigation_while_the_alertmanager_clock_is_ahead(monkeypatch, sqlite_db):
+    """The investigation's times come from ai-service's clock, the alert's start from Alertmanager's: the alert finds
+    the investigation by the starts_at it carries, and a press queues no second one."""
+    row = await a_firing_while_behind(monkeypatch, sqlite_db)
+    inv = (await store.list_rows(sqlite_db))[0][0]
+    assert (inv.starts_at, inv.received_at, inv.last_seen_at) == (AM_STARTS, BEHIND, BEHIND)
+    c, _ = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR, at=BEHIND + timedelta(minutes=1))
+    assert (c.get(f"/api/v1/alerts/inbox/{row.id}").json().get("investigation") or {}).get("id") == inv.id
+    assert (c.get("/api/v1/alerts/inbox?cluster=self").json()["items"][0].get("investigation") or {}).get("id") == inv.id
+    r = c.post(f"/api/v1/alerts/inbox/{row.id}/investigate")
+    assert (r.status_code, r.json().get("started"), (r.json().get("investigation") or {}).get("id")) == (200, False, inv.id)
+    assert (await store.list_rows(sqlite_db))[1] == 1
+
+
+@pytest.mark.asyncio
+async def test_investigate_now_finds_this_firings_investigation_while_the_alertmanager_clock_is_ahead(monkeypatch, sqlite_db):
+    """store.queue_requested, under the inbox row's lock, matches this firing by its starts_at: the webhook's
+    investigation, and one a press queued before ai-service's clock reached the alert's start."""
+    async def record(inv_id):
+        return True
+
+    row = await a_firing_while_behind(monkeypatch, sqlite_db)
+    inv = (await store.list_rows(sqlite_db))[0][0]
+    assert await store.queue_requested(sqlite_db, row, requested_by="a@x", now=BEHIND + timedelta(seconds=10), record=record) == (inv.id, False)
+    assert (await store.list_rows(sqlite_db))[1] == 1
+    # the inbox only (automatic off): the first press queues, the second finds it
+    other = await a_firing_while_behind(monkeypatch, sqlite_db, fp="fp2", automatic=False)
+    first, started = await store.queue_requested(sqlite_db, other, requested_by="a@x", now=BEHIND + timedelta(seconds=10), record=record)
+    assert started
+    assert await store.queue_requested(sqlite_db, other, requested_by="b@x", now=BEHIND + timedelta(seconds=20), record=record) == (first, False)
+    assert (await store.list_rows(sqlite_db))[1] == 2
+    assert (await inbox.investigations_for(sqlite_db, [other]))[other.id].id == first

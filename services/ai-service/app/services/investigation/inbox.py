@@ -131,8 +131,10 @@ async def get(db, item_id: str) -> Optional[AlertInboxItem]:
 
 
 async def investigations_for(db, rows: list[AlertInboxItem]) -> dict[str, AlertInvestigation]:
-    """The newest investigation of each row's alert since it started (a repeat folded into an older investigation
-    within the dedupe window counts: its last_seen_at moved on)."""
+    """The newest investigation of each row's alert since it started: one holding the row's starts_at (the webhook and
+    "Investigate now" store it, so ai-service's clock behind Alertmanager's does not matter), or one received or seen
+    again since then (a repeat folded into an older investigation within the dedupe window: its last_seen_at moved
+    on; a row stored without startsAt)."""
     if not rows:
         return {}
     async with db.async_session() as s:
@@ -145,7 +147,9 @@ async def investigations_for(db, rows: list[AlertInboxItem]) -> dict[str, AlertI
     out = {}
     for r in rows:
         for inv in found:
-            if inv.fingerprint == r.fingerprint and (inv.received_at >= r.starts_at or inv.last_seen_at >= r.starts_at):
+            if inv.fingerprint == r.fingerprint and (
+                inv.starts_at == r.starts_at or inv.received_at >= r.starts_at or inv.last_seen_at >= r.starts_at
+            ):
                 out[r.id] = inv
                 break
     return out

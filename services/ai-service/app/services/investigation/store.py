@@ -174,7 +174,11 @@ async def queue_requested(
             .where(
                 AlertInvestigation.cluster == item.cluster,
                 AlertInvestigation.fingerprint == item.fingerprint,
-                or_(AlertInvestigation.received_at >= item.starts_at, AlertInvestigation.last_seen_at >= item.starts_at),
+                or_(
+                    AlertInvestigation.starts_at == item.starts_at,
+                    AlertInvestigation.received_at >= item.starts_at,
+                    AlertInvestigation.last_seen_at >= item.starts_at,
+                ),
             )
             .order_by(AlertInvestigation.received_at.desc())
             .limit(1)

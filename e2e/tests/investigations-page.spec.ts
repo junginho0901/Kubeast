@@ -49,7 +49,7 @@ test.describe.serial('Admin → Investigations', () => {
           status: 'firing',
           labels: { alertname: NAME, severity: 'warning', namespace: 'default', deployment: 'e2e-unschedulable' },
           annotations: { summary: '<b>not bold</b> — the alert panel shows this as text' },
-          startsAt: new Date().toISOString(), generatorURL: 'http://prometheus.e2e/graph', fingerprint: `page-${Date.now()}`,
+          startsAt: new Date(Date.now() - 60_000).toISOString(), generatorURL: 'http://prometheus.e2e/graph', fingerprint: `page-${Date.now()}`,
         }],
       },
     })
