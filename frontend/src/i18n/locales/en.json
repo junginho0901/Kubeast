@@ -2743,6 +2743,10 @@
     "map": {
       "aria": "Node map: {{nodes}} nodes, {{pods}} pods ({{error}} errors, {{warn}} warnings)",
       "hover": "{{node}} · {{total}} pods · {{error}} errors · {{warn}} warnings",
+      "hoverStatus": "{{node}} · {{status}} · {{total}} pods · {{error}} errors · {{warn}} warnings",
+      "ariaMarks": "{{notReady}} nodes not Ready, {{cordoned}} SchedulingDisabled.",
+      "notReady": "Node not Ready",
+      "cordoned": "SchedulingDisabled",
       "error": "Error",
       "warn": "Warning",
       "ok": "Healthy",

@@ -309,7 +309,7 @@ test.describe('Cluster View — number check', () => {
     await chooseNamespace(page, NS)
     await expect.poll(async () => cellTotals(await mapCells(page)), { timeout: 15_000 }).toEqual(perNode(pods(`-n ${NS}`)))
     await expect.configure({ soft: true }).poll(async () => (await ask())?.stats, { timeout: 15_000 }).toMatchObject({
-      total_nodes: STATUSES.length, ready_nodes: 2, total_pods: 6, warning_pods: KNOWN.warn, error_pods: KNOWN.error,
+      total_nodes: STATUSES.length, ready_nodes: 2, cordoned_nodes: 2, total_pods: 6, warning_pods: KNOWN.warn, error_pods: KNOWN.error,
     })
 
     // searched: the counts are of the pods found, named with the search next to the whole

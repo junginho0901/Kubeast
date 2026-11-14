@@ -2743,6 +2743,10 @@
     "map": {
       "aria": "노드 지도: 노드 {{nodes}}개, Pod {{pods}}개(오류 {{error}}, 주의 {{warn}})",
       "hover": "{{node}} · Pod {{total}}개 · 오류 {{error}} · 주의 {{warn}}",
+      "hoverStatus": "{{node}} · {{status}} · Pod {{total}}개 · 오류 {{error}} · 주의 {{warn}}",
+      "ariaMarks": "Ready가 아닌 Node {{notReady}}개, SchedulingDisabled {{cordoned}}개입니다.",
+      "notReady": "Ready가 아닌 Node",
+      "cordoned": "SchedulingDisabled",
       "error": "오류",
       "warn": "주의",
       "ok": "정상",

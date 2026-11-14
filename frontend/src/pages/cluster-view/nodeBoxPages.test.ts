@@ -341,3 +341,53 @@ describe('the node\'s own view: its pods by name, sixty a page', () => {
     vi.doUnmock('./ClusterNodeMap')
   })
 })
+
+describe('the live node list on the screen', () => {
+  const nodesWith = (statuses: Record<string, string>) => [
+    { name: 'cp-0', roles: ['control-plane'], status: statuses['cp-0'] ?? 'Ready' },
+    ...NAMES.slice(1).map((name) => ({ name, roles: [], status: statuses[name] ?? 'Ready' })),
+  ]
+  const show = (nodes: ReturnType<typeof nodesWith>, summary: PodNodeSummary, o: Options = {}) => {
+    const Live: ComponentType = () => {
+      const entries = useClusterDerived({ summary, nodes })
+      return createElement(PodNodeGrid, { entries, matched: summary.total, all: summary.all, isLoading: false, canDeletePod: false })
+    }
+    return renderWith(ClusterViewContext, createElement(Live), o).replace(/<!-- -->/g, '')
+  }
+  const badges = (html: string, node: string) => {
+    const at = html.indexOf(`data-testid="cluster-view-node" data-node="${node}"`)
+    const boxHtml = html.slice(at, html.indexOf('data-testid="cluster-view-node" data-node=', at + 10) >>> 0 || undefined)
+    return [...boxHtml.matchAll(/data-testid="cluster-view-node-status">([^<]*)</g)].map((m) => m[1])
+  }
+
+  it('marks a node that turned NotReady or was cordoned on its cell, in the legend and on its box', () => {
+    const before = show(nodesWith({}), summaryOf(NAMES))
+    expect({ marks: attr(before, 'data-node-marks') ?? null, badges: badges(before, 'node-001') }).toEqual({ marks: null, badges: [] })
+    const html = show(nodesWith({ 'node-001': 'NotReady', 'node-002': 'Ready,SchedulingDisabled', 'node-003': 'NotReady,SchedulingDisabled' }), summaryOf(NAMES))
+    expect({
+      marks: JSON.parse(attr(html, 'data-node-marks') ?? '{}'),
+      notReady: html.match(/data-testid="cluster-view-map-not-ready">[\s\S]*?<\/span>([^<]*)</)?.[1],
+      cordoned: html.match(/data-testid="cluster-view-map-cordoned">[\s\S]*?<\/span>([^<]*)</)?.[1],
+      b1: badges(html, 'node-001'), b2: badges(html, 'node-002'), b3: badges(html, 'node-003'), b4: badges(html, 'node-004'),
+    }).toEqual({
+      marks: { 'node-001': 'NotReady', 'node-002': 'Ready,SchedulingDisabled', 'node-003': 'NotReady,SchedulingDisabled' },
+      notReady: 'Node not Ready 2', cordoned: 'SchedulingDisabled 2',
+      b1: ['NotReady'], b2: ['SchedulingDisabled'], b3: ['NotReady', 'SchedulingDisabled'], b4: [],
+    })
+    expect(attr(html, 'aria-label')).toBe('Node map: 1000 nodes, 3000 pods (0 errors, 0 warnings) 2 nodes not Ready, 2 SchedulingDisabled.')
+    const korean = show(nodesWith({ 'node-001': 'NotReady' }), summaryOf(NAMES), { lng: 'ko' })
+    expect(korean.match(/data-testid="cluster-view-map-not-ready">[\s\S]*?<\/span>([^<]*)</)?.[1]).toBe('Ready가 아닌 Node 1')
+    // the node's own view says it too
+    const view = show(nodesWith({ 'node-001': 'NotReady' }), summaryOf(NAMES), { nodeView: { node: 'node-001', page: null, pod: null } })
+    expect(badges(view, 'node-001')).toEqual(['NotReady'])
+  })
+
+  it('drops the box of a node removed, the others keeping their places', () => {
+    const html = show(nodesWith({}).filter((n) => n.name !== 'node-005'), summaryOf(NAMES.filter((n) => n !== 'node-005')))
+    expect({ boxes: boxes(html), footer: footer(html) }).toEqual({
+      boxes: ['cp-0', 'node-001', 'node-002', 'node-003', 'node-004', 'node-006', 'node-007', 'node-008', 'node-009', 'node-010'],
+      footer: 'Showing 1-10 of 999',
+    })
+  })
+})
+

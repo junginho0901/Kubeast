@@ -7,6 +7,7 @@ import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useWritesRefusedIn } from '@/hooks/useCanCreate'
 import { useAIContext } from '@/hooks/useAIContext'
 import { ListPager } from '@/components/ListPager'
+import { nodeStatusBadge, nodeStatusParts } from '@/utils/nodeStatus'
 import { getPodHealth, getHealthIcon } from './podHealth'
 import { useClusterView } from './ClusterViewContext'
 import { pickMainContainer, podToDetail } from './types'
@@ -351,6 +352,10 @@ export function NodeBox({ entry, canDeletePod, mode }: { entry: NodeEntry; canDe
     <div key={i} className="h-[132px] rounded-lg bg-slate-700/50" aria-hidden="true" data-testid="cluster-view-card-placeholder" />
   ))
   const grid = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3'
+  // the node's STATUS parts but Ready, as the Nodes list draws them (NotReady, Unknown, SchedulingDisabled)
+  const statusBadges = nodeStatusParts(entry.status).filter((part) => part !== 'Ready').map((part) => (
+    <span key={part} className={`badge ${nodeStatusBadge(part)}`} data-testid="cluster-view-node-status">{part}</span>
+  ))
 
   if (mode === 'preview') {
     const count = pods ? found.length : entry.counts.total
@@ -369,6 +374,7 @@ export function NodeBox({ entry, canDeletePod, mode }: { entry: NodeEntry; canDe
           <span className="badge badge-secondary">
             {tr('clusterView.nodePodsCount', '{{count}} Pods', { count })}
           </span>
+          {statusBadges}
           {hidden > 0 && (
             <span className="text-xs text-slate-400" data-testid="cluster-view-node-shown">
               {tr('clusterView.box.shown', 'Showing {{shown}} of {{total}} Pods', { shown: count - hidden, total: count })}
@@ -399,6 +405,7 @@ export function NodeBox({ entry, canDeletePod, mode }: { entry: NodeEntry; canDe
           <span className="badge badge-secondary">
             {tr('clusterView.nodePodsCount', '{{count}} Pods', { count: pods ? list.length : entry.counts.total })}
           </span>
+          {statusBadges}
           {shownPage.gone && focus !== null && (
             <span className="text-xs text-amber-300" data-testid="cluster-view-node-pod-gone">
               {tr('clusterView.nodeView.gone', 'Pod {{pod}} is no longer on this node.', { pod: focus })}

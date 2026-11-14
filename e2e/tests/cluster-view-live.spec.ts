@@ -249,6 +249,26 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
     await expect(big.locator('[data-testid="cluster-view-pod"][data-match="true"]')).toHaveCount(1)
   })
 
+  test('a node cordoned and uncordoned shows and drops its mark at once, on its cell, in the legend and on its box', async ({ page }) => {
+    // the node list follows the cluster through its watch: kubectl's STATUS gains and loses SchedulingDisabled
+    const node = kubectl('get nodes -o jsonpath={.items[0].metadata.name}')
+    try {
+      await page.goto(`/cluster-view?cluster=${CLUSTER}`)
+      const canvas = page.getByTestId('cluster-view-map').locator('canvas')
+      await expect(canvas).toBeVisible()
+      await expect(page.getByTestId('cluster-view-map-cordoned')).toHaveCount(0)
+      kubectl(`cordon ${node}`)
+      await expect(canvas).toHaveAttribute('data-node-marks', JSON.stringify({ [node]: 'Ready,SchedulingDisabled' }), { timeout: 15_000 })
+      await expect(page.getByTestId('cluster-view-map-cordoned')).toContainText('1')
+      await expect(box(page, node).getByTestId('cluster-view-node-status')).toHaveText(['SchedulingDisabled'])
+      kubectl(`uncordon ${node}`)
+      await expect(canvas).not.toHaveAttribute('data-node-marks', /./, { timeout: 15_000 })
+      await expect(box(page, node).getByTestId('cluster-view-node-status')).toHaveCount(0)
+    } finally {
+      tryKubectl(`uncordon ${node}`)
+    }
+  })
+
   test('a cell of the map opens its node\'s own view, and All nodes brings the overview back', async ({ page }) => {
     await page.goto(`/cluster-view?cluster=${CLUSTER}`)
     const canvas = page.getByTestId('cluster-view-map').locator('canvas')
