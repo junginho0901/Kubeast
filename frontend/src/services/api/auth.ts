@@ -3,6 +3,7 @@
 // routes to the auth-service (Go). Admin-side user/role/audit
 // endpoints live in admin.ts.
 
+import { resetSessionState } from '../auth'
 import { client } from './client'
 import type { AuthResponse, Member, OIDCLoginConfig, Organization } from './types'
 
@@ -21,6 +22,9 @@ export const authApi = {
 
   login: async (request: { email: string; password: string }): Promise<AuthResponse> => {
     const { data } = await client.post('/auth/login', request)
+    // The cookie now names this person: what the tab held for the session before (its live socket, chat answers on
+    // their way) stops, whether or not that session signed out.
+    resetSessionState()
     // auth-service 는 user 필드로 내려줌. 기존 session-service(member) 호환 유지.
     if (data?.user && !data?.member) {
       data.member = data.user
