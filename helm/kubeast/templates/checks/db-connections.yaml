@@ -1,0 +1,28 @@
+{{- /*
+Each service's pool is postgresql.pool.<service>.maxConns (the DB_POOL_MAX_* values of kubeast-config). The chart's
+PostgreSQL takes postgresql.maxConnections; past that a pod's pool cannot open a connection, so the sum the pods can
+hold (kubeast.dbConnections) must fit. An external database's limit is not known here: NOTES.txt prints the sum.
+*/}}
+{{- $services := list "authService" "sessionService" "k8sService" "aiService" "modelConfigController" }}
+{{- range $key, $v := .Values.postgresql.pool }}
+{{- if not (has $key $services) }}
+{{- fail (printf "postgresql.pool.%s: no such service. The keys are %s." $key (join ", " $services)) }}
+{{- end }}
+{{- $n := "" }}
+{{- if kindIs "map" $v }}
+{{- $n = dig "maxConns" "" $v }}
+{{- end }}
+{{- if not (and (or (kindIs "int" $n) (kindIs "int64" $n) (kindIs "float64" $n)) (eq (float64 $n) (float64 (int $n))) (ge (int $n) 1)) }}
+{{- fail (printf "postgresql.pool.%s.maxConns must be a whole number, 1 or more (got %v)" $key $n) }}
+{{- end }}
+{{- end }}
+{{- if .Values.postgresql.enabled }}
+{{- $max := .Values.postgresql.maxConnections }}
+{{- if not (and (or (kindIs "int" $max) (kindIs "int64" $max) (kindIs "float64" $max)) (eq (float64 $max) (float64 (int $max))) (ge (int $max) 20)) }}
+{{- fail (printf "postgresql.maxConnections must be a whole number, 20 or more (got %v)" $max) }}
+{{- end }}
+{{- $need := include "kubeast.dbConnections" . | int }}
+{{- if gt $need (int $max) }}
+{{- fail (printf "the pods can hold up to %d database connections (postgresql.pool.<service>.maxConns times the pods while a rollout runs, with autoscaling's maxReplicas where it is on, plus 4 for the migrations and 10 kept) and the chart's PostgreSQL takes postgresql.maxConnections=%d. Raise postgresql.maxConnections to %d or more, or lower replicas, maxReplicas or the pools." $need (int $max) $need) }}
+{{- end }}
+{{- end }}

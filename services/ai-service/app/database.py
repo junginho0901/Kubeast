@@ -254,15 +254,28 @@ class DatabaseService:
         self.database_url = database_url
         # sslmode / sslrootcert are libpq parameters (shared URL with the Go
         # services); asyncpg needs them as an `ssl` connect argument instead.
-        engine_url, connect_args = database_url, {}
+        engine_url, connect_args, pool = database_url, {}, {}
+        session_statements: list[str] = []
         if "postgresql" in database_url:
+            from app.db_session import pool_args, statements
             from app.db_ssl import split_ssl_params
 
             engine_url, connect_args = split_ssl_params(database_url)
+            pool = pool_args()
+            session_statements = statements()
         # pool_pre_ping: a pooled connection that died with a Postgres restart
         # is replaced on checkout instead of surfacing as "connection is
         # closed" on the first request after the database is back.
-        self.engine = create_async_engine(engine_url, echo=False, pool_pre_ping=True, connect_args=connect_args)
+        self.engine = create_async_engine(engine_url, echo=False, pool_pre_ping=True, connect_args=connect_args, **pool)
+        # The session limits (app/db_session.py), SET on each new connection.
+        self.on_connect = None
+        if session_statements:
+            from sqlalchemy import event
+
+            from app.db_session import on_connect
+
+            self.on_connect = on_connect(session_statements)
+            event.listen(self.engine.sync_engine, "connect", self.on_connect)
         self.async_session = async_sessionmaker(
             self.engine,
             class_=AsyncSession,

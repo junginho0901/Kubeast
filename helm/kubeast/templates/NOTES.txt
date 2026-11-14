@@ -80,6 +80,14 @@ in bash, zsh and PowerShell.
     environment. To give each service its own key only, move them to a Secret of their own and upgrade with
     --reset-then-reuse-values --set redis.acl.existingSecret=<that Secret> (docs/configuration.md "Redis users").
 {{- end }}
+{{- if not .Values.postgresql.enabled }}
+
+▸ Database connections
+
+    The pods can hold up to {{ include "kubeast.dbConnections" . }} connections to {{ .Values.postgresql.externalHost | default "the external database" }}
+    (postgresql.pool × the pods while a rollout runs, 4 for the migrations, 10 kept).
+    Keep its max_connections above that.
+{{- end }}
 
 ▸ Upgrading
 
