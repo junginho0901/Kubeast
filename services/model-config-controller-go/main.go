@@ -39,6 +39,9 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         envBool("LEADER_ELECTION", true),
 		LeaderElectionID:       leaderElectionID,
+		// On SIGTERM the leader gives its Lease back, so the pod a rollout started takes over at once instead of after
+		// the lease runs out. Safe because main returns as soon as mgr.Start does.
+		LeaderElectionReleaseOnCancel: true,
 	}
 	if leaderElectionNamespace != "" {
 		opts.LeaderElectionNamespace = leaderElectionNamespace
