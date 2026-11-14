@@ -1,0 +1,17 @@
+suite: a values path this chart removed stops the render
+templates:
+  - checks/removed-values.yaml
+# Each path listed in the check gets a case that sets it and expects its stop. scripts/chart-removed-values.sh (CI)
+# also tries the check on a copy with a listed path, so it is known to stop while the list is empty.
+tests:
+  - it: renders nothing on this chart's own values
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: renders nothing on a path no release had, which is not its to stop
+    set:
+      notAKubeastValue: 1
+      pdb.notAKubeastValue: 1
+    asserts:
+      - hasDocuments:
+          count: 0

@@ -30,6 +30,9 @@ for tag in $tags; do
     fi
   elif grep -q "come from an earlier Kubeast chart" <<<"$reuse"; then
     echo "$tag: stops with the upgrade hint"
+  elif grep -q "is no longer a Kubeast value" <<<"$reuse"; then
+    # its defaults hold a path this chart removed (templates/checks/removed-values.yaml, scripts/chart-removed-values.sh)
+    echo "$tag: stops on a value this chart removed"
   else
     echo "$tag: $(grep -m1 -A1 Error <<<"$reuse" | tr -s ' \n' ' ') — if it is a values path this chart added, add it to templates/checks/upgrade-values.yaml"
     fail=1

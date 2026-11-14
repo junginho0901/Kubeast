@@ -1,0 +1,22 @@
+{{- /*
+Values paths an earlier release had and this chart no longer reads. A value set there would be dropped without a word,
+so the chart stops and says what to do instead. Entries are "<path>" "<what to set instead>", and a path stays listed:
+a values file kept from an older release can still hold it. scripts/chart-removed-values.sh (CI) fails when a path of
+the latest release's values.yaml is gone from values.yaml and not stopped here. upgrade-values.yaml renders first (Helm
+takes a folder's files in reverse name order), so values of an earlier release get its hint before this one.
+*/}}
+{{- $removed := dict }}
+{{- range $path, $instead := $removed }}
+{{- $node := $.Values }}
+{{- $found := true }}
+{{- range splitList "." $path }}
+{{- if and $found (kindIs "map" $node) (hasKey $node .) }}
+{{- $node = index $node . }}
+{{- else }}
+{{- $found = false }}
+{{- end }}
+{{- end }}
+{{- if and $found (not (kindIs "invalid" $node)) }}
+{{- fail (printf "%s is no longer a Kubeast value: %s. Remove it from your values." $path $instead) }}
+{{- end }}
+{{- end }}
