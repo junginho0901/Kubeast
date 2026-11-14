@@ -78,6 +78,8 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 
 ### Upgrade
 
+Going from 0.7.7 to 0.7.8, read [Upgrading from 0.7.7 to 0.7.8](upgrade-0.7.8.md) first: what to check before, what changes, and how to go back.
+
 ```bash
 helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
   -n kubeast --reset-then-reuse-values
