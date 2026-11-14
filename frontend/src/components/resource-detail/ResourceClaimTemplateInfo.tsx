@@ -6,6 +6,7 @@ import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { DeviceRequestsTable } from './DeviceRequestsTable'
 import { configParameterMap } from './draText'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
@@ -44,6 +45,7 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
     enabled,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['resourceclaimtemplate-describe', namespace, name], answer: describe, kind: 'ResourceClaimTemplate', namespace, name })
 
   useResourceDetailOverlay({ kind: 'ResourceClaimTemplate', name, namespace, describe })
 

@@ -43,15 +43,22 @@ export function applyEventFrame(answer: any, event: WatchEvent): any {
   return { ...answer, events: eventsNewestFirst(next) }
 }
 
+// Where the describe answer read the object's events (k8s-service objectEvents): its namespace, or every namespace for an
+// object of the cluster.
+export function drawerEventsPath(namespace: string | undefined): string {
+  return namespace ? `/api/v1/namespaces/${namespace}/events` : '/api/v1/events'
+}
+
 // useDrawerFollowsEvents keeps a drawer's Events moving while its object stays as it is: a warning that repeats counts up
 // on the event alone, which useDrawerFollowsObject never hears of. It opens once the answer has come, so what the watch
 // opens with finds it, and not for an answer that says the events could not be read: the watch would be refused too.
+// `namespace` is where the answer read them, none for an object of the cluster.
 export function useDrawerFollowsEvents(options: { describeKey: QueryKey; answer: any; kind: string; namespace?: string; name: string }) {
   const { describeKey, answer, kind, namespace, name } = options
   useKubeWatchList({
-    enabled: !!namespace && !!name && Array.isArray(answer?.events),
+    enabled: !!kind && !!name && Array.isArray(answer?.events),
     queryKey: describeKey as any[],
-    path: `/api/v1/namespaces/${namespace}/events`,
+    path: drawerEventsPath(namespace),
     query: `watch=1&fieldSelector=${encodeURIComponent(`involvedObject.kind=${kind},involvedObject.name=${name}`)}`,
     applyEvent: (prev, event) => applyEventFrame(prev, event),
   })
