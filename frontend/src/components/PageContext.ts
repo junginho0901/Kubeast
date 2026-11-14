@@ -35,9 +35,14 @@ export interface PageContextValue extends RouteContextMeta {
   consumeContextChanged: () => boolean
 }
 
-// The chat reads the last overlay as the window on top. A notice above the page is no window, whenever it came.
+// The shared notices that tell the floating chat what they say: above the page, in a list's empty row, in a drawer.
+export const NOTICE_SOURCES: ReadonlySet<string> = new Set([
+  'WatchProblemNotice', 'ForbiddenBanner', 'RefreshFailure', 'TableEmptyRow', 'DescribeFailure', 'DescribeStale', 'ListReadFailure',
+])
+
+// The chat reads the last overlay as the window on top. A notice is no window, whenever it came.
 export function overlaysInOrder(overlays: VisibleDataLayer[]): VisibleDataLayer[] {
-  const isNotice = (layer: VisibleDataLayer) => layer.source === 'WatchProblemNotice'
+  const isNotice = (layer: VisibleDataLayer) => NOTICE_SOURCES.has(layer.source)
   return [...overlays.filter(isNotice), ...overlays.filter((layer) => !isNotice(layer))]
 }
 

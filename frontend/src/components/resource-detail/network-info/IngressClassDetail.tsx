@@ -67,7 +67,7 @@ export default function IngressClassDetail({ name, rawJson }: Props) {
 
       <InfoSection title={usedByError && !Array.isArray(usedByIngresses) ? 'Used By Ingresses' : 'Used By Ingresses ({{n}})'} titleValues={{ n: usedList.length }}>
         {usedByError && !Array.isArray(usedByIngresses) ? (
-          <ListReadFailure error={usedByError} />
+          <ListReadFailure error={usedByError} list="Used By Ingresses" />
         ) : usedList.length === 0 ? (
           <p className="text-xs text-slate-400"><Tx>No Ingress in the cluster uses this IngressClass.</Tx></p>
         ) : (
