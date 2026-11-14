@@ -318,6 +318,16 @@ describe('how an answer ends', () => {
     })
   })
 
+  it('a refused request whose server names the words for it keeps that key', async () => {
+    const state = await ended(new Response('{"detail":"the answer stream could not start","error_key":"streamStartFailed"}', { status: 500 }))
+    expect(state).toMatchObject({
+      status: 'error',
+      error: 'HTTP 500: the answer stream could not start',
+      errorKey: 'streamStartFailed',
+      errorArgs: { status: 500, detail: 'the answer stream could not start' },
+    })
+  })
+
   it.each([
     ['a page from a proxy', '<html><body>Bad Gateway</body></html>', 502],
     ['no body', '', 500],

@@ -1,7 +1,9 @@
 """/suggest-optimization/stream builds the service for the cluster named in
 X-Cluster-Name (the same header the chat streams send), so the observations come
 from the selected cluster instead of the default one."""
+import json
 import logging
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -83,6 +85,13 @@ def test_a_stream_that_cannot_start_answers_a_fixed_message_and_logs_the_error(m
     finally:
         app.dependency_overrides.pop(require_auth, None)
     assert r.status_code == 500
-    assert r.json() == {"detail": "the answer stream could not start"}
+    assert r.json() == {"detail": "the answer stream could not start", "error_key": "streamStartFailed"}
     assert "10.0.0.9" not in r.text
     assert "optimization stream could not start: dial tcp 10.0.0.9:8002: connection refused" in caplog.text
+
+
+@pytest.mark.parametrize("language", ["en", "ko"])
+def test_the_words_for_a_stream_that_cannot_start_are_in_each_catalog(language):
+    catalogs = Path(__file__).resolve().parents[3] / "frontend" / "src" / "i18n" / "locales"
+    catalog = json.loads((catalogs / f"{language}.json").read_text(encoding="utf-8"))
+    assert catalog["aiChat"]["error"]["streamStartFailed"]

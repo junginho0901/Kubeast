@@ -1794,6 +1794,7 @@
       "modelAddress": "AI 모델을 호출하지 못했습니다 ({{provider}}): 모델 주소가 허용되지 않아 아무것도 보내지 않았습니다. 관리자가 Admin → AI Models에서 이 모델의 연결 테스트로 이유를 확인하세요.",
       "streamHttp": "채팅 요청이 실패했습니다 (HTTP {{status}}): {{detail}}",
       "streamHttpStatus": "채팅 요청이 실패했습니다 (HTTP {{status}}).",
+      "streamStartFailed": "답변 스트림을 시작하지 못했습니다. 잠시 뒤 다시 시도하세요.",
       "streamCut": "답변이 끝나기 전에 연결이 끊겼습니다. 위 내용은 일부일 수 있습니다. 전체 답변이 필요하면 다시 질문하세요.",
       "streamEmpty": "답변 없이 연결이 끊겼습니다. 다시 질문하세요.",
       "sessionNotFound": "이 대화는 더 이상 없습니다. 새 대화를 시작하세요."
