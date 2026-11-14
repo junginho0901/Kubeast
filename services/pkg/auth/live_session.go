@@ -17,7 +17,7 @@ import (
 // connection with a cause the client can show.
 //
 // The token cannot be the credential here (auth-service refuses an expired one, and would read that as revoked), so
-// the current version comes from a VersionLookup that does not need it.
+// the current version and the signed-out sign-ins come from a VersionLookup that does not need it.
 
 // SessionEndedCloseCode is the close code of a WebSocket ended because its session no longer stands (the application
 // range of RFC 6455 §7.4.2); the close reason is one of the Session* codes below.
@@ -26,6 +26,7 @@ const SessionEndedCloseCode = 4401
 // Why a session ended, as clients are told.
 const (
 	SessionRevoked    = "session_revoked"    // token_version moved on, or the user or API key is gone
+	SessionSignedOut  = "session_signed_out" // the sign-in the connection opened with was signed out
 	SessionExpired    = "session_expired"    // past the absolute lifetime since the last sign-in
 	SessionUnverified = "session_unverified" // the current version could not be read for too long
 )
@@ -38,8 +39,9 @@ func (e *SessionEndError) Error() string { return "session ended: " + e.Code }
 // ErrSubjectGone is what a VersionLookup answers when the user or the API key no longer exists.
 var ErrSubjectGone = errors.New("user or API key is gone")
 
-// VersionLookup reads the current token_version for a user, and for the API key a token was exchanged for.
-type VersionLookup func(ctx context.Context, userID, apiKeyID string) (int, error)
+// VersionLookup reads the current token_version and the signed-out sign-ins of a user (SessionStateQuery), and for the
+// API key a token was exchanged for whether that key still stands.
+type VersionLookup func(ctx context.Context, userID, apiKeyID string) (SessionState, error)
 
 // LiveSessionConfig configures LiveSessions. Zero durations take the defaults; a zero AbsoluteLifetime means no cap.
 type LiveSessionConfig struct {
@@ -95,7 +97,7 @@ func (s *LiveSessions) check(ctx context.Context, p TokenPayload) error {
 	entry, cached := s.versions[key]
 	s.mu.Unlock()
 	if cached && now.Sub(entry.fetched) < s.cfg.CacheTTL && p.TokenVersion <= entry.version {
-		return versionVerdict(p.TokenVersion, entry.version)
+		return liveVerdict(p, entry.state())
 	}
 
 	lookupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -104,12 +106,15 @@ func (s *LiveSessions) check(ctx context.Context, p TokenPayload) error {
 	switch {
 	case err == nil:
 		s.remember(key, current, now)
-		return versionVerdict(p.TokenVersion, current)
+		return liveVerdict(p, current)
 	case errors.Is(err, ErrSubjectGone):
 		s.mu.Lock()
 		delete(s.versions, key)
 		s.mu.Unlock()
 		return &SessionEndError{Code: SessionRevoked}
+	case cached && entry.state().SignedOutAt(p.SignIn()):
+		// A sign-out is not undone: what was seen before the outage still ends this one.
+		return &SessionEndError{Code: SessionSignedOut}
 	case cached && p.TokenVersion < entry.version:
 		// Versions only grow: what was seen before the outage still revokes this one.
 		return &SessionEndError{Code: SessionRevoked}
@@ -118,15 +123,19 @@ func (s *LiveSessions) check(ctx context.Context, p TokenPayload) error {
 	}
 }
 
-func versionVerdict(claimed, current int) error {
-	if claimed != current {
+// liveVerdict says whether the session of p stands against state: its sign-in not signed out, its version current.
+func liveVerdict(p TokenPayload, state SessionState) error {
+	if state.SignedOutAt(p.SignIn()) {
+		return &SessionEndError{Code: SessionSignedOut}
+	}
+	if p.TokenVersion != state.Version {
 		return &SessionEndError{Code: SessionRevoked}
 	}
 	return nil
 }
 
-// remember keeps a version and drops the ones past the stale window, so the cache holds the people connected lately.
-func (s *LiveSessions) remember(key string, version int, now time.Time) {
+// remember keeps a state and drops the ones past the stale window, so the cache holds the people connected lately.
+func (s *LiveSessions) remember(key string, state SessionState, now time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for k, e := range s.versions {
@@ -134,7 +143,7 @@ func (s *LiveSessions) remember(key string, version int, now time.Time) {
 			delete(s.versions, k)
 		}
 	}
-	s.versions[key] = tokenVersionEntry{version: version, fetched: now}
+	s.versions[key] = tokenVersionEntry{version: state.Version, signedOut: state.SignedOut, fetched: now}
 }
 
 // Hold returns a context that ends, with a SessionEndError as its cause, when the session of p stops standing, and the

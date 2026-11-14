@@ -33,12 +33,13 @@ func signWithTV(t *testing.T, key *rsa.PrivateKey, kid string, tv int) string {
 
 // tvServer stands in for auth-service's token-version lookup.
 type tvServer struct {
-	srv     *httptest.Server
-	version atomic.Int32
-	status  atomic.Int32 // 0 = 200 with the version
-	calls   atomic.Int32
-	lastSub string
-	lastTok string
+	srv       *httptest.Server
+	version   atomic.Int32
+	signedOut atomic.Value // string: the JSON list, "" for an answer without the field (an older auth-service)
+	status    atomic.Int32 // 0 = 200 with the version
+	calls     atomic.Int32
+	lastSub   string
+	lastTok   string
 }
 
 func newTVServer(t *testing.T, version int) *tvServer {
@@ -54,10 +55,65 @@ func newTVServer(t *testing.T, version int) *tvServer {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"tv":` + strconv.Itoa(int(s.version.Load())) + `}`))
+		body := `{"tv":` + strconv.Itoa(int(s.version.Load()))
+		if list, _ := s.signedOut.Load().(string); list != "" {
+			body += `,"signed_out":` + list
+		}
+		_, _ = w.Write([]byte(body + `}`))
 	}))
 	t.Cleanup(s.srv.Close)
 	return s
+}
+
+// signInToken is a sign-in's token of u1 at version tv, signed in at authTime; akid makes it a key's token instead.
+func signInToken(t *testing.T, j *jwksServer, tv int, authTime int64, akid string) string {
+	t.Helper()
+	extra := jwt.MapClaims{"tv": tv, "auth_time": authTime}
+	if akid != "" {
+		extra["akid"] = akid
+	}
+	return signClaims(t, j.key, "k1", extra)
+}
+
+func TestValidate_ASignedOutSignInIsRefusedAndTheUsersOthersPass(t *testing.T) {
+	j := newJWKSServer(t, "k1")
+	tv := newTVServer(t, 3)
+	signedIn := time.Now().Add(-time.Hour).Unix()
+	tv.signedOut.Store("[" + strconv.FormatInt(signedIn, 10) + "]")
+	v := newTVValidator(j, tv, 30*time.Second, 5*time.Minute)
+
+	if _, err := v.Validate(signInToken(t, j, 3, signedIn+1, "")); err != nil {
+		t.Fatalf("another sign-in of the user: %v", err)
+	}
+	if _, err := v.Validate(signInToken(t, j, 3, signedIn, "")); !errors.Is(err, ErrTokenRevoked) {
+		t.Fatalf("the signed-out sign-in: %v", err)
+	}
+	if tv.calls.Load() != 1 {
+		t.Fatalf("lookups = %d: one answer serves every sign-in of the user", tv.calls.Load())
+	}
+	if _, err := v.Validate(signInToken(t, j, 3, signedIn, "key-1")); err != nil {
+		t.Fatalf("a key's token of the same second is no sign-in: %v", err)
+	}
+}
+
+func TestValidate_ASignOutSeenBeforeAnOutageStaysRefused(t *testing.T) {
+	j := newJWKSServer(t, "k1")
+	tv := newTVServer(t, 3)
+	signedIn := time.Now().Add(-time.Hour).Unix()
+	tv.signedOut.Store("[" + strconv.FormatInt(signedIn, 10) + "]")
+	v := newTVValidator(j, tv, time.Millisecond, 5*time.Minute)
+	other := signInToken(t, j, 3, signedIn+1, "")
+	if _, err := v.Validate(other); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(2 * time.Millisecond)
+	tv.status.Store(http.StatusBadGateway)
+	if _, err := v.Validate(signInToken(t, j, 3, signedIn, "")); !errors.Is(err, ErrTokenRevoked) {
+		t.Fatalf("signed out before the outage: %v", err)
+	}
+	if _, err := v.Validate(other); err != nil {
+		t.Fatalf("the other sign-in is bridged as before: %v", err)
+	}
 }
 
 func newTVValidator(j *jwksServer, tv *tvServer, cacheTTL, staleTTL time.Duration) *JWTValidator {

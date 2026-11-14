@@ -3096,6 +3096,7 @@
   "liveSession": {
     "revoked": "Stopped: your account or access changed. Sign in again.",
     "expired": "Stopped: the session reached its maximum lifetime. Sign in again.",
+    "signedOut": "Stopped: this sign-in was signed out. Sign in again.",
     "unverified": "Stopped: the session could not be verified. Sign in again."
   },
   "login": {

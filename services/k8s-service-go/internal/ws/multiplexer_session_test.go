@@ -15,7 +15,9 @@ import (
 // liveSessionsAt checks every few milliseconds against a version the test moves.
 func liveSessionsAt(version *atomic.Int32) *auth.LiveSessions {
 	return auth.NewLiveSessions(auth.LiveSessionConfig{
-		Lookup:     func(context.Context, string, string) (int, error) { return int(version.Load()), nil },
+		Lookup: func(context.Context, string, string) (auth.SessionState, error) {
+			return auth.SessionState{Version: int(version.Load())}, nil
+		},
 		CheckEvery: 5 * time.Millisecond, CacheTTL: time.Millisecond,
 	})
 }
