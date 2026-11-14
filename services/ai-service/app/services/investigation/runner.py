@@ -46,6 +46,7 @@ from app.services.investigation import evidence
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import settings as inv_settings
 from app.services.investigation import inbox, skip_reasons, store
+from app.services.investigation import ledger
 from app.services.investigation import numbers
 from app.services.investigation import rca
 from app.services.investigation import result as inv_result
@@ -159,7 +160,8 @@ async def settle(service, messages: list[dict[str, Any]], answer: str, *, tool_l
     problem, one model call without tools asks for the report again with every problem of both in one message; its
     answer replaces the first only when it has text and a block that can be read, and is checked the same way. A
     second call that fails or finds the time up leaves the first answer. With evidenceCheck the causes still not
-    shown are listed under the report; with the ledger the hypotheses stay in `result` with their reasons."""
+    shown are listed under the report; with the ledger the hypotheses stay in `result` with their reasons. Each switch
+    leaves its counts in `progress` for the run's audit row (`evidence`, `ledger`)."""
     from app.services.ai.tool_turn import answer_once
 
     def check(text: str) -> rca.Checked:
@@ -190,6 +192,10 @@ async def settle(service, messages: list[dict[str, Any]], answer: str, *, tool_l
                                 "unverified": len(kept.cause_problems) if kept.status == "ok" else None}
         if kept.status != "ok" or kept.cause_problems:
             report += evidence.note(kept.status, kept.cause_problems, cfg.language)
+    if cfg.ledger:
+        # the kept hypotheses counted and the failure kinds of both answers, no text
+        progress["ledger"] = ledger.counts(kept.hypotheses, asked_because=first.failures, failures=kept.failures,
+                                           asked_again=asked, ask_failed=ask_failed)
     result = inv_result.shape(kept.block, kept.status, tool_log, kept.hypotheses, asked_again=asked, ask_failed=ask_failed,
                               failures=kept.failures)
     return report, result, int(asked)
@@ -431,6 +437,8 @@ async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:
             "requested_by": getattr(row, "requested_by", "") or None,
             # features.alertInvestigation.evidenceCheck: what the check of the report's causes found (counts only)
             **({"evidence": progress["evidence"]} if progress.get("evidence") else {}),
+            # features.alertInvestigation.ledger: the hypotheses by state and why it asked again (counts, kind names)
+            **({"ledger": progress["ledger"]} if progress.get("ledger") else {}),
         },
     )
     log.info("investigation %s %s in %dms", row.id, status, duration_ms)

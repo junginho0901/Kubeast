@@ -309,6 +309,69 @@ async def test_the_ledger_runs_on_a_claude_subscription(monkeypatch):
     assert out["iterations"] == 4
 
 
+# --- the run's audit row --------------------------------------------------------------------------------------------
+
+# what ai.investigation.run's after held before the v0.7.9 switches
+RUN_ROW_KEYS = {"investigation_id", "alertname", "severity", "status", "provider", "model", "prompt_tokens",
+                "completion_tokens", "total_tokens", "tool_calls", "iterations", "duration_ms", "summary", "link",
+                "requested_by"}
+NO_STATES = {"cause": 0, "symptom": 0, "ruled_out": 0, "blocked": 0, "open": 0}
+
+
+async def run_row(monkeypatch, answers, **on):
+    audits = []
+
+    async def finish(db, inv_id, **f):
+        pass
+
+    monkeypatch.setattr(runner.store, "finish", finish)
+    install_loop(monkeypatch, FakeService(answers), audits)
+    assert await runner.run_one(cfg(max_steps=5, **on), None, row()) == "done"
+    (run,) = [a for a in audits if a["action"] == "ai.investigation.run"]
+    json.dumps(run["after"])  # the audit row keeps it as JSON
+    return run["after"]
+
+
+@pytest.mark.asyncio
+async def test_the_run_row_counts_the_ledger_with_the_switch_and_holds_no_text(monkeypatch):
+    open_block = {**CLOSED, "hypotheses": [hypothesis(id="h3", state="open", **{"for": []})]}
+    after = await run_row(monkeypatch, reads_logs_then("## Summary\nfirst\n" + block_text(open_block),
+                                                       "## Summary\nsecond\n" + block_text(CLOSED)), ledger=True)
+    assert set(after) == RUN_ROW_KEYS | {"ledger"}  # the ledger alone: no evidence counts
+    assert after["ledger"] == {"hypotheses": 2, "states": {**NO_STATES, "cause": 1, "ruled_out": 1}, "not_closed": 0,
+                               "asked_again": True, "asked_because": ["hypothesis_open"], "ask_failed": False,
+                               "failures": []}
+    kept = json.dumps(after["ledger"])
+    for model_text in ("h1", "h3", "Image web", "Deployment/apps/web", "Node/kind-worker", "first", "second"):
+        assert model_text not in kept
+
+
+@pytest.mark.asyncio
+async def test_the_run_row_says_what_is_still_wrong_and_a_second_ask_that_failed(monkeypatch):
+    still = {**CLOSED, "hypotheses": [hypothesis(id="h3", state="symptom", **{"for": [7]}), hypothesis(id="h4", state="maybe")]}
+    after = await run_row(monkeypatch, reads_logs_then("## Summary\nfirst\n" + block_text(still),
+                                                       "## Summary\nsecond\n" + block_text(still)), ledger=True)
+    assert after["ledger"] == {"hypotheses": 2, "states": {**NO_STATES, "symptom": 1, "open": 1}, "not_closed": 2,
+                               "asked_again": True, "asked_because": ["hypothesis_open", "hypothesis_no_evidence", "hypothesis_bad_calls"],
+                               "ask_failed": False, "failures": ["hypothesis_open", "hypothesis_no_evidence", "hypothesis_bad_calls"]}
+    none = {**CLOSED, "hypotheses": []}
+    after = await run_row(monkeypatch, reads_logs_then("## Summary\nfirst\n" + block_text(none)) + [RuntimeError("provider down")],
+                          ledger=True)
+    assert after["ledger"] == {"hypotheses": 0, "states": NO_STATES, "not_closed": 0, "asked_again": True,
+                               "asked_because": ["no_hypotheses"], "ask_failed": True, "failures": ["no_hypotheses"]}
+    after = await run_row(monkeypatch, reads_logs_then("## Summary\nno block"), ledger=True)
+    assert after["ledger"]["asked_because"] == ["block_missing"] and after["ledger"]["hypotheses"] == 0
+
+
+@pytest.mark.asyncio
+async def test_without_the_ledger_the_run_row_is_as_before(monkeypatch):
+    after = await run_row(monkeypatch, reads_logs_then("## Summary\nok"))
+    assert set(after) == RUN_ROW_KEYS
+    answer = "## Summary\nok\n" + block_text(CLOSED)
+    after = await run_row(monkeypatch, reads_logs_then(answer, answer), evidence_check=True)
+    assert set(after) == RUN_ROW_KEYS | {"evidence"}  # evidenceCheck's own counts, not the ledger's
+
+
 # --- what the API and the MCP read return ---------------------------------------------------------------------------
 
 def stored(**kw):

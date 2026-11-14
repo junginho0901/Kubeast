@@ -81,6 +81,19 @@ def needs_asking(status: str, block: Optional[dict], hypotheses: list[dict[str, 
     return status != "ok" or bool(rca.hypothesis_failures(block, hypotheses))
 
 
+def counts(hypotheses: list[dict[str, Any]], *, asked_because: list[dict[str, Any]], failures: list[dict[str, Any]],
+           asked_again: bool, ask_failed: bool) -> dict[str, Any]:
+    """The ai.investigation.run row's `ledger`: the kept block's hypotheses counted, whether the model was asked once
+    more, and the failure kinds of the first answer and of the kept one (rca.FAILURES) — numbers and kind names, no
+    text of the model's."""
+    states = dict.fromkeys((*STATES, OPEN), 0)
+    for h in hypotheses:
+        states[h["state"]] += 1
+    return {"hypotheses": len(hypotheses), "states": states, "not_closed": sum(1 for h in hypotheses if not h["closed"]),
+            "asked_again": asked_again, "asked_because": rca.kinds(asked_because), "ask_failed": ask_failed,
+            "failures": rca.kinds(failures)}
+
+
 _REASONS = {
     "open": "its state is not one of cause, symptom, ruled_out or blocked",
     "no_evidence": 'no call that answered is given under "{side}"',

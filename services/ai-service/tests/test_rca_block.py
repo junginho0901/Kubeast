@@ -100,6 +100,10 @@ async def test_both_checks_problems_go_in_one_second_ask(monkeypatch):
     assert out["report"] == "## Summary\nweb crashes."  # the second answer passed both: no note
     assert out["result"]["asked_again"] is True and out["result"]["failures"] == []
     assert progress["evidence"]["asked_again"] is True and progress["evidence"]["unverified"] == 0
+    # the ledger's counts name why it asked: both checks' kinds, as the one second ask carried them
+    assert progress["ledger"]["asked_because"] == ["cause_name_missing", "cause_not_in_ledger", "hypothesis_open",
+                                                   "hypothesis_bad_calls"]  # h3's "for" names call 2 of a run of one
+    assert progress["ledger"]["failures"] == [] and progress["ledger"]["states"]["cause"] == 1
 
 
 @pytest.mark.asyncio

@@ -128,6 +128,12 @@ def check(answer: str, *, tool_log: list[dict[str, Any]], reads: Optional[list],
     return out
 
 
+def kinds(failures: Iterable[dict[str, Any]]) -> list[str]:
+    """The failure kinds found, each once, in the order of FAILURES."""
+    found = {f.get("kind") for f in failures}
+    return [k for k in FAILURES if k in found]
+
+
 def hypothesis_failures(block: Optional[dict], hypotheses: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The ledger's failures: each problem of a hypothesis not closed, or no hypothesis while the block finds a fault."""
     out = [{"kind": f"hypothesis_{p['reason']}", "id": h["id"]} for h in hypotheses for p in h.get("problems") or []]
