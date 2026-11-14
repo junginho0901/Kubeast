@@ -73,6 +73,7 @@ auth:
   #   it automatically goes back to the previous role (audit log access.request.* / access.grant.expire).
   # It takes effect only on clusters whose RBAC binds that role's group: on a production cluster
   # that binds only viewer, the user still gets 403 after elevation.
+  # roles names each role exactly; an entry that is a built-in's name in other capitals (WRITE) stands for the built-in.
   accessRequests:
     enabled: false
     maxHours: 8
