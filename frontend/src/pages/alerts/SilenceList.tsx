@@ -1,8 +1,13 @@
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 
 import { ActionFailure } from '@/components/ActionFailure'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { pageOf } from '@/utils/listPages'
 import { api } from '@/services/api'
 import { useConfirm } from '@/services/confirm'
 import { useCluster } from '@/contexts/ClusterContext'
@@ -12,7 +17,9 @@ import { formatTime, utcTitle } from '@/utils/time'
 // The active and pending silences that mute this cluster's alerts in its alert store: its own, and the store's
 // others (no cluster condition, or a cluster pattern this cluster meets) marked by their scope. Expiring one of its
 // own (resource.alert.silence, with features.alertStore.silences) ends it now and is audited server-side
-// (alert.silence.expire); the others are not this cluster's to end.
+// (alert.silence.expire); the others are not this cluster's to end. The tab fits the screen as the inbox does: the
+// rows that fit (or the footer's fixed choice) and the list footer, since a store keeps every silence of every team.
+const COLUMNS = 5
 
 export default function SilenceList({ canExpire }: { canExpire: boolean }) {
   const { t } = useTranslation()
@@ -29,6 +36,9 @@ export default function SilenceList({ canExpire }: { canExpire: boolean }) {
   const silences = data ?? []
   const scopeOf = (s: { scope?: string }) => s.scope ?? 'cluster'
   const own = silences.filter((s) => scopeOf(s) === 'cluster').length
+  const [page, setPage] = useState(1)
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: `${isLoading}:${silences.length}` })
+  const shown = pageOf(silences, page, rowsPerPage)
 
   useAIContext(data ? {
     source: 'SilenceList',
@@ -42,9 +52,10 @@ export default function SilenceList({ canExpire }: { canExpire: boolean }) {
   } : null, [data])
 
   return (
-    <div className="card flex-1 min-h-0 overflow-auto" data-testid="silence-list">
+    <div ref={containerRef} className="card flex-1 min-h-0 flex flex-col" data-testid="silence-list">
+      <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
       <table className="w-full text-sm">
-        <thead className="text-slate-400">
+        <thead ref={theadRef} className="text-slate-400">
           <tr>
             <th className="text-left py-3 px-4 w-[100px]">{tr('alertInbox.col.status', 'Status')}</th>
             <th className="text-left py-3 px-4">{tr('alertInbox.silence.conditions', 'Label conditions')}</th>
@@ -54,8 +65,8 @@ export default function SilenceList({ canExpire }: { canExpire: boolean }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-700">
-          {silences.map((s) => (
-            <tr key={s.id} className="text-slate-200" data-testid={`silence-row-${s.id}`}>
+          {shown.rows.map((s, idx) => (
+            <tr key={s.id} ref={idx === 0 ? firstRowRef : undefined} className="text-slate-200" data-testid={`silence-row-${s.id}`}>
               <td className="py-3 px-4 text-xs">
                 {tr(`alertInbox.silence.state.${s.state}`, s.state)}
                 {scopeOf(s) !== 'cluster' && (
@@ -97,15 +108,18 @@ export default function SilenceList({ canExpire }: { canExpire: boolean }) {
             </tr>
           ))}
           {isLoading && (
-            <tr><td colSpan={5} className="py-10 px-4 text-center text-slate-400"><Loader2 className="inline w-4 h-4 animate-spin" /></td></tr>
+            <tr><td colSpan={COLUMNS} className="py-10 px-4 text-center text-slate-400"><Loader2 className="inline w-4 h-4 animate-spin" /></td></tr>
           )}
           {!isLoading && silences.length === 0 && (
-            <tr><td colSpan={5} className="py-6 px-4 text-center text-slate-400">
+            <tr><td colSpan={COLUMNS} className="py-6 px-4 text-center text-slate-400">
               {error ? tr('alertInbox.silence.listFailed', 'The alert store did not answer.') : tr('common.listEmpty', 'No items.')}
             </td></tr>
           )}
         </tbody>
+        <AdaptiveTableFillerRows count={rowsPerPage - shown.rows.length} columnCount={COLUMNS} />
       </table>
+      </div>
+      <ListPager currentPage={shown.page} totalPages={shown.pages} total={silences.length} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="silences-pager" />
     </div>
   )
 }
