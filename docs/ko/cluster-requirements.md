@@ -116,7 +116,8 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 ## 2. metrics-server
 
 노드 목록, Monitoring 화면, 노드 드로어의 사용량과, Prometheus가 없을 때 최적화 표에 나오는 사용량(순간값)은 `metrics.k8s.io`에서 읽습니다.
-Kubeast는 원래 읽는 클러스터의 API discovery로 이를 찾습니다. discovery에 `metrics.k8s.io`가 없으면 모든 사용자에게 metrics-server를 사용할 수 없다고 알리고 metrics 목록은 묻지 않습니다. 나중에 설치한 metrics-server는 1분 안에 보입니다.
+Kubeast는 metrics 목록을 먼저 묻습니다. 그래서 목록이 답하는 클러스터에는 더 묻는 것이 없습니다. 목록이 404나 403을 답할 때만 클러스터의 API discovery에서 `metrics.k8s.io`를 찾습니다. 1분 안에 읽은 discovery가 있으면 그것을 쓰고, 없으면 `kubeast:cache`로 `GET /apis/metrics.k8s.io`를 한 번 읽습니다. 기본 `system:discovery` ClusterRole이 이 읽기를 허용합니다. 그 답과 읽기 실패는 클러스터마다 1분 동안 씁니다.
+discovery에 `metrics.k8s.io`가 없으면 모든 사용자에게 metrics-server를 사용할 수 없다고 알리고, 그 1분 동안 metrics 목록은 묻지 않습니다. discovery를 읽지 못하는 동안에는 사용자마다 클러스터가 준 답을 그대로 받습니다. 나중에 설치한 metrics-server는 2분 안에 보입니다. 확인: metrics-server가 없는 클러스터에서는 `kubectl get --raw /apis/metrics.k8s.io`가 404를 답합니다.
 
 - 설치: [metrics-server 차트](https://artifacthub.io/packages/helm/metrics-server/metrics-server) `3.14.0`(앱 0.9.0)
   - `helm install metrics-server metrics-server/metrics-server --version 3.14.0 -n kube-system`

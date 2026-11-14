@@ -114,7 +114,8 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 The node list, the Monitoring screen and the node drawer read their usage from `metrics.k8s.io`.
 So does the optimization table when there is no Prometheus (point-in-time values).
 A node's CPU, memory and percents are what `kubectl top nodes` prints: the share of the node's allocatable, not its capacity.
-Kubeast finds it through the cluster's API discovery, which it reads anyway: where discovery lists no `metrics.k8s.io`, every user is told metrics-server is not available and no metrics list is asked. A metrics-server installed since shows within a minute.
+Kubeast asks the metrics list first, so a cluster that answers it is asked nothing more. Only when a list answers 404 or 403 does it look in the cluster's API discovery for `metrics.k8s.io`: the discovery it read within the last minute, or else one `GET /apis/metrics.k8s.io` as `kubeast:cache`, which the default `system:discovery` ClusterRole allows. It keeps that answer, or a failure to read it, a minute per cluster.
+Where discovery does not list `metrics.k8s.io`, every user is told metrics-server is not available and no metrics list is asked in that minute; while discovery cannot be read, each user gets the cluster's own answer. A metrics-server installed since shows within two minutes. Check: `kubectl get --raw /apis/metrics.k8s.io` answers 404 on a cluster without it.
 
 - Install: [metrics-server chart](https://artifacthub.io/packages/helm/metrics-server/metrics-server) `3.14.0` (app 0.9.0), with `helm install metrics-server metrics-server/metrics-server --version 3.14.0 -n kube-system`.
   - On EKS the metrics-server add-on also works.
