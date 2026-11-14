@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
-import { failureFields, readFailure } from '@/utils/aiContext/readFailure'
+import { classifyReadFailure, failureFields } from '@/utils/aiContext/readFailure'
 import type { HelmReleaseSummary } from '@/services/api'
 
 interface Params {
@@ -33,7 +33,7 @@ export function useReleasesAISnapshot({
     const nsLabel = namespace || '전체 네임스페이스'
     const filters = { namespace: namespace || undefined, search: searchQuery || undefined }
     if (error) {
-      const f = readFailure(error)
+      const f = classifyReadFailure(error)
       return {
         source: 'base' as const,
         summary: `${nsLabel} Helm Release — ${f.refused ? '볼 권한 없음' : '불러오지 못함'}: ${f.reason}`,

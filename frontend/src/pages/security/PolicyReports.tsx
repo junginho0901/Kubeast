@@ -13,7 +13,7 @@ import { useAIContext } from '@/hooks/useAIContext'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
-import { failureFields, readFailure } from '@/utils/aiContext/readFailure'
+import { classifyReadFailure, failureFields } from '@/utils/aiContext/readFailure'
 import { policyResultTarget } from '@/utils/detailTargets'
 import { formatTime, utcTitle } from '@/utils/time'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
@@ -186,7 +186,7 @@ export default function PolicyReports() {
   const aiSnapshot = useMemo(() => {
     if (!summary) return null
     const list = tab === 'policies' ? pagedPolicies : tab === 'namespaces' ? pagedNamespaces : pagedResults
-    const unread = resultsError ? (readFailure(resultsError).refused ? '; the results were refused' : '; the results could not be read') : ''
+    const unread = resultsError ? (classifyReadFailure(resultsError).refused ? '; the results were refused' : '; the results could not be read') : ''
     return {
       source: 'base' as const,
       summary: `Policy reports: ${summary.totals.fail} fail, ${summary.totals.warn} warn, ${summary.totals.error} error over ${summary.reports} reports (${tab})${unread}`,
