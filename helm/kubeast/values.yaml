@@ -26,9 +26,9 @@ admin:
 # looking the Secret up — which GitOps renderers such as Argo CD cannot do, so
 # every sync would rotate it). Set it to a Secret you manage (e.g. via
 # ExternalSecrets) holding these keys: POSTGRES_PASSWORD, DATABASE_URL,
-# REDIS_PASSWORD (redis requirepass, with redis.acl.enabled false),
-# REDIS_K8S_SERVICE_PASSWORD and REDIS_PROBE_PASSWORD (the Redis users of
-# redis.acl; the chart keeps its own in kubeast-redis-users),
+# REDIS_PASSWORD (redis requirepass while the Redis users are off),
+# REDIS_K8S_SERVICE_PASSWORD and REDIS_PROBE_PASSWORD (the Redis users, read
+# once redis.acl.existingSecretHasKeys is true),
 # DEFAULT_ADMIN_PASSWORD, AI_APPROVAL_SECRET (shared by ai-service and
 # tool-server to sign write-tool approvals), INTERNAL_API_TOKEN (service token
 # tool-server and auth-service present on k8s-service's /internal routes; rotate
@@ -623,17 +623,22 @@ resources:
 # --- Redis ---
 redis:
   enabled: true
-  # requirepass, used only with acl.enabled false. Empty = generated at install
-  # and kept across upgrades (REDIS_PASSWORD in kubeast-secrets).
+  # requirepass, used while the Redis users below are off. Empty = generated at
+  # install and kept across upgrades (REDIS_PASSWORD in kubeast-secrets).
   password: ""
   # One Redis user per service (docs/configuration.md "Redis users"): k8s-service
   # reaches only kubeast:* keys and channels with the commands its cache uses, the
   # probes may only PING, and the default user is off. The passwords are generated
   # at install and kept across upgrades in the Secret kubeast-redis-users
-  # (REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD); with secrets.existingSecret
-  # put both in that Secret. false = one password (requirepass) as before.
+  # (REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD). false = one password
+  # (requirepass) as before.
   acl:
     enabled: true
+    # With secrets.existingSecret the users stay off, and Redis keeps the one
+    # password, until this is true: put REDIS_K8S_SERVICE_PASSWORD and
+    # REDIS_PROBE_PASSWORD in that Secret first. An upgrade that can read the
+    # Secret stops when one is missing. Not read without secrets.existingSecret.
+    existingSecretHasKeys: false
 
 # --- Gateway ---
 gateway:

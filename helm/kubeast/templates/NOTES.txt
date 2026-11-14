@@ -62,6 +62,15 @@ in bash, zsh and PowerShell.
     Installed without ai-service, tool-server and the ModelConfig controller.
     To turn it on, upgrade with --reset-then-reuse-values --set ai.enabled=true.
 {{- end }}
+{{- if and .Values.redis.enabled .Values.redis.acl.enabled .Values.secrets.existingSecret (not .Values.redis.acl.existingSecretHasKeys) }}
+
+▸ Redis runs with one password for every service
+
+    With secrets.existingSecret, the Redis users stay off until you turn them on.
+    Add REDIS_K8S_SERVICE_PASSWORD and REDIS_PROBE_PASSWORD to Secret {{ .Values.secrets.existingSecret }}, then upgrade with
+    --reset-then-reuse-values --set redis.acl.existingSecretHasKeys=true
+    (docs/configuration.md "Redis users").
+{{- end }}
 
 ▸ Upgrading
 

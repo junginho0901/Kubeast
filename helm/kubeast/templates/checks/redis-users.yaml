@@ -1,0 +1,17 @@
+{{- /*
+With secrets.existingSecret and redis.acl.existingSecretHasKeys, that Secret holds the Redis users' passwords. When
+helm can read it (install and upgrade), a missing or empty key stops the render here, before anything changes.
+lookup is empty under helm template and Argo CD: there the redis pod's acl container, which names the missing key and
+stops, is the last guard.
+*/}}
+{{- if and (include "kubeast.redisAcl" .) .Values.secrets.existingSecret }}
+{{- $secret := lookup "v1" "Secret" .Release.Namespace .Values.secrets.existingSecret }}
+{{- if $secret }}
+{{- $data := $secret.data | default dict }}
+{{- range list "REDIS_K8S_SERVICE_PASSWORD" "REDIS_PROBE_PASSWORD" }}
+{{- if not (index $data .) }}
+{{- fail (printf "Secret %s has no %s, and redis.acl.existingSecretHasKeys is true. Add REDIS_K8S_SERVICE_PASSWORD and REDIS_PROBE_PASSWORD to that Secret, or set redis.acl.existingSecretHasKeys=false to keep one Redis password for every service (docs/configuration.md \"Redis users\")." $.Values.secrets.existingSecret .) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

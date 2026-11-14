@@ -19,9 +19,11 @@ app.kubernetes.io/part-of: kubeast
 {{ .Values.secrets.existingSecret | default "kubeast-secrets" }}
 {{- end -}}
 
-{{- /* "true" when the chart's Redis runs one user per service (redis.acl). */ -}}
+{{- /* "true" when the chart's Redis runs one user per service (redis.acl): with the chart's own Secrets, or with
+       secrets.existingSecret once redis.acl.existingSecretHasKeys says it holds the users' passwords. Values only,
+       never whether a key exists. */ -}}
 {{- define "kubeast.redisAcl" -}}
-{{- if and .Values.redis.enabled .Values.redis.acl.enabled }}true{{ end -}}
+{{- if and .Values.redis.enabled .Values.redis.acl.enabled (or (not .Values.secrets.existingSecret) .Values.redis.acl.existingSecretHasKeys) }}true{{ end -}}
 {{- end -}}
 
 {{- /* The Secret holding the Redis users' passwords: the chart's kubeast-redis-users, or secrets.existingSecret. */ -}}

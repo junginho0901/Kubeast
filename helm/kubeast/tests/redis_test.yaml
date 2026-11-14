@@ -131,13 +131,17 @@ tests:
           path: spec.template.spec.containers[0].livenessProbe.exec.command
           value: ["sh", "-c", "redis-cli --user probe ping | grep -q PONG"]
 
-  - it: reads the users' passwords from secrets.existingSecret when one is given
+  - it: with secrets.existingSecret and redis.acl.existingSecretHasKeys reads the users' passwords from that Secret
     set:
       secrets.existingSecret: company-kubeast
+      redis.acl.existingSecretHasKeys: true
     documentSelector:
       path: kind
       value: Deployment
     asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[0]
+          value: --aclfile
       - equal:
           path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.name
           value: company-kubeast
@@ -146,7 +150,36 @@ tests:
           value: company-kubeast
       - matchRegex:
           path: spec.template.spec.initContainers[0].args[0]
-          pattern: is not in Secret company-kubeast; add it
+          pattern: 'is not in Secret company-kubeast; add it \(docs/configuration\.md \\"Redis users\\"\) or set redis\.acl\.existingSecretHasKeys=false"'
+
+  # The render reads the values only: whether that Secret holds the keys is not known to it.
+  - it: with secrets.existingSecret and no redis.acl.existingSecretHasKeys keeps the one password, with no acl container
+    set:
+      secrets.existingSecret: company-kubeast
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args
+          value: ["--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "107374182", "--maxmemory-policy", "volatile-lru"]
+      - equal:
+          path: spec.template.spec.containers[0].env
+          value:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: company-kubeast
+                  key: REDIS_PASSWORD
+      - notExists:
+          path: spec.template.spec.initContainers
+      - notExists:
+          path: spec.template.metadata.annotations
+      - equal:
+          path: spec.template.spec.volumes
+          value:
+            - name: data
+              emptyDir: {}
 
   - it: with podSecurity.enabled=false mounts the password files 0444 and sets no uid or fsGroup
     set:

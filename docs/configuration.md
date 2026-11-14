@@ -171,9 +171,10 @@ postgresql:
   database: kubeast
 redis:
   enabled: true
-  password: ""          # requirepass, only with acl.enabled: false — generated when empty (REDIS_PASSWORD)
+  password: ""          # requirepass while the Redis users are off — generated when empty (REDIS_PASSWORD)
   acl:
     enabled: true       # one Redis user per service ("Redis users" below); false = one password as before
+    existingSecretHasKeys: false  # with secrets.existingSecret: true once that Secret holds the users' passwords
 networkPolicy:
   enabled: true         # default deny, plus only the flows the services use. Harmless on CNIs that do not enforce NetworkPolicy (kindnet, etc.)
 
@@ -208,6 +209,8 @@ multicluster:
 
 The chart's Redis (Valkey) gives each service that uses it a user of its own (`redis.acl.enabled`, on by default).
 
+With `secrets.existingSecret`, Redis keeps one password (`REDIS_PASSWORD`) for every service until you turn the users on: put `REDIS_K8S_SERVICE_PASSWORD` and `REDIS_PROBE_PASSWORD` in that Secret, then set `redis.acl.existingSecretHasKeys: true`. Until then the install notes say so.
+
 | User | Can | Cannot |
 |---|---|---|
 | `k8s-service` | Keys and channels whose names start with `kubeast:`. Reads, writes and deletes of single keys, `SCAN` for the deletes by pattern, the hash commands (`HGET`, `HGETALL`, `HSET`, `HSETNX`, `HINCRBY`, `HDEL`), `MULTI`/`EXEC`, `PUBLISH`/`SUBSCRIBE`, `PING`, `SELECT` (`REDIS_DB`) | Any other key or channel. `FLUSHALL`, `FLUSHDB`, `KEYS`, `CONFIG`, `DEBUG`, `ACL`, `MONITOR`, `EVAL`, `SCRIPT` and every command not listed |
@@ -224,7 +227,7 @@ The chart's Redis (Valkey) gives each service that uses it a user of its own (`r
 - Each user's password is generated at install, 32 characters, in the Secret `kubeast-redis-users` (`REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD`).
 - It is kept across upgrades and stays after `helm uninstall`, like `kubeast-secrets`.
 - It is not in `kubeast-secrets`, which every service reads whole as its environment. Only the redis pod and k8s-service read it.
-- With `secrets.existingSecret`, both keys are read from that Secret.
+- With `secrets.existingSecret` and `redis.acl.existingSecretHasKeys: true`, both keys are read from that Secret.
 - To change one, write the new value into the Secret, then restart `redis` and `k8s-service`.
 
 **How Valkey reads them.**
@@ -248,7 +251,8 @@ The chart's Redis (Valkey) gives each service that uses it a user of its own (`r
 - Redis and k8s-service restart. The cache starts empty, as on any restart of Redis.
 - Until the old k8s-service pod has gone, its requests to the new Redis are refused and read as cache misses.
 - A new k8s-service pod that comes up while only the old Redis answers keeps its cache in memory until it restarts. It answers the same; only the cache is not shared.
-- With `secrets.existingSecret`, add the two keys to that Secret before upgrading. Without them, the `acl` container stops and says which key is missing, and k8s-service keeps its cache in memory. Or set `redis.acl.enabled: false` to keep the one password.
+- With `secrets.existingSecret`, nothing changes on upgrade: Redis keeps the one password until `redis.acl.existingSecretHasKeys` is true.
+- With that set, an upgrade that can read the Secret stops when a key is missing or empty, and names it. `helm template` and Argo CD cannot read it: there the `acl` container stops and says which key is missing, and k8s-service keeps its cache in memory.
 - `redis.acl.enabled: false` renders Redis as before, with the memory cap.
 
 **Later.** TLS to an external Redis is not in this chart yet. The chart cannot point at an external Redis today: `REDIS_HOST` is the chart's `redis`, or empty.

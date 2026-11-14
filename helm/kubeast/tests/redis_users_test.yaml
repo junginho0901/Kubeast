@@ -51,10 +51,11 @@ tests:
           path: metadata.name
           value: kubeast-redis-users
 
-  - it: renders no kubeast-redis-users with secrets.existingSecret, whose Secret holds the two keys
+  - it: renders no kubeast-redis-users with secrets.existingSecret, with or without redis.acl.existingSecretHasKeys
     template: secret.yaml
     set:
       secrets.existingSecret: company-kubeast
+      redis.acl.existingSecretHasKeys: true
     asserts:
       - hasDocuments:
           count: 1
@@ -170,12 +171,40 @@ tests:
           any: true
         documentSelector: {path: metadata.name, value: ai-service}
 
-  - it: with secrets.existingSecret k8s-service reads its password there
+  - it: with secrets.existingSecret and no redis.acl.existingSecretHasKeys, k8s-service signs in with REDIS_PASSWORD alone
     template: deployments.yaml
     documentSelector: {path: metadata.name, value: k8s-service}
     set:
       secrets.existingSecret: company-kubeast
     asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: REDIS_USERNAME
+          any: true
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: REDIS_PASSWORD
+          any: true
+      - contains:
+          path: spec.template.spec.containers[0].envFrom
+          content:
+            secretRef:
+              name: company-kubeast
+
+  - it: with secrets.existingSecret and redis.acl.existingSecretHasKeys k8s-service reads its password there
+    template: deployments.yaml
+    documentSelector: {path: metadata.name, value: k8s-service}
+    set:
+      secrets.existingSecret: company-kubeast
+      redis.acl.existingSecretHasKeys: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: REDIS_USERNAME
+            value: k8s-service
       - contains:
           path: spec.template.spec.containers[0].env
           content:

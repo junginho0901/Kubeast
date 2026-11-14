@@ -168,9 +168,10 @@ postgresql:
   database: kubeast
 redis:
   enabled: true
-  password: ""          # requirepass, acl.enabled: false일 때만 씁니다 — 비우면 생성합니다(REDIS_PASSWORD)
+  password: ""          # requirepass, Redis 사용자가 꺼져 있는 동안 씁니다 — 비우면 생성합니다(REDIS_PASSWORD)
   acl:
     enabled: true       # 서비스마다 Redis 사용자 하나(아래 "Redis 사용자"). false면 예전처럼 비밀번호 하나
+    existingSecretHasKeys: false  # secrets.existingSecret을 쓸 때: 그 Secret에 사용자 비밀번호를 넣은 뒤 true
 networkPolicy:
   enabled: true         # 기본 거부 + 서비스가 쓰는 흐름만 허용합니다. NetworkPolicy를 강제하지 않는 CNI(kindnet 등)에서는 영향이 없습니다
 
@@ -205,6 +206,8 @@ multicluster:
 
 차트의 Redis(Valkey)는 Redis를 쓰는 서비스마다 자기 사용자를 둡니다(`redis.acl.enabled`, 기본 켬).
 
+`secrets.existingSecret`을 쓰면, 사용자를 켤 때까지 Redis는 모든 서비스에 비밀번호 하나(`REDIS_PASSWORD`)를 씁니다. 켜려면 그 Secret에 `REDIS_K8S_SERVICE_PASSWORD`와 `REDIS_PROBE_PASSWORD`를 넣고 `redis.acl.existingSecretHasKeys: true`로 두세요. 그 전까지는 설치 안내(NOTES)가 이를 알립니다.
+
 | 사용자 | 할 수 있는 것 | 할 수 없는 것 |
 |---|---|---|
 | `k8s-service` | 이름이 `kubeast:`로 시작하는 키와 채널. 키 하나씩 읽기·쓰기·지우기, 패턴으로 지울 때 쓰는 `SCAN`, 해시 명령(`HGET`, `HGETALL`, `HSET`, `HSETNX`, `HINCRBY`, `HDEL`), `MULTI`/`EXEC`, `PUBLISH`/`SUBSCRIBE`, `PING`, `SELECT`(`REDIS_DB`) | 그 밖의 키와 채널. `FLUSHALL`, `FLUSHDB`, `KEYS`, `CONFIG`, `DEBUG`, `ACL`, `MONITOR`, `EVAL`, `SCRIPT`와 목록에 없는 모든 명령 |
@@ -221,7 +224,7 @@ multicluster:
 - 사용자마다 설치 때 32자로 만들어 Secret `kubeast-redis-users`에 둡니다(`REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD`).
 - 업그레이드해도 유지되고, `kubeast-secrets`처럼 `helm uninstall` 뒤에도 남습니다.
 - 모든 서비스가 통째로 환경 변수로 읽는 `kubeast-secrets`에는 넣지 않습니다. redis 파드와 k8s-service만 읽습니다.
-- `secrets.existingSecret`을 쓰면 두 키를 그 Secret에서 읽습니다.
+- `secrets.existingSecret`과 `redis.acl.existingSecretHasKeys: true`를 쓰면 두 키를 그 Secret에서 읽습니다.
 - 바꾸려면 Secret에 새 값을 쓰고 `redis`와 `k8s-service`를 다시 시작합니다.
 
 **Valkey가 읽는 방법.**
@@ -245,7 +248,8 @@ multicluster:
 - Redis와 k8s-service가 다시 시작합니다. Redis가 다시 시작할 때마다 그렇듯 캐시는 비어서 시작합니다.
 - 옛 k8s-service 파드가 내려갈 때까지 그 파드가 새 Redis에 보내는 요청은 거절되고 캐시에 없는 것으로 읽힙니다.
 - 옛 Redis만 답하는 동안 뜬 새 k8s-service 파드는 다시 시작할 때까지 메모리에 캐시합니다. 답은 같고, 캐시만 나눠 쓰지 않습니다.
-- `secrets.existingSecret`을 쓰면 업그레이드 전에 그 Secret에 두 키를 넣으세요. 없으면 `acl` 컨테이너가 어느 키가 없는지 말하고 멈추며, k8s-service는 메모리에 캐시합니다. 비밀번호 하나를 그대로 쓰려면 `redis.acl.enabled: false`로 두세요.
+- `secrets.existingSecret`을 쓰면 업그레이드에서 바뀌는 것이 없습니다: `redis.acl.existingSecretHasKeys`가 true가 될 때까지 Redis는 비밀번호 하나를 씁니다.
+- 그 값을 켜면, Secret을 읽을 수 있는 업그레이드는 키가 없거나 비었을 때 그 키를 말하고 멈춥니다. `helm template`과 Argo CD는 Secret을 읽지 못합니다: 그때는 `acl` 컨테이너가 어느 키가 없는지 말하고 멈추며, k8s-service는 메모리에 캐시합니다.
 - `redis.acl.enabled: false`면 Redis는 예전 그대로(메모리 상한만 더해) 뜹니다.
 
 **나중에.** 바깥 Redis로 가는 TLS는 아직 이 차트에 없습니다. 지금 차트로는 바깥 Redis를 가리킬 수 없습니다: `REDIS_HOST`는 차트의 `redis`이거나 비어 있습니다.

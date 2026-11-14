@@ -43,7 +43,7 @@ spec:
               # not "hash", a shell builtin
               pwhash() {
                 if [ ! -s "/run/kubeast/redis-passwords/$1" ]; then
-                  echo "redis users: $1 is not in Secret {{ include "kubeast.redisUsersSecretName" . }}; add it (docs/configuration.md \"Redis users\") or set redis.acl.enabled=false" >&2
+                  echo "redis users: $1 is not in Secret {{ include "kubeast.redisUsersSecretName" . }}; add it (docs/configuration.md \"Redis users\") or set {{ ternary "redis.acl.existingSecretHasKeys" "redis.acl.enabled" (not (empty .Values.secrets.existingSecret)) }}=false" >&2
                   exit 1
                 fi
                 sha256sum < "/run/kubeast/redis-passwords/$1" | cut -d' ' -f1
