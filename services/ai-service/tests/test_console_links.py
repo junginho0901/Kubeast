@@ -129,8 +129,14 @@ async def test_on_a_result_that_is_not_an_object_or_names_nothing_stays_as_it_ca
 
 
 @pytest.mark.asyncio
-async def test_on_a_refusal_gets_no_links(on):
-    refusal = json.dumps({"status": "not_found", "reason": "pods \"web-1\" not found"})
+@pytest.mark.parametrize("answer", [
+    {"status": "not_found", "reason": "pods \"web-1\" not found"},
+    {"status": "unavailable", "feature": "prometheus"},
+    {"status": "forbidden", "reason": "no"},
+    {"error": "boom"},
+])
+async def test_on_a_result_with_a_status_or_an_error_gets_no_links(on, answer):
+    refusal = json.dumps(answer)
     out = await execute_function_with_context(_service(refusal), "k8s_describe_resource",
                                               {"resource_type": "pod", "resource_name": "web-1", "namespace": "shop"}, _ctx())
     assert out == refusal

@@ -195,6 +195,7 @@ def add(function_name: str, args: Any, result: Any, cluster: str) -> Any:
     if not enabled() or not isinstance(result, str):
         return result
     data = _parsed(result)
-    if data is None:
+    # a status (not_found, unavailable, too_large, …) or an error names nothing that is there to open
+    if data is None or isinstance(data.get("status"), str) or data.get("error"):
         return result
     return with_links(result, links_for(function_name, args, data, cluster))
