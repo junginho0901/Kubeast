@@ -135,6 +135,8 @@ func logReadStatus(err error) int {
 		return http.StatusBadRequest
 	case errors.As(err, &se) && se.Status == http.StatusBadRequest:
 		return http.StatusBadRequest // the store could not parse the query: the caller's to fix
+	case errors.Is(err, logsearch.ErrTooLarge):
+		return http.StatusBadRequest // the caller's to narrow
 	case errors.Is(err, logsearch.ErrNotServed):
 		return http.StatusNotFound
 	case errors.Is(err, logsearch.ErrTimeout):
@@ -214,7 +216,8 @@ func (h *Handler) serveLogQLSearch(w http.ResponseWriter, r *http.Request, names
 	id, _ := cluster.FromContext(r.Context())
 	req := logsearch.QueryRequest{Cluster: string(id), Namespace: namespace, Query: r.URL.Query().Get("q"), Metric: true, HiddenNamespace: h.hiddenLogNamespace(r, namespace)}
 	var res *logsearch.Result
-	after := func() json.RawMessage { return logReadAudit("", req, nil, res) }
+	var estimated *int64
+	after := func() json.RawMessage { return withEstimate(logReadAudit("", req, nil, res), estimated) }
 	prepare := func() error {
 		window, err := h.logReadWindow(r, string(id), namespace)
 		if err == nil && strings.TrimSpace(req.Query) == "" {
@@ -232,8 +235,16 @@ func (h *Handler) serveLogQLSearch(w http.ResponseWriter, r *http.Request, names
 	if !h.openLogDoor(w, r, namespace, "k8s.pod.logs.logql", prepare, after) {
 		return
 	}
-	out, qerr := h.logSearch.Query(r.Context(), req)
+	var out logsearch.Result
+	var qerr error
+	if limit := h.logSearch.Config().QueryMaxBytes; limit > 0 {
+		estimated, qerr = h.estimateLogQuery(r, req, limit)
+	}
 	if qerr == nil {
+		out, qerr = h.logSearch.Query(r.Context(), req)
+	}
+	if qerr == nil {
+		out.EstimatedBytes = estimated
 		res = &out
 	}
 	if werr := h.recordAuditWithPayload(r, "k8s.pod.logs.logql", "namespace", namespace, namespace, qerr, nil, after()); werr != nil {
@@ -268,5 +279,35 @@ func logReadAudit(kind string, req logsearch.QueryRequest, patterns *logsearch.P
 		after["kind"] = kind
 	}
 	b, _ := json.Marshal(after)
+	return b
+}
+
+// estimateLogQuery asks the store's index how much req would read (features.logSearch.queryMaxBytes, as
+// mcp-grafana's lokiguard does) and refuses it past limit with how to narrow it. The bytes come back with a refusal too.
+func (h *Handler) estimateLogQuery(r *http.Request, req logsearch.QueryRequest, limit int64) (*int64, error) {
+	vol, _, err := h.logSearch.Estimate(r.Context(), req)
+	switch {
+	case errors.Is(err, logsearch.ErrNotServed):
+		return nil, fmt.Errorf("the log store's index stats are %w (features.logSearch.queryMaxBytes reads Loki's /loki/api/v1/index/stats first)", err)
+	case err != nil:
+		return nil, err
+	case vol.Bytes > limit:
+		return &vol.Bytes, fmt.Errorf("%w: the log store's index puts the streams of this query over the range at %s, past features.logSearch.queryMaxBytes (%s); narrow the time range or add label matchers",
+			logsearch.ErrTooLarge, logsearch.Size(vol.Bytes), logsearch.Size(limit))
+	}
+	return &vol.Bytes, nil
+}
+
+// withEstimate adds the estimated bytes to an audit payload when they were asked.
+func withEstimate(after json.RawMessage, estimated *int64) json.RawMessage {
+	if estimated == nil {
+		return after
+	}
+	var m map[string]interface{}
+	if json.Unmarshal(after, &m) != nil || m == nil {
+		return after
+	}
+	m["estimated_bytes"] = *estimated
+	b, _ := json.Marshal(m)
 	return b
 }

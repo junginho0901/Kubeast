@@ -34,6 +34,11 @@ type Matcher struct {
 // reaching further. Matchers already in a selector stay (Loki ANDs them), so
 // a user's own cluster or namespace matcher cannot widen the scope.
 func InjectMatchers(query string, matchers []Matcher) (string, error) {
+	return injectMatchers(query, matchers, nil)
+}
+
+// injectMatchers is InjectMatchers that also hands each rewritten selector, braces included, to selector (nil: none).
+func injectMatchers(query string, matchers []Matcher, selector func(string)) (string, error) {
 	if len(query) > MaxLogQLLength {
 		return "", fmt.Errorf("%w: longer than %d bytes", ErrInvalidLogQL, MaxLogQLLength)
 	}
@@ -60,6 +65,7 @@ func InjectMatchers(query string, matchers []Matcher) (string, error) {
 	selectors := 0
 	inSelector := false
 	bodyStart := 0 // where the current selector's body starts in out
+	selStart := 0  // where its "{" is in out
 	for i := 0; i < len(query); {
 		c := query[i]
 		switch {
@@ -90,6 +96,7 @@ func InjectMatchers(query string, matchers []Matcher) (string, error) {
 				return "", fmt.Errorf("%w: a selector inside a selector", ErrInvalidLogQL)
 			}
 			inSelector = true
+			selStart = len(out)
 			out = append(out, '{')
 			out = append(out, added...)
 			bodyStart = len(out)
@@ -110,6 +117,9 @@ func InjectMatchers(query string, matchers []Matcher) (string, error) {
 				out = append(out, body...)
 			}
 			out = append(out, '}')
+			if selector != nil {
+				selector(string(out[selStart:]))
+			}
 			inSelector = false
 			selectors++
 			i++
@@ -154,4 +164,17 @@ func CountSelectors(query string) int {
 		return -1
 	}
 	return strings.Count(out, `__kubeast_count__="1"`)
+}
+
+// Selectors are the distinct stream selectors of query, as InjectMatchers reads them, in order.
+func Selectors(query string) ([]string, error) {
+	var out []string
+	seen := map[string]bool{}
+	_, err := injectMatchers(query, nil, func(s string) {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	})
+	return out, err
 }

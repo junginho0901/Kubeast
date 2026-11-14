@@ -15,6 +15,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/protectedns"
 )
 
 var anomalyNow = time.Date(2026, 11, 15, 1, 30, 0, 0, time.UTC)
@@ -57,6 +58,10 @@ func (f *fakeAnomalies) GetPods(_ context.Context, namespace, _ string) ([]map[s
 }
 
 func (f *fakeAnomalies) PrometheusAvailable(context.Context) bool { return f.prometheus }
+
+func (f *fakeAnomalies) ProtectedNamespaces(context.Context) protectedns.Namespaces {
+	return protectedns.Namespaces{NodeShell: "kubeast-node-shell"}
+}
 
 func (f *fakeAnomalies) PrometheusQueryAt(_ context.Context, q string, at time.Time) ([]k8s.PrometheusQueryResult, error) {
 	f.mu.Lock()
@@ -128,8 +133,23 @@ func TestAnomaliesRankWhatChangedAndSayWhatIsNormal(t *testing.T) {
 	if strings.Join(res.Normal, ",") != "memory_near_limit" {
 		t.Fatalf("normal %v", res.Normal)
 	}
-	if len(res.NotRun) != 1 || res.NotRun[0].Check != anomaly.CheckCPUThrottling || res.NotRun[0].Reason != anomaly.NoSeries {
+	// no log or trace store here: those checks are listed as not run, never as normal
+	notRun := map[string]string{}
+	for _, n := range res.NotRun {
+		notRun[n.Check] = n.Reason
+	}
+	if len(res.NotRun) != 6 || notRun[anomaly.CheckCPUThrottling] != anomaly.NoSeries {
 		t.Fatalf("not run %+v", res.NotRun)
+	}
+	for _, check := range anomaly.LogChecks {
+		if !strings.HasPrefix(notRun[check], "no log store for this cluster") {
+			t.Errorf("%s: %q", check, notRun[check])
+		}
+	}
+	for _, check := range anomaly.TraceChecks {
+		if !strings.HasPrefix(notRun[check], "no trace store for this cluster") {
+			t.Errorf("%s: %q", check, notRun[check])
+		}
 	}
 	if res.StoreQueries != 6 || len(f.queries) != 6 {
 		t.Fatalf("%d store queries, %d made", res.StoreQueries, len(f.queries))

@@ -154,29 +154,41 @@ func (l *loki) labels(ctx context.Context, store Store, name, selector string, s
 	return res, nil
 }
 
-// patterns asks store's pattern ingester for the patterns of query's streams
-// in [start, end], most lines first.
-func (l *loki) patterns(ctx context.Context, store Store, query string, start, end time.Time) (PatternsResult, error) {
+// patternDatum is one pattern of the pattern ingester's answer.
+type patternDatum struct {
+	Pattern string           `json:"pattern"`
+	Level   string           `json:"level"`
+	Samples [][2]json.Number `json:"samples"`
+}
+
+// patternData asks store's pattern ingester for the patterns of query's streams in [start, end], as it answered.
+func (l *loki) patternData(ctx context.Context, store Store, query string, start, end time.Time) ([]patternDatum, error) {
 	params := url.Values{}
 	params.Set("query", query)
 	params.Set("start", strconv.FormatInt(start.UnixNano(), 10))
 	params.Set("end", strconv.FormatInt(end.UnixNano(), 10))
 	body, err := l.getJSON(ctx, store, "/loki/api/v1/patterns", params)
 	if err != nil {
-		return PatternsResult{}, err
+		return nil, err
 	}
 	var pr struct {
-		Data []struct {
-			Pattern string           `json:"pattern"`
-			Level   string           `json:"level"`
-			Samples [][2]json.Number `json:"samples"`
-		} `json:"data"`
+		Data []patternDatum `json:"data"`
 	}
 	if err := json.Unmarshal(body, &pr); err != nil {
-		return PatternsResult{}, fmt.Errorf("log store: unreadable answer: %w", err)
+		return nil, fmt.Errorf("log store: unreadable answer: %w", err)
 	}
-	res := PatternsResult{Patterns: []Pattern{}, Total: len(pr.Data), EffectiveQuery: query}
-	for _, d := range pr.Data {
+	return pr.Data, nil
+}
+
+// patterns asks store's pattern ingester for the patterns of query's streams
+// in [start, end], most lines first.
+func (l *loki) patterns(ctx context.Context, store Store, query string, start, end time.Time) (PatternsResult, error) {
+	data, err := l.patternData(ctx, store, query, start, end)
+	if err != nil {
+		return PatternsResult{}, err
+	}
+	res := PatternsResult{Patterns: []Pattern{}, Total: len(data), EffectiveQuery: query}
+	for _, d := range data {
 		p := Pattern{Pattern: d.Pattern, Level: d.Level}
 		if r := []rune(p.Pattern); len(r) > maxPatternText {
 			p.Pattern = string(r[:maxPatternText]) + "…"

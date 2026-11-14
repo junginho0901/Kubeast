@@ -1,0 +1,84 @@
+suite: Narrowing for the AI — features.anomalyRank and loki_query's volume limit
+templates:
+  - configmap.yaml
+tests:
+  - it: is off with its load bounds and a 10 GiB log estimate limit by default
+    asserts:
+      - equal:
+          path: data.ANOMALY_RANK_ENABLED
+          value: "false"
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.ANOMALY_RANK_MAX_QUERIES
+          value: "12"
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.ANOMALY_RANK_TIMEOUT_SEC
+          value: "20"
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.ANOMALY_RANK_LOG_MAX_BYTES
+          value: "10737418240"
+        documentSelector: {path: metadata.name, value: kubeast-config}
+
+  - it: takes the switch and the log estimate limit from features.anomalyRank
+    set:
+      features.anomalyRank.enabled: true
+      features.anomalyRank.logMaxBytes: 2147483648
+    asserts:
+      - equal:
+          path: data.ANOMALY_RANK_ENABLED
+          value: "true"
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.ANOMALY_RANK_LOG_MAX_BYTES
+          value: "2147483648"
+        documentSelector: {path: metadata.name, value: kubeast-config}
+
+  - it: renders this chart's defaults on values from a chart without anomalyRank (helm upgrade --reuse-values)
+    set:
+      features.anomalyRank: null
+    asserts:
+      - equal:
+          path: data.ANOMALY_RANK_ENABLED
+          value: "false"
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.ANOMALY_RANK_LOG_MAX_BYTES
+          value: "10737418240"
+        documentSelector: {path: metadata.name, value: kubeast-config}
+
+  - it: leaves loki_query's volume limit off by default
+    set:
+      features.logSearch.enabled: true
+      features.logSearch.url: http://loki:3100
+      features.logSearch.clusters: {self: kind}
+    asserts:
+      - equal:
+          path: data.LOG_SEARCH_QUERY_MAX_BYTES
+          value: "0"
+        documentSelector: {path: metadata.name, value: kubeast-config}
+
+  - it: hands loki_query's volume limit to k8s-service as a whole number of bytes
+    set:
+      features.logSearch.enabled: true
+      features.logSearch.url: http://loki:3100
+      features.logSearch.clusters: {self: kind}
+      features.logSearch.queryMaxBytes: 53687091200
+    asserts:
+      - equal:
+          path: data.LOG_SEARCH_QUERY_MAX_BYTES
+          value: "53687091200"
+        documentSelector: {path: metadata.name, value: kubeast-config}
+
+  - it: keeps loki_query's volume limit off on values from a chart without it (helm upgrade --reuse-values)
+    set:
+      features.logSearch.enabled: true
+      features.logSearch.url: http://loki:3100
+      features.logSearch.clusters: {self: kind}
+      features.logSearch.queryMaxBytes: null
+    asserts:
+      - equal:
+          path: data.LOG_SEARCH_QUERY_MAX_BYTES
+          value: "0"
+        documentSelector: {path: metadata.name, value: kubeast-config}

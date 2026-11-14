@@ -296,6 +296,10 @@ Loki와 수집기는 따로 설치합니다([docs/ko/cluster-requirements.md §1
   - API `GET /api/v1/[cluster/namespaces/{ns}/]logsearch/logql?q=&step=` · `…/logsearch/labels[?label=]` · `…/logsearch/patterns?q=<선택자>`
     - 문은 같습니다(Pod 읽기 + `get pods/log` + 분당 한도).
     - 감사는 `k8s.pod.logs.logql`(`kind`)이며, 레이블 목록은 감사하지 않습니다.
+  - **양 한도**(`features.logSearch.queryMaxBytes`, 기본 0 = 끔): 바이트 수를 정하면 `loki_query`는 먼저 Loki `index/stats`에 질의의 선택자마다 그 범위의 스트림 양을 묻습니다(mcp-grafana lokiguard 방식).
+    - 한도를 넘으면 크기와 좁히는 법(짧은 범위·라벨 매처 추가)을 담아 400으로 답하고 아무것도 읽지 않습니다. 감사 행은 `estimated_bytes`가 붙은 failure입니다.
+    - 한도 안이면 답에 `estimatedBytes`가 붙습니다. 한도를 정했는데 저장소가 `index/stats`를 주지 않으면 404입니다.
+    - 끄면 색인을 묻지 않고 답과 감사 행이 예전과 같습니다.
   - 패턴을 쓰려면 Loki에 `pattern_ingester.enabled: true`가 있어야 하고(없으면 AI가 "패턴 없음"을 받고 `loki_query`로 셉니다), Loki는 창 안에서 30줄 이상 나온 패턴만 돌려줍니다(3.7 고정값).
 
 ```yaml
