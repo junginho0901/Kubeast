@@ -98,3 +98,21 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: postgresql.maxConnections must be a whole number, 20 or more
+
+  - it: counts k8s-service-stream with streams.enabled, one pod and one while it rolls at k8s-service's pool
+    set:
+      streams.enabled: true
+      streams.replicas: 1
+      postgresql.maxConnections: 160
+    asserts:
+      - failedTemplate:
+          errorPattern: can hold up to 172 database connections
+
+  - it: leaves k8s-service-stream out with streams.enabled false
+    set:
+      streams.enabled: false
+      streams.replicas: 1
+      postgresql.maxConnections: 160
+    asserts:
+      - hasDocuments:
+          count: 0
