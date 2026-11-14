@@ -9,7 +9,9 @@
 // jsdom 없이 node 환경에서 실행 — WebSocket 을 직접 mock 으로 교체.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { WebSocketMultiplexer } from './watchMultiplexer'
+import { QueryClient, QueryObserver } from '@tanstack/react-query'
+import { watchMultiplexer, WebSocketMultiplexer } from './watchMultiplexer'
+import { followList, LIST_GATHER_MS } from './useKubeWatchList'
 import { getWatchProblem, resetWatchProblems } from './watchProblemStore'
 
 // import.meta.env / window 는 vite 가 아니라 node 에서 실행되므로 직접 stub.
@@ -371,7 +373,7 @@ describe('WebSocketMultiplexer', () => {
     const ws2 = MockWebSocket.instances[1]
     ws2.simulateOpen()
     await flush()
-    expect(ws2.sent.map((m) => JSON.parse(m))).toEqual([a, b])
+    expect(ws2.sent.map((m) => JSON.parse(m))).toEqual([{ ...a, resync: true }, { ...b, resync: true }])
 
     mux.unsubscribe(a, onA)
     expect(JSON.parse(ws2.sent[ws2.sent.length - 1])).toEqual({ ...a, type: 'CLOSE' })
@@ -555,9 +557,9 @@ describe('WebSocketMultiplexer', () => {
       expect(listener).toHaveBeenCalledWith(expect.objectContaining({ type: 'CHANGED' }))
     })
 
-    // It sends no objects as it opens, so nothing else would tell it what changed while the socket was gone. A list's
-    // watch sends its objects again and asks for nothing more.
-    it('alone says it missed something when its socket comes back', async () => {
+    // It sends no objects as it opens, and a list's watch sends the objects there are and not those deleted meanwhile:
+    // neither can tell what went while the socket was gone, so both ask.
+    it('says it missed something when its socket comes back, as a list\'s watch does', async () => {
       const mux = new WebSocketMultiplexer()
       const listener = vi.fn()
       const subs = [mux.subscribe(changes, listener), mux.subscribe(list, listener)]
@@ -574,7 +576,165 @@ describe('WebSocketMultiplexer', () => {
       await flush()
       const asks = ws2.sent.map((raw) => JSON.parse(raw))
       expect(asks.find((m) => m.path === changes.path)).toMatchObject({ resync: true })
-      expect(asks.find((m) => m.path === list.path)?.resync).toBeUndefined()
+      expect(asks.find((m) => m.path === list.path)).toMatchObject({ resync: true })
+    })
+  })
+
+  // Only a watch an earlier socket carried missed something: one first asked for on this socket has its list read as it opens.
+  it('a socket that comes back asks a RESYNC for the watches it had, not for those first asked for since', async () => {
+    const mux = new WebSocketMultiplexer()
+    const pods = { type: 'REQUEST' as const, clusterId: 'self', path: '/api/v1/pods', query: 'watch=1' }
+    const nodes = { ...pods, path: '/api/v1/nodes' }
+    const services = { ...pods, path: '/api/v1/services' }
+    const p = mux.subscribe(pods, vi.fn())
+    await flush()
+    const ws1 = MockWebSocket.instances[0]
+    ws1.simulateOpen()
+    await p
+
+    ws1.simulateServerClose()
+    // asked for while the socket is closed
+    const n = mux.subscribe(nodes, vi.fn())
+    await vi.advanceTimersByTimeAsync(1000)
+    await flush()
+    const ws2 = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+    ws2.simulateOpen()
+    await n
+    // asked for once it is open
+    await mux.subscribe(services, vi.fn())
+    expect(ws2.sent.map((raw) => JSON.parse(raw))).toEqual([{ ...pods, resync: true }, nodes, services])
+  })
+
+  // A k8s-service or gateway pod replaced closes the socket. The server keeps nothing of the watch it carried, and the
+  // next watch starts from no version: it sends ADDED for the objects there are, nothing for those deleted meanwhile.
+  describe('a list followed across a reconnect', () => {
+    type Row = { name: string; namespace: string; node_name: string; status: string }
+    const queryOf = (node: string) => `watch=1&fieldSelector=${encodeURIComponent(`spec.nodeName=${node}`)}`
+    const pod = (name: string, node = 'node-1'): Row => ({ name, namespace: 'demo', node_name: node, status: 'Running' })
+
+    // followList follows through the module's multiplexer; this one has a socket of the test's own
+    const throughOwnSocket = () => {
+      const mux = new WebSocketMultiplexer()
+      vi.spyOn(watchMultiplexer, 'subscribe').mockImplementation((msg, listener) => mux.subscribe(msg, listener))
+      vi.spyOn(watchMultiplexer, 'unsubscribe').mockImplementation((msg, listener) => mux.unsubscribe(msg, listener))
+      vi.spyOn(watchMultiplexer, 'answers').mockImplementation((clusterId, path, query) => mux.answers(clusterId, path, query))
+      vi.spyOn(watchMultiplexer, 'onSocketClosed').mockImplementation((listener) => mux.onSocketClosed(listener))
+    }
+    // What the server's followWatch answers each REQUEST of a socket with: one RESYNC first when it says it missed
+    // something, then an ADDED for each object there is now.
+    const serve = (ws: MockWebSocket, names: Iterable<string>) => {
+      for (const msg of ws.sent.map((raw) => JSON.parse(raw))) {
+        if (msg.type !== 'REQUEST') continue
+        const frame = { clusterId: msg.clusterId, path: msg.path, query: msg.query }
+        if (msg.resync) ws.simulateMessage({ ...frame, type: 'RESYNC' })
+        for (const name of names) ws.simulateMessage({ ...frame, type: 'DATA', data: { type: 'ADDED', object: pod(name) } })
+      }
+    }
+    const reconnect = async (ws: MockWebSocket, meanwhile = () => {}) => {
+      ws.simulateServerClose()
+      meanwhile()
+      await vi.advanceTimersByTimeAsync(1000)
+      await flush()
+      const next = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+      next.simulateOpen()
+      await flush()
+      return next
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('a pod deleted while the socket was closed is gone after the reconnect, its row on screen until the list answers', async () => {
+      throughOwnSocket()
+      // the reconnect after 750 ms, the read 2.5 s after the RESYNC
+      vi.spyOn(Math, 'random').mockReturnValue(0.5)
+      const pods = new Set(['web-a', 'web-b', 'web-c'])
+      const key = ['cluster-view', 'node-pods', 'node-1', 'all']
+      const client = new QueryClient()
+      const queryFn = vi.fn(async () => [...pods].map((name) => pod(name)))
+      const shown: string[][] = []
+      let loaded = false
+      const stopObserver = new QueryObserver(client, { queryKey: key, queryFn }).subscribe((result) => {
+        if (loaded) shown.push(result.data?.map((row) => row.name) ?? [])
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      loaded = true
+      const names = () => (client.getQueryData(key) as Row[]).map((row) => row.name)
+      expect(names()).toEqual(['web-a', 'web-b', 'web-c'])
+
+      // as a Cluster View node box follows its pods
+      const stopList = followList(client, { clusterId: 'self', paths: ['/api/v1/pods'], query: queryOf('node-1'), queryKey: key, gatherEveryMs: LIST_GATHER_MS })
+      await flush()
+      const ws1 = MockWebSocket.instances[0]
+      ws1.simulateOpen()
+      await flush()
+      serve(ws1, pods)
+      await vi.advanceTimersByTimeAsync(LIST_GATHER_MS)
+      expect(names()).toEqual(['web-a', 'web-b', 'web-c'])
+
+      const ws2 = await reconnect(ws1, () => pods.delete('web-b'))
+      expect(ws2.sent.map((raw) => JSON.parse(raw))).toEqual([{ type: 'REQUEST', clusterId: 'self', path: '/api/v1/pods', query: queryOf('node-1'), resync: true }])
+      serve(ws2, pods)
+      await vi.advanceTimersByTimeAsync(LIST_GATHER_MS)
+      // the new watch's ADDED frames do not take web-b away; the read the RESYNC asked for has not come yet
+      expect(names()).toEqual(['web-a', 'web-b', 'web-c'])
+      expect(queryFn).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(6000)
+      expect(queryFn).toHaveBeenCalledTimes(2)
+      expect(names()).toEqual(['web-a', 'web-c'])
+      // no drawing without the rows
+      expect(shown.length).toBeGreaterThan(0)
+      expect(shown.every((rows) => rows.length > 0)).toBe(true)
+      expect(shown[shown.length - 1]).toEqual(['web-a', 'web-c'])
+
+      stopList()
+      stopObserver()
+    })
+
+    // A restart closes every socket at one moment: the lists a reconnect asks to read again are read each at its own
+    // time within the RESYNC's spread, not together.
+    it('the lists of a reconnect are read each at its own time within five seconds, not together', async () => {
+      throughOwnSocket()
+      let draw = 0
+      vi.spyOn(Math, 'random').mockImplementation(() => (draw++ * 0.37) % 1)
+      const client = new QueryClient()
+      const readAt: number[] = []
+      const stops = Array.from({ length: 10 }, (_, i) => {
+        const node = `node-${i}`
+        const key = ['cluster-view', 'node-pods', node, 'all']
+        const stopObserver = new QueryObserver(client, {
+          queryKey: key,
+          queryFn: async () => {
+            readAt.push(Date.now())
+            return [pod(`${node}-p0`, node)]
+          },
+        }).subscribe(() => {})
+        const stopList = followList(client, { clusterId: 'self', paths: ['/api/v1/pods'], query: queryOf(node), queryKey: key, gatherEveryMs: LIST_GATHER_MS })
+        return () => {
+          stopList()
+          stopObserver()
+        }
+      })
+      await flush()
+      const ws1 = MockWebSocket.instances[0]
+      ws1.simulateOpen()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(readAt).toHaveLength(10)
+      readAt.length = 0
+
+      const ws2 = await reconnect(ws1)
+      expect(ws2.sent.map((raw) => JSON.parse(raw).resync)).toEqual(Array.from({ length: 10 }, () => true))
+      const answered = Date.now()
+      serve(ws2, [])
+      await vi.advanceTimersByTimeAsync(LIST_GATHER_MS + 5000)
+      expect(readAt).toHaveLength(10)
+      expect(Math.min(...readAt) - answered).toBeGreaterThanOrEqual(LIST_GATHER_MS)
+      expect(Math.max(...readAt) - answered).toBeLessThan(LIST_GATHER_MS + 5000)
+      expect(new Set(readAt).size).toBe(10)
+      expect(Math.max(...readAt) - Math.min(...readAt)).toBeGreaterThanOrEqual(3000)
+      stops.forEach((stop) => stop())
     })
   })
 
