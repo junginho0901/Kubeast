@@ -202,7 +202,7 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
       {relatedPVCs.length > 0 && (
         <InfoSection title="Related PersistentVolumeClaims ({{n}})" titleValues={{ n: relatedPVCs.length }}>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs table-fixed min-w-[760px]">
+            <table className="w-full text-xs table-fixed min-w-[640px]">
               <thead className="text-slate-400">
                 <tr>
                   <Th className="text-left py-2 w-[26%]">PVC</Th>
@@ -231,7 +231,7 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
                     <td className="py-2 pr-2"><StatusBadge status={String(pvc.status || '-')} /></td>
                     <td className="py-2 pr-2">{String(pvc.requested || '-')}</td>
                     <td className="py-2 pr-2">{String(pvc.capacity || '-')}</td>
-                    <td className="py-2 pr-2"><span className="block truncate">{String(pvc.volume_name || '-')}</span></td>
+                    <td className="py-2 pr-2"><span className="block truncate" title={pvc.volume_name ? String(pvc.volume_name) : undefined}>{String(pvc.volume_name || '-')}</span></td>
                     <td className="py-2 pr-2">{fmtRel(pvc.created_at)}</td>
                   </tr>
                 ))}

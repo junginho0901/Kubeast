@@ -187,7 +187,7 @@ export default function PVCDetail({ name, namespace, rawJson }: { name: string; 
       {usedByPods.length > 0 && (
         <InfoSection title="Used By Pods ({{n}})" titleValues={{ n: usedByPods.length }}>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs table-fixed min-w-[760px]">
+            <table className="w-full text-xs table-fixed min-w-[640px]">
               <thead className="text-slate-400">
                 <tr>
                   <Th className="text-left py-2 w-[24%]">Pod</Th>
@@ -218,7 +218,7 @@ export default function PVCDetail({ name, namespace, rawJson }: { name: string; 
                     </td>
                     <td className="py-2 pr-2">{pod.ready || '-'}</td>
                     <td className="py-2 pr-2">{String(pod.restart_count ?? 0)}</td>
-                    <td className="py-2 pr-2"><span className="block truncate">{pod.node_name || '-'}</span></td>
+                    <td className="py-2 pr-2"><span className="block truncate" title={pod.node_name || undefined}>{pod.node_name || '-'}</span></td>
                     <td className="py-2 pr-2">
                       <span className="block truncate">{Array.isArray(pod.volume_names) ? pod.volume_names.join(', ') || '-' : '-'}</span>
                     </td>

@@ -136,7 +136,7 @@ export default function VPAInfo({ name, namespace }: Props) {
       {containerPolicies.length > 0 && (
         <InfoSection title="Container Policies">
           <div className="overflow-x-auto">
-            <table className="w-full text-xs table-fixed min-w-[700px]">
+            <table className="w-full text-xs table-fixed min-w-[640px]">
               <thead className="text-slate-400">
                 <tr>
                   <Th className="text-left py-2 w-[17%]">Container</Th>
@@ -169,7 +169,7 @@ export default function VPAInfo({ name, namespace }: Props) {
           </div>
           {policyExtras.length > 0 && (
             <div className="overflow-x-auto mt-3">
-              <table className="w-full text-xs table-fixed min-w-[700px]">
+              <table className="w-full text-xs table-fixed min-w-[640px]">
                 <thead className="text-slate-400">
                   <tr>
                     {VPA_POLICY_EXTRA_HEAD.map((h, i) => <Th key={h} className={`text-left py-2 ${['w-[15%]', 'w-[13%]', 'w-[13%]', 'w-[17%]', 'w-[17%]', 'w-[25%]'][i]}`}>{h}</Th>)}
@@ -192,7 +192,7 @@ export default function VPAInfo({ name, namespace }: Props) {
       {recommendations.length > 0 && (
         <InfoSection title="Recommendations">
           <div className="overflow-x-auto">
-            <table className="w-full text-xs table-fixed min-w-[700px]">
+            <table className="w-full text-xs table-fixed min-w-[640px]">
               <thead className="text-slate-400">
                 <tr>
                   <Th className="text-left py-2 w-[18%]">Container</Th>
