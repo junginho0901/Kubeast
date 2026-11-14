@@ -18,9 +18,10 @@ import { afterSwitch, arm, disarm, holdAnswers, installSampler, pageNow, recordi
 // tabs and search and an alert window reached with the browser's Back; AI Usage's grouping; the Dashboard Pods window
 // from one phase to another and to every pod; the Optimization window's namespace after an AI answer; the YAML of a
 // custom resource of another CRD with the same name; a forced read of A answered after the switch; a read of A refused
-// (403) or failed (500) after the switch; and the live connection across a sign-out and the next sign-in in one tab.
-// Answers are stood in where dev has no fixed data (the inbox, AI usage, the Pods window, the AI stream); the cluster
-// keeps nothing: two CRDs of the run and a throwaway Read account are removed after.
+// (403) or failed (500) after the switch; and the live connection and an AI Chat and a floating chat answer on their
+// way across a sign-out and the next sign-in in one tab. Answers are stood in where dev has no fixed data (the inbox,
+// AI usage, the Pods window, the AI streams); the cluster keeps nothing: two CRDs of the run, a throwaway Read account
+// and the two chat conversations are removed after.
 
 const EN = JSON.parse(fs.readFileSync(path.join(__dirname, '../../frontend/src/i18n/locales/en.json'), 'utf8'))
 const WINDOW_MS = 1_500
@@ -34,7 +35,7 @@ const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const exactly = (s: string) => new RegExp(`^\\s*${esc(s)}\\s*$`)
 
 // what the run leaves to remove
-const made = { crds: [] as string[], users: [] as string[] }
+const made = { crds: [] as string[], users: [] as string[], sessions: [] as string[] }
 
 // kubectl on the kind cluster of `self`, read when a test first needs it
 let kubeconfig = ''
@@ -195,8 +196,9 @@ async function watchSwitch(page: Page, o: {
 test.describe('switch guard: nothing of the condition before after a switch', () => {
   test.afterAll(async ({ request }) => {
     if (made.crds.length) kubectl(['delete', 'crd', ...made.crds, '--ignore-not-found', '--wait=true', '--timeout=120s'])
-    if (made.users.length) {
+    if (made.users.length || made.sessions.length) {
       const admin = await bearer(request)
+      for (const id of made.sessions) await request.delete(`/api/v1/sessions/${id}?cluster=self`, { headers: admin, failOnStatusCode: false })
       for (const id of made.users) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
     }
   })
@@ -656,8 +658,8 @@ test.describe('switch guard: nothing of the condition before after a switch', ()
     expect(problems, 'frames of default\'s Deployments that showed self\'s refusal or failure').toEqual([])
   })
 
-  test('signing out closes the live connection, and the next person signing in in the same tab gets a new one', async ({ browser, request }) => {
-    test.setTimeout(120_000)
+  test('signing out closes the live connection and ends the answer on its way; the next person signing in in the same tab gets a connection of their own and none of it', async ({ browser, request }) => {
+    test.setTimeout(180_000)
     const admin = await bearer(request)
     const roles = await (await request.get('/api/v1/auth/roles', { headers: admin })).json()
     const member = (Array.isArray(roles) ? roles : roles.roles || roles.items || []).find((r: { name: string }) => r.name === 'Member').id
@@ -671,6 +673,7 @@ test.describe('switch guard: nothing of the condition before after a switch', ()
 
     const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } })
     const page = await ctx.newPage()
+    await installSampler(page)
     const sockets: { opened: number; closed: number | null }[] = []
     page.on('websocket', (ws) => {
       if (!ws.url().includes('/wsMultiplexer')) return
@@ -685,25 +688,95 @@ test.describe('switch guard: nothing of the condition before after a switch', ()
       await page.waitForFunction(() => !document.querySelector('input[autocomplete="email"]'), undefined, { timeout: 20_000 })
     }
     const openNow = (before: number) => sockets.filter((s) => s.opened < before && s.closed === null).length
+    const toScreen = async (href: string) => page.getByTestId('sidebar-nav').locator(`a[href="${href}"]`).first().dispatchEvent('click')
+    // the two answers of the person before, held in the browser (no model) and answered after the next one signs in
+    const QUESTION = `switch guard question ${run}`
+    const FLOATING_QUESTION = `switch guard floating question ${run}`
+    const LETTERS = `SG-ANSWER-${run} letters of the person before`
+    const FLOATING_LETTERS = `SG-FLOATING-${run} letters of the person before`
+    const sse = (content: string) => `data: ${JSON.stringify({ content })}\n\ndata: [DONE]\n\n`
+    const chat = holdAnswers(page, (u) => /^\/api\/v1\/ai\/sessions\/[^/]+\/chat$/.test(u.pathname))
+    const floating = holdAnswers(page, (u) => /^\/api\/v1\/ai\/sessions\/[^/]+\/floating-chat$/.test(u.pathname))
+    const AI_STOP = '[data-testid="chat-input"] ~ button.bg-red-600'
+    const FLOATING_STOP = '[data-testid="floating-chat-panel"] button.bg-red-600'
+    const openFloating = async () => {
+      await page.getByRole('button', { name: /Open AI Chat|AI Chat 열기/i }).click({ timeout: 20_000 })
+      await expect(page.getByTestId('floating-chat-panel')).toHaveCSS('pointer-events', 'auto')
+    }
 
-    await page.goto('/login')
-    await signIn(ADMIN_EMAIL, ADMIN_PASSWORD)
-    await page.goto('/workloads/deployments?cluster=self')
-    await expect.poll(() => sockets.filter((s) => s.closed === null).length, { timeout: 20_000, message: 'the live list opened a connection' }).toBeGreaterThan(0)
-    await page.evaluate(() => { (window as unknown as { __sgDocument: string }).__sgDocument = 'kept' })
+    try {
+      await chat.ready
+      await floating.ready
+      await page.goto('/login')
+      await signIn(ADMIN_EMAIL, ADMIN_PASSWORD)
+      await page.goto('/ai-chat?cluster=self')
+      await page.getByTestId('chat-input').fill(QUESTION, { timeout: 20_000 })
+      await page.getByRole('button', { name: /전송|send/i }).click()
+      await expect.poll(() => chat.held(), { message: 'the AI Chat answer is held' }).toBeGreaterThan(0)
+      await expect(page.locator(AI_STOP), 'AI Chat shows Stop while its answer is held').toHaveCount(1)
+      // the answer goes on in the background while another page is open, as it does for a person
+      await toScreen('/workloads/deployments')
+      await expect(page.locator('main h1').first()).toHaveText(/Deployments/, { timeout: 20_000 })
+      await expect.poll(() => sockets.filter((s) => s.closed === null).length, { timeout: 20_000, message: 'the live list opened a connection' }).toBeGreaterThan(0)
+      await openFloating()
+      await page.getByTestId('floating-chat-input').fill(FLOATING_QUESTION)
+      await page.getByTestId('floating-chat-input').press('Enter')
+      await expect.poll(() => floating.held(), { message: 'the floating chat answer is held' }).toBeGreaterThan(0)
+      await expect(page.locator(FLOATING_STOP), 'the floating chat shows Stop while its answer is held').toHaveCount(1)
+      made.sessions.push(...[...chat.urls(), ...floating.urls()].map((u) => u.pathname.split('/')[5]))
+      await page.evaluate(() => { (window as unknown as { __sgDocument: string }).__sgDocument = 'kept' })
 
-    await page.getByRole('button', { name: EN.layout.logout, exact: true }).click()
-    await expect(page).toHaveURL(/\/login/)
-    const signedOut = Date.now()
-    await soft.poll(() => openNow(signedOut), { timeout: 10_000, message: 'the connection opened before the sign-out is closed after it' }).toBe(0)
+      await page.getByRole('button', { name: EN.layout.logout, exact: true }).click()
+      await expect(page).toHaveURL(/\/login/)
+      const signedOut = Date.now()
+      await soft.poll(() => openNow(signedOut), { timeout: 10_000, message: 'the connection opened before the sign-out is closed after it' }).toBe(0)
 
-    // the sign-in page opens no list: a connection opened after the sign-out is the next person's
-    await signIn(email, password)
-    await page.getByTestId('sidebar-nav').locator('a[href="/workloads/deployments"]').first().dispatchEvent('click')
-    await expect(page.locator('main h1').first()).toHaveText(/Deployments/, { timeout: 20_000 })
-    await soft.poll(() => sockets.filter((s) => s.opened > signedOut && s.closed === null).length, { timeout: 20_000, message: 'the next person\'s live list has a connection of its own' }).toBeGreaterThan(0)
-    soft(openNow(signedOut), 'connections of the person before still open').toBe(0)
-    expect(await page.evaluate(() => (window as unknown as { __sgDocument?: string }).__sgDocument), 'the tab was not reloaded in between').toBe('kept')
-    await ctx.close()
+      // from the sign-in page on: the next person's account card, both chats' Stop and waiting dots and every word of them
+      await arm(page, {
+        rows: '[data-sg-none]',
+        probes: {
+          account: 'a[href="/account"]',
+          aiStop: AI_STOP,
+          aiWaiting: { sel: '[data-testid="chat-messages"] .animate-bounce', attr: 'class' },
+          aiText: '[data-testid="chat-messages"]',
+          floatingStop: { sel: FLOATING_STOP, attr: 'class' },
+          floatingWaiting: { sel: '[data-testid="floating-waiting"]', attr: 'data-testid' },
+          floatingText: '[data-testid="floating-messages"]',
+        },
+      })
+      await signIn(email, password)
+      await toScreen('/ai-chat')
+      await expect(page.getByTestId('chat-input'), 'the next person\'s AI Chat').toHaveCount(1, { timeout: 20_000 })
+      await page.waitForTimeout(WINDOW_MS)
+      // the person before's answer arrives now: none of its letters reach this person's AI Chat
+      await chat.release({ contentType: 'text/event-stream', body: sse(LETTERS) })
+      await page.waitForTimeout(WINDOW_MS)
+
+      // the sign-in page opens no list: a connection opened after the sign-out is the next person's
+      await toScreen('/workloads/deployments')
+      await expect(page.locator('main h1').first()).toHaveText(/Deployments/, { timeout: 20_000 })
+      await soft.poll(() => sockets.filter((s) => s.opened > signedOut && s.closed === null).length, { timeout: 20_000, message: 'the next person\'s live list has a connection of its own' }).toBeGreaterThan(0)
+      soft(openNow(signedOut), 'connections of the person before still open').toBe(0)
+      await openFloating()
+      await page.waitForTimeout(WINDOW_MS)
+      await floating.release({ contentType: 'text/event-stream', body: sse(FLOATING_LETTERS) })
+      await page.waitForTimeout(WINDOW_MS)
+
+      const rec = await recording(page)
+      await disarm(page)
+      const problems = afterSwitch(rec, {
+        what: 'sign-out, next person signed in',
+        switched: (f) => f.probes.account.includes(email),
+        noProbes: ['aiStop', 'aiWaiting', 'floatingStop', 'floatingWaiting'],
+        oldTexts: [LETTERS, FLOATING_LETTERS, QUESTION, FLOATING_QUESTION],
+      })
+      soft(problems, 'frames after the next person signed in that showed the answers of the person before').toEqual([])
+      expect(await page.evaluate(() => (window as unknown as { __sgDocument?: string }).__sgDocument), 'the tab was not reloaded in between').toBe('kept')
+    } finally {
+      // an answer still held when a step failed: let it go before the tab closes
+      await chat.release({ status: 503, json: { detail: 'switch guard: the test ended' } }).catch(() => undefined)
+      await floating.release({ status: 503, json: { detail: 'switch guard: the test ended' } }).catch(() => undefined)
+      await ctx.close()
+    }
   })
 })

@@ -140,11 +140,14 @@ export const recording = (page: Page) => page.evaluate(() => (window as unknown 
 export const disarm = (page: Page) => page.evaluate(() => (window as unknown as { __switchGuard: Guard }).__switchGuard.disarm())
 export const pageNow = (page: Page) => page.evaluate(() => performance.now())
 
-export type Answer = { status: number; json?: unknown }
+// a JSON answer, or a body of its own type (an SSE stream)
+export type Answer = { status?: number; json?: unknown; body?: string; contentType?: string }
 export type Hold = {
   ready: Promise<void>
   // how many matching reads were held so far
   held(): number
+  // the addresses of the reads held so far
+  urls(): URL[]
   // lets every held read go on (to the next route or the server), or answers them all with `answer`; holds no more
   release(answer?: Answer): Promise<void>
 }
@@ -153,17 +156,18 @@ export type Hold = {
 // first and hands the read to it on release.
 export function holdAnswers(page: Page, match: (url: URL, request: Request) => boolean): Hold {
   const waiting: ((answer?: Answer) => Promise<void>)[] = []
-  let seen = 0
+  const seen: URL[] = []
   let holding = true
   const handler = async (route: Route) => {
     const request = route.request()
     const url = new URL(request.url())
     if (!holding || !match(url, request)) return route.fallback()
-    seen += 1
+    seen.push(url)
     await new Promise<void>((resolve) => {
       waiting.push(async (answer) => {
         try {
-          if (answer) await route.fulfill({ status: answer.status, json: answer.json ?? {} })
+          if (answer?.body !== undefined) await route.fulfill({ status: answer.status ?? 200, contentType: answer.contentType, body: answer.body })
+          else if (answer) await route.fulfill({ status: answer.status ?? 200, json: answer.json ?? {} })
           else await route.fallback()
         } catch { /* the page went on, or the read was given up */ }
         resolve()
@@ -173,7 +177,8 @@ export function holdAnswers(page: Page, match: (url: URL, request: Request) => b
   const ready = page.route('**/api/v1/**', handler).then(() => undefined)
   return {
     ready,
-    held: () => seen,
+    held: () => seen.length,
+    urls: () => [...seen],
     async release(answer?: Answer) {
       holding = false
       await Promise.all(waiting.splice(0).map((go) => go(answer)))
@@ -201,6 +206,8 @@ export type Watch = {
   oldTexts?: string[]
   // no notice (forbidden banner, a list's refused, failed or not-installed line) after the switch
   noNotice?: boolean
+  // probes that show nothing after the switch (a Stop button, an answer's waiting dots)
+  noProbes?: string[]
   // no row before this moment (the page clock), while the new condition's read is held
   noRowsBefore?: number
 }
@@ -236,6 +243,7 @@ export function afterSwitch(rec: Recording, w: Watch): string[] {
       if ([...Object.values(f.probes), ...f.rows, f.banner, f.drawer, f.yaml].some((s) => s.includes(word))) say(`text ${word}`, f, `the condition before's "${word}"`)
     }
     if (w.noNotice && f.banner) say('notice', f, `a notice the new condition did not give: "${f.banner}"`)
+    for (const name of w.noProbes ?? []) if (f.probes[name]) say(`shown ${name}`, f, `${name} is on screen: "${f.probes[name].slice(0, 80)}"`)
     if (w.noRowsBefore !== undefined && f.t < w.noRowsBefore && f.rows.length) say('early rows', f, 'rows before the new condition\'s list answered')
   }
   return problems
