@@ -175,6 +175,48 @@ async def test_one_skipped_alert_arriving_twice_at_once_writes_one_skipped_row(m
     assert len(skipped) == 1 and skipped[0].get("repeat_count") == 2
 
 
+def _fake_hourly_lock(monkeypatch):
+    """store.hourly_cap_locked as one lock of this process; the list it returns grows each time it is entered."""
+    held, entered = asyncio.Lock(), []
+
+    @contextlib.asynccontextmanager
+    async def hourly_cap_locked(db, lock):
+        async with held:
+            entered.append(lock)
+            yield
+
+    monkeypatch.setattr(store, "hourly_cap_locked", hourly_cap_locked)
+    return entered
+
+
+@pytest.mark.asyncio
+async def test_two_different_alerts_at_once_queue_no_more_than_the_hourly_cap(monkeypatch):
+    """One investigation left in the hour and two different alerts at one moment (two replicas): the count and the
+    row it allows are one step, so the second counts the first one's row and is skipped."""
+    fs = FakeStore(rows=[{"id": "r0", "cluster": "self", "fingerprint": "x0", "status": "done", "received_at": NOW - timedelta(minutes=10)}])
+    fs.install(monkeypatch)
+    entered = _fake_hourly_lock(monkeypatch)
+    settings = cfg(max_per_hour=2)
+    counts = await asyncio.gather(*(webhook.gate_and_queue(None, settings, "self", am_message(alert(fp=fp)), NOW) for fp in ("a", "b")))
+    assert sorted((c["accepted"], c["skipped"]) for c in counts) == [(0, 1), (1, 0)]
+    assert [r["status"] for r in fs.rows[1:]].count("queued") == 1 and len(entered) == 2
+
+
+@pytest.mark.asyncio
+async def test_without_an_hourly_cap_no_delivery_waits_for_the_hourly_lock(monkeypatch):
+    fs = FakeStore()
+    fs.install(monkeypatch)
+    entered = _fake_hourly_lock(monkeypatch)
+    counts = await asyncio.gather(*(webhook.gate_and_queue(None, cfg(max_per_hour=0), "self", am_message(alert(fp=fp)), NOW) for fp in ("a", "b")))
+    assert [c["accepted"] for c in counts] == [1, 1] and entered == []
+
+
+async def test_the_hourly_lock_asks_nothing_of_sqlite(sqlite_db):
+    async with store.alert_locked(sqlite_db, "self", "a", None) as lock:
+        async with store.hourly_cap_locked(sqlite_db, lock):
+            assert await store.count_since(sqlite_db, NOW - timedelta(hours=1)) == 0
+
+
 def test_the_alert_lock_is_a_row_lock_on_its_inbox_row():
     from sqlalchemy.dialects import postgresql
 

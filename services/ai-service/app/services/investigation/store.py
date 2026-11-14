@@ -172,13 +172,34 @@ def alert_row_lock(cluster: str, fingerprint: str, starts_at: Optional[datetime]
 
 
 @asynccontextmanager
-async def alert_locked(db, cluster: str, fingerprint: str, starts_at: Optional[datetime]) -> AsyncIterator[None]:
+async def alert_locked(db, cluster: str, fingerprint: str, starts_at: Optional[datetime]) -> AsyncIterator[Any]:
     """Holds the alert's inbox row lock, as queue_requested does, until the block ends: two deliveries of one alert
     at one moment, on one replica or two, decide one after the other, so the second finds the first one's row. The
-    block's writes commit in their own sessions before the lock is let go."""
+    block's writes commit in their own sessions before the lock is let go. Yields the session holding it."""
     async with db.async_session() as s:
         (await s.execute(alert_row_lock(cluster, fingerprint, starts_at))).first()
-        yield
+        yield s
+
+
+# The pg_advisory_xact_lock key of the hourly cap: a fixed number no other lock of the database uses (auth-service's
+# auditchain takes 7_432_119_027 and 7_432_119_028, its audit sinks 0x6b62617564736e6b).
+HOURLY_CAP_LOCK = 0x4B55424541535448  # "KUBEASTH"
+
+
+def _postgres(db) -> bool:
+    return getattr(getattr(getattr(db, "engine", None), "dialect", None), "name", "") == "postgresql"
+
+
+@asynccontextmanager
+async def hourly_cap_locked(db, lock) -> AsyncIterator[None]:
+    """While the block runs no other webhook delivery, on any replica, counts the past hour's investigations or
+    writes its row: two different alerts at one moment on two replicas would each count without the other's row and
+    both be queued past max_per_hour. On PostgreSQL a transaction lock taken in `lock`, the session alert_locked
+    holds, so it needs no connection of its own and goes with the alert's row lock once the block's writes committed;
+    on sqlite (one process: local dev and tests) nothing. The webhook enters it only while the cap is on."""
+    if lock is not None and _postgres(db):
+        await lock.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": HOURLY_CAP_LOCK})
+    yield
 
 
 async def queue_requested(
