@@ -5,6 +5,7 @@ import { EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx 
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
 import { allowedTopologyLines } from '../netstoreDetail'
+import { useDrawerFollowsEvents } from '../useDrawerFollowsEvents'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { DescribeFailure, DescribeStale } from '../DescribeFailure'
 
@@ -61,6 +62,7 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
     enabled: !!name,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['storageclass-describe', name], answer: describe, kind: 'StorageClass', name })
 
   useResourceDetailOverlay({ kind: 'StorageClass', name, describe })
 

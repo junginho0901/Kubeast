@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // DescribePod returns detailed info about a pod.
@@ -108,7 +109,7 @@ func (s *Service) DescribePod(ctx context.Context, namespace, name string) (map[
 	result["annotations"] = pod.Annotations
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(podEventsUID(pod)))
 
 	// Conditions
 	conditions := make([]map[string]interface{}, 0, len(pod.Status.Conditions))
@@ -175,4 +176,13 @@ func (s *Service) DescribePod(ctx context.Context, namespace, name string) (map[
 	result["node_selector"] = nodeSelector
 
 	return result, nil
+}
+
+// podEventsUID is the UID a pod's events name it by: its own, or for a mirror pod the UID of the static pod the kubelet
+// runs, which the kubelet writes in the mirror annotation and its events (kubectl describe pod's searchEvents).
+func podEventsUID(pod *corev1.Pod) types.UID {
+	if mirror, ok := pod.Annotations[corev1.MirrorPodAnnotationKey]; ok {
+		return types.UID(mirror)
+	}
+	return pod.UID
 }

@@ -5,6 +5,7 @@ import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, Sta
 import { fmtRel, fmtTs } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
 import { usePagination } from '../usePagination'
+import { useDrawerFollowsEvents } from '../useDrawerFollowsEvents'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { DescribeFailure, DescribeStale } from '../DescribeFailure'
 
@@ -90,6 +91,7 @@ export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Re
     enabled: !!name,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['pv-describe', name], answer: describe, kind: 'PersistentVolume', name })
 
   useResourceDetailOverlay({ kind: 'PersistentVolume', name, describe })
 
