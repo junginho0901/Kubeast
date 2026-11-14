@@ -73,3 +73,29 @@ def test_oversized_body_is_refused_before_routing():
     res = client.post("/api/v1/ai/health", content=b"x" * (MAX_REQUEST_BODY_BYTES + 1), headers={"Content-Type": "application/octet-stream"})
     assert res.status_code == 413
     assert res.json()["detail"] == "request body too large"
+
+
+# The account level's name is trimmed as Go's strings.TrimSpace trims it (pkg/auth Validate), not as str.strip does:
+# U+001C..U+001F are no space to Go, so "Admin\x1f" is a custom role, not the built-in Admin.
+@pytest.mark.parametrize("claimed, role, tier", [
+    ("Admin", "Admin", "admin"),
+    ("　Admin ", "Admin", "admin"),
+    ("\tWrite ", "Write", "write"),
+    ("Admin\x1f", "Admin\x1f", "read"),
+    ("\x1cAdmin", "\x1cAdmin", "read"),
+    ("\x1ePending\x1d", "\x1ePending\x1d", "read"),
+])
+def test_the_account_level_is_trimmed_as_go_trims_it(monkeypatch, claimed, role, tier):
+    from types import SimpleNamespace
+
+    from app.services.ai import permissions
+
+    monkeypatch.setattr(security._jwk_client, "get_signing_key_from_jwt", lambda token: SimpleNamespace(key="k"))
+    monkeypatch.setattr(security.jwt, "decode", lambda *a, **kw: {"sub": "u1", "role": claimed, "permissions": {"*": []}})
+    monkeypatch.setattr(security, "check_token_version", lambda *a, **kw: None)
+    assert security.decode_access_token("t").role == role
+    assert permissions.resolve_user_role(SimpleNamespace(), "Bearer t") == tier
+
+
+def test_go_space_is_what_str_isspace_takes_less_the_four_separators():
+    assert set(security.GO_SPACE) == {chr(c) for c in range(0x110000) if chr(c).isspace()} - set("\x1c\x1d\x1e\x1f")
