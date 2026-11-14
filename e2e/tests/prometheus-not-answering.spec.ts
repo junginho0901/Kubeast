@@ -185,11 +185,15 @@ test.describe('a Prometheus that is set but does not answer', () => {
       await user.locator('input[type="password"]').first().fill(password)
       await user.locator('button[type="submit"]').first().click()
       await user.waitForFunction(() => !document.querySelector('input[autocomplete="email"]'), undefined, { timeout: 20_000 })
-      for (const [screen, columns] of [['nodes', '8'], ['pods', '9']] as const) {
+      for (const screen of ['nodes', 'pods'] as const) {
         await user.goto(`/gpu/${screen}?cluster=${CLUSTER}`)
         // the banner comes with the metrics' 403, so the row below is read after that refusal
         await expect(user.getByTestId('forbidden-banner'), `GPU ${screen}: the banner`).toContainText(/You do not have permission to view (.+, )?gpu(, .+)? in this cluster/, { timeout: 30_000 })
-        await expect(user.getByRole('cell', { name: 'No items.', exact: true }), `GPU ${screen}: the empty list`).toHaveAttribute('colspan', columns)
+        // the list's own empty row, across every column its table draws (GPU Pods draws no metric columns for a refused read)
+        const empty = user.getByRole('cell', { name: 'No items.', exact: true })
+        await expect(empty, `GPU ${screen}: the empty list`).toHaveCount(1)
+        const [span, columns] = await empty.evaluate((td) => [Number(td.getAttribute('colspan')), td.closest('table')?.querySelectorAll('thead th').length ?? -1])
+        expect(span, `GPU ${screen}: the empty row spans the table's columns`).toBe(columns)
         await expect(user.getByTestId('table-forbidden'), `GPU ${screen}: no list refused`).toHaveCount(0)
       }
     } finally {
