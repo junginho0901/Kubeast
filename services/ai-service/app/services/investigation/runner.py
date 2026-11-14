@@ -324,6 +324,20 @@ async def fail_stale(cfg: inv_settings.InvestigationSettings, db) -> int:
     return await store.fail_stale_running(db, utcnow() - timedelta(seconds=cfg.timeout_seconds + 60))
 
 
+async def requeue_on_stop(db, inv_id: str) -> None:
+    """Puts a row the stopping worker held back in the queue, or ends it failed when it went back once already
+    (store.requeue_or_fail), within REQUEUE_SECONDS."""
+    try:
+        outcome = await asyncio.wait_for(store.requeue_or_fail(db, inv_id), timeout=REQUEUE_SECONDS)
+        log.info("investigation %s %s: ai-service is stopping", inv_id, outcome or "unchanged")
+    except Exception:
+        log.exception("investigation %s: could not put it back in the queue; fail_stale ends it after its time limit", inv_id)
+
+
+# The requeue's share of the shutdown: the lifespan waits for the worker WORKER_STOP_SECONDS (main.py).
+REQUEUE_SECONDS = 3
+
+
 async def worker(stop: asyncio.Event) -> None:
     log.info("alert investigation worker started")
     while not stop.is_set():
@@ -340,7 +354,12 @@ async def worker(stop: asyncio.Event) -> None:
             if reason:  # queued before the provider refused or the budget was spent: it would cross it too
                 await store.skip(db, row.id, reason)
             else:
-                await run_one(cfg, db, row)
+                try:
+                    await run_one(cfg, db, row)
+                except asyncio.CancelledError:
+                    # ai-service is stopping (lifespan): give the row back instead of leaving it running until fail_stale.
+                    await requeue_on_stop(db, row.id)
+                    raise
             continue
         webhook.wake.clear()
         try:

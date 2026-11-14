@@ -56,7 +56,7 @@ replicas:
   frontend: 2
 ```
 
-- `pdb.enabled: true`는 노드 드레인 동안 서비스마다 `pdb.minAvailable`개의 파드를 남깁니다. 모든 서비스가 2대 이상일 때만 켜세요. 1대인 서비스에서는 드레인을 막습니다.
+- `pdb.enabled`(기본 켜짐)는 2대 이상으로 돌거나 autoscaling의 `minReplicas`가 2 이상인 서비스마다, 한 번에 `pdb.maxUnavailable`개(1)까지 내보낼 수 있는 PodDisruptionBudget을 만듭니다. 1대인 서비스에는 만들지 않아 드레인을 막지 않습니다.
 
 ## HPA에 대수 맡기기
 

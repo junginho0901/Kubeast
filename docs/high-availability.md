@@ -56,7 +56,7 @@ replicas:
   frontend: 2
 ```
 
-- `pdb.enabled: true` keeps `pdb.minAvailable` pods of every service during a node drain. Turn it on only when every service runs two or more pods: for a service of one pod it blocks the drain.
+- `pdb.enabled` (on by default) gives each service that runs two or more pods, or whose autoscaling keeps `minReplicas` 2 or more, a PodDisruptionBudget that lets `pdb.maxUnavailable` (1) of its pods be evicted at once; a service of one pod gets none, so it never blocks a drain.
 
 ## Let an HPA set the count
 

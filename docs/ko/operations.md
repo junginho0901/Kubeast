@@ -358,7 +358,7 @@ resources:
     limits: { memory: 512Mi }
 ```
 
-- **k8s-service-stream이 교체될 때**(배포, 노드 비우기): 새 파드가 먼저 준비됩니다(`maxSurge: 1`, `maxUnavailable: 0`). 옛 파드는 `preStopSeconds`를 기다린 뒤 SIGTERM을 받으면 `/ready`에 503으로 답하고, 실시간 로그를 바로 끝내며(브라우저가 다시 붙어 마지막으로 받은 줄 다음부터 이어 받습니다), 터미널마다 언제 닫히는지 적습니다. `drainSeconds`가 지나도 열려 있는 터미널은 그 까닭과 함께 닫히고(close code 1001, `server_shutdown`) 다시 연결 버튼이 나옵니다. `terminationGracePeriodSeconds`는 `preStopSeconds + drainSeconds + 35`(기본 105초)입니다. k8s-service(api)는 `podShutdown.preStopSeconds`를 기다리고 그 + 30입니다.
+- **k8s-service-stream이 교체될 때**(배포, 노드 비우기): 새 파드가 먼저 준비됩니다(`maxSurge: 1`, `maxUnavailable: 0`). 옛 파드는 `preStopSeconds`를 기다린 뒤 SIGTERM을 받으면 `/readyz`에 503으로 답하고, 실시간 로그를 바로 끝내며(브라우저가 다시 붙어 마지막으로 받은 줄 다음부터 이어 받습니다), 터미널마다 언제 닫히는지 적습니다. `drainSeconds`가 지나도 열려 있는 터미널은 그 까닭과 함께 닫히고(close code 1001, `server_shutdown`) 다시 연결 버튼이 나옵니다. `terminationGracePeriodSeconds`는 `preStopSeconds + drainSeconds + 35`(기본 105초)입니다. k8s-service(api)는 `podShutdown.preStopSeconds`를 기다리고 그 + 30입니다.
 - **같은 신원**: 두 Deployment 모두 `k8s-service` 서비스 계정을 쓰므로 IRSA 역할과 녹화 저장소 자격 증명(`sessionRecording.secret`)이 둘 다에 적용됩니다. 녹화는 stream 서버가 쓰고 k8s-service가 읽습니다. 스풀 볼륨은 stream 서버에만 붙습니다.
 - **함께 쓸 수 없는 값**: `sessionRecording.storage: file`(볼륨 하나를 파드 둘이 붙일 수 없음)과 1보다 큰 `streams.replicas`.
 - **NetworkPolicy**: `k8s-service-stream`은 게이트웨이에서만 연결을 받고, 데이터베이스·Redis·auth-service·클러스터 API 서버·`sessionRecording.egress`로만 나갑니다.

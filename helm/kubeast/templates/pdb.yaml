@@ -1,20 +1,39 @@
+{{- /* A Deployment that can be down to one pod gets none: that pod could never be evicted and a node drain would wait on it. */ -}}
 {{- if .Values.pdb.enabled }}
-{{- $apps := list "auth-service" "k8s-service" "session-service" "frontend" "gateway" }}
-{{- if .Values.ai.enabled }}{{- $apps = concat $apps (list "ai-service" "tool-server") }}{{- end }}
-{{- if .Values.streams.enabled }}{{- $apps = append $apps "k8s-service-stream" }}{{- end }}
+{{- $apps := list (list "auth-service" "authService") (list "k8s-service" "k8sService") (list "session-service" "sessionService") (list "frontend" "frontend") (list "gateway" "gateway") }}
+{{- if .Values.ai.enabled }}{{- $apps = concat $apps (list (list "ai-service" "aiService") (list "tool-server" "toolServer")) }}{{- end }}
+{{- /* the stream server's count is streams.replicas */}}
+{{- if .Values.streams.enabled }}{{- $apps = append $apps (list "k8s-service-stream" "") }}{{- end }}
+{{- $max := .Values.pdb.maxUnavailable }}
+{{- if or (not (or (kindIs "float64" $max) (kindIs "int64" $max) (kindIs "int" $max))) (lt (float64 $max) 1.0) (ne (float64 $max) (float64 (int $max))) }}
+{{- fail (printf "pdb.maxUnavailable must be a whole number of pods, 1 or more (0 would stop every node drain): %v" $max) }}
+{{- end }}
+{{- /* autoscaling.<service> (an HPA that sets the count) is read with dig, so values without it render as before. */}}
+{{- $autoscaling := .Values.autoscaling | default dict }}
 {{- range $app := $apps }}
+{{- $name := index $app 0 }}
+{{- $key := index $app 1 }}
+{{- $least := int $.Values.streams.replicas }}
+{{- if $key }}{{- $least = int (index $.Values.replicas $key) }}{{- end }}
+{{- if dig $key "enabled" false $autoscaling }}
+{{- $least = int (dig $key "minReplicas" 1 $autoscaling) }}
+{{- end }}
+{{- if gt $least 1 }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ $app }}
+  name: {{ $name }}
   labels:
-    app: {{ $app }}
+    app: {{ $name }}
     {{- include "kubeast.labels" $ | nindent 4 }}
 spec:
-  minAvailable: {{ $.Values.pdb.minAvailable }}
+  maxUnavailable: {{ int $max }}
+  # A pod that is not ready (a crash loop, a start that does not finish) may still be evicted, so it never holds a drain.
+  unhealthyPodEvictionPolicy: AlwaysAllow
   selector:
     matchLabels:
-      app: {{ $app }}
+      app: {{ $name }}
+{{- end }}
 {{- end }}
 {{- end }}

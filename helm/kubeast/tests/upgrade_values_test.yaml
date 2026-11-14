@@ -155,3 +155,9 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no postgresql.maxConnections
+  - it: stops values without pdb.maxUnavailable, which 0.7.8 added, as v0.7.7's published defaults are
+    set:
+      pdb.maxUnavailable: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no pdb.maxUnavailable

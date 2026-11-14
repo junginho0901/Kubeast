@@ -20,7 +20,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, ge
 from starlette.routing import compile_path
 
 SERVICE = "ai"
-SKIP = {"/metrics", "/health", "/"}
+SKIP = {"/metrics", "/health", "/", "/livez", "/readyz"}
 
 REQUESTS = Counter(
     "kubeast_http_requests_total",
