@@ -25,11 +25,13 @@ ENV = "Environment:\n  DB_PASSWORD:  planted-db-pass-1\n  ADMIN_EMAIL:  bob.plan
 
 
 class _StandInToolServer:
-    """POST /tools/call as tool-server answers it: the output masked with the request's table, the table sent back."""
+    """POST /tools/call as tool-server answers it: the output masked with the request's table, the table sent back, and
+    the values and held placeholders only when the request's masks ask reveal (redact.Numbers.Values, Held)."""
 
     def __init__(self, outputs):
         self.outputs = list(outputs)
         self.requests = []
+        self.answers = []
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
@@ -37,8 +39,16 @@ class _StandInToolServer:
         numbers = redact.Numbers(key=body["masks"]["key"])
         numbers.table = {kind: dict(by_key) for kind, by_key in body["masks"].get("table", {}).items()}
         numbers.after = dict(body["masks"].get("after", {}))
+        if body["masks"].get("reveal") is True:
+            numbers.keep_values()
         out, stats = redact.redact_text(self.outputs.pop(0), redact.Options(pii=True), numbers)
-        return httpx.Response(200, json={"content": out, "redacted": stats.as_dict(), "masks": numbers.table})
+        answer = {"content": out, "redacted": stats.as_dict(), "masks": numbers.table}
+        if numbers.values:
+            answer["values"] = dict(numbers.values)
+        if numbers.values is not None and numbers.held:
+            answer["held"] = sorted(numbers.held)
+        self.answers.append(answer)
+        return httpx.Response(200, json=answer)
 
 
 class _Service(FakeService):
@@ -176,19 +186,23 @@ def _client_on(stand_in):
     return c
 
 
-def chat_rig(monkeypatch, history, replies, tool_server=None, order=None):
+def chat_rig(monkeypatch, history, replies, tool_server=None, order=None, saved=None, audits=None, owner="u1"):
     """streaming.session_chat_stream over stand-ins: the messages the session holds, the model's replies and tool-server.
-    Returns the service, the messages of each model call (as JSON) and the sessions whose messages were read."""
+    Returns the service, the messages of each model call (as JSON) and the sessions whose messages were read. ``saved``
+    and ``audits``, when given, collect the messages saved (each answered with an id) and the audit rows written;
+    ``owner`` is the user the session belongs to."""
     from app.services.ai import streaming
 
     reads, calls, replies = [], [], list(replies)
 
     class DB:
         async def get_session(self, sid):
-            return SimpleNamespace(id=sid, user_id="u1")
+            return SimpleNamespace(id=sid, user_id=owner)
 
         async def add_message(self, sid, role, content, **kw):
-            pass
+            if saved is not None:
+                saved.append({"role": role, "content": content, **kw})
+                return SimpleNamespace(id=len(saved))
 
         async def get_messages(self, sid):
             reads.append(sid)
@@ -209,7 +223,12 @@ def chat_rig(monkeypatch, history, replies, tool_server=None, order=None):
         return DB()
 
     async def no_audit(**kw):
+        if audits is not None:
+            audits.append(kw)
         return True
+
+    async def audit_ready():
+        return True, None
 
     async def no_budget(*a, **kw):
         return None
@@ -219,6 +238,7 @@ def chat_rig(monkeypatch, history, replies, tool_server=None, order=None):
 
     monkeypatch.setattr("app.database.get_db_service", get_db_service)
     monkeypatch.setattr("app.services.audit_writer.write_audit", no_audit)
+    monkeypatch.setattr("app.services.audit_writer.audit_ready", audit_ready)
     monkeypatch.setattr(streaming.budget_mod, "check", no_budget)
     monkeypatch.setattr("app.services.ai.features.gate_tools", same_tools)
 

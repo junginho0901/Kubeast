@@ -753,6 +753,22 @@
       "inputs": ["owner: <EMAIL_7> or <PHONE_2>\n"],
       "want": ["owner: <EMAIL_7> or <PHONE_2>\n"],
       "table": {}
+    },
+    {
+      "name": "with reveal the values come back with the first spelling seen, and none for a placeholder a text held",
+      "key": "fixture-key",
+      "inputs": ["login Ann@Example.com from 010-1234-5678\n", "report said <EMAIL_1>; now ann@example.com and 01012345678, bob@example.com\n"],
+      "want": ["login <EMAIL_1> from <PHONE_1>\n", "report said <EMAIL_1>; now <EMAIL_1> and <PHONE_1>, <EMAIL_2>\n"],
+      "table": {"email": {"ann@example.com": 1, "bob@example.com": 2}, "phone": {"01012345678": 1}},
+      "reveal": {"values": {"<PHONE_1>": "010-1234-5678", "<EMAIL_2>": "bob@example.com"}, "held": ["<EMAIL_1>"]}
+    },
+    {
+      "name": "with reveal a value loses its placeholder's value once a later text holds that placeholder",
+      "key": "fixture-key",
+      "inputs": ["mail c@example.com\n", "copied \\u003cEMAIL_1\\u003e from a report\n"],
+      "want": ["mail <EMAIL_1>\n", "copied \\u003cEMAIL_1\\u003e from a report\n"],
+      "table": {"email": {"c@example.com": 1}},
+      "reveal": {"values": {}, "held": ["<EMAIL_1>"]}
     }
   ],
   "mask_keys": [

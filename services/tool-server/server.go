@@ -38,6 +38,11 @@ type ToolCallResponse struct {
 	// Masks is the request's number table with what this answer numbered, only when the request sent one. It holds
 	// keys and numbers, no value; ai-service keeps it for the next call and writes it nowhere.
 	Masks redact.NumberTable `json:"masks,omitempty"`
+	// Values is placeholder → value for what this answer numbered and Held the placeholders its text already held,
+	// only when the request's masks ask reveal: the chat stream shows them to the person who asked, whose identity the
+	// call ran as (redact.Numbers.Values, Held). Never for a request without it: investigations and MCP.
+	Values map[string]string `json:"values,omitempty"`
+	Held   []string          `json:"held,omitempty"`
 	// Access is the identity the call reached the cluster as, set once the
 	// tool ran (also when it failed); shown next to the call and audited.
 	Access *auth.Access `json:"access,omitempty"`
@@ -179,7 +184,7 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 		}
 		defer release()
 		text, stats := maskToolOutput(message, req.Masks)
-		respondJSON(w, status, ToolCallResponse{Error: text, Redacted: addReadMasks(stats, masked), Masks: req.Masks.Copy(), Access: &access, Requests: trailOf(rec)})
+		respondJSON(w, status, ToolCallResponse{Error: text, Redacted: addReadMasks(stats, masked), Masks: req.Masks.Copy(), Values: req.Masks.Values(), Held: req.Masks.Held(), Access: &access, Requests: trailOf(rec)})
 		return
 	}
 
@@ -192,7 +197,7 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 	}
 	defer release()
 	content, stats := maskToolOutput(output, req.Masks)
-	respondJSON(w, http.StatusOK, ToolCallResponse{Content: content, Redacted: addReadMasks(stats, masked), Masks: req.Masks.Copy(), Access: &access, Requests: trailOf(rec)})
+	respondJSON(w, http.StatusOK, ToolCallResponse{Content: content, Redacted: addReadMasks(stats, masked), Masks: req.Masks.Copy(), Values: req.Masks.Values(), Held: req.Masks.Held(), Access: &access, Requests: trailOf(rec)})
 }
 
 // bigAnswerBytes: an answer past this is masked and written holding one of bigAnswerSlots; the output cap is 1 MiB.
@@ -245,7 +250,7 @@ func trailOf(rec *accesstrail.Recorder) *accesstrail.Trail {
 // masks is the request's number table, nil when it sent none.
 func respondToolError(w http.ResponseWriter, status int, message string, access *auth.Access, requests *accesstrail.Trail, masks *redact.Numbers) {
 	text, stats := maskToolOutput(message, masks)
-	respondJSON(w, status, ToolCallResponse{Error: text, Redacted: stats, Masks: masks.Copy(), Access: access, Requests: requests})
+	respondJSON(w, status, ToolCallResponse{Error: text, Redacted: stats, Masks: masks.Copy(), Values: masks.Values(), Held: masks.Held(), Access: access, Requests: requests})
 }
 
 // redactToolOutput masks one tool's output: a JSON answer string by string, so what a string holds is seen as itself.

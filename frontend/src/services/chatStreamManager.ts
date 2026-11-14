@@ -1,6 +1,7 @@
 import { getAuthHeaders, handleUnauthorized, onSessionChange } from '@/services/auth'
 import { closingFence } from '@/services/chatTextUtils'
 import { clusterHeaders } from '@/services/clusterRef'
+import { maskValuesFrom, rememberMaskValues, type MaskValues } from '@/services/maskValues'
 import { accessSection } from '@/services/toolAccess'
 
 export type StreamingPhase = 'waiting' | 'tools' | 'answer'
@@ -44,6 +45,9 @@ export interface ChatStreamState {
   // how many saved messages the screen had when this question was sent
   savedBefore: number
   failedTurns: FailedTurn[]
+  // The values behind this answer's numbered placeholders, which the server sends once the answer is saved
+  // (services/maskValues): drawn in their place, never put into content.
+  maskValues: MaskValues | null
   updatedAt: number
 }
 
@@ -63,6 +67,7 @@ const initialState: ChatStreamState = {
   errorArgs: null,
   savedBefore: 0,
   failedTurns: [],
+  maskValues: null,
   updatedAt: Date.now(),
 }
 
@@ -409,6 +414,7 @@ export class ChatStreamManager {
       errorArgs: null,
       savedBefore: savedMessages,
       failedTurns: this._failedTurnsBefore(sessionId, savedMessages),
+      maskValues: null,
     })
 
     try {
@@ -509,6 +515,17 @@ export class ChatStreamManager {
               const phase = data.usage_phase ? ` (${String(data.usage_phase)})` : ''
               // console.debug 는 브라우저 설정에 따라 숨겨질 수 있어 info 로 출력
               console.info('[TOKENS]' + phase, data.usage)
+              continue
+            }
+
+            if (data.mask_values) {
+              // Kept beside the answer, not in it: the text, Copy and the saves keep the placeholders. The saved answer's
+              // id lets its bubble keep them once the saved messages take its place, until the page is read again.
+              const values = maskValuesFrom(data.mask_values)
+              if (values) {
+                if (typeof data.message_id === 'number') rememberMaskValues(data.message_id, values)
+                this.setState({ maskValues: values })
+              }
               continue
             }
 
