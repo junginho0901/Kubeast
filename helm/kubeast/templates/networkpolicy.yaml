@@ -165,7 +165,8 @@ spec:
             matchExpressions:
               - key: app
                 operator: In
-                values: [k8s-service] # the only Redis client (resource cache)
+                # the only Redis client, signed in as its Redis user (redis.acl)
+                values: [k8s-service]
       ports:
         - protocol: TCP
           port: 6379
