@@ -371,7 +371,8 @@ describe('WebSocketMultiplexer', () => {
     const ws2 = MockWebSocket.instances[1]
     ws2.simulateOpen()
     await flush()
-    expect(ws2.sent.map((m) => JSON.parse(m))).toEqual([a, b])
+    // each saying it missed the gap
+    expect(ws2.sent.map((m) => JSON.parse(m))).toEqual([{ ...a, resync: true }, { ...b, resync: true }])
 
     mux.unsubscribe(a, onA)
     expect(JSON.parse(ws2.sent[ws2.sent.length - 1])).toEqual({ ...a, type: 'CLOSE' })
@@ -555,9 +556,9 @@ describe('WebSocketMultiplexer', () => {
       expect(listener).toHaveBeenCalledWith(expect.objectContaining({ type: 'CHANGED' }))
     })
 
-    // It sends no objects as it opens, so nothing else would tell it what changed while the socket was gone. A list's
-    // watch sends its objects again and asks for nothing more.
-    it('alone says it missed something when its socket comes back', async () => {
+    // It sends no objects as it opens, and a list's watch sends the objects there are and not those deleted while the
+    // socket was gone: both say they missed something, and the server's RESYNC has the list read again.
+    it('says it missed something when its socket comes back, and so does a list\'s watch', async () => {
       const mux = new WebSocketMultiplexer()
       const listener = vi.fn()
       const subs = [mux.subscribe(changes, listener), mux.subscribe(list, listener)]
@@ -574,7 +575,93 @@ describe('WebSocketMultiplexer', () => {
       await flush()
       const asks = ws2.sent.map((raw) => JSON.parse(raw))
       expect(asks.find((m) => m.path === changes.path)).toMatchObject({ resync: true })
-      expect(asks.find((m) => m.path === list.path)?.resync).toBeUndefined()
+      expect(asks.find((m) => m.path === list.path)).toMatchObject({ resync: true })
+    })
+  })
+
+  // What the reconnect asks of the server, through the list it feeds: the server answers resync with one RESYNC once the
+  // watch is on (k8s-service followWatch), and the list is read again, without the row deleted while the socket was gone.
+  describe('a list whose socket came back', () => {
+    const path = '/apis/apps/v1/namespaces/demo/deployments'
+    const listKey = ['workloads', 'deployments', 'demo']
+
+    const follow = async () => {
+      vi.resetModules()
+      const { followList } = await import('./useKubeWatchList')
+      const { QueryClient, QueryObserver } = await import('@tanstack/react-query')
+      const client = new QueryClient()
+      let rows = [{ name: 'api', namespace: 'demo' }, { name: 'web', namespace: 'demo' }]
+      const queryFn = vi.fn(async () => rows)
+      const stopObserver = new QueryObserver(client, { queryKey: listKey, queryFn }).subscribe(() => {})
+      const stopList = followList(client, { clusterId: 'self', paths: [path], query: 'watch=1', queryKey: listKey })
+      await flush()
+      const ws = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+      ws.simulateOpen()
+      await vi.advanceTimersByTimeAsync(0)
+      return {
+        ws,
+        queryFn,
+        rows: () => client.getQueryData(listKey),
+        deleteMeanwhile: (name: string) => (rows = rows.filter((row) => row.name !== name)),
+        stop: () => { stopList(); stopObserver() },
+      }
+    }
+    // The server: a frame per object as a watch from no version opens, and a RESYNC first when the request asks for one.
+    const serve = (ws: MockWebSocket, objects: string[]) => {
+      for (const raw of ws.sent) {
+        const ask = JSON.parse(raw)
+        if (ask.type !== 'REQUEST') continue
+        if (ask.resync) ws.simulateMessage({ type: 'RESYNC', clusterId: 'self', path, query: 'watch=1' })
+        for (const name of objects) ws.simulateMessage({ type: 'DATA', clusterId: 'self', path, query: 'watch=1', data: { type: 'ADDED', object: { name, namespace: 'demo' } } })
+      }
+    }
+
+    it('drops a row deleted while the socket was gone, once the list is read again', async () => {
+      const list = await follow()
+      serve(list.ws, ['api', 'web'])
+      expect(list.rows()).toEqual([{ name: 'api', namespace: 'demo' }, { name: 'web', namespace: 'demo' }])
+
+      list.ws.simulateServerClose()
+      list.deleteMeanwhile('api')
+      await vi.advanceTimersByTimeAsync(1000)
+      await flush()
+      const ws2 = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+      expect(ws2).not.toBe(list.ws)
+      ws2.simulateOpen()
+      await flush()
+      serve(ws2, ['web'])
+      // the read waits its share of five seconds, the rows on screen until then
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(list.queryFn).toHaveBeenCalledTimes(2)
+      expect(list.rows()).toEqual([{ name: 'web', namespace: 'demo' }])
+      list.stop()
+    })
+
+    it('a tab that is hidden reads it once it shows again', async () => {
+      const { focusManager } = await import('@tanstack/react-query')
+      const list = await follow()
+      serve(list.ws, ['api', 'web'])
+      list.ws.simulateServerClose()
+      list.deleteMeanwhile('api')
+      focusManager.setFocused(false)
+      try {
+        await vi.advanceTimersByTimeAsync(1000)
+        await flush()
+        const ws2 = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+        ws2.simulateOpen()
+        await flush()
+        serve(ws2, ['web'])
+        await vi.advanceTimersByTimeAsync(60_000)
+        expect(list.queryFn).toHaveBeenCalledTimes(1)
+        expect(list.rows()).toEqual([{ name: 'api', namespace: 'demo' }, { name: 'web', namespace: 'demo' }])
+        focusManager.setFocused(true)
+        await vi.advanceTimersByTimeAsync(0)
+        expect(list.queryFn).toHaveBeenCalledTimes(2)
+        expect(list.rows()).toEqual([{ name: 'web', namespace: 'demo' }])
+      } finally {
+        focusManager.setFocused(undefined)
+        list.stop()
+      }
     })
   })
 
