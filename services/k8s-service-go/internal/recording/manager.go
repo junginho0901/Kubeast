@@ -340,8 +340,11 @@ func (m *Manager) uploadNew(ctx context.Context, t *tracked, ended bool) error {
 		if err != nil {
 			return err
 		}
+		// under mu for PendingBytes; flush is the only writer
+		m.mu.Lock()
 		t.offset += int64(len(buf))
 		t.parts++
+		m.mu.Unlock()
 		m.uploaded.Add(int64(len(buf)))
 		m.lastSuccess.Store(m.now().Unix())
 		status := "recording"

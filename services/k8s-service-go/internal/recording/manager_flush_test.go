@@ -149,3 +149,27 @@ func TestShutdownWaitsForAFlushUnderWayOnlyWithinItsContext(t *testing.T) {
 		t.Fatalf("Shutdown held for %s", took)
 	}
 }
+
+type okStore struct{ Store }
+
+func (okStore) PutPart(context.Context, string, int, []byte) error { return nil }
+
+// The pending-bytes gauge is read while a flush moves the offset.
+func TestPendingBytesWhileAFlushUploads(t *testing.T) {
+	m := noDBManager(t)
+	m.store = okStore{}
+	s, _ := track(t, m, "o13-pending")
+	s.Output([]byte("ls\r\n"))
+	done := make(chan struct{})
+	go func() {
+		m.flush(context.Background())
+		close(done)
+	}()
+	for i := 0; i < 1000; i++ {
+		_ = m.PendingBytes()
+	}
+	<-done
+	if n := m.PendingBytes(); n != 0 {
+		t.Fatalf("pending %d after the flush", n)
+	}
+}
