@@ -21,6 +21,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/alerts"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drain"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
@@ -44,6 +45,10 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/memlimit"
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
 )
+
+// streamCloseWait is how long the drain waits, after the wait, for the cut terminals to say so and hang their shells up
+// (shellHangup's keys and grace, the audit row).
+const streamCloseWait = 5 * time.Second
 
 func main() {
 	// Load configuration
@@ -288,15 +293,23 @@ func main() {
 	wsMux.Sessions = liveSessions
 	h.SetLiveSessions(liveSessions)
 
+	// Open terminals and followed logs, held so a server being replaced ends them in order (STREAM_DRAIN_SECONDS).
+	streams := drain.New()
+	h.SetDrain(streams)
+
 	// Console metrics (services/pkg/metrics): HTTP by route pattern, the audit
-	// store's readiness and write failures, live WebSocket subscriptions.
+	// store's readiness and write failures, live watches, open terminals and followed logs.
 	m := metrics.New("k8s")
 	m.Route = metrics.ChiRoute
 	if s, ok := any(auditStore).(audit.Statuser); ok {
 		m.AuditStore(s)
 	}
-	m.Gauge("kubeast_ws_subscriptions", "Live WebSocket subscriptions (logs, exec, watches) across all connections.",
+	m.Gauge("kubeast_ws_subscriptions", "Live watches counted against WS_MAX_SUBSCRIPTIONS: the live lists' WebSocket subscriptions across all connections and the Helm releases streams' Secret watches.",
 		func() float64 { return float64(wsMux.SubscriptionCount()) })
+	m.Gauge("kubeast_terminals_open", "Open terminals (pod exec, node shell).",
+		func() float64 { terminals, _ := streams.Open(); return float64(terminals) })
+	m.Gauge("kubeast_followed_logs_open", "Open followed logs (a container's output, a log file).",
+		func() float64 { _, logs := streams.Open(); return float64(logs) })
 	if recorder.Enabled() {
 		m.Gauge("kubeast_session_recording_pending_bytes", "Recorded terminal output not uploaded to the recording store yet.",
 			func() float64 { return float64(recorder.PendingBytes()) })
@@ -335,6 +348,7 @@ func main() {
 	// Public routes
 	r.Get("/", h.HealthRoot)
 	r.Get("/health", h.HealthCheck)
+	r.Get("/ready", h.Ready)
 	r.Get("/metrics", m.Handler().ServeHTTP)
 
 	// Protected API routes — domain-specific registrations live in
@@ -419,6 +433,18 @@ func main() {
 
 	<-done
 	slog.Info("shutting down server...")
+
+	// net/http's Shutdown neither closes nor waits for the terminals' hijacked sockets and waits on an event stream
+	// until its context ends: the drain ends both first, in order (internal/drain).
+	if cfg.StreamDrainSeconds >= 0 {
+		wait := time.Duration(cfg.StreamDrainSeconds) * time.Second
+		terminals, logs := streams.Open()
+		slog.Info("draining terminals and followed logs", "wait", wait, "terminals", terminals, "followed_logs", logs)
+		recorder.UploadNow()
+		res := streams.Run(wait, streamCloseWait)
+		slog.Info("terminals and followed logs drained", "followed_logs_ended", res.Streams,
+			"terminals_ended_in_time", res.TerminalsLeft, "terminals_cut", res.TerminalsCut, "not_released", res.Unreleased)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()

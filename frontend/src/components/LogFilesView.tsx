@@ -12,6 +12,7 @@ import { api } from '@/services/api'
 import { getCurrentClusterID } from '@/services/clusterRef'
 import { SESSION_ENDED_EVENT } from '@/services/auth'
 import { liveSessionEndText } from '@/utils/liveSessionEnd'
+import { SERVER_SHUTDOWN_EVENT } from '@/utils/serverShutdown'
 import { useCluster } from '@/contexts/ClusterContext'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 
@@ -162,6 +163,12 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
       es.close()
       setFollow(false)
       setStreamNote(liveSessionEndText(t, (e as MessageEvent).data))
+    })
+    // The server was replaced: following again reads the last lines from a server that stays.
+    es.addEventListener(SERVER_SHUTDOWN_EVENT, () => {
+      es.close()
+      setFollow(false)
+      setStreamNote(t('serverShutdown.followStopped', 'Following stopped: the server was replaced. Turn Follow on again to go on.'))
     })
     // Never let the browser reconnect on its own: a reconnect reads the last
     // lines again (duplicates on screen) and is another audited read. After a

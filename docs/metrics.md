@@ -26,7 +26,9 @@ With `METRICS_ENABLED=false` (chart `metrics.enabled`), it returns 404.
 | `kubeast_http_requests_in_flight` | gauge | `service` | Requests being handled |
 | `kubeast_audit_store_up` | gauge 0/1 | `service` | Whether the audit store takes rows (k8s-service: `audit.Guarded.Ready`, 2 s cache). At 0, writes, Secret reveals, exec and AI write tools are refused with 503 |
 | `kubeast_audit_write_failures_total` | counter | `service` | Audit rows that could not be stored since start |
-| `kubeast_ws_subscriptions` | gauge | `service` | Live WebSocket subscriptions (logs, exec, watch) in k8s-service |
+| `kubeast_ws_subscriptions` | gauge | `service` | Live watches in k8s-service, counted against `multicluster.wsMaxSubscriptions`: the live lists' WebSocket subscriptions and the Helm releases streams' Secret watches. Terminals and followed logs are the next two rows |
+| `kubeast_terminals_open` | gauge | `service` | Open terminals (pod exec, node shell) in k8s-service |
+| `kubeast_followed_logs_open` | gauge | `service` | Open followed logs (a container's output, a log file) in k8s-service |
 | `kubeast_audit_sink_pending` | gauge | `service`, `sink`, `type` | Audit rows an audit sink (`audit.sinks`) has not sent yet. Only the auth-service replica that does the sending exposes it |
 | `kubeast_audit_sink_failures_total` | counter | same | Failed sends since that replica started sending |
 | `kubeast_audit_sink_last_success_timestamp_seconds` | gauge | same | When the sink cursor last moved forward (starting from the time sending began) |
