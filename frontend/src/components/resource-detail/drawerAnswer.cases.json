@@ -2720,6 +2720,7 @@
     }
    ],
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
    "events": [],
    "generation": 0,
    "image": "example.test/app:2",
@@ -2782,6 +2783,7 @@
   "frame": {
    "available_replicas": 2,
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
    "image": "example.test/app:1",
    "images": [
     "example.test/app:1"
@@ -2821,6 +2823,7 @@
     }
    ],
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
    "events": [],
    "generation": 0,
    "image": "example.test/app:1",
@@ -2896,6 +2899,7 @@
     }
    ],
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
    "events": [],
    "generation": 0,
    "image": "example.test/app:1",
@@ -2950,6 +2954,7 @@
   "frame": {
    "available_replicas": 2,
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
    "image": "example.test/app:2",
    "images": [
     "example.test/app:2",
@@ -2992,6 +2997,7 @@
     }
    ],
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
    "events": [],
    "generation": 0,
    "image": "example.test/app:2",
