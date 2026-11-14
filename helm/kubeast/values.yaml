@@ -551,6 +551,7 @@ postgresql:
 # hostUsers=false puts pods in a user namespace (Kubernetes >= 1.33); set it to
 # true on clusters without that support.
 # enabled=false sets none of it, leaving the uids and fsGroup to the platform, and Secret files then mount 0444 instead of 0440.
+# A PVC you give audit.fileSinkVolume or sessionRecording.spoolVolume / fileVolume must then be writable by uid 65532 by itself, unless the platform adds an fsGroup (OpenShift's restricted SCCs do).
 podSecurity:
   enabled: true
   seccompProfile: RuntimeDefault

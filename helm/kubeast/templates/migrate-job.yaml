@@ -22,7 +22,8 @@ spec:
       labels:
         app: kubeast-migrate
     spec:
-      restartPolicy: OnFailure
+      # a pod per try: a failed one keeps its log until the next hook replaces the Job (OnFailure's one pod is deleted when the Job fails)
+      restartPolicy: Never
       automountServiceAccountToken: false
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}
       containers:
