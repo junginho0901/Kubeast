@@ -123,6 +123,6 @@ func TestNewWithUserSignsInAsTheUserAndWithoutOneAsBefore(t *testing.T) {
 		if strings.Join(got[0], " ") != strings.Join(tc.want, " ") {
 			t.Fatalf("username %q: AUTH %q, want AUTH %q", tc.username, got[0], tc.want)
 		}
-		_ = c.rdb.Close()
+		_ = c.rdb.Load().Close()
 	}
 }
