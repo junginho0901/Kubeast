@@ -246,16 +246,27 @@ startupProbe:
   failureThreshold: {{ div 180 $period }}
 {{- end -}}
 
-{{/* A pod behind a Service answers 5 s more while its endpoint leaves kube-proxy, then gets SIGTERM with the 30 s its shutdown fits in. */}}
+{{/* A pod behind a Service answers podShutdown.preStopSeconds more while its endpoint leaves, then gets SIGTERM with the 30 s its shutdown fits in. */}}
+{{- define "kubeast.preStopSeconds" -}}
+{{- $s := .Values.podShutdown.preStopSeconds -}}
+{{- if or (not (or (kindIs "float64" $s) (kindIs "int64" $s) (kindIs "int" $s))) (lt (float64 $s) 0.0) (ne (float64 $s) (float64 (int $s))) -}}
+{{- fail (printf "podShutdown.preStopSeconds must be a whole number of seconds, 0 or more (0 = no wait): %v" $s) -}}
+{{- end -}}
+{{- int $s -}}
+{{- end -}}
+
 {{- define "kubeast.preStop" -}}
+{{- $s := int (include "kubeast.preStopSeconds" .) -}}
+{{- if gt $s 0 -}}
 lifecycle:
   preStop:
     sleep:
-      seconds: 5
+      seconds: {{ $s }}
+{{- end -}}
 {{- end -}}
 
 {{- define "kubeast.terminationGrace" -}}
-terminationGracePeriodSeconds: 35
+terminationGracePeriodSeconds: {{ add 30 (include "kubeast.preStopSeconds" .) }}
 {{- end -}}
 
 {{/*

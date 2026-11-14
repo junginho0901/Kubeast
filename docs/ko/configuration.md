@@ -133,13 +133,15 @@ podSecurity:
   readOnlyRootFilesystem: true
 
 # 가용성 — replicas를 2 이상으로 올릴 때는 pdb.enabled: true로 두세요
-# Service 뒤의 파드는 종료 요청 뒤 5초 더 응답하고(preStop sleep, Kubernetes 1.30 이상) 그다음 30초 안에 종료합니다(grace 35초)
+# podShutdown.preStopSeconds: Service 뒤의 파드는 종료 요청 뒤 이 초만큼 더 응답하고(preStop sleep, Kubernetes 1.30 이상) 그다음 30초 안에 종료합니다. 파드 IP로 보내는 로드 밸런서 뒤라면 그 해제 지연(deregistration delay)에 몇 초를 더해 두세요
 replicas:
   gateway: 1
 pdb:
   enabled: false
 topologySpread:
   enabled: true
+podShutdown:
+  preStopSeconds: 5
 resources:               # 컨테이너별 requests / memory limit(전체 목록은 values.yaml)
   aiService:
     requests: { cpu: 100m, memory: 256Mi }

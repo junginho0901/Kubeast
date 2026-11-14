@@ -136,13 +136,15 @@ podSecurity:
   readOnlyRootFilesystem: true
 
 # Availability: set pdb.enabled: true when you raise replicas to 2 or more
-# Every pod behind a Service answers 5 s after it is told to stop (preStop sleep, Kubernetes 1.30 or later), then has 30 s to shut down (grace 35 s)
+# podShutdown.preStopSeconds: a pod behind a Service answers that long after it is told to stop (preStop sleep, Kubernetes 1.30 or later), then has 30 s to shut down; behind a load balancer that sends to pod IPs, set its deregistration delay plus a few seconds
 replicas:
   gateway: 1
 pdb:
   enabled: false
 topologySpread:
   enabled: true
+podShutdown:
+  preStopSeconds: 5
 resources:               # per-container requests / memory limit (the full list is in values.yaml)
   aiService:
     requests: { cpu: 100m, memory: 256Mi }
