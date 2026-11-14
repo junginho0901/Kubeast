@@ -25,6 +25,7 @@ import { roleMenuOpensUp } from './admin-users/roleMenu'
 import { failureText } from '@/utils/failureText'
 import { copyText } from '@/utils/clipboard'
 import { allPendingSelected, toggleAllFound, toggleAllPending as toggleAllPendingIds, toggleOnePending } from './admin-users/pendingSelection'
+import { ownLevelChangeAsksSignIn } from './admin-users/ownLevel'
 import { usersMatching } from './admin/adminListSearch'
 import { useDismiss } from '@/hooks/useDismiss'
 import { announceCreated } from '@/services/createdNoticeStore'
@@ -87,7 +88,7 @@ export default function AdminUsers() {
     onMutate: () => setActionError(null),
     onSuccess: (_data, vars) => {
       const roleName = roles.find((r) => r.id === vars.roleId)?.name
-      if (me?.id && vars.userId === me.id && roleName !== 'admin') {
+      if (ownLevelChangeAsksSignIn(me?.id, vars.userId, roleName)) {
         setReauthModalOpen(true)
         return
       }
@@ -230,7 +231,7 @@ export default function AdminUsers() {
       const newRoleName = vars.payload.role_id != null
         ? roles.find((r) => r.id === vars.payload.role_id)?.name
         : undefined
-      if (me?.id && vars.userId === me.id && newRoleName && newRoleName !== 'admin') {
+      if (newRoleName && ownLevelChangeAsksSignIn(me?.id, vars.userId, newRoleName)) {
         setReauthModalOpen(true)
         setDetailUserId(null)
         setDetailEditing(false)
