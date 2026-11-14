@@ -147,6 +147,10 @@ func sessionEndNotice(code, lang string) string {
 		return "\r\n[Kubeast] 세션 최대 시간이 지나 이 터미널을 닫았습니다. 다시 로그인하세요.\r\n"
 	case code == auth.SessionExpired:
 		return "\r\n[Kubeast] This terminal was closed: the session reached its maximum lifetime. Sign in again.\r\n"
+	case code == auth.SessionSignedOut && ko:
+		return "\r\n[Kubeast] 이 로그인이 로그아웃되어 이 터미널을 닫았습니다. 다시 로그인하세요.\r\n"
+	case code == auth.SessionSignedOut:
+		return "\r\n[Kubeast] This terminal was closed: this sign-in was signed out. Sign in again.\r\n"
 	case code == auth.SessionUnverified && ko:
 		return "\r\n[Kubeast] 세션을 확인할 수 없어 이 터미널을 닫았습니다. 다시 로그인하세요.\r\n"
 	case code == auth.SessionUnverified:

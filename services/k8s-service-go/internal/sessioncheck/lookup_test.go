@@ -23,17 +23,22 @@ func (r row) Scan(dest ...any) error {
 	}
 	switch d := dest[0].(type) {
 	case *int:
-		*d = r.value.(int)
+		state := r.value.(auth.SessionState)
+		*d = state.Version
+		*dest[1].(*[]int64) = state.SignedOut
 	case *time.Time:
 		*d = r.value.(time.Time)
 	}
 	return nil
 }
 
-// tables answers by which table a query reads.
+// tables answers by which table a query reads; "auth_users" is the session state's statement.
 type tables map[string]row
 
 func (t tables) QueryRow(_ context.Context, sql string, _ ...any) pgx.Row {
+	if strings.Contains(sql, "auth_users") && sql != auth.SessionStateQuery {
+		return row{err: errors.New("not the session state statement: " + sql)}
+	}
 	for name, r := range t {
 		if strings.Contains(sql, name) {
 			return r
@@ -43,9 +48,21 @@ func (t tables) QueryRow(_ context.Context, sql string, _ ...any) pgx.Row {
 }
 
 func TestLookupAnswersTheUsersCurrentVersion(t *testing.T) {
-	got, err := Lookup(tables{"auth_users": {value: 7}})(context.Background(), "u1", "")
-	if err != nil || got != 7 {
-		t.Fatalf("got %d, %v", got, err)
+	got, err := Lookup(tables{"auth_users": {value: auth.SessionState{Version: 7}}})(context.Background(), "u1", "")
+	if err != nil || got.Version != 7 || len(got.SignedOut) != 0 {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+}
+
+// One statement answers the version and the sign-ins signed out, so a check costs what it did.
+func TestLookupAnswersTheSignedOutSignInsInTheSameStatement(t *testing.T) {
+	want := auth.SessionState{Version: 2, SignedOut: []int64{1763100000, 1763100042}}
+	got, err := Lookup(tables{"auth_users": {value: want}})(context.Background(), "u1", "")
+	if err != nil || got.Version != 2 || len(got.SignedOut) != 2 || got.SignedOut[1] != 1763100042 {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	if !strings.Contains(auth.SessionStateQuery, "ended_sign_ins") {
+		t.Fatalf("the statement reads no signed-out sign-ins: %s", auth.SessionStateQuery)
 	}
 }
 
@@ -57,7 +74,7 @@ func TestLookupSaysADeletedUserIsGone(t *testing.T) {
 }
 
 func TestLookupSaysADeletedOrExpiredKeyIsGone(t *testing.T) {
-	users := row{value: 1}
+	users := row{value: auth.SessionState{Version: 1}}
 	for name, key := range map[string]row{
 		"deleted": {err: pgx.ErrNoRows},
 		"expired": {value: time.Now().Add(-time.Minute)},
@@ -70,9 +87,9 @@ func TestLookupSaysADeletedOrExpiredKeyIsGone(t *testing.T) {
 }
 
 func TestLookupReadsTheVersionForALiveKey(t *testing.T) {
-	got, err := Lookup(tables{"api_keys": {value: time.Now().Add(time.Hour)}, "auth_users": {value: 3}})(context.Background(), "u1", "k1")
-	if err != nil || got != 3 {
-		t.Fatalf("got %d, %v", got, err)
+	got, err := Lookup(tables{"api_keys": {value: time.Now().Add(time.Hour)}, "auth_users": {value: auth.SessionState{Version: 3}}})(context.Background(), "u1", "k1")
+	if err != nil || got.Version != 3 {
+		t.Fatalf("got %+v, %v", got, err)
 	}
 }
 
