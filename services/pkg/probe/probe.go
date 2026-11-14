@@ -25,9 +25,13 @@ import (
 // ErrLeaving is the cancel cause of a held context whose server started to leave.
 var ErrLeaving = errors.New("server leaving")
 
-// LeavingReason is the close reason of a WebSocket ended by Leave (close code 1012, Service Restart) and the reason of
-// the k8s.session.end row of a terminal it ended.
-const LeavingReason = "server_leaving"
+// ShutdownReason is the close reason of a WebSocket ended by Leave and the reason of the k8s.session.end row of a
+// terminal it ended: the name the W4 drain (#824) gives the same end.
+const ShutdownReason = "server_shutdown"
+
+// ShutdownCloseCode is the close code of a WebSocket ended by Leave: RFC 6455 §7.4.1's 1001 "going away", a server
+// going down, which the screen reads as "connect again".
+const ShutdownCloseCode = 1001
 
 // Probe holds a service's readiness: whether it is leaving. A nil *Probe holds nothing: Hold returns the context as
 // it is.

@@ -197,7 +197,7 @@ type Multiplexer struct {
 	MaxSubscriptionsPerConn int
 	// Sessions ends a socket whose session stopped standing (nil: not checked).
 	Sessions *auth.LiveSessions
-	// Leaving ends every socket with close code 1012 when the server starts to leave (nil: never). The browser
+	// Leaving ends every socket with close code 1001 when the server starts to leave (nil: never). The browser
 	// connects again and asks for its lists, which a pod that stays answers.
 	Leaving *probe.Probe
 	// PanicRetryDelay is the wait after a panic; 0 = the five seconds a failed watch waits.
@@ -369,7 +369,7 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 					slog.Info("ws closed: session ended", "id", wsID, "user", payload.UserID, "reason", code)
 					_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(auth.SessionEndedCloseCode, code), time.Now().Add(writeWait))
 				} else if probe.IsLeaving(ctx) {
-					_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseServiceRestart, probe.LeavingReason), time.Now().Add(writeWait))
+					_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(probe.ShutdownCloseCode, probe.ShutdownReason), time.Now().Add(writeWait))
 				}
 				return
 			case msg, ok := <-sendCh:

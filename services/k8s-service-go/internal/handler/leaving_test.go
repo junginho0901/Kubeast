@@ -18,7 +18,7 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 )
 
-// A terminal whose server leaves (SIGTERM) says so, closes with 1012 and hangs its shell up, as the browser going away
+// A terminal whose server leaves (SIGTERM) says so, closes with 1001 and hangs its shell up, as the browser going away
 // does: nothing is left running in the container.
 func TestAServerLeavingTellsTheTerminalAndHangsUpTheShell(t *testing.T) {
 	withHangupGrace(t, 5*time.Second)
@@ -39,7 +39,7 @@ func TestAServerLeavingTellsTheTerminalAndHangsUpTheShell(t *testing.T) {
 	_ = c.SetReadDeadline(time.Now().Add(5 * time.Second))
 	_, _, err := c.ReadMessage()
 	var closed *websocket.CloseError
-	if !errors.As(err, &closed) || closed.Code != websocket.CloseServiceRestart || closed.Text != probe.LeavingReason {
+	if !errors.As(err, &closed) || closed.Code != probe.ShutdownCloseCode || closed.Text != probe.ShutdownReason {
 		t.Fatalf("after the notice: %v", err)
 	}
 	select {
@@ -104,7 +104,7 @@ func TestHoldSessionEndsWhenTheServerLeaves(t *testing.T) {
 	}
 }
 
-// The handler itself: an exec terminal the server's leaving closed leaves a k8s.session.end row with server_leaving,
+// The handler itself: an exec terminal the server's leaving closed leaves a k8s.session.end row with server_shutdown,
 // beside the row that opened it, and lets go of its hold.
 func TestAnExecTerminalTheServerLeavingClosedLeavesItsRow(t *testing.T) {
 	var version atomic.Int32
@@ -135,10 +135,10 @@ func TestAnExecTerminalTheServerLeavingClosedLeavesItsRow(t *testing.T) {
 	_ = c.SetReadDeadline(time.Now().Add(5 * time.Second))
 	_, _, err = c.ReadMessage()
 	var closed *websocket.CloseError
-	if !errors.As(err, &closed) || closed.Code != websocket.CloseServiceRestart {
+	if !errors.As(err, &closed) || closed.Code != probe.ShutdownCloseCode {
 		t.Fatalf("after the notice: %v", err)
 	}
-	if row := store.sessionEndRow(t); row["stream"] != "exec" || row["reason"] != probe.LeavingReason {
+	if row := store.sessionEndRow(t); row["stream"] != "exec" || row["reason"] != probe.ShutdownReason {
 		t.Fatalf("session end row = %v", row)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

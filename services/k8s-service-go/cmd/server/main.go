@@ -440,7 +440,7 @@ const (
 )
 
 // shutdown stops the server, waits within the same time for the connections it
-// leaves alone (WebSockets, which Leave closed with 1012 and whose shells hang
+// leaves alone (WebSockets, which Leave closed with 1001 and whose shells hang
 // up), then gives the recorder a wait of its own: an open event stream that is
 // not held keeps srv.Shutdown waiting until its context ends, and the recorder's
 // last parts and rows would get a spent one. The recorder takes its turn

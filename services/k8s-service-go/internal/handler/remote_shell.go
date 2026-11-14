@@ -168,9 +168,9 @@ func serverLeavingNotice(lang string) string {
 	return "\r\n[Kubeast] This terminal was closed: the server is restarting. Open the terminal again.\r\n"
 }
 
-// closeLeaving closes a terminal's socket with 1012 (Service Restart) once its notice is written.
+// closeLeaving closes a terminal's socket with 1001 and server_shutdown once its notice is written.
 func closeLeaving(conn *websocket.Conn) {
-	_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseServiceRestart, probe.LeavingReason), time.Now().Add(time.Second))
+	_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(probe.ShutdownCloseCode, probe.ShutdownReason), time.Now().Add(time.Second))
 }
 
 func hangUp(w io.Writer, pause time.Duration) {
@@ -197,7 +197,7 @@ func hangUp(w io.Writer, pause time.Duration) {
 // lang, the screen's language the page sent.
 //
 // A ctx ended by the session (auth.LiveSessions) or by the server leaving
-// (probe.ErrLeaving, close code 1012) says why on the terminal and closes the
+// (probe.ErrLeaving, close code 1001) says why on the terminal and closes the
 // socket, which from here on is a browser going away: the shell is hung up, not
 // left running in the container.
 func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cfg *rest.Config, u *url.URL, rec *recording.Session, lang string) error {

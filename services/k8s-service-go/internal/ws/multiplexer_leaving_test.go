@@ -12,7 +12,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/probe"
 )
 
-// The server leaving (SIGTERM) closes an open socket with 1012, which the screen reads as "connect again", ends its
+// The server leaving (SIGTERM) closes an open socket with 1001 and server_shutdown, which the screen reads as "connect again", ends its
 // watches on the API server and releases its hold, so shutdown does not wait for it.
 func TestAnOpenSocketClosesWithServiceRestartWhenTheServerLeaves(t *testing.T) {
 	var watchEnded atomic.Bool
@@ -31,8 +31,8 @@ func TestAnOpenSocketClosesWithServiceRestartWhenTheServerLeaves(t *testing.T) {
 
 	_, _, err := conn.ReadMessage()
 	var closed *websocket.CloseError
-	if !errors.As(err, &closed) || closed.Code != websocket.CloseServiceRestart || closed.Text != probe.LeavingReason {
-		t.Fatalf("read after the server left = %v, want close %d %q", err, websocket.CloseServiceRestart, probe.LeavingReason)
+	if !errors.As(err, &closed) || closed.Code != probe.ShutdownCloseCode || closed.Text != probe.ShutdownReason {
+		t.Fatalf("read after the server left = %v, want close %d %q", err, probe.ShutdownCloseCode, probe.ShutdownReason)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
