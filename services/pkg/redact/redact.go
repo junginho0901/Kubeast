@@ -902,6 +902,7 @@ func redactPII(s string, o Options, st *Stats, n *Numbers) string {
 	if n == nil {
 		n = &Numbers{}
 	}
+	n.startAfterHeld(s)
 	for _, rule := range []struct {
 		kind string
 		re   *regexp.Regexp

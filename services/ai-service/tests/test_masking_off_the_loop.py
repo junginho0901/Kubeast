@@ -27,7 +27,7 @@ async def test_the_floating_snapshot_is_masked_off_the_loop_before_the_answer_st
     loop_thread = threading.get_ident()
     seen = {}
 
-    def snapshot(ctx, cluster):
+    def snapshot(ctx, cluster, numbers=None):
         seen["thread"] = threading.get_ident()
         seen["cluster"] = cluster
         order.append("snapshot masked")
@@ -44,7 +44,7 @@ async def test_the_floating_snapshot_is_masked_off_the_loop_before_the_answer_st
 
 @pytest.mark.asyncio
 async def test_a_turn_without_a_snapshot_has_nothing_to_mask(monkeypatch):
-    def snapshot(ctx, cluster):
+    def snapshot(ctx, cluster, numbers=None):
         raise AssertionError("no snapshot to mask")
 
     monkeypatch.setattr(floating_ai_service, "build_context_prompt", snapshot)

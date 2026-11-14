@@ -38,6 +38,7 @@ type shapeCases struct {
 	NumberedPersonalData []struct {
 		Name   string                    `json:"name"`
 		Key    string                    `json:"key"`
+		After  map[string]int            `json:"after"`
 		Seed   map[string]map[string]int `json:"seed"`
 		Inputs []string                  `json:"inputs"`
 		Want   []string                  `json:"want"`
@@ -89,7 +90,7 @@ func TestSharedShapeCases(t *testing.T) {
 	}
 	for _, c := range cases.NumberedPersonalData {
 		t.Run("numbered/"+c.Name, func(t *testing.T) {
-			n := &Numbers{Key: c.Key, Table: tableOf(c.Key, c.Seed)}
+			n := &Numbers{Key: c.Key, Table: tableOf(c.Key, c.Seed), After: c.After}
 			for i, in := range c.Inputs {
 				if got, _ := TextNumbered(in, Options{Enabled: true, PII: true, Disabled: map[string]bool{}}, n); got != c.Want[i] {
 					t.Errorf("text %d: got  %q\nwant %q", i, got, c.Want[i])

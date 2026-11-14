@@ -67,17 +67,49 @@ def mask_key(key: str, kind: str, value: str) -> str:
     return hmac.new(key.encode(), normal.encode(), hashlib.sha256).hexdigest()[:_MASK_KEY_CHARS]
 
 
+_MAX_HELD_NUMBER = 999999  # a number past this in a text is not counted, so ``after`` stays a small number for Go too
+_HELD_PLACEHOLDER = re.compile(r"(?:<|\\u003[cC])(EMAIL|PHONE|RRN|CARD)_([0-9]{1,6})(?:>|\\u003[eE])")
+
+
+def highest_numbers(texts: Any) -> Dict[str, int]:
+    """Per kind, the highest numbered placeholder the texts already hold (also as JSON writes < and > for HTML); what is
+    not a string is passed over. Go: startAfterHeld."""
+    kinds = {name: kind for kind, name in NUMBERED_KINDS.items()}
+    found: Dict[str, int] = {}
+    for text in texts:
+        if not isinstance(text, str) or ("<" not in text and "u003" not in text):
+            continue
+        for name, digits in _HELD_PLACEHOLDER.findall(text):
+            num = int(digits)
+            if num <= _MAX_HELD_NUMBER and num > found.get(kinds[name], 0):
+                found[kinds[name]] = num
+    return found
+
+
 class Numbers:
     """The personal-data numbers of one chat answer or one alert investigation, in memory for that run only.
 
     The table is kind → mask_key of a value → number, and holds no value. ai-service sends it with each tool-server call
-    (``wire``) and keeps the table that comes back (``take``), so tool-server numbers a value it masks as this run
-    numbered it before; ``redact_text(..., numbers=)`` numbers with it here. The key is made for this table only."""
+    (``wire``) and keeps the table that comes back (``take_answer``), so tool-server numbers a value it masks as this run
+    numbered it before; ``redact_text(..., numbers=)`` numbers with it here. The key is made for this table only.
+
+    A new number is past every number of its kind in the table, in ``after`` and in the texts given so far: ``after``
+    starts past what the conversation already shows the model (``start_after``), so a value is never given a number an
+    earlier answer gave another one. The same value in a later answer gets a new number."""
 
     def __init__(self, key: Optional[str] = None) -> None:
         self.key = secrets.token_hex(16) if key is None else key
         self.table: Dict[str, Dict[str, int]] = {}
+        self.after: Dict[str, int] = {}
         self._next: Dict[str, int] = {}  # per kind, one past the highest number, worked out when first needed
+
+    def start_after(self, found: Dict[str, int]) -> None:
+        """Make each kind's next new number past the number ``found`` gives it (highest_numbers)."""
+        for kind, num in found.items():
+            if num > self.after.get(kind, 0):
+                self.after[kind] = num
+                if self._next.get(kind, num + 1) <= num:
+                    self._next[kind] = num + 1
 
     def number(self, kind: str, value: str) -> int:
         by_key = self.table.setdefault(kind, {})
@@ -86,7 +118,7 @@ class Numbers:
         if isinstance(got, int) and got > 0:
             return got
         if kind not in self._next:
-            self._next[kind] = max([v for v in by_key.values() if isinstance(v, int)] + [0]) + 1
+            self._next[kind] = max([v for v in by_key.values() if isinstance(v, int)] + [self.after.get(kind, 0)]) + 1
         by_key[k] = self._next[kind]
         self._next[kind] += 1
         return by_key[k]
@@ -96,13 +128,15 @@ class Numbers:
 
     def wire(self) -> Dict[str, Any]:
         """What a tool-server call sends as ``masks``: the key and a copy of the table as it is when the call leaves."""
-        return {"key": self.key, "table": {kind: dict(by_key) for kind, by_key in self.table.items()}}
+        return {"key": self.key, "table": {kind: dict(by_key) for kind, by_key in self.table.items()}, "after": dict(self.after)}
 
     def take_answer(self, sent: Dict[str, Dict[str, int]], table: Any, text: str) -> str:
         """Keep the table a tool-server answer gave back for a call that left with ``sent``, and return ``text`` as the
         run reads it. Two calls of a run at once (Claude Code makes them) both number from the table they left with, so
         each may give the next number to a different value: the later answer's value then takes the run's number for
-        it, or the next free one, in its text too. Anything not shaped as a table is ignored."""
+        it, or the next free one, in its text too. Anything not shaped as a table is ignored. The numbers the text already
+        held, an earlier report it read for one, are not given to a new value later in the run."""
+        self.start_after(highest_numbers([text]))
         if not isinstance(table, dict):
             return text
         self._next = {}
@@ -121,7 +155,7 @@ class Numbers:
                         moves[(kind, n)] = mine[k]
                     continue
                 if n in mine.values():
-                    mine[k] = max(mine.values()) + 1
+                    mine[k] = max(max(mine.values()), self.after.get(kind, 0)) + 1
                     moves[(kind, n)] = mine[k]
                 else:
                     mine[k] = n
@@ -1297,6 +1331,7 @@ def redact_text(text: Optional[str], opts: Optional[Options] = None, numbers: Op
         text = _sub_on_credential_lines(_INLINE_PAIR, text, _mask_inline_pair, stats, "key_name")
     if o.pii:
         n = numbers if numbers is not None else Numbers(key="")
+        n.start_after(highest_numbers([text]))
         for kind, pattern in (("email", _EMAIL), ("rrn", _KR_RRN), ("card", _CARD), ("phone", _KR_PHONE)):
             if o.on(kind):
                 text = _sub_count(pattern, text, lambda m, kind=kind: n.placeholder(kind, m.group(0)), stats, kind)

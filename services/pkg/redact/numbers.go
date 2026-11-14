@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -17,11 +18,15 @@ type NumberTable map[string]map[string]int
 
 // Numbers keeps the numbers of one table across the texts it is given. Text and JSON start a new one for each text;
 // ai-service sends the table of a chat answer or an alert investigation with each tool call (ToolCallRequest.Masks) and
-// keeps the table that comes back, so one value has one number for the whole answer and none outside it.
+// keeps the table that comes back, so one value has one number for the whole answer and none outside it. A new number
+// is past every number of its kind in the table, in After and in the texts given so far, so it is never one the model
+// already reads for another value.
 type Numbers struct {
 	// Key is the HMAC key of MaskKey, made by ai-service for one table: a key read outside it says nothing of a value.
 	Key   string      `json:"key"`
 	Table NumberTable `json:"table,omitempty"`
+	// After is, per kind, the highest number the conversation already holds (earlier answers, the page).
+	After map[string]int `json:"after,omitempty"`
 
 	// next is, per kind, one past the highest number in Table, worked out when the kind is first numbered.
 	next map[string]int
@@ -71,6 +76,9 @@ func (n *Numbers) number(kind, value string) int {
 	next, ok := n.next[kind]
 	if !ok {
 		next = 1
+		if after := n.After[kind]; after > 0 && after <= maxHeldNumber {
+			next = after + 1
+		}
 		for _, v := range byKey {
 			if v >= next {
 				next = v + 1
@@ -80,6 +88,40 @@ func (n *Numbers) number(kind, value string) int {
 	byKey[key] = next
 	n.next[kind] = next + 1
 	return next
+}
+
+// maxHeldNumber: a number past this in a text is not counted, so After stays a small number for every reader of it.
+const maxHeldNumber = 999999
+
+// heldPlaceholder is a numbered placeholder already in a text, also as JSON writes < and > for HTML.
+var heldPlaceholder = regexp.MustCompile(`(?:<|\\u003[cC])(EMAIL|PHONE|RRN|CARD)_([0-9]{1,6})(?:>|\\u003[eE])`)
+
+var kindOfName = map[string]string{"EMAIL": "email", "PHONE": "phone", "RRN": "rrn", "CARD": "card"}
+
+// startAfterHeld raises After past the numbered placeholders s already holds. redact.py: highest_numbers.
+func (n *Numbers) startAfterHeld(s string) {
+	if !strings.Contains(s, "<") && !strings.Contains(s, "u003") {
+		return
+	}
+	for _, m := range heldPlaceholder.FindAllStringSubmatch(s, -1) {
+		if num, err := strconv.Atoi(m[2]); err == nil && num <= maxHeldNumber {
+			n.startAfter(kindOfName[m[1]], num)
+		}
+	}
+}
+
+// startAfter makes the next new number of kind past num.
+func (n *Numbers) startAfter(kind string, num int) {
+	if num <= n.After[kind] {
+		return
+	}
+	if n.After == nil {
+		n.After = map[string]int{}
+	}
+	n.After[kind] = num
+	if next, ok := n.next[kind]; ok && next <= num {
+		n.next[kind] = num + 1
+	}
 }
 
 // isNumberedPlaceholder: a value that is already one of these placeholders is not read as a value.

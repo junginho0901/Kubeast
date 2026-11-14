@@ -60,6 +60,7 @@ def test_mask_keys(case):
 def test_numbered_personal_data(case):
     numbers = redact.Numbers(key=case["key"])
     numbers.table = _table_of(case["key"], case.get("seed"))
+    numbers.after = dict(case.get("after") or {})
     for text, want in zip(case["inputs"], case["want"], strict=True):
         assert redact.redact_text(text, redact.Options(pii=True), numbers)[0] == want
     assert {k: v for k, v in numbers.table.items() if v} == _table_of(case["key"], case["table"])

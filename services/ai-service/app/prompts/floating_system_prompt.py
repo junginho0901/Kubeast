@@ -7,7 +7,7 @@
 LLM 으로 하여금 tool_call 없이 자연어 거절을 출력하도록 한다.
 """
 import json
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from app.models.floating_ai import PageContextPayload
 
@@ -132,11 +132,12 @@ def _extract_resources_in_context(ctx: PageContextPayload) -> List[dict]:
 
 
 def build_context_prompt(
-    ctx: PageContextPayload, cluster_name: Optional[str] = None
+    ctx: PageContextPayload, cluster_name: Optional[str] = None, numbers: Optional[Any] = None
 ) -> str:
     """page_context 를 사람이 읽을 수 있는 system 메시지 블록으로 변환.
 
-    JSON 직렬화는 compact(`separators`) 로 토큰 절약.
+    JSON 직렬화는 compact(`separators`) 로 토큰 절약. numbers = the answer's personal-data table (redact.Numbers), so
+    the page and the answer's tool results number one value alike; without it each string numbers from 1.
     """
     lines: List[str] = ["[현재 화면]"]
     lines.append(f"- 경로: {ctx.path}")
@@ -161,7 +162,7 @@ def build_context_prompt(
         lines.append("[베이스 페이지 데이터]")
         lines.append(f"요약: {ctx.base.summary}")
         if ctx.base.data:
-            data, _ = redact_object(dict(ctx.base.data))
+            data, _ = redact_object(dict(ctx.base.data), numbers=numbers)
             lines.append(
                 "데이터: "
                 + json.dumps(data, ensure_ascii=False, separators=(",", ":"))
@@ -174,7 +175,7 @@ def build_context_prompt(
             topmost = " ← 맨 위 (사용자가 지금 보고 있는 창)" if i == len(ctx.overlays) - 1 else ""
             lines.append(f"{i + 1}. [{overlay.source}] {overlay.summary}{topmost}")
             if overlay.data:
-                data, _ = redact_object(dict(overlay.data))
+                data, _ = redact_object(dict(overlay.data), numbers=numbers)
                 lines.append(
                     "   데이터: "
                     + json.dumps(data, ensure_ascii=False, separators=(",", ":"))

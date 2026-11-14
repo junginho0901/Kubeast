@@ -2,7 +2,9 @@
 answer is masked by tool-server, stood in below with the same rules (redact_shape_cases.json holds the two lists equal),
 numbering with the table the request sent. Both number a value from the one table of the run, which lives in this
 process's memory for that run and goes in no report, audit row or stored tool log."""
+import asyncio
 import json
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -34,6 +36,7 @@ class _StandInToolServer:
         self.requests.append(body)
         numbers = redact.Numbers(key=body["masks"]["key"])
         numbers.table = {kind: dict(by_key) for kind, by_key in body["masks"].get("table", {}).items()}
+        numbers.after = dict(body["masks"].get("after", {}))
         out, stats = redact.redact_text(self.outputs.pop(0), redact.Options(pii=True), numbers)
         return httpx.Response(200, json={"content": out, "redacted": stats.as_dict(), "masks": numbers.table})
 
@@ -116,8 +119,9 @@ async def test_the_client_keeps_the_table_tool_server_answers_and_ignores_other_
     assert await c.call_tool("k8s_get_resources", {}) == "<EMAIL_1>"
     await c.call_tool("k8s_get_resources", {})
     await c.call_tool("k8s_get_resources", {})
-    assert sent[0] == {"key": c.numbers.key, "table": {}}
+    assert sent[0] == {"key": c.numbers.key, "table": {}, "after": {}}
     assert sent[1]["table"] == sent[2]["table"] == {"email": {"0123456789abcdef": 1}}
+    assert sent[1]["after"] == {"email": 1}
     assert c.numbers.table == {"email": {"0123456789abcdef": 1}}
 
 
@@ -127,18 +131,17 @@ def test_a_number_two_calls_at_once_gave_two_values_moves_in_the_later_answer():
     left_with = {"email": {"a" * 16: 1}}
     # both calls left with the same table; the first answer gives 2 and 3 to two new values
     assert numbers.take_answer(left_with, {"email": {"a" * 16: 1, "b" * 16: 2, "c" * 16: 3}}, "<EMAIL_2> <EMAIL_3>") == "<EMAIL_2> <EMAIL_3>"
-    # the second gave 2 to c, which the first answer numbered 3, and 3 to d, new to the run: they move to 3 and 4
-    later =numbers.take_answer(left_with, {"email": {"a" * 16: 1, "c" * 16: 2, "d" * 16: 3}}, "<EMAIL_1> <EMAIL_2> <EMAIL_3> <EMAIL_9>")
-    assert later == "<EMAIL_1> <EMAIL_3> <EMAIL_4> <EMAIL_9>"
-    assert numbers.table == {"email": {"a" * 16: 1, "b" * 16: 2, "c" * 16: 3, "d" * 16: 4}}
+    # the second gave 2 to c, which the first answer numbered 3, and 3 to d, new to the run: c moves to 3 and d past
+    # every number the run has seen, the 9 its text already held included
+    later = numbers.take_answer(left_with, {"email": {"a" * 16: 1, "c" * 16: 2, "d" * 16: 3}}, "<EMAIL_1> <EMAIL_2> <EMAIL_3> <EMAIL_9>")
+    assert later == "<EMAIL_1> <EMAIL_3> <EMAIL_10> <EMAIL_9>"
+    assert numbers.table == {"email": {"a" * 16: 1, "b" * 16: 2, "c" * 16: 3, "d" * 16: 10}}
     # a number of another kind is not taken
     assert numbers.take_answer({}, {"phone": {"e" * 16: 2}}, "<PHONE_2> <EMAIL_2>") == "<PHONE_2> <EMAIL_2>"
 
 
 @pytest.mark.asyncio
 async def test_two_calls_at_once_end_with_one_number_for_each_value():
-    import asyncio
-
     both_sent = asyncio.Event()
     seen = []
 
@@ -160,3 +163,143 @@ async def test_two_calls_at_once_end_with_one_number_for_each_value():
     assert seen[0]["table"] == seen[1]["table"] == {}  # both left before either answered
     assert sorted([a, b]) == ["user=<EMAIL_1>", "user=<EMAIL_2>"]
     assert sorted(c.numbers.table["email"].values()) == [1, 2]
+
+
+def test_the_highest_number_of_each_kind_a_conversation_already_holds():
+    texts = ["<EMAIL_1> wrote to <EMAIL_3>", None, "\\u003cPHONE_2\\u003e", "<EMAIL_1234567> <EMAIL_ADDRESS> <SSN_9>", {"x": "<EMAIL_8>"}]
+    assert redact.highest_numbers(texts) == {"email": 3, "phone": 2}
+
+
+def _client_on(stand_in):
+    c = ToolServerClient(authorization="Bearer t")
+    c.client = httpx.AsyncClient(base_url="http://tool-server", transport=httpx.MockTransport(stand_in.handler))
+    return c
+
+
+@pytest.mark.asyncio
+async def test_a_new_answer_numbers_past_the_placeholders_its_history_shows(monkeypatch):
+    """An earlier answer's <EMAIL_1> was another table's: a new value of this answer never takes 1, so the model is not led
+    to join two people. The same value would get a new number (a join missed, never a wrong one)."""
+    from app.services.ai import streaming
+    from tests.test_chat_turn_edges import stream, text_chunk, tool_call_chunk
+
+    class DB:
+        async def get_session(self, sid):
+            return SimpleNamespace(id=sid, user_id="u1")
+
+        async def add_message(self, sid, role, content, **kw):
+            pass
+
+        async def get_messages(self, sid):
+            return [SimpleNamespace(role="user", content="who called?"),
+                    SimpleNamespace(role="assistant", content="<EMAIL_1> called from <PHONE_2>."),
+                    SimpleNamespace(role="user", content="and now?")]
+
+        async def get_context(self, sid):
+            return None
+
+        async def update_context(self, sid, **kw):
+            pass
+
+        async def update_session_title(self, sid, title):
+            pass
+
+    async def get_db_service():
+        return DB()
+
+    async def no_audit(**kw):
+        return True
+
+    async def no_budget(*a, **kw):
+        return None
+
+    async def same_tools(tools, service):
+        return tools
+
+    monkeypatch.setattr("app.database.get_db_service", get_db_service)
+    monkeypatch.setattr("app.services.audit_writer.write_audit", no_audit)
+    monkeypatch.setattr(streaming.budget_mod, "check", no_budget)
+    monkeypatch.setattr("app.services.ai.features.gate_tools", same_tools)
+
+    replies = [stream([tool_call_chunk("k8s_get_pod_logs", json.dumps({"namespace": "apps", "pod_name": "web-1"}))]),
+               stream([text_chunk("Read it.")])]
+    calls = []
+
+    async def create(**kwargs):
+        calls.append(json.dumps(kwargs["messages"], ensure_ascii=False, default=str))
+        return replies.pop(0)
+
+    stand_in = _StandInToolServer(["login carol.planted@example.com from 010-4444-5555\n"])
+    tool_server = _client_on(stand_in)
+
+    async def execute(tool, tool_args, ctx):
+        return await tool_server.call_tool(tool, tool_args)
+
+    tools = [{"type": "function", "function": {"name": "k8s_get_pod_logs", "parameters": {"type": "object", "properties": {}}}}]
+    service = SimpleNamespace(
+        model="claude-haiku-5-5", provider="anthropic", user_role="admin", tier="default", cluster_name="self",
+        client=SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))),
+        tool_contexts={}, tool_server=tool_server,
+        _sanitize_history_content=lambda role, content: content,
+        _build_language_directive=lambda message: "Answer in English.",
+        _get_tools_definition=lambda: tools,
+        _filter_tools_for_output_preference=lambda tools, message: tools,
+        _execute_function_with_context=execute,
+    )
+    [e async for e in streaming.session_chat_stream(service, "s1", "and now?")]
+
+    assert stand_in.requests[0]["masks"]["after"] == {"email": 1, "phone": 2}
+    assert len(calls) == 2 and "login <EMAIL_2> from <PHONE_3>" in calls[1]
+    for value in ("carol.planted", "4444-5555"):
+        assert value not in calls[1], value
+
+
+@pytest.mark.asyncio
+async def test_the_floating_page_and_the_tool_results_of_an_answer_share_numbers(monkeypatch):
+    from app.models.floating_ai import PageContextPayload, VisibleDataLayer
+    from app.services.floating_ai_service import FloatingAIService
+
+    class DB:
+        async def get_messages(self, sid):
+            return [SimpleNamespace(role="assistant", content="<EMAIL_1> asked earlier.")]
+
+    async def get_db_service():
+        return DB()
+
+    monkeypatch.setattr("app.database.get_db_service", get_db_service)
+    monkeypatch.setenv("REDACTION_PII", "true")
+    stand_in = _StandInToolServer(["login ann.planted@example.com and bob.planted@example.com\n"])
+
+    class Chat:
+        def __init__(self):
+            self.tool_server = _client_on(stand_in)
+            self.kw = None
+            self.tool_text = None
+
+        async def session_chat_stream(self, **kw):
+            self.kw = kw
+            self.tool_text = await self.tool_server.call_tool("k8s_get_pod_logs", {"namespace": "apps", "pod_name": "web-1"})
+            yield "done"
+
+    ctx = PageContextPayload(
+        page_type="resource-detail", page_title="web-1", path="/workloads/pods", snapshot_at="2026-11-15T00:00:00Z",
+        base=VisibleDataLayer(source="base", summary="pod", data={"owner": "ann.planted@example.com", "note": "paged ann.planted@example.com"}),
+    )
+    chat = Chat()
+    assert [e async for e in FloatingAIService(chat).session_chat_stream("s1", "who?", page_context=ctx)] == ["done"]
+    page = chat.kw["extra_context_block"]
+    # one number for the value across the page's strings, past the history's <EMAIL_1>, and the same in the tool result
+    assert "ann.planted" not in page and '"owner":"<EMAIL_2>"' in page and '"note":"paged <EMAIL_2>"' in page
+    assert chat.tool_text == "login <EMAIL_2> and <EMAIL_3>\n"
+    assert stand_in.requests[0]["masks"]["after"] == {"email": 1}
+
+
+def test_an_alert_quoting_an_earlier_report_numbers_past_its_placeholders(monkeypatch):
+    from app.services.investigation import prompt as inv_prompt
+
+    monkeypatch.setenv("REDACTION_PII", "true")
+    numbers = redact.Numbers()
+    alert = {"annotations": {"summary": "the last report named <EMAIL_1> and <PHONE_2>; now dana.planted@example.com, 010-6666-7777"}}
+    msg = inv_prompt.alert_message(cluster="self", alert=alert, numbers=numbers)
+    assert "now <EMAIL_2>, <PHONE_3>" in msg and "dana.planted" not in msg
+    assert numbers.after == {"email": 1, "phone": 2}

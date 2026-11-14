@@ -724,6 +724,30 @@
       "table": {"email": {"a@b.io": 1}, "phone": {"01011112222": 1}, "rrn": {"9001011234567": 1}, "card": {"1234567890123456": 1, "4000000000000002": 2}}
     },
     {
+      "name": "numbers start past the highest one the conversation already holds",
+      "key": "fixture-key",
+      "after": {"email": 1, "phone": 2},
+      "inputs": ["mail x@example.com phone 010-5555-6666 then y@example.com\n"],
+      "want": ["mail <EMAIL_2> phone <PHONE_3> then <EMAIL_3>\n"],
+      "table": {"email": {"x@example.com": 2, "y@example.com": 3}, "phone": {"01055556666": 3}}
+    },
+    {
+      "name": "a table past the conversation's highest number goes on from the table",
+      "key": "fixture-key",
+      "after": {"email": 2},
+      "seed": {"email": {"carol@example.com": 5}},
+      "inputs": ["dave@example.com\n"],
+      "want": ["<EMAIL_6>\n"],
+      "table": {"email": {"carol@example.com": 5, "dave@example.com": 6}}
+    },
+    {
+      "name": "a number a text already holds is not given to a new value, in that text or a later one",
+      "key": "fixture-key",
+      "inputs": ["old <EMAIL_4> and \\u003cPHONE_1\\u003e, new z@example.com 010-7777-8888\n", "again z@example.com and w@example.com\n"],
+      "want": ["old <EMAIL_4> and \\u003cPHONE_1\\u003e, new <EMAIL_5> <PHONE_2>\n", "again <EMAIL_5> and <EMAIL_6>\n"],
+      "table": {"email": {"z@example.com": 5, "w@example.com": 6}, "phone": {"01077778888": 2}}
+    },
+    {
       "name": "a placeholder already in the text is not a value",
       "key": "fixture-key",
       "inputs": ["owner: <EMAIL_7> or <PHONE_2>\n"],

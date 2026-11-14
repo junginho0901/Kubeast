@@ -27,7 +27,7 @@ from app.services.ai.debug_dump import dump, log, safe_error
 from app.services.ai.prompts import SYSTEM_MESSAGE
 from app.services.prompt_fence import inside_tag
 from app.services.audit_target import shown_tool_args
-from app.services.redact import redact_text
+from app.services.redact import highest_numbers, redact_text
 
 if TYPE_CHECKING:
     from app.services.ai_service import AIService
@@ -851,6 +851,11 @@ async def session_chat_stream(
             from app.services.ai.permissions import unavailable_note
             if note := unavailable_note(service):
                 messages.append({"role": "system", "content": note})
+
+        # This answer's personal-data numbers start past the highest the model already reads here (earlier answers, the
+        # summary, the question, the page), so a new value never takes a number an earlier answer gave another one.
+        if (numbers := getattr(getattr(service, "tool_server", None), "numbers", None)) is not None:
+            numbers.start_after(highest_numbers([m.get("content") for m in messages] + [message]))
 
         # 모델 정보를 스트림 첫 이벤트로 전송 (브라우저 콘솔에서 확인용)
         yield f"data: {json.dumps({'model_info': {'provider': service.provider, 'model': service.model, 'role': service.user_role, 'tier': getattr(service, 'tier', 'default')}}, ensure_ascii=False)}\n\n"
