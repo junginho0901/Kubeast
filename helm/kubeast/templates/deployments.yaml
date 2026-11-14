@@ -79,6 +79,7 @@ spec:
             {{- end }}
             {{- include "kubeast.dbCAVolumeMount" . | nindent 12 }}
             {{- include "kubeast.customCAVolumeMount" . | nindent 12 }}
+          {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8004) | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /health
@@ -331,6 +332,7 @@ spec:
               readOnly: true
             {{- end }}
           {{- end }}
+          {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8002) | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /health
@@ -401,6 +403,7 @@ spec:
             {{- . | trim | nindent 12 }}
           {{- end }}
           {{- include "kubeast.serviceVolumeMountsBlock" . | nindent 10 }}
+          {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8003) | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /health

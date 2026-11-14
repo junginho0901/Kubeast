@@ -224,6 +224,24 @@ resources:
 {{- end -}}
 
 {{/*
+startupProbe of a service that opens its port only after waiting for the
+database at boot; liveness and readiness start once it passes. 180 s covers the
+longest wait (auth-service and session-service: 30 pings 2 s apart, then 60 s
+for the schema; k8s-service: AUDIT_DB_WAIT_SEC 90 s, then up to 10 s in
+k8s.NewService) and 60 s of migrations. Usage, with the liveness path and port:
+  {{ include "kubeast.startupProbe" (dict "path" "/health" "port" 8004) }}
+*/}}
+{{- define "kubeast.startupProbe" -}}
+{{- $period := 5 -}}
+startupProbe:
+  httpGet:
+    path: {{ .path }}
+    port: {{ .port }}
+  periodSeconds: {{ $period }}
+  failureThreshold: {{ div 180 $period }}
+{{- end -}}
+
+{{/*
 Annotations of one of the chart's ServiceAccounts: serviceAccounts.<key>.annotations,
 over the aws.irsaRoleArn role when eksAuth (k8s-service and tool-server run
 aws-iam-authenticator with the credentials the EKS pod identity webhook injects).
