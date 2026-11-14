@@ -6,6 +6,13 @@ export function aiEnabled(features?: ClusterFeatures | null): boolean {
   return features?.ai?.enabled !== false
 }
 
+// AIGate and the MCP card: 'wait' while the features are their placeholder (unless the cluster list they wait for failed); unknown as above.
+export type AIState = 'wait' | 'on' | 'off'
+export function aiState(features: ClusterFeatures | null | undefined, featuresPlaceholder: boolean, clusterListFailed = false): AIState {
+  if (featuresPlaceholder && !clusterListFailed) return 'wait'
+  return aiEnabled(features) ? 'on' : 'off'
+}
+
 // Chart features.cost.enabled: the Cost page and the optimization table's cost
 // columns. Unknown counts as off — an older server has no /cluster/cost to show.
 export function costEnabled(features?: ClusterFeatures | null): boolean {
@@ -31,6 +38,11 @@ export function networkFlowsEnabledFor(features: ClusterFeatures | null | undefi
 // Chart features.networkFlowMonitor: whether the cluster has a Network Flow Monitor monitor. Unknown counts as off.
 export function networkFlowMonitorEnabledFor(features: ClusterFeatures | null | undefined, clusterId: string): boolean {
   return features?.networkFlowMonitor?.enabled === true && !!clusterId && (features.networkFlowMonitor.clusters ?? []).includes(clusterId)
+}
+
+// Chart features.alertStore for this cluster: Kubeast reads its Alertmanager (the Alerts page's live state and Silences tab). Unknown counts as off.
+export function alertStoreEnabledFor(features: ClusterFeatures | null | undefined, clusterId: string): boolean {
+  return features?.alertStore?.enabled === true && !!clusterId && (features.alertStore.clusters ?? []).includes(clusterId)
 }
 
 // Chart features.tracing: the URL templates of trace links, or undefined when off. Unknown counts as off.

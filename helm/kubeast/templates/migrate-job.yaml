@@ -15,6 +15,8 @@ metadata:
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:
   backoffLimit: 3
+  # the binary's DB wait (30 tries, 2 s apart) plus goose's lock wait (5 min) plus the migrations, with room
+  activeDeadlineSeconds: 600
   template:
     metadata:
       labels:

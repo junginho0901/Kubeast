@@ -7,6 +7,7 @@ import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { useRefresh } from '@/hooks/useRefresh'
+import { prometheusNotAnswering } from '@/hooks/usePrometheusQuery'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { podNotRunning } from '@/utils/aiContext/podCounts'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -43,7 +44,7 @@ export default function GPUPods() {
     retryDelay: 1000,
   })
 
-  const { data: metrics } = useQuery<GPUMetricsData>({
+  const { data: metrics, error: metricsError } = useQuery<GPUMetricsData>({
     queryKey: ['gpu', 'metrics'],
     queryFn: () => api.getGPUMetrics(),
     enabled: !limited,
@@ -52,6 +53,8 @@ export default function GPUPods() {
   })
 
   const metricsAvailable = metrics?.available ?? false
+  // the cluster's Prometheus is set but did not answer: the table's metric columns say so in their place
+  const metricsFailure = metricsAvailable ? null : prometheusNotAnswering(metricsError)
 
   // Build pod→GPU metrics lookup (every GPU of a pod, not the last one seen)
   const podMetricsMap = useMemo(() => podGpuUsage(metrics?.gpus), [metrics])
@@ -242,6 +245,7 @@ export default function GPUPods() {
         sortedPodsLength={sortedPods.length}
         isLoading={isLoading}
         metricsAvailable={metricsAvailable}
+        metricsFailure={metricsFailure}
         podMetricsMap={podMetricsMap}
         showCharts={showCharts}
         sortKey={sortKey}

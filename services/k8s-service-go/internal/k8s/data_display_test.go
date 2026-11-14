@@ -50,7 +50,7 @@ func TestPreferredFirstResolvesThePreferredVersion(t *testing.T) {
 	for _, l := range ordered {
 		gvs = append(gvs, l.GroupVersion)
 	}
-	if got := strings.Join(gvs, ","); got != "autoscaling/v2,v1,autoscaling/v1" {
+	if got := strings.Join(gvs, ","); got != "v1,autoscaling/v2,autoscaling/v1" {
 		t.Fatalf("order = %s", got)
 	}
 

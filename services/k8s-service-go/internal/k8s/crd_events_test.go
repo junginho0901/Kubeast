@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -37,12 +36,12 @@ func TestDescribeCRD_EventsAndSubresourcesInOrder(t *testing.T) {
 	}
 	api := &clusterDrawersAPI{
 		objects: map[string]interface{}{"/apis/apiextensions.k8s.io/v1/customresourcedefinitions/" + name: crd},
-		events: []corev1.Event{
+		events: naming("u-crd",
 			gatewayEvent("default", "CustomResourceDefinition", name, "Established", now.Add(-5*time.Minute)),
 			gatewayEvent("kube-system", "CustomResourceDefinition", name, "NamesAccepted", now.Add(-time.Minute)),
 			gatewayEvent("default", "Widget", name, "OtherKind", now),
 			gatewayEvent("default", "CustomResourceDefinition", "gadgets.numbers.kubeast.io", "OtherName", now),
-		},
+		),
 	}
 	srv := httptest.NewServer(http.HandlerFunc(api.serve))
 	t.Cleanup(srv.Close)

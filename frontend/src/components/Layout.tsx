@@ -51,7 +51,7 @@ import { useCluster } from '../contexts/ClusterContext'
 import { usePermission } from '@/hooks/usePermission'
 import { usePendingAccessRequestCount } from '@/hooks/usePendingAccessRequestCount'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
-import { aiEnabled, alertInvestigationEnabled, costEnabled, policyReportsEnabled } from '@/utils/features'
+import { aiEnabled, alertInvestigationEnabled, alertStoreEnabledFor, costEnabled, policyReportsEnabled } from '@/utils/features'
 import { resolveRouteMeta } from '@/utils/aiContext/routeMatcher'
 import { ADMIN_PAGE_PERMISSIONS, isGlobalAdmin, readsHygiene } from '@/utils/adminAccess'
 
@@ -181,8 +181,8 @@ export default function Layout() {
   const costOn = costEnabled(clusterFeatures)
   const policyReportsOn = policyReportsEnabled(clusterFeatures)
   const investigationsOn = aiOn && alertInvestigationEnabled(clusterFeatures)
-  // Alerts cover the whole cluster: the inbox is for whoever reads the selected cluster without a namespace limit.
-  const alertsOn = investigationsOn && hasPermission('resource.pod.read') && !(clusterNamespaces?.length)
+  // Alerts cover the whole cluster: the inbox, and the alert store's silences without it, are for whoever reads the selected cluster without a namespace limit.
+  const alertsOn = (investigationsOn || alertStoreEnabledFor(clusterFeatures, currentCluster)) && hasPermission('resource.pod.read') && !(clusterNamespaces?.length)
   // Admin pages each need their own permission (utils/adminAccess), held in the matrix "*" entry; only "*" itself
   // reaches every cluster.
   const globalAdmin = isGlobalAdmin(matrix)

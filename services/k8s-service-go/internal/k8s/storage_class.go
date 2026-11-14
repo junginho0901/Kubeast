@@ -185,7 +185,7 @@ func (s *Service) DescribeStorageClass(ctx context.Context, name string) (map[st
 	}
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(sc.UID))
 
 	return result, nil
 }

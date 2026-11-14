@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getBezierPath, Position } from '@xyflow/react'
 import type { ClusterFeatures, NetflowGroup, ResourceGraphNode, TrafficLine } from '@/services/api'
-import { anchorOf, boxHeight, buildTraffic, byPort, checkFor, endText, lineState, MAX_ROWS, pointOnBezier, portText, rowCenter, roundedPath, trafficParams, trafficSources, PEER_KIND } from './traffic'
+import { anchorOf, boxHeight, buildTraffic, byPort, checkFor, endText, lineState, MAX_ROWS, metricsFailure, pointOnBezier, portText, rowCenter, roundedPath, trafficParams, trafficSources, PEER_KIND } from './traffic'
 
 const node = (kind: string, namespace: string, name: string): ResourceGraphNode => ({ id: `${kind}/${namespace}/${name}`, kind, name, namespace, status: 'Running' })
 const shown = new Map([node('Deployment', 'shop', 'web'), node('Deployment', 'shop', 'client'), node('Pod', 'shop', 'debug'), node('StatefulSet', 'shop', 'db')].map((n) => [n.id, n]))
@@ -21,6 +21,34 @@ describe('trafficSources', () => {
   it('asks the server for the source', () => {
     expect(trafficParams('relay')).toEqual({ source: 'relay' })
     expect(trafficParams('24h')).toEqual({ source: 'metrics', range: '24h' })
+  })
+})
+
+describe('metricsFailure', () => {
+  const features = (prometheus: boolean) => ({ prometheus: { enabled: prometheus } }) as unknown as ClusterFeatures
+  const httpError = (status: number | undefined, detail?: string) => ({ response: status === undefined ? undefined : { status, data: detail ? { detail } : undefined }, message: 'Network Error' })
+  it('says why when the cluster\'s Prometheus is set and its status says it does not answer', () => {
+    const reason = 'prometheus request failed (status 503)'
+    expect(metricsFailure(features(true), { available: false, source: 'external', message: reason }, null)).toBe(reason)
+    expect(metricsFailure(features(true), { available: false, source: 'proxy', configured: true, message: 'Prometheus Service monitoring/prometheus:9: no port 9' }, null)).toBe('Prometheus Service monitoring/prometheus:9: no port 9')
+    expect(metricsFailure(features(true), { available: false, source: 'external' }, null)).toBe('-')
+  })
+  it('says why when the status read itself got the server\'s 5xx or no answer, not a refusal', () => {
+    expect(metricsFailure(features(true), undefined, httpError(502, 'upstream down'))).toBe('upstream down')
+    expect(metricsFailure(features(true), undefined, httpError(undefined))).toBe('Network Error')
+    expect(metricsFailure(features(true), undefined, httpError(403, 'no permission'))).toBeNull()
+  })
+  it('says nothing when Prometheus answers, the cluster has none, the feature is off or nothing was read yet', () => {
+    expect(metricsFailure(features(true), { available: true, source: 'proxy' }, null)).toBeNull()
+    expect(metricsFailure(features(true), { available: false, source: 'none', message: 'Prometheus not found in target cluster', reason: 'not_found' }, null)).toBeNull()
+    expect(metricsFailure(features(false), { available: false, source: 'external', message: 'down' }, null)).toBeNull()
+    expect(metricsFailure(undefined, { available: false, source: 'external', message: 'down' }, null)).toBeNull()
+    expect(metricsFailure(features(true), undefined, null)).toBeNull()
+  })
+  it('leaves the Relay source as it is: the switch keeps it beside the reason', () => {
+    const both = { prometheus: { enabled: true }, networkFlows: { enabled: true, clusters: ['c1'] } } as unknown as ClusterFeatures
+    expect(trafficSources(both, 'c1', false)).toEqual(['relay'])
+    expect(metricsFailure(both, { available: false, source: 'external', message: 'down' }, null)).toBe('down')
   })
 })
 

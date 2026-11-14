@@ -1,0 +1,165 @@
+suite: startup probes — the services that wait for the database at boot
+# auth-service, k8s-service and session-service open /health only after the
+# database (and the schema) answered, which can take longer than their liveness
+# probes allow (about 65–90 s); the startup probe holds liveness off for 180 s.
+templates:
+  - deployments.yaml
+  - configmap.yaml
+  - secret.yaml
+  - gateway.yaml
+  - postgres.yaml
+  - redis.yaml
+tests:
+  - it: gives auth-service 180 s on its liveness path before liveness starts
+    template: deployments.yaml
+    documentSelector:
+      path: metadata.name
+      value: auth-service
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet:
+              path: /health
+              port: 8004
+            periodSeconds: 5
+            failureThreshold: 36
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe
+          value:
+            httpGet:
+              path: /health
+              port: 8004
+            initialDelaySeconds: 5
+            periodSeconds: 30
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet:
+              path: /health
+              port: 8004
+            initialDelaySeconds: 3
+            periodSeconds: 10
+
+  - it: gives k8s-service 180 s on its liveness path before liveness starts
+    template: deployments.yaml
+    documentSelector:
+      path: metadata.name
+      value: k8s-service
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet:
+              path: /health
+              port: 8002
+            periodSeconds: 5
+            failureThreshold: 36
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe
+          value:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 10
+            periodSeconds: 30
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 3
+            periodSeconds: 10
+
+  - it: gives session-service 180 s on its liveness path before liveness starts
+    template: deployments.yaml
+    documentSelector:
+      path: metadata.name
+      value: session-service
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet:
+              path: /health
+              port: 8003
+            periodSeconds: 5
+            failureThreshold: 36
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe
+          value:
+            httpGet:
+              path: /health
+              port: 8003
+            initialDelaySeconds: 10
+            periodSeconds: 30
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet:
+              path: /health
+              port: 8003
+            initialDelaySeconds: 3
+            periodSeconds: 10
+
+  - it: keeps the startup probes with pod security off and migrations in a Job
+    template: deployments.yaml
+    set:
+      podSecurity.enabled: false
+      migrations.mode: job
+    asserts:
+      - exists:
+          path: spec.template.spec.containers[0].startupProbe
+        documentSelector:
+          path: metadata.name
+          value: auth-service
+      - exists:
+          path: spec.template.spec.containers[0].startupProbe
+        documentSelector:
+          path: metadata.name
+          value: k8s-service
+      - exists:
+          path: spec.template.spec.containers[0].startupProbe
+        documentSelector:
+          path: metadata.name
+          value: session-service
+
+  - it: leaves the services that answer without waiting for the database as they were
+    template: deployments.yaml
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].startupProbe
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+      - notExists:
+          path: spec.template.spec.containers[0].startupProbe
+        documentSelector:
+          path: metadata.name
+          value: tool-server
+      - notExists:
+          path: spec.template.spec.containers[0].startupProbe
+        documentSelector:
+          path: metadata.name
+          value: model-config-controller-go
+      - notExists:
+          path: spec.template.spec.containers[0].startupProbe
+        documentSelector:
+          path: metadata.name
+          value: frontend
+
+  - it: leaves gateway, postgres and redis without a startup probe
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].startupProbe
+        template: gateway.yaml
+      - notExists:
+          path: spec.template.spec.containers[0].startupProbe
+        template: postgres.yaml
+      - notExists:
+          path: spec.template.spec.containers[0].startupProbe
+        template: redis.yaml
