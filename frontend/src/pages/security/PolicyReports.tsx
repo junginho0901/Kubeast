@@ -13,6 +13,7 @@ import { useAIContext } from '@/hooks/useAIContext'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { failureFields, readFailure } from '@/utils/aiContext/readFailure'
 import { policyResultTarget } from '@/utils/detailTargets'
 import { formatTime, utcTitle } from '@/utils/time'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
@@ -178,16 +179,22 @@ export default function PolicyReports() {
   const pagedPolicies = useMemo(() => pageSlice(sortedPolicies), [sortedPolicies, currentPage, rowsPerPage]) // eslint-disable-line react-hooks/exhaustive-deps
   const pagedNamespaces = useMemo(() => pageSlice(sortedNamespaces), [sortedNamespaces, currentPage, rowsPerPage]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The Results tab's rows are told once they are read: nothing is counted while the first read is on its way, and a
+  // read that failed or was refused says so with its reason, as the table does, never "0 results".
+  const resultsUnread = tab === 'results' && !results
+  const resultsError = resultsUnread && resultsQuery.isError ? resultsQuery.error : null
   const aiSnapshot = useMemo(() => {
     if (!summary) return null
     const list = tab === 'policies' ? pagedPolicies : tab === 'namespaces' ? pagedNamespaces : pagedResults
+    const unread = resultsError ? (readFailure(resultsError).refused ? '; the results were refused' : '; the results could not be read') : ''
     return {
       source: 'base' as const,
-      summary: `Policy reports: ${summary.totals.fail} fail, ${summary.totals.warn} warn, ${summary.totals.error} error over ${summary.reports} reports (${tab})`,
+      summary: `Policy reports: ${summary.totals.fail} fail, ${summary.totals.warn} warn, ${summary.totals.error} error over ${summary.reports} reports (${tab})${unread}`,
       data: {
         filters: { tab, namespace: namespace || undefined, policy: policy || undefined, policySource: policySource || undefined, result: resultFilter, severity: severity || undefined, search: searchQuery || undefined, scoped: summary.scoped },
         stats: { ...summary.totals, reports: summary.reports, truncated: summary.truncated, cluster_reports_error: clusterReportsError },
-        ...summarizeList(list as unknown as Record<string, unknown>[], {
+        ...(resultsError ? failureFields('results', resultsError) : {}),
+        ...(resultsUnread ? {} : summarizeList(list as unknown as Record<string, unknown>[], {
           total: rowCount,
           currentPage,
           pageSize: rowsPerPage,
@@ -195,10 +202,10 @@ export default function PolicyReports() {
           pickFields: tab === 'results'
             ? ['result', 'severity', 'policy', 'rule', 'kind', 'api_version', 'name', 'selector', 'namespace', 'message']
             : tab === 'policies' ? ['policy', 'category', 'severity', 'source', 'fail', 'warn', 'error', 'pass', 'skip'] : ['namespace', 'policies', 'fail', 'warn', 'error', 'pass', 'skip'],
-        }),
+        })),
       },
     }
-  }, [summary, clusterReportsError, tab, pagedPolicies, pagedNamespaces, pagedResults, rowCount, currentPage, rowsPerPage, namespace, policy, policySource, resultFilter, severity, searchQuery])
+  }, [summary, clusterReportsError, tab, pagedPolicies, pagedNamespaces, pagedResults, resultsUnread, resultsError, rowCount, currentPage, rowsPerPage, namespace, policy, policySource, resultFilter, severity, searchQuery])
   useAIContext(aiSnapshot, [aiSnapshot])
 
   // Force refresh: past the server's one-minute cache, so a fix shows up as soon as the engine reports it.

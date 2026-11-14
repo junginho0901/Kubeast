@@ -15,6 +15,7 @@ import SearchSettings from '@/components/search/SearchSettings'
 import SavedSearches from '@/components/search/SavedSearches'
 import type { SavedSearch } from '@/components/search/savedSearchStore'
 import { rememberPrinterStatus, searchWithExpression, toSearchResult, SearchResult } from '@/components/search/searchEngine'
+import { searchReadGaps, searchReadGapsText } from '@/components/search/searchReadGaps'
 import { useAIContext } from '@/hooks/useAIContext'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { failureText } from '@/utils/failureText'
@@ -199,7 +200,7 @@ export default function AdvancedSearch() {
     }
     const summary = `고급 검색 ${searchResults.length}건 — 쿼리: "${rawQuery || '(없음)'}"${
       namespace ? ` · namespace=${namespace}` : ''
-    }`
+    }${searchReadGapsText(fetchResult)}`
     return {
       source: 'base' as const,
       summary,
@@ -209,6 +210,8 @@ export default function AdvancedSearch() {
         selected_resource_types: Array.from(selectedResources),
         total: searchResults.length,
         by_kind: byKind,
+        // the toolbar's "N failed" and "the first N only": these results are over part of the objects
+        ...searchReadGaps(fetchResult),
         top_results: searchResults.slice(0, 20).map((r) => {
           const link = buildResourceLink(r.kind, r.namespace, r.name)
           return {
@@ -223,7 +226,7 @@ export default function AdvancedSearch() {
         }),
       },
     }
-  }, [searchResults, rawQuery, namespace, selectedResources])
+  }, [searchResults, rawQuery, namespace, selectedResources, fetchResult])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
