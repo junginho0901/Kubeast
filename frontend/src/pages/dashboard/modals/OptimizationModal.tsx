@@ -301,6 +301,7 @@ export function OptimizationModal({
             <button
               onClick={onClose}
               className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+              aria-label={tr('common.close', 'Close')}
             >
               <X className="w-5 h-5 text-slate-400" />
             </button>

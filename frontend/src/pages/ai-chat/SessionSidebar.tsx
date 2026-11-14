@@ -261,6 +261,7 @@ export function SessionSidebar({
                         <button
                           onClick={handleCancelEdit}
                           className="shrink-0 p-1 hover:bg-slate-600 rounded-sm"
+                          aria-label={t('common.cancel')}
                         >
                           <X className="w-4 h-4 text-red-400" />
                         </button>

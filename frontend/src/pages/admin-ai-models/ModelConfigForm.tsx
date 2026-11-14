@@ -77,7 +77,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
             </>
           )}
         </h2>
-        <button onClick={resetForm} className="text-slate-500 hover:text-slate-300 transition">
+        <button onClick={resetForm} className="text-slate-500 hover:text-slate-300 transition" aria-label={tr('common.close', 'Close')}>
           <X className="h-4 w-4" />
         </button>
       </div>}
