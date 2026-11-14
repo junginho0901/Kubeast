@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -340,4 +341,13 @@ func TestAReplicaStartedWithoutRedisHearsTheNoticesOnceRedisAnswers(t *testing.T
 	a := newReplica(t, g, mr, time.Hour)
 	a.Changed("dev")
 	eventually(t, func() bool { return equal(b.noticeDrops(), []cluster.ID{"dev"}) })
+}
+
+// The chart's Redis user k8s-service publishes and subscribes on channels under kubeast: only (&kubeast:*).
+func TestTheChannelIsWithinTheACLChannelPattern(t *testing.T) {
+	for _, db := range []int{0, 3, 15} {
+		if ch := ChannelFor(db); !strings.HasPrefix(ch, "kubeast:") {
+			t.Fatalf("channel %q for db %d is outside kubeast:", ch, db)
+		}
+	}
 }
