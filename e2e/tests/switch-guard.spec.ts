@@ -244,6 +244,8 @@ test.describe('switch guard: nothing of the condition before after a switch', ()
       const held = hold.held()
       await hold.release()
       const shown = await showsNew(page, theirs, mine)
+      // what the screen held when that wait ended, told again below once the new cluster's own names are known
+      const lastNames = shown ? [] : await rowNames(page)
       await net.quiet()
       const after = await cardValues(page)
       const rec = await recording(page)
@@ -263,8 +265,11 @@ test.describe('switch guard: nothing of the condition before after a switch', ()
       const oldCards = Object.fromEntries(Object.entries(cards).filter(([id, v]) => after[id] !== v))
       problems.push(...afterSwitch(rec, { what, switched: (f) => f.cluster.startsWith(named[target]), oldRows: mine, oldCards }))
       if (held === 0) problems.push(`${what}: the screen asked no read of ${to} in ${WINDOW_MS} ms`)
-      if (!shown) problems.push(`${what}: ${to}'s rows did not show after its answers came`)
-      checked.push(`${what}: ${mine.length} rows and ${Object.keys(oldCards).length} cards only ${from} has`)
+      // a name both clusters have (a status word, a list read from the screen's cache) is no row of the cluster before
+      const newRows = shown || (lastNames.length > 0 && !lastNames.some((n) => mine.some((k) => n.includes(k))))
+      if (!newRows) problems.push(`${what}: ${to}'s rows did not show after its answers came`)
+      if (mine.length || Object.keys(oldCards).length) checked.push(`${what}: ${mine.length} rows and ${Object.keys(oldCards).length} cards only ${from} has`)
+      else notes.push(`${what}: every row it showed is ${to}'s too`)
       ;[from, to] = [to, from]
     }
     await testInfo.attach('cluster-switch-screens.json', { body: JSON.stringify({ checked, notes }, null, 2), contentType: 'application/json' })
@@ -413,8 +418,9 @@ test.describe('switch guard: nothing of the condition before after a switch', ()
       await route.fulfill({ json: { since: u.searchParams.get('since'), until: u.searchParams.get('until'), group, rows, limit: null, truncated: false, totals: sums(rows) } })
     })
     await page.goto('/admin/ai-usage')
-    const table = page.getByTestId('ai-usage-table')
-    await expect(table.locator('tbody')).toContainText(byGroup.user[0].key, { timeout: 20_000 })
+    // the rows' tbody, not the filler rows' (AdaptiveTableFillerRows, aria-hidden) under it
+    const body = page.getByTestId('ai-usage-table').locator('tbody:not([aria-hidden="true"])')
+    await expect(body).toContainText(byGroup.user[0].key, { timeout: 20_000 })
     const totals = (await page.locator('main .ml-auto.text-xs').first().innerText()).replace(/\s+/g, ' ').trim()
     const group = page.getByTestId('ai-usage-group')
     const { problems } = await watchSwitch(page, {
@@ -424,7 +430,7 @@ test.describe('switch guard: nothing of the condition before after a switch', ()
         await group.click()
         await group.locator('xpath=..').getByRole('button', { name: EN.adminAIUsage.group.model, exact: true }).click()
       },
-      shown: () => expect(table.locator('tbody')).toContainText(byGroup.model[0].key, { timeout: 10_000 }).then(() => true, () => false),
+      shown: () => expect(body).toContainText(byGroup.model[0].key, { timeout: 10_000 }).then(() => true, () => false),
       watch: () => ({ what: 'AI Usage user → model', switched: (f) => f.probes.group.includes(EN.adminAIUsage.group.model), oldRows: byGroup.user.map((r) => r.key), oldProbes: { totals } }),
     })
     expect(problems, 'frames that showed the user grouping after the picker showed Model').toEqual([])
@@ -525,7 +531,9 @@ test.describe('switch guard: nothing of the condition before after a switch', ()
     await page.getByRole('button', { name: EN.dashboard.optimization.run, exact: true }).click({ timeout: 20_000 })
     await expect(page.getByTestId('optimization-ai'), 'the dev install has AI on and draws the answer').toContainText(marker(from), { timeout: 20_000 })
     const mine = await page.getByTestId('optimization-open').allInnerTexts()
-    const theirs = await (await page.request.get(`/api/v1/cluster/optimization?namespace=${to}&cluster=self`, { headers: XRW })).text()
+    const answer = (await (await page.request.get(`/api/v1/cluster/optimization?namespace=${to}&cluster=self`, { headers: XRW })).json()) as { rows?: { kind: string; name: string }[] }
+    // a row of the window reads Kind/name, two fields of the answer
+    const theirs = (answer.rows ?? []).map((r) => `${r.kind}/${r.name}`)
     const oldRows = [...new Set(mine.map((n) => n.trim()).filter(tellable).filter((n) => !theirs.includes(n)))]
     await trigger.evaluate((el) => el.setAttribute('data-sg-probe', 'ns'))
     const { problems } = await watchSwitch(page, {
