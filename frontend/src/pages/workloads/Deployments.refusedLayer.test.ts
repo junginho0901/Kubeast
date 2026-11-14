@@ -37,7 +37,7 @@ beforeEach(() => {
 const KEY = ['workloads', 'deployments', 'all']
 
 // The page as it stands once its list answered: rows, or the error its read ended with.
-function open(answer: { rows: unknown[] } | { error: unknown }): string {
+function open(answer: { rows: unknown[] } | { error: Error }): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, retryOnMount: false, staleTime: Infinity } } })
   client.setQueryData(['namespaces'], [])
   if ('rows' in answer) client.setQueryData(KEY, answer.rows)
@@ -50,14 +50,14 @@ const baseLayers = () => told.filter((l) => (l.source ?? 'base') === 'base')
 describe('a list page whose list was not read', () => {
   it('says no 0 to the floating chat when the list was refused', () => {
     recordForbidden('/cluster/deployments/all')
-    const html = open({ error: { response: { status: 403, data: { detail: 'deployments.apps is forbidden' } }, message: 'Request failed with status code 403' } })
+    const html = open({ error: Object.assign(new Error('Request failed with status code 403'), { response: { status: 403, data: { detail: 'deployments.apps is forbidden' } } }) })
     expect(html).toContain('data-testid="table-forbidden"')
     expect(baseLayers()).toEqual([])
   })
 
   it('says no 0 when the list failed, and the empty row tells the chat why', () => {
     recordListStatus({ url: '/cluster/deployments/all', state: 'error', code: 500, reason: 'etcd timed out' })
-    const html = open({ error: { response: { status: 500, data: { detail: 'etcd timed out' } }, message: 'Request failed with status code 500' } })
+    const html = open({ error: Object.assign(new Error('Request failed with status code 500'), { response: { status: 500, data: { detail: 'etcd timed out' } } }) })
     expect(html).toContain('data-testid="table-load-error"')
     expect(baseLayers()).toEqual([])
     expect(told.find((l) => l.source === 'TableEmptyRow')?.data).toEqual({ notice: 'list_failed', list: 'Deployment', code: 500, reason: 'etcd timed out' })
