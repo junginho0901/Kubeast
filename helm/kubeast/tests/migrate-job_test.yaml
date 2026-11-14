@@ -27,6 +27,10 @@ tests:
       - equal:
           path: metadata.annotations["helm.sh/hook-delete-policy"]
           value: before-hook-creation,hook-succeeded
+      # one above the -1 of networkpolicy.yaml's RELEASE-NAME-migrate-hook, which opens its database egress first
+      - equal:
+          path: metadata.annotations["helm.sh/hook-weight"]
+          value: "0"
       - equal:
           path: spec.template.spec.restartPolicy
           value: OnFailure
@@ -43,6 +47,18 @@ tests:
           content:
             secretRef:
               name: kubeast-secrets
+
+  - it: ends the Job after 10 minutes, so a database it cannot reach fails the hook instead of retrying past Helm's timeout
+    template: migrate-job.yaml
+    set:
+      migrations.mode: job
+    asserts:
+      - equal:
+          path: spec.activeDeadlineSeconds
+          value: 600
+      - equal:
+          path: spec.backoffLimit
+          value: 3
 
   - it: carries kubeast-config's values itself, since a pre-install hook runs before the release creates that ConfigMap
     template: migrate-job.yaml
