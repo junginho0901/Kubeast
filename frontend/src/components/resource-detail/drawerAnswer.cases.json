@@ -4505,5 +4505,174 @@
    "volumes_attached": [],
    "volumes_in_use": []
   }
+ },
+ {
+  "name": "a namespace that gained a label and an annotation",
+  "resource": "namespaces",
+  "before": {
+   "annotations": null,
+   "conditions": [],
+   "created_at": "2026-11-01T00:00:00Z",
+   "events": [],
+   "finalizers": null,
+   "labels": {
+    "kubernetes.io/metadata.name": "shop"
+   },
+   "limit_ranges": [],
+   "name": "shop",
+   "owner_references": [],
+   "pod_summary": {
+    "cpu_limits_millicores": 0,
+    "cpu_requests_millicores": 0,
+    "memory_limits_bytes": 0,
+    "memory_requests_bytes": 0,
+    "phases": null,
+    "summed_pods": 0,
+    "total": 0
+   },
+   "resource_counts": {
+    "configmaps": 0,
+    "deployments": 0,
+    "pods": 0,
+    "secrets": 0,
+    "services": 0
+   },
+   "resource_quotas": [],
+   "resource_version": "10",
+   "status": "Active",
+   "uid": "ns-uid-1"
+  },
+  "frame": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "kubernetes.io/metadata.name": "shop",
+    "team": "a"
+   },
+   "name": "shop",
+   "status": "Active"
+  },
+  "after": {
+   "annotations": {
+    "owner": "team-a"
+   },
+   "conditions": [],
+   "created_at": "2026-11-01T00:00:00Z",
+   "events": [],
+   "finalizers": null,
+   "labels": {
+    "kubernetes.io/metadata.name": "shop",
+    "team": "a"
+   },
+   "limit_ranges": [],
+   "name": "shop",
+   "owner_references": [],
+   "pod_summary": {
+    "cpu_limits_millicores": 0,
+    "cpu_requests_millicores": 0,
+    "memory_limits_bytes": 0,
+    "memory_requests_bytes": 0,
+    "phases": null,
+    "summed_pods": 0,
+    "total": 0
+   },
+   "resource_counts": {
+    "configmaps": 0,
+    "deployments": 0,
+    "pods": 0,
+    "secrets": 0,
+    "services": 0
+   },
+   "resource_quotas": [],
+   "resource_version": "11",
+   "status": "Active",
+   "uid": "ns-uid-1"
+  }
+ },
+ {
+  "name": "a namespace being deleted",
+  "resource": "namespaces",
+  "before": {
+   "annotations": null,
+   "conditions": [],
+   "created_at": "2026-11-01T00:00:00Z",
+   "events": [],
+   "finalizers": null,
+   "labels": {
+    "kubernetes.io/metadata.name": "shop"
+   },
+   "limit_ranges": [],
+   "name": "shop",
+   "owner_references": [],
+   "pod_summary": {
+    "cpu_limits_millicores": 0,
+    "cpu_requests_millicores": 0,
+    "memory_limits_bytes": 0,
+    "memory_requests_bytes": 0,
+    "phases": null,
+    "summed_pods": 0,
+    "total": 0
+   },
+   "resource_counts": {
+    "configmaps": 0,
+    "deployments": 0,
+    "pods": 0,
+    "secrets": 0,
+    "services": 0
+   },
+   "resource_quotas": [],
+   "resource_version": "10",
+   "status": "Active",
+   "uid": "ns-uid-1"
+  },
+  "frame": {
+   "created_at": "2026-11-01T00:00:00Z",
+   "labels": {
+    "kubernetes.io/metadata.name": "shop"
+   },
+   "name": "shop",
+   "status": "Terminating"
+  },
+  "after": {
+   "annotations": null,
+   "conditions": [
+    {
+     "last_transition_time": "2026-11-08T12:00:05Z",
+     "message": "Some resources are remaining: pods. has 1 resource instances",
+     "reason": "SomeResourcesRemain",
+     "status": "True",
+     "type": "NamespaceContentRemaining"
+    }
+   ],
+   "created_at": "2026-11-01T00:00:00Z",
+   "deletion_timestamp": "2026-11-08T12:00:00Z",
+   "events": [],
+   "finalizers": null,
+   "labels": {
+    "kubernetes.io/metadata.name": "shop"
+   },
+   "limit_ranges": [],
+   "name": "shop",
+   "owner_references": [],
+   "pod_summary": {
+    "cpu_limits_millicores": 0,
+    "cpu_requests_millicores": 0,
+    "memory_limits_bytes": 0,
+    "memory_requests_bytes": 0,
+    "phases": null,
+    "summed_pods": 0,
+    "total": 0
+   },
+   "resource_counts": {
+    "configmaps": 0,
+    "deployments": 0,
+    "pods": 0,
+    "secrets": 0,
+    "services": 0
+   },
+   "resource_quotas": [],
+   "resource_version": "12",
+   "status": "Terminating",
+   "uid": "ns-uid-1"
+  }
  }
 ]
