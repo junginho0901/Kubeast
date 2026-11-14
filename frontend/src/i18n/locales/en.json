@@ -35,7 +35,9 @@
       "title": "Connect an AI agent (MCP)",
       "body": "Agents such as Claude Code and Cursor connect with this API key instead of a kubeconfig. They get read-only tools within your permissions, and every call is audited.",
       "writeBody": "A key with a Write ceiling also gets the write tools — no approval step, your own or a temporarily granted role (access request) applies, and Argo CD-managed objects are refused or flagged by the guard.",
-      "command": "Registration command (replace the key with the value shown when it was created)"
+      "command": "Registration command (replace the key with the value shown when it was created)",
+      "aiOff": "Connecting an AI agent (MCP) needs AI, which is off on this installation (ai.enabled).",
+      "readFailed": "Could not read whether AI agents (MCP) can connect: {{reason}}"
     }
   },
   "clusterHygiene": {
@@ -2943,6 +2945,7 @@
       "clearSelection": "Clear",
       "selectPending": "Select all pending users",
       "selectAllPages": "Select all {{count}} pending users, on every page",
+      "selectAllFound": "Select all {{count}} pending users the search finds, on every page",
       "selectAllPages_one": "Select the 1 pending user",
       "selectedEveryPage": "{{count}} selected, on every page",
       "notChanged": "{{done}} of {{total}} accounts changed. Not changed: {{accounts}}",
@@ -3727,6 +3730,7 @@
     "teamTitle": "Team",
     "teamSubtitle": "Teams / Groups",
     "inputPlaceholder": "Enter name...",
+    "searchPlaceholder": "Search teams by name...",
     "add": "Add",
     "addError": "Not added: {{reason}}",
     "empty": "No items registered.",
@@ -3914,6 +3918,7 @@
       }
     },
     "viewUsers": "View users with this role",
+    "searchPlaceholder": "Search roles by name, description or permission...",
     "sessionNotice": "Saving this ends the sessions and API key tokens of the people holding this role, so they sign in again. You too, if you hold it.",
     "menuNote": "Hides the group in the sidebar. Its screens and the AI's reads stay open: the permissions below and the cluster decide those.",
     "usersWithRole": "Users with this global (account-level) role",
@@ -4126,6 +4131,7 @@
       "name": "Name",
       "mode": "Mode",
       "apiServer": "API server",
+      "searchPlaceholder": "Search clusters by name, API server or creator...",
       "health": "Health",
       "healthChecked": "Checked {{time}}",
       "testPassed": "Test passed",
@@ -4685,6 +4691,7 @@
     "subtitle": "Every alert Alertmanager sent for this cluster, firing or resolved. The alert rule decides when it resolves; the marks here are kept in Kubeast.",
     "refresh": "Refresh",
     "disabled": "The alert webhook is off on this installation (features.alertInvestigation.enabled), so no alerts come in.",
+    "disabledNoAI": "The alert webhook is part of alert investigation, which needs AI: AI is off on this installation (ai.enabled), so no alerts come in.",
     "forbidden": "Alerts cover the whole cluster: they are shown to users who can read this cluster without a namespace limit.",
     "storeLimited": "Alertmanager's state could not be read for now (request limit). Reading again in {{seconds}} s.",
     "storeFailed": "Alertmanager's state could not be read: {{reason}}",
@@ -4753,6 +4760,7 @@
     },
     "silence": {
       "tab": "Silences",
+      "new": "New silence",
       "title": "Silence alerts",
       "subtitle": "In the alert store for this cluster: alerts matching every condition are not sent while the silence lasts.",
       "conditions": "Label conditions",

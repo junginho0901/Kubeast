@@ -78,8 +78,9 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
     enabled: !!name && !!namespace,
     retry: false,
   })
-  // A container that keeps crashing counts up BackOff on the event while the Pod reads the same.
-  useDrawerFollowsEvents({ describeKey: ['pod-describe', namespace, name], answer: podDescribe, kind: 'Pod', namespace, name })
+  // A container that keeps crashing counts up BackOff on the event while the Pod reads the same. A mirror pod's events
+  // name its static pod's UID, the mirror annotation, as the server keeps them.
+  useDrawerFollowsEvents({ describeKey: ['pod-describe', namespace, name], answer: podDescribe, kind: 'Pod', namespace, name, uid: podDescribe?.annotations?.['kubernetes.io/config.mirror'] })
 
   const { data: logData, isFetching: logsFetching, refetch: refetchLogs, error: logsError } = useQuery({
     queryKey: ['pod-logs', namespace, name, logContainer, logLines],

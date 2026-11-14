@@ -95,7 +95,7 @@ func (s *Service) DescribeReplicaSet(ctx context.Context, namespace, name string
 	result["pod_template"] = formatPodTemplate(rs.Spec.Template)
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(rs.UID))
 
 	// Conditions
 	conditions := make([]map[string]interface{}, 0, len(rs.Status.Conditions))

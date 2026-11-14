@@ -48,7 +48,7 @@ test.describe('custom role in the UI', () => {
       await box(/^resource\.\*\.read$/).check()
       await expect(notice).toHaveCount(0)
 
-      const name = page.locator('input:not([type="checkbox"])').first()
+      const name = page.getByTestId('role-dialog').locator('input:not([type="checkbox"])').first()
       await name.fill(roleName.toUpperCase())
       await expect(notice, 'the same group').toHaveCount(0)
       await name.fill(`${roleName}-other`)

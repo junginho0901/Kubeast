@@ -1,0 +1,103 @@
+suite: podSecurity — who reads the Secret files, with the chart's uids and without them
+templates:
+  - deployments.yaml
+  - configmap.yaml   # this and secret.yaml: the Deployments' config checksum renders both
+  - secret.yaml
+set:
+  auth.oidc.enabled: true
+  auth.oidc.issuerUrl: https://accounts.google.com
+  auth.oidc.clientId: client
+  auth.oidc.clientSecret: secret
+  auth.oidc.redirectUrl: http://localhost:30080/api/v1/auth/oidc/callback
+  auth.oidc.googleGroups.enabled: true
+  auth.oidc.googleGroups.credentialsSecret: kubeast-google-groups
+  auth.oidc.googleGroups.domain: example.com
+  audit.sinks:
+    - name: slack
+      type: webhook
+      secret: kubeast-audit-slack
+      webhook: {format: slack}
+  sessionRecording.enabled: true
+  sessionRecording.secret: kubeast-recording-s3
+  sessionRecording.s3.bucket: kubeast-sessions
+tests:
+  - it: mounts every Secret file 0440 by default, read through fsGroup 65532 of the pods that hold them
+    template: deployments.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            fsGroup: 65532
+            seccompProfile: {type: RuntimeDefault}
+        documentSelector: {path: metadata.name, value: auth-service}
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: auth-keys
+            secret: {secretName: kubeast-auth-keys, defaultMode: 0440}
+        documentSelector: {path: metadata.name, value: auth-service}
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: google-groups
+            secret: {secretName: kubeast-google-groups, defaultMode: 0440, items: [{key: credentials.json, path: credentials.json}]}
+        documentSelector: {path: metadata.name, value: auth-service}
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: audit-sink-slack
+            secret: {secretName: kubeast-audit-slack, defaultMode: 0440}
+        documentSelector: {path: metadata.name, value: auth-service}
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 65532
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: recording-secret
+            secret: {secretName: kubeast-recording-s3, defaultMode: 0440}
+        documentSelector: {path: metadata.name, value: k8s-service}
+
+  - it: with podSecurity.enabled=false sets no uid or fsGroup and mounts every Secret file 0444, readable by any uid the platform runs the image as
+    template: deployments.yaml
+    set:
+      podSecurity.enabled: false
+    asserts:
+      # every Deployment, so no pod keeps a uid or fsGroup the platform would refuse
+      - notExists:
+          path: spec.template.spec.securityContext
+      - notExists:
+          path: spec.template.spec.containers[0].securityContext
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: auth-keys
+            secret: {secretName: kubeast-auth-keys, defaultMode: 0444}
+        documentSelector: {path: metadata.name, value: auth-service}
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: google-groups
+            secret: {secretName: kubeast-google-groups, defaultMode: 0444, items: [{key: credentials.json, path: credentials.json}]}
+        documentSelector: {path: metadata.name, value: auth-service}
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: audit-sink-slack
+            secret: {secretName: kubeast-audit-slack, defaultMode: 0444}
+        documentSelector: {path: metadata.name, value: auth-service}
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: recording-secret
+            secret: {secretName: kubeast-recording-s3, defaultMode: 0444}
+        documentSelector: {path: metadata.name, value: k8s-service}
+      # 0444 is 292: the "other" read bit (4) that a uid outside the file's owner and group reads through
+      - equal:
+          path: spec.template.spec.volumes[0].secret.defaultMode
+          value: 292
+        documentSelector: {path: metadata.name, value: auth-service}

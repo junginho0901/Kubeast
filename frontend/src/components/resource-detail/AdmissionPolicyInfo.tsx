@@ -3,6 +3,7 @@ import { api } from '@/services/api'
 import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { usePagination } from './usePagination'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
@@ -24,6 +25,7 @@ export default function AdmissionPolicyInfo({ name, kind }: Props) {
     staleTime: 10_000,
     retry: 1,
   })
+  useDrawerFollowsEvents({ describeKey: ['admissionpolicy-describe', kind, name], answer: desc, kind, name })
 
   useResourceDetailOverlay({ kind, name, describe: desc })
 

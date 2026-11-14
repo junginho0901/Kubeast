@@ -73,6 +73,8 @@ type Handler struct {
 	nfmCanI func(ctx context.Context, namespace string) (bool, error)
 	// netdropsSrc replaces the Prometheus and cluster reads of NetworkDrops in tests (nil: svc).
 	netdropsSrc netdropsSource
+	// backendUsageSrc replaces the Prometheus and EndpointSlice reads of ServiceBackendUsage in tests (nil: svc).
+	backendUsageSrc backendUsageSource
 	// alertStore reads the alert store (nil: alert reads off).
 	alertStore *alerts.Store
 	// logSearchCanI replaces the pods/log access review in tests.

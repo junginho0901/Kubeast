@@ -126,7 +126,8 @@ nodeShell:
     - docker.io/library/busybox:1.38.0
 
 # Pod security (Pod Security Standards restricted by default). On clusters that do not support
-# user namespaces (kernel below 6.3), set hostUsers: true
+# user namespaces (kernel below 6.3), set hostUsers: true. enabled: false sets no securityContext, leaving
+# the uids and fsGroup to the platform, and Secret files then mount 0444 instead of 0440
 podSecurity:
   enabled: true
   hostUsers: false

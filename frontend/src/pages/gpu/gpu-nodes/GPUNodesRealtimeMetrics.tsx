@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { GPUDeviceMetric } from '@/services/api'
 import { ListPager } from '@/components/ListPager'
 import { usePagedItems } from '@/hooks/usePagedItems'
+import { failureText } from '@/utils/failureText'
 import { gpuHostAverages, gpuPercentText, hostsByName } from '../gpuNumbers'
 
 // Hosts per page of the panel (two columns): it sits above the table, so a fixed count rather than a fit
@@ -10,15 +11,25 @@ const NODES_METRICS_HOSTS_PER_PAGE = 4
 
 interface Props {
   gpusByHost: Map<string, GPUDeviceMetric[]>
+  // the metrics read's error when the cluster's Prometheus is set but did not answer
+  metricsFailure?: unknown
 }
 
-export default function GPUNodesRealtimeMetrics({ gpusByHost }: Props) {
+export default function GPUNodesRealtimeMetrics({ gpusByHost, metricsFailure = null }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
   const hosts = useMemo(() => hostsByName(gpusByHost), [gpusByHost])
   const { items: pagedHosts, page, totalPages, total, setPage } = usePagedItems(hosts, NODES_METRICS_HOSTS_PER_PAGE)
 
+  if (metricsFailure) {
+    return (
+      <div className="card shrink-0" data-testid="gpu-realtime-not-answering">
+        <h2 className="text-sm font-semibold text-ink mb-2">{tr('gpuNodes.realtimeMetrics', 'Real-time GPU Utilization')}</h2>
+        <p className="text-xs text-slate-400">{tr('gpuDashboardPage.realtime.notAnswering', 'Prometheus did not answer: {{reason}}', { reason: failureText(metricsFailure) })}</p>
+      </div>
+    )
+  }
   if (gpusByHost.size === 0) return null
 
   return (

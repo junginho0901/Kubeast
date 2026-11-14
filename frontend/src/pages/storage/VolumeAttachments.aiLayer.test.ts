@@ -13,7 +13,7 @@ import VolumeAttachments from './VolumeAttachments'
 type Layer = { summary?: string; data?: { stats?: { total?: number; with_error?: number }; problematic_items?: { name: string }[] } }
 const layers: Layer[] = []
 vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: Layer | null) => { if (input) layers.push(input) } }))
-vi.mock('@/services/useKubeWatchList', () => ({ useKubeWatchList: () => {} }))
+vi.mock('@/services/useKubeWatchList', () => ({ useKubeWatchList: () => {}, LIST_GATHER_MS: 100 }))
 vi.mock('@/hooks/useCanCreate', () => ({ useCanCreate: () => false }))
 vi.mock('@/components/ResourceDetailContext', () => ({ useResourceDetail: () => ({ open: () => {} }) }))
 vi.mock('@/components/ResourceYamlCreateDialog', () => ({ default: () => null }))
