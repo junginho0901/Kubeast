@@ -4685,6 +4685,7 @@
     "subtitle": "Every alert Alertmanager sent for this cluster, firing or resolved. The alert rule decides when it resolves; the marks here are kept in Kubeast.",
     "refresh": "Refresh",
     "disabled": "The alert webhook is off on this installation (features.alertInvestigation.enabled), so no alerts come in.",
+    "disabledNoAI": "The alert webhook is part of alert investigation, which needs AI: AI is off on this installation (ai.enabled), so no alerts come in.",
     "forbidden": "Alerts cover the whole cluster: they are shown to users who can read this cluster without a namespace limit.",
     "storeLimited": "Alertmanager's state could not be read for now (request limit). Reading again in {{seconds}} s.",
     "storeFailed": "Alertmanager's state could not be read: {{reason}}",
@@ -4753,6 +4754,7 @@
     },
     "silence": {
       "tab": "Silences",
+      "new": "New silence",
       "title": "Silence alerts",
       "subtitle": "In the alert store for this cluster: alerts matching every condition are not sent while the silence lasts.",
       "conditions": "Label conditions",
