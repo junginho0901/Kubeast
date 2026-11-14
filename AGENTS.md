@@ -113,6 +113,11 @@ _, _ = h.auditStore.Write(r.Context(), rec)
   게이트웨이(nginx.conf)는 `scripts/rebuild-kind.sh gateway` — 릴리스 값 그대로 `helm upgrade`로 다시 렌더한다.
   ConfigMap을 `kubectl apply`로 쓰면 kubectl이 필드 소유자가 돼 다음 `helm upgrade`(Helm 4 서버 측 적용)가 충돌로 멈춘다.
 
+## 데이터베이스 연결
+
+- 서비스마다 연결한 뒤 SET으로 세션 한도(statement 30초 · lock 15초 · idle-in-transaction 5분, 차트 `postgresql.sessionLimits`)를 걸고(`services/pkg/dbsession`, ai-service는 롤백에 풀리지 않게 autocommit으로 `app/db_session.py`), 마이그레이션은 값과 상관없이 statement · lock을 항상 0으로 둔다(`ApplyMigrations`).
+- 풀 크기는 서비스별 `postgresql.pool.<svc>.maxConns`이고, 새 서비스나 새 풀(잠금 전용 연결 포함)은 합계식 `kubeast.dbConnections`에 더한다 — `templates/checks/db-connections.yaml`이 그 합을 `postgresql.maxConnections` 아래로 막는다(`tests/db_connections_test.yaml`). PgBouncer는 session 모드만 쓴다.
+
 ## 컨테이너 exec
 
 - **서버가 `pods/exec`로 띄운 프로세스는 클라이언트가 끊겨도 컨테이너에 남는다**(TTY 유무와 무관, 컨테이너 런타임이
