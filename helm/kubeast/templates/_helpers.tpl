@@ -56,7 +56,8 @@ ${k8s_service} and ${probe} stand, so no password is in this text, the pod spec 
 - tool-server (with the AI on): the cluster change notice channel, to listen to, and no key — SUBSCRIBE, UNSUBSCRIBE,
   PING (go-redis checks a subscription with it) and SELECT. It publishes nothing and reads no cache key.
 Every command named must exist in the image's Valkey, or Valkey refuses the file and does not start. A command the
-code starts to use is added here with a case in tests/redis_test.yaml.
+code starts to use is added here with a case in tests/redis_test.yaml; the services' tests hold what their code sends
+to these lines (services/pkg/redisacl).
 */}}
 {{/*
 maxmemory of the chart's Redis, in bytes: 80% of resources.redis.limits.memory, so Valkey evicts before the container

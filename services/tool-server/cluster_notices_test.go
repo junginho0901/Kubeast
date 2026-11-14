@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	"github.com/junginho0901/kubeast/services/pkg/redisacl"
 )
 
 // noticeServer is a Redis stand-in for one subscriber: it refuses HELLO, as a server without RESP3 does, so the client
@@ -182,11 +184,13 @@ func TestClusterNoticesDropTheirClusterAndSendNothingElse(t *testing.T) {
 	if len(s.subscribed) != 1 || s.subscribed[0] != "kubeast:clusters:changed:0" {
 		t.Fatalf("subscribed to %q, want kubeast:clusters:changed:0", s.subscribed)
 	}
-	listening := map[string]bool{"HELLO": true, "AUTH": true, "CLIENT": true, "SELECT": true, "SUBSCRIBE": true, "UNSUBSCRIBE": true, "PING": true}
-	for _, c := range s.commands {
-		if !listening[c] {
-			t.Errorf("sent %s, which listening does not need", c)
-		}
+	// What it sends is held to the chart's Redis user tool-server, which Redis would otherwise refuse with NOPERM.
+	allowed, err := redisacl.Commands("../../helm/kubeast/templates/_helpers.tpl", "tool-server")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if refused := redisacl.Refused(s.commands, allowed); len(refused) > 0 {
+		t.Errorf("sent %s, which the chart's Redis user tool-server does not allow (kubeast.redisUsersAcl in helm/kubeast/templates/_helpers.tpl; sent: %v)", strings.Join(refused, ", "), s.commands)
 	}
 }
 
