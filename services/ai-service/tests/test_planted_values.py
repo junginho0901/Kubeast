@@ -176,12 +176,12 @@ def _client_on(stand_in):
     return c
 
 
-@pytest.mark.asyncio
-async def test_a_new_answer_numbers_past_the_placeholders_its_history_shows(monkeypatch):
-    """An earlier answer's <EMAIL_1> was another table's: a new value of this answer never takes 1, so the model is not led
-    to join two people. The same value would get a new number (a join missed, never a wrong one)."""
+def chat_rig(monkeypatch, history, replies, tool_server=None, order=None):
+    """streaming.session_chat_stream over stand-ins: the messages the session holds, the model's replies and tool-server.
+    Returns the service, the messages of each model call (as JSON) and the sessions whose messages were read."""
     from app.services.ai import streaming
-    from tests.test_chat_turn_edges import stream, text_chunk, tool_call_chunk
+
+    reads, calls, replies = [], [], list(replies)
 
     class DB:
         async def get_session(self, sid):
@@ -191,9 +191,10 @@ async def test_a_new_answer_numbers_past_the_placeholders_its_history_shows(monk
             pass
 
         async def get_messages(self, sid):
-            return [SimpleNamespace(role="user", content="who called?"),
-                    SimpleNamespace(role="assistant", content="<EMAIL_1> called from <PHONE_2>."),
-                    SimpleNamespace(role="user", content="and now?")]
+            reads.append(sid)
+            if order is not None:
+                order.append("history read")
+            return list(history)
 
         async def get_context(self, sid):
             return None
@@ -221,16 +222,11 @@ async def test_a_new_answer_numbers_past_the_placeholders_its_history_shows(monk
     monkeypatch.setattr(streaming.budget_mod, "check", no_budget)
     monkeypatch.setattr("app.services.ai.features.gate_tools", same_tools)
 
-    replies = [stream([tool_call_chunk("k8s_get_pod_logs", json.dumps({"namespace": "apps", "pod_name": "web-1"}))]),
-               stream([text_chunk("Read it.")])]
-    calls = []
-
     async def create(**kwargs):
+        if order is not None:
+            order.append("model called")
         calls.append(json.dumps(kwargs["messages"], ensure_ascii=False, default=str))
         return replies.pop(0)
-
-    stand_in = _StandInToolServer(["login carol.planted@example.com from 010-4444-5555\n"])
-    tool_server = _client_on(stand_in)
 
     async def execute(tool, tool_args, ctx):
         return await tool_server.call_tool(tool, tool_args)
@@ -239,59 +235,63 @@ async def test_a_new_answer_numbers_past_the_placeholders_its_history_shows(monk
     service = SimpleNamespace(
         model="claude-haiku-5-5", provider="anthropic", user_role="admin", tier="default", cluster_name="self",
         client=SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))),
-        tool_contexts={}, tool_server=tool_server,
+        tool_contexts={}, tool_server=tool_server if tool_server is not None else SimpleNamespace(last_redacted=None),
         _sanitize_history_content=lambda role, content: content,
         _build_language_directive=lambda message: "Answer in English.",
         _get_tools_definition=lambda: tools,
         _filter_tools_for_output_preference=lambda tools, message: tools,
         _execute_function_with_context=execute,
     )
-    [e async for e in streaming.session_chat_stream(service, "s1", "and now?")]
+    service.session_chat_stream = lambda **kw: streaming.session_chat_stream(service, **kw)
+    return service, calls, reads
+
+
+@pytest.mark.asyncio
+async def test_a_new_answer_numbers_past_the_placeholders_its_history_shows(monkeypatch):
+    """An earlier answer's <EMAIL_1> was another table's: a new value of this answer never takes 1, so the model is not led
+    to join two people. The same value would get a new number (a join missed, never a wrong one)."""
+    from tests.test_chat_turn_edges import stream, text_chunk, tool_call_chunk
+
+    stand_in = _StandInToolServer(["login carol.planted@example.com from 010-4444-5555\n"])
+    history = [SimpleNamespace(role="user", content="who called?"),
+               SimpleNamespace(role="assistant", content="<EMAIL_1> called from <PHONE_2>."),
+               SimpleNamespace(role="user", content="and now?")]
+    replies = [stream([tool_call_chunk("k8s_get_pod_logs", json.dumps({"namespace": "apps", "pod_name": "web-1"}))]),
+               stream([text_chunk("Read it.")])]
+    service, calls, reads = chat_rig(monkeypatch, history, replies, tool_server=_client_on(stand_in))
+    [e async for e in service.session_chat_stream(session_id="s1", message="and now?")]
 
     assert stand_in.requests[0]["masks"]["after"] == {"email": 1, "phone": 2}
     assert len(calls) == 2 and "login <EMAIL_2> from <PHONE_3>" in calls[1]
     for value in ("carol.planted", "4444-5555"):
         assert value not in calls[1], value
+    assert reads == ["s1"]
 
 
 @pytest.mark.asyncio
-async def test_the_floating_page_and_the_tool_results_of_an_answer_share_numbers(monkeypatch):
+async def test_the_floating_page_and_the_tool_results_of_an_answer_share_numbers_with_one_read_of_the_history(monkeypatch):
     from app.models.floating_ai import PageContextPayload, VisibleDataLayer
     from app.services.floating_ai_service import FloatingAIService
+    from tests.test_chat_turn_edges import stream, text_chunk, tool_call_chunk
 
-    class DB:
-        async def get_messages(self, sid):
-            return [SimpleNamespace(role="assistant", content="<EMAIL_1> asked earlier.")]
-
-    async def get_db_service():
-        return DB()
-
-    monkeypatch.setattr("app.database.get_db_service", get_db_service)
     monkeypatch.setenv("REDACTION_PII", "true")
     stand_in = _StandInToolServer(["login ann.planted@example.com and bob.planted@example.com\n"])
-
-    class Chat:
-        def __init__(self):
-            self.tool_server = _client_on(stand_in)
-            self.kw = None
-            self.tool_text = None
-
-        async def session_chat_stream(self, **kw):
-            self.kw = kw
-            self.tool_text = await self.tool_server.call_tool("k8s_get_pod_logs", {"namespace": "apps", "pod_name": "web-1"})
-            yield "done"
-
+    history = [SimpleNamespace(role="assistant", content="<EMAIL_1> asked earlier."), SimpleNamespace(role="user", content="who?")]
+    replies = [stream([tool_call_chunk("k8s_get_pod_logs", json.dumps({"namespace": "apps", "pod_name": "web-1"}))]),
+               stream([text_chunk("Read it.")])]
+    service, calls, reads = chat_rig(monkeypatch, history, replies, tool_server=_client_on(stand_in))
     ctx = PageContextPayload(
         page_type="resource-detail", page_title="web-1", path="/workloads/pods", snapshot_at="2026-11-15T00:00:00Z",
         base=VisibleDataLayer(source="base", summary="pod", data={"owner": "ann.planted@example.com", "note": "paged ann.planted@example.com"}),
     )
-    chat = Chat()
-    assert [e async for e in FloatingAIService(chat).session_chat_stream("s1", "who?", page_context=ctx)] == ["done"]
-    page = chat.kw["extra_context_block"]
-    # one number for the value across the page's strings, past the history's <EMAIL_1>, and the same in the tool result
-    assert "ann.planted" not in page and '"owner":"<EMAIL_2>"' in page and '"note":"paged <EMAIL_2>"' in page
-    assert chat.tool_text == "login <EMAIL_2> and <EMAIL_3>\n"
-    assert stand_in.requests[0]["masks"]["after"] == {"email": 1}
+    [e async for e in FloatingAIService(service).session_chat_stream("s1", "who?", page_context=ctx)]
+
+    # one read of the session's messages per question, the chat's own
+    assert reads == ["s1"]
+    # the page: one number for the value across its strings, past the history's <EMAIL_1>; the tool result: the same
+    assert "ann.planted" not in calls[0] and '\\"owner\\":\\"<EMAIL_2>\\"' in calls[0] and "paged <EMAIL_2>" in calls[0]
+    assert "login <EMAIL_2> and <EMAIL_3>" in calls[1]
+    assert stand_in.requests[0]["masks"]["after"] == {"email": 2}  # past what the model reads, the page included
 
 
 def test_an_alert_quoting_an_earlier_report_numbers_past_its_placeholders(monkeypatch):

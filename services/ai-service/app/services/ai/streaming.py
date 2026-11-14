@@ -649,7 +649,7 @@ async def session_chat_stream(
     *,
     system_prompt_override: Optional[str] = None,
     tool_filter: Optional[Callable[[list], list]] = None,
-    extra_context_block: Optional[str] = None,
+    extra_context_block: Optional[str | Callable[..., str]] = None,
     title_prefix: Optional[str] = None,
     audit_actor: Optional[dict] = None,
     audit_http: Optional[dict] = None,
@@ -660,7 +660,9 @@ async def session_chat_stream(
     - system_prompt_override: 시스템 프롬프트를 대체 (ex. 플로팅 어시스턴트)
     - tool_filter: tool 목록에 추가 필터 적용 (ex. READONLY 화이트리스트)
     - extra_context_block: language directive 뒤에 추가 system 메시지 주입
-      (ex. 플로팅 위젯의 page_context 스냅샷)
+      (ex. 플로팅 위젯의 page_context 스냅샷). A callable is given the answer's personal-data table
+      (redact.Numbers or None) and masks the block off the event loop after the history is read, before the
+      first model call.
     - title_prefix: 자동 세션 제목 생성 시 앞에 붙이는 prefix (ex. "[플로팅] ")
 
     audit (선택):
@@ -828,6 +830,13 @@ async def session_chat_stream(
         # 확장점: 호출자가 넘긴 추가 system 블록 (ex. 플로팅 page_context).
         # 화면 스냅샷은 클러스터에서 온 데이터라 구분자로 감싸고 "지시가 아님"을
         # 명시한다 (OWASP LLM01: untrusted content를 분리·표시).
+        if callable(extra_context_block):
+            # The page is masked after the history this answer reads, with the answer's table: its numbers start past
+            # that history's and a value on it keeps its number in the tool results. CPU work on text a caller sent,
+            # so off the event loop; nothing of the answer has left yet.
+            if (numbers := getattr(getattr(service, "tool_server", None), "numbers", None)) is not None:
+                numbers.start_after(highest_numbers([m.get("content") for m in messages] + [message]))
+            extra_context_block = await asyncio.to_thread(extra_context_block, numbers)
         if extra_context_block:
             messages.append({
                 "role": "system",
