@@ -333,8 +333,12 @@ func handleTimelineChanges(ctx context.Context, args map[string]interface{}, hea
 	if len(notRead) > 0 {
 		result["not_read_note"] = "The sources in summary.not_read could not be read: their changes are not counted, not zero (by_source is null for them)."
 	}
-	if total == 0 && len(notRead) == 0 {
+	skipped, _ := summary["skipped"].(map[string]interface{})
+	if len(skipped) > 0 {
+		result["skipped_note"] = "The sources in summary.skipped were not read, for the reason given: their changes are not counted, not zero."
+	}
+	if total == 0 && len(notRead) == 0 && len(skipped) == 0 {
 		result["hint"] = "Nothing changed in this window as far as the objects keep it. Each ConfigMap, Secret, HPA and container keeps only its last change; older ones are in events, which live about an hour."
 	}
-	return marshalOrdered(result, []string{"view", "namespace", "summary", "changes_note", "not_read_note", "hint"}, []string{"changes"})
+	return marshalOrdered(result, []string{"view", "namespace", "summary", "changes_note", "not_read_note", "skipped_note", "hint"}, []string{"changes"})
 }

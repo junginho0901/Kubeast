@@ -676,3 +676,22 @@ func TestTimeline_ViewIsEventsOrChanges(t *testing.T) {
 		t.Fatalf("view changes refused by the argument check: %v", err)
 	}
 }
+
+// A source k8s-service skipped (every namespace's restarts for a caller who may not list pods across the cluster) is
+// said to be not counted, and an answer with nothing listed is then no "nothing changed".
+func TestTimeline_ChangesViewSaysWhatWasSkipped(t *testing.T) {
+	fakeK8sService(t, func(*http.Request) (int, string) {
+		return 200, `{"changes":[],"summary":{"changes_total":0,"changes_shown":0,"by_source":{"pods":null},"skipped":{"pods":"name a namespace"}}}`
+	})
+	out, err := handleTimeline(ctxFor("c1"), args{"view": "changes"}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := decode(t, out)
+	if note, _ := m["skipped_note"].(string); !strings.Contains(note, "not counted, not zero") {
+		t.Fatalf("skipped_note = %q", note)
+	}
+	if _, nothing := m["hint"]; nothing {
+		t.Fatalf("a skipped source reads as nothing changed: %v", m)
+	}
+}

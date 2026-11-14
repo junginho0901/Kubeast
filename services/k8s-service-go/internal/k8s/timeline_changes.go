@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/singleflight"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -83,7 +84,7 @@ type TimelineChangesResult struct {
 	Summary map[string]interface{} `json:"summary"`
 }
 
-// changeSink gathers the changes of a window from the sources read side by side, keeping the newest max of them.
+// changeSink gathers the changes of a window from its sources, keeping the newest max of them.
 type changeSink struct {
 	since, until time.Time
 	max          int
@@ -94,10 +95,11 @@ type changeSink struct {
 	counts  map[string]int
 	notRead map[string]string
 	notes   map[string]string
+	skipped map[string]string
 }
 
 func newChangeSink(since, until time.Time, most int) *changeSink {
-	return &changeSink{since: since, until: until, max: most, counts: map[string]int{}, notRead: map[string]string{}, notes: map[string]string{}}
+	return &changeSink{since: since, until: until, max: most, counts: map[string]int{}, notRead: map[string]string{}, notes: map[string]string{}, skipped: map[string]string{}}
 }
 
 func (c *changeSink) in(t time.Time) bool {
@@ -121,6 +123,13 @@ func (c *changeSink) failed(source string, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.notRead[source] = response.Public(err)
+}
+
+// skip says why a source was not read, which is not a zero either.
+func (c *changeSink) skip(source, text string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.skipped[source] = text
 }
 
 // note says why a source has nothing to count, which is not a zero either.
@@ -173,6 +182,9 @@ func (c *changeSink) result() *TimelineChangesResult {
 	for source := range c.notes {
 		bySource[source] = nil
 	}
+	for source := range c.skipped {
+		bySource[source] = nil
+	}
 	if _, refused := c.notRead["secrets"]; refused {
 		bySource["helm"] = nil
 	}
@@ -191,18 +203,57 @@ func (c *changeSink) result() *TimelineChangesResult {
 	if len(c.notes) > 0 {
 		summary["notes"] = c.notes
 	}
+	if len(c.skipped) > 0 {
+		summary["skipped"] = c.skipped
+	}
 	return &TimelineChangesResult{Changes: changes, Summary: summary}
 }
+
+// timelineChangesRunMax bounds one shared read of the changes, which goes on when the caller it started for leaves.
+const timelineChangesRunMax = 60 * time.Second
 
 // GetTimelineChanges lists what changed from since to until in namespace ("" for every namespace the caller reads, each
 // of a limited grant's in turn), the newest limit of it: rollouts compared with the revision before, ConfigMap and Secret
 // writes, Helm release revisions, HPA scales, node creations and condition changes, Argo CD syncs and container
-// restarts. A source that could not be read is in summary.not_read with why; when none of a namespace's could, that
-// refusal is the answer.
+// restarts. Callers asking the same window with the same identity and grant at one moment share one read
+// (changesFlight): the same window is the same question, and the handler keeps the answer 30 s anyway.
 func (s *Service) GetTimelineChanges(ctx context.Context, namespace string, since, until time.Time, limit int) (*TimelineChangesResult, error) {
 	if s.clientsetCtx(ctx) == nil {
 		return nil, errNotLoaded
 	}
+	key := s.clusterCacheKey(ctx, fmt.Sprintf("timeline-changes|%s|%d|%d|%d|%s", namespace, since.Unix(), until.Unix(), limit, strings.Join(scopeFromCtx(ctx), ",")))
+	answer, err := sharedRun(ctx, &s.changesFlight, key, func(run context.Context) (interface{}, error) {
+		return s.readTimelineChanges(run, namespace, since, until, limit)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return answer.(*TimelineChangesResult), nil
+}
+
+// sharedRun is read once for everyone asking key at one moment, on the first caller's context values but not its
+// cancellation (bounded by timelineChangesRunMax), so one caller leaving fails no one else; each caller waits on its
+// own context.
+func sharedRun(ctx context.Context, group *singleflight.Group, key string, read func(context.Context) (interface{}, error)) (interface{}, error) {
+	answers := group.DoChan(key, func() (interface{}, error) {
+		run, cancel := context.WithTimeout(context.WithoutCancel(ctx), timelineChangesRunMax)
+		defer cancel()
+		return read(run)
+	})
+	select {
+	case r := <-answers:
+		return r.Val, r.Err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// readTimelineChanges reads the sources one after another, so one read has one list at a time with the cluster and holds
+// at most one of bigReadSlots (eachPage takes it before a second page). A source that could not be read is in
+// summary.not_read with why; when every namespaced source that was read was refused, that refusal is the answer.
+// Without a namespace, a caller not limited to namespaces walks the cluster's pods only when it may list pods across
+// the cluster; otherwise the restarts are skipped and summary.skipped says so.
+func (s *Service) readTimelineChanges(ctx context.Context, namespace string, since, until time.Time, limit int) (*TimelineChangesResult, error) {
 	sink := newChangeSink(since, until, limit)
 	namespaced := []struct {
 		source string
@@ -214,40 +265,33 @@ func (s *Service) GetTimelineChanges(ctx context.Context, namespace string, sinc
 		{"hpas", func(ns string) error { return s.hpaChangesIn(ctx, ns, sink) }},
 		{"pods", func(ns string) error { return s.restartChangesIn(ctx, ns, sink) }},
 	}
-	errs := make([]error, len(namespaced))
-	var wg sync.WaitGroup
-	for i, src := range namespaced {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := eachCallerNamespace(ctx, namespace, src.read); err != nil {
-				errs[i] = err
-				sink.failed(src.source, err)
+	tried, refused := 0, 0
+	var first error
+	for _, src := range namespaced {
+		if src.source == "pods" && namespace == "" && len(scopeFromCtx(ctx)) == 0 {
+			if b := s.bundleForCtx(ctx); b != nil {
+				if allowed, err := s.mayListPods(ctx, b, ""); err == nil && !allowed {
+					sink.skip("pods", "the restarts of every namespace are read only for a caller who may list pods across the cluster; name a namespace")
+					continue
+				}
 			}
-		}()
-	}
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		if err := s.nodeChanges(ctx, sink); err != nil {
-			sink.failed("nodes", err)
 		}
-	}()
-	go func() {
-		defer wg.Done()
-		s.argoChanges(ctx, namespace, sink)
-	}()
-	wg.Wait()
-
-	refusedAll := true
-	for _, err := range errs {
-		if err == nil {
-			refusedAll = false
+		tried++
+		if err := eachCallerNamespace(ctx, namespace, src.read); err != nil {
+			refused++
+			if first == nil {
+				first = err
+			}
+			sink.failed(src.source, err)
 		}
 	}
-	if refusedAll {
-		return nil, errs[0]
+	if tried > 0 && refused == tried {
+		return nil, first
 	}
+	if err := s.nodeChanges(ctx, sink); err != nil {
+		sink.failed("nodes", err)
+	}
+	s.argoChanges(ctx, namespace, sink)
 	return sink.result(), nil
 }
 
@@ -291,35 +335,25 @@ func newRevisionBook(since, until time.Time) *revisionBook {
 func (s *Service) rolloutChangesIn(ctx context.Context, namespace string, sink *changeSink) error {
 	cs := s.clientsetCtx(ctx)
 	book := newRevisionBook(sink.since, sink.until)
-	var wg sync.WaitGroup
-	var rsErr, crErr error
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		rsErr = eachRolloutPage(ctx, func(o metav1.ListOptions) (*appsv1.ReplicaSetList, error) {
-			return cs.AppsV1().ReplicaSets(namespace).List(ctx, o)
-		}, func(page *appsv1.ReplicaSetList) {
-			for i := range page.Items {
-				book.addReplicaSet(&page.Items[i])
-			}
-		})
-	}()
-	go func() {
-		defer wg.Done()
-		crErr = eachRolloutPage(ctx, func(o metav1.ListOptions) (*appsv1.ControllerRevisionList, error) {
-			return cs.AppsV1().ControllerRevisions(namespace).List(ctx, o)
-		}, func(page *appsv1.ControllerRevisionList) {
-			for i := range page.Items {
-				book.addControllerRevision(&page.Items[i])
-			}
-		})
-	}()
-	wg.Wait()
-	if rsErr != nil {
-		return fmt.Errorf("list replicasets: %w", rsErr)
+	err := eachRolloutPage(ctx, func(o metav1.ListOptions) (*appsv1.ReplicaSetList, error) {
+		return cs.AppsV1().ReplicaSets(namespace).List(ctx, o)
+	}, func(page *appsv1.ReplicaSetList) {
+		for i := range page.Items {
+			book.addReplicaSet(&page.Items[i])
+		}
+	})
+	if err != nil {
+		return fmt.Errorf("list replicasets: %w", err)
 	}
-	if crErr != nil {
-		return fmt.Errorf("list controller revisions: %w", crErr)
+	err = eachRolloutPage(ctx, func(o metav1.ListOptions) (*appsv1.ControllerRevisionList, error) {
+		return cs.AppsV1().ControllerRevisions(namespace).List(ctx, o)
+	}, func(page *appsv1.ControllerRevisionList) {
+		for i := range page.Items {
+			book.addControllerRevision(&page.Items[i])
+		}
+	})
+	if err != nil {
+		return fmt.Errorf("list controller revisions: %w", err)
 	}
 	book.emit(sink)
 	return nil
@@ -375,9 +409,10 @@ func (b *revisionBook) add(key revisionKey, revision int64, created time.Time, t
 	}
 }
 
-// emit writes each revision of the window as a change from the revision before it. A ReplicaSet a rollback brought back
-// keeps its old creation time: it is not in the window, and when it holds a higher revision than the window's first,
-// that first one has no revision before it to compare with.
+// emit writes each revision of the window as a change from the revision before it. A rollback gives an older
+// ReplicaSet (or ControllerRevision) the next revision number and keeps its creation time, so it is not in the window:
+// when one created before the window holds a higher revision than the window's first, the workload was rolled back to
+// it after that rollout, which the first one's note says, and that first one has no revision before it to compare with.
 func (b *revisionBook) emit(sink *changeSink) {
 	for key, o := range b.owners {
 		if len(o.inWindow) == 0 {
@@ -385,14 +420,18 @@ func (b *revisionBook) emit(sink *changeSink) {
 		}
 		sort.Slice(o.inWindow, func(i, j int) bool { return o.inWindow[i].revision < o.inWindow[j].revision })
 		prev := o.before
-		if prev != nil && prev.revision > o.inWindow[0].revision {
+		rolledBack := prev != nil && prev.revision > o.inWindow[0].revision
+		if rolledBack {
 			prev = nil
 		}
-		for _, cur := range o.inWindow {
+		for i, cur := range o.inWindow {
 			ch := TimelineChange{at: cur.created, Kind: key.kind, Name: key.name, Namespace: key.namespace, What: "rollout", To: cur.revision}
-			if prev == nil {
+			switch {
+			case i == 0 && rolledBack:
+				ch.Note = fmt.Sprintf("rolled back after this rollout: revision %d is an older template brought back, which keeps its creation time, so when is not known", o.before.revision)
+			case prev == nil:
 				ch.Note = "no earlier revision is kept, so nothing is compared"
-			} else {
+			default:
 				ch.From = prev.revision
 				if ch.Changed = diffPrints(prev, cur); len(ch.Changed) == 0 {
 					ch.Note = "the pod template is the same as the revision before"
@@ -658,35 +697,63 @@ func (s *Service) hpaChangesIn(ctx context.Context, namespace string, sink *chan
 	})
 }
 
+// nodeFact is what the changes read of a node: its creation and its conditions' types, statuses, reasons and times. The
+// overview informers keep no condition times (stripNode), so the nodes are listed as the caller.
+type nodeFact struct {
+	name       string
+	created    time.Time
+	conditions []corev1.NodeCondition
+}
+
 // nodeChanges writes the nodes created in the window and each node condition that changed in it; a node gone is in its
-// events only.
+// events only. One list of the nodes serves every changes read of the same identity at that moment, whatever its window
+// (nodeFacts).
 func (s *Service) nodeChanges(ctx context.Context, sink *changeSink) error {
-	cs := s.clientsetCtx(ctx)
-	err := eachRolloutPage(ctx, func(o metav1.ListOptions) (*corev1.NodeList, error) {
-		return cs.CoreV1().Nodes().List(ctx, o)
-	}, func(page *corev1.NodeList) {
-		for i := range page.Items {
-			nodeChangesOf(&page.Items[i], sink)
-		}
-	})
+	facts, err := s.nodeFacts(ctx)
 	if err != nil {
 		return fmt.Errorf("list nodes: %w", err)
+	}
+	for i := range facts {
+		nodeChangesOf(&facts[i], sink)
 	}
 	return nil
 }
 
-func nodeChangesOf(n *corev1.Node, sink *changeSink) {
-	created := n.CreationTimestamp.Time
-	isNew := sink.in(created)
-	if isNew {
-		sink.add("nodes", TimelineChange{at: created, Kind: "Node", Name: n.Name, What: "created"})
+func (s *Service) nodeFacts(ctx context.Context) ([]nodeFact, error) {
+	facts, err := sharedRun(ctx, &s.changesFlight, s.clusterCacheKey(ctx, "timeline-changes-nodes"), func(run context.Context) (interface{}, error) {
+		cs := s.clientsetCtx(run)
+		var out []nodeFact
+		err := eachRolloutPage(run, func(o metav1.ListOptions) (*corev1.NodeList, error) {
+			return cs.CoreV1().Nodes().List(run, o)
+		}, func(page *corev1.NodeList) {
+			for i := range page.Items {
+				n := &page.Items[i]
+				fact := nodeFact{name: n.Name, created: n.CreationTimestamp.Time}
+				for _, c := range n.Status.Conditions {
+					fact.conditions = append(fact.conditions, corev1.NodeCondition{Type: c.Type, Status: c.Status, Reason: c.Reason, LastTransitionTime: c.LastTransitionTime})
+				}
+				out = append(out, fact)
+			}
+		})
+		return out, err
+	})
+	if err != nil {
+		return nil, err
 	}
-	for _, c := range n.Status.Conditions {
+	return facts.([]nodeFact), nil
+}
+
+func nodeChangesOf(n *nodeFact, sink *changeSink) {
+	isNew := sink.in(n.created)
+	if isNew {
+		sink.add("nodes", TimelineChange{at: n.created, Kind: "Node", Name: n.name, What: "created"})
+	}
+	for _, c := range n.conditions {
 		at := c.LastTransitionTime.Time
-		if !sink.in(at) || (isNew && nodeConditionFine(c) && at.Sub(created) < nodeStartupGrace) {
+		if !sink.in(at) || (isNew && nodeConditionFine(c) && at.Sub(n.created) < nodeStartupGrace) {
 			continue
 		}
-		sink.add("nodes", TimelineChange{at: at, Kind: "Node", Name: n.Name, What: "condition " + string(c.Type), To: string(c.Status), Reason: c.Reason})
+		sink.add("nodes", TimelineChange{at: at, Kind: "Node", Name: n.name, What: "condition " + string(c.Type), To: string(c.Status), Reason: c.Reason})
 	}
 }
 

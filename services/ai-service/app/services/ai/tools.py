@@ -1032,8 +1032,8 @@ K8S_READONLY_TOOLS: List[Dict] = [
                 "rollouts compared with the revision before (images, the names of other pod template fields, the keys of env, labels and annotations that were added, "
                 "removed or changed — never a value), ConfigMap and Secret last writes and the field manager that wrote them (metadata only), Helm release revisions, "
                 "HPA last scales, node creations and condition changes, Argo CD syncs and container restarts with their reason. Each object keeps only its last write, "
-                "scale or restart. summary.changes_total and by_source count every change of the window; a source in summary.not_read is null in by_source: not counted, "
-                "not zero. Use it first for \"why did this break?\", then line the changes up with when the symptom started."
+                "scale or restart. summary.changes_total and by_source count every change of the window; a source in summary.not_read or summary.skipped is null in by_source: not counted, "
+                "not zero (without a namespace, every namespace's restarts need listing pods across the cluster: name a namespace). Use it first for \"why did this break?\", then line the changes up with when the symptom started."
             ),
             "parameters": {
                 "type": "object",

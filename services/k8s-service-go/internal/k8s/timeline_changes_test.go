@@ -4,15 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -20,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -37,9 +41,17 @@ type changesAPI struct {
 	pods    []corev1.Pod
 	apps    []map[string]interface{}
 	refuse  map[string]bool
+	// pageSize > 0 answers that many objects a page whatever the limit asked, as an API server may
+	pageSize int
+	// podsEverywhere answers the access review of listing pods across the cluster (set reviews to ask one)
+	reviews, podsEverywhere bool
+	// hold, when set, keeps the first list waiting until it is closed; started is closed when that list came
+	hold, started chan struct{}
 
-	mu    sync.Mutex
-	asked []changesAsk
+	mu      sync.Mutex
+	asked   []changesAsk
+	inUse   int // the most bigReadSlots places held while a list was asked
+	holding bool
 }
 
 type changesAsk struct{ path, accept string }
@@ -68,13 +80,50 @@ func chgMetadata(metas []metav1.ObjectMeta) metav1.PartialObjectMetadataList {
 	return list
 }
 
+// chgPage is the page of items a list asks for when the stand-in pages by pageSize: continue is the offset.
+func chgPage[T any](a *changesAPI, items []T, r *http.Request) ([]T, metav1.ListMeta) {
+	if a.pageSize <= 0 {
+		return items, metav1.ListMeta{}
+	}
+	from, _ := strconv.Atoi(r.URL.Query().Get("continue"))
+	to := min(from+a.pageSize, len(items))
+	if from > to {
+		from = to
+	}
+	meta := metav1.ListMeta{}
+	if to < len(items) {
+		meta.Continue = strconv.Itoa(to)
+	}
+	return items[from:to], meta
+}
+
 func (a *changesAPI) serve(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	a.asked = append(a.asked, changesAsk{r.URL.Path, r.Header.Get("Accept")})
+	a.inUse = max(a.inUse, bigReadSlots.InUse())
+	first := a.hold != nil && !a.holding
+	a.holding = a.holding || first
 	a.mu.Unlock()
+	if first {
+		close(a.started)
+		<-a.hold
+	}
 	w.Header().Set("Content-Type", "application/json")
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	resource := parts[len(parts)-1]
+	if resource == "selfsubjectaccessreviews" {
+		body, _ := io.ReadAll(r.Body)
+		review := &authorizationv1.SelfSubjectAccessReview{}
+		if _, _, err := scheme.Codecs.UniversalDeserializer().Decode(body, nil, review); err != nil || review.Spec.ResourceAttributes == nil {
+			http.Error(w, "unreadable review", http.StatusBadRequest)
+			return
+		}
+		attrs := review.Spec.ResourceAttributes
+		review.APIVersion, review.Kind = "authorization.k8s.io/v1", "SelfSubjectAccessReview"
+		review.Status.Allowed = attrs.Resource != "pods" || attrs.Namespace != "" || a.podsEverywhere
+		_ = json.NewEncoder(w).Encode(review)
+		return
+	}
 	ns := ""
 	for i := 0; i+1 < len(parts); i++ {
 		if parts[i] == "namespaces" {
@@ -89,46 +138,55 @@ func (a *changesAPI) serve(w http.ResponseWriter, r *http.Request) {
 	var body interface{}
 	switch resource {
 	case "replicasets":
-		body = appsv1.ReplicaSetList{TypeMeta: metav1.TypeMeta{Kind: "ReplicaSetList", APIVersion: "apps/v1"}, Items: chgIn(a.rs, ns, func(x appsv1.ReplicaSet) string { return x.Namespace })}
+		items, meta := chgPage(a, chgIn(a.rs, ns, func(x appsv1.ReplicaSet) string { return x.Namespace }), r)
+		body = appsv1.ReplicaSetList{TypeMeta: metav1.TypeMeta{Kind: "ReplicaSetList", APIVersion: "apps/v1"}, ListMeta: meta, Items: items}
 	case "controllerrevisions":
-		body = appsv1.ControllerRevisionList{TypeMeta: metav1.TypeMeta{Kind: "ControllerRevisionList", APIVersion: "apps/v1"}, Items: chgIn(a.crs, ns, func(x appsv1.ControllerRevision) string { return x.Namespace })}
+		items, meta := chgPage(a, chgIn(a.crs, ns, func(x appsv1.ControllerRevision) string { return x.Namespace }), r)
+		body = appsv1.ControllerRevisionList{TypeMeta: metav1.TypeMeta{Kind: "ControllerRevisionList", APIVersion: "apps/v1"}, ListMeta: meta, Items: items}
 	case "configmaps":
-		items := chgIn(a.cms, ns, func(x corev1.ConfigMap) string { return x.Namespace })
+		items, meta := chgPage(a, chgIn(a.cms, ns, func(x corev1.ConfigMap) string { return x.Namespace }), r)
 		if !metadataOnly {
-			body = corev1.ConfigMapList{TypeMeta: metav1.TypeMeta{Kind: "ConfigMapList", APIVersion: "v1"}, Items: items}
+			body = corev1.ConfigMapList{TypeMeta: metav1.TypeMeta{Kind: "ConfigMapList", APIVersion: "v1"}, ListMeta: meta, Items: items}
 			break
 		}
 		metas := []metav1.ObjectMeta{}
 		for _, it := range items {
 			metas = append(metas, it.ObjectMeta)
 		}
-		body = chgMetadata(metas)
+		list := chgMetadata(metas)
+		list.ListMeta = meta
+		body = list
 	case "secrets":
-		items := chgIn(a.secrets, ns, func(x corev1.Secret) string { return x.Namespace })
+		items, meta := chgPage(a, chgIn(a.secrets, ns, func(x corev1.Secret) string { return x.Namespace }), r)
 		if !metadataOnly {
-			body = corev1.SecretList{TypeMeta: metav1.TypeMeta{Kind: "SecretList", APIVersion: "v1"}, Items: items}
+			body = corev1.SecretList{TypeMeta: metav1.TypeMeta{Kind: "SecretList", APIVersion: "v1"}, ListMeta: meta, Items: items}
 			break
 		}
 		metas := []metav1.ObjectMeta{}
 		for _, it := range items {
 			metas = append(metas, it.ObjectMeta)
 		}
-		body = chgMetadata(metas)
+		list := chgMetadata(metas)
+		list.ListMeta = meta
+		body = list
 	case "horizontalpodautoscalers":
-		body = autoscalingv2.HorizontalPodAutoscalerList{TypeMeta: metav1.TypeMeta{Kind: "HorizontalPodAutoscalerList", APIVersion: "autoscaling/v2"}, Items: chgIn(a.hpas, ns, func(x autoscalingv2.HorizontalPodAutoscaler) string { return x.Namespace })}
+		items, meta := chgPage(a, chgIn(a.hpas, ns, func(x autoscalingv2.HorizontalPodAutoscaler) string { return x.Namespace }), r)
+		body = autoscalingv2.HorizontalPodAutoscalerList{TypeMeta: metav1.TypeMeta{Kind: "HorizontalPodAutoscalerList", APIVersion: "autoscaling/v2"}, ListMeta: meta, Items: items}
 	case "nodes":
-		body = corev1.NodeList{TypeMeta: metav1.TypeMeta{Kind: "NodeList", APIVersion: "v1"}, Items: a.nodes}
+		items, meta := chgPage(a, a.nodes, r)
+		body = corev1.NodeList{TypeMeta: metav1.TypeMeta{Kind: "NodeList", APIVersion: "v1"}, ListMeta: meta, Items: items}
 	case "pods":
-		body = corev1.PodList{TypeMeta: metav1.TypeMeta{Kind: "PodList", APIVersion: "v1"}, Items: chgIn(a.pods, ns, func(x corev1.Pod) string { return x.Namespace })}
+		items, meta := chgPage(a, chgIn(a.pods, ns, func(x corev1.Pod) string { return x.Namespace }), r)
+		body = corev1.PodList{TypeMeta: metav1.TypeMeta{Kind: "PodList", APIVersion: "v1"}, ListMeta: meta, Items: items}
 	case "applications":
 		if a.apps == nil {
 			chgStatus(w, http.StatusNotFound, "NotFound", "the server could not find the requested resource")
 			return
 		}
-		items := chgIn(a.apps, ns, func(x map[string]interface{}) string {
+		items, meta := chgPage(a, chgIn(a.apps, ns, func(x map[string]interface{}) string {
 			return x["metadata"].(map[string]interface{})["namespace"].(string)
-		})
-		body = map[string]interface{}{"apiVersion": "argoproj.io/v1alpha1", "kind": "ApplicationList", "metadata": map[string]interface{}{}, "items": items}
+		}), r)
+		body = map[string]interface{}{"apiVersion": "argoproj.io/v1alpha1", "kind": "ApplicationList", "metadata": map[string]interface{}{"continue": meta.Continue}, "items": items}
 	default:
 		chgStatus(w, http.StatusNotFound, "NotFound", "the server could not find the requested resource")
 		return
@@ -149,7 +207,11 @@ func (a *changesAPI) service(t *testing.T) *Service {
 		t.Fatal(err)
 	}
 	s := &Service{}
-	s.defaultBundle.Store(&clientBundle{clientset: cs, dynamic: dyn})
+	b := &clientBundle{clientset: cs, dynamic: dyn}
+	if a.reviews {
+		b.authz = cs.AuthorizationV1()
+	}
+	s.defaultBundle.Store(b)
 	return s
 }
 
@@ -550,5 +612,140 @@ func TestTimelineChanges_ArgoCDSyncsFromTheApplicationsHistory(t *testing.T) {
 	}
 	if by := res.Summary["by_source"].(map[string]interface{}); by["argocd"] != nil {
 		t.Fatalf("by_source.argocd %v, want null", by["argocd"])
+	}
+}
+
+// A changes read asks its sources one after another: past a page each takes a place among bigReadSlots as every paged
+// read does, so the read holds at most one place at a time, never more than the sources it reads, and none after.
+func TestTimelineChanges_AReadHoldsOneBigReadPlaceAtATime(t *testing.T) {
+	now, since, until := chgWindow()
+	api := &changesAPI{pageSize: 2, apps: []map[string]interface{}{}}
+	for i := 0; i < 5; i++ {
+		// revisions 5 to 2 in the window, 1 just before it
+		api.rs = append(api.rs, chgReplicaSet("shop", fmt.Sprintf("web-%d", i), "web", strconv.Itoa(5-i), now.Add(-time.Duration(i)*time.Hour-time.Minute), "web:"+strconv.Itoa(5-i)))
+		api.crs = append(api.crs, appsv1.ControllerRevision{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("db-%d", i), Namespace: "shop", OwnerReferences: chgOwner("StatefulSet", "db")}, Revision: int64(i + 1)})
+		api.cms = append(api.cms, corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("cm-%d", i), Namespace: "shop"}})
+		api.secrets = append(api.secrets, corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("s-%d", i), Namespace: "shop"}})
+		api.hpas = append(api.hpas, autoscalingv2.HorizontalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("h-%d", i), Namespace: "shop"}})
+		api.nodes = append(api.nodes, corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("n-%d", i)}})
+		api.pods = append(api.pods, corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("p-%d", i), Namespace: "shop"}})
+		api.apps = append(api.apps, map[string]interface{}{"apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
+			"metadata": map[string]interface{}{"name": fmt.Sprintf("a-%d", i), "namespace": "shop"}})
+	}
+	res := chgRead(t, api.service(t), context.Background(), "shop", since, until)
+	if got := len(chgOfKind(res, "Deployment")); got != 4 {
+		t.Fatalf("%d rollouts, want the 4 of the window: the pages were not all read", got)
+	}
+	pages := map[string]int{}
+	for _, ask := range api.paths() {
+		pages[ask.path]++
+	}
+	if len(pages) != 8 {
+		t.Fatalf("lists %v, want the 8 sources", pages)
+	}
+	for path, n := range pages {
+		if n != 3 {
+			t.Errorf("%s read in %d pages, want 3", path, n)
+		}
+	}
+	if api.inUse != 1 {
+		t.Fatalf("at most %d places held at once, want one at a time", api.inUse)
+	}
+	if n := bigReadSlots.InUse(); n != 0 {
+		t.Fatalf("%d places still held after the read", n)
+	}
+}
+
+// Two calls for the same window by the same identity at one moment share one read: each list is asked once and both
+// get its answer.
+func TestTimelineChanges_TwoIdenticalCallsAtOnceReadOnce(t *testing.T) {
+	now, since, until := chgWindow()
+	api := &changesAPI{hold: make(chan struct{}), started: make(chan struct{}), apps: []map[string]interface{}{}}
+	api.cms = []corev1.ConfigMap{{ObjectMeta: metav1.ObjectMeta{Name: "cfg", Namespace: "shop", CreationTimestamp: metav1.NewTime(now.Add(-time.Hour))}}}
+	s := api.service(t)
+	results := make([]*TimelineChangesResult, 2)
+	errs := make([]error, 2)
+	var wg sync.WaitGroup
+	call := func(i int) {
+		defer wg.Done()
+		results[i], errs[i] = s.GetTimelineChanges(context.Background(), "shop", since, until, TimelineChangesMax)
+	}
+	wg.Add(1)
+	go call(0)
+	<-api.started
+	wg.Add(1)
+	go call(1)
+	// the second call reaches the read under way while its first list waits
+	time.Sleep(300 * time.Millisecond)
+	close(api.hold)
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("call %d: %v", i, err)
+		}
+	}
+	if results[0] != results[1] || len(chgOfKind(results[0], "ConfigMap")) != 1 {
+		t.Fatalf("answers %+v and %+v, want one shared answer", results[0], results[1])
+	}
+	asked := map[string]int{}
+	for _, ask := range api.paths() {
+		asked[ask.path]++
+	}
+	for path, n := range asked {
+		if n != 1 {
+			t.Errorf("%s asked %d times, want once for both calls", path, n)
+		}
+	}
+}
+
+// Without a namespace, every namespace's restarts are read only for a caller who may list pods across the cluster;
+// another is told they were skipped and asked to name a namespace, which reads that namespace's pods.
+func TestTimelineChanges_EveryNamespacesRestartsNeedListingPodsAcrossTheCluster(t *testing.T) {
+	now, since, until := chgWindow()
+	pods := []corev1.Pod{{
+		ObjectMeta: metav1.ObjectMeta{Name: "web-1", Namespace: "shop"},
+		Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{Name: "app", RestartCount: 1,
+			LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error", ExitCode: 1, FinishedAt: metav1.NewTime(now.Add(-time.Minute))}}}}},
+	}}
+
+	refused := &changesAPI{reviews: true, pods: pods}
+	res := chgRead(t, refused.service(t), context.Background(), "", since, until)
+	skipped, _ := res.Summary["skipped"].(map[string]string)
+	if !strings.Contains(skipped["pods"], "name a namespace") {
+		t.Fatalf("skipped %v, want the restarts named", res.Summary["skipped"])
+	}
+	if by := res.Summary["by_source"].(map[string]interface{}); by["pods"] != nil {
+		t.Fatalf("by_source.pods %v, want null", by["pods"])
+	}
+	for _, ask := range refused.paths() {
+		if strings.HasSuffix(ask.path, "/pods") {
+			t.Fatalf("pods listed: %s", ask.path)
+		}
+	}
+
+	allowed := &changesAPI{reviews: true, podsEverywhere: true, pods: pods}
+	if got := chgOfKind(chgRead(t, allowed.service(t), context.Background(), "", since, until), "Pod"); len(got) != 1 {
+		t.Fatalf("restarts %+v, want web-1's for a caller who may list pods everywhere", got)
+	}
+	named := &changesAPI{reviews: true, pods: pods}
+	if got := chgOfKind(chgRead(t, named.service(t), context.Background(), "shop", since, until), "Pod"); len(got) != 1 {
+		t.Fatalf("restarts %+v, want web-1's in the namespace named", got)
+	}
+}
+
+// A ReplicaSet made before the window holding a higher revision than the window's first rollout was brought back by
+// a rollback after it: that rollout's note says so, with nothing compared.
+func TestTimelineChanges_ARollbackAfterARolloutIsSaid(t *testing.T) {
+	now, since, until := chgWindow()
+	api := &changesAPI{rs: []appsv1.ReplicaSet{
+		chgReplicaSet("shop", "web-a", "web", "5", now.Add(-10*24*time.Hour), "web:1"),
+		chgReplicaSet("shop", "web-b", "web", "4", now.Add(-time.Hour), "web:2"),
+	}}
+	got := chgOfKind(chgRead(t, api.service(t), context.Background(), "shop", since, until), "Deployment")
+	if len(got) != 1 || got[0].To != int64(4) || got[0].From != nil || got[0].Changed != nil {
+		t.Fatalf("rollouts %+v, want revision 4 with nothing compared", got)
+	}
+	if !strings.Contains(got[0].Note, "rolled back after this rollout: revision 5") {
+		t.Fatalf("note %q", got[0].Note)
 	}
 }
