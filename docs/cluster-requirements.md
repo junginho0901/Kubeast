@@ -23,7 +23,7 @@ A "target cluster" is a cluster Kubeast manages, including the cluster it is ins
 | --- | --- | --- | --- |
 | All | Kubeast permissions (RBAC) — §1 | `auth.impersonation.enabled` (on) | User requests get 403 from the cluster |
 | Alerts → AI investigation | Investigator identity RBAC — §1, Alertmanager or Grafana alerting that sends webhooks to Kubeast — §13 | `features.alertInvestigation.enabled` (off) | Alerts do not arrive, or the investigation's read tools get 403 from the cluster |
-| Node and pod usage, Monitoring, optimization (fallback) | metrics-server — §2 | — | Usage cells are empty and optimization shows "none" |
+| Node and pod usage, Monitoring, optimization (fallback) | metrics-server — §2 | — | The Dashboard's top resources, Monitoring and the Nodes page's top card tell every user "Metrics server not available for this cluster" (from the cluster's API discovery, §2); the node drawer's usage is empty and optimization shows "none" |
 | Drawer and dashboard graphs, optimization, storage analysis | Prometheus + metric collectors — §3 | `features.prometheus.enabled` (**off**) | Graph areas are hidden and optimization uses metrics-server point-in-time values |
 | Cost, optimization cost column | OpenCost — §4 | `features.cost.enabled` (on) | "OpenCost is not installed on this cluster" notice, no cost column |
 | Policy reports | The PolicyReport CRD and a tool that creates reports — §5 | `features.policyReports.enabled` (on) | "Not installed" notice |

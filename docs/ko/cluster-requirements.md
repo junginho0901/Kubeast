@@ -23,7 +23,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 예
 | --- | --- | --- | --- |
 | 전체 | Kubeast 권한(RBAC) — §1 | `auth.impersonation.enabled`(켬) | 클러스터가 사용자 요청을 403으로 거부 |
 | 알림 → AI 조사 | 조사 신원 RBAC — §1, Kubeast로 웹훅을 보내는 Alertmanager 또는 Grafana 알림 — §13 | `features.alertInvestigation.enabled`(끔) | 알림이 오지 않거나, 조사용 읽기 도구가 클러스터에서 403 |
-| 노드·파드 사용량, Monitoring, 최적화(대체 수단) | metrics-server — §2 | — | 사용량 칸이 비고, 최적화는 "없음" |
+| 노드·파드 사용량, Monitoring, 최적화(대체 수단) | metrics-server — §2 | — | 대시보드 상위 리소스, Monitoring, 노드 페이지 상단 카드가 모든 사용자에게 "이 클러스터에 메트릭 서버가 없습니다"를 표시(클러스터의 API discovery로 판정, §2), 노드 드로어의 사용량은 비고, 최적화는 "없음" |
 | 드로어·대시보드 그래프, 최적화, 스토리지 분석 | Prometheus + 지표 수집기 — §3 | `features.prometheus.enabled`(**끔**) | 그래프 영역이 숨겨지고, 최적화는 metrics-server 순간값 사용 |
 | 비용(Cost), 최적화 비용 열 | OpenCost — §4 | `features.cost.enabled`(켬) | "OpenCost 없음" 안내, 비용 열 없음 |
 | 정책 보고서 | PolicyReport CRD와 보고서를 만드는 도구 — §5 | `features.policyReports.enabled`(켬) | "설치 안 됨" 안내 |
