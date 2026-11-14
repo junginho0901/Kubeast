@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ShieldCheck } from 'lucide-react'
 import { api } from '@/services/api'
@@ -8,6 +8,7 @@ import CustomDropdown from '@/components/CustomDropdown'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
 import { useAIContext } from '@/hooks/useAIContext'
+import { keepSameRead } from '@/utils/keepSameRead'
 import { reasonText, resultLabel, ruleName, unevaluatedText, type Tr } from './netpolText'
 import { podPickerWay } from './namespacePodTable'
 
@@ -113,12 +114,14 @@ export default function NetworkPolicyCheckModal({ self, selfName, namespace, onC
     const id = setTimeout(() => setPodSearch(otherName.trim()), 250)
     return () => clearTimeout(id)
   }, [otherName])
+  // the suggestions stay while the next letters are asked, never another namespace's
+  const podMatchesKey = ['cluster', 'netpol-check-pod-search', otherNs, podSearch]
   const podMatches = useQuery({
-    queryKey: ['cluster', 'netpol-check-pod-search', otherNs, podSearch],
+    queryKey: podMatchesKey,
     queryFn: () => api.getPodPage({ namespace: otherNs, q: podSearch || undefined, offset: 0, limit: POD_SUGGESTIONS }),
     enabled: podWay === 'search' && !!otherNs,
     retry: false,
-    placeholderData: keepPreviousData,
+    placeholderData: keepSameRead(podMatchesKey, [3]),
   })
   const check = useMutation({
     mutationFn: () => {

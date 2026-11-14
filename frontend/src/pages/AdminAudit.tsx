@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, AuditLogEntry, AuditLogFilter, AuditVerifyReport, type AuditAnchor } from '@/services/api'
@@ -17,6 +17,7 @@ import { RefreshFailure } from '@/components/RefreshFailure'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { failureOf } from '@/hooks/useRefresh'
 import { failureText } from '@/utils/failureText'
+import { keepSameRead } from '@/utils/keepSameRead'
 import { useConfirm } from '@/services/confirm'
 import { ActionFailure } from '@/components/ActionFailure'
 import { useDownload } from '@/hooks/useDownload'
@@ -124,12 +125,14 @@ export default function AdminAudit() {
   const request = auditLimitFilter(filter, rowsPerPage, fit)
 
   const queryClient = useQueryClient()
-  // The answer carries the read it answers: the pager counts with its rows per page while another loads.
+  // The answer carries the read it answers: the pager counts with its rows per page while another loads. The rows stay
+  // while another page, page size or as_of of the same filter loads; another filter waits for its own answer.
+  const listKey = ['admin-audit-logs', request]
   const { data, isLoading, isFetching, isPlaceholderData, refetch, error: listError, errorUpdatedAt } = useQuery({
-    queryKey: ['admin-audit-logs', request],
+    queryKey: listKey,
     queryFn: async () => ({ ...(await api.adminListAuditLogs(request)), request }),
     enabled: measured,
-    placeholderData: keepPreviousData,
+    placeholderData: keepSameRead(listKey, ['offset', 'limit', 'as_of']),
     // Audit log list is a read that itself produces an audit record
     // ("admin.audit.read"), so we want to poll sparingly. 60s is the minimum
     // automatic refetch interval; the user can hit "새로고침" for immediate

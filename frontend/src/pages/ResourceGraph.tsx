@@ -10,7 +10,7 @@ import {
   BackgroundVariant,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Info, ShieldAlert } from 'lucide-react'
 import { api, ResourceGraphNode, type TrafficEnd, type TrafficLine, type TrafficResult } from '@/services/api'
@@ -22,6 +22,7 @@ import { useAIContext } from '@/hooks/useAIContext'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { usePermission } from '@/hooks/usePermission'
 import { buildResourceLink } from '@/utils/resourceLink'
+import { keepSameRead } from '@/utils/keepSameRead'
 import {
   ALL_EDGE_TYPES,
   DEFAULT_KINDS,
@@ -151,11 +152,13 @@ export default function ResourceGraph() {
 
   // a group never crosses the page's node or instance grouping, so those are asked of the server
   const serverGroupBy = groupBy === 'node' || groupBy === 'instance' ? groupBy : 'none'
+  // the graph stays while the same namespaces are grouped or expanded another way; other namespaces wait for their own
+  const graphKey = ['resource-graph', nsArray, groupPods, serverGroupBy, expanded]
   const { data: graphData, isLoading, error: graphError, refetch: refetchGraph } = useQuery({
-    queryKey: ['resource-graph', nsArray, groupPods, serverGroupBy, expanded],
+    queryKey: graphKey,
     queryFn: () => api.getResourceGraph(nsArray, { groupPods, groupBy: serverGroupBy, expand: expanded }),
     enabled: hasSelection,
-    placeholderData: keepPreviousData,
+    placeholderData: keepSameRead(graphKey, [2, 3, 4]),
   })
   // the pods the graph holds: a group counts its members
   const podCounts = useMemo(() => {
