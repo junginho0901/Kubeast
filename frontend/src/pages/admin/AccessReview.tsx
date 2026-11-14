@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, ClipboardCheck, Download, History, Loader2, RefreshCw, X } from 'lucide-react'
 
@@ -13,6 +13,7 @@ import {
 import { formatDuration, formatWhen } from './accessRequestFormat'
 import { apiKeyTabCount, historyPage, requestsCut } from './accessReviewView'
 import { answerPageSize } from '@/utils/fitServerPage'
+import { keepSameRead } from '@/utils/keepSameRead'
 import { ListPager } from '@/components/ListPager'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
@@ -186,10 +187,11 @@ export default function AccessReview() {
   // before it. With Fit the first page is one block, so the count the Users tab gives reads it as well as the
   // History tab's own.
   const pastQuery = historyPage(pastPage, rowsPerPage, fit)
+  const pastKey = ['access-review', 'history', pastQuery]
   const { data: past, isLoading: historyLoading, isPlaceholderData: pastLoading, error: historyError } = useQuery({
-    queryKey: ['access-review', 'history', pastQuery],
+    queryKey: pastKey,
     queryFn: async () => ({ ...(await api.listAccessReviews(pastQuery)), offset: pastQuery.offset, limit: pastQuery.limit }),
-    placeholderData: keepPreviousData,
+    placeholderData: keepSameRead(pastKey, ['offset', 'limit']),
   })
   const pastTotal = past?.total ?? 0
   // the pager follows the answer on screen, with its page size (a first-page block cut at the rows that fit)

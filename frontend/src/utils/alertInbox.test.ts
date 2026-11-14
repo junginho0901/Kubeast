@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { alertResource, inboxState, liveLineOf, liveStateOf, severityChoices, silenceStart, storeLimited, storeLimitedSeconds, storeRefetchMs } from './alertInbox'
+import { alertResource, inboxState, liveLineOf, liveStateOf, previewAnswers, severityChoices, silenceStart, storeLimited, storeLimitedSeconds, storeRefetchMs } from './alertInbox'
 
 describe('the object an alert is about', () => {
   it('takes the most specific namespaced label first', () => {
@@ -131,5 +131,25 @@ describe('whether the Alerts page asks the inbox', () => {
     expect(inboxState({ prometheus: prom, ai: { enabled: true }, alertInvestigation: { enabled: false } }, false)).toBe('off')
     expect(inboxState({ prometheus: prom }, false)).toBe('off')
     expect(inboxState({ prometheus: prom, ai: { enabled: false }, alertInvestigation: { enabled: false } }, false)).toBe('aiOff')
+  })
+})
+
+// The silence window listed the alerts of the conditions asked before the last edit, for 400 ms after each, as the
+// alerts the conditions on screen would mute. The preview is drawn only while it answers the conditions on screen.
+describe('previewAnswers', () => {
+  const m = (name: string, value: string, isRegex = false, isEqual = true) => ({ name, value, isRegex, isEqual })
+  const asked = [m('alertname', 'KubePodCrashLooping'), m('namespace', 'shop')]
+
+  it('answers the conditions it was asked for', () => {
+    expect(previewAnswers(asked, [m('alertname', 'KubePodCrashLooping'), m('namespace', 'shop')])).toBe(true)
+    expect(previewAnswers([], [])).toBe(true)
+  })
+
+  it('does not answer edited conditions: a value, an operator, a condition more or less', () => {
+    expect(previewAnswers(asked, [m('alertname', 'KubePodCrashLooping'), m('namespace', 'billing')])).toBe(false)
+    expect(previewAnswers(asked, [m('alertname', 'KubePodCrashLooping'), m('namespace', 'shop', false, false)])).toBe(false)
+    expect(previewAnswers(asked, [m('alertname', 'KubePodCrashLooping'), m('namespace', 'shop', true)])).toBe(false)
+    expect(previewAnswers(asked, [m('alertname', 'KubePodCrashLooping')])).toBe(false)
+    expect(previewAnswers(asked, [...asked, m('severity', 'info')])).toBe(false)
   })
 })

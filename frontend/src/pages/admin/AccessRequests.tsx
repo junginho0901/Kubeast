@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Check, Clock, Loader2, Search, ShieldCheck, X } from 'lucide-react'
 
@@ -10,6 +10,7 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { formatDuration, formatWhen } from './accessRequestFormat'
 import { accessRequestQuery, pageCount, type AccessRequestTab } from './accessRequestPages'
 import { answerPageSize } from '@/utils/fitServerPage'
+import { keepSameRead } from '@/utils/keepSameRead'
 import { usePendingAccessRequestCount } from '@/hooks/usePendingAccessRequestCount'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { utcTitle } from '@/utils/time'
@@ -57,24 +58,26 @@ export default function AccessRequests() {
   const [hasRows, setHasRows] = useState(false)
   const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage, fit } = useAdaptiveTable({ recalculationKey: `${tab}:${hasRows}` })
   // Both tabs are read (the one not shown at its first page), so switching shows rows at once; each keeps the
-  // rows it showed while its next page or search loads.
+  // rows it showed while its next page or page size loads, and waits for its own answer with another search.
   const tabQuery = (k: AccessRequestTab) => accessRequestQuery(k, search, tab === k ? page : 1, rowsPerPage, fit)
+  const pendingKey = ['access-requests', 'admin', 'list', 'pending', tabQuery('pending')]
   const pendingList = useQuery({
-    queryKey: ['access-requests', 'admin', 'list', 'pending', tabQuery('pending')],
+    queryKey: pendingKey,
     queryFn: async () => {
       const q = tabQuery('pending')
       return { ...(await api.adminAccessRequestsPage(q)), offset: q.offset, limit: q.limit }
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepSameRead(pendingKey, ['offset', 'limit']),
     refetchInterval: 30_000,
   })
+  const historyKey = ['access-requests', 'admin', 'list', 'history', tabQuery('history')]
   const historyList = useQuery({
-    queryKey: ['access-requests', 'admin', 'list', 'history', tabQuery('history')],
+    queryKey: historyKey,
     queryFn: async () => {
       const q = tabQuery('history')
       return { ...(await api.adminAccessRequestsPage(q)), offset: q.offset, limit: q.limit }
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepSameRead(historyKey, ['offset', 'limit']),
   })
   const list = tab === 'pending' ? pendingList : historyList
   const total = list.data?.total ?? 0

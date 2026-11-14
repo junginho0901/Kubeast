@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { KeyRound, Loader2 } from 'lucide-react'
 
@@ -17,6 +17,7 @@ import { usePagination } from '@/components/resource-detail/usePagination'
 import { pagerNav } from '@/components/resource-detail/useServerPods'
 import { formatDuration, formatWhen } from '@/pages/admin/accessRequestFormat'
 import { parseNamespaceList } from '@/utils/namespaceScope'
+import { keepSameRead } from '@/utils/keepSameRead'
 import { MY_REQUESTS_PER_PAGE, myRequestsKey, myRequestsQuery } from './myRequestPages'
 
 // Settings → Cluster access: the signed-in user's role on each cluster, a
@@ -52,10 +53,11 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
   // My requests: one page of every request, the page being read keeps the rows shown before it
   const [requestPage, setRequestPage] = useState(1)
   const requestQuery = myRequestsQuery(requestPage)
+  const requestsKey = myRequestsKey(requestQuery)
   const { data: requests, isPlaceholderData: requestsTurning } = useQuery({
-    queryKey: myRequestsKey(requestQuery),
+    queryKey: requestsKey,
     queryFn: () => api.listMyAccessRequestsPage(requestQuery),
-    placeholderData: keepPreviousData,
+    placeholderData: keepSameRead(requestsKey, ['limit', 'offset']),
     refetchInterval: 30_000,
     enabled,
   })

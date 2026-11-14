@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type PodListRow, type PodPage, type PodPageParams } from '@/services/api'
 import { podPagePollEvery, podRowChanged, readPodPageSince } from '@/services/podPageRead'
@@ -20,6 +20,7 @@ import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { NOT_COUNTED } from '@/utils/listCounts'
+import { keepSameRead } from '@/utils/keepSameRead'
 
 const PAGE_BLOCK = 50
 
@@ -75,11 +76,12 @@ export default function Pods() {
   const pageKey = useMemo(() => ['workloads', 'pods-page', pageParams], [pageParams])
 
   // A poll sends the revision it has; while nothing a row shows changed the server
-  // answers "unchanged" and the page keeps what it has.
+  // answers "unchanged" and the page keeps what it has. The rows stay while another page or order of them loads;
+  // another namespace or search waits for its own answer.
   const { data: page, isLoading: isLoadingPods } = useQuery({
     queryKey: pageKey,
     queryFn: () => readPodPageSince(queryClient, pageKey, pageParams),
-    placeholderData: keepPreviousData,
+    placeholderData: keepSameRead(pageKey, ['offset', 'limit', 'sort', 'dir']),
     refetchInterval: (query) => podPagePollEvery(query.state.data),
   })
   useEffect(() => {
@@ -147,7 +149,9 @@ spec:
 `
   }, [selectedNamespace])
 
-  const totalPages = Math.max(1, Math.ceil(totalRows / rowsPerPage))
+  // the count of the answer on screen (none while another namespace or search loads)
+  const shownTotal = page?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(shownTotal / rowsPerPage))
 
   useEffect(() => {
     setCurrentPage(1)
@@ -197,7 +201,7 @@ spec:
           top_reasons: podStats.topReasons.map(([reason, count]) => ({ reason, count })),
         },
         ...summarizeList(pagedPods as unknown as Record<string, unknown>[], {
-          total: totalRows,
+          total: shownTotal,
           currentPage,
           pageSize: rowsPerPage,
           topN: rowsPerPage,
@@ -221,7 +225,7 @@ spec:
         }),
       },
     }
-  }, [page, pagedPods, totalRows, currentPage, rowsPerPage, selectedNamespace, searchQuery, podStats])
+  }, [page, pagedPods, shownTotal, currentPage, rowsPerPage, selectedNamespace, searchQuery, podStats])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -276,11 +280,11 @@ spec:
         allNamespacesLabel={tr('pods.allNamespaces', 'All namespaces')}
       />
 
-      {search && (
+      {search && page && (
         <p className="text-sm text-slate-400 shrink-0">
           {tr('pods.matchCount', '{{count}} pod{{suffix}} match.', {
-            count: totalRows,
-            suffix: totalRows === 1 ? '' : 's',
+            count: shownTotal,
+            suffix: shownTotal === 1 ? '' : 's',
           })}
         </p>
       )}
@@ -309,7 +313,7 @@ spec:
 
       <PodTable
         pagedPods={pagedPods}
-        sortedPodsLength={totalRows}
+        sortedPodsLength={shownTotal}
         isLoadingPods={isLoadingPods}
         showNamespaceColumn={showNamespaceColumn}
         sortKey={sortKey}

@@ -120,3 +120,9 @@ export function inboxState(features: ClusterFeatures | undefined, featuresPlaceh
   if (!features || alertInvestigationEnabled(features)) return 'on'
   return aiEnabled(features) ? 'off' : 'aiOff'
 }
+
+// The silence window's preview answers the conditions it was asked for once typing paused: while the conditions on
+// screen differ from those, its alerts are not the ones these would mute, so it is not drawn.
+export function previewAnswers(asked: readonly object[], conditions: readonly object[]): boolean {
+  return JSON.stringify(asked) === JSON.stringify(conditions)
+}
