@@ -35,7 +35,9 @@
       "title": "Connect an AI agent (MCP)",
       "body": "Agents such as Claude Code and Cursor connect with this API key instead of a kubeconfig. They get read-only tools within your permissions, and every call is audited.",
       "writeBody": "A key with a Write ceiling also gets the write tools — no approval step, your own or a temporarily granted role (access request) applies, and Argo CD-managed objects are refused or flagged by the guard.",
-      "command": "Registration command (replace the key with the value shown when it was created)"
+      "command": "Registration command (replace the key with the value shown when it was created)",
+      "aiOff": "Connecting an AI agent (MCP) needs AI, which is off on this installation (ai.enabled).",
+      "readFailed": "Could not read whether AI agents (MCP) can connect: {{reason}}"
     }
   },
   "clusterHygiene": {

@@ -6,6 +6,13 @@ export function aiEnabled(features?: ClusterFeatures | null): boolean {
   return features?.ai?.enabled !== false
 }
 
+// AIGate and the MCP card: 'wait' while the features are their placeholder (unless the cluster list they wait for failed); unknown as above.
+export type AIState = 'wait' | 'on' | 'off'
+export function aiState(features: ClusterFeatures | null | undefined, featuresPlaceholder: boolean, clusterListFailed = false): AIState {
+  if (featuresPlaceholder && !clusterListFailed) return 'wait'
+  return aiEnabled(features) ? 'on' : 'off'
+}
+
 // Chart features.cost.enabled: the Cost page and the optimization table's cost
 // columns. Unknown counts as off — an older server has no /cluster/cost to show.
 export function costEnabled(features?: ClusterFeatures | null): boolean {
