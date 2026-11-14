@@ -9,7 +9,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].args
-          value: ["--aclfile", "/run/kubeast/redis-acl/users.acl"]
+          value: ["--aclfile", "/run/kubeast/redis-acl/users.acl", "--maxmemory", "107374182", "--maxmemory-policy", "volatile-lru"]
       - equal:
           path: spec.template.spec.containers[0].env
           value:
@@ -168,7 +168,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].args
-          value: ["--requirepass", "$(REDIS_PASSWORD)"]
+          value: ["--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "107374182", "--maxmemory-policy", "volatile-lru"]
       - contains:
           path: spec.template.spec.containers[0].env
           content:
@@ -203,6 +203,98 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.name
           value: company-kubeast
+
+  # maxmemory = 80% of resources.redis.limits.memory in bytes; volatile-lru evicts only keys with a TTL
+  - it: caps Valkey at 80% of the memory limit and evicts only keys with a TTL, in both modes
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[2]
+          value: --maxmemory
+      - equal:
+          path: spec.template.spec.containers[0].args[3]
+          value: "107374182"
+      - equal:
+          path: spec.template.spec.containers[0].args[4]
+          value: --maxmemory-policy
+      - equal:
+          path: spec.template.spec.containers[0].args[5]
+          value: volatile-lru
+
+  - it: derives maxmemory from a limit in Gi
+    set:
+      resources.redis.limits.memory: 1Gi
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[3]
+          value: "858993459"
+
+  - it: derives maxmemory from a limit with a fraction
+    set:
+      resources.redis.limits.memory: 1.5Gi
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[3]
+          value: "1288490188"
+
+  - it: derives maxmemory from a decimal suffix
+    set:
+      resources.redis.limits.memory: 512M
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[3]
+          value: "409600000"
+
+  - it: derives maxmemory from a limit given as a number of bytes
+    set:
+      resources.redis.limits.memory: 134217728
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[3]
+          value: "107374182"
+
+  - it: without a memory limit caps at 80% of 128Mi, the chart's default limit
+    set:
+      resources.redis.limits: null
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[3]
+          value: "107374182"
+      - notExists:
+          path: spec.template.spec.containers[0].resources.limits
+
+  - it: without resources.redis at all caps at 80% of 128Mi
+    set:
+      resources.redis: null
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[3]
+          value: "107374182"
+
+  - it: with redis.acl.enabled=false keeps the same cap
+    set:
+      redis.acl.enabled: false
+      resources.redis.limits.memory: 1Gi
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args
+          value: ["--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "858993459", "--maxmemory-policy", "volatile-lru"]
+
+  - it: refuses a memory limit that is not a quantity
+    set:
+      resources.redis.limits.memory: lots
+    asserts:
+      - failedTemplate:
+          errorPattern: resources.redis.limits.memory "lots" is not a memory quantity
 
   - it: runs Valkey by default
     documentSelector:

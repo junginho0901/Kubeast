@@ -1,5 +1,6 @@
 {{- if .Values.redis.enabled }}
 {{- $acl := include "kubeast.redisAcl" . }}
+{{- $maxmemory := include "kubeast.redisMaxmemory" . }}
 {{- /* The probes sign in as probe (PING only) with REDISCLI_AUTH, or with requirepass as before. */ -}}
 {{- $probe := `["sh", "-c", "redis-cli --no-auth-warning -a \"$REDIS_PASSWORD\" ping | grep -q PONG"]` }}
 {{- if $acl }}{{ $probe = `["sh", "-c", "redis-cli --user probe ping | grep -q PONG"]` }}{{ end }}
@@ -69,7 +70,8 @@ spec:
           {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
           {{- include "kubeast.resources" (dict "root" $ "key" "redis") | nindent 10 }}
           {{- if $acl }}
-          args: ["--aclfile", "/run/kubeast/redis-acl/users.acl"]
+          # maxmemory: 80% of the memory limit; volatile-lru evicts only keys with a TTL (the cache), never the keys without one
+          args: ["--aclfile", "/run/kubeast/redis-acl/users.acl", "--maxmemory", "{{ $maxmemory }}", "--maxmemory-policy", "volatile-lru"]
           env:
             # valkey-cli (redis-cli) reads the password from this variable, not from its arguments
             - name: REDISCLI_AUTH
@@ -80,7 +82,7 @@ spec:
           {{- else }}
           # requirepass from kubeast-secrets (REDIS_PASSWORD); the probes sign
           # in with the same value.
-          args: ["--requirepass", "$(REDIS_PASSWORD)"]
+          args: ["--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "{{ $maxmemory }}", "--maxmemory-policy", "volatile-lru"]
           env:
             - name: REDIS_PASSWORD
               valueFrom:

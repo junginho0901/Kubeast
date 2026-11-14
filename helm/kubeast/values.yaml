@@ -614,6 +614,8 @@ resources:
   postgres:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 1Gi }
+  # The chart's Redis evicts keys with a TTL (the cache) at 80% of this limit (maxmemory, volatile-lru); keys without one
+  # stay. Without a limit it caps at 80% of 128Mi.
   redis:
     requests: { cpu: 20m, memory: 32Mi }
     limits: { memory: 128Mi }

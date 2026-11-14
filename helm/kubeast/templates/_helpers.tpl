@@ -42,6 +42,20 @@ ${k8s_service} and ${probe} stand, so no password is in this text, the pod spec 
 Every command named must exist in the image's Valkey, or Valkey refuses the file and does not start. A command the
 code starts to use is added here with a case in tests/redis_test.yaml.
 */}}
+{{/*
+maxmemory of the chart's Redis, in bytes: 80% of resources.redis.limits.memory, so Valkey evicts before the container
+reaches its limit (the rest is Valkey's own memory and the allocator's). Without a limit, 80% of 128Mi, the chart's
+default limit. The quantity is bytes or a number with a Kubernetes suffix (Ki Mi Gi Ti Pi Ei, k M G T P E, m).
+*/}}
+{{- define "kubeast.redisMaxmemory" -}}
+{{- $limit := "128Mi" -}}
+{{- with index .Values.resources "redis" }}{{ with .limits }}{{ with .memory }}{{ $limit = toString . }}{{ end }}{{ end }}{{ end -}}
+{{- $re := "^([0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E|m)?$" -}}
+{{- if not (regexMatch $re $limit) }}{{ fail (printf "resources.redis.limits.memory %q is not a memory quantity (bytes, or a number with Ki, Mi, Gi, k, M, G …)" $limit) }}{{ end -}}
+{{- $units := dict "" 1 "m" 0.001 "k" 1000 "M" 1000000 "G" 1000000000 "T" 1000000000000 "P" 1000000000000000 "E" 1000000000000000000 "Ki" 1024 "Mi" 1048576 "Gi" 1073741824 "Ti" 1099511627776 "Pi" 1125899906842624 "Ei" 1152921504606846976 -}}
+{{- mulf (regexReplaceAll $re $limit "${1}" | float64) (index $units (regexReplaceAll $re $limit "${2}")) 0.8 | floor | int64 -}}
+{{- end -}}
+
 {{- define "kubeast.redisUsersAcl" -}}
 user default off resetkeys resetchannels -@all
 user k8s-service on #${k8s_service} resetkeys ~kubeast:* resetchannels &kubeast:* -@all +ping +select +get +set +del +unlink +scan +hget +hgetall +hset +hsetnx +hincrby +hdel +multi +exec +discard +publish +subscribe +unsubscribe
