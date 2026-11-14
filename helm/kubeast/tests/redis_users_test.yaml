@@ -308,3 +308,55 @@ tests:
           content:
             name: REDIS_USERNAME
           any: true
+
+  - it: renders no kubeast-redis-users with redis.acl.existingSecret
+    template: secret.yaml
+    set:
+      redis.acl.existingSecret: company-redis-users
+    asserts:
+      - hasDocuments:
+          count: 2
+      - notEqual:
+          path: metadata.name
+          value: kubeast-redis-users
+
+  # Each service takes its own key from the Redis users' Secret; secrets.existingSecret, which they take whole, need
+  # not hold any of them.
+  - it: with redis.acl.existingSecret k8s-service and tool-server each read their own key there, beside secrets.existingSecret
+    template: deployments.yaml
+    set:
+      secrets.existingSecret: company-kubeast
+      redis.acl.existingSecret: company-redis-users
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: company-redis-users
+                key: REDIS_K8S_SERVICE_PASSWORD
+                optional: true
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: company-redis-users
+                key: REDIS_TOOL_SERVER_PASSWORD
+                optional: true
+        documentSelector: {path: metadata.name, value: tool-server}
+      - contains:
+          path: spec.template.spec.containers[0].envFrom
+          content:
+            secretRef:
+              name: company-kubeast
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - notContains:
+          path: spec.template.spec.containers[0].envFrom
+          content:
+            secretRef:
+              name: company-redis-users
+        documentSelector: {path: metadata.name, value: k8s-service}

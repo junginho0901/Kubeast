@@ -95,3 +95,9 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no redis.acl.existingSecretHasKeys
+  - it: stops values without redis.acl.existingSecret (the Redis users' own Secret)
+    set:
+      redis.acl.existingSecret: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no redis.acl.existingSecret

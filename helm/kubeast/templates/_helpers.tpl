@@ -19,16 +19,28 @@ app.kubernetes.io/part-of: kubeast
 {{ .Values.secrets.existingSecret | default "kubeast-secrets" }}
 {{- end -}}
 
-{{- /* "true" when the chart's Redis runs one user per service (redis.acl): with the chart's own Secrets, or with
-       secrets.existingSecret once redis.acl.existingSecretHasKeys says it holds the users' passwords. Values only,
-       never whether a key exists. */ -}}
+{{- /* "true" when the chart's Redis runs one user per service (redis.acl): with the chart's own Secrets, with
+       redis.acl.existingSecret, or with secrets.existingSecret once redis.acl.existingSecretHasKeys says it holds
+       the users' passwords. Values only, never whether a key exists. */ -}}
 {{- define "kubeast.redisAcl" -}}
-{{- if and .Values.redis.enabled .Values.redis.acl.enabled (or (not .Values.secrets.existingSecret) .Values.redis.acl.existingSecretHasKeys) }}true{{ end -}}
+{{- if and .Values.redis.enabled .Values.redis.acl.enabled (or (not .Values.secrets.existingSecret) .Values.redis.acl.existingSecretHasKeys .Values.redis.acl.existingSecret) }}true{{ end -}}
 {{- end -}}
 
-{{- /* The Secret holding the Redis users' passwords: the chart's kubeast-redis-users, or secrets.existingSecret. */ -}}
+{{- /* The Secret holding the Redis users' passwords: redis.acl.existingSecret, else secrets.existingSecret, else the
+       chart's kubeast-redis-users. */ -}}
 {{- define "kubeast.redisUsersSecretName" -}}
-{{ .Values.secrets.existingSecret | default "kubeast-redis-users" }}
+{{ .Values.redis.acl.existingSecret | default .Values.secrets.existingSecret | default "kubeast-redis-users" }}
+{{- end -}}
+
+{{- /* The other way out of a missing Redis user key, for the acl container's message. */ -}}
+{{- define "kubeast.redisUsersWayOut" -}}
+{{- if .Values.redis.acl.existingSecret -}}
+unset redis.acl.existingSecret
+{{- else if .Values.secrets.existingSecret -}}
+set redis.acl.existingSecretHasKeys=false
+{{- else -}}
+set redis.acl.enabled=false
+{{- end -}}
 {{- end -}}
 
 {{/*

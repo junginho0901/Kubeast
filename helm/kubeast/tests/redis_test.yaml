@@ -381,3 +381,36 @@ tests:
       - equal:
           path: spec.template.spec.initContainers[0].image
           value: valkey/valkey:9.1-alpine
+
+  # redis.acl.existingSecret: a Secret of the Redis user keys alone, read key by key.
+  - it: with redis.acl.existingSecret reads the users' passwords from that Secret and turns the users on with secrets.existingSecret
+    set:
+      secrets.existingSecret: company-kubeast
+      redis.acl.existingSecret: company-redis-users
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[0]
+          value: --aclfile
+      - equal:
+          path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.name
+          value: company-redis-users
+      - equal:
+          path: spec.template.spec.volumes[2].secret.secretName
+          value: company-redis-users
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: 'is not in Secret company-redis-users; add it \(docs/configuration\.md \\"Redis users\\"\) or unset redis\.acl\.existingSecret"'
+
+  - it: with redis.acl.existingSecret and no secrets.existingSecret reads from that Secret too
+    set:
+      redis.acl.existingSecret: company-redis-users
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.volumes[2].secret.secretName
+          value: company-redis-users

@@ -175,6 +175,7 @@ redis:
   acl:
     enabled: true       # one Redis user per service ("Redis users" below); false = one password as before
     existingSecretHasKeys: false  # with secrets.existingSecret: true once that Secret holds the users' passwords
+    existingSecret: ""            # a Secret of the users' keys alone; each service then reads only its own key
 networkPolicy:
   enabled: true         # default deny, plus only the flows the services use. Harmless on CNIs that do not enforce NetworkPolicy (kindnet, etc.)
 
@@ -230,7 +231,8 @@ With `secrets.existingSecret`, Redis keeps one password (`REDIS_PASSWORD`) for e
 - Each user's password is generated at install, 32 characters, in the Secret `kubeast-redis-users` (`REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD`, `REDIS_TOOL_SERVER_PASSWORD`).
 - It is kept across upgrades and stays after `helm uninstall`, like `kubeast-secrets`.
 - It is not in `kubeast-secrets`, which every service reads whole as its environment. The redis pod reads them, and k8s-service and tool-server each read their own.
-- With `secrets.existingSecret` and `redis.acl.existingSecretHasKeys: true`, the keys are read from that Secret.
+- With `secrets.existingSecret` and `redis.acl.existingSecretHasKeys: true`, the keys are read from that Secret. Every backend reads that Secret whole as its environment, so each then holds every Redis user's password, and the install notes say so.
+- To give each service its own key only, put the keys in a Secret of their own and set `redis.acl.existingSecret` to it. The users are on, the redis pod and each service read their key from it, and the main Secret need not hold them.
 - To change one, write the new value into the Secret, then restart `redis` and the service it belongs to.
 
 **How Valkey reads them.**

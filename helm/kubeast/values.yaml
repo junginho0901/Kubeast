@@ -637,11 +637,19 @@ redis:
   acl:
     enabled: true
     # With secrets.existingSecret the users stay off, and Redis keeps the one
-    # password, until this is true: put REDIS_K8S_SERVICE_PASSWORD,
-    # REDIS_PROBE_PASSWORD and, with the AI on, REDIS_TOOL_SERVER_PASSWORD in
-    # that Secret first. An upgrade that can read the
-    # Secret stops when one is missing. Not read without secrets.existingSecret.
+    # password, until this is true (or existingSecret below is set): put
+    # REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD and, with the AI on,
+    # REDIS_TOOL_SERVER_PASSWORD in that Secret first. An upgrade that can read
+    # the Secret stops when one is missing. Not read without
+    # secrets.existingSecret or with existingSecret below.
     existingSecretHasKeys: false
+    # A Secret holding only the Redis users' keys (the three above), read key by
+    # key: each service then holds its own password only, where
+    # secrets.existingSecret, which every service takes whole as environment,
+    # gives each all of them. Set, the users are on, the chart makes no
+    # kubeast-redis-users, and an upgrade that can read it stops when a key is
+    # missing.
+    existingSecret: ""
 
 # --- Gateway ---
 gateway:

@@ -139,3 +139,73 @@ tests:
     asserts:
       - hasDocuments:
           count: 0
+
+  - it: with redis.acl.existingSecret reads that Secret, not secrets.existingSecret, and names it
+    set:
+      secrets.existingSecret: company-kubeast
+      redis.acl.existingSecret: company-redis-users
+    kubernetesProvider:
+      scheme:
+        "v1/Secret":
+          gvr: {version: v1, resource: secrets}
+          namespaced: true
+      objects:
+        - kind: Secret
+          apiVersion: v1
+          metadata: {name: company-kubeast, namespace: kubeast}
+          data:
+            REDIS_K8S_SERVICE_PASSWORD: Y28tazhzLXNlcnZpY2UtcHc=      # co-k8s-service-pw
+            REDIS_PROBE_PASSWORD: Y28tcHJvYmUtcHc=                    # co-probe-pw
+            REDIS_TOOL_SERVER_PASSWORD: Y28tdG9vbC1zZXJ2ZXItcHc=      # co-tool-server-pw
+        - kind: Secret
+          apiVersion: v1
+          metadata: {name: company-redis-users, namespace: kubeast}
+          data:
+            REDIS_K8S_SERVICE_PASSWORD: Y28tazhzLXNlcnZpY2UtcHc=      # co-k8s-service-pw
+    asserts:
+      - failedTemplate:
+          errorPattern: 'Secret company-redis-users has no REDIS_PROBE_PASSWORD, and redis\.acl\.existingSecret names it for the Redis users\. Add REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD, REDIS_TOOL_SERVER_PASSWORD to that Secret, or unset redis\.acl\.existingSecret'
+
+  - it: with redis.acl.existingSecret holding every key renders nothing, whatever secrets.existingSecret holds
+    set:
+      secrets.existingSecret: company-kubeast
+      redis.acl.existingSecret: company-redis-users
+    kubernetesProvider:
+      scheme:
+        "v1/Secret":
+          gvr: {version: v1, resource: secrets}
+          namespaced: true
+      objects:
+        - kind: Secret
+          apiVersion: v1
+          metadata: {name: company-kubeast, namespace: kubeast}
+          data:
+            REDIS_PASSWORD: b2xkLXJlZGlzLXB3                          # old-redis-pw
+        - kind: Secret
+          apiVersion: v1
+          metadata: {name: company-redis-users, namespace: kubeast}
+          data:
+            REDIS_K8S_SERVICE_PASSWORD: Y28tazhzLXNlcnZpY2UtcHc=      # co-k8s-service-pw
+            REDIS_PROBE_PASSWORD: Y28tcHJvYmUtcHc=                    # co-probe-pw
+            REDIS_TOOL_SERVER_PASSWORD: Y28tdG9vbC1zZXJ2ZXItcHc=      # co-tool-server-pw
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: with redis.acl.existingSecret and no secrets.existingSecret checks that Secret too
+    set:
+      redis.acl.existingSecret: company-redis-users
+    kubernetesProvider:
+      scheme:
+        "v1/Secret":
+          gvr: {version: v1, resource: secrets}
+          namespaced: true
+      objects:
+        - kind: Secret
+          apiVersion: v1
+          metadata: {name: company-redis-users, namespace: kubeast}
+          data:
+            REDIS_PROBE_PASSWORD: Y28tcHJvYmUtcHc=                    # co-probe-pw
+    asserts:
+      - failedTemplate:
+          errorPattern: Secret company-redis-users has no REDIS_K8S_SERVICE_PASSWORD
