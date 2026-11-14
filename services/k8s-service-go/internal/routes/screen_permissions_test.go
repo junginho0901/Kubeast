@@ -70,6 +70,7 @@ func screenRouter(t *testing.T) chi.Router {
 		RegisterGPU(g, h)
 		RegisterCustomResources(g, h)
 		RegisterMetrics(g, h)
+		RegisterStreams(g, h)
 	})
 	return r
 }

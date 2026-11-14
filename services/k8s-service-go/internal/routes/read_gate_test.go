@@ -178,7 +178,7 @@ func TestTheServerPutsTheGateInFrontOfTheRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := string(raw)
-	cluster, gate, routes := strings.Index(src, "r.Use(h.ClusterMiddleware)"), strings.Index(src, "r.Use(h.ReadGateMiddleware)"), strings.Index(src, "routes.Register(r, h, wsMux)")
+	cluster, gate, routes := strings.Index(src, "r.Use(h.ClusterMiddleware)"), strings.Index(src, "r.Use(h.ReadGateMiddleware)"), strings.Index(src, "routes.RegisterRole(r, h, wsMux, role)")
 	if cluster < 0 || gate < cluster || routes < gate {
 		t.Fatalf("cluster %d, read gate %d, routes %d: the gate goes after the cluster is known and before the routes", cluster, gate, routes)
 	}
