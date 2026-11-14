@@ -36,6 +36,8 @@ for p in $gone; do
   value=$(jq -c --arg p "$p" 'getpath($p | split("."))' "$work/old.json")
   # a map with keys is tried through the paths under it
   jq -e 'type == "object" and length > 0' <<<"$value" >/dev/null && continue
+  # null set there reads as not set; any value stands in for it
+  [ "$value" != null ] || value='"stand-in"'
   if out=$(helm template kubeast helm/kubeast "${args[@]}" --set-json "$p=$value" 2>&1); then
     echo "$tag has $p and this chart does not: a value set there is dropped without a word. Add it to $check with what to set instead."
     fail=1

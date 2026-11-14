@@ -17,6 +17,6 @@ takes a folder's files in reverse name order), so values of an earlier release g
 {{- end }}
 {{- end }}
 {{- if and $found (not (kindIs "invalid" $node)) }}
-{{- fail (printf "%s is no longer a Kubeast value: %s. Remove it from your values." $path $instead) }}
+{{- fail (printf "%s is no longer a Kubeast value: %s. Remove it from your values; if you did not set it, it is an earlier chart's default that --reuse-values kept: upgrade with --reset-then-reuse-values instead." $path $instead) }}
 {{- end }}
 {{- end }}

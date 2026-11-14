@@ -64,6 +64,8 @@ jobs:
   dbmigrate:
     name: dbmigrate (postgres)
     runs-on: ubuntu-latest
+    # about 2 minutes (1 m 48 s on a cold cache); a test that hangs stops here, not at the 6-hour default
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:15-alpine
@@ -178,7 +180,7 @@ jobs:
           helm template kubeast helm/kubeast --namespace kubeast --set pdb.enabled=true \
             | ./kubeconform -strict -summary -kubernetes-version 1.33.0 -ignore-missing-schemas
       # docs/X.md with docs/ko/X.md, a new values path in docs/configuration.md (en, ko); a commit trailer
-      # `Docs-Pair: en-only <reason>` (ko-only, values-not-in-docs) says why one side stays.
+      # `Docs-Pair: en-only [<file>...] <reason>` (ko-only, values-not-in-docs) says why one side stays.
       - name: docs in both languages, new values documented
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         env:
