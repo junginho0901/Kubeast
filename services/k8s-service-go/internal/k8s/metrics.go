@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
+	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
 // PodMetrics represents the metrics.k8s.io pod metrics response.
@@ -169,8 +170,13 @@ func (s *Service) GetNodeMetrics(ctx context.Context) ([]map[string]interface{},
 	return result, nil
 }
 
-// GetTopResources returns the top N pods and nodes by CPU usage descending.
-func (s *Service) GetTopResources(ctx context.Context, podLimit, nodeLimit int) (map[string]interface{}, error) {
+// TopSkip is what a top-resources read leaves out, top_pods or top_nodes with its error: a part the cluster refused the
+// caller, which the screen keeps from that answer instead of asking again.
+type TopSkip struct{ Pods, Nodes bool }
+
+// GetTopResources returns the top N pods and nodes by CPU usage descending. A part that could not be read has its
+// error, and pod_metrics_refused or node_metrics_refused when the cluster refused it.
+func (s *Service) GetTopResources(ctx context.Context, podLimit, nodeLimit int, skip TopSkip) (map[string]interface{}, error) {
 	if podLimit <= 0 {
 		podLimit = 10
 	}
@@ -181,6 +187,17 @@ func (s *Service) GetTopResources(ctx context.Context, podLimit, nodeLimit int) 
 	result := map[string]interface{}{}
 
 	// Pod metrics across all namespaces, or each of a limited grant's namespaces
+	if !skip.Pods {
+		s.addTopPods(ctx, result, podLimit)
+	}
+	if !skip.Nodes {
+		s.addTopNodes(ctx, result, nodeLimit)
+	}
+	return result, nil
+}
+
+// addTopPods puts top_pods in result, or the reason they could not be read.
+func (s *Service) addTopPods(ctx context.Context, result map[string]interface{}, podLimit int) {
 	podItems, podErr := s.topPodItems(ctx)
 	if podErr == nil {
 		pods := make([]map[string]interface{}, 0, len(podItems))
@@ -211,12 +228,17 @@ func (s *Service) GetTopResources(ctx context.Context, podLimit, nodeLimit int) 
 			pods = pods[:podLimit]
 		}
 		result["top_pods"] = pods
-	} else {
-		result["top_pods"] = []map[string]interface{}{}
-		result["pod_metrics_error"] = podErr.Error()
+		return
 	}
+	result["top_pods"] = []map[string]interface{}{}
+	result["pod_metrics_error"] = response.Public(podErr)
+	if apierrors.IsForbidden(podErr) {
+		result["pod_metrics_refused"] = true
+	}
+}
 
-	// Node metrics with their share of the allocatable
+// addTopNodes puts top_nodes in result with their share of the allocatable, or the reason they could not be read.
+func (s *Service) addTopNodes(ctx context.Context, result map[string]interface{}, nodeLimit int) {
 	nodeBody, nodeErr := s.topMetricsRead(ctx, "/apis/metrics.k8s.io/v1beta1/nodes")
 	if nodeErr == nil {
 		var nodeResp nodeMetricsResponse
@@ -239,12 +261,13 @@ func (s *Service) GetTopResources(ctx context.Context, podLimit, nodeLimit int) 
 			}
 			result["top_nodes"] = nodes
 		}
-	} else {
-		result["top_nodes"] = []map[string]interface{}{}
-		result["node_metrics_error"] = nodeErr.Error()
+		return
 	}
-
-	return result, nil
+	result["top_nodes"] = []map[string]interface{}{}
+	result["node_metrics_error"] = response.Public(nodeErr)
+	if apierrors.IsForbidden(nodeErr) {
+		result["node_metrics_refused"] = true
+	}
 }
 
 // topPodItems is the pod metrics top-resources ranks: one list of every namespace, or for a grant limited to
@@ -310,7 +333,7 @@ type metricsMiss struct {
 	until time.Time
 }
 
-// topMetricsRead is RawRequest for one of top-resources' metrics.k8s.io lists. A list names no object that could be
+// topMetricsRead is metricsRequest for one of top-resources' metrics.k8s.io lists. A list names no object that could be
 // missing, so its 404 saying "the server could not find the requested resource" is the API not served on that cluster.
 // The cluster's bundle keeps that answer and gives it to every caller of the cluster for metricsMissTTL without a
 // request; then one caller asks again while the others keep the answer until it comes. Whether an API group is served
@@ -318,7 +341,7 @@ type metricsMiss struct {
 func (s *Service) topMetricsRead(ctx context.Context, path string) ([]byte, error) {
 	b := s.bundleForCtx(ctx)
 	if b == nil {
-		body, _, err := s.RawRequest(ctx, "GET", path)
+		body, _, err := s.metricsRequest(ctx, path)
 		return body, err
 	}
 	asking := false
@@ -332,7 +355,7 @@ func (s *Service) topMetricsRead(ctx context.Context, path string) ([]byte, erro
 			break
 		}
 	}
-	body, status, err := s.RawRequest(ctx, "GET", path)
+	body, status, err := s.metricsRequest(ctx, path)
 	switch {
 	case metricsNotServed(status, err):
 		b.metricsMissing.Store(&metricsMiss{err: err, until: time.Now().Add(metricsMissTTL)})
@@ -341,6 +364,27 @@ func (s *Service) topMetricsRead(ctx context.Context, path string) ([]byte, erro
 		b.metricsMissing.Store(nil)
 	}
 	return body, err
+}
+
+// metricsRequest is RawRequest that gives a failure as the cluster wrote it: RawRequest leaves the body of a failure
+// unread, so a refusal written as a Status reads "unknown". A 404 stays in RawRequest's words, "the server could not
+// find the requested resource", which the dashboard reads as no metrics-server.
+func (s *Service) metricsRequest(ctx context.Context, path string) ([]byte, int, error) {
+	cs := s.clientsetCtx(ctx)
+	if cs == nil {
+		return nil, http.StatusServiceUnavailable, errNotLoaded
+	}
+	result := cs.RESTClient().Get().AbsPath(path).Do(ctx)
+	body, err := result.Raw()
+	var status int
+	result.StatusCode(&status)
+	if status == 0 {
+		status = http.StatusInternalServerError
+	}
+	if err != nil && status != http.StatusNotFound {
+		err = result.Error()
+	}
+	return body, status, err
 }
 
 // metricsNotServed is a 404 for one of those lists: the API server's for a path no API group serves, which RawRequest

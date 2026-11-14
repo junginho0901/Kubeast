@@ -25,6 +25,7 @@ import (
 // the metrics lists asked and the most under way at once.
 type metricsAPI struct {
 	notServed atomic.Bool
+	refused   bool                // every list answers 403 with a Status, as kube-apiserver refuses an identity
 	pods      map[string][]string // namespace → its items as JSON
 	status    map[string]int      // namespace → the status it answers instead of its list
 	broken    map[string]bool     // namespace → a 200 whose body is not JSON
@@ -75,6 +76,18 @@ func (a *metricsAPI) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sub := strings.TrimPrefix(r.URL.Path, prefix)
+	if a.refused {
+		resource, where := "nodes", "at the cluster scope"
+		if strings.HasSuffix(sub, "pods") {
+			resource, where = "pods", "at the cluster scope"
+			if ns, ok := strings.CutPrefix(strings.TrimSuffix(sub, "/pods"), "namespaces/"); ok {
+				where = fmt.Sprintf(`in the namespace \"%s\"`, ns)
+			}
+		}
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = fmt.Fprintf(w, `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"%[1]s.metrics.k8s.io is forbidden: User \"u1\" cannot list resource \"%[1]s\" in API group \"metrics.k8s.io\" %[2]s","reason":"Forbidden","details":{"group":"metrics.k8s.io","kind":"%[1]s"},"code":403}`, resource, where)
+		return
+	}
 	switch {
 	case sub == "nodes":
 		_, _ = w.Write([]byte(`{"items":[{"metadata":{"name":"n1"},"usage":{"cpu":"250m","memory":"512Mi"},"timestamp":"t","window":"30s"}]}`))
@@ -252,7 +265,7 @@ func TestAClusterWithoutTheMetricsAPIIsAskedOnceWithinTheMinute(t *testing.T) {
 	s := api.service(t)
 	wide := context.Background()
 
-	first, err := s.GetTopResources(wide, 5, 3)
+	first, err := s.GetTopResources(wide, 5, 3, TopSkip{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,8 +276,8 @@ func TestAClusterWithoutTheMetricsAPIIsAskedOnceWithinTheMinute(t *testing.T) {
 	if asked, _ := api.counts(); asked != 1 {
 		t.Fatalf("first request asked %d lists, want 1 (the node list after the pods' 404 is not asked)", asked)
 	}
-	again, _ := s.GetTopResources(wide, 5, 3)
-	limited, _ := s.GetTopResources(limitedTo(scope), 5, 3)
+	again, _ := s.GetTopResources(wide, 5, 3, TopSkip{})
+	limited, _ := s.GetTopResources(limitedTo(scope), 5, 3, TopSkip{})
 	if asked, _ := api.counts(); asked != 1 {
 		t.Fatalf("asked %d lists within the minute, want 1", asked)
 	}
@@ -274,7 +287,7 @@ func TestAClusterWithoutTheMetricsAPIIsAskedOnceWithinTheMinute(t *testing.T) {
 	// the limited grant's answer is the one the cluster gives it when asked
 	fresh := &metricsAPI{}
 	fresh.notServed.Store(true)
-	if asked, _ := fresh.service(t).GetTopResources(limitedTo(scope), 5, 3); !reflect.DeepEqual(limited, asked) {
+	if asked, _ := fresh.service(t).GetTopResources(limitedTo(scope), 5, 3, TopSkip{}); !reflect.DeepEqual(limited, asked) {
 		t.Errorf("limited grant from the cluster's answer %v, asking %v", limited, asked)
 	}
 
@@ -293,7 +306,7 @@ func TestAClusterWithoutTheMetricsAPIIsAskedOnceWithinTheMinute(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			got, _ := s.GetTopResources(wide, 5, 3)
+			got, _ := s.GetTopResources(wide, 5, 3, TopSkip{})
 			if !reflect.DeepEqual(got, first) {
 				t.Errorf("answer past the minute: %v", got)
 			}
@@ -307,7 +320,7 @@ func TestAClusterWithoutTheMetricsAPIIsAskedOnceWithinTheMinute(t *testing.T) {
 	// metrics-server installed: the next ask past the minute is answered, and every request asks from then on
 	api.notServed.Store(false)
 	expire()
-	served, _ := s.GetTopResources(wide, 5, 3)
+	served, _ := s.GetTopResources(wide, 5, 3, TopSkip{})
 	if pods, _ := served["top_pods"].([]map[string]interface{}); len(pods) != 1 || served["pod_metrics_error"] != nil || served["node_metrics_error"] != nil {
 		t.Fatalf("answer once served: %v", served)
 	}
@@ -315,8 +328,46 @@ func TestAClusterWithoutTheMetricsAPIIsAskedOnceWithinTheMinute(t *testing.T) {
 		t.Error("still remembered as not served")
 	}
 	api.reset()
-	_, _ = s.GetTopResources(wide, 5, 3)
+	_, _ = s.GetTopResources(wide, 5, 3, TopSkip{})
 	if asked, _ := api.counts(); asked != 2 {
 		t.Errorf("a served cluster asked %d lists, want the pods' and the nodes'", asked)
+	}
+}
+
+// A refusal reads as the cluster wrote it, with refused set, where RawRequest left "unknown"; it is not remembered, and a
+// part the screen keeps from its refusal (skip) is not asked.
+func TestTopResourcesSayARefusalAsTheClusterWroteIt(t *testing.T) {
+	scope := loadNamespaces(2)
+	api := &metricsAPI{refused: true}
+	s := api.service(t)
+	got, err := s.GetTopResources(limitedTo(scope), 5, 3, TopSkip{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]interface{}{
+		"top_pods":             []map[string]interface{}{},
+		"pod_metrics_error":    `pods.metrics.k8s.io is forbidden: User "u1" cannot list resource "pods" in API group "metrics.k8s.io" in the namespace "load-ns-01"`,
+		"pod_metrics_refused":  true,
+		"top_nodes":            []map[string]interface{}{},
+		"node_metrics_error":   `nodes.metrics.k8s.io is forbidden: User "u1" cannot list resource "nodes" in API group "metrics.k8s.io" at the cluster scope`,
+		"node_metrics_refused": true,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("refused answer:\n%v\nwant\n%v", got, want)
+	}
+	if asked, _ := api.counts(); asked != 3 {
+		t.Fatalf("asked %d lists, want the two namespaces' and the nodes'", asked)
+	}
+	_, _ = s.GetTopResources(limitedTo(scope), 5, 3, TopSkip{})
+	if asked, _ := api.counts(); asked != 6 {
+		t.Errorf("a refusal was remembered: %d lists after two requests", asked)
+	}
+	api.reset()
+	if got, _ := s.GetTopResources(limitedTo(scope), 5, 3, TopSkip{Pods: true, Nodes: true}); len(got) != 0 {
+		t.Errorf("both parts left out: %v", got)
+	}
+	nodesKept, _ := s.GetTopResources(limitedTo(scope), 5, 3, TopSkip{Nodes: true})
+	if asked, _ := api.counts(); asked != 2 || nodesKept["top_nodes"] != nil || nodesKept["pod_metrics_refused"] != true {
+		t.Errorf("nodes left out: asked %d lists, answer %v", asked, nodesKept)
 	}
 }
