@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useCluster } from '@/contexts/ClusterContext'
 import { ResourceDetailContext, type ResourceDetailTarget } from './ResourceDetailContext'
 import { apiParam, fromParam, keyOf, toParam } from './detailParam'
 
@@ -21,6 +22,15 @@ export function ResourceDetailProvider({ children }: { children: ReactNode }) {
   const [syncedKey, setSyncedKey] = useState(urlKey)
   const [pendingKey, setPendingKey] = useState<string | null>(null)
   const historyRef = useRef<ResourceDetailTarget[]>([])
+  // On another cluster the drawer stays open on what the address names, as a link opens it there: without the row
+  // the list of the cluster before gave it, and without the way back to that cluster's objects.
+  const { currentCluster } = useCluster()
+  const [cluster, setCluster] = useState(currentCluster)
+  if (cluster !== currentCluster) {
+    setCluster(currentCluster)
+    historyRef.current = []
+    setTarget(fromParam(searchParams.get(DETAIL), searchParams.get(DETAIL_API)))
+  }
 
   if (urlKey !== syncedKey) {
     setSyncedKey(urlKey)
