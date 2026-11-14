@@ -7,8 +7,9 @@ import { useDashboardAIContext } from './useDashboardAIContext'
 
 // What the Dashboard tells the floating chat of its top pods and nodes is what those cards show: rows, the cluster's
 // refusal, the read's failure, or no rows.
-const chat: { current: { data?: Record<string, unknown> } | null } = { current: null }
-vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: { data?: Record<string, unknown> } | null) => { chat.current = input } }))
+type Layer = { data?: Record<string, unknown> } | null
+const chat: { current: Layer } = { current: null }
+vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: Layer) => { chat.current = input } }))
 
 const PODS_REFUSED = 'pods.metrics.k8s.io is forbidden: User "u1" cannot list resource "pods" in API group "metrics.k8s.io" in the namespace "web"'
 const NODES_FAILED = 'the server is currently unable to handle the request (get nodes.metrics.k8s.io)'
@@ -22,7 +23,8 @@ function layer(topResources: TopResources) {
     return null
   }
   renderToStaticMarkup(createElement(Probe))
-  return chat.current?.data ?? {}
+  // read through the declared type: the render set it, which the narrowing after `= null` above does not see
+  return (chat.current as Layer)?.data ?? {}
 }
 
 describe("the Dashboard's top pods and nodes in the floating chat", () => {
