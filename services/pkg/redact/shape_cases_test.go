@@ -43,6 +43,10 @@ type shapeCases struct {
 		Inputs []string                  `json:"inputs"`
 		Want   []string                  `json:"want"`
 		Table  map[string]map[string]int `json:"table"`
+		Reveal *struct {
+			Values map[string]string `json:"values"`
+			Held   []string          `json:"held"`
+		} `json:"reveal"`
 	} `json:"numbered_personal_data"`
 	MaskKeys []struct {
 		Key   string `json:"key"`
@@ -90,7 +94,7 @@ func TestSharedShapeCases(t *testing.T) {
 	}
 	for _, c := range cases.NumberedPersonalData {
 		t.Run("numbered/"+c.Name, func(t *testing.T) {
-			n := &Numbers{Key: c.Key, Table: tableOf(c.Key, c.Seed), After: c.After}
+			n := &Numbers{Key: c.Key, Table: tableOf(c.Key, c.Seed), After: c.After, Reveal: c.Reveal != nil}
 			for i, in := range c.Inputs {
 				if got, _ := TextNumbered(in, Options{Enabled: true, PII: true, Disabled: map[string]bool{}}, n); got != c.Want[i] {
 					t.Errorf("text %d: got  %q\nwant %q", i, got, c.Want[i])
@@ -98,6 +102,18 @@ func TestSharedShapeCases(t *testing.T) {
 			}
 			if got, want := n.Copy(), tableOf(c.Key, c.Table); len(got) != len(want) || (len(want) > 0 && !reflect.DeepEqual(got, want)) {
 				t.Errorf("table %v, want %v", got, want)
+			}
+			if c.Reveal == nil {
+				if n.Values() != nil || n.Held() != nil {
+					t.Errorf("values %v and held %v without reveal", n.Values(), n.Held())
+				}
+				return
+			}
+			if got := n.Values(); len(got) != len(c.Reveal.Values) || (len(got) > 0 && !reflect.DeepEqual(got, c.Reveal.Values)) {
+				t.Errorf("values %v, want %v", got, c.Reveal.Values)
+			}
+			if got := n.Held(); !reflect.DeepEqual(got, c.Reveal.Held) {
+				t.Errorf("held %v, want %v", got, c.Reveal.Held)
 			}
 		})
 	}

@@ -29,7 +29,8 @@ class ToolServerClient:
         self.last_requests: Optional[Dict[str, Any]] = None
         # The personal-data numbers of this client's run: one is made per chat request and per investigation, so a value
         # keeps its number (<EMAIL_1>) across that answer's tool calls and nowhere else. Sent as masks, taken back from
-        # each answer (redact.Numbers.take_answer).
+        # each answer (redact.Numbers.take_answer). Only the chat stream turns on numbers.keep_values, which asks
+        # tool-server for the values behind them for the person who asked (values, held); they stay in this run's memory.
         self.numbers = Numbers()
 
     async def call_tool(
@@ -58,7 +59,7 @@ class ToolServerClient:
                 self.last_requests = tool_trail(body.get("requests"))
                 self.last_redacted = body.get("redacted") if isinstance(body.get("redacted"), dict) else None
                 if reason:
-                    reason = self.numbers.take_answer(masks["table"], body.get("masks"), str(reason))
+                    reason = self.numbers.take_answer(masks["table"], body.get("masks"), str(reason), body.get("values"), body.get("held"))
             except Exception:
                 reason = None
             if reason:
@@ -70,9 +71,9 @@ class ToolServerClient:
         if isinstance(data, dict):
             self.last_requests = tool_trail(data.get("requests"))
         if isinstance(data, dict) and data.get("error"):
-            raise Exception(self.numbers.take_answer(masks["table"], data.get("masks"), str(data.get("error"))))
+            raise Exception(self.numbers.take_answer(masks["table"], data.get("masks"), str(data.get("error")), data.get("values"), data.get("held")))
         if isinstance(data, dict):
             redacted = data.get("redacted")
             self.last_redacted = redacted if isinstance(redacted, dict) else None
-            return self.numbers.take_answer(masks["table"], data.get("masks"), str(data.get("content") or ""))
+            return self.numbers.take_answer(masks["table"], data.get("masks"), str(data.get("content") or ""), data.get("values"), data.get("held"))
         return ""
