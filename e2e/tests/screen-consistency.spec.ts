@@ -5,6 +5,7 @@ import AxeBuilder from '@axe-core/playwright'
 import { test, expect, type Page } from '@playwright/test'
 
 import { footersThatFit, listProblems, listsOnScreen, readExemptions, skippedTables } from './list-guard'
+import { sidebarScreens } from './sidebar-screens'
 
 // Every screen the sidebar lists (the admin ones too) and the account page, in each colour mode:
 // - a header row (.page-head) whose title and buttons do not fit sends the buttons to the next line instead of pushing
@@ -22,19 +23,7 @@ const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
 const LIST_EXEMPTIONS = readExemptions(JSON.parse(readFileSync(join(__dirname, 'list-guard-exempt.json'), 'utf8')))
 
 async function screens(page: Page) {
-  await page.goto('/?cluster=self')
-  const nav = page.getByTestId('sidebar-nav')
-  await expect(nav.locator('a[href^="/"]').first()).toBeAttached()
-  const hrefs = async () => [...new Set(await nav.locator('a[href^="/"]').evaluateAll((as) => as.map((a) => a.getAttribute('href') ?? '')))]
-  // some entries come after the features and permissions answers: read the list once it holds still for a second
-  let paths: string[] = []
-  await expect.poll(async () => {
-    const before = (await hrefs()).length
-    await page.waitForTimeout(1_000)
-    paths = await hrefs()
-    return paths.length === before ? paths.length : 0
-  }, { timeout: 30_000, message: 'the sidebar lists every screen' }).toBeGreaterThan(70)
-  return [...paths, '/account']
+  return [...await sidebarScreens(page), '/account']
 }
 
 async function setMode(page: Page, mode: string) {
