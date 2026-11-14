@@ -21,6 +21,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/alerts"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drains"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
@@ -266,6 +267,14 @@ func main() {
 		os.Exit(1)
 	}
 	h.SetRecorder(recorder)
+
+	// Node drains keep their progress in the shared database, so any replica
+	// answers a drain's status and one whose server stopped reads as interrupted.
+	drainTracker := drains.NewTracker(drains.PG{Pool: pgPool}, auditStore)
+	h.SetDrains(drainTracker)
+	drainCtx, drainCancel := context.WithCancel(context.Background())
+	defer drainCancel()
+	go drainTracker.Run(drainCtx)
 	recCtx, recCancel := context.WithCancel(context.Background())
 	defer recCancel()
 	if recorder.Enabled() {
@@ -419,14 +428,19 @@ func main() {
 
 	<-done
 	slog.Info("shutting down server...")
+	// The drains this process runs end with it: say so at once rather than when their heartbeat goes stale.
+	drainShutdown, drainShutdownCancel := context.WithTimeout(context.Background(), drainShutdownWait)
+	drainTracker.Shutdown(drainShutdown)
+	drainShutdownCancel()
 	shutdown(srv, recorder, serverShutdownWait, recorderShutdownWait)
 	slog.Info("server stopped")
 }
 
-// Both waits fit the pod's grace period, 30 s by default (the chart sets none).
+// The waits fit the pod's grace period, 30 s by default (the chart sets none).
 const (
 	serverShutdownWait   = 15 * time.Second
 	recorderShutdownWait = 10 * time.Second
+	drainShutdownWait    = 3 * time.Second
 )
 
 // shutdown stops the server, then gives the recorder a wait of its own: an open

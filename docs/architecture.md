@@ -123,6 +123,7 @@ Work that always runs:
 - k8s-service:
   - checks the health of each registered cluster every 60 seconds (`multicluster.healthcheckIntervalSec`)
   - cleans up the informer caches of clusters not used for a long time
+  - while it runs a node drain, writes that it is alive every 5 seconds; every 10 seconds marks the drains whose server stopped as interrupted; every hour deletes drains that finished a day ago (`node_drains`)
 
 The MCP, alert investigation, session recording, node shell and `features.*` rows are based on the code. They create no pods, so they were not measured separately. The MCP value was measured on 2026-10-13.
 

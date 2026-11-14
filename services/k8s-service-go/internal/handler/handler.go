@@ -14,6 +14,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/alerts"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drains"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/flight"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/helm"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
@@ -39,6 +40,8 @@ type Handler struct {
 	auditStore audit.Writer
 	helmSvc    *helm.Service
 	recorder   *recording.Manager // nil or disabled: terminals are not recorded
+	// drains keeps node drain progress in the shared database (nil: drains answer 503).
+	drains *drains.Tracker
 	// liveSessions ends long-lived answers with their session (nil: not checked).
 	liveSessions *auth.LiveSessions
 	// hygieneStore keeps cluster hygiene sign-offs (nil in tests: no history).
@@ -85,6 +88,9 @@ type Handler struct {
 
 // SetRecorder turns on terminal session recording (internal/recording).
 func (h *Handler) SetRecorder(m *recording.Manager) { h.recorder = m }
+
+// SetDrains sets where node drains keep their progress.
+func (h *Handler) SetDrains(t *drains.Tracker) { h.drains = t }
 
 // SetWatchLimits holds the Helm releases' stream to the multiplexer's live watches and its places for starting one.
 func (h *Handler) SetWatchLimits(m *ws.Multiplexer) { h.watchLimits = m }
