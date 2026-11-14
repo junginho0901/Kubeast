@@ -167,7 +167,7 @@ spec:
           image: "{{ .Values.images.aiService }}:{{ .Values.global.imageTag }}{{ if .Values.ai.providers.claudeCode.enabled }}{{ .Values.ai.providers.claudeCode.imageTagSuffix }}{{ end }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
-          {{- include "kubeast.resources" (dict "root" $ "key" "aiService") | nindent 10 }}
+          {{- include "kubeast.aiServiceResources" $ | nindent 10 }}
           ports:
             - containerPort: 8001
           envFrom:

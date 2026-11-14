@@ -188,9 +188,19 @@ class AlertInboxItem(Base):
     done_at = Column(DateTime, nullable=True)
 
 
+class ClaudeCodeSlot(Base):
+    """One install-wide Claude Code slot (00027_claude_code_slots.sql): owner '' is free (app/services/claude_code_slots.py)."""
+    __tablename__ = "claude_code_slots"
+
+    lane = Column(String, primary_key=True)
+    slot = Column(Integer, primary_key=True)
+    owner = Column(String, nullable=False, default="", server_default="")
+    heartbeat_at = Column(DateTime(timezone=True), nullable=True)
+
+
 # Schema version this build needs — the newest file in
 # services/pkg/dbmigrate/migrations (goose records it in goose_db_version).
-REQUIRED_SCHEMA_VERSION = 26
+REQUIRED_SCHEMA_VERSION = 27
 
 
 async def read_schema_version(engine) -> int:
