@@ -93,7 +93,7 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	ctx, release := h.holdSession(ctx)
+	ctx, release := h.holdTerminal(ctx)
 	defer release()
 	// The socket's reader from here on: closing the window while the pod is
 	// still starting ends the wait (and deletes the pod) instead of the timeout.

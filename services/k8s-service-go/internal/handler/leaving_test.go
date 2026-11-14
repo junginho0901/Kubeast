@@ -173,3 +173,43 @@ func TestATerminalClosesItsRecordingBeforeItLetsGoOfTheServer(t *testing.T) {
 		t.Fatalf("held = %d after endTerminal", p.Held())
 	}
 }
+
+// Merge plan S21: with the terminals handed over (the drain of #824 is set), the server's leaving ends a followed log
+// at once and leaves a terminal's context to the drain.
+func TestATerminalHandedOverOutlivesTheServerLeaving(t *testing.T) {
+	p := probe.New()
+	p.HandOverTerminals()
+	h := &Handler{leaving: p}
+	terminal, releaseTerminal := h.holdTerminal(context.Background())
+	defer releaseTerminal()
+	stream, releaseStream := h.holdSession(context.Background())
+	defer releaseStream()
+	p.Leave()
+	select {
+	case <-stream.Done():
+	case <-time.After(time.Second):
+		t.Fatal("a followed log did not end when the server left")
+	}
+	select {
+	case <-terminal.Done():
+		t.Fatalf("a handed-over terminal ended when the server left: %v", context.Cause(terminal))
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+// Without the hand-over (no drain: the API role's default) a terminal ends at once, as before.
+func TestATerminalNotHandedOverEndsWhenTheServerLeaves(t *testing.T) {
+	p := probe.New()
+	h := &Handler{leaving: p}
+	terminal, release := h.holdTerminal(context.Background())
+	defer release()
+	p.Leave()
+	select {
+	case <-terminal.Done():
+	case <-time.After(time.Second):
+		t.Fatal("the terminal did not end when the server left")
+	}
+	if !probe.IsLeaving(terminal) {
+		t.Fatalf("cause = %v", context.Cause(terminal))
+	}
+}

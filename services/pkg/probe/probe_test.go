@@ -105,3 +105,48 @@ func TestANilProbeHoldsNothing(t *testing.T) {
 		t.Fatal("a nil Probe changed the context or reports leaving")
 	}
 }
+
+// Merge plan S21: without a hand-over a terminal ends on Leave like a followed log or a live list; handed over (the
+// drain of #824 owns terminals), its context stays after Leave and Wait does not wait for it, while the others still end.
+func TestTerminalsEndOnLeaveUnlessHandedOver(t *testing.T) {
+	ended := func(ctx context.Context) bool {
+		select {
+		case <-ctx.Done():
+			return true
+		case <-time.After(200 * time.Millisecond):
+			return false
+		}
+	}
+
+	own := New()
+	terminal, releaseTerminal := own.HoldTerminal(context.Background())
+	defer releaseTerminal()
+	stream, releaseStream := own.Hold(context.Background())
+	defer releaseStream()
+	own.Leave()
+	if !ended(terminal) || !IsLeaving(terminal) || !ended(stream) {
+		t.Fatal("without a hand-over the terminal and the stream end on Leave")
+	}
+
+	handed := New()
+	handed.HandOverTerminals()
+	terminal2, releaseTerminal2 := handed.HoldTerminal(context.Background())
+	defer releaseTerminal2()
+	stream2, releaseStream2 := handed.Hold(context.Background())
+	if handed.Held() != 1 {
+		t.Fatalf("held = %d, want the stream alone", handed.Held())
+	}
+	handed.Leave()
+	if ended(terminal2) {
+		t.Fatal("a handed-over terminal ended on Leave")
+	}
+	if !ended(stream2) || !IsLeaving(stream2) {
+		t.Fatal("a followed log or live list must still end on Leave")
+	}
+	releaseStream2()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if !handed.Wait(ctx) {
+		t.Fatalf("Wait waited for a handed-over terminal (held %d)", handed.Held())
+	}
+}

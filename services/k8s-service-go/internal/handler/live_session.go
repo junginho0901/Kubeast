@@ -33,6 +33,18 @@ func (h *Handler) holdSession(ctx context.Context) (context.Context, func()) {
 	}
 }
 
+// holdTerminal is holdSession for a terminal (pod exec, node shell): when the terminals were handed over to another
+// owner (probe.HandOverTerminals, merge plan S21), the server's leaving leaves the terminal to that owner.
+func (h *Handler) holdTerminal(ctx context.Context) (context.Context, func()) {
+	payload, _ := auth.FromContext(ctx)
+	ctx, endSession := h.liveSessions.Hold(ctx, payload)
+	ctx, endHold := h.leaving.HoldTerminal(ctx)
+	return ctx, func() {
+		endHold()
+		endSession()
+	}
+}
+
 // sayStreamEnded tells an event stream why it ends when that is its session, and reports whether it was. A stream the
 // server's leaving ended gets a short reconnection time instead and is not a session's end.
 func sayStreamEnded(ctx context.Context, w http.ResponseWriter, flusher http.Flusher) bool {

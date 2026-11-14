@@ -83,7 +83,7 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	ctx, release := h.holdSession(ctx)
+	ctx, release := h.holdTerminal(ctx)
 	defer endTerminal(rec, release)
 
 	// The exec runs on the request's cluster as the signed-in user: the

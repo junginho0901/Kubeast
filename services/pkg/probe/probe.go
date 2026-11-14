@@ -39,6 +39,8 @@ type Probe struct {
 	leaving context.Context
 	leave   context.CancelFunc
 	held    atomic.Int64
+	// terminalsHandedOver: another owner (#824's drain) warns and closes the terminals, so Leave leaves them be.
+	terminalsHandedOver atomic.Bool
 }
 
 // New returns a Probe that is ready until Leave.
@@ -78,6 +80,26 @@ func (p *Probe) Hold(ctx context.Context) (context.Context, func()) {
 			p.held.Add(-1)
 		})
 	}
+}
+
+// HandOverTerminals says that another owner closes this process's terminals on shutdown: the drain of #824 when
+// STREAM_DRAIN_SECONDS is set, which tells each terminal when it closes and waits before closing it. From then on
+// HoldTerminal leaves a terminal's context alone on Leave and does not count it for Wait, while followed logs and live
+// lists (Hold) still end at once. Call it once at start, before serving; without it a terminal ends on Leave like the
+// rest (merge plan S21).
+func (p *Probe) HandOverTerminals() {
+	if p != nil {
+		p.terminalsHandedOver.Store(true)
+	}
+}
+
+// HoldTerminal is Hold for a terminal (pod exec, node shell): the same, unless HandOverTerminals was called, when the
+// context and its release are left to the other owner.
+func (p *Probe) HoldTerminal(ctx context.Context) (context.Context, func()) {
+	if p != nil && p.terminalsHandedOver.Load() {
+		return ctx, func() {}
+	}
+	return p.Hold(ctx)
 }
 
 // Held is the number of contexts held and not released.
