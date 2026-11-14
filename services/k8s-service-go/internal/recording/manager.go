@@ -59,6 +59,7 @@ type Manager struct {
 	cfg        Config
 	store      Store
 	pool       *pgxpool.Pool
+	rows       index
 	now        func() time.Time
 	putTimeout time.Duration
 
@@ -74,7 +75,7 @@ type Manager struct {
 
 // New builds the manager; with recording off it returns a disabled manager.
 func New(cfg Config, pool *pgxpool.Pool) (*Manager, error) {
-	m := &Manager{cfg: cfg, pool: pool, now: time.Now, putTimeout: partPutTimeout, active: map[string]*tracked{}, wake: make(chan struct{}, 1), flushing: make(chan struct{}, 1)}
+	m := &Manager{cfg: cfg, pool: pool, rows: pgIndex{pool}, now: time.Now, putTimeout: partPutTimeout, active: map[string]*tracked{}, wake: make(chan struct{}, 1), flushing: make(chan struct{}, 1)}
 	if !cfg.Enabled {
 		return m, nil
 	}
@@ -111,10 +112,7 @@ func (m *Manager) Start(ctx context.Context, meta Meta) (*Session, error) {
 		return nil, fmt.Errorf("recording spool: %w", err)
 	}
 	location := m.store.Location(meta)
-	if _, err := m.pool.Exec(ctx, `
-		INSERT INTO session_recordings (id, kind, user_id, user_email, cluster, namespace, target, container, storage, location, started_at, status)
-		VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), $5, NULLIF($6,''), $7, NULLIF($8,''), $9, $10, $11, 'recording')`,
-		meta.ID, meta.Kind, meta.UserID, meta.UserEmail, meta.Cluster, meta.Namespace, meta.Target, meta.Container, m.cfg.Storage, location, meta.StartedAt); err != nil {
+	if err := m.rows.insert(ctx, meta, m.cfg.Storage, location); err != nil {
 		s.Close()
 		_ = os.Remove(path)
 		return nil, fmt.Errorf("recording index: %w", err)
@@ -144,7 +142,7 @@ func (m *Manager) Abort(s *Session) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, _ = m.pool.Exec(ctx, `DELETE FROM session_recordings WHERE id = $1`, s.ID)
+	_ = m.rows.remove(ctx, s.ID)
 }
 
 func (m *Manager) ended(s *Session) {
@@ -161,7 +159,7 @@ func (m *Manager) ended(s *Session) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	size := fileSize(t.path)
-	_, _ = m.pool.Exec(ctx, `UPDATE session_recordings SET ended_at = NOW(), bytes = $2, truncated = $3, status = 'uploading', updated_at = NOW() WHERE id = $1`, s.ID, size, t.truncated)
+	_ = m.rows.ended(ctx, s.ID, size, t.truncated)
 	m.kick()
 }
 
@@ -216,34 +214,26 @@ func (m *Manager) Shutdown(ctx context.Context) {
 // recover picks up rows a previous process left mid-way: the spool file is
 // uploaded and the recording marked interrupted (the session was cut off).
 func (m *Manager) recover(ctx context.Context) {
-	rows, err := m.pool.Query(ctx, `SELECT id, kind, cluster, target, location, uploaded_bytes, parts, status, started_at FROM session_recordings WHERE status IN ('recording', 'uploading')`)
+	open, err := m.rows.open(ctx)
 	if err != nil {
 		slog.Warn("recording: recovery query", "err", err)
 		return
 	}
-	var found []*tracked
-	for rows.Next() {
-		var t tracked
-		var status string
-		if err := rows.Scan(&t.meta.ID, &t.meta.Kind, &t.meta.Cluster, &t.meta.Target, &t.location, &t.offset, &t.parts, &status, &t.meta.StartedAt); err != nil {
-			continue
+	for _, r := range open {
+		t := &tracked{
+			meta:     Meta{ID: r.id, Kind: r.kind, Cluster: r.cluster, Target: r.target, StartedAt: r.startedAt},
+			location: r.location, offset: r.uploaded, parts: r.parts,
+			path: filepath.Join(m.cfg.SpoolDir, r.id+".cast"), ended: true, interrupted: r.status == "recording",
 		}
-		t.path = filepath.Join(m.cfg.SpoolDir, t.meta.ID+".cast")
-		t.ended = true
-		t.interrupted = status == "recording"
-		found = append(found, &t)
-	}
-	rows.Close()
-	for _, t := range found {
 		if _, err := os.Stat(t.path); err != nil {
-			_, _ = m.pool.Exec(ctx, `UPDATE session_recordings SET status = 'interrupted', ended_at = COALESCE(ended_at, NOW()), bytes = GREATEST(bytes, uploaded_bytes), last_error = 'spool file lost; parts uploaded before are kept', updated_at = NOW() WHERE id = $1`, t.meta.ID)
+			_ = m.rows.lost(ctx, r.id)
 			continue
 		}
 		if t.interrupted {
-			_, _ = m.pool.Exec(ctx, `UPDATE session_recordings SET ended_at = COALESCE(ended_at, NOW()), bytes = $2, updated_at = NOW() WHERE id = $1`, t.meta.ID, fileSize(t.path))
+			_ = m.rows.cutOff(ctx, r.id, fileSize(t.path))
 		}
 		m.mu.Lock()
-		m.active[t.meta.ID] = t
+		m.active[r.id] = t
 		m.mu.Unlock()
 		slog.Info("recording: resuming upload left by the previous process", "id", t.meta.ID, "interrupted", t.interrupted)
 	}
@@ -282,7 +272,7 @@ func (m *Manager) flush(ctx context.Context) {
 				t.backoff = maxBackoff
 			}
 			t.nextTry = now.Add(t.backoff)
-			_, _ = m.pool.Exec(ctx, `UPDATE session_recordings SET last_error = $2, updated_at = NOW() WHERE id = $1`, t.meta.ID, truncateErr(err))
+			_ = m.rows.failed(ctx, t.meta.ID, truncateErr(err))
 			slog.Warn("recording: upload failed; retrying", "id", t.meta.ID, "err", err, "retry_in", t.backoff.String())
 			continue
 		}
@@ -292,7 +282,7 @@ func (m *Manager) flush(ctx context.Context) {
 			if t.interrupted {
 				status = "interrupted"
 			}
-			_, _ = m.pool.Exec(ctx, `UPDATE session_recordings SET status = $2, last_error = NULL, updated_at = NOW() WHERE id = $1`, t.meta.ID, status)
+			_ = m.rows.finished(ctx, t.meta.ID, status)
 			_ = os.Remove(t.path)
 			m.mu.Lock()
 			delete(m.active, t.meta.ID)
@@ -347,12 +337,7 @@ func (m *Manager) uploadNew(ctx context.Context, t *tracked, ended bool) error {
 		m.mu.Unlock()
 		m.uploaded.Add(int64(len(buf)))
 		m.lastSuccess.Store(m.now().Unix())
-		status := "recording"
-		if ended {
-			status = "uploading"
-		}
-		if _, err := m.pool.Exec(ctx, `UPDATE session_recordings SET uploaded_bytes = $2, parts = $3, status = CASE WHEN status = 'recording' THEN $4 ELSE status END, last_error = NULL, updated_at = NOW() WHERE id = $1`,
-			t.meta.ID, t.offset, t.parts, status); err != nil {
+		if err := m.rows.uploaded(ctx, t.meta.ID, t.offset, t.parts, ended); err != nil {
 			return err
 		}
 	}
