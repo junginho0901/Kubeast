@@ -866,6 +866,7 @@ tests:
           value: "true"
       - equal:
           path: data.ALERT_INVESTIGATION_EVIDENCE_CHECK
+          value: "true"
   - it: keeps the tool result details off by default
     asserts:
       - equal:
