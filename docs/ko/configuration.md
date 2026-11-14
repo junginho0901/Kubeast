@@ -173,6 +173,7 @@ postgresql:
   user: kubeast
   password: ""          # 비우면 설치 때 생성하고 업그레이드해도 유지합니다(secret에서 확인). 외부 DB(enabled: false)면 필수입니다
   database: kubeast
+# 업그레이드할 때 Redis는 옛 파드를 멈춘 뒤 새 파드를 띄우므로(Recreate) 몇 초 동안 캐시가 비어 있습니다.
 redis:
   enabled: true
   password: ""          # requirepass, Redis 사용자가 꺼져 있는 동안 씁니다 — 비우면 생성합니다(REDIS_PASSWORD)

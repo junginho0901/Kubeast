@@ -160,8 +160,8 @@ func TestStreamNamespaces(t *testing.T) {
 		return
 	}
 	names, heads, truncated, remaining, err := run([]string{"a", "refused", "b", "gone"}, map[string]int{"a": 3, "b": 4}, 100)
-	if err != nil || truncated || heads != 1 || !slices.Equal(names, []string{"a-0=S0", "a-1=S1", "a-2=S2", "b-0=S0", "b-1=S1", "b-2=S2", "b-3=S3"}) {
-		t.Fatalf("all: names %v heads %d truncated %v err %v", names, heads, truncated, err)
+	if err != nil || truncated || remaining != 0 || heads != 1 || !slices.Equal(names, []string{"a-0=S0", "a-1=S1", "a-2=S2", "b-0=S0", "b-1=S1", "b-2=S2", "b-3=S3"}) {
+		t.Fatalf("all: names %v heads %d truncated %v remaining %d err %v", names, heads, truncated, remaining, err)
 	}
 	// the max is shared: cut in b, more namespaces after it, so the rest is not counted
 	names, _, truncated, remaining, err = run([]string{"a", "b", "c"}, map[string]int{"a": 3, "b": 4, "c": 1}, 5)

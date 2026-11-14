@@ -12,12 +12,8 @@
 # - _resolve_single — 후보 중 1개 선택
 # - _pick_log_container — pod 의 container 중 logs 대상 결정
 
-import json
 import re
-from typing import Dict, List, Optional, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from app.services.ai_service import AIService
+from typing import Dict, List, Optional
 
 
 async def _pick_log_container(

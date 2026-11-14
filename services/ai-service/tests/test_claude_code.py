@@ -9,9 +9,9 @@ import json
 import os
 import sys
 import types
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, Optional
+from typing import Optional
 
 import pytest
 from fastapi import HTTPException

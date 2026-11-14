@@ -177,6 +177,7 @@ postgresql:
   user: kubeast
   password: ""          # when empty, generated at install and kept across upgrades (look it up in the secret). Required for an external DB (enabled: false)
   database: kubeast
+# An upgrade stops Redis before its new pod starts (Recreate), so the cache is empty for a few seconds.
 redis:
   enabled: true
   password: ""          # requirepass while the Redis users are off — generated when empty (REDIS_PASSWORD)
