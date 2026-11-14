@@ -1,6 +1,8 @@
 """/suggest-optimization/stream builds the service for the cluster named in
 X-Cluster-Name (the same header the chat streams send), so the observations come
 from the selected cluster instead of the default one."""
+import logging
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -62,3 +64,25 @@ def test_stream_passes_the_ui_language(builder_calls):
     )
     assert r.status_code == 200
     assert stream_calls[-1]["lang"] == "ko"
+
+
+class _StreamThatCannotStart:
+    def suggest_optimization_stream(self, namespace, audit_actor=None, audit_http=None, lang="en"):
+        raise RuntimeError("dial tcp 10.0.0.9:8002: connection refused")
+
+
+def test_a_stream_that_cannot_start_answers_a_fixed_message_and_logs_the_error(monkeypatch, caplog):
+    async def fake_build(authorization, cluster_name=None):
+        return _StreamThatCannotStart()
+
+    monkeypatch.setattr(api_module, "_build_ai_service", fake_build)
+    app.dependency_overrides[require_auth] = lambda: None
+    try:
+        with caplog.at_level(logging.ERROR, logger="app.api"):
+            r = TestClient(app).get("/api/v1/ai/suggest-optimization/stream?namespace=web", headers={"Authorization": "Bearer tok"})
+    finally:
+        app.dependency_overrides.pop(require_auth, None)
+    assert r.status_code == 500
+    assert r.json() == {"detail": "the answer stream could not start"}
+    assert "10.0.0.9" not in r.text
+    assert "optimization stream could not start: dial tcp 10.0.0.9:8002: connection refused" in caplog.text

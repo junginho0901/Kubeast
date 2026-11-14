@@ -27,6 +27,7 @@ from app import api_public
 from app.services import model_config_policy as policy
 from app.services import tls
 from app.services.ai import model_errors, streaming
+from app.services.anthropic_messages import AnthropicAPIError
 from app.services.provider_adapter import ProviderAdapter
 
 FAKE_KEY = "fake-model-key-for-a-test"
@@ -343,7 +344,7 @@ async def test_an_investigation_connects_by_the_same_rule(names, wire, server, m
     names.answer(NAME, PUBLIC, "127.0.0.1")
     service = await _investigation_client(monkeypatch, f"http://{NAME}:{server.port}/v1")
     policy.check_base_url(f"http://{NAME}:{server.port}/v1")
-    with pytest.raises(Exception):
+    with pytest.raises(policy.AddressRefused):
         await service.client.chat.completions.create(model="m", messages=MESSAGES, max_tokens=5)
     assert server.connections == 0 and wire.dialled == []
 
@@ -386,14 +387,14 @@ async def test_the_rule_when_connecting_reads_every_form_as_the_rule_when_saving
 async def test_one_refused_address_among_the_answers_refuses_the_connection(names, wire):
     """"Every address the host resolves to must be public": at save time and when connecting."""
     names.answer(NAME, [PUBLIC, PRIVATE])
-    with pytest.raises(Exception):
+    with pytest.raises(policy.AddressRefused):
         await api_public._list_models("custom", FAKE_KEY, f"http://{NAME}:8080/v1", True)
     assert wire.dialled == []
 
 
 async def test_a_metadata_name_is_refused_by_its_name_when_connecting(names, wire):
     names.answer("metadata.google.internal", PUBLIC)
-    with pytest.raises(Exception):
+    with pytest.raises(policy.AddressRefused):
         await api_public._list_models("custom", FAKE_KEY, "http://metadata.google.internal/v1", True)
     assert wire.dialled == [] and names.asked == []
 
@@ -411,7 +412,7 @@ async def test_a_listed_host_is_still_refused_a_metadata_address_it_resolves_to(
     monkeypatch.setenv(LIST_VARIABLE, NAME)
     names.answer(NAME, METADATA)
     policy.check_base_url(f"http://{NAME}:8080/v1")
-    with pytest.raises(Exception):
+    with pytest.raises(policy.AddressRefused):
         await api_public._list_models("custom", FAKE_KEY, f"http://{NAME}:8080/v1", True)
     assert wire.dialled == []
 
@@ -430,7 +431,7 @@ async def test_an_international_name_on_the_list_stays_on_the_list_when_connecti
 
 async def test_an_international_name_not_on_the_list_is_judged(names, wire, server):
     names.answer("xn--bcher-kva.example.test", "127.0.0.1")
-    with pytest.raises(Exception):
+    with pytest.raises(policy.AddressRefused):
         await api_public._list_models("custom", FAKE_KEY, f"http://bücher.example.test:{server.port}/v1", True)
     assert server.connections == 0
 
@@ -442,7 +443,7 @@ async def test_a_redirect_to_another_host_is_judged_as_its_own_connection(names,
     names.answer("other.example.test", "127.0.0.1")
     server.redirect_to = f"http://other.example.test:{server.port}/v1/models"
     client = adapter_for("custom", f"http://{NAME}:{server.port}/v1")._openai_client._client
-    with pytest.raises(Exception):
+    with pytest.raises(policy.AddressRefused):
         await client.get(f"http://{NAME}:{server.port}/v1/models", follow_redirects=True)
     assert len(server.requests) == 1, server.requests
 
@@ -455,7 +456,7 @@ async def test_a_new_connection_after_a_closed_one_is_judged_again(names, wire, 
     first = await client.chat.completions.create(model="m", messages=MESSAGES, max_tokens=5)
     assert first.choices[0].message.content == "pong"
     wire.dialled.clear()
-    with pytest.raises(Exception):
+    with pytest.raises(policy.AddressRefused):
         await client.chat.completions.create(model="m", messages=MESSAGES, max_tokens=5)
     assert wire.dialled == []
 
@@ -893,7 +894,7 @@ async def test_a_host_under_no_proxy_is_judged_as_a_direct_connection(names, wir
     monkeypatch.setenv("HTTP_PROXY", f"http://127.0.0.1:{server.port}")
     monkeypatch.setenv("NO_PROXY", NAME)
     names.answer(NAME, "127.0.0.1")
-    with pytest.raises(Exception):
+    with pytest.raises(policy.AddressRefused):
         await api_public._list_models("custom", FAKE_KEY, f"http://{NAME}:{server.port}/v1", True)
     assert server.connections == 0, "the proxy or the address was reached"
 
@@ -913,11 +914,15 @@ async def test_the_chat_on_ollamas_built_in_address_goes_to_it(wire):
     assert wire.dialled and set(wire.dialled) <= {"127.0.0.1", "::1"}
 
 
-@pytest.mark.parametrize("provider,host", [("openai", "api.openai.com"), ("anthropic", "api.anthropic.com"), ("gemini", "generativelanguage.googleapis.com")])
-async def test_a_providers_own_address_may_resolve_to_a_private_one(names, wire, provider, host):
+@pytest.mark.parametrize("provider,host,failure,text", [
+    ("openai", "api.openai.com", openai.APIConnectionError, "Connection error"),
+    ("anthropic", "api.anthropic.com", AnthropicAPIError, "connection_error"),
+    ("gemini", "generativelanguage.googleapis.com", openai.APIConnectionError, "Connection error"),
+])
+async def test_a_providers_own_address_may_resolve_to_a_private_one(names, wire, provider, host, failure, text):
     """Company DNS often answers a provider's name with a private endpoint; no base_url means no address rule, as before."""
     names.answer(host, PRIVATE)
-    with pytest.raises(Exception):
+    with pytest.raises(failure, match=text):
         await ProviderAdapter(provider=provider, model="m", api_key=FAKE_KEY).chat.completions.create(model="m", messages=MESSAGES, max_tokens=5)
     assert set(wire.dialled) == {PRIVATE}
 

@@ -5,7 +5,7 @@ Resolves the active model config from DB and caches the result for
 `_CACHE_TTL` seconds so that repeated requests don't hit the database.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, Dict, Any
 import logging
 import os

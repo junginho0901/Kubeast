@@ -4,11 +4,10 @@ Database models and session management
 from datetime import UTC, datetime
 from typing import Optional, List, Dict, Any
 from sqlalchemy import func
-from sqlalchemy import Column, String, DateTime, Text, JSON, Integer, ForeignKey, Boolean, UniqueConstraint, create_engine
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from sqlalchemy import Column, String, DateTime, Text, JSON, Integer, ForeignKey, Boolean, UniqueConstraint
+from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 import asyncio
-import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -318,7 +317,7 @@ class DatabaseService:
     async def update_session_title(self, session_id: str, title: str):
         """세션 제목 업데이트"""
         async with self.async_session() as db:
-            from sqlalchemy import select, update
+            from sqlalchemy import update
             await db.execute(
                 update(Session)
                 .where(Session.id == session_id)
@@ -405,7 +404,7 @@ class DatabaseService:
     async def update_context(self, session_id: str, state: Dict = None, cache: Dict = None):
         """세션 컨텍스트 업데이트"""
         async with self.async_session() as db:
-            from sqlalchemy import select, update
+            from sqlalchemy import update
             
             updates = {"updated_at": utcnow()}
             if state is not None:
