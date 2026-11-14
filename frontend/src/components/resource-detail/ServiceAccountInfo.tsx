@@ -11,6 +11,7 @@ import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 import { useEffectivePermissions } from './service-account-info/useEffectivePermissions'
 import { RULE_TABLE_COLUMNS, ruleRowNote, ruleTableCells } from './service-account-info/ruleTable'
 import { useNamespacePodTable } from './useNamespacePodTable'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
@@ -43,6 +44,7 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
     enabled: !!namespace && !!name,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['serviceaccount-describe', namespace, name], answer: describe, kind: 'ServiceAccount', namespace, name })
 
   useResourceDetailOverlay({ kind: 'ServiceAccount', name, namespace, describe })
 
