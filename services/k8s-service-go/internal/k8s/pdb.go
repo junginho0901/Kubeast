@@ -76,7 +76,7 @@ func (s *Service) DescribePDB(ctx context.Context, namespace, name string) (map[
 	result["conditions"] = conditions
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(pdb.UID))
 
 	return result, nil
 }

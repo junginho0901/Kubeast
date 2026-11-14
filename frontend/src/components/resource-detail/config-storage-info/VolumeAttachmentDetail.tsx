@@ -5,6 +5,7 @@ import { EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx 
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
 import { volumeAttachmentState } from '../netstoreDetail'
+import { useDrawerFollowsEvents } from '../useDrawerFollowsEvents'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { DescribeFailure, DescribeStale } from '../DescribeFailure'
 
@@ -47,6 +48,7 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
     enabled: !!name,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['volumeattachment-describe', name], answer: describe, kind: 'VolumeAttachment', name })
 
   useResourceDetailOverlay({ kind: 'VolumeAttachment', name, describe })
 

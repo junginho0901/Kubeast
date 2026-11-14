@@ -109,11 +109,11 @@ func TestDescribeClusterRole_RulesAndAggregationAsTheAPIWritesThem(t *testing.T)
 	}
 	s := newClusterDrawersService(t, &clusterDrawersAPI{
 		objects: map[string]interface{}{"/apis/rbac.authorization.k8s.io/v1/clusterroles/reader": cr},
-		events: []corev1.Event{
+		events: append(naming("c1",
 			gatewayEvent("default", "ClusterRole", "reader", "Aggregated", now.Add(-time.Minute)),
 			gatewayEvent("kube-system", "ClusterRole", "reader", "Updated", now),
 			gatewayEvent("default", "ClusterRoleBinding", "reader", "Elsewhere", now),
-		},
+		), naming("c0", gatewayEvent("default", "ClusterRole", "reader", "OfTheOneBefore", now))...),
 	})
 	out, err := s.DescribeClusterRole(context.Background(), "reader")
 	if err != nil {
@@ -219,11 +219,10 @@ func TestDescribeAdmissionPolicies_Events(t *testing.T) {
 			"/apis/admissionregistration.k8s.io/v1/mutatingadmissionpolicies/guard":   mp,
 			"/apis/admissionregistration.k8s.io/v1/mutatingadmissionpolicybindings":   mpb,
 		},
-		events: []corev1.Event{
+		events: append(naming("v1",
 			gatewayEvent("default", "ValidatingAdmissionPolicy", "guard", "TypeChecked", now.Add(-2*time.Minute)),
 			gatewayEvent("kube-system", "ValidatingAdmissionPolicy", "guard", "Audited", now),
-			gatewayEvent("default", "MutatingAdmissionPolicy", "guard", "Mutated", now.Add(-time.Minute)),
-		},
+		), naming("m1", gatewayEvent("default", "MutatingAdmissionPolicy", "guard", "Mutated", now.Add(-time.Minute)))...),
 	}
 	s := newClusterDrawersService(t, api)
 	v, err := s.DescribeValidatingAdmissionPolicy(context.Background(), "guard")

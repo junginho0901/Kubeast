@@ -119,6 +119,8 @@ func (s *Service) describeNode(ctx context.Context, name string, withEvents bool
 	}
 
 	result := formatNodeSummary(node)
+	// the UID the drawer keeps the followed events to, beside the name the kubelet writes in its place
+	result["uid"] = string(node.UID)
 
 	// Conditions (detailed)
 	conditions := make([]map[string]interface{}, 0, len(node.Status.Conditions))
@@ -205,7 +207,7 @@ func (s *Service) describeNode(ctx context.Context, name string, withEvents bool
 
 	// Events
 	if withEvents {
-		setEvents(result, events, eventsErr)
+		setEvents(result, events, eventsErr, about(node.UID, types.UID(node.Name)))
 	}
 
 	result["annotations"] = node.Annotations
@@ -219,15 +221,30 @@ func (s *Service) GetNodePods(ctx context.Context, nodeName string) ([]map[strin
 	return s.GetPodsOnNode(ctx, nodeName, "")
 }
 
-// GetNodeEvents returns events for a node.
+// GetNodeEvents returns the events about a node: those naming its UID or its name, which the kubelet writes in place of
+// the UID, as kubectl describe node lists them. The node is read beside the events for its UID; while it cannot be read
+// the events stay as listed.
 func (s *Service) GetNodeEvents(ctx context.Context, nodeName string) ([]map[string]interface{}, error) {
+	var node *corev1.Node
+	var nodeErr error
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		node, nodeErr = s.clientsetCtx(ctx).CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	}()
 	events, err := s.objectEvents(ctx, "", "Node", nodeName)
+	wg.Wait()
 	if err != nil {
 		return nil, fmt.Errorf("get events for node %s: %w", nodeName, err)
 	}
-	sortEventsByTime(events.Items)
+	items := events.Items
+	if nodeErr == nil {
+		items = about(node.UID, types.UID(node.Name)).keep(items)
+	}
+	sortEventsByTime(items)
 
-	return formatEventList(events.Items), nil
+	return formatEventList(items), nil
 }
 
 // DeleteNode deletes a node.

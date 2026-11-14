@@ -17,6 +17,7 @@ import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 import { secretDescribeForAI } from './secretDescribeForAI'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useNamespacePodTable } from './useNamespacePodTable'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
@@ -77,6 +78,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
     path: `/api/v1/namespaces/${namespace}/secrets`,
     name,
   })
+  useDrawerFollowsEvents({ describeKey: ['secret-describe', namespace, name], answer: describe, kind: 'Secret', namespace, name })
 
   useResourceDetailOverlay({ kind: 'Secret', name, namespace, describe: secretDescribeForAI(describe) })
 

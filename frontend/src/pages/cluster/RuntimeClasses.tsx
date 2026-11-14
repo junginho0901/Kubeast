@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api, type RuntimeClassInfo } from '@/services/api'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
@@ -62,6 +62,7 @@ export default function RuntimeClasses() {
     path: '/apis/node.k8s.io/v1/runtimeclasses',
     query: 'watch=1',
     applyEvent: (prev, event) => applyRuntimeClassWatchEvent(prev as RuntimeClassInfo[] | undefined, event),
+    gatherEveryMs: LIST_GATHER_MS,
   })
 
   const filteredRCs = useMemo(() => {

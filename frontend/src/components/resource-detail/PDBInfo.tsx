@@ -5,6 +5,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, ConditionsTable, EventsSection, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { selectorText } from './netpolText'
 import { useNamespacePodTable } from './useNamespacePodTable'
 import { SET_POD_TABLE_WATCH_MAX } from './namespacePodTable'
@@ -35,6 +36,7 @@ export default function PDBInfo({ name, namespace }: Props) {
     path: `/apis/policy/v1/namespaces/${namespace}/poddisruptionbudgets`,
     name,
   })
+  useDrawerFollowsEvents({ describeKey: ['pdb-describe', namespace, name], answer: desc, kind: 'PodDisruptionBudget', namespace, name })
 
   useResourceDetailOverlay({ kind: 'PodDisruptionBudget', name, namespace, describe: desc })
 

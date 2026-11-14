@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useDescribeReads } from '@/services/pacedReads'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
@@ -79,6 +79,7 @@ export function useBackendPoliciesData<T extends BackendPolicyLike>({
     path: config.watchPath(selectedNamespace),
     query: 'watch=1',
     applyEvent: (prev, event) => applyWatchEvent<T>(prev as T[] | undefined, event),
+    gatherEveryMs: LIST_GATHER_MS,
     onEvent: (event) => {
       if (event?.type === 'DELETED') return
       const name = event?.object?.name || event?.object?.metadata?.name

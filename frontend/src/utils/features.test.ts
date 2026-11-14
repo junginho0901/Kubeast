@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aiEnabled, alertInvestigationEnabled, alertStoreEnabledFor, costEnabled, logSearchEnabledFor, policyReportsEnabled, traceTemplates } from './features'
+import { aiEnabled, aiState, alertInvestigationEnabled, alertStoreEnabledFor, costEnabled, logSearchEnabledFor, policyReportsEnabled, traceTemplates } from './features'
 
 describe('aiEnabled', () => {
   it('is off only when the server says so', () => {
@@ -7,6 +7,21 @@ describe('aiEnabled', () => {
     expect(aiEnabled({ prometheus: { enabled: false }, ai: { enabled: true } })).toBe(true)
     expect(aiEnabled({ prometheus: { enabled: false } })).toBe(true)
     expect(aiEnabled(undefined)).toBe(true)
+  })
+})
+
+describe('aiState (AIGate, the MCP card)', () => {
+  it('waits while the features are still their placeholder, which says nothing of AI', () => {
+    expect(aiState({ prometheus: { enabled: true } }, true)).toBe('wait')
+  })
+  it('is off only when the answered features say so', () => {
+    expect(aiState({ prometheus: { enabled: true }, ai: { enabled: false } }, false)).toBe('off')
+    expect(aiState({ prometheus: { enabled: true }, ai: { enabled: true } }, false)).toBe('on')
+  })
+  it('counts unknown as on: an older server, a features read that failed, a cluster list that failed (no features will come)', () => {
+    expect(aiState({ prometheus: { enabled: true } }, false)).toBe('on')
+    expect(aiState(undefined, false)).toBe('on')
+    expect(aiState({ prometheus: { enabled: true } }, true, true)).toBe('on')
   })
 })
 

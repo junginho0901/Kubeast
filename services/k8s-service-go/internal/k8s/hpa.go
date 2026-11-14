@@ -109,7 +109,7 @@ func (s *Service) DescribeHPA(ctx context.Context, namespace, name string) (map[
 	result["conditions"] = conditions
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(hpa.UID))
 
 	return result, nil
 }

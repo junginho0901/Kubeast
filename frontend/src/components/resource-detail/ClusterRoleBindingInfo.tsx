@@ -4,6 +4,7 @@ import { api } from '@/services/api'
 import { InfoSection, InfoRow, StatusBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useServerPods } from './useServerPods'
 import { ResourceLink } from './ResourceLink'
 import { BindingSubjects } from './role-info/BindingSubjects'
@@ -34,6 +35,7 @@ export default function ClusterRoleBindingInfo({ name, rawJson }: Props) {
     path: '/apis/rbac.authorization.k8s.io/v1/clusterrolebindings',
     name,
   })
+  useDrawerFollowsEvents({ describeKey: ['clusterrolebinding-describe', name], answer: describe, kind: 'ClusterRoleBinding', name })
 
   useResourceDetailOverlay({ kind: 'ClusterRoleBinding', name, describe })
 

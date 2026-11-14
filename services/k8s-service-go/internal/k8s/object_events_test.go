@@ -77,7 +77,7 @@ func (a *eventsAPI) serve(w http.ResponseWriter, r *http.Request) {
 				at := metav1.NewTime(made.Add(time.Duration(i*7%3) * time.Minute))
 				list.Items = append(list.Items, corev1.Event{
 					ObjectMeta:     metav1.ObjectMeta{Name: "app." + reason, Namespace: "shop"},
-					InvolvedObject: corev1.ObjectReference{Kind: "ConfigMap", Name: "app", Namespace: "shop"},
+					InvolvedObject: corev1.ObjectReference{Kind: "ConfigMap", Name: "app", Namespace: "shop", UID: "c0f1"},
 					Reason:         reason, Message: reason + " by the controller", Type: corev1.EventTypeNormal, Count: int32(i + 1),
 					FirstTimestamp: made, LastTimestamp: at, Source: corev1.EventSource{Component: "controller"},
 				})
@@ -110,7 +110,7 @@ func ownEvents(t *testing.T, cs *kubernetes.Clientset, ctx context.Context) stri
 	t.Helper()
 	events, err := cs.CoreV1().Events("shop").List(ctx, metav1.ListOptions{FieldSelector: "involvedObject.name=app,involvedObject.kind=ConfigMap"})
 	want := map[string]interface{}{}
-	setEvents(want, events, err)
+	setEvents(want, events, err, about())
 	return answerJSON(t, map[string]interface{}{"events": want["events"], "events_error": want["events_error"]})
 }
 
