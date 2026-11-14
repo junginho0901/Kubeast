@@ -8,6 +8,8 @@ vi.hoisted(() => {
 })
 
 import { QueryClient, QueryObserver } from '@tanstack/react-query'
+import { isMetricsDisabled, type TopResources } from '@/services/api'
+import { readTopResources, topResourcesPace, type TopRefusals } from '../dashboard/topResourcesRead'
 import { METRICS_NOT_SERVED_MS, metricsReadPace, metricsRefreshFailure, metricsRefusal } from './metricsRefresh'
 
 // The cluster's words for a Read grant limited to namespaces, as k8s-service passes them on in the 403's detail
@@ -88,6 +90,45 @@ describe('the Monitoring tabs\' metrics read', () => {
     expect(read.mock.calls.map((c) => c[0]).slice(4)).toEqual(['c1', 'c1', 'c1'])
     expect(observer.getCurrentResult().data).toEqual(ROWS)
     done()
+  })
+
+  it('still asks after the Dashboard found no metrics.k8s.io, and shows a metrics-server installed since within the minute', async () => {
+    let served = false
+    const NOT_SERVED_TEXT = 'the server could not find the requested resource'
+    // the Dashboard's top resources query (useDashboardQueries) on the same cluster first
+    const refusals = { current: { ck: 'c1' } as TopRefusals }
+    const dashboardRead = vi.fn(async () => (served
+      ? { top_pods: [], top_nodes: ROWS }
+      : { top_pods: [], top_nodes: [], pod_metrics_error: NOT_SERVED_TEXT, node_metrics_error: NOT_SERVED_TEXT }) as TopResources)
+    const dashboardClient = new QueryClient()
+    const dashboard = new QueryObserver<TopResources>(dashboardClient, {
+      queryKey: ['top-resources', 'c1'], queryFn: () => readTopResources('c1', dashboardRead, refusals), staleTime: 5000,
+      ...topResourcesPace(() => refusals.current, 'c1'),
+    })
+    const stopDashboard = dashboard.subscribe(() => {})
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(dashboardRead).toHaveBeenCalledTimes(1)
+    stopDashboard()
+    dashboardClient.clear()
+    // then the Nodes tab, with the options MonitoringNodes gives it
+    expect(isMetricsDisabled()).toBe(false)
+    const read = vi.fn(async () => {
+      if (!served) throw NOT_SERVED()
+      return ROWS
+    })
+    const client = new QueryClient()
+    const tab = new QueryObserver<unknown>(client, {
+      queryKey: ['node-metrics', 'c1'], queryFn: read, enabled: !isMetricsDisabled(), ...metricsReadPace(() => isMetricsDisabled()),
+    })
+    const stop = tab.subscribe(() => {})
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(read).toHaveBeenCalledTimes(1)
+    served = true
+    await vi.advanceTimersByTimeAsync(METRICS_NOT_SERVED_MS - 30_000 + 500)
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(tab.getCurrentResult().data).toEqual(ROWS)
+    stop()
+    client.clear()
   })
 
   it('asks nothing again once metrics are off for the cluster', async () => {

@@ -34,13 +34,13 @@ export function metricsRefusal(error: unknown): { reason?: string } | null {
 }
 
 export const METRICS_POLL_MS = 5000
-/** How long k8s-service keeps a cluster's API discovery, which says whether it serves metrics.k8s.io (apiResourcesTTL). */
+/** How long k8s-service keeps its answer that a cluster serves no metrics.k8s.io (metricsVerdictTTL). */
 export const METRICS_NOT_SERVED_MS = 60_000
 
 /**
  * How the Nodes and Pods tabs read: every 5 s, a failure tried twice more, and neither a refused read nor the answer that
  * says metrics-server is missing tried again. A refused read is not asked again on the 5 s, and the answer that the
- * cluster serves no metrics.k8s.io is asked again after the minute k8s-service keeps the cluster's discovery, so a
+ * cluster serves no metrics.k8s.io is asked again after the minute k8s-service keeps that answer, so a
  * metrics-server installed since shows. Both are asked again when the tab is opened again or another cluster (or
  * namespace) is chosen, which is a query of its own, as the banner forgets its refusals on the route and the cluster.
  * `off`: metrics are off for this cluster.

@@ -1,24 +1,20 @@
 // Dashboard data fetching — every useQuery the page consumes plus
-// the metricsUnavailable flag and its two side-effects (cancel
-// in-flight top-resources queries when metrics flip unavailable;
-// flip the flag when the top-resources query reports the
-// metrics-server is gone). Extracted from Dashboard.tsx so the page
+// metricsUnavailable, read from the top-resources query's last answer
+// (the cluster serves no metrics.k8s.io; asked again after a minute,
+// topResourcesPace). Extracted from Dashboard.tsx so the page
 // no longer has to declare 12 useQuery calls inline; one hook call
 // returns everything it needs.
 //
 // `enabled` flags depend on which modal is open / which stat card is
 // selected — those are passed in as plain booleans so the hook stays
-// pure (no UI state of its own besides metricsUnavailable, which is
-// genuinely about the data layer).
+// pure (no UI state of its own).
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   api,
   TopResources,
-  disableMetrics,
-  isMetricsDisabled,
   isMetricsUnavailableError,
 } from '@/services/api'
 import { readPodPageSince } from '@/services/podPageRead'
@@ -26,7 +22,7 @@ import { useCluster } from '@/contexts/ClusterContext'
 import { keepSameRead } from '@/utils/keepSameRead'
 
 import type { ResourceType } from '../types'
-import { readTopResources, topResourcesPollMs, type TopRefusals } from '../topResourcesRead'
+import { readTopResources, topResourcesPace, type TopRefusals } from '../topResourcesRead'
 
 export const DASHBOARD_POD_PAGE = 50
 // the server's most groups (PodGroupTopMax): past it the rest is one "(other)" and those namespaces get no pod count
@@ -66,7 +62,6 @@ export function useDashboardQueries({
   // Appended as a suffix so existing prefix-based invalidate/removeQueries that
   // reference e.g. ['cluster-overview'] still match. 'default' mirrors the server fallback.
   const ck = currentCluster || 'default'
-  const [metricsUnavailable, setMetricsUnavailable] = useState(() => isMetricsDisabled())
   // what the cluster refused of the top pods and nodes since this page opened
   const topRefusals = useRef<TopRefusals>({ ck })
 
@@ -208,9 +203,9 @@ export function useDashboardQueries({
     queryKey: ['top-resources', ck],
     // a part the cluster refused is kept and not asked again until the page opens again (topResourcesRead)
     queryFn: () => readTopResources(ck, (skip) => api.getTopResources(5, 3, skip), topRefusals),
-    enabled: !metricsUnavailable && !isMetricsDisabled(),
     staleTime: 5000, // 5초간 fresh 상태 유지
-    refetchInterval: () => topResourcesPollMs(topRefusals.current, ck, metricsUnavailable || isMetricsDisabled()),
+    // every 5 s; a cluster without metrics-server once a minute, so a metrics-server installed since shows
+    ...topResourcesPace(() => topRefusals.current, ck),
     placeholderData: (previousData, previousQuery) => {
       // Keep the prior frame to avoid flicker on the 5s refetch — but ONLY within
       // the same cluster. The key's 2nd segment is the cluster; if it differs,
@@ -225,26 +220,10 @@ export function useDashboardQueries({
       }
       return undefined
     },
-    retry: (failureCount, error) => {
-      if (isMetricsUnavailableError(error)) return false
-      return failureCount < 1
-    },
-    retryDelay: 1000,
     gcTime: 60000,
   })
-
-  useEffect(() => {
-    if (isMetricsUnavailableError(topResourcesError)) {
-      disableMetrics()
-      setMetricsUnavailable(true)
-    }
-  }, [topResourcesError])
-
-  useEffect(() => {
-    if (metricsUnavailable) {
-      queryClient.cancelQueries({ queryKey: ['top-resources', ck] })
-    }
-  }, [metricsUnavailable, queryClient, ck])
+  // its last answer says the cluster serves no metrics.k8s.io, until an answer with rows
+  const metricsUnavailable = isMetricsUnavailableError(topResourcesError)
 
   // 노드 목록 (모달용)
   const { data: modalNodes, isLoading: isLoadingNodes } = useQuery({
