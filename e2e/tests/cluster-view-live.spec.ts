@@ -6,9 +6,10 @@ import path from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 
 // Cluster View fetches the node map from the server and each node box's pods when the box is on screen, watching that
-// node (fieldSelector spec.nodeName). What it shows must still be the cluster's and follow it at once: the map's counts
-// against kubectl, the map's colours against the cards', a pod made, deleted and replaced, a search that finds a pod on
-// the last of 200 nodes the page never drew, and only the boxes near the screen watching.
+// node (fieldSelector spec.nodeName); the boxes are paged ten at a time under the map. What it shows must still be the
+// cluster's and follow it at once: the map's counts against kubectl, the map's colours against the cards', a pod made,
+// deleted and replaced, a search that finds a pod on the last of 200 nodes the page never drew, only the boxes of the
+// page near the screen watching, and a map cell of another page opening that page at its node's box.
 
 const CLUSTER = 'self'
 
@@ -27,6 +28,25 @@ const mapCells = async (page: Page): Promise<Cell[]> =>
   JSON.parse((await page.getByTestId('cluster-view-map').locator('canvas').getAttribute('data-cells')) ?? '[]')
 const box = (page: Page, node: string) => page.locator(`[data-testid="cluster-view-node"][data-node="${node}"]`)
 const card = (page: Page, name: string) => page.locator('[data-testid="cluster-view-node"] button', { hasText: name })
+const BOXES_PER_PAGE = 10 // nodeBoxPages.ts NODE_BOXES_PER_PAGE
+
+// 200 nodes of six pods stood in for the map and the boxes; a search finds the pod e2e-target-pod on the last node
+const NODES_200 = Array.from({ length: 200 }, (_, i) => `e2e-node-${String(i).padStart(3, '0')}`)
+async function standIn200Nodes(page: Page) {
+  const summary = (q: string | null) => {
+    const list = q ? NODES_200.slice(-1) : NODES_200
+    return { nodes: list.map((n) => ({ node: n, total: 6, ok: 6, warn: 0, error: 0 })), total: list.length * 6, all: NODES_200.length * 6, revision: `e2e-${q ?? ''}`, source: 'index' }
+  }
+  await page.route('**/api/v1/cluster/pods/nodes?**', (route) => {
+    const q = new URL(route.request().url()).searchParams.get('q')
+    return route.fulfill({ json: summary(q) })
+  })
+  await page.route('**/api/v1/cluster/pods/on-node?**', (route) => {
+    const n = new URL(route.request().url()).searchParams.get('node') ?? ''
+    const pods = Array.from({ length: 6 }, (_, i) => ({ name: n === NODES_200[199] && i === 0 ? 'e2e-target-pod' : `${n}-p${i}`, namespace: 'e2e', node_name: n, phase: 'Running', status: 'Running', ready: '1/1', restart_count: 0, containers: [{ name: 'c', ready: true, state: { running: {} } }], init_containers: [], created_at: new Date().toISOString() }))
+    return route.fulfill({ json: pods })
+  })
+}
 
 test.describe('Cluster View — node map, boxes on screen, live', () => {
   test('the map counts each node\'s pods as the cluster has them, in the cards\' colours', async ({ page }) => {
@@ -85,21 +105,9 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
     }
   })
 
-  test('on 200 nodes the search finds a pod on the last node, and only the boxes near the screen watch', async ({ page }) => {
-    const nodes = Array.from({ length: 200 }, (_, i) => `e2e-node-${String(i).padStart(3, '0')}`)
-    const summary = (q: string | null) => {
-      const list = q ? nodes.slice(-1) : nodes
-      return { nodes: list.map((n) => ({ node: n, total: 6, ok: 6, warn: 0, error: 0 })), total: list.length * 6, all: nodes.length * 6, revision: `e2e-${q ?? ''}`, source: 'index' }
-    }
-    await page.route('**/api/v1/cluster/pods/nodes?**', (route) => {
-      const q = new URL(route.request().url()).searchParams.get('q')
-      return route.fulfill({ json: summary(q) })
-    })
-    await page.route('**/api/v1/cluster/pods/on-node?**', (route) => {
-      const n = new URL(route.request().url()).searchParams.get('node') ?? ''
-      const pods = Array.from({ length: 6 }, (_, i) => ({ name: n === nodes[199] && i === 0 ? 'e2e-target-pod' : `${n}-p${i}`, namespace: 'e2e', node_name: n, phase: 'Running', status: 'Running', ready: '1/1', restart_count: 0, containers: [{ name: 'c', ready: true, state: { running: {} } }], init_containers: [], created_at: new Date().toISOString() }))
-      return route.fulfill({ json: pods })
-    })
+  test('on 200 nodes the search finds a pod on the last node, and only the boxes of the page near the screen watch', async ({ page }) => {
+    const nodes = NODES_200
+    await standIn200Nodes(page)
     const open = new Set<string>()
     page.on('websocket', (ws) => ws.on('framesent', (f) => {
       const msg = JSON.parse(String(f.payload)) as { type: string; query?: string; path?: string }
@@ -112,22 +120,48 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
     await page.goto(`/cluster-view?cluster=${CLUSTER}`)
     await expect(page.getByTestId('cluster-view-map')).toBeVisible()
     expect((await mapCells(page)).length).toBe(200)
-    // the last node's box is not drawn yet
+    // the boxes are the first page of the 200 nodes: the last node's box is not drawn
+    await expect(page.getByTestId('cluster-view-nodes-pager')).toContainText(/Showing 1-10 of 200|200개 중 1-10 표시/)
     await expect(box(page, nodes[199])).toHaveCount(0)
 
     await page.getByPlaceholder(/Search pod name|Pod 이름/i).fill('e2e-target')
     await expect(page.getByTestId('cluster-view-search-count')).toContainText('6')
     await expect(card(page, 'e2e-target-pod')).toHaveCount(1)
     await expect(box(page, nodes[199])).toHaveCount(1)
+    await expect(page.getByTestId('cluster-view-nodes-pager')).toContainText(/Showing 1-1 of 1|1개 중 1-1 표시/)
 
-    // without the search, scroll through the boxes: the watches open are those of the boxes drawn now
+    // without the search, scroll through the page: the boxes drawn are the page's at most, and the watches open are
+    // those of the boxes drawn now
     await page.getByPlaceholder(/Search pod name|Pod 이름/i).fill('')
     await expect(box(page, nodes[0])).toHaveCount(1)
     for (let y = 0; y < 20; y++) await page.mouse.wheel(0, 2000)
     await page.waitForTimeout(1500)
     const drawn = await page.getByTestId('cluster-view-node').count()
-    expect(drawn).toBeLessThan(30)
+    expect(drawn).toBeLessThanOrEqual(BOXES_PER_PAGE)
     expect(open.size).toBeLessThanOrEqual(drawn)
+  })
+
+  test('on 200 nodes a cell of the second page opens that page at its node\'s box, outlined on the map', async ({ page }) => {
+    await standIn200Nodes(page)
+    await page.goto(`/cluster-view?cluster=${CLUSTER}`)
+    const canvas = page.getByTestId('cluster-view-map').locator('canvas')
+    await expect(canvas).toBeVisible()
+    await expect(canvas).toHaveAttribute('data-page-cells', '0,10')
+    // node 15 is the sixth box of the second page; its cell is on the map's first row (cells of about 30 px)
+    const target = NODES_200[15]
+    const at = (await canvas.boundingBox())!
+    let found = false
+    for (let x = 4; x < Math.min(at.width, 900) && !found; x += 6) {
+      await page.mouse.move(at.x + x, at.y + 6)
+      found = (await page.getByTestId('cluster-view-map-legend').innerText()).startsWith(`${target} `)
+    }
+    expect(found, `the legend names ${target} under the mouse`).toBe(true)
+    await page.mouse.down()
+    await page.mouse.up()
+    await expect(page.getByTestId('cluster-view-nodes-pager')).toContainText(/Showing 11-20 of 200|200개 중 11-20 표시/)
+    await expect(canvas).toHaveAttribute('data-page-cells', '10,20')
+    await expect(box(page, target)).toBeInViewport()
+    await expect(box(page, NODES_200[0])).toHaveCount(0)
   })
 
   test('a cell of the map opens its node\'s box', async ({ page }) => {

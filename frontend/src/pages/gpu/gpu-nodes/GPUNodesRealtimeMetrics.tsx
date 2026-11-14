@@ -40,7 +40,7 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost, metricsFailure = n
           {tr('gpuNodes.realtimeMetrics', 'Real-time GPU Utilization')}
         </h2>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" data-list="GPU hosts">
         {pagedHosts.map(([hostname, gpus]) => {
           const averages = gpuHostAverages(gpus)
           return (
