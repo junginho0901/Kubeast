@@ -3,12 +3,16 @@ package handler
 import (
 	"bufio"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/junginho0901/kubeast/services/pkg/probe"
 )
 
 // sseFields reads a stream's id, event and data lines in order: an id-only block is the place it marks.
@@ -115,6 +119,97 @@ func TestLogFileStreamGoesOnAfterTheBrowsersLastLine(t *testing.T) {
 		if after := string(store.rows[i+1].After); !strings.Contains(after, want) {
 			t.Fatalf("row %d = %s, want %s", i+1, after, want)
 		}
+	}
+}
+
+// A server that leaves while a poll's command runs cuts that command with the stream's context: the stream ends with
+// the reconnection time alone, no error and no end, so the browser connects again and goes on from its mark.
+func TestAFollowedLogFileTheServerLeavesDuringACommandAsksTheBrowserBack(t *testing.T) {
+	orig := logFilePollInterval
+	logFilePollInterval = 5 * time.Millisecond
+	defer func() { logFilePollInterval = orig }()
+
+	file := &fakeFile{inode: "11", data: "l1\n"}
+	h, _, _ := logFileHandler(t, true, file.run)
+	store := &lockedAudit{}
+	h.auditStore = store
+	p := probe.New()
+	h.SetLeaving(p)
+	var holdNext atomic.Bool
+	held := make(chan struct{})
+	var once sync.Once
+	fake := h.logFileExec
+	h.logFileExec = func(ctx context.Context, ns, pod, container string, argv []string, stdout, stderr io.Writer) error {
+		if holdNext.Load() {
+			once.Do(func() { close(held) })
+			<-ctx.Done()
+			return ctx.Err() // what the exec stream answers when its context ends: "context canceled"
+		}
+		return fake(ctx, ns, pod, container, argv, stdout, stderr)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.LogFileStream(w, withLogFileContext(r, "apps", "resource.pod.logfile"))
+	}))
+	defer srv.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/x?container=app&path=/var/log/app/app.log&lines=1", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+	lines := make(chan string, 64)
+	go func() {
+		defer close(lines)
+		sc := bufio.NewScanner(resp.Body)
+		for sc.Scan() {
+			lines <- sc.Text()
+		}
+	}()
+	for marked := false; !marked; {
+		select {
+		case l, ok := <-lines:
+			if !ok {
+				t.Fatal("the stream ended before its first mark")
+			}
+			marked = l == "id: 11:3"
+		case <-time.After(3 * time.Second):
+			t.Fatal("no mark after the first line")
+		}
+	}
+
+	holdNext.Store(true)
+	select {
+	case <-held:
+	case <-time.After(3 * time.Second):
+		t.Fatal("no poll command ran")
+	}
+	p.Leave()
+
+	var rest []string
+	for open := true; open; {
+		select {
+		case l, ok := <-lines:
+			if ok {
+				rest = append(rest, l)
+			}
+			open = ok
+		case <-time.After(3 * time.Second):
+			t.Fatalf("the stream did not end when the server left: %q", rest)
+		}
+	}
+	got := strings.Join(rest, "\n")
+	if !strings.Contains(got, "retry: 1000") || strings.Contains(got, "event: error") || strings.Contains(got, "event: end") {
+		t.Fatalf("after the server left the stream wrote %q, want the reconnection time alone", got)
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.rows) != 1 || store.rows[0].Action != auditLogFileRead {
+		t.Fatalf("rows = %+v, want the read's row alone (a followed log the server left has no end row)", store.rows)
 	}
 }
 

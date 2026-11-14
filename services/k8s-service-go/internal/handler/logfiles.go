@@ -432,10 +432,17 @@ func (h *Handler) LogFileStream(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 		return true
 	}
-	// stop ends the stream with the reason; the browser closes on "end".
-	stop := func(e *logFileError) {
+	// ended closes a stream whose context ended: the server leaving and the session's end say so, a gone client hears nothing.
+	ended := func() {
 		if sayStreamEnded(ctx, w, flusher) {
 			h.auditSessionEnd(ctx, r, "pod", pod, namespace, "log-file")
+		}
+	}
+	// stop ends the stream with the reason; the browser closes on "end". A command cut by the context's end (the server
+	// leaving during a poll's exec) is not the file's failure: the stream ends as the context's end does, and reconnects.
+	stop := func(e *logFileError) {
+		if ctx.Err() != nil {
+			ended()
 			return
 		}
 		slog.InfoContext(ctx, "log file stream stopped", "namespace", namespace, "pod", pod, "reason", e.reason, "detail", e.detail)
@@ -505,9 +512,7 @@ func (h *Handler) LogFileStream(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-ctx.Done():
-			if sayStreamEnded(ctx, w, flusher) {
-				h.auditSessionEnd(ctx, r, "pod", pod, namespace, "log-file")
-			}
+			ended()
 			return
 		case <-heartbeat.C:
 			// A comment line keeps proxies (nginx: 60 s idle) from closing a quiet stream.
