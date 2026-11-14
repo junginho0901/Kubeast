@@ -235,7 +235,7 @@ spec:
   replicas: {{ $.Values.replicas.k8sService }}
   {{- else }}
   {{- if gt (int $.Values.streams.replicas) 1 }}
-  {{- fail "streams.replicas must be 1: a stream server's client caches are not told of a cluster's change" }}
+  {{- fail "streams.replicas must be 1: more than one stream server is not supported yet" }}
   {{- end }}
   {{- if eq (toString $.Values.sessionRecording.storage) "file" }}
   {{- fail "sessionRecording.storage file and streams.enabled: the stream server writes the recordings and k8s-service reads them, and one file volume is mounted by one pod — use s3 or database" }}
