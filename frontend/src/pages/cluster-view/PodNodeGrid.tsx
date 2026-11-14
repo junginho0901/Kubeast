@@ -378,7 +378,7 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
           if (!isDeleting) handlePodContextMenu(event, pod)
         }}
         disabled={isDeleting}
-        className={`min-w-0 min-h-[132px] p-3 bg-slate-800 border border-hairline rounded-lg transition-colors text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-400 ${focused ? 'ring-2 ring-primary-400' : hit ? 'ring-1 ring-primary-400' : ''} ${
+        className={`flex flex-col items-stretch justify-start min-w-0 min-h-[132px] p-3 bg-slate-800 border border-hairline rounded-lg transition-colors text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-400 ${focused ? 'ring-2 ring-primary-400' : hit ? 'ring-1 ring-primary-400' : ''} ${
           isDeleting ? 'opacity-60 cursor-not-allowed' : 'hover:bg-slate-700'
         }`}
       >
@@ -390,7 +390,7 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
             getHealthIcon(health.level, health.reason)
           )}
         </div>
-        <div className="min-w-0 text-sm font-medium text-ink break-all line-clamp-2" title={pod.name}>
+        <div className="min-w-0 h-10 text-sm font-medium text-ink break-all line-clamp-2" title={pod.name}>
           {pod.name}
         </div>
         <div title={pod.namespace} className="text-xs text-slate-400 mt-1 break-all">{pod.namespace}</div>
