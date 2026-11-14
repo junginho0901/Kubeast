@@ -166,6 +166,7 @@ postgresql:
   user: kubeast
   password: ""          # 비우면 설치 때 생성하고 업그레이드해도 유지합니다(secret에서 확인). 외부 DB(enabled: false)면 필수입니다
   database: kubeast
+  sessionLimits: { statementTimeoutMs: 30000, lockTimeoutMs: 15000, idleInTransactionTimeoutMs: 300000 }  # 각 서비스가 자기 연결에 거는 PostgreSQL statement_timeout, lock_timeout, idle_in_transaction_session_timeout입니다(마이그레이션은 앞의 둘 없이 돕니다). 0이면 보내지 않습니다 — PgBouncer 뒤라면 0으로 두고 데이터베이스 역할(role)에 거세요
 redis:
   enabled: true
   password: ""          # requirepass — 비우면 생성합니다(REDIS_PASSWORD)

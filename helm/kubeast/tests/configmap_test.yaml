@@ -641,3 +641,31 @@ tests:
       - equal:
           path: data.CLUSTER_STORE_ALLOWED_HOSTS
           value: prom.monitoring.svc,.corp.example.com
+
+  - it: hands the database session limits to every service, in milliseconds
+    asserts:
+      - equal:
+          path: data.DB_STATEMENT_TIMEOUT_MS
+          value: "30000"
+      - equal:
+          path: data.DB_LOCK_TIMEOUT_MS
+          value: "15000"
+      - equal:
+          path: data.DB_IDLE_IN_TRANSACTION_TIMEOUT_MS
+          value: "300000"
+
+  - it: passes 0 and changed session limits as they are set
+    set:
+      postgresql.sessionLimits.statementTimeoutMs: 0
+      postgresql.sessionLimits.lockTimeoutMs: 5000
+      postgresql.sessionLimits.idleInTransactionTimeoutMs: 600000
+    asserts:
+      - equal:
+          path: data.DB_STATEMENT_TIMEOUT_MS
+          value: "0"
+      - equal:
+          path: data.DB_LOCK_TIMEOUT_MS
+          value: "5000"
+      - equal:
+          path: data.DB_IDLE_IN_TRANSACTION_TIMEOUT_MS
+          value: "600000"

@@ -169,6 +169,7 @@ postgresql:
   user: kubeast
   password: ""          # when empty, generated at install and kept across upgrades (look it up in the secret). Required for an external DB (enabled: false)
   database: kubeast
+  sessionLimits: { statementTimeoutMs: 30000, lockTimeoutMs: 15000, idleInTransactionTimeoutMs: 300000 }  # PostgreSQL statement_timeout, lock_timeout and idle_in_transaction_session_timeout each service sets on its connections (migrations run without the first two); 0 sends nothing — use 0 behind PgBouncer and set them on the database role
 redis:
   enabled: true
   password: ""          # requirepass — generated when empty (REDIS_PASSWORD)

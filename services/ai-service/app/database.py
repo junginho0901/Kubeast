@@ -247,9 +247,13 @@ class DatabaseService:
         # services); asyncpg needs them as an `ssl` connect argument instead.
         engine_url, connect_args = database_url, {}
         if "postgresql" in database_url:
+            from app.db_session import server_settings
             from app.db_ssl import split_ssl_params
 
             engine_url, connect_args = split_ssl_params(database_url)
+            settings = server_settings()
+            if settings:
+                connect_args = {**connect_args, "server_settings": settings}
         # pool_pre_ping: a pooled connection that died with a Postgres restart
         # is replaced on checkout instead of surfacing as "connection is
         # closed" on the first request after the database is back.

@@ -542,6 +542,15 @@ postgresql:
   sslRootCert:
     secretName: ""
     key: ca.crt
+  # Time limits each service sets on its own database connections (PostgreSQL statement_timeout, lock_timeout,
+  # idle_in_transaction_session_timeout; PostgreSQL's default for each is no limit), in milliseconds. 0 sends
+  # nothing and leaves the database's setting: use 0 behind a pooler that refuses startup parameters (PgBouncer
+  # by default) and set them on the database role instead. The schema migrations run without the statement and
+  # lock limits.
+  sessionLimits:
+    statementTimeoutMs: 30000
+    lockTimeoutMs: 15000
+    idleInTransactionTimeoutMs: 300000
 
 # --- Pod security (Pod Security Standards "restricted") ---
 # Every workload runs as a fixed non-root uid matching its image USER
