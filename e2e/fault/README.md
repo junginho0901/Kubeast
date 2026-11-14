@@ -196,8 +196,9 @@ PLAYWRIGHT_JSON_OUTPUT_NAME=<raw>/<case>/report.json E2E_FAULT=1 npx playwright 
 ```
 
 The JSON report holds each test's annotations (who was killed, reasons, what was not checked) and the paths of its
-attachments: `answers.json` (every probe answer) in every case; `timeline.json` (kill, thaw and recovery times in ms,
-the error window, the live list's sockets, the recording row before and after, how the killed container ended) in
+attachments: every probe answer (`answers.json`; `reads.json`, `reads-during-outage.json`, `list-reads.json`,
+`tool-answers.json` or `seen.json` in the cases that name them so); `timeline.json` (kill, thaw and recovery times in
+ms, the error window, the live list's sockets, the recording row before and after, how the killed container ended) in
 W6-1, Q-52, F-5 and F-14; `killed-container-previous-log.txt` in W6-1; `drain-status.json` in Q-52;
 `reads-by-route.json` in F-9; `gateway-502-and-worker-lines.txt` in F-14. Print `scripts/kind-fault-shape.sh status`
 before and after each shape into the same folder.
