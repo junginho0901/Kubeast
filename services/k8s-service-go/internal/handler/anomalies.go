@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/anomaly"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/callgraph"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/traces"
@@ -255,7 +256,151 @@ func (h *Handler) rankAnomalies(r *http.Request, namespace string, wl *anomaly.W
 		}
 		rows = append(rows, row)
 	}
-	return anomaly.Assemble(namespace, wl, win, results, budget.used()), rows, recorded
+	order := h.callOrder(r, run, budget, namespace, win, results)
+	return anomaly.AssembleWith(namespace, wl, win, results, budget.used(), order), rows, recorded
+}
+
+// callOrder reads the call graph over the narrowing's window when features.callGraph is on and the anomalous findings
+// name two workloads or more of the namespace's graph, and gives its order of the failing workloads (callgraph.Suspects,
+// a failing workload whose callees are all well first). Its Prometheus reads (1 + 2 for the traces, without the 90th
+// percentile, which ranks nothing; 3 or 4 for the traffic lines) are taken from the answer's store queries after the
+// checks took theirs, so the same budget gives the same checks with the switch on or off; a read past the budget is
+// refused and call_order says why. nil = not asked (the answer has no call_order).
+func (h *Handler) callOrder(r *http.Request, run func(func(context.Context)), budget *anomalyBudget, namespace string, win anomaly.Window, results []anomaly.CheckResult) *anomaly.CallOrder {
+	if !h.cfg.CallGraphEnabled {
+		return nil
+	}
+	var targets []string
+	for _, res := range results {
+		for _, f := range res.Findings {
+			if f.Verdict == anomaly.VerdictAnomalous {
+				targets = append(targets, f.Target)
+			}
+		}
+	}
+	if len(targets) < 2 {
+		return nil
+	}
+	var graph map[string]interface{}
+	var err error
+	run(func(c context.Context) { graph, err = h.anomalyGraphOf(c, namespace) })
+	if err != nil {
+		return &anomaly.CallOrder{Note: anomaly.CallOrderNote{Reason: readFailure("the namespace's graph", err)}}
+	}
+	ix, err := callGraphIndex(namespace, graph)
+	if err != nil {
+		return &anomaly.CallOrder{Note: anomaly.CallOrderNote{Reason: readFailure("the namespace's graph", err)}}
+	}
+	workload := func(target string) string { return findingWorkload(ix, target) }
+	named := map[string]bool{}
+	for _, t := range targets {
+		if id := workload(t); id != "" {
+			named[id] = true
+		}
+	}
+	if len(named) < 2 {
+		return nil
+	}
+	src := &budgetedSource{netdropsSource: h.netdropsSource(), budget: budget}
+	var calls callgraph.Result
+	run(func(c context.Context) {
+		calls, err = h.callsIn(r.WithContext(c), namespace, graph, promWindow{Range: win.Length(), End: win.End}, src, false)
+	})
+	order := &anomaly.CallOrder{Workload: workload}
+	var unread []string
+	read := false
+	for _, st := range calls.Sources {
+		if st.Read {
+			read = true
+			continue
+		}
+		why := st.Source + ": " + st.Reason
+		if st.Detail != "" {
+			why += " (" + st.Detail + ")"
+		}
+		unread = append(unread, why)
+	}
+	switch {
+	case err != nil:
+		order.Note.Reason = readFailure("the call graph", err)
+	case !read:
+		order.Note.Reason = "the call graph read no source: " + strings.Join(unread, "; ")
+	case len(calls.Suspects) == 0:
+		order.Note.Reason = "the call graph shows no failing workload in the window"
+	default:
+		for _, sp := range calls.Suspects {
+			order.Suspects = append(order.Suspects, sp.ID)
+		}
+	}
+	return order
+}
+
+// findingWorkload is the graph ID of the workload a finding names: a Pod's (with or without a container), an issue's
+// object, or the workload a trace service is placed on. Shapes, reasons, containers alone and nodes name none ("").
+func findingWorkload(ix *callgraph.Index, target string) string {
+	if service, ok := strings.CutPrefix(target, "service "); ok {
+		return ix.ServiceWorkload(service)
+	}
+	if i := strings.Index(target, " container "); i >= 0 {
+		target = target[:i]
+	}
+	kind, name, ok := strings.Cut(target, "/")
+	if !ok || strings.ContainsAny(name, "/ ") {
+		return ""
+	}
+	return ix.WorkloadOf(kind, name)
+}
+
+// anomalyGraphOf is the namespace's Resource Graph, as the user (cached by the service like the Resource Graph's).
+func (h *Handler) anomalyGraphOf(ctx context.Context, namespace string) (map[string]interface{}, error) {
+	if h.anomalyGraph != nil {
+		return h.anomalyGraph(ctx, namespace)
+	}
+	return h.svc.GetResourceGraph(ctx, []string{namespace}, k8s.ResourceGraphOptions{})
+}
+
+// budgetedSource takes one of the narrowing's store queries for every Prometheus read and refuses a read past them.
+type budgetedSource struct {
+	netdropsSource
+	budget *anomalyBudget
+}
+
+var errBudgetSpent = errors.New(budgetSpent)
+
+func (b *budgetedSource) PrometheusLabels(ctx context.Context, label, selector string, since time.Duration, limit int) ([]string, error) {
+	if !b.budget.take(1) {
+		return nil, errBudgetSpent
+	}
+	return b.netdropsSource.PrometheusLabels(ctx, label, selector, since, limit)
+}
+
+func (b *budgetedSource) PrometheusQuery(ctx context.Context, query string) ([]k8s.PrometheusQueryResult, error) {
+	if !b.budget.take(1) {
+		return nil, errBudgetSpent
+	}
+	return b.netdropsSource.PrometheusQuery(ctx, query)
+}
+
+func (b *budgetedSource) PrometheusQueryAt(ctx context.Context, query string, at time.Time) ([]k8s.PrometheusQueryResult, error) {
+	src, ok := b.netdropsSource.(promAtSource)
+	if !ok {
+		return nil, errNoFixedWindow
+	}
+	if !b.budget.take(1) {
+		return nil, errBudgetSpent
+	}
+	return src.PrometheusQueryAt(ctx, query, at)
+}
+
+func (b *budgetedSource) PrometheusLabelsBetween(ctx context.Context, label, selector string, start, end time.Time, limit int) ([]string, error) {
+	src, ok := b.netdropsSource.(promAtSource)
+	if !ok {
+		return nil, errNoFixedWindow
+	}
+	if !b.budget.take(1) {
+		return nil, errBudgetSpent
+	}
+	return src.PrometheusLabelsBetween(ctx, label, selector, start, end, limit)
 }
 
 const budgetSpent = "this answer's store queries are spent (features.anomalyRank.maxQueries)"

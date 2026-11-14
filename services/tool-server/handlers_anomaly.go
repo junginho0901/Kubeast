@@ -16,7 +16,7 @@ import (
 const anomalyRankChars = 3000
 
 var (
-	anomalyFirstKeys = []string{"namespace", "workload", "window", "compared_with", "findings_total", "findings_note", "examples_note", "not_run", "normal", "store_queries"}
+	anomalyFirstKeys = []string{"namespace", "workload", "window", "compared_with", "findings_total", "findings_note", "examples_note", "call_order", "not_run", "normal", "store_queries"}
 	anomalyLastKeys  = []string{"findings"}
 )
 

@@ -208,12 +208,14 @@ type Index struct {
 	top       map[string]bool
 	byName    map[string][]string
 	byService map[string][]string
+	owner     map[string]string
 }
 
 // NewIndex reads the nodes and edges of one namespace's graph.
 func NewIndex(namespace string, nodes []Node, edges []GraphEdge) *Index {
-	ix := &Index{namespace: namespace, nodes: map[string]Node{}, top: map[string]bool{}, byName: map[string][]string{}, byService: map[string][]string{}}
-	owner := map[string]string{}
+	ix := &Index{namespace: namespace, nodes: map[string]Node{}, top: map[string]bool{}, byName: map[string][]string{}, byService: map[string][]string{},
+		owner: map[string]string{}}
+	owner := ix.owner
 	selects := map[string][]string{}
 	for _, n := range nodes {
 		ix.nodes[n.ID] = n
@@ -226,16 +228,7 @@ func NewIndex(namespace string, nodes []Node, edges []GraphEdge) *Index {
 			selects[e.Source] = append(selects[e.Source], e.Target)
 		}
 	}
-	top := func(id string) string {
-		for i := 0; i < 5; i++ { // Pod → ReplicaSet → Deployment, Pod → Job → CronJob
-			o, ok := owner[id]
-			if !ok || !workloadKinds[ix.nodes[o].Kind] {
-				return id
-			}
-			id = o
-		}
-		return id
-	}
+	top := ix.topOf
 	ids := make([]string, 0, len(ix.nodes))
 	for id := range ix.nodes {
 		ids = append(ids, id)
@@ -262,6 +255,42 @@ func NewIndex(namespace string, nodes []Node, edges []GraphEdge) *Index {
 		}
 	}
 	return ix
+}
+
+func (ix *Index) topOf(id string) string {
+	for i := 0; i < 5; i++ { // Pod → ReplicaSet → Deployment, Pod → Job → CronJob
+		o, ok := ix.owner[id]
+		if !ok || !workloadKinds[ix.nodes[o].Kind] {
+			return id
+		}
+		id = o
+	}
+	return id
+}
+
+// WorkloadOf is the graph ID of the workload an object of the namespace belongs to (a Pod's Deployment through its
+// ReplicaSet), "" when the object is not on the graph.
+func (ix *Index) WorkloadOf(kind, name string) string {
+	id := ix.id(kind, name)
+	if id == "" || !workloadKinds[kind] {
+		return ""
+	}
+	if t := ix.topOf(id); ix.top[t] {
+		return t
+	}
+	return ""
+}
+
+// ServiceWorkload is the graph ID of the workload a trace service name is placed on, as the call edges place it
+// without labels (a workload of that name, else the one workload a Service of that name selects); "" when none fits.
+func (ix *Index) ServiceWorkload(service string) string {
+	if ids := ix.byName[service]; len(ids) == 1 {
+		return ids[0]
+	}
+	if ids := ix.byService[service]; len(ids) == 1 {
+		return ids[0]
+	}
+	return ""
 }
 
 // End is one end of a call edge: a box of the graph (ID set), a workload of another namespace, a namespace alone (a
@@ -704,10 +733,12 @@ type SourceState struct {
 
 // Result is the calls part of a graph answer. Suspects and Paths come before the edges, so a cut answer keeps them.
 type Result struct {
-	Available bool          `json:"available"`
-	Reason    string        `json:"reason,omitempty"`
-	Range     string        `json:"range,omitempty"`
-	Sources   []SourceState `json:"sources"`
+	Available bool   `json:"available"`
+	Reason    string `json:"reason,omitempty"`
+	Range     string `json:"range,omitempty"`
+	// Window: the fixed window read (start and end asked), the range ending at its end; without it the range ends now.
+	Window  *Window       `json:"window,omitempty"`
+	Sources []SourceState `json:"sources"`
 	// Paths: cause → … → symptom, each a list of graph IDs (the first calls nothing failing, each next one calls the one before).
 	Paths [][]string `json:"paths"`
 	// NoStart: why Paths is empty although workloads fail (NoStartCycle).
@@ -718,6 +749,12 @@ type Result struct {
 	EdgesTotal    int    `json:"edges_total"`
 	Truncated     bool   `json:"truncated,omitempty"`
 	Edges         []Edge `json:"edges"`
+}
+
+// Window is a fixed window as RFC3339 times.
+type Window struct {
+	Start string `json:"start"`
+	End   string `json:"end"`
 }
 
 // Off is the answer of an install with features.callGraph off: nothing read.

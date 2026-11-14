@@ -3,10 +3,10 @@ package handler
 import (
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
-	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netdrops"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -46,7 +46,8 @@ func resourceGraphOptions(w http.ResponseWriter, q url.Values) (k8s.ResourceGrap
 
 // GetNamespaceResourceGraph handles GET /api/v1/namespaces/{namespace}/resource-graph
 // Backwards-compatible single-namespace endpoint (the AI tool resource_graph), with the same options.
-// include=calls (with range, 1m–24h, default 1h) adds calls: who calls whom (resourceGraphCalls, features.callGraph).
+// include=calls (with range, 1m–24h back from now, default 1h, or a fixed start and end, RFC3339) adds calls: who calls
+// whom (callsIn, features.callGraph).
 func (h *Handler) GetNamespaceResourceGraph(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
@@ -63,7 +64,8 @@ func (h *Handler) GetNamespaceResourceGraph(w http.ResponseWriter, r *http.Reque
 		}
 		calls = true
 	}
-	if _, err := netdrops.ParseRange(q.Get("range")); calls && err != nil {
+	win, err := callWindowOf(q.Get("range"), q.Get("start"), q.Get("end"), time.Now())
+	if calls && err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -73,7 +75,7 @@ func (h *Handler) GetNamespaceResourceGraph(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if calls {
-		res, err := h.resourceGraphCalls(r, namespace, data, q.Get("range"))
+		res, err := h.callsIn(r, namespace, data, win, h.netdropsSource(), true)
 		if err != nil {
 			h.handleError(w, err)
 			return

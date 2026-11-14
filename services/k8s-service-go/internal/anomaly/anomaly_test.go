@@ -1,6 +1,7 @@
 package anomaly
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -279,5 +280,53 @@ func TestAssemble_RanksNewThenRatioThenValueAndCapsAtTen(t *testing.T) {
 	}
 	if res.ComparedWith.End != res.Window.Start || res.StoreQueries != 4 {
 		t.Fatalf("%+v", res)
+	}
+}
+
+func TestCallOrderMovesTheSuspectsWithinTheirPlaces(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	w := Window{Start: time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC), End: time.Date(2026, 11, 15, 1, 0, 0, 0, time.UTC)}
+	results := []CheckResult{
+		{Check: CheckRestarts, Findings: []Finding{
+			{Check: CheckRestarts, Target: "Pod/web-1", Verdict: VerdictAnomalous, Now: f(8), Ratio: f(8)},
+			{Check: CheckRestarts, Target: "Pod/api-1", Verdict: VerdictAnomalous, Now: f(3), Ratio: f(3)},
+		}},
+		{Check: CheckCrashReasons, Findings: []Finding{{Check: CheckCrashReasons, Target: "OOMKilled", Verdict: VerdictAnomalous, Now: f(2), Ratio: f(4)}}},
+		{Check: CheckTraceErrors, Findings: []Finding{{Check: CheckTraceErrors, Target: "service web-svc", Verdict: VerdictAnomalous, Now: f(0.3), Ratio: f(6)}}},
+	}
+	workloads := map[string]string{"Pod/web-1": "D/web", "service web-svc": "D/web", "Pod/api-1": "D/api"}
+	order := &CallOrder{Suspects: []string{"D/api", "D/web"}, Workload: func(t string) string { return workloads[t] }}
+	before := Assemble("shop", nil, w, results, 0)
+	got := AssembleWith("shop", nil, w, results, 0, order)
+	targets := func(r Result) string {
+		var out []string
+		for _, f := range r.Findings {
+			out = append(out, f.Target)
+		}
+		return strings.Join(out, ",")
+	}
+	// by the counts: web 8×, web-svc 6×, OOMKilled 4×, api 3×; api takes the first place a suspect held, OOMKilled keeps its own
+	if targets(before) != "Pod/web-1,service web-svc,OOMKilled,Pod/api-1" {
+		t.Fatalf("2-a order %s", targets(before))
+	}
+	if targets(got) != "Pod/api-1,Pod/web-1,OOMKilled,service web-svc" {
+		t.Fatalf("call order %s", targets(got))
+	}
+	if got.CallOrder == nil || !got.CallOrder.Applied || got.CallOrder.Moved != 3 || strings.Join(got.CallOrder.Suspects, ",") != "D/api,D/web" {
+		t.Fatalf("%+v", got.CallOrder)
+	}
+	if before.CallOrder != nil {
+		t.Fatal("call_order without an order")
+	}
+
+	// no suspects: the order stays and the note says why; nil order: the answer of Assemble, byte for byte
+	none := AssembleWith("shop", nil, w, results, 0, &CallOrder{Workload: order.Workload, Note: CallOrderNote{Reason: "no failing workload"}})
+	if targets(none) != targets(before) || none.CallOrder.Applied || none.CallOrder.Reason != "no failing workload" {
+		t.Fatalf("%s %+v", targets(none), none.CallOrder)
+	}
+	a, _ := json.Marshal(before)
+	b, _ := json.Marshal(AssembleWith("shop", nil, w, results, 0, nil))
+	if string(a) != string(b) || strings.Contains(string(a), "call_order") {
+		t.Fatalf("%s\n%s", a, b)
 	}
 }

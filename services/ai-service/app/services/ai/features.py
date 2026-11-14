@@ -15,7 +15,7 @@ import time
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from app.services.ai import screen_permissions
-from app.services.ai.tools import CALLS_DESCRIPTION, CALLS_PARAM, CALLS_SINCE_PARAM
+from app.services.ai.tools import CALLS_DESCRIPTION, CALLS_PARAM, CALLS_SINCE_PARAM, CALLS_WINDOW_PARAMS
 from app.services.investigation import settings as investigation_settings
 from app.services.tool_whitelists import WRITE_TOOL_NAMES
 
@@ -123,7 +123,7 @@ GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
 # tool name → (its parameters, the words of its description about them, does this cluster serve them): a cluster that
 # does not, or features unknown, gets the definition without them — the model is not handed what can only answer "off".
 PARAM_GATES: Dict[str, tuple[tuple[str, ...], str, Callable[[Dict[str, Any], str], bool]]] = {
-    "resource_graph": ((CALLS_PARAM, CALLS_SINCE_PARAM), CALLS_DESCRIPTION, _call_graph_on),
+    "resource_graph": ((CALLS_PARAM, CALLS_SINCE_PARAM, *CALLS_WINDOW_PARAMS), CALLS_DESCRIPTION, _call_graph_on),
 }
 
 # tool name → (scope, the permission that names it) of the screen's route. Without what the route asks the call could
