@@ -22,6 +22,7 @@
   - The conversation follows new text only while you are at the bottom. When you scroll up, it stays put and a "Jump to latest" button appears.
   - Tables in answers have horizontal and vertical lines, and answers have the Kubeast icon next to them.
 - **Multi-round Tool Calling** — the AI views and changes K8s with allowlisted tools, for up to 10 rounds. Read, write and admin tools are **gated by the user's permissions (JWT)**.
+  - With `ai.refuseRepeatedReads` (off by default), a read the model makes again with the same tool and arguments in one answer, less than 60 seconds after the first answered, is not run: the model is told at which step it already has the result and to change the arguments to read anything new. Its `ai.tool.call` row has `status: repeated` and `repeat_of` (that step). A call that failed or was refused can be made again.
   - The 52 read tools include:
     - `k8s_find_resource`, which finds multiple kinds and namespaces at once by name fragment or label
     - `k8s_explain`, which asks for the API schema

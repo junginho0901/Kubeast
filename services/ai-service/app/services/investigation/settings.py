@@ -37,6 +37,8 @@ class InvestigationSettings:
     model: str = ""
     language: str = "en"
     console_url: str = ""
+    # The report's causes held to the run's tool calls before it is kept (investigation/evidence.py).
+    evidence_check: bool = False
     token_url: str = "http://auth-service:8004/api/v1/auth/internal/investigator-token"
     internal_token: str = field(default="", repr=False)
     # A firing inbox alert with no notification for this long shows "status unknown" (Alertmanager resends a
@@ -70,6 +72,7 @@ def load() -> InvestigationSettings:
         model=os.getenv("ALERT_INVESTIGATION_MODEL", "").strip(),
         language=(os.getenv("ALERT_INVESTIGATION_LANGUAGE", "en").strip().lower() or "en"),
         console_url=os.getenv("ALERT_INVESTIGATION_CONSOLE_URL", "").strip().rstrip("/"),
+        evidence_check=os.getenv("ALERT_INVESTIGATION_EVIDENCE_CHECK", "false").strip().lower() == "true",
         token_url=os.getenv(
             "AUTH_INVESTIGATOR_TOKEN_URL", "http://auth-service:8004/api/v1/auth/internal/investigator-token"
         ).strip(),

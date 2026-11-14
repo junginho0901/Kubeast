@@ -641,3 +641,24 @@ tests:
       - equal:
           path: data.CLUSTER_STORE_ALLOWED_HOSTS
           value: prom.monitoring.svc,.corp.example.com
+
+  - it: keeps the repeated read refusal and the investigation's evidence check off by default
+    asserts:
+      - equal:
+          path: data.AI_REFUSE_REPEATED_READS
+          value: "false"
+      - equal:
+          path: data.ALERT_INVESTIGATION_EVIDENCE_CHECK
+          value: "false"
+
+  - it: passes the repeated read refusal and the evidence check as they are set
+    set:
+      ai.refuseRepeatedReads: true
+      features.alertInvestigation.evidenceCheck: true
+    asserts:
+      - equal:
+          path: data.AI_REFUSE_REPEATED_READS
+          value: "true"
+      - equal:
+          path: data.ALERT_INVESTIGATION_EVIDENCE_CHECK
+          value: "true"

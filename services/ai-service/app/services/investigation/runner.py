@@ -7,7 +7,10 @@ same path the chat uses — tool-server checks the token's ai.tool.* rights and
 namespace, the cluster sees kubeast:investigator. At most max_steps model calls;
 the last one gets no tools, so it must answer (as HolmesGPT does) — the loop is
 app.services.ai.tool_turn, which hands it to Claude Code on a Claude subscription.
-The whole run is bounded by timeout_seconds.
+The whole run is bounded by timeout_seconds. With ai.refuseRepeatedReads a read
+repeated within the run is not run again (app/services/ai/repeats.py); with
+evidence_check the report's causes are held to the run's calls before it is kept
+(investigation/evidence.py).
 """
 
 from __future__ import annotations
@@ -30,6 +33,8 @@ from app.services.ai.debug_dump import safe_error
 from app.services.ai.model_errors import classify
 from app.services.audit_target import tool_target
 from app.services.audit_writer import audit_ready, fail_closed_enabled, write_audit
+from app.services.ai import repeats as repeats_mod
+from app.services.investigation import evidence
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import settings as inv_settings
 from app.services.investigation import inbox, skip_reasons, store
@@ -132,6 +137,43 @@ def used_fields(progress: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+async def verify_report(service, messages: list[dict[str, Any]], answer: str, reads: list, row, cfg, *, remaining,
+                        usage: dict[str, Any], progress: dict[str, Any]) -> tuple[str, int]:
+    """The evidence check (investigation/evidence.py): (the report to keep, the model calls it added — 0 or 1).
+
+    A cause that no call of the run shows, or a report without its rca block, gets one more model call without tools
+    asking for the report again; its answer replaces the first only when it ends with a valid block. What still fails
+    is listed under the report. The block is taken out of the kept report. A second call that fails or finds the time
+    up leaves the first answer with that list."""
+    from app.services.ai.tool_turn import answer_once
+
+    report, block, status = evidence.split(answer)
+    causes, problems = evidence.check(block, reads, row.starts_at) if block is not None else (0, [])
+    summary: dict[str, Any] = {"block": status, "causes": causes, "unsupported": len(problems), "asked_again": False}
+    if status == "ok" and not problems:
+        progress["evidence"] = {**summary, "block_after": status, "causes_after": causes, "unverified": 0}
+        return report, 0
+    summary["asked_again"] = True
+    again = messages + [{"role": "assistant", "content": answer},
+                        {"role": "user", "content": evidence.ask_again(status, problems, reads)}]
+    try:
+        second = await answer_once(service, again, remaining=remaining, lane="investigation", usage=usage)
+    except Exception as e:  # the model or the clock: the first answer stands, with what was not verified
+        log.warning("investigation %s: the evidence check's second call failed: %s", row.id, clean_error(e))
+        second = ""
+    if second:
+        report2, block2, status2 = evidence.split(second)
+        if block2 is not None:
+            report, status = report2, status2
+            causes, problems = evidence.check(block2, reads, row.starts_at)
+    # unverified: the causes listed under the report; None when the kept report has no block to check
+    progress["evidence"] = {**summary, "block_after": status, "causes_after": causes,
+                            "unverified": len(problems) if status == "ok" else None}
+    if status == "ok" and not problems:
+        return report, 1
+    return report + evidence.note(status, problems, cfg.language), 1
+
+
 async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """Run one investigation; return the fields to store. Raises on failure — `progress` then holds what it had used
     (the provider, the model and the model calls' usage), for used_fields."""
@@ -162,18 +204,28 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     from app.services.ai import features as feature_gate
     tools = await feature_gate.gate_tools(readonly_tool_filter(service._get_tools_definition()), service)
     context = ToolContext(session_id=f"investigation:{row.id}")
+    system = inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language)
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language)},
+        {"role": "system", "content": system + (evidence.INSTRUCTION if cfg.evidence_check else "")},
         {"role": "user", "content": inv_prompt.alert_message(cluster=row.cluster, alert=alert_view(row))},
     ]
     tool_log: list[dict[str, Any]] = []
+    repeats = repeats_mod.RepeatGuard() if repeats_mod.enabled() else None
+    # What each call returned to the model, by its place in tool_log, for the evidence check; kept only while the run lasts.
+    reads: Optional[list[evidence.Read]] = [] if cfg.evidence_check else None
 
     async def run_tool(name: str, args: dict, step: int) -> str:
         entry: dict[str, Any] = {"tool": name, "args": args, "step": step}
         ran = False
+        seen = None
         if name not in READONLY_TOOL_NAMES:
             result = json.dumps({"error": f"'{name}' is not a read-only tool; investigations only read"})
             entry["error"] = "not a read-only tool"
+        elif repeats is not None and (seen := repeats.earlier(name, args)) is not None:
+            # The same read answered earlier in this run: not run again, the model is told where its answer is.
+            access_mod.reset(service)
+            result = repeats_mod.refusal(seen, repeats.age(seen), scope="investigation")
+            entry["repeat_of"] = seen.step
         elif not (await audit_ready())[0]:
             result = json.dumps({"status": "audit_unavailable"})
             entry["error"] = "audit unavailable"
@@ -199,6 +251,11 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
             if (requests := access_mod.requests_of_call(service)) is not None:
                 entry["requests"] = requests
         tool_log.append(entry)
+        number = len(tool_log)  # the call's number, before another call can append
+        read = None
+        if reads is not None:
+            read = evidence.Read(name, args, same_as=seen.call if seen is not None else None)
+            reads.append(read)
         target = tool_target(name, args)
         stored = await write_audit(
             action="ai.tool.call",
@@ -216,6 +273,8 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
                 "redacted": getattr(service.tool_server, "last_redacted", None),
                 "access": entry.get("access"),
                 "requests": entry.get("requests"),
+                # the iteration of the call this one repeated (ai.refuseRepeatedReads): not run, nothing read
+                **({"repeat_of": seen.step} if seen is not None else {}),
             },
             result="failure" if entry.get("error") else "success",
             error=entry.get("error"),
@@ -223,19 +282,31 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         if stored is False and ran and fail_closed_enabled():
             # As on the screens, a read nobody could find later gives no answer.
             entry["error"] = "audit unavailable"
-            return json.dumps({"status": "audit_unavailable"})
-        return result
+            result = json.dumps({"status": "audit_unavailable"})
+        if repeats is not None and ran and not entry.get("error"):
+            repeats.note(name, args, step=step, call=number)
+        if read is None:
+            return result
+        read.failed = bool(entry.get("error")) or (not ran and seen is None)
+        read.text = result if ran and not read.failed else ""
+        return evidence.tag(number, result)
 
+    final_message = inv_prompt.final_step_message() + (evidence.FINAL_NOTE if reads is not None else "")
     turn = await run_tool_turn(service, messages, tools, run_tool, max_steps=cfg.max_steps,
-                               final_message=inv_prompt.final_step_message(), remaining=remaining, lane="investigation",
+                               final_message=final_message, remaining=remaining, lane="investigation",
                                usage=progress["usage"])
     usage = turn.usage
     if not turn.answer:
         raise InvestigationError("the model returned no report")
+    report, steps = turn.answer, turn.steps
+    if reads is not None:
+        report, asked = await verify_report(service, messages, turn.answer, reads, row, cfg, remaining=remaining,
+                                            usage=usage, progress=progress)
+        steps += asked
     return {
-        "report": turn.answer,
+        "report": report,
         "tool_calls": tool_log,
-        "iterations": turn.steps,
+        "iterations": steps,
         "provider": service.provider or "",
         "model": service.model or "",
         "prompt_tokens": usage["prompt_tokens"] if usage["seen"] else None,
@@ -294,6 +365,8 @@ async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:
             "link": link,
             # the person who asked for it in the Alerts inbox (ai.investigation.request); None for the webhook's
             "requested_by": getattr(row, "requested_by", "") or None,
+            # features.alertInvestigation.evidenceCheck: what the check of the report's causes found (counts only)
+            **({"evidence": progress["evidence"]} if progress.get("evidence") else {}),
         },
     )
     log.info("investigation %s %s in %dms", row.id, status, duration_ms)
