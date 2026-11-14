@@ -50,6 +50,7 @@ describe('Gateway Policies, told to the floating chat', () => {
   it('names a refused kind as refused, as its chip says "no permission", not as 0', () => {
     const { html, layer } = open(answer)
     expect(html).toContain('no permission')
+    expect(html).toMatch(/data-testid="policy-kind-refused"[^>]*>[^]*?BackendTrafficPolicy/)
     expect(layer.data?.forbidden_kinds).toEqual(['BackendTrafficPolicy'])
     expect(layer.data?.stats?.kinds).toContain('BackendTrafficPolicy (builtin, no permission)')
     expect(layer.data?.stats?.kinds).not.toContain('BackendTrafficPolicy (builtin, 0)')
@@ -59,6 +60,7 @@ describe('Gateway Policies, told to the floating chat', () => {
   it('names a kind whose list failed with the reason its chip shows', () => {
     const { html, layer } = open(answer)
     expect(html).toContain('context deadline exceeded')
+    expect(html).toMatch(/data-testid="policy-kind-failed"[^>]*>[^]*?ClientTrafficPolicy/)
     expect(layer.data?.failed_kinds).toEqual([{ kind: 'ClientTrafficPolicy', reason: TIMEOUT }])
     expect(layer.data?.stats?.kinds).toContain('ClientTrafficPolicy (builtin, not read)')
     expect(layer.summary).toContain('불러오지 못한 종류: ClientTrafficPolicy')
