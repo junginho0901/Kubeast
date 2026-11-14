@@ -213,7 +213,7 @@ With `secrets.existingSecret`, Redis keeps one password (`REDIS_PASSWORD`) for e
 
 | User | Can | Cannot |
 |---|---|---|
-| `k8s-service` | Keys and channels whose names start with `kubeast:`. Reads, writes and deletes of single keys, `SCAN` for the deletes by pattern, the hash commands (`HGET`, `HGETALL`, `HSET`, `HSETNX`, `HINCRBY`, `HDEL`), `MULTI`/`EXEC`, `PUBLISH`/`SUBSCRIBE`, `PING`, `SELECT` (`REDIS_DB`) | Any other key or channel. `FLUSHALL`, `FLUSHDB`, `KEYS`, `CONFIG`, `DEBUG`, `ACL`, `MONITOR`, `EVAL`, `SCRIPT` and every command not listed |
+| `k8s-service` | Keys and channels whose names start with `kubeast:`. Reads, writes and deletes of single keys, `SCAN` for the deletes by pattern, `PUBLISH`/`SUBSCRIBE` (the cluster change notices), `PING`, `SELECT` (`REDIS_DB`) | Any other key or channel. `FLUSHALL`, `FLUSHDB`, `KEYS`, `CONFIG`, `DEBUG`, `ACL`, `MONITOR`, `EVAL`, `SCRIPT` and every command not listed |
 | `probe` | `PING`, for the readiness and liveness probes | Everything else |
 | `default` | Nothing: it is off | A connection that has not signed in as a user above gets `NOAUTH` for every command |
 

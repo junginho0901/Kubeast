@@ -37,8 +37,8 @@ ${k8s_service} and ${probe} stand, so no password is in this text, the pod spec 
 - default: off and allowed nothing, so a connection that has not signed in as a user below gets NOAUTH. AUTH and
   HELLO, which sign in, take no rule.
 - k8s-service: keys and channels under kubeast: only, and the commands of internal/cache and internal/clustersync —
-  single-key reads, writes and deletes, SCAN for the pattern deletes, the hash commands, MULTI/EXEC, publish and
-  subscribe, PING and SELECT (REDIS_DB). go-redis's CLIENT SETINFO and CLIENT MAINT_NOTIFICATIONS on connect are
+  single-key reads, writes and deletes, SCAN for the pattern deletes, publish and subscribe (the cluster change
+  notices), PING and SELECT (REDIS_DB). The cluster versions are in the database, so no hash or MULTI/EXEC. go-redis's CLIENT SETINFO and CLIENT MAINT_NOTIFICATIONS on connect are
   refused, which it ignores. No FLUSHALL, FLUSHDB, KEYS, CONFIG, DEBUG, ACL, MONITOR, EVAL or SCRIPT.
 - probe: PING, for the readiness and liveness probes.
 Every command named must exist in the image's Valkey, or Valkey refuses the file and does not start. A command the
@@ -60,7 +60,7 @@ default limit. The quantity is bytes or a number with a Kubernetes suffix (Ki Mi
 
 {{- define "kubeast.redisUsersAcl" -}}
 user default off resetkeys resetchannels -@all
-user k8s-service on #${k8s_service} resetkeys ~kubeast:* resetchannels &kubeast:* -@all +ping +select +get +set +del +unlink +scan +hget +hgetall +hset +hsetnx +hincrby +hdel +multi +exec +discard +publish +subscribe +unsubscribe
+user k8s-service on #${k8s_service} resetkeys ~kubeast:* resetchannels &kubeast:* -@all +ping +select +get +set +del +unlink +scan +publish +subscribe +unsubscribe
 user probe on #${probe} resetkeys resetchannels -@all +ping
 {{- end -}}
 

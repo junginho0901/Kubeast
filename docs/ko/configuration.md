@@ -210,7 +210,7 @@ multicluster:
 
 | 사용자 | 할 수 있는 것 | 할 수 없는 것 |
 |---|---|---|
-| `k8s-service` | 이름이 `kubeast:`로 시작하는 키와 채널. 키 하나씩 읽기·쓰기·지우기, 패턴으로 지울 때 쓰는 `SCAN`, 해시 명령(`HGET`, `HGETALL`, `HSET`, `HSETNX`, `HINCRBY`, `HDEL`), `MULTI`/`EXEC`, `PUBLISH`/`SUBSCRIBE`, `PING`, `SELECT`(`REDIS_DB`) | 그 밖의 키와 채널. `FLUSHALL`, `FLUSHDB`, `KEYS`, `CONFIG`, `DEBUG`, `ACL`, `MONITOR`, `EVAL`, `SCRIPT`와 목록에 없는 모든 명령 |
+| `k8s-service` | 이름이 `kubeast:`로 시작하는 키와 채널. 키 하나씩 읽기·쓰기·지우기, 패턴으로 지울 때 쓰는 `SCAN`, `PUBLISH`/`SUBSCRIBE`(클러스터 바뀜 알림), `PING`, `SELECT`(`REDIS_DB`) | 그 밖의 키와 채널. `FLUSHALL`, `FLUSHDB`, `KEYS`, `CONFIG`, `DEBUG`, `ACL`, `MONITOR`, `EVAL`, `SCRIPT`와 목록에 없는 모든 명령 |
 | `probe` | readiness·liveness 프로브의 `PING` | 그 밖의 모든 것 |
 | `default` | 없음: 꺼져 있습니다 | 위 사용자로 로그인하지 않은 연결은 모든 명령에 `NOAUTH`를 받습니다 |
 

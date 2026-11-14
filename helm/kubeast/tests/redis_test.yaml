@@ -41,7 +41,7 @@ tests:
           pattern: '(?m)^user default off resetkeys resetchannels -@all$'
       - matchRegex:
           path: spec.template.spec.initContainers[0].args[0]
-          pattern: '(?m)^user k8s-service on #\$\{k8s_service\} resetkeys ~kubeast:\* resetchannels &kubeast:\* -@all \+ping \+select \+get \+set \+del \+unlink \+scan \+hget \+hgetall \+hset \+hsetnx \+hincrby \+hdel \+multi \+exec \+discard \+publish \+subscribe \+unsubscribe$'
+          pattern: '(?m)^user k8s-service on #\$\{k8s_service\} resetkeys ~kubeast:\* resetchannels &kubeast:\* -@all \+ping \+select \+get \+set \+del \+unlink \+scan \+publish \+subscribe \+unsubscribe$'
       - matchRegex:
           path: spec.template.spec.initContainers[0].args[0]
           pattern: '(?m)^user probe on #\$\{probe\} resetkeys resetchannels -@all \+ping$'
