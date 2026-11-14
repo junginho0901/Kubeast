@@ -1,6 +1,7 @@
 """The install-wide Claude Code limit (app/services/claude_code_slots.py) on sqlite: two DatabaseServices on one file
 stand for two replicas. tests/test_claude_code_slots_postgres.py runs the same against PostgreSQL."""
 import asyncio
+import json
 import sys
 
 import pytest
@@ -206,3 +207,112 @@ async def test_with_the_provider_off_nothing_reads_the_slots(monkeypatch):
     with pytest.raises(claude_code.ClaudeCodeError, match="off"):
         await claude_code.complete([{"role": "user", "content": "x"}], model="m", token="t")
 
+
+# --- waiting for a slot: at most queue_wait(), said on the chat stream, busy past it, left at once on Stop ---------
+
+def chat_turn():
+    """A chat turn's SSE events as dicts, through the real ClaudeCodeChat.turn."""
+    async def run_tool(name, args, turn, call_id=None):
+        return [], "[]"
+
+    async def events():
+        gen = claude_code.ClaudeCodeChat(model="m", token="t").turn(
+            messages=[{"role": "user", "content": "x"}], tools=[], run_tool=run_tool, out=claude_code.TurnResult())
+        return [json.loads(e.removeprefix("data: ").strip()) for e in [x async for x in gen]]
+    return events()
+
+
+@pytest.fixture
+def one_slot(on, monkeypatch, servers):
+    """The provider on with one chat slot on this server and in the install, its rows in servers[0]."""
+    async def database():
+        return servers[0]
+
+    monkeypatch.setattr(claude_code, "_database", database)
+    monkeypatch.setattr(claude_code, "_semaphores", {})
+    monkeypatch.setattr(claude_code.settings, "AI_CLAUDE_CODE_MAX_CONCURRENT", 1, raising=False)
+    monkeypatch.setattr(claude_code.settings, "AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL", 1, raising=False)
+    return on
+
+
+async def test_a_turn_that_waits_says_so_then_runs_when_the_slot_frees(one_slot):
+    first = asyncio.create_task(claude_code.complete([{"role": "user", "content": "x"}], model="m", token="t"))
+    await asyncio.sleep(0.02)
+    events = await asyncio.wait_for(chat_turn(), 5)
+    await first
+    assert events[0] == {"queued": True} and events[1] == {"queued": False}
+    assert one_slot.state["max_running"] == 1 and len(one_slot.state["options"]) == 2
+
+
+async def test_a_turn_with_a_free_slot_says_nothing_of_waiting(one_slot):
+    events = await chat_turn()
+    assert not any("queued" in e for e in events)
+
+
+async def test_a_turn_that_waits_past_the_queue_wait_ends_busy(one_slot, monkeypatch):
+    monkeypatch.setattr(claude_code, "queue_wait", lambda: 0.05)
+    first = asyncio.create_task(claude_code.complete([{"role": "user", "content": "x"}], model="m", token="t"))
+    await asyncio.sleep(0.02)
+    with pytest.raises(claude_code.ClaudeCodeBusy, match="Claude Code is busy; ask again in a moment"):
+        await asyncio.wait_for(chat_turn(), 5)
+    await first
+    assert len(one_slot.state["options"]) == 1  # the busy turn never started Claude Code
+
+
+async def test_a_slot_another_server_holds_past_the_queue_wait_ends_busy_and_stays_its(one_slot, monkeypatch, servers):
+    monkeypatch.setattr(claude_code, "queue_wait", lambda: 0.1)
+    assert await claude_code_slots.take(servers[1], "chat", 1, "other-server") == 0
+    with pytest.raises(claude_code.ClaudeCodeBusy):
+        await asyncio.wait_for(claude_code.complete([{"role": "user", "content": "x"}], model="m", token="t"), 5)
+    assert [owner for *_, owner in await rows(servers[0])] == ["other-server"]
+    assert not claude_code._sem("chat").locked()  # this server's slot was given back
+
+
+async def test_stop_while_waiting_leaves_the_queue_at_once_and_takes_no_slot(one_slot, servers):
+    assert await claude_code_slots.take(servers[1], "chat", 1, "other-server") == 0
+    gen = claude_code.ClaudeCodeChat(model="m", token="t").turn(
+        messages=[{"role": "user", "content": "x"}], tools=[], run_tool=None, out=claude_code.TurnResult())
+    assert json.loads((await gen.__anext__()).removeprefix("data: ")) == {"queued": True}
+    await gen.aclose()  # the user pressed Stop
+    await asyncio.sleep(0.1)  # longer than a poll: a run still waiting would take the slot freed below
+    await claude_code_slots.release(servers[1], "chat", "other-server")
+    await asyncio.sleep(0.1)
+    assert [owner for *_, owner in await rows(servers[0])] == [""]
+    assert not claude_code._sem("chat").locked() and one_slot.state["options"] == []
+
+
+async def test_stop_while_waiting_for_this_servers_slot_leaves_it_to_the_next(one_slot):
+    first = asyncio.create_task(claude_code.complete([{"role": "user", "content": "x"}], model="m", token="t"))
+    await asyncio.sleep(0.02)
+    gen = claude_code.ClaudeCodeChat(model="m", token="t").turn(
+        messages=[{"role": "user", "content": "x"}], tools=[], run_tool=None, out=claude_code.TurnResult())
+    assert json.loads((await gen.__anext__()).removeprefix("data: ")) == {"queued": True}
+    await gen.aclose()
+    await first
+    await claude_code.complete([{"role": "user", "content": "x"}], model="m", token="t")  # the slot is free again
+    assert len(one_slot.state["options"]) == 2
+
+
+def test_busy_is_its_own_kind_of_refusal_with_its_catalog_key():
+    from app.services.ai import model_errors
+
+    refusal = model_errors.classify(claude_code.ClaudeCodeBusy())
+    assert (refusal.kind, refusal.key, refusal.blocks) == ("busy", "claudeCodeBusy", False)
+    assert model_errors.classify(claude_code.ClaudeCodeError("Claude Code failed: busy")).kind != "busy"
+
+
+def test_the_chat_error_for_busy_is_the_catalogued_text():
+    from types import SimpleNamespace
+
+    from app.services.ai import streaming
+
+    event = streaming.model_error(SimpleNamespace(provider="claude-code"), claude_code.ClaudeCodeBusy())
+    assert event == {"error": "Claude Code is busy; ask again in a moment.", "error_key": "claudeCodeBusy",
+                     "error_args": {"provider": "Claude subscription"}}
+
+
+def test_the_queue_wait_defaults_to_a_minute(monkeypatch):
+    monkeypatch.setattr(claude_code.settings, "AI_CLAUDE_CODE_QUEUE_WAIT", None, raising=False)
+    assert claude_code.queue_wait() == 60
+    monkeypatch.setattr(claude_code.settings, "AI_CLAUDE_CODE_QUEUE_WAIT", 0, raising=False)
+    assert claude_code.queue_wait() == 0

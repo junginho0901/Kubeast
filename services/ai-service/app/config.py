@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     AI_CLAUDE_CODE_MAX_CONCURRENT: int = 2
     # Runs of the chat across every replica (claude_code_slots table); 0 = AI_CLAUDE_CODE_MAX_CONCURRENT.
     AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL: int = 0
+    # Seconds a chat run waits for those slots before it ends as busy.
+    AI_CLAUDE_CODE_QUEUE_WAIT: int = 60
     AI_CLAUDE_CODE_TURN_TIMEOUT: int = 300
     AI_CLAUDE_CODE_MAX_TURNS: int = 10
 
