@@ -1,0 +1,45 @@
+{
+ "id": "18_moved_namespace_old_address",
+ "title": "A service moved to another namespace, the frontend still calls its old in-cluster address",
+ "group": "hidden_cause",
+ "cluster": "self",
+ "namespace": "shop-18",
+ "question": "self 클러스터 shop-18에서 로그인이 안 된대. 로그인하면 다시 로그인 화면이 나온대. 원인이 뭐야?",
+ "question_vague": "self 클러스터 shop-18 사이트에 문제가 있다는 말이 있어. 원인 찾아줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "members-18"
+  ],
+  [
+   "web-settings",
+   "ACCOUNTS_INTERNAL_URL",
+   "주소",
+   "address",
+   "URL"
+  ]
+ ],
+ "tools": [],
+ "setup_cmds": [
+  "kubectl create namespace members-18 --dry-run=client -o yaml | kubectl apply -f - && kubectl label namespace members-18 kubeast.io/ai-eval=true --overwrite && kubectl -n members-18 apply -f $CASE_DIR/accounts.yaml",
+  "kubectl -n $NS apply -f $CASE_DIR/accounts.yaml"
+ ],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/web deploy/accounts deploy/visitor --timeout=10s && kubectl -n members-18 wait --for=condition=Available deploy/accounts --timeout=10s && kubectl -n $NS logs deploy/visitor --since=15s | grep -q 'account page shown'",
+ "wait_seconds": 300,
+ "baseline_seconds": 180,
+ "inject_cmds": [
+  "kubectl -n members-18 delete deploy/accounts svc/accounts --wait=true"
+ ],
+ "inject_wait": "kubectl -n $NS logs deploy/visitor --since=20s | grep -q 'asks to sign in again'",
+ "inject_wait_seconds": 180,
+ "ask_after_seconds": [300],
+ "undo_cmds": [
+  "kubectl -n members-18 apply -f $CASE_DIR/accounts.yaml"
+ ],
+ "cleanup_cmds": [
+  "kubectl delete namespace members-18 --ignore-not-found --wait=false"
+ ],
+ "cooldown_seconds": 30,
+ "hidden": true,
+ "timeout_seconds": 420
+}

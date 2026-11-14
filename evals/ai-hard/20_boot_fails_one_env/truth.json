@@ -1,0 +1,27 @@
+{
+ "id": "20_boot_fails_one_env",
+ "control": false,
+ "symptom": "every request to shop-web fails (no ready pods); its three pods restart in a loop; preview-web on the same release answers",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "Deployment/shop-20/shop-web",
+   "kind": "rollout",
+   "accept_resources": ["shop-web-release-2-4-0", "^(deployment|replicaset|pod)/(shop-20/)?shop-web(-[a-z0-9]{6,10})?(-[a-z0-9]{5})?$", "^shop-web$"],
+   "accept_kinds": ["crash", "config_change"]
+  }
+ ],
+ "path": [
+  {"resource": "Deployment/shop-20/shop-web", "role": "cause", "required": true, "accept": ["shop-web", "2\\.4\\.0"], "note": "rolled to release 2.4.0, which reads asset_host; production.conf has none (staging.conf has one)"},
+  {"resource": "ReplicaSet/shop-20/shop-web-<new>", "role": "via", "required": false, "accept": ["replicaset/(shop-20/)?shop-web"], "note": "Recreate: the old pods were gone before the new ones failed"},
+  {"resource": "Service/shop-20/shop-web", "role": "symptom", "required": true, "accept": ["service/(shop-20/)?shop-web", "visitor", "endpoint"]}
+ ],
+ "also_ok": ["ConfigMap/shop-20/shop-web-config"],
+ "decoys": [
+  {"resource": "Deployment/shop-20/preview-web", "why": "runs the same 2.4.0 release with the staging settings, which hold asset_host; healthy throughout"},
+  {"resource": "Deployment/shop-20/assets", "why": "serves the manifest; preview-web reads it"}
+ ],
+ "variants_note": "At 3900 s the rollout's ScalingReplicaSet events have passed the default 1 h event TTL; the pods' BackOff events keep being renewed. What tells when and what changed: the two ReplicaSets (revision annotations, creation times, release volume and version label), the previous container logs and the two env files in shop-web-config."
+}

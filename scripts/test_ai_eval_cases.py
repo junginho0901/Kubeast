@@ -80,7 +80,7 @@ def resource_form(resource: str) -> bool:
 def test_every_hard_case_loads_with_no_field_problem():
     cases = all_cases()
     folders = sorted(d.name for d in HARD.iterdir() if (d / "case.json").exists())
-    assert [d.name for d, _ in cases] == folders and len(cases) == 10
+    assert [d.name for d, _ in cases] == folders and len(cases) == 16
     namespaces = [c["namespace"] for _, c in cases]
     assert len(set(namespaces)) == len(namespaces), "two cases share a namespace"
     for d, c in cases:
