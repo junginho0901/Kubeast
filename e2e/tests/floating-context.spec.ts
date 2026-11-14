@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
-import { aiLayerScreens, clusterFor, visitUrl } from './ai-layer-screens'
+import { aiLayerScreens, clusterFor, prepareScreen, visitUrl } from './ai-layer-screens'
 import { turnToRow } from './list-pages'
 
 // The floating chat sends what is on screen (page_context) with each question. These tests stop the request in the
@@ -101,6 +101,8 @@ test.describe('floating chat screen data', () => {
       for (const [href, cluster] of MENUS) {
         const path = href.split('?')[0]
         await navigate(page, visitUrl(href, cluster))
+        // Advanced Search sends its layer once something is searched
+        await prepareScreen(page, href)
         // Cluster Hygiene and Investigations read their reports for a while
         const ctx = await askForBase(page, sent, path, 20000)
         if (ctx.path !== path || !ctx.base?.summary) missing.push(`${visit} ${href} (sent for ${ctx.path})`)

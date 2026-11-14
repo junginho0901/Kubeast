@@ -6,11 +6,6 @@
       "pr": "#376"
     },
     {
-      "path": "/cluster/search",
-      "reason": "Advanced Search sends its layer once something is searched; before a search it shows no results to hold a layer to.",
-      "pr": "#376"
-    },
-    {
       "path": "/admin/clusters",
       "reason": "An admin screen: nothing on it goes to the model (utils/aiContext/privateScreens.ts, PageContextProvider).",
       "pr": "#377"

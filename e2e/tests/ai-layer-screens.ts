@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import type { Page } from '@playwright/test'
+
 // The screens the floating chat's checks open (floating-context.spec.ts, ai-layers-every-screen.spec.ts), read from the
 // app's own sidebar config: every `href` in `navGroups` of frontend/src/components/Layout.tsx, the entries a feature or
 // a permission shows included. A screen added to the sidebar is checked from then on, unless ai-layer-exempt.json names
@@ -61,3 +63,13 @@ const ON_DEFAULT = new Set(['/security/policyreports', '/monitoring', '/cost'])
 export const clusterFor = (href: string): string => (ON_DEFAULT.has(href.split('?')[0]) ? 'default' : 'self')
 
 export const visitUrl = (href: string, cluster: string): string => `${href}${href.includes('?') ? '&' : '?'}cluster=${cluster}`
+
+// What a screen needs done after it opens before it shows anything to tell: Advanced Search shows results, and sends its
+// layer, once something is searched — `true`, which every object read matches, so its gaps ("N failed", "the first N
+// only") and its 0 of an empty read are held as its results are (as number-check-search.spec.ts types it).
+export const SEARCH_QUERY = 'true'
+export async function prepareScreen(page: Page, href: string): Promise<void> {
+  if (href.split('?')[0] !== '/cluster/search') return
+  await page.locator('main .monaco-editor').first().click({ timeout: 20_000 })
+  await page.keyboard.type(SEARCH_QUERY)
+}

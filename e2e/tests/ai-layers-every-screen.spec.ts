@@ -3,9 +3,12 @@ import path from 'node:path'
 
 import { test, expect, type Page, type Request, type Route } from '@playwright/test'
 
-import { AI_LAYER_EXEMPT, aiLayerScreens, clusterFor, visitUrl } from './ai-layer-screens'
+import { AI_LAYER_EXEMPT, aiLayerScreens, clusterFor, prepareScreen, visitUrl } from './ai-layer-screens'
 
-// Opt-in, not in the default run: E2E_AI_LAYERS=1 npx playwright test --project=ai-layers (an estimated 15–20 min).
+// Opt-in, not in the default run: E2E_AI_LAYERS=1 npx playwright test --project=ai-layers. One worker opens the screens
+// one after another: about 30–35 min when every state passes (some 5 s a state), 45–90 min on a first run, where a
+// state that fails asks again until its 15–20 s are up. E2E_AI_LAYERS_ONLY=<regular expression> runs the screens whose
+// sidebar address it matches (and the exempt screens it matches), e.g. E2E_AI_LAYERS_ONLY='^/helm|^/cluster/search'.
 //
 // Every screen of the app's sidebar config (ai-layer-screens.ts) but those ai-layer-exempt.json names is opened in six
 // states, its reads answered in the browser: nothing on the cluster changes, and the floating chat's question is
@@ -14,17 +17,23 @@ import { AI_LAYER_EXEMPT, aiLayerScreens, clusterFor, visitUrl } from './ai-laye
 //   refresh     after it, the page's Refresh answered 500 with a reason
 //   refused     every read of the screen 403 with a reason
 //   failed      every read of the screen 500 with a reason
-//   not-served  every read an empty answer with X-Kubeast-Not-Installed — what k8s-service sends when the cluster's API
-//               server answers a kind's list with 404 "the server could not find the requested resource" (handler/served.go)
+//   not-served  the reads k8s-service answers "not installed" for (handler/served.go ListIfServed: the CRD-backed lists
+//               and the built-in APIs a cluster may not serve, NOT_SERVED_LISTS) an empty answer with
+//               X-Kubeast-Not-Installed, what it sends when the cluster's API server answers such a kind's list with 404;
+//               every other read as in empty. A screen that read none of them with the cluster's answer skips this state:
+//               the server never says it of a built-in kind
 //   empty       every read the cluster's answer with its lists emptied and its counts 0
 // In the last four the live updates are held (the socket and the event streams stay open with nothing on them), so no
-// row of the cluster comes in over the stood-in answer.
+// row of the cluster comes in over the stood-in answer. On the Dashboard the refused and failed states also open the
+// Services card's window (ResourceModal) and hold its notice the same way. Advanced Search is held with a search typed
+// (prepareScreen), since it says nothing before one.
 //
-// One rule for every screen: a shared notice the screen shows — the "No permission" banner or a list's refusal row, a
-// failed read or Refresh with its reason, "… is not installed / not served", an empty list's row — has a layer of the
-// same meaning in what the floating chat is sent (refused naming the kinds, failed with the reason, not served naming
-// the kind, zero items), and while the screen shows no rows no layer states a count the screen does not show. A screen
-// with the cluster's answer and no notice sends its screen data (base). Each screen's states are attached as JSON.
+// One rule for every screen: a notice the screen shows — the "No permission" banner or a list's refusal row, a failed
+// read or Refresh with its reason, "… is not installed / not served", an empty list's row, and each screen's own notices
+// in NOTICES — has a layer of the same meaning in what the floating chat is sent (refused naming the kinds, failed with
+// the reason, not served naming the kind, zero items), and while the screen shows no rows no layer states a count the
+// screen does not show. A screen with the cluster's answer and no notice sends its screen data (base). Each screen's
+// states are attached as JSON.
 
 const EN = JSON.parse(fs.readFileSync(path.join(__dirname, '../../frontend/src/i18n/locales/en.json'), 'utf8'))
 const REFUSED_REASON = 'e2e stand-in: this role may not list it (ai-layers)'
@@ -46,7 +55,8 @@ type Shown = {
   rows: number // table rows of more than one cell
   text: string // main's visible text
 }
-type Row = { state: State; problems: string[]; shown?: Omit<Shown, 'text' | 'ready'>; said?: Record<string, unknown>; note?: string }
+// window: a window the state was held in again (the Dashboard's Services card)
+type Row = { state: State; window?: string; problems: string[]; shown?: Omit<Shown, 'text' | 'ready'>; said?: Record<string, unknown>; note?: string }
 
 // The floating chat's question, stopped in the browser: the page_context it carries is what the model would read.
 async function captureFloating(page: Page) {
@@ -123,10 +133,35 @@ function emptied(v: unknown): unknown {
   return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, typeof x === 'number' && COUNT_KEY.test(k) ? 0 : emptied(x)]))
 }
 
-// the list a path reads, as the app's list status names it (utils/forbiddenResource listSegmentFromUrl)
-function listSegment(pathname: string): string {
+// The list reads k8s-service answers "not installed" for (handler/served.go ListIfServed in routes/gateway.go,
+// configuration.go, cluster.go and gpu.go): the read's list segment and the resource the header names. The Gateway API,
+// VPA and Policy Reports lists are CRDs; the admission policies and DRA are the built-in APIs a cluster may not serve
+// (utils/forbiddenResource BUILTIN_SEGMENTS). No other read is ever answered so.
+const NOT_SERVED_LISTS: Record<string, string> = {
+  gateways: 'gateways', gatewayclasses: 'gatewayclasses', httproutes: 'httproutes', grpcroutes: 'grpcroutes',
+  referencegrants: 'referencegrants', backendtlspolicies: 'backendtlspolicies',
+  vpas: 'verticalpodautoscalers',
+  policyreports: 'policyreports',
+  validatingadmissionpolicies: 'validatingadmissionpolicies', mutatingadmissionpolicies: 'mutatingadmissionpolicies',
+  deviceclasses: 'deviceclasses', resourceclaims: 'resourceclaims', resourceclaimtemplates: 'resourceclaimtemplates',
+  resourceslices: 'resourceslices',
+}
+
+// The resource X-Kubeast-Not-Installed names for a read of one of those lists (/<list>, /<list>/all,
+// /namespaces/{ns}/<list>, Policy Reports' /policyreports/{summary,results,resource} and
+// /namespaces/{ns}/policyreports/resource, where the cluster-wide /policyreports/resource is clusterpolicyreports), else
+// null: a describe, a YAML or any other read.
+function notServedAs(pathname: string): string | null {
   const parts = pathname.replace(/^\/api\/v1\//, '').replace(/^cluster\//, '').split('/').filter(Boolean)
-  return parts[0] === 'namespaces' ? (parts[2] ?? 'namespaces') : (parts[0] ?? '')
+  const [segment, rest] = parts[0] === 'namespaces' ? [parts[2], parts.slice(3)] : [parts[0], parts.slice(1)]
+  const resource = segment ? NOT_SERVED_LISTS[segment] : undefined
+  if (!resource) return null
+  if (segment === 'policyreports') {
+    if (parts[0] === 'namespaces') return rest.join('/') === 'resource' ? 'policyreports' : null
+    if (rest.join('/') === 'resource') return 'clusterpolicyreports'
+    return rest.length === 1 && ['summary', 'results'].includes(rest[0]) ? 'policyreports' : null
+  }
+  return rest.length === 0 || (parts[0] !== 'namespaces' && rest.join('/') === 'all') ? resource : null
 }
 
 // Answers every GET the screen makes under /api/v1/ but the app's own reads, until lifted.
@@ -145,6 +180,9 @@ async function standIn(page: Page, state: 'refused' | 'failed' | 'not-served' | 
     const answer = (a: Parameters<Route['fulfill']>[0]) => route.fulfill(a).catch(() => {})
     if (state === 'refused') return answer({ status: 403, json: { detail: REFUSED_REASON } })
     if (state === 'failed') return answer({ status: 500, json: { detail: FAILED_REASON } })
+    // as ListIfServed answers: an empty list naming the resource
+    const notServed = state === 'not-served' ? notServedAs(url.pathname) : null
+    if (notServed) return answer({ status: 200, json: [], headers: { 'X-Kubeast-Not-Installed': notServed } })
     let body: unknown = []
     try {
       const real = await route.fetch()
@@ -153,33 +191,58 @@ async function standIn(page: Page, state: 'refused' | 'failed' | 'not-served' | 
       // the page moved on, or the cluster did not answer: an empty list stands in
     }
     s.lastHit = Date.now()
-    return answer({ status: 200, json: body, headers: state === 'not-served' ? { 'X-Kubeast-Not-Installed': listSegment(url.pathname) } : {} })
+    return answer({ status: 200, json: body })
   }
   await page.route(match, handler)
   s.lift = () => page.unroute(match, handler)
   return s
 }
 
+// The notices read on screen, by testid and meaning: the shared ones (the banner, TableEmptyRow, RefreshFailure) and each
+// screen's own. A screen's own notice tells what the layers must say as much as a shared one does, so a layer that
+// stops saying refused or failed fails here too.
+const NOTICES = {
+  refused: [
+    'forbidden-banner', 'table-forbidden',
+    'helm-forbidden', 'helm-history-refused', 'helm-resources-refused', // Helm Releases, a release's tabs
+    'resource-modal-refused', 'top-pods-refused', 'top-nodes-refused', // the Dashboard's windows and top cards
+    'node-metrics-forbidden', 'pod-metrics-forbidden', // Monitoring's tabs
+    'policy-kind-refused', // Gateway Policies' chips
+  ],
+  failed: [
+    'table-load-error', 'refresh-failed',
+    'helm-read-failed', 'helm-history-read-failed', 'helm-resources-read-failed',
+    'resource-modal-read-failed', 'top-resources-read-failed', 'top-pods-metrics-error', 'top-nodes-metrics-error', 'prometheus-not-answering',
+    'node-metrics-error', 'pod-metrics-error',
+    'policy-reports-load-error', 'policy-kind-failed', 'search-failed', 'hygiene-error',
+  ],
+  notServed: ['table-not-installed'],
+}
+// read with the line beside them, which holds the server's reason
+const NOTICE_WITH_PARENT = ['node-metrics-error', 'pod-metrics-error', 'policy-reports-load-error']
+
 async function readShown(page: Page): Promise<Shown> {
-  return page.evaluate((loading: string) => {
+  return page.evaluate(({ loading, notices, withParent }) => {
     const main = document.querySelector('main')
     const visible = (e: Element) => e.getClientRects().length > 0
     const text = (e: Element) => (e.textContent ?? '').replace(/\s+/g, ' ').trim()
     const all = (selector: string) => [...document.querySelectorAll(selector)].filter(visible)
+    const noticesOf = (ids: string[]) => all(ids.map((id) => `[data-testid="${id}"]`).join(', '))
+      .map((e) => text(withParent.includes(e.getAttribute('data-testid') ?? '') && e.parentElement ? e.parentElement : e))
     const rows = main ? [...main.querySelectorAll('tbody tr')].filter(visible) : []
     const oneCell = rows.filter((r) => r.children.length === 1 && (r.children[0] as HTMLTableCellElement).colSpan > 1)
     const mainText = main ? (main as HTMLElement).innerText : ''
     const h1 = main?.querySelector('h1')
     return {
       ready: !!h1 && visible(h1) && !mainText.includes(loading) && !main?.querySelector('[aria-busy="true"]'),
-      refused: all('[data-testid="forbidden-banner"], [data-testid="table-forbidden"]').map(text),
-      failed: all('[data-testid="table-load-error"], [data-testid="refresh-failed"]').map((e) => text(e).replace(/\s*Retry$/, '')),
-      notServed: all('[data-testid="table-not-installed"]').map(text),
+      refused: noticesOf(notices.refused),
+      failed: noticesOf(notices.failed).map((t) => t.replace(/\s*Retry$/, '')),
+      notServed: noticesOf(notices.notServed),
       emptyRow: oneCell.some((r) => !r.querySelector('[data-testid]') && text(r) !== '' && !text(r).includes(loading)),
       rows: rows.filter((r) => r.children.length > 1 && text(r) !== '').length,
       text: mainText,
     }
-  }, EN.common.loading as string)
+  }, { loading: EN.common.loading as string, notices: NOTICES, withParent: NOTICE_WITH_PARENT })
 }
 
 // The words a layer uses for each meaning: a key holding something (refused: [kinds], refresh_failed: {at, reason},
@@ -322,8 +385,23 @@ async function holdState(page: Page, sent: PageContext[], screenPath: string, st
   }
 }
 
+// The Dashboard's Services card opens its list's window (ResourceModal), which draws a refusal or a failure of its own.
+const WINDOW_NOTICE = { refused: 'resource-modal-refused', failed: 'resource-modal-read-failed' } as const
+async function holdServicesWindow(page: Page, sent: PageContext[], state: 'refused' | 'failed', s: StandIn): Promise<Row> {
+  await closeChat(page)
+  await page.getByTestId('stat-services').click()
+  if (!(await page.getByTestId(WINDOW_NOTICE[state]).waitFor({ timeout: 20_000 }).then(() => true, () => false))) {
+    return { state, window: 'Services', problems: [`the Services window drew no ${WINDOW_NOTICE[state]}`], shown: brief(await readShown(page)) }
+  }
+  return { ...(await holdState(page, sent, '/', state, s)), window: 'Services' }
+}
+
+// E2E_AI_LAYERS_ONLY: the sidebar addresses to run, as a regular expression
+const ONLY = process.env.E2E_AI_LAYERS_ONLY ? new RegExp(process.env.E2E_AI_LAYERS_ONLY) : null
+const picked = (href: string) => !ONLY || ONLY.test(href)
+
 test.describe('the floating chat is sent what each screen shows', () => {
-  for (const href of aiLayerScreens()) {
+  for (const href of aiLayerScreens().filter(picked)) {
     const screenPath = href.split('?')[0]
     const cluster = clusterFor(href)
     test(`${href}: refused, failed, not served, empty and the real answer read the same in the layers`, async ({ page }) => {
@@ -333,8 +411,16 @@ test.describe('the floating chat is sent what each screen shows', () => {
       const url = visitUrl(href, cluster)
       const rows: Row[] = []
 
+      // the reads the screen makes with the cluster's answer: a screen that reads no list the server can answer
+      // "not installed" for has no not-served state
+      const readPaths = new Set<string>()
+      const noteRead = (r: Request) => { if (r.method() === 'GET') readPaths.add(new URL(r.url()).pathname) }
+      page.on('request', noteRead)
       await page.goto(url)
+      await prepareScreen(page, href)
       rows.push(await holdState(page, sent, screenPath, 'real', null))
+      page.off('request', noteRead)
+      const notServedReads = [...readPaths].filter((p) => notServedAs(p) !== null)
 
       const refresh = page.locator('.page-head').first().getByRole('button', { name: /^(Refresh|새로고침)$/ }).first()
       if (await refresh.isVisible()) {
@@ -351,22 +437,30 @@ test.describe('the floating chat is sent what each screen shows', () => {
 
       await page.routeWebSocket(/\/wsMultiplexer/, () => {})
       for (const state of ['refused', 'failed', 'not-served', 'empty'] as const) {
+        if (state === 'not-served' && notServedReads.length === 0) {
+          rows.push({ state, problems: [], note: 'the screen reads no list k8s-service answers "not installed" for (NOT_SERVED_LISTS)' })
+          continue
+        }
         const answering = await standIn(page, state, own)
         await page.goto(url)
+        await prepareScreen(page, href)
         rows.push(await holdState(page, sent, screenPath, state, answering))
+        if (screenPath === '/' && (state === 'refused' || state === 'failed')) rows.push(await holdServicesWindow(page, sent, state, answering))
         await answering.lift()
       }
 
-      await test.info().attach('ai-layers.json', { body: JSON.stringify({ href, cluster, rows }, null, 2), contentType: 'application/json' })
-      expect(rows.flatMap((r) => r.problems.map((p) => `${r.state}: ${p}`)), `${href} on ${cluster}`).toEqual([])
+      await test.info().attach('ai-layers.json', { body: JSON.stringify({ href, cluster, notServedReads, rows }, null, 2), contentType: 'application/json' })
+      expect(rows.flatMap((r) => r.problems.map((p) => `${r.state}${r.window ? ` (${r.window} window)` : ''}: ${p}`)), `${href} on ${cluster}`).toEqual([])
     })
   }
 
   test('the screens ai-layer-exempt.json names send the floating chat nothing', async ({ page }) => {
     test.setTimeout(120_000)
+    const exempt = AI_LAYER_EXEMPT.filter((e) => picked(e.path))
+    test.skip(exempt.length === 0, `E2E_AI_LAYERS_ONLY matches no exempt screen`)
     const sent = await captureFloating(page)
     const sending: string[] = []
-    for (const e of AI_LAYER_EXEMPT) {
+    for (const e of exempt) {
       await page.goto(visitUrl(e.path, clusterFor(e.path)))
       // what a screen registers comes with its data
       await page.waitForTimeout(2_000)
