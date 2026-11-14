@@ -74,8 +74,8 @@ func TestPostgres_ConfigVersionChangesWithWhatAConnectionIsBuiltFrom(t *testing.
 			_, err := r.UpdateMeta(ctx, id, MetaPatch{LogSearchTenant: &tenant})
 			return err
 		}},
-		{"kubeconfig replaced, no uid", func() error { return r.KubeconfigReplaced(ctx, id, "") }},
-		{"kubeconfig replaced with uid", func() error { return r.KubeconfigReplaced(ctx, id, "uid-1") }},
+		{"kubeconfig replaced, no uid", func() error { return r.ReplaceKubeconfig(ctx, id, "", nil) }},
+		{"kubeconfig replaced with uid", func() error { return r.ReplaceKubeconfig(ctx, id, "uid-1", nil) }},
 	}
 	prev := v0
 	for _, c := range changes {
@@ -92,14 +92,51 @@ func TestPostgres_ConfigVersionChangesWithWhatAConnectionIsBuiltFrom(t *testing.
 	if uid, err := r.ClusterUID(ctx, id); err != nil || uid != "uid-1" {
 		t.Fatalf("ClusterUID = %q, %v; want uid-1", uid, err)
 	}
-	if err := r.KubeconfigReplaced(ctx, id, ""); err != nil {
+	if err := r.ReplaceKubeconfig(ctx, id, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if uid, _ := r.ClusterUID(ctx, id); uid != "uid-1" {
 		t.Fatalf("a replacement without a uid cleared the stored one: %q", uid)
 	}
-	if err := r.KubeconfigReplaced(ctx, "nope", ""); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("KubeconfigReplaced of an unknown id = %v, want ErrNotFound", err)
+	prev, _ = versionOf(t, r, id)
+	seen[prev] = true
+	ran := false
+	if err := r.ReplaceKubeconfig(ctx, "nope", "", func(context.Context) error { ran = true; return nil }); !errors.Is(err, ErrNotFound) || ran {
+		t.Fatalf("ReplaceKubeconfig of an unknown id = %v (store ran: %v), want ErrNotFound without the store", err, ran)
+	}
+
+	// A store that fails leaves the row as it was: no new version, no new UID, no new Prometheus URL.
+	refused := errors.New("the API server refused the Secret")
+	if err := r.ReplaceKubeconfig(ctx, id, "uid-2", func(context.Context) error { return refused }); !errors.Is(err, refused) {
+		t.Fatalf("ReplaceKubeconfig with a failing store = %v", err)
+	}
+	other := "https://prom-other.example"
+	if _, err := r.UpdateMetaStoring(ctx, id, MetaPatch{PrometheusURL: &other}, func(context.Context) error { return refused }); !errors.Is(err, refused) {
+		t.Fatalf("UpdateMetaStoring with a failing store = %v", err)
+	}
+	if v, _ := versionOf(t, r, id); v != prev {
+		t.Fatalf("a change whose store failed moved the version %d -> %d", prev, v)
+	}
+	if uid, _ := r.ClusterUID(ctx, id); uid != "uid-1" {
+		t.Fatalf("a replacement whose store failed set the uid %q", uid)
+	}
+	if meta, err := r.GetMeta(ctx, id); err != nil || meta.PrometheusURL != "https://prom.example" {
+		t.Fatalf("a change whose store failed set the Prometheus URL: %+v, %v", meta, err)
+	}
+
+	// The store runs before the commit: what it reads of the row is the version before.
+	stored := false
+	if err := r.ReplaceKubeconfig(ctx, id, "", func(context.Context) error {
+		stored = true
+		if v, _ := versionOf(t, r, id); v != prev {
+			t.Errorf("the new version %d was visible before the commit", v)
+		}
+		return nil
+	}); err != nil || !stored {
+		t.Fatalf("ReplaceKubeconfig = %v (stored: %v)", err, stored)
+	}
+	if v, _ := versionOf(t, r, id); v == prev || seen[v] {
+		t.Fatalf("version %d after a replacement from %d", v, prev)
 	}
 
 	if err := r.Remove(ctx, id, secrets); err != nil {

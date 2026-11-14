@@ -52,7 +52,7 @@ NGINX 게이트웨이가 모든 요청을 받아 각 마이크로서비스로 �
 | `postgres` | — | 5432 | 메인 DB (durable state) — PostgreSQL 18 |
 | `redis` | — | 6379 | k8s-service 캐시 — Valkey 9.1(Redis 프로토콜). `redis.enabled: false`면 k8s-service가 메모리에 캐시합니다 |
 
-k8s-service는 Redis에 캐시를 키 앞머리 `kubeast:cache:` 아래에 쓰고, 모든 항목은 최대 1시간 뒤에 만료됩니다. 클러스터 등록이 바뀌면 그 앞머리의 키만 지우므로(`SCAN`과 `UNLINK`) 같은 Redis 데이터베이스의 다른 키는 남습니다. 시작할 때 Redis가 답하지 않은 k8s-service는 메모리에 캐시하고 5초마다 Redis에 다시 묻다가, 답하면 캐시를 Redis로 옮깁니다. 어느 클러스터가 바뀌었는지는 Redis가 아니라 PostgreSQL에 둡니다. auth-service가 kubeconfig를 바꾸거나 Prometheus·로그 저장소 설정을 바꾸는 문장에서 클러스터의 `config_version`을 새 값으로 바꾸고, 모든 k8s-service가 5초마다 이 값을 읽어 다른 값으로 만든 연결과 지운 클러스터의 연결을 버립니다. Redis가 있으면 auth-service가 알린 k8s-service가 다른 k8s-service에도 바로 알립니다(채널 `kubeast:clusters:changed:<db>`).
+k8s-service는 Redis에 캐시를 키 앞머리 `kubeast:cache:` 아래에 쓰고, 모든 항목은 최대 1시간 뒤에 만료됩니다. 클러스터 등록이 바뀌면 그 앞머리의 키만 지우므로(`SCAN`과 `UNLINK`) 같은 Redis 데이터베이스의 다른 키는 남습니다. 시작할 때 Redis가 답하지 않은 k8s-service는 메모리에 캐시하고 5초마다 Redis에 다시 묻다가, 답하면 캐시를 Redis로 옮깁니다. 어느 클러스터가 바뀌었는지는 Redis가 아니라 PostgreSQL에 둡니다. auth-service가 kubeconfig를 바꾸거나 Prometheus·로그 저장소 설정을 바꾸는 데이터베이스 거래에서 클러스터의 `config_version`을 새 값으로 바꿉니다. 이 거래는 Secret을 쓴 뒤에만 반영되고, 실패하면 오류로 답하며 둘 다 그대로 둡니다. 모든 k8s-service가 5초마다 이 값을 읽어 다른 값으로 만든 연결과 지운 클러스터의 연결을 버립니다. Redis가 있으면 auth-service가 알린 k8s-service가 다른 k8s-service에도 바로 알립니다(채널 `kubeast:clusters:changed:<db>`).
 
 ## 컨테이너 이미지
 
