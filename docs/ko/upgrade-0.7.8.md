@@ -63,7 +63,7 @@ kubectl get nodes    # STATUS Ready,SchedulingDisabled
 
 ### 1.5 역할 이름
 
-업그레이드는 다른 역할이나 기본 역할과 같은 역할 그룹이 되는 이름의 사용자 정의 역할(`Admin` 옆의 `ADMIN`, ` read `, `a-b` 옆의 `a b`)의 이름을 바꾸고, 그 역할이 클러스터에서 가졌던 것을 지웁니다([5](#5-이번-업그레이드에서-한-번-일어나는-일), #865).
+업그레이드는 다른 역할이나 기본 역할과 같은 역할 그룹이 되는 이름의 사용자 정의 역할(`Admin` 옆의 `ADMIN`, ` read `, `a b` 옆의 `a-b`)의 이름을 바꾸고, 그 역할이 클러스터에서 가졌던 것을 지웁니다([5](#5-이번-업그레이드에서-한-번-일어나는-일), #865).
 
 아래 질의가 그런 역할을 마이그레이션 규칙에 가깝게 보여 줍니다. 한 행이 한 그룹이고, 기본 역할(없으면 가장 오래된 역할)을 뺀 나머지 이름이 바뀝니다.
 
@@ -98,17 +98,18 @@ helm get values kubeast -n kubeast -o yaml | grep -n -A6 -E 'roleMapping|cluster
 
 | 부분 | 연결 |
 | --- | --- |
-| auth-service | `postgresql.pool.authService.maxConns`(20) × (파드 수 + 롤아웃 동안 1) |
-| session-service | `postgresql.pool.sessionService.maxConns`(20) × (파드 수 + 1) |
-| k8s-service | (`postgresql.pool.k8sService.maxConns`(10) + 상태 확인 잠금 1) × (파드 수 + 1)(#858) |
-| ai-service(AI를 켰을 때) | `postgresql.pool.aiService.maxConns`(15) × (파드 수 + 1) |
+| auth-service | `postgresql.pool.authService.maxConns`(20) × 롤아웃 파드 수 |
+| session-service | `postgresql.pool.sessionService.maxConns`(20) × 롤아웃 파드 수 |
+| k8s-service | (`postgresql.pool.k8sService.maxConns`(10) + 상태 확인 잠금 1) × 롤아웃 파드 수(#858) |
+| ai-service(AI를 켰을 때) | `postgresql.pool.aiService.maxConns`(15) × 롤아웃 파드 수 |
 | ModelConfig controller(AI를 켰을 때) | `postgresql.pool.modelConfigController.maxConns`(4) × 2 |
 | k8s-service-stream(`streams.enabled`일 때) | `postgresql.pool.k8sService.maxConns` × (`streams.replicas` + 1) |
 | 마이그레이션과 남겨 둘 몫 | 4 + 10 |
 
-"파드 수"는 `replicas.<service>`이고, HPA를 켠 서비스는 `autoscaling.<service>.maxReplicas`입니다.
-AI를 켜고 서비스마다 파드 1개면 40 + 40 + 22 + 30 + 8 + 14 = 154입니다.
-auth-service, session-service, ai-service를 4개씩 띄우면 100 + 100 + 22 + 75 + 8 + 14 = 319로 300을 넘어 업그레이드가 멈추고, 메시지가 합계를 알려 줍니다.
+"파드 수"는 `replicas.<service>`이고, HPA를 켠 서비스는 `autoscaling.<service>.maxReplicas`입니다. "롤아웃 파드 수"는 롤아웃 몫으로 파드 수의 4분의 1을 올림해 더한 수입니다. 파드 1개면 2, 4개면 5입니다. 롤아웃은 파드를 한 번에 하나만 더 띄우므로(#901), 파드가 4개를 넘으면 검사가 롤아웃이 실제로 여는 것보다 많이 셉니다.
+상태 확인 잠금은 k8s-service 파드마다 풀 밖에 자기 연결을 하나 둡니다. k8s-service-stream은 두지 않습니다(#858).
+AI를 켜고 서비스마다 파드 1개면 20 × 2 + 20 × 2 + 11 × 2 + 15 × 2 + 4 × 2 + 14 = 40 + 40 + 22 + 30 + 8 + 14 = 154입니다.
+auth-service, session-service, ai-service를 4개씩 띄우면 20 × 5 + 20 × 5 + 11 × 2 + 15 × 5 + 4 × 2 + 14 = 100 + 100 + 22 + 75 + 8 + 14 = 319로 300을 넘어 업그레이드가 멈추고, 메시지가 합계를 알려 줍니다.
 
 그만큼 띄우는 설치라면 업그레이드와 함께 다음 중 하나를 바꿉니다.
 
@@ -124,7 +125,7 @@ psql "<데이터베이스 URL>" -c 'SHOW max_connections'
 풀러 뒤에서는 다음과 같습니다.
 
 - RDS Proxy: `SET`이 클라이언트 연결을 고정(pinning)합니다. `postgresql.sessionLimits.statementTimeoutMs`, `lockTimeoutMs`, `idleInTransactionTimeoutMs`를 `0`으로 두고, 한도는 프록시의 초기화 질의나 데이터베이스 역할에 둡니다(#868).
-- PgBouncer: 세션 풀링을 쓰거나 직접 연결합니다. 트랜잭션 풀링은 `SET`과 세션 advisory lock(마이그레이션, 감사 싱크, 상태 확인 잠금의 것)을 그 클라이언트에 붙여 두지 않습니다(#858, #868).
+- PgBouncer: 세션 풀링을 쓰거나 직접 연결합니다. 트랜잭션 풀링은 지원하지 않습니다. 트랜잭션 사이에 서버 연결을 다른 클라이언트에게 넘기므로, 한도를 거는 `SET`과 세션 advisory lock(마이그레이션, 감사 싱크, 상태 확인 잠금의 것)이 그것을 건 클라이언트에 남지 않습니다. 데이터베이스 역할에 한도를 걸어도 이것은 바뀌지 않습니다(#858, #868).
 
 ### 1.7 `secrets.existingSecret`과 Redis 사용자
 
@@ -185,7 +186,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 | 차트의 PostgreSQL에 레플리카가 많을 때([1.6](#16-데이터베이스-연결)) | PostgreSQL의 `max_connections` 100 | `postgresql.maxConnections`(300)를 넘으면 멈춤. 올리거나 `postgresql.pool.<service>.maxConns`를 줄입니다 | #868 |
 | 바깥 데이터베이스 | — | `max_connections`를 설치 안내가 출력한 합계보다 크게 | #868 |
 | RDS Proxy 뒤 | — | `postgresql.sessionLimits.*: 0`, 한도는 프록시나 역할에 | #868 |
-| 트랜잭션 풀링 PgBouncer 뒤 | — | 세션 풀링이나 직접 연결 | #858, #868 |
+| 트랜잭션 풀링 PgBouncer 뒤 | — | 지원하지 않음. 세션 풀링이나 직접 연결 | #858, #868 |
 | `secrets.existingSecret`([1.7](#17-secretsexistingsecret과-redis-사용자)) | `REDIS_PASSWORD` | 사용자 키 셋을 넣고 `redis.acl.existingSecret`이나 `redis.acl.existingSecretHasKeys: true`. 그때까지는 비밀번호 하나 | #866 |
 | 직접 고른 `images.redis` | 아무 Redis | Valkey나 Redis 6.2 이상 | #866 |
 | Claude Code를 켜고 메모리 limit을 그대로 둘 때 | `resources.aiService.limits.memory` | `ai.providers.claudeCode.memoryLimit: ""` | #859 |
@@ -210,7 +211,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 
 **파드와 롤아웃**
 
-- Service 뒤의 파드는 SIGTERM 전에 `podShutdown.preStopSeconds`를 기다립니다. 종료 유예는 그 기다림, SIGTERM 뒤 서비스가 기다리는 시간, 5초를 더한 것이고 기본값으로는 35초입니다. k8s-service는 열린 터미널이 끝나도록 `streams.drainSeconds`(60)도 더 줍니다(#856, #824, #825).
+- Service 뒤의 파드는 SIGTERM 전에 `podShutdown.preStopSeconds`를 기다립니다. 종료 유예는 그 기다림, SIGTERM 뒤 서비스가 기다리는 시간, 5초를 더한 것이고 기본값으로는 35초입니다. k8s-service는 열린 터미널이 끝나도록 `streams.drainSeconds`(60)와 닫을 시간 5초를 더 주므로, 기본값으로 종료 유예가 100초입니다(#856, #824, #825).
 - liveness는 다른 것을 읽지 않는 `/livez`를 묻습니다. readiness는 `/readyz`를 묻고, 이것은 SIGTERM부터 503을 답하며 데이터베이스는 묻지 않습니다(#901).
 - 롤아웃은 새 파드를 하나 띄우고 그 파드가 준비된 뒤에만 옛 파드를 멈춥니다(`maxSurge: 1`, `maxUnavailable: 0`). 그래서 Deployment마다 파드 하나가 더 들어갈 자리가 필요합니다. PostgreSQL과 Redis는 `Recreate`를 유지합니다(#901, #860).
 - `pdb.enabled`가 이제 `true`입니다. 파드가 둘 이상 남을 수 있는 Deployment(`replicas`, 또는 HPA를 켰을 때 `autoscaling.<service>.minReplicas`)는 `unhealthyPodEvictionPolicy: AlwaysAllow`인 PodDisruptionBudget을 받고, 파드 하나인 Deployment는 받지 않습니다(#901).
@@ -305,7 +306,7 @@ git fetch --tags && git checkout v0.7.8
 
 차트와 다른 점은 다음과 같습니다.
 
-- **멈출 때 기다림**: Kubeast 서비스마다 멈출 시간을 35초 줍니다(`stop_grace_period`. Docker 기본값은 10초). 기본값일 때 차트의 종료 유예와 같습니다. `docker compose stop`과 업그레이드는 컨테이너마다 그만큼 걸릴 수 있습니다. `preStop` 기다림, PodDisruptionBudget, HPA는 없습니다(#856).
+- **멈출 때 기다림**: Kubeast 서비스 일곱 개와 Redis에 멈출 시간을 35초 줍니다(`stop_grace_period`. Docker 기본값은 10초). 기본값일 때 차트가 서비스에 주는 시간입니다. `docker compose stop`과 업그레이드는 컨테이너마다 그만큼 걸릴 수 있습니다. `preStop` 기다림, 터미널 드레인, PodDisruptionBudget, HPA는 없습니다(#856).
 - **Redis**: 전과 같이 사용자도 비밀번호도 없고 Compose 네트워크 안에서만 닿습니다(#866은 차트만 바꿉니다).
 - **데이터베이스 한도**: 같은 세션 한도와 풀이 기본으로 적용됩니다. 바꾸려면 `.env`에 `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS`(`0`이면 두지 않음)나 `DB_POOL_MAX_AUTH`, `DB_POOL_MAX_SESSION`, `DB_POOL_MAX_K8S`, `DB_POOL_MAX_AI`를 넣습니다. Compose의 PostgreSQL은 기본 `max_connections`(100)를 그대로 쓰며, 서비스마다 컨테이너 하나면 그 안에 들어갑니다(#868).
 - **차트와 같은 것**: 마이그레이션, 역할 이름 바꾸기([1.5](#15-역할-이름)의 질의는 `docker compose exec -T postgres psql -U kubeast -d kubeast`로 돌림), 알림 시간의 UTC 저장, 캐시가 비어서 시작하는 것, 드레인([1.4](#14-노드-드레인))은 차트와 같습니다.

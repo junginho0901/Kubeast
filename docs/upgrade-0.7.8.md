@@ -63,7 +63,7 @@ From 0.7.8 a drain's progress is in the database, and one cut short reads "Inter
 
 ### 1.5 Role names
 
-The upgrade renames the custom roles whose names make the same role group as another role or a built-in's (`ADMIN` beside `Admin`, ` read `, `a b` beside `a-b`), and removes what they held on clusters ([5](#5-one-time-effects-of-this-upgrade), #865).
+The upgrade renames the custom roles whose names make the same role group as another role or a built-in's (`ADMIN` beside `Admin`, ` read `, `a-b` beside `a b`), and removes what they held on clusters ([5](#5-one-time-effects-of-this-upgrade), #865).
 
 This query lists them, close to the rule the migration uses (each row is one group; all but the built-in, else the oldest, are renamed):
 
@@ -98,17 +98,18 @@ The sum the chart checks:
 
 | Part | Connections |
 | --- | --- |
-| auth-service | `postgresql.pool.authService.maxConns` (20) × (pods + 1 while it rolls) |
-| session-service | `postgresql.pool.sessionService.maxConns` (20) × (pods + 1) |
-| k8s-service | (`postgresql.pool.k8sService.maxConns` (10) + 1 for the health status lock) × (pods + 1) (#858) |
-| ai-service, with the AI on | `postgresql.pool.aiService.maxConns` (15) × (pods + 1) |
+| auth-service | `postgresql.pool.authService.maxConns` (20) × rolling pods |
+| session-service | `postgresql.pool.sessionService.maxConns` (20) × rolling pods |
+| k8s-service | (`postgresql.pool.k8sService.maxConns` (10) + 1 for the health status lock) × rolling pods (#858) |
+| ai-service, with the AI on | `postgresql.pool.aiService.maxConns` (15) × rolling pods |
 | ModelConfig controller, with the AI on | `postgresql.pool.modelConfigController.maxConns` (4) × 2 |
 | k8s-service-stream, with `streams.enabled` | `postgresql.pool.k8sService.maxConns` × (`streams.replicas` + 1) |
 | migrations and kept | 4 + 10 |
 
-"pods" is `replicas.<service>`, or `autoscaling.<service>.maxReplicas` while its HPA is on.
-One pod of each service with the AI on is 40 + 40 + 22 + 30 + 8 + 14 = 154.
-auth-service, session-service and ai-service at 4 pods each is 100 + 100 + 22 + 75 + 8 + 14 = 319, past 300, and the upgrade stops; the message names the sum.
+"pods" is `replicas.<service>`, or `autoscaling.<service>.maxReplicas` while its HPA is on. "Rolling pods" adds a quarter of them, rounded up, for a rollout: 2 for one pod, 5 for four. A rollout starts one extra pod at a time (#901), so past four pods the check counts more than a rollout opens.
+The health status lock holds a connection of its own outside k8s-service's pool, on each k8s-service pod; k8s-service-stream holds none (#858).
+One pod of each service with the AI on: 20 × 2 + 20 × 2 + 11 × 2 + 15 × 2 + 4 × 2 + 14 = 40 + 40 + 22 + 30 + 8 + 14 = 154.
+auth-service, session-service and ai-service at 4 pods each: 20 × 5 + 20 × 5 + 11 × 2 + 15 × 5 + 4 × 2 + 14 = 100 + 100 + 22 + 75 + 8 + 14 = 319, past 300, and the upgrade stops; the message names the sum.
 
 If your install runs that many pods, change one of these with the upgrade:
 
@@ -124,7 +125,7 @@ psql "<your database URL>" -c 'SHOW max_connections'
 Behind a pooler:
 
 - RDS Proxy: a `SET` pins the client connection. Set `postgresql.sessionLimits.statementTimeoutMs`, `lockTimeoutMs` and `idleInTransactionTimeoutMs` to `0`, and put the limits in the proxy's initialization query or on the database role (#868).
-- PgBouncer: use session pooling, or connect directly. Transaction pooling does not keep a `SET` or a session advisory lock (the migrations', the audit sinks', the health status lock) with its client (#858, #868).
+- PgBouncer: use session pooling, or connect directly. Transaction pooling is not supported: it hands a server connection to other clients between transactions, so the `SET` of the limits and the session advisory locks (the migrations', the audit sinks', the health status lock) do not stay with the client that made them. Limits on the database role do not change that (#858, #868).
 
 ### 1.7 `secrets.existingSecret` and the Redis users
 
@@ -185,7 +186,7 @@ Only the rows that match your install. A row marked "stops" stops the upgrade, w
 | Many replicas with the chart's PostgreSQL ([1.6](#16-database-connections)) | PostgreSQL's `max_connections` 100 | Stops past `postgresql.maxConnections` (300): raise it, or lower `postgresql.pool.<service>.maxConns` | #868 |
 | External database | — | Its `max_connections` above the sum the install notes print | #868 |
 | Behind RDS Proxy | — | `postgresql.sessionLimits.*: 0`, limits in the proxy or on the role | #868 |
-| Behind PgBouncer in transaction pooling | — | Session pooling, or a direct connection | #858, #868 |
+| Behind PgBouncer in transaction pooling | — | Not supported: session pooling, or a direct connection | #858, #868 |
 | `secrets.existingSecret` ([1.7](#17-secretsexistingsecret-and-the-redis-users)) | `REDIS_PASSWORD` | The users' three keys, then `redis.acl.existingSecret` or `redis.acl.existingSecretHasKeys: true`; until then one password | #866 |
 | `images.redis` of your own | any Redis | Valkey, or Redis 6.2 or later | #866 |
 | Claude Code on, keep the memory limit | `resources.aiService.limits.memory` | `ai.providers.claudeCode.memoryLimit: ""` | #859 |
@@ -210,7 +211,7 @@ New values whose defaults need nothing from you: `podShutdown.preStopSeconds` (5
 
 **Pods and rollouts**
 
-- Pods behind a Service wait `podShutdown.preStopSeconds` before SIGTERM. Their grace period is that wait, what the service waits for after SIGTERM, and 5 s: 35 s with the defaults. k8s-service also gives open terminals `streams.drainSeconds` (60) to end (#856, #824, #825).
+- Pods behind a Service wait `podShutdown.preStopSeconds` before SIGTERM. Their grace period is that wait, what the service waits for after SIGTERM, and 5 s: 35 s with the defaults. k8s-service also gives open terminals `streams.drainSeconds` (60) to end and 5 s to close, so its grace period is 100 s with the defaults (#856, #824, #825).
 - Liveness asks `/livez`, which reads nothing else. Readiness asks `/readyz`, which answers 503 from SIGTERM on and never asks the database (#901).
 - A rollout starts one new pod and stops an old one only once the new one is ready (`maxSurge: 1`, `maxUnavailable: 0`), so it needs room for one more pod of each Deployment. PostgreSQL and Redis keep `Recreate` (#901, #860).
 - `pdb.enabled` is now `true`. A Deployment that can be down to two pods or more (`replicas`, or `autoscaling.<service>.minReplicas` while its HPA is on) gets a PodDisruptionBudget with `unhealthyPodEvictionPolicy: AlwaysAllow`; a Deployment of one pod gets none (#901).
@@ -305,7 +306,7 @@ If you set `KUBEAST_TAG`, set it to `v0.7.8` or unset it.
 
 What differs from the chart:
 
-- **Stop wait**: each Kubeast service gets 35 s to stop (`stop_grace_period`; Docker's default is 10 s), the chart's grace period with the defaults. `docker compose stop` and the upgrade can take that long per container. There is no `preStop` wait, PodDisruptionBudget or HPA (#856).
+- **Stop wait**: the seven Kubeast services and Redis get 35 s to stop (`stop_grace_period`; Docker's default is 10 s), what the chart gives a service with the defaults. `docker compose stop` and the upgrade can take that long per container. There is no `preStop` wait, terminal drain, PodDisruptionBudget or HPA (#856).
 - **Redis**: as before, with no users and no password, reachable only on the Compose network (#866 changes the chart only).
 - **Database limits**: the same session limits and pools apply by default. To change them, set `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS` (`0` sets nothing) or `DB_POOL_MAX_AUTH`, `DB_POOL_MAX_SESSION`, `DB_POOL_MAX_K8S`, `DB_POOL_MAX_AI` in `.env`. Compose's PostgreSQL keeps its default `max_connections` (100), which one container of each service fits (#868).
 - **The same as the chart**: the migrations, the role renames ([1.5](#15-role-names), run the query with `docker compose exec -T postgres psql -U kubeast -d kubeast`), the alert times in UTC, the cache starting empty and the drains ([1.4](#14-node-drains)).
