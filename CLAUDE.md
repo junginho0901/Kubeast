@@ -107,7 +107,7 @@ Frontend source under `frontend/src`: `pages/` (route-level, grouped by resource
 
 ## E2E tests (Playwright)
 
-`e2e/` runs **against the live kind cluster's gateway**, not a dev server. Tests are serialized (`workers: 1`, `fullyParallel: false`) because they mutate shared single-cluster K8s state. Many specs are **visual-regression baselines** — snapshots captured on `main` must match pixel-for-pixel (within `maxDiffPixels: 100`) on feature branches.
+`e2e/` runs **against the live kind cluster's gateway**, not a dev server. Tests are serialized (`workers: 1`, `fullyParallel: false`) because they mutate shared single-cluster K8s state. Many specs are **visual-regression baselines** — snapshots captured on `main` must match pixel-for-pixel (within `maxDiffPixels: 100`) on feature branches. `E2E_AI_LAYERS=1 npx playwright test --project=ai-layers` (opt-in, an estimated 15–20 minutes) opens every screen of the sidebar config (`navGroups` in `Layout.tsx`, read by `e2e/tests/ai-layer-screens.ts`, which the default run's "every menu" test in `floating-context.spec.ts` reads too; a screen that sends nothing by rule is in `e2e/tests/ai-layer-exempt.json` with a reason and a PR) with its reads answered in the browser as the cluster's answer, a failed Refresh, 403, 500, a kind not served and an empty list, and fails when a shared notice on the screen has no layer of the same meaning in what the floating chat is sent (refused, failed with the reason, not served, zero items) or a layer states a count the screen does not show.
 
 ```bash
 cd e2e
