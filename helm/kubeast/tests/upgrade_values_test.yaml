@@ -89,3 +89,9 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no podShutdown.preStopSeconds
+  - it: stops values without pdb.maxUnavailable, which 0.7.8 added
+    set:
+      pdb.maxUnavailable: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no pdb.maxUnavailable

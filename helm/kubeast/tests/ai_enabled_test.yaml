@@ -12,9 +12,15 @@ templates:
   - gateway.yaml
 tests:
   - it: renders ai-service, tool-server and the ModelConfig controller by default, with the CRD kept on removal
+    # A PDB comes with a second replica; k8s-service and tool-server stay at one until the chart lets them have more.
     set:
       networkPolicy.enabled: true
       pdb.enabled: true
+      replicas.authService: 2
+      replicas.aiService: 2
+      replicas.sessionService: 2
+      replicas.frontend: 2
+      replicas.gateway: 2
     asserts:
       - hasDocuments:
           count: 7
@@ -50,7 +56,7 @@ tests:
           count: 12
         template: networkpolicy.yaml
       - hasDocuments:
-          count: 7
+          count: 5
         template: pdb.yaml
       - equal:
           path: data.AI_ENABLED
@@ -66,6 +72,11 @@ tests:
       ai.enabled: false
       networkPolicy.enabled: true
       pdb.enabled: true
+      replicas.authService: 2
+      replicas.aiService: 2
+      replicas.sessionService: 2
+      replicas.frontend: 2
+      replicas.gateway: 2
     asserts:
       - hasDocuments:
           count: 4
@@ -99,7 +110,7 @@ tests:
           count: 9
         template: networkpolicy.yaml
       - hasDocuments:
-          count: 5
+          count: 4
         template: pdb.yaml
       - equal:
           path: data.AI_ENABLED

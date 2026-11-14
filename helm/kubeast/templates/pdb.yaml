@@ -1,19 +1,28 @@
+{{- /* A Deployment of one replica gets none: its only pod could never be evicted and a node drain would wait on it. */ -}}
 {{- if .Values.pdb.enabled }}
-{{- $apps := list "auth-service" "k8s-service" "session-service" "frontend" "gateway" }}
-{{- if .Values.ai.enabled }}{{- $apps = concat $apps (list "ai-service" "tool-server") }}{{- end }}
+{{- $apps := list (list "auth-service" .Values.replicas.authService) (list "k8s-service" .Values.replicas.k8sService) (list "session-service" .Values.replicas.sessionService) (list "frontend" .Values.replicas.frontend) (list "gateway" .Values.replicas.gateway) }}
+{{- if .Values.ai.enabled }}{{- $apps = concat $apps (list (list "ai-service" .Values.replicas.aiService) (list "tool-server" .Values.replicas.toolServer)) }}{{- end }}
+{{- $max := .Values.pdb.maxUnavailable }}
+{{- if or (not (or (kindIs "float64" $max) (kindIs "int64" $max) (kindIs "int" $max))) (lt (float64 $max) 1.0) (ne (float64 $max) (float64 (int $max))) }}
+{{- fail (printf "pdb.maxUnavailable must be a whole number of pods, 1 or more (0 would stop every node drain): %v" $max) }}
+{{- end }}
 {{- range $app := $apps }}
+{{- if gt (int (index $app 1)) 1 }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ $app }}
+  name: {{ index $app 0 }}
   labels:
-    app: {{ $app }}
+    app: {{ index $app 0 }}
     {{- include "kubeast.labels" $ | nindent 4 }}
 spec:
-  minAvailable: {{ $.Values.pdb.minAvailable }}
+  maxUnavailable: {{ int $max }}
+  # A pod that is not ready (its database down, a crash loop) may still be evicted, so it never holds a drain.
+  unhealthyPodEvictionPolicy: AlwaysAllow
   selector:
     matchLabels:
-      app: {{ $app }}
+      app: {{ index $app 0 }}
+{{- end }}
 {{- end }}
 {{- end }}

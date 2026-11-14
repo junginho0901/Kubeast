@@ -572,10 +572,11 @@ replicas:
   frontend: 1
   toolServer: 1
   gateway: 1
-# PDB is off while replicas are 1 (a minAvailable PDB would block node drains).
+# A PodDisruptionBudget for each Deployment above with more than one replica, allowing maxUnavailable of its pods to be
+# evicted at once (unhealthy ones always); none at 1, where it would block node drains. enabled: false leaves them out.
 pdb:
-  enabled: false
-  minAvailable: 1
+  enabled: true
+  maxUnavailable: 1
 # zone + hostname spread, soft (ScheduleAnyway)
 topologySpread:
   enabled: true

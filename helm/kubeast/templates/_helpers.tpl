@@ -269,6 +269,15 @@ lifecycle:
 terminationGracePeriodSeconds: {{ add 30 (include "kubeast.preStopSeconds" .) }}
 {{- end -}}
 
+{{/* A rollout starts one new pod and stops an old one only once the new one is ready, so the Service always has a ready pod (postgres and redis keep Recreate: two must not share their data). */}}
+{{- define "kubeast.rollingUpdate" -}}
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+{{- end -}}
+
 {{/*
 Annotations of one of the chart's ServiceAccounts: serviceAccounts.<key>.annotations,
 over the aws.irsaRoleArn role when eksAuth (k8s-service and tool-server run
