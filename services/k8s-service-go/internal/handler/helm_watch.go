@@ -110,7 +110,8 @@ func (h *Handler) runHelmWatchSSE(ctx context.Context, w http.ResponseWriter, fl
 	defer keepalive.Stop()
 
 	// The stream's watches count against the server's live watches while it is open (multicluster.wsMaxSubscriptions).
-	release, told, err := h.holdHelmWatches(ctx, w, flusher, keepalive, helmWatchCount(ctx, namespace))
+	// The retry wait is read once here, as keepalivePeriod above: the stream runs on until its request ends.
+	release, told, err := h.holdHelmWatches(ctx, w, flusher, keepalive, helmWatchCount(ctx, namespace), helmLimitRetry)
 	if release == nil {
 		return err
 	}
@@ -208,9 +209,9 @@ func helmWatchNamespaces(ctx context.Context, namespace string) []string {
 // an ADDED for each release Secret there is.
 type helmWatchVersions map[string]string
 
-// holdHelmWatches takes n of the server's live watches, telling the page and asking again later while they do not fit.
-// release is nil when the stream ended first; told says the page was told.
-func (h *Handler) holdHelmWatches(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, keepalive *time.Ticker, n int) (release func(), told bool, err error) {
+// holdHelmWatches takes n of the server's live watches, telling the page and asking again after retry() while they do
+// not fit. release is nil when the stream ended first; told says the page was told.
+func (h *Handler) holdHelmWatches(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, keepalive *time.Ticker, n int, retry func() time.Duration) (release func(), told bool, err error) {
 	if h.watchLimits == nil {
 		return func() {}, false, nil
 	}
@@ -222,7 +223,7 @@ func (h *Handler) holdHelmWatches(ctx context.Context, w http.ResponseWriter, fl
 			return nil, told, err
 		}
 		told = true
-		if !keepAliveFor(ctx, w, flusher, keepalive, helmLimitRetry()) {
+		if !keepAliveFor(ctx, w, flusher, keepalive, retry()) {
 			return nil, told, nil
 		}
 	}
