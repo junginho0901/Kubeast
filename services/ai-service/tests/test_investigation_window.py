@@ -25,7 +25,7 @@ from tests.test_alert_investigation import (
 STARTED = NOW - timedelta(minutes=10)  # 2026-10-13T11:50:00Z; NOW is 12:00:00
 CHANGE_ROW = {"time": "2026-10-13T11:41:00Z", "kind": "Deployment", "name": "web", "what": "image web:1.4 -> web:1.5"}
 CHANGES = json.dumps({"view": "changes", "changes": [CHANGE_ROW]})
-STEP_ZERO_ARGS = {"view": "changes", "namespace": "apps", "since_time": "2026-10-13T07:50:00Z", "until_time": "2026-10-13T12:00:00Z"}
+STEP_ZERO_ARGS = {"view": "changes", "namespace": "apps", "since_time": "2026-10-13T07:50:00Z"}  # until_time: the tool's now
 
 
 class TimelineTool:
@@ -122,6 +122,13 @@ def test_the_switches_are_off_and_the_windows_held_to_their_ranges(monkeypatch):
         s = inv_settings.load()
         assert (s.rules, s.changes_first) == (True, True)
         assert (s.metrics_window_minutes, s.logs_window_minutes, s.changes_window_hours) == held
+
+
+def test_step_zero_leaves_a_window_end_of_now_to_the_tool_and_names_an_earlier_one():
+    w = inv_windows.of(STARTED, NOW, cfg())
+    assert inv_windows.changes_args(w, "apps") == STEP_ZERO_ARGS
+    earlier = inv_windows.Windows(w.anchor, w.now, w.metrics, w.logs, inv_windows.Window(w.changes.start, NOW - timedelta(hours=1)))
+    assert inv_windows.changes_args(earlier, "apps") == dict(STEP_ZERO_ARGS, until_time="2026-10-13T11:00:00Z")
 
 
 def test_the_changes_view_is_told_from_a_timeline_that_does_not_know_view():
@@ -321,6 +328,20 @@ async def test_step_zero_of_an_alert_without_a_namespace_reads_the_tokens_namesp
     at_now(monkeypatch)
     await runner.investigate(cfg(max_steps=5, changes_first=True), row(namespace="", starts_at=STARTED))
     assert service.executed == [("timeline", {k: v for k, v in STEP_ZERO_ARGS.items() if k != "namespace"})]
+
+
+@pytest.mark.asyncio
+async def test_step_zero_of_the_same_alert_later_makes_the_same_call_so_a_replay_finds_its_recording(monkeypatch):
+    # AI_TOOL_REPLAY_MODE keys a recorded answer by the call's arguments: an investigation of the same alert run
+    # again later (a replay) must ask timeline exactly what the recorded run asked.
+    calls = []
+    for now in (NOW, NOW + timedelta(minutes=37, seconds=5)):
+        service = ChangesService([completion(content="## Summary\nok")])
+        install_loop(monkeypatch, service, [])
+        monkeypatch.setattr(runner, "utcnow", lambda now=now: now)
+        await runner.investigate(cfg(max_steps=5, changes_first=True), row(starts_at=STARTED))
+        calls.append(service.executed[0])
+    assert calls == [("timeline", STEP_ZERO_ARGS)] * 2
 
 
 class RecordingClaudeCode(FakeClaudeCode):

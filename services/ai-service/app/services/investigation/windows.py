@@ -70,8 +70,12 @@ def describe(w: Windows, cfg) -> str:
 
 
 def changes_args(w: Windows, namespace: str) -> dict[str, Any]:
-    """The investigation's scope: the alert's namespace, or every namespace its token reads."""
-    args: dict[str, Any] = {"view": CHANGES_VIEW, "since_time": stamp(w.changes.start), "until_time": stamp(w.changes.end)}
+    """The investigation's scope: the alert's namespace, or every namespace its token reads. A window that ends now
+    leaves until_time to the tool, whose default end is now: the call then holds only times counted from the alert's
+    start, so a recorded answer (AI_TOOL_REPLAY_MODE) is found again for the same alert."""
+    args: dict[str, Any] = {"view": CHANGES_VIEW, "since_time": stamp(w.changes.start)}
+    if w.changes.end != w.now:
+        args["until_time"] = stamp(w.changes.end)
     if namespace:
         args["namespace"] = namespace
     return args
