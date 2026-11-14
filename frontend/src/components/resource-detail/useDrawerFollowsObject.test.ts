@@ -23,6 +23,8 @@ import resourceQuotaInfoSrc from './ResourceQuotaInfo.tsx?raw'
 import pdbInfoSrc from './PDBInfo.tsx?raw'
 import crdInfoSrc from './CRDInfo.tsx?raw'
 import leaseInfoSrc from './LeaseInfo.tsx?raw'
+import namespaceInfoSrc from './NamespaceInfo.tsx?raw'
+import namespacesPageSrc from '@/pages/Namespaces.tsx?raw'
 import followHookSrc from './useDrawerFollowsObject.ts?raw'
 import { frameOfObject, objectFollower, openListOf } from './useDrawerFollowsObject'
 import { applyPriorityClassWatchEvent } from '@/pages/cluster/priorityclasses/priorityClassWatchNormalize'
@@ -669,6 +671,8 @@ const READ_BRINGS: Record<string, string[]> = {
   customresourcedefinitions: ['versions'],
   // the row's conditions have no message or times
   nodes: ['conditions'],
+  // the row is the name, phase, age and labels
+  namespaces: ['annotations', 'conditions', 'deletion_timestamp', 'resource_version'],
 }
 
 type AnswerCase = { name: string; resource: string; before: Record<string, unknown>; frame: Record<string, unknown>; after: Record<string, unknown> }
@@ -989,6 +993,19 @@ describe('the drawers that read a describe answer follow their object', () => {
     expect(frameOfObject({ object: { name: 'web', namespace: 'other' } }, 'web', 'shop')).toBe(false)
     expect(frameOfObject({ object: { metadata: { name: 'web', namespace: 'shop' } } }, 'web', 'shop')).toBe(true)
     expect(frameOfObject({ object: { name: 'admin' } }, 'admin', undefined)).toBe(true)
+  })
+
+  // Opened from another page nothing else follows it; on the Namespaces page it shares that page's watch, which leaves the
+  // reading to the drawer. A grant limited to namespaces is refused a watch of namespaces (k8s-service leftToTheClustersRBAC).
+  it('a Namespace drawer follows its object by the namespace list, except for a grant limited to namespaces', () => {
+    const keyOf = (src: string, label: string) => src.match(new RegExp(`${label}: (\\[[^\\]]*-describe[^\\]]*\\])`))?.[1]
+    expect(namespaceInfoSrc).toContain('useDrawerFollowsObject({')
+    expect(namespaceInfoSrc).toContain("path: '/api/v1/namespaces',")
+    expect(namespaceInfoSrc).toContain('enabled: !!nsDescribe && !clusterNamespaces?.length,')
+    expect(keyOf(namespaceInfoSrc, 'describeKey')).toBe("['namespace-describe', name]")
+    expect(keyOf(namespaceInfoSrc, 'queryKey')).toBe("['namespace-describe', name]")
+    expect(namespacesPageSrc).toContain("describes.changedFollowed(['namespace-describe', name])")
+    expect(namespacesPageSrc).not.toContain("describes.changed(['namespace-describe'")
   })
 
   // A Lease's holder renews it every few seconds, faster than a read of its events is worth: the drawer reads on the clock.

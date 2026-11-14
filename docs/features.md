@@ -15,7 +15,10 @@
   - Below each answer, the turn's tokens are shown ("In · out · % cached"). The tooltip adds the number of model calls and the model.
   - The tokens are stored with the message in `messages.usage`, with the same values as that turn's `ai.chat.complete`, so they remain after a refresh.
   - That row (tokens and Copy) stays closed while the answer is coming in. It opens and fades in when the answer ends or is stopped. With the operating system's reduce-motion setting, it opens immediately.
-  - A stopped answer is saved with the text so far and a "Stopped · usage not available" marker. session-service accepts only the marker `{"stopped": true}`.
+  - A stopped answer is saved with the text so far and a "Stopped · usage not available" marker.
+  - An answer whose connection closed before it ended is saved the same way, marked "Ended by an error".
+  - Both are saved only while their question is still the newest message, so an answer the server already saved (stopped or cut just as it ended) is not saved twice.
+  - session-service accepts only the markers `{"stopped": true}` and `{"failed": true}`, no token counts.
   - The conversation follows new text only while you are at the bottom. When you scroll up, it stays put and a "Jump to latest" button appears.
   - Tables in answers have horizontal and vertical lines, and answers have the Kubeast icon next to them.
 - **Multi-round Tool Calling** — the AI views and changes K8s with allowlisted tools, for up to 10 rounds. Read, write and admin tools are **gated by the user's permissions (JWT)**.

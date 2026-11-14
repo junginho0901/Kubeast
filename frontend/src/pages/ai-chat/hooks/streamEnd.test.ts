@@ -139,7 +139,7 @@ describe.each([
   async function stopped(events: unknown[], ticks: number) {
     vi.useFakeTimers()
     vi.stubGlobal('window', globalThis)
-    const sent: { content: string; tool_calls?: unknown[]; stopped?: boolean }[] = []
+    const sent: { content: string; tool_calls?: unknown[]; stopped?: boolean; answers?: string }[] = []
     vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
       if (url.includes('/messages')) {
         sent.push(...JSON.parse(String(init.body)).messages)
@@ -190,6 +190,13 @@ describe.each([
     expect(sent[0].content.endsWith(LETTERS)).toBe(true)
     expect(messages[1]?.content).toBe(sent[0].content)
     expect(messages[1]?.toolCalls?.map((tc) => tc.function)).toEqual(['list_clusters'])
+  })
+
+  // session-service adds it only while that question is the newest message: stopped as the answer ended, ai-service has
+  // saved the whole answer after it already.
+  it('the save names the question it answers, marked stopped', async () => {
+    const { sent } = await stopped([{ content: LETTERS }], 1)
+    expect(sent).toEqual([{ role: 'assistant', content: LETTERS, stopped: true, answers: QUESTION }])
   })
 
   it('stopped before the first letter it saves nothing and drops the waiting bubble', async () => {
