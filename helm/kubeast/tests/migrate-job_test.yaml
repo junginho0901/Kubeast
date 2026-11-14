@@ -32,9 +32,6 @@ tests:
           path: metadata.annotations["helm.sh/hook-weight"]
           value: "0"
       - equal:
-          path: spec.template.spec.restartPolicy
-          value: OnFailure
-      - equal:
           path: spec.template.spec.containers[0].image
           value: ghcr.io/junginho0901/kubeast-auth-service:v0.1.0
       - contains:
@@ -59,6 +56,23 @@ tests:
       - equal:
           path: spec.backoffLimit
           value: 3
+
+  # Kubernetes Job docs: with OnFailure the Job's one pod is terminated at the backoff limit; the Job controller
+  # deletes only active pods when the Job fails, so each failed try's pod stays with its log.
+  - it: runs each try in a pod of its own, so the logs of a failed hook stay readable after the Job fails
+    template: migrate-job.yaml
+    set:
+      migrations.mode: job
+    asserts:
+      - equal:
+          path: spec.template.spec.restartPolicy
+          value: Never
+      # a failed Job stays until the next install or upgrade's hook replaces it, with its pods
+      - equal:
+          path: metadata.annotations["helm.sh/hook-delete-policy"]
+          value: before-hook-creation,hook-succeeded
+      - notExists:
+          path: spec.ttlSecondsAfterFinished
 
   - it: carries kubeast-config's values itself, since a pre-install hook runs before the release creates that ConfigMap
     template: migrate-job.yaml
