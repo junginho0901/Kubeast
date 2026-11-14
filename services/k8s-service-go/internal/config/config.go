@@ -116,7 +116,8 @@ type Config struct {
 	RedisHost     string
 	RedisPort     int
 	RedisDB       int
-	RedisPassword string // requirepass (REDIS_PASSWORD); empty = no AUTH
+	RedisUsername string // ACL user (REDIS_USERNAME); empty = the password alone
+	RedisPassword string // requirepass or the ACL user's (REDIS_PASSWORD); empty = no AUTH
 
 	// WebSocket
 	WSHeartbeatInterval int
@@ -213,6 +214,7 @@ func Load() Config {
 		RedisHost:     pkgconfig.LookupEnv("REDIS_HOST", "localhost"), // "" = no Redis (chart redis.enabled false)
 		RedisPort:     pkgconfig.GetEnvInt("REDIS_PORT", 6379),
 		RedisDB:       pkgconfig.GetEnvInt("REDIS_DB", 0),
+		RedisUsername: pkgconfig.GetEnv("REDIS_USERNAME", ""),
 		RedisPassword: pkgconfig.GetEnv("REDIS_PASSWORD", ""),
 
 		WSHeartbeatInterval:       pkgconfig.GetEnvInt("WS_HEARTBEAT_INTERVAL", 30),
