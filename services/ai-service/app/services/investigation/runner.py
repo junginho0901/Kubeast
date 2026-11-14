@@ -257,7 +257,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
             first.append(await changes_first(windows))
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language,
-                                                               rules=cfg.rules)},
+                                                               rules=cfg.rules, call_paths=cfg.call_paths)},
         {"role": "user", "content": inv_prompt.alert_message(cluster=row.cluster, alert=alert_view(row), context="\n\n".join(first))},
     ]
     turn = await run_tool_turn(service, messages, tools, run_tool, max_steps=cfg.max_steps,

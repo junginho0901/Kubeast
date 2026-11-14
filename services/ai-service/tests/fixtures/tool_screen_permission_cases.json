@@ -713,6 +713,21 @@
    "read": true
   },
   {
+   "tool": "resource_graph",
+   "args": {
+    "include": [
+     "calls"
+    ],
+    "namespace": "shop",
+    "since": "1h"
+   },
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
    "tool": "k8s_get_pod_logs",
    "args": {
     "pod_name": "web"

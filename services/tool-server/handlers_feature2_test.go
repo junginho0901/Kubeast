@@ -334,6 +334,60 @@ func TestCanI_And_ResourceGraph(t *testing.T) {
 	}
 }
 
+// include calls asks k8s-service for who calls whom over since; the calls come before the objects, their paths and
+// suspects before their edges, cut at graphCallsCap with k8s-service's total kept.
+func TestResourceGraphCalls(t *testing.T) {
+	var callEdges []string
+	for i := 0; i < 100; i++ {
+		callEdges = append(callEdges, `{"from":{"id":"Deployment/shop/web"},"to":{"service":"svc-`+strconv.Itoa(i)+`"},"sources":["traces"],"requests":`+strconv.Itoa(1000-i)+`}`)
+	}
+	var nodes []string
+	for i := 0; i < 50; i++ {
+		nodes = append(nodes, `{"id":"Pod/shop/p`+strconv.Itoa(i)+`","kind":"Pod","name":"p`+strconv.Itoa(i)+`"}`)
+	}
+	seen := fakeK8sService(t, func(r *http.Request) (int, string) {
+		return 200, `{"nodes":[` + strings.Join(nodes, ",") + `],"edges":[],"calls":{"available":true,"range":"30m0s",` +
+			`"edges":[` + strings.Join(callEdges, ",") + `],"edges_total":130,"truncated":true,` +
+			`"sources":[{"source":"traces","read":true},{"source":"network","read":false,"reason":"permission"}],` +
+			`"suspects":[{"id":"Deployment/shop/api","signals":["calls_fail"],"failing_outside":["service postgresql"]}],"suspects_total":12,` +
+			`"no_start":"cycle","paths":[["Deployment/shop/api","Deployment/shop/web"]]}}`
+	})
+	out, err := handleResourceGraph(ctxFor("c1"), map[string]interface{}{"namespace": "shop", "include": []interface{}{"calls"}, "since": "30m"}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q := (*seen)[0].URL.Query(); q.Get("include") != "calls" || q.Get("range") != "30m" || q.Get("group_pods") != "1" {
+		t.Fatalf("request: %s", (*seen)[0].URL.RawQuery)
+	}
+	at := func(key string) int { return strings.Index(out, `"`+key+`":`) }
+	inCalls := func(key string) int { return at("calls") + strings.Index(out[at("calls"):], `"`+key+`":`) }
+	if !(at("calls_note") < at("calls") && at("calls") < at("nodes") && inCalls("paths") < inCalls("no_start") && inCalls("no_start") < inCalls("suspects") &&
+		inCalls("suspects") < inCalls("suspects_total") && inCalls("suspects_total") < inCalls("edges_total") && inCalls("edges_total") < inCalls("edges")) {
+		t.Fatalf("order: %s", out[:400])
+	}
+	// the note reads the fields the answer has
+	for _, words := range []string{"_unscoped", "4xx", "5xx before naming a cause", "p90_ms is shown only", "failing_outside", "suspects_total", "no_start cycle", "drop_reasons", "POLICY_DENIED"} {
+		if !strings.Contains(graphCallsNote, words) {
+			t.Errorf("calls_note says nothing of %q", words)
+		}
+	}
+	if at("paths") > 6000 || at("suspects") > 6000 {
+		t.Fatalf("the paths and suspects fall past the model's cut: %d %d", at("paths"), at("suspects"))
+	}
+	calls := decode(t, out)["calls"].(map[string]interface{})
+	if len(calls["edges"].([]interface{})) != graphCallsCap || calls["edges_total"] != float64(130) || calls["truncated"] != true {
+		t.Fatalf("calls cap: %d %v %v", len(calls["edges"].([]interface{})), calls["edges_total"], calls["truncated"])
+	}
+	// without include the request and the answer are as before
+	_, _ = handleResourceGraph(ctxFor("c1"), map[string]interface{}{"namespace": "shop", "since": "30m"}, bearer())
+	if q := (*seen)[1].URL.Query(); q.Has("include") || q.Has("range") {
+		t.Fatalf("no include: %s", (*seen)[1].URL.RawQuery)
+	}
+	if _, err := handleResourceGraph(ctxFor("c1"), map[string]interface{}{"namespace": "shop", "include": "everything"}, bearer()); !errors.Is(err, errBadRequest) {
+		t.Fatalf("include: %v", err)
+	}
+}
+
 func TestFeatureArgs2AndGate(t *testing.T) {
 	for _, args := range []map[string]interface{}{
 		{"what": "diff", "section": "values"}, {"view": "results"}, {"aggregate": "controller", "window": "7d"}, {"release": "kubeast"},
