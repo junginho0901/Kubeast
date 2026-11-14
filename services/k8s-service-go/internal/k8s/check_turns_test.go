@@ -54,7 +54,7 @@ func TestAFirstAccessCheckGoesBeforeChecksAskedAgain(t *testing.T) {
 		if _, err := s.mayList(ctx, b, "pods", ns); err != nil {
 			t.Fatal(err)
 		}
-		s.cache.Delete(ctx, s.clusterCacheKey(ctx, "pods_list_allowed:"+ns))
+		s.accessAnswers.set(s.clusterCacheKey(ctx, "pods_list_allowed:"+ns), true, time.Now())
 	}
 	mu.Lock()
 	order, at = nil, nil
