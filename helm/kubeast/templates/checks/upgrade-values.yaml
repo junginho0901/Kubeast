@@ -20,7 +20,7 @@ without its digest, must be this chart's; a tag that is not a release's (an imag
 {{- fail (printf "the values say global.imageTag %s and this chart is %s: they come from an earlier Kubeast chart, by a values file copied from it, and would keep its images. Leave chartVersion and global.imageTag out of a values file of your own, or set global.imageTag to v%s." $tag .Chart.Version .Chart.Version) }}
 {{- end }}
 {{- end }}
-{{- range list "features.networkFlowMonitor" "multicluster.clientQPS" }}
+{{- range list "features.networkFlowMonitor" "multicluster.clientQPS" "streams" }}
 {{- $node := $.Values }}
 {{- $found := true }}
 {{- range splitList "." . }}

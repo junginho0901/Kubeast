@@ -10,7 +10,7 @@ data:
   # mounted directly by docker-compose). Do NOT inline routes here — edit the
   # canonical file so every deploy path stays in sync.
   nginx.conf: |
-{{ .Files.Get "files/nginx.conf" | indent 4 }}
+{{ include "kubeast.gatewayNginxConf" . | indent 4 }}
 {{- if .Values.gateway.trustedProxies }}
   # The proxies in front of the gateway (Ingress controller, load balancer):
   # nginx takes the client address from the X-Forwarded-For they append,
@@ -21,6 +21,13 @@ data:
     {{- end }}
     real_ip_header X-Forwarded-For;
     real_ip_recursive on;
+{{- end }}
+{{- if .Values.streams.enabled }}
+  # The terminals and followed logs go to k8s-service-stream (streams.enabled).
+  streams.conf: |
+    upstream k8s-service-stream {
+        server k8s-service-stream:8002;
+    }
 {{- end }}
 ---
 apiVersion: apps/v1
@@ -40,7 +47,7 @@ spec:
       labels:
         app: gateway
       annotations:
-        checksum/nginx-config: {{ print (.Files.Get "files/nginx.conf") (toJson .Values.gateway.trustedProxies) | sha256sum }}
+        checksum/nginx-config: {{ print (include "kubeast.gatewayNginxConf" .) (toJson .Values.gateway.trustedProxies) | sha256sum }}
     spec:
       automountServiceAccountToken: false
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 101) | nindent 6 }}
@@ -60,6 +67,11 @@ spec:
             - name: nginx-config
               mountPath: /etc/nginx/conf.d/kubeast/realip.conf
               subPath: realip.conf
+            {{- end }}
+            {{- if .Values.streams.enabled }}
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/kubeast/streams.conf
+              subPath: streams.conf
             {{- end }}
             - name: tmp
               mountPath: /tmp

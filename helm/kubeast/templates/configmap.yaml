@@ -102,7 +102,7 @@ data:
   POD_NAMESPACE: {{ include "kubeast.namespace" . | quote }}
   SETUP_KUBECONFIG_SECRET: "k8s-kubeconfig"
   SETUP_CONFIGMAP_NAME: "kubeast-config"
-  SETUP_RESTART_DEPLOYMENTS: {{ ternary "k8s-service,tool-server" "k8s-service" .Values.ai.enabled | quote }}
+  SETUP_RESTART_DEPLOYMENTS: {{ print (ternary "k8s-service,tool-server" "k8s-service" .Values.ai.enabled) (ternary ",k8s-service-stream" "" .Values.streams.enabled) | quote }}
   AI_ENABLED: {{ .Values.ai.enabled | quote }}
   AUTH_JWKS_URL: "http://auth-service:8004/api/v1/auth/jwks.json"
   AUTH_TOKEN_VERSION_URL: "http://auth-service:8004/api/v1/auth/internal/token-version"

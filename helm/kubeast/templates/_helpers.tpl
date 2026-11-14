@@ -279,11 +279,15 @@ annotations:
 {{- range .Values.audit.sinks }}{{ if eq (toString .type) "file" }}true{{ end }}{{ end }}
 {{- end -}}
 
-{{/* k8s-service volumes for terminal session recording (spool, file store, store Secret). */}}
+{{/* k8s-service volumes for terminal session recording (spool, file store, store Secret): (dict "root" $ "spool" bool).
+     The spool is where the terminals open (SERVER_ROLE all or stream); k8s-service of role api only reads the store. */}}
 {{- define "kubeast.recordingVolumeMounts" -}}
+{{- with .root }}
 {{- if .Values.sessionRecording.enabled }}
+{{- if $.spool }}
 - name: recording-spool
   mountPath: /var/lib/kubeast-recordings
+{{- end }}
 {{- if eq (toString .Values.sessionRecording.storage) "file" }}
 - name: recording-store
   mountPath: /var/lib/kubeast-recordings-store
@@ -294,12 +298,16 @@ annotations:
   readOnly: true
 {{- end }}
 {{- end }}
+{{- end }}
 {{- end -}}
 
 {{- define "kubeast.recordingVolumes" -}}
+{{- with .root }}
 {{- if .Values.sessionRecording.enabled }}
+{{- if $.spool }}
 - name: recording-spool
   {{- toYaml (.Values.sessionRecording.spoolVolume | default (dict "emptyDir" (dict))) | nindent 2 }}
+{{- end }}
 {{- if eq (toString .Values.sessionRecording.storage) "file" }}
 - name: recording-store
   {{- toYaml .Values.sessionRecording.fileVolume | nindent 2 }}
@@ -309,6 +317,7 @@ annotations:
   secret:
     secretName: {{ .Values.sessionRecording.secret }}
     defaultMode: {{ include "kubeast.secretMode" . }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end -}}
@@ -327,3 +336,35 @@ true
 {{- end -}}
 {{- end }}
 
+
+{{/*
+The gateway's nginx.conf: files/nginx.conf as written, or with streams.enabled the terminals' and followed logs'
+locations (the ones holding exec/ws, logs/stream, logfiles/stream and debug-shell/ws, each with its 3600 s timeouts)
+sent to k8s-service-stream, plus a location for a node shell as API clients open it. The upstream is in
+conf.d/kubeast/streams.conf. tests/streams_test.yaml counts the locations that changed, so an edit of the file that
+this no longer matches fails there.
+*/}}
+{{- define "kubeast.gatewayNginxConf" -}}
+{{- $conf := .Files.Get "files/nginx.conf" -}}
+{{- if .Values.streams.enabled -}}
+{{- $conf = regexReplaceAll `(location ~ \^/api/v1/[^\n]*(?:\(exec/ws\|logs/stream\|logfiles/stream\)|debug-shell/ws)\$ \{\n(?:[ \t]*rewrite [^\n]*\n)?[ \t]*proxy_pass http://)k8s-service;` $conf "${1}k8s-service-stream;" -}}
+{{- $nodeShell := `        # A node shell as API clients open it (streams.enabled): to the stream server, kept open while quiet.
+        location ~ ^/api/v1/nodes/[^/]+/debug-shell/ws$ {
+            proxy_pass http://k8s-service-stream;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            proxy_cache_bypass $http_upgrade;
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+        }
+
+` -}}
+{{- $conf = replace "        location /api/v1/nodes {\n" (print $nodeShell "        location /api/v1/nodes {\n") $conf -}}
+{{- end -}}
+{{- $conf -}}
+{{- end -}}
