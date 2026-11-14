@@ -7,7 +7,8 @@
 # features.networkFlows.clusters next to the ones already there.
 #
 #   scripts/kind-retina.sh up       # creates the cluster, or starts it when stopped
-#   scripts/kind-retina.sh down     # takes the cluster out of features.networkFlows, unregisters it and stops it (kept: up registers it again)
+#   scripts/kind-retina.sh down     # takes the cluster out of features.networkFlows (enabled as before up — see
+#                                   # scripts/kind-networkflows-record.sh), unregisters it and stops it (kept: up registers it again)
 #   scripts/kind-retina.sh delete   # down and delete the cluster
 #
 # Behind a TLS-inspecting proxy set RETINA_NODE_HOOK to a command that gets the cluster name and makes the node
@@ -44,6 +45,8 @@ token() {
 registered_id() { # the Kubeast cluster whose name is $NAME, if any
   curl -s -H "Authorization: Bearer $1" "$GATEWAY/api/v1/clusters" | jq -r --arg n "$NAME" '(.items // .)[] | select(.display_name == $n or .id == $n) | .id' | head -1
 }
+# shellcheck source-path=SCRIPTDIR source=kind-networkflows-record.sh disable=SC1091
+. "$ROOT/scripts/kind-networkflows-record.sh"
 
 case "${1:-}" in
   up)
@@ -82,6 +85,7 @@ case "${1:-}" in
     helm template "$RELEASE" "$ROOT/helm/kubeast" -s templates/impersonation-viewer-proxy.yaml -f "$ROOT/deploy/kind/values.yaml" \
       --set-json 'auth.impersonation.viewerProxyServices=[{"namespace":"monitoring","service":"prometheus","port":9090}]' | ck apply -f - >/dev/null
     echo "═══ Kubeast: features.networkFlows adds cluster $ID ═══"
+    flows_up "$ID"
     main_helm upgrade "$RELEASE" "$ROOT/helm/kubeast" --reset-then-reuse-values \
       --set features.networkFlows.enabled=true --set "features.networkFlows.clusters.$ID=proxy" \
       --wait --timeout 5m | grep -E "REVISION|STATUS"
@@ -91,9 +95,8 @@ case "${1:-}" in
   down|delete)
     TOKEN="$(token)"
     ID="$(registered_id "$TOKEN")"
-    if [ -n "$ID" ] && main_helm status "$RELEASE" >/dev/null 2>&1; then
-      main_helm upgrade "$RELEASE" "$ROOT/helm/kubeast" --reset-then-reuse-values --set "features.networkFlows.clusters.$ID=null" \
-        --wait --timeout 5m | grep -E "REVISION|STATUS"
+    if main_helm status "$RELEASE" >/dev/null 2>&1; then
+      flows_down "$ID"
     fi
     # unregistered on down too: a stopped cluster left registered fails every read that goes to all clusters
     if [ -n "$ID" ]; then
