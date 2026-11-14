@@ -245,7 +245,7 @@ describe('the notices among the windows the floating chat is told of', () => {
     }
   })
 
-  it('cover every notice this file renders', () => {
-    expect([...NOTICE_SOURCES].sort()).toEqual(['DescribeFailure', 'DescribeStale', 'ForbiddenBanner', 'ListReadFailure', 'RefreshFailure', 'TableEmptyRow', 'WatchProblemNotice'])
+  it('cover every shared notice', () => {
+    expect([...NOTICE_SOURCES].sort()).toEqual(['DescribeFailure', 'DescribeStale', 'ForbiddenBanner', 'ListReadFailure', 'MetricsNotRead', 'RefreshFailure', 'TableEmptyRow', 'WatchProblemNotice'])
   })
 })
