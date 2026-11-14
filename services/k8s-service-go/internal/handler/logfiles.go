@@ -337,6 +337,9 @@ func (h *Handler) LogFileStream(w http.ResponseWriter, r *http.Request) {
 	if !h.logFileGate(w, r) {
 		return
 	}
+	if h.refuseWhileLeaving(w) {
+		return
+	}
 	namespace, pod, container := chi.URLParam(r, "namespace"), chi.URLParam(r, "name"), r.URL.Query().Get("container")
 	if rerr := h.auditReady(r); rerr != nil {
 		h.refuseUnaudited(w, r, rerr)
@@ -358,6 +361,8 @@ func (h *Handler) LogFileStream(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, release := h.holdSession(r.Context())
 	defer release()
+	ctx, leave := h.drain.HoldStream(ctx)
+	defer leave()
 	run := func(argv []string, out io.Writer) *logFileError {
 		var stderr bytes.Buffer
 		if err := h.runContainerCommand(ctx, namespace, pod, container, argv, out, &limitedWriter{w: &stderr, n: logFileStderrMax}); err != nil {
