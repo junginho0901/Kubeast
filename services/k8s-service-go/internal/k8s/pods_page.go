@@ -523,14 +523,26 @@ func (s *Service) MayListKind(ctx context.Context, group, resource string) (bool
 
 // mayListGroup is mayList for a resource of any API group.
 func (s *Service) mayListGroup(ctx context.Context, b *clientBundle, group, resource, namespace string) (bool, error) {
-	if b.authz == nil {
-		return true, nil
-	}
 	name := resource
 	if group != "" {
 		name = group + "/" + resource
 	}
-	key := s.clusterCacheKey(ctx, name+"_list_allowed:"+namespace)
+	return s.mayDo(ctx, b, name+"_list_allowed:"+namespace, authorizationv1.ResourceAttributes{Verb: "list", Group: group, Resource: resource, Namespace: namespace})
+}
+
+// mayGetNamespace asks whether the caller may read the namespace name, with the attributes the API server gives that
+// read (GET /api/v1/namespaces/<name> is in the namespace of its own name), remembered as mayList's answers.
+func (s *Service) mayGetNamespace(ctx context.Context, b *clientBundle, name string) (bool, error) {
+	return s.mayDo(ctx, b, "namespaces_get_allowed:"+name, authorizationv1.ResourceAttributes{Verb: "get", Resource: "namespaces", Namespace: name, Name: name})
+}
+
+// mayDo asks whether the caller may do what attrs describe, from the cache or by a SelfSubjectAccessReview, remembered
+// accessCheckTTL under what (with the cluster and the identity added).
+func (s *Service) mayDo(ctx context.Context, b *clientBundle, what string, attrs authorizationv1.ResourceAttributes) (bool, error) {
+	if b.authz == nil {
+		return true, nil
+	}
+	key := s.clusterCacheKey(ctx, what)
 	var allowed bool
 	if s.cache != nil && s.cache.Get(ctx, key, &allowed) {
 		return allowed, nil
@@ -545,9 +557,7 @@ func (s *Service) mayListGroup(ctx context.Context, b *clientBundle, group, reso
 			return known, nil
 		}
 		review, err := b.authz.SelfSubjectAccessReviews().Create(ctx, &authorizationv1.SelfSubjectAccessReview{
-			Spec: authorizationv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authorizationv1.ResourceAttributes{
-				Verb: "list", Group: group, Resource: resource, Namespace: namespace,
-			}},
+			Spec: authorizationv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &attrs},
 		}, metav1.CreateOptions{})
 		if err != nil {
 			return false, err
