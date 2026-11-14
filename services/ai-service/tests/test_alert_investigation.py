@@ -1169,3 +1169,79 @@ async def test_the_worker_requeues_the_row_it_runs_when_it_is_cancelled(monkeypa
     with pytest.raises(asyncio.CancelledError):
         await task
     assert requeued == ["inv-held"]
+
+
+@pytest.mark.asyncio
+async def test_a_worker_told_to_stop_ends_the_run_it_holds_and_takes_no_other(monkeypatch):
+    claimed, finished, requeued = [], [], []
+
+    async def claim_next(_db):
+        claimed.append(f"inv-{len(claimed)}")
+        return SimpleNamespace(id=claimed[-1], requested_by="")
+
+    async def no_stale(*_a, **_k):
+        return 0
+
+    async def no_refusal(*_a, **_k):
+        return ""
+
+    running, release = asyncio.Event(), asyncio.Event()
+
+    async def run_one(_cfg, _db, row):
+        running.set()
+        await release.wait()
+        finished.append(row.id)
+
+    async def requeue_or_fail(_db, inv_id):
+        requeued.append(inv_id)
+        return "queued"
+
+    async def db_service():
+        return object()
+
+    monkeypatch.setattr(runner, "get_db_service", db_service)
+    monkeypatch.setattr(runner, "fail_stale", no_stale)
+    monkeypatch.setattr(runner.store, "claim_next", claim_next)
+    monkeypatch.setattr(runner, "claim_refusal", no_refusal)
+    monkeypatch.setattr(runner, "run_one", run_one)
+    monkeypatch.setattr(runner.store, "requeue_or_fail", requeue_or_fail)
+    stop = asyncio.Event()
+    task = asyncio.create_task(runner.worker(stop))
+    await asyncio.wait_for(running.wait(), timeout=2)
+    stop.set()
+    release.set()
+    await asyncio.wait_for(task, timeout=2)
+    assert (claimed, finished, requeued) == (["inv-0"], ["inv-0"], [])
+
+
+@pytest.mark.asyncio
+async def test_the_stop_signal_stops_the_worker_taking_runs_before_uvicorn_ends_the_lifespan(monkeypatch):
+    # uvicorn 0.54 waits up to --timeout-graceful-shutdown for the answers in flight before the lifespan ends: the
+    # worker's stop is set when SIGTERM comes, and uvicorn's own handler still gets the signal.
+    import signal
+
+    import uvicorn
+
+    import main
+
+    seen = {}
+
+    async def worker(stop):
+        seen["stop"] = stop
+        await asyncio.sleep(60)
+
+    monkeypatch.setattr(runner, "worker", worker)
+    monkeypatch.setattr(main.investigation_settings, "load", lambda: SimpleNamespace(enabled=True))
+    server = uvicorn.Server(uvicorn.Config(main.app))
+    original = signal.signal(signal.SIGTERM, server.handle_exit)
+    try:
+        async with main.lifespan(main.app):
+            await asyncio.sleep(0)
+            stop = seen["stop"]
+            assert not stop.is_set()
+            signal.raise_signal(signal.SIGTERM)
+            await asyncio.wait_for(stop.wait(), timeout=2)
+            assert server.should_exit  # uvicorn starts its graceful wait as before
+        assert signal.getsignal(signal.SIGTERM) == server.handle_exit
+    finally:
+        signal.signal(signal.SIGTERM, original)
