@@ -73,7 +73,7 @@ type nameTaken struct {
 func (t *nameTaken) Error() string {
 	switch {
 	case t.other == "":
-		return fmt.Sprintf("Role name %q is taken by another role apart from letter case. Choose another name", t.name)
+		return fmt.Sprintf("Role name %q makes the same group as another role. Choose another name", t.name)
 	case t.other == t.name && t.builtin:
 		return fmt.Sprintf("Role %q already exists: it is a built-in role", t.name)
 	case t.other == t.name:
@@ -100,8 +100,9 @@ func refuseTakenName(w http.ResponseWriter, t *nameTaken) {
 // on a cluster comes from the name alone (auth.RoleGroupSlug), so another role
 // with the same slug shares that group and its bindings, and a built-in's name
 // in other capitals acts as the built-in. id is the role being renamed, 0 for a
-// new one. nil means the name is free. Stored names are not read through here,
-// so an install that already has such a name keeps it.
+// new one. nil means the name is free. Migration 23 renamed the stored roles
+// that shared a group, and the database refuses such a name too
+// (roles_name_group_key).
 func (h *RoleHandler) roleNameConflict(ctx context.Context, name string, id int) (*nameTaken, error) {
 	roles, err := h.repo.ListRoleNames(ctx)
 	if err != nil {
@@ -118,8 +119,7 @@ func (h *RoleHandler) roleNameConflict(ctx context.Context, name string, id int)
 }
 
 // takenOnSave reads a save the database refused for the name (two saves at one
-// moment, or a name equal ignoring case to one the handler's check let through)
-// as the refusal the check gives; any other error is returned as it is.
+// moment) as the refusal the check gives; any other error is returned as it is.
 func (h *RoleHandler) takenOnSave(ctx context.Context, name string, id int, err error) error {
 	if !repository.IsRoleNameTaken(err) {
 		return err
@@ -206,7 +206,8 @@ func (h *RoleHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
 		// ChartBound: a grant of this role takes a global admin or an Admin of the cluster (chartBoundGrantCeiling).
 		ChartBound bool `json:"chart_bound,omitempty"`
 		// SameGroupAs: another role this custom role acts as on a cluster, its name differing only in letter case,
-		// spaces or punctuation (stored before roleNameConflict refused such names), for the pickers to say so.
+		// spaces or punctuation, for the pickers to say so. Migration 23 renamed such roles and the database refuses
+		// new ones, so it reads none; the refusals that read it stay as a second check.
 		SameGroupAs string `json:"same_group_as,omitempty"`
 	}
 	names := make([]model.Role, 0, len(roles))
@@ -455,7 +456,7 @@ func (h *RoleHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	role, err := h.repo.UpdateRole(r.Context(), id, name, req.Description, req.Permissions, tokensEndedBy(existing, name, req.Permissions), sameName)
+	role, err := h.repo.UpdateRole(r.Context(), id, name, req.Description, req.Permissions, tokensEndedBy(existing, name, req.Permissions))
 	err = h.takenOnSave(r.Context(), name, id, err)
 	writeAudit(h.auditStore, r, payload, auditEvent{
 		action: "admin.roles.update", targetType: "role", targetID: strconv.Itoa(id),

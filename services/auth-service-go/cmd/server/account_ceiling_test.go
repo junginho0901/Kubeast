@@ -462,27 +462,27 @@ func TestTakenRoleNameSaysWhichRoleHoldsIt(t *testing.T) {
 	}
 }
 
-// Two saves at one moment can both pass the check; the database's index of
-// names ignoring case (migration 00023) or its unique name refuses the second,
+// Two saves at one moment can both pass the check; the database's index of the
+// group each name makes (migration 23) or its unique name refuses the second,
 // which reads as a taken name with its audit row, not as a server error.
 func TestRoleNameTheDatabaseRefusesReadsAsTaken(t *testing.T) {
 	global := auth.PermissionMatrix{"*": {"*"}}
 	for _, c := range []struct {
 		name, method, path, body, constraint, action string
 	}{
-		{"a new role, ignoring case", http.MethodPost, "/admin/roles", `{"name":"team-reader","permissions":[]}`, "roles_name_folded_key", "admin.roles.create"},
+		{"a new role of another's group", http.MethodPost, "/admin/roles", `{"name":"team-reader","permissions":[]}`, "roles_name_group_key", "admin.roles.create"},
 		{"a new role, as written", http.MethodPost, "/admin/roles", `{"name":"team-reader","permissions":[]}`, "roles_name_key", "admin.roles.create"},
-		{"a rename", http.MethodPut, fmt.Sprintf("/admin/roles/%d", roleCustom), `{"name":"renamed","permissions":[]}`, "roles_name_folded_key", "admin.roles.update"},
+		{"a rename", http.MethodPut, fmt.Sprintf("/admin/roles/%d", roleCustom), `{"name":"renamed","permissions":[]}`, "roles_name_group_key", "admin.roles.update"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			api := newAuthAPI(t, pendingRequest{owner: "requester"}, roleNameRules()...)
 			api.db.refuseOn("INSERT INTO roles", "23505", c.constraint)
 			api.db.refuseOn("UPDATE roles SET", "23505", c.constraint)
 			w := api.call(api.actor(global, nil), c.method, c.path, c.body)
-			if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), `"code":"role_name_taken"`) || !strings.Contains(w.Body.String(), "taken by another role") {
+			if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), `"code":"role_name_taken"`) || !strings.Contains(w.Body.String(), "same group as another role") {
 				t.Fatalf("%d %s, want 400 role_name_taken", w.Code, w.Body.String())
 			}
-			if rows := api.store.failures(c.action); len(rows) != 1 || !strings.Contains(rows[0].Error, "taken by another role") {
+			if rows := api.store.failures(c.action); len(rows) != 1 || !strings.Contains(rows[0].Error, "same group as another role") {
 				t.Errorf("audit failures = %+v, want one saying the name is taken", rows)
 			}
 		})

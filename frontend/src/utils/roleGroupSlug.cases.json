@@ -1,0 +1,23 @@
+{"about": "The group a role name makes (kubeast:role:<slug>), one rule in three places: auth.RoleGroupSlug (impersonation_test.go), the database's role_group_slug of migration 23 (role_names_postgres_test.go) and roleGroupSlug (roleGroup.test.ts). Go's whitespace is trimmed, U+FEFF is not; U+0130 and U+212A lower to ASCII; anything else outside [a-z0-9._-] is one '-' per character.",
+"cases": [
+  {"name": "Admin", "slug": "admin"},
+  {"name": "ADMIN", "slug": "admin"},
+  {"name": " read ", "slug": "read"},
+  {"name": "Team.Ops_1", "slug": "team.ops_1"},
+  {"name": "a b", "slug": "a-b"},
+  {"name": "a-b", "slug": "a-b"},
+  {"name": "A!B", "slug": "a-b"},
+  {"name": "x y", "slug": "x-y"},
+  {"name": "\tops\n", "slug": "ops"},
+  {"name": "\u000b\f\rops\u0085", "slug": "ops"},
+  {"name": " ops　", "slug": "ops"},
+  {"name": "   ops    ", "slug": "ops"},
+  {"name": "﻿ops", "slug": "-ops"},
+  {"name": "ADMİN", "slug": "admin"},
+  {"name": "Kube", "slug": "kube"},
+  {"name": "Éclair", "slug": "-clair"},
+  {"name": "운영팀", "slug": "---"},
+  {"name": "a😀b", "slug": "a-b"},
+  {"name": "ΣΙΣ", "slug": "---"},
+  {"name": "   ", "slug": ""}
+]}

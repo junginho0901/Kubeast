@@ -351,7 +351,8 @@
       "expired": "time elapsed",
       "not_reviewed": "not reviewed within 24 h",
       "revoked": "revoked by an admin",
-      "superseded": "role set by an admin"
+      "superseded": "role set by an admin",
+      "role_renamed": "role renamed by the upgrade"
     },
     "admin": {
       "subtitle": "Users ask for a higher role on a cluster for a limited time. Approving grants it until the time runs out, then the previous role comes back. You cannot decide your own request.",
@@ -3749,7 +3750,7 @@
     "nameTakenSame": "Role \"{{role}}\" already exists. Choose another name.",
     "nameTakenBuiltin": "Taken: it is the built-in role {{role}} apart from letter case or spaces.",
     "nameTakenGroup": "On a cluster this name acts as the same Kubernetes group as role \"{{role}}\" ({{group}}). Choose another name.",
-    "nameTakenOther": "Taken by another role apart from letter case. Choose another name.",
+    "nameTakenOther": "Another role's name makes the same group. Choose another name.",
     "sameGroupNote": "Its name differs from role \"{{role}}\" only in letter case, spaces or punctuation, so it is not given on a cluster any more. A grant it already has acts as no role group where the other is a built-in role. Rename it.",
     "sameGroupHint": "not grantable: same name as {{role}} apart from letter case or spaces",
     "sameGroupRefused": "Role \"{{role}}\" is not given on a cluster: its name differs from role \"{{other}}\" only in letter case, spaces or punctuation. Rename it in Role Management first.",

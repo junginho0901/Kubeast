@@ -90,7 +90,7 @@ export default function AdminRoles() {
         role: taken.role, group: `kubeast:role:${roleGroupSlug(name)}`,
       })
     }
-    return tr('adminRoles.nameTakenOther', 'Taken by another role apart from letter case. Choose another name.')
+    return tr('adminRoles.nameTakenOther', "Another role's name makes the same group. Choose another name.")
   }
   const serverRefusal = (err: any, fallback: string) => {
     const data = err?.response?.data

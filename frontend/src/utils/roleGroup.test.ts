@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { customRoleGroup, isBuiltinRole, roleEditEndsSessions, roleGroupSlug, sameGroupRefusal, takenRoleName, takesBuiltinSlug } from './roleGroup'
+import SLUG_CASES from './roleGroupSlug.cases.json'
+
+// auth.RoleGroupSlug and the database's role_group_slug run the same table (TestRoleGroupSlugCases,
+// TestPostgresRoleNamesOneGroupEach), so the role form refuses what the server and the database refuse.
+describe('roleGroupSlug', () => {
+  it.each(SLUG_CASES.cases)('$name makes $slug', ({ name, slug }) => {
+    expect(roleGroupSlug(name)).toBe(slug)
+  })
+})
 
 // auth-service tokensEndedBy: only what a token held and no longer may ends a session.
 describe('roleEditEndsSessions', () => {

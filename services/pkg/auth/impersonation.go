@@ -141,9 +141,10 @@ func BuiltinRoleNamed(name string) (string, bool) {
 }
 
 // TakesBuiltinSlug reports whether name is not a built-in role's but makes a
-// built-in's slug ("ADMIN", " read ", "PENDING"): such a role, stored before
-// those names were refused, acts on a cluster as no role group, neither the
-// built-in's nor kubeast:role:<slug>, so it is never taken for the built-in.
+// built-in's slug ("ADMIN", " read ", "PENDING"): such a role acts on a cluster
+// as no role group, neither the built-in's nor kubeast:role:<slug>, so it is
+// never taken for the built-in. Migration 23 renamed the roles stored so and
+// the database refuses new ones, so this is a second check.
 func TakesBuiltinSlug(name string) bool {
 	if IsBuiltinRole(name) {
 		return false
