@@ -14,3 +14,13 @@ tests:
     asserts:
       - notMatchRegexRaw:
           pattern: Database connections
+
+  - it: adds k8s-service-stream's pods to the sum for an external database with streams.enabled
+    set:
+      postgresql.enabled: false
+      postgresql.externalHost: db.example.com
+      streams.enabled: true
+      streams.replicas: 1
+    asserts:
+      - matchRegexRaw:
+          pattern: can hold up to 172 connections to db\.example\.com
