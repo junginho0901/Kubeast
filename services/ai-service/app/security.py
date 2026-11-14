@@ -5,7 +5,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, Mapping, Optional, Tuple
+from typing import Dict, FrozenSet, Iterable, Mapping, Optional, Tuple
 
 import jwt
 from fastapi import Depends, Header, HTTPException, Request
@@ -19,11 +19,13 @@ _jwk_client = jwt.PyJWKClient(AUTH_JWKS_URL)
 
 # Token revocation (same rules as services/pkg/auth token_version.go).
 # auth-service bumps a user's token_version to revoke every token issued so
-# far; "tv" in a token is the version it was issued with. The current version
-# is read from auth-service at most once per TOKEN_VERSION_CACHE_SECONDS per
-# user. When auth-service cannot be reached a version fetched within
-# TOKEN_VERSION_STALE_SECONDS still counts; with nothing cached the token is
-# refused rather than trusted. Empty AUTH_TOKEN_VERSION_URL turns the check off.
+# far; "tv" in a token is the version it was issued with. A sign-out ends one
+# sign-in: the same answer lists the auth_time of each of the user's sign-ins
+# that was signed out. Both are read from auth-service at most once per
+# TOKEN_VERSION_CACHE_SECONDS per user. When auth-service cannot be reached an
+# answer fetched within TOKEN_VERSION_STALE_SECONDS still counts; with nothing
+# cached the token is refused rather than trusted. Empty
+# AUTH_TOKEN_VERSION_URL turns the check off.
 AUTH_TOKEN_VERSION_URL = os.getenv(
     "AUTH_TOKEN_VERSION_URL", "http://auth-service:8004/api/v1/auth/internal/token-version"
 )
@@ -35,37 +37,55 @@ class TokenRevokedError(Exception):
     """The token's version is behind the user's current one, or the user is gone."""
 
 
-def _fetch_token_version(token: str, user_id: str) -> int:
-    """GET <AUTH_TOKEN_VERSION_URL>/<user_id> as the bearer. The endpoint only
-    answers for the token's own subject, so the token is the credential."""
+def _fetch_token_version(token: str, user_id: str) -> Tuple[int, FrozenSet[int]]:
+    """GET <AUTH_TOKEN_VERSION_URL>/<user_id> as the bearer: the version and the
+    signed-out sign-ins (none when an older auth-service leaves the list out).
+    The endpoint only answers for the token's own subject, so the token is the
+    credential."""
     req = urllib.request.Request(
         f"{AUTH_TOKEN_VERSION_URL}/{user_id}", headers={"Authorization": f"Bearer {token}"}
     )
     try:
         with urllib.request.urlopen(req, timeout=3) as resp:
-            return int(json.load(resp)["tv"])
+            body = json.load(resp)
     except urllib.error.HTTPError as e:
         if e.code in (401, 403, 404):
             raise TokenRevokedError(f"auth-service {e.code}") from e
         raise
+    return int(body["tv"]), frozenset(int(t) for t in body.get("signed_out") or ())
 
 
-_tv_cache: Dict[str, Tuple[int, float]] = {}  # user_id[|akid] -> (version, monotonic seconds fetched)
+# user_id[|akid] -> (version, monotonic seconds fetched, signed-out sign-ins)
+_tv_cache: Dict[str, Tuple[int, float, FrozenSet[int]]] = {}
 _tv_lock = threading.Lock()
 
 
-def _compare_token_version(claimed: int, current: int) -> None:
-    if claimed != current:
+def sign_in_of(payload: Mapping) -> int:
+    """The sign-in a token belongs to (pkg/auth TokenPayload.SignIn): "auth_time",
+    or "iat" for a token issued before it; 0 for a token an API key was
+    exchanged for or a system token."""
+    if payload.get("akid") or payload.get("sys"):
+        return 0
+    for claim in ("auth_time", "iat"):
+        value = payload.get(claim)
+        if isinstance(value, (int, float)) and value > 0:
+            return int(value)
+    return 0
+
+
+def _compare_token_version(claimed: int, current: int, sign_in: int = 0, signed_out: FrozenSet[int] = frozenset()) -> None:
+    if claimed != current or (sign_in and sign_in in signed_out):
         raise HTTPException(status_code=401, detail="Token revoked")
 
 
-def check_token_version(token: str, user_id: str, claimed: int, akid: str = "") -> None:
+def check_token_version(token: str, user_id: str, claimed: int, akid: str = "", sign_in: int = 0) -> None:
     """Versions only grow, so a token claiming more than the cached version was
     issued after the cache entry (sign-in right after a role change): that
     refreshes the cache instead of waiting for it to expire. A token an API key
     was exchanged for (akid) is cached apart: auth-service answers "revoked" for
     it once the key is deleted or expired, and the user's sign-in token must not
-    keep a shared entry fresh for it (pkg/auth checkTokenVersion)."""
+    keep a shared entry fresh for it (pkg/auth checkTokenVersion). sign_in is the
+    token's sign-in (sign_in_of): one answer per user serves all of them."""
     if not AUTH_TOKEN_VERSION_URL:
         return
     now = time.monotonic()
@@ -73,10 +93,10 @@ def check_token_version(token: str, user_id: str, claimed: int, akid: str = "") 
     with _tv_lock:
         cached = _tv_cache.get(key)
     if cached and now - cached[1] < TOKEN_VERSION_CACHE_SECONDS and claimed <= cached[0]:
-        _compare_token_version(claimed, cached[0])
+        _compare_token_version(claimed, cached[0], sign_in, cached[2])
         return
     try:
-        current = _fetch_token_version(token, user_id)
+        current, signed_out = _fetch_token_version(token, user_id)
     except TokenRevokedError:
         with _tv_lock:
             _tv_cache.pop(key, None)
@@ -85,14 +105,15 @@ def check_token_version(token: str, user_id: str, claimed: int, akid: str = "") 
         if cached and now - cached[1] < TOKEN_VERSION_STALE_SECONDS:
             # Outage: the signature proves auth-service issued the token at
             # version `claimed`, so anything not older than what we last saw
-            # passes; an older one was revoked before the outage.
-            if claimed < cached[0]:
+            # passes; an older one was revoked before the outage, and a sign-in
+            # seen signed out stays so.
+            if claimed < cached[0] or (sign_in and sign_in in cached[2]):
                 raise HTTPException(status_code=401, detail="Token revoked")
             return
         raise HTTPException(status_code=401, detail="Token version unavailable")
     with _tv_lock:
-        _tv_cache[key] = (current, now)
-    _compare_token_version(claimed, current)
+        _tv_cache[key] = (current, now, signed_out)
+    _compare_token_version(claimed, current, sign_in, signed_out)
 
 # Cluster id the services fall back to when a request names none (mirrors
 # k8s-service ClusterMiddleware / tool-server resolveClusterKubeconfig).
@@ -220,7 +241,7 @@ def decode_access_token(token: str) -> TokenPayload:
         matrix = _parse_permission_matrix(payload.get("permissions"))
         if matrix is None:
             raise HTTPException(status_code=401, detail="Invalid token: permissions claim must be a per-cluster map")
-        check_token_version(token, user_id, int(payload.get("tv") or 0), str(payload.get("akid") or ""))
+        check_token_version(token, user_id, int(payload.get("tv") or 0), str(payload.get("akid") or ""), sign_in_of(payload))
         return TokenPayload(
             user_id=user_id,
             role=role or "read",
