@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import re
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, AsyncIterator, Awaitable, Callable, Optional
 
 from sqlalchemy import func, or_, select, text, update
 
@@ -158,6 +159,26 @@ async def insert(db, **fields: Any) -> str:
         s.add(row)
         await s.commit()
     return inv_id
+
+
+def alert_row_lock(cluster: str, fingerprint: str, starts_at: Optional[datetime]):
+    """The FOR UPDATE of an alert's inbox row, the row inbox.record stored it in (without starts_at, the newest)."""
+    q = select(AlertInboxItem.id).where(AlertInboxItem.cluster == cluster, AlertInboxItem.fingerprint == fingerprint)
+    if starts_at is not None:
+        q = q.where(AlertInboxItem.starts_at == starts_at)
+    else:
+        q = q.order_by(AlertInboxItem.starts_at.desc()).limit(1)
+    return q.with_for_update()
+
+
+@asynccontextmanager
+async def alert_locked(db, cluster: str, fingerprint: str, starts_at: Optional[datetime]) -> AsyncIterator[None]:
+    """Holds the alert's inbox row lock, as queue_requested does, until the block ends: two deliveries of one alert
+    at one moment, on one replica or two, decide one after the other, so the second finds the first one's row. The
+    block's writes commit in their own sessions before the lock is let go."""
+    async with db.async_session() as s:
+        (await s.execute(alert_row_lock(cluster, fingerprint, starts_at))).first()
+        yield
 
 
 async def queue_requested(
