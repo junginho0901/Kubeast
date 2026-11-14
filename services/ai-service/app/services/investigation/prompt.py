@@ -50,7 +50,8 @@ def system_prompt(*, cluster: str, namespace: str, language: str) -> str:
     )
 
 
-def alert_message(*, cluster: str, alert: dict[str, Any]) -> str:
+def alert_message(*, cluster: str, alert: dict[str, Any], context: str = "") -> str:
+    """`context`: what the server worked out or read before the first model call (the rule cards)."""
     # Labels and annotations are free text: masked here like other model input; the alert screens read the stored row.
     data, _ = redact_text(json.dumps(alert, ensure_ascii=False, indent=2, default=str))
     return (
@@ -59,7 +60,8 @@ def alert_message(*, cluster: str, alert: dict[str, Any]) -> str:
         "<<<ALERT\n"
         f"{inside_arrows(data)}\n"
         "ALERT>>>\n"
-        "Investigate it now."
+        + (f"\n{context}\n\n" if context else "")
+        + "Investigate it now."
     )
 
 

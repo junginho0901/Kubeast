@@ -851,6 +851,10 @@ async def session_chat_stream(
             from app.services.ai.permissions import unavailable_note
             if note := unavailable_note(service):
                 messages.append({"role": "system", "content": note})
+        # ai.ruleCards.chat: the checks of a failure the question names, with the tools this turn offers (this turn only).
+        from app.services import rule_cards
+        if card_note := rule_cards.chat_note(message, tools):
+            messages.append({"role": "system", "content": card_note})
 
         # 모델 정보를 스트림 첫 이벤트로 전송 (브라우저 콘솔에서 확인용)
         yield f"data: {json.dumps({'model_info': {'provider': service.provider, 'model': service.model, 'role': service.user_role, 'tier': getattr(service, 'tier', 'default')}}, ensure_ascii=False)}\n\n"

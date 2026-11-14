@@ -7,7 +7,9 @@ same path the chat uses — tool-server checks the token's ai.tool.* rights and
 namespace, the cluster sees kubeast:investigator. At most max_steps model calls;
 the last one gets no tools, so it must answer (as HolmesGPT does) — the loop is
 app.services.ai.tool_turn, which hands it to Claude Code on a Claude subscription.
-The whole run is bounded by timeout_seconds.
+The whole run is bounded by timeout_seconds. With ai.ruleCards.investigations on,
+the first message also holds at most two rule cards the alert's name and labels
+pick (app/services/rule_cards.py).
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from urllib.parse import urlencode
 import httpx
 
 from app.database import get_db_service, utcnow
+from app.services import rule_cards
 from app.services.ai import access as access_mod
 from app.services.ai import limits
 from app.services.ai.debug_dump import safe_error
@@ -162,9 +165,11 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     from app.services.ai import features as feature_gate
     tools = await feature_gate.gate_tools(readonly_tool_filter(service._get_tools_definition()), service)
     context = ToolContext(session_id=f"investigation:{row.id}")
+    # ai.ruleCards.investigations: at most two cards the alert's name and labels pick, beside the alert.
+    cards, _kinds = rule_cards.investigation_cards(rule_cards.load(), alertname=row.alertname, labels=row.labels, tools=tools)
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language)},
-        {"role": "user", "content": inv_prompt.alert_message(cluster=row.cluster, alert=alert_view(row))},
+        {"role": "user", "content": inv_prompt.alert_message(cluster=row.cluster, alert=alert_view(row), context=cards)},
     ]
     tool_log: list[dict[str, Any]] = []
 

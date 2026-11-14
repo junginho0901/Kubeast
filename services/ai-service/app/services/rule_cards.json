@@ -1,0 +1,162 @@
+[
+  {
+    "kind": "crash",
+    "title": "Container restarting (CrashLoopBackOff)",
+    "alerts": ["KubePodCrashLooping"],
+    "terms": ["CrashLoopBackOff", "back-off restarting failed container", "RunContainerError", "ContainerCannotRun"],
+    "checks": [
+      {"check": "The log of the run that stopped (previous=true): the last lines before the exit", "tools": ["k8s_get_pod_logs"]},
+      {"check": "The last termination reason, the exit code and when the restarts began", "tools": ["k8s_describe_resource"]},
+      {"check": "A rollout, ConfigMap or Secret change just before the first restart", "tools": ["timeline"]},
+      {"check": "Liveness probe failures and back-off in the pod's events", "tools": ["k8s_get_events"]},
+      {"check": "A dependency it calls at start that refuses or times out (the error line names it)", "tools": ["k8s_check_service_connectivity", "logsearch"]}
+    ]
+  },
+  {
+    "kind": "oom",
+    "title": "Container killed for memory (OOMKilled)",
+    "alerts": ["KubernetesContainerOomKiller", "ContainerOOMKilled"],
+    "terms": ["OOMKilled", "OOMKilling", "out of memory", "exit code 137"],
+    "checks": [
+      {"check": "The last termination reason (OOMKilled, exit code 137) and the container's memory request and limit", "tools": ["k8s_describe_resource"]},
+      {"check": "Memory in use against the limit before each kill: a steady climb or a jump", "tools": ["prometheus_query", "get_pod_metrics"]},
+      {"check": "Workers or threads the process starts (args, env) against the limit, and a rollout that changed either", "tools": ["k8s_get_resource_yaml", "timeline"]},
+      {"check": "Other pods on the same node and the node's memory: the node may have run short, not the container", "tools": ["k8s_get_resources", "get_node_metrics"]},
+      {"check": "Fewer ready replicas after each kill, so the rest take more load and are killed in turn", "tools": ["issues", "prometheus_query"]}
+    ]
+  },
+  {
+    "kind": "image",
+    "title": "Image not pulled (ImagePullBackOff, ErrImagePull)",
+    "alerts": [],
+    "terms": ["ImagePullBackOff", "ErrImagePull", "InvalidImageName", "ErrImageNeverPull", "manifest unknown", "pull access denied"],
+    "checks": [
+      {"check": "The pull error as the events write it: not found, unauthorized or a timeout", "tools": ["k8s_get_events"]},
+      {"check": "The image and tag of the failing pods against the previous revision's", "tools": ["timeline", "k8s_describe_resource"]},
+      {"check": "The imagePullSecrets of the pod or its ServiceAccount, by name, and whether they exist in the namespace", "tools": ["k8s_get_resource_yaml", "k8s_get_resources"]},
+      {"check": "Whether pods on other nodes pull the same image: one node's network or the registry for all", "tools": ["k8s_get_resources"]}
+    ]
+  },
+  {
+    "kind": "config_change",
+    "title": "Configuration changed or missing",
+    "alerts": [],
+    "terms": ["CreateContainerConfigError", "couldn't find key", "invalid configuration"],
+    "checks": [
+      {"check": "The ConfigMaps and Secrets the pods use, and when each was last written", "tools": ["resource_graph", "timeline"]},
+      {"check": "Whether only the pods started after that write fail, while older pods keep working", "tools": ["k8s_get_resources", "k8s_describe_resource"]},
+      {"check": "The error line that names the setting or key", "tools": ["k8s_get_pod_logs", "k8s_get_events"]},
+      {"check": "The Argo CD application's last sync and its revision", "tools": ["gitops_status"]}
+    ]
+  },
+  {
+    "kind": "rollout",
+    "title": "Rollout not progressing or a new revision failing",
+    "alerts": ["KubeDeploymentRolloutStuck", "KubeDeploymentGenerationMismatch", "KubeDeploymentReplicasMismatch", "KubeStatefulSetUpdateNotRolledOut", "KubeStatefulSetReplicasMismatch", "KubeDaemonSetRolloutStuck"],
+    "terms": ["ProgressDeadlineExceeded"],
+    "checks": [
+      {"check": "The revisions: which image and template the new one brought and when it started", "tools": ["timeline"]},
+      {"check": "New pods against old: whether only the new revision's pods fail or stay unready", "tools": ["k8s_get_resources", "k8s_describe_resource"]},
+      {"check": "The new pods' log and their readiness probe failures", "tools": ["k8s_get_pod_logs", "k8s_get_events"]},
+      {"check": "The Argo CD application or Helm release that made the revision", "tools": ["gitops_status", "helm_read"]}
+    ]
+  },
+  {
+    "kind": "network_policy",
+    "title": "Traffic stopped by a NetworkPolicy",
+    "alerts": [],
+    "terms": ["NetworkPolicy", "POLICY_DENIED"],
+    "checks": [
+      {"check": "The NetworkPolicies that select the source and the destination pods", "tools": ["network_policy_effective", "k8s_get_resources"]},
+      {"check": "Whether the policies allow that source, destination and port", "tools": ["network_policy_check"]},
+      {"check": "Dropped flows between the two in the window", "tools": ["network_drops", "network_flows"]},
+      {"check": "When the policy was created or last written, against when the errors began", "tools": ["k8s_get_resource_yaml"]}
+    ]
+  },
+  {
+    "kind": "dns",
+    "title": "Name resolution failing",
+    "alerts": ["CoreDNSDown", "CoreDNSErrorsHigh", "CoreDNSLatencyHigh", "CoreDNSForwardErrorsHigh", "CoreDNSForwardLatencyHigh"],
+    "terms": ["NXDOMAIN", "SERVFAIL", "no such host", "Temporary failure in name resolution", "could not resolve host"],
+    "checks": [
+      {"check": "The name exactly as the error writes it: a short name read from another namespace, or a name that changed", "tools": ["k8s_get_pod_logs", "logsearch"]},
+      {"check": "The pod's dnsPolicy and dnsConfig", "tools": ["k8s_get_resource_yaml"]},
+      {"check": "The Service that name points to: in which namespace, and whether it has ready endpoints", "tools": ["k8s_find_resource", "k8s_check_service_connectivity"]},
+      {"check": "CoreDNS answers by response code and its errors over the window", "tools": ["prometheus_query"]}
+    ]
+  },
+  {
+    "kind": "resource_limit",
+    "title": "CPU or memory held by its limit",
+    "alerts": ["CPUThrottlingHigh"],
+    "terms": ["throttling", "throttled"],
+    "checks": [
+      {"check": "The container's CPU and memory requests and limits", "tools": ["k8s_describe_resource"]},
+      {"check": "The throttled share of CPU periods and the use against the limit over the window", "tools": ["prometheus_query", "get_pod_metrics"]},
+      {"check": "Latency in the same window: a throttled process slows down without writing errors", "tools": ["traces_compare", "prometheus_query"]},
+      {"check": "A rollout that lowered a limit, or more load from fewer replicas", "tools": ["timeline"]},
+      {"check": "A LimitRange that sets the default limit", "tools": ["limit_range_violations", "k8s_get_resources"]}
+    ]
+  },
+  {
+    "kind": "quota",
+    "title": "ResourceQuota used up",
+    "alerts": ["KubeQuotaExceeded", "KubeQuotaFullyUsed", "KubeQuotaAlmostFull", "KubeCPUQuotaOvercommit", "KubeMemoryQuotaOvercommit"],
+    "terms": ["exceeded quota", "ResourceQuota"],
+    "checks": [
+      {"check": "Each ResourceQuota of the namespace: used against hard", "tools": ["k8s_describe_resource", "k8s_get_resources"]},
+      {"check": "FailedCreate events of ReplicaSets, StatefulSets or Jobs that name the quota", "tools": ["k8s_get_events"]},
+      {"check": "What used it up and when: new workloads, more replicas or larger requests", "tools": ["timeline"]},
+      {"check": "The symptom further on: workloads short of replicas, so the pods left carry the load", "tools": ["issues"]}
+    ]
+  },
+  {
+    "kind": "node",
+    "title": "Node not ready, under pressure or out of capacity",
+    "alerts": ["KubeNodeNotReady", "KubeNodeUnreachable", "KubeNodePressure", "KubeNodeReadinessFlapping", "KubeletDown", "NodeMemoryHighUtilization", "NodeFilesystemAlmostOutOfSpace"],
+    "terms": ["MemoryPressure", "DiskPressure", "PIDPressure", "NodeNotReady", "Evicted", "FailedScheduling"],
+    "checks": [
+      {"check": "The node's conditions and when each last changed", "tools": ["k8s_describe_resource"]},
+      {"check": "Whether the affected pods share that node", "tools": ["k8s_get_resources"]},
+      {"check": "The node's CPU, memory and disk", "tools": ["get_node_metrics", "prometheus_query"]},
+      {"check": "Evictions and scheduling failures (insufficient CPU or memory, taints) in the events", "tools": ["k8s_get_events"]},
+      {"check": "Whether the node is new or being replaced (its creation time, the autoscaler's events)", "tools": ["k8s_get_resources", "timeline"]}
+    ]
+  },
+  {
+    "kind": "dependency_down",
+    "title": "A service it depends on is down",
+    "alerts": ["TargetDown"],
+    "terms": ["connection refused", "ECONNREFUSED", "no endpoints available", "no healthy upstream", "upstream connect error", "503 Service Unavailable"],
+    "checks": [
+      {"check": "The address the error names, the Service behind it and its ready endpoints", "tools": ["k8s_check_service_connectivity"]},
+      {"check": "The dependency's own pods: status, restarts and their log at that time", "tools": ["issues", "k8s_get_pod_logs"]},
+      {"check": "Which callers fail and since when: several failing together point to what they all call, not to each caller", "tools": ["resource_graph", "traces_search"]},
+      {"check": "Other alerts firing at the same time, often from the same cause", "tools": ["alerts_list"]}
+    ]
+  },
+  {
+    "kind": "dependency_slow",
+    "title": "A service it depends on is slow",
+    "alerts": [],
+    "terms": ["context deadline exceeded", "i/o timeout", "DeadlineExceeded", "upstream request timeout", "Gateway Timeout"],
+    "checks": [
+      {"check": "Where a slow request spends its time: the span that took it", "tools": ["traces_compare", "traces_get"]},
+      {"check": "The dependency's latency and request count over the window against the window before", "tools": ["traces_metrics", "prometheus_query"]},
+      {"check": "Queues, connection pools or consumers falling behind without errors", "tools": ["prometheus_query", "loki_patterns"]},
+      {"check": "CPU throttling or a busy node under the dependency", "tools": ["prometheus_query", "get_node_metrics"]}
+    ]
+  },
+  {
+    "kind": "storage",
+    "title": "Volume not mounted or full",
+    "alerts": ["KubePersistentVolumeFillingUp", "KubePersistentVolumeInodesFillingUp", "KubePersistentVolumeErrors"],
+    "terms": ["FailedMount", "FailedAttachVolume", "ProvisioningFailed", "Multi-Attach error", "no space left on device", "read-only file system"],
+    "checks": [
+      {"check": "The PVC's phase and StorageClass and the volume's events (FailedMount, FailedAttachVolume, ProvisioningFailed)", "tools": ["k8s_describe_resource", "k8s_get_events"]},
+      {"check": "Volume use against capacity and the days until full", "tools": ["storage_summary", "prometheus_query"]},
+      {"check": "Whether the volume is still attached to another node or pod", "tools": ["k8s_get_resources"]},
+      {"check": "The write error in the log (no space left, read-only file system)", "tools": ["k8s_get_pod_logs"]}
+    ]
+  }
+]
