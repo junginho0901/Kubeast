@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 func versionOf(t *testing.T, r *PostgresRegistry, id ID) (int64, bool) {
@@ -151,5 +152,41 @@ func TestPostgres_ConfigVersionChangesWithWhatAConnectionIsBuiltFrom(t *testing.
 	}
 	if v, _ := versionOf(t, r, again.ID); seen[v] {
 		t.Fatalf("the cluster registered again under %s shows version %d, seen before", again.ID, v)
+	}
+}
+
+// A store that runs past changeRow's deadline (short here) fails like any other: the transaction rolls back, so the
+// version and the UID stay, and the row's lock is let go within the deadline, not when the request ends.
+func TestPostgres_AStorePastItsDeadlineRollsBack(t *testing.T) {
+	r, _ := migratedRegistry(t)
+	r.storeLimit = 100 * time.Millisecond
+	ctx := context.Background()
+	meta, err := r.AddExternal(ctx, "Prod", "apiVersion: v1\nkind: Config\n", "", "", "tester", NewFilesystemSecretStore(t.TempDir()))
+	if err != nil {
+		t.Fatalf("AddExternal: %v", err)
+	}
+	before, _ := versionOf(t, r, meta.ID)
+	start := time.Now()
+	err = r.ReplaceKubeconfig(ctx, meta.ID, "uid-late", func(ctx context.Context) error {
+		<-ctx.Done()
+		return ctx.Err()
+	})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("ReplaceKubeconfig with a store past its deadline = %v", err)
+	}
+	if took := time.Since(start); took > 5*time.Second {
+		t.Fatalf("the change took %v", took)
+	}
+	if v, _ := versionOf(t, r, meta.ID); v != before {
+		t.Fatalf("version %d -> %d after a store past its deadline", before, v)
+	}
+	if uid, _ := r.ClusterUID(ctx, meta.ID); uid != "" {
+		t.Fatalf("uid %q after a store past its deadline", uid)
+	}
+	// the row is not held: a health update goes through at once
+	updateCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if err := r.UpdateHealth(updateCtx, meta.ID, "healthy"); err != nil {
+		t.Fatalf("UpdateHealth after the rollback: %v", err)
 	}
 }

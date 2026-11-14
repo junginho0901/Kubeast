@@ -3,25 +3,29 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
-// secretBox is a secret store in memory; a Secret named in refuse is not written.
+// secretBox is a secret store in memory; a Secret named in refuse is not written, and one named in stall is written
+// and then not answered until the write's context ends (an API server that applied it and went quiet).
 type secretBox struct {
 	kubeconfigs map[string]string
 	values      map[string]map[string]string
 	refuse      map[string]bool
+	stall       map[string]bool
 }
 
 func newSecretBox() *secretBox {
-	return &secretBox{kubeconfigs: map[string]string{}, values: map[string]map[string]string{}, refuse: map[string]bool{}}
+	return &secretBox{kubeconfigs: map[string]string{}, values: map[string]map[string]string{}, refuse: map[string]bool{}, stall: map[string]bool{}}
 }
 
 func (b *secretBox) ReadKubeconfig(_ context.Context, name string) (string, error) {
@@ -54,7 +58,7 @@ func (b *secretBox) DeleteKubeconfig(_ context.Context, name string) error {
 	return nil
 }
 
-func (b *secretBox) WriteValue(_ context.Context, name, key, value string) error {
+func (b *secretBox) WriteValue(ctx context.Context, name, key, value string) error {
 	if b.refuse[name] {
 		return errors.New("the API server refused " + name)
 	}
@@ -62,6 +66,11 @@ func (b *secretBox) WriteValue(_ context.Context, name, key, value string) error
 		b.values[name] = map[string]string{}
 	}
 	b.values[name][key] = value
+	if b.stall[name] {
+		delete(b.stall, name) // the put back is answered
+		<-ctx.Done()
+		return fmt.Errorf("write secret %s: %w", name, ctx.Err())
+	}
 	return nil
 }
 
@@ -177,6 +186,44 @@ func TestWhatCannotBePutBackIsInTheFailureRow(t *testing.T) {
 	h.failClusterChange(w, changeRequest(), auth.TokenPayload{UserID: "a1"}, "prod", nil, nil, nil, cluster.ErrNotFound)
 	if w.Code != http.StatusNotFound || len(gone.written) != 1 || gone.written[0].Result != audit.ResultFailure {
 		t.Fatalf("answer %d rows %+v", w.Code, gone.written)
+	}
+}
+
+// A store that runs past its deadline (changeRow's, short here) fails like any other: the Secrets written before it
+// and the one it may have applied are put back, the answer is a 500 with the reason and the audit row a failure.
+func TestAStoreThatRunsOutOfTimeIsAFailureLikeAnyOther(t *testing.T) {
+	box := newSecretBox()
+	promName, lsName := cluster.PrometheusSecretName("prod"), cluster.LogSearchSecretName("prod")
+	box.values[promName] = map[string]string{cluster.PrometheusAuthKey: "Bearer old-prom"}
+	box.values[lsName] = map[string]string{cluster.LogSearchAuthKey: "Bearer old-logs"}
+	box.stall[lsName] = true
+	store := &memAuditStore{}
+	h := &ClustersHandler{secrets: box, auditStore: store}
+	staged := []*stagedSecret{
+		h.stageValue("prometheus auth", promName, cluster.PrometheusAuthKey, "Bearer new-prom"),
+		h.stageValue("log search auth", lsName, cluster.LogSearchAuthKey, "Bearer new-logs"),
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err := storeAll(staged)(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("store = %v, want the deadline", err)
+	}
+
+	w := httptest.NewRecorder()
+	h.failClusterChange(w, changeRequest(), auth.TokenPayload{UserID: "a1"}, "prod", nil, nil, staged, err)
+
+	if got := box.values[promName][cluster.PrometheusAuthKey]; got != "Bearer old-prom" {
+		t.Errorf("prometheus header %q, want the one before", got)
+	}
+	if got := box.values[lsName][cluster.LogSearchAuthKey]; got != "Bearer old-logs" {
+		t.Errorf("log store header %q after its write ran out of time, want the one before", got)
+	}
+	if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "store log search auth") || !strings.Contains(w.Body.String(), "deadline exceeded") {
+		t.Fatalf("answer %d %s", w.Code, w.Body.String())
+	}
+	if len(store.written) != 1 || store.written[0].Result != audit.ResultFailure || !strings.Contains(store.written[0].Error, "deadline exceeded") {
+		t.Fatalf("rows %+v", store.written)
 	}
 }
 

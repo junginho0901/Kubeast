@@ -23,7 +23,13 @@ import (
 type PostgresRegistry struct {
 	pool    *pgxpool.Pool
 	secrets SecretReader
+	// storeLimit is storeTimeout unless a test sets it.
+	storeLimit time.Duration
 }
+
+// storeTimeout bounds the store of one clusters row change (changeRow): it runs while the transaction holds the row's
+// lock and a pool connection, and the Kubernetes client of the Secret store sets no timeout on a write.
+const storeTimeout = 10 * time.Second
 
 // NewPostgresRegistry builds a registry over pool, loading external kubeconfigs
 // through secrets.
@@ -584,8 +590,10 @@ func (r *PostgresRegistry) UpdateMetaStoring(ctx context.Context, id ID, patch M
 // it was; a k8s-service process that reads a Secret store wrote meanwhile has
 // built from the old version and drops that connection at its next read of
 // Versions. When the commit itself fails after store wrote, the Secrets hold
-// the new values and the old version: the caller puts them back.
-// ErrNotFound when no row matched (store is not run). A nil store runs nothing.
+// the new values and the old version: the caller puts them back. store runs
+// with its own deadline (storeTimeout); past it, it fails like any other
+// error. ErrNotFound when no row matched (store is not run). A nil store runs
+// nothing.
 func (r *PostgresRegistry) changeRow(ctx context.Context, sql string, args []any, store func(context.Context) error) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -600,7 +608,14 @@ func (r *PostgresRegistry) changeRow(ctx context.Context, sql string, args []any
 		return ErrNotFound
 	}
 	if store != nil {
-		if err := store(ctx); err != nil {
+		limit := r.storeLimit
+		if limit <= 0 {
+			limit = storeTimeout
+		}
+		storeCtx, cancel := context.WithTimeout(ctx, limit)
+		err := store(storeCtx)
+		cancel()
+		if err != nil {
 			return err
 		}
 	}

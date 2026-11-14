@@ -31,8 +31,10 @@ type stagedSecret struct {
 	before    string
 	hasBefore bool
 	written   bool
-	// err is the write's own failure.
-	err error
+	// err is the write's own failure; unsure, that it failed with its context ended (the store's deadline), when the
+	// API server may have applied it anyway.
+	err    error
+	unsure bool
 }
 
 // stageKubeconfig stages cluster id's kubeconfig Secret.
@@ -71,7 +73,7 @@ func storeAll(staged []*stagedSecret) func(context.Context) error {
 				}
 			}
 			if err := s.write(ctx, s.value); err != nil {
-				s.err = err
+				s.err, s.unsure = err, ctx.Err() != nil
 				return fmt.Errorf("store %s: %w", s.what, err)
 			}
 			s.written = true
@@ -80,12 +82,12 @@ func storeAll(staged []*stagedSecret) func(context.Context) error {
 	}
 }
 
-// putBackAll writes back what each written staged Secret replaced, once their row change did not commit, and says what
-// stays as written ("" when nothing does).
+// putBackAll writes back what each staged Secret written, or whose write ran out of time, replaced, once their row
+// change did not commit, and says what may stay as written ("" when nothing does).
 func putBackAll(ctx context.Context, staged []*stagedSecret) string {
 	var left []string
 	for _, s := range staged {
-		if !s.written {
+		if !s.written && !s.unsure {
 			continue
 		}
 		if !s.hasBefore {
@@ -96,7 +98,7 @@ func putBackAll(ctx context.Context, staged []*stagedSecret) string {
 			left = append(left, fmt.Sprintf("%s (%v)", s.what, err))
 			continue
 		}
-		s.written = false
+		s.written, s.unsure = false, false
 	}
 	return strings.Join(left, ", ")
 }
