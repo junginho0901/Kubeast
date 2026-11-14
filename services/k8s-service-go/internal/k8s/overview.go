@@ -5,12 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 )
@@ -92,56 +95,156 @@ func refuseCount(ov map[string]interface{}, key, resource string) {
 // grant's namespaces (a kind listable in some of them counted there only). A scoped overview does not count the
 // cluster-wide kinds.
 func (s *Service) keepListable(ctx context.Context, b *clientBundle, ci *clusterInformers, scope []string, ov map[string]interface{}) error {
-	questions := make([]listQuestion, 0, len(overviewCounts))
-	for _, c := range overviewCounts {
-		if len(scope) == 0 {
-			questions = append(questions, listQuestion{group: c.group, resource: c.resource})
-			continue
-		}
-		if !c.namespaced {
-			continue
-		}
-		for _, ns := range scope {
-			questions = append(questions, listQuestion{group: c.group, resource: c.resource, namespace: ns})
-		}
+	if len(scope) > 0 {
+		return s.keepListableIn(ctx, b, ci, scope, ov)
+	}
+	questions := make([]listQuestion, len(overviewCounts))
+	for i, c := range overviewCounts {
+		questions[i] = listQuestion{group: c.group, resource: c.resource}
 	}
 	answers, err := s.mayListAll(ctx, b, questions)
 	if err != nil {
 		return err
 	}
-	next := func() bool {
-		ok := answers[0]
-		answers = answers[1:]
-		return ok
-	}
-	for _, c := range overviewCounts {
-		if len(scope) == 0 {
-			if !next() {
-				refuseCount(ov, c.key, c.resource)
-			}
-			continue
-		}
-		if !c.namespaced {
-			continue
-		}
-		var allowed []string
-		for _, ns := range scope {
-			if next() {
-				allowed = append(allowed, ns)
-			}
-		}
-		switch {
-		case len(allowed) == 0:
+	for i, c := range overviewCounts {
+		if !answers[i] {
 			refuseCount(ov, c.key, c.resource)
-		case len(allowed) < len(scope):
-			in := ci.overviewFor(allowed)
-			ov[c.key] = in[c.key]
-			if c.key == "total_pods" {
-				ov["pod_status"] = in["pod_status"]
-			}
 		}
 	}
 	return nil
+}
+
+// keepListableIn is keepListable for a grant limited to namespaces. A namespace that holds none of a kind adds nothing
+// to its count, so whether the caller may list the kind there only decides between 0 and refused: the namespaces that
+// hold some are asked, and the others only while none of the kind's answers allowed it (the first of them when no
+// namespace holds the kind, the rest in a second round). Every count is the namespaces' counts as read once, added up
+// over the namespaces whose answer allowed it, so a namespace not asked is one that added nothing.
+func (s *Service) keepListableIn(ctx context.Context, b *clientBundle, ci *clusterInformers, scope []string, ov map[string]interface{}) error {
+	counts := ci.namespaceCounts(scope)
+	type kind struct {
+		key, group, resource string
+		asked, allowed       []string
+	}
+	var kinds []*kind
+	for _, c := range overviewCounts {
+		if c.namespaced {
+			kinds = append(kinds, &kind{key: c.key, group: c.group, resource: c.resource})
+		}
+	}
+	ask := func(next func(k *kind) []string) error {
+		var questions []listQuestion
+		var of []*kind
+		for _, k := range kinds {
+			for _, ns := range next(k) {
+				k.asked = append(k.asked, ns)
+				questions = append(questions, listQuestion{group: k.group, resource: k.resource, namespace: ns})
+				of = append(of, k)
+			}
+		}
+		if len(questions) == 0 {
+			return nil
+		}
+		answers, err := s.mayListAll(ctx, b, questions)
+		if err != nil {
+			return err
+		}
+		for i, q := range questions {
+			if answers[i] {
+				of[i].allowed = append(of[i].allowed, q.namespace)
+			}
+		}
+		return nil
+	}
+	holding := func(k *kind, holds bool) []string {
+		var out []string
+		for _, ns := range scope {
+			if (counts[ns].of[k.key] > 0) == holds && !slices.Contains(k.asked, ns) && !slices.Contains(out, ns) {
+				out = append(out, ns)
+			}
+		}
+		return out
+	}
+	if err := ask(func(k *kind) []string {
+		if held := holding(k, true); len(held) > 0 {
+			return held
+		}
+		empty := holding(k, false)
+		return empty[:min(1, len(empty))]
+	}); err != nil {
+		return err
+	}
+	if err := ask(func(k *kind) []string {
+		if len(k.allowed) > 0 {
+			return nil
+		}
+		return holding(k, false)
+	}); err != nil {
+		return err
+	}
+	for _, k := range kinds {
+		if len(k.allowed) == 0 {
+			refuseCount(ov, k.key, k.resource)
+			continue
+		}
+		n := 0
+		for _, ns := range k.allowed {
+			n += counts[ns].of[k.key]
+		}
+		ov[k.key] = n
+		if k.key == "total_pods" {
+			phases := map[string]int{"Running": 0, "Pending": 0, "Failed": 0, "Succeeded": 0, "Unknown": 0}
+			for _, ns := range k.allowed {
+				for phase, m := range counts[ns].phases {
+					phases[phase] += m
+				}
+			}
+			ov["pod_status"] = phases
+		}
+	}
+	return nil
+}
+
+// scopeCount is one namespace's counts of the overview's namespaced kinds, by the overview's key, and its pods by phase.
+type scopeCount struct {
+	of     map[string]int
+	phases map[string]int
+}
+
+// namespaceCounts reads each namespace of scope's counts from the stores, as overviewFor counts them.
+func (ci *clusterInformers) namespaceCounts(scope []string) map[string]scopeCount {
+	ci.touch()
+	out := make(map[string]scopeCount, len(scope))
+	for _, ns := range scope {
+		c := scopeCount{of: map[string]int{}, phases: map[string]int{}}
+		pods, _ := ci.pods.ByIndex(cache.NamespaceIndex, ns)
+		for _, o := range pods {
+			if p, ok := o.(*podRow); ok {
+				c.of["total_pods"]++
+				c.phases[overviewPhase(p.phase)]++
+			}
+		}
+		out[ns] = c
+	}
+	for key, store := range map[string]cache.Store{"total_services": ci.services, "total_deployments": ci.deployments, "total_pvcs": ci.pvcs} {
+		for _, k := range store.ListKeys() { // "namespace/name"
+			if i := strings.IndexByte(k, '/'); i > 0 {
+				if c, ok := out[k[:i]]; ok {
+					c.of[key]++
+				}
+			}
+		}
+	}
+	return out
+}
+
+// overviewPhase is the pod_status key a pod's phase counts under.
+func overviewPhase(phase string) string {
+	switch corev1.PodPhase(phase) {
+	case corev1.PodRunning, corev1.PodPending, corev1.PodFailed, corev1.PodSucceeded:
+		return phase
+	default:
+		return "Unknown"
+	}
 }
 
 func (s *Service) getClusterOverviewUncached(ctx context.Context) (map[string]interface{}, error) {

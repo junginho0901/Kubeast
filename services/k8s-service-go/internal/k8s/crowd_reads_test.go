@@ -56,15 +56,17 @@ func TestFirstScreensOfOnePersonListNoPodsAsThatPerson(t *testing.T) {
 			overviewPod(ns, "p", corev1.PodRunning))
 	}
 	grants := map[string][]string{"wide@example.com": {""}, "five@example.com": namespaces[:5], "twenty@example.com": namespaces}
-	// what is left is a question per thing shown (7 for the overview, the can-i), and a grant's namespaces and nodes
+	// what is left is a question per thing shown (7 for the overview, the can-i); a grant asks per namespace about the
+	// kinds it holds there (pods, a Deployment) and reading it, once about each kind none holds (Services, PVCs), and
+	// lists the nodes
 	people := []struct {
 		user    string
 		ctx     context.Context
 		n, want int
 	}{
 		{"wide@example.com", wideCaller("wide@example.com"), 0, 8},
-		{"five@example.com", grantCaller("five@example.com", namespaces[:5]...), 5, 5*5 + 2},
-		{"twenty@example.com", grantCaller("twenty@example.com", namespaces...), 20, 5*20 + 2},
+		{"five@example.com", grantCaller("five@example.com", namespaces[:5]...), 5, 3*5 + 4},
+		{"twenty@example.com", grantCaller("twenty@example.com", namespaces...), 20, 3*20 + 4},
 	}
 	var table []string
 	for _, p := range people {

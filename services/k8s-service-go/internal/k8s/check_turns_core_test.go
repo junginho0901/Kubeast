@@ -160,7 +160,7 @@ func TestTurnsKeepTheRateAndEveryRequest(t *testing.T) {
 	t.Logf("%d requests, the last token at %v as client-go's bucket", len(reqs), times[len(times)-1])
 }
 
-// A crowd of first screens: 100 people (80 wide, 10 with 5 namespaces, 10 with 20, the calls the code makes counted in TestFirstScreensOfOnePersonListNoPodsAsThatPerson, eight side by side each) while 500 open screens ask their checks again at 59 a second, on the client's 100 a second and burst of 200.
+// A crowd of first screens: 100 people (80 wide, 10 with 5 namespaces, 10 with 20, the calls the code made on 2026-11-08 as TestFirstScreensOfOnePersonListNoPodsAsThatPerson counted them, eight side by side each) while 500 open screens ask their checks again at 59 a second, on the client's 100 a second and burst of 200.
 func TestACrowdsFirstChecksFinishSoonerAndChecksAskedAgainWaitAtMostTheBound(t *testing.T) {
 	crowd := func(wide, five, twenty int) []turnRequest {
 		var reqs []turnRequest
