@@ -87,15 +87,11 @@ tests:
     documentSelector: { path: kind, value: Deployment }
     asserts: *waits
 
-  - it: gives redis the preStop wait inside its grace period
-    template: redis.yaml
-    documentSelector: { path: kind, value: Deployment }
-    asserts: *waits
-
   - it: leaves the wait out where no Service sends traffic or no other pod takes it over
     templates:
       - deployments.yaml
       - postgres.yaml
+      - redis.yaml
     asserts:
       - notExists:
           path: spec.template.spec.containers[0].lifecycle
@@ -110,6 +106,19 @@ tests:
           value: Recreate
         documentSelector: { path: kind, value: Deployment }
         template: postgres.yaml
+      - notExists:
+          path: spec.template.spec.containers[0].lifecycle
+        documentSelector: { path: kind, value: Deployment }
+        template: redis.yaml
+      - notExists:
+          path: spec.template.spec.terminationGracePeriodSeconds
+        documentSelector: { path: kind, value: Deployment }
+        template: redis.yaml
+      - equal:
+          path: spec.strategy.type
+          value: Recreate
+        documentSelector: { path: kind, value: Deployment }
+        template: redis.yaml
 
   - it: waits podShutdown.preStopSeconds and keeps 30 s after it
     set:
@@ -144,11 +153,11 @@ tests:
           value: 95
         documentSelector: { path: metadata.name, value: k8s-service }
 
-  # Helm renders same-depth templates in reverse name order and stops at the first that fails: redis.yaml.
+  # Helm renders same-depth templates in reverse name order and stops at the first that fails: gateway.yaml.
   - it: refuses a negative wait
     set:
       podShutdown.preStopSeconds: -1
-    template: redis.yaml
+    template: gateway.yaml
     asserts:
       - failedTemplate:
           errorPattern: "podShutdown.preStopSeconds must be a whole number of seconds, 0 or more"
@@ -156,7 +165,7 @@ tests:
   - it: refuses a wait that is not a whole number of seconds
     set:
       podShutdown.preStopSeconds: "5s"
-    template: redis.yaml
+    template: gateway.yaml
     asserts:
       - failedTemplate:
           errorPattern: "podShutdown.preStopSeconds must be a whole number of seconds, 0 or more"
