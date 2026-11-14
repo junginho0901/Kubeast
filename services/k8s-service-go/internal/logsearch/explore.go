@@ -62,13 +62,13 @@ type matrixResponse struct {
 }
 
 // readMatrix reads a metric query's answer: at most MaxSeries series, the
-// rest counted as Truncated. A step with no sample has no point.
+// rest counted as Truncated and in SeriesTotal. A step with no sample has no point.
 func readMatrix(body []byte, query string, step time.Duration) (Result, error) {
 	var mr matrixResponse
 	if err := json.Unmarshal(body, &mr); err != nil {
 		return Result{Query: query}, fmt.Errorf("log store: unreadable answer: %w", err)
 	}
-	res := Result{Query: query, ResultType: "matrix", Lines: []Line{}, Series: []Series{}, StepSeconds: int64(step / time.Second)}
+	res := Result{Query: query, ResultType: "matrix", Lines: []Line{}, Series: []Series{}, StepSeconds: int64(step / time.Second), SeriesTotal: len(mr.Data.Result)}
 	for _, s := range mr.Data.Result {
 		if len(res.Series) == MaxSeries {
 			res.Truncated = true

@@ -90,6 +90,7 @@ func handleLokiQuery(ctx context.Context, args map[string]interface{}, headers h
 		Lines          []interface{}            `json:"lines"`
 		Series         []map[string]interface{} `json:"series"`
 		Truncated      bool                     `json:"truncated"`
+		SeriesTotal    int                      `json:"seriesTotal"`
 		Oldest         string                   `json:"oldest"`
 		Newest         string                   `json:"newest"`
 	}
@@ -110,7 +111,7 @@ func handleLokiQuery(ctx context.Context, args map[string]interface{}, headers h
 		if len(results) > promSeriesCap {
 			results, truncated = results[:promSeriesCap], true
 		}
-		cut = seriesCut(len(reply.Series), len(results), reply.Truncated, maxPoints(results))
+		cut = seriesCut(len(reply.Series), len(results), reply.Truncated, reply.SeriesTotal, maxPoints(results))
 		for _, r := range results {
 			if pts, ok := r["points"].([]interface{}); ok && len(pts) > promPointsCap {
 				r["points"], truncated = thin(pts, promPointsCap), true

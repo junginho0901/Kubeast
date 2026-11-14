@@ -205,6 +205,7 @@ func handleTracesMetrics(ctx context.Context, args map[string]interface{}, heade
 	var reply struct {
 		Series         []map[string]interface{} `json:"series"`
 		Truncated      bool                     `json:"truncated"`
+		SeriesTotal    int                      `json:"seriesTotal"`
 		EffectiveQuery string                   `json:"effectiveQuery"`
 	}
 	if out, done, err := tracesGet(ctx, headers, namespace, "/traces/metrics", q, &reply); done {
@@ -215,7 +216,7 @@ func handleTracesMetrics(ctx context.Context, args map[string]interface{}, heade
 	if len(results) > promSeriesCap {
 		results, truncated = results[:promSeriesCap], true
 	}
-	cut := seriesCut(len(reply.Series), len(results), reply.Truncated, maxPoints(results))
+	cut := seriesCut(len(reply.Series), len(results), reply.Truncated, reply.SeriesTotal, maxPoints(results))
 	for _, r := range results {
 		if pts, ok := r["points"].([]interface{}); ok && len(pts) > promPointsCap {
 			r["points"], truncated = thin(pts, promPointsCap), true

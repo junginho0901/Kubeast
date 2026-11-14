@@ -226,10 +226,12 @@ type Series struct {
 	Points []Point           `json:"points"`
 }
 
-// MetricsResult is a TraceQL metrics range answer.
+// MetricsResult is a TraceQL metrics range answer: at most MaxSeries series,
+// Truncated past it; SeriesTotal is how many the store answered.
 type MetricsResult struct {
 	Series         []Series `json:"series"`
 	Truncated      bool     `json:"truncated"`
+	SeriesTotal    int      `json:"seriesTotal"`
 	StepSeconds    int64    `json:"stepSeconds"`
 	EffectiveQuery string   `json:"effectiveQuery"`
 }
@@ -256,6 +258,7 @@ func (t *tempo) metrics(ctx context.Context, query string, start, end time.Time,
 	if err := json.Unmarshal(body, &mr); err != nil {
 		return res, fmt.Errorf("trace store: unreadable answer: %w", err)
 	}
+	res.SeriesTotal = len(mr.Series)
 	for _, s := range mr.Series {
 		if len(res.Series) == MaxSeries {
 			res.Truncated = true

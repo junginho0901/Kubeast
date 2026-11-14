@@ -251,7 +251,7 @@ func handlePrometheusQuery(ctx context.Context, args map[string]interface{}, hea
 		if !isRange {
 			mostPoints = 0
 		}
-		addDetails(result, seriesCut(len(reply.Results), len(results), false, mostPoints), window, emptyReason)
+		addDetails(result, seriesCut(len(reply.Results), len(results), false, 0, mostPoints), window, emptyReason)
 	}
 	return marshalJSON(result)
 }

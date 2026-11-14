@@ -88,9 +88,13 @@ func maxPoints(series []map[string]interface{}) int {
 	return most
 }
 
-// seriesCut is the cut of a series answer: the series kept out of the total (or the total not known when the store
-// stopped at its limit) and the points thinned per series.
-func seriesCut(total, kept int, storeStopped bool, mostPoints int) string {
+// seriesCut is the cut of a series answer: the series kept out of the total and the points thinned per series. When
+// k8s-service stopped at its limit, the total is the count it answered with (counted, its seriesTotal), or not known
+// from a k8s-service that does not answer one.
+func seriesCut(total, kept int, storeStopped bool, counted, mostPoints int) string {
+	if storeStopped && counted > total {
+		total, storeStopped = counted, false
+	}
 	var parts []string
 	switch {
 	case storeStopped:

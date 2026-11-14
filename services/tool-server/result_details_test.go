@@ -87,6 +87,9 @@ func detailCases(t *testing.T) []detailCase {
 		{name: "loki series the store stopped", handler: handleLokiQuery, args: args{"logql": `sum by (pod) (count_over_time({app="web"}[5m]))`, "since_time": "6h"},
 			reply: `{"resultType":"matrix","series":` + seriesJSON(3, 5) + `,"truncated":true}`,
 			want:  map[string]string{"cut": "3 series shown; the total is not known (k8s-service stops", "default_window": ""}},
+		{name: "loki series the store stopped, with k8s-service's count", handler: handleLokiQuery, args: args{"logql": `sum by (pod) (count_over_time({app="web"}[5m]))`, "since_time": "6h"},
+			reply: `{"resultType":"matrix","series":` + seriesJSON(100, 5) + `,"truncated":true,"seriesTotal":340}`,
+			want:  map[string]string{"cut": "100 of 340 series", "default_window": ""}},
 		{name: "loki labels cut", handler: handleLokiLabels, args: args{"label": "app"},
 			reply: `{"values":["a"],"truncated":true}`, want: map[string]string{"cut": "1 values shown", "default_window": "(since)"}},
 		{name: "loki patterns", handler: handleLokiPatterns, args: args{"selector": `{app="web"}`},
@@ -105,6 +108,8 @@ func detailCases(t *testing.T) []detailCase {
 		{name: "trace metrics cut", handler: handleTracesMetrics, args: args{"traceql": "{} | rate()"},
 			// no points: the note on where points end follows the clock
 			reply: `{"series":` + seriesJSON(101, 0) + `}`, want: map[string]string{"cut": "100 of 101 series", "default_window": "the last 1h"}},
+		{name: "trace metrics the store stopped, with k8s-service's count", handler: handleTracesMetrics, args: args{"traceql": "{} | rate()"},
+			reply: `{"series":` + seriesJSON(100, 0) + `,"truncated":true,"seriesTotal":250}`, want: map[string]string{"cut": "100 of 250 series", "default_window": "the last 1h"}},
 		{name: "trace compare", handler: handleTracesCompare, args: args{"traceql": "{}", "since": "2h"},
 			reply: `{"traces":0}`, want: none},
 		{name: "timeline", handler: handleTimeline, args: args{"namespace": "shop"}, ordered: true,
@@ -157,6 +162,32 @@ func TestResultDetails_OffEveryAnswerIsAsBefore(t *testing.T) {
 		b, _ := json.Marshal(onRest)
 		if string(a) != string(b) {
 			t.Fatalf("%s: bytes differ:\n%s\n%s", c.name, a, b)
+		}
+	}
+}
+
+// k8s-service's seriesTotal is read for cut only: off, an answer from a k8s-service that sends it is the same bytes as
+// one from a k8s-service that does not.
+func TestResultDetails_OffTheSeriesTotalChangesNothing(t *testing.T) {
+	window := "2026-11-15T00:00:00Z" // a fixed end, so the two answers have the same start and end
+	for _, c := range []detailCase{
+		{name: "loki_query", handler: handleLokiQuery, args: args{"logql": `sum by (pod) (count_over_time({app="web"}[5m]))`, "since_time": "6h", "until_time": window},
+			reply: `{"resultType":"matrix","series":` + seriesJSON(100, 130) + `,"truncated":true`},
+		{name: "traces_metrics", handler: handleTracesMetrics, args: args{"traceql": "{} | rate()", "since_time": "6h", "until_time": window},
+			reply: `{"series":` + seriesJSON(100, 130) + `,"truncated":true`},
+	} {
+		before, counted := c, c
+		before.reply += "}"
+		counted.reply += `,"seriesTotal":340}`
+		if a, b := runDetailCase(t, before, false), runDetailCase(t, counted, false); a != b {
+			t.Fatalf("%s: off, seriesTotal changed the answer:\n%s\n%s", c.name, a, b)
+		}
+		want := "100 of 340 series; points thinned to 120 per series, of up to 130"
+		if got := decode(t, runDetailCase(t, counted, true))["cut"]; got != want {
+			t.Fatalf("%s: on, cut = %v, want %q", c.name, got, want)
+		}
+		if got := decode(t, runDetailCase(t, before, true))["cut"]; !strings.Contains(fmt.Sprint(got), "100 series shown; the total is not known") {
+			t.Fatalf("%s: on without seriesTotal, cut = %v", c.name, got)
 		}
 	}
 }

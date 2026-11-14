@@ -189,7 +189,7 @@ func TestTraceMetricsTagsAndCompare(t *testing.T) {
 	w := f.serve(f.h.TraceMetricsAll, logSearchRequestAs(traceTarget("/api/v1/traces/metrics", q)+"&since=2h&step=60", "self", "", podReader))
 	var m traces.MetricsResult
 	_ = json.Unmarshal(w.Body.Bytes(), &m)
-	if w.Code != http.StatusOK || len(m.Series) != 1 || m.Series[0].Metric["resource.service.name"] != "cart" || m.Series[0].Points[0] != (traces.Point{T: 1760443200, V: 1.5}) ||
+	if w.Code != http.StatusOK || len(m.Series) != 1 || m.SeriesTotal != 1 || m.Series[0].Metric["resource.service.name"] != "cart" || m.Series[0].Points[0] != (traces.Point{T: 1760443200, V: 1.5}) ||
 		f.requests[0].URL.Query().Get("step") != "60s" || !strings.Contains(f.requests[0].URL.Query().Get("q"), `resource.k8s.cluster.name = "kubeast" } | rate()`) {
 		t.Fatalf("metrics %d %s %v", w.Code, w.Body, f.requests[0].URL.Query())
 	}
@@ -222,6 +222,23 @@ func TestTraceMetricsTagsAndCompare(t *testing.T) {
 	}
 	if _, after := f.lastRow(t); after["kind"] != "compare" || after["traces"] != float64(10) {
 		t.Fatalf("after %v", after)
+	}
+}
+
+func TestTraceMetricsCountsTheSeriesPastTheCap(t *testing.T) {
+	f := newTraceFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		series := make([]string, traces.MaxSeries+7)
+		for i := range series {
+			series[i] = fmt.Sprintf(`{"labels":[{"key":"resource.service.name","value":{"stringValue":"svc-%d"}}],"samples":[{"timestampMs":"1760443200000","value":1}]}`, i)
+		}
+		_, _ = fmt.Fprintf(w, `{"series":[%s]}`, strings.Join(series, ","))
+	})
+	w := f.serve(f.h.TraceMetricsAll, logSearchRequestAs(traceTarget("/api/v1/traces/metrics", `{} | rate() by (resource.service.name)`)+"&since=1h", "self", "", podReader))
+	var m traces.MetricsResult
+	_ = json.Unmarshal(w.Body.Bytes(), &m)
+	// the count comes from the answer the store already gave: one request
+	if w.Code != http.StatusOK || len(m.Series) != traces.MaxSeries || !m.Truncated || m.SeriesTotal != traces.MaxSeries+7 || len(f.requests) != 1 {
+		t.Fatalf("status %d series %d truncated %v seriesTotal %d requests %d", w.Code, len(m.Series), m.Truncated, m.SeriesTotal, len(f.requests))
 	}
 }
 
