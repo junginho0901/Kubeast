@@ -17,7 +17,7 @@ func (panicsAskingClients) MayListKind(context.Context, string, string) (bool, e
 func TestAPanicAskingWhetherAKindMayBeListedEndsThatWatchOnly(t *testing.T) {
 	api := &apiSeen{object: watchEvent(t, nodeObjectForScopeTest)}
 	base := muxOn(t, api.serve)
-	m := NewMultiplexer(panicsAskingClients{base.provider.(fakeClients)})
+	m := NewMultiplexer(panicsAskingClients{base.provider.(configClients).fakeClients})
 	conn := socketAs(t, m, scopedToTeamA)
 	request(t, conn, "REQUEST", "self", "/api/v1/nodes", "watch=1")
 	f := nextFrame(t, conn)

@@ -37,12 +37,22 @@ func muxOn(t *testing.T, api http.HandlerFunc) *Multiplexer {
 	t.Helper()
 	server := httptest.NewServer(api)
 	t.Cleanup(server.Close)
-	d, err := dynamic.NewForConfig(&rest.Config{Host: server.URL, QPS: -1})
+	cfg := &rest.Config{Host: server.URL, QPS: -1}
+	d, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewMultiplexer(fakeClients{d})
+	return NewMultiplexer(configClients{fakeClients{d}, cfg})
 }
+
+// configClients is fakeClients with the REST config its client was made of, as the k8s Service gives it, so the watches
+// go through the client that decodes what the rows read (watchClient).
+type configClients struct {
+	fakeClients
+	cfg *rest.Config
+}
+
+func (p configClients) RESTConfigFor(context.Context) (*rest.Config, error) { return p.cfg, nil }
 
 // eventThenHold sends one pod event and keeps the watch open, as a quiet cluster does.
 func eventThenHold(w http.ResponseWriter, r *http.Request) {

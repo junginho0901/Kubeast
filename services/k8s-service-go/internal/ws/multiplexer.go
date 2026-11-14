@@ -220,6 +220,9 @@ type Multiplexer struct {
 
 	// heap reads the live heap and the collector's limit; nil = heapNow.
 	heap func() (live, limit uint64)
+
+	// rowClients are the clients the watches go through, which decode what the rows read (watchClient).
+	rowClients rowClientCache
 }
 
 // SubscriptionCount is the number of live subscriptions across all connections and the watches HoldWatches holds (metrics).
@@ -689,10 +692,11 @@ func (m *Multiplexer) followWatch(ctx context.Context, req RequestMessage, sendC
 		}
 		resync = resync || told
 		var watcher watch.Interface
+		watching := m.watchClient(ctx, dyn, notify)
 		if namespace != "" {
-			watcher, err = dyn.Resource(gvr).Namespace(namespace).Watch(ctx, opts)
+			watcher, err = watching.Resource(gvr).Namespace(namespace).Watch(ctx, opts)
 		} else {
-			watcher, err = dyn.Resource(gvr).Watch(ctx, opts)
+			watcher, err = watching.Resource(gvr).Watch(ctx, opts)
 		}
 		release()
 		if err != nil {
