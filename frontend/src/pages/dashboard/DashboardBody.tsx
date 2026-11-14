@@ -98,6 +98,7 @@ export function DashboardBody() {
   const {
     overview,
     isOverviewError,
+    overviewError,
     isLoading,
     namespaces,
     isLoadingNamespaces,
@@ -150,7 +151,7 @@ export function DashboardBody() {
   const defaultIssuesWindowMinutes = useClusterFeatures().data?.issues?.eventWindowMinutes ?? 60
 
   // 플로팅 AI 위젯의 "현재 화면 컨텍스트" snapshot — useDashboardAIContext hook 으로 분리
-  useDashboardAIContext({ overview, nodes, topResources, problemPods })
+  useDashboardAIContext({ overview, overviewError, nodes, topResources, problemPods })
 
   // Prometheus cluster-wide metrics
   const promCluster = usePrometheusQueries(
