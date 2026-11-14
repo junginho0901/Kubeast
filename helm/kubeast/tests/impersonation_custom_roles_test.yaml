@@ -91,6 +91,24 @@ tests:
           value: cluster-admin
         documentIndex: 4
 
+  # The fourth place of the slug rule (auth.RoleGroupSlug, role_group_slug, roleGroupSlug): Go's whitespace trimmed, a
+  # full-width space too, U+0130 lowered to i, any other letter outside [a-z0-9._-] one "-" each. Every case of
+  # frontend/src/utils/roleGroupSlug.cases.json runs through this helper in TestTheChartMakesEachSlugOfTheSharedCases.
+  - it: makes the group as the service does of a full-width space, a dotted capital I and Korean
+    set:
+      auth.impersonation.customRoles:
+        - name: "\u3000SRE Team\u3000"
+          clusterRoles: [view]
+        - name: "İnfra"
+          clusterRoles: [view]
+        - name: "운영팀"
+          clusterRoles: [view]
+    asserts:
+      - equal:
+          path: rules[0].resourceNames
+          value: ["kubeast:role:sre-team", "kubeast:role:infra", "kubeast:role:---"]
+        documentIndex: 0
+
   - it: binds a namespace-scoped entry with a RoleBinding in each namespace, not cluster-wide
     set:
       auth.impersonation.customRoles:
