@@ -95,3 +95,18 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no pdb.maxUnavailable
+  - it: stops values that set pdb.minAvailable, which 0.7.8 removed, and names what took its place
+    set:
+      pdb.minAvailable: 2
+    asserts:
+      - failedTemplate:
+          errorPattern: "the values set pdb.minAvailable, which this chart no longer reads: set pdb.maxUnavailable instead"
+  - it: gives values of an earlier chart that hold pdb.minAvailable the upgrade hint first
+    chart:
+      version: 0.7.8
+    set:
+      chartVersion: 0.7.7
+      pdb.minAvailable: 1
+    asserts:
+      - failedTemplate:
+          errorPattern: the values say chartVersion 0.7.7 and this chart is 0.7.8
