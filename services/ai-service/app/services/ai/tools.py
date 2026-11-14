@@ -1027,18 +1027,25 @@ K8S_READONLY_TOOLS: List[Dict] = [
                 "ControllerRevisions) of one namespace, one object or every namespace the user reads. Use it for \"what changed before this broke?\", then read one object with k8s_describe_resource. "
                 "summary counts every event of the window; events holds the newest (events_shown of events_matching, said in events_note when cut), so do not count from the rows. "
                 "rollouts_total is null with rollouts_note when the rollouts could not be read: not counted, not zero. With until_time or a kind without a name, narrowed.events_matching is null when the "
-                "list stopped before reaching them: not counted, not zero. Events typically live about an hour in the cluster."
+                "list stopped before reaching them: not counted, not zero. Events typically live about an hour in the cluster. "
+                "view \"changes\" answers instead what changed from since_time to until_time (default the 4 hours before now, exact), newest first, at most 50: "
+                "rollouts compared with the revision before (images, the names of other pod template fields, the keys of env, labels and annotations that were added, "
+                "removed or changed — never a value), ConfigMap and Secret last writes and the field manager that wrote them (metadata only), Helm release revisions, "
+                "HPA last scales, node creations and condition changes, Argo CD syncs and container restarts with their reason. Each object keeps only its last write, "
+                "scale or restart. summary.changes_total and by_source count every change of the window; a source in summary.not_read or summary.skipped is null in by_source: not counted, "
+                "not zero (without a namespace, every namespace's restarts need listing pods across the cluster: name a namespace). Use it first for \"why did this break?\", then line the changes up with when the symptom started."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "view": {"type": "string", "enum": ["events", "changes"], "description": "events (default): events and rollout revisions; changes: what changed in the window. changes takes namespace, since_time, until_time and limit only"},
                     "namespace": {"type": "string", "description": "One namespace; empty for every namespace the user reads"},
-                    "since_time": {"type": "string", "description": "Start: 24h, 7d or an RFC3339 time (default 24h before the end). Rounded out to a whole hour back from now"},
+                    "since_time": {"type": "string", "description": "Start: 24h, 7d or an RFC3339 time (default 24h before the end; 4h for changes). Rounded out to a whole hour back from now for events"},
                     "until_time": {"type": "string", "description": "End as an RFC3339 time (default now)"},
                     "event_type": {"type": "string", "enum": ["Normal", "Warning"], "description": "Only events of this type, the newest of that type; the counts stay of every event"},
                     "kind": {"type": "string", "description": "An object's kind (Deployment, Pod …). With name, that object's history; alone, that kind among the rows read"},
                     "name": {"type": "string", "description": "An object's name; needs kind and namespace (a Node's events are in namespace default)"},
-                    "limit": {"type": "integer", "description": "The newest events to list (default 200, at most 500, the screen's)"},
+                    "limit": {"type": "integer", "description": "The newest events to list (default 200, at most 500, the screen's); for changes the newest changes (default and at most 50)"},
                 },
             },
         },

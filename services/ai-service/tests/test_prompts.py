@@ -104,6 +104,13 @@ def test_tool_usage_guide():
         assert tool in SYSTEM_MESSAGE, f"도구 이름 {tool} 이 프롬프트에서 사라짐"
 
 
+def test_a_why_question_reads_the_changes_first():
+    """Asked why something broke, the chat reads what changed before it, and does not blame a change that does not match."""
+    assert "고장 원인을 물으면 바뀐 것부터 보세요" in SYSTEM_MESSAGE
+    assert 'view: "changes"' in SYSTEM_MESSAGE
+    assert 'timeline(view, namespace' in SYSTEM_MESSAGE
+
+
 def test_not_found_protocol():
     """not_found/unavailable 결과를 받은 뒤의 행동이 프롬프트에 있어야 한다 — 없으면
     모델이 같은 이름을 네임스페이스만 바꿔 되묻는 옛 행동으로 돌아간다."""

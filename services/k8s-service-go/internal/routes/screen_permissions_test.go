@@ -240,6 +240,8 @@ func TestAReadWithNoPermissionOfItsOwnIsTheClustersToAnswerForAHolderOfTheKey(t 
 		"/api/v1/timeline",
 		"/api/v1/namespaces/x/timeline",
 		"/api/v1/namespaces/x/timeline/Deployment/y",
+		"/api/v1/timeline/changes",
+		"/api/v1/namespaces/x/timeline/changes",
 		"/api/v1/gpu/dashboard",
 		"/api/v1/gpu/metrics",
 		"/api/v1/deviceclasses",
