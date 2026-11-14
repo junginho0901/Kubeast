@@ -96,12 +96,12 @@ spec:
         - name: auth-keys
           secret:
             secretName: {{ .Values.auth.signingKey.existingSecret | default "kubeast-auth-keys" }}
-            defaultMode: 0440
+            defaultMode: {{ include "kubeast.secretMode" $ }}
         {{- if include "kubeast.googleGroups" . }}
         - name: google-groups
           secret:
             secretName: {{ .Values.auth.oidc.googleGroups.credentialsSecret }}
-            defaultMode: 0440
+            defaultMode: {{ include "kubeast.secretMode" $ }}
             items:
               - key: credentials.json
                 path: credentials.json
@@ -124,7 +124,7 @@ spec:
         - name: audit-sink-{{ .name }}
           secret:
             secretName: {{ .secret }}
-            defaultMode: 0440
+            defaultMode: {{ include "kubeast.secretMode" $ }}
         {{- end }}
         {{- end }}
         {{- if include "kubeast.auditFileSinks" . }}

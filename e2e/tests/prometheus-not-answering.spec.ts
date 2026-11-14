@@ -8,7 +8,8 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 // A cluster's Prometheus that is set but does not answer: cluster `default` is pointed at its own Prometheus Service on a
 // port nothing serves, so each query is the server's 502 with its reason. The dashboard's Cluster Resource Utilization
 // and a Pod drawer's Real-time Resource Usage say "Prometheus did not answer: <that reason>" where they used to leave
-// the section out, as for a cluster with no Prometheus. The setting is put back and the dashboard's card returns.
+// the section out, as for a cluster with no Prometheus; the Resource Graph keeps its Structure/Traffic switch and says
+// the status's reason where the metrics sources were. The setting is put back and the card and the sources return.
 
 const EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -81,11 +82,28 @@ test.describe('a Prometheus that is set but does not answer', () => {
     await expect(section).toContainText('Real-time Resource Usage', { timeout: 30_000 })
     await expect(section).toContainText(`Prometheus did not answer: ${reason}`)
 
+    // the Resource Graph reads the status, which answers 200 with available false and its message
+    let statusMessage = ''
+    await expect.poll(async () => {
+      const st = await status(request)
+      statusMessage = st.message ?? ''
+      return st.available
+    }, { timeout: 30_000 }).toBe(false)
+    expect(statusMessage, 'the status says why').not.toBe('')
+    await page.goto(`/cluster/resource-graph?cluster=${CLUSTER}`)
+    await page.getByTestId('graph-view-traffic').click({ timeout: 30_000 })
+    await expect(page.getByTestId('traffic-metrics-failure')).toHaveText(`Prometheus did not answer: ${statusMessage}`)
+    await expect(page.getByTestId('traffic-source-1h'), 'no metrics source without an answer').toHaveCount(0)
+
     await patch(request, { prometheus_service: '', prometheus_url: '', prometheus_cluster_label: '', prometheus_auth: { type: 'none' } })
     moved = false
     expect((await status(request)).endpoint, 'the setting is back').toBe(PROMETHEUS)
     await page.goto(`/?cluster=${CLUSTER}`)
     await expect(page.getByTestId('cluster-metric-cpu'), 'the card is back').toBeVisible({ timeout: 60_000 })
     await expect(page.getByTestId('prometheus-not-answering')).toHaveCount(0)
+    await page.goto(`/cluster/resource-graph?cluster=${CLUSTER}`)
+    await page.getByTestId('graph-view-traffic').click({ timeout: 30_000 })
+    await expect(page.getByTestId('traffic-source-24h'), 'the metrics sources are back').toHaveText('Metrics 24h', { timeout: 30_000 })
+    await expect(page.getByTestId('traffic-metrics-failure')).toHaveCount(0)
   })
 })

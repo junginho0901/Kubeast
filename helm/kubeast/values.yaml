@@ -550,12 +550,13 @@ postgresql:
 # forbids privilege escalation and uses the runtime seccomp profile.
 # hostUsers=false puts pods in a user namespace (Kubernetes >= 1.33); set it to
 # true on clusters without that support.
+# enabled=false sets none of it, leaving the uids and fsGroup to the platform, and Secret files then mount 0444 instead of 0440.
 podSecurity:
   enabled: true
   seccompProfile: RuntimeDefault
   hostUsers: false
   # Root filesystem read-only; every path a container writes is an emptyDir
-  # (auth keys, tool-server /tmp kubeconfig, nginx /tmp, postgres socket, redis /data).
+  # (tool-server /tmp kubeconfig, nginx /tmp, postgres socket, redis /data); the auth keys are a read-only Secret.
   readOnlyRootFilesystem: true
 
 # --- Availability ---

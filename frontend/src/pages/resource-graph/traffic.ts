@@ -3,8 +3,10 @@
 // useResourceGraphLayout draw with them.
 
 import { Position } from '@xyflow/react'
-import type { ClusterFeatures, ResourceGraphNode, TrafficEnd, TrafficLine } from '@/services/api'
+import type { ClusterFeatures, PrometheusStatus, ResourceGraphNode, TrafficEnd, TrafficLine } from '@/services/api'
 import type { NetpolCheckInitial, OtherKind } from '@/components/resource-detail/NetworkPolicyCheckModal'
+import { prometheusNotAnswering } from '@/hooks/usePrometheusQuery'
+import { failureText } from '@/utils/failureText'
 import { networkFlowsEnabledFor } from '@/utils/features'
 
 // structure: the objects and how they relate (as before) · traffic: who talks to whom · both: the two together
@@ -18,6 +20,15 @@ export function trafficSources(features: ClusterFeatures | null | undefined, clu
   if (networkFlowsEnabledFor(features, clusterId)) out.push('relay')
   if (features?.prometheus?.enabled === true && prometheusAvailable) out.push('1h', '24h')
   return out
+}
+
+// Why the metrics sources are out though Prometheus is set (status unavailable, or that read's 5xx or no answer); null for none or off.
+export function metricsFailure(features: ClusterFeatures | null | undefined, status: PrometheusStatus | undefined, statusError: unknown): string | null {
+  if (features?.prometheus?.enabled !== true) return null
+  const err = prometheusNotAnswering(statusError)
+  if (err) return failureText(err)
+  if (!status || status.available || status.source === 'none') return null
+  return status.message || '-'
 }
 
 export function trafficParams(source: TrafficSource): { source: 'relay' | 'metrics'; range?: string } {

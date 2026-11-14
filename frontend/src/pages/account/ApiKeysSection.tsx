@@ -8,14 +8,13 @@ import { copyText } from '@/utils/clipboard'
 import { failureText } from '@/utils/failureText'
 import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
-import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
-import { aiEnabled } from '@/utils/features'
 import type { CreatedAPIKey } from '@/services/api/api_keys'
 import CustomDropdown from '@/components/CustomDropdown'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
 import { formatWhen } from '@/pages/admin/accessRequestFormat'
 import { formatScope } from './apiKeyFormat'
+import { useMCPConfig } from './accountReady'
 
 // Settings → API keys: the signed-in user's keys for automation. A key is
 // issued once (name, expiry, clusters, role ceiling), shown a single time,
@@ -29,9 +28,8 @@ export default function ApiKeysSection() {
   const queryClient = useQueryClient()
 
   const { data: config } = useQuery({ queryKey: ['api-keys', 'config'], queryFn: api.getAPIKeysConfig, staleTime: 60_000 })
-  // With chart ai.enabled off there is no MCP server to ask about (the gateway answers 503), so the section stays hidden.
-  const aiOn = aiEnabled(useClusterFeatures().data)
-  const { data: mcp } = useQuery({ queryKey: ['ai', 'mcp-config'], queryFn: api.getMCPConfig, staleTime: 60_000, enabled: aiOn })
+  const { state: mcpState, query: mcpQuery } = useMCPConfig()
+  const mcp = mcpQuery.data
   const enabled = !!config?.enabled
   const maxDays = config?.max_days ?? 90
   const { data: keys = [] } = useQuery({ queryKey: ['api-keys', 'mine'], queryFn: api.listMyAPIKeys, enabled })
@@ -140,7 +138,17 @@ export default function ApiKeysSection() {
         </button>
       </div>
 
-      {mcp?.enabled && (
+      {mcpState === 'off' && (
+        <p className="mb-4 text-sm text-slate-400" data-testid="api-key-mcp-ai-off">
+          {tr('apiKeys.mcp.aiOff', 'Connecting an AI agent (MCP) needs AI, which is off on this installation (ai.enabled).')}
+        </p>
+      )}
+      {mcpState === 'on' && mcpQuery.isError && !mcp && (
+        <p className="mb-4 text-sm text-slate-400" data-testid="api-key-mcp-failed">
+          {tr('apiKeys.mcp.readFailed', 'Could not read whether AI agents (MCP) can connect: {{reason}}', { reason: failureText(mcpQuery.error) })}
+        </p>
+      )}
+      {mcpState !== 'off' && mcp?.enabled && (
         <div className="mb-4 rounded-lg border border-slate-700 bg-slate-900/40 p-3" data-testid="api-key-mcp">
           <div className="text-sm font-semibold text-slate-200">{tr('apiKeys.mcp.title', 'Connect an AI agent (MCP)')}</div>
           <p className="mt-1 text-sm text-slate-400">
