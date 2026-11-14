@@ -108,7 +108,12 @@ Without it, or with AI off, a cluster with an alert store still has **Alerts** i
   - When Alertmanager resends every `repeat_interval`, "Received" goes up. When resolved arrives, the row becomes Resolved. If the alert fires again after resolving, it gets a new row.
   - Statuses are Firing, **Status unknown** and Resolved. Status unknown means firing, but nothing heard for `inbox.staleAfterHours` (8); Alertmanager does not send a firing alert's `endsAt` through the webhook.
   - Every alert of a message is kept, however many the message carries.
-  - `startsAt` is kept in UTC, whatever offset the sender writes. Up to v0.7.7 the offset was dropped: an alert from a sender that writes another zone and still firing after the upgrade gets a new row, and the old row reads Status unknown after `inbox.staleAfterHours`.
+  - `startsAt` is kept in UTC, whatever offset the sender writes. Up to v0.7.7 the offset was dropped, so an alert from a sender that writes another zone and is still firing after the upgrade moves to a new row:
+    - The old row reads Status unknown after `inbox.staleAfterHours` and stays so until retention removes it, since the resolution goes to the new row.
+    - Its handling marks (Acknowledge, assignee, Note, Mark done) stay on the old row; the new row starts without them.
+    - The old row's start time stays off by the sender's offset.
+    - For a sender behind UTC (`-hh:mm`), the new row shows the alert's earlier investigation once the next notification folds into it.
+    - For a sender ahead of UTC (`+hh:mm`), the new row shows no investigation until one is made for it: "Investigate now", or the webhook's next one after `dedupeHours`.
   - When the cluster has an alert store (`features.alertStore`), Alertmanager's current state (Silenced, Inhibited, Not in Alertmanager) is shown too. When the store's list was cut at `alertStore.maxAlerts` before the alert, the row says Unknown and the alert window says so with the store's numbers; the window also says when the store has not answered, failed, or the cluster has none.
 - **Silence**: needs an alert store on the cluster and `features.alertStore.silences: true`. This is off by default; the store credentials need write permission (Editor for Grafana).
   - People with the permission `resource.alert.silence` (Write and Admin by default, not Read) use **Silence** in the alert window, or **New silence** on the Silences tab, which starts from one empty condition.

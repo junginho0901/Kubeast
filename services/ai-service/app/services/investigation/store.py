@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any, Awaitable, Callable, Optional
 
-from sqlalchemy import func, or_, select, text, update
+from sqlalchemy import and_, case, func, or_, select, text, update
 
 from app.database import AlertInboxItem, AlertInvestigation, utcnow
 from app.services.investigation import skip_reasons
@@ -163,10 +163,10 @@ async def insert(db, **fields: Any) -> str:
 async def queue_requested(
     db, item: AlertInboxItem, *, requested_by: str, now: datetime, record: Callable[[str], Awaitable[bool]],
 ) -> tuple[Optional[str], bool]:
-    """A person's "Investigate now" on an inbox alert: (the id of this firing's investigation, False) when one is
-    queued, running or done, else (a new queued row's id, True) — written as the webhook writes a row, and kept only
-    when record(id) stored its audit row ((None, False) when it did not). The inbox row stays locked meanwhile, so two
-    presses at once queue one investigation."""
+    """A person's "Investigate now" on an inbox alert: (the id of this firing's investigation, as
+    inbox.investigations_for picks it, False) when one is queued, running or done, else (a new queued row's id, True)
+    — written as the webhook writes a row, and kept only when record(id) stored its audit row ((None, False) when it
+    did not). The inbox row stays locked meanwhile, so two presses at once queue one investigation."""
     async with db.async_session() as s:
         await s.execute(select(AlertInboxItem.id).where(AlertInboxItem.id == item.id).with_for_update())
         q = (
@@ -176,11 +176,14 @@ async def queue_requested(
                 AlertInvestigation.fingerprint == item.fingerprint,
                 or_(
                     AlertInvestigation.starts_at == item.starts_at,
-                    AlertInvestigation.received_at >= item.first_received_at,
-                    AlertInvestigation.last_seen_at >= item.first_received_at,
+                    and_(
+                        or_(AlertInvestigation.starts_at.is_(None), AlertInvestigation.starts_at <= item.starts_at),
+                        or_(AlertInvestigation.received_at >= item.first_received_at, AlertInvestigation.last_seen_at >= item.first_received_at),
+                    ),
                 ),
             )
-            .order_by(AlertInvestigation.received_at.desc())
+            # the one holding this firing's starts_at first (a NULL starts_at sorts with the others)
+            .order_by(case((AlertInvestigation.starts_at == item.starts_at, 0), else_=1), AlertInvestigation.received_at.desc())
             .limit(1)
         )
         current = (await s.execute(q)).scalars().first()

@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from app.services.investigation import inbox, store, webhook
 from app.services.investigation.settings import InvestigationSettings
 
-NOW =datetime(2026, 10, 20, 3, 0, 0)
+NOW = datetime(2026, 10, 20, 3, 0, 0)
 STARTS = datetime(2026, 10, 20, 2, 50, 0)
 
 
@@ -615,3 +615,27 @@ async def test_a_start_written_in_another_zone_is_the_same_alert(monkeypatch, sq
     assert (total, rows[0].starts_at, rows[0].received_count) == (1, AM_STARTS, 3)
     invs, inv_total = await store.list_rows(sqlite_db)
     assert (inv_total, invs[0].starts_at, invs[0].repeat_count) == (1, AM_STARTS, 3)
+
+
+@pytest.mark.asyncio
+async def test_an_older_firing_keeps_its_investigation_after_the_alert_fires_again(monkeypatch, sqlite_db):
+    """Firing A resolves and the alert fires again (B) past the dedupe window, with an investigation of its own: row A
+    keeps A's (the one holding its starts_at) and "Investigate now" on A answers A's; B's row links B's."""
+    async def record(inv_id):
+        return True
+
+    row_a = await a_firing_while_behind(monkeypatch, sqlite_db)
+    inv_a = (await store.list_rows(sqlite_db))[0][0]
+    await put(sqlite_db, firing=False, starts_at=AM_STARTS, now=BEHIND + timedelta(hours=1))
+    later = BEHIND + timedelta(days=2)
+    row_b = await a_firing_while_behind(monkeypatch, sqlite_db, starts="2026-10-22T02:50:00.123456789Z", clock=later)
+    invs, total = await store.list_rows(sqlite_db)
+    inv_b = next(i for i in invs if i.id != inv_a.id)
+    assert (total, inv_a.starts_at, inv_b.starts_at, inv_b.received_at) == (2, row_a.starts_at, row_b.starts_at, later)
+    linked = await inbox.investigations_for(sqlite_db, [row_a, row_b])
+    assert (linked[row_a.id].id, linked[row_b.id].id) == (inv_a.id, inv_b.id)
+    c, _ = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR, at=later + timedelta(minutes=1))
+    assert (c.get(f"/api/v1/alerts/inbox/{row_a.id}").json().get("investigation") or {}).get("id") == inv_a.id
+    assert await store.queue_requested(sqlite_db, row_a, requested_by="a@x", now=later + timedelta(minutes=1), record=record) == (inv_a.id, False)
+    assert await store.queue_requested(sqlite_db, row_b, requested_by="a@x", now=later + timedelta(minutes=1), record=record) == (inv_b.id, False)
+    assert (await store.list_rows(sqlite_db))[1] == 2
