@@ -138,6 +138,9 @@ podSecurity:
 # Availability: set pdb.enabled: true when you raise replicas to 2 or more
 replicas:
   gateway: 1
+# One HPA per service, off by default; k8sService and toolServer above 1 pod need redis.enabled (docs/high-availability.md)
+autoscaling:
+  gateway: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
 pdb:
   enabled: false
 topologySpread:

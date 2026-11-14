@@ -135,6 +135,9 @@ podSecurity:
 # 가용성 — replicas를 2 이상으로 올릴 때는 pdb.enabled: true로 두세요
 replicas:
   gateway: 1
+# 서비스마다 HPA 하나, 기본 꺼짐. k8sService · toolServer를 2대 이상으로 하려면 redis.enabled가 필요(docs/ko/high-availability.md)
+autoscaling:
+  gateway: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
 pdb:
   enabled: false
 topologySpread:
