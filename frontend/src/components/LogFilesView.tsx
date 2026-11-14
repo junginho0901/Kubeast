@@ -14,6 +14,7 @@ import { SESSION_ENDED_EVENT } from '@/services/auth'
 import { liveSessionEndText } from '@/utils/liveSessionEnd'
 import { useCluster } from '@/contexts/ClusterContext'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
+import { useResultFor } from '@/hooks/useResultFor'
 
 const LINE_OPTIONS = [100, 500, 1000, 2000]
 // Following keeps this many lines on screen; older ones scroll away.
@@ -93,7 +94,8 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
   const [lines, setLines] = useState(lineOptions[0])
   const [follow, setFollow] = useState(false)
   const [streamText, setStreamText] = useState('')
-  const [streamNote, setStreamNote] = useState<string | null>(null)
+  // why following stopped, said only for the file it followed (another container, pod or file has no such line)
+  const [streamNote, setStreamNote] = useResultFor<string>([currentCluster, namespace, pod, container, path])
   const outputRef = useRef<HTMLDivElement>(null)
 
   const errorText = (err: any): string => {
@@ -173,7 +175,7 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
       setStreamNote(t('clusterView.logFiles.streamFailed', 'Following stopped: {{reason}}', { reason }))
     }
     return () => es.close()
-  }, [follow, path, lines, container, namespace, pod, currentCluster, t])
+  }, [follow, path, lines, container, namespace, pod, currentCluster, t, setStreamNote])
 
   // The newest lines are at the end: keep them in view, as the container output does.
   useEffect(() => {
