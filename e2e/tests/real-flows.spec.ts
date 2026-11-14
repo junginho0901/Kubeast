@@ -216,7 +216,7 @@ test('signing out closes the live connection and stops the chat answers, and the
     await sidebarLink('/configuration/configmaps').dispatchEvent('click')
     await expect(page).toHaveURL(/\/configuration\/configmaps/)
     await expect.poll(() => open().length, { timeout: 15000 }).toBe(1)
-    const first = open()[0]
+    const firstSocket = open()[0]
     await openFloating()
     await page.getByTestId('floating-chat-input').fill('what is wrong on this page?')
     await page.getByTestId('floating-chat-input').press('Enter')
@@ -225,7 +225,7 @@ test('signing out closes the live connection and stops the chat answers, and the
 
     await page.getByRole('button', { name: /Log out|로그아웃/ }).click()
     await expect(page).toHaveURL(/\/login/)
-    await expect.poll(() => first.closedAt !== null, { timeout: 10000 }).toBe(true)
+    await expect.poll(() => firstSocket.closedAt !== null, { timeout: 10000 }).toBe(true)
     const signedInAt = Date.now()
     await signIn(page, email, password)
     await expect(page.getByText(email, { exact: true })).toHaveCount(1, { timeout: 15000 })
@@ -241,8 +241,8 @@ test('signing out closes the live connection and stops the chat answers, and the
     await expect(page).toHaveURL(/\/configuration\/configmaps/)
     await expect.poll(() => open().length, { timeout: 15000 }).toBe(1)
     const second = open()[0]
-    expect(second).not.toBe(first)
-    expect(first.closedAt!).toBeLessThanOrEqual(signedInAt)
+    expect(second).not.toBe(firstSocket)
+    expect(firstSocket.closedAt!).toBeLessThanOrEqual(signedInAt)
     expect(second.openedAt).toBeGreaterThanOrEqual(signedInAt)
 
     // the floating chat sends this person's question at once, in a conversation of their own
