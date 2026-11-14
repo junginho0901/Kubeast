@@ -1,91 +1,120 @@
-"""O-27: the ai-service's Postgres engine sets the session limits on each connection (asyncpg server_settings).
+"""O-27: the ai-service's Postgres engine sets the session limits on each new connection and keeps its pool size.
 
 PostgreSQL's default for statement_timeout, lock_timeout and idle_in_transaction_session_timeout is 0
-(no limit); the same DB_* variables and defaults as the Go services (services/pkg/dbsession).
+(no limit); the same DB_* variables and defaults as the Go services (services/pkg/dbsession). The limits
+are SET after connecting (the pool's "connect" event), not sent as startup parameters.
 """
 import pytest
+from sqlalchemy import event
 
 from app import database, db_session
 
-DEFAULTS = {
-    "statement_timeout": "30000",
-    "lock_timeout": "15000",
-    "idle_in_transaction_session_timeout": "300000",
-}
-VARS = [var for var, _, _ in db_session.SESSION_LIMITS]
+DEFAULTS = [
+    "SET statement_timeout = 30000",
+    "SET lock_timeout = 15000",
+    "SET idle_in_transaction_session_timeout = 300000",
+]
+VARS = [var for var, _, _ in db_session.SESSION_LIMITS] + [db_session.POOL_MAX_ENV]
+PG_URL = "postgresql+asyncpg://kubeast:pw@db.example:5432/kubeast"
 
 
 @pytest.fixture
-def no_limit_vars(monkeypatch):
+def no_db_vars(monkeypatch):
     for var in VARS:
         monkeypatch.delenv(var, raising=False)
 
 
-def test_defaults_when_nothing_is_set(no_limit_vars):
-    assert db_session.server_settings() == DEFAULTS
+class FakeCursor:
+    def __init__(self, seen):
+        self.seen = seen
+        self.closed = False
+
+    def execute(self, stmt):
+        self.seen.append(stmt)
+
+    def close(self):
+        self.closed = True
 
 
-def test_values_in_milliseconds_and_zero_not_sent():
+class FakeDBAPIConnection:
+    def __init__(self):
+        self.seen = []
+        self.cursors = []
+
+    def cursor(self):
+        c = FakeCursor(self.seen)
+        self.cursors.append(c)
+        return c
+
+
+def test_defaults_when_nothing_is_set(no_db_vars):
+    assert db_session.statements() == DEFAULTS
+    assert db_session.pool_args() == {"pool_size": 5, "max_overflow": 10}
+
+
+def test_values_in_milliseconds_and_zero_not_set():
     env = {
         "DB_STATEMENT_TIMEOUT_MS": "60000",
         "DB_LOCK_TIMEOUT_MS": "0",
         "DB_IDLE_IN_TRANSACTION_TIMEOUT_MS": "120000",
     }
-    assert db_session.server_settings(env) == {
-        "statement_timeout": "60000",
-        "idle_in_transaction_session_timeout": "120000",
-    }
+    assert db_session.statements(env) == [
+        "SET statement_timeout = 60000",
+        "SET idle_in_transaction_session_timeout = 120000",
+    ]
 
 
 @pytest.mark.parametrize("value", ["-1", "30s", "1.5", "abc", " "])
 def test_unreadable_value_keeps_the_default(value):
-    assert db_session.server_settings({"DB_STATEMENT_TIMEOUT_MS": value})["statement_timeout"] == "30000"
+    assert db_session.statements({"DB_STATEMENT_TIMEOUT_MS": value})[0] == "SET statement_timeout = 30000"
 
 
-def test_all_zero_sends_nothing():
-    assert db_session.server_settings({var: "0" for var in VARS}) == {}
+def test_all_zero_sets_nothing():
+    assert db_session.statements({var: "0" for var, _, _ in db_session.SESSION_LIMITS}) == []
+
+
+@pytest.mark.parametrize(
+    "value, want",
+    [("3", {"pool_size": 3, "max_overflow": 0}), ("40", {"pool_size": 5, "max_overflow": 35}),
+     ("0", {"pool_size": 5, "max_overflow": 10}), ("x", {"pool_size": 5, "max_overflow": 10})],
+)
+def test_pool_size_from_the_variable(value, want):
+    assert db_session.pool_args({"DB_POOL_MAX_AI": value}) == want
 
 
 def test_the_go_services_variables_and_defaults():
     # services/pkg/dbsession: the same names and defaults
-    assert [(v, p, d) for v, p, d in db_session.SESSION_LIMITS] == [
+    assert list(db_session.SESSION_LIMITS) == [
         ("DB_STATEMENT_TIMEOUT_MS", "statement_timeout", 30_000),
         ("DB_LOCK_TIMEOUT_MS", "lock_timeout", 15_000),
         ("DB_IDLE_IN_TRANSACTION_TIMEOUT_MS", "idle_in_transaction_session_timeout", 300_000),
     ]
 
 
-def _engine_args(monkeypatch, url):
-    seen = {}
-
-    def fake_engine(engine_url, **kwargs):
-        seen["url"] = engine_url
-        seen.update(kwargs)
-        return object()
-
-    monkeypatch.setattr(database, "create_async_engine", fake_engine)
-    database.DatabaseService(url)
-    return seen
+def test_postgres_engine_sets_the_limits_on_each_new_connection(no_db_vars):
+    svc = database.DatabaseService(PG_URL)
+    assert svc.on_connect is not None
+    assert event.contains(svc.engine.sync_engine, "connect", svc.on_connect)
+    conn = FakeDBAPIConnection()
+    svc.on_connect(conn, None)
+    assert conn.seen == DEFAULTS
+    assert all(c.closed for c in conn.cursors)
 
 
-def test_postgres_engine_gets_the_limits(monkeypatch, no_limit_vars):
-    seen = _engine_args(monkeypatch, "postgresql+asyncpg://kubeast:pw@db.example:5432/kubeast")
-    assert seen["connect_args"] == {"server_settings": DEFAULTS}
+def test_postgres_engine_pool_size(monkeypatch, no_db_vars):
+    pool = database.DatabaseService(PG_URL).engine.sync_engine.pool
+    assert (pool.size(), pool._max_overflow) == (5, 10)
+    monkeypatch.setenv("DB_POOL_MAX_AI", "8")
+    pool = database.DatabaseService(PG_URL).engine.sync_engine.pool
+    assert (pool.size(), pool._max_overflow) == (5, 3)
 
 
-def test_postgres_engine_keeps_the_tls_argument_beside_the_limits(monkeypatch, no_limit_vars):
-    seen = _engine_args(monkeypatch, "postgresql+asyncpg://kubeast:pw@db.example:5432/kubeast?sslmode=require")
-    assert seen["url"] == "postgresql+asyncpg://kubeast:pw@db.example:5432/kubeast"
-    assert seen["connect_args"] == {"ssl": "require", "server_settings": DEFAULTS}
-
-
-def test_postgres_engine_with_every_limit_zero_sends_no_server_settings(monkeypatch):
-    for var in VARS:
+def test_postgres_engine_with_every_limit_zero_has_no_listener(monkeypatch):
+    for var, _, _ in db_session.SESSION_LIMITS:
         monkeypatch.setenv(var, "0")
-    seen = _engine_args(monkeypatch, "postgresql+asyncpg://kubeast:pw@db.example:5432/kubeast")
-    assert seen["connect_args"] == {}
+    assert database.DatabaseService(PG_URL).on_connect is None
 
 
-def test_sqlite_engine_gets_none(monkeypatch, no_limit_vars):
-    seen = _engine_args(monkeypatch, "sqlite+aiosqlite:///./kubeast.db")
-    assert seen["connect_args"] == {}
+def test_sqlite_engine_gets_none(no_db_vars, tmp_path):
+    svc = database.DatabaseService(f"sqlite+aiosqlite:///{tmp_path / 'limits.db'}")
+    assert svc.on_connect is None

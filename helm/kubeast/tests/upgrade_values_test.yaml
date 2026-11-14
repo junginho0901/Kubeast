@@ -89,3 +89,15 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no postgresql.sessionLimits
+  - it: stops values without postgresql.pool, as v0.7.7's published defaults are
+    set:
+      postgresql.pool: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no postgresql.pool
+  - it: stops values without postgresql.maxConnections, as v0.7.7's published defaults are
+    set:
+      postgresql.maxConnections: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no postgresql.maxConnections

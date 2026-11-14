@@ -327,3 +327,33 @@ true
 {{- end -}}
 {{- end }}
 
+
+{{/*
+The most database connections the pods can hold at once: for each service its pool (postgresql.pool.<key>.maxConns)
+times its pods while a rollout runs — replicas.<key>, or autoscaling.<key>.maxReplicas while its HPA is on, plus a
+quarter of that rounded up (Kubernetes' default maxSurge; the Deployments set no strategy) — then the migration pool
+(4, dbsession.MigrationPoolMaxConns) and 10 kept for psql and PostgreSQL's 3 superuser slots. ai-service and the
+ModelConfig controller (one pod, two while it rolls) count with ai.enabled. templates/checks/db-connections.yaml,
+NOTES.txt.
+*/}}
+{{- define "kubeast.dbConnections" -}}
+{{- $services := list "authService" "sessionService" "k8sService" -}}
+{{- if .Values.ai.enabled -}}
+{{- $services = append $services "aiService" -}}
+{{- end -}}
+{{- $pool := .Values.postgresql.pool | default dict -}}
+{{- $total := 14 -}}
+{{- range $key := $services -}}
+{{- $pods := int (index $.Values.replicas $key) -}}
+{{- $hpa := index ($.Values.autoscaling | default dict) $key | default dict -}}
+{{- if dig "enabled" false $hpa -}}
+{{- $pods = int (dig "maxReplicas" $pods $hpa) -}}
+{{- end -}}
+{{- $pods = add $pods (div (add $pods 3) 4) -}}
+{{- $total = add $total (mul $pods (int (dig $key "maxConns" 0 $pool))) -}}
+{{- end -}}
+{{- if .Values.ai.enabled -}}
+{{- $total = add $total (mul 2 (int (dig "modelConfigController" "maxConns" 0 $pool))) -}}
+{{- end -}}
+{{- $total -}}
+{{- end -}}

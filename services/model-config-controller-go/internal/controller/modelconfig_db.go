@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/stdlib"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -71,6 +72,7 @@ func (r *ModelConfigReconciler) ensureDB() error {
 			return
 		}
 		db := stdlib.OpenDB(*cfg)
+		db.SetMaxOpenConns(dbPoolMaxConns())
 		r.db = db
 		// The model_configs table is owned by auth-service's migrations
 		// (services/pkg/dbmigrate); wait for the version this build needs.
@@ -83,7 +85,7 @@ func (r *ModelConfigReconciler) ensureDB() error {
 }
 
 // dbSessionLimits are the session limits on the controller's connections: the DB_* variables and defaults of
-// services/pkg/dbsession (this module is built without it), in milliseconds, 0 = not sent.
+// services/pkg/dbsession (this module is built without it), in milliseconds, 0 = not set.
 var dbSessionLimits = []struct {
 	env, param string
 	def        int
@@ -93,23 +95,49 @@ var dbSessionLimits = []struct {
 	{"DB_IDLE_IN_TRANSACTION_TIMEOUT_MS", "idle_in_transaction_session_timeout", 300000},
 }
 
-// dbConnConfig parses DATABASE_URL and puts the session limits in the connection's run-time parameters. An absent,
-// negative or unreadable variable keeps the default.
-func dbConnConfig(url string) (*pgx.ConnConfig, error) {
-	cfg, err := pgx.ParseConfig(normalizeDBURL(url))
-	if err != nil {
-		return nil, err
+// The controller's pool size (the chart's postgresql.pool.modelConfigController.maxConns): it reconciles one
+// ModelConfig at a time.
+const (
+	envDBPoolMaxConns     = "DB_POOL_MAX_MODEL_CONFIG"
+	defaultDBPoolMaxConns = 4
+)
+
+func dbPoolMaxConns() int {
+	if n, err := strconv.Atoi(strings.TrimSpace(os.Getenv(envDBPoolMaxConns))); err == nil && n >= 1 && n <= 10_000 {
+		return n
 	}
+	return defaultDBPoolMaxConns
+}
+
+// dbSessionStatements is the SET statements for the session limits, as services/pkg/dbsession writes them. An
+// absent, negative or unreadable variable keeps the default; 0 sets nothing.
+func dbSessionStatements() string {
+	var s []string
 	for _, l := range dbSessionLimits {
 		ms := l.def
 		if n, err := strconv.Atoi(strings.TrimSpace(os.Getenv(l.env))); err == nil && n >= 0 {
 			ms = n
 		}
 		if ms > 0 {
-			if cfg.RuntimeParams == nil {
-				cfg.RuntimeParams = map[string]string{}
+			s = append(s, fmt.Sprintf("SET %s = %d", l.param, ms))
+		}
+	}
+	return strings.Join(s, "; ")
+}
+
+// dbConnConfig parses DATABASE_URL and makes each connection run the session limits' SET statements once it is
+// connected (not as startup parameters, which a pooler such as PgBouncer refuses by default).
+func dbConnConfig(url string) (*pgx.ConnConfig, error) {
+	cfg, err := pgx.ParseConfig(normalizeDBURL(url))
+	if err != nil {
+		return nil, err
+	}
+	if stmts := dbSessionStatements(); stmts != "" {
+		cfg.AfterConnect = func(ctx context.Context, conn *pgconn.PgConn) error {
+			if _, err := conn.Exec(ctx, stmts).ReadAll(); err != nil {
+				return fmt.Errorf("session limits: %s: %w", stmts, err)
 			}
-			cfg.RuntimeParams[l.param] = strconv.Itoa(ms)
+			return nil
 		}
 	}
 	return cfg, nil

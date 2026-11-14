@@ -1,0 +1,16 @@
+suite: NOTES — the database connections an external database must take
+templates:
+  - NOTES.txt
+tests:
+  - it: prints the pods' most connections for an external database
+    set:
+      postgresql.enabled: false
+      postgresql.externalHost: db.example.com
+    asserts:
+      - matchRegexRaw:
+          pattern: can hold up to 152 connections to db\.example\.com
+
+  - it: prints nothing of it for the chart's PostgreSQL, which the install checks
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Database connections

@@ -9,15 +9,21 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/dbsession"
 )
 
-// newPoolConfig is the pool of auth-service's requests and background jobs (and of reset-admin): 20 connections,
-// 2 kept open, each with the session limits.
+// envPoolMaxConns is auth-service's pool size (the chart's postgresql.pool.authService.maxConns).
+const (
+	envPoolMaxConns     = "DB_POOL_MAX_AUTH"
+	defaultPoolMaxConns = 20
+)
+
+// newPoolConfig is the pool of auth-service's requests and background jobs (and of reset-admin): DB_POOL_MAX_AUTH
+// connections (20), 2 kept open, each with the session limits.
 func newPoolConfig(dbURL string, sessionLimits dbsession.Limits) (*pgxpool.Config, error) {
 	cfg, err := pgxpool.ParseConfig(dbURL)
 	if err != nil {
 		return nil, err
 	}
-	cfg.MaxConns = 20
-	cfg.MinConns = 2
+	cfg.MaxConns = dbsession.PoolMaxConns(envPoolMaxConns, defaultPoolMaxConns)
+	cfg.MinConns = min(2, cfg.MaxConns)
 	sessionLimits.Apply(&cfg.ConnConfig.Config)
 	return cfg, nil
 }
@@ -28,6 +34,7 @@ func newMigrationPoolConfig(dbURL string, sessionLimits dbsession.Limits) (*pgxp
 	if err != nil {
 		return nil, err
 	}
+	cfg.MaxConns = dbsession.MigrationPoolMaxConns
 	sessionLimits.ApplyMigrations(&cfg.ConnConfig.Config)
 	return cfg, nil
 }

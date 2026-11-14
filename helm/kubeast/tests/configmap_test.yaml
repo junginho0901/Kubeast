@@ -669,3 +669,29 @@ tests:
       - equal:
           path: data.DB_IDLE_IN_TRANSACTION_TIMEOUT_MS
           value: "600000"
+
+  - it: hands each service its database pool size
+    asserts:
+      - equal:
+          path: data.DB_POOL_MAX_AUTH
+          value: "20"
+      - equal:
+          path: data.DB_POOL_MAX_SESSION
+          value: "20"
+      - equal:
+          path: data.DB_POOL_MAX_K8S
+          value: "10"
+      - equal:
+          path: data.DB_POOL_MAX_AI
+          value: "15"
+      - equal:
+          path: data.DB_POOL_MAX_MODEL_CONFIG
+          value: "4"
+
+  - it: passes a changed pool size as it is set
+    set:
+      postgresql.pool.k8sService.maxConns: 16
+    asserts:
+      - equal:
+          path: data.DB_POOL_MAX_K8S
+          value: "16"
