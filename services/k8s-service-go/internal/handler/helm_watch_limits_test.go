@@ -104,7 +104,8 @@ func openHelmStream(t *testing.T, h *Handler, user string, namespaces []string) 
 func TestHelmStreamsKeepToTheServersWatchLimitAndStartPlaces(t *testing.T) {
 	retry := helmLimitRetry
 	helmLimitRetry = func() time.Duration { return 20 * time.Millisecond }
-	defer func() { helmLimitRetry = retry }()
+	// A cleanup registered before the streams runs after their servers close, which waits for the handlers reading it.
+	t.Cleanup(func() { helmLimitRetry = retry })
 
 	api := &helmWatchAPI{}
 	h, _ := liveHandler(t, api.serve, &atomic.Int32{})
