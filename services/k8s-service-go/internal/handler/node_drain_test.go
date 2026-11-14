@@ -51,7 +51,7 @@ func TestEvictAll_RetriesPDBThenSucceeds(t *testing.T) {
 	if *calls != 3 {
 		t.Fatalf("expected 3 eviction attempts (2 rejected + 1 ok), got %d", *calls)
 	}
-	if err := waitForPodsGone(context.Background(), cs, []corev1.Pod{pod}); err != nil {
+	if err := waitForPodsGone(context.Background(), cs, []corev1.Pod{pod}, nil); err != nil {
 		t.Fatalf("pod should be gone: %v", err)
 	}
 }
