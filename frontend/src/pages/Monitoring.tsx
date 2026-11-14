@@ -2,17 +2,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, isMetricsDisabled } from '@/services/api'
-import { useActiveRead, useMetricsNotReadForChat } from '@/hooks/useMetricsNotRead'
-import { monitoringNotRead } from '@/utils/aiContext/metricsNotRead'
 import MonitoringNodes from './monitoring/MonitoringNodes'
 import MonitoringPods from './monitoring/MonitoringPods'
 
 // Monitoring entry — tab routing + the "metrics unavailable" banner.
 // The Nodes/Pods tabs each own their own queries, AI snapshot, and
 // metrics-error handling. Namespace list is fetched here so it survives
-// tab switches without a refetch. A tab's numbers that could not be read (the
-// read failed with none to keep, or no metrics-server) go to the floating chat
-// from here, since the tab's own layer has no numbers then.
+// tab switches without a refetch.
 export default function Monitoring() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -37,10 +33,6 @@ export default function Monitoring() {
       queryClient.cancelQueries({ queryKey: ['pod-metrics'] })
     }
   }, [metricsUnavailable, queryClient])
-
-  const nodeRead = useActiveRead('node-metrics')
-  const podRead = useActiveRead('pod-metrics')
-  useMetricsNotReadForChat(monitoringNotRead(t, activeTab, activeTab === 'nodes' ? nodeRead : podRead, metricsUnavailable))
 
   // sized to the screen: each tab's list fits its rows and footer in the space left, as the list pages do
   return (
