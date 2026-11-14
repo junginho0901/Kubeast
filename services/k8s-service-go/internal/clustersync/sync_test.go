@@ -309,3 +309,35 @@ func TestSpreadStaysWithinAFifth(t *testing.T) {
 		}
 	}
 }
+
+// A replica whose Redis did not answer when it started listens for the notices once Redis answers (the client
+// subscribes again by itself) and reads the versions on subscribing, so what changed meanwhile is dropped then.
+func TestAReplicaStartedWithoutRedisHearsTheNoticesOnceRedisAnswers(t *testing.T) {
+	mr := miniredis.NewMiniRedis()
+	if err := mr.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(mr.Close)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: -1}) // the address, before the stand-in stops
+	t.Cleanup(func() { _ = rdb.Close() })
+	mr.Close()
+	g := &registry{versions: map[cluster.ID]int64{"prod": 2, "dev": 1}}
+	b := &replica{Sync: New(g, rdb), kept: map[cluster.ID]int64{}}
+	b.Every = time.Hour // no timed read
+	b.build("prod", 1)  // changed while Redis was down
+	b.build("dev", 1)
+	b.run(t)
+	time.Sleep(100 * time.Millisecond)
+	if got := b.staleDrops(); len(got) != 0 {
+		t.Fatalf("dropped %v before Redis answered", got)
+	}
+
+	if err := mr.Restart(); err != nil {
+		t.Fatal(err)
+	}
+	waitSubscribers(t, mr, 1)
+	eventually(t, func() bool { return equal(b.staleDrops(), []string{"prod"}) })
+	a := newReplica(t, g, mr, time.Hour)
+	a.Changed("dev")
+	eventually(t, func() bool { return equal(b.noticeDrops(), []cluster.ID{"dev"}) })
+}

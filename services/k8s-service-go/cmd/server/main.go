@@ -68,8 +68,11 @@ func main() {
 		slog.Warn("INTERNAL_API_TOKEN is not set; /internal routes will answer 503")
 	}
 
-	// Init Redis cache
+	// Init Redis cache. One whose Redis did not answer is in memory until Redis answers (asked every 5 s).
 	redisCache := cache.New(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisPassword)
+	cacheCtx, cacheCancel := context.WithCancel(context.Background())
+	defer cacheCancel()
+	go redisCache.Reconnect(cacheCtx, 5*time.Second)
 
 	// Shared Postgres pool: the audit log and the cluster registry.
 	bootCtx, bootCancel := context.WithTimeout(context.Background(), 5*time.Second)

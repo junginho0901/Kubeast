@@ -68,7 +68,9 @@ func onRedis() (*Cache, *ctxSeen) {
 	seen := &ctxSeen{errs: map[string]error{}}
 	rdb := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
 	rdb.AddHook(seen)
-	return &Cache{rdb: rdb, connected: true, mem: map[string]memEntry{}}, seen
+	c := &Cache{mem: map[string]memEntry{}}
+	c.rdb.Store(rdb)
+	return c, seen
 }
 
 func TestInvalidationOutlivesTheRequestThatAskedForIt(t *testing.T) {

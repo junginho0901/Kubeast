@@ -51,6 +51,8 @@ The NGINX gateway receives every request and routes it to the microservices. Pos
 | `postgres` | — | 5432 | Main DB (durable state), PostgreSQL 18 |
 | `redis` | — | 6379 | k8s-service cache, Valkey 9.1 (Redis protocol). With `redis.enabled: false`, k8s-service caches in memory |
 
+k8s-service writes its cache in Redis under the key prefix `kubeast:cache:`, every entry with a time to live of at most an hour, and a change of a cluster's registration deletes only those keys (`SCAN` and `UNLINK`), so other keys in the same Redis database stay. A k8s-service whose Redis did not answer at start caches in memory and asks Redis again every 5 s; once it answers, the cache moves there. Which clusters changed is kept in PostgreSQL, not in Redis: auth-service gives a cluster a new `config_version` in the statement that replaces its kubeconfig or changes its Prometheus or log store, and every k8s-service reads the versions every 5 s and drops a connection built from another version or to a deleted cluster. With Redis, the k8s-service that auth-service tells also notifies the others at once (channel `kubeast:clusters:changed:<db>`).
+
 ## Container images
 
 All are published as public packages on ghcr.io.

@@ -26,7 +26,7 @@ func logs(t *testing.T) *bytes.Buffer {
 func TestNoHostIsTheInMemoryCacheWithoutAnAttempt(t *testing.T) {
 	buf := logs(t)
 	c := New("", 6379, 0, "")
-	if c.IsConnected() || c.rdb != nil {
+	if c.IsConnected() || c.rdb.Load() != nil || c.standby != nil {
 		t.Fatal("no host must not connect")
 	}
 	if out := buf.String(); !strings.Contains(out, "redis off") || strings.Contains(out, "not available") {
