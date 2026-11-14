@@ -231,7 +231,7 @@ New values whose defaults need nothing from you: `podShutdown.preStopSeconds` (5
 **Sign-in, roles and AI**
 
 - Signing out ends the sign-in on the server: its tokens are refused and cannot be refreshed (#849).
-- A built-in role is known by its exact name (`Pending`, `Member`, `Read`, `Write`, `Admin`). A grant, an approval or an OIDC group sync of a role sharing another role's group is refused (400 `role_same_group`) (#865).
+- A built-in role is known by its exact name (`Pending`, `Member`, `Read`, `Write`, `Admin`), and so is the `Pending` account level everywhere: the services' middleware, the API key exchange, ai-service and Admin Users. A grant, an approval or an OIDC group sync of a role sharing another role's group is refused (400 `role_same_group`) (#865).
 - Claude Code turns take install-wide slots in the database (`maxConcurrentTotal`); a turn waits up to `queueWaitSeconds` for one (#859).
 - An alert's `startsAt` is stored in UTC, whatever offset the sender writes (#909).
 
@@ -243,7 +243,7 @@ New values whose defaults need nothing from you: `podShutdown.preStopSeconds` (5
 
 ## 5. One-time effects of this upgrade
 
-- **Roles renamed** (#865). Of the roles whose names make one group, the built-in, else the oldest, keeps its name. Every other one, and a custom role making a built-in's group (`ADMIN`, `PENDING`), becomes `<name>-renamed-<id>`. Its cluster grants are removed (a temporary one goes back to the role it would restore), its pending and approved access requests end (`role_renamed`), and the people whose grants changed sign in again. An account level stays on the renamed role. Each change is an audit row by `system` / `migration` (`admin.roles.update`, `user.cluster_role.unset`, `access.request.expire`). If a renamed role is still wanted, rename it and grant it again; [Features](features.md) "Role names" has the details.
+- **Roles renamed** (#865). A custom role whose name makes a built-in's group (`ADMIN`, ` read `) or another role's group (`a-b` beside `a b`) is renamed `<name>-renamed-<id>`; of the roles of one group, the built-in, else the oldest, keeps its name. A renamed role loses its cluster grants and open access requests: a temporary grant goes back to the role it would restore, pending and approved requests end with `role_renamed`, and the people whose grants changed sign in again. An account level stays on the renamed role. Each change is an audit row by `system` / `migration` (`admin.roles.update`, `user.cluster_role.unset`, `access.request.expire`). From then on the database refuses such a name. What to do next is in [6](#6-after-you-upgrade); [Features](features.md) "Role names" has the details.
 - **PostgreSQL restarts once** (#868). Its pod now starts with `max_connections`, so the database pauses while the new pod starts. Writes and sensitive reads answer 503 `audit unavailable` until it is back, as on any restart of the database.
 - **Redis and k8s-service restart, and the cache starts empty** (#866, #857). Until the 0.7.7 k8s-service pod has gone, its requests to the new Redis are refused and read as cache misses.
 - **Alerts from a sender that writes another zone** (#909). Up to 0.7.7 the offset of `startsAt` was dropped. Such an alert still firing after the upgrade gets a new inbox row, and the old row reads Status unknown after `inbox.staleAfterHours`.
@@ -251,7 +251,30 @@ New values whose defaults need nothing from you: `podShutdown.preStopSeconds` (5
 - **Session recordings in progress** (#851). A recording the 0.7.7 pod was writing has no owner. A 0.7.8 pod leaves it for its first 5 minutes, then takes it: it uploads it if it holds the spool file, and otherwise marks it interrupted.
 - **Claude Code slots** (#859). For the few minutes of the rolling update, the 0.7.7 ai-service pods do not count the install-wide slots, so the total can pass `maxConcurrentTotal`.
 
-## 6. Rolling back to 0.7.7
+## 6. After you upgrade
+
+```bash
+helm list -n kubeast                 # CHART kubeast-0.7.8
+kubectl -n kubeast get pods          # every pod Running and ready
+helm get notes kubeast -n kubeast    # the install notes, as 1.2 showed them
+```
+
+**Renamed roles** (#865). The audit log holds an `admin.roles.update` row by `system` / `migration` for each one, and this lists them:
+
+```bash
+kubectl -n kubeast exec deploy/postgres -c postgres -- \
+  psql -U kubeast -d kubeast -c "SELECT id, name FROM roles WHERE name LIKE '%-renamed-%' ORDER BY id"
+```
+
+- If a renamed role is still wanted, give it the name you want in Role Management, then grant it again on its clusters; the list you made in [1.5](#15-role-names) says to whom.
+- Change a chart setting that names it by its old name (`auth.oidc.roleMapping`, `auth.oidc.clusterGroupMapping`, `auth.accessRequests.roles`) to the new name, and upgrade again with `--reset-then-reuse-values`.
+- The `Pending` account level is matched by its exact name everywhere. An account whose level was a renamed role (`PENDING`, for example) is not read as Pending any more; set the level you want in Admin → Users.
+
+**Cordoned nodes** (#858). On each registered cluster, `kubectl get nodes`; run `kubectl uncordon <node>` for a node a drain cut short left cordoned.
+
+**Redis users** (#866). With `secrets.existingSecret`, the install notes say Redis still runs with one password until you turn the users on ([1.7](#17-secretsexistingsecret-and-the-redis-users)).
+
+## 7. Rolling back to 0.7.7
 
 ```bash
 helm history kubeast -n kubeast                        # the revision of 0.7.7
@@ -267,7 +290,7 @@ helm rollback kubeast <revision> -n kubeast
 - **Alerts** (#909): 0.7.7 drops a `startsAt` offset again, so an alert from a sender that writes another zone gets a new row again.
 - **Drains** (#858): a drain running at the rollback ends where it is and its node stays cordoned; 0.7.7 does not read `node_drains`.
 
-## 7. Docker Compose
+## 8. Docker Compose
 
 Upgrade from the checkout. The script keeps the passwords and keys in `.env`; give it the gateway port you use, since it writes `--port` (8000 when left out) into `.env`:
 
@@ -286,4 +309,4 @@ What differs from the chart:
 - **Redis**: as before, with no users and no password, reachable only on the Compose network (#866 changes the chart only).
 - **Database limits**: the same session limits and pools apply by default. To change them, set `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS` (`0` sets nothing) or `DB_POOL_MAX_AUTH`, `DB_POOL_MAX_SESSION`, `DB_POOL_MAX_K8S`, `DB_POOL_MAX_AI` in `.env`. Compose's PostgreSQL keeps its default `max_connections` (100), which one container of each service fits (#868).
 - **The same as the chart**: the migrations, the role renames ([1.5](#15-role-names), run the query with `docker compose exec -T postgres psql -U kubeast -d kubeast`), the alert times in UTC, the cache starting empty and the drains ([1.4](#14-node-drains)).
-- **Rollback**: `git checkout v0.7.7 && ./install-docker.sh --port <your port>`. The notes in [6](#6-rolling-back-to-077) apply, Redis aside.
+- **Rollback**: `git checkout v0.7.7 && ./install-docker.sh --port <your port>`. The notes in [7](#7-rolling-back-to-077) apply, Redis aside.

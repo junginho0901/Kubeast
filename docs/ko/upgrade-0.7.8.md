@@ -231,7 +231,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 **로그인, 역할, AI**
 
 - 로그아웃하면 서버에서 그 로그인이 끝납니다. 그 토큰은 거부되고 갱신할 수 없습니다(#849).
-- 기본 역할은 정확한 이름(`Pending`, `Member`, `Read`, `Write`, `Admin`)으로만 알아봅니다. 다른 역할과 같은 그룹이 되는 역할의 부여, 승인, OIDC 그룹 동기화는 거부됩니다(400 `role_same_group`)(#865).
+- 기본 역할은 정확한 이름(`Pending`, `Member`, `Read`, `Write`, `Admin`)으로만 알아보고, `Pending` 계정 등급도 서비스의 미들웨어, API 키 교환, ai-service, Admin Users 어디서나 정확한 이름으로만 알아봅니다. 다른 역할과 같은 그룹이 되는 역할의 부여, 승인, OIDC 그룹 동기화는 거부됩니다(400 `role_same_group`)(#865).
 - Claude Code 턴은 데이터베이스의 설치 전체 자리(`maxConcurrentTotal`)를 씁니다. 턴은 자리를 `queueWaitSeconds`까지 기다립니다(#859).
 - 알림의 `startsAt`은 보낸 쪽이 어떤 오프셋을 쓰든 UTC로 저장됩니다(#909).
 
@@ -243,7 +243,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 
 ## 5. 이번 업그레이드에서 한 번 일어나는 일
 
-- **역할 이름 바뀜**(#865). 이름이 같은 그룹이 되는 역할들 가운데 기본 역할, 없으면 가장 오래된 역할이 이름을 지킵니다. 나머지와 기본 역할의 그룹이 되는 사용자 정의 역할(`ADMIN`, `PENDING`)은 `<이름>-renamed-<id>`가 됩니다. 그 역할의 클러스터 부여는 지워지고(임시 부여는 되돌릴 역할로 돌아감), 대기 중이거나 승인된 접근 요청은 끝나며(`role_renamed`), 부여가 바뀐 사람은 다시 로그인합니다. 계정 등급은 바뀐 이름의 역할로 남습니다. 바뀐 것마다 `system` / `migration`이 남긴 감사 행이 있습니다(`admin.roles.update`, `user.cluster_role.unset`, `access.request.expire`). 이름이 바뀐 역할이 아직 필요하면 이름을 고치고 다시 부여합니다. 자세한 내용은 [기능](features.md)의 "역할 이름"에 있습니다.
+- **역할 이름 바뀜**(#865). 기본 역할의 그룹(`ADMIN`, ` read `)이나 다른 역할의 그룹(`a b` 옆의 `a-b`)이 되는 이름의 사용자 정의 역할은 `<이름>-renamed-<id>`로 이름이 바뀝니다. 한 그룹의 역할들 가운데 기본 역할, 없으면 가장 오래된 역할이 이름을 지킵니다. 이름이 바뀐 역할은 클러스터 부여와 열린 접근 요청을 잃습니다. 임시 부여는 되돌릴 역할로 돌아가고, 대기 중이거나 승인된 요청은 `role_renamed`로 끝나며, 부여가 바뀐 사람은 다시 로그인합니다. 계정 등급은 바뀐 이름의 역할로 남습니다. 바뀐 것마다 `system` / `migration`이 남긴 감사 행이 있습니다(`admin.roles.update`, `user.cluster_role.unset`, `access.request.expire`). 그 뒤로는 데이터베이스가 그런 이름을 거부합니다. 다음에 할 일은 [6](#6-업그레이드한-뒤)에 있고, 자세한 내용은 [기능](features.md)의 "역할 이름"에 있습니다.
 - **PostgreSQL이 한 번 다시 시작함**(#868). 파드가 이제 `max_connections`를 받아 시작하므로 새 파드가 뜨는 동안 데이터베이스가 멈춥니다. 다시 뜰 때까지 쓰기와 민감한 읽기는 데이터베이스가 다시 시작할 때마다 그렇듯 503 `audit unavailable`을 답합니다.
 - **Redis와 k8s-service가 다시 시작하고 캐시가 비어서 시작함**(#866, #857). 0.7.7 k8s-service 파드가 사라질 때까지 그 파드가 새 Redis에 보내는 요청은 거부되고 캐시 미스로 처리됩니다.
 - **다른 시간대를 쓰는 곳에서 온 알림**(#909). 0.7.7까지는 `startsAt`의 오프셋을 버렸습니다. 업그레이드 뒤에도 울리는 그런 알림은 받은 편지함에 새 행이 생기고, 옛 행은 `inbox.staleAfterHours`가 지나면 Status unknown이 됩니다.
@@ -251,7 +251,30 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 - **진행 중이던 세션 기록**(#851). 0.7.7 파드가 쓰던 기록에는 소유자가 없습니다. 0.7.8 파드는 처음 5분 동안 그 기록을 두었다가 가져가며, 스풀 파일을 갖고 있으면 올리고 없으면 interrupted로 표시합니다.
 - **Claude Code 자리**(#859). 롤링 업데이트의 몇 분 동안 0.7.7 ai-service 파드는 설치 전체 자리를 세지 않으므로 합계가 `maxConcurrentTotal`을 넘을 수 있습니다.
 
-## 6. 0.7.7로 되돌리기
+## 6. 업그레이드한 뒤
+
+```bash
+helm list -n kubeast                 # CHART kubeast-0.7.8
+kubectl -n kubeast get pods          # 모든 파드가 Running이고 준비됨
+helm get notes kubeast -n kubeast    # 1.2에서 본 설치 안내
+```
+
+**이름이 바뀐 역할**(#865). 감사 로그에 역할마다 `system` / `migration`이 남긴 `admin.roles.update` 행이 있고, 아래 명령이 그 역할을 보여 줍니다.
+
+```bash
+kubectl -n kubeast exec deploy/postgres -c postgres -- \
+  psql -U kubeast -d kubeast -c "SELECT id, name FROM roles WHERE name LIKE '%-renamed-%' ORDER BY id"
+```
+
+- 이름이 바뀐 역할이 아직 필요하면 역할 관리에서 원하는 이름을 준 뒤 그 클러스터에 다시 부여합니다. 누구에게 줄지는 [1.5](#15-역할-이름)에서 적어 둔 목록에 있습니다.
+- 옛 이름으로 그 역할을 적은 차트 설정(`auth.oidc.roleMapping`, `auth.oidc.clusterGroupMapping`, `auth.accessRequests.roles`)을 새 이름으로 바꾸고 `--reset-then-reuse-values`로 다시 업그레이드합니다.
+- `Pending` 계정 등급은 어디서나 정확한 이름으로만 알아봅니다. 계정 등급이 이름이 바뀐 역할(예: `PENDING`)이던 계정은 더는 Pending으로 읽히지 않으므로, Admin → Users에서 원하는 등급을 줍니다.
+
+**cordon된 노드**(#858). 등록한 클러스터마다 `kubectl get nodes`를 보고, 끊긴 드레인이 cordon된 채 남긴 노드는 `kubectl uncordon <node>`로 풉니다.
+
+**Redis 사용자**(#866). `secrets.existingSecret`을 쓰면 사용자를 켤 때까지 Redis가 비밀번호 하나로 돈다고 설치 안내가 알려 줍니다([1.7](#17-secretsexistingsecret과-redis-사용자)).
+
+## 7. 0.7.7로 되돌리기
 
 ```bash
 helm history kubeast -n kubeast                        # 0.7.7의 revision
@@ -267,7 +290,7 @@ helm rollback kubeast <revision> -n kubeast
 - **알림**(#909): 0.7.7은 `startsAt`의 오프셋을 다시 버리므로, 다른 시간대를 쓰는 곳에서 온 알림은 다시 새 행이 생깁니다.
 - **드레인**(#858): 되돌릴 때 돌던 드레인은 그 자리에서 끝나고 노드는 cordon된 채 남습니다. 0.7.7은 `node_drains`를 읽지 않습니다.
 
-## 7. Docker Compose
+## 8. Docker Compose
 
 내려받은 폴더에서 올립니다. 스크립트는 `.env`의 비밀번호와 키를 그대로 두지만 `--port`(빼면 8000)를 `.env`에 쓰므로, 지금 쓰는 Gateway 포트를 줍니다.
 
@@ -286,4 +309,4 @@ git fetch --tags && git checkout v0.7.8
 - **Redis**: 전과 같이 사용자도 비밀번호도 없고 Compose 네트워크 안에서만 닿습니다(#866은 차트만 바꿉니다).
 - **데이터베이스 한도**: 같은 세션 한도와 풀이 기본으로 적용됩니다. 바꾸려면 `.env`에 `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS`(`0`이면 두지 않음)나 `DB_POOL_MAX_AUTH`, `DB_POOL_MAX_SESSION`, `DB_POOL_MAX_K8S`, `DB_POOL_MAX_AI`를 넣습니다. Compose의 PostgreSQL은 기본 `max_connections`(100)를 그대로 쓰며, 서비스마다 컨테이너 하나면 그 안에 들어갑니다(#868).
 - **차트와 같은 것**: 마이그레이션, 역할 이름 바꾸기([1.5](#15-역할-이름)의 질의는 `docker compose exec -T postgres psql -U kubeast -d kubeast`로 돌림), 알림 시간의 UTC 저장, 캐시가 비어서 시작하는 것, 드레인([1.4](#14-노드-드레인))은 차트와 같습니다.
-- **되돌리기**: `git checkout v0.7.7 && ./install-docker.sh --port <지금 포트>`를 씁니다. Redis를 빼면 [6](#6-077로-되돌리기)의 내용이 그대로 적용됩니다.
+- **되돌리기**: `git checkout v0.7.7 && ./install-docker.sh --port <지금 포트>`를 씁니다. Redis를 빼면 [7](#7-077로-되돌리기)의 내용이 그대로 적용됩니다.
