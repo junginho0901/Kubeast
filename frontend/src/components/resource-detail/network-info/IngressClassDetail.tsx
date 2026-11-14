@@ -4,6 +4,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
+import { useDrawerFollowsEvents } from '../useDrawerFollowsEvents'
 import { DescribeFailure, ListReadFailure, DescribeStale } from '../DescribeFailure'
 
 interface Props {
@@ -27,6 +28,7 @@ export default function IngressClassDetail({ name, rawJson }: Props) {
     enabled: !!name,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['ingressclass-describe', name], answer: describe, kind: 'IngressClass', name })
   const usedList = Array.isArray(usedByIngresses) ? usedByIngresses : []
   const { items: pagedUsedList, nav: usedListNav } = usePagination(usedList, 10)
 

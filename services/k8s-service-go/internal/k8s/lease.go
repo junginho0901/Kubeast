@@ -63,7 +63,7 @@ func (s *Service) DescribeLease(ctx context.Context, namespace, name string) (ma
 	result["labels"] = lease.Labels
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(lease.UID))
 
 	return result, nil
 }

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api, type ResourceSliceItem } from '@/services/api'
 import { useDescribeReads } from '@/services/pacedReads'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useForbidden } from '@/services/forbiddenStore'
 import { countsOf } from '@/utils/listCounts'
 import { applyResourceSliceWatchEvent } from './resourceslices/resourceSlicesWatch'
@@ -49,6 +49,7 @@ export default function ResourceSlices() {
     path: '/api/v1/resourceslices',
     query: 'watch=1',
     applyEvent: (prev, event) => applyResourceSliceWatchEvent(prev as ResourceSliceItem[] | undefined, event),
+    gatherEveryMs: LIST_GATHER_MS,
     onEvent: (event) => {
       if (event?.type === 'DELETED') return
       const name = event?.object?.name || event?.object?.metadata?.name

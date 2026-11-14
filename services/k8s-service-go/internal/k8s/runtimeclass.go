@@ -52,7 +52,7 @@ func (s *Service) DescribeRuntimeClass(ctx context.Context, name string) (map[st
 	result["labels"] = rc.Labels
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(rc.UID))
 
 	return result, nil
 }

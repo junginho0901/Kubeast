@@ -12,7 +12,8 @@ import { otherFields } from './crDetail'
 const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
-import { useWatchChanges } from '@/services/useWatchChanges'
+import { LIVE_ROWS_MAX, useWatchChanges } from '@/services/useWatchChanges'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
@@ -143,6 +144,14 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
   })
 
   const crKind = (describe?.kind as string | undefined) || (rawJson?.kind as string | undefined) || 'CustomResource'
+  // the answer read the events by the object's own kind (k8s-service DescribeCustomResourceInstance)
+  useDrawerFollowsEvents({
+    describeKey: ['cr-instance-describe', group, version, plural, namespace || '-', name],
+    answer: describe,
+    kind: (describe?.kind as string | undefined) ?? '',
+    namespace,
+    name,
+  })
   useResourceDetailOverlay({ kind: crKind, name, namespace, describe })
 
   // Peer instances — same CRD's other instances (exclude self).
@@ -152,6 +161,15 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
     enabled: !!group && !!version && !!plural,
     staleTime: 30_000,
     retry: false,
+  })
+  // The other instances come and go as the CRD drawer's table follows them: read again when the kind changes, up to the
+  // rows a table follows (the same watch as that table and the Custom Resources page's chosen kind).
+  const followsPeers = Array.isArray(allInstances) && allInstances.length <= LIVE_ROWS_MAX
+  useWatchChanges({
+    enabled: followsPeers,
+    paths: [`/apis/${group}/${version}/${plural}`],
+    read: [['cri-peer', group, version, plural]],
+    clusterWide: !namespace,
   })
   const peerInstances = (Array.isArray(allInstances) ? allInstances : [])
     .filter((it: any) => {
@@ -312,6 +330,9 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
 
       {plural && (
         <InfoSection title="Peer Instances ({{n}})" titleValues={{ n: peerInstances.length }}>
+          {Array.isArray(allInstances) && !followsPeers && (
+            <p className="mb-2 text-xs text-slate-400">{t('crdInfo.notLive', { defaultValue: 'A table of more than {{max}} objects does not update live. Close and open this window to read it again.', max: LIVE_ROWS_MAX })}</p>
+          )}
           {peerInstances.length === 0 ? (
             <p className="text-xs text-slate-400"><Tx text="No other instance of {{kind}} in the cluster." values={{ kind: crKind }} /></p>
           ) : (

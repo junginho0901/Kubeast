@@ -177,7 +177,7 @@ func (s *Service) DescribePVC(ctx context.Context, namespace, name string) (map[
 	result["filesystem_resize_pending"] = filesystemResizePending
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(pvc.UID))
 
 	attachPVCUsage([]map[string]interface{}{result}, s.pvcUsage(ctx))
 	return result, nil

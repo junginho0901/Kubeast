@@ -5,6 +5,7 @@ import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, Sum
 import { fmtRel, fmtTs } from './detailFormat'
 import { backendRefGroup, conditionStatus, conditionSummary, formatParentRef, parentRefGroup } from './gatewayDetail'
 import { GroupRefLink } from './GroupRefLink'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import type { HTTPRouteInfo as HTTPRouteRow } from '@/services/api'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
@@ -38,6 +39,7 @@ export default function HTTPRouteInfo({ name, namespace, rawJson }: Props) {
     enabled,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['httproute-describe', namespace, name], answer: describe, kind: 'HTTPRoute', namespace, name })
 
   useResourceDetailOverlay({ kind: 'HTTPRoute', name, namespace, describe })
 
