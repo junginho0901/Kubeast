@@ -27,16 +27,26 @@ import (
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/repository"
 )
 
-func pingWithRetry(ctx context.Context, pool *pgxpool.Pool, attempts int, wait time.Duration) error {
-	var err error
-	for i := 1; i <= attempts; i++ {
-		if err = pool.Ping(ctx); err == nil {
-			return nil
-		}
-		slog.Warn("database not ready", "attempt", i, "error", err)
-		time.Sleep(wait)
-	}
-	return err
+// Boot waits, inside the chart's 180 s startup probe (kubeast.startupProbe): the database, then the schema.
+const (
+	dbBootWait     = 60 * time.Second
+	schemaBootWait = 60 * time.Second
+)
+
+// waitForDatabase pings until the database answers, for up to wait or until ctx ends. audit.WaitReady gives each ping
+// 5 s: without it one pgxpool connect runs for two minutes (pgxpool's ConnectTimeout default).
+func waitForDatabase(ctx context.Context, db audit.Pinger, wait time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
+	return audit.WaitReady(ctx, db, 2*time.Second)
+}
+
+// waitForSchema waits up to wait for the schema version this build needs. ctx also cuts a version read that hangs,
+// a few seconds past wait so dbmigrate's own "behind" error comes first.
+func waitForSchema(ctx context.Context, pool *pgxpool.Pool, wait time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, wait+5*time.Second)
+	defer cancel()
+	return dbmigrate.WaitFor(ctx, pool, dbmigrate.Required, wait)
 }
 
 func main() {
@@ -66,9 +76,8 @@ func main() {
 	}
 	defer pool.Close()
 
-	// Postgres may still be starting in the same rollout: wait up to ~60s
-	// instead of exiting into CrashLoopBackOff.
-	if err := pingWithRetry(ctx, pool, 30, 2*time.Second); err != nil {
+	// Postgres may still be starting in the same rollout: wait instead of exiting into CrashLoopBackOff.
+	if err := waitForDatabase(ctx, pool, dbBootWait); err != nil {
 		slog.Error("failed to ping database", "error", err)
 		os.Exit(1)
 	}
@@ -76,7 +85,7 @@ func main() {
 
 	// The schema is owned by auth-service (services/pkg/dbmigrate); wait for the
 	// version this build needs instead of running DDL here.
-	if err := dbmigrate.WaitFor(ctx, pool, dbmigrate.Required, 60*time.Second); err != nil {
+	if err := waitForSchema(ctx, pool, schemaBootWait); err != nil {
 		slog.Error("database schema not ready", "error", err)
 		os.Exit(1)
 	}

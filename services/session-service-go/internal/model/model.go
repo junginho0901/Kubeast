@@ -55,6 +55,12 @@ type MessageRequest struct {
 	ToolCalls *json.RawMessage `json:"tool_calls,omitempty"`
 	// Stopped: an answer the user stopped part way; stored as usage {"stopped": true} (no token counts are taken here).
 	Stopped bool `json:"stopped,omitempty"`
+	// Failed: an answer whose stream was cut before it ended, saved by the page as it showed; stored as usage
+	// {"failed": true}, the marker ai-service writes with a turn an error ended.
+	Failed bool `json:"failed,omitempty"`
+	// Answers: the question this answer is to. It is saved only while that question is the conversation's newest
+	// message: a stream that lost only its end had its whole answer saved by ai-service already.
+	Answers *string `json:"answers,omitempty"`
 }
 
 // SaveMessagesRequest is the request body for saving messages.
