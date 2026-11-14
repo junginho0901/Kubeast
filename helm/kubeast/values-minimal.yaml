@@ -5,7 +5,7 @@
 # Six pods (auth-service, k8s-service, session-service, frontend, gateway, postgres) instead of ten. Left out:
 #   - ai.enabled: false — no ai-service, tool-server or ModelConfig controller: no AI chat, floating assistant,
 #     alert investigation, MCP server or AI optimization text. The gateway answers /api/v1/ai with a JSON 503.
-#   - redis.enabled: false — k8s-service keeps its cache in memory (it is the only Redis user, one replica).
+#   - redis.enabled: false — k8s-service keeps its cache in memory (one replica); there is no tool-server to tell.
 # Requests from scripts/kind-footprint.sh (docs/architecture.md "자원 사용량"): memory = the larger of the idle 90th percentile and
 # the peak in use, plus 15% (memory over the request is what the kubelet evicts first; postgres from an install with
 # data); CPU = the idle 90th percentile plus 15%, at least 25m (CPU over the request is only slowed down). Limits

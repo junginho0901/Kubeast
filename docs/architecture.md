@@ -49,7 +49,7 @@ The NGINX gateway receives every request and routes it to the microservices. Pos
 | `model-config-controller` | Go (controller-runtime) | — | `ModelConfig` CRD controller |
 | `frontend` | React + Vite + TS | 5173 | UI (static build in prod, served by nginx) |
 | `postgres` | — | 5432 | Main DB (durable state), PostgreSQL 18 |
-| `redis` | — | 6379 | k8s-service cache, Valkey 9.1 (Redis protocol). k8s-service signs in as its own Redis user and only it may connect ([Redis users](configuration.md#redis-users)). With `redis.enabled: false`, k8s-service caches in memory |
+| `redis` | — | 6379 | k8s-service cache, Valkey 9.1 (Redis protocol). k8s-service and tool-server (cluster change notices only) each sign in as their own Redis user, and only they may connect ([Redis users](configuration.md#redis-users)). With `redis.enabled: false`, k8s-service caches in memory |
 
 ## Container images
 
@@ -105,7 +105,7 @@ The requests of the minimal install are set as follows:
 | Turned on | Added pods | Idle memory | Background work |
 | --- | --- | --- | --- |
 | `ai.enabled` (on by default) | 3: ai-service, tool-server, ModelConfig controller | +about 155 MiB | The controller watches ModelConfigs. ai-service and tool-server work only when requests come in |
-| `redis.enabled` (on by default) | 1 | +9 MiB | None. When off, k8s-service caches in memory (it is the only user of Redis) |
+| `redis.enabled` (on by default) | 1 | +9 MiB | None. When off, k8s-service caches in memory and tool-server's kubeconfigs expire in 10 s without the cluster change notices |
 | `mcp.enabled` | 0 | about +15 MiB inside ai-service (MCP SDK) | None |
 | `features.alertInvestigation` | 0 | 0 | None; it investigates when an alert webhook arrives |
 | `sessionRecording.enabled` | 0 | 0 | Uploads chunks while exec or a node shell is open |

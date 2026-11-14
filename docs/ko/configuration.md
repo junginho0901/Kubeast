@@ -160,7 +160,7 @@ ai:
     claudeCode: { enabled: false, maxConcurrent: 1, turnTimeoutSeconds: 300, maxTurns: 10 }
 
 # 내장 PostgreSQL(false면 외부 DB)과 Redis(false면 k8s-service가 메모리에 캐시).
-# Redis를 쓰는 곳은 k8s-service 하나뿐입니다.
+# Redis에 캐시하는 곳은 k8s-service 하나이고, tool-server는 클러스터 바뀜 알림만 듣습니다.
 postgresql:
   enabled: true
   user: kubeast
@@ -206,35 +206,38 @@ multicluster:
 
 차트의 Redis(Valkey)는 Redis를 쓰는 서비스마다 자기 사용자를 둡니다(`redis.acl.enabled`, 기본 켬).
 
-`secrets.existingSecret`을 쓰면, 사용자를 켤 때까지 Redis는 모든 서비스에 비밀번호 하나(`REDIS_PASSWORD`)를 씁니다. 켜려면 그 Secret에 `REDIS_K8S_SERVICE_PASSWORD`와 `REDIS_PROBE_PASSWORD`를 넣고 `redis.acl.existingSecretHasKeys: true`로 두세요. 그 전까지는 설치 안내(NOTES)가 이를 알립니다.
+`secrets.existingSecret`을 쓰면, 사용자를 켤 때까지 Redis는 모든 서비스에 비밀번호 하나(`REDIS_PASSWORD`)를 씁니다. 켜려면 그 Secret에 `REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD`, AI를 켰다면 `REDIS_TOOL_SERVER_PASSWORD`까지 넣고 `redis.acl.existingSecretHasKeys: true`로 두세요. 그 전까지는 설치 안내(NOTES)가 이를 알립니다.
 
 | 사용자 | 할 수 있는 것 | 할 수 없는 것 |
 |---|---|---|
 | `k8s-service` | 이름이 `kubeast:`로 시작하는 키와 채널. 키 하나씩 읽기·쓰기·지우기, 패턴으로 지울 때 쓰는 `SCAN`, `PUBLISH`/`SUBSCRIBE`(클러스터 바뀜 알림), `PING`, `SELECT`(`REDIS_DB`) | 그 밖의 키와 채널. `FLUSHALL`, `FLUSHDB`, `KEYS`, `CONFIG`, `DEBUG`, `ACL`, `MONITOR`, `EVAL`, `SCRIPT`와 목록에 없는 모든 명령 |
+| `tool-server`(AI를 켰을 때) | 클러스터 바뀜 알림 채널(`kubeast:clusters:changed:*`): `SUBSCRIBE`, `PING`, `SELECT` | 모든 키. 알림 보내기. 그 밖의 모든 명령 |
 | `probe` | readiness·liveness 프로브의 `PING` | 그 밖의 모든 것 |
 | `default` | 없음: 꺼져 있습니다 | 위 사용자로 로그인하지 않은 연결은 모든 명령에 `NOAUTH`를 받습니다 |
 
 - 규칙은 `helm/kubeast/templates/_helpers.tpl`의 `kubeast.redisUsersAcl`에 있습니다. k8s-service가 새 명령을 쓰기 시작하면 거기에 더합니다.
 - go-redis는 연결할 때 `CLIENT SETINFO`와 `CLIENT MAINT_NOTIFICATIONS`를 보냅니다. Redis가 둘 다 거절하고, go-redis는 그대로 이어 갑니다.
 - 이 규칙은 `images.redis`가 Valkey이거나 Redis 6.2 이상이어야 합니다. 이미지가 모르는 명령이 있으면 Valkey가 시작하지 않습니다.
-- tool-server에는 아직 사용자가 없습니다. tool-server가 k8s-service의 클러스터 바뀜 알림을 듣게 될 때 생깁니다: 그 채널과 클러스터 판 번호 읽기만. 그때 NetworkPolicy도 tool-server를 들입니다.
+- tool-server는 k8s-service의 클러스터 바뀜 알림을 듣고 그 클러스터의 kubeconfig를 버립니다. auth-service가 부른 한 대만이 아니라 모든 tool-server가 바로 버립니다.
+- 알림에는 클러스터와 보낸 k8s-service 프로세스만 들어 있습니다(`services/pkg/clusternotice`). 다음 도구 호출은 kubeconfig를 k8s-service에 다시 묻고, 그때 그 사람의 권한도 다시 봅니다. 그래서 진짜가 아닌 알림이 와도 다시 읽기 한 번입니다.
+- 알림을 놓치거나 Redis가 꺼져 있으면, 길어야 tool-server가 kubeconfig를 기억하는 10초입니다.
 
 **비밀번호.**
 
-- 사용자마다 설치 때 32자로 만들어 Secret `kubeast-redis-users`에 둡니다(`REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD`).
+- 사용자마다 설치 때 32자로 만들어 Secret `kubeast-redis-users`에 둡니다(`REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD`, `REDIS_TOOL_SERVER_PASSWORD`).
 - 업그레이드해도 유지되고, `kubeast-secrets`처럼 `helm uninstall` 뒤에도 남습니다.
-- 모든 서비스가 통째로 환경 변수로 읽는 `kubeast-secrets`에는 넣지 않습니다. redis 파드와 k8s-service만 읽습니다.
-- `secrets.existingSecret`과 `redis.acl.existingSecretHasKeys: true`를 쓰면 두 키를 그 Secret에서 읽습니다.
-- 바꾸려면 Secret에 새 값을 쓰고 `redis`와 `k8s-service`를 다시 시작합니다.
+- 모든 서비스가 통째로 환경 변수로 읽는 `kubeast-secrets`에는 넣지 않습니다. redis 파드가 읽고, k8s-service와 tool-server는 자기 것만 읽습니다.
+- `secrets.existingSecret`과 `redis.acl.existingSecretHasKeys: true`를 쓰면 키를 그 Secret에서 읽습니다.
+- 바꾸려면 Secret에 새 값을 쓰고 `redis`와 그 비밀번호의 서비스를 다시 시작합니다.
 
 **Valkey가 읽는 방법.**
 
-- redis 파드의 첫 컨테이너 `acl`이 Secret의 두 비밀번호를 파일로 읽습니다.
+- redis 파드의 첫 컨테이너 `acl`이 Secret의 비밀번호를 파일로 읽습니다.
 - 각 비밀번호의 SHA-256을 메모리 볼륨의 ACL 파일에 쓰고 파일을 읽기 전용으로 둡니다. Valkey는 `--aclfile`로 시작합니다.
 - 비밀번호는 파드 스펙에도 Valkey 인자에도 없습니다. 프로브는 `REDISCLI_AUTH`에서 읽습니다.
 - 규칙이 바뀌면 Valkey가 다시 시작합니다(파드의 `checksum/redis-users`, 비밀번호를 뺀 규칙의 해시).
 
-**네트워크.** `networkPolicy.enabled`면 Redis는 릴리스 네임스페이스의 k8s-service 파드에서 6379 포트로 오는 연결만 받습니다.
+**네트워크.** `networkPolicy.enabled`면 Redis는 릴리스 네임스페이스의 k8s-service와 tool-server 파드에서 6379 포트로 오는 연결만 받습니다. 프로브는 redis 컨테이너 안에서 돌아 규칙이 필요 없습니다.
 
 **메모리.**
 

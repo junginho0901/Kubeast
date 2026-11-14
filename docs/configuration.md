@@ -163,7 +163,7 @@ ai:
   providers:
     claudeCode: { enabled: false, maxConcurrent: 1, turnTimeoutSeconds: 300, maxTurns: 10 }
 
-# Built-in PostgreSQL (false = external DB) and Redis (false = k8s-service caches in memory; it is the only user of Redis)
+# Built-in PostgreSQL (false = external DB) and Redis (false = k8s-service caches in memory; tool-server only listens there for cluster changes)
 postgresql:
   enabled: true
   user: kubeast
@@ -209,35 +209,38 @@ multicluster:
 
 The chart's Redis (Valkey) gives each service that uses it a user of its own (`redis.acl.enabled`, on by default).
 
-With `secrets.existingSecret`, Redis keeps one password (`REDIS_PASSWORD`) for every service until you turn the users on: put `REDIS_K8S_SERVICE_PASSWORD` and `REDIS_PROBE_PASSWORD` in that Secret, then set `redis.acl.existingSecretHasKeys: true`. Until then the install notes say so.
+With `secrets.existingSecret`, Redis keeps one password (`REDIS_PASSWORD`) for every service until you turn the users on: put `REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD` and, with the AI on, `REDIS_TOOL_SERVER_PASSWORD` in that Secret, then set `redis.acl.existingSecretHasKeys: true`. Until then the install notes say so.
 
 | User | Can | Cannot |
 |---|---|---|
 | `k8s-service` | Keys and channels whose names start with `kubeast:`. Reads, writes and deletes of single keys, `SCAN` for the deletes by pattern, `PUBLISH`/`SUBSCRIBE` (the cluster change notices), `PING`, `SELECT` (`REDIS_DB`) | Any other key or channel. `FLUSHALL`, `FLUSHDB`, `KEYS`, `CONFIG`, `DEBUG`, `ACL`, `MONITOR`, `EVAL`, `SCRIPT` and every command not listed |
+| `tool-server` (with the AI on) | The cluster change notice channel (`kubeast:clusters:changed:*`): `SUBSCRIBE`, `PING`, `SELECT` | Any key. Publishing. Every other command |
 | `probe` | `PING`, for the readiness and liveness probes | Everything else |
 | `default` | Nothing: it is off | A connection that has not signed in as a user above gets `NOAUTH` for every command |
 
 - The rules are `kubeast.redisUsersAcl` in `helm/kubeast/templates/_helpers.tpl`. A command k8s-service starts to use goes there.
 - go-redis sends `CLIENT SETINFO` and `CLIENT MAINT_NOTIFICATIONS` when it connects. Redis refuses both, and go-redis goes on.
 - The rules need Valkey, or Redis 6.2 or later, in `images.redis`. A command the image does not know stops Valkey at start.
-- tool-server has no user yet. It gets one when it listens for k8s-service's cluster change notices: that channel and the cluster versions, read only. The NetworkPolicy then lets it in.
+- tool-server listens to k8s-service's cluster change notices and drops that cluster's kubeconfigs, so every tool-server replica drops them at once, not only the one auth-service calls.
+- A notice names the cluster and the k8s-service process that sent it, nothing else (`services/pkg/clusternotice`). The next tool call reads the kubeconfig from k8s-service again, which checks the person's access again, so a notice that is not genuine costs one read.
+- A notice lost, or Redis down, costs at most the 10 s tool-server keeps a kubeconfig.
 
 **Passwords.**
 
-- Each user's password is generated at install, 32 characters, in the Secret `kubeast-redis-users` (`REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD`).
+- Each user's password is generated at install, 32 characters, in the Secret `kubeast-redis-users` (`REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD`, `REDIS_TOOL_SERVER_PASSWORD`).
 - It is kept across upgrades and stays after `helm uninstall`, like `kubeast-secrets`.
-- It is not in `kubeast-secrets`, which every service reads whole as its environment. Only the redis pod and k8s-service read it.
-- With `secrets.existingSecret` and `redis.acl.existingSecretHasKeys: true`, both keys are read from that Secret.
-- To change one, write the new value into the Secret, then restart `redis` and `k8s-service`.
+- It is not in `kubeast-secrets`, which every service reads whole as its environment. The redis pod reads them, and k8s-service and tool-server each read their own.
+- With `secrets.existingSecret` and `redis.acl.existingSecretHasKeys: true`, the keys are read from that Secret.
+- To change one, write the new value into the Secret, then restart `redis` and the service it belongs to.
 
 **How Valkey reads them.**
 
-- The redis pod's first container, `acl`, reads the two passwords from the Secret as files.
+- The redis pod's first container, `acl`, reads the passwords from the Secret as files.
 - It writes their SHA-256 into the ACL file, on a volume in memory, and makes the file read-only. Valkey starts with `--aclfile`.
 - No password is in the pod spec or in Valkey's arguments. The probes read theirs from `REDISCLI_AUTH`.
 - A change to the rules restarts Valkey (`checksum/redis-users` on the pod, a hash of the rules without the passwords).
 
-**Network.** With `networkPolicy.enabled`, Redis takes connections only from k8s-service pods in the release namespace, on port 6379.
+**Network.** With `networkPolicy.enabled`, Redis takes connections only from k8s-service and tool-server pods in the release namespace, on port 6379. The probes run inside the redis container and need no rule.
 
 **Memory.**
 
