@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // After a cluster switch nothing of the cluster before is drawn as the new one's — not in one commit. React Router
 // applies the URL change in a transition, and the page re-mounted under the new cluster (Layout's key) used to read
-// the old cache, refusals and notices before an effect after that render emptied them. These tests run
+// the old cache, refusals, notices and drawer row before an effect after that render emptied them. These tests run
 // the real provider in react-dom with the few DOM parts it touches while nothing it renders is an element, and note
 // what each commit shows (layout effects run for every commit, painted or not).
 
@@ -25,6 +25,18 @@ vi.hoisted(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
 })
 
+// the drawer itself: one that notes each time it starts
+const drawerMounts = vi.hoisted(() => ({ count: 0 }))
+vi.mock('@/components/ResourceDetailDrawer', async () => {
+  const { useLayoutEffect } = await import('react')
+  return {
+    default: function Drawer() {
+      useLayoutEffect(() => { drawerMounts.count += 1 }, [])
+      return null
+    },
+  }
+})
+
 import { act, createElement, useLayoutEffect, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
@@ -38,6 +50,9 @@ import { client } from '@/services/api/client'
 import { useForbiddenLabels } from '@/services/forbiddenStore'
 import { announceCreated, useCreatedNotice } from '@/services/createdNoticeStore'
 import { recordWatchFrame, useWatchProblem } from '@/services/watchProblemStore'
+import { ResourceDetailProvider } from '@/components/ResourceDetailProvider'
+import { useResourceDetail, type ResourceDetailTarget } from '@/components/ResourceDetailContext'
+import LazyResourceDetailDrawer from '@/components/LazyResourceDetailDrawer'
 
 client.defaults.adapter = async (config: InternalAxiosRequestConfig) => {
   const cluster = String((config.params as { cluster?: string } | undefined)?.cluster ?? '')
@@ -79,6 +94,7 @@ const mount = async (body: ReactNode) => {
 
 beforeEach(async () => {
   if (root) await act(async () => root.unmount())
+  drawerMounts.count = 0
 })
 
 afterAll(() => {
@@ -126,5 +142,47 @@ describe('a cluster switch', () => {
     expect(onB.filter((c) => c.rows === 'pods of a' || c.refused.length > 0 || c.notice !== null || c.watch !== undefined)).toEqual([])
     // and the cluster before is never drawn with the new one's rows
     expect(commits.filter((c) => c.cluster === 'a' && c.rows === 'pods of b')).toEqual([])
+  })
+})
+
+describe('an open drawer on a cluster switch', () => {
+  type Shown = { cluster: string; target: ResourceDetailTarget | null; canGoBack: boolean }
+  const commits: Shown[] = []
+  let open: (t: ResourceDetailTarget) => void = () => {}
+
+  function Probe() {
+    const { currentCluster } = useCluster()
+    const detail = useResourceDetail()
+    open = detail.open
+    useLayoutEffect(() => { commits.push({ cluster: currentCluster, target: detail.target, canGoBack: detail.canGoBack }) })
+    return null
+  }
+
+  it('stays on the object the address names, without the row or the way back of the cluster before', async () => {
+    commits.length = 0
+    await mount(createElement(ResourceDetailProvider, null, createElement(Probe)))
+    await act(async () => open({ kind: 'Deployment', namespace: 'default', name: 'api', rawJson: { from: 'list of a' } }))
+    await act(async () => open({ kind: 'Deployment', namespace: 'default', name: 'web', rawJson: { from: 'list of a' } }))
+    expect(commits.at(-1)).toMatchObject({ cluster: 'a', canGoBack: true, target: { name: 'web', rawJson: { from: 'list of a' } } })
+
+    commits.length = 0
+    await act(async () => pick('b'))
+    await settle()
+
+    const onB = commits.filter((c) => c.cluster === 'b')
+    expect(onB.length).toBeGreaterThan(0)
+    expect(onB.filter((c) => c.target?.rawJson !== undefined || c.canGoBack)).toEqual([])
+    expect(onB.at(-1)?.target).toMatchObject({ kind: 'Deployment', namespace: 'default', name: 'web' })
+  })
+
+  it('starts the drawer again, so nothing it held of the cluster before stays', async () => {
+    await mount(createElement(ResourceDetailProvider, null, createElement(Probe), createElement(LazyResourceDetailDrawer)))
+    await act(async () => open({ kind: 'Deployment', namespace: 'default', name: 'web' }))
+    await until(() => drawerMounts.count === 1)
+
+    await act(async () => pick('b'))
+    await settle()
+
+    expect(drawerMounts.count).toBe(2)
   })
 })
