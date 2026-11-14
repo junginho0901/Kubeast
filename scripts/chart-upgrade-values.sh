@@ -35,4 +35,25 @@ for tag in $tags; do
     fail=1
   fi
 done
+# A values file copied from `helm show values` of a published release holds the image tag and chartVersion the release
+# workflow wrote into it (0.7.6 and earlier no chartVersion). Passed with -f to this chart published the same way, it
+# must stop with the upgrade hint: it renders, it keeps that release's images.
+pub=v99.0.0
+rm -rf "$work/pub"
+cp -R helm/kubeast "$work/pub"
+sed -e "s/^version:.*/version: ${pub#v}/" helm/kubeast/Chart.yaml > "$work/pub/Chart.yaml"
+sed -e "s/imageTag:.*/imageTag: \"$pub\"/" -e "s/^chartVersion:.*/chartVersion: \"${pub#v}\"/" helm/kubeast/values.yaml > "$work/pub/values.yaml"
+for tag in $tags; do
+  git show "$tag:helm/kubeast/values.yaml" 2>/dev/null |
+    sed -e "s/imageTag:.*/imageTag: \"$tag\"/" -e "s/^chartVersion:.*/chartVersion: \"${tag#v}\"/" > "$work/copied.yaml" || continue
+  if copied=$(helm template kubeast "$work/pub" -f "$work/copied.yaml" "${args[@]}" 2>&1); then
+    echo "$tag: a values file copied from it renders over this chart as published, with its images — stop it in templates/checks/upgrade-values.yaml"
+    fail=1
+  elif grep -q "come from an earlier Kubeast chart" <<<"$copied"; then
+    echo "$tag: a values file copied from it stops with the upgrade hint"
+  else
+    echo "$tag: a values file copied from it: $(grep -m1 -A1 Error <<<"$copied" | tr -s ' \n' ' ')"
+    fail=1
+  fi
+done
 exit $fail
