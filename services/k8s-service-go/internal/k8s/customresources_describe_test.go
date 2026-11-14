@@ -127,13 +127,13 @@ func newCRDescribeService(t *testing.T) (*Service, *crAPI) {
 			"/apis/numbers.kubeast.io/v1/namespaces/lab/widgets/w2":  {other, "w2", "small", nil, 1, nil, nil, "3d"},
 			"/apis/numbers.kubeast.io/v1/gadgets/g1":                 {gadget, "g1", nil, nil, nil, nil, nil, "3d"},
 		},
-		events: []corev1.Event{
+		events: append(append(naming("77777777-aaaa-4bbb-8ccc-000000000007",
 			gatewayEvent("shop", "Widget", "w1", "Synced", now.Add(-5*time.Minute)),
 			gatewayEvent("shop", "Widget", "w1", "Ready", now.Add(-time.Minute)),
 			gatewayEvent("shop", "ConfigMap", "w1", "Elsewhere", now),
 			gatewayEvent("lab", "Widget", "w1", "OtherNamespace", now),
-			gatewayEvent("default", "Gadget", "g1", "Seen", now.Add(-2*time.Minute)),
-		},
+		), naming("66666666-aaaa-4bbb-8ccc-000000000006", gatewayEvent("shop", "Widget", "w1", "OfTheOneBefore", now))...),
+			naming("u3", gatewayEvent("default", "Gadget", "g1", "Seen", now.Add(-2*time.Minute)))...),
 	}
 	srv := httptest.NewServer(http.HandlerFunc(api.serve))
 	t.Cleanup(srv.Close)
