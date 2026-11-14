@@ -32,6 +32,26 @@ async function freshPage(browser: Browser) {
   const ctx = await browser.newContext()
   return { ctx, page: await ctx.newPage() }
 }
+// An account of the run, removed in afterAll: an Admin of the whole console, or a Member with Read on `default`. A
+// sign-out ends that sign-in on the server and auth_time is in whole seconds, so the people who sign out here are not
+// the admin whose token this spec holds.
+async function throwaway(api: APIRequestContext, tag: string, roleName: 'Admin' | 'Member') {
+  const roles = await (await api.get('/api/v1/auth/roles', { headers: admin })).json()
+  const role = (Array.isArray(roles) ? roles : roles.roles || roles.items || []).find((r: { name: string }) => r.name === roleName).id
+  const email = `e2e-rf-${tag}-${stamp}@kubeast.local`
+  const password = `e2e-rf-${tag}-pw`
+  const made = await api.post('/api/v1/auth/admin/users', { headers: admin, data: { name: `E2E real flows ${tag}`, email, password, role_id: role } })
+  expect(made.status(), await made.text()).toBe(201)
+  const id = (await made.json()).id as string
+  users.push(id)
+  if (roleName === 'Member') expect((await api.put(`/api/v1/auth/admin/users/${id}/cluster-roles/default`, { headers: admin, data: { role: 'Read', namespaces: [] } })).status()).toBeLessThan(300)
+  return { email, password }
+}
+// A sign-in in the same second as one signed out shares its auth_time and would end with it.
+async function pastTheSecondOf(at: number) {
+  const wait = (Math.floor(at / 1000) + 1) * 1000 - Date.now()
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait + 50))
+}
 const storedCluster = (page: Page) => page.evaluate((k) => localStorage.getItem(k), CLUSTER_KEY)
 const nodesCard = (page: Page) => page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Nodes', exact: true }) })
 const nodeNames = (page: Page) => nodesCard(page).locator('button p[title]').evaluateAll((els) => els.map((e) => e.getAttribute('title')))
@@ -127,7 +147,9 @@ test('after one person signs out, the next one signs in to their own access and 
 
   const { ctx, page } = await freshPage(browser)
   await page.goto('/login')
-  await signIn(page)
+  // the first person is an admin of the run's own: its sign-out ends no token a later step uses
+  const first = await throwaway(request, 'first', 'Admin')
+  await signIn(page, first.email, first.password)
   await page.goto('/admin/users')
   // the list pages as many rows as fit the screen: find the account by its email
   await page.getByTestId('admin-users-search').fill(email)
@@ -149,8 +171,10 @@ test('after one person signs out, the next one signs in to their own access and 
 
 test('the language and the colour mode chosen on Settings stay through a sign-out and the next sign-in', async ({ browser }) => {
   const { ctx, page } = await freshPage(browser)
+  const own = await throwaway(ctx.request, 'settings', 'Member')
   await page.goto('/login')
-  await signIn(page)
+  await signIn(page, own.email, own.password)
+  const signedInAt = Date.now()
   await page.evaluate(() => {
     localStorage.setItem('i18nextLng', 'ko')
     localStorage.setItem('kubeast.colorMode', 'light')
@@ -159,7 +183,8 @@ test('the language and the colour mode chosen on Settings stay through a sign-ou
   await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'light')
   await page.getByRole('button', { name: /Log out|로그아웃/ }).click()
   await expect(page).toHaveURL(/\/login/)
-  await signIn(page)
+  await pastTheSecondOf(signedInAt)
+  await signIn(page, own.email, own.password)
   await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'light')
   await expect(page.getByRole('button', { name: '로그아웃' })).toHaveCount(1, { timeout: 15000 })
   await page.evaluate(() => {
