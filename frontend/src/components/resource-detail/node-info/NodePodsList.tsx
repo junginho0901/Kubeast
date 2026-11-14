@@ -41,27 +41,27 @@ export default function NodePodsList({
       }
     >
       <div className="overflow-x-auto">
-        <table className="w-full text-xs min-w-[820px] table-fixed">
+        <table className="w-full text-xs min-w-[640px] table-fixed">
           <thead className="text-slate-400">
             <tr>
-              <Th className="text-left py-2 w-[32%]">Name</Th>
-              <Th className="text-left py-2 w-[16%]">Namespace</Th>
-              <Th className="text-left py-2 w-[10%]">Ready</Th>
-              <Th className="text-left py-2 w-[12%]">Status</Th>
+              <Th className="text-left py-2 w-[27%]">Name</Th>
+              <Th className="text-left py-2 w-[15%]">Namespace</Th>
+              <Th className="text-left py-2 w-[8%]">Ready</Th>
+              <Th className="text-left py-2 w-[14%]">Status</Th>
               <Th className="text-left py-2 w-[10%]">Restarts</Th>
-              <Th className="text-left py-2 w-[12%]">IP</Th>
-              <Th className="text-left py-2 w-[8%]">Age</Th>
+              <Th className="text-left py-2 w-[17%]">IP</Th>
+              <Th className="text-left py-2 w-[9%]">Age</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800">
             {pagedPods.map((pod: any) => (
               <tr key={`${pod.namespace}-${pod.name}`} className="text-slate-200">
                 <td className="py-2 pr-2 font-medium text-ink"><span className="block truncate"><ResourceLink kind="Pod" name={pod.name} namespace={pod.namespace} /></span></td>
-                <td className="py-2 pr-2"><span className="block truncate">{pod.namespace}</span></td>
+                <td className="py-2 pr-2"><span className="block truncate" title={pod.namespace}>{pod.namespace}</span></td>
                 <td className="py-2 pr-2">{pod.ready || '-'}</td>
-                <td className="py-2 pr-2"><span className="block truncate">{pod.status || pod.phase || '-'}</span></td>
+                <td className="py-2 pr-2"><span className="block truncate" title={pod.status || pod.phase || undefined}>{pod.status || pod.phase || '-'}</span></td>
                 <td className="py-2 pr-2">{pod.restart_count ?? 0}</td>
-                <td className="py-2 pr-2"><span className="block truncate">{pod.pod_ip || '-'}</span></td>
+                <td className="py-2 pr-2"><span className="block truncate" title={pod.pod_ip || undefined}>{pod.pod_ip || '-'}</span></td>
                 <td className="py-2 pr-2">{fmtPodAge(pod.created_at)}</td>
               </tr>
             ))}

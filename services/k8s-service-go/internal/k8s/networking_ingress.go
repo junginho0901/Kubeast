@@ -80,7 +80,7 @@ func (s *Service) DescribeIngress(ctx context.Context, namespace, name string) (
 		}
 	}
 
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(ing.UID))
 
 	return result, nil
 }
@@ -161,7 +161,7 @@ func (s *Service) DescribeIngressClass(ctx context.Context, name string) (map[st
 	result["resource_version"] = ic.ResourceVersion
 	result["labels"] = ic.Labels
 	result["annotations"] = ic.Annotations
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(ic.UID))
 	if ic.Spec.Parameters != nil {
 		params := map[string]interface{}{
 			"kind": ic.Spec.Parameters.Kind,

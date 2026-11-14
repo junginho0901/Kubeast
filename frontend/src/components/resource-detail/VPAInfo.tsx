@@ -3,6 +3,7 @@ import { api } from '@/services/api'
 import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, ConditionsTable, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { VPA_POLICY_EXTRA_HEAD, vpaEvictionText, vpaPolicyExtraRows, vpaRecommendersText, vpaStartupBoostText, vpaValue } from './vpaDetail'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
@@ -20,6 +21,7 @@ export default function VPAInfo({ name, namespace }: Props) {
     staleTime: 10_000,
     retry: 1,
   })
+  useDrawerFollowsEvents({ describeKey: ['vpa-describe', namespace, name], answer: desc, kind: 'VerticalPodAutoscaler', namespace, name })
 
   useResourceDetailOverlay({ kind: 'VerticalPodAutoscaler', name, namespace, describe: desc })
 
@@ -134,7 +136,7 @@ export default function VPAInfo({ name, namespace }: Props) {
       {containerPolicies.length > 0 && (
         <InfoSection title="Container Policies">
           <div className="overflow-x-auto">
-            <table className="w-full text-xs table-fixed min-w-[700px]">
+            <table className="w-full text-xs table-fixed min-w-[640px]">
               <thead className="text-slate-400">
                 <tr>
                   <Th className="text-left py-2 w-[17%]">Container</Th>
@@ -167,7 +169,7 @@ export default function VPAInfo({ name, namespace }: Props) {
           </div>
           {policyExtras.length > 0 && (
             <div className="overflow-x-auto mt-3">
-              <table className="w-full text-xs table-fixed min-w-[700px]">
+              <table className="w-full text-xs table-fixed min-w-[640px]">
                 <thead className="text-slate-400">
                   <tr>
                     {VPA_POLICY_EXTRA_HEAD.map((h, i) => <Th key={h} className={`text-left py-2 ${['w-[15%]', 'w-[13%]', 'w-[13%]', 'w-[17%]', 'w-[17%]', 'w-[25%]'][i]}`}>{h}</Th>)}
@@ -190,7 +192,7 @@ export default function VPAInfo({ name, namespace }: Props) {
       {recommendations.length > 0 && (
         <InfoSection title="Recommendations">
           <div className="overflow-x-auto">
-            <table className="w-full text-xs table-fixed min-w-[700px]">
+            <table className="w-full text-xs table-fixed min-w-[640px]">
               <thead className="text-slate-400">
                 <tr>
                   <Th className="text-left py-2 w-[18%]">Container</Th>

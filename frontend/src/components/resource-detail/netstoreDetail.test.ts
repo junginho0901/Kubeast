@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { EndpointInfo } from '@/services/api'
 import { endpointToRawJson } from '@/pages/network/endpoints/endpointHelpers'
-import { allowedTopologyLines, endpointsView, replicaSetOwnerRow, volumeAttachmentState } from './netstoreDetail'
+import { allowedTopologyLines, endpointsView, ingressClassRows, replicaSetOwnerRow, volumeAttachmentState } from './netstoreDetail'
+import ingressDetailSrc from './network-info/IngressDetail.tsx?raw'
 
 // k8s-service DescribeEndpoints: the list's row, the object's metadata, every subset and the events
 const describeAnswer = {
@@ -74,5 +75,32 @@ describe('VolumeAttachment drawer Status', () => {
     expect(volumeAttachmentState({ attached: true })).toEqual({ status: 'Attached', attached: 'Yes' })
     expect(volumeAttachmentState({ attached: false })).toEqual({ status: 'Detached', attached: 'No' })
     expect(volumeAttachmentState({ attached: null })).toEqual({ status: 'Unknown', attached: '-' })
+  })
+})
+
+describe('Ingress drawer class rows', () => {
+  // the list's row (ingressrow.Info) and what DescribeIngress adds from the IngressClass the Ingress names
+  const row = { name: 'web', namespace: 'shop', class: 'nginx', class_source: 'spec' }
+  const answer = { ...row, class_controller: 'k8s.io/ingress-nginx', class_is_default: true }
+
+  it('say the class\'s controller and default from the answer, which the list\'s row does not have', () => {
+    expect(ingressClassRows(answer, row)).toEqual({ source: 'spec', controller: 'k8s.io/ingress-nginx', isDefault: 'Yes' })
+    expect(ingressClassRows({ ...answer, class_is_default: false }, row).isDefault).toBe('No')
+  })
+
+  // The drawer reads its answer again when the Ingress changes: a class set by annotation since it opened is the answer's.
+  it('follow the answer, not the row the drawer opened with', () => {
+    const moved = { ...row, class: 'traefik', class_source: 'annotation' }
+    expect(ingressClassRows(moved, row)).toEqual({ source: 'annotation', controller: '-', isDefault: '-' })
+  })
+
+  it('are the row\'s while no answer has come, and "-" for what neither says', () => {
+    expect(ingressClassRows(undefined, row)).toEqual({ source: 'spec', controller: '-', isDefault: '-' })
+    expect(ingressClassRows({ ...row, class: '', class_source: '' }, row).source).toBe('-')
+  })
+
+  it('are what the drawer draws', () => {
+    expect(ingressDetailSrc).toContain('ingressClassRows(describe, rawJson)')
+    expect(ingressDetailSrc).not.toContain('rawJson?.class_controller')
   })
 })

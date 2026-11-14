@@ -149,7 +149,7 @@ func (s *Service) DescribeCRD(ctx context.Context, name string) (map[string]inte
 		"stored_versions":  storedVersions,
 		"subresources":     subresourcesToList(subresources),
 	}
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(item.GetUID()))
 
 	return result, nil
 }
