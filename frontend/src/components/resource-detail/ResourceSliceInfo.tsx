@@ -4,6 +4,7 @@ import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from './Det
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { draValueMap } from './draText'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
@@ -43,6 +44,7 @@ export default function ResourceSliceInfo({ name, rawJson }: Props) {
     enabled: !!name,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['resourceslice-describe', name], answer: describe, kind: 'ResourceSlice', name })
 
   useResourceDetailOverlay({ kind: 'ResourceSlice', name, describe })
 
