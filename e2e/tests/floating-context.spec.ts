@@ -365,19 +365,33 @@ test.describe('floating chat — a new conversation', () => {
 })
 
 test.describe('floating chat — signing out', () => {
-  // its own sign-in, so signing out does not end the session the other specs share
+  // A sign-out ends that sign-in on the server and auth_time is in whole seconds: an admin account of the run signs in
+  // and out here, so no token of the shared admin ends with it.
   test.use({ storageState: { cookies: [], origins: [] } })
 
-  test('signing out forgets the tab\'s floating conversation', async ({ page }) => {
-    const login = await page.request.post('/api/v1/auth/login', { data: { email: process.env.E2E_USER_EMAIL || 'admin', password: process.env.E2E_USER_PASSWORD || '' } })
-    expect(login.ok()).toBeTruthy()
-    const sent = await captureFloating(page)
-    await page.goto('/?cluster=self')
-    await ask(page, sent)
-    expect(await remembered(page)).toBe('e2e-floating-ctx-1')
+  test('signing out forgets the tab\'s floating conversation', async ({ page, request }) => {
+    const signIn = await request.post('/api/v1/auth/login', { data: { email: process.env.E2E_USER_EMAIL || 'admin', password: process.env.E2E_USER_PASSWORD || '' } })
+    expect(signIn.ok()).toBeTruthy()
+    const admin = { Authorization: `Bearer ${(await signIn.json()).access_token}`, 'X-Requested-With': 'XMLHttpRequest' }
+    const roles = (await (await request.get('/api/v1/auth/roles', { headers: admin })).json()) as { id: number; name: string }[]
+    const email = `e2e-floating-signout-${Date.now().toString(36)}@kubeast.local`
+    const password = 'E2e-floating-signout-throwaway-1!'
+    const made = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E floating sign-out', email, password, role_id: roles.find((r) => r.name === 'Admin')!.id } })
+    expect(made.status(), await made.text()).toBe(201)
+    const id = (await made.json()).id as string
+    try {
+      const login = await page.request.post('/api/v1/auth/login', { data: { email, password } })
+      expect(login.ok()).toBeTruthy()
+      const sent = await captureFloating(page)
+      await page.goto('/?cluster=self')
+      await ask(page, sent)
+      expect(await remembered(page)).toBe('e2e-floating-ctx-1')
 
-    await page.getByRole('button', { name: 'Log out' }).click()
-    await page.waitForURL('**/login')
-    expect(await remembered(page)).toBeNull()
+      await page.getByRole('button', { name: 'Log out' }).click()
+      await page.waitForURL('**/login')
+      expect(await remembered(page)).toBeNull()
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
+    }
   })
 })

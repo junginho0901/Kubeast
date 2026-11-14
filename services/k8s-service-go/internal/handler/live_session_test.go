@@ -28,7 +28,9 @@ import (
 // sessionsAt checks every few milliseconds against a version the test moves.
 func sessionsAt(version *atomic.Int32) *auth.LiveSessions {
 	return auth.NewLiveSessions(auth.LiveSessionConfig{
-		Lookup:     func(context.Context, string, string) (int, error) { return int(version.Load()), nil },
+		Lookup: func(context.Context, string, string) (auth.SessionState, error) {
+			return auth.SessionState{Version: int(version.Load())}, nil
+		},
 		CheckEvery: 5 * time.Millisecond, CacheTTL: time.Millisecond,
 	})
 }
@@ -193,6 +195,8 @@ func TestSessionEndNoticeFollowsTheScreenLanguageAndTheReason(t *testing.T) {
 		{auth.SessionRevoked, "ko-KR", "계정이나 권한이 바뀌어"},
 		{auth.SessionExpired, "", "maximum lifetime"},
 		{auth.SessionExpired, "ko", "최대 시간"},
+		{auth.SessionSignedOut, "", "this sign-in was signed out"},
+		{auth.SessionSignedOut, "ko", "로그아웃되어"},
 		{auth.SessionUnverified, "", "could not be verified"},
 		{auth.SessionUnverified, "ko", "확인할 수 없어"},
 	} {

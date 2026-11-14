@@ -16,7 +16,7 @@ export default function PendingApproval() {
   const { data: oidc } = useQuery({ queryKey: ['oidc-config'], queryFn: api.oidcConfig, staleTime: 60000, retry: false, enabled: viaSSO })
 
   const handleLogout = () => {
-    void logoutSession()
+    void logoutSession({ asked: true })
     queryClient.clear()
     navigate('/login', { replace: true })
   }

@@ -137,7 +137,8 @@ export default function AdminUsers() {
     const self = resetResult?.self
     setResetResult(null)
     if (self) {
-      void logoutSession()
+      // The server issued this sign-in only to show the window; closing it signs the person out on purpose.
+      void logoutSession({ asked: true })
       queryClient.clear()
       navigate('/login')
     }
