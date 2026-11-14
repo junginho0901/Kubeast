@@ -31,6 +31,8 @@ type DrainStatus struct {
 	Status  string `json:"status"`
 	Message string `json:"message,omitempty"`
 	Created time.Time
+	// Cluster is where the drain runs; its status is read on that cluster only.
+	Cluster cluster.ID `json:"-"`
 }
 
 var (
@@ -66,12 +68,14 @@ func (h *Handler) DrainNode(w http.ResponseWriter, r *http.Request) {
 
 	nodeName := chi.URLParam(r, "name")
 	drainID := rand.String(12)
+	clusterID, _ := cluster.FromContext(r.Context())
 
 	ds := &DrainStatus{
 		ID:      drainID,
 		Node:    nodeName,
 		Status:  "pending",
 		Created: time.Now(),
+		Cluster: clusterID,
 	}
 	setDrainStatus(ds)
 
@@ -105,7 +109,8 @@ func (h *Handler) DrainNode(w http.ResponseWriter, r *http.Request) {
 // DrainNodeStatus handles GET /api/v1/nodes/{name}/drain/status.
 func (h *Handler) DrainNodeStatus(w http.ResponseWriter, r *http.Request) {
 	// Gate the status read on the same per-cluster permission as starting a drain,
-	// so it isn't protected by the opaque drain_id alone.
+	// so it isn't protected by the opaque drain_id alone; a drain of another
+	// cluster is not found here.
 	if err := h.requirePermissionForCluster(r, "resource.node.drain"); err != nil {
 		h.handleError(w, err)
 		return
@@ -116,8 +121,9 @@ func (h *Handler) DrainNodeStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	clusterID, _ := cluster.FromContext(r.Context())
 	ds := getDrainStatus(drainID)
-	if ds == nil {
+	if ds == nil || ds.Cluster != clusterID {
 		response.Error(w, http.StatusNotFound, "drain operation not found")
 		return
 	}

@@ -26,12 +26,13 @@ func TestOverviewIdentityAllowed(t *testing.T) {
 		})
 		return &clientBundle{authz: cs.AuthorizationV1()}
 	}
-	s := &Service{} // no cache: every call asks the cluster
+	// Each case a Service of its own: an answer is kept for its minute.
+	s := func() *Service { return &Service{} }
 
-	if err := s.overviewIdentityAllowed(context.Background(), answer(true, nil)); err != nil {
+	if err := s().overviewIdentityAllowed(context.Background(), answer(true, nil)); err != nil {
 		t.Fatalf("allowed identity must pass: %v", err)
 	}
-	err := s.overviewIdentityAllowed(context.Background(), answer(false, nil))
+	err := s().overviewIdentityAllowed(context.Background(), answer(false, nil))
 	if !apierrors.IsForbidden(err) {
 		t.Fatalf("refused identity must be forbidden (403): %v", err)
 	}
@@ -39,11 +40,11 @@ func TestOverviewIdentityAllowed(t *testing.T) {
 		t.Fatalf("the refusal must say what is missing: %v", err)
 	}
 	boom := errors.New("apiserver down")
-	if err := s.overviewIdentityAllowed(context.Background(), answer(false, boom)); !errors.Is(err, boom) {
+	if err := s().overviewIdentityAllowed(context.Background(), answer(false, boom)); !errors.Is(err, boom) {
 		t.Fatalf("a failed review is the cluster's error, not a verdict: %v", err)
 	}
 	// No authorization client (a bundle built without one): nothing to ask, the overview is served.
-	if err := s.overviewIdentityAllowed(context.Background(), &clientBundle{}); err != nil {
+	if err := s().overviewIdentityAllowed(context.Background(), &clientBundle{}); err != nil {
 		t.Fatalf("no authz client must pass: %v", err)
 	}
 }
