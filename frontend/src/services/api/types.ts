@@ -2411,7 +2411,7 @@ export interface SessionDetail {
 
 // GET /cluster/nodes/{name}/drain/status. Any server answers it from the database: `interrupted` is a drain whose
 // server stopped before it ended, `cordoned_nodes` the drain's nodes the cluster still has cordoned once it failed or
-// was interrupted (absent when they could not be read).
+// was interrupted ([] when none is, null when they could not be read).
 export interface DrainStatusAnswer {
   id: string
   node: string

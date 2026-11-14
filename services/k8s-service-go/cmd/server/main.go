@@ -441,11 +441,16 @@ func main() {
 	slog.Info("server stopped")
 }
 
-// The waits fit the pod's grace period, 30 s by default (the chart sets none).
+// The waits run one after another from SIGTERM and add up to 25 s, inside the
+// 30 s before SIGKILL: the pod's default grace period, which the chart leaves
+// after any preStop wait. The drains' 3 s (marking and their audit rows) came
+// out of the server's wait, which was 15 s.
 const (
-	serverShutdownWait   = 15 * time.Second
-	recorderShutdownWait = 10 * time.Second
 	drainShutdownWait    = 3 * time.Second
+	serverShutdownWait   = 12 * time.Second
+	recorderShutdownWait = 10 * time.Second
+	// shutdownWaitsMax is what the waits must stay within after SIGTERM.
+	shutdownWaitsMax = 30 * time.Second
 )
 
 // healthStatusLockKey is the advisory lock of the replica that writes

@@ -38,8 +38,9 @@ type DrainStatus struct {
 	Created    time.Time  `json:"Created"`
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
 	// CordonedNodes are the drain's nodes still cordoned, read from the cluster
-	// as the caller when a drain ended without success; absent when not read.
-	CordonedNodes []string `json:"cordoned_nodes,omitempty"`
+	// as the caller when a drain ended without success: [] when none is, null
+	// when they were not read (no omitempty, or [] would read as not read).
+	CordonedNodes []string `json:"cordoned_nodes"`
 	// Cluster is where the drain runs; its status is read on that cluster only.
 	Cluster cluster.ID `json:"-"`
 }

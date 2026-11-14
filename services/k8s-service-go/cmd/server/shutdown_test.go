@@ -56,3 +56,13 @@ func TestShutdownGivesTheRecorderItsOwnWaitAfterAStreamHeldTheServer(t *testing.
 		t.Fatalf("the recorder's last part failed after the server's wait: %v", rec.err)
 	}
 }
+
+// The waits run one after another from SIGTERM; with a margin for the process to exit they stay inside the 30 s the
+// grace period leaves before SIGKILL.
+func TestTheShutdownWaitsFitTheTimeBeforeSIGKILL(t *testing.T) {
+	const margin = 3 * time.Second
+	if sum := drainShutdownWait + serverShutdownWait + recorderShutdownWait; sum+margin > shutdownWaitsMax {
+		t.Fatalf("drain %s + server %s + recorder %s = %s, past %s less a %s margin",
+			drainShutdownWait, serverShutdownWait, recorderShutdownWait, sum, shutdownWaitsMax, margin)
+	}
+}

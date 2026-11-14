@@ -101,3 +101,17 @@ func TestTheNodesLeftCordonedAreReadFromTheCluster(t *testing.T) {
 		t.Fatalf("a node that cannot be read: %v, want nil", got)
 	}
 }
+
+// The answer says [] when no node is left cordoned and null when the nodes were not read, so the screen
+// tells "none" from "not read".
+func TestTheAnswerTellsNoCordonedNodeFromNotRead(t *testing.T) {
+	for _, c := range []struct {
+		nodes []string
+		want  string
+	}{{[]string{}, `"cordoned_nodes":[]`}, {nil, `"cordoned_nodes":null`}, {[]string{"n1"}, `"cordoned_nodes":["n1"]`}} {
+		b, err := json.Marshal(DrainStatus{ID: "d1", Node: "n1", Status: drains.StatusInterrupted, CordonedNodes: c.nodes})
+		if err != nil || !strings.Contains(string(b), c.want) {
+			t.Errorf("%v: %s, want %s", c.nodes, b, c.want)
+		}
+	}
+}

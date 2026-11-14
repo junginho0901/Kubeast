@@ -285,3 +285,130 @@ func TestTheSweepMarksUnreadDrainsAndOldRowsGo(t *testing.T) {
 		t.Fatalf("an open row was deleted or ended by the purge: %+v", r)
 	}
 }
+
+// goneAfterRead is the store as a request sees it when its caller goes away right after the read: the read
+// answers, then the request's context ends, and a write on that context fails as pgx's would.
+type goneAfterRead struct {
+	*Memory
+	leave context.CancelFunc
+}
+
+func (g goneAfterRead) Get(ctx context.Context, id string, staleAfter time.Duration) (*Row, error) {
+	r, err := g.Memory.Get(ctx, id, staleAfter)
+	g.leave()
+	return r, err
+}
+
+func (g goneAfterRead) Interrupt(ctx context.Context, id string, staleAfter time.Duration, message string) ([]Row, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return g.Memory.Interrupt(ctx, id, staleAfter, message)
+}
+
+// ctxRows keeps each row with whether its context had ended when it was written.
+type ctxRows struct {
+	mu    sync.Mutex
+	ended []bool
+}
+
+func (c *ctxRows) Write(ctx context.Context, _ audit.Record) (int64, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ended = append(c.ended, ctx.Err() != nil)
+	return int64(len(c.ended)), nil
+}
+
+// The request that finds a drain stale goes away before the mark: the drain is still marked and its
+// finished row written on a context the request's end did not end.
+func TestAMarkFromAGoneRequestStillWritesItsRow(t *testing.T) {
+	c := &clock{t: time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC)}
+	db := NewMemory(c.now)
+	begin(t, NewTracker(db, nil), "d1", "n1")
+	c.add(staleAfter + time.Second)
+
+	reqCtx, leave := context.WithCancel(context.Background())
+	rows := &ctxRows{}
+	reader := NewTracker(goneAfterRead{Memory: db, leave: leave}, rows)
+	r, err := reader.Status(reqCtx, "d1")
+	if err != nil || r == nil || r.Status != StatusInterrupted {
+		t.Fatalf("status from a gone request: %+v %v", r, err)
+	}
+	if len(rows.ended) != 1 || rows.ended[0] {
+		t.Fatalf("finished rows (context ended when written): %v, want one written on a live context", rows.ended)
+	}
+	if got, _ := db.Get(context.Background(), "d1", staleAfter); got.Status != StatusInterrupted {
+		t.Fatalf("the row: %+v", got)
+	}
+}
+
+// slowAudit takes a row only when its context ends.
+type slowAudit struct{}
+
+func (slowAudit) Write(ctx context.Context, _ audit.Record) (int64, error) {
+	<-ctx.Done()
+	return 0, ctx.Err()
+}
+
+// Shutdown marks and writes within its deadline, however slow the audit store is, so the waits after it
+// keep their time before SIGKILL.
+func TestShutdownKeepsToItsDeadline(t *testing.T) {
+	db := NewMemory(nil)
+	a := NewTracker(db, slowAudit{})
+	begin(t, a, "d1", "n1")
+	begin(t, a, "d2", "n2")
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	began := time.Now()
+	a.Shutdown(ctx)
+	if took := time.Since(began); took > 2*time.Second {
+		t.Fatalf("shutdown took %s with a 200ms deadline", took)
+	}
+	for _, id := range []string{"d1", "d2"} {
+		if r, _ := db.Get(context.Background(), id, staleAfter); r.Status != StatusInterrupted {
+			t.Fatalf("%s after shutdown: %+v", id, r)
+		}
+	}
+}
+
+// slowPurge holds every purge until the test ends and counts the beats.
+type slowPurge struct {
+	*Memory
+	release chan struct{}
+	beats   chan struct{}
+}
+
+func (s slowPurge) Purge(ctx context.Context, keep time.Duration, batch int) (int64, error) {
+	select {
+	case <-s.release:
+	case <-ctx.Done():
+	}
+	return 0, nil
+}
+
+func (s slowPurge) Beat(ctx context.Context, owner string) ([]string, error) {
+	select {
+	case s.beats <- struct{}{}:
+	default:
+	}
+	return s.Memory.Beat(ctx, owner)
+}
+
+// The heartbeat goes on while a purge is slow: it has a goroutine of its own.
+func TestTheHeartbeatGoesOnWhileTheCleanupIsSlow(t *testing.T) {
+	store := slowPurge{Memory: NewMemory(nil), release: make(chan struct{}), beats: make(chan struct{}, 1)}
+	defer close(store.release)
+	tr := NewTracker(store, nil)
+	tr.beatEvery, tr.sweepEvery, tr.purgeEvery = 10*time.Millisecond, time.Hour, time.Hour
+	begin(t, tr, "d1", "n1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go tr.Run(ctx) // its first purge is held
+	for i := range 2 {
+		select {
+		case <-store.beats:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("beat %d did not come while the purge was held", i+1)
+		}
+	}
+}

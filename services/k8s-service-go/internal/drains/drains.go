@@ -190,24 +190,28 @@ func (t *Tracker) Finish(id, status, message string) bool {
 		slog.Warn("drain: end not saved", "id", id, "status", status, "err", err)
 	}
 	if ok && (applied || err != nil) {
-		t.recordEnd(run.base, id, status, message)
+		t.recordEnd(context.Background(), run.base, id, status, message)
 	}
 	return applied
 }
 
 // Status reads a drain from any replica. A stale open row is marked
 // interrupted here (of two replicas reading at once, one marks it) and read
-// as it now is.
+// as it now is. The mark and its audit row do not follow the request's
+// cancellation: a caller that goes away between them would leave a marked
+// row with no finished row, which no sweep writes later.
 func (t *Tracker) Status(ctx context.Context, id string) (*Row, error) {
 	r, err := t.store.Get(ctx, id, t.staleAfter)
 	if err != nil || r == nil || !r.Stale {
 		return r, err
 	}
-	marked, err := t.store.Interrupt(ctx, id, t.staleAfter, MessageOwnerGone)
+	mctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), opTimeout)
+	defer cancel()
+	marked, err := t.store.Interrupt(mctx, id, t.staleAfter, MessageOwnerGone)
 	if err != nil {
 		return nil, err
 	}
-	t.recordInterrupted(marked)
+	t.recordInterrupted(context.WithoutCancel(ctx), marked)
 	if len(marked) == 1 {
 		return &marked[0], nil
 	}
@@ -216,10 +220,11 @@ func (t *Tracker) Status(ctx context.Context, id string) (*Row, error) {
 }
 
 // Run beats for this process's drains, marks stale rows and deletes old ones
-// until ctx ends.
+// until ctx ends. The heartbeat has a goroutine of its own, so a slow sweep or
+// purge cannot hold it past staleAfter.
 func (t *Tracker) Run(ctx context.Context) {
-	beat, sweep, purge := time.NewTicker(t.beatEvery), time.NewTicker(t.sweepEvery), time.NewTicker(t.purgeEvery)
-	defer beat.Stop()
+	go t.beatLoop(ctx)
+	sweep, purge := time.NewTicker(t.sweepEvery), time.NewTicker(t.purgeEvery)
 	defer sweep.Stop()
 	defer purge.Stop()
 	t.purge(ctx)
@@ -227,12 +232,23 @@ func (t *Tracker) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-beat.C:
-			t.beat(ctx)
 		case <-sweep.C:
 			t.sweep(ctx)
 		case <-purge.C:
 			t.purge(ctx)
+		}
+	}
+}
+
+func (t *Tracker) beatLoop(ctx context.Context) {
+	beat := time.NewTicker(t.beatEvery)
+	defer beat.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-beat.C:
+			t.beat(ctx)
 		}
 	}
 }
@@ -276,15 +292,17 @@ func (t *Tracker) beat(ctx context.Context) {
 	}
 }
 
+// sweep marks the stale rows nobody is reading. As in Status, the mark and
+// its audit rows do not follow ctx's cancellation.
 func (t *Tracker) sweep(ctx context.Context) {
-	sctx, cancel := context.WithTimeout(ctx, opTimeout)
+	sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), opTimeout)
 	defer cancel()
 	marked, err := t.store.Interrupt(sctx, "", t.staleAfter, MessageOwnerGone)
 	if err != nil {
 		slog.Warn("drain: marking stale drains", "err", err)
 		return
 	}
-	t.recordInterrupted(marked)
+	t.recordInterrupted(context.WithoutCancel(ctx), marked)
 }
 
 func (t *Tracker) purge(ctx context.Context) {
@@ -303,7 +321,8 @@ func (t *Tracker) purge(ctx context.Context) {
 }
 
 // Shutdown marks this process's open drains interrupted, writes their
-// finished audit rows and stops them.
+// finished audit rows and stops them, all within ctx's deadline (the time
+// the pod's grace period leaves it).
 func (t *Tracker) Shutdown(ctx context.Context) {
 	t.mu.Lock()
 	runs := t.active
@@ -319,10 +338,10 @@ func (t *Tracker) Shutdown(ctx context.Context) {
 	for _, run := range runs {
 		run.cancel()
 	}
-	t.recordInterrupted(marked)
+	t.recordInterrupted(ctx, marked)
 }
 
-func (t *Tracker) recordInterrupted(rows []Row) {
+func (t *Tracker) recordInterrupted(ctx context.Context, rows []Row) {
 	for _, r := range rows {
 		var base audit.Record
 		if err := json.Unmarshal(r.Audit, &base); err != nil || len(r.Audit) == 0 {
@@ -331,13 +350,14 @@ func (t *Tracker) recordInterrupted(rows []Row) {
 		}
 		base.Before = nil // stored as JSON null
 		slog.Warn("drain: interrupted", "id", r.ID, "node", r.Node, "cluster", r.Cluster, "previous_owner", r.Owner)
-		t.recordEnd(base, r.ID, StatusInterrupted, r.Message)
+		t.recordEnd(ctx, base, r.ID, StatusInterrupted, r.Message)
 	}
 }
 
 // recordEnd writes the drain's finished row with the start request's actor
-// and address (base): failure unless every pod was evicted.
-func (t *Tracker) recordEnd(base audit.Record, id, status, message string) {
+// and address (base): failure unless every pod was evicted. It waits at most
+// opTimeout, and no longer than ctx allows.
+func (t *Tracker) recordEnd(ctx context.Context, base audit.Record, id, status, message string) {
 	if t.audit == nil {
 		return
 	}
@@ -347,7 +367,7 @@ func (t *Tracker) recordEnd(base audit.Record, id, status, message string) {
 	if status != StatusSuccess {
 		rec.Result, rec.Error = audit.ResultFailure, message
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	wctx, cancel := context.WithTimeout(ctx, opTimeout)
 	defer cancel()
-	_, _ = t.audit.Write(ctx, rec) // audit.Guarded counts a failure
+	_, _ = t.audit.Write(wctx, rec) // audit.Guarded counts a failure
 }
