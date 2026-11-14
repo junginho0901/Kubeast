@@ -4,6 +4,11 @@
       "screen": "^\\w+ · drawer (Pod|PodDisruptionBudget|Deployment|StatefulSet|DaemonSet|ReplicaSet|Job|HorizontalPodAutoscaler|Service|PersistentVolumeClaim|PersistentVolume|StorageClass|Node|Namespace|VerticalPodAutoscaler|CustomResourceDefinition|Gateway|GatewayClass|HTTPRoute|GRPCRoute|BackendTLSPolicy) \\(",
       "why": "A drawer's tables fit the drawer: the Conditions table, a workload's, a claim's, a volume's and a node's pods, a StorageClass's claims, a Service's ports and EndpointSlices and a VPA's tables are 640 px at their narrowest with their columns rebalanced, where v0.7.7 cut their last columns and headers (\"Last Transiti\") at the drawer's edge.",
       "pr": "fix/w3-screen-headers"
+    },
+    {
+      "screen": "^\\w+ · /admin/(organizations|roles|clusters) on ",
+      "why": "Teams, Roles and Clusters have a search box above their list, which takes a row of the fitted table.",
+      "pr": "fix/w3-screen-search"
     }
   ]
 }
