@@ -35,6 +35,14 @@
       "cell": "^\\$\\.items(\\.\\$length$|\\[/[^\\]]+#2\\]\\.)",
       "why": "Every lease's holder renews it every few seconds; whether a renewal falls inside a build's first live frame is timing, so one build's frame can hold a lease twice and count one more.",
       "pr": "#783"
+    },
+    {
+      "route": "^/api/v1/cluster/metrics/(nodes|pods)$",
+      "cell": "^\\$\\.detail$",
+      "user": "^nsread$",
+      "newStatus": "^403$",
+      "why": "The namespace-limited Read user is refused metrics.k8s.io on self; the 403 now says it in the cluster's words where the old build, reading the answer without its body, said \"get node metrics (status 403): unknown\".",
+      "pr": "#895"
     }
   ]
 }
