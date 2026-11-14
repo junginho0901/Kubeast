@@ -37,6 +37,13 @@
       "pr": "#783"
     },
     {
+      "route": "^/api/v1/cluster/metrics/top-resources$",
+      "cell": "^\\$\\.(pod|node)_metrics_(error|refused)$",
+      "user": "^nsread$",
+      "why": "The namespace-limited Read user is refused metrics.k8s.io on self; the dashboard's top resources now give the cluster's words and a refused mark for each part where the old build, reading the answer without its body, said \"unknown\".",
+      "pr": "#889"
+    },
+    {
       "route": "^/api/v1/cluster/metrics/(nodes|pods)$",
       "cell": "^\\$\\.detail$",
       "user": "^nsread$",

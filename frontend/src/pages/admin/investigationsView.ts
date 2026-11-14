@@ -1,9 +1,9 @@
 import type { InvestigationSummary } from '@/services/api/investigations'
 import { answerPageSize } from '@/utils/fitServerPage'
 
-// What the Investigations list draws from one answer. While another page, filter or page size
-// loads the previous answer stays on screen, so the range, page, rows per page and filter come
-// with it rather than from what was just asked.
+// What the Investigations list draws from one answer. While another page or page size of the same
+// filter loads the previous answer stays on screen, so the range, page and rows per page come with
+// it rather than from what was just asked.
 
 export interface InvestigationsFilter {
   status: string
