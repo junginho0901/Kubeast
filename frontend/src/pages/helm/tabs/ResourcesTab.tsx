@@ -7,6 +7,8 @@ import { ListPager } from '@/components/ListPager'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { usePagedItems } from '@/hooks/usePagedItems'
 import { failureText } from '@/utils/failureText'
+import { classifyReadFailure } from '@/utils/aiContext/readFailure'
+import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
 
 const NO_RESOURCES: never[] = []
 
@@ -32,11 +34,15 @@ export default function ResourcesTab({ namespace, name }: { namespace: string; n
     )
   }
 
-  // a read that failed is not a release with no objects: its reason, as a list says it
+  // a read that failed is not a release with no objects: its reason, as a list says it, and a refusal as the lists say
+  // one (the tab's layer says `resources_refused`)
   if (q.isError && !q.data) {
+    const refused = classifyReadFailure(q.error).refused
     return (
-      <p role="alert" data-testid="helm-resources-read-failed" className="text-sm text-red-400 break-words">
-        {t('common.readFailed', { defaultValue: 'Could not read the list: {{reason}}', reason: failureText(q.error) })}
+      <p role="alert" data-testid={refused ? 'helm-resources-refused' : 'helm-resources-read-failed'} className="text-sm text-red-400 break-words">
+        {refused
+          ? t('common.forbiddenEmpty', { defaultValue: 'You do not have permission to view {{resource}} in this cluster.', resource: forbiddenResourceFromUrl('/cluster/helm/releases') })
+          : t('common.readFailed', { defaultValue: 'Could not read the list: {{reason}}', reason: failureText(q.error) })}
       </p>
     )
   }

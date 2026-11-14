@@ -23,9 +23,10 @@ vi.mock('@/components/ResourceDetailContext', () => ({ useResourceDetail: () => 
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ has: () => true }) }))
 vi.mock('@/services/useHelmWatchList', () => ({ useHelmWatchList: () => {} }))
 vi.mock('@/contexts/ClusterContext', () => ({ useCluster: () => ({ currentCluster: 'c1' }) }))
-type Layer = { summary?: string; data?: Record<string, any> }
+type Layer = { source?: string; summary?: string; data?: Record<string, any> }
 const chat: { current: Layer | null } = { current: null }
-vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: Layer | null) => { chat.current = input } }))
+// the page's own layer; the shared notices under it register theirs beside it
+vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: Layer | null) => { if (input && (input.source ?? 'base') === 'base') chat.current = input } }))
 
 const i18n = i18next.createInstance()
 beforeAll(async () => {
@@ -76,11 +77,19 @@ describe.each(['history', 'resources'] as const)('the %s tab, drawn and told to 
     expect(layer?.data?.[`${tab}_failed`]).toEqual({ status: 500, reason: 'reading the release storage timed out' })
   })
 
-  it('draws and tells a refused read with the reason the server gave', () => {
+  it('draws a refused read as the lists draw a refusal and tells it with the reason the server gave', () => {
     const { html, layer } = open(tab, fail(KEY[tab], refused))
-    expect(html).toContain(`data-testid="helm-${tab}-read-failed"`)
+    expect(html).toContain(`data-testid="helm-${tab}-refused"`)
+    expect(html).toContain('You do not have permission to view Helm release in this cluster.')
+    expect(html).not.toContain('Could not read the list')
     expect(counted(layer?.data)).toEqual([`${tab}_refused`])
     expect(layer?.data?.[`${tab}_refused`]).toBe(refused.response.data.detail)
+  })
+
+  it('says the refusal in Korean on a Korean screen', () => {
+    const { html } = open(tab, fail(KEY[tab], refused), 'ko')
+    expect(html).toContain('Helm release: 이 클러스터에서 볼 권한이 없습니다.')
+    expect(html).not.toContain('목록을 읽지 못했습니다')
   })
 
   it('says the failure in Korean on a Korean screen', () => {

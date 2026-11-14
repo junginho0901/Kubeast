@@ -9,6 +9,8 @@ import { usePagedItems } from '@/hooks/usePagedItems'
 import { ListPager } from '@/components/ListPager'
 import { formatTime, utcTitle } from '@/utils/time'
 import { failureText } from '@/utils/failureText'
+import { classifyReadFailure } from '@/utils/aiContext/readFailure'
+import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
 import RollbackModal from '../modals/RollbackModal'
 import RevisionDetailModal from '../modals/RevisionDetailModal'
 
@@ -46,11 +48,15 @@ export default function HistoryTab({
     )
   }
 
-  // a read that failed is not a release with no history: its reason, as a list says it
+  // a read that failed is not a release with no history: its reason, as a list says it, and a refusal as the lists say
+  // one (the tab's layer says `history_refused`)
   if (historyQuery.isError && !historyQuery.data) {
+    const refused = classifyReadFailure(historyQuery.error).refused
     return (
-      <p role="alert" data-testid="helm-history-read-failed" className="text-sm text-red-400 break-words">
-        {t('common.readFailed', { defaultValue: 'Could not read the list: {{reason}}', reason: failureText(historyQuery.error) })}
+      <p role="alert" data-testid={refused ? 'helm-history-refused' : 'helm-history-read-failed'} className="text-sm text-red-400 break-words">
+        {refused
+          ? t('common.forbiddenEmpty', { defaultValue: 'You do not have permission to view {{resource}} in this cluster.', resource: forbiddenResourceFromUrl('/cluster/helm/releases') })
+          : t('common.readFailed', { defaultValue: 'Could not read the list: {{reason}}', reason: failureText(historyQuery.error) })}
       </p>
     )
   }

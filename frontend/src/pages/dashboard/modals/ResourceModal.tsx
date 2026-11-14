@@ -13,7 +13,7 @@ import { ModalOverlay } from '@/components/ModalOverlay'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAIContext } from '@/hooks/useAIContext'
 import { nodeStatusBadge, nodeStatusParts } from '@/utils/nodeStatus'
-import { failureFields, readFailure } from '@/utils/aiContext/readFailure'
+import { classifyReadFailure, failureFields } from '@/utils/aiContext/readFailure'
 import type { NamespaceCounts } from '../namespaceCounts'
 import { buildResourceLink } from '@/utils/resourceLink'
 import type { ResourceType } from '../types'
@@ -78,7 +78,7 @@ export function ResourceModal({
     if (page > totalPages) setPage(totalPages)
   }, [page, totalPages, setPage])
   const pageItems = serverPage ? filteredResources : filteredResources.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
-  const failure = !isLoading && listError ? readFailure(listError) : null
+  const failure = !isLoading && listError ? classifyReadFailure(listError) : null
 
   useAIContext(selectedResourceType && !isLoading ? (failure ? {
     source: 'ResourceModal',

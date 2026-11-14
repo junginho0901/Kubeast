@@ -260,6 +260,7 @@ export default function Policies() {
         {kinds.map((k) => (
           <span
             key={`${k.group}/${k.plural}`}
+            data-testid={k.error ? (k.error === 'forbidden' ? 'policy-kind-refused' : 'policy-kind-failed') : undefined}
             title={`${k.plural}.${k.group}/${k.version} · ${sourceLabel(k.source)}${k.error ? ` · ${k.error}` : ''}`}
             className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${k.error ? 'border-amber-700/60 bg-amber-900/20 text-amber-300' : 'border-slate-700 bg-slate-800/60 text-slate-300'}`}
           >

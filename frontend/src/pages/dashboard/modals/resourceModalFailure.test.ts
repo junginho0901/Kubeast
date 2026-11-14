@@ -20,7 +20,8 @@ vi.mock('@/components/ResourceDetailContext', () => ({ useResourceDetail: () => 
 vi.mock('@/contexts/ClusterContext', () => ({ useCluster: () => ({ currentCluster: 'c1' }) }))
 type Layer = { source?: string; summary?: string; data?: Record<string, any> }
 const chat: { current: Layer | null } = { current: null }
-vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: Layer | null) => { chat.current = input ?? null } }))
+// the window's own layer; the shared notices under it register theirs beside it
+vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: Layer | null) => { if (input?.source === 'ResourceModal') chat.current = input } }))
 
 const i18n = i18next.createInstance()
 beforeAll(async () => {
