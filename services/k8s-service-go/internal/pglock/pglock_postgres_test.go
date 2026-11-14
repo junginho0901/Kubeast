@@ -57,3 +57,23 @@ func TestPostgresOneProcessHoldsTheLock(t *testing.T) {
 		t.Fatal("the lock was not free after its holder closed it")
 	}
 }
+
+// The lock's connection asks the server for keepalives (10 s quiet, every 5 s, 3 probes), so a holder whose
+// node is gone loses the lock within about 25 s.
+func TestPostgresTheLockConnectionHasKeepalives(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	l := New(p, 0x6b62746573746b61)
+	t.Cleanup(l.Close)
+	if !l.Held(ctx) {
+		t.Fatal("a process alone did not take the lock")
+	}
+	var idle, interval, count string
+	if err := l.conn.QueryRow(ctx, `SELECT current_setting('tcp_keepalives_idle'), current_setting('tcp_keepalives_interval'),
+		current_setting('tcp_keepalives_count')`).Scan(&idle, &interval, &count); err != nil {
+		t.Fatal(err)
+	}
+	if idle != "10" || interval != "5" || count != "3" {
+		t.Fatalf("keepalives idle %s, interval %s, count %s; want 10, 5, 3", idle, interval, count)
+	}
+}
