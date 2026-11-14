@@ -9,6 +9,7 @@ import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { PrometheusSection, MetricCard } from '../PrometheusMetrics'
 import { DescribeFailure, DescribeStale } from '../DescribeFailure'
+import { ingressClassRows } from '../netstoreDetail'
 
 interface Props {
   name: string
@@ -33,10 +34,7 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
   const rules = (spec.rules ?? []) as any[]
   const tls = (spec.tls ?? []) as any[]
   const defaultBackend = spec.defaultBackend as any
-  const classSource = String(rawJson?.class_source ?? '-')
-  const classController = String(rawJson?.class_controller ?? '-')
-  const classDefaultRaw = rawJson?.class_is_default
-  const classIsDefault = classDefaultRaw == null ? '-' : classDefaultRaw ? 'Yes' : 'No'
+  const { source: classSource, controller: classController, isDefault: classIsDefault } = ingressClassRows(describe, rawJson)
   const lbIngress = ((status.loadBalancer as any)?.ingress ?? []) as any[]
   const lbAddresses = lbIngress.map((a: any) => (a?.ip && a?.hostname ? `${a.ip} (${a.hostname})` : a?.ip || a?.hostname)).filter(Boolean)
   const lbPortStatuses = lbIngress.flatMap((a: any) => {
