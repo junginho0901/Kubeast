@@ -715,6 +715,40 @@ describe('a list the server has no room to follow', () => {
     list.stop()
   })
 
+  // Each tab of each browser starts over when the server or its socket does: the one nobody looks at waits.
+  it('a RESYNC in a hidden tab reads the list once the tab shows again', async () => {
+    const list = follow()
+    await vi.advanceTimersByTimeAsync(0)
+    focusManager.setFocused(false)
+    frames.get('/api/v1/namespaces/demo/configmaps')!(frame('RESYNC'))
+    list.queryFn.mockClear()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(list.queryFn).toHaveBeenCalledTimes(0)
+    focusManager.setFocused(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(list.queryFn).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(list.queryFn).toHaveBeenCalledTimes(1)
+    list.stop()
+  })
+
+  it('a RESYNC waiting for a hidden tab is forgotten with the list', async () => {
+    const client = new QueryClient()
+    const queryFn = vi.fn(async () => [{ name: 'web', namespace: 'demo' }])
+    const stopObserver = new QueryObserver(client, { queryKey: listKey, queryFn }).subscribe(() => {})
+    const stopList = followList(client, { clusterId: 'self', paths: ['/api/v1/namespaces/demo/configmaps'], query: 'watch=1', queryKey: listKey })
+    await vi.advanceTimersByTimeAsync(0)
+    focusManager.setFocused(false)
+    frames.get('/api/v1/namespaces/demo/configmaps')!(frame('RESYNC'))
+    await vi.advanceTimersByTimeAsync(10_000)
+    stopList()
+    queryFn.mockClear()
+    focusManager.setFocused(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(queryFn).toHaveBeenCalledTimes(0)
+    stopObserver()
+  })
+
   it('a RESYNC waiting for its time is forgotten with the list', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.9999)
     const list = follow()
