@@ -491,6 +491,7 @@ export function DashboardBody() {
 
       <DashboardPodNodeStatus
         podStatusData={podStatusData}
+        podStatusFailure={overviewError}
         nodeStatusChartData={nodeStatusChartData}
         onPodStatusClick={handlePodStatusClick}
         onNodeStatusClick={handleNodeStatusClick}
