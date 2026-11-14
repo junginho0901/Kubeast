@@ -171,7 +171,9 @@ export default function ClusterRoleMatrix({ userID, canEdit: canEditUsers, userI
                           label: r.name,
                           testId: `cluster-role-${c.id}-opt-${r.name}`,
                           disabled: held,
-                          listHint: held ? tr('admin.userClusterRoles.chartBound', "a global admin or this cluster's Admin grants it") : undefined,
+                          listHint: held
+                            ? tr('admin.userClusterRoles.chartBound', "a global admin or this cluster's Admin grants it")
+                            : r.same_group_as ? tr('adminRoles.sameGroupHint', 'acts as {{role}} on clusters', { role: r.same_group_as }) : undefined,
                         }
                       }),
                   ]}

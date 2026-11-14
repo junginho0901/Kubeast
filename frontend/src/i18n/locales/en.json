@@ -3744,6 +3744,13 @@
   },
   "adminRoles": {
     "deleteInUse": "Role \"{{name}}\" is still in use (accounts {{accounts}}, cluster grants {{grants}}, access requests {{requests}}). Give them another role first.",
+    "nameTakenBuiltinSame": "Role \"{{role}}\" already exists: it is a built-in role.",
+    "nameTakenSame": "Role \"{{role}}\" already exists. Choose another name.",
+    "nameTakenBuiltin": "Taken: it is the built-in role {{role}} apart from letter case or spaces.",
+    "nameTakenGroup": "On a cluster this name acts as the same Kubernetes group as role \"{{role}}\" ({{group}}). Choose another name.",
+    "nameTakenOther": "Taken by another role apart from letter case. Choose another name.",
+    "sameGroupNote": "Its name differs from role \"{{role}}\" only in letter case, spaces or punctuation, so on a cluster it acts as that role. Rename it.",
+    "sameGroupHint": "acts as {{role}} on clusters",
     "systemRoles": {
       "pending": "Awaiting approval",
       "member": "Regular user (access per cluster grant)",

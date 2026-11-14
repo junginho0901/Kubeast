@@ -22,6 +22,24 @@ export function roleEditEndsSessions(before: { name: string; permissions?: strin
   return (before.permissions ?? []).some((permission) => !matchAny(now, permission))
 }
 
+// The role holding a name, as auth-service's roleNameConflict reads it: the first other role (in the list's id order)
+// whose name makes the same group, so a name differing from it only in letter case, spaces or punctuation is taken.
+// editing is the role being renamed: its own name is never taken, and its stored name sent back as the form sends it
+// (trimmed) is not checked again, so a name stored before the rule stays usable.
+export type TakenRoleName = { role: string; builtin: boolean; sameName: boolean }
+
+export function takenRoleName(
+  name: string,
+  roles: ReadonlyArray<{ id: number; name: string; is_system: boolean }>,
+  editing?: { id: number; name: string } | null,
+): TakenRoleName | null {
+  const trimmed = name.trim()
+  if (!trimmed || (editing && trimmed === editing.name.trim())) return null
+  const slug = roleGroupSlug(trimmed)
+  const other = roles.find((r) => r.id !== editing?.id && roleGroupSlug(r.name) === slug)
+  return other ? { role: other.name, builtin: other.is_system, sameName: other.name === trimmed } : null
+}
+
 // kubeast:role:<slug> for a custom role, null for a built-in role or none.
 export function customRoleGroup(role: string | null | undefined): string | null {
   const name = (role ?? '').trim()

@@ -271,6 +271,9 @@ test.describe('permission ceiling (M16)', () => {
       expect.soft(same.status(), 'the same name again').toBe(400)
       expect.soft((await same.json()).detail, 'it says the role exists').toBe(`Role "e2e name ${ts}" already exists. Choose another name`)
       expect.soft((await (await create('Read')).json()).detail, 'a built-in name as written').toBe('Role "Read" already exists: it is a built-in role')
+      // what the role form says under its field comes with the refusal
+      const { code, role: holder, builtin, same_name: sameName } = await (await create('ADMIN')).json()
+      expect.soft({ code, holder, builtin, sameName }, 'the role holding the name').toEqual({ code: 'role_name_taken', holder: 'Admin', builtin: true, sameName: false })
 
       const normal = await create(`e2e-other-${ts}`)
       expect(normal.status(), await normal.text()).toBe(201)

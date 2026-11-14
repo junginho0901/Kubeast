@@ -23,10 +23,16 @@ type pgRule struct {
 // test can walk a request through the real routes and handlers without a
 // server. A statement no rule matches gets an empty result.
 type fakePG struct {
-	rules   []pgRule
-	mu      sync.Mutex
-	seen    []string
-	failing []string
+	rules    []pgRule
+	mu       sync.Mutex
+	seen     []string
+	failing  []string
+	refusals []pgRefusal
+}
+
+// pgRefusal is a statement the database refuses with an SQLSTATE naming a constraint, as a unique index does.
+type pgRefusal struct {
+	text, code, constraint string
 }
 
 func startFakePG(t *testing.T, rules ...pgRule) (*fakePG, *pgxpool.Pool) {
@@ -92,7 +98,15 @@ func (f *fakePG) answer(be *pgproto3.Backend, sql string) {
 	f.mu.Lock()
 	f.seen = append(f.seen, sql)
 	failing := f.failing
+	refusals := f.refusals
 	f.mu.Unlock()
+	for _, r := range refusals {
+		if strings.Contains(sql, r.text) {
+			be.Send(&pgproto3.ErrorResponse{Severity: "ERROR", Code: r.code, Message: "fake refusal", ConstraintName: r.constraint})
+			be.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
+			return
+		}
+	}
 	for _, text := range failing {
 		if strings.Contains(sql, text) {
 			be.Send(&pgproto3.ErrorResponse{Severity: "ERROR", Code: "XX000", Message: "fake database failure"})
@@ -157,6 +171,13 @@ func (f *fakePG) failOn(text string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.failing = append(f.failing, text)
+}
+
+// refuseOn makes every statement containing text fail with code on constraint, as a unique index refuses a row.
+func (f *fakePG) refuseOn(text, code, constraint string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.refusals = append(f.refusals, pgRefusal{text: text, code: code, constraint: constraint})
 }
 
 func (f *fakePG) forget() {

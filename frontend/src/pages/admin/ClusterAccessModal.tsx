@@ -55,6 +55,9 @@ export default function ClusterAccessModal({
   const [refusal, setRefusal] = useState<string | null>(null)
 
   const grantRoles = useMemo(() => roles.filter((r) => !ACCOUNT_LEVEL_ROLES.has(r.name)), [roles])
+  // a custom role stored with another role's name in other capitals acts as that role on the cluster: the list says so
+  const sameGroupHint = (r: { same_group_as?: string }) =>
+    r.same_group_as ? tr('adminRoles.sameGroupHint', 'acts as {{role}} on clusters', { role: r.same_group_as }) : undefined
   const invalidate = () => queryClient.invalidateQueries({ queryKey: grantsKey })
   const [search, setSearch] = useState('')
   const matching = useMemo(() => grantsMatching(grants, search), [grants, search])
@@ -189,6 +192,7 @@ export default function ClusterAccessModal({
                       value: r.name,
                       label: r.name,
                       testId: `cluster-access-role-${g.user_id}-opt-${r.name}`,
+                      listHint: sameGroupHint(r),
                     }))}
                   />
                   <button
@@ -263,6 +267,7 @@ export default function ClusterAccessModal({
               value: r.name,
               label: r.name,
               testId: `cluster-access-add-role-opt-${r.name}`,
+              listHint: sameGroupHint(r),
             }))}
           />
           <button

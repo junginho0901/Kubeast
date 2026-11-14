@@ -4074,7 +4074,14 @@
     "title": "Role Management",
     "updateError": "역할을 수정하지 못했습니다",
     "deleteError": "역할을 삭제하지 못했습니다",
-    "deleteInUse": "역할 \"{{name}}\"을 아직 쓰고 있어 삭제하지 않았습니다(계정 {{accounts}}, 클러스터 권한 {{grants}}, 접근 요청 {{requests}}). 먼저 다른 역할로 바꾸세요."
+    "deleteInUse": "역할 \"{{name}}\"을 아직 쓰고 있어 삭제하지 않았습니다(계정 {{accounts}}, 클러스터 권한 {{grants}}, 접근 요청 {{requests}}). 먼저 다른 역할로 바꾸세요.",
+    "nameTakenBuiltinSame": "\"{{role}}\" 역할은 기본 역할로 이미 있습니다.",
+    "nameTakenSame": "\"{{role}}\" 역할이 이미 있습니다. 다른 이름을 고르세요.",
+    "nameTakenBuiltin": "쓸 수 없는 이름입니다. 대소문자나 공백만 빼면 기본 역할 {{role}}의 이름과 같습니다.",
+    "nameTakenGroup": "이 이름은 클러스터에서 \"{{role}}\" 역할과 같은 Kubernetes 그룹({{group}})으로 동작합니다. 다른 이름을 고르세요.",
+    "nameTakenOther": "대소문자만 다른 역할이 이미 있습니다. 다른 이름을 고르세요.",
+    "sameGroupNote": "이름이 \"{{role}}\" 역할과 대소문자·공백·기호만 달라 클러스터에서 그 역할로 동작합니다. 이름을 바꾸세요.",
+    "sameGroupHint": "클러스터에서 {{role}}(으)로 동작"
   },
   "gpuDashboardPage": {
     "title": "GPU Dashboard",

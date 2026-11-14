@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { customRoleGroup, roleEditEndsSessions, roleGroupSlug } from './roleGroup'
+import { customRoleGroup, roleEditEndsSessions, roleGroupSlug, takenRoleName } from './roleGroup'
 
 // auth-service tokensEndedBy: only what a token held and no longer may ends a session.
 describe('roleEditEndsSessions', () => {
@@ -47,5 +47,39 @@ describe('roleGroup', () => {
     expect(roleGroupSlug('dev_team.v2')).toBe('dev_team.v2')
     expect(roleGroupSlug('개발자 A')).toBe('----a')
     expect(roleGroupSlug('a/b:c')).toBe('a-b-c')
+  })
+})
+
+// auth-service roleNameConflict (TestNewRoleNameCannotShareAKubernetesGroup, TestRoleRenameCannotShareAKubernetesGroup).
+describe('takenRoleName', () => {
+  const roles = [
+    { id: 1, name: 'Member', is_system: true },
+    { id: 3, name: 'Read', is_system: true },
+    { id: 5, name: 'Admin', is_system: true },
+    { id: 7, name: 'custom', is_system: false },
+    { id: 8, name: 'ADMIN', is_system: false },
+    { id: 15, name: 'a b', is_system: false },
+  ]
+
+  it('a built-in in other capitals or with spaces is taken by the built-in', () => {
+    expect(takenRoleName('admin', roles)).toEqual({ role: 'Admin', builtin: true, sameName: false })
+    expect(takenRoleName(' read ', roles)).toEqual({ role: 'Read', builtin: true, sameName: true })
+    expect(takenRoleName('MEMBER', roles)).toEqual({ role: 'Member', builtin: true, sameName: false })
+  })
+
+  it('another role of the same group takes it, the same name too', () => {
+    expect(takenRoleName('custom', roles)).toEqual({ role: 'custom', builtin: false, sameName: true })
+    expect(takenRoleName('A!B', roles)).toEqual({ role: 'a b', builtin: false, sameName: false })
+  })
+
+  it('a free name, an empty one and a name of its own group are not taken', () => {
+    expect(takenRoleName('admin-2', roles)).toBeNull()
+    expect(takenRoleName('   ', roles)).toBeNull()
+    expect(takenRoleName('CUSTOM', roles, { id: 7, name: 'custom' })).toBeNull()
+  })
+
+  it('a stored name sent back as the form sends it stays usable, another form of it does not', () => {
+    expect(takenRoleName('ADMIN', roles, { id: 8, name: 'ADMIN' })).toBeNull()
+    expect(takenRoleName('admin', roles, { id: 8, name: 'ADMIN' })).toEqual({ role: 'Admin', builtin: true, sameName: false })
   })
 })
