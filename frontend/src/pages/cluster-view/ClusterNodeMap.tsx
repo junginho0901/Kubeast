@@ -5,7 +5,8 @@ import { GAP, layoutMap } from './nodeMapLayout'
 // Every node at a glance: a cell per node in the boxes' order, a dot per pod in the cards' colour (errors first, then
 // warnings, then the rest, so a problem is never at the end of a cell). Canvas 2D, one fillRect per dot — static, so
 // 100 000 dots draw in milliseconds. The cell is large enough to hold the busiest node's dots, so no pod is left out.
-// While the boxes take more than one page, the cells of the page shown are outlined. A click goes to that node's box.
+// While the boxes take more than one page, the cells of the page shown are outlined, and while they are narrowed to a
+// node its cell. A click narrows the boxes to that node.
 
 function cssColor(name: string, fallback: string): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
@@ -137,8 +138,8 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, tr }: Pr
             <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm bg-green-400" />{tr('clusterView.map.ok', 'Healthy')} {totals.pods - totals.error - totals.warn}</span>
             <span>
               {pageEnd > pageStart
-                ? tr('clusterView.map.hintPaged', 'A cell is a node, a dot a pod; the outlined cells are the boxes below. Click a cell to go to the node.')
-                : tr('clusterView.map.hint', 'A cell is a node, a dot a pod. Click a cell to go to the node.')}
+                ? tr('clusterView.map.hintPaged', 'A cell is a node, a dot a pod; the outlined cells are the boxes below. Click a cell to show only that node.')
+                : tr('clusterView.map.hint', 'A cell is a node, a dot a pod. Click a cell to show only that node.')}
             </span>
           </>
         )}

@@ -2665,6 +2665,17 @@
     "restarts": "Restarts: {{count}}",
     "podDeleting": "Deleting...",
     "noPods": "No pods found",
+    "pageNodes": "Page {{page}} of {{pages}}: Nodes {{first}}–{{last}} of {{nodes}}.",
+    "part": {
+      "first": "Pods {{from}}–{{to}} of {{total}} · continues on the next page",
+      "middle": "Continued: Pods {{from}}–{{to}} of {{total}} · continues on the next page",
+      "last": "Continued: Pods {{from}}–{{to}} of {{total}}"
+    },
+    "nodeFilter": {
+      "on": "Showing Node {{node}} only.",
+      "none": "Node {{node}} has no Pods in this view.",
+      "all": "All nodes"
+    },
     "tabs": {
       "summary": "Summary",
       "logs": "Logs",
@@ -2734,8 +2745,8 @@
       "error": "Error",
       "warn": "Warning",
       "ok": "Healthy",
-      "hint": "A cell is a node, a dot a pod. Click a cell to go to the node.",
-      "hintPaged": "A cell is a node, a dot a pod; the outlined cells are the boxes below. Click a cell to go to the node."
+      "hint": "A cell is a node, a dot a pod. Click a cell to show only that node.",
+      "hintPaged": "A cell is a node, a dot a pod; the outlined cells are the boxes below. Click a cell to show only that node."
     }
   },
   "namespaces": {

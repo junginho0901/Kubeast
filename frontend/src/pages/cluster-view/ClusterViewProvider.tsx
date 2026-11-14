@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import type { PodInfo } from '@/services/api'
 import type { PodDetail, DetailTab } from './types'
 import { ClusterViewContext, type ClusterViewContextValue, type PodContextMenuPosition } from './ClusterViewContext'
@@ -20,6 +21,15 @@ export function ClusterViewProvider({ children }: { children: ReactNode }) {
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
   const [searchQuery, setSearchQuery] = useState<string>('')
+  // ?node= keeps the node the boxes are narrowed to, so a reload or a link opens it again; other parameters stay
+  const [params, setParams] = useSearchParams()
+  const nodeFilter = params.get('node')
+  const setNodeFilter = useCallback((node: string | null) => setParams((prev) => {
+    const next = new URLSearchParams(prev)
+    if (node === null) next.delete('node')
+    else next.set('node', node)
+    return next
+  }, { replace: true }), [setParams])
 
   const [selectedPod, setSelectedPod] = useState<PodDetail | null>(null)
   const [selectedContainer, setSelectedContainer] = useState<string>('')
@@ -76,6 +86,7 @@ export function ClusterViewProvider({ children }: { children: ReactNode }) {
     isNamespaceDropdownOpen, setIsNamespaceDropdownOpen,
     namespaceDropdownRef,
     searchQuery, setSearchQuery,
+    nodeFilter, setNodeFilter,
     selectedPod, setSelectedPod,
     selectedContainer, setSelectedContainer,
     containerSearchQuery, setContainerSearchQuery,
@@ -95,7 +106,7 @@ export function ClusterViewProvider({ children }: { children: ReactNode }) {
     closeDetailModal, closeContextMenu, openDeleteModal, closeDeleteModal,
   }), [
     tr, locale, na, emptyValue,
-    selectedNamespace, setSelectedNamespace, isNamespaceDropdownOpen, searchQuery,
+    selectedNamespace, setSelectedNamespace, isNamespaceDropdownOpen, searchQuery, nodeFilter, setNodeFilter,
     selectedPod, selectedContainer, containerSearchQuery,
     activeTab, selectTab,
     showLogs, showManifest, showDescribe, showRbac, showExec,

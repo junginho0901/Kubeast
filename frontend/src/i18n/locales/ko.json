@@ -2664,6 +2664,17 @@
     "restarts": "재시작: {{count}}",
     "podDeleting": "삭제 중...",
     "noPods": "Pod가 없습니다",
+    "pageNodes": "{{pages}}쪽 중 {{page}}쪽: Node {{nodes}}개 중 {{first}}–{{last}}번째입니다.",
+    "part": {
+      "first": "Pod {{total}}개 중 {{from}}–{{to}}번째입니다. 다음 페이지에 이어집니다.",
+      "middle": "이어지는 부분입니다. Pod {{total}}개 중 {{from}}–{{to}}번째이고, 다음 페이지에 이어집니다.",
+      "last": "이어지는 부분입니다. Pod {{total}}개 중 {{from}}–{{to}}번째입니다."
+    },
+    "nodeFilter": {
+      "on": "Node {{node}}만 보여 줍니다.",
+      "none": "이 보기에서 Node {{node}}에 Pod가 없습니다.",
+      "all": "전체 Node 보기"
+    },
     "tabs": {
       "summary": "요약",
       "logs": "로그",
@@ -2734,8 +2745,8 @@
       "error": "오류",
       "warn": "주의",
       "ok": "정상",
-      "hint": "칸 하나가 Node, 점 하나가 Pod입니다. 칸을 누르면 그 Node로 이동합니다.",
-      "hintPaged": "칸 하나가 Node, 점 하나가 Pod이고, 테두리를 친 칸이 아래 상자입니다. 칸을 누르면 그 Node로 이동합니다."
+      "hint": "칸 하나가 Node, 점 하나가 Pod입니다. 칸을 누르면 그 Node만 보여 줍니다.",
+      "hintPaged": "칸 하나가 Node, 점 하나가 Pod이고, 테두리를 친 칸이 아래 상자입니다. 칸을 누르면 그 Node만 보여 줍니다."
     }
   },
   "namespaces": {

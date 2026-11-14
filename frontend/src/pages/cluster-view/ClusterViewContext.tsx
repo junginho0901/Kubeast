@@ -33,6 +33,9 @@ export interface ClusterViewContextValue {
   namespaceDropdownRef: React.RefObject<HTMLDivElement | null>
   searchQuery: string
   setSearchQuery: (s: string) => void
+  // the node the boxes are narrowed to (a map cell's click), kept in the address as ?node=; null shows every node
+  nodeFilter: string | null
+  setNodeFilter: (node: string | null) => void
 
   // pod detail modal
   selectedPod: PodDetail | null

@@ -9,7 +9,7 @@
     {
       "screen": "^/cluster-view$",
       "pager": "^cluster-view-nodes-pager$",
-      "why": "Cluster View draws every node in the map and pages a fixed number of node boxes under it; a box holds a node's pod cards and can be taller than the screen, so the page scrolls on purpose and the footer has no rows-per-page choice.",
+      "why": "Cluster View draws every node in the map and pages the node boxes under it by their pod cards (at most 200 cards and 10 boxes a page, a node of more pods going on on the next page); a box can be taller than the screen, so the page scrolls on purpose and the footer has no rows-per-page choice.",
       "pr": "#869"
     }
   ]
