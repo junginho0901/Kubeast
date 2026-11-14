@@ -132,6 +132,9 @@ export default function ResourceDetailDrawer() {
     target: target ? { kind: target.kind, namespace: target.namespace ?? null, name: target.name, rawJson: (target as any).rawJson } : null,
     close,
   })
+  // the Delete window is for the object it was opened on: the drawer moved to another (back, forward, a link) closes it
+  const [deleteFor, setDeleteFor] = useState('')
+  if (deleteDialogOpen && deleteFor !== objectId) setDeleteDialogOpen(false)
   const features = useClusterFeatures().data
   // features.admissionPolicies.readOnly: the server refuses a policy apply, so the editor stays read-only too.
   const policyLocked = !!features?.admissionPolicies?.readOnly &&
@@ -407,6 +410,7 @@ export default function ResourceDetailDrawer() {
           onDeleteClick={() => {
             setDeleteError(null)
             setTypedName('')
+            setDeleteFor(objectId)
             setDeleteDialogOpen(true)
           }}
           t={t}
@@ -416,7 +420,8 @@ export default function ResourceDetailDrawer() {
         <div ref={contentScrollRef} className="flex-1 overflow-y-auto overflow-x-hidden">
           {tab === 'info' && (
             <DrawerObjectReadContext.Provider value={objectRead}>
-            <div className="p-5 space-y-6 text-sm">
+            {/* keyed by the object: what a view holds (a value shown, a log or shell window, a page of a list) starts over for the next one */}
+            <div className="p-5 space-y-6 text-sm" key={objectId}>
               {unreadable ? (
                 <ObjectUnreadable kind={displayKind} name={name} namespace={ns} notFound={loadStatus === 404} />
               ) : renderInfoContent()}

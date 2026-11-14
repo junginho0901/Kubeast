@@ -116,6 +116,12 @@ describe('drawerObjectKey', () => {
     expect(drawerSource).toMatch(/<YamlEditor\s+key=\{objectId\}/)
     expect(drawerSource).toContain('toast={applyToast?.of === objectId ? applyToast : null}')
   })
+
+  it('keys the Info tab and the Delete window too, so a value shown, a terminal or a Delete opened do not carry over', () => {
+    expect(drawerSource).toContain('<div className="p-5 space-y-6 text-sm" key={objectId}>')
+    expect(drawerSource).toContain('if (deleteDialogOpen && deleteFor !== objectId) setDeleteDialogOpen(false)')
+    expect(drawerSource).toMatch(/setDeleteFor\(objectId\)\s+setDeleteDialogOpen\(true\)/)
+  })
 })
 
 // A kind with no drawer of its own that two groups serve (no CRD of either, so no custom resource drawer): the drawer
