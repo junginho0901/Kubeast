@@ -86,6 +86,9 @@ type Handler struct {
 	anomalySrc     anomalySource
 	anomalyNow     func() time.Time
 	anomalyAnswers anomalyAnswers
+	// anomalyGraph replaces the narrowing's read of the namespace's Resource Graph in tests (nil: svc), read for the
+	// call graph's order when features.callGraph is on.
+	anomalyGraph func(ctx context.Context, namespace string) (map[string]interface{}, error)
 	// alertStore reads the alert store (nil: alert reads off).
 	alertStore *alerts.Store
 	// logSearchCanI replaces the pods/log access review in tests.

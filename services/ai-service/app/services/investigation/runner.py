@@ -7,10 +7,11 @@ same path the chat uses — tool-server checks the token's ai.tool.* rights and
 namespace, the cluster sees kubeast:investigator. At most max_steps model calls;
 the last one gets no tools, so it must answer (as HolmesGPT does) — the loop is
 app.services.ai.tool_turn, which hands it to Claude Code on a Claude subscription.
-The whole run is bounded by timeout_seconds. With rules or changes_first on, the
-first message also holds the time windows counted from the alert's start, and
-with changes_first what changed in the change window, read as step 0 before the
-first model call (investigation/windows.py).
+The whole run is bounded by timeout_seconds. With rules, changes_first or
+narrow_first on, the first message also holds the time windows counted from the
+alert's start, with changes_first what changed in the change window and with
+narrow_first anomaly_rank over the metrics window, read as step 0 before the
+first model call in that order (investigation/windows.py).
 """
 
 from __future__ import annotations
@@ -251,13 +252,37 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
             return inv_prompt.no_changes_block(unused)
         return inv_prompt.changes_block(text, args)
 
+    async def narrow_first(windows: inv_windows.Windows) -> str:
+        """Step 0, after the changes: anomaly_rank over the metrics window of the alert's namespace through the same call,
+        one call, its own bounds (store queries, seconds, the answer's size) kept by k8s-service and tool-server."""
+        nonlocal unnarrowed
+        offered = {(t.get("function") or {}).get("name") for t in tools}
+        if inv_windows.NARROW_TOOL not in offered:
+            unnarrowed = f"{inv_windows.NARROW_TOOL} is not offered to this investigation"
+        elif not row.namespace:
+            unnarrowed = "the alert names no namespace"
+        if unnarrowed:
+            return inv_prompt.no_narrowing_block(unnarrowed)
+        args = inv_windows.narrow_args(windows, row.namespace)
+        text, raw, entry = await call_tool(inv_windows.NARROW_TOOL, args, 0)
+        if entry.get("error"):
+            unnarrowed = f"{inv_windows.NARROW_TOOL} answered: {entry['error']}"
+        elif not inv_windows.is_narrowing_answer(raw):
+            unnarrowed = f"{inv_windows.NARROW_TOOL} did not answer with findings"
+        if unnarrowed:
+            return inv_prompt.no_narrowing_block(unnarrowed)
+        return inv_prompt.narrowing_block(text, args)
+
     first: list[str] = []
     unused = ""  # why step 0 gave nothing to use
-    if cfg.rules or cfg.changes_first:
+    unnarrowed = ""  # why step 0's narrowing gave nothing to use
+    if cfg.rules or cfg.changes_first or cfg.narrow_first:
         windows = inv_windows.of(row.starts_at, utcnow(), cfg)
         first.append(inv_windows.describe(windows, cfg))
         if cfg.changes_first:
             first.append(await changes_first(windows))
+        if cfg.narrow_first:
+            first.append(await narrow_first(windows))
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language,
                                                                rules=cfg.rules, call_paths=cfg.call_paths)},
@@ -272,7 +297,8 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     if not turn.answer:
         raise InvestigationError("the model returned no report")
     return {
-        "report": turn.answer + (inv_prompt.step_zero_note(unused, cfg.language) if unused else ""),
+        "report": turn.answer + (inv_prompt.step_zero_note(unused, cfg.language) if unused else "")
+        + (inv_prompt.narrowing_note(unnarrowed, cfg.language) if unnarrowed else ""),
         "tool_calls": tool_log,
         "iterations": turn.steps,
         "provider": service.provider or "",

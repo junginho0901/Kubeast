@@ -656,6 +656,9 @@ tests:
           path: data.ALERT_INVESTIGATION_CHANGES_FIRST
           value: "false"
       - equal:
+          path: data.ALERT_INVESTIGATION_NARROW_FIRST
+          value: "false"
+      - equal:
           path: data.ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES
           value: "15"
       - equal:
@@ -669,6 +672,7 @@ tests:
     set:
       features.alertInvestigation.rules: true
       features.alertInvestigation.changesFirst: true
+      features.alertInvestigation.narrowFirst: true
       features.alertInvestigation.window:
         metricsMinutes: 30
         logsMinutes: 0
@@ -679,6 +683,9 @@ tests:
           value: "true"
       - equal:
           path: data.ALERT_INVESTIGATION_CHANGES_FIRST
+          value: "true"
+      - equal:
+          path: data.ALERT_INVESTIGATION_NARROW_FIRST
           value: "true"
       - equal:
           path: data.ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES
@@ -777,3 +784,11 @@ tests:
       - equal:
           path: data.CALL_GRAPH_ENABLED
           value: "true"
+
+  - it: keeps the step 0 narrowing off for values from a chart without it (--reuse-values)
+    set:
+      features.alertInvestigation.narrowFirst: null
+    asserts:
+      - equal:
+          path: data.ALERT_INVESTIGATION_NARROW_FIRST
+          value: "false"

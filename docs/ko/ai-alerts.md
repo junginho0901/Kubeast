@@ -80,9 +80,10 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   - 추가한 규칙은 알림을 보내는 모든 클러스터에 다시 적용하세요(`scripts/render-target-rbac.sh`).
   - 모델은 `model`(ModelConfig 이름) 또는 기본 모델을 쓰고, 모델 호출은 `maxSteps`(8)번까지, 전체 시간은 `timeoutSeconds`(300)까지입니다. 마지막 호출에는 도구를 주지 않으므로 답이 돌아옵니다.
   - 알림의 라벨·주석은 프롬프트에서 "신뢰하지 않는 데이터"로 분리합니다.
-  - `rules`와 `changesFirst`(둘 다 기본 꺼짐)는 조사를 시작하는 방식을 바꿉니다. 둘 중 하나라도 켜면 알림 시작 시각에서 센 시간창을 첫 입력에 적습니다: 지표는 앞뒤 `window.metricsMinutes`(15, 1–360)분, 로그는 `window.logsMinutes`(5, 0–1440)분 전부터, 변경은 `window.changesHours`(4, 1–168)시간 전부터이며, 끝은 늦어도 지금입니다.
+  - `rules` · `changesFirst` · `narrowFirst`(모두 기본 꺼짐)는 조사를 시작하는 방식을 바꿉니다. 하나라도 켜면 알림 시작 시각에서 센 시간창을 첫 입력에 적습니다: 지표는 앞뒤 `window.metricsMinutes`(15, 1–360)분, 로그는 `window.logsMinutes`(5, 0–1440)분 전부터, 변경은 `window.changesHours`(4, 1–168)시간 전부터이며, 끝은 늦어도 지금입니다.
     - `rules`는 프롬프트에 규칙을 더합니다: 그 시간창으로 읽기, 바뀐 것부터 보기, 고장에서 멈추지 말고 그것을 일으킨 변경까지 따라가기, 시각과 대상이 증상과 맞을 때만 변경을 원인으로 대기, 오류 문구는 그대로 인용하기, 확인한 사실과 가설을 구분하기. 보고서는 여섯 절이 됩니다: Summary, Scope(영향 받음 · 확인했고 정상 · 다른 까닭으로 바뀜 · 안 봄), What I checked, Likely cause(원인 → … → 증상), Ruled out, Next steps.
     - `changesFirst`는 첫 모델 호출 전에 변경 시간창과 알림의 Namespace로 `timeline` 도구를 `view: changes`로 부르고(0번째 걸음: 다른 도구 호출과 같이 반복 번호 0의 `ai.tool.call` 행 · 가림 · 모델의 결과 길이 상한을 거치며, 모델 호출은 쓰지 않습니다), 그 답을 첫 입력에 넣습니다. 도구가 주어지지 않았거나, 실패했거나, 변경 보기 없이 답하면 그것 없이 조사를 이어 가고 보고서 아래에 까닭을 한 줄 적습니다.
+    - `narrowFirst`는 그다음 알림의 Namespace와 지표 시간창(분 단위로 자르고 최소 5분)으로 `anomaly_rank`를 부릅니다(`features.anomalyRank` 필요). 이것도 0번째 걸음입니다(호출 한 번, 반복 번호 0의 `ai.tool.call` 행, 미리 좁히기 자체의 조회·시간 상한). 그 발견은 첫 입력에서 바뀐 것 다음에 들어갑니다. 도구가 주어지지 않았거나, 알림에 Namespace가 없거나, 실패했거나, 발견 없이 답하면 그것 없이 조사를 이어 가고 보고서 아래에 까닭을 한 줄 적습니다. `features.callGraph`가 켜져 있으면 발견은 호출 관계의 차례(`call_order`)로 오고, 프롬프트는 호출 관계 읽기를 한 번만 말합니다: `rules`가 켜져 있으면 보고서의 Likely cause 사슬이 유일한 경로 지시입니다.
 - **보고서**: 요약 · 확인한 것 · 가능한 원인 · 다음에 볼 것으로 구성됩니다(`language`, 기본 en).
   - API는 `GET /api/v1/ai/investigations`(목록, `status`·`cluster`로 거르기)와 `/{id}`(상세: 보고서·도구 호출·토큰)이고, 권한은 `admin.investigations.read`입니다.
   - 상세에는 파드 로그가 인용될 수 있어 열람할 때마다 `ai.investigation.view`로 남깁니다.

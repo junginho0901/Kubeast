@@ -38,6 +38,8 @@ class InvestigationSettings:
     rules: bool = False
     # Step 0: before the first model call, the timeline tool's changes view over the change window.
     changes_first: bool = False
+    # Step 0: then anomaly_rank (features.anomalyRank) over the metrics window of the alert's namespace.
+    narrow_first: bool = False
     # Counted from the alert's start: metrics either side of it, logs from before it, changes from before it.
     metrics_window_minutes: int = 15
     logs_window_minutes: int = 5
@@ -79,6 +81,7 @@ def load() -> InvestigationSettings:
         timeout_seconds=min(1800, max(30, _int("ALERT_INVESTIGATION_TIMEOUT_SECONDS", 300))),
         rules=os.getenv("ALERT_INVESTIGATION_RULES", "false").strip().lower() == "true",
         changes_first=os.getenv("ALERT_INVESTIGATION_CHANGES_FIRST", "false").strip().lower() == "true",
+        narrow_first=os.getenv("ALERT_INVESTIGATION_NARROW_FIRST", "false").strip().lower() == "true",
         # Prometheus reads at most 168 h, Loki 24 h by default, timeline 90 days back.
         metrics_window_minutes=min(360, max(1, _int("ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES", 15))),
         logs_window_minutes=min(1440, max(0, _int("ALERT_INVESTIGATION_LOGS_WINDOW_MINUTES", 5))),
