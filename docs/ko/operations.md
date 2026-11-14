@@ -345,7 +345,7 @@ features:
 `streams.enabled: true`이면 두 번째 Deployment `k8s-service-stream`이 k8s-service와 같은 이미지를 다른 역할(`SERVER_ROLE=stream`)로 돌립니다(Loki·Mimir가 한 바이너리를 `-target`으로 띄우는 것과 같은 방식).
 이 서버가 Pod exec, 노드 셸, 실시간 로그(컨테이너 출력, 로그 파일)를 맡고, k8s-service(`SERVER_ROLE=api`)가 실시간 목록을 포함한 나머지를 맡습니다.
 게이트웨이는 `files/nginx.conf`의 스트림 location 넷을 새 Service로 보내므로, 한쪽을 배포해도 다른 쪽 연결이 끊기지 않고 터미널이 많이 열려도 목록이 느려지지 않습니다.
-꺼져 있으면(기본) 예전처럼 k8s-service가 전부 맡고, 교체될 때 아래와 같은 방식으로 터미널을 차례로 끝냅니다(preStop 대기는 없음). `terminationGracePeriodSeconds`는 `drainSeconds + 15`(기본 75초)이고, 열린 터미널이 없으면 기다리지 않습니다.
+꺼져 있으면(기본) 예전처럼 k8s-service가 전부 맡고, 교체될 때 아래와 같은 방식으로 터미널을 차례로 끝냅니다(preStop 대기는 없음). `terminationGracePeriodSeconds`는 `drainSeconds + 30`(기본 90초)이고, 열린 터미널이 없으면 기다리지 않습니다.
 
 ```yaml
 streams:
@@ -358,7 +358,7 @@ resources:
     limits: { memory: 512Mi }
 ```
 
-- **k8s-service-stream이 교체될 때**(배포, 노드 비우기): 새 파드가 먼저 준비됩니다(`maxSurge: 1`, `maxUnavailable: 0`). 옛 파드는 `preStopSeconds`를 기다린 뒤 SIGTERM을 받으면 `/ready`에 503으로 답하고, 실시간 로그를 바로 끝내며(브라우저가 다시 붙어 마지막으로 받은 줄 다음부터 이어 받습니다), 터미널마다 언제 닫히는지 적습니다. `drainSeconds`가 지나도 열려 있는 터미널은 그 까닭과 함께 닫히고(close code 1001, `server_shutdown`) 다시 연결 버튼이 나옵니다. `terminationGracePeriodSeconds`는 `preStopSeconds + drainSeconds + 15`입니다.
+- **k8s-service-stream이 교체될 때**(배포, 노드 비우기): 새 파드가 먼저 준비됩니다(`maxSurge: 1`, `maxUnavailable: 0`). 옛 파드는 `preStopSeconds`를 기다린 뒤 SIGTERM을 받으면 `/ready`에 503으로 답하고, 실시간 로그를 바로 끝내며(브라우저가 다시 붙어 마지막으로 받은 줄 다음부터 이어 받습니다), 터미널마다 언제 닫히는지 적습니다. `drainSeconds`가 지나도 열려 있는 터미널은 그 까닭과 함께 닫히고(close code 1001, `server_shutdown`) 다시 연결 버튼이 나옵니다. `terminationGracePeriodSeconds`는 `preStopSeconds + drainSeconds + 30`입니다.
 - **같은 신원**: 두 Deployment 모두 `k8s-service` 서비스 계정을 쓰므로 IRSA 역할과 녹화 저장소 자격 증명(`sessionRecording.secret`)이 둘 다에 적용됩니다. 녹화는 stream 서버가 쓰고 k8s-service가 읽습니다. 스풀 볼륨은 stream 서버에만 붙습니다.
 - **함께 쓸 수 없는 값**: `sessionRecording.storage: file`(볼륨 하나를 파드 둘이 붙일 수 없음)과 1보다 큰 `streams.replicas`.
 - **NetworkPolicy**: `k8s-service-stream`은 게이트웨이에서만 연결을 받고, 데이터베이스·Redis·auth-service·클러스터 API 서버·`sessionRecording.egress`로만 나갑니다.

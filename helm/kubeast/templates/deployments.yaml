@@ -256,8 +256,8 @@ spec:
     spec:
       serviceAccountName: k8s-service
       {{- if $streams }}
-      # {{ if $api }}the drain (STREAM_DRAIN_SECONDS){{ else }}preStop, then the drain (STREAM_DRAIN_SECONDS){{ end }}, then the drain's close wait and the shutdown
-      terminationGracePeriodSeconds: {{ add (ternary 0 (int $.Values.streams.preStopSeconds) $api) (int $.Values.streams.drainSeconds) 15 }}
+      # {{ if $api }}the drain (STREAM_DRAIN_SECONDS){{ else }}preStop, then the drain (STREAM_DRAIN_SECONDS){{ end }}, then the drain's close wait, the server's shutdown and the recorder's
+      terminationGracePeriodSeconds: {{ add (ternary 0 (int $.Values.streams.preStopSeconds) $api) (int $.Values.streams.drainSeconds) 30 }}
       {{- end }}
       # recording on: fsGroup lets uid 65532 read the 0440 recording Secret and write a spool/store PVC
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532 "fsGroup" (ternary 65532 0 $.Values.sessionRecording.enabled)) | nindent 6 }}

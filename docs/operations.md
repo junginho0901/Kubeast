@@ -356,7 +356,7 @@ The links open at `localhost:16686` after `kubectl port-forward -n tracing svc/j
 With `streams.enabled: true` a second Deployment, `k8s-service-stream`, runs the same image as k8s-service in another role (`SERVER_ROLE=stream`, as Loki and Mimir run one binary with `-target`).
 It serves pod exec, the node shell and the followed logs (a container's output, a log file); k8s-service (`SERVER_ROLE=api`) serves everything else, the live lists included.
 The gateway sends the four stream locations of `files/nginx.conf` to the new Service, so a rollout of one does not cut the other's connections and many open terminals do not slow the lists.
-Off (the default), k8s-service serves everything, as before, and drains its terminals the same way when it is replaced (below), without the preStop sleep: `terminationGracePeriodSeconds` is `drainSeconds + 15` (75 s by default), and with no terminal open it does not wait.
+Off (the default), k8s-service serves everything, as before, and drains its terminals the same way when it is replaced (below), without the preStop sleep: `terminationGracePeriodSeconds` is `drainSeconds + 30` (90 s by default), and with no terminal open it does not wait.
 
 ```yaml
 streams:
@@ -369,7 +369,7 @@ resources:
     limits: { memory: 512Mi }
 ```
 
-- **When k8s-service-stream is replaced** (a rollout, a node drain): the new pod is ready first (`maxSurge: 1`, `maxUnavailable: 0`). The old one waits `preStopSeconds`, then on SIGTERM answers `/ready` with 503, ends the followed logs at once — the browser reconnects and goes on after the last line it got — and writes on each terminal when it will close. A terminal still open after `drainSeconds` is closed with that reason (close code 1001, `server_shutdown`) and offers Reconnect. `terminationGracePeriodSeconds` is `preStopSeconds + drainSeconds + 15`.
+- **When k8s-service-stream is replaced** (a rollout, a node drain): the new pod is ready first (`maxSurge: 1`, `maxUnavailable: 0`). The old one waits `preStopSeconds`, then on SIGTERM answers `/ready` with 503, ends the followed logs at once — the browser reconnects and goes on after the last line it got — and writes on each terminal when it will close. A terminal still open after `drainSeconds` is closed with that reason (close code 1001, `server_shutdown`) and offers Reconnect. `terminationGracePeriodSeconds` is `preStopSeconds + drainSeconds + 30`.
 - **Same identity**: both Deployments use the `k8s-service` service account, so the IRSA role and the recording store's credentials (`sessionRecording.secret`) apply to both: the stream server writes the recordings, k8s-service reads them. The spool volume is mounted on the stream server only.
 - **Refused with it**: `sessionRecording.storage: file` (one volume, two pods) and `streams.replicas` above 1.
 - **NetworkPolicy**: `k8s-service-stream` takes connections from the gateway only, and reaches the database, Redis, auth-service, the clusters' API servers and `sessionRecording.egress`.

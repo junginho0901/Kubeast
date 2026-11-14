@@ -40,7 +40,7 @@ tests:
         template: configmap.yaml
         documentSelector: {path: metadata.name, value: kubeast-config}
 
-  - it: drains the one default k8s-service too — the wait from streams.drainSeconds, a grace period of the wait + 15, no preStop
+  - it: drains the one default k8s-service too — the wait from streams.drainSeconds, a grace period of the wait + 30, no preStop
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
@@ -49,7 +49,7 @@ tests:
         documentSelector: {path: metadata.name, value: k8s-service}
       - equal:
           path: spec.template.spec.terminationGracePeriodSeconds
-          value: 75
+          value: 90
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
       # the Deployment's default rollout (maxSurge 1, maxUnavailable 0 for one replica) brings the new pod up first,
@@ -75,7 +75,7 @@ tests:
         documentSelector: {path: metadata.name, value: k8s-service}
       - equal:
           path: spec.template.spec.terminationGracePeriodSeconds
-          value: 135
+          value: 150
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
 
@@ -145,7 +145,7 @@ tests:
         documentSelector: {path: metadata.name, value: k8s-service-stream}
       - equal:
           path: spec.template.spec.terminationGracePeriodSeconds
-          value: 85
+          value: 100
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service-stream}
       - equal:
@@ -192,7 +192,7 @@ tests:
         documentSelector: {path: metadata.name, value: k8s-service-stream}
       - equal:
           path: spec.template.spec.terminationGracePeriodSeconds
-          value: 320
+          value: 335
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service-stream}
 
