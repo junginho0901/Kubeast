@@ -192,7 +192,7 @@ test.describe('Redis users per service (PR #866)', () => {
       { message: 'kubeast:cache: keys in Redis again', timeout: 60_000 }).toBeGreaterThan(0)
   })
 
-  test('F-8 (PR #857): a k8s-service started while Redis was down moves its cache to Redis within 10 s of Redis answering', async ({ request }) => {
+  test('F-8 (PR #857): a k8s-service started while Redis was down moves its cache to Redis within 15 s of Redis answering', async ({ request }) => {
     test.skip(!deploymentExists(REDIS), 'the install runs no Redis (redis.enabled false)')
     test.setTimeout(420_000)
     const token = await login(request)
