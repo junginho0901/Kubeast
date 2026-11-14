@@ -98,3 +98,28 @@ func TestAccessRequestsConfig_AccessHelp(t *testing.T) {
 		}
 	}
 }
+
+// A listed built-in, in whatever capitals the chart or the request writes it, is that built-in's exact name, so a
+// request never reaches a custom role named as a built-in in other capitals. Any other listed role matches exactly.
+func TestRequestedRoleIsTheListedRolesOwnName(t *testing.T) {
+	for _, c := range []struct {
+		role    string
+		allowed []string
+		want    string
+		ok      bool
+	}{
+		{"Write", []string{"Write"}, "Write", true},
+		{"admin", []string{"admin"}, "Admin", true},
+		{"ADMIN", []string{"Admin"}, "Admin", true},
+		{"Admin", []string{" Admin "}, "Admin", true},
+		{"sre-oncall", []string{"sre-oncall"}, "sre-oncall", true},
+		{"SRE-ONCALL", []string{"sre-oncall"}, "", false},
+		{"Read", []string{"Write"}, "", false},
+		{"ADMIN", []string{"Write"}, "", false},
+	} {
+		got, ok := requestedRole(c.role, c.allowed)
+		if got != c.want || ok != c.ok || roleRequestable(c.role, c.allowed) != c.ok {
+			t.Errorf("requestedRole(%q, %q) = %q, %v; want %q, %v", c.role, c.allowed, got, ok, c.want, c.ok)
+		}
+	}
+}

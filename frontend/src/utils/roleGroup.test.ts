@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { customRoleGroup, roleEditEndsSessions, roleGroupSlug, takenRoleName } from './roleGroup'
+import { customRoleGroup, isBuiltinRole, roleEditEndsSessions, roleGroupSlug, sameGroupRefusal, takenRoleName, takesBuiltinSlug } from './roleGroup'
 
 // auth-service tokensEndedBy: only what a token held and no longer may ends a session.
 describe('roleEditEndsSessions', () => {
@@ -35,10 +35,32 @@ describe('roleEditEndsSessions', () => {
 })
 
 describe('roleGroup', () => {
-  it('maps built-in roles to no custom group, case-insensitively', () => {
-    for (const r of ['Read', 'write', 'ADMIN', ' Admin ', '', null, undefined]) {
+  it('maps Read, Write and Admin and their names in other capitals to no custom group', () => {
+    for (const r of ['Read', 'write', 'ADMIN', ' Admin ', 'PENDING', '', null, undefined]) {
       expect(customRoleGroup(r)).toBeNull()
     }
+    // the built-in Member is no fixed group: a grant of it acts as kubeast:role:member, as impersonation.go has it
+    expect(customRoleGroup('Member')).toBe('kubeast:role:member')
+  })
+
+  // impersonation.go IsBuiltinRole / TakesBuiltinSlug (TestImpersonation_RoleNamesOfTheBuiltInsInOtherForms)
+  it('knows a built-in by its exact name only', () => {
+    for (const r of ['Admin', 'Write', 'Read', 'Member', 'Pending']) {
+      expect(isBuiltinRole(r)).toBe(true)
+      expect(takesBuiltinSlug(r)).toBe(false)
+    }
+    for (const r of ['ADMIN', 'admin', ' Admin ', 'WRITE', 'write', ' read ', 'PENDING']) {
+      expect(isBuiltinRole(r)).toBe(false)
+      expect(takesBuiltinSlug(r)).toBe(true)
+    }
+    for (const r of ['sre-oncall', 'admin-2', '', null]) expect(takesBuiltinSlug(r)).toBe(false)
+  })
+
+  it("reads auth-service's role_same_group refusal", () => {
+    const err = { response: { data: { code: 'role_same_group', role: 'ADMIN', same_group_as: 'Admin', detail: 'x' } } }
+    expect(sameGroupRefusal(err)).toEqual({ role: 'ADMIN', other: 'Admin' })
+    expect(sameGroupRefusal({ response: { data: { detail: 'other' } } })).toBeNull()
+    expect(sameGroupRefusal(null)).toBeNull()
   })
 
   it('slugs a custom role the way impersonation.go does', () => {

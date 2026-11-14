@@ -274,9 +274,9 @@ export default function AdminRoles() {
                       <span
                         data-testid="role-same-group"
                         className="ml-2 inline-block rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-normal text-amber-300"
-                        title={tr('adminRoles.sameGroupNote', 'Its name differs from role "{{role}}" only in letter case, spaces or punctuation, so on a cluster it acts as that role. Rename it.', { role: role.same_group_as })}
+                        title={tr('adminRoles.sameGroupNote', 'Its name differs from role "{{role}}" only in letter case, spaces or punctuation, so it is not given on a cluster any more. A grant it already has acts as no role group where the other is a built-in role. Rename it.', { role: role.same_group_as })}
                       >
-                        {tr('adminRoles.sameGroupHint', 'acts as {{role}} on clusters', { role: role.same_group_as })}
+                        {tr('adminRoles.sameGroupHint', 'not grantable: same name as {{role}} apart from letter case or spaces', { role: role.same_group_as })}
                       </span>
                     )}
                   </td>

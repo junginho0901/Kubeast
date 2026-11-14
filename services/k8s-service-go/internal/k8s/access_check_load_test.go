@@ -155,8 +155,8 @@ func TestAccessChecksAreNotSharedBetweenIdentities(t *testing.T) {
 	}{
 		{"alice", callerCtx("alice"), true},
 		{"bob", callerCtx("bob"), false},
-		{"carol with Read", auth.WithPayload(context.Background(), auth.TokenPayload{UserID: "carol", Email: "carol", Roles: map[string]string{"default": "read"}}), false},
-		{"carol with Write", auth.WithPayload(context.Background(), auth.TokenPayload{UserID: "carol", Email: "carol", Roles: map[string]string{"default": "write"}}), true},
+		{"carol with Read", auth.WithPayload(context.Background(), auth.TokenPayload{UserID: "carol", Email: "carol", Roles: map[string]string{"default": "Read"}}), false},
+		{"carol with Write", auth.WithPayload(context.Background(), auth.TokenPayload{UserID: "carol", Email: "carol", Roles: map[string]string{"default": "Write"}}), true},
 	}
 	var wg sync.WaitGroup
 	for _, c := range cases {

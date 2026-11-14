@@ -209,19 +209,25 @@ func (h *RoleHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
 		// spaces or punctuation (stored before roleNameConflict refused such names), for the pickers to say so.
 		SameGroupAs string `json:"same_group_as,omitempty"`
 	}
+	names := make([]model.Role, 0, len(roles))
+	for _, role := range roles {
+		names = append(names, role.Role)
+	}
 	out := make([]listedRole, 0, len(roles))
 	for _, role := range roles {
 		slug := auth.RoleGroupSlug(role.Name)
 		_, bound := h.boundSlugs[slug]
-		out = append(out, listedRole{RoleWithPermissions: role, ChartBound: bound && !builtinSlug(slug), SameGroupAs: sameGroupAs(roles, role)})
+		out = append(out, listedRole{RoleWithPermissions: role, ChartBound: bound && !builtinSlug(slug), SameGroupAs: sameGroupAs(names, role.Role)})
 	}
 	response.JSON(w, http.StatusOK, out)
 }
 
 // sameGroupAs names the role a custom role shares its group with: a built-in
 // first, else the oldest other role of that group. "" for a built-in or a role
-// alone in its group.
-func sameGroupAs(roles []model.RoleWithPermissions, role model.RoleWithPermissions) string {
+// alone in its group. A custom role named as a built-in acts as no role group
+// (auth.TakesBuiltinSlug) and one sharing a custom role's group shares its
+// bindings, so neither is given on a cluster any more (refuseSharedGroupRole).
+func sameGroupAs(roles []model.Role, role model.Role) string {
 	if role.IsSystem {
 		return ""
 	}
@@ -239,6 +245,45 @@ func sameGroupAs(roles []model.RoleWithPermissions, role model.RoleWithPermissio
 		}
 	}
 	return other
+}
+
+// sharedGroupRefusal is why a role is not given on a cluster: its name differs
+// from another role's only in letter case, spaces or punctuation.
+type sharedGroupRefusal struct{ role, other string }
+
+func (e *sharedGroupRefusal) Error() string {
+	return fmt.Sprintf("Role %q cannot be given on a cluster: its name differs from role %q only in letter case, spaces or punctuation. Rename it first", e.role, e.other)
+}
+
+// sharedGroupOf reads whether the role (by id) shares its group with another
+// role; nil when it does not or the role is not there.
+func sharedGroupOf(ctx context.Context, repo *repository.Repository, roleID int) (*sharedGroupRefusal, error) {
+	roles, err := repo.ListRoleNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, role := range roles {
+		if role.ID != roleID {
+			continue
+		}
+		if other := sameGroupAs(roles, role); other != "" {
+			return &sharedGroupRefusal{role: role.Name, other: other}, nil
+		}
+		return nil, nil
+	}
+	return nil, nil
+}
+
+// refuseSharedGroupRole answers 400 with the English sentence as detail and
+// code role_same_group with the two names, which the Cluster access pickers and
+// the Approve button say in the viewer's language.
+func refuseSharedGroupRole(w http.ResponseWriter, e *sharedGroupRefusal) {
+	response.JSON(w, http.StatusBadRequest, map[string]any{
+		"detail":        e.Error(),
+		"code":          "role_same_group",
+		"role":          e.role,
+		"same_group_as": e.other,
+	})
 }
 
 // builtinSlug: Read, Write and Admin, which the chart binds only for their grants limited to namespaces.
