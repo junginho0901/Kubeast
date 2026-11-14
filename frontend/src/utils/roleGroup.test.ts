@@ -85,7 +85,9 @@ describe('takenRoleName', () => {
 
   it('a built-in in other capitals or with spaces is taken by the built-in', () => {
     expect(takenRoleName('admin', roles)).toEqual({ role: 'Admin', builtin: true, sameName: false })
-    expect(takenRoleName(' read ', roles)).toEqual({ role: 'Read', builtin: true, sameName: true })
+    // " read " is Read in other capitals, not its name: the server answers same_name false for it too
+    expect(takenRoleName(' read ', roles)).toEqual({ role: 'Read', builtin: true, sameName: false })
+    expect(takenRoleName('Read ', roles)).toEqual({ role: 'Read', builtin: true, sameName: true })
     expect(takenRoleName('MEMBER', roles)).toEqual({ role: 'Member', builtin: true, sameName: false })
   })
 
