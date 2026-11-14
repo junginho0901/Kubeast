@@ -54,8 +54,11 @@ type GraphRead = { kind: string; resource: string; namespaced: boolean }
 // across the cluster, and what the cluster refuses of those is what the notice names, as `named`. `closed`: the screen's
 // numbers span the cluster, so every such grant is told it may not see it; `named` is what its notice names.
 // `may` is named as well where the installation has it. `shows`: text of a fixture object of the granted namespace.
+// A list beyond them that the cluster does not serve (not in kubectl api-resources) is refused to no one, so the notice
+// does not name it, and every user is shown `unavailable`, the screen's text for it.
+type Beyond = { resource: string; named: string; unavailable?: string }
 type Limited =
-  | { rule: 'narrowed'; beyond?: { resource: string; named: string }[]; may?: string[]; shows?: string }
+  | { rule: 'narrowed'; beyond?: Beyond[]; may?: string[]; shows?: string }
   | { rule: 'closed'; why: string; named: string[]; may?: string[] }
 type SummaryScreen = { type: 'summary'; reads: string[]; limited: Limited; forbiddenId?: string; cards?: true; menuRead?: string; crRows?: true; inNamespace?: GraphRead[] }
 // what the Resource Graph lists for its chosen namespaces (k8s-service internal/k8s/resource_graph_fetch.go: fetch,
@@ -81,13 +84,14 @@ type Screen = ListScreen | SummaryScreen | AdminScreen | { type: 'account' } | {
 const list = (resource: string, kind: string, namespaced: boolean, create: string | null, more: Partial<ListScreen> = {}): ListScreen =>
   ({ type: 'list', resource, kind, namespaced, create, ...more })
 const NODES = { resource: 'nodes', named: 'Node' }
+// metrics.k8s.io, which a cluster serves with metrics-server: k8s-service answers it not served from the cluster's
+// discovery, for everyone alike, and otherwise each caller's own answer, a limited grant's refusal of the node list too
+const METRICS = { resource: 'nodes.metrics.k8s.io', named: 'metrics' }
 const GPU_CLOSED: Limited = { rule: 'closed', why: 'capacity, allocation and each node\'s numbers are the nodes\', which no namespace holds', named: ['gpu'] }
 const SCREENS: Record<string, Screen> = {
-  '/': { type: 'summary', reads: ['namespaces', 'pods', 'services', 'deployments.apps', 'persistentvolumeclaims', 'nodes'], cards: true, limited: { rule: 'narrowed', beyond: [NODES], may: ['prometheus'] } },
+  '/': { type: 'summary', reads: ['namespaces', 'pods', 'services', 'deployments.apps', 'persistentvolumeclaims', 'nodes'], cards: true, limited: { rule: 'narrowed', beyond: [NODES, { ...METRICS, unavailable: 'dashboard.metrics.unavailable' }], may: ['prometheus'] } },
   '/cluster-view': { type: 'summary', reads: ['nodes', 'pods', 'namespaces'], limited: { rule: 'narrowed', beyond: [NODES] } },
-  // self serves no metrics.k8s.io: within the minute k8s-service keeps that answer for the cluster (metricsListRead)
-  // every caller reads "not served", so the metrics refusal is named only past it
-  '/monitoring': { type: 'summary', reads: ['nodes', 'pods', 'namespaces'], limited: { rule: 'narrowed', beyond: [NODES], may: ['metrics'] } },
+  '/monitoring': { type: 'summary', reads: ['nodes', 'pods', 'namespaces'], limited: { rule: 'narrowed', beyond: [NODES, { ...METRICS, unavailable: 'monitoring.metricsUnavailable' }] } },
   '/alerts': { type: 'summary', reads: ['pods'], forbiddenId: 'alert-inbox-forbidden', menuRead: 'pods', limited: { rule: 'closed', why: 'an alert\'s labels are not bounded by a namespace: for whoever reads the cluster as a whole', named: [] } },
   '/cost': { type: 'skip', why: 'OpenCost runs on the second cluster only; on self the page is off (costEnabled) and only its menu entry is compared' },
   '/ai-chat': { type: 'skip', why: 'a chat: opening it reads no cluster list; what the AI tools may read is the AI symmetry test (2-2)' },
@@ -234,6 +238,13 @@ function canI(who: Who, verb: string, resource: string, namespace: string | null
     answers.set(key, ok)
   }
   return { ok, basis: `can-i ${verb} ${target} ${namespace ? `-n ${namespace}` : '-A'} → ${ok ? 'yes' : 'no'}` }
+}
+
+// A list a summary screen reads beyond a limited grant's namespaces, across the cluster: the cluster's answer, or, for a
+// kind it does not serve, allowed — no one is refused what is not there, and the screen says it is not available.
+function listBeyond(who: Who, b: Beyond): { ok: boolean; basis: string } {
+  if (!served.has(b.resource)) return { ok: true, basis: `${b.resource} not served (kubectl api-resources): refused to no one` }
+  return canI(who, 'list', b.resource, null)
 }
 
 // pkg/auth permMatches: "*" alone grants all, a "*" segment matches one segment, a trailing "*" matches the rest
@@ -706,7 +717,7 @@ async function walk(browser: Browser, request: APIRequestContext, role: Role, ce
       } else if (role.scoped) {
         // the screen's rule for a grant limited to namespaces, each list it reads beyond them asked of the cluster
         const rule = s.limited
-        const beyond = rule.rule === 'narrowed' ? (rule.beyond ?? []).map((b) => ({ ...b, c: canI(who, 'list', b.resource, null) })) : []
+        const beyond = rule.rule === 'narrowed' ? (rule.beyond ?? []).map((b) => ({ ...b, c: listBeyond(who, b) })) : []
         const wantNamed = rule.rule === 'closed' ? rule.named : beyond.filter((b) => !b.c.ok).map((b) => b.named)
         const want = rule.rule === 'closed' || wantNamed.length ? 'forbidden' : 'allowed'
         const basis = rule.rule === 'closed' ? `closed to a limited grant: ${rule.why}` : `narrowed to ${NS_A}${beyond.length ? `; ${beyond.map((b) => b.c.basis).join('; ')}` : ''}`
@@ -738,6 +749,13 @@ async function walk(browser: Browser, request: APIRequestContext, role: Role, ce
           const refused = crds.filter((c) => !canI(who, 'list', c.resource, null).ok).map((c) => c.label).sort()
           add({ screen: p, view: '', check: 'kinds the notice names', kubeast: named.join(', ') || 'none', cluster: refused.join(', ') || 'none', basis: crds.map((c) => canI(who, 'list', c.resource, null).basis).join('; '), detail: { said } })
         }
+      }
+      // what the cluster does not serve is not available to every user alike, whoever opened the screen before
+      for (const b of s.limited.rule === 'narrowed' ? s.limited.beyond ?? [] : []) {
+        if (!b.unavailable || served.has(b.resource)) continue
+        const want = tr(b.unavailable)
+        const shown = await expect.poll(async () => (await main.innerText()).includes(want), { timeout: 15_000 }).toBe(true).then(() => true, () => false)
+        add({ screen: p, view: '', check: `"${want}"`, kubeast: shown ? 'shown' : 'not shown', cluster: 'shown', basis: `${b.resource} not served (kubectl api-resources)` })
       }
       if (s.crRows) {
         // the GuardCheck rows the screen lists, or its refusal; the cluster: may the user list them (where the grant reaches)
