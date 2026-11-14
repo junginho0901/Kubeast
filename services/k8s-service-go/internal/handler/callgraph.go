@@ -67,7 +67,8 @@ func (h *Handler) resourceGraphCalls(r *http.Request, namespace string, graph ma
 	res.Sources = append(res.Sources, netState)
 
 	res.Edges, res.EdgesTotal, res.Truncated = callgraph.Build(ix, traces, lines)
-	res.Suspects, res.Paths = callgraph.Suspects(ix, res.Edges)
+	rk := callgraph.Suspects(ix, res.Edges)
+	res.Suspects, res.SuspectsTotal, res.Paths, res.NoStart = rk.Suspects, rk.Total, rk.Paths, rk.NoStart
 	if res.Suspects == nil {
 		res.Suspects = []callgraph.Suspect{}
 	}
@@ -115,6 +116,9 @@ func (h *Handler) callGraphTraces(ctx context.Context, r *http.Request, namespac
 		*read.into = callGraphSamples(answer)
 	}
 	state.Read, state.Series = true, len(tr.Requests)
+	if shape.Namespace == "" {
+		state.Detail = callgraph.DetailUnscoped
+	}
 	return tr, state
 }
 

@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netdrops"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nettraffic"
 )
 
@@ -31,9 +32,10 @@ const (
 const (
 	MaxEdges = 100
 	// MaxSeries caps the series one trace query brings back (topk), where the metric names no namespace.
-	MaxSeries = 500
-	MaxPaths  = 5
-	MaxDepth  = 6
+	MaxSeries   = 500
+	MaxPaths    = 5
+	MaxDepth    = 6
+	MaxSuspects = 10
 )
 
 // Thresholds a call edge counts as failing at: both, so a single error on a quiet edge does not.
@@ -57,6 +59,16 @@ const (
 	ReasonPermission       = "permission"        // resource.networkflow.read is not held, as the traffic lines ask
 	ReasonFailed           = "failed"            // the read failed (detail says why)
 )
+
+// Unscoped ends a matched_by placed by name where the metric named no namespace for that end: a service of the same
+// name in another namespace is counted on this namespace's workload.
+const Unscoped = "_unscoped"
+
+// DetailUnscoped is the trace source's detail when the metric has no namespace labels.
+const DetailUnscoped = "the metric has no namespace dimension: services are placed by name, and a service of the same name in another namespace counts here (matched_by ends in " + Unscoped + ")"
+
+// NoStartCycle: workloads fail but each calls another failing one, so no path has a start.
+const NoStartCycle = "cycle"
 
 var nameRe = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 
@@ -136,7 +148,8 @@ type Queries struct {
 }
 
 // BuildQueries: with the namespace labels, the edges with either end in the namespace (the halves joined with or);
-// without them, the busiest MaxSeries edges, placed on the namespace's workloads afterwards.
+// without them, the busiest MaxSeries edges, placed on the namespace's workloads afterwards, and the 90th percentile of
+// the slowest MaxSeries (topk keeps the answer to that many series; Prometheus reads nothing more for it).
 func BuildQueries(s Shape, namespace string, rng time.Duration) Queries {
 	by := strings.Join(s.by(), ", ")
 	secs := int(rng.Seconds())
@@ -152,7 +165,7 @@ func BuildQueries(s Shape, namespace string, rng time.Duration) Queries {
 	q := Queries{Requests: sum(RequestsMetric, "increase"), Failed: sum(FailedMetric, "increase")}
 	bucketBy := "le, " + by
 	if s.Namespace == "" {
-		q.P90 = fmt.Sprintf("histogram_quantile(0.9, sum by (%s) (rate(%s[%ds])))", bucketBy, ServerSeconds, secs)
+		q.P90 = fmt.Sprintf("topk(%d, histogram_quantile(0.9, sum by (%s) (rate(%s[%ds]))))", MaxSeries, bucketBy, ServerSeconds, secs)
 	} else {
 		half := func(end string) string {
 			return fmt.Sprintf(`sum by (%s) (rate(%s{%s_%s="%s"}[%ds]))`, bucketBy, ServerSeconds, end, s.Namespace, namespace, secs)
@@ -265,7 +278,8 @@ type End struct {
 	Outside string `json:"outside,omitempty"`
 	// Unnamed: the traffic source named no pod at this end.
 	Unnamed bool `json:"unnamed,omitempty"`
-	// MatchedBy: how a trace service was placed — labels, workload_name, service_selector.
+	// MatchedBy: how a trace service was placed — labels, workload_name, service_selector; with Unscoped after it
+	// when the metric named no namespace for this end.
 	MatchedBy string `json:"matched_by,omitempty"`
 }
 
@@ -278,7 +292,28 @@ func (e End) key() string {
 
 func (e End) local() bool { return e.ID != "" }
 
-// placeService places a trace service name, with the namespace and workload labels when the metric had them.
+// outsideName names an end that is not a box of the graph: a workload of another namespace, a trace service name
+// (a database or another store is one: Tempo names it by db.name or db.system), a namespace alone, or what is not a pod.
+func (e End) outsideName() string {
+	switch {
+	case e.Kind != "" && e.Name != "":
+		return e.Kind + "/" + e.Namespace + "/" + e.Name
+	case e.Name != "":
+		return e.Namespace + "/" + e.Name
+	case e.Service != "" && e.Namespace != "":
+		return "service " + e.Namespace + "/" + e.Service
+	case e.Service != "":
+		return "service " + e.Service
+	case e.Outside != "":
+		return e.Outside
+	case e.Namespace != "":
+		return "namespace " + e.Namespace
+	}
+	return "unnamed"
+}
+
+// placeService places a trace service name, with the namespace and workload labels when the metric had them. Without a
+// namespace for the end, a name is looked up in this namespace only, so matched_by says Unscoped.
 func (ix *Index) placeService(service, namespace string, workloads map[string]string) End {
 	if namespace != "" && namespace != ix.namespace {
 		for _, w := range workloadAttributes {
@@ -288,21 +323,27 @@ func (ix *Index) placeService(service, namespace string, workloads map[string]st
 		}
 		return End{Namespace: namespace, Service: service, MatchedBy: "labels"}
 	}
+	by := func(way string) string {
+		if namespace == "" {
+			return way + Unscoped
+		}
+		return way
+	}
 	for _, w := range workloadAttributes {
 		if name := workloads[labelName(w.attribute)]; name != "" {
 			if id := ix.id(w.kind, name); id != "" {
-				return ix.end(id, "labels")
+				return ix.end(id, by("labels"))
 			}
 		}
 	}
 	if ids := ix.byName[service]; len(ids) == 1 {
-		return ix.end(ids[0], "workload_name")
+		return ix.end(ids[0], by("workload_name"))
 	}
 	if ids := ix.byService[service]; len(ids) == 1 {
-		return ix.end(ids[0], "service_selector")
+		return ix.end(ids[0], by("service_selector"))
 	} else if len(ids) > 1 {
 		if id := ix.id("Service", service); id != "" {
-			return ix.end(id, "service_selector")
+			return ix.end(id, by("service_selector"))
 		}
 	}
 	return End{Namespace: namespace, Service: service}
@@ -332,17 +373,19 @@ func (ix *Index) placeTraffic(e nettraffic.End) End {
 }
 
 // Edge is a call from one end to another over the range. Requests, Errors and P90Ms come from the traces;
-// Connections (TCP connections opened) and Dropped from the traffic lines.
+// Connections (TCP connections opened), Dropped and DropReasons (the traffic lines' reasons, most first) from the
+// traffic lines.
 type Edge struct {
-	From        End      `json:"from"`
-	To          End      `json:"to"`
-	Sources     []string `json:"sources"`
-	Requests    int64    `json:"requests,omitempty"`
-	Errors      int64    `json:"errors,omitempty"`
-	ErrorRatio  float64  `json:"error_ratio,omitempty"`
-	P90Ms       float64  `json:"p90_ms,omitempty"`
-	Connections int64    `json:"connections,omitempty"`
-	Dropped     int64    `json:"dropped,omitempty"`
+	From        End               `json:"from"`
+	To          End               `json:"to"`
+	Sources     []string          `json:"sources"`
+	Requests    int64             `json:"requests,omitempty"`
+	Errors      int64             `json:"errors,omitempty"`
+	ErrorRatio  float64           `json:"error_ratio,omitempty"`
+	P90Ms       float64           `json:"p90_ms,omitempty"`
+	Connections int64             `json:"connections,omitempty"`
+	Dropped     int64             `json:"dropped,omitempty"`
+	DropReasons []netdrops.Reason `json:"drop_reasons,omitempty"`
 }
 
 func (e *Edge) weight() int64 { return e.Requests + e.Connections + e.Dropped }
@@ -366,6 +409,30 @@ func (b *builder) get(from, to End) *Edge {
 	b.edges[k] = e
 	b.order = append(b.order, k)
 	return e
+}
+
+// addReasons adds a traffic line's drop reasons to an edge's (two lines may fall on one edge), most first.
+func addReasons(have, more []netdrops.Reason) []netdrops.Reason {
+	if len(more) == 0 {
+		return have
+	}
+	for _, r := range more {
+		i := 0
+		for i < len(have) && have[i].Reason != r.Reason {
+			i++
+		}
+		if i == len(have) {
+			have = append(have, netdrops.Reason{Reason: r.Reason})
+		}
+		have[i].Count += r.Count
+	}
+	sort.SliceStable(have, func(i, j int) bool {
+		if have[i].Count != have[j].Count {
+			return have[i].Count > have[j].Count
+		}
+		return have[i].Reason < have[j].Reason
+	})
+	return have
 }
 
 func addSource(e *Edge, source string) {
@@ -439,6 +506,7 @@ func Build(ix *Index, tr *Traces, traffic []nettraffic.Line) (edges []Edge, tota
 		e := b.get(from, to)
 		e.Connections += l.Allowed
 		e.Dropped += l.Dropped
+		e.DropReasons = addReasons(e.DropReasons, l.Reasons)
 		addSource(e, SourceNetwork)
 	}
 	all := make([]*Edge, 0, len(b.order))
@@ -478,13 +546,27 @@ type Suspect struct {
 	FailingCallees []string `json:"failing_callees,omitempty"`
 	// FailingCallers: the failing workloads that call it — they may fail because of it.
 	FailingCallers []string `json:"failing_callers,omitempty"`
+	// FailingOutside: the ends outside the graph its calls fail to (a database, another namespace, a service name no
+	// workload fits, what the network drops) — their health is not known here, so the cause may be there.
+	FailingOutside []string `json:"failing_outside,omitempty"`
+}
+
+// Ranked is what Suspects finds.
+type Ranked struct {
+	// Suspects: the first MaxSuspects of Total, in order.
+	Suspects []Suspect
+	Total    int
+	Paths    [][]string
+	// NoStart says why there is no path although workloads fail: NoStartCycle when each failing workload calls another.
+	NoStart string
 }
 
 // Suspects orders the failing workloads of the namespace: those whose callees are all well first (a caller of a failing
 // workload is more likely its victim than its cause — the simplest form of what Coroot and Causely do), then by how
 // many failing workloads call them; and the paths from each such start to the failing workloads that call it, cause
-// first. Only boxes of the graph take part (an edge to another namespace or a service name tells nothing of its health).
-func Suspects(ix *Index, edges []Edge) ([]Suspect, [][]string) {
+// first. Only boxes of the graph take part (an edge to another namespace or a service name tells nothing of its health);
+// a failing call to such an end is named on its caller (FailingOutside), the order unchanged.
+func Suspects(ix *Index, edges []Edge) Ranked {
 	signals := map[string][]string{}
 	add := func(id, s string) {
 		for _, have := range signals[id] {
@@ -501,9 +583,13 @@ func Suspects(ix *Index, edges []Edge) ([]Suspect, [][]string) {
 	}
 	callees := map[string][]string{}
 	callers := map[string][]string{}
+	outside := map[string][]string{}
 	for i := range edges {
 		e := &edges[i]
 		if !e.To.local() {
+			if e.From.local() && e.Failing() {
+				outside[e.From.ID] = append(outside[e.From.ID], e.To.outsideName())
+			}
 			continue
 		}
 		if e.Errors >= FailingErrors && e.ErrorRatio >= FailingRatio {
@@ -530,9 +616,22 @@ func Suspects(ix *Index, edges []Edge) ([]Suspect, [][]string) {
 		sort.Strings(out)
 		return out
 	}
+	names := func(ids []string) []string {
+		var out []string
+		seen := map[string]bool{}
+		for _, id := range ids {
+			if !seen[id] {
+				seen[id] = true
+				out = append(out, id)
+			}
+		}
+		sort.Strings(out)
+		return out
+	}
 	var out []Suspect
 	for id := range signals {
-		out = append(out, Suspect{ID: id, Health: ix.nodes[id].Health, Signals: signals[id], FailingCallees: keep(callees[id]), FailingCallers: keep(callers[id])})
+		out = append(out, Suspect{ID: id, Health: ix.nodes[id].Health, Signals: signals[id], FailingCallees: keep(callees[id]),
+			FailingCallers: keep(callers[id]), FailingOutside: names(outside[id])})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]
@@ -573,7 +672,14 @@ func Suspects(ix *Index, edges []Edge) ([]Suspect, [][]string) {
 			walk([]string{s.ID})
 		}
 	}
-	return out, paths
+	r := Ranked{Suspects: out, Total: len(out), Paths: paths}
+	if len(out) > 0 && len(out[0].FailingCallees) > 0 { // the starts come first: none
+		r.NoStart = NoStartCycle
+	}
+	if len(r.Suspects) > MaxSuspects {
+		r.Suspects = r.Suspects[:MaxSuspects]
+	}
+	return r
 }
 
 func contains(ids []string, id string) bool {
@@ -590,6 +696,7 @@ type SourceState struct {
 	Source string `json:"source"`
 	Read   bool   `json:"read"`
 	Reason string `json:"reason,omitempty"`
+	// Detail: why the read failed, or beside a read what limits it (DetailUnscoped).
 	Detail string `json:"detail,omitempty"`
 	// Series: the trace queries' series, or the traffic lines, read.
 	Series int `json:"series,omitempty"`
@@ -602,11 +709,15 @@ type Result struct {
 	Range     string        `json:"range,omitempty"`
 	Sources   []SourceState `json:"sources"`
 	// Paths: cause → … → symptom, each a list of graph IDs (the first calls nothing failing, each next one calls the one before).
-	Paths      [][]string `json:"paths"`
-	Suspects   []Suspect  `json:"suspects"`
-	EdgesTotal int        `json:"edges_total"`
-	Truncated  bool       `json:"truncated,omitempty"`
-	Edges      []Edge     `json:"edges"`
+	Paths [][]string `json:"paths"`
+	// NoStart: why Paths is empty although workloads fail (NoStartCycle).
+	NoStart  string    `json:"no_start,omitempty"`
+	Suspects []Suspect `json:"suspects"`
+	// SuspectsTotal: the failing workloads before Suspects' cap (MaxSuspects).
+	SuspectsTotal int    `json:"suspects_total,omitempty"`
+	EdgesTotal    int    `json:"edges_total"`
+	Truncated     bool   `json:"truncated,omitempty"`
+	Edges         []Edge `json:"edges"`
 }
 
 // Off is the answer of an install with features.callGraph off: nothing read.

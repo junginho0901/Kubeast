@@ -349,7 +349,8 @@ func TestResourceGraphCalls(t *testing.T) {
 		return 200, `{"nodes":[` + strings.Join(nodes, ",") + `],"edges":[],"calls":{"available":true,"range":"30m0s",` +
 			`"edges":[` + strings.Join(callEdges, ",") + `],"edges_total":130,"truncated":true,` +
 			`"sources":[{"source":"traces","read":true},{"source":"network","read":false,"reason":"permission"}],` +
-			`"suspects":[{"id":"Deployment/shop/api","signals":["calls_fail"]}],"paths":[["Deployment/shop/api","Deployment/shop/web"]]}}`
+			`"suspects":[{"id":"Deployment/shop/api","signals":["calls_fail"],"failing_outside":["service postgresql"]}],"suspects_total":12,` +
+			`"no_start":"cycle","paths":[["Deployment/shop/api","Deployment/shop/web"]]}}`
 	})
 	out, err := handleResourceGraph(ctxFor("c1"), map[string]interface{}{"namespace": "shop", "include": []interface{}{"calls"}, "since": "30m"}, bearer())
 	if err != nil {
@@ -360,9 +361,15 @@ func TestResourceGraphCalls(t *testing.T) {
 	}
 	at := func(key string) int { return strings.Index(out, `"`+key+`":`) }
 	inCalls := func(key string) int { return at("calls") + strings.Index(out[at("calls"):], `"`+key+`":`) }
-	if !(at("calls_note") < at("calls") && at("calls") < at("nodes") && inCalls("paths") < inCalls("suspects") &&
-		inCalls("suspects") < inCalls("edges_total") && inCalls("edges_total") < inCalls("edges")) {
+	if !(at("calls_note") < at("calls") && at("calls") < at("nodes") && inCalls("paths") < inCalls("no_start") && inCalls("no_start") < inCalls("suspects") &&
+		inCalls("suspects") < inCalls("suspects_total") && inCalls("suspects_total") < inCalls("edges_total") && inCalls("edges_total") < inCalls("edges")) {
 		t.Fatalf("order: %s", out[:400])
+	}
+	// the note reads the fields the answer has
+	for _, words := range []string{"_unscoped", "4xx", "5xx before naming a cause", "p90_ms is shown only", "failing_outside", "suspects_total", "no_start cycle", "drop_reasons", "POLICY_DENIED"} {
+		if !strings.Contains(graphCallsNote, words) {
+			t.Errorf("calls_note says nothing of %q", words)
+		}
 	}
 	if at("paths") > 6000 || at("suspects") > 6000 {
 		t.Fatalf("the paths and suspects fall past the model's cut: %d %d", at("paths"), at("suspects"))

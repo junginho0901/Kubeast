@@ -19,6 +19,8 @@ import (
 type fakeCalls struct {
 	labels  map[string][]string
 	queries []string
+	// drops: also answer the Hubble drop metric (web → api refused by a policy)
+	drops bool
 }
 
 func (f *fakeCalls) PrometheusAvailable(context.Context) bool { return true }
@@ -32,8 +34,9 @@ func (f *fakeCalls) PrometheusLabels(_ context.Context, label, selector string, 
 
 func (f *fakeCalls) PrometheusQuery(_ context.Context, q string) ([]k8s.PrometheusQueryResult, error) {
 	f.queries = append(f.queries, q)
+	// the namespace labels a metric with the dimension has; read only when the label names say so (Shape)
 	edge := func(client, server string) map[string]interface{} {
-		return map[string]interface{}{"client": client, "server": server}
+		return map[string]interface{}{"client": client, "server": server, "client_k8s_namespace_name": "shop", "server_k8s_namespace_name": "shop"}
 	}
 	switch {
 	case strings.Contains(q, callgraph.RequestsMetric):
@@ -45,6 +48,9 @@ func (f *fakeCalls) PrometheusQuery(_ context.Context, q string) ([]k8s.Promethe
 	case strings.Contains(q, nettraffic.TCPMetric):
 		return []k8s.PrometheusQueryResult{{Metric: map[string]interface{}{"source_namespace": "shop", "source_workload": "web", "source_workload_kind": "Deployment",
 			"destination_namespace": "shop", "destination_workload": "api", "destination_workload_kind": "Deployment", "traffic_direction": "ingress"}, Value: 30}}, nil
+	case f.drops && strings.Contains(q, netdrops.Metric):
+		return []k8s.PrometheusQueryResult{{Metric: map[string]interface{}{"source_namespace": "shop", "source_workload": "web", "source_workload_kind": "Deployment",
+			"destination_namespace": "shop", "destination_workload": "api", "destination_workload_kind": "Deployment", "traffic_direction": "ingress", "reason": "POLICY_DENIED"}, Value: 6}}, nil
 	}
 	return nil, nil
 }
@@ -146,5 +152,46 @@ func TestResourceGraphCallsKeepToTheGrant(t *testing.T) {
 	}
 	if _, err := h.resourceGraphCalls(logSearchRequestAs("/", "self", "Shop", flowReader), "Shop", callsGraph, ""); !errors.Is(err, k8s.ErrBadInput) {
 		t.Fatalf("namespace: %v", err)
+	}
+}
+
+// Without the namespace dimension the trace source says its services are placed by name, the ends say _unscoped and
+// the 90th percentile is capped like the other two queries; the drops' reasons reach the edge. With the dimension none
+// of that, and the same number of reads.
+func TestResourceGraphCallsNameOnlyAndDropReasons(t *testing.T) {
+	src := callsSource()
+	src.drops = true
+	src.labels[netdrops.Metric] = dropsShape
+	h := &Handler{netdropsSrc: src, cfg: config.Config{CallGraphEnabled: true}}
+	res, err := h.resourceGraphCalls(logSearchRequestAs("/api/v1/namespaces/shop/resource-graph?include=calls", "self", "shop", flowReader), "shop", callsGraph, "")
+	if err != nil || len(res.Edges) != 1 || !res.Sources[0].Read || res.Sources[0].Detail != callgraph.DetailUnscoped {
+		t.Fatalf("%+v %v", res, err)
+	}
+	e := res.Edges[0]
+	if e.From.MatchedBy != "service_selector_unscoped" || e.To.MatchedBy != "workload_name_unscoped" || e.Dropped != 6 ||
+		len(e.DropReasons) != 1 || e.DropReasons[0].Reason != "POLICY_DENIED" || e.DropReasons[0].Count != 6 {
+		t.Fatalf("web → api: %+v", e)
+	}
+	if res.SuspectsTotal != 2 || res.NoStart != "" {
+		t.Fatalf("suspects %d no_start %q", res.SuspectsTotal, res.NoStart)
+	}
+	for _, q := range src.queries {
+		if strings.Contains(q, callgraph.ServerSeconds) && !strings.HasPrefix(q, "topk(500, histogram_quantile(0.9,") {
+			t.Fatalf("p90 uncapped: %s", q)
+		}
+	}
+	if src.count(callgraph.RequestsMetric) != 1 || src.count(callgraph.FailedMetric) != 1 || src.count(callgraph.ServerSeconds) != 1 {
+		t.Fatalf("one query each: %v", src.queries)
+	}
+
+	src = callsSource()
+	src.labels[callgraph.RequestsMetric] = []string{"__name__", "client", "server", "client_k8s_namespace_name", "server_k8s_namespace_name"}
+	h.netdropsSrc = src
+	res, err = h.resourceGraphCalls(logSearchRequestAs("/api/v1/namespaces/shop/resource-graph?include=calls", "self", "shop", flowReader), "shop", callsGraph, "")
+	if err != nil || len(res.Edges) != 1 || res.Sources[0].Detail != "" || res.Edges[0].From.MatchedBy != "service_selector" || res.Edges[0].To.MatchedBy != "workload_name" {
+		t.Fatalf("namespace dimension: %+v %v", res, err)
+	}
+	if src.count("topk(") != 0 || src.count(callgraph.ServerSeconds) != 1 {
+		t.Fatalf("namespace dimension, no cap: %v", src.queries)
 	}
 }

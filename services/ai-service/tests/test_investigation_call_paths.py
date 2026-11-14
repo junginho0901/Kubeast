@@ -14,7 +14,8 @@ def test_off_by_default_and_the_prompt_is_unchanged():
     off = _prompt()
     assert off == _prompt(call_paths=False)
     assert "include [\"calls\"]" not in off and "cause → … → symptom" not in off and "calls.suspects" not in off
-    assert off.count("\n- ") == _prompt(call_paths=True).count("\n- ") - 2
+    assert off.count("\n- ") == _prompt(call_paths=True).count("\n- ") - 3
+    assert "failing_outside" not in off and "root cause" not in off
 
 
 def test_on_asks_for_the_calls_and_the_path():
@@ -23,6 +24,12 @@ def test_on_asks_for_the_calls_and_the_path():
     assert on.index("When alerts_list is offered") < rule < on.index("When prometheus_rules is offered")
     assert "calls.suspects" in on and "calls.paths" in on and "more often its victim than its cause" in on
     assert "cause → … → symptom" in on and "counting your calls from 1" in on and "marked as a guess" in on
+    # a failing call outside the graph may hold the cause
+    assert "failing_outside" in on and "cause may be outside the graph" in on
+    # what changed at the first workload is the root cause, read with timeline
+    change = on.index("Find what changed at a path's first workload")
+    assert on.index("calls.paths lists") < change < on.index("Under \"Likely cause\"")
+    assert "with timeline" in on[change:] and "root cause" in on[change:] and "a rollout" in on[change:]
     # the headings stay the four the report screen and the unit test read
     for heading in prompt.REPORT_HEADINGS:
         assert f"## {heading}" in on
