@@ -85,6 +85,8 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
 
 `--reset-then-reuse-values` keeps the values you set and adds what the new version brings. `--reuse-values` keeps the defaults of the version you installed, so a value a later version added is missing and the images stay at that version; the chart stops such an upgrade with this hint and leaves the release as it was. A values file of your own copied from `helm show values` of 0.7.7 or later stops the same way. One copied from 0.7.6 or earlier holds no `chartVersion`, and stops on its `global.imageTag`, that version's tag, from 0.7.8 on. Leave `chartVersion` and `global.imageTag` out of a values file of your own. A `global.imageTag` of an image you built yourself, not a release's `vX.Y.Z`, is not stopped.
 
+From 0.7.8 k8s-service signs in to the chart's Redis as a user of its own. With `secrets.existingSecret`, add `REDIS_K8S_SERVICE_PASSWORD` and `REDIS_PROBE_PASSWORD` to that Secret before upgrading ([Redis users](configuration.md#redis-users)).
+
 ### Uninstall
 
 ```bash
@@ -99,6 +101,7 @@ helm uninstall kubeast -n kubeast      # K8s
 | PersistentVolumeClaim `kubeast-postgres-data` | The database (`postgresql.persistence.resourcePolicy: keep`) |
 | Secret `kubeast-secrets` | The database and admin passwords, the AI keys set in the values, the webhook and internal tokens |
 | Secret `kubeast-auth-keys` | The keys that sign sign-in tokens |
+| Secret `kubeast-redis-users` | The passwords of the Redis users ([Redis users](configuration.md#redis-users)) |
 | Secrets labelled `app.kubernetes.io/managed-by=kubeast` | What Kubeast wrote for registered clusters: each one's kubeconfig, a store's authorization header |
 | CustomResourceDefinition `modelconfigs.ai.kubeast.io` | The kind of AI models written as resources, and those resources |
 | Namespace `kubeast` | Helm does not delete a namespace |

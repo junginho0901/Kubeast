@@ -171,7 +171,9 @@ postgresql:
   database: kubeast
 redis:
   enabled: true
-  password: ""          # requirepass — generated when empty (REDIS_PASSWORD)
+  password: ""          # requirepass, only with acl.enabled: false — generated when empty (REDIS_PASSWORD)
+  acl:
+    enabled: true       # one Redis user per service ("Redis users" below); false = one password as before
 networkPolicy:
   enabled: true         # default deny, plus only the flows the services use. Harmless on CNIs that do not enforce NetworkPolicy (kindnet, etc.)
 
@@ -201,5 +203,54 @@ multicluster:
   reviewQPS: 0              # 0 = the access checks share clientQPS; see architecture.md "Many users"
   reviewBurst: 0
 ```
+
+## Redis users
+
+The chart's Redis (Valkey) gives each service that uses it a user of its own (`redis.acl.enabled`, on by default).
+
+| User | Can | Cannot |
+|---|---|---|
+| `k8s-service` | Keys and channels whose names start with `kubeast:`. Reads, writes and deletes of single keys, `SCAN` for the deletes by pattern, the hash commands (`HGET`, `HGETALL`, `HSET`, `HSETNX`, `HINCRBY`, `HDEL`), `MULTI`/`EXEC`, `PUBLISH`/`SUBSCRIBE`, `PING`, `SELECT` (`REDIS_DB`) | Any other key or channel. `FLUSHALL`, `FLUSHDB`, `KEYS`, `CONFIG`, `DEBUG`, `ACL`, `MONITOR`, `EVAL`, `SCRIPT` and every command not listed |
+| `probe` | `PING`, for the readiness and liveness probes | Everything else |
+| `default` | Nothing: it is off | A connection that has not signed in as a user above gets `NOAUTH` for every command |
+
+- The rules are `kubeast.redisUsersAcl` in `helm/kubeast/templates/_helpers.tpl`. A command k8s-service starts to use goes there.
+- go-redis sends `CLIENT SETINFO` and `CLIENT MAINT_NOTIFICATIONS` when it connects. Redis refuses both, and go-redis goes on.
+- The rules need Valkey, or Redis 6.2 or later, in `images.redis`. A command the image does not know stops Valkey at start.
+- tool-server has no user yet. It gets one when it listens for k8s-service's cluster change notices: that channel and the cluster versions, read only. The NetworkPolicy then lets it in.
+
+**Passwords.**
+
+- Each user's password is generated at install, 32 characters, in the Secret `kubeast-redis-users` (`REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD`).
+- It is kept across upgrades and stays after `helm uninstall`, like `kubeast-secrets`.
+- It is not in `kubeast-secrets`, which every service reads whole as its environment. Only the redis pod and k8s-service read it.
+- With `secrets.existingSecret`, both keys are read from that Secret.
+- To change one, write the new value into the Secret, then restart `redis` and `k8s-service`.
+
+**How Valkey reads them.**
+
+- The redis pod's first container, `acl`, reads the two passwords from the Secret as files.
+- It writes their SHA-256 into the ACL file, on a volume in memory, and makes the file read-only. Valkey starts with `--aclfile`.
+- No password is in the pod spec or in Valkey's arguments. The probes read theirs from `REDISCLI_AUTH`.
+- A change to the rules restarts Valkey (`checksum/redis-users` on the pod, a hash of the rules without the passwords).
+
+**Network.** With `networkPolicy.enabled`, Redis takes connections only from k8s-service pods in the release namespace, on port 6379.
+
+**Memory.**
+
+- Valkey evicts at 80% of `resources.redis.limits.memory` (`maxmemory`, 107374182 bytes for the default 128Mi), so it evicts before the container reaches its limit.
+- Without a limit it stops at 80% of 128Mi.
+- The policy is `volatile-lru`: only keys with a TTL are evicted. The cache's keys all have one. A key without one is never evicted.
+
+**Upgrading from 0.7.7 or earlier**, which had one password (`REDIS_PASSWORD`):
+
+- The upgrade adds `kubeast-redis-users` and keeps every value of `kubeast-secrets`, `REDIS_PASSWORD` included.
+- Redis and k8s-service restart. The cache starts empty, as on any restart of Redis.
+- Until the old k8s-service pod has gone, its requests to the new Redis are refused and read as cache misses.
+- A new k8s-service pod that comes up while only the old Redis answers keeps its cache in memory until it restarts. It answers the same; only the cache is not shared.
+- With `secrets.existingSecret`, add the two keys to that Secret before upgrading. Without them, the `acl` container stops and says which key is missing, and k8s-service keeps its cache in memory. Or set `redis.acl.enabled: false` to keep the one password.
+- `redis.acl.enabled: false` renders Redis as before, with the memory cap.
+
+**Later.** TLS to an external Redis is not in this chart yet. The chart cannot point at an external Redis today: `REDIS_HOST` is the chart's `redis`, or empty.
 
 See [helm/kubeast/values.yaml](../helm/kubeast/values.yaml) for all options.

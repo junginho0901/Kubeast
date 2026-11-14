@@ -49,7 +49,7 @@ The NGINX gateway receives every request and routes it to the microservices. Pos
 | `model-config-controller` | Go (controller-runtime) | — | `ModelConfig` CRD controller |
 | `frontend` | React + Vite + TS | 5173 | UI (static build in prod, served by nginx) |
 | `postgres` | — | 5432 | Main DB (durable state), PostgreSQL 18 |
-| `redis` | — | 6379 | k8s-service cache, Valkey 9.1 (Redis protocol). With `redis.enabled: false`, k8s-service caches in memory |
+| `redis` | — | 6379 | k8s-service cache, Valkey 9.1 (Redis protocol). k8s-service signs in as its own Redis user and only it may connect ([Redis users](configuration.md#redis-users)). With `redis.enabled: false`, k8s-service caches in memory |
 
 ## Container images
 

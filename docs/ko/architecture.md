@@ -50,7 +50,7 @@ NGINX 게이트웨이가 모든 요청을 받아 각 마이크로서비스로 �
 | `model-config-controller` | Go (controller-runtime) | — | `ModelConfig` CRD 컨트롤러 |
 | `frontend` | React + Vite + TS | 5173 | UI (prod는 정적 빌드를 nginx로 서빙) |
 | `postgres` | — | 5432 | 메인 DB (durable state) — PostgreSQL 18 |
-| `redis` | — | 6379 | k8s-service 캐시 — Valkey 9.1(Redis 프로토콜). `redis.enabled: false`면 k8s-service가 메모리에 캐시합니다 |
+| `redis` | — | 6379 | k8s-service 캐시 — Valkey 9.1(Redis 프로토콜). k8s-service가 자기 Redis 사용자로 로그인하고, k8s-service만 연결할 수 있습니다([Redis 사용자](configuration.md#redis-사용자)). `redis.enabled: false`면 k8s-service가 메모리에 캐시합니다 |
 
 ## 컨테이너 이미지
 

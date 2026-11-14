@@ -83,6 +83,8 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
 
 `--reset-then-reuse-values`는 직접 넣은 값을 그대로 두고 새 버전에 생긴 값을 더합니다. `--reuse-values`는 처음 설치한 버전의 기본값을 그대로 써서 뒤 버전에 생긴 값이 빠집니다. 차트는 그런 업그레이드를 이 안내와 함께 멈추고, 릴리스는 그대로 둡니다. `helm show values`에서 복사한 값 파일도 0.7.7부터는 같은 식으로 멈춥니다. 0.7.6 이하에서 복사한 파일은 `chartVersion`이 없지만, 0.7.8부터는 그 안의 `global.imageTag`(그 버전의 태그)로 멈춥니다. 직접 쓰는 값 파일에는 `chartVersion`과 `global.imageTag`를 넣지 마세요. 직접 빌드한 이미지의 `global.imageTag`처럼 릴리스의 `vX.Y.Z`가 아닌 태그는 멈추지 않습니다.
 
+0.7.8부터 k8s-service는 자기 사용자로 차트의 Redis에 로그인합니다. `secrets.existingSecret`을 쓰면 업그레이드 전에 그 Secret에 `REDIS_K8S_SERVICE_PASSWORD`와 `REDIS_PROBE_PASSWORD`를 넣으세요([Redis 사용자](configuration.md#redis-사용자)).
+
 ### 제거
 
 ```bash
@@ -97,6 +99,7 @@ helm uninstall kubeast -n kubeast      # K8s
 | PersistentVolumeClaim `kubeast-postgres-data` | 데이터베이스(`postgresql.persistence.resourcePolicy: keep`) |
 | Secret `kubeast-secrets` | 데이터베이스·관리자 비밀번호, values에 넣은 AI 키, 웹훅·내부 토큰 |
 | Secret `kubeast-auth-keys` | 로그인 토큰에 서명하는 키 |
+| Secret `kubeast-redis-users` | Redis 사용자의 비밀번호([Redis 사용자](configuration.md#redis-사용자)) |
 | 레이블 `app.kubernetes.io/managed-by=kubeast`가 붙은 Secret | Kubeast가 등록한 클러스터마다 쓴 것: 그 kubeconfig, 저장소의 인증 헤더 |
 | CustomResourceDefinition `modelconfigs.ai.kubeast.io` | 리소스로 쓰는 AI 모델의 종류와 그 리소스 |
 | Namespace `kubeast` | Helm은 네임스페이스를 지우지 않습니다 |
