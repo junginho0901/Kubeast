@@ -112,6 +112,19 @@ jobs:
     defaults:
       run:
         working-directory: services/ai-service
+    # For the tests that need PostgreSQL (tests/*_postgres.py); they skip without DBMIGRATE_TEST_DATABASE_URL.
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -123,6 +136,8 @@ jobs:
             services/ai-service/requirements-dev.txt
       - run: pip install -r requirements.txt -r requirements-dev.txt
       - run: python -m pytest -q
+        env:
+          DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
 
   frontend:
     name: frontend (tsc + vitest)
