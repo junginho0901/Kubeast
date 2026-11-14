@@ -20,7 +20,16 @@ import { isProtectedNamespaceError } from '@/utils/protectedNamespace'
 
 type TabKey = 'overview' | 'values' | 'manifest' | 'notes' | 'history' | 'resources'
 
+// One page per release: the route keeps its element when only the address's namespace or name changes (a drawer's Helm
+// badge, back, forward) or the cluster does, so the page is keyed by all three and the next release opens on its own
+// tab with none of the windows or edits of the one before.
 export default function HelmReleaseDetailPage() {
+  const { namespace = '', name = '' } = useParams<{ namespace: string; name: string }>()
+  const { currentCluster } = useCluster()
+  return <HelmReleaseDetail key={JSON.stringify([currentCluster, namespace, name])} />
+}
+
+function HelmReleaseDetail() {
   const { t } = useTranslation()
   const { has } = usePermission()
   const { namespace = '', name = '' } = useParams<{ namespace: string; name: string }>()
