@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { CRDInfo } from '@/services/api/types'
 import { apiParam, fromParam, toParam } from '../detailParam'
-import { customResourceTarget, detailTarget, drawerResourceType, needsCustomResourceLookup, otherFields } from './crDetail'
+import drawerSource from '../ResourceDetailDrawer.tsx?raw'
+import { customResourceTarget, detailTarget, drawerObjectKey, drawerResourceType, needsCustomResourceLookup, objectResourceType, otherFields } from './crDetail'
 
 // test2 serves Widget from two groups (its own qa.example.com and the number check's), and the number check's
 // BackendTLSPolicy of another group than Gateway API's
@@ -87,6 +88,33 @@ describe('drawerResourceType', () => {
     expect(drawerResourceType('ConfigMap')).toBe('configmap')
     expect(drawerResourceType('Secret')).toBe('secret')
     expect(drawerResourceType('PodTemplate')).toBe('podtemplate')
+  })
+})
+
+// Karpenter's NodePool and EC2NodeClass are both often "default"; a drawer moving from one to the other is another object.
+describe('drawerObjectKey', () => {
+  const cr = (crd_name: string, kind: string) => ({ kind: 'CustomResourceInstance', name: 'default', rawJson: { kind, crd_name, group: crd_name.slice(crd_name.indexOf('.') + 1), version: 'v1' } })
+  const nodePool = cr('nodepools.karpenter.sh', 'NodePool')
+  const nodeClass = cr('ec2nodeclasses.karpenter.k8s.aws', 'EC2NodeClass')
+
+  it('tells apart two custom resources of one namespace and name by their CRD', () => {
+    expect(drawerObjectKey(nodePool)).not.toBe(drawerObjectKey(nodeClass))
+    expect(drawerObjectKey(nodePool)).toBe(drawerObjectKey(cr('nodepools.karpenter.sh', 'NodePool')))
+    expect(objectResourceType(nodePool)).toBe('nodepools.karpenter.sh')
+    expect(objectResourceType(nodeClass)).toBe('ec2nodeclasses.karpenter.k8s.aws')
+  })
+
+  it('tells apart one Kind and name of two groups by the apiVersion the caller named', () => {
+    const of = (apiVersion?: string) => drawerObjectKey({ kind: 'Gadget', namespace: 'shop', name: 'x', apiVersion })
+    expect(of('a.example.com/v1')).not.toBe(of('b.example.com/v1'))
+    expect(of(undefined)).not.toBe(of('b.example.com/v1'))
+    expect(drawerObjectKey({ kind: 'ConfigMap', namespace: 'a', name: 'x' })).not.toBe(drawerObjectKey({ kind: 'ConfigMap', namespace: 'b', name: 'x' }))
+  })
+
+  it('keys the drawer\'s YAML window and its save line, so neither carries over to the next object', () => {
+    expect(drawerSource).toContain("const objectId = target ? drawerObjectKey(target) : ''")
+    expect(drawerSource).toMatch(/<YamlEditor\s+key=\{objectId\}/)
+    expect(drawerSource).toContain('toast={applyToast?.of === objectId ? applyToast : null}')
   })
 })
 

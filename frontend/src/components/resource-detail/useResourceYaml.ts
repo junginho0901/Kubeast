@@ -9,7 +9,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/services/api'
 
-import { drawerResourceType } from './crDetail'
+import { drawerResourceType, objectResourceType } from './crDetail'
 import { encodeSecretYaml, yamlOpenedOf } from './utils'
 
 interface Target {
@@ -34,20 +34,17 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
   const ns = target?.namespace ?? null
   const name = target?.name ?? ''
 
+  // a custom resource by its CRD's name (plural.group): another CRD may serve an object of the same namespace and name,
+  // so the key names it too and the read of one is never the other's YAML
+  const type = target ? objectResourceType(target) : ''
   const { data: yamlData, isLoading: yamlLoading, isFetching: yamlFetching, error: yamlError } = useQuery({
-    queryKey: ['resource-yaml', kind, ns, name, yamlRefreshNonce],
+    queryKey: ['resource-yaml', kind, ns, name, type, yamlRefreshNonce],
     queryFn: async () => {
       if (kind === 'Node') return api.getNodeYaml(name, yamlRefreshNonce > 0)
       if (kind === 'Namespace') return api.getNamespaceYaml(name, yamlRefreshNonce > 0)
       if (kind === 'Secret' && ns) return api.getSecretYaml(ns, name)
       if (kind === 'CustomResourceDefinition') return api.getResourceYaml('customresourcedefinitions', name, undefined)
-      // a custom resource by its CRD's name (plural.group): another group may serve the same plural
-      if (kind === 'CustomResourceInstance') {
-        const rj = target?.rawJson as Record<string, unknown> | undefined
-        const crdN = (rj?.crd_name as string) || ''
-        if (crdN) return api.getResourceYaml(crdN, name, ns || undefined)
-      }
-      return api.getResourceYaml(drawerResourceType(kind), name, ns || undefined)
+      return api.getResourceYaml(type, name, ns || undefined)
     },
     enabled: !!target && tab === 'yaml',
     staleTime: 10_000,

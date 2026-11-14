@@ -28,7 +28,7 @@ import { ModalFrame } from './ModalFrame'
 import { modalButton } from './modalStyles'
 import { TypeToConfirm, WarningBox } from './TypeToConfirm'
 import { systemObject, type SystemReason } from './resource-detail/systemObject'
-import { customResourceTarget, deleteTarget, drawerResourceType, needsCustomResourceLookup } from './resource-detail/crDetail'
+import { customResourceTarget, deleteTarget, drawerObjectKey, drawerResourceType, needsCustomResourceLookup } from './resource-detail/crDetail'
 import { drawerObjectLayer, followsObjectForChat, objectReadInterval } from './resource-detail/drawerObjectLayer'
 import { drawerBody, useDrawerFollowsRead } from './resource-detail/useDrawerFollowsRead'
 import { DrawerObjectReadContext } from './resource-detail/drawerObjectRead'
@@ -103,12 +103,14 @@ export default function ResourceDetailDrawer() {
   const target = useMemo(() => (asked && crLookup ? customResourceTarget(asked, crds) : asked), [asked, crLookup, crds])
   const { isTop: isTopModal, zIndex } = useModalStackEntry(!!target)
   const [tab, setTab] = useState<TabId>('info')
-  const [applyToast, setApplyToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  // a save's line names the object it saved: one that ends after the drawer moved on is not shown on the next object
+  const [applyToast, setApplyToast] = useState<{ of: string; type: 'success' | 'error'; message: string } | null>(null)
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
 
   const ns = target?.namespace
   const name = target?.name ?? ''
   const kind = target?.kind ?? ''
+  const objectId = target ? drawerObjectKey(target) : ''
   // The generic custom-resource drawer shows the object's own kind when the caller passes it.
   const crKind = kind === 'CustomResourceInstance' ? target?.rawJson?.kind : undefined
   const displayKind = typeof crKind === 'string' && crKind ? crKind : kind
@@ -424,7 +426,7 @@ export default function ResourceDetailDrawer() {
           {tab === 'yaml' && (
             <div className="h-full">
               <YamlEditor
-                key={`${kind}-${name}-${ns || ''}`}
+                key={objectId}
                 value={kind === 'Secret' && canEditYaml && yamlData?.yaml ? decodeSecretYaml(yamlData.yaml) : yamlData?.yaml || ''}
                 canEdit={canEditYaml && !argoBlocked && !unreadable}
                 isLoading={yamlLoading}
@@ -435,14 +437,14 @@ export default function ResourceDetailDrawer() {
                 onApplySuccess={() => {
                   invalidateAfterApply()
                   const { kept, unchanged } = appliedRef.current
-                  setApplyToast({ type: 'success', message: unchanged
+                  setApplyToast({ of: objectId, type: 'success', message: unchanged
                     ? t('common.unchanged', { defaultValue: 'Unchanged: the object is already as this YAML says.' })
                     : kept > 0 ? t('secretInfo.appliedKeptMasked', { count: kept, defaultValue: 'Applied. Hidden values left as they were: {{count}}' }) : t('common.applied', { defaultValue: 'Applied' }) })
                 }}
-                onApplyError={(msg) => setApplyToast({ type: 'error', message: msg || t('common.applyError', { defaultValue: 'Apply failed.' }) })}
+                onApplyError={(msg) => setApplyToast({ of: objectId, type: 'error', message: msg || t('common.applyError', { defaultValue: 'Apply failed.' }) })}
                 onDirtyChange={setIsYamlDirty}
                 showInlineApplied={false}
-                toast={applyToast}
+                toast={applyToast?.of === objectId ? applyToast : null}
                 note={kind === 'Secret' && canEditYaml && !argoBlocked && !unreadable && !hasPermission('resource.secret.reveal') ? t('secretInfo.yamlMaskedNote', { defaultValue: 'A value shown as *** stays as it is when you save, as long as its line is there. To change one, write the new value over it. To remove one, delete its line.' }) : undefined}
                 labels={{
                   title: `${displayKind}: ${name}`,
