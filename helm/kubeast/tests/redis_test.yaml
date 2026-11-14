@@ -72,7 +72,7 @@ tests:
           pattern: 'sha256sum < "/run/kubeast/redis-passwords/\$1" \| cut -d'' '' -f1'
       - matchRegex:
           path: spec.template.spec.initContainers[0].args[0]
-          pattern: 'k8s_service=\$\(hash REDIS_K8S_SERVICE_PASSWORD\)\nprobe=\$\(hash REDIS_PROBE_PASSWORD\)'
+          pattern: 'k8s_service=\$\(pwhash REDIS_K8S_SERVICE_PASSWORD\)\nprobe=\$\(pwhash REDIS_PROBE_PASSWORD\)'
       - matchRegex:
           path: spec.template.spec.initContainers[0].args[0]
           pattern: '\$1 is not in Secret kubeast-redis-users; add it'
