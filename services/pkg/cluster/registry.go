@@ -31,6 +31,10 @@ type Info struct {
 	ID          ID
 	DisplayName string
 	Mode        Mode
+	// ConfigVersion is the clusters row's config_version read with the rest of
+	// this Info (PostgresRegistry.Get): it changes with every change of what a
+	// connection is built from. 0 from a registry that keeps none.
+	ConfigVersion int64
 
 	// Connection — exactly one is used, per Mode.
 	InCluster      bool   // rest.InClusterConfig()

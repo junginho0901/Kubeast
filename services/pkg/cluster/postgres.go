@@ -23,7 +23,13 @@ import (
 type PostgresRegistry struct {
 	pool    *pgxpool.Pool
 	secrets SecretReader
+	// storeLimit is storeTimeout unless a test sets it.
+	storeLimit time.Duration
 }
+
+// storeTimeout bounds the store of one clusters row change (changeRow): it runs while the transaction holds the row's
+// lock and a pool connection, and the Kubernetes client of the Secret store sets no timeout on a write.
+const storeTimeout = 10 * time.Second
 
 // NewPostgresRegistry builds a registry over pool, loading external kubeconfigs
 // through secrets.
@@ -91,10 +97,10 @@ func (r *PostgresRegistry) Get(ctx context.Context, id ID) (*Info, error) {
 	err := r.pool.QueryRow(ctx, `
 		SELECT id, display_name, mode, kubeconfig_secret_name, api_server_url, is_self_cluster,
 		       prometheus_url, prometheus_auth_secret_name, prometheus_cluster_label, prometheus_service,
-		       log_search_url, log_search_auth_secret_name, log_search_tenant, log_search_cluster_label
+		       log_search_url, log_search_auth_secret_name, log_search_tenant, log_search_cluster_label, config_version
 		FROM clusters WHERE id = $1`, id,
 	).Scan(&info.ID, &info.DisplayName, &mode, &secretName, &apiURL, &info.IsSelfCluster, &promURL, &promSecret, &promLabel, &promSvc,
-		&lsURL, &lsSecret, &lsTenant, &lsLabel)
+		&lsURL, &lsSecret, &lsTenant, &lsLabel, &info.ConfigVersion)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -168,6 +174,31 @@ func (r *PostgresRegistry) Default(ctx context.Context) (ID, error) {
 		return "", err
 	}
 	return id, nil
+}
+
+// Versions returns every registered cluster's config_version, by id: one read
+// of the clusters table, a row per cluster. A cluster with no entry is gone.
+// The row is read in Get before the Secrets, and auth-service writes a Secret
+// before the row change that sets the new version commits (changeRow), so an
+// Info whose ConfigVersion equals the one here holds what that version names.
+func (r *PostgresRegistry) Versions(ctx context.Context) (map[ID]int64, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id, config_version FROM clusters`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[ID]int64{}
+	for rows.Next() {
+		var (
+			id ID
+			v  int64
+		)
+		if err := rows.Scan(&id, &v); err != nil {
+			return nil, err
+		}
+		out[id] = v
+	}
+	return out, rows.Err()
 }
 
 // --- Admin metadata view (no kubeconfig blob) ---
@@ -511,10 +542,27 @@ func (r *PostgresRegistry) PrometheusAuthSecretName(ctx context.Context, id ID) 
 	return *name, nil
 }
 
+// changesConnection is whether the patch changes what k8s-service builds a
+// cluster's connection from: the Prometheus source and the log store, kept on
+// its per-cluster bundle. The display name and the API server URL, which is
+// shown only, do not.
+func (p MetaPatch) changesConnection() bool {
+	return p.PrometheusURL != nil || p.PrometheusAuthSecretName != nil || p.PrometheusClusterLabel != nil || p.PrometheusService != nil ||
+		p.LogSearchURL != nil || p.LogSearchAuthSecretName != nil || p.LogSearchTenant != nil || p.LogSearchClusterLabel != nil
+}
+
 // UpdateMeta updates the mutable metadata of a cluster (display name, the
 // display-only API server URL and the Prometheus source). The ID is immutable.
+// A patch that changes the connection (changesConnection) sets a new
+// config_version in the same statement.
 func (r *PostgresRegistry) UpdateMeta(ctx context.Context, id ID, patch MetaPatch) (*Meta, error) {
-	tag, err := r.pool.Exec(ctx, `
+	return r.UpdateMetaStoring(ctx, id, patch, nil)
+}
+
+// UpdateMetaStoring is UpdateMeta running store (the Prometheus and log store
+// header Secrets) before the row change commits (changeRow).
+func (r *PostgresRegistry) UpdateMetaStoring(ctx context.Context, id ID, patch MetaPatch, store func(context.Context) error) (*Meta, error) {
+	err := r.changeRow(ctx, `
 		UPDATE clusters
 		SET display_name                = COALESCE($2, display_name),
 		    api_server_url              = COALESCE($3, api_server_url),
@@ -526,16 +574,52 @@ func (r *PostgresRegistry) UpdateMeta(ctx context.Context, id ID, patch MetaPatc
 		    log_search_auth_secret_name = CASE WHEN $9::varchar IS NULL THEN log_search_auth_secret_name ELSE NULLIF($9, '') END,
 		    log_search_tenant           = CASE WHEN $10::varchar IS NULL THEN log_search_tenant ELSE NULLIF($10, '') END,
 		    log_search_cluster_label    = CASE WHEN $11::varchar IS NULL THEN log_search_cluster_label ELSE NULLIF($11, '') END,
+		    config_version              = CASE WHEN $12 THEN nextval('cluster_config_version_seq') ELSE config_version END,
 		    updated_at                  = NOW()
-		WHERE id = $1`, id, patch.DisplayName, patch.APIServerURL, patch.PrometheusURL, patch.PrometheusAuthSecretName, patch.PrometheusClusterLabel, patch.PrometheusService,
-		patch.LogSearchURL, patch.LogSearchAuthSecretName, patch.LogSearchTenant, patch.LogSearchClusterLabel)
+		WHERE id = $1`, []any{id, patch.DisplayName, patch.APIServerURL, patch.PrometheusURL, patch.PrometheusAuthSecretName, patch.PrometheusClusterLabel, patch.PrometheusService,
+		patch.LogSearchURL, patch.LogSearchAuthSecretName, patch.LogSearchTenant, patch.LogSearchClusterLabel, patch.changesConnection()}, store)
 	if err != nil {
 		return nil, err
 	}
-	if tag.RowsAffected() == 0 {
-		return nil, ErrNotFound
-	}
 	return r.GetMeta(ctx, id)
+}
+
+// changeRow runs one UPDATE of a clusters row, then store, in a transaction
+// that commits only when both succeed, so config_version moves only when the
+// Secrets store writes are in place. Until the commit, readers see the row as
+// it was; a k8s-service process that reads a Secret store wrote meanwhile has
+// built from the old version and drops that connection at its next read of
+// Versions. When the commit itself fails after store wrote, the Secrets hold
+// the new values and the old version: the caller puts them back. store runs
+// with its own deadline (storeTimeout); past it, it fails like any other
+// error. ErrNotFound when no row matched (store is not run). A nil store runs
+// nothing.
+func (r *PostgresRegistry) changeRow(ctx context.Context, sql string, args []any, store func(context.Context) error) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }() // after Commit it returns pgx.ErrTxClosed
+	tag, err := tx.Exec(ctx, sql, args...)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	if store != nil {
+		limit := r.storeLimit
+		if limit <= 0 {
+			limit = storeTimeout
+		}
+		storeCtx, cancel := context.WithTimeout(ctx, limit)
+		err := store(storeCtx)
+		cancel()
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 // ClusterUID returns a cluster's stored fingerprint (kube-system namespace UID),
@@ -555,13 +639,17 @@ func (r *PostgresRegistry) ClusterUID(ctx context.Context, id ID) (string, error
 	return *uid, nil
 }
 
-// SetClusterUID records a cluster's fingerprint (kube-system namespace UID),
-// e.g. backfilling a legacy row on its first kubeconfig rotation.
-func (r *PostgresRegistry) SetClusterUID(ctx context.Context, id ID, uid string) error {
-	_, err := r.pool.Exec(ctx, `
-		UPDATE clusters SET cluster_uid = $2, updated_at = NOW() WHERE id = $1`,
-		id, nullIfEmpty(uid))
-	return err
+// ReplaceKubeconfig replaces cluster id's kubeconfig: a new config_version
+// and, when uid is not empty, the cluster's fingerprint (kube-system namespace
+// UID, e.g. backfilling a legacy row on its first rotation), with store, which
+// writes the kubeconfig Secret, run before that row change commits
+// (changeRow). A failure of either leaves config_version as it was.
+func (r *PostgresRegistry) ReplaceKubeconfig(ctx context.Context, id ID, uid string, store func(context.Context) error) error {
+	return r.changeRow(ctx, `
+		UPDATE clusters
+		SET cluster_uid = COALESCE($2, cluster_uid), config_version = nextval('cluster_config_version_seq'), updated_at = NOW()
+		WHERE id = $1`,
+		[]any{id, nullIfEmpty(uid)}, store)
 }
 
 // UpdateHealth records the outcome of a connectivity check.

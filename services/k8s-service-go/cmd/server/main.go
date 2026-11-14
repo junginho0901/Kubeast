@@ -15,11 +15,13 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/redis/go-redis/v9"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/alerts"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/clustersync"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drain"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/handler"
@@ -77,8 +79,11 @@ func main() {
 		slog.Warn("INTERNAL_API_TOKEN is not set; /internal routes will answer 503")
 	}
 
-	// Init Redis cache
+	// Init Redis cache. One whose Redis did not answer is in memory until Redis answers (asked every 5 s).
 	redisCache := cache.New(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisPassword)
+	cacheCtx, cacheCancel := context.WithCancel(context.Background())
+	defer cacheCancel()
+	go redisCache.Reconnect(cacheCtx, 5*time.Second)
 
 	// Shared Postgres pool: the audit log and the cluster registry.
 	bootCtx, bootCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -150,6 +155,17 @@ func main() {
 		slog.Error("failed to initialize k8s service", "err", err)
 		os.Exit(1)
 	}
+	// A cluster changed in the registry is dropped on every replica (internal/clustersync): each reads the clusters'
+	// config_version every 5 s, and with Redis the replica auth-service tells notifies the others at once.
+	var notices *redis.Client
+	if cfg.RedisHost != "" {
+		notices = redis.NewClient(cache.Options(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisPassword))
+	}
+	changes := clustersync.New(registry, notices)
+	k8sSvc.SetChangeNotifier(changes)
+	syncCtx, syncCancel := context.WithCancel(context.Background())
+	defer syncCancel()
+	go changes.Run(syncCtx, k8sSvc)
 	// Init JWT validator
 	jwtValidator := auth.NewJWTValidator(auth.JWKSConfig{
 		JWKSURL:         cfg.AuthJWKSURL,
