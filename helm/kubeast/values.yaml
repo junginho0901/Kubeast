@@ -425,7 +425,7 @@ audit:
   # AI write tools) with 503 while the audit database cannot store the row,
   # instead of running them unrecorded. Lists and reads keep working. Services
   # also wait for the database at start-up (k8s-service AUDIT_DB_WAIT_SEC 90 s,
-  # auth-service and session-service 30 pings 2 s apart then 60 s for the schema;
+  # auth-service and session-service 60 s, 5 s a ping, then 60 s for the schema;
   # a 180 s startupProbe covers it) and exit if it does not come, rather than
   # falling back to log-only auditing.
   failClosed: true
@@ -551,6 +551,7 @@ postgresql:
 # hostUsers=false puts pods in a user namespace (Kubernetes >= 1.33); set it to
 # true on clusters without that support.
 # enabled=false sets none of it, leaving the uids and fsGroup to the platform, and Secret files then mount 0444 instead of 0440.
+# A PVC you give audit.fileSinkVolume or sessionRecording.spoolVolume / fileVolume must then be writable by uid 65532 by itself, unless the platform adds an fsGroup (OpenShift's restricted SCCs do).
 podSecurity:
   enabled: true
   seccompProfile: RuntimeDefault
