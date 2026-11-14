@@ -23,9 +23,10 @@ vi.mock('@/components/ResourceDetailContext', () => ({ useResourceDetail: () => 
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ has: () => true }) }))
 vi.mock('@/services/useHelmWatchList', () => ({ useHelmWatchList: () => {} }))
 vi.mock('@/contexts/ClusterContext', () => ({ useCluster: () => ({ currentCluster: 'c1' }) }))
-type Layer = { summary?: string; data?: Record<string, any> }
+type Layer = { source?: string; summary?: string; data?: Record<string, any> }
 const chat: { current: Layer | null } = { current: null }
-vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: Layer | null) => { chat.current = input } }))
+// the page's own layer; the shared notices under it register theirs beside it
+vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: Layer | null) => { if (input && (input.source ?? 'base') === 'base') chat.current = input } }))
 
 const i18n = i18next.createInstance()
 beforeAll(async () => {

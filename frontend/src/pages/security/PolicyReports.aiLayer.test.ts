@@ -18,9 +18,10 @@ vi.mock('react', async (importOriginal) => {
 })
 vi.mock('@/hooks/useAdaptiveTable', () => ({ useAdaptiveTable: () => ({ containerRef: { current: null }, bodyRef: { current: null }, theadRef: { current: null }, firstRowRef: { current: null }, rowsPerPage: 10 }) }))
 vi.mock('@/components/ResourceDetailContext', () => ({ useResourceDetail: () => ({ open: () => {} }) }))
-type Layer = { summary?: string; data?: Record<string, any> }
+type Layer = { source?: string; summary?: string; data?: Record<string, any> }
 const layers: Layer[] = []
-vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: Layer | null) => { if (input) layers.push(input) } }))
+// the page's own layer; the shared notices under it register theirs beside it
+vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: Layer | null) => { if (input && (input.source ?? 'base') === 'base') layers.push(input) } }))
 
 const i18n = i18next.createInstance()
 beforeAll(async () => {

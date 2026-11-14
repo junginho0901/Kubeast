@@ -16,9 +16,10 @@ import HelmReleasesPage from './Releases'
 vi.mock('@/hooks/useAdaptiveTable', () => ({ useAdaptiveTable: () => ({ containerRef: { current: null }, bodyRef: { current: null }, theadRef: { current: null }, firstRowRef: { current: null }, rowsPerPage: 2 }) }))
 vi.mock('@/services/useHelmWatchList', () => ({ useHelmWatchList: () => {} }))
 vi.mock('@/contexts/ClusterContext', () => ({ useCluster: () => ({ currentCluster: 'c1' }) }))
-type Layer = { summary?: string; data?: Record<string, any> }
+type Layer = { source?: string; summary?: string; data?: Record<string, any> }
 const chat: { current: Layer | null } = { current: null }
-vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: Layer | null) => { chat.current = input } }))
+// the page's own layer: the shared notices it draws (RefreshFailure) register theirs through the same hook
+vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: Layer | null) => { if (input?.source === 'base') chat.current = input } }))
 
 const i18n = i18next.createInstance()
 beforeAll(async () => {
