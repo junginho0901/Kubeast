@@ -424,6 +424,123 @@ describe('how an answer ends', () => {
   })
 })
 
+// ai-service saves an answer only when it sees the turn end; a stream cut on the way (its pod gone, a proxy's cut) it does
+// not see, so the page saves what it shows. session-service adds that copy only while its question is the newest message.
+describe('an answer whose stream was cut is saved as it shows', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  const sse = (...events: unknown[]) => events.map((e) => `data: ${typeof e === 'string' ? e : JSON.stringify(e)}\n\n`).join('')
+
+  // The chat request answered with `answer`; every other request recorded, answered by `saved`.
+  function requests(answer: (init: RequestInit) => Response, saved: () => Promise<Response> = async () => new Response('{"saved":1}')) {
+    const sent: { url: string; method?: string; body: any }[] = []
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      sent.push({ url, method: init.method, body: JSON.parse(String(init.body)) })
+      return url.includes('/ai/sessions/') ? answer(init) : saved()
+    }))
+    return { sent, saves: () => sent.filter((r) => !r.url.includes('/ai/sessions/')) }
+  }
+
+  async function asked(answer: () => Response) {
+    const { saves } = requests(answer)
+    const manager = new ChatStreamManager({ bodyJson: true })
+    await manager.startSessionChat('s1', 'how many?')
+    await vi.runAllTimersAsync()
+    return { state: manager.getState(), saves: saves() }
+  }
+
+  it('a stream that closes without [DONE] saves the letters it brought, marked failed, as the answer to its question', async () => {
+    const { state, saves } = await asked(() => new Response(sse({ content: 'partial ' }, { content: 'answer' })))
+    expect(state).toMatchObject({ status: 'error', errorKey: 'streamCut', content: 'partial answer' })
+    expect(saves).toEqual([{
+      url: '/api/v1/sessions/s1/messages',
+      method: 'POST',
+      body: { messages: [{ role: 'assistant', content: 'partial answer', failed: true, answers: 'how many?' }] },
+    }])
+  })
+
+  it('with the tool blocks and calls that came', async () => {
+    const { state, saves } = await asked(() => new Response(sse({ content: 'Checking.' }, { function: 'list_clusters', args: {}, call_id: 0 })))
+    expect(saves).toHaveLength(1)
+    const [answer] = saves[0].body.messages
+    expect(answer.content).toBe(state.content)
+    expect(answer.content).toContain('<strong>list_clusters</strong>')
+    expect(answer.tool_calls.map((tc: { function: string }) => tc.function)).toEqual(['list_clusters'])
+  })
+
+  it('a connection that breaks part way saves the letters that came', async () => {
+    let reads = 0
+    const { state, saves } = await asked(() => new Response(new ReadableStream({
+      pull(controller) {
+        if (reads++ === 0) controller.enqueue(new TextEncoder().encode(sse({ content: 'partial' })))
+        else controller.error(new TypeError('network error'))
+      },
+    })))
+    expect(state).toMatchObject({ status: 'error', content: 'partial', error: 'TypeError: network error' })
+    expect(saves.map((s) => s.body.messages[0])).toEqual([{ role: 'assistant', content: 'partial', failed: true, answers: 'how many?' }])
+  })
+
+  it.each([
+    ['an answer that ended', () => new Response(sse({ content: 'Two clusters.' }, '[DONE]'))],
+    ["the server's error, which it saved with the answer", () => new Response(sse({ content: 'Checking.' }, { error: 'AI model call failed', error_key: 'modelCall' }))],
+    ['a refused request', () => new Response('{"detail":"audit unavailable"}', { status: 503 })],
+    ['a stream that brought nothing', () => new Response('')],
+  ])('%s is not saved by the page', async (_name, answer) => {
+    const { saves } = await asked(answer)
+    expect(saves).toEqual([])
+  })
+
+  it('a stopped answer is left to the stop, which saves it', async () => {
+    const { saves } = requests((init) => new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(sse({ content: 'part of it' })))
+        init.signal?.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')))
+      },
+    })))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    const running = manager.startSessionChat('s1', 'how many?')
+    await vi.advanceTimersByTimeAsync(0)
+    await manager.stop()
+    await running
+    await vi.runAllTimersAsync()
+    expect(manager.getState().status).toBe('aborted')
+    expect(saves()).toEqual([])
+  })
+
+  it('the next question is sent once that save has answered, so the answer is saved under its own question', async () => {
+    let answerSave!: (response: Response) => void
+    const answers = [new Response(sse({ content: 'partial' })), new Response(sse({ content: 'Two clusters.' }, '[DONE]'))]
+    const { sent } = requests(() => answers.shift()!, () => new Promise((resolve) => (answerSave = resolve)))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    await manager.startSessionChat('s1', 'how many?')
+    await vi.runAllTimersAsync()
+    const next = manager.startSessionChat('s1', 'and now?')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sent.map((r) => r.body.message ?? 'save')).toEqual(['how many?', 'save'])
+    answerSave(new Response('{"saved":1}'))
+    await next
+    await vi.runAllTimersAsync()
+    expect(sent.map((r) => r.body.message ?? 'save')).toEqual(['how many?', 'save', 'and now?'])
+    expect(manager.getState()).toMatchObject({ status: 'completed', content: 'Two clusters.', userMessage: 'and now?' })
+  })
+
+  it('a save that fails leaves the next question to go as usual', async () => {
+    const answers = [new Response(sse({ content: 'partial' })), new Response(sse({ content: 'Two clusters.' }, '[DONE]'))]
+    requests(() => answers.shift()!, async () => { throw new TypeError('network error') })
+    const manager = new ChatStreamManager({ bodyJson: true })
+    await manager.startSessionChat('s1', 'how many?')
+    await vi.runAllTimersAsync()
+    await manager.startSessionChat('s1', 'and now?')
+    await vi.runAllTimersAsync()
+    expect(manager.getState()).toMatchObject({ status: 'completed', content: 'Two clusters.', error: null })
+  })
+})
+
 describe('each tool result and 🔐 line goes to its own block', () => {
   afterEach(() => {
     vi.useRealTimers()

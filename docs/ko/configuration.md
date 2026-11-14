@@ -126,6 +126,7 @@ nodeShell:
 # 파드 보안(기본 Pod Security Standards restricted).
 # 사용자 네임스페이스를 지원하지 않는 클러스터(커널 6.3 미만)에서는 hostUsers: true로 두세요.
 # enabled: false는 securityContext를 두지 않아 uid·fsGroup을 플랫폼에 맡기고, Secret 파일을 0440 대신 0444로 마운트합니다.
+# 이때 audit.fileSinkVolume, sessionRecording.spoolVolume·fileVolume에 준 PVC는 uid 65532가 스스로 쓸 수 있어야 합니다(플랫폼이 fsGroup을 넣어 주면 됨 — OpenShift의 restricted SCC는 넣어 줍니다).
 podSecurity:
   enabled: true
   hostUsers: false

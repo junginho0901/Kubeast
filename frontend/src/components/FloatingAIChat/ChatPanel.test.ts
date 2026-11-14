@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChatPanel } from '@/components/FloatingAIChat/ChatPanel'
 import { conversationGone, forgetsConversation } from '@/components/FloatingAIChat/turnsOnScreen'
 import { floatingChatStreamManager } from '@/services/floatingChatStreamManager'
+import chatPanelSrc from '@/components/FloatingAIChat/ChatPanel.tsx?raw'
 
 // The floating chat's panel as it stands after a turn: the real manager, each fetch answered, the panel drawn over a
 // history of saved messages. The manager outlives a panel, as it does on the page, so each test has its own conversation.
@@ -359,6 +360,16 @@ describe('a conversation the server no longer has', () => {
     expect(conversationGone(null, { errorKey: 'sessionNotFound', sessionId: session }, session)).toBe(true)
     expect(conversationGone(null, { errorKey: 'sessionNotFound', sessionId: 'another' }, session)).toBe(false)
     expect(conversationGone(null, { errorKey: 'streamCut', sessionId: session }, session)).toBe(false)
+  })
+})
+
+// As AI Chat's (streamEnd.test.ts): session-service adds the stopped answer only while its question is the newest
+// message, so one stopped as it ended, which ai-service saved already, is not saved twice.
+describe('the floating chat saves a stopped answer as the answer to its question', () => {
+  it('names that question in the save, beside the stopped marker', () => {
+    const save = chatPanelSrc.slice(chatPanelSrc.indexOf('const handleStop = async'), chatPanelSrc.indexOf('// What the panel holds'))
+    expect(save).toContain('/messages`')
+    expect(save).toMatch(/stopped: true,\n(?:\s*\/\/.*\n)?\s*answers: stopped\.userMessage \?\? undefined,/)
   })
 })
 

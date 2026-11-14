@@ -10,7 +10,7 @@
 // forbidden store on every route or cluster change.
 
 import { useSyncExternalStore } from 'react'
-import { FORBIDDEN_EVENT, LIST_STATUS_EVENT, type ListStatusDetail } from './api/client'
+import { FORBIDDEN_EVENT, LIST_STATUS_EVENT, type ForbiddenDetail, type ListStatusDetail } from './api/client'
 import { listSegmentFromUrl } from '@/utils/forbiddenResource'
 
 export type ListStatus = { state: 'notInstalled' } | { state: 'error'; code?: number; reason?: string }
@@ -62,8 +62,9 @@ if (typeof window !== 'undefined') {
     if (d?.url) recordListStatus(d)
   })
   window.addEventListener(FORBIDDEN_EVENT, (e: Event) => {
-    const url = (e as CustomEvent<{ url?: string }>).detail?.url
-    if (url) recordListForbidden(url)
+    const d = (e as CustomEvent<Partial<ForbiddenDetail>>).detail
+    // a refused read beside the list (`listStatus: false`) is not the list's answer
+    if (d?.url && d.list !== false) recordListForbidden(d.url)
   })
 }
 

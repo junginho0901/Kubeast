@@ -29,7 +29,7 @@ var followedResources = map[string]bool{
 	"horizontalpodautoscalers": true, "clusterroles": true, "clusterrolebindings": true, "rolebindings": true,
 	"priorityclasses": true, "runtimeclasses": true, "validatingwebhookconfigurations": true,
 	"mutatingwebhookconfigurations": true, "limitranges": true, "resourcequotas": true, "poddisruptionbudgets": true,
-	"customresourcedefinitions": true, "nodes": true,
+	"customresourcedefinitions": true, "nodes": true, "namespaces": true,
 }
 
 const (
@@ -40,15 +40,22 @@ const (
 	nodeLabelled   = nodeHead + `,"team":"a"}},"spec":{"podCIDR":"10.244.0.0/24"},"status":{"conditions":[` + nodeMemoryOK + `,{"type":"Ready","status":"True","reason":"KubeletReady","message":"kubelet is posting ready status","lastHeartbeatTime":"2026-11-08T12:04:00Z","lastTransitionTime":"2026-11-01T00:01:00Z"}],` + nodeInfo + `}}`
 	nodeNotReady   = nodeHead + `}},"spec":{"podCIDR":"10.244.0.0/24","unschedulable":true,"taints":[{"key":"node.kubernetes.io/unreachable","effect":"NoSchedule"}]},"status":{"conditions":[` + nodeMemoryOK + `,{"type":"Ready","status":"Unknown","reason":"NodeStatusUnknown","message":"Kubelet stopped posting node status.","lastHeartbeatTime":"2026-11-08T11:59:00Z","lastTransitionTime":"2026-11-08T12:00:40Z"}],` + nodeInfo + `}}`
 	nodeNoReadyRow = nodeHead + `}},"spec":{"podCIDR":"10.244.0.0/24"},"status":{` + nodeInfo + `}}`
+
+	nsHead        = `{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"shop","uid":"ns-uid-1","creationTimestamp":"2026-11-01T00:00:00Z"`
+	nsActive      = nsHead + `,"resourceVersion":"10","labels":{"kubernetes.io/metadata.name":"shop"}},"spec":{"finalizers":["kubernetes"]},"status":{"phase":"Active"}}`
+	nsLabelled    = nsHead + `,"resourceVersion":"11","labels":{"kubernetes.io/metadata.name":"shop","team":"a"},"annotations":{"owner":"team-a"}},"spec":{"finalizers":["kubernetes"]},"status":{"phase":"Active"}}`
+	nsTerminating = nsHead + `,"resourceVersion":"12","deletionTimestamp":"2026-11-08T12:00:00Z","labels":{"kubernetes.io/metadata.name":"shop"}},"spec":{"finalizers":["kubernetes"]},"status":{"phase":"Terminating","conditions":[{"type":"NamespaceContentRemaining","status":"True","reason":"SomeResourcesRemain","message":"Some resources are remaining: pods. has 1 resource instances","lastTransitionTime":"2026-11-08T12:00:05Z"}]}}`
 )
 
 // drawerSources are the list rows' cases and those of the kinds whose list rows other tests hold: a Node drawer
-// follows the node list's frames.
+// follows the node list's frames, a Namespace drawer the namespace list's.
 func drawerSources() []watchRowSource {
 	return append(watchRowSources(),
 		watchRowSource{name: "a node that gained a label keeps its conditions", resource: "nodes", before: nodeReady, after: nodeLabelled},
 		watchRowSource{name: "a node whose kubelet stopped reporting is cordoned and not ready", resource: "nodes", before: nodeReady, after: nodeNotReady},
 		watchRowSource{name: "a node with no conditions yet", resource: "nodes", before: nodeNoReadyRow, after: nodeReady},
+		watchRowSource{name: "a namespace that gained a label and an annotation", resource: "namespaces", before: nsActive, after: nsLabelled},
+		watchRowSource{name: "a namespace being deleted", resource: "namespaces", before: nsActive, after: nsTerminating},
 	)
 }
 
@@ -165,6 +172,8 @@ func (a *oneObjectAPI) answer(t *testing.T, resource, object string) map[string]
 		out, err = a.svc.DescribeCRD(ctx, name)
 	case "nodes":
 		out, err = a.svc.DescribeNodeWithoutEvents(ctx, name)
+	case "namespaces":
+		out, err = a.svc.DescribeNamespace(ctx, name)
 	default:
 		t.Fatalf("no describe for %s", resource)
 	}

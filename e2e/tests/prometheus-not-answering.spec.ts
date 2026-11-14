@@ -11,12 +11,16 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 // the section out, as for a cluster with no Prometheus; the Resource Graph keeps its Structure/Traffic switch and says
 // the status's reason where the metrics sources were. The setting is put back and the card and the sources return.
 // GPU Nodes' real-time panel and GPU Pods' metric columns say the same, while their lists keep their own empty row.
+// A Read user refused the Prometheus (a Service its proxy Role does not name) keeps that empty row too, the refused
+// read named in the banner.
 
 const EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const PASSWORD = process.env.E2E_USER_PASSWORD || ''
 const CLUSTER = 'default'
 const PROMETHEUS = 'monitoring/prometheus:9090 (via K8s API proxy)'
 const NOWHERE = 'monitoring/prometheus:9'
+// the same Prometheus under another Service: the Read group's proxy Role names monitoring/prometheus:9090 only (viewer-proxy.spec.ts)
+const REFUSED_TO_READ = 'monitoring/prometheus-nodeport:9090'
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })
 
 function kubectlFor(kindName: string) {
@@ -148,5 +152,58 @@ test.describe('a Prometheus that is set but does not answer', () => {
     await expect(page.getByRole('columnheader', { name: 'GPU Utilization', exact: true }), 'the metric columns are back').toHaveText('GPU Utilization', { timeout: 60_000 })
     await expect(page.getByTestId('gpu-pods-metrics-not-answering')).toHaveCount(0)
     await expect(page.getByRole('cell', { name: 'No items.', exact: true })).toHaveAttribute('colspan', '9')
+  })
+
+  // The metrics read refused (403) beside a list that answered was the list's refusal: the empty row said "You do not
+  // have permission to view gpu in this cluster." The banner above the page keeps naming the refused read.
+  test('GPU Nodes and GPU Pods for a Read user refused the Prometheus: the empty row says "No items." and the banner names the read', async ({ browser, request }) => {
+    const list = await (await request.get(`/api/v1/cluster/gpu/dashboard?cluster=${CLUSTER}`, { headers: bearer(admin) })).json()
+    test.skip(list.gpu_nodes.length > 0 || list.gpu_pods.length > 0, `cluster ${CLUSTER} has GPU nodes or GPU pods`)
+    const id = Date.now().toString(36)
+    const email = `e2e-prom-refused-${id}@kubeast.local`
+    const password = `prom-refused-${id}-pw`
+    const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: `E2E prom refused ${id}`, email, password } })
+    expect(created.status(), await created.text()).toBe(201)
+    const userId = (await created.json()).id
+    const ctx = await browser.newContext({ baseURL: process.env.E2E_BASE_URL || 'http://localhost:30080' })
+    try {
+      const put = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: 'Read' } })
+      expect(put.ok(), await put.text()).toBeTruthy()
+      await patch(request, { prometheus_service: REFUSED_TO_READ })
+      moved = true
+      const signedIn = await request.post('/api/v1/auth/login', { data: { email, password } })
+      expect(signedIn.ok(), `login ${email}`).toBeTruthy()
+      const asUser = bearer((await signedIn.json()).access_token as string)
+      // what the screens read: the list answers the user, the metrics read is refused to the user and answers the admin
+      expect((await request.get(`/api/v1/cluster/gpu/dashboard?cluster=${CLUSTER}`, { headers: asUser })).status(), 'the GPU list').toBe(200)
+      await expect.poll(async () => (await request.get(`/api/v1/cluster/gpu/metrics?cluster=${CLUSTER}`, { headers: asUser, failOnStatusCode: false })).status(), { timeout: 30_000 }).toBe(403)
+      expect((await request.get(`/api/v1/cluster/gpu/metrics?cluster=${CLUSTER}`, { headers: bearer(admin), failOnStatusCode: false })).status(), 'the admin reads it').toBe(200)
+
+      const user = await ctx.newPage()
+      await user.goto('/login')
+      await user.locator('input[autocomplete="email"]').first().fill(email)
+      await user.locator('input[type="password"]').first().fill(password)
+      await user.locator('button[type="submit"]').first().click()
+      await user.waitForFunction(() => !document.querySelector('input[autocomplete="email"]'), undefined, { timeout: 20_000 })
+      for (const screen of ['nodes', 'pods'] as const) {
+        await user.goto(`/gpu/${screen}?cluster=${CLUSTER}`)
+        // the banner comes with the metrics' 403, so the row below is read after that refusal
+        await expect(user.getByTestId('forbidden-banner'), `GPU ${screen}: the banner`).toContainText(/You do not have permission to view (.+, )?gpu(, .+)? in this cluster/, { timeout: 30_000 })
+        // the list's own empty row, across every column its table draws (GPU Pods draws no metric columns for a refused read)
+        const empty = user.getByRole('cell', { name: 'No items.', exact: true })
+        await expect(empty, `GPU ${screen}: the empty list`).toHaveCount(1)
+        const [span, columns] = await empty.evaluate((td) => [Number(td.getAttribute('colspan')), td.closest('table')?.querySelectorAll('thead th').length ?? -1])
+        expect(span, `GPU ${screen}: the empty row spans the table's columns`).toBe(columns)
+        await expect(user.getByTestId('table-forbidden'), `GPU ${screen}: no list refused`).toHaveCount(0)
+      }
+    } finally {
+      await ctx.close()
+      await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin) })
+      if (moved) {
+        await patch(request, { prometheus_service: '', prometheus_url: '', prometheus_cluster_label: '', prometheus_auth: { type: 'none' } })
+        moved = false
+      }
+    }
+    expect((await status(request)).endpoint, 'the setting is back').toBe(PROMETHEUS)
   })
 })

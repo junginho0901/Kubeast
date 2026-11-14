@@ -50,7 +50,7 @@ export default function Namespaces() {
     onEvent: (event) => {
       const name = event?.object?.name || event?.object?.metadata?.name
       if (name) {
-        describes.changed(['namespace-describe', name])
+        describes.changedFollowed(['namespace-describe', name])
       }
     },
   })
