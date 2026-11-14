@@ -923,6 +923,18 @@ features:
     providerPauseMinutes: 30  # after the model provider refuses for credit or the key, new alerts are skipped this long; 0 = no pause
     maxSteps: 8               # model calls per investigation; the last one gets no tools
     timeoutSeconds: 300
+    # The time windows below, the scope groups (affected, checked and normal,
+    # changed for another reason, not looked at), facts kept apart from
+    # hypotheses and the report's six headings, in the prompt.
+    rules: false
+    # Step 0: before the first model call, the timeline tool's changes view
+    # over the change window goes into the first message (an audited tool call,
+    # no model step). Writes the windows too.
+    changesFirst: false
+    window:                   # counted from the alert's start; ends are never past now
+      metricsMinutes: 15      # metrics this long either side of the start (1–360)
+      logsMinutes: 5          # logs from this long before the start (0–1440)
+      changesHours: 4         # changes from this long before the start (1–168)
     model: ""                 # ModelConfig name; empty = the default model
     language: en              # report language (en, ko, …)
     consoleUrl: ""            # e.g. https://kubeast.example.com — links in the audit summary; empty = no link
