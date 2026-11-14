@@ -134,6 +134,7 @@ export function DashboardBody() {
     topResourcesError,
     modalNodes,
     isLoadingNodes,
+    windowListErrors,
     metricsUnavailable,
   } = useDashboardQueries({
     selectedResourceType,
@@ -603,6 +604,7 @@ export function DashboardBody() {
         onClose={closeResourceModal}
         selectedStat={getSelectedStat()}
         isLoading={isLoadingResource()}
+        listError={selectedResourceType ? windowListErrors[selectedResourceType] : null}
         resourceCount={getResourceCount()}
         searchQuery={modalSearchQuery}
         setSearchQuery={setModalSearchQuery}

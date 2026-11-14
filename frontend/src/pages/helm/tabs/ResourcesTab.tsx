@@ -6,6 +6,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { ListPager } from '@/components/ListPager'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { usePagedItems } from '@/hooks/usePagedItems'
+import { failureText } from '@/utils/failureText'
 
 const NO_RESOURCES: never[] = []
 
@@ -28,6 +29,15 @@ export default function ResourcesTab({ namespace, name }: { namespace: string; n
       <div className="flex items-center justify-center py-10 text-slate-400">
         <Loader2 className="w-5 h-5 animate-spin" />
       </div>
+    )
+  }
+
+  // a read that failed is not a release with no objects: its reason, as a list says it
+  if (q.isError && !q.data) {
+    return (
+      <p role="alert" data-testid="helm-resources-read-failed" className="text-sm text-red-400 break-words">
+        {t('common.readFailed', { defaultValue: 'Could not read the list: {{reason}}', reason: failureText(q.error) })}
+      </p>
     )
   }
 
