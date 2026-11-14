@@ -2165,6 +2165,7 @@
     "next": "Next",
     "paginationRange": "Showing {{start}}-{{end}} of {{total}}",
     "paginationEmpty": "Showing 0 of 0",
+    "paginationNotCounted": "Showing - of -",
     "prev": "Previous",
     "readonly": "Read-only",
     "refresh": "Refresh",
