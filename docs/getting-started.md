@@ -85,6 +85,8 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
 
 `--reset-then-reuse-values` keeps the values you set and adds what the new version brings. `--reuse-values` keeps the defaults of the version you installed, so a value a later version added is missing and the images stay at that version; the chart stops such an upgrade with this hint and leaves the release as it was. A values file of your own copied from `helm show values` of 0.7.7 or later stops the same way. One copied from 0.7.6 or earlier holds no `chartVersion`, and stops on its `global.imageTag`, that version's tag, from 0.7.8 on. Leave `chartVersion` and `global.imageTag` out of a values file of your own. A `global.imageTag` of an image you built yourself, not a release's `vX.Y.Z`, is not stopped.
 
+Upgrading to 0.7.8 renames the custom roles whose names make another role's group or a built-in's (`ADMIN` beside `Admin`) to `<name>-renamed-<id>` and removes their cluster grants, with an audit row for each change. [Features](features.md) "Role names" says what changes and what to do after.
+
 ### Uninstall
 
 ```bash
