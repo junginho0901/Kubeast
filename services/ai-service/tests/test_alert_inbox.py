@@ -1,7 +1,7 @@
 """Alert inbox: every alert Alertmanager sent, one row per alert, the status the screen shows, Kubeast's handling
 marks with their audit rows, and who may read it (the whole cluster, as the alert store read)."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -163,6 +163,8 @@ async def test_an_alert_links_the_investigation_of_this_firing(sqlite_db):
     assert await inbox.investigations_for(db, [row]) == {}
     old = await store.insert(db, cluster="self", fingerprint="fp1", status="done", received_at=STARTS - timedelta(days=2))
     await store.bump_repeat(db, old, STARTS - timedelta(days=1, hours=23))  # a repeat of an older firing
+    assert await inbox.investigations_for(db, [row]) == {}
+    await store.bump_repeat(db, old, NOW - timedelta(minutes=1))  # seen again after this firing started, before it came
     assert await inbox.investigations_for(db, [row]) == {}
     await store.bump_repeat(db, old, NOW)  # this firing folded into it within the dedupe window
     assert (await inbox.investigations_for(db, [row]))[row.id].id == old
@@ -534,18 +536,17 @@ AM_STARTS = datetime(2026, 10, 20, 2, 50, 0, 123456)  # startsAt by Alertmanager
 BEHIND = AM_STARTS - timedelta(seconds=30)  # ai-service's clock as the notification comes: a minute behind, after group_wait
 
 
-async def a_firing_while_behind(monkeypatch, db, fp="fp1", **settings):
-    """One firing alert through the webhook while ai-service's clock reads BEHIND."""
-    monkeypatch.setattr(store, "utcnow", lambda: BEHIND)
+async def a_firing_while_behind(monkeypatch, db, fp="fp1", starts="2026-10-20T02:50:00.123456789Z", clock=BEHIND, **settings):
+    """One firing alert through the webhook while ai-service's clock reads `clock`: its row, by the moment `starts` names."""
+    monkeypatch.setattr(store, "utcnow", lambda: clock)
     msg = webhook.AmWebhook(
         version="4", groupKey="{}:{alertname=\"X\"}", status="firing", receiver="kubeast", externalURL="http://am:9093",
         alerts=[webhook.AmAlert(status="firing", labels=labels(), annotations={"summary": "api-1 restarts"},
-                                startsAt="2026-10-20T02:50:00.123456789Z", fingerprint=fp, generatorURL="http://prometheus/graph")],
+                                startsAt=starts, fingerprint=fp, generatorURL="http://prometheus/graph")],
     )
-    await webhook.gate_and_queue(db, InvestigationSettings(enabled=True, max_per_hour=0, daily_token_budget=0, **settings), "self", msg, BEHIND)
-    row = next(r for r in (await rows_of(db))[0] if r.fingerprint == fp)
-    assert row.starts_at == AM_STARTS
-    return row
+    await webhook.gate_and_queue(db, InvestigationSettings(enabled=True, max_per_hour=0, daily_token_budget=0, **settings), "self", msg, clock)
+    moment = datetime.fromisoformat(starts.replace("Z", "+00:00")).astimezone(UTC).replace(tzinfo=None)
+    return next((r for r in (await rows_of(db))[0] if r.fingerprint == fp and r.starts_at == moment), None)
 
 
 @pytest.mark.asyncio
@@ -554,7 +555,7 @@ async def test_an_alert_shows_its_investigation_while_the_alertmanager_clock_is_
     the investigation by the starts_at it carries, and a press queues no second one."""
     row = await a_firing_while_behind(monkeypatch, sqlite_db)
     inv = (await store.list_rows(sqlite_db))[0][0]
-    assert (inv.starts_at, inv.received_at, inv.last_seen_at) == (AM_STARTS, BEHIND, BEHIND)
+    assert (row.starts_at, inv.starts_at, inv.received_at, inv.last_seen_at) == (AM_STARTS, AM_STARTS, BEHIND, BEHIND)
     c, _ = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR, at=BEHIND + timedelta(minutes=1))
     assert (c.get(f"/api/v1/alerts/inbox/{row.id}").json().get("investigation") or {}).get("id") == inv.id
     assert (c.get("/api/v1/alerts/inbox?cluster=self").json()["items"][0].get("investigation") or {}).get("id") == inv.id
@@ -581,3 +582,36 @@ async def test_investigate_now_finds_this_firings_investigation_while_the_alertm
     assert await store.queue_requested(sqlite_db, other, requested_by="b@x", now=BEHIND + timedelta(seconds=20), record=record) == (first, False)
     assert (await store.list_rows(sqlite_db))[1] == 2
     assert (await inbox.investigations_for(sqlite_db, [other]))[other.id].id == first
+
+
+@pytest.mark.asyncio
+async def test_a_firing_folded_into_an_older_investigation_shows_it_while_the_alertmanager_clock_is_ahead(monkeypatch, sqlite_db):
+    """An alert that fires again within the dedupe window folds into its older investigation: the new row's
+    first_received_at and the investigation's last_seen_at are one reading of ai-service's clock, so the row finds it
+    and a press queues no second one, whatever Alertmanager's clock says."""
+    async def record(inv_id):
+        return True
+
+    await a_firing_while_behind(monkeypatch, sqlite_db)
+    inv = (await store.list_rows(sqlite_db))[0][0]
+    later = BEHIND + timedelta(hours=1)
+    again = await a_firing_while_behind(monkeypatch, sqlite_db, starts="2026-10-20T03:50:00.123456789Z", clock=later)
+    assert (again.starts_at, again.first_received_at) == (AM_STARTS + timedelta(hours=1), later)
+    folded = await store.get(sqlite_db, inv.id)
+    assert (folded.starts_at, folded.last_seen_at, folded.repeat_count) == (AM_STARTS, later, 2)
+    c, _ = client(monkeypatch, sqlite_db, matrix=INVESTIGATOR, at=later + timedelta(minutes=1))
+    assert (c.get(f"/api/v1/alerts/inbox/{again.id}").json().get("investigation") or {}).get("id") == inv.id
+    assert await store.queue_requested(sqlite_db, again, requested_by="a@x", now=later + timedelta(minutes=1), record=record) == (inv.id, False)
+    assert (await store.list_rows(sqlite_db))[1] == 1
+
+
+@pytest.mark.asyncio
+async def test_a_start_written_in_another_zone_is_the_same_alert(monkeypatch, sqlite_db):
+    """startsAt names a moment: written with +09:00, -05:00 or Z it is one row, kept and given to its investigation
+    in UTC."""
+    for starts in ("2026-10-20T11:50:00.123456789+09:00", "2026-10-19T21:50:00.123456789-05:00", "2026-10-20T02:50:00.123456789Z"):
+        await a_firing_while_behind(monkeypatch, sqlite_db, starts=starts)
+    rows, total, _ = await rows_of(sqlite_db)
+    assert (total, rows[0].starts_at, rows[0].received_count) == (1, AM_STARTS, 3)
+    invs, inv_total = await store.list_rows(sqlite_db)
+    assert (inv_total, invs[0].starts_at, invs[0].repeat_count) == (1, AM_STARTS, 3)

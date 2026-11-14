@@ -111,6 +111,16 @@ def test_parse_time():
     assert webhook.parse_time("garbage") is None
 
 
+def test_parse_time_reads_an_offset_as_the_utc_moment_it_names():
+    """The columns keep naive UTC: a sender writing its own zone names the same moment as one writing Z."""
+    moment = datetime(2026, 10, 13, 11, 59, 0, 123456)
+    for text in ("2026-10-13T11:59:00.123456789Z", "2026-10-13T20:59:00.123456789+09:00", "2026-10-13T06:59:00.123456789-05:00",
+                 "2026-10-14T02:59:00.123456+15:00", "2026-10-13T11:59:00.123456+00:00"):
+        assert webhook.parse_time(text) == moment, text
+    assert webhook.parse_time("2026-10-13T11:59:00") == datetime(2026, 10, 13, 11, 59)  # no offset: read as UTC
+    assert webhook.parse_time("9999-12-31T23:00:00-05:00") is None  # past what a datetime holds in UTC
+
+
 @pytest.mark.asyncio
 async def test_gates_filter_resolve_queue(monkeypatch):
     fs = FakeStore()

@@ -176,8 +176,8 @@ async def queue_requested(
                 AlertInvestigation.fingerprint == item.fingerprint,
                 or_(
                     AlertInvestigation.starts_at == item.starts_at,
-                    AlertInvestigation.received_at >= item.starts_at,
-                    AlertInvestigation.last_seen_at >= item.starts_at,
+                    AlertInvestigation.received_at >= item.first_received_at,
+                    AlertInvestigation.last_seen_at >= item.first_received_at,
                 ),
             )
             .order_by(AlertInvestigation.received_at.desc())
