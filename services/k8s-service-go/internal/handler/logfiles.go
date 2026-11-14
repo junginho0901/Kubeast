@@ -447,6 +447,9 @@ func (h *Handler) LogFileStream(w http.ResponseWriter, r *http.Request) {
 	// Last-Event-ID when it connects again): the file's inode and the offset after its last complete line.
 	var split lineSplitter
 	mark := func() bool {
+		if split.skipPartial { // the bytes so far end inside a line it drops: no line start to mark yet
+			return true
+		}
 		if _, err := fmt.Fprintf(w, "id: %s\n\n", logFileMark{inode: st.inode, offset: offset - int64(len(split.carry))}); err != nil {
 			return false
 		}
