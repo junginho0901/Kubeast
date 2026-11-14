@@ -179,6 +179,14 @@ data:
   COST_ENABLED: {{ .Values.features.cost.enabled | quote }}
   POLICY_REPORTS_ENABLED: {{ .Values.features.policyReports.enabled | quote }}
   ALERT_INVESTIGATION_ENABLED: {{ .Values.features.alertInvestigation.enabled | quote }}
+  {{- /* dig: values an earlier chart's --reuse-values lacks render as this chart's defaults */}}
+  {{- $anomalyRank := dig "anomalyRank" (dict) .Values.features }}
+  ANOMALY_RANK_ENABLED: {{ dig "enabled" false $anomalyRank | quote }}
+  ANOMALY_RANK_MAX_QUERIES: {{ dig "maxQueries" 12 $anomalyRank | int64 | quote }}
+  ANOMALY_RANK_CHECK_TIMEOUT_SEC: {{ dig "checkTimeoutSeconds" 5 $anomalyRank | int64 | quote }}
+  ANOMALY_RANK_TIMEOUT_SEC: {{ dig "timeoutSeconds" 20 $anomalyRank | int64 | quote }}
+  ANOMALY_RANK_CONCURRENCY: {{ dig "concurrency" 4 $anomalyRank | int64 | quote }}
+  ANOMALY_RANK_CACHE_SEC: {{ dig "cacheSeconds" 60 $anomalyRank | int64 | quote }}
   {{- with .Values.features.alertInvestigation }}
   ALERT_INVESTIGATION_SEVERITIES: {{ join "," .severities | quote }}
   ALERT_INVESTIGATION_DEDUPE_HOURS: {{ .dedupeHours | int64 | quote }}

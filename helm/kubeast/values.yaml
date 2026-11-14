@@ -952,6 +952,21 @@ features:
     #   resources: [policyreports, clusterpolicyreports]
     #   verbs: [get, list, watch]
     extraRules: []
+  # Narrowing for the AI (the tool anomaly_rank, GET
+  # /namespaces/{namespace}/anomalies, read as the caller like a list): what
+  # differs in one namespace between a window and the window of the same length
+  # before it — failing objects, terminations by reason, restarts, CPU
+  # throttling, memory against the limit, node pressure — ranked, at most ten.
+  # The metric checks read the cluster's Prometheus (kube-state-metrics and
+  # cAdvisor names); without it they are listed as not run. Off: the route
+  # answers 404, reads nothing and the AI is not offered the tool.
+  anomalyRank:
+    enabled: false
+    maxQueries: 12           # store queries one answer may make
+    checkTimeoutSeconds: 5   # each check
+    timeoutSeconds: 20       # the whole answer
+    concurrency: 4           # checks at once
+    cacheSeconds: 60         # the same caller, namespace and window answered from memory
   # Cluster hygiene report (Cluster → Cluster Hygiene, permissions
   # resource.hygiene.scan on the cluster, admin.hygiene.read/export/signoff
   # globally): Pod Security Standards, image tags,

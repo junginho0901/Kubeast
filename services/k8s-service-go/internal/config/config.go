@@ -62,6 +62,18 @@ type Config struct {
 	// runs it; it needs AI on.
 	AlertInvestigationEnabled bool
 
+	// Narrowing for the AI (chart ai.anomalyRank, off by default): GET
+	// /namespaces/{namespace}/anomalies ranks what differs from the window
+	// before. Off = the route answers 404 and reads nothing. The rest bound one
+	// answer: store queries, seconds per check and for the whole answer, checks
+	// at once, and how long the same question is answered from memory.
+	AnomalyRankEnabled         bool
+	AnomalyRankMaxQueries      int
+	AnomalyRankCheckTimeoutSec int
+	AnomalyRankTimeoutSec      int
+	AnomalyRankConcurrency     int
+	AnomalyRankCacheSec        int
+
 	// Log files inside containers (chart features.logFiles). Off = the routes
 	// answer 404. Only files matching LogFilesPaths (absolute, glob in the file
 	// name only) can be listed or read; with LogFilesNamespaces set, only pods
@@ -178,6 +190,13 @@ func Load() Config {
 		AIEnabled: pkgconfig.GetEnvBool("AI_ENABLED", true),
 
 		AlertInvestigationEnabled: pkgconfig.GetEnvBool("ALERT_INVESTIGATION_ENABLED", false),
+
+		AnomalyRankEnabled:         pkgconfig.GetEnvBool("ANOMALY_RANK_ENABLED", false),
+		AnomalyRankMaxQueries:      pkgconfig.GetEnvInt("ANOMALY_RANK_MAX_QUERIES", 12),
+		AnomalyRankCheckTimeoutSec: pkgconfig.GetEnvInt("ANOMALY_RANK_CHECK_TIMEOUT_SEC", 5),
+		AnomalyRankTimeoutSec:      pkgconfig.GetEnvInt("ANOMALY_RANK_TIMEOUT_SEC", 20),
+		AnomalyRankConcurrency:     pkgconfig.GetEnvInt("ANOMALY_RANK_CONCURRENCY", 4),
+		AnomalyRankCacheSec:        pkgconfig.GetEnvInt("ANOMALY_RANK_CACHE_SEC", 60),
 
 		LogFilesEnabled:    pkgconfig.GetEnvBool("LOG_FILES_ENABLED", false),
 		LogFilesPaths:      pkgconfig.GetEnvList("LOG_FILES_PATHS", ""),

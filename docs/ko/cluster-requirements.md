@@ -42,6 +42,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 예
 | 최근 흐름(드로어, AI `network_flows`) | TLS로 서비스하는 Cilium Hubble Relay, Relay Service의 `services/proxy` create 권한 — §16 | `features.networkFlows.enabled`(끔) | 칸과 도구가 빠지고 API는 404. 클러스터 권한이 없으면 403 |
 | 네트워크 차단(드로어, AI `network_drops`) | 클러스터 Prometheus에 워크로드 레이블이 붙은 Hubble 차단 지표 — §17 | Prometheus(§3) | 칸이 나오지 않고, 도구는 지표가 없다고 알려 줌 |
 | Resource Graph 통신 선 | 최근 흐름(§16), 또는 클러스터 Prometheus에 워크로드 레이블이 붙은 Hubble TCP·차단 지표 — §18 | `features.networkFlows` 또는 Prometheus | 전환이 나오지 않고, 없는 지표는 그래프에서 알려 줌 |
+| 미리 좁히기(AI `anomaly_rank`) | 이슈 점검처럼 읽는 파드·워크로드·이벤트·노드, 지표 검사에는 클러스터 Prometheus의 kube-state-metrics·cAdvisor 시리즈 — §3 | `features.anomalyRank.enabled`(끔) | 도구가 빠지고 API는 404. Prometheus나 그 시리즈가 없으면 지표 검사는 못 함으로 적히고, 네임스페이스로 한정된 권한에도 못 함으로 적힘 |
 | 상위 통신(드로어, AI `network_top_flows`) | EKS 클러스터의 Amazon CloudWatch Network Flow Monitor 모니터, 그 모니터를 조회할 수 있는 Kubeast의 AWS 신원, 사용자의 파드 `list` 권한 — §19 | `features.networkFlowMonitor.enabled`(끔) | 칸과 도구가 빠지고 API는 404. 파드 `list` 권한이 없으면 403. AWS가 Kubeast의 신원을 거부하면 502 |
 
 ## 1. 권한(RBAC) — 모든 대상 클러스터
@@ -197,6 +198,7 @@ VictoriaMetrics는 Prometheus 질의 API를 그대로 제공하므로 화면과 
 | `container_cpu_usage_seconds_total`, `container_memory_working_set_bytes`(라벨 `namespace`·`pod`·`container`) | kubelet의 cAdvisor(`/metrics/cadvisor`) | 최적화 표, Pod·워크로드·Service·Namespace 드로어 |
 | `node_cpu_seconds_total`, `node_memory_MemAvailable_bytes`·`MemTotal_bytes`, `node_filesystem_avail_bytes`·`size_bytes`(`mountpoint="/"`), `node_load1`, `node_network_*_bytes_total`, `node_disk_*_bytes_total` — 또는 아래 hostmetrics 이름 | node-exporter 또는 OpenTelemetry Collector `hostmetrics` | 대시보드, 노드 드로어 |
 | `kube_pod_info`, `kube_pod_container_status_restarts_total`, `kube_horizontalpodautoscaler_status_current_replicas` | kube-state-metrics | 대시보드, Namespace·워크로드·HPA 드로어 |
+| kube-state-metrics의 `kube_pod_container_status_restarts_total`, `kube_pod_container_resource_limits`(`resource="memory"`), cAdvisor의 `container_cpu_cfs_periods_total`, `container_cpu_cfs_throttled_periods_total`, `container_memory_working_set_bytes`(라벨 `namespace`·`pod`·`container`) | kube-state-metrics, kubelet의 cAdvisor | AI의 미리 좁히기(`anomaly_rank`): 재시작, CPU 걸림, limit 대비 메모리 |
 | `kubelet_volume_stats_used_bytes`·`capacity_bytes`·`available_bytes` | kubelet `/metrics` — CSI 드라이버가 볼륨 통계를 내야 합니다(hostPath·local-path는 내지 않아 N/A) | 스토리지 분석 |
 | `DCGM_FI_DEV_GPU_UTIL`, `DCGM_FI_DEV_FB_USED`·`FB_FREE`, `DCGM_FI_DEV_MEMORY_TEMP` | NVIDIA DCGM exporter | GPU 화면 |
 | `nginx_ingress_controller_request_duration_seconds_bucket` | ingress-nginx 컨트롤러 | Ingress 드로어 지연(P50/P95/P99) |
