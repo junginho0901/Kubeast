@@ -13,6 +13,7 @@ const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { useWatchChanges } from '@/services/useWatchChanges'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
 interface Props {
@@ -143,6 +144,14 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
   })
 
   const crKind = (describe?.kind as string | undefined) || (rawJson?.kind as string | undefined) || 'CustomResource'
+  // the answer read the events by the object's own kind (k8s-service DescribeCustomResourceInstance)
+  useDrawerFollowsEvents({
+    describeKey: ['cr-instance-describe', group, version, plural, namespace || '-', name],
+    answer: describe,
+    kind: (describe?.kind as string | undefined) ?? '',
+    namespace,
+    name,
+  })
   useResourceDetailOverlay({ kind: crKind, name, namespace, describe })
 
   // Peer instances — same CRD's other instances (exclude self).

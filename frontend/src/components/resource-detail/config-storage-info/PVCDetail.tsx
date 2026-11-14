@@ -5,6 +5,7 @@ import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, Sta
 import { fmtRel, fmtTs } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
 import { usePagination } from '../usePagination'
+import { useDrawerFollowsEvents } from '../useDrawerFollowsEvents'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { DescribeFailure, DescribeStale } from '../DescribeFailure'
 
@@ -81,6 +82,7 @@ export default function PVCDetail({ name, namespace, rawJson }: { name: string; 
     enabled: !!namespace && !!name,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['pvc-describe', namespace, name], answer: describe, kind: 'PersistentVolumeClaim', namespace, name })
 
   useResourceDetailOverlay({ kind: 'PersistentVolumeClaim', name, namespace, describe })
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api, type WebhookConfigInfo } from '@/services/api'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
@@ -60,6 +60,7 @@ export default function ValidatingWebhookConfigurations() {
     path: '/apis/admissionregistration.k8s.io/v1/validatingwebhookconfigurations',
     query: 'watch=1',
     applyEvent: (prev, event) => applyWebhookConfigWatchEvent(prev as WebhookConfigInfo[] | undefined, event),
+    gatherEveryMs: LIST_GATHER_MS,
   })
 
   const filtered = useMemo(() => {
