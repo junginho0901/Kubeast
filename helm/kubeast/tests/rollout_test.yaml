@@ -34,7 +34,7 @@ tests:
           path: spec.strategy.type
           value: Recreate
 
-  - it: asks liveness of the process alone and readiness of what it needs
+  - it: asks liveness of the process alone and readiness of the server not leaving, never of the database
     template: deployments.yaml
     asserts:
       - equal:
@@ -51,7 +51,7 @@ tests:
         documentSelector: { path: metadata.name, value: ai-service }
       - equal:
           path: spec.template.spec.containers[0].readinessProbe.httpGet.path
-          value: /readyz
+          value: /api/v1/ai/health
         documentSelector: { path: metadata.name, value: ai-service }
 
   - it: renders no PDB while every Deployment has one replica

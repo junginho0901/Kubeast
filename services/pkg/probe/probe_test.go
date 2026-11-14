@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 )
@@ -22,57 +21,11 @@ func answer(t *testing.T, h http.HandlerFunc) (int, map[string]any) {
 	return rec.Code, body
 }
 
-type pinger struct {
-	err   error
-	block bool
-}
-
-func (p pinger) Ping(ctx context.Context) error {
-	if p.block {
-		<-ctx.Done()
-		return ctx.Err()
-	}
-	return p.err
-}
-
-func TestLiveAsksNoDependency(t *testing.T) {
-	p := New().Require("database", func(context.Context) error { return errors.New("down") })
+func TestLiveAsksNothingAndAnswersWhileLeaving(t *testing.T) {
+	p := New()
 	p.Leave()
 	if code, _ := answer(t, p.Live); code != http.StatusOK {
-		t.Fatalf("live answered %d with the database down and the server leaving", code)
-	}
-}
-
-func TestReadyFollowsTheRequiredDependency(t *testing.T) {
-	down := errors.New("dial tcp 10.0.0.5:5432: connection refused")
-	db := &pinger{err: down}
-	p := New().Require("database", Database(db, nil))
-	code, body := answer(t, p.Ready)
-	if code != http.StatusServiceUnavailable {
-		t.Fatalf("ready answered %d with the database down", code)
-	}
-	if got := body["waiting_for"].([]any); len(got) != 1 || got[0] != "database" {
-		t.Fatalf("waiting_for = %v", got)
-	}
-	if b, _ := json.Marshal(body); strings.Contains(string(b), "10.0.0.5") || strings.Contains(string(b), "refused") {
-		t.Fatalf("the body names the error: %s", b)
-	}
-	db.err = nil
-	if code, _ := answer(t, p.Ready); code != http.StatusOK {
-		t.Fatalf("ready answered %d with the database back", code)
-	}
-}
-
-func TestABusyPoolIsNotADatabaseGone(t *testing.T) {
-	db := pinger{block: true}
-	busy := true
-	p := New().Require("database", Database(db, func() bool { return busy }))
-	if code, _ := answer(t, p.Ready); code != http.StatusOK {
-		t.Fatalf("ready answered %d while every connection was taken", code)
-	}
-	busy = false
-	if code, _ := answer(t, p.Ready); code != http.StatusServiceUnavailable {
-		t.Fatalf("ready answered %d when a ping ran out of time with connections free", code)
+		t.Fatalf("live answered %d while leaving", code)
 	}
 }
 

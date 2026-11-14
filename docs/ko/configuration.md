@@ -133,7 +133,7 @@ podSecurity:
   readOnlyRootFilesystem: true
 
 # 가용성 — replicas를 2 이상으로 올린 Deployment에는 PodDisruptionBudget이 생깁니다(pdb.maxUnavailable, 1 · pdb.enabled: false면 만들지 않음). 판을 올릴 때는 새 파드를 먼저 띄우고, 새 파드가 준비된 뒤에 옛 파드를 멈춥니다(postgres·redis는 먼저 멈춤)
-# 프로브 — liveness는 /livez(다른 것은 안 봄), readiness는 /readyz(SIGTERM부터 503, auth-service·session-service·ai-service는 DB가 응답하지 않는 동안도 503)
+# 프로브 — liveness는 /livez(다른 것은 안 봄), readiness는 /readyz(SIGTERM부터 503, DB는 보지 않음 — 모두가 쓰는 DB가 죽으면 모든 파드가 한꺼번에 빠지므로). DB 상태는 auth-service·session-service의 /health와 k8s-service의 kubeast_audit_store_up에서 봅니다
 # podShutdown.preStopSeconds: Service 뒤의 파드는 종료 요청 뒤 이 초만큼 더 응답하고(preStop sleep, Kubernetes 1.30 이상) 그다음 30초 안에 종료합니다. 파드 IP로 보내는 로드 밸런서 뒤라면 그 해제 지연(deregistration delay)에 몇 초를 더해 두세요
 replicas:
   gateway: 1

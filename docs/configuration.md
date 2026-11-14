@@ -136,7 +136,7 @@ podSecurity:
   readOnlyRootFilesystem: true
 
 # Availability: a Deployment you raise to 2 or more replicas gets a PodDisruptionBudget (pdb.maxUnavailable, 1; pdb.enabled: false leaves them out), and every rollout starts the new pod and stops an old one only once the new one is ready (postgres and redis stop first)
-# Probes: liveness asks /livez, which reads nothing else; readiness asks /readyz, which answers 503 from SIGTERM on and, for auth-service, session-service and ai-service, while their database does not answer
+# Probes: liveness asks /livez, which reads nothing else; readiness asks /readyz, which answers 503 from SIGTERM on and never asks the database (a shared database down would take every pod out at once); the database's state is in auth-service's and session-service's /health and k8s-service's kubeast_audit_store_up
 # podShutdown.preStopSeconds: a pod behind a Service answers that long after it is told to stop (preStop sleep, Kubernetes 1.30 or later), then has 30 s to shut down; behind a load balancer that sends to pod IPs, set its deregistration delay plus a few seconds
 replicas:
   gateway: 1

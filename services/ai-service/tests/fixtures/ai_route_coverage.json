@@ -341,7 +341,6 @@
  "ai-service": {
   "/": {"excluded": "The service saying it runs, for whoever opens its address: no screen reads it."},
   "/health": {"excluded": "The service saying it runs and whether its environment holds a key, for whoever opens its address: no screen reads it and the gateway's /health goes to k8s-service."},
-  "/readyz": {"excluded": "The kubelet's readiness probe of this service: whether it takes new requests now, and no screen reads it."},
   "/metrics": {"excluded": "Prometheus scraping this service's own request counters, not what a screen shows."},
   "/openapi.json": {"excluded": "The schema FastAPI writes for this service, at its own address. No screen reads it and the gateway does not route it."},
   "/docs": {"excluded": "The API page FastAPI writes for this service, at its own address. No screen reads it and the gateway does not route it."},

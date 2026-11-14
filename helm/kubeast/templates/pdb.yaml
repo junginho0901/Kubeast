@@ -18,7 +18,7 @@ metadata:
     {{- include "kubeast.labels" $ | nindent 4 }}
 spec:
   maxUnavailable: {{ int $max }}
-  # A pod that is not ready (its database down, a crash loop) may still be evicted, so it never holds a drain.
+  # A pod that is not ready (a crash loop, a start that does not finish) may still be evicted, so it never holds a drain.
   unhealthyPodEvictionPolicy: AlwaysAllow
   selector:
     matchLabels:

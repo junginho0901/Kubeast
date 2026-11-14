@@ -290,8 +290,9 @@ func main() {
 		clustersHandler.OnRegistered = func(ctx context.Context, id string) { grantDemoClusterRoles(ctx, repo, cfg, []string{id}) }
 	}
 	healthHandler := handler.NewHealthHandler(pool)
-	// Readiness: not from SIGTERM on, nor while the database (every route but the JWKS needs it) does not answer.
-	ready := probe.New().Require("database", probe.Database(pool, poolBusy(pool)))
+	// Readiness: from serving until SIGTERM. The database stays out of it (a shared database down would take every
+	// replica out at once); /health says whether it answers.
+	ready := probe.New()
 
 	// Router
 	r := chi.NewRouter()
@@ -382,14 +383,6 @@ func main() {
 // serverShutdownWait lets the requests in flight finish inside the 30 s the chart's grace period leaves after its
 // preStop wait, with room for the pool to close after it.
 const serverShutdownWait = 20 * time.Second
-
-// poolBusy says whether every connection of the pool is taken (probe.Database).
-func poolBusy(pool *pgxpool.Pool) func() bool {
-	return func() bool {
-		s := pool.Stat()
-		return s.AcquiredConns() >= s.MaxConns()
-	}
-}
 
 func bootstrapUsers(ctx context.Context, repo *repository.Repository, cfg config.Config) {
 	if cfg.DefaultAdminPassword == "change-me-do-not-use-in-prod" {

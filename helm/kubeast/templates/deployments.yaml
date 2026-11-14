@@ -194,7 +194,7 @@ spec:
           {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             httpGet:
-              path: /readyz
+              path: /api/v1/ai/health
               port: 8001
             initialDelaySeconds: 5
             periodSeconds: 10

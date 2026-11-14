@@ -106,8 +106,9 @@ func main() {
 	auditStore := audit.Guard(audit.WithStdout(pgAudit, audit.StdoutEnabled()), pgAudit, audit.FailClosedEnabled())
 	sessionHandler := handler.NewSessionHandler(repo, auditStore)
 	healthHandler := handler.NewHealthHandler(pool)
-	// Readiness: not from SIGTERM on, nor while the database (every route reads or writes it) does not answer.
-	ready := probe.New().Require("database", probe.Database(pool, poolBusy(pool)))
+	// Readiness: from serving until SIGTERM. The database stays out of it (a shared database down would take every
+	// replica out at once); /health says whether it answers.
+	ready := probe.New()
 
 	// Setup router
 	r := chi.NewRouter()
@@ -201,11 +202,3 @@ func main() {
 // serverShutdownWait lets the requests in flight finish inside the 30 s the chart's grace period leaves after its
 // preStop wait, with room for the pool to close after it.
 const serverShutdownWait = 20 * time.Second
-
-// poolBusy says whether every connection of the pool is taken (probe.Database).
-func poolBusy(pool *pgxpool.Pool) func() bool {
-	return func() bool {
-		s := pool.Stat()
-		return s.AcquiredConns() >= s.MaxConns()
-	}
-}
