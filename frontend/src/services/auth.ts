@@ -74,7 +74,7 @@ export function resetSessionState(): void {
 // if the call fails the cookie simply expires with the token. The tab's floating
 // chat conversation is forgotten too, so the next sign-in starts a new one, and
 // the live connection and the chat streams of this session stop (resetSessionState).
-export function logoutSession(): Promise<void> {
+export function logoutSession({ asked }: { asked: boolean } = { asked: true }): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve()
   resetSessionState()
   forgetFloatingChat()
@@ -83,7 +83,10 @@ export function logoutSession(): Promise<void> {
   } catch {
     // storage off
   }
-  return fetch('/api/v1/auth/logout', {
+  // `asked`: the person signed out, and the server ends the sign-in too, so the person's other tabs and any copy of the
+  // token stop. A sign-out the app makes on its own — after the server refused a request, or after a change that
+  // already ended the account's tokens — only clears the cookie (`end_sign_in=false`).
+  return fetch(asked ? '/api/v1/auth/logout' : '/api/v1/auth/logout?end_sign_in=false', {
     method: 'POST',
     headers: CSRF_HEADER,
     credentials: 'same-origin',
@@ -202,7 +205,8 @@ export function handleUnauthorized() {
   handlingUnauthorized = true
 
   noteSessionEnded()
-  void logoutSession()
+  // The server refused a request, possibly for a reason other than the sign-in: the cookie goes, the sign-in is not ended.
+  void logoutSession({ asked: false })
 
   try {
     const path = window.location.pathname + window.location.search
