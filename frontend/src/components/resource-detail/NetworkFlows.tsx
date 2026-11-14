@@ -120,7 +120,7 @@ export default function NetworkFlows({ kind, namespace, name }: { kind: string; 
         ) : !res || res.groups.length === 0 ? (
           <div data-testid="netflow-none"><NoneText /></div>
         ) : (
-          <table className="w-full min-w-[680px]" data-testid="netflow-table">
+          <table className="w-full" data-testid="netflow-table">
             <thead className="text-slate-400">
               <tr>
                 <th className="text-left py-1 pr-2 font-medium">{tr('netflows.verdict', 'Verdict')}</th>

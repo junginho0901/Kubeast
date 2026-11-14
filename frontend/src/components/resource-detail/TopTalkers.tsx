@@ -34,7 +34,7 @@ function TalkerRows({ res, self, metricLabel, category, tr }: {
   const { items: paged, page, nav } = usePagination(res.rows, 10)
   return (
     <div className="overflow-x-auto" data-testid="toptalkers-list">
-      <table className="w-full min-w-[680px]" data-testid="toptalkers-table">
+      <table className="w-full" data-testid="toptalkers-table">
         <thead className="text-slate-400">
           <tr>
             <th className="text-left py-1 pr-2 font-medium">{tr('toptalkers.peer', 'Peer')}</th>
