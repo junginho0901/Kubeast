@@ -90,10 +90,12 @@ const (
 	reasonScope       = "scope"       // a kind no namespace holds, for a grant limited to namespaces
 )
 
-// Which limit a reasonLimit frame hit (limit_scope): closing a tab frees the tab's, not the server's.
+// Which limit a reasonLimit frame hit (limit_scope): closing a tab frees the tab's, not the server's; memory is the
+// server's room to open more (watchMemoryFull), which comes back by itself.
 const (
 	limitScopeTab    = "tab"
 	limitScopeServer = "server"
+	limitScopeMemory = "memory"
 )
 
 func (r RequestMessage) errorFrame(message, reason string) ResponseMessage {
@@ -215,6 +217,9 @@ type Multiplexer struct {
 	starts map[string]*limits.Slots // cluster -> places for starting a watch
 	// held are the live watches of streams outside the sockets (HoldWatches), which count against MaxSubscriptions too.
 	held int
+
+	// heap reads the live heap and the collector's limit; nil = heapNow.
+	heap func() (live, limit uint64)
 }
 
 // SubscriptionCount is the number of live subscriptions across all connections and the watches HoldWatches holds (metrics).
@@ -449,6 +454,12 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				}
 				m.mu.Unlock()
 				send(ctx, sendCh, req.limitFrame(fmt.Sprintf("max subscriptions reached for %s (%d), cannot create new watch", scope, limit), limitScope))
+				continue
+			}
+			// The watches already on go on; a new one waits, as the page asks again after half a minute to five.
+			if m.watchMemoryFull() {
+				m.mu.Unlock()
+				send(ctx, sendCh, req.limitFrame("k8s-service is short of memory, cannot create new watch for now", limitScopeMemory))
 				continue
 			}
 
