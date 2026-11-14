@@ -7,7 +7,7 @@ export interface SearchRead {
 }
 
 // The same for the floating chat, beside the results: results over part of the objects are not told as complete.
-export function searchReadGaps(read: SearchRead | undefined): Record<string, unknown> {
+export function searchReadGaps(read: Partial<SearchRead> | undefined): Record<string, unknown> {
   const errors = read?.errors ?? []
   const cut = read?.cut ?? []
   if (errors.length === 0 && cut.length === 0) return {}
@@ -23,7 +23,7 @@ export function searchReadGaps(read: SearchRead | undefined): Record<string, unk
 }
 
 /** The gaps in a line of the layer's summary ("" when the read is whole). */
-export function searchReadGapsText(read: SearchRead | undefined): string {
+export function searchReadGapsText(read: Partial<SearchRead> | undefined): string {
   const errors = read?.errors ?? []
   const cut = read?.cut ?? []
   return `${errors.length ? ` · ${errors.length}개 종류 실패: ${errors.map((e) => e.type).join(', ')}` : ''}${
