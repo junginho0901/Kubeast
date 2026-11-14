@@ -40,6 +40,9 @@ const getWsBase = () => {
 
 const makeKey = (clusterId: string, path: string, query: string) => `${clusterId}\n${path}?${query}`
 
+// A watch of changes sends no objects as it opens, so after a socket's gap only a read can say what it missed.
+const watchesChanges = (query: string) => new URLSearchParams(query).get('notify') === '1'
+
 // How long a watch refused a place waits to ask again: doubling up to the cap, each wait somewhere between half and one
 // and a half of that, since the tabs a full server refuses were refused together.
 const REFUSED_WAIT_MS = 30_000
@@ -236,11 +239,9 @@ class WebSocketMultiplexer {
       // A watch that still cannot start says so again.
       for (const key of this.subscriptions.keys()) clearWatchProblem(key)
       this.forgetRefused()
-      // The server keeps no version past its socket: the watch starts over and sends the objects there are, not those
-      // deleted meanwhile, and a watch of changes sends none. So each watch an earlier socket carried asks for a RESYNC.
       for (const [key, msg] of this.subscriptions) {
         try {
-          socket.send(JSON.stringify(this.carried.has(key) ? { ...msg, resync: true } : msg))
+          socket.send(JSON.stringify(this.carried.has(key) && watchesChanges(msg.query) ? { ...msg, resync: true } : msg))
           this.carried.add(key)
         } catch {
           // send 실패는 onclose 가 처리.
