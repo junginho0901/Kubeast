@@ -387,7 +387,7 @@ func (p *listAnswerClients) MayListKind(_ context.Context, group, resource strin
 func scopedMuxOn(t *testing.T, api http.HandlerFunc, allow bool) (*Multiplexer, *listAnswerClients) {
 	t.Helper()
 	base := muxOn(t, api)
-	clients := &listAnswerClients{fakeClients: base.provider.(fakeClients), allow: allow}
+	clients := &listAnswerClients{fakeClients: base.provider.(configClients).fakeClients, allow: allow}
 	return NewMultiplexer(clients), clients
 }
 
@@ -539,7 +539,7 @@ func (p *lateClients) DynamicForCtx(context.Context) dynamic.Interface {
 // A cluster whose kubeconfig is not loaded yet: its reason says the watch keeps trying, and it does.
 func TestAWatchOfAClusterNotLoadedYetKeepsTryingAndComesBack(t *testing.T) {
 	base := muxOn(t, eventThenHold)
-	clients := &lateClients{fakeClients: base.provider.(fakeClients)}
+	clients := &lateClients{fakeClients: base.provider.(configClients).fakeClients}
 	m := NewMultiplexer(clients)
 	conn := socketTo(t, m, everyCluster)
 	request(t, conn, "REQUEST", "c1", "/api/v1/pods", "watch=1")

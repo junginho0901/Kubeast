@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -330,5 +332,51 @@ func TestAPanicInTheSessionCheckEndsThatConnection(t *testing.T) {
 	defer release()
 	if got := waitEnded(t, held); got != SessionUnverified {
 		t.Fatalf("code = %q, want %q", got, SessionUnverified)
+	}
+}
+
+// One ticker walks the open connections: a hundred held cost one goroutine between their checks, where each had one of
+// its own; each is still checked every CheckEvery, and the ticker stops with the last of them.
+func TestHeldConnectionsShareOneSweep(t *testing.T) {
+	const every = 100 * time.Millisecond
+	l := &lookupStub{}
+	s := NewLiveSessions(LiveSessionConfig{Lookup: l.lookup, CheckEvery: every, CacheTTL: time.Millisecond, StaleTTL: time.Minute})
+	settle := func(want int) int {
+		t.Helper()
+		deadline := time.Now().Add(3 * time.Second)
+		n := runtime.NumGoroutine()
+		for ; n > want && time.Now().Before(deadline); n = runtime.NumGoroutine() {
+			time.Sleep(time.Millisecond)
+		}
+		return n
+	}
+	before := runtime.NumGoroutine()
+	helds := make([]context.Context, 100)
+	for i := range helds {
+		var release func()
+		helds[i], release = s.Hold(context.Background(), TokenPayload{UserID: fmt.Sprint("u", i)})
+		defer release()
+	}
+	if n := settle(before + 1); n > before+1 {
+		t.Fatalf("100 held connections keep %d goroutines, want 1", n-before)
+	}
+	asked := l.calls.Load()
+	time.Sleep(2*every + every/2)
+	if got := l.calls.Load() - asked; got < 200 {
+		t.Errorf("in two and a half intervals the sweep checked %d times, want each of the 100 connections at least twice", got)
+	}
+
+	l.version.Store(1)
+	revoked := time.Now()
+	for i, held := range helds {
+		if got := waitEnded(t, held); got != SessionRevoked {
+			t.Fatalf("connection %d: code = %q, want %q", i, got, SessionRevoked)
+		}
+	}
+	if took := time.Since(revoked); took > every+every/2 {
+		t.Errorf("the connections ended %s after their session, want within the interval of %s", took, every)
+	}
+	if n := settle(before); n > before {
+		t.Errorf("with nothing held %d goroutines stay", n-before)
 	}
 }
