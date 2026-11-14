@@ -69,7 +69,7 @@ func podMetricsPath(namespace string) string {
 }
 
 func (s *Service) podMetricsIn(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	rawBody, statusCode, err := s.RawRequest(ctx, "GET", podMetricsPath(namespace))
+	rawBody, statusCode, err := s.metricsRequest(ctx, podMetricsPath(namespace))
 	if err != nil {
 		// metrics-server not installed in this cluster → the metrics.k8s.io API
 		// group is unregistered (404). That's "no metrics", not a server error;
@@ -77,7 +77,7 @@ func (s *Service) podMetricsIn(ctx context.Context, namespace string) ([]map[str
 		if statusCode == http.StatusNotFound {
 			return []map[string]interface{}{}, nil
 		}
-		return nil, fmt.Errorf("get pod metrics (status %d): %w", statusCode, err)
+		return nil, metricsReadError("pod", statusCode, err)
 	}
 
 	var resp podMetricsResponse
@@ -145,15 +145,24 @@ func (s *Service) AddPodLimits(ctx context.Context, namespace string, rows []map
 	}
 }
 
+// metricsReadError is the failure of Monitoring's pod or node metrics read. A refusal stays as the cluster wrote it, as
+// top-resources gives it; another failure says which read and the status.
+func metricsReadError(what string, status int, err error) error {
+	if apierrors.IsForbidden(err) {
+		return err
+	}
+	return fmt.Errorf("get %s metrics (status %d): %w", what, status, err)
+}
+
 // GetNodeMetrics returns node metrics with cpu_percent and memory_percent.
 func (s *Service) GetNodeMetrics(ctx context.Context) ([]map[string]interface{}, error) {
 	path := "/apis/metrics.k8s.io/v1beta1/nodes"
-	rawBody, statusCode, err := s.RawRequest(ctx, "GET", path)
+	rawBody, statusCode, err := s.metricsRequest(ctx, path)
 	if err != nil {
 		if statusCode == http.StatusNotFound {
 			return []map[string]interface{}{}, nil
 		}
-		return nil, fmt.Errorf("get node metrics (status %d): %w", statusCode, err)
+		return nil, metricsReadError("node", statusCode, err)
 	}
 
 	var resp nodeMetricsResponse

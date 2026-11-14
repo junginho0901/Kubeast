@@ -11,11 +11,10 @@ import {
 import {
   api,
   disableMetrics,
-  isForbiddenError,
   isMetricsDisabled,
   isMetricsUnavailableError,
 } from '@/services/api'
-import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
+import { RefusedMetrics } from '@/components/RefusedMetrics'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCluster } from '@/contexts/ClusterContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -27,7 +26,7 @@ import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { usePagedItems } from '@/hooks/usePagedItems'
 import { MonitoringSearch } from './MonitoringFilters'
 import { MetricsRefreshFailed } from './MetricsRefreshFailed'
-import { metricsRefreshFailure, refreshFailureForChat } from './metricsRefresh'
+import { metricsReadPace, metricsRefreshFailure, metricsRefusal, refreshFailureForChat } from './metricsRefresh'
 import type { NodeMetric } from './types'
 
 const COLUMNS = 5
@@ -93,23 +92,18 @@ export default function MonitoringNodes({
     staleTime: 30000,
   })
 
-  const { data: nodeMetrics, isLoading, error, dataUpdatedAt } = useQuery<NodeMetric[], Error>({
+  const { data: nodeMetricsRead, isLoading, error, dataUpdatedAt } = useQuery<NodeMetric[], Error>({
     queryKey: ['node-metrics', currentCluster],
     queryFn: api.getNodeMetrics,
     enabled: !metricsUnavailable && !isMetricsDisabled(),
-    staleTime: 5000,
-    refetchInterval: () => {
-      if (metricsUnavailable || isMetricsDisabled()) return false
-      return 5000
-    },
-    retry: (failureCount, err) => {
-      if (isMetricsUnavailableError(err)) return false
-      return failureCount < 2
-    },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
+    // every 5 s, not again once the cluster refused it (metricsReadPace)
+    ...metricsReadPace(() => metricsUnavailable || isMetricsDisabled()),
     placeholderData: (prev, prevQuery) =>
       prevQuery && prevQuery.queryKey[1] === currentCluster ? prev : undefined,
   })
+  // a refusal shows in place of the numbers, those read before it too
+  const refusal = metricsRefusal(error)
+  const nodeMetrics = refusal ? undefined : nodeMetricsRead
 
   useEffect(() => {
     if (error && isMetricsUnavailableError(error)) {
@@ -294,12 +288,8 @@ export default function MonitoringNodes({
           <ListPager currentPage={page} totalPages={totalPages} total={total} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="monitoring-node-pager" />
         </div>
         </div>
-      ) : isForbiddenError(error) ? (
-        <div className="text-center py-12">
-          <p className="text-slate-400" data-testid="node-metrics-forbidden">
-            {t('common.forbiddenEmpty', { resource: forbiddenResourceFromUrl('/cluster/metrics/nodes'), defaultValue: 'You do not have permission to view {{resource}} in this cluster.' })}
-          </p>
-        </div>
+      ) : refusal ? (
+        <RefusedMetrics path="/cluster/metrics/nodes" reason={refusal.reason} testId="node-metrics-forbidden" />
       ) : error && !isMetricsUnavailableError(error) ? (
         <div className="text-center py-12">
           <div className="flex flex-col items-center gap-4">
