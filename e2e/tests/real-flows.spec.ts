@@ -33,6 +33,26 @@ async function freshPage(browser: Browser) {
   const ctx = await browser.newContext()
   return { ctx, page: await ctx.newPage() }
 }
+// An account of the run, removed in afterAll: an Admin of the whole console, or a Member with Read on `default`. A
+// sign-out ends that sign-in on the server and auth_time is in whole seconds, so the people who sign out here are not
+// the admin whose token this spec holds.
+async function throwaway(api: APIRequestContext, tag: string, roleName: 'Admin' | 'Member') {
+  const roles = await (await api.get('/api/v1/auth/roles', { headers: admin })).json()
+  const role = (Array.isArray(roles) ? roles : roles.roles || roles.items || []).find((r: { name: string }) => r.name === roleName).id
+  const email = `e2e-rf-${tag}-${stamp}@kubeast.local`
+  const password = `e2e-rf-${tag}-pw`
+  const made = await api.post('/api/v1/auth/admin/users', { headers: admin, data: { name: `E2E real flows ${tag}`, email, password, role_id: role } })
+  expect(made.status(), await made.text()).toBe(201)
+  const id = (await made.json()).id as string
+  users.push(id)
+  if (roleName === 'Member') expect((await api.put(`/api/v1/auth/admin/users/${id}/cluster-roles/default`, { headers: admin, data: { role: 'Read', namespaces: [] } })).status()).toBeLessThan(300)
+  return { email, password }
+}
+// A sign-in in the same second as one signed out shares its auth_time and would end with it.
+async function pastTheSecondOf(at: number) {
+  const wait = (Math.floor(at / 1000) + 1) * 1000 - Date.now()
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait + 50))
+}
 const storedCluster = (page: Page) => page.evaluate((k) => localStorage.getItem(k), CLUSTER_KEY)
 const nodesCard = (page: Page) => page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Nodes', exact: true }) })
 const nodeNames = (page: Page) => nodesCard(page).locator('button p[title]').evaluateAll((els) => els.map((e) => e.getAttribute('title')))
@@ -159,6 +179,8 @@ test('after one person signs out, the next one signs in to their own access and 
 // requests are held in the browser and never answered.
 test('signing out closes the live connection and stops the chat answers, and the next person signed in without a reload starts with their own', async ({ browser, request }) => {
   const { email, password } = await readUser(request, 'live')
+  // the first person is an admin of the run's own: its sign-out ends no token a later step uses
+  const first = await throwaway(request, 'live-first', 'Admin')
   const { ctx, page } = await freshPage(browser)
   const sockets: { openedAt: number; closedAt: number | null }[] = []
   page.on('websocket', (ws) => {
@@ -182,7 +204,7 @@ test('signing out closes the live connection and stops the chat answers, and the
 
   try {
     await page.goto('/login')
-    await signIn(page)
+    await signIn(page, first.email, first.password)
     await page.goto('/ai-chat?cluster=default')
     await page.waitForLoadState('networkidle')
     await page.getByTestId('chat-input').fill('which pods restarted today?')
@@ -233,12 +255,12 @@ test('signing out closes the live connection and stops the chat answers, and the
     expect(asked[2]).not.toBe(asked[1])
   } finally {
     await ctx.close()
-    // the conversations the questions made: the first two are the admin's, the third the second person's
-    for (const id of asked.slice(0, 2)) if (id) await request.delete(`/api/v1/sessions/${id}?cluster=default`, { headers: admin, failOnStatusCode: false })
-    if (asked[2]) {
-      const login = await request.post('/api/v1/auth/login', { data: { email, password } })
+    // the conversations the questions made: the first two are the first person's, the third the second person's
+    for (const [who, ids] of [[first, asked.slice(0, 2)], [{ email, password }, asked.slice(2, 3)]] as const) {
+      if (!ids.some(Boolean)) continue
+      const login = await request.post('/api/v1/auth/login', { data: who })
       const token = login.ok() ? (await login.json()).access_token : ''
-      if (token) await request.delete(`/api/v1/sessions/${asked[2]}?cluster=default`, { headers: { Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' }, failOnStatusCode: false })
+      for (const id of ids) if (token && id) await request.delete(`/api/v1/sessions/${id}?cluster=default`, { headers: { Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' }, failOnStatusCode: false })
     }
   }
 })
