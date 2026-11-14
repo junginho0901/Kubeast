@@ -13,6 +13,7 @@ import {
 import { ListPager } from '@/components/ListPager'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { RefusedMetrics } from '@/components/RefusedMetrics'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { usePagedItems } from '@/hooks/usePagedItems'
 import { cpuToMillis, memoryToBytes } from '@/utils/resourceQuantity'
@@ -29,7 +30,7 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { MonitoringSearch, NamespaceFilter } from './MonitoringFilters'
 import { MetricsRefreshFailed } from './MetricsRefreshFailed'
-import { metricsRefreshFailure, refreshFailureForChat } from './metricsRefresh'
+import { metricsReadPace, metricsRefreshFailure, metricsRefusal, refreshFailureForChat } from './metricsRefresh'
 import type { PodMetric } from './types'
 
 interface MonitoringPodsProps {
@@ -70,22 +71,17 @@ export default function MonitoringPods({
   const { open: openDetail } = useResourceDetail()
 
   // Pod 리소스 사용량 (네임스페이스 선택 시에만 활성화, 5초마다 자동 갱신)
-  const { data: podMetrics, isLoading, error, dataUpdatedAt } = useQuery<PodMetric[], Error>({
+  const { data: podMetricsRead, isLoading, error, dataUpdatedAt } = useQuery<PodMetric[], Error>({
     queryKey: ['pod-metrics', currentCluster, selectedNamespace],
     // with each pod's limits from k8s-service's pod rows, so the page takes no pod list
     queryFn: () => api.getPodMetrics(selectedNamespace === 'all' ? undefined : selectedNamespace, true),
-    staleTime: 5000,
-    refetchInterval: () => {
-      if (metricsUnavailable || isMetricsDisabled()) return false
-      return 5000
-    },
+    // every 5 s, not again once the cluster refused it (metricsReadPace)
+    ...metricsReadPace(() => metricsUnavailable || isMetricsDisabled()),
     enabled: !!selectedNamespace && !metricsUnavailable && !isMetricsDisabled(),
-    retry: (failureCount, err) => {
-      if (isMetricsUnavailableError(err)) return false
-      return failureCount < 2
-    },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
   })
+  // a refusal shows in place of the numbers, those read before it too
+  const refusal = metricsRefusal(error)
+  const podMetrics = refusal ? undefined : podMetricsRead
 
   useEffect(() => {
     if (error && isMetricsUnavailableError(error)) {
@@ -336,6 +332,8 @@ export default function MonitoringPods({
           </div>
           <ListPager currentPage={page} totalPages={totalPages} total={total} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="monitoring-pod-pager" />
         </div>
+      ) : selectedNamespace && refusal ? (
+        <RefusedMetrics path="/cluster/metrics/pods" reason={refusal.reason} testId="pod-metrics-forbidden" />
       ) : selectedNamespace && error && !isMetricsUnavailableError(error) ? (
         <div className="text-center py-12">
           <div className="flex flex-col items-center gap-4">
