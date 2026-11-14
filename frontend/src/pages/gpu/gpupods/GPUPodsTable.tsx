@@ -4,7 +4,8 @@
 // 빈/로딩 상태 + metrics 컬럼 + pagination footer) 추출. useAdaptiveTable
 // 의 ref/rowsPerPage 는 부모에서 hook 호출 후 props 로 전달.
 // 7 sortable 컬럼 (namespace + name + node + GPUs + vendor + status + age) +
-// 2 optional 컬럼 (GPU Util + Mem Util, metricsAvailable 일 때만).
+// 2 optional 컬럼 (GPU Util + Mem Util, metricsAvailable 일 때만; Prometheus 가 설정됐는데 응답하지 않으면
+// 그 두 칸의 머리글이 이유를 말한다 — metricsFailure).
 // min-w-[1090px].
 
 import type { Dispatch, RefObject, SetStateAction } from 'react'
@@ -13,6 +14,7 @@ import type { GPUPodInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
+import { failureText } from '@/utils/failureText'
 import { formatAge, getStatusColor, type SortKey } from './gpuPodsHelpers'
 import { vendorNames, type PodGpuUsage } from '../gpuNumbers'
 import { Trans } from 'react-i18next'
@@ -28,6 +30,8 @@ interface Props {
   sortedPodsLength: number
   isLoading: boolean
   metricsAvailable: boolean
+  // the metrics read's error when the cluster's Prometheus is set but did not answer
+  metricsFailure?: unknown
   podMetricsMap: Map<string, PodGpuUsage>
   showCharts: boolean
   sortKey: SortKey
@@ -52,6 +56,7 @@ export function GPUPodsTable({
   sortedPodsLength,
   isLoading,
   metricsAvailable,
+  metricsFailure = null,
   podMetricsMap,
   showCharts,
   sortKey,
@@ -92,6 +97,9 @@ export function GPUPodsTable({
     )
   }
 
+  // the two metric columns stay while Prometheus did not answer: their header says why they hold no number
+  const columnCount = metricsAvailable || !!metricsFailure ? 9 : 7
+
   return (
     <div ref={tableContainerRef} className={`card flex flex-col ${showCharts ? 'min-h-[420px]' : 'flex-1 min-h-0'}`}>
       <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
@@ -128,6 +136,11 @@ export function GPUPodsTable({
                     {tr('gpuPods.table.memUtil', 'Mem Util')}
                   </th>
                 </>
+              )}
+              {!!metricsFailure && (
+                <th colSpan={2} className="text-left py-3 px-4 w-[280px] text-xs font-normal break-words" data-testid="gpu-pods-metrics-not-answering">
+                  {tr('gpuDashboardPage.realtime.notAnswering', 'Prometheus did not answer: {{reason}}', { reason: failureText(metricsFailure) })}
+                </th>
               )}
             </tr>
           </thead>
@@ -185,12 +198,18 @@ export function GPUPodsTable({
                     </td>
                   </>
                 )}
+                {!!metricsFailure && (
+                  <>
+                    <td className="py-3 px-4"><span className="text-xs text-slate-500">-</span></td>
+                    <td className="py-3 px-4"><span className="text-xs text-slate-500">-</span></td>
+                  </>
+                )}
               </tr>
               )
             })}
             {isLoading && (
               <tr>
-                <td colSpan={metricsAvailable ? 9 : 7} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={columnCount} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -200,10 +219,10 @@ export function GPUPodsTable({
               </tr>
             )}
             {sortedPodsLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={metricsAvailable ? 9 : 7} resource="gpu" searching={searching} />
+              <TableEmptyRow colSpan={columnCount} resource="gpu" searching={searching} />
             )}
           </tbody>
-            <AdaptiveTableFillerRows count={rowsPerPage - pagedPods.length} columnCount={metricsAvailable ? 9 : 7} />
+            <AdaptiveTableFillerRows count={rowsPerPage - pagedPods.length} columnCount={columnCount} />
         </table>
       </div>
       <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedPodsLength} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { alertResource, liveLineOf, liveStateOf, severityChoices, silenceStart, storeLimited, storeLimitedSeconds, storeRefetchMs } from './alertInbox'
+import { alertResource, inboxState, liveLineOf, liveStateOf, severityChoices, silenceStart, storeLimited, storeLimitedSeconds, storeRefetchMs } from './alertInbox'
 
 describe('the object an alert is about', () => {
   it('takes the most specific namespaced label first', () => {
@@ -113,5 +113,23 @@ describe('where a silence of an alert starts', () => {
     expect(silenceStart({ alertname: 'NodeDiskFull', node: 'n1', k8s_cluster: 'eks' }, 'k8s_cluster')).toEqual({ alertname: 'NodeDiskFull', node: 'n1' })
     expect(silenceStart({ alertname: 'Watchdog' })).toEqual({ alertname: 'Watchdog' })
     expect(silenceStart({ alertname: 'X', namespace: 'apps' }, 'namespace')).toEqual({ alertname: 'X' }) // a store whose cluster label is namespace
+  })
+})
+
+describe('whether the Alerts page asks the inbox', () => {
+  const prom = { enabled: false }
+  it('waits while only the features placeholder is there', () => {
+    expect(inboxState({ prometheus: { enabled: true } }, true)).toBe('wait')
+  })
+
+  it('asks with alert investigation on, and when the features could not be read', () => {
+    expect(inboxState({ prometheus: prom, ai: { enabled: true }, alertInvestigation: { enabled: true } }, false)).toBe('on')
+    expect(inboxState(undefined, false)).toBe('on')
+  })
+
+  it('does not ask with alert investigation off, and tells AI off apart (the server reports investigation off then too)', () => {
+    expect(inboxState({ prometheus: prom, ai: { enabled: true }, alertInvestigation: { enabled: false } }, false)).toBe('off')
+    expect(inboxState({ prometheus: prom }, false)).toBe('off')
+    expect(inboxState({ prometheus: prom, ai: { enabled: false }, alertInvestigation: { enabled: false } }, false)).toBe('aiOff')
   })
 })
