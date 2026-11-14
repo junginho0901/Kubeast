@@ -56,6 +56,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 - **거르기**: `firing`이고 `severity` 라벨이 `severities`(기본 critical·warning)에 있는 알림만 받습니다.
   - 클러스터와 fingerprint가 같은 알림이 `dedupeHours`(24) 안에 다시 오면 `repeat_count`만 올립니다(Alertmanager는 4시간마다 다시 보냅니다).
   - 시간당 `maxPerHour`(6)나 하루 `dailyTokenBudget`(200,000 토큰, UTC 기준)을 넘으면 `skipped`로 남깁니다. 둘 다 웹훅이 시작한 조사만 셉니다. 받은편지함에서 사람이 요청한 조사(아래 "지금 조사")는 따로 `manualDailyTokenBudget`을 씁니다. 조사 한 번은 측정해 보니 약 6만 토큰이었습니다(dev 설치 657번). 200,000이면 하루 약 3번이고, 0은 한도 없음입니다.
+  - ai-service 복제본이 여럿이어도 시간당 한도는 지켜집니다. 여러 복제본에 동시에 온 알림이 개수 세기와 행 쓰기를 하나씩 차례로 하므로(PostgreSQL 트랜잭션 잠금) 한 시간에 `maxPerHour`보다 하나 더 들어가는 일이 없습니다.
   - `automatic: false`이면 웹훅이 조사를 시작하지 않고 알림은 전부 받은편지함에 저장합니다(`automatic_off`로 셈). 그 알림도 사람이 조사를 요청할 수 있습니다. `enabled: false`는 받은편지함까지 끕니다.
   - 웹훅 한 통에서 새 조사는 100개까지 시작합니다. 넘친 알림도 알림함에는 저장하고 `skipped`("investigation cap")로 남기며, 최근 조사에 접힌 알림·해결 알림·걸러진 알림은 자리를 쓰지 않습니다. Alertmanager가 그 묶음을 다시 보내면 조사한 알림은 접히고 다음 알림이 조사됩니다.
   - `dedupeHours` 안에 다시 건너뛴 알림은 새 행 대신 그 건너뜀 행에 접힙니다(반복 수, 마지막으로 본 시각, 마지막 이유).
