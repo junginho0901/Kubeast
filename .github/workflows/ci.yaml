@@ -92,6 +92,12 @@ jobs:
         env:
           DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
         run: go test ./internal/retention/... -run Postgres -v -count=1
+      # auth-service's audit anchors from two replicas at once (same server).
+      - name: audit chain anchors
+        working-directory: services/auth-service-go
+        env:
+          DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+        run: go test ./internal/auditchain/... -run Postgres -v -count=1
       # auth-service's repository: access request and sign-off pages, dormant
       # accounts next to the lock's, the AI usage query (both sources).
       - name: auth-service repository

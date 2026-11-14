@@ -89,7 +89,7 @@ func TestRunOnceRecordsTheSystemAuditActionOnSuccessAndFailure(t *testing.T) {
 	objects := newFakeObjects()
 	aud := &memAudit{}
 	a := &Anchorer{Store: f, Objects: objects, Sink: "archive", Audit: aud}
-	if _, err := a.RunOnce(context.Background()); err != nil {
+	if _, _, err := a.RunOnce(context.Background(), 24*time.Hour); err != nil {
 		t.Fatal(err)
 	}
 	if len(aud.recs) != 1 || aud.recs[0].Action != ActionAnchor || aud.recs[0].ActorEmail != "system" || aud.recs[0].Result != audit.ResultSuccess || aud.recs[0].TargetID != "archive" {
@@ -104,7 +104,7 @@ func TestRunOnceRecordsTheSystemAuditActionOnSuccessAndFailure(t *testing.T) {
 		t.Error("LastAt not set after a successful anchor")
 	}
 	objects.putErr = errors.New("bucket gone")
-	if _, err := a.RunOnce(context.Background()); err == nil {
+	if _, _, err := a.RunOnce(context.Background(), 24*time.Hour); err == nil {
 		t.Fatal("expected the put error")
 	}
 	if len(aud.recs) != 2 || aud.recs[1].Result != audit.ResultFailure || aud.recs[1].Error == "" {

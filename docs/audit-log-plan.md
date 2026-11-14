@@ -76,6 +76,7 @@ Viewing is through the admin screen (`admin.audit.read`) and CSV (`admin.audit.e
     - Digest: `{version, created_at, from_seq, to_seq, rows, head_hash, prev_anchor{object_key, hash}, access_reviews[{id, reviewed_at, hash}], hash_algorithm}`
     - Object key: `<prefix>digests/YYYY/MM/DD/<HHMMSS>Z-<from>-<to>.json`
     - It writes even when there are no new rows, with metadata `anchor-hash`.
+    - Of several auth-service replicas, one writes each period's anchor. Anchors are written one at a time under a Postgres advisory lock. A replica's scheduled anchor is skipped when the last scheduled one is another replica's and less than a period (less one minute) old. "Anchor now" waits for an anchor being written and builds on it.
   - **Verification**: admins (`admin.audit.read`) get the status with `GET /api/v1/auth/admin/audit/integrity`, and recompute a range with `POST …/integrity/verify {from_seq?, to_seq?, anchors?}`.
     - The default range starts from the last anchor. The limit is 200,000 rows; past it, 413.
     - Result: `{ok, first_bad_seq, reason: hash_mismatch|chain_break|gap|anchor_mismatch, anchors[{head_ok, object_ok, reviews_ok}]}`

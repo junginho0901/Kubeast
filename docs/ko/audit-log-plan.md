@@ -79,6 +79,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서입니다.
     - 형식: `{version, created_at, from_seq, to_seq, rows, head_hash, prev_anchor{object_key, hash}, access_reviews[{id, reviewed_at, hash}], hash_algorithm}`
     - 위치: 그 싱크 버킷의 `<prefix>digests/YYYY/MM/DD/<HHMMSS>Z-<from>-<to>.json`(새 행이 없어도 씀, 메타데이터 `anchor-hash`)
     - 기록: `audit_anchors`에도 남깁니다.
+    - auth-service가 여러 대여도 주기마다 앵커는 한 대만 씁니다. 앵커는 Postgres advisory lock을 잡고 하나씩 씁니다. 마지막 주기 앵커가 다른 replica의 것이고 한 주기(1분 여유)가 안 됐으면 그 replica는 이번 주기를 쓰지 않습니다. "지금 앵커"는 쓰는 중인 앵커를 기다렸다가 그 위에 씁니다.
   - 관리자(`admin.audit.read`)는 다음을 할 수 있습니다.
     - `GET /api/v1/auth/admin/audit/integrity`로 상태 확인
     - `POST …/integrity/verify {from_seq?, to_seq?, anchors?}`로 구간 재계산(기본 = 마지막 앵커부터, 상한 200,000행 → 413)
