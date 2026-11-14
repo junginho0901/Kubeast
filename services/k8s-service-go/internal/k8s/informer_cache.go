@@ -420,15 +420,15 @@ func keyMeta(m metav1.ObjectMeta) metav1.ObjectMeta {
 }
 
 // overviewInformers returns the bundle's informer set, starting it on first
-// use. nil when the bundle has no cache client or a recent start was forbidden
-// (tried again after overviewRetryAfter).
+// use. nil when the bundle has no cache client, keeps none (noInformers) or a
+// recent start was forbidden (tried again after overviewRetryAfter).
 func (b *clientBundle) overviewInformers() *clusterInformers {
 	b.infMu.Lock()
 	defer b.infMu.Unlock()
 	if b.inf != nil {
 		return b.inf
 	}
-	if b.cacheClient == nil {
+	if b.cacheClient == nil || b.noInformers {
 		return nil
 	}
 	if !b.infFailedAt.IsZero() && time.Since(b.infFailedAt) < overviewRetryAfter {
