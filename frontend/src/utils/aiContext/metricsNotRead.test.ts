@@ -5,14 +5,13 @@ import { I18nextProvider, initReactI18next } from 'react-i18next'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
-import MonitoringNodes from '@/pages/monitoring/MonitoringNodes'
 import { DashboardTopResources } from '@/pages/dashboard/DashboardTopResources'
 import { PrometheusClusterMetricsFailure } from '@/pages/dashboard/PrometheusClusterMetrics'
-import { METRICS_NOT_READ, monitoringNotRead, topResourcesNotRead } from './metricsNotRead'
+import { METRICS_NOT_READ, topResourcesNotRead } from './metricsNotRead'
 
-// Numbers a screen could not read reach the floating chat as the screen says it in their place: the Monitoring tabs and
-// the Dashboard's top cards when the read failed or the cluster has no metrics-server, and the cluster metrics card when
-// Prometheus did not answer. A refusal is the screen's own layer (`metrics_refused`, `top_*_refused`).
+// Numbers a screen could not read reach the floating chat as the screen says it in their place: the Dashboard's top
+// cards when the read failed or the cluster has no metrics-server, and the cluster metrics card when Prometheus did not
+// answer. A refusal is the screen's own layer (`top_*_refused`).
 
 type Layer = { source?: string; summary: string; data?: Record<string, unknown> }
 const told: Layer[] = []
@@ -32,48 +31,6 @@ const textOf = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&quot;/g
 const httpError = (status: number, data?: unknown) => Object.assign(new Error(`Request failed with status code ${status}`), { response: { status, data } })
 const draw = (element: ReactElement, client = new QueryClient()) =>
   renderToStaticMarkup(createElement(I18nextProvider, { i18n }, createElement(QueryClientProvider, { client }, element)))
-
-describe('a Monitoring tab whose read failed', () => {
-  const REASON = 'get node metrics (status 503): the server is currently unable to handle the request'
-  const failedTab = (error: Error) => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false, retryOnMount: false } } })
-    client.setQueryData(['nodes', 'c1'], [{ name: 'n1' }])
-    const q = client.getQueryCache().build(client, { queryKey: ['node-metrics', 'c1'] })
-    q.setState({ ...q.state, status: 'error', error, errorUpdatedAt: Date.now(), errorUpdateCount: 1 })
-    return draw(createElement(MonitoringNodes, { metricsUnavailable: false, onMetricsUnavailable: () => {} }), client)
-  }
-
-  it('tells the chat the failure the tab shows in place of its numbers, which its own layer does not carry', () => {
-    const error = httpError(502, { detail: REASON })
-    const html = failedTab(error)
-    expect(html).toContain('data-testid="node-metrics-error"')
-    expect(told.filter((l) => (l.source ?? 'base') === 'base')).toEqual([])
-    const notRead = monitoringNotRead(t, 'nodes', { queryKey: ['node-metrics', 'c1'], error, data: undefined }, false)
-    expect(notRead?.data).toEqual({ tab: 'nodes', metrics_error: { reason: REASON } })
-    for (const part of [en.monitoring.nodes.errorTitle, REASON, en.monitoring.pods.retrying]) {
-      expect(textOf(html)).toContain(part)
-      expect(notRead?.summary).toContain(part)
-    }
-  })
-
-  it('names the Pods tab\'s namespace, as the tab\'s own layer does', () => {
-    const notRead = monitoringNotRead(t, 'pods', { queryKey: ['pod-metrics', 'c1', 'shop'], error: httpError(500, { detail: 'boom' }), data: undefined }, false)
-    expect(notRead?.data).toEqual({ tab: 'pods', filters: { namespace: 'shop' }, metrics_error: { reason: 'boom' } })
-    expect(notRead?.summary).toContain(en.monitoring.pods.errorTitle)
-  })
-
-  it('leaves a refusal to the tab, numbers kept to the failed refresh, and a tab with no namespace chosen alone', () => {
-    expect(monitoringNotRead(t, 'nodes', { queryKey: ['node-metrics', 'c1'], error: httpError(403, { detail: 'forbidden' }), data: undefined }, false)).toBeNull()
-    expect(monitoringNotRead(t, 'nodes', { queryKey: ['node-metrics', 'c1'], error: httpError(500), data: [{ name: 'n1' }] }, false)).toBeNull()
-    expect(monitoringNotRead(t, 'pods', { queryKey: ['pod-metrics', 'c1', ''], error: httpError(500), data: undefined }, false)).toBeNull()
-    expect(monitoringNotRead(t, 'nodes', { queryKey: ['node-metrics', 'c1'], error: null, data: undefined }, false)).toBeNull()
-    expect(monitoringNotRead(t, 'nodes', null, false)).toBeNull()
-  })
-
-  it('tells the chat a cluster without metrics-server, as the banner says', () => {
-    expect(monitoringNotRead(t, 'nodes', null, true)).toEqual({ summary: en.monitoring.metricsUnavailable, data: { tab: 'nodes', metrics_unavailable: true } })
-  })
-})
 
 describe("the Dashboard's top cards whose read failed", () => {
   const error = httpError(500, { detail: 'top resources: etcd timed out' })
