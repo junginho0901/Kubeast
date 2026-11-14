@@ -88,11 +88,15 @@ func TestAQuietTerminalIsPingedAndStaysOpen(t *testing.T) {
 	var version atomic.Int32
 	h, _ := liveHandler(t, func(http.ResponseWriter, *http.Request) {}, &version)
 	useExecutor(t, &fakeExecutor{endOnEOT: true})
+	served := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer close(served)
 		h.PodExecWS(w, withLogFileContext(r, "apps", "resource.pod.exec"))
 	}))
 	defer srv.Close()
 	b := browse(t, srv.URL+"?container=app")
+	// srv.Close does not wait for a hijacked socket's handler: close the socket and wait, before withKeepalive's cleanup.
+	t.Cleanup(func() { b.conn.Close(); <-served })
 	b.frame(t) // ready
 	b.frame(t) // prompt
 
