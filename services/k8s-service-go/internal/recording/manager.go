@@ -62,9 +62,10 @@ type Manager struct {
 	now        func() time.Time
 	putTimeout time.Duration
 
-	mu     sync.Mutex
-	active map[string]*tracked
-	wake   chan struct{}
+	mu       sync.Mutex
+	active   map[string]*tracked
+	wake     chan struct{}
+	flushing chan struct{} // one slot: the flush that holds it
 
 	failures    atomic.Int64
 	uploaded    atomic.Int64
@@ -73,7 +74,7 @@ type Manager struct {
 
 // New builds the manager; with recording off it returns a disabled manager.
 func New(cfg Config, pool *pgxpool.Pool) (*Manager, error) {
-	m := &Manager{cfg: cfg, pool: pool, now: time.Now, putTimeout: partPutTimeout, active: map[string]*tracked{}, wake: make(chan struct{}, 1)}
+	m := &Manager{cfg: cfg, pool: pool, now: time.Now, putTimeout: partPutTimeout, active: map[string]*tracked{}, wake: make(chan struct{}, 1), flushing: make(chan struct{}, 1)}
 	if !cfg.Enabled {
 		return m, nil
 	}
@@ -250,8 +251,15 @@ func (m *Manager) recover(ctx context.Context) {
 
 // flush uploads every tracked recording's new bytes as parts. A live
 // recording uploads whole lines only; an ended one uploads the rest and is
-// closed out.
+// closed out. One runs at a time: Run's and Shutdown's would both send the
+// same part and count it twice.
 func (m *Manager) flush(ctx context.Context) {
+	select {
+	case m.flushing <- struct{}{}:
+	case <-ctx.Done():
+		return
+	}
+	defer func() { <-m.flushing }()
 	m.mu.Lock()
 	list := make([]*tracked, 0, len(m.active))
 	for _, t := range m.active {
