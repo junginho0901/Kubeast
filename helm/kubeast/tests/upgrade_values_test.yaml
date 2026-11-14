@@ -83,3 +83,21 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no features.networkFlowMonitor
+  - it: stops values without the investigation windows
+    set:
+      features.alertInvestigation.window: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.window
+  - it: stops values without the investigation rules switch
+    set:
+      features.alertInvestigation.rules: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.rules
+  - it: stops values without the step 0 switch
+    set:
+      features.alertInvestigation.changesFirst: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.changesFirst
