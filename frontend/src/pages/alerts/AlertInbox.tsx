@@ -20,6 +20,7 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import InvestigationReportModal from '@/components/InvestigationReportModal'
 import SilenceList from './SilenceList'
 import SilenceModal from './SilenceModal'
+import { inboxPage } from './inboxPage'
 import { alertStoreEnabledFor } from '@/utils/features'
 import { alertResource, inboxState, liveLineOf, liveStateOf, severityChoices, silenceStart, storeCut, storeLimited, storeLimitedSeconds, storeRefetchMs, type LiveState } from '@/utils/alertInbox'
 import { severityClass, skipReason, statusClass as investigationClass } from '@/utils/investigationFormat'
@@ -136,10 +137,10 @@ export default function AlertInbox() {
     ? { reason: failureText(storeQuery.error), shownFrom: store ? storeQuery.dataUpdatedAt : null }
     : null
   const cut = storeCut(store)
-  const rows = data?.items ?? []
+  const { rows, limit: shownLimit } = inboxPage(data, rowsPerPage)
   const total = data?.total ?? 0
   const counts = data?.counts ?? { firing: 0, stale: 0, resolved: 0 }
-  const shown = data ? { ...data.filter, page: data.page } : { ...filter, page }
+  const shown = data ? { ...data.filter, limit: shownLimit, page: data.page } : { ...filter, page }
   const totalPages = Math.max(1, Math.ceil(total / shown.limit))
   const severities = severityChoices(data?.severities, severity)
   const forbidden = (error as { response?: { status?: number } } | null)?.response?.status === 403

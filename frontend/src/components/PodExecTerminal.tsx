@@ -233,6 +233,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
           <button
             type="button"
             className="text-slate-400 hover:text-ink"
+            aria-label={t('common.close', { defaultValue: 'Close' })}
             onClick={() => {
               try {
                 if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {

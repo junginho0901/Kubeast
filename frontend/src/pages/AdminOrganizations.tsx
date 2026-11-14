@@ -254,6 +254,7 @@ export default function AdminOrganizations() {
                 type="button"
                 onClick={() => setSelectedOrg(null)}
                 className="rounded-sm p-1.5 text-slate-400 hover:text-ink hover:bg-slate-800"
+                aria-label={tr('common.close', 'Close')}
               >
                 <X className="w-5 h-5" />
               </button>
