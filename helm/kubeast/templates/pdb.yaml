@@ -1,6 +1,7 @@
 {{- if .Values.pdb.enabled }}
 {{- $apps := list "auth-service" "k8s-service" "session-service" "frontend" "gateway" }}
 {{- if .Values.ai.enabled }}{{- $apps = concat $apps (list "ai-service" "tool-server") }}{{- end }}
+{{- if .Values.streams.enabled }}{{- $apps = append $apps "k8s-service-stream" }}{{- end }}
 {{- range $app := $apps }}
 ---
 apiVersion: policy/v1

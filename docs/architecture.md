@@ -44,6 +44,7 @@ The NGINX gateway receives every request and routes it to the microservices. Pos
 | `auth-service` | Go | 8004 | Authentication, JWT/JWKS, organizations/teams/RBAC, cluster registry |
 | `ai-service` | Python (FastAPI) | 8001 | LLM integration, streaming chatbot, optimization suggestions, Tool calling |
 | `k8s-service` | Go | 8002 | K8s resource CRUD, WS logs/exec, topology, Helm, GPU/DRA, multi-cluster pool |
+| `k8s-service-stream` | Go | 8002 | With `streams.enabled` only: the same image as k8s-service (`SERVER_ROLE=stream`) taking pod exec, the node shell and the followed logs |
 | `session-service` | Go | 8003 | Chat sessions / message history |
 | `tool-server` | Go | — | AI Tool call backend (runs kubectl) |
 | `model-config-controller` | Go (controller-runtime) | — | `ModelConfig` CRD controller |

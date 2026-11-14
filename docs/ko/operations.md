@@ -340,6 +340,31 @@ features:
 개발용(kind): `scripts/kind-logsearch.sh up` 다음에 `scripts/kind-tracing.sh up`을 실행하면 2번 클러스터에 Jaeger 2.22가 뜹니다.
 링크는 `kubectl port-forward -n tracing svc/jaeger 16686`(kubeast-b)을 실행한 뒤 `localhost:16686`에서 열립니다.
 
+## 터미널과 실시간 로그를 따로 맡는 서버
+
+`streams.enabled: true`이면 두 번째 Deployment `k8s-service-stream`이 k8s-service와 같은 이미지를 다른 역할(`SERVER_ROLE=stream`)로 돌립니다(Loki·Mimir가 한 바이너리를 `-target`으로 띄우는 것과 같은 방식).
+이 서버가 Pod exec, 노드 셸, 실시간 로그(컨테이너 출력, 로그 파일)를 맡고, k8s-service(`SERVER_ROLE=api`)가 실시간 목록을 포함한 나머지를 맡습니다.
+게이트웨이는 `files/nginx.conf`의 스트림 location 넷을 새 Service로 보내므로, 한쪽을 배포해도 다른 쪽 연결이 끊기지 않고 터미널이 많이 열려도 목록이 느려지지 않습니다.
+꺼져 있으면(기본) 예전처럼 k8s-service가 전부 맡고, 교체될 때 아래와 같은 방식으로 터미널을 차례로 끝냅니다(preStop 대기는 없음). `terminationGracePeriodSeconds`는 `drainSeconds + 30`(기본 90초)이고, 열린 터미널이 없으면 기다리지 않습니다.
+
+```yaml
+streams:
+  enabled: true
+  drainSeconds: 60     # 열린 터미널이 스스로 끝나기를 기다리는 시간
+  preStopSeconds: 10   # 드레인 전에 Service 엔드포인트에서 빠지는 시간
+resources:
+  k8sServiceStream:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
+```
+
+- **k8s-service-stream이 교체될 때**(배포, 노드 비우기): 새 파드가 먼저 준비됩니다(`maxSurge: 1`, `maxUnavailable: 0`). 옛 파드는 `preStopSeconds`를 기다린 뒤 SIGTERM을 받으면 `/ready`에 503으로 답하고, 실시간 로그를 바로 끝내며(브라우저가 다시 붙어 마지막으로 받은 줄 다음부터 이어 받습니다), 터미널마다 언제 닫히는지 적습니다. `drainSeconds`가 지나도 열려 있는 터미널은 그 까닭과 함께 닫히고(close code 1001, `server_shutdown`) 다시 연결 버튼이 나옵니다. `terminationGracePeriodSeconds`는 `preStopSeconds + drainSeconds + 30`입니다.
+- **같은 신원**: 두 Deployment 모두 `k8s-service` 서비스 계정을 쓰므로 IRSA 역할과 녹화 저장소 자격 증명(`sessionRecording.secret`)이 둘 다에 적용됩니다. 녹화는 stream 서버가 쓰고 k8s-service가 읽습니다. 스풀 볼륨은 stream 서버에만 붙습니다.
+- **함께 쓸 수 없는 값**: `sessionRecording.storage: file`(볼륨 하나를 파드 둘이 붙일 수 없음)과 1보다 큰 `streams.replicas`.
+- **NetworkPolicy**: `k8s-service-stream`은 게이트웨이에서만 연결을 받고, 데이터베이스·Redis·auth-service·클러스터 API 서버·`sessionRecording.egress`로만 나갑니다.
+- **게이트웨이 앞단**: 로드밸런서의 등록 해제 지연은 게이트웨이 파드가 끝나기 전에 끝나야 하고(AWS ALB 기본 300초), 콘솔로 가는 Envoy Gateway 라우트는 요청 타임아웃(기본 15초)에 스트림을 끊지 않게 두세요.
+- **지표**: 서버마다 `kubeast_terminals_open`, `kubeast_followed_logs_open`.
+
 ## 신뢰할 CA 추가 (사설 CA·TLS 가로채는 프록시)
 
 Kubeast 서비스는 밖으로 나가는 TLS 연결(Loki·외부 Prometheus·OIDC 발급자·Google API·감사 싱크·LLM 엔드포인트)에서 이미지에 든 공인 CA만 신뢰합니다.
