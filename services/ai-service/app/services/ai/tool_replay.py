@@ -5,7 +5,7 @@ cluster data instead of a dev cluster that changes between runs.
 Off unless the environment says otherwise, read once at start (main.py), and not a chart value:
 
   AI_TOOL_REPLAY_MODE           off (default) | record | replay
-  AI_TOOL_REPLAY_DIR            the directory of recorded answers (made in record mode)
+  AI_TOOL_REPLAY_DIR            the directory of recorded answers (made when missing)
   AI_TOOL_REPLAY_TEST_INSTALL   must be "true" for record or replay; the service does not start without it
 
 Every tool call of the chat (both loops and Claude Code) and of the alert investigator passes AIService.
@@ -78,10 +78,14 @@ def load(env: Mapping[str, str]) -> Settings:
     if not raw:
         raise ReplayConfigError(f"{MODE_ENV}={mode} needs {DIR_ENV}")
     directory = Path(raw)
-    if mode == RECORD:
+    # Made in replay too: a new pod starts with an empty /tmp, and the recordings are copied in after it has started
+    # (each call reads its file then; until they are there every call is a miss).
+    try:
         directory.mkdir(parents=True, exist_ok=True)
-    elif not directory.is_dir():
-        raise ReplayConfigError(f"{DIR_ENV}={raw}: no such directory to replay from")
+    except OSError as e:
+        raise ReplayConfigError(f"{DIR_ENV}={raw}: cannot be made ({type(e).__name__})") from e
+    if not directory.is_dir():
+        raise ReplayConfigError(f"{DIR_ENV}={raw}: not a directory")
     return Settings(mode=mode, directory=directory)
 
 
@@ -99,7 +103,9 @@ def start(env: Optional[Mapping[str, str]] = None) -> Settings:
     s = load(os.environ if env is None else env)
     configure(s)
     if s.mode != OFF:
-        log.warning("AI tool replay: %s, directory %s (a test install; tool answers are %s)", s.mode, s.directory,
+        held = sum(1 for _ in s.directory.glob("*.json"))
+        log.warning("AI tool replay: %s, directory %s holding %d recordings (a test install; tool answers are %s)",
+                    s.mode, s.directory, held,
                     "written to that directory" if s.mode == RECORD else "served from that directory, the cluster is not read")
     return s
 

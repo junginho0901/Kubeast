@@ -96,10 +96,19 @@ async def test_a_replay_on_another_cluster_or_with_other_arguments_finds_nothing
     assert json.loads(elsewhere)["status"] == json.loads(other_args)["status"] == "replay_miss"
 
 
+async def test_recordings_copied_in_after_the_start_are_found(mode, tmp_path):
+    recorded_in = mode("record", tmp_path / "recorded")
+    await call(make_service())
+    fresh = mode("replay", tmp_path / "fresh-pod" / "rec")  # a new pod's empty /tmp: made, and every call a miss
+    assert fresh.is_dir()
+    assert json.loads(await call(make_service()))["status"] == "replay_miss"
+    for f in recorded_in.glob("*.json"):
+        (fresh / f.name).write_text(f.read_text())
+    assert await call(make_service(content="now")) == ANSWER
+
+
 async def test_a_call_with_no_recording_is_an_error_and_reaches_no_tool_server(mode, tmp_path):
-    empty = tmp_path / "empty"
-    empty.mkdir()
-    mode("replay", empty)
+    mode("replay", tmp_path / "empty")
     service = make_service()
     answer = json.loads(await call(service))
     assert answer["status"] == "replay_miss" and "No recorded answer" in answer["error"] and "not read" in answer["error"]
@@ -142,8 +151,9 @@ def test_record_and_replay_do_not_start_without_the_test_install_variable(tmp_pa
         tool_replay.load({tool_replay.MODE_ENV: "on", tool_replay.TEST_INSTALL_ENV: "true"})
     with pytest.raises(tool_replay.ReplayConfigError, match=tool_replay.DIR_ENV):
         tool_replay.load({tool_replay.MODE_ENV: "replay", tool_replay.TEST_INSTALL_ENV: "true"})
-    with pytest.raises(tool_replay.ReplayConfigError, match="no such directory"):
-        tool_replay.load({tool_replay.MODE_ENV: "replay", tool_replay.DIR_ENV: str(tmp_path / "missing"),
+    (tmp_path / "file").write_text("")
+    with pytest.raises(tool_replay.ReplayConfigError, match="cannot be made"):
+        tool_replay.load({tool_replay.MODE_ENV: "replay", tool_replay.DIR_ENV: str(tmp_path / "file" / "rec"),
                           tool_replay.TEST_INSTALL_ENV: "true"})
 
 

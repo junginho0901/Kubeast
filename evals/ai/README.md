@@ -25,7 +25,7 @@ environment variables at start; they are not chart values and are off by default
 | Variable | |
 |---|---|
 | `AI_TOOL_REPLAY_MODE` | `off` (default), `record` or `replay` |
-| `AI_TOOL_REPLAY_DIR` | the directory of recordings, one `<tool>-<key>.json` per call; `record` makes it, `replay` refuses to start without it |
+| `AI_TOOL_REPLAY_DIR` | the directory of recordings, one `<tool>-<key>.json` per call, made when missing |
 | `AI_TOOL_REPLAY_TEST_INSTALL` | must be `true` for `record` or `replay`, or ai-service does not start, so a normal install never serves recorded answers |
 
 The key is the SHA-256 of the cluster, the tool and the arguments with sorted keys, after dropping the model's
@@ -41,8 +41,9 @@ investigation's tool call carry the same two fields, so a run can count its hits
 compare with replay only when it is high.
 
 The variables go on the ai-service Deployment of the dev install (record, then replay with the same user and cluster).
-Its `/tmp` is an `emptyDir`, so copy the directory out before switching modes (a new pod starts empty) and into the
-new pod before the replay run.
+Its `/tmp` is an `emptyDir` and a new pod starts with it empty: copy the directory out of the recording pod before
+switching modes and into the replaying pod once it runs. A call reads its file when it comes, so the copy needs no
+restart; the start line in the log says how many recordings the directory held then.
 
 ## A case
 
