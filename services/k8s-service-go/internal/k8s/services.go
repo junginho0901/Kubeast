@@ -149,7 +149,7 @@ func (s *Service) DescribeService(ctx context.Context, namespace, name string) (
 	}
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(svc.UID))
 
 	result["labels"] = svc.Labels
 	result["annotations"] = svc.Annotations

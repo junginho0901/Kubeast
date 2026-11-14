@@ -5,6 +5,7 @@ import { applyPriorityClassWatchEvent } from '@/pages/cluster/priorityclasses/pr
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useServerPods } from './useServerPods'
 import { preemptionPolicy } from './clusterDetail'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -31,6 +32,7 @@ export default function PriorityClassInfo({ name }: Props) {
     path: '/apis/scheduling.k8s.io/v1/priorityclasses',
     name,
   })
+  useDrawerFollowsEvents({ describeKey: ['priorityclass-describe', name], answer: desc, kind: 'PriorityClass', name })
 
   // Cluster-wide Pod scan for spec.priorityClassName matches. max 50 cap since
   // a system PriorityClass can be referenced by hundreds of pods.

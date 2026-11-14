@@ -83,6 +83,20 @@ export function allowedTopologyLines(topologies: unknown): string[] {
   })
 }
 
+// The Ingress drawer's class rows, from the describe answer: it reads the IngressClass the Ingress names (DescribeIngress)
+// and is read again when the Ingress changes. The list's row has the source as the drawer opened and no controller.
+export function ingressClassRows(describe: Raw | null | undefined, row: Raw | null | undefined): { source: string; controller: string; isDefault: string } {
+  const from = (key: string) => (describe && key in describe ? describe[key] : row?.[key])
+  const source = from('class_source')
+  const controller = from('class_controller')
+  const isDefault = from('class_is_default')
+  return {
+    source: typeof source === 'string' && source ? source : '-',
+    controller: typeof controller === 'string' && controller ? controller : '-',
+    isDefault: isDefault == null ? '-' : isDefault ? 'Yes' : 'No',
+  }
+}
+
 // A VolumeAttachment's Status as its list's column says it (an attach or detach error first), and kubectl's
 // ATTACHED (status.attached) beside it
 export function volumeAttachmentState(src: Pick<VolumeAttachmentInfo, 'attached' | 'attach_error' | 'detach_error'>): { status: string; attached: 'Yes' | 'No' | '-' } {

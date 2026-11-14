@@ -15,6 +15,7 @@ func RegisterNetwork(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/namespaces/{namespace}/services", h.GetServices)
 	r.Get("/api/v1/namespaces/{namespace}/services/{name}/describe", h.DescribeService)
 	r.Get("/api/v1/namespaces/{namespace}/services/{name}/yaml", h.GetServiceYAML)
+	r.Get("/api/v1/namespaces/{namespace}/services/{name}/backend-usage", h.ServiceBackendUsage)
 	r.Delete("/api/v1/namespaces/{namespace}/services/{name}", h.DeleteService)
 	r.Get("/api/v1/namespaces/{namespace}/services/{service_name}/connectivity", h.CheckServiceConnectivity)
 
