@@ -28,6 +28,7 @@ import { formatAge, formatTime, utcTitle } from '@/utils/time'
 import { failureText } from '@/utils/failureText'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { failureOf } from '@/hooks/useRefresh'
+import { keepSameRead } from '@/utils/keepSameRead'
 
 // Alerts: every alert Alertmanager sent for the selected cluster (features.alertInvestigation's webhook), firing or
 // resolved, for whoever reads the cluster as a whole. Resolving is the alert rule's: the marks here (acknowledged,
@@ -72,17 +73,23 @@ export default function AlertInbox() {
     const t = setTimeout(() => setSearch(searchInput.trim()), 300)
     return () => clearTimeout(t)
   }, [searchInput])
-  const [page, setPage] = useState(1)
+  // the page goes back to 1 with another tab, filter, search or cluster, in the same render (no read of the old page)
+  const pageKey = JSON.stringify([status, severity, mine, openOnly, search, currentCluster])
+  const [paged, setPaged] = useState({ key: pageKey, page: 1 })
+  const page = paged.key === pageKey ? paged.page : 1
+  const setPage = (p: number) => setPaged({ key: pageKey, page: p })
   const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: status })
 
   const inbox = inboxState(features.data, features.isPlaceholderData)
   const filter = { status, severity, mine, open: openOnly, q: search, limit: rowsPerPage, offset: (page - 1) * rowsPerPage }
-  // The rows on screen stay while another tab, page or search loads (never another cluster's); the pager, the counts
-  // and the AI context follow the answer's own filter and page.
+  // The rows on screen stay while another page or page size of them loads; another tab, severity, Mine, Open only,
+  // search or cluster waits for its own answer, as on first open. The pager, the counts and the AI context follow the
+  // answer's own filter and page.
+  const listKey = ['alert-inbox', 'list', currentCluster, filter]
   const { data, isLoading, isFetching, error, errorUpdatedAt, refetch } = useQuery({
-    queryKey: ['alert-inbox', 'list', currentCluster, filter],
+    queryKey: listKey,
     queryFn: async () => ({ ...(await api.listAlertInbox(filter)), filter, page }),
-    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[2] === currentCluster ? prev : undefined),
+    placeholderData: keepSameRead(listKey, ['limit', 'offset']),
     refetchInterval: 30_000,
     retry: false,
     enabled: inbox === 'on',
@@ -136,8 +143,6 @@ export default function AlertInbox() {
   const totalPages = Math.max(1, Math.ceil(total / shown.limit))
   const severities = severityChoices(data?.severities, severity)
   const forbidden = (error as { response?: { status?: number } } | null)?.response?.status === 403
-
-  useEffect(() => setPage(1), [status, severity, mine, openOnly, search, currentCluster])
 
   const open = (id: string | null) => {
     const next = new URLSearchParams(params)
