@@ -18,6 +18,8 @@ import (
 type Cache struct {
 	rdb       *redis.Client
 	connected bool
+	// noTTL logs once that an entry came without a positive TTL (Set).
+	noTTL sync.Once
 
 	mu      sync.RWMutex
 	mem     map[string]memEntry
@@ -31,9 +33,14 @@ type memEntry struct {
 	expires time.Time
 }
 
-// KeptPrefix starts the keys FlushAll leaves in Redis: what the replicas keep there for each other
-// (internal/clustersync), not a cached answer.
-const KeptPrefix = "kubeast:sync:"
+// Prefix starts every key the cache reads, writes and deletes in Redis; callers name keys without it. FlushAll deletes
+// these keys only, so a Redis database shared with another application, or with keys Kubeast keeps for longer, keeps
+// the rest.
+const Prefix = "kubeast:cache:"
+
+// MaxTTL is the longest the cache keeps an entry (the Helm list's generation mark). An entry set without a positive
+// TTL is kept this long: nothing the cache writes stays in Redis for ever.
+const MaxTTL = time.Hour
 
 // Options is the connection New makes, for another client of the same Redis.
 func Options(host string, port, db int, password string) *redis.Options {
@@ -92,7 +99,7 @@ func (c *Cache) Peek(ctx context.Context, key string, dest interface{}) bool {
 
 func (c *Cache) get(ctx context.Context, key string, dest interface{}) bool {
 	if c.connected {
-		data, err := c.rdb.Get(ctx, key).Bytes()
+		data, err := c.rdb.Get(ctx, Prefix+key).Bytes()
 		if err != nil {
 			return false
 		}
@@ -116,14 +123,21 @@ func (c *Cache) get(ctx context.Context, key string, dest interface{}) bool {
 	return json.Unmarshal(entry.data, dest) == nil
 }
 
+// Set keeps value under key for ttl; a ttl that is not positive keeps it for MaxTTL.
 func (c *Cache) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return
 	}
+	if ttl <= 0 {
+		ttl = MaxTTL
+		c.noTTL.Do(func() {
+			slog.Warn("cache: an entry set without a positive TTL is kept for the longest TTL", "key", cacheName(key), "ttl", MaxTTL)
+		})
+	}
 
 	if c.connected {
-		c.rdb.Set(ctx, key, data, ttl)
+		c.rdb.Set(ctx, Prefix+key, data, ttl)
 		return
 	}
 
@@ -164,7 +178,7 @@ func (c *Cache) Delete(ctx context.Context, key string) {
 	if c.connected {
 		ctx, cancel := invalidationContext(ctx)
 		defer cancel()
-		c.rdb.Del(ctx, key)
+		c.rdb.Del(ctx, Prefix+key)
 		return
 	}
 	c.mu.Lock()
@@ -176,7 +190,7 @@ func (c *Cache) DeletePattern(ctx context.Context, pattern string) {
 	if c.connected {
 		ctx, cancel := invalidationContext(ctx)
 		defer cancel()
-		iter := c.rdb.Scan(ctx, 0, pattern, 100).Iterator()
+		iter := c.rdb.Scan(ctx, 0, Prefix+pattern, 100).Iterator()
 		for iter.Next(ctx) {
 			c.rdb.Del(ctx, iter.Val())
 		}
@@ -199,10 +213,10 @@ func (c *Cache) IsConnected() bool {
 
 // FlushAll drops every entry. Use sparingly — only when cached data may no
 // longer reflect reality (e.g. after the underlying K8s cluster changes).
-// In Redis it deletes every key of the database but those under KeptPrefix.
+// In Redis it deletes the keys under Prefix and no other.
 func (c *Cache) FlushAll(ctx context.Context) error {
 	if c.connected {
-		return flushKeeping(ctx, c.rdb, KeptPrefix)
+		return flushPrefix(ctx, c.rdb)
 	}
 	c.mu.Lock()
 	c.mem = make(map[string]memEntry)
@@ -213,9 +227,9 @@ func (c *Cache) FlushAll(ctx context.Context) error {
 // flushBatch is how many keys one SCAN step asks for and one UNLINK removes.
 const flushBatch = 1000
 
-// flushKeeping unlinks every key of the database but those starting with keep. A key written during the scan may
-// stay, as one written right after a FLUSHDB would.
-func flushKeeping(ctx context.Context, rdb *redis.Client, keep string) error {
+// flushPrefix unlinks the keys under Prefix, found by SCAN MATCH. A key written during the scan may stay, as one
+// written right after a FLUSHDB would.
+func flushPrefix(ctx context.Context, rdb *redis.Client) error {
 	batch := make([]string, 0, flushBatch)
 	unlink := func() error {
 		if len(batch) == 0 {
@@ -225,11 +239,9 @@ func flushKeeping(ctx context.Context, rdb *redis.Client, keep string) error {
 		batch = batch[:0]
 		return err
 	}
-	iter := rdb.Scan(ctx, 0, "*", flushBatch).Iterator()
+	iter := rdb.Scan(ctx, 0, Prefix+"*", flushBatch).Iterator()
 	for iter.Next(ctx) {
-		if key := iter.Val(); !strings.HasPrefix(key, keep) {
-			batch = append(batch, key)
-		}
+		batch = append(batch, iter.Val())
 		if len(batch) == flushBatch {
 			if err := unlink(); err != nil {
 				return err
