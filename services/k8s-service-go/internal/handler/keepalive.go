@@ -19,9 +19,9 @@ var terminalPongWait = 60 * time.Second
 
 const terminalWriteWait = 10 * time.Second
 
-// pingTerminal pings until ctx ends, stop closes or a ping fails; a ping is no output, so a recording never holds one.
-func pingTerminal(ctx context.Context, conn *websocket.Conn, stop <-chan struct{}) {
-	ticker := time.NewTicker(keepalivePeriod)
+// pingTerminal pings every period until ctx ends, stop closes or a ping fails; a ping is no output, so a recording never holds one.
+func pingTerminal(ctx context.Context, conn *websocket.Conn, stop <-chan struct{}, period time.Duration) {
+	ticker := time.NewTicker(period)
 	defer ticker.Stop()
 	for {
 		select {
