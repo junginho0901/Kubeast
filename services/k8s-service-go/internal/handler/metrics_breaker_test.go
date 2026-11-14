@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
@@ -122,13 +123,74 @@ func TestMetricsReadOfAnUnreachableClusterStillCounts(t *testing.T) {
 	}
 }
 
-// Without metrics-server the group is not served (404): that is no metrics, an empty answer.
-func TestMetricsReadWithoutMetricsServerIsEmpty(t *testing.T) {
+// Without metrics-server the group is not served (404). Monitoring's reads say so as top-resources does, a 404 with
+// "the server could not find the requested resource", where they answered an empty list the tabs asked again every 5 s.
+// The cluster's answer is kept for the minute top-resources keeps it, so both reads, every namespace and a grant limited
+// to namespaces ask the cluster once within it.
+func TestMonitoringMetricsOfAClusterWithoutTheMetricsAPISayNotServed(t *testing.T) {
+	const notFound = "the server could not find the requested resource"
+	var asked atomic.Int64
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/apis/metrics.k8s.io/") {
+			asked.Add(1)
+		}
+		http.NotFound(w, r)
+	}))
+	defer api.Close()
+	h := metricsHandler(t, api.URL)
+	limited := auth.TokenPayload{UserID: "u2", Perms: auth.PermissionMatrix{"c1": {"resource.objects.read"}}, Namespaces: map[string][]string{"c1": {"web", "shop"}}}
+	reads := []struct {
+		name    string
+		path    string
+		read    http.HandlerFunc
+		payload *auth.TokenPayload
+	}{
+		{"nodes", "/api/v1/metrics/nodes", h.GetNodeMetrics, nil},
+		{"nodes again", "/api/v1/metrics/nodes", h.GetNodeMetrics, nil},
+		{"pods of every namespace", "/api/v1/metrics/pods?with_limits=1", h.GetPodMetrics, nil},
+		{"pods of one namespace", "/api/v1/metrics/pods?namespace=web&with_limits=1", h.GetPodMetrics, nil},
+		{"pods of a grant limited to namespaces", "/api/v1/metrics/pods?with_limits=1", h.GetPodMetrics, &limited},
+	}
+	for _, c := range reads {
+		payload := auth.TokenPayload{UserID: "u1", Perms: auth.PermissionMatrix{"*": {"*"}}}
+		if c.payload != nil {
+			payload = *c.payload
+		}
+		sep := "?"
+		if strings.Contains(c.path, "?") {
+			sep = "&"
+		}
+		req := httptest.NewRequest(http.MethodGet, c.path+sep+"cluster=c1", nil)
+		req = req.WithContext(auth.WithPayload(req.Context(), payload))
+		rec := httptest.NewRecorder()
+		h.ClusterMiddleware(c.read).ServeHTTP(rec, req)
+		var body struct {
+			Detail string `json:"detail"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || rec.Code != http.StatusNotFound || body.Detail != notFound {
+			t.Fatalf("%s: %d %s, want 404 %q", c.name, rec.Code, rec.Body.String(), notFound)
+		}
+		if got := asked.Load(); got != 1 {
+			t.Fatalf("%s: %d metrics.k8s.io lists asked in all, want 1 within the minute", c.name, got)
+		}
+	}
+	if h.svc.ClusterDown("c1") {
+		t.Error("a cluster without metrics-server was taken down")
+	}
+}
+
+// A grant limited to namespaces asking first gets the same answer: the namespaces' 404s are the API not served, not
+// namespaces the cluster does not have, which would read as no rows.
+func TestMonitoringPodMetricsOfALimitedGrantWithoutTheMetricsAPISayNotServed(t *testing.T) {
 	api := httptest.NewServer(http.NotFoundHandler())
 	defer api.Close()
 	h := metricsHandler(t, api.URL)
-	rec := readMetrics(h, "/api/v1/metrics/nodes", h.GetNodeMetrics)
-	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != "[]" {
+	payload := auth.TokenPayload{UserID: "u2", Perms: auth.PermissionMatrix{"c1": {"resource.objects.read"}}, Namespaces: map[string][]string{"c1": {"web", "shop", "api"}}}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/metrics/pods?with_limits=1&cluster=c1", nil)
+	req = req.WithContext(auth.WithPayload(req.Context(), payload))
+	rec := httptest.NewRecorder()
+	h.ClusterMiddleware(http.HandlerFunc(h.GetPodMetrics)).ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "could not find the requested resource") {
 		t.Fatalf("status %d, body %s", rec.Code, rec.Body.String())
 	}
 }

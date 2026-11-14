@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, isForbiddenError } from '@/services/api'
+import { api, isForbiddenError, isMetricsUnavailableError } from '@/services/api'
 import { useNodeShellSettings } from '@/services/nodeShellSettings'
 import { applyWatchEvent, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useChangeReader } from '@/services/useWatchChanges'
@@ -50,6 +50,8 @@ export function useNodeData(name: string) {
     queryKey: ['cluster', 'node-metrics'],
     queryFn: () => api.getNodeMetrics(),
     enabled: metricsAvailable,
+    // the answer that the cluster serves no metrics.k8s.io is not tried again
+    retry: (failureCount, error) => !isMetricsUnavailableError(error) && failureCount < 1,
   })
 
   useDrawerFollowsObject({

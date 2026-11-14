@@ -3,7 +3,7 @@
 // read beside a list, and not asked again (`skip`) until the page is opened again or another cluster is chosen, when
 // the banner forgets it too. With both parts refused the read stops.
 
-import type { TopResources } from '@/services/api'
+import { isMetricsNotServedText, type TopResources } from '@/services/api'
 import { recordForbidden } from '@/services/forbiddenStore'
 
 /** The parts the cluster refused since the page opened on cluster `ck`, each with the cluster's reason. */
@@ -60,7 +60,7 @@ export async function readTopResources(
   // The k8s-service answers 200 with empty lists and the metrics API error when the cluster has no metrics-server
   // ("could not find the requested resource").
   const apiErr = `${answer.pod_metrics_error || ''} ${answer.node_metrics_error || ''}`
-  if (/could not find the requested resource/i.test(apiErr)) {
+  if (isMetricsNotServedText(apiErr)) {
     const unavailable: any = new Error('metrics server not available')
     unavailable.response = { status: 503, data: { code: 'metrics_unavailable' } }
     throw unavailable

@@ -85,7 +85,9 @@ const GPU_CLOSED: Limited = { rule: 'closed', why: 'capacity, allocation and eac
 const SCREENS: Record<string, Screen> = {
   '/': { type: 'summary', reads: ['namespaces', 'pods', 'services', 'deployments.apps', 'persistentvolumeclaims', 'nodes'], cards: true, limited: { rule: 'narrowed', beyond: [NODES], may: ['prometheus'] } },
   '/cluster-view': { type: 'summary', reads: ['nodes', 'pods', 'namespaces'], limited: { rule: 'narrowed', beyond: [NODES] } },
-  '/monitoring': { type: 'summary', reads: ['nodes', 'pods', 'namespaces'], limited: { rule: 'narrowed', beyond: [NODES, { resource: 'nodes.metrics.k8s.io', named: 'metrics' }] } },
+  // self serves no metrics.k8s.io: within the minute k8s-service keeps that answer for the cluster (metricsListRead)
+  // every caller reads "not served", so the metrics refusal is named only past it
+  '/monitoring': { type: 'summary', reads: ['nodes', 'pods', 'namespaces'], limited: { rule: 'narrowed', beyond: [NODES], may: ['metrics'] } },
   '/alerts': { type: 'summary', reads: ['pods'], forbiddenId: 'alert-inbox-forbidden', menuRead: 'pods', limited: { rule: 'closed', why: 'an alert\'s labels are not bounded by a namespace: for whoever reads the cluster as a whole', named: [] } },
   '/cost': { type: 'skip', why: 'OpenCost runs on the second cluster only; on self the page is off (costEnabled) and only its menu entry is compared' },
   '/ai-chat': { type: 'skip', why: 'a chat: opening it reads no cluster list; what the AI tools may read is the AI symmetry test (2-2)' },
