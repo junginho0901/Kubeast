@@ -4,9 +4,9 @@ import { test, expect, type Locator, type Page, type Route } from '@playwright/t
 // that closes early and an empty 200 show as errors with the question and the letters that came still on screen. Tags and
 // tool names in a tool result stay the result's words: Copy, the 🔐 line and what is drawn after them are not moved by
 // them, nor by HTML an answer leaves open, and a tool block below a code block the answer left open is a tool block. A
-// stopped answer shows what is saved, and the floating chat keeps a turn on screen as AI Chat does: a failed one above the
-// next question, one that ended until the saved messages have it. The chat request is answered in the browser (no model);
-// nothing on the cluster changes.
+// stopped answer shows what is saved, a cut one is saved as it showed under its question, once, and the floating chat keeps
+// a turn on screen as AI Chat does: a failed one above the next question, one that ended until the saved messages have it.
+// The chat request is answered in the browser (no model); nothing on the cluster changes.
 
 const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
 const ASSISTANT = 'div.flex.gap-3.p-6:not(.flex-row-reverse)'
@@ -187,6 +187,107 @@ test.describe('How a chat answer ends', () => {
       await ask(page, 'and now?')
       await expect(page.locator(ASSISTANT).last()).toContainText('Now it works.')
       expect(answers).toBe(2)
+    } finally {
+      await dropSession(page, chat.session())
+    }
+  })
+})
+
+// ai-service saves the question before it calls the model and the answer only when it sees the turn end: these routes do
+// the same, so what the page saves of a cut stream goes where it would.
+async function saveAsAIService(page: Page, route: Route, messages: { role: string; content: string }[]) {
+  const id = /sessions\/([^/]+)\//.exec(route.request().url())?.[1]
+  const saved = await page.request.post(`/api/v1/sessions/${id}/messages?cluster=self`, { headers: XRW, data: { messages } })
+  expect(saved.ok(), `save messages: ${saved.status()}`).toBeTruthy()
+}
+
+async function savedMessages(page: Page, id: string) {
+  const read = await page.request.get(`/api/v1/sessions/${id}?cluster=self`, { headers: XRW })
+  expect(read.ok(), `read the conversation: ${read.status()}`).toBeTruthy()
+  return ((await read.json()) as { messages: { role: string; content: string; usage?: Record<string, unknown> | null }[] }).messages
+}
+
+const pageSave = (page: Page) => page.waitForResponse((r) => /\/api\/v1\/sessions\/[^/]+\/messages/.test(r.url()) && r.request().method() === 'POST')
+
+test.describe('A cut answer is saved as it showed', () => {
+  test('AI chat: a stream that closes without [DONE] leaves its letters saved under the question, marked ended by an error', async ({ page }) => {
+    const chat = answering(page, /\/api\/v1\/ai\/sessions\/[^/]+\/chat/, async (route) => {
+      await saveAsAIService(page, route, [{ role: 'user', content: QUESTION }])
+      await route.fulfill({ contentType: 'text/event-stream', body: sse({ content: PARTIAL }) })
+    })
+    await chat.ready
+    try {
+      const saved = pageSave(page)
+      await sendInAIChat(page)
+      await chat.answered
+      const response = await saved
+      expect(response.request().postDataJSON()).toEqual({ messages: [{ role: 'assistant', content: PARTIAL, failed: true, answers: QUESTION }] })
+      expect(await response.json()).toMatchObject({ saved: 1 })
+      await expect(page.locator(ASSISTANT).last()).toContainText(ENDINGS[1].error)
+      const messages = await savedMessages(page, chat.session())
+      expect(messages.map((m) => [m.role, m.content])).toEqual([['user', QUESTION], ['assistant', PARTIAL]])
+      expect(messages[1].usage).toEqual({ failed: true })
+    } finally {
+      await dropSession(page, chat.session())
+    }
+  })
+
+  test('AI chat: a stream that lost only its end keeps the one answer ai-service saved', async ({ page }) => {
+    const whole = `${PARTIAL}, both healthy.`
+    const chat = answering(page, /\/api\/v1\/ai\/sessions\/[^/]+\/chat/, async (route) => {
+      await saveAsAIService(page, route, [{ role: 'user', content: QUESTION }, { role: 'assistant', content: whole }])
+      await route.fulfill({ contentType: 'text/event-stream', body: sse({ content: whole }) })
+    })
+    await chat.ready
+    try {
+      const saved = pageSave(page)
+      await sendInAIChat(page)
+      await chat.answered
+      expect(await (await saved).json()).toMatchObject({ saved: 0 })
+      const messages = await savedMessages(page, chat.session())
+      expect(messages.map((m) => [m.role, m.content])).toEqual([['user', QUESTION], ['assistant', whole]])
+    } finally {
+      await dropSession(page, chat.session())
+    }
+  })
+
+  test('floating chat: the cut answer is saved once, and stays above the next question and its answer', async ({ page }) => {
+    let answers = 0
+    const chat = answering(page, /\/api\/v1\/ai\/sessions\/[^/]+\/floating-chat/, async (route) => {
+      answers++
+      if (answers === 1) {
+        await saveAsAIService(page, route, [{ role: 'user', content: QUESTION }])
+        return route.fulfill({ contentType: 'text/event-stream', body: sse({ content: PARTIAL }) })
+      }
+      await saveAsAIService(page, route, [{ role: 'user', content: 'and now?' }, { role: 'assistant', content: 'Now it works.' }])
+      await route.fulfill({ contentType: 'text/event-stream', body: sse({ content: 'Now it works.' }, '[DONE]') })
+    })
+    await chat.ready
+    try {
+      const input = await openFloating(page)
+      const saved = pageSave(page)
+      await input.fill(QUESTION)
+      await input.press('Enter')
+      await chat.answered
+      expect(await (await saved).json()).toMatchObject({ saved: 1 })
+      const list = page.getByTestId('floating-messages')
+      await expect(list).toContainText(ENDINGS[1].error)
+
+      await input.fill('and now?')
+      await input.press('Enter')
+      await expect(page.getByTestId('floating-answer').last()).toContainText('Now it works.')
+      // the read of the saved messages after the answer has come
+      await page.waitForTimeout(500)
+
+      const text = await list.innerText()
+      const places = [QUESTION, PARTIAL, 'and now?', 'Now it works.'].map((words) => text.indexOf(words))
+      expect(places.every((at) => at !== -1), text).toBe(true)
+      expect([...places].sort((a, b) => a - b)).toEqual(places)
+      expect(text.split(PARTIAL).length - 1, 'the saved answer and the one on screen are one').toBe(1)
+      expect(text.search(ENDINGS[1].error)).toBeGreaterThan(places[1])
+      expect(text.search(ENDINGS[1].error)).toBeLessThan(places[2])
+      const messages = await savedMessages(page, chat.session())
+      expect(messages.map((m) => [m.role, m.content])).toEqual([['user', QUESTION], ['assistant', PARTIAL], ['user', 'and now?'], ['assistant', 'Now it works.']])
     } finally {
       await dropSession(page, chat.session())
     }
