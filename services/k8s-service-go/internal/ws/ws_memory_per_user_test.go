@@ -140,9 +140,10 @@ func TestWSMemoryPerUser(t *testing.T) {
 	}
 }
 
-// An idle socket holds its reader, its session check and little else. It held 47 KiB of live heap while its queue
-// took 256 frames as values and gorilla gave it a write buffer of its own; by pointer and from a pool, about 18 KiB
-// (TestWSMemoryPerUser). The browsers run in a second process, so only the server's side is counted.
+// An idle socket holds its reader, its writer and little else. It held 47 KiB of live heap while its queue took 256
+// frames as values and gorilla gave it a write buffer of its own; by pointer and from a pool, about 18 KiB
+// (TestWSMemoryPerUser). Its session is checked by the one ticker of auth.LiveSessions, where it had a goroutine of its
+// own (3 a socket). The browsers run in a second process, so only the server's side is counted.
 func TestAnIdleSocketHoldsLittleOfItsOwn(t *testing.T) {
 	if testing.Short() {
 		t.Skip("starts a second process")
@@ -153,15 +154,20 @@ func TestAnIdleSocketHoldsLittleOfItsOwn(t *testing.T) {
 	wsURL := memMuxServer(t, m)
 	peer.crowd(t, m, wsURL, [][]memWatch{nil}, nil)
 	before := takeMemSnapshot(true)
-	var perSocket float64
+	var perSocket, goroutines float64
 	peer.crowd(t, m, wsURL, make([][]memWatch, sockets), func() {
 		held := takeMemSnapshot(true)
 		perSocket = (float64(held.heapAlloc) - float64(before.heapAlloc)) / sockets / 1024
+		goroutines = float64(held.goroutines-before.goroutines) / sockets
 	})
 	if perSocket > 30 {
 		t.Errorf("an idle socket holds %.1f KiB of live heap, want at most 30", perSocket)
 	}
-	t.Logf("an idle socket holds %.1f KiB of live heap", perSocket)
+	// the reader and the writer; the sweep is one for every socket
+	if goroutines > 2.05 {
+		t.Errorf("an idle socket holds %.2f goroutines, want 2", goroutines)
+	}
+	t.Logf("an idle socket holds %.1f KiB of live heap and %.2f goroutines", perSocket, goroutines)
 }
 
 // memMuxServer serves m's socket as k8s-service does behind the gateway: plain HTTP, each person signed in as an account
