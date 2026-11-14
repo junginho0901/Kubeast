@@ -11,7 +11,7 @@ import { pageOfItems } from '@/hooks/usePagedItems'
 import { ClusterViewContext, type ClusterViewContextValue } from './ClusterViewContext'
 import { PodNodeGrid } from './PodNodeGrid'
 import { useClusterDerived } from './hooks/useClusterDerived'
-import { NODE_BOXES_PER_PAGE, boxPageOf, cellsOfPage } from './nodeBoxPages'
+import { NODE_BOXES_PER_PAGE, boxPageLayer, boxPageOf, cellsOfPage } from './nodeBoxPages'
 
 // Cluster View on 1 000 nodes: the map draws a cell for every node and the boxes under it are one page of a fixed
 // size with the footer every list has, in the map's order, which does not move between refreshes; a cell's click lands
@@ -33,6 +33,9 @@ vi.mock('@/services/useKubeWatchList', () => ({
   useKubeWatchList: (o: { query: string }) => { watches.queries.push(o.query) },
 }))
 vi.mock('@/hooks/useCanCreate', () => ({ useWritesRefusedIn: () => () => false }))
+// what the boxes tell the floating chat (the map's own layer is useClusterAIContext)
+const chat: { current: { summary?: string; data?: Record<string, unknown> } | null } = { current: null }
+vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: { summary?: string; data?: Record<string, unknown> } | null) => { chat.current = input } }))
 
 const i18n = i18next.createInstance()
 beforeAll(async () => {
@@ -125,8 +128,23 @@ describe('Cluster View on 1 000 nodes', () => {
     })
   })
 
+  it('tells the floating chat the page of boxes shown and its nodes, as a paged list does', () => {
+    const html = render(summaryOf(reversed))
+    expect(chat.current?.summary).toBe('클러스터 뷰 노드 박스 1/100쪽 — 노드 1000개 중 1-10번째')
+    expect(chat.current?.data).toEqual({
+      node_boxes: {
+        pagination: { current_page: 1, total_pages: 100, page_size: NODE_BOXES_PER_PAGE, total_count: 1000, showing_count: 10 },
+        nodes: boxes(html),
+      },
+    })
+    expect(boxPageLayer(54, 100, 1000, ['node-530'])?.summary).toBe('클러스터 뷰 노드 박스 54/100쪽 — 노드 1000개 중 531-540번째')
+  })
+
   it('draws a small cluster as one page, nothing outlined, with the footer', () => {
+    chat.current = { summary: 'before' }
     const html = render(summaryOf(['cp-0', 'node-001', 'node-002', 'node-003']))
+    // one page shows every node, which the map's layer names: no layer of its own
+    expect(chat.current).toBeNull()
     expect({ boxes: boxes(html), footer: footer(html), outlined: attr(html, 'data-page-cells') ?? null }).toEqual({
       boxes: ['cp-0', 'node-001', 'node-002', 'node-003'],
       footer: 'Showing 1-4 of 4',

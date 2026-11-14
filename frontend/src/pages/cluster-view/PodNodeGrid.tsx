@@ -6,12 +6,13 @@ import { api, type PodInfo } from '@/services/api'
 import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useWritesRefusedIn } from '@/hooks/useCanCreate'
 import { usePagedItems } from '@/hooks/usePagedItems'
+import { useAIContext } from '@/hooks/useAIContext'
 import { ListPager } from '@/components/ListPager'
 import { getPodHealth, getHealthIcon } from './podHealth'
 import { useClusterView } from './ClusterViewContext'
 import { pickMainContainer, podToDetail } from './types'
 import { ClusterNodeMap } from './ClusterNodeMap'
-import { NODE_BOXES_PER_PAGE, boxPageOf, cellsOfPage } from './nodeBoxPages'
+import { NODE_BOXES_PER_PAGE, boxPageLayer, boxPageOf, cellsOfPage } from './nodeBoxPages'
 import type { NodeEntry } from './hooks/useClusterDerived'
 
 // The node map, then a box per node with its pod cards, NODE_BOXES_PER_PAGE boxes a page in the map's order (the
@@ -39,6 +40,9 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod }: 
   // a new search or namespace starts at the first page; a refresh of the same nodes keeps the page
   const { items: pageEntries, page, totalPages, total, setPage } = usePagedItems(entries, NODE_BOXES_PER_PAGE, `${selectedNamespace}\n${searchQuery.trim()}`)
   const outlined = totalPages > 1 ? cellsOfPage(page, entries.length) : { start: 0, end: 0 }
+  // the floating chat is told which page of boxes is shown, and its nodes
+  const boxNodes = pageEntries.map((e) => e.node || 'unscheduled')
+  useAIContext(boxPageLayer(page, totalPages, total, boxNodes), [page, totalPages, total, boxNodes.join('\n')])
   // the box brought to the top once its page is drawn: a map cell's node, or the first box of a page turned to
   const [scrollTo, setScrollTo] = useState<{ at: number } | null>(null)
   const goTo = (p: number, at: number) => {
