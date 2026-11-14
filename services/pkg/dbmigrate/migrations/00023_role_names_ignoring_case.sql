@@ -11,8 +11,10 @@
 -- is renamed "<name>-renamed-<id>" and loses what it held on a cluster: its grants are removed (a temporary one goes
 -- back to the grant it would restore), the restore of a temporary grant that would bring it back is dropped, its
 -- pending and approved access requests end (end_reason role_renamed) and the holders' tokens end. Accounts whose
--- account level is such a role keep it under the new name. Each change leaves an audit row by actor system /
--- migration, unsealed, which the audit chain seals as any other.
+-- account level is such a role keep it under the new name, except a role of Pending's group (PENDING): the builds
+-- before read the account level ignoring case and kept such an account waiting for approval, so it moves to the
+-- built-in Pending, stored here when it is not yet. Each change leaves an audit row by actor system / migration,
+-- unsealed, which the audit chain seals as any other.
 
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION role_group_slug(role_name text) RETURNS text
@@ -40,6 +42,7 @@ DECLARE
   candidate text;
   n         int;
   g         record;
+  pending   int;
 BEGIN
   SELECT coalesce(array_agg(id ORDER BY id), '{}'), coalesce(array_agg(name ORDER BY id), '{}'), coalesce(array_agg(keeper ORDER BY id), '{}')
     INTO ids, olds, keepers
@@ -59,13 +62,13 @@ BEGIN
     RETURN;
   END IF;
 
-  -- New names, in id order, each checked against every name stored at that moment. 100 characters is the role form's
-  -- limit.
+  -- New names, in id order, each checked against every name stored at that moment. The old name is trimmed of the
+  -- whitespace role_group_slug trims (Go's). 100 characters is the role form's limit.
   FOR i IN 1 .. cardinality(ids) LOOP
     suffix := '-renamed-' || ids[i];
     n := 1;
     LOOP
-      candidate := left(btrim(olds[i]), 100 - length(suffix)) || suffix;
+      candidate := left(btrim(olds[i], E' \t\n\u000b\f\r\u0085                 　'), 100 - length(suffix)) || suffix;
       EXIT WHEN NOT EXISTS (SELECT 1 FROM roles WHERE id <> ids[i] AND role_group_slug(name) = role_group_slug(candidate));
       n := n + 1;
       suffix := '-renamed-' || ids[i] || '-' || n;
@@ -140,6 +143,28 @@ BEGIN
     VALUES ('auth', 'access.request.expire', 'system', 'migration', g.user_id, g.email, 'user', g.user_id, g.cluster_id,
             jsonb_build_object('request_id', g.id, 'role', olds[i], 'status', g.status, 'end_reason', 'role_renamed', 'renamed_to', news[i]),
             'success');
+  END LOOP;
+
+  -- An account level of a renamed role of Pending's group waits for approval as before, on the built-in Pending.
+  FOR g IN
+    SELECT u.id, u.email, u.role_id
+      FROM auth_users u
+     WHERE u.role_id = ANY (ids) AND keepers[array_position(ids, u.role_id)] = 'Pending'
+     ORDER BY u.id
+  LOOP
+    IF pending IS NULL THEN
+      SELECT id INTO pending FROM roles WHERE name = 'Pending';
+      IF pending IS NULL THEN
+        INSERT INTO roles (name, description, is_system) VALUES ('Pending', '승인 대기', true) RETURNING id INTO pending;
+      END IF;
+    END IF;
+    i := array_position(ids, g.role_id);
+    UPDATE auth_users SET role_id = pending, updated_at = NOW() WHERE id = g.id;
+    users := users || g.id::text;
+    INSERT INTO auth_audit_logs (service, action, actor_user_id, actor_email, target_user_id, target_email, target_type, target_id, before, after, result)
+    VALUES ('auth', 'user.role.update', 'system', 'migration', g.id, g.email, 'user', g.id,
+            jsonb_build_object('role', olds[i]),
+            jsonb_build_object('role', 'Pending', 'reason', 'role_renamed', 'renamed_to', news[i]), 'success');
   END LOOP;
 
   -- Tokens naming a removed grant or an old name: the next request signs in again.
