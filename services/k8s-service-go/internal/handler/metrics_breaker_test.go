@@ -124,7 +124,8 @@ func TestMetricsReadOfAnUnreachableClusterStillCounts(t *testing.T) {
 }
 
 // serveDiscovery answers API discovery as a legacy (not aggregated) API server: core v1 and, with metrics,
-// metrics.k8s.io/v1beta1 (metrics-server installed). It counts the discovery reads (the group list asked) in reads.
+// metrics.k8s.io/v1beta1 (metrics-server installed), and the metrics.k8s.io group's document, a 404 without metrics. It
+// counts the discovery reads (the group list and the group's document asked) in reads.
 func serveDiscovery(w http.ResponseWriter, r *http.Request, metrics bool, reads *atomic.Int64) bool {
 	const metricsGV = `{"groupVersion":"metrics.k8s.io/v1beta1","version":"v1beta1"}`
 	w.Header().Set("Content-Type", "application/json")
@@ -140,6 +141,13 @@ func serveDiscovery(w http.ResponseWriter, r *http.Request, metrics bool, reads 
 			groups = `{"name":"metrics.k8s.io","versions":[` + metricsGV + `],"preferredVersion":` + metricsGV + `}`
 		}
 		_, _ = w.Write([]byte(`{"kind":"APIGroupList","apiVersion":"v1","groups":[` + groups + `]}`))
+	case "/apis/metrics.k8s.io":
+		reads.Add(1)
+		if !metrics {
+			http.NotFound(w, r)
+			return true
+		}
+		_, _ = w.Write([]byte(`{"kind":"APIGroup","apiVersion":"v1","name":"metrics.k8s.io","versions":[` + metricsGV + `],"preferredVersion":` + metricsGV + `}`))
 	case "/apis/metrics.k8s.io/v1beta1":
 		if !metrics {
 			http.NotFound(w, r)
@@ -154,8 +162,8 @@ func serveDiscovery(w http.ResponseWriter, r *http.Request, metrics bool, reads 
 
 // Without metrics-server the group is not served. Monitoring's reads say so as top-resources does, a 404 with "the
 // server could not find the requested resource", where they answered an empty list the tabs asked again every 5 s. The
-// cluster's discovery, which lists no metrics.k8s.io, says it for every caller: both reads, every namespace and a grant
-// limited to namespaces ask the cluster no list, and discovery is read once.
+// first read's 404 reads the group's discovery once, which says it for every caller: after it both reads, every
+// namespace and a grant limited to namespaces ask the cluster no list for the minute.
 func TestMonitoringMetricsOfAClusterWithoutTheMetricsAPISayNotServed(t *testing.T) {
 	const notFound = "the server could not find the requested resource"
 	var asked, discovery atomic.Int64
@@ -202,8 +210,8 @@ func TestMonitoringMetricsOfAClusterWithoutTheMetricsAPISayNotServed(t *testing.
 		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || rec.Code != http.StatusNotFound || body.Detail != notFound {
 			t.Fatalf("%s: %d %s, want 404 %q", c.name, rec.Code, rec.Body.String(), notFound)
 		}
-		if got, reads := asked.Load(), discovery.Load(); got != 0 || reads != 1 {
-			t.Fatalf("%s: %d metrics.k8s.io lists asked and %d discovery reads in all, want none and one", c.name, got, reads)
+		if got, reads := asked.Load(), discovery.Load(); got != 1 || reads != 1 {
+			t.Fatalf("%s: %d metrics.k8s.io lists asked and %d discovery reads in all, want the first read's and one", c.name, got, reads)
 		}
 	}
 	if h.svc.ClusterDown("c1") {
@@ -211,11 +219,17 @@ func TestMonitoringMetricsOfAClusterWithoutTheMetricsAPISayNotServed(t *testing.
 	}
 }
 
-// Where discovery could not be read (this stand-in answers 404 for the group list too) a grant limited to namespaces
-// asks the cluster and gets the same answer from its 404s: the API not served, not namespaces the cluster does not have,
-// which would read as no rows.
+// Where discovery could not be read (this stand-in answers it 503 and every list 404) a grant limited to namespaces
+// gets the same answer from its own 404s: the API not served, not namespaces the cluster does not have, which would
+// read as no rows.
 func TestMonitoringPodMetricsOfALimitedGrantWithoutTheMetricsAPISayNotServed(t *testing.T) {
-	api := httptest.NewServer(http.NotFoundHandler())
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/apis" || r.URL.Path == "/apis/metrics.k8s.io" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		http.NotFound(w, r)
+	}))
 	defer api.Close()
 	h := metricsHandler(t, api.URL)
 	payload := auth.TokenPayload{UserID: "u2", Perms: auth.PermissionMatrix{"c1": {"resource.objects.read"}}, Namespaces: map[string][]string{"c1": {"web", "shop", "api"}}}

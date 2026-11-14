@@ -107,20 +107,9 @@ type discovered struct {
 	failed []string
 }
 
-// servesGroup says whether the request's cluster serves an API group, from the discovery apiResources keeps, read once
-// for every caller of the cluster: discovery is what the API server shows every signed-in identity (the default
-// system:discovery ClusterRole, bound to system:authenticated), so the answer is no one caller's. The last read stands
-// for apiResourcesTTL, a partial one too, so this asks discovery no more often than apiResources' minute. A group the
-// read lists or names as not answering is served, and so is every group while discovery cannot be read: the caller
-// asks as it would without the check.
-func (s *Service) servesGroup(ctx context.Context, group string) bool {
-	d, ok := s.lastDiscovery(ctxClusterID(ctx))
-	if !ok {
-		var err error
-		if d, err = s.discover(ctx); err != nil {
-			return true
-		}
-	}
+// servesGroup says whether this discovery read serves an API group: the read lists it, or names it as not answering
+// (registered, its server down).
+func (d discovered) servesGroup(group string) bool {
 	if slices.Contains(d.failed, group) {
 		return true
 	}

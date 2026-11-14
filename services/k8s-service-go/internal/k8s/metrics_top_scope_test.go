@@ -22,8 +22,10 @@ import (
 
 // metricsAPI stands in for an API server and its metrics.k8s.io: each namespace's pods as given, or the status a
 // namespace answers instead, or, while not served, the API server's plain 404 for a path no API group serves. It counts
-// the metrics lists asked and the most under way at once. With discovery it also serves API discovery, listing
-// metrics.k8s.io while served, and the client reads it.
+// the metrics lists asked and the most under way at once. It serves the group's discovery document
+// (/apis/metrics.k8s.io) while served, as kube-aggregator does from the APIService whether or not metrics-server
+// answers; with discovery it also serves the whole API discovery, listing metrics.k8s.io while served, and the client
+// reads it.
 type metricsAPI struct {
 	notServed atomic.Bool
 	refused   bool                // every list answers 403 with a Status, as kube-apiserver refuses an identity
@@ -38,12 +40,17 @@ type metricsAPI struct {
 	// down: metrics-server registered and not answering: discovery names metrics.k8s.io/v1beta1 and its resources answer
 	// 503, as do its lists
 	down bool
+	// discoveryFails: discovery (/apis and /apis/metrics.k8s.io) answers 503 after discoveryDelay
+	discoveryFails bool
+	discoveryDelay time.Duration
 
-	mu             sync.Mutex
-	asked          []string
-	running        int
-	most           int
-	discoveryReads int // the group list (/apis) asked: once a discovery read, twice when a group does not answer
+	mu      sync.Mutex
+	asked   []string
+	running int
+	most    int
+	// discoveryReads: the discovery requests, the group list (/apis: once a discovery read, twice when a group does not
+	// answer) and the metrics.k8s.io group's document
+	discoveryReads int
 }
 
 func (a *metricsAPI) service(t *testing.T) *Service {
@@ -68,16 +75,15 @@ func (a *metricsAPI) service(t *testing.T) *Service {
 // serveDiscovery answers API discovery as a legacy (not aggregated) API server: core v1, apps/v1 and, while served,
 // metrics.k8s.io/v1beta1.
 func (a *metricsAPI) serveDiscovery(w http.ResponseWriter, r *http.Request) bool {
-	const metricsGV = `{"groupVersion":"metrics.k8s.io/v1beta1","version":"v1beta1"}`
 	switch r.URL.Path {
 	case "/api":
 		_, _ = w.Write([]byte(`{"kind":"APIVersions","versions":["v1"]}`))
 	case "/api/v1":
 		_, _ = w.Write([]byte(`{"kind":"APIResourceList","groupVersion":"v1","resources":[{"name":"nodes","singularName":"node","namespaced":false,"kind":"Node","verbs":["get","list"]},{"name":"pods","singularName":"pod","namespaced":true,"kind":"Pod","verbs":["get","list"]}]}`))
 	case "/apis":
-		a.mu.Lock()
-		a.discoveryReads++
-		a.mu.Unlock()
+		if a.discoveryFailed(w) {
+			return true
+		}
 		groups := []string{`{"name":"apps","versions":[{"groupVersion":"apps/v1","version":"v1"}],"preferredVersion":{"groupVersion":"apps/v1","version":"v1"}}`}
 		if !a.notServed.Load() {
 			groups = append(groups, `{"name":"metrics.k8s.io","versions":[`+metricsGV+`],"preferredVersion":`+metricsGV+`}`)
@@ -100,6 +106,32 @@ func (a *metricsAPI) serveDiscovery(w http.ResponseWriter, r *http.Request) bool
 	return true
 }
 
+const metricsGV = `{"groupVersion":"metrics.k8s.io/v1beta1","version":"v1beta1"}`
+
+// serveMetricsGroup answers the metrics.k8s.io group's discovery document, a 404 while not served.
+func (a *metricsAPI) serveMetricsGroup(w http.ResponseWriter, r *http.Request) {
+	if a.discoveryFailed(w) {
+		return
+	}
+	if a.notServed.Load() {
+		http.NotFound(w, r)
+		return
+	}
+	_, _ = w.Write([]byte(`{"kind":"APIGroup","apiVersion":"v1","name":"metrics.k8s.io","versions":[` + metricsGV + `],"preferredVersion":` + metricsGV + `}`))
+}
+
+// discoveryFailed counts a discovery request and, with discoveryFails, answers it 503.
+func (a *metricsAPI) discoveryFailed(w http.ResponseWriter) bool {
+	a.mu.Lock()
+	a.discoveryReads++
+	a.mu.Unlock()
+	time.Sleep(a.discoveryDelay)
+	if a.discoveryFails {
+		unavailable(w)
+	}
+	return a.discoveryFails
+}
+
 // unavailable is the aggregator's answer for an APIService whose server does not answer.
 func unavailable(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusServiceUnavailable)
@@ -110,6 +142,10 @@ func (a *metricsAPI) serve(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.URL.Path == "/api/v1/nodes" {
 		_, _ = w.Write([]byte(`{"items":[]}`))
+		return
+	}
+	if r.URL.Path == "/apis/"+metricsGroup {
+		a.serveMetricsGroup(w, r)
 		return
 	}
 	if a.discovery && a.serveDiscovery(w, r) {

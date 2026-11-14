@@ -10,11 +10,13 @@ import (
 	"sort"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 	"github.com/junginho0901/kubeast/services/pkg/response"
@@ -324,9 +326,13 @@ func (s *Service) topPodItems(ctx context.Context) ([]podMetricsItem, error) {
 }
 
 // podMetricItems is one metrics.k8s.io list of the pods in namespace ("" = every namespace). An answer that does not
-// parse is no rows.
+// parse is no rows. metrics.k8s.io not served is ErrMetricsNotServed, as Monitoring's pod read gives it, so a grant
+// limited to namespaces does not skip it as a namespace the cluster does not have.
 func (s *Service) podMetricItems(ctx context.Context, namespace string) ([]podMetricsItem, error) {
-	body, _, err := s.metricsListRead(ctx, podMetricsPath(namespace))
+	body, status, err := s.metricsListRead(ctx, podMetricsPath(namespace))
+	if metricsNotServed(status, err) {
+		return nil, metricsNotServedError{err: err}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -341,18 +347,123 @@ func (s *Service) podMetricItems(ctx context.Context, namespace string) ([]podMe
 const metricsGroup = "metrics.k8s.io"
 
 // metricsListRead is metricsRequest for one of the metrics.k8s.io lists of top-resources and Monitoring's Nodes and Pods
-// tabs, asked only of a cluster whose API discovery serves metrics.k8s.io (servesGroup). On a cluster without
-// metrics-server every caller gets, without a request, the answer the API server gives an identity it lets list them:
-// the 404 for a path no API group serves, "the server could not find the requested resource". The API server refuses a
-// list (403) before it looks for the path, so asking would give a caller it refuses its refusal and the others the 404;
-// discovery is the same for every signed-in identity. On a cluster that serves metrics.k8s.io each caller's own answer
-// stands: its rows, its refusal, a failure.
+// tabs. The list is asked first, so a cluster that answers it is asked nothing more. Only its 404 or 403 asks whether
+// the cluster serves metrics.k8s.io at all (metricsServedOn): the API server refuses a list (403) before it looks for
+// the path, so on a cluster without metrics-server a caller it refuses would get its refusal and the others the 404.
+// Not served, every caller gets the answer the API server gives an identity it lets list them, the 404 for a path no
+// API group serves, "the server could not find the requested resource", and no list is asked while that answer stands.
+// Served, or not known, each caller's own answer stands: its rows, its refusal, a failure.
 func (s *Service) metricsListRead(ctx context.Context, path string) ([]byte, int, error) {
-	if !s.servesGroup(ctx, metricsGroup) {
-		accesstrail.Cached(ctx, "metrics.k8s.io not served: the cluster's API discovery, read within the last minute")
-		return nil, http.StatusNotFound, metricsAPINotServed()
+	b := s.bundleForCtx(ctx)
+	if b != nil {
+		if v := b.metricsServed.Load(); v != nil && v.serving == metricsServingNo && (v.fresh() || s.metricsServedOn(ctx, b) == metricsServingNo) {
+			return metricsNotServedAnswer(ctx)
+		}
 	}
-	return s.metricsRequest(ctx, path)
+	body, status, err := s.metricsRequest(ctx, path)
+	if b == nil || err == nil || (status != http.StatusNotFound && status != http.StatusForbidden) {
+		return body, status, err
+	}
+	if s.metricsServedOn(ctx, b) == metricsServingNo {
+		return metricsNotServedAnswer(ctx)
+	}
+	return body, status, err
+}
+
+// metricsNotServedAnswer is metricsListRead's answer for a cluster that does not serve metrics.k8s.io.
+func metricsNotServedAnswer(ctx context.Context) ([]byte, int, error) {
+	accesstrail.Cached(ctx, "metrics.k8s.io not served: the cluster's API discovery, read within the last minute")
+	return nil, http.StatusNotFound, metricsAPINotServed()
+}
+
+// metricsServing is what a cluster's discovery says of metrics.k8s.io.
+type metricsServing int
+
+const (
+	metricsServingUnknown metricsServing = iota // discovery could not be read
+	metricsServingYes
+	metricsServingNo
+)
+
+// metricsVerdict is a cluster's metricsServing and when the discovery it comes from was read.
+type metricsVerdict struct {
+	serving metricsServing
+	at      time.Time
+}
+
+// metricsVerdictTTL is how long a cluster's answer to whether it serves metrics.k8s.io stands, a failure to read it
+// too: a metrics-server installed since shows within it, and discovery is read for it at most once in it.
+const metricsVerdictTTL = time.Minute
+
+// metricsGroupReadTimeout bounds the one discovery read behind that answer, well inside the screens' 20 s.
+var metricsGroupReadTimeout = 5 * time.Second
+
+func (v *metricsVerdict) fresh() bool { return v != nil && time.Since(v.at) < metricsVerdictTTL }
+
+// metricsServedOn is whether the request's cluster serves metrics.k8s.io: the answer of the last metricsVerdictTTL,
+// else the discovery apiResources read within it, else one read of the group's discovery document for everyone asking
+// (readMetricsGroup). Discovery is what the API server shows every signed-in identity (the default system:discovery
+// ClusterRole, bound to system:authenticated), so the answer is no one caller's. A read that fails is kept as not
+// known for the same minute; a caller who leaves before the answer comes takes it as not known and nothing is kept.
+func (s *Service) metricsServedOn(ctx context.Context, b *clientBundle) metricsServing {
+	serving, _, err := b.metricsServedRead.Do(ctx, "", func(ctx context.Context) (metricsServing, error) {
+		if v := b.metricsServed.Load(); v.fresh() {
+			return v.serving, nil
+		}
+		if d, ok := s.lastDiscovery(ctxClusterID(ctx)); ok {
+			v := &metricsVerdict{serving: metricsServingNo, at: d.read}
+			if d.servesGroup(metricsGroup) {
+				v.serving = metricsServingYes
+			}
+			b.metricsServed.Store(v)
+			return v.serving, nil
+		}
+		serving, err := readMetricsGroup(ctx, b)
+		if err != nil && ctx.Err() != nil {
+			return metricsServingUnknown, ctx.Err()
+		}
+		if err != nil {
+			slog.Debug("metrics.k8s.io discovery not read", "cluster", b.id, "err", err)
+		}
+		b.metricsServed.Store(&metricsVerdict{serving: serving, at: time.Now()})
+		return serving, nil
+	})
+	if err != nil {
+		return metricsServingUnknown
+	}
+	return serving
+}
+
+// readMetricsGroup reads the discovery document of metrics.k8s.io (GET /apis/metrics.k8s.io) as the identity the
+// cluster's shared reads use (the overview cache's, else the bundle's), within metricsGroupReadTimeout: one small
+// request, which kube-aggregator answers from the APIService registrations without asking metrics-server, so a
+// metrics-server registered and down is served, as a discovery read names it. A 404 is not served.
+func readMetricsGroup(ctx context.Context, b *clientBundle) (metricsServing, error) {
+	var c kubernetes.Interface
+	switch {
+	case b.cacheClient != nil:
+		c = b.cacheClient
+	case b.clientset != nil:
+		c = b.clientset
+	default:
+		return metricsServingUnknown, errNotLoaded
+	}
+	rc := c.Discovery().RESTClient()
+	if rc == nil {
+		return metricsServingUnknown, errNotLoaded
+	}
+	ctx, cancel := context.WithTimeout(ctx, metricsGroupReadTimeout)
+	defer cancel()
+	var status int
+	err := rc.Get().AbsPath("/apis/" + metricsGroup).Do(ctx).StatusCode(&status).Error()
+	switch {
+	case err == nil:
+		return metricsServingYes, nil
+	case status == http.StatusNotFound:
+		return metricsServingNo, nil
+	default:
+		return metricsServingUnknown, err
+	}
 }
 
 // metricsAPINotServed is the error RawRequest makes of the API server's 404 for a metrics.k8s.io list on a cluster that
