@@ -112,13 +112,18 @@ Reported beside it: `started_at` within the tolerance, the required path hops in
 `evidence` points at no call that answered. `expect` is still checked, as `prose_pass`. A truth's `symptom`,
 `distractor_at`, `variants_note` and a hop's `note` are for people.
 
-`evals/ai-hard/` holds ten cases made of plain Kubernetes objects. Each folder has `case.json`, `truth.json`, the
+`evals/ai-hard/` holds sixteen cases made of plain Kubernetes objects. Each folder has `case.json`, `truth.json`, the
 manifests it applies and `NOTES.md`: what the AI has to notice, the trap, how it is scored and what is unsure. None
 has run on a cluster yet, so their sizes and waits are first guesses for the first run to measure. They use only
-`docker.io/library/busybox:1.38.0`, namespaces `shop-NN` (and `edge-15`), business names and no Secret. The fault
-comes from data or settings, never from a branch in the code, and nothing a case applies names it
-(`scripts/test_ai_eval_cases.py`). Their answers lean on logs: run `scripts/kind-logsearch.sh up` first. The numbers
-leave room for the cases that need the OpenTelemetry demo or Chaos Mesh (01–03, 07, 10, 11), not written yet.
+`docker.io/library/busybox:1.38.0`, namespaces `shop-NN` (and `edge-15`, `members-18`), business names and no
+Secret. The fault comes from data or settings, never from a branch in the code, and nothing a case applies names it
+(`scripts/test_ai_eval_cases.py`); case 20's new release is a boot script in a ConfigMap, the stand-in for a new
+image. Their answers lean on logs: run `scripts/kind-logsearch.sh up` first. The numbers leave room for the cases that
+need the OpenTelemetry demo or Chaos Mesh (01–03, 07, 10, 11), not written yet. Cases 17–22 follow outage shapes
+common in production — a batch read that saturates a database, a stale in-cluster address, a route without its
+hostname, a release that boots in one environment only, an OOM cascade, workers past the memory limit — each rebuilt
+small; the scripts whose behaviour they depend on (headers through busybox httpd, memory held per worker or shard and
+where the OOM kill lands) were checked in a local busybox 1.38.0 container, not on kind.
 
 | Case | Group | Problem | Needs on dev besides logs |
 |---|---|---|---|
@@ -132,6 +137,12 @@ leave room for the cases that need the OpenTelemetry demo or Chaos Mesh (01–03
 | 14 | control | no fault; a clean rollout four minutes before the question | |
 | 15 | control, hidden | no fault; traffic from another namespace rises fivefold and the HPA scales out | the second cluster's metrics-server and Prometheus |
 | 16 | past | a Deployment scaled to 0 for five minutes, then back; asked at 6 and 70 minutes | the second cluster's Prometheus |
+| 17 | trap | a CronJob loses its cursor setting and reads a whole table every minute; the database's disk queue slows every caller while its CPU stays low | the second cluster's Prometheus (cAdvisor), for the CPU part |
+| 18 | hidden cause, hidden | a service's old namespace is emptied after a move; the frontend still calls the old address and treats the failure as signed out | |
+| 19 | hidden cause | the front Service is switched to a new edge whose routes lack the main hostname: 404 for one site, the backend healthy | |
+| 20 | hidden cause | a release that needs a setting only staging has is rolled out with `Recreate`; production is down; asked at 5 and 65 minutes | |
+| 21 | hidden cause | a bigger index leaves a three-node StatefulSet no room to lose a node; its rolling update starts an OOM cascade | the second cluster's Prometheus, for the memory steps |
+| 22 | hidden cause | the worker count raised past what the memory limit holds; OOMKilled every time the workers warm up | the second cluster's Prometheus, for the memory climb |
 
 ```bash
 scripts/kind-logsearch.sh up && scripts/kind-tracing.sh up   # the stores the demo writes to

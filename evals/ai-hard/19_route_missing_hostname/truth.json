@@ -1,0 +1,27 @@
+{
+ "id": "19_route_missing_hostname",
+ "control": false,
+ "symptom": "every visit to www.shop.example through frontdoor gets HTTP 404; help.shop.example keeps working and storefront is Ready",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "ConfigMap/shop-19/edge-routes",
+   "kind": "config_change",
+   "accept_resources": ["edge-routes"],
+   "accept_kinds": []
+  }
+ ],
+ "path": [
+  {"resource": "ConfigMap/shop-19/edge-routes", "role": "cause", "required": true, "accept": ["edge-routes"], "note": "the new edge's routes name preview.shop.example and help.shop.example, not www.shop.example"},
+  {"resource": "Deployment/shop-19/edge", "role": "via", "required": false, "accept": ["^(deployment|replicaset|pod)/(shop-19/)?edge(-[a-z0-9]{6,10})?(-[a-z0-9]{5})?$"], "note": "answers 404 with flags=NR for a host it has no route for"},
+  {"resource": "Service/shop-19/frontdoor", "role": "symptom", "required": true, "accept": ["frontdoor", "visitor"], "note": "its selector moved from edge-legacy to edge"}
+ ],
+ "also_ok": ["Service/shop-19/frontdoor", "Deployment/shop-19/edge"],
+ "decoys": [
+  {"resource": "Deployment/shop-19/storefront", "why": "the backend: Ready, answers its readiness checks and every request that reaches it"},
+  {"resource": "Deployment/shop-19/edge-legacy", "why": "the old edge: its routes hold www.shop.example; it simply gets no traffic since the switch"},
+  {"resource": "Deployment/shop-19/helpdesk", "why": "the other site, unaffected"}
+ ]
+}

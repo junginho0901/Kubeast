@@ -1,0 +1,39 @@
+{
+ "id": "22_workers_over_memory",
+ "title": "The worker count raised past what the memory limit holds: repeated OOM kills once the workers warm up",
+ "group": "hidden_cause",
+ "cluster": "default",
+ "namespace": "shop-22",
+ "question": "default 클러스터 shop-22에서 API가 몇 분마다 끊긴대. 원인이 뭐야?",
+ "question_vague": "default 클러스터 shop-22 서비스가 불안정하다는데 원인 찾아줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "WEB_WORKERS",
+   "워커",
+   "worker"
+  ],
+  [
+   "OOM",
+   "메모리",
+   "memory"
+  ]
+ ],
+ "tools": [],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/shop-api deploy/session-cache deploy/visitor --timeout=10s",
+ "wait_seconds": 240,
+ "baseline_seconds": 240,
+ "inject_cmds": [
+  "kubectl -n $NS patch configmap shop-api-settings --type=merge -p '{\"data\":{\"WEB_WORKERS\":\"6\"}}'",
+  "kubectl -n $NS rollout restart deploy/shop-api"
+ ],
+ "inject_wait": "kubectl -n $NS get pod -l app=shop-api -o jsonpath='{.items[*].status.containerStatuses[0].lastState.terminated.reason}' | grep -q OOMKilled",
+ "inject_wait_seconds": 300,
+ "ask_after_seconds": [600],
+ "undo_cmds": [
+  "kubectl -n $NS patch configmap shop-api-settings --type=merge -p '{\"data\":{\"WEB_WORKERS\":\"3\"}}'",
+  "kubectl -n $NS rollout restart deploy/shop-api"
+ ],
+ "cooldown_seconds": 30,
+ "timeout_seconds": 420
+}

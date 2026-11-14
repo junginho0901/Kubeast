@@ -1,0 +1,27 @@
+{
+ "id": "21_oom_cascade",
+ "control": false,
+ "symptom": "storefront's search calls fail; all three search pods are OOMKilled one after another and keep failing on restart, the one still on the old settings too",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "StatefulSet/shop-21/search",
+   "kind": "oom",
+   "accept_resources": ["search-indexes-2", "^(statefulset|pod)/(shop-21/)?search(-[0-9])?$", "^search(-[0-9])?$"],
+   "accept_kinds": ["resource_limit", "config_change", "rollout"]
+  }
+ ],
+ "path": [
+  {"resource": "ConfigMap/shop-21/search-indexes-2", "role": "via", "required": false, "accept": ["search-indexes-2", "questions"], "note": "a third index: 105 MB over the nodes instead of 66; 35 MB a node with three nodes, 53 with two, over the 48Mi limit"},
+  {"resource": "StatefulSet/shop-21/search", "role": "cause", "required": true, "accept": ["^(statefulset|pod)/(shop-21/)?search(-[0-9])?$", "^search(-[0-9])?$", "search-indexes"], "note": "the rolling update removes one node; the others take over its shards and are OOMKilled in turn"},
+  {"resource": "Deployment/shop-21/storefront", "role": "symptom", "required": true, "accept": ["storefront"]}
+ ],
+ "also_ok": ["Service/shop-21/search"],
+ "decoys": [
+  {"resource": "CronJob/shop-21/report-builder", "why": "a small aggregate query every two minutes, the same before and after; it only reports the failures"},
+  {"resource": "Deployment/shop-21/storefront", "why": "the caller"},
+  {"resource": "Node/*", "why": "the node has free memory; each pod hits its own 48Mi limit"}
+ ]
+}

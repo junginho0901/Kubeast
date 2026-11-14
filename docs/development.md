@@ -112,7 +112,7 @@ The harder cases of `scripts/ai-eval.py` need faults and services that call each
   - A line a service both prints and sends over OTLP is in Loki twice.
   - With metrics on, `up` also puts the demo's alert rules (`deploy/kind/otel-demo-rules.json`: error rate, 95th percentile latency, restarts) into that Prometheus, and `down` takes them out. Their alerts carry `kubeast_eval="otel-demo"`, the only ones that Prometheus sends to Alertmanager, which posts them to the webhook for `default`. An older dev install needs `deploy/kind/second-cluster.yaml` applied again first.
 - Behind a TLS-inspecting proxy, set `CHAOS_NODE_HOOK` or `OTELDEMO_NODE_HOOK` as for `CILIUM_NODE_HOOK`: a command that gets the cluster name, run before the images are pulled.
-- The case fields, the run order and the ten cases of `evals/ai-hard/` are in [evals/ai/README.md](../evals/ai/README.md) "Hard cases".
+- The case fields, the run order and the sixteen cases of `evals/ai-hard/` are in [evals/ai/README.md](../evals/ai/README.md) "Hard cases".
 
 ### Project site (`site/`)
 

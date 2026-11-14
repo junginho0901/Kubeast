@@ -1,0 +1,35 @@
+{
+ "id": "19_route_missing_hostname",
+ "title": "Traffic moved to a new edge whose routes lack the main site's hostname: 404 there, the backend healthy",
+ "group": "hidden_cause",
+ "cluster": "self",
+ "namespace": "shop-19",
+ "question": "self 클러스터 shop-19에서 www.shop.example 이 404를 낸대. 원인이 뭐야?",
+ "question_vague": "self 클러스터 shop-19 사이트가 안 열린다는 말이 있어. 원인 찾아줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "edge-routes"
+  ],
+  [
+   "www\\.shop\\.example",
+   "호스트",
+   "host"
+  ]
+ ],
+ "tools": [],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/edge-legacy deploy/edge deploy/storefront deploy/helpdesk deploy/visitor deploy/uptime-probe --timeout=10s && kubectl -n $NS logs deploy/visitor --since=15s | grep -q 'page loaded.*site=www'",
+ "wait_seconds": 300,
+ "baseline_seconds": 180,
+ "inject_cmds": [
+  "kubectl -n $NS patch service frontdoor --type=merge -p '{\"spec\":{\"selector\":{\"app\":\"edge\"}}}'"
+ ],
+ "inject_wait": "kubectl -n $NS logs deploy/visitor --since=20s | grep 'page failed' | grep -q 'site=www.shop.example'",
+ "inject_wait_seconds": 120,
+ "ask_after_seconds": [300],
+ "undo_cmds": [
+  "kubectl -n $NS patch service frontdoor --type=merge -p '{\"spec\":{\"selector\":{\"app\":\"edge-legacy\"}}}'"
+ ],
+ "cooldown_seconds": 30,
+ "timeout_seconds": 420
+}
