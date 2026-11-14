@@ -59,6 +59,7 @@ The feature is off by default (`features.alertInvestigation.enabled`). Turning i
   - `automatic: false` stops the webhook's investigations and keeps every alert in the inbox (counted as `automatic_off`), where a person may still ask for one; `enabled: false` turns the inbox off too.
   - One webhook message starts at most 100 new investigations. The alerts past that are still kept in the inbox and recorded as `skipped` ("investigation cap"); alerts folded into a recent investigation, resolved or filtered take no place. When Alertmanager sends the group again, the investigated ones fold and the next alerts get their turn.
   - An alert skipped again within `dedupeHours` folds into its skipped row (repeats, last seen, the latest reason) instead of a new row.
+  - Copies of one alert that arrive at the same moment, on one replica or several (an Alertmanager HA pair, two ai-service pods), are decided one after the other under the lock of the alert's inbox row, so they queue one investigation and the others fold into it.
   - When the model provider **refuses because of a credit or key problem**, investigations pause. For a subscription, this is the usage limit, and the pause lasts until the time it lifts.
     - That alert becomes `failed` ("provider refused (credit)…").
     - Alerts arriving in the following `providerPauseMinutes` (30 minutes, 0 = off), and alerts already queued, become `skipped` ("paused: …until …").

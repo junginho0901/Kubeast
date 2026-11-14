@@ -59,6 +59,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   - `automatic: false`이면 웹훅이 조사를 시작하지 않고 알림은 전부 받은편지함에 저장합니다(`automatic_off`로 셈). 그 알림도 사람이 조사를 요청할 수 있습니다. `enabled: false`는 받은편지함까지 끕니다.
   - 웹훅 한 통에서 새 조사는 100개까지 시작합니다. 넘친 알림도 알림함에는 저장하고 `skipped`("investigation cap")로 남기며, 최근 조사에 접힌 알림·해결 알림·걸러진 알림은 자리를 쓰지 않습니다. Alertmanager가 그 묶음을 다시 보내면 조사한 알림은 접히고 다음 알림이 조사됩니다.
   - `dedupeHours` 안에 다시 건너뛴 알림은 새 행 대신 그 건너뜀 행에 접힙니다(반복 수, 마지막으로 본 시각, 마지막 이유).
+  - 같은 알림이 같은 순간에 여러 번 와도(Alertmanager HA 쌍, ai-service 파드 둘) 그 알림의 알림함 행 잠금 아래에서 하나씩 정하므로 조사는 하나만 걸리고 나머지는 거기에 접힙니다.
   - 모델 공급자가 **크레딧·키 문제로 거절**하면 그 건은 `failed`("provider refused (credit)…")가 됩니다.
     그 뒤 `providerPauseMinutes`(30분, 0 = 끔) 동안 들어오는 알림과 대기 중이던 알림은 `skipped`("paused: …until …")로 두어, 막힌 공급자를 알림마다 다시 부르지 않습니다.
     구독의 사용량 한도라면 한도가 풀리는 시각까지 멈춥니다.
