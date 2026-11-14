@@ -33,11 +33,11 @@ const ingress = (host: string) => JSON.stringify({
   apiVersion: 'networking.k8s.io/v1', kind: 'Ingress', metadata: { name: 'web', namespace: NS },
   spec: { rules: [{ host, http: { paths: [{ path: '/', pathType: 'Prefix', backend: { service: { name: 'web', port: { number: 80 } } } }] } }] },
 })
-// an event counts up under one first time, as a recorder writes it
+// an event counts up under one first time, as a recorder writes it, naming the object's UID
 const FIRST_SEEN = new Date(Date.now() - 60_000).toISOString().replace(/\.\d+Z$/, 'Z')
 const event = (count: number) => JSON.stringify({
   apiVersion: 'v1', kind: 'Event', metadata: { name: 'web.e2e-live', namespace: NS },
-  involvedObject: { kind: 'Deployment', name: 'web', namespace: NS, apiVersion: 'apps/v1' },
+  involvedObject: { kind: 'Deployment', name: 'web', namespace: NS, apiVersion: 'apps/v1', uid: kubectl(`-n ${NS} get deployment web -o 'jsonpath={.metadata.uid}'`) },
   reason: 'E2ELiveWarning', message: 'told by the run', type: 'Warning', count,
   firstTimestamp: FIRST_SEEN, lastTimestamp: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), source: { component: 'e2e-live' },
 })
@@ -148,6 +148,24 @@ test.describe('what keeps up by itself', () => {
     kubectl('apply -f -', event(7))
     await expect.poll(async () => (await row.locator('td').last().innerText()).trim(), { timeout: 20_000 }).toBe(kubectl(`-n ${NS} get event web.e2e-live -o 'jsonpath={.count}'`))
     expect(describes.length, 'the frame is the row').toBe(before)
+
+    // an event of an earlier Deployment of the same name, which kubectl describe leaves out (its UID is another), does
+    // not join the table; one of this Deployment written after it does, so the watch was still on
+    const earlier = JSON.parse(event(1))
+    earlier.metadata.name = 'web.e2e-earlier'
+    earlier.reason = 'E2EEarlierObject'
+    earlier.involvedObject.uid = '00000000-0000-4000-8000-0000000e2e02'
+    kubectl('apply -f -', JSON.stringify(earlier))
+    const after = JSON.parse(event(1))
+    after.metadata.name = 'web.e2e-after'
+    after.reason = 'E2EAfterTheEarlier'
+    kubectl('apply -f -', JSON.stringify(after))
+    await expect(drawer.locator('tr').filter({ hasText: 'E2EAfterTheEarlier' })).toHaveCount(1, { timeout: 20_000 })
+    await expect(drawer.locator('tr').filter({ hasText: 'E2EEarlierObject' })).toHaveCount(0)
+    const describedUid = kubectl(`-n ${NS} get deployment web -o 'jsonpath={.metadata.uid}'`)
+    const kubectlLists = JSON.parse(kubectl(`-n ${NS} get events --field-selector involvedObject.name=web,involvedObject.kind=Deployment,involvedObject.uid=${describedUid} -o json`)).items.map((e: { reason: string }) => e.reason)
+    expect(kubectlLists, 'kubectl describe lists the later event, not the earlier object\'s').toEqual(expect.arrayContaining(['E2EAfterTheEarlier']))
+    expect(kubectlLists).not.toContain('E2EEarlierObject')
   })
 
   test('a Pod\'s Events count up while it stays as it is, and its answer is not read for that', async ({ page }) => {
@@ -155,7 +173,7 @@ test.describe('what keeps up by itself', () => {
     const podName = kubectl(`-n ${NS} get pod -l app=web -o 'jsonpath={.items[0].metadata.name}'`)
     const eventOf = (count: number) => JSON.stringify({
       apiVersion: 'v1', kind: 'Event', metadata: { name: 'pod.e2e-live', namespace: NS },
-      involvedObject: { apiVersion: 'v1', kind: 'Pod', name: podName, namespace: NS },
+      involvedObject: { apiVersion: 'v1', kind: 'Pod', name: podName, namespace: NS, uid: kubectl(`-n ${NS} get pod ${podName} -o 'jsonpath={.metadata.uid}'`) },
       type: 'Warning', reason: 'E2ELiveBackOff', message: 'Back-off restarting failed container', count,
       firstTimestamp: '2026-11-07T00:00:00Z', lastTimestamp: new Date().toISOString(), source: { component: 'kubelet' },
     })

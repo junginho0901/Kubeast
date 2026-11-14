@@ -130,7 +130,6 @@ export const RBAC = 'rbac.authorization.k8s.io'
 function namespacedObjects(ns: string): object[] {
   const meta = (name: string, labels: Record<string, string> = {}) => ({ name, namespace: ns, labels: { ...LABELS, ...labels } })
   const template = (app: string) => ({ metadata: { labels: { app } }, spec: { nodeSelector: NOWHERE, containers: [PAUSE] } })
-  const now = new Date().toISOString()
   const claim = { devices: { requests: [{ name: 'dev', exactly: { deviceClassName: `${PREFIX}-dc` } }] } }
   return [
     { apiVersion: 'v1', kind: 'ConfigMap', metadata: meta('guard-cm'), data: { k: 'v' } },
@@ -155,11 +154,16 @@ function namespacedObjects(ns: string): object[] {
     { apiVersion: `${RBAC}/v1`, kind: 'RoleBinding', metadata: meta('guard-rb'), roleRef: { apiGroup: RBAC, kind: 'Role', name: 'guard-role' }, subjects: [{ apiGroup: RBAC, kind: 'User', name: 'guard-nobody@kubeast.invalid' }] },
     { apiVersion: 'resource.k8s.io/v1', kind: 'ResourceClaim', metadata: meta('guard-claim'), spec: claim },
     { apiVersion: 'resource.k8s.io/v1', kind: 'ResourceClaimTemplate', metadata: meta('guard-claim-tpl'), spec: { spec: claim } },
-    { apiVersion: 'v1', kind: 'Event', metadata: meta('guard-cm.guard'), involvedObject: { apiVersion: 'v1', kind: 'ConfigMap', namespace: ns, name: 'guard-cm' }, type: 'Normal', reason: 'GuardCheck', message: `guard event in ${ns}`, count: 1, firstTimestamp: now, lastTimestamp: now, source: { component: 'e2e' } },
     // last: a quota and a limit that nothing here comes near
     { apiVersion: 'v1', kind: 'ResourceQuota', metadata: meta('guard-quota'), spec: { hard: { 'services.loadbalancers': '0' } } },
     { apiVersion: 'v1', kind: 'LimitRange', metadata: meta('guard-limits'), spec: { limits: [{ type: 'PersistentVolumeClaim', max: { storage: '1Gi' } }] } },
   ]
+}
+// The event about a namespace's ConfigMap, naming its UID as a recorder writes it: a drawer lists only the events of
+// its object's UID, as kubectl describe does.
+function guardEvent(ns: string, uid: string): object {
+  const now = new Date().toISOString()
+  return { apiVersion: 'v1', kind: 'Event', metadata: { name: 'guard-cm.guard', namespace: ns, labels: LABELS }, involvedObject: { apiVersion: 'v1', kind: 'ConfigMap', namespace: ns, name: 'guard-cm', uid }, type: 'Normal', reason: 'GuardCheck', message: `guard event in ${ns}`, count: 1, firstTimestamp: now, lastTimestamp: now, source: { component: 'e2e' } }
 }
 function clusterObjects(node: string): object[] {
   const meta = (name: string) => ({ name, labels: LABELS })
@@ -286,6 +290,7 @@ export async function applyFixtures(): Promise<{ node: string; served: Set<strin
   kubectl(['apply', '-f', '-'], asList([NS_A, NS_B].map((name) => ({ apiVersion: 'v1', kind: 'Namespace', metadata: { name, labels: LABELS } }))))
   kubectl(['apply', '-f', '-'], asList(clusterObjects(node)))
   kubectl(['apply', '-f', '-'], asList([...namespacedObjects(NS_A), ...namespacedObjects(NS_B)]))
+  kubectl(['apply', '-f', '-'], asList([NS_A, NS_B].map((ns) => guardEvent(ns, kubectl(['-n', ns, 'get', 'configmap', 'guard-cm', '-o', 'jsonpath={.metadata.uid}'])))))
   // the namespace-limited Read grant acts as kubeast:role:read: the cluster lets that group read (view) in NS_A only
   kubectl(['apply', '-f', '-'], asList([{
     apiVersion: `${RBAC}/v1`, kind: 'RoleBinding', metadata: { name: `${PREFIX}-view`, namespace: NS_A, labels: LABELS },

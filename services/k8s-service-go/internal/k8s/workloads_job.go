@@ -111,7 +111,7 @@ func (s *Service) DescribeJob(ctx context.Context, namespace, name string) (map[
 	result["pod_template"] = formatPodTemplate(job.Spec.Template)
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(job.UID))
 
 	// Conditions
 	conditions := make([]map[string]interface{}, 0, len(job.Status.Conditions))
