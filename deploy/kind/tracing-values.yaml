@@ -15,3 +15,7 @@ features:
       default: kubeast-b
     egressCIDRs:
       - {cidr: 172.18.0.0/16, port: 31200}
+  # Who calls whom for the AI's resource_graph with include calls (e2e/tests/ai-call-graph.spec.ts): the service
+  # graph metrics the Tempo above writes into the second cluster's Prometheus, read as for cluster default.
+  callGraph:
+    enabled: true
