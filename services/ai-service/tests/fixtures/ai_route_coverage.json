@@ -187,6 +187,7 @@
   "/api/v1/namespaces/{namespace}/serviceaccounts/{name}/describe": {"tool": "k8s_describe_resource", "args": {"resource_type": "serviceaccounts", "resource_name": "y", "namespace": "x"}},
   "/api/v1/namespaces/{namespace}/serviceaccounts/{name}/yaml": {"tool": "k8s_get_resource_yaml", "args": {"resource_type": "serviceaccounts", "resource_name": "y", "namespace": "x"}},
   "/api/v1/namespaces/{namespace}/services": {"tool": "k8s_get_resources", "args": {"resource_type": "services", "namespace": "x"}},
+  "/api/v1/namespaces/{namespace}/services/{name}/backend-usage": {"tool": "prometheus_query", "args": {"promql": "up"}, "note": "The sums of the Service drawer's three queries over the pods of its ready endpoints, which prometheus_query asks with their names in pod=~ (k8s_describe_resource names them).", "reads": "/api/v1/prometheus/query"},
   "/api/v1/namespaces/{namespace}/services/{name}/describe": {"tool": "k8s_describe_resource", "args": {"resource_type": "services", "resource_name": "y", "namespace": "x"}},
   "/api/v1/namespaces/{namespace}/services/{name}/yaml": {"tool": "k8s_get_resource_yaml", "args": {"resource_type": "services", "resource_name": "y", "namespace": "x"}},
   "/api/v1/namespaces/{namespace}/services/{service_name}/connectivity": {"tool": "k8s_check_service_connectivity", "args": {"namespace": "x", "service_name": "y"}, "note": "The Service and its endpoints, through kubectl.", "reads": "kubectl get endpointslices -n x"},
