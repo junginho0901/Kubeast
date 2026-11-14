@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, Member, RoleWithDetails } from '@/services/api'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Pencil, Trash2, Shield, X, Check, Users } from 'lucide-react'
+import { Plus, Pencil, Search, Trash2, Shield, X, Check, Users } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
@@ -19,6 +19,7 @@ import { RefreshFailure } from '@/components/RefreshFailure'
 import { announceCreated } from '@/services/createdNoticeStore'
 import { failureOf } from '@/hooks/useRefresh'
 import { NAME_MAX } from '@/utils/nameLimits'
+import { rolesMatching } from './admin/adminListSearch'
 
 type PermCategory = { category: string; permissions: Array<{ key: string; description: string }> }
 
@@ -64,9 +65,15 @@ export default function AdminRoles() {
     : []
 
   // the page is as high as the screen; the table pages the roles, as many as fit (or the footer's fixed choice)
+  // the description a row shows: a system role's in the viewer's language
+  const shownDescription = (role: RoleWithDetails) => (role.is_system
+    ? tr(`adminRoles.systemRoles.${role.name.toLowerCase()}`, role.description || '-')
+    : (role.description || '-'))
+  const [search, setSearch] = useState('')
+  const found = rolesMatching(roles, search, shownDescription)
   const [page, setPage] = useState(1)
-  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: `${isLoading}:${roles.length}` })
-  const shown = pageOf(roles, page, rowsPerPage)
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: `${isLoading}:${found.length}` })
+  const shown = pageOf(found, page, rowsPerPage)
 
   const { data: permCatalog = [] } = useQuery<PermCategory[]>({
     queryKey: ['permissions'],
@@ -192,6 +199,19 @@ export default function AdminRoles() {
 
       <RefreshFailure failure={roles.length ? failureOf(rolesError, rolesErrorAt) : null} />
 
+      <div className="relative shrink-0">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+          placeholder={tr('adminRoles.searchPlaceholder', 'Search roles by name, description or permission...')}
+          aria-label={tr('adminRoles.searchPlaceholder', 'Search roles by name, description or permission...')}
+          data-testid="roles-search"
+          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+        />
+      </div>
+
       {isLoading ? (
         <div className="text-slate-400 text-sm">{tr('adminRoles.loading', 'Loading...')}</div>
       ) : (
@@ -232,9 +252,7 @@ export default function AdminRoles() {
                     </button>
                   </td>
                   <td className="px-4 py-3 text-slate-400">
-                    {role.is_system
-                      ? tr(`adminRoles.systemRoles.${role.name.toLowerCase()}`, role.description || '-')
-                      : (role.description || '-')}
+                    {shownDescription(role)}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
@@ -298,11 +316,12 @@ export default function AdminRoles() {
                 )
               })}
               {roles.length === 0 && <TableEmptyRow colSpan={ROLE_COLUMNS} resource="admin-roles" error={rolesError} onRetry={() => void readRolesAgain()} />}
+              {roles.length > 0 && found.length === 0 && <TableEmptyRow colSpan={ROLE_COLUMNS} resource="admin-roles" searching />}
             </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - shown.rows.length} columnCount={ROLE_COLUMNS} />
           </table>
           </div>
-          <ListPager currentPage={shown.page} totalPages={shown.pages} total={roles.length} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="roles-pager" />
+          <ListPager currentPage={shown.page} totalPages={shown.pages} total={found.length} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="roles-pager" />
         </div>
       )}
 

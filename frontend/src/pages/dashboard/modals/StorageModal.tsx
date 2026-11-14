@@ -3,12 +3,14 @@
 // parent prepares the filtered/sorted lists and topology query
 // result and passes them in. The dropdown's outside-click detection
 // is owned by this component (ref + useEffect) so the parent
-// doesn't have to thread a ref through props.
+// doesn't have to thread a ref through props. Each tab's list pages 50 at a
+// time (a big cluster has thousands of claims, volumes and topology lines).
 
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle, ChevronDown, RefreshCw, Search, X } from 'lucide-react'
 
+import { ListPager } from '@/components/ListPager'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useAIContext } from '@/hooks/useAIContext'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -16,6 +18,8 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { formatBytes } from '../utils'
 import { failureText } from '@/utils/failureText'
 import { useDismiss } from '@/hooks/useDismiss'
+import { pageOf } from '@/utils/listPages'
+import { WINDOW_PAGE } from './windowPages'
 
 interface Props {
   open: boolean
@@ -94,6 +98,14 @@ export function StorageModal({
       })),
     },
   } : null, [open, isLoading, sortedPVCs, sortedPVs, activeTab, namespaceFilter, searchQuery, pvcStatusCounts, pvStatusCounts])
+
+  // the tab's list a page at a time; another tab, search or namespace, or the window opened again, starts at the first
+  const [page, setPage] = useState(1)
+  useEffect(() => setPage(1), [open, activeTab, searchQuery, namespaceFilter])
+  const edges: any[] = Array.isArray(storageTopology?.edges) ? storageTopology.edges : []
+  const tabList: any[] = activeTab === 'pvcs' ? sortedPVCs : activeTab === 'pvs' ? sortedPVs : edges
+  const shown = pageOf(tabList, page, WINDOW_PAGE)
+  const listShown = !isLoading && (activeTab !== 'topology' || !!storageTopology)
 
   if (!open) return null
 
@@ -259,7 +271,7 @@ export function StorageModal({
               </div>
             ) : (
               <div className="divide-y divide-slate-700 rounded-lg border border-slate-700 overflow-hidden">
-                {sortedPVCs.map((pvc: any) => {
+                {shown.rows.map((pvc: any) => {
                   const status = String(pvc?.status ?? 'Unknown')
                   const badge =
                     status === 'Bound'
@@ -276,7 +288,7 @@ export function StorageModal({
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className={`badge ${badge}`}>{status}</span>
-                            <p className="text-sm font-medium text-ink truncate">{pvc.name}</p>
+                            <p className="text-sm font-medium text-ink truncate" title={pvc.name}>{pvc.name}</p>
                           </div>
                           <div className="mt-1 space-y-0.5">
                             <p className="text-xs text-slate-400">
@@ -326,7 +338,7 @@ export function StorageModal({
               </div>
             ) : (
               <div className="divide-y divide-slate-700 rounded-lg border border-slate-700 overflow-hidden">
-                {sortedPVs.map((pv: any) => {
+                {shown.rows.map((pv: any) => {
                   const status = String(pv?.status ?? 'Unknown')
                   const badge =
                     status === 'Bound'
@@ -349,7 +361,7 @@ export function StorageModal({
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className={`badge ${badge}`}>{status}</span>
-                            <p className="text-sm font-medium text-ink truncate">{pv.name}</p>
+                            <p className="text-sm font-medium text-ink truncate" title={pv.name}>{pv.name}</p>
                           </div>
                           <div className="mt-1 space-y-0.5">
                             <p className="text-xs text-slate-400">
@@ -381,9 +393,9 @@ export function StorageModal({
                       })}
                     </p>
                   </div>
-                  {Array.isArray(storageTopology.edges) && storageTopology.edges.length > 0 ? (
+                  {edges.length > 0 ? (
                     <div className="divide-y divide-slate-700 rounded-lg border border-slate-700 overflow-hidden">
-                      {storageTopology.edges.map((edge: any) => (
+                      {shown.rows.map((edge: any) => (
                         <div key={edge.id} className="p-3 bg-slate-900/20">
                           <p className="text-xs text-slate-300">
                             {edge.source} → {edge.target}
@@ -422,6 +434,17 @@ export function StorageModal({
             </div>
           )}
         </div>
+        {listShown && (
+          <ListPager
+            currentPage={shown.page}
+            totalPages={shown.pages}
+            total={tabList.length}
+            rowsPerPage={WINDOW_PAGE}
+            onPageChange={setPage}
+            showPageSize={false}
+            testId="storage-pager"
+          />
+        )}
       </div>
     </ModalOverlay>
   )
