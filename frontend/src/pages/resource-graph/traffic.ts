@@ -93,6 +93,13 @@ export interface TrafficEdge {
   width: number
 }
 
+// The traffic line picked, while the answer on screen holds it. A line picked in another answer (other namespaces,
+// another cluster or source) is not this answer's — an edge id is a place in its answer's list — so its panel and
+// highlight go instead of showing its numbers beside the new answer.
+export function pickedLine<T>(picked: { id: string; line: T } | null, lines: readonly T[] | undefined): { id: string; line: T } | null {
+  return picked && lines?.includes(picked.line) ? picked : null
+}
+
 // buildTraffic places the lines: their ends' nodes or stand-ins, a width from 1.5 to 4 by how busy the line is
 // next to the busiest. A line from a node to itself (pods of one workload talking) is counted, not drawn.
 export function buildTraffic(lines: TrafficLine[], shown: Map<string, ResourceGraphNode>): { peers: TrafficPeerNode[]; edges: TrafficEdge[]; selfLoops: number } {

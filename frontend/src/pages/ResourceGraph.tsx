@@ -39,7 +39,7 @@ import { graphTotals } from './resource-graph/counts'
 import { TrafficControls } from './resource-graph/TrafficControls'
 import { TrafficPanel } from './resource-graph/TrafficPanel'
 import { RoutedEdge } from './resource-graph/RoutedEdge'
-import { isPeer, lineColor, metricsFailure, openableEnd, trafficParams, trafficSources, type GraphView, type LineCheck, type TrafficSource } from './resource-graph/traffic'
+import { isPeer, lineColor, metricsFailure, openableEnd, pickedLine, trafficParams, trafficSources, type GraphView, type LineCheck, type TrafficSource } from './resource-graph/traffic'
 
 const edgeTypes = { routed: RoutedEdge }
 
@@ -116,7 +116,6 @@ export default function ResourceGraph() {
   const view: GraphView = sources.length > 0 || metricsDown ? pickedView : 'structure'
   const source = pickedSource && sources.includes(pickedSource) ? pickedSource : sources[0]
   const [selected, setSelected] = useState<{ id: string; line: TrafficLine } | null>(null)
-  const selectedLine = selected?.line ?? null
   const [hoverEdge, setHoverEdge] = useState<string | null>(null)
   const [hoverNode, setHoverNode] = useState<string | null>(null)
   const [why, setWhy] = useState<LineCheck | null>(null)
@@ -191,6 +190,9 @@ export default function ResourceGraph() {
     refetchOnWindowFocus: false,
   })
   const traffic = view !== 'structure' && trafficQuery.data?.available ? trafficQuery.data : undefined
+  // the line picked, only while the answer on screen holds it
+  const picked = pickedLine(selected, traffic?.lines)
+  const selectedLine = picked?.line ?? null
   const trafficError = trafficQuery.error as { response?: { status?: number; data?: { detail?: string; error?: string } }; message?: string } | null
   const trafficErrorText = trafficError ? trafficError.response?.data?.detail ?? trafficError.response?.data?.error ?? trafficError.message : undefined
 
@@ -298,7 +300,7 @@ export default function ResourceGraph() {
   const focus = !routed ? null
     : hoverEdge ? { edge: hoverEdge }
       : hoverNode ? { node: hoverNode }
-        : selected ? { edge: selected.id }
+        : picked ? { edge: picked.id }
           : drawerNode ? { node: drawerNode } : null
   const { nodes, edges } = useMemo(() => focusLines(laidNodes, laidEdges, focus), [laidNodes, laidEdges, focus?.edge, focus?.node]) // eslint-disable-line react-hooks/exhaustive-deps
 

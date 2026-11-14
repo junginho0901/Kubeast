@@ -14,12 +14,13 @@ import SearchExamples from '@/components/search/SearchExamples'
 import SearchSettings from '@/components/search/SearchSettings'
 import SavedSearches from '@/components/search/SavedSearches'
 import type { SavedSearch } from '@/components/search/savedSearchStore'
-import { rememberPrinterStatus, searchWithExpression, toSearchResult, SearchResult } from '@/components/search/searchEngine'
+import { answerFor, rememberPrinterStatus, searchWithExpression, toSearchResult, type SearchAnswer, type SearchResult } from '@/components/search/searchEngine'
 import { useAIContext } from '@/hooks/useAIContext'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { failureText } from '@/utils/failureText'
 
 const STORAGE_KEY_RESOURCES = 'advanced-search-resources'
+const NO_RESULTS: SearchResult[] = []
 
 export default function AdvancedSearch() {
   const { t } = useTranslation()
@@ -161,15 +162,13 @@ export default function AdvancedSearch() {
     })
   }, [items])
 
-  // Search state
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
-  const [searchTimeMs, setSearchTimeMs] = useState<number | null>(null)
+  // Search state: the last answer with the expression and items it searched
+  const [search, setSearch] = useState<SearchAnswer | null>(null)
   const [isSearching, setIsSearching] = useState(false)
 
   useEffect(() => {
     if (!deferredQuery.trim() || items.length === 0) {
-      setSearchResults(prev => prev.length === 0 ? prev : [])
-      setSearchTimeMs(prev => prev === null ? prev : null)
+      setSearch(prev => prev === null ? prev : null)
       setIsSearching(false)
       return
     }
@@ -179,8 +178,7 @@ export default function AdvancedSearch() {
 
     searchWithExpression(items, deferredQuery, cancelToken).then(({ results, timeMs }) => {
       if (!cancelToken.current) {
-        setSearchResults(results.map(toSearchResult))
-        setSearchTimeMs(timeMs)
+        setSearch({ query: deferredQuery, items, results: results.map(toSearchResult), timeMs })
         setIsSearching(false)
       }
     })
@@ -188,7 +186,12 @@ export default function AdvancedSearch() {
     return () => { cancelToken.current = true }
   }, [deferredQuery, items])
 
-  const deferredResults = useDeferredValue(searchResults)
+  // the table renders behind typing; it draws an answer only for the expression and items on screen
+  const deferredSearch = useDeferredValue(search)
+  const shown = answerFor(deferredSearch, deferredQuery, items)
+  const deferredResults = shown?.results ?? NO_RESULTS
+  // what the floating chat is told: the answer of the expression and items on screen, or none while it is on its way
+  const searchResults = answerFor(search, deferredQuery, items)?.results ?? NO_RESULTS
 
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
@@ -243,6 +246,8 @@ export default function AdvancedSearch() {
   }, [])
 
   const showResults = deferredQuery.trim().length > 0 && deferredResults.length > 0 && !isSearching
+  // no answer yet for the expression and items on screen (searching, or the table not caught up): no count, no "no results"
+  const answered = shown !== null && !isSearching
   const showExamples = !deferredQuery.trim()
 
   return (
@@ -346,9 +351,9 @@ export default function AdvancedSearch() {
         onChange={setRawQuery}
         onClear={() => setRawQuery('')}
         isSearching={isSearching}
-        resultCount={deferredQuery.trim() ? deferredResults.length : null}
+        resultCount={deferredQuery.trim() && answered ? deferredResults.length : null}
         totalCount={items.length}
-        searchTimeMs={searchTimeMs}
+        searchTimeMs={answered && shown ? shown.timeMs : null}
         items={jsonItems}
       />
 
@@ -375,7 +380,7 @@ export default function AdvancedSearch() {
       )}
 
       {/* No results message */}
-      {!isLoadingResources && deferredQuery.trim() && !isSearching && deferredResults.length === 0 && items.length > 0 && (
+      {!isLoadingResources && deferredQuery.trim() && answered && deferredResults.length === 0 && items.length > 0 && (
         <div className="flex flex-col items-center gap-2 py-12 text-slate-500">
           <AlertCircle className="w-8 h-8" />
           <p className="text-sm">{t('advancedSearch.noResults', 'No resources match your query')}</p>

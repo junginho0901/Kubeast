@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareResults, rememberPrinterStatus, toSearchResult } from './searchEngine'
+import { answerFor, compareResults, rememberPrinterStatus, toSearchResult, type SearchAnswer } from './searchEngine'
 
 const NOW = Date.now()
 const made = (name: string, agoMs?: number) =>
@@ -43,5 +43,26 @@ describe('the Status column', () => {
     expect(toSearchResult(pod()).status).toBe('Running')
     const deploy = { kind: 'Deployment', metadata: { name: 'web' }, status: { conditions: [{ type: 'Available', status: 'False' }] } }
     expect(toSearchResult(deploy).status).toBe('NotReady')
+  })
+})
+
+// Advanced Search drew the table behind a deferred value: in the render a search ended, the results of the expression
+// or namespace before it showed with the new one's count until the deferred render caught up. An answer now carries
+// what it searched and is drawn only for the expression and items on screen.
+describe('answerFor', () => {
+  const pods = [{ kind: 'Pod', metadata: { name: 'web-0', namespace: 'shop' } }]
+  const otherNamespace = [{ kind: 'Pod', metadata: { name: 'job-0', namespace: 'batch' } }]
+  const answer: SearchAnswer = { query: "status == 'Running'", items: pods, results: [toSearchResult(pods[0])], timeMs: 3 }
+
+  it('is the answer for its own expression and items', () => {
+    expect(answerFor(answer, "status == 'Running'", pods)).toBe(answer)
+  })
+
+  it('is none for another expression, other items (another namespace or set of types) or before any answer', () => {
+    expect(answerFor(answer, "status == 'Pending'", pods)).toBeNull()
+    expect(answerFor(answer, "status == 'Running'", otherNamespace)).toBeNull()
+    // the same objects read again are other items: their answer is searched again
+    expect(answerFor(answer, "status == 'Running'", [...pods])).toBeNull()
+    expect(answerFor(null, "status == 'Running'", pods)).toBeNull()
   })
 })
