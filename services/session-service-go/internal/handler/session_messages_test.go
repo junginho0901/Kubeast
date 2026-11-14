@@ -90,3 +90,62 @@ func TestGetEarlierMessages_APageBeforeTheOneNamed(t *testing.T) {
 		}
 	}
 }
+
+// The page saves an answer whose stream was cut as the answer to its question: only while that question is the newest
+// message, since a stream that lost only its end had its whole answer saved by ai-service, and once, marked failed.
+func TestSaveMessages_ACutAnswerOnlyAfterItsQuestion(t *testing.T) {
+	const question = "are my clusters healthy?"
+	cut := `{"messages":[{"role":"assistant","content":"Two clusters so far","failed":true,"answers":"are my clusters healthy?"}]}`
+	for name, c := range map[string]struct {
+		before []model.Message
+		saved  bool
+	}{
+		"its question is the newest message":     {[]model.Message{{Role: "user", Content: question}}, true},
+		"ai-service saved the answer after it":   {[]model.Message{{Role: "user", Content: question}, {Role: "assistant", Content: "Two clusters, both healthy."}}, false},
+		"another question came after it":         {[]model.Message{{Role: "user", Content: question}, {Role: "user", Content: "and now?"}}, false},
+		"the question never reached the service": {nil, false},
+	} {
+		f := &fakeSessions{sessions: map[string]*model.Session{"s1": {ID: "s1", UserID: "u1"}}, messages: append([]model.Message(nil), c.before...)}
+		h := &SessionHandler{repo: f, auditStore: &memAudit{}}
+		w := httptest.NewRecorder()
+		h.SaveMessages(w, sessionRequest(http.MethodPost, "s1", cut, auth.TokenPayload{UserID: "u1"}))
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s: status %d %s", name, w.Code, w.Body)
+		}
+		var got struct {
+			Saved int `json:"saved"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		added := f.messages[len(c.before):]
+		if !c.saved {
+			if len(added) != 0 || got.Saved != 0 {
+				t.Errorf("%s: added %+v (saved %d), want none", name, added, got.Saved)
+			}
+			continue
+		}
+		if len(added) != 1 || got.Saved != 1 {
+			t.Errorf("%s: added %d (saved %d), want 1", name, len(added), got.Saved)
+			continue
+		}
+		if a := added[0]; a.Role != "assistant" || a.Content != "Two clusters so far" || a.Usage == nil || string(*a.Usage) != `{"failed":true}` {
+			t.Errorf("%s: added %s %q usage %v", name, a.Role, a.Content, a.Usage)
+		}
+	}
+}
+
+// A save that names no question is added as before: the stopped answer, and messages a caller writes itself.
+func TestSaveMessages_WithoutAQuestionAddsEach(t *testing.T) {
+	f := &fakeSessions{sessions: map[string]*model.Session{"s1": {ID: "s1", UserID: "u1"}}, messages: []model.Message{{Role: "assistant", Content: "earlier"}}}
+	h := &SessionHandler{repo: f, auditStore: &memAudit{}}
+	w := httptest.NewRecorder()
+	body := `{"messages":[{"role":"user","content":"q"},{"role":"assistant","content":"part","stopped":true}]}`
+	h.SaveMessages(w, sessionRequest(http.MethodPost, "s1", body, auth.TokenPayload{UserID: "u1"}))
+	if w.Code != http.StatusOK || len(f.messages) != 3 {
+		t.Fatalf("status %d, %d messages, want 200 and 3", w.Code, len(f.messages))
+	}
+	if u := f.messages[2].Usage; u == nil || string(*u) != `{"stopped":true}` {
+		t.Errorf("stopped answer usage %v", u)
+	}
+}
