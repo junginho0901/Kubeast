@@ -22,6 +22,7 @@ import { hygieneFindingTarget } from '@/utils/detailTargets'
 import { utcTitle } from '@/utils/time'
 import { failureText } from '@/utils/failureText'
 import { failureFields } from '@/utils/aiContext/readFailure'
+import { keepSameRead } from '@/utils/keepSameRead'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { failureOf } from '@/hooks/useRefresh'
 import { ActionFailure } from '@/components/ActionFailure'
@@ -105,14 +106,15 @@ export default function ClusterHygiene() {
   const [historyRowsIn, setHistoryRowsIn] = useState(false)
   const historyTable = useAdaptiveTable({ rowHeight: 37, recalculationKey: `${tab}:${historyRowsIn}` })
   const historyPage = Math.floor(historyFirst / historyTable.rowsPerPage) + 1
+  const historyKey = ['hygiene', cluster, 'history', historyPage, historyTable.rowsPerPage]
   const { data: historyAnswer, isLoading: historyLoading } = useQuery({
-    queryKey: ['hygiene', cluster, 'history', historyPage, historyTable.rowsPerPage],
+    queryKey: historyKey,
     queryFn: async () => ({
       ...(await api.listHygieneReviews(cluster, { limit: historyTable.rowsPerPage, offset: (historyPage - 1) * historyTable.rowsPerPage })),
       page: historyPage, limit: historyTable.rowsPerPage,
     }),
     enabled: !!cluster && (tab === 'history' || !!viewId),
-    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[1] === cluster ? prev : undefined),
+    placeholderData: keepSameRead(historyKey, [3, 4]),
   })
   const history = historyAnswer?.items ?? []
   const historyTotal = historyAnswer?.total ?? 0
