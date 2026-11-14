@@ -11,11 +11,19 @@ import (
 // alone, and the rules on object keys see each member. Only what the rules change is rewritten: other numbers, key order
 // and spacing stay as they came. ok is false when s is not such text; the caller then uses Text.
 func JSON(s string, o Options) (out string, st Stats, ok bool) {
+	return JSONNumbered(s, o, nil)
+}
+
+// JSONNumbered is JSON numbering personal data with n (TextNumbered); nil starts a table for this text.
+func JSONNumbered(s string, o Options, n *Numbers) (out string, st Stats, ok bool) {
 	start := jsonStart(s)
 	if start < 0 || !json.Valid([]byte(s[start:])) {
 		return s, st, false
 	}
-	head, headStats := Text(s[:start], o)
+	if n == nil {
+		n = &Numbers{}
+	}
+	head, headStats := TextNumbered(s[:start], o, n)
 	st.merge(headStats)
 	// PII runs once over the whole text below: one address keeps one placeholder across strings.
 	each := o
@@ -23,7 +31,7 @@ func JSON(s string, o Options) (out string, st Stats, ok bool) {
 	w := jsonRewriter{src: s, opts: each, st: &st}
 	w.value(start, jsonValueEnd(s, start), false)
 	w.out.WriteString(s[w.pos:])
-	return head + redactPII(w.out.String()[start:], o, &st), st, true
+	return head + redactPII(w.out.String()[start:], o, &st, n), st, true
 }
 
 func (s *Stats) merge(other Stats) {
