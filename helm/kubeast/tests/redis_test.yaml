@@ -41,3 +41,13 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].image
           value: valkey/valkey:9.1-alpine
+
+  - it: stops the old Redis before the new one starts, so one Redis stands behind the Service
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.strategy
+          value:
+            type: Recreate
