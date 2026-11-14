@@ -29,6 +29,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nfm"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/pglock"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/routes"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/sessioncheck"
@@ -153,6 +154,10 @@ func main() {
 		hcCtx, hcCancel := context.WithCancel(context.Background())
 		defer hcCancel()
 		hc := k8s.NewHealthChecker(k8sSvc, registry, time.Duration(cfg.HealthcheckIntervalSec)*time.Second)
+		// Every replica probes for its own breaker; the one holding this lock writes the column.
+		healthLock := pglock.New(pgPool, healthStatusLockKey)
+		defer healthLock.Close()
+		hc.WriteStatusWhen(healthLock)
 		go hc.Run(hcCtx)
 	}
 
@@ -442,6 +447,10 @@ const (
 	recorderShutdownWait = 10 * time.Second
 	drainShutdownWait    = 3 * time.Second
 )
+
+// healthStatusLockKey is the advisory lock of the replica that writes
+// clusters.health_status (arbitrary constant: "kubeast-health-status").
+const healthStatusLockKey int64 = 0x6b62686c74687374
 
 // shutdown stops the server, then gives the recorder a wait of its own: an open
 // event stream (a followed log, the Helm releases stream) keeps srv.Shutdown

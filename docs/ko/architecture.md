@@ -121,7 +121,7 @@ ghcr.io/junginho0901/kubeast-model-config-controller-go
   - `dormantAccounts`를 켜면 24시간마다 휴면 계정 잠금
   - S3 싱크를 지정했다면 24시간마다 감사 앵커
 - k8s-service
-  - 60초마다 등록된 클러스터별 상태 확인(`multicluster.healthcheckIntervalSec`)
+  - 60초마다 등록된 클러스터별 상태 확인(`multicluster.healthcheckIntervalSec`). 확인은 서버마다 자기 빠른 실패 판단에 쓰고, `clusters.health_status`는 PostgreSQL advisory lock(따로 연 연결 하나)을 잡은 서버 한 대만 씀
   - 오래 쓰지 않은 클러스터의 informer 캐시 정리
   - 노드 드레인을 맡은 동안 5초마다 살아 있음을 적음 · 10초마다 맡은 서버가 멈춘 드레인을 중단됨으로 적음 · 1시간마다 하루 전에 끝난 드레인 지움(`node_drains`)
 

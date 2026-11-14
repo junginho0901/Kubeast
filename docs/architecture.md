@@ -121,7 +121,7 @@ Work that always runs:
   - with `dormantAccounts` on, locks dormant accounts every 24 hours
   - when an S3 sink is set, writes the audit anchor every 24 hours
 - k8s-service:
-  - checks the health of each registered cluster every 60 seconds (`multicluster.healthcheckIntervalSec`)
+  - checks the health of each registered cluster every 60 seconds (`multicluster.healthcheckIntervalSec`): every replica probes for its own fail-fast state, and the one holding a PostgreSQL advisory lock (on a connection of its own) writes `clusters.health_status`
   - cleans up the informer caches of clusters not used for a long time
   - while it runs a node drain, writes that it is alive every 5 seconds; every 10 seconds marks the drains whose server stopped as interrupted; every hour deletes drains that finished a day ago (`node_drains`)
 
