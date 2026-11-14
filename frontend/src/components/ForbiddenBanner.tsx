@@ -7,7 +7,7 @@ import { resetListStatus } from '@/services/listStatusStore'
 import { joinResources } from '@/utils/forbiddenResource'
 import { usePermission } from '@/hooks/usePermission'
 import { LISTS_AND_DETAILS } from '@/utils/permissions'
-import { customRoleGroup } from '@/utils/roleGroup'
+import { customRoleGroup, takesBuiltinSlug } from '@/utils/roleGroup'
 
 // Shown above the page when a cluster list request answered 403 for the
 // signed-in user. The forbidden store collects those responses (the API
@@ -25,6 +25,9 @@ export default function ForbiddenBanner({ clusterKey }: { clusterKey: string }) 
   // A role without the read permission never gets that far: the cluster is not why.
   const isGlobalAdmin = (permissions['*'] ?? []).includes('*')
   const group = isGlobalAdmin || !readsLists ? null : customRoleGroup(clusterRole)
+  // A custom role named as a built-in in other capitals ("ADMIN", stored before such names were refused) acts as no
+  // role group (auth.TakesBuiltinSlug): the cluster refuses what it reads, whatever it binds.
+  const builtinName = !isGlobalAdmin && readsLists && takesBuiltinSlug(clusterRole)
 
   useEffect(() => {
     resetForbidden()
@@ -60,6 +63,15 @@ export default function ForbiddenBanner({ clusterKey }: { clusterKey: string }) 
             {t('layout.forbidden.readPermission', {
               defaultValue:
                 'Your role on this cluster holds neither resource.objects.read (lists and details) nor resource.*.read (All resources: read), so Kubeast reads no list for it. Ask an administrator to add one.',
+            })}
+          </div>
+        )}
+        {builtinName && (
+          <div data-testid="forbidden-builtin-name-hint" className="mt-1 text-amber-100/80">
+            {t('layout.forbidden.builtinName', {
+              defaultValue:
+                'Your role "{{role}}" has a built-in role\'s name in other capitals or with spaces, so on this cluster it acts as no role group and the cluster refuses what it reads. Ask an administrator for a built-in role here, or to rename this one.',
+              role: clusterRole,
             })}
           </div>
         )}

@@ -26,6 +26,12 @@ func TestAccess(t *testing.T) {
 			Access{Cluster: "prod", Kind: "investigator", User: UserInvestigator, Groups: []string{GroupInvestigator}, Impersonation: true}},
 		{"impersonation off: nothing sent", TokenPayload{Email: "a@example.com", Roles: map[string]string{"prod": "Read"}}, false,
 			Access{Cluster: "prod", Kind: "person", Role: "Read"}},
+		{"a custom role with a built-in's name and spaces: the name as stored, no role group", TokenPayload{Email: "a@example.com", Roles: map[string]string{"prod": " Admin "}}, true,
+			Access{Cluster: "prod", Kind: "person", User: "a@example.com", Groups: []string{GroupAuthenticated}, Role: " Admin ", NoRoleGroup: true, Impersonation: true}},
+		{"a custom role with a built-in's name in capitals, limited to namespaces", TokenPayload{Email: "a@example.com", Roles: map[string]string{"prod": "WRITE"}, Namespaces: map[string][]string{"prod": {"shop"}}}, true,
+			Access{Cluster: "prod", Kind: "person", User: "a@example.com", Groups: []string{GroupAuthenticated}, Role: "WRITE", NoRoleGroup: true, Namespaces: []string{"shop"}, Impersonation: true}},
+		{"a custom role keeps its name as stored", TokenPayload{Email: "a@example.com", Roles: map[string]string{"prod": " ops "}}, true,
+			Access{Cluster: "prod", Kind: "person", User: "a@example.com", Groups: []string{GroupAuthenticated, "kubeast:role:ops"}, Role: " ops ", Impersonation: true}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

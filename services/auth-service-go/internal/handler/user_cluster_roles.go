@@ -137,6 +137,17 @@ func (h *AuthHandler) SetUserClusterRole(w http.ResponseWriter, r *http.Request)
 	if len(namespaces) > 0 {
 		after["namespaces"] = namespaces
 	}
+	// A role sharing another role's group is not given any more; grants already stored stay.
+	shared, err := sharedGroupOf(r.Context(), h.repo, role.ID)
+	if err != nil {
+		response.InternalError(w, r, err)
+		return
+	}
+	if shared != nil {
+		h.auditClusterRole(r, "user.cluster_role.set", payload, userID, target.Email, clusterID, after, shared)
+		refuseSharedGroupRole(w, shared)
+		return
+	}
 	if err := h.chartBoundGrantCeiling(payload, role.Name, clusterID); err != nil {
 		h.auditClusterRole(r, "user.cluster_role.set", payload, userID, target.Email, clusterID, after, err)
 		response.Error(w, http.StatusForbidden, err.Error())

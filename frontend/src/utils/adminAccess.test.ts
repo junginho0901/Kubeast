@@ -109,6 +109,12 @@ describe('who gives a role the chart binds', () => {
     expect(givesChartBoundRole({ ...users, self: ['*'] }, { self: 'Admin' }, {}, 'other')).toBe(false)
   })
 
+  it('not a custom role named as Admin in other capitals, which acts as no role group there', () => {
+    for (const role of ['ADMIN', 'admin', ' Admin ']) {
+      expect(givesChartBoundRole({ ...users, self: ['*'] }, { self: role }, {}, 'self'), role).toBe(false)
+    }
+  })
+
   it('not a user admin holding less there, nor every admin key', () => {
     expect(givesChartBoundRole({ ...users, self: READ }, { self: 'Read' }, {}, 'self')).toBe(false)
     expect(givesChartBoundRole({ ...users, self: WRITE }, { self: 'Write' }, {}, 'self')).toBe(false)

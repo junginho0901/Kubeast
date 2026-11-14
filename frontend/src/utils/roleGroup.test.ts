@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { customRoleGroup, roleEditEndsSessions, roleGroupSlug } from './roleGroup'
+import { customRoleGroup, isBuiltinRole, roleEditEndsSessions, roleGroupSlug, sameGroupRefusal, takenRoleName, takesBuiltinSlug } from './roleGroup'
 
 // auth-service tokensEndedBy: only what a token held and no longer may ends a session.
 describe('roleEditEndsSessions', () => {
@@ -35,10 +35,32 @@ describe('roleEditEndsSessions', () => {
 })
 
 describe('roleGroup', () => {
-  it('maps built-in roles to no custom group, case-insensitively', () => {
-    for (const r of ['Read', 'write', 'ADMIN', ' Admin ', '', null, undefined]) {
+  it('maps Read, Write and Admin and their names in other capitals to no custom group', () => {
+    for (const r of ['Read', 'write', 'ADMIN', ' Admin ', 'PENDING', '', null, undefined]) {
       expect(customRoleGroup(r)).toBeNull()
     }
+    // the built-in Member is no fixed group: a grant of it acts as kubeast:role:member, as impersonation.go has it
+    expect(customRoleGroup('Member')).toBe('kubeast:role:member')
+  })
+
+  // impersonation.go IsBuiltinRole / TakesBuiltinSlug (TestImpersonation_RoleNamesOfTheBuiltInsInOtherForms)
+  it('knows a built-in by its exact name only', () => {
+    for (const r of ['Admin', 'Write', 'Read', 'Member', 'Pending']) {
+      expect(isBuiltinRole(r)).toBe(true)
+      expect(takesBuiltinSlug(r)).toBe(false)
+    }
+    for (const r of ['ADMIN', 'admin', ' Admin ', 'WRITE', 'write', ' read ', 'PENDING']) {
+      expect(isBuiltinRole(r)).toBe(false)
+      expect(takesBuiltinSlug(r)).toBe(true)
+    }
+    for (const r of ['sre-oncall', 'admin-2', '', null]) expect(takesBuiltinSlug(r)).toBe(false)
+  })
+
+  it("reads auth-service's role_same_group refusal", () => {
+    const err = { response: { data: { code: 'role_same_group', role: 'ADMIN', same_group_as: 'Admin', detail: 'x' } } }
+    expect(sameGroupRefusal(err)).toEqual({ role: 'ADMIN', other: 'Admin' })
+    expect(sameGroupRefusal({ response: { data: { detail: 'other' } } })).toBeNull()
+    expect(sameGroupRefusal(null)).toBeNull()
   })
 
   it('slugs a custom role the way impersonation.go does', () => {
@@ -47,5 +69,41 @@ describe('roleGroup', () => {
     expect(roleGroupSlug('dev_team.v2')).toBe('dev_team.v2')
     expect(roleGroupSlug('개발자 A')).toBe('----a')
     expect(roleGroupSlug('a/b:c')).toBe('a-b-c')
+  })
+})
+
+// auth-service roleNameConflict (TestNewRoleNameCannotShareAKubernetesGroup, TestRoleRenameCannotShareAKubernetesGroup).
+describe('takenRoleName', () => {
+  const roles = [
+    { id: 1, name: 'Member', is_system: true },
+    { id: 3, name: 'Read', is_system: true },
+    { id: 5, name: 'Admin', is_system: true },
+    { id: 7, name: 'custom', is_system: false },
+    { id: 8, name: 'ADMIN', is_system: false },
+    { id: 15, name: 'a b', is_system: false },
+  ]
+
+  it('a built-in in other capitals or with spaces is taken by the built-in', () => {
+    expect(takenRoleName('admin', roles)).toEqual({ role: 'Admin', builtin: true, sameName: false })
+    // " read " is Read in other capitals, not its name: the server answers same_name false for it too
+    expect(takenRoleName(' read ', roles)).toEqual({ role: 'Read', builtin: true, sameName: false })
+    expect(takenRoleName('Read ', roles)).toEqual({ role: 'Read', builtin: true, sameName: true })
+    expect(takenRoleName('MEMBER', roles)).toEqual({ role: 'Member', builtin: true, sameName: false })
+  })
+
+  it('another role of the same group takes it, the same name too', () => {
+    expect(takenRoleName('custom', roles)).toEqual({ role: 'custom', builtin: false, sameName: true })
+    expect(takenRoleName('A!B', roles)).toEqual({ role: 'a b', builtin: false, sameName: false })
+  })
+
+  it('a free name, an empty one and a name of its own group are not taken', () => {
+    expect(takenRoleName('admin-2', roles)).toBeNull()
+    expect(takenRoleName('   ', roles)).toBeNull()
+    expect(takenRoleName('CUSTOM', roles, { id: 7, name: 'custom' })).toBeNull()
+  })
+
+  it('a stored name sent back as the form sends it stays usable, another form of it does not', () => {
+    expect(takenRoleName('ADMIN', roles, { id: 8, name: 'ADMIN' })).toBeNull()
+    expect(takenRoleName('admin', roles, { id: 8, name: 'ADMIN' })).toEqual({ role: 'Admin', builtin: true, sameName: false })
   })
 })

@@ -85,6 +85,23 @@ def _code(s: str) -> str:
     return f"<code>{html.escape(s)}</code>"
 
 
+# After a role of a built-in's name in other forms, which acts as no role group (auth.TakesBuiltinSlug); the same
+# text as the frontend's toolAccess.ts (toolAccess.cases.json).
+NO_ROLE_GROUP = " (named as a built-in role in other capitals or with spaces: no role group)"
+
+
+def _role_text(access: Dict[str, Any]) -> str:
+    """The role as stored ("role" of auth.Access), "global admin" for "*", and whether it gives no role group."""
+    role = str(access.get("role") or "")
+    if role == "*":
+        return "global admin"
+    if not role:
+        return "no role in this cluster"
+    if access.get("no_role_group"):
+        return f'role "{html.escape(role)}"{NO_ROLE_GROUP}'
+    return f"role {html.escape(role)}"
+
+
 def line(access: Optional[Dict[str, Any]]) -> str:
     """The 🔐 line under a tool block's name: who the cluster saw, the Kubeast role and scope behind it, read or
     write. Empty without an identity."""
@@ -105,8 +122,7 @@ def line(access: Optional[Dict[str, Any]]) -> str:
     if kind == "investigator":
         parts.append("alert investigator")
     elif kind == "person" or kind == "api_key":
-        role = str(access.get("role") or "")
-        parts.append("global admin" if role == "*" else f"role {html.escape(role)}" if role else "no role in this cluster")
+        parts.append(_role_text(access))
         namespaces = [n for n in access.get("namespaces") or [] if isinstance(n, str)]
         parts.append("namespaces " + ", ".join(html.escape(n) for n in namespaces) if namespaces else "whole cluster")
     parts.append("write" if access.get("mode") == "write" else "read-only")

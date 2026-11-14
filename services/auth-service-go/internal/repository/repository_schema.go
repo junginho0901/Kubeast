@@ -128,6 +128,15 @@ func (r *Repository) SeedSystemRoles(ctx context.Context) error {
 	defer tx.Rollback(ctx)
 
 	for _, s := range seeds {
+		// A custom role whose name is this built-in's in other capitals (made before
+		// such names were refused) keeps its name, out of the index of names ignoring
+		// case (migration 00025), so the built-in can be written.
+		if _, err := tx.Exec(ctx,
+			`UPDATE roles SET name_kept = true
+			 WHERE NOT is_system AND NOT name_kept AND name <> $1 AND lower(btrim(name)) = lower(btrim($1::text))`, s.Name,
+		); err != nil {
+			return fmt.Errorf("seed role %s: keep a custom role of the same name: %w", s.Name, err)
+		}
 		var roleID int
 		err := tx.QueryRow(ctx,
 			`INSERT INTO roles (name, description, is_system)

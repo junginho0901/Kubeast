@@ -495,6 +495,7 @@
       "title": "No permission",
       "body": "You do not have permission to view {{resources}} in this cluster. Ask an administrator for a role that includes it.",
       "customRole": "Your role \"{{role}}\" acts on this cluster as the Kubernetes group {{group}}. If every page shows this notice, the cluster has not allowed and bound that group yet (chart auth.impersonation.customRoles).",
+      "builtinName": "Your role \"{{role}}\" has a built-in role's name in other capitals or with spaces, so on this cluster it acts as no role group and the cluster refuses what it reads. Ask an administrator for a built-in role here, or to rename this one.",
       "readPermission": "Your role on this cluster holds neither resource.objects.read (lists and details) nor resource.*.read (All resources: read), so Kubeast reads no list for it. Ask an administrator to add one.",
       "namespaces": "Your access to this cluster is limited to the namespaces {{namespaces}}; cluster-wide pages and other namespaces are not shown."
     },
@@ -3745,6 +3746,14 @@
   },
   "adminRoles": {
     "deleteInUse": "Role \"{{name}}\" is still in use (accounts {{accounts}}, cluster grants {{grants}}, access requests {{requests}}). Give them another role first.",
+    "nameTakenBuiltinSame": "Role \"{{role}}\" already exists: it is a built-in role.",
+    "nameTakenSame": "Role \"{{role}}\" already exists. Choose another name.",
+    "nameTakenBuiltin": "Taken: it is the built-in role {{role}} apart from letter case or spaces.",
+    "nameTakenGroup": "On a cluster this name acts as the same Kubernetes group as role \"{{role}}\" ({{group}}). Choose another name.",
+    "nameTakenOther": "Taken by another role apart from letter case. Choose another name.",
+    "sameGroupNote": "Its name differs from role \"{{role}}\" only in letter case, spaces or punctuation, so it is not given on a cluster any more. A grant it already has acts as no role group where the other is a built-in role. Rename it.",
+    "sameGroupHint": "not grantable: same name as {{role}} apart from letter case or spaces",
+    "sameGroupRefused": "Role \"{{role}}\" is not given on a cluster: its name differs from role \"{{other}}\" only in letter case, spaces or punctuation. Rename it in Role Management first.",
     "systemRoles": {
       "pending": "Awaiting approval",
       "member": "Regular user (access per cluster grant)",

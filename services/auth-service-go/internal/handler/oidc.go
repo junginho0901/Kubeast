@@ -640,6 +640,17 @@ func (h *AuthHandler) syncClusterGrants(r *http.Request, user *model.User, want 
 			slog.Warn("oidc: cluster group names unknown role", "cluster", clusterID, "role", roleName)
 			continue
 		}
+		// a role sharing another role's group is not given, as by a grant or an approval (refuseSharedGroupRole)
+		shared, err := sharedGroupOf(ctx, h.repo, role.ID)
+		if err != nil {
+			return err
+		}
+		if shared != nil {
+			h.auditClusterRole(r, "user.cluster_role.set", self, userID, user.Email, clusterID,
+				map[string]any{"role": roleName, "previous": have[clusterID], "via": "oidc"}, shared)
+			slog.Warn("oidc: cluster group names a role sharing another role's group, skipped", "cluster", clusterID, "role", roleName, "same_group_as", shared.other)
+			continue
+		}
 		err = h.repo.SetUserClusterRole(ctx, userID, clusterID, role.ID, nil) // group-driven grants are cluster-wide
 		// A group for a cluster that is not (or no longer) registered must
 		// not fail the whole login: skip it and keep the other grants (L21).
