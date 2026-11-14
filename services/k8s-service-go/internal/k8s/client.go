@@ -80,6 +80,8 @@ type clientBundle struct {
 	infMu       sync.Mutex
 	inf         *clusterInformers
 	infFailedAt time.Time
+	// noInformers: the overview informers never start here (ServiceOptions.NoInformers); readers list instead.
+	noInformers bool
 }
 
 // Close stops the bundle's informers (LRU eviction, kubeconfig rotation).
@@ -168,6 +170,9 @@ type ServiceOptions struct {
 	InstallNamespace   string
 	NodeShellNamespace string
 	Gitops             gitops.Config // Argo CD guard (chart gitops.argocd)
+	// NoInformers keeps the overview informers from starting: a server of role "stream" serves no list, and whatever
+	// would read them lists instead, as before the first sync.
+	NoInformers bool
 }
 
 // impersonationEnabled and execCommands are read by buildClientBundle (set once
@@ -176,6 +181,7 @@ var (
 	impersonationEnabled bool
 	execCommands         []string
 	clientRates          rates
+	informersOff         bool
 )
 
 // rates are ServiceOptions' client rates, read by buildClientBundle.
@@ -189,6 +195,7 @@ func NewService(ctx context.Context, registry cluster.Registry, watchEnabled boo
 	execCommands = opts.ExecCommands
 	clientRates = rates{opts.ClientQPS, opts.ClientBurst, opts.ReviewQPS, opts.ReviewBurst}
 	installNamespace, nodeShellNamespace = opts.InstallNamespace, opts.NodeShellNamespace
+	informersOff = opts.NoInformers
 	s := &Service{
 		registry:          registry,
 		gitops:            opts.Gitops,
@@ -328,6 +335,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		id:          info.ID,
 		protected:   protected,
 		cacheClient: cacheClient,
+		noInformers: informersOff,
 	}, nil
 }
 

@@ -52,7 +52,13 @@ func main() {
 	// Setup structured logger
 	logger.Setup(cfg.AppName, cfg.Debug)
 
-	slog.Info("starting k8s-service-go", "port", cfg.Port, "debug", cfg.Debug)
+	// One image, three roles (SERVER_ROLE): all (the default), api, stream. A value it does not know stops it.
+	role, roleErr := config.ParseRole(cfg.ServerRole)
+	if roleErr != nil {
+		slog.Error("invalid server role", "err", roleErr)
+		os.Exit(1)
+	}
+	slog.Info("starting k8s-service-go", "port", cfg.Port, "debug", cfg.Debug, "role", role)
 	memlimit.Set(0)
 
 	// The /internal routes (kubeconfig for tool-server, validate/invalidate for
@@ -132,6 +138,7 @@ func main() {
 		ExecCommands:       cfg.KubeconfigExecCommands,
 		InstallNamespace:   cfg.PodNamespace,
 		NodeShellNamespace: cfg.NodeShellNamespace,
+		NoInformers:        !role.ServesAPI(),
 	})
 	startCancel()
 	if err != nil {
@@ -148,7 +155,8 @@ func main() {
 
 	// Periodic cluster health checker (step 15): keeps in-memory reachability +
 	// clusters.health_status fresh so fail-fast + the picker reflect down clusters.
-	if cfg.HealthcheckIntervalSec > 0 {
+	// A stream server leaves it to the API server: one writer of clusters.health_status.
+	if role.ServesAPI() && cfg.HealthcheckIntervalSec > 0 {
 		hcCtx, hcCancel := context.WithCancel(context.Background())
 		defer hcCancel()
 		hc := k8s.NewHealthChecker(k8sSvc, registry, time.Duration(cfg.HealthcheckIntervalSec)*time.Second)
@@ -268,7 +276,9 @@ func main() {
 	h.SetRecorder(recorder)
 	recCtx, recCancel := context.WithCancel(context.Background())
 	defer recCancel()
-	if recorder.Enabled() {
+	// Only a server that opens terminals writes recordings: Run's recovery marks a row whose spool file it does not
+	// hold as interrupted, which on an API server would be every live recording of the stream server.
+	if recorder.Enabled() && role.ServesStreams() {
 		slog.Info("session recording enabled", "storage", recCfg.Storage, "chunk_sec", recCfg.ChunkSeconds, "required", recCfg.Required)
 		go recorder.Run(recCtx)
 	}
@@ -297,7 +307,7 @@ func main() {
 	}
 	m.Gauge("kubeast_ws_subscriptions", "Live WebSocket subscriptions (logs, exec, watches) across all connections.",
 		func() float64 { return float64(wsMux.SubscriptionCount()) })
-	if recorder.Enabled() {
+	if recorder.Enabled() && role.ServesStreams() {
 		m.Gauge("kubeast_session_recording_pending_bytes", "Recorded terminal output not uploaded to the recording store yet.",
 			func() float64 { return float64(recorder.PendingBytes()) })
 		m.Gauge("kubeast_session_recording_last_upload_timestamp_seconds", "When a recording part was last uploaded (or when recording started).",
@@ -361,12 +371,16 @@ func main() {
 			r.Use(h.GitopsGuard)
 		}
 
-		routes.Register(r, h, wsMux)
+		routes.RegisterRole(r, h, wsMux, role)
 	})
 
 	// Session recordings span clusters: JWT only, no cluster middleware; the
 	// handlers check admin.sessions.read (config is open to any signed-in user).
+	// Reading them is the API's; a stream server only writes them.
 	r.Group(func(r chi.Router) {
+		if !role.ServesAPI() {
+			return
+		}
 		r.Use(func(next http.Handler) http.Handler {
 			return jwtValidator.MiddlewareWithCookie(cfg.AuthCookieName, next)
 		})
@@ -382,6 +396,9 @@ func main() {
 	// JWT: per-cluster access and the audit actor come from the user. No
 	// ClusterMiddleware — the cluster id comes from the path.
 	r.Group(func(r chi.Router) {
+		if !role.ServesAPI() {
+			return
+		}
 		r.Use(internalauth.Middleware(cfg.InternalAPIToken))
 		r.Use(func(next http.Handler) http.Handler {
 			return jwtValidator.MiddlewareWithCookie(cfg.AuthCookieName, next)
