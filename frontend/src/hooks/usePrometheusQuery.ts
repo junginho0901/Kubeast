@@ -2,6 +2,7 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 import { api, type PrometheusQueryResponse, type PrometheusRangeResponse, type ClusterFeatures, type ServiceBackendUsage } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { useCluster } from '@/contexts/ClusterContext'
+import { aiState, type AIState } from '@/utils/features'
 
 /**
  * Fetch cluster-level feature flags (e.g. Prometheus enabled/disabled) once
@@ -31,6 +32,13 @@ export function useClusterFeatures() {
     // so behavior matches pre-toggle deployments.
     placeholderData: { prometheus: { enabled: true } },
   })
+}
+
+// ai.enabled once the features have answered (aiState); the cluster list is the read the features wait for.
+export function useAIState(): AIState {
+  const features = useClusterFeatures()
+  const clusters = useQuery({ queryKey: ['clusters-accessible'], queryFn: () => clustersApi.listClusters(true), staleTime: 30_000 })
+  return aiState(features.data, features.isPlaceholderData, clusters.isError)
 }
 
 // The hooks ask only while the cluster's toggle is on and the caller's grant covers the whole cluster: a grant

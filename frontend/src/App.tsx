@@ -182,7 +182,7 @@ function App() {
             <Route path="helm/releases" element={<HelmReleasesPage />} />
             <Route path="helm/releases/:namespace/:name" element={<HelmReleaseDetailPage />} />
             <Route path="monitoring" element={<Monitoring />} />
-            <Route path="alerts" element={<AIGate><AlertInbox /></AIGate>} />
+            <Route path="alerts" element={<AlertInbox />} />
             <Route path="cost" element={<Cost />} />
             <Route path="security/policyreports" element={<PolicyReports />} />
             <Route path="cluster-view" element={<ClusterView />} />
