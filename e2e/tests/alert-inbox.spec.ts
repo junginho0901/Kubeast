@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { test, expect, type APIRequestContext } from '@playwright/test'
+import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 
 // The Alerts inbox (features.alertInvestigation on in the dev values): every alert the webhook gets, one row per alert
 // (cluster + fingerprint + startsAt), firing or resolved, for whoever reads the cluster as a whole. The alerts here
@@ -31,6 +31,14 @@ function am(method: 'GET' | 'POST' | 'DELETE', urlPath: string, body?: unknown):
   return execSync(`docker exec -i kubeast-b-control-plane curl -sf -X ${method} ${data} 'http://127.0.0.1:31093${urlPath}'`, {
     encoding: 'utf8', input: body === undefined ? undefined : JSON.stringify(body), stdio: ['pipe', 'pipe', 'pipe'],
   })
+}
+
+// the address changed in the page, as back, forward or a link change it (page.goto would load the app again)
+async function navigate(page: Page, to: string) {
+  await page.evaluate((next) => {
+    window.history.pushState({}, '', next)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }, to)
 }
 
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
@@ -198,6 +206,37 @@ test.describe('Alerts inbox', () => {
     await expect(page.getByTestId('alert-detail').getByTestId('alert-note')).toHaveValue(`restarted the rollout ${id}`)
     await page.keyboard.press('Escape')
     await expect(line.getByTestId('alert-handling')).toContainText(/Done|조치 완료/)
+  })
+
+  // The window follows ?alert=: moved to another alert without a reload, it is that alert's window — a note typed and
+  // not saved stays with the alert it was typed for and is saved on no other.
+  test('the alert window moved to another alert keeps nothing of the one before', async ({ page, request }) => {
+    const rows = await list(request, admin)
+    const marked = rows.find((r) => r.status === 'firing')! // its note was saved by the test before
+    const other = rows.find((r) => r.status === 'resolved')!
+    const noteOf = async (alertId: string) => ((await (await request.get(`/api/v1/alerts/inbox/${alertId}`, { headers: bearer(admin) })).json()).note ?? '') as string
+    const markedNote = await noteOf(marked.id)
+    const otherNote = await noteOf(other.id)
+    expect(markedNote).toBe(`restarted the rollout ${id}`)
+
+    await page.goto(`/alerts?cluster=self&alert=${other.id}`)
+    const detail = page.getByTestId('alert-detail')
+    const note = detail.getByTestId('alert-note')
+    const saveNote = detail.getByTestId('alert-note-save')
+    await expect(note).toHaveValue(otherNote)
+    await note.fill(`typed for the resolved one ${id}`)
+    await expect(saveNote).toBeEnabled()
+
+    await navigate(page, `/alerts?cluster=self&alert=${marked.id}`)
+    await expect(note, 'the note of the alert now open').toHaveValue(markedNote)
+    await expect(saveNote, 'nothing typed in this window yet').toBeDisabled()
+
+    await page.evaluate(() => window.history.back())
+    await expect(page).toHaveURL(new RegExp(`alert=${other.id}`))
+    await expect(note, 'the window starts again from what the alert keeps').toHaveValue(otherNote)
+    await expect(saveNote).toBeDisabled()
+    expect(await noteOf(marked.id)).toBe(markedNote)
+    expect(await noteOf(other.id)).toBe(otherNote)
   })
 
   test('the search asks the server: a term finds alerts on any page, the counts follow, no match says so', async ({ page, request }) => {

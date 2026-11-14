@@ -58,11 +58,13 @@ const buildHelmWatchURL = (cluster: string, namespace?: string): string => {
 const releaseKey = (rel: HelmReleaseSummary): string =>
   `${rel.namespace}/${rel.name}`
 
+// A frame before the list has answered (a namespace just picked) changes nothing: it would make a list of its one release.
 export const applyHelmWatchEvent = (
   prev: HelmReleaseSummary[] | undefined,
   event: HelmWatchEvent,
-): HelmReleaseSummary[] => {
-  const items = Array.isArray(prev) ? [...prev] : []
+): HelmReleaseSummary[] | undefined => {
+  if (!Array.isArray(prev)) return prev
+  const items = [...prev]
   const obj = event.object
   if (!obj?.name || !obj?.namespace) return items
   const key = releaseKey(obj)
