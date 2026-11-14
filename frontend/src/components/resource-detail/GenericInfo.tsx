@@ -4,6 +4,7 @@ import { api } from '@/services/api'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, Tx } from './DetailCommon'
 import { DescribeFailure } from './DescribeFailure'
 import { fmtRel, fmtTs } from './detailFormat'
+import { apiGroupOf } from './crDetail'
 import { genericObjectLayer } from './drawerObjectLayer'
 import { kindToPlural } from './utils'
 import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
@@ -13,25 +14,32 @@ interface Props {
   name: string
   namespace?: string
   kind: string
+  // the apiVersion the drawer was opened with, which names the group before the object is read
+  apiVersion?: string
   rawJson?: Record<string, unknown>
 }
 
-export default function GenericInfo({ name, namespace, kind, rawJson }: Props) {
+export default function GenericInfo({ name, namespace, kind, apiVersion, rawJson }: Props) {
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
   const status = (rawJson?.status ?? {}) as Record<string, unknown>
   const labels = (meta.labels ?? {}) as Record<string, string>
   const annotations = (meta.annotations ?? {}) as Record<string, string>
 
-  // the events kubectl describe lists about the object; of the object's own group where a Kind has two
-  const group = typeof rawJson?.apiVersion === 'string' && rawJson.apiVersion.includes('/') ? rawJson.apiVersion.split('/')[0] : ''
+  // the events kubectl describe lists about the object; of the object's own group where a Kind has two. The read waits
+  // until an apiVersion names the group (the drawer's, else the object's) and is kept under it, so a describe of the group
+  // discovery prefers never stands for the object of another.
+  const named = apiVersion ?? rawJson?.apiVersion
+  const groupKnown = typeof named === 'string' && named !== ''
+  const group = apiGroupOf(named)
+  const describeKey = ['generic-describe', kind, namespace, name, group]
   const { data: describe, isLoading, error } = useQuery({
-    queryKey: ['generic-describe', kind, namespace, name],
+    queryKey: describeKey,
     queryFn: () => api.describeGenericResource(group ? `${kindToPlural(kind)}.${group}` : kindToPlural(kind), name, namespace),
-    enabled: !!name,
+    enabled: !!name && groupKnown,
     retry: false,
   })
-  useDrawerFollowsEvents({ describeKey: ['generic-describe', kind, namespace, name], answer: describe, kind, namespace, name })
+  useDrawerFollowsEvents({ describeKey, answer: describe, kind, namespace, name })
   const refused =(error as { response?: { data?: { detail?: string } } } | null)?.response?.data?.detail
 
   const layer = useMemo(() => genericObjectLayer(rawJson, describe), [rawJson, describe])
@@ -123,7 +131,7 @@ export default function GenericInfo({ name, namespace, kind, rawJson }: Props) {
         </InfoSection>
       )}
 
-      <EventsSection events={describe?.events} error={describe?.events_error ?? refused} loading={isLoading} />
+      <EventsSection events={describe?.events} error={describe?.events_error ?? refused} loading={isLoading || !groupKnown} />
     </>
   )
 }

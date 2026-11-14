@@ -8,13 +8,16 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 // A save of a YAML window takes out of the object what left the text its edit began from, each kind in the patch its API
 // takes: a strategic merge patch by each list's merge key, a JSON merge patch for a custom resource, labels and annotations
 // for a Namespace. What someone else added since stays. Held on `self` against kubectl, through the API and the window; the
-// namespace, the node label and the CRD are of this run and removed after.
+// namespace, the node label and the CRDs are of this run and removed after.
 
 const CLUSTER = 'self'
 const run = Date.now().toString(36)
 const NS = `e2e-yaml-edit-${run}`
 const GROUP = `yamledit${run}.kubeast.io`
 const CRD = `widgets.${GROUP}`
+// a second CRD whose object has the same namespace and name as a Widget's, as Karpenter's EC2NodeClass and NodePool
+const TWIN_GROUP = `yamltwin${run}.kubeast.io`
+const TWIN_CRD = `gadgets.${TWIN_GROUP}`
 const NODE_LABEL = `e2e-yaml-edit-${run}`
 const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
 
@@ -82,12 +85,19 @@ test.describe('a line taken out of a YAML window', () => {
         versions: [{ name: 'v1', served: true, storage: true, schema: { openAPIV3Schema: { type: 'object', 'x-kubernetes-preserve-unknown-fields': true } } }],
       },
     }))
-    kubectl(`wait --for=condition=Established crd/${CRD} --timeout=60s`)
+    kubectl('create -f -', JSON.stringify({
+      apiVersion: 'apiextensions.k8s.io/v1', kind: 'CustomResourceDefinition', metadata: { name: TWIN_CRD },
+      spec: {
+        group: TWIN_GROUP, scope: 'Namespaced', names: { plural: 'gadgets', singular: 'gadget', kind: 'Gadget' },
+        versions: [{ name: 'v1', served: true, storage: true, schema: { openAPIV3Schema: { type: 'object', 'x-kubernetes-preserve-unknown-fields': true } } }],
+      },
+    }))
+    kubectl(`wait --for=condition=Established crd/${CRD} crd/${TWIN_CRD} --timeout=60s`)
   })
 
   test.afterAll(async () => {
     kubectl(`delete namespace ${NS} --wait=false --ignore-not-found`)
-    kubectl(`delete crd ${CRD} --wait=false --ignore-not-found`)
+    kubectl(`delete crd ${CRD} ${TWIN_CRD} --wait=false --ignore-not-found`)
     const node = kubectl(`get nodes -o jsonpath='{.items[0].metadata.name}'`)
     kubectl(`label node ${node} ${NODE_LABEL}- ${NODE_LABEL}-keep-`)
   })
@@ -304,5 +314,32 @@ test.describe('a line taken out of a YAML window', () => {
     await page.goto(`/?cluster=${CLUSTER}&detail=${encodeURIComponent(`Widget/${NS}/seen`)}&detailApi=${encodeURIComponent(`${GROUP}/v1/widgets`)}`)
     await deleteLineInWindow(page, opened, 'gone-key:')
     expect(objectOf(`-n ${NS} get ${CRD} seen`).spec).toEqual({ keep: 1 })
+  })
+
+  // The YAML tab moved, within the read's ten seconds, from a custom resource to one of another CRD with the same
+  // namespace and name (as the browser's back and forward move it, or a link): the window shows that object's YAML,
+  // and its save goes to that object, the first left as it was.
+  test('in the window: a custom resource of another CRD with the same name shows and saves its own YAML', async ({ page, request }) => {
+    kubectl('create -f -', JSON.stringify({ apiVersion: `${GROUP}/v1`, kind: 'Widget', metadata: { name: 'twin', namespace: NS }, spec: { from: 'first', 'first-key': 1 } }))
+    kubectl('create -f -', JSON.stringify({ apiVersion: `${TWIN_GROUP}/v1`, kind: 'Gadget', metadata: { name: 'twin', namespace: NS }, spec: { from: 'second', 'gone-key': 2 } }))
+    const opened = await yamlOf(request, TWIN_CRD, 'twin', NS)
+    await page.goto(`/?cluster=${CLUSTER}&detail=${encodeURIComponent(`Widget/${NS}/twin`)}&detailApi=${encodeURIComponent(`${GROUP}/v1/widgets`)}`)
+    const drawer = page.locator(DRAWER).last()
+    const lines = drawer.locator('.monaco-editor .view-lines').first()
+    await drawer.getByRole('button', { name: 'YAML', exact: true }).click({ timeout: 30_000 })
+    await expect(lines).toContainText('from: first', { timeout: 30_000 })
+
+    // the address changes in the page, as back and forward change it (page.goto would load the app again)
+    await page.evaluate((next) => {
+      window.history.pushState({}, '', next)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }, `/?cluster=${CLUSTER}&detail=${encodeURIComponent(`Gadget/${NS}/twin`)}&detailApi=${encodeURIComponent(`${TWIN_GROUP}/v1/gadgets`)}`)
+    await expect(lines).toContainText('from: second', { timeout: 30_000 })
+    await expect(lines).toContainText(`apiVersion: ${TWIN_GROUP}/v1`)
+    await expect(lines).not.toContainText('from: first')
+
+    await deleteLineInWindow(page, opened, 'gone-key:')
+    expect(objectOf(`-n ${NS} get ${TWIN_CRD} twin`).spec).toEqual({ from: 'second' })
+    expect(objectOf(`-n ${NS} get ${CRD} twin`).spec, 'the Widget of the same name is as it was').toEqual({ from: 'first', 'first-key': 1 })
   })
 })

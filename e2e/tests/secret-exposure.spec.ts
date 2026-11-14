@@ -32,6 +32,9 @@ const rbName = `e2e-viewer-secrets-${ts}`
 const secretName = `e2e-secret-${ts}`
 const secretValue = `e2e-hunter2-${ts}`
 const secretValueB64 = Buffer.from(secretValue).toString('base64')
+// a second Secret with a key of the same name, which the drawer moves to
+const otherSecretName = `e2e-secret-other-${ts}`
+const otherValue = `e2e-other-value-${ts}`
 const lastAppliedValue = `e2e-last-applied-${ts}`
 const relName = `e2e-rel-${ts}`
 const relSecretName = `sh.helm.release.v1.${relName}.v1`
@@ -157,6 +160,19 @@ test.describe.serial('Secret exposure — generic resource paths and Helm text',
       '  username: app',
       '',
     ].join('\n'))
+    await createYAML(request, admin, [
+      'apiVersion: v1',
+      'kind: Secret',
+      'metadata:',
+      `  name: ${otherSecretName}`,
+      `  namespace: ${NS}`,
+      '  annotations:',
+      '    e2e-team: other',
+      'type: Opaque',
+      'stringData:',
+      `  password: ${otherValue}`,
+      '',
+    ].join('\n'))
     await createYAML(request, admin, helmReleaseYAML())
 
     reader = await login(request, readerEmail, readerPassword)
@@ -164,7 +180,7 @@ test.describe.serial('Secret exposure — generic resource paths and Helm text',
 
   test.afterAll(async ({ request }) => {
     if (!admin) return
-    for (const name of [secretName, relSecretName]) {
+    for (const name of [secretName, otherSecretName, relSecretName]) {
       await request.delete(`/api/v1/cluster/namespaces/${NS}/secrets/${name}?cluster=${CLUSTER}`, { headers: admin })
     }
     await request.delete(`/api/v1/cluster/namespaces/${NS}/rolebindings/${rbName}?cluster=${CLUSTER}`, { headers: admin })
@@ -215,6 +231,29 @@ test.describe.serial('Secret exposure — generic resource paths and Helm text',
     await row.getByTitle(/^(Show|보기)$/).click()
     await expect(row).toContainText(secretValue)
     expect(await page.content(), 'Show opens the value, never the copy').not.toContain(lastAppliedValue)
+  })
+
+  // The drawer moved to another Secret in the page (back, forward, a link) is that Secret's: a value shown in the first
+  // stays under Show in the next, where a key has the same name.
+  test('a value shown in one Secret\'s drawer stays hidden in the next Secret\'s until its own Show', async ({ page }) => {
+    const at = (name: string) => `/configuration/secrets?cluster=${CLUSTER}&namespace=${NS}&detail=${encodeURIComponent(`Secret/${NS}/${name}`)}`
+    await page.goto(at(secretName))
+    const drawer = page.locator('[class*="max-w-[740px]"]')
+    const row = drawer.locator('div.rounded-sm.border-slate-800').filter({ has: page.locator('span.font-mono', { hasText: /^password$/ }) })
+    const team = drawer.locator('span.rounded-full').filter({ has: page.locator('span.font-mono', { hasText: /^e2e-team$/ }) }).locator('span.truncate').nth(1)
+    await expect(team).toHaveText('shop', { timeout: 30_000 })
+    await row.getByTitle(/^(Show|보기)$/).click()
+    await expect(row).toContainText(secretValue)
+
+    await page.evaluate((next) => {
+      window.history.pushState({}, '', next)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }, at(otherSecretName))
+    await expect(team, 'the drawer shows the other Secret').toHaveText('other', { timeout: 30_000 })
+    await expect(row.getByTitle(/^(Show|보기)$/), 'its value is not opened').toHaveCount(1)
+    expect(await page.content(), 'the other Secret\'s value is not on the page before its Show').not.toContain(otherValue)
+    await row.getByTitle(/^(Show|보기)$/).click()
+    await expect(row).toContainText(otherValue)
   })
 
   test('the copy kubectl apply keeps in an annotation is masked with the values, and the annotation stays listed', async ({ request }) => {
