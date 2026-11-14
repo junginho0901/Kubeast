@@ -12,7 +12,7 @@
 // genuinely about the data layer).
 
 import { useEffect, useRef, useState } from 'react'
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   api,
@@ -23,6 +23,7 @@ import {
 } from '@/services/api'
 import { readPodPageSince } from '@/services/podPageRead'
 import { useCluster } from '@/contexts/ClusterContext'
+import { keepSameRead } from '@/utils/keepSameRead'
 
 import type { ResourceType } from '../types'
 import { readTopResources, topResourcesPollMs, type TopRefusals } from '../topResourcesRead'
@@ -85,7 +86,8 @@ export function useDashboardQueries({
   })
 
   // The Pods window: a page of 50 from the Pods list's server page, the phase the chart picked and the search
-  // worked out on the server — not every pod of the cluster.
+  // worked out on the server — not every pod of the cluster. The rows stay while another page loads; another phase,
+  // search or cluster waits for its own answer.
   const podPageKey = ['dashboard-pods-page', ck, podQuery.q, selectedPodStatus, podQuery.page]
   const { data: podPage, isLoading: isLoadingPods } = useQuery({
     queryKey: podPageKey,
@@ -93,7 +95,7 @@ export function useDashboardQueries({
       q: podQuery.q || undefined, phase: selectedPodStatus ?? undefined, offset: (podQuery.page - 1) * DASHBOARD_POD_PAGE, limit: DASHBOARD_POD_PAGE,
     }),
     enabled: selectedResourceType === 'pods' || selectedPodStatus !== null,
-    placeholderData: keepPreviousData,
+    placeholderData: keepSameRead(podPageKey, [4]),
     refetchInterval: 15000,
   })
   // The problem pods the floating chat is told about: errors, then warnings, first (sort=health), with the counts.
