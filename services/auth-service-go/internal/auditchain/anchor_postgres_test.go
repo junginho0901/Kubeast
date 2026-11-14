@@ -69,7 +69,7 @@ func TestPostgresReplicasWriteOneAnchorAPeriodEachOnTheOneBefore(t *testing.T) {
 		t.Fatalf("sealed %d err = %v", n, err)
 	}
 	objects := &slowObjects{fakeObjects: newFakeObjects()}
-	// A second later on every call, so no two digests share an object key.
+	// A second later on every call.
 	var seconds atomic.Int64
 	base := time.Date(2026, 11, 14, 3, 0, 0, 0, time.UTC)
 	clock := func() time.Time { return base.Add(time.Duration(seconds.Add(1)) * time.Second) }

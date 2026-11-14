@@ -25,6 +25,10 @@ const scheduledActor = "system"
 // clocks drift).
 const driftTolerance = time.Minute
 
+// putTimeout bounds the digest write, which runs while the anchor lock is
+// held (the sink dispatcher's send timeout).
+const putTimeout = 60 * time.Second
+
 // ObjectStore is the S3 sink the digests go to (auditsink.ObjectStore).
 // Keys are relative to the sink's prefix.
 type ObjectStore interface {
@@ -202,11 +206,14 @@ func (a *Anchorer) write(ctx context.Context, s Store, actor string) (Anchor, er
 	}
 	sum := sha256.Sum256(body)
 	anchor := Anchor{CreatedAt: now, FromSeq: from, ToSeq: to, Rows: rows, HeadHash: head.Hash, AnchorHash: sum[:], Sink: a.Sink, Actor: actor,
-		ObjectKey: fmt.Sprintf("digests/%s/%s-%d-%d.json", now.Format("2006/01/02"), now.Format("150405Z"), from, to)}
+		ObjectKey: fmt.Sprintf("digests/%s/%s-%d-%d-%x.json", now.Format("2006/01/02"), now.Format("150405Z"), from, to, sum[:4])}
 	if prev != nil {
 		anchor.PrevAnchorHash = prev.AnchorHash
 	}
-	if err := a.Objects.PutObject(ctx, anchor.ObjectKey, body, "application/json", map[string]string{"anchor-hash": hex.EncodeToString(anchor.AnchorHash)}); err != nil {
+	pctx, cancel := context.WithTimeout(ctx, putTimeout)
+	err = a.Objects.PutObject(pctx, anchor.ObjectKey, body, "application/json", map[string]string{"anchor-hash": hex.EncodeToString(anchor.AnchorHash)})
+	cancel()
+	if err != nil {
 		return Anchor{}, fmt.Errorf("anchor sink %s: %w", a.Sink, err)
 	}
 	id, err := s.InsertAnchor(ctx, anchor)

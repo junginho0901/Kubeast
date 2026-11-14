@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ func TestAnchorOnceWritesTheDigestAndLinksToThePreviousOne(t *testing.T) {
 	if first.ID != 1 || first.FromSeq != 1 || first.ToSeq != 7 || first.Rows != 7 || first.Sink != "archive" || first.Actor != "system" || first.PrevAnchorHash != nil {
 		t.Fatalf("first anchor = %+v", first)
 	}
-	if first.ObjectKey != "digests/2026/10/08/000509Z-1-7.json" {
+	if want := fmt.Sprintf("digests/2026/10/08/000509Z-1-7-%x.json", first.AnchorHash[:4]); first.ObjectKey != want {
 		t.Errorf("object key = %s", first.ObjectKey)
 	}
 	body := objects.objects[first.ObjectKey]
@@ -71,6 +72,37 @@ func TestAnchorOnceWritesTheDigestAndLinksToThePreviousOne(t *testing.T) {
 	}
 	if len(objects.objects) != 3 || len(f.anchors) != 3 {
 		t.Fatalf("objects = %d anchors = %d", len(objects.objects), len(f.anchors))
+	}
+}
+
+func TestTwoEmptyAnchorsInOneSecondKeepBothDigests(t *testing.T) {
+	f := chainOf(3)
+	objects := newFakeObjects()
+	now := time.Date(2026, 11, 14, 3, 0, 0, 0, time.UTC)
+	a := &Anchorer{Store: f, Objects: objects, Sink: "archive", Now: func() time.Time { return now }}
+	if _, err := a.AnchorOnce(context.Background(), "system"); err != nil {
+		t.Fatal(err)
+	}
+	// Nothing sealed since: both anchors cover the same empty range in the same second.
+	first, err := a.AnchorOnce(context.Background(), "admin@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := a.AnchorOnce(context.Background(), "admin@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.FromSeq != second.FromSeq || first.ToSeq != second.ToSeq {
+		t.Fatalf("ranges differ: %d-%d and %d-%d", first.FromSeq, first.ToSeq, second.FromSeq, second.ToSeq)
+	}
+	if first.ObjectKey == second.ObjectKey {
+		t.Fatalf("both anchors use object key %s", first.ObjectKey)
+	}
+	for _, an := range []Anchor{first, second} {
+		sum := sha256.Sum256(objects.objects[an.ObjectKey])
+		if hex.EncodeToString(sum[:]) != hex.EncodeToString(an.AnchorHash) {
+			t.Errorf("digest of anchor %d was overwritten", an.ID)
+		}
 	}
 }
 
