@@ -273,6 +273,7 @@ multicluster:
 - `secrets.existingSecret`을 쓰면 업그레이드에서 바뀌는 것이 없습니다: `redis.acl.existingSecretHasKeys`가 true가 될 때까지 Redis는 비밀번호 하나를 씁니다.
 - 그 값을 켜면, Secret을 읽을 수 있는 업그레이드는 키가 없거나 비었을 때 그 키를 말하고 멈춥니다. `helm template`과 Argo CD는 Secret을 읽지 못합니다: 그때는 `acl` 컨테이너가 어느 키가 없는지 말하고 멈추며, k8s-service는 메모리에 캐시합니다.
 - `redis.acl.enabled: false`면 Redis는 예전 그대로(메모리 상한만 더해) 뜹니다.
+- 0.7.7로 `helm rollback`하면 Redis가 `kubeast-secrets`에 그대로 있는 비밀번호 하나로 돌아오고, 0.7.7 k8s-service는 그 비밀번호로 로그인합니다. 그 Redis가 답하기 전에 뜬 0.7.7 k8s-service 파드는 다시 시작할 때까지 메모리에 캐시합니다. `kubeast-redis-users`는 남고, 다음 업그레이드가 그 비밀번호를 다시 씁니다.
 
 **나중에.** 바깥 Redis로 가는 TLS는 아직 이 차트에 없습니다. 지금 차트로는 바깥 Redis를 가리킬 수 없습니다: `REDIS_HOST`는 차트의 `redis`이거나 비어 있습니다.
 
