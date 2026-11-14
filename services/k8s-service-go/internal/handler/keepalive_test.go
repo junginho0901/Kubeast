@@ -116,6 +116,37 @@ func TestAQuietTerminalIsPingedAndStaysOpen(t *testing.T) {
 	}
 }
 
+// A terminal keeps the keepalive it opened with: its reader and pings can outlive the request that opened them, so
+// they read the settings once, not on each pong.
+func TestATerminalKeepsTheKeepaliveItOpenedWith(t *testing.T) {
+	withKeepalive(t, 20*time.Millisecond, 300*time.Millisecond)
+	var version atomic.Int32
+	h, _ := liveHandler(t, func(http.ResponseWriter, *http.Request) {}, &version)
+	useExecutor(t, &fakeExecutor{endOnEOT: true})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.PodExecWS(w, withLogFileContext(r, "apps", "resource.pod.exec"))
+	}))
+	defer srv.Close()
+	b := browse(t, srv.URL+"?container=app")
+	b.frame(t) // ready
+	b.frame(t) // prompt
+
+	// Read again after the start, these would cut the terminal at its next pong and stop its pings.
+	keepalivePeriod, terminalPongWait = time.Hour, time.Millisecond
+	at := b.pings.Load()
+	time.Sleep(300 * time.Millisecond)
+
+	if got := b.pings.Load() - at; got < 5 {
+		t.Fatalf("pings after the settings changed = %d, want at least 5", got)
+	}
+	if err := b.conn.WriteMessage(websocket.TextMessage, []byte("ls")); err != nil {
+		t.Fatal(err)
+	}
+	if ch, s := b.frame(t); ch != shellStdout || s != "echo:ls" {
+		t.Fatalf("after the settings changed: frame %d %q, want the shell's echo", ch, s)
+	}
+}
+
 // The node shell's wait for its debug pod (up to 90 s) carries pings too.
 func TestANodeShellWaitingForItsPodIsPinged(t *testing.T) {
 	withKeepalive(t, 20*time.Millisecond, 300*time.Millisecond)
@@ -180,7 +211,7 @@ func TestTerminalPingsStopWithTheConnectionOrTheContext(t *testing.T) {
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 				go func() {
-					pingTerminal(ctx, conn, nil)
+					pingTerminal(ctx, conn, nil, keepalivePeriod)
 					close(stopped)
 				}()
 				<-endNow
