@@ -81,6 +81,8 @@ kubeconfig*.yaml
 deploy/kind/values.local.yaml
 # scripts/kind-footprint.sh runs (kubeconfig + samples)
 .footprint/
+# scripts/upgrade-rehearsal.sh runs (kubeconfig + results)
+.rehearsal/
 
 # Docker
 .dockerignore
