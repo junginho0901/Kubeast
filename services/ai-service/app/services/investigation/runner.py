@@ -26,6 +26,7 @@ import httpx
 from app.database import get_db_service, utcnow
 from app.services.ai import access as access_mod
 from app.services.ai import limits
+from app.services.ai import tool_replay
 from app.services.ai.debug_dump import safe_error
 from app.services.ai.model_errors import classify
 from app.services.audit_target import tool_target
@@ -198,6 +199,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
                 entry["access"] = access
             if (requests := access_mod.requests_of_call(service)) is not None:
                 entry["requests"] = requests
+        entry.update(tool_replay.call_fields(service, ran))
         tool_log.append(entry)
         target = tool_target(name, args)
         stored = await write_audit(
@@ -216,6 +218,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
                 "redacted": getattr(service.tool_server, "last_redacted", None),
                 "access": entry.get("access"),
                 "requests": entry.get("requests"),
+                **tool_replay.call_fields(service, ran),
             },
             result="failure" if entry.get("error") else "success",
             error=entry.get("error"),

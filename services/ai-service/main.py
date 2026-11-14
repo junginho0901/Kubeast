@@ -19,7 +19,12 @@ from app.config import settings
 from app.security import require_auth
 from app import metrics as console_metrics
 from app import mcp_flags
+from app.services.ai import tool_replay
 import uvicorn
+
+# Recorded tool answers for AI evaluation (AI_TOOL_REPLAY_MODE, off by default): read once here, and a setting that
+# cannot be used stops the start — record and replay need AI_TOOL_REPLAY_TEST_INSTALL=true.
+tool_replay.start()
 
 # The MCP server (MCP_ENABLED): external AI agents reach the clusters through
 # Kubeast as the signed-in user. Its session manager runs for the app's lifetime.
