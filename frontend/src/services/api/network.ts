@@ -44,7 +44,8 @@ export const networkApi = {
   },
 
   serviceBackendUsage: async (namespace: string, name: string): Promise<ServiceBackendUsage> => {
-    const { data } = await client.get(`/cluster/namespaces/${encodeURIComponent(namespace)}/services/${encodeURIComponent(name)}/backend-usage`)
+    // a Prometheus read of the drawer, not the Services list: its failure is said in its section (PrometheusSection)
+    const { data } = await client.get(`/cluster/namespaces/${encodeURIComponent(namespace)}/services/${encodeURIComponent(name)}/backend-usage`, { listStatus: false })
     return data
   },
 

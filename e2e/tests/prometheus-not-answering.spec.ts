@@ -10,6 +10,7 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 // and a Pod drawer's Real-time Resource Usage say "Prometheus did not answer: <that reason>" where they used to leave
 // the section out, as for a cluster with no Prometheus; the Resource Graph keeps its Structure/Traffic switch and says
 // the status's reason where the metrics sources were. The setting is put back and the card and the sources return.
+// GPU Nodes' real-time panel and GPU Pods' metric columns say the same, while their lists keep their own empty row.
 
 const EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -105,5 +106,47 @@ test.describe('a Prometheus that is set but does not answer', () => {
     await page.getByTestId('graph-view-traffic').click({ timeout: 30_000 })
     await expect(page.getByTestId('traffic-source-24h'), 'the metrics sources are back').toHaveText('Metrics 24h', { timeout: 30_000 })
     await expect(page.getByTestId('traffic-metrics-failure')).toHaveCount(0)
+  })
+
+  // The GPU lists answered (no GPU node, no pod asking for one) and only the metrics read beside them failed: the empty
+  // row is the list's "No items.", not "Could not load gpu (server error 502): …", and the metrics' place says why.
+  test('GPU Nodes and GPU Pods on a cluster with no GPUs: the empty row says "No items." and the metrics say why', async ({ page, request }) => {
+    const list = await (await request.get(`/api/v1/cluster/gpu/dashboard?cluster=${CLUSTER}`, { headers: bearer(admin) })).json()
+    test.skip(list.gpu_nodes.length > 0 || list.gpu_pods.length > 0, `cluster ${CLUSTER} has GPU nodes or GPU pods`)
+    await patch(request, { prometheus_service: NOWHERE })
+    moved = true
+
+    // what the screens read: the list answers, the metrics read is the server's 502 and its reason — the first of its
+    // four queries (gpu_util) failing, so no answer of the store from before the change is still in the server's cache
+    let reason = ''
+    await expect.poll(async () => {
+      const res = await request.get(`/api/v1/cluster/gpu/metrics?cluster=${CLUSTER}`, { headers: bearer(admin), failOnStatusCode: false })
+      if (res.status() !== 502) return res.status()
+      reason = (await res.json()).detail
+      return reason.startsWith('GPU metric gpu_util: ') ? 502 : reason
+    }, { timeout: 30_000 }).toBe(502)
+    const listNow = await request.get(`/api/v1/cluster/gpu/dashboard?cluster=${CLUSTER}`, { headers: bearer(admin) })
+    expect(listNow.status(), 'the GPU list still answers').toBe(200)
+
+    await page.goto(`/gpu/nodes?cluster=${CLUSTER}`)
+    await page.getByRole('button', { name: 'Metrics' }).click()
+    const panel = page.getByTestId('gpu-realtime-not-answering')
+    await expect(panel.locator('p')).toHaveText(`Prometheus did not answer: ${reason}`, { timeout: 30_000 })
+    await expect(panel.locator('h2')).toHaveText('Real-time GPU Utilization')
+    await expect(page.getByRole('cell', { name: 'No items.', exact: true }), 'GPU Nodes: the empty list').toHaveAttribute('colspan', '8')
+    await expect(page.getByTestId('table-load-error'), 'GPU Nodes: no list failure').toHaveCount(0)
+
+    await page.goto(`/gpu/pods?cluster=${CLUSTER}`)
+    await expect(page.getByTestId('gpu-pods-metrics-not-answering')).toHaveText(`Prometheus did not answer: ${reason}`, { timeout: 30_000 })
+    await expect(page.getByRole('cell', { name: 'No items.', exact: true }), 'GPU Pods: the empty list').toHaveAttribute('colspan', '9')
+    await expect(page.getByTestId('table-load-error'), 'GPU Pods: no list failure').toHaveCount(0)
+
+    await patch(request, { prometheus_service: '', prometheus_url: '', prometheus_cluster_label: '', prometheus_auth: { type: 'none' } })
+    moved = false
+    expect((await status(request)).endpoint, 'the setting is back').toBe(PROMETHEUS)
+    await page.goto(`/gpu/pods?cluster=${CLUSTER}`)
+    await expect(page.getByRole('columnheader', { name: 'GPU Utilization', exact: true }), 'the metric columns are back').toHaveText('GPU Utilization', { timeout: 60_000 })
+    await expect(page.getByTestId('gpu-pods-metrics-not-answering')).toHaveCount(0)
+    await expect(page.getByRole('cell', { name: 'No items.', exact: true })).toHaveAttribute('colspan', '9')
   })
 })
