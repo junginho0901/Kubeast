@@ -105,6 +105,30 @@ async def test_a_live_holder_keeps_its_slot_past_the_stale_time(servers, monkeyp
     assert waited_for_the_end
 
 
+async def test_a_run_whose_slot_was_taken_goes_on_stops_beating_and_leaves_the_takers_slot(servers, monkeypatch):
+    """Another server took the slot as stale (this one could not beat for the stale time): the run is not stopped,
+    one beat finds the slot taken and beating stops, and ending the run does not set the taker's slot free."""
+    monkeypatch.setattr(claude_code_slots, "HEARTBEAT_SECONDS", 0.05)
+    beats = []
+    real_beat = claude_code_slots.beat
+
+    async def counting_beat(db, lane, owner):
+        beats.append(owner)
+        return await real_beat(db, lane, owner)
+
+    monkeypatch.setattr(claude_code_slots, "beat", counting_beat)
+    async with asyncio.timeout(5), claude_code_slots.held(servers[0], "chat", 1) as slot:
+        async with servers[1].async_session() as s:
+            await s.execute(text("UPDATE claude_code_slots SET owner = 'taker' WHERE lane = 'chat' AND slot = :slot"),
+                            {"slot": slot})
+            await s.commit()
+        await asyncio.sleep(0.3)
+        seen = len(beats)
+        await asyncio.sleep(0.2)
+        assert len(beats) == seen >= 1  # beats stopped once one found the slot taken
+    assert [owner for *_, owner in await rows(servers[0])] == ["taker"]
+
+
 async def test_an_error_in_the_run_sets_the_slot_free(servers):
     with pytest.raises(RuntimeError):
         async with claude_code_slots.held(servers[0], "chat", 1):

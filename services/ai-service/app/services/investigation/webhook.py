@@ -14,7 +14,9 @@ worker. That decision holds the alert's inbox row lock (store.alert_locked),
 so copies of one alert arriving at once, on any replica, queue one row, and
 while the hourly cap is on its count and the row it allows hold one more lock
 (store.hourly_cap_locked), so different alerts arriving at once on several
-replicas queue no more than the cap. The answer comes at once; the
+replicas queue no more than the cap. On PostgreSQL the decision reads and
+writes through the session holding those locks (held=), one connection per
+delivery however long it waits. The answer comes at once; the
 investigation runs later.
 """
 
@@ -125,9 +127,9 @@ async def gate_and_queue(db, cfg: inv_settings.InvestigationSettings, cluster: s
         fingerprint = fingerprint_of(alert)
         async with store.alert_locked(db, cluster, fingerprint, starts_at) as lock:
             if cfg.dedupe_hours > 0:
-                recent = await store.find_recent(db, cluster, fingerprint, now - timedelta(hours=cfg.dedupe_hours))
+                recent = await store.find_recent(db, cluster, fingerprint, now - timedelta(hours=cfg.dedupe_hours), held=lock)
                 if recent is not None:
-                    await store.bump_repeat(db, recent.id, now)
+                    await store.bump_repeat(db, recent.id, now, held=lock)
                     counts["duplicate"] += 1
                     continue
             # the hourly count and the row it allows decide one delivery at a time across replicas
@@ -136,21 +138,22 @@ async def gate_and_queue(db, cfg: inv_settings.InvestigationSettings, cluster: s
                 capped = counts["accepted"] >= MAX_INVESTIGATIONS_PER_MESSAGE
                 if capped:
                     skip_reason = skip_reasons.investigation_cap(MAX_INVESTIGATIONS_PER_MESSAGE)
-                elif cfg.max_per_hour and await store.count_since(db, store.hour_ago(now)) >= cfg.max_per_hour:
+                elif cfg.max_per_hour and await store.count_since(db, store.hour_ago(now), held=lock) >= cfg.max_per_hour:
                     skip_reason = skip_reasons.hourly_cap(cfg.max_per_hour)
-                elif cfg.daily_token_budget and await store.tokens_since(db, store.day_start(now)) >= cfg.daily_token_budget:
+                elif cfg.daily_token_budget and await store.tokens_since(db, store.day_start(now), held=lock) >= cfg.daily_token_budget:
                     skip_reason = skip_reasons.daily_token_budget(cfg.daily_token_budget)
                 else:
-                    skip_reason = await store.pause_reason(db, cfg.provider_pause_minutes, now)
+                    skip_reason = await store.pause_reason(db, cfg.provider_pause_minutes, now, held=lock)
                 if skip_reason and cfg.dedupe_hours > 0:
                     # one skipped row per alert in the dedupe window, however many messages carry it
-                    earlier = await store.find_recent_skipped(db, cluster, fingerprint, now - timedelta(hours=cfg.dedupe_hours))
+                    earlier = await store.find_recent_skipped(db, cluster, fingerprint, now - timedelta(hours=cfg.dedupe_hours), held=lock)
                     if earlier is not None:
-                        await store.fold_skip(db, earlier.id, skip_reason, now)
+                        await store.fold_skip(db, earlier.id, skip_reason, now, held=lock)
                         counts["capped" if capped else "skipped"] += 1
                         continue
                 await store.insert(
                     db,
+                    held=lock,
                     cluster=cluster,
                     fingerprint=fingerprint,
                     alertname=(alert.labels.get("alertname") or "")[:200],

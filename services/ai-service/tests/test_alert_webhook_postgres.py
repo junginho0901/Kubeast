@@ -88,3 +88,29 @@ async def test_two_replicas_given_two_alerts_at_once_queue_no_more_than_the_hour
     rows, total = await store.list_rows(replicas[0])
     assert total == 2 and sorted(r.status for r in rows) == ["queued", "skipped"]
     assert "hourly cap" in next(r.skip_reason for r in rows if r.status == "skipped")
+
+
+async def test_a_delivery_decides_on_one_connection(replicas):
+    """Every read and write of the decision goes through the session holding the alert's lock and the hourly lock:
+    replicas with one connection each still decide two alerts at once, one queued and one past the cap."""
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    for db in replicas:
+        url = db.engine.url
+        await db.engine.dispose()
+        db.engine = create_async_engine(url, pool_size=1, max_overflow=0, pool_timeout=3)
+        db.async_session = async_sessionmaker(db.engine, class_=AsyncSession, expire_on_commit=False)
+    cfg = InvestigationSettings(enabled=True, webhook_token="t", internal_token="i", max_per_hour=1, daily_token_budget=0)
+
+    def message(name, fingerprint):
+        return webhook.AmWebhook(
+            version="4", groupKey="g", status="firing", receiver="kubeast", externalURL="http://alertmanager:9093",
+            alerts=[webhook.AmAlert(status="firing", labels={"alertname": name, "severity": "critical"},
+                                    startsAt="2026-11-14T02:59:00Z", fingerprint=fingerprint)],
+        )
+
+    counts = await asyncio.wait_for(asyncio.gather(
+        webhook.gate_and_queue(replicas[0], cfg, "self", message("KubePodCrashLooping", "fp1"), NOW),
+        webhook.gate_and_queue(replicas[1], cfg, "self", message("KubeNodeNotReady", "fp2"), NOW),
+    ), 10)
+    assert sorted((c["accepted"], c["skipped"]) for c in counts) == [(0, 1), (1, 0)]

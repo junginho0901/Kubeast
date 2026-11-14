@@ -5,7 +5,8 @@ A run takes a slot with one short conditional UPDATE: the slot is free (owner ''
 heartbeat for STALE_SECONDS. While the run goes on its holder refreshes the heartbeat every HEARTBEAT_SECONDS, and it
 sets the slot free as soon as the run ends, whatever ended it. No lock is held for the run: the slot of a server that
 stops goes stale and the next taker has it STALE_SECONDS later. On PostgreSQL the database's clock dates every
-heartbeat, so the servers' clocks need not agree; sqlite (local dev, tests) has this process's.
+heartbeat, so the servers' clocks need not agree; sqlite (local dev, tests) has this process's. A run whose server
+could not write its heartbeat for STALE_SECONDS loses the slot to the next taker and goes on (_keep_beating).
 """
 from __future__ import annotations
 
@@ -137,11 +138,19 @@ async def _release_soon(db, lane: str, owner: str) -> None:
 
 
 async def _keep_beating(db, lane: str, owner: str) -> None:
+    """Refreshes owner's heartbeat until cancelled. A slot found taken (its heartbeat could not be written for
+    STALE_SECONDS, so another run took it as stale) is not taken back, beating stops and the run goes on: this
+    server's own limit (its semaphore, held for the whole run) still holds, and the install runs one more than its
+    limit until this run ends, at most the turn timeout. Ending the run instead would lose an answer being written
+    because the database did not answer, the same database the audit row of that end would have to reach. The
+    release at the end matches the owner, so it leaves the taker's slot alone."""
     while True:
         await asyncio.sleep(HEARTBEAT_SECONDS)
         try:
             if not await beat(db, lane, owner):
-                log.warning("Claude Code slot of %s went stale and was taken by another run", owner)
+                log.warning("Claude Code slot of %s was taken by another run after %d s without a heartbeat; this run "
+                            "goes on, one over the install-wide limit until it ends", owner, int(STALE_SECONDS))
+                return
         except Exception as e:
             log.warning("Claude Code slot heartbeat of %s failed: %s", owner, e)
 
