@@ -547,7 +547,10 @@ postgresql:
   # statements once a connection is made (not startup parameters, which PgBouncer refuses by default). 0 sets
   # nothing and leaves the database's setting. Behind RDS Proxy a SET pins the client connection to one database
   # connection: set 0 there and put the limits in the proxy's initialization query or on the database role. The
-  # schema migrations run without the statement and lock limits.
+  # schema migrations always run without the statement and lock limits, also when the role sets them. Through
+  # PgBouncer use session pooling only: transaction pooling hands a server connection to other clients between
+  # transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's) does not stay with
+  # the client that made it.
   sessionLimits:
     statementTimeoutMs: 30000
     lockTimeoutMs: 15000
