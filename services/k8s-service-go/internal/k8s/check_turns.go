@@ -33,6 +33,9 @@ type turnLimiter struct {
 	first   []*turnWaiter // in arrival order, as again
 	again   []*turnWaiter
 	serving bool
+	waits   turnWaits
+	// lastFirst is when the last request not asked again that waited for its token came: a check asked again that came before it was passed over.
+	lastFirst time.Time
 }
 
 type turnWaiter struct {
@@ -44,8 +47,8 @@ type turnWaiter struct {
 
 var _ flowcontrol.RateLimiter = (*turnLimiter)(nil)
 
-func newTurnLimiter(qps float32, burst int) *turnLimiter {
-	return &turnLimiter{qps: qps, bucket: rate.NewLimiter(rate.Limit(qps), max(burst, 1))}
+func newTurnLimiter(qps float32, burst int, waits turnWaits) *turnLimiter {
+	return &turnLimiter{qps: qps, bucket: rate.NewLimiter(rate.Limit(qps), max(burst, 1)), waits: waits}
 }
 
 func (l *turnLimiter) QPS() float32 { return l.qps }
@@ -88,6 +91,7 @@ func (l *turnLimiter) Wait(ctx context.Context) error {
 			w.took.CancelAt(time.Now())
 		} else {
 			l.leave(w)
+			l.observe(w, time.Now())
 		}
 		return ctx.Err()
 	}
@@ -114,6 +118,7 @@ func (l *turnLimiter) serve() {
 // arrive takes a token at once when no one waits and the bucket has one (nil), else queues the request. l.mu held.
 func (l *turnLimiter) arrive(now time.Time, again bool) *turnWaiter {
 	if l.waiting() == 0 && l.bucket.AllowN(now, 1) {
+		l.waits.inTurn.Observe(0)
 		return nil
 	}
 	w := &turnWaiter{again: again, since: now, ready: make(chan struct{})}
@@ -142,8 +147,22 @@ func (l *turnLimiter) give(r *rate.Reservation, now time.Time) *turnWaiter {
 		return nil
 	}
 	w.took = r
+	l.observe(w, now)
+	if !w.again {
+		l.lastFirst = w.since
+	}
 	close(w.ready)
 	return w
+}
+
+// observe counts how long w waited until now, given its token or not. l.mu held.
+func (l *turnLimiter) observe(w *turnWaiter, now time.Time) {
+	o := l.waits.inTurn
+	if w.again && l.lastFirst.After(w.since) {
+		o = l.waits.passedOver
+	}
+	o.Observe(now.Sub(w.since).Seconds())
+	l.waits.waited.Inc()
 }
 
 // next takes the oldest request not asked again, unless the oldest check asked again came first and waited passOverLimit. l.mu held.
