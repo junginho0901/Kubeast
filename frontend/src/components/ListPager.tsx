@@ -7,8 +7,6 @@ interface Props {
   /** Rows after search and filters */
   total: number
   rowsPerPage: number
-  /** The range shown, 1-based and inclusive, for pages that are not all rowsPerPage long (Cluster View's boxes) */
-  range?: { start: number; end: number }
   onPageChange: (page: number) => void
   /** Off for a fixed page size: a section of a page that scrolls by design (the GPU overview, chart panels) or a window's list */
   showPageSize?: boolean
@@ -20,7 +18,7 @@ const pagerButton =
 
 // The footer of every list table: rows per page, the range shown and the page buttons — always there, also with
 // one page or no rows, so a list never changes shape with its row count.
-export function ListPager({ currentPage, totalPages, total, rowsPerPage, range, onPageChange, showPageSize = true, testId = 'list-pager' }: Props) {
+export function ListPager({ currentPage, totalPages, total, rowsPerPage, onPageChange, showPageSize = true, testId = 'list-pager' }: Props) {
   const { t } = useTranslation()
   const pages = Math.max(1, totalPages)
   return (
@@ -32,8 +30,8 @@ export function ListPager({ currentPage, totalPages, total, rowsPerPage, range, 
         {total === 0
           ? t('common.paginationEmpty', 'Showing 0 of 0')
           : t('common.paginationRange', {
-              start: range?.start ?? (currentPage - 1) * rowsPerPage + 1,
-              end: range?.end ?? Math.min(currentPage * rowsPerPage, total),
+              start: (currentPage - 1) * rowsPerPage + 1,
+              end: Math.min(currentPage * rowsPerPage, total),
               total,
               defaultValue: 'Showing {{start}}-{{end}} of {{total}}',
             })}

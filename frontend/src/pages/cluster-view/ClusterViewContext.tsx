@@ -33,9 +33,14 @@ export interface ClusterViewContextValue {
   namespaceDropdownRef: React.RefObject<HTMLDivElement | null>
   searchQuery: string
   setSearchQuery: (s: string) => void
-  // the node the boxes are narrowed to (a map cell's click), kept in the address as ?node=; null shows every node
-  nodeFilter: string | null
-  setNodeFilter: (node: string | null) => void
+  // the node's own view (a map cell or a box's "show all"), kept in the address as ?node=, ?nodePage= and ?pod= so a
+  // link opens it; null is the overview of every node. `pod` (namespace/name) is the pod a search opened it on, which
+  // the page follows; a page of null is chosen by the view (the search's first match, else 1). Turning a page drops
+  // `pod`.
+  nodeView: { node: string; page: number | null; pod: string | null } | null
+  openNodeView: (node: string, at?: { page?: number; pod?: string }) => void
+  setNodeViewPage: (page: number) => void
+  closeNodeView: () => void
 
   // pod detail modal
   selectedPod: PodDetail | null

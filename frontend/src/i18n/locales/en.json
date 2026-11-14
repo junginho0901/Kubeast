@@ -2665,16 +2665,17 @@
     "restarts": "Restarts: {{count}}",
     "podDeleting": "Deleting...",
     "noPods": "No pods found",
-    "pageNodes": "Page {{page}} of {{pages}}: Nodes {{first}}–{{last}} of {{nodes}}.",
-    "part": {
-      "first": "Pods {{from}}–{{to}} of {{total}} · continues on the next page",
-      "middle": "Continued: Pods {{from}}–{{to}} of {{total}} · continues on the next page",
-      "last": "Continued: Pods {{from}}–{{to}} of {{total}}"
+    "box": {
+      "shown": "Showing {{shown}} of {{total}} Pods",
+      "more": "+{{count}} show all on this node",
+      "open": "Show all on this node"
     },
-    "nodeFilter": {
-      "on": "Showing Node {{node}} only.",
-      "none": "Node {{node}} has no Pods in this view.",
-      "all": "All nodes"
+    "nodeView": {
+      "path": "Cluster View path",
+      "all": "All nodes",
+      "problemsOnly": "Problem pods only",
+      "gone": "Pod {{pod}} is no longer on this node.",
+      "matches": "Pods matching \"{{query}}\" are outlined: {{count}} on this node."
     },
     "tabs": {
       "summary": "Summary",
@@ -2745,8 +2746,8 @@
       "error": "Error",
       "warn": "Warning",
       "ok": "Healthy",
-      "hint": "A cell is a node, a dot a pod. Click a cell to show only that node.",
-      "hintPaged": "A cell is a node, a dot a pod; the outlined cells are the boxes below. Click a cell to show only that node."
+      "hint": "A cell is a node, a dot a pod. Click a cell to see all its pods.",
+      "hintPaged": "A cell is a node, a dot a pod; the outlined cells are the boxes below. Click a cell to see all its pods."
     }
   },
   "namespaces": {

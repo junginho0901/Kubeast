@@ -21,15 +21,28 @@ export function ClusterViewProvider({ children }: { children: ReactNode }) {
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
   const [searchQuery, setSearchQuery] = useState<string>('')
-  // ?node= keeps the node the boxes are narrowed to, so a reload or a link opens it again; other parameters stay
+  // ?node=, ?nodePage= and ?pod= keep the node's own view, so a reload or a link opens it again; other parameters stay
   const [params, setParams] = useSearchParams()
-  const nodeFilter = params.get('node')
-  const setNodeFilter = useCallback((node: string | null) => setParams((prev) => {
+  const viewNode = params.get('node')
+  const viewPage = Number(params.get('nodePage')) || null
+  const viewPod = params.get('pod')
+  const nodeView = useMemo(() => (viewNode === null ? null : { node: viewNode, page: viewPage, pod: viewPod }), [viewNode, viewPage, viewPod])
+  const setView = useCallback((node: string | null, at: { page?: number; pod?: string } = {}) => setParams((prev) => {
     const next = new URLSearchParams(prev)
-    if (node === null) next.delete('node')
-    else next.set('node', node)
+    for (const k of ['node', 'nodePage', 'pod']) next.delete(k)
+    if (node !== null) next.set('node', node)
+    if (node !== null && at.page) next.set('nodePage', String(at.page))
+    if (node !== null && at.pod) next.set('pod', at.pod)
     return next
   }, { replace: true }), [setParams])
+  const openNodeView = useCallback((node: string, at?: { page?: number; pod?: string }) => setView(node, at), [setView])
+  const setNodeViewPage = useCallback((page: number) => setParams((prev) => {
+    const next = new URLSearchParams(prev)
+    next.set('nodePage', String(page))
+    next.delete('pod')
+    return next
+  }, { replace: true }), [setParams])
+  const closeNodeView = useCallback(() => setView(null), [setView])
 
   const [selectedPod, setSelectedPod] = useState<PodDetail | null>(null)
   const [selectedContainer, setSelectedContainer] = useState<string>('')
@@ -86,7 +99,7 @@ export function ClusterViewProvider({ children }: { children: ReactNode }) {
     isNamespaceDropdownOpen, setIsNamespaceDropdownOpen,
     namespaceDropdownRef,
     searchQuery, setSearchQuery,
-    nodeFilter, setNodeFilter,
+    nodeView, openNodeView, setNodeViewPage, closeNodeView,
     selectedPod, setSelectedPod,
     selectedContainer, setSelectedContainer,
     containerSearchQuery, setContainerSearchQuery,
@@ -106,7 +119,8 @@ export function ClusterViewProvider({ children }: { children: ReactNode }) {
     closeDetailModal, closeContextMenu, openDeleteModal, closeDeleteModal,
   }), [
     tr, locale, na, emptyValue,
-    selectedNamespace, setSelectedNamespace, isNamespaceDropdownOpen, searchQuery, nodeFilter, setNodeFilter,
+    selectedNamespace, setSelectedNamespace, isNamespaceDropdownOpen, searchQuery,
+    nodeView, openNodeView, setNodeViewPage, closeNodeView,
     selectedPod, selectedContainer, containerSearchQuery,
     activeTab, selectTab,
     showLogs, showManifest, showDescribe, showRbac, showExec,

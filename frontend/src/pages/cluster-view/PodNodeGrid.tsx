@@ -11,18 +11,22 @@ import { getPodHealth, getHealthIcon } from './podHealth'
 import { useClusterView } from './ClusterViewContext'
 import { pickMainContainer, podToDetail } from './types'
 import { ClusterNodeMap } from './ClusterNodeMap'
-import { POD_CARDS_PER_PAGE, boxPageLayer, cellsOfPage, cutBoxPages, shownPage, stateForView, type BoxPage, type BoxPageState, type BoxPiece } from './nodeBoxPages'
+import {
+  BOX_PREVIEW_CARDS, NODE_BOXES_PER_PAGE, NODE_PODS_PER_PAGE, boxPageLayer, boxPageOf, cellsOfPage, nameOrder, nodePageOf,
+  nodeViewLayer, nodeViewPage, overviewPage, podKey, previewOrder, type OverviewPageState,
+} from './nodeBoxPages'
 import { UNSCHEDULED, type NodeEntry } from './hooks/useClusterDerived'
 
-// The node map, then a box per node with its pod cards, paged by the cards (nodeBoxPages.ts): a page holds about
-// POD_CARDS_PER_PAGE cards of the nodes in the map's order, and a node with more pods than are left on a page goes on to
-// the next with its header again, so every pod is on a page. The map draws every node and outlines the cells of the
-// page shown; a click on a cell narrows the boxes to that node (?node=), paged the same way, until "All nodes" brings
-// every node back at that node's page. Inside the page only the boxes near the screen are drawn (TanStack Virtual,
-// window scroll, each box measured once drawn), and a drawn box fetches its node's pods and watches them
-// (fieldSelector spec.nodeName) — so the page holds at most a page of nodes' pods, and what is on screen changes as soon
-// as the cluster does. The search is counted by the server (the map and the boxes listed, paged over the pods it
-// matched); a box shows its pods the search matches. Click a card → the detail window on Logs; right click → the menu.
+// The node map, then the overview: a box per node, NODE_BOXES_PER_PAGE boxes a page in the map's order, each drawing
+// at most BOX_PREVIEW_CARDS pod cards (problems first) and "show all" for the rest. A click on a map cell or on "show
+// all" opens the node's own view (?node=, ?nodePage=): the map stays with that cell outlined, "All nodes" goes back,
+// and the node's pods are paged by name, NODE_PODS_PER_PAGE a page, with "Problem pods only" — so every pod is on a
+// page of Cluster View. In the overview only the boxes near the screen are drawn (TanStack Virtual, window scroll,
+// each box measured once drawn), and a drawn box fetches its node's pods and watches them (fieldSelector
+// spec.nodeName) — so the page holds at most a page of nodes' pods. The search is counted by the server (the map fades
+// the nodes with no match, the boxes listed are the nodes it matched, each showing its matching pods); the node's own
+// view outlines the matching cards and opens on the page of the first. Click a card → the detail window on Logs;
+// right click → the menu.
 
 interface Props {
   entries: NodeEntry[]
@@ -37,90 +41,80 @@ const SUBSCRIBE_AFTER_MS = 150 // a box scrolled past does not open a watch
 // What ?node= holds for a box: its node's name, or Unscheduled for the pods no node took (a node's name is lower case).
 const keyOf = (e: NodeEntry) => e.node || UNSCHEDULED
 
-// The page shown of the boxes: the first page whenever the view (resetKey) changes, else the page holding the box it
-// was turned to (nodeBoxPages.ts shownPage). `land` sets the state of the view to come before the address follows.
-function useBoxPage(pages: BoxPage[], entries: NodeEntry[], resetKey: string) {
-  const [state, setState] = useState<BoxPageState>({ key: resetKey, page: 1, anchor: null })
-  const [seen, setSeen] = useState(resetKey)
-  if (seen !== resetKey) {
-    setSeen(resetKey)
-    const next = stateForView(state, resetKey)
-    if (next !== state) setState(next)
-  }
-  const indexOf = useMemo(() => new Map(entries.map((e, i) => [keyOf(e), i])), [entries])
-  const page = shownPage(pages, (node) => indexOf.get(node), state)
-  const turnTo = (p: number) => {
-    const first = pages[p - 1]?.pieces[0]
-    setState({ key: resetKey, page: p, anchor: first && entries[first.index] ? { node: keyOf(entries[first.index]), pod: first.from } : null })
-  }
-  const land = (key: string, node: string) => setState({ key, page: 1, anchor: { node, pod: 0 } })
-  return { page, turnTo, land }
-}
+// The fields the server's search reads (pods_page.go): name, namespace, node and pod IP.
+const podMatches = (pod: PodInfo, q: string, node: string) => pod.name.toLowerCase().includes(q) || pod.namespace.toLowerCase().includes(q)
+  || String(pod.node_name || node).toLowerCase().includes(q) || String(pod.pod_ip || '').toLowerCase().includes(q)
 
 export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod }: Props) {
-  const { tr, searchQuery, selectedNamespace, nodeFilter, setNodeFilter } = useClusterView()
+  const { tr, searchQuery, selectedNamespace, nodeView, openNodeView, closeNodeView } = useClusterView()
 
-  // the boxes: every node, or the one a map cell narrowed them to
-  const boxEntries = useMemo(() => (nodeFilter === null ? entries : entries.filter((e) => keyOf(e) === nodeFilter)), [entries, nodeFilter])
-  const pages = useMemo(() => cutBoxPages(boxEntries.map((e) => e.counts.total)), [boxEntries])
-  const keyFor = (filter: string | null) => `${selectedNamespace}\n${searchQuery.trim()}\n${filter ?? ''}`
-  const resetKey = keyFor(nodeFilter)
-  const { page, turnTo, land } = useBoxPage(pages, boxEntries, resetKey)
-  const shown = pages[page - 1]
-  const pieces = shown.pieces
-  const totalPods = pages[pages.length - 1].podEnd
-  const filteredAt = nodeFilter === null ? -1 : entries.findIndex((e) => keyOf(e) === nodeFilter)
-  const outlined = nodeFilter !== null
-    ? (filteredAt >= 0 ? { start: filteredAt, end: filteredAt + 1 } : { start: 0, end: 0 })
-    : pages.length > 1 ? cellsOfPage(shown) : { start: 0, end: 0 }
+  // the boxes are the nodes with a pod (that the search matched); a faded cell has no box
+  const listed = useMemo(() => entries.filter((e) => !e.dim), [entries])
+  // a new search or namespace starts at the first page; otherwise the page shown holds the box it was turned to (its
+  // first box), so a node added or removed before it does not move the view (overviewPage)
+  const resetKey = `${selectedNamespace}\n${searchQuery.trim()}`
+  const [overview, setOverview] = useState<OverviewPageState & { key: string }>({ key: resetKey, page: 1, anchor: null })
+  if (overview.key !== resetKey) setOverview({ key: resetKey, page: 1, anchor: null })
+  const keys = useMemo(() => listed.map(keyOf), [listed])
+  const page = overviewPage(keys, overview.key === resetKey ? overview : { page: 1, anchor: null })
+  const total = listed.length
+  const totalPages = Math.max(1, Math.ceil(total / NODE_BOXES_PER_PAGE))
+  const pageEntries = listed.slice((page - 1) * NODE_BOXES_PER_PAGE, page * NODE_BOXES_PER_PAGE)
+  const setPage = (p: number) => setOverview({ key: resetKey, page: p, anchor: keys[(p - 1) * NODE_BOXES_PER_PAGE] ?? null })
+  const q = searchQuery.trim()
 
-  // the floating chat is told which page of boxes is shown, the pods of each box on it and the node filter
-  const layer = boxPageLayer(pages, page, boxEntries.map((e) => e.node || 'unscheduled'), nodeFilter)
+  const viewAt = nodeView ? entries.findIndex((e) => keyOf(e) === nodeView.node) : -1
+  const viewEntry: NodeEntry | null = !nodeView ? null : viewAt >= 0 ? entries[viewAt] : {
+    node: nodeView.node === UNSCHEDULED ? '' : nodeView.node,
+    label: nodeView.node,
+    counts: { node: nodeView.node, total: 0, ok: 0, warn: 0, error: 0 },
+  }
+  // the outlined cells: the node's own view's, else the boxes of the page shown while there is more than one
+  const pageCells = cellsOfPage(page, listed.length)
+  const outlined = nodeView
+    ? (viewAt >= 0 ? { start: viewAt, end: viewAt + 1 } : { start: 0, end: 0 })
+    : totalPages > 1 && pageEntries.length > 0
+      ? { start: entries.indexOf(listed[pageCells.start]), end: entries.indexOf(listed[pageCells.end - 1]) + 1 }
+      : { start: 0, end: 0 }
+
+  // the floating chat is told which page of boxes is shown and how many of each box's pods it draws
+  const boxes = pageEntries.map((e) => ({ node: e.node || 'unscheduled', shown: Math.min(e.counts.total, BOX_PREVIEW_CARDS), total: e.counts.total }))
+  const layer = nodeView ? null : boxPageLayer(page, totalPages, total, boxes, q)
   useAIContext(layer, [JSON.stringify(layer)])
 
-  // where to scroll once the page asked for is drawn: a box (by its node; null = the first) or the node filter's line
-  const [scrollTo, setScrollTo] = useState<{ key: string; node: string | null; bar?: boolean } | null>(null)
-  const barRef = useRef<HTMLDivElement>(null)
+  // the box brought to the top once its page is drawn: back from a node's own view, or the first box of a page turned to
+  const [scrollTo, setScrollTo] = useState<{ at: number } | null>(null)
+  const goTo = (p: number, at: number) => {
+    setPage(p)
+    setScrollTo({ at })
+  }
+  const back = () => {
+    const at = viewEntry ? listed.findIndex((e) => keyOf(e) === keyOf(viewEntry)) : -1
+    closeNodeView()
+    if (at >= 0) {
+      const box = boxPageOf(at)
+      goTo(box.page, box.at)
+    }
+  }
 
   const listRef = useRef<HTMLDivElement>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
-  const paged = pages.length > 1 // the page's line above the boxes
   useLayoutEffect(() => {
     setScrollMargin(listRef.current?.offsetTop ?? 0)
-  }, [searchQuery, entries.length, nodeFilter, paged])
+  }, [searchQuery, entries.length, nodeView])
   const virtualizer = useWindowVirtualizer({
-    count: pieces.length,
-    // header and padding, then one row of cards per six pods of the piece; the drawn box is measured
-    estimateSize: (i) => 120 + Math.ceil((pieces[i].to - pieces[i].from) / 6) * 144,
+    count: pageEntries.length,
+    // header and padding, then one row of cards per six pods the box draws; the drawn box is measured
+    estimateSize: (i) => 120 + Math.ceil(Math.min(pageEntries[i].counts.total, BOX_PREVIEW_CARDS) / 6) * 144,
     overscan: 3,
     scrollMargin,
-    getItemKey: (i) => `${keyOf(boxEntries[pieces[i].index])}#${pieces[i].from}`,
+    getItemKey: (i) => pageEntries[i].node || '~unscheduled',
   })
   useEffect(() => {
-    if (!scrollTo || scrollTo.key !== resetKey) return
+    if (!scrollTo || nodeView || pageEntries.length === 0) return
+    virtualizer.scrollToIndex(Math.min(scrollTo.at, pageEntries.length - 1), { align: 'start' })
     setScrollTo(null)
-    if (scrollTo.bar) {
-      barRef.current?.scrollIntoView({ block: 'start' })
-      return
-    }
-    if (pieces.length === 0) return
-    const at = scrollTo.node === null ? 0 : Math.max(0, pieces.findIndex((p) => keyOf(boxEntries[p.index]) === scrollTo.node))
-    virtualizer.scrollToIndex(at, { align: 'start' })
-  }, [scrollTo, resetKey, pieces, boxEntries, virtualizer])
-
-  const showNode = (i: number) => {
-    const node = keyOf(entries[i])
-    setNodeFilter(node)
-    setScrollTo({ key: keyFor(node), node, bar: true })
-  }
-  const showAll = () => {
-    if (nodeFilter === null) return
-    const key = keyFor(null)
-    land(key, nodeFilter)
-    setNodeFilter(null)
-    setScrollTo({ key, node: nodeFilter })
-  }
-  const filteredLabel = nodeFilter === null ? '' : (entries[filteredAt]?.label ?? nodeFilter)
+  }, [scrollTo, nodeView, virtualizer, pageEntries.length])
 
   return (
     <div className="space-y-6">
@@ -129,7 +123,7 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod }: 
         tr={tr}
         pageStart={outlined.start}
         pageEnd={outlined.end}
-        onSelect={showNode}
+        onSelect={(i) => openNodeView(keyOf(entries[i]))}
       />
 
       {searchQuery && (
@@ -145,84 +139,75 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod }: 
         </div>
       )}
 
-      {nodeFilter !== null && (
-        <div ref={barRef} className="card flex flex-wrap items-center justify-between gap-3 py-3 scroll-mt-20" data-testid="cluster-view-node-filter" data-node={nodeFilter}>
-          <span className="text-sm text-ink">
-            {filteredAt >= 0
-              ? tr('clusterView.nodeFilter.on', 'Showing Node {{node}} only.', { node: filteredLabel })
-              : tr('clusterView.nodeFilter.none', 'Node {{node}} has no Pods in this view.', { node: filteredLabel })}
-          </span>
-          <button type="button" className="btn-row" onClick={showAll} data-testid="cluster-view-node-filter-all">
-            {tr('clusterView.nodeFilter.all', 'All nodes')}
-          </button>
-        </div>
-      )}
-
-      {searchQuery && matched === 0 && !isLoading && (
-        <div className="card text-center py-12">
-          <Search className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-          <p className="text-slate-400">
-            {tr('clusterView.noSearchResults', 'No pods found for "{{query}}"', { query: searchQuery })}
-          </p>
-        </div>
-      )}
-
-      {paged && (
-        <div className="text-xs text-slate-400" data-testid="cluster-view-page-nodes">
-          {tr('clusterView.pageNodes', 'Page {{page}} of {{pages}}: Nodes {{first}}–{{last}} of {{nodes}}.', {
-            page, pages: pages.length, first: pieces[0].index + 1, last: pieces[pieces.length - 1].index + 1, nodes: boxEntries.length,
-          })}
-        </div>
-      )}
-
-      {boxEntries.length > 0 ? (
-        <div
-          ref={listRef}
-          style={{ height: virtualizer.getTotalSize(), position: 'relative' }}
-          data-testid="cluster-view-nodes"
-          data-list="node boxes"
-        >
-          {virtualizer.getVirtualItems().map((row) => (
-            <div
-              key={row.key}
-              data-index={row.index}
-              ref={virtualizer.measureElement}
-              className={`absolute left-0 top-0 w-full ${row.index < pieces.length - 1 ? 'pb-6' : ''}`}
-              style={{ transform: `translateY(${row.start - virtualizer.options.scrollMargin}px)` }}
-            >
-              <NodeBox entry={boxEntries[pieces[row.index].index]} piece={pieces[row.index]} canDeletePod={canDeletePod} />
-            </div>
-          ))}
-        </div>
+      {viewEntry ? (
+        <>
+          <nav className="flex flex-wrap items-center gap-2 text-sm" aria-label={tr('clusterView.nodeView.path', 'Cluster View path')} data-testid="cluster-view-node-view">
+            <button type="button" className="btn-row" onClick={back} data-testid="cluster-view-all-nodes">
+              {tr('clusterView.nodeView.all', 'All nodes')}
+            </button>
+            <span className="text-slate-500" aria-hidden="true">/</span>
+            <span className="text-ink font-medium" data-testid="cluster-view-node-view-name">{viewEntry.label}</span>
+          </nav>
+          <NodeBox key={keyOf(viewEntry)} entry={viewEntry} canDeletePod={canDeletePod} mode="all" />
+        </>
       ) : (
-        !searchQuery && !isLoading && nodeFilter === null && (
-          <div className="card text-center py-12">
-            <Box className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-            <p className="text-slate-400">{tr('clusterView.noPods', 'No pods found')}</p>
-          </div>
-        )
-      )}
+        <>
+          {searchQuery && matched === 0 && !isLoading && (
+            <div className="card text-center py-12">
+              <Search className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+              <p className="text-slate-400">
+                {tr('clusterView.noSearchResults', 'No pods found for "{{query}}"', { query: searchQuery })}
+              </p>
+            </div>
+          )}
 
-      <ListPager
-        currentPage={page}
-        totalPages={pages.length}
-        total={totalPods}
-        rowsPerPage={POD_CARDS_PER_PAGE}
-        range={{ start: shown.podStart + 1, end: shown.podEnd }}
-        onPageChange={(p) => {
-          turnTo(p)
-          setScrollTo({ key: resetKey, node: null })
-        }}
-        showPageSize={false}
-        testId="cluster-view-nodes-pager"
-      />
+          {listed.length > 0 ? (
+            <div
+              ref={listRef}
+              style={{ height: virtualizer.getTotalSize(), position: 'relative' }}
+              data-testid="cluster-view-nodes"
+              data-list="node boxes"
+            >
+              {virtualizer.getVirtualItems().map((row) => (
+                <div
+                  key={row.key}
+                  data-index={row.index}
+                  ref={virtualizer.measureElement}
+                  className={`absolute left-0 top-0 w-full ${row.index < pageEntries.length - 1 ? 'pb-6' : ''}`}
+                  style={{ transform: `translateY(${row.start - virtualizer.options.scrollMargin}px)` }}
+                >
+                  <NodeBox entry={pageEntries[row.index]} canDeletePod={canDeletePod} mode="preview" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            !searchQuery && !isLoading && (
+              <div className="card text-center py-12">
+                <Box className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                <p className="text-slate-400">{tr('clusterView.noPods', 'No pods found')}</p>
+              </div>
+            )
+          )}
+
+          <ListPager
+            currentPage={page}
+            totalPages={totalPages}
+            total={total}
+            rowsPerPage={NODE_BOXES_PER_PAGE}
+            onPageChange={(p) => goTo(p, 0)}
+            showPageSize={false}
+            testId="cluster-view-nodes-pager"
+          />
+        </>
+      )}
     </div>
   )
 }
 
-// A node's box, or its piece on this page: pods [piece.from, piece.to) of the node's pods by namespace and name, the
-// last piece taking whatever is left (a pod the watch brought before the map's next count is not left out).
-export function NodeBox({ entry, piece, canDeletePod }: { entry: NodeEntry; piece: BoxPiece; canDeletePod: boolean }) {
+// A node's box. In the overview (`preview`) it draws at most BOX_PREVIEW_CARDS of its pods — those the search matches,
+// problems first — and opens the node's own view for the rest; in the node's own view (`all`) it draws a page of its
+// pods by name, the search's matches outlined, with "Problem pods only" and the footer under it.
+export function NodeBox({ entry, canDeletePod, mode }: { entry: NodeEntry; canDeletePod: boolean; mode: 'preview' | 'all' }) {
   const writesRefused = useWritesRefusedIn()
   const {
     tr,
@@ -235,6 +220,9 @@ export function NodeBox({ entry, piece, canDeletePod }: { entry: NodeEntry; piec
     selectTab,
     setContainerSearchQuery,
     setPodContextMenu,
+    nodeView,
+    openNodeView,
+    setNodeViewPage,
   } = useClusterView()
 
   const [active, setActive] = useState(false)
@@ -278,18 +266,29 @@ export function NodeBox({ entry, piece, canDeletePod }: { entry: NodeEntry; piec
   }, [pods, setDeletingPods])
 
   const q = searchQuery.trim().toLowerCase()
-  const ordered = useMemo(() => {
-    const list = Array.isArray(pods) ? pods : []
-    // the fields the server's search reads (pods_page.go): name, namespace, node and pod IP — a box found by its node
-    // or an IP shows those pods, not none
-    const found = q ? list.filter((pod) => pod.name.toLowerCase().includes(q) || pod.namespace.toLowerCase().includes(q)
-      || String(pod.node_name || entry.node).toLowerCase().includes(q) || String(pod.pod_ip || '').toLowerCase().includes(q)) : list
-    // one order for every piece of the box, whatever order the read and the watch bring them in
-    const by = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
-    return [...found].sort((a, b) => by(a.namespace, b.namespace) || by(a.name, b.name))
-  }, [pods, q, entry.node])
-  const last = piece.to >= piece.total
-  const drawn = useMemo(() => ordered.slice(piece.from, last ? undefined : piece.to), [ordered, piece.from, piece.to, last])
+  const list = useMemo(() => (Array.isArray(pods) ? pods : []), [pods])
+  const matches = (pod: PodInfo) => q !== '' && podMatches(pod, q, entry.node)
+
+  // the overview: the pods the search matches (all without one), problems first, the first BOX_PREVIEW_CARDS drawn
+  const found = useMemo(() => (q ? list.filter((pod) => podMatches(pod, q, entry.node)) : list), [list, q, entry.node])
+  const preview = useMemo(() => previewOrder(found, (pod) => getPodHealth(pod).level).slice(0, BOX_PREVIEW_CARDS), [found])
+
+  // the node's own view: every pod by name (problems only when asked), a page of NODE_PODS_PER_PAGE that follows the pod
+  // a search opened it on (nodeViewPage); a pod coming or going moves at most a card or two over a page's edge
+  const [problemsOnly, setProblemsOnly] = useState(false)
+  const ordered = useMemo(() => nameOrder(problemsOnly ? list.filter((pod) => getPodHealth(pod).level !== 'ok') : list), [list, problemsOnly])
+  const orderedKeys = useMemo(() => ordered.map(podKey), [ordered])
+  const focus = mode === 'all' && pods ? nodeView?.pod ?? null : null
+  const shownPage = nodeViewPage(orderedKeys, { page: nodeView?.page ?? null, pod: focus }, q ? ordered.findIndex((pod) => podMatches(pod, q, entry.node)) : -1)
+  const matchCount = q ? found.length : 0
+  const viewLayer = mode === 'all' && pods
+    ? nodeViewLayer({
+      node: entry.node || 'unscheduled', page: shownPage.page, totalPages: shownPage.totalPages, start: shownPage.start, end: shownPage.end,
+      total: ordered.length, problemsOnly, search: searchQuery.trim(), matches: matchCount,
+      pods: orderedKeys.slice(shownPage.start, shownPage.end), focus, gone: shownPage.gone,
+    })
+    : null
+  useAIContext(viewLayer, [JSON.stringify(viewLayer)])
 
   const handlePodClick = (pod: any) => {
     const detail = podToDetail(pod)
@@ -305,75 +304,143 @@ export function NodeBox({ entry, piece, canDeletePod }: { entry: NodeEntry; piec
     setPodContextMenu({ x: event.clientX, y: event.clientY, pod })
   }
 
-  const count = pods ? ordered.length : entry.counts.total
-  // a node split over pages says which of its pods this piece holds and whether more follow
-  const split = piece.from > 0 || !last
-  const partValues = pods
-    ? { from: piece.from + 1, to: piece.from + drawn.length, total: ordered.length }
-    : { from: piece.from + 1, to: piece.to, total: piece.total }
-  const partKey = piece.from === 0 ? 'first' : last ? 'last' : 'middle'
-  const partText = {
-    first: tr('clusterView.part.first', 'Pods {{from}}–{{to}} of {{total}} · continues on the next page', partValues),
-    middle: tr('clusterView.part.middle', 'Continued: Pods {{from}}–{{to}} of {{total}} · continues on the next page', partValues),
-    last: tr('clusterView.part.last', 'Continued: Pods {{from}}–{{to}} of {{total}}', partValues),
-  }[partKey]
+  const card = (pod: PodInfo, idx: number) => {
+    const key = podKey(pod)
+    const isDeleting = deletingPods.has(key)
+    const health = getPodHealth(pod)
+    const hit = mode === 'all' && matches(pod)
+    const focused = focus !== null && key === focus
+    return (
+      <button
+        key={`${pod.namespace}-${pod.name}-${idx}`}
+        data-testid="cluster-view-pod"
+        data-match={hit ? 'true' : undefined}
+        data-focus={focused ? 'true' : undefined}
+        onClick={() => handlePodClick(pod)}
+        onContextMenu={(event) => {
+          if (!isDeleting) handlePodContextMenu(event, pod)
+        }}
+        disabled={isDeleting}
+        className={`p-3 bg-slate-700 rounded-lg transition-colors text-left ${focused ? 'ring-2 ring-primary-400' : hit ? 'ring-1 ring-primary-400' : ''} ${
+          isDeleting ? 'opacity-60 cursor-not-allowed' : 'hover:bg-slate-600'
+        }`}
+      >
+        <div className="flex items-start justify-between mb-2">
+          <Box className="w-4 h-4 text-slate-400 shrink-0" />
+          {isDeleting ? (
+            <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+          ) : (
+            getHealthIcon(health.level, health.reason)
+          )}
+        </div>
+        <div className="text-sm font-medium text-ink truncate" title={pod.name}>
+          {pod.name}
+        </div>
+        <div title={pod.namespace} className="text-xs text-slate-300 mt-1">{pod.namespace}</div>
+        <div className={`text-xs mt-1 min-h-[16px] ${isDeleting ? 'text-amber-400' : 'text-slate-300'}`}>
+          {isDeleting ? tr('clusterView.podDeleting', 'Deleting...') : health.reason}
+        </div>
+        <div className="text-xs text-yellow-400 mt-1 min-h-[16px]">
+          {pod.restart_count > 0 &&
+            tr('clusterView.restarts', 'Restarts: {{count}}', { count: pod.restart_count })}
+        </div>
+      </button>
+    )
+  }
+  const placeholders = (n: number) => Array.from({ length: n }, (_, i) => (
+    <div key={i} className="h-[132px] rounded-lg bg-slate-700/50" aria-hidden="true" data-testid="cluster-view-card-placeholder" />
+  ))
+  const grid = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3'
+
+  if (mode === 'preview') {
+    const count = pods ? found.length : entry.counts.total
+    const hidden = count - Math.min(count, BOX_PREVIEW_CARDS)
+    // the search opens the node's own view on its first match (by name), which the page then follows
+    const openAll = () => {
+      const byName = nameOrder(list)
+      const first = q && pods ? byName.findIndex((pod) => podMatches(pod, q, entry.node)) : -1
+      openNodeView(keyOf(entry), first >= 0 ? { page: nodePageOf(first), pod: podKey(byName[first]) } : undefined)
+    }
+    return (
+      <div className="card" data-testid="cluster-view-node" data-node={entry.node}>
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <Server className="w-6 h-6 text-slate-400" />
+          <h2 className="text-xl font-semibold text-ink">{entry.label}</h2>
+          <span className="badge badge-secondary">
+            {tr('clusterView.nodePodsCount', '{{count}} Pods', { count })}
+          </span>
+          {hidden > 0 && (
+            <span className="text-xs text-slate-400" data-testid="cluster-view-node-shown">
+              {tr('clusterView.box.shown', 'Showing {{shown}} of {{total}} Pods', { shown: count - hidden, total: count })}
+            </span>
+          )}
+          {(hidden > 0 || q !== '') && (
+            <button type="button" className="btn-row ml-auto" onClick={openAll} data-testid="cluster-view-node-more">
+              {hidden > 0
+                ? tr('clusterView.box.more', '+{{count}} show all on this node', { count: hidden })
+                : tr('clusterView.box.open', 'Show all on this node')}
+            </button>
+          )}
+        </div>
+        <div className={grid} data-list-bounded={`at most ${BOX_PREVIEW_CARDS} pod cards; the node's own view pages the rest`}>
+          {pods ? preview.map(card) : placeholders(Math.min(count, BOX_PREVIEW_CARDS))}
+        </div>
+      </div>
+    )
+  }
+
+  const drawn = ordered.slice(shownPage.start, shownPage.end)
   return (
-    <div className="card" data-testid="cluster-view-node" data-node={entry.node} data-pods={split ? `${partValues.from}-${partValues.to}/${partValues.total}` : undefined}>
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <Server className="w-6 h-6 text-slate-400" />
-        <h2 className="text-xl font-semibold text-ink">{entry.label}</h2>
-        <span className="badge badge-secondary">
-          {tr('clusterView.nodePodsCount', '{{count}} Pods', { count })}
-        </span>
-        {split && (!pods || drawn.length > 0) && (
-          <span className="text-xs text-slate-400" data-testid="cluster-view-node-part">{partText}</span>
+    <>
+      <div className="card" data-testid="cluster-view-node" data-node={entry.node}>
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <Server className="w-6 h-6 text-slate-400" />
+          <h2 className="text-xl font-semibold text-ink">{entry.label}</h2>
+          <span className="badge badge-secondary">
+            {tr('clusterView.nodePodsCount', '{{count}} Pods', { count: pods ? list.length : entry.counts.total })}
+          </span>
+          {shownPage.gone && focus !== null && (
+            <span className="text-xs text-amber-300" data-testid="cluster-view-node-pod-gone">
+              {tr('clusterView.nodeView.gone', 'Pod {{pod}} is no longer on this node.', { pod: focus })}
+            </span>
+          )}
+          {q !== '' && pods && (
+            <span className="text-xs text-slate-400" data-testid="cluster-view-node-matches">
+              {tr('clusterView.nodeView.matches', 'Pods matching "{{query}}" are outlined: {{count}} on this node.', { query: searchQuery.trim(), count: matchCount })}
+            </span>
+          )}
+          <label className="ml-auto inline-flex items-center gap-2 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              checked={problemsOnly}
+              onChange={(event) => {
+                setProblemsOnly(event.target.checked)
+                setNodeViewPage(1)
+              }}
+              data-testid="cluster-view-problems-only"
+            />
+            {tr('clusterView.nodeView.problemsOnly', 'Problem pods only')}
+          </label>
+        </div>
+        {pods && ordered.length === 0 ? (
+          <p className="text-sm text-slate-400" data-testid="cluster-view-node-empty">
+            {problemsOnly ? tr('common.noSearchResults', 'No results found.') : tr('common.listEmpty', 'No items.')}
+          </p>
+        ) : (
+          <div className={grid} data-list="node pods">
+            {pods ? drawn.map(card) : placeholders(Math.min(entry.counts.total, NODE_PODS_PER_PAGE))}
+          </div>
         )}
       </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-        {pods
-          ? drawn.map((pod, idx) => {
-            const podKey = `${pod.namespace}/${pod.name}`
-            const isDeleting = deletingPods.has(podKey)
-            const health = getPodHealth(pod)
-            return (
-              <button
-                key={`${pod.namespace}-${pod.name}-${idx}`}
-                onClick={() => handlePodClick(pod)}
-                onContextMenu={(event) => {
-                  if (!isDeleting) handlePodContextMenu(event, pod)
-                }}
-                disabled={isDeleting}
-                className={`p-3 bg-slate-700 rounded-lg transition-colors text-left ${
-                  isDeleting ? 'opacity-60 cursor-not-allowed' : 'hover:bg-slate-600'
-                }`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <Box className="w-4 h-4 text-slate-400 shrink-0" />
-                  {isDeleting ? (
-                    <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
-                  ) : (
-                    getHealthIcon(health.level, health.reason)
-                  )}
-                </div>
-                <div className="text-sm font-medium text-ink truncate" title={pod.name}>
-                  {pod.name}
-                </div>
-                <div title={pod.namespace} className="text-xs text-slate-300 mt-1">{pod.namespace}</div>
-                <div className={`text-xs mt-1 min-h-[16px] ${isDeleting ? 'text-amber-400' : 'text-slate-300'}`}>
-                  {isDeleting ? tr('clusterView.podDeleting', 'Deleting...') : health.reason}
-                </div>
-                <div className="text-xs text-yellow-400 mt-1 min-h-[16px]">
-                  {pod.restart_count > 0 &&
-                    tr('clusterView.restarts', 'Restarts: {{count}}', { count: pod.restart_count })}
-                </div>
-              </button>
-            )
-          })
-          : Array.from({ length: piece.to - piece.from }, (_, i) => (
-            <div key={i} className="h-[132px] rounded-lg bg-slate-700/50" aria-hidden="true" data-testid="cluster-view-card-placeholder" />
-          ))}
-      </div>
-    </div>
+      <ListPager
+        currentPage={shownPage.page}
+        totalPages={shownPage.totalPages}
+        total={ordered.length}
+        rowsPerPage={NODE_PODS_PER_PAGE}
+        onPageChange={setNodeViewPage}
+        showPageSize={false}
+        testId="cluster-view-node-pods-pager"
+      />
+    </>
   )
 }

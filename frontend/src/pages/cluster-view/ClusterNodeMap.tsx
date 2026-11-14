@@ -5,8 +5,8 @@ import { GAP, layoutMap } from './nodeMapLayout'
 // Every node at a glance: a cell per node in the boxes' order, a dot per pod in the cards' colour (errors first, then
 // warnings, then the rest, so a problem is never at the end of a cell). Canvas 2D, one fillRect per dot — static, so
 // 100 000 dots draw in milliseconds. The cell is large enough to hold the busiest node's dots, so no pod is left out.
-// While the boxes take more than one page, the cells of the page shown are outlined, and while they are narrowed to a
-// node its cell. A click narrows the boxes to that node.
+// While the boxes take more than one page, the cells of the page shown are outlined, and in a node's own view its cell.
+// While a search is on, the nodes with no pod it matched are faded. A click opens that node's own view.
 
 function cssColor(name: string, fallback: string): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
@@ -62,11 +62,13 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, tr }: Pr
       ok: cssColor('--color-green-400', '#4ade80'),
     }
     const { cell, cols, per, dot } = layout
-    // cells first, then each colour in one pass (fewer fillStyle changes)
+    // cells first, then each colour in one pass (fewer fillStyle changes); a node the search did not match is faded
     ctx.fillStyle = colors.cell
-    entries.forEach((_, i) => {
+    entries.forEach((e, i) => {
+      ctx.globalAlpha = e.dim ? 0.3 : 1
       ctx.fillRect((i % cols) * (cell + GAP), Math.floor(i / cols) * (cell + GAP), cell, cell)
     })
+    ctx.globalAlpha = 1
     for (const [key, color] of [['error', colors.error], ['warn', colors.warn], ['ok', colors.ok]] as const) {
       ctx.fillStyle = color
       entries.forEach((e, i) => {
@@ -83,6 +85,7 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, tr }: Pr
       ctx.strokeStyle = cssColor('--color-ink', '#fff')
       ctx.lineWidth = 1
       for (let i = pageStart; i < Math.min(pageEnd, entries.length); i++) {
+        if (entries[i].dim) continue
         ctx.strokeRect((i % cols) * (cell + GAP) + 0.5, Math.floor(i / cols) * (cell + GAP) + 0.5, cell - 1, cell - 1)
       }
     }
@@ -116,6 +119,7 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, tr }: Pr
           role="img"
           aria-label={tr('clusterView.map.aria', 'Node map: {{nodes}} nodes, {{pods}} pods ({{error}} errors, {{warn}} warnings)', { nodes: entries.length, pods: totals.pods, error: totals.error, warn: totals.warn })}
           data-cells={JSON.stringify(entries.map((e) => [e.node, e.counts.ok, e.counts.warn, e.counts.error]))}
+          data-dim-cells={entries.some((e) => e.dim) ? entries.filter((e) => e.dim).length : undefined}
           data-page-cells={pageEnd > pageStart ? `${pageStart},${pageEnd}` : undefined}
           style={{ width: '100%', height: layout.height, cursor: h ? 'pointer' : 'default' }}
           onMouseMove={(ev) => setHover(indexAt(ev))}
@@ -138,8 +142,8 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, tr }: Pr
             <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm bg-green-400" />{tr('clusterView.map.ok', 'Healthy')} {totals.pods - totals.error - totals.warn}</span>
             <span>
               {pageEnd > pageStart
-                ? tr('clusterView.map.hintPaged', 'A cell is a node, a dot a pod; the outlined cells are the boxes below. Click a cell to show only that node.')
-                : tr('clusterView.map.hint', 'A cell is a node, a dot a pod. Click a cell to show only that node.')}
+                ? tr('clusterView.map.hintPaged', 'A cell is a node, a dot a pod; the outlined cells are the boxes below. Click a cell to see all its pods.')
+                : tr('clusterView.map.hint', 'A cell is a node, a dot a pod. Click a cell to see all its pods.')}
             </span>
           </>
         )}
