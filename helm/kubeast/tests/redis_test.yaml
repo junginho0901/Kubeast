@@ -76,6 +76,10 @@ tests:
       - matchRegex:
           path: spec.template.spec.initContainers[0].args[0]
           pattern: '\$1 is not in Secret kubeast-redis-users; add it'
+      # a key that is missing or empty: no user with an empty password
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: 'if \[ ! -s "/run/kubeast/redis-passwords/\$1" \]; then'
       - contains:
           path: spec.template.spec.initContainers[0].volumeMounts
           content:
