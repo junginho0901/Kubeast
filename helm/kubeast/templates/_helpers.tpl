@@ -41,6 +41,8 @@ ${k8s_service} and ${probe} stand, so no password is in this text, the pod spec 
   notices), PING and SELECT (REDIS_DB). The cluster versions are in the database, so no hash or MULTI/EXEC. go-redis's CLIENT SETINFO and CLIENT MAINT_NOTIFICATIONS on connect are
   refused, which it ignores. No FLUSHALL, FLUSHDB, KEYS, CONFIG, DEBUG, ACL, MONITOR, EVAL or SCRIPT.
 - probe: PING, for the readiness and liveness probes.
+- tool-server (with the AI on): the cluster change notice channel, to listen to, and no key — SUBSCRIBE, UNSUBSCRIBE,
+  PING (go-redis checks a subscription with it) and SELECT. It publishes nothing and reads no cache key.
 Every command named must exist in the image's Valkey, or Valkey refuses the file and does not start. A command the
 code starts to use is added here with a case in tests/redis_test.yaml.
 */}}
@@ -62,6 +64,14 @@ default limit. The quantity is bytes or a number with a Kubernetes suffix (Ki Mi
 user default off resetkeys resetchannels -@all
 user k8s-service on #${k8s_service} resetkeys ~kubeast:* resetchannels &kubeast:* -@all +ping +select +get +set +del +unlink +scan +publish +subscribe +unsubscribe
 user probe on #${probe} resetkeys resetchannels -@all +ping
+{{- if .Values.ai.enabled }}
+user tool-server on #${tool_server} resetkeys resetchannels &kubeast:clusters:changed:* -@all +ping +select +subscribe +unsubscribe
+{{- end }}
+{{- end -}}
+
+{{- /* The keys of the Redis users' passwords the redis pod reads, space-separated: tool-server's with the AI on. */ -}}
+{{- define "kubeast.redisUserKeys" -}}
+REDIS_K8S_SERVICE_PASSWORD REDIS_PROBE_PASSWORD{{ if .Values.ai.enabled }} REDIS_TOOL_SERVER_PASSWORD{{ end }}
 {{- end -}}
 
 {{/*

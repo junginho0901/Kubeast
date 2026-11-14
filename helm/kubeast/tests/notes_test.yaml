@@ -9,7 +9,7 @@ tests:
       - matchRegexRaw:
           pattern: '▸ Redis runs with one password for every service'
       - matchRegexRaw:
-          pattern: 'Add REDIS_K8S_SERVICE_PASSWORD and REDIS_PROBE_PASSWORD to Secret company-kubeast, then upgrade with\n\s+--reset-then-reuse-values --set redis\.acl\.existingSecretHasKeys=true'
+          pattern: 'Add REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD, REDIS_TOOL_SERVER_PASSWORD to Secret company-kubeast, then upgrade with\n\s+--reset-then-reuse-values --set redis\.acl\.existingSecretHasKeys=true'
 
   - it: says nothing of it once redis.acl.existingSecretHasKeys is true
     set:

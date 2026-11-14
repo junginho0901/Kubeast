@@ -7,7 +7,7 @@ templates:
 release:
   namespace: kubeast
 tests:
-  - it: generates the two passwords in kubeast-redis-users, kept on uninstall, and leaves REDIS_PASSWORD in kubeast-secrets
+  - it: generates the users' passwords in kubeast-redis-users, kept on uninstall, and leaves REDIS_PASSWORD in kubeast-secrets
     template: secret.yaml
     asserts:
       - hasDocuments:
@@ -18,6 +18,10 @@ tests:
         documentSelector: {path: metadata.name, value: kubeast-redis-users}
       - matchRegex:
           path: stringData.REDIS_PROBE_PASSWORD
+          pattern: ^[A-Za-z0-9]{32}$
+        documentSelector: {path: metadata.name, value: kubeast-redis-users}
+      - matchRegex:
+          path: stringData.REDIS_TOOL_SERVER_PASSWORD
           pattern: ^[A-Za-z0-9]{32}$
         documentSelector: {path: metadata.name, value: kubeast-redis-users}
       - equal:
@@ -63,7 +67,7 @@ tests:
           path: metadata.name
           value: kubeast-auth-keys
 
-  - it: keeps the passwords an earlier install generated
+  - it: keeps the passwords an earlier install generated and adds a key it did not have (tool-server's)
     template: secret.yaml
     kubernetesProvider:
       scheme:
@@ -85,6 +89,10 @@ tests:
       - equal:
           path: stringData.REDIS_PROBE_PASSWORD
           value: kept-probe-pw
+        documentSelector: {path: metadata.name, value: kubeast-redis-users}
+      - matchRegex:
+          path: stringData.REDIS_TOOL_SERVER_PASSWORD
+          pattern: ^[A-Za-z0-9]{32}$
         documentSelector: {path: metadata.name, value: kubeast-redis-users}
 
   # An install of v0.7.7 holds kubeast-secrets with REDIS_PASSWORD and no kubeast-redis-users: the upgrade keeps every
@@ -153,23 +161,80 @@ tests:
             secretRef:
               name: kubeast-secrets
 
-  - it: no other service is given a Redis user or password beyond kubeast-secrets
+  - it: tool-server signs in as tool-server with its own password, which takes the place of kubeast-secrets' REDIS_PASSWORD
+    template: deployments.yaml
+    documentSelector: {path: metadata.name, value: tool-server}
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: REDIS_USERNAME
+            value: tool-server
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: kubeast-redis-users
+                key: REDIS_TOOL_SERVER_PASSWORD
+                optional: true
+
+  - it: no service but k8s-service and tool-server is given a Redis user or password beyond kubeast-secrets
     template: deployments.yaml
     asserts:
       - notContains:
           path: spec.template.spec.containers[0].env
           content:
             name: REDIS_USERNAME
-            value: k8s-service
           any: true
-        documentSelector: {path: metadata.name, value: tool-server}
+        documentSelector: {path: metadata.name, value: ai-service}
       - notContains:
           path: spec.template.spec.containers[0].env
           content:
             name: REDIS_USERNAME
-            value: k8s-service
           any: true
-        documentSelector: {path: metadata.name, value: ai-service}
+        documentSelector: {path: metadata.name, value: auth-service}
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: REDIS_USERNAME
+          any: true
+        documentSelector: {path: metadata.name, value: session-service}
+
+  - it: with secrets.existingSecret and no redis.acl.existingSecretHasKeys, tool-server gets no Redis user
+    template: deployments.yaml
+    documentSelector: {path: metadata.name, value: tool-server}
+    set:
+      secrets.existingSecret: company-kubeast
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: REDIS_USERNAME
+          any: true
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: REDIS_PASSWORD
+          any: true
+
+  - it: with secrets.existingSecret and redis.acl.existingSecretHasKeys tool-server reads its password there
+    template: deployments.yaml
+    documentSelector: {path: metadata.name, value: tool-server}
+    set:
+      secrets.existingSecret: company-kubeast
+      redis.acl.existingSecretHasKeys: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: company-kubeast
+                key: REDIS_TOOL_SERVER_PASSWORD
+                optional: true
 
   - it: with secrets.existingSecret and no redis.acl.existingSecretHasKeys, k8s-service signs in with REDIS_PASSWORD alone
     template: deployments.yaml

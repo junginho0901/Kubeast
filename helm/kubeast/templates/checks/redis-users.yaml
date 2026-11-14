@@ -8,9 +8,10 @@ stops, is the last guard.
 {{- $secret := lookup "v1" "Secret" .Release.Namespace .Values.secrets.existingSecret }}
 {{- if $secret }}
 {{- $data := $secret.data | default dict }}
-{{- range list "REDIS_K8S_SERVICE_PASSWORD" "REDIS_PROBE_PASSWORD" }}
+{{- $keys := splitList " " (include "kubeast.redisUserKeys" .) }}
+{{- range $keys }}
 {{- if not (index $data .) }}
-{{- fail (printf "Secret %s has no %s, and redis.acl.existingSecretHasKeys is true. Add REDIS_K8S_SERVICE_PASSWORD and REDIS_PROBE_PASSWORD to that Secret, or set redis.acl.existingSecretHasKeys=false to keep one Redis password for every service (docs/configuration.md \"Redis users\")." $.Values.secrets.existingSecret .) }}
+{{- fail (printf "Secret %s has no %s, and redis.acl.existingSecretHasKeys is true. Add %s to that Secret, or set redis.acl.existingSecretHasKeys=false to keep one Redis password for every service (docs/configuration.md \"Redis users\")." $.Values.secrets.existingSecret . (join ", " $keys)) }}
 {{- end }}
 {{- end }}
 {{- end }}

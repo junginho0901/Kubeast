@@ -534,6 +534,18 @@ spec:
               value: /tmp/kube-cache
             - name: TOOL_SERVER_KUBECTL_CONCURRENCY
               value: "{{ .Values.multicluster.toolServerKubectlConcurrency | default 3 }}"
+            {{- if include "kubeast.redisAcl" . }}
+            # Redis user tool-server (redis.acl): listens to the cluster change notices, reads no key. This REDIS_PASSWORD
+            # takes the place of kubeast-secrets' one; optional, as k8s-service's: without it the kubeconfigs still expire.
+            - name: REDIS_USERNAME
+              value: tool-server
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kubeast.redisUsersSecretName" . }}
+                  key: REDIS_TOOL_SERVER_PASSWORD
+                  optional: true
+            {{- end }}
             {{- with include "kubeast.awsEnv" . }}{{ nindent 12 . }}{{- end }}
             {{- with include "kubeast.customCAGoEnv" . }}{{ . | trim | nindent 12 }}{{ end }}
           volumeMounts:

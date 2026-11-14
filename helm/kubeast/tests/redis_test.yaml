@@ -31,7 +31,7 @@ tests:
           path: spec.template.spec.initContainers[0].command
           value: ["sh", "-c"]
 
-  - it: writes the default user off with nothing allowed, k8s-service on kubeast keys and channels with its commands, and probe with PING only
+  - it: writes the default user off with nothing allowed, k8s-service on kubeast keys and channels with its commands, probe with PING only and tool-server on the notice channel
     documentSelector:
       path: kind
       value: Deployment
@@ -45,10 +45,45 @@ tests:
       - matchRegex:
           path: spec.template.spec.initContainers[0].args[0]
           pattern: '(?m)^user probe on #\$\{probe\} resetkeys resetchannels -@all \+ping$'
-      # these three lines and no other
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: '(?m)^user tool-server on #\$\{tool_server\} resetkeys resetchannels &kubeast:clusters:changed:\* -@all \+ping \+select \+subscribe \+unsubscribe$'
+      # these four lines and no other
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: 'users\.acl <<EOF\nuser default [^\n]*\nuser k8s-service [^\n]*\nuser probe [^\n]*\nuser tool-server [^\n]*\nEOF\n'
+
+  # tool-server listens to the cluster change notices: no key pattern, one channel pattern, no command that reads or
+  # writes a key.
+  - it: gives tool-server the cluster change channel and no key
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - notMatchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: '(?m)^user tool-server [^\n]*(~|%R|%W|allkeys|\+get|\+set|\+del|\+unlink|\+scan|\+publish|\+flush)'
+
+  - it: with the AI off has no tool-server user or password
+    set:
+      ai.enabled: false
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
       - matchRegex:
           path: spec.template.spec.initContainers[0].args[0]
           pattern: 'users\.acl <<EOF\nuser default [^\n]*\nuser k8s-service [^\n]*\nuser probe [^\n]*\nEOF\n'
+      - notMatchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: REDIS_TOOL_SERVER_PASSWORD
+      - equal:
+          path: spec.template.spec.volumes[2].secret.items
+          value:
+            - key: REDIS_K8S_SERVICE_PASSWORD
+              path: REDIS_K8S_SERVICE_PASSWORD
+            - key: REDIS_PROBE_PASSWORD
+              path: REDIS_PROBE_PASSWORD
 
   - it: gives no user every key, channel or command, a password in clear, or a command that empties or reconfigures Redis
     documentSelector:
@@ -72,7 +107,7 @@ tests:
           pattern: 'sha256sum < "/run/kubeast/redis-passwords/\$1" \| cut -d'' '' -f1'
       - matchRegex:
           path: spec.template.spec.initContainers[0].args[0]
-          pattern: 'k8s_service=\$\(pwhash REDIS_K8S_SERVICE_PASSWORD\)\nprobe=\$\(pwhash REDIS_PROBE_PASSWORD\)'
+          pattern: 'k8s_service=\$\(pwhash REDIS_K8S_SERVICE_PASSWORD\)\nprobe=\$\(pwhash REDIS_PROBE_PASSWORD\)\ntool_server=\$\(pwhash REDIS_TOOL_SERVER_PASSWORD\)\n'
       - matchRegex:
           path: spec.template.spec.initContainers[0].args[0]
           pattern: '\$1 is not in Secret kubeast-redis-users; add it'
@@ -108,6 +143,8 @@ tests:
                   path: REDIS_K8S_SERVICE_PASSWORD
                 - key: REDIS_PROBE_PASSWORD
                   path: REDIS_PROBE_PASSWORD
+                - key: REDIS_TOOL_SERVER_PASSWORD
+                  path: REDIS_TOOL_SERVER_PASSWORD
       - contains:
           path: spec.template.spec.volumes
           content:

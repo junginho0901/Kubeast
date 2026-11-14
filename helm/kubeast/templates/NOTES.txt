@@ -67,7 +67,7 @@ in bash, zsh and PowerShell.
 ▸ Redis runs with one password for every service
 
     With secrets.existingSecret, the Redis users stay off until you turn them on.
-    Add REDIS_K8S_SERVICE_PASSWORD and REDIS_PROBE_PASSWORD to Secret {{ .Values.secrets.existingSecret }}, then upgrade with
+    Add {{ include "kubeast.redisUserKeys" . | splitList " " | join ", " }} to Secret {{ .Values.secrets.existingSecret }}, then upgrade with
     --reset-then-reuse-values --set redis.acl.existingSecretHasKeys=true
     (docs/configuration.md "Redis users").
 {{- end }}

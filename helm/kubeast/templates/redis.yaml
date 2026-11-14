@@ -50,6 +50,9 @@ spec:
               }
               k8s_service=$(pwhash REDIS_K8S_SERVICE_PASSWORD)
               probe=$(pwhash REDIS_PROBE_PASSWORD)
+              {{- if .Values.ai.enabled }}
+              tool_server=$(pwhash REDIS_TOOL_SERVER_PASSWORD)
+              {{- end }}
               # a pod started again keeps its emptyDir, and the file in it is read-only
               rm -f /run/kubeast/redis-acl/users.acl
               cat > /run/kubeast/redis-acl/users.acl <<EOF
@@ -126,10 +129,10 @@ spec:
             # optional: a Secret of secrets.existingSecret without the keys stops the acl container with what to add
             optional: true
             items:
-              - key: REDIS_K8S_SERVICE_PASSWORD
-                path: REDIS_K8S_SERVICE_PASSWORD
-              - key: REDIS_PROBE_PASSWORD
-                path: REDIS_PROBE_PASSWORD
+              {{- range splitList " " (include "kubeast.redisUserKeys" .) }}
+              - key: {{ . }}
+                path: {{ . }}
+              {{- end }}
         {{- end }}
 ---
 apiVersion: v1

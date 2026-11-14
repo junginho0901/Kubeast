@@ -27,8 +27,9 @@ admin:
 # every sync would rotate it). Set it to a Secret you manage (e.g. via
 # ExternalSecrets) holding these keys: POSTGRES_PASSWORD, DATABASE_URL,
 # REDIS_PASSWORD (redis requirepass while the Redis users are off),
-# REDIS_K8S_SERVICE_PASSWORD and REDIS_PROBE_PASSWORD (the Redis users, read
-# once redis.acl.existingSecretHasKeys is true),
+# REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD and, with the AI on,
+# REDIS_TOOL_SERVER_PASSWORD (the Redis users, read once
+# redis.acl.existingSecretHasKeys is true),
 # DEFAULT_ADMIN_PASSWORD, AI_APPROVAL_SECRET (shared by ai-service and
 # tool-server to sign write-tool approvals), INTERNAL_API_TOKEN (service token
 # tool-server and auth-service present on k8s-service's /internal routes; rotate
@@ -627,16 +628,18 @@ redis:
   # install and kept across upgrades (REDIS_PASSWORD in kubeast-secrets).
   password: ""
   # One Redis user per service (docs/configuration.md "Redis users"): k8s-service
-  # reaches only kubeast:* keys and channels with the commands its cache uses, the
-  # probes may only PING, and the default user is off. The passwords are generated
-  # at install and kept across upgrades in the Secret kubeast-redis-users
-  # (REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD). false = one password
-  # (requirepass) as before.
+  # reaches only kubeast:* keys and channels with the commands its cache uses,
+  # tool-server only listens to the cluster change notices, the probes may only
+  # PING, and the default user is off. The passwords are generated at install and
+  # kept across upgrades in the Secret kubeast-redis-users
+  # (REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD, REDIS_TOOL_SERVER_PASSWORD).
+  # false = one password (requirepass) as before.
   acl:
     enabled: true
     # With secrets.existingSecret the users stay off, and Redis keeps the one
-    # password, until this is true: put REDIS_K8S_SERVICE_PASSWORD and
-    # REDIS_PROBE_PASSWORD in that Secret first. An upgrade that can read the
+    # password, until this is true: put REDIS_K8S_SERVICE_PASSWORD,
+    # REDIS_PROBE_PASSWORD and, with the AI on, REDIS_TOOL_SERVER_PASSWORD in
+    # that Secret first. An upgrade that can read the
     # Secret stops when one is missing. Not read without secrets.existingSecret.
     existingSecretHasKeys: false
 
