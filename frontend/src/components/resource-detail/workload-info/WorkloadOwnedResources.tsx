@@ -107,14 +107,14 @@ export default function WorkloadOwnedResources({
             <p className="text-xs text-slate-400"><Tx>Loading...</Tx></p>
           ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs table-fixed min-w-[700px]">
+            <table className="w-full text-xs table-fixed min-w-[640px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-2 w-[28%]">{tr('pods.table.name', 'Name')}</th>
+                  <th className="text-left py-2 w-[27%]">{tr('pods.table.name', 'Name')}</th>
                   <th className="text-left py-2 w-[13%]">{tr('pods.table.status', 'Status')}</th>
-                  <th className="text-left py-2 w-[8%]">{tr('pods.table.ready', 'Ready')}</th>
+                  <th className="text-left py-2 w-[7%]">{tr('pods.table.ready', 'Ready')}</th>
                   <th className="text-left py-2 w-[9%]">{tr('pods.table.restarts', 'Restarts')}</th>
-                  <th className="text-left py-2 w-[22%]">{tr('pods.table.node', 'Node')}</th>
+                  <th className="text-left py-2 w-[24%]">{tr('pods.table.node', 'Node')}</th>
                   {pvcsEnabled && <Th className="text-left py-2 w-[20%]">PVC Status</Th>}
                 </tr>
               </thead>
@@ -131,7 +131,7 @@ export default function WorkloadOwnedResources({
                       <td className="py-2 pr-2"><StatusBadge status={pod.status || pod.phase || '-'} /></td>
                       <td className="py-2 pr-2 font-mono">{pod.ready || '-'}</td>
                       <td className="py-2 pr-2 font-mono">{pod.restart_count ?? 0}</td>
-                      <td className="py-2 pr-2 font-mono truncate">{pod.node_name || '-'}</td>
+                      <td className="py-2 pr-2 font-mono truncate" title={pod.node_name || undefined}>{pod.node_name || '-'}</td>
                       {pvcsEnabled && (
                         <td className="py-2 pr-2 text-[11px]">
                           {pvcEntries.length === 0 ? (

@@ -38,7 +38,7 @@ import { graphTotals } from './resource-graph/counts'
 import { TrafficControls } from './resource-graph/TrafficControls'
 import { TrafficPanel } from './resource-graph/TrafficPanel'
 import { RoutedEdge } from './resource-graph/RoutedEdge'
-import { isPeer, lineColor, openableEnd, trafficParams, trafficSources, type GraphView, type LineCheck, type TrafficSource } from './resource-graph/traffic'
+import { isPeer, lineColor, metricsFailure, openableEnd, trafficParams, trafficSources, type GraphView, type LineCheck, type TrafficSource } from './resource-graph/traffic'
 
 const edgeTypes = { routed: RoutedEdge }
 
@@ -107,9 +107,12 @@ export default function ResourceGraph() {
     () => (has('resource.networkflow.read') ? trafficSources(features, currentCluster, prometheusAvailable) : []),
     [has, features, currentCluster, prometheusAvailable],
   )
+  // a Prometheus that is set but did not answer keeps the switch, with its reason in the metrics sources' place
+  const metricsDown = has('resource.networkflow.read') ? metricsFailure(features, prometheus.data, prometheus.error) : null
+  const metricsDownText = metricsDown ? t('dashboard.prometheusNotAnswering', { defaultValue: 'Prometheus did not answer: {{reason}}', reason: metricsDown }) : undefined
   const [pickedView, setView] = useState<GraphView>('structure')
   const [pickedSource, setSource] = useState<TrafficSource | null>(null)
-  const view: GraphView = sources.length > 0 ? pickedView : 'structure'
+  const view: GraphView = sources.length > 0 || metricsDown ? pickedView : 'structure'
   const source = pickedSource && sources.includes(pickedSource) ? pickedSource : sources[0]
   const [selected, setSelected] = useState<{ id: string; line: TrafficLine } | null>(null)
   const selectedLine = selected?.line ?? null
@@ -271,9 +274,11 @@ export default function ResourceGraph() {
         visible_items: visibleItems,
         // the traffic lines on screen, counted only: the AI reads flows itself (network_flows)
         traffic: traffic ? { view, source, lines: traffic.lines.length, dropped_lines: traffic.lines.filter((l) => l.dropped > 0).length, truncated: traffic.truncated || undefined } : undefined,
+        // the metrics sources are left out: the cluster's Prometheus is set but did not answer, for this reason
+        prometheus_not_answering: metricsDown ?? undefined,
       },
     }
-  }, [graphData, nsArray, kindFilters, edgeTypeFilters, searchQuery, groupBy, statusFilter, traffic, view, source, podCounts, totals, shown])
+  }, [graphData, nsArray, kindFilters, edgeTypeFilters, searchQuery, groupBy, statusFilter, traffic, view, source, podCounts, totals, shown, metricsDown])
 
   useAIContext(aiSnapshot, [aiSnapshot])
   // the box whose drawer is open keeps its lines lit (a stand-in by the end it stands for)
@@ -377,15 +382,20 @@ export default function ResourceGraph() {
         podCounts={podCounts}
         groupPods={groupPods && expanded.length === 0 ? 'grouped' : groupPods ? 'some' : 'all'}
         setGroupPods={(on) => void setGrouping(on)}
-        extra={sources.length > 0 && source ? (
+        extra={(sources.length > 0 && source) || metricsDown ? (
           <TrafficControls
             view={view}
             setView={(v) => { setView(v); setSelected(null) }}
             sources={sources}
             source={source}
             setSource={(s) => { setSource(s); setSelected(null) }}
-            onRefresh={() => { setSelected(null); void trafficQuery.refetch() }}
-            fetching={trafficQuery.isFetching}
+            metricsFailure={metricsDown}
+            onRefresh={() => {
+              setSelected(null)
+              if (source) void trafficQuery.refetch()
+              if (metricsDown) void prometheus.refetch()
+            }}
+            fetching={trafficQuery.isFetching || prometheus.isFetching}
           />
         ) : undefined}
       />
@@ -452,9 +462,11 @@ export default function ResourceGraph() {
             <p className="text-sm max-w-md text-center">
               {trafficErrorText
                 ? trafficErrorText
-                : trafficQuery.data && !trafficQuery.data.available
-                  ? t(`resourceGraph.traffic.unavailable.${trafficQuery.data.reason}`, unavailableText[trafficQuery.data.reason ?? 'no_metrics'])
-                  : t('resourceGraph.traffic.none', 'No traffic between these namespaces’ workloads in what was read.')}
+                : !source && metricsDownText
+                  ? metricsDownText
+                  : trafficQuery.data && !trafficQuery.data.available
+                    ? t(`resourceGraph.traffic.unavailable.${trafficQuery.data.reason}`, unavailableText[trafficQuery.data.reason ?? 'no_metrics'])
+                    : t('resourceGraph.traffic.none', 'No traffic between these namespaces’ workloads in what was read.')}
             </p>
           </div>
         ) : nodeCount === 0 ? (
@@ -512,7 +524,7 @@ export default function ResourceGraph() {
         {/* Traffic: what was read and what the lines leave out */}
         {hasSelection && view !== 'structure' && !trafficQuery.isLoading && (view === 'both' || nodes.length > 0) && (
           <TrafficStatus
-            error={trafficErrorText}
+            error={trafficErrorText ?? (source ? undefined : metricsDownText)}
             result={trafficQuery.data}
             selfLoops={selfLoops}
           />

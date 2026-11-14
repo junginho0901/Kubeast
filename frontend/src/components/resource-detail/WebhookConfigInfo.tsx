@@ -5,6 +5,7 @@ import { fmtRel } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { webhookAffected, type WebhookRule } from './clusterDetail'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
@@ -33,6 +34,7 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
     path: `/apis/admissionregistration.k8s.io/v1/${isMutating ? 'mutatingwebhookconfigurations' : 'validatingwebhookconfigurations'}`,
     name,
   })
+  useDrawerFollowsEvents({ describeKey: [isMutating ? 'mutatingwebhookconfiguration-describe' : 'validatingwebhookconfiguration-describe', name], answer: desc, kind, name })
 
   useResourceDetailOverlay({ kind, name, describe: desc })
 

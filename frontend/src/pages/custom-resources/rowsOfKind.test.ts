@@ -58,4 +58,13 @@ describe('what follows a custom resource', () => {
     expect(instanceInfoSrc).toContain('useWatchChanges({')
     expect(instanceInfoSrc).toContain('fieldSelector: `metadata.name=${name}`')
   })
+
+  // The kind's watch the CRD drawer and the page open too, up to the rows a table follows, and the note past them.
+  it('a custom resource drawer, the other instances of its kind', () => {
+    const peers = /useWatchChanges\(\{\s*enabled: followsPeers,\s*paths: \[`\/apis\/\$\{group\}\/\$\{version\}\/\$\{plural\}`\],\s*read: \[\['cri-peer', group, version, plural\]\],/
+    expect(instanceInfoSrc).toMatch(peers)
+    expect(instanceInfoSrc).toContain("queryKey: ['cri-peer', group, version, plural],")
+    expect(instanceInfoSrc).toContain('const followsPeers = Array.isArray(allInstances) && allInstances.length <= LIVE_ROWS_MAX')
+    expect(instanceInfoSrc).toContain("t('crdInfo.notLive'")
+  })
 })

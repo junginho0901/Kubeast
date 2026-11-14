@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Plus, Trash2, Activity, Loader2, Server, Pencil, Users } from 'lucide-react'
+import { Plus, Search, Trash2, Activity, Loader2, Server, Pencil, Users } from 'lucide-react'
 
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { ListPager } from '@/components/ListPager'
@@ -18,12 +18,13 @@ import { healthDotClass } from '@/utils/clusterHealth'
 import { failureText } from '@/utils/failureText'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { failureOf } from '@/hooks/useRefresh'
+import { clustersMatching } from './adminListSearch'
 
 // Admin > Clusters (step 11): list every registered cluster with register /
 // connection-test / delete. Registration & deletion are rollout-free, so the
 // picker (clusters-accessible) is invalidated right after to reflect changes.
 // The page is as high as the screen; the table pages the clusters, as many as
-// fit (or the footer's fixed choice).
+// fit (or the footer's fixed choice), and the search reads every cluster.
 const CLUSTER_COLUMNS = 6
 
 export default function AdminClusters() {
@@ -44,9 +45,13 @@ export default function AdminClusters() {
     staleTime: 30_000,
   })
 
+  // the API server a row shows
+  const shownApiServer = (c: ClusterMeta) => c.api_server_url || (c.is_self_cluster ? tr('cluster.admin.inCluster', 'In-cluster') : '-')
+  const [search, setSearch] = useState('')
+  const found = clustersMatching(clusters, search, shownApiServer)
   const [page, setPage] = useState(1)
-  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: `${isLoading}:${clusters.length}` })
-  const shown = pageOf(clusters, page, rowsPerPage)
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: `${isLoading}:${found.length}` })
+  const shown = pageOf(found, page, rowsPerPage)
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['clusters-all'] })
@@ -103,6 +108,19 @@ export default function AdminClusters() {
 
       <RefreshFailure failure={clusters.length ? failureOf(listError, errorUpdatedAt) : null} />
 
+      <div className="relative shrink-0">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+          placeholder={tr('cluster.admin.searchPlaceholder', 'Search clusters by name, API server or creator...')}
+          aria-label={tr('cluster.admin.searchPlaceholder', 'Search clusters by name, API server or creator...')}
+          data-testid="clusters-search"
+          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+        />
+      </div>
+
       <div ref={containerRef} className="card overflow-hidden p-0 flex-1 min-h-0 flex flex-col">
         {/* Horizontal scroll so the action buttons (Test/Access/Edit/Delete) are
             never clipped on a narrow / portrait viewport. */}
@@ -125,6 +143,7 @@ export default function AdminClusters() {
               </tr>
             )}
             {!isLoading && clusters.length === 0 && <TableEmptyRow colSpan={CLUSTER_COLUMNS} resource="admin-clusters" error={listError} onRetry={() => void readAgain()} />}
+            {clusters.length > 0 && found.length === 0 && <TableEmptyRow colSpan={CLUSTER_COLUMNS} resource="admin-clusters" searching />}
             {shown.rows.map((c, idx) => {
               const tested = testResults[c.id]
               const testedText = tested
@@ -141,7 +160,7 @@ export default function AdminClusters() {
                   </td>
                   <td className="px-4 py-3 text-slate-300" title={c.mode}>{tr(`cluster.admin.modeValue.${c.mode}`, c.mode)}</td>
                   <td className="px-4 py-3 text-slate-400 truncate max-w-[220px]" title={c.api_server_url || undefined}>
-                    {c.api_server_url || (c.is_self_cluster ? tr('cluster.admin.inCluster', 'In-cluster') : '-')}
+                    {shownApiServer(c)}
                     {c.prometheus_url && (
                       <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-300" title={c.prometheus_url} data-testid="cluster-prometheus-external">
                         {tr('cluster.admin.prometheusExternal', 'Prometheus: external')}
@@ -233,7 +252,7 @@ export default function AdminClusters() {
           <AdaptiveTableFillerRows count={rowsPerPage - shown.rows.length} columnCount={CLUSTER_COLUMNS} />
         </table>
         </div>
-        <ListPager currentPage={shown.page} totalPages={shown.pages} total={clusters.length} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="clusters-pager" />
+        <ListPager currentPage={shown.page} totalPages={shown.pages} total={found.length} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="clusters-pager" />
       </div>
 
       {registerOpen && (

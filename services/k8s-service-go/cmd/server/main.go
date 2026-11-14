@@ -419,15 +419,28 @@ func main() {
 
 	<-done
 	slog.Info("shutting down server...")
+	shutdown(srv, recorder, serverShutdownWait, recorderShutdownWait)
+	slog.Info("server stopped")
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
+// Both waits fit the pod's grace period, 30 s by default (the chart sets none).
+const (
+	serverShutdownWait   = 15 * time.Second
+	recorderShutdownWait = 10 * time.Second
+)
 
+// shutdown stops the server, then gives the recorder a wait of its own: an open
+// event stream (a followed log, the Helm releases stream) keeps srv.Shutdown
+// waiting until its context ends, and the recorder's last parts and rows would
+// get a spent one. The recorder takes its turn whatever srv.Shutdown returned.
+func shutdown(srv interface{ Shutdown(context.Context) error }, recorder interface{ Shutdown(context.Context) }, serverWait, recorderWait time.Duration) {
+	ctx, cancel := context.WithTimeout(context.Background(), serverWait)
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("server shutdown error", "err", err)
 	}
+	cancel()
 	// End live recordings and upload what is left before the process goes.
+	ctx, cancel = context.WithTimeout(context.Background(), recorderWait)
+	defer cancel()
 	recorder.Shutdown(ctx)
-
-	slog.Info("server stopped")
 }

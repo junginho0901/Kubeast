@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, Member, Organization } from '@/services/api'
-import { Plus, Trash2, Users, X } from 'lucide-react'
-import { useState } from 'react'
+import { Plus, Search, Trash2, Users, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActionFailure } from '@/components/ActionFailure'
 import { ModalOverlay } from '@/components/ModalOverlay'
@@ -16,9 +16,10 @@ import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useConfirm } from '@/services/confirm'
 import { pageOf } from '@/utils/listPages'
 import { NAME_MAX } from '@/utils/nameLimits'
+import { teamsMatching } from './admin/adminListSearch'
 
 // Admin → Teams: the teams users pick from, each with its member count. The page is as high as the screen and the
-// list pages the teams, as many as fit (or the footer's fixed choice).
+// list pages the teams, as many as fit (or the footer's fixed choice); the search reads every team's name.
 const TEAM_COLUMNS = 2
 
 export default function AdminOrganizations() {
@@ -50,9 +51,11 @@ export default function AdminOrganizations() {
     ? allUsers.filter((u) => u.team === selectedOrg.name)
     : []
 
+  const [search, setSearch] = useState('')
+  const found = useMemo(() => teamsMatching(teams, search), [teams, search])
   const [page, setPage] = useState(1)
-  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: teams.length })
-  const shown = pageOf(teams, page, rowsPerPage)
+  const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: found.length })
+  const shown = pageOf(found, page, rowsPerPage)
 
   const createMutation = useMutation({
     mutationFn: ({ type, name }: { type: 'team'; name: string }) => api.adminCreateOrganization(type, name),
@@ -109,6 +112,19 @@ export default function AdminOrganizations() {
           {tr('adminOrg.add', 'Add')}
         </button>
       </form>
+
+      <div className="relative mt-3 shrink-0">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+          placeholder={tr('adminOrg.searchPlaceholder', 'Search teams by name...')}
+          aria-label={tr('adminOrg.searchPlaceholder', 'Search teams by name...')}
+          data-testid="teams-search"
+          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+        />
+      </div>
 
       {createMutation.isError && createMutation.variables?.type === type && (
         <div role="alert" data-testid="team-add-error" className="mt-2 shrink-0 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200 break-words">
@@ -184,11 +200,14 @@ export default function AdminOrganizations() {
                 {tr('adminOrg.empty', 'No items registered.')}
               </TableEmptyRow>
             )}
+            {items.length > 0 && found.length === 0 && (
+              <TableEmptyRow colSpan={TEAM_COLUMNS} resource="admin-teams" searching className="px-4 py-2 text-left text-sm text-slate-500" />
+            )}
           </tbody>
           <AdaptiveTableFillerRows count={rowsPerPage - shown.rows.length} columnCount={TEAM_COLUMNS} cellClassName="py-2.5" />
         </table>
       </div>
-      <ListPager currentPage={shown.page} totalPages={shown.pages} total={items.length} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="teams-pager" />
+      <ListPager currentPage={shown.page} totalPages={shown.pages} total={found.length} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="teams-pager" />
     </div>
   )
 

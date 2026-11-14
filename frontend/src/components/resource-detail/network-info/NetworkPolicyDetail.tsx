@@ -10,6 +10,7 @@ import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { eventsForAI, fmtRel, fmtTs } from '../detailFormat'
 import { useNamespacePodTable } from '../useNamespacePodTable'
+import { useDrawerFollowsEvents } from '../useDrawerFollowsEvents'
 import { peerOf, peerText, portOf, portsText, selectorText, type Tr } from '../netpolText'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 import { DescribeFailure, DescribeStale } from '../DescribeFailure'
@@ -37,6 +38,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
     query: 'watch=1',
     applyEvent: (prev, event) => applyNetworkPolicyToDrawer(prev, event, name) as any,
   })
+  useDrawerFollowsEvents({ describeKey, answer: describe, kind: 'NetworkPolicy', namespace, name })
   // The object as it is now; what the drawer was opened with until the answer comes, or when it is refused.
   const object = useMemo(() => (describe ? networkPolicyToRawJson(describe) : rawJson), [describe, rawJson])
   useResourceDetailOverlay({ kind: 'NetworkPolicy', name, namespace, extras: object ? { spec: object.spec, ...eventsForAI(describe) } : undefined })

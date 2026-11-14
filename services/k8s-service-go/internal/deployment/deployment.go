@@ -11,6 +11,7 @@ import (
 )
 
 // Info is the Deployment's row: its counts, images, and the status and reason deploystatus reads from its conditions.
+// current_replicas is status.replicas, the pods its ReplicaSets hold, which kubectl describe prints as "total".
 func Info(d *appsv1.Deployment) map[string]interface{} {
 	replicas := int32(0)
 	if d.Spec.Replicas != nil {
@@ -44,6 +45,7 @@ func Info(d *appsv1.Deployment) map[string]interface{} {
 		"name":                 d.Name,
 		"namespace":            d.Namespace,
 		"replicas":             replicas,
+		"current_replicas":     d.Status.Replicas,
 		"ready_replicas":       d.Status.ReadyReplicas,
 		"available_replicas":   d.Status.AvailableReplicas,
 		"updated_replicas":     d.Status.UpdatedReplicas,

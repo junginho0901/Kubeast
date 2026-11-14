@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type ReferenceGrantInfo } from '@/services/api'
 import { useDescribeReads } from '@/services/pacedReads'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
@@ -67,6 +67,7 @@ export default function ReferenceGrants() {
       : `/api/v1/namespaces/${selectedNamespace}/referencegrants`,
     query: 'watch=1',
     applyEvent: (prev, event) => applyReferenceGrantWatchEvent(prev as ReferenceGrantInfo[] | undefined, event),
+    gatherEveryMs: LIST_GATHER_MS,
     onEvent: (event) => {
       if (event?.type === 'DELETED') return
       const name = event?.object?.name || event?.object?.metadata?.name

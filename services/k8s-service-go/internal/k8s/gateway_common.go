@@ -73,6 +73,6 @@ func (s *Service) describeGatewayObject(ctx context.Context, resource, kind, nam
 	}
 	result := row(obj)
 	addObjectMetaFields(result, obj)
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(obj.GetUID()))
 	return result, obj, nil
 }

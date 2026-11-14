@@ -267,6 +267,10 @@ test.describe('permission ceiling (M16)', () => {
       const folded = await create(`e2e-name-${ts}`)
       expect.soft(folded.status(), 'the same group as another role').toBe(400)
       expect.soft(await folded.text(), 'it names that role').toContain(`e2e name ${ts}`)
+      const same = await create(`e2e name ${ts}`)
+      expect.soft(same.status(), 'the same name again').toBe(400)
+      expect.soft((await same.json()).detail, 'it says the role exists').toBe(`Role "e2e name ${ts}" already exists. Choose another name`)
+      expect.soft((await (await create('Read')).json()).detail, 'a built-in name as written').toBe('Role "Read" already exists: it is a built-in role')
 
       const normal = await create(`e2e-other-${ts}`)
       expect(normal.status(), await normal.text()).toBe(201)

@@ -261,6 +261,8 @@ test.describe('number check — the drawer a screen opens for one Kind of two gr
         await compare(page, `Issues · Widget.${g}`, async (p) => {
           await p.goto('/?cluster=default')
           await p.locator('button').filter({ hasText: /Check issues|이슈 확인/ }).first().click()
+          // the window pages its rows: its search brings the row onto the first page
+          await p.getByPlaceholder(/Search issues|이슈 검색/).fill(`the ${g} widget warns ${RUN}`)
           await p.getByTestId('issues-kind-Widget').getByTestId('issue-row').filter({ hasText: `the ${g} widget warns ${RUN}` }).first().click({ timeout: 30_000 })
         }, widgetWant(g))
       }

@@ -4,6 +4,7 @@ import { api } from '@/services/api'
 import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { conditionStatus, conditionSummary } from './gatewayDetail'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import type { GatewayClassInfo as GatewayClassRow } from '@/services/api'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
@@ -48,6 +49,7 @@ export default function GatewayClassInfo({ name, rawJson }: Props) {
     enabled: !!name,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['gatewayclass-describe', name], answer: describe, kind: 'GatewayClass', name })
 
   useResourceDetailOverlay({ kind: 'GatewayClass', name, describe })
 

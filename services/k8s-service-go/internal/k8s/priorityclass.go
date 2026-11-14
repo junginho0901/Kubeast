@@ -52,7 +52,7 @@ func (s *Service) DescribePriorityClass(ctx context.Context, name string) (map[s
 	result["labels"] = pc.Labels
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(pc.UID))
 
 	return result, nil
 }

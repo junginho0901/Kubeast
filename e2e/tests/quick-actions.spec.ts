@@ -54,9 +54,14 @@ test.describe('Dashboard quick actions', () => {
     await page.locator('button').filter({ hasText: /Check issues|이슈 확인/ }).first().click()
     await expect(page.locator('h2').filter({ hasText: /^Issues$|^이슈$/ })).toBeVisible()
 
+    // the window pages its rows 50 at a time: the search brings each fixture onto the first page wherever it was
+    const search = page.getByPlaceholder(/Search issues|이슈 검색/)
+    await search.fill('e2e-unschedulable')
     await expect(page.getByTestId('issues-kind-Deployment').getByText('e2e-unschedulable')).toBeVisible({ timeout: 20000 })
-    await expect(page.getByTestId('issues-kind-Job').getByText('e2e-failing-job')).toBeVisible()
     await expect(page.getByTestId('issues-kind-Deployment')).toContainText(/available 0\/1/)
+    await search.fill('e2e-failing-job')
+    await expect(page.getByTestId('issues-kind-Job').getByText('e2e-failing-job')).toBeVisible()
+    await search.fill('')
 
     const defaultWindow = page.getByTestId('issues-window-60')
     await expect(defaultWindow).toHaveAttribute('aria-pressed', 'true')

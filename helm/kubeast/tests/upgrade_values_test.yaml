@@ -25,6 +25,49 @@ tests:
       version: 0.7.8
     set:
       chartVersion: 0.7.8
+      global.imageTag: v0.7.8
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: stops a values file copied from 0.7.6, which takes this chart's chartVersion and holds that release's tag
+    chart:
+      version: 0.7.8
+    set:
+      chartVersion: 0.7.8
+      global.imageTag: v0.7.6
+    asserts:
+      - failedTemplate:
+          errorPattern: the values say global.imageTag v0.7.6 and this chart is 0.7.8
+  - it: stops another release's tag held with its digest
+    chart:
+      version: 0.7.8
+    set:
+      chartVersion: 0.7.8
+      global.imageTag: v0.7.6@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    asserts:
+      - failedTemplate:
+          errorPattern: the values say global.imageTag v0.7.6@sha256
+  - it: renders nothing on this release's tag held with its digest
+    chart:
+      version: 0.7.8
+    set:
+      chartVersion: 0.7.8
+      global.imageTag: v0.7.8@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: renders nothing on a published chart with the tag of an image built by hand
+    chart:
+      version: 0.7.8
+    set:
+      chartVersion: 0.7.8
+      global.imageTag: my-build-1
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: renders nothing in a checkout, whose chartVersion is empty, whatever release tag the values hold
+    set:
+      global.imageTag: v0.7.6
     asserts:
       - hasDocuments:
           count: 0

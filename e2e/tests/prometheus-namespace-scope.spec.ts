@@ -45,6 +45,8 @@ const READS = [
   'prometheus/rules',
   'prometheus/targets',
   'gpu/metrics',
+  // the Service drawer's sums past one query, in the limited grant's own namespace
+  `namespaces/${NS}/services/kubernetes/backend-usage`,
 ]
 
 test.describe('the cluster\'s Prometheus and a grant limited to namespaces', () => {

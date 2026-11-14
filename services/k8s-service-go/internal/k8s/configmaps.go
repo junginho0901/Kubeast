@@ -70,7 +70,7 @@ func (s *Service) DescribeConfigMap(ctx context.Context, namespace, name string)
 
 	// Events
 	events, eventsErr := s.objectEvents(ctx, namespace, "ConfigMap", name)
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(cm.UID))
 
 	return result, nil
 }
@@ -182,7 +182,7 @@ func (s *Service) DescribeSecret(ctx context.Context, namespace, name string, ca
 
 	// Events
 	events, eventsErr := s.objectEvents(ctx, namespace, "Secret", name)
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(secret.UID))
 
 	return result, nil
 }

@@ -520,7 +520,8 @@ test.describe('number check — DRA screens', () => {
       if (ns === 'default') written.push(eventName)
       kubectl('create -f -', JSON.stringify({
         apiVersion: 'v1', kind: 'Event', metadata: { name: eventName, namespace: ns },
-        involvedObject: { apiVersion: 'resource.k8s.io/v1', kind, name, ...(ns === 'default' ? {} : { namespace: ns }) },
+        // the object's UID, as a recorder writes it: a drawer lists the events of its object's UID, as kubectl describe does
+        involvedObject: { apiVersion: 'resource.k8s.io/v1', kind, name, uid: kubectl(`get ${kind.toLowerCase()}.resource.k8s.io ${name} ${ns === 'default' ? '' : `-n ${ns}`} -o jsonpath={.metadata.uid}`), ...(ns === 'default' ? {} : { namespace: ns }) },
         reason: 'NumSeen', message: `${kind} seen by the e2e run`, type: 'Normal', count: 1, firstTimestamp: at, lastTimestamp: at, source: { component: 'e2e' },
       }))
     }

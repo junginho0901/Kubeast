@@ -18,6 +18,28 @@ async function refuseClipboard(page: Page): Promise<void> {
   })
 }
 
+// The optimization answer is answered here (no model is asked): the observed table, one answer line, the finish reason.
+const OPT_ANSWER = 'E2E answer: keep the request as it is.'
+async function optimizationCopyButton(page: Page) {
+  const sse = [
+    { kind: 'observed', content: '| Pod | CPU |\n|---|---|\n| e2e | 1m |\n\n' },
+    { content: OPT_ANSWER },
+    { kind: 'meta', finish_reason: 'stop', max_tokens: 1000 },
+  ].map((e) => `data: ${JSON.stringify(e)}\n\n`).join('') + 'data: [DONE]\n\n'
+  await page.route((u) => u.pathname === '/api/v1/ai/suggest-optimization/stream', (route) =>
+    route.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream' }, body: sse }))
+  await page.goto('/?cluster=self')
+  await page.locator('button').filter({ hasText: /Optimization suggestions|최적화 제안/ }).first().click({ timeout: 20_000 })
+  await page.locator('button[title="Select namespace"], button[title="Namespace 선택"]').first().click()
+  await page.getByRole('button', { name: 'kube-system', exact: true }).click()
+  await expect(page.getByTestId('optimization-table')).toBeVisible({ timeout: 20_000 })
+  await page.getByRole('button', { name: /^Explain with AI$|^AI 설명$/ }).click()
+  await expect(page.getByText(OPT_ANSWER)).toBeVisible({ timeout: 20_000 })
+  const copy = page.getByTestId('optimization-copy')
+  await expect(copy).toBeEnabled()
+  return copy
+}
+
 test.describe('a refused Copy says so', () => {
   test('a new API key: the line stays under the key', async ({ page }) => {
     await refuseClipboard(page)
@@ -47,6 +69,16 @@ test.describe('a refused Copy says so', () => {
     await copy.click()
     await expect(copy).toHaveText(EN.common.notCopied)
     await expect(copy).toHaveAttribute('title', EN.common.copyFailed)
+  })
+
+  test('the optimization answer: Not copied, not Copied, and it stays', async ({ page }) => {
+    await refuseClipboard(page)
+    const copy = await optimizationCopyButton(page)
+    await copy.click()
+    await expect(copy).toHaveText(EN.common.notCopied)
+    await expect(copy).toHaveAttribute('title', EN.common.copyFailed)
+    await page.waitForTimeout(3_500)
+    await expect(copy, 'it stays').toHaveText(EN.common.notCopied)
   })
 })
 
@@ -85,5 +117,14 @@ test.describe('a Copy that went through says so and keeps saying it', () => {
     await page.waitForTimeout(3_500)
     await expect(result, 'it stays').toHaveText(EN.common.copied)
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('e2e-copy-value')
+  })
+
+  test('the optimization answer: Copied, still there 3 s on, and the clipboard holds the answer', async ({ page }) => {
+    const copy = await optimizationCopyButton(page)
+    await copy.click()
+    await expect(copy).toHaveText(EN.dashboard.optimization.copied)
+    await page.waitForTimeout(3_500)
+    await expect(copy, 'it stays').toHaveText(EN.dashboard.optimization.copied)
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(OPT_ANSWER)
   })
 })

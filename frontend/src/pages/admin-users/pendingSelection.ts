@@ -15,3 +15,12 @@ export function toggleOnePending(selected: ReadonlySet<string>, id: string): Set
   else next.add(id)
   return next
 }
+
+// With text in the window's search the header box stands for the accounts it finds, on every page: it chooses them
+// all, or, when each is chosen already, leaves them out. A choice outside the search stays as it was.
+export function toggleAllFound(selected: ReadonlySet<string>, foundIds: readonly string[]): Set<string> {
+  const next = new Set(selected)
+  if (allPendingSelected(selected, foundIds)) foundIds.forEach((id) => next.delete(id))
+  else foundIds.forEach((id) => next.add(id))
+  return next
+}

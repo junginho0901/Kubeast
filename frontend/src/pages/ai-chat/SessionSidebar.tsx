@@ -7,6 +7,7 @@
 // useChatSessions hook 추출로 sessions 관련 props 는 sidebar 자체 hook 호출로
 // 흡수 예정.
 
+import type { TFunction } from 'i18next'
 import type { Session } from '@/services/api'
 import { ActionFailure } from '@/components/ActionFailure'
 import { Plus, MessageSquare, Trash2, Edit2, Check, X } from 'lucide-react'
@@ -64,7 +65,7 @@ interface Props {
 
   // a delete or rename the server refused, said above the list
   listFailure?: { error: unknown; action: 'delete' | 'change' } | null
-  t: (key: string, options?: any) => string
+  t: TFunction
 }
 
 export function SessionSidebar({

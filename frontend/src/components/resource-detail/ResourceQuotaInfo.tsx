@@ -3,6 +3,7 @@ import { api } from '@/services/api'
 import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { quotaPercent } from '@/utils/resourceQuantity'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
@@ -26,6 +27,7 @@ export default function ResourceQuotaInfo({ name, namespace }: Props) {
     path: `/api/v1/namespaces/${namespace}/resourcequotas`,
     name,
   })
+  useDrawerFollowsEvents({ describeKey: ['resourcequota-describe', namespace, name], answer: desc, kind: 'ResourceQuota', namespace, name })
 
   useResourceDetailOverlay({ kind: 'ResourceQuota', name, namespace, describe: desc })
 

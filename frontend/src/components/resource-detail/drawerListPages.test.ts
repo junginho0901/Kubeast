@@ -36,6 +36,7 @@ vi.mock('./role-info/useReverseRoleBindings', () => ({ useReverseRoleBindings: (
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ has: () => true, clusterNamespaces: {} }) }))
 vi.mock('@/hooks/usePrometheusQuery', () => ({
   usePrometheusQueries: () => ({ available: false, data: {} }),
+  useServiceBackendUsage: () => ({ data: undefined, available: false, failure: null }),
   useClusterFeatures: () => ({ data: { policyReports: { enabled: true } } }),
 }))
 

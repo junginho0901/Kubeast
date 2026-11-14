@@ -33,7 +33,11 @@ export default function SilenceModal({ initial, maxHours, onClose }: {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, opts?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...opts })
   const queryClient = useQueryClient()
-  const [rows, setRows] = useState<Row[]>(() => Object.entries(initial).map(([name, value]) => ({ name, op: '=' as Op, value })))
+  // a silence made from the Silences tab starts from one empty condition
+  const [rows, setRows] = useState<Row[]>(() => {
+    const from = Object.entries(initial).map(([name, value]) => ({ name, op: '=' as Op, value }))
+    return from.length ? from : [{ name: '', op: '=', value: '' }]
+  })
   const hours = HOURS.filter((h) => h <= maxHours)
   const [duration, setDuration] = useState(String(hours.includes(4) ? 4 : hours[0] ?? 1))
   const [comment, setComment] = useState('')

@@ -87,7 +87,7 @@ func (s *Service) DescribeVPA(ctx context.Context, namespace, name string) (map[
 	result["annotations"] = vpa.GetAnnotations()
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(vpa.GetUID()))
 
 	return result, nil
 }

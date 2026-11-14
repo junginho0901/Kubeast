@@ -263,7 +263,7 @@ func (s *Service) DescribeCustomResourceInstance(ctx context.Context, group, ver
 	result["uid"] = string(item.GetUID())
 	result["resource_version"] = item.GetResourceVersion()
 	result["api_version"] = item.GetAPIVersion()
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(item.GetUID()))
 
 	if fields := topLevelFields(item.Object); len(fields) > 0 {
 		result["fields"] = fields

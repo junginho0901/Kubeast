@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { EventsSection, InfoSection, InfoRow, KeyValueTags, NoneText, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import type { ReferenceGrantInfo as ReferenceGrantRow } from '@/services/api'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
@@ -35,6 +36,7 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
     enabled,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['referencegrant-describe', namespace, name], answer: describe, kind: 'ReferenceGrant', namespace, name })
 
   useResourceDetailOverlay({ kind: 'ReferenceGrant', name, namespace, describe })
 

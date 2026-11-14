@@ -150,7 +150,7 @@ func (s *Service) DescribePV(ctx context.Context, name string) (map[string]inter
 	result["conditions"] = conditions
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(pv.UID))
 
 	return result, nil
 }

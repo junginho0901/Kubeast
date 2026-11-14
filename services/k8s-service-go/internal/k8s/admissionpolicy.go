@@ -8,6 +8,7 @@ import (
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // Admission policies (admissionregistration.k8s.io/v1): ValidatingAdmissionPolicy
@@ -50,7 +51,7 @@ func (s *Service) DescribeValidatingAdmissionPolicy(ctx context.Context, name st
 	if cs == nil {
 		return nil, errNotLoaded
 	}
-	events := make(chan func(map[string]interface{}), 1)
+	events := make(chan func(map[string]interface{}, types.UID), 1)
 	go func() { events <- s.clusterObjectEvents(ctx, "ValidatingAdmissionPolicy", name) }()
 	p, err := cs.AdmissionregistrationV1().ValidatingAdmissionPolicies().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -73,7 +74,7 @@ func (s *Service) DescribeValidatingAdmissionPolicy(ctx context.Context, name st
 	out["validations_count"] = len(p.Spec.Validations)
 	out["spec"] = asJSON(p.Spec)
 	out["status"] = asJSON(p.Status)
-	(<-events)(out)
+	(<-events)(out, p.UID)
 	return out, nil
 }
 
@@ -112,7 +113,7 @@ func (s *Service) DescribeMutatingAdmissionPolicy(ctx context.Context, name stri
 	if cs == nil {
 		return nil, errNotLoaded
 	}
-	events := make(chan func(map[string]interface{}), 1)
+	events := make(chan func(map[string]interface{}, types.UID), 1)
 	go func() { events <- s.clusterObjectEvents(ctx, "MutatingAdmissionPolicy", name) }()
 	p, err := cs.AdmissionregistrationV1().MutatingAdmissionPolicies().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -135,15 +136,16 @@ func (s *Service) DescribeMutatingAdmissionPolicy(ctx context.Context, name stri
 	out["mutations_count"] = len(p.Spec.Mutations)
 	out["reinvocation_policy"] = string(p.Spec.ReinvocationPolicy)
 	out["spec"] = asJSON(p.Spec)
-	(<-events)(out)
+	(<-events)(out, p.UID)
 	return out, nil
 }
 
 // clusterObjectEvents lists the events about a cluster-scoped object as the other drawers find them (involvedObject name
-// and kind, in every namespace); the func it returns puts them, or why they could not be listed, on a describe answer.
-func (s *Service) clusterObjectEvents(ctx context.Context, kind, name string) func(map[string]interface{}) {
+// and kind, in every namespace); the func it returns puts those naming the object's UID, or why they could not be listed,
+// on a describe answer.
+func (s *Service) clusterObjectEvents(ctx context.Context, kind, name string) func(map[string]interface{}, types.UID) {
 	events, err := s.objectEvents(ctx, "", kind, name)
-	return func(result map[string]interface{}) { setEvents(result, events, err) }
+	return func(result map[string]interface{}, uid types.UID) { setEvents(result, events, err, about(uid)) }
 }
 
 func admissionPolicyRow(meta *metav1.ObjectMeta, failure *admissionregistrationv1.FailurePolicyType, param *admissionregistrationv1.ParamKind, bindings []string) map[string]interface{} {

@@ -80,9 +80,13 @@ test.describe('Number check — Issues numbers', () => {
     const issues = (await (await loaded).json()).issues as Issue[]
     const pod = issues.find((i) => i.id === `Pod/${NS}/${POD}`)!
     const job = issues.find((i) => i.id === `Job/${JOB.namespace}/${JOB.name}`)!
+    // the window pages its rows 50 at a time: its search brings each row onto the first page wherever it was
+    const search = page.getByPlaceholder(/Search issues|이슈 검색/)
+    await search.fill(POD)
     const podRow = page.getByTestId('issues-kind-Pod').getByTestId('issue-row').filter({ hasText: POD })
     await expect.soft(podRow, 'the pod row: restarts').toContainText(new RegExp(`Restarts ${pod.restarts}(?!\\d)|재시작 ${pod.restarts}회`), { timeout: 20_000 })
     await expect.soft(podRow, 'the pod row: its newest event').toContainText(new RegExp(`Event ×${pod.events}(?!\\d)|이벤트 ×${pod.events}(?!\\d)`))
+    await search.fill(JOB.name)
     const jobRow = page.getByTestId('issues-kind-Job').getByTestId('issue-row').filter({ hasText: JOB.name })
     await expect.soft(jobRow, 'the Job row: failed pods').toContainText(new RegExp(`Failed ${job.failed}(?!\\d)|실패 ${job.failed}(?!\\d)`))
   })

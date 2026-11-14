@@ -1,6 +1,8 @@
 import type { AlertInboxItem, AlertStoreAlert } from '@/services/api/alertInbox'
+import type { ClusterFeatures } from '@/services/api/types'
 import type { ResourceDetailTarget } from '@/components/ResourceDetailContext'
 import { detailTarget } from '@/components/resource-detail/crDetail'
+import { aiEnabled, alertInvestigationEnabled } from '@/utils/features'
 
 // The object an alert is about, from the labels kube-state-metrics and the kube-prometheus rules put on it:
 // the most specific one first. `service` is left out (it names the scrape target there, not the object).
@@ -109,4 +111,12 @@ export function severityChoices(carried: string[] | undefined, chosen: string): 
 export function storeCut(answer: { alerts: unknown[]; total: number; truncated: boolean } | undefined): { listed: number; total: number } | null {
   if (!answer?.truncated) return null
   return { listed: answer.alerts.length, total: answer.total }
+}
+
+// The inbox (ai-service) answers only with alert investigation on, which the server reports off with AI off; features that could not be read ask it.
+export type InboxState = 'wait' | 'on' | 'off' | 'aiOff'
+export function inboxState(features: ClusterFeatures | undefined, featuresPlaceholder: boolean): InboxState {
+  if (featuresPlaceholder) return 'wait'
+  if (!features || alertInvestigationEnabled(features)) return 'on'
+  return aiEnabled(features) ? 'off' : 'aiOff'
 }

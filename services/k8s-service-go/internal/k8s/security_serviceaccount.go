@@ -56,7 +56,7 @@ func (s *Service) DescribeServiceAccount(ctx context.Context, namespace, name st
 	result := formatServiceAccountDetail(sa)
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(sa.UID))
 
 	return result, nil
 }

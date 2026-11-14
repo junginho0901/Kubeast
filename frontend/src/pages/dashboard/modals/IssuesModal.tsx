@@ -2,15 +2,20 @@
 // PVCs, Warning events of the last window) grouped per kind, with a search
 // box, severity chips, the events window and the restart-history toggle.
 // The parent owns the query and the derived lists; a row opens the drawer.
+// The rows page 50 at a time in the order they are listed (issuesOnPage), each
+// kind's heading keeping the count of the whole kind.
 
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AlertCircle, CheckCircle, RefreshCw, Search, X } from 'lucide-react'
 
+import { ListPager } from '@/components/ListPager'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useAIContext } from '@/hooks/useAIContext'
 import { buildResourceLink } from '@/utils/resourceLink'
 import type { IssueItem, IssueKind, IssueSeverity } from '../types'
 import { formatAge } from '../utils'
+import { WINDOW_PAGE, issuesOnPage } from './windowPages'
 
 interface Props {
   open: boolean
@@ -72,6 +77,11 @@ export function IssuesModal({
       })),
     },
   } : null, [open, isLoading, issuesSummary, sortedIssues, searchQuery, windowMinutes, defaultWindowMinutes, includeRestartHistory, generatedAt, error])
+
+  // a new search, window or restart choice, or the window opened again, starts at the first page
+  const [page, setPage] = useState(1)
+  useEffect(() => setPage(1), [open, searchQuery, windowMinutes, includeRestartHistory])
+  const shown = issuesOnPage(kinds, issuesByKind, page)
 
   if (!open) return null
 
@@ -226,16 +236,14 @@ export function IssuesModal({
             </div>
           ) : (
             <div className="space-y-6">
-              {kinds.map((kind) => {
-                const items = issuesByKind[kind] ?? []
-                if (items.length === 0) return null
+              {shown.groups.map(({ kind, total: kindTotal, rows: items }) => {
                 const openable = kind !== 'Collector'
                 return (
                   <div key={kind} className="space-y-2" data-testid={`issues-kind-${kind}`}>
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-semibold text-slate-200">{kindLabel(kind)}</h3>
                       <span className="text-xs text-slate-400">
-                        {tr('dashboard.issues.count', '{{count}}', { count: items.length })}
+                        {tr('dashboard.issues.count', '{{count}}', { count: kindTotal })}
                       </span>
                     </div>
                     <div className="divide-y divide-slate-700 rounded-lg border border-slate-700 overflow-hidden">
@@ -263,7 +271,7 @@ export function IssuesModal({
                                 >
                                   {issueSeverityLabels[issue.severity] || issue.severity.toUpperCase()}
                                 </span>
-                                <p className="text-sm font-medium text-ink truncate">
+                                <p className="text-sm font-medium text-ink truncate" title={issue.title}>
                                   {issue.title}
                                 </p>
                                 {issue.namespace && (
@@ -273,7 +281,7 @@ export function IssuesModal({
                                 )}
                               </div>
                               {issue.subtitle && (
-                                <p className="mt-1 text-xs text-slate-400 line-clamp-2 wrap-break-word">{issue.subtitle}</p>
+                                <p className="mt-1 text-xs text-slate-400 line-clamp-2 wrap-break-word" title={issue.subtitle}>{issue.subtitle}</p>
                               )}
                             </div>
                             {(issue.lastSeen || issue.restarts || issue.failed || issue.events) && (
@@ -298,6 +306,17 @@ export function IssuesModal({
             </div>
           )}
         </div>
+        {!isLoading && !error && (
+          <ListPager
+            currentPage={shown.page}
+            totalPages={shown.pages}
+            total={shown.total}
+            rowsPerPage={WINDOW_PAGE}
+            onPageChange={setPage}
+            showPageSize={false}
+            testId="issues-pager"
+          />
+        )}
       </div>
     </ModalOverlay>
   )

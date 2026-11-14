@@ -5,6 +5,7 @@ import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../De
 import { fmtRel, fmtTs } from '../detailFormat'
 import { endpointsView } from '../netstoreDetail'
 import { usePagination } from '../usePagination'
+import { useDrawerFollowsEvents } from '../useDrawerFollowsEvents'
 import { DescribeFailure, DescribeStale } from '../DescribeFailure'
 
 interface Props {
@@ -72,6 +73,7 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
     enabled: !!name && !!namespace,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['endpoints-describe', namespace, name], answer: describe, kind: 'Endpoints', namespace, name })
   const view = endpointsView(describe, rawJson)
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const readyCount = view?.ready_count ?? 0

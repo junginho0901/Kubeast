@@ -25,6 +25,7 @@ export default function GPUNodes() {
     handleRefresh,
     refreshFailure,
     metricsAvailable,
+    metricsFailure,
     gpusByHost,
     summaryCards,
     modelDistribution,
@@ -116,8 +117,8 @@ export default function GPUNodes() {
         <GPUNodesModelDistribution modelDistribution={modelDistribution} />
       )}
 
-      {showCharts && metricsAvailable && (
-        <GPUNodesRealtimeMetrics gpusByHost={gpusByHost} />
+      {showCharts && (metricsAvailable || !!metricsFailure) && (
+        <GPUNodesRealtimeMetrics gpusByHost={gpusByHost} metricsFailure={metricsFailure} />
       )}
 
       <GPUNodesTable

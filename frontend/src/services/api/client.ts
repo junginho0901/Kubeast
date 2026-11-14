@@ -32,8 +32,18 @@ client.interceptors.request.use((config) => {
   return config
 })
 
-const isClusterRead = (config: { method?: string; url?: string } | undefined): boolean =>
-  String(config?.method || 'get').toLowerCase() === 'get' && String(config?.url || '').startsWith('/cluster/')
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    // false on a read beside a screen's list (the GPU metrics next to the GPU lists, a drawer's Prometheus sums): its
+    // answer, failure or refusal is not the list's, so it does not go into the list status or forbidden state of its API segment
+    listStatus?: false
+  }
+}
+
+// A cluster read whose outcome is the list status of its segment (services/listStatusStore): every GET under
+// /cluster/ but the reads that say `listStatus: false`.
+const isListRead = (config: { method?: string; url?: string; listStatus?: false } | undefined): boolean =>
+  config?.listStatus !== false && String(config?.method || 'get').toLowerCase() === 'get' && String(config?.url || '').startsWith('/cluster/')
 
 const dispatchListStatus = (detail: ListStatusDetail) => {
   try {
@@ -45,7 +55,7 @@ client.interceptors.response.use(
   (response) => {
     // A cluster read that answered: "not installed" when the server says the
     // cluster does not serve the kind, otherwise it clears an earlier failure.
-    if (isClusterRead(response.config)) {
+    if (isListRead(response.config)) {
       const url = String(response.config.url)
       dispatchListStatus(response.headers?.['x-kubeast-not-installed'] ? { url, state: 'notInstalled' } : { url, state: 'ok' })
     }
@@ -64,16 +74,17 @@ client.interceptors.response.use(
     // A 403 on a cluster read means the signed-in user's cluster role does not
     // cover that kind. Pages render an empty list in that case; the banner in
     // Layout listens for this event so the page says "no permission" instead of
-    // "nothing here".
+    // "nothing here". A read saying `listStatus: false` is named in the banner but refuses no list (`list: false`).
     if (status === 403 && String(error?.config?.method || 'get').toLowerCase() === 'get' && url.startsWith('/cluster/')) {
+      const detail: ForbiddenDetail = { url, detail: error?.response?.data?.detail, list: isListRead(error?.config) }
       try {
-        window.dispatchEvent(new CustomEvent(FORBIDDEN_EVENT, { detail: { url, detail: error?.response?.data?.detail } }))
+        window.dispatchEvent(new CustomEvent(FORBIDDEN_EVENT, { detail }))
       } catch { /* non-browser */ }
     }
     // A cluster read that failed on the server or on the way (5xx, timeout):
     // the table says "could not load" instead of "no … found". metrics-server
     // missing is a known state with its own notices, not a failure.
-    if (isClusterRead(error?.config) && (status === undefined || status >= 500) && !axios.isCancel(error) &&
+    if (isListRead(error?.config) && (status === undefined || status >= 500) && !axios.isCancel(error) &&
         !isMetricsUnavailableResponse(error)) {
       // the server's own reason when it wrote one (a 5xx of k8s-service carries `detail`), not the client's "status code"
       const detail = error?.response?.data?.detail
@@ -83,10 +94,12 @@ client.interceptors.response.use(
   },
 )
 
-/** Dispatched on window for every 403 on a GET /cluster/... request (detail: { url, detail }). */
+/** Dispatched on window for every 403 on a GET /cluster/... request (detail: ForbiddenDetail). */
 export const FORBIDDEN_EVENT = 'kubeast:forbidden'
+/** `list` is false for a read saying `listStatus: false`: its refusal is not the list's. */
+export type ForbiddenDetail = { url: string; detail?: unknown; list: boolean }
 
-/** Dispatched on window for every GET /cluster/... outcome other than 403: ok, not installed, failed (5xx / network). */
+/** Dispatched on window for every GET /cluster/... outcome other than 403 (a read saying `listStatus: false` aside): ok, not installed, failed (5xx / network). */
 export const LIST_STATUS_EVENT = 'kubeast:list-status'
 export type ListStatusDetail = { url: string; state: 'ok' | 'notInstalled' | 'error'; code?: number; reason?: string }
 

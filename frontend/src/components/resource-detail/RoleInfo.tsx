@@ -5,6 +5,7 @@ import { InfoSection, InfoRow, KeyValueTags, EventsSection, Th, Tx } from './Det
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { useReverseRoleBindings } from './role-info/useReverseRoleBindings'
 import { subjectsText, unreadableText } from './role-info/referencedBy'
@@ -27,6 +28,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
     enabled: !!namespace && !!name,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['role-describe', namespace, name], answer: describe, kind: 'Role', namespace, name })
 
   useResourceDetailOverlay({ kind: 'Role', name, namespace, describe })
 

@@ -5,6 +5,7 @@ import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { eventsForAI, fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
+import { useDrawerFollowsEvents } from '../useDrawerFollowsEvents'
 import { DescribeFailure, ListReadFailure, DescribeStale } from '../DescribeFailure'
 
 interface Props {
@@ -38,6 +39,7 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
     enabled: !!name && !!namespace,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['endpointslice-describe', namespace, name], answer: describe, kind: 'EndpointSlice', namespace, name })
   useResourceDetailOverlay({ kind: 'EndpointSlice', name, namespace, extras: { spec: rawJson?.spec, status: rawJson?.status, ...eventsForAI(describe) } })
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const labels = ((rawJson?.labels as Record<string, string>) ?? (meta.labels as Record<string, string>) ?? {}) as Record<string, string>

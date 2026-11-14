@@ -4,6 +4,7 @@ import { EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx 
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { DeviceRequestsTable } from './DeviceRequestsTable'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
@@ -47,6 +48,7 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
     enabled,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['resourceclaim-describe', namespace, name], answer: describe, kind: 'ResourceClaim', namespace, name })
 
   useResourceDetailOverlay({ kind: 'ResourceClaim', name, namespace, describe })
 

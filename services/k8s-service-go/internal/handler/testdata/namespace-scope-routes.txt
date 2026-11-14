@@ -232,6 +232,7 @@ GET /api/v1/namespaces/{namespace}/serviceaccounts path
 GET /api/v1/namespaces/{namespace}/serviceaccounts/{name}/describe path
 GET /api/v1/namespaces/{namespace}/serviceaccounts/{name}/yaml path
 GET /api/v1/namespaces/{namespace}/services path
+GET /api/v1/namespaces/{namespace}/services/{name}/backend-usage path
 GET /api/v1/namespaces/{namespace}/services/{name}/describe path
 GET /api/v1/namespaces/{namespace}/services/{name}/yaml path
 GET /api/v1/namespaces/{namespace}/services/{service_name}/connectivity path

@@ -44,7 +44,7 @@ func (s *Service) DescribeClusterRole(ctx context.Context, name string) (map[str
 	}
 
 	result := formatClusterRoleDetail(cr)
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(cr.UID))
 
 	return result, nil
 }

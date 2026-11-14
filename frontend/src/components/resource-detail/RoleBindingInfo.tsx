@@ -4,6 +4,7 @@ import { api } from '@/services/api'
 import { InfoSection, InfoRow, StatusBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useNamespacePodTable } from './useNamespacePodTable'
 import { ResourceLink } from './ResourceLink'
 import { BindingSubjects } from './role-info/BindingSubjects'
@@ -35,6 +36,7 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
     path: `/apis/rbac.authorization.k8s.io/v1/namespaces/${namespace}/rolebindings`,
     name,
   })
+  useDrawerFollowsEvents({ describeKey: ['rolebinding-describe', namespace, name], answer: describe, kind: 'RoleBinding', namespace, name })
 
   useResourceDetailOverlay({ kind: 'RoleBinding', name, namespace, describe })
 

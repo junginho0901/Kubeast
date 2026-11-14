@@ -6,6 +6,7 @@
 
 import { useTranslation } from 'react-i18next'
 
+import { failureText } from '@/utils/failureText'
 import { podsShown } from './podsShown'
 
 interface Props {
@@ -50,6 +51,17 @@ function Slot({ label, title, value, figure, normalClass, missing, testId }: {
         )}
       </div>
       {value === null && !figure && <p className="text-[11px] text-slate-500 truncate" title={missing}>{missing}</p>}
+    </div>
+  )
+}
+
+// In the card's place when the cluster's Prometheus is set but did not answer: the server's reason, not an empty page.
+export function PrometheusClusterMetricsFailure({ title, failure }: { title: string; failure: unknown }) {
+  const { t } = useTranslation()
+  return (
+    <div className="card" data-testid="prometheus-not-answering">
+      <h2 className="text-lg font-semibold text-ink mb-2">{title}</h2>
+      <p className="text-sm text-slate-400">{t('dashboard.prometheusNotAnswering', { defaultValue: 'Prometheus did not answer: {{reason}}', reason: failureText(failure) })}</p>
     </div>
   )
 }

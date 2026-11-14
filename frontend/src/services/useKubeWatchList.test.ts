@@ -23,6 +23,12 @@ import jobsPageSrc from '@/pages/workloads/Jobs.tsx?raw'
 import secretsPageSrc from '@/pages/configuration/Secrets.tsx?raw'
 import configMapsPageSrc from '@/pages/configuration/ConfigMaps.tsx?raw'
 
+// Every page and page hook that follows a list, and every kind's function that applies a frame to its rows.
+const pageSources = import.meta.glob(['../pages/**/*.tsx', '../pages/**/*.ts', '!../pages/**/*.test.*'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+const normalizeModules = import.meta.glob(['../pages/**/*WatchNormalize.ts', '../pages/gateway/backend-policies/helpers.ts'], { eager: true }) as Record<string, Record<string, unknown>>
+// The options of each useKubeWatchList call in a source.
+const watchBlocks = (src: string) => src.split('useKubeWatchList({').slice(1).map((rest) => rest.slice(0, rest.search(/\n\s*\}\)\n/)))
+
 const key = ['workloads', 'pods', 'demo']
 const frame = (type: string, extra: object = {}) => ({ type, clusterId: 'self', path: '/api/v1/pods', query: 'watch=1', ...extra })
 
@@ -462,6 +468,47 @@ describe('a list that opens with thousands of objects', () => {
 
   it('ReplicaSets, Jobs, Secrets and ConfigMaps gather their frames', () => {
     for (const src of [replicaSetsPageSrc, jobsPageSrc, secretsPageSrc, configMapsPageSrc]) expect(src).toContain('gatherEveryMs: LIST_GATHER_MS')
+  })
+
+  // A watch opens with every object as a frame: one pass over the rows per frame is the square of the list's length.
+  it('every list a page watches gathers its frames', () => {
+    const ungathered: string[] = []
+    for (const [path, src] of Object.entries(pageSources)) {
+      for (const block of watchBlocks(src)) {
+        if (!/gatherEveryMs: (LIST_GATHER_MS|\d+),/.test(block)) ungathered.push(`${path}: ${/path:[^\n]*\n?[^\n]*/.exec(block)?.[0].trim()}`)
+      }
+    }
+    expect(Object.keys(pageSources).length).toBeGreaterThan(40)
+    expect(ungathered).toEqual([])
+  })
+
+  it('each list\'s own function applies gathered frames as it does one by one', () => {
+    const applies = Object.entries(normalizeModules).flatMap(([path, module]) =>
+      Object.entries(module).filter(([name, fn]) => /^apply\w*WatchEvent$/.test(name) && typeof fn === 'function').map(([name, fn]) => [`${path} ${name}`, fn] as const))
+    expect(applies.length).toBeGreaterThan(40)
+    const differs: string[] = []
+    for (const [name, applyKind] of applies) {
+      // a row as the kind's list holds it, which is what the server sends (a kind of the cluster keeps no namespace)
+      const asRow = (raw: object) => (applyKind as (prev: unknown[], event: object) => unknown[])([], { type: 'ADDED', object: raw })[0] ?? raw
+      const row = (i: number, ready = 1) => asRow({ name: `obj-${i}`, namespace: NS, ready_replicas: ready, status: 'Ready', labels: { app: 'web' }, created_at: '2026-11-01T00:00:00Z' })
+      const start = [row(0), row(1), row(2), row(4)]
+      const frames = [
+        frame('DATA', { data: { type: 'MODIFIED', object: row(1, 0) } }),
+        frame('DATA', { data: { type: 'DELETED', object: row(0) } }),
+        added(row(3)),
+        frame('DATA', { data: { type: 'MODIFIED', object: row(3, 2) } }),
+        added(row(9)),
+        frame('DATA', { data: { type: 'DELETED', object: row(9) } }),
+      ]
+      const one = openList(start)
+      for (const f of frames) applyWatchMessage(one.client, listKey, f, applyKind as never)
+      const all = openList(start)
+      applyWatchFrames(all.client, listKey, frames, applyKind as never)
+      if (JSON.stringify(all.client.getQueryData(listKey)) !== JSON.stringify(one.client.getQueryData(listKey))) differs.push(name)
+      one.stop()
+      all.stop()
+    }
+    expect(differs).toEqual([])
   })
 
   // These tables watch their namespace's pods: at fifty thousand pods one pass over the rows per frame never ends.

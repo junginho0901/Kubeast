@@ -76,6 +76,7 @@ var sharedReadRoutes = routeSet(
 
 	"/api/v1/custom-resources/{group}/{version}/{plural}",
 	"/api/v1/namespaces/{namespace}/limitranges/{name}/violations",
+	"/api/v1/namespaces/{namespace}/services/{name}/backend-usage",
 	"/api/v1/pods/all",
 	"/api/v1/namespaces/{namespace}/pods",
 	"/api/v1/namespaces/{namespace}/owned-pods",

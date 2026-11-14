@@ -58,7 +58,7 @@ import { workloadStatusTitle } from '@/utils/workloadStatus'
 import { QueryClient } from '@tanstack/react-query'
 import secretInfoSrc from '@/components/resource-detail/SecretInfo.tsx?raw'
 import effectivePermissionsSrc from '@/components/resource-detail/service-account-info/useEffectivePermissions.ts?raw'
-import { applyWatchMessage } from './useKubeWatchList'
+import { applyWatchFrames, applyWatchMessage } from './useKubeWatchList'
 import cases from './watchRows.cases.json'
 
 // the English fallback with its values, as the screen writes it with no catalog in the way
@@ -596,6 +596,28 @@ describe('a live update of a row', () => {
       expect(rows.map((r) => r.name)).toEqual(['first', (c.before as { name: string }).name, 'last'])
       expect(rows[0]).toBe(first)
       expect(rows[2]).toBe(last)
+    })
+
+    // Every list gathers its frames (LIST_GATHER_MS): the server's row among others leaves what it leaves one by one.
+    it(`gathered with other frames leaves what one by one leaves: ${c.name}`, () => {
+      const page = pages[c.resource]
+      const apply = (prev: any[] | undefined, event: { type?: string; object?: any }) => page.apply(prev ?? [], event)
+      const namespace = (c.before as { namespace?: string }).namespace
+      const other = (name: string) => ({ ...(c.before as object), name, namespace })
+      const key = ['rows', c.resource]
+      const frames = [
+        { type: 'DATA', data: { type: 'ADDED', object: other('zz-new') } },
+        { type: 'DATA', data: { type: 'MODIFIED', object: c.event } },
+        { type: 'DATA', data: { type: 'DELETED', object: other('aa-first') } },
+        { type: 'DATA', data: { type: 'ADDED', object: other('mm-middle') } },
+      ]
+      const one = new QueryClient()
+      one.setQueryData(key, [other('aa-first'), c.before])
+      for (const frame of frames) applyWatchMessage(one, key, frame, apply)
+      const all = new QueryClient()
+      all.setQueryData(key, [other('aa-first'), c.before])
+      applyWatchFrames(all, key, frames, apply)
+      expect(all.getQueryData(key)).toEqual(one.getQueryData(key))
     })
   }
 })

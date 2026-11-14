@@ -137,7 +137,7 @@ func (s *Service) DescribeDeployment(ctx context.Context, namespace, name string
 	result["conditions"] = conditions
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(dep.UID))
 
 	return result, nil
 }

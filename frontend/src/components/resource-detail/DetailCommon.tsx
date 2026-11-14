@@ -131,15 +131,15 @@ export function ConditionsTable({ conditions }: { conditions: any[] }) {
   const withGeneration = conditions.some((c: any) => generationOf(c) != null)
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs table-fixed min-w-[700px]">
+      <table className="w-full text-xs table-fixed min-w-[640px]">
         <thead className="text-slate-400">
           <tr>
-            <Th className={`text-left py-2 ${withGeneration ? 'w-[24%]' : 'w-[28%]'}`}>Type</Th>
-            <Th className="text-left py-2 w-[10%]">Status</Th>
+            <Th className={`text-left py-2 ${withGeneration ? 'w-[21%]' : 'w-[26%]'}`}>Type</Th>
+            <Th className="text-left py-2 w-[12%]">Status</Th>
             <Th className={`text-left py-2 ${withGeneration ? 'w-[15%]' : 'w-[17%]'}`}>Reason</Th>
-            <Th className={`text-left py-2 ${withGeneration ? 'w-[26%]' : 'w-[30%]'}`}>Message</Th>
-            {withGeneration && <Th className="text-left py-2 w-[10%]">Observed Generation</Th>}
-            <Th className="text-left py-2 w-[15%]">Last Transition</Th>
+            <Th className={`text-left py-2 ${withGeneration ? 'w-[26%]' : 'w-[31%]'}`}>Message</Th>
+            {withGeneration && <Th className="text-left py-2 w-[12%]">Observed Generation</Th>}
+            <Th className="text-left py-2 w-[14%]">Last Transition</Th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800">

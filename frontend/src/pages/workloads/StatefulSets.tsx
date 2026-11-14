@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Plus, RefreshCw } from 'lucide-react'
 import { api, type StatefulSetInfo } from '@/services/api'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
@@ -58,6 +58,7 @@ export default function StatefulSets() {
       ? '/api/v1/statefulsets'
       : `/api/v1/namespaces/${selectedNamespace}/statefulsets`,
     query: 'watch=1',
+    gatherEveryMs: LIST_GATHER_MS,
   })
 
   const filtered = useMemo(() => {

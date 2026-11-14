@@ -1,19 +1,14 @@
 {
   "rules": [
     {
-      "screen": "^\\w+ · /(workloads/(cronjobs|daemonsets|deployments|hpas|jobs|pdbs|pods|replicasets|statefulsets|vpas)|network/(endpoints|endpointslices|ingressclasses|ingresses|networkpolicies|services)|storage\\?tab=(pvcs|pvs|storageclasses|volumeattachments)|gateway/(backendtlspolicies|gatewayclasses|gateways|grpcroutes|httproutes|policies|referencegrants)|gpu/(resourceclaims|resourceclaimtemplates)|cluster/(hygiene|leases|limitranges|priorityclasses|resourcequotas)|helm/releases|security/policyreports|admin/access-requests|alerts|cost|cluster-view) on ",
-      "why": "Each search box names the fields its search reads, where v0.7.6 said \"by name\".",
-      "pr": "#766"
+      "screen": "^\\w+ · drawer (Pod|PodDisruptionBudget|Deployment|StatefulSet|DaemonSet|ReplicaSet|Job|HorizontalPodAutoscaler|Service|PersistentVolumeClaim|PersistentVolume|StorageClass|Node|Namespace|VerticalPodAutoscaler|CustomResourceDefinition|Gateway|GatewayClass|HTTPRoute|GRPCRoute|BackendTLSPolicy) \\(",
+      "why": "A drawer's tables fit the drawer: the Conditions table, a workload's, a claim's, a volume's and a node's pods, a StorageClass's claims, a Service's ports and EndpointSlices and a VPA's tables are 640 px at their narrowest with their columns rebalanced, where v0.7.7 cut their last columns and headers (\"Last Transiti\") at the drawer's edge.",
+      "pr": "fix/w3-screen-headers"
     },
     {
-      "screen": "^\\w+ · / on ",
-      "why": "The dashboard's usage card says which metric Prometheus did not give, shows Disk and the pods' capacity, where v0.7.6 showed a spinner or nothing.",
-      "pr": "#757"
-    },
-    {
-      "screen": "^\\w+ · drawer Secret ",
-      "why": "A Secret's drawer shows kubectl's last-applied annotation as ***.",
-      "pr": "#781"
+      "screen": "^\\w+ · /admin/(organizations|roles|clusters) on ",
+      "why": "Teams, Roles and Clusters have a search box above their list, which takes a row of the fitted table.",
+      "pr": "fix/w3-screen-search"
     }
   ]
 }

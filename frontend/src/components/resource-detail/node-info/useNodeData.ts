@@ -11,6 +11,7 @@ import { formatBytes } from '@/pages/dashboard/utils'
 import { parseQuantityToBytes } from '@/pages/storage/pvcs/pvcHelpers'
 import { eventsNewestFirst } from '../detailFormat'
 import { useDrawerFollowsObject } from '../useDrawerFollowsObject'
+import { nodeEventNamesNode } from '../useDrawerFollowsEvents'
 import { nodeAllocatedView, readyChangedAt } from './nodeAllocated'
 import { changesAllocated } from './nodePodsChange'
 
@@ -187,10 +188,14 @@ export function useNodeData(name: string) {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
+  // A node's events name its UID, or its name in place of it when the kubelet writes them (kubectl describe node lists
+  // both); one field selector cannot ask for either, so the frames are kept to them here, as the server keeps the list.
+  const nodeUid = (nodeDescribe as { uid?: string } | undefined)?.uid
   const applyNodeEvent = (prev: any[] | undefined, event: { type?: string; object?: any }) => {
     const items = Array.isArray(prev) ? [...prev] : []
     const obj = event?.object
     if (!obj) return items
+    if (!nodeEventNamesNode(obj, name, nodeUid)) return prev ?? items
     const key = `${obj?.object?.kind || ''}:${obj?.object?.name || ''}:${obj?.reason || ''}:${obj?.message || ''}`
     const idx = items.findIndex(i => `${i?.object?.kind || ''}:${i?.object?.name || ''}:${i?.reason || ''}:${i?.message || ''}` === key)
     if (event.type === 'DELETED') { if (idx >= 0) items.splice(idx, 1); return items }
@@ -199,7 +204,7 @@ export function useNodeData(name: string) {
   }
 
   useKubeWatchList({
-    enabled: !!name,
+    enabled: !!name && !!nodeUid,
     queryKey: ['cluster', 'nodes', 'events', name],
     path: '/api/v1/events',
     query: `watch=1&fieldSelector=${encodeURIComponent(`involvedObject.kind=Node,involvedObject.name=${name}`)}`,

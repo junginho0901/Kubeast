@@ -61,7 +61,7 @@ func (s *Service) DescribeLimitRange(ctx context.Context, namespace, name string
 	result["labels"] = lr.Labels
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(lr.UID))
 
 	return result, nil
 }

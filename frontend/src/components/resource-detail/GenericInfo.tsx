@@ -2,9 +2,11 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, Tx } from './DetailCommon'
+import { DescribeFailure } from './DescribeFailure'
 import { fmtRel, fmtTs } from './detailFormat'
 import { genericObjectLayer } from './drawerObjectLayer'
 import { kindToPlural } from './utils'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -29,7 +31,8 @@ export default function GenericInfo({ name, namespace, kind, rawJson }: Props) {
     enabled: !!name,
     retry: false,
   })
-  const refused = (error as { response?: { data?: { detail?: string } } } | null)?.response?.data?.detail
+  useDrawerFollowsEvents({ describeKey: ['generic-describe', kind, namespace, name], answer: describe, kind, namespace, name })
+  const refused =(error as { response?: { data?: { detail?: string } } } | null)?.response?.data?.detail
 
   const layer = useMemo(() => genericObjectLayer(rawJson, describe), [rawJson, describe])
   useResourceDetailOverlay({ kind, name, namespace, extras: layer })
@@ -41,6 +44,8 @@ export default function GenericInfo({ name, namespace, kind, rawJson }: Props) {
 
   return (
     <>
+      {/* a describe that failed: the reason, and that what shows is the object as it was read, not its describe */}
+      <DescribeFailure error={describe ? null : error} showingRow className="mb-2" />
       <InfoSection title="Basic Info">
         <div className="space-y-2">
           <InfoRow label="Kind" value={kind} />

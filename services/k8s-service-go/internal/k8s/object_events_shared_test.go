@@ -16,6 +16,7 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -48,9 +49,13 @@ var eventsMade = metav1.NewTime(time.Date(2026, 11, 1, 2, 3, 4, 0, time.UTC))
 func clusterEvents() []corev1.Event {
 	var out []corev1.Event
 	event := func(ns, kind, name, reason string, minute int) corev1.Event {
+		var uid types.UID
+		if kind == "ConfigMap" {
+			uid = "c0f1" // the UID eventsCluster gives every ConfigMap
+		}
 		return corev1.Event{
 			ObjectMeta:     metav1.ObjectMeta{Name: name + "." + reason, Namespace: ns, ResourceVersion: "9"},
-			InvolvedObject: corev1.ObjectReference{Kind: kind, Name: name, Namespace: ns},
+			InvolvedObject: corev1.ObjectReference{Kind: kind, Name: name, Namespace: ns, UID: uid},
 			Reason:         reason, Message: reason + " of " + name, Type: corev1.EventTypeNormal, Count: int32(minute + 1),
 			FirstTimestamp: eventsMade, LastTimestamp: metav1.NewTime(eventsMade.Add(time.Duration(minute) * time.Minute)),
 			Source: corev1.EventSource{Component: "controller"},
@@ -201,14 +206,14 @@ func ownEventsAnswer(t *testing.T, cs kubernetes.Interface, ctx context.Context,
 	t.Helper()
 	events, err := cs.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=%s", name, kind)})
 	want := map[string]interface{}{}
-	setEvents(want, events, err)
+	setEvents(want, events, err, about())
 	return answerJSON(t, map[string]interface{}{"events": want["events"], "events_error": want["events_error"]})
 }
 
 func eventsAnswer(t *testing.T, s *Service, ctx context.Context, namespace, kind, name string) string {
 	t.Helper()
 	got := map[string]interface{}{}
-	s.setObjectEvents(ctx, got, namespace, kind, name)
+	s.setObjectEvents(ctx, got, namespace, kind, name, about())
 	return answerJSON(t, map[string]interface{}{"events": got["events"], "events_error": got["events_error"]})
 }
 
@@ -330,7 +335,7 @@ func TestSharedDescribeEventListsTakeTheirTurn(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			got := map[string]interface{}{}
-			s.setObjectEvents(wideCaller(fmt.Sprintf("u%02d@example.com", i)), got, "shop", "ConfigMap", fmt.Sprintf("app%02d", i))
+			s.setObjectEvents(wideCaller(fmt.Sprintf("u%02d@example.com", i)), got, "shop", "ConfigMap", fmt.Sprintf("app%02d", i), about())
 		}()
 	}
 	eventually(t, 3*time.Second, func() bool { api.mu.Lock(); defer api.mu.Unlock(); return api.cacheNow >= 4 })
@@ -367,7 +372,7 @@ func TestAnEventListThatFailsOnTheWayNamesNoAddress(t *testing.T) {
 	}
 	dial := &url.Error{Op: "Get", URL: "https://10.0.0.1:6443/api/v1/namespaces/shop/events?fieldSelector=x", Err: errors.New("dial tcp 10.0.0.1:6443: connect: connection refused")}
 	answer := map[string]interface{}{}
-	setEvents(answer, nil, dial)
+	setEvents(answer, nil, dial, about())
 	if r := fmt.Sprint(answer["events_error"]); strings.Contains(r, "10.0.0.1") || strings.Contains(r, "/api/v1") {
 		t.Errorf("a list that could not reach the server says %q", r)
 	}

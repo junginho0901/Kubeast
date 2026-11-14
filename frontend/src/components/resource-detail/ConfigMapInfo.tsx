@@ -8,6 +8,7 @@ import { InfoSection, InfoRow, KeyValueTags, EventsSection, StatusBadge, Th, Tx 
 import { fmtRel, fmtTs } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
 import { useNamespacePodTable } from './useNamespacePodTable'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
@@ -30,6 +31,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
     enabled: !!namespace && !!name,
     retry: false,
   })
+  useDrawerFollowsEvents({ describeKey: ['configmap-describe', namespace, name], answer: describe, kind: 'ConfigMap', namespace, name })
 
   useResourceDetailOverlay({ kind: 'ConfigMap', name, namespace, describe })
 

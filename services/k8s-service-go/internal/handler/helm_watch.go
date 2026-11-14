@@ -23,10 +23,6 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
-// helmWatchKeepaliveInterval — SSE comment line (": keepalive\n\n") 주기.
-// proxy / LB idle timeout 방어용. 이전 WebSocket 의 30s ping interval 과 동일.
-const helmWatchKeepaliveInterval = 30 * time.Second
-
 // helmLimitRetry is the wait before a stream the server's limit of live watches refused asks again: half a minute to
 // five, as a page the sockets refused asks again, so what was refused together does not come back together.
 var helmLimitRetry = func() time.Duration { return 30*time.Second + rand.N(270*time.Second) }
@@ -95,7 +91,8 @@ func (h *Handler) WatchHelmReleases(w http.ResponseWriter, r *http.Request) {
 // or when a non-recoverable error happens. K8s watcher 의 server-side
 // TimeoutSeconds 가 차면 자동으로 새 watcher 를 열어 transparent reconnect.
 func (h *Handler) runHelmWatchSSE(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, namespace string) error {
-	keepalive := time.NewTicker(helmWatchKeepaliveInterval)
+	// The same 25 s as the terminals and the other streams, under the 60 s idle cut of nginx and load balancers.
+	keepalive := time.NewTicker(keepalivePeriod)
 	defer keepalive.Stop()
 
 	// The stream's watches count against the server's live watches while it is open (multicluster.wsMaxSubscriptions).

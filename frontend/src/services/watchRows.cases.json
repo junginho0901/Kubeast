@@ -8497,6 +8497,7 @@
   "before": {
    "available_replicas": 2,
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
    "image": "example.test/app:2",
    "images": [
     "example.test/app:2",
@@ -8520,6 +8521,7 @@
   "event": {
    "available_replicas": 2,
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
    "image": "example.test/app:1",
    "images": [
     "example.test/app:1"
@@ -8540,6 +8542,7 @@
   "after": {
    "available_replicas": 2,
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
    "image": "example.test/app:1",
    "images": [
     "example.test/app:1"
@@ -8575,6 +8578,7 @@
   "before": {
    "available_replicas": 2,
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
    "image": "example.test/app:1",
    "images": [
     "example.test/app:1"
@@ -8597,6 +8601,7 @@
   "event": {
    "available_replicas": 2,
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
    "image": "example.test/app:2",
    "images": [
     "example.test/app:2",
@@ -8620,6 +8625,7 @@
   "after": {
    "available_replicas": 2,
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
    "image": "example.test/app:2",
    "images": [
     "example.test/app:2",
@@ -8660,6 +8666,7 @@
   "before": {
    "available_replicas": 2,
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
    "image": "example.test/app:1",
    "images": [
     "example.test/app:1"
@@ -8682,6 +8689,7 @@
   "event": {
    "available_replicas": 0,
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
    "image": "example.test/app:2",
    "images": [
     "example.test/app:2",
@@ -8705,6 +8713,7 @@
   "after": {
    "available_replicas": 0,
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
    "image": "example.test/app:2",
    "images": [
     "example.test/app:2",
@@ -8745,6 +8754,7 @@
   "before": {
    "available_replicas": 2,
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 3,
    "image": "example.test/app:2",
    "images": [
     "example.test/app:2",
@@ -8768,6 +8778,7 @@
   "event": {
    "available_replicas": 2,
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
    "image": "example.test/app:1",
    "images": [
     "example.test/app:1"
@@ -8790,6 +8801,7 @@
   "after": {
    "available_replicas": 2,
    "created_at": "2026-11-01T00:00:00Z",
+   "current_replicas": 2,
    "image": "example.test/app:1",
    "images": [
     "example.test/app:1"

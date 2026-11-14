@@ -5,6 +5,7 @@ import { api } from '@/services/api'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, NoneText, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
+import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { LIVE_ROWS_MAX, useWatchChanges } from '@/services/useWatchChanges'
@@ -46,6 +47,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
     name,
     alsoRead: [['crd-instances', group, storageVersion, plural]],
   })
+  useDrawerFollowsEvents({ describeKey: ['crd-describe', name], answer: describe, kind: 'CustomResourceDefinition', name })
 
   const { data: crInstances, error: instancesError } = useQuery({
     queryKey: ['crd-instances', group, storageVersion, plural],

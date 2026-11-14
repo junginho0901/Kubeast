@@ -279,7 +279,7 @@ func (s *Service) DescribeNamespace(ctx context.Context, name string) (map[strin
 	res["conditions"] = conditions
 
 	// Events
-	setEvents(res, events, eventsErr)
+	setEvents(res, events, eventsErr, about(ns.UID))
 
 	return res, nil
 }

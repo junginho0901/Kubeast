@@ -129,7 +129,7 @@ func (s *Service) DescribeVolumeAttachment(ctx context.Context, name string) (ma
 	}
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(va.UID))
 
 	return result, nil
 }

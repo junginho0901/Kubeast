@@ -19,6 +19,8 @@ interface DaemonSetStatus {
 
 interface PromMetrics {
   available: boolean
+  // set when the cluster's Prometheus is set but did not answer (usePrometheusQueries)
+  failure?: unknown
   data: Record<string, { available: boolean; results?: Array<{ value: number; metric?: Record<string, string> }> } | undefined>
 }
 
@@ -90,7 +92,7 @@ export default function WorkloadReplicasSection({
         </InfoGrid>
       </InfoSection>
 
-      <PrometheusSection available={promWorkloadMetrics.available} title="Real-time Resource Usage">
+      <PrometheusSection available={promWorkloadMetrics.available} failure={promWorkloadMetrics.failure} title="Real-time Resource Usage">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
           {getWorkloadMetric('cpu') !== null && (
             <MetricCard label="Total CPU" value={getWorkloadMetric('cpu')!} unit="m" thresholds={{ warn: 1000, danger: 2000 }} />

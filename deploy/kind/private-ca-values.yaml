@@ -11,8 +11,11 @@ features:
 ai:
   baseUrlAllowedHosts:
     - host.docker.internal
+    - model-stub.kubeast-devtools.svc.cluster.local
+    - model-metadata-standin.kubeast-devtools.svc.cluster.local
     - kubeast-b-control-plane
 networkPolicy:
   allowExternalEgressCIDRs:
     - {cidr: 192.168.65.0/24, port: 11434}
+    - {cidr: 10.244.0.0/16, port: 8090}
     - {cidr: 172.18.0.0/16, port: 31443}

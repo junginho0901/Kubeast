@@ -15,10 +15,13 @@ export function podPagePollEvery(page: PodPage | undefined): number | false {
   return page.stats.total > 10_000 ? 10_000 : 3_000
 }
 
-// Whether a pod's row differs between two pages. A pod in neither is one the rows cannot speak for, which reads as changed.
+// Whether a pod's row differs between two pages. A pod in neither is one the rows cannot speak for: the drawer follows
+// it on its own read of the object, which reads the answer again when the object's version moves (useDrawerFollowsRead),
+// so the page's revision moving for other pods says nothing of it.
 export function podRowChanged(before: PodListRow[] | undefined, after: PodListRow[] | undefined, pod: { namespace?: string; name: string }): boolean {
   const rowOf = (rows: PodListRow[] | undefined) => rows?.find((row) => row.name === pod.name && row.namespace === pod.namespace)
   const was = rowOf(before)
   const is = rowOf(after)
+  if (!was && !is) return false
   return !was || !is || JSON.stringify(was) !== JSON.stringify(is)
 }

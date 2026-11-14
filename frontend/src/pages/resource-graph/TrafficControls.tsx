@@ -7,12 +7,14 @@ import type { GraphView, TrafficSource } from './traffic'
 
 const segment = (on: boolean) => `px-2.5 py-1.5 rounded-md text-xs transition-colors ${on ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-ink'}`
 
-export function TrafficControls({ view, setView, sources, source, setSource, onRefresh, fetching }: {
+export function TrafficControls({ view, setView, sources, source, setSource, metricsFailure, onRefresh, fetching }: {
   view: GraphView
   setView: (v: GraphView) => void
   sources: TrafficSource[]
-  source: TrafficSource
+  source?: TrafficSource
   setSource: (s: TrafficSource) => void
+  // the cluster's Prometheus is set but did not answer: said where the metrics sources would be (traffic.metricsFailure)
+  metricsFailure?: string | null
   onRefresh: () => void
   fetching: boolean
 }) {
@@ -34,13 +36,20 @@ export function TrafficControls({ view, setView, sources, source, setSource, onR
       </div>
       {view !== 'structure' && (
         <>
-          <div className="flex items-center gap-1 bg-slate-700 rounded-lg p-0.5" role="group" aria-label={t('resourceGraph.traffic.sourceLabel', 'Traffic source')}>
-            {sources.map((s) => (
-              <button key={s} type="button" onClick={() => setSource(s)} className={segment(source === s)} aria-pressed={source === s} data-testid={`traffic-source-${s}`}>
-                {sourceLabel[s]}
-              </button>
-            ))}
-          </div>
+          {sources.length > 0 && (
+            <div className="flex items-center gap-1 bg-slate-700 rounded-lg p-0.5" role="group" aria-label={t('resourceGraph.traffic.sourceLabel', 'Traffic source')}>
+              {sources.map((s) => (
+                <button key={s} type="button" onClick={() => setSource(s)} className={segment(source === s)} aria-pressed={source === s} data-testid={`traffic-source-${s}`}>
+                  {sourceLabel[s]}
+                </button>
+              ))}
+            </div>
+          )}
+          {metricsFailure && (
+            <span className="max-w-xs truncate text-xs text-amber-300" title={metricsFailure} data-testid="traffic-metrics-failure">
+              {t('dashboard.prometheusNotAnswering', { defaultValue: 'Prometheus did not answer: {{reason}}', reason: metricsFailure })}
+            </span>
+          )}
           <button
             type="button"
             onClick={onRefresh}

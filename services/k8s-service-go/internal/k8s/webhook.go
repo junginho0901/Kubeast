@@ -57,7 +57,7 @@ func (s *Service) DescribeMutatingWebhookConfiguration(ctx context.Context, name
 	result["webhooks"] = formatMutatingWebhooks(mwc.Webhooks)
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(mwc.UID))
 
 	return result, nil
 }
@@ -175,7 +175,7 @@ func (s *Service) DescribeValidatingWebhookConfiguration(ctx context.Context, na
 	result["webhooks"] = formatValidatingWebhooks(vwc.Webhooks)
 
 	// Events
-	setEvents(result, events, eventsErr)
+	setEvents(result, events, eventsErr, about(vwc.UID))
 
 	return result, nil
 }

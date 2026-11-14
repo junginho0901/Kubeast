@@ -444,11 +444,27 @@ test.describe('number check — no drawer row out of reach', () => {
             notes: ps.filter((t) => /edges/i.test(t) && !t.startsWith('Nodes: ')),
           }
         })
+        // the window pages its lines 50 at a time: every page in turn, the footer's range naming the page read
+        const pager = page.getByTestId('storage-pager')
+        const pageRange = () => pager.locator('div').first().innerText()
+        const got = { summary: null as string | null, lines: [] as string[], notes: [] as string[] }
         try {
-          await expect.poll(shown, { timeout: 30_000 }).toEqual(want)
-        } catch {
-          expect.soft(await shown(), 'storage topology').toEqual(want)
+          for (let from = 1; from <= lines.length; from += 50) {
+            const to = Math.min(from + 49, lines.length)
+            if (from > 1) await pager.getByRole('button').last().click()
+            await expect.poll(pageRange, { timeout: 30_000, message: `topology lines ${from}-${to}` })
+              .toMatch(new RegExp(`(^|\\D)(${from}-${to} of ${lines.length}|${lines.length}개 중 ${from}-${to})(\\D|$)`))
+            const s = await shown()
+            expect(s?.lines, `topology lines ${from}-${to} on screen`).toHaveLength(to - from + 1)
+            got.summary = s?.summary ?? null
+            got.notes = s?.notes ?? []
+            got.lines.push(...(s?.lines ?? []))
+          }
+          got.lines.sort()
+        } catch (e) {
+          got.notes.push(`paging: ${(e as Error).message.split('\n')[0]}`)
         }
+        expect.soft(got, 'storage topology').toEqual(want)
       })
 
       await test.step('RuntimeClass hr-rc: every node its selector matches (the node list stood in)', async () => {

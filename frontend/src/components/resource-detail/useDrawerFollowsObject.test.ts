@@ -23,6 +23,8 @@ import resourceQuotaInfoSrc from './ResourceQuotaInfo.tsx?raw'
 import pdbInfoSrc from './PDBInfo.tsx?raw'
 import crdInfoSrc from './CRDInfo.tsx?raw'
 import leaseInfoSrc from './LeaseInfo.tsx?raw'
+import namespaceInfoSrc from './NamespaceInfo.tsx?raw'
+import namespacesPageSrc from '@/pages/Namespaces.tsx?raw'
 import followHookSrc from './useDrawerFollowsObject.ts?raw'
 import { frameOfObject, objectFollower, openListOf } from './useDrawerFollowsObject'
 import { applyPriorityClassWatchEvent } from '@/pages/cluster/priorityclasses/priorityClassWatchNormalize'
@@ -648,7 +650,8 @@ describe('how often an open drawer reads', () => {
 // What only the answer holds waits for its read: within a second of a change, within five while changes keep coming.
 // Written by kind, so a new field that waits is seen here.
 const READ_BRINGS: Record<string, string[]> = {
-  deployments: ['conditions', 'pod_template', 'replicas_status.current'],
+  // the row's current_replicas moves replicas_status.current with the frame
+  deployments: ['conditions', 'pod_template'],
   statefulsets: ['pod_template'],
   daemonsets: ['pod_template'],
   replicasets: [],
@@ -668,6 +671,8 @@ const READ_BRINGS: Record<string, string[]> = {
   customresourcedefinitions: ['versions'],
   // the row's conditions have no message or times
   nodes: ['conditions'],
+  // the row is the name, phase, age and labels
+  namespaces: ['annotations', 'conditions', 'deletion_timestamp', 'resource_version'],
 }
 
 type AnswerCase = { name: string; resource: string; before: Record<string, unknown>; frame: Record<string, unknown>; after: Record<string, unknown> }
@@ -746,6 +751,20 @@ describe('what a live update changes in an open drawer before its answer is read
     follower.onEvent({ type: 'MODIFIED', object: { name: 'web', replicas: 3, ready_replicas: 2, updated_replicas: 1, available_replicas: 2 } })
     follower.stop()
     expect((client.getQueryData(describeKey) as { replicas_status: unknown }).replicas_status).toEqual({ desired: 3, current: 2, ready: 2, updated: 1, available: 2 })
+  })
+
+  // A rollout holds the old ReplicaSet's pods beside the new one's: kubectl describe's "total", the Deployment row's
+  // current_replicas, moves with the frame.
+  it('moves a Deployment\'s Current with the frame, as its row says the pods it holds', () => {
+    const client = new QueryClient()
+    client.setQueryData(describeKey, {
+      name: 'web', replicas: 3, current_replicas: 3, ready_replicas: 3, updated_replicas: 3, available_replicas: 3,
+      replicas_status: { desired: 3, current: 3, ready: 3, updated: 3, available: 3 },
+    })
+    const follower = objectFollower(client, describeKey)
+    follower.onEvent({ type: 'MODIFIED', object: { name: 'web', replicas: 3, current_replicas: 4, ready_replicas: 3, updated_replicas: 1, available_replicas: 3 } })
+    follower.stop()
+    expect((client.getQueryData(describeKey) as { replicas_status: unknown }).replicas_status).toEqual({ desired: 3, current: 4, ready: 3, updated: 1, available: 3 })
   })
 })
 
@@ -974,6 +993,19 @@ describe('the drawers that read a describe answer follow their object', () => {
     expect(frameOfObject({ object: { name: 'web', namespace: 'other' } }, 'web', 'shop')).toBe(false)
     expect(frameOfObject({ object: { metadata: { name: 'web', namespace: 'shop' } } }, 'web', 'shop')).toBe(true)
     expect(frameOfObject({ object: { name: 'admin' } }, 'admin', undefined)).toBe(true)
+  })
+
+  // Opened from another page nothing else follows it; on the Namespaces page it shares that page's watch, which leaves the
+  // reading to the drawer. A grant limited to namespaces is refused a watch of namespaces (k8s-service leftToTheClustersRBAC).
+  it('a Namespace drawer follows its object by the namespace list, except for a grant limited to namespaces', () => {
+    const keyOf = (src: string, label: string) => src.match(new RegExp(`${label}: (\\[[^\\]]*-describe[^\\]]*\\])`))?.[1]
+    expect(namespaceInfoSrc).toContain('useDrawerFollowsObject({')
+    expect(namespaceInfoSrc).toContain("path: '/api/v1/namespaces',")
+    expect(namespaceInfoSrc).toContain('enabled: !!nsDescribe && !clusterNamespaces?.length,')
+    expect(keyOf(namespaceInfoSrc, 'describeKey')).toBe("['namespace-describe', name]")
+    expect(keyOf(namespaceInfoSrc, 'queryKey')).toBe("['namespace-describe', name]")
+    expect(namespacesPageSrc).toContain("describes.changedFollowed(['namespace-describe', name])")
+    expect(namespacesPageSrc).not.toContain("describes.changed(['namespace-describe'")
   })
 
   // A Lease's holder renews it every few seconds, faster than a read of its events is worth: the drawer reads on the clock.

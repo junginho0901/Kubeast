@@ -10,6 +10,7 @@ import { Activity } from 'lucide-react'
 import type { GPUMetricsData, GPUDeviceMetric } from '@/services/api'
 import { ListPager } from '@/components/ListPager'
 import { usePagedItems } from '@/hooks/usePagedItems'
+import { failureText } from '@/utils/failureText'
 import { gpuPercentText, gpuRealtimeAverages, gpusReportingUtil, gpuSeriesPod, hostsByName } from '../gpuNumbers'
 
 // Hosts per page of the section (a host of 8 GPUs is about 250px): the dashboard scrolls, so a fixed count
@@ -17,6 +18,8 @@ const REALTIME_HOSTS_PER_PAGE = 4
 
 interface Props {
   metricsAvailable: boolean
+  // the metrics read's error when the cluster's Prometheus is set but did not answer
+  metricsFailure?: unknown
   metrics: GPUMetricsData | undefined
   gpusByHost: Map<string, GPUDeviceMetric[]>
   // namespace/name of the pods that ask for a GPU or hold a DRA claim's devices (gpuHolderPods): a GPU's pod is named
@@ -25,9 +28,17 @@ interface Props {
   tr: (key: string, fallback: string, options?: Record<string, unknown>) => string
 }
 
-export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, gpuPodKeys, tr }: Props) {
+export function RealtimeMetricsSection({ metricsAvailable, metricsFailure = null, metrics, gpusByHost, gpuPodKeys, tr }: Props) {
   const hosts = useMemo(() => hostsByName(gpusByHost), [gpusByHost])
   const { items: pagedHosts, page, totalPages, total, setPage } = usePagedItems(hosts, REALTIME_HOSTS_PER_PAGE)
+  if (!metricsAvailable && metricsFailure) {
+    return (
+      <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-5" data-testid="gpu-realtime-not-answering">
+        <h2 className="text-sm font-semibold text-ink mb-2">{tr('gpuDashboardPage.realtime.title', 'Real-time GPU Metrics')}</h2>
+        <p className="text-xs text-slate-400">{tr('gpuDashboardPage.realtime.notAnswering', 'Prometheus did not answer: {{reason}}', { reason: failureText(metricsFailure) })}</p>
+      </div>
+    )
+  }
   if (!metricsAvailable || !metrics) return null
   const podOf = (gpu: GPUDeviceMetric) => gpuSeriesPod(gpu, gpuPodKeys)
   const { util, memory } = gpuRealtimeAverages(metrics)

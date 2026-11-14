@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Check, Copy, KeySquare, Loader2 } from 'lucide-react'
@@ -8,14 +8,13 @@ import { copyText } from '@/utils/clipboard'
 import { failureText } from '@/utils/failureText'
 import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
-import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
-import { aiEnabled } from '@/utils/features'
 import type { CreatedAPIKey } from '@/services/api/api_keys'
 import CustomDropdown from '@/components/CustomDropdown'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
 import { formatWhen } from '@/pages/admin/accessRequestFormat'
 import { formatScope } from './apiKeyFormat'
+import { useMCPConfig } from './accountReady'
 
 // Settings → API keys: the signed-in user's keys for automation. A key is
 // issued once (name, expiry, clusters, role ceiling), shown a single time,
@@ -29,9 +28,8 @@ export default function ApiKeysSection() {
   const queryClient = useQueryClient()
 
   const { data: config } = useQuery({ queryKey: ['api-keys', 'config'], queryFn: api.getAPIKeysConfig, staleTime: 60_000 })
-  // With chart ai.enabled off there is no MCP server to ask about (the gateway answers 503), so the section stays hidden.
-  const aiOn = aiEnabled(useClusterFeatures().data)
-  const { data: mcp } = useQuery({ queryKey: ['ai', 'mcp-config'], queryFn: api.getMCPConfig, staleTime: 60_000, enabled: aiOn })
+  const { state: mcpState, query: mcpQuery } = useMCPConfig()
+  const mcp = mcpQuery.data
   const enabled = !!config?.enabled
   const maxDays = config?.max_days ?? 90
   const { data: keys = [] } = useQuery({ queryKey: ['api-keys', 'mine'], queryFn: api.listMyAPIKeys, enabled })
@@ -44,7 +42,9 @@ export default function ApiKeysSection() {
 
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
-  const [days, setDays] = useState(30)
+  // the expiry as typed: a number kept as a number turns an emptied field into 0 and "-1" typed after it into "01"
+  const [daysText, setDaysText] = useState('30')
+  const days = /^\d+$/.test(daysText.trim()) ? Number(daysText.trim()) : NaN
   const [selected, setSelected] = useState<string[]>([])
   const [ceiling, setCeiling] = useState('Read')
   const [error, setError] = useState<string | null>(null)
@@ -53,10 +53,17 @@ export default function ApiKeysSection() {
   // the key is shown only this once: a refused copy says so and stays
   const [copyFailed, setCopyFailed] = useState(false)
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null)
+  // the name of the key the last Revoke took away, said in the card until the next issue or revoke
+  const [revokedName, setRevokedName] = useState<string | null>(null)
+  // the key is shown only this once: the card may sit below the fold, so its box is brought into view
+  const createdRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (created) createdRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [created])
 
   const openModal = () => {
     setName('')
-    setDays(Math.min(30, maxDays))
+    setDaysText(String(Math.min(30, maxDays)))
     setSelected([])
     setCeiling('Read')
     setError(null)
@@ -76,14 +83,18 @@ export default function ApiKeysSection() {
       setCreated(key)
       setCopied(false)
       setCopyFailed(false)
+      setRevokedName(null)
       queryClient.invalidateQueries({ queryKey: ['api-keys', 'mine'] })
     },
     onError: (err: unknown) => setError(`${tr('apiKeys.failed', 'The key was not created.')} ${failureText(err)}`),
   })
   const revoke = useMutation({
     mutationFn: (id: string) => api.deleteAPIKey(id),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       setConfirmRevoke(null)
+      setRevokedName(keys.find((k) => k.id === id)?.name ?? id)
+      // the key just issued and now revoked is no longer shown as one to copy
+      if (created?.id === id) setCreated(null)
       queryClient.invalidateQueries({ queryKey: ['api-keys', 'mine'] })
     },
   })
@@ -127,7 +138,17 @@ export default function ApiKeysSection() {
         </button>
       </div>
 
-      {mcp?.enabled && (
+      {mcpState === 'off' && (
+        <p className="mb-4 text-sm text-slate-400" data-testid="api-key-mcp-ai-off">
+          {tr('apiKeys.mcp.aiOff', 'Connecting an AI agent (MCP) needs AI, which is off on this installation (ai.enabled).')}
+        </p>
+      )}
+      {mcpState === 'on' && mcpQuery.isError && !mcp && (
+        <p className="mb-4 text-sm text-slate-400" data-testid="api-key-mcp-failed">
+          {tr('apiKeys.mcp.readFailed', 'Could not read whether AI agents (MCP) can connect: {{reason}}', { reason: failureText(mcpQuery.error) })}
+        </p>
+      )}
+      {mcpState !== 'off' && mcp?.enabled && (
         <div className="mb-4 rounded-lg border border-slate-700 bg-slate-900/40 p-3" data-testid="api-key-mcp">
           <div className="text-sm font-semibold text-slate-200">{tr('apiKeys.mcp.title', 'Connect an AI agent (MCP)')}</div>
           <p className="mt-1 text-sm text-slate-400">
@@ -142,7 +163,7 @@ export default function ApiKeysSection() {
       )}
 
       {created && (
-        <div className="mb-4 rounded-lg border border-emerald-800/60 bg-emerald-900/20 p-3" data-testid="api-key-created">
+        <div ref={createdRef} className="mb-4 rounded-lg border border-emerald-800/60 bg-emerald-900/20 p-3" data-testid="api-key-created">
           <div className="text-sm text-emerald-200 mb-2">
             {tr('apiKeys.onceWarning', 'Copy the key now — it is shown only this once.')}
           </div>
@@ -172,6 +193,15 @@ export default function ApiKeysSection() {
               {tr('common.copyFailed', 'Not copied: the browser did not take it. Select the text and copy it yourself.')}
             </p>
           )}
+        </div>
+      )}
+
+      {revokedName && (
+        <div role="status" data-testid="api-key-revoked" className="mb-3 flex items-start gap-3 text-sm text-emerald-300">
+          <p className="min-w-0 break-words">{tr('apiKeys.revoked', 'Revoked: {{name}}', { name: revokedName })}</p>
+          <button type="button" className="btn-row shrink-0" onClick={() => setRevokedName(null)} data-testid="api-key-revoked-close">
+            {tr('common.close', 'Close')}
+          </button>
         </div>
       )}
 
@@ -284,8 +314,8 @@ export default function ApiKeysSection() {
                   type="number"
                   min={1}
                   max={maxDays}
-                  value={days}
-                  onChange={(e) => setDays(Number(e.target.value))}
+                  value={daysText}
+                  onChange={(e) => setDaysText(e.target.value)}
                   className="w-full h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-ink"
                 />
                 {!daysOk && (

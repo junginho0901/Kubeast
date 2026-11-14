@@ -252,6 +252,69 @@ tests:
         documentSelector:
           path: metadata.name
           value: RELEASE-NAME-migrate
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - ipBlock:
+                  cidr: 0.0.0.0/0
+            ports:
+              - protocol: TCP
+                port: 5433
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-migrate-hook
+
+  - it: opens the migration Job's database egress as a hook one weight before the Job, so an upgrade into job mode does not wait behind default-deny
+    set:
+      migrations.mode: job
+    asserts:
+      - hasDocuments:
+          count: 14
+      - equal:
+          path: metadata.annotations
+          value:
+            helm.sh/hook: pre-install,pre-upgrade
+            helm.sh/hook-weight: "-1"
+            helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded,hook-failed
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-migrate-hook
+      - equal:
+          path: spec
+          value:
+            podSelector:
+              matchLabels:
+                app: kubeast-migrate
+            policyTypes: [Egress]
+            egress:
+              - to:
+                  - podSelector:
+                      matchLabels:
+                        app: postgres
+                ports:
+                  - protocol: TCP
+                    port: 5432
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-migrate-hook
+      # the release's own copy stays a plain resource and governs after the hook phase
+      - notExists:
+          path: metadata.annotations
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-migrate
+      - equal:
+          path: spec.podSelector.matchLabels.app
+          value: kubeast-migrate
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-migrate
+
+  - it: renders neither migration policy in startup mode
+    asserts:
+      - hasDocuments:
+          count: 12
 
   - it: lets auth-service reach tool-server's invalidate endpoint, and tool-server take it, only on 8086
     asserts:

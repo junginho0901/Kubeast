@@ -195,11 +195,12 @@ func newGatewayDescribeService(t *testing.T) (*Service, *gatewayEventsAPI) {
 
 	now := time.Now().UTC().Truncate(time.Second)
 	events := &gatewayEventsAPI{events: []corev1.Event{
-		gatewayEvent("web", "Gateway", "edge", "Synced", now.Add(-5*time.Minute)),
-		gatewayEvent("web", "Gateway", "edge", "Programmed", now.Add(-time.Minute)),
+		withUID("33333333-aaaa-4bbb-8ccc-000000000003", gatewayEvent("web", "Gateway", "edge", "Synced", now.Add(-5*time.Minute))),
+		withUID("33333333-aaaa-4bbb-8ccc-000000000003", gatewayEvent("web", "Gateway", "edge", "Programmed", now.Add(-time.Minute))),
+		withUID("33333333-aaaa-4bbb-8ccc-000000000000", gatewayEvent("web", "Gateway", "edge", "OfTheOneBefore", now)),
 		gatewayEvent("web", "HTTPRoute", "edge", "Attached", now.Add(-2*time.Minute)),
-		gatewayEvent("default", "GatewayClass", "envoy", "Accepted", now.Add(-3*time.Minute)),
-		gatewayEvent("web", "ReferenceGrant", "allow-gw", "Seen", now),
+		withUID("11111111-aaaa-4bbb-8ccc-000000000001", gatewayEvent("default", "GatewayClass", "envoy", "Accepted", now.Add(-3*time.Minute))),
+		withUID("22222222-aaaa-4bbb-8ccc-000000000002", gatewayEvent("web", "ReferenceGrant", "allow-gw", "Seen", now)),
 	}}
 	srv := httptest.NewServer(http.HandlerFunc(events.serve))
 	t.Cleanup(srv.Close)

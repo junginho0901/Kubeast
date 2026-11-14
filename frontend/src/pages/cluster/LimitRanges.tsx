@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type LimitRangeInfo } from '@/services/api'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
@@ -63,6 +63,7 @@ export default function LimitRanges() {
       : `/api/v1/namespaces/${selectedNamespace}/limitranges`,
     query: 'watch=1',
     applyEvent: (prev, event) => applyLimitRangeWatchEvent(prev as LimitRangeInfo[] | undefined, event),
+    gatherEveryMs: LIST_GATHER_MS,
   })
 
   const filteredLimitRanges = useMemo(() => {

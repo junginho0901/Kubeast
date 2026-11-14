@@ -2,6 +2,7 @@ import { useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, isForbiddenError } from '@/services/api'
+import { prometheusNotAnswering } from '@/hooks/usePrometheusQuery'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useRefresh } from '@/hooks/useRefresh'
@@ -32,7 +33,7 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
     retryDelay: 1000,
   })
 
-  const { data: metrics } = useQuery<GPUMetricsData>({
+  const { data: metrics, error: metricsError } = useQuery<GPUMetricsData>({
     queryKey: ['gpu', 'metrics'],
     queryFn: () => api.getGPUMetrics(),
     refetchInterval: 15000,
@@ -40,6 +41,8 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
   })
 
   const metricsAvailable = metrics?.available ?? false
+  // the cluster's Prometheus is set but did not answer: the real-time panel says so in its place, as the dashboard's does
+  const metricsFailure = metricsAvailable ? null : prometheusNotAnswering(metricsError)
 
   const gpusByHost = useMemo(() => {
     if (!metrics?.gpus) return new Map<string, GPUDeviceMetric[]>()
@@ -159,6 +162,7 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
     handleRefresh,
     refreshFailure,
     metricsAvailable,
+    metricsFailure,
     gpusByHost,
     summaryCards,
     modelDistribution,
