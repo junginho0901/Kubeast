@@ -15,11 +15,12 @@ import SearchSettings from '@/components/search/SearchSettings'
 import SavedSearches from '@/components/search/SavedSearches'
 import type { SavedSearch } from '@/components/search/savedSearchStore'
 import { rememberPrinterStatus, searchWithExpression, toSearchResult, SearchResult } from '@/components/search/searchEngine'
+import { searchLayer, searchShown, type Searched } from '@/components/search/searchShown'
 import { useAIContext } from '@/hooks/useAIContext'
-import { buildResourceLink } from '@/utils/resourceLink'
 import { failureText } from '@/utils/failureText'
 
 const STORAGE_KEY_RESOURCES = 'advanced-search-resources'
+const NO_RESULTS: SearchResult[] = []
 
 export default function AdvancedSearch() {
   const { t } = useTranslation()
@@ -137,7 +138,8 @@ export default function AdvancedSearch() {
       // each type is cut to the limit by the server (`limit`), and two types of one Kind name are two lists; the
       // notices list the types in the order chosen, not in the order the answers came
       const order = (a: { type: string }, b: { type: string }) => resourceTypes.indexOf(a.type) - resourceTypes.indexOf(b.type)
-      return { items, errors: errors.sort(order), cut: cut.sort(order) }
+      // what the read listed goes with it, so a search over it says which namespace and types its results come from
+      return { items, errors: errors.sort(order), cut: cut.sort(order), namespace, types: [...resourceTypes] }
     },
     enabled: resourceTypes.length > 0,
     staleTime: 30_000,
@@ -161,69 +163,32 @@ export default function AdvancedSearch() {
     })
   }, [items])
 
-  // Search state
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
-  const [searchTimeMs, setSearchTimeMs] = useState<number | null>(null)
-  const [isSearching, setIsSearching] = useState(false)
+  // The last finished search, with the expression and the read it answers: until a search of the expression in the box
+  // over the objects read now finishes, the page says it is searching instead of showing the results of the one before.
+  const [searched, setSearched] = useState<Searched | null>(null)
 
   useEffect(() => {
-    if (!deferredQuery.trim() || items.length === 0) {
-      setSearchResults(prev => prev.length === 0 ? prev : [])
-      setSearchTimeMs(prev => prev === null ? prev : null)
-      setIsSearching(false)
-      return
-    }
-
+    if (!deferredQuery.trim() || !fetchResult || fetchResult.items.length === 0) return
     const cancelToken = { current: false }
-    setIsSearching(true)
-
-    searchWithExpression(items, deferredQuery, cancelToken).then(({ results, timeMs }) => {
+    searchWithExpression(fetchResult.items, deferredQuery, cancelToken).then(({ results, timeMs }) => {
       if (!cancelToken.current) {
-        setSearchResults(results.map(toSearchResult))
-        setSearchTimeMs(timeMs)
-        setIsSearching(false)
+        setSearched({ query: deferredQuery, over: fetchResult, namespace: fetchResult.namespace, types: fetchResult.types, results: results.map(toSearchResult), timeMs })
       }
     })
-
     return () => { cancelToken.current = true }
-  }, [deferredQuery, items])
+  }, [deferredQuery, fetchResult])
 
-  const deferredResults = useDeferredValue(searchResults)
+  // the table draws behind the typing; the record is deferred whole, so its results never pass for another expression's
+  const deferredSearched = useDeferredValue(searched)
+  const shown = searchShown(deferredSearched, deferredQuery, fetchResult)
+  const isSearching = shown.state === 'searching'
+  const shownResults = shown.state === 'done' ? shown.results : NO_RESULTS
 
-  // 플로팅 AI 위젯용 스냅샷
-  const aiSnapshot = useMemo(() => {
-    if (searchResults.length === 0 && !rawQuery.trim()) return null
-    const byKind: Record<string, number> = {}
-    for (const r of searchResults) {
-      byKind[r.kind] = (byKind[r.kind] ?? 0) + 1
-    }
-    const summary = `고급 검색 ${searchResults.length}건 — 쿼리: "${rawQuery || '(없음)'}"${
-      namespace ? ` · namespace=${namespace}` : ''
-    }`
-    return {
-      source: 'base' as const,
-      summary,
-      data: {
-        query: rawQuery,
-        namespace: namespace || undefined,
-        selected_resource_types: Array.from(selectedResources),
-        total: searchResults.length,
-        by_kind: byKind,
-        top_results: searchResults.slice(0, 20).map((r) => {
-          const link = buildResourceLink(r.kind, r.namespace, r.name)
-          return {
-            kind: r.kind,
-            api_version: typeof r.raw?.apiVersion === 'string' ? r.raw.apiVersion : undefined,
-            name: r.name,
-            namespace: r.namespace || undefined,
-            status: r.status,
-            age: r.age,
-            ...(link ? { _link: link } : {}),
-          }
-        }),
-      },
-    }
-  }, [searchResults, rawQuery, namespace, selectedResources])
+  // 플로팅 AI 위젯용 스냅샷 — the results with their own expression, namespace and types
+  const aiSnapshot = useMemo(
+    () => searchLayer(searched, rawQuery, { namespace, types: Array.from(selectedResources), read: fetchResult }),
+    [searched, rawQuery, namespace, selectedResources, fetchResult],
+  )
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -242,7 +207,7 @@ export default function AdvancedSearch() {
     setRawQuery(s.query)
   }, [])
 
-  const showResults = deferredQuery.trim().length > 0 && deferredResults.length > 0 && !isSearching
+  const showResults = shownResults.length > 0
   const showExamples = !deferredQuery.trim()
 
   return (
@@ -346,9 +311,9 @@ export default function AdvancedSearch() {
         onChange={setRawQuery}
         onClear={() => setRawQuery('')}
         isSearching={isSearching}
-        resultCount={deferredQuery.trim() ? deferredResults.length : null}
+        resultCount={deferredQuery.trim() ? shownResults.length : null}
         totalCount={items.length}
-        searchTimeMs={searchTimeMs}
+        searchTimeMs={shown.state === 'done' ? shown.timeMs : null}
         items={jsonItems}
       />
 
@@ -367,7 +332,7 @@ export default function AdvancedSearch() {
 
       {/* Results or Examples */}
       {!isLoadingResources && showResults && (
-        <SearchResultTable results={deferredResults} />
+        <SearchResultTable results={shownResults} />
       )}
 
       {!isLoadingResources && showExamples && (
@@ -375,7 +340,7 @@ export default function AdvancedSearch() {
       )}
 
       {/* No results message */}
-      {!isLoadingResources && deferredQuery.trim() && !isSearching && deferredResults.length === 0 && items.length > 0 && (
+      {!isLoadingResources && shown.state === 'done' && shown.results.length === 0 && (
         <div className="flex flex-col items-center gap-2 py-12 text-slate-500">
           <AlertCircle className="w-8 h-8" />
           <p className="text-sm">{t('advancedSearch.noResults', 'No resources match your query')}</p>
