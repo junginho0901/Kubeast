@@ -80,6 +80,7 @@ def test_tool_usage_guide():
         "resource_graph",
         "timeline",
         "gpu",
+        "anomaly_rank",
         "hygiene",
         "k8s_jq_query",
         "k8s_tabular_query",

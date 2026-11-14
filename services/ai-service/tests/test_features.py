@@ -40,7 +40,7 @@ def test_gated_names_by_feature_and_cluster():
     assert gated == {"prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets",
                      "logsearch", "loki_query", "loki_labels", "loki_patterns", "traces_search", "traces_get", "traces_tags",
                      "traces_metrics", "traces_compare", "alerts_list", "network_flows", "network_drops", "network_top_flows", "cost", "policy_reports",
-                     "alerts_inbox", "logfiles"}
+                     "alerts_inbox", "logfiles", "anomaly_rank"}
     # alerts_list comes and goes with the alert store
     assert features.gated_names(["alerts_list"], {"alertStore": {"enabled": True, "clusters": ["self"]}}, "self") == ["alerts_list"]
     assert features.gated_names(["alerts_list"], {"alertStore": {"enabled": True, "clusters": ["self"]}}, "other") == []
@@ -69,6 +69,11 @@ def test_gated_names_by_feature_and_cluster():
     assert features.gated_names(["network_top_flows"], {"networkFlowMonitor": {"enabled": False, "clusters": ["eks"]}}, "eks") == []
     feats = {"cost": {"enabled": True}, "policyReports": {"enabled": False}}
     assert features.gated_names(["cost", "policy_reports", "helm_read"], feats, "self") == ["cost", "helm_read"]
+    # anomaly_rank is offered only where features.anomalyRank is on (off by default), on every cluster alike
+    assert features.gated_names(["anomaly_rank"], {"anomalyRank": {"enabled": True}}, "self") == ["anomaly_rank"]
+    assert features.gated_names(["anomaly_rank"], {"anomalyRank": {"enabled": False}}, "self") == []
+    assert features.gated_names(["anomaly_rank"], {"prometheus": {"enabled": True}}, "self") == []
+    assert features.gated_names(["anomaly_rank"], None, "self") == []
 
 
 class _Token:

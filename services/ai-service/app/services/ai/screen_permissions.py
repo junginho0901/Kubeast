@@ -56,6 +56,7 @@ TOOL_SCREEN_TABLE: Dict[str, Tuple[str, ...]] = {
     "traces_metrics": _LISTS_AND_DETAILS,
     "traces_compare": _LISTS_AND_DETAILS,
     "issues": _LISTS_AND_DETAILS,
+    "anomaly_rank": _LISTS_AND_DETAILS,
     "gitops_status": _LISTS_AND_DETAILS,
     "optimization": _LISTS_AND_DETAILS,
     "resource_graph": _LISTS_AND_DETAILS,

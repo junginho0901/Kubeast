@@ -47,6 +47,7 @@ EXPECTED_READONLY_NAMES = {
     "resource_graph",
     "timeline",
     "gpu",
+    "anomaly_rank",
     "k8s_jq_query",
     "k8s_tabular_query",
     "k8s_count",

@@ -22,6 +22,8 @@ func RegisterCluster(r chi.Router, h *handler.Handler) {
 
 	// Dashboard quick actions
 	r.Get("/api/v1/issues", h.GetClusterIssues)
+	// What differs from the window before, ranked (features.anomalyRank; the AI tool anomaly_rank)
+	r.Get("/api/v1/namespaces/{namespace}/anomalies", h.GetNamespaceAnomalies)
 	r.Get("/api/v1/optimization", h.GetClusterOptimization)
 	r.Post("/api/v1/namespaces/{namespace}/optimization/resize", h.ResizeOptimization)
 

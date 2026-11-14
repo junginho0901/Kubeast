@@ -40,6 +40,7 @@
     - kubectl 도구는 tool-server 안의 중계를 거쳐 클러스터에 닿고, 중계가 신원과 `Audit-ID`를 붙입니다. kubectl 자체의 탐색 요청은 목록에 넣지 않습니다.
   - Kubeast 기능을 쓰는 도구는 kubectl이 아니라 k8s-service API를 **그 사람 토큰으로** 부르므로, 권한·감사·마스킹이 화면과 같습니다. 이런 도구는 다음과 같습니다.
     - `issues` — 이슈 점검: 파드·워크로드·노드·PVC·경고 이벤트를 한 번에
+    - `anomaly_rank` — 한 네임스페이스(또는 워크로드 하나의 파드)가 기간(기본 최근 1시간)과 그 바로 앞 같은 길이 구간 사이에 무엇이 달라졌는지, 모델이 둘러보기 전에 서버가 순위를 매겨 줍니다. 지금 고장 난 객체, 종료 이유별 컨테이너 종료 수, 클러스터 Prometheus의 재시작·CPU 걸림·메모리 limit 근처, 그 파드들이 도는 노드의 압박을 봅니다. 발견은 최대 10개(새로 나타난 것 먼저, 약 3,000자)이고, 아무것도 못 찾은 검사는 정상으로, 못 한 검사(Prometheus나 시리즈 없음, 네임스페이스로 한정된 권한, 시간·조회 한도를 다 씀)는 까닭과 함께 못 함으로 적습니다. 기본 꺼짐(`features.anomalyRank`)
     - `prometheus_query` — PromQL 즉시·범위 질의, 절대 시각 범위도 가능합니다.
       `chart=true`·제목·단위를 주면 결과를 **답 아래 그래프**로 그립니다(AI 채팅과 플로팅에 같은 그래프, 시리즈 최대 10개, "크게 보기", 저장된 답에도 보존).
     - `prometheus_metrics`·`prometheus_labels` — 질의 전에 지표 이름·타입·설명, 레이블 이름·값 찾기
@@ -75,6 +76,7 @@
     - `hygiene` — 위생 보고, 그 클러스터의 Admin 부여
   - 다음 경우에는 그 도구가 도구 목록에서 빠집니다(`/api/v1/features`, 1분 캐시).
     - 그 클러스터에 기능이 없을 때: Prometheus 미설정, 로그·트레이스·알림 저장소 없음, 네트워크 흐름 꺼짐, 비용·정책 보고 꺼짐
+    - 설치에서 켜지 않았을 때: `features.anomalyRank.enabled`가 꺼진 `anomaly_rank`
     - 그 사람에게 k8s-service가 확인하는 권한(`resource.hygiene.scan` 또는 `admin.hygiene.read`·`resource.helm.read`·`resource.policyreport.read`·`resource.cost.read`·`resource.networkflow.read`)이 없을 때
   - 결과가 길면 시리즈 100개, 점 120개, 로그 200줄, 행 200개, 그래프 노드 200개/엣지 400개, 텍스트 64 KB에서 자릅니다.
   - 범위 질의 결과(`prometheus_query`·`loki_query` 지표 질의)가 모델이 한 번에 읽는 길이(모델의 도구 결과 최대 길이, 정하지 않으면 6,000자)를 넘으면, 자르는 대신 값이 큰 시리즈 10개의 최저·최고·평균·마지막 값과 12점 개요로 줄여서 줍니다.
