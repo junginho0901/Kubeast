@@ -15,6 +15,7 @@ import time
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from app.services.ai import screen_permissions
+from app.services.ai.tools import CALLS_DESCRIPTION, CALLS_PARAM, CALLS_SINCE_PARAM
 from app.services.investigation import settings as investigation_settings
 from app.services.tool_whitelists import WRITE_TOOL_NAMES
 
@@ -87,6 +88,10 @@ def _anomaly_rank_on(features: Dict[str, Any], cluster: str) -> bool:
     return bool((features.get("anomalyRank") or {}).get("enabled"))
 
 
+def _call_graph_on(features: Dict[str, Any], cluster: str) -> bool:
+    return bool((features.get("callGraph") or {}).get("enabled"))
+
+
 # tool name → does this cluster serve it. Tools not listed are always offered.
 GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "prometheus_query": _prometheus_on,
@@ -113,6 +118,12 @@ GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "alerts_inbox": _alert_inbox_on,
     "logfiles": _log_files_on,
     "anomaly_rank": _anomaly_rank_on,
+}
+
+# tool name → (its parameters, the words of its description about them, does this cluster serve them): a cluster that
+# does not, or features unknown, gets the definition without them — the model is not handed what can only answer "off".
+PARAM_GATES: Dict[str, tuple[tuple[str, ...], str, Callable[[Dict[str, Any], str], bool]]] = {
+    "resource_graph": ((CALLS_PARAM, CALLS_SINCE_PARAM), CALLS_DESCRIPTION, _call_graph_on),
 }
 
 # tool name → (scope, the permission that names it) of the screen's route. Without what the route asks the call could
@@ -197,6 +208,16 @@ def gated_names(names: Iterable[str], features: Optional[Dict[str, Any]], cluste
     return out
 
 
+def _without_params(tool: Dict, params: tuple[str, ...], words: str) -> Dict:
+    fn = dict(tool.get("function") or {})
+    parameters = dict(fn.get("parameters") or {})
+    parameters["properties"] = {k: v for k, v in (parameters.get("properties") or {}).items() if k not in params}
+    fn["parameters"] = parameters
+    if words and isinstance(fn.get("description"), str):
+        fn["description"] = fn["description"].replace(words, "")
+    return {**tool, "function": fn}
+
+
 def filter_tools(tools: List[Dict], features: Optional[Dict[str, Any]], cluster: Optional[str], token=None) -> List[Dict]:
     kept: List[Dict] = []
     for tool in tools:
@@ -204,6 +225,9 @@ def filter_tools(tools: List[Dict], features: Optional[Dict[str, Any]], cluster:
         name = fn.get("name") if isinstance(fn, dict) else None
         if isinstance(name, str) and gated(name) and not gated_names([name], features, cluster, token):
             continue
+        gate = PARAM_GATES.get(name) if isinstance(name, str) else None
+        if gate is not None and (features is None or not gate[2](features, cluster or "")):
+            tool = _without_params(tool, gate[0], gate[1])
         kept.append(tool)
     return kept
 
@@ -215,12 +239,12 @@ def _names(tools: List[Dict]) -> List[str]:
 async def gate_tools(tools: List[Dict], service) -> List[Dict]:
     """The chat's tool list for the service's active cluster and token."""
     names = _names(tools)
-    if not any(gated(n) for n in names):
+    if not any(gated(n) or n in PARAM_GATES for n in names):
         return tools
     cluster = getattr(service, "cluster_name", None) or ""
     token = getattr(service, "token", None)
     features = None
-    if any(n in GATES for n in names if permitted(n, token, cluster)):
+    if any(n in GATES or n in PARAM_GATES for n in names if permitted(n, token, cluster)):
         k8s = getattr(service, "k8s_service", None)
         features = await fetch_features(k8s, cluster) if k8s is not None else None
     return filter_tools(tools, features, cluster, token)

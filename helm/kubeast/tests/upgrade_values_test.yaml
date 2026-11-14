@@ -179,3 +179,9 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no features.alertInvestigation.changesFirst
+  - it: stops values without features.callGraph, which this chart added
+    set:
+      features.callGraph: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.callGraph

@@ -764,3 +764,16 @@ tests:
       - equal:
           path: data.DB_POOL_MAX_K8S
           value: "16"
+
+  - it: keeps the call graph off by default and takes it from features.callGraph
+    asserts:
+      - equal:
+          path: data.CALL_GRAPH_ENABLED
+          value: "false"
+  - it: turns the call graph on from features.callGraph.enabled
+    set:
+      features.callGraph.enabled: true
+    asserts:
+      - equal:
+          path: data.CALL_GRAPH_ENABLED
+          value: "true"
