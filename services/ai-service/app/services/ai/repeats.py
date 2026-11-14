@@ -67,16 +67,25 @@ class RepeatGuard:
         return int(self._clock() - seen.at)
 
 
-def refusal(seen: Seen, age: int, *, scope: str) -> str:
-    """What the model reads instead of a result. `scope`: "answer" (chat) or "investigation"."""
-    if seen.step == 0:
-        where = "by the server before the investigation started (step 0); its answer is in the first message"
+def refusal(seen: Seen, age: int, *, scope: str, numbered: bool = False) -> str:
+    """What the model reads instead of a result. `scope`: "answer" (chat) or "investigation". `numbered`: the model
+    reads each result under its call number (an investigation with investigation/numbers.py on), so the earlier call
+    is named by that number, `repeat_of_call`, and not by its step."""
+    told: dict[str, Any] = {"status": STATUS}
+    if numbered and seen.call is not None:
+        n = seen.call
+        if seen.step == 0:
+            where = f"by the server before the investigation started (call {n}); its answer is in the first message"
+        else:
+            where = f"as call {n} of this {scope}, {age} seconds ago; its result is the one under [call {n}] above"
+        told["repeat_of_call"] = n
     else:
-        where = f"at step {seen.step} of this {scope}, {age} seconds ago; its result is above"
-    return json.dumps({
-        "status": STATUS,
-        "repeat_of": seen.step,
-        "message": f"This read, the same tool with the same arguments, was already made {where}. It was not run again. "
-                   "Use that result, or call with other arguments (another name, namespace, time range or filter) "
-                   "to read something new.",
-    }, ensure_ascii=False)
+        if seen.step == 0:
+            where = "by the server before the investigation started (step 0); its answer is in the first message"
+        else:
+            where = f"at step {seen.step} of this {scope}, {age} seconds ago; its result is above"
+        told["repeat_of"] = seen.step
+    told["message"] = (f"This read, the same tool with the same arguments, was already made {where}. It was not run again. "
+                       "Use that result, or call with other arguments (another name, namespace, time range or filter) "
+                       "to read something new.")
+    return json.dumps(told, ensure_ascii=False)

@@ -236,6 +236,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     # What each call returned to the model, by its place in tool_log, for the evidence check; kept only while the run lasts.
     reads: Optional[list[evidence.Read]] = [] if cfg.evidence_check else None
     same_as: dict[int, int] = {}  # a refused repeat's number → the number of the call it repeated
+    numbered = numbers.on(cfg)  # each result the model reads starts with its call number
 
     async def call_tool(name: str, args: dict, step: int) -> tuple[str, Any, dict[str, Any]]:
         """The text the model reads, the tool's own answer (None when it did not run) and the call's log entry."""
@@ -248,8 +249,10 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         elif repeats is not None and (seen := repeats.earlier(name, args)) is not None:
             # The same read answered earlier in this run: not run again, the model is told where its answer is.
             access_mod.reset(service)
-            result = repeats_mod.refusal(seen, repeats.age(seen), scope="investigation")
+            result = repeats_mod.refusal(seen, repeats.age(seen), scope="investigation", numbered=numbered)
             entry["repeat_of"] = seen.step
+            if numbered and seen.call is not None:
+                entry["repeat_of_call"] = seen.call  # the number the model read that call under
         elif not (await audit_ready())[0]:
             result = json.dumps({"status": "audit_unavailable"})
             entry["error"] = "audit unavailable"
@@ -299,8 +302,9 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
                 "redacted": getattr(service.tool_server, "last_redacted", None),
                 "access": entry.get("access"),
                 "requests": entry.get("requests"),
-                # the iteration of the call this one repeated (ai.refuseRepeatedReads): not run, nothing read
-                **({"repeat_of": seen.step} if seen is not None else {}),
+                # the call this one repeated (ai.refuseRepeatedReads), its iteration and with call numbers its number:
+                # not run, nothing read
+                **{k: entry[k] for k in ("repeat_of", "repeat_of_call") if k in entry},
             },
             result="failure" if entry.get("error") else "success",
             error=entry.get("error"),
@@ -319,8 +323,6 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     def number_of(entry: dict[str, Any]) -> int:
         """The call's place in tool_calls, from 1: the number the rca block gives it."""
         return next(i for i, e in enumerate(tool_log, 1) if e is entry)
-
-    numbered = numbers.on(cfg)
 
     async def run_tool(name: str, args: dict, step: int) -> str:
         text, _raw, entry = await call_tool(name, args, step)

@@ -15,6 +15,7 @@ from app.services.investigation import runner
 from tests.test_alert_investigation import (FakeClaudeCode, FakeService, FakeSubscriptionService, cfg, completion,
                                             install_loop, row, tool_call)
 from tests.test_claude_code import OK, make_sdk
+from tests.test_investigation_window import STARTED, STEP_ZERO_ARGS, ChangesService, at_now
 
 PODS = {"resource_type": "pods", "namespace": "apps"}
 LOGS = {"namespace": "apps", "pod_name": "p"}
@@ -81,6 +82,35 @@ def test_the_refusal_says_where_the_result_is_and_asks_for_other_arguments():
     assert "It was not run again" in told["message"] and "other arguments" in told["message"]
     step_zero = json.loads(repeats.refusal(repeats.Seen(step=0, call=1, at=0.0), 3, scope="investigation"))
     assert "step 0" in step_zero["message"] and "first message" in step_zero["message"]
+
+
+ASK = ("It was not run again. Use that result, or call with other arguments (another name, namespace, time range or "
+       "filter) to read something new.")
+
+
+def test_without_call_numbers_the_refusal_reads_as_it_did_to_the_byte():
+    for numbered in (False, True):  # True with no number kept (the chat's guard) reads the same
+        seen = repeats.Seen(step=2, call=None if numbered else 4, at=0.0)
+        assert repeats.refusal(seen, 12, scope="investigation", numbered=numbered) == (
+            '{"status": "repeated", "repeat_of": 2, "message": "This read, the same tool with the same arguments, was '
+            f'already made at step 2 of this investigation, 12 seconds ago; its result is above. {ASK}"}}')
+    assert repeats.refusal(repeats.Seen(step=0, call=1, at=0.0), 3, scope="investigation") == (
+        '{"status": "repeated", "repeat_of": 0, "message": "This read, the same tool with the same arguments, was '
+        f'already made by the server before the investigation started (step 0); its answer is in the first message. {ASK}"}}')
+    assert repeats.refusal(repeats.Seen(step=1, call=0, at=0.0), 5, scope="answer") == (
+        '{"status": "repeated", "repeat_of": 1, "message": "This read, the same tool with the same arguments, was '
+        f'already made at step 1 of this answer, 5 seconds ago; its result is above. {ASK}"}}')
+
+
+def test_with_call_numbers_the_refusal_names_the_call_the_model_read():
+    told = json.loads(repeats.refusal(repeats.Seen(step=1, call=2, at=0.0), 12, scope="investigation", numbered=True))
+    assert told == {"status": "repeated", "repeat_of_call": 2,
+                    "message": "This read, the same tool with the same arguments, was already made as call 2 of this "
+                               f"investigation, 12 seconds ago; its result is the one under [call 2] above. {ASK}"}
+    step_zero = json.loads(repeats.refusal(repeats.Seen(step=0, call=1, at=0.0), 3, scope="investigation", numbered=True))
+    assert step_zero["repeat_of_call"] == 1 and "repeat_of" not in step_zero
+    assert "before the investigation started (call 1); its answer is in the first message" in step_zero["message"]
+    assert "step" not in told["message"] and "step" not in step_zero["message"]  # one numbering for the model
 
 
 # --- the chat's _call_tool, which both chat loops reach ----------------------------------------------------------
@@ -403,3 +433,44 @@ async def test_off_an_investigation_runs_both_reads_and_reads_as_before(monkeypa
     assert [m["content"] for m in messages if m["role"] == "tool"] == ["NAME READY\npod-1 0/1"] * 2
     assert [set(a["after"]) for a in audits] == [INVESTIGATION_ROW_KEYS, INVESTIGATION_ROW_KEYS]
     assert out["report"] == "## Summary\nok" and out["iterations"] == 3
+
+
+# --- an investigation with call numbers (any of rules, changesFirst, evidenceCheck, ledger) ------------------------
+
+
+@pytest.mark.asyncio
+async def test_an_investigation_with_call_numbers_names_the_call_it_repeated_by_its_number(monkeypatch, refuse):
+    service = FakeService([
+        completion(calls=[tool_call("c1", "k8s_get_resources", PODS), tool_call("c2", "k8s_get_pod_logs", LOGS)]),
+        completion(calls=[tool_call("c3", "k8s_get_pod_logs", dict(LOGS))]),
+        completion(content="## Summary\nok"),
+    ])
+    audits = []
+    install_loop(monkeypatch, service, audits)
+    at_now(monkeypatch)
+    out = await runner.investigate(cfg(max_steps=5, rules=True), row(starts_at=STARTED))
+    assert service.executed == [("k8s_get_resources", PODS), ("k8s_get_pod_logs", LOGS)]
+    # step 1 made calls 1 and 2; the repeat at step 2 is call 3, of call 2
+    assert out["tool_calls"][2] == {"tool": "k8s_get_pod_logs", "args": LOGS, "step": 2, "repeat_of": 1, "repeat_of_call": 2}
+    text = service.completions.calls[2]["messages"][-1]["content"]
+    assert text.startswith("[call 3]\n")
+    told = json.loads(text.removeprefix("[call 3]\n"))
+    assert told["repeat_of_call"] == 2 and "repeat_of" not in told
+    assert "as call 2 of this investigation" in told["message"] and "[call 2]" in told["message"] and "step" not in told["message"]
+    assert audits[2]["after"]["repeat_of"] == 1 and audits[2]["after"]["repeat_of_call"] == 2  # the row keeps both
+    assert "repeat_of_call" not in audits[1]["after"] and "repeat_of" not in audits[1]["after"]
+
+
+@pytest.mark.asyncio
+async def test_a_repeat_of_step_zero_is_a_repeat_of_call_one(monkeypatch, refuse):
+    service = ChangesService([completion(calls=[tool_call("c1", "timeline", dict(STEP_ZERO_ARGS))]),
+                              completion(content="## Summary\nok")])
+    audits = []
+    install_loop(monkeypatch, service, audits)
+    at_now(monkeypatch)
+    out = await runner.investigate(cfg(max_steps=5, changes_first=True), row(starts_at=STARTED))
+    assert service.executed == [("timeline", STEP_ZERO_ARGS)]  # read once, by step 0
+    assert out["tool_calls"][1]["repeat_of"] == 0 and out["tool_calls"][1]["repeat_of_call"] == 1
+    told = json.loads(service.completions.calls[1]["messages"][-1]["content"].removeprefix("[call 2]\n"))
+    assert told["repeat_of_call"] == 1 and "(call 1); its answer is in the first message" in told["message"]
+    assert audits[1]["after"]["repeat_of"] == 0 and audits[1]["after"]["repeat_of_call"] == 1

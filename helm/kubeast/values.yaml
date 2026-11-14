@@ -349,7 +349,9 @@ ai:
   # chat answer or one alert investigation, less than 60 seconds after the
   # first answered, is not run again: the model is told at which step it
   # already has the result and to change the arguments to read anything new.
-  # Its ai.tool.call row has status repeated and repeat_of (that step).
+  # Its ai.tool.call row has status repeated and repeat_of (that step). An
+  # investigation with call numbers names the call instead ([call N]) and the
+  # row adds repeat_of_call.
   refuseRepeatedReads: false
   # What leaves for the model is masked first: credentials by key name
   # (password, token, api_key, dsn, ...) and by shape (AWS keys, private keys,
