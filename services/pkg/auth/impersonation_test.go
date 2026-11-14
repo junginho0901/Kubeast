@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -134,8 +133,8 @@ func TestImpersonation_RoleNamesOfTheBuiltInsInOtherForms(t *testing.T) {
 			if _, groups := p.Impersonation(cluster); !reflect.DeepEqual(groups, scope.want) {
 				t.Errorf("%q %s: groups %v, want %v", c.role, scope.name, groups, scope.want)
 			}
-			// the 🔐 line shows the same identity
-			if a := p.Access(cluster, true); !reflect.DeepEqual(a.Groups, scope.want) || a.Role != strings.TrimSpace(c.role) {
+			// the 🔐 line shows the same identity, the role as stored and whether it gives no role group
+			if a := p.Access(cluster, true); !reflect.DeepEqual(a.Groups, scope.want) || a.Role != c.role || a.NoRoleGroup != c.takesSlug {
 				t.Errorf("%q %s: Access %+v, want groups %v", c.role, scope.name, a, scope.want)
 			}
 		}
