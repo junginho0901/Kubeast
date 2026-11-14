@@ -28,11 +28,6 @@ MAX_TEXT = 300
 _BLOCK = re.compile(r"```[ \t]*rca[ \t]*\r?\n(.*?)```", re.S)
 
 
-def tag(number: int, text: str) -> str:
-    """A tool result as the model reads it: its call number first."""
-    return f"[call {number}]\n{text}"
-
-
 def split(answer: str) -> tuple[str, Optional[dict], str]:
     """(the answer without its rca blocks, the last block's object, "ok" | "missing" | "invalid")."""
     blocks = _BLOCK.findall(answer or "")

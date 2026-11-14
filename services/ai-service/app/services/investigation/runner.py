@@ -10,12 +10,14 @@ app.services.ai.tool_turn, which hands it to Claude Code on a Claude subscriptio
 The whole run is bounded by timeout_seconds. With rules or changes_first on, the
 first message also holds the time windows counted from the alert's start, and
 with changes_first what changed in the change window, read as step 0 before the
-first model call (investigation/windows.py). With ai.refuseRepeatedReads a read
+first model call (investigation/windows.py). With any of rules, changes_first,
+evidence_check or ledger on, each tool result the model reads starts with its call
+number, step 0 being call 1 (investigation/numbers.py). With ai.refuseRepeatedReads a read
 repeated within the run is not run again (app/services/ai/repeats.py); with
 evidence_check the report's causes are held to the run's calls before it is kept
-(investigation/evidence.py). With ledger on, each tool result the model reads carries its call
-number and the report ends with the rca block: the runner takes it out, asks once more without tools while a
-hypothesis is open, and returns what it read as `result` (investigation/result.py, investigation/ledger.py).
+(investigation/evidence.py). With ledger on, the report ends with the rca block: the runner takes it out, asks
+once more without tools while a hypothesis is open, and returns what it read as `result` (investigation/result.py,
+investigation/ledger.py).
 """
 
 from __future__ import annotations
@@ -44,6 +46,7 @@ from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import settings as inv_settings
 from app.services.investigation import inbox, skip_reasons, store
 from app.services.investigation import ledger as inv_ledger
+from app.services.investigation import numbers
 from app.services.investigation import result as inv_result
 from app.services.investigation import webhook
 from app.services.investigation import windows as inv_windows
@@ -298,11 +301,11 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         """The call's place in tool_calls, from 1: the number the rca block gives it."""
         return next(i for i, e in enumerate(tool_log, 1) if e is entry)
 
-    numbered = cfg.ledger or cfg.evidence_check
+    numbered = numbers.on(cfg)
 
     async def run_tool(name: str, args: dict, step: int) -> str:
         text, _raw, entry = await call_tool(name, args, step)
-        return inv_result.tag(number_of(entry), text) if numbered else text
+        return numbers.tag(number_of(entry), text) if numbered else text
 
     async def changes_first(windows: inv_windows.Windows) -> str:
         """Step 0: the changes view through the same call as the model's (rights, masking, limits, audit row), no model
@@ -320,7 +323,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
             unused = f"{inv_windows.CHANGES_TOOL} did not answer the {inv_windows.CHANGES_VIEW} view"
         if unused:
             return inv_prompt.no_changes_block(unused)
-        return inv_prompt.changes_block(inv_result.tag(number_of(entry), text) if numbered else text, args)
+        return inv_prompt.changes_block(numbers.tag(number_of(entry), text) if numbered else text, args)
 
     first: list[str] = []
     unused = ""  # why step 0 gave nothing to use
@@ -330,9 +333,12 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         if cfg.changes_first:
             first.append(await changes_first(windows))
     system = inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language, rules=cfg.rules)
+    if cfg.ledger or cfg.evidence_check:
+        tail = (inv_ledger.INSTRUCTION if cfg.ledger else "") + (evidence.INSTRUCTION if cfg.evidence_check else "")
+    else:
+        tail = numbers.NOTE if numbered else ""
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": system + (inv_ledger.INSTRUCTION if cfg.ledger else "")
-                                      + (evidence.INSTRUCTION if cfg.evidence_check else "")},
+        {"role": "system", "content": system + tail},
         {"role": "user", "content": inv_prompt.alert_message(cluster=row.cluster, alert=alert_view(row), context="\n\n".join(first))},
     ]
     final_message = (inv_prompt.final_step_message(cfg.rules) + (inv_ledger.FINAL_NOTE if cfg.ledger else "")
