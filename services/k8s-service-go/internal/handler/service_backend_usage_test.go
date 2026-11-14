@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -15,7 +16,10 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
+// fakeBackendUsage records the queries under mu: SumBackendUsage asks them from
+// several goroutines at once.
 type fakeBackendUsage struct {
+	mu        sync.Mutex
 	available bool
 	pods      []string
 	podsErr   error
@@ -31,7 +35,9 @@ func (f *fakeBackendUsage) ServiceBackendPods(_ context.Context, namespace, name
 }
 
 func (f *fakeBackendUsage) PrometheusQuery(_ context.Context, q string) ([]k8s.PrometheusQueryResult, error) {
+	f.mu.Lock()
 	f.queries = append(f.queries, q)
+	f.mu.Unlock()
 	if strings.HasPrefix(q, "count(") {
 		return []k8s.PrometheusQueryResult{{Value: 2}}, nil
 	}
