@@ -326,3 +326,104 @@ describe('what sits above the pod table', () => {
     expect([number(en.monitoring.pods.totalPods), number(en.monitoring.pods.totalCpu), number(en.monitoring.pods.totalMemory)]).toEqual(['1', '123m', '45Mi'])
   })
 })
+
+// The floating chat is told what the tab draws where its rows go, never a count of usage the screen does not show, and the
+// cards say no number the tab contradicts: an empty answer for one namespace ("No pods in … namespace", the cards at 0),
+// for every namespace (not available, no cards), a failed read after an empty one, the answer that says metrics-server
+// is missing, the page's notice and #900's not-served answer (404) each go as the tab says them.
+describe('what the Pods tab tells the floating chat in place of rows', () => {
+  const HINT = en.monitoring.metricsServerHint
+  const NOT_AVAILABLE = en.monitoring.pods.unavailableAll
+  const textOf = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/&amp;/g, '&').replace(/\s+/g, ' ')
+  const answered = (namespace: string, rows: unknown, error?: unknown) => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, retryOnMount: false } } })
+    const key = ['pod-metrics', 'c1', namespace]
+    if (rows) qc.setQueryData(key, rows)
+    if (error) {
+      const q = qc.getQueryCache().build(qc, { queryKey: key })
+      q.setState({ ...q.state, status: 'error', error: error as Error, errorUpdatedAt: Date.now(), errorUpdateCount: 1 })
+    }
+    return qc
+  }
+  const renderOn = (namespace: string, qc: QueryClient, { notice = false, lng = 'en' } = {}) => {
+    picked.done = false
+    picked.namespace = namespace
+    return renderToStaticMarkup(createElement(I18nextProvider, { i18n: i18n.cloneInstance({ lng }) },
+      createElement(QueryClientProvider, { client: qc }, createElement(MonitoringPods, { metricsUnavailable: notice, onMetricsUnavailable: () => {}, namespaces: [{ name: 'shop' }] as never }))))
+  }
+  const card = (html: string, label: string) => html.split(label)[1]?.match(/text-2xl[^>]*>([^<]*)</)?.[1]
+  const saysWhatTheTabShows = (html: string, skip: string[] = []) => {
+    const parts = (chat.current?.summary ?? '').split(' — ').filter((p) => !skip.includes(p))
+    expect(parts.length).toBeGreaterThan(1)
+    for (const part of parts) expect(textOf(html)).toContain(part)
+    expect(chat.current?.summary).not.toContain('실시간')
+  }
+  beforeEach(() => { chat.current = null })
+  afterEach(() => { picked.namespace = 'shop' })
+
+  it('one namespace answered empty: "No pods in … namespace" and 0, as the tab and its cards say', () => {
+    const html = renderOn('shop', answered('shop', []))
+    expect(html).toContain('data-testid="pod-metrics-none-in-namespace"')
+    expect(card(html, en.monitoring.pods.totalPods)).toBe('0')
+    expect(chat.current?.data).toEqual({ tab: 'pods', filters: { namespace: 'shop' }, total_count: 0 })
+    expect(chat.current?.summary).toBe(`${en.monitoring.pods.title} — No pods in shop namespace`)
+    saysWhatTheTabShows(html)
+  })
+
+  it('every namespace answered empty: not available with its hint, and no cards at 0', () => {
+    const html = renderOn('all', answered('all', []))
+    expect(html).toContain('data-testid="pod-metrics-not-available"')
+    expect(html).not.toContain(en.monitoring.pods.totalPods)
+    expect(chat.current?.data).toEqual({ tab: 'pods', filters: { namespace: 'all' }, no_samples: true })
+    expect(chat.current?.summary).toBe(`${en.monitoring.pods.title} — ${NOT_AVAILABLE} — ${HINT}`)
+    saysWhatTheTabShows(html)
+  })
+
+  it('an empty answer, then a read that failed: the failure with its reason and no card of the empty answer', () => {
+    const html = renderOn('shop', answered('shop', [], httpError(500, { detail: 'etcd timed out' })))
+    expect(html).toContain('data-testid="pod-metrics-error"')
+    expect(html).not.toContain(en.monitoring.pods.totalPods)
+    expect(chat.current?.data).toEqual({ tab: 'pods', filters: { namespace: 'shop' }, metrics_error: { reason: 'etcd timed out' } })
+    saysWhatTheTabShows(html)
+  })
+
+  it('the answer that says metrics-server is missing, on one namespace: not available, not "No pods"', () => {
+    const html = renderOn('shop', answered('shop', null, httpError(503, { detail: 'metrics_unavailable' })))
+    expect(html).toContain('data-testid="pod-metrics-not-available"')
+    expect(html).not.toContain('No pods in shop namespace')
+    expect(chat.current?.data).toEqual({ tab: 'pods', filters: { namespace: 'shop' }, metrics_unavailable: true })
+    saysWhatTheTabShows(html)
+  })
+
+  it('the page\'s notice on: its words first, then the tab\'s, and no "No pods"', () => {
+    const html = renderOn('shop', answered('shop', null), { notice: true })
+    expect(html).toContain('data-testid="pod-metrics-not-available"')
+    expect(html).not.toContain('No pods in shop namespace')
+    expect(chat.current?.summary).toBe(`${en.monitoring.pods.title} — ${en.monitoring.metricsUnavailable} — ${NOT_AVAILABLE} — ${HINT}`)
+    saysWhatTheTabShows(html, [en.monitoring.metricsUnavailable])
+  })
+
+  it('#900\'s not-served answer (404): the layer is the block the tab draws for it, whichever the client reads it as', () => {
+    const notServed = httpError(404, { detail: 'the server could not find the requested resource' })
+    for (const qc of [answered('shop', null, notServed), answered('shop', [], notServed)]) {
+      const html = renderOn('shop', qc)
+      const drawn = html.includes('data-testid="pod-metrics-not-available"') ? 'not-available' : html.includes('data-testid="pod-metrics-error"') ? 'error' : 'other'
+      expect(drawn).not.toBe('other')
+      expect(html).not.toContain(en.monitoring.pods.totalPods)
+      expect(chat.current?.data).toEqual(drawn === 'not-available'
+        ? { tab: 'pods', filters: { namespace: 'shop' }, metrics_unavailable: true }
+        : { tab: 'pods', filters: { namespace: 'shop' }, metrics_error: { reason: 'the server could not find the requested resource' } })
+      saysWhatTheTabShows(html)
+    }
+  })
+
+  it('says it in the screen\'s language', () => {
+    renderOn('shop', answered('shop', []), { lng: 'ko' })
+    expect(chat.current?.summary).toBe(`${ko.monitoring.pods.title} — shop Namespace에 Pod가 없습니다`)
+  })
+
+  it('tells nothing before a namespace is chosen', () => {
+    renderOn('', answered('', null))
+    expect(chat.current).toBeNull()
+  })
+})
