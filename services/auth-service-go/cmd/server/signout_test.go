@@ -73,8 +73,31 @@ func TestSigningOutEndsTheSignInOnTheServer(t *testing.T) {
 		t.Errorf("signing out again must be no change: %q", insert)
 	}
 	rows := api.store.successes("user.logout")
-	if len(rows) != 1 || rows[0].ActorUserID != "owner" || !strings.Contains(string(rows[0].After), signedIn.UTC().Format(time.RFC3339)) {
+	if len(rows) != 1 || rows[0].ActorUserID != "owner" || !strings.Contains(string(rows[0].After), signedIn.UTC().Format(time.RFC3339)) || !strings.Contains(string(rows[0].After), `"sign_in_ended":true`) {
 		t.Fatalf("user.logout rows = %+v", rows)
+	}
+}
+
+// The console's own sign-out after a refused request clears the cookie and leaves the sign-in: the refusal may have
+// been for another reason, and the person's other tabs go on.
+func TestTheConsolesSignOutAfterARefusalOnlyClearsTheCookie(t *testing.T) {
+	api := cookieAPI(t)
+	signedIn := time.Now().Add(-time.Hour).Truncate(time.Second)
+	w := api.call(api.signInAt(signedIn), http.MethodPost, "/logout?end_sign_in=false", "")
+	if w.Code != http.StatusOK || !clearsTheCookie(w) {
+		t.Fatalf("logout: %d %s, cookie cleared %v", w.Code, w.Body.String(), clearsTheCookie(w))
+	}
+	if api.db.ran("ended_sign_ins") {
+		t.Fatalf("ended the sign-in: %q", api.db.statement("ended_sign_ins"))
+	}
+	rows := api.store.successes("user.logout")
+	if len(rows) != 1 || !strings.Contains(string(rows[0].After), `"sign_in_ended":false`) || !strings.Contains(string(rows[0].After), signedIn.UTC().Format(time.RFC3339)) {
+		t.Fatalf("user.logout rows = %+v", rows)
+	}
+	// Any other value is a sign-out the person asked for, as a request without the flag is.
+	other := cookieAPI(t)
+	if w := other.call(other.signInAt(signedIn), http.MethodPost, "/logout?end_sign_in=0", ""); w.Code != http.StatusOK || !other.db.ran("INSERT INTO ended_sign_ins") {
+		t.Fatalf("end_sign_in=0: %d, ended %v", w.Code, other.db.ran("INSERT INTO ended_sign_ins"))
 	}
 }
 

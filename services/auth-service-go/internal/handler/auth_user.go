@@ -377,10 +377,13 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 // audit 없이 진행 (silent logout). 세션 종료는 보안 사고 대응 timeline 의 마지막
 // 지점이라 누락 시 "user 가 언제까지 활동" 추적 어렵다.
 //
-// The sign-in the token belongs to ends on the server too (ended_sign_ins):
-// refresh refuses its tokens, every service refuses its requests and its open
-// terminals, followed logs and live lists end at their next check. A token
-// an API key was exchanged for and a system token belong to no sign-in.
+// When the person asked to sign out, the sign-in the token belongs to ends on
+// the server too (ended_sign_ins): refresh refuses its tokens, every service
+// refuses its requests and its open terminals, followed logs and live lists
+// end at their next check. The console's own sign-out after a refused request
+// sends end_sign_in=false and only clears the cookie; a request without it
+// ends the sign-in. A token an API key was exchanged for and a system token
+// belong to no sign-in.
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	// Public route (no auth middleware): the session may already be expired
 	// and logout must still succeed. The actor and the sign-in are read from
@@ -392,7 +395,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		if claims, err := h.jwtMgr.ClaimsIgnoringExpiry(tokenStr); err == nil {
 			userID, _ := claims["sub"].(string)
 			email, _ := claims["email"].(string)
-			h.endSignIn(r, userID, email, security.SignInTime(claims))
+			h.endSignIn(r, userID, email, security.SignInTime(claims), r.URL.Query().Get("end_sign_in") != "false")
 		}
 	}
 
@@ -409,23 +412,28 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-// endSignIn records the end of the user's sign-in at signIn and the
-// user.logout row. The browser is signed out whether or not the end could be
+// endSignIn writes the user.logout row and, when end is set, records the end
+// of the user's sign-in at signIn; the row says whether it ended
+// (sign_in_ended). The browser is signed out whether or not the end could be
 // stored (its cookie is cleared all the same, and refusing would keep the
 // person signed in on that browser while the database is down); a failure is
 // logged and its row says so.
-func (h *AuthHandler) endSignIn(r *http.Request, userID, email string, signIn int64) {
+func (h *AuthHandler) endSignIn(r *http.Request, userID, email string, signIn int64, end bool) {
 	if userID == "" || signIn <= 0 {
 		h.writeAuditLog(r, "user.logout", &userID, &email, &userID, &email, nil, nil)
 		return
 	}
-	at := jsonRaw(map[string]interface{}{"auth_time": time.Unix(signIn, 0).UTC().Format(time.RFC3339)})
-	if err := h.repo.EndSignIn(r.Context(), userID, signIn); err != nil {
-		slog.ErrorContext(r.Context(), "sign-out: the end of the sign-in could not be stored; its other tokens and connections go on", "user", email, "error", err)
-		h.writeAuditFailure(r, "user.logout", &userID, &email, &userID, &email, "sign_in_end_not_stored", at)
+	at := time.Unix(signIn, 0).UTC().Format(time.RFC3339)
+	if !end {
+		h.writeAuditLog(r, "user.logout", &userID, &email, &userID, &email, nil, jsonRaw(map[string]interface{}{"auth_time": at, "sign_in_ended": false}))
 		return
 	}
-	h.writeAuditLog(r, "user.logout", &userID, &email, &userID, &email, nil, at)
+	if err := h.repo.EndSignIn(r.Context(), userID, signIn); err != nil {
+		slog.ErrorContext(r.Context(), "sign-out: the end of the sign-in could not be stored; its other tokens and connections go on", "user", email, "error", err)
+		h.writeAuditFailure(r, "user.logout", &userID, &email, &userID, &email, "sign_in_end_not_stored", jsonRaw(map[string]interface{}{"auth_time": at, "sign_in_ended": false}))
+		return
+	}
+	h.writeAuditLog(r, "user.logout", &userID, &email, &userID, &email, nil, jsonRaw(map[string]interface{}{"auth_time": at, "sign_in_ended": true}))
 }
 
 // sessionToken returns the raw session token from the cookie or the
