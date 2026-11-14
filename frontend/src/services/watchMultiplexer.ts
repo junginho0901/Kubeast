@@ -1,5 +1,5 @@
 import { getCurrentClusterID } from './clusterRef'
-import { liveSessionEnded, SESSION_ENDED_CLOSE_CODE } from './auth'
+import { liveSessionEnded, onSessionChange, SESSION_ENDED_CLOSE_CODE } from './auth'
 import { clearWatchProblem, recordWatchFrame } from './watchProblemStore'
 
 type ClientMessage = {
@@ -257,6 +257,33 @@ class WebSocketMultiplexer {
     }
   }
 
+  // Lets go of every watch and of the socket, with no reconnect: the socket stays the identity it opened as, so when the
+  // person signed in changes the next subscription opens a socket of its own with the cookie the browser holds then.
+  close() {
+    for (const key of this.subscriptions.keys()) clearWatchProblem(key)
+    this.listeners.clear()
+    this.subscriptions.clear()
+    this.carried.clear()
+    this.answered.clear()
+    this.forgetRefused()
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
+    this.reconnectTimer = null
+    this.reconnectAttempts = 0
+    this.lastSessionEnd = 0
+    this.connecting = null
+    const socket = this.socket
+    this.socket = null
+    if (!socket) return
+    // its close event comes later and would reach the socket opened after it
+    socket.onclose = null
+    try {
+      socket.close()
+    } catch {
+      // closing already
+    }
+    this.closeListeners.forEach((listener) => listener())
+  }
+
   // Told each time the socket closes: its watches have stopped, and no frame says so.
   onSocketClosed(listener: () => void): () => void {
     this.closeListeners.add(listener)
@@ -278,9 +305,16 @@ class WebSocketMultiplexer {
     // REQUEST 를 전송. 이미 OPEN 인 socket 에 새 subscription 이 추가되는
     // 경우만 여기서 직접 REQUEST 보냄 (dedup: 기존 subscription 은 무시).
     const wasOpenBefore = this.socket?.readyState === WebSocket.OPEN
-    const socket = await this.connect()
-    if (socket.readyState !== WebSocket.OPEN) {
-      await this.waitForOpen(socket)
+    let socket: WebSocket
+    try {
+      socket = await this.connect()
+      if (socket.readyState !== WebSocket.OPEN) {
+        await this.waitForOpen(socket)
+      }
+    } catch (err) {
+      // let go of before its socket opened (unsubscribe, close): nothing waits for that socket
+      if (!this.listeners.get(key)?.has(onMessage)) return () => undefined
+      throw err
     }
     // dropped while connecting (unsubscribe ran first): nothing to ask for
     if (wasOpenBefore && wasNewSubscription && this.listeners.get(key)?.has(onMessage)) {
@@ -313,5 +347,6 @@ class WebSocketMultiplexer {
 }
 
 export const watchMultiplexer = new WebSocketMultiplexer()
+onSessionChange(() => watchMultiplexer.close())
 export { WebSocketMultiplexer }
 export type { ClientMessage, ServerMessage }
