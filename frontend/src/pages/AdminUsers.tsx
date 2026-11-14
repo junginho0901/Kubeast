@@ -304,8 +304,8 @@ export default function AdminUsers() {
   // the table takes the screen's height left; its rows per page are what fits (or the footer's fixed choice)
   const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: `${isLoading}:${filteredRows.length}` })
   const { rows: pagedRows, page: currentPage, pages: pageCount } = pageOf(filteredRows, page, rowsPerPage)
-  // role names are stored capitalized ("Pending"), so compare without case
-  const pendingRows = useMemo(() => rows.filter((u) => u.role?.name?.toLowerCase() === 'pending'), [rows])
+  // the built-in Pending by its exact name, as auth-service reads it (a custom role spelled otherwise is not it)
+  const pendingRows = useMemo(() => rows.filter((u) => u.role?.name === 'Pending'), [rows])
   const pendingIds = useMemo(() => pendingRows.map((u) => u.id), [pendingRows])
   // the window's search reads every pending account, not only the page shown
   const pendingFound = useMemo(() => usersMatching(pendingRows, pendingSearch), [pendingRows, pendingSearch])
@@ -513,7 +513,7 @@ export default function AdminUsers() {
               const currentRoleName = roles.find((r) => r.id === currentRoleId)?.name ?? u.role?.name ?? 'unknown'
               const isOpen = openRoleDropdownUserId === u.id
               const isSelf = !!me?.id && me.id === u.id
-              const isPending = currentRoleName.toLowerCase() === 'pending'
+              const isPending = currentRoleName === 'Pending'
               return (
                 <tr
                   key={u.id}

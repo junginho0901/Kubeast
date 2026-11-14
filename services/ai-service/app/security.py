@@ -213,7 +213,8 @@ def decode_access_token(token: str) -> TokenPayload:
             audience=JWT_AUDIENCE,
         )
         user_id = str(payload.get("sub") or "").strip()
-        role = str(payload.get("role") or "").strip().lower()
+        # the account level's name as stored: a built-in is known by its exact name
+        role = str(payload.get("role") or "").strip()
         email = str(payload.get("email") or "").strip()
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -279,7 +280,7 @@ async def require_auth(authorization: Optional[str] = Depends(bearer_or_cookie))
     # A pending account (registered, no role granted yet) holds a session only
     # to see its own state; it must not reach the AI endpoints (L15 — same
     # rule as the Go services' shared middleware).
-    if (payload.role or "").lower() == "pending":
+    if payload.role == "Pending":
         raise HTTPException(status_code=403, detail="Account pending approval")
     return payload
 

@@ -60,6 +60,11 @@ async def test_require_auth_refuses_pending_accounts(monkeypatch):
     payload = await require_auth("Bearer anything")
     assert payload.user_id == "u2"
 
+    # the built-in is known by its exact name: another spelling is not that account level
+    for role in ("PENDING", "pending"):
+        monkeypatch.setattr(security, "decode_access_token", lambda token, role=role: TokenPayload(user_id="u3", role=role, email="c@example.com"))
+        assert (await require_auth("Bearer anything")).role == role
+
 
 def test_oversized_body_is_refused_before_routing():
     from main import app, MAX_REQUEST_BODY_BYTES

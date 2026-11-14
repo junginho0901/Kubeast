@@ -94,7 +94,8 @@ func tokenMiddleware(jwtMgr *JWTManager, tokenVersion TokenVersionLookup, cookie
 				email = ""
 			}
 
-			role := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", claims["role"])))
+			// The account level's name as stored: a built-in is known by its exact name (auth.IsBuiltinRole).
+			role := strings.TrimSpace(fmt.Sprintf("%v", claims["role"]))
 			if role == "" || role == "<nil>" {
 				role = "read"
 			}
@@ -119,7 +120,7 @@ func tokenMiddleware(jwtMgr *JWTManager, tokenVersion TokenVersionLookup, cookie
 
 			// A pending account may only see its own state, keep its session and
 			// sign out (same rule as pkg/auth's middleware in the other services).
-			if role == "pending" {
+			if role == "Pending" {
 				if _, allowed := auth.PendingAllowedPaths[r.URL.Path]; !allowed {
 					http.Error(w, `{"detail":"Account pending approval"}`, http.StatusForbidden)
 					return
