@@ -572,8 +572,9 @@ replicas:
   frontend: 1
   toolServer: 1
   gateway: 1
-# A PodDisruptionBudget for each Deployment above with more than one replica, allowing maxUnavailable of its pods to be
-# evicted at once (unhealthy ones always); none at 1, where it would block node drains. enabled: false leaves them out.
+# A PodDisruptionBudget for each Deployment above with more than one replica, or with autoscaling on and minReplicas 2 or
+# more, allowing maxUnavailable of its pods to be evicted at once (unhealthy ones always); none where it can be down to one
+# pod, which would block node drains. enabled: false leaves them out.
 pdb:
   enabled: true
   maxUnavailable: 1

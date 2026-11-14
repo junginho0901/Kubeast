@@ -108,6 +108,52 @@ tests:
       - hasDocuments:
           count: 0
 
+  - it: renders a PDB for a service whose autoscaling keeps at least two pods
+    template: pdb.yaml
+    set:
+      autoscaling.authService.enabled: true
+      autoscaling.authService.minReplicas: 2
+      autoscaling.authService.maxReplicas: 4
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: auth-service
+      - equal:
+          path: spec.maxUnavailable
+          value: 1
+
+  - it: renders none for a service whose autoscaling may go down to one pod, whatever replicas says
+    template: pdb.yaml
+    set:
+      replicas.gateway: 3
+      autoscaling.gateway.enabled: true
+      autoscaling.gateway.minReplicas: 1
+      autoscaling.gateway.maxReplicas: 4
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: reads minReplicas only while autoscaling is on
+    template: pdb.yaml
+    set:
+      autoscaling.sessionService.enabled: false
+      autoscaling.sessionService.minReplicas: 3
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders no PDB for the AI services' autoscaling with ai.enabled false
+    template: pdb.yaml
+    set:
+      ai.enabled: false
+      autoscaling.aiService.enabled: true
+      autoscaling.aiService.minReplicas: 2
+    asserts:
+      - hasDocuments:
+          count: 0
+
   - it: refuses a maxUnavailable of 0, which would stop every node drain
     template: pdb.yaml
     set:
