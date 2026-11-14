@@ -101,3 +101,9 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no features.alertInvestigation.changesFirst
+  - it: stops values without the investigation ledger switch
+    set:
+      features.alertInvestigation.ledger: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.ledger

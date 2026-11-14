@@ -154,6 +154,9 @@ class AlertInvestigation(Base):
     error = Column(Text, nullable=False, default="")
     # the email of the person who asked for it in the Alerts inbox, "" when the webhook queued it (00021)
     requested_by = Column(String, nullable=False, default="")
+    # what the server read of the report's rca block and the hypothesis ledger, null without
+    # features.alertInvestigation.ledger (00029, investigation/result.py)
+    result = Column(JSON, nullable=True)
 
 
 class AlertInboxItem(Base):
@@ -191,7 +194,7 @@ class AlertInboxItem(Base):
 
 # Schema version this build needs — the newest file in
 # services/pkg/dbmigrate/migrations (goose records it in goose_db_version).
-REQUIRED_SCHEMA_VERSION = 22
+REQUIRED_SCHEMA_VERSION = 29
 
 
 async def read_schema_version(engine) -> int:

@@ -10,7 +10,9 @@ app.services.ai.tool_turn, which hands it to Claude Code on a Claude subscriptio
 The whole run is bounded by timeout_seconds. With rules or changes_first on, the
 first message also holds the time windows counted from the alert's start, and
 with changes_first what changed in the change window, read as step 0 before the
-first model call (investigation/windows.py).
+first model call (investigation/windows.py). With ledger on, each tool result the model reads carries its call
+number and the report ends with the rca block: the runner takes it out, asks once more without tools while a
+hypothesis is open, and returns what it read as `result` (investigation/result.py, investigation/ledger.py).
 """
 
 from __future__ import annotations
@@ -36,6 +38,8 @@ from app.services.audit_writer import audit_ready, fail_closed_enabled, write_au
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import settings as inv_settings
 from app.services.investigation import inbox, skip_reasons, store
+from app.services.investigation import ledger as inv_ledger
+from app.services.investigation import result as inv_result
 from app.services.investigation import webhook
 from app.services.investigation import windows as inv_windows
 
@@ -227,8 +231,13 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
             return json.dumps({"status": "audit_unavailable"}), raw, entry
         return result, raw, entry
 
+    def number_of(entry: dict[str, Any]) -> int:
+        """The call's place in tool_calls, from 1: the number the rca block gives it."""
+        return next(i for i, e in enumerate(tool_log, 1) if e is entry)
+
     async def run_tool(name: str, args: dict, step: int) -> str:
-        return (await call_tool(name, args, step))[0]
+        text, _raw, entry = await call_tool(name, args, step)
+        return inv_result.tag(number_of(entry), text) if cfg.ledger else text
 
     async def changes_first(windows: inv_windows.Windows) -> str:
         """Step 0: the changes view through the same call as the model's (rights, masking, limits, audit row), no model
@@ -246,7 +255,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
             unused = f"{inv_windows.CHANGES_TOOL} did not answer the {inv_windows.CHANGES_VIEW} view"
         if unused:
             return inv_prompt.no_changes_block(unused)
-        return inv_prompt.changes_block(text, args)
+        return inv_prompt.changes_block(inv_result.tag(number_of(entry), text) if cfg.ledger else text, args)
 
     first: list[str] = []
     unused = ""  # why step 0 gave nothing to use
@@ -255,27 +264,72 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         first.append(inv_windows.describe(windows, cfg))
         if cfg.changes_first:
             first.append(await changes_first(windows))
+    system = inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language, rules=cfg.rules)
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language,
-                                                               rules=cfg.rules)},
+        {"role": "system", "content": system + (inv_ledger.INSTRUCTION if cfg.ledger else "")},
         {"role": "user", "content": inv_prompt.alert_message(cluster=row.cluster, alert=alert_view(row), context="\n\n".join(first))},
     ]
     turn = await run_tool_turn(service, messages, tools, run_tool, max_steps=cfg.max_steps,
-                               final_message=inv_prompt.final_step_message(cfg.rules), remaining=remaining, lane="investigation",
-                               usage=progress["usage"])
+                               final_message=inv_prompt.final_step_message(cfg.rules) + (inv_ledger.FINAL_NOTE if cfg.ledger else ""),
+                               remaining=remaining, lane="investigation", usage=progress["usage"])
     usage = turn.usage
     if not turn.answer:
         raise InvestigationError("the model returned no report")
+    answer, steps, extra = turn.answer, turn.steps, {}
+    if cfg.ledger:
+        answer, result, asked = await settle_result(service, messages, turn.answer, tool_log, remaining, progress["usage"], row.id)
+        steps += 1 if asked else 0
+        extra["result"] = result
     return {
-        "report": turn.answer + (inv_prompt.step_zero_note(unused, cfg.language) if unused else ""),
+        "report": answer + (inv_prompt.step_zero_note(unused, cfg.language) if unused else ""),
         "tool_calls": tool_log,
-        "iterations": turn.steps,
+        "iterations": steps,
         "provider": service.provider or "",
         "model": service.model or "",
         "prompt_tokens": usage["prompt_tokens"] if usage["seen"] else None,
         "completion_tokens": usage["completion_tokens"] if usage["seen"] else None,
         "total_tokens": usage["total_tokens"] if usage["seen"] else None,
+        **extra,
     }
+
+
+async def answer_without_tools(service, messages: list[dict[str, Any]], remaining, usage: dict[str, Any]) -> str:
+    """One more model call with no tools offered, on either loop's provider; its tokens count in the run's usage."""
+    from app.services.ai import usage as usage_acct
+
+    if getattr(service, "provider", None) == "claude-code":
+        done = await asyncio.wait_for(service.client.claude_code.complete(messages, lane="investigation"), timeout=remaining())
+        usage_acct.add_usage(usage, done.usage, prompt_chars=usage_acct.prompt_chars(messages, None))
+        return (done.text or "").strip()
+    resp = await asyncio.wait_for(
+        service.client.chat.completions.create(model=service.model, messages=messages, temperature=0.2,
+                                               max_tokens=limits.answer_tokens(service, 2048), timeout=min(120.0, remaining())),
+        timeout=remaining())
+    usage_acct.add_usage(usage, getattr(resp, "usage", None), prompt_chars=usage_acct.prompt_chars(messages, None))
+    return (resp.choices[0].message.content or "").strip()
+
+
+async def settle_result(service, messages: list[dict[str, Any]], answer: str, tool_log: list[dict[str, Any]], remaining,
+                        usage: dict[str, Any], inv_id: str) -> tuple[str, dict[str, Any], bool]:
+    """(the report without its rca block, the row's result, whether the model was asked again). A report whose block
+    is missing or holds a hypothesis that is not closed is asked for once more without tools; the second answer is
+    taken when its block can be read. A second call that fails keeps the first report."""
+    report, block, status = inv_result.split(answer)
+    hypotheses = inv_ledger.check(block, tool_log)
+    if not inv_ledger.needs_asking(status, block, hypotheses):
+        return report, inv_result.shape(block, status, tool_log, hypotheses), False
+    ask = inv_ledger.ask_again(status, block, hypotheses, tool_log)
+    try:
+        again = await answer_without_tools(
+            service, messages + [{"role": "assistant", "content": answer}, {"role": "user", "content": ask}], remaining, usage)
+    except Exception as e:  # the report is there; the second ask is not worth the run
+        log.warning("investigation %s: second ask failed: %s", inv_id, clean_error(e))
+        return report, inv_result.shape(block, status, tool_log, hypotheses, asked_again=True, ask_failed=True), True
+    report2, block2, status2 = inv_result.split(again)
+    if status2 == "ok" and report2.strip():
+        report, block, status = report2, block2, status2
+        hypotheses = inv_ledger.check(block, tool_log)
+    return report, inv_result.shape(block, status, tool_log, hypotheses, asked_again=True), True
 
 
 async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:

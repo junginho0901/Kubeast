@@ -664,6 +664,20 @@ tests:
           path: data.ALERT_INVESTIGATION_CHANGES_WINDOW_HOURS
           value: "24"
 
+  - it: keeps the investigation ledger off by default
+    asserts:
+      - equal:
+          path: data.ALERT_INVESTIGATION_LEDGER
+          value: "false"
+
+  - it: passes the investigation ledger when it is on
+    set:
+      features.alertInvestigation.ledger: true
+    asserts:
+      - equal:
+          path: data.ALERT_INVESTIGATION_LEDGER
+          value: "true"
+
   - it: keeps the shared webhook token and leaves registered store URLs open by default
     asserts:
       - equal:

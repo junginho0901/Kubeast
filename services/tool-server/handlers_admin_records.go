@@ -31,7 +31,7 @@ var investigationRowFields = []string{
 
 // What the report window adds. The report comes after what says what it is about, for a result cut at the model's limit.
 var (
-	investigationDetailFields   = []string{"fingerprint", "starts_at", "generator_url", "alertmanager_url", "provider", "prompt_tokens", "completion_tokens", "error", "report", "labels", "annotations"}
+	investigationDetailFields   = []string{"fingerprint", "starts_at", "generator_url", "alertmanager_url", "provider", "prompt_tokens", "completion_tokens", "error", "result", "report", "labels", "annotations"}
 	investigationToolCallFields = []string{"tool", "args", "step", "result_chars", "error", "access"}
 	investigationAnswerLast     = []string{"report", "tool_calls", "labels", "annotations"}
 )
