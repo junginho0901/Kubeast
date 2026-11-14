@@ -1,5 +1,7 @@
+import type { Ref } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MessageSquare } from 'lucide-react'
+import { chatShortcutNames, isMacPlatform } from '@/hooks/useChatShortcut'
 
 interface ToggleButtonProps {
   onClick: () => void
@@ -7,6 +9,8 @@ interface ToggleButtonProps {
   visible: boolean
   /** 상세 드로어가 열려 있으면 드로어 왼쪽 바깥으로 */
   docked: boolean
+  /** the chat gives the focus back here when it closes */
+  buttonRef?: Ref<HTMLButtonElement>
 }
 
 /**
@@ -15,10 +19,12 @@ interface ToggleButtonProps {
  * `visible=false` 시 페이드아웃 + 살짝 축소 → 부모가 unmount 처리.
  * 클릭 가능 영역도 같이 비활성화하여 hidden 중 클릭 사고를 방지.
  */
-export function ToggleButton({ onClick, visible, docked }: ToggleButtonProps) {
+export function ToggleButton({ onClick, visible, docked, buttonRef }: ToggleButtonProps) {
   const { t } = useTranslation()
+  const shortcut = chatShortcutNames(isMacPlatform())
   return (
     <button
+      ref={buttonRef}
       type="button"
       onClick={onClick}
       tabIndex={visible ? 0 : -1}
@@ -32,6 +38,8 @@ export function ToggleButton({ onClick, visible, docked }: ToggleButtonProps) {
           : 'opacity-0 scale-90 pointer-events-none'
       }`}
       aria-label={t('floatingChat.openAriaLabel', { defaultValue: 'Open AI Chat' })}
+      aria-keyshortcuts={shortcut.aria}
+      title={t('floatingChat.openTitle', { shortcut: shortcut.label, defaultValue: 'Open AI Chat ({{shortcut}})' })}
     >
       <MessageSquare className="h-5 w-5" />
     </button>
