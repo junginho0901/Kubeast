@@ -424,8 +424,10 @@ audit:
   # Refuse audited actions (writes, Secret/Helm reveal, exec, node shell, logs,
   # AI write tools) with 503 while the audit database cannot store the row,
   # instead of running them unrecorded. Lists and reads keep working. Services
-  # also wait for the database at start-up (AUDIT_DB_WAIT_SEC, 90 s) and exit
-  # if it does not come, rather than falling back to log-only auditing.
+  # also wait for the database at start-up (k8s-service AUDIT_DB_WAIT_SEC 90 s,
+  # auth-service and session-service 30 pings 2 s apart then 60 s for the schema;
+  # a 180 s startupProbe covers it) and exit if it does not come, rather than
+  # falling back to log-only auditing.
   failClosed: true
   # Copies of the audit rows outside the database (which stays the primary
   # store). One auth-service replica reads past each sink's cursor and sends
