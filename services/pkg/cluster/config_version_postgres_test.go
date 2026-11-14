@@ -3,8 +3,12 @@ package cluster
 import (
 	"context"
 	"errors"
+	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func versionOf(t *testing.T, r *PostgresRegistry, id ID) (int64, bool) {
@@ -75,8 +79,8 @@ func TestPostgres_ConfigVersionChangesWithWhatAConnectionIsBuiltFrom(t *testing.
 			_, err := r.UpdateMeta(ctx, id, MetaPatch{LogSearchTenant: &tenant})
 			return err
 		}},
-		{"kubeconfig replaced, no uid", func() error { return r.ReplaceKubeconfig(ctx, id, "", nil) }},
-		{"kubeconfig replaced with uid", func() error { return r.ReplaceKubeconfig(ctx, id, "uid-1", nil) }},
+		{"kubeconfig replaced, no uid", func() error { return r.ReplaceKubeconfig(ctx, id, "", SecretWrites{}) }},
+		{"kubeconfig replaced with uid", func() error { return r.ReplaceKubeconfig(ctx, id, "uid-1", SecretWrites{}) }},
 	}
 	prev := v0
 	for _, c := range changes {
@@ -93,7 +97,7 @@ func TestPostgres_ConfigVersionChangesWithWhatAConnectionIsBuiltFrom(t *testing.
 	if uid, err := r.ClusterUID(ctx, id); err != nil || uid != "uid-1" {
 		t.Fatalf("ClusterUID = %q, %v; want uid-1", uid, err)
 	}
-	if err := r.ReplaceKubeconfig(ctx, id, "", nil); err != nil {
+	if err := r.ReplaceKubeconfig(ctx, id, "", SecretWrites{}); err != nil {
 		t.Fatal(err)
 	}
 	if uid, _ := r.ClusterUID(ctx, id); uid != "uid-1" {
@@ -102,17 +106,18 @@ func TestPostgres_ConfigVersionChangesWithWhatAConnectionIsBuiltFrom(t *testing.
 	prev, _ = versionOf(t, r, id)
 	seen[prev] = true
 	ran := false
-	if err := r.ReplaceKubeconfig(ctx, "nope", "", func(context.Context) error { ran = true; return nil }); !errors.Is(err, ErrNotFound) || ran {
+	if err := r.ReplaceKubeconfig(ctx, "nope", "", SecretWrites{Store: func(context.Context) error { ran = true; return nil }}); !errors.Is(err, ErrNotFound) || ran {
 		t.Fatalf("ReplaceKubeconfig of an unknown id = %v (store ran: %v), want ErrNotFound without the store", err, ran)
 	}
 
-	// A store that fails leaves the row as it was: no new version, no new UID, no new Prometheus URL.
+	// A store that fails having written nothing leaves the row as it was: no new version, no new UID, no new
+	// Prometheus URL.
 	refused := errors.New("the API server refused the Secret")
-	if err := r.ReplaceKubeconfig(ctx, id, "uid-2", func(context.Context) error { return refused }); !errors.Is(err, refused) {
+	if err := r.ReplaceKubeconfig(ctx, id, "uid-2", SecretWrites{Store: func(context.Context) error { return refused }}); !errors.Is(err, refused) {
 		t.Fatalf("ReplaceKubeconfig with a failing store = %v", err)
 	}
 	other := "https://prom-other.example"
-	if _, err := r.UpdateMetaStoring(ctx, id, MetaPatch{PrometheusURL: &other}, func(context.Context) error { return refused }); !errors.Is(err, refused) {
+	if _, err := r.UpdateMetaStoring(ctx, id, MetaPatch{PrometheusURL: &other}, SecretWrites{Store: func(context.Context) error { return refused }}); !errors.Is(err, refused) {
 		t.Fatalf("UpdateMetaStoring with a failing store = %v", err)
 	}
 	if v, _ := versionOf(t, r, id); v != prev {
@@ -127,13 +132,13 @@ func TestPostgres_ConfigVersionChangesWithWhatAConnectionIsBuiltFrom(t *testing.
 
 	// The store runs before the commit: what it reads of the row is the version before.
 	stored := false
-	if err := r.ReplaceKubeconfig(ctx, id, "", func(context.Context) error {
+	if err := r.ReplaceKubeconfig(ctx, id, "", SecretWrites{Store: func(context.Context) error {
 		stored = true
 		if v, _ := versionOf(t, r, id); v != prev {
 			t.Errorf("the new version %d was visible before the commit", v)
 		}
 		return nil
-	}); err != nil || !stored {
+	}}); err != nil || !stored {
 		t.Fatalf("ReplaceKubeconfig = %v (stored: %v)", err, stored)
 	}
 	if v, _ := versionOf(t, r, id); v == prev || seen[v] {
@@ -167,10 +172,10 @@ func TestPostgres_AStorePastItsDeadlineRollsBack(t *testing.T) {
 	}
 	before, _ := versionOf(t, r, meta.ID)
 	start := time.Now()
-	err = r.ReplaceKubeconfig(ctx, meta.ID, "uid-late", func(ctx context.Context) error {
+	err = r.ReplaceKubeconfig(ctx, meta.ID, "uid-late", SecretWrites{Store: func(ctx context.Context) error {
 		<-ctx.Done()
 		return ctx.Err()
-	})
+	}})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("ReplaceKubeconfig with a store past its deadline = %v", err)
 	}
@@ -188,5 +193,202 @@ func TestPostgres_AStorePastItsDeadlineRollsBack(t *testing.T) {
 	defer cancel()
 	if err := r.UpdateHealth(updateCtx, meta.ID, "healthy"); err != nil {
 		t.Fatalf("UpdateHealth after the rollback: %v", err)
+	}
+}
+
+// memSecret is one Secret held in memory for the SecretWrites of these tests.
+type memSecret struct {
+	mu sync.Mutex
+	v  string
+}
+
+func (m *memSecret) get() string  { m.mu.Lock(); defer m.mu.Unlock(); return m.v }
+func (m *memSecret) set(v string) { m.mu.Lock(); m.v = v; m.mu.Unlock() }
+
+// writesOf is the SecretWrites of one value: Store reads what the Secret holds and writes value, then answers fail;
+// PutBack writes back what Store read.
+func writesOf(secret *memSecret, value string, fail error) SecretWrites {
+	var before string
+	return SecretWrites{
+		Store: func(context.Context) error {
+			before = secret.get()
+			secret.set(value)
+			return fail
+		},
+		PutBack: func(context.Context) (bool, string) {
+			secret.set(before)
+			return true, ""
+		},
+	}
+}
+
+// waitForLockWaiters waits until n sessions of the test's database wait on a lock.
+func waitForLockWaiters(t *testing.T, pool *pgxpool.Pool, n int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var waiting int
+		if err := pool.QueryRow(context.Background(),
+			`SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'`).Scan(&waiting); err != nil {
+			t.Fatalf("pg_stat_activity: %v", err)
+		}
+		if waiting >= n {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%d sessions wait on a lock after 5 s, want %d", waiting, n)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// A change whose store wrote a Secret and then failed puts it back and sets one more new config_version, so a
+// connection a k8s-service process built from the written value meanwhile, under the version before, is dropped; the
+// UID stays. What PutBack could not undo comes back as a PutBackError around the store's error.
+func TestPostgres_AFailedStoreThatWroteSetsANewVersion(t *testing.T) {
+	r, _ := migratedRegistry(t)
+	ctx := context.Background()
+	meta, err := r.AddExternal(ctx, "Prod", "apiVersion: v1\nkind: Config\n", "", "", "tester", NewFilesystemSecretStore(t.TempDir()))
+	if err != nil {
+		t.Fatalf("AddExternal: %v", err)
+	}
+	id := meta.ID
+	before, _ := versionOf(t, r, id)
+	secret := &memSecret{v: "kubeconfig before"}
+	refused := errors.New("the API server refused the Secret")
+	err = r.ReplaceKubeconfig(ctx, id, "uid-refused", writesOf(secret, "kubeconfig refused", refused))
+	if !errors.Is(err, refused) {
+		t.Fatalf("ReplaceKubeconfig = %v, want the store's error", err)
+	}
+	var notUndone *PutBackError
+	if errors.As(err, &notUndone) {
+		t.Fatalf("a change put back whole answered %v", err)
+	}
+	if got := secret.get(); got != "kubeconfig before" {
+		t.Fatalf("the Secret holds %q after the change failed", got)
+	}
+	after, _ := versionOf(t, r, id)
+	if after == before {
+		t.Fatalf("version %d stayed after a store that wrote and failed", after)
+	}
+	if uid, _ := r.ClusterUID(ctx, id); uid != "" {
+		t.Fatalf("uid %q after the change failed", uid)
+	}
+
+	err = r.ReplaceKubeconfig(ctx, id, "", SecretWrites{
+		Store:   func(context.Context) error { return refused },
+		PutBack: func(context.Context) (bool, string) { return true, "kubeconfig (the value before was not read)" },
+	})
+	if !errors.As(err, &notUndone) || !errors.Is(err, refused) || notUndone.Left != "left as written: kubeconfig (the value before was not read)" {
+		t.Fatalf("ReplaceKubeconfig with a Secret left as written = %v", err)
+	}
+	if v, _ := versionOf(t, r, id); v == after {
+		t.Fatalf("version %d stayed after a Secret was left as written", v)
+	}
+}
+
+// Two changes of one cluster at once: the first writes its Secret and then fails, while the second waits on the row.
+// The first puts the Secret back before it lets the row go, so the second reads the value from before the first and
+// its own write is what stays; the first's put back does not write over it.
+func TestPostgres_AFailedStorePutsBackBeforeTheNextChangeOfTheCluster(t *testing.T) {
+	r, pool := migratedRegistry(t)
+	ctx := context.Background()
+	meta, err := r.AddExternal(ctx, "Prod", "apiVersion: v1\nkind: Config\n", "", "", "tester", NewFilesystemSecretStore(t.TempDir()))
+	if err != nil {
+		t.Fatalf("AddExternal: %v", err)
+	}
+	id := meta.ID
+	secret := &memSecret{v: "kubeconfig before"}
+	refused := errors.New("the API server refused the Secret")
+
+	secondStored := make(chan struct{})
+	var secondRead string
+	second := SecretWrites{
+		Store: func(context.Context) error {
+			secondRead = secret.get()
+			secret.set("kubeconfig second")
+			close(secondStored)
+			return nil
+		},
+		PutBack: func(context.Context) (bool, string) { return true, "" },
+	}
+	secondDone := make(chan error, 1)
+
+	var firstBefore string
+	first := SecretWrites{
+		Store: func(context.Context) error {
+			firstBefore = secret.get()
+			secret.set("kubeconfig first")
+			go func() { secondDone <- r.ReplaceKubeconfig(ctx, id, "", second) }()
+			waitForLockWaiters(t, pool, 1)
+			return refused
+		},
+		PutBack: func(context.Context) (bool, string) {
+			time.Sleep(200 * time.Millisecond) // a second change not held by the row would store now
+			select {
+			case <-secondStored:
+				t.Error("the second change stored before the first put its Secret back")
+			default:
+			}
+			secret.set(firstBefore)
+			return true, ""
+		},
+	}
+	if err := r.ReplaceKubeconfig(ctx, id, "", first); !errors.Is(err, refused) {
+		t.Fatalf("first change = %v, want the store's error", err)
+	}
+	select {
+	case err := <-secondDone:
+		if err != nil {
+			t.Fatalf("second change = %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the second change did not end")
+	}
+	if secondRead != "kubeconfig before" {
+		t.Fatalf("the second change read %q before its write, want the value from before the first", secondRead)
+	}
+	if got := secret.get(); got != "kubeconfig second" {
+		t.Fatalf("the Secret holds %q, want the second change's", got)
+	}
+}
+
+// A commit that fails after the store wrote (here a deferred trigger refuses it) puts the Secret back under the row's
+// lock taken again and sets a new config_version in that transaction; the UID of the change stays out.
+func TestPostgres_AFailedCommitPutsBackAndSetsANewVersion(t *testing.T) {
+	r, pool := migratedRegistry(t)
+	ctx := context.Background()
+	for _, sql := range []string{
+		`CREATE FUNCTION refuse_commit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'commit refused by the test'; END $$`,
+		`CREATE CONSTRAINT TRIGGER refuse_commit AFTER UPDATE ON clusters DEFERRABLE INITIALLY DEFERRED
+			FOR EACH ROW WHEN (NEW.cluster_uid = 'uid-commit-refused') EXECUTE FUNCTION refuse_commit()`,
+	} {
+		if _, err := pool.Exec(ctx, sql); err != nil {
+			t.Fatalf("%s: %v", sql, err)
+		}
+	}
+	meta, err := r.AddExternal(ctx, "Prod", "apiVersion: v1\nkind: Config\n", "", "", "tester", NewFilesystemSecretStore(t.TempDir()))
+	if err != nil {
+		t.Fatalf("AddExternal: %v", err)
+	}
+	id := meta.ID
+	before, _ := versionOf(t, r, id)
+	secret := &memSecret{v: "kubeconfig before"}
+	err = r.ReplaceKubeconfig(ctx, id, "uid-commit-refused", writesOf(secret, "kubeconfig not committed", nil))
+	if err == nil || !strings.Contains(err.Error(), "commit refused by the test") {
+		t.Fatalf("ReplaceKubeconfig = %v, want the refused commit", err)
+	}
+	var notUndone *PutBackError
+	if errors.As(err, &notUndone) {
+		t.Fatalf("a change put back whole answered %v", err)
+	}
+	if got := secret.get(); got != "kubeconfig before" {
+		t.Fatalf("the Secret holds %q after the commit failed", got)
+	}
+	if v, _ := versionOf(t, r, id); v == before {
+		t.Fatalf("version %d stayed after a commit that failed with the Secret written", v)
+	}
+	if uid, _ := r.ClusterUID(ctx, id); uid != "" {
+		t.Fatalf("uid %q after the commit failed", uid)
 	}
 }

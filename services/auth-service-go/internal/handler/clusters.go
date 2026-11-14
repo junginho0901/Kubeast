@@ -324,10 +324,11 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 		// config_version (and the UID, when the probe read one), which commits
 		// only when the write went through. Every k8s-service process reads the
 		// versions and drops a connection built from an older one, also when the
-		// call below reaches none of them. A failure leaves the version and the
-		// Secret as they were and answers it.
+		// call below reaches none of them. A failure puts the Secret back, gives
+		// the cluster one more new version once it had been written, and answers
+		// it, naming a Secret that could not be put back.
 		staged := []*stagedSecret{h.stageKubeconfig(id, *req.Kubeconfig)}
-		if err := h.registry.ReplaceKubeconfig(r.Context(), id, newUID, storeAll(staged)); err != nil {
+		if err := h.registry.ReplaceKubeconfig(r.Context(), id, newUID, secretWrites(staged)); err != nil {
 			h.failClusterChange(w, r, payload, id, nil, rotate, staged, err)
 			return
 		}
@@ -434,7 +435,7 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 
 	// A patch that changes the connection sets a new config_version in the
 	// same row change, which commits only when the header Secrets are written.
-	meta, err := h.registry.UpdateMetaStoring(r.Context(), id, patch, storeAll(staged))
+	meta, err := h.registry.UpdateMetaStoring(r.Context(), id, patch, secretWrites(staged))
 	if err != nil {
 		var asked interface{}
 		if promAuthChange != "" || logSearchAuthChange != "" {

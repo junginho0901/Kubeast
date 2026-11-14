@@ -31,6 +31,9 @@ type PostgresRegistry struct {
 // lock and a pool connection, and the Kubernetes client of the Secret store sets no timeout on a write.
 const storeTimeout = 10 * time.Second
 
+// putBackTimeout bounds putting back the Secrets of a change that did not commit, which goes on after its request.
+const putBackTimeout = 10 * time.Second
+
 // NewPostgresRegistry builds a registry over pool, loading external kubeconfigs
 // through secrets.
 func NewPostgresRegistry(pool *pgxpool.Pool, secrets SecretReader) *PostgresRegistry {
@@ -181,6 +184,8 @@ func (r *PostgresRegistry) Default(ctx context.Context) (ID, error) {
 // The row is read in Get before the Secrets, and auth-service writes a Secret
 // before the row change that sets the new version commits (changeRow), so an
 // Info whose ConfigVersion equals the one here holds what that version names.
+// A change that does not commit puts its Secrets back and then sets one more
+// new version, so an Info built meanwhile from what it wrote is dropped too.
 func (r *PostgresRegistry) Versions(ctx context.Context) (map[ID]int64, error) {
 	rows, err := r.pool.Query(ctx, `SELECT id, config_version FROM clusters`)
 	if err != nil {
@@ -556,13 +561,14 @@ func (p MetaPatch) changesConnection() bool {
 // A patch that changes the connection (changesConnection) sets a new
 // config_version in the same statement.
 func (r *PostgresRegistry) UpdateMeta(ctx context.Context, id ID, patch MetaPatch) (*Meta, error) {
-	return r.UpdateMetaStoring(ctx, id, patch, nil)
+	return r.UpdateMetaStoring(ctx, id, patch, SecretWrites{})
 }
 
-// UpdateMetaStoring is UpdateMeta running store (the Prometheus and log store
-// header Secrets) before the row change commits (changeRow).
-func (r *PostgresRegistry) UpdateMetaStoring(ctx context.Context, id ID, patch MetaPatch, store func(context.Context) error) (*Meta, error) {
-	err := r.changeRow(ctx, `
+// UpdateMetaStoring is UpdateMeta writing w (the Prometheus and log store
+// header Secrets) before the row change commits (changeRow). A patch with
+// Secret writes changes the connection, so it sets a new config_version.
+func (r *PostgresRegistry) UpdateMetaStoring(ctx context.Context, id ID, patch MetaPatch, w SecretWrites) (*Meta, error) {
+	err := r.changeRow(ctx, id, `
 		UPDATE clusters
 		SET display_name                = COALESCE($2, display_name),
 		    api_server_url              = COALESCE($3, api_server_url),
@@ -577,49 +583,176 @@ func (r *PostgresRegistry) UpdateMetaStoring(ctx context.Context, id ID, patch M
 		    config_version              = CASE WHEN $12 THEN nextval('cluster_config_version_seq') ELSE config_version END,
 		    updated_at                  = NOW()
 		WHERE id = $1`, []any{id, patch.DisplayName, patch.APIServerURL, patch.PrometheusURL, patch.PrometheusAuthSecretName, patch.PrometheusClusterLabel, patch.PrometheusService,
-		patch.LogSearchURL, patch.LogSearchAuthSecretName, patch.LogSearchTenant, patch.LogSearchClusterLabel, patch.changesConnection()}, store)
+		patch.LogSearchURL, patch.LogSearchAuthSecretName, patch.LogSearchTenant, patch.LogSearchClusterLabel, patch.changesConnection()}, w)
 	if err != nil {
 		return nil, err
 	}
 	return r.GetMeta(ctx, id)
 }
 
-// changeRow runs one UPDATE of a clusters row, then store, in a transaction
-// that commits only when both succeed, so config_version moves only when the
-// Secrets store writes are in place. Until the commit, readers see the row as
-// it was; a k8s-service process that reads a Secret store wrote meanwhile has
-// built from the old version and drops that connection at its next read of
-// Versions. When the commit itself fails after store wrote, the Secrets hold
-// the new values and the old version: the caller puts them back. store runs
-// with its own deadline (storeTimeout); past it, it fails like any other
-// error. ErrNotFound when no row matched (store is not run). A nil store runs
-// nothing.
-func (r *PostgresRegistry) changeRow(ctx context.Context, sql string, args []any, store func(context.Context) error) error {
+// SecretWrites is what one clusters row change writes to the Secret store
+// (ReplaceKubeconfig, UpdateMetaStoring). The zero value writes nothing.
+type SecretWrites struct {
+	// Store writes them before the change commits; an error rolls it back.
+	Store func(ctx context.Context) error
+	// PutBack writes back what Store replaced, when the change does not
+	// commit after Store ran. changed is whether Store had changed a Secret
+	// (one it wrote, or whose write ran out of time); left names what stays as
+	// written ("" when nothing does).
+	PutBack func(ctx context.Context) (changed bool, left string)
+}
+
+func (w SecretWrites) putBack(ctx context.Context) (bool, string) {
+	if w.PutBack == nil {
+		return false, ""
+	}
+	return w.PutBack(ctx)
+}
+
+// PutBackError is a clusters row change that did not commit (Err) after its
+// Secret writes began, when what they did could not all be undone: Left says
+// what stays as written or which connections were not dropped.
+type PutBackError struct {
+	Err  error
+	Left string
+}
+
+func (e *PutBackError) Error() string { return e.Err.Error() + "; " + e.Left }
+func (e *PutBackError) Unwrap() error { return e.Err }
+
+func withLeft(err error, left []string) error {
+	if len(left) == 0 {
+		return err
+	}
+	return &PutBackError{Err: err, Left: strings.Join(left, "; ")}
+}
+
+const (
+	lockRowSQL    = `SELECT config_version FROM clusters WHERE id = $1 FOR NO KEY UPDATE`
+	newVersionSQL = `UPDATE clusters SET config_version = nextval('cluster_config_version_seq') WHERE id = $1`
+	// notDropped is what stays when a change that wrote a Secret and did not
+	// commit could not set a new config_version after putting it back.
+	notDropped = "connections made meanwhile from the Secrets written are kept (a new config_version could not be set)"
+)
+
+// changeRow locks a clusters row, runs one UPDATE of it, then w.Store, in a
+// transaction that commits only when both succeed, so config_version moves
+// only when the Secrets store writes are in place. Until the commit, readers
+// see the row as it was; a k8s-service process that reads a Secret store wrote
+// meanwhile has built from the old version and drops that connection at its
+// next read of Versions. When the change does not commit after Store ran, what
+// Store wrote is put back (undoStore, undoCommit) and the cluster gets one
+// more new config_version, so a connection built from it meanwhile, under the
+// version before, is dropped as well; what could not be undone is a
+// PutBackError. Store runs with its own deadline (storeTimeout); past it, it
+// fails like any other error. ErrNotFound when no row matched (Store is not
+// run). Store runs only with an UPDATE that sets a new config_version.
+func (r *PostgresRegistry) changeRow(ctx context.Context, id ID, sql string, args []any, w SecretWrites) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }() // after Commit it returns pgx.ErrTxClosed
-	tag, err := tx.Exec(ctx, sql, args...)
+	var before, after int64
+	err = tx.QueryRow(ctx, lockRowSQL, id).Scan(&before)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
+	if err := tx.QueryRow(ctx, sql+" RETURNING config_version", args...).Scan(&after); err != nil {
+		return err
 	}
-	if store != nil {
-		limit := r.storeLimit
-		if limit <= 0 {
-			limit = storeTimeout
+	if w.Store == nil {
+		return tx.Commit(ctx)
+	}
+	limit := r.storeLimit
+	if limit <= 0 {
+		limit = storeTimeout
+	}
+	storeCtx, cancel := context.WithTimeout(ctx, limit)
+	err = w.Store(storeCtx)
+	cancel()
+	if err != nil {
+		return r.undoStore(ctx, tx, id, w, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return r.undoCommit(ctx, id, before, after, w, err)
+	}
+	return nil
+}
+
+// undoStore puts back what a failed Store wrote while tx still holds the row,
+// so no other change of the cluster reads or writes its Secrets in between,
+// then lets the row go and, when a Secret had changed, sets a new
+// config_version.
+func (r *PostgresRegistry) undoStore(ctx context.Context, tx pgx.Tx, id ID, w SecretWrites, cause error) error {
+	putCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), putBackTimeout)
+	changed, putLeft := w.putBack(putCtx)
+	cancel()
+	var left []string
+	if putLeft != "" {
+		left = append(left, "left as written: "+putLeft)
+	}
+	endCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), putBackTimeout)
+	defer cancel()
+	_ = tx.Rollback(endCtx)
+	if changed {
+		if _, err := r.pool.Exec(endCtx, newVersionSQL, id); err != nil {
+			slog.Error("cluster: no new config_version after putting back the Secrets of a change that did not commit", "id", id, "err", err)
+			left = append(left, notDropped)
 		}
-		storeCtx, cancel := context.WithTimeout(ctx, limit)
-		err := store(storeCtx)
-		cancel()
+	}
+	return withLeft(cause, left)
+}
+
+// undoCommit answers a commit that failed after Store wrote. The row's lock
+// went with the transaction, so it locks the row again and reads
+// config_version: the change's own value means the commit went through and
+// only its answer was lost (nil); the value before means no other change came
+// in between, so the Secrets are put back and the cluster gets a new
+// config_version in that transaction; another value means a later change of
+// the cluster came first, and the Secrets stay as they are.
+func (r *PostgresRegistry) undoCommit(ctx context.Context, id ID, before, after int64, w SecretWrites, cause error) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), putBackTimeout)
+	defer cancel()
+	const notRead = "left as written: the Secrets of this change (the cluster row could not be read again to put them back)"
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		slog.Error("cluster: cannot lock the row again after a failed commit", "id", id, "err", err)
+		return withLeft(cause, []string{notRead})
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var now int64
+	err = tx.QueryRow(ctx, lockRowSQL, id).Scan(&now)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return cause // removed since, with its Secrets
+	case err != nil:
+		slog.Error("cluster: cannot lock the row again after a failed commit", "id", id, "err", err)
+		return withLeft(cause, []string{notRead})
+	case now == after:
+		return nil
+	case now != before:
+		return withLeft(cause, []string{"left as written: the Secrets of this change (the cluster was changed again before they could be put back)"})
+	}
+	changed, putLeft := w.putBack(ctx)
+	var left []string
+	if putLeft != "" {
+		left = append(left, "left as written: "+putLeft)
+	}
+	if changed {
+		_, err := tx.Exec(ctx, newVersionSQL, id)
+		if err == nil {
+			err = tx.Commit(ctx)
+		}
 		if err != nil {
-			return err
+			slog.Error("cluster: no new config_version after putting back the Secrets of a change that did not commit", "id", id, "err", err)
+			left = append(left, notDropped)
 		}
 	}
-	return tx.Commit(ctx)
+	return withLeft(cause, left)
 }
 
 // ClusterUID returns a cluster's stored fingerprint (kube-system namespace UID),
@@ -641,15 +774,16 @@ func (r *PostgresRegistry) ClusterUID(ctx context.Context, id ID) (string, error
 
 // ReplaceKubeconfig replaces cluster id's kubeconfig: a new config_version
 // and, when uid is not empty, the cluster's fingerprint (kube-system namespace
-// UID, e.g. backfilling a legacy row on its first rotation), with store, which
+// UID, e.g. backfilling a legacy row on its first rotation), with w, which
 // writes the kubeconfig Secret, run before that row change commits
-// (changeRow). A failure of either leaves config_version as it was.
-func (r *PostgresRegistry) ReplaceKubeconfig(ctx context.Context, id ID, uid string, store func(context.Context) error) error {
-	return r.changeRow(ctx, `
+// (changeRow). A failure of either leaves the UID as it was and the Secret as
+// it was; config_version is then new only when the Secret had been written.
+func (r *PostgresRegistry) ReplaceKubeconfig(ctx context.Context, id ID, uid string, w SecretWrites) error {
+	return r.changeRow(ctx, id, `
 		UPDATE clusters
 		SET cluster_uid = COALESCE($2, cluster_uid), config_version = nextval('cluster_config_version_seq'), updated_at = NOW()
 		WHERE id = $1`,
-		[]any{id, nullIfEmpty(uid)}, store)
+		[]any{id, nullIfEmpty(uid)}, w)
 }
 
 // UpdateHealth records the outcome of a connectivity check.

@@ -85,8 +85,9 @@ func changeRequest() *http.Request {
 }
 
 // A row change that did not commit after its Secrets were written (the commit or the database failed) puts each
-// Secret back to what it held, so the stored headers again match the config_version k8s-service compares; the answer
-// is a 500 and the audit row a failure naming the database's error.
+// Secret back to what it held (the registry calls PutBack), so the stored headers again match the config_version
+// k8s-service compares, and reports a change; the answer is a 500 and the audit row a failure naming the database's
+// error.
 func TestAChangeThatDidNotCommitPutsItsSecretsBack(t *testing.T) {
 	box := newSecretBox()
 	promName, lsName := cluster.PrometheusSecretName("prod"), cluster.LogSearchSecretName("prod")
@@ -98,22 +99,25 @@ func TestAChangeThatDidNotCommitPutsItsSecretsBack(t *testing.T) {
 		h.stageValue("prometheus auth", promName, cluster.PrometheusAuthKey, "Bearer new-prom"),
 		h.stageValue("log search auth", lsName, cluster.LogSearchAuthKey, "Bearer new-logs"),
 	}
-	if err := storeAll(staged)(context.Background()); err != nil {
+	writes := secretWrites(staged)
+	if err := writes.Store(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if box.values[promName][cluster.PrometheusAuthKey] != "Bearer new-prom" {
 		t.Fatal("the staged write did not go through")
 	}
-
-	w := httptest.NewRecorder()
-	h.failClusterChange(w, changeRequest(), auth.TokenPayload{UserID: "a1"}, "prod", nil, map[string]string{"prometheus_auth": "set"}, staged, errors.New("commit: connection reset"))
-
+	if changed, left := writes.PutBack(context.Background()); !changed || left != "" {
+		t.Fatalf("PutBack = %v, %q; want a change put back whole", changed, left)
+	}
 	if got := box.values[promName][cluster.PrometheusAuthKey]; got != "Bearer old-prom" {
 		t.Errorf("prometheus header %q after the change failed, want the one before", got)
 	}
 	if got := box.values[lsName][cluster.LogSearchAuthKey]; got != "Bearer old-logs" {
 		t.Errorf("log store header %q after the change failed, want the one before", got)
 	}
+
+	w := httptest.NewRecorder()
+	h.failClusterChange(w, changeRequest(), auth.TokenPayload{UserID: "a1"}, "prod", nil, map[string]string{"prometheus_auth": "set"}, staged, errors.New("commit: connection reset"))
 	if w.Code != http.StatusInternalServerError || strings.Contains(w.Body.String(), "connection reset") {
 		t.Fatalf("answer %d %s", w.Code, w.Body.String())
 	}
@@ -130,7 +134,8 @@ func TestAChangeThatDidNotCommitPutsItsSecretsBack(t *testing.T) {
 }
 
 // A Secret the store refuses stops the row change: the Secrets written before it are put back, the answer is a 500
-// with the store's reason and the audit row a failure.
+// with the store's reason and the audit row a failure. A refusal of the first write changed nothing, so the registry
+// sets no new config_version for it.
 func TestARefusedSecretWritePutsTheEarlierOnesBack(t *testing.T) {
 	box := newSecretBox()
 	promName, lsName := cluster.PrometheusSecretName("prod"), cluster.LogSearchSecretName("prod")
@@ -142,41 +147,75 @@ func TestARefusedSecretWritePutsTheEarlierOnesBack(t *testing.T) {
 		h.stageValue("prometheus auth", promName, cluster.PrometheusAuthKey, "Bearer new-prom"),
 		h.stageValue("log search auth", lsName, cluster.LogSearchAuthKey, "Bearer new-logs"),
 	}
-	err := storeAll(staged)(context.Background())
+	writes := secretWrites(staged)
+	err := writes.Store(context.Background())
 	if err == nil || !strings.HasPrefix(err.Error(), "store log search auth: ") {
 		t.Fatalf("store = %v", err)
+	}
+	if changed, left := writes.PutBack(context.Background()); !changed || left != "" {
+		t.Fatalf("PutBack = %v, %q", changed, left)
+	}
+	if got := box.values[promName][cluster.PrometheusAuthKey]; got != "Bearer old-prom" {
+		t.Errorf("prometheus header %q, want the one before", got)
 	}
 
 	w := httptest.NewRecorder()
 	h.failClusterChange(w, changeRequest(), auth.TokenPayload{UserID: "a1"}, "prod", nil, nil, staged, err)
-
-	if got := box.values[promName][cluster.PrometheusAuthKey]; got != "Bearer old-prom" {
-		t.Errorf("prometheus header %q, want the one before", got)
-	}
 	if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "store log search auth") {
 		t.Fatalf("answer %d %s", w.Code, w.Body.String())
 	}
 	if len(store.written) != 1 || store.written[0].Result != audit.ResultFailure || !strings.HasPrefix(store.written[0].Error, "store log search auth: ") {
 		t.Fatalf("rows %+v", store.written)
 	}
+
+	first := secretWrites([]*stagedSecret{h.stageValue("log search auth", lsName, cluster.LogSearchAuthKey, "Bearer new-logs")})
+	if err := first.Store(context.Background()); err == nil {
+		t.Fatal("a refused write stored")
+	}
+	if changed, left := first.PutBack(context.Background()); changed || left != "" {
+		t.Fatalf("PutBack after a refused first write = %v, %q; want nothing changed", changed, left)
+	}
 }
 
-// A kubeconfig whose value before could not be read stays as written when its change does not commit, and the audit
-// row says so; a row gone is a 404 with a failure row.
-func TestWhatCannotBePutBackIsInTheFailureRow(t *testing.T) {
+// What could not be put back is named in the audit row and in the answer, through response.Public (no address of the
+// Secret store): after a database failure, whose own text stays out of the answer, and after a refused write. A row
+// gone is a 404 with a failure row.
+func TestWhatCannotBePutBackIsInTheFailureRowAndTheAnswer(t *testing.T) {
 	box := newSecretBox() // no kubeconfig stored before
 	store := &memAuditStore{}
 	h := &ClustersHandler{secrets: box, auditStore: store}
 	staged := []*stagedSecret{h.stageKubeconfig("prod", "apiVersion: v1\nkind: Config\n")}
-	if err := storeAll(staged)(context.Background()); err != nil {
+	writes := secretWrites(staged)
+	if err := writes.Store(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	w := httptest.NewRecorder()
-	h.failClusterChange(w, changeRequest(), auth.TokenPayload{UserID: "a1"}, "prod", nil, map[string]string{"kubeconfig": "replace"}, staged, errors.New("commit: connection reset"))
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("answer %d", w.Code)
+	changed, left := writes.PutBack(context.Background())
+	if !changed || left != "kubeconfig (the value before was not read)" {
+		t.Fatalf("PutBack = %v, %q", changed, left)
 	}
-	if rec := store.written[0]; rec.Result != audit.ResultFailure || !strings.Contains(rec.Error, "left as written: kubeconfig") {
+	err := &cluster.PutBackError{Err: errors.New("commit: connection reset"), Left: "left as written: " + left}
+	w := httptest.NewRecorder()
+	h.failClusterChange(w, changeRequest(), auth.TokenPayload{UserID: "a1"}, "prod", nil, map[string]string{"kubeconfig": "replace"}, staged, err)
+	if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "left as written: kubeconfig (the value before was not read)") || strings.Contains(w.Body.String(), "connection reset") {
+		t.Fatalf("answer %d %s", w.Code, w.Body.String())
+	}
+	if rec := store.written[0]; rec.Result != audit.ResultFailure || rec.Error != "commit: connection reset; left as written: kubeconfig (the value before was not read)" {
+		t.Fatalf("row %s %q", rec.Result, rec.Error)
+	}
+
+	refusedStore := &memAuditStore{}
+	h = &ClustersHandler{secrets: newSecretBox(), auditStore: refusedStore}
+	refused := []*stagedSecret{h.stageValue("log search auth", "logs", cluster.LogSearchAuthKey, "Bearer new-logs")}
+	refused[0].err = errors.New("the API server refused logs")
+	unreachable := `prometheus auth (Put "https://10.0.0.1:6443/api/v1/namespaces/kubeast/secrets/prom": dial tcp 10.0.0.1:6443: connect: connection refused)`
+	err = &cluster.PutBackError{Err: errors.New("store log search auth: the API server refused logs"), Left: "left as written: " + unreachable}
+	w = httptest.NewRecorder()
+	h.failClusterChange(w, changeRequest(), auth.TokenPayload{UserID: "a1"}, "prod", nil, nil, refused, err)
+	body := w.Body.String()
+	if w.Code != http.StatusInternalServerError || !strings.Contains(body, "store log search auth") || !strings.Contains(body, "left as written: prometheus auth (server unreachable") || strings.Contains(body, "10.0.0.1") {
+		t.Fatalf("answer %d %s", w.Code, body)
+	}
+	if rec := refusedStore.written[0]; rec.Result != audit.ResultFailure || !strings.Contains(rec.Error, "left as written: prometheus auth") {
 		t.Fatalf("row %s %q", rec.Result, rec.Error)
 	}
 
@@ -203,22 +242,25 @@ func TestAStoreThatRunsOutOfTimeIsAFailureLikeAnyOther(t *testing.T) {
 		h.stageValue("prometheus auth", promName, cluster.PrometheusAuthKey, "Bearer new-prom"),
 		h.stageValue("log search auth", lsName, cluster.LogSearchAuthKey, "Bearer new-logs"),
 	}
+	writes := secretWrites(staged)
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	err := storeAll(staged)(ctx)
+	err := writes.Store(ctx)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("store = %v, want the deadline", err)
 	}
-
-	w := httptest.NewRecorder()
-	h.failClusterChange(w, changeRequest(), auth.TokenPayload{UserID: "a1"}, "prod", nil, nil, staged, err)
-
+	if changed, left := writes.PutBack(context.Background()); !changed || left != "" {
+		t.Fatalf("PutBack = %v, %q", changed, left)
+	}
 	if got := box.values[promName][cluster.PrometheusAuthKey]; got != "Bearer old-prom" {
 		t.Errorf("prometheus header %q, want the one before", got)
 	}
 	if got := box.values[lsName][cluster.LogSearchAuthKey]; got != "Bearer old-logs" {
 		t.Errorf("log store header %q after its write ran out of time, want the one before", got)
 	}
+
+	w := httptest.NewRecorder()
+	h.failClusterChange(w, changeRequest(), auth.TokenPayload{UserID: "a1"}, "prod", nil, nil, staged, err)
 	if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "store log search auth") || !strings.Contains(w.Body.String(), "deadline exceeded") {
 		t.Fatalf("answer %d %s", w.Code, w.Body.String())
 	}
@@ -227,9 +269,9 @@ func TestAStoreThatRunsOutOfTimeIsAFailureLikeAnyOther(t *testing.T) {
 	}
 }
 
-// With nothing staged the row change runs no store.
+// With nothing staged the row change writes nothing.
 func TestNothingStagedIsNoStore(t *testing.T) {
-	if storeAll(nil) != nil {
-		t.Fatal("a store for nothing staged")
+	if w := secretWrites(nil); w.Store != nil || w.PutBack != nil {
+		t.Fatal("writes for nothing staged")
 	}
 }
