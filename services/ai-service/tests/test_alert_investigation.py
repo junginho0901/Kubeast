@@ -1107,19 +1107,24 @@ async def test_a_subscription_run_whose_closing_call_fails_keeps_the_turns_token
 
 
 @pytest.mark.asyncio
-async def test_a_stopping_worker_puts_its_running_row_back_in_the_queue(sqlite_db):
+async def test_a_stopping_worker_puts_its_running_row_back_in_the_queue_once(sqlite_db):
     db = sqlite_db
     inv_id = await store.insert(db, cluster="self", fingerprint="fp-stop", status="queued", received_at=NOW)
     row = await store.claim_next(db)
     assert row is not None and (row.id, row.status) == (inv_id, "running") and row.started_at is not None
-    await store.requeue(db, inv_id)
+    assert await store.requeue_or_fail(db, inv_id) == "queued"
     back = await store.get(db, inv_id)
-    assert (back.status, back.started_at) == ("queued", None)
+    assert (back.status, back.started_at, back.stop_requeues) == ("queued", None, 1)
     again = await store.claim_next(db)  # a replica or the next pod takes it from the start
     assert again is not None and again.id == inv_id
-    await store.finish(db, inv_id, status="done")
-    await store.requeue(db, inv_id)  # a row that ended stays as it ended
-    assert (await store.get(db, inv_id)).status == "done"
+    # cut a second time: it ends failed and does not come back
+    assert await store.requeue_or_fail(db, inv_id) == "failed"
+    ended = await store.get(db, inv_id)
+    assert (ended.status, ended.error, ended.stop_requeues) == ("failed", store.STOPPED_TWICE, 1)
+    assert ended.finished_at is not None
+    assert await store.claim_next(db) is None
+    assert await store.requeue_or_fail(db, inv_id) == ""  # a row that ended stays as it ended
+    assert (await store.get(db, inv_id)).status == "failed"
 
 
 @pytest.mark.asyncio
@@ -1145,8 +1150,9 @@ async def test_the_worker_requeues_the_row_it_runs_when_it_is_cancelled(monkeypa
         running.set()
         await asyncio.sleep(60)
 
-    async def requeue(_db, inv_id):
+    async def requeue_or_fail(_db, inv_id):
         requeued.append(inv_id)
+        return "queued"
 
     async def db_service():
         return object()
@@ -1156,7 +1162,7 @@ async def test_the_worker_requeues_the_row_it_runs_when_it_is_cancelled(monkeypa
     monkeypatch.setattr(runner.store, "claim_next", claim_next)
     monkeypatch.setattr(runner, "claim_refusal", no_refusal)
     monkeypatch.setattr(runner, "run_one", run_one)
-    monkeypatch.setattr(runner.store, "requeue", requeue)
+    monkeypatch.setattr(runner.store, "requeue_or_fail", requeue_or_fail)
     task = asyncio.create_task(runner.worker(asyncio.Event()))
     await asyncio.wait_for(running.wait(), timeout=2)
     task.cancel()

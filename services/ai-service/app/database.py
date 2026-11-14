@@ -154,6 +154,8 @@ class AlertInvestigation(Base):
     error = Column(Text, nullable=False, default="")
     # the email of the person who asked for it in the Alerts inbox, "" when the webhook queued it (00021)
     requested_by = Column(String, nullable=False, default="")
+    # times a stopping ai-service put it back in the queue; a second stop ends it failed (00028)
+    stop_requeues = Column(Integer, nullable=False, default=0, server_default="0")
 
 
 class AlertInboxItem(Base):
@@ -191,7 +193,7 @@ class AlertInboxItem(Base):
 
 # Schema version this build needs — the newest file in
 # services/pkg/dbmigrate/migrations (goose records it in goose_db_version).
-REQUIRED_SCHEMA_VERSION = 22
+REQUIRED_SCHEMA_VERSION = 28
 
 
 async def read_schema_version(engine) -> int:

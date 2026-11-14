@@ -322,10 +322,11 @@ async def fail_stale(cfg: inv_settings.InvestigationSettings, db) -> int:
 
 
 async def requeue_on_stop(db, inv_id: str) -> None:
-    """Puts a row the stopping worker held back in the queue, within REQUEUE_SECONDS."""
+    """Puts a row the stopping worker held back in the queue, or ends it failed when it went back once already
+    (store.requeue_or_fail), within REQUEUE_SECONDS."""
     try:
-        await asyncio.wait_for(store.requeue(db, inv_id), timeout=REQUEUE_SECONDS)
-        log.info("investigation %s back in the queue: ai-service is stopping", inv_id)
+        outcome = await asyncio.wait_for(store.requeue_or_fail(db, inv_id), timeout=REQUEUE_SECONDS)
+        log.info("investigation %s %s: ai-service is stopping", inv_id, outcome or "unchanged")
     except Exception:
         log.exception("investigation %s: could not put it back in the queue; fail_stale ends it after its time limit", inv_id)
 
