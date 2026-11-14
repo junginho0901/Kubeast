@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from app.services.investigation import numbers
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import runner
 from app.services.investigation import settings as inv_settings
@@ -368,3 +369,45 @@ def test_the_report_note_is_in_the_reports_language():
     assert inv_prompt.step_zero_note("x", "ja") == inv_prompt.step_zero_note("x", "en")
     assert inv_prompt.step_zero_note("x", "en").startswith("\n\n---\n\n")
 
+
+
+# --- the call numbers ---------------------------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_the_rules_number_each_result_the_model_reads(monkeypatch):
+    service = ChangesService([completion(calls=[tool_call("c1", "k8s_get_resources", {"resource_type": "pods", "namespace": "apps"}),
+                                                tool_call("c2", "k8s_get_pod_logs", {"name": "web-1", "namespace": "apps"})]),
+                              completion(content="## Summary\nok")])
+    install_loop(monkeypatch, service, [])
+    at_now(monkeypatch)
+    out = await runner.investigate(cfg(max_steps=5, rules=True), row(starts_at=STARTED))
+    messages = service.completions.calls[1]["messages"]
+    assert [m["content"].split("\n")[0] for m in messages if m["role"] == "tool"] == ["[call 1]", "[call 2]"]
+    assert messages[0]["content"].endswith(numbers.NOTE) and messages[0]["content"].count("[call 3]") == 1
+    assert [c["tool"] for c in out["tool_calls"]] == ["k8s_get_resources", "k8s_get_pod_logs"]  # the stored calls carry no tag
+
+
+@pytest.mark.asyncio
+async def test_step_zero_is_call_one_and_the_models_first_call_is_call_two(monkeypatch):
+    service = ChangesService([completion(calls=[tool_call("c1", "k8s_get_resources", {"resource_type": "pods", "namespace": "apps"})]),
+                              completion(content="## Summary\nok")])
+    install_loop(monkeypatch, service, [])
+    at_now(monkeypatch)
+    await runner.investigate(cfg(max_steps=5, changes_first=True), row(starts_at=STARTED))
+    assert "<<<CHANGES\n[call 1]\n" in first_message(service)
+    (result,) = [m["content"] for m in service.completions.calls[1]["messages"] if m["role"] == "tool"]
+    assert result.startswith("[call 2]\n")
+    assert service.completions.calls[0]["messages"][0]["content"].endswith(numbers.NOTE)
+
+
+@pytest.mark.asyncio
+async def test_with_every_switch_off_no_result_is_numbered(monkeypatch):
+    service = ChangesService([completion(calls=[tool_call("c1", "k8s_get_resources", {"resource_type": "pods", "namespace": "apps"})]),
+                              completion(content="## Summary\nok")])
+    install_loop(monkeypatch, service, [])
+    await runner.investigate(cfg(max_steps=5), row(starts_at=STARTED))
+    messages = service.completions.calls[1]["messages"]
+    assert messages[0]["content"] == inv_prompt.system_prompt(cluster="self", namespace="apps", language="en")
+    assert not any(m["content"].startswith("[call") for m in messages if m["role"] == "tool")
+    assert not numbers.on(cfg()) and all(numbers.on(cfg(**{k: True})) for k in ("rules", "changes_first", "evidence_check", "ledger"))

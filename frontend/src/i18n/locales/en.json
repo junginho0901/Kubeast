@@ -4925,7 +4925,42 @@
       "args": "Arguments",
       "result": "Result",
       "error": "refused",
-      "chars": "{{n}} chars"
+      "chars": "{{n}} chars",
+      "call": "Call"
+    },
+    "result": {
+      "title": "Result and hypotheses",
+      "missing": "The report did not end with a result block the server could read, so it has no causes or hypotheses to show.",
+      "askedAgain": "The model was asked once more without tools, because a cause or a hypothesis was not shown by the calls or the block was missing.",
+      "askFailed": "The model was asked once more without tools and that call failed: this is the first report.",
+      "noFault": "The report finds no fault.",
+      "causes": "Causes",
+      "started": "from {{at}}",
+      "path": "Path (cause → symptom)",
+      "ruledOut": "Ruled out",
+      "hypotheses": "Hypotheses ({{count}})",
+      "col": {
+        "hypothesis": "Hypothesis",
+        "state": "State",
+        "for": "For",
+        "against": "Against"
+      },
+      "state": {
+        "cause": "Cause",
+        "symptom": "Symptom",
+        "open": "Open",
+        "blocked": "Blocked",
+        "ruled_out": "Ruled out"
+      },
+      "blockedBecause": "Blocked: {{reason}}",
+      "notClosed": "Not closed: {{reasons}}",
+      "problem": {
+        "open": "no state of the four",
+        "no_evidence_for": "no call that answered speaks for it",
+        "no_evidence_against": "no call that answered speaks against it",
+        "no_reason": "no reason why it is blocked",
+        "bad_calls": "{{calls}} name no call of this investigation"
+      }
     }
   },
   "notFound": {

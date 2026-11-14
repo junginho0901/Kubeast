@@ -155,6 +155,9 @@ class AlertInvestigation(Base):
     requested_by = Column(String, nullable=False, default="")
     # times a stopping ai-service put it back in the queue; a second stop ends it failed (00029)
     stop_requeues = Column(Integer, nullable=False, default=0, server_default="0")
+    # what the server read of the report's rca block and the hypothesis ledger, null without
+    # features.alertInvestigation.ledger (00029, investigation/result.py)
+    result = Column(JSON, nullable=True)
 
 
 class AlertInboxItem(Base):

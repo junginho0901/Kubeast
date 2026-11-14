@@ -41,6 +41,42 @@ export interface InvestigationToolCall {
   access?: ToolAccess
 }
 
+// A call number of the report's rca block, given with the call it names (its place in tool_calls, from 1).
+export interface InvestigationCallRef {
+  call: number
+  tool: string
+  // the call was refused or failed
+  failed?: boolean
+}
+
+export type HypothesisState = 'cause' | 'symptom' | 'ruled_out' | 'blocked' | 'open'
+
+export interface InvestigationHypothesis {
+  id: string
+  statement: string
+  resource: string
+  state: HypothesisState
+  for: InvestigationCallRef[]
+  against: InvestigationCallRef[]
+  blocked?: string
+  closed: boolean
+  problems?: { reason: 'open' | 'no_evidence' | 'no_reason' | 'bad_calls'; side?: 'for' | 'against'; calls?: string[] }[]
+}
+
+// What the server read of the report's rca block (features.alertInvestigation.ledger; absent without it).
+export interface InvestigationResult {
+  version: number
+  // ok: the block was read; missing / invalid: the report ended without a block it could read
+  status: 'ok' | 'missing' | 'invalid'
+  no_fault: boolean | null
+  causes: { resource: string; kind: string; started_at: string | null; evidence: InvestigationCallRef[] }[]
+  path: string[]
+  ruled_out: string[]
+  hypotheses: InvestigationHypothesis[]
+  asked_again: boolean
+  ask_failed?: boolean
+}
+
 export interface Investigation extends InvestigationSummary {
   fingerprint: string
   labels: Record<string, string>
@@ -54,6 +90,7 @@ export interface Investigation extends InvestigationSummary {
   tool_calls: InvestigationToolCall[]
   report: string
   error: string
+  result?: InvestigationResult
 }
 
 export interface InvestigationFilter {

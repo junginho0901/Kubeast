@@ -71,6 +71,18 @@ tests:
     asserts:
       - hasDocuments:
           count: 0
+  - it: stops values without the repeated read switch
+    set:
+      ai.refuseRepeatedReads: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.refuseRepeatedReads
+  - it: stops values without the evidence check switch
+    set:
+      features.alertInvestigation.evidenceCheck: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.evidenceCheck
   - it: stops values without a path 0.7.6 added, as v0.7.5's published defaults are
     set:
       multicluster.clientQPS: null
@@ -185,3 +197,9 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no features.callGraph
+  - it: stops values without the investigation ledger switch
+    set:
+      features.alertInvestigation.ledger: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.ledger

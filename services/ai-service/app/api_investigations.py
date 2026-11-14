@@ -79,6 +79,10 @@ def detail_of(row) -> dict[str, Any]:
         "report": row.report,
         "error": row.error,
     })
+    # features.alertInvestigation.ledger: the rca block and the hypotheses as the server read them; absent without it
+    result = getattr(row, "result", None)
+    if result is not None:
+        out["result"] = result
     return out
 
 

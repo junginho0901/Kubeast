@@ -5543,7 +5543,42 @@
       "args": "인자",
       "result": "결과",
       "error": "거부됨",
-      "chars": "{{n}}자"
+      "chars": "{{n}}자",
+      "call": "호출"
+    },
+    "result": {
+      "title": "결과와 가설",
+      "missing": "보고서 끝에 서버가 읽을 수 있는 결과 묶음이 없어 보여 줄 원인과 가설이 없습니다.",
+      "askedAgain": "호출로 확인되지 않은 원인이나 가설이 있거나 묶음이 없어 도구 없이 한 번 더 물었습니다.",
+      "askFailed": "도구 없이 한 번 더 물었지만 그 호출이 실패해 첫 보고서를 보여 줍니다.",
+      "noFault": "보고서는 고장이 없다고 판단했습니다.",
+      "causes": "원인",
+      "started": "{{at}}부터",
+      "path": "경로(원인 → 증상)",
+      "ruledOut": "배제한 것",
+      "hypotheses": "가설 ({{count}})",
+      "col": {
+        "hypothesis": "가설",
+        "state": "상태",
+        "for": "뒷받침",
+        "against": "반박"
+      },
+      "state": {
+        "cause": "원인",
+        "symptom": "증상",
+        "open": "열림",
+        "blocked": "막힘",
+        "ruled_out": "아님"
+      },
+      "blockedBecause": "막힌 까닭: {{reason}}",
+      "notClosed": "닫히지 않음: {{reasons}}",
+      "problem": {
+        "open": "네 상태 중 어느 것도 아님",
+        "no_evidence_for": "뒷받침한 호출 중 답을 받은 것이 없음",
+        "no_evidence_against": "반박한 호출 중 답을 받은 것이 없음",
+        "no_reason": "막힌 까닭이 없음",
+        "bad_calls": "{{calls}}번은 이 조사의 호출이 아님"
+      }
     }
   },
   "comingSoon": {
