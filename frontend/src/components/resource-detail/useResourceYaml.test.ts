@@ -125,3 +125,16 @@ describe('the YAML of a custom resource', () => {
     expect(api.applyResourceYaml).toHaveBeenCalledWith('ec2nodeclasses.karpenter.k8s.aws', 'x', EDITED, undefined, SENT)
   })
 })
+
+describe('the YAML of a kind with no drawer of its own', () => {
+  it('is saved in the group the caller named, not the one discovery prefers', async () => {
+    let handle!: ReturnType<typeof useResourceYaml>['handleApplyYaml']
+    const Window = () => {
+      handle = useResourceYaml({ target: { kind: 'Gadget', namespace: 'shop', name: 'x', apiVersion: 'b.example.com/v1' }, tab: 'info', canEditYaml: true }).handleApplyYaml
+      return null
+    }
+    renderToStaticMarkup(createElement(QueryClientProvider, { client: new QueryClient() }, createElement(Window)))
+    await handle(EDITED, OPENED)
+    expect(api.applyResourceYaml).toHaveBeenCalledWith('gadget.b.example.com', 'x', EDITED, 'shop', SENT)
+  })
+})

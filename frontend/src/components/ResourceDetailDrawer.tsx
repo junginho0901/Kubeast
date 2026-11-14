@@ -28,7 +28,7 @@ import { ModalFrame } from './ModalFrame'
 import { modalButton } from './modalStyles'
 import { TypeToConfirm, WarningBox } from './TypeToConfirm'
 import { systemObject, type SystemReason } from './resource-detail/systemObject'
-import { customResourceTarget, deleteTarget, drawerObjectKey, drawerResourceType, needsCustomResourceLookup } from './resource-detail/crDetail'
+import { customResourceTarget, deleteTarget, drawerObjectKey, needsCustomResourceLookup, objectResourceType } from './resource-detail/crDetail'
 import { drawerObjectLayer, followsObjectForChat, objectReadInterval } from './resource-detail/drawerObjectLayer'
 import { drawerBody, useDrawerFollowsRead } from './resource-detail/useDrawerFollowsRead'
 import { DrawerObjectReadContext } from './resource-detail/drawerObjectRead'
@@ -153,7 +153,7 @@ export default function ResourceDetailDrawer() {
     handleApplyYaml,
     invalidateAfterApply,
   } = useResourceYaml({
-    target: target ? { kind: target.kind, namespace: target.namespace ?? null, name: target.name, rawJson: (target as any).rawJson } : null,
+    target: target ? { kind: target.kind, namespace: target.namespace ?? null, name: target.name, apiVersion: target.apiVersion, rawJson: (target as any).rawJson } : null,
     tab,
     canEditYaml,
   })
@@ -173,11 +173,13 @@ export default function ResourceDetailDrawer() {
   // watches its object reads this when the object changes; without a watch that answers it is read on the clock.
   const followsForChat = !!target && tab === 'info' && !resolving && !!name && followsObjectForChat(kind)
   const [objectWatchAnswers, setObjectWatchAnswers] = useState(false)
-  const objectKey = useMemo(() => ['resource-json', kind, ns, name], [kind, ns, name])
+  // a kind with no drawer of its own is read in the group the caller or its row named, and kept under it
+  const objectType = target ? objectResourceType(target) : ''
+  const objectKey = useMemo(() => ['resource-json', kind, ns, name, objectType], [kind, ns, name, objectType])
   const objectRead = useMemo(() => (followsForChat ? { key: objectKey, setWatchAnswers: setObjectWatchAnswers } : null), [followsForChat, objectKey])
   const { data: fetchedRawJson, dataUpdatedAt: rawJsonReadAt, isFetching: rawJsonFetching, error: rawJsonError } = useQuery({
     queryKey: objectKey,
-    queryFn: () => api.getResourceJson(drawerResourceType(kind), name, ns || undefined),
+    queryFn: () => api.getResourceJson(objectType, name, ns || undefined),
     enabled: needsRawJsonFetch || followsForChat,
     staleTime: 30_000,
     refetchInterval: (query) => objectReadInterval(followsForChat, query.state.error, objectWatchAnswers),
@@ -367,7 +369,7 @@ export default function ResourceDetailDrawer() {
     if (CONFIG_STORAGE_KINDS.has(kind)) return <ConfigStorageInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} />
     // the other views load what they show; this one shows only the object, so it waits for the object
     if (linkPending) return <p className="text-slate-400">{t('common.loading', 'Loading...')}</p>
-    return <GenericInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} />
+    return <GenericInfo name={name} namespace={ns} kind={kind} apiVersion={target.apiVersion} rawJson={effectiveRawJson} />
   }
 
   return (

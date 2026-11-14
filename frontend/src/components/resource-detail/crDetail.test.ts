@@ -118,6 +118,34 @@ describe('drawerObjectKey', () => {
   })
 })
 
+// A kind with no drawer of its own that two groups serve (no CRD of either, so no custom resource drawer): the drawer
+// reads and saves the one the caller or its row named, as kubectl get <resource>.<group>; the Kind alone reads the group
+// discovery prefers.
+describe('objectResourceType of a kind with no drawer of its own', () => {
+  it('names the group of the apiVersion the caller named, else the row\'s', () => {
+    expect(objectResourceType({ kind: 'Gadget', apiVersion: 'b.example.com/v1' })).toBe('gadget.b.example.com')
+    expect(objectResourceType({ kind: 'Gadget', rawJson: { apiVersion: 'a.example.com/v1' } })).toBe('gadget.a.example.com')
+    expect(objectResourceType({ kind: 'Gadget', apiVersion: 'b.example.com/v1', rawJson: { apiVersion: 'a.example.com/v1' } })).toBe('gadget.b.example.com')
+  })
+
+  it('stays as it was for the core group, no apiVersion and a kind with a drawer of its own', () => {
+    expect(objectResourceType({ kind: 'PodTemplate', rawJson: { apiVersion: 'v1' } })).toBe('podtemplate')
+    expect(objectResourceType({ kind: 'Gadget' })).toBe(drawerResourceType('Gadget'))
+    expect(objectResourceType({ kind: 'Deployment', rawJson: { apiVersion: 'apps/v1' } })).toBe('deployments.apps')
+  })
+
+  it('keeps two of one Kind and name of two groups apart in the drawer\'s views', () => {
+    expect(drawerObjectKey({ kind: 'Gadget', namespace: 'shop', name: 'x', rawJson: { apiVersion: 'a.example.com/v1' } }))
+      .not.toBe(drawerObjectKey({ kind: 'Gadget', namespace: 'shop', name: 'x', rawJson: { apiVersion: 'b.example.com/v1' } }))
+  })
+
+  it('is what the drawer reads its object as and keeps the read under', () => {
+    expect(drawerSource).toContain("const objectType = target ? objectResourceType(target) : ''")
+    expect(drawerSource).toContain("['resource-json', kind, ns, name, objectType]")
+    expect(drawerSource).toContain('queryFn: () => api.getResourceJson(objectType, name, ns || undefined),')
+  })
+})
+
 describe('otherFields', () => {
   it('lists the fields beside spec and status by name, as kubectl describe prints them', () => {
     expect(otherFields({ summary: { pass: 1 }, results: [{ policy: 'p' }], scope: { kind: 'Pod' }, Zone: 'a' }).map(([k]) => k)).toEqual(['Zone', 'results', 'scope', 'summary'])
