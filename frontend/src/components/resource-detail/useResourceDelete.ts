@@ -5,19 +5,34 @@
 // 는 hook 자체 보유. close() 가 setTarget(null) 호출 → drawer unmount → hook
 // 자체 unmount 라 추가 reset 불필요.
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/services/api'
 import { announceDeleted } from '@/services/createdNoticeStore'
 
+import { drawerObjectKey } from './crDetail'
+
 interface Target {
   kind: string
   namespace: string | null
   name: string
+  apiVersion?: string
   rawJson?: any
 }
+
+// The object a delete was pressed for. It is the one deleted, named as deleted and read again, whatever the drawer shows
+// by the time the answer comes.
+interface Pressed {
+  kind: string
+  ns: string | null
+  name: string
+  target: Target | null
+}
+
+const objectOf = (t: Target | null): string =>
+  t ? drawerObjectKey({ kind: t.kind, namespace: t.namespace ?? undefined, name: t.name, apiVersion: t.apiVersion, rawJson: t.rawJson }) : ''
 
 interface Args {
   target: Target | null
@@ -32,9 +47,15 @@ export function useResourceDelete({ target, close }: Args) {
   const kind = target?.kind ?? ''
   const ns = target?.namespace ?? null
   const name = target?.name ?? ''
+  // the object the drawer shows now, read when a delete answers: the drawer may have moved to another (back, forward, a link)
+  const shown = objectOf(target)
+  const shownRef = useRef(shown)
+  useEffect(() => {
+    shownRef.current = shown
+  }, [shown])
 
   const deleteMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({ kind, ns, name, target }: Pressed) => {
       if (kind === 'Pod' && ns) {
         await api.deletePod(ns, name)
         return
@@ -236,15 +257,18 @@ export function useResourceDelete({ target, close }: Args) {
       }
       throw new Error('Delete is not supported for this resource.')
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, { kind, ns, name, target: deleted }) => {
       // Unmount the drawer before invalidating: the describe queries below
       // belong to the object that no longer exists, and an invalidated query
       // only refetches while something still renders it. close() alone only
       // schedules the unmount, so it is flushed synchronously here — otherwise
       // the drawer's describe refetched first and logged a 404 on every delete.
-      setDeleteDialogOpen(false)
-      setDeleteError(null)
-      flushSync(() => close())
+      // A drawer that moved to another object meanwhile stays open on it.
+      if (objectOf(deleted) === shownRef.current) {
+        setDeleteDialogOpen(false)
+        setDeleteError(null)
+        flushSync(() => close())
+      }
       // the drawer is gone, so the page says what was deleted (components/CreatedNotice)
       announceDeleted(window.location.pathname, { kind, name, namespace: ns })
       if (kind === 'Pod' && ns) {
@@ -526,7 +550,9 @@ export function useResourceDelete({ target, close }: Args) {
         ])
       }
     },
-    onError: (err: any) => {
+    onError: (err: any, { target: refused }) => {
+      // the reason goes to the Delete window of the object refused, not to one of the object the drawer moved to
+      if (objectOf(refused) !== shownRef.current) return
       const detail = err?.response?.data?.detail || err?.message || 'Failed to delete resource.'
       setDeleteError(String(detail))
     },
@@ -538,5 +564,8 @@ export function useResourceDelete({ target, close }: Args) {
     deleteError,
     setDeleteError,
     deleteMutation,
+    // the delete of the object shown now; under way only for that object, not for one the drawer showed before
+    deleteObject: () => deleteMutation.mutate({ kind, ns, name, target }),
+    deletePending: deleteMutation.isPending && objectOf(deleteMutation.variables?.target ?? null) === shown,
   }
 }

@@ -127,9 +127,10 @@ export default function ResourceDetailDrawer() {
     setDeleteDialogOpen,
     deleteError,
     setDeleteError,
-    deleteMutation,
+    deleteObject,
+    deletePending,
   } = useResourceDelete({
-    target: target ? { kind: target.kind, namespace: target.namespace ?? null, name: target.name, rawJson: (target as any).rawJson } : null,
+    target: target ? { kind: target.kind, namespace: target.namespace ?? null, name: target.name, apiVersion: target.apiVersion, rawJson: (target as any).rawJson } : null,
     close,
   })
   // the Delete window is for the object it was opened on: the drawer moved to another (back, forward, a link) closes it
@@ -479,7 +480,7 @@ export default function ResourceDetailDrawer() {
           size="sm"
           title={t('common.deleteKind', { kind: displayKind, defaultValue: 'Delete {{kind}}' })}
           onClose={() => setDeleteDialogOpen(false)}
-          busy={deleteMutation.isPending}
+          busy={deletePending}
           testId="delete-dialog"
           footer={system.blocked ? (
             <button type="button" className={modalButton.cancel} onClick={() => setDeleteDialogOpen(false)}>
@@ -487,17 +488,17 @@ export default function ResourceDetailDrawer() {
             </button>
           ) : (
             <>
-              <button type="button" className={modalButton.cancel} onClick={() => setDeleteDialogOpen(false)} disabled={deleteMutation.isPending}>
+              <button type="button" className={modalButton.cancel} onClick={() => setDeleteDialogOpen(false)} disabled={deletePending}>
                 {t('common.cancel', { defaultValue: 'Cancel' })}
               </button>
               <button
                 type="button"
                 data-testid="delete-dialog-confirm"
                 className={modalButton.danger}
-                onClick={() => deleteMutation.mutate()}
-                disabled={deleteMutation.isPending || systemMetaPending || (system.reasons.length > 0 && typedName !== name)}
+                onClick={deleteObject}
+                disabled={deletePending || systemMetaPending || (system.reasons.length > 0 && typedName !== name)}
               >
-                {deleteMutation.isPending
+                {deletePending
                   ? t('common.deleting', { defaultValue: 'Deleting...' })
                   : t('common.delete', { defaultValue: 'Delete' })}
               </button>
