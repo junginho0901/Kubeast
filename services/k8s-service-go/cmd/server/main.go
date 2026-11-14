@@ -43,6 +43,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/logger"
 	"github.com/junginho0901/kubeast/services/pkg/memlimit"
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
+	"github.com/junginho0901/kubeast/services/pkg/probe"
 )
 
 func main() {
@@ -158,6 +159,11 @@ func main() {
 	// Init handler
 	h := handler.New(k8sSvc, cfg, auditStore)
 	h.SetHygieneStore(hygiene.NewStore(pgPool))
+	// Readiness: not from SIGTERM on, when open terminals, watches and followed logs are told to connect again. The
+	// database stays out of it: lists and reads go on while the audit store is down (writes answer 503), and a shared
+	// database would take every replica out of the Service at once.
+	ready := probe.New()
+	h.SetLeaving(ready)
 
 	// Log files view (off unless LOG_FILES_ENABLED): a bad path pattern stops
 	// the service instead of widening what can be read.
@@ -286,6 +292,7 @@ func main() {
 		AbsoluteLifetime: time.Duration(cfg.SessionAbsoluteHours) * time.Hour,
 	})
 	wsMux.Sessions = liveSessions
+	wsMux.Leaving = ready
 	h.SetLiveSessions(liveSessions)
 
 	// Console metrics (services/pkg/metrics): HTTP by route pattern, the audit
@@ -335,6 +342,8 @@ func main() {
 	// Public routes
 	r.Get("/", h.HealthRoot)
 	r.Get("/health", h.HealthCheck)
+	r.Get("/livez", ready.Live)
+	r.Get("/readyz", ready.Ready)
 	r.Get("/metrics", m.Handler().ServeHTTP)
 
 	// Protected API routes — domain-specific registrations live in
@@ -419,7 +428,8 @@ func main() {
 
 	<-done
 	slog.Info("shutting down server...")
-	shutdown(srv, recorder, serverShutdownWait, recorderShutdownWait)
+	ready.Leave()
+	shutdown(srv, ready, recorder, serverShutdownWait, recorderShutdownWait)
 	slog.Info("server stopped")
 }
 
@@ -429,15 +439,18 @@ const (
 	recorderShutdownWait = 10 * time.Second
 )
 
-// shutdown stops the server, then gives the recorder a wait of its own: an open
-// event stream (a followed log, the Helm releases stream) keeps srv.Shutdown
-// waiting until its context ends, and the recorder's last parts and rows would
-// get a spent one. The recorder takes its turn whatever srv.Shutdown returned.
-func shutdown(srv interface{ Shutdown(context.Context) error }, recorder interface{ Shutdown(context.Context) }, serverWait, recorderWait time.Duration) {
+// shutdown stops the server, waits within the same time for the connections it
+// leaves alone (WebSockets, which Leave closed with 1012 and whose shells hang
+// up), then gives the recorder a wait of its own: an open event stream that is
+// not held keeps srv.Shutdown waiting until its context ends, and the recorder's
+// last parts and rows would get a spent one. The recorder takes its turn
+// whatever srv.Shutdown returned.
+func shutdown(srv interface{ Shutdown(context.Context) error }, held interface{ Wait(context.Context) bool }, recorder interface{ Shutdown(context.Context) }, serverWait, recorderWait time.Duration) {
 	ctx, cancel := context.WithTimeout(context.Background(), serverWait)
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("server shutdown error", "err", err)
 	}
+	held.Wait(ctx)
 	cancel()
 	// End live recordings and upload what is left before the process goes.
 	ctx, cancel = context.WithTimeout(context.Background(), recorderWait)

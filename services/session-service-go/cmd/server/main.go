@@ -22,6 +22,7 @@ import (
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
 	"github.com/junginho0901/kubeast/services/pkg/memlimit"
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
+	"github.com/junginho0901/kubeast/services/pkg/probe"
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/repository"
@@ -105,6 +106,8 @@ func main() {
 	auditStore := audit.Guard(audit.WithStdout(pgAudit, audit.StdoutEnabled()), pgAudit, audit.FailClosedEnabled())
 	sessionHandler := handler.NewSessionHandler(repo, auditStore)
 	healthHandler := handler.NewHealthHandler(pool)
+	// Readiness: not from SIGTERM on, nor while the database (every route reads or writes it) does not answer.
+	ready := probe.New().Require("database", probe.Database(pool, poolBusy(pool)))
 
 	// Setup router
 	r := chi.NewRouter()
@@ -143,6 +146,8 @@ func main() {
 	// Health endpoints (no auth)
 	r.Get("/", healthHandler.Root)
 	r.Get("/health", healthHandler.Health)
+	r.Get("/livez", ready.Live)
+	r.Get("/readyz", ready.Ready)
 	r.Get("/metrics", m.Handler().ServeHTTP)
 
 	// API routes (with auth)
@@ -183,11 +188,24 @@ func main() {
 	<-quit
 
 	slog.Info("shutting down server...")
-	shutdownCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ready.Leave()
+	shutdownCtx, cancel := context.WithTimeout(ctx, serverShutdownWait)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("server shutdown error", "error", err)
 	}
 	slog.Info("server stopped")
+}
+
+// serverShutdownWait lets the requests in flight finish inside the 30 s the chart's grace period leaves after its
+// preStop wait, with room for the pool to close after it.
+const serverShutdownWait = 20 * time.Second
+
+// poolBusy says whether every connection of the pool is taken (probe.Database).
+func poolBusy(pool *pgxpool.Pool) func() bool {
+	return func() bool {
+		s := pool.Stat()
+		return s.AcquiredConns() >= s.MaxConns()
+	}
 }

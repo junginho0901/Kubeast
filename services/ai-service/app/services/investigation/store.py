@@ -221,6 +221,18 @@ async def claim_next(db) -> Optional[AlertInvestigation]:
         return row
 
 
+async def requeue(db, inv_id: str) -> None:
+    """A running row back to the queue: its ai-service is stopping before the run ended, and a replica or the pod that
+    replaces it takes the row from the start. Only while it is still running, so a row that ended stays as it ended."""
+    async with db.async_session() as s:
+        await s.execute(
+            update(AlertInvestigation)
+            .where(AlertInvestigation.id == inv_id, AlertInvestigation.status == "running")
+            .values(status="queued", started_at=None)
+        )
+        await s.commit()
+
+
 async def finish(db, inv_id: str, **fields: Any) -> None:
     fields.setdefault("finished_at", utcnow())
     async with db.async_session() as s:

@@ -17,8 +17,8 @@ func (h *Handler) HealthRoot(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// HealthCheck handles GET /health.
-// liveness probe에서도 사용되므로 항상 200을 반환한다.
+// HealthCheck handles GET /health, which the gateway's /health and the compose health check read.
+// 항상 200을 반환한다 — kubelet 의 probe 는 /livez(liveness)·/readyz(readiness)다.
 // kubernetes 연결 상태는 별도로 짧은 타임아웃으로 확인한다.
 // audit 블록은 감사 writer 상태(fail-closed 여부·DB 도달·쓰기 실패 수) —
 // 파드를 빼지는 않고(readiness 무관) 보이게만 한다.

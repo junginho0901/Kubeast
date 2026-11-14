@@ -2,6 +2,7 @@
 AI Service - OpenAI 통합 및 AI 기능 전담
 Port: 8001
 """
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -31,13 +32,16 @@ if mcp_flags.mcp_enabled():
     _mcp = mcp_server.KubeastMCPServer()
 
 
+# How long the lifespan's end waits for the investigation worker, after uvicorn's --timeout-graceful-shutdown (Dockerfile),
+# inside the 30 s the chart's grace period leaves after its preStop wait.
+WORKER_STOP_SECONDS = 4
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # Alert investigation (features.alertInvestigation): one worker, only while on.
     stop, worker_task = None, None
     if investigation_settings.load().enabled:
-        import asyncio
-
         from app.services.investigation.runner import worker
 
         stop = asyncio.Event()
@@ -52,6 +56,11 @@ async def lifespan(_app: FastAPI):
         if worker_task is not None:
             stop.set()
             worker_task.cancel()
+            # The worker puts a run it held back in the queue (runner.requeue_on_stop) before the process goes.
+            try:
+                await asyncio.wait_for(worker_task, timeout=WORKER_STOP_SECONDS)
+            except (asyncio.CancelledError, Exception):
+                pass
 
 
 app = FastAPI(
@@ -125,6 +134,50 @@ async def root():
 async def health_check():
     """상세 헬스 체크"""
     return {"status": "healthy"}
+
+
+# Readiness (the chart's readinessProbe): the database answers. Liveness stays /api/v1/ai/health, which asks nothing.
+# From SIGTERM on uvicorn closes its listening socket, so the probe is refused and the pod is not ready.
+READY_DB_TIMEOUT = 0.8
+_db_warmup = None
+
+
+def _pool_busy(engine) -> bool:
+    """Every pooled connection is taken: a check that ran out of time waited for one, which is load, not a database gone."""
+    pool = engine.pool
+    try:
+        return pool.checkedin() == 0 and pool.checkedout() >= pool.size()
+    except Exception:
+        return False
+
+
+async def _database_answers() -> None:
+    global _db_warmup
+    from sqlalchemy import text
+    from app import database
+
+    if not database.db_initialized:
+        # The first use initializes the database (schema wait, default model); a probe's 0.8 s must not cut it short.
+        if _db_warmup is None or _db_warmup.done():
+            _db_warmup = asyncio.create_task(database.get_db_service())
+            _db_warmup.add_done_callback(lambda t: t.cancelled() or t.exception())
+        raise RuntimeError("database not initialized yet")
+    async with database.db_service.engine.connect() as conn:
+        await conn.execute(text("SELECT 1"))
+
+
+@app.get("/readyz")
+async def readiness():
+    from app import database
+
+    try:
+        await asyncio.wait_for(_database_answers(), timeout=READY_DB_TIMEOUT)
+    except asyncio.TimeoutError:
+        if database.db_service is None or not _pool_busy(database.db_service.engine):
+            return JSONResponse(status_code=503, content={"status": "not ready", "waiting_for": ["database"]})
+    except Exception:
+        return JSONResponse(status_code=503, content={"status": "not ready", "waiting_for": ["database"]})
+    return {"status": "ready"}
 
 
 if __name__ == "__main__":

@@ -20,6 +20,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/probe"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -216,6 +217,9 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 			if code := auth.SessionEndCode(ctx); code != "" {
 				_ = conn.WriteMessage(websocket.TextMessage, []byte(sessionEndNotice(code, r.URL.Query().Get("lang"))))
 				_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(auth.SessionEndedCloseCode, code), time.Now().Add(time.Second))
+			} else if probe.IsLeaving(ctx) {
+				_ = conn.WriteMessage(websocket.TextMessage, []byte(serverLeavingNotice(r.URL.Query().Get("lang"))))
+				closeLeaving(conn)
 			}
 			return
 		case _, open := <-in:

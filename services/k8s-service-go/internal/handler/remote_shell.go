@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/probe"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/httpstream"
 	"k8s.io/client-go/kubernetes"
@@ -158,6 +159,20 @@ func sessionEndNotice(code, lang string) string {
 	}
 }
 
+// serverLeavingNotice is the line a terminal ends with when its server stops (an upgrade or a node change), in the
+// screen's language. The shell is hung up; a new one opens on a server that stays.
+func serverLeavingNotice(lang string) string {
+	if strings.HasPrefix(strings.ToLower(lang), "ko") {
+		return "\r\n[Kubeast] 서버가 다시 시작되어 이 터미널을 닫았습니다. 터미널을 다시 여세요.\r\n"
+	}
+	return "\r\n[Kubeast] This terminal was closed: the server is restarting. Open the terminal again.\r\n"
+}
+
+// closeLeaving closes a terminal's socket with 1012 (Service Restart) once its notice is written.
+func closeLeaving(conn *websocket.Conn) {
+	_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseServiceRestart, probe.LeavingReason), time.Now().Add(time.Second))
+}
+
 func hangUp(w io.Writer, pause time.Duration) {
 	for i, key := range shellHangup {
 		if i > 0 {
@@ -181,9 +196,10 @@ func hangUp(w io.Writer, pause time.Duration) {
 // also written to the recording, after a one-line notice that it is — in
 // lang, the screen's language the page sent.
 //
-// A ctx ended by the session (auth.LiveSessions) says why on the terminal and
-// closes the socket, which from here on is a browser going away: the shell is
-// hung up, not left running in the container.
+// A ctx ended by the session (auth.LiveSessions) or by the server leaving
+// (probe.ErrLeaving, close code 1012) says why on the terminal and closes the
+// socket, which from here on is a browser going away: the shell is hung up, not
+// left running in the container.
 func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cfg *rest.Config, u *url.URL, rec *recording.Session, lang string) error {
 	exec, err := newShellExecutor(cfg, u)
 	if err != nil {
@@ -200,13 +216,17 @@ func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cf
 		select {
 		case <-ctx.Done():
 		case <-held.Done():
-			code := auth.SessionEndCode(held)
-			if code == "" {
+			switch code := auth.SessionEndCode(held); {
+			case code != "":
+				_, _ = out.channel(shellStderr).Write([]byte(sessionEndNotice(code, lang)))
+				_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(auth.SessionEndedCloseCode, code), time.Now().Add(time.Second))
+			case probe.IsLeaving(held):
+				_, _ = out.channel(shellStderr).Write([]byte(serverLeavingNotice(lang)))
+				closeLeaving(conn)
+			default:
 				cancel()
 				return
 			}
-			_, _ = out.channel(shellStderr).Write([]byte(sessionEndNotice(code, lang)))
-			_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(auth.SessionEndedCloseCode, code), time.Now().Add(time.Second))
 			_ = conn.Close()
 		}
 	}()
@@ -252,7 +272,7 @@ func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cf
 		_, _ = out.channel(shellError).Write([]byte(exit.Error()))
 		return nil
 	}
-	if auth.SessionEndCode(held) != "" {
+	if auth.SessionEndCode(held) != "" || probe.IsLeaving(held) {
 		return nil
 	}
 	return err

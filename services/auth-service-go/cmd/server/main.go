@@ -36,6 +36,7 @@ import (
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
 	"github.com/junginho0901/kubeast/services/pkg/memlimit"
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
+	"github.com/junginho0901/kubeast/services/pkg/probe"
 )
 
 // Boot waits, inside the chart's 180 s startup probe (kubeast.startupProbe): the database, then the schema.
@@ -289,6 +290,8 @@ func main() {
 		clustersHandler.OnRegistered = func(ctx context.Context, id string) { grantDemoClusterRoles(ctx, repo, cfg, []string{id}) }
 	}
 	healthHandler := handler.NewHealthHandler(pool)
+	// Readiness: not from SIGTERM on, nor while the database (every route but the JWKS needs it) does not answer.
+	ready := probe.New().Require("database", probe.Database(pool, poolBusy(pool)))
 
 	// Router
 	r := chi.NewRouter()
@@ -330,6 +333,8 @@ func main() {
 	// Health (no auth)
 	r.Get("/", healthHandler.Root)
 	r.Get("/health", healthHandler.Health)
+	r.Get("/livez", ready.Live)
+	r.Get("/readyz", ready.Ready)
 	r.Get("/metrics", m.Handler().ServeHTTP)
 
 	// Auth API
@@ -367,10 +372,23 @@ func main() {
 	<-ctx.Done()
 
 	slog.Info("shutting down server...")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ready.Leave()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), serverShutdownWait)
 	defer cancel()
 	srv.Shutdown(shutdownCtx)
 	slog.Info("server stopped")
+}
+
+// serverShutdownWait lets the requests in flight finish inside the 30 s the chart's grace period leaves after its
+// preStop wait, with room for the pool to close after it.
+const serverShutdownWait = 20 * time.Second
+
+// poolBusy says whether every connection of the pool is taken (probe.Database).
+func poolBusy(pool *pgxpool.Pool) func() bool {
+	return func() bool {
+		s := pool.Stat()
+		return s.AcquiredConns() >= s.MaxConns()
+	}
 }
 
 func bootstrapUsers(ctx context.Context, repo *repository.Repository, cfg config.Config) {

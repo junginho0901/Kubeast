@@ -29,6 +29,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/probe"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -41,6 +42,8 @@ type Handler struct {
 	recorder   *recording.Manager // nil or disabled: terminals are not recorded
 	// liveSessions ends long-lived answers with their session (nil: not checked).
 	liveSessions *auth.LiveSessions
+	// leaving ends long-lived answers when the server starts to leave (nil: never).
+	leaving *probe.Probe
 	// hygieneStore keeps cluster hygiene sign-offs (nil in tests: no history).
 	hygieneStore hygiene.Store
 	// hygieneScan replaces svc.CollectHygiene in tests.
@@ -91,6 +94,9 @@ func (h *Handler) SetWatchLimits(m *ws.Multiplexer) { h.watchLimits = m }
 
 // SetLiveSessions sets what ends open terminals and followed streams when their session stops standing.
 func (h *Handler) SetLiveSessions(s *auth.LiveSessions) { h.liveSessions = s }
+
+// SetLeaving sets what ends open terminals and followed streams when the server starts to leave (SIGTERM).
+func (h *Handler) SetLeaving(p *probe.Probe) { h.leaving = p }
 
 // New creates a new Handler. The helm service is derived from the same
 // k8s.Service and cache so Helm SDK calls observe the kubeconfig
