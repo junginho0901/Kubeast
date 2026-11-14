@@ -1,0 +1,26 @@
+{
+ "id": "05_dns_one_service",
+ "control": false,
+ "symptom": "storefront's stock lookups fail with \"bad address 'inventory:8080'\"; its catalog calls (full name) and reports' stock calls keep working",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "Deployment/shop-05/storefront",
+   "kind": "dns",
+   "accept_resources": ["(deployment|replicaset|pod)/(shop-05/)?storefront", "^storefront"],
+   "accept_kinds": []
+  }
+ ],
+ "path": [
+  {"resource": "Deployment/shop-05/storefront", "role": "cause", "required": true, "accept": ["storefront"], "note": "its pod DNS settings; the symptom shows in the same workload's log"},
+  {"resource": "Service/shop-05/inventory", "role": "symptom", "required": false, "accept": ["inventory"], "note": "the name that no longer resolves from storefront"}
+ ],
+ "also_ok": [],
+ "decoys": [
+  {"resource": "Deployment/shop-05/inventory", "why": "the callee: Ready, endpoints present, reports reaches it every 5 s"},
+  {"resource": "Service/shop-05/inventory", "why": "unchanged and has ready endpoints"},
+  {"resource": "Deployment/kube-system/coredns", "why": "cluster DNS works: storefront still resolves the catalog's full name, reports resolves inventory"}
+ ]
+}

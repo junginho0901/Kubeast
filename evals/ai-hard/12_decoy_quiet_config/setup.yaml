@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: storefront-config}
+data:
+  upstreams.conf: |
+    catalog_url=http://catalog:8080/api/v1/items
+    cart_url=http://cart:8080/api/v1/cart
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: storefront}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: storefront}}
+  template:
+    metadata: {labels: {app: storefront}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              now_cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }
+              call() {
+                t0=$(now_cs)
+                if out=$(wget -q -T 3 -O /dev/null "$2" 2>&1); then
+                  echo "level=info msg=\"upstream ok\" upstream=$1 duration_ms=$(( ($(now_cs) - t0) * 10 ))"
+                else
+                  echo "level=error msg=\"upstream request failed\" upstream=$1 duration_ms=$(( ($(now_cs) - t0) * 10 )) err=\"$(echo $out)\""
+                fi
+              }
+              echo "level=info msg=\"storefront started\""
+              while true; do
+                . /etc/storefront/upstreams.conf
+                call catalog "$catalog_url"
+                call cart "$cart_url"
+                sleep 2
+              done
+          volumeMounts:
+            - {name: config, mountPath: /etc/storefront, readOnly: true}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+      volumes:
+        - name: config
+          configMap: {name: storefront-config}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: cart}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: cart}}
+  template:
+    metadata: {labels: {app: cart}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/api/v1
+              echo '{"cart_id":"c-1","lines":2}' > /www/api/v1/cart
+              exec httpd -f -vv -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: cart}
+spec:
+  selector: {app: cart}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: catalog}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: catalog}}
+  template:
+    metadata: {labels: {app: catalog}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/api/v1
+              echo '{"items":[101,102,103]}' > /www/api/v1/items
+              exec httpd -f -v -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: catalog}
+spec:
+  selector: {app: catalog}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: notifier}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: notifier}}
+  template:
+    metadata: {labels: {app: notifier}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              echo "level=info msg=\"notifier starting\" relay=smtp.mail.internal:587"
+              sleep 3
+              echo "level=error msg=\"cannot reach mail relay\" err=\"dial tcp: lookup smtp.mail.internal: no such host\""
+              exit 1
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 50m, memory: 16Mi}}

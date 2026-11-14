@@ -1,0 +1,27 @@
+{
+ "id": "12_decoy_quiet_config",
+ "control": false,
+ "symptom": "storefront's cart calls get HTTP 404; its catalog calls keep working",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "ConfigMap/shop-12/storefront-config",
+   "kind": "config_change",
+   "accept_resources": ["storefront-config"],
+   "accept_kinds": []
+  }
+ ],
+ "path": [
+  {"resource": "ConfigMap/shop-12/storefront-config", "role": "cause", "required": true, "accept": ["storefront-config"], "note": "cart_url edited in place from /api/v1/cart to /api/v2/cart; no rollout"},
+  {"resource": "Deployment/shop-12/storefront", "role": "via", "required": false, "accept": ["storefront"], "note": "re-reads the mounted file on every loop"},
+  {"resource": "Deployment/shop-12/cart", "role": "via", "required": false, "accept": ["cart"], "note": "answers 404 for the path it never served"},
+  {"resource": "Deployment/shop-12/storefront", "role": "symptom", "required": true, "accept": ["storefront"]}
+ ],
+ "also_ok": [],
+ "decoys": [
+  {"resource": "Deployment/shop-12/notifier", "why": "CrashLoopBackOff since setup, ten minutes before the cart errors began, with a DNS-looking error; unrelated to the cart path"},
+  {"resource": "Deployment/shop-12/cart", "why": "returns 404, but serves exactly what it always served"}
+ ]
+}

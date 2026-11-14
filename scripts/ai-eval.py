@@ -35,7 +35,9 @@ import time
 import urllib.request
 from pathlib import Path
 
-import ai_eval_rca as rca
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # python3 -I leaves the script's folder out
+
+import ai_eval_rca as rca  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 CASES = ROOT / "evals" / "ai"
@@ -378,7 +380,7 @@ def main() -> int:
     ap.add_argument("--hidden", action="store_true", help="also run the cases marked hidden (the table shows only their total)")
     ap.add_argument("--list", action="store_true", help="list the cases that would run and check their fields; touches no cluster")
     args = ap.parse_args()
-    cases, problems = load_cases(Path(args.cases), args.only, args.hidden)
+    cases, problems = load_cases(Path(args.cases).resolve(), args.only, args.hidden)  # $CASE_DIR is absolute
     if args.list:
         print(listing(cases))
         for p in problems:

@@ -1,0 +1,31 @@
+{
+ "id": "13_control_unrelated_restart",
+ "title": "Control: no fault, one unrelated container restart",
+ "group": "control",
+ "cluster": "self",
+ "namespace": "shop-13",
+ "question": "self 클러스터 shop-13에서 주문이 가끔 실패한다는 제보가 있는데 원인이 뭐야?",
+ "question_vague": "self 클러스터 shop-13 상태 괜찮아? 문제가 있으면 원인까지 알려줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "문제(가|는)? ?(없|보이지|확인되지)",
+   "이상(이|은)? ?(없|보이지|확인되지)",
+   "실패(가|는)? ?(없|보이지|확인되지)",
+   "정상"
+  ]
+ ],
+ "tools": [],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/catalog deploy/orders deploy/storefront deploy/thumbnailer --timeout=10s",
+ "wait_seconds": 240,
+ "baseline_seconds": 300,
+ "inject_cmds": [
+  "kubectl -n $NS exec deploy/thumbnailer -- kill -TERM 1"
+ ],
+ "inject_wait": "test \"$(kubectl -n $NS get pod -l app=thumbnailer -o jsonpath='{.items[0].status.containerStatuses[0].restartCount}')\" -ge 1",
+ "inject_wait_seconds": 60,
+ "ask_after_seconds": [300],
+ "undo_cmds": [],
+ "cooldown_seconds": 30,
+ "timeout_seconds": 420
+}

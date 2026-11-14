@@ -8,8 +8,17 @@
 # Run those up first.
 #
 #   scripts/kind-otel-demo.sh up                     # again to apply a change; the memory check is for the first up
-#   OTELDEMO_METRICS=0 scripts/kind-otel-demo.sh up  # metrics kept out of that Prometheus (one 384 Mi pod, 2 h kept)
+#   OTELDEMO_METRICS=0 scripts/kind-otel-demo.sh up  # metrics and alert rules kept out of that Prometheus (384 Mi, 2 h)
 #   scripts/kind-otel-demo.sh down                   # what up made; the stores keep what the demo sent
+#
+# Alert rules: with metrics on, up puts deploy/kind/otel-demo-rules.json (error rate and 95th percentile latency of each
+# service's server spans, container restarts in otel-demo) into the Prometheus ConfigMap as extra-rules-otel-demo.json,
+# which its rule_files read, and sends Prometheus SIGHUP once the kubelet has updated the mounted file; down takes it
+# out the same way. The alerts carry kubeast_eval="otel-demo", the one label that Prometheus sends to Alertmanager
+# (deploy/kind/second-cluster.yaml), whose default route posts them to Kubeast's webhook for cluster "default", where
+# the investigator takes severity warning. The e2e specs pick alerts by kubeast_e2e, e2e_run or names of their own and
+# find none of these. flagd is left out of both span rules: its event stream is one long call. The thresholds (5 %,
+# 1000 ms) are not measured on kind yet.
 #
 # Memory: the first up refuses when the Docker VM has less memory available than the demo's containers may take —
 # MemAvailable of /proc/meminfo read in the kind node (it shares the VM's kernel) against the sum of the memory limits
@@ -30,6 +39,8 @@ NODE="$STORE-control-plane"
 NS="otel-demo"
 OTELDEMO_CHART_VERSION="0.42.6"
 VALUES="$ROOT/deploy/kind/otel-demo-values.yaml"
+RULES="$ROOT/deploy/kind/otel-demo-rules.json"
+RULES_KEY="extra-rules-otel-demo.json"  # matches rule_files' /etc/prometheus/extra-rules-* in deploy/kind/second-cluster.yaml
 
 case "${1:-}" in
   up|down) ;;
@@ -102,6 +113,51 @@ memory_check() {
   fi
 }
 
+# rules_loaded — whether the second cluster's Prometheus has the group of $RULES loaded, asked from its node on
+# NodePort 30090 (deploy/kind/second-cluster.yaml).
+rules_loaded() {
+  docker exec "$NODE" curl -sf http://127.0.0.1:30090/api/v1/rules 2>/dev/null \
+    | jq -e --arg g "$(jq -r '.groups[0].name' "$RULES")" 'any(.data.groups[]; .name == $g)' >/dev/null
+}
+
+# reload_prometheus present|absent — waits until the kubelet has written the ConfigMap's change into the pod (up to
+# three minutes), sends SIGHUP (the Prometheus runs without --web.enable-lifecycle) and waits until the group is
+# loaded or gone; fails when it is not.
+reload_prometheus() {
+  local _
+  for _ in $(seq 1 36); do
+    if [ "$1" = present ]; then
+      k -n monitoring exec deploy/prometheus -- cat "/etc/prometheus/$RULES_KEY" 2>/dev/null | cmp -s - "$RULES" && break
+    else
+      k -n monitoring exec deploy/prometheus -- test -e "/etc/prometheus/$RULES_KEY" 2>/dev/null || break
+    fi
+    sleep 5
+  done
+  k -n monitoring exec deploy/prometheus -- kill -HUP 1 || return 1
+  for _ in $(seq 1 12); do
+    if [ "$1" = present ]; then rules_loaded && return 0; else rules_loaded || return 0; fi
+    sleep 5
+  done
+  return 1
+}
+
+rules_up() {
+  echo "═══ alert rules in $STORE monitoring/prometheus ($RULES_KEY) ═══"
+  k -n monitoring patch configmap prometheus --type merge \
+    -p "$(jq -Rs --arg k "$RULES_KEY" '{data: {($k): .}}' "$RULES")" >/dev/null
+  reload_prometheus present \
+    || { echo "Prometheus did not load $RULES_KEY: kubectl -n monitoring logs deploy/prometheus" >&2; exit 1; }
+  echo "the alert rules are loaded; their alerts go through Alertmanager to Kubeast's webhook for cluster default"
+}
+
+rules_down() {
+  [ -n "$(k -n monitoring get configmap prometheus -o json 2>/dev/null | jq -r --arg k "$RULES_KEY" '.data[$k] // empty')" ] \
+    || return 0
+  k -n monitoring patch configmap prometheus --type merge -p "$(jq -n --arg k "$RULES_KEY" '{data: {($k): null}}')" >/dev/null
+  reload_prometheus absent \
+    || echo "the Prometheus in $STORE may hold the demo's alert rules until it restarts: kubectl -n monitoring logs deploy/prometheus" >&2
+}
+
 case "$1" in
   up)
     k -n tempo get deploy tempo >/dev/null 2>&1 \
@@ -113,6 +169,11 @@ case "$1" in
       case "$args" in
         *enable-remote-write-receiver*) ;;
         *) echo "the Prometheus in $STORE (monitoring/prometheus) takes no remote write: apply" \
+             "deploy/kind/second-cluster.yaml there, or run with OTELDEMO_METRICS=0" >&2; exit 1 ;;
+      esac
+      case "$(k -n monitoring get configmap prometheus -o jsonpath='{.data.prometheus\.yml}' 2>/dev/null || true)" in
+        *extra-rules-*) ;;
+        *) echo "the Prometheus in $STORE reads no extra rule files, so the demo's alert rules would not load: apply" \
              "deploy/kind/second-cluster.yaml there, or run with OTELDEMO_METRICS=0" >&2; exit 1 ;;
       esac
     fi
@@ -133,9 +194,11 @@ case "$1" in
     k apply --server-side --force-conflicts -n "$NS" -f "$MANIFEST" >/dev/null
     k -n "$NS" rollout status ds/otel-collector-agent --timeout=180s
     k -n "$NS" wait --for=condition=Available deploy --all --timeout=600s
+    if [ "${OTELDEMO_METRICS:-1}" != 0 ]; then rules_up; else rules_down; fi
     echo "the demo is up: kubectl -n $NS port-forward svc/frontend-proxy 8080 opens the shop and /feature its flags"
     ;;
   down)
+    rules_down
     render
     k delete -n "$NS" -f "$MANIFEST" --ignore-not-found --wait=false >/dev/null
     k delete namespace "$NS" --ignore-not-found

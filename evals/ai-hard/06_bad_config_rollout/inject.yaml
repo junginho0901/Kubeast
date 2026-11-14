@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: pricing-settings-9b2c1}
+data:
+  CURRENCY: KRW
+  ROUNDING: half-up
+  TAX_RATE_BP: "0.10"
+  FX_REFRESH_SECONDS: "300"

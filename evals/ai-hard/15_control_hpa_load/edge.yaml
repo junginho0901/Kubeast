@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: gateway}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: gateway}}
+  template:
+    metadata: {labels: {app: gateway}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: API_URL, value: "http://api.shop-15.svc.cluster.local:8080/cgi-bin/products"}
+          command: [sh, -c]
+          args:
+            - |
+              now_cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }
+              echo "level=info msg=\"gateway started\""
+              while true; do
+                t0=$(now_cs)
+                if out=$(wget -q -T 5 -O /dev/null "$API_URL" 2>&1); then
+                  echo "level=info msg=\"proxied\" route=/products upstream=api duration_ms=$(( ($(now_cs) - t0) * 10 ))"
+                else
+                  echo "level=error msg=\"proxy error\" route=/products upstream=api duration_ms=$(( ($(now_cs) - t0) * 10 )) err=\"$(echo $out)\""
+                fi
+                sleep 1
+              done
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}

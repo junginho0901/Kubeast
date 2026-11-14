@@ -5,6 +5,8 @@
 #   --alertmanager.url=http://localhost:9093
 # Kubeast's alerts_list reads it on NodePort 31093 (features.alertStore in deploy/kind/values.yaml); the alerts
 # ai-alerts-list.spec.ts posts carry kubeast_e2e="store" and go to no receiver, so they start no investigation.
+# The second cluster's Prometheus sends only alerts labelled kubeast_eval (deploy/kind/second-cluster.yaml): the
+# OpenTelemetry demo's rules while scripts/kind-otel-demo.sh has them in, which take the default route to the webhook.
 # After a change here: kubectl apply -f this file, then kubectl -n monitoring rollout restart deploy/alertmanager.
 apiVersion: v1
 kind: ConfigMap

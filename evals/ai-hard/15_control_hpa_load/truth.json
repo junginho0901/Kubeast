@@ -1,0 +1,17 @@
+{
+ "id": "15_control_hpa_load",
+ "control": true,
+ "symptom": "none that is a fault: request rate to api rises about fivefold, the HPA scales api from 1 to 2-3 pods within a couple of minutes, latency moves little and no request fails",
+ "fault_start": null,
+ "fault_end": null,
+ "time_tolerance_seconds": null,
+ "causes": [],
+ "path": [],
+ "also_ok": [],
+ "decoys": [
+  {"resource": "HorizontalPodAutoscaler/shop-15/api", "why": "scaled out as designed; its events say why"},
+  {"resource": "Deployment/shop-15/api", "why": "more pods and higher CPU, all within requests and limits, no throttling, no errors"},
+  {"resource": "Deployment/edge-15/gateway", "why": "the traffic source outside the asked namespace; more traffic is not a fault"}
+ ],
+ "distractor_at": "{{INJECT_TIME}}"
+}

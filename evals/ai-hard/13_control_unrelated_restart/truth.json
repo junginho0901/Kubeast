@@ -1,0 +1,16 @@
+{
+ "id": "13_control_unrelated_restart",
+ "control": true,
+ "symptom": "none: every storefront call to catalog and orders succeeds before and after the restart",
+ "fault_start": null,
+ "fault_end": null,
+ "time_tolerance_seconds": null,
+ "causes": [],
+ "path": [],
+ "also_ok": [],
+ "decoys": [
+  {"resource": "Deployment/shop-13/thumbnailer", "why": "its container restarted once (exit 143) about five minutes before the question; it is not on the orders path and has run normally since"},
+  {"resource": "Deployment/shop-13/orders", "why": "named in the question; healthy, no errors"}
+ ],
+ "distractor_at": "{{INJECT_TIME}}"
+}

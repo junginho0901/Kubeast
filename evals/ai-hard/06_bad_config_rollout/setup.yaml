@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: pricing-settings-7d4f8}
+data:
+  CURRENCY: KRW
+  ROUNDING: half-up
+  TAX_RATE_BP: "1000"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: pricing}
+spec:
+  replicas: 4
+  minReadySeconds: 120
+  strategy: {type: RollingUpdate, rollingUpdate: {maxSurge: 2, maxUnavailable: 0}}
+  selector: {matchLabels: {app: pricing}}
+  template:
+    metadata: {labels: {app: pricing}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: {name: pricing-settings-7d4f8}
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/cgi-bin
+              cat > /www/cgi-bin/quote <<'EOF'
+              #!/bin/sh
+              case "$TAX_RATE_BP" in
+                ''|*[!0-9]*)
+                  echo "level=error msg=\"quote failed\" err=\"invalid TAX_RATE_BP '$TAX_RATE_BP': want whole basis points\"" >&2
+                  printf 'Status: 500 Internal Server Error\r\nContent-Type: text/plain\r\n\r\ninternal error\n'
+                  exit 0
+                  ;;
+              esac
+              base=19900
+              tax=$(( base * TAX_RATE_BP / 10000 ))
+              printf 'Content-Type: application/json\r\n\r\n{"currency":"%s","base":%d,"tax":%d}\n' "$CURRENCY" "$base" "$tax"
+              EOF
+              chmod 755 /www/cgi-bin/quote
+              echo "level=info msg=\"pricing started\" currency=$CURRENCY rounding=$ROUNDING"
+              exec httpd -f -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: pricing}
+spec:
+  selector: {app: pricing}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: checkout}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: checkout}}
+  template:
+    metadata: {labels: {app: checkout}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: PRICING_URL, value: "http://pricing:8080/cgi-bin/quote"}
+          command: [sh, -c]
+          args:
+            - |
+              now_cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }
+              call() {
+                t0=$(now_cs)
+                if out=$(wget -q -T 3 -O /dev/null "$2" 2>&1); then
+                  echo "level=info msg=\"upstream ok\" upstream=$1 duration_ms=$(( ($(now_cs) - t0) * 10 ))"
+                else
+                  echo "level=error msg=\"upstream request failed\" upstream=$1 duration_ms=$(( ($(now_cs) - t0) * 10 )) err=\"$(echo $out)\""
+                fi
+              }
+              echo "level=info msg=\"checkout started\""
+              while true; do
+                call pricing "$PRICING_URL"
+                sleep 0.5
+              done
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}

@@ -1,0 +1,33 @@
+{
+ "id": "08_quota_exhausted",
+ "title": "ResourceQuota used up: the export Job's pods cannot be created, data goes stale",
+ "group": "hidden_cause",
+ "cluster": "self",
+ "namespace": "shop-08",
+ "question": "self 클러스터 shop-08에서 정산 데이터가 몇 분째 갱신이 안 된대. 원인이 뭐야?",
+ "question_vague": "self 클러스터 shop-08 쪽이 좀 이상하다는데 뭐가 문제인지 봐줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "ResourceQuota",
+   "quota",
+   "쿼터"
+  ]
+ ],
+ "tools": [],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/ledger deploy/search-indexer --timeout=10s && kubectl -n $NS get jobs -o jsonpath='{.items[*].status.succeeded}' | grep -q 1",
+ "wait_seconds": 240,
+ "baseline_seconds": 180,
+ "inject_cmds": [
+  "kubectl -n $NS scale deploy/search-indexer --replicas=4"
+ ],
+ "inject_wait": "kubectl -n $NS get events --field-selector reason=FailedCreate,involvedObject.kind=Job -o name | grep -q .",
+ "inject_wait_seconds": 240,
+ "ask_after_seconds": [420],
+ "undo_cmds": [
+  "kubectl -n $NS scale deploy/search-indexer --replicas=1"
+ ],
+ "cooldown_seconds": 30,
+ "hidden": true,
+ "timeout_seconds": 420
+}

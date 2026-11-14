@@ -1,0 +1,30 @@
+{
+ "id": "04_netpol_block",
+ "title": "A new NetworkPolicy blocks one caller from one backend",
+ "group": "hidden_cause",
+ "cluster": "self",
+ "namespace": "shop-04",
+ "question": "self 클러스터 shop-04에서 storefront가 상품 목록을 못 불러온대. 원인이 뭐야?",
+ "question_vague": "self 클러스터 shop-04 쪽 사이트가 이상하다는데 원인 좀 찾아줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "allow-from-gateway"
+  ]
+ ],
+ "tools": [],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/catalog deploy/reviews deploy/storefront --timeout=10s",
+ "wait_seconds": 240,
+ "baseline_seconds": 180,
+ "inject_cmds": [
+  "kubectl -n $NS apply -f $CASE_DIR/inject.yaml"
+ ],
+ "inject_wait": "kubectl -n $NS logs deploy/storefront --since=20s | grep 'request failed' | grep -q 'upstream=catalog'",
+ "inject_wait_seconds": 120,
+ "ask_after_seconds": [300],
+ "undo_cmds": [
+  "kubectl -n $NS delete networkpolicy allow-from-gateway --ignore-not-found"
+ ],
+ "cooldown_seconds": 30,
+ "timeout_seconds": 420
+}

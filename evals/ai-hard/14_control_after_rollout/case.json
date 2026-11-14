@@ -1,0 +1,32 @@
+{
+ "id": "14_control_after_rollout",
+ "title": "Control: no fault, right after a normal rollout",
+ "group": "control",
+ "cluster": "self",
+ "namespace": "shop-14",
+ "question": "self 클러스터 shop-14에서 주문 처리가 느려졌다는 얘기가 있는데 원인이 뭐야?",
+ "question_vague": "self 클러스터 shop-14 지금 문제 없어? 있으면 원인까지 알려줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "문제(가|는)? ?(없|보이지|확인되지)",
+   "이상(이|은)? ?(없|보이지|확인되지)",
+   "느려진 ?(흔적|징후)(이|은)? ?(없|보이지)",
+   "정상"
+  ]
+ ],
+ "tools": [],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/orders deploy/catalog deploy/storefront --timeout=10s",
+ "wait_seconds": 240,
+ "baseline_seconds": 300,
+ "inject_cmds": [
+  "kubectl -n $NS annotate deploy/orders kubernetes.io/change-cause='release 4.18.1' --overwrite",
+  "kubectl -n $NS set env deploy/orders RELEASE=4.18.1"
+ ],
+ "inject_wait": "kubectl -n $NS rollout status deploy/orders --timeout=10s",
+ "inject_wait_seconds": 180,
+ "ask_after_seconds": [240],
+ "undo_cmds": [],
+ "cooldown_seconds": 30,
+ "timeout_seconds": 420
+}

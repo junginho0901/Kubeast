@@ -1,0 +1,16 @@
+{
+ "id": "14_control_after_rollout",
+ "control": true,
+ "symptom": "none: orders calls stay fast and successful before, during and after the rollout",
+ "fault_start": null,
+ "fault_end": null,
+ "time_tolerance_seconds": null,
+ "causes": [],
+ "path": [],
+ "also_ok": [],
+ "decoys": [
+  {"resource": "Deployment/shop-14/orders", "why": "rolled out to release 4.18.1 four minutes before the question; the rollout finished cleanly and nothing got worse"},
+  {"resource": "ReplicaSet/shop-14/orders-<new>", "why": "the new revision; healthy"}
+ ],
+ "distractor_at": "{{INJECT_TIME}}"
+}

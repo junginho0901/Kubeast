@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: inventory}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: inventory}}
+  template:
+    metadata: {labels: {app: inventory}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/api/v1
+              echo '{"sku":"A-101","in_stock":12}' > /www/api/v1/stock
+              exec httpd -f -v -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: inventory}
+spec:
+  selector: {app: inventory}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: catalog}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: catalog}}
+  template:
+    metadata: {labels: {app: catalog}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/api/v1
+              echo '{"items":[101,102,103]}' > /www/api/v1/items
+              exec httpd -f -v -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: catalog}
+spec:
+  selector: {app: catalog}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: storefront}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: storefront}}
+  template:
+    metadata: {labels: {app: storefront}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: INVENTORY_URL, value: "http://inventory:8080/api/v1/stock"}
+            - {name: CATALOG_URL, value: "http://catalog.shop-05.svc.cluster.local:8080/api/v1/items"}
+          command: [sh, -c]
+          args:
+            - |
+              now_cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }
+              call() {
+                t0=$(now_cs)
+                if out=$(wget -q -T 3 -O /dev/null "$2" 2>&1); then
+                  echo "level=info msg=\"upstream ok\" upstream=$1 duration_ms=$(( ($(now_cs) - t0) * 10 ))"
+                else
+                  echo "level=error msg=\"upstream request failed\" upstream=$1 duration_ms=$(( ($(now_cs) - t0) * 10 )) err=\"$(echo $out)\""
+                fi
+              }
+              echo "level=info msg=\"storefront started\""
+              while true; do
+                call catalog "$CATALOG_URL"
+                call inventory "$INVENTORY_URL"
+                sleep 2
+              done
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: reports}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: reports}}
+  template:
+    metadata: {labels: {app: reports}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: INVENTORY_URL, value: "http://inventory:8080/api/v1/stock"}
+          command: [sh, -c]
+          args:
+            - |
+              echo "level=info msg=\"reports worker started\""
+              while true; do
+                if out=$(wget -q -T 3 -O- "$INVENTORY_URL" 2>&1); then
+                  echo "level=info msg=\"stock snapshot taken\" body=$(echo $out)"
+                else
+                  echo "level=error msg=\"stock snapshot failed\" err=\"$(echo $out)\""
+                fi
+                sleep 5
+              done
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}

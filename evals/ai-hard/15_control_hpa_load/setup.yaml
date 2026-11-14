@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: api}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: api}}
+  template:
+    metadata: {labels: {app: api}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/cgi-bin
+              cat > /www/cgi-bin/products <<'EOF'
+              #!/bin/sh
+              etag=$(head -c 2000000 /dev/zero | sha256sum | cut -c1-16)
+              printf 'Content-Type: application/json\r\nETag: "%s"\r\n\r\n{"products":[101,102,103],"etag":"%s"}\n' "$etag" "$etag"
+              EOF
+              chmod 755 /www/cgi-bin/products
+              echo "level=info msg=\"api started\""
+              exec httpd -f -v -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 50m, memory: 32Mi}, limits: {cpu: 500m, memory: 64Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: api}
+spec:
+  selector: {app: api}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: api}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: api}
+  minReplicas: 1
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: {type: Utilization, averageUtilization: 60}

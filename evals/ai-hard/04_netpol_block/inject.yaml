@@ -1,0 +1,9 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-from-gateway}
+spec:
+  podSelector: {matchLabels: {tier: backend}}
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{podSelector: {matchLabels: {app.kubernetes.io/component: gateway}}}]
+      ports: [{port: 8080}]

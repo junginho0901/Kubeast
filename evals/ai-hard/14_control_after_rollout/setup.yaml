@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders
+  annotations: {kubernetes.io/change-cause: "release 4.18.0"}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: orders}}
+  template:
+    metadata: {labels: {app: orders}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: RELEASE, value: "4.18.0"}
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/api/v1
+              echo '{"orders":[{"id":"o-1","status":"paid"}]}' > /www/api/v1/orders
+              echo "level=info msg=\"orders starting\" release=$RELEASE"
+              exec httpd -f -v -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: orders}
+spec:
+  selector: {app: orders}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: catalog}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: catalog}}
+  template:
+    metadata: {labels: {app: catalog}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/api/v1
+              echo '{"items":[101,102,103]}' > /www/api/v1/items
+              exec httpd -f -v -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: catalog}
+spec:
+  selector: {app: catalog}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: storefront}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: storefront}}
+  template:
+    metadata: {labels: {app: storefront}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: CATALOG_URL, value: "http://catalog:8080/api/v1/items"}
+            - {name: ORDERS_URL, value: "http://orders:8080/api/v1/orders"}
+          command: [sh, -c]
+          args:
+            - |
+              now_cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }
+              call() {
+                t0=$(now_cs)
+                if out=$(wget -q -T 3 -O /dev/null "$2" 2>&1); then
+                  echo "level=info msg=\"upstream ok\" upstream=$1 duration_ms=$(( ($(now_cs) - t0) * 10 ))"
+                else
+                  echo "level=error msg=\"upstream request failed\" upstream=$1 duration_ms=$(( ($(now_cs) - t0) * 10 )) err=\"$(echo $out)\""
+                fi
+              }
+              echo "level=info msg=\"storefront started\""
+              while true; do
+                call catalog "$CATALOG_URL"
+                call orders "$ORDERS_URL"
+                sleep 2
+              done
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
