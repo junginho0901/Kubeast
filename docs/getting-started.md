@@ -124,6 +124,28 @@ SELECT g.user_id, g.cluster_id, r.name
                  WHERE actor_user_id = 'system' AND actor_email = 'migration' AND action = 'admin.roles.update');
 ```
 
+Upgrading to 0.7.8 also gives a new group to each role whose name has characters outside ASCII: 0.7.7 wrote each such character as `-` (`운영팀` acted as `kubeast:role:---`), 0.7.8 writes `~` and its code point (`kubeast:role:~c6b4~c601~d300`, [Features](features.md) "Role names"). A cluster that allows and binds only the old group refuses those people's requests (403) until the new group is allowed and bound there. On every registered cluster other than the one Kubeast runs in, apply the custom roles template again (`scripts/render-target-rbac.sh`, [Cluster requirements](cluster-requirements.md) §1) and delete the bindings it made for the old group, named `kubeast-role-<old slug>-<ClusterRole>` (`kubeast-role-----view` for `운영팀` bound to `view`): `kubectl apply` does not delete them. On the cluster Kubeast runs in, `helm upgrade` replaces them. On every cluster, change each `kubeast:role:<old slug>` you wrote yourself, in an impersonation rule or a binding, to the new group. Before the upgrade, this query (it reads only) lists those roles with the group each acts as in 0.7.7 and in 0.7.8; it lists none when every role name is ASCII.
+
+```sql
+WITH s AS (
+  SELECT ro.name,
+         string_agg(CASE WHEN p BETWEEN 97 AND 122 OR p BETWEEN 48 AND 57 OR p IN (45, 46, 95) THEN c ELSE '-' END, '' ORDER BY i) AS slug_0_7_7,
+         string_agg(CASE WHEN p BETWEEN 97 AND 122 OR p BETWEEN 48 AND 57 OR p IN (45, 46, 95) THEN c
+                         WHEN p < 128 THEN '-'
+                         WHEN p < 65536 THEN '~' || lpad(to_hex(p), 4, '0')
+                         ELSE '~~' || lpad(to_hex(p), 6, '0') END, '' ORDER BY i) AS slug_0_7_8
+    FROM roles ro,
+         unnest(string_to_array(translate(btrim(ro.name, E' \t\n\u000b\f\r\u0085                 　'),
+                                          E'ABCDEFGHIJKLMNOPQRSTUVWXYZİK', 'abcdefghijklmnopqrstuvwxyzik'), NULL))
+           WITH ORDINALITY AS t(c, i),
+         LATERAL ascii(c) AS p
+   GROUP BY ro.id, ro.name)
+SELECT name, 'kubeast:role:' || slug_0_7_7 AS group_0_7_7, 'kubeast:role:' || slug_0_7_8 AS group_0_7_8
+  FROM s
+ WHERE slug_0_7_7 <> slug_0_7_8
+ ORDER BY name;
+```
+
 ### Uninstall
 
 ```bash
