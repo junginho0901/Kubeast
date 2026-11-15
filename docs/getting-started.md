@@ -153,6 +153,17 @@ From 0.7.8 k8s-service and tool-server sign in to the chart's Redis as users of 
 
 From 0.7.8, `pdb.minAvailable` is gone: a service gets a PodDisruptionBudget only when it is set to two or more replicas or autoscales with `minReplicas` 2 or more, and `pdb.maxUnavailable` (1) says how many of them a node drain may evict at once. Values that still set `pdb.minAvailable` stop the upgrade and say so; take it out, and set `pdb.maxUnavailable` if you want another number.
 
+**The default model is `gpt-6-luna` from 0.7.8, in place of `gpt-4o-mini`.** OpenAI shuts down `gpt-4o-mini-2024-07-18` on 2027-01-14 and names `gpt-6-luna` as its replacement ([deprecations](https://developers.openai.com/api/docs/deprecations)).
+
+- An upgrade leaves the model of every saved setting as it is, also the `default-openai` setting ai-service made from `ai.model` at its first start. Change it in **Admin > AI Models** before 2027-01-14.
+- A gateway (LiteLLM and the like) answers only the model names it maps. Add `gpt-6-luna` there before a setting uses it.
+- `gpt-6-luna` takes tools in Chat Completions only at `reasoning_effort: "none"`. Kubeast sends it on every call to the names `gpt-6-sol` and `gpt-6-luna` on the OpenAI and Azure OpenAI providers. A setting that reaches `gpt-6-luna` under another name (a gateway alias, provider `custom`, an Azure deployment) gets a tool call that is refused with OpenAI's 400 "Function tools with reasoning_effort are not supported" again at `none` and sends `none` from then on, in each ai-service pod until it restarts ("AI assistant" in [Features](features.md)). A refusal worded otherwise is not sent again at `none`; whether Azure OpenAI and gateways use OpenAI's words has not been checked. To send it from the first call, put `"reasoning_effort": "none"` in that setting's options.
+- An install with no saved setting and no `ai.model` of its own (a gateway at `ai.baseUrl` with no key) sends `gpt-6-luna` from the upgrade on. Map it on the gateway first, or set `ai.model` to a name the gateway maps.
+- A values file of your own that sets `ai.model: gpt-4o-mini` (one copied from `helm show values` of 0.7.7, for example) keeps it. Change it before 2027-01-14.
+- Docker Compose reads `OPENAI_MODEL` from `.env`, and `install-docker.sh` run again keeps the `OPENAI_MODEL` and `OPENAI_BASE_URL` already there. A `.env` written by 0.7.7 or earlier names `gpt-4o-mini`: change it before 2027-01-14. Like `ai.model`, it names the model only while no setting is saved.
+- With `KUBEAST_TAG` set to v0.7.7 or earlier, keep `OPENAI_MODEL` at a model those images can use: they send no `reasoning_effort`, so every tool call to `gpt-6-luna` is refused.
+- Price per 1M tokens: `gpt-6-luna` $0.10 input and $0.50 output, `gpt-4o-mini` $0.15 and $0.60. A request of more than 272K input tokens to `gpt-6-luna` is billed at twice the input and cached input prices and 1.5 times the output price, for the whole request. Reasoning tokens are billed as output ([pricing](https://developers.openai.com/api/docs/pricing), [model](https://developers.openai.com/api/docs/models/gpt-6-luna), [reasoning](https://developers.openai.com/api/docs/guides/reasoning), read 2026-11-15).
+
 ### Uninstall
 
 ```bash

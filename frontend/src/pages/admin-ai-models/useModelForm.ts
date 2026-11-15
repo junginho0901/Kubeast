@@ -1,10 +1,10 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ModelConfigResponse } from '@/services/api'
-import { PROVIDER_CATALOG, getProvider, type ProviderDef } from '@/constants/modelCatalog'
+import { PROVIDER_CATALOG, getDefaultModel, getProvider, type ProviderDef } from '@/constants/modelCatalog'
 import { urlProblem } from '@/utils/urlField'
 import { useResultFor } from '@/hooks/useResultFor'
-import { buildOptions, modelListError, modelOptions, splitLimits, type LimitsError } from './helpers'
+import { buildOptions, listDefault, modelListError, modelOptions, splitLimits, type LimitsError } from './helpers'
 
 export function useModelForm() {
   const qc = useQueryClient()
@@ -97,13 +97,13 @@ export function useModelForm() {
   })
   const fetchedModels = providerModels.data?.models
   const currentModelOptions = useMemo(() => modelOptions(currentProviderDef, fetchedModels), [currentProviderDef, fetchedModels])
-  // A new config starts on the provider's first listed model when the built-in default is not one of them;
+  // A new config starts on the provider's default when the provider lists it, else on the first listed model;
   // an edited config keeps its stored model.
   useEffect(() => {
     if (isCreating && !formCustomModel && fetchedModels?.length && !fetchedModels.some((m) => m.name === formModel)) {
-      setFormModel(fetchedModels[0].name)
+      setFormModel(listDefault(formProvider, fetchedModels.map((m) => m.name)))
     }
-  }, [isCreating, formCustomModel, fetchedModels, formModel])
+  }, [isCreating, formCustomModel, fetchedModels, formModel, formProvider])
   const modelList = {
     noList: formProvider === 'claude-code',  // Claude Code has no model list API
     loading: providerModels.isFetching,
@@ -168,7 +168,7 @@ export function useModelForm() {
     setFormProvider(newProvider)
     const prov = getProvider(newProvider)
     if (prov) {
-      setFormModel(prov.models[0]?.name ?? '')
+      setFormModel(getDefaultModel(newProvider))
       setFormCustomModel(false)
       setFormBaseUrl(prov.defaultBaseUrl ?? '')
       setFormApiKeyEnv(prov.defaultApiKeyEnv ?? '')
