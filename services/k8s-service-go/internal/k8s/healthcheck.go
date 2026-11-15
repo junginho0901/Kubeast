@@ -78,20 +78,30 @@ func (h *clusterHealth) isOpen(id cluster.ID) bool {
 	return open
 }
 
-// admit says whether a request to id may go: the breaker is closed, or its period is over and this one tries the cluster.
-func (h *clusterHealth) admit(id cluster.ID) bool {
+// admit says whether a request to id may go; a trial (its period over) gets the end of the next period it books.
+func (h *clusterHealth) admit(id cluster.ID) (bool, time.Time) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	next, open := h.open[id]
 	if !open {
-		return true
+		return true, time.Time{}
 	}
 	now := h.now()
 	if now.Before(next) {
-		return false
+		return false, time.Time{}
 	}
-	h.open[id] = now.Add(h.openFor)
-	return true
+	booked := now.Add(h.openFor)
+	h.open[id] = booked
+	return true, booked
+}
+
+// unbook gives the next request the try that the trial which booked until booked did not use.
+func (h *clusterHealth) unbook(id cluster.ID, booked time.Time) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if next, open := h.open[id]; open && next.Equal(booked) {
+		h.open[id] = h.now()
+	}
 }
 
 // --- Service accessors (used by the fail-fast middleware + handlers). All
@@ -105,12 +115,19 @@ func (s *Service) ClusterDown(id cluster.ID) bool {
 	return s.health.isOpen(id)
 }
 
-// AdmitToCluster reports whether a request to id may go: the breaker is closed, or this one tries it (half-open). nil-safe.
-func (s *Service) AdmitToCluster(id cluster.ID) bool {
+// AdmitToCluster reports whether a request to id may go; trial is non-zero for the one that tries an open breaker. nil-safe.
+func (s *Service) AdmitToCluster(id cluster.ID) (ok bool, trial time.Time) {
 	if s.health == nil {
-		return true
+		return true, time.Time{}
 	}
 	return s.health.admit(id)
+}
+
+// TrialAskedNothing gives the next request the try: no answer of the cluster came to the trial (a cache's or Kubeast's own). nil-safe.
+func (s *Service) TrialAskedNothing(id cluster.ID, trial time.Time) {
+	if s.health != nil {
+		s.health.unbook(id, trial)
+	}
 }
 
 // MarkClusterDown records a live connectivity error (opens the breaker once the

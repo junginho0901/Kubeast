@@ -55,7 +55,7 @@ func TestAnOpenBreakerLetsOneRequestTryTheClusterAfterItsPeriod(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				if h.admit(id) {
+				if ok, _ := h.admit(id); ok {
 					got.Add(1)
 				}
 			}()
@@ -102,6 +102,20 @@ func TestAnOpenBreakerLetsOneRequestTryTheClusterAfterItsPeriod(t *testing.T) {
 	at = at.Add(period)
 	if n := tryAll(20); n != 1 {
 		t.Fatalf("%d let through a period after a try with no answer, want one", n)
+	}
+	// a trial the cluster did not answer gives its try to the next request, and only its own booking
+	at = at.Add(period)
+	ok, booked := h.admit(id)
+	if !ok || booked.IsZero() {
+		t.Fatalf("a period after the last try: let through %v, booked until %v", ok, booked)
+	}
+	h.unbook(id, booked.Add(-time.Second))
+	if n := tryAll(20); n != 0 {
+		t.Fatalf("%d let through after another booking was given back", n)
+	}
+	h.unbook(id, booked)
+	if n := tryAll(20); n != 1 || !h.isOpen(id) {
+		t.Fatalf("%d let through after the trial gave its try back (open %v), want one and still open", n, h.isOpen(id))
 	}
 	if newClusterHealth(5, 0).openFor != defaultBreakerOpen {
 		t.Error("no period given is not the default")

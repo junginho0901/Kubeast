@@ -124,7 +124,7 @@ ghcr.io/junginho0901/kubeast-model-config-controller-go
   - `dormantAccounts`를 켜면 24시간마다 휴면 계정 잠금
   - S3 싱크를 지정했다면 24시간마다 감사 앵커
 - k8s-service
-  - 60초마다 등록된 클러스터별 상태 확인(`multicluster.healthcheckIntervalSec`). 확인은 서버마다 자기 빠른 실패 판단에 쓰고, `clusters.health_status`는 PostgreSQL advisory lock(따로 연 연결 하나)을 잡은 서버 한 대만 씀. 확인이 실패하거나 요청이 `multicluster.breakerConsecutiveFails`번 잇달아 실패하면 그 클러스터의 차단기가 열림: `multicluster.breakerOpenSec`(30초) 동안 그 클러스터 요청에 503으로 답하고, 그 뒤 서버마다 요청 하나를 클러스터로 보내 봄. 그 요청이 성공하면 차단기가 닫히고, 실패하면 다시 열림. 클러스터 목록을 읽지 못하는 동안(DB 다운)에는 서버마다 마지막 판정을 그대로 두고 로그를 한 번 남김
+  - 60초마다 등록된 클러스터별 상태 확인(`multicluster.healthcheckIntervalSec`). 확인은 서버마다 자기 빠른 실패 판단에 쓰고, `clusters.health_status`는 PostgreSQL advisory lock(따로 연 연결 하나)을 잡은 서버 한 대만 씀. 확인이 실패하거나 요청이 `multicluster.breakerConsecutiveFails`번 잇달아 실패하면 그 클러스터의 차단기가 열림: `multicluster.breakerOpenSec`(30초) 동안 그 클러스터 요청에 503으로 답하고, 그 뒤 서버마다 요청 하나를 클러스터로 보내 봄. API 서버가 답하면 차단기가 닫히고, 실패하면 다시 열리며, 캐시로만 답한 요청이면 다음 요청이 다시 보내 봄. 클러스터 목록을 읽지 못하는 동안(DB 다운)에는 서버마다 마지막 판정을 그대로 두고 로그를 한 번 남김
   - `/health`(콘솔 머리 표시가 열린 탭마다 5초에 한 번 물음)는 기본 클러스터의 `/version`을 모든 호출자 몫으로 5초에 한 번만 읽고, 한 번 읽기는 클러스터 클라이언트가 준비된 뒤 1.5초 안에 끝나며 사람들의 요청 뒤에 줄 서지 않음. 그래서 `kubernetes` 값은 클러스터보다 최대 약 7초 늦고, 탭 수만큼 늘지 않음. 답은 감사 저장소 상태를 함께 읽어 1.5초 안에 나가므로, auth-service가 기다리는 2초 안에 듦
   - 오래 쓰지 않은 클러스터의 informer 캐시 정리
   - 레플리카마다 5초(앞뒤 1초)마다 DB에서 등록된 클러스터의 `config_version` 읽기, 쿼리 하나(`internal/clustersync`). Redis가 있으면 다른 레플리카의 클러스터 변경 알림도 구독

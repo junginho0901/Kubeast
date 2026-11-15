@@ -74,7 +74,8 @@ func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 			response.Error(w, http.StatusNotFound, "cluster not found")
 			return
 		}
-		if !h.svc.AdmitToCluster(id) {
+		admitted, trial := h.svc.AdmitToCluster(id)
+		if !admitted {
 			response.Error(w, http.StatusServiceUnavailable, "cluster "+c+" is currently unreachable")
 			return
 		}
@@ -92,15 +93,33 @@ func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 			sr.trail = &accesstrail.Recorder{}
 			r = r.WithContext(accesstrail.NewContext(r.Context(), sr.trail))
 		}
+		asked := sr.trail
+		if !trial.IsZero() && asked == nil {
+			// a trial's own record, not sent back: whether the cluster answered it or only a cache did
+			asked = &accesstrail.Recorder{}
+			r = r.WithContext(accesstrail.NewContext(r.Context(), asked))
+		}
 		next.ServeHTTP(sr, r)
 
 		switch {
 		case sr.clusterFailed:
 			h.svc.MarkClusterDown(id)
-		case sr.status < http.StatusInternalServerError:
+		case sr.status < http.StatusInternalServerError && (trial.IsZero() || clusterAnswered(asked)):
 			h.svc.MarkClusterUp(id)
+		case !trial.IsZero():
+			h.svc.TrialAskedNothing(id, trial)
 		}
 	})
+}
+
+// clusterAnswered says whether one of the recorded requests got an answer from the API server, whatever its status.
+func clusterAnswered(rec *accesstrail.Recorder) bool {
+	for _, req := range rec.Snapshot().Requests {
+		if req.Source == "api" && req.Status != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // clusterFailureNoter is the response writer ClusterMiddleware gives handlers: handleError tells it a call to the
