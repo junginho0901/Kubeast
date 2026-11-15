@@ -255,8 +255,9 @@ func (m *JWTManager) ValidateToken(tokenStr string) (jwt.MapClaims, error) {
 }
 
 // ClaimsIgnoringExpiry returns the claims of a token whose signature is ours,
-// even when it has expired. For audit only (who is logging out), never for
-// authorization: expiry, issuer and audience are not checked.
+// even when it has expired. For sign-out only (who is signing out, and which
+// sign-in ends), never to grant anything: expiry, issuer and audience are not
+// checked.
 func (m *JWTManager) ClaimsIgnoringExpiry(tokenStr string) (jwt.MapClaims, error) {
 	parser := jwt.NewParser(jwt.WithValidMethods([]string{"RS256"}), jwt.WithoutClaimsValidation())
 	token, err := parser.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
