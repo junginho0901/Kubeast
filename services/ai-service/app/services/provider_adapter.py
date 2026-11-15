@@ -142,19 +142,30 @@ class _CompletionsProxy:
                 # Sent once at "none" at most: after it reasoning_effort is in the call, or refused and remembered.
                 if (not given and kwargs.get("tools") and "reasoning_effort" not in kwargs
                         and "reasoning_effort" not in _refused.get(key, ()) and _needs_no_reasoning(e)):
-                    logger.info("model %s takes tools only at reasoning_effort none; sending it", kwargs.get("model"))
                     _without_reasoning.add(key)
                     kwargs["reasoning_effort"] = "none"
                     # refused at the default effort, taken at "none": sent again, and no longer left out
-                    for param in _SAMPLING_AT_NONE & dropped.keys():
+                    restored = sorted(_SAMPLING_AT_NONE & dropped.keys())
+                    for param in restored:
                         kwargs[param] = dropped.pop(param)
                         _refused.get(key, set()).discard(param)
+                    if restored:
+                        logger.info("model %s takes tools only at reasoning_effort none; sending it with %s again",
+                                    kwargs.get("model"), ", ".join(restored))
+                    else:
+                        logger.info("model %s takes tools only at reasoning_effort none; sending it", kwargs.get("model"))
                     continue
                 param = _refused_param(e)
                 if param is None or param not in kwargs:
                     raise
-                logger.info("model %s refused %s; leaving it out", kwargs.get("model"), param)
-                _refused.setdefault(key, set()).add(param)
+                if param in _SAMPLING_AT_NONE and "reasoning_effort" not in kwargs and key in _without_reasoning:
+                    # a call that went out at the default effort before the model was found to need "none": its
+                    # refusal holds for that effort only, and the calls at "none" keep the value
+                    logger.info("model %s refused %s at its default effort; leaving it out of this call",
+                                kwargs.get("model"), param)
+                else:
+                    logger.info("model %s refused %s; leaving it out", kwargs.get("model"), param)
+                    _refused.setdefault(key, set()).add(param)
                 drop(param)
 
     def __getattr__(self, name):
