@@ -70,6 +70,10 @@ type clientBundle struct {
 	// events is one read of an object's events as kubeast:cache for everyone asking; eventsRefused the namespaces it was refused, until when
 	events        flight.Group[*corev1.EventList]
 	eventsRefused sync.Map
+	// metricsServed is this cluster's answer to whether it serves metrics.k8s.io and when it was taken; metricsServedRead
+	// is one read of it for everyone asking (metrics.go)
+	metricsServed     atomic.Pointer[metricsVerdict]
+	metricsServedRead flight.Group[metricsServing]
 
 	// cacheClient is the identity the overview informers watch as; inf is the
 	// running set, if any (informer_cache.go). id names the cluster in logs.
@@ -136,6 +140,8 @@ type Service struct {
 	apiResourcesCache map[cluster.ID][]metav1.APIResourceList
 	apiResourcesAt    map[cluster.ID]time.Time
 	apiResourcesRead  map[cluster.ID]time.Time // when the lists were read, which apiResourcesAt shortens for a partial answer
+	// apiResourcesFailed: the API groups of that read that did not answer (an aggregated API whose server is down)
+	apiResourcesFailed map[cluster.ID][]string
 	// apiResourcesSF is one discovery read per cluster at a time; apiResourcesGen moves when the caches are cleared, so
 	// a read that started before is not kept.
 	apiResourcesSF  singleflight.Group
@@ -292,7 +298,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	cfg.Wrap(kubetrail.RoundTripper)
 	// on a copy, so the dynamic client and UserRESTConfigFor keep rates of their own as before
 	userCfg := rest.CopyConfig(cfg)
-	userCfg.RateLimiter = newTurnLimiter(cfg.QPS, cfg.Burst)
+	userCfg.RateLimiter = newTurnLimiter(cfg.QPS, cfg.Burst, clientWait.forLimiter(limiterUser))
 	clientset, err := kubernetes.NewForConfig(userCfg)
 	if err != nil {
 		return nil, fmt.Errorf("create clientset: %w", err)
@@ -302,7 +308,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		// the same wrapped transports, so a review carries the caller's impersonation as before
 		reviewCfg := rest.CopyConfig(cfg)
 		reviewCfg.QPS, reviewCfg.Burst = float32(clientRates.reviewQPS), max(clientRates.reviewBurst, clientRates.reviewQPS)
-		reviewCfg.RateLimiter = newTurnLimiter(reviewCfg.QPS, reviewCfg.Burst)
+		reviewCfg.RateLimiter = newTurnLimiter(reviewCfg.QPS, reviewCfg.Burst, clientWait.forLimiter(limiterReview))
 		reviews, err := kubernetes.NewForConfig(reviewCfg)
 		if err != nil {
 			return nil, fmt.Errorf("create review clientset: %w", err)
@@ -452,6 +458,7 @@ func (s *Service) invalidateCaches() {
 	s.apiResourcesCache = map[cluster.ID][]metav1.APIResourceList{}
 	s.apiResourcesAt = map[cluster.ID]time.Time{}
 	s.apiResourcesRead = map[cluster.ID]time.Time{}
+	s.apiResourcesFailed = map[cluster.ID][]string{}
 	s.apiResourcesGen++
 	s.apiResourcesMu.Unlock()
 

@@ -13,7 +13,7 @@ type ApplyEvent = (prev: any[] | undefined, event: WatchEvent) => any[]
 // A list that opens with thousands of objects gathers its frames this long: too short to see, and one pass over the rows.
 export const LIST_GATHER_MS = 100
 
-// A server back from a failure starts every watch over at one moment: each browser reads each list within this time, its rows on screen until then.
+// A server back from a failure, or a restart that closed every socket, starts every watch over at one moment: each browser reads each list within this time, its rows on screen until then.
 const RESYNC_READ_WITHIN_MS = 5000
 // A list the limit refused is read this often until it has its place, each at its own time.
 const LIMIT_READ_MS = 45_000
@@ -260,21 +260,31 @@ export function frameHolder(deliver: (message: any) => void, everyMs: number, de
   }
 }
 
-// The reads a list's RESYNCs ask for: one at a time, and none once the list is gone.
+// The reads a list's RESYNCs ask for: one at a time, and none once the list is gone. Every tab of a browser starts over
+// when its socket does: a hidden tab, which draws nothing, reads once it shows again.
 export function resyncReads() {
   let timer: ReturnType<typeof setTimeout> | undefined
+  let stopWaitingToShow: (() => void) | undefined
+  const stop = () => {
+    if (timer !== undefined) clearTimeout(timer)
+    timer = undefined
+    stopWaitingToShow?.()
+    stopWaitingToShow = undefined
+  }
   return {
     later(read: () => void) {
-      if (timer !== undefined) return
+      if (timer !== undefined || stopWaitingToShow) return
       timer = setTimeout(() => {
         timer = undefined
-        read()
+        if (focusManager.isFocused()) return read()
+        stopWaitingToShow = focusManager.subscribe(() => {
+          if (!focusManager.isFocused()) return
+          stop()
+          read()
+        })
       }, resyncWait())
     },
-    stop() {
-      if (timer !== undefined) clearTimeout(timer)
-      timer = undefined
-    },
+    stop,
   }
 }
 
