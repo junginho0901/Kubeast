@@ -95,13 +95,54 @@ class Numbers:
 
     A new number is past every number of its kind in the table, in ``after`` and in the texts given so far: ``after``
     starts past what the conversation already shows the model (``start_after``), so a value is never given a number an
-    earlier answer gave another one. The same value in a later answer gets a new number."""
+    earlier answer gave another one. The same value in a later answer gets a new number.
+
+    The chat stream turns on ``keep_values`` for the person who asked: tool-server then gives back each placeholder's
+    value with the answer (``reveal``), the page masked here adds its own, and ``revealed`` is what the screen shows in
+    their place. ``held`` are the placeholders a text already held (an earlier report a tool read), which stand for no
+    value of this run and are never given one. Investigations and MCP leave it off. Go: Numbers.Reveal."""
 
     def __init__(self, key: Optional[str] = None) -> None:
         self.key = secrets.token_hex(16) if key is None else key
         self.table: Dict[str, Dict[str, int]] = {}
         self.after: Dict[str, int] = {}
         self._next: Dict[str, int] = {}  # per kind, one past the highest number, worked out when first needed
+        self.values: Optional[Dict[str, str]] = None  # placeholder → value, only once keep_values is on
+        self.held: set = set()
+
+    def keep_values(self) -> None:
+        """Keep each placeholder's value for this run's answer to the person who asked (the chat stream only)."""
+        if self.values is None:
+            self.values = {}
+
+    def hold(self, text: str) -> None:
+        """Count the numbered placeholders ``text`` already holds: the next new number goes past them and, while values
+        are kept, none of them is given a value."""
+        self.start_after(highest_numbers([text]))
+        if self.values is not None and isinstance(text, str):
+            for p in held_placeholders(text):
+                self.held.add(p)
+                self.values.pop(p, None)
+
+    def keep(self, values: Any, held: Any = None) -> None:
+        """Add what tool-server gave back for one answer: placeholder → value, the first one kept, and the placeholders
+        its text held. Anything not shaped so is ignored; nothing is kept while values are off."""
+        if self.values is None:
+            return
+        if isinstance(held, list):
+            self.held.update(p for p in held if isinstance(p, str) and _NUMBERED_PLACEHOLDER.fullmatch(p))
+        if isinstance(values, dict):
+            for p, v in values.items():
+                if isinstance(p, str) and isinstance(v, str) and _NUMBERED_PLACEHOLDER.fullmatch(p):
+                    self.values.setdefault(p, v)
+        for p in self.held:
+            self.values.pop(p, None)
+
+    def revealed(self, text: str) -> Dict[str, str]:
+        """The values of the placeholders ``text`` shows, for the person who asked; none for a held one."""
+        if not self.values or not isinstance(text, str):
+            return {}
+        return {p: v for p, v in self.values.items() if p not in self.held and p in text}
 
     def start_after(self, found: Dict[str, int]) -> None:
         """Make each kind's next new number past the number ``found`` gives it (highest_numbers)."""
@@ -124,20 +165,29 @@ class Numbers:
         return by_key[k]
 
     def placeholder(self, kind: str, value: str) -> str:
-        return "<%s_%d>" % (NUMBERED_KINDS[kind], self.number(kind, value))
+        p = "<%s_%d>" % (NUMBERED_KINDS[kind], self.number(kind, value))
+        if self.values is not None and p not in self.held:
+            self.values.setdefault(p, value)
+        return p
 
     def wire(self) -> Dict[str, Any]:
-        """What a tool-server call sends as ``masks``: the key and a copy of the table as it is when the call leaves."""
-        return {"key": self.key, "table": {kind: dict(by_key) for kind, by_key in self.table.items()}, "after": dict(self.after)}
+        """What a tool-server call sends as ``masks``: the key and a copy of the table as it is when the call leaves, and
+        ``reveal`` while values are kept."""
+        out = {"key": self.key, "table": {kind: dict(by_key) for kind, by_key in self.table.items()}, "after": dict(self.after)}
+        if self.values is not None:
+            out["reveal"] = True
+        return out
 
-    def take_answer(self, sent: Dict[str, Dict[str, int]], table: Any, text: str) -> str:
+    def take_answer(self, sent: Dict[str, Dict[str, int]], table: Any, text: str, values: Any = None, held: Any = None) -> str:
         """Keep the table a tool-server answer gave back for a call that left with ``sent``, and return ``text`` as the
         run reads it. Two calls of a run at once (Claude Code makes them) both number from the table they left with, so
         each may give the next number to a different value: the later answer's value then takes the run's number for
         it, or the next free one, in its text too. Anything not shaped as a table is ignored. The numbers the text already
-        held, an earlier report it read for one, are not given to a new value later in the run."""
+        held, an earlier report it read for one, are not given to a new value later in the run. ``values`` and ``held``
+        (with ``reveal``) are kept under the numbers the text ends with (``keep``)."""
         self.start_after(highest_numbers([text]))
         if not isinstance(table, dict):
+            self.keep(values, held)
             return text
         self._next = {}
         moves: Dict[Tuple[str, int], int] = {}
@@ -160,6 +210,7 @@ class Numbers:
                 else:
                     mine[k] = n
         if not moves:
+            self.keep(values, held)
             return text
         kinds = {name: kind for kind, name in NUMBERED_KINDS.items()}
 
@@ -167,10 +218,21 @@ class Numbers:
             to = moves.get((kinds[m.group(1)], int(m.group(2))))
             return m.group(0) if to is None else "<%s_%d>" % (m.group(1), to)
 
+        if isinstance(values, dict):
+            values = {(_NUMBERED_PLACEHOLDER.sub(move, p) if isinstance(p, str) else p): v for p, v in values.items()}
+        if isinstance(held, list):
+            held = [_NUMBERED_PLACEHOLDER.sub(move, p) if isinstance(p, str) else p for p in held]
+        self.keep(values, held)
         return _NUMBERED_PLACEHOLDER.sub(move, text)
 
 
 _NUMBERED_PLACEHOLDER = re.compile(r"<(EMAIL|PHONE|RRN|CARD)_([0-9]+)>")
+
+
+def held_placeholders(text: str) -> set:
+    """The numbered placeholders a text holds, as ``<KIND_n>`` also where JSON wrote < and > for HTML. Go: the held of
+    startAfterHeld."""
+    return {"<%s_%s>" % (name, digits) for name, digits in _HELD_PLACEHOLDER.findall(text)}
 
 
 def is_numbered_placeholder(v: str) -> bool:
@@ -1331,7 +1393,7 @@ def redact_text(text: Optional[str], opts: Optional[Options] = None, numbers: Op
         text = _sub_on_credential_lines(_INLINE_PAIR, text, _mask_inline_pair, stats, "key_name")
     if o.pii:
         n = numbers if numbers is not None else Numbers(key="")
-        n.start_after(highest_numbers([text]))
+        n.hold(text)
         for kind, pattern in (("email", _EMAIL), ("rrn", _KR_RRN), ("card", _CARD), ("phone", _KR_PHONE)):
             if o.on(kind):
                 text = _sub_count(pattern, text, lambda m, kind=kind: n.placeholder(kind, m.group(0)), stats, kind)

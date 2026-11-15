@@ -28,7 +28,7 @@ from app.services.ai.debug_dump import dump, log, safe_error
 from app.services.ai.prompts import SYSTEM_MESSAGE
 from app.services.prompt_fence import inside_tag
 from app.services.audit_target import shown_tool_args
-from app.services.redact import highest_numbers, redact_text
+from app.services.redact import Numbers, highest_numbers, redact_text
 
 if TYPE_CHECKING:
     from app.services.ai_service import AIService
@@ -648,6 +648,12 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     return events, log_entry, formatters._truncate_tool_result_for_llm(formatted_result, result_chars, tool=function_name)
 
 
+def _answer_numbers(service) -> Optional[Numbers]:
+    """The personal-data numbers of this request's answer (the ToolServerClient's), or None."""
+    numbers = getattr(getattr(service, "tool_server", None), "numbers", None)
+    return numbers if isinstance(numbers, Numbers) else None
+
+
 async def session_chat_stream(
     service: "AIService",
     session_id: str,
@@ -728,6 +734,14 @@ async def session_chat_stream(
                 )
             yield f"data: {json.dumps(over.event(), ensure_ascii=False)}\n\n"
             return
+
+        # The person who asked sees on their screen the values behind this answer's numbered placeholders, which their
+        # own identity read: tool-server gives them back for this request only (masks.reveal), they stay in its memory
+        # and leave once, as mask_values after the answer is saved with its placeholders. Only the two chats come here,
+        # and only for the conversation's own user, whose token the tools run with.
+        asker = (audit_actor or {}).get('user_id')
+        if (answer_numbers := _answer_numbers(service)) is not None and asker and asker == getattr(session, 'user_id', None):
+            answer_numbers.keep_values()
 
         # 사용자 메시지 저장
         await db.add_message(session_id, "user", message)
@@ -1165,11 +1179,19 @@ async def session_chat_stream(
         dump("[DUMP] Full message preview", full_message[:200])
         
         # Assistant 메시지 저장 (tool call 정보 포함 - 전체 결과)
-        await db.add_message(
+        saved_answer = await db.add_message(
             session_id, "assistant", full_message, tool_calls=tool_calls_log or None,
             usage=usage_acct.message_usage(turn_usage, model=getattr(service, "model", None)),
         )
         answer_saved = True
+        # The saved answer and the next turn's history keep the placeholders; the screen of the person who asked puts
+        # these values in their place while it draws this answer, until a reload. Written to no log or row.
+        if answer_numbers is not None and (shown := answer_numbers.revealed(full_message)):
+            event = {'mask_values': shown}
+            if isinstance(getattr(saved_answer, 'id', None), int):
+                event['message_id'] = saved_answer.id
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            answer_numbers.values = {}
         log.debug("[DEBUG] Message saved to DB")
 
         await _audit_chat_complete(

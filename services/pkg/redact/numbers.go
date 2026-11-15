@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -27,9 +28,16 @@ type Numbers struct {
 	Table NumberTable `json:"table,omitempty"`
 	// After is, per kind, the highest number the conversation already holds (earlier answers, the page).
 	After map[string]int `json:"after,omitempty"`
+	// Reveal is set by the chat stream only, which shows the person who asked the values behind the placeholders of
+	// their answer: then Values and Held are kept for the response. Investigations and MCP never set it.
+	Reveal bool `json:"reveal,omitempty"`
 
 	// next is, per kind, one past the highest number in Table, worked out when the kind is first numbered.
 	next map[string]int
+	// values is placeholder → the text it stands for, the first one seen; held is the placeholders a text already held,
+	// which stand for no value of this answer. Both only with Reveal, and never read from the request.
+	values map[string]string
+	held   map[string]bool
 }
 
 // maskKeyChars: 64 bits of the HMAC, enough to tell apart the values of one answer.
@@ -107,6 +115,12 @@ func (n *Numbers) startAfterHeld(s string) {
 		if num, err := strconv.Atoi(m[2]); err == nil && num <= maxHeldNumber {
 			n.startAfter(kindOfName[m[1]], num)
 		}
+		if n.Reveal {
+			if n.held == nil {
+				n.held = map[string]bool{}
+			}
+			n.held["<"+m[1]+"_"+m[2]+">"] = true
+		}
 	}
 }
 
@@ -131,7 +145,48 @@ func isNumberedPlaceholder(v string) bool {
 
 // placeholder is what a numbered kind writes in place of a value.
 func (n *Numbers) placeholder(kind, value string) string {
-	return "<" + numberedKinds[kind] + "_" + strconv.Itoa(n.number(kind, value)) + ">"
+	p := "<" + numberedKinds[kind] + "_" + strconv.Itoa(n.number(kind, value)) + ">"
+	if n.Reveal {
+		if n.values == nil {
+			n.values = map[string]string{}
+		}
+		if _, seen := n.values[p]; !seen {
+			n.values[p] = value
+		}
+	}
+	return p
+}
+
+// Values is placeholder → value for what this answer's texts numbered, none of them held, only with Reveal; nil
+// otherwise. redact.py: the values of Numbers.
+func (n *Numbers) Values() map[string]string {
+	if n == nil || !n.Reveal || len(n.values) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(n.values))
+	for p, v := range n.values {
+		if !n.held[p] {
+			out[p] = v
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// Held is the numbered placeholders the texts already held before they were masked (an earlier report a tool read), in
+// order, only with Reveal: the caller puts no value back for them, since another value of the answer can have that number.
+func (n *Numbers) Held() []string {
+	if n == nil || !n.Reveal || len(n.held) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(n.held))
+	for p := range n.held {
+		out = append(out, p)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Copy is the table of the numbered kinds, for the answer to the caller; nil for a nil or empty Numbers.

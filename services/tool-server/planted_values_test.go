@@ -29,9 +29,12 @@ var plantedOutputs = []string{
 		`"http.request.header.authorization":"Bearer plantedtoken9876543210zyxwvu","user.email":"ann.planted@example.com","payment.card":"4111-1111-1111-1111"}}]}`,
 }
 
-// plantedRig answers each call of k8s_get_resources with the next planted output, with personal data masked.
-func plantedRig(t *testing.T) func(masks *redact.Numbers) (ToolCallResponse, string) {
+// plantedRig answers each call of k8s_get_resources with the next planted output (or of outputs), with personal data masked.
+func plantedRig(t *testing.T, outputs ...string) func(masks *redact.Numbers) (ToolCallResponse, string) {
 	t.Helper()
+	if len(outputs) == 0 {
+		outputs = plantedOutputs
+	}
 	prevOpts, prevAuth := redactOpts, toolAuth
 	t.Cleanup(func() { redactOpts, toolAuth = prevOpts, prevAuth })
 	redactOpts = redact.Options{Enabled: true, PII: true, Disabled: map[string]bool{}}
@@ -47,7 +50,7 @@ func plantedRig(t *testing.T) func(masks *redact.Numbers) (ToolCallResponse, str
 	tools := map[string]ToolDefinition{"k8s_get_resources": {
 		Name: "k8s_get_resources",
 		Handler: func(context.Context, map[string]interface{}, http.Header) (string, error) {
-			out := plantedOutputs[next%len(plantedOutputs)]
+			out := outputs[next%len(outputs)]
 			next++
 			return out, nil
 		},
@@ -123,5 +126,82 @@ func TestPlantedValuesReachTheModelOnlyAsPlaceholders(t *testing.T) {
 	alone, body := call(nil)
 	if alone.Masks != nil || strings.Contains(body, `"masks"`) || !strings.Contains(alone.Content, "<EMAIL_1>") {
 		t.Fatalf("no table sent: %s", body)
+	}
+}
+
+// The chat stream asks reveal for the person who asked: the values of what this answer numbered come back beside the
+// content, which still holds placeholders only, and no credential is among them. A request that does not ask (an
+// investigation, MCP) gets no value anywhere in the answer.
+func TestRevealGivesBackTheValuesOfTheNumberedPlaceholdersOnlyWhenAsked(t *testing.T) {
+	call := plantedRig(t)
+	turn := &redact.Numbers{Key: "answer-reveal", Reveal: true}
+	values := map[string]string{}
+	for i := range plantedOutputs {
+		resp, body := call(turn)
+		text := resp.Content + resp.Error
+		for _, v := range plantedValues {
+			if strings.Contains(text, v) {
+				t.Fatalf("call %d: %q reached the content: %s", i, v, text)
+			}
+		}
+		for _, credential := range []string{"plantedtoken", "planted-db-pass-1", "ghp_planted"} {
+			if strings.Contains(body, credential) {
+				t.Fatalf("call %d: a credential came back: %s", i, body)
+			}
+		}
+		for p, v := range resp.Values {
+			if !strings.Contains(resp.Content, p) {
+				t.Errorf("call %d: %s has a value but is not in the content", i, p)
+			}
+			values[p] = v
+		}
+		if resp.Held != nil {
+			t.Errorf("call %d: held %v, the outputs hold no placeholder", i, resp.Held)
+		}
+		turn = &redact.Numbers{Key: turn.Key, Table: resp.Masks, Reveal: true}
+	}
+	want := map[string]string{"<EMAIL_1>": "ann.planted@example.com", "<PHONE_1>": "010-2222-3333", "<EMAIL_2>": "bob.planted@example.com", "<CARD_1>": "4111-1111-1111-1111"}
+	if len(values) != len(want) {
+		t.Fatalf("values %v, want %v", values, want)
+	}
+	for p, v := range want {
+		if values[p] != v {
+			t.Errorf("%s = %q, want %q", p, values[p], v)
+		}
+	}
+
+	for _, masks := range []*redact.Numbers{{Key: "answer-no-reveal"}, nil} {
+		resp, body := call(masks)
+		if resp.Values != nil || resp.Held != nil || strings.Contains(body, `"values"`) || strings.Contains(body, `"held"`) {
+			t.Fatalf("no reveal asked: %s", body)
+		}
+		for _, v := range plantedValues {
+			if strings.Contains(body, v) {
+				t.Fatalf("no reveal asked: %q in %s", v, body)
+			}
+		}
+	}
+}
+
+// A placeholder an output already holds (an earlier report a tool reads) stands for no value of this answer: it is named
+// in held, and a value of this answer that has its number gets no value back, since the screen could not tell them apart.
+func TestRevealNamesThePlaceholdersAnOutputAlreadyHeld(t *testing.T) {
+	call := plantedRig(t, "report: <EMAIL_1> asked; now ann.planted@example.com\n")
+	resp, body := call(&redact.Numbers{Key: "answer-held", Reveal: true})
+	if !strings.Contains(resp.Content, "report: <EMAIL_1> asked; now <EMAIL_2>") {
+		t.Fatalf("content %q", resp.Content)
+	}
+	if len(resp.Held) != 1 || resp.Held[0] != "<EMAIL_1>" || resp.Values["<EMAIL_2>"] != "ann.planted@example.com" || len(resp.Values) != 1 {
+		t.Fatalf("held %v values %v: %s", resp.Held, resp.Values, body)
+	}
+
+	// The table already gives ann number 1, which the output also holds as text: no value for it.
+	table := resp.Masks
+	for k := range table["email"] {
+		table["email"][k] = 1
+	}
+	resp, body = call(&redact.Numbers{Key: "answer-held", Table: table, Reveal: true})
+	if !strings.Contains(resp.Content, "report: <EMAIL_1> asked; now <EMAIL_1>") || resp.Values != nil || len(resp.Held) != 1 {
+		t.Fatalf("held %v values %v: %s", resp.Held, resp.Values, body)
 	}
 }
