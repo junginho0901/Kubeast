@@ -189,6 +189,13 @@ ingress:
   host: kubeast.example.com
   tls: false
 
+# 0.7.9에 더한 AI 스위치 — 모두 기본 꺼짐입니다. 끄면 모델이 받는 프롬프트·도구 정의가 0.7.8과 같습니다.
+# (alpha): 예고 없이 바뀌거나 없어질 수 있습니다. 자세한 것은 ai-alerts.md·features.md에 있습니다
+features:
+  callGraph:
+    enabled: false           # (alpha) true면 AI 도구 resource_graph가 include calls를 받습니다 — 트레이스 서비스 그래프 지표와 Hubble로 본
+                             # 호출 관계(cluster-requirements.md). 끄면 include calls는 아무것도 읽지 않고 AI에 주지 않습니다
+
 # 멀티클러스터 부하/장애 격리 튜닝
 multicluster:
   maxClusters: 20

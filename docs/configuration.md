@@ -192,6 +192,13 @@ ingress:
   host: kubeast.example.com
   tls: false
 
+# AI switches added in 0.7.9, all off by default. Off, the model's prompts and tool definitions are as in 0.7.8.
+# (alpha): may change or go without notice. More in ai-alerts.md and features.md
+features:
+  callGraph:
+    enabled: false           # (alpha) true: the AI tool resource_graph takes include calls, who calls whom from the traces' service graph
+                             # metrics and Hubble (cluster-requirements.md); off: include calls reads nothing and the AI is not offered it
+
 # Multi-cluster load/failure isolation tuning
 multicluster:
   maxClusters: 20
