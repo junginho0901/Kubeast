@@ -297,6 +297,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	if clientRates.burst > 0 {
 		cfg.Burst = clientRates.burst
 	}
+	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return answerNotice{base: rt} })
 	// The overview informers run outside any user request: with impersonation
 	// on they act as a fixed viewer identity instead of the per-request user
 	// the wrapped transport adds.

@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"sync"
 	"time"
 
@@ -46,6 +47,15 @@ func (h *clusterHealth) recordFailure(id cluster.ID) {
 	h.fails[id]++
 	if h.fails[id] >= h.threshold {
 		h.open[id] = h.now().Add(h.openFor)
+	}
+	h.mu.Unlock()
+}
+
+// answered forgets id's failures while its breaker is closed; an open one waits for its trial.
+func (h *clusterHealth) answered(id cluster.ID) {
+	h.mu.Lock()
+	if _, open := h.open[id]; !open {
+		delete(h.fails, id)
 	}
 	h.mu.Unlock()
 }
@@ -128,6 +138,34 @@ func (s *Service) TrialAskedNothing(id cluster.ID, trial time.Time) {
 	if s.health != nil {
 		s.health.unbook(id, trial)
 	}
+}
+
+// ClusterAnswered: the API server answered a request to id that is no trial; the failures go, an open breaker stays. nil-safe.
+func (s *Service) ClusterAnswered(id cluster.ID) {
+	if s.health != nil {
+		s.health.answered(id)
+	}
+}
+
+type clusterAnswerKey struct{}
+
+// OnClusterAnswer gives ctx a function its cluster requests call once, when the API server first answers one below 500.
+func OnClusterAnswer(ctx context.Context, answered func()) context.Context {
+	var once sync.Once
+	return context.WithValue(ctx, clusterAnswerKey{}, func() { once.Do(answered) })
+}
+
+// answerNotice is the innermost cluster transport, under the namespace guard and the person check that answer on their own.
+type answerNotice struct{ base http.RoundTripper }
+
+func (t answerNotice) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := t.base.RoundTrip(req)
+	if err == nil && resp != nil && resp.StatusCode < http.StatusInternalServerError {
+		if notify, ok := req.Context().Value(clusterAnswerKey{}).(func()); ok {
+			notify()
+		}
+	}
+	return resp, err
 }
 
 // MarkClusterDown records a live connectivity error (opens the breaker once the

@@ -18,7 +18,16 @@ import (
 // breakerHandler is a Handler on the cluster c1, whose API server answers /version.
 func breakerHandler(t *testing.T, opts k8s.ServiceOptions) *Handler {
 	t.Helper()
+	h, _ := countedBreakerHandler(t, opts)
+	return h
+}
+
+// countedBreakerHandler is breakerHandler with the number of requests its API server got.
+func countedBreakerHandler(t *testing.T, opts k8s.ServiceOptions) (*Handler, *atomic.Int32) {
+	t.Helper()
+	var hits atomic.Int32
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
 		if r.URL.Path != "/version" {
 			http.NotFound(w, r)
 			return
@@ -27,7 +36,13 @@ func breakerHandler(t *testing.T, opts k8s.ServiceOptions) *Handler {
 		_, _ = w.Write([]byte(`{"major":"1","minor":"35","gitVersion":"v1.35.0"}`))
 	}))
 	t.Cleanup(api.Close)
-	blob := strings.Replace(middlewareKubeconfig, "https://127.0.0.1:6443", api.URL, 1)
+	return handlerOn(t, api.URL, opts), &hits
+}
+
+// handlerOn is a Handler on the cluster c1 whose API server is at url.
+func handlerOn(t *testing.T, url string, opts k8s.ServiceOptions) *Handler {
+	t.Helper()
+	blob := strings.Replace(middlewareKubeconfig, "https://127.0.0.1:6443", url, 1)
 	svc, err := k8s.NewService(context.Background(), metricsRegistry{blob: blob}, false, nil, opts)
 	if err != nil {
 		t.Fatal(err)
@@ -37,8 +52,13 @@ func breakerHandler(t *testing.T, opts k8s.ServiceOptions) *Handler {
 
 // askC1 sends one request for the cluster c1 through ClusterMiddleware to next.
 func askC1(h *Handler, next http.HandlerFunc) *httptest.ResponseRecorder {
+	return askC1As(h, auth.TokenPayload{UserID: "u1", Perms: auth.PermissionMatrix{"*": {"*"}}}, next)
+}
+
+// askC1As is askC1 for the person p.
+func askC1As(h *Handler, p auth.TokenPayload, next http.HandlerFunc) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/cluster/overview?cluster=c1", nil)
-	req = req.WithContext(auth.WithPayload(req.Context(), auth.TokenPayload{UserID: "u1", Perms: auth.PermissionMatrix{"*": {"*"}}}))
+	req = req.WithContext(auth.WithPayload(req.Context(), p))
 	rec := httptest.NewRecorder()
 	h.ClusterMiddleware(next).ServeHTTP(rec, req)
 	return rec
@@ -180,4 +200,194 @@ func TestAClusterWithTheBreakerOffIsAlwaysAsked(t *testing.T) {
 	if a.h.svc.ClusterDown("c1") {
 		t.Error("the breaker opened while off")
 	}
+}
+
+// A trial the namespace guard refused never reached the API server: the guard's 403 is no answer of the cluster.
+func TestATrialRefusedByTheNamespaceGuardLeavesTheBreakerOpen(t *testing.T) {
+	const period = 500 * time.Millisecond
+	h, hits := countedBreakerHandler(t, k8s.ServiceOptions{BreakerFails: 1, BreakerOpen: period, NodeShellNamespace: "kubeast-node-shell"})
+	a := &breakerAnswers{h: h}
+	openC1(t, a)
+	time.Sleep(period + 50*time.Millisecond)
+	reader := auth.TokenPayload{UserID: "u2", Email: "r@example.com", Perms: auth.PermissionMatrix{"c1": {"resource.objects.read"}}, Roles: map[string]string{"c1": "Read"}}
+	before := hits.Load()
+	rec := askC1As(h, reader, func(w http.ResponseWriter, r *http.Request) {
+		if _, _, err := h.svc.RawRequest(r.Context(), http.MethodGet, "/api/v1/namespaces/kubeast-node-shell/pods/p/log"); err != nil {
+			h.handleError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	if rec.Code != http.StatusForbidden || hits.Load() != before {
+		t.Fatalf("the guarded read: %d with %d requests at the API server, want the guard's 403 and none", rec.Code, hits.Load()-before)
+	}
+	if !h.svc.ClusterDown("c1") {
+		t.Fatal("the guard's refusal closed the breaker")
+	}
+	if code := askC1(h, a.askTheCluster).Code; code != http.StatusOK || h.svc.ClusterDown("c1") {
+		t.Fatalf("the next request: %d, open %v: want it to try the cluster and close the breaker", code, h.svc.ClusterDown("c1"))
+	}
+}
+
+// Open, only the trial closes the breaker: a request let in before it opened and answered after does not, whether a
+// cache or the API server answered it.
+func TestOnlyTheTrialClosesAnOpenBreaker(t *testing.T) {
+	for name, answerLate := range map[string]func(a *breakerAnswers) http.HandlerFunc{
+		"from a cache":      func(a *breakerAnswers) http.HandlerFunc { return a.answerFromACache },
+		"by the API server": func(a *breakerAnswers) http.HandlerFunc { return a.askTheCluster },
+	} {
+		t.Run(name, func(t *testing.T) {
+			a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 1, BreakerOpen: time.Minute})}
+			late := answerLate(&breakerAnswers{h: a.h})
+			admitted, release, done := make(chan struct{}), make(chan struct{}), make(chan int, 1)
+			go func() {
+				done <- askC1(a.h, func(w http.ResponseWriter, r *http.Request) {
+					close(admitted)
+					<-release
+					late(w, r)
+				}).Code
+			}()
+			select {
+			case <-admitted:
+			case code := <-done:
+				t.Fatalf("the request was not let in: %d", code)
+			}
+			if code := askC1(a.h, a.failAsTheCluster).Code; code != http.StatusServiceUnavailable || !a.h.svc.ClusterDown("c1") {
+				t.Fatalf("the breaker did not open: %d", code)
+			}
+			close(release)
+			if code := <-done; code != http.StatusOK {
+				t.Fatalf("the request let in before: %d", code)
+			}
+			if !a.h.svc.ClusterDown("c1") {
+				t.Error("a request that was no trial closed the open breaker")
+			}
+		})
+	}
+}
+
+// Closed, an answer of the API server clears the failures counted; an answer that is not one (a socket that ends
+// without a status written, as a hijacked connection's) does not.
+func TestAnAnswerOfTheAPIServerClearsTheCountOfAClosedBreaker(t *testing.T) {
+	silent := func(http.ResponseWriter, *http.Request) {}
+	for name, c := range map[string]struct {
+		between  http.HandlerFunc
+		wantOpen bool
+	}{
+		"the API server answered": {nil, false},
+		"nothing was asked":       {silent, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 2, BreakerOpen: time.Minute})}
+			between := c.between
+			if between == nil {
+				between = a.askTheCluster
+			}
+			askC1(a.h, a.failAsTheCluster)
+			if code := askC1(a.h, between).Code; code != http.StatusOK {
+				t.Fatalf("the request between: %d", code)
+			}
+			askC1(a.h, a.failAsTheCluster)
+			if a.h.svc.ClusterDown("c1") != c.wantOpen {
+				t.Errorf("open %v after a failure, the request between and a failure, want %v", a.h.svc.ClusterDown("c1"), c.wantOpen)
+			}
+		})
+	}
+}
+
+// A terminal or a followed log trying the cluster closes the breaker at the API server's first answer, not when it ends.
+func TestAStreamTryingTheClusterClosesTheBreakerAtItsFirstAnswer(t *testing.T) {
+	const period = 500 * time.Millisecond
+	a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 1, BreakerOpen: period})}
+	openC1(t, a)
+	time.Sleep(period + 50*time.Millisecond)
+	streaming, release, done := make(chan struct{}), make(chan struct{}), make(chan int, 1)
+	go func() {
+		done <- askC1(a.h, func(w http.ResponseWriter, r *http.Request) {
+			if _, _, err := a.h.svc.RawRequest(r.Context(), http.MethodGet, "/version"); err != nil {
+				a.h.handleError(w, err)
+				close(streaming)
+				return
+			}
+			close(streaming)
+			<-release
+		}).Code
+	}()
+	select {
+	case <-streaming:
+	case code := <-done:
+		t.Fatalf("the stream was not let through: %d", code)
+	case <-time.After(5 * time.Second):
+		t.Fatal("the stream did not start")
+	}
+	if a.h.svc.ClusterDown("c1") {
+		close(release)
+		t.Fatal("the breaker stayed open while the stream that the API server answered went on")
+	}
+	a.reached = 0
+	if code := askC1(a.h, a.askTheCluster).Code; code != http.StatusOK || a.reached != 1 {
+		t.Errorf("a request beside the stream: %d with the handler run %d times, want it sent", code, a.reached)
+	}
+	close(release)
+	<-done
+}
+
+// A trial whose call to the cluster failed before an answer (no status) closes nothing, though its handler answered 200.
+func TestATrialWhoseCallGotNoAnswerLeavesTheBreakerOpen(t *testing.T) {
+	const period = 500 * time.Millisecond
+	dead := httptest.NewServer(http.NotFoundHandler())
+	url := dead.URL
+	dead.Close()
+	a := &breakerAnswers{h: handlerOn(t, url, k8s.ServiceOptions{BreakerFails: 1, BreakerOpen: period})}
+	openC1(t, a)
+	time.Sleep(period + 50*time.Millisecond)
+	swallowed := func(w http.ResponseWriter, r *http.Request) {
+		a.reached++
+		_, _, err := a.h.svc.RawRequest(r.Context(), http.MethodGet, "/version")
+		if err == nil {
+			t.Error("a request to a closed address was answered")
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+	if code := askC1(a.h, swallowed).Code; code != http.StatusOK || a.reached != 1 {
+		t.Fatalf("the trial: %d with the handler run %d times", code, a.reached)
+	}
+	if !a.h.svc.ClusterDown("c1") {
+		t.Error("a call that got no answer closed the breaker")
+	}
+}
+
+// A trial refused by the cluster's rate limit, or one whose handler panicked, gives its try back to the next request.
+func TestATrialThatDidNotRunGivesItsTryBack(t *testing.T) {
+	t.Run("rate limited", func(t *testing.T) {
+		const period = 2 * time.Second
+		a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 1, BreakerOpen: period, RateLimitQPS: 1, RateLimitBurst: 1})}
+		if code := askC1(a.h, a.failAsTheCluster).Code; code != http.StatusServiceUnavailable || !a.h.svc.ClusterDown("c1") {
+			t.Fatalf("the breaker did not open: %d", code)
+		}
+		time.Sleep(period + 100*time.Millisecond)
+		_ = a.h.svc.AllowRequest("c1") // another request took the token
+		if code := askC1(a.h, a.askTheCluster).Code; code != http.StatusTooManyRequests {
+			t.Fatalf("the trial: %d, want 429", code)
+		}
+		time.Sleep(1100 * time.Millisecond) // the token is back, the period booked is not over
+		a.reached = 0
+		if code := askC1(a.h, a.askTheCluster).Code; code != http.StatusOK || a.reached != 1 || a.h.svc.ClusterDown("c1") {
+			t.Fatalf("the next request: %d with the handler run %d times, open %v: want it to try and close", code, a.reached, a.h.svc.ClusterDown("c1"))
+		}
+	})
+	t.Run("panicked", func(t *testing.T) {
+		const period = 500 * time.Millisecond
+		a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 1, BreakerOpen: period})}
+		openC1(t, a)
+		time.Sleep(period + 50*time.Millisecond)
+		func() {
+			defer func() { _ = recover() }()
+			askC1(a.h, func(http.ResponseWriter, *http.Request) { panic("handler") })
+		}()
+		a.reached = 0
+		if code := askC1(a.h, a.askTheCluster).Code; code != http.StatusOK || a.reached != 1 || a.h.svc.ClusterDown("c1") {
+			t.Fatalf("the next request: %d with the handler run %d times, open %v: want it to try and close", code, a.reached, a.h.svc.ClusterDown("c1"))
+		}
+	})
 }
