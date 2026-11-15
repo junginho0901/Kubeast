@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { focusManager, notifyManager, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { focusManager, hashKey, notifyManager, useQueryClient, type Query, type QueryClient } from '@tanstack/react-query'
 import { watchMultiplexer } from './watchMultiplexer'
 import { getCurrentClusterID } from './clusterRef'
 
@@ -13,7 +13,7 @@ type ApplyEvent = (prev: any[] | undefined, event: WatchEvent) => any[]
 // A list that opens with thousands of objects gathers its frames this long: too short to see, and one pass over the rows.
 export const LIST_GATHER_MS = 100
 
-// A server back from a failure starts every watch over at one moment: each browser reads each list within this time, its rows on screen until then.
+// A server back from a failure, or a restart that closed every socket, starts every watch over at one moment: each browser reads each list within this time, its rows on screen until then.
 const RESYNC_READ_WITHIN_MS = 5000
 // A list the limit refused is read this often until it has its place, each at its own time.
 const LIMIT_READ_MS = 45_000
@@ -260,20 +260,92 @@ export function frameHolder(deliver: (message: any) => void, everyMs: number, de
   }
 }
 
-// The reads a list's RESYNCs ask for: one at a time, and none once the list is gone.
-function resyncReads() {
+// The reads a list's RESYNCs ask for: one at a time, and none once the list is gone. Every tab of a browser starts over
+// when its socket does: a hidden tab, which draws nothing, reads once it shows again.
+export function resyncReads() {
   let timer: ReturnType<typeof setTimeout> | undefined
+  let stopWaitingToShow: (() => void) | undefined
+  const stop = () => {
+    if (timer !== undefined) clearTimeout(timer)
+    timer = undefined
+    stopWaitingToShow?.()
+    stopWaitingToShow = undefined
+  }
   return {
     later(read: () => void) {
-      if (timer !== undefined) return
+      if (timer !== undefined || stopWaitingToShow) return
       timer = setTimeout(() => {
         timer = undefined
-        read()
+        if (focusManager.isFocused()) return read()
+        stopWaitingToShow = focusManager.subscribe(() => {
+          if (!focusManager.isFocused()) return
+          stop()
+          read()
+        })
       }, resyncWait())
     },
+    stop,
+  }
+}
+
+// How many follow each list now, and when the last one stopped.
+const followers = new WeakMap<Query, { count: number; stoppedAt?: number }>()
+
+// followQuery counts a follower of the list under queryKey until stop. A list shown again with nothing read since its last
+// follower stopped (a Cluster View box scrolled away and back within its staleTime, the Helm releases opened again from
+// the cache) missed what changed meanwhile, and a new watch sends the objects there are, not those deleted: missed says
+// it needs a read, unless its query is reading already.
+export function followQuery(queryClient: QueryClient, queryKey: readonly unknown[]) {
+  const query = queryClient.getQueryCache().find({ queryKey, exact: true })
+  if (!query) return { missed: false, stop: () => {} }
+  const entry = followers.get(query) ?? { count: 0 }
+  followers.set(query, entry)
+  const { data, dataUpdatedAt, fetchStatus } = query.state
+  const missed = entry.count === 0 && entry.stoppedAt !== undefined && data !== undefined && dataUpdatedAt <= entry.stoppedAt && fetchStatus !== 'fetching'
+  entry.count += 1
+  let stopped = false
+  return {
+    missed,
     stop() {
-      if (timer !== undefined) clearTimeout(timer)
-      timer = undefined
+      if (stopped) return
+      stopped = true
+      entry.count -= 1
+      if (entry.count === 0) entry.stoppedAt = Date.now()
+    },
+  }
+}
+
+// A read's answer replaces the rows, and it may have been made before a frame that came while the read was on its way: the
+// frames applied during a read are applied again to its answer, in the order they came, within the notification that
+// brings it. Rows carry no version, so a frame older than the answer is applied too; the watch has gone on since before
+// the read (the server sends RESYNC once the new watch is on), so the frame of what changed after it follows.
+function framesDuringReads(queryClient: QueryClient, queryKey: readonly unknown[], applyAgain: (events: WatchEvent[]) => void) {
+  const queryHash = hashKey(queryKey)
+  let held: WatchEvent[] = []
+  const stopCache = queryClient.getQueryCache().subscribe((event) => {
+    if (event.type !== 'updated' || event.query.queryHash !== queryHash) return
+    // setQueryData writes are manual: only a read's answer replaces what the frames wrote
+    if (event.action.type === 'success' && !event.action.manual) {
+      const events = held
+      held = []
+      if (events.length > 0) applyAgain(events)
+    } else if (event.action.type === 'error') {
+      held = []
+    }
+  })
+  return {
+    // the frames of one delivery, as they are applied
+    delivered(events: WatchEvent[]) {
+      const status = queryClient.getQueryCache().get(queryHash)?.state.fetchStatus
+      if (status === undefined || status === 'idle') {
+        held = []
+        return
+      }
+      for (const event of events) held.push(event)
+    },
+    stop() {
+      stopCache()
+      held = []
     },
   }
 }
@@ -330,11 +402,27 @@ export function followList(
   const { clusterId, paths, query, queryKey, gatherEveryMs, listensOnly } = options
   const resync = resyncReads()
   const poll = limitReads(() => void queryClient.invalidateQueries({ queryKey }))
-  const deliver = (message: any) =>
+  const gathers = !!gatherEveryMs
+  // what the frames did during a read, done again to its answer with the apply they had; onEvent is not told twice
+  const reads = listensOnly
+    ? undefined
+    : framesDuringReads(queryClient, queryKey, (events) => {
+        const apply = options.applyEvent?.() ?? applyWatchEvent
+        queryClient.setQueryData(queryKey, (prev: any) => {
+          if (prev === undefined) return undefined
+          if (gathers) return mergeEvents(prev, events, apply)
+          return events.reduce((rows, event) => placeNewRow(rows, apply(rows, event)), prev)
+        })
+      })
+  const deliver = (message: any) => {
+    reads?.delivered(message?.type === 'DATA' ? [message.data] : [])
     applyWatchMessage(queryClient, queryKey, message, options.applyEvent?.(), options.onEvent?.(), options.onResync?.(), listensOnly, resync.later)
-  const deliverAll = (messages: any[]) =>
+  }
+  const deliverAll = (messages: any[]) => {
+    reads?.delivered(messages.filter((message) => message?.type === 'DATA').map((message) => message.data))
     applyWatchFrames(queryClient, queryKey, messages, options.applyEvent?.(), options.onEvent?.(), options.onResync?.(), listensOnly, resync.later)
-  const holder = gatherEveryMs ? frameHolder(deliver, gatherEveryMs, deliverAll) : null
+  }
+  const holder = gathers ? frameHolder(deliver, gatherEveryMs, deliverAll) : null
   const answering = (answers: boolean) => options.onAnswering?.()?.(answers)
   const handle = (message: any) => {
     poll.onFrame(message)
@@ -344,11 +432,17 @@ export function followList(
     else deliver(message)
   }
 
+  // A list that missed what changed while nobody followed it asks for a RESYNC, which the server sends once the new watch
+  // is on; a watch another list keeps on already sends none, so the list is read from here.
+  const follow = listensOnly ? undefined : followQuery(queryClient, queryKey)
+  const missed = !!follow?.missed
   // Unsubscribed by message, not by the function subscribe resolves to: that
   // comes only once the socket is open, and a cleanup before it (the key
   // changing while the socket connects) would leave this watch feeding the list.
-  const msgs = paths.map((path) => ({ type: 'REQUEST' as const, clusterId, path, query }))
+  const msgs = paths.map((path) => ({ type: 'REQUEST' as const, clusterId, path, query, ...(missed ? { resync: true } : {}) }))
+  const joined = missed && msgs.some((msg) => watchMultiplexer.follows(clusterId, msg.path, query))
   for (const msg of msgs) void watchMultiplexer.subscribe(msg, handle)
+  if (joined) deliver({ type: 'RESYNC' })
   // A list already open has said what it opens with.
   if (msgs.every((msg) => watchMultiplexer.answers(clusterId, msg.path, query))) answering(true)
   const stopClosed = watchMultiplexer.onSocketClosed(() => {
@@ -358,7 +452,9 @@ export function followList(
 
   return () => {
     holder?.stop()
+    reads?.stop()
     resync.stop()
+    follow?.stop()
     poll.stop()
     stopClosed()
     answering(false)
