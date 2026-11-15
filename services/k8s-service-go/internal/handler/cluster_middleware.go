@@ -26,7 +26,7 @@ import (
 // API-server timeout — so one dead cluster can't tie up requests. The live
 // response then feeds the health state back: a connectivity 503 marks the
 // cluster down (so the next request fails fast before the periodic poll), any
-// success clears it.
+// success clears it. Open for MC_BREAKER_OPEN_SEC, one request is let through to try the cluster.
 func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		payload, ok := auth.FromContext(r.Context())
@@ -74,7 +74,7 @@ func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 			response.Error(w, http.StatusNotFound, "cluster not found")
 			return
 		}
-		if h.svc.ClusterDown(id) {
+		if !h.svc.AdmitToCluster(id) {
 			response.Error(w, http.StatusServiceUnavailable, "cluster "+c+" is currently unreachable")
 			return
 		}

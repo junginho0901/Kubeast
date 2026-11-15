@@ -178,7 +178,7 @@ type ServiceOptions struct {
 	ReviewQPS      int           // the callers' access checks on a rate of their own; 0 = the client's
 	ReviewBurst    int           // 0 = ReviewQPS
 	BreakerFails   int           // open breaker after N consecutive fails; 0 = off
-	BreakerOpen    time.Duration // breaker open duration before half-open
+	BreakerOpen    time.Duration // breaker open duration before half-open; 0 = 30 s
 	// Impersonation makes every API call carry the signed-in user as
 	// Impersonate-User/-Group headers (Kubernetes user impersonation), so the
 	// cluster authorizes and audits the person instead of Kubeast's credential.
@@ -222,7 +222,7 @@ func NewService(ctx context.Context, registry cluster.Registry, watchEnabled boo
 		watchEnabled:      watchEnabled,
 		cache:             c,
 		maxClusters:       opts.MaxClusters,
-		health:            newClusterHealth(opts.BreakerFails),
+		health:            newClusterHealth(opts.BreakerFails, opts.BreakerOpen),
 		promQ:             newPromQueryCache(opts.QueryCacheTTL),
 		limiters:          newClusterLimiters(opts.RateLimitQPS, opts.RateLimitBurst),
 		resolveCache:      map[string]resolvedEntry{},

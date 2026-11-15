@@ -16,18 +16,28 @@ import (
 // opening (so a single transient blip doesn't trip it); a health-check failure
 // opens immediately (authoritative probe). Any success closes it. Absent =
 // unknown → treated as CLOSED (we never fail-fast a cluster we haven't seen fail).
+// After openFor one request tries the cluster (half-open) and holds the next openFor.
 type clusterHealth struct {
 	mu        sync.Mutex
 	threshold int
+	openFor   time.Duration
+	now       func() time.Time
 	fails     map[cluster.ID]int
-	open      map[cluster.ID]bool
+	open      map[cluster.ID]time.Time // an open cluster: when a request may next try it
 }
 
-func newClusterHealth(threshold int) *clusterHealth {
+// defaultBreakerOpen is the open period of a breaker given none (ServiceOptions.BreakerOpen 0).
+const defaultBreakerOpen = 30 * time.Second
+
+// newClusterHealth is nil, the breaker off, for a threshold below 1 (MC_BREAKER_CONSECUTIVE_FAILS 0).
+func newClusterHealth(threshold int, openFor time.Duration) *clusterHealth {
 	if threshold < 1 {
-		threshold = 1
+		return nil
 	}
-	return &clusterHealth{threshold: threshold, fails: map[cluster.ID]int{}, open: map[cluster.ID]bool{}}
+	if openFor <= 0 {
+		openFor = defaultBreakerOpen
+	}
+	return &clusterHealth{threshold: threshold, openFor: openFor, now: time.Now, fails: map[cluster.ID]int{}, open: map[cluster.ID]time.Time{}}
 }
 
 // recordFailure is a live request error: open the breaker once threshold is hit.
@@ -35,7 +45,7 @@ func (h *clusterHealth) recordFailure(id cluster.ID) {
 	h.mu.Lock()
 	h.fails[id]++
 	if h.fails[id] >= h.threshold {
-		h.open[id] = true
+		h.open[id] = h.now().Add(h.openFor)
 	}
 	h.mu.Unlock()
 }
@@ -52,7 +62,7 @@ func (h *clusterHealth) recordSuccess(id cluster.ID) {
 func (h *clusterHealth) setOpen(id cluster.ID, open bool) {
 	h.mu.Lock()
 	if open {
-		h.open[id] = true
+		h.open[id] = h.now().Add(h.openFor)
 		h.fails[id] = h.threshold
 	} else {
 		delete(h.open, id)
@@ -64,7 +74,24 @@ func (h *clusterHealth) setOpen(id cluster.ID, open bool) {
 func (h *clusterHealth) isOpen(id cluster.ID) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return h.open[id]
+	_, open := h.open[id]
+	return open
+}
+
+// admit says whether a request to id may go: the breaker is closed, or its period is over and this one tries the cluster.
+func (h *clusterHealth) admit(id cluster.ID) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	next, open := h.open[id]
+	if !open {
+		return true
+	}
+	now := h.now()
+	if now.Before(next) {
+		return false
+	}
+	h.open[id] = now.Add(h.openFor)
+	return true
 }
 
 // --- Service accessors (used by the fail-fast middleware + handlers). All
@@ -76,6 +103,14 @@ func (s *Service) ClusterDown(id cluster.ID) bool {
 		return false
 	}
 	return s.health.isOpen(id)
+}
+
+// AdmitToCluster reports whether a request to id may go: the breaker is closed, or this one tries it (half-open). nil-safe.
+func (s *Service) AdmitToCluster(id cluster.ID) bool {
+	if s.health == nil {
+		return true
+	}
+	return s.health.admit(id)
 }
 
 // MarkClusterDown records a live connectivity error (opens the breaker once the
@@ -121,6 +156,8 @@ type HealthChecker struct {
 	// this sweep: of several replicas one does, so the column does not flip
 	// between their answers. Every replica still probes for its own breaker.
 	writer statusWriter
+	// listFailedAt: while the clusters cannot be listed (the database down), when that began; the verdicts stay as they were.
+	listFailedAt time.Time
 }
 
 // statusWriter is pglock.Lock: true while this process holds the lock.
@@ -154,8 +191,15 @@ func (hc *HealthChecker) Run(ctx context.Context) {
 func (hc *HealthChecker) sweep(ctx context.Context) {
 	metas, err := hc.registry.ListMeta(ctx)
 	if err != nil {
-		slog.Debug("healthcheck: list clusters failed", "err", err)
+		if hc.listFailedAt.IsZero() && ctx.Err() == nil {
+			hc.listFailedAt = time.Now()
+			slog.Warn("healthcheck: cannot list the clusters; keeping the last verdicts", "err", err, "since", hc.listFailedAt)
+		}
 		return
+	}
+	if !hc.listFailedAt.IsZero() {
+		slog.Info("healthcheck: listing the clusters again", "failed_for", time.Since(hc.listFailedAt).Round(time.Second))
+		hc.listFailedAt = time.Time{}
 	}
 	write := hc.writer == nil || hc.writer.Held(ctx)
 	var wg sync.WaitGroup

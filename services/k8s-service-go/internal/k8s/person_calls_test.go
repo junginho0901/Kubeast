@@ -480,6 +480,7 @@ func TestTheInformerOverviewShowsAVersionAtMostShownVersionTTLOld(t *testing.T) 
 func TestDroppingAClusterForgetsItsBreaker(t *testing.T) {
 	api := &identityAPI{}
 	s := identityService(t, api)
+	s.health = newClusterHealth(5, time.Minute)
 	for name, drop := range map[string]func(){
 		"Invalidate":  func() { s.Invalidate(idc) },
 		"DropCluster": func() { s.DropCluster(idc) },

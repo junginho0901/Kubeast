@@ -223,7 +223,8 @@ multicluster:
   maxClusters: 20
   healthcheckIntervalSec: 60
   rateLimitQPS: 0           # 0 = off
-  breakerConsecutiveFails: 5
+  breakerConsecutiveFails: 5  # 클러스터 차단기를 여는 연속 실패 요청 수. 0 = 끔, 어떤 요청도 바로 실패시키지 않음
+  breakerOpenSec: 30        # 열린 차단기가 503으로 답하는 시간. 지나면 요청 하나를 클러스터로 보내 봄(0 = 30)
   clientQPS: 100            # 클러스터 API 서버로 보내는 client-go 속도
   clientBurst: 200
   reviewQPS: 0              # 0 = 권한 확인이 clientQPS를 같이 씀. architecture.md "Many users" 참고

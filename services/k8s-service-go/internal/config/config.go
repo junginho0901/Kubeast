@@ -83,7 +83,7 @@ type Config struct {
 	ReviewQPS               int // the callers' access checks on a rate of their own; 0 = the client's
 	ReviewBurst             int
 	BreakerConsecutiveFails int // open the per-cluster breaker after N fails; 0 = off
-	BreakerOpenSec          int // breaker open duration before half-open
+	BreakerOpenSec          int // breaker open duration before half-open; 0 = 30
 
 	// Auth
 	AuthJWKSURL string
