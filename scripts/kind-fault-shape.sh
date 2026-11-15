@@ -122,10 +122,12 @@ def docs(path):
     out = {}
     for doc in re.split(r'(?m)^---\s*$', open(path).read()):
         lines = [l.rstrip() for l in doc.splitlines() if l.strip()]
-        if not lines or 'kind: Secret' in lines:
+        body = [l for l in lines if not l.startswith('#')]
+        # a Secret, or what --hide-secret leaves in its place (comments only)
+        if not body or 'kind: Secret' in body:
             continue
-        src = next((l for l in lines if l.startswith('# Source:')), lines[0])
-        out.setdefault(hashlib.sha256('\n'.join(lines).encode()).hexdigest(), src)
+        src = next((l for l in lines if l.startswith('# Source:')), body[0])
+        out.setdefault(hashlib.sha256('\n'.join(body).encode()).hexdigest(), src)
     return out
 live, mine = docs(sys.argv[1]), docs(sys.argv[2])
 for h in sorted(set(live) ^ set(mine)):
@@ -136,7 +138,7 @@ PY
 
 note_start() {
   [ "$(release_status)" = deployed ] || die "release $RELEASE is $(release_status), not deployed: finish or roll back that operation first"
-  h get metadata "$RELEASE" -o json | jq -r '"  installed: chart \(.chart // "?") \(.version // "?"), app \(.appVersion // "?"), revision \(.revision // "?")"'
+  h get metadata "$RELEASE" -o json | jq -r 'def v: if . == null or . == "" then "-" else tostring end; "  installed: chart \(.chart | v) \(.version | v), app \(.appVersion | v), revision \(.revision | v)"'
   local diff
   diff=$(manifest_diff)
   if [ -n "$diff" ] && [ -z "${FAULT_SHAPE_ACCEPT_CHART:-}" ]; then
