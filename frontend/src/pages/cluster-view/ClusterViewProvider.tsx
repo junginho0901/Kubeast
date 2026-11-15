@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import type { PodInfo } from '@/services/api'
 import type { PodDetail, DetailTab } from './types'
 import { ClusterViewContext, type ClusterViewContextValue, type PodContextMenuPosition } from './ClusterViewContext'
@@ -20,6 +21,31 @@ export function ClusterViewProvider({ children }: { children: ReactNode }) {
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
   const [searchQuery, setSearchQuery] = useState<string>('')
+  // ?node=, ?nodePage= and ?pod= keep the node's own view, so a reload or a link opens it again; other parameters stay.
+  // Opening and closing it push a history entry, so Back returns to every node; a page turned replaces the entry.
+  const [params, setParams] = useSearchParams()
+  const viewNode = params.get('node')
+  const viewPage = Number(params.get('nodePage')) || null
+  const viewPod = params.get('pod')
+  const nodeView = useMemo(() => (viewNode === null ? null : { node: viewNode, page: viewPage, pod: viewPod }), [viewNode, viewPage, viewPod])
+  const setView = useCallback((node: string | null, at: { page?: number; pod?: string } = {}) => setParams((prev) => {
+    const next = new URLSearchParams(prev)
+    for (const k of ['node', 'nodePage', 'pod']) next.delete(k)
+    if (node !== null) next.set('node', node)
+    if (node !== null && at.page) next.set('nodePage', String(at.page))
+    if (node !== null && at.pod) next.set('pod', at.pod)
+    return next
+  }), [setParams])
+  const openNodeView = useCallback((node: string, at?: { page?: number; pod?: string }) => setView(node, at), [setView])
+  const moveNodeView = useCallback((at: { page: number; pod?: string | null }) => setParams((prev) => {
+    const next = new URLSearchParams(prev)
+    next.set('nodePage', String(at.page))
+    if (at.pod) next.set('pod', at.pod)
+    else next.delete('pod')
+    return next
+  }, { replace: true }), [setParams])
+  const setNodeViewPage = useCallback((page: number) => moveNodeView({ page }), [moveNodeView])
+  const closeNodeView = useCallback(() => setView(null), [setView])
 
   const [selectedPod, setSelectedPod] = useState<PodDetail | null>(null)
   const [selectedContainer, setSelectedContainer] = useState<string>('')
@@ -76,6 +102,7 @@ export function ClusterViewProvider({ children }: { children: ReactNode }) {
     isNamespaceDropdownOpen, setIsNamespaceDropdownOpen,
     namespaceDropdownRef,
     searchQuery, setSearchQuery,
+    nodeView, openNodeView, setNodeViewPage, moveNodeView, closeNodeView,
     selectedPod, setSelectedPod,
     selectedContainer, setSelectedContainer,
     containerSearchQuery, setContainerSearchQuery,
@@ -96,6 +123,7 @@ export function ClusterViewProvider({ children }: { children: ReactNode }) {
   }), [
     tr, locale, na, emptyValue,
     selectedNamespace, setSelectedNamespace, isNamespaceDropdownOpen, searchQuery,
+    nodeView, openNodeView, setNodeViewPage, moveNodeView, closeNodeView,
     selectedPod, selectedContainer, containerSearchQuery,
     activeTab, selectTab,
     showLogs, showManifest, showDescribe, showRbac, showExec,
