@@ -38,10 +38,11 @@
 #
 # Roles whose names have characters outside ASCII (W8 QA Q-61, Q-66; ROLE_GROUPS=0 leaves them out), made on
 # FROM_VERSION: one bound by the chart, one by the custom roles template applied with kubectl as on a registered cluster
-# (one cluster plays both, so that template's impersonation rule is renamed), two making one group with #865. After the
-# upgrade: their names, grants and the group each request goes out as (X-Kubeast-Access), getting-started "Upgrade"'s
-# queries against what the migration did, the chart's binding replaced, the registered one refused until the template
-# is applied again, then its old binding deleted. A stored AI model config (default-openai) keeps its model (Q-74).
+# (one cluster plays both, so that template's kubeast-impersonator-custom-roles is renamed), two making one group with
+# #865. After the upgrade: their names, grants and the group each request goes out as (X-Kubeast-Access),
+# getting-started "Upgrade"'s queries against what the migration did, the chart's binding replaced, the registered one
+# refused until the template is applied again, then its old binding, named as getting-started names it, deleted. A
+# stored AI model config (default-openai) keeps its model (Q-74).
 #
 # A check whose change is not in this checkout (chart values, a check template or a migration's schema; never a
 # migration file number, which changes at merge) is a SKIP row naming that change's PR. REQUIRE lists the changes a
@@ -120,6 +121,7 @@ CREATED=0
 BG_PIDS=""
 FG_PID=""
 TMP_VALUES=""
+TMP_REQ="" # the folder of the API answer being read (call, access_of), removed by cleanup when a signal ends the run
 CALL_TIMEOUT=60
 TOKEN_REFRESH=240
 
@@ -235,6 +237,7 @@ cleanup() {
   stop_fg
   stop_bg
   [ -n "$TMP_VALUES" ] && rm -f "$TMP_VALUES"
+  [ -n "$TMP_REQ" ] && rm -rf "$TMP_REQ"
   print_table
   # the exit status says the verdict too
   [ "$rc" = 0 ] && [ -s "$OUT/verdict.txt" ] && grep -q ': FAIL' "$OUT/verdict.txt" && rc=1
@@ -277,13 +280,13 @@ busy_guard() {
 hdr() { [ -n "$1" ] && printf 'Authorization: Bearer %s\n' "$1"; [ -n "$2" ] && printf 'Content-Type: application/json\n'; return 0; }
 call() {
   local m=$1 p=$2 t=$3 b=${4:-} tmp
-  tmp=$(mktemp "${TMPDIR:-/tmp}/reh.XXXXXX")
+  TMP_REQ=$(mktemp -d "${TMPDIR:-/tmp}/reh.XXXXXX"); tmp="$TMP_REQ/body"
   if [ -n "$b" ]; then
     CODE=$(printf '%s' "$b" | curl -s -m "$CALL_TIMEOUT" -o "$tmp" -w '%{http_code}' -X "$m" -H @<(hdr "$t" json) --data-binary @- "$GW$p")
   else
     CODE=$(curl -s -m "$CALL_TIMEOUT" -o "$tmp" -w '%{http_code}' -X "$m" -H @<(hdr "$t" "") "$GW$p")
   fi
-  BODY=$(cat "$tmp"); rm -f "$tmp"
+  BODY=$(cat "$tmp" 2>/dev/null); rm -rf "$TMP_REQ"; TMP_REQ=""
   [ -n "$CODE" ] || CODE=000
 }
 jqb() { printf '%s' "$BODY" | jq -r "$1" 2>/dev/null; }
@@ -665,7 +668,10 @@ seed() {
     || stop "insert the recording rows"
   unset U1_PW U2_PW U3_PW U4_PW U5_PW U6_PW U7_PW
   for n in 1 2 3 4; do printf -v "T$n" '%s' ""; done
-  info seed "data on $FROM_VERSION" "5 users · roles rh-ops rh-reader + stored ADMIN, ' read ', RH-OPS, ' PENDING ' (rh-u5's account level) · grants (rh-u4 ADMIN) · 2 keys (1 revoked) · 3 access requests (1 pending for RH-OPS) · 1 conversation · 2 recordings"
+  # 5 users, 7 with section 11's rh-u6 and rh-u7
+  local users
+  users=$(psql_q "SELECT count(*) FROM auth_users WHERE email LIKE 'rh-u%@$DOMAIN'")
+  info seed "data on $FROM_VERSION" "${users:-?} users · roles rh-ops rh-reader + stored ADMIN, ' read ', RH-OPS, ' PENDING ' (rh-u5's account level) · grants (rh-u4 ADMIN) · 2 keys (1 revoked) · 3 access requests (1 pending for RH-OPS) · 1 conversation · 2 recordings"
 }
 
 # seed_lookalikes: custom roles whose names a built-in or another role has in other letters or with spaces around.
@@ -733,6 +739,7 @@ snapshot() {
   call GET /api/v1/ai/model-configs "$ATOK"
   jqb "$LIST | [.[] | \"\(.name) \(.provider) \(.model) default=\(.is_default) enabled=\(.enabled) key=\(.api_key_env // \"-\")\"] | sort | .[]" > "$d/model-configs.txt"
   value_of ai.model > "$d/chart-ai-model.txt"
+  value_of ai.enabled > "$d/ai-enabled.txt"
   db_version > "$d/db-version.txt"
   BODY=""
 }
@@ -760,7 +767,9 @@ compare_snapshots() {
   for f in users teams roles grants access-requests recordings conversations api-keys model-configs; do
     want="$OUT/before/$f.txt"; name="$f read back the same"
     if [ -f "$OUT/expected/$f.txt" ]; then want="$OUT/expected/$f.txt"; name="$f read back the same but for #865's changes"; fi
-    if diff -q "$want" "$OUT/after/$f.txt" > /dev/null; then
+    if [ "$f" = model-configs ] && [ "$(cat "$OUT/before/ai-enabled.txt")" != true ]; then
+      row data "$name" SKIP "ai.enabled is not true on $FROM_VERSION: no config was stored, so the two lists are empty and say nothing"
+    elif diff -q "$want" "$OUT/after/$f.txt" > /dev/null; then
       row data "$name" PASS "$(wc -l < "$OUT/after/$f.txt" | tr -d ' ') lines"
     else
       row data "$name" FAIL "$(diff "$want" "$OUT/after/$f.txt" | grep '^[<>]' | head -3 | tr '\n' ' ')"
@@ -1259,6 +1268,17 @@ groups_left_out() { # groups_left_out AREA — the row for a run without the gro
   else row "$1" "$name" SKIP "ROLE_GROUPS=0"; fi
 }
 binding_name() { printf 'kubeast-role-%s-%s' "${1#kubeast:role:}" "$2"; } # binding_name GROUP CLUSTERROLE, as the template names it
+# docs_old_binding SLUG CLUSTERROLE — the name getting-started "Upgrade" gives a binding the template made for an old
+# group: the page's first `…<old slug>…<ClusterRole>…` (now `kubeast-role-<old slug>-<ClusterRole>`) filled in; fails
+# when the page gives no such form
+docs_old_binding() {
+  local form
+  # shellcheck disable=SC2016 # the backquotes are Markdown's code marks
+  form=$(grep -o '`[^`]*<old slug>[^`]*<ClusterRole>[^`]*`' "$ROOT/docs/getting-started.md" | head -1 | tr -d '`')
+  [ -n "$form" ] || return 1
+  form=${form/<old slug>/$1}
+  printf '%s' "${form/<ClusterRole>/$2}"
+}
 
 # seed_groups: the four roles (through the API when FROM_VERSION takes the name, else straight into the table as an
 # install from before its rule holds them: it refuses a name whose group another role has), rh-u6 given GR_CHART and
@@ -1320,13 +1340,14 @@ seed_groups() {
 
 # registered_rbac from|rc — the custom roles template for GR_REG (edit), rendered by FROM_VERSION's chart or the
 # candidate's and applied with kubectl, as on a registered cluster (the template's head comment; render-target-rbac.sh
-# renders it with the rest). This cluster is also the one Kubeast runs in, whose chart has an impersonation rule of the
-# same name, so the template's is renamed rehearsal-registered-impersonator.
+# renders it with the rest). This cluster is also the one Kubeast runs in, whose chart has a ClusterRole and a
+# ClusterRoleBinding named kubeast-impersonator-custom-roles too, so the template's are renamed
+# rehearsal-registered-custom-roles.
 registered_rbac() {
   local f="$OUT/registered-rbac-$1.yaml" src=("$CHART")
   [ "$1" = from ] && src=("$CHART_OCI" --version "$FROM_VERSION")
   hc template kubeast "${src[@]}" -s templates/impersonation-custom-roles.yaml -f "$OUT/registered-values.yaml" > "$f" 2> "$OUT/registered-rbac-$1.log" || return 1
-  sed -i.bak 's/kubeast-impersonator-custom-roles/rehearsal-registered-impersonator/g' "$f" && rm -f "$f.bak"
+  sed -i.bak 's/kubeast-impersonator-custom-roles/rehearsal-registered-custom-roles/g' "$f" && rm -f "$f.bak"
   kc apply -f "$f" >> "$OUT/registered-rbac-$1.log" 2>&1
 }
 
@@ -1376,10 +1397,11 @@ EOF
 # cluster for it (its X-Kubeast-Access header, base64url JSON: "none" without such a group, "no-header" without one).
 access_of() {
   local h tmp
-  h=$(mktemp "${TMPDIR:-/tmp}/reh.XXXXXX"); tmp=$(mktemp "${TMPDIR:-/tmp}/reh.XXXXXX")
+  TMP_REQ=$(mktemp -d "${TMPDIR:-/tmp}/reh.XXXXXX"); h="$TMP_REQ/headers"; tmp="$TMP_REQ/body"
+  : > "$h"
   CODE=$(curl -s -m "$CALL_TIMEOUT" -D "$h" -o "$tmp" -w '%{http_code}' -H @<(hdr "$2" "") "$GW$1")
   [ -n "$CODE" ] || CODE=000
-  BODY=$(cat "$tmp")
+  BODY=$(cat "$tmp" 2>/dev/null)
   ROLE_GROUP=$(python3 -I -c '
 import base64, json, sys
 g = "no-header"
@@ -1393,7 +1415,7 @@ for line in sys.stdin:
         except Exception:
             g = "unreadable"
 print(g)' < "$h")
-  rm -f "$h" "$tmp"
+  rm -rf "$TMP_REQ"; TMP_REQ=""
 }
 groups_token() { local pw; pw=$(seed_get "U$1_PW"); login "rh-u$1@$DOMAIN" "$pw"; pw=""; printf '%s' "$TOKEN"; } # groups_token 6|7
 can_create() { # can_create TOKEN — whether that identity may create ConfigMaps in default, as Kubeast's can-i answers
@@ -1406,7 +1428,7 @@ chart_group_bindings() { # the chart's ClusterRoleBindings of GR_CHART's group, 
     | select(any(.subjects[]?; .kind == "Group" and (.name == $a or .name == $b)))
     | "\(.metadata.name) \([.subjects[].name] | join(","))"] | sort | join("; ")'
 }
-old_group_left() { # the bindings and impersonation rules that still name GR_OLD
+old_group_left() { # the bindings, and the ClusterRoles listing the groups k8s-service may act as, that still name GR_OLD
   {
     kc get clusterrolebindings,rolebindings -A -o json | jq -r --arg o "$GR_OLD" \
       '.items[] | select(any(.subjects[]?; .kind == "Group" and .name == $o)) | "\(.kind)/\(.metadata.name)"'
@@ -1449,7 +1471,7 @@ groups_before() {
 # way of getting-started "Upgrade": refused until the template is applied again, then the old binding deleted.
 groups_after() {
   [ "$GROUPS_ON" = 1 ] && [ "$GROUPS_READY" = 1 ] || return 0
-  local want="" got="" rid name via renamed t6 t7 i t0 old
+  local want="" got="" rid name via renamed t6 t7 i t0 ct old obj rel
   while IFS='|' read -r rid name via; do
     if [ "$name" = "$GR_RENAMED" ]; then want="$want$rid [$name-renamed-$rid],"; else want="$want$rid [$name],"; fi
     got="$got$rid [$(psql_q "SELECT name FROM roles WHERE id = $rid")],"
@@ -1475,15 +1497,22 @@ groups_after() {
   t6=$(groups_token 6); t7=$(groups_token 7)
   access_of "$LIST_CM" "$t6"
   check groups "rh-u6's list answers as its #865 group (the chart's binding, replaced by helm upgrade)" "200 $GR_CHART_NEW" "$CODE $ROLE_GROUP"
-  check groups "the chart binds only that group, and its impersonation rule names it and not the old one" \
+  check groups "the chart binds only that group, and kubeast-impersonator-custom-roles names it and not the old one" \
     "$(binding_name "$GR_CHART_NEW" view) $GR_CHART_NEW · new yes old no" \
     "$(chart_group_bindings) · $(kc get clusterrole kubeast-impersonator-custom-roles -o json | jq -r --arg o "$GR_OLD" --arg n "$GR_CHART_NEW" \
         '[.rules[].resourceNames // [] | .[]] as $r | "new \(if any($r[]; . == $n) then "yes" else "no" end) old \(if any($r[]; . == $o) then "yes" else "no" end)"')"
   access_of "$LIST_CM" "$t7"
   check groups "rh-u7's list goes out as its #865 group, refused while the registered cluster binds the old one" "403 $GR_REG_NEW" "$CODE $ROLE_GROUP"
   if registered_rbac rc; then
-    t0=$(date +%s)
-    for i in $(seq 1 23); do access_of "$LIST_CM" "$t7"; [ "$CODE" = 200 ] && break; sleep 2; done
+    # about 46 s in all: each list has 5 s, and no try starts that could end past it
+    ct=$CALL_TIMEOUT; CALL_TIMEOUT=5; t0=$(date +%s); i=0
+    while :; do
+      i=$((i + 1)); access_of "$LIST_CM" "$t7"
+      [ "$CODE" = 200 ] && break
+      [ $(( $(date +%s) - t0 + 2 + CALL_TIMEOUT )) -le 46 ] || break
+      sleep 2
+    done
+    CALL_TIMEOUT=$ct
     if [ "$CODE $ROLE_GROUP" = "200 $GR_REG_NEW" ]; then
       row groups "rh-u7's list answers once the candidate's template is applied again" PASS "200 $ROLE_GROUP, ${i} tries in $(( $(date +%s) - t0 ))s"
     else
@@ -1492,11 +1521,28 @@ groups_after() {
   else
     row groups "rh-u7's list answers once the candidate's template is applied again" FAIL "the template did not render or apply (registered-rbac-rc.log)"
   fi
-  old=$(binding_name "$GR_OLD" edit)
-  check groups "getting-started's name of the old binding is the one $FROM_VERSION's template made ($old)" "rendered · in the cluster" \
-    "$(grep -qxF -- "  name: $old" "$OUT/registered-rbac-from.yaml" && echo rendered || echo "not rendered") · $(kc get clusterrolebinding "$old" > /dev/null 2>&1 && echo "in the cluster" || echo "not in the cluster")"
-  kc delete clusterrolebinding "$old" --ignore-not-found > /dev/null 2>&1
-  none_bad groups "with it deleted, no binding or impersonation rule names $GR_OLD" "$(old_group_left)" "none" "still in:"
+  name="getting-started's name of the old binding, its form filled in, is the one $FROM_VERSION's template made"
+  if old=$(docs_old_binding "${GR_OLD#kubeast:role:}" edit); then
+    check groups "$name ($old)" "rendered · in the cluster" \
+      "$(grep -qxF -- "  name: $old" "$OUT/registered-rbac-from.yaml" && echo rendered || echo "not rendered") · $(kc get clusterrolebinding "$old" > /dev/null 2>&1 && echo "in the cluster" || echo "not in the cluster")"
+  else
+    old=$(binding_name "$GR_OLD" edit)
+    row groups "$name" FAIL "docs/getting-started.md gives no form naming <old slug> and <ClusterRole>; deleting $old, the template's name"
+  fi
+  # deleted as getting-started says, but never an object of a Helm release (EXTRA_VALUES could give the chart that name)
+  if ! obj=$(kc get clusterrolebinding "$old" -o json --ignore-not-found 2> "$OUT/old-binding.log"); then
+    row groups "the old binding $old is deleted" FAIL "it could not be read (old-binding.log)"
+  elif [ -n "$obj" ]; then
+    if ! rel=$(printf '%s' "$obj" | jq -er '.metadata.annotations["meta.helm.sh/release-name"] // ""'); then
+      row groups "the old binding $old is deleted" FAIL "not deleted: its JSON did not read"
+    elif [ -n "$rel" ]; then
+      row groups "the old binding $old is deleted" FAIL "not deleted: it is an object of Helm release $rel (meta.helm.sh/release-name)"
+    elif ! kc delete clusterrolebinding "$old" --ignore-not-found >> "$OUT/old-binding.log" 2>&1; then
+      row groups "the old binding $old is deleted" FAIL "kubectl delete failed (old-binding.log)"
+    fi
+  fi
+  obj=""
+  none_bad groups "with it deleted, no binding or ClusterRole of the groups k8s-service may act as names $GR_OLD" "$(old_group_left)" "none" "still in:"
   check groups "rh-u6 may not create ConfigMaps in default, rh-u7 may: the two groups are apart" "false true" "$(can_create "$t6") $(can_create "$t7")"
   access_of "$LIST_CM" "$t7"
   check groups "rh-u7's list still answers with the old binding deleted" 200 "$CODE"
