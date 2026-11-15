@@ -13,7 +13,7 @@ type ApplyEvent = (prev: any[] | undefined, event: WatchEvent) => any[]
 // A list that opens with thousands of objects gathers its frames this long: too short to see, and one pass over the rows.
 export const LIST_GATHER_MS = 100
 
-// A server back from a failure starts every watch over at one moment: each browser reads each list within this time, its rows on screen until then.
+// A server back from a failure, or a restart that closed every socket, starts every watch over at one moment: each browser reads each list within this time, its rows on screen until then.
 const RESYNC_READ_WITHIN_MS = 5000
 // A list the limit refused is read this often until it has its place, each at its own time.
 const LIMIT_READ_MS = 45_000

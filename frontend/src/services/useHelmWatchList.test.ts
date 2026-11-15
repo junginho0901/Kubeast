@@ -39,12 +39,31 @@ describe('applyHelmWatchEvent — each revision is its own Secret', () => {
   })
 
   it('takes a newer revision and leaves an older one', () => {
-    expect(applyHelmWatchEvent(shown, { type: 'ADDED', object: rel('web', 13, 'pending-upgrade') })[0]).toEqual(rel('web', 13, 'pending-upgrade'))
+    expect(applyHelmWatchEvent(shown, { type: 'ADDED', object: rel('web', 13, 'pending-upgrade') })?.[0]).toEqual(rel('web', 13, 'pending-upgrade'))
     expect(applyHelmWatchEvent(shown, { type: 'MODIFIED', object: rel('web', 11, 'superseded') })).toEqual(shown)
   })
 
   it('adds a release it has not seen', () => {
     expect(applyHelmWatchEvent(shown, { type: 'ADDED', object: rel('db', 1) })).toEqual([...shown, rel('db', 1)])
+  })
+})
+
+// A namespace just picked has no list yet; the stream for it may send a frame before the list answers.
+describe('applyHelmWatchEvent — before the list has answered', () => {
+  it('makes no list of the releases its frames name', () => {
+    expect(applyHelmWatchEvent(undefined, { type: 'ADDED', object: rel('web', 3) })).toBeUndefined()
+    expect(applyHelmWatchEvent(undefined, { type: 'MODIFIED', object: rel('web', 4) })).toBeUndefined()
+    expect(applyHelmWatchEvent(undefined, { type: 'DELETED', object: rel('web', 4) })).toBeUndefined()
+  })
+
+  it('leaves the page\'s query with nothing, so it shows loading until the list answers', () => {
+    const client = new QueryClient()
+    const key = ['helm-releases', 'c', 'apps']
+    client.setQueryData(key, (prev: HelmReleaseSummary[] | undefined) => applyHelmWatchEvent(prev, { type: 'ADDED', object: rel('web', 3) }))
+    expect(client.getQueryData(key)).toBeUndefined()
+    client.setQueryData(key, [rel('api', 1)])
+    client.setQueryData(key, (prev: HelmReleaseSummary[] | undefined) => applyHelmWatchEvent(prev, { type: 'ADDED', object: rel('web', 3) }))
+    expect(client.getQueryData(key)).toEqual([rel('api', 1), rel('web', 3)])
   })
 })
 

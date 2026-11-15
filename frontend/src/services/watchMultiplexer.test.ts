@@ -579,6 +579,31 @@ describe('WebSocketMultiplexer', () => {
     })
   })
 
+  // Only a watch an earlier socket carried missed something: one first asked for on this socket has its list read as it opens.
+  it('a socket that comes back asks a RESYNC for the watches it had, not for those first asked for since', async () => {
+    const mux = new WebSocketMultiplexer()
+    const pods = { type: 'REQUEST' as const, clusterId: 'self', path: '/api/v1/pods', query: 'watch=1' }
+    const nodes = { ...pods, path: '/api/v1/nodes' }
+    const services = { ...pods, path: '/api/v1/services' }
+    const p = mux.subscribe(pods, vi.fn())
+    await flush()
+    const ws1 = MockWebSocket.instances[0]
+    ws1.simulateOpen()
+    await p
+
+    ws1.simulateServerClose()
+    // asked for while the socket is closed
+    const n = mux.subscribe(nodes, vi.fn())
+    await vi.advanceTimersByTimeAsync(1000)
+    await flush()
+    const ws2 = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+    ws2.simulateOpen()
+    await n
+    // asked for once it is open
+    await mux.subscribe(services, vi.fn())
+    expect(ws2.sent.map((raw) => JSON.parse(raw))).toEqual([{ ...pods, resync: true }, nodes, services])
+  })
+
   // What the reconnect asks of the server, through the list it feeds: the server answers resync with one RESYNC once the
   // watch is on (k8s-service followWatch), and the list is read again, without the row deleted while the socket was gone.
   describe('a list whose socket came back', () => {
@@ -662,6 +687,140 @@ describe('WebSocketMultiplexer', () => {
         focusManager.setFocused(undefined)
         list.stop()
       }
+    })
+  })
+
+  // Cluster View's node boxes follow their pods the same way (a field selector per node, frames gathered) and have no
+  // polling: the read the RESYNC asks for is what takes a pod deleted while the socket was closed off the box.
+  describe('Cluster View node boxes whose socket came back', () => {
+    type Row = { name: string; namespace: string; node_name: string; status: string }
+    const queryOf = (node: string) => `watch=1&fieldSelector=${encodeURIComponent(`spec.nodeName=${node}`)}`
+    const pod = (name: string, node = 'node-1'): Row => ({ name, namespace: 'demo', node_name: node, status: 'Running' })
+    const keyOf = (node: string) => ['cluster-view', 'node-pods', node, 'all']
+
+    // the module's own multiplexer, new for each test, on the test's sockets
+    const load = async () => {
+      vi.resetModules()
+      const { followList, LIST_GATHER_MS } = await import('./useKubeWatchList')
+      const { QueryClient, QueryObserver } = await import('@tanstack/react-query')
+      // as PodNodeGrid follows a node's pods
+      const box = (node: string) => ({ clusterId: 'self', paths: ['/api/v1/pods'], query: queryOf(node), queryKey: keyOf(node), gatherEveryMs: LIST_GATHER_MS })
+      return { followList, LIST_GATHER_MS, QueryClient, QueryObserver, box }
+    }
+    // What the server's followWatch answers each REQUEST of a socket with: one RESYNC first when it says it missed
+    // something, then an ADDED for each object there is now.
+    const serve = (ws: MockWebSocket, names: Iterable<string>) => {
+      for (const msg of ws.sent.map((raw) => JSON.parse(raw))) {
+        if (msg.type !== 'REQUEST') continue
+        const frame = { clusterId: msg.clusterId, path: msg.path, query: msg.query }
+        if (msg.resync) ws.simulateMessage({ ...frame, type: 'RESYNC' })
+        for (const name of names) ws.simulateMessage({ ...frame, type: 'DATA', data: { type: 'ADDED', object: pod(name) } })
+      }
+    }
+    const lastSocket = () => MockWebSocket.instances[MockWebSocket.instances.length - 1]
+    const reconnect = async (ws: MockWebSocket, meanwhile = () => {}) => {
+      ws.simulateServerClose()
+      meanwhile()
+      await vi.advanceTimersByTimeAsync(1000)
+      await flush()
+      const next = lastSocket()
+      next.simulateOpen()
+      await flush()
+      return next
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('a pod deleted while the socket was closed is gone after the reconnect, its row on screen until the list answers', async () => {
+      const { followList, LIST_GATHER_MS, QueryClient, QueryObserver, box } = await load()
+      // the reconnect after 750 ms, the read 2.5 s after the RESYNC
+      vi.spyOn(Math, 'random').mockReturnValue(0.5)
+      const pods = new Set(['web-a', 'web-b', 'web-c'])
+      const key = keyOf('node-1')
+      const client = new QueryClient()
+      const queryFn = vi.fn(async () => [...pods].map((name) => pod(name)))
+      const shown: string[][] = []
+      let loaded = false
+      const stopObserver = new QueryObserver(client, { queryKey: key, queryFn }).subscribe((result) => {
+        if (loaded) shown.push(result.data?.map((row) => row.name) ?? [])
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      loaded = true
+      const names = () => (client.getQueryData(key) as Row[]).map((row) => row.name)
+      expect(names()).toEqual(['web-a', 'web-b', 'web-c'])
+
+      const stopList = followList(client, box('node-1'))
+      await flush()
+      const ws1 = lastSocket()
+      ws1.simulateOpen()
+      await flush()
+      serve(ws1, pods)
+      await vi.advanceTimersByTimeAsync(LIST_GATHER_MS)
+      expect(names()).toEqual(['web-a', 'web-b', 'web-c'])
+
+      const ws2 = await reconnect(ws1, () => pods.delete('web-b'))
+      expect(ws2.sent.map((raw) => JSON.parse(raw))).toEqual([{ type: 'REQUEST', clusterId: 'self', path: '/api/v1/pods', query: queryOf('node-1'), resync: true }])
+      serve(ws2, pods)
+      await vi.advanceTimersByTimeAsync(LIST_GATHER_MS)
+      // the new watch's ADDED frames do not take web-b away; the read the RESYNC asked for has not come yet
+      expect(names()).toEqual(['web-a', 'web-b', 'web-c'])
+      expect(queryFn).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(6000)
+      expect(queryFn).toHaveBeenCalledTimes(2)
+      expect(names()).toEqual(['web-a', 'web-c'])
+      // no drawing without the rows
+      expect(shown.length).toBeGreaterThan(0)
+      expect(shown.every((rows) => rows.length > 0)).toBe(true)
+      expect(shown[shown.length - 1]).toEqual(['web-a', 'web-c'])
+
+      stopList()
+      stopObserver()
+    })
+
+    // A restart closes every socket at one moment: the lists a reconnect asks to read again are read each at its own
+    // time within the RESYNC's spread, not together.
+    it('the boxes of a reconnect are read each at its own time within five seconds, not together', async () => {
+      const { followList, LIST_GATHER_MS, QueryClient, QueryObserver, box } = await load()
+      let draw = 0
+      vi.spyOn(Math, 'random').mockImplementation(() => (draw++ * 0.37) % 1)
+      const client = new QueryClient()
+      const readAt: number[] = []
+      const stops = Array.from({ length: 10 }, (_, i) => {
+        const node = `node-${i}`
+        const stopObserver = new QueryObserver(client, {
+          queryKey: keyOf(node),
+          queryFn: async () => {
+            readAt.push(Date.now())
+            return [pod(`${node}-p0`, node)]
+          },
+        }).subscribe(() => {})
+        const stopList = followList(client, box(node))
+        return () => {
+          stopList()
+          stopObserver()
+        }
+      })
+      await flush()
+      const ws1 = lastSocket()
+      ws1.simulateOpen()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(readAt).toHaveLength(10)
+      readAt.length = 0
+
+      const ws2 = await reconnect(ws1)
+      expect(ws2.sent.map((raw) => JSON.parse(raw).resync)).toEqual(Array.from({ length: 10 }, () => true))
+      const answered = Date.now()
+      serve(ws2, [])
+      await vi.advanceTimersByTimeAsync(LIST_GATHER_MS + 5000)
+      expect(readAt).toHaveLength(10)
+      expect(Math.min(...readAt) - answered).toBeGreaterThanOrEqual(LIST_GATHER_MS)
+      expect(Math.max(...readAt) - answered).toBeLessThan(LIST_GATHER_MS + 5000)
+      expect(new Set(readAt).size).toBe(10)
+      expect(Math.max(...readAt) - Math.min(...readAt)).toBeGreaterThanOrEqual(3000)
+      stops.forEach((stop) => stop())
     })
   })
 
@@ -853,6 +1012,102 @@ describe('WebSocketMultiplexer', () => {
       ;(globalThis as any).document = { visibilityState: 'visible' }
       await vi.advanceTimersByTimeAsync(60_000)
       expect(requests(ws)[2]).toEqual({ ...other, resync: true })
+    })
+  })
+
+  // Signing out and signing in close the multiplexer (services/auth onSessionChange): a socket stays the identity it
+  // opened as, so the next person's watches go on a socket opened with their cookie.
+  describe('closed when the person signed in changes', () => {
+    const a = { type: 'REQUEST' as const, clusterId: 'self', path: '/api/v1/namespaces/team-a/configmaps', query: 'watch=1' }
+    const b = { ...a, path: '/api/v1/namespaces/team-b/configmaps' }
+    const opened = async (mux: WebSocketMultiplexer, msg = a, listener = vi.fn()) => {
+      const sub = mux.subscribe(msg, listener)
+      await flush()
+      const ws = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+      ws.simulateOpen()
+      await sub
+      return { ws, listener }
+    }
+
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
+
+    it('lets go of the socket and every watch, and reconnects to none of them', async () => {
+      const mux = new WebSocketMultiplexer()
+      const closed = vi.fn()
+      mux.onSocketClosed(closed)
+      const { ws } = await opened(mux)
+
+      mux.close()
+      expect(ws.readyState).toBe(MockWebSocket.CLOSED)
+      expect(closed).toHaveBeenCalledTimes(1)
+      expect(mux.follows(a.clusterId, a.path, a.query)).toBe(false)
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(MockWebSocket.instances).toHaveLength(1)
+    })
+
+    it('the next subscription opens a socket of its own, which asks only for that watch and feeds only it', async () => {
+      const mux = new WebSocketMultiplexer()
+      const { ws: first, listener: before } = await opened(mux)
+
+      mux.close()
+      const { ws: next, listener: after } = await opened(mux, b)
+      expect(next).not.toBe(first)
+      expect(next.sent.map((m) => JSON.parse(m))).toEqual([b])
+      next.simulateMessage({ type: 'DATA', clusterId: a.clusterId, path: a.path, query: a.query, data: { type: 'ADDED', object: { name: 'cm-a' } } })
+      next.simulateMessage({ type: 'DATA', clusterId: b.clusterId, path: b.path, query: b.query, data: { type: 'ADDED', object: { name: 'cm-b' } } })
+      expect(before).not.toHaveBeenCalled()
+      expect(after).toHaveBeenCalledTimes(1)
+    })
+
+    it('the closed socket telling of its end only later leaves the next socket and its watches alone', async () => {
+      const fetchMe = vi.fn(async () => ({ status: 200 }))
+      vi.stubGlobal('fetch', fetchMe)
+      const mux = new WebSocketMultiplexer()
+      const closed = vi.fn()
+      mux.onSocketClosed(closed)
+      const { ws: first } = await opened(mux)
+      // a browser tells of the close with an event that comes after close() returns
+      first.close = () => {
+        first.readyState = MockWebSocket.CLOSING
+      }
+
+      mux.close()
+      const { ws: next } = await opened(mux, b)
+      first.simulateServerClose(4401)
+      await vi.advanceTimersByTimeAsync(0)
+      await flush()
+      expect(closed).toHaveBeenCalledTimes(1)
+      expect(fetchMe).not.toHaveBeenCalled()
+      const c = { ...a, path: '/api/v1/namespaces/team-c/configmaps' }
+      await mux.subscribe(c, vi.fn())
+      expect(MockWebSocket.instances).toHaveLength(2)
+      expect(next.sent.map((m) => JSON.parse(m))).toEqual([b, c])
+    })
+
+    it('a subscription waiting for the socket closed before it opened ends without an error and asks for nothing', async () => {
+      const mux = new WebSocketMultiplexer()
+      const sub = mux.subscribe(a, vi.fn())
+      await flush()
+      const first = MockWebSocket.instances[0]
+
+      mux.close()
+      const unsubscribe = await sub
+      unsubscribe()
+      expect(first.readyState).toBe(MockWebSocket.CLOSED)
+      expect(first.sent).toEqual([])
+    })
+
+    it('takes away what the closed watches said on screen', async () => {
+      resetWatchProblems()
+      const mux = new WebSocketMultiplexer()
+      const { ws } = await opened(mux)
+      ws.simulateMessage({ type: 'ERROR', clusterId: a.clusterId, path: a.path, query: a.query, error: { message: 'configmaps is forbidden', reason: 'forbidden' } })
+      expect(getWatchProblem()).toBe('forbidden')
+
+      mux.close()
+      expect(getWatchProblem()).toBeUndefined()
     })
   })
 
