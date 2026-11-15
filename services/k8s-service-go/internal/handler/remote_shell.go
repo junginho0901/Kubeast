@@ -94,18 +94,20 @@ func attachURL(cs kubernetes.Interface, namespace, pod, container string) *url.U
 // It pings the browser meanwhile; no key and no pong for terminalPongWait
 // is a browser gone without closing.
 func readFrames(ctx context.Context, conn *websocket.Conn) <-chan []byte {
+	// Read once: the reader and the pings can outlive the request that opened them.
+	period, pongWait := keepalivePeriod, terminalPongWait
 	in := make(chan []byte)
 	reading := make(chan struct{})
 	conn.SetPongHandler(func(string) error {
-		return conn.SetReadDeadline(time.Now().Add(terminalPongWait))
+		return conn.SetReadDeadline(time.Now().Add(pongWait))
 	})
-	go pingTerminal(ctx, conn, reading)
+	go pingTerminal(ctx, conn, reading, period)
 	go func() {
 		defer close(in)
 		defer close(reading)
 		for {
 			// Set before each read: time spent handing a frame to a busy shell is not silence.
-			_ = conn.SetReadDeadline(time.Now().Add(terminalPongWait))
+			_ = conn.SetReadDeadline(time.Now().Add(pongWait))
 			_, data, err := conn.ReadMessage()
 			if err != nil {
 				return
