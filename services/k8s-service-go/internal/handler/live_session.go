@@ -35,12 +35,13 @@ func sayStreamEnded(ctx context.Context, w http.ResponseWriter, flusher http.Flu
 }
 
 // auditSessionEnd writes the row of a connection its session ended; other ends are the user's own and have none.
+// The browser closes on the end frame sent before it, so the row does not wait on the request.
 func (h *Handler) auditSessionEnd(ctx context.Context, r *http.Request, targetType, target, namespace, stream string) {
 	code := auth.SessionEndCode(ctx)
 	if code == "" {
 		return
 	}
 	slog.InfoContext(r.Context(), "connection closed: session ended", "stream", stream, "target", target, "reason", code)
-	_ = h.recordAuditWithPayload(r, auditSessionEndAction, targetType, target, namespace, nil, nil,
+	_ = h.recordAuditAfterClose(r, auditSessionEndAction, targetType, target, namespace, nil, nil,
 		audit.MustJSON(map[string]interface{}{"stream": stream, "reason": code}))
 }
