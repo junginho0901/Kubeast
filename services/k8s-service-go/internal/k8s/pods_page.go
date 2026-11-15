@@ -501,7 +501,7 @@ func accessCheckTTL() time.Duration {
 }
 
 // mayListPods asks whether the caller may list pods in namespace ("" = every
-// namespace), from the cache or by a SelfSubjectAccessReview.
+// namespace), from this process's answers or by a SelfSubjectAccessReview.
 func (s *Service) mayListPods(ctx context.Context, b *clientBundle, namespace string) (bool, error) {
 	return s.mayList(ctx, b, "pods", namespace)
 }
@@ -530,9 +530,9 @@ func (s *Service) mayListGroup(ctx context.Context, b *clientBundle, group, reso
 	if group != "" {
 		name = group + "/" + resource
 	}
-	key := s.clusterCacheKey(ctx, name+"_list_allowed:"+namespace)
-	var allowed bool
-	if s.cache != nil && s.cache.Get(ctx, key, &allowed) {
+	question := name + "_list_allowed:" + namespace
+	key := s.clusterCacheKey(ctx, question)
+	if allowed, ok := s.rememberedAccess(ctx, key, question); ok {
 		return allowed, nil
 	}
 	if s.answered.askedAgain(key, time.Now()) {
@@ -540,8 +540,7 @@ func (s *Service) mayListGroup(ctx context.Context, b *clientBundle, group, reso
 	}
 	// The key holds the cluster and the identity the review goes out as, all its answer depends on.
 	return s.askOnce(ctx, key, func(ctx context.Context) (bool, error) {
-		var known bool
-		if s.cache != nil && s.cache.Get(ctx, key, &known) {
+		if known, ok := s.rememberedAccess(ctx, key, question); ok {
 			return known, nil
 		}
 		review, err := b.authz.SelfSubjectAccessReviews().Create(ctx, &authorizationv1.SelfSubjectAccessReview{
@@ -552,13 +551,21 @@ func (s *Service) mayListGroup(ctx context.Context, b *clientBundle, group, reso
 		if err != nil {
 			return false, err
 		}
-		ttl := accessCheckTTL()
-		if s.cache != nil {
-			s.cache.Set(ctx, key, review.Status.Allowed, ttl)
-		}
-		s.answered.answered(key, time.Now().Add(ttl))
+		end := time.Now().Add(accessCheckTTL())
+		s.accessAnswers.set(key, review.Status.Allowed, end)
+		s.answered.answered(key, end)
 		return review.Status.Allowed, nil
 	})
+}
+
+// rememberedAccess is the answer this process got for key and still keeps (accessAnswers), noted for a recorded call
+// as a cache hit.
+func (s *Service) rememberedAccess(ctx context.Context, key, question string) (bool, bool) {
+	allowed, ok := s.accessAnswers.get(key, time.Now())
+	if ok {
+		accesstrail.Cached(ctx, "cache "+question)
+	}
+	return allowed, ok
 }
 
 // askOnce is one access question to the cluster at a time per key, whoever waits on it.
