@@ -10,6 +10,7 @@ from datetime import datetime
 from urllib.parse import urlsplit, urlunsplit
 
 import pytest
+from sqlalchemy import text
 
 from app.services.investigation import store, webhook
 from app.services.investigation.settings import InvestigationSettings
@@ -114,3 +115,18 @@ async def test_a_delivery_decides_on_one_connection(replicas):
         webhook.gate_and_queue(replicas[1], cfg, "self", message("KubeNodeNotReady", "fp2"), NOW),
     ), 10)
     assert sorted((c["accepted"], c["skipped"]) for c in counts) == [(0, 1), (1, 0)]
+
+
+async def test_the_hourly_lock_waits_past_the_session_limits(replicas):
+    db = replicas[0]
+    limits = text("SELECT current_setting('lock_timeout'), current_setting('statement_timeout')")
+    async with db.async_session() as s:
+        await s.execute(text("SET lock_timeout = '15s'"))
+        await s.execute(text("SET statement_timeout = '30s'"))
+        await s.commit()
+        async with store.hourly_cap_locked(db, s):
+            held = tuple((await s.execute(limits)).one())
+        await s.commit()
+        after = tuple((await s.execute(limits)).one())
+    assert held == (store.HOURLY_CAP_LOCK_WAIT, store.HOURLY_CAP_LOCK_WAIT)
+    assert after == ("15s", "30s")
