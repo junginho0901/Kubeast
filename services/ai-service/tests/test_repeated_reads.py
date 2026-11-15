@@ -44,13 +44,14 @@ def never_guarded(monkeypatch):
 # --- the guard ---------------------------------------------------------------------------------------------------
 
 
-def test_the_switch_is_off_unless_set_to_true(monkeypatch):
+def test_the_switch_is_off_unless_set_on(monkeypatch):
     monkeypatch.delenv("AI_REFUSE_REPEATED_READS", raising=False)
     assert repeats.enabled() is False
-    monkeypatch.setenv("AI_REFUSE_REPEATED_READS", "yes")
+    monkeypatch.setenv("AI_REFUSE_REPEATED_READS", "no")
     assert repeats.enabled() is False
-    monkeypatch.setenv("AI_REFUSE_REPEATED_READS", " True ")
-    assert repeats.enabled() is True
+    for value in (" True ", "yes", "1"):  # app/services/switch.py, the one switch rule
+        monkeypatch.setenv("AI_REFUSE_REPEATED_READS", value)
+        assert repeats.enabled() is True
 
 
 def test_the_same_read_within_a_minute_is_held_and_past_it_runs_again():

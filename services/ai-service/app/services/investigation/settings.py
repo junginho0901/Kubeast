@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+from app.services import switch
+
 
 def _int(name: str, default: int) -> int:
     try:
@@ -79,9 +81,9 @@ def load() -> InvestigationSettings:
         provider_pause_minutes=max(0, _int("ALERT_INVESTIGATION_PROVIDER_PAUSE_MINUTES", 30)),
         max_steps=min(20, max(1, _int("ALERT_INVESTIGATION_MAX_STEPS", 8))),
         timeout_seconds=min(1800, max(30, _int("ALERT_INVESTIGATION_TIMEOUT_SECONDS", 300))),
-        rules=os.getenv("ALERT_INVESTIGATION_RULES", "false").strip().lower() == "true",
-        changes_first=os.getenv("ALERT_INVESTIGATION_CHANGES_FIRST", "false").strip().lower() == "true",
-        ledger=os.getenv("ALERT_INVESTIGATION_LEDGER", "false").strip().lower() == "true",
+        rules=switch.env_on("ALERT_INVESTIGATION_RULES"),
+        changes_first=switch.env_on("ALERT_INVESTIGATION_CHANGES_FIRST"),
+        ledger=switch.env_on("ALERT_INVESTIGATION_LEDGER"),
         # Prometheus reads at most 168 h, Loki 24 h by default, timeline 90 days back.
         metrics_window_minutes=min(360, max(1, _int("ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES", 15))),
         logs_window_minutes=min(1440, max(0, _int("ALERT_INVESTIGATION_LOGS_WINDOW_MINUTES", 5))),
@@ -89,7 +91,7 @@ def load() -> InvestigationSettings:
         model=os.getenv("ALERT_INVESTIGATION_MODEL", "").strip(),
         language=(os.getenv("ALERT_INVESTIGATION_LANGUAGE", "en").strip().lower() or "en"),
         console_url=os.getenv("ALERT_INVESTIGATION_CONSOLE_URL", "").strip().rstrip("/"),
-        evidence_check=os.getenv("ALERT_INVESTIGATION_EVIDENCE_CHECK", "false").strip().lower() == "true",
+        evidence_check=switch.env_on("ALERT_INVESTIGATION_EVIDENCE_CHECK"),
         token_url=os.getenv(
             "AUTH_INVESTIGATOR_TOKEN_URL", "http://auth-service:8004/api/v1/auth/internal/investigator-token"
         ).strip(),

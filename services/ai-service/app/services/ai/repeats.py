@@ -12,17 +12,18 @@ Code's calls on a Claude subscription.
 from __future__ import annotations
 
 import json
-import os
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
+
+from app.services import switch
 
 REPEAT_SECONDS = 60.0
 STATUS = "repeated"
 
 
 def enabled() -> bool:
-    return os.getenv("AI_REFUSE_REPEATED_READS", "false").strip().lower() == "true"
+    return switch.env_on("AI_REFUSE_REPEATED_READS")
 
 
 def key(name: str, args: Any) -> str:

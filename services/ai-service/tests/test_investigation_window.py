@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.services.ai import repeats
 from app.services.investigation import numbers
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import runner
@@ -136,6 +137,20 @@ def test_the_switches_are_off_and_the_windows_held_to_their_ranges(monkeypatch):
         s = inv_settings.load()
         assert (s.rules, s.changes_first) == (True, True)
         assert (s.metrics_window_minutes, s.logs_window_minutes, s.changes_window_hours) == held
+
+
+SWITCHES = {"ALERT_INVESTIGATION_RULES": "rules", "ALERT_INVESTIGATION_CHANGES_FIRST": "changes_first",
+            "ALERT_INVESTIGATION_LEDGER": "ledger", "ALERT_INVESTIGATION_EVIDENCE_CHECK": "evidence_check"}
+
+
+@pytest.mark.parametrize("value, on", [("1", True), ("ON", True), (" yes ", True), ("True", True), ("0", False),
+                                       ("off", False), ("", False)])
+def test_the_v079_switches_read_the_one_switch_rule(monkeypatch, value, on):
+    for name in (*SWITCHES, "AI_REFUSE_REPEATED_READS"):
+        monkeypatch.setenv(name, value)
+    s = inv_settings.load()
+    assert {field: getattr(s, field) for field in SWITCHES.values()} == dict.fromkeys(SWITCHES.values(), on)
+    assert repeats.enabled() is on
 
 
 def test_step_zero_leaves_a_window_end_of_now_to_the_tool_and_names_an_earlier_one():
