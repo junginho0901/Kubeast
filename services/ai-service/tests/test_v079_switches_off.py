@@ -207,8 +207,11 @@ async def _first_call(monkeypatch, message, floating):
 
 async def _investigation_calls(monkeypatch):
     """The first two model calls of an alert investigation (the second after ROUND) and what tool-server was asked."""
+    import dataclasses
+
     from app.services.investigation import runner
-    from tests.test_alert_investigation import FakeCompletions, cfg, completion, row, tool_call
+    from app.services.investigation import settings as inv_settings
+    from tests.test_alert_investigation import FakeCompletions, completion, row, tool_call
 
     asked = []
     # anomaly_rank is left out: 0.7.8's investigator refuses it as a tool outside its read-only list, which v0.7.9 widens
@@ -234,7 +237,8 @@ async def _investigation_calls(monkeypatch):
     monkeypatch.setattr(runner, "audit_ready", audit_ready)
     alert = row(namespace="shop", labels={"alertname": "KubePodCrashLooping", "namespace": "shop", "pod": "web-1", "owner": "ann@example.com"},
                 annotations={"summary": "web-1 restarts", "oncall": "010-1234-5678"})
-    await runner.investigate(cfg(max_steps=3), alert)
+    # the settings as the environment gives them, so a v0.7.9 setting that defaults to on changes what is pinned
+    await runner.investigate(dataclasses.replace(inv_settings.load(), max_steps=3), alert)
     from app.services.ai import features
     features.clear_cache()
     calls = [{"messages": c["messages"], "tools": c.get("tools"), "max_tokens": c.get("max_tokens")} for c in completions.calls]
