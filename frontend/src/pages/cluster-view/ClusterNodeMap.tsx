@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { NodeEntry } from './hooks/useClusterDerived'
 import type { ClusterViewNode } from './hooks/useClusterPodsQuery'
 import { GAP, layoutMap, mapKey } from './nodeMapLayout'
@@ -12,7 +12,9 @@ import { nodeCordoned, nodeReadiness } from '@/utils/nodeStatus'
 // has a solid red border, a cordoned one (SchedulingDisabled) a dashed yellow one, drawn over the page's outline, from
 // the live node list; the legend counts both from that list and each count opens the first such node. A click, or
 // Enter on the cell the arrow keys reach, opens that node's own view; the line under the legend names that cell. The
-// canvas is an `application` (WAI-ARIA 1.2), so a screen reader in browse mode passes the arrow keys and Enter to it.
+// canvas is an `application` (WAI-ARIA 1.2), so a screen reader in browse mode passes the arrow keys and Enter to it;
+// the cell's line is a live region only while the canvas has the keyboard focus, so a mouse passing over the cells
+// is not read out, and the hint is the canvas's description, outside that region.
 
 function cssColor(name: string, fallback: string): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
@@ -44,6 +46,8 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, nodeList
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [width, setWidth] = useState(0)
   const [hover, setHover] = useState<number | null>(null)
+  const [focused, setFocused] = useState(false)
+  const hintId = useId()
   const [mode, setMode] = useState(0) // bumps when the colour mode changes, to redraw
 
   useLayoutEffect(() => {
@@ -159,12 +163,19 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, nodeList
           role="application"
           aria-roledescription={tr('clusterView.map.roleDescription', 'Node map')}
           aria-label={notReady + cordoned > 0 ? `${aria} ${tr('clusterView.map.ariaMarks', '{{notReady}} nodes not Ready, {{cordoned}} SchedulingDisabled.', { notReady, cordoned })}` : aria}
+          aria-describedby={hintId}
           data-cells={JSON.stringify(entries.map((e) => [e.node, e.counts.ok, e.counts.warn, e.counts.error]))}
           data-dim-cells={entries.some((e) => e.dim) ? entries.filter((e) => e.dim).length : undefined}
           data-node-marks={Object.keys(marked).length > 0 ? JSON.stringify(marked) : undefined}
           tabIndex={0}
-          onFocus={() => setHover((h) => h ?? 0)}
-          onBlur={() => setHover(null)}
+          onFocus={() => {
+            setFocused(true)
+            setHover((h) => h ?? 0)
+          }}
+          onBlur={() => {
+            setFocused(false)
+            setHover(null)
+          }}
           onKeyDown={(ev) => {
             const to = mapKey(ev.key, cur, entries.length, layout.cols)
             if (!to) return
@@ -200,15 +211,20 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, nodeList
             </button>
           )}
         </div>
-        <p className={h ? 'min-h-[16px] text-ink' : 'min-h-[16px]'} aria-live="polite" data-testid="cluster-view-map-hover">
-          {h
-            ? h.status && h.status !== 'Ready'
-              ? tr('clusterView.map.hoverStatus', '{{node}} · {{status}} · {{total}} pods · {{error}} errors · {{warn}} warnings', { node: h.label, status: h.status, total: h.counts.total, error: h.counts.error, warn: h.counts.warn })
-              : tr('clusterView.map.hover', '{{node}} · {{total}} pods · {{error}} errors · {{warn}} warnings', { node: h.label, total: h.counts.total, error: h.counts.error, warn: h.counts.warn })
-            : pageEnd > pageStart
+        <div className="min-h-[16px]">
+          <p className={h ? 'text-ink' : undefined} aria-live={focused ? 'polite' : 'off'} data-testid="cluster-view-map-hover">
+            {h
+              ? h.status && h.status !== 'Ready'
+                ? tr('clusterView.map.hoverStatus', '{{node}} · {{status}} · {{total}} pods · {{error}} errors · {{warn}} warnings', { node: h.label, status: h.status, total: h.counts.total, error: h.counts.error, warn: h.counts.warn })
+                : tr('clusterView.map.hover', '{{node}} · {{total}} pods · {{error}} errors · {{warn}} warnings', { node: h.label, total: h.counts.total, error: h.counts.error, warn: h.counts.warn })
+              : ''}
+          </p>
+          <p id={hintId} hidden={!!h} data-testid="cluster-view-map-hint">
+            {pageEnd > pageStart
               ? tr('clusterView.map.hintPaged', 'A cell is a Node, a dot a Pod; the outlined cells are the boxes below. Click a cell, or press Enter on it, to see all its Pods.')
               : tr('clusterView.map.hint', 'A cell is a Node, a dot a Pod. Click a cell, or press Enter on it, to see all its Pods.')}
-        </p>
+          </p>
+        </div>
       </div>
     </div>
   )

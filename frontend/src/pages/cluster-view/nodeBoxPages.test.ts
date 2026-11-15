@@ -524,7 +524,12 @@ describe('the live node list on the screen', () => {
     })
     // the map can be reached from the keyboard, says what it is, and the line under the legend names the cell reached
     expect(html).toMatch(/<canvas role="application" aria-roledescription="Node map" aria-label="Node map: 2 nodes[^"]*"[^>]*tabindex="0"/)
-    expect(html).toMatch(/<p class="min-h-\[16px\]" aria-live="polite" data-testid="cluster-view-map-hover">A cell is a Node/)
+    // that line is read out only while the canvas has the keyboard focus (not here), and holds no hint: the hint is the
+    // canvas's description, a line of its own
+    expect(html).toMatch(/<p aria-live="off" data-testid="cluster-view-map-hover"><\/p>/)
+    const hintId = html.match(/<canvas [^>]*aria-describedby="([^"]+)"/)?.[1]
+    expect(hintId).toBeTruthy()
+    expect(html).toContain(`<p id="${hintId}" data-testid="cluster-view-map-hint">A cell is a Node, a dot a Pod.`)
     // the legend's buttons are not inside that line, so a cell reached does not take them away
     expect(html.match(/data-testid="cluster-view-map-hover">[^<]*<\/p>/)).not.toBeNull()
   })
