@@ -188,8 +188,9 @@ func Load() Config {
 		AIEnabled: pkgconfig.GetEnvBool("AI_ENABLED", true),
 
 		AlertInvestigationEnabled: pkgconfig.GetEnvBool("ALERT_INVESTIGATION_ENABLED", false),
+		// ALERT_INVESTIGATION_ENABLED, a 0.7.8 switch, as AlertInvestigationEnabled reads it; the v0.7.9 ones by SwitchOn
 		TimelineChangesView: pkgconfig.EnvSwitch("AI_TIMELINE_CHANGES") ||
-			(pkgconfig.EnvSwitch("ALERT_INVESTIGATION_ENABLED") && pkgconfig.EnvSwitch("ALERT_INVESTIGATION_CHANGES_FIRST")),
+			(pkgconfig.GetEnvBool("ALERT_INVESTIGATION_ENABLED", false) && pkgconfig.EnvSwitch("ALERT_INVESTIGATION_CHANGES_FIRST")),
 
 		AnomalyRankEnabled:         pkgconfig.EnvSwitch("ANOMALY_RANK_ENABLED"),
 		AnomalyRankMaxQueries:      pkgconfig.GetEnvInt("ANOMALY_RANK_MAX_QUERIES", 12),

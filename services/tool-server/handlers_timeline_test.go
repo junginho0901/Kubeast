@@ -673,7 +673,7 @@ func TestTimeline_ViewIsEventsOrChanges(t *testing.T) {
 	if len(*seen) != 0 {
 		t.Fatalf("k8s-service asked: %v", (*seen)[0].URL)
 	}
-	if err := validateToolArgs(args{"view": "changes"}); err != nil {
+	if err := validateCallArgs("timeline", args{"view": "changes"}); err != nil {
 		t.Fatalf("view changes refused by the argument check: %v", err)
 	}
 }
