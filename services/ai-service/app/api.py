@@ -9,7 +9,7 @@ from typing import Optional
 import httpx
 
 from fastapi import APIRouter, Header, HTTPException, Depends, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from app.models.ai import SessionChatRequest
 from app.models.floating_ai import FloatingChatRequest
 from pydantic import ValidationError
@@ -26,6 +26,13 @@ def _validation_message(err: ValidationError) -> str:
         return "invalid request"
     msg = str(errors[0].get("msg", "invalid request"))
     return msg[len("Value error, "):] if msg.startswith("Value error, ") else msg
+
+
+def _stream_start_failed(stream: str, err: Exception) -> JSONResponse:
+    """The error goes to the log; the caller reads a fixed message, as response.Public keeps internal text out in Go.
+    error_key names the screen's words for it (aiChat.error.*), as the budget refusal's event does."""
+    logger.error("%s stream could not start: %s", stream, safe_error(err))
+    return JSONResponse(status_code=500, content={"detail": "the answer stream could not start", "error_key": "streamStartFailed"})
 
 
 def _extract_audit_meta(request: Request, authorization: str) -> tuple[dict, dict]:
@@ -227,8 +234,6 @@ async def session_chat(
     사용자가 쓴 문장(붙여 넣은 비밀 포함)이 게이트웨이·uvicorn 접근 로그에 그대로
     남으므로 `?message=` 는 더 받지 않는다(422).
     """
-    from app.database import get_db_service
-
     message = body.message
     if not message.strip():
         raise HTTPException(status_code=422, detail="message required")
@@ -252,7 +257,7 @@ async def session_chat(
             },
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return _stream_start_failed("session chat", e)
 
 
 # ---- AI write-tool approvals (H2) ----
@@ -524,7 +529,7 @@ async def floating_session_chat(
             },
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return _stream_start_failed("floating chat", e)
 
 
 @router.get("/suggest-optimization/stream")
@@ -549,7 +554,7 @@ async def suggest_optimization_stream(
             },
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return _stream_start_failed("optimization", e)
 
 
 @router.get("/config")

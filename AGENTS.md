@@ -107,11 +107,25 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 
 ---
 
+## 여러 레플리카
+
+- 서비스는 레플리카 여러 개로 돌 수 있다([docs/ko/high-availability.md](docs/ko/high-availability.md)). 한 파드만 해야 하는 일(주기 작업 · 큐)은 프로세스 메모리가 아니라 DB로 차례를 정한다:
+  작업 동안 자기 연결에 쥐는 advisory lock(`pg_try_advisory_lock`, auth-service `internal/auditsink`), 트랜잭션 하나 동안의 lock(`pg_try_advisory_xact_lock`, `internal/auditchain`),
+  또는 `FOR UPDATE SKIP LOCKED`로 행을 가져가기(권한 요청 · 휴면 계정 정리, ai-service 알림 조사 큐). lock을 못 잡은 파드는 그 차례를 넘긴다.
+- 프로세스 안의 한도 · 캐시 · 카운터는 파드마다다(설치 전체로는 레플리카 수만큼 곱해진다). 설치 전체에서 지켜야 하는 값은 DB나 Redis에 둔다.
+  그런 일이나 상태를 더하는 변경은 docs/high-availability.md(en · ko)에 파드가 무엇을 쥐는지 적는다.
+
 ## 빌드 / 배포
 
 - **빌드/배포는 항상 `scripts/rebuild-kind.sh` 를 통해 수행**한다. 직접 docker/kubectl 명령을 돌리지 않는다.
   게이트웨이(nginx.conf)는 `scripts/rebuild-kind.sh gateway` — 릴리스 값 그대로 `helm upgrade`로 다시 렌더한다.
   ConfigMap을 `kubectl apply`로 쓰면 kubectl이 필드 소유자가 돼 다음 `helm upgrade`(Helm 4 서버 측 적용)가 충돌로 멈춘다.
+
+## Redis
+
+- 서비스마다 차트 Redis에 자기 사용자로 붙고, 그 사용자는 코드가 보내는 명령과 `kubeast:` 아래 키 · 채널만 쓸 수 있다(`helm/kubeast/templates/_helpers.tpl`의 `kubeast.redisUsersAcl`, `redis.acl`).
+- 서비스가 Redis에 새 명령을 보내기 시작하면 그 서비스 사용자 줄에 명령을 넣고 `tests/redis_test.yaml`에 케이스를 더한다. 빠뜨리면 Redis ACL을 켠 설치에서 그 명령이 거절(NOPERM)되고 캐시는 오류 없이 빈 것처럼 읽힌다.
+  `services/pkg/redisacl`로 서비스가 보내는 명령을 그 줄과 비교하는 시험이 있다(k8s-service `internal/cache`, tool-server 클러스터 변경 알림). Redis 명령을 보내는 새 곳에도 같은 시험을 붙인다.
 
 ## 데이터베이스 연결
 

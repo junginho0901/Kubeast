@@ -37,11 +37,15 @@ test.describe('audit log — 신규 action 검증 (backend response 기준)', ()
     //   "action":"user.login.failed", "actor":"", "target":"no-such-user-9999@..."
   })
 
-  test('user.logout — 200 응답 + cookie clear', async ({ page }) => {
-    const res = await page.request.post('/api/v1/auth/logout', { failOnStatusCode: false })
-    expect(res.ok()).toBeTruthy()
-    // 미인증 상태에서 logout 호출 — audit row 는 안 남김 (JWT 없으니 silent),
-    // 다만 response 자체는 200 (idempotent logout).
+  // 미인증 상태에서 logout 호출: 저장된 로그인(.auth/user.json)을 쓰면 그 로그인이 서버에서 끝나 뒤 spec 이 모두 막힌다.
+  test.describe('without the stored sign-in', () => {
+    test.use({ storageState: { cookies: [], origins: [] } })
+
+    test('user.logout — 200 응답 + cookie clear', async ({ page }) => {
+      const res = await page.request.post('/api/v1/auth/logout', { failOnStatusCode: false })
+      expect(res.ok()).toBeTruthy()
+      // audit row 는 안 남김 (JWT 없으니 silent), 다만 response 자체는 200 (idempotent logout).
+    })
   })
 
   test('k8s.pod.logs.read — REST endpoint mount + audit hook 존재', async ({ page }) => {

@@ -95,6 +95,11 @@ func main() {
 	// On SIGTERM a rollout lets the tool calls in flight finish (within the pod's grace period) instead of cutting them.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	// k8s-service's cluster change notices drop a cluster's kubeconfigs here too (cluster_notices.go).
+	if rdb := clusterNoticeClient(); rdb != nil {
+		defer rdb.Close()
+		go listenClusterNotices(ctx, rdb, invalidateClusterKubeconfig)
+	}
 	<-ctx.Done()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()

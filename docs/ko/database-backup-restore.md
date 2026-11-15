@@ -39,6 +39,8 @@ postgresql:
     key: ca.crt
 ```
 
+PgBouncer를 거친다면 session 풀링을 쓰거나 직접 연결하세요. k8s-service와 auth-service는 연결 하나에 잡은 세션 advisory lock으로 일을 맡을 서버 한 대를 고르는데, transaction 풀링에서는 그 잠금이 한 서버 세션에 남지 않습니다.
+
 ## 클러스터 안 데이터베이스 백업 (Backing up the in-cluster database)
 
 서로 독립된 두 겹으로 백업합니다. 둘 다 쓰세요.
