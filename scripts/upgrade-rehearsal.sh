@@ -122,6 +122,8 @@ BG_PIDS=""
 FG_PID=""
 TMP_VALUES=""
 TMP_REQ="" # the folder of the API answer being read (call, access_of), removed by cleanup when a signal ends the run
+RBAC_WHY="" # why registered_rbac did not apply the template
+CAN="" # can_create's answer
 CALL_TIMEOUT=60
 TOKEN_REFRESH=240
 
@@ -174,7 +176,7 @@ print_table() {
     echo "scenario $SCENARIO · from $FROM_VERSION · candidate $HEAD8 (chart ${RC_TAG#v}, images $IMAGE_TAG) · replicas $REPLICAS · REQUIRE ${REQUIRE:-none}"
   fi
   echo "PASS $p · FAIL $f · SKIP $s · results $RES"
-  [ "$s" = 0 ] || echo "each SKIP names the change it waits for (not in this checkout); REQUIRE=<those numbers> makes them fail"
+  [ "$s" = 0 ] || echo "each SKIP names its change; one waiting for a change not in this checkout fails with REQUIRE=<that number>"
   [ "$s" = 0 ] || [ -n "${REQUIRE:-}" ] || warn "$s checks skipped and REQUIRE is not set: a release run sets REQUIRE=all, so that a skipped check fails"
   local word=RESULT verdict=FAIL
   [ "$PLAN" = 1 ] && word=PLAN
@@ -768,7 +770,7 @@ compare_snapshots() {
     want="$OUT/before/$f.txt"; name="$f read back the same"
     if [ -f "$OUT/expected/$f.txt" ]; then want="$OUT/expected/$f.txt"; name="$f read back the same but for #865's changes"; fi
     if [ "$f" = model-configs ] && [ "$(cat "$OUT/before/ai-enabled.txt")" != true ]; then
-      row data "$name" SKIP "ai.enabled is not true on $FROM_VERSION: no config was stored, so the two lists are empty and say nothing"
+      row data "$name" SKIP "#924's check (Q-74): ai.enabled is not true on $FROM_VERSION, so no config was stored and the two empty lists say nothing"
     elif diff -q "$want" "$OUT/after/$f.txt" > /dev/null; then
       row data "$name" PASS "$(wc -l < "$OUT/after/$f.txt" | tr -d ' ') lines"
     else
@@ -1265,7 +1267,7 @@ groups_left_out() { # groups_left_out AREA — the row for a run without the gro
   local name="roles outside ASCII: groups, renames, bindings (W8 QA Q-61, Q-66)"
   if [ "${ROLE_GROUPS:-1}" != 0 ]; then skip "$1" "$name" 865 "no migration makes roles_name_group_key"
   elif required 865; then row "$1" "$name" FAIL "REQUIRE names #865 and ROLE_GROUPS=0 leaves these checks out"
-  else row "$1" "$name" SKIP "ROLE_GROUPS=0"; fi
+  else row "$1" "$name" SKIP "#865's checks: ROLE_GROUPS=0 leaves them out"; fi
 }
 binding_name() { printf 'kubeast-role-%s-%s' "${1#kubeast:role:}" "$2"; } # binding_name GROUP CLUSTERROLE, as the template names it
 # docs_old_binding SLUG CLUSTERROLE — the name getting-started "Upgrade" gives a binding the template made for an old
@@ -1334,7 +1336,7 @@ seed_groups() {
   done
   info groups "grants of rh-u6 and rh-u7 on $FROM_VERSION" "$given"
   printf 'auth:\n  impersonation:\n    customRoles:\n      - name: "%s"\n        clusterRoles: [edit]\n' "$GR_REG" > "$OUT/registered-values.yaml"
-  registered_rbac from || { row groups "the custom roles template of $FROM_VERSION applied as on a registered cluster" FAIL "registered-rbac-from.log"; return 0; }
+  registered_rbac from || { row groups "the custom roles template of $FROM_VERSION applied as on a registered cluster" FAIL "$RBAC_WHY"; return 0; }
   GROUPS_READY=1
 }
 
@@ -1342,13 +1344,24 @@ seed_groups() {
 # candidate's and applied with kubectl, as on a registered cluster (the template's head comment; render-target-rbac.sh
 # renders it with the rest). This cluster is also the one Kubeast runs in, whose chart has a ClusterRole and a
 # ClusterRoleBinding named kubeast-impersonator-custom-roles too, so the template's are renamed
-# rehearsal-registered-custom-roles.
+# rehearsal-registered-custom-roles. Nothing is applied when an object of the render is in the cluster as a Helm
+# release's; RBAC_WHY says why it returned 1.
 registered_rbac() {
-  local f="$OUT/registered-rbac-$1.yaml" src=("$CHART")
+  local f="$OUT/registered-rbac-$1.yaml" src=("$CHART") log="$OUT/registered-rbac-$1.log" live owned
   [ "$1" = from ] && src=("$CHART_OCI" --version "$FROM_VERSION")
-  hc template kubeast "${src[@]}" -s templates/impersonation-custom-roles.yaml -f "$OUT/registered-values.yaml" > "$f" 2> "$OUT/registered-rbac-$1.log" || return 1
+  RBAC_WHY="the template did not render (${log##*/})"
+  hc template kubeast "${src[@]}" -s templates/impersonation-custom-roles.yaml -f "$OUT/registered-values.yaml" > "$f" 2> "$log" || return 1
   sed -i.bak 's/kubeast-impersonator-custom-roles/rehearsal-registered-custom-roles/g' "$f" && rm -f "$f.bak"
-  kc apply -f "$f" >> "$OUT/registered-rbac-$1.log" 2>&1
+  # applied over no object of a Helm release (a name EXTRA_VALUES gives the chart's customRoles can be one of these)
+  RBAC_WHY="its objects in the cluster could not be read (${log##*/})"
+  live=$(kc get -f "$f" -o json --ignore-not-found 2>> "$log") || return 1
+  owned=$(printf '%s' "$live" | jq -r '(.items? // [.])[]? | select((.metadata.annotations["meta.helm.sh/release-name"] // "") != "")
+    | "\(.kind)/\(.metadata.name)"' 2>> "$log") || return 1
+  live=""
+  RBAC_WHY="not applied: objects of a Helm release (meta.helm.sh/release-name) among them: $(printf '%s' "$owned" | tr '\n' ' ')"
+  [ -z "$owned" ] || return 1
+  RBAC_WHY="kubectl apply failed (${log##*/})"
+  kc apply -f "$f" >> "$log" 2>&1
 }
 
 # groups_docs_queries AREA — getting-started "Upgrade"'s three queries into $OUT/docs-{preview,check,groups}.sql, picked
@@ -1417,10 +1430,12 @@ for line in sys.stdin:
 print(g)' < "$h")
   rm -rf "$TMP_REQ"; TMP_REQ=""
 }
-groups_token() { local pw; pw=$(seed_get "U$1_PW"); login "rh-u$1@$DOMAIN" "$pw"; pw=""; printf '%s' "$TOKEN"; } # groups_token 6|7
-can_create() { # can_create TOKEN — whether that identity may create ConfigMaps in default, as Kubeast's can-i answers
+# groups_token 6|7 — signs that user in: sets TOKEN. Called as is, not in $( ): a command substitution's shell runs no
+# EXIT trap, so a signal there would leave call's answer (the token) in TMP_REQ.
+groups_token() { local pw; pw=$(seed_get "U$1_PW"); login "rh-u$1@$DOMAIN" "$pw"; pw=""; }
+can_create() { # can_create TOKEN — sets CAN: whether that identity may create ConfigMaps in default, as Kubeast's can-i answers
   call GET "/api/v1/cluster/can-i?verb=create&resource=configmaps&namespace=default&cluster=$CLUSTER_ID" "$1"
-  if [ "$CODE" = 200 ]; then jqb '.allowed'; else printf 'HTTP %s' "$CODE"; fi
+  if [ "$CODE" = 200 ]; then CAN=$(jqb '.allowed'); else CAN="HTTP $CODE"; fi
 }
 chart_group_bindings() { # the chart's ClusterRoleBindings of GR_CHART's group, before #865 or after: "<name> <subjects>"
   kc get clusterrolebindings -o json | jq -r --arg a "$GR_OLD" --arg b "$GR_CHART_NEW" '[.items[]
@@ -1456,12 +1471,13 @@ groups_before() {
     : > "$OUT/before/docs-preview.txt"
     row groups "getting-started's preview runs on $FROM_VERSION" FAIL "$(head -c 160 "$OUT/before/docs-preview-rows.txt")"
   fi
-  t6=$(groups_token 6); t7=$(groups_token 7)
+  groups_token 6; t6=$TOKEN; groups_token 7; t7=$TOKEN; TOKEN=""
   access_of "$LIST_CM" "$t6"; c6=$CODE; g6=$ROLE_GROUP
   access_of "$LIST_CM" "$t7"
   check groups "rh-u6's and rh-u7's ConfigMap lists answer and go out as one group on $FROM_VERSION" \
     "200 $GR_OLD · 200 $GR_OLD" "$c6 $g6 · $CODE $ROLE_GROUP"
-  check groups "on $FROM_VERSION rh-u6 (chart: view) may create ConfigMaps through rh-u7's role's binding (edit)" true "$(can_create "$t6")"
+  can_create "$t6"
+  check groups "on $FROM_VERSION rh-u6 (chart: view) may create ConfigMaps through rh-u7's role's binding (edit)" true "$CAN"
   check groups "the chart binds that group on $FROM_VERSION" "$(binding_name "$GR_OLD" view) $GR_OLD" "$(chart_group_bindings)"
   t6=""; t7=""; BODY=""
 }
@@ -1471,7 +1487,7 @@ groups_before() {
 # way of getting-started "Upgrade": refused until the template is applied again, then the old binding deleted.
 groups_after() {
   [ "$GROUPS_ON" = 1 ] && [ "$GROUPS_READY" = 1 ] || return 0
-  local want="" got="" rid name via renamed t6 t7 i t0 ct old obj rel
+  local want="" got="" rid name via renamed t6 t7 c6 i t0 ct old obj rel
   while IFS='|' read -r rid name via; do
     if [ "$name" = "$GR_RENAMED" ]; then want="$want$rid [$name-renamed-$rid],"; else want="$want$rid [$name],"; fi
     got="$got$rid [$(psql_q "SELECT name FROM roles WHERE id = $rid")],"
@@ -1494,7 +1510,7 @@ groups_after() {
     "$(psql_q "SELECT string_agg(split_part(u.email, '@', 1) || ' ' || r.name, ' · ' ORDER BY u.email) FROM user_cluster_roles g
                JOIN auth_users u ON u.id = g.user_id JOIN roles r ON r.id = g.role_id
                WHERE u.email IN ('rh-u6@$DOMAIN', 'rh-u7@$DOMAIN') AND g.cluster_id = '$CLUSTER_ID'")"
-  t6=$(groups_token 6); t7=$(groups_token 7)
+  groups_token 6; t6=$TOKEN; groups_token 7; t7=$TOKEN; TOKEN=""
   access_of "$LIST_CM" "$t6"
   check groups "rh-u6's list answers as its #865 group (the chart's binding, replaced by helm upgrade)" "200 $GR_CHART_NEW" "$CODE $ROLE_GROUP"
   check groups "the chart binds only that group, and kubeast-impersonator-custom-roles names it and not the old one" \
@@ -1519,7 +1535,7 @@ groups_after() {
       row groups "rh-u7's list answers once the candidate's template is applied again" FAIL "want 200 $GR_REG_NEW, got $CODE $ROLE_GROUP after $(( $(date +%s) - t0 ))s"
     fi
   else
-    row groups "rh-u7's list answers once the candidate's template is applied again" FAIL "the template did not render or apply (registered-rbac-rc.log)"
+    row groups "rh-u7's list answers once the candidate's template is applied again" FAIL "the template: $RBAC_WHY"
   fi
   name="getting-started's name of the old binding, its form filled in, is the one $FROM_VERSION's template made"
   if old=$(docs_old_binding "${GR_OLD#kubeast:role:}" edit); then
@@ -1543,7 +1559,8 @@ groups_after() {
   fi
   obj=""
   none_bad groups "with it deleted, no binding or ClusterRole of the groups k8s-service may act as names $GR_OLD" "$(old_group_left)" "none" "still in:"
-  check groups "rh-u6 may not create ConfigMaps in default, rh-u7 may: the two groups are apart" "false true" "$(can_create "$t6") $(can_create "$t7")"
+  can_create "$t6"; c6=$CAN; can_create "$t7"
+  check groups "rh-u6 may not create ConfigMaps in default, rh-u7 may: the two groups are apart" "false true" "$c6 $CAN"
   access_of "$LIST_CM" "$t7"
   check groups "rh-u7's list still answers with the old binding deleted" 200 "$CODE"
   t6=""; t7=""; BODY=""
