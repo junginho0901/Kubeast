@@ -77,6 +77,8 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 
 ### 업그레이드
 
+0.7.7에서 0.7.8로 올릴 때는 먼저 [0.7.7에서 0.7.8로 업그레이드](upgrade-0.7.8.md)를 읽습니다. 업그레이드 전에 확인할 것, 바뀌는 것, 되돌리는 방법이 있습니다.
+
 ```bash
 helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
   -n kubeast --reset-then-reuse-values
