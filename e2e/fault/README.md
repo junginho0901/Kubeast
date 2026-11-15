@@ -207,8 +207,9 @@ checkout's chart, if its files are the start's, and the same hash check.
 helm runs in the background of the script, so Ctrl-C, TERM or a closed terminal (HUP) reaches its trap at once: it
 stops helm, rolls back to the revision before the switch and checks the hashes (`ROLLBACK_BROKEN` and exit 3 when they
 differ, the start's files kept). The rollbacks, there and in `back`, ignore those signals until they end; after a
-closed terminal the rollback writes to `<start file>.log`. A release left `pending-upgrade` or `pending-rollback` by
-anything else: run `back`.
+closed terminal the rollback writes to `<start file>.log`. Each revision the script makes is listed (`<start>.made`)
+before helm runs, so a release it left `pending-upgrade` or `pending-rollback` (its shell killed outright) is put back
+with `back`; one left so by something else is refused like any other revision the script did not make.
 
 ## What a run leaves for the record
 
@@ -260,7 +261,8 @@ the laptop went away before that could run:
 - `kubectl -n kubeast get deploy redis postgres` — scale back to 1 if 0.
 - `docker exec kubeast-control-plane ctr -n k8s.io task ls | grep PAUSED` — `ctr -n k8s.io task resume <id>` (a frozen
   PostgreSQL resumes by itself 30 s after its freeze time; `docker unpause` for `E2E_FAULT_PG_DOCKER`).
-- `scripts/kind-fault-shape.sh status` — `back` while the values are not the start's or the release is `pending-*`.
+- `scripts/kind-fault-shape.sh status` — `back` while the values are not the start's or the release is `pending-*`
+  (`back-values` when it names revisions made by something else).
 - `ps -ef | grep 'kubectl.*port-forward'` — a port-forward left by a worker killed within the second before its shell
   looked.
 - `kubectl --context kind-test2 get ns | grep e2e-w6` — delete them, then `kubectl --context kind-test2 uncordon <node>`.

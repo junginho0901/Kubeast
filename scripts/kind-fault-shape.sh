@@ -28,7 +28,8 @@
 # the background and this shell waits for it, so Ctrl-C, TERM or a closed terminal (HUP) reaches the trap at once: it
 # stops helm, then rolls back to the revision before the switch and checks the hashes (ROLLBACK_BROKEN, exit 3, when
 # they differ). The rollbacks, here and in `back`, ignore those signals. After a closed terminal the rollback writes
-# to <start file>.log. A release left pending-* by anything else: run `back`.
+# to <start file>.log. Each revision this script makes is listed before helm runs, so a release it left pending-*
+# (its shell killed outright) is put back with `back`; one left so by anything else is refused like any other.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -125,7 +126,7 @@ load_start() {
   [ -n "$updated" ] && [ "$updated" = "$START_UPDATED" ] || die "the start noted $START_AT names revision $START_REV of $START_UPDATED, which the release no longer has as it was (pruned, or the release installed again): it is not this release's start. Use back-values if the values copy is still the one you want, else remove $STATE* and start again."
 }
 
-# revisions after the start that this script did not make (its upgrades carry its description, its rollbacks are listed)
+# revisions after the start that this script did not make (listed in $MADE; its finished upgrades also carry its description)
 foreign_after() {
   history_json | jq -r --argjson r "$START_REV" --arg tag "$TAG" --rawfile made "$MADE" '
     ($made | split("\n") | map(select(. != "") | tonumber)) as $mine
@@ -133,7 +134,9 @@ foreign_after() {
     | "\(.revision) (\(.description // ""))"'
 }
 
-note_made() { revision >> "$MADE"; }
+# The revision the next helm upgrade or rollback will make (helm takes the latest + 1), listed as this script's before
+# it runs: a pending or failed one (helm describes those itself) and one left by a shell killed outright count too.
+claim_next() { echo $(( $(revision) + 1 )) >> "$MADE"; }
 
 HELM_PID="" GOT_HUP=""
 # helm in the background: a signal to this shell interrupts the wait and reaches its trap at once
@@ -169,11 +172,11 @@ roll_back_to_pre() {
   quiet_signals
   if [ -n "$GOT_HUP" ]; then exec >>"$STATE.log" 2>&1; echo "$(date -u +%FT%TZ) terminal closed during $SHAPE"; fi
   echo "═══ switching to $SHAPE stopped: rolling back to revision $PRE_REV ═══" >&2
+  claim_next
   if ! h rollback "$RELEASE" "$PRE_REV" --history-max 0 --wait --timeout "$TIMEOUT" >&2; then
     echo "ROLLBACK_BROKEN: helm rollback to $PRE_REV failed; the install is not in a known shape. Fix it by hand (helm history $RELEASE)." >&2
     exit 3
   fi
-  note_made
   local given all
   given=$(given_hash); all=$(all_hash)
   show "after the rollback" "$(revision)" "$given" "$all" >&2
@@ -231,6 +234,7 @@ switch() {
   local out
   out=$(mktemp)
   SWITCHING=1
+  claim_next
   run_helm upgrade "$RELEASE" "$CHART" --reset-then-reuse-values --history-max 0 --set "$sets" --wait --timeout "$TIMEOUT" \
     --description "$TAG $SHAPE chart=$(short "$START_CHART")" >"$out"
   grep -E '^(REVISION|STATUS):' "$out" || true
@@ -272,9 +276,9 @@ back() {
   refuse_foreign "rolling back to revision $START_REV"
   echo "═══ helm rollback $RELEASE $START_REV (Ctrl-C, TERM and HUP ignored until it ends) ═══"
   quiet_signals
+  claim_next
   h rollback "$RELEASE" "$START_REV" --history-max 0 --wait --timeout "$TIMEOUT" \
     || { echo "ROLLBACK_BROKEN: helm rollback to $START_REV failed (helm history $RELEASE)" >&2; exit 3; }
-  note_made
   check_back "the rollback"
 }
 
@@ -283,6 +287,7 @@ back_values() {
   [ "$(chart_hash)" = "$START_CHART" ] || die "the chart files in $CHART differ from the ones noted at start: back-values would also change the templates. Run it from the checkout of the start."
   echo "═══ helm upgrade $RELEASE --reset-values -f $VALUES (Ctrl-C, TERM and HUP ignored until it ends) ═══"
   quiet_signals
+  claim_next
   local out
   out=$(mktemp)
   h upgrade "$RELEASE" "$CHART" --reset-values -f "$VALUES" --history-max 0 --wait --timeout "$TIMEOUT" --description "$TAG back-values" >"$out" \
