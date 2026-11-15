@@ -789,8 +789,7 @@ customCAs: []
 # services → database/cache/auth, apiserver and model APIs out). Enforced by
 # CNIs that implement NetworkPolicy (Calico, Cilium, EKS VPC CNI with network
 # policy on, kind's kindnet since kind 0.24); on others (Flannel) the objects
-# are inert. Set false
-# only if the cluster's own policy tooling takes over.
+# are inert. Set false only if the cluster's own policy tooling takes over.
 networkPolicy:
   enabled: true
   # CoreDNS namespace (DNS egress is allowed cluster-wide)
