@@ -56,8 +56,9 @@
 # the cluster is made — behind a TLS-inspecting proxy, one that makes the node trust its CA and restarts containerd,
 # as CALICO_NODE_HOOK), DOCKER_BUILD_ARGS (with --build), PROBE_TIMEOUT (10 s: a request
 # that has no answer by then is a hang), PG_GRACE (20 s after the bundled PostgreSQL is ready again), POOLER_IMAGE,
-# POOLER_MODE, POOLER, EXTRA_VALUES (a values file of no secret added to the FROM_VERSION install, e.g.
-# migrations.mode: job with SCENARIO=external-db), REQUIRE, KEEP, ALLOW_DIRTY, ALLOW_PARALLEL, ROLE_GROUPS (1).
+# POOLER_MODE, POOLER, EXTRA_VALUES (a values file of no secret added to the FROM_VERSION install and to --plan's
+# renders, e.g. migrations.mode: job with SCENARIO=external-db, or ai.enabled: false, which the image and connection
+# sum rows follow), REQUIRE, KEEP, ALLOW_DIRTY, ALLOW_PARALLEL, ROLE_GROUPS (1).
 #
 # Safety: every kubectl and helm call names the rehearsal's kubeconfig file ($REH_OUT/kubeconfig) and its context;
 # the current context is never read. Cluster names must start with kubeast-reh. Passwords, tokens and keys are read
@@ -171,7 +172,7 @@ print_table() {
   s=$(awk -F'\t' '$3 == "SKIP"' "$RES" | wc -l | tr -d ' ')
   echo
   if [ "$PLAN" = 1 ]; then
-    echo "plan of checkout $HEAD8 (no cluster; renders of helm/kubeast on the default scenario's install values) · REQUIRE ${REQUIRE:-none}"
+    echo "plan of checkout $HEAD8 (no cluster; renders of helm/kubeast on the default scenario's install values${EXTRA_VALUES:+ and EXTRA_VALUES}) · REQUIRE ${REQUIRE:-none}"
   else
     echo "scenario $SCENARIO · from $FROM_VERSION · candidate $HEAD8 (chart ${RC_TAG#v}, images $IMAGE_TAG) · replicas $REPLICAS · REQUIRE ${REQUIRE:-none}"
   fi
@@ -375,20 +376,55 @@ plan() { # --plan: the changes against the checkout, and the render stops on the
     else skip plan "$(change_says "$c")" "$c" "not in this checkout"; fi
   done
   write_values_from
+  if [ -n "${EXTRA_VALUES:-}" ]; then
+    [ -f "$EXTRA_VALUES" ] || stop "EXTRA_VALUES $EXTRA_VALUES is not a file"
+    info plan "values added at install, in each render" "$EXTRA_VALUES"
+  fi
+  values_json "$OUT/plan-values.json" "$ROOT/helm/kubeast/values.yaml" "$OUT/values-from.yaml" ${EXTRA_VALUES:+"$EXTRA_VALUES"} \
+    || stop "the install's values did not render as JSON"
   removed_value_checks render
   db_connection_checks render
   if [ "$GROUPS_ON" = 1 ]; then groups_docs_queries plan; else groups_left_out plan; fi
 }
-# The checkout chart's values.yaml as JSON, as Helm reads it (scripts/values-paths.sh of #908 does the same).
-chart_values() {
-  local c="$OUT/values-json-chart" t
-  for t in helm jq; do command -v "$t" > /dev/null || stop "$t is not installed"; done
+# values_json OUT FILE... — the values those files give, merged in order as Helm merges -f files, as JSON
+values_json() {
+  local out=$1 c="$OUT/values-json-chart" f args=()
+  shift
+  for f in "$@"; do args+=(-f "$f"); done
   mkdir -p "$c/templates"
   printf 'apiVersion: v2\nname: values-json\nversion: 0.0.0\n' > "$c/Chart.yaml"
   printf '# {{ toJson .Values }}\n' > "$c/templates/values.yaml"
-  helm template values-json "$c" -f "$ROOT/helm/kubeast/values.yaml" 2>/dev/null | sed -n 's/^# {/{/p' > "$CHART_VALUES"
+  helm template values-json "$c" "${args[@]}" 2>/dev/null | sed -n 's/^# {/{/p' > "$out"
   rm -rf "$c"
-  [ -s "$CHART_VALUES" ] || stop "helm/kubeast/values.yaml did not render as JSON"
+  [ -s "$out" ]
+}
+# The checkout chart's values.yaml as JSON, as Helm reads it (scripts/values-paths.sh of #908 does the same).
+chart_values() {
+  local t
+  for t in helm jq; do command -v "$t" > /dev/null || stop "$t is not installed"; done
+  values_json "$CHART_VALUES" "$ROOT/helm/kubeast/values.yaml" || stop "helm/kubeast/values.yaml did not render as JSON"
+}
+# ai_on — the install runs AI: the release's ai.enabled, or with --plan the checkout's values under the install's values
+# and EXTRA_VALUES. With it false the chart renders no ai-service, tool-server or ModelConfig controller.
+ai_on() {
+  if [ "$PLAN" = 1 ]; then [ "$(jq -r '.ai.enabled' "$OUT/plan-values.json")" = true ]
+  else [ "$(value_of ai.enabled)" = true ]; fi
+}
+# kubeast_images TAG — the Kubeast images the release's Deployments run at TAG, named as IMAGES names them, sorted, each
+# once (k8s-service-stream runs k8s-service's)
+kubeast_images() {
+  kc -n "$NS" get deploy -o json | jq -r --arg t ":$1" '[.items[].spec.template.spec.containers[0].image | select(endswith($t))
+    | rtrimstr($t) | split("/") | last | ltrimstr("kubeast-")] | unique | join(" ")'
+}
+# expected_images — IMAGES sorted, without ai-service, tool-server and the ModelConfig controller when AI is off
+expected_images() {
+  local n out="" on=0
+  ai_on && on=1
+  for n in $IMAGES; do
+    case "$n" in ai-service|tool-server|model-config-controller-go) [ "$on" = 1 ] || continue ;; esac
+    out="$out$n"$'\n'
+  done
+  printf '%s' "$out" | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//'
 }
 chart_has() { jq -e --arg p "$1" 'getpath($p | split(".")) != null' "$CHART_VALUES" > /dev/null; }
 chart_value() { jq -r --arg p "$1" 'getpath($p | split(".")) // empty' "$CHART_VALUES"; }
@@ -596,7 +632,7 @@ for d in re.split(r"(?m)^---\s*$", sys.stdin.read()):
   local i
   for i in $(seq 1 30); do [ "$(curl -s -o /dev/null -m 3 -w '%{http_code}' "$GW/healthz")" = 200 ] && break; sleep 2; done
   check install "chart $FROM_VERSION installed" "kubeast-$FROM_VERSION deployed" "$(hc list -o json | jq -r '.[] | select(.name == "kubeast") | "\(.chart) \(.status)"')"
-  check install "every Kubeast image is v$FROM_VERSION" 7 "$(kc -n "$NS" get deploy -o json | jq "[.items[].spec.template.spec.containers[0].image | select(endswith(\":v$FROM_VERSION\"))] | length")"
+  check install "every Kubeast image is v$FROM_VERSION" "$(expected_images)" "$(kubeast_images "v$FROM_VERSION")"
   admin_login
   helm show values "$CHART_OCI" --version "$FROM_VERSION" > "$OUT/values-copied-from.yaml" 2>/dev/null || stop "helm show values $FROM_VERSION"
 }
@@ -982,13 +1018,14 @@ upgrade_values_checks() {
 }
 
 # render ARGS... — the candidate on the install's values with ARGS added, as the upgrade renders it: a client dry run
-# of `helm upgrade --reset-then-reuse-values` (--plan: `helm template` of the checkout's chart on values-from.yaml).
+# of `helm upgrade --reset-then-reuse-values` (--plan: `helm template` of the checkout's chart on values-from.yaml and
+# EXTRA_VALUES).
 # Sets RC, ERR (the error lines) and NOTES_SUM (the connection sum NOTES.txt prints for an external database); a
 # render that goes through holds the release's Secrets, so the rest is not kept.
 render() {
   local full
   if [ "$PLAN" = 1 ]; then
-    full=$(helm template kubeast "$ROOT/helm/kubeast" -n "$NS" -f "$OUT/values-from.yaml" "$@" 2>&1); RC=$?
+    full=$(helm template kubeast "$ROOT/helm/kubeast" -n "$NS" -f "$OUT/values-from.yaml" ${EXTRA_VALUES:+-f "$EXTRA_VALUES"} "$@" 2>&1); RC=$?
   else
     full=$(hc upgrade kubeast "$CHART" --reset-then-reuse-values "$@" --dry-run=client 2>&1); RC=$?
   fi
@@ -1020,42 +1057,45 @@ removed_value_checks() {
   fi
 }
 
-# db_connection_checks AREA — auth, session and ai at 4 replicas stop the render at the chart's PostgreSQL connection
-# check (templates/checks/db-connections.yaml) with the sum it works out; at 3 they render. The numbers are the chart's:
-# the sum from its message, the limit from postgresql.maxConnections. With an external database the chart does not
-# stop and NOTES.txt prints the sum.
+# db_connection_checks AREA — the services whose pools count in the sum, at one replica count, stop the render at the
+# chart's PostgreSQL connection check (templates/checks/db-connections.yaml) with the sum it works out; at one fewer
+# they render. With AI on: auth, session and ai at 4 (319 with the default pools) and 3 (264). With ai.enabled false the
+# chart renders no ai-service or ModelConfig controller and leaves their pools out (kubeast.dbConnections): auth and
+# session at 6 (316) and 5 (276). The numbers are the chart's: the sum from its message, the limit from
+# postgresql.maxConnections. With an external database the chart does not stop and NOTES.txt prints the sum.
 db_connection_checks() {
-  local a=$1 k total max want set3=() set4=()
+  local a=$1 k total max want set3=() set4=() keys="authService sessionService aiService" svc="auth, session and ai" over=4
   if ! in_checkout 868; then skip "$a" "the connection sum stops a render past postgresql.maxConnections" 868 "checks/db-connections.yaml not in the chart"; return; fi
-  for k in authService sessionService aiService; do set3+=(--set "replicas.$k=3"); set4+=(--set "replicas.$k=4"); done
+  ai_on || { keys="authService sessionService"; svc="auth and session (ai.enabled false)"; over=6; }
+  for k in $keys; do set3+=(--set "replicas.$k=$((over - 1))"); set4+=(--set "replicas.$k=$over"); done
   if [ "$SCENARIO" = external-db ] && [ "$PLAN" != 1 ]; then
     render "${set4[@]}"
     if [ "$RC" = 0 ] && [ -n "$NOTES_SUM" ]; then
-      info "$a" "auth, session and ai at 4 replicas, external database" "renders; NOTES.txt: the pods can hold up to $NOTES_SUM connections"
+      info "$a" "$svc at $over replicas, external database" "renders; NOTES.txt: the pods can hold up to $NOTES_SUM connections"
     else
-      row "$a" "auth, session and ai at 4 replicas render with an external database" FAIL "helm exit $RC, NOTES sum '${NOTES_SUM}': $ERR"
+      row "$a" "$svc at $over replicas render with an external database" FAIL "helm exit $RC, NOTES sum '${NOTES_SUM}': $ERR"
     fi
     return
   fi
   want=$(chart_value postgresql.maxConnections)
   render "${set4[@]}"
-  printf '%s\n' "$ERR" > "$OUT/db-connections-4.txt"
+  printf '%s\n' "$ERR" > "$OUT/db-connections-$over.txt"
   total=$(printf '%s' "$ERR" | sed -n 's/.*can hold up to \([0-9][0-9]*\) database connections.*/\1/p' | head -1)
   max=$(printf '%s' "$ERR" | sed -n 's/.*postgresql\.maxConnections=\([0-9][0-9]*\).*/\1/p' | head -1)
   if [ "$RC" != 0 ] && [ -n "$total" ] && [ -n "$max" ] && [ "$max" = "$want" ] && [ "$total" -gt "$max" ]; then
-    row "$a" "auth, session and ai at 4 replicas stop at the connection sum" PASS "the pods can hold up to $total connections > postgresql.maxConnections $max"
+    row "$a" "$svc at $over replicas stop at the connection sum" PASS "the pods can hold up to $total connections > postgresql.maxConnections $max"
   else
-    row "$a" "auth, session and ai at 4 replicas stop at the connection sum" FAIL "helm exit $RC, sum '$total', limit '$max' (values.yaml $want): $ERR"
+    row "$a" "$svc at $over replicas stop at the connection sum" FAIL "helm exit $RC, sum '$total', limit '$max' (values.yaml $want): $ERR"
   fi
   render "${set3[@]}"
   if [ "$RC" = 0 ]; then
-    row "$a" "auth, session and ai at 3 replicas render" PASS "helm exit 0"
-    # the sum at 3, as the same check prints it once the limit is below it
+    row "$a" "$svc at $((over - 1)) replicas render" PASS "helm exit 0"
+    # the sum at one fewer, as the same check prints it once the limit is below it
     render "${set3[@]}" --set postgresql.maxConnections=20
     total=$(printf '%s' "$ERR" | sed -n 's/.*can hold up to \([0-9][0-9]*\) database connections.*/\1/p' | head -1)
-    info "$a" "connection sum at 3 replicas of auth, session and ai" "${total:-not printed} (postgresql.maxConnections $want)"
+    info "$a" "connection sum at $((over - 1)) replicas of $svc" "${total:-not printed} (postgresql.maxConnections $want)"
   else
-    row "$a" "auth, session and ai at 3 replicas render" FAIL "helm exit $RC: $ERR"
+    row "$a" "$svc at $((over - 1)) replicas render" FAIL "helm exit $RC: $ERR"
   fi
 }
 
@@ -1255,8 +1295,12 @@ redis_checks() { # redis_checks PHASE single|users USERS_SECRET
   fi
   n=$(kc -n "$NS" logs deploy/k8s-service --since=10m 2>/dev/null | grep -ciE 'WRONGPASS|NOAUTH|NOPERM')
   check "$a" "k8s-service logs no Redis refusal (10 min)" 0 "${n:-0}"
-  n=$(kc -n "$NS" logs deploy/tool-server --since=10m 2>/dev/null | grep -ciE 'WRONGPASS|NOAUTH|NOPERM')
-  check "$a" "tool-server logs no Redis refusal (10 min)" 0 "${n:-0}"
+  if ai_on; then
+    n=$(kc -n "$NS" logs deploy/tool-server --since=10m 2>/dev/null | grep -ciE 'WRONGPASS|NOAUTH|NOPERM')
+    check "$a" "tool-server logs no Redis refusal (10 min)" 0 "${n:-0}"
+  else
+    info "$a" "tool-server logs no Redis refusal (10 min)" "ai.enabled is not true: the chart renders no tool-server"
+  fi
 }
 
 # --- 11. roles whose names have characters outside ASCII (W8 QA Q-61, Q-66) ---
@@ -1612,7 +1656,7 @@ WANT_DB=$((10#$(newest_migration)))
 check A "migrations reach the newest file ($FROM_DB → $WANT_DB)" "$WANT_DB" "$(db_version)"
 kc -n "$NS" logs deploy/auth-service --since=30m 2>/dev/null | grep -i 'dbmigrate\|migrat' | cut -c1-300 > "$OUT/A-migrations.log"
 info A "auth-service migration lines" "$(wc -l < "$OUT/A-migrations.log" | tr -d ' ') (A-migrations.log)"
-check A "every Kubeast image is $IMAGE_TAG" 7 "$(kc -n "$NS" get deploy -o json | jq "[.items[].spec.template.spec.containers[0].image | select(endswith(\":$IMAGE_TAG\"))] | length")"
+check A "every Kubeast image is $IMAGE_TAG" "$(expected_images)" "$(kubeast_images "$IMAGE_TAG")"
 if [ "$SCENARIO" != external-db ]; then
   PG_UID_AFTER=$(kc -n "$NS" get pods -l app=postgres -o jsonpath='{.items[0].metadata.uid}' 2>/dev/null)
   if in_checkout 868; then
@@ -1707,7 +1751,11 @@ elif [ "$REPLICAS" -gt 1 ]; then
   for k in authService aiService k8sService sessionService frontend toolServer gateway; do set_args+=(--set "replicas.$k=$REPLICAS"); done
   upgrade_phase C --reset-then-reuse-values "${set_args[@]}"
   check C "k8s-service runs $REPLICAS ready pods" "$REPLICAS" "$(kc -n "$NS" get deploy k8s-service -o jsonpath='{.status.readyReplicas}')"
-  check C "tool-server runs $REPLICAS ready pods" "$REPLICAS" "$(kc -n "$NS" get deploy tool-server -o jsonpath='{.status.readyReplicas}')"
+  if ai_on; then
+    check C "tool-server runs $REPLICAS ready pods" "$REPLICAS" "$(kc -n "$NS" get deploy tool-server -o jsonpath='{.status.readyReplicas}')"
+  else
+    info C "tool-server runs $REPLICAS ready pods" "ai.enabled is not true: the chart renders no tool-server"
+  fi
   spec_checks C
   admin_login
   ok=0
