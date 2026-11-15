@@ -29,6 +29,7 @@ import { formatAge, formatTime, utcTitle } from '@/utils/time'
 import { failureText } from '@/utils/failureText'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { failureOf } from '@/hooks/useRefresh'
+import { keepSameRead } from '@/utils/keepSameRead'
 
 // Alerts: every alert Alertmanager sent for the selected cluster (features.alertInvestigation's webhook), firing or
 // resolved, for whoever reads the cluster as a whole. Resolving is the alert rule's: the marks here (acknowledged,
@@ -73,17 +74,23 @@ export default function AlertInbox() {
     const t = setTimeout(() => setSearch(searchInput.trim()), 300)
     return () => clearTimeout(t)
   }, [searchInput])
-  const [page, setPage] = useState(1)
+  // the page goes back to 1 with another tab, filter, search or cluster, in the same render (no read of the old page)
+  const pageKey = JSON.stringify([status, severity, mine, openOnly, search, currentCluster])
+  const [paged, setPaged] = useState({ key: pageKey, page: 1 })
+  const page = paged.key === pageKey ? paged.page : 1
+  const setPage = (p: number) => setPaged({ key: pageKey, page: p })
   const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: status })
 
   const inbox = inboxState(features.data, features.isPlaceholderData)
   const filter = { status, severity, mine, open: openOnly, q: search, limit: rowsPerPage, offset: (page - 1) * rowsPerPage }
-  // The rows on screen stay while another tab, page or search loads (never another cluster's); the pager, the counts
-  // and the AI context follow the answer's own filter and page.
+  // The rows on screen stay while another page or page size of them loads; another tab, severity, Mine, Open only,
+  // search or cluster waits for its own answer, as on first open. The pager, the counts and the AI context follow the
+  // answer's own filter and page.
+  const listKey = ['alert-inbox', 'list', currentCluster, filter]
   const { data, isLoading, isFetching, error, errorUpdatedAt, refetch } = useQuery({
-    queryKey: ['alert-inbox', 'list', currentCluster, filter],
+    queryKey: listKey,
     queryFn: async () => ({ ...(await api.listAlertInbox(filter)), filter, page }),
-    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[2] === currentCluster ? prev : undefined),
+    placeholderData: keepSameRead(listKey, ['limit', 'offset']),
     refetchInterval: 30_000,
     retry: false,
     enabled: inbox === 'on',
@@ -137,8 +144,6 @@ export default function AlertInbox() {
   const totalPages = Math.max(1, Math.ceil(total / shown.limit))
   const severities = severityChoices(data?.severities, severity)
   const forbidden = (error as { response?: { status?: number } } | null)?.response?.status === 403
-
-  useEffect(() => setPage(1), [status, severity, mine, openOnly, search, currentCluster])
 
   const open = (id: string | null) => {
     const next = new URLSearchParams(params)
@@ -384,7 +389,8 @@ export default function AlertInbox() {
       </div>
 
       {newSilence && silenceWith && <SilenceModal initial={{}} maxHours={silenceWith.maxHours} onClose={() => setNewSilence(false)} />}
-      {openId && inbox === 'on' && <AlertDetailModal id={openId} store={storeRead} silenceWith={silenceWith} onClose={() => open(null)} />}
+      {/* one window per alert: a note being typed, a sub-window and a save under way stay with the alert they were for */}
+      {openId && inbox === 'on' && <AlertDetailModal key={openId} id={openId} store={storeRead} silenceWith={silenceWith} onClose={() => open(null)} />}
     </div>
   )
 }
@@ -422,22 +428,23 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
     // a queued or running investigation is read again until it ends (the window keeps what it shows meanwhile)
     refetchInterval: (q) => (['queued', 'running'].includes(q.state.data?.investigation?.status ?? '') ? 5_000 : false),
   })
+  // a save names its alert, and its answer goes to that alert's window
   const save = useMutation({
-    mutationFn: (marks: AlertInboxMarks) => api.setAlertInboxMarks(id, marks),
-    onSuccess: (fresh) => {
-      queryClient.setQueryData(['alert-inbox', 'one', id], fresh)
+    mutationFn: ({ alert, marks }: { alert: string; marks: AlertInboxMarks }) => api.setAlertInboxMarks(alert, marks),
+    onSuccess: (fresh, { alert }) => {
+      queryClient.setQueryData(['alert-inbox', 'one', alert], fresh)
       queryClient.invalidateQueries({ queryKey: ['alert-inbox', 'list'] })
       setNote(null)
     },
   })
   // "Investigate now": the answer is the window with its new investigation; a refusal reads the window again
   const start = useMutation({
-    mutationFn: () => api.investigateAlertInboxItem(id),
-    onSuccess: (fresh) => {
-      queryClient.setQueryData(['alert-inbox', 'one', id], fresh)
+    mutationFn: (alert: string) => api.investigateAlertInboxItem(alert),
+    onSuccess: (fresh, alert) => {
+      queryClient.setQueryData(['alert-inbox', 'one', alert], fresh)
       queryClient.invalidateQueries({ queryKey: ['alert-inbox', 'list'] })
     },
-    onError: () => queryClient.invalidateQueries({ queryKey: ['alert-inbox', 'one', id] }),
+    onError: (_err, alert) => queryClient.invalidateQueries({ queryKey: ['alert-inbox', 'one', alert] }),
   })
   const now = investigateNowView(data?.investigate_now, tr)
   const nowNote = start.isError ? investigateErrorText(start.error, tr) : now.note
@@ -546,13 +553,13 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
               <h3 className="mb-1 text-xs font-semibold text-slate-400">{tr('alertInbox.section.handling', 'Handling')}</h3>
               <p className="mb-2 text-xs text-slate-500">{tr('alertInbox.handlingNote', 'Kept in Kubeast for your team; Alertmanager and the alert rule are not changed.')}</p>
               <div className="flex flex-wrap gap-2">
-                <button type="button" disabled={save.isPending} onClick={() => save.mutate({ acknowledged: !data.acknowledged })} className="btn btn-secondary flex items-center gap-1" data-testid="alert-ack">
+                <button type="button" disabled={save.isPending} onClick={() => save.mutate({ alert: id, marks: { acknowledged: !data.acknowledged } })} className="btn btn-secondary flex items-center gap-1" data-testid="alert-ack">
                   <Check className="w-4 h-4" /> {data.acknowledged ? tr('alertInbox.action.unack', 'Undo acknowledge') : tr('alertInbox.action.ack', 'Acknowledge')}
                 </button>
-                <button type="button" disabled={save.isPending} onClick={() => save.mutate({ assignee: data.assignee ? '' : 'me' })} className="btn btn-secondary flex items-center gap-1" data-testid="alert-assign">
+                <button type="button" disabled={save.isPending} onClick={() => save.mutate({ alert: id, marks: { assignee: data.assignee ? '' : 'me' } })} className="btn btn-secondary flex items-center gap-1" data-testid="alert-assign">
                   <UserCheck className="w-4 h-4" /> {data.assignee ? tr('alertInbox.action.unassign', 'Unassign') : tr('alertInbox.action.assign', 'Assign to me')}
                 </button>
-                <button type="button" disabled={save.isPending} onClick={() => save.mutate({ done: !data.done })} className="btn btn-secondary flex items-center gap-1" data-testid="alert-done">
+                <button type="button" disabled={save.isPending} onClick={() => save.mutate({ alert: id, marks: { done: !data.done } })} className="btn btn-secondary flex items-center gap-1" data-testid="alert-done">
                   {data.done ? tr('alertInbox.action.reopen', 'Reopen') : tr('alertInbox.action.done', 'Mark done')}
                 </button>
                 {silenceWith && data.status !== 'resolved' && (
@@ -578,7 +585,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
               />
               <div className="mt-1 flex items-center justify-between text-xs text-slate-500">
                 <span>{data.note_by ? tr('alertInbox.noteBy', 'Last written by {{who}} · {{when}}', { who: data.note_by, when: formatTime(data.note_at) }) : ''}</span>
-                <button type="button" disabled={save.isPending || note === null || note.trim() === data.note} onClick={() => save.mutate({ note: noteValue })} className="btn btn-primary" data-testid="alert-note-save">
+                <button type="button" disabled={save.isPending || note === null || note.trim() === data.note} onClick={() => save.mutate({ alert: id, marks: { note: noteValue } })} className="btn btn-primary" data-testid="alert-note-save">
                   {tr('alertInbox.action.saveNote', 'Save note')}
                 </button>
               </div>
@@ -616,7 +623,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
                   <>
                     <button
                       type="button"
-                      onClick={() => start.mutate()}
+                      onClick={() => start.mutate(id)}
                       disabled={!now.enabled || start.isPending}
                       title={now.enabled ? undefined : now.note}
                       className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-primary-600 px-2 py-1 text-xs text-white hover:bg-primary-500 disabled:opacity-40"

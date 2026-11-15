@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ModelConfigResponse } from '@/services/api'
 import { PROVIDER_CATALOG, getProvider, type ProviderDef } from '@/constants/modelCatalog'
 import { urlProblem } from '@/utils/urlField'
+import { useResultFor } from '@/hooks/useResultFor'
 import { buildOptions, modelListError, modelOptions, splitLimits, type LimitsError } from './helpers'
 
 export function useModelForm() {
@@ -31,7 +32,10 @@ export function useModelForm() {
   const [formLimitsError, setFormLimitsError] = useState<LimitsError | null>(null)
 
   const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
+  // the Test answer, of the values it tested (provider, model, base URL, key variable, CA): an edit of any drops it
+  const [testResult, setTestResult] = useResultFor<{ success: boolean; message: string }>(
+    [formProvider, formModel, formBaseUrl, formApiKeyEnv.trim(), formCaCert.trim()],
+  )
 
 
   const { data: configs, isLoading } = useQuery({

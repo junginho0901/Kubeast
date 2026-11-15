@@ -1,6 +1,7 @@
 // The identity an AI tool call reached its cluster as (services/pkg/auth.Access) and the cluster requests it made
 // (services/pkg/accesstrail), both sent on the tool result event, and what goes under the tool block's name. ai-service
-// writes the same into the saved answer (app/services/ai/access.py `section`); keep the two equal.
+// writes the same into the saved answer (app/services/ai/access.py `section`); keep the two equal
+// (toolAccess.cases.json, which both run).
 
 export interface ToolAccess {
   cluster?: string
@@ -8,10 +9,22 @@ export interface ToolAccess {
   api_key?: string
   user?: string
   groups?: string[]
+  // the role as stored; no_role_group: a custom role with a built-in's name in other capitals or with spaces
   role?: string
+  no_role_group?: boolean
   namespaces?: string[]
   impersonation?: boolean
   mode?: string
+}
+
+// After a role of a built-in's name in other forms, which acts as no role group (auth.TakesBuiltinSlug).
+const NO_ROLE_GROUP = ' (named as a built-in role in other capitals or with spaces: no role group)'
+
+function roleText(access: ToolAccess): string {
+  const role = String(access.role || '')
+  if (role === '*') return 'global admin'
+  if (!role) return 'no role in this cluster'
+  return access.no_role_group ? `role "${escapeHtml(role)}"${NO_ROLE_GROUP}` : `role ${escapeHtml(role)}`
 }
 
 function escapeHtml(s: string): string {
@@ -34,8 +47,7 @@ export function accessLine(access: ToolAccess | null | undefined): string {
   if (access.kind === 'investigator') {
     parts.push('alert investigator')
   } else if (access.kind === 'person' || access.kind === 'api_key') {
-    const role = String(access.role || '')
-    parts.push(role === '*' ? 'global admin' : role ? `role ${escapeHtml(role)}` : 'no role in this cluster')
+    parts.push(roleText(access))
     const namespaces = strings(access.namespaces)
     parts.push(namespaces.length ? 'namespaces ' + namespaces.map(escapeHtml).join(', ') : 'whole cluster')
   }
