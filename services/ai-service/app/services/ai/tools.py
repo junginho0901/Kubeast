@@ -1918,16 +1918,20 @@ def timeline_changes_on() -> bool:
     return switch.env_on("AI_TIMELINE_CHANGES")
 
 
-def changes_view_on() -> bool:
-    """Whether a timeline call may ask the changes view at all: with AI_TIMELINE_CHANGES, or ALERT_INVESTIGATION_CHANGES_FIRST
-    (an investigation's step 0 reads it). Both off, dispatch drops view, as before the view."""
-    return timeline_changes_on() or switch.env_on("ALERT_INVESTIGATION_CHANGES_FIRST")
+def changes_view_on(session_id: object = None) -> bool:
+    """Whether a timeline call of this session may keep the changes view: with AI_TIMELINE_CHANGES, or in an alert
+    investigation (its session id starts "investigation:") with ALERT_INVESTIGATION_CHANGES_FIRST, whose step 0 reads it.
+    Otherwise dispatch drops view, as before the view: a chat keeps none with only the investigation's switch on."""
+    if timeline_changes_on():
+        return True
+    return str(session_id or "").startswith("investigation:") and switch.env_on("ALERT_INVESTIGATION_CHANGES_FIRST")
 
 
 def anomaly_rank_on() -> bool:
     """ANOMALY_RANK_ENABLED (chart features.anomalyRank.enabled, default off; in the ConfigMap every service reads): the
     chat prompt names anomaly_rank and the MCP server lists it. The chat's and an investigation's tool lists follow the
-    cluster's features (features.GATES); dispatch answers it as an unknown function while it is off."""
+    cluster's features (features.GATES); while it is off dispatch answers it as an unknown function and an investigation as a
+    tool outside its read-only list (investigation.runner), as before the tool."""
     return switch.env_on("ANOMALY_RANK_ENABLED")
 
 

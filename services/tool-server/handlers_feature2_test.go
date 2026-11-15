@@ -440,10 +440,11 @@ func TestResourceGraphCallsWindow(t *testing.T) {
 // off a view other than summary or results is refused with the words of before.
 func TestViewWordsFollowTheChangesViewSwitches(t *testing.T) {
 	for _, c := range []struct {
-		chat, stepZero string
-		passes         bool
-	}{{"", "", false}, {"true", "", true}, {"", "true", true}} {
+		chat, investigations, stepZero string
+		passes                         bool
+	}{{"", "", "", false}, {"true", "", "", true}, {"", "", "true", false}, {"", "true", "true", true}} {
 		t.Setenv("AI_TIMELINE_CHANGES", c.chat)
+		t.Setenv("ALERT_INVESTIGATION_ENABLED", c.investigations)
 		t.Setenv("ALERT_INVESTIGATION_CHANGES_FIRST", c.stepZero)
 		for _, view := range []string{"events", "changes"} {
 			err := validateToolArgs(map[string]interface{}{"view": view})

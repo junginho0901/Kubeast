@@ -145,6 +145,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     from app.services.ai import usage as usage_acct
     from app.services.ai.streaming import tool_outcome
     from app.services.ai.tool_turn import run_tool_turn
+    from app.services.ai.tools import anomaly_rank_on
     from app.services.ai_service import ToolContext
     from app.services.tool_whitelists import READONLY_TOOL_NAMES, readonly_tool_filter
 
@@ -173,7 +174,8 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         """The text the model reads, the tool's own answer (None when it did not run) and the call's log entry."""
         entry: dict[str, Any] = {"tool": name, "args": args, "step": step}
         ran, raw = False, None
-        if name not in READONLY_TOOL_NAMES:
+        # anomaly_rank with its switch off is refused as before it was a read-only tool
+        if name not in READONLY_TOOL_NAMES or (name == "anomaly_rank" and not anomaly_rank_on()):
             result = json.dumps({"error": f"'{name}' is not a read-only tool; investigations only read"})
             entry["error"] = "not a read-only tool"
         elif not (await audit_ready())[0]:

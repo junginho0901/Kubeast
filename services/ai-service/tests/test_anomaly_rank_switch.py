@@ -1,7 +1,8 @@
 """anomaly_rank is named to the model only where it is turned on (ANOMALY_RANK_ENABLED, chart
 features.anomalyRank.enabled, off by default): off, the chat's system prompt is SYSTEM_MESSAGE as it was before the tool
 and the MCP server does not list it; on, its three lines follow the lines they belong after. The chat's and an
-investigation's tool lists follow the cluster's features (features.GATES) either way."""
+investigation's tool lists follow the cluster's features (features.GATES) either way; off, dispatch and an investigation
+answer a call of it as they did before the tool."""
 import hashlib
 
 import pytest
@@ -118,3 +119,27 @@ async def test_off_dispatch_answers_anomaly_rank_as_an_unknown_function(monkeypa
     on = service()
     await execute_function_with_context(on, "anomaly_rank", {"namespace": "shop"}, SimpleNamespace(state={}, cache={}))
     on._call_tool_server.assert_awaited_once_with("anomaly_rank", {"namespace": "shop"})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("on", [False, True])
+async def test_an_investigation_runs_it_only_with_the_switch_and_off_refuses_it_as_before_it_was_read_only(monkeypatch, on):
+    import json
+
+    from app.services.investigation import runner
+    from tests.test_alert_investigation import FakeService, cfg, completion, install_loop, row, tool_call
+
+    if on:
+        monkeypatch.setenv("ANOMALY_RANK_ENABLED", "true")
+    else:
+        monkeypatch.delenv("ANOMALY_RANK_ENABLED", raising=False)
+    service = FakeService([completion(calls=[tool_call("c1", "anomaly_rank", {"namespace": "apps"})]), completion(content="## Summary\nok")])
+    audits = []
+    install_loop(monkeypatch, service, audits)
+    out = await runner.investigate(cfg(max_steps=3), row())
+    assert service.executed == ([("anomaly_rank", {"namespace": "apps"})] if on else [])
+    assert ("error" not in out["tool_calls"][0]) if on else out["tool_calls"][0]["error"] == "not a read-only tool"
+    answered = [m for m in service.completions.calls[1]["messages"] if m.get("role") == "tool"][0]["content"]
+    if not on:  # 0.7.8's words
+        assert json.loads(answered) == {"error": "'anomaly_rank' is not a read-only tool; investigations only read"}
+    assert [a["action"] for a in audits] == ["ai.tool.call"]
