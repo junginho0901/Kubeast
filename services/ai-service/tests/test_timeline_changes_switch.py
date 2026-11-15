@@ -1,7 +1,8 @@
 """timeline's changes view is offered to the model only with AI_TIMELINE_CHANGES (chart ai.timelineChanges, off by
 default): off, the chat, alert investigations and the MCP server get timeline and the system prompt as they were before
-the view, and only those differ when it is on. A call naming the view takes it to tool-server only with this switch or
-an investigation's step 0 (ALERT_INVESTIGATION_CHANGES_FIRST); k8s-service's changes route answers 404 otherwise."""
+the view, and only those differ when it is on. A call naming the view takes it to tool-server only with this switch, or
+in an alert investigation with its step 0 on (ALERT_INVESTIGATION_CHANGES_FIRST); k8s-service's changes route answers 404
+without this switch or step 0's (with ALERT_INVESTIGATION_ENABLED)."""
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -109,16 +110,24 @@ def test_the_mcp_read_tools_follow_the_switch(monkeypatch):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("on", [None, "AI_TIMELINE_CHANGES", "ALERT_INVESTIGATION_CHANGES_FIRST"])
-async def test_a_call_naming_the_view_takes_it_to_tool_server_only_with_a_switch_that_reads_it(monkeypatch, on):
+@pytest.mark.parametrize("session, on, keeps", [
+    ("s1", None, False),
+    ("s1", "AI_TIMELINE_CHANGES", True),
+    ("s1", "ALERT_INVESTIGATION_CHANGES_FIRST", False),  # the investigation's switch alone: a chat sends what main sent
+    ("investigation:inv-1", None, False),
+    ("investigation:inv-1", "ALERT_INVESTIGATION_CHANGES_FIRST", True),  # step 0 reads the view
+    ("investigation:inv-1", "AI_TIMELINE_CHANGES", True),
+])
+async def test_a_call_naming_the_view_keeps_it_only_where_a_switch_reads_it(monkeypatch, session, on, keeps):
     for name in ("AI_TIMELINE_CHANGES", "ALERT_INVESTIGATION_CHANGES_FIRST"):
         monkeypatch.delenv(name, raising=False)
     if on:
         monkeypatch.setenv(on, "true")
     service = SimpleNamespace(user_role="admin", _is_tool_allowed=MagicMock(return_value=True),
                               _call_tool_server=AsyncMock(return_value='{"ok": true}'), k8s_service=MagicMock())
-    await execute_function_with_context(service, "timeline", {"view": "changes", "namespace": "shop", "since_time": "4h"}, SimpleNamespace(state={}, cache={}))
-    sent = {"namespace": "shop", "since_time": "4h"} | ({"view": "changes"} if on else {})
+    await execute_function_with_context(service, "timeline", {"view": "changes", "namespace": "shop", "since_time": "4h"},
+                                        SimpleNamespace(session_id=session, state={}, cache={}))
+    sent = {"namespace": "shop", "since_time": "4h"} | ({"view": "changes"} if keeps else {})
     service._call_tool_server.assert_awaited_once_with("timeline", sent)
 
 

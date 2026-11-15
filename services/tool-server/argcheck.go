@@ -468,10 +468,11 @@ func checkSeverity(field, v string) error {
 
 // checkEnum accepts one of a fixed set of words.
 // checkView: policy_reports' summary or results, and timeline's events or changes only while k8s-service serves the
-// changes view (AI_TIMELINE_CHANGES, or ALERT_INVESTIGATION_CHANGES_FIRST for an investigation's step 0); with both off
-// the rule and its words are as before the view.
+// changes view (AI_TIMELINE_CHANGES, or alert investigations on with their step 0 reading it); otherwise the rule and its
+// words are as before the view.
 func checkView(field, v string) error {
-	if config.EnvSwitch("AI_TIMELINE_CHANGES") || config.EnvSwitch("ALERT_INVESTIGATION_CHANGES_FIRST") {
+	if config.EnvSwitch("AI_TIMELINE_CHANGES") ||
+		(config.EnvSwitch("ALERT_INVESTIGATION_ENABLED") && config.EnvSwitch("ALERT_INVESTIGATION_CHANGES_FIRST")) {
 		return checkEnum("summary", "results", "events", "changes")(field, v)
 	}
 	return checkEnum("summary", "results")(field, v)
