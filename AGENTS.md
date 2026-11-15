@@ -115,7 +115,7 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 
 ## 기본 모델
 
-- 아무도 고르지 않았을 때 쓰는 모델(차트 `ai.model`, ai-service 기본값, `install-docker.sh`, `docker-compose.yml`, `scripts/kind-model-*.sh`)은 고정된 스냅샷 ID로 적는다. `scripts/check-model-pins.py`(CI)가 별칭이면 실패하고, 기본값 자리가 새로 생기면 그 목록에 넣는다(`docs/ko/development.md` "기본 모델").
+- 아무도 고르지 않았을 때 쓰는 모델(차트 `ai.model`, ai-service 기본값, `install-docker.sh`, `.env.example`, `docker-compose.yml`, 첫 설정 화면 `SetupAIModelPage`, `scripts/kind-model-*.sh`)은 고정된 스냅샷 ID로 적는다. `scripts/check-model-pins.py`(CI)가 별칭이면 실패하고, 기본값 자리가 새로 생기면 그 목록에 넣는다(`docs/ko/development.md` "기본 모델").
 
 ## 컨테이너 exec
 

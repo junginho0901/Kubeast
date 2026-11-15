@@ -85,6 +85,8 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
 
 `--reset-then-reuse-values` keeps the values you set and adds what the new version brings. `--reuse-values` keeps the defaults of the version you installed, so a value a later version added is missing and the images stay at that version; the chart stops such an upgrade with this hint and leaves the release as it was. A values file of your own copied from `helm show values` of 0.7.7 or later stops the same way. One copied from 0.7.6 or earlier holds no `chartVersion`, and stops on its `global.imageTag`, that version's tag, from 0.7.8 on. Leave `chartVersion` and `global.imageTag` out of a values file of your own. A `global.imageTag` of an image you built yourself, not a release's `vX.Y.Z`, is not stopped.
 
+From 0.7.9 the default model `ai.model` is the snapshot `gpt-4o-mini-2024-07-18`, the same model as `gpt-4o-mini`. It is used only while no model is registered (Admin → AI Models). An OpenAI-compatible gateway behind `ai.baseUrl` (LiteLLM and the like) that maps only the name `gpt-4o-mini` answers that the model does not exist: set `ai.model: gpt-4o-mini`, or add the snapshot name to the gateway.
+
 ### Uninstall
 
 ```bash

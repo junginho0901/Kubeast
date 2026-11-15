@@ -24,7 +24,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
   const navigate = useNavigate()
 
   const [selectedProvider, setSelectedProvider] = useState('openai')
-  const [aiModel, setAiModel] = useState('gpt-4o-mini')
+  const [aiModel, setAiModel] = useState('gpt-4o-mini-2024-07-18')
   const [aiCustomModel, setAiCustomModel] = useState(false) // true = free text input
   // Env var in ai-service that holds the provider key — the key itself is never stored
   const [aiApiKeyEnv, setAiApiKeyEnv] = useState(PROVIDER_CATALOG[0].defaultApiKeyEnv)
