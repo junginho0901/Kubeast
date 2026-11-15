@@ -313,12 +313,19 @@ So these are the same as on the API key path: the tool list, approval cards for 
 - **Rules**:
   - Only claude-code can use `CLAUDE_CODE_OAUTH_TOKEN`, and claude-code does not accept base_url or other providers' key variables.
   - On an install where it is off, saving a new claude-code setting is rejected with 400, and the connection test shows the reason.
-- **Limits**:
-  - Concurrent turns are capped at `maxConcurrent` (default 1; the rest wait).
+- **Limits**: a chat turn needs a slot under two limits, taken in this order.
+  - `maxConcurrent` (default 2) is per ai-service server: how many Claude Code processes one server runs at once, which sets its memory.
+  - `maxConcurrentTotal` (default 0, which means the same number as `maxConcurrent`) is for the whole install: every ai-service replica shares it through the database, so the subscription's use stays within it however many servers run. With 2 per server and 3 servers, 6 turns run at once only when `maxConcurrentTotal` is 6 or more.
+  - A server that stops holding a slot (a crash, a node lost) frees it by itself after 60 seconds.
+  - A run whose server could not refresh its slot for 60 seconds (the database did not answer) loses the slot to the next taker and still finishes. Until it ends the install runs one more than `maxConcurrentTotal`; `maxConcurrent` on each server still holds.
   - One turn is capped at `turnTimeoutSeconds` (default 300 seconds) and `maxTurns` (default 10 model calls).
-  - Each turn starts one Claude Code process (up to about 300 MB). If you raise `maxConcurrent`, also raise `resources.aiService.limits.memory`.
+  - Each turn starts one Claude Code process (up to about 300 MB). While the provider is on, ai-service's memory limit is the larger of `resources.aiService.limits.memory` (default 1Gi) and `ai.providers.claudeCode.memoryLimit` (default 2Gi: the service and 2 chat processes with the investigator's). Raise `memoryLimit` with `maxConcurrent`, about 300 MB for each more; `""` leaves the limit as `resources.aiService.limits.memory` sets it.
+- **Waiting**: a turn whose slot is not free waits up to `queueWaitSeconds` (default 60).
+  - Meanwhile AI Chat and the floating chat show "Waiting for a turn — another question is running".
+  - Past that the answer ends with "Claude Code is busy; ask again in a moment."
+  - Stop leaves the queue at once, and the turn takes no slot.
 - **Alert → AI investigation** also runs on this provider.
-  - Investigations use one slot separate from chat (the investigator runs one at a time), so chat does not wait during an investigation.
-  - With investigation on, up to `maxConcurrent` + 1 Claude Code processes therefore run.
+  - Investigations use one slot per server separate from chat (the investigator runs one at a time) and outside `maxConcurrentTotal`, so chat does not wait during an investigation. With 3 servers, up to 3 investigations run at once.
+  - With investigation on, up to `maxConcurrent` + 1 Claude Code processes therefore run on a server.
   - The step cap is `maxSteps`, the same as with an API key. The last step is a report without tools.
 - **Not supported**: provider model list (built-in list or type the name in).

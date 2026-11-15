@@ -170,7 +170,10 @@ ai:
                            # (in-cluster Ollama, internal LLM gateway).
                            # api_key_env is OPENAI/ANTHROPIC/GEMINI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN (claude-code only) or KUBEAST_AI_KEY_*
   providers:
-    claudeCode: { enabled: false, maxConcurrent: 1, turnTimeoutSeconds: 300, maxTurns: 10 }
+    claudeCode: { enabled: false, maxConcurrent: 2, maxConcurrentTotal: 0, memoryLimit: 2Gi, queueWaitSeconds: 60, turnTimeoutSeconds: 300, maxTurns: 10 }
+    # maxConcurrent: Claude Code runs per ai-service server (memory); maxConcurrentTotal: across every replica
+    # (0 = maxConcurrent); queueWaitSeconds: how long a turn waits for a slot before it ends as busy;
+    # memoryLimit: ai-service's memory limit while the provider is on, if larger than resources.aiService.limits.memory
 
 # Built-in PostgreSQL (false = external DB) and Redis (false = k8s-service caches in memory; tool-server only listens there for cluster changes)
 postgresql:

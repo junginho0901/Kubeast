@@ -123,6 +123,135 @@ tests:
           path: metadata.name
           value: ai-service
 
+  - it: keeps ai-service at its own memory limit while the Claude subscription provider is off
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 1Gi
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.memory
+          value: 256Mi
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: gives ai-service the Claude subscription's memory limit when the provider is on
+    set:
+      ai.providers.claudeCode.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 2Gi
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.memory
+          value: 256Mi
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: keeps a larger ai-service memory limit when the provider is on
+    set:
+      ai.providers.claudeCode.enabled: true
+      resources.aiService.limits.memory: 3Gi
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 3Gi
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: compares the limits as quantities, not as text
+    set:
+      ai.providers.claudeCode.enabled: true
+      resources.aiService.limits.memory: 2500M
+      ai.providers.claudeCode.memoryLimit: 2Gi
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 2500M
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: raises a limit written in decimal units below the provider's
+    set:
+      ai.providers.claudeCode.enabled: true
+      resources.aiService.limits.memory: 1500M
+      ai.providers.claudeCode.memoryLimit: 1.5Gi
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 1.5Gi
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: follows a raised memoryLimit for more Claude Code runs
+    set:
+      ai.providers.claudeCode.enabled: true
+      ai.providers.claudeCode.maxConcurrent: 4
+      ai.providers.claudeCode.memoryLimit: 3Gi
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 3Gi
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: leaves the limit as set when memoryLimit is cleared
+    set:
+      ai.providers.claudeCode.enabled: true
+      ai.providers.claudeCode.memoryLimit: ""
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 1Gi
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: adds no limit to an ai-service that has none
+    set:
+      ai.providers.claudeCode.enabled: true
+      resources.aiService.limits: null
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].resources.limits.memory
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: takes 2Gi for values from before memoryLimit existed
+    set:
+      ai.providers.claudeCode.enabled: true
+      ai.providers.claudeCode.memoryLimit: null
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 2Gi
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
   - it: keeps a cleared suffix for an image built with Claude Code under the plain tag
     set:
       global.imageTag: local
