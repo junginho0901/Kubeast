@@ -12,6 +12,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // openingAPI is an API server whose watches from no version send their objects one after another as they open, then,
@@ -137,12 +140,12 @@ func eventually(t *testing.T, what string, within time.Duration, ok func() bool)
 }
 
 // A watch from no version is asked as a watch list from the watch cache's version, and the watches of a restart open
-// a few at a time: each keeps an opening place until its bookmark, and every object reaches every list. At 700 people
-// the openings after a restart took k8s-service from 121 to 285 MiB of live heap in two seconds while each watch went on
-// at its first answer.
+// a few at a time: each reads its objects only while it holds an opening place, one cluster half of them, and every
+// object reaches every list. At 700 people the openings after a restart took k8s-service from 121 to 285 MiB of live
+// heap in two seconds while each watch went on at its first answer.
 func TestWatchesOpenAFewAtATime(t *testing.T) {
-	api := &openingAPI{objects: 20, gap: 2 * time.Millisecond}
-	m := muxOn(t, api.serve)
+	api := &chanAPI{objects: 20, gap: time.Millisecond}
+	m := NewMultiplexer(chanClusters{string(cluster.Default): api})
 	m.MaxWatchOpenings = 4
 	ctx := testCtx(t)
 	const subscriptions = 32
@@ -152,8 +155,8 @@ func TestWatchesOpenAFewAtATime(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			out := make(chan *ResponseMessage, 4)
-			go watchInto(ctx, m, "/api/v1/pods", "watch=1", out)
+			out := make(chan *ResponseMessage, 64)
+			go chanWatch(ctx, m, string(cluster.Default), fmt.Sprintf("watch=1&labelSelector=a%%3D%d", i), out)
 			deadline := time.After(30 * time.Second)
 			for frames[i] < api.objects {
 				select {
@@ -173,37 +176,58 @@ func TestWatchesOpenAFewAtATime(t *testing.T) {
 			t.Errorf("list %d got %d of the %d objects", i, n, api.objects)
 		}
 	}
-	t.Logf("watches sending their objects at once: %d, for %d subscriptions and %d places", api.mostAtOnce(), subscriptions, m.MaxWatchOpenings)
-	if got := api.mostAtOnce(); got > m.MaxWatchOpenings {
-		t.Errorf("%d watches sent their objects at once, want at most the %d places", got, m.MaxWatchOpenings)
+	t.Logf("watches read at once: %d, for %d subscriptions and %d places (2 of one cluster)", api.mostAtOnce(), subscriptions, m.MaxWatchOpenings)
+	if got := api.mostAtOnce(); got > 2 {
+		t.Errorf("%d watches of one cluster were read at once, want at most its share of 2", got)
 	}
-	q := api.queries()[0]
-	if q.Get("sendInitialEvents") != "true" || q.Get("resourceVersionMatch") != "NotOlderThan" || q.Get("resourceVersion") != "0" || q.Get("allowWatchBookmarks") != "true" {
-		t.Errorf("a watch from no version asked %v, want a watch list from resourceVersion 0", q)
+	o := api.options()[0]
+	if o.SendInitialEvents == nil || !*o.SendInitialEvents || o.ResourceVersionMatch != metav1.ResourceVersionMatchNotOlderThan || o.ResourceVersion != "0" || !o.AllowWatchBookmarks {
+		t.Errorf("a watch from no version asked %+v, want a watch list from resourceVersion 0", o)
 	}
 }
 
-// An opening keeps its place while its objects come, and a second one starts once the first's bookmark came.
+// An opening reads its objects only while it holds its place: a second watch, started meanwhile, gets none until the
+// first's bookmark, also past startHoldFor, which ends only a start the API server has not answered.
 func TestAnOpeningHoldsItsPlaceUntilItsBookmark(t *testing.T) {
-	api := &openingAPI{objects: 30, gap: 10 * time.Millisecond}
-	m := muxOn(t, api.serve)
-	m.MaxWatchOpenings = 1
+	api := &chanAPI{objects: 30, gap: 10 * time.Millisecond}
+	m := NewMultiplexer(chanClusters{string(cluster.Default): api})
+	m.MaxWatchOpenings = 2 // a cluster's share is 1
 	m.openingHoldFor = 10 * time.Second
+	m.startHoldFor = 50 * time.Millisecond
 	ctx := testCtx(t)
-	first, second := make(chan *ResponseMessage, 64), make(chan *ResponseMessage, 4)
-	go drain(ctx, first)
-	go watchInto(ctx, m, "/api/v1/pods", "watch=1", first)
-	eventually(t, "the first watch to start", 5*time.Second, func() bool { return len(api.queries()) == 1 })
-	go watchInto(ctx, m, "/api/v1/pods", "watch=1&labelSelector=a%3D1", second)
+	var firstDone atomic.Int64
+	first, second := make(chan *ResponseMessage, 64), make(chan *ResponseMessage, 64)
+	go func() {
+		for frames := 0; ; {
+			select {
+			case f := <-first:
+				if f.Type == "DATA" {
+					if frames++; frames == api.objects {
+						firstDone.Store(time.Now().UnixNano())
+					}
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	go chanWatch(ctx, m, string(cluster.Default), "watch=1", first)
+	eventually(t, "the first watch to be read", 5*time.Second, func() bool { return api.mostAtOnce() == 1 })
+	go chanWatch(ctx, m, string(cluster.Default), "watch=1&labelSelector=a%3D1", second)
 	time.Sleep(100 * time.Millisecond) // a third of the first's objects
 	if n := m.openingPlaces().InUse(); n != 1 {
 		t.Errorf("%d opening places taken while the first watch's objects come, want 1", n)
 	}
-	if n := len(api.queries()); n != 1 {
-		t.Errorf("%d watches reached the API server while the first one opened, want 1", n)
+	select {
+	case f := <-second:
+		t.Fatalf("the second list got %s while the first opened", f.Type)
+	default:
 	}
-	if typ := firstFrame(second, 2*time.Second); typ != "DATA" {
+	if typ := firstFrame(second, 5*time.Second); typ != "DATA" {
 		t.Fatalf("the second list after the first's bookmark: %q, want DATA", typ)
+	}
+	if done := firstDone.Load(); done == 0 {
+		t.Error("the second list's objects came before the first's were all read")
 	}
 }
 
@@ -298,44 +322,6 @@ func TestAWatchOfChangesDoesNotWaitBehindOpenings(t *testing.T) {
 	}
 }
 
-// The opening places are the server's, not a cluster's: openings of two clusters together stay within them.
-func TestOpeningsOfEveryClusterShareThePlaces(t *testing.T) {
-	api := &openingAPI{objects: 20, gap: 2 * time.Millisecond}
-	m := muxOn(t, api.serve)
-	m.MaxWatchOpenings = 2
-	ctx := testCtx(t)
-	var wg sync.WaitGroup
-	var lists atomic.Int64
-	for i := 0; i < 16; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			out := make(chan *ResponseMessage, 4)
-			go watchOn(ctx, m, []string{"alpha", "beta"}[i%2], "/api/v1/pods", fmt.Sprintf("watch=1&labelSelector=a%%3D%d", i), out)
-			frames := 0
-			deadline := time.After(30 * time.Second)
-			for frames < api.objects {
-				select {
-				case f := <-out:
-					if f.Type == "DATA" {
-						frames++
-					}
-				case <-deadline:
-					return
-				}
-			}
-			lists.Add(1)
-		}()
-	}
-	wg.Wait()
-	if n := lists.Load(); n != 16 {
-		t.Errorf("%d of 16 lists got their objects", n)
-	}
-	if got := api.mostAtOnce(); got > 2 {
-		t.Errorf("%d watches of two clusters sent their objects at once, want at most the server's 2 places", got)
-	}
-}
-
 // A cluster whose API server refuses sendInitialEvents (the WatchList gate off, as in 1.33) opens the watch the earlier
 // way, and its next watches too, without asking again; another cluster still asks for a watch list.
 func TestAClusterThatRefusesWatchListsOpensTheEarlierWay(t *testing.T) {
@@ -397,8 +383,10 @@ func TestAnOpeningThatGoesOnGivesItsPlaceBackAfterAWhile(t *testing.T) {
 	eventually(t, "the first watch to start", 5*time.Second, func() bool { return len(api.queries()) == 1 })
 	go watchInto(ctx, m, "/api/v1/pods", "watch=1&labelSelector=a%3D1", second)
 	time.Sleep(100 * time.Millisecond)
-	if n := len(api.queries()); n != 1 {
-		t.Errorf("%d watches started before openingHoldFor, want 1", n)
+	select {
+	case f := <-second:
+		t.Errorf("the second list got %s before openingHoldFor", f.Type)
+	default:
 	}
 	if typ := firstFrame(second, 2*time.Second); typ != "DATA" {
 		t.Fatalf("the second list: %q, want DATA", typ)

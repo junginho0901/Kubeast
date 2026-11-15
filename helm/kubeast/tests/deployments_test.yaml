@@ -81,6 +81,32 @@ tests:
               secretName: rds-ca
         template: deployments.yaml
 
+  - it: gives k8s-service the live lists' opening places, 8 by default
+    documentSelector:
+      path: metadata.name
+      value: k8s-service
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WS_WATCH_OPENING_CONCURRENCY
+            value: "8"
+        template: deployments.yaml
+
+  - it: gives k8s-service the opening places multicluster.wsWatchOpeningConcurrency sets
+    set:
+      multicluster.wsWatchOpeningConcurrency: 4
+    documentSelector:
+      path: metadata.name
+      value: k8s-service
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WS_WATCH_OPENING_CONCURRENCY
+            value: "4"
+        template: deployments.yaml
+
   - it: keeps the CA out of pods that do not talk to the database
     set:
       postgresql.sslRootCert.secretName: rds-ca

@@ -55,17 +55,6 @@ func TestWSMemoryPerUser(t *testing.T) {
 
 	peer := startMemPeer(t)
 	cfg := &rest.Config{Host: peer.api, QPS: 100, Burst: 200, TLSClientConfig: rest.TLSClientConfig{Insecure: true}}
-	// WS_MEMORY_H2_STREAM_BUFFER caps what the API server may send on one watch before it is read (HTTP/2 flow
-	// control; Go's default is 4 MiB a stream).
-	streamBuffer, _ := strconv.Atoi(os.Getenv("WS_MEMORY_H2_STREAM_BUFFER"))
-	if streamBuffer > 0 {
-		cfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
-			if tr, ok := rt.(*http.Transport); ok {
-				tr.HTTP2 = &http.HTTP2Config{MaxReceiveBufferPerStream: streamBuffer}
-			}
-			return rt
-		}
-	}
 	d, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -88,8 +77,8 @@ func TestWSMemoryPerUser(t *testing.T) {
 	peer.crowd(t, m, wsURL, [][]memWatch{memWatches(memPodsOnNode(0), memNodes(), memDeployments(""))}, nil)
 
 	var summary strings.Builder
-	fmt.Fprintf(&summary, "%s, %s %s/%s, GOGC default, GOMEMLIMIT %q, HTTP/2 stream buffer %d (0 = Go's 4 MiB), %s decoder, memory gate %v\n", time.Now().Format(time.RFC3339),
-		runtime.Version(), runtime.GOOS, runtime.GOARCH, os.Getenv("GOMEMLIMIT"), streamBuffer, decoder, gate)
+	fmt.Fprintf(&summary, "%s, %s %s/%s, GOGC default, GOMEMLIMIT %q, the watches' HTTP/2 stream buffer %d, %s decoder, memory gate %v\n", time.Now().Format(time.RFC3339),
+		runtime.Version(), runtime.GOOS, runtime.GOARCH, os.Getenv("GOMEMLIMIT"), watchStreamBuffer, decoder, gate)
 	fmt.Fprintf(&summary, "one event on the wire: pod %d bytes, node %d bytes, deployment %d bytes\n", len(watchPodJSON(0)), len(memNodeJSON(0)), len(memDeploymentJSON(0)))
 	fmt.Fprintf(&summary, "%-12s %6s %6s %9s %9s %9s %8s %9s %9s %9s %9s %7s %7s %6s\n", "scenario", "people", "watch", "live/p", "stack/p", "gor/p", "inuse/p", "rss/p", "peak/p", "left/p", "alloc/p", "open", "refused", "waits")
 	for _, sc := range []struct {

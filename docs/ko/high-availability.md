@@ -108,7 +108,7 @@ autoscaling:
 - k8s-service 파드는 저마다 클러스터를 감시하므로, 두 파드에 간 두 요청이 잠깐 감시 이벤트 하나만큼 다를 수 있습니다.
 - k8s-service 파드는 맡은 클러스터를 저마다 목록으로 읽고 감시합니다. API 서버는 이것을 파드 수만큼 받습니다.
 - k8s-service 파드 하나의 메모리는 1대일 때와 같고, 합은 파드 수만큼 늡니다.
-- 파드를 지키는 한도(메모리, 동시 작업, 실시간 감시 `multicluster.wsMaxSubscriptions`)는 파드마다입니다. 클러스터로 보내는 요청 속도(`multicluster.clientQPS`)도 파드마다라, N대면 N배까지 보낼 수 있습니다.
+- 파드를 지키는 한도(메모리, 동시 작업, 실시간 감시 `multicluster.wsMaxSubscriptions`와 그 열기 `multicluster.wsWatchOpeningConcurrency`)는 파드마다입니다. 클러스터로 보내는 요청 속도(`multicluster.clientQPS`)도 파드마다라, N대면 N배까지 보낼 수 있습니다.
 
 ## 크기 표
 

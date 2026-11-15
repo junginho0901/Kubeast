@@ -90,7 +90,7 @@ func (n rowNegotiator) SupportedMediaTypes() []runtime.SerializerInfo { return n
 // newRowWatchClient is a dynamic client of cfg, as client-go makes one, whose objects decode by shapeOf. It speaks JSON
 // only.
 func newRowWatchClient(cfg *rest.Config, shapeOf watchShapeOf) (dynamic.Interface, error) {
-	c := dynamic.ConfigFor(cfg)
+	c := dynamic.ConfigFor(watchStreamConfig(cfg))
 	c.ContentType, c.AcceptContentTypes = runtime.ContentTypeJSON, runtime.ContentTypeJSON
 	var infos []runtime.SerializerInfo
 	for _, info := range c.NegotiatedSerializer.SupportedMediaTypes() {

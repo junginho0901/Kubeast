@@ -232,6 +232,7 @@ multicluster:
   clientBurst: 200
   reviewQPS: 0              # 0 = the access checks share clientQPS; see architecture.md "Many users"
   reviewBurst: 0
+  wsWatchOpeningConcurrency: 8  # live lists of every cluster receiving their first objects at once, half at most of one cluster; see architecture.md "Many users"
 ```
 
 ## Redis users
