@@ -5,7 +5,7 @@ a values file kept from an older release can still hold it. scripts/chart-remove
 the latest release's values.yaml is gone from values.yaml and not stopped here. upgrade-values.yaml renders first (Helm
 takes a folder's files in reverse name order), so values of an earlier release get its hint before this one.
 */}}
-{{- $removed := dict }}
+{{- $removed := dict "pdb.minAvailable" "set pdb.maxUnavailable instead (the pods of one service a node drain may evict at once, 1 by default); only a service set to two or more replicas gets a PodDisruptionBudget" }}
 {{- range $path, $instead := $removed }}
 {{- $node := $.Values }}
 {{- $found := true }}
