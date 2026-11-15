@@ -84,6 +84,9 @@ func RegisterCluster(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/timeline", h.GetClusterTimeline)
 	r.Get("/api/v1/namespaces/{namespace}/timeline", h.GetNamespaceTimeline)
 	r.Get("/api/v1/namespaces/{namespace}/timeline/{kind}/{name}", h.GetResourceTimeline)
+	// what changed in a window: rollouts, writes, scales, nodes, syncs, restarts
+	r.Get("/api/v1/timeline/changes", h.GetClusterTimelineChanges)
+	r.Get("/api/v1/namespaces/{namespace}/timeline/changes", h.GetNamespaceTimelineChanges)
 
 	// Topology
 	r.Get("/api/v1/topology/namespace/{namespace}", h.GetNamespaceTopology)

@@ -15,7 +15,7 @@ import time
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from app.services.ai import screen_permissions
-from app.services.ai.tools import CALLS_DESCRIPTION, CALLS_PARAM, CALLS_SINCE_PARAM, CALLS_WINDOW_PARAMS
+from app.services.ai.tools import CALLS_DESCRIPTION, CALLS_PARAMS, offer_timeline_changes, without_params
 from app.services.investigation import settings as investigation_settings
 from app.services.tool_whitelists import WRITE_TOOL_NAMES
 
@@ -123,7 +123,7 @@ GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
 # tool name → (its parameters, the words of its description about them, does this cluster serve them): a cluster that
 # does not, or features unknown, gets the definition without them — the model is not handed what can only answer "off".
 PARAM_GATES: Dict[str, tuple[tuple[str, ...], str, Callable[[Dict[str, Any], str], bool]]] = {
-    "resource_graph": ((CALLS_PARAM, CALLS_SINCE_PARAM, *CALLS_WINDOW_PARAMS), CALLS_DESCRIPTION, _call_graph_on),
+    "resource_graph": (CALLS_PARAMS, CALLS_DESCRIPTION, _call_graph_on),
 }
 
 # tool name → (scope, the permission that names it) of the screen's route. Without what the route asks the call could
@@ -208,16 +208,6 @@ def gated_names(names: Iterable[str], features: Optional[Dict[str, Any]], cluste
     return out
 
 
-def _without_params(tool: Dict, params: tuple[str, ...], words: str) -> Dict:
-    fn = dict(tool.get("function") or {})
-    parameters = dict(fn.get("parameters") or {})
-    parameters["properties"] = {k: v for k, v in (parameters.get("properties") or {}).items() if k not in params}
-    fn["parameters"] = parameters
-    if words and isinstance(fn.get("description"), str):
-        fn["description"] = fn["description"].replace(words, "")
-    return {**tool, "function": fn}
-
-
 def filter_tools(tools: List[Dict], features: Optional[Dict[str, Any]], cluster: Optional[str], token=None) -> List[Dict]:
     kept: List[Dict] = []
     for tool in tools:
@@ -227,7 +217,7 @@ def filter_tools(tools: List[Dict], features: Optional[Dict[str, Any]], cluster:
             continue
         gate = PARAM_GATES.get(name) if isinstance(name, str) else None
         if gate is not None and (features is None or not gate[2](features, cluster or "")):
-            tool = _without_params(tool, gate[0], gate[1])
+            tool = without_params(tool, gate[0], gate[1])
         kept.append(tool)
     return kept
 
@@ -237,7 +227,8 @@ def _names(tools: List[Dict]) -> List[str]:
 
 
 async def gate_tools(tools: List[Dict], service) -> List[Dict]:
-    """The chat's tool list for the service's active cluster and token."""
+    """The chat's tool list for the service's active cluster and token, timeline's changes view only with its switch."""
+    tools = offer_timeline_changes(tools)
     names = _names(tools)
     if not any(gated(n) or n in PARAM_GATES for n in names):
         return tools

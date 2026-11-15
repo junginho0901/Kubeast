@@ -381,6 +381,14 @@ ai:
   # log (redacted, length-capped). Debugging only — off keeps them out of the
   # cluster log pipeline.
   debugDump: false
+  # The AI tool timeline's changes view (view: changes — what changed in a
+  # window: rollouts compared with the revision before, ConfigMap and Secret
+  # writes as metadata, Helm revisions, HPA scales, node conditions, Argo CD
+  # syncs, restarts; no value read) and the chat's instruction to read it first
+  # when asked why something broke. Off: the chat, alert investigations and the
+  # MCP server are offered timeline without it and the chat's instructions do
+  # not name it; k8s-service still serves the route.
+  timelineChanges: false
   # Provider claude-code: the chat with a Claude Pro/Max subscription instead of
   # an API key. Claude Code makes each model call and the chat's own tools answer
   # its tool calls (same tools, approval card for writes, masking and audit).
@@ -641,6 +649,13 @@ gateway:
   # [+ port], no path. Empty = same host and the Ingress host only.
   allowedOrigins: []
   #  - https://console.example.com
+  # true: each access log line, after nginx's default "combined" fields, also
+  # gives the request's time and the service's connect, header and response
+  # times in seconds ($request_time $upstream_connect_time
+  # $upstream_header_time $upstream_response_time), the service's address and
+  # the client's port. false = nginx's default lines.
+  accessLog:
+    upstreamTimes: false
 
 # --- Ingress (optional) ---
 ingress:
@@ -846,7 +861,8 @@ features:
   # (features.traceStore), each through the door of its own tools
   # (resource.pod.read, get pods/log, audited as k8s.pod.logs.logql and
   # k8s.traces.query); without one, its checks are listed as not run. Off: the
-  # route answers 404, reads nothing and the AI is not offered the tool.
+  # route answers 404, reads nothing, the AI is not offered the tool and the
+  # chat's system prompt and the MCP tool list do not name it.
   anomalyRank:
     enabled: false
     maxQueries: 12           # store queries one answer may make
@@ -1083,7 +1099,7 @@ features:
   # path with the step of each link. Read as the user: the traces need a grant
   # on the whole cluster (as the Prometheus reads), the Hubble lines
   # resource.networkflow.read. Off: include calls reads nothing and says so,
-  # and the AI is not offered it.
+  # and the AI (the chat, investigations and the MCP tool list) is not offered it.
   callGraph:
     enabled: false
   # Alert store reads for the AI's alerts_list (off by default): an
