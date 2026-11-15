@@ -67,7 +67,7 @@ cd Kubeast
   - kind 클러스터라면 `kind get kubeconfig --internal --name <클러스터>`를 붙여 넣고, 클러스터와 통신하는 컨테이너를 kind 네트워크에 연결하세요: `docker network connect kind <폴더>-auth-service-1`, `k8s-service`와 `tool-server`도 같은 방식입니다(`<폴더>`는 내려받은 폴더 이름, 곧 Compose 프로젝트 이름).
 - 밖으로 여는 포트는 Gateway 하나뿐입니다. 다른 서비스에는 `docker compose exec`로 들어가세요.
 - 스크립트를 다시 실행해도(예: `--port`를 바꿔서) `.env`의 비밀번호와 키는 그대로 둡니다. 데이터베이스 볼륨이 처음 만들 때의 비밀번호를 기억하기 때문입니다.
-- 컨테이너를 멈추거나 바꿀 때(`docker compose stop`, 새 이미지로 `up`) Kubeast 서비스마다 마무리할 시간 35초를 줍니다(`stop_grace_period`). 기본 `podShutdown.preStopSeconds: 5`일 때 차트의 종료 유예와 같습니다. Docker 기본값 10초면 마무리 도중에 멈춥니다.
+- 컨테이너를 멈추거나 바꿀 때(`docker compose stop`, 새 이미지로 `up`) Kubeast 서비스마다 마무리할 시간 35초를 줍니다(`stop_grace_period`). 기본 `podShutdown.preStopSeconds: 5`일 때, 터미널 드레인을 하지 않는 파드에 차트가 주는 종료 유예와 같습니다. 여기서는 k8s-service도 드레인하지 않습니다. Compose는 컨테이너를 멈춘 뒤에 다음 컨테이너를 띄우므로 터미널을 넘겨받을 다른 서버가 없습니다. Docker 기본값 10초면 마무리 도중에 멈춥니다.
 
 `docker-compose`는 게시된 이미지를 pull합니다. 기본은 내려받은 태그의 버전이며 `KUBEAST_TAG`로 바꿀 수 있습니다. 소스에서 빌드하려면 다음을 실행하세요.
 

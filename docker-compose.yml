@@ -1,7 +1,9 @@
 # Only the gateway is published. Every other service is reachable inside msa-network only;
 # use `docker compose exec` (or an override file) to reach one directly.
-# stop_grace_period 35s is the chart's grace period (30 s + podShutdown.preStopSeconds 5): Docker's own 10 s would
-# stop a service in the middle of its shutdown.
+# stop_grace_period 35s is the chart's grace period for a pod that runs no terminal drain: podShutdown.preStopSeconds 5,
+# the waits after SIGTERM (25 s at most, k8s-service's) and 5 s to spare. Docker's own 10 s would stop a service in the
+# middle of its shutdown. k8s-service runs no terminal drain here: Compose stops a container before it starts the next,
+# so no other server would take its terminals over.
 services:
   # The services run as UID 65532; Docker creates named volumes owned by root.
   volume-init:
