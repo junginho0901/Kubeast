@@ -226,3 +226,14 @@ async def test_resource_graph_offers_its_calls_only_where_the_call_graph_is_on()
     out = await features.gate_tools(tool, SimpleNamespace(cluster_name="c1", k8s_service=k8s))
     assert "include" in out[0]["function"]["parameters"]["properties"]
     assert k8s.get_features.await_count == 1
+
+
+def test_the_mcp_read_tools_offer_resource_graphs_calls_only_with_call_graph_enabled(monkeypatch):
+    from app import mcp_server
+
+    monkeypatch.delenv("CALL_GRAPH_ENABLED", raising=False)
+    off = mcp_server._read_tools()["resource_graph"]
+    assert set(off.input_schema["properties"]) == {"namespace", "cluster"} and "calls" not in off.description
+    monkeypatch.setenv("CALL_GRAPH_ENABLED", "true")
+    on = mcp_server._read_tools()["resource_graph"]
+    assert {"include", "since"} <= set(on.input_schema["properties"]) and "include [\"calls\"]" in on.description
