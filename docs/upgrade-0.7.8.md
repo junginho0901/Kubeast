@@ -344,7 +344,7 @@ If you set `KUBEAST_TAG`, set it to `v0.7.8` or unset it.
 
 What differs from the chart:
 
-- **Stop wait**: the seven Kubeast services and Redis get 35 s to stop (`stop_grace_period`; Docker's default is 10 s), what the chart gives a service with the defaults. `docker compose stop` and the upgrade can take that long per container. There is no `preStop` wait, terminal drain, PodDisruptionBudget or HPA (#856).
+- **Stop wait**: the seven Kubeast services get 35 s to stop and Redis and PostgreSQL 30 s, the Kubernetes default (`stop_grace_period`; Docker's default is 10 s), what the chart gives each with the defaults. `docker compose stop` and the upgrade can take that long per container. There is no `preStop` wait, terminal drain, PodDisruptionBudget or HPA (#856).
 - **Redis**: as before, with no users and no password, reachable only on the Compose network (#866 changes the chart only).
 - **Database limits**: the same session limits and pools apply by default. To change them, set `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS` (`0` sets nothing) or `DB_POOL_MAX_AUTH`, `DB_POOL_MAX_SESSION`, `DB_POOL_MAX_K8S`, `DB_POOL_MAX_AI` in `.env`. Compose's PostgreSQL keeps its default `max_connections` (100), which one container of each service fits (#868).
 - **Custom role bindings**: `IMPERSONATION_CUSTOM_ROLES` in `.env` takes role names, as before. Bind the new group of a name outside ASCII on your clusters ([6](#6-after-you-upgrade)).

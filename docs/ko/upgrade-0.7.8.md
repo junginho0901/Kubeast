@@ -344,7 +344,7 @@ git fetch --tags && git checkout v0.7.8
 
 차트와 다른 점은 다음과 같습니다.
 
-- **멈출 때 기다림**: Kubeast 서비스 일곱 개와 Redis에 멈출 시간을 35초 줍니다(`stop_grace_period`. Docker 기본값은 10초). 기본값일 때 차트가 서비스에 주는 시간입니다. `docker compose stop`과 업그레이드는 컨테이너마다 그만큼 걸릴 수 있습니다. `preStop` 기다림, 터미널 드레인, PodDisruptionBudget, HPA는 없습니다(#856).
+- **멈출 때 기다림**: Kubeast 서비스 일곱 개에 멈출 시간을 35초, Redis와 PostgreSQL에 Kubernetes 기본값인 30초를 줍니다(`stop_grace_period`. Docker 기본값은 10초). 기본값일 때 차트가 각각에 주는 시간입니다. `docker compose stop`과 업그레이드는 컨테이너마다 그만큼 걸릴 수 있습니다. `preStop` 기다림, 터미널 드레인, PodDisruptionBudget, HPA는 없습니다(#856).
 - **Redis**: 전과 같이 사용자도 비밀번호도 없고 Compose 네트워크 안에서만 닿습니다(#866은 차트만 바꿉니다).
 - **데이터베이스 한도**: 같은 세션 한도와 풀이 기본으로 적용됩니다. 바꾸려면 `.env`에 `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS`(`0`이면 두지 않음)나 `DB_POOL_MAX_AUTH`, `DB_POOL_MAX_SESSION`, `DB_POOL_MAX_K8S`, `DB_POOL_MAX_AI`를 넣습니다. Compose의 PostgreSQL은 기본 `max_connections`(100)를 그대로 쓰며, 서비스마다 컨테이너 하나면 그 안에 들어갑니다(#868).
 - **사용자 정의 역할 바인딩**: `.env`의 `IMPERSONATION_CUSTOM_ROLES`는 전과 같이 역할 이름을 받습니다. ASCII가 아닌 이름의 새 그룹은 클러스터에 바인딩합니다([6](#6-업그레이드한-뒤)).
