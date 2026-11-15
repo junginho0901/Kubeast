@@ -205,7 +205,7 @@ templates would change too). `back-values` is the way back then: `helm upgrade -
 checkout's chart, if its files are the start's, and the same hash check.
 
 helm runs in the background of the script, so Ctrl-C, TERM or a closed terminal (HUP) reaches its trap at once: it
-stops helm, rolls back to the revision before the switch and checks the hashes (`ROLLBACK_BROKEN` and exit 3 when they
+stops helm (SIGINT, which helm ends as a failed upgrade; SIGTERM if it is still there 30 s later), rolls back to the revision before the switch and checks the hashes (`ROLLBACK_BROKEN` and exit 3 when they
 differ, the start's files kept). The rollbacks, there and in `back`, ignore those signals until they end; after a
 closed terminal the rollback writes to `<start file>.log`. Each revision the script makes is listed (`<start>.made`)
 before helm runs, so a release it left `pending-upgrade` or `pending-rollback` (its shell killed outright) is put back
@@ -265,6 +265,7 @@ the laptop went away before that could run:
   (`back-values` when it names revisions made by something else).
 - `ps -ef | grep 'kubectl.*port-forward'` — a port-forward left by a worker killed within the second before its shell
   looked.
+- `$TMPDIR/e2e-fault-*` — the kubeconfig copy of a worker killed outright (any other run removes its own on exit).
 - `kubectl --context kind-test2 get ns | grep e2e-w6` — delete them, then `kubectl --context kind-test2 uncordon <node>`.
 - Clusters named `e2e-w6-*` in the cluster list — delete them.
 - AI Chat conversations titled `e2e-w6-slots-*` — delete them.

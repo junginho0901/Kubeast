@@ -147,9 +147,18 @@ run_helm() {
   HELM_PID=""
   return "$rc"
 }
+# helm ends an upgrade on SIGINT as failed ("context canceled"); on SIGTERM it stops where it is and leaves the revision
+# pending-upgrade (both roll back the same). INT first, TERM if it is still there 30 s later.
 on_signal() {
   [ "$1" = 129 ] && GOT_HUP=1
-  if [ -n "$HELM_PID" ]; then kill -TERM "$HELM_PID" 2>/dev/null || true; wait "$HELM_PID" 2>/dev/null || true; HELM_PID=""; fi
+  if [ -n "$HELM_PID" ]; then
+    kill -INT "$HELM_PID" 2>/dev/null || true
+    local i=0
+    while kill -0 "$HELM_PID" 2>/dev/null && [ "$i" -lt 30 ]; do sleep 1; i=$((i + 1)); done
+    kill -TERM "$HELM_PID" 2>/dev/null || true
+    wait "$HELM_PID" 2>/dev/null || true
+    HELM_PID=""
+  fi
   exit "$1"
 }
 quiet_signals() { trap '' INT TERM HUP; }
