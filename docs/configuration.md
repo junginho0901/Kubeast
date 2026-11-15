@@ -174,6 +174,9 @@ redis:
   password: ""          # requirepass — generated when empty (REDIS_PASSWORD)
 networkPolicy:
   enabled: true         # default deny, plus only the flows the services use. Harmless on CNIs that do not enforce NetworkPolicy (kindnet, etc.)
+  aiEgress:
+    allowListOnly: false  # true: ai-service connects out only to allowExternalEgressCIDRs, tool-server only to clusterAPIs and apiserverCIDR (cluster-requirements.md §15)
+    clusterAPIs: []       # the API servers of the registered clusters, this one's too: a CIDR opens 443 and 6443, {cidr, port} another port
 
 # Gateway exposure
 gateway:

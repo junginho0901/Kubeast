@@ -35,6 +35,8 @@ const elements = (html: string) =>
     .replace(/<link rel="preload" as="image" href="\/icon\.svg"[^>]*>/g, '')
     .split(/<[a-z]+\b[^>]*data-testid="(?:message-actions-row|floating-copy)"/)[0]
     .matchAll(/<([a-zA-Z][\w-]*)/g)].map((m) => m[1].toLowerCase())
+// the images the answer drew, past the avatar
+const imagesOf = (html: string) => [...html.matchAll(/<img\b[^>]*>/g)].map((m) => m[0]).filter((tag) => !tag.includes('src="/icon.svg"'))
 const anchor = (html: string, href: string) => new RegExp(`<a\\b[^>]*href="${href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*>`).exec(html)?.[0] ?? 'no such link'
 
 describe.each(SURFACES)('%s: what an answer cannot draw', (_name, render) => {
@@ -368,8 +370,14 @@ describe.each(SURFACES)('%s: what an answer keeps', (_name, render) => {
     }
   })
 
-  it('an image keeps its address and its text', () => {
-    expect(render('![A chart](https://example.test/a.png "Title")')).toContain('<img src="https://example.test/a.png" alt="A chart" title="Title"/>')
+  it('an image of another host is a link to its address, so drawing the answer fetches nothing', () => {
+    const html = render('![A chart](https://example.test/a.png "Title") and <img src="https://example.test/b.png" alt="">')
+    expect(imagesOf(html)).toEqual([])
+    expect(html).not.toContain('as="image" href="https://example.test')
+    expect(anchor(html, 'https://example.test/a.png')).toContain('title="Title"')
+    expect(anchor(html, 'https://example.test/a.png')).toContain('target="_blank"')
+    expect(html).toContain('>A chart</a>')
+    expect(html).toContain('>https://example.test/b.png</a>')
   })
 
   it('an image on the console\'s own host keeps its text and loses its address, so drawing the answer asks the console nothing', () => {
@@ -380,11 +388,11 @@ describe.each(SURFACES)('%s: what an answer keeps', (_name, render) => {
         'https://console.example.test/api/v1/x', 'http://CONSOLE.example.test:8443/api/v1/x', '/\\console.example.test/api/v1/x',
       ]) {
         const html = render(`![shown](${src}) and <img src="${src}" alt="raw">`)
-        const images = [...html.matchAll(/<img\b[^>]*>/g)].map((m) => m[0]).filter((tag) => /alt="(?:shown|raw)"/.test(tag))
-        expect(images).toEqual(['<img alt="shown"/>', '<img alt="raw"/>'])
+        expect(imagesOf(html)).toEqual([])
+        expect(html).toContain('<span>shown</span> and <span>raw</span>')
         expect([...html.matchAll(/<link rel="preload" as="image" href="([^"]*)"/g)].map((m) => m[1]).filter((href) => href !== '/icon.svg')).toEqual([])
       }
-      expect(render('![A chart](https://example.test/a.png)')).toContain('<img src="https://example.test/a.png" alt="A chart"/>')
+      expect(anchor(render('![A chart](https://example.test/a.png)'), 'https://example.test/a.png')).toContain('target="_blank"')
     } finally {
       vi.unstubAllGlobals()
     }

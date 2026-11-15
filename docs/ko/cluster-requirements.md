@@ -520,6 +520,16 @@ service:
 | EKS 외부 클러스터·S3 | IRSA 롤(`aws.irsaRoleArn` 등) |
 | 사설 CA·TLS를 가로채는 프록시 | `customCAs`에 적은 Secret·ConfigMap이 릴리스 네임스페이스에 먼저 있어야 합니다. 없으면 새 파드가 볼륨을 기다리느라 뜨지 않으며, 이전 파드는 계속 응답합니다 |
 
+### AI 서비스가 밖으로 여는 연결
+
+기본으로 ai-service는 공인 주소 어디로든 443(모델 공급자), tool-server는 어느 주소로든 443·6443(등록한 클러스터의 API 서버)으로 연결할 수 있습니다. `networkPolicy.aiEgress.allowListOnly: true`(기본 꺼짐)를 켜면 둘 다 적은 주소로만 나갑니다. 모델이 클러스터에서 읽은 글이 둘을 다른 곳으로 연결하게 할 수 없습니다.
+
+- ai-service: `networkPolicy.allowExternalEgressCIDRs`에 부르는 모델 공급자·게이트웨이를 적습니다. Anthropic은 Claude API의 고정 주소를 공개합니다(`160.79.104.0/23`, `153.61.224.0/22`, IPv6 `2607:6bc0::/48` — platform.claude.com "IP addresses"). Claude Code(공급자 `claude-code`)도 같은 API로 가고 다른 연결은 보내지 않습니다(`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`). 고정 주소를 공개하지 않는 공급자는 직접 둔 프록시·게이트웨이를 거치게 하고 그 주소를 적습니다. NetworkPolicy는 이름이 아니라 주소로 맞춥니다.
+- tool-server: `networkPolicy.aiEgress.clusterAPIs`(CIDR은 443·6443, `{cidr, port}`는 그 포트)와 `networkPolicy.apiserverCIDR`에 Kubeast에 등록한 모든 클러스터의 API 서버를 적습니다. AI의 kubectl이 tool-server에서 돌므로 이 클러스터의 것도 적습니다(`kubectl get endpoints kubernetes -n default`).
+- 둘 중 하나라도 비어 있으면 차트가 이유를 말하고 멈춥니다.
+
+목록이 모자라면 멈추는 것: 적지 않은 모델의 AI 답은 두 채팅 모두 공급자 오류("응답하지 않음")로 끝나고, Admin → AI Models의 Test와 알림 조사도 같은 이유로 실패합니다. API 서버를 적지 않은 클러스터의 AI 도구는 kubectl 시간 초과로 실패하고, 그 클러스터의 화면은 그대로 돕니다(k8s-service는 막지 않음). DNS·데이터베이스·콘솔 자체 서비스는 전처럼 열려 있습니다. 어느 쪽이든 화면은 답 안의 그림을 불러오지 않습니다. AI가 쓴 글의 그림은 읽는 사람이 여는 링크입니다.
+
 ### Kubeast 자체 Namespace에 누가 닿는가
 
 릴리스 네임스페이스에는 로그인을 서명하는 키(`kubeast-auth-keys`), 등록한 클러스터의 자격 증명(`cluster-kubeconfig-<id>`), 차트의 Secret이 있습니다. 이것을 읽은 사람은 등록된 모든 클러스터에서 전역 관리자로 행동할 수 있습니다.

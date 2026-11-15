@@ -504,6 +504,16 @@ service:
 | EKS external clusters, S3 | IRSA role (`aws.irsaRoleArn`, etc.) |
 | Private CA, TLS-intercepting proxy | The Secrets and ConfigMaps listed in `customCAs` must exist in the release namespace first (otherwise new pods wait for the volume and do not start, while the previous pods keep answering) |
 
+### Outbound connections of the AI services
+
+By default ai-service may connect to any public address on 443 (the model providers) and tool-server to any address on 443 and 6443 (the API servers of the registered clusters). `networkPolicy.aiEgress.allowListOnly: true` (off by default) leaves each only the addresses you list, so text a model read from a cluster cannot make either of them connect anywhere else:
+
+- ai-service: `networkPolicy.allowExternalEgressCIDRs`, the model providers and gateways it calls. Anthropic publishes fixed addresses for the Claude API (`160.79.104.0/23`, `153.61.224.0/22`, IPv6 `2607:6bc0::/48` — platform.claude.com "IP addresses"); Claude Code (provider `claude-code`) reaches the same API and sends no other traffic (`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`). A provider that publishes no fixed addresses is reached through a proxy or gateway of your own whose address you list here: a NetworkPolicy matches addresses, not names.
+- tool-server: `networkPolicy.aiEgress.clusterAPIs` (a CIDR opens 443 and 6443, `{cidr, port}` another port) and `networkPolicy.apiserverCIDR`, the API server of every cluster registered in Kubeast — this cluster's too (`kubectl get endpoints kubernetes -n default`), since the AI's kubectl runs from tool-server.
+- The chart stops with a message when either list is empty.
+
+What stops when a list is short: an AI answer whose model is not listed ends with the provider error ("did not answer") in both chats, and Admin → AI Models' Test and the alert investigations fail the same way; an AI tool on a cluster whose API server is not listed fails with kubectl's timeout while that cluster's screens keep working (k8s-service is not limited). DNS, the database and the console's own services are allowed as before. The screens' answers fetch no image either way: an image in AI-written text is a link the reader opens.
+
 ### Who reaches Kubeast's own namespace
 
 The release namespace holds the key that signs sign-ins (`kubeast-auth-keys`), the registered clusters' credentials (`cluster-kubeconfig-<id>`) and the chart's Secrets. Whoever reads them can act as a global admin on every registered cluster.
