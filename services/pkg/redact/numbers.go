@@ -138,11 +138,6 @@ func (n *Numbers) startAfter(kind string, num int) {
 	}
 }
 
-// isNumberedPlaceholder: a value that is already one of these placeholders is not read as a value.
-func isNumberedPlaceholder(v string) bool {
-	return strings.HasPrefix(v, "<EMAIL") || strings.HasPrefix(v, "<PHONE_") || strings.HasPrefix(v, "<RRN_") || strings.HasPrefix(v, "<CARD_")
-}
-
 // placeholder is what a numbered kind writes in place of a value.
 func (n *Numbers) placeholder(kind, value string) string {
 	p := "<" + numberedKinds[kind] + "_" + strconv.Itoa(n.number(kind, value)) + ">"

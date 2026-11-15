@@ -37,7 +37,7 @@ func plantedRig(t *testing.T, outputs ...string) func(masks *redact.Numbers) (To
 	}
 	prevOpts, prevAuth := redactOpts, toolAuth
 	t.Cleanup(func() { redactOpts, toolAuth = prevOpts, prevAuth })
-	redactOpts = redact.Options{Enabled: true, PII: true, Disabled: map[string]bool{}}
+	redactOpts = redact.Options{Enabled: true, PII: true, Numbered: true, Disabled: map[string]bool{}}
 	resetKubeconfigCache()
 	_, restore := mockK8sService(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"kubeconfig":"","in_cluster":true}`))
@@ -203,5 +203,35 @@ func TestRevealNamesThePlaceholdersAnOutputAlreadyHeld(t *testing.T) {
 	resp, body = call(&redact.Numbers{Key: "answer-held", Table: table, Reveal: true})
 	if !strings.Contains(resp.Content, "report: <EMAIL_1> asked; now <EMAIL_1>") || resp.Values != nil || len(resp.Held) != 1 {
 		t.Fatalf("held %v values %v: %s", resp.Held, resp.Values, body)
+	}
+}
+
+// With REDACTION_NUMBERED off the answer masks as it did before numbering: an address numbered within its own text, the
+// other kinds <REDACTED:kind>, and no table or value back, also to a caller that sends one asking reveal.
+func TestWithNumberingOffAnAnswerMasksPersonalDataAsBefore(t *testing.T) {
+	call := plantedRig(t)
+	redactOpts.Numbered = false
+	var contents []string
+	for range plantedOutputs {
+		resp, body := call(nil)
+		if resp.Masks != nil || strings.Contains(body, `"masks"`) {
+			t.Fatalf("a table came back: %s", body)
+		}
+		contents = append(contents, resp.Content)
+	}
+	for i, want := range [][]string{
+		{"user=<EMAIL_1>", "phone=<REDACTED:phone>", "Bearer <REDACTED:token>"},
+		{"DB_PASSWORD:  <REDACTED:DB_PASSWORD>", "ADMIN_EMAIL:  <EMAIL_1>"},
+		{`"enduser.id":"<EMAIL_1>"`, `"user.email":"<EMAIL_2>"`, `"payment.card":"<REDACTED:card>"`},
+	} {
+		for _, w := range want {
+			if !strings.Contains(contents[i], w) {
+				t.Errorf("call %d does not hold %q: %s", i, w, contents[i])
+			}
+		}
+	}
+	sent, body := call(&redact.Numbers{Key: "answer-one", Reveal: true})
+	if sent.Masks != nil || sent.Values != nil || !strings.Contains(sent.Content, "phone=<REDACTED:phone>") {
+		t.Fatalf("a table sent with numbering off: %s", body)
 	}
 }
