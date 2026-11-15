@@ -196,6 +196,7 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
           <button
             type="button"
             className="text-slate-400 hover:text-ink"
+            aria-label={t('common.close', 'Close')}
             onClick={() => {
               try {
                 if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
