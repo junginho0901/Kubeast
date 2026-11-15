@@ -113,6 +113,10 @@ _, _ = h.auditStore.Write(r.Context(), rec)
   게이트웨이(nginx.conf)는 `scripts/rebuild-kind.sh gateway` — 릴리스 값 그대로 `helm upgrade`로 다시 렌더한다.
   ConfigMap을 `kubectl apply`로 쓰면 kubectl이 필드 소유자가 돼 다음 `helm upgrade`(Helm 4 서버 측 적용)가 충돌로 멈춘다.
 
+## 기본 모델
+
+- 아무도 고르지 않았을 때 쓰는 모델(차트 `ai.model`, ai-service 기본값, `install-docker.sh`, `docker-compose.yml`, `scripts/kind-model-*.sh`)은 고정된 스냅샷 ID로 적는다. `scripts/check-model-pins.py`(CI)가 별칭이면 실패하고, 기본값 자리가 새로 생기면 그 목록에 넣는다(`docs/ko/development.md` "기본 모델").
+
 ## 컨테이너 exec
 
 - **서버가 `pods/exec`로 띄운 프로세스는 클라이언트가 끊겨도 컨테이너에 남는다**(TTY 유무와 무관, 컨테이너 런타임이
