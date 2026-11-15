@@ -215,3 +215,9 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no features.alertInvestigation.ledger
+  - it: stops values without the rule cards
+    set:
+      ai.ruleCards: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.ruleCards

@@ -79,6 +79,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   - 조사에서 CRD(Kyverno PolicyReport, Argo Rollout, KEDA ScaledObject 등)도 읽게 하려면 `extraRules`에 읽기 규칙을 추가하세요. 동사는 get, list, watch만 쓸 수 있고, `apiGroups "*"`, Secret, exec, 프록시, 토큰, 와일드카드 자원은 렌더 단계에서 거부합니다.
   - 추가한 규칙은 알림을 보내는 모든 클러스터에 다시 적용하세요(`scripts/render-target-rbac.sh`).
   - 모델은 `model`(ModelConfig 이름) 또는 기본 모델을 쓰고, 모델 호출은 `maxSteps`(8)번까지(`evidenceCheck`나 `ledger`가 보고서를 한 번 더 받으면 한 번 더, 아래), 전체 시간은 `timeoutSeconds`(300)까지입니다. 마지막 호출에는 도구를 주지 않으므로 답이 돌아옵니다.
+  - `ai.ruleCards.investigations`를 켜면(기본 꺼짐) 첫 입력에 알림 이름과 라벨로 고른 규칙 카드가 최대 두 장 더 들어갑니다(목록에 있는 알림 이름이 먼저, 그다음 라벨 값의 `OOMKilled` 같은 이유). 카드는 그 고장의 원인을 자주 찾아내는 확인 순서와 각 확인에 쓸 도구이며, 조사에 주어진 도구만 적힙니다. 알림은 카드를 고르기만 하고 알림의 글은 카드에 들어가지 않으며, 모델 걸음이나 도구 호출을 쓰지 않습니다. 카드와 직접 더하는 법은 `ai.ruleCards`에 있습니다([기능](features.md)).
   - 알림의 라벨·주석은 프롬프트에서 "신뢰하지 않는 데이터"로 분리합니다.
   - `rules` · `changesFirst` · `narrowFirst`(모두 기본 꺼짐)는 조사를 시작하는 방식을 바꿉니다. 하나라도 켜면 알림 시작 시각에서 센 시간창을 첫 입력에 적습니다: 지표는 앞뒤 `window.metricsMinutes`(15, 1–360)분, 로그는 `window.logsMinutes`(5, 0–1440)분 전부터, 변경은 `window.changesHours`(4, 1–168)시간 전부터이며, 끝은 늦어도 지금입니다. 로그 시간창은 늦어도 시작 1시간 뒤에 끝나고 로그 검색이 받는 가장 긴 범위인 하루(`LOG_SEARCH_MAX_RANGE`)를 넘지 않으므로, 며칠 전에 시작한 알림은 시작 무렵의 로그를 읽습니다.
     - `rules`는 프롬프트에 규칙을 더합니다: 그 시간창으로 읽기, 바뀐 것부터 보기, 고장에서 멈추지 말고 그것을 일으킨 변경까지 따라가기, 시각과 대상이 증상과 맞을 때만 변경을 원인으로 대기, 오류 문구는 그대로 인용하기, 확인한 사실과 가설을 구분하기. 보고서는 여섯 절이 됩니다: Summary, Scope(영향 받음 · 확인했고 정상 · 다른 까닭으로 바뀜 · 안 봄), What I checked, Likely cause(원인 → … → 증상), Ruled out, Next steps.

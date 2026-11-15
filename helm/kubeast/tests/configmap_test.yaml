@@ -343,6 +343,47 @@ tests:
           path: data.AI_CLAUDE_CODE_QUEUE_WAIT
           value: "60"
 
+  - it: keeps the rule cards off for the chat and investigations by default, with no cards added or removed
+    asserts:
+      - equal:
+          path: data.AI_RULE_CARDS_CHAT
+          value: "false"
+      - equal:
+          path: data.AI_RULE_CARDS_INVESTIGATIONS
+          value: "false"
+      - equal:
+          path: data.AI_RULE_CARDS
+          value: "[]"
+      - equal:
+          path: data.AI_RULE_CARDS_REMOVE
+          value: ""
+
+  - it: passes the rule card switches, the added cards as JSON and the removed kinds from ai.ruleCards
+    set:
+      ai.ruleCards.chat: true
+      ai.ruleCards.investigations: true
+      ai.ruleCards.cards:
+        - kind: payments-db
+          title: Payments database slow
+          alerts: [PaymentsDBLatencyHigh]
+          checks:
+            - check: The database's slow queries over the window
+              tools: [prometheus_query]
+      ai.ruleCards.remove: [network_policy, dns]
+    asserts:
+      - equal:
+          path: data.AI_RULE_CARDS_CHAT
+          value: "true"
+      - equal:
+          path: data.AI_RULE_CARDS_INVESTIGATIONS
+          value: "true"
+      - equal:
+          path: data.AI_RULE_CARDS
+          value: '[{"alerts":["PaymentsDBLatencyHigh"],"checks":[{"check":"The database''s slow queries over the window","tools":["prometheus_query"]}],"kind":"payments-db","title":"Payments database slow"}]'
+      - equal:
+          path: data.AI_RULE_CARDS_REMOVE
+          value: network_policy,dns
+
   - it: turns in-place resize on by default and off from features.inPlaceResize
     asserts:
       - equal:
