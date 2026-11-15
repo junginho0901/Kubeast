@@ -16,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/junginho0901/kubeast/services/pkg/config"
 )
 
 const (
@@ -99,7 +101,7 @@ var argRules = map[string]argCheck{
 	"workload_name": checkObjectName,
 	"severity":      checkSeverity,
 	"what":          checkEnum("list", "get", "values", "manifest", "notes", "hooks", "history", "resources", "images", "diff", "revision"),
-	"view":          checkEnum("summary", "results", "events", "changes"),
+	"view":          checkView,
 	"section":       checkEnum("manifest", "values", "notes", "hooks"),
 	"aggregate":     checkEnum("namespace", "controller"),
 	"window":        checkEnum("1h", "6h", "12h", "24h", "48h", "7d", "14d", "30d"),
@@ -465,6 +467,16 @@ func checkSeverity(field, v string) error {
 }
 
 // checkEnum accepts one of a fixed set of words.
+// checkView: policy_reports' summary or results, and timeline's events or changes only while k8s-service serves the
+// changes view (AI_TIMELINE_CHANGES, or ALERT_INVESTIGATION_CHANGES_FIRST for an investigation's step 0); with both off
+// the rule and its words are as before the view.
+func checkView(field, v string) error {
+	if config.EnvSwitch("AI_TIMELINE_CHANGES") || config.EnvSwitch("ALERT_INVESTIGATION_CHANGES_FIRST") {
+		return checkEnum("summary", "results", "events", "changes")(field, v)
+	}
+	return checkEnum("summary", "results")(field, v)
+}
+
 func checkEnum(words ...string) argCheck {
 	return func(field, v string) error {
 		for _, w := range words {

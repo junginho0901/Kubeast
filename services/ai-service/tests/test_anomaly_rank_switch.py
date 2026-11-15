@@ -7,13 +7,14 @@ import pytest
 from app.services.ai import prompts, tools
 
 
-@pytest.mark.parametrize("value", ["true", "TRUE", " true "])
-def test_the_switch_is_on_only_for_true(monkeypatch, value):
+# the one switch rule (app/services/switch.py, fixtures/switch_cases.json)
+@pytest.mark.parametrize("value", ["true", "TRUE", " true ", "1", "on", "yes"])
+def test_the_switch_is_on_for_the_switch_rules_words(monkeypatch, value):
     monkeypatch.setenv("ANOMALY_RANK_ENABLED", value)
     assert tools.anomaly_rank_on()
 
 
-@pytest.mark.parametrize("value", [None, "", "false", "yes", "1"])
+@pytest.mark.parametrize("value", [None, "", "false", "no", "0", "t"])
 def test_the_switch_is_off_otherwise(monkeypatch, value):
     if value is None:
         monkeypatch.delenv("ANOMALY_RANK_ENABLED", raising=False)
@@ -61,3 +62,25 @@ def test_the_mcp_server_lists_it_only_with_the_switch(monkeypatch):
     monkeypatch.setenv("ANOMALY_RANK_ENABLED", "true")
     on = mcp_server._read_tools()
     assert set(on) - set(off) == {"anomaly_rank"} and all(on[n] == off[n] for n in off)
+
+
+@pytest.mark.asyncio
+async def test_off_dispatch_answers_anomaly_rank_as_an_unknown_function(monkeypatch):
+    import json
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.services.ai.tool_dispatch import execute_function_with_context
+
+    def service():
+        return SimpleNamespace(user_role="admin", _is_tool_allowed=MagicMock(return_value=True),
+                               _call_tool_server=AsyncMock(return_value='{"ok": true}'), k8s_service=MagicMock())
+
+    monkeypatch.delenv("ANOMALY_RANK_ENABLED", raising=False)
+    off = service()
+    out = await execute_function_with_context(off, "anomaly_rank", {"namespace": "shop"}, SimpleNamespace(state={}, cache={}))
+    assert json.loads(out) == {"error": "Unknown function: anomaly_rank"} and off._call_tool_server.await_count == 0
+    monkeypatch.setenv("ANOMALY_RANK_ENABLED", "true")
+    on = service()
+    await execute_function_with_context(on, "anomaly_rank", {"namespace": "shop"}, SimpleNamespace(state={}, cache={}))
+    on._call_tool_server.assert_awaited_once_with("anomaly_rank", {"namespace": "shop"})
