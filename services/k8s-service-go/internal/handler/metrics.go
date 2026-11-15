@@ -5,6 +5,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -45,12 +46,18 @@ func (h *Handler) GetNodeMetrics(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, data)
 }
 
-// GetTopResources handles GET /api/v1/metrics/top-resources.
+// GetTopResources handles GET /api/v1/metrics/top-resources. skip=pods,nodes leaves out a part the cluster refused the
+// caller, which the dashboard keeps from that answer.
 func (h *Handler) GetTopResources(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	podLimit := queryParamInt(r, "pod_limit", 10)
 	nodeLimit := queryParamInt(r, "node_limit", 10)
-	data, err := h.svc.GetTopResources(ctx, podLimit, nodeLimit)
+	var skip k8s.TopSkip
+	for _, part := range splitList(queryParam(r, "skip", "")) {
+		skip.Pods = skip.Pods || part == "pods"
+		skip.Nodes = skip.Nodes || part == "nodes"
+	}
+	data, err := h.svc.GetTopResources(ctx, podLimit, nodeLimit, skip)
 	if err != nil {
 		h.handleError(w, err)
 		return

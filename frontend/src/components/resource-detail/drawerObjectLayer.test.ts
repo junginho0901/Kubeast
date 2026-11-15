@@ -10,6 +10,7 @@ import { ResourceDetailContext, type ResourceDetailTarget } from '../ResourceDet
 import ResourceDetailDrawer from '../ResourceDetailDrawer'
 import { ConfirmContext } from '@/services/confirm'
 import { OBJECT_READ_EVERY_MS, drawerObjectLayer, followsObjectForChat, objectReadInterval } from './drawerObjectLayer'
+import { objectResourceType } from './crDetail'
 
 // A list row is the list's answer when the drawer opened. What the floating chat is told of the object is the object.
 
@@ -38,7 +39,7 @@ const objectOf = (replicas: number, extra: Record<string, unknown> = {}) => ({ m
 
 function drawerLayer(target: ResourceDetailTarget, live?: unknown, error?: unknown): Layer | undefined {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, retryOnMount: false } } })
-  const key = ['resource-json', target.kind, target.namespace, target.name]
+  const key = ['resource-json', target.kind, target.namespace, target.name, objectResourceType(target)]
   if (live) qc.setQueryData(key, live)
   if (error) {
     const q = qc.getQueryCache().build(qc, { queryKey: key })

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { api } from '@/services/api'
+import { api, isMetricsUnavailableError } from '@/services/api'
 import { useDescribeReads } from '@/services/pacedReads'
 import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { Plus, RefreshCw, Search } from 'lucide-react'
@@ -58,10 +58,12 @@ export default function ClusterNodes() {
     },
   })
 
-  const { data: metrics, isLoading: isLoadingMetrics, isError: isMetricsError } = useQuery({
+  const { data: metrics, isLoading: isLoadingMetrics, isError: isMetricsError, error: metricsError } = useQuery({
     queryKey: ['cluster', 'node-metrics'],
     queryFn: () => api.getNodeMetrics(),
     enabled: metricsAvailable,
+    // the answer that the cluster serves no metrics.k8s.io is not tried again
+    retry: (failureCount, error) => !isMetricsUnavailableError(error) && failureCount < 1,
   })
 
   const metricsMap = useMemo(() => {
@@ -189,7 +191,7 @@ export default function ClusterNodes() {
 
       <NodeTopUsageCard
         metrics={metrics}
-        metricsAvailable={metricsAvailable}
+        metricsAvailable={metricsAvailable && !isMetricsUnavailableError(metricsError)}
         isLoadingMetrics={isLoadingMetrics}
         isMetricsError={isMetricsError}
         tr={tr}
