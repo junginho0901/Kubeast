@@ -331,6 +331,41 @@ resources:
 {{- end -}}
 
 {{/*
+A memory quantity as bytes ("2Gi", "512Mi", "1500M", "1073741824"), or -1 for a form it does not read.
+*/}}
+{{- define "kubeast.memoryBytes" -}}
+{{- $q := toString . | trim -}}
+{{- $num := regexFind "^[0-9]+(\\.[0-9]+)?" $q -}}
+{{- $unit := trimPrefix $num $q -}}
+{{- $mult := dict "" 1.0 "k" 1000.0 "M" 1000000.0 "G" 1000000000.0 "T" 1000000000000.0 "Ki" 1024.0 "Mi" 1048576.0 "Gi" 1073741824.0 "Ti" 1099511627776.0 -}}
+{{- if and $num (hasKey $mult $unit) -}}{{ mulf (float64 $num) (index $mult $unit) }}{{- else -}}-1{{- end -}}
+{{- end -}}
+
+{{/*
+ai-service's resources: resources.aiService, and while the Claude subscription provider is on a memory limit of at
+least ai.providers.claudeCode.memoryLimit, since each Claude Code run is a process of its own in the container. A limit
+already larger stays, no limit stays none, and memoryLimit "" turns the rule off.
+*/}}
+{{- define "kubeast.aiServiceResources" -}}
+{{- $r := deepCopy (.Values.resources.aiService | default dict) -}}
+{{- $cc := .Values.ai.providers.claudeCode -}}
+{{- $floor := toString (dig "memoryLimit" "2Gi" $cc) -}}
+{{- $limits := get $r "limits" | default dict -}}
+{{- $have := toString (get $limits "memory" | default "") -}}
+{{- if and $cc.enabled $floor $have -}}
+{{- $haveBytes := include "kubeast.memoryBytes" $have | float64 -}}
+{{- if and (ge $haveBytes 0.0) (gt (include "kubeast.memoryBytes" $floor | float64) $haveBytes) -}}
+{{- $_ := set $limits "memory" $floor -}}
+{{- $_ := set $r "limits" $limits -}}
+{{- end -}}
+{{- end -}}
+{{- if $r }}
+resources:
+  {{- toYaml $r | nindent 2 }}
+{{- end }}
+{{- end -}}
+
+{{/*
 startupProbe of a service that opens its port only after waiting for the
 database at boot; liveness and readiness start once it passes. 180 s covers the
 longest wait (auth-service and session-service: 60 s for the database, at most

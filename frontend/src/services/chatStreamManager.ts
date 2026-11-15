@@ -34,6 +34,9 @@ export interface ChatStreamState {
   content: string
   toolCalls: any[]
   streamingPhase: StreamingPhase | null
+  // The answer waits for its turn (the server's `queued` event: every Claude Code slot is taken), shown as a line in
+  // both chats until the run starts
+  queued: boolean
   error: string | null
   // A refusal the server writes for the screen (token budget): catalog key and values (utils/chatError)
   errorKey: string | null
@@ -54,6 +57,7 @@ const initialState: ChatStreamState = {
   content: '',
   toolCalls: [],
   streamingPhase: null,
+  queued: false,
   error: null,
   errorKey: null,
   errorArgs: null,
@@ -302,7 +306,7 @@ export class ChatStreamManager {
   // The answer failed: the letters that came stay in content, and an answer the user already stopped stays stopped.
   private _fail = (patch: Partial<ChatStreamState>) => {
     if (this.state.status !== 'streaming') return
-    this.setState({ status: 'error', isStreaming: false, streamingPhase: null, ...patch }, true)
+    this.setState({ status: 'error', isStreaming: false, streamingPhase: null, queued: false, ...patch }, true)
   }
 
   // The content with the n-th tool's result and 🔐 line in its block, once; the blocks after it move by what went in.
@@ -354,7 +358,7 @@ export class ChatStreamManager {
     }
 
     if (this.state.status === 'streaming') {
-      this.setState({ status: 'aborted', isStreaming: false }, true)
+      this.setState({ status: 'aborted', isStreaming: false, queued: false }, true)
     }
   }
 
@@ -400,6 +404,7 @@ export class ChatStreamManager {
       content: '',
       toolCalls: [],
       streamingPhase: 'waiting',
+      queued: false,
       error: null,
       errorKey: null,
       errorArgs: null,
@@ -478,12 +483,17 @@ export class ChatStreamManager {
 
           const dataStr = line.slice(6)
           if (dataStr === '[DONE]') {
-            this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null })
+            this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null, queued: false })
             return
           }
 
           try {
             const data = JSON.parse(dataStr)
+
+            if (typeof data.queued === 'boolean') {
+              this.setState({ queued: data.queued })
+              continue
+            }
 
             if (data.model_info) {
               console.info(
@@ -608,7 +618,7 @@ export class ChatStreamManager {
 
       // Every answer the server finishes ends with [DONE] or an error event: a stream without either was cut off.
       if (buffer.trim() === 'data: [DONE]') {
-        this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null })
+        this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null, queued: false })
       } else if (this.state.content || this._charQueue.length > 0) {
         this._fail({ error: STREAM_CUT, errorKey: 'streamCut' })
         this._keepCutAnswer()
@@ -619,7 +629,7 @@ export class ChatStreamManager {
       // reset cancelled this run: the state is a new tab's now
       if (run !== this._run) return
       if (error?.name === 'AbortError') {
-        this.setState({ status: 'aborted', isStreaming: false, streamingPhase: null }, true)
+        this.setState({ status: 'aborted', isStreaming: false, streamingPhase: null, queued: false }, true)
         return
       }
 
