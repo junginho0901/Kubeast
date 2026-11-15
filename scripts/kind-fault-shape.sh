@@ -139,10 +139,11 @@ foreign_after() {
 claim_next() { echo $(( $(revision) + 1 )) >> "$MADE"; }
 
 HELM_PID="" GOT_HUP=""
-# helm in the background: a signal to this shell interrupts the wait and reaches its trap at once
+# helm in the background, started as itself (not through the h function, which would background a subshell and give
+# its pid): a signal to this shell interrupts the wait and reaches its trap at once, and the trap signals helm
 run_helm() {
   local rc=0
-  h "$@" & HELM_PID=$!
+  helm --kubeconfig "$KUBECONFIG_PATH" --kube-context "kind-$MAIN" -n "$NAMESPACE" "$@" & HELM_PID=$!
   wait "$HELM_PID" || rc=$?
   HELM_PID=""
   return "$rc"
