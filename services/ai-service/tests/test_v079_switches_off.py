@@ -58,8 +58,8 @@ V078 = {
     "floating tools": "9bcba9d81a94dd1ebf1e506e8cbd3fc16cb1d1b761c776c575041173187681d7",
     "chat second call": "c58e7c62a59a34b888ecf2a60cb33e996641212e3b8ad4c4df185c2cc2b48793",
     "chat tool-server calls": "5d8da759a4d9aa10e638da55a396fda8b9dea31db8206d81ca9947db3e503c85",
-    "investigation first call": "aa4ff10ab51dc5bdedbd65c2e3fd54e2d5179e58881205d9093e0907fafd4435",
-    "investigation second call": "e2b27fc7f2a333b2c9622ffa7cf0fe7b523b7f73b26a410bc764f9937d6f277a",
+    "investigation first call": "7e132b9533a49709f916eed38eced504a8a62e59bd94b9d43a2f129f9bd58437",
+    "investigation second call": "c0724a074ee83bcaf119e67c050d1d21a895a7fc953cca8920ed71bfaba6e01c",
     "investigation tool-server calls": "5d8da759a4d9aa10e638da55a396fda8b9dea31db8206d81ca9947db3e503c85",
     "mcp tools": "a9102a1ecc66e0eb023b45a2bc01bb57f9346ad1d5894112c1991a9f2de5cc16",
     "masked text": "c86dd3f61d49c68ed59dfa80c31c1c899ee5a57da982c402a989c432dde6d902",
@@ -213,9 +213,15 @@ async def _investigation_calls(monkeypatch):
     from app.services.investigation import settings as inv_settings
     from tests.test_alert_investigation import FakeCompletions, completion, row, tool_call
 
+    class AsSent(FakeCompletions):
+        """Each call as it was sent: the runner goes on adding to the messages list it passed."""
+
+        async def create(self, **kw):
+            return await super().create(**json.loads(json.dumps(kw, default=str)))
+
     asked = []
-    # anomaly_rank is left out: 0.7.8's investigator refuses it as a tool outside its read-only list, which v0.7.9 widens
-    completions = FakeCompletions([completion(calls=[tool_call(f"c{i + 1}", n, a) for i, (n, a) in enumerate(ROUND) if n != "anomaly_rank"]),
+    # anomaly_rank too: 0.7.8's investigator refuses it as a tool outside its read-only list
+    completions = AsSent([completion(calls=[tool_call(f"c{i + 1}", n, a) for i, (n, a) in enumerate(ROUND)]),
                                    completion(content="## Summary\nok")])
     service = _service(monkeypatch, completions.create, asked)
 
