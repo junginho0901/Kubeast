@@ -571,7 +571,10 @@ tests:
           path: metadata.name
           value: RELEASE-NAME-tool-server
 
-  - it: with aiEgress.allowListOnly, a role on k8s-service alone (S3 recordings, no EKS cluster) asks for no STS endpoint
+  - it: with aiEgress.allowListOnly, a role on k8s-service alone (S3 recordings, no EKS cluster) asks for no STS endpoint and leaves tool-server without one
+    templates:
+      - networkpolicy.yaml
+      - rbac.yaml
     set:
       networkPolicy.allowExternalEgressCIDRs: [160.79.104.0/23]
       networkPolicy.aiEgress.allowListOnly: true
@@ -580,3 +583,13 @@ tests:
         eks.amazonaws.com/role-arn: arn:aws:iam::111122223333:role/kubeast-recordings
     asserts:
       - notFailedTemplate: {}
+        template: networkpolicy.yaml
+      - notExists:
+          path: metadata.annotations["eks.amazonaws.com/role-arn"]
+        template: rbac.yaml
+        documentSelector: {path: metadata.name, value: tool-server}
+      - equal:
+          path: metadata.annotations["eks.amazonaws.com/role-arn"]
+          value: arn:aws:iam::111122223333:role/kubeast-recordings
+        template: rbac.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}

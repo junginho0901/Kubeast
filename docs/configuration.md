@@ -177,7 +177,7 @@ networkPolicy:
   aiEgress:
     allowListOnly: false  # true (needs networkPolicy.enabled): ai-service connects out only to allowExternalEgressCIDRs, tool-server only to clusterAPIs, stsEndpoints and apiserverCIDR (cluster-requirements.md §15)
     clusterAPIs: []       # the API servers of the registered clusters, this one's too, as VPC or subnet CIDRs (never a /32 on EKS): a CIDR opens 443 and 6443, {cidr, port} another port
-    stsEndpoints: []      # with an IRSA role: the subnets of the STS VPC interface endpoint, {cidr, port: 443}
+    stsEndpoints: []      # when tool-server holds an IRSA role: the subnets of the STS VPC interface endpoint, {cidr, port: 443}
 
 # Gateway exposure
 gateway:

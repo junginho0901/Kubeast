@@ -696,7 +696,7 @@ networkPolicy:
   aiEgress:
     allowListOnly: false  # true (needs networkPolicy.enabled): ai-service connects out only to allowExternalEgressCIDRs, tool-server only to the lists below and apiserverCIDR (docs/cluster-requirements.md §15)
     clusterAPIs: []       # API servers of the registered clusters, for tool-server, as VPC or subnet CIDRs (EKS endpoint addresses change, never a /32): a CIDR opens 443 and 6443, {cidr, port} another port
-    stsEndpoints: []      # with an IRSA role (aws.irsaRoleArn): the subnets of the STS VPC interface endpoint com.amazonaws.<region>.sts, for tool-server's aws-iam-authenticator: {cidr, port: 443}
+    stsEndpoints: []      # when tool-server holds an IRSA role (aws.irsaRoleArn or its own annotation): the subnets of the STS VPC interface endpoint com.amazonaws.<region>.sts, for tool-server's aws-iam-authenticator: {cidr, port: 443}
 
 # --- Feature flags ---
 # Optional integrations the operator can opt in/out of without changing
