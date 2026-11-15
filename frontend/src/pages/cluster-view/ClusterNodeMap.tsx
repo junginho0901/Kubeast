@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { NodeEntry } from './hooks/useClusterDerived'
 import type { ClusterViewNode } from './hooks/useClusterPodsQuery'
-import { GAP, layoutMap, mapKey } from './nodeMapLayout'
+import { GAP, focusSpokenCell, layoutMap, mapKey } from './nodeMapLayout'
 import { nodeCordoned, nodeReadiness } from '@/utils/nodeStatus'
 
 // Every node at a glance: a cell per node in the boxes' order, a dot per pod in the cards' colour (errors first, then
@@ -13,8 +13,9 @@ import { nodeCordoned, nodeReadiness } from '@/utils/nodeStatus'
 // the live node list; the legend counts both from that list and each count opens the first such node. A click, or
 // Enter on the cell the arrow keys reach, opens that node's own view; the line under the legend names that cell. The
 // canvas is an `application` (WAI-ARIA 1.2), so a screen reader in browse mode passes the arrow keys and Enter to it;
-// the cell's line is a live region only while the canvas has the keyboard focus, so a mouse passing over the cells
-// is not read out, and the hint is the canvas's description, outside that region.
+// a visually hidden live region, polite from the first render, names the cell a keyboard move reached (a focus from
+// the keyboard, an arrow key), and the line under the legend is not live, so a mouse passing over the cells is not
+// read out; the hint is the canvas's description, outside that region.
 
 function cssColor(name: string, fallback: string): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
@@ -46,7 +47,8 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, nodeList
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [width, setWidth] = useState(0)
   const [hover, setHover] = useState<number | null>(null)
-  const [focused, setFocused] = useState(false)
+  const [spoken, setSpoken] = useState('') // the live region's text: the cell the last keyboard move reached
+  const byPointer = useRef(false) // a pointer is down on the canvas, so the focus it gives is not a keyboard move
   const hintId = useId()
   const [mode, setMode] = useState(0) // bumps when the colour mode changes, to redraw
 
@@ -154,6 +156,10 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, nodeList
   const marked = Object.fromEntries(entries.filter((e, i) => marks[i] || (e.status && nodeCordoned(e.status))).map((e) => [e.node, e.status]))
   const legendButton = 'inline-flex items-center gap-1.5 hover:text-ink underline-offset-2 hover:underline'
   const aria = tr('clusterView.map.aria', 'Node map: {{nodes}} nodes, {{pods}} pods ({{error}} errors, {{warn}} warnings)', { nodes: entries.length, pods: totals.pods, error: totals.error, warn: totals.warn })
+  const cellLine = (e: NodeEntry) => e.status && e.status !== 'Ready'
+    ? tr('clusterView.map.hoverStatus', '{{node}} · {{status}} · {{total}} pods · {{error}} errors · {{warn}} warnings', { node: e.label, status: e.status, total: e.counts.total, error: e.counts.error, warn: e.counts.warn })
+    : tr('clusterView.map.hover', '{{node}} · {{total}} pods · {{error}} errors · {{warn}} warnings', { node: e.label, total: e.counts.total, error: e.counts.error, warn: e.counts.warn })
+  const speak = (i: number | null) => setSpoken(i === null ? '' : cellLine(entries[i]))
 
   return (
     <div className="card" data-testid="cluster-view-map" data-list-bounded="one canvas of every node: about 194 px tall at 1,000 nodes, about 1.5 screens at 5,000">
@@ -168,20 +174,26 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, nodeList
           data-dim-cells={entries.some((e) => e.dim) ? entries.filter((e) => e.dim).length : undefined}
           data-node-marks={Object.keys(marked).length > 0 ? JSON.stringify(marked) : undefined}
           tabIndex={0}
+          onPointerDown={() => { byPointer.current = true }}
           onFocus={() => {
-            setFocused(true)
+            speak(focusSpokenCell(byPointer.current, cur, entries.length))
+            byPointer.current = false
             setHover((h) => h ?? 0)
           }}
           onBlur={() => {
-            setFocused(false)
+            byPointer.current = false
             setHover(null)
+            setSpoken('')
           }}
           onKeyDown={(ev) => {
             const to = mapKey(ev.key, cur, entries.length, layout.cols)
             if (!to) return
             ev.preventDefault()
             if ('open' in to) onSelect(to.open)
-            else setHover(to.hover)
+            else {
+              setHover(to.hover)
+              speak(to.hover)
+            }
           }}
           data-page-cells={pageEnd > pageStart ? `${pageStart},${pageEnd}` : undefined}
           style={{ width: '100%', height: layout.height, cursor: h ? 'pointer' : 'default' }}
@@ -212,13 +224,8 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, nodeList
           )}
         </div>
         <div className="min-h-[16px]">
-          <p className={h ? 'text-ink' : undefined} aria-live={focused ? 'polite' : 'off'} data-testid="cluster-view-map-hover">
-            {h
-              ? h.status && h.status !== 'Ready'
-                ? tr('clusterView.map.hoverStatus', '{{node}} · {{status}} · {{total}} pods · {{error}} errors · {{warn}} warnings', { node: h.label, status: h.status, total: h.counts.total, error: h.counts.error, warn: h.counts.warn })
-                : tr('clusterView.map.hover', '{{node}} · {{total}} pods · {{error}} errors · {{warn}} warnings', { node: h.label, total: h.counts.total, error: h.counts.error, warn: h.counts.warn })
-              : ''}
-          </p>
+          <p className={h ? 'text-ink' : undefined} data-testid="cluster-view-map-hover">{h ? cellLine(h) : ''}</p>
+          <p className="sr-only" aria-live="polite" data-testid="cluster-view-map-live">{spoken}</p>
           <p id={hintId} hidden={!!h} data-testid="cluster-view-map-hint">
             {pageEnd > pageStart
               ? tr('clusterView.map.hintPaged', 'A cell is a Node, a dot a Pod; the outlined cells are the boxes below. Click a cell, or press Enter on it, to see all its Pods.')

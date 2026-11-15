@@ -28,6 +28,12 @@ export function layoutMap(width: number, entries: NodeEntry[]): Layout {
   return { cell, cols, per, dot, height: rows * (cell + GAP) - GAP }
 }
 
+// The cell the map's live region names when the canvas takes the focus: from the keyboard the cell the keys start from
+// (the one the mouse reached, else the first), from a pointer none, so a mouse over the cells is never read out.
+export function focusSpokenCell(byPointer: boolean, at: number | null, count: number): number | null {
+  return byPointer || count === 0 ? null : Math.min(Math.max(0, at ?? 0), count - 1)
+}
+
 // A key on the focused map from cell `at` (null: none yet; past the cells: the last): the cell an arrow moves to, the cell Enter or Space opens, else null.
 export function mapKey(key: string, at: number | null, count: number, cols: number): { hover: number } | { open: number } | null {
   if (count === 0) return null
