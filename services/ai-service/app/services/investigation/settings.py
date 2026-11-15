@@ -83,7 +83,7 @@ def load() -> InvestigationSettings:
         timeout_seconds=min(1800, max(30, _int("ALERT_INVESTIGATION_TIMEOUT_SECONDS", 300))),
         rules=os.getenv("ALERT_INVESTIGATION_RULES", "false").strip().lower() == "true",
         changes_first=os.getenv("ALERT_INVESTIGATION_CHANGES_FIRST", "false").strip().lower() == "true",
-        narrow_first=os.getenv("ALERT_INVESTIGATION_NARROW_FIRST", "false").strip().lower() == "true",
+        narrow_first=switch.env_on("ALERT_INVESTIGATION_NARROW_FIRST"),
         # Prometheus reads at most 168 h, Loki 24 h by default, timeline 90 days back.
         metrics_window_minutes=min(360, max(1, _int("ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES", 15))),
         logs_window_minutes=min(1440, max(0, _int("ALERT_INVESTIGATION_LOGS_WINDOW_MINUTES", 5))),

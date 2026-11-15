@@ -384,7 +384,7 @@ async def execute_function_with_context(
                 tool_args["range"] = True  # a graph needs points; chart/title/unit stay here (app/services/ai/charts.py)
             if function_name == "resource_graph" and _wants_calls(function_args.get("include")):
                 tool_args["include"] = ["calls"]
-            if function_name == "timeline" and not changes_view_on():
+            if function_name == "timeline" and not changes_view_on(getattr(tool_context, "session_id", None)):
                 tool_args.pop("view", None)  # the changes view is reachable only with its switch (or step 0's)
             if function_name == "resource_graph" and not call_graph_on():
                 for key in CALLS_PARAMS:  # the calls arguments reach tool-server only with the switch, as before them
