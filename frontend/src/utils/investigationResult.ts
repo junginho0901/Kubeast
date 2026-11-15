@@ -1,8 +1,9 @@
 import type { AIContextInput } from '@/hooks/useAIContext'
-import type { HypothesisState, Investigation, InvestigationCallRef, InvestigationHypothesis, InvestigationResult } from '@/services/api/investigations'
+import type { HypothesisState, Investigation, InvestigationCallRef, InvestigationCause, InvestigationHypothesis, InvestigationResult } from '@/services/api/investigations'
 
-// The report's result and hypothesis ledger (features.alertInvestigation.ledger): what the report window draws under the
-// report and what it tells the floating chat. The texts in it came from a model, so the window draws them as plain text.
+// The report's result and hypothesis ledger (features.alertInvestigation.evidenceCheck or ledger): what the report
+// window draws under the report and what it tells the floating chat. The texts in it came from a model, so the window
+// draws them as plain text.
 
 type Tr = (key: string, fallback: string, opts?: Record<string, unknown>) => string
 
@@ -59,10 +60,32 @@ export function notClosedText(h: InvestigationHypothesis, tr: Tr): string {
   return tr('investigations.result.notClosed', 'Not closed: {{reasons}}', { reasons: reasons.join('; ') })
 }
 
+// Whether the ledger read the block: a row written before `checks` was kept had it on.
+export function ledgerOn(result: InvestigationResult): boolean {
+  return result.checks?.ledger ?? true
+}
+
+const UNVERIFIED_TEXT: Record<string, string> = {
+  no_evidence: 'no call is given for it',
+  bad_calls: 'the calls given are not calls of this investigation that answered',
+  name_missing: 'its name does not appear in what the calls returned',
+  after_alert: 'it starts after the alert did',
+}
+
+// A cause the run's calls do not show (evidenceCheck), as the window and the floating chat say it.
+export function notVerifiedText(c: InvestigationCause, tr: Tr): string {
+  const reason = c.reason ? tr(`investigations.result.unverified.${c.reason}`, UNVERIFIED_TEXT[c.reason] ?? c.reason) : ''
+  return reason
+    ? tr('investigations.result.notVerified', 'Not verified: {{reason}}', { reason })
+    : tr('investigations.result.notVerifiedBare', 'Not verified')
+}
+
 // The lines above the result: a block the server could not read, the second ask.
 export function resultNotes(result: InvestigationResult, tr: Tr): string[] {
   const notes: string[] = []
-  if (result.status !== 'ok') {
+  if (result.status === 'cut') {
+    notes.push(tr('investigations.result.cut', 'The answer reached its length limit inside its result block, so the report has no causes or hypotheses to show.'))
+  } else if (result.status !== 'ok') {
     notes.push(tr('investigations.result.missing', 'The report did not end with a result block the server could read, so it has no causes or hypotheses to show.'))
   }
   if (result.asked_again) {
@@ -75,29 +98,50 @@ export function resultNotes(result: InvestigationResult, tr: Tr): string[] {
 
 // The floating chat's layer is cut whole past 8 KB: the report it gets with a result, and each text of the result.
 export const CHAT_REPORT_WITH_RESULT = 2048
+// The server's notes under a report (the causes it could not verify, a step 0 that gave nothing) each follow a rule.
+const NOTE_RULE = '\n\n---\n\n'
+export const CHAT_NOTES = 1024
 const CHAT_TEXT = 120
 
 const short = (s: string) => (s.length > CHAT_TEXT ? `${s.slice(0, CHAT_TEXT - 1)}…` : s)
 
-// What the floating chat is told of the result, next to the report it already gets.
+// The report cut to `limit` for the floating chat, the server's notes at its end kept: the start of the report, then
+// the text from the earliest rule whose rest fits in CHAT_NOTES (the server writes its notes last).
+export function reportForChat(report: string, limit: number): string {
+  if (report.length <= limit) return report
+  for (let at = report.indexOf(NOTE_RULE); at >= 0; at = report.indexOf(NOTE_RULE, at + 1)) {
+    const notes = report.slice(at)
+    if (notes.length <= CHAT_NOTES) return `${report.slice(0, limit - notes.length - 1)}…${notes}`
+  }
+  return report.slice(0, limit)
+}
+
+const hypothesesForChat = (result: InvestigationResult) => orderedHypotheses(result).map((h) => ({
+  statement: short(h.statement),
+  resource: h.resource,
+  state: h.state,
+  closed: h.closed,
+  for: h.for.map(callLabel),
+  against: h.against.map(callLabel),
+  ...(h.blocked ? { blocked: short(h.blocked) } : {}),
+  ...(h.problems?.length ? { not_closed: h.problems.map((p) => p.reason) } : {}),
+}))
+
+// What the floating chat is told of the result, next to the report it already gets. A cause the calls do not show
+// says so; without the ledger there are no hypotheses to tell.
 export function resultForChat(result: InvestigationResult): Record<string, unknown> {
   return {
     status: result.status,
     no_fault: result.no_fault,
     asked_again: result.asked_again,
-    causes: result.causes.map((c) => ({ resource: c.resource, kind: c.kind, started_at: c.started_at, evidence: c.evidence.map(callLabel) })),
+    causes: result.causes.map((c) => ({
+      resource: c.resource, kind: c.kind, started_at: c.started_at, evidence: c.evidence.map(callLabel),
+      ...(c.verified !== undefined ? { verified: c.verified } : {}),
+      ...(c.verified === false && c.reason ? { not_verified: c.reason } : {}),
+    })),
     path: result.path,
     ruled_out: result.ruled_out,
-    hypotheses: orderedHypotheses(result).map((h) => ({
-      statement: short(h.statement),
-      resource: h.resource,
-      state: h.state,
-      closed: h.closed,
-      for: h.for.map(callLabel),
-      against: h.against.map(callLabel),
-      ...(h.blocked ? { blocked: short(h.blocked) } : {}),
-      ...(h.problems?.length ? { not_closed: h.problems.map((p) => p.reason) } : {}),
-    })),
+    ...(ledgerOn(result) ? { hypotheses: hypothesesForChat(result) } : {}),
   }
 }
 
@@ -114,7 +158,7 @@ export function reportLayer(data: Investigation): AIContextInput {
       // With a result the report is cut shorter, so the layer stays within its 8 KB (past it enforceTokenBudget keeps
       // none of the data); the result holds the causes and hypotheses the report's end would.
       ...(data.result ? { result: resultForChat(data.result) } : {}),
-      report: data.report.slice(0, data.result ? CHAT_REPORT_WITH_RESULT : 4096),
+      report: data.result ? reportForChat(data.report, CHAT_REPORT_WITH_RESULT) : data.report.slice(0, 4096),
     },
   }
 }

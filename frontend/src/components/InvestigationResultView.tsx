@@ -2,11 +2,12 @@ import { useTranslation } from 'react-i18next'
 
 import type { InvestigationCallRef, InvestigationResult, InvestigationToolCall } from '@/services/api/investigations'
 import { formatTime } from '@/utils/time'
-import { callLabel, notClosedText, orderedHypotheses, resultNotes, stateBadge, stateText } from '@/utils/investigationResult'
+import { callLabel, ledgerOn, notClosedText, notVerifiedText, orderedHypotheses, resultNotes, stateBadge, stateText } from '@/utils/investigationResult'
 
-// The report's result and hypothesis ledger, under the report in its window (features.alertInvestigation.ledger). Every
-// text here came from a model that read an external alert, so it is drawn as plain text: no Markdown, no HTML. A call
-// number names a row of the window's tool calls, whose arguments show on hover.
+// The report's result and hypothesis ledger, under the report in its window (features.alertInvestigation.evidenceCheck
+// or ledger). Every text here came from a model that read an external alert, so it is drawn as plain text: no
+// Markdown, no HTML. A call number names a row of the window's tool calls, whose arguments show on hover. A cause the
+// calls do not show says so; the hypotheses show only when the ledger read the block.
 
 function Calls({ refs, toolCalls }: { refs: InvestigationCallRef[]; toolCalls: InvestigationToolCall[] }) {
   const { t } = useTranslation()
@@ -32,10 +33,13 @@ export function InvestigationResultView({ result, toolCalls }: { result: Investi
   const tr = (key: string, fallback: string, opts?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...opts })
   const notes = resultNotes(result, tr)
   const hypotheses = orderedHypotheses(result)
+  const withLedger = ledgerOn(result)
 
   return (
     <section data-testid="investigation-result">
-      <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('investigations.result.title', 'Result and hypotheses')}</h3>
+      <h3 className="mb-2 text-xs font-semibold text-slate-400">
+        {withLedger ? tr('investigations.result.title', 'Result and hypotheses') : tr('investigations.result.titleCauses', 'Result')}
+      </h3>
       <div className="space-y-3 rounded-lg border border-slate-700 bg-slate-950/40 px-4 py-3 text-xs">
         {notes.map((n) => (
           <div key={n} className={result.status === 'ok' ? 'text-slate-400' : 'text-amber-300'} data-testid="investigation-result-note">{n}</div>
@@ -55,6 +59,9 @@ export function InvestigationResultView({ result, toolCalls }: { result: Investi
                       {c.kind && <span className="text-slate-400">{c.kind}</span>}
                       {c.started_at && <span className="text-slate-400">{tr('investigations.result.started', 'from {{at}}', { at: formatTime(c.started_at) })}</span>}
                       <Calls refs={c.evidence} toolCalls={toolCalls} />
+                      {c.verified === false && (
+                        <span className="badge badge-warning" data-testid="investigation-cause-unverified">{notVerifiedText(c, tr)}</span>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -72,7 +79,7 @@ export function InvestigationResultView({ result, toolCalls }: { result: Investi
                 <div className="font-mono text-ink break-all" data-testid="investigation-result-ruled-out">{result.ruled_out.join(', ')}</div>
               </div>
             )}
-            <div>
+            {withLedger && <div>
               <div className="mb-1 font-semibold text-slate-400">
                 {tr('investigations.result.hypotheses', 'Hypotheses ({{count}})', { count: hypotheses.length })}
               </div>
@@ -109,7 +116,7 @@ export function InvestigationResultView({ result, toolCalls }: { result: Investi
                   </tbody>
                 </table>
               )}
-            </div>
+            </div>}
           </>
         )}
       </div>
