@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { X, Loader2 } from 'lucide-react'
@@ -40,6 +40,8 @@ interface ChatPanelProps {
   /** 패널 닫고 다시 열어도 유지되도록 부모가 세션 id 를 소유 */
   sessionId: string | null
   onSessionIdChange: (id: string | null) => void
+  /** the window's box: where the focus is decides whether closing moves it */
+  panelRef?: Ref<HTMLDivElement>
 }
 
 /**
@@ -60,6 +62,7 @@ export function ChatPanel({
   docked,
   sessionId,
   onSessionIdChange,
+  panelRef,
 }: ChatPanelProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -179,6 +182,8 @@ export function ChatPanel({
                 ? stopped.toolCalls
                 : undefined,
               stopped: true,
+              // saved only while its question is the newest message: stopped as it ended, ai-service saved it already
+              answers: stopped.userMessage ?? undefined,
             },
           ],
         }),
@@ -252,8 +257,12 @@ export function ChatPanel({
   // Keys pressed in the panel stay here, so a modal or drawer under it does not close on Escape or take the focus on Tab.
   // Once Escape has closed it they pass on, also before the fade starts: a second Escape closes the window under it.
   const closing = useRef(false)
+  // the window opens with the focus in its input, by the button or the shortcut
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   useEffect(() => {
-    if (visible) closing.current = false
+    if (!visible) return
+    closing.current = false
+    inputRef.current?.focus()
   }, [visible])
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!visible || closing.current) return
@@ -273,6 +282,7 @@ export function ChatPanel({
 
   return (
     <div
+      ref={panelRef}
       data-testid="floating-chat-panel"
       tabIndex={-1}
       onKeyDown={handleKeyDown}
@@ -338,6 +348,7 @@ export function ChatPanel({
         </p>
       )}
       <InputArea
+        inputRef={inputRef}
         onSubmit={handleSubmit}
         onStop={handleStop}
         isStreaming={isStreaming}

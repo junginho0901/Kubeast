@@ -23,7 +23,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 예
 | --- | --- | --- | --- |
 | 전체 | Kubeast 권한(RBAC) — §1 | `auth.impersonation.enabled`(켬) | 클러스터가 사용자 요청을 403으로 거부 |
 | 알림 → AI 조사 | 조사 신원 RBAC — §1, Kubeast로 웹훅을 보내는 Alertmanager 또는 Grafana 알림 — §13 | `features.alertInvestigation.enabled`(끔) | 알림이 오지 않거나, 조사용 읽기 도구가 클러스터에서 403 |
-| 노드·파드 사용량, Monitoring, 최적화(대체 수단) | metrics-server — §2 | — | 사용량 칸이 비고, 최적화는 "없음" |
+| 노드·파드 사용량, Monitoring, 최적화(대체 수단) | metrics-server — §2 | — | 대시보드 상위 리소스, Monitoring, 노드 페이지 상단 카드가 모든 사용자에게 "이 클러스터에 메트릭 서버가 없습니다"를 표시(클러스터의 API discovery로 판정, §2), 노드 드로어의 사용량은 비고, 최적화는 "없음" |
 | 드로어·대시보드 그래프, 최적화, 스토리지 분석 | Prometheus + 지표 수집기 — §3 | `features.prometheus.enabled`(**끔**) | 그래프 영역이 숨겨지고, 최적화는 metrics-server 순간값 사용 |
 | 비용(Cost), 최적화 비용 열 | OpenCost — §4 | `features.cost.enabled`(켬) | "OpenCost 없음" 안내, 비용 열 없음 |
 | 정책 보고서 | PolicyReport CRD와 보고서를 만드는 도구 — §5 | `features.policyReports.enabled`(켬) | "설치 안 됨" 안내 |
@@ -51,7 +51,7 @@ Kubeast는 **로그인한 사람의 신원으로**(impersonation) 클러스터�
 | --- | --- | --- |
 | ClusterRole `kubeast-impersonator` + 바인딩(그룹 `kubeast:impersonator`) | Kubeast 자격 증명이 사용자와 정해진 그룹으로만 가장하도록 제한 | [`helm/kubeast/files/impersonation-rbac.yaml`](../../helm/kubeast/files/impersonation-rbac.yaml) |
 | 그룹 바인딩 `kubeast:viewer`(view + `kubeast:cluster-reader`) · `kubeast:operator`(edit) · `kubeast:admin`(cluster-admin) | Read·Write·Admin 역할이 클러스터에서 할 수 있는 범위. `kubeast:cluster-reader`는 `view`에 없는 클러스터 범위 객체와 Role·RoleBinding을 더합니다(Role·RoleBinding은 2026-10-27부터 — 그 전에 RBAC를 적용한 클러스터는 다시 적용하세요). 설치하는 쪽이 `view`에 넣지 않는 Lease·IngressClass·DeviceClass·ResourceSlice와 Gateway API·VPA·정책 보고서 종류도 더합니다(2026-11-01부터 — 그 전에 RBAC를 적용한 클러스터는 다시 적용하세요). Secret은 넣지 않습니다 | 같은 파일 |
-| 커스텀 역할 그룹 `kubeast:role:<이름>`, Namespace 범위 부여 | 커스텀 역할이나 Namespace 한정 부여를 쓸 때. 목록 화면은 그 종류의 `watch`로 객체를 따라갑니다. list만 되고 watch가 안 되는 역할은 화면을 연 때 읽은 값을 보여 주고, 화면 위 안내가 그렇다고 말합니다. 열린 창도 보여 주는 것을 같이 따라갑니다: 워크로드·HPA의 이벤트, Node의 파드, 파드 RBAC 탭의 바인딩과 역할, CRD나 고른 Kind의 커스텀 리소스(이쪽은 항목 하나짜리 `list` 뒤 `watch`, 브라우저에 객체를 보내지 않음) | `auth.impersonation.customRoles` → `templates/impersonation-custom-roles.yaml` |
+| 커스텀 역할 그룹 `kubeast:role:<이름>`, Namespace 범위 부여 | 커스텀 역할이나 Namespace 한정 부여를 쓸 때. 목록 화면은 그 종류의 `watch`로 객체를 따라갑니다. list만 되고 watch가 안 되는 역할은 화면을 연 때 읽은 값을 보여 주고, 화면 위 안내가 그렇다고 말합니다. 열린 창도 보여 주는 것을 같이 따라갑니다: 워크로드·HPA의 이벤트, Node의 파드, Namespace 서랍의 그 Namespace(Namespace 한정 부여는 Namespace watch가 거절되므로 빼고), 파드 RBAC 탭의 바인딩과 역할, CRD나 고른 Kind의 커스텀 리소스(이쪽은 항목 하나짜리 `list` 뒤 `watch`, 브라우저에 객체를 보내지 않음) | `auth.impersonation.customRoles` → `templates/impersonation-custom-roles.yaml` |
 | Read의 Prometheus·OpenCost 프록시 GET | Read 역할이 비용과 그래프를 볼 때 | `auth.impersonation.viewerProxyServices` → `templates/impersonation-viewer-proxy.yaml` |
 | Admin의 `nodes/proxy` get — AI 도구 `nodes_stats_summary`·`nodes_log` | API 서버 프록시를 거쳐 노드의 kubelet stats summary를 읽고 로그를 질의할 때 필요합니다. `kubeast:admin`(cluster-admin)에는 이미 들어 있고, 커스텀 역할로 Admin 도구를 쓰려면 역할에 `admin.nodes.read`를, 그 그룹에 `nodes` get + `nodes/proxy` get을 넣어야 합니다. `nodes_log`에는 kubelet 설정 `enableSystemLogHandler: true` + `enableSystemLogQuery: true`(NodeLogQuery, 1.36 GA)도 필요하며, 꺼져 있으면 도구가 unavailable로 답합니다. kind는 기본값에서 query가 꺼져 있습니다 | 차트 `impersonation-rbac`(cluster-admin) · kubelet 설정 |
 | 로그 파일 Namespace의 `pods/exec` | 로그 파일 보기를 켤 때(§10) | `features.logFiles` → `templates/logfiles-rbac.yaml` |
@@ -77,7 +77,8 @@ Kubeast 화면에서 셸은 Admin만 열 수 있지만, 클러스터 권한으�
 Kubeast는 그 ClusterRole과 사람이 가진 권한을 비교할 수 없으므로, 목록의 그룹이 되는 새 이름과 이름 바꾸기에는 모든 권한(`*`, 전역 Admin)이 필요합니다. `admin.roles.create`나 `admin.roles.update`를 가진 다른 사람은 403을 받고 감사 행이 남습니다.
 그러니 이름을 목록에 적고 전역 Admin이 역할을 만들거나, 역할을 먼저 만들고 나서 목록에 적으세요. 그 뒤로는 다른 역할과 같습니다. `admin.roles.update`로 고칠 수 있고, 목록의 이름으로 이미 저장된 역할은 그대로 동작합니다.
 그 역할의 부여(직접 부여나 접근 요청 승인)는 전역 관리자나 그 클러스터의 Admin(Namespace 한정 없음)만 할 수 있습니다. 이들은 그 클러스터에서 `kubeast:admin`, 곧 `cluster-admin`으로 동작하므로 바인딩이 주는 것을 이미 가졌습니다. `admin.users.update`를 가진 다른 사람은 403을 받고 감사 행이 남으며, 클러스터 접근 선택지와 승인 버튼도 그렇게 보입니다. Namespace 한정 부여를 위해 목록에 적은 Read·Write·Admin은 이렇게 막지 않습니다.
-차트는 이 목록을 `IMPERSONATION_CUSTOM_ROLES`로 auth-service에 넘깁니다. Docker Compose에는 차트가 없으므로, 클러스터에 이런 바인딩을 적용했다면 `.env`의 이 변수에 이름을 적으세요.
+차트는 이 이름들을 `IMPERSONATION_CUSTOM_ROLES`로 auth-service에 넘깁니다. 이름 안의 쉼표는 `-`로 넘깁니다(같은 그룹). Docker Compose에는 차트가 없으므로, 클러스터에 이런 바인딩을 적용했다면 `.env`의 이 변수에 이름을 적으세요.
+역할의 그룹은 `kubeast:role:`에 이름의 slug를 붙인 것이고, 역할 창에 나옵니다. ASCII가 아닌 글자는 `~`와 코드 포인트로 적습니다(`운영팀` → `kubeast:role:~c6b4~c601~d300`, [기능](features.md) "역할 이름"). 그 그룹을 적힌 그대로 바인딩하세요.
 
 **역할을 지워도 바인딩은 지워지지 않습니다.** 적용된 모든 클러스터에 남고, 다음에 그 이름으로 만든 역할이 그 바인딩으로 동작합니다.
 이름이 목록에 있는 동안은 위 규칙이 그대로 걸립니다.
@@ -116,6 +117,8 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 ## 2. metrics-server
 
 노드 목록, Monitoring 화면, 노드 드로어의 사용량과, Prometheus가 없을 때 최적화 표에 나오는 사용량(순간값)은 `metrics.k8s.io`에서 읽습니다.
+Kubeast는 metrics 목록을 먼저 묻습니다. 그래서 목록이 답하는 클러스터에는 더 묻는 것이 없습니다. 목록이 404나 403을 답할 때만 클러스터의 API discovery에서 `metrics.k8s.io`를 찾습니다. 1분 안에 읽은 discovery가 있으면 그것을 쓰고, 없으면 `kubeast:cache`로 `GET /apis/metrics.k8s.io`를 한 번 읽습니다. 기본 `system:discovery` ClusterRole이 이 읽기를 허용합니다. 그 답과 읽기 실패는 클러스터마다 1분 동안 씁니다.
+discovery에 `metrics.k8s.io`가 없으면 모든 사용자에게 metrics-server를 사용할 수 없다고 알리고, 그 1분 동안 metrics 목록은 묻지 않습니다. discovery를 읽지 못하는 동안에는 사용자마다 클러스터가 준 답을 그대로 받습니다. 나중에 설치한 metrics-server는 2분 안에 보입니다. 확인: metrics-server가 없는 클러스터에서는 `kubectl get --raw /apis/metrics.k8s.io`가 404를 답합니다.
 
 - 설치: [metrics-server 차트](https://artifacthub.io/packages/helm/metrics-server/metrics-server) `3.14.0`(앱 0.9.0)
   - `helm install metrics-server metrics-server/metrics-server --version 3.14.0 -n kube-system`

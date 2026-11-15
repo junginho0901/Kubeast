@@ -39,7 +39,8 @@ export function ReauthModal({ open, tr }: Props) {
             type="button"
             autoFocus
             onClick={() => {
-              void logoutSession()
+              // The role change already ended every token of the account: the cookie goes, nothing is left to end.
+              void logoutSession({ asked: false })
               queryClient.clear()
               navigate('/login', { replace: true })
             }}

@@ -145,8 +145,9 @@ auth:
     # those bindings to groups first (docs/cluster-requirements.md §1).
     userPrefix: ""
     # A custom Kubeast role (anything but Read/Write/Admin) granted on a
-    # cluster acts there as group kubeast:role:<slug> (lowercase; any character
-    # other than a-z 0-9 . _ - becomes "-"). The impersonator ClusterRole allows
+    # cluster acts there as group kubeast:role:<slug> (A-Z lowercased, any other
+    # ASCII character but a-z 0-9 . _ - becomes "-", any other character "~" and
+    # its code point: 운영팀 -> ~c6b4~c601~d300). The impersonator ClusterRole allows
     # only the four fixed groups, so such a role gets 403 on every cluster call
     # until its group is allowed and bound. Each entry here renders both for
     # the installed cluster: the group joins an extra impersonator ClusterRole
@@ -425,7 +426,7 @@ audit:
   # AI write tools) with 503 while the audit database cannot store the row,
   # instead of running them unrecorded. Lists and reads keep working. Services
   # also wait for the database at start-up (k8s-service AUDIT_DB_WAIT_SEC 90 s,
-  # auth-service and session-service 30 pings 2 s apart then 60 s for the schema;
+  # auth-service and session-service 60 s, 5 s a ping, then 60 s for the schema;
   # a 180 s startupProbe covers it) and exit if it does not come, rather than
   # falling back to log-only auditing.
   failClosed: true
@@ -551,6 +552,7 @@ postgresql:
 # hostUsers=false puts pods in a user namespace (Kubernetes >= 1.33); set it to
 # true on clusters without that support.
 # enabled=false sets none of it, leaving the uids and fsGroup to the platform, and Secret files then mount 0444 instead of 0440.
+# A PVC you give audit.fileSinkVolume or sessionRecording.spoolVolume / fileVolume must then be writable by uid 65532 by itself, unless the platform adds an fsGroup (OpenShift's restricted SCCs do).
 podSecurity:
   enabled: true
   seccompProfile: RuntimeDefault
@@ -640,6 +642,13 @@ gateway:
   # [+ port], no path. Empty = same host and the Ingress host only.
   allowedOrigins: []
   #  - https://console.example.com
+  # true: each access log line, after nginx's default "combined" fields, also
+  # gives the request's time and the service's connect, header and response
+  # times in seconds ($request_time $upstream_connect_time
+  # $upstream_header_time $upstream_response_time), the service's address and
+  # the client's port. false = nginx's default lines.
+  accessLog:
+    upstreamTimes: false
 
 # --- Ingress (optional) ---
 ingress:
