@@ -123,6 +123,28 @@ SELECT g.user_id, g.cluster_id, r.name
                  WHERE actor_user_id = 'system' AND actor_email = 'migration' AND action = 'admin.roles.update');
 ```
 
+0.7.8로 업그레이드하면 이름에 ASCII가 아닌 글자가 든 역할도 새 그룹을 받습니다. 0.7.7은 그런 글자를 하나마다 `-`로 적었고(`운영팀`은 `kubeast:role:---`), 0.7.8은 `~`와 코드 포인트로 적습니다(`kubeast:role:~c6b4~c601~d300`, [기능](features.md)의 "역할 이름"). 옛 그룹만 허용하고 바인딩한 클러스터는 새 그룹을 허용하고 바인딩할 때까지 그 사람들의 요청을 거부합니다(403). Kubeast가 설치된 클러스터 말고 등록한 모든 클러스터에 사용자 정의 역할 템플릿을 다시 적용하고(`scripts/render-target-rbac.sh`, [클러스터 요구 사항](cluster-requirements.md) §1), 템플릿이 옛 그룹에 만든 바인딩 `kubeast-role-<옛 슬러그>-<ClusterRole>`(`운영팀`을 `view`에 묶었으면 `kubeast-role-----view`)을 지우세요. `kubectl apply`는 그 바인딩을 지우지 않습니다. Kubeast가 설치된 클러스터에서는 `helm upgrade`가 바꿉니다. 모든 클러스터에서 직접 쓴 `kubeast:role:<옛 슬러그>`(impersonation 규칙이나 바인딩)는 새 그룹으로 바꾸세요. 업그레이드 전에 아래 쿼리(읽기만 함)를 실행하면 그런 역할과 각 역할의 0.7.7 그룹·0.7.8 그룹을 볼 수 있습니다. 역할 이름이 모두 ASCII면 아무것도 나오지 않습니다.
+
+```sql
+WITH s AS (
+  SELECT ro.name,
+         string_agg(CASE WHEN p BETWEEN 97 AND 122 OR p BETWEEN 48 AND 57 OR p IN (45, 46, 95) THEN c ELSE '-' END, '' ORDER BY i) AS slug_0_7_7,
+         string_agg(CASE WHEN p BETWEEN 97 AND 122 OR p BETWEEN 48 AND 57 OR p IN (45, 46, 95) THEN c
+                         WHEN p < 128 THEN '-'
+                         WHEN p < 65536 THEN '~' || lpad(to_hex(p), 4, '0')
+                         ELSE '~~' || lpad(to_hex(p), 6, '0') END, '' ORDER BY i) AS slug_0_7_8
+    FROM roles ro,
+         unnest(string_to_array(translate(btrim(ro.name, E' \t\n\u000b\f\r\u0085                 　'),
+                                          E'ABCDEFGHIJKLMNOPQRSTUVWXYZİK', 'abcdefghijklmnopqrstuvwxyzik'), NULL))
+           WITH ORDINALITY AS t(c, i),
+         LATERAL ascii(c) AS p
+   GROUP BY ro.id, ro.name)
+SELECT name, 'kubeast:role:' || slug_0_7_7 AS group_0_7_7, 'kubeast:role:' || slug_0_7_8 AS group_0_7_8
+  FROM s
+ WHERE slug_0_7_7 <> slug_0_7_8
+ ORDER BY name;
+```
+
 0.7.8부터 k8s-service와 tool-server는 자기 사용자로 차트의 Redis에 로그인합니다. `secrets.existingSecret`을 쓰면 그 Secret에 `REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD`, AI를 켰다면 `REDIS_TOOL_SERVER_PASSWORD`까지 넣고 `redis.acl.existingSecretHasKeys: true`로 둘 때까지 비밀번호 하나를 그대로 씁니다([Redis 사용자](configuration.md#redis-사용자)).
 
 ### 제거
