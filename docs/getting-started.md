@@ -91,9 +91,14 @@ Upgrading to 0.7.8 renames the custom roles whose names make another role's grou
 WITH b(name, slug) AS (VALUES ('Pending', 'pending'), ('Member', 'member'), ('Read', 'read'), ('Write', 'write'), ('Admin', 'admin')),
 s AS (
   SELECT ro.id, ro.name, ro.is_system,
-         regexp_replace(translate(btrim(ro.name, E' \t\n\u000b\f\r\u0085                 　'),
-                                  E'ABCDEFGHIJKLMNOPQRSTUVWXYZİK', 'abcdefghijklmnopqrstuvwxyzik'),
-                        '[^a-z0-9._-]', '-', 'g') AS slug
+         (SELECT coalesce(string_agg(CASE WHEN p BETWEEN 97 AND 122 OR p BETWEEN 48 AND 57 OR p IN (45, 46, 95) THEN c
+                                          WHEN p < 128 THEN '-'
+                                          WHEN p < 65536 THEN '~' || lpad(to_hex(p), 4, '0')
+                                          ELSE '~~' || lpad(to_hex(p), 6, '0') END, '' ORDER BY i), '')
+            FROM unnest(string_to_array(translate(btrim(ro.name, E' \t\n\u000b\f\r\u0085                 　'),
+                                                  E'ABCDEFGHIJKLMNOPQRSTUVWXYZİK', 'abcdefghijklmnopqrstuvwxyzik'), NULL))
+                 WITH ORDINALITY AS t(c, i),
+                 LATERAL ascii(c) AS p) AS slug
     FROM roles ro),
 g AS (
   SELECT s.*, b.name AS builtin_name, coalesce(s.name = b.name, false) AS is_builtin,

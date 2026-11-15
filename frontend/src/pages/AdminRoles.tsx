@@ -505,6 +505,15 @@ export default function AdminRoles() {
                   'On a cluster this role acts as the Kubernetes group {{group}}. Each cluster must allow and bind that group (chart auth.impersonation.customRoles), or every request there is refused.',
                   { group: customRoleGroup(formName) },
                 )}
+                {customRoleGroup(formName)?.includes('~') && (
+                  <>
+                    {' '}
+                    {tr(
+                      'adminRoles.groupHintEncoded',
+                      'A character outside ASCII is written as ~ and its Unicode code point (운 → ~c6b4), so Korean names of one length still make different groups.',
+                    )}
+                  </>
+                )}
               </p>
             )}
 

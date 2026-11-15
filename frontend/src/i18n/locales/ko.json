@@ -4056,6 +4056,7 @@
     "customNote": "이 역할에 줄 권한을 고르세요(본인이 가진 권한만)",
     "noListHint": "이대로면 이 역할의 화면은 아무 목록도 읽지 못합니다. resource.objects.read(목록·상세)나 resource.*.read를 고르세요.",
     "groupHint": "클러스터에서 이 역할은 Kubernetes 그룹 {{group}}(으)로 동작합니다. 클러스터마다 이 그룹을 허용·바인딩해야 하고(차트 auth.impersonation.customRoles), 그렇지 않으면 그 클러스터의 모든 요청이 거부됩니다.",
+    "groupHintEncoded": "ASCII 밖의 글자는 ~와 유니코드 코드 포인트로 적습니다(운 → ~c6b4). 그래서 한글 이름은 글자 수가 같아도 그룹이 서로 다릅니다.",
     "delete": "삭제",
     "deleteConfirm": "\"{{name}}\" 역할을 삭제할까요?",
     "deleteTitle": "역할 삭제",

@@ -52,6 +52,8 @@ func TestPostgresRoleNamesOneGroupEach(t *testing.T) {
 		{"Admin", true}, {"Read", true}, {"Member", true},
 		{"ADMIN", false}, {"admin", false}, {" read ", false}, {"PENDING", false},
 		{"ops", false}, {"OPS", false}, {"a b", false}, {"a-b", false}, {"team", false}, {"ADMİN", false},
+		// Korean names of one length make groups of their own; two that differ only in letter case and punctuation do not
+		{"운영팀", false}, {"개발팀", false}, {"Ops 팀", false}, {"ops-팀", false},
 	} {
 		var id int
 		if err := pool.QueryRow(ctx, `INSERT INTO roles (name, is_system) VALUES ($1, $2) RETURNING id`, r.name, r.system).Scan(&id); err != nil {
@@ -71,7 +73,7 @@ func TestPostgresRoleNamesOneGroupEach(t *testing.T) {
 		global int
 	}{
 		{"u-admin-grant", ids["Member"]}, {"u-ops-grant", ids["Member"]}, {"u-temporary", ids["Member"]}, {"u-restore", ids["Member"]},
-		{"u-global", ids["ADMIN"]}, {"u-requested", ids["Member"]}, {"u-team", ids["Member"]},
+		{"u-global", ids["ADMIN"]}, {"u-requested", ids["Member"]}, {"u-team", ids["Member"]}, {"u-dev", ids["Member"]},
 	} {
 		exec(`INSERT INTO auth_users (id, name, email, role_id, password_hash) VALUES ($1, $1, $2, $3, 'x')`, u.id, u.id+"@example.com", u.global)
 	}
@@ -87,6 +89,7 @@ func TestPostgresRoleNamesOneGroupEach(t *testing.T) {
 	exec(`INSERT INTO access_requests (id, user_id, cluster_id, role_id, duration_minutes, reason, status) VALUES ('r-pending', 'u-requested', 'c', $1, 60, 'x', 'pending')`, ids["a-b"])
 	exec(grant, "u-requested", ids["team"], nil, nil, nil, nil, nil)
 	exec(grant, "u-team", ids["team"], nil, nil, nil, nil, nil)
+	exec(grant, "u-dev", ids["개발팀"], nil, nil, nil, nil, nil)
 
 	if _, err := p.UpTo(ctx, 25); err != nil {
 		t.Fatalf("up to 25 over roles of one group: %v", err)
@@ -116,6 +119,7 @@ func TestPostgresRoleNamesOneGroupEach(t *testing.T) {
 		ids["ADMIN"]: renamed("ADMIN"), ids["admin"]: renamed("admin"), ids[" read "]: fmt.Sprintf("read-renamed-%d", ids[" read "]),
 		ids["PENDING"]: renamed("PENDING"), ids["ops"]: "ops", ids["OPS"]: renamed("OPS") + "-2", ids["a b"]: "a b",
 		ids["a-b"]: renamed("a-b"), ids["team"]: "team", ids["ADMİN"]: renamed("ADMİN"),
+		ids["운영팀"]: "운영팀", ids["개발팀"]: "개발팀", ids["Ops 팀"]: "Ops 팀", ids["ops-팀"]: renamed("ops-팀"),
 	}
 	got := names()
 	for id, name := range want {
@@ -162,7 +166,7 @@ func TestPostgresRoleNamesOneGroupEach(t *testing.T) {
 	if g := gs["u-restore"]; g.role != ids["Read"] || !g.temporary || g.restore != nil {
 		t.Errorf("the temporary Read over a grant of ' read ' is %+v, want it with nothing to restore", g)
 	}
-	for user, role := range map[string]int{"u-ops-grant": ids["ops"], "u-requested": ids["team"], "u-team": ids["team"]} {
+	for user, role := range map[string]int{"u-ops-grant": ids["ops"], "u-requested": ids["team"], "u-team": ids["team"], "u-dev": ids["개발팀"]} {
 		if g, ok := gs[user]; !ok || g.role != role {
 			t.Errorf("%s's grant is %+v, want role %d as it was", user, g, role)
 		}
@@ -202,7 +206,7 @@ func TestPostgresRoleNamesOneGroupEach(t *testing.T) {
 	}
 	rows.Close()
 	if want := map[string]int{
-		"u-admin-grant": 1, "u-ops-grant": 0, "u-temporary": 1, "u-restore": 1, "u-global": 1, "u-requested": 0, "u-team": 0,
+		"u-admin-grant": 1, "u-ops-grant": 0, "u-temporary": 1, "u-restore": 1, "u-global": 1, "u-requested": 0, "u-team": 0, "u-dev": 0,
 	}; !maps.Equal(versions, want) {
 		t.Errorf("token versions %v, want %v", versions, want)
 	}
@@ -212,11 +216,14 @@ func TestPostgresRoleNamesOneGroupEach(t *testing.T) {
 	}
 
 	audit := auditRows(t, pool)
-	if want := map[string]int{"admin.roles.update": 7, "user.cluster_role.unset": 3, "access.request.expire": 2}; !maps.Equal(audit.count, want) {
+	if want := map[string]int{"admin.roles.update": 8, "user.cluster_role.unset": 3, "access.request.expire": 2}; !maps.Equal(audit.count, want) {
 		t.Errorf("audit rows by action %v, want %v", audit.count, want)
 	}
 	if r := audit.byTarget[fmt.Sprint(ids["ADMIN"])]; r.before["name"] != "ADMIN" || r.after["name"] != renamed("ADMIN") || r.after["same_group_as"] != "Admin" {
 		t.Errorf("ADMIN's row %+v", r)
+	}
+	if r := audit.byTarget[fmt.Sprint(ids["ops-팀"])]; r.after["same_group_as"] != "Ops 팀" {
+		t.Errorf("ops-팀's row %+v, want Ops 팀 named", r)
 	}
 	if r := audit.byTarget[fmt.Sprint(ids["PENDING"])]; r.after["same_group_as"] != "Pending" {
 		t.Errorf("PENDING's row %+v, want the built-in not yet stored named", r)
@@ -235,10 +242,13 @@ func TestPostgresRoleNamesOneGroupEach(t *testing.T) {
 			t.Errorf("%s: %v, want 23505 on roles_name_group_key", what, err)
 		}
 	}
-	for _, name := range []string{"TEAM", " team ", "Ops", "READ", "aDmIn", "A!B", "ADMİN"} {
+	for _, name := range []string{"TEAM", " team ", "Ops", "READ", "aDmIn", "A!B", "ADMİN", " 운영팀", "OPS!팀"} {
 		_, err := pool.Exec(ctx, `INSERT INTO roles (name) VALUES ($1)`, name)
 		refused("new role "+name, err)
 	}
+	// another Korean name of the same length, and one that differs from a held name in a space only where that name has
+	// none, are names of their own
+	exec(`INSERT INTO roles (name) VALUES ('운영부'), ('운영 팀')`)
 	// Write is not stored, so its seed or a role of that name is free; the next of its group is not.
 	exec(`INSERT INTO roles (name, is_system) VALUES ('Write', true)`)
 	_, err = pool.Exec(ctx, `INSERT INTO roles (name) VALUES ('WRITE')`)
@@ -485,6 +495,7 @@ func TestPostgresUpgradeDocsQueriesSayWhatTheMigrationDoes(t *testing.T) {
 		{"Admin", true}, {"Read", true}, {"Member", true},
 		{"ADMIN", false}, {" read ", false}, {"PENDING", false}, {"ops", false}, {"OPS", false},
 		{"a b", false}, {"a-b", false}, {"team", false}, {"　team ", false}, {"ADMİN", false},
+		{"운영팀", false}, {"개발팀", false}, {"Ops 팀", false}, {"ops-팀", false}, {"😀", false}, {"😁", false},
 	} {
 		var id int
 		if err := pool.QueryRow(ctx, `INSERT INTO roles (name, is_system) VALUES ($1, $2) RETURNING id`, r.name, r.system).Scan(&id); err != nil {
@@ -520,7 +531,7 @@ func TestPostgresUpgradeDocsQueriesSayWhatTheMigrationDoes(t *testing.T) {
 		ids["ADMIN"]: {"ADMIN", "Admin", 0, 0, 0, 0}, ids[" read "]: {" read ", "Read", 0, 0, 0, 0},
 		ids["PENDING"]: {"PENDING", "Pending", 0, 0, 0, 1}, ids["OPS"]: {"OPS", "ops", 1, 0, 0, 0},
 		ids["a-b"]: {"a-b", "a b", 0, 0, 1, 0}, ids["　team "]: {"　team ", "team", 0, 0, 0, 0},
-		ids["ADMİN"]: {"ADMİN", "Admin", 0, 0, 0, 0},
+		ids["ADMİN"]: {"ADMİN", "Admin", 0, 0, 0, 0}, ids["ops-팀"]: {"ops-팀", "Ops 팀", 0, 0, 0, 0},
 	}; !maps.Equal(preview, want) {
 		t.Errorf("the preview lists %+v, want %+v", preview, want)
 	}

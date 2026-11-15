@@ -145,8 +145,9 @@ auth:
     # those bindings to groups first (docs/cluster-requirements.md §1).
     userPrefix: ""
     # A custom Kubeast role (anything but Read/Write/Admin) granted on a
-    # cluster acts there as group kubeast:role:<slug> (lowercase; any character
-    # other than a-z 0-9 . _ - becomes "-"). The impersonator ClusterRole allows
+    # cluster acts there as group kubeast:role:<slug> (A-Z lowercased, any other
+    # ASCII character but a-z 0-9 . _ - becomes "-", any other character "~" and
+    # its code point: 운영팀 -> ~c6b4~c601~d300). The impersonator ClusterRole allows
     # only the four fixed groups, so such a role gets 403 on every cluster call
     # until its group is allowed and bound. Each entry here renders both for
     # the installed cluster: the group joins an extra impersonator ClusterRole

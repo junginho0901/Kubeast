@@ -29,13 +29,23 @@ function trimSpace(name: string): string {
   return name.replace(GO_SPACE_ENDS, '')
 }
 
-// Lowercase; anything other than a-z 0-9 . _ - becomes "-", one per character (groupSlug in Go, the database's
-// role_group_slug; roleGroupSlug.cases.json holds the three equal). U+0130 lowers to "i" as in Go, not to two characters.
+// A-Z, U+0130 and U+212A lowered to ASCII, a-z 0-9 . _ - kept, any other ASCII character "-", any other character "~"
+// and its code point in four hex digits ("~~" and six above U+FFFF), as groupSlug in Go and the database's
+// role_group_slug (roleGroupSlug.cases.json holds the four equal). A lone surrogate is U+FFFD, as Go reads it.
 export function roleGroupSlug(name: string): string {
-  return Array.from(trimSpace(name))
-    .map((c) => (c === 'İ' ? 'i' : c.toLowerCase()))
-    .map((c) => (/^[a-z0-9._-]$/.test(c) ? c : '-'))
-    .join('')
+  let slug = ''
+  for (const c of trimSpace(name)) {
+    const p = c.codePointAt(0) ?? 0
+    if (p >= 0x41 && p <= 0x5a) slug += String.fromCharCode(p + 0x20)
+    else if (p === 0x130) slug += 'i'
+    else if (p === 0x212a) slug += 'k'
+    else if (/^[a-z0-9._-]$/.test(c)) slug += c
+    else if (p < 0x80) slug += '-'
+    else if (p >= 0xd800 && p <= 0xdfff) slug += '~fffd'
+    else if (p <= 0xffff) slug += `~${p.toString(16).padStart(4, '0')}`
+    else slug += `~~${p.toString(16).padStart(6, '0')}`
+  }
+  return slug
 }
 
 // Whether saving this edit ends the sessions of those holding the role, as auth-service's tokensEndedBy decides: a

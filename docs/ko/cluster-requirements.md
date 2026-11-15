@@ -77,7 +77,8 @@ Kubeast 화면에서 셸은 Admin만 열 수 있지만, 클러스터 권한으�
 Kubeast는 그 ClusterRole과 사람이 가진 권한을 비교할 수 없으므로, 목록의 그룹이 되는 새 이름과 이름 바꾸기에는 모든 권한(`*`, 전역 Admin)이 필요합니다. `admin.roles.create`나 `admin.roles.update`를 가진 다른 사람은 403을 받고 감사 행이 남습니다.
 그러니 이름을 목록에 적고 전역 Admin이 역할을 만들거나, 역할을 먼저 만들고 나서 목록에 적으세요. 그 뒤로는 다른 역할과 같습니다. `admin.roles.update`로 고칠 수 있고, 목록의 이름으로 이미 저장된 역할은 그대로 동작합니다.
 그 역할의 부여(직접 부여나 접근 요청 승인)는 전역 관리자나 그 클러스터의 Admin(Namespace 한정 없음)만 할 수 있습니다. 이들은 그 클러스터에서 `kubeast:admin`, 곧 `cluster-admin`으로 동작하므로 바인딩이 주는 것을 이미 가졌습니다. `admin.users.update`를 가진 다른 사람은 403을 받고 감사 행이 남으며, 클러스터 접근 선택지와 승인 버튼도 그렇게 보입니다. Namespace 한정 부여를 위해 목록에 적은 Read·Write·Admin은 이렇게 막지 않습니다.
-차트는 이 목록을 `IMPERSONATION_CUSTOM_ROLES`로 auth-service에 넘깁니다. Docker Compose에는 차트가 없으므로, 클러스터에 이런 바인딩을 적용했다면 `.env`의 이 변수에 이름을 적으세요.
+차트는 이 이름들을 `IMPERSONATION_CUSTOM_ROLES`로 auth-service에 넘깁니다. 이름 안의 쉼표는 `-`로 넘깁니다(같은 그룹). Docker Compose에는 차트가 없으므로, 클러스터에 이런 바인딩을 적용했다면 `.env`의 이 변수에 이름을 적으세요.
+역할의 그룹은 `kubeast:role:`에 이름의 slug를 붙인 것이고, 역할 창에 나옵니다. ASCII가 아닌 글자는 `~`와 코드 포인트로 적습니다(`운영팀` → `kubeast:role:~c6b4~c601~d300`, [기능](features.md) "역할 이름"). 그 그룹을 적힌 그대로 바인딩하세요.
 
 **역할을 지워도 바인딩은 지워지지 않습니다.** 적용된 모든 클러스터에 남고, 다음에 그 이름으로 만든 역할이 그 바인딩으로 동작합니다.
 이름이 목록에 있는 동안은 위 규칙이 그대로 걸립니다.

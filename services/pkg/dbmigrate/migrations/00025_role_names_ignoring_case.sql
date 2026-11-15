@@ -3,8 +3,10 @@
 -- group share its bindings, and a custom role whose name makes a built-in's group (ADMIN, " read ") once acted as that
 -- built-in. auth-service refuses such a name when a role is made or renamed; from here the database refuses it too,
 -- with a unique index on the group each name makes. role_group_slug is auth.RoleGroupSlug written in SQL: Go's
--- whitespace trimmed, A-Z and the two letters Go lowers to ASCII (U+0130, U+212A) lowered, anything outside
--- [a-z0-9._-] made "-". It does not depend on the database's locale.
+-- whitespace trimmed, A-Z and the two letters Go lowers to ASCII (U+0130, U+212A) lowered, a-z 0-9 . _ - kept, any
+-- other ASCII character made "-", and any other character "~" and its code point (ascii() in a UTF8 database) in four
+-- hex digits, "~~" and six above U+FFFF. No ASCII name makes a "~", so names with other characters (Korean) share a
+-- group only when they differ in letter case, spaces or punctuation. It does not depend on the database's locale.
 --
 -- Roles stored before the rule are put right here, once. Of the roles of one group, the built-in (else the oldest)
 -- keeps its name; every other one, and a custom role making a built-in's group where that built-in is not stored yet,
@@ -20,12 +22,14 @@
 CREATE OR REPLACE FUNCTION role_group_slug(role_name text) RETURNS text
 LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
 AS $$
-  SELECT regexp_replace(
-           translate(
-             btrim(role_name, E' \t\n\u000b\f\r\u0085                 　'),
-             E'ABCDEFGHIJKLMNOPQRSTUVWXYZİK',
-             'abcdefghijklmnopqrstuvwxyzik'),
-           '[^a-z0-9._-]', '-', 'g')
+  SELECT coalesce(string_agg(CASE WHEN p BETWEEN 97 AND 122 OR p BETWEEN 48 AND 57 OR p IN (45, 46, 95) THEN c
+                                  WHEN p < 128 THEN '-'
+                                  WHEN p < 65536 THEN '~' || lpad(to_hex(p), 4, '0')
+                                  ELSE '~~' || lpad(to_hex(p), 6, '0') END, '' ORDER BY i), '')
+    FROM unnest(string_to_array(translate(btrim(role_name, E' \t\n\u000b\f\r\u0085                 　'),
+                                          E'ABCDEFGHIJKLMNOPQRSTUVWXYZİK', 'abcdefghijklmnopqrstuvwxyzik'), NULL))
+         WITH ORDINALITY AS t(c, i),
+         LATERAL ascii(c) AS p
 $$;
 -- +goose StatementEnd
 

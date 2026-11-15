@@ -319,7 +319,7 @@ func roleNameRules() []pgRule {
 	return []pgRule{
 		{match: "name, is_system FROM roles ORDER BY id", oids: []uint32{integerOID, textOID, booleanOID}, rows: [][]any{
 			row(20, "Pending", true), row(roleMember, "Member", true), row(roleRead, "Read", true), row(2, "Write", true), row(roleAdmin, "Admin", true),
-			row(roleCustom, "custom", false), row(roleStoredAdmin, "ADMIN", false), row(9, "sre-admin", false), row(15, "a b", false), row(16, "운영", false), row(18, "a-b", false),
+			row(roleCustom, "custom", false), row(roleStoredAdmin, "ADMIN", false), row(9, "sre-admin", false), row(15, "a b", false), row(16, "운영", false), row(18, "a-b", false), row(19, "Ops 팀", false),
 		}},
 		{match: "INSERT INTO roles", oids: []uint32{integerOID, textOID, textOID, booleanOID, stampOID, stampOID},
 			rows: [][]any{{30, "new", "", false, pgNow(), pgNow()}}},
@@ -357,11 +357,15 @@ func TestNewRoleNameCannotShareAKubernetesGroup(t *testing.T) {
 		{"a-b", http.StatusBadRequest, "a b"},
 		{"A!B", http.StatusBadRequest, "a b"},
 		{" custom", http.StatusBadRequest, "custom"},
-		{"개발", http.StatusBadRequest, "운영"},
+		{"OPS-팀", http.StatusBadRequest, "Ops 팀"},
+		{" 운영", http.StatusBadRequest, "운영"},
 		{"team-reader", http.StatusCreated, ""},
 		{"Infra Manager", http.StatusCreated, ""},
 		{"admin-2", http.StatusCreated, ""},
 		{"운영팀", http.StatusCreated, ""},
+		// a Korean name of the same length as another makes a group of its own
+		{"개발", http.StatusCreated, ""},
+		{"운영 팀", http.StatusCreated, ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			api := newAuthAPI(t, pendingRequest{owner: "requester"}, roleNameRules()...)
