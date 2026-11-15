@@ -281,3 +281,18 @@ async def test_with_every_v079_switch_off_the_model_is_sent_what_v078_sent(monke
     monkeypatch.setenv("REDACTION_PII", "true")  # a 0.7.8 switch: the masking the model reads with it on
     got = await _what_the_model_reads(monkeypatch)
     assert got == V078
+
+
+@pytest.mark.asyncio
+async def test_with_only_the_investigations_switches_on_a_chat_is_sent_and_asks_what_v078_did(monkeypatch):
+    """Alert investigations with each of their v0.7.9 steps on: a chat's round is v0.7.8's (its second call, what it asks tool-server)."""
+    for name in V079_SWITCHES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("REDACTION_PII", "true")
+    for name in ("ALERT_INVESTIGATION_ENABLED", "ALERT_INVESTIGATION_CHANGES_FIRST", "ALERT_INVESTIGATION_NARROW_FIRST",
+                 "ALERT_INVESTIGATION_EVIDENCE_CHECK", "ALERT_INVESTIGATION_LEDGER", "ALERT_INVESTIGATION_RULES",
+                 "AI_RULE_CARDS_INVESTIGATIONS"):
+        monkeypatch.setenv(name, "true")
+    sent, asked = await _chat_calls(monkeypatch, QUESTIONS["en"], False, ROUND)
+    assert {"chat second call": _sha(sent[1]["messages"]), "chat tool-server calls": _sha(asked, sort_keys=True)} == {
+        name: V078[name] for name in ("chat second call", "chat tool-server calls")}
