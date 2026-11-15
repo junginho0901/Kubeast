@@ -9,6 +9,11 @@
       "screen": "^\\w+ · /admin/(organizations|roles|clusters) on ",
       "why": "Teams, Roles and Clusters have a search box above their list, which takes a row of the fitted table.",
       "pr": "fix/w3-screen-search"
+    },
+    {
+      "screen": "^\\w+ · /(monitoring|cluster/nodes) on self$",
+      "why": "self has no metrics-server and its metrics reads now say so (a 404, not an empty list): Monitoring shows the page's \"Metrics server not available for this cluster\" above the tab's \"not available\", and the Nodes page's top card says it in place of \"No metrics available\".",
+      "pr": "#900"
     }
   ]
 }
