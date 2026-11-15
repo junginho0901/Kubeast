@@ -793,7 +793,8 @@ features:
   # it is not held to maxPerHour and has its own daily budget, none by
   # default. One investigation took about 60,000 tokens when measured (657
   # runs on a dev install, Claude Haiku 5.5 averaged 66,424), so 200000 is
-  # about three a day.
+  # about three a day — fewer with evidenceCheck or ledger on, whose
+  # instruction goes with every model call and which may ask once more.
   alertInvestigation:
     enabled: false
     # true refuses the shared token: every receiver must send its cluster's own.
@@ -806,7 +807,7 @@ features:
     dailyTokenBudget: 200000  # the webhook's investigations, per UTC day; 0 = no budget
     manualDailyTokenBudget: 0  # "Investigate now" investigations, per UTC day; 0 = no budget (the permission decides who)
     providerPauseMinutes: 30  # after the model provider refuses for credit or the key, new alerts are skipped this long; 0 = no pause
-    maxSteps: 8               # model calls per investigation; the last one gets no tools
+    maxSteps: 8               # model calls per investigation (+1 when evidenceCheck or ledger asks again); the last one gets no tools
     timeoutSeconds: 300
     # The time windows below, the scope groups (affected, checked and normal,
     # changed for another reason, not looked at), facts kept apart from
