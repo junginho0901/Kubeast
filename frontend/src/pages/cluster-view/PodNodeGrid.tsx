@@ -13,8 +13,8 @@ import { useClusterView } from './ClusterViewContext'
 import { pickMainContainer, podToDetail } from './types'
 import { ClusterNodeMap } from './ClusterNodeMap'
 import {
-  BOX_PREVIEW_CARDS, NODE_BOXES_PER_PAGE, NODE_PODS_PER_PAGE, boxPageLayer, boxPageOf, cellsOfPage, followedPage, nameOrder, nodeMissingLayer,
-  nodePageOf, nodeViewLayer, nodeViewPage, overviewPage, podKey, previewOrder, searchStart, type OverviewPageState,
+  BOX_PREVIEW_CARDS, NODE_BOXES_PER_PAGE, NODE_PODS_PER_PAGE, boxPageLayer, boxPageOf, cellsOfPage, followedPage, keptOverview, nameOrder,
+  nodeMissingLayer, nodePageOf, nodeViewLayer, nodeViewPage, overviewPage, podKey, previewOrder, searchStart, shownPageAddress, type OverviewPageState,
 } from './nodeBoxPages'
 import { UNSCHEDULED, type NodeEntry } from './hooks/useClusterDerived'
 import type { ClusterViewNode } from './hooks/useClusterPodsQuery'
@@ -61,6 +61,8 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod, no
   if (overview.key !== resetKey) setOverview({ key: resetKey, page: 1, anchor: null })
   const keys = useMemo(() => listed.map(keyOf), [listed])
   const page = overviewPage(keys, overview.key === resetKey ? overview : { page: 1, anchor: null })
+  const kept = overview.key === resetKey ? keptOverview(keys, overview, page) : null
+  if (kept) setOverview({ key: resetKey, ...kept })
   const total = listed.length
   const totalPages = Math.max(1, Math.ceil(total / NODE_BOXES_PER_PAGE))
   const pageEntries = listed.slice((page - 1) * NODE_BOXES_PER_PAGE, page * NODE_BOXES_PER_PAGE)
@@ -320,13 +322,15 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
     : null
   useAIContext(viewLayer, [JSON.stringify(viewLayer)])
 
-  // following the opened pod, the address keeps its page, so the page shown last is the one kept if it then goes
+  // following the opened pod, the address keeps its page, so the page shown last is the one kept if it then goes;
+  // following none, a page asked past the last is written as the page shown
   const follow = mode === 'all' && nodeView ? followedPage({ page: nodeView.page, pod: focus }, shownPage) : null
-  const followPage = follow?.page
-  const followPod = follow?.pod
+  const kept = follow ?? (mode === 'all' && nodeView && pods ? shownPageAddress(nodeView, shownPage) : null)
+  const keptPage = kept?.page
+  const keptPod = kept?.pod
   useEffect(() => {
-    if (followPage !== undefined && followPod) moveNodeView({ page: followPage, pod: followPod })
-  }, [followPage, followPod, moveNodeView])
+    if (keptPage !== undefined) moveNodeView({ page: keptPage, pod: keptPod })
+  }, [keptPage, keptPod, moveNodeView])
 
   // a search typed in this view goes to the page of its first match, that pod followed; cleared, it follows nothing
   const searched = useRef(q)
