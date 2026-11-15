@@ -12,6 +12,8 @@ export interface DisplayMessage {
   // an answer still coming: '' before its first letter
   content: string
   pending?: boolean
+  // an answer that waits for its turn before its first letter (chatStreamManager's queued)
+  queued?: boolean
   // the tool calls so far: the graphs the AI asked to show come from here, as soon as their results come
   toolCalls?: unknown[]
   // a saved answer that ended by an error (its usage says so): what came before the error
@@ -61,7 +63,7 @@ export function MessageList({ messages, emptyExtras }: MessageListProps) {
         </div>
       ) : (
         <Fragment key={position}>
-          <MessageBubble role={msg.role} content={msg.content} pending={msg.pending} toolCalls={msg.toolCalls} />
+          <MessageBubble role={msg.role} content={msg.content} pending={msg.pending} queued={msg.queued} toolCalls={msg.toolCalls} />
           {/* the error itself is not saved: once this page is read again, this is what is left of it */}
           {msg.failed && messages[position + 1]?.role !== 'error' && (
             <div className="rounded-md border border-red-700/50 bg-red-900/20 px-3 py-2 text-xs text-red-300" data-testid="floating-answer-failed">
@@ -78,11 +80,13 @@ interface MessageBubbleProps {
   role: 'user' | 'assistant'
   content: string
   pending?: boolean
+  queued?: boolean
   toolCalls?: unknown[]
 }
 
 // memo: while an answer comes the list is drawn every few milliseconds, and the bubbles above it have not changed.
-const MessageBubble = memo(function MessageBubble({ role, content, pending, toolCalls }: MessageBubbleProps) {
+const MessageBubble = memo(function MessageBubble({ role, content, pending, queued, toolCalls }: MessageBubbleProps) {
+  const { t } = useTranslation()
   if (role === 'user') {
     return (
       <div className="flex justify-end">
@@ -106,6 +110,11 @@ const MessageBubble = memo(function MessageBubble({ role, content, pending, tool
             <div className="h-2 w-2 animate-bounce rounded-full bg-slate-400" />
             <div className="h-2 w-2 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: '0.1s' }} />
             <div className="h-2 w-2 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: '0.2s' }} />
+            {queued && (
+              <span className="text-xs text-slate-400" role="status" data-testid="floating-waiting-turn">
+                {t('aiChat.waitingTurn', { defaultValue: 'Waiting for a turn — another question is running' })}
+              </span>
+            )}
           </div>
         )}
       </div>

@@ -20,10 +20,25 @@ const summary: PodNodeSummary = {
 }
 
 describe('buildClusterViewSnapshot', () => {
-  it('counts the nodes whose STATUS starts with Ready as ready', () => {
+  it('counts the nodes whose STATUS starts with Ready as ready, and the cordoned ones, naming both', () => {
     const snap = buildClusterViewSnapshot({ nodes, summary, selectedNamespace: 'all' })!
-    expect(snap.data.stats).toMatchObject({ total_nodes: 5, ready_nodes: 2, total_pods: 12, warning_pods: 2, error_pods: 1 })
-    expect(snap.summary).toContain('노드 5개 (Ready 2)')
+    expect(snap.data.stats).toMatchObject({ total_nodes: 5, ready_nodes: 2, cordoned_nodes: 2, total_pods: 12, warning_pods: 2, error_pods: 1 })
+    expect(snap.summary).toContain('노드 5개 (Ready 2, SchedulingDisabled 2)')
+    expect({ notReady: snap.data.nodes_not_ready, cordoned: snap.data.nodes_cordoned }).toEqual({ notReady: ['n1', 'n2', 'n4'], cordoned: ['n3', 'n4'] })
+  })
+
+  it('follows the live node list: a node turning NotReady, a node added and one removed change the counts', () => {
+    const ready = [{ name: 'a', status: 'Ready' }, { name: 'b', status: 'Ready' }]
+    const before = buildClusterViewSnapshot({ nodes: ready, summary, selectedNamespace: 'all' })!
+    expect({ stats: before.data.stats, notReady: before.data.nodes_not_ready, summary: before.summary.includes('노드 2개 (Ready 2)') }).toMatchObject({
+      stats: { total_nodes: 2, ready_nodes: 2, cordoned_nodes: 0 }, notReady: undefined, summary: true,
+    })
+    const turned = buildClusterViewSnapshot({ nodes: [{ name: 'a', status: 'Ready' }, { name: 'b', status: 'NotReady' }, { name: 'c', status: 'Ready,SchedulingDisabled' }], summary, selectedNamespace: 'all' })!
+    expect({ stats: turned.data.stats, notReady: turned.data.nodes_not_ready, cordoned: turned.data.nodes_cordoned }).toMatchObject({
+      stats: { total_nodes: 3, ready_nodes: 2, cordoned_nodes: 1 }, notReady: ['b'], cordoned: ['c'],
+    })
+    const removed = buildClusterViewSnapshot({ nodes: [{ name: 'a', status: 'Ready' }], summary, selectedNamespace: 'all' })!
+    expect(removed.data.stats).toMatchObject({ total_nodes: 1, ready_nodes: 1, cordoned_nodes: 0 })
   })
 
   it('names the search and the pods it found, which the warnings and errors count', () => {

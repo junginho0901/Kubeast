@@ -162,7 +162,7 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
       {serviceName !== '-' && (
         <InfoSection title={peersError && !Array.isArray(nsSlices) ? 'Peer EndpointSlices for {{service}}' : 'Peer EndpointSlices for {{service}} ({{n}})'} titleValues={{ service: serviceName, n: peerSlices.length }}>
           {peersError && !Array.isArray(nsSlices) ? (
-            <ListReadFailure error={peersError} />
+            <ListReadFailure error={peersError} list={`Peer EndpointSlices for ${serviceName}`} />
           ) : peerSlices.length === 0 ? (
             <p className="text-xs text-slate-400"><Tx>No other EndpointSlice for this Service in the namespace.</Tx></p>
           ) : (

@@ -27,6 +27,12 @@ func TestRoleAtMost(t *testing.T) {
 		{"Read", "Admin", "Read"},
 		{"auditor", "Write", "auditor"}, // custom role: unranked, keeps its own name
 		{"auditor", "Admin", "auditor"},
+		// a custom role named as a built-in in other capitals is no built-in: it keeps its name, which acts as no role
+		// group, and never becomes the ceiling's built-in name
+		{"ADMIN", "Read", "ADMIN"},
+		{"admin", "Write", "admin"},
+		{" Admin ", "Read", " Admin "},
+		{"WRITE", "Read", "WRITE"},
 		{"", "Read", ""},
 	}
 	for _, c := range cases {

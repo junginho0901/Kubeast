@@ -161,12 +161,17 @@ export default function Policies() {
 
   const aiSnapshot = useMemo(() => {
     if (!data) return null
+    // a kind the cluster refused or could not list comes with a count of 0 beside its `error`: named as its chip names it, not counted
+    const forbiddenKinds = kinds.filter((k) => k.error === 'forbidden').map(kindLabel)
+    const failedKinds = kinds.filter((k) => k.error && k.error !== 'forbidden').map((k) => ({ kind: kindLabel(k), reason: k.error }))
     return {
       source: 'base' as const,
-      summary: `Gateway 정책 ${items.length}개${kindFilter ? ` · ${kindFilter}` : ''}`,
+      summary: `Gateway 정책 ${items.length}개${kindFilter ? ` · ${kindFilter}` : ''}${forbiddenKinds.length ? ` · 볼 권한 없는 종류: ${forbiddenKinds.join(', ')}` : ''}${failedKinds.length ? ` · 불러오지 못한 종류: ${failedKinds.map((f) => f.kind).join(', ')}` : ''}`,
       data: {
         filters: { kind: kindFilter || undefined, namespace: namespaceFilter || undefined, search: searchQuery || undefined },
-        stats: { total: items.length, kinds: kinds.map((k) => `${k.kind} (${k.source}, ${k.count})`) },
+        stats: { total: items.length, kinds: kinds.map((k) => `${kindLabel(k)} (${k.source}, ${k.error ? (k.error === 'forbidden' ? 'no permission' : 'not read') : k.count})`) },
+        forbidden_kinds: forbiddenKinds.length ? forbiddenKinds : undefined,
+        failed_kinds: failedKinds.length ? failedKinds : undefined,
         ...summarizeList(pagedItems as unknown as Record<string, unknown>[], {
           total: sortedItems.length,
           currentPage,
@@ -180,7 +185,7 @@ export default function Policies() {
         }),
       },
     }
-  }, [data, items, kinds, pagedItems, sortedItems.length, currentPage, rowsPerPage, kindFilter, namespaceFilter, searchQuery])
+  }, [data, items, kinds, kindLabel, pagedItems, sortedItems.length, currentPage, rowsPerPage, kindFilter, namespaceFilter, searchQuery])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -255,6 +260,7 @@ export default function Policies() {
         {kinds.map((k) => (
           <span
             key={`${k.group}/${k.plural}`}
+            data-testid={k.error ? (k.error === 'forbidden' ? 'policy-kind-refused' : 'policy-kind-failed') : undefined}
             title={`${k.plural}.${k.group}/${k.version} · ${sourceLabel(k.source)}${k.error ? ` · ${k.error}` : ''}`}
             className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${k.error ? 'border-amber-700/60 bg-amber-900/20 text-amber-300' : 'border-slate-700 bg-slate-800/60 text-slate-300'}`}
           >
