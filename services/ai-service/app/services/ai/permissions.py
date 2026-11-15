@@ -20,6 +20,9 @@ def effective_cluster(service: "AIService") -> str:
     return getattr(service, "cluster_name", None) or DEFAULT_CLUSTER
 
 
+_BUILTIN_TIERS = {"Admin": "admin", "Write": "write", "Read": "read"}
+
+
 def resolve_user_role(service: "AIService", authorization: Optional[str]) -> str:
     if not authorization:
         return "read"
@@ -28,8 +31,9 @@ def resolve_user_role(service: "AIService", authorization: Optional[str]) -> str
         token = parts[1].strip() if len(parts) == 2 else authorization.strip()
         payload = decode_access_token(token)
         service._token_payload = payload
-        role = (payload.role or "").strip().lower()
-        if role in {"admin", "read", "write"}:
+        # the built-ins by their exact names, as auth-service seeds them
+        role = _BUILTIN_TIERS.get(payload.role or "")
+        if role:
             return role
     except Exception:
         pass
