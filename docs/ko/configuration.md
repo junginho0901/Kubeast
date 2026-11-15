@@ -174,7 +174,7 @@ postgresql:
   user: kubeast
   password: ""          # 비우면 설치 때 생성하고 업그레이드해도 유지합니다(secret에서 확인). 외부 DB(enabled: false)면 필수입니다
   database: kubeast
-# 업그레이드할 때 Redis는 옛 파드를 멈춘 뒤 새 파드를 띄우므로(Recreate) 몇 초 동안 캐시가 비어 있습니다.
+# 업그레이드할 때 Redis는 옛 파드를 멈춘 뒤 새 파드를 띄우므로(maxSurge 0) 몇 초 동안 캐시가 비어 있습니다.
 redis:
   enabled: true
   password: ""          # requirepass, Redis 사용자가 꺼져 있는 동안 씁니다 — 비우면 생성합니다(REDIS_PASSWORD)
@@ -263,7 +263,7 @@ multicluster:
 - 업그레이드가 `kubeast-redis-users`를 더하고 `kubeast-secrets`의 값은 `REDIS_PASSWORD`까지 모두 그대로 둡니다.
 - Redis와 k8s-service가 다시 시작합니다. Redis가 다시 시작할 때마다 그렇듯 캐시는 비어서 시작합니다.
 - 옛 k8s-service 파드가 내려갈 때까지 그 파드가 새 Redis에 보내는 요청은 거절되고 캐시에 없는 것으로 읽힙니다.
-- 새 Redis가 답하기 전에 뜬 새 k8s-service 파드(업그레이드는 옛 Redis를 먼저 멈춥니다, Recreate)는 Redis가 답할 때까지 메모리에 캐시하고, 5초마다 다시 묻습니다. 답은 같고, 그동안 캐시만 나눠 쓰지 않습니다.
+- 새 Redis가 답하기 전에 뜬 새 k8s-service 파드(업그레이드는 옛 Redis를 먼저 멈춥니다, maxSurge 0)는 Redis가 답할 때까지 메모리에 캐시하고, 5초마다 다시 묻습니다. 답은 같고, 그동안 캐시만 나눠 쓰지 않습니다.
 - `secrets.existingSecret`을 쓰면 업그레이드에서 바뀌는 것이 없습니다: `redis.acl.existingSecretHasKeys`가 true가 될 때까지 Redis는 비밀번호 하나를 씁니다.
 - 그 값을 켜면, Secret을 읽을 수 있는 업그레이드는 키가 없거나 비었을 때 그 키를 말하고 멈춥니다. `helm template`과 Argo CD는 Secret을 읽지 못합니다: 그때는 `acl` 컨테이너가 어느 키가 없는지 말하고 멈추며, k8s-service는 메모리에 캐시합니다.
 - `redis.acl.enabled: false`면 Redis는 예전 그대로(메모리 상한만 더해) 뜹니다.
