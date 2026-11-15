@@ -388,8 +388,9 @@ ai:
   # when asked why something broke. Off: the chat, alert investigations and the
   # MCP server are offered timeline without it, the chat's instructions do
   # not name it, a call naming the view is sent without it and k8s-service's
-  # changes routes answer 404 — unless
-  # features.alertInvestigation.changesFirst is on, whose step 0 reads them.
+  # changes routes answer 404 — unless alert investigations are on with
+  # features.alertInvestigation.changesFirst, whose step 0 reads them; the chat
+  # still sends its calls without the view.
   timelineChanges: false
   # Provider claude-code: the chat with a Claude Pro/Max subscription instead of
   # an API key. Claude Code makes each model call and the chat's own tools answer

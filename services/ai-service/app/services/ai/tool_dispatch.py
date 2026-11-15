@@ -375,7 +375,7 @@ async def execute_function_with_context(
                 tool_args[key] = resolvers._coerce_limit(service, function_args.get(key), default=0, max_value=1_000_000)
             if function_name == "prometheus_query" and _flag(function_args.get("chart")):
                 tool_args["range"] = True  # a graph needs points; chart/title/unit stay here (app/services/ai/charts.py)
-            if function_name == "timeline" and not changes_view_on():
+            if function_name == "timeline" and not changes_view_on(getattr(tool_context, "session_id", None)):
                 tool_args.pop("view", None)  # the changes view is reachable only with its switch (or step 0's)
             labels = function_args.get("alert_labels")
             if function_name in ("alerts_list", "alert_investigate") and isinstance(labels, dict):

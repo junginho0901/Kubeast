@@ -60,9 +60,9 @@ type Config struct {
 	// runs it; it needs AI on.
 	AlertInvestigationEnabled bool
 
-	// The timeline's changes view (GET …/timeline/changes): served with chart ai.timelineChanges (AI_TIMELINE_CHANGES)
-	// or features.alertInvestigation.changesFirst (ALERT_INVESTIGATION_CHANGES_FIRST, an investigation's step 0 reads
-	// it); with both off the routes answer 404, as before the view.
+	// The timeline's changes view (GET …/timeline/changes): served with chart ai.timelineChanges (AI_TIMELINE_CHANGES),
+	// or with alert investigations on and their step 0 reading it (ALERT_INVESTIGATION_ENABLED and
+	// ALERT_INVESTIGATION_CHANGES_FIRST); otherwise the routes answer 404, as before the view.
 	TimelineChangesView bool
 
 	// Log files inside containers (chart features.logFiles). Off = the routes
@@ -173,7 +173,8 @@ func Load() Config {
 		AIEnabled: pkgconfig.GetEnvBool("AI_ENABLED", true),
 
 		AlertInvestigationEnabled: pkgconfig.GetEnvBool("ALERT_INVESTIGATION_ENABLED", false),
-		TimelineChangesView:       pkgconfig.EnvSwitch("AI_TIMELINE_CHANGES") || pkgconfig.EnvSwitch("ALERT_INVESTIGATION_CHANGES_FIRST"),
+		TimelineChangesView: pkgconfig.EnvSwitch("AI_TIMELINE_CHANGES") ||
+			(pkgconfig.EnvSwitch("ALERT_INVESTIGATION_ENABLED") && pkgconfig.EnvSwitch("ALERT_INVESTIGATION_CHANGES_FIRST")),
 
 		LogFilesEnabled:    pkgconfig.GetEnvBool("LOG_FILES_ENABLED", false),
 		LogFilesPaths:      pkgconfig.GetEnvList("LOG_FILES_PATHS", ""),
