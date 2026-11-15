@@ -66,8 +66,8 @@ def test_right_resource_wrong_kind_fails():
 
 
 def test_missing_cause_fails():
-    s = rca.score_rca(answer({"causes": [cause("Deployment/shop-x/inventory", kind="crash")]}), TRUTH, CALLS)
-    assert not s["pass"] and s["extras"] == ["Deployment/shop-x/inventory"]
+    s = rca.score_rca(answer({"causes": [cause("Deployment/shop-x/warehouse", kind="crash")]}), TRUTH, CALLS)
+    assert not s["pass"] and s["extras"] == ["Deployment/shop-x/warehouse"]
 
 
 def test_decoy_named_as_cause_fails_even_with_the_right_one():
