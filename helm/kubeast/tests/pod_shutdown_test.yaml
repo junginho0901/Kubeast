@@ -116,8 +116,8 @@ tests:
         documentSelector: { path: kind, value: Deployment }
         template: redis.yaml
       - equal:
-          path: spec.strategy.type
-          value: Recreate
+          path: spec.strategy.rollingUpdate.maxSurge
+          value: 0
         documentSelector: { path: kind, value: Deployment }
         template: redis.yaml
 
