@@ -21,6 +21,7 @@ from app.services.ai import charts
 from app.services.ai import formatters
 from app.services.ai import history as history_mod
 from app.services.ai import limits
+from app.services.ai import tool_replay
 from app.services.ai import usage as usage_acct
 from app.services.ai.debug_dump import dump, log, safe_error
 
@@ -547,6 +548,8 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
                 'requests': call_requests,
                 **({'objects': target.objects} if target.objects else {}),
                 **tool_input,
+                # replay: true when the answer came from recorded tool answers, not the cluster (tool_replay)
+                **tool_replay.call_fields(service, ran),
             },
             request_ip=(audit_http or {}).get('ip'),
             user_agent=(audit_http or {}).get('user_agent'),
@@ -604,6 +607,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         payload["access"] = call_access
     if call_requests is not None:
         payload["requests"] = call_requests
+    payload.update(tool_replay.call_fields(service, ran))
     if display_preview is not None:
         payload["display"] = display_preview
         payload["display_format"] = "kubectl"
