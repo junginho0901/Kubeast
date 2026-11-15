@@ -21,12 +21,25 @@ ROOT = Path(__file__).resolve().parent.parent
 CATALOG = "frontend/src/constants/modelCatalog.ts"
 
 
+# getDefaultModel as the screens' list defines it: the provider's first entry. Another body reads nothing here.
+_DEFAULT_MODEL = re.compile(r"export const getDefaultModel = \(providerId: string\): string => \{\s*"
+                            r"const prov = getProvider\(providerId\)\s*return prov\?\.models\[0\]\?\.name \?\? ''\s*\}")
+
+
 def catalog_first(provider: str, root: Path) -> str | None:
-    """The first model the screens' list gives a provider (modelCatalog.ts getDefaultModel), or None."""
+    """The first model the screens' list gives a provider (modelCatalog.ts getDefaultModel), or None when getDefaultModel
+    reads another way or the provider's models are not a list written there."""
     text = (root / CATALOG).read_text(encoding="utf-8")
     at = text.find(f"id: '{provider}',")
-    models = text.find("models: [", at) if at >= 0 else -1
-    first = re.match(r"\s*\{ name: '([^']+)'", text[models + len("models: ["):]) if models >= 0 else None
+    if at < 0 or not _DEFAULT_MODEL.search(text):
+        return None
+    following = text.find("    id: '", at + 1)
+    entry = text[at:following if following > 0 else len(text)]
+    models = re.search(r"\bmodels: \[(.*?)\]", entry, re.S)
+    if models is None:
+        return None
+    body = "\n".join(line for line in models.group(1).splitlines() if not line.strip().startswith("//"))
+    first = re.match(r"\s*\{ name: '([^']+)'", body)
     return first.group(1) if first else None
 
 
@@ -51,7 +64,7 @@ DEFAULTS = [
 _CLAUDE = re.compile(r"claude-(?:opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d+))?")
 _CLAUDE_DATED = re.compile(r"claude-[a-z0-9-]+-\d{8}")
 _OPENAI = re.compile(r"(?:gpt|chatgpt|o\d)[a-z0-9.-]*")
-_OPENAI_DATED = re.compile(rf"(?:gpt|chatgpt|o\d)[a-z0-9.-]*-(?:20\d\d-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])|(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01]))(?:-preview)?")
+_OPENAI_DATED = re.compile(r"(?:gpt|chatgpt|o\d)[a-z0-9.-]*-(?:20\d\d-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])|(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01]))(?:-preview)?")
 # OpenAI models whose own ID is their only snapshot: developers.openai.com/api/docs/models/<id> "Snapshots" (read 2026-11-15).
 _OPENAI_OWN_SNAPSHOT = frozenset({"gpt-6-luna"})
 
