@@ -34,5 +34,9 @@
   "kubectl -n $NS rollout undo deploy/shop-web"
  ],
  "cooldown_seconds": 30,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceDown", "service": "shop-web", "severity": "critical"},
+  "annotations": {"summary": "shop-web is down", "description": "Every request to shop-web has failed for the last few minutes."}
+ }
 }

@@ -35,5 +35,9 @@
   "kubectl -n $NS rollout restart deploy/shop-api"
  ],
  "cooldown_seconds": 30,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceRequestsFailing", "service": "visitor"},
+  "annotations": {"summary": "API calls drop out every few minutes", "description": "visitor's calls to the API fail for a minute or more at a time, and again every few minutes."}
+ }
 }
