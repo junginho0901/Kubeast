@@ -46,6 +46,7 @@ metadata:
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
   {{- include "kubeast.replicas" (dict "root" $ "key" "gateway") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" . | nindent 2 }}
   selector:
     matchLabels:
       app: gateway
