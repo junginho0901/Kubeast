@@ -8,8 +8,9 @@
 # (tool dispatch) 의 if-elif chain 과 매칭되어야 함. name 변경 / 추가 / 삭제 시
 # dispatch 도 함께 갱신.
 
-import os
 from typing import Dict, List
+
+from app.services import switch
 
 # resource_graph's call parameters, offered only where the cluster has features.callGraph on (features.PARAM_GATES), and
 # in the MCP server's list only with CALL_GRAPH_ENABLED (offer_call_graph).
@@ -1914,14 +1915,20 @@ def get_tools_definition(service) -> List[Dict]:
 
 def timeline_changes_on() -> bool:
     """AI_TIMELINE_CHANGES (chart ai.timelineChanges, default off): the model is offered timeline's changes view."""
-    return os.getenv("AI_TIMELINE_CHANGES", "false").strip().lower() == "true"
+    return switch.env_on("AI_TIMELINE_CHANGES")
+
+
+def changes_view_on() -> bool:
+    """Whether a timeline call may ask the changes view at all: with AI_TIMELINE_CHANGES, or ALERT_INVESTIGATION_CHANGES_FIRST
+    (an investigation's step 0 reads it). Both off, dispatch drops view, as before the view."""
+    return timeline_changes_on() or switch.env_on("ALERT_INVESTIGATION_CHANGES_FIRST")
 
 
 def anomaly_rank_on() -> bool:
     """ANOMALY_RANK_ENABLED (chart features.anomalyRank.enabled, default off; in the ConfigMap every service reads): the
     chat prompt names anomaly_rank and the MCP server lists it. The chat's and an investigation's tool lists follow the
-    cluster's features (features.GATES)."""
-    return os.getenv("ANOMALY_RANK_ENABLED", "false").strip().lower() == "true"
+    cluster's features (features.GATES); dispatch answers it as an unknown function while it is off."""
+    return switch.env_on("ANOMALY_RANK_ENABLED")
 
 
 def _timeline_without_changes(tool: Dict) -> Dict:
@@ -1934,11 +1941,30 @@ def _timeline_without_changes(tool: Dict) -> Dict:
     return {**tool, "function": fn}
 
 
+# With anomaly_rank on too, the chat's one order rule calls it first (prompts.ANOMALY_RANK_RULE_WITH_CHANGES): the changes
+# view's description then does not say "first".
+TIMELINE_FIRST = " Use it first for \"why did this break?\", then line the changes up with when the symptom started."
+TIMELINE_AFTER_ANOMALY_RANK = " For \"why did this break?\", line the changes up with when the symptom started."
+
+
+def _timeline_after_anomaly_rank(tool: Dict) -> Dict:
+    fn = dict(tool.get("function") or {})
+    if isinstance(fn.get("description"), str):
+        fn["description"] = fn["description"].replace(TIMELINE_FIRST, TIMELINE_AFTER_ANOMALY_RANK)
+    return {**tool, "function": fn}
+
+
 def offer_timeline_changes(tools: List[Dict]) -> List[Dict]:
-    """tools as the model is offered them: with AI_TIMELINE_CHANGES off, timeline without its changes view."""
+    """tools as the model is offered them: with AI_TIMELINE_CHANGES off, timeline without its changes view; with it and
+    ANOMALY_RANK_ENABLED on, the view's description without "first"."""
+    def timeline(t: Dict) -> bool:
+        return ((t or {}).get("function") or {}).get("name") == "timeline"
+
     if timeline_changes_on():
+        if anomaly_rank_on():
+            return [_timeline_after_anomaly_rank(t) if timeline(t) else t for t in tools]
         return tools
-    return [_timeline_without_changes(t) if ((t or {}).get("function") or {}).get("name") == "timeline" else t for t in tools]
+    return [_timeline_without_changes(t) if timeline(t) else t for t in tools]
 
 
 def without_params(tool: Dict, params: tuple, words: str) -> Dict:
@@ -1953,8 +1979,9 @@ def without_params(tool: Dict, params: tuple, words: str) -> Dict:
 
 
 def call_graph_on() -> bool:
-    """CALL_GRAPH_ENABLED (chart features.callGraph.enabled, default off; in the ConfigMap every service reads)."""
-    return os.getenv("CALL_GRAPH_ENABLED", "false").strip().lower() == "true"
+    """CALL_GRAPH_ENABLED (chart features.callGraph.enabled, default off; in the ConfigMap every service reads), read with
+    the one switch rule (app/services/switch.py)."""
+    return switch.env_on("CALL_GRAPH_ENABLED")
 
 
 def offer_call_graph(tools: List[Dict]) -> List[Dict]:

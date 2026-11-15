@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+from app.services import switch
+
 
 def _int(name: str, default: int) -> int:
     try:
@@ -94,5 +96,5 @@ def load() -> InvestigationSettings:
         ).strip(),
         internal_token=os.getenv("INTERNAL_API_TOKEN", "").strip(),
         inbox_stale_hours=min(24 * 30, max(1, _int("ALERT_INBOX_STALE_HOURS", 8))),
-        call_paths=os.getenv("CALL_GRAPH_ENABLED", "false").strip().lower() == "true",
+        call_paths=switch.env_on("CALL_GRAPH_ENABLED"),  # the one switch rule, as tools.call_graph_on
     )

@@ -9,7 +9,7 @@
 # 키워드 ("Kubeast", "도구 호출", "Critical Rules" 등) 가 사라지면 행동이
 # 바뀐다 — tests/test_prompts.py 의 회귀 테스트로 보호.
 
-from app.services.ai.tools import anomaly_rank_on, timeline_changes_on
+from app.services.ai.tools import anomaly_rank_on, call_graph_on, timeline_changes_on
 
 SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 
@@ -363,20 +363,37 @@ ANOMALY_RANK_GUIDE = (
     "limit 근처 · 오류 로그 모양·줄 수 · 서비스별 요청·실패 비율·p90 · 노드 압박, 최대 10개, 새로 나타난 것 먼저). `normal`은 아무것도 못 찾은 검사, `not_run`은 "
     "못 한 검사와 까닭 — 못 한 것은 정상이 아님 (켜진 설치에서만 제공)"
 )
-# The one order for broad "why did this break?" questions: anomaly_rank, then the changes view while it is offered, then
-# resource_graph's calls; it takes the place of the changes view's own "changes first" rule (_TIME_RULE's addition).
+# The one order for broad "why did this break?" questions, by the switches that are on; each switch alone gives its own
+# pull request's words, and the combined words come only with both on. It takes the place of the changes view's own
+# "changes first" rule (_TIME_RULE's addition) whenever it names that view.
+# anomaly_rank on, timeline's changes view off: this pull request's line as written (timeline's events and rollouts).
 ANOMALY_RANK_RULE = (
+    "- **\"왜 깨졌어?\"·\"뭐가 달라졌어?\"처럼 넓게 물으면 이 차례로 보세요** (먼저 부를 도구를 정하는 규칙은 이것 하나입니다): ① 네임스페이스가 정해져 있고 `anomaly_rank`가 "
+    "제공되면 그것을 **한 번** → ② 거기 나온 구간(없으면 증상이 시작된 시각 앞 몇 시간)으로 `timeline`에서 그동안 바뀐 것 → ③ 여러 워크로드가 같이 아프면 "
+    "`resource_graph`를 `include: [\"calls\"]`로(제공될 때, 같은 구간을 `since_time`·`until_time`으로) 불러 누가 누구를 부르는지 — 고장 난 쪽을 "
+    "부르는 워크로드는 원인보다 피해자일 때가 많습니다. `anomaly_rank`가 없으면 ②부터. 순위는 단서이지 원인이 아닙니다 — 나온 대상을 읽어 확인하고, `not_run`에 있는 검사는 \"못 "
+    "봤다\"고 말하세요. 바뀐 것이 있어도 증상과 시각·대상이 맞지 않으면 원인으로 대지 마세요."
+)
+# anomaly_rank and the changes view on: step 2 reads the changes view.
+ANOMALY_RANK_RULE_WITH_CHANGES = (
     "- **\"왜 깨졌어?\"·\"뭐가 달라졌어?\"처럼 넓게 물으면 이 차례로 보세요** (먼저 부를 도구를 정하는 규칙은 이것 하나입니다): ① 네임스페이스가 정해져 있고 `anomaly_rank`가 "
     "제공되면 그것을 **한 번** → ② 거기 나온 구간(없으면 증상이 시작된 시각 앞 몇 시간)을 `since_time`·`until_time`으로 `timeline`을 `view: "
     "\"changes\"`로 불러 그동안 바뀐 것 → ③ 여러 워크로드가 같이 아프면 `resource_graph`를 `include: [\"calls\"]`로(제공될 때, 같은 구간을 "
     "`since_time`·`until_time`으로) 불러 누가 누구를 부르는지 — 고장 난 쪽을 부르는 워크로드는 원인보다 피해자일 때가 많습니다. `anomaly_rank`가 없으면 ②부터. "
     "순위는 단서이지 원인이 아닙니다 — 나온 대상을 읽어 확인하고, `not_run`에 있는 검사는 \"못 봤다\"고 말하세요. 바뀐 것이 있어도 증상과 시각·대상이 맞지 않으면 원인으로 대지 마세요."
 )
-ANOMALY_RANK_RULE_WITHOUT_CHANGES = (
-    "- **\"왜 깨졌어?\"·\"뭐가 달라졌어?\"처럼 넓게 물으면 이 차례로 보세요** (먼저 부를 도구를 정하는 규칙은 이것 하나입니다): ① 네임스페이스가 정해져 있고 `anomaly_rank`가 "
-    "제공되면 그것을 **한 번** → ② 여러 워크로드가 같이 아프면 `resource_graph`를 `include: [\"calls\"]`로(제공될 때, 거기 나온 구간을 — 없으면 증상이 시작된 시각 "
-    "앞 몇 시간을 — `since_time`·`until_time`으로) 불러 누가 누구를 부르는지 — 고장 난 쪽을 부르는 워크로드는 원인보다 피해자일 때가 많습니다. `anomaly_rank`가 "
-    "없으면 ②부터. 순위는 단서이지 원인이 아닙니다 — 나온 대상을 읽어 확인하고, `not_run`에 있는 검사는 \"못 봤다\"고 말하세요."
+# anomaly_rank off, resource_graph's calls on (CALL_GRAPH_ENABLED): the lines of the rule not about anomaly_rank, timeline first.
+CALL_GRAPH_RULE = (
+    "- **\"왜 깨졌어?\"·\"뭐가 달라졌어?\"처럼 넓게 물으면 이 차례로 보세요** (먼저 부를 도구를 정하는 규칙은 이것 하나입니다): ① 증상이 시작된 시각 앞 몇 시간으로 `timeline`에서 "
+    "그동안 바뀐 것 → ② 여러 워크로드가 같이 아프면 `resource_graph`를 `include: [\"calls\"]`로(제공될 때, 같은 구간을 "
+    "`since_time`·`until_time`으로) 불러 누가 누구를 부르는지 — 고장 난 쪽을 부르는 워크로드는 원인보다 피해자일 때가 많습니다. 바뀐 것이 있어도 증상과 시각·대상이 맞지 않으면 "
+    "원인으로 대지 마세요."
+)
+CALL_GRAPH_RULE_WITH_CHANGES = (
+    "- **\"왜 깨졌어?\"·\"뭐가 달라졌어?\"처럼 넓게 물으면 이 차례로 보세요** (먼저 부를 도구를 정하는 규칙은 이것 하나입니다): ① 증상이 시작된 시각 앞 몇 시간을 "
+    "`since_time`·`until_time`으로 `timeline`을 `view: \"changes\"`로 불러 그동안 바뀐 것 → ② 여러 워크로드가 같이 아프면 `resource_graph`를 "
+    "`include: [\"calls\"]`로(제공될 때, 같은 구간을 `since_time`·`until_time`으로) 불러 누가 누구를 부르는지 — 고장 난 쪽을 부르는 워크로드는 원인보다 피해자일 "
+    "때가 많습니다. 바뀐 것이 있어도 증상과 시각·대상이 맞지 않으면 원인으로 대지 마세요."
 )
 ANOMALY_RANK_SIGNATURE = (
     "- `anomaly_rank(namespace, since_time, until_time, workload_kind, workload_name)` - What differs in one "
@@ -393,18 +410,21 @@ ANOMALY_RANK_LINES = {
 
 def system_message() -> str:
     """The chat's system prompt: SYSTEM_MESSAGE, with the lines of each switch that is on (timeline's changes view,
-    anomaly_rank, whose order rule names the changes view only while it is offered); with every one off, SYSTEM_MESSAGE
-    as it is."""
+    anomaly_rank, resource_graph's calls); with every one off, SYSTEM_MESSAGE as it is."""
     lines: dict = {}
-    changes = timeline_changes_on()
+    changes, anomaly, calls = timeline_changes_on(), anomaly_rank_on(), call_graph_on()
     if changes:
         lines.update(TIMELINE_CHANGES_LINES)
-    if anomaly_rank_on():
+    rule = None
+    if anomaly:
         lines.update(ANOMALY_RANK_LINES)
+        rule = ANOMALY_RANK_RULE_WITH_CHANGES if changes else ANOMALY_RANK_RULE
+    elif calls:
+        rule = CALL_GRAPH_RULE_WITH_CHANGES if changes else CALL_GRAPH_RULE
+    if rule is not None:
+        lines[_STATE_RULE] = _STATE_RULE + "\n" + rule
         if changes:
             del lines[_TIME_RULE]
-        else:
-            lines[_STATE_RULE] = _STATE_RULE + "\n" + ANOMALY_RANK_RULE_WITHOUT_CHANGES
     if not lines:
         return SYSTEM_MESSAGE
     return "\n".join(lines.get(line, line) for line in SYSTEM_MESSAGE.split("\n"))

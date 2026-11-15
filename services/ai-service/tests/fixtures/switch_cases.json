@@ -1,0 +1,29 @@
+{
+  "note": "A switch's value and whether it turns the switch on: app/services/switch.py and services/pkg/config.SwitchOn.",
+  "cases": [
+    {"value": "true", "on": true},
+    {"value": "TRUE", "on": true},
+    {"value": "True", "on": true},
+    {"value": " true ", "on": true},
+    {"value": "\ttrue\n", "on": true},
+    {"value": "1", "on": true},
+    {"value": "on", "on": true},
+    {"value": "ON", "on": true},
+    {"value": "yes", "on": true},
+    {"value": "Yes", "on": true},
+    {"value": "", "on": false},
+    {"value": " ", "on": false},
+    {"value": "false", "on": false},
+    {"value": "FALSE", "on": false},
+    {"value": "0", "on": false},
+    {"value": "off", "on": false},
+    {"value": "no", "on": false},
+    {"value": "t", "on": false},
+    {"value": "y", "on": false},
+    {"value": "2", "on": false},
+    {"value": "01", "on": false},
+    {"value": "truee", "on": false},
+    {"value": "enabled", "on": false},
+    {"value": "true,false", "on": false}
+  ]
+}

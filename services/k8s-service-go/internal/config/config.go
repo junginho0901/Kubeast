@@ -60,6 +60,11 @@ type Config struct {
 	// runs it; it needs AI on.
 	AlertInvestigationEnabled bool
 
+	// The timeline's changes view (GET …/timeline/changes): served with chart ai.timelineChanges (AI_TIMELINE_CHANGES)
+	// or features.alertInvestigation.changesFirst (ALERT_INVESTIGATION_CHANGES_FIRST, an investigation's step 0 reads
+	// it); with both off the routes answer 404, as before the view.
+	TimelineChangesView bool
+
 	// Narrowing for the AI (chart features.anomalyRank, off by default): GET
 	// /namespaces/{namespace}/anomalies ranks what differs from the window
 	// before. Off = the route answers 404 and reads nothing. The rest bound one
@@ -188,8 +193,9 @@ func Load() Config {
 		AIEnabled: pkgconfig.GetEnvBool("AI_ENABLED", true),
 
 		AlertInvestigationEnabled: pkgconfig.GetEnvBool("ALERT_INVESTIGATION_ENABLED", false),
+		TimelineChangesView:       pkgconfig.EnvSwitch("AI_TIMELINE_CHANGES") || pkgconfig.EnvSwitch("ALERT_INVESTIGATION_CHANGES_FIRST"),
 
-		AnomalyRankEnabled:         pkgconfig.GetEnvBool("ANOMALY_RANK_ENABLED", false),
+		AnomalyRankEnabled:         pkgconfig.EnvSwitch("ANOMALY_RANK_ENABLED"),
 		AnomalyRankMaxQueries:      pkgconfig.GetEnvInt("ANOMALY_RANK_MAX_QUERIES", 12),
 		AnomalyRankCheckTimeoutSec: pkgconfig.GetEnvInt("ANOMALY_RANK_CHECK_TIMEOUT_SEC", 5),
 		AnomalyRankTimeoutSec:      pkgconfig.GetEnvInt("ANOMALY_RANK_TIMEOUT_SEC", 20),
@@ -197,7 +203,7 @@ func Load() Config {
 		AnomalyRankCacheSec:        pkgconfig.GetEnvInt("ANOMALY_RANK_CACHE_SEC", 60),
 		AnomalyRankLogMaxBytes:     int64(pkgconfig.GetEnvInt("ANOMALY_RANK_LOG_MAX_BYTES", 10<<30)),
 
-		CallGraphEnabled: pkgconfig.GetEnvBool("CALL_GRAPH_ENABLED", false),
+		CallGraphEnabled: pkgconfig.EnvSwitch("CALL_GRAPH_ENABLED"),
 
 		LogFilesEnabled:    pkgconfig.GetEnvBool("LOG_FILES_ENABLED", false),
 		LogFilesPaths:      pkgconfig.GetEnvList("LOG_FILES_PATHS", ""),
