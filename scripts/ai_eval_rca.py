@@ -21,8 +21,10 @@ ANSWER_FORMATS = {"rca_block_v0": RCA_BLOCK_V0}
 KINDS = ("crash", "oom", "image", "config_change", "rollout", "network_policy", "dns", "resource_limit", "quota", "node",
          "dependency_down", "dependency_slow", "storage", "none")
 
-# What an extra cause (not a truth cause, not in also_ok, not a decoy) takes off a right answer's 1.0.
+# What an extra cause (not a truth cause, not in also_ok, not a decoy) takes off a right answer's 1.0, and how many a
+# passing answer may hold: more reads as a list of guesses and does not pass.
 EXTRA_CAUSE_PENALTY = 0.25
+EXTRAS_ALLOWED = 1
 DEFAULT_TIME_TOLERANCE_SECONDS = 120
 DEFAULT_INJECT_WAIT_SECONDS = 240
 
@@ -146,11 +148,22 @@ def _fences(text: str) -> list[tuple[list[str], str, re.Match]]:
     return [([w for w in re.split(r"[^a-z0-9_-]+", m.group(1).lower()) if w], m.group(2), m) for m in _FENCE.finditer(text or "")]
 
 
+def _loose(words: list[str], body: str) -> dict | None:
+    """A ```json (or untagged) block's object when it holds causes or no_fault: what extract_block reads as loose."""
+    if words not in ([], ["json"]):
+        return None
+    try:
+        block = json.loads(body)
+    except ValueError:
+        return None
+    return block if isinstance(block, dict) and ("causes" in block or "no_fault" in block) else None
+
+
 def strip_blocks(text: str) -> str:
-    """The text without its rca blocks."""
+    """The text without its rca blocks and the loose blocks extract_block would read."""
     out, at = [], 0
-    for words, _, m in _fences(text):
-        if "rca" in words:
+    for words, body, m in _fences(text):
+        if "rca" in words or _loose(words, body) is not None:
             out.append(text[at:m.start()])
             at = m.end()
     return "".join(out) + (text or "")[at:]
@@ -169,13 +182,9 @@ def extract_block(answer: str) -> tuple[dict | None, str]:
             return None, "invalid"
         return (block, "ok") if isinstance(block, dict) else (None, "invalid")
     for words, body, _ in reversed(fences):
-        if words in ([], ["json"]):
-            try:
-                block = json.loads(body)
-            except ValueError:
-                continue
-            if isinstance(block, dict) and ("causes" in block or "no_fault" in block):
-                return block, "loose"
+        block = _loose(words, body)
+        if block is not None:
+            return block, "loose"
     return None, "missing"
 
 
@@ -300,9 +309,9 @@ def _path(truth_path: list, answer_path: list) -> tuple[bool | None, list]:
 def score_rca(answer: str, truth: dict, calls: list) -> dict:
     """Score an answer's rca block against a filled truth (README "The answer block"): every truth cause named with an
     accepted kind, no decoy named as a cause (a control: no_fault and no cause other than kind none), less for each
-    extra cause — the same resource named again under a kind its truth cause does not take is one too. started_at, the
-    path and the evidence are reported next to it, not folded into pass; pass_grounded is pass with every named cause
-    pointing at a call that answered."""
+    extra cause — the same resource named again under a kind its truth cause does not take is one too — and more than
+    EXTRAS_ALLOWED extras fail. started_at, the path and the evidence are reported next to it, not folded into pass;
+    pass_grounded is pass with every named cause pointing at a call that answered."""
     block, status = extract_block(answer)
     out = {"block": status, "pass": False, "pass_grounded": False, "score": 0.0, "no_fault": None, "causes": [], "extras": [],
            "decoys_taken": [], "also_ok_named": [], "time_ok": None, "path_ok": None, "path": [], "ungrounded": 0,
@@ -374,7 +383,8 @@ def score_rca(answer: str, truth: dict, calls: list) -> dict:
     if truth.get("control"):
         out["pass"] = no_fault and not real
     else:
-        out["pass"] = (not no_fault) and bool(truth_causes) and all(r["found"] for r in out["causes"]) and not out["decoys_taken"]
+        out["pass"] = ((not no_fault) and bool(truth_causes) and all(r["found"] for r in out["causes"]) and not out["decoys_taken"]
+                       and len(out["extras"]) <= EXTRAS_ALLOWED)
     if out["pass"]:
         out["score"] = max(0.0, 1.0 - EXTRA_CAUSE_PENALTY * len(out["extras"]))
     out["pass_grounded"] = out["pass"] and out["ungrounded"] == 0
