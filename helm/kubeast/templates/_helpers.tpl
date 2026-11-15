@@ -578,8 +578,8 @@ true
 
 {{/*
 The most database connections the pods can hold at once: for each service its pool (postgresql.pool.<key>.maxConns)
-times its pods while a rollout runs — replicas.<key>, or autoscaling.<key>.maxReplicas while its HPA is on, plus a
-quarter of that rounded up (Kubernetes' default maxSurge; the Deployments set no strategy) — then the migration pool
+times its pods while a rollout runs — replicas.<key>, or autoscaling.<key>.maxReplicas while its HPA is on, plus one
+(every Deployment's maxSurge 1, kubeast.rollingUpdate) — then the migration pool
 (4, dbsession.MigrationPoolMaxConns) and 10 kept for psql and PostgreSQL's 3 superuser slots. Each k8s-service pod
 adds one: the health status lock (internal/pglock) holds a connection of its own outside the pool. ai-service and the
 ModelConfig controller (one pod, two while it rolls) count with ai.enabled. With streams.enabled (read with dig, so
@@ -599,7 +599,7 @@ plus one while it rolls (its strategy's maxSurge 1). templates/checks/db-connect
 {{- if dig "enabled" false $hpa -}}
 {{- $pods = int (dig "maxReplicas" $pods $hpa) -}}
 {{- end -}}
-{{- $pods = add $pods (div (add $pods 3) 4) -}}
+{{- $pods = add $pods 1 -}}
 {{- $perPod := int (dig $key "maxConns" 0 $pool) -}}
 {{- if eq $key "k8sService" -}}
 {{- $perPod = add $perPod 1 -}}
