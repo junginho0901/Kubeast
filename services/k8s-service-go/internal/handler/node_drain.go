@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -18,43 +19,35 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drains"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
-// DrainStatus tracks the status of a drain operation.
+// DrainStatus is a drain as the status route answers it, from node_drains, so
+// any replica answers it.
 type DrainStatus struct {
-	ID      string `json:"id"`
-	Node    string `json:"node"`
-	Status  string `json:"status"`
-	Message string `json:"message,omitempty"`
-	Created time.Time
+	ID         string     `json:"id"`
+	Node       string     `json:"node"`
+	Status     string     `json:"status"`
+	Message    string     `json:"message,omitempty"`
+	PodsTotal  *int       `json:"pods_total,omitempty"`
+	PodsDone   *int       `json:"pods_done,omitempty"`
+	Created    time.Time  `json:"Created"`
+	FinishedAt *time.Time `json:"finished_at,omitempty"`
+	// CordonedNodes are the drain's nodes still cordoned, read from the cluster
+	// as the caller when a drain ended without success: [] when none is, null
+	// when they were not read (no omitempty, or [] would read as not read).
+	CordonedNodes []string `json:"cordoned_nodes"`
+	// Cluster is where the drain runs; its status is read on that cluster only.
+	Cluster cluster.ID `json:"-"`
 }
 
-var (
-	drainStore   = make(map[string]*DrainStatus)
-	drainStoreMu sync.RWMutex
-)
-
-func getDrainStatus(id string) *DrainStatus {
-	drainStoreMu.RLock()
-	defer drainStoreMu.RUnlock()
-	return drainStore[id]
-}
-
-func setDrainStatus(ds *DrainStatus) {
-	drainStoreMu.Lock()
-	defer drainStoreMu.Unlock()
-	drainStore[ds.ID] = ds
-
-	// Cleanup old entries (>1 hour)
-	for k, v := range drainStore {
-		if time.Since(v.Created) > time.Hour {
-			delete(drainStore, k)
-		}
-	}
+func drainStatusOf(r *drains.Row) *DrainStatus {
+	return &DrainStatus{ID: r.ID, Node: r.Node, Status: r.Status, Message: r.Message, PodsTotal: r.PodsTotal, PodsDone: r.PodsDone,
+		Created: r.StartedAt, FinishedAt: r.FinishedAt, Cluster: cluster.ID(r.Cluster)}
 }
 
 // DrainNode handles POST /api/v1/nodes/{name}/drain.
@@ -66,21 +59,13 @@ func (h *Handler) DrainNode(w http.ResponseWriter, r *http.Request) {
 
 	nodeName := chi.URLParam(r, "name")
 	drainID := rand.String(12)
-
-	ds := &DrainStatus{
-		ID:      drainID,
-		Node:    nodeName,
-		Status:  "pending",
-		Created: time.Now(),
+	clusterID, _ := cluster.FromContext(r.Context())
+	started := audit.MustJSON(map[string]interface{}{"drain_id": drainID, "phase": "started"})
+	if h.drains == nil {
+		h.recordAuditWithPayload(r, "k8s.node.drain", "node", nodeName, "", errDrainStore, nil, started)
+		response.Error(w, http.StatusServiceUnavailable, errDrainStore.Error())
+		return
 	}
-	setDrainStatus(ds)
-
-	// Record the drain's acceptance now and its outcome when it ends (phase
-	// finished) — a drain that cannot evict a pod is a failure, not the
-	// acceptance's success.
-	h.recordAuditWithPayload(r, "k8s.node.drain", "node", nodeName, "", nil,
-		nil, audit.MustJSON(map[string]interface{}{"drain_id": drainID, "phase": "started"}))
-	end := auditBase(r, audit.ServiceK8s, "k8s.node.drain", "node", nodeName, "")
 
 	// The drain outlives the request: carry only the selected cluster id into
 	// the background context so the goroutine targets the same cluster.
@@ -88,12 +73,36 @@ func (h *Handler) DrainNode(w http.ResponseWriter, r *http.Request) {
 	if id, ok := cluster.FromContext(r.Context()); ok {
 		bg = cluster.WithID(bg, id)
 	}
-	if p, ok := auth.FromContext(r.Context()); ok { // evictions are made as the user (impersonation)
-		bg = auth.WithPayload(bg, p)
+	payload, hasPayload := auth.FromContext(r.Context())
+	if hasPayload { // evictions are made as the user (impersonation)
+		bg = auth.WithPayload(bg, payload)
 	}
+	runCtx, cancel := context.WithCancel(bg)
+
+	// Its finished row comes from the replica that ends it, with this request's actor and address.
+	end := auditBase(r, audit.ServiceK8s, "k8s.node.drain", "node", nodeName, "")
+	row := drains.Row{ID: drainID, Cluster: string(clusterID), Node: nodeName, UserID: payload.UserID, UserEmail: payload.Email}
+	if err := h.drains.Begin(r.Context(), row, end, cancel); err != nil {
+		cancel()
+		if errors.Is(err, drains.ErrShuttingDown) {
+			h.recordAuditWithPayload(r, "k8s.node.drain", "node", nodeName, "", fmt.Errorf("drain not started: %w", err), nil, started)
+			response.Error(w, http.StatusServiceUnavailable, "this server is shutting down; start the drain again")
+			return
+		}
+		h.recordAuditWithPayload(r, "k8s.node.drain", "node", nodeName, "", fmt.Errorf("drain progress not saved: %w", err), nil, started)
+		response.Error(w, http.StatusServiceUnavailable, "drain progress could not be saved")
+		return
+	}
+
+	// Record the drain's acceptance now and its outcome when it ends (phase
+	// finished) — a drain that cannot evict a pod is a failure, not the
+	// acceptance's success.
+	h.recordAuditWithPayload(r, "k8s.node.drain", "node", nodeName, "", nil, nil, started)
+
 	go func() {
-		h.runDrain(bg, nodeName, drainID)
-		h.recordDrainEnd(end, drainID)
+		defer cancel()
+		status, message := h.runDrain(runCtx, nodeName, drainID)
+		h.drains.Finish(drainID, status, message)
 	}()
 
 	response.JSON(w, http.StatusOK, map[string]interface{}{
@@ -102,10 +111,13 @@ func (h *Handler) DrainNode(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+var errDrainStore = errors.New("drain progress store unavailable")
+
 // DrainNodeStatus handles GET /api/v1/nodes/{name}/drain/status.
 func (h *Handler) DrainNodeStatus(w http.ResponseWriter, r *http.Request) {
 	// Gate the status read on the same per-cluster permission as starting a drain,
-	// so it isn't protected by the opaque drain_id alone.
+	// so it isn't protected by the opaque drain_id alone; a drain of another
+	// cluster is not found here.
 	if err := h.requirePermissionForCluster(r, "resource.node.drain"); err != nil {
 		h.handleError(w, err)
 		return
@@ -115,38 +127,77 @@ func (h *Handler) DrainNodeStatus(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "drain_id is required")
 		return
 	}
+	if h.drains == nil {
+		response.Error(w, http.StatusServiceUnavailable, errDrainStore.Error())
+		return
+	}
 
-	ds := getDrainStatus(drainID)
-	if ds == nil {
+	clusterID, _ := cluster.FromContext(r.Context())
+	row, err := h.drains.Status(r.Context(), drainID)
+	if err != nil {
+		slog.Warn("drain: status read failed", "id", drainID, "err", err)
+		response.Error(w, http.StatusServiceUnavailable, "drain progress could not be read")
+		return
+	}
+	if row == nil || cluster.ID(row.Cluster) != clusterID {
 		response.Error(w, http.StatusNotFound, "drain operation not found")
 		return
 	}
-
+	ds := drainStatusOf(row)
+	if ds.Status == drains.StatusInterrupted || ds.Status == drains.StatusError {
+		ds.CordonedNodes = h.cordonedNodes(r.Context(), []string{ds.Node})
+	}
 	response.JSON(w, http.StatusOK, ds)
 }
 
-func (h *Handler) runDrain(parent context.Context, nodeName, drainID string) {
+// cordonedNodes reads the nodes as the caller and returns those still
+// cordoned; nil when they could not be read, so the screen says nothing it
+// did not read.
+func (h *Handler) cordonedNodes(ctx context.Context, names []string) []string {
+	if h.svc == nil {
+		return nil
+	}
+	cs, err := h.svc.ClientsetFor(ctx)
+	if err != nil {
+		return nil
+	}
+	return cordonedOf(ctx, cs, names)
+}
+
+func cordonedOf(ctx context.Context, cs kubernetes.Interface, names []string) []string {
+	cordoned := []string{}
+	for _, name := range names {
+		node, err := cs.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return nil
+		}
+		if node.Spec.Unschedulable {
+			cordoned = append(cordoned, name)
+		}
+	}
+	return cordoned
+}
+
+// runDrain cordons the node and evicts its pods, writing its progress to the
+// drain's row, and returns how it ended. The cordon and every eviction wait
+// while this server's drain heartbeat is not being saved (drains.Tracker.Ready).
+func (h *Handler) runDrain(parent context.Context, nodeName, drainID string) (status, message string) {
 	ctx, cancel := context.WithTimeout(parent, 5*time.Minute)
 	defer cancel()
 
-	ds := getDrainStatus(drainID)
-	ds.Status = "draining"
-	setDrainStatus(ds)
+	h.drains.Progress(drainID, drains.Progress{Status: drains.StatusDraining})
 
 	clientset, err := h.svc.ClientsetFor(ctx)
 	if err != nil {
-		ds.Status = "error"
-		ds.Message = fmt.Sprintf("cluster client: %v", err)
-		setDrainStatus(ds)
-		return
+		return drains.StatusError, fmt.Sprintf("cluster client: %v", err)
 	}
 
 	// Step 1: Cordon
+	if err := h.drains.Ready(ctx); err != nil {
+		return drains.StatusError, fmt.Sprintf("not cordoned: %v", err)
+	}
 	if err := h.svc.CordonNode(ctx, nodeName); err != nil {
-		ds.Status = "error"
-		ds.Message = fmt.Sprintf("cordon failed: %v", err)
-		setDrainStatus(ds)
-		return
+		return drains.StatusError, fmt.Sprintf("cordon failed: %v", err)
 	}
 
 	// Step 2: List pods on node
@@ -154,10 +205,7 @@ func (h *Handler) runDrain(parent context.Context, nodeName, drainID string) {
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
 	})
 	if err != nil {
-		ds.Status = "error"
-		ds.Message = fmt.Sprintf("list pods failed: %v", err)
-		setDrainStatus(ds)
-		return
+		return drains.StatusError, fmt.Sprintf("list pods failed: %v", err)
 	}
 
 	// Step 3: evict through the Eviction API so PodDisruptionBudgets are
@@ -173,43 +221,22 @@ func (h *Handler) runDrain(parent context.Context, nodeName, drainID string) {
 		}
 		candidates = append(candidates, pod)
 	}
+	total, done := len(candidates), 0
+	h.drains.Progress(drainID, drains.Progress{PodsTotal: &total, PodsDone: &done})
 
-	if blocked := evictAll(ctx, clientset, candidates); len(blocked) > 0 {
+	if blocked := evictAll(ctx, clientset, candidates, h.drains.Ready); len(blocked) > 0 {
 		slog.Warn("drain incomplete", "node", nodeName, "blocked", len(blocked))
-		ds.Status = "error"
-		ds.Message = fmt.Sprintf("drain incomplete: %d of %d pods could not be evicted (node stays cordoned): %s",
+		return drains.StatusError, fmt.Sprintf("drain incomplete: %d of %d pods could not be evicted (node stays cordoned): %s",
 			len(blocked), len(candidates), strings.Join(blocked, "; "))
-		setDrainStatus(ds)
-		return
 	}
-	if err := waitForPodsGone(ctx, clientset, candidates); err != nil {
-		ds.Status = "error"
-		ds.Message = fmt.Sprintf("drain incomplete: %v (node stays cordoned)", err)
-		setDrainStatus(ds)
-		return
+	gone := func(left int) {
+		n := total - left
+		h.drains.Progress(drainID, drains.Progress{PodsDone: &n})
 	}
-
-	ds.Status = "success"
-	ds.Message = fmt.Sprintf("drain completed, %d pods evicted", len(candidates))
-	setDrainStatus(ds)
-}
-
-// recordDrainEnd writes the drain's outcome with the request's actor and
-// address (base): failure unless every pod was evicted.
-func (h *Handler) recordDrainEnd(base audit.Record, drainID string) {
-	ds := getDrainStatus(drainID)
-	if h.auditStore == nil || ds == nil {
-		return
+	if err := waitForPodsGone(ctx, clientset, candidates, gone); err != nil {
+		return drains.StatusError, fmt.Sprintf("drain incomplete: %v (node stays cordoned)", err)
 	}
-	rec := base
-	rec.After = audit.MustJSON(map[string]interface{}{"drain_id": drainID, "phase": "finished", "status": ds.Status, "message": ds.Message})
-	rec.Result = audit.ResultSuccess
-	if ds.Status != "success" {
-		rec.Result, rec.Error = audit.ResultFailure, ds.Message
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_, _ = h.auditStore.Write(ctx, rec) // audit.Guarded counts a failure
+	return drains.StatusSuccess, fmt.Sprintf("drain completed, %d pods evicted", len(candidates))
 }
 
 // evictRetryInterval is how long to wait before retrying an eviction a
@@ -218,8 +245,9 @@ var evictRetryInterval = 5 * time.Second
 
 // evictAll evicts the pods concurrently (as kubectl drain does, so one pod
 // held by a PDB does not starve the others) and returns "ns/name: reason" for
-// the ones that could not be evicted before the deadline.
-func evictAll(ctx context.Context, cs kubernetes.Interface, pods []corev1.Pod) []string {
+// the ones that could not be evicted before the deadline. ready (nil: none)
+// is waited for before each eviction call.
+func evictAll(ctx context.Context, cs kubernetes.Interface, pods []corev1.Pod, ready func(context.Context) error) []string {
 	var (
 		mu      sync.Mutex
 		wg      sync.WaitGroup
@@ -229,7 +257,7 @@ func evictAll(ctx context.Context, cs kubernetes.Interface, pods []corev1.Pod) [
 		wg.Add(1)
 		go func(pod *corev1.Pod) {
 			defer wg.Done()
-			if err := evictWithRetry(ctx, cs, pod); err != nil {
+			if err := evictWithRetry(ctx, cs, pod, ready); err != nil {
 				mu.Lock()
 				blocked = append(blocked, fmt.Sprintf("%s/%s: %v", pod.Namespace, pod.Name, err))
 				mu.Unlock()
@@ -241,8 +269,13 @@ func evictAll(ctx context.Context, cs kubernetes.Interface, pods []corev1.Pod) [
 	return blocked
 }
 
-func evictWithRetry(ctx context.Context, cs kubernetes.Interface, pod *corev1.Pod) error {
+func evictWithRetry(ctx context.Context, cs kubernetes.Interface, pod *corev1.Pod, ready func(context.Context) error) error {
 	for {
+		if ready != nil {
+			if err := ready(ctx); err != nil {
+				return err
+			}
+		}
 		err := evictPod(ctx, cs, pod)
 		switch {
 		case err == nil, apierrors.IsNotFound(err):
@@ -259,8 +292,10 @@ func evictWithRetry(ctx context.Context, cs kubernetes.Interface, pod *corev1.Po
 	}
 }
 
-// waitForPodsGone waits until none of the evicted pods (by UID) exist any more.
-func waitForPodsGone(ctx context.Context, cs kubernetes.Interface, pods []corev1.Pod) error {
+// waitForPodsGone waits until none of the evicted pods (by UID) exist any
+// more, telling left (when not nil) how many remain each time that changes.
+func waitForPodsGone(ctx context.Context, cs kubernetes.Interface, pods []corev1.Pod, left func(int)) error {
+	last := len(pods)
 	for {
 		remaining := 0
 		for i := range pods {
@@ -269,6 +304,10 @@ func waitForPodsGone(ctx context.Context, cs kubernetes.Interface, pods []corev1
 				remaining++
 			}
 		}
+		if remaining != last && left != nil {
+			left(remaining)
+		}
+		last = remaining
 		if remaining == 0 {
 			return nil
 		}

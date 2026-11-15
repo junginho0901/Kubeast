@@ -1,6 +1,7 @@
 package helm
 
 import (
+	"encoding/json"
 	"os"
 	"slices"
 	"testing"
@@ -57,5 +58,30 @@ func TestTheChartBindsTheGroupARoleActsAs(t *testing.T) {
 				t.Errorf("the chart binds %q, a user with this role acts as %v", group, groups)
 			}
 		})
+	}
+}
+
+// The chart's helper is the fourth place of one slug rule: it makes from each name of
+// frontend/src/utils/roleGroupSlug.cases.json the slug auth.RoleGroupSlug, the database's role_group_slug and the
+// frontend's roleGroupSlug make.
+func TestTheChartMakesEachSlugOfTheSharedCases(t *testing.T) {
+	helpers, err := os.ReadFile("../../../../helm/kubeast/templates/_helpers.tpl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile("../../../../frontend/src/utils/roleGroupSlug.cases.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var file struct {
+		Cases []struct{ Name, Slug string }
+	}
+	if err := json.Unmarshal(raw, &file); err != nil || len(file.Cases) == 0 {
+		t.Fatalf("roleGroupSlug.cases.json: %v", err)
+	}
+	for _, c := range file.Cases {
+		if got := chartRoleSlug(t, helpers, c.Name); got != c.Slug {
+			t.Errorf("the chart makes %q of %q, want %q", got, c.Name, c.Slug)
+		}
 	}
 }
