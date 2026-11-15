@@ -1,7 +1,8 @@
 """OpenAI's GPT-6 Sol and Luna take function tools in Chat Completions only with reasoning_effort "none"
-(developers.openai.com/api/docs/guides/latest-model): provider_adapter sends it with tools to OpenAI and Azure, leaves it
-out for a model that refuses it, keeps one the options or the call set, and sends nothing new to other providers or
-without tools. The connection test sends a tool, so a model that refuses tools fails it as it would fail the chat."""
+(developers.openai.com/api/docs/guides/latest-model): provider_adapter sends it with tools to OpenAI and Azure for those
+models only, leaves it out when the model refuses it, keeps one the options or the call set, and sends nothing new to
+other models, other providers or without tools. The connection test sends a tool, so a model that refuses tools fails it
+as it would fail the chat."""
 import json
 
 import httpx
@@ -84,31 +85,46 @@ def serve(monkeypatch, refuse=lambda body: None):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("provider,base", [("openai", None), ("azure", AZURE)])
-async def test_a_tool_call_asks_for_no_reasoning_and_a_call_without_tools_is_as_it_was(monkeypatch, provider, base):
+@pytest.mark.parametrize("provider,base,model", [
+    ("openai", None, "gpt-6-luna"), ("openai", None, "gpt-6-sol"), ("openai", None, "gpt-6-luna-2027-03-01"),
+    ("azure", AZURE, "gpt-6-luna")])
+async def test_a_gpt6_sol_or_luna_tool_call_asks_for_no_reasoning_and_a_call_without_tools_is_as_it_was(
+        monkeypatch, provider, base, model):
     bodies = serve(monkeypatch, luna)
-    adapter = ProviderAdapter(provider=provider, model="gpt-6-luna", api_key="k", base_url=base)
-    resp = await adapter.chat.completions.create(model="gpt-6-luna", messages=MSG, tools=TOOLS, tool_choice="auto",
+    adapter = ProviderAdapter(provider=provider, model=model, api_key="k", base_url=base)
+    resp = await adapter.chat.completions.create(model=model, messages=MSG, tools=TOOLS, tool_choice="auto",
                                                  temperature=0.7, max_tokens=4096)
     assert resp.choices[0].message.content == "ok"
     assert len(bodies) == 1 and bodies[0]["reasoning_effort"] == "none" and bodies[0]["temperature"] == 0.7
-    await adapter.chat.completions.create(model="gpt-6-luna", messages=MSG, max_tokens=4096)
-    await adapter.chat.completions.create(model="gpt-6-luna", messages=MSG, tools=[], max_tokens=4096)
+    await adapter.chat.completions.create(model=model, messages=MSG, max_tokens=4096)
+    await adapter.chat.completions.create(model=model, messages=MSG, tools=[], max_tokens=4096)
     assert ["reasoning_effort" in b for b in bodies[1:]] == [False, False]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider,base,model", [
+    ("openai", None, "gpt-4o-mini"), ("openai", None, "gpt-5.5"), ("openai", None, "gpt-6.1-sol"),
+    ("openai", None, "gpt-6-astra"), ("openai", None, "gpt-6-lunar"), ("azure", AZURE, "my-deployment")])
+async def test_other_models_tool_calls_are_sent_as_before_in_one_request(monkeypatch, provider, base, model):
+    bodies = serve(monkeypatch, no_reasoning)
+    adapter = ProviderAdapter(provider=provider, model=model, api_key="k", base_url=base)
+    await adapter.chat.completions.create(model=model, messages=MSG, tools=TOOLS, max_tokens=4096)
+    assert len(bodies) == 1 and "reasoning_effort" not in bodies[0] and bodies[0]["tools"] == TOOLS
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("provider,base,refuse", [
     ("openai", None, no_reasoning), ("openai", None, no_none), ("azure", AZURE, azure_unknown)],
-    ids=["no-reasoning-model", "no-none-value", "azure-unrecognized"])
-async def test_a_model_that_refuses_it_gets_the_call_again_without_it_and_no_more(monkeypatch, provider, base, refuse):
+    ids=["parameter-refused", "value-refused", "azure-unrecognized"])
+async def test_a_refusal_of_it_gets_the_call_again_without_it_once_and_no_more(monkeypatch, provider, base, refuse):
+    # a deployment or a gateway behind the name that does not take it
     bodies = serve(monkeypatch, refuse)
-    adapter = ProviderAdapter(provider=provider, model="m", api_key="k", base_url=base)
-    resp = await adapter.chat.completions.create(model="m", messages=MSG, tools=TOOLS, max_tokens=4096)
+    adapter = ProviderAdapter(provider=provider, model="gpt-6-luna", api_key="k", base_url=base)
+    resp = await adapter.chat.completions.create(model="gpt-6-luna", messages=MSG, tools=TOOLS, max_tokens=4096)
     assert resp.choices[0].message.content == "ok"
     assert [b.get("reasoning_effort") for b in bodies] == ["none", None]
     assert bodies[1]["tools"] == TOOLS and bodies[1]["max_completion_tokens"] == 4096
-    await adapter.chat.completions.create(model="m", messages=MSG, tools=TOOLS)
+    await adapter.chat.completions.create(model="gpt-6-luna", messages=MSG, tools=TOOLS)
     assert len(bodies) == 3 and "reasoning_effort" not in bodies[2]
 
 
@@ -119,7 +135,9 @@ async def test_a_reasoning_effort_the_options_or_the_call_set_is_sent_as_given(m
     await adapter.chat.completions.create(model="gpt-6-luna", messages=MSG, tools=TOOLS)
     plain = ProviderAdapter(provider="openai", model="gpt-6-luna", api_key="k")
     await plain.chat.completions.create(model="gpt-6-luna", messages=MSG, tools=TOOLS, reasoning_effort="high")
-    assert [b["reasoning_effort"] for b in bodies] == ["low", "high"]
+    other = ProviderAdapter(provider="openai", model="gpt-5.5", api_key="k", options={"reasoning_effort": "none"})
+    await other.chat.completions.create(model="gpt-5.5", messages=MSG, tools=TOOLS)
+    assert [b["reasoning_effort"] for b in bodies] == ["low", "high", "none"]
 
 
 @pytest.mark.asyncio
@@ -149,6 +167,14 @@ async def test_the_connection_test_sends_a_tool_and_passes_a_model_that_takes_it
     body = bodies[0]
     assert [t["function"]["name"] for t in body["tools"]] == ["noop"] and "tool_choice" not in body
     assert body["reasoning_effort"] == "none" and body["max_completion_tokens"] == 5
+
+
+@pytest.mark.asyncio
+async def test_the_connection_test_of_another_model_sends_the_tool_without_reasoning_effort(monkeypatch):
+    bodies = serve(monkeypatch, no_reasoning)
+    out = await api_public._test_model_connection({"provider": "openai", "model": "gpt-4o-mini", "api_key": "sk-test-1"})
+    assert out["success"] is True and len(bodies) == 1
+    assert [t["function"]["name"] for t in bodies[0]["tools"]] == ["noop"] and "reasoning_effort" not in bodies[0]
 
 
 @pytest.mark.asyncio
