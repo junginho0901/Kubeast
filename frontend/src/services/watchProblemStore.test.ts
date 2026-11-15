@@ -33,6 +33,10 @@ describe('what the screen says about its live updates', () => {
     recordWatchFrame('a', { type: 'ERROR', error: { message: 'max subscriptions', reason: 'limit', limit_scope: 'server' } })
     expect(getWatchProblem()).toBe('server_limit')
     resetWatchProblems()
+    // the server's memory, held by TestANewWatchWaitsWhileTheLiveHeapIsPastItsShare
+    recordWatchFrame('a', { type: 'ERROR', error: { message: 'short of memory', reason: 'limit', limit_scope: 'memory' } })
+    expect(getWatchProblem()).toBe('server_memory')
+    resetWatchProblems()
     // a server older than the field, while an upgrade is under way
     recordWatchFrame('a', { type: 'ERROR', error: { message: 'max subscriptions reached for the server (2000), cannot create new watch', reason: 'limit' } })
     expect(getWatchProblem()).toBe('limit')

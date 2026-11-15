@@ -29,8 +29,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+// A socket takes its write buffer from the pool for each message, so an idle one holds none; without a pool gorilla gave
+// every socket a 4.8 KiB buffer of its own, the server's reaching it empty (TestWSMemoryPerUser).
 var upgrader = websocket.Upgrader{
-	CheckOrigin: CheckOrigin,
+	CheckOrigin:     CheckOrigin,
+	WriteBufferPool: &sync.Pool{},
 }
 
 // WebSocket keepalive parameters.
@@ -87,10 +90,12 @@ const (
 	reasonScope       = "scope"       // a kind no namespace holds, for a grant limited to namespaces
 )
 
-// Which limit a reasonLimit frame hit (limit_scope): closing a tab frees the tab's, not the server's.
+// Which limit a reasonLimit frame hit (limit_scope): closing a tab frees the tab's, not the server's; memory is the
+// server's room to open more (watchMemoryFull), which comes back by itself.
 const (
 	limitScopeTab    = "tab"
 	limitScopeServer = "server"
+	limitScopeMemory = "memory"
 )
 
 func (r RequestMessage) errorFrame(message, reason string) ResponseMessage {
@@ -121,9 +126,9 @@ func watchFailure(err error) (message, reason string) {
 }
 
 // send queues a frame unless ctx ends first: with a slow client or a dead writer the queue may never have room.
-func send(ctx context.Context, sendCh chan<- ResponseMessage, f ResponseMessage) bool {
+func send(ctx context.Context, sendCh chan<- *ResponseMessage, f ResponseMessage) bool {
 	select {
-	case sendCh <- f:
+	case sendCh <- &f:
 		return true
 	case <-ctx.Done():
 		return false
@@ -212,6 +217,12 @@ type Multiplexer struct {
 	starts map[string]*limits.Slots // cluster -> places for starting a watch
 	// held are the live watches of streams outside the sockets (HoldWatches), which count against MaxSubscriptions too.
 	held int
+
+	// heap reads the live heap and the collector's limit; nil = heapNow.
+	heap func() (live, limit uint64)
+
+	// rowClients are the clients the watches go through, which decode what the rows read (watchClient).
+	rowClients rowClientCache
 }
 
 // SubscriptionCount is the number of live subscriptions across all connections and the watches HoldWatches holds (metrics).
@@ -261,6 +272,9 @@ func WatchTimeoutSeconds() int64 { return watchTimeoutSeconds() }
 
 // WatchResumeDelay is the wait before a watch that ended goes on, spread as the sockets' watches are.
 func WatchResumeDelay() time.Duration { return watchResumeDelay() }
+
+// ResourceVersionExpired is the API server saying a watch cannot go on from the version it was asked for.
+func ResourceVersionExpired(err error) bool { return resourceVersionExpired(err) }
 
 // subscriptionCluster is the cluster a REQUEST targets: its own clusterId, or
 // the connection's cluster that the HTTP ClusterMiddleware resolved.
@@ -337,8 +351,8 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 
-	// Channel to send messages to client
-	sendCh := make(chan ResponseMessage, 256)
+	// The frames waiting for the writer, by pointer: 256 frames as values took 27 KiB of every socket, waiting or not.
+	sendCh := make(chan *ResponseMessage, 256)
 
 	// Writer goroutine — DATA/ERROR 메시지 송신 + 25초마다 ping.
 	go func() {
@@ -448,6 +462,12 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				send(ctx, sendCh, req.limitFrame(fmt.Sprintf("max subscriptions reached for %s (%d), cannot create new watch", scope, limit), limitScope))
 				continue
 			}
+			// The watches already on go on; a new one waits, as the page asks again after half a minute to five.
+			if m.watchMemoryFull() {
+				m.mu.Unlock()
+				send(ctx, sendCh, req.limitFrame("k8s-service is short of memory, cannot create new watch for now", limitScopeMemory))
+				continue
+			}
 
 			subCtx, subCancel := context.WithCancel(ctx)
 			// Carry the target cluster so the watch hits the right cluster.
@@ -519,7 +539,7 @@ func (m *Multiplexer) watchStartPlaces(id string) *limits.Slots {
 // startNoticeAfter is told to the client, whose list is not following meanwhile; told says the next watch has to say
 // it is back. ok is false when ctx ended. The place goes back by the time release is called or the API server has kept
 // the start waiting for startHoldFor, whichever comes first, so a server that does not answer does not stop the queue.
-func (m *Multiplexer) takeWatchStart(ctx context.Context, req RequestMessage, sendCh chan<- ResponseMessage) (release func(), told, ok bool) {
+func (m *Multiplexer) takeWatchStart(ctx context.Context, req RequestMessage, sendCh chan<- *ResponseMessage) (release func(), told, ok bool) {
 	places := m.watchStartPlaces(effectiveClusterID(subscriptionCluster(ctx, req.ClusterID)))
 	waiting, stop := context.WithTimeout(ctx, m.startNoticeAfter)
 	give, err := places.Take(waiting)
@@ -578,7 +598,7 @@ type watchProgress struct {
 // runWatch follows req until its context ends or there is nothing to follow. Nothing above it recovers, so a panic on one
 // object would end the service for everyone. It ends one try: the client is told, the wait keeps the same panic from
 // spinning, and the watch goes on from its version, past that object, with the list read again.
-func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh chan<- ResponseMessage) {
+func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh chan<- *ResponseMessage) {
 	var progress watchProgress
 	for m.watchPanicked(ctx, req, sendCh, &progress) {
 		message := "this list could not be followed for a moment; it goes on by itself"
@@ -590,7 +610,7 @@ func (m *Multiplexer) runWatch(ctx context.Context, req RequestMessage, sendCh c
 }
 
 // watchPanicked runs one try of req's watch and reports whether a panic ended it.
-func (m *Multiplexer) watchPanicked(ctx context.Context, req RequestMessage, sendCh chan<- ResponseMessage, progress *watchProgress) (panicked bool) {
+func (m *Multiplexer) watchPanicked(ctx context.Context, req RequestMessage, sendCh chan<- *ResponseMessage, progress *watchProgress) (panicked bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			panicked = true
@@ -601,7 +621,7 @@ func (m *Multiplexer) watchPanicked(ctx context.Context, req RequestMessage, sen
 	return false
 }
 
-func (m *Multiplexer) followWatch(ctx context.Context, req RequestMessage, sendCh chan<- ResponseMessage, progress *watchProgress) {
+func (m *Multiplexer) followWatch(ctx context.Context, req RequestMessage, sendCh chan<- *ResponseMessage, progress *watchProgress) {
 	resource, namespace, err := parsePath(req.Path)
 	if err != nil {
 		send(ctx, sendCh, req.errorFrame(err.Error(), reasonUnsupported))
@@ -675,10 +695,11 @@ func (m *Multiplexer) followWatch(ctx context.Context, req RequestMessage, sendC
 		}
 		resync = resync || told
 		var watcher watch.Interface
+		watching := m.watchClient(ctx, dyn, notify)
 		if namespace != "" {
-			watcher, err = dyn.Resource(gvr).Namespace(namespace).Watch(ctx, opts)
+			watcher, err = watching.Resource(gvr).Namespace(namespace).Watch(ctx, opts)
 		} else {
-			watcher, err = dyn.Resource(gvr).Watch(ctx, opts)
+			watcher, err = watching.Resource(gvr).Watch(ctx, opts)
 		}
 		release()
 		if err != nil {
@@ -731,7 +752,7 @@ func (m *Multiplexer) followWatch(ctx context.Context, req RequestMessage, sendC
 
 // forwardEvents sends a watch's events until it ends, moving resourceVersion along, and reports whether the API server
 // said that version has expired.
-func forwardEvents(ctx context.Context, watcher watch.Interface, req RequestMessage, resource string, resourceVersion *string, sendCh chan<- ResponseMessage) bool {
+func forwardEvents(ctx context.Context, watcher watch.Interface, req RequestMessage, resource string, resourceVersion *string, sendCh chan<- *ResponseMessage) bool {
 	defer watcher.Stop()
 	for event := range watcher.ResultChan() {
 		if ctx.Err() != nil {
@@ -781,7 +802,7 @@ func forwardEvents(ctx context.Context, watcher watch.Interface, req RequestMess
 
 // forwardChanges is forwardEvents for a watch of changes: one CHANGED on the first event and at most one every
 // changedEvery while they keep coming, no object in it.
-func forwardChanges(ctx context.Context, watcher watch.Interface, req RequestMessage, resource string, resourceVersion *string, sendCh chan<- ResponseMessage) bool {
+func forwardChanges(ctx context.Context, watcher watch.Interface, req RequestMessage, resource string, resourceVersion *string, sendCh chan<- *ResponseMessage) bool {
 	defer watcher.Stop()
 	var wait <-chan time.Time
 	held := false
