@@ -637,10 +637,12 @@ streams:
   replicas: 1        # must stay 1 for now (more than one stream server is not supported yet)
   drainSeconds: 60   # how long open terminals get to end on their own
   preStopSeconds: 10 # k8s-service-stream: out of the Service's endpoints before the drain starts
-# PDB is off while replicas are 1 (a minAvailable PDB would block node drains).
+# A PodDisruptionBudget for each Deployment above with more than one replica, or with autoscaling on and minReplicas 2 or
+# more, allowing maxUnavailable of its pods to be evicted at once (unhealthy ones always); none where it can be down to one
+# pod, which would block node drains. enabled: false leaves them out.
 pdb:
-  enabled: false
-  minAvailable: 1
+  enabled: true
+  maxUnavailable: 1
 # One HorizontalPodAutoscaler (autoscaling/v2) per service, off by default. On, the
 # Deployment's replicas is left to it (turning it on in a running release sets the
 # count to 1 until the HPA's first sync: docs/high-availability.md). It scales on

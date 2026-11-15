@@ -2616,6 +2616,7 @@
       "waiting": "새 줄을 기다리는 중...",
       "streamEnded": "실시간 보기가 끝났습니다.",
       "streamFailed": "실시간 보기가 끊겼습니다: {{reason}}",
+      "reconnecting": "연결이 끊겨 다시 연결하는 중입니다. 다시 붙으면 마지막으로 보인 줄 다음부터 이어집니다.",
       "errors": {
         "disabled": "로그 파일 보기가 꺼져 있습니다.",
         "namespace": "이 Namespace에서는 로그 파일 보기가 켜져 있지 않습니다.",
