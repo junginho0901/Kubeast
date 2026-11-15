@@ -518,15 +518,16 @@ func clusterNotices(cfg config.Config) *redis.Client {
 }
 
 // The waits run one after another from SIGTERM: where STREAM_DRAIN_SECONDS is set, the drain's wait and
-// streamCloseWait first, then these three, which add up to 25 s, inside the 30 s before SIGKILL that the chart's
-// grace period leaves after any preStop wait and the drain. The drains' 3 s (marking and their audit rows) came out
-// of the server's wait, which was 15 s.
+// streamCloseWait first, then these three, which add up to 25 s. The chart's grace period (kubeast.graceSeconds) is
+// the preStop wait + the drain's wait + streamCloseWait + 25 s + 5 s to spare. The drains' 3 s (marking and their
+// audit rows) came out of the server's wait, which was 15 s.
 const (
 	drainShutdownWait    = 3 * time.Second
 	serverShutdownWait   = 12 * time.Second
 	recorderShutdownWait = 10 * time.Second
-	// shutdownWaitsMax is what the waits must stay within after SIGTERM.
-	shutdownWaitsMax = 30 * time.Second
+	// shutdownWaitsMax is the grace period the chart gives after the preStop wait and the drain's wait:
+	// streamCloseWait, these three and 5 s.
+	shutdownWaitsMax = 35 * time.Second
 )
 
 // healthStatusLockKey is the advisory lock of the replica that writes
