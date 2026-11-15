@@ -326,7 +326,9 @@ func TestANodeShellStillStartingEndsWithTheReasonWhenItsServerLeaves(t *testing.
 	interval := nodeShellPollInterval
 	nodeShellPollInterval = 5 * time.Millisecond
 	t.Cleanup(func() { nodeShellPollInterval = interval })
+	served := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer close(served)
 		h.NodeDebugShellWS(w, withLogFileContext(r, "apps", "resource.node.shell"))
 	}))
 	t.Cleanup(srv.Close)
@@ -334,7 +336,8 @@ func TestANodeShellStillStartingEndsWithTheReasonWhenItsServerLeaves(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { c.Close() })
+	// srv.Close does not wait for a hijacked socket's handler: close the socket and wait, before the settings go back.
+	t.Cleanup(func() { c.Close(); <-served })
 	if s := readShellStatus(t, c); s.Status != shellWaiting {
 		t.Fatalf("status %+v", s)
 	}
