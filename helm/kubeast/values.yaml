@@ -381,6 +381,14 @@ ai:
   # log (redacted, length-capped). Debugging only — off keeps them out of the
   # cluster log pipeline.
   debugDump: false
+  # The AI tool timeline's changes view (view: changes — what changed in a
+  # window: rollouts compared with the revision before, ConfigMap and Secret
+  # writes as metadata, Helm revisions, HPA scales, node conditions, Argo CD
+  # syncs, restarts; no value read) and the chat's instruction to read it first
+  # when asked why something broke. Off: the chat, alert investigations and the
+  # MCP server are offered timeline without it and the chat's instructions do
+  # not name it; k8s-service still serves the route.
+  timelineChanges: false
   # Provider claude-code: the chat with a Claude Pro/Max subscription instead of
   # an API key. Claude Code makes each model call and the chat's own tools answer
   # its tool calls (same tools, approval card for writes, masking and audit).

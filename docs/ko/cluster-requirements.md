@@ -37,7 +37,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 예
 | AI 트레이스 읽기 | 스팬을 Tempo로 보내는 수집기(리소스 속성 `k8s.cluster.name`·`k8s.namespace.name`), `pods/log` 읽기 권한 — §14 끝 | `features.traceStore.enabled`(끔) | `traces_*` 도구가 빠지고 API는 404 |
 | 위생·업그레이드 점검의 폐기 API 항목 | API 서버 `/metrics` 읽기 권한 — §11 | `features.hygiene.enabled`(켬) | 그 항목만 "수집 실패"로 표시 |
 | Argo CD 가드 | Argo CD 추적 어노테이션 — §12 | `gitops.argocd.enabled`(끔) | 배지·경고 없음 |
-| AI `timeline`의 `view: "changes"` | 사용자의 ReplicaSet·ControllerRevision·ConfigMap·Secret(메타데이터만 요청, `as=PartialObjectMetadataList`)·HPA·파드·노드 `list`, Argo CD가 돌아가는 곳이면 `applications.argoproj.io` `list` — §1. `view`에는 Secret이 없어 Read는 Secret과 Helm 릴리스를 못 읽습니다. 네임스페이스 없이 부르면 전체 네임스페이스의 재시작에는 클러스터 전체 파드 `list`가 필요합니다(접근 검토로 확인) | — | 목록을 못 읽는 출처는 `summary.not_read`(전체 재시작은 `summary.skipped`)에 이름이 오르고 null로 셉니다. 나머지는 그대로 답합니다 |
+| AI `timeline`의 `view: "changes"`(`ai.timelineChanges`) | 사용자의 ReplicaSet·ControllerRevision·ConfigMap·Secret(메타데이터만 요청, `as=PartialObjectMetadataList`)·HPA·파드·노드 `list`, Argo CD가 돌아가는 곳이면 `applications.argoproj.io` `list` — §1. `view`에는 Secret이 없어 Read는 Secret과 Helm 릴리스를 못 읽습니다. 네임스페이스 없이 부르면 전체 네임스페이스의 재시작에는 클러스터 전체 파드 `list`가 필요합니다(접근 검토로 확인) | — | 목록을 못 읽는 출처는 `summary.not_read`(전체 재시작은 `summary.skipped`)에 이름이 오르고 null로 셉니다. 나머지는 그대로 답합니다 |
 | NetworkPolicy 보기와 연결 확인 | NetworkPolicy를 강제하는 네트워크 플러그인, 관련 네임스페이스 읽기 권한 — §7 | — | 답은 정책이 말하는 것이지 클러스터가 하는 것이 아님. 규칙이 사용자가 읽지 못하는 네임스페이스 레이블을 쓰면 "알 수 없음" |
 | 최근 흐름(드로어, AI `network_flows`) | TLS로 서비스하는 Cilium Hubble Relay, Relay Service의 `services/proxy` create 권한 — §16 | `features.networkFlows.enabled`(끔) | 칸과 도구가 빠지고 API는 404. 클러스터 권한이 없으면 403 |
 | 네트워크 차단(드로어, AI `network_drops`) | 클러스터 Prometheus에 워크로드 레이블이 붙은 Hubble 차단 지표 — §17 | Prometheus(§3) | 칸이 나오지 않고, 도구는 지표가 없다고 알려 줌 |
