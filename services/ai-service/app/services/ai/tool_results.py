@@ -47,6 +47,7 @@ def for_model(tool: str, text: str, limit: Optional[int] = None) -> str:
     out = as_json(tool, text)
     if limit is None or len(out) <= limit:
         return out
+    # the log tools' JSON cut (logfiles, nodes_log) is not monotone in the budget: there the search may stop short, still within the limit
     low, high = 0, len(text)
     while low < high:
         mid = (low + high + 1) // 2
