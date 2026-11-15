@@ -105,6 +105,7 @@ func TestTheCachesRedisCommandsAreThoseItsChartUserMayRun(t *testing.T) {
 		"DeletePattern": func() { c.DeletePattern(ctx, "k:*") },
 		"IsConnected":   func() { c.IsConnected() },
 		"FlushAll":      func() { _ = c.FlushAll(ctx) },
+		"Reconnect":     func() { c.Reconnect(ctx, time.Millisecond) },
 	}
 	typ := reflect.TypeOf(c)
 	for i := 0; i < typ.NumMethod(); i++ {
