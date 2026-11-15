@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { NodeEntry } from './hooks/useClusterDerived'
 import type { ClusterViewNode } from './hooks/useClusterPodsQuery'
-import { GAP, focusSpokenCell, layoutMap, mapKey } from './nodeMapLayout'
+import { GAP, focusSpokenCell, layoutMap, mapKey, pointerFocusAfter } from './nodeMapLayout'
 import { nodeCordoned, nodeReadiness } from '@/utils/nodeStatus'
 
 // Every node at a glance: a cell per node in the boxes' order, a dot per pod in the cards' colour (errors first, then
@@ -48,7 +48,7 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, nodeList
   const [width, setWidth] = useState(0)
   const [hover, setHover] = useState<number | null>(null)
   const [spoken, setSpoken] = useState('') // the live region's text: the cell the last keyboard move reached
-  const byPointer = useRef(false) // a pointer is down on the canvas, so the focus it gives is not a keyboard move
+  const byPointer = useRef(false) // the canvas's next focus comes with a pointer, not a keyboard move (pointerFocusAfter)
   const hintId = useId()
   const [mode, setMode] = useState(0) // bumps when the colour mode changes, to redraw
 
@@ -174,14 +174,15 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, nodeList
           data-dim-cells={entries.some((e) => e.dim) ? entries.filter((e) => e.dim).length : undefined}
           data-node-marks={Object.keys(marked).length > 0 ? JSON.stringify(marked) : undefined}
           tabIndex={0}
-          onPointerDown={() => { byPointer.current = true }}
+          onPointerDown={() => { byPointer.current = pointerFocusAfter('pointerdown') }}
+          onPointerCancel={() => { byPointer.current = pointerFocusAfter('pointercancel') }}
           onFocus={() => {
             speak(focusSpokenCell(byPointer.current, cur, entries.length))
-            byPointer.current = false
+            byPointer.current = pointerFocusAfter('focus')
             setHover((h) => h ?? 0)
           }}
           onBlur={() => {
-            byPointer.current = false
+            byPointer.current = pointerFocusAfter('blur')
             setHover(null)
             setSpoken('')
           }}

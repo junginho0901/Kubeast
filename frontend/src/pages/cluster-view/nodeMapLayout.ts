@@ -34,6 +34,14 @@ export function focusSpokenCell(byPointer: boolean, at: number | null, count: nu
   return byPointer || count === 0 ? null : Math.min(Math.max(0, at ?? 0), count - 1)
 }
 
+// Whether the canvas's next focus comes with a pointer, after one of its events: a pointer going down sets it; the
+// focus, the blur and a pointer cancelled before any focus (a touch that turned into a scroll) clear it, so the next
+// focus from the keyboard is read out. A pointer's up is not among them: a tap's focus comes after its pointerup.
+export type MapPointerEvent = 'pointerdown' | 'pointercancel' | 'focus' | 'blur'
+export function pointerFocusAfter(event: MapPointerEvent): boolean {
+  return event === 'pointerdown'
+}
+
 // A key on the focused map from cell `at` (null: none yet; past the cells: the last): the cell an arrow moves to, the cell Enter or Space opens, else null.
 export function mapKey(key: string, at: number | null, count: number, cols: number): { hover: number } | { open: number } | null {
   if (count === 0) return null
