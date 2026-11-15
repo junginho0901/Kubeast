@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -31,6 +33,25 @@ func (h *Handler) recordAuditWithPayload(
 	before, after json.RawMessage,
 ) error {
 	return h.recordAuditAs(r, audit.ServiceK8s, action, targetType, targetID, namespace, err, before, after)
+}
+
+// auditAfterCloseTimeout bounds a row recordAuditAfterClose writes.
+const auditAfterCloseTimeout = 5 * time.Second
+
+// recordAuditAfterClose is recordAuditWithPayload for a row written when the
+// caller may have closed the connection already (a stream's last frame was
+// sent, or a long wait ran after the headers). The write keeps the request's
+// values (caller, cluster) but not its cancellation, so the row is stored and
+// the store is not marked broken by a closed browser.
+func (h *Handler) recordAuditAfterClose(
+	r *http.Request,
+	action, targetType, targetID, namespace string,
+	err error,
+	before, after json.RawMessage,
+) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), auditAfterCloseTimeout)
+	defer cancel()
+	return h.recordAuditWithPayload(r.WithContext(ctx), action, targetType, targetID, namespace, err, before, after)
 }
 
 // recordHelmAudit is the helm-scoped counterpart to recordAudit. It

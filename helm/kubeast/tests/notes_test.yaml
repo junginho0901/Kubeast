@@ -1,0 +1,58 @@
+suite: NOTES.txt — the note that Redis keeps one password with secrets.existingSecret
+templates:
+  - NOTES.txt
+tests:
+  - it: says Redis runs with one password and how to turn the users on, for secrets.existingSecret without redis.acl.existingSecretHasKeys
+    set:
+      secrets.existingSecret: company-kubeast
+    asserts:
+      - matchRegexRaw:
+          pattern: '▸ Redis runs with one password for every service'
+      - matchRegexRaw:
+          pattern: 'Add REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD, REDIS_TOOL_SERVER_PASSWORD to Secret company-kubeast, then upgrade with\n\s+--reset-then-reuse-values --set redis\.acl\.existingSecretHasKeys=true'
+
+  - it: says nothing of it once redis.acl.existingSecretHasKeys is true
+    set:
+      secrets.existingSecret: company-kubeast
+      redis.acl.existingSecretHasKeys: true
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Redis runs with one password
+
+  - it: says nothing of it when the chart makes the passwords
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Redis runs with one password
+
+  - it: says nothing of it with redis.acl.enabled=false
+    set:
+      secrets.existingSecret: company-kubeast
+      redis.acl.enabled: false
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Redis runs with one password
+
+  - it: with the users' keys in secrets.existingSecret says every backend holds every Redis password and how to separate them
+    set:
+      secrets.existingSecret: company-kubeast
+      redis.acl.existingSecretHasKeys: true
+    asserts:
+      - matchRegexRaw:
+          pattern: '▸ Every backend holds every Redis user''s password'
+      - matchRegexRaw:
+          pattern: 'The Redis user keys are in Secret company-kubeast, which every backend reads whole as its\n\s+environment\. To give each service its own key only, move them to a Secret of their own and upgrade with\n\s+--reset-then-reuse-values --set redis\.acl\.existingSecret=<that Secret>'
+
+  - it: says nothing of either with redis.acl.existingSecret
+    set:
+      secrets.existingSecret: company-kubeast
+      redis.acl.existingSecret: company-redis-users
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Every backend holds every Redis
+      - notMatchRegexRaw:
+          pattern: Redis runs with one password
+
+  - it: says nothing of the shared keys when the chart makes the passwords
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Every backend holds every Redis

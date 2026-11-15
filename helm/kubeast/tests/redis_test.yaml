@@ -1,15 +1,248 @@
-suite: redis — requirepass from kubeast-secrets
+suite: redis — one Valkey user per service (redis.acl), or requirepass from kubeast-secrets
 templates:
   - redis.yaml
 tests:
-  - it: starts redis with requirepass and probes with the same password
+  - it: starts Valkey on the ACL file the acl container writes, with no password in its arguments or environment but the probe's
     documentSelector:
       path: kind
       value: Deployment
     asserts:
       - equal:
           path: spec.template.spec.containers[0].args
-          value: ["--requirepass", "$(REDIS_PASSWORD)"]
+          value: ["--aclfile", "/run/kubeast/redis-acl/users.acl", "--maxmemory", "107374182", "--maxmemory-policy", "volatile-lru"]
+      - equal:
+          path: spec.template.spec.containers[0].env
+          value:
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: kubeast-redis-users
+                  key: REDIS_PROBE_PASSWORD
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: acl
+            mountPath: /run/kubeast/redis-acl
+            readOnly: true
+      - equal:
+          path: spec.template.spec.initContainers[0].name
+          value: acl
+      - equal:
+          path: spec.template.spec.initContainers[0].command
+          value: ["sh", "-c"]
+
+  - it: writes the default user off with nothing allowed, k8s-service on kubeast keys and channels with its commands, probe with PING only and tool-server on the notice channel
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: '(?m)^user default off resetkeys resetchannels -@all$'
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: '(?m)^user k8s-service on #\$\{k8s_service\} resetkeys ~kubeast:\* resetchannels &kubeast:\* -@all \+ping \+select \+get \+set \+del \+unlink \+scan \+publish \+subscribe \+unsubscribe$'
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: '(?m)^user probe on #\$\{probe\} resetkeys resetchannels -@all \+ping$'
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: '(?m)^user tool-server on #\$\{tool_server\} resetkeys resetchannels &kubeast:clusters:changed:\* -@all \+ping \+select \+subscribe \+unsubscribe$'
+      # these four lines and no other
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: 'users\.acl <<EOF\nuser default [^\n]*\nuser k8s-service [^\n]*\nuser probe [^\n]*\nuser tool-server [^\n]*\nEOF\n'
+
+  # tool-server listens to the cluster change notices: no key pattern, one channel pattern, no command that reads or
+  # writes a key.
+  - it: gives tool-server the cluster change channel and no key
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - notMatchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: '(?m)^user tool-server [^\n]*(~|%R|%W|allkeys|\+get|\+set|\+del|\+unlink|\+scan|\+publish|\+flush)'
+
+  - it: with the AI off has no tool-server user or password
+    set:
+      ai.enabled: false
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: 'users\.acl <<EOF\nuser default [^\n]*\nuser k8s-service [^\n]*\nuser probe [^\n]*\nEOF\n'
+      - notMatchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: REDIS_TOOL_SERVER_PASSWORD
+      - equal:
+          path: spec.template.spec.volumes[2].secret.items
+          value:
+            - key: REDIS_K8S_SERVICE_PASSWORD
+              path: REDIS_K8S_SERVICE_PASSWORD
+            - key: REDIS_PROBE_PASSWORD
+              path: REDIS_PROBE_PASSWORD
+
+  - it: gives no user every key, channel or command, a password in clear, or a command that empties or reconfigures Redis
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - notMatchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: '(?im)^user [^\n]*(~\*|&\*|allkeys|allchannels|allcommands|\+@|nopass| >)'
+      - notMatchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: '(?im)^user [^\n]*\+(flushall|flushdb|keys|config|debug|acl|monitor|eval|evalsha|script|function|shutdown|save|bgsave|bgrewriteaof|replicaof|slaveof|module|migrate|restore|sort|swapdb|move|rename|client)\b'
+
+  - it: hashes each password file with SHA-256 and stops with what to add when one is missing
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: 'sha256sum < "/run/kubeast/redis-passwords/\$1" \| cut -d'' '' -f1'
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: 'k8s_service=\$\(pwhash REDIS_K8S_SERVICE_PASSWORD\)\nprobe=\$\(pwhash REDIS_PROBE_PASSWORD\)\ntool_server=\$\(pwhash REDIS_TOOL_SERVER_PASSWORD\)\n'
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: '\$1 is not in Secret kubeast-redis-users; add it'
+      # a key that is missing or empty: no user with an empty password
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: 'if \[ ! -s "/run/kubeast/redis-passwords/\$1" \]; then'
+      - contains:
+          path: spec.template.spec.initContainers[0].volumeMounts
+          content:
+            name: passwords
+            mountPath: /run/kubeast/redis-passwords
+            readOnly: true
+
+  - it: reads the two passwords from kubeast-redis-users 0440 through fsGroup 999 and keeps the ACL file in memory
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 999
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: passwords
+            secret:
+              secretName: kubeast-redis-users
+              defaultMode: 0440
+              optional: true
+              items:
+                - key: REDIS_K8S_SERVICE_PASSWORD
+                  path: REDIS_K8S_SERVICE_PASSWORD
+                - key: REDIS_PROBE_PASSWORD
+                  path: REDIS_PROBE_PASSWORD
+                - key: REDIS_TOOL_SERVER_PASSWORD
+                  path: REDIS_TOOL_SERVER_PASSWORD
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: acl
+            emptyDir:
+              medium: Memory
+              sizeLimit: 1Mi
+      - matchRegex:
+          path: spec.template.metadata.annotations["checksum/redis-users"]
+          pattern: ^[0-9a-f]{64}$
+
+  - it: probes as probe, the password from REDISCLI_AUTH, never on the command line
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.exec.command
+          value: ["sh", "-c", "redis-cli --user probe ping | grep -q PONG"]
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.exec.command
+          value: ["sh", "-c", "redis-cli --user probe ping | grep -q PONG"]
+
+  - it: with secrets.existingSecret and redis.acl.existingSecretHasKeys reads the users' passwords from that Secret
+    set:
+      secrets.existingSecret: company-kubeast
+      redis.acl.existingSecretHasKeys: true
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[0]
+          value: --aclfile
+      - equal:
+          path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.name
+          value: company-kubeast
+      - equal:
+          path: spec.template.spec.volumes[2].secret.secretName
+          value: company-kubeast
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: 'is not in Secret company-kubeast; add it \(docs/configuration\.md \\"Redis users\\"\) or set redis\.acl\.existingSecretHasKeys=false"'
+
+  # The render reads the values only: whether that Secret holds the keys is not known to it.
+  - it: with secrets.existingSecret and no redis.acl.existingSecretHasKeys keeps the one password, with no acl container
+    set:
+      secrets.existingSecret: company-kubeast
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args
+          value: ["--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "107374182", "--maxmemory-policy", "volatile-lru"]
+      - equal:
+          path: spec.template.spec.containers[0].env
+          value:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: company-kubeast
+                  key: REDIS_PASSWORD
+      - notExists:
+          path: spec.template.spec.initContainers
+      - notExists:
+          path: spec.template.metadata.annotations
+      - equal:
+          path: spec.template.spec.volumes
+          value:
+            - name: data
+              emptyDir: {}
+
+  - it: with podSecurity.enabled=false mounts the password files 0444 and sets no uid or fsGroup
+    set:
+      podSecurity.enabled: false
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - notExists:
+          path: spec.template.spec.securityContext
+      - notExists:
+          path: spec.template.spec.initContainers[0].securityContext
+      - equal:
+          path: spec.template.spec.volumes[2].secret.defaultMode
+          value: 0444
+
+  - it: with redis.acl.enabled=false starts Valkey with requirepass and probes with the same password, as before
+    set:
+      redis.acl.enabled: false
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args
+          value: ["--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "107374182", "--maxmemory-policy", "volatile-lru"]
       - contains:
           path: spec.template.spec.containers[0].env
           content:
@@ -21,9 +254,21 @@ tests:
       - matchRegex:
           path: spec.template.spec.containers[0].readinessProbe.exec.command[2]
           pattern: 'redis-cli --no-auth-warning -a "\$REDIS_PASSWORD" ping'
+      - notExists:
+          path: spec.template.spec.initContainers
+      - notExists:
+          path: spec.template.metadata.annotations
+      - notExists:
+          path: spec.template.spec.securityContext.fsGroup
+      - equal:
+          path: spec.template.spec.volumes
+          value:
+            - name: data
+              emptyDir: {}
 
-  - it: reads the password from secrets.existingSecret when one is given
+  - it: with redis.acl.enabled=false reads requirepass from secrets.existingSecret when one is given
     set:
+      redis.acl.enabled: false
       secrets.existingSecret: company-kubeast
     documentSelector:
       path: kind
@@ -33,6 +278,98 @@ tests:
           path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.name
           value: company-kubeast
 
+  # maxmemory = 80% of resources.redis.limits.memory in bytes; volatile-lru evicts only keys with a TTL
+  - it: caps Valkey at 80% of the memory limit and evicts only keys with a TTL, in both modes
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[2]
+          value: --maxmemory
+      - equal:
+          path: spec.template.spec.containers[0].args[3]
+          value: "107374182"
+      - equal:
+          path: spec.template.spec.containers[0].args[4]
+          value: --maxmemory-policy
+      - equal:
+          path: spec.template.spec.containers[0].args[5]
+          value: volatile-lru
+
+  - it: derives maxmemory from a limit in Gi
+    set:
+      resources.redis.limits.memory: 1Gi
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[3]
+          value: "858993459"
+
+  - it: derives maxmemory from a limit with a fraction
+    set:
+      resources.redis.limits.memory: 1.5Gi
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[3]
+          value: "1288490188"
+
+  - it: derives maxmemory from a decimal suffix
+    set:
+      resources.redis.limits.memory: 512M
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[3]
+          value: "409600000"
+
+  - it: derives maxmemory from a limit given as a number of bytes
+    set:
+      resources.redis.limits.memory: 134217728
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[3]
+          value: "107374182"
+
+  - it: without a memory limit caps at 80% of 128Mi, the chart's default limit
+    set:
+      resources.redis.limits: null
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[3]
+          value: "107374182"
+      - notExists:
+          path: spec.template.spec.containers[0].resources.limits
+
+  - it: without resources.redis at all caps at 80% of 128Mi
+    set:
+      resources.redis: null
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[3]
+          value: "107374182"
+
+  - it: with redis.acl.enabled=false keeps the same cap
+    set:
+      redis.acl.enabled: false
+      resources.redis.limits.memory: 1Gi
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args
+          value: ["--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "858993459", "--maxmemory-policy", "volatile-lru"]
+
+  - it: refuses a memory limit that is not a quantity
+    set:
+      resources.redis.limits.memory: lots
+    asserts:
+      - failedTemplate:
+          errorPattern: resources.redis.limits.memory "lots" is not a memory quantity
+
   - it: runs Valkey by default
     documentSelector:
       path: kind
@@ -41,6 +378,42 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].image
           value: valkey/valkey:9.1-alpine
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: valkey/valkey:9.1-alpine
+
+  # redis.acl.existingSecret: a Secret of the Redis user keys alone, read key by key.
+  - it: with redis.acl.existingSecret reads the users' passwords from that Secret and turns the users on with secrets.existingSecret
+    set:
+      secrets.existingSecret: company-kubeast
+      redis.acl.existingSecret: company-redis-users
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[0]
+          value: --aclfile
+      - equal:
+          path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.name
+          value: company-redis-users
+      - equal:
+          path: spec.template.spec.volumes[2].secret.secretName
+          value: company-redis-users
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: 'is not in Secret company-redis-users; add it \(docs/configuration\.md \\"Redis users\\"\) or unset redis\.acl\.existingSecret"'
+
+  - it: with redis.acl.existingSecret and no secrets.existingSecret reads from that Secret too
+    set:
+      redis.acl.existingSecret: company-redis-users
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.volumes[2].secret.secretName
+          value: company-redis-users
 
   - it: stops the old Redis before the new one starts, so one Redis stands behind the Service
     documentSelector:

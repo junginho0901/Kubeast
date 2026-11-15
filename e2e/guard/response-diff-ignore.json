@@ -35,6 +35,73 @@
       "cell": "^\\$\\.items(\\.\\$length$|\\[/[^\\]]+#2\\]\\.)",
       "why": "Every lease's holder renews it every few seconds; whether a renewal falls inside a build's first live frame is timing, so one build's frame can hold a lease twice and count one more.",
       "pr": "#783"
+    },
+    {
+      "route": "^/api/v1/cluster/metrics/top-resources$",
+      "cell": "^\\$\\.(pod|node)_metrics_(error|refused)$",
+      "user": "^nsread$",
+      "why": "The namespace-limited Read user is refused metrics.k8s.io on self; the dashboard's top resources now give the cluster's words and a refused mark for each part where the old build, reading the answer without its body, said \"unknown\".",
+      "pr": "#889"
+    },
+    {
+      "route": "^/api/v1/cluster/metrics/(nodes|pods)$",
+      "cell": "^\\$\\.detail$",
+      "user": "^nsread$",
+      "newStatus": "^403$",
+      "why": "The namespace-limited Read user is refused metrics.k8s.io on self; the 403 now says it in the cluster's words where the old build, reading the answer without its body, said \"get node metrics (status 403): unknown\".",
+      "pr": "#895"
+    },
+    {
+      "route": "^/api/v1/cluster/metrics/(nodes|pods)$",
+      "cell": "^(\\$status|\\$\\.\\$length|\\$\\.detail)$",
+      "cluster": "^self$",
+      "newStatus": "^404$",
+      "why": "self has no metrics-server: the reads say metrics.k8s.io is not served, a 404 \"the server could not find the requested resource\" as top-resources words it, where the old build answered an empty list. k8s-service reads it from the cluster's API discovery, the same for every user, so the namespace-limited Read user, whom the cluster refuses those lists, reads it too where the old build gave it the 403.",
+      "pr": "#900"
+    },
+    {
+      "route": "^/api/v1/cluster/metrics/top-resources$",
+      "cell": "^\\$\\.(node|pod)_metrics_error$",
+      "user": "^nsread$",
+      "cluster": "^self$",
+      "why": "self has no metrics-server: the namespace-limited Read user's top nodes and pods say metrics.k8s.io is not served, \"the server could not find the requested resource\", as every user's do. The old build read the cluster's 403 for the nodes without its body as \"unknown\", and took its namespace's 404 for the pods as a namespace with nothing to read, an empty list with no error.",
+      "pr": "#900"
+    },
+    {
+      "route": "^/api/v1/cluster/api-resources$",
+      "cell": "^\\$\\.\\$order$",
+      "why": "The discovery lists come in kubectl's RESTMapper order: core v1, then the groups as discovery names them, each group's preferred version before its others; v0.7.7 put every preferred version first, then the rest by group/version.",
+      "pr": "#816"
+    },
+    {
+      "route": "^(/api/v1/cluster/(deployments/all|namespaces/[^/]+/deployments(/[^/]+/describe)?)|live /apis/apps/v1(/namespaces/[^/]+)?/deployments)$",
+      "cell": "(^\\$|\\])\\.current_replicas$",
+      "why": "A Deployment's row, describe answer and live frame carry current_replicas, status.replicas (kubectl describe's total); v0.7.7 did not send it.",
+      "pr": "#813"
+    },
+    {
+      "route": "^live /api/v1(/namespaces/[^/]+)?/events$",
+      "cell": "^\\$\\.items\\[.*\\]\\.involved_object\\.uid$",
+      "why": "An event frame's involved_object carries the object's UID, which a drawer keeps its followed events to as kubectl describe does; v0.7.7's frame did not.",
+      "pr": "#815"
+    },
+    {
+      "route": "^/api/v1/cluster/nodes/[^/]+/describe$",
+      "cell": "^\\$\\.uid$",
+      "why": "A Node's describe answer carries its UID, which the Node drawer keeps followed events to beside the node's name; v0.7.7 did not send it.",
+      "pr": "#815"
+    },
+    {
+      "route": "^/api/v1/cluster/nodes/[^/]+/drain/status$",
+      "cell": "^\\$\\.(pods_total|pods_done|finished_at|cordoned_nodes)(\\.|\\[|$)",
+      "why": "A drain's status answer is read from the node_drains table and carries pods_total, pods_done, finished_at and cordoned_nodes (null, or the drain's nodes still cordoned once it failed or was interrupted); v0.7.7 answered from the server's memory without them.",
+      "pr": "#858"
+    },
+    {
+      "route": "^/api/v1/auth/roles$",
+      "cell": "^\\$\\[[^\\]]+\\]\\.same_group_as$",
+      "why": "A custom role whose name differs from another role's only in letter case, spaces or punctuation carries same_group_as, the role it acts as on a cluster (a built-in first, else the oldest), which the pickers name; v0.7.7 did not send it.",
+      "pr": "#865"
     }
   ]
 }

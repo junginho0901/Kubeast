@@ -223,6 +223,11 @@ def _parse_namespaces(raw) -> dict:
     return out
 
 
+# Go's strings.TrimSpace, which the Go services trim a token's role with (pkg/auth): str.strip() also takes
+# U+001C..U+001F, so a custom role "Admin\x1f" would read as the built-in Admin here.
+GO_SPACE = "\t\n\v\f\r \x85\xa0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000"
+
+
 def decode_access_token(token: str) -> TokenPayload:
     try:
         signing_key = _jwk_client.get_signing_key_from_jwt(token).key
@@ -234,7 +239,8 @@ def decode_access_token(token: str) -> TokenPayload:
             audience=JWT_AUDIENCE,
         )
         user_id = str(payload.get("sub") or "").strip()
-        role = str(payload.get("role") or "").strip().lower()
+        # the account level's name as stored: a built-in is known by its exact name
+        role = str(payload.get("role") or "").strip(GO_SPACE)
         email = str(payload.get("email") or "").strip()
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -300,7 +306,7 @@ async def require_auth(authorization: Optional[str] = Depends(bearer_or_cookie))
     # A pending account (registered, no role granted yet) holds a session only
     # to see its own state; it must not reach the AI endpoints (L15 — same
     # rule as the Go services' shared middleware).
-    if (payload.role or "").lower() == "pending":
+    if payload.role == "Pending":
         raise HTTPException(status_code=403, detail="Account pending approval")
     return payload
 

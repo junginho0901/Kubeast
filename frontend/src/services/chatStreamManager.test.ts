@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ANSWERS from './chatAnswer.cases.json'
+import ACCESS_LINES from './toolAccess.cases.json'
 import { appendToolBlock, ChatStreamManager, resultTarget, withToolAccess, withToolResult, type ChatStreamState } from './chatStreamManager'
 import { stripToolDetails } from './chatTextUtils'
-import { accessLine, accessSection, requestsBlock } from './toolAccess'
+import { accessLine, accessSection, requestsBlock, type ToolAccess } from './toolAccess'
 
 describe('pairing a tool result with its call', () => {
   const calls = [
@@ -767,23 +768,9 @@ describe('each tool result and 🔐 line goes to its own block', () => {
 describe('the 🔐 line', () => {
   const read = { cluster: 'prod', kind: 'person', user: 'a@example.com', groups: ['kubeast:authenticated', 'kubeast:viewer'], role: 'Read', impersonation: true }
 
-  // The same cases and text as ai-service tests/test_tool_access.py: the saved answer and the live one must match.
-  it.each([
-    [{ ...read, mode: 'read' },
-      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> <code>kubeast:viewer</code> · role Read · whole cluster · read-only</p>'],
-    [{ ...read, role: 'Write', groups: ['kubeast:authenticated', 'kubeast:role:write'], namespaces: ['shop', 'payments'], mode: 'write' },
-      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> <code>kubeast:role:write</code> · role Write · namespaces shop, payments · write</p>'],
-    [{ ...read, role: '*', groups: ['kubeast:admin', 'kubeast:authenticated'] },
-      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:admin</code> <code>kubeast:authenticated</code> · global admin · whole cluster · read-only</p>'],
-    [{ ...read, kind: 'api_key', api_key: 'k-1' },
-      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> (API key) · groups <code>kubeast:authenticated</code> <code>kubeast:viewer</code> · role Read · whole cluster · read-only</p>'],
-    [{ cluster: 'prod', kind: 'investigator', user: 'kubeast:investigator', groups: ['kubeast:investigator'], impersonation: true },
-      '<p><strong>🔐 Ran as:</strong> <code>kubeast:investigator</code> · groups <code>kubeast:investigator</code> · alert investigator · read-only</p>'],
-    [{ cluster: 'prod', kind: 'person', role: 'Read', impersonation: false },
-      "<p><strong>🔐 Ran as:</strong> ⚠️ Kubeast's own credential, not this user's permissions (impersonation is off) · role Read · whole cluster · read-only</p>"],
-    [{ ...read, role: '' },
-      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> <code>kubeast:viewer</code> · no role in this cluster · whole cluster · read-only</p>'],
-  ])('%#', (access, want) => {
+  // The cases ai-service tests/test_tool_access.py runs too (toolAccess.cases.json): the saved answer and the live one
+  // must match, a role of a built-in's name in other forms shown as stored and as giving no role group among them.
+  it.each(ACCESS_LINES.cases.map((c): [string, ToolAccess, string] => [c.name, c.access as ToolAccess, c.line]))('%s', (_name, access, want) => {
     expect(accessLine(access)).toBe(want)
   })
 
