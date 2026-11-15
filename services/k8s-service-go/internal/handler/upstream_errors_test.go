@@ -33,9 +33,10 @@ func TestAClusterThatCannotBeReachedAnswersWithoutItsAddress(t *testing.T) {
 	}
 }
 
-// A cluster request Kubeast refused to send for naming no person is a 500 in fixed words, without the request.
+// A cluster request Kubeast refused to send for naming no person is a 500 in fixed words, without the request, whatever
+// words the request's address holds.
 func TestARequestNamingNoPersonIsA500InFixedWords(t *testing.T) {
-	err := fmt.Errorf("list pods: %w", &url.Error{Op: "Get", URL: "https://10.0.0.9:6443/api/v1/pods", Err: auth.ErrNoPerson})
+	err := fmt.Errorf("get configmap: %w", &url.Error{Op: "Get", URL: "https://10.0.0.9:6443/api/v1/namespaces/shop/configmaps/forbidden-notes", Err: auth.ErrNoPerson})
 	if got := statusForError(err); got != http.StatusInternalServerError {
 		t.Fatalf("statusForError = %d, want 500", got)
 	}
