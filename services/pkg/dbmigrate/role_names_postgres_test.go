@@ -436,11 +436,12 @@ func TestPostgresRenamedRoleNamesTrimmedAsGo(t *testing.T) {
 	}
 }
 
-// upgradeDocsQueries are the two queries of docs/getting-started.md "Upgrade", which docs/ko gives the same: the
-// preview of what the migration renames and the check for a grant of a renamed role after it.
-func upgradeDocsQueries(t *testing.T) (preview, check string) {
+// upgradeDocsQueries are the three queries of docs/getting-started.md "Upgrade", which docs/ko gives the same: the
+// preview of what the migration renames, the check for a grant of a renamed role after it, and the 0.7.7 and 0.7.8
+// groups of the roles whose names have characters outside ASCII.
+func upgradeDocsQueries(t *testing.T) (preview, check, groups string) {
 	t.Helper()
-	blocks := func(path string) (preview, check string) {
+	blocks := func(path string) (preview, check, groups string) {
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
@@ -454,24 +455,27 @@ func upgradeDocsQueries(t *testing.T) (preview, check string) {
 				preview = sql
 			case strings.Contains(sql, "FROM user_cluster_roles g JOIN roles r"):
 				check = sql
+			case strings.Contains(sql, "AS group_0_7_8"):
+				groups = sql
 			}
 		}
-		if preview == "" || check == "" {
+		if preview == "" || check == "" || groups == "" {
 			t.Fatalf("%s: the upgrade queries are not there", path)
 		}
-		return preview, check
+		return preview, check, groups
 	}
-	preview, check = blocks("../../../docs/getting-started.md")
-	if p, c := blocks("../../../docs/ko/getting-started.md"); p != preview || c != check {
+	preview, check, groups = blocks("../../../docs/getting-started.md")
+	if p, c, g := blocks("../../../docs/ko/getting-started.md"); p != preview || c != check || g != groups {
 		t.Errorf("docs/ko/getting-started.md gives other upgrade queries")
 	}
-	return preview, check
+	return preview, check, groups
 }
 
 // The upgrade docs' preview, run before the migration, lists the roles it renames, each with the role whose group it
-// shares and what it holds; the check after it lists a grant of a renamed role written once the migration had run.
+// shares and what it holds; the check after it lists a grant of a renamed role written once the migration had run; the
+// groups query lists the roles whose 0.7.7 group (each character outside ASCII a "-") is not their 0.7.8 group.
 func TestPostgresUpgradeDocsQueriesSayWhatTheMigrationDoes(t *testing.T) {
-	previewSQL, checkSQL := upgradeDocsQueries(t)
+	previewSQL, checkSQL, groupsSQL := upgradeDocsQueries(t)
 	pool := freshDatabase(t)
 	ctx := context.Background()
 	p, err := newProvider(stdlib.OpenDBFromPool(pool))
@@ -534,6 +538,31 @@ func TestPostgresUpgradeDocsQueriesSayWhatTheMigrationDoes(t *testing.T) {
 		ids["ADMİN"]: {"ADMİN", "Admin", 0, 0, 0, 0}, ids["ops-팀"]: {"ops-팀", "Ops 팀", 0, 0, 0, 0},
 	}; !maps.Equal(preview, want) {
 		t.Errorf("the preview lists %+v, want %+v", preview, want)
+	}
+
+	groups := map[string][2]string{}
+	rows, err = pool.Query(ctx, groupsSQL)
+	if err != nil {
+		t.Fatalf("the groups query: %v", err)
+	}
+	for rows.Next() {
+		var name string
+		var g [2]string
+		if err := rows.Scan(&name, &g[0], &g[1]); err != nil {
+			t.Fatal(err)
+		}
+		groups[name] = g
+	}
+	rows.Close()
+	if want := map[string][2]string{
+		"운영팀":   {"kubeast:role:---", "kubeast:role:~c6b4~c601~d300"},
+		"개발팀":   {"kubeast:role:---", "kubeast:role:~ac1c~bc1c~d300"},
+		"Ops 팀": {"kubeast:role:ops--", "kubeast:role:ops-~d300"},
+		"ops-팀": {"kubeast:role:ops--", "kubeast:role:ops-~d300"},
+		"😀":     {"kubeast:role:-", "kubeast:role:~~01f600"},
+		"😁":     {"kubeast:role:-", "kubeast:role:~~01f601"},
+	}; !maps.Equal(groups, want) {
+		t.Errorf("the groups query lists %v, want %v", groups, want)
 	}
 
 	if _, err := p.UpTo(ctx, 25); err != nil {
