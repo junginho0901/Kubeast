@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
@@ -122,13 +123,121 @@ func TestMetricsReadOfAnUnreachableClusterStillCounts(t *testing.T) {
 	}
 }
 
-// Without metrics-server the group is not served (404): that is no metrics, an empty answer.
-func TestMetricsReadWithoutMetricsServerIsEmpty(t *testing.T) {
-	api := httptest.NewServer(http.NotFoundHandler())
+// serveDiscovery answers API discovery as a legacy (not aggregated) API server: core v1 and, with metrics,
+// metrics.k8s.io/v1beta1 (metrics-server installed), and the metrics.k8s.io group's document, a 404 without metrics. It
+// counts the discovery reads (the group list and the group's document asked) in reads.
+func serveDiscovery(w http.ResponseWriter, r *http.Request, metrics bool, reads *atomic.Int64) bool {
+	const metricsGV = `{"groupVersion":"metrics.k8s.io/v1beta1","version":"v1beta1"}`
+	w.Header().Set("Content-Type", "application/json")
+	switch r.URL.Path {
+	case "/api":
+		_, _ = w.Write([]byte(`{"kind":"APIVersions","versions":["v1"]}`))
+	case "/api/v1":
+		_, _ = w.Write([]byte(`{"kind":"APIResourceList","groupVersion":"v1","resources":[{"name":"nodes","singularName":"node","namespaced":false,"kind":"Node","verbs":["get","list"]}]}`))
+	case "/apis":
+		reads.Add(1)
+		groups := ""
+		if metrics {
+			groups = `{"name":"metrics.k8s.io","versions":[` + metricsGV + `],"preferredVersion":` + metricsGV + `}`
+		}
+		_, _ = w.Write([]byte(`{"kind":"APIGroupList","apiVersion":"v1","groups":[` + groups + `]}`))
+	case "/apis/metrics.k8s.io":
+		reads.Add(1)
+		if !metrics {
+			http.NotFound(w, r)
+			return true
+		}
+		_, _ = w.Write([]byte(`{"kind":"APIGroup","apiVersion":"v1","name":"metrics.k8s.io","versions":[` + metricsGV + `],"preferredVersion":` + metricsGV + `}`))
+	case "/apis/metrics.k8s.io/v1beta1":
+		if !metrics {
+			http.NotFound(w, r)
+			return true
+		}
+		_, _ = w.Write([]byte(`{"kind":"APIResourceList","groupVersion":"metrics.k8s.io/v1beta1","resources":[{"name":"nodes","namespaced":false,"kind":"NodeMetrics","verbs":["get","list"]},{"name":"pods","namespaced":true,"kind":"PodMetrics","verbs":["get","list"]}]}`))
+	default:
+		return false
+	}
+	return true
+}
+
+// Without metrics-server the group is not served. Monitoring's reads say so as top-resources does, a 404 with "the
+// server could not find the requested resource", where they answered an empty list the tabs asked again every 5 s. The
+// first read's 404 reads the group's discovery once, which says it for every caller: after it both reads, every
+// namespace and a grant limited to namespaces ask the cluster no list for the minute.
+func TestMonitoringMetricsOfAClusterWithoutTheMetricsAPISayNotServed(t *testing.T) {
+	const notFound = "the server could not find the requested resource"
+	var asked, discovery atomic.Int64
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if serveDiscovery(w, r, false, &discovery) {
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/apis/metrics.k8s.io/") {
+			asked.Add(1)
+		}
+		http.NotFound(w, r)
+	}))
 	defer api.Close()
 	h := metricsHandler(t, api.URL)
-	rec := readMetrics(h, "/api/v1/metrics/nodes", h.GetNodeMetrics)
-	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != "[]" {
+	limited := auth.TokenPayload{UserID: "u2", Perms: auth.PermissionMatrix{"c1": {"resource.objects.read"}}, Namespaces: map[string][]string{"c1": {"web", "shop"}}}
+	reads := []struct {
+		name    string
+		path    string
+		read    http.HandlerFunc
+		payload *auth.TokenPayload
+	}{
+		{"nodes", "/api/v1/metrics/nodes", h.GetNodeMetrics, nil},
+		{"nodes again", "/api/v1/metrics/nodes", h.GetNodeMetrics, nil},
+		{"pods of every namespace", "/api/v1/metrics/pods?with_limits=1", h.GetPodMetrics, nil},
+		{"pods of one namespace", "/api/v1/metrics/pods?namespace=web&with_limits=1", h.GetPodMetrics, nil},
+		{"pods of a grant limited to namespaces", "/api/v1/metrics/pods?with_limits=1", h.GetPodMetrics, &limited},
+	}
+	for _, c := range reads {
+		payload := auth.TokenPayload{UserID: "u1", Perms: auth.PermissionMatrix{"*": {"*"}}}
+		if c.payload != nil {
+			payload = *c.payload
+		}
+		sep := "?"
+		if strings.Contains(c.path, "?") {
+			sep = "&"
+		}
+		req := httptest.NewRequest(http.MethodGet, c.path+sep+"cluster=c1", nil)
+		req = req.WithContext(auth.WithPayload(req.Context(), payload))
+		rec := httptest.NewRecorder()
+		h.ClusterMiddleware(c.read).ServeHTTP(rec, req)
+		var body struct {
+			Detail string `json:"detail"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || rec.Code != http.StatusNotFound || body.Detail != notFound {
+			t.Fatalf("%s: %d %s, want 404 %q", c.name, rec.Code, rec.Body.String(), notFound)
+		}
+		if got, reads := asked.Load(), discovery.Load(); got != 1 || reads != 1 {
+			t.Fatalf("%s: %d metrics.k8s.io lists asked and %d discovery reads in all, want the first read's and one", c.name, got, reads)
+		}
+	}
+	if h.svc.ClusterDown("c1") {
+		t.Error("a cluster without metrics-server was taken down")
+	}
+}
+
+// Where discovery could not be read (this stand-in answers it 503 and every list 404) a grant limited to namespaces
+// gets the same answer from its own 404s: the API not served, not namespaces the cluster does not have, which would
+// read as no rows.
+func TestMonitoringPodMetricsOfALimitedGrantWithoutTheMetricsAPISayNotServed(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/apis" || r.URL.Path == "/apis/metrics.k8s.io" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer api.Close()
+	h := metricsHandler(t, api.URL)
+	payload := auth.TokenPayload{UserID: "u2", Perms: auth.PermissionMatrix{"c1": {"resource.objects.read"}}, Namespaces: map[string][]string{"c1": {"web", "shop", "api"}}}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/metrics/pods?with_limits=1&cluster=c1", nil)
+	req = req.WithContext(auth.WithPayload(req.Context(), payload))
+	rec := httptest.NewRecorder()
+	h.ClusterMiddleware(http.HandlerFunc(h.GetPodMetrics)).ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "could not find the requested resource") {
 		t.Fatalf("status %d, body %s", rec.Code, rec.Body.String())
 	}
 }

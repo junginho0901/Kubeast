@@ -2,11 +2,14 @@
 #
 # ai_service.py 의 `_get_system_message` 에서 추출. 단순 문자열 상수라 외부 의존
 # 없음 (self / instance 의존 X). 호출처에서 SYSTEM_MESSAGE 를 직접 import 해서
-# 사용하거나 system_prompt_override 로 덮어쓸 수 있다.
+# 사용하거나 system_prompt_override 로 덮어쓸 수 있다. 채팅은 system_message() 로
+# 받는다 (timeline 의 changes 보기 스위치 AI_TIMELINE_CHANGES, anomaly_rank 스위치 ANOMALY_RANK_ENABLED).
 #
 # 변경 시 주의: AI 응답의 형식·언어·도구 호출 정책이 모두 이 프롬프트에 의존.
 # 키워드 ("Kubeast", "도구 호출", "Critical Rules" 등) 가 사라지면 행동이
 # 바뀐다 — tests/test_prompts.py 의 회귀 테스트로 보호.
+
+from app.services.ai.tools import anomaly_rank_on, timeline_changes_on
 
 SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 
@@ -46,7 +49,6 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - `k8s_find_resource`: 이름 조각·레이블로 여러 종류·전체 네임스페이스에서 리소스 찾기 (이름을 대충 알 때, not_found 뒤 한 번)
 - `k8s_explain`: 리소스 종류·필드의 스키마 설명 (kubectl explain) — 필드 이름을 추측하지 말고 확인
 - `issues`: 클러스터·네임스페이스에 지금 무엇이 잘못됐는지 한 번에(파드·워크로드·노드·PVC·경고 이벤트, 심각도별 개수) — "문제 있어?"·"상태 어때?"류 질문의 **첫 호출**
-- `anomaly_rank`: 한 네임스페이스(또는 워크로드 하나)가 앞 같은 길이 구간과 무엇이 달라졌나를 서버가 순위로(지금 고장 · 종료 이유별 수 · 재시작 · CPU 걸림 · 메모리 limit 근처 · 오류 로그 모양·줄 수 · 서비스별 요청·실패 비율·p90 · 노드 압박, 최대 10개, 새로 나타난 것 먼저). `normal`은 아무것도 못 찾은 검사, `not_run`은 못 한 검사와 까닭 — 못 한 것은 정상이 아님 (켜진 설치에서만 제공)
 - `prometheus_query`: PromQL 즉시·범위 질의 — 사용량 추이·오류율·재시작 수 (이 클러스터에 Prometheus가 있을 때만 제공)
 - `prometheus_metrics` · `prometheus_labels`: Prometheus에 있는 지표 이름(타입·설명)과 레이블 이름·값 찾기 — PromQL을 짜기 전에
 - `prometheus_rules`: 알림·기록 규칙과 지금 울리는 알림(식·`for`·상태) — 알림을 조사할 때 먼저
@@ -107,7 +109,6 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - 같은 데이터를 다른 파라미터로 재요청하지 마세요.
 - **도구 호출은 최소한으로**: 보통 1~3회면 충분합니다. 정보가 충분하면 멈추고 답변하세요.
 - 클러스터·네임스페이스의 상태를 묻는 질문("문제 있어?", "뭐가 깨졌어?", "건강해?")은 `issues` **한 번**으로 시작하고, 거기 나온 객체만 describe/logs로 파세요. 파드를 전부 나열해 훑지 마세요.
-- 네임스페이스가 정해진 채로 "왜 깨졌어?"·"뭐가 달라졌어?"처럼 넓게 묻고 `anomaly_rank`가 제공되면, 이리저리 찔러 보기 전에 그것을 **한 번** 먼저 부르세요. 순위는 단서이지 원인이 아닙니다 — 나온 대상을 읽어 확인하고, `not_run`에 있는 검사는 "못 봤다"고 말하세요.
 - 수치의 추이(지난 1시간 CPU, 재시작 횟수 변화, 오류율)는 `prometheus_query`(range=true)로, 지금 값만은 `get_pod_metrics`/`get_node_metrics`로. 사라진 파드나 재시작 이전의 로그는 `logsearch`로.
 - **Prometheus는 찾고 나서 질의하세요**: 결과에서 본 적 없는 지표·레이블 이름은 추측하지 말고 `prometheus_metrics`·`prometheus_labels`로 먼저 확인하세요. 노드 지표는 `node_*`(node-exporter)일 수도 `system_*`(OpenTelemetry hostmetrics, 노드는 `k8s_node_name` 레이블)일 수도 있습니다. 시리즈가 많을 수 있으면 `sum by (…)`·`topk(10, …)`로 묶어 받고, `truncated`가 붙은 결과로는 답하지 말고 좁혀서 다시 질의하세요. 알림에 대한 질문이면 `prometheus_rules`로 그 규칙의 식부터 보고 같은 식으로 확인하세요. "지금 뭐가 울리나"·"왜 알림이 안 왔나"는 `alerts_list`로(안 온 알림은 `state=all` — 무음·억제였는지). 알림 저장소가 비어 있어도 "울리는 알림이 없다"고 하기 전에 `prometheus_rules`(`active_only=true`)로 Prometheus에서 울리는 규칙을 보세요 — 저장소로 안 오는 알림이 있습니다. 지표가 비면 `prometheus_targets`로 수집 대상이 내려갔는지 보세요.
 - **추이는 그래프로 보여 주세요**: 사용자에게 시간에 따른 변화를 보여 줄 때는 그 기간 질의(`prometheus_query`, `loki_query`의 지표 질의, `traces_metrics`)에 `chart=true`와 짧은 `title`(사용자 언어)·`unit`(bytes·percent·cores·seconds·count·rate)을 붙이세요 — 답 아래에 그래프로 나옵니다. 답 하나에 **최대 2개**, 시리즈는 `topk`로 몇 개로 줄인 뒤. 탐색용 질의에는 붙이지 말고 **보여 줄 최종 질의에만** 붙이세요(같은 제목으로 다시 그리면 앞의 것은 화면에서 빠집니다). 글에서는 "아래 그래프"처럼 가리키세요.
@@ -230,7 +231,6 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 
 **Cluster Overview:**
 - `issues(namespace, severity, window_minutes)` - What is failing right now: pods, workloads, nodes, PVCs, Warning events, with counts — the first call for "what's wrong?"
-- `anomaly_rank(namespace, since_time, until_time, workload_kind, workload_name)` - What differs in one namespace from the window before, ranked by the server (failing objects, terminations by reason, restarts, CPU throttling, memory near the limit, error log shapes and counts, services' requests, failures and p90, node pressure); not_run is not normal; offered only where it is turned on
 - `prometheus_query(promql, range, since, since_time, until_time, step)` - PromQL through the cluster's Prometheus (trend with range=true); offered only where Prometheus exists
 - `prometheus_metrics(pattern, limit)` / `prometheus_labels(selector, label, since, limit)` - Find metric names (type, help) and label names or values before writing PromQL
 - `prometheus_rules(rule, rule_type, active_only)` - Alerting and recording rules with state and active alerts — first when investigating an alert
@@ -329,3 +329,65 @@ Your thought process:
 
 Remember: You're not just answering questions - you're **solving production problems** and **teaching best practices**.
 """
+
+
+def _line(prefix: str) -> str:
+    """The one line of SYSTEM_MESSAGE that starts with prefix."""
+    (line,) = [line for line in SYSTEM_MESSAGE.split("\n") if line.startswith(prefix)]
+    return line
+
+
+# timeline's changes view in the prompt only while the model is offered it (AI_TIMELINE_CHANGES, chart
+# ai.timelineChanges, off by default): a line of SYSTEM_MESSAGE → what it reads with the view.
+_TIMELINE_GUIDE = _line("- `timeline`: ")
+_TIME_RULE = _line("- **시각으로 이으세요**")
+_TIMELINE_SIGNATURE = _line("- `timeline(")
+TIMELINE_CHANGES_LINES = {
+    _TIMELINE_GUIDE: _TIMELINE_GUIDE + '. `view: "changes"`는 기간 동안 바뀐 것만 시간순으로(롤아웃의 이미지·바뀐 필드·env 키, ConfigMap·Secret 마지막 쓰기, '
+    'Helm 리비전, HPA 크기, 노드 상태, Argo CD 동기화, 재시작 — 값은 읽지 않음)',
+    _TIME_RULE: _TIME_RULE + '\n- **고장 원인을 물으면 바뀐 것부터 보세요**: "왜 깨졌나·왜 안 되나"면 먼저 `timeline`을 `view: "changes"`로(증상이 시작된 시각 앞 '
+    '몇 시간을 `since_time`·`until_time`으로) 불러 그동안 바뀐 것을 보세요. 바뀐 것이 있어도 증상과 시각·대상이 맞지 않으면 원인으로 대지 마세요.',
+    _TIMELINE_SIGNATURE: "- `timeline(view, namespace, since_time, until_time, event_type, kind, name, limit)` - Change history: events and rollout revisions in "
+    "a window; the counts are in summary, the list holds the newest; view=\"changes\" lists what changed in the window instead (rollouts compared with the "
+    "revision before, ConfigMap/Secret writes, Helm revisions, HPA scales, node conditions, Argo CD syncs, restarts), never a value",
+}
+
+
+# anomaly_rank in the prompt only where it is turned on (ANOMALY_RANK_ENABLED, chart features.anomalyRank.enabled, off by
+# default): the line after which each of its lines goes.
+_ISSUES_GUIDE = _line("- `issues`: ")
+_STATE_RULE = _line("- 클러스터·네임스페이스의 상태를 묻는 질문")
+_ISSUES_SIGNATURE = _line("- `issues(")
+ANOMALY_RANK_GUIDE = (
+    "- `anomaly_rank`: 한 네임스페이스(또는 워크로드 하나)가 앞 같은 길이 구간과 무엇이 달라졌나를 서버가 순위로(지금 고장 · 종료 이유별 수 · 재시작 · CPU 걸림 · 메모리 "
+    "limit 근처 · 오류 로그 모양·줄 수 · 서비스별 요청·실패 비율·p90 · 노드 압박, 최대 10개, 새로 나타난 것 먼저). `normal`은 아무것도 못 찾은 검사, `not_run`은 "
+    "못 한 검사와 까닭 — 못 한 것은 정상이 아님 (켜진 설치에서만 제공)"
+)
+ANOMALY_RANK_RULE = (
+    "- 네임스페이스가 정해진 채로 \"왜 깨졌어?\"·\"뭐가 달라졌어?\"처럼 넓게 묻고 `anomaly_rank`가 제공되면, 이리저리 찔러 보기 전에 그것을 **한 번** 먼저 부르세요. 순위는 단서이지 "
+    "원인이 아닙니다 — 나온 대상을 읽어 확인하고, `not_run`에 있는 검사는 \"못 봤다\"고 말하세요."
+)
+ANOMALY_RANK_SIGNATURE = (
+    "- `anomaly_rank(namespace, since_time, until_time, workload_kind, workload_name)` - What differs in one "
+    "namespace from the window before, ranked by the server (failing objects, terminations by reason, restarts, CPU "
+    "throttling, memory near the limit, error log shapes and counts, services' requests, failures and p90, node "
+    "pressure); not_run is not normal; offered only where it is turned on"
+)
+ANOMALY_RANK_LINES = {
+    _ISSUES_GUIDE: _ISSUES_GUIDE + "\n" + ANOMALY_RANK_GUIDE,
+    _STATE_RULE: _STATE_RULE + "\n" + ANOMALY_RANK_RULE,
+    _ISSUES_SIGNATURE: _ISSUES_SIGNATURE + "\n" + ANOMALY_RANK_SIGNATURE,
+}
+
+
+def system_message() -> str:
+    """The chat's system prompt: SYSTEM_MESSAGE, with the lines of each switch that is on (timeline's changes view,
+    anomaly_rank); with every one off, SYSTEM_MESSAGE as it is."""
+    lines: dict = {}
+    if timeline_changes_on():
+        lines.update(TIMELINE_CHANGES_LINES)
+    if anomaly_rank_on():
+        lines.update(ANOMALY_RANK_LINES)
+    if not lines:
+        return SYSTEM_MESSAGE
+    return "\n".join(lines.get(line, line) for line in SYSTEM_MESSAGE.split("\n"))

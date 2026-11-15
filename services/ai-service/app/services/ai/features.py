@@ -15,6 +15,7 @@ import time
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from app.services.ai import screen_permissions
+from app.services.ai.tools import offer_timeline_changes
 from app.services.investigation import settings as investigation_settings
 from app.services.tool_whitelists import WRITE_TOOL_NAMES
 
@@ -213,7 +214,8 @@ def _names(tools: List[Dict]) -> List[str]:
 
 
 async def gate_tools(tools: List[Dict], service) -> List[Dict]:
-    """The chat's tool list for the service's active cluster and token."""
+    """The chat's tool list for the service's active cluster and token, timeline's changes view only with its switch."""
+    tools = offer_timeline_changes(tools)
     names = _names(tools)
     if not any(gated(n) for n in names):
         return tools

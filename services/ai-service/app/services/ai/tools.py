@@ -8,7 +8,20 @@
 # (tool dispatch) 의 if-elif chain 과 매칭되어야 함. name 변경 / 추가 / 삭제 시
 # dispatch 도 함께 갱신.
 
+import os
 from typing import Dict, List
+
+# timeline's changes view, offered to the model only with AI_TIMELINE_CHANGES (chart ai.timelineChanges, off by default):
+# off, timeline is offered without the view parameter and without these words (offer_timeline_changes).
+TIMELINE_CHANGES_PARAM = "view"
+TIMELINE_CHANGES_DESCRIPTION = (
+    " view \"changes\" answers instead what changed from since_time to until_time (default the 4 hours before now, exact), newest first, at most 50: "
+    "rollouts compared with the revision before (images, the names of other pod template fields, the keys of env, labels and annotations that were added, "
+    "removed or changed — never a value), ConfigMap and Secret last writes and the field manager that wrote them (metadata only), Helm release revisions, "
+    "HPA last scales, node creations and condition changes, Argo CD syncs and container restarts with their reason. Each object keeps only its last write, "
+    "scale or restart. summary.changes_total and by_source count every change of the window; a source in summary.not_read or summary.skipped is null in by_source: not counted, "
+    "not zero (without a namespace, every namespace's restarts need listing pods across the cluster: name a namespace). Use it first for \"why did this break?\", then line the changes up with when the symptom started."
+)
 
 K8S_READONLY_TOOLS: List[Dict] = [
     {
@@ -1057,10 +1070,16 @@ K8S_READONLY_TOOLS: List[Dict] = [
                 "summary counts every event of the window; events holds the newest (events_shown of events_matching, said in events_note when cut), so do not count from the rows. "
                 "rollouts_total is null with rollouts_note when the rollouts could not be read: not counted, not zero. With until_time or a kind without a name, narrowed.events_matching is null when the "
                 "list stopped before reaching them: not counted, not zero. Events typically live about an hour in the cluster."
+                + TIMELINE_CHANGES_DESCRIPTION
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
+                    TIMELINE_CHANGES_PARAM: {
+                        "type": "string", "enum": ["events", "changes"],
+                        "description": "events (default): events and rollout revisions; changes: what changed in the window. changes takes namespace, since_time "
+                                       "(default 4h before the end, not rounded), until_time and limit (default and at most 50) only",
+                    },
                     "namespace": {"type": "string", "description": "One namespace; empty for every namespace the user reads"},
                     "since_time": {"type": "string", "description": "Start: 24h, 7d or an RFC3339 time (default 24h before the end). Rounded out to a whole hour back from now"},
                     "until_time": {"type": "string", "description": "End as an RFC3339 time (default now)"},
@@ -1869,3 +1888,32 @@ def get_tools_definition(service) -> List[Dict]:
     tools.extend(ACTION_TOOLS)
     tools.extend(K8S_WRITE_TOOLS)
     return service._filter_tools_by_role(tools)
+
+
+def timeline_changes_on() -> bool:
+    """AI_TIMELINE_CHANGES (chart ai.timelineChanges, default off): the model is offered timeline's changes view."""
+    return os.getenv("AI_TIMELINE_CHANGES", "false").strip().lower() == "true"
+
+
+def anomaly_rank_on() -> bool:
+    """ANOMALY_RANK_ENABLED (chart features.anomalyRank.enabled, default off; in the ConfigMap every service reads): the
+    chat prompt names anomaly_rank and the MCP server lists it. The chat's and an investigation's tool lists follow the
+    cluster's features (features.GATES)."""
+    return os.getenv("ANOMALY_RANK_ENABLED", "false").strip().lower() == "true"
+
+
+def _timeline_without_changes(tool: Dict) -> Dict:
+    fn = dict(tool.get("function") or {})
+    parameters = dict(fn.get("parameters") or {})
+    parameters["properties"] = {k: v for k, v in (parameters.get("properties") or {}).items() if k != TIMELINE_CHANGES_PARAM}
+    fn["parameters"] = parameters
+    if isinstance(fn.get("description"), str):
+        fn["description"] = fn["description"].replace(TIMELINE_CHANGES_DESCRIPTION, "")
+    return {**tool, "function": fn}
+
+
+def offer_timeline_changes(tools: List[Dict]) -> List[Dict]:
+    """tools as the model is offered them: with AI_TIMELINE_CHANGES off, timeline without its changes view."""
+    if timeline_changes_on():
+        return tools
+    return [_timeline_without_changes(t) if ((t or {}).get("function") or {}).get("name") == "timeline" else t for t in tools]

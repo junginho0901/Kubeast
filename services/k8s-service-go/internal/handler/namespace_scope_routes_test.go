@@ -128,6 +128,16 @@ func (a *standIn) serve(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]interface{}{"kind": "APIGroupList", "apiVersion": "v1", "groups": groups})
 		return
 	}
+	// a group's discovery document, as the API server serves one for each group it lists
+	if group, ok := strings.CutPrefix(r.URL.Path, "/apis/"); ok && !strings.Contains(group, "/") {
+		for gv := range standInKinds {
+			if g, version, _ := strings.Cut(gv, "/"); g == group {
+				v := map[string]string{"groupVersion": gv, "version": version}
+				writeJSON(w, 200, map[string]interface{}{"kind": "APIGroup", "apiVersion": "v1", "name": group, "versions": []map[string]string{v}, "preferredVersion": v})
+				return
+			}
+		}
+	}
 	a.mu.Lock()
 	a.calls = append(a.calls, apiCall{r.Method, r.URL.Path, r.URL.RawQuery, r.Header.Get("Impersonate-User")})
 	a.mu.Unlock()

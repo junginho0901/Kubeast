@@ -231,7 +231,7 @@ func statusForError(err error) int {
 		return http.StatusBadRequest
 	case apierrors.IsTimeout(err), apierrors.IsServerTimeout(err), apierrors.IsServiceUnavailable(err):
 		return http.StatusServiceUnavailable
-	case errors.Is(err, k8s.ErrPrometheusNotServed):
+	case errors.Is(err, k8s.ErrPrometheusNotServed), errors.Is(err, k8s.ErrMetricsNotServed):
 		return http.StatusNotFound
 	case errors.Is(err, k8s.ErrBadSelector), errors.Is(err, k8s.ErrBadQuery):
 		return http.StatusBadRequest
