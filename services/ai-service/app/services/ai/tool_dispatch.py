@@ -20,6 +20,7 @@
 from typing import TYPE_CHECKING, Dict
 
 from app.services.ai import permissions, resolvers
+from app.services.ai.tools import anomaly_rank_on, changes_view_on
 from app.services.ai.debug_dump import dump, log, safe_error
 
 if TYPE_CHECKING:
@@ -349,7 +350,7 @@ async def execute_function_with_context(
                 tool_args["resource_manifest"] = function_args["resource_manifest"]
             result = await service._call_tool_server(function_name, tool_args)
 
-        elif function_name in FEATURE_TOOL_ARGS:
+        elif function_name in FEATURE_TOOL_ARGS and not (function_name == "anomaly_rank" and not anomaly_rank_on()):
             # Feature tools: tool-server calls k8s-service as the user; only the
             # declared arguments travel, booleans and integers normalised.
             spec = FEATURE_TOOL_ARGS[function_name]
@@ -375,6 +376,8 @@ async def execute_function_with_context(
                 tool_args[key] = resolvers._coerce_limit(service, function_args.get(key), default=0, max_value=1_000_000)
             if function_name == "prometheus_query" and _flag(function_args.get("chart")):
                 tool_args["range"] = True  # a graph needs points; chart/title/unit stay here (app/services/ai/charts.py)
+            if function_name == "timeline" and not changes_view_on():
+                tool_args.pop("view", None)  # the changes view is reachable only with its switch (or step 0's)
             labels = function_args.get("alert_labels")
             if function_name in ("alerts_list", "alert_investigate") and isinstance(labels, dict):
                 tool_args["alert_labels"] = {str(k): str(v) for k, v in list(labels.items())[:10] if isinstance(v, (str, int, float))}

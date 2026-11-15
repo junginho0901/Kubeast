@@ -1,6 +1,7 @@
 """timeline's changes view is offered to the model only with AI_TIMELINE_CHANGES (chart ai.timelineChanges, off by
 default): off, the chat, alert investigations and the MCP server get timeline and the system prompt as they were before
-the view, and only those differ when it is on. A call that names the view still reaches tool-server either way."""
+the view, and only those differ when it is on. A call naming the view takes it to tool-server only with this switch or
+an investigation's step 0 (ALERT_INVESTIGATION_CHANGES_FIRST); k8s-service's changes route answers 404 otherwise."""
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -32,13 +33,14 @@ def _timeline_table():
     return tool
 
 
-@pytest.mark.parametrize("value", ["true", "TRUE", " true "])
-def test_the_switch_is_on_only_for_true(monkeypatch, value):
+# the one switch rule (app/services/switch.py, fixtures/switch_cases.json)
+@pytest.mark.parametrize("value", ["true", "TRUE", " true ", "1", "on", "yes"])
+def test_the_switch_is_on_for_the_switch_rules_words(monkeypatch, value):
     monkeypatch.setenv("AI_TIMELINE_CHANGES", value)
     assert tools.timeline_changes_on()
 
 
-@pytest.mark.parametrize("value", [None, "", "false", "yes", "1"])
+@pytest.mark.parametrize("value", [None, "", "false", "no", "0", "t"])
 def test_the_switch_is_off_otherwise(monkeypatch, value):
     if value is None:
         monkeypatch.delenv("AI_TIMELINE_CHANGES", raising=False)
@@ -107,12 +109,17 @@ def test_the_mcp_read_tools_follow_the_switch(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_a_call_naming_the_view_reaches_tool_server_with_the_switch_off(monkeypatch):
-    monkeypatch.delenv("AI_TIMELINE_CHANGES", raising=False)
+@pytest.mark.parametrize("on", [None, "AI_TIMELINE_CHANGES", "ALERT_INVESTIGATION_CHANGES_FIRST"])
+async def test_a_call_naming_the_view_takes_it_to_tool_server_only_with_a_switch_that_reads_it(monkeypatch, on):
+    for name in ("AI_TIMELINE_CHANGES", "ALERT_INVESTIGATION_CHANGES_FIRST"):
+        monkeypatch.delenv(name, raising=False)
+    if on:
+        monkeypatch.setenv(on, "true")
     service = SimpleNamespace(user_role="admin", _is_tool_allowed=MagicMock(return_value=True),
                               _call_tool_server=AsyncMock(return_value='{"ok": true}'), k8s_service=MagicMock())
     await execute_function_with_context(service, "timeline", {"view": "changes", "namespace": "shop", "since_time": "4h"}, SimpleNamespace(state={}, cache={}))
-    service._call_tool_server.assert_awaited_once_with("timeline", {"view": "changes", "namespace": "shop", "since_time": "4h"})
+    sent = {"namespace": "shop", "since_time": "4h"} | ({"view": "changes"} if on else {})
+    service._call_tool_server.assert_awaited_once_with("timeline", sent)
 
 
 def _stream(chunks):

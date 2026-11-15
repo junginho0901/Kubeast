@@ -653,6 +653,7 @@ func TestTimeline_ChangesViewDefaultsAndSaysWhatItDidNotList(t *testing.T) {
 // The events view's narrowing arguments are refused with view changes, and a view neither tool knows is refused by
 // both, before anything is asked.
 func TestTimeline_ViewIsEventsOrChanges(t *testing.T) {
+	t.Setenv("AI_TIMELINE_CHANGES", "true") // the argument check takes the view words only while the view is served
 	seen := fakeK8sService(t, func(*http.Request) (int, string) { return 200, `{}` })
 	for _, a := range []args{
 		{"view": "changes", "kind": "Deployment"},

@@ -8,8 +8,9 @@
 # (tool dispatch) 의 if-elif chain 과 매칭되어야 함. name 변경 / 추가 / 삭제 시
 # dispatch 도 함께 갱신.
 
-import os
 from typing import Dict, List
+
+from app.services import switch
 
 # timeline's changes view, offered to the model only with AI_TIMELINE_CHANGES (chart ai.timelineChanges, off by default):
 # off, timeline is offered without the view parameter and without these words (offer_timeline_changes).
@@ -1892,14 +1893,20 @@ def get_tools_definition(service) -> List[Dict]:
 
 def timeline_changes_on() -> bool:
     """AI_TIMELINE_CHANGES (chart ai.timelineChanges, default off): the model is offered timeline's changes view."""
-    return os.getenv("AI_TIMELINE_CHANGES", "false").strip().lower() == "true"
+    return switch.env_on("AI_TIMELINE_CHANGES")
+
+
+def changes_view_on() -> bool:
+    """Whether a timeline call may ask the changes view at all: with AI_TIMELINE_CHANGES, or ALERT_INVESTIGATION_CHANGES_FIRST
+    (an investigation's step 0 reads it). Both off, dispatch drops view, as before the view."""
+    return timeline_changes_on() or switch.env_on("ALERT_INVESTIGATION_CHANGES_FIRST")
 
 
 def anomaly_rank_on() -> bool:
     """ANOMALY_RANK_ENABLED (chart features.anomalyRank.enabled, default off; in the ConfigMap every service reads): the
     chat prompt names anomaly_rank and the MCP server lists it. The chat's and an investigation's tool lists follow the
-    cluster's features (features.GATES)."""
-    return os.getenv("ANOMALY_RANK_ENABLED", "false").strip().lower() == "true"
+    cluster's features (features.GATES); dispatch answers it as an unknown function while it is off."""
+    return switch.env_on("ANOMALY_RANK_ENABLED")
 
 
 def _timeline_without_changes(tool: Dict) -> Dict:
