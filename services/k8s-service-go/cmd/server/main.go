@@ -21,6 +21,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/alerts"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drain"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
@@ -45,6 +46,10 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
 )
 
+// streamCloseWait is how long the drain waits, after the wait, for the cut terminals to say so and hang their shells up
+// (shellHangup's keys and grace, the audit row).
+const streamCloseWait = 5 * time.Second
+
 func main() {
 	// Load configuration
 	cfg := config.Load()
@@ -52,7 +57,13 @@ func main() {
 	// Setup structured logger
 	logger.Setup(cfg.AppName, cfg.Debug)
 
-	slog.Info("starting k8s-service-go", "port", cfg.Port, "debug", cfg.Debug)
+	// One image, three roles (SERVER_ROLE): all (the default), api, stream. A value it does not know stops it.
+	role, roleErr := config.ParseRole(cfg.ServerRole)
+	if roleErr != nil {
+		slog.Error("invalid server role", "err", roleErr)
+		os.Exit(1)
+	}
+	slog.Info("starting k8s-service-go", "port", cfg.Port, "debug", cfg.Debug, "role", role)
 	memlimit.Set(0)
 
 	// The /internal routes (kubeconfig for tool-server, validate/invalidate for
@@ -132,6 +143,7 @@ func main() {
 		ExecCommands:       cfg.KubeconfigExecCommands,
 		InstallNamespace:   cfg.PodNamespace,
 		NodeShellNamespace: cfg.NodeShellNamespace,
+		NoInformers:        !role.ServesAPI(),
 	})
 	startCancel()
 	if err != nil {
@@ -148,7 +160,8 @@ func main() {
 
 	// Periodic cluster health checker (step 15): keeps in-memory reachability +
 	// clusters.health_status fresh so fail-fast + the picker reflect down clusters.
-	if cfg.HealthcheckIntervalSec > 0 {
+	// A stream server leaves it to the API server: one writer of clusters.health_status.
+	if role.ServesAPI() && cfg.HealthcheckIntervalSec > 0 {
 		hcCtx, hcCancel := context.WithCancel(context.Background())
 		defer hcCancel()
 		hc := k8s.NewHealthChecker(k8sSvc, registry, time.Duration(cfg.HealthcheckIntervalSec)*time.Second)
@@ -268,7 +281,9 @@ func main() {
 	h.SetRecorder(recorder)
 	recCtx, recCancel := context.WithCancel(context.Background())
 	defer recCancel()
-	if recorder.Enabled() {
+	// Only a server that opens terminals runs the recorder: an API server holds no recording to keep alive, and a row
+	// its recovery took from a stopped stream server would end interrupted, the spool volume being the stream server's.
+	if recorder.Enabled() && role.ServesStreams() {
 		slog.Info("session recording enabled", "storage", recCfg.Storage, "chunk_sec", recCfg.ChunkSeconds, "required", recCfg.Required)
 		go recorder.Run(recCtx)
 	}
@@ -288,16 +303,28 @@ func main() {
 	wsMux.Sessions = liveSessions
 	h.SetLiveSessions(liveSessions)
 
+	// Open terminals and followed logs, held so a server being replaced ends them in order (STREAM_DRAIN_SECONDS).
+	streams := drain.New()
+	h.SetDrain(streams)
+
 	// Console metrics (services/pkg/metrics): HTTP by route pattern, the audit
-	// store's readiness and write failures, live WebSocket subscriptions.
+	// store's readiness and write failures, live watches, open terminals and followed logs, the
+	// requests' wait for the client's rate to the clusters.
 	m := metrics.New("k8s")
 	m.Route = metrics.ChiRoute
 	if s, ok := any(auditStore).(audit.Statuser); ok {
 		m.AuditStore(s)
 	}
-	m.Gauge("kubeast_ws_subscriptions", "Live WebSocket subscriptions (logs, exec, watches) across all connections.",
+	m.Gauge("kubeast_ws_subscriptions", "Live watches counted against WS_MAX_SUBSCRIPTIONS: the live lists' WebSocket subscriptions across all connections and the Helm releases streams' Secret watches.",
 		func() float64 { return float64(wsMux.SubscriptionCount()) })
-	if recorder.Enabled() {
+	m.Registry.MustRegister(k8s.ClientWaitCollectors()...)
+	if role.ServesStreams() {
+		m.Gauge("kubeast_terminals_open", "Open terminals (pod exec, node shell).",
+			func() float64 { terminals, _ := streams.Open(); return float64(terminals) })
+		m.Gauge("kubeast_followed_logs_open", "Open followed logs (a container's output, a log file).",
+			func() float64 { _, logs := streams.Open(); return float64(logs) })
+	}
+	if recorder.Enabled() && role.ServesStreams() {
 		m.Gauge("kubeast_session_recording_pending_bytes", "Recorded terminal output not uploaded to the recording store yet.",
 			func() float64 { return float64(recorder.PendingBytes()) })
 		m.Gauge("kubeast_session_recording_last_upload_timestamp_seconds", "When a recording part was last uploaded (or when recording started).",
@@ -335,6 +362,7 @@ func main() {
 	// Public routes
 	r.Get("/", h.HealthRoot)
 	r.Get("/health", h.HealthCheck)
+	r.Get("/ready", h.Ready)
 	r.Get("/metrics", m.Handler().ServeHTTP)
 
 	// Protected API routes — domain-specific registrations live in
@@ -361,12 +389,16 @@ func main() {
 			r.Use(h.GitopsGuard)
 		}
 
-		routes.Register(r, h, wsMux)
+		routes.RegisterRole(r, h, wsMux, role)
 	})
 
 	// Session recordings span clusters: JWT only, no cluster middleware; the
 	// handlers check admin.sessions.read (config is open to any signed-in user).
+	// Reading them is the API's; a stream server only writes them.
 	r.Group(func(r chi.Router) {
+		if !role.ServesAPI() {
+			return
+		}
 		r.Use(func(next http.Handler) http.Handler {
 			return jwtValidator.MiddlewareWithCookie(cfg.AuthCookieName, next)
 		})
@@ -382,6 +414,9 @@ func main() {
 	// JWT: per-cluster access and the audit actor come from the user. No
 	// ClusterMiddleware — the cluster id comes from the path.
 	r.Group(func(r chi.Router) {
+		if !role.ServesAPI() {
+			return
+		}
 		r.Use(internalauth.Middleware(cfg.InternalAPIToken))
 		r.Use(func(next http.Handler) http.Handler {
 			return jwtValidator.MiddlewareWithCookie(cfg.AuthCookieName, next)
@@ -420,14 +455,41 @@ func main() {
 	<-done
 	slog.Info("shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
+	// net/http's Shutdown neither closes nor waits for the terminals' hijacked sockets and waits on an event stream
+	// until its context ends: the drain ends both first, in order (internal/drain).
+	if cfg.StreamDrainSeconds >= 0 {
+		wait := time.Duration(cfg.StreamDrainSeconds) * time.Second
+		terminals, logs := streams.Open()
+		slog.Info("draining terminals and followed logs", "wait", wait, "terminals", terminals, "followed_logs", logs)
+		recorder.UploadNow()
+		res := streams.Run(wait, streamCloseWait)
+		slog.Info("terminals and followed logs drained", "followed_logs_ended", res.Streams,
+			"terminals_ended_in_time", res.TerminalsLeft, "terminals_cut", res.TerminalsCut, "not_released", res.Unreleased)
+	}
 
+	shutdown(srv, recorder, serverShutdownWait, recorderShutdownWait)
+	slog.Info("server stopped")
+}
+
+// Both waits come after the drain and fit the pod's grace period: 30 s by default, or the drain's wait + 30 s
+// (streamCloseWait, then these two) where STREAM_DRAIN_SECONDS is set.
+const (
+	serverShutdownWait   = 15 * time.Second
+	recorderShutdownWait = 10 * time.Second
+)
+
+// shutdown stops the server, then gives the recorder a wait of its own: an open
+// event stream (a followed log, the Helm releases stream) keeps srv.Shutdown
+// waiting until its context ends, and the recorder's last parts and rows would
+// get a spent one. The recorder takes its turn whatever srv.Shutdown returned.
+func shutdown(srv interface{ Shutdown(context.Context) error }, recorder interface{ Shutdown(context.Context) }, serverWait, recorderWait time.Duration) {
+	ctx, cancel := context.WithTimeout(context.Background(), serverWait)
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("server shutdown error", "err", err)
 	}
+	cancel()
 	// End live recordings and upload what is left before the process goes.
+	ctx, cancel = context.WithTimeout(context.Background(), recorderWait)
+	defer cancel()
 	recorder.Shutdown(ctx)
-
-	slog.Info("server stopped")
 }

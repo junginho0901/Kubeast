@@ -7,6 +7,8 @@ import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsSection, Sum
 import { eventsNewestFirst, fmtRel, fmtTs } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
 import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
+import { useDrawerFollowsObject } from './useDrawerFollowsObject'
+import { usePermission } from '@/hooks/usePermission'
 import { namespacePodBadge, namespacePodsLayer } from './namespacePods'
 import { ResourceLink } from './ResourceLink'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
@@ -33,6 +35,15 @@ export default function NamespaceInfo({ name }: Props) {
   })
   // the answer reads a Namespace's events in that namespace (k8s-service DescribeNamespace)
   useDrawerFollowsEvents({ describeKey: ['namespace-describe', name], answer: nsDescribe, kind: 'Namespace', namespace: name, name })
+  // The Namespaces page's watch when it is open, else one of this namespace. A grant limited to namespaces is refused a
+  // watch of them (k8s-service leftToTheClustersRBAC): its drawer keeps the answer it opened with.
+  const { clusterNamespaces } = usePermission()
+  useDrawerFollowsObject({
+    enabled: !!nsDescribe && !clusterNamespaces?.length,
+    describeKey: ['namespace-describe', name],
+    path: '/api/v1/namespaces',
+    name,
+  })
 
   const { data: resourceQuotas, error: quotasError } = useQuery({
     queryKey: ['namespace-rq', name],

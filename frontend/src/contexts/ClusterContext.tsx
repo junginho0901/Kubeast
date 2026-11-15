@@ -4,6 +4,10 @@
 // a different cluster independently (00-COMMON §2-7), with a localStorage
 // fallback for fresh navigations. The selected id is mirrored into a module ref
 // (services/clusterRef) that the axios interceptor and WS multiplexer read.
+// `currentCluster` takes a new choice together with that ref, the cluster-scoped
+// query cache and the stores fed by API answers, before the browser paints
+// (ClusterProvider's moveTo), so nothing of the cluster before is ever drawn as
+// the new one's.
 //
 // Empty string = no explicit selection → axios omits ?cluster= → the server
 // falls back to its default cluster (step 05). The ClusterPicker UI is step 11.

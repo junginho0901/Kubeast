@@ -95,6 +95,8 @@ export function useChatHandlers({
                 content: assistantContent,
                 tool_calls: stopped.toolCalls && stopped.toolCalls.length > 0 ? stopped.toolCalls : undefined,
                 stopped: true,
+                // saved only while its question is the newest message: stopped as it ended, ai-service saved it already
+                answers: stopped.userMessage ?? undefined,
               },
             ],
           }),

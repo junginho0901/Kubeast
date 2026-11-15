@@ -68,8 +68,10 @@ func (f *fakeSessions) GetMessagesBefore(_ context.Context, _ string, beforeID, 
 	}
 	return f.messages[start:end], nil
 }
-func (f *fakeSessions) AddMessage(context.Context, string, string, string, *json.RawMessage, *json.RawMessage) (*model.Message, error) {
-	return nil, nil
+func (f *fakeSessions) AddMessage(_ context.Context, sessionID, role, content string, toolCalls, usage *json.RawMessage) (*model.Message, error) {
+	m := model.Message{ID: len(f.messages) + 1, SessionID: sessionID, Role: role, Content: content, ToolCalls: toolCalls, Usage: usage}
+	f.messages = append(f.messages, m)
+	return &m, nil
 }
 func (f *fakeSessions) GetMessageCount(context.Context, string) (int, error) {
 	return len(f.messages), nil
