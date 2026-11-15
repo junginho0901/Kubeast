@@ -38,13 +38,13 @@ const (
 // sha256 of each answer, masked as it leaves tool-server, and of what tool-server asked k8s-service, as main d58cf599
 // gives them.
 var v078RoundAnswers = map[string]string{
-	"timeline":                "TODO",
-	"timeline without window": "TODO",
-	"resource_graph":          "TODO",
-	"loki_query":              "TODO",
-	"prometheus_query":        "TODO",
-	"k8s_get_pod_logs":        "TODO",
-	"asked":                   "TODO",
+	"timeline":                "f926c99f44753357f21d03080289e1a471565aa3cb37f2dbe6de675af3a317ab",
+	"timeline without window": "f926c99f44753357f21d03080289e1a471565aa3cb37f2dbe6de675af3a317ab",
+	"resource_graph":          "23a16d58c646f67889f593db831813209aee99430c63c89ade55773039174e2a",
+	"loki_query":              "14c9c36b943ad3a492f25a3d72589fdb2348ba4bdddc2233b2f139d456d9c050",
+	"prometheus_query":        "50e1e0f2e6300ff82c27600dd4f61cd6f180c9f3210601d4f242ae53794dd489",
+	"k8s_get_pod_logs":        "353698581b52736c100e9d05ff58e48c8625fb6b4e2b6a8fd88cb6d9072e9798",
+	"asked":                   "cfcb49a6322a8f9e70f3038dc1129cbda8c93c92ee098250836d2013f869d2fa",
 }
 
 // With every v0.7.9 switch off, what tool-server answers the tools of test_v079_switches_off.py's round, over a fixed
