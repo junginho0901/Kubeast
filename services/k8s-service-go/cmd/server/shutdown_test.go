@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/junginho0901/kubeast/services/pkg/probe"
 )
 
 // lastParts stands in for recording.Manager.Shutdown: each part is put with a
@@ -48,7 +50,7 @@ func TestShutdownGivesTheRecorderItsOwnWaitAfterAStreamHeldTheServer(t *testing.
 	const serverWait = 200 * time.Millisecond
 	rec := &lastParts{}
 	began := time.Now()
-	shutdown(srv, rec, serverWait, time.Second)
+	shutdown(srv, probe.New(), rec, serverWait, time.Second)
 	if took := time.Since(began); took < serverWait {
 		t.Fatalf("shutdown took %s: the stream did not hold the server for its wait", took)
 	}
@@ -64,5 +66,29 @@ func TestTheShutdownWaitsFitTheTimeBeforeSIGKILL(t *testing.T) {
 	if sum := streamCloseWait + drainShutdownWait + serverShutdownWait + recorderShutdownWait; sum+margin > shutdownWaitsMax {
 		t.Fatalf("close wait %s + drain %s + server %s + recorder %s = %s, past %s less a %s margin",
 			streamCloseWait, drainShutdownWait, serverShutdownWait, recorderShutdownWait, sum, shutdownWaitsMax, margin)
+	}
+}
+
+// A socket held through probe.Hold hears the server leave, closes and is released; shutdown waits for that and no longer.
+func TestShutdownWaitsForTheHeldConnectionsToClose(t *testing.T) {
+	p := probe.New()
+	ctx, release := p.Hold(context.Background())
+	closed := make(chan struct{})
+	go func() {
+		<-ctx.Done()
+		time.Sleep(100 * time.Millisecond) // its close frame and the shell's hang-up
+		release()
+		close(closed)
+	}()
+	p.Leave()
+	began := time.Now()
+	shutdown(&http.Server{}, p, &lastParts{}, 2*time.Second, time.Second)
+	select {
+	case <-closed:
+	default:
+		t.Fatal("shutdown returned before the held connection closed")
+	}
+	if took := time.Since(began); took > time.Second {
+		t.Fatalf("shutdown took %s: it should end once the held connection closed", took)
 	}
 }

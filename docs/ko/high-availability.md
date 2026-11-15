@@ -41,7 +41,7 @@ Kubeast의 서비스는 기본으로 하나씩 파드 1개로 뜹니다.
 | 마이그레이션 | 도는 동안 4 | 마이그레이션 풀(`dbsession.MigrationPoolMaxConns`) |
 | tool-server, frontend, gateway | 0 | — |
 
-차트 내장 postgres는 `max_connections`를 `postgresql.maxConnections`(300)로 두고, 파드들이 그보다 많이 쥘 수 있으면 설치가 멈춥니다. 셈은 풀마다 배포 중의 파드 수(4분의 1을 올림해 더함, autoscaling을 켰으면 `maxReplicas`)를 곱해 더하고, 마이그레이션 4와 psql·PostgreSQL superuser 몫 10을 더합니다(`templates/checks/db-connections.yaml`).
+차트 내장 postgres는 `max_connections`를 `postgresql.maxConnections`(300)로 두고, 파드들이 그보다 많이 쥘 수 있으면 설치가 멈춥니다. 셈은 풀마다 배포 중의 파드 수(Deployment마다 `maxSurge`가 1이라 개수에 하나 더함, autoscaling을 켰으면 `maxReplicas`에 하나 더함)를 곱해 더하고, 마이그레이션 4와 psql·PostgreSQL superuser 몫 10을 더합니다(`templates/checks/db-connections.yaml`).
 바깥 데이터베이스는 자기 한도를 쓰고, 차트는 그 값을 읽지 못합니다. NOTES가 같은 합을 적어 주니 그 값과 견주세요. Kubeast 사용자가 superuser가 아니면 그중 3개는 기본으로 superuser 몫입니다.
 예: 서비스마다 1대면 배포 중의 여분 파드까지 최대 154개, 서비스마다 3대면 286개입니다.
 `postgresql.maxConnections`를 올리거나, 풀이나 파드 수를 줄이거나, 연결을 더 받는 데이터베이스를 쓰세요.
@@ -56,7 +56,7 @@ replicas:
   frontend: 2
 ```
 
-- `pdb.enabled: true`는 노드 드레인 동안 서비스마다 `pdb.minAvailable`개의 파드를 남깁니다. 모든 서비스가 2대 이상일 때만 켜세요. 1대인 서비스에서는 드레인을 막습니다.
+- `pdb.enabled`(기본 켜짐)는 2대 이상으로 돌거나 autoscaling의 `minReplicas`가 2 이상인 서비스마다, 한 번에 `pdb.maxUnavailable`개(1)까지 내보낼 수 있는 PodDisruptionBudget을 만듭니다. 1대인 서비스에는 만들지 않아 드레인을 막지 않습니다.
 
 ## HPA에 대수 맡기기
 

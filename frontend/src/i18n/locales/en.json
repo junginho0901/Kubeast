@@ -2615,6 +2615,7 @@
       "waiting": "Waiting for new lines...",
       "streamEnded": "Following stopped.",
       "streamFailed": "Following stopped: {{reason}}",
+      "reconnecting": "The connection dropped; reconnecting and going on after the last line shown...",
       "errors": {
         "disabled": "The log files view is turned off.",
         "namespace": "The log files view is not enabled in this namespace.",

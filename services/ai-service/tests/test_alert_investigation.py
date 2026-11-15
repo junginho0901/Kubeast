@@ -1227,3 +1227,144 @@ async def test_a_subscription_run_whose_closing_call_fails_keeps_the_turns_token
     assert await runner.run_one(cfg(max_steps=5), None, row()) == "failed"
     assert (finished[0].get("total_tokens"), finished[0].get("model")) == (35, "claude-haiku-5-5")
     assert (audits[-1]["after"].get("total_tokens"), audits[-1]["after"].get("requested_by", "absent")) == (35, None)  # None: the webhook's
+
+
+@pytest.mark.asyncio
+async def test_a_stopping_worker_puts_its_running_row_back_in_the_queue_once(sqlite_db):
+    db = sqlite_db
+    inv_id = await store.insert(db, cluster="self", fingerprint="fp-stop", status="queued", received_at=NOW)
+    row = await store.claim_next(db)
+    assert row is not None and (row.id, row.status) == (inv_id, "running") and row.started_at is not None
+    assert await store.requeue_or_fail(db, inv_id) == "queued"
+    back = await store.get(db, inv_id)
+    assert (back.status, back.started_at, back.stop_requeues) == ("queued", None, 1)
+    again = await store.claim_next(db)  # a replica or the next pod takes it from the start
+    assert again is not None and again.id == inv_id
+    # cut a second time: it ends failed and does not come back
+    assert await store.requeue_or_fail(db, inv_id) == "failed"
+    ended = await store.get(db, inv_id)
+    assert (ended.status, ended.error, ended.stop_requeues) == ("failed", store.STOPPED_TWICE, 1)
+    assert ended.finished_at is not None
+    assert await store.claim_next(db) is None
+    assert await store.requeue_or_fail(db, inv_id) == ""  # a row that ended stays as it ended
+    assert (await store.get(db, inv_id)).status == "failed"
+
+
+@pytest.mark.asyncio
+async def test_the_worker_requeues_the_row_it_runs_when_it_is_cancelled(monkeypatch):
+    held = SimpleNamespace(id="inv-held", requested_by="")
+    claimed, requeued = [], []
+
+    async def claim_next(_db):
+        if claimed:
+            return None
+        claimed.append(held.id)
+        return held
+
+    async def no_stale(*_a, **_k):
+        return 0
+
+    async def no_refusal(*_a, **_k):
+        return ""
+
+    running = asyncio.Event()
+
+    async def run_one(*_a, **_k):
+        running.set()
+        await asyncio.sleep(60)
+
+    async def requeue_or_fail(_db, inv_id):
+        requeued.append(inv_id)
+        return "queued"
+
+    async def db_service():
+        return object()
+
+    monkeypatch.setattr(runner, "get_db_service", db_service)
+    monkeypatch.setattr(runner, "fail_stale", no_stale)
+    monkeypatch.setattr(runner.store, "claim_next", claim_next)
+    monkeypatch.setattr(runner, "claim_refusal", no_refusal)
+    monkeypatch.setattr(runner, "run_one", run_one)
+    monkeypatch.setattr(runner.store, "requeue_or_fail", requeue_or_fail)
+    task = asyncio.create_task(runner.worker(asyncio.Event()))
+    await asyncio.wait_for(running.wait(), timeout=2)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert requeued == ["inv-held"]
+
+
+@pytest.mark.asyncio
+async def test_a_worker_told_to_stop_ends_the_run_it_holds_and_takes_no_other(monkeypatch):
+    claimed, finished, requeued = [], [], []
+
+    async def claim_next(_db):
+        claimed.append(f"inv-{len(claimed)}")
+        return SimpleNamespace(id=claimed[-1], requested_by="")
+
+    async def no_stale(*_a, **_k):
+        return 0
+
+    async def no_refusal(*_a, **_k):
+        return ""
+
+    running, release = asyncio.Event(), asyncio.Event()
+
+    async def run_one(_cfg, _db, row):
+        running.set()
+        await release.wait()
+        finished.append(row.id)
+
+    async def requeue_or_fail(_db, inv_id):
+        requeued.append(inv_id)
+        return "queued"
+
+    async def db_service():
+        return object()
+
+    monkeypatch.setattr(runner, "get_db_service", db_service)
+    monkeypatch.setattr(runner, "fail_stale", no_stale)
+    monkeypatch.setattr(runner.store, "claim_next", claim_next)
+    monkeypatch.setattr(runner, "claim_refusal", no_refusal)
+    monkeypatch.setattr(runner, "run_one", run_one)
+    monkeypatch.setattr(runner.store, "requeue_or_fail", requeue_or_fail)
+    stop = asyncio.Event()
+    task = asyncio.create_task(runner.worker(stop))
+    await asyncio.wait_for(running.wait(), timeout=2)
+    stop.set()
+    release.set()
+    await asyncio.wait_for(task, timeout=2)
+    assert (claimed, finished, requeued) == (["inv-0"], ["inv-0"], [])
+
+
+@pytest.mark.asyncio
+async def test_the_stop_signal_stops_the_worker_taking_runs_before_uvicorn_ends_the_lifespan(monkeypatch):
+    # uvicorn 0.54 waits up to --timeout-graceful-shutdown for the answers in flight before the lifespan ends: the
+    # worker's stop is set when SIGTERM comes, and uvicorn's own handler still gets the signal.
+    import signal
+
+    import uvicorn
+
+    import main
+
+    seen = {}
+
+    async def worker(stop):
+        seen["stop"] = stop
+        await asyncio.sleep(60)
+
+    monkeypatch.setattr(runner, "worker", worker)
+    monkeypatch.setattr(main.investigation_settings, "load", lambda: SimpleNamespace(enabled=True))
+    server = uvicorn.Server(uvicorn.Config(main.app))
+    original = signal.signal(signal.SIGTERM, server.handle_exit)
+    try:
+        async with main.lifespan(main.app):
+            await asyncio.sleep(0)
+            stop = seen["stop"]
+            assert not stop.is_set()
+            signal.raise_signal(signal.SIGTERM)
+            await asyncio.wait_for(stop.wait(), timeout=2)
+            assert server.should_exit  # uvicorn starts its graceful wait as before
+        assert signal.getsignal(signal.SIGTERM) == server.handle_exit
+    finally:
+        signal.signal(signal.SIGTERM, original)

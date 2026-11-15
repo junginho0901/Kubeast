@@ -147,6 +147,8 @@ SELECT name, 'kubeast:role:' || slug_0_7_7 AS group_0_7_7, 'kubeast:role:' || sl
 
 0.7.8부터 k8s-service와 tool-server는 자기 사용자로 차트의 Redis에 로그인합니다. `secrets.existingSecret`을 쓰면 그 Secret에 `REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD`, AI를 켰다면 `REDIS_TOOL_SERVER_PASSWORD`까지 넣고 `redis.acl.existingSecretHasKeys: true`로 둘 때까지 비밀번호 하나를 그대로 씁니다([Redis 사용자](configuration.md#redis-사용자)).
 
+0.7.8부터 `pdb.minAvailable`은 없습니다. 레플리카를 2개 이상으로 두거나 autoscaling의 `minReplicas`가 2 이상인 서비스만 PodDisruptionBudget을 받고, 노드 drain이 그중 한 번에 몇 개를 내보낼 수 있는지는 `pdb.maxUnavailable`(1)이 정합니다. 값에 `pdb.minAvailable`이 남아 있으면 업그레이드가 그렇다고 말하고 멈춥니다. 그 줄을 지우고, 다른 수를 원하면 `pdb.maxUnavailable`을 넣으세요.
+
 ### 제거
 
 ```bash

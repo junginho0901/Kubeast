@@ -136,7 +136,8 @@ podSecurity:
   hostUsers: false
   readOnlyRootFilesystem: true
 
-# Availability: set pdb.enabled: true when you raise replicas to 2 or more
+# Availability: a Deployment you raise to 2 or more replicas, or whose autoscaling keeps minReplicas 2 or more, gets a PodDisruptionBudget (pdb.maxUnavailable, 1; pdb.enabled: false leaves them out), and every rollout starts the new pod and stops an old one only once the new one is ready (postgres and redis stop first)
+# Probes: liveness asks /livez, which reads nothing else; readiness asks /readyz, which answers 503 from SIGTERM on and never asks the database (a shared database down would take every pod out at once); the database's state is in auth-service's and session-service's /health and k8s-service's kubeast_audit_store_up
 # podShutdown.preStopSeconds: a pod behind a Service answers that long after it is told to stop (preStop sleep, Kubernetes 1.30 or later), then has 30 s to shut down (a server holding terminals: the drain's wait and close wait more); behind a load balancer that sends to pod IPs, set its deregistration delay plus a few seconds
 replicas:
   gateway: 1
@@ -144,7 +145,8 @@ replicas:
 autoscaling:
   gateway: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
 pdb:
-  enabled: false
+  enabled: true
+  maxUnavailable: 1
 # Terminals and followed logs on a server of their own, off by default (docs/operations.md
 # "Terminals and followed logs on their own server")
 streams:

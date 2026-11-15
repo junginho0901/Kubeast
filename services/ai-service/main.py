@@ -2,6 +2,9 @@
 AI Service - OpenAI 통합 및 AI 기능 전담
 Port: 8001
 """
+import asyncio
+import signal
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -36,16 +39,50 @@ if mcp_flags.mcp_enabled():
     _mcp = mcp_server.KubeastMCPServer()
 
 
+# How long the lifespan's end waits for the investigation worker, after uvicorn's --timeout-graceful-shutdown (Dockerfile),
+# inside the 30 s the chart's grace period leaves after its preStop wait.
+WORKER_STOP_SECONDS = 4
+
+
+def stop_on_shutdown_signal(stop: asyncio.Event):
+    """Sets stop the moment SIGTERM or SIGINT comes and hands the signal on to the handler already there, uvicorn's
+    Server.handle_exit (uvicorn installs it before it imports the app). uvicorn ends the lifespan only after it has waited
+    for the answers in flight (--timeout-graceful-shutdown, Dockerfile), and the worker would take new investigations
+    all that time. Returns what puts the handlers back. Signals go to the main thread only: off it (a test client) and
+    for a signal with no Python handler it changes nothing."""
+    if threading.current_thread() is not threading.main_thread():
+        return lambda: None
+    loop = asyncio.get_running_loop()
+    previous = {}
+
+    def handle(sig, frame):
+        loop.call_soon_threadsafe(stop.set)
+        previous[sig](sig, frame)
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        handler = signal.getsignal(sig)
+        if callable(handler):
+            previous[sig] = handler
+            signal.signal(sig, handle)
+
+    def restore():
+        for sig, handler in previous.items():
+            if signal.getsignal(sig) is handle:
+                signal.signal(sig, handler)
+
+    return restore
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # Alert investigation (features.alertInvestigation): one worker, only while on.
-    stop, worker_task = None, None
+    # Alert investigation (features.alertInvestigation): one worker, only while on. From the stop signal on it takes no
+    # new run; one still running when the lifespan ends is cut and put back in the queue.
+    stop, worker_task, restore_signals = None, None, None
     if investigation_settings.load().enabled:
-        import asyncio
-
         from app.services.investigation.runner import worker
 
         stop = asyncio.Event()
+        restore_signals = stop_on_shutdown_signal(stop)
         worker_task = asyncio.create_task(worker(stop))
     try:
         if _mcp is None:
@@ -55,8 +92,14 @@ async def lifespan(_app: FastAPI):
                 yield
     finally:
         if worker_task is not None:
+            restore_signals()
             stop.set()
             worker_task.cancel()
+            # The worker puts a run it held back in the queue (runner.requeue_on_stop) before the process goes.
+            try:
+                await asyncio.wait_for(worker_task, timeout=WORKER_STOP_SECONDS)
+            except (asyncio.CancelledError, Exception):
+                pass
 
 
 app = FastAPI(
