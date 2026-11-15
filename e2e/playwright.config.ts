@@ -7,6 +7,9 @@ const ACTIONS = process.env.E2E_ACTIONS === '1'
 const DEMO = process.env.E2E_DEMO === '1'
 // Safety nets (e2e/guard): E2E_GUARD=1 adds the guard project.
 const GUARD = process.env.E2E_GUARD === '1'
+// tests/rollout-in-use.spec.ts restarts the install's services: E2E_ROLLOUT=1 adds the rollout project, chromium leaves it out.
+const ROLLOUT = process.env.E2E_ROLLOUT === '1'
+const ROLLOUT_SPEC = /rollout-in-use\.spec\.ts$/
 // The floating chat's layers on every screen in refused, failed, not served and empty states: E2E_AI_LAYERS=1 adds the
 // ai-layers project (tests/ai-layers-every-screen.spec.ts, which the chromium project leaves out).
 const AI_LAYERS = process.env.E2E_AI_LAYERS === '1'
@@ -61,8 +64,23 @@ export default defineConfig({
         permissions: ['clipboard-read', 'clipboard-write'],
       },
       dependencies: ['setup'],
-      testIgnore: [/auth\.setup\.ts/, AI_LAYERS_SPEC],
+      testIgnore: [/auth\.setup\.ts/, ROLLOUT_SPEC, AI_LAYERS_SPEC],
     },
+    ...(ROLLOUT
+      ? [
+          {
+            name: 'rollout',
+            testMatch: ROLLOUT_SPEC,
+            use: {
+              ...devices['Desktop Chrome'],
+              viewport: { width: 1440, height: 900 },
+              locale: 'en-US',
+              storageState: '.auth/user.json',
+            },
+            dependencies: ['setup'],
+          },
+        ]
+      : []),
     ...(AI_LAYERS
       ? [
           {

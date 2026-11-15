@@ -2,6 +2,7 @@ suite: startup probes — the services that wait for the database at boot
 # auth-service, k8s-service and session-service open /health only after the
 # database (and the schema) answered, which can take longer than their liveness
 # probes allow (about 65–90 s); the startup probe holds liveness off for 180 s.
+# Liveness then asks /livez, which reads nothing else, and readiness /readyz.
 templates:
   - deployments.yaml
   - configmap.yaml
@@ -28,7 +29,7 @@ tests:
           path: spec.template.spec.containers[0].livenessProbe
           value:
             httpGet:
-              path: /health
+              path: /livez
               port: 8004
             initialDelaySeconds: 5
             periodSeconds: 30
@@ -36,7 +37,7 @@ tests:
           path: spec.template.spec.containers[0].readinessProbe
           value:
             httpGet:
-              path: /health
+              path: /readyz
               port: 8004
             initialDelaySeconds: 3
             periodSeconds: 10
@@ -59,7 +60,7 @@ tests:
           path: spec.template.spec.containers[0].livenessProbe
           value:
             httpGet:
-              path: /health
+              path: /livez
               port: 8002
             initialDelaySeconds: 10
             periodSeconds: 30
@@ -67,7 +68,7 @@ tests:
           path: spec.template.spec.containers[0].readinessProbe
           value:
             httpGet:
-              path: /health
+              path: /readyz
               port: 8002
             initialDelaySeconds: 3
             periodSeconds: 10
@@ -90,7 +91,7 @@ tests:
           path: spec.template.spec.containers[0].livenessProbe
           value:
             httpGet:
-              path: /health
+              path: /livez
               port: 8003
             initialDelaySeconds: 10
             periodSeconds: 30
@@ -98,7 +99,7 @@ tests:
           path: spec.template.spec.containers[0].readinessProbe
           value:
             httpGet:
-              path: /health
+              path: /readyz
               port: 8003
             initialDelaySeconds: 3
             periodSeconds: 10

@@ -350,7 +350,8 @@
       "expired": "기간 만료",
       "not_reviewed": "24시간 내 미검토",
       "revoked": "관리자 회수",
-      "superseded": "관리자가 역할 직접 변경"
+      "superseded": "관리자가 역할 직접 변경",
+      "role_renamed": "업그레이드로 역할 이름 변경"
     },
     "admin": {
       "subtitle": "사용자가 클러스터에서 더 높은 역할을 정해진 시간만 요청합니다. 승인하면 그 시간 동안 부여되고 끝나면 이전 역할로 돌아갑니다. 본인 요청은 결정할 수 없습니다.",
@@ -494,6 +495,7 @@
       "title": "권한 없음",
       "body": "{{resources}}: 이 클러스터에서 볼 권한이 없습니다. 관리자에게 해당 권한이 포함된 역할을 요청하세요.",
       "customRole": "역할 \"{{role}}\"은(는) 이 클러스터에서 Kubernetes 그룹 {{group}}(으)로 동작합니다. 모든 페이지에 이 안내가 뜬다면 클러스터가 아직 이 그룹을 허용·바인딩하지 않은 것입니다(차트 auth.impersonation.customRoles).",
+      "builtinName": "역할 \"{{role}}\"의 이름은 대소문자나 공백만 빼면 기본 역할의 이름과 같아서, 이 클러스터에서 어떤 역할 그룹으로도 동작하지 않고 클러스터가 읽기를 거부합니다. 관리자에게 이 클러스터의 기본 역할을 받거나 이 역할의 이름을 바꿔 달라고 요청하세요.",
       "readPermission": "이 클러스터에서 받은 역할에 resource.objects.read(목록·상세)도 resource.*.read(All resources: read)도 없어 Kubeast가 목록을 읽지 않습니다. 관리자에게 둘 중 하나를 더해 달라고 요청하세요.",
       "namespaces": "이 클러스터에서는 네임스페이스 {{namespaces}}만 볼 수 있습니다. 클러스터 범위 화면과 다른 네임스페이스는 보이지 않습니다."
     },
@@ -501,6 +503,7 @@
       "forbidden": "클러스터가 이 화면 일부의 실시간 갱신을 거절합니다. 행이 오래된 값일 수 있습니다. 새로고침하면 다시 읽습니다.",
       "limit": "이 탭이 따라갈 수 있는 목록 수가 찼습니다. 나머지는 약 1분마다 다시 읽고, 이 탭에 자리가 나면 저절로 실시간 갱신으로 돌아갑니다.",
       "serverLimit": "서버가 따라갈 수 있는 목록 수가 찼습니다. 이 화면의 행은 약 1분마다 다시 읽고, 자리가 나면 저절로 실시간 갱신으로 돌아갑니다.",
+      "serverMemory": "서버의 메모리가 모자라 지금은 목록을 더 따라가지 않습니다. 이 화면의 행은 약 1분마다 다시 읽고, 여유가 생기면 저절로 실시간 갱신으로 돌아갑니다.",
       "unreachable": "클러스터에 연결할 수 없어 실시간 갱신이 멈췄습니다. 다시 연결되면 저절로 이어집니다.",
       "failed": "클러스터가 오류로 답해 실시간 갱신이 멈췄습니다. 오류가 없어지면 저절로 이어집니다.",
       "scope": "접근 권한이 Namespace로 한정되어 이 화면의 클러스터 범위 객체는 실시간으로 갱신되지 않습니다. 행이 오래된 값일 수 있습니다. 새로고침하면 다시 읽습니다."
@@ -1612,7 +1615,13 @@
         "progressMessage": "Node에서 Pod를 축출하는 중입니다...",
         "success": "완료",
         "doneMessage": "Node 드레인이 완료되었습니다.",
-        "error": "실패"
+        "error": "실패",
+        "interrupted": "중단됨",
+        "interruptedMessage": "이 드레인을 맡은 서버가 끝나기 전에 멈췄습니다. Node에 Pod가 남아 있을 수 있습니다.",
+        "stillCordoned": "아직 cordon 상태: {{nodes}}",
+        "notCordoned": "cordon 상태로 남은 Node가 없습니다.",
+        "startAgain": "다시 시작",
+        "pods": "Pod {{total}}개 중 {{done}}개 축출"
       }
     },
     "detail": {
@@ -1776,6 +1785,7 @@
     "copied": "복사됨",
     "inputPlaceholder": "메시지를 입력하세요...",
     "stop": "중단",
+    "waitingTurn": "차례를 기다립니다 — 다른 질문을 처리하고 있습니다.",
     "send": "전송",
     "confirmDeleteStreaming": "현재 답변 생성 중입니다. 중단하고 이 대화를 삭제하시겠습니까?",
     "confirmDelete": "이 대화를 삭제하시겠습니까?",
@@ -1794,9 +1804,11 @@
       "modelAddress": "AI 모델을 호출하지 못했습니다 ({{provider}}): 모델 주소가 허용되지 않아 아무것도 보내지 않았습니다. 관리자가 Admin → AI Models에서 이 모델의 연결 테스트로 이유를 확인하세요.",
       "streamHttp": "채팅 요청이 실패했습니다 (HTTP {{status}}): {{detail}}",
       "streamHttpStatus": "채팅 요청이 실패했습니다 (HTTP {{status}}).",
+      "streamStartFailed": "답변 스트림을 시작하지 못했습니다. 잠시 뒤 다시 시도하세요.",
       "streamCut": "답변이 끝나기 전에 연결이 끊겼습니다. 위 내용은 일부일 수 있습니다. 전체 답변이 필요하면 다시 질문하세요.",
       "streamEmpty": "답변 없이 연결이 끊겼습니다. 다시 질문하세요.",
-      "sessionNotFound": "이 대화는 더 이상 없습니다. 새 대화를 시작하세요."
+      "sessionNotFound": "이 대화는 더 이상 없습니다. 새 대화를 시작하세요.",
+      "claudeCodeBusy": "Claude Code가 바쁩니다. 잠시 뒤 다시 질문하세요."
     },
     "errorAnswer": "죄송합니다. 답변을 생성하는 중 오류가 발생했습니다: {{error}}",
     "errorSessionCreate": "세션 생성에 실패했습니다: {{error}}",
@@ -2178,6 +2190,7 @@
     "next": "다음",
     "paginationRange": "{{total}}개 중 {{start}}-{{end}} 표시",
     "paginationEmpty": "0개 중 0 표시",
+    "paginationNotCounted": "-개 중 - 표시",
     "selectNamespace": "Namespace를 선택하세요",
     "refreshForce": "새로고침 (강제 갱신)",
     "noOptions": "옵션 없음",
@@ -2603,6 +2616,7 @@
       "waiting": "새 줄을 기다리는 중...",
       "streamEnded": "실시간 보기가 끝났습니다.",
       "streamFailed": "실시간 보기가 끊겼습니다: {{reason}}",
+      "reconnecting": "연결이 끊겨 다시 연결하는 중입니다. 다시 붙으면 마지막으로 보인 줄 다음부터 이어집니다.",
       "errors": {
         "disabled": "로그 파일 보기가 꺼져 있습니다.",
         "namespace": "이 Namespace에서는 로그 파일 보기가 켜져 있지 않습니다.",
@@ -2664,6 +2678,21 @@
     "restarts": "재시작: {{count}}",
     "podDeleting": "삭제 중...",
     "noPods": "Pod가 없습니다",
+    "box": {
+      "shown": "Pod {{total}}개 중 {{shown}}개를 보여 줍니다.",
+      "more": "+{{count}} 이 Node 전부 보기",
+      "moreMatching": "맞는 Pod +{{count}} · 이 Node의 Pod 전부 보기",
+      "open": "이 Node의 Pod 전부 보기"
+    },
+    "nodeView": {
+      "path": "Cluster View 위치",
+      "all": "전체 Node",
+      "problemsOnly": "문제 Pod만",
+      "gone": "Pod {{pod}}: 이 Node에 더 없습니다. 다른 Node에서 돌고 있으면 검색으로 찾을 수 있습니다.",
+      "filtered": "Pod {{pod}}: Namespace 필터({{namespace}}) 밖에 있습니다.",
+      "missing": "Node {{node}}: 이 클러스터에 없습니다.",
+      "matches": "\"{{query}}\"에 맞는 Pod에 테두리를 쳤습니다. 이 Node에 {{count}}개 있습니다."
+    },
     "tabs": {
       "summary": "요약",
       "logs": "로그",
@@ -2729,12 +2758,18 @@
       "loading": "불러오는 중..."
     },
     "map": {
-      "aria": "노드 지도: 노드 {{nodes}}개, Pod {{pods}}개(오류 {{error}}, 주의 {{warn}})",
+      "aria": "Node 지도: Node {{nodes}}개, Pod {{pods}}개(오류 {{error}}, 주의 {{warn}})",
       "hover": "{{node}} · Pod {{total}}개 · 오류 {{error}} · 주의 {{warn}}",
+      "hoverStatus": "{{node}} · {{status}} · Pod {{total}}개 · 오류 {{error}} · 주의 {{warn}}",
+      "ariaMarks": "Ready가 아닌 Node {{notReady}}개, SchedulingDisabled {{cordoned}}개입니다.",
+      "notReady": "Ready가 아닌 Node",
+      "cordoned": "SchedulingDisabled",
       "error": "오류",
       "warn": "주의",
       "ok": "정상",
-      "hint": "칸 하나가 노드, 점 하나가 Pod입니다. 칸을 누르면 그 노드로 이동합니다."
+      "hint": "칸 하나가 Node, 점 하나가 Pod입니다. 칸을 누르거나 칸에서 Enter를 누르면 그 Node의 Pod를 모두 보여 줍니다.",
+      "hintPaged": "칸 하나가 Node, 점 하나가 Pod이고, 테두리를 친 칸이 아래 상자입니다. 칸을 누르거나 칸에서 Enter를 누르면 그 Node의 Pod를 모두 보여 줍니다.",
+      "openFirst": "{{node}} 열기(그중 첫 Node)"
     }
   },
   "namespaces": {
@@ -3192,6 +3227,12 @@
     "signedOut": "멈췄습니다: 이 로그인이 로그아웃되었습니다. 다시 로그인하세요.",
     "unverified": "멈췄습니다: 세션을 확인할 수 없습니다. 다시 로그인하세요."
   },
+  "serverShutdown": {
+    "terminalReplaced": "서버가 교체되었습니다. 새 터미널을 열려면 다시 연결하세요.",
+    "terminalLost": "서버와의 연결이 끊겼습니다. 새 터미널을 열려면 다시 연결하세요.",
+    "reconnect": "다시 연결",
+    "followStopped": "실시간 보기가 끝났습니다: 서버가 교체되었습니다. 이어서 보려면 실시간 보기를 다시 켜세요."
+  },
   "login": {
     "sessionEnded": "세션이 끝났습니다. 계정이나 권한이 바뀌었거나 오래 사용하지 않아 로그아웃되었을 수 있습니다. 다시 로그인하세요.",
     "errors": {
@@ -3206,6 +3247,7 @@
       "ssoEmailUnverified": "인증 제공자가 이 이메일을 확인하지 않았습니다.",
       "ssoEmailInvalid": "이 이름으로는 계정을 만들 수 없습니다. 콜론·공백·제어 문자를 쓸 수 없습니다.",
       "ssoNoEmail": "인증 제공자가 이메일 주소를 돌려주지 않았습니다.",
+      "ssoRoleMissing": "이 로그인에 주어지는 역할(auth.oidc.roleMapping 또는 auth.oidc.defaultRole)이 없습니다. 관리자에게 문의하세요. 서버 로그에 그 역할 이름이 있습니다.",
       "tokenTooLarge": "클러스터마다 다른 역할이 너무 많아 로그인 토큰에 담을 수 없습니다. 관리자에게 역할 정리를 요청하세요."
     },
     "sso": {
@@ -4053,6 +4095,7 @@
     "customNote": "이 역할에 줄 권한을 고르세요(본인이 가진 권한만)",
     "noListHint": "이대로면 이 역할의 화면은 아무 목록도 읽지 못합니다. resource.objects.read(목록·상세)나 resource.*.read를 고르세요.",
     "groupHint": "클러스터에서 이 역할은 Kubernetes 그룹 {{group}}(으)로 동작합니다. 클러스터마다 이 그룹을 허용·바인딩해야 하고(차트 auth.impersonation.customRoles), 그렇지 않으면 그 클러스터의 모든 요청이 거부됩니다.",
+    "groupHintEncoded": "ASCII 밖의 글자는 ~와 유니코드 코드 포인트로 적습니다(운 → ~c6b4). 그래서 한글 이름은 글자 수가 같아도 그룹이 서로 다릅니다.",
     "delete": "삭제",
     "deleteConfirm": "\"{{name}}\" 역할을 삭제할까요?",
     "deleteTitle": "역할 삭제",
@@ -4075,7 +4118,15 @@
     "title": "Role Management",
     "updateError": "역할을 수정하지 못했습니다",
     "deleteError": "역할을 삭제하지 못했습니다",
-    "deleteInUse": "역할 \"{{name}}\"을 아직 쓰고 있어 삭제하지 않았습니다(계정 {{accounts}}, 클러스터 권한 {{grants}}, 접근 요청 {{requests}}). 먼저 다른 역할로 바꾸세요."
+    "deleteInUse": "역할 \"{{name}}\"을 아직 쓰고 있어 삭제하지 않았습니다(계정 {{accounts}}, 클러스터 권한 {{grants}}, 접근 요청 {{requests}}). 먼저 다른 역할로 바꾸세요.",
+    "nameTakenBuiltinSame": "\"{{role}}\" 역할은 기본 역할로 이미 있습니다.",
+    "nameTakenSame": "\"{{role}}\" 역할이 이미 있습니다. 다른 이름을 고르세요.",
+    "nameTakenBuiltin": "쓸 수 없는 이름입니다. 대소문자나 공백만 빼면 기본 역할 {{role}}의 이름과 같습니다.",
+    "nameTakenGroup": "이 이름은 클러스터에서 \"{{role}}\" 역할과 같은 Kubernetes 그룹({{group}})으로 동작합니다. 다른 이름을 고르세요.",
+    "nameTakenOther": "다른 역할의 이름과 같은 그룹이 됩니다. 다른 이름을 고르세요.",
+    "sameGroupNote": "이름이 \"{{role}}\" 역할과 대소문자·공백·기호만 달라 이제 클러스터에 부여하지 않습니다. 이미 있는 부여는 상대가 기본 역할이면 어떤 역할 그룹으로도 동작하지 않습니다. 이름을 바꾸세요.",
+    "sameGroupHint": "부여 불가: 대소문자·공백만 빼면 {{role}}의 이름",
+    "sameGroupRefused": "\"{{role}}\" 역할은 클러스터에 부여하지 않습니다. 이름이 \"{{other}}\" 역할과 대소문자·공백·기호만 다릅니다. 먼저 역할 관리에서 이름을 바꾸세요."
   },
   "gpuDashboardPage": {
     "title": "GPU Dashboard",
@@ -4425,6 +4476,7 @@
   "floatingChat": {
     "title": "AI Chat",
     "openAriaLabel": "AI Chat 열기",
+    "openTitle": "AI Chat 열기 ({{shortcut}})",
     "closeAriaLabel": "닫기",
     "copy": "복사",
     "copied": "복사됨",

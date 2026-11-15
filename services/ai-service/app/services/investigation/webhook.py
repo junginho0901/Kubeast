@@ -10,12 +10,20 @@ firing alert then passes the severity filter, then folds into a recent row of
 the same cluster + fingerprint (Alertmanager repeats a firing group every
 repeat_interval), or is skipped by the per-message investigation cap, the
 hourly cap, the daily token budget or a provider pause, or is queued for the
-worker. The answer comes at once; the investigation runs later.
+worker. That decision holds the alert's inbox row lock (store.alert_locked),
+so copies of one alert arriving at once, on any replica, queue one row, and
+while the hourly cap is on its count and the row it allows hold one more lock
+(store.hourly_cap_locked), so different alerts arriving at once on several
+replicas queue no more than the cap. On PostgreSQL the decision reads and
+writes through the session holding those locks (held=), one connection per
+delivery however long it waits. The answer comes at once; the
+investigation runs later.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import hmac
 import json
@@ -98,9 +106,10 @@ async def gate_and_queue(db, cfg: inv_settings.InvestigationSettings, cluster: s
     counts = {"accepted": 0, "duplicate": 0, "filtered": 0, "skipped": 0, "capped": 0, "resolved": 0, "automatic_off": 0, "stored": 0}
     for alert in msg.alerts:
         status = (alert.status or msg.status or "").lower()
+        starts_at = parse_time(alert.startsAt)
         await inbox.record(
             db, cluster=cluster, fingerprint=fingerprint_of(alert), firing=status == "firing",
-            starts_at=parse_time(alert.startsAt), ends_at=parse_time(alert.endsAt), labels=alert.labels,
+            starts_at=starts_at, ends_at=parse_time(alert.endsAt), labels=alert.labels,
             annotations=alert.annotations, generator_url=alert.generatorURL, alertmanager_url=msg.externalURL,
             receiver=msg.receiver, group_key=msg.groupKey, now=now,
         )
@@ -116,46 +125,51 @@ async def gate_and_queue(db, cfg: inv_settings.InvestigationSettings, cluster: s
             counts["filtered"] += 1
             continue
         fingerprint = fingerprint_of(alert)
-        if cfg.dedupe_hours > 0:
-            recent = await store.find_recent(db, cluster, fingerprint, now - timedelta(hours=cfg.dedupe_hours))
-            if recent is not None:
-                await store.bump_repeat(db, recent.id, now)
-                counts["duplicate"] += 1
-                continue
-        capped = counts["accepted"] >= MAX_INVESTIGATIONS_PER_MESSAGE
-        if capped:
-            skip_reason = skip_reasons.investigation_cap(MAX_INVESTIGATIONS_PER_MESSAGE)
-        elif cfg.max_per_hour and await store.count_since(db, store.hour_ago(now)) >= cfg.max_per_hour:
-            skip_reason = skip_reasons.hourly_cap(cfg.max_per_hour)
-        elif cfg.daily_token_budget and await store.tokens_since(db, store.day_start(now)) >= cfg.daily_token_budget:
-            skip_reason = skip_reasons.daily_token_budget(cfg.daily_token_budget)
-        else:
-            skip_reason = await store.pause_reason(db, cfg.provider_pause_minutes, now)
-        if skip_reason and cfg.dedupe_hours > 0:
-            # one skipped row per alert in the dedupe window, however many messages carry it
-            earlier = await store.find_recent_skipped(db, cluster, fingerprint, now - timedelta(hours=cfg.dedupe_hours))
-            if earlier is not None:
-                await store.fold_skip(db, earlier.id, skip_reason, now)
-                counts["capped" if capped else "skipped"] += 1
-                continue
-        await store.insert(
-            db,
-            cluster=cluster,
-            fingerprint=fingerprint,
-            alertname=(alert.labels.get("alertname") or "")[:200],
-            severity=severity[:50],
-            namespace=(alert.labels.get("namespace") or "")[:63],
-            status="skipped" if skip_reason else "queued",
-            skip_reason=skip_reason,
-            labels=dict(alert.labels),
-            annotations=dict(alert.annotations),
-            starts_at=parse_time(alert.startsAt),
-            generator_url=alert.generatorURL[:2000],
-            alertmanager_url=msg.externalURL[:2000],
-            group_key=msg.groupKey[:2000],
-            received_at=now,
-        )
-        counts["capped" if capped else "skipped" if skip_reason else "accepted"] += 1
+        async with store.alert_locked(db, cluster, fingerprint, starts_at) as lock:
+            if cfg.dedupe_hours > 0:
+                recent = await store.find_recent(db, cluster, fingerprint, now - timedelta(hours=cfg.dedupe_hours), held=lock)
+                if recent is not None:
+                    await store.bump_repeat(db, recent.id, now, held=lock)
+                    counts["duplicate"] += 1
+                    continue
+            # the hourly count and the row it allows decide one delivery at a time across replicas
+            hourly = store.hourly_cap_locked(db, lock) if cfg.max_per_hour else contextlib.nullcontext()
+            async with hourly:
+                capped = counts["accepted"] >= MAX_INVESTIGATIONS_PER_MESSAGE
+                if capped:
+                    skip_reason = skip_reasons.investigation_cap(MAX_INVESTIGATIONS_PER_MESSAGE)
+                elif cfg.max_per_hour and await store.count_since(db, store.hour_ago(now), held=lock) >= cfg.max_per_hour:
+                    skip_reason = skip_reasons.hourly_cap(cfg.max_per_hour)
+                elif cfg.daily_token_budget and await store.tokens_since(db, store.day_start(now), held=lock) >= cfg.daily_token_budget:
+                    skip_reason = skip_reasons.daily_token_budget(cfg.daily_token_budget)
+                else:
+                    skip_reason = await store.pause_reason(db, cfg.provider_pause_minutes, now, held=lock)
+                if skip_reason and cfg.dedupe_hours > 0:
+                    # one skipped row per alert in the dedupe window, however many messages carry it
+                    earlier = await store.find_recent_skipped(db, cluster, fingerprint, now - timedelta(hours=cfg.dedupe_hours), held=lock)
+                    if earlier is not None:
+                        await store.fold_skip(db, earlier.id, skip_reason, now, held=lock)
+                        counts["capped" if capped else "skipped"] += 1
+                        continue
+                await store.insert(
+                    db,
+                    held=lock,
+                    cluster=cluster,
+                    fingerprint=fingerprint,
+                    alertname=(alert.labels.get("alertname") or "")[:200],
+                    severity=severity[:50],
+                    namespace=(alert.labels.get("namespace") or "")[:63],
+                    status="skipped" if skip_reason else "queued",
+                    skip_reason=skip_reason,
+                    labels=dict(alert.labels),
+                    annotations=dict(alert.annotations),
+                    starts_at=starts_at,
+                    generator_url=alert.generatorURL[:2000],
+                    alertmanager_url=msg.externalURL[:2000],
+                    group_key=msg.groupKey[:2000],
+                    received_at=now,
+                )
+                counts["capped" if capped else "skipped" if skip_reason else "accepted"] += 1
     return counts
 
 

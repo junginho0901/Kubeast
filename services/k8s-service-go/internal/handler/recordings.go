@@ -56,6 +56,14 @@ func (h *Handler) startRecording(w http.ResponseWriter, r *http.Request, kind, n
 	return rec, true
 }
 
+// endTerminal closes a terminal's recording, then lets go of its hold on the server. Shutdown waits for the holds and
+// then runs the recorder's Shutdown, which would take a recording still open for one the server cut off and close it
+// a second time beside the terminal. A nil recording (recording off) closes as nothing.
+func endTerminal(rec interface{ Close() }, release func()) {
+	rec.Close()
+	release()
+}
+
 // RecordingsConfig tells the UI whether terminals are recorded.
 func (h *Handler) RecordingsConfig(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, map[string]bool{"enabled": h.recorder.Enabled()})

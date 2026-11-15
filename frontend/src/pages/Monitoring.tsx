@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, isMetricsDisabled } from '@/services/api'
 import MonitoringNodes from './monitoring/MonitoringNodes'
@@ -11,9 +11,11 @@ import MonitoringPods from './monitoring/MonitoringPods'
 // tab switches without a refetch.
 export default function Monitoring() {
   const { t } = useTranslation()
-  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'nodes' | 'pods'>('nodes')
-  const [metricsUnavailable, setMetricsUnavailable] = useState(() => isMetricsDisabled())
+  // metrics-server missing as another screen found it this session (disableMetrics): the tabs ask nothing
+  const [metricsUnavailable] = useState(() => isMetricsDisabled())
+  // a tab's last answer says the cluster serves no metrics.k8s.io: the notice, while the tab asks again each minute
+  const [notServed, setNotServed] = useState(false)
 
   // Namespace list (used by the Pods tab dropdown). Lifted here so
   // switching tabs does not trigger a refetch.
@@ -23,16 +25,9 @@ export default function Monitoring() {
     staleTime: 30000,
   })
 
-  const handleMetricsUnavailable = useCallback(() => {
-    setMetricsUnavailable(true)
+  const handleMetricsUnavailable = useCallback((unavailable: boolean) => {
+    setNotServed(unavailable)
   }, [])
-
-  useEffect(() => {
-    if (metricsUnavailable) {
-      queryClient.cancelQueries({ queryKey: ['node-metrics'] })
-      queryClient.cancelQueries({ queryKey: ['pod-metrics'] })
-    }
-  }, [metricsUnavailable, queryClient])
 
   // sized to the screen: each tab's list fits its rows and footer in the space left, as the list pages do
   return (
@@ -71,7 +66,7 @@ export default function Monitoring() {
         </div>
       </div>
 
-      {metricsUnavailable && (
+      {(metricsUnavailable || notServed) && (
         <div className="shrink-0 rounded-lg border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-300">
           {t('monitoring.metricsUnavailable', 'Metrics server not available for this cluster')}
         </div>

@@ -1,16 +1,60 @@
+import { isForbiddenError, isMetricsUnavailableError } from '@/services/api'
+
 // A refresh that failed while earlier numbers are on screen. The numbers stay, so nothing flickers, and the screen and
-// the floating chat say how old they are; with no numbers to keep the tab shows the failure itself.
+// the floating chat say how old they are; with no numbers to keep the tab shows the failure itself. A refusal is not a
+// failed refresh (metricsRefusal).
 export interface MetricsRefreshFailure {
   valuesFrom: number
   detail?: string
 }
 
+const detailOf = (error: unknown): string | undefined => {
+  const detail = (error as { response?: { data?: { detail?: unknown } } } | null)?.response?.data?.detail
+  return typeof detail === 'string' && detail ? detail : undefined
+}
+
 export function metricsRefreshFailure(error: unknown, rows: unknown, dataUpdatedAt: number): MetricsRefreshFailure | null {
-  if (!error || !dataUpdatedAt || !Array.isArray(rows) || rows.length === 0) return null
-  const detail = (error as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
-  return { valuesFrom: dataUpdatedAt, ...(typeof detail === 'string' && detail ? { detail } : {}) }
+  if (!error || isForbiddenError(error) || isMetricsUnavailableError(error) || !dataUpdatedAt || !Array.isArray(rows) || rows.length === 0) return null
+  const detail = detailOf(error)
+  return { valuesFrom: dataUpdatedAt, ...(detail ? { detail } : {}) }
 }
 
 export function refreshFailureForChat(failure: MetricsRefreshFailure): { values_from: string; reason?: string } {
   return { values_from: new Date(failure.valuesFrom).toISOString(), ...(failure.detail ? { reason: failure.detail } : {}) }
+}
+
+/**
+ * The cluster refused the tab's read (403, with the cluster's words as `detail`): the tab shows the refusal with that
+ * reason in place of the numbers, and the API client has named it in the no-permission banner.
+ */
+export function metricsRefusal(error: unknown): { reason?: string } | null {
+  if (!isForbiddenError(error)) return null
+  const reason = detailOf(error)
+  return reason ? { reason } : {}
+}
+
+export const METRICS_POLL_MS = 5000
+/** How long k8s-service keeps its answer that a cluster serves no metrics.k8s.io (metricsVerdictTTL). */
+export const METRICS_NOT_SERVED_MS = 60_000
+
+/**
+ * How the Nodes and Pods tabs read: every 5 s, a failure tried twice more, and neither a refused read nor the answer that
+ * says metrics-server is missing tried again. A refused read is not asked again on the 5 s, and the answer that the
+ * cluster serves no metrics.k8s.io is asked again after the minute k8s-service keeps that answer, so a
+ * metrics-server installed since shows. Both are asked again when the tab is opened again or another cluster (or
+ * namespace) is chosen, which is a query of its own, as the banner forgets its refusals on the route and the cluster.
+ * `off`: metrics are off for this cluster.
+ */
+export function metricsReadPace(off: () => boolean) {
+  return {
+    staleTime: METRICS_POLL_MS,
+    refetchInterval: (query: { state: { error: unknown } }): number | false => {
+      const error = query.state.error
+      if (off() || isForbiddenError(error)) return false
+      return isMetricsUnavailableError(error) ? METRICS_NOT_SERVED_MS : METRICS_POLL_MS
+    },
+    retry: (failureCount: number, error: unknown): boolean =>
+      !isMetricsUnavailableError(error) && !isForbiddenError(error) && failureCount < 2,
+    retryDelay: (attemptIndex: number): number => Math.min(1000 * 2 ** attemptIndex, 5000),
+  }
 }
