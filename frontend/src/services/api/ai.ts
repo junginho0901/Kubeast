@@ -70,9 +70,12 @@ export const aiApi = {
     }
 
     if (!response.ok) {
-      // the server's reason (its detail — a refusal names what is missing), as the other failure lines read it
-      const message = failureText(await responseFailure(response))
-      onError?.(message)
+      // the server's reason (its detail — a refusal names what is missing), as the other failure lines read it, and
+      // the screen's words for it when the server names them (error_key)
+      const failure = (await responseFailure(response)) as { response: { data: { error_key?: unknown } | null } }
+      const message = failureText(failure)
+      const key = failure.response.data?.error_key
+      onError?.(message, typeof key === 'string' ? key : null)
       throw new Error(message)
     }
 

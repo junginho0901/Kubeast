@@ -414,3 +414,16 @@ tests:
       - equal:
           path: spec.template.spec.volumes[2].secret.secretName
           value: company-redis-users
+
+  - it: stops the old Redis before the new one starts, so one Redis stands behind the Service
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.strategy
+          value:
+            type: RollingUpdate
+            rollingUpdate:
+              maxSurge: 0
+              maxUnavailable: 1
