@@ -198,7 +198,9 @@ test.describe('number check: the Alerts screen', () => {
           await page.unroute(/\/api\/v1\/alerts\/inbox(\?|$)/, hold)
         }
         const answer: InboxAnswer = await (await asked).json()
-        await expect.poll(async () => rowIds(page), { timeout: 15_000, message: `the ${tab} rows once its answer came` }).toEqual(answer.items.map((i) => i.id))
+        // a first page asked at a count made before its rows were measured is cut at the rows that fit: its first rows
+        const firstRows = async () => answer.items.slice(0, tab === 'firing' ? ((await rangeOf(page))?.end ?? 0) : 0).map((i) => i.id)
+        await expect.poll(async () => { const ids = await rowIds(page); return (tab !== 'firing' || ids.length > 0) && ids.join() === (await firstRows()).join() }, { timeout: 15_000, message: `the ${tab} rows once its answer came: its first rows, as many as fit` }).toBe(true)
         expect.soft(answer.items.length, `${tab} holds its share of the 101`).toBe(tab === 'firing' ? Math.min(N, Number(new URL((await asked).url()).searchParams.get('limit'))) : 0)
         if (tab === 'firing') await expect.poll(async () => (await rangeOf(page))?.start, { timeout: 15_000 }).toBe(1)
         else await expect(page.getByTestId('alert-inbox-table').locator('tbody').first()).toContainText(EN.common.noSearchResults)
