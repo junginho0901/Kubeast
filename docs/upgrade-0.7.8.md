@@ -214,7 +214,7 @@ New values whose defaults need nothing from you: `podShutdown.preStopSeconds` (5
 
 - Pods behind a Service wait `podShutdown.preStopSeconds` before SIGTERM. Their grace period is that wait, what the service waits for after SIGTERM, and 5 s: 35 s with the defaults. k8s-service also gives open terminals `streams.drainSeconds` (60) to end and 5 s to close, so its grace period is 100 s with the defaults (#856, #824, #825).
 - Liveness asks `/livez`, which reads nothing else. Readiness asks `/readyz`, which answers 503 from SIGTERM on and never asks the database (#901).
-- A rollout starts one new pod and stops an old one only once the new one is ready (`maxSurge: 1`, `maxUnavailable: 0`), so it needs room for one more pod of each Deployment. PostgreSQL and Redis keep `Recreate` (#901, #860).
+- A rollout starts one new pod and stops an old one only once the new one is ready (`maxSurge: 1`, `maxUnavailable: 0`), so it needs room for one more pod of each Deployment. PostgreSQL keeps `Recreate`, and Redis stops its old pod before the new one starts (`maxSurge: 0`) (#901, #860).
 - `pdb.enabled` is now `true`. A Deployment that can be down to two pods or more (`replicas`, or `autoscaling.<service>.minReplicas` while its HPA is on) gets a PodDisruptionBudget with `unhealthyPodEvictionPolicy: AlwaysAllow`; a Deployment of one pod gets none (#901).
 - A pod that stops closes its long-lived connections: live lists and followed logs connect again to a pod that stays; a terminal ends with a line saying the server is restarting (close code 1001, `server_shutdown`) (#901).
 

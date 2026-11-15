@@ -195,7 +195,7 @@ postgresql:
   sessionLimits: { statementTimeoutMs: 30000, lockTimeoutMs: 15000, idleInTransactionTimeoutMs: 300000 }  # 각 서비스가 연결한 뒤 SET으로 거는 PostgreSQL statement_timeout, lock_timeout, idle_in_transaction_session_timeout입니다(마이그레이션은 역할(role)에 걸려 있어도 앞의 둘 없이 돕니다). 0이면 걸지 않습니다. RDS Proxy 뒤에서는 SET이 세션을 고정(pinning)하니 0으로 두고 프록시의 초기화 쿼리나 데이터베이스 역할(role)에 거세요. PgBouncer는 session 풀링으로만 쓰세요. transaction 풀링은 트랜잭션 사이에 서버 연결을 다른 클라이언트에게 넘기므로 SET이나 세션 advisory lock(마이그레이션, 감사 디스패처)이 그것을 건 클라이언트에 남지 않습니다
   pool: { authService: { maxConns: 20 }, sessionService: { maxConns: 20 }, k8sService: { maxConns: 10 }, aiService: { maxConns: 15 }, modelConfigController: { maxConns: 4 } }  # 파드 하나의 연결 수입니다. 차트의 PostgreSQL이면 파드들(롤아웃 때 하나 더, 오토스케일링의 maxReplicas 포함)이 maxConnections보다 많이 열 수 있을 때 설치가 멈추고, 외부 데이터베이스면 NOTES가 그 합을 보여 주니 그쪽 max_connections와 비교하세요
   maxConnections: 300   # 차트 PostgreSQL의 max_connections
-# 업그레이드할 때 Redis는 옛 파드를 멈춘 뒤 새 파드를 띄우므로(Recreate) 몇 초 동안 캐시가 비어 있습니다.
+# 업그레이드할 때 Redis는 옛 파드를 멈춘 뒤 새 파드를 띄우므로(maxSurge 0) 몇 초 동안 캐시가 비어 있습니다.
 redis:
   enabled: true
   password: ""          # requirepass, Redis 사용자가 꺼져 있는 동안 씁니다 — 비우면 생성합니다(REDIS_PASSWORD)
@@ -287,7 +287,7 @@ multicluster:
 - 업그레이드가 `kubeast-redis-users`를 더하고 `kubeast-secrets`의 값은 `REDIS_PASSWORD`까지 모두 그대로 둡니다.
 - Redis와 k8s-service가 다시 시작합니다. Redis가 다시 시작할 때마다 그렇듯 캐시는 비어서 시작합니다.
 - 옛 k8s-service 파드가 내려갈 때까지 그 파드가 새 Redis에 보내는 요청은 거절되고 캐시에 없는 것으로 읽힙니다.
-- 새 Redis가 답하기 전에 뜬 새 k8s-service 파드(업그레이드는 옛 Redis를 먼저 멈춥니다, Recreate)는 Redis가 답할 때까지 메모리에 캐시하고, 5초마다 다시 묻습니다. 답은 같고, 그동안 캐시만 나눠 쓰지 않습니다.
+- 새 Redis가 답하기 전에 뜬 새 k8s-service 파드(업그레이드는 옛 Redis를 먼저 멈춥니다, maxSurge 0)는 Redis가 답할 때까지 메모리에 캐시하고, 5초마다 다시 묻습니다. 답은 같고, 그동안 캐시만 나눠 쓰지 않습니다.
 - `secrets.existingSecret`을 쓰면 업그레이드에서 바뀌는 것이 없습니다: `redis.acl.existingSecretHasKeys`가 true가 될 때까지 Redis는 비밀번호 하나를 씁니다.
 - 그 값을 켜면, Secret을 읽을 수 있는 업그레이드는 키가 없거나 비었을 때 그 키를 말하고 멈춥니다. `helm template`과 Argo CD는 Secret을 읽지 못합니다: 그때는 `acl` 컨테이너가 어느 키가 없는지 말하고 멈추며, k8s-service는 메모리에 캐시합니다.
 - `redis.acl.enabled: false`면 Redis는 예전 그대로(메모리 상한만 더해) 뜹니다.
