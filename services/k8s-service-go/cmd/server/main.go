@@ -24,7 +24,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/clustersync"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drain"
-	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drains"
+	nodedrains "github.com/junginho0901/kubeast/services/k8s-service-go/internal/drains"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
@@ -301,9 +301,9 @@ func main() {
 	// Node drains keep their progress in the shared database, so any replica
 	// answers a drain's status and one whose server stopped reads as interrupted.
 	// A node drain is an API route: a server without the API runs no tracker.
-	var drainTracker *drains.Tracker
+	var drainTracker *nodedrains.Tracker
 	if role.ServesAPI() {
-		drainTracker = drains.NewTracker(drains.PG{Pool: pgPool}, auditStore)
+		drainTracker = nodedrains.NewTracker(nodedrains.PG{Pool: pgPool}, auditStore)
 		h.SetDrains(drainTracker)
 		drainCtx, drainCancel := context.WithCancel(context.Background())
 		defer drainCancel()
