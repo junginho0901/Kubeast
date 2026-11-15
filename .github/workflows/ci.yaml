@@ -218,6 +218,18 @@ jobs:
           cd services && files=$(gofmt -l pkg auth-service-go k8s-service-go session-service-go tool-server model-config-controller-go deploy-service-go dashboards-service-go ci-controller-go)
           if [ -n "$files" ]; then echo "gofmt needed:"; echo "$files"; exit 1; fi
 
+  # The planted-instruction cases of evals/ai-planted and their scorer: standard library only, no cluster, no model.
+  ai-eval-planted:
+    name: planted-instruction cases and scorer (stdlib tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - run: python -I scripts/test_ai_eval_planted.py
+      - run: python -I scripts/ai_eval_planted.py check
+
   e2e-assertions:
     name: e2e specs assert outcomes
     runs-on: ubuntu-latest
