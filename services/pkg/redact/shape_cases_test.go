@@ -31,10 +31,45 @@ type shapeCases struct {
 		Want  []string `json:"want"`
 	} `json:"commands"`
 	TextWithPersonalData []struct {
-		Name  string `json:"name"`
-		Input string `json:"input"`
-		Want  string `json:"want"`
+		Name         string `json:"name"`
+		Input        string `json:"input"`
+		Want         string `json:"want"`
+		WantNumbered string `json:"want_numbered"`
 	} `json:"text_with_personal_data"`
+	NumberedPersonalData []struct {
+		Name   string                    `json:"name"`
+		Key    string                    `json:"key"`
+		After  map[string]int            `json:"after"`
+		Seed   map[string]map[string]int `json:"seed"`
+		Inputs []string                  `json:"inputs"`
+		Want   []string                  `json:"want"`
+		Table  map[string]map[string]int `json:"table"`
+		Reveal *struct {
+			Values map[string]string `json:"values"`
+			Held   []string          `json:"held"`
+		} `json:"reveal"`
+	} `json:"numbered_personal_data"`
+	MaskKeys []struct {
+		Key   string `json:"key"`
+		Kind  string `json:"kind"`
+		Value string `json:"value"`
+		Want  string `json:"want"`
+	} `json:"mask_keys"`
+}
+
+// tableOf writes a fixture's table, whose keys are the values, as Numbers keeps it.
+func tableOf(key string, byValue map[string]map[string]int) NumberTable {
+	out := NumberTable{}
+	for kind, values := range byValue {
+		if len(values) == 0 {
+			continue
+		}
+		out[kind] = map[string]int{}
+		for v, n := range values {
+			out[kind][MaskKey(key, kind, v)] = n
+		}
+	}
+	return out
 }
 
 // The same cases run in ai-service (test_redact_shapes.py): the two rule lists must give the same answers.
@@ -47,13 +82,53 @@ func TestSharedShapeCases(t *testing.T) {
 	if err := json.Unmarshal(raw, &cases); err != nil {
 		t.Fatal(err)
 	}
-	if len(cases.Text) == 0 || len(cases.Objects) == 0 || len(cases.KeyNames) == 0 || len(cases.Commands) == 0 || len(cases.TextWithPersonalData) == 0 {
+	if len(cases.Text) == 0 || len(cases.Objects) == 0 || len(cases.KeyNames) == 0 || len(cases.Commands) == 0 || len(cases.TextWithPersonalData) == 0 ||
+		len(cases.NumberedPersonalData) == 0 || len(cases.MaskKeys) == 0 {
 		t.Fatal("no cases read")
+	}
+	for _, c := range cases.MaskKeys {
+		t.Run("mask key/"+c.Kind+"/"+c.Value, func(t *testing.T) {
+			if got := MaskKey(c.Key, c.Kind, c.Value); got != c.Want {
+				t.Errorf("got %s, want %s", got, c.Want)
+			}
+		})
+	}
+	for _, c := range cases.NumberedPersonalData {
+		t.Run("numbered/"+c.Name, func(t *testing.T) {
+			n := &Numbers{Key: c.Key, Table: tableOf(c.Key, c.Seed), After: c.After, Reveal: c.Reveal != nil}
+			for i, in := range c.Inputs {
+				if got, _ := TextNumbered(in, Options{Enabled: true, PII: true, Numbered: true, Disabled: map[string]bool{}}, n); got != c.Want[i] {
+					t.Errorf("text %d: got  %q\nwant %q", i, got, c.Want[i])
+				}
+			}
+			if got, want := n.Copy(), tableOf(c.Key, c.Table); len(got) != len(want) || (len(want) > 0 && !reflect.DeepEqual(got, want)) {
+				t.Errorf("table %v, want %v", got, want)
+			}
+			if c.Reveal == nil {
+				if n.Values() != nil || n.Held() != nil {
+					t.Errorf("values %v and held %v without reveal", n.Values(), n.Held())
+				}
+				return
+			}
+			if got := n.Values(); len(got) != len(c.Reveal.Values) || (len(got) > 0 && !reflect.DeepEqual(got, c.Reveal.Values)) {
+				t.Errorf("values %v, want %v", got, c.Reveal.Values)
+			}
+			if got := n.Held(); !reflect.DeepEqual(got, c.Reveal.Held) {
+				t.Errorf("held %v, want %v", got, c.Reveal.Held)
+			}
+		})
 	}
 	for _, c := range cases.TextWithPersonalData {
 		t.Run("personal/"+c.Name, func(t *testing.T) {
 			if got, _ := Text(c.Input, Options{Enabled: true, PII: true, Disabled: map[string]bool{}}); got != c.Want {
 				t.Errorf("got  %q\nwant %q", got, c.Want)
+			}
+			want := c.WantNumbered
+			if want == "" {
+				want = c.Want
+			}
+			if got, _ := Text(c.Input, Options{Enabled: true, PII: true, Numbered: true, Disabled: map[string]bool{}}); got != want {
+				t.Errorf("numbered: got  %q\nwant %q", got, want)
 			}
 		})
 	}

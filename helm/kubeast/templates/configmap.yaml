@@ -90,6 +90,14 @@ data:
   KEY_DIR: "/app/.keys"
   POSTGRES_USER: {{ .Values.postgresql.user | quote }}
   POSTGRES_DB: {{ .Values.postgresql.database | quote }}
+  DB_STATEMENT_TIMEOUT_MS: {{ .Values.postgresql.sessionLimits.statementTimeoutMs | int64 | quote }}
+  DB_LOCK_TIMEOUT_MS: {{ .Values.postgresql.sessionLimits.lockTimeoutMs | int64 | quote }}
+  DB_IDLE_IN_TRANSACTION_TIMEOUT_MS: {{ .Values.postgresql.sessionLimits.idleInTransactionTimeoutMs | int64 | quote }}
+  DB_POOL_MAX_AUTH: {{ .Values.postgresql.pool.authService.maxConns | int64 | quote }}
+  DB_POOL_MAX_SESSION: {{ .Values.postgresql.pool.sessionService.maxConns | int64 | quote }}
+  DB_POOL_MAX_K8S: {{ .Values.postgresql.pool.k8sService.maxConns | int64 | quote }}
+  DB_POOL_MAX_AI: {{ .Values.postgresql.pool.aiService.maxConns | int64 | quote }}
+  DB_POOL_MAX_MODEL_CONFIG: {{ .Values.postgresql.pool.modelConfigController.maxConns | int64 | quote }}
   REDIS_HOST: {{ ternary "redis" "" .Values.redis.enabled | quote }}
   REDIS_PORT: "6379"
   REDIS_DB: "0"
@@ -102,35 +110,49 @@ data:
   POD_NAMESPACE: {{ include "kubeast.namespace" . | quote }}
   SETUP_KUBECONFIG_SECRET: "k8s-kubeconfig"
   SETUP_CONFIGMAP_NAME: "kubeast-config"
-  SETUP_RESTART_DEPLOYMENTS: {{ ternary "k8s-service,tool-server" "k8s-service" .Values.ai.enabled | quote }}
+  SETUP_RESTART_DEPLOYMENTS: {{ print (ternary "k8s-service,tool-server" "k8s-service" .Values.ai.enabled) (ternary ",k8s-service-stream" "" .Values.streams.enabled) | quote }}
   AI_ENABLED: {{ .Values.ai.enabled | quote }}
   AUTH_JWKS_URL: "http://auth-service:8004/api/v1/auth/jwks.json"
   AUTH_TOKEN_VERSION_URL: "http://auth-service:8004/api/v1/auth/internal/token-version"
   TOOL_SERVER_URL: "http://tool-server:8086"
   IMPERSONATION_ENABLED: {{ .Values.auth.impersonation.enabled | quote }}
-  {{- /* The groups templates/impersonation-custom-roles.yaml binds: auth-service holds their names back (handler/role.go). */}}
+  {{- /* The role names templates/impersonation-custom-roles.yaml binds the groups of: auth-service holds them back
+         (handler/role.go) and makes each group as the chart does. A comma, which would split the list, is a "-",
+         which makes the same group. */}}
   {{- $boundRoles := list }}
   {{- if .Values.auth.impersonation.enabled }}
-  {{- range .Values.auth.impersonation.customRoles }}{{ $boundRoles = append $boundRoles (include "kubeast.roleSlug" .name) }}{{ end }}
+  {{- range .Values.auth.impersonation.customRoles }}{{ $boundRoles = append $boundRoles (replace "," "-" .name) }}{{ end }}
   {{- end }}
   IMPERSONATION_CUSTOM_ROLES: {{ join "," $boundRoles | quote }}
   IMPERSONATION_USER_PREFIX: {{ .Values.auth.impersonation.userPrefix | default "" | quote }}
   KUBECONFIG_EXEC_COMMANDS: {{ join "," .Values.multicluster.execCommands | quote }}
   GATEWAY_POLICY_KINDS: {{ join "," .Values.gatewayApi.policyKinds | quote }}
   AI_WRITE_APPROVAL: {{ .Values.ai.writeApproval | quote }}
+  AI_REFUSE_REPEATED_READS: {{ .Values.ai.refuseRepeatedReads | quote }}
+  AI_TOOL_RESULT_DETAILS: {{ .Values.ai.toolResultDetails | quote }}
   AI_BASE_URL_ALLOWED_HOSTS: {{ join "," .Values.ai.baseUrlAllowedHosts | quote }}
   COOKIE_SECURE: {{ .Values.auth.cookieSecure | quote }}
   REDACTION_ENABLED: {{ .Values.ai.redaction.enabled | quote }}
   REDACTION_PII: {{ .Values.ai.redaction.pii | quote }}
   REDACTION_DISABLE: {{ join "," .Values.ai.redaction.disable | quote }}
+  {{- /* dig: values an earlier chart's --reuse-values lacks render as this chart's default */}}
+  REDACTION_NUMBERED: {{ dig "numbered" false .Values.ai.redaction | quote }}
   AI_DEBUG_DUMP: {{ .Values.ai.debugDump | quote }}
+  AI_TIMELINE_CHANGES: {{ .Values.ai.timelineChanges | quote }}
+  AI_TOOL_RESULTS_JSON: {{ dig "toolResultsJSON" false .Values.ai | quote }}
   AI_CHAT_HISTORY_MESSAGES: {{ .Values.ai.chat.historyMessages | quote }}
   AI_CHAT_SUMMARY_ENABLED: {{ .Values.ai.chat.summary.enabled | quote }}
   AI_CHAT_SUMMARY_MAX_CHARS: {{ .Values.ai.chat.summary.maxChars | quote }}
   AI_CHAT_BUDGET_SESSION_TOKENS: {{ .Values.ai.chat.budget.sessionTokens | quote }}
   AI_CHAT_BUDGET_USER_DAILY_TOKENS: {{ .Values.ai.chat.budget.userDailyTokens | quote }}
+  AI_RULE_CARDS_CHAT: {{ .Values.ai.ruleCards.chat | quote }}
+  AI_RULE_CARDS_INVESTIGATIONS: {{ .Values.ai.ruleCards.investigations | quote }}
+  AI_RULE_CARDS: {{ .Values.ai.ruleCards.cards | default (list) | toJson | quote }}
+  AI_RULE_CARDS_REMOVE: {{ .Values.ai.ruleCards.remove | default (list) | join "," | quote }}
   AI_CLAUDE_CODE_ENABLED: {{ .Values.ai.providers.claudeCode.enabled | quote }}
   AI_CLAUDE_CODE_MAX_CONCURRENT: {{ .Values.ai.providers.claudeCode.maxConcurrent | quote }}
+  AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL: {{ dig "maxConcurrentTotal" 0 .Values.ai.providers.claudeCode | int64 | quote }}
+  AI_CLAUDE_CODE_QUEUE_WAIT: {{ dig "queueWaitSeconds" 60 .Values.ai.providers.claudeCode | int64 | quote }}
   AI_CLAUDE_CODE_TURN_TIMEOUT: {{ .Values.ai.providers.claudeCode.turnTimeoutSeconds | quote }}
   AI_CLAUDE_CODE_MAX_TURNS: {{ .Values.ai.providers.claudeCode.maxTurns | quote }}
   MCP_ENABLED: {{ .Values.mcp.enabled | quote }}
@@ -169,6 +191,15 @@ data:
   COST_ENABLED: {{ .Values.features.cost.enabled | quote }}
   POLICY_REPORTS_ENABLED: {{ .Values.features.policyReports.enabled | quote }}
   ALERT_INVESTIGATION_ENABLED: {{ .Values.features.alertInvestigation.enabled | quote }}
+  {{- /* dig: values an earlier chart's --reuse-values lacks render as this chart's defaults */}}
+  {{- $anomalyRank := dig "anomalyRank" (dict) .Values.features }}
+  ANOMALY_RANK_ENABLED: {{ dig "enabled" false $anomalyRank | quote }}
+  ANOMALY_RANK_MAX_QUERIES: {{ dig "maxQueries" 12 $anomalyRank | int64 | quote }}
+  ANOMALY_RANK_CHECK_TIMEOUT_SEC: {{ dig "checkTimeoutSeconds" 5 $anomalyRank | int64 | quote }}
+  ANOMALY_RANK_TIMEOUT_SEC: {{ dig "timeoutSeconds" 20 $anomalyRank | int64 | quote }}
+  ANOMALY_RANK_CONCURRENCY: {{ dig "concurrency" 4 $anomalyRank | int64 | quote }}
+  ANOMALY_RANK_CACHE_SEC: {{ dig "cacheSeconds" 60 $anomalyRank | int64 | quote }}
+  ANOMALY_RANK_LOG_MAX_BYTES: {{ dig "logMaxBytes" 10737418240 $anomalyRank | int64 | quote }}
   {{- with .Values.features.alertInvestigation }}
   ALERT_INVESTIGATION_SEVERITIES: {{ join "," .severities | quote }}
   ALERT_INVESTIGATION_DEDUPE_HOURS: {{ .dedupeHours | int64 | quote }}
@@ -182,9 +213,17 @@ data:
   ALERT_INVESTIGATION_PROVIDER_PAUSE_MINUTES: {{ .providerPauseMinutes | int64 | quote }}
   ALERT_INVESTIGATION_MAX_STEPS: {{ .maxSteps | int64 | quote }}
   ALERT_INVESTIGATION_TIMEOUT_SECONDS: {{ .timeoutSeconds | int64 | quote }}
+  ALERT_INVESTIGATION_RULES: {{ .rules | quote }}
+  ALERT_INVESTIGATION_CHANGES_FIRST: {{ .changesFirst | quote }}
+  ALERT_INVESTIGATION_NARROW_FIRST: {{ dig "narrowFirst" false . | quote }}
+  ALERT_INVESTIGATION_LEDGER: {{ .ledger | quote }}
+  ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES: {{ .window.metricsMinutes | int64 | quote }}
+  ALERT_INVESTIGATION_LOGS_WINDOW_MINUTES: {{ .window.logsMinutes | int64 | quote }}
+  ALERT_INVESTIGATION_CHANGES_WINDOW_HOURS: {{ .window.changesHours | int64 | quote }}
   ALERT_INVESTIGATION_MODEL: {{ .model | quote }}
   ALERT_INVESTIGATION_LANGUAGE: {{ .language | quote }}
   ALERT_INVESTIGATION_CONSOLE_URL: {{ .consoleUrl | quote }}
+  ALERT_INVESTIGATION_EVIDENCE_CHECK: {{ .evidenceCheck | quote }}
   ALERT_INBOX_STALE_HOURS: {{ .inbox.staleAfterHours | int64 | quote }}
   {{- end }}
   AUTH_INVESTIGATOR_TOKEN_URL: "http://auth-service:8004/api/v1/auth/internal/investigator-token"
@@ -230,6 +269,7 @@ data:
   LOG_SEARCH_TIMEOUT: {{ .timeout | quote }}
   LOG_SEARCH_PER_USER_PER_MINUTE: {{ .perUserPerMinute | quote }}
   LOG_SEARCH_LOGQL: {{ .logql | default false | quote }}
+  LOG_SEARCH_QUERY_MAX_BYTES: {{ dig "queryMaxBytes" 0 . | int64 | quote }}
 {{- end }}
 {{- end }}
 {{- with .Values.features.tracing }}
@@ -333,6 +373,7 @@ data:
 {{- end }}
 {{- end }}
 {{- end }}
+  CALL_GRAPH_ENABLED: {{ .Values.features.callGraph.enabled | quote }}
 {{- with .Values.features.alertStore }}
   ALERT_STORE_ENABLED: {{ .enabled | quote }}
 {{- if .enabled }}

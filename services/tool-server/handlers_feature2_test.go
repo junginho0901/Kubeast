@@ -6,9 +6,11 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
@@ -331,6 +333,106 @@ func TestCanI_And_ResourceGraph(t *testing.T) {
 	group := m["nodes"].([]interface{})[0].(map[string]interface{})
 	if counts["Pod"] != float64(301) || counts["Deployment"] != float64(1) || len(group["members"].([]interface{})) != graphGroupMembers || m["groups"] == nil {
 		t.Fatalf("groups: counts=%v members=%d", counts, len(group["members"].([]interface{})))
+	}
+}
+
+// include calls asks k8s-service for who calls whom over since; the calls come before the objects, their paths and
+// suspects before their edges, cut at graphCallsCap with k8s-service's total kept.
+func TestResourceGraphCalls(t *testing.T) {
+	var callEdges []string
+	for i := 0; i < 100; i++ {
+		callEdges = append(callEdges, `{"from":{"id":"Deployment/shop/web"},"to":{"service":"svc-`+strconv.Itoa(i)+`"},"sources":["traces"],"requests":`+strconv.Itoa(1000-i)+`}`)
+	}
+	var nodes []string
+	for i := 0; i < 50; i++ {
+		nodes = append(nodes, `{"id":"Pod/shop/p`+strconv.Itoa(i)+`","kind":"Pod","name":"p`+strconv.Itoa(i)+`"}`)
+	}
+	seen := fakeK8sService(t, func(r *http.Request) (int, string) {
+		return 200, `{"nodes":[` + strings.Join(nodes, ",") + `],"edges":[],"calls":{"available":true,"range":"30m0s",` +
+			`"edges":[` + strings.Join(callEdges, ",") + `],"edges_total":130,"truncated":true,` +
+			`"sources":[{"source":"traces","read":true},{"source":"network","read":false,"reason":"permission"}],` +
+			`"suspects":[{"id":"Deployment/shop/api","signals":["calls_fail"],"failing_outside":["service postgresql"]}],"suspects_total":12,` +
+			`"no_start":"cycle","paths":[["Deployment/shop/api","Deployment/shop/web"]]}}`
+	})
+	out, err := handleResourceGraph(ctxFor("c1"), map[string]interface{}{"namespace": "shop", "include": []interface{}{"calls"}, "since": "30m"}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q := (*seen)[0].URL.Query(); q.Get("include") != "calls" || q.Get("range") != "30m" || q.Get("group_pods") != "1" {
+		t.Fatalf("request: %s", (*seen)[0].URL.RawQuery)
+	}
+	at := func(key string) int { return strings.Index(out, `"`+key+`":`) }
+	inCalls := func(key string) int { return at("calls") + strings.Index(out[at("calls"):], `"`+key+`":`) }
+	if !(at("calls_note") < at("calls") && at("calls") < at("nodes") && inCalls("paths") < inCalls("no_start") && inCalls("no_start") < inCalls("suspects") &&
+		inCalls("suspects") < inCalls("suspects_total") && inCalls("suspects_total") < inCalls("edges_total") && inCalls("edges_total") < inCalls("edges")) {
+		t.Fatalf("order: %s", out[:400])
+	}
+	// the note reads the fields the answer has
+	for _, words := range []string{"_unscoped", "4xx", "5xx before naming a cause", "p90_ms is shown only", "failing_outside", "suspects_total", "no_start cycle", "drop_reasons", "POLICY_DENIED"} {
+		if !strings.Contains(graphCallsNote, words) {
+			t.Errorf("calls_note says nothing of %q", words)
+		}
+	}
+	if at("paths") > 6000 || at("suspects") > 6000 {
+		t.Fatalf("the paths and suspects fall past the model's cut: %d %d", at("paths"), at("suspects"))
+	}
+	calls := decode(t, out)["calls"].(map[string]interface{})
+	if len(calls["edges"].([]interface{})) != graphCallsCap || calls["edges_total"] != float64(130) || calls["truncated"] != true {
+		t.Fatalf("calls cap: %d %v %v", len(calls["edges"].([]interface{})), calls["edges_total"], calls["truncated"])
+	}
+	// without include the request and the answer are as before
+	_, _ = handleResourceGraph(ctxFor("c1"), map[string]interface{}{"namespace": "shop", "since": "30m"}, bearer())
+	if q := (*seen)[1].URL.Query(); q.Has("include") || q.Has("range") {
+		t.Fatalf("no include: %s", (*seen)[1].URL.RawQuery)
+	}
+	if _, err := handleResourceGraph(ctxFor("c1"), map[string]interface{}{"namespace": "shop", "include": "everything"}, bearer()); !errors.Is(err, errBadRequest) {
+		t.Fatalf("include: %v", err)
+	}
+}
+
+// since_time and until_time give a fixed window, parsed as anomaly_rank parses them; without them since stays the range.
+func TestResourceGraphCallsWindow(t *testing.T) {
+	now := time.Date(2026, 11, 15, 1, 30, 0, 0, time.UTC)
+	for _, c := range []struct {
+		args            map[string]interface{}
+		start, end, rng string
+	}{
+		{map[string]interface{}{"since": "30m"}, "", "", "30m"},
+		{map[string]interface{}{"since_time": "2026-11-15T00:45:00Z", "until_time": "2026-11-15T01:15:00Z"}, "2026-11-15T00:45:00Z", "2026-11-15T01:15:00Z", ""},
+		// a relative start counts back from until_time, or from now; since_time wins over since
+		{map[string]interface{}{"since_time": "30m", "until_time": "2026-11-15T01:00:00Z", "since": "6h"}, "2026-11-15T00:30:00Z", "2026-11-15T01:00:00Z", ""},
+		{map[string]interface{}{"since_time": "45m"}, "2026-11-15T00:45:00Z", "", ""},
+		// an end with since: the range back from that end
+		{map[string]interface{}{"until_time": "2026-11-15T01:00:00Z", "since": "15m"}, "", "2026-11-15T01:00:00Z", "15m"},
+	} {
+		q := url.Values{}
+		if err := setCallsWindow(q, c.args, now); err != nil || q.Get("start") != c.start || q.Get("end") != c.end || q.Get("range") != c.rng {
+			t.Fatalf("%v: %s %v", c.args, q.Encode(), err)
+		}
+	}
+	for _, args := range []map[string]interface{}{{"until_time": "soon"}, {"since_time": "yesterday"}} {
+		if err := setCallsWindow(url.Values{}, args, now); !errors.Is(err, errBadRequest) {
+			t.Fatalf("%v: %v", args, err)
+		}
+	}
+	seen := fakeK8sService(t, func(r *http.Request) (int, string) {
+		return 200, `{"nodes":[],"edges":[],"calls":{"available":true,"range":"30m0s","window":{"start":"2026-11-15T00:45:00Z","end":"2026-11-15T01:15:00Z"},"sources":[],"paths":[],"suspects":[],"edges_total":0,"edges":[]}}`
+	})
+	out, err := handleResourceGraph(ctxFor("c1"), map[string]interface{}{"namespace": "shop", "include": []interface{}{"calls"},
+		"since_time": "2026-11-15T00:45:00Z", "until_time": "2026-11-15T01:15:00Z"}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q := (*seen)[0].URL.Query(); q.Get("start") != "2026-11-15T00:45:00Z" || q.Get("end") != "2026-11-15T01:15:00Z" || q.Has("range") {
+		t.Fatalf("request: %s", (*seen)[0].URL.RawQuery)
+	}
+	if i, j := strings.Index(out, `"window":`), strings.Index(out, `"sources":`); i < 0 || i > j {
+		t.Fatalf("window before sources: %s", out)
+	}
+	// without include the window is not sent
+	_, _ = handleResourceGraph(ctxFor("c1"), map[string]interface{}{"namespace": "shop", "since_time": "45m"}, bearer())
+	if q := (*seen)[1].URL.Query(); q.Has("start") || q.Has("end") {
+		t.Fatalf("no include: %s", (*seen)[1].URL.RawQuery)
 	}
 }
 

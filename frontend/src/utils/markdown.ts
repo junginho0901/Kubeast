@@ -7,8 +7,8 @@ export const REMARK_PLUGINS = [[remarkGfm, { singleTilde: false }]] satisfies No
 
 const hostOf = (host: string) => host.replace(/\.$/, '')
 
-// An image loads as soon as the text is drawn, and on the console's own host the request carries the viewer's session,
-// so only an image of another host keeps its address (the page's Content-Security-Policy says whether it loads).
+// An image on the console's own host would be a request carrying the viewer's session, so only another host's keeps its
+// address, which components/AnswerImage draws as a link: AI-written text never fetches an image by being drawn.
 export function aiImageSrc(url: string): string | null {
   const page = globalThis.location
   try {

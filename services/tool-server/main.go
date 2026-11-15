@@ -14,6 +14,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/internalauth"
 	"github.com/junginho0901/kubeast/services/pkg/memlimit"
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
+	"github.com/junginho0901/kubeast/services/pkg/probe"
 )
 
 type ToolHandler func(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error)
@@ -70,8 +71,12 @@ func main() {
 
 	// Console metrics (services/pkg/metrics): the four fixed paths by name.
 	m := metrics.New("tool-server")
+	// Readiness: not from SIGTERM on. tool-server keeps no database; a call reaches k8s-service when it runs.
+	ready := probe.New()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", handleHealth)
+	mux.HandleFunc("/livez", ready.Live)
+	mux.HandleFunc("/readyz", ready.Ready)
 	mux.Handle("/metrics", m.Handler())
 	mux.HandleFunc("/tools/list", func(w http.ResponseWriter, r *http.Request) {
 		handleList(w, r, toolRegistry)
@@ -95,7 +100,13 @@ func main() {
 	// On SIGTERM a rollout lets the tool calls in flight finish (within the pod's grace period) instead of cutting them.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	// k8s-service's cluster change notices drop a cluster's kubeconfigs here too (cluster_notices.go).
+	if rdb := clusterNoticeClient(); rdb != nil {
+		defer rdb.Close()
+		go listenClusterNotices(ctx, rdb, invalidateClusterKubeconfig)
+	}
 	<-ctx.Done()
+	ready.Leave()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
@@ -294,6 +305,11 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleIssues,
 	})
 	register(ToolDefinition{
+		Name:        "anomaly_rank",
+		Description: "What differs in one namespace between a window and the window before it, ranked: failing objects, terminations by reason, restarts, CPU throttling, memory near the limit, node pressure",
+		Handler:     handleAnomalyRank,
+	})
+	register(ToolDefinition{
 		Name:        "hygiene",
 		Description: "The cluster hygiene report (Pod Security, image tags, TLS expiry, upgrade readiness) — Admin",
 		Handler:     handleHygiene,
@@ -410,7 +426,7 @@ func buildToolRegistry() map[string]ToolDefinition {
 	})
 	register(ToolDefinition{
 		Name:        "timeline",
-		Description: "The Timeline screen's change history: events and rollout revisions of a namespace, one object or every namespace in a time window",
+		Description: "The Timeline screen's change history: events and rollout revisions of a namespace, one object or every namespace in a time window; view changes lists what changed in it",
 		Handler:     handleTimeline,
 	})
 	register(ToolDefinition{

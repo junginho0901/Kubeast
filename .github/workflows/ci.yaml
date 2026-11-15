@@ -56,13 +56,35 @@ jobs:
           CGO_ENABLED: "0"
         run: go test -run 'JQ' .
 
-  # The real migrations against PostgreSQL (services/pkg/dbmigrate/*_postgres_test.go):
-  # empty database to Required, idempotent re-run, legacy role column conversion.
-  # The tests skip themselves when DBMIGRATE_TEST_DATABASE_URL is unset, so the
-  # plain go matrix above stays server-free.
+  # The race detector over k8s-service's live lists (internal/ws) and handlers (internal/handler), whose sockets,
+  # terminals and streams run goroutines that can outlive their request. A job of its own, beside the longer helm job,
+  # since its build with -race is not in the module cache.
+  go-race:
+    name: go race (k8s-service ws + handler)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: services/k8s-service-go/go.mod
+          cache-dependency-path: services/k8s-service-go/go.sum
+      - name: internal/ws
+        working-directory: services/k8s-service-go
+        run: go test -race ./internal/ws/
+      - name: internal/handler
+        working-directory: services/k8s-service-go
+        run: go test -race ./internal/handler/
+
+  # Every Go test that needs PostgreSQL, found rather than listed (scripts/postgres-tests.sh):
+  # each package whose tests read DBMIGRATE_TEST_DATABASE_URL runs whole against this server —
+  # the migrations, the cluster registry, auth-service's retention purge and repository,
+  # k8s-service's recording, and any new one without a change here. The tests skip themselves
+  # when the variable is unset, so the plain go matrix above stays server-free.
   dbmigrate:
     name: dbmigrate (postgres)
     runs-on: ubuntu-latest
+    # about 2 minutes (1 m 48 s on a cold cache); a test that hangs stops here, not at the 6-hour default
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:15-alpine
@@ -77,34 +99,15 @@ jobs:
           - 5432:5432
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The modules' go.mod minimums differ; the images build with 1.27 (golang:1.27-alpine).
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: services/pkg/go.mod
-          cache-dependency-path: services/pkg/go.sum
-      - name: test
-        working-directory: services/pkg
+          go-version: "1.27"
+          cache-dependency-path: services/**/go.sum
+      - name: every test that needs PostgreSQL
         env:
           DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
-        run: go test ./dbmigrate/... ./cluster/... -run Postgres -v -count=1
-      # auth-service's retention purge against the real schema (same server).
-      - name: retention
-        working-directory: services/auth-service-go
-        env:
-          DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
-        run: go test ./internal/retention/... -run Postgres -v -count=1
-      # auth-service's audit anchors from two replicas at once (same server).
-      - name: audit chain anchors
-        working-directory: services/auth-service-go
-        env:
-          DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
-        run: go test ./internal/auditchain/... -run Postgres -v -count=1
-      # auth-service's repository: access request and sign-off pages, dormant
-      # accounts next to the lock's, the AI usage query (both sources).
-      - name: auth-service repository
-        working-directory: services/auth-service-go
-        env:
-          DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
-        run: go test ./internal/repository/... -run Postgres -v -count=1
+        run: scripts/postgres-tests.sh
 
   python:
     name: ai-service (pytest)
@@ -112,7 +115,8 @@ jobs:
     defaults:
       run:
         working-directory: services/ai-service
-    # For the tests that need PostgreSQL (tests/*_postgres.py); they skip without DBMIGRATE_TEST_DATABASE_URL.
+    # For the tests that need PostgreSQL (tests/*_postgres.py: the alert webhook's locks, the session limits of
+    # test_db_session_postgres.py); they skip without DBMIGRATE_TEST_DATABASE_URL.
     services:
       postgres:
         image: postgres:15-alpine
@@ -138,6 +142,21 @@ jobs:
       - run: python -m pytest -q
         env:
           DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+
+  # scripts/ai-eval.py's scoring, the hard cases of evals/ai-hard with the demo's alert rules, and the runner's chat path,
+  # sign-in and alert path against a stand-in API on 127.0.0.1: standard library only, no cluster.
+  ai-eval-scripts:
+    name: ai-eval scripts (stdlib tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - run: python -I scripts/test_ai_eval_rca.py
+      - run: python -I scripts/test_ai_eval_cases.py
+      - run: python -I scripts/test_ai_eval_runner.py
+      - run: python -I scripts/test_ai_eval_alerts.py
 
   frontend:
     name: frontend (tsc + vitest)
@@ -165,6 +184,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # the release tags for the upgrade checks, the pull request's merge base for the docs check
+          fetch-depth: 0
       - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
         with:
           version: v4.3.0
@@ -172,7 +194,7 @@ jobs:
       # Rendered-manifest assertions (helm/kubeast/tests/*_test.yaml): switch
       # defaults, migrations hook Job, PVC retention, replica guards, secrets.
       - name: helm unittest
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: |
           # The plugin's install hook downloads its release from GitHub without retrying: five tries, 10 s apart.
           for attempt in 1 2 3 4 5; do
@@ -190,9 +212,11 @@ jobs:
           helm unittest helm/kubeast
       # `helm upgrade --reuse-values` from every release: stops with the upgrade hint or loses nothing.
       - name: upgrade from earlier releases
-        run: |
-          git fetch --no-tags --depth=1 origin '+refs/tags/v*:refs/tags/v*'
-          scripts/chart-upgrade-values.sh
+        run: scripts/chart-upgrade-values.sh
+      # A values path the last release has and this chart has not stops at templates/checks/removed-values.yaml.
+      - name: removed values stop
+        if: ${{ !cancelled() }}
+        run: scripts/chart-removed-values.sh
       - name: kubeconform
         timeout-minutes: 10
         env:
@@ -205,6 +229,14 @@ jobs:
           tar xzf kubeconform.tar.gz
           helm template kubeast helm/kubeast --namespace kubeast --set pdb.enabled=true \
             | ./kubeconform -strict -summary -kubernetes-version 1.33.0 -ignore-missing-schemas
+      # docs/X.md with docs/ko/X.md, a new values path in docs/configuration.md (en, ko); a commit trailer
+      # `Docs-Pair: en-only [<file>...] <reason>` (ko-only, values-not-in-docs) says why one side stays.
+      - name: docs in both languages, new values documented
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: scripts/check-docs-pair.sh "$BASE_SHA" "$HEAD_SHA"
 
   gofmt:
     name: gofmt
@@ -217,6 +249,18 @@ jobs:
       - run: |
           cd services && files=$(gofmt -l pkg auth-service-go k8s-service-go session-service-go tool-server model-config-controller-go deploy-service-go dashboards-service-go ci-controller-go)
           if [ -n "$files" ]; then echo "gofmt needed:"; echo "$files"; exit 1; fi
+
+  # The planted-instruction cases of evals/ai-planted and their scorer: standard library only, no cluster, no model.
+  ai-eval-planted:
+    name: planted-instruction cases and scorer (stdlib tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - run: python -I scripts/test_ai_eval_planted.py
+      - run: python -I scripts/ai_eval_planted.py check
 
   e2e-assertions:
     name: e2e specs assert outcomes
@@ -322,3 +366,15 @@ jobs:
           echo "${ZEITGEIST_SHA256}  zeitgeist" | sha256sum -c -
           chmod +x zeitgeist
           ./zeitgeist validate --local-only --base-path . --config deploy/dependencies.yaml
+
+  # Every default model is a pinned snapshot ID (scripts/check-model-pins.py): standard library only.
+  model-pins:
+    name: default models are pinned snapshots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - run: python -I scripts/test_check_model_pins.py
+      - run: python -I scripts/check-model-pins.py

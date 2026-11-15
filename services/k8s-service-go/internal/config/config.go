@@ -11,6 +11,8 @@ type Config struct {
 	Port    int
 	Debug   bool
 	AppName string
+	// ServerRole is SERVER_ROLE as set; ParseRole reads it (role.go).
+	ServerRole string
 
 	// Kubernetes
 	InCluster       bool
@@ -59,6 +61,26 @@ type Config struct {
 	// /cluster/features so the screens show Admin → Investigations. ai-service
 	// runs it; it needs AI on.
 	AlertInvestigationEnabled bool
+
+	// Narrowing for the AI (chart features.anomalyRank, off by default): GET
+	// /namespaces/{namespace}/anomalies ranks what differs from the window
+	// before. Off = the route answers 404 and reads nothing. The rest bound one
+	// answer: store queries, seconds per check and for the whole answer, checks
+	// at once, and how long the same question is answered from memory.
+	// AnomalyRankLogMaxBytes is the most the log store's index may put the
+	// namespace's logs over both windows at before the log checks read them.
+	AnomalyRankEnabled         bool
+	AnomalyRankMaxQueries      int
+	AnomalyRankCheckTimeoutSec int
+	AnomalyRankTimeoutSec      int
+	AnomalyRankConcurrency     int
+	AnomalyRankCacheSec        int
+	AnomalyRankLogMaxBytes     int64
+
+	// Who calls whom on a namespace's graph (chart features.callGraph, the AI tool resource_graph with include calls):
+	// the traces' service graph metrics and the Hubble metrics in the cluster's Prometheus. Off = include calls reads
+	// nothing and answers that it is off.
+	CallGraphEnabled bool
 
 	// Log files inside containers (chart features.logFiles). Off = the routes
 	// answer 404. Only files matching LogFilesPaths (absolute, glob in the file
@@ -114,7 +136,8 @@ type Config struct {
 	RedisHost     string
 	RedisPort     int
 	RedisDB       int
-	RedisPassword string // requirepass (REDIS_PASSWORD); empty = no AUTH
+	RedisUsername string // ACL user (REDIS_USERNAME); empty = the password alone
+	RedisPassword string // requirepass or the ACL user's (REDIS_PASSWORD); empty = no AUTH
 
 	// WebSocket
 	WSHeartbeatInterval int
@@ -126,6 +149,11 @@ type Config struct {
 	// MaxRequestBodyBytes caps every request body; YAML apply/create of large
 	// manifests fit well under the default 4 MiB.
 	MaxRequestBodyBytes int
+
+	// StreamDrainSeconds is how long a server being replaced (SIGTERM) gives its open terminals to end on their own
+	// after telling them, ending the followed logs at once (internal/drain). Below 0 (unset): no drain, they are cut
+	// when the process exits, as before. The chart sets it (streams.drainSeconds) on the server that opens terminals.
+	StreamDrainSeconds int
 
 	// Node shell: privileged debug pod on a node. Off unless enabled; the pod
 	// always runs in NodeShellNamespace with an image from NodeShellImages.
@@ -143,6 +171,8 @@ func Load() Config {
 		Port:    pkgconfig.GetEnvInt("PORT", 8002),
 		Debug:   pkgconfig.GetEnvBool("DEBUG", false),
 		AppName: pkgconfig.GetEnv("APP_NAME", "k8s-service"),
+
+		ServerRole: pkgconfig.GetEnv("SERVER_ROLE", ""),
 
 		InCluster:       pkgconfig.GetEnvBool("IN_CLUSTER", false),
 		KubeconfigWatch: pkgconfig.GetEnvBool("KUBECONFIG_WATCH", false),
@@ -168,6 +198,16 @@ func Load() Config {
 		AIEnabled: pkgconfig.GetEnvBool("AI_ENABLED", true),
 
 		AlertInvestigationEnabled: pkgconfig.GetEnvBool("ALERT_INVESTIGATION_ENABLED", false),
+
+		AnomalyRankEnabled:         pkgconfig.GetEnvBool("ANOMALY_RANK_ENABLED", false),
+		AnomalyRankMaxQueries:      pkgconfig.GetEnvInt("ANOMALY_RANK_MAX_QUERIES", 12),
+		AnomalyRankCheckTimeoutSec: pkgconfig.GetEnvInt("ANOMALY_RANK_CHECK_TIMEOUT_SEC", 5),
+		AnomalyRankTimeoutSec:      pkgconfig.GetEnvInt("ANOMALY_RANK_TIMEOUT_SEC", 20),
+		AnomalyRankConcurrency:     pkgconfig.GetEnvInt("ANOMALY_RANK_CONCURRENCY", 4),
+		AnomalyRankCacheSec:        pkgconfig.GetEnvInt("ANOMALY_RANK_CACHE_SEC", 60),
+		AnomalyRankLogMaxBytes:     int64(pkgconfig.GetEnvInt("ANOMALY_RANK_LOG_MAX_BYTES", 10<<30)),
+
+		CallGraphEnabled: pkgconfig.GetEnvBool("CALL_GRAPH_ENABLED", false),
 
 		LogFilesEnabled:    pkgconfig.GetEnvBool("LOG_FILES_ENABLED", false),
 		LogFilesPaths:      pkgconfig.GetEnvList("LOG_FILES_PATHS", ""),
@@ -204,6 +244,7 @@ func Load() Config {
 		RedisHost:     pkgconfig.LookupEnv("REDIS_HOST", "localhost"), // "" = no Redis (chart redis.enabled false)
 		RedisPort:     pkgconfig.GetEnvInt("REDIS_PORT", 6379),
 		RedisDB:       pkgconfig.GetEnvInt("REDIS_DB", 0),
+		RedisUsername: pkgconfig.GetEnv("REDIS_USERNAME", ""),
 		RedisPassword: pkgconfig.GetEnv("REDIS_PASSWORD", ""),
 
 		WSHeartbeatInterval:       pkgconfig.GetEnvInt("WS_HEARTBEAT_INTERVAL", 30),
@@ -211,6 +252,8 @@ func Load() Config {
 		WSMaxSubscriptionsPerConn: pkgconfig.GetEnvInt("WS_MAX_SUBSCRIPTIONS_PER_CONN", 50),
 		WSWatchStartConcurrency:   pkgconfig.GetEnvInt("WS_WATCH_START_CONCURRENCY", 16),
 		MaxRequestBodyBytes:       pkgconfig.GetEnvInt("MAX_REQUEST_BODY_BYTES", 4<<20),
+
+		StreamDrainSeconds: pkgconfig.GetEnvInt("STREAM_DRAIN_SECONDS", -1),
 
 		NodeShellEnabled:    pkgconfig.GetEnvBool("NODE_SHELL_ENABLED", false),
 		NodeShellNamespace:  pkgconfig.GetEnv("NODE_SHELL_NAMESPACE", "kubeast-node-shell"),

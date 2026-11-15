@@ -232,7 +232,8 @@ The AI tool `logfiles` lists and reads the same files through the same routes, w
   - Now and then, it checks size and inode with `ls -lindL` to follow truncation and replacement (log rotation).
   - Each command ends right away.
   - An SSE comment every 20 seconds keeps the proxy from closing an idle connection (nginx 60 seconds).
-  - When the connection drops, the browser does not reconnect by itself. A reconnect would read the last lines again and add another audit row.
+  - When the connection drops (the server restarting in an upgrade, a network cut), the browser connects again by itself and sends the mark of the last line it got (`Last-Event-ID` = `<inode>:<offset>`). The stream goes on after that line instead of reading the last lines again. If the file was replaced or truncated in between, it shows the file's last lines with a notice.
+  - Each reconnect is an audited read of its own; its row's `after.resume_from` says where it went on from.
   - One read returns at most `maxLines` (default 2000) lines.
 
 ```yaml
@@ -307,6 +308,10 @@ Loki and the collector are set up separately ([docs/cluster-requirements.md §14
   - API: `GET /api/v1/[cluster/namespaces/{ns}/]logsearch/logql?q=&step=`, `…/logsearch/labels[?label=]` and `…/logsearch/patterns?q=<selector>`.
     - The same gate: Pod read + `get pods/log` + per-minute limit.
     - Audit `k8s.pod.logs.logql` (`kind`). Label lists are not audited.
+  - **Volume limit** (`features.logSearch.queryMaxBytes`, default 0 = off): with a number of bytes set, `loki_query` first asks Loki's `index/stats` how much the streams of each selector of the query hold over the range, as mcp-grafana's lokiguard does.
+    - Past the limit it answers 400 with the size and how to narrow it (a shorter range, more label matchers), and reads nothing. The audit row is a failure with `estimated_bytes`.
+    - Under it the answer carries `estimatedBytes`. A store without `index/stats` answers 404 while the limit is set.
+    - Off, the index is not asked and the answer and the row are as before.
   - Patterns need Loki's `pattern_ingester.enabled: true`. Without it, the AI gets "no patterns" and counts with `loki_query`.
   - Loki returns only patterns that appear in 30 or more lines within the window (a fixed value in 3.7).
 
@@ -350,6 +355,31 @@ features:
 
 For development (kind): run `scripts/kind-logsearch.sh up`, then `scripts/kind-tracing.sh up`. This puts Jaeger 2.22 in the second cluster.
 The links open at `localhost:16686` after `kubectl port-forward -n tracing svc/jaeger 16686` (kubeast-b).
+
+## Terminals and followed logs on their own server
+
+With `streams.enabled: true` a second Deployment, `k8s-service-stream`, runs the same image as k8s-service in another role (`SERVER_ROLE=stream`, as Loki and Mimir run one binary with `-target`).
+It serves pod exec, the node shell and the followed logs (a container's output, a log file); k8s-service (`SERVER_ROLE=api`) serves everything else, the live lists included.
+The gateway sends the four stream locations of `files/nginx.conf` to the new Service, so a rollout of one does not cut the other's connections and many open terminals do not slow the lists.
+Off (the default), k8s-service serves everything, as before, and drains its terminals the same way when it is replaced (below), after the `podShutdown.preStopSeconds` sleep (5 s): `terminationGracePeriodSeconds` is `podShutdown.preStopSeconds + drainSeconds + 35` (the drain's close wait 5 s, the node drains' marking, the server's shutdown and the recorder's 25 s, 5 s to spare; 100 s by default), and with no terminal open it does not wait.
+
+```yaml
+streams:
+  enabled: true
+  drainSeconds: 60     # how long open terminals get to end on their own
+  preStopSeconds: 10   # out of the Service's endpoints before the drain starts
+resources:
+  k8sServiceStream:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
+```
+
+- **When k8s-service-stream is replaced** (a rollout, a node drain): the new pod is ready first (`maxSurge: 1`, `maxUnavailable: 0`). The old one waits `preStopSeconds`, then on SIGTERM answers `/readyz` with 503, ends the followed logs at once — the browser reconnects and goes on after the last line it got — and writes on each terminal when it will close. A terminal still open after `drainSeconds` is closed with that reason (close code 1001, `server_shutdown`) and offers Reconnect. `terminationGracePeriodSeconds` is `preStopSeconds + drainSeconds + 35` (105 s by default); k8s-service (api) waits `podShutdown.preStopSeconds` and has that + 30.
+- **Same identity**: both Deployments use the `k8s-service` service account, so the IRSA role and the recording store's credentials (`sessionRecording.secret`) apply to both: the stream server writes the recordings, k8s-service reads them. The spool volume is mounted on the stream server only.
+- **Refused with it**: `sessionRecording.storage: file` (one volume, two pods) and `streams.replicas` above 1.
+- **NetworkPolicy**: `k8s-service-stream` takes connections from the gateway only, and reaches the database, Redis, auth-service, the clusters' API servers and `sessionRecording.egress`.
+- **In front of the gateway**: a load balancer's deregistration delay should end before the gateway pod does (AWS ALB: 300 s by default), and an Envoy Gateway route to the console should not cut a stream at its request timeout (15 s by default).
+- **Metrics**: `kubeast_terminals_open` and `kubeast_followed_logs_open` on each stream server (k8s-service-stream; k8s-service with `streams.enabled` off).
 
 ## Adding trusted CAs (private CAs, TLS-intercepting proxies)
 

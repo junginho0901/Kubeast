@@ -159,7 +159,7 @@ class ProviderAdapter:
     def __init__(
         self,
         provider: str = "openai",
-        model: str = "gpt-4o-mini",
+        model: str = "gpt-4o-mini-2024-07-18",
         api_key: str = "",
         base_url: Optional[str] = None,
         tls_verify: bool = True,

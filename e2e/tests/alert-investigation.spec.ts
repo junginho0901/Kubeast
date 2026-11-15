@@ -18,7 +18,7 @@ const READ_TOOLS = new Set([
   'k8s_find_resource', 'k8s_explain', 'issues', 'prometheus_query', 'prometheus_metrics', 'prometheus_labels',
   'prometheus_rules', 'prometheus_targets', 'logsearch', 'loki_query', 'loki_labels', 'loki_patterns',
   'traces_search', 'traces_get', 'traces_tags', 'traces_metrics', 'traces_compare', 'alerts_list',
-  'policy_reports', 'helm_read', 'cost', 'optimization', 'can_i', 'network_policy_check', 'network_flows', 'network_drops', 'network_top_flows', 'resource_graph', 'timeline', 'gpu',
+  'policy_reports', 'helm_read', 'cost', 'optimization', 'can_i', 'network_policy_check', 'network_flows', 'network_drops', 'network_top_flows', 'resource_graph', 'timeline', 'gpu', 'anomaly_rank',
   'k8s_jq_query', 'k8s_tabular_query', 'k8s_count', 'gitops_status',
   'clusters_list',
   'pod_rbac',
@@ -53,7 +53,7 @@ function firing(name: string, fingerprint: string, labels: Record<string, string
     status: 'firing',
     labels: { alertname: name, severity: 'critical', namespace: 'default', deployment: 'e2e-unschedulable', ...labels },
     annotations: { summary: 'Deployment default/e2e-unschedulable has had no ready replica for 10 minutes.' },
-    startsAt: new Date().toISOString(),
+    startsAt: new Date(Date.now() - 60_000).toISOString(), // before delivery, as Alertmanager sends it
     generatorURL: 'http://prometheus.e2e/graph',
     fingerprint,
   }
@@ -111,6 +111,7 @@ async function readerFollowsTheLink(request: APIRequestContext, browser: Browser
     await page.goto(`${url.pathname}${url.search}`)
     await expect(page.getByRole('heading', { name: alertname })).toHaveText(alertname, { timeout: 30_000 })
     await expect(page).toHaveURL(/\/alerts\?/)
+    await expect(page.getByTestId('alert-report'), 'the alert window links its investigation').toBeVisible({ timeout: 20_000 })
     await page.getByTestId('alert-report').click()
     await expect(page.getByTestId('investigation-meta')).toHaveCount(1, { timeout: 20_000 })
   } finally {

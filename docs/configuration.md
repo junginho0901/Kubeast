@@ -73,6 +73,7 @@ auth:
   #   it automatically goes back to the previous role (audit log access.request.* / access.grant.expire).
   # It takes effect only on clusters whose RBAC binds that role's group: on a production cluster
   # that binds only viewer, the user still gets 403 after elevation.
+  # roles names each role exactly; an entry that is a built-in's name in other capitals (WRITE) stands for the built-in.
   accessRequests:
     enabled: false
     maxHours: 8
@@ -135,17 +136,35 @@ podSecurity:
   hostUsers: false
   readOnlyRootFilesystem: true
 
-# Availability: set pdb.enabled: true when you raise replicas to 2 or more
+# Availability: a Deployment you raise to 2 or more replicas, or whose autoscaling keeps minReplicas 2 or more, gets a PodDisruptionBudget (pdb.maxUnavailable, 1; pdb.enabled: false leaves them out), and every rollout starts the new pod and stops an old one only once the new one is ready (postgres and redis stop first)
+# Probes: liveness asks /livez, which reads nothing else; readiness asks /readyz, which answers 503 from SIGTERM on and never asks the database (a shared database down would take every pod out at once); the database's state is in auth-service's and session-service's /health and k8s-service's kubeast_audit_store_up
+# podShutdown.preStopSeconds: a pod behind a Service answers that long after it is told to stop (preStop sleep, Kubernetes 1.30 or later), then has 30 s to shut down (a server holding terminals: the drain's wait and close wait more); behind a load balancer that sends to pod IPs, set its deregistration delay plus a few seconds
 replicas:
   gateway: 1
+# One HPA per service, off by default; k8sService and toolServer above 1 pod need redis.enabled (docs/high-availability.md)
+autoscaling:
+  gateway: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
 pdb:
+  enabled: true
+  maxUnavailable: 1
+# Terminals and followed logs on a server of their own, off by default (docs/operations.md
+# "Terminals and followed logs on their own server")
+streams:
   enabled: false
+  replicas: 1            # stays 1: more than one stream server is not supported yet
+  drainSeconds: 60       # how long open terminals get to end when their server is replaced (k8s-service when off)
+  preStopSeconds: 10     # k8s-service-stream leaves the Service's endpoints this long before the drain starts
 topologySpread:
   enabled: true
+podShutdown:
+  preStopSeconds: 5
 resources:               # per-container requests / memory limit (the full list is in values.yaml)
   aiService:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 1Gi }
+  k8sServiceStream:      # streams.enabled only; k8sService's numbers for a start, not measured yet
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
 
 # AI keys: injected only as ai-service environment variables and not stored in the DB.
 # Model settings (UI/CRD) point only to the variable name (api_key_env).
@@ -156,24 +175,54 @@ ai:
   geminiApiKey: ""
   claudeCodeOAuthToken: ""  # Claude subscription setup-token (provider claude-code, personal use; see "4. Enable AI")
   apiKeysSecret: ""
-  model: "gpt-4o-mini"
+  model: "gpt-4o-mini-2024-07-18"
   baseUrlAllowedHosts: []  # register a host here when a model setting's base_url is a private address
                            # (in-cluster Ollama, internal LLM gateway).
                            # api_key_env is OPENAI/ANTHROPIC/GEMINI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN (claude-code only) or KUBEAST_AI_KEY_*
+  timelineChanges: false   # offer the AI tool timeline's changes view (what changed in a window, no value read) and the chat's instruction to read it first
+  redaction:
+    numbered: false        # with redaction.pii: every personal-data kind as its kind and a number per chat answer or investigation (<PHONE_1>),
+                           # writes holding those refused, the asker's chat answer shows the values in their place;
+                           # off: <EMAIL_n> within one text, <REDACTED:phone>, <REDACTED:rrn>, <REDACTED:card>, no value shown
+  refuseRepeatedReads: false # (alpha) true: a read made again with the same tool and arguments in one chat answer or investigation, less
+                             # than 60 s after the first answered, is not run and the model is told where it has the result; off: as before
+  toolResultDetails: false # (alpha) true: tool results say "M of N" for a cut answer, the window read when the call named none, why an empty
+                           # one may be empty and the console paths of the objects they name, from what they hold (features.md); off: as before
+  ruleCards:               # per kind of failure, the checks that often find its cause and their tools (features.md "Rule cards")
+    chat: false            # (alpha) true: a chat question naming a failure a card knows gets at most two cards for that turn
+    investigations: false  # (alpha) true: an alert investigation's first message holds at most two, picked by the alert's name and labels
+                           # off, both: the cards file is not read and the chat and investigations are as before
+    cards: []              # more cards of the same shape (a kind already there is replaced); the defaults are app/services/rule_cards.json
+    remove: []             # default kinds left out, e.g. [network_policy]
   providers:
-    claudeCode: { enabled: false, maxConcurrent: 1, turnTimeoutSeconds: 300, maxTurns: 10 }
+    claudeCode: { enabled: false, maxConcurrent: 2, maxConcurrentTotal: 0, memoryLimit: 2Gi, queueWaitSeconds: 60, turnTimeoutSeconds: 300, maxTurns: 10 }
+    # maxConcurrent: Claude Code runs per ai-service server (memory); maxConcurrentTotal: across every replica
+    # (0 = maxConcurrent); queueWaitSeconds: how long a turn waits for a slot before it ends as busy;
+    # memoryLimit: ai-service's memory limit while the provider is on, if larger than resources.aiService.limits.memory
+  toolResultsJSON: false   # true: the model reads each tool result as one JSON object, cluster text as JSON strings (ai-alerts.md "Planted instructions")
 
-# Built-in PostgreSQL (false = external DB) and Redis (false = k8s-service caches in memory; it is the only user of Redis)
+# Built-in PostgreSQL (false = external DB) and Redis (false = k8s-service caches in memory; tool-server only listens there for cluster changes)
 postgresql:
   enabled: true
   user: kubeast
   password: ""          # when empty, generated at install and kept across upgrades (look it up in the secret). Required for an external DB (enabled: false)
   database: kubeast
+  sessionLimits: { statementTimeoutMs: 30000, lockTimeoutMs: 15000, idleInTransactionTimeoutMs: 300000 }  # PostgreSQL statement_timeout, lock_timeout and idle_in_transaction_session_timeout each service SETs on its connections once connected (migrations always run without the first two, also when the role sets them); 0 sets nothing. Behind RDS Proxy a SET pins the session: set 0 and put them in the proxy's initialization query or on the database role. Through PgBouncer use session pooling only: transaction pooling hands a server connection to other clients between transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's) does not stay with its client
+  pool: { authService: { maxConns: 20 }, sessionService: { maxConns: 20 }, k8sService: { maxConns: 10 }, aiService: { maxConns: 15 }, modelConfigController: { maxConns: 4 } }  # connections per pod; with the chart's PostgreSQL the install stops when the pods (a rollout's extra pod and autoscaling's maxReplicas counted) could open more than maxConnections, for an external database NOTES prints the sum to compare with its max_connections
+  maxConnections: 300   # the chart's PostgreSQL max_connections
+# An upgrade stops Redis before its new pod starts (maxSurge 0), so the cache is empty for a few seconds.
 redis:
   enabled: true
-  password: ""          # requirepass — generated when empty (REDIS_PASSWORD)
+  password: ""          # requirepass while the Redis users are off — generated when empty (REDIS_PASSWORD)
+  acl:
+    enabled: true       # one Redis user per service ("Redis users" below); false = one password as before
+    existingSecretHasKeys: false  # with secrets.existingSecret: true once that Secret holds the users' passwords
+    existingSecret: ""            # a Secret of the users' keys alone; each service then reads only its own key
 networkPolicy:
   enabled: true         # default deny, plus only the flows the services use. Harmless on CNIs that do not enforce NetworkPolicy (kindnet, etc.)
+  aiEgress:
+    allowListOnly: false  # true: ai-service connects out only to allowExternalEgressCIDRs, tool-server only to clusterAPIs and apiserverCIDR (cluster-requirements.md §15)
+    clusterAPIs: []       # the API servers of the registered clusters, this one's too: a CIDR opens 443 and 6443, {cidr, port} another port
 
 # Gateway exposure
 gateway:
@@ -192,6 +241,40 @@ ingress:
   host: kubeast.example.com
   tls: false
 
+# AI switches added in 0.7.9, all off by default. Off, the model's prompts and tool definitions are as in 0.7.8.
+# (alpha): may change or go without notice. More in ai-alerts.md and features.md
+features:
+  alertInvestigation:
+    rules: false             # (alpha) true: the time windows below, the scope groups, facts kept apart from hypotheses and the report's
+                             # six headings, in the prompt (ai-alerts.md)
+    changesFirst: false      # (alpha) true: step 0 puts the timeline's changes over the change window into the first message (an audited
+                             # tool call, no model step); writes the windows too
+    narrowFirst: false       # (alpha) true: step 0, after the changes, puts anomaly_rank (features.anomalyRank) over the metrics window
+                             # into the first message; writes the windows too
+    ledger: false            # (alpha) true: the report ends with a block of causes, path, ruled out and hypotheses, each closed with the
+                             # calls for and against it, kept apart and shown under the report (asked once more while one is open)
+    evidenceCheck: false     # (alpha) true: the server checks that the calls each cause names answered and hold its name, asks once more
+                             # without tools otherwise and lists what still fails as not verified; with ledger, one block and one ask
+    window:                  # counted from the alert's start; ends are never past now
+      metricsMinutes: 15     # metrics this long either side of the start (1–360)
+      logsMinutes: 5         # logs from this long before the start (0–1440)
+      changesHours: 4        # changes from this long before the start (1–168)
+  anomalyRank:
+    enabled: false           # (alpha) true: the AI tool anomaly_rank and GET /namespaces/{namespace}/anomalies, what differs in one
+                             # namespace from the window before, ranked (cluster-requirements.md); off: the route answers 404, reads nothing
+    maxQueries: 12           # store queries one answer may make
+    checkTimeoutSeconds: 5   # each check
+    timeoutSeconds: 20       # the whole answer
+    concurrency: 4           # checks at once
+    cacheSeconds: 60         # the same caller, namespace and window answered from memory
+    logMaxBytes: 10737418240 # the log checks ask the log store's index first and read no more than this over both windows (10 GiB)
+  logSearch:
+    queryMaxBytes: 0         # (alpha) a number of bytes: the AI's loki_query asks the store's index first and is refused past it, with how
+                             # to narrow it (operations.md); 0: not asked, the query runs as before
+  callGraph:
+    enabled: false           # (alpha) true: the AI tool resource_graph takes include calls, who calls whom from the traces' service graph
+                             # metrics and Hubble (cluster-requirements.md); off: include calls reads nothing and the AI is not offered it
+
 # Multi-cluster load/failure isolation tuning
 multicluster:
   maxClusters: 20
@@ -203,5 +286,62 @@ multicluster:
   reviewQPS: 0              # 0 = the access checks share clientQPS; see architecture.md "Many users"
   reviewBurst: 0
 ```
+
+## Redis users
+
+The chart's Redis (Valkey) gives each service that uses it a user of its own (`redis.acl.enabled`, on by default).
+
+With `secrets.existingSecret`, Redis keeps one password (`REDIS_PASSWORD`) for every service until you turn the users on: put `REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD` and, with the AI on, `REDIS_TOOL_SERVER_PASSWORD` in that Secret, then set `redis.acl.existingSecretHasKeys: true`. Until then the install notes say so.
+
+| User | Can | Cannot |
+|---|---|---|
+| `k8s-service` | Keys and channels whose names start with `kubeast:`. Reads, writes and deletes of single keys, `SCAN` for the deletes by pattern, `PUBLISH`/`SUBSCRIBE` (the cluster change notices), `PING`, `SELECT` (`REDIS_DB`) | Any other key or channel. `FLUSHALL`, `FLUSHDB`, `KEYS`, `CONFIG`, `DEBUG`, `ACL`, `MONITOR`, `EVAL`, `SCRIPT` and every command not listed |
+| `tool-server` (with the AI on) | The cluster change notice channel (`kubeast:clusters:changed:*`): `SUBSCRIBE`, `PING`, `SELECT` | Any key. Publishing. Every other command |
+| `probe` | `PING`, for the readiness and liveness probes | Everything else |
+| `default` | Nothing: it is off | A connection that has not signed in as a user above gets `NOAUTH` for every command |
+
+- The rules are `kubeast.redisUsersAcl` in `helm/kubeast/templates/_helpers.tpl`. A command k8s-service starts to use goes there.
+- go-redis sends `CLIENT SETINFO` and `CLIENT MAINT_NOTIFICATIONS` when it connects. Redis refuses both, and go-redis goes on.
+- The rules need Valkey, or Redis 6.2 or later, in `images.redis`. A command the image does not know stops Valkey at start.
+- tool-server listens to k8s-service's cluster change notices and drops that cluster's kubeconfigs, so every tool-server replica drops them at once, not only the one auth-service calls.
+- A notice names the cluster and the k8s-service process that sent it, nothing else (`services/pkg/clusternotice`). The next tool call reads the kubeconfig from k8s-service again, which checks the person's access again, so a notice that is not genuine costs one read.
+- A notice lost, or Redis down, costs at most the 10 s tool-server keeps a kubeconfig.
+
+**Passwords.**
+
+- Each user's password is generated at install, 32 characters, in the Secret `kubeast-redis-users` (`REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD`, `REDIS_TOOL_SERVER_PASSWORD`).
+- It is kept across upgrades and stays after `helm uninstall`, like `kubeast-secrets`.
+- It is not in `kubeast-secrets`, which every service reads whole as its environment. The redis pod reads them, and k8s-service and tool-server each read their own.
+- With `secrets.existingSecret` and `redis.acl.existingSecretHasKeys: true`, the keys are read from that Secret. Every backend reads that Secret whole as its environment, so each then holds every Redis user's password, and the install notes say so.
+- To give each service its own key only, put the keys in a Secret of their own and set `redis.acl.existingSecret` to it. The users are on, the redis pod and each service read their key from it, and the main Secret need not hold them.
+- To change one, write the new value into the Secret, then restart `redis` and the service it belongs to.
+
+**How Valkey reads them.**
+
+- The redis pod's first container, `acl`, reads the passwords from the Secret as files.
+- It writes their SHA-256 into the ACL file, on a volume in memory, and makes the file read-only. Valkey starts with `--aclfile`.
+- No password is in the pod spec or in Valkey's arguments. The probes read theirs from `REDISCLI_AUTH`.
+- A change to the rules restarts Valkey (`checksum/redis-users` on the pod, a hash of the rules without the passwords).
+
+**Network.** With `networkPolicy.enabled`, Redis takes connections only from k8s-service and tool-server pods in the release namespace, on port 6379. The probes run inside the redis container and need no rule.
+
+**Memory.**
+
+- Valkey evicts at 80% of `resources.redis.limits.memory` (`maxmemory`, 107374182 bytes for the default 128Mi), so it evicts before the container reaches its limit.
+- Without a limit it stops at 80% of 128Mi.
+- The policy is `volatile-lru`: only keys with a TTL are evicted. The cache's keys all have one. A key without one is never evicted.
+
+**Upgrading from 0.7.7 or earlier**, which had one password (`REDIS_PASSWORD`):
+
+- The upgrade adds `kubeast-redis-users` and keeps every value of `kubeast-secrets`, `REDIS_PASSWORD` included.
+- Redis and k8s-service restart. The cache starts empty, as on any restart of Redis.
+- Until the old k8s-service pod has gone, its requests to the new Redis are refused and read as cache misses.
+- A new k8s-service pod that comes up before the new Redis answers (the upgrade stops the old Redis first, maxSurge 0) keeps its cache in memory until Redis answers; it asks again every 5 s. It answers the same; only the cache is not shared meanwhile.
+- With `secrets.existingSecret`, nothing changes on upgrade: Redis keeps the one password until `redis.acl.existingSecretHasKeys` is true.
+- With that set, an upgrade that can read the Secret stops when a key is missing or empty, and names it. `helm template` and Argo CD cannot read it: there the `acl` container stops and says which key is missing, and k8s-service keeps its cache in memory.
+- `redis.acl.enabled: false` renders Redis as before, with the memory cap.
+- `helm rollback` to 0.7.7 brings back its Redis with the one password, which `kubeast-secrets` still holds, and its k8s-service signs in with it. A 0.7.7 k8s-service pod that comes up before that Redis answers keeps its cache in memory until it restarts. `kubeast-redis-users` stays, and the next upgrade uses its passwords again.
+
+**Later.** TLS to an external Redis is not in this chart yet. The chart cannot point at an external Redis today: `REDIS_HOST` is the chart's `redis`, or empty.
 
 See [helm/kubeast/values.yaml](../helm/kubeast/values.yaml) for all options.

@@ -98,6 +98,27 @@ Prerequisites (without them, the spec does not fail but skips and records the re
 
 It is not part of the default run. Run it with `E2E_ACTIONS=1 npx playwright test --project=actions`. Prerequisites are in [e2e/actions/README.md](../e2e/actions/README.md).
 
+### Faults and demo services for the AI evaluation
+
+The harder cases of `scripts/ai-eval.py` need faults and services that call each other. Two scripts put them on the second cluster; neither is an e2e prerequisite.
+
+- `scripts/kind-chaos.sh up|down`: Chaos Mesh 2.8.8 (pod kill and failure, network delay, loss and partition, DNS errors, CPU and memory stress).
+  - The chart is rendered with `deploy/kind/chaos-values.yaml` (the kind node's containerd runtime and socket) and applied server-side, so `default` keeps no Helm release.
+  - `up` again with the same version and values does nothing. `down` deletes every experiment first, then what `up` made.
+- `scripts/kind-otel-demo.sh up|down`: the OpenTelemetry Demo, chart 0.42.6, in namespace `otel-demo`.
+  - Run `scripts/kind-logsearch.sh up` and `scripts/kind-tracing.sh up` first.
+  - The demo's own Jaeger, Grafana, Prometheus and OpenSearch are off. Its collector writes traces to that Tempo, logs to that Loki and metrics to the second cluster's Prometheus (`OTELDEMO_METRICS=0` keeps the metrics out).
+  - Those metrics include who calls whom (`traces_service_graph_*`, from the collector's `service_graph` connector, with the namespace on both sides), which the AI's call graph reads.
+  - The first `up` refuses when the Docker VM has less memory available than the sum of the render's memory limits (about 6.7 GiB). The lighter fallback, Online Boutique, is described at the top of the script.
+  - A line a service both prints and sends over OTLP is in Loki twice.
+  - With metrics on, `up` also puts the demo's alert rules (`deploy/kind/otel-demo-rules.json`: error rate, 95th percentile latency, restarts) into that Prometheus, and `down` takes them out. Their alerts carry `kubeast_eval="otel-demo"`, the only ones that Prometheus sends to Alertmanager, which posts them to the webhook for `default`. An older dev install needs `deploy/kind/second-cluster.yaml` applied again first.
+- Behind a TLS-inspecting proxy, set `CHAOS_NODE_HOOK` or `OTELDEMO_NODE_HOOK` as for `CILIUM_NODE_HOOK`: a command that gets the cluster name, run before the images are pulled.
+- The case fields, the run order and the twenty-two cases of `evals/ai-hard/` are in [evals/ai/README.md](../evals/ai/README.md) "Hard cases".
+- `scripts/ai-eval.py --alerts` runs the cases that carry an `alert` through the alert investigation instead of the chat and scores the report ([evals/ai/README.md](../evals/ai/README.md) "The alert path").
+  - The alert comes through the second cluster's Alertmanager when the case's test rule is loaded there, and is posted to the webhook in Alertmanager's form otherwise (`--alert-source auto`, the default; `real` runs only the rule, `synthetic` always posts). The twenty-two cases of `evals/ai-hard/` have no test rule yet, so they are posted.
+  - It has not run on kind yet.
+- The runner signs in again before its token runs out and on a 401, and writes its report after each case, so one call can run a round longer than the dev token's 120 minutes.
+
 ### Project site (`site/`)
 
 [https://junginho0901.github.io/Kubeast/](https://junginho0901.github.io/Kubeast/) is `site/`, a static page in English with a Korean switch: `index.html`, `style.css`, `app.js` and `particles.js`.
@@ -153,6 +174,16 @@ pip install -r requirements.txt
 uvicorn main:app --reload --port 8001
 pytest
 ```
+
+### Default models
+
+A model an install or a dev script uses when nobody chose one is written as a pinned snapshot ID, so the model behind it does not change under an install: the chart's `ai.model` (`gpt-4o-mini-2024-07-18`), ai-service's `OPENAI_MODEL` and `ProviderAdapter` defaults, `install-docker.sh`, `docker-compose.yml` and the `scripts/kind-model-*.sh` defaults. `python3 -I scripts/check-model-pins.py` (CI job "default models are pinned snapshots") reads each place and fails on an alias or a place it no longer finds.
+
+- Claude: every ID from the 4.6 generation on is its own pinned snapshot (`claude-haiku-5-5`); an earlier model's short name is an alias of its dated ID (`claude-haiku-4-5` → `claude-haiku-4-5-20251001`).
+- OpenAI: the snapshot carries its date (`gpt-4o-mini-2024-07-18`); `gpt-4o-mini` is an alias.
+- A name holding `latest` is never pinned. Another provider fails until the script has a rule from that provider's documentation.
+- The model picker on the screens (`frontend/src/constants/modelCatalog.ts`) is a list people choose from and is not checked.
+- A pull request that changes a default model runs the evaluation (`scripts/ai-eval.py`) for it.
 
 ### Health check
 

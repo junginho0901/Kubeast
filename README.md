@@ -46,6 +46,7 @@ The chart gives k8s-service 512 Mi. If many people will use a large cluster at o
 | [Architecture](docs/architecture.md) | Services, container images, resource usage, sizing for many users |
 | [Configuration (values.yaml)](docs/configuration.md) | Chart values explained |
 | [Database: TLS, backup and restore](docs/database-backup-restore.md) | DB connection TLS, backup and restore, retention |
+| [Running more than one replica](docs/high-availability.md) | Which services run more than one pod, Redis and database connections, replicas and autoscaling, sizing |
 | [Console metrics](docs/metrics.md) | Kubeast's own `/metrics` |
 | [Supply chain](docs/supply-chain.md) | Image scanning, SBOM, provenance attestation, signing |
 | [Audit log plan](docs/audit-log-plan.md) | Audit action catalog and permission mapping |

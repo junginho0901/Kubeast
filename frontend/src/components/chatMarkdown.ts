@@ -1,10 +1,12 @@
 import { defaultUrlTransform, type Options } from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize'
+import { AnswerImage } from '@/components/AnswerImage'
 import { MarkdownLink } from '@/components/FloatingAIChat/MarkdownLink'
 import { MarkdownDetails, MarkdownSummary } from '@/components/MarkdownDisclosure'
 import { MarkdownTable } from '@/components/MarkdownTable'
 import { fenceReader } from '@/services/chatTextUtils'
+import { revealText, type MaskValues } from '@/services/maskValues'
 import { aiImageSrc, REMARK_PLUGINS } from '@/utils/markdown'
 
 // How a chat answer becomes elements, the same in AI Chat and the floating chat. An answer is text a model wrote after
@@ -155,16 +157,26 @@ function takersAsWords() {
 }
 
 // react-markdown blanks an address of a scheme it does not know; MarkdownLink checks each kubest:// link it gets. An
-// image keeps only another host's address (aiImageSrc).
+// image keeps only another host's address (aiImageSrc), which AnswerImage draws as a link.
 function urlTransform(url: string, key: string): string | null {
   if (key === 'src') return aiImageSrc(url)
   return url.startsWith('kubest://') ? url : defaultUrlTransform(url)
 }
+
+function revealIn(node: AnswerNode, values: MaskValues) {
+  if (node.type === 'text' && node.value) node.value = revealText(node.value, values)
+  node.children?.forEach((child) => revealIn(child, values))
+}
+
+// The values of the answer's numbered placeholders, for the person who asked (services/maskValues), put in as letters where
+// the answer is drawn, after the sanitizer: nothing a value holds is read as Markdown or HTML, and the answer's text, which
+// Copy and every save use, keeps the placeholders.
+export const revealPlaceholders = (values: MaskValues) => (tree: AnswerNode) => revealIn(tree, values)
 
 export const CHAT_MARKDOWN = {
   remarkPlugins: [...REMARK_PLUGINS, readOpenHtmlAsWords],
   // tagfilter: an element that reads what follows as its own text (style, textarea, …) shows as words instead of hiding it
   rehypePlugins: [takersAsWords, [rehypeRaw, { tagfilter: true }], [rehypeSanitize, ANSWER_SCHEMA], keepLinksInline],
   urlTransform,
-  components: { a: MarkdownLink, details: MarkdownDetails, summary: MarkdownSummary, table: MarkdownTable },
+  components: { a: MarkdownLink, img: AnswerImage, details: MarkdownDetails, summary: MarkdownSummary, table: MarkdownTable },
 } satisfies Options

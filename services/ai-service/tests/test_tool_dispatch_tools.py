@@ -188,6 +188,9 @@ async def test_second_batch_feature_tools_pass_declared_arguments_only():
         ("can_i", {"verb": "delete", "resource": "pods", "namespace": "shop", "group": ""}, {"verb": "delete", "resource": "pods", "namespace": "shop"}),
         ("can_i", {"verb": "delete", "resource": "configmaps", "namespace": "shop", "name": " app-config "}, {"verb": "delete", "resource": "configmaps", "namespace": "shop", "name": "app-config"}),
         ("resource_graph", {"namespace": "shop", "depth": 3}, {"namespace": "shop"}),
+        ("resource_graph", {"namespace": "shop", "include": ["calls"], "since": " 30m "}, {"namespace": "shop", "include": ["calls"], "since": "30m"}),
+        ("resource_graph", {"namespace": "shop", "include": "calls"}, {"namespace": "shop", "include": ["calls"]}),
+        ("resource_graph", {"namespace": "shop", "include": ["everything"]}, {"namespace": "shop"}),
         (
             "timeline",
             {"namespace": "shop", "since_time": "6h", "until_time": "2026-11-06T09:00:00Z", "event_type": "Warning", "kind": "Deployment", "name": "web", "limit": 50, "cluster": "x", "hours": 3},
@@ -211,6 +214,11 @@ async def test_second_batch_feature_tools_pass_declared_arguments_only():
             "network_top_flows",
             {"namespace": "shop", "workload_kind": "Deployment", "workload_name": "web", "metric": "retransmissions", "destination": "aws", "since": "2h", "limit": 5},
             {"namespace": "shop", "workload_kind": "Deployment", "workload_name": "web", "metric": "retransmissions", "destination": "aws", "since": "2h"},
+        ),
+        (
+            "anomaly_rank",
+            {"namespace": "shop", "since_time": "2h", "until_time": "2026-11-15T01:30:00Z", "workload_kind": "Deployment", "workload_name": "web", "limit": 5, "cluster": "x"},
+            {"namespace": "shop", "since_time": "2h", "until_time": "2026-11-15T01:30:00Z", "workload_kind": "Deployment", "workload_name": "web"},
         ),
         ("hygiene", {"severity": "critical", "check": "pss-level"}, {"severity": "critical", "check": "pss-level"}),
     ]:

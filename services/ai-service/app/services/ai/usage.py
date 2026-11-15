@@ -121,15 +121,17 @@ def chat_complete_payload(
     finish_reason: Optional[str] = None,
     message_length: int = 0,
     phase: str = "chat",
+    rule_cards: Optional[list] = None,
 ) -> dict[str, Any]:
     """The `after` payload of ai.chat.complete. Token fields are null when the
     provider sent no usage (an OpenAI-compatible endpoint that ignores
     stream_options.include_usage), so sums in the admin view skip them;
     prompt_chars and model_calls are ours and always present.
     `phase` is `chat` for a chat turn and `optimization` for the Optimization
-    page's AI explanation, which has no session."""
+    page's AI explanation, which has no session. `rule_cards`: the kinds of the
+    rule cards the turn was given (ai.ruleCards.chat), added only when that is on."""
     seen = bool(usage.get("seen"))
-    return {
+    payload = {
         "phase": phase,
         "session_id": session_id,
         "provider": provider,
@@ -148,3 +150,6 @@ def chat_complete_payload(
         "finish_reason": finish_reason,
         "message_length": int(message_length),
     }
+    if rule_cards is not None:
+        payload["rule_cards"] = list(rule_cards)
+    return payload

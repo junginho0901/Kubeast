@@ -71,6 +71,24 @@ tests:
     asserts:
       - hasDocuments:
           count: 0
+  - it: stops values without the repeated read switch
+    set:
+      ai.refuseRepeatedReads: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.refuseRepeatedReads
+  - it: stops values without the evidence check switch
+    set:
+      features.alertInvestigation.evidenceCheck: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.evidenceCheck
+  - it: stops values without the tool result details switch
+    set:
+      ai.toolResultDetails: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.toolResultDetails
   - it: stops values without a path 0.7.6 added, as v0.7.5's published defaults are
     set:
       multicluster.clientQPS: null
@@ -83,3 +101,123 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no features.networkFlowMonitor
+  - it: stops values without streams (the stream server), as v0.7.7's are
+    set:
+      streams: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no streams
+  - it: stops values without a path 0.7.8 added, as v0.7.7's published defaults are
+    set:
+      podShutdown: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no podShutdown.preStopSeconds
+  - it: stops values without redis.acl, as v0.7.7's are (the Redis users)
+    set:
+      redis.acl: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no redis.acl
+  - it: stops values without redis.acl.existingSecretHasKeys (the Redis users with secrets.existingSecret)
+    set:
+      redis.acl.existingSecretHasKeys: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no redis.acl.existingSecretHasKeys
+  - it: stops values without redis.acl.existingSecret (the Redis users' own Secret)
+    set:
+      redis.acl.existingSecret: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no redis.acl.existingSecret
+  - it: stops values without ai.providers.claudeCode.maxConcurrentTotal, as v0.7.7's published defaults are
+    set:
+      ai.providers.claudeCode.maxConcurrentTotal: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.providers.claudeCode.maxConcurrentTotal
+  - it: stops values without ai.providers.claudeCode.queueWaitSeconds, as v0.7.7's published defaults are
+    set:
+      ai.providers.claudeCode.queueWaitSeconds: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.providers.claudeCode.queueWaitSeconds
+  - it: stops values without ai.providers.claudeCode.memoryLimit, as v0.7.7's published defaults are
+    set:
+      ai.providers.claudeCode.memoryLimit: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.providers.claudeCode.memoryLimit
+  - it: stops values without autoscaling, which 0.7.8 added, as v0.7.7's published defaults are
+    set:
+      autoscaling: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no autoscaling
+  - it: stops values without postgresql.sessionLimits, which 0.7.8 added, as v0.7.7's published defaults are
+    set:
+      postgresql.sessionLimits: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no postgresql.sessionLimits
+  - it: stops values without postgresql.pool, as v0.7.7's published defaults are
+    set:
+      postgresql.pool: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no postgresql.pool
+  - it: stops values without postgresql.maxConnections, as v0.7.7's published defaults are
+    set:
+      postgresql.maxConnections: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no postgresql.maxConnections
+  - it: stops values without pdb.maxUnavailable, which 0.7.8 added, as v0.7.7's published defaults are
+    set:
+      pdb.maxUnavailable: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no pdb.maxUnavailable
+  - it: stops values without ai.timelineChanges, which this chart added
+    set:
+      ai.timelineChanges: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.timelineChanges
+  - it: stops values without the investigation windows
+    set:
+      features.alertInvestigation.window: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.window
+  - it: stops values without the investigation rules switch
+    set:
+      features.alertInvestigation.rules: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.rules
+  - it: stops values without the step 0 switch
+    set:
+      features.alertInvestigation.changesFirst: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.changesFirst
+  - it: stops values without features.callGraph, which this chart added
+    set:
+      features.callGraph: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.callGraph
+  - it: stops values without the investigation ledger switch
+    set:
+      features.alertInvestigation.ledger: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.ledger
+  - it: stops values without the rule cards
+    set:
+      ai.ruleCards: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.ruleCards

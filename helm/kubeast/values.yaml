@@ -26,7 +26,10 @@ admin:
 # looking the Secret up — which GitOps renderers such as Argo CD cannot do, so
 # every sync would rotate it). Set it to a Secret you manage (e.g. via
 # ExternalSecrets) holding these keys: POSTGRES_PASSWORD, DATABASE_URL,
-# REDIS_PASSWORD (redis requirepass; k8s-service's cache uses it),
+# REDIS_PASSWORD (redis requirepass while the Redis users are off),
+# REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD and, with the AI on,
+# REDIS_TOOL_SERVER_PASSWORD (the Redis users, read once
+# redis.acl.existingSecretHasKeys is true),
 # DEFAULT_ADMIN_PASSWORD, AI_APPROVAL_SECRET (shared by ai-service and
 # tool-server to sign write-tool approvals), INTERNAL_API_TOKEN (service token
 # tool-server and auth-service present on k8s-service's /internal routes; rotate
@@ -145,8 +148,9 @@ auth:
     # those bindings to groups first (docs/cluster-requirements.md §1).
     userPrefix: ""
     # A custom Kubeast role (anything but Read/Write/Admin) granted on a
-    # cluster acts there as group kubeast:role:<slug> (lowercase; any character
-    # other than a-z 0-9 . _ - becomes "-"). The impersonator ClusterRole allows
+    # cluster acts there as group kubeast:role:<slug> (A-Z lowercased, any other
+    # ASCII character but a-z 0-9 . _ - becomes "-", any other character "~" and
+    # its code point: 운영팀 -> ~c6b4~c601~d300). The impersonator ClusterRole allows
     # only the four fixed groups, so such a role gets 403 on every cluster call
     # until its group is allowed and bound. Each entry here renders both for
     # the installed cluster: the group joins an extra impersonator ClusterRole
@@ -329,7 +333,7 @@ ai:
   # claude-code (providers.claudeCode below); rendered as CLAUDE_CODE_OAUTH_TOKEN.
   claudeCodeOAuthToken: ""
   apiKeysSecret: ""
-  model: "gpt-4o-mini"
+  model: "gpt-4o-mini-2024-07-18"
   baseUrl: ""
   # A model config's base_url must be a public http(s) endpoint; hosts that
   # resolve to private addresses (an in-cluster Ollama, an internal LLM
@@ -345,6 +349,21 @@ ai:
   # AI tools that change a cluster (delete/scale/apply/...) are never run from
   # the model's call directly: the user approves each one in the chat first.
   writeApproval: true
+  # A read the model makes again with the same tool and arguments within one
+  # chat answer or one alert investigation, less than 60 seconds after the
+  # first answered, is not run again: the model is told at which step it
+  # already has the result and to change the arguments to read anything new.
+  # Its ai.tool.call row has status repeated and repeat_of (that step). An
+  # investigation with call numbers names the call instead ([call N]) and the
+  # row adds repeat_of_call.
+  refuseRepeatedReads: false
+  # The metrics, log, trace and timeline tools say why an empty answer may be
+  # empty where they did not, "M of N" for a cut answer (or that the total is
+  # not known), and the window read when the call named none; a read tool's
+  # result in the chat and in an alert investigation starts with the console
+  # paths of the objects it names (a drawer's ?detail=, an alert, a namespace's
+  # Resource Graph). Nothing more is read for them.
+  toolResultDetails: false
   # What leaves for the model is masked first: credentials by key name
   # (password, token, api_key, dsn, ...) and by shape (AWS keys, private keys,
   # JWTs, credentials in URLs, Authorization values, API keys with a known
@@ -355,10 +374,20 @@ ai:
   # number masking; disable lists rule names to skip (key_name, private_key,
   # url_credentials, authorization, jwt, aws_key, provider_key, email, phone,
   # rrn, card). Error messages shown on screen or written to the audit log are
-  # masked with every credential rule, whatever these settings.
+  # masked with every credential rule, whatever these settings. numbered (with
+  # pii, off by default) reads each value as its kind and a number (<EMAIL_1>,
+  # <PHONE_1>, <RRN_1>, <CARD_1>) that stays the same within one chat answer or
+  # alert investigation; a later answer numbers past what the conversation
+  # shows, so the same value then gets a new number; a chat answer shows the
+  # person who asked the values in their place, kept in that page's memory and
+  # never saved; a write holding <PHONE_n>, <RRN_n> or <CARD_n> is refused like
+  # one holding <EMAIL_n>. Off: one address keeps one <EMAIL_n> within a text,
+  # the other kinds read <REDACTED:phone>, <REDACTED:rrn>, <REDACTED:card>, and
+  # no value is shown in a placeholder's place.
   redaction:
     enabled: true
     pii: false
+    numbered: false
     disable: []
   # Chat history sent to the model: the last historyMessages user/assistant
   # messages verbatim; with summary.enabled, everything before them is folded
@@ -377,10 +406,43 @@ ai:
     budget:
       sessionTokens: 0
       userDailyTokens: 0
+  # Rule cards: for a kind of failure (crash, oom, image, config_change,
+  # rollout, network_policy, dns, resource_limit, quota, node, dependency_down,
+  # dependency_slow, storage), the checks that often find its cause, in order,
+  # with the tools that answer them. The server picks at most two — from an
+  # alert's name and labels for an investigation, from the failure a question
+  # names for the chat — and gives them beside the first message, with only the
+  # tools that model is offered. The defaults are in ai-service
+  # (app/services/rule_cards.json). cards adds cards of the same shape (a kind
+  # already there is replaced); remove leaves default kinds out:
+  #   cards:
+  #     - kind: payments-db
+  #       title: Payments database slow
+  #       alerts: [PaymentsDBLatencyHigh]
+  #       terms: [pq canceling statement]
+  #       checks:
+  #         - check: The database's slow queries over the window
+  #           tools: [prometheus_query]
+  #   remove: [network_policy]
+  # At most 6 checks a card, 3 tools a check, 200 characters a check.
+  ruleCards:
+    chat: false
+    investigations: false
+    cards: []
+    remove: []
   # Write model responses, tool arguments and tool results to the ai-service
   # log (redacted, length-capped). Debugging only — off keeps them out of the
   # cluster log pipeline.
   debugDump: false
+  # The AI tool timeline's changes view (view: changes — what changed in a
+  # window: rollouts compared with the revision before, ConfigMap and Secret
+  # writes as metadata, Helm revisions, HPA scales, node conditions, Argo CD
+  # syncs, restarts; no value read) and the chat's instruction to read it first
+  # when asked why something broke. Off: the chat, alert investigations and the
+  # MCP server are offered timeline without it and the chat's instructions do
+  # not name it; k8s-service still serves the route.
+  timelineChanges: false
+  toolResultsJSON: false  # true: the model reads each tool result as one JSON object naming its tool, cluster text as JSON strings (docs/ai-alerts.md "Planted instructions")
   # Provider claude-code: the chat with a Claude Pro/Max subscription instead of
   # an API key. Claude Code makes each model call and the chat's own tools answer
   # its tool calls (same tools, approval card for writes, masking and audit).
@@ -390,14 +452,25 @@ ai:
   # 250 MB more; "" for a self-built image with --build-arg WITH_CLAUDE_CODE=true).
   # Also needs the token in claudeCodeOAuthToken (or CLAUDE_CODE_OAUTH_TOKEN in
   # apiKeysSecret) and a model config with that provider naming
-  # CLAUDE_CODE_OAUTH_TOKEN. Each running turn holds one Claude Code process;
-  # maxConcurrent caps the chat's (raise resources.aiService.limits.memory with
-  # it) and an alert investigation runs in one more slot of its own.
+  # CLAUDE_CODE_OAUTH_TOKEN. Each running turn holds one Claude Code process
+  # (up to about 300 MB): maxConcurrent caps the chat's on each ai-service server,
+  # and maxConcurrentTotal caps them across every replica through the database
+  # (0 = maxConcurrent), so the subscription's use stays within one limit however
+  # many servers run; a slot a stopped server held is free again after 60 s. A
+  # turn waits up to queueWaitSeconds for both (the chats say it is waiting),
+  # then ends as busy. An alert investigation runs in one more slot of its own on
+  # each server, outside maxConcurrentTotal. While the provider is on, ai-service's
+  # memory limit is the larger of resources.aiService.limits.memory and
+  # memoryLimit: 2Gi holds the service and maxConcurrent 2 + the investigator
+  # (about 300 MB each); raise it with maxConcurrent. "" leaves the limit as set.
   providers:
     claudeCode:
       enabled: false
       imageTagSuffix: "-claude-code"
-      maxConcurrent: 1
+      maxConcurrent: 2
+      maxConcurrentTotal: 0
+      memoryLimit: 2Gi
+      queueWaitSeconds: 60
       turnTimeoutSeconds: 300
       maxTurns: 10
 
@@ -542,6 +615,32 @@ postgresql:
   sslRootCert:
     secretName: ""
     key: ca.crt
+  # Time limits each service sets on its own database connections (PostgreSQL statement_timeout, lock_timeout,
+  # idle_in_transaction_session_timeout; PostgreSQL's default for each is no limit), in milliseconds, with SET
+  # statements once a connection is made (not startup parameters, which PgBouncer refuses by default). 0 sets
+  # nothing and leaves the database's setting. Behind RDS Proxy a SET pins the client connection to one database
+  # connection: set 0 there and put the limits in the proxy's initialization query or on the database role. The
+  # schema migrations always run without the statement and lock limits, also when the role sets them. Through
+  # PgBouncer use session pooling only: transaction pooling hands a server connection to other clients between
+  # transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's) does not stay with
+  # the client that made it.
+  sessionLimits:
+    statementTimeoutMs: 30000
+    lockTimeoutMs: 15000
+    idleInTransactionTimeoutMs: 300000
+  # Connections each pod of a service opens to the database at most (its pool). k8s-service's is a fixed 10 rather
+  # than pgx's count of the node's CPUs. templates/checks/db-connections.yaml holds their sum under maxConnections.
+  pool:
+    authService: { maxConns: 20 }
+    sessionService: { maxConns: 20 }
+    k8sService: { maxConns: 10 }
+    aiService: { maxConns: 15 }
+    modelConfigController: { maxConns: 4 }
+  # max_connections of the chart's PostgreSQL (postgresql.enabled; PostgreSQL's own default is 100). 300 holds the
+  # default pools with 3 pods of each service: one more pod each while a rollout surges, so 4 × (20 + 20 + 10 + 15)
+  # = 260, the controller's 2 × 4 = 8, the migration pool's 4 and 10 kept for psql and PostgreSQL's 3 superuser
+  # slots: 282.
+  maxConnections: 300
 
 # --- Pod security (Pod Security Standards "restricted") ---
 # Every workload runs as a fixed non-root uid matching its image USER
@@ -561,9 +660,12 @@ podSecurity:
   readOnlyRootFilesystem: true
 
 # --- Availability ---
-# k8sService and toolServer must stay at 1: node drain progress and per-cluster
-# client/kubeconfig caches live in process memory, so a second replica would
-# answer with stale or missing state. The chart refuses to render otherwise.
+# Pods per service (docs/high-availability.md). k8sService and toolServer above 1
+# need redis.enabled: k8s-service's pods share their list, YAML and Helm caches
+# through it, and both hear of a cluster's change there; the chart refuses to
+# render otherwise. The ModelConfig controller runs one pod (one works at a time,
+# by leader election), and so do the chart's postgres and redis: they have no key.
+# A service with autoscaling.<service>.enabled takes its count from its HPA instead.
 replicas:
   authService: 1
   aiService: 1
@@ -572,13 +674,55 @@ replicas:
   frontend: 1
   toolServer: 1
   gateway: 1
-# PDB is off while replicas are 1 (a minAvailable PDB would block node drains).
-pdb:
+# --- Terminals and followed logs on their own server ---
+# Off: k8s-service serves everything, as before. On: a second Deployment of the
+# same image, k8s-service-stream (SERVER_ROLE stream), takes pod exec, the node
+# shell and the followed logs, and k8s-service (SERVER_ROLE api) the rest, so a
+# rollout of either does not cut the other's connections and a crowd of
+# terminals does not slow the lists. The gateway sends those paths to the new
+# Service. When the server holding the terminals is replaced (k8s-service when
+# off, k8s-service-stream when on) it ends the followed logs at once (the
+# browser reconnects and goes on after the last line), tells each terminal when
+# it will close, and waits drainSeconds for them before closing the rest; with
+# no terminal open it does not wait. Its terminationGracePeriodSeconds is the
+# preStop wait (podShutdown.preStopSeconds; preStopSeconds on k8s-service-stream)
+# + drainSeconds + the drain's close wait 5 s + the node drains' marking 3 s, the
+# server's shutdown 12 s and the recorder's last upload 10 s + 5 s to spare (100 s
+# by default).
+# sessionRecording.storage file is refused with it (s3 or database).
+streams:
   enabled: false
-  minAvailable: 1
+  replicas: 1        # must stay 1 for now (more than one stream server is not supported yet)
+  drainSeconds: 60   # how long open terminals get to end on their own
+  preStopSeconds: 10 # k8s-service-stream: out of the Service's endpoints before the drain starts
+# A PodDisruptionBudget for each Deployment above with more than one replica, or with autoscaling on and minReplicas 2 or
+# more, allowing maxUnavailable of its pods to be evicted at once (unhealthy ones always); none where it can be down to one
+# pod, which would block node drains. enabled: false leaves them out.
+pdb:
+  enabled: true
+  maxUnavailable: 1
+# One HorizontalPodAutoscaler (autoscaling/v2) per service, off by default. On, the
+# Deployment's replicas is left to it (turning it on in a running release sets the
+# count to 1 until the HPA's first sync: docs/high-availability.md). It scales on
+# CPU only, as a share of resources.<service>.requests.cpu, which must be set; the
+# cluster needs metrics-server. 80 is Kubernetes' own default target; set yours
+# from a load test. maxReplicas above 1 for k8sService and toolServer needs
+# redis.enabled. behavior goes into the HPA as written ({} = Kubernetes' defaults,
+# which scale down after 300 s of lower use).
+autoscaling:
+  authService: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
+  aiService: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
+  k8sService: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
+  sessionService: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
+  frontend: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
+  toolServer: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
+  gateway: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
 # zone + hostname spread, soft (ScheduleAnyway)
 topologySpread:
   enabled: true
+# Seconds a pod behind a Service keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, its deregistration delay plus a few seconds.
+podShutdown:
+  preStopSeconds: 5
 
 # --- Resources (requests always; memory limits so a leak is contained) ---
 resources:
@@ -590,6 +734,10 @@ resources:
     limits: { memory: 1Gi }
   # 1Gi when many people use a large cluster at once: docs/architecture.md "Many different people on a large cluster".
   k8sService:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  # streams.enabled only; not measured yet, k8sService's for a start
+  k8sServiceStream:
     requests: { cpu: 100m, memory: 128Mi }
     limits: { memory: 512Mi }
   sessionService:
@@ -612,6 +760,8 @@ resources:
   postgres:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 1Gi }
+  # The chart's Redis evicts keys with a TTL (the cache) at 80% of this limit (maxmemory, volatile-lru); keys without one
+  # stay. Without a limit it caps at 80% of 128Mi.
   redis:
     requests: { cpu: 20m, memory: 32Mi }
     limits: { memory: 128Mi }
@@ -619,9 +769,32 @@ resources:
 # --- Redis ---
 redis:
   enabled: true
-  # requirepass. Empty = generated at install and kept across upgrades
-  # (REDIS_PASSWORD in kubeast-secrets); k8s-service's cache signs in with it.
+  # requirepass, used while the Redis users below are off. Empty = generated at
+  # install and kept across upgrades (REDIS_PASSWORD in kubeast-secrets).
   password: ""
+  # One Redis user per service (docs/configuration.md "Redis users"): k8s-service
+  # reaches only kubeast:* keys and channels with the commands its cache uses,
+  # tool-server only listens to the cluster change notices, the probes may only
+  # PING, and the default user is off. The passwords are generated at install and
+  # kept across upgrades in the Secret kubeast-redis-users
+  # (REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD, REDIS_TOOL_SERVER_PASSWORD).
+  # false = one password (requirepass) as before.
+  acl:
+    enabled: true
+    # With secrets.existingSecret the users stay off, and Redis keeps the one
+    # password, until this is true (or existingSecret below is set): put
+    # REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD and, with the AI on,
+    # REDIS_TOOL_SERVER_PASSWORD in that Secret first. An upgrade that can read
+    # the Secret stops when one is missing. Not read without
+    # secrets.existingSecret or with existingSecret below.
+    existingSecretHasKeys: false
+    # A Secret holding only the Redis users' keys (the three above), read key by
+    # key: each service then holds its own password only, where
+    # secrets.existingSecret, which every service takes whole as environment,
+    # gives each all of them. Set, the users are on, the chart makes no
+    # kubeast-redis-users, and an upgrade that can read it stops when a key is
+    # missing.
+    existingSecret: ""
 
 # --- Gateway ---
 gateway:
@@ -693,6 +866,9 @@ networkPolicy:
   # egress. Ports 443 and 6443 are already open to every address, private and
   # public; set this only for an API server on another port.
   apiserverCIDR: ""
+  aiEgress:
+    allowListOnly: false  # true: ai-service connects out only to allowExternalEgressCIDRs, tool-server only to clusterAPIs and apiserverCIDR (docs/cluster-requirements.md §15)
+    clusterAPIs: []       # API servers of the registered clusters, for tool-server: a CIDR opens 443 and 6443, {cidr: 203.0.113.10/32, port: 8443} another port
 
 # --- Feature flags ---
 # Optional integrations the operator can opt in/out of without changing
@@ -792,7 +968,8 @@ features:
   # it is not held to maxPerHour and has its own daily budget, none by
   # default. One investigation took about 60,000 tokens when measured (657
   # runs on a dev install, Claude Haiku 5.5 averaged 66,424), so 200000 is
-  # about three a day.
+  # about three a day — fewer with evidenceCheck or ledger on, whose
+  # instruction goes with every model call and which may ask once more.
   alertInvestigation:
     enabled: false
     # true refuses the shared token: every receiver must send its cluster's own.
@@ -805,11 +982,43 @@ features:
     dailyTokenBudget: 200000  # the webhook's investigations, per UTC day; 0 = no budget
     manualDailyTokenBudget: 0  # "Investigate now" investigations, per UTC day; 0 = no budget (the permission decides who)
     providerPauseMinutes: 30  # after the model provider refuses for credit or the key, new alerts are skipped this long; 0 = no pause
-    maxSteps: 8               # model calls per investigation; the last one gets no tools
+    maxSteps: 8               # model calls per investigation (+1 when evidenceCheck or ledger asks again); the last one gets no tools
     timeoutSeconds: 300
+    # The time windows below, the scope groups (affected, checked and normal,
+    # changed for another reason, not looked at), facts kept apart from
+    # hypotheses and the report's six headings, in the prompt.
+    rules: false
+    # Step 0: before the first model call, the timeline tool's changes view
+    # over the change window goes into the first message (an audited tool call,
+    # no model step). Writes the windows too.
+    changesFirst: false
+    # Step 0, after the changes: anomaly_rank (features.anomalyRank) over the
+    # metrics window of the alert's namespace goes into the first message (an
+    # audited tool call, no model step; its store queries and seconds are
+    # features.anomalyRank's). Writes the windows too.
+    narrowFirst: false
+    # The report ends with a block the server takes out and keeps: the causes,
+    # the path from cause to symptom, what was ruled out and the hypotheses
+    # weighed, each closed as cause, symptom, ruled out or blocked with the
+    # calls for and against it (asked once more without tools while one is
+    # open). The report window shows them under the report. One block with
+    # evidenceCheck: both on, the model is asked again at most once.
+    ledger: false
+    window:                   # counted from the alert's start; ends are never past now
+      metricsMinutes: 15      # metrics this long either side of the start (1–360)
+      logsMinutes: 5          # logs from this long before the start (0–1440)
+      changesHours: 4         # changes from this long before the start (1–168)
     model: ""                 # ModelConfig name; empty = the default model
     language: en              # report language (en, ko, …)
     consoleUrl: ""            # e.g. https://kubeast.example.com — links in the audit summary; empty = no link
+    # The report ends with a block of its causes, each with the numbers of the
+    # tool calls that show it; before the report is kept, the server checks
+    # that those calls answered, hold the cause's name and that it does not
+    # start after the alert. Otherwise one more model call without tools asks
+    # for the report again, and what still fails is listed under the report as
+    # not verified. The block is taken out of the kept report and kept as the
+    # report's result. One block with ledger: both on, one second ask.
+    evidenceCheck: false
     inbox:
       staleAfterHours: 8      # a firing alert with no notification for this long shows "status unknown"; twice your repeat_interval
     # More read-only rules for the investigator, appended to the
@@ -824,6 +1033,30 @@ features:
     #   resources: [policyreports, clusterpolicyreports]
     #   verbs: [get, list, watch]
     extraRules: []
+  # Narrowing for the AI (the tool anomaly_rank, GET
+  # /namespaces/{namespace}/anomalies, read as the caller like a list): what
+  # differs in one namespace between a window and the window of the same length
+  # before it — failing objects, terminations by reason, restarts, CPU
+  # throttling, memory against the limit, error log shapes and counts, the
+  # services' requests, failed requests and p90 from their server spans, node
+  # pressure — ranked, at most ten. The metric checks read the cluster's
+  # Prometheus (kube-state-metrics and cAdvisor names), the log checks the log
+  # store (features.logSearch) and the trace checks the trace store
+  # (features.traceStore), each through the door of its own tools
+  # (resource.pod.read, get pods/log, audited as k8s.pod.logs.logql and
+  # k8s.traces.query); without one, its checks are listed as not run. Off: the
+  # route answers 404, reads nothing, the AI is not offered the tool and the
+  # chat's system prompt and the MCP tool list do not name it.
+  anomalyRank:
+    enabled: false
+    maxQueries: 12           # store queries one answer may make
+    checkTimeoutSeconds: 5   # each check
+    timeoutSeconds: 20       # the whole answer
+    concurrency: 4           # checks at once
+    cacheSeconds: 60         # the same caller, namespace and window answered from memory
+    # The log checks ask the log store's index first (Loki's index stats) and
+    # do not read past this many bytes over both windows (10 GiB).
+    logMaxBytes: 10737418240
   # Cluster hygiene report (Cluster → Cluster Hygiene, permissions
   # resource.hygiene.scan on the cluster, admin.hygiene.read/export/signoff
   # globally): Pod Security Standards, image tags,
@@ -910,6 +1143,10 @@ features:
     # k8s.pod.logs.logql. Off unless asked. (The AI's loki_* tools do not
     # depend on this switch.)
     logql: false
+    # The AI's loki_query asks the store's index first (Loki's index stats,
+    # mcp-grafana's lokiguard way) and is refused, with how to narrow it, past
+    # this many bytes. 0 = not asked: the query runs as it always did.
+    queryMaxBytes: 0
     # With networkPolicy on, k8s-service reaches outside the cluster on 443
     # and 6443 only; a store on another port needs {cidr, port} here. A store
     # behind a Service of this cluster: on EKS VPC CNI its ClusterIP (§15).
@@ -1034,6 +1271,21 @@ features:
     timeout: 15s
     perUserPerMinute: 20
     egress: []
+  # Who calls whom for the AI (off by default): resource_graph with include
+  # calls adds the calls between a namespace's workloads over a range (1m-24h)
+  # from the traces' service graph metrics (traces_service_graph_request_total,
+  # _failed_total, _server_seconds — Tempo's metrics-generator or the
+  # servicegraph connector of the OpenTelemetry Collector or Alloy, written to
+  # the cluster's Prometheus) and the Hubble metrics the Resource Graph's lines
+  # read, with the failing workloads that call nothing failing first and the
+  # paths from them to their failing callers; alert investigations are told to
+  # read it when several workloads fail and to write the cause → … → symptom
+  # path with the step of each link. Read as the user: the traces need a grant
+  # on the whole cluster (as the Prometheus reads), the Hubble lines
+  # resource.networkflow.read. Off: include calls reads nothing and says so,
+  # and the AI (the chat, investigations and the MCP tool list) is not offered it.
+  callGraph:
+    enabled: false
   # Alert store reads for the AI's alerts_list (off by default): an
   # Alertmanager's API v2 at url (http://alertmanager.monitoring:9093), a
   # Grafana data source proxy to one (https://<grafana>/api/datasources/proxy/uid/<Alertmanager UID>)

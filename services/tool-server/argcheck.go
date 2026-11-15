@@ -99,7 +99,7 @@ var argRules = map[string]argCheck{
 	"workload_name": checkObjectName,
 	"severity":      checkSeverity,
 	"what":          checkEnum("list", "get", "values", "manifest", "notes", "hooks", "history", "resources", "images", "diff", "revision"),
-	"view":          checkEnum("summary", "results"),
+	"view":          checkEnum("summary", "results", "events", "changes"),
 	"section":       checkEnum("manifest", "values", "notes", "hooks"),
 	"aggregate":     checkEnum("namespace", "controller"),
 	"window":        checkEnum("1h", "6h", "12h", "24h", "48h", "7d", "14d", "30d"),

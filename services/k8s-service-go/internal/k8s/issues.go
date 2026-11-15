@@ -40,11 +40,13 @@ const (
 
 // IssuesOptions: Window is how far back Warning events are read;
 // IncludeRestartHistory also lists healthy pods whose last restart is older
-// than a day (as info).
+// than a day (as info); Namespace reads that namespace's objects only (the
+// nodes stay whole).
 type IssuesOptions struct {
 	Window                time.Duration
 	IncludeRestartHistory bool
 	Now                   time.Time
+	Namespace             string
 }
 
 // CollectIssues gathers the issues of the ctx cluster. Pods are required; a
@@ -67,15 +69,25 @@ func (s *Service) CollectIssues(ctx context.Context, opts IssuesOptions) ([]Issu
 		}
 		return items
 	}
+	// in one namespace when the options name it, else across the namespaces the caller reads
+	each := func(all func(context.Context) ([]map[string]interface{}, error), one func(context.Context, string) ([]map[string]interface{}, error)) func(context.Context) ([]map[string]interface{}, error) {
+		if opts.Namespace == "" {
+			return all
+		}
+		return func(ctx context.Context) ([]map[string]interface{}, error) { return one(ctx, opts.Namespace) }
+	}
 	nodes := collect("nodes", s.GetNodes)
-	deployments := collect("deployments", s.GetAllDeployments)
-	statefulsets := collect("statefulsets", s.GetAllStatefulSets)
-	daemonsets := collect("daemonsets", s.GetAllDaemonSets)
-	jobs := collect("jobs", s.GetAllJobs)
-	cronjobs := collect("cronjobs", s.GetAllCronJobs)
-	hpas := collect("hpas", s.GetAllHPAs)
-	pvcs := collect("pvcs", s.GetAllPVCs)
+	deployments := collect("deployments", each(s.GetAllDeployments, s.GetDeployments))
+	statefulsets := collect("statefulsets", each(s.GetAllStatefulSets, s.GetStatefulSets))
+	daemonsets := collect("daemonsets", each(s.GetAllDaemonSets, s.GetDaemonSets))
+	jobs := collect("jobs", each(s.GetAllJobs, s.GetJobs))
+	cronjobs := collect("cronjobs", each(s.GetAllCronJobs, s.GetCronJobs))
+	hpas := collect("hpas", each(s.GetAllHPAs, s.GetHPAs))
+	pvcs := collect("pvcs", each(s.GetAllPVCs, s.GetPVCs))
 	events := collect("events", func(ctx context.Context) ([]map[string]interface{}, error) {
+		if opts.Namespace != "" {
+			return s.warningEventRowsIn(ctx, opts.Namespace, opts.Now.Add(-opts.Window))
+		}
 		return s.warningEventRows(ctx, opts.Now.Add(-opts.Window))
 	})
 
@@ -102,6 +114,9 @@ func (s *Service) podIssues(ctx context.Context, opts IssuesOptions) ([]Issue, e
 			return nil, err
 		}
 		return out, nil
+	}
+	if opts.Namespace != "" {
+		return list(opts.Namespace)
 	}
 	if scope := scopeFromCtx(ctx); len(scope) > 0 {
 		return fanOutNamespaces(scope, list)

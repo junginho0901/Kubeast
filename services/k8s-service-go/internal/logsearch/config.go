@@ -10,6 +10,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -69,6 +70,10 @@ type Config struct {
 	MaxLines         int
 	Timeout          time.Duration
 	PerUserPerMinute int
+	// QueryMaxBytes, when above 0, asks the store's index how much a LogQL
+	// query run for the AI (/logsearch/logql) would read and refuses it past
+	// this many bytes (chart features.logSearch.queryMaxBytes; 0 = not asked).
+	QueryMaxBytes int64
 }
 
 // LoadConfig reads the LOG_SEARCH_* environment.
@@ -93,7 +98,21 @@ func LoadConfig() Config {
 		MaxLines:         pkgconfig.GetEnvInt("LOG_SEARCH_MAX_LINES", 1000),
 		Timeout:          envDuration("LOG_SEARCH_TIMEOUT", 15*time.Second),
 		PerUserPerMinute: pkgconfig.GetEnvInt("LOG_SEARCH_PER_USER_PER_MINUTE", 20),
+		QueryMaxBytes:    envInt64("LOG_SEARCH_QUERY_MAX_BYTES"),
 	}
+}
+
+// envInt64 reads a whole number of bytes (unset or empty = 0, unreadable = -1, rejected by Validate).
+func envInt64(key string) int64 {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return 0
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return -1
+	}
+	return n
 }
 
 // envOr is like GetEnv but keeps an explicitly empty value (LOG_SEARCH_LABEL_CLUSTER="" = one cluster per store).
@@ -184,6 +203,9 @@ func (c Config) Validate() error {
 	}
 	if c.PerUserPerMinute < 1 {
 		return fmt.Errorf("LOG_SEARCH_PER_USER_PER_MINUTE must be at least 1")
+	}
+	if c.QueryMaxBytes < 0 {
+		return fmt.Errorf("LOG_SEARCH_QUERY_MAX_BYTES must be a whole number of bytes, 0 for none")
 	}
 	return nil
 }

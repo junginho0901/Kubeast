@@ -14,6 +14,7 @@ import { useDrawerFollowsObject } from '../useDrawerFollowsObject'
 import { nodeEventNamesNode } from '../useDrawerFollowsEvents'
 import { nodeAllocatedView, readyChangedAt } from './nodeAllocated'
 import { changesAllocated } from './nodePodsChange'
+import { drainView, type DrainState } from './drainState'
 
 // Byte-valued node resources shown in binary units ("977896124416" → "910.7Gi").
 export function formatCapacity(key: string, value: string | undefined): string {
@@ -22,8 +23,6 @@ export function formatCapacity(key: string, value: string | undefined): string {
   const bytes = parseQuantityToBytes(value)
   return bytes == null ? value : formatBytes(bytes)
 }
-
-type DrainStatus = 'idle' | 'pending' | 'draining' | 'success' | 'error'
 
 const PAGE_SIZE = 10
 const NOT_RUNNING_TOLD = 20
@@ -35,8 +34,11 @@ export function useNodeData(name: string) {
   const [podPage, setPodPage] = useState(1)
   const [drainDialogOpen, setDrainDialogOpen] = useState(false)
   const [drainId, setDrainId] = useState<string | null>(null)
-  const [drainStatus, setDrainStatus] = useState<DrainStatus>('idle')
+  const [drainStatus, setDrainStatus] = useState<DrainState>('idle')
   const [drainError, setDrainError] = useState<string | null>(null)
+  // the drain's nodes still cordoned once it failed or was interrupted (null: not read)
+  const [drainCordoned, setDrainCordoned] = useState<string[] | null>(null)
+  const [drainPods, setDrainPods] = useState<{ done: number; total: number } | null>(null)
   const [showNodeShell, setShowNodeShell] = useState(false)
   const [metricsAvailable] = useState(true)
 
@@ -226,20 +228,24 @@ export function useNodeData(name: string) {
     onSuccess: (data) => { setDrainId(data.drain_id); setDrainStatus('draining'); setDrainError(null) },
     onError: (err: any) => { setDrainStatus('error'); setDrainError(err?.response?.data?.detail || err?.message || 'Failed') },
   })
+  // "Start again" of an interrupted drain: a new drain of the same node through the same route
+  const startDrain = () => {
+    setDrainStatus('pending'); setDrainError(null); setDrainCordoned(null); setDrainPods(null)
+    drainMut.mutate(name)
+  }
 
   useEffect(() => {
     if (!drainStatusData) return
-    const s = drainStatusData.status
-    if (s === 'success') {
-      setDrainStatus('success'); setDrainId(null)
-      qc.invalidateQueries({ queryKey: ['cluster', 'nodes'] })
-      qc.invalidateQueries({ queryKey: ['cluster', 'nodes', 'describe', name] })
-      qc.invalidateQueries({ queryKey: ['cluster', 'nodes', 'pods', name] })
-    } else if (s === 'error') {
-      setDrainStatus('error'); setDrainError(drainStatusData.message || 'Failed'); setDrainId(null)
-    } else {
-      setDrainStatus(s as DrainStatus)
-    }
+    const view = drainView(drainStatusData)
+    setDrainStatus(view.state)
+    setDrainPods(view.pods)
+    if (!view.ended) return
+    setDrainError(view.error)
+    setDrainCordoned(view.cordoned)
+    setDrainId(null)
+    qc.invalidateQueries({ queryKey: ['cluster', 'nodes'] })
+    qc.invalidateQueries({ queryKey: ['cluster', 'nodes', 'describe', name] })
+    if (view.state === 'success') qc.invalidateQueries({ queryKey: ['cluster', 'nodes', 'pods', name] })
   }, [drainStatusData, qc, name])
 
   useEffect(() => { setPodPage(1) }, [podFilter, name])
@@ -319,6 +325,9 @@ export function useNodeData(name: string) {
     setDrainStatus,
     drainError,
     setDrainError,
+    drainCordoned,
+    drainPods,
+    startDrain,
     drainId,
     cordonMut,
     uncordonMut,

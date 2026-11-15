@@ -22,7 +22,7 @@ MATRIX_WRITE = {"self": ("ai.tool.*", "ai.mcp.use", "resource.*.read", "resource
 TOKENS = {
     "tok-write": TokenPayload(user_id="u-write", role="member", email="w@example.com", matrix=MATRIX_WRITE),
     "tok-read": TokenPayload(user_id="u-read", role="member", email="r@example.com", matrix={"self": ("resource.*.read",)}),
-    "tok-pending": TokenPayload(user_id="u-p", role="pending", email="p@example.com", matrix={}),
+    "tok-pending": TokenPayload(user_id="u-p", role="Pending", email="p@example.com", matrix={}),
     "tok-admin": TokenPayload(user_id="u-admin", role="admin", email="a@example.com", permissions=("*",), matrix={"*": ("*",)}),
     "tok-key": TokenPayload(user_id="u-write", role="member", email="w@example.com", matrix=MATRIX_WRITE, api_key_id="k-1"),
     # ai.mcp.use with read tools only (a custom role): may read, may not write.
@@ -256,7 +256,7 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
     features = {"prometheus": {"enabled": True}, "logSearch": {"enabled": True, "clusters": ["self"]}, "cost": {"enabled": True}, "policyReports": {"enabled": True},
                 "traceStore": {"enabled": True, "clusters": ["self"]}, "alertStore": {"enabled": True, "clusters": ["self"]},
                 "networkFlows": {"enabled": True, "clusters": ["self"]}, "networkFlowMonitor": {"enabled": True, "clusters": ["self"]},
-                "logFiles": {"enabled": True}, "alertInvestigation": {"enabled": True}}
+                "logFiles": {"enabled": True}, "alertInvestigation": {"enabled": True}, "anomalyRank": {"enabled": True}}
 
     async def fetch_features(k8s_client, cluster):
         feature_calls.append((k8s_client.client.headers.get("Authorization"), k8s_client.client.params.get("cluster"), cluster))
@@ -288,13 +288,13 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
     prometheus = {"prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets", "network_drops"}
     assert set(tools) == set(mcp_server.READ_TOOLS) - prometheus - {"logsearch", "loki_query", "loki_labels", "loki_patterns", "cost", "policy_reports",
                                                          "traces_search", "traces_get", "traces_tags", "traces_metrics", "traces_compare",
-                                                         "alerts_list", "network_flows", "network_top_flows", "logfiles", "alerts_inbox"} - admin_only
+                                                         "alerts_list", "network_flows", "network_top_flows", "logfiles", "alerts_inbox", "anomaly_rank"} - admin_only
 
     # The admin (global *) is offered the hygiene report too.
     features = {"prometheus": {"enabled": True}, "logSearch": {"enabled": True, "clusters": ["self"]}, "cost": {"enabled": True}, "policyReports": {"enabled": True},
                 "traceStore": {"enabled": True, "clusters": ["self"]}, "alertStore": {"enabled": True, "clusters": ["self"]},
                 "networkFlows": {"enabled": True, "clusters": ["self"]}, "networkFlowMonitor": {"enabled": True, "clusters": ["self"]},
-                "logFiles": {"enabled": True}, "alertInvestigation": {"enabled": True}}
+                "logFiles": {"enabled": True}, "alertInvestigation": {"enabled": True}, "anomalyRank": {"enabled": True}}
 
     async def get_admin(url, **kwargs):
         assert kwargs["headers"]["Authorization"] == "Bearer tok-admin"

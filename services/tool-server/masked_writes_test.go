@@ -21,6 +21,9 @@ type maskedWriteCase struct {
 	Tool    string                 `json:"tool"`
 	Args    map[string]interface{} `json:"args"`
 	Refused []string               `json:"refused"`
+	// Numbered: the case runs with REDACTION_NUMBERED on; with it off the same write goes on (its placeholders are
+	// numbered kinds only).
+	Numbered bool `json:"numbered"`
 }
 
 func maskedWriteCases(t *testing.T) []maskedWriteCase {
@@ -54,8 +57,10 @@ func maskedWriteRig(t *testing.T, perms ...string) *[]maskedWriteCall {
 		_, _ = w.Write([]byte(`{"kubeconfig":"","in_cluster":true}`))
 	})
 	t.Cleanup(restore)
-	prevAuth, prevApproval, prevExec := toolAuth, writeApprovalRequired, kubectlExec
-	t.Cleanup(func() { toolAuth, writeApprovalRequired, kubectlExec = prevAuth, prevApproval, prevExec })
+	prevAuth, prevApproval, prevExec, prevOpts := toolAuth, writeApprovalRequired, kubectlExec, redactOpts
+	t.Cleanup(func() {
+		toolAuth, writeApprovalRequired, kubectlExec, redactOpts = prevAuth, prevApproval, prevExec, prevOpts
+	})
 	toolAuth = fakeValidator{payload: auth.TokenPayload{UserID: "u1", Perms: auth.PermissionMatrix{"prod": append([]string{"ai.tool.*", "resource.*.read", "resource.*.edit", "resource.*.create", "resource.*.delete", "resource.pod.exec"}, perms...)}}}
 	writeApprovalRequired = false
 	var calls []maskedWriteCall
@@ -102,6 +107,7 @@ func TestAWriteHoldingWhatStandsForAValueIsRefused(t *testing.T) {
 				} else {
 					calls = maskedWriteRig(t)
 				}
+				redactOpts.Numbered = c.Numbered
 				rec := callMaskedWrite(t, c.Tool, c.Args)
 				if len(*calls) != 0 {
 					t.Errorf("kubectl ran with what stands for a value: %+v", *calls)
@@ -123,14 +129,15 @@ func TestAWriteHoldingWhatStandsForAValueIsRefused(t *testing.T) {
 	}
 }
 
-// The same tools with values of their own run as before.
+// The same tools with values of their own run as before, and so do the numbered cases with REDACTION_NUMBERED off.
 func TestAWriteWithoutWhatStandsForAValueGoesOn(t *testing.T) {
 	for _, c := range maskedWriteCases(t) {
-		if len(c.Refused) != 0 {
+		if len(c.Refused) != 0 && !c.Numbered {
 			continue
 		}
 		t.Run(c.Name, func(t *testing.T) {
 			calls := maskedWriteRig(t)
+			redactOpts.Numbered = false
 			rec := callMaskedWrite(t, c.Tool, c.Args)
 			if strings.Contains(rec.Body.String(), "placeholder") {
 				t.Fatalf("refused: %s", rec.Body)

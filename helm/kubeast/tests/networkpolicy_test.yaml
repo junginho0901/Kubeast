@@ -141,7 +141,7 @@ tests:
           path: metadata.name
           value: RELEASE-NAME-k8s-service
 
-  - it: opens the database to every DATABASE_URL reader and Redis to its one client
+  - it: opens the database to every DATABASE_URL reader and Redis to its two clients
     asserts:
       - equal:
           path: spec.ingress[0].from[0].podSelector.matchExpressions[0].values
@@ -151,7 +151,7 @@ tests:
           value: RELEASE-NAME-postgres
       - equal:
           path: spec.ingress[0].from[0].podSelector.matchExpressions[0].values
-          value: [k8s-service]
+          value: [k8s-service, tool-server]
         documentSelector:
           path: metadata.name
           value: RELEASE-NAME-redis
@@ -362,3 +362,231 @@ tests:
         documentSelector:
           path: metadata.name
           value: RELEASE-NAME-auth-service
+
+  # The chart's Redis takes connections from k8s-service and tool-server pods only, on 6379; the Redis users
+  # (redis.acl) limit what each may do. A pod of another app in the namespace, of another namespace or an address is
+  # not let in.
+  - it: opens the chart's Redis to k8s-service and tool-server pods of this namespace on 6379 and to nothing else
+    documentSelector:
+      path: metadata.name
+      value: RELEASE-NAME-redis
+    asserts:
+      - equal:
+          path: spec
+          value:
+            podSelector:
+              matchLabels:
+                app: redis
+            policyTypes: [Ingress]
+            ingress:
+              - from:
+                  - podSelector:
+                      matchExpressions:
+                        - key: app
+                          operator: In
+                          values: [k8s-service, tool-server]
+                ports:
+                  - protocol: TCP
+                    port: 6379
+
+  - it: with the AI off opens the chart's Redis to k8s-service pods only
+    set:
+      ai.enabled: false
+    documentSelector:
+      path: metadata.name
+      value: RELEASE-NAME-redis
+    asserts:
+      - equal:
+          path: spec.ingress[0].from[0].podSelector.matchExpressions[0].values
+          value: [k8s-service]
+
+  - it: lets tool-server reach the chart's Redis on 6379
+    asserts:
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - podSelector:
+                  matchLabels:
+                    app: redis
+            ports:
+              - protocol: TCP
+                port: 6379
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+
+  - it: gives tool-server no egress to Redis without the chart's Redis
+    set:
+      redis.enabled: false
+    asserts:
+      - notContains:
+          path: spec.egress
+          content:
+            to:
+              - podSelector:
+                  matchLabels:
+                    app: redis
+            ports:
+              - protocol: TCP
+                port: 6379
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+
+  - it: renders no Redis policy and no k8s-service egress to Redis without the chart's Redis
+    set:
+      redis.enabled: false
+    asserts:
+      - notEqual:
+          path: metadata.name
+          value: RELEASE-NAME-redis
+      - notContains:
+          path: spec.egress
+          content:
+            to:
+              - podSelector:
+                  matchLabels:
+                    app: redis
+            ports:
+              - protocol: TCP
+                port: 6379
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-k8s-service
+
+  - it: renders no policy at all with networkPolicy.enabled=false
+    set:
+      networkPolicy.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: leaves ai-service and tool-server open to any public or API server address by default
+    asserts:
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - ipBlock:
+                  cidr: 0.0.0.0/0
+                  except:
+                    - 10.0.0.0/8
+                    - 172.16.0.0/12
+                    - 192.168.0.0/16
+            ports:
+              - protocol: TCP
+                port: 443
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-ai-service
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - ipBlock:
+                  cidr: 0.0.0.0/0
+            ports:
+              - protocol: TCP
+                port: 443
+              - protocol: TCP
+                port: 6443
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+
+  - it: with aiEgress.allowListOnly, ai-service connects out only to allowExternalEgressCIDRs and tool-server only to clusterAPIs and apiserverCIDR
+    set:
+      networkPolicy.allowExternalEgressCIDRs:
+        - 160.79.104.0/23
+      networkPolicy.apiserverCIDR: 172.18.0.2/32
+      networkPolicy.aiEgress:
+        allowListOnly: true
+        clusterAPIs:
+          - 203.0.113.0/24
+          - cidr: 198.51.100.7/32
+            port: 8443
+    asserts:
+      - equal:
+          path: spec.egress[2]
+          value:
+            to:
+              - ipBlock:
+                  cidr: 160.79.104.0/23
+            ports:
+              - protocol: TCP
+                port: 443
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-ai-service
+      - lengthEqual:
+          path: spec.egress
+          count: 3
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-ai-service
+      - equal:
+          path: spec.egress[4]
+          value:
+            to:
+              - ipBlock:
+                  cidr: 203.0.113.0/24
+            ports:
+              - protocol: TCP
+                port: 443
+              - protocol: TCP
+                port: 6443
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+      - equal:
+          path: spec.egress[5]
+          value:
+            to:
+              - ipBlock:
+                  cidr: 198.51.100.7/32
+            ports:
+              - protocol: TCP
+                port: 8443
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+      - equal:
+          path: spec.egress[6]
+          value:
+            to:
+              - ipBlock:
+                  cidr: 172.18.0.2/32
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+      - lengthEqual:
+          path: spec.egress
+          count: 7
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+
+  - it: with aiEgress.allowListOnly, stops the install when ai-service would reach no model provider
+    set:
+      networkPolicy.aiEgress:
+        allowListOnly: true
+        clusterAPIs: [203.0.113.0/24]
+    asserts:
+      - failedTemplate:
+          errorPattern: needs networkPolicy.allowExternalEgressCIDRs
+
+  - it: with aiEgress.allowListOnly, stops the install when tool-server would reach no API server
+    set:
+      networkPolicy.allowExternalEgressCIDRs: [160.79.104.0/23]
+      networkPolicy.aiEgress.allowListOnly: true
+    asserts:
+      - failedTemplate:
+          errorPattern: needs networkPolicy.aiEgress.clusterAPIs or networkPolicy.apiserverCIDR
+
+  - it: with aiEgress.allowListOnly and the AI off, asks for no list
+    set:
+      ai.enabled: false
+      networkPolicy.aiEgress.allowListOnly: true
+    asserts:
+      - notFailedTemplate: {}

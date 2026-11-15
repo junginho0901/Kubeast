@@ -14,8 +14,11 @@ process uses (``remember_secret``), whatever their shape.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
 import re
+import secrets
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
@@ -25,6 +28,10 @@ class Options:
     enabled: bool = True
     pii: bool = False
     disabled: set = field(default_factory=set)
+    # With pii, every personal-data kind is numbered (<PHONE_1>) and a run's table numbers a value alike across its texts
+    # (REDACTION_NUMBERED, chart ai.redaction.numbered, default false). Off: one address keeps one <EMAIL_n> within a
+    # text, the other kinds are <REDACTED:kind>, and no table is used.
+    numbered: bool = False
 
     def on(self, rule: str) -> bool:
         return self.enabled and rule not in self.disabled
@@ -48,13 +55,202 @@ class Stats:
         return {"count": self.count, "kinds": dict(self.kinds)} if self.count else None
 
 
+# The personal-data rules whose placeholder carries a number (<EMAIL_1>, <PHONE_2>, <RRN_1>, <CARD_1>): the same value gets
+# the same number, so the model can tell that two lines name one person without reading who. Go: numberedKinds.
+NUMBERED_KINDS = {"email": "EMAIL", "phone": "PHONE", "rrn": "RRN", "card": "CARD"}
+_MASK_KEY_CHARS = 16  # 64 bits of the HMAC, enough to tell apart the values of one answer
+
+
+def mask_key(key: str, kind: str, value: str) -> str:
+    """What a number table holds for a value: the HMAC-SHA256 of its normal form under ``key``, in hex, cut to 16
+    characters. An address in another case and a number with other separators are the same value. Go: MaskKey."""
+    if kind == "email":
+        normal = value.lower()
+    else:
+        normal = "".join(c for c in value if "0" <= c <= "9")
+    return hmac.new(key.encode(), normal.encode(), hashlib.sha256).hexdigest()[:_MASK_KEY_CHARS]
+
+
+_MAX_HELD_NUMBER = 999999  # a number past this in a text is not counted, so ``after`` stays a small number for Go too
+_HELD_PLACEHOLDER = re.compile(r"(?:<|\\u003[cC])(EMAIL|PHONE|RRN|CARD)_([0-9]{1,6})(?:>|\\u003[eE])")
+
+
+def highest_numbers(texts: Any) -> Dict[str, int]:
+    """Per kind, the highest numbered placeholder the texts already hold (also as JSON writes < and > for HTML); what is
+    not a string is passed over. Go: startAfterHeld."""
+    kinds = {name: kind for kind, name in NUMBERED_KINDS.items()}
+    found: Dict[str, int] = {}
+    for text in texts:
+        if not isinstance(text, str) or ("<" not in text and "u003" not in text):
+            continue
+        for name, digits in _HELD_PLACEHOLDER.findall(text):
+            num = int(digits)
+            if num <= _MAX_HELD_NUMBER and num > found.get(kinds[name], 0):
+                found[kinds[name]] = num
+    return found
+
+
+class Numbers:
+    """The personal-data numbers of one chat answer or one alert investigation, in memory for that run only.
+
+    The table is kind → mask_key of a value → number, and holds no value. ai-service sends it with each tool-server call
+    (``wire``) and keeps the table that comes back (``take_answer``), so tool-server numbers a value it masks as this run
+    numbered it before; ``redact_text(..., numbers=)`` numbers with it here. The key is made for this table only.
+
+    A new number is past every number of its kind in the table, in ``after`` and in the texts given so far: ``after``
+    starts past what the conversation already shows the model (``start_after``), so a value is never given a number an
+    earlier answer gave another one. The same value in a later answer gets a new number.
+
+    The chat stream turns on ``keep_values`` for the person who asked: tool-server then gives back each placeholder's
+    value with the answer (``reveal``), the page masked here adds its own, and ``revealed`` is what the screen shows in
+    their place. ``held`` are the placeholders a text already held (an earlier report a tool read), which stand for no
+    value of this run and are never given one. Investigations and MCP leave it off. Go: Numbers.Reveal."""
+
+    def __init__(self, key: Optional[str] = None) -> None:
+        self.key = secrets.token_hex(16) if key is None else key
+        self.table: Dict[str, Dict[str, int]] = {}
+        self.after: Dict[str, int] = {}
+        self._next: Dict[str, int] = {}  # per kind, one past the highest number, worked out when first needed
+        self.values: Optional[Dict[str, str]] = None  # placeholder → value, only once keep_values is on
+        self.held: set = set()
+
+    def keep_values(self) -> None:
+        """Keep each placeholder's value for this run's answer to the person who asked (the chat stream only)."""
+        if self.values is None:
+            self.values = {}
+
+    def hold(self, text: str) -> None:
+        """Count the numbered placeholders ``text`` already holds: the next new number goes past them and, while values
+        are kept, none of them is given a value."""
+        self.start_after(highest_numbers([text]))
+        if self.values is not None and isinstance(text, str):
+            for p in held_placeholders(text):
+                self.held.add(p)
+                self.values.pop(p, None)
+
+    def keep(self, values: Any, held: Any = None) -> None:
+        """Add what tool-server gave back for one answer: placeholder → value, the first one kept, and the placeholders
+        its text held. Anything not shaped so is ignored; nothing is kept while values are off."""
+        if self.values is None:
+            return
+        if isinstance(held, list):
+            self.held.update(p for p in held if isinstance(p, str) and _NUMBERED_PLACEHOLDER.fullmatch(p))
+        if isinstance(values, dict):
+            for p, v in values.items():
+                if isinstance(p, str) and isinstance(v, str) and _NUMBERED_PLACEHOLDER.fullmatch(p):
+                    self.values.setdefault(p, v)
+        for p in self.held:
+            self.values.pop(p, None)
+
+    def revealed(self, text: str) -> Dict[str, str]:
+        """The values of the placeholders ``text`` shows, for the person who asked; none for a held one."""
+        if not self.values or not isinstance(text, str):
+            return {}
+        return {p: v for p, v in self.values.items() if p not in self.held and p in text}
+
+    def start_after(self, found: Dict[str, int]) -> None:
+        """Make each kind's next new number past the number ``found`` gives it (highest_numbers)."""
+        for kind, num in found.items():
+            if num > self.after.get(kind, 0):
+                self.after[kind] = num
+                if self._next.get(kind, num + 1) <= num:
+                    self._next[kind] = num + 1
+
+    def number(self, kind: str, value: str) -> int:
+        by_key = self.table.setdefault(kind, {})
+        k = mask_key(self.key, kind, value)
+        got = by_key.get(k)
+        if isinstance(got, int) and got > 0:
+            return got
+        if kind not in self._next:
+            self._next[kind] = max([v for v in by_key.values() if isinstance(v, int)] + [self.after.get(kind, 0)]) + 1
+        by_key[k] = self._next[kind]
+        self._next[kind] += 1
+        return by_key[k]
+
+    def placeholder(self, kind: str, value: str) -> str:
+        p = "<%s_%d>" % (NUMBERED_KINDS[kind], self.number(kind, value))
+        if self.values is not None and p not in self.held:
+            self.values.setdefault(p, value)
+        return p
+
+    def wire(self) -> Dict[str, Any]:
+        """What a tool-server call sends as ``masks``: the key and a copy of the table as it is when the call leaves, and
+        ``reveal`` while values are kept."""
+        out = {"key": self.key, "table": {kind: dict(by_key) for kind, by_key in self.table.items()}, "after": dict(self.after)}
+        if self.values is not None:
+            out["reveal"] = True
+        return out
+
+    def take_answer(self, sent: Dict[str, Dict[str, int]], table: Any, text: str, values: Any = None, held: Any = None) -> str:
+        """Keep the table a tool-server answer gave back for a call that left with ``sent``, and return ``text`` as the
+        run reads it. Two calls of a run at once (Claude Code makes them) both number from the table they left with, so
+        each may give the next number to a different value: the later answer's value then takes the run's number for
+        it, or the next free one, in its text too. Anything not shaped as a table is ignored. The numbers the text already
+        held, an earlier report it read for one, are not given to a new value later in the run. ``values`` and ``held``
+        (with ``reveal``) are kept under the numbers the text ends with (``keep``)."""
+        self.start_after(highest_numbers([text]))
+        if not isinstance(table, dict):
+            self.keep(values, held)
+            return text
+        self._next = {}
+        moves: Dict[Tuple[str, int], int] = {}
+        for kind, by_key in table.items():
+            if kind not in NUMBERED_KINDS or not isinstance(by_key, dict):
+                continue
+            mine = self.table.setdefault(kind, {})
+            left_with = sent.get(kind) or {}
+            given = [(n, k) for k, n in by_key.items() if isinstance(k, str) and isinstance(n, int) and not isinstance(n, bool) and n > 0]
+            for n, k in sorted(given):
+                if k in left_with:
+                    continue
+                if k in mine:
+                    if mine[k] != n:
+                        moves[(kind, n)] = mine[k]
+                    continue
+                if n in mine.values():
+                    mine[k] = max(max(mine.values()), self.after.get(kind, 0)) + 1
+                    moves[(kind, n)] = mine[k]
+                else:
+                    mine[k] = n
+        if not moves:
+            self.keep(values, held)
+            return text
+        kinds = {name: kind for kind, name in NUMBERED_KINDS.items()}
+
+        def move(m: re.Match) -> str:
+            to = moves.get((kinds[m.group(1)], int(m.group(2))))
+            return m.group(0) if to is None else "<%s_%d>" % (m.group(1), to)
+
+        if isinstance(values, dict):
+            values = {(_NUMBERED_PLACEHOLDER.sub(move, p) if isinstance(p, str) else p): v for p, v in values.items()}
+        if isinstance(held, list):
+            held = [_NUMBERED_PLACEHOLDER.sub(move, p) if isinstance(p, str) else p for p in held]
+        self.keep(values, held)
+        return _NUMBERED_PLACEHOLDER.sub(move, text)
+
+
+_NUMBERED_PLACEHOLDER = re.compile(r"<(EMAIL|PHONE|RRN|CARD)_([0-9]+)>")
+
+
+def held_placeholders(text: str) -> set:
+    """The numbered placeholders a text holds, as ``<KIND_n>`` also where JSON wrote < and > for HTML. Go: the held of
+    startAfterHeld."""
+    return {"<%s_%s>" % (name, digits) for name, digits in _HELD_PLACEHOLDER.findall(text)}
+
+
 def from_env() -> Options:
     """REDACTION_ENABLED (default true) / REDACTION_PII (default false) /
-    REDACTION_DISABLE (comma list of rule names)."""
+    REDACTION_DISABLE (comma list of rule names) / REDACTION_NUMBERED (default false)."""
     enabled = os.getenv("REDACTION_ENABLED", "true").strip().lower() not in ("false", "0", "off")
     pii = os.getenv("REDACTION_PII", "false").strip().lower() in ("true", "1", "on")
     disabled = {x.strip().lower() for x in os.getenv("REDACTION_DISABLE", "").split(",") if x.strip()}
-    return Options(enabled=enabled, pii=pii, disabled=disabled)
+    return Options(enabled=enabled, pii=pii, disabled=disabled, numbered=numbered_on())
+
+
+def numbered_on() -> bool:
+    """REDACTION_NUMBERED (chart ai.redaction.numbered, default false): personal data numbered per run (Options.numbered)."""
+    return os.getenv("REDACTION_NUMBERED", "false").strip().lower() in ("true", "1", "on")
 
 
 # --- key-name rule ------------------------------------------------------------
@@ -1132,8 +1328,9 @@ def _strip_secret_documents(text: str) -> Tuple[str, int]:
 
 # --- public API -------------------------------------------------------------------
 
-def redact_text(text: Optional[str], opts: Optional[Options] = None) -> Tuple[str, Stats]:
-    """Redact free text (logs, YAML, JSON, describe output)."""
+def redact_text(text: Optional[str], opts: Optional[Options] = None, numbers: Optional[Numbers] = None) -> Tuple[str, Stats]:
+    """Redact free text (logs, YAML, JSON, describe output). With Options.numbered, personal data is numbered with
+    ``numbers`` (one run's table), without it from 1 for this text; with numbered off ``numbers`` is not read."""
     stats = Stats()
     if not text:
         return text or "", stats
@@ -1198,7 +1395,7 @@ def redact_text(text: Optional[str], opts: Optional[Options] = None) -> Tuple[st
             text = _sub_count(_ENV_LIST_YAML, text, _env_yaml, stats, "key_name")
         text = _sub_on_credential_lines(_INLINE_QUOTED, text, _mask_inline_quoted, stats, "key_name")
         text = _sub_on_credential_lines(_INLINE_PAIR, text, _mask_inline_pair, stats, "key_name")
-    if o.pii:
+    if o.pii and not o.numbered:
         if o.on("email"):
             seen: Dict[str, int] = {}
 
@@ -1213,6 +1410,12 @@ def redact_text(text: Optional[str], opts: Optional[Options] = None) -> Tuple[st
             text = _sub_count(_CARD, text, lambda m: "<REDACTED:card>", stats, "card")
         if o.on("phone"):
             text = _sub_count(_KR_PHONE, text, lambda m: "<REDACTED:phone>", stats, "phone")
+    elif o.pii:
+        n = numbers if numbers is not None else Numbers(key="")
+        n.hold(text)
+        for kind, pattern in (("email", _EMAIL), ("rrn", _KR_RRN), ("card", _CARD), ("phone", _KR_PHONE)):
+            if o.on(kind):
+                text = _sub_count(pattern, text, lambda m, kind=kind: n.placeholder(kind, m.group(0)), stats, kind)
     return text, stats
 
 
@@ -1234,12 +1437,13 @@ def _mask_secret_fields(value: dict, stats: Stats) -> None:
         stats.add("secret", 1)
 
 
-def redact_object(value: Any, opts: Optional[Options] = None, _secret: bool = False, _stats: Optional[Stats] = None) -> Tuple[Any, Stats]:
+def redact_object(value: Any, opts: Optional[Options] = None, _secret: bool = False, _stats: Optional[Stats] = None,
+                  numbers: Optional[Numbers] = None) -> Tuple[Any, Stats]:
     """Redact a decoded JSON/YAML value in place: credential-looking keys lose
     their values, a container env entry's value follows its name, every string
     goes through redact_text, and a mapping with kind: Secret (or an item
     without a kind in a SecretList) loses data/stringData wherever they sit
-    under it, with the last-applied annotation of any annotations under it."""
+    under it, with the last-applied annotation of any annotations under it. ``numbers`` is passed to redact_text."""
     stats = _stats if _stats is not None else Stats()
     o = opts or from_env()
     if isinstance(value, dict):
@@ -1275,16 +1479,16 @@ def redact_object(value: Any, opts: Optional[Options] = None, _secret: bool = Fa
                 # A typed list's items carry no kind of their own; kubectl reads them as the list's (apimachinery decodeToList).
                 for i, item in enumerate(v):
                     own_kind = isinstance(item, dict) and isinstance(item.get("kind"), str) and item["kind"] != ""
-                    v[i], _ = redact_object(item, o, secret or (isinstance(item, dict) and not own_kind), stats)
+                    v[i], _ = redact_object(item, o, secret or (isinstance(item, dict) and not own_kind), stats, numbers)
                 continue
-            value[k], _ = redact_object(v, o, secret, stats)
+            value[k], _ = redact_object(v, o, secret, stats, numbers)
         return value, stats
     if isinstance(value, list):
         for i, v in enumerate(value):
-            value[i], _ = redact_object(v, o, _secret, stats)
+            value[i], _ = redact_object(v, o, _secret, stats, numbers)
         return value, stats
     if isinstance(value, str):
-        out, s = redact_text(value, o)
+        out, s = redact_text(value, o, numbers)
         stats.merge(s)
         return out, stats
     return value, stats

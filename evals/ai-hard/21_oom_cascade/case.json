@@ -1,0 +1,48 @@
+{
+ "id": "21_oom_cascade",
+ "title": "A bigger index leaves no room to lose a node: the rollout's first restart starts an OOM cascade through the search cluster",
+ "group": "hidden_cause",
+ "cluster": "default",
+ "namespace": "shop-21",
+ "question": "default 클러스터 shop-21에서 상품 검색이 안 된대. 원인이 뭐야?",
+ "question_vague": "default 클러스터 shop-21 상품 화면이 이상하다는데 원인 찾아줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "OOM",
+   "메모리"
+  ],
+  [
+   "questions",
+   "search-indexes-2",
+   "인덱스",
+   "index",
+   "샤드",
+   "shard",
+   "연쇄",
+   "cascade",
+   "taking over"
+  ]
+ ],
+ "tools": [],
+ "wait": "kubectl -n $NS wait --for=condition=Ready pod -l app=search --timeout=10s && test \"$(kubectl -n $NS get sts search -o jsonpath='{.status.readyReplicas}')\" = 3 && kubectl -n $NS wait --for=condition=Available deploy/storefront --timeout=10s",
+ "wait_seconds": 300,
+ "baseline_seconds": 180,
+ "inject_cmds": [
+  "kubectl -n $NS apply -f $CASE_DIR/inject.yaml",
+  "kubectl -n $NS patch sts search --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/envFrom/0/configMapRef/name\",\"value\":\"search-indexes-2\"}]'"
+ ],
+ "inject_wait": "kubectl -n $NS get pod -l app=search -o jsonpath='{.items[*].status.containerStatuses[0].lastState.terminated.reason}' | grep -q OOMKilled",
+ "inject_wait_seconds": 300,
+ "ask_after_seconds": [420],
+ "undo_cmds": [
+  "kubectl -n $NS patch sts search --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/envFrom/0/configMapRef/name\",\"value\":\"search-indexes\"}]'",
+  "kubectl -n $NS delete pod -l app=search --wait=false"
+ ],
+ "cooldown_seconds": 30,
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceRequestsFailing", "service": "storefront"},
+  "annotations": {"summary": "storefront cannot find products", "description": "storefront's product lookups have been failing for the last few minutes."}
+ }
+}
