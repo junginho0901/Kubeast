@@ -28,10 +28,11 @@ V078_FEATURES = {
     "alertInvestigation": {"enabled": True}, "logFiles": {"enabled": True},
 }
 
+# Each names a failure, which picks a rule card where the chat's rule cards are on.
 QUESTIONS = {
-    "ko": "shop 네임스페이스의 web 파드가 왜 계속 재시작해?",
-    "en": "Why does the web pod in the shop namespace keep restarting?",
-    "fr": "Pourquoi le pod web du namespace shop redémarre-t-il sans cesse ?",
+    "ko": "shop 네임스페이스의 web 파드가 OOMKilled로 계속 재시작해. 왜 깨졌어?",
+    "en": "Why does the web pod in the shop namespace keep restarting with OOMKilled?",
+    "fr": "Pourquoi le pod web du namespace shop redémarre-t-il sans cesse (OOMKilled) ?",
 }
 
 PAGE = PageContextPayload(
@@ -47,13 +48,13 @@ MASKED = ("login ann@example.com Ann@Example.com bob@example.com phone 010-1234-
 
 # sha256 of each of the above as main d58cf599 sends it (hashes of the JSON written with ensure_ascii=False).
 V078 = {
-    "chat messages ko": "8f0f0cfe81ea2fd30558060fad00877cb6b5ea8fe21ae62d06ab052775680495",
-    "chat messages en": "a75991dc54b8868afdb27c46a5a4c587a83158c4ef0009ccfbcb6f873ba0a92f",
-    "chat messages fr": "ec6434ff8a70c4f8e963b416699824483e200fe7384ff8c747d0e36dacf65bed",
+    "chat messages ko": "68afb98f58f0de1cb0963997038a0e43454ed72926242e88e6bb268fac0bd3dd",
+    "chat messages en": "1573903a24b67517dea7a7ed6d583c6a3a0efbf03c3e97e5aab8bedc9464a9b9",
+    "chat messages fr": "ddd7c0bb24893979dd3a537a96af44d7b39237c08d434820bcf3bc040ced91e6",
     "chat tools": "bd30d62b2b4a61db2bc40a401cd6d62a57135cd6bd5477f6c8bed7531c485a94",
-    "floating messages ko": "f5849117bd4ca78607344ef64b675c9ab4776483fa8174ca8207a3415dfffd84",
-    "floating messages en": "19f47cdb4802dd3900124cba7141fc959a20bc82d6c140d94ef25369b2ec1315",
-    "floating messages fr": "701db657ad26d32320afa7e171943ed0fa0d7b7c4b3a8196655f65db07ce4f9f",
+    "floating messages ko": "72ae8d680f5caf53d35fc463ac21fc00fbe2bfb862d9e202ab5940e17cea05b6",
+    "floating messages en": "3153b3ab1f4e83b603108a1386ed83b2d5d2591d2f2d6e45d0af1ad21ccbcf4e",
+    "floating messages fr": "82a9a4b1c4dce0d7aff16e9c9ef3dd9afd885a08dfc02614ee27014ed6c79e5e",
     "floating tools": "9bcba9d81a94dd1ebf1e506e8cbd3fc16cb1d1b761c776c575041173187681d7",
     "mcp tools": "a9102a1ecc66e0eb023b45a2bc01bb57f9346ad1d5894112c1991a9f2de5cc16",
     "masked text": "c86dd3f61d49c68ed59dfa80c31c1c899ee5a57da982c402a989c432dde6d902",
