@@ -165,7 +165,7 @@ describe('the drawers that gained the Events section', () => {
     { kind: 'ResourceClaim', el: inPage(createElement(ResourceClaimInfo, { name: 'x', namespace: 'ns' })), key: ['resourceclaim-describe', 'ns', 'x'] },
     { kind: 'ResourceClaimTemplate', el: inPage(createElement(ResourceClaimTemplateInfo, { name: 'x', namespace: 'ns' })), key: ['resourceclaimtemplate-describe', 'ns', 'x'] },
     { kind: 'ResourceSlice', el: inPage(createElement(ResourceSliceInfo, { name: 'x' })), key: ['resourceslice-describe', 'x'] },
-    { kind: 'a kind with no view of its own', el: inPage(createElement(GenericInfo, { name: 'x', namespace: 'ns', kind: 'Gadget', rawJson: { metadata: { name: 'x' } } })), key: ['generic-describe', 'Gadget', 'ns', 'x'] },
+    { kind: 'a kind with no view of its own', el: inPage(createElement(GenericInfo, { name: 'x', namespace: 'ns', kind: 'Gadget', rawJson: { apiVersion: 'example.com/v1', metadata: { name: 'x' } } })), key: ['generic-describe', 'Gadget', 'ns', 'x', 'example.com'] },
   ]
   for (const c of cases) {
     it(`${c.kind}: the events, "None" without any, the reason when refused`, () => {

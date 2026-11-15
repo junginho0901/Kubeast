@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
 import { enforceTokenBudget, MAX_LAYER_BYTES } from '@/utils/aiContext/tokenBudget'
+import { api } from '@/services/api'
 import GenericInfo from './GenericInfo'
 
 // A kind with no drawer of its own shows what its object says; the floating chat is told what the window shows.
@@ -46,7 +47,7 @@ const events = [{ type: 'Normal', reason: 'Seen', message: 'seen once', count: 1
 
 const layerOf = (rawJson: Record<string, unknown>, kind = 'Gadget', listed: unknown[] = events) => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, retryOnMount: false } } })
-  qc.setQueryData(['generic-describe', kind, 'ns', 'x'], { events: listed })
+  qc.setQueryData(['generic-describe', kind, 'ns', 'x', 'example.com'], { events: listed })
   const html = renderToStaticMarkup(createElement(I18nextProvider, { i18n }, createElement(QueryClientProvider, { client: qc },
     createElement(GenericInfo, { name: 'x', namespace: 'ns', kind, rawJson }))))
   const layer = layers.filter((l) => l.source === `${kind}Info`).at(-1)
@@ -127,5 +128,42 @@ describe('what the window of a kind with no drawer of its own tells the floating
     const text = JSON.stringify(data)
     expect(text).not.toContain('fake-value-for-test')
     expect(text).not.toContain('ZmFrZS12YWx1ZS1mb3ItdGVzdA==')
+  })
+})
+
+// The describe (the window's events) of a Kind two groups serve is of the object's own group. Opened before the object
+// has come, the window does not read the Kind alone (discovery's preferred group) and keep that read for the object.
+describe('the describe of a kind with no drawer of its own', () => {
+  const render = (qc: QueryClient, props: { apiVersion?: string; rawJson?: Record<string, unknown> }) =>
+    renderToStaticMarkup(createElement(I18nextProvider, { i18n }, createElement(QueryClientProvider, { client: qc },
+      createElement(GenericInfo, { name: 'x', namespace: 'ns', kind: 'Gadget', ...props }))))
+  const reads = (qc: QueryClient) => qc.getQueryCache().findAll({ queryKey: ['generic-describe'] })
+
+  it('waits for an apiVersion naming the group, then reads that group\'s object', async () => {
+    const describe = vi.spyOn(api, 'describeGenericResource').mockResolvedValue({ events: [] } as never)
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const waiting = render(qc, {})
+    expect(reads(qc).every((q) => (q.options as { enabled?: boolean }).enabled === false), 'no read before the group is known').toBe(true)
+    expect(waiting).toContain('Loading...')
+
+    render(qc, { rawJson: object({ apiVersion: 'b.example.com/v1' }) })
+    const read = reads(qc).find((q) => (q.options as { enabled?: boolean }).enabled !== false)
+    expect(read, 'a read of its own, not the one made before the group was known').toBeDefined()
+    await qc.fetchQuery({ queryKey: read!.queryKey, queryFn: read!.options.queryFn as () => Promise<unknown> })
+    expect(describe).toHaveBeenLastCalledWith('gadget.b.example.com', 'x', 'ns')
+    describe.mockRestore()
+  })
+
+  it('reads at once in the group of the apiVersion the drawer was opened with', () => {
+    const qc = new QueryClient()
+    render(qc, { apiVersion: 'a.example.com/v1' })
+    expect(reads(qc).map((q) => [q.queryKey, (q.options as { enabled?: boolean }).enabled])).toEqual([[['generic-describe', 'Gadget', 'ns', 'x', 'a.example.com'], true]])
+  })
+
+  it('keeps the describe of one group from the other\'s window', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, retryOnMount: false } } })
+    qc.setQueryData(['generic-describe', 'Gadget', 'ns', 'x', 'a.example.com'], { events: [{ type: 'Normal', reason: 'OfGroupA', message: 'a', count: 1 }] })
+    expect(render(qc, { rawJson: object({ apiVersion: 'b.example.com/v1' }) })).not.toContain('OfGroupA')
+    expect(render(qc, { rawJson: object({ apiVersion: 'a.example.com/v1' }) })).toContain('OfGroupA')
   })
 })

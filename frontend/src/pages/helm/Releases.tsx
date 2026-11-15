@@ -51,13 +51,11 @@ export default function HelmReleasesPage() {
     staleTime: 0,
   }))
 
+  // Another namespace or cluster waits for its own answer, as on first open: the releases of the one before are not
+  // its releases.
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey,
     queryFn: () => api.helm.listReleases(namespace ? { namespace } : undefined),
-    // keepPreviousData for smooth namespace-filter changes, but only within the
-    // same cluster so a switch never lingers on the prior cluster's releases.
-    placeholderData: (prev, prevQuery) =>
-      prevQuery && prevQuery.queryKey[1] === cluster ? prev : undefined,
     staleTime: Infinity,
   })
 

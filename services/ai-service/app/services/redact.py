@@ -22,6 +22,8 @@ import secrets
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
+from app.services import switch
+
 
 @dataclass
 class Options:
@@ -249,8 +251,9 @@ def from_env() -> Options:
 
 
 def numbered_on() -> bool:
-    """REDACTION_NUMBERED (chart ai.redaction.numbered, default false): personal data numbered per run (Options.numbered)."""
-    return os.getenv("REDACTION_NUMBERED", "false").strip().lower() in ("true", "1", "on")
+    """REDACTION_NUMBERED (chart ai.redaction.numbered, default false): personal data numbered per run (Options.numbered).
+    Read with the one switch rule (app/services/switch.py)."""
+    return switch.env_on("REDACTION_NUMBERED")
 
 
 # --- key-name rule ------------------------------------------------------------
