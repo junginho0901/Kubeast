@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -22,6 +23,19 @@ func pool(t *testing.T) *pgxpool.Pool {
 	}
 	t.Cleanup(p.Close)
 	return p
+}
+
+// heldWithin asks l for the lock until it holds it or d passes: the server frees a session lock when the backend of
+// the connection that held it ends, a moment after the client closed the connection.
+func heldWithin(ctx context.Context, l *Lock, d time.Duration) bool {
+	for deadline := time.Now().Add(d); ; time.Sleep(20 * time.Millisecond) {
+		if l.Held(ctx) {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+	}
 }
 
 // Of two processes one holds the lock and keeps it; when it gives the lock up (it stops, or its
@@ -46,14 +60,14 @@ func TestPostgresOneProcessHoldsTheLock(t *testing.T) {
 	if err := a.conn.Close(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if !b.Held(ctx) {
+	if !heldWithin(ctx, b, 5*time.Second) {
 		t.Fatal("the other process did not take the lock its holder gave up")
 	}
 	if a.Held(ctx) {
 		t.Fatal("the old holder took the lock back while the other holds it")
 	}
 	b.Close()
-	if !a.Held(ctx) {
+	if !heldWithin(ctx, a, 5*time.Second) {
 		t.Fatal("the lock was not free after its holder closed it")
 	}
 }
