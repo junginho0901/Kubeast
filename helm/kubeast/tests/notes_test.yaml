@@ -63,7 +63,7 @@ tests:
       postgresql.externalHost: db.example.com
     asserts:
       - matchRegexRaw:
-          pattern: can hold up to 152 connections to db\.example\.com
+          pattern: can hold up to 154 connections to db\.example\.com
 
   - it: prints nothing of it for the chart's PostgreSQL, which the install checks
     asserts:
@@ -78,4 +78,4 @@ tests:
       streams.replicas: 1
     asserts:
       - matchRegexRaw:
-          pattern: can hold up to 172 connections to db\.example\.com
+          pattern: can hold up to 174 connections to db\.example\.com

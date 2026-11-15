@@ -2,12 +2,12 @@ suite: database connections — the pods' pools against the chart's PostgreSQL m
 templates:
   - checks/db-connections.yaml
 tests:
-  - it: renders nothing on the defaults (one pod each, 152 connections at most, max_connections 300)
+  - it: renders nothing on the defaults (one pod each, 154 connections at most, max_connections 300)
     asserts:
       - hasDocuments:
           count: 0
 
-  - it: fits three pods of each service in the default 300 (282 with a rollout's extra pod)
+  - it: fits three pods of each service in the default 300 (286 with a rollout's extra pod)
     set:
       replicas.authService: 3
       replicas.sessionService: 3
@@ -22,12 +22,12 @@ tests:
       replicas.authService: 10
     asserts:
       - failedTemplate:
-          errorPattern: can hold up to 372 database connections
+          errorPattern: can hold up to 374 database connections
 
   - it: takes them with max_connections raised to the sum
     set:
       replicas.authService: 10
-      postgresql.maxConnections: 372
+      postgresql.maxConnections: 374
     asserts:
       - hasDocuments:
           count: 0
@@ -38,7 +38,7 @@ tests:
       autoscaling.k8sService.maxReplicas: 30
     asserts:
       - failedTemplate:
-          errorPattern: can hold up to 512 database connections
+          errorPattern: can hold up to 550 database connections
 
   - it: counts replicas while the HPA is off
     set:
@@ -61,7 +61,7 @@ tests:
       replicas.authService: 8
     asserts:
       - failedTemplate:
-          errorPattern: can hold up to 312 database connections
+          errorPattern: can hold up to 314 database connections
 
   - it: does not check an external database, whose limit it cannot read
     set:
@@ -106,7 +106,7 @@ tests:
       postgresql.maxConnections: 160
     asserts:
       - failedTemplate:
-          errorPattern: can hold up to 172 database connections
+          errorPattern: can hold up to 174 database connections
 
   - it: leaves k8s-service-stream out with streams.enabled false
     set:
