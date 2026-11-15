@@ -298,7 +298,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	cfg.Wrap(kubetrail.RoundTripper)
 	// on a copy, so the dynamic client and UserRESTConfigFor keep rates of their own as before
 	userCfg := rest.CopyConfig(cfg)
-	userCfg.RateLimiter = newTurnLimiter(cfg.QPS, cfg.Burst)
+	userCfg.RateLimiter = newTurnLimiter(cfg.QPS, cfg.Burst, clientWait.forLimiter(limiterUser))
 	clientset, err := kubernetes.NewForConfig(userCfg)
 	if err != nil {
 		return nil, fmt.Errorf("create clientset: %w", err)
@@ -308,7 +308,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		// the same wrapped transports, so a review carries the caller's impersonation as before
 		reviewCfg := rest.CopyConfig(cfg)
 		reviewCfg.QPS, reviewCfg.Burst = float32(clientRates.reviewQPS), max(clientRates.reviewBurst, clientRates.reviewQPS)
-		reviewCfg.RateLimiter = newTurnLimiter(reviewCfg.QPS, reviewCfg.Burst)
+		reviewCfg.RateLimiter = newTurnLimiter(reviewCfg.QPS, reviewCfg.Burst, clientWait.forLimiter(limiterReview))
 		reviews, err := kubernetes.NewForConfig(reviewCfg)
 		if err != nil {
 			return nil, fmt.Errorf("create review clientset: %w", err)
