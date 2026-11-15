@@ -1,4 +1,5 @@
 import type { PageContextSnapshot } from '@/components/PageContext'
+import { onSessionChange } from './auth'
 import { ChatStreamManager } from './chatStreamManager'
 import { clusterHeaders } from './clusterRef'
 
@@ -16,6 +17,7 @@ export const floatingChatStreamManager = new ChatStreamManager({
   // step 14: scope the floating chat's tool calls to the active cluster.
   extraHeaders: clusterHeaders,
 })
+onSessionChange(floatingChatStreamManager.reset)
 
 export interface FloatingChatExtraBody {
   page_context?: PageContextSnapshot

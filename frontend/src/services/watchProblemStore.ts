@@ -4,14 +4,15 @@
 
 import { useSyncExternalStore } from 'react'
 
-export type WatchProblem = 'forbidden' | 'limit' | 'server_limit' | 'unreachable' | 'failed' | 'scope'
+export type WatchProblem = 'forbidden' | 'limit' | 'server_limit' | 'server_memory' | 'unreachable' | 'failed' | 'scope'
 
 type WatchFrame = { type: string; error?: { message?: string; reason?: string; limit_scope?: string } }
 
-const SERIOUS_FIRST: WatchProblem[] = ['forbidden', 'limit', 'server_limit', 'unreachable', 'failed', 'scope']
+const SERIOUS_FIRST: WatchProblem[] = ['forbidden', 'limit', 'server_limit', 'server_memory', 'unreachable', 'failed', 'scope']
 const SILENT = new Set(['not_served', 'unsupported'])
 
-const limitOf = (frame: WatchFrame): WatchProblem => (frame.error?.limit_scope === 'server' ? 'server_limit' : 'limit')
+const LIMIT_OF_SCOPE: Record<string, WatchProblem> = { server: 'server_limit', memory: 'server_memory' }
+const limitOf = (frame: WatchFrame): WatchProblem => LIMIT_OF_SCOPE[frame.error?.limit_scope ?? ''] ?? 'limit'
 
 // The kinds a watch names otherwise than the REST list it feeds does (forbiddenStore's segments).
 const LIST_OF_KIND: Record<string, string> = {
