@@ -5,7 +5,8 @@ under an install (docs/development.md "Default models").
 A default is a model an install, the first-run setup page or a dev script uses when nobody chose one (the model picker's
 other entries are a list to choose from, not checked here). A place its pattern no longer finds fails
 too, so a default that moved is added here instead of going unchecked. Claude IDs from the 4.6 generation on are their
-own snapshot, earlier ones only with their date; OpenAI IDs with their date; "latest" never; another provider needs a rule.
+own snapshot, earlier ones only with their date; OpenAI IDs with their date, or an ID OpenAI lists as its own snapshot;
+"latest" never; another provider needs a rule.
 
   python3 -I scripts/check-model-pins.py          # exit 1 when a default is not pinned or not found
 """
@@ -34,6 +35,8 @@ _CLAUDE = re.compile(r"claude-(?:opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d+))
 _CLAUDE_DATED = re.compile(r"claude-[a-z0-9-]+-\d{8}")
 _OPENAI = re.compile(r"(?:gpt|chatgpt|o\d)[a-z0-9.-]*")
 _OPENAI_DATED = re.compile(r"(?:gpt|chatgpt|o\d)[a-z0-9.-]*-(?:\d{4}-\d{2}-\d{2}|\d{4})(?:-preview)?")
+# OpenAI models whose own ID is their only snapshot: developers.openai.com/api/docs/models/<id> "Snapshots" (read 2026-11-15).
+_OPENAI_OWN_SNAPSHOT = frozenset({"gpt-6-luna"})
 
 
 def why_not_pinned(model: str) -> str | None:
@@ -50,7 +53,9 @@ def why_not_pinned(model: str) -> str | None:
             return None
         return "a Claude alias before the 4.6 generation: write its dated ID"
     if _OPENAI.fullmatch(model):
-        return None if _OPENAI_DATED.fullmatch(model) else "an OpenAI alias: write the snapshot with its date"
+        if _OPENAI_DATED.fullmatch(model) or model in _OPENAI_OWN_SNAPSHOT:
+            return None
+        return "an OpenAI alias: write the snapshot with its date (or, when OpenAI lists the ID as its own snapshot, add it to _OPENAI_OWN_SNAPSHOT)"
     return "no pin rule for this provider: add one from its documentation"
 
 

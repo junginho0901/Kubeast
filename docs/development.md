@@ -159,7 +159,7 @@ pytest
 A model an install or a dev script uses when nobody chose one is written as a pinned snapshot ID, so the model behind it does not change under an install: the chart's `ai.model` (`gpt-4o-mini-2024-07-18`), ai-service's `OPENAI_MODEL` and `ProviderAdapter` defaults, `install-docker.sh`, `.env.example`, `docker-compose.yml`, the first-run setup page's model and the `scripts/kind-model-*.sh` defaults. `python3 -I scripts/check-model-pins.py` (CI job "default models are pinned snapshots") reads each place and fails on an alias or a place it no longer finds.
 
 - Claude: every ID from the 4.6 generation on is its own pinned snapshot (`claude-haiku-5-5`); an earlier model's short name is an alias of its dated ID (`claude-haiku-4-5` → `claude-haiku-4-5-20251001`).
-- OpenAI: the snapshot carries its date (`gpt-4o-mini-2024-07-18`); `gpt-4o-mini` is an alias.
+- OpenAI: the snapshot carries its date (`gpt-4o-mini-2024-07-18`); `gpt-4o-mini` is an alias. A model whose only snapshot OpenAI lists under its own ID (`gpt-6-luna`) goes into the script's `_OPENAI_OWN_SNAPSHOT`, from the model's page.
 - A name holding `latest` is never pinned. Another provider fails until the script has a rule from that provider's documentation.
 - The first-run setup page starts at a pinned entry of the model picker (`frontend/src/constants/modelCatalog.ts`); the picker's other entries are a list people choose from and are not checked.
 - A pull request that changes a default model runs the evaluation (`scripts/ai-eval.py`) for it.
