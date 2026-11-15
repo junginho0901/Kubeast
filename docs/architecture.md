@@ -124,10 +124,11 @@ Work that always runs:
   - with `dormantAccounts` on, locks dormant accounts every 24 hours
   - when an S3 sink is set, writes the audit anchor every 24 hours
 - k8s-service:
-  - checks the health of each registered cluster every 60 seconds (`multicluster.healthcheckIntervalSec`)
+  - checks the health of each registered cluster every 60 seconds (`multicluster.healthcheckIntervalSec`): every replica probes for its own fail-fast state, and the one holding a PostgreSQL advisory lock (on a connection of its own) writes `clusters.health_status`
   - cleans up the informer caches of clusters not used for a long time
   - on each replica, reads every registered cluster's `config_version` from the database every 5 seconds, give or take a second, one query (`internal/clustersync`); with Redis it also follows the other replicas' cluster change notices
   - when Redis did not answer at start, asks it again every 5 seconds until it answers, then moves the cache there
+  - while it runs a node drain, writes that it is alive every 5 seconds; every 10 seconds marks the drains whose server stopped as interrupted; every hour deletes drains that finished a day ago (`node_drains`)
 
 The MCP, alert investigation, session recording, node shell and `features.*` rows are based on the code. They create no pods, so they were not measured separately. The MCP value was measured on 2026-10-13.
 
