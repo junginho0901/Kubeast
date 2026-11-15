@@ -231,6 +231,36 @@ ingress:
   host: kubeast.example.com
   tls: false
 
+# AI switches added in 0.7.9, all off by default. Off, the model's prompts and tool definitions are as in 0.7.8.
+# (alpha): may change or go without notice. More in ai-alerts.md and features.md
+features:
+  alertInvestigation:
+    rules: false             # (alpha) true: the time windows below, the scope groups, facts kept apart from hypotheses and the report's
+                             # six headings, in the prompt (ai-alerts.md)
+    changesFirst: false      # (alpha) true: step 0 puts the timeline's changes over the change window into the first message (an audited
+                             # tool call, no model step); writes the windows too
+    narrowFirst: false       # (alpha) true: step 0, after the changes, puts anomaly_rank (features.anomalyRank) over the metrics window
+                             # into the first message; writes the windows too
+    window:                  # counted from the alert's start; ends are never past now
+      metricsMinutes: 15     # metrics this long either side of the start (1–360)
+      logsMinutes: 5         # logs from this long before the start (0–1440)
+      changesHours: 4        # changes from this long before the start (1–168)
+  anomalyRank:
+    enabled: false           # (alpha) true: the AI tool anomaly_rank and GET /namespaces/{namespace}/anomalies, what differs in one
+                             # namespace from the window before, ranked (cluster-requirements.md); off: the route answers 404, reads nothing
+    maxQueries: 12           # store queries one answer may make
+    checkTimeoutSeconds: 5   # each check
+    timeoutSeconds: 20       # the whole answer
+    concurrency: 4           # checks at once
+    cacheSeconds: 60         # the same caller, namespace and window answered from memory
+    logMaxBytes: 10737418240 # the log checks ask the log store's index first and read no more than this over both windows (10 GiB)
+  logSearch:
+    queryMaxBytes: 0         # (alpha) a number of bytes: the AI's loki_query asks the store's index first and is refused past it, with how
+                             # to narrow it (operations.md); 0: not asked, the query runs as before
+  callGraph:
+    enabled: false           # (alpha) true: the AI tool resource_graph takes include calls, who calls whom from the traces' service graph
+                             # metrics and Hubble (cluster-requirements.md); off: include calls reads nothing and the AI is not offered it
+
 # Multi-cluster load/failure isolation tuning
 multicluster:
   maxClusters: 20

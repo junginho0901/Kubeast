@@ -226,6 +226,35 @@ ingress:
   host: kubeast.example.com
   tls: false
 
+# 0.7.9에 더한 AI 스위치 — 모두 기본 꺼짐입니다. 끄면 모델이 받는 프롬프트·도구 정의가 0.7.8과 같습니다.
+# (alpha): 예고 없이 바뀌거나 없어질 수 있습니다. 자세한 것은 ai-alerts.md·features.md에 있습니다
+features:
+  alertInvestigation:
+    rules: false             # (alpha) true면 아래 시간창, 범위 묶음, 가설과 나눈 사실, 보고서의 여섯 절을 프롬프트에 넣습니다(ai-alerts.md)
+    changesFirst: false      # (alpha) true면 0번째 걸음으로 변경 시간창의 timeline 변경 보기를 첫 입력에 넣습니다(감사되는 도구 호출,
+                             # 모델 호출 아님). 시간창도 적습니다
+    narrowFirst: false       # (alpha) true면 0번째 걸음에서 변경 다음에 지표 시간창의 anomaly_rank(features.anomalyRank)를 첫 입력에
+                             # 넣습니다. 시간창도 적습니다
+    window:                  # 알림 시작 시각에서 셉니다. 끝은 늦어도 지금입니다
+      metricsMinutes: 15     # 시작 앞뒤로 이만큼의 지표(1–360)
+      logsMinutes: 5         # 시작 이만큼 전부터의 로그(0–1440)
+      changesHours: 4        # 시작 이만큼 전부터의 변경(1–168)
+  anomalyRank:
+    enabled: false           # (alpha) true면 AI 도구 anomaly_rank와 GET /namespaces/{namespace}/anomalies를 켭니다 — 한 네임스페이스가
+                             # 앞 구간과 무엇이 달라졌는지 순위로(cluster-requirements.md). 끄면 그 경로는 404이고 아무것도 읽지 않습니다
+    maxQueries: 12           # 답 하나가 저장소에 보낼 수 있는 질의 수
+    checkTimeoutSeconds: 5   # 검사 하나의 시간
+    timeoutSeconds: 20       # 답 전체의 시간
+    concurrency: 4           # 한 번에 도는 검사 수
+    cacheSeconds: 60         # 같은 사용자·네임스페이스·구간은 이 시간 동안 메모리에서 답합니다
+    logMaxBytes: 10737418240 # 로그 검사는 먼저 로그 저장소 색인에 양을 묻고, 두 구간을 합쳐 이만큼(10 GiB)을 넘게 읽지 않습니다
+  logSearch:
+    queryMaxBytes: 0         # (alpha) 바이트 수를 정하면 AI의 loki_query가 먼저 저장소 색인에 양을 묻고, 넘으면 좁히는 법과 함께
+                             # 거절합니다(operations.md). 0이면 묻지 않고 전처럼 질의합니다
+  callGraph:
+    enabled: false           # (alpha) true면 AI 도구 resource_graph가 include calls를 받습니다 — 트레이스 서비스 그래프 지표와 Hubble로 본
+                             # 호출 관계(cluster-requirements.md). 끄면 include calls는 아무것도 읽지 않고 AI에 주지 않습니다
+
 # 멀티클러스터 부하/장애 격리 튜닝
 multicluster:
   maxClusters: 20
