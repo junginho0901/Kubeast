@@ -2678,6 +2678,21 @@
     "restarts": "Restarts: {{count}}",
     "podDeleting": "Deleting...",
     "noPods": "No pods found",
+    "box": {
+      "shown": "Showing {{shown}} of {{total}} Pods",
+      "more": "+{{count}} show all on this Node",
+      "moreMatching": "+{{count}} matching · show all Pods on this Node",
+      "open": "Show all Pods on this Node"
+    },
+    "nodeView": {
+      "path": "Cluster View path",
+      "all": "All Nodes",
+      "problemsOnly": "Problem Pods only",
+      "gone": "Pod {{pod}} is no longer on this Node; a search finds it if it runs on another.",
+      "filtered": "Pod {{pod}} is outside the namespace filter ({{namespace}}).",
+      "missing": "Node {{node}} is not in this cluster.",
+      "matches": "Pods matching \"{{query}}\" are outlined: {{count}} on this Node."
+    },
     "tabs": {
       "summary": "Summary",
       "logs": "Logs",
@@ -2744,10 +2759,16 @@
     "map": {
       "aria": "Node map: {{nodes}} nodes, {{pods}} pods ({{error}} errors, {{warn}} warnings)",
       "hover": "{{node}} · {{total}} pods · {{error}} errors · {{warn}} warnings",
+      "hoverStatus": "{{node}} · {{status}} · {{total}} pods · {{error}} errors · {{warn}} warnings",
+      "ariaMarks": "{{notReady}} nodes not Ready, {{cordoned}} SchedulingDisabled.",
+      "notReady": "Node not Ready",
+      "cordoned": "SchedulingDisabled",
       "error": "Error",
       "warn": "Warning",
       "ok": "Healthy",
-      "hint": "A cell is a node, a dot a pod. Click a cell to go to the node."
+      "hint": "A cell is a Node, a dot a Pod. Click a cell, or press Enter on it, to see all its Pods.",
+      "hintPaged": "A cell is a Node, a dot a Pod; the outlined cells are the boxes below. Click a cell, or press Enter on it, to see all its Pods.",
+      "openFirst": "Open {{node}}, the first of them"
     }
   },
   "namespaces": {

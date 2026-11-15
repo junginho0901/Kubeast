@@ -2677,6 +2677,21 @@
     "restarts": "재시작: {{count}}",
     "podDeleting": "삭제 중...",
     "noPods": "Pod가 없습니다",
+    "box": {
+      "shown": "Pod {{total}}개 중 {{shown}}개를 보여 줍니다.",
+      "more": "+{{count}} 이 Node 전부 보기",
+      "moreMatching": "맞는 Pod +{{count}} · 이 Node의 Pod 전부 보기",
+      "open": "이 Node의 Pod 전부 보기"
+    },
+    "nodeView": {
+      "path": "Cluster View 위치",
+      "all": "전체 Node",
+      "problemsOnly": "문제 Pod만",
+      "gone": "Pod {{pod}}: 이 Node에 더 없습니다. 다른 Node에서 돌고 있으면 검색으로 찾을 수 있습니다.",
+      "filtered": "Pod {{pod}}: Namespace 필터({{namespace}}) 밖에 있습니다.",
+      "missing": "Node {{node}}: 이 클러스터에 없습니다.",
+      "matches": "\"{{query}}\"에 맞는 Pod에 테두리를 쳤습니다. 이 Node에 {{count}}개 있습니다."
+    },
     "tabs": {
       "summary": "요약",
       "logs": "로그",
@@ -2742,12 +2757,18 @@
       "loading": "불러오는 중..."
     },
     "map": {
-      "aria": "노드 지도: 노드 {{nodes}}개, Pod {{pods}}개(오류 {{error}}, 주의 {{warn}})",
+      "aria": "Node 지도: Node {{nodes}}개, Pod {{pods}}개(오류 {{error}}, 주의 {{warn}})",
       "hover": "{{node}} · Pod {{total}}개 · 오류 {{error}} · 주의 {{warn}}",
+      "hoverStatus": "{{node}} · {{status}} · Pod {{total}}개 · 오류 {{error}} · 주의 {{warn}}",
+      "ariaMarks": "Ready가 아닌 Node {{notReady}}개, SchedulingDisabled {{cordoned}}개입니다.",
+      "notReady": "Ready가 아닌 Node",
+      "cordoned": "SchedulingDisabled",
       "error": "오류",
       "warn": "주의",
       "ok": "정상",
-      "hint": "칸 하나가 노드, 점 하나가 Pod입니다. 칸을 누르면 그 노드로 이동합니다."
+      "hint": "칸 하나가 Node, 점 하나가 Pod입니다. 칸을 누르거나 칸에서 Enter를 누르면 그 Node의 Pod를 모두 보여 줍니다.",
+      "hintPaged": "칸 하나가 Node, 점 하나가 Pod이고, 테두리를 친 칸이 아래 상자입니다. 칸을 누르거나 칸에서 Enter를 누르면 그 Node의 Pod를 모두 보여 줍니다.",
+      "openFirst": "{{node}} 열기(그중 첫 Node)"
     }
   },
   "namespaces": {
