@@ -16,16 +16,14 @@ OpenAI-compatible 엔드포인트를 사용하여,
 
 from __future__ import annotations
 
-import logging
 import re
 from typing import Optional, Dict, Any
 
+from app.services.ai.debug_dump import log as logger
 from app.services.ai.limits import KUBEAST_KEYS
 from app.services.model_config_policy import AZURE_PROVIDERS, AZURE_V1_URL_HINT
 from app.services.model_http import model_client
 from app.services.tls import build_verify
-
-logger = logging.getLogger(__name__)
 
 
 # 프로바이더별 기본 OpenAI-compatible 엔드포인트

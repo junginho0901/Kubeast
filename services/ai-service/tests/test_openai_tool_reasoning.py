@@ -174,6 +174,33 @@ async def test_a_temperature_refused_at_the_default_effort_is_sent_again_at_none
 
 
 @pytest.mark.asyncio
+async def test_the_retry_and_the_left_out_parameter_are_each_one_line_in_the_pod_log(monkeypatch):
+    import io
+    import logging
+
+    from app.services.ai import debug_dump
+
+    # the handler that writes kubeast.ai to stdout, which kubectl logs reads
+    out = next(h for h in debug_dump.log.handlers if isinstance(h, logging.StreamHandler))
+    buf = io.StringIO()
+    before = out.setStream(buf)
+    try:
+        serve(monkeypatch, temperature_first)
+        adapter = ProviderAdapter(provider="azure", model="prod-chat", api_key="sk-secret-123", base_url=AZURE)
+        await adapter.chat.completions.create(model="prod-chat", messages=[{"role": "user", "content": "prompt-xyz"}],
+                                              tools=TOOLS, temperature=0.7)
+    finally:
+        out.setStream(before)
+    lines = [line for line in buf.getvalue().splitlines() if "prod-chat" in line]
+    assert [line.split(" kubeast.ai ", 1)[1] for line in lines] == [
+        "model prod-chat refused temperature; leaving it out",
+        "model prod-chat takes tools only at reasoning_effort none; sending it",
+    ]
+    assert all(" INFO " in line for line in lines)
+    assert "sk-secret-123" not in buf.getvalue() and "prompt-xyz" not in buf.getvalue()
+
+
+@pytest.mark.asyncio
 async def test_a_temperature_a_summary_had_refused_is_sent_again_once_tools_need_none(monkeypatch):
     bodies = serve(monkeypatch, temperature_first)
     adapter = ProviderAdapter(provider="azure", model="prod-chat", api_key="k", base_url=AZURE)
