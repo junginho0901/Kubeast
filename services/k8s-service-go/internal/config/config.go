@@ -174,7 +174,7 @@ func Load() Config {
 
 		AlertInvestigationEnabled: pkgconfig.GetEnvBool("ALERT_INVESTIGATION_ENABLED", false),
 
-		CallGraphEnabled: pkgconfig.GetEnvBool("CALL_GRAPH_ENABLED", false),
+		CallGraphEnabled: pkgconfig.EnvSwitch("CALL_GRAPH_ENABLED"),
 
 		LogFilesEnabled:    pkgconfig.GetEnvBool("LOG_FILES_ENABLED", false),
 		LogFilesPaths:      pkgconfig.GetEnvList("LOG_FILES_PATHS", ""),

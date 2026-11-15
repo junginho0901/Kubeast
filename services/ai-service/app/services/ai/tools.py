@@ -8,8 +8,9 @@
 # (tool dispatch) 의 if-elif chain 과 매칭되어야 함. name 변경 / 추가 / 삭제 시
 # dispatch 도 함께 갱신.
 
-import os
 from typing import Dict, List
+
+from app.services import switch
 
 # resource_graph's call parameters, offered only where the cluster has features.callGraph on (features.PARAM_GATES), and
 # in the MCP server's list only with CALL_GRAPH_ENABLED (offer_call_graph).
@@ -1873,8 +1874,9 @@ def without_params(tool: Dict, params: tuple, words: str) -> Dict:
 
 
 def call_graph_on() -> bool:
-    """CALL_GRAPH_ENABLED (chart features.callGraph.enabled, default off; in the ConfigMap every service reads)."""
-    return os.getenv("CALL_GRAPH_ENABLED", "false").strip().lower() == "true"
+    """CALL_GRAPH_ENABLED (chart features.callGraph.enabled, default off; in the ConfigMap every service reads), read with
+    the one switch rule (app/services/switch.py)."""
+    return switch.env_on("CALL_GRAPH_ENABLED")
 
 
 def offer_call_graph(tools: List[Dict]) -> List[Dict]:
