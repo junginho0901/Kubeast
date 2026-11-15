@@ -151,26 +151,44 @@ export function stopPod(name: string): number {
 }
 
 // What must be put back even when a run is cut: a test registers it before it breaks something and drops it once it
-// is put back. It runs on the worker's exit and on SIGINT, SIGTERM and SIGHUP (Ctrl-C, a stopped runner), synchronously;
-// when no one else listens for that signal it then ends the process as the signal would have.
+// is put back. A test's own `finally` does not run when Playwright interrupts it (Ctrl-C, a test timeout: the body is
+// left where it waits), so the list also runs, synchronously, in each fault file's afterEach (`undoPending`), on the
+// worker's exit and on SIGINT, SIGTERM and SIGHUP; when no one else listens for that signal the process then ends as
+// the signal would have. What must survive the worker being killed outright also has a detached process (`whenGone`).
 const undo = new Map<string, () => unknown>()
 export function atExit(label: string, fn: () => unknown): () => void {
   undo.set(label, fn)
   return () => { undo.delete(label) }
 }
-function runUndo() {
+export function undoPending() {
   for (const [label, fn] of [...undo]) {
     undo.delete(label)
     try { fn() } catch (e) { process.stderr.write(`fault cleanup "${label}" failed: ${(e as Error).message}\n`) }
   }
 }
-process.on('exit', runUndo)
+// last: the port-forwards and the kubeconfig copy (the cleanup above still uses them)
+function leave() {
+  forwards.forEach((p) => p.kill('SIGTERM'))
+  fs.rmSync(kcDir, { recursive: true, force: true })
+}
+process.on('exit', () => { undoPending(); leave() })
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
   const on = () => {
-    runUndo()
-    if (process.listenerCount(sig) === 1) { process.removeListener(sig, on); process.kill(process.pid, sig) }
+    undoPending()
+    if (process.listenerCount(sig) === 1) { leave(); process.removeListener(sig, on); process.kill(process.pid, sig) }
   }
   process.on(sig, on)
+}
+
+// A detached process that runs `kubectl <argv>` on the install's cluster once this worker is gone, however it went
+// (SIGKILL too; it looks every 2 s), unless stopped first. It reads the kubeconfig from kind again, since the worker's
+// copy goes with the worker.
+export function whenGone(argv: string[]): () => void {
+  const script = 'k="$1"; shift; while kill -0 "$PARENT" 2>/dev/null; do sleep 2; done; '
+    + 'kc=$(mktemp) || exit 1; kind get kubeconfig --name "$k" > "$kc" && kubectl --kubeconfig "$kc" --context "kind-$k" "$@"; rm -f "$kc"'
+  const child = spawn('sh', ['-c', script, 'when-gone', KIND, ...argv], { detached: true, stdio: 'ignore', env: { ...process.env, PARENT: String(process.pid) } })
+  child.unref()
+  return () => { try { process.kill(-child.pid!, 'SIGKILL') } catch { /* it ran already */ } }
 }
 
 // Below the Kubernetes API: a kind node is a Docker container named after the node, and `docker exec <node> crictl|ctr`
@@ -276,17 +294,44 @@ export function rolledOut(deploy: string, timeoutSeconds = 180) {
   kubectl(['-n', NS, 'rollout', 'status', `deploy/${deploy}`, `--timeout=${timeoutSeconds}s`], { timeout: (timeoutSeconds + 10) * 1000 })
 }
 
-// Scales a Deployment to 0 for `seconds` and back to what it had, waiting for its rollout; the restore runs even when
-// the body throws.
-export async function stopFor(deploy: string, seconds: number, during: () => Promise<void> = async () => {}) {
+// Scales a Deployment to 0 and waits until none of its pods is left (podsOf counts a pod being deleted, which still
+// answers through its preStop and grace: Redis has a 5 s preStop), so what a test does "with it off" starts only then.
+// The scale back is registered with atExit and given to whenGone before the scale to 0; bringBack scales back, waits
+// for the rollout and returns when.
+export async function takeDown(deploy: string, goneWithinMs = 120_000): Promise<{ offAt: number; bringBack: () => number }> {
   const had = replicasOf(deploy)
-  scale(deploy, 0)
-  try {
-    await Promise.all([sleep(seconds * 1000), during()])
-  } finally {
+  const stopWatcher = whenGone(['-n', NS, 'scale', `deploy/${deploy}`, `--replicas=${had}`])
+  const drop = atExit(`scale ${deploy} back to ${had}`, () => { scale(deploy, had); stopWatcher() })
+  let onAt = 0
+  const bringBack = () => {
+    if (onAt) return onAt
     scale(deploy, had)
+    drop()
+    stopWatcher()
     rolledOut(deploy)
+    onAt = Date.now()
+    return onAt
   }
+  try {
+    scale(deploy, 0)
+    await expect.poll(() => podsOf(deploy).length, { message: `every ${deploy} pod gone`, timeout: goneWithinMs, intervals: [250] }).toBe(0)
+  } catch (e) {
+    bringBack()
+    throw e
+  }
+  return { offAt: Date.now(), bringBack }
+}
+
+// takeDown, then `during(offAt)` and at least `seconds` from the moment the last pod was gone, then bringBack; the times
+// it went off and came back are returned for the test's timeline.
+export async function stopFor(deploy: string, seconds: number, during: (offAt: number) => Promise<void> = async () => {}): Promise<{ offAt: number; onAt: number }> {
+  const down = await takeDown(deploy)
+  try {
+    await Promise.all([sleep(seconds * 1000), during(down.offAt)])
+  } finally {
+    down.bringBack()
+  }
+  return { offAt: down.offAt, onAt: down.bringBack() }
 }
 
 export function serverLog(deploy: string, sinceIso: string): string {
@@ -297,13 +342,17 @@ export function podLog(pod: string, sinceIso: string): string {
   return kubectlOk(['-n', NS, 'logs', pod, '--all-containers', `--since-time=${sinceIso}`]).out
 }
 
-// A port-forward to one pod, so a request reaches that server and no other.
+// A port-forward to one pod, so a request reaches that server and no other. kubectl runs under a small shell that ends
+// it when told (close, the worker's exit or signal) and also when the worker is gone however it went (it looks every
+// second), so a killed worker leaves no port-forward behind.
 export type Forward = { port: number; close: () => void }
 const forwards = new Set<ChildProcess>()
-process.on('exit', () => forwards.forEach((p) => p.kill('SIGKILL')))
 
 export async function forwardTo(pod: string, port: number): Promise<Forward> {
-  const child = spawn('kubectl', ['--kubeconfig', KUBECONFIG, '--context', `kind-${KIND}`, '-n', NS, 'port-forward', `pod/${pod}`, `:${port}`, '--address', '127.0.0.1'], { stdio: ['ignore', 'pipe', 'pipe'] })
+  const script = 'kubectl "$@" & c=$!; trap \'kill $c 2>/dev/null; exit 0\' TERM INT HUP; '
+    + 'while kill -0 "$PARENT" 2>/dev/null && kill -0 $c 2>/dev/null; do sleep 1; done; kill $c 2>/dev/null'
+  const child = spawn('sh', ['-c', script, 'port-forward', '--kubeconfig', KUBECONFIG, '--context', `kind-${KIND}`, '-n', NS, 'port-forward', `pod/${pod}`, `:${port}`, '--address', '127.0.0.1'],
+    { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, PARENT: String(process.pid) } })
   forwards.add(child)
   const local = await new Promise<number>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`port-forward to ${pod} did not start`)), 15_000)
@@ -313,7 +362,7 @@ export async function forwardTo(pod: string, port: number): Promise<Forward> {
     })
     child.on('exit', () => { clearTimeout(timer); reject(new Error(`port-forward to ${pod} ended`)) })
   })
-  return { port: local, close: () => { child.kill('SIGKILL'); forwards.delete(child) } }
+  return { port: local, close: () => { child.kill('SIGTERM'); forwards.delete(child) } }
 }
 
 // An API context on one pod (through its port-forward), signed in with token.

@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test'
 
 import {
   CLUSTER, NS, Probe, STAMP, aroundKill, atExit, bearer, forwardTo, killPod, kubectl, kubectlOk, listSocketBack, listSockets, login, readyPods,
-  restartCounts, restartsSince, rolledOut, show, sleep, watchListSockets, wsSubscriptions, type Answer, type Forward,
+  restartCounts, restartsSince, rolledOut, show, sleep, undoPending, watchListSockets, wsSubscriptions, type Answer, type Forward,
 } from './shared'
 
 // Step 4 F-5 and F-14, rows of W5 that none of the pull requests of the other files changes: a server force-killed
@@ -46,6 +46,8 @@ async function openLiveList(page: Page) {
 test.describe('servers force-killed under reads and live lists (F-5, F-14)', () => {
   test.describe.configure({ mode: 'serial' })
 
+  test.afterEach(() => undoPending())
+
   test('F-5: one of two k8s-service pods force-killed — reads error 0 from 3 s after the kill, the live list it held is open again within 5 s', async ({ page, request }) => {
     test.skip(readyPods(K8S).length < 2, 'needs two ready k8s-service pods (scripts/kind-fault-shape.sh s2, once M-7 lets the chart render it)')
     test.setTimeout(300_000)
@@ -59,10 +61,13 @@ test.describe('servers force-killed under reads and live lists (F-5, F-14)', () 
       const before = await subs()
       await openLiveList(page)
       await sleep(3_000)
-      const rise = (await subs()).map((n, i) => n - before[i])
+      const after = await subs()
+      expect([...before, ...after].every(Number.isFinite), 'every k8s-service pod reports kubeast_ws_subscriptions on /metrics').toBe(true)
+      const rise = after.map((n, i) => n - before[i])
       const i = rise.indexOf(Math.max(...rise))
       const victim = pods[i]
       test.info().annotations.push({ type: 'killed', description: `${victim} (live list subscriptions ${rise.map((n, j) => `${pods[j]} +${n}`).join(', ')})` })
+      expect(rise[i], 'the subscriptions of one server went up when the page opened its live list').toBeGreaterThan(0)
       forwards.forEach((f) => f.close())
       forwards.length = 0
 
@@ -70,7 +75,7 @@ test.describe('servers force-killed under reads and live lists (F-5, F-14)', () 
       probe = new Probe(request, READS, bearer(token), 100, 10_000)
       await sleep(5_000)
       const killedAt = killPod(victim)
-      const list = rise[i] > 0 ? await listSocketBack(page, killedAt, RECONNECT_MS) : null
+      const list = await listSocketBack(page, killedAt, RECONNECT_MS)
       rolledOut(K8S)
       await sleep(5_000)
       const answers = await probe.stop()
@@ -80,20 +85,18 @@ test.describe('servers force-killed under reads and live lists (F-5, F-14)', () 
       test.info().attach('timeline.json', {
         body: JSON.stringify({
           killed: new Date(killedAt).toISOString(), victim, errorWindow: around.window ? `${around.window.first - killedAt}..${around.window.last - killedAt} ms` : null,
-          failedInGrace: around.during.length, listReopenMs: list?.reopenMs ?? null, sockets: list?.sockets ?? null,
+          failedInGrace: around.during.length, listReopenMs: list.reopenMs, sockets: list.sockets,
         }, null, 2),
         contentType: 'application/json',
       })
+      // judged first from these when a line is missed (README "First runs"); the lines are not loosened
+      test.info().attach('errors-around-kill.json', { body: JSON.stringify(around, null, 2), contentType: 'application/json' })
 
       expect(around.before.map((a) => `${a.path} ${a.status}`), 'reads that failed before the kill').toEqual([])
       expect(around.after.length, `reads not 200 from ${STALE_WITHIN_MS} ms after the kill:\n${show(around.after)}`).toBe(0)
-      if (list) {
-        expect(list.cut, 'the page\'s live list socket on the killed server closed').toBe(true)
-        expect(list.reopenMs, 'ms from its close to a new socket open').not.toBeNull()
-        expect(list.reopenMs!, 'ms from its close to a new socket open').toBeLessThanOrEqual(RECONNECT_MS)
-      } else {
-        test.info().annotations.push({ type: 'not checked', description: 'the live list: no server\'s subscriptions went up when the page opened it' })
-      }
+      expect(list.cut, 'the page\'s live list socket on the killed server closed').toBe(true)
+      expect(list.reopenMs, 'ms from its close to a new socket open').not.toBeNull()
+      expect(list.reopenMs!, 'ms from its close to a new socket open').toBeLessThanOrEqual(RECONNECT_MS)
       expect(restartsSince(restartsBefore), 'restarts of the pods that stayed').toEqual({})
     } finally {
       if (probe) await probe.stop()
@@ -117,9 +120,12 @@ test.describe('servers force-killed under reads and live lists (F-5, F-14)', () 
       const restartsBefore = restartCounts()
       probe = new Probe(request, GATEWAY_READS, bearer(token), 100, 5_000)
       await sleep(3_000)
-      const killedAt = killPod(gateways[0].name)
-      rolledOut(GATEWAY)
+      const killed = gateways[0].name
+      const killedAt = killPod(killed)
+      // ready = a gateway pod other than the killed one is Ready (rollout status may still read the old state at first)
+      await expect.poll(() => readyPods(GATEWAY).some((p) => p.name !== killed), { message: 'a new gateway pod is ready', timeout: 180_000, intervals: [250] }).toBe(true)
       const readyAt = Date.now()
+      rolledOut(GATEWAY)
       kubectl(['-n', 'default', 'run', added, '--image=busybox:1.37', '--image-pull-policy=IfNotPresent', '--restart=Never', '--command', '--', 'sleep', '600'])
       await expect(page.locator('table').first(), 'the list, never reloaded, follows again').toContainText(added, { timeout: RECOVER_MS })
       const shownAt = Date.now()

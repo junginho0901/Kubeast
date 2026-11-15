@@ -2,25 +2,33 @@
 # Switch the kind dev install between the shapes the fault tests run in (e2e/fault/README.md "Install shapes") and
 # back to where it started.
 #
-#   scripts/kind-fault-shape.sh start        # note the release's revision and the hashes of its values (changes nothing)
+#   scripts/kind-fault-shape.sh start        # note the start: revision, values' hashes, the chart's files, a copy of the values
 #   scripts/kind-fault-shape.sh s1           # one pod per service, mcp.enabled
 #   scripts/kind-fault-shape.sh s2           # k8s-service, ai-service and tool-server on 2 pods (needs autoscaling.* in the chart, #867)
 #   scripts/kind-fault-shape.sh s2-gateway   # s2 with 2 gateway pods
 #   scripts/kind-fault-shape.sh s3           # streams.enabled, one pod per service (needs streams.* in the chart, #825)
 #   scripts/kind-fault-shape.sh back         # roll back to the noted revision and check its hashes
-#   scripts/kind-fault-shape.sh status       # revision, hashes, the shape's values and ready pods
+#   scripts/kind-fault-shape.sh back-values  # put the start's values back with this chart instead (helm upgrade --reset-values -f)
+#   scripts/kind-fault-shape.sh status       # revision, hashes, the shape's values, ready pods, what changed since the start
 #
 # A shape sets every key it is about (replicas.k8sService, aiService, toolServer, gateway, streams.enabled when the
 # chart has it, mcp.enabled), so it is the same whichever shape came before. The first switch notes the start when
-# `start` was not run. Every upgrade and rollback keeps all revisions (--history-max 0), so the noted one is still there
-# to go back to. Each step prints the revision and two hashes, of the values given (helm get values) and of all computed
-# values (--all), never the values themselves (they hold passwords). A shape is first rendered on the server
-# (--dry-run=server) and nothing changes if the chart refuses it; a helm error, a failed check or an interrupt during the
-# upgrade rolls back to the revision before it (Ctrl-C cannot cut that rollback) and checks that its hashes are back,
-# else it stops with ROLLBACK_BROKEN.
+# `start` was not run. Each step prints the revision and two hashes, of the values given (helm get values) and of all
+# computed values (--all), never the values themselves (they hold passwords; the copy kept for back-values is a 0600
+# file next to the start, under the git-ignored .kind-data/).
 #
-# Other scripts' helm upgrades (kind-model-subscription.sh, rebuild-kind.sh) keep helm's default of 10 revisions and
-# can drop the noted one; `back` then rolls back to the newest revision whose two hashes equal the noted ones.
+# Every upgrade and rollback keeps all revisions (--history-max 0), and every upgrade is described
+# "kind-fault-shape <shape> chart=<files hash>". Between start and back nothing else may change the release:
+# a switch and `back` stop when a revision after the start was made by something else (another script's helm upgrade
+# — kind-model-subscription.sh, rebuild-kind.sh — would be undone by the rollback, and keeps only 10 revisions), when
+# the noted revision is no longer the one noted (pruned, or the release installed again), or when this checkout's chart
+# files differ from the start's (a switch would change the templates too). back-values is the way back then.
+#
+# A shape is first rendered on the server (--dry-run=server) and nothing changes if the chart refuses it. helm runs in
+# the background and this shell waits for it, so Ctrl-C, TERM or a closed terminal (HUP) reaches the trap at once: it
+# stops helm, then rolls back to the revision before the switch and checks the hashes (ROLLBACK_BROKEN, exit 3, when
+# they differ). The rollbacks, here and in `back`, ignore those signals. After a closed terminal the rollback writes
+# to <start file>.log. A release left pending-* by anything else: run `back`.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -33,6 +41,9 @@ TIMEOUT="${FAULT_SHAPE_TIMEOUT:-10m}"
 MCP="${FAULT_SHAPE_MCP:-true}"
 S2_TOOL_SERVER="${S2_TOOL_SERVER:-2}"
 STATE="${FAULT_SHAPE_STATE:-$ROOT/.kind-data/fault-shape-$MAIN-$RELEASE.start}"
+VALUES="$STATE.values.yaml"
+MADE="$STATE.made"
+TAG="kind-fault-shape"
 
 h() { helm --kubeconfig "$KUBECONFIG_PATH" --kube-context "kind-$MAIN" -n "$NAMESPACE" "$@"; }
 k() { kubectl --kubeconfig "$KUBECONFIG_PATH" --context "kind-$MAIN" -n "$NAMESPACE" "$@"; }
@@ -40,12 +51,16 @@ die() { echo "$*" >&2; exit 1; }
 
 sha() { shasum -a 256 | cut -d' ' -f1; }
 release_status() { h status "$RELEASE" -o json | jq -r '.info.status'; }
-revision() { h status "$RELEASE" -o json | jq -r '.version'; }
-given_hash() { h get values "$RELEASE" ${1:+--revision "$1"} -o json | sha; }
-all_hash() { h get values "$RELEASE" ${1:+--revision "$1"} --all -o json | sha; }
+revision() { h history "$RELEASE" -o json --max 1 | jq -r '.[-1].revision'; }
+history_json() { h history "$RELEASE" -o json --max 256; }
+given_hash() { h get values "$RELEASE" -o json | sha; }
+all_hash() { h get values "$RELEASE" --all -o json | sha; }
 chart_has() { grep -qE "^$1:" "$CHART/values.yaml"; }
+# every file of the chart directory, by path and content
+chart_hash() { (cd "$CHART" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 shasum -a 256) | sha; }
 short() { echo "${1:0:16}"; }
 show() { echo "  $1: revision $2 · values $(short "$3") · all values $(short "$4")"; }
+clean_state() { rm -f "$STATE" "$VALUES" "$MADE"; }
 
 shape_sets() {
   local sets
@@ -85,26 +100,60 @@ ready_as_set() {
 note_start() {
   [ "$(release_status)" = deployed ] || die "release $RELEASE is $(release_status), not deployed: finish or roll back that operation first"
   mkdir -p "$(dirname "$STATE")"
-  local rev given all
+  local rev given all updated
   rev=$(revision); given=$(given_hash); all=$(all_hash)
-  printf 'REV=%s\nGIVEN=%s\nALL=%s\nAT=%s\n' "$rev" "$given" "$all" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$STATE"
+  updated=$(history_json | jq -r --argjson r "$rev" '.[] | select(.revision == $r) | .updated')
+  (umask 077 && h get values "$RELEASE" -o yaml > "$VALUES")
+  : > "$MADE"
+  printf 'REV=%s\nUPDATED=%s\nGIVEN=%s\nALL=%s\nCHART=%s\nAT=%s\n' "$rev" "$updated" "$given" "$all" "$(chart_hash)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$STATE"
   echo "═══ start noted in $STATE ═══"
   show start "$rev" "$given" "$all"
+  echo "  chart files $(short "$(chart_hash)") ($CHART)"
   shape_now
 }
 
-# the noted start, read as data (the file is not sourced)
+# the noted start, read as data (the file is not sourced), and checked against the release's history
 load_start() {
   [ -f "$STATE" ] || return 1
-  START_REV=$(sed -n 's/^REV=\([0-9]*\)$/\1/p' "$STATE")
-  START_GIVEN=$(sed -n 's/^GIVEN=\([0-9a-f]*\)$/\1/p' "$STATE")
-  START_ALL=$(sed -n 's/^ALL=\([0-9a-f]*\)$/\1/p' "$STATE")
-  [ -n "$START_REV" ] && [ -n "$START_GIVEN" ] && [ -n "$START_ALL" ] || die "$STATE is not a start this script noted: remove it and run start"
+  field() { sed -n "s/^$1=\\(.*\\)$/\\1/p" "$STATE"; }
+  START_REV=$(field REV); START_UPDATED=$(field UPDATED); START_GIVEN=$(field GIVEN); START_ALL=$(field ALL)
+  START_CHART=$(field CHART); START_AT=$(field AT)
+  case "$START_REV$START_GIVEN$START_ALL$START_CHART" in *[!0-9a-f]*|'') die "$STATE is not a start this script noted: remove $STATE* and run start" ;; esac
+  [ -f "$VALUES" ] && [ -f "$MADE" ] || die "$STATE has lost its values copy or its list of revisions: remove $STATE* and run start"
+  local updated
+  updated=$(history_json | jq -r --argjson r "$START_REV" '.[] | select(.revision == $r) | .updated')
+  [ -n "$updated" ] && [ "$updated" = "$START_UPDATED" ] || die "the start noted $START_AT names revision $START_REV of $START_UPDATED, which the release no longer has as it was (pruned, or the release installed again): it is not this release's start. Use back-values if the values copy is still the one you want, else remove $STATE* and start again."
 }
 
+# revisions after the start that this script did not make (its upgrades carry its description, its rollbacks are listed)
+foreign_after() {
+  history_json | jq -r --argjson r "$START_REV" --arg tag "$TAG" --rawfile made "$MADE" '
+    ($made | split("\n") | map(select(. != "") | tonumber)) as $mine
+    | .[] | select(.revision > $r and ((.description // "") | startswith($tag) | not) and (.revision as $v | $mine | index($v) | not))
+    | "\(.revision) (\(.description // ""))"'
+}
+
+note_made() { revision >> "$MADE"; }
+
+HELM_PID="" GOT_HUP=""
+# helm in the background: a signal to this shell interrupts the wait and reaches its trap at once
+run_helm() {
+  local rc=0
+  h "$@" & HELM_PID=$!
+  wait "$HELM_PID" || rc=$?
+  HELM_PID=""
+  return "$rc"
+}
+on_signal() {
+  [ "$1" = 129 ] && GOT_HUP=1
+  if [ -n "$HELM_PID" ]; then kill -TERM "$HELM_PID" 2>/dev/null || true; wait "$HELM_PID" 2>/dev/null || true; HELM_PID=""; fi
+  exit "$1"
+}
+quiet_signals() { trap '' INT TERM HUP; }
+
 PRE_REV="" PRE_GIVEN="" PRE_ALL="" SHAPE="" SWITCHING=""
-# Runs on every exit (an error under set -e, helm failing, Ctrl-C or TERM turned into an exit): while a switch is under
-# way it rolls back. An EXIT trap, not ERR, since bash would run an inherited ERR trap in command substitutions too.
+# Runs on every exit (an error under set -e, helm failing, a signal turned into an exit): while a switch is under way
+# it rolls back. An EXIT trap, not ERR, since bash would run an inherited ERR trap in command substitutions too.
 on_exit() {
   local rc=$?
   [ -n "$SWITCHING" ] || return "$rc"
@@ -112,16 +161,19 @@ on_exit() {
   roll_back_to_pre
 }
 trap on_exit EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
+trap 'on_signal 130' INT
+trap 'on_signal 143' TERM
+trap 'on_signal 129' HUP
 
 roll_back_to_pre() {
-  trap '' INT TERM
+  quiet_signals
+  if [ -n "$GOT_HUP" ]; then exec >>"$STATE.log" 2>&1; echo "$(date -u +%FT%TZ) terminal closed during $SHAPE"; fi
   echo "═══ switching to $SHAPE stopped: rolling back to revision $PRE_REV ═══" >&2
   if ! h rollback "$RELEASE" "$PRE_REV" --history-max 0 --wait --timeout "$TIMEOUT" >&2; then
     echo "ROLLBACK_BROKEN: helm rollback to $PRE_REV failed; the install is not in a known shape. Fix it by hand (helm history $RELEASE)." >&2
     exit 3
   fi
+  note_made
   local given all
   given=$(given_hash); all=$(all_hash)
   show "after the rollback" "$(revision)" "$given" "$all" >&2
@@ -133,6 +185,15 @@ roll_back_to_pre() {
   exit 1
 }
 
+refuse_foreign() {
+  local foreign
+  foreign=$(foreign_after)
+  [ -z "$foreign" ] && return 0
+  echo "revisions after the start (revision $START_REV) that $TAG did not make:" >&2
+  echo "$foreign" | sed 's/^/  /' >&2
+  die "$1 would undo or build on them. Run other helm upgrades of the release before start or after back; to put the start's values back on this chart, back-values."
+}
+
 switch() {
   SHAPE="$1"
   case "$SHAPE" in
@@ -141,12 +202,14 @@ switch() {
     s3)
       chart_has streams || die "s3 needs the chart of #825 (streams.enabled): $CHART has no streams values. Nothing changed." ;;
   esac
-  [ "$(release_status)" = deployed ] || die "release $RELEASE is $(release_status), not deployed: finish or roll back that operation first"
+  [ "$(release_status)" = deployed ] || die "release $RELEASE is $(release_status), not deployed: run back (or finish that operation) first"
   local auto
   auto=$(h get values "$RELEASE" --all -o json | jq -r '(.autoscaling // {}) | to_entries[] | select(.value.enabled == true) | .key' | tr '\n' ' ')
   [ -z "$auto" ] || die "autoscaling is on for: $auto— their HPAs set the pod count, not replicas. Turn them off first. Nothing changed."
   load_start || note_start
   load_start
+  [ "$(chart_hash)" = "$START_CHART" ] || die "the chart files in $CHART differ from the ones noted at start ($(short "$START_CHART")): a switch from here would change the templates too. Run it from the checkout of the start, or back and start again. Nothing changed."
+  refuse_foreign "switching to $SHAPE"
 
   local sets err
   sets=$(shape_sets "$SHAPE")
@@ -168,7 +231,8 @@ switch() {
   local out
   out=$(mktemp)
   SWITCHING=1
-  h upgrade "$RELEASE" "$CHART" --reset-then-reuse-values --history-max 0 --set "$sets" --wait --timeout "$TIMEOUT" >"$out"
+  run_helm upgrade "$RELEASE" "$CHART" --reset-then-reuse-values --history-max 0 --set "$sets" --wait --timeout "$TIMEOUT" \
+    --description "$TAG $SHAPE chart=$(short "$START_CHART")" >"$out"
   grep -E '^(REVISION|STATUS):' "$out" || true
   rm -f "$out"
   local given all
@@ -181,36 +245,51 @@ switch() {
   show start "$START_REV" "$START_GIVEN" "$START_ALL"
 }
 
-back() {
-  load_start || die "no start noted ($STATE): nothing to go back to"
-  local given all target="$START_REV"
-  given=$(given_hash); all=$(all_hash)
-  show now "$(revision)" "$given" "$all"
-  show start "$START_REV" "$START_GIVEN" "$START_ALL"
-  if [ "$(release_status)" = deployed ] && [ "$given" = "$START_GIVEN" ] && [ "$all" = "$START_ALL" ]; then
-    echo "already at the start's values"
-    rm -f "$STATE"
-    return
-  fi
-  if ! h history "$RELEASE" -o json | jq -e --argjson r "$START_REV" 'any(.[]; .revision == $r)' >/dev/null; then
-    target=""
-    local r
-    for r in $(h history "$RELEASE" -o json | jq -r 'map(.revision) | sort | reverse | .[]'); do
-      if [ "$(given_hash "$r")" = "$START_GIVEN" ] && [ "$(all_hash "$r")" = "$START_ALL" ]; then target=$r; break; fi
-    done
-    [ -n "$target" ] || die "ROLLBACK_BROKEN: revision $START_REV is gone (another script's upgrade kept only 10) and no revision left has the start's hashes. Put the values back by hand."
-    echo "revision $START_REV is gone; revision $target has the start's hashes"
-  fi
-  echo "═══ helm rollback $RELEASE $target ═══"
-  h rollback "$RELEASE" "$target" --history-max 0 --wait --timeout "$TIMEOUT" || die "ROLLBACK_BROKEN: helm rollback to $target failed"
+check_back() {
+  local given all
   given=$(given_hash); all=$(all_hash)
   show after "$(revision)" "$given" "$all"
   shape_now
   if [ "$given" != "$START_GIVEN" ] || [ "$all" != "$START_ALL" ]; then
-    die "ROLLBACK_BROKEN: the values after the rollback differ from the start's"
+    echo "ROLLBACK_BROKEN: the values after $1 differ from the start's (the start's files are kept)" >&2
+    exit 3
   fi
-  rm -f "$STATE"
+  clean_state
   echo "back at the start's values"
+}
+
+back() {
+  load_start || die "no start noted ($STATE): nothing to go back to"
+  local given all
+  given=$(given_hash); all=$(all_hash)
+  show now "$(revision)" "$given" "$all"
+  show start "$START_REV" "$START_GIVEN" "$START_ALL"
+  if [ "$(release_status)" = deployed ] && [ "$given" = "$START_GIVEN" ] && [ "$all" = "$START_ALL" ] && [ -z "$(foreign_after)" ]; then
+    echo "already at the start's values"
+    clean_state
+    return
+  fi
+  refuse_foreign "rolling back to revision $START_REV"
+  echo "═══ helm rollback $RELEASE $START_REV (Ctrl-C, TERM and HUP ignored until it ends) ═══"
+  quiet_signals
+  h rollback "$RELEASE" "$START_REV" --history-max 0 --wait --timeout "$TIMEOUT" \
+    || { echo "ROLLBACK_BROKEN: helm rollback to $START_REV failed (helm history $RELEASE)" >&2; exit 3; }
+  note_made
+  check_back "the rollback"
+}
+
+back_values() {
+  load_start || die "no start noted ($STATE): nothing to go back to"
+  [ "$(chart_hash)" = "$START_CHART" ] || die "the chart files in $CHART differ from the ones noted at start: back-values would also change the templates. Run it from the checkout of the start."
+  echo "═══ helm upgrade $RELEASE --reset-values -f $VALUES (Ctrl-C, TERM and HUP ignored until it ends) ═══"
+  quiet_signals
+  local out
+  out=$(mktemp)
+  h upgrade "$RELEASE" "$CHART" --reset-values -f "$VALUES" --history-max 0 --wait --timeout "$TIMEOUT" --description "$TAG back-values" >"$out" \
+    || { rm -f "$out"; echo "ROLLBACK_BROKEN: helm upgrade with the start's values failed (helm history $RELEASE)" >&2; exit 3; }
+  grep -E '^(REVISION|STATUS):' "$out" || true
+  rm -f "$out"
+  check_back "back-values"
 }
 
 status() {
@@ -221,6 +300,10 @@ status() {
   if load_start; then
     show start "$START_REV" "$START_GIVEN" "$START_ALL"
     if [ "$given" = "$START_GIVEN" ] && [ "$all" = "$START_ALL" ]; then echo "  = the start's values"; else echo "  ≠ the start's values"; fi
+    if [ "$(chart_hash)" = "$START_CHART" ]; then echo "  chart files = the start's"; else echo "  chart files ≠ the start's ($CHART)"; fi
+    local foreign
+    foreign=$(foreign_after)
+    [ -z "$foreign" ] || { echo "  revisions after the start made by something else:"; echo "$foreign" | sed 's/^/    /'; }
   else
     echo "  no start noted"
   fi
@@ -229,13 +312,13 @@ status() {
 
 case "${1:-}" in
   start)
-    if load_start && [ -z "${FORCE:-}" ]; then
-      show "a start is already noted" "$START_REV" "$START_GIVEN" "$START_ALL"
-      die "run back first, or FORCE=1 to note the current revision instead"
+    if [ -f "$STATE" ] && [ -z "${FORCE:-}" ]; then
+      die "a start is already noted ($STATE, $(sed -n 's/^AT=//p' "$STATE")): run back (or back-values), or FORCE=1 to note the current revision instead"
     fi
     note_start ;;
   s1|s2|s2-gateway|s3) switch "$1" ;;
   back) back ;;
+  back-values) back_values ;;
   status) status ;;
-  *) sed -n '2,11p' "$0"; exit 2 ;;
+  *) sed -n '2,12p' "$0"; exit 2 ;;
 esac

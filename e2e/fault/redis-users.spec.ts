@@ -2,7 +2,7 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 
 import {
   CLUSTER, NS, Probe, STAMP, bearer, deploymentExists, internalKubeconfig, kubectl, kubectlOk, login, podLog, readyPods, restartCounts,
-  restartsSince, rolledOut, scale, show, sleep, stopFor, type Answer,
+  restartsSince, rolledOut, show, sleep, stopFor, takeDown, undoPending, type Answer,
 } from './shared'
 
 // PR #866 (one Redis user per service): the chart's Valkey runs an ACL file — k8s-service reaches kubeast:* keys and
@@ -65,6 +65,8 @@ async function nodesByTool(request: APIRequestContext, token: string, cluster: s
   const result = (await res.json()).result
   return result?.isError ? `error ${result?.content?.[0]?.text ?? ''}` : String(result?.content?.[0]?.text ?? '')
 }
+
+test.afterEach(() => undoPending())
 
 test.describe('Redis users per service (PR #866)', () => {
   test.describe.configure({ mode: 'serial' })
@@ -130,6 +132,7 @@ test.describe('Redis users per service (PR #866)', () => {
       const replicas = readyPods('tool-server').length
       const seen: { at: number; text: string }[] = []
       let patchedAt = 0
+      let outage: { offAt: number; onAt: number } | null = null
       try {
         // every tool-server replica keeps the first kubeconfig: as many calls as replicas and more, through the Service
         for (let i = 0; i < replicas * 4; i++) expect(await nodesByTool(request, token, id), 'the tool reads the first cluster').toContain(`${OLD_KIND}-`)
@@ -142,12 +145,15 @@ test.describe('Redis users per service (PR #866)', () => {
             await sleep(200)
           }
         }
-        if (redisDown) await stopFor(REDIS, 0, async () => { await sleep(3_000); await follow() })
+        // with Redis stopped the change is made only once every Redis pod is gone (a terminating one still answers)
+        if (redisDown) outage = await stopFor(REDIS, 0, async () => { await sleep(3_000); await follow() })
         else await follow()
       } finally {
         await request.delete(`/api/v1/clusters/${id}`, { headers: admin, failOnStatusCode: false })
       }
       test.info().attach('tool-answers.json', { body: JSON.stringify(seen), contentType: 'application/json' })
+      if (outage) test.info().attach('timeline.json', { body: JSON.stringify({ redisGone: new Date(outage.offAt).toISOString(), patched: new Date(patchedAt).toISOString(), redisBack: new Date(outage.onAt).toISOString() }, null, 2), contentType: 'application/json' })
+      if (outage) expect(patchedAt, 'the change was made after every Redis pod was gone').toBeGreaterThan(outage.offAt)
       const late = seen.filter((s) => s.at > 10_000 && !s.text.includes(`${NEW_KIND}-`))
       expect(seen.filter((s) => s.at > 10_000).length, 'calls after the first 10 s').toBeGreaterThan(replicas * 4)
       expect(late.map((s) => `+${s.at}ms ${s.text.slice(0, 80)}`), `answers not from ${NEW_KIND} later than 10 s after the change`).toEqual([])
@@ -169,14 +175,17 @@ test.describe('Redis users per service (PR #866)', () => {
     const before = restartCounts()
     const probe = new Probe(request, reads, headers, 100, 10_000)
     let answers: Answer[] = []
+    let outage: { offAt: number; onAt: number } | null = null
     try {
       await sleep(5_000)
-      await stopFor(REDIS, 60)
+      // 60 s from the moment the last Redis pod is gone
+      outage = await stopFor(REDIS, 60)
       await sleep(20_000)
     } finally {
       answers = await probe.stop()
     }
     test.info().attach('reads.json', { body: JSON.stringify(answers), contentType: 'application/json' })
+    test.info().attach('timeline.json', { body: JSON.stringify({ redisGone: new Date(outage.offAt).toISOString(), redisBack: new Date(outage.onAt).toISOString(), offMs: outage.onAt - outage.offAt }, null, 2), contentType: 'application/json' })
     const bad = answers.filter((a) => a.status !== 200)
     expect(answers.length, 'the probe kept sending').toBeGreaterThan(500)
     expect(bad.length, `screen reads not answered 200 while Redis was off or coming back:\n${show(bad)}`).toBe(0)
@@ -197,14 +206,14 @@ test.describe('Redis users per service (PR #866)', () => {
     test.setTimeout(420_000)
     const token = await login(request)
     const headers = bearer(token)
-    const redisHad = Number(kubectl(['-n', NS, 'get', 'deploy', REDIS, '-o', 'jsonpath={.spec.replicas}']) || '1')
     const probe = new Probe(request, [`/api/v1/cluster/overview?cluster=${CLUSTER}`, '/api/v1/clusters'], headers, 200, 10_000)
     let started: string[] = []
     let backAt = 0
     let answers: Answer[] = []
+    let down: Awaited<ReturnType<typeof takeDown>> | null = null
     try {
-      scale(REDIS, 0)
-      await expect.poll(() => readyPods(REDIS).length, { timeout: 60_000 }).toBe(0)
+      // k8s-service restarts only once every Redis pod is gone: a terminating one still answers through its preStop
+      down = await takeDown(REDIS)
       const old = new Set(readyPods(K8S).map((p) => p.name))
       kubectl(['-n', NS, 'rollout', 'restart', `deploy/${K8S}`])
       rolledOut(K8S, 240)
@@ -212,12 +221,11 @@ test.describe('Redis users per service (PR #866)', () => {
       const since = new Date(Date.now() - 300_000).toISOString()
       for (const pod of started) expect(podLog(pod, since), `${pod} started on the in-memory cache`).toContain('redis not available, using in-memory cache until it answers')
     } finally {
-      scale(REDIS, redisHad)
-      rolledOut(REDIS)
-      backAt = Date.now()
+      backAt = down ? down.bringBack() : Date.now()
       answers = await probe.stop()
     }
     test.info().attach('reads.json', { body: JSON.stringify(answers), contentType: 'application/json' })
+    test.info().attach('timeline.json', { body: JSON.stringify({ redisGone: down ? new Date(down.offAt).toISOString() : null, redisBack: new Date(backAt).toISOString(), started }, null, 2), contentType: 'application/json' })
     expect(started.length, 'new k8s-service pods').toBeGreaterThan(0)
     const since = new Date(backAt - 5_000).toISOString()
     for (const pod of started) {

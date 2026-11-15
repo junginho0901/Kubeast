@@ -2,7 +2,7 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 
 import {
   STAMP, bearer, deploymentExists, forwardTo, internalKubeconfig, items, login, onPod, readyPods, restartCounts, restartsSince,
-  sleep, stopFor, type Forward,
+  sleep, stopFor, undoPending, type Forward,
 } from './shared'
 
 // PR #857 (cluster versions in the database): auth-service bumps a cluster's config_version in the statement that
@@ -99,6 +99,8 @@ async function changeAndFollow(request: APIRequestContext, during?: (follow: () 
 test.describe('cluster versions in the database (PR #857, step 3 test 6)', () => {
   test.describe.configure({ mode: 'serial' })
 
+  test.afterEach(() => undoPending())
+
   test.beforeEach(() => {
     test.skip(readyPods(K8S).length < 2, 'needs two ready k8s-service pods (replicas.k8sService: 2 once M-7 lets the chart render it)')
     test.skip(!internalKubeconfig(OLD_KIND), `needs the kind cluster ${OLD_KIND} (scripts/add-kind-cluster.sh default --addons)`)
@@ -122,13 +124,16 @@ test.describe('cluster versions in the database (PR #857, step 3 test 6)', () =>
     test.skip(!deploymentExists('redis'), 'the install runs no Redis (redis.enabled false): the first case already has no notices')
     test.setTimeout(300_000)
     const before = restartCounts()
+    const times: { outage?: { offAt: number; onAt: number } } = {}
     const result = await changeAndFollow(request, async (follow) => {
-      // Redis goes before the change and comes back after the follow; stopFor restores it whatever happens
-      await stopFor('redis', 0, async () => {
+      // the change goes out once every Redis pod is gone (a terminating one still answers through its preStop); Redis
+      // comes back after the follow — also on Ctrl-C or a timeout (atExit, the afterEach) and a killed worker (whenGone)
+      times.outage = await stopFor('redis', 0, async () => {
         await sleep(5_000)
         await follow()
       })
     })
+    test.info().attach('timeline.json', { body: JSON.stringify(times.outage && { redisGone: new Date(times.outage.offAt).toISOString(), redisBack: new Date(times.outage.onAt).toISOString() }, null, 2), contentType: 'application/json' })
     const { pods, firstNew, oldAfter, lateOld } = result
     for (const pod of pods) {
       expect(firstNew[pod], `${pod} named ${NEW_KIND}'s node with Redis stopped`).not.toBeNull()

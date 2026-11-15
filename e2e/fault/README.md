@@ -34,15 +34,21 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
   container again in the same pod.
 - "Freeze" (`freeze`) is `ctr -n k8s.io task pause` of a container on its kind node (`docker pause` for a database
   container outside kind, `E2E_FAULT_PG_DOCKER`): every process stops, open connections stay open and nothing answers.
-- What a test breaks below the API is put back on the worker's exit and on Ctrl-C (`atExit`), and a frozen container
-  also by a detached process `seconds` + 30 s after the freeze, so a worker killed outright leaves no paused database.
-  The drain tests' namespace on test2 and its cordon are put back the same way.
+- What a test changes and must put back (a Deployment scaled to 0, a frozen container, the drain tests' namespace and
+  cordon on test2, a pod it made) is registered with `atExit` as it is changed. A test's `finally` does not run when
+  Playwright interrupts it (Ctrl-C, a test timeout: the body is left where it waits), so the list also runs in each
+  file's `afterEach` (`undoPending`), on the worker's exit and on SIGINT, SIGTERM and SIGHUP. For a worker killed
+  outright, a scaled-down Deployment is scaled back by a detached process that waits for the worker to be gone
+  (`whenGone`), and a frozen container is resumed by one `seconds` + 30 s after the freeze. Port-forwards run under a
+  shell that ends them when the worker is gone, and the kubeconfig copy is removed on exit.
 - `wsSubscriptions` reads a k8s-service pod's `kubeast_ws_subscriptions` through its port-forward: the pod whose count
   went up when a page opened its live list is the one that holds it. `watchListSockets` keeps each `/wsMultiplexer`
   socket the page opens (opened, first frame, closed) for `listSocketBack`.
 - "Server restarts 0" compares the container restart counts of the pods present before and after.
-- `stopFor(deploy, seconds)` scales a Deployment to 0 and back to what it had, waiting for the rollout, also when the
-  test fails.
+- `takeDown(deploy)` scales a Deployment to 0 and waits until none of its pods is left — `podsOf` counts a pod being
+  deleted, which still answers through its preStop and grace (Redis has a 5 s preStop) — so what a test does with it
+  "off" starts only then; `stopFor(deploy, seconds)` keeps it off `seconds` from that moment and brings it back,
+  waiting for the rollout, and returns when it went off and came back for the test's `timeline.json`.
 - Passwords (the Redis users') are read from their Secret and given to `valkey-cli` on stdin, never on a command line.
 
 ## Files
@@ -110,12 +116,15 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
 
 `claude-code-slots.spec.ts`
 - With every slot held by rows the test writes, a turn on each server says `{"queued": true}` and no server takes a
-  slot; one slot set free is taken by exactly one turn within 5 s; slots held never pass `maxConcurrentTotal`.
+  slot; one slot set free is taken by exactly one turn within 5 s. Read about every 250 ms until both turns end: the
+  two servers never hold more than the one row given back; a turn still getting answer text a second later holds a
+  row of its server (a run without one would be past the cap); each turn that started had its server's row at its
+  start (`slot-samples.json`).
 - With every slot held for the whole wait, a turn ends with `error_key: claudeCodeBusy` between `queueWaitSeconds` − 1
   and + 10 s.
 - A slot whose heartbeat stopped is taken by a waiting turn on another server when it is 59–62 s old, never before.
-- A server killed while its run holds a slot: the other server's turn has that slot at most 62 s after the dead run's
-  last heartbeat and is not busy (the test notes whether the shutdown set it free first).
+- A server killed with no SIGTERM (`killNoSignal`) while its run holds a slot: the slot is not set free before the
+  other server's turn takes it, 59–62 s after the dead run's last heartbeat, and that turn is not busy.
 - Depends on: `claude_code_slots` (migration 00025 of #859), `AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL` /
   `AI_CLAUDE_CODE_QUEUE_WAIT` in the ConfigMap, slot owners starting with the pod's host name, the stream's `queued`
   events, `POST /api/v1/ai/sessions/{id}/chat` with a JSON body.
@@ -125,9 +134,9 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
   KEYS and SCAN and may PING; k8s-service may SET, GET and PUBLISH under `kubeast:` and is refused keys and channels
   outside it, FLUSHALL, FLUSHDB, KEYS, CONFIG, EVAL, HSET and ACL.
 - tool-server answers from the new kubeconfig on every call later than 10 s after the change, with the change notice
-  and with Redis stopped (its 10 s keep alone).
-- F-8: every screen read answers 200 while Redis is off for 60 s and while it comes back, no restart of the pods that
-  stayed, `kubeast:cache:` keys are in Redis again afterwards.
+  and with Redis stopped (its 10 s keep alone; the change is made after every Redis pod is gone).
+- F-8: every screen read answers 200 while Redis is off for 60 s (from the moment its last pod is gone) and while it
+  comes back, no restart of the pods that stayed, `kubeast:cache:` keys are in Redis again afterwards.
 - F-8 for #857: a k8s-service started while Redis was down logs that it runs on the in-memory cache, logs within 15 s
   of Redis answering that its cache moves to Redis, and reads answer 200 throughout.
 - Depends on: the ACL file of #866 (`kubeast.redisUsersAcl`), the Secret `kubeast-redis-users` (or the one the redis
@@ -175,18 +184,31 @@ TERM and writes a line to a hostPath file, and a PostgreSQL 18 Deployment with t
 | `s3` | every replica 1, `streams.enabled` (needs #825) | `w4-stream-split` |
 
 ```bash
-scripts/kind-fault-shape.sh start   # note the revision and its values' hashes (the first switch does it too)
-scripts/kind-fault-shape.sh s2      # … the tests of that shape …
+scripts/kind-model-subscription.sh up <token-file>   # first: claude-code-slots needs it, and it upgrades the release itself
+scripts/kind-fault-shape.sh start   # note the start (the first switch does it too)
+scripts/kind-fault-shape.sh s1      # … the tests of that shape …, then s2, s2-gateway, s3
 scripts/kind-fault-shape.sh back    # roll back to the noted revision; its two hashes must match
+scripts/kind-model-subscription.sh down              # last
 ```
 
-Every upgrade and rollback runs with `--history-max 0` and `--wait`; each step prints the revision and the hashes of
-`helm get values` and `helm get values --all` before and after, never the values. A shape the chart refuses stops at
-the server render (`--dry-run=server`) with nothing changed; a helm error, a failed check or Ctrl-C during the upgrade
-rolls back to the revision before it and checks its hashes (`ROLLBACK_BROKEN` and exit 3 when they differ). Another
-script's upgrade (`kind-model-subscription.sh`, `rebuild-kind.sh`) keeps helm's 10 revisions and can drop the noted
-one: `back` then takes the newest revision with the same two hashes. The claude-code model for `claude-code-slots`
-stays `scripts/kind-model-subscription.sh up` / `down`.
+`start` notes the revision, its time in `helm history`, the hashes of `helm get values` and `helm get values --all`,
+a hash of the chart directory's files, and a copy of the values (a 0600 file next to the start, under the git-ignored
+`.kind-data/`, for `back-values`). Every upgrade and rollback runs with `--history-max 0` and `--wait`; each upgrade is
+described `kind-fault-shape <shape> chart=<hash>`, and each step prints the revision and both hashes before and after,
+never the values. A shape the chart refuses stops at the server render (`--dry-run=server`) with nothing changed.
+
+Between `start` and `back` nothing else may upgrade the release: a switch and `back` stop when a revision after the
+start was made by something else (another script's upgrade — `kind-model-subscription.sh`, `rebuild-kind.sh` — would
+be undone by the rollback, and keeps only 10 revisions), when the noted revision is no longer the one noted (pruned,
+or the release installed again), and a switch also when this checkout's chart files differ from the start's (the
+templates would change too). `back-values` is the way back then: `helm upgrade --reset-values -f <the copy>` with this
+checkout's chart, if its files are the start's, and the same hash check.
+
+helm runs in the background of the script, so Ctrl-C, TERM or a closed terminal (HUP) reaches its trap at once: it
+stops helm, rolls back to the revision before the switch and checks the hashes (`ROLLBACK_BROKEN` and exit 3 when they
+differ, the start's files kept). The rollbacks, there and in `back`, ignore those signals until they end; after a
+closed terminal the rollback writes to `<start file>.log`. A release left `pending-upgrade` or `pending-rollback` by
+anything else: run `back`.
 
 ## What a run leaves for the record
 
@@ -200,8 +222,24 @@ attachments: every probe answer (`answers.json`; `reads.json`, `reads-during-out
 `tool-answers.json` or `seen.json` in the cases that name them so); `timeline.json` (kill, thaw and recovery times in
 ms, the error window, the live list's sockets, the recording row before and after, how the killed container ended) in
 W6-1, Q-52, F-5 and F-14; `killed-container-previous-log.txt` in W6-1; `drain-status.json` in Q-52;
-`reads-by-route.json` in F-9; `gateway-502-and-worker-lines.txt` in F-14. Print `scripts/kind-fault-shape.sh status`
-before and after each shape into the same folder.
+`reads-by-route.json` in F-9; `gateway-502-and-worker-lines.txt` in F-14; `errors-around-kill.json` (the failed
+answers before, in the 3 s after and after the kill) in W6-1 and F-5; `slot-samples.json` in the first
+`claude-code-slots` case; Redis's and PostgreSQL's off and on times in the `timeline.json` of every case that stops
+them. Print `scripts/kind-fault-shape.sh status` before and after each shape into the same folder.
+
+The fault project records no trace (`trace: 'off'`: a trace would hold the admin password, tokens and the kind
+clusters' kubeconfigs the requests carry). The `--output` folder holds the attachments above, a screenshot of a page
+test that failed and Playwright's `error-context.md` (the page's accessibility snapshot); none of them holds a
+credential.
+
+### First runs
+
+The 3 s line of W6-1 and F-5 and the 5 s line of their live list sit near times of the system itself: the gateway's
+nginx has one upstream (the Service) and does not send a failed request to the other server, a dead pod leaves the
+endpoints after the kubelet sees it (about a second) and kube-proxy rewrites its rules (at least another), and the
+list reconnects after 0.5–1 s, then 1–2 s, then 2–4 s. A first run that misses a line is judged from
+`errors-around-kill.json` and the sockets in `timeline.json` before anything changes; the test is not loosened to make
+it green (step 4 §4-3), and a line set again after the first measurement says why in the matrix.
 
 ## Not here, and why
 
@@ -216,13 +254,17 @@ before and after each shape into the same folder.
 
 ## After a run that stopped half way
 
-Each test puts back what it changed in `finally`. If a run was cut (the laptop slept, the process was killed):
+Each test puts back what it changed in `finally`, and an interrupted one through `atExit` (above). If the worker or
+the laptop went away before that could run:
 
 - `kubectl -n kubeast get deploy redis postgres` — scale back to 1 if 0.
 - `docker exec kubeast-control-plane ctr -n k8s.io task ls | grep PAUSED` — `ctr -n k8s.io task resume <id>` (a frozen
   PostgreSQL resumes by itself 30 s after its freeze time; `docker unpause` for `E2E_FAULT_PG_DOCKER`).
-- `scripts/kind-fault-shape.sh status` — `back` while the values are not the start's.
+- `scripts/kind-fault-shape.sh status` — `back` while the values are not the start's or the release is `pending-*`.
+- `ps -ef | grep 'kubectl.*port-forward'` — a port-forward left by a worker killed within the second before its shell
+  looked.
 - `kubectl --context kind-test2 get ns | grep e2e-w6` — delete them, then `kubectl --context kind-test2 uncordon <node>`.
 - Clusters named `e2e-w6-*` in the cluster list — delete them.
+- AI Chat conversations titled `e2e-w6-slots-*` — delete them.
 - `UPDATE claude_code_slots SET owner = '', heartbeat_at = NULL WHERE owner LIKE 'e2e-w6-%'` on the dev database.
 - Pods `e2e-w6-seq-*` / `e2e-w6-after-*` / `e2e-w6-nosig-*` / `e2e-w6-gw-*` in `default` on `self` — delete them.

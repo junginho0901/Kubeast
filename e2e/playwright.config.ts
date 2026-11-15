@@ -137,6 +137,9 @@ export default defineConfig({
             testMatch: /\.spec\.ts$/,
             use: {
               ...devices['Desktop Chrome'],
+              // A trace would hold the admin password, tokens and the kind clusters' kubeconfigs the requests carry,
+              // and a run's artifacts are kept as a record: the attachments say what happened instead.
+              trace: 'off',
               actionTimeout: 15_000,
               navigationTimeout: 30_000,
               viewport: { width: 1440, height: 900 },

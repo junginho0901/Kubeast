@@ -3,7 +3,7 @@ import { test, expect, type APIRequestContext, type BrowserContext } from '@play
 import {
   CLUSTER, NS, Probe, STAMP, aroundKill, atExit, bearer, deploymentExists, dockerFreezeTarget, envOf, forwardTo, freeze, freezeTargetOf,
   killNoSignal, killPod, kindKubectl, kubectl, kubectlOk, lastEnd, listSocketBack, listSockets, login, onPod, psql, readyPods, restartCounts,
-  restartsSince, rolledOut, show, sleep, stopFor, stopPod, watchListSockets, wsSubscriptions, type Answer, type Forward, type FreezeTarget,
+  restartsSince, rolledOut, show, sleep, stopFor, stopPod, undoPending, watchListSockets, wsSubscriptions, type Answer, type Forward, type FreezeTarget,
 } from './shared'
 
 // PR #858 (drain progress in the database): node_drains holds each drain's progress, its owner (the server running
@@ -133,6 +133,8 @@ async function auditRows(request: APIRequestContext, token: string, action: stri
 
 test.describe('drain progress in the database (PR #858)', () => {
   test.describe.configure({ mode: 'serial' })
+
+  test.afterEach(() => undoPending())
 
   test.beforeEach(() => {
     test.skip(!remote, `needs the kind cluster ${DRAIN_KIND} registered as ${DRAIN_CLUSTER} (scripts/add-kind-cluster.sh test2)`)
@@ -282,8 +284,9 @@ test.describe('drain progress in the database (PR #858)', () => {
       const rise = (p: string) => subsAfter[p] - subsBefore[p]
       const victim = pods.reduce((best, p) => (rise(p) > rise(best) ? p : best), pods[0])
       const other = pods.find((p) => p !== victim)!
-      const holdsList = rise(victim) > 0
       test.info().annotations.push({ type: 'killed', description: `${victim} (live list subscriptions +${rise(victim)}; ${other} +${rise(other)})` })
+      expect([...Object.values(subsBefore), ...Object.values(subsAfter)].every(Number.isFinite), 'every k8s-service pod reports kubeast_ws_subscriptions on /metrics').toBe(true)
+      expect(rise(victim), 'the subscriptions of one server went up when the page opened its live list').toBeGreaterThan(0)
 
       // a drain and a terminal on that server
       const onA = await onPod(fwd[victim], token)
@@ -324,8 +327,8 @@ test.describe('drain progress in the database (PR #858)', () => {
       }
       timeline.drainInterruptedMs = interruptedAt ? interruptedAt - killedAt : null
       // ② the live list
-      const list = holdsList ? await listSocketBack(page, killedAt, RECONNECT_MS) : null
-      timeline.listReopenMs = list?.reopenMs ?? null
+      const list = await listSocketBack(page, killedAt, RECONNECT_MS)
+      timeline.listReopenMs = list.reopenMs
       // ④ the container back in the same pod
       let readyAt = 0
       while (Date.now() - killedAt < 180_000) {
@@ -352,20 +355,19 @@ test.describe('drain progress in the database (PR #858)', () => {
       const around = aroundKill(answers, killedAt, STALE_WITHIN_MS)
       timeline.errorWindow = around.window ? `${around.window.first - killedAt}..${around.window.last - killedAt} ms` : null
       test.info().attach('answers.json', { body: JSON.stringify(answers), contentType: 'application/json' })
-      test.info().attach('timeline.json', { body: JSON.stringify({ ...timeline, victim, other, holdsList, recordingBefore, recordingAfter, lastEnd: end, sockets: list?.sockets ?? null }, null, 2), contentType: 'application/json' })
+      test.info().attach('timeline.json', { body: JSON.stringify({ ...timeline, victim, other, recordingBefore, recordingAfter, lastEnd: end, sockets: list.sockets }, null, 2), contentType: 'application/json' })
+      // the 3 s and 5 s lines sit near the system's own times (one upstream in nginx, endpoint updates, the list's
+      // reconnect backoff): a first red run is judged from these before anything changes (README "First runs")
+      test.info().attach('errors-around-kill.json', { body: JSON.stringify(around, null, 2), contentType: 'application/json' })
       test.info().attach('killed-container-previous-log.txt', { body: previous, contentType: 'text/plain' })
 
       // ① reads
       expect(around.before.map((a) => `${a.path} ${a.status}`), 'reads that failed before the kill').toEqual([])
       expect(around.after.length, `reads not 200 from ${STALE_WITHIN_MS} ms after the kill:\n${show(around.after)}`).toBe(0)
       // ② the live list
-      if (list) {
-        expect(list.cut, 'the page\'s live list socket on the killed server closed').toBe(true)
-        expect(list.reopenMs, 'ms from its close to a new socket open').not.toBeNull()
-        expect(list.reopenMs!, 'ms from its close to a new socket open').toBeLessThanOrEqual(RECONNECT_MS)
-      } else {
-        test.info().annotations.push({ type: 'not checked', description: 'the live list: no server\'s subscriptions went up when the page opened it' })
-      }
+      expect(list.cut, 'the page\'s live list socket on the killed server closed').toBe(true)
+      expect(list.reopenMs, 'ms from its close to a new socket open').not.toBeNull()
+      expect(list.reopenMs!, 'ms from its close to a new socket open').toBeLessThanOrEqual(RECONNECT_MS)
       // ③ the drain: interrupted within 30 s, by a server that found the heartbeat stale (no shutdown marked it)
       expect(last?.status, `status read on ${other} after ${victim} was killed`).toBe('interrupted')
       expect(interruptedAt - killedAt, 'ms from the kill to "interrupted"').toBeLessThanOrEqual(INTERRUPTED_WITHIN_MS)
@@ -418,23 +420,27 @@ test.describe('drain progress in the database (PR #858)', () => {
       '/api/v1/clusters',
       `/api/v1/sessions?cluster=${CLUSTER}`,
     ]
-    const writes: { name: string; status: number }[] = []
+    const writes: { name: string; status: number; at: number }[] = []
     let drainDuring = 0
     let probe: Probe | null = null
     let left: string[] = []
+    let outage: { offAt: number; onAt: number } | null = null
     const maps = Array.from({ length: 10 }, (_, i) => `w6-pgoff-${STAMP}-${i}`)
     for (const name of maps) remote!(['-n', ns, 'create', 'configmap', name, '--from-literal=k=v'])
     try {
       probe = new Probe(request, reads, headers, 100, 10_000)
       await sleep(5_000)
-      await stopFor('postgres', 60, async () => {
+      // 60 s from the moment the PostgreSQL pod is gone; no delete is sent past 57 s of it, so the outage stays 60 s
+      outage = await stopFor('postgres', 60, async (offAt) => {
         await sleep(10_000)
         const drain = await request.post(`/api/v1/cluster/nodes/${node}/drain?cluster=${DRAIN_CLUSTER}`, { headers, failOnStatusCode: false, timeout: 15_000 }).catch(() => null)
         drainDuring = drain?.status() ?? 0
-        // a ConfigMap delete on test2 every 3 s: refused (the ConfigMap stays), or done with its row once the database is back
+        // a ConfigMap delete on test2 every 3 s while it is off: refused (the ConfigMap stays), or done with its row
         for (const name of maps) {
+          if (Date.now() - offAt > 57_000) break
+          const at = Date.now()
           const res = await request.delete(`/api/v1/cluster/namespaces/${ns}/configmaps/${name}?cluster=${DRAIN_CLUSTER}`, { headers, failOnStatusCode: false, timeout: 15_000 }).catch(() => null)
-          writes.push({ name, status: res?.status() ?? 0 })
+          writes.push({ name, status: res?.status() ?? 0, at })
           await sleep(3_000)
         }
       })
@@ -449,6 +455,7 @@ test.describe('drain progress in the database (PR #858)', () => {
       // what a signed-in reader still saw, per route (written down, not a pass line: step 4 F-9)
       const byPath = Object.fromEntries(reads.map((p) => [p, answers.filter((a) => a.path === p).reduce<Record<string, number>>((m, a) => ({ ...m, [a.status]: (m[a.status] ?? 0) + 1 }), {})]))
       test.info().attach('reads-by-route.json', { body: JSON.stringify(byPath, null, 2), contentType: 'application/json' })
+      test.info().attach('timeline.json', { body: JSON.stringify({ postgresGone: outage ? new Date(outage.offAt).toISOString() : null, postgresBack: outage ? new Date(outage.onAt).toISOString() : null, offMs: outage ? outage.onAt - outage.offAt : null, drainDuring, writes: writes.map((w) => ({ ...w, at: new Date(w.at).toISOString() })) }, null, 2), contentType: 'application/json' })
       try { left = remote!(['-n', ns, 'get', 'configmaps', '-o', 'jsonpath={.items[*].metadata.name}']).split(/\s+/).filter(Boolean) } catch { left = [] }
       release(ns, node)
     }

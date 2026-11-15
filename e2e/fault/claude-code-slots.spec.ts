@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
 
-import { CLUSTER, STAMP, bearer, envOf, forwardTo, killPod, login, psql, readyPods, rolledOut, sleep, type Forward } from './shared'
+import { CLUSTER, STAMP, bearer, envOf, forwardTo, killNoSignal, login, psql, readyPods, rolledOut, sleep, undoPending, type Forward } from './shared'
 
 // PR #859 (Claude Code slots in the database): every ai-service replica takes a chat run's place in
 // claude_code_slots, so the install runs at most maxConcurrentTotal Claude Code processes however many servers there
@@ -24,6 +24,8 @@ let beating: NodeJS.Timeout | null = null
 
 type Event = { at: number; data: Record<string, unknown> }
 type Turn = { events: Event[]; ended: Promise<void>; startedAt: number }
+// rows of claude_code_slots at one moment: how many each of the two servers holds
+type Sample = { at: number; byA: number; byB: number }
 
 const total = () => {
   const t = Number(envOf(AI, 'AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL') || '0')
@@ -93,6 +95,12 @@ function turn(f: Forward, token: string, session: string, message: string): Turn
 
 const queuedAt = (t: Turn, v: boolean) => t.events.find((e) => e.data.queued === v)?.at ?? null
 const busy = (t: Turn) => t.events.find((e) => e.data.error_key === 'claudeCodeBusy') ?? null
+// The run's process is alive at `at` when the turn had started a second before and still gets answer text a second
+// after: text comes only from the running Claude Code process, which holds its slot until it ends (#859 claude_code.py).
+const runningAt = (t: Turn, at: number) => {
+  const start = queuedAt(t, false)
+  return start !== null && start <= at - 1_000 && t.events.some((e) => typeof e.data.content === 'string' && e.at >= at + 1_000)
+}
 
 async function newSession(request: APIRequestContext, token: string): Promise<string> {
   const res = await request.post(`/api/v1/sessions?cluster=${CLUSTER}`, { headers: bearer(token), data: { title: `e2e-w6-slots-${STAMP}` } })
@@ -116,6 +124,7 @@ test.describe('Claude Code slots across replicas (PR #859, M-4)', () => {
   })
 
   test.afterEach(() => {
+    undoPending()
     if (beating) { clearInterval(beating); beating = null }
     try { letGo() } catch { /* no table: the group skipped before writing a row */ }
     forwards.splice(0).forEach((f) => f.close())
@@ -141,35 +150,48 @@ test.describe('Claude Code slots across replicas (PR #859, M-4)', () => {
     const ta = turn(fa, token, sa, 'Answer with the single word: ok')
     const tb = turn(fb, token, sb, 'Answer with the single word: ok')
     await expect.poll(() => [queuedAt(ta, true) !== null, queuedAt(tb, true) !== null], { message: 'both turns say they wait', timeout: 15_000 }).toEqual([true, true])
-    const held = (rows: SlotRow[]) => rows.filter((r) => r.slot < n && r.owner !== '')
-    const mine = (rows: SlotRow[]) => rows.filter((r) => r.owner.startsWith(`${a}-`) || r.owner.startsWith(`${b}-`))
-    expect(mine(slots()).length, 'no server took a slot while all were held').toBe(0)
+    const samples: Sample[] = []
+    const sample = () => {
+      const rows = slots()
+      const s = { at: Date.now(), byA: rows.filter((r) => r.owner.startsWith(`${a}-`)).length, byB: rows.filter((r) => r.owner.startsWith(`${b}-`)).length }
+      samples.push(s)
+      return s
+    }
+    const first = sample()
+    expect(first.byA + first.byB, 'no server took a slot while all were held').toBe(0)
 
     // one slot comes free: one of the two takes it within a poll, the other keeps waiting
     letGo([0])
-    let maxHeld = 0
-    await expect.poll(() => {
-      const rows = slots()
-      maxHeld = Math.max(maxHeld, held(rows).length)
-      return mine(rows).length
-    }, { message: 'one turn takes the freed slot', timeout: 5_000, intervals: [250] }).toBe(1)
-    const taker = mine(slots())[0].owner.startsWith(`${a}-`) ? ta : tb
+    await expect.poll(() => { const s = sample(); return s.byA + s.byB }, { message: 'one turn takes the freed slot', timeout: 5_000, intervals: [250] }).toBe(1)
+    const taker = samples[samples.length - 1].byA ? ta : tb
     const waiter = taker === ta ? tb : ta
     expect(queuedAt(taker, false), 'the turn that took the slot says it started').not.toBeNull()
 
-    // the taker's run ends and sets its slot free; the waiter takes it then, and the slots held never pass the cap
-    let waiterTook = false
-    const until = Date.now() + (wait + 30) * 1000
-    while (Date.now() < until && !waiterTook && !busy(waiter)) {
-      const rows = slots()
-      maxHeld = Math.max(maxHeld, held(rows).length)
-      waiterTook = queuedAt(waiter, false) !== null
+    // both runs to their end, the rows read about every 250 ms
+    let ended = 0
+    void Promise.all([ta.ended, tb.ended]).then(() => { ended = Date.now() })
+    const until = Date.now() + (wait + 90) * 1000
+    while (Date.now() < until && !ended) {
+      sample()
       await sleep(250)
     }
     await Promise.all([ta.ended, tb.ended])
-    expect(maxHeld, `slots held at once with the cap ${n}`).toBeLessThanOrEqual(n)
+    test.info().attach('slot-samples.json', { body: JSON.stringify({ samples, taker: taker === ta ? a : b, starts: { [a]: queuedAt(ta, false), [b]: queuedAt(tb, false) } }), contentType: 'application/json' })
+
+    // one slot was given back, so the two servers never hold more than one row between them
+    expect(samples.filter((s) => s.byA + s.byB > 1).map((s) => `${new Date(s.at).toISOString()} ${a}:${s.byA} ${b}:${s.byB}`), 'moments the two servers held more than the one slot given back').toEqual([])
+    // a run whose process was alive held a row of its server (a run without one would be past the cap)
+    const unheld = samples.filter((s) => (runningAt(ta, s.at) && s.byA < 1) || (runningAt(tb, s.at) && s.byB < 1))
+    expect(unheld.map((s) => `${new Date(s.at).toISOString()} ${a}:${s.byA} ${b}:${s.byB}`), 'moments a running turn\'s server held no row').toEqual([])
+    // each turn that started had its server's row at its start (the first read within 1.5 s after it)
+    for (const [t, by, name] of [[ta, 'byA', a], [tb, 'byB', b]] as const) {
+      const start = queuedAt(t, false)
+      if (start === null) continue
+      const next = samples.find((s) => s.at >= start && s.at <= start + 1_500)
+      expect(next ? next[by] : null, `${name}'s row read within 1.5 s of its turn starting`).toBe(1)
+    }
     expect(busy(taker), 'the turn that took the freed slot is not busy').toBeNull()
-    expect(waiterTook || busy(waiter) !== null, 'the other turn either started on the slot set free or ended busy').toBe(true)
+    expect(queuedAt(waiter, false) !== null || busy(waiter) !== null, 'the other turn either started on the slot set free or ended busy').toBe(true)
   })
 
   test('every slot held for the whole queue wait: a turn waits, takes none, and ends busy after queueWaitSeconds', async ({ request }) => {
@@ -230,7 +252,7 @@ test.describe('Claude Code slots across replicas (PR #859, M-4)', () => {
     await t.ended
   })
 
-  test('a server killed while its run holds a slot: that slot is free for the other server within 60 s of its last heartbeat', async ({ request }) => {
+  test('a server killed with no SIGTERM while its run holds a slot: the other server takes it 59–62 s after its last heartbeat, not before', async ({ request }) => {
     const n = total()
     test.setTimeout(300_000)
     const rest = Array.from({ length: n - 1 }, (_, i) => i + 1)
@@ -248,7 +270,8 @@ test.describe('Claude Code slots across replicas (PR #859, M-4)', () => {
       await expect.poll(() => slots().find((r) => r.slot === 0)?.owner.startsWith(`${a}-`) ?? false, { message: `${a} takes slot 0`, timeout: 30_000, intervals: [200] }).toBe(true)
       const deadBeat = slots().find((r) => r.slot === 0)!
       const beatEpoch = deadBeat.now - (deadBeat.age ?? 0)
-      killPod(a)
+      // SIGKILL with no SIGTERM, so the server cannot set its slot free on the way out: the slot frees only as stale
+      killNoSignal(a)
       void ta.ended
 
       // a turn on B, started once the dead slot is at most 45 s from stale so its queue wait covers the rest
@@ -263,8 +286,10 @@ test.describe('Claude Code slots across replicas (PR #859, M-4)', () => {
         if (row.owner.startsWith(`${b}-`)) { takenAfter = row.now - beatEpoch; break }
         await sleep(250)
       }
-      test.info().annotations.push({ type: 'slot 0', description: `taken by ${b} ${takenAfter} s after ${a}'s last heartbeat${releasedOnShutdown ? ' (set free by the shutdown first)' : ''}` })
+      test.info().annotations.push({ type: 'slot 0', description: `taken by ${b} ${takenAfter} s after ${a}'s last heartbeat${releasedOnShutdown ? ' (set free before that)' : ''}` })
+      expect(releasedOnShutdown, `slot 0 was set free before ${b} took it (a SIGKILLed server cannot)`).toBe(false)
       expect(takenAfter, `${b}'s turn took the slot ${a} held`).not.toBeNull()
+      expect(takenAfter!, 'not before the dead holder\'s heartbeat is 60 s old (s after it)').toBeGreaterThanOrEqual(59)
       expect(takenAfter!, 'seconds from the dead holder\'s last heartbeat to the take').toBeLessThanOrEqual(62)
       expect(busy(tb), 'the turn on the server left is not busy').toBeNull()
       await tb.ended
