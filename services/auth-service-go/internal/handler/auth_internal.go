@@ -20,11 +20,13 @@ import (
 )
 
 // TokenVersion handles GET /auth/internal/token-version/{userID}: the current
-// token_version of the bearer's own subject, for the other services'
-// validators (services/pkg/auth token_version.go). The token is validated for
-// signature, issuer, audience and expiry but not for its own "tv" — a revoked
-// token must still be able to learn that it is revoked. The gateway never
-// routes /api/v1/auth/internal/, so only in-cluster callers reach this.
+// token_version of the bearer's own subject and the auth_time of each of its
+// sign-ins that was signed out, for the other services' validators
+// (services/pkg/auth token_version.go), which cache the answer per user. The
+// token is validated for signature, issuer, audience and expiry but not for
+// its own "tv" or sign-in — a revoked token must still be able to learn that
+// it is revoked. The gateway never routes /api/v1/auth/internal/, so only
+// in-cluster callers reach this.
 func (h *AuthHandler) TokenVersion(w http.ResponseWriter, r *http.Request) {
 	header := r.Header.Get("Authorization")
 	if !strings.HasPrefix(strings.ToLower(header), "bearer ") {
@@ -54,7 +56,7 @@ func (h *AuthHandler) TokenVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	// A token an API key was exchanged for goes with the key (revoked or expired).
 	akid, _ := claims["akid"].(string)
-	tv, err := h.repo.TokenVersionFor(r.Context(), userID, akid)
+	state, err := h.repo.SessionStateFor(r.Context(), userID, akid)
 	if errors.Is(err, repository.ErrAPIKeyNotFound) {
 		response.Error(w, http.StatusNotFound, "API key revoked")
 		return
@@ -63,7 +65,11 @@ func (h *AuthHandler) TokenVersion(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusNotFound, "Unknown user")
 		return
 	}
-	response.JSON(w, http.StatusOK, map[string]int{"tv": tv})
+	signedOut := state.SignedOut
+	if signedOut == nil {
+		signedOut = []int64{}
+	}
+	response.JSON(w, http.StatusOK, map[string]any{"tv": state.Version, "signed_out": signedOut})
 }
 
 // dns1123Label is a namespace name (RFC 1123 label).

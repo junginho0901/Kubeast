@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ANSWERS from './chatAnswer.cases.json'
-import { appendToolBlock, ChatStreamManager, resultTarget, withToolAccess, withToolResult } from './chatStreamManager'
+import ACCESS_LINES from './toolAccess.cases.json'
+import { appendToolBlock, ChatStreamManager, resultTarget, withToolAccess, withToolResult, type ChatStreamState } from './chatStreamManager'
 import { stripToolDetails } from './chatTextUtils'
-import { accessLine, accessSection, requestsBlock } from './toolAccess'
+import { accessLine, accessSection, requestsBlock, type ToolAccess } from './toolAccess'
 
 describe('pairing a tool result with its call', () => {
   const calls = [
@@ -318,6 +319,16 @@ describe('how an answer ends', () => {
     })
   })
 
+  it('a refused request whose server names the words for it keeps that key', async () => {
+    const state = await ended(new Response('{"detail":"the answer stream could not start","error_key":"streamStartFailed"}', { status: 500 }))
+    expect(state).toMatchObject({
+      status: 'error',
+      error: 'HTTP 500: the answer stream could not start',
+      errorKey: 'streamStartFailed',
+      errorArgs: { status: 500, detail: 'the answer stream could not start' },
+    })
+  })
+
   it.each([
     ['a page from a proxy', '<html><body>Bad Gateway</body></html>', 502],
     ['no body', '', 500],
@@ -541,6 +552,142 @@ describe('an answer whose stream was cut is saved as it shows', () => {
   })
 })
 
+// Signing out and signing in reset both chats (services/auth onSessionChange): the answer on its way is cancelled, and
+// what its request still brings writes nothing, so the next person's chat starts as a new tab's.
+describe('a reset when the person signed in changes', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  const sse = (...events: unknown[]) => events.map((e) => `data: ${typeof e === 'string' ? e : JSON.stringify(e)}\n\n`).join('')
+  const encode = (text: string) => new TextEncoder().encode(text)
+  const NEW_TAB = { status: 'idle', isStreaming: false, sessionId: null, userMessage: null, content: '', toolCalls: [], streamingPhase: null, error: null, errorKey: null, failedTurns: [] }
+
+  // Each chat request answered by `answer` with its signal; every request recorded.
+  function server(answer: (signal: AbortSignal) => Response | Promise<Response>) {
+    const sent: { url: string; signal: AbortSignal; message?: string }[] = []
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      sent.push({ url, signal: init.signal!, message: JSON.parse(String(init.body)).message })
+      return answer(init.signal!)
+    }))
+    return sent
+  }
+  // A stream that stays open until its request is cancelled, as a browser's does.
+  const openStream = (signal: AbortSignal, first = '') => new Response(new ReadableStream({
+    start(controller) {
+      if (first) controller.enqueue(encode(first))
+      signal.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')))
+    },
+  }))
+
+  it('cancels the answer on its way and leaves what a new tab has: no Stop, no letters, no earlier turns', async () => {
+    const answers = [
+      () => new Response('{"detail":"audit unavailable"}', { status: 503 }),
+      (signal: AbortSignal) => openStream(signal, sse({ content: 'Checking team-a. ' }, { function: 'k8s_get_resources', args: { namespace: 'team-a' }, call_id: 0 })),
+    ]
+    const sent = server((signal) => answers.shift()!(signal))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    const seen: ChatStreamState[] = []
+    manager.subscribe((s) => seen.push(s))
+    await manager.startSessionChat('s1', 'how many?')
+    const running = manager.startSessionChat('s1', 'which pods restarted?', undefined, 2)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(manager.getState()).toMatchObject({ status: 'streaming', isStreaming: true })
+    expect(manager.getState().content).toContain('k8s_get_resources')
+    expect(manager.getState().failedTurns).toHaveLength(1)
+
+    manager.reset()
+    expect(sent[1].signal.aborted).toBe(true)
+    await running
+    await vi.runAllTimersAsync()
+    expect(manager.getState()).toMatchObject(NEW_TAB)
+    expect(seen.at(-1)).toBe(manager.getState())
+  })
+
+  it('what the cancelled request still brings is not written: no letters, no end', async () => {
+    let push!: (text: string) => void
+    let end!: () => void
+    server(() => new Response(new ReadableStream({
+      start(controller) {
+        push = (text) => controller.enqueue(encode(text))
+        end = () => controller.close()
+        push(sse({ content: 'first ' }))
+      },
+    })))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    const running = manager.startSessionChat('s1', 'q')
+    await vi.advanceTimersByTimeAsync(200)
+    expect(manager.getState().content).toBe('first ')
+
+    manager.reset()
+    push(sse({ content: 'second' }, '[DONE]'))
+    end()
+    await running
+    await vi.runAllTimersAsync()
+    expect(manager.getState()).toMatchObject(NEW_TAB)
+  })
+
+  it('a refusal answering the cancelled request does not send the next person to the sign-in page', async () => {
+    let answer!: (response: Response) => void
+    server(() => new Promise<Response>((resolve) => (answer = resolve)))
+    const assign = vi.fn()
+    vi.stubGlobal('window', { location: { pathname: '/ai-chat', search: '', assign } })
+    const manager = new ChatStreamManager({ bodyJson: true })
+    const running = manager.startSessionChat('s1', 'q')
+    await vi.advanceTimersByTimeAsync(0)
+
+    manager.reset()
+    answer(new Response('{"detail":"Unauthorized"}', { status: 401 }))
+    await running
+    expect(assign).not.toHaveBeenCalled()
+    expect(manager.getState()).toMatchObject(NEW_TAB)
+  })
+
+  it('a question waiting for the save of a cut answer is not sent once the person changed', async () => {
+    let answerSave!: (response: Response) => void
+    const sent: string[] = []
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      sent.push(JSON.parse(String(init.body)).message ?? 'save')
+      if (url.includes('/ai/sessions/')) return new Response(sse({ content: 'partial' }))
+      return new Promise<Response>((resolve) => (answerSave = resolve))
+    }))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    await manager.startSessionChat('s1', 'how many?')
+    await vi.runAllTimersAsync()
+    expect(manager.getState().errorKey).toBe('streamCut')
+    const next = manager.startSessionChat('s1', 'and now?')
+    await vi.advanceTimersByTimeAsync(0)
+
+    manager.reset()
+    answerSave(new Response('{"saved":1}'))
+    await next
+    await vi.runAllTimersAsync()
+    expect(sent).toEqual(['how many?', 'save'])
+    expect(manager.getState()).toMatchObject(NEW_TAB)
+  })
+
+  it('the cancelled run ending after the next question started leaves that question its Stop', async () => {
+    const sent = server((signal) => openStream(signal))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    const first = manager.startSessionChat('s1', 'q1')
+    await vi.advanceTimersByTimeAsync(0)
+
+    manager.reset()
+    const second = manager.startSessionChat('s2', 'q2')
+    await first
+    expect(manager.getState()).toMatchObject({ status: 'streaming', sessionId: 's2', userMessage: 'q2' })
+    await manager.stop()
+    expect(sent.map((r) => [r.message, r.signal.aborted])).toEqual([['q1', true], ['q2', true]])
+    await second
+    expect(manager.getState()).toMatchObject({ status: 'aborted', sessionId: 's2', isStreaming: false })
+  })
+})
+
 describe('each tool result and 🔐 line goes to its own block', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -621,23 +768,9 @@ describe('each tool result and 🔐 line goes to its own block', () => {
 describe('the 🔐 line', () => {
   const read = { cluster: 'prod', kind: 'person', user: 'a@example.com', groups: ['kubeast:authenticated', 'kubeast:viewer'], role: 'Read', impersonation: true }
 
-  // The same cases and text as ai-service tests/test_tool_access.py: the saved answer and the live one must match.
-  it.each([
-    [{ ...read, mode: 'read' },
-      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> <code>kubeast:viewer</code> · role Read · whole cluster · read-only</p>'],
-    [{ ...read, role: 'Write', groups: ['kubeast:authenticated', 'kubeast:role:write'], namespaces: ['shop', 'payments'], mode: 'write' },
-      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> <code>kubeast:role:write</code> · role Write · namespaces shop, payments · write</p>'],
-    [{ ...read, role: '*', groups: ['kubeast:admin', 'kubeast:authenticated'] },
-      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:admin</code> <code>kubeast:authenticated</code> · global admin · whole cluster · read-only</p>'],
-    [{ ...read, kind: 'api_key', api_key: 'k-1' },
-      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> (API key) · groups <code>kubeast:authenticated</code> <code>kubeast:viewer</code> · role Read · whole cluster · read-only</p>'],
-    [{ cluster: 'prod', kind: 'investigator', user: 'kubeast:investigator', groups: ['kubeast:investigator'], impersonation: true },
-      '<p><strong>🔐 Ran as:</strong> <code>kubeast:investigator</code> · groups <code>kubeast:investigator</code> · alert investigator · read-only</p>'],
-    [{ cluster: 'prod', kind: 'person', role: 'Read', impersonation: false },
-      "<p><strong>🔐 Ran as:</strong> ⚠️ Kubeast's own credential, not this user's permissions (impersonation is off) · role Read · whole cluster · read-only</p>"],
-    [{ ...read, role: '' },
-      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> <code>kubeast:viewer</code> · no role in this cluster · whole cluster · read-only</p>'],
-  ])('%#', (access, want) => {
+  // The cases ai-service tests/test_tool_access.py runs too (toolAccess.cases.json): the saved answer and the live one
+  // must match, a role of a built-in's name in other forms shown as stored and as giving no role group among them.
+  it.each(ACCESS_LINES.cases.map((c): [string, ToolAccess, string] => [c.name, c.access as ToolAccess, c.line]))('%s', (_name, access, want) => {
     expect(accessLine(access)).toBe(want)
   })
 
@@ -683,5 +816,64 @@ describe('the cluster requests under the 🔐 line', () => {
     const both = accessSection(access, { requests: [LIST], total: 1 })
     expect(both).toBe(`${accessLine(access)}\n\n${requestsBlock({ requests: [LIST], total: 1 })}`)
     expect(accessSection(null, null)).toBe('')
+  })
+})
+
+describe('an answer that waits for its turn', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  const sse = (...events: unknown[]) => events.map((e) => `data: ${typeof e === 'string' ? e : JSON.stringify(e)}\n\n`).join('')
+
+  async function seen(body: string) {
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(body)))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    const queued: boolean[] = []
+    manager.subscribe((state) => {
+      if (queued[queued.length - 1] !== state.queued) queued.push(state.queued)
+    })
+    await manager.startSessionChat('s1', 'how many?')
+    await vi.runAllTimersAsync()
+    return { state: manager.getState(), queued }
+  }
+
+  it('is waiting from the server\'s queued true until its queued false, then the answer comes', async () => {
+    const { state, queued } = await seen(sse({ queued: true }, { queued: false }, { content: 'Two clusters.' }, '[DONE]'))
+    expect(queued).toEqual([false, true, false])
+    expect(state).toMatchObject({ status: 'completed', queued: false, content: 'Two clusters.', error: null })
+  })
+
+  it('is not waiting when the server sends no queued event', async () => {
+    const { queued } = await seen(sse({ content: 'Two clusters.' }, '[DONE]'))
+    expect(queued).toEqual([false])
+  })
+
+  it('that waits past the server\'s limit ends with the busy error and stops waiting', async () => {
+    const busy = { error: 'Claude Code is busy; ask again in a moment.', error_key: 'claudeCodeBusy', error_args: { provider: 'Claude subscription' } }
+    const { state, queued } = await seen(sse({ queued: true }, busy, '[DONE]'))
+    expect(queued).toEqual([false, true, false])
+    expect(state).toMatchObject({ status: 'error', isStreaming: false, queued: false, errorKey: 'claudeCodeBusy', error: busy.error })
+  })
+
+  it('stops waiting when the person presses Stop', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(sse({ queued: true })))
+        init.signal?.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')))
+      },
+    }))))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    void manager.startSessionChat('s1', 'how many?')
+    await vi.advanceTimersByTimeAsync(100)
+    expect(manager.getState().queued).toBe(true)
+    await manager.stop()
+    await vi.runAllTimersAsync()
+    expect(manager.getState()).toMatchObject({ status: 'aborted', queued: false })
   })
 })

@@ -91,6 +91,63 @@ tests:
           value: cluster-admin
         documentIndex: 4
 
+  # The fourth place of the slug rule (auth.RoleGroupSlug, role_group_slug, roleGroupSlug): Go's whitespace trimmed, a
+  # full-width space too, U+0130 lowered to i, a character outside ASCII "~" and its code point. Every case of
+  # frontend/src/utils/roleGroupSlug.cases.json runs through this helper in TestTheChartMakesEachSlugOfTheSharedCases.
+  - it: makes the group as the service does of a full-width space, a dotted capital I and Korean
+    set:
+      auth.impersonation.customRoles:
+        - name: "\u3000SRE Team\u3000"
+          clusterRoles: [view]
+        - name: "İnfra"
+          clusterRoles: [view]
+        - name: "운영팀"
+          clusterRoles: [view]
+    asserts:
+      - equal:
+          path: rules[0].resourceNames
+          value: ["kubeast:role:sre-team", "kubeast:role:infra", "kubeast:role:~c6b4~c601~d300"]
+        documentIndex: 0
+
+  # Korean names of one length are groups of their own, each bound by a binding of its own name.
+  - it: binds two Korean names of one length as two groups
+    set:
+      auth.impersonation.customRoles:
+        - name: 운영팀
+          clusterRoles: [view]
+        - name: 개발팀
+          namespaces: [web]
+          clusterRoles: [edit]
+    asserts:
+      - hasDocuments:
+          count: 4
+      - equal:
+          path: rules[0].resourceNames
+          value: ["kubeast:role:~c6b4~c601~d300", "kubeast:role:~ac1c~bc1c~d300"]
+        documentIndex: 0
+      - isKind:
+          of: ClusterRoleBinding
+        documentIndex: 2
+      - equal:
+          path: metadata.name
+          value: kubeast-role-~c6b4~c601~d300-view
+        documentIndex: 2
+      - equal:
+          path: subjects[0].name
+          value: kubeast:role:~c6b4~c601~d300
+        documentIndex: 2
+      - isKind:
+          of: RoleBinding
+        documentIndex: 3
+      - equal:
+          path: metadata.name
+          value: kubeast-role-~ac1c~bc1c~d300-edit
+        documentIndex: 3
+      - equal:
+          path: subjects[0].name
+          value: kubeast:role:~ac1c~bc1c~d300
+        documentIndex: 3
+
   - it: binds a namespace-scoped entry with a RoleBinding in each namespace, not cluster-wide
     set:
       auth.impersonation.customRoles:
