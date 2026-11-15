@@ -244,7 +244,7 @@ func (a *clusterAPI) start(t *testing.T, informerObjs ...k8sruntime.Object) (*Se
 	srv := httptest.NewServer(http.HandlerFunc(a.serve))
 	t.Cleanup(srv.Close)
 	userCfg := &rest.Config{Host: srv.URL, QPS: -1}
-	userCfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, "default") })
+	wrapPerson(userCfg, "default")
 	cs, err := kubernetes.NewForConfig(userCfg)
 	if err != nil {
 		t.Fatal(err)

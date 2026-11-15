@@ -7,8 +7,10 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -39,7 +41,7 @@ import (
 // switch on.
 func sharingBundle(t testing.TB, api *reviewAPI) *clientBundle {
 	b := api.bundle(t)
-	b.id, b.groupCheckUser = "default", groupCheckUser
+	b.id, b.sharesChecks = "default", true
 	return b
 }
 
@@ -169,7 +171,7 @@ func TestAGroupsRefusalIsAskedAgainAsThePerson(t *testing.T) {
 }
 
 // A cluster that does not let Kubeast ask under the shared name leaves each check to the person, with the person's
-// answer.
+// answer: a refusal of one and the allow of another.
 func TestAClusterThatRefusesTheSharedNameLeavesTheCheckToThePerson(t *testing.T) {
 	var shared atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -181,15 +183,16 @@ func TestAClusterThatRefusesTheSharedNameLeavesTheCheckToThePerson(t *testing.T)
 		body, _ := io.ReadAll(r.Body)
 		review := &authorizationv1.SelfSubjectAccessReview{}
 		_, _, _ = scheme.Codecs.UniversalDeserializer().Decode(body, nil, review)
-		review.APIVersion, review.Kind, review.Status.Allowed = "authorization.k8s.io/v1", "SelfSubjectAccessReview", true
+		review.APIVersion, review.Kind = "authorization.k8s.io/v1", "SelfSubjectAccessReview"
+		review.Status.Allowed = r.Header.Get(auth.HeaderImpersonateUser) == "allowed@example.com"
 		writeJSON(w, review)
 	}))
 	t.Cleanup(srv.Close)
-	b := &clientBundle{authz: reviewClient(t, srv.URL), id: "default", groupCheckUser: groupCheckUser}
+	b := &clientBundle{authz: reviewClient(t, srv.URL), id: "default", sharesChecks: true}
 	s := &Service{}
-	for _, person := range []string{"a@example.com", "b@example.com"} {
-		if ok, err := s.mayListShown(wideCaller(person), b, "", "nodes", ""); err != nil || !ok {
-			t.Errorf("%s: answer = %v, %v, want the person's own allow", person, ok, err)
+	for person, want := range map[string]bool{"refused@example.com": false, "allowed@example.com": true} {
+		if ok, err := s.mayListShown(wideCaller(person), b, "", "nodes", ""); err != nil || ok != want {
+			t.Errorf("%s: answer = %v, %v, want the person's own %v", person, ok, err, want)
 		}
 	}
 	if n := shared.Load(); n != 1 {
@@ -197,77 +200,161 @@ func TestAClusterThatRefusesTheSharedNameLeavesTheCheckToThePerson(t *testing.T)
 	}
 }
 
-// With the switch off the screens' checks go out as before: as the person, as many and the same bytes as the person's
-// own check (mayDo, unchanged) sends.
-func TestWithTheSwitchOffTheChecksGoOutAsBefore(t *testing.T) {
-	var namespaces []string
-	for i := 0; i < 20; i++ {
-		namespaces = append(namespaces, fmt.Sprintf("ns-%02d", i))
-	}
-	nodes := []string{"n0", "n1", "n2", "n3"}
-	var pods []corev1.Pod
-	var objs []k8sruntime.Object
-	for i, ns := range namespaces {
-		for _, node := range nodes {
-			pods = append(pods, nodePod(ns, ns+"-"+node, node))
-		}
-		objs = append(objs, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}},
-			&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: fmt.Sprintf("d%d", i)}},
-			overviewPod(ns, "p", corev1.PodRunning))
-	}
-	grants := map[string][]string{"wide@example.com": {""}, "five@example.com": namespaces[:5], "twenty@example.com": namespaces}
-	// the numbers TestFirstScreensOfOnePersonListNoPodsAsThatPerson holds
-	people := []struct {
-		user string
-		ctx  context.Context
-		want int
-	}{
-		{"wide@example.com", wideCaller("wide@example.com"), 8},
-		{"five@example.com", grantCaller("five@example.com", namespaces[:5]...), 3*5 + 4},
-		{"twenty@example.com", grantCaller("twenty@example.com", namespaces...), 3*20 + 4},
-	}
-	// each review as sent: who it went out as and its bytes
-	reviewsOf := func(a *clusterAPI) []apiCall {
-		var out []apiCall
-		for _, c := range a.calls {
-			if c.verb == "review" {
-				out = append(out, apiCall{user: c.user, groups: c.groups, body: c.body})
-			}
-		}
-		slices.SortFunc(out, func(x, y apiCall) int {
-			return strings.Compare(x.user+"|"+x.groups+"|"+x.body, y.user+"|"+y.groups+"|"+y.body)
-		})
-		return out
-	}
-	for _, p := range people {
-		api := &clusterAPI{pods: pods, namespaces: namespaces, review: rbac(grants)}
-		s, b := api.start(t, objs...)
-		firstScreens(s, b, p.ctx, nodes)
-		if n := len(api.callsOf(p.user)); n != p.want {
-			t.Errorf("%s: %d requests as the person, want %d", p.user, n, p.want)
-		}
-		if n := len(api.callsOf(groupCheckUser)); n != 0 {
-			t.Errorf("%s: %d requests as %s", p.user, n, groupCheckUser)
-		}
-		// each review asked again through the person's own check
-		again := &clusterAPI{pods: pods, namespaces: namespaces, review: rbac(grants)}
-		s2, b2 := again.start(t, objs...)
-		sent := reviewsOf(api)
-		for i, r := range sent {
+// An allow of one cluster's groups is no answer on another: the same people, allowed on a and refused on b.
+func TestAGroupsAllowIsKeptPerCluster(t *testing.T) {
+	asked := map[string]*atomic.Int32{"a": {}, "b": {}}
+	bundles := map[string]*clientBundle{}
+	for id, allows := range map[string]bool{"a": true, "b": false} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			asked[id].Add(1)
+			body, _ := io.ReadAll(r.Body)
 			review := &authorizationv1.SelfSubjectAccessReview{}
-			if _, _, err := scheme.Codecs.UniversalDeserializer().Decode([]byte(r.body), nil, review); err != nil {
-				t.Fatal(err)
-			}
-			_, _ = s2.mayDo(p.ctx, b2, fmt.Sprintf("again-%d", i), *review.Spec.ResourceAttributes)
+			_, _, _ = scheme.Codecs.UniversalDeserializer().Decode(body, nil, review)
+			review.APIVersion, review.Kind, review.Status.Allowed = "authorization.k8s.io/v1", "SelfSubjectAccessReview", allows
+			writeJSON(w, review)
+		}))
+		t.Cleanup(srv.Close)
+		cfg := &rest.Config{Host: srv.URL, QPS: -1}
+		wrapPerson(cfg, id)
+		cs, err := kubernetes.NewForConfig(cfg)
+		if err != nil {
+			t.Fatal(err)
 		}
-		bytes := 0
-		for _, r := range sent {
-			bytes += len(r.body)
+		bundles[id] = &clientBundle{authz: cs.AuthorizationV1(), id: cluster.ID(id), sharesChecks: true}
+	}
+	s := &Service{}
+	reader := func(user string) context.Context {
+		return auth.WithPayload(context.Background(), auth.TokenPayload{UserID: user, Email: user, Roles: map[string]string{"a": "Read", "b": "Read"}})
+	}
+	if ok, _ := s.mayListShown(reader("alice@example.com"), bundles["a"], "", "pods", ""); !ok {
+		t.Fatal("refused on a, which allows the group")
+	}
+	if ok, _ := s.mayListShown(reader("bob@example.com"), bundles["b"], "", "pods", ""); ok {
+		t.Error("allowed on b by a's answer for the same groups")
+	}
+	if a, b := asked["a"].Load(), asked["b"].Load(); a != 1 || b != 2 {
+		t.Errorf("asked a %d times and b %d, want once on a and on b as the groups and then as bob", a, b)
+	}
+}
+
+// The transport sends a marked check under the shared name with exactly the person's groups, or sends nothing.
+func TestTheGroupCheckGoesOutAsTheSharedNameWithThePersonsGroupsOrNotAtAll(t *testing.T) {
+	var got *http.Request
+	base := roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		got = r
+		return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Request: r}, nil
+	})
+	cfg := &rest.Config{}
+	wrapPerson(cfg, "prod")
+	rt := cfg.WrapTransport(base)
+	alice := auth.TokenPayload{Email: "alice@example.com", Roles: map[string]string{"prod": "Read"}}
+	_, groups := alice.Impersonation("prod")
+	send := func(p *auth.TokenPayload, mark *groupCheck) error {
+		got = nil
+		ctx := context.Background()
+		if mark != nil {
+			ctx = context.WithValue(ctx, groupCheckCtx{}, mark)
 		}
-		t.Logf("%s: %d reviews of %d bytes, as the person", p.user, len(sent), bytes)
-		if got := reviewsOf(again); !slices.Equal(got, sent) {
-			t.Errorf("%s: the reviews differ from the person's own check's:\n%q\n%q", p.user, sent, got)
+		if p != nil {
+			ctx = auth.WithPayload(ctx, *p)
 		}
+		_, err := rt.RoundTrip(httptest.NewRequest("POST", "https://k8s/apis/authorization.k8s.io/v1/selfsubjectaccessreviews", nil).WithContext(ctx))
+		return err
+	}
+	mark := &groupCheck{groups: groups}
+	if err := send(&alice, mark); err != nil {
+		t.Fatal(err)
+	}
+	if user := got.Header.Get(auth.HeaderImpersonateUser); user != groupCheckUser || !mark.sent.Load() {
+		t.Errorf("sent as %q (marked sent %v), want %q", user, mark.sent.Load(), groupCheckUser)
+	}
+	if g := got.Header.Values(auth.HeaderImpersonateGroup); !slices.Equal(g, groups) {
+		t.Errorf("groups %v, want the person's %v", g, groups)
+	}
+	person := func(email string, roles map[string]string) *auth.TokenPayload {
+		return &auth.TokenPayload{Email: email, Roles: roles}
+	}
+	read := map[string]string{"prod": "Read"}
+	for _, c := range []struct {
+		name string
+		p    *auth.TokenPayload
+		mark *groupCheck
+	}{
+		{"no person", nil, &groupCheck{groups: groups}},
+		{"the alert investigator", &auth.TokenPayload{UserID: "system", Email: auth.UserInvestigator, System: auth.SystemInvestigator}, &groupCheck{groups: []string{auth.GroupInvestigator}}},
+		{"another token of no person", &auth.TokenPayload{UserID: "probe", System: "probe"}, &groupCheck{groups: []string{auth.GroupAuthenticated}}},
+		{"other groups than the person's", &alice, &groupCheck{groups: []string{auth.GroupAdmin, auth.GroupAuthenticated}}},
+		{"no groups", &alice, &groupCheck{}},
+		{"a person named as the shared checks", person(groupCheckUser, read), &groupCheck{groups: groups}},
+		{"a person under the shared prefix", person(groupCheckUserPrefix+"other", read), &groupCheck{groups: groups}},
+		{"system:anonymous", person("system:anonymous", read), &groupCheck{groups: groups}},
+		{"system:kube-controller-manager", person("system:kube-controller-manager", read), &groupCheck{groups: groups}},
+	} {
+		if err := send(c.p, c.mark); err == nil || got != nil || c.mark.sent.Load() {
+			t.Errorf("%s: sent %v (marked %v), err %v; want nothing sent", c.name, got != nil, c.mark.sent.Load(), err)
+		}
+	}
+	// an unmarked request goes out as the person
+	if err := send(&alice, nil); err != nil || got.Header.Get(auth.HeaderImpersonateUser) != "alice@example.com" {
+		t.Errorf("an unmarked request: %v, sent as %q", err, got.Header.Get(auth.HeaderImpersonateUser))
+	}
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// A client without the shared checks' transport shares nothing: the review it sends is the person's, which is no
+// group's answer.
+func TestAClientWithoutTheGroupCheckTransportSharesNothing(t *testing.T) {
+	var mu sync.Mutex
+	users := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := r.Header.Get(auth.HeaderImpersonateUser)
+		mu.Lock()
+		users[user]++
+		mu.Unlock()
+		body, _ := io.ReadAll(r.Body)
+		review := &authorizationv1.SelfSubjectAccessReview{}
+		_, _, _ = scheme.Codecs.UniversalDeserializer().Decode(body, nil, review)
+		review.APIVersion, review.Kind = "authorization.k8s.io/v1", "SelfSubjectAccessReview"
+		review.Status.Allowed = user == "alice@example.com" // a binding of alice by name
+		writeJSON(w, review)
+	}))
+	t.Cleanup(srv.Close)
+	cfg := &rest.Config{Host: srv.URL, QPS: -1}
+	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, "default") })
+	cs, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := &clientBundle{authz: cs.AuthorizationV1(), id: "default", sharesChecks: true}
+	s := &Service{}
+	if ok, _ := s.mayListShown(wideCaller("alice@example.com"), b, "", "pods", ""); !ok {
+		t.Error("alice refused, whom the cluster allows by name")
+	}
+	if ok, _ := s.mayListShown(wideCaller("bob@example.com"), b, "", "pods", ""); ok {
+		t.Error("bob allowed by alice's answer")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if users[groupCheckUser] != 0 {
+		t.Errorf("%d reviews under the shared name without its transport", users[groupCheckUser])
+	}
+}
+
+// The clusters listed out under no registered id are named, so a cluster meant to be left out is not shared from under
+// a misspelling.
+func TestExcludedClustersThatAreNoRegisteredIdAreNamed(t *testing.T) {
+	t.Cleanup(func() { sharedReadChecks.on, sharedReadChecks.exclude = false, nil })
+	s := &Service{registry: &mockRegistry{clusters: map[cluster.ID]cluster.Info{"prod": extCluster("prod"), "lab": extCluster("lab")}}}
+	sharedReadChecks.on, sharedReadChecks.exclude = true, []string{"prod", "Prod Cluster", "labb"}
+	if got := s.unknownExcludes(context.Background()); !slices.Equal(got, []string{"Prod Cluster", "labb"}) {
+		t.Errorf("named %v, want the two entries no cluster has", got)
+	}
+	sharedReadChecks.on = false
+	if got := s.unknownExcludes(context.Background()); got != nil {
+		t.Errorf("named %v with the switch off", got)
 	}
 }
 
@@ -278,7 +365,7 @@ func TestOtherChecksAreAskedAsThePersonWhileTheGroupsAllowIsKept(t *testing.T) {
 		return hasGroup(groups, auth.GroupViewer) || hasGroup(groups, auth.GroupInvestigator)
 	}, may: func(string, string, string, string, string) bool { return true }}
 	s, b := api.start(t)
-	b.groupCheckUser = groupCheckUser
+	b.sharesChecks = true
 	reviews := func(user string) int {
 		return api.count(func(c apiCall) bool { return c.verb == "review" && c.user == user })
 	}
@@ -324,18 +411,25 @@ func TestOtherChecksAreAskedAsThePersonWhileTheGroupsAllowIsKept(t *testing.T) {
 	}
 }
 
-// The shared checks are called only from the screens served from kubeast:cache: the overview's counts, the namespace
-// list and a grant's namespaces, the node list, the pod rows and the pods of a node.
+// The shared checks and their transport are used only from the screens served from kubeast:cache — the overview's
+// counts, the namespace list and a grant's namespaces, the node list, the pod rows and the pods of a node — and from
+// their own code: every use of their names in the package (calls, method values, package-level values), counted per
+// function, and the shared name written nowhere else in the module or the services beside it.
 func TestOnlyTheChecksOfScreensServedFromKubeastCacheAreShared(t *testing.T) {
-	want := map[string][]string{
-		"mayDoShown":      {"mayGetNamespace", "mayListShown"},
-		"mayListShown":    {"cachedNamespaces", "cachedNodes", "mayListAll", "mayListPods", "overviewIdentityAllowed"},
-		"mayListAll":      {"keepListable", "keepListableIn", "podListAccess"},
-		"mayListPods":     {"podListAccess"},
-		"mayGetNamespace": {"cachedScopedNamespaces"},
-		"podListAccess":   {"callerPodRows", "podsOnNodeOf"},
+	want := map[string]map[string]int{
+		"mayDoShown":          {"mayGetNamespace": 1, "mayListShown": 1},
+		"mayListShown":        {"cachedNamespaces": 1, "cachedNodes": 1, "mayListAll": 1, "mayListPods": 1, "overviewIdentityAllowed": 1},
+		"mayListAll":          {"keepListable": 1, "keepListableIn": 1, "podListAccess": 1},
+		"mayListPods":         {"podListAccess": 1},
+		"mayGetNamespace":     {"cachedScopedNamespaces": 1},
+		"podListAccess":       {"callerPodRows": 1, "podsOnNodeOf": 1},
+		"askAsGroups":         {"mayDoShown": 1},
+		"groupCheckCtx":       {"askAsGroups": 1, "groupCheckTransport.RoundTrip": 1},
+		"groupCheckTransport": {"wrapPerson": 1},
+		"groupCheckUser":      {"groupCheckTransport.RoundTrip": 1},
+		"sharesChecks":        {"buildClientBundle": 1, "groupCheckKey": 1, "type clientBundle": 1},
 	}
-	got := map[string][]string{}
+	got := map[string]map[string]int{}
 	files, _ := filepath.Glob("*.go")
 	fset := token.NewFileSet()
 	for _, f := range files {
@@ -346,28 +440,68 @@ func TestOnlyTheChecksOfScreensServedFromKubeastCacheAreShared(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, d := range file.Decls {
-			fn, ok := d.(*ast.FuncDecl)
-			if !ok || fn.Body == nil {
-				continue
-			}
-			ast.Inspect(fn.Body, func(n ast.Node) bool {
-				if call, ok := n.(*ast.CallExpr); ok {
-					if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
-						if _, watched := want[sel.Sel.Name]; watched && !slices.Contains(got[sel.Sel.Name], fn.Name.Name) {
-							got[sel.Sel.Name] = append(got[sel.Sel.Name], fn.Name.Name)
+		count := func(where string, n ast.Node) {
+			ast.Inspect(n, func(n ast.Node) bool {
+				if id, ok := n.(*ast.Ident); ok {
+					if _, watched := want[id.Name]; watched {
+						if got[id.Name] == nil {
+							got[id.Name] = map[string]int{}
 						}
+						got[id.Name][where]++
 					}
 				}
 				return true
 			})
 		}
-	}
-	for helper, callers := range want {
-		slices.Sort(got[helper])
-		if !slices.Equal(got[helper], callers) {
-			t.Errorf("%s is called from %v, want %v: an allow shared by group stands only for what a screen served from kubeast:cache shows", helper, got[helper], callers)
+		for _, d := range file.Decls {
+			switch d := d.(type) {
+			case *ast.FuncDecl:
+				where := d.Name.Name
+				if d.Recv != nil && len(d.Recv.List) == 1 {
+					typ := d.Recv.List[0].Type
+					if star, ok := typ.(*ast.StarExpr); ok {
+						typ = star.X
+					}
+					if id, ok := typ.(*ast.Ident); ok && id.Name != "Service" {
+						where = id.Name + "." + where
+					}
+				}
+				if d.Body != nil {
+					count(where, d.Body)
+				}
+			case *ast.GenDecl:
+				for _, spec := range d.Specs {
+					switch spec := spec.(type) {
+					case *ast.TypeSpec:
+						count("type "+spec.Name.Name, spec.Type)
+					case *ast.ValueSpec:
+						for _, v := range spec.Values {
+							count("package level", v)
+						}
+					}
+				}
+			}
 		}
+	}
+	for name, uses := range want {
+		if fmt.Sprint(got[name]) != fmt.Sprint(uses) {
+			t.Errorf("%s is used in %v, want %v: an allow shared by group stands only for what a screen served from kubeast:cache shows", name, got[name], uses)
+		}
+	}
+	// the shared name in the code of this module, tool-server and the shared packages: here only
+	for _, root := range []string{"../..", "../../../tool-server", "../../../pkg"} {
+		_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return err
+			}
+			if filepath.Clean(path) == filepath.Clean("../../internal/k8s/shared_read_checks.go") {
+				return nil
+			}
+			if b, err := os.ReadFile(path); err == nil && strings.Contains(string(b), "kubeast:group-check") {
+				t.Errorf("%s names the shared checks' user; only shared_read_checks.go sends it", path)
+			}
+			return nil
+		})
 	}
 }
 
@@ -375,7 +509,7 @@ func TestOnlyTheChecksOfScreensServedFromKubeastCacheAreShared(t *testing.T) {
 func reviewClient(t *testing.T, url string) authorizationv1client.AuthorizationV1Interface {
 	t.Helper()
 	cfg := &rest.Config{Host: url, QPS: -1}
-	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, "default") })
+	wrapPerson(cfg, "default")
 	cs, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -415,20 +549,19 @@ func TestTheSharedChecksAreSwitchedPerClusterAndTakeThePersonsRate(t *testing.T)
 		return b
 	}
 	for _, c := range []struct {
-		name          string
-		id            string
-		on, groupSent bool
-		want          string
+		name                string
+		id                  string
+		on, groupSent, want bool
 	}{
-		{"on", "a", true, true, groupCheckUser},
-		{"the cluster listed out", "b", true, true, ""},
-		{"the switch off", "a", false, true, ""},
-		{"no groups sent (auth.impersonation.enabled off)", "a", true, false, ""},
+		{"on", "a", true, true, true},
+		{"the cluster listed out", "b", true, true, false},
+		{"the switch off", "a", false, true, false},
+		{"no groups sent (auth.impersonation.enabled off)", "a", true, false, false},
 	} {
 		impersonationEnabled = c.groupSent
 		sharedReadChecks.on, sharedReadChecks.exclude = c.on, []string{"b"}
-		if got := build(c.id).groupCheckUser; got != c.want {
-			t.Errorf("%s: shared as %q, want %q", c.name, got, c.want)
+		if got := build(c.id).sharesChecks; got != c.want {
+			t.Errorf("%s: shares %v, want %v", c.name, got, c.want)
 		}
 	}
 
@@ -476,9 +609,9 @@ func TestTheSharedChecksAreSwitchedPerClusterAndTakeThePersonsRate(t *testing.T)
 // The shared name is Kubeast's prefix and a part made at each start, and a person who has such a name is asked as
 // itself, its answer kept for no one else.
 func TestTheSharedNameIsKubeastsOwnMadeAtEachStartAndNoPersons(t *testing.T) {
-	suffix, ok := strings.CutPrefix(groupCheckUser, auth.GroupCheckUserPrefix)
+	suffix, ok := strings.CutPrefix(groupCheckUser, groupCheckUserPrefix)
 	if !ok || !regexp.MustCompile(`^[0-9a-f]{8}$`).MatchString(suffix) {
-		t.Errorf("shared name %q, want %s and eight hex digits", groupCheckUser, auth.GroupCheckUserPrefix)
+		t.Errorf("shared name %q, want %s and eight hex digits", groupCheckUser, groupCheckUserPrefix)
 	}
 	made := map[string]bool{}
 	for i := 0; i < 50; i++ {
@@ -492,7 +625,7 @@ func TestTheSharedNameIsKubeastsOwnMadeAtEachStartAndNoPersons(t *testing.T) {
 	}}
 	b := sharingBundle(t, api)
 	s := &Service{}
-	for _, name := range []string{groupCheckUser, auth.GroupCheckUserPrefix + "other"} {
+	for _, name := range []string{groupCheckUser, groupCheckUserPrefix + "other", "system:anonymous"} {
 		if ok, err := s.mayListShown(wideCaller(name), b, "", "nodes", ""); err != nil || !ok {
 			t.Fatalf("%s: %v %v", name, ok, err)
 		}
@@ -500,9 +633,9 @@ func TestTheSharedNameIsKubeastsOwnMadeAtEachStartAndNoPersons(t *testing.T) {
 	if ok, err := s.mayListShown(wideCaller("next@example.com"), b, "", "nodes", ""); err != nil || !ok {
 		t.Fatalf("next: %v %v", ok, err)
 	}
-	// one as the person of that name, one shared for next: neither person's answer was kept for the groups
-	if n, other := api.count(groupCheckUser), api.count(auth.GroupCheckUserPrefix+"other"); n != 2 || other != 1 {
-		t.Errorf("%d reviews under the shared name (want 2) and %d as the prefixed person (want 1)", n, other)
+	// one as the person of that name, one shared for next: no such person's answer was kept for the groups
+	if n, other, anon := api.count(groupCheckUser), api.count(groupCheckUserPrefix+"other"), api.count("system:anonymous"); n != 2 || other != 1 || anon != 1 {
+		t.Errorf("%d reviews under the shared name (want 2), %d as the prefixed person and %d as system:anonymous (want 1 each)", n, other, anon)
 	}
 }
 
@@ -621,7 +754,7 @@ func TestACrowdOfOneGroupSetQueuesItsAllowedChecksOnce(t *testing.T) {
 		api := &clusterAPI{pods: pods, namespaces: namespaces, reviewGroups: reviewGroups, may: may}
 		s, b := api.start(t, objs...)
 		if shared {
-			b.groupCheckUser = groupCheckUser
+			b.sharesChecks = true
 		}
 		var wg sync.WaitGroup
 		for _, p := range people {

@@ -86,8 +86,8 @@ type clientBundle struct {
 	infFailedAt time.Time
 	// noInformers: the overview informers never start here (ServiceOptions.NoInformers); readers list instead.
 	noInformers bool
-	// groupCheckUser is the name this cluster's shared read checks go out as, "" = none shared (shared_read_checks.go).
-	groupCheckUser string
+	// sharesChecks: this cluster's screens share an allowed read check by group (shared_read_checks.go).
+	sharesChecks bool
 }
 
 // Close stops the bundle's informers (LRU eviction, kubeconfig rotation).
@@ -211,7 +211,7 @@ func NewService(ctx context.Context, registry cluster.Registry, watchEnabled boo
 	sharedReadChecks.on, sharedReadChecks.exclude = opts.SharedReadChecks, opts.SharedReadChecksExclude
 	switch {
 	case opts.SharedReadChecks && opts.Impersonation:
-		slog.Info("k8s: allowed read checks of screens are shared by group", "user", groupCheckUser, "excluded_clusters", opts.SharedReadChecksExclude)
+		slog.Info("k8s: allowed read checks of screens are shared by group", "user_prefix", groupCheckUserPrefix, "excluded_clusters", opts.SharedReadChecksExclude)
 	case opts.SharedReadChecks:
 		slog.Warn("k8s: shared read checks need auth.impersonation.enabled; every check is asked as Kubeast's own credential, as before")
 	}
@@ -230,6 +230,7 @@ func NewService(ctx context.Context, registry cluster.Registry, watchEnabled boo
 		apiResourcesRead:  map[cluster.ID]time.Time{},
 	}
 
+	s.warnUnknownExcludes(ctx)
 	defaultID, err := registry.Default(ctx)
 	if err != nil {
 		// Not configured yet: no clusters registered (ErrNotFound), the schema
@@ -302,7 +303,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	cacheCfg := rest.CopyConfig(cfg)
 	if impersonationEnabled {
 		id := string(info.ID)
-		cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, id) })
+		wrapPerson(cfg, id)
 		cacheCfg.Impersonate = rest.ImpersonationConfig{UserName: overviewCacheUser, Groups: []string{auth.GroupAuthenticated, auth.GroupViewer}}
 	}
 	cacheClient, err := kubernetes.NewForConfig(cacheCfg)
@@ -356,8 +357,15 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		cacheClient: cacheClient,
 		noInformers: informersOff,
 	}
-	b.groupCheckUser = sharedCheckUserFor(info.ID)
+	b.sharesChecks = sharesChecksOn(info.ID)
 	return b, nil
+}
+
+// wrapPerson makes cfg's requests go out as the person in their context, and a shared read check under it
+// (groupCheckTransport, wrapped first so it sees the person's headers).
+func wrapPerson(cfg *rest.Config, id string) {
+	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return groupCheckTransport{base: rt} })
+	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, id) })
 }
 
 // pool lazily builds the LRU client-bundle pool. Lazy so a zero-value Service
@@ -459,6 +467,13 @@ func (s *Service) Invalidate(id cluster.ID) {
 	// actually tried instead of fail-fast 503'd until the next health poll.
 	s.MarkClusterUp(id)
 	s.invalidateCaches()
+	if sharedReadChecks.on && len(sharedReadChecks.exclude) > 0 {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			s.warnUnknownExcludes(ctx)
+		}()
+	}
 }
 
 // defaultClientBundle resolves (and caches) the default cluster's bundle for the

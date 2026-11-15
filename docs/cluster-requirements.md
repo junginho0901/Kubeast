@@ -113,22 +113,33 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 **Read checks shared by group** (`auth.impersonation.sharedReadChecks.enabled`, off by default; `SHARED_READ_CHECKS` in compose).
 The screens served from what Kubeast watches as `kubeast:cache` — the Dashboard's counts, the namespace and node lists, a grant's namespaces, the Pods page and Cluster View's nodes — first ask the cluster whether the person may list or get what they show (a SelfSubjectAccessReview, kept up to a minute).
 With the switch on, that question goes out once for everyone with the same groups, as the user `kubeast:group-check:<eight hex digits>` with those groups, and its allow stands for each of them for the rest of that minute, as a person's own answer does.
-The part after the prefix is made at each start of k8s-service and written in its start log (`allowed read checks of screens are shared by group`).
+The part after the prefix is made at each start of k8s-service and is not logged; the start log names the prefix (`allowed read checks of screens are shared by group`). The cluster's audit log shows the whole name to whoever can read it.
 A refusal is not shared: the person is asked again as before, so a binding of a `User` still counts for that person.
-Can-i, writes, logs, Secrets, subresources and the checks of an AI tool call are always asked as the person.
+Can-i, writes, logs, Secrets, subresources, the checks of an AI tool call, a token of no person and a `system:` user name are always asked as the person.
 
-- What it relies on: no authorizer of the cluster refuses a person by name where it allows that person's groups. RBAC only adds, and so do the Node authorizer and Amazon EKS access policies, which allow or pass and are not used for an identity Kubeast acts as. An authorization webhook ahead of RBAC that can refuse a person by name can: list that cluster's registered id in `auth.impersonation.sharedReadChecks.excludeClusters`.
-- Never bind a `User` named `kubeast:group-check:*`: such a binding would count for everyone in the groups. The name changes at each start, so no binding can be made for it beforehand.
-- The cluster's audit log names `kubeast:group-check:…` and the groups for those allowed checks, not the person. Refusals, can-i and the reads made as the person still name the person.
-- What one person's screens ask as itself drops from about eight to its can-i; a grant limited to N namespaces asks its groups' questions once for everyone with that grant's groups. Each replica asks for itself, so R replicas ask up to R times as many shared questions. They take their turn on the same client rate (`multicluster.clientQPS`, or `reviewQPS` when set) as the person's checks; no rate is added.
-- When the name is refused (a cluster that limits the user names Kubeast may act as): each check is asked as the person, as with the switch off, and nothing changes on screen. With `auth.impersonation.enabled` off the switch does nothing.
+What it relies on, for every authorizer of the cluster: what `kubeast:group-check:…` with a person's groups is allowed, that person with the same groups is allowed too.
+RBAC only adds, so a cluster whose authorizers are `Node` and `RBAC` holds it. Amazon EKS adds access policies, which allow or pass and are not used for an identity Kubeast acts as.
+List the registered id of a cluster where any of these is true in `auth.impersonation.sharedReadChecks.excludeClusters`:
+
+- An authorizer, ahead of RBAC or after it, answers by the user name: it refuses a person by name, or it allows a group but passes ("no opinion") for named people, so that the person ends refused. Kubeast would show that person what the cluster refuses its own requests.
+- The cluster limits the user names Kubeast may act as, so that the shared name is allowed and some person is not. That person's own requests are refused; the shared allow is not. Where it is the shared name the cluster refuses, every check is asked as the person and nothing changes on screen.
+- A `User` named `kubeast:group-check:*` is bound. Such a binding counts for everyone in the groups. The name changes at each start, so a binding made for one start does not carry to the next; while Kubeast runs the name can be read from the audit log, so the binding check below is what keeps this true.
 
 ```bash
-# a group set's allow, asked under the shared name: the same answer as a person in that group
-kubectl --context <cluster> auth can-i list pods -A --as=kubeast:group-check:check --as-group=kubeast:viewer --as-group=system:authenticated   # yes
-# no binding names the shared user
+# the authorizers: Node and RBAC only (kubeadm and other API servers you run; with --authorization-config the file lists them in order)
+kubectl --context <cluster> -n kube-system get pod -l component=kube-apiserver -o yaml | grep -E 'authorization-(mode|config)'
+# Kubeast may act as any user name: the users rule of kubeast-impersonator has no resourceNames
+kubectl --context <cluster> get clusterrole kubeast-impersonator -o jsonpath='{.rules[?(@.resources[0]=="users")]}'
+# no binding names the shared user — run it on each registered cluster with your RBAC review
 kubectl --context <cluster> get clusterrolebindings,rolebindings -A -o json | jq -r '.items[] | select(any(.subjects[]?; .kind == "User" and (.name | startswith("kubeast:group-check:")))) | .metadata.name'   # nothing
+# a group set's allow, asked under the shared name: the same answer as a person in that group
+kubectl --context <cluster> auth can-i list pods -A --as=kubeast:group-check:check --as-group=kubeast:authenticated --as-group=kubeast:viewer --as-group=system:authenticated   # yes
 ```
+
+- The cluster's audit log names `kubeast:group-check:…` and the groups for those allowed checks, not the person. Refusals, can-i and the reads made as the person still name the person.
+- What one person's screens ask as itself drops from about eight to its can-i; a grant limited to N namespaces asks its groups' questions once for everyone with that grant's groups. Each replica asks for itself, so R replicas ask up to R times as many shared questions. They take their turn on the same client rate (`multicluster.clientQPS`, or `reviewQPS` when set) as the person's checks; no rate is added.
+- k8s-service warns at start, and after a cluster changes, of an `excludeClusters` entry that is no registered cluster's id: such an entry leaves nothing out.
+- With `auth.impersonation.enabled` off the switch does nothing.
 
 ## 2. metrics-server
 

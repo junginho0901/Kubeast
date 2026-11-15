@@ -108,43 +108,6 @@ func TestImpersonationRoundTripper(t *testing.T) {
 	}
 }
 
-// A check asked by groups goes out as its name with the person's groups exactly, and is not sent without them.
-func TestAGroupCheckGoesOutAsItsNameWithThePersonsGroupsOrNotAtAll(t *testing.T) {
-	base := &captureRT{}
-	rt := ImpersonationRoundTripper(base, "prod")
-	p := TokenPayload{Email: "a@example.com", Roles: map[string]string{"prod": "Read"}}
-	_, groups := p.Impersonation("prod")
-	name := GroupCheckUserPrefix + "0a1b2c3d"
-	send := func(ctx context.Context) error {
-		base.req = nil
-		_, err := rt.RoundTrip(httptest.NewRequest("POST", "https://k8s/apis/authorization.k8s.io/v1/selfsubjectaccessreviews", nil).WithContext(ctx))
-		return err
-	}
-	if err := send(AsGroupCheck(WithPayload(context.Background(), p), name, groups)); err != nil {
-		t.Fatal(err)
-	}
-	if got := base.req.Header.Get(HeaderImpersonateUser); got != name {
-		t.Errorf("Impersonate-User = %q, want %q", got, name)
-	}
-	if got := base.req.Header.Values(HeaderImpersonateGroup); !reflect.DeepEqual(got, groups) {
-		t.Errorf("Impersonate-Group = %v, want the person's %v", got, groups)
-	}
-	for _, c := range []struct {
-		name string
-		ctx  context.Context
-	}{
-		{"no person", AsGroupCheck(context.Background(), name, groups)},
-		{"other groups", AsGroupCheck(WithPayload(context.Background(), p), name, []string{GroupAuthenticated, GroupAdmin})},
-		{"no groups", AsGroupCheck(WithPayload(context.Background(), p), name, nil)},
-		{"no name", AsGroupCheck(WithPayload(context.Background(), p), "", groups)},
-		{"the person's own name", AsGroupCheck(WithPayload(context.Background(), p), "a@example.com", groups)},
-	} {
-		if err := send(c.ctx); err == nil || base.req != nil {
-			t.Errorf("%s: sent %v, err %v; want nothing sent", c.name, base.req != nil, err)
-		}
-	}
-}
-
 func TestKubectlImpersonationArgs(t *testing.T) {
 	p := TokenPayload{Email: "a@example.com", Roles: map[string]string{"test2": "Read"}}
 	got := KubectlImpersonationArgs(p, "test2")

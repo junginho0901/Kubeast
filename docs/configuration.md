@@ -59,7 +59,9 @@ auth:
     # A screen served from kubeast:cache asks whether the person may list or get what it shows. On, that read check
     # goes out once per group set as kubeast:group-check:<made at each start> and its allow stands for everyone with
     # those groups up to a minute; a refusal is asked again as the person. The cluster's audit log then names that
-    # name for those checks. List a cluster whose authorizer can refuse a person by name (cluster-requirements §1).
+    # name for those checks. It relies on every authorizer allowing a person what it allows that name with the
+    # person's groups: list a cluster with an authorizer that answers by user name (ahead of RBAC or after it), or
+    # that limits the user names Kubeast may act as, and never bind the name (cluster-requirements §1).
     sharedReadChecks:
       enabled: false
       excludeClusters: []  # registered cluster ids that keep asking each person

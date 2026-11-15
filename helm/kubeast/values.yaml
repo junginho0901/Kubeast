@@ -151,9 +151,12 @@ auth:
     # in those groups, and its allow stands for each of them for up to a minute, as a person's own
     # answer does; a refusal is asked again as the person, so a User binding still counts. Can-i,
     # writes, logs, Secrets and AI tool calls are always asked as the person. Those allowed checks
-    # then show that name, not the person, in the cluster's audit log. List in excludeClusters (by
-    # registered cluster id) a cluster whose authorizer can refuse a person by name, such as an
-    # authorization webhook ahead of RBAC, and never bind the name (docs/cluster-requirements.md §1).
+    # then show that name, not the person, in the cluster's audit log. It relies on every
+    # authorizer allowing a person what it allows that name with the person's groups (RBAC only
+    # adds). List in excludeClusters, by registered cluster id, a cluster with an authorizer
+    # whose answer depends on the user name (ahead of RBAC or after it, a refusal or a pass for
+    # named people) or that limits the user names Kubeast may act as, and never bind the name
+    # (docs/cluster-requirements.md §1 has the checks).
     sharedReadChecks:
       enabled: false
       excludeClusters: []

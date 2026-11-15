@@ -5,11 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
-	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -20,7 +18,6 @@ import (
 // Impersonate-User / Impersonate-Group headers, so the API server authorizes
 // and audits the person, not Kubeast's own credential. The credential only
 // needs the "impersonate" verb on users and groups.
-// A read check k8s-service shares by group goes out as GroupCheckUserPrefix plus a part made at start (AsGroupCheck).
 //
 // Group names are stable and bound per cluster (templates/impersonation-rbac):
 //
@@ -51,10 +48,6 @@ const (
 	SystemInvestigator = "investigator"
 	UserInvestigator   = "kubeast:investigator"
 	GroupInvestigator  = "kubeast:investigator"
-
-	// GroupCheckUserPrefix starts the user name of a read check whose allow everyone with the same groups is given
-	// (k8s-service, auth.impersonation.sharedReadChecks); k8s-service adds a part made at each start.
-	GroupCheckUserPrefix = "kubeast:group-check:"
 
 	// userPrefixEnv is chart auth.impersonation.userPrefix: a name of Kubeast's own before a person's address, so a
 	// binding a cluster made of that address for its own sign-in is not opened by a Kubeast account holding it. Off by
@@ -208,22 +201,6 @@ func WithPayload(ctx context.Context, p TokenPayload) context.Context {
 	return context.WithValue(ctx, tokenPayloadKey, p)
 }
 
-// groupCheck is the user name and the groups a request of ctx goes out as instead of its person's name (AsGroupCheck).
-type groupCheck struct {
-	user   string
-	groups []string
-}
-
-type groupCheckKey struct{}
-
-// AsGroupCheck makes ctx's requests go out as user with groups, which must be the groups the person in ctx has on the
-// cluster: a request whose person is missing or has other groups is not sent.
-func AsGroupCheck(ctx context.Context, user string, groups []string) context.Context {
-	return context.WithValue(ctx, groupCheckKey{}, groupCheck{user: user, groups: groups})
-}
-
-var errGroupCheck = errors.New("a check asked by groups names no person of those groups")
-
 // impersonatingRoundTripper adds impersonation headers for the user found in
 // the request context. Requests without a user (startup probes, health checks)
 // go out under the service credential unchanged.
@@ -240,24 +217,10 @@ func ImpersonationRoundTripper(base http.RoundTripper, clusterID string) http.Ro
 
 func (t *impersonatingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	p, ok := FromContext(req.Context())
-	check, byGroups := req.Context().Value(groupCheckKey{}).(groupCheck)
-	if !ok && !byGroups {
+	if !ok {
 		return t.base.RoundTrip(req)
 	}
-	var user string
-	var groups []string
-	if ok {
-		user, groups = p.Impersonation(t.clusterID)
-	}
-	if byGroups {
-		if !ok || check.user == "" || check.user == user || len(groups) == 0 || !slices.Equal(check.groups, groups) {
-			if req.Body != nil {
-				_ = req.Body.Close()
-			}
-			return nil, errGroupCheck
-		}
-		user = check.user
-	}
+	user, groups := p.Impersonation(t.clusterID)
 	r2 := req.Clone(req.Context())
 	r2.Header.Set(HeaderImpersonateUser, user)
 	r2.Header.Del(HeaderImpersonateGroup)
