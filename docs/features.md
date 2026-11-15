@@ -116,6 +116,7 @@
   - It shows waiting dots before the first character and a small copy icon next to a finished answer (no token row). Wide tables scroll inside a box with a fixed header row.
   - It floats above modals, so you can ask while looking at an open dialog. When the right-hand detail drawer opens, the widget moves to its left (screens 1348px and wider).
   - Esc pressed inside the widget closes only the widget.
+  - ⌘/ on a Mac, Ctrl+/ on Windows and Linux, opens and closes it from any screen, also while typing in a field; it opens with the focus in its input and gives the focus back when it closes, and the button's tooltip names the key.
   - List screens pass "0 items" even when empty (not while loading).
   - Dialogs that show information pass their contents:
     - dashboard lists, issues, optimization and storage
