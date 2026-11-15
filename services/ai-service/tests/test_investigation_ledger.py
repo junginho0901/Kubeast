@@ -52,10 +52,11 @@ CLOSED = {"no_fault": False,
 
 # --- the block ------------------------------------------------------------------------------------------------------
 
-def test_split_takes_the_last_block_out_of_the_report():
-    answer = "## Summary\nweb crashed.\n\n" + block_text({"no_fault": True}) + "\n\n" + block_text(CLOSED)
+def test_split_takes_the_block_at_the_end_out_of_the_report():
+    earlier = block_text({"no_fault": True})
+    answer = "## Summary\nweb crashed.\n\n" + earlier + "\n\n" + block_text(CLOSED)
     report, block, status = inv_result.split(answer)
-    assert report == "## Summary\nweb crashed." and status == "ok" and block == CLOSED
+    assert report == "## Summary\nweb crashed.\n\n" + earlier and status == "ok" and block == CLOSED
 
 
 @pytest.mark.parametrize("answer,status", [
@@ -81,7 +82,7 @@ def test_the_stored_result_has_one_shape_whatever_the_model_wrote():
     assert out == {
         "version": 1, "status": "ok", "no_fault": False,
         "causes": [{"resource": "Deployment/apps/web", "kind": "rollout", "started_at": "2026-10-13T11:41:00Z",
-                    "evidence": [{"call": 1, "tool": "timeline"}]}],
+                    "evidence": [{"call": 1, "tool": "timeline"}], "raw_evidence": [1]}],
         "path": ["Deployment/apps/web", "Pod/apps/web-1"], "ruled_out": ["Node/kind-worker"], "hypotheses": [],
         "asked_again": True,
     }
@@ -93,6 +94,7 @@ def test_the_stored_result_has_one_shape_whatever_the_model_wrote():
     assert len(odd["path"]) <= inv_result.MAX_PATH and all(len(p) <= inv_result.MAX_TEXT for p in odd["path"])
     many = inv_result.shape({"causes": [{"resource": f"Pod/apps/p{i}", "evidence": list(range(1, 40))} for i in range(30)]}, "ok", LOG, [])
     assert len(many["causes"]) == inv_result.MAX_CAUSES and len(many["causes"][0]["evidence"]) == 3
+    assert many["causes"][0]["raw_evidence"] == list(range(1, inv_result.MAX_CALLS + 1))  # as given, the bad ones too
 
 
 # --- the ledger -----------------------------------------------------------------------------------------------------

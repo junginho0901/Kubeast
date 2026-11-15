@@ -154,8 +154,8 @@ class AlertInvestigation(Base):
     error = Column(Text, nullable=False, default="")
     # the email of the person who asked for it in the Alerts inbox, "" when the webhook queued it (00021)
     requested_by = Column(String, nullable=False, default="")
-    # what the server read of the report's rca block and the hypothesis ledger, null without
-    # features.alertInvestigation.ledger (00029, investigation/result.py)
+    # what the server read of the report's rca block and the hypothesis ledger, null with both
+    # features.alertInvestigation.evidenceCheck and ledger off (00029, investigation/result.py)
     result = Column(JSON, nullable=True)
 
 

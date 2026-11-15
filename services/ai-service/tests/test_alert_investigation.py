@@ -932,6 +932,44 @@ async def test_worker_skips_a_queued_alert_while_paused(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_the_worker_logs_a_run_whose_end_could_not_be_stored_and_takes_the_next_row(monkeypatch, caplog):
+    """A run whose store.finish raised (the database refusing a value) does not end the worker: the next rows run."""
+    stop = asyncio.Event()
+    queued, ran = [row(id="inv-nul"), row(id="inv-next")], []
+
+    async def get_db():
+        return object()
+
+    async def claim_next(db):
+        if queued:
+            return queued.pop(0)
+        stop.set()
+        return None
+
+    async def nothing(*a, **k):
+        return 0
+
+    async def not_paused(db, minutes, now):
+        return ""
+
+    async def run_one(c, db, r):
+        ran.append(r.id)
+        if r.id == "inv-nul":
+            raise ValueError("unsupported Unicode escape sequence")
+
+    monkeypatch.setattr(runner, "get_db_service", get_db)
+    monkeypatch.setattr(runner.store, "claim_next", claim_next)
+    monkeypatch.setattr(runner.store, "fail_stale_running", nothing)
+    monkeypatch.setattr(runner.store, "pause_reason", not_paused)
+    monkeypatch.setattr(runner.store, "tokens_since", nothing)
+    monkeypatch.setattr(runner, "run_one", run_one)
+    monkeypatch.setattr(runner, "POLL_SECONDS", 0.01)
+    await asyncio.wait_for(runner.worker(stop), timeout=5)
+    assert ran == ["inv-nul", "inv-next"]
+    assert "investigation inv-nul: not finished" in caplog.text and "unsupported Unicode escape" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_a_tool_is_not_run_when_the_audit_store_goes_down_mid_investigation(monkeypatch):
     # up when the run starts, down by the first tool call: the tool does not read the cluster and its row is a failure
     service = FakeService([

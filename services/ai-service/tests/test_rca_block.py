@@ -2,7 +2,9 @@
 with both on, the call numbers come once, the block has one instruction and is split once per answer, the model is
 asked again at most once with both checks' problems in one message, the row keeps the result, and the report's
 "not verified" list and the ledger each say what their own check found."""
+import importlib.util
 import json
+from pathlib import Path
 
 import pytest
 
@@ -75,7 +77,7 @@ async def test_both_on_split_the_answer_once_and_keep_the_result(monkeypatch):
     assert result["causes"][0]["evidence"] == [{"call": 1, "tool": "k8s_get_resources"}]
     assert [(h["state"], h["closed"]) for h in result["hypotheses"]] == [("cause", True)]
     assert progress["evidence"] == {"block": "ok", "causes": 1, "unsupported": 0, "asked_again": False,
-                                    "block_after": "ok", "causes_after": 1, "unverified": 0}
+                                    "ask_failed": False, "block_after": "ok", "causes_after": 1, "unverified": 0}
     json.dumps(result)
 
 
@@ -194,13 +196,14 @@ def test_one_list_of_failure_kinds_and_one_block_shape():
     assert {f"cause_{r}" for r in evidence._REASONS["en"]} <= set(rca.FAILURES)
     assert set(evidence._REASONS["en"]) == set(evidence._REASONS["ko"])
     assert {f"hypothesis_{r}" for r in ledger._REASONS} <= set(rca.FAILURES)
-    assert {"block_missing", "block_invalid", "cause_not_in_ledger", "no_hypotheses"} <= set(rca.FAILURES)
+    assert {"block_missing", "block_invalid", "block_cut", "cause_not_in_ledger", "no_hypotheses"} <= set(rca.FAILURES)
     assert len(rca.FAILURES) == len(set(rca.FAILURES))
     assert evidence.KINDS is rca.KINDS and evidence.split is rca.split and inv_result.split is rca.split
     assert evidence.INSTRUCTION == rca.instruction(evidence=True, hypotheses=False)
     assert ledger.INSTRUCTION == rca.instruction(evidence=False, hypotheses=True)
     both = rca.instruction(evidence=True, hypotheses=True)
     assert both.startswith(numbers.NOTE) and '"hypotheses"' in both and "is a hypothesis" in both
+    assert f"at most {ledger.MAX_HYPOTHESES}" in both and ledger.MAX_HYPOTHESES == rca.MAX_HYPOTHESES == 12
     assert "hypothesis of state cause about the same object" in both
     for kind in rca.KINDS:
         assert kind in both
@@ -213,3 +216,123 @@ def test_a_cause_matches_a_cause_hypothesis_by_its_objects_name():
                         [{"tool": "k8s_get_resources"}])
     block_ = {"causes": [cause(WEB, [1]), cause("Pod/apps/db-0", [1]), cause("Pod/apps/x", [], kind="none")]}
     assert rca.not_in_ledger(block_, hyps) == ["Pod/apps/db-0"]  # a symptom is not a cause; kind none is not a cause
+
+
+# --- a cut block, the answer length ---------------------------------------------------------------------------------
+
+CUT = "## Summary\nweb crashes.\n\n```rca\n{\"no_fault\": false, \"causes\": [{\"resource\": \"Deployment/apps/web\", \"kind\": \"cr"
+
+
+def at_length(content):
+    """An answer the provider stopped at its answer length."""
+    reply = completion(content=content)
+    reply.choices[0].finish_reason = "length"
+    return reply
+
+
+@pytest.mark.asyncio
+async def test_a_cut_block_is_taken_out_and_asked_for_once_more_shorter(monkeypatch):
+    service = _service(_reads_pods(), at_length(CUT), completion(content=GOOD))
+    install_loop(monkeypatch, service, [])
+    progress = {}
+    out = await runner.investigate(cfg(**BOTH), row(), progress)
+    assert [c["max_tokens"] for c in service.completions.calls] == [rca.ANSWER_TOKENS] * 3  # the steps and the second ask
+    ask = service.completions.calls[2]["messages"][-1]["content"]
+    assert ask.startswith("Your report was cut off before its rca block ended") and "Keep the report brief" in ask
+    assert out["report"] == "## Summary\nweb crashes." and out["result"]["failures"] == []
+    assert progress["evidence"]["block"] == "cut" and progress["ledger"]["asked_because"] == ["block_cut"]
+
+
+@pytest.mark.asyncio
+async def test_a_block_cut_twice_leaves_no_half_block_in_the_kept_report(monkeypatch):
+    service = _service(_reads_pods(), at_length(CUT), at_length(CUT))
+    install_loop(monkeypatch, service, [])
+    out = await runner.investigate(cfg(**BOTH), row())
+    assert "```rca" not in out["report"] and out["report"].startswith("## Summary\nweb crashes.\n\n---\n\n")
+    assert out["result"]["status"] == "cut" and out["result"]["causes"] == []
+    assert out["result"]["failures"] == [{"kind": "block_cut", "finish_reason": "length"}]
+
+
+@pytest.mark.asyncio
+async def test_an_answer_stopped_at_its_length_before_the_block_is_cut(monkeypatch):
+    for reply, status, failure in ((at_length("## Summary\nweb crashes and"), "cut", {"kind": "block_cut", "finish_reason": "length"}),
+                                   (completion(content=CUT), "cut", {"kind": "block_cut"}),  # no finish reason given
+                                   (completion(content="## Summary\nweb crashes."), "missing", {"kind": "block_missing"})):
+        service = _service(_reads_pods(), reply, completion(content="## Summary\nno block"))
+        install_loop(monkeypatch, service, [])
+        out = await runner.investigate(cfg(max_steps=5, evidence_check=True), row())
+        assert out["result"]["status"] == status and out["result"]["failures"] == [failure]
+
+
+@pytest.mark.asyncio
+async def test_the_answer_length_grows_only_with_the_block_and_never_past_the_models_own(monkeypatch):
+    for on, tokens in (({}, 2048), ({"rules": True}, 2048), ({"evidence_check": True}, rca.ANSWER_TOKENS),
+                       ({"ledger": True}, rca.ANSWER_TOKENS)):
+        service = _service(_reads_pods(), completion(content=GOOD))
+        install_loop(monkeypatch, service, [])
+        await runner.investigate(cfg(max_steps=5, **on), row())
+        assert {c["max_tokens"] for c in service.completions.calls} == {tokens}, on
+    service = _service(_reads_pods(), completion(content=GOOD))
+    service.options = {"max_tokens": 1500}
+    install_loop(monkeypatch, service, [])
+    await runner.investigate(cfg(**BOTH), row())
+    assert {c["max_tokens"] for c in service.completions.calls} == {1500}
+
+
+def test_the_instruction_asks_for_a_brief_report_and_names_the_hypotheses_cap():
+    for evidence_on, hypotheses_on in ((True, False), (False, True), (True, True)):
+        text = rca.instruction(evidence=evidence_on, hypotheses=hypotheses_on)
+        assert "Keep the report brief so that the whole block fits after it" in text
+        assert ("at most 12" in text) is hypotheses_on
+
+
+# --- what the result says of its causes -----------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_each_cause_says_whether_the_calls_show_it_and_the_result_which_checks_read_it(monkeypatch):
+    still = "## Summary\nx\n\n" + block([cause(DB, [1, 9], kind="dependency_down"), web_cause(),
+                                        cause("Pod/apps/x", [], kind="none")], [])
+    service = _service(_reads_pods(), completion(content=still), completion(content=still))
+    install_loop(monkeypatch, service, [])
+    out = await runner.investigate(cfg(max_steps=5, evidence_check=True), row())
+    db, web, none = out["result"]["causes"]
+    assert (db["verified"], db["reason"]) == (False, "name_missing")  # the report's note lists it too
+    assert web["verified"] is True and "reason" not in web and "verified" not in none  # kind none is not a cause
+    assert db["evidence"] == [{"call": 1, "tool": "k8s_get_resources"}] and db["raw_evidence"] == [1, 9]  # 9 names no call
+    assert out["result"]["checks"] == {"evidence": True, "ledger": False}
+    assert out["report"].endswith(f"- {DB}: db does not appear in what calls 1 returned")
+
+    service = _service(_reads_pods(), completion(content=still), completion(content=still))
+    install_loop(monkeypatch, service, [])
+    out = await runner.investigate(cfg(max_steps=5, ledger=True), row())
+    assert all("verified" not in c for c in out["result"]["causes"])  # nothing held them to the calls
+    assert out["result"]["checks"] == {"evidence": False, "ledger": True}
+
+
+@pytest.mark.asyncio
+async def test_a_nul_the_model_wrote_reaches_neither_the_result_nor_the_report(monkeypatch):
+    answer = "## Summary\nthe data\u0000base.\n\n" + block(
+        [cause("StatefulSet/apps/d\u0000b", [1, "9\u0000"], kind="dependency_down")],
+        [hypothesis(id="h\u00003", statement="d\u0000own", resource=DB, state="cause", **{"for": ["x\u0000"]})])
+    service = _service(_reads_pods(), completion(content=answer), completion(content=answer))
+    install_loop(monkeypatch, service, [])
+    out = await runner.investigate(cfg(**BOTH), row())
+    kept = json.dumps(out["result"])
+    assert "\\u0000" not in kept and "\x00" not in out["report"]  # the database refuses both
+    assert out["result"]["causes"][0]["raw_evidence"] == [1, "9"] and out["result"]["hypotheses"][0]["statement"] == "down"
+    assert {"kind": "cause_name_missing", "resource": "StatefulSet/apps/db"} in out["result"]["failures"]
+
+
+def test_the_kinds_are_those_the_ai_evaluation_scores():
+    path = Path(__file__).resolve().parents[3] / "scripts" / "ai_eval_rca.py"
+    if not path.exists():
+        pytest.skip("scripts/ai_eval_rca.py comes with #804; until it is in, nothing scores the block")
+    spec = importlib.util.spec_from_file_location("ai_eval_rca_kinds", path)
+    scorer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(scorer)
+    assert tuple(scorer.KINDS) == rca.KINDS
+    # the scorer counts the numbers that name no call of the run from what the row keeps
+    kept = inv_result.shape({"causes": [cause(WEB, [1, 9, "x"])]}, "ok", [{"tool": "k8s_get_resources"}], [])
+    good, bad = scorer._evidence({"evidence": kept["causes"][0]["raw_evidence"]}, [{"tool": "k8s_get_resources"}])
+    assert (good, bad) == ([1], [9, "x"])

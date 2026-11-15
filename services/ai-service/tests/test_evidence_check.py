@@ -50,11 +50,15 @@ def test_the_instruction_asks_for_the_block_and_names_the_call_numbers():
     assert evidence.tag(4, "NAME READY") == "[call 4]\nNAME READY"
 
 
-def test_split_takes_every_block_out_and_reads_the_last():
-    answer = f"{WEB_REPORT}\n\n```rca\n{{\"causes\": []}}\n```\n\nmore\n{rca(no_fault=True)}\n"
+def test_split_reads_only_the_block_at_the_very_end():
+    quoted = "```rca\n{\"causes\": [{\"resource\": \"Deployment/apps/other\", \"kind\": \"crash\"}]}\n```"
+    answer = f"{WEB_REPORT}\n\n{quoted}\n\nmore\n{rca(no_fault=True)}\n  \n"
     report, block, status = evidence.split(answer)
     assert status == "ok" and block["no_fault"] is True and block["causes"] == []
-    assert "```" not in report and report.startswith(WEB_REPORT) and report.endswith("more")
+    assert report == f"{WEB_REPORT}\n\n{quoted}\n\nmore"  # an rca fence before the end stays in the report
+    # a block with text after it is not the block at the very end: the answer is kept whole and asked for again
+    after = f"{WEB_REPORT}\n{rca(no_fault=True)}\n\nThe quoted text: {quoted}\nend"
+    assert evidence.split(after) == (after, None, "missing")
 
 
 @pytest.mark.parametrize("answer, status", [
@@ -63,6 +67,12 @@ def test_split_takes_every_block_out_and_reads_the_last():
     (WEB_REPORT + "\n```rca\nnot json\n```", "invalid"),
     (WEB_REPORT + "\n```rca\n[1, 2]\n```", "invalid"),
     (WEB_REPORT + "\n```rca\n{\"causes\": \"web\"}\n```", "invalid"),
+    (WEB_REPORT + "\n```rca\n{\"causes\": {}}\n```", "invalid"),
+    (WEB_REPORT + "\n```rca\n{\"causes\": null}\n```", "invalid"),
+    (WEB_REPORT + "\n```rca\n{\"no_fault\": false}\n```", "invalid"),
+    (WEB_REPORT + "\n```rca\n{\"causes\": [\"StatefulSet/apps/db\"]}\n```", "invalid"),
+    (WEB_REPORT + "\n```rca\n{\"causes\": [{\"resource\": \"Deployment/apps/web\"}, 3]}\n```", "invalid"),
+    (WEB_REPORT + "\n```rca\n{\"no_fault\": false, \"causes\": [{\"resource\": \"Deployment/apps/web\", \"kind\": \"cr", "cut"),
 ])
 def test_a_report_without_a_usable_block(answer, status):
     report, block, got = evidence.split(answer)
@@ -104,6 +114,21 @@ def test_each_cause_is_held_to_calls_of_the_run_that_answered_and_name_it():
     assert evidence.reason_text(problems[1]) == "cache does not appear in what calls 1 returned"
     assert evidence.reason_text(problems[3]) == "it starts at 2026-10-13T12:05:00Z, after the alert's start at 2026-10-13T12:00:00Z"
     assert evidence.reason_text(problems[2], "ko") == "근거로 댄 호출이 없음"
+
+
+def test_only_kind_none_leaves_an_entry_out_of_the_causes():
+    reads = [evidence.Read("k8s_get_resources", PODS, text=POD_TABLE)]
+    block = {"causes": [
+        {"resource": "StatefulSet/apps/db", "kind": None, "evidence": [9]},  # a null kind is still a cause
+        {"resource": "StatefulSet/apps/db", "evidence": [9]},  # so is a missing one
+        {"resource": "Pod/apps/x", "kind": " None", "evidence": []},
+        {"resource": "Pod/apps/y", "kind": 0, "evidence": []},
+    ]}
+    checked, problems = evidence.check(block, reads, NOW)
+    assert checked == 3
+    assert [(p.resource, p.reason, p.index) for p in problems] == [
+        ("StatefulSet/apps/db", "bad_calls", 0), ("StatefulSet/apps/db", "bad_calls", 1), ("Pod/apps/y", "no_evidence", 3)]
+    assert rca_block.not_in_ledger(block, []) == ["StatefulSet/apps/db", "StatefulSet/apps/db", "Pod/apps/y"]
 
 
 def test_no_fault_and_an_alert_without_a_start_check_nothing_of_time():
@@ -156,7 +181,7 @@ async def test_a_report_whose_causes_the_calls_show_is_kept_without_its_block(mo
     assert messages[0]["content"].endswith(evidence.INSTRUCTION)
     assert [m["content"] for m in messages if m["role"] == "tool"] == [f"[call 1]\n{POD_TABLE}"]
     assert progress["evidence"] == {"block": "ok", "causes": 1, "unsupported": 0, "asked_again": False,
-                                    "block_after": "ok", "causes_after": 1, "unverified": 0}
+                                    "ask_failed": False, "block_after": "ok", "causes_after": 1, "unverified": 0}
 
 
 @pytest.mark.asyncio
@@ -171,9 +196,10 @@ async def test_a_cause_no_call_shows_is_asked_about_once_without_tools(monkeypat
     ask = service.completions.calls[2]
     assert "tools" not in ask and ask["messages"][-2] == {"role": "assistant", "content": first}
     assert "- StatefulSet/apps/db: db does not appear in what calls 1 returned" in ask["messages"][-1]["content"]
+    assert "Tool results so far" not in ask["messages"][-1]["content"]  # the messages hold them on this path
     assert out["iterations"] == 3 and out["total_tokens"] == 33  # the second ask counts in the run's tokens
     assert progress["evidence"] == {"block": "ok", "causes": 1, "unsupported": 1, "asked_again": True,
-                                    "block_after": "ok", "causes_after": 1, "unverified": 0}
+                                    "ask_failed": False, "block_after": "ok", "causes_after": 1, "unverified": 0}
 
 
 @pytest.mark.parametrize("language, head", [
@@ -203,7 +229,7 @@ async def test_a_report_without_its_block_is_asked_for_again_and_marked_when_it_
     assert out["report"].endswith("the report did not end with a valid rca block, so its causes were not checked against the tool results.")
     assert "did not end with a valid rca block" in service.completions.calls[2]["messages"][-1]["content"]
     assert progress["evidence"] == {"block": "missing", "causes": 0, "unsupported": 0, "asked_again": True,
-                                    "block_after": "missing", "causes_after": 0, "unverified": None}
+                                    "ask_failed": False, "block_after": "missing", "causes_after": 0, "unverified": None}
 
 
 @pytest.mark.asyncio
@@ -247,6 +273,29 @@ async def test_a_subscription_investigation_asks_again_through_claude_code(monke
     assert lane == "investigation" and messages[-2] == {"role": "assistant", "content": first}
     assert "StatefulSet/apps/db" in messages[-1]["content"] and messages[0]["content"].endswith(evidence.INSTRUCTION)
     assert progress["evidence"]["asked_again"] is True and progress["evidence"]["unverified"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_subscription_second_ask_carries_the_tool_results_its_messages_lack(monkeypatch):
+    first = f"{DB_REPORT}\n\n{rca(cause('StatefulSet/apps/db', [1], kind='dependency_down'))}"
+    cc = FakeClaudeCode([("k8s_get_resources", PODS)], text=first, turns=2,
+                        closing=f"{WEB_REPORT}\n\n{rca(cause('Deployment/apps/web', [1]))}")
+    service = FakeSubscriptionService(cc)
+
+    async def execute(name, args, ctx):
+        service.executed.append((name, args))
+        return POD_TABLE
+
+    service._execute_function_with_context = execute
+    install_loop(monkeypatch, service, [])
+    await runner.investigate(cfg(max_steps=5, evidence_check=True), row())
+    ((messages, _lane),) = cc.completed
+    assert [m["role"] for m in messages] == ["system", "user", "assistant", "user"]
+    ask = messages[-1]["content"]
+    # as the closing call gives them: each result under its tool and arguments, with its call number
+    assert ask.startswith('Tool results so far:\n\nk8s_get_resources {"resource_type": "pods", "namespace": "apps"}\n'
+                          f"[call 1]\n{POD_TABLE}\n\n")
+    assert "- StatefulSet/apps/db: db does not appear in what calls 1 returned" in ask and ask.endswith("No tools now.")
 
 
 @pytest.mark.asyncio

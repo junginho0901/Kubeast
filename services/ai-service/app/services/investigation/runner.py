@@ -18,7 +18,9 @@ evidence_check or ledger on, the report ends with the rca block (investigation/r
 the runner takes it out once, holds its causes to the run's calls (evidence_check,
 investigation/evidence.py) and its hypotheses to their states (ledger,
 investigation/ledger.py), asks once more without tools with every problem of both in
-one message, and returns what it read as `result` (investigation/result.py).
+one message, and returns what it read as `result` (investigation/result.py). Its model
+calls may then answer at rca.ANSWER_TOKENS, and the second ask is one more model call
+than max_steps.
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ import logging
 import re
 import time
 from datetime import timedelta
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 from urllib.parse import urlencode
 
 import httpx
@@ -152,7 +154,8 @@ def used_fields(progress: dict[str, Any]) -> dict[str, Any]:
 
 async def settle(service, messages: list[dict[str, Any]], answer: str, *, tool_log: list[dict[str, Any]],
                  reads: Optional[list], same_as: dict[int, int], row, cfg, remaining, usage: dict[str, Any],
-                 progress: dict[str, Any]) -> tuple[str, dict[str, Any], int]:
+                 progress: dict[str, Any], finish_reason: str = "",
+                 tool_results: Sequence[str] = ()) -> tuple[str, dict[str, Any], int]:
     """The rca block, once for evidenceCheck and ledger (investigation/rca.py): (the report to keep, the row's
     `result`, the model calls it added — 0 or 1).
 
@@ -161,34 +164,39 @@ async def settle(service, messages: list[dict[str, Any]], answer: str, *, tool_l
     answer replaces the first only when it has text and a block that can be read, and is checked the same way. A
     second call that fails or finds the time up leaves the first answer. With evidenceCheck the causes still not
     shown are listed under the report; with the ledger the hypotheses stay in `result` with their reasons. Each switch
-    leaves its counts in `progress` for the run's audit row (`evidence`, `ledger`)."""
-    from app.services.ai.tool_turn import answer_once
+    leaves its counts in `progress` for the run's audit row (`evidence`, `ledger`). `finish_reason`: the provider's
+    for the answer. `tool_results`: a subscription's (ToolTurn.results), which its messages do not hold, so the
+    second ask carries them as the closing call does."""
+    from app.services.ai.tool_turn import answer_once, tool_results_text
 
-    def check(text: str) -> rca.Checked:
+    def check(text: str, finish: str) -> rca.Checked:
         return rca.check(text, tool_log=tool_log, reads=reads, alert_start=row.starts_at, evidence=cfg.evidence_check,
-                         ledger=cfg.ledger)
+                         ledger=cfg.ledger, finish_reason=finish)
 
-    first = kept = check(answer)
+    first = kept = check(answer, finish_reason)
     asked = ask_failed = False
     if first.failures:
         asked = True
         ask = rca.ask_again(first, rca.rows(tool_log, same_as), evidence=cfg.evidence_check, ledger=cfg.ledger)
+        if tool_results:
+            ask = tool_results_text(tool_results) + "\n\n" + ask
         try:
-            second = await answer_once(service, messages + [{"role": "assistant", "content": answer},
-                                                            {"role": "user", "content": ask}],
-                                       remaining=remaining, lane="investigation", usage=usage)
+            second, second_finish = await answer_once(
+                service, messages + [{"role": "assistant", "content": answer}, {"role": "user", "content": ask}],
+                remaining=remaining, lane="investigation", usage=usage, answer_tokens=rca.ANSWER_TOKENS)
         except Exception as e:  # the model or the clock: the first answer stands
             log.warning("investigation %s: the second ask failed: %s", row.id, clean_error(e))
-            second, ask_failed = "", True
+            second, second_finish, ask_failed = "", "", True
         if second:
-            again = check(second)
+            again = check(second, second_finish)
             if again.status == "ok" and again.report.strip():
                 kept = again
     report = kept.report
     if cfg.evidence_check:
         # unverified: the causes listed under the report; None when the kept report has no block to check
         progress["evidence"] = {"block": first.status, "causes": first.causes, "unsupported": len(first.cause_problems),
-                                "asked_again": asked, "block_after": kept.status, "causes_after": kept.causes,
+                                "asked_again": asked, "ask_failed": ask_failed, "block_after": kept.status,
+                                "causes_after": kept.causes,
                                 "unverified": len(kept.cause_problems) if kept.status == "ok" else None}
         if kept.status != "ok" or kept.cause_problems:
             report += evidence.note(kept.status, kept.cause_problems, cfg.language)
@@ -197,7 +205,8 @@ async def settle(service, messages: list[dict[str, Any]], answer: str, *, tool_l
         progress["ledger"] = ledger.counts(kept.hypotheses, asked_because=first.failures, failures=kept.failures,
                                            asked_again=asked, ask_failed=ask_failed)
     result = inv_result.shape(kept.block, kept.status, tool_log, kept.hypotheses, asked_again=asked, ask_failed=ask_failed,
-                              failures=kept.failures)
+                              failures=kept.failures, cause_problems=kept.cause_problems if cfg.evidence_check else None,
+                              checks={"evidence": cfg.evidence_check, "ledger": cfg.ledger})
     return report, result, int(asked)
 
 
@@ -363,8 +372,10 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         {"role": "user", "content": inv_prompt.alert_message(cluster=row.cluster, alert=alert_view(row), context="\n\n".join(first))},
     ]
     final_message = inv_prompt.final_step_message(cfg.rules) + (rca.FINAL_NOTE if rca.on(cfg) else "")
+    # With the block the answer is longer: every call may answer at rca.ANSWER_TOKENS (the model's own limit first).
+    longer = {"answer_tokens": rca.ANSWER_TOKENS} if rca.on(cfg) else {}
     turn = await run_tool_turn(service, messages, tools, run_tool, max_steps=cfg.max_steps, final_message=final_message,
-                               remaining=remaining, lane="investigation", usage=progress["usage"])
+                               remaining=remaining, lane="investigation", usage=progress["usage"], **longer)
     usage = turn.usage
     if not turn.answer:
         raise InvestigationError("the model returned no report")
@@ -372,10 +383,13 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     if rca.on(cfg):
         answer, extra["result"], asked = await settle(service, messages, answer, tool_log=tool_log, reads=reads,
                                                       same_as=same_as, row=row, cfg=cfg, remaining=remaining,
-                                                      usage=usage, progress=progress)
+                                                      usage=usage, progress=progress, finish_reason=turn.finish_reason,
+                                                      tool_results=turn.results)
         steps += asked
+    report = answer + (inv_prompt.step_zero_note(unused, cfg.language) if unused else "")
     return {
-        "report": answer + (inv_prompt.step_zero_note(unused, cfg.language) if unused else ""),
+        # the database refuses a NUL in text and in JSON; a model may write one
+        "report": report.replace("\x00", ""),
         "tool_calls": tool_log,
         "iterations": steps,
         "provider": service.provider or "",
@@ -480,11 +494,14 @@ async def worker(stop: asyncio.Event) -> None:
             log.exception("investigation worker: queue unavailable")
             row = None
         if row is not None:
-            reason = await claim_refusal(cfg, db, row, utcnow())
-            if reason:  # queued before the provider refused or the budget was spent: it would cross it too
-                await store.skip(db, row.id, reason)
-            else:
-                await run_one(cfg, db, row)
+            try:
+                reason = await claim_refusal(cfg, db, row, utcnow())
+                if reason:  # queued before the provider refused or the budget was spent: it would cross it too
+                    await store.skip(db, row.id, reason)
+                else:
+                    await run_one(cfg, db, row)
+            except Exception:  # the store or the audit refused the run's end: fail_stale fails the row, the next ones run
+                log.exception("investigation %s: not finished", row.id)
             continue
         webhook.wake.clear()
         try:
