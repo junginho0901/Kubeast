@@ -12,6 +12,7 @@ package main
 import (
 	"fmt"
 	"net/netip"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -101,7 +102,7 @@ var argRules = map[string]argCheck{
 	"workload_name": checkObjectName,
 	"severity":      checkSeverity,
 	"what":          checkEnum("list", "get", "values", "manifest", "notes", "hooks", "history", "resources", "images", "diff", "revision"),
-	"view":          checkView,
+	"view":          checkEnum("summary", "results"),
 	"section":       checkEnum("manifest", "values", "notes", "hooks"),
 	"aggregate":     checkEnum("namespace", "controller"),
 	"window":        checkEnum("1h", "6h", "12h", "24h", "48h", "7d", "14d", "30d"),
@@ -180,6 +181,31 @@ var argRules = map[string]argCheck{
 	"policy_source": checkPrintable(253),
 	"sort":          checkEnum("result", "policy", "namespace", "name"),
 	"dir":           checkEnum("asc", "desc"),
+}
+
+// validateCallArgs is validateToolArgs for a call of tool: timeline's view takes events or changes too while
+// k8s-service serves the changes view (changesViewServed); every other view, and timeline's otherwise, is
+// policy_reports' summary or results, refused in the words of before the view.
+func validateCallArgs(tool string, args map[string]interface{}) error {
+	if v := argString(args, "view", ""); tool == "timeline" && (v == "events" || v == "changes") && changesViewServed() {
+		rest := make(map[string]interface{}, len(args))
+		for k, a := range args {
+			if k != "view" {
+				rest[k] = a
+			}
+		}
+		return validateToolArgs(rest)
+	}
+	return validateToolArgs(args)
+}
+
+// changesViewServed is k8s-service's TimelineChangesView: AI_TIMELINE_CHANGES, or alert investigations on with their
+// step 0 reading the view. ALERT_INVESTIGATION_ENABLED (0.7.8) is read as ai-service reads it ("true" in any case);
+// the v0.7.9 switches with the one switch rule.
+func changesViewServed() bool {
+	return config.EnvSwitch("AI_TIMELINE_CHANGES") ||
+		(strings.EqualFold(strings.TrimSpace(os.Getenv("ALERT_INVESTIGATION_ENABLED")), "true") &&
+			config.EnvSwitch("ALERT_INVESTIGATION_CHANGES_FIRST"))
 }
 
 // validateToolArgs rejects any argument that would not be read by kubectl as
@@ -467,17 +493,6 @@ func checkSeverity(field, v string) error {
 }
 
 // checkEnum accepts one of a fixed set of words.
-// checkView: policy_reports' summary or results, and timeline's events or changes only while k8s-service serves the
-// changes view (AI_TIMELINE_CHANGES, or alert investigations on with their step 0 reading it); otherwise the rule and its
-// words are as before the view.
-func checkView(field, v string) error {
-	if config.EnvSwitch("AI_TIMELINE_CHANGES") ||
-		(config.EnvSwitch("ALERT_INVESTIGATION_ENABLED") && config.EnvSwitch("ALERT_INVESTIGATION_CHANGES_FIRST")) {
-		return checkEnum("summary", "results", "events", "changes")(field, v)
-	}
-	return checkEnum("summary", "results")(field, v)
-}
-
 func checkEnum(words ...string) argCheck {
 	return func(field, v string) error {
 		for _, w := range words {
