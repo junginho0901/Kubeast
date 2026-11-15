@@ -56,6 +56,25 @@ jobs:
           CGO_ENABLED: "0"
         run: go test -run 'JQ' .
 
+  # The race detector over k8s-service's sockets and terminals, whose goroutines can outlive their request: the live
+  # lists (internal/ws) and the exec, attach and node shell tests of internal/handler. A job of its own, beside the
+  # longer helm job, since its build with -race is not in the module cache.
+  go-race:
+    name: go race (k8s-service sockets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: services/k8s-service-go/go.mod
+          cache-dependency-path: services/k8s-service-go/go.sum
+      - name: internal/ws
+        working-directory: services/k8s-service-go
+        run: go test -race ./internal/ws/
+      - name: internal/handler terminals
+        working-directory: services/k8s-service-go
+        run: go test -race -run 'Terminal|Shell|Exec|Ping' ./internal/handler/
+
   # The real migrations against PostgreSQL (services/pkg/dbmigrate/*_postgres_test.go):
   # empty database to Required, idempotent re-run, legacy role column conversion;
   # services/pkg/dbsession's session limits as the server applies them.
