@@ -364,6 +364,45 @@ test.describe('floating chat — a new conversation', () => {
   })
 })
 
+test.describe('floating chat — the keyboard shortcut', () => {
+  // ⌘/ on a Mac, Ctrl+/ elsewhere: Playwright's ControlOrMeta is the same choice for the browser's platform
+  test('⌘/ or Ctrl+/ opens the chat from a text field with the focus in its input, and closes it with the focus back', async ({ page }) => {
+    await page.goto('/admin/users')
+    const toggle = page.getByTestId('floating-chat-toggle')
+    const mac = await page.evaluate(() => /mac|iphone|ipad/i.test(navigator.platform))
+    await expect(toggle).toHaveAttribute('aria-keyshortcuts', mac ? 'Meta+Slash' : 'Control+Slash')
+    await expect(toggle).toHaveAttribute('title', mac ? 'Open AI Chat (⌘/)' : 'Open AI Chat (Ctrl+/)')
+
+    const field = page.getByTestId('admin-users-search')
+    await field.fill('abc')
+    await field.press('ControlOrMeta+Slash')
+    const panel = page.getByTestId('floating-chat-panel')
+    await expect(panel).toHaveCSS('opacity', '1')
+    await expect(page.getByTestId('floating-chat-input'), 'the window opens with the focus in its input').toBeFocused()
+    await expect(field, 'the shortcut typed nothing').toHaveValue('abc')
+
+    await page.keyboard.press('ControlOrMeta+Slash')
+    await expect(panel).toHaveCount(0)
+    await expect(field, 'the focus is back where it was').toBeFocused()
+    await expect(field).toHaveValue('abc')
+
+    // Escape closes it as before, the focus going back the same way
+    await page.keyboard.press('ControlOrMeta+Slash')
+    await expect(page.getByTestId('floating-chat-input')).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(panel).toHaveCount(0)
+    await expect(field).toBeFocused()
+
+    // opened from the page itself, it gives the focus to the button when it closes
+    await page.locator('h1').first().click()
+    await page.keyboard.press('ControlOrMeta+Slash')
+    await expect(page.getByTestId('floating-chat-input')).toBeFocused()
+    await page.keyboard.press('ControlOrMeta+Slash')
+    await expect(panel).toHaveCount(0)
+    await expect(toggle).toBeFocused()
+  })
+})
+
 test.describe('floating chat — signing out', () => {
   // A sign-out ends that sign-in on the server and auth_time is in whole seconds: an admin account of the run signs in
   // and out here, so no token of the shared admin ends with it.
