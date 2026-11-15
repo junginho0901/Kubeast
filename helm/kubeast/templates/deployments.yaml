@@ -235,7 +235,7 @@ spec:
   replicas: {{ $.Values.replicas.k8sService }}
   {{- else }}
   {{- if gt (int $.Values.streams.replicas) 1 }}
-  {{- fail "streams.replicas must be 1: a stream server's client caches are not told of a cluster's change" }}
+  {{- fail "streams.replicas must be 1: more than one stream server is not supported yet" }}
   {{- end }}
   {{- if eq (toString $.Values.sessionRecording.storage) "file" }}
   {{- fail "sessionRecording.storage file and streams.enabled: the stream server writes the recordings and k8s-service reads them, and one file volume is mounted by one pod — use s3 or database" }}
@@ -320,6 +320,18 @@ spec:
               value: "{{ $.Values.multicluster.bigReadConcurrency | default 2 }}"
             - name: EVENT_LIST_CONCURRENCY
               value: "{{ $.Values.multicluster.eventListConcurrency | default 4 }}"
+            {{- if include "kubeast.redisAcl" $ }}
+            # Redis user k8s-service (redis.acl) in every role; this REDIS_PASSWORD takes the place of kubeast-secrets' one. optional:
+            # a Secret of secrets.existingSecret without the key leaves the cache in memory instead of the pod not starting.
+            - name: REDIS_USERNAME
+              value: k8s-service
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kubeast.redisUsersSecretName" $ }}
+                  key: REDIS_K8S_SERVICE_PASSWORD
+                  optional: true
+            {{- end }}
             {{- if $api }}
             {{- with $.Values.features.prometheus.auth.existingSecret }}
             - name: PROMETHEUS_AUTH_HEADER
@@ -584,6 +596,18 @@ spec:
               value: /tmp/kube-cache
             - name: TOOL_SERVER_KUBECTL_CONCURRENCY
               value: "{{ .Values.multicluster.toolServerKubectlConcurrency | default 3 }}"
+            {{- if include "kubeast.redisAcl" . }}
+            # Redis user tool-server (redis.acl): listens to the cluster change notices, reads no key. This REDIS_PASSWORD
+            # takes the place of kubeast-secrets' one; optional, as k8s-service's: without it the kubeconfigs still expire.
+            - name: REDIS_USERNAME
+              value: tool-server
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kubeast.redisUsersSecretName" . }}
+                  key: REDIS_TOOL_SERVER_PASSWORD
+                  optional: true
+            {{- end }}
             {{- with include "kubeast.awsEnv" . }}{{ nindent 12 . }}{{- end }}
             {{- with include "kubeast.customCAGoEnv" . }}{{ . | trim | nindent 12 }}{{ end }}
           volumeMounts:

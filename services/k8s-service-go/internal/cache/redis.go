@@ -48,10 +48,11 @@ const Prefix = "kubeast:cache:"
 // TTL is kept this long: nothing the cache writes stays in Redis for ever.
 const MaxTTL = time.Hour
 
-// Options is the connection New makes, for another client of the same Redis.
-func Options(host string, port, db int, password string) *redis.Options {
+// Options is the connection NewWithUser makes, for another client of the same Redis signing in as the same user.
+func Options(host string, port, db int, username, password string) *redis.Options {
 	return &redis.Options{
 		Addr:        fmt.Sprintf("%s:%d", host, port),
+		Username:    username,
 		Password:    password,
 		DB:          db,
 		DialTimeout: 5 * time.Second,
@@ -63,6 +64,12 @@ func Options(host string, port, db int, password string) *redis.Options {
 // docker/kind setups) and falls back to the in-memory cache when it is not
 // reachable. An empty host is no Redis at all: the in-memory cache, no attempt.
 func New(host string, port, db int, password string) *Cache {
+	return NewWithUser(host, port, db, "", password)
+}
+
+// NewWithUser is New signing in as a Redis ACL user (REDIS_USERNAME, the chart's redis.acl); an empty username signs
+// in with the password alone, as New does.
+func NewWithUser(host string, port, db int, username, password string) *Cache {
 	c := &Cache{
 		mem: make(map[string]memEntry),
 	}
@@ -71,7 +78,7 @@ func New(host string, port, db int, password string) *Cache {
 		return c
 	}
 
-	rdb := redis.NewClient(Options(host, port, db, password))
+	rdb := redis.NewClient(Options(host, port, db, username, password))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
