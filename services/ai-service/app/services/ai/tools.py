@@ -8,11 +8,14 @@
 # (tool dispatch) 의 if-elif chain 과 매칭되어야 함. name 변경 / 추가 / 삭제 시
 # dispatch 도 함께 갱신.
 
+import os
 from typing import Dict, List
 
-# resource_graph's call parameters, offered only where the cluster has features.callGraph on (features.PARAM_GATES).
+# resource_graph's call parameters, offered only where the cluster has features.callGraph on (features.PARAM_GATES), and
+# in the MCP server's list only with CALL_GRAPH_ENABLED (offer_call_graph).
 CALLS_PARAM = "include"
 CALLS_SINCE_PARAM = "since"
+CALLS_PARAMS = (CALLS_PARAM, CALLS_SINCE_PARAM)
 CALLS_DESCRIPTION = (
     " With include [\"calls\"] it adds who calls whom over since — requests, errors and p90 latency from the traces, connections "
     "and drops from the network — with the failing workloads that call nothing failing first and the cause → … → symptom paths "
@@ -1856,3 +1859,28 @@ def get_tools_definition(service) -> List[Dict]:
     tools.extend(ACTION_TOOLS)
     tools.extend(K8S_WRITE_TOOLS)
     return service._filter_tools_by_role(tools)
+
+
+def without_params(tool: Dict, params: tuple, words: str) -> Dict:
+    """tool without these parameters and the words of its description about them."""
+    fn = dict(tool.get("function") or {})
+    parameters = dict(fn.get("parameters") or {})
+    parameters["properties"] = {k: v for k, v in (parameters.get("properties") or {}).items() if k not in params}
+    fn["parameters"] = parameters
+    if words and isinstance(fn.get("description"), str):
+        fn["description"] = fn["description"].replace(words, "")
+    return {**tool, "function": fn}
+
+
+def call_graph_on() -> bool:
+    """CALL_GRAPH_ENABLED (chart features.callGraph.enabled, default off; in the ConfigMap every service reads)."""
+    return os.getenv("CALL_GRAPH_ENABLED", "false").strip().lower() == "true"
+
+
+def offer_call_graph(tools: List[Dict]) -> List[Dict]:
+    """tools for a list that names no cluster (the MCP server's read tools): with CALL_GRAPH_ENABLED off, resource_graph
+    without its call parameters and their words, as features.PARAM_GATES gives a cluster without callGraph."""
+    if call_graph_on():
+        return tools
+    return [without_params(t, CALLS_PARAMS, CALLS_DESCRIPTION) if ((t or {}).get("function") or {}).get("name") == "resource_graph" else t
+            for t in tools]

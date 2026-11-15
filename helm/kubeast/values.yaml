@@ -1046,7 +1046,7 @@ features:
   # path with the step of each link. Read as the user: the traces need a grant
   # on the whole cluster (as the Prometheus reads), the Hubble lines
   # resource.networkflow.read. Off: include calls reads nothing and says so,
-  # and the AI is not offered it.
+  # and the AI (the chat, investigations and the MCP tool list) is not offered it.
   callGraph:
     enabled: false
   # Alert store reads for the AI's alerts_list (off by default): an

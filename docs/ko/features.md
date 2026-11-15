@@ -69,7 +69,7 @@
     - `network_flows` — 클러스터의 Hubble Relay가 본 네임스페이스·파드·워크로드의 최근 연결. 연결별로 합치고, 막힌 이유와 판정한 정책을 붙입니다([최근 흐름](#최근-흐름-hubble)).
     - `network_drops` — Hubble 에이전트가 센 네임스페이스·파드·워크로드의 차단 수를 클러스터의 Prometheus에서 사유·상대별로, 최대 1일 전까지([네트워크 차단](#네트워크-차단-hubble-지표)).
     - `network_top_flows` — EKS 클러스터의 Network Flow Monitor에서, 네임스페이스·파드·워크로드가 가장 많이 주고받거나 재전송·재전송 시간 초과가 가장 많은 상대([상위 통신](#상위-통신-network-flow-monitor)).
-    - `resource_graph` — 네임스페이스 객체와 그 연결. 파드가 10개 넘는 소유자의 정상 파드는 화면처럼 개수를 단 노드 하나로 — `features.callGraph`를 켜면(기본 꺼짐) `include: ["calls"]`가 트레이스 서비스 그래프 지표와 Hubble 지표로 누가 누구를 부르는지, 부르는 쪽이 멀쩡한 고장 워크로드부터 놓은 목록, 그 사이 원인 → … → 증상 경로를 더하고, 알림 조사는 여러 워크로드가 같이 고장 나면 이것을 읽음([클러스터 요구사항 §20](cluster-requirements.md#20-호출-관계-ai-resource_graph의-include-calls))
+    - `resource_graph` — 네임스페이스 객체와 그 연결. 파드가 10개 넘는 소유자의 정상 파드는 화면처럼 개수를 단 노드 하나로 — `features.callGraph`를 켜면(기본 꺼짐) `include: ["calls"]`가 트레이스 서비스 그래프 지표와 Hubble 지표로 누가 누구를 부르는지, 부르는 쪽이 멀쩡한 고장 워크로드부터 놓은 목록, 그 사이 원인 → … → 증상 경로를 더하고, 알림 조사는 여러 워크로드가 같이 고장 나면 이것을 읽음. MCP 도구 목록에는 `features.callGraph.enabled`가 켜져 있을 때만 그 인자가 나옴([클러스터 요구사항 §20](cluster-requirements.md#20-호출-관계-ai-resource_graph의-include-calls))
     - `timeline` — Timeline 화면의 변경 이력. 네임스페이스·객체 하나·전체 네임스페이스의 이벤트와 롤아웃 리비전을 기간·이벤트 종류로 읽습니다. 숫자는 화면과 같고, 목록이 잘리면 "N개 중 최신 M개", 롤아웃을 못 읽으면 그 까닭을 함께 답합니다.
     - `gpu` — GPU 화면들의 숫자. 회사별·노드별 GPU 수와 사용·남은 수, 파드별 요청, device plugin, DeviceClass, ResourceClaimTemplate, DCGM 사용률을 읽습니다. 읽지 못한 곳은 이름을 대고 그 숫자는 0이 아니라 null입니다.
     - `hygiene` — 위생 보고, 그 클러스터의 Admin 부여
