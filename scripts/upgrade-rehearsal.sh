@@ -1142,6 +1142,8 @@ upgrade_phase() {
   kc -n "$NS" get pods -o wide > "$OUT/$phase-pods-after.txt"
   row "$phase" "helm upgrade $*" PASS "$(( $(date +%s) - PHASE_T0 ))s, revision $(hc list -o json | jq -r '.[] | select(.name == "kubeast") | .revision')"
   probe_summary "$phase" "$OUT/$phase-probe.txt" "$OUT/$phase-pods.txt" "$probe_secs"
+  # maxSurge 0 makes the new Redis pod once the old one is terminating, not once it has gone: the seconds both are listed
+  info "$phase" "Redis: seconds with two pods listed" "$(awk '{ n = 0; for (i = 2; i <= NF; i++) if ($i ~ /^redis=/) n++; if (n > 1) s++ } END { print s + 0 }' "$OUT/$phase-pods.txt") s of $phase-pods.txt (the old pod ending beside the new; emptyDir, nothing shared; 0 when Redis was not replaced)"
 }
 
 # --- 9. pod settings after the upgrade ---
@@ -1155,8 +1157,12 @@ spec_checks() { # spec_checks PHASE
   if in_checkout 901; then
     bad=$(jq -r '[.items[] | select(.kind == "Deployment" and (.metadata.name | IN("auth-service", "k8s-service", "session-service"))) | .spec.template.spec.containers[0] | select(.readinessProbe.httpGet.path != "/readyz" or .livenessProbe.httpGet.path != "/livez") | .name] | join(" ")' "$json")
     none_bad "$a" "Go services: readiness /readyz, liveness /livez" "$bad" "auth-service k8s-service session-service" "other paths on:"
-    bad=$(jq -r '[.items[] | select(.kind == "Deployment") | select(if (.metadata.name | IN("postgres", "redis")) then .spec.strategy.type != "Recreate" else (.spec.strategy.type != "RollingUpdate" or (.spec.strategy.rollingUpdate.maxUnavailable | tostring) != "0" or (.spec.strategy.rollingUpdate.maxSurge | tostring) != "1") end) | .metadata.name] | join(" ")' "$json")
-    none_bad "$a" "rollouts: maxSurge 1 · maxUnavailable 0; PostgreSQL and Redis Recreate" "$bad" "every Deployment" "other strategy on:"
+    # Redis keeps RollingUpdate (0.7.7's type, which an upgrade cannot switch to Recreate) with maxSurge 0
+    bad=$(jq -r '[.items[] | select(.kind == "Deployment") | .spec.strategy as $s | select(
+        if .metadata.name == "postgres" then $s.type != "Recreate"
+        elif .metadata.name == "redis" then ($s.type != "RollingUpdate" or ($s.rollingUpdate.maxSurge | tostring) != "0" or ($s.rollingUpdate.maxUnavailable | tostring) != "1")
+        else ($s.type != "RollingUpdate" or ($s.rollingUpdate.maxUnavailable | tostring) != "0" or ($s.rollingUpdate.maxSurge | tostring) != "1") end) | .metadata.name] | join(" ")' "$json")
+    none_bad "$a" "rollouts: maxSurge 1 · maxUnavailable 0; PostgreSQL Recreate, Redis maxSurge 0" "$bad" "every Deployment" "other strategy on:"
     bad=$(jq -r '[.items[] | select(.kind == "Deployment" and .spec.replicas > 1) | .metadata.name] as $many | [.items[] | select(.kind == "PodDisruptionBudget") | .spec.selector.matchLabels.app] as $pdb | ($many - $pdb) | join(" ")' "$json")
     none_bad "$a" "a PodDisruptionBudget for each Deployment past one replica" "$bad" "$(jq '[.items[] | select(.kind == "PodDisruptionBudget")] | length' "$json") PDBs" "none for:"
   else
