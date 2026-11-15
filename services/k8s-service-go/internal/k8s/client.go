@@ -86,6 +86,8 @@ type clientBundle struct {
 	infFailedAt time.Time
 	// noInformers: the overview informers never start here (ServiceOptions.NoInformers); readers list instead.
 	noInformers bool
+	// groupCheckUser is the name this cluster's shared read checks go out as, "" = none shared (shared_read_checks.go).
+	groupCheckUser string
 }
 
 // Close stops the bundle's informers (LRU eviction, kubeconfig rotation).
@@ -176,6 +178,10 @@ type ServiceOptions struct {
 	InstallNamespace   string
 	NodeShellNamespace string
 	Gitops             gitops.Config // Argo CD guard (chart gitops.argocd)
+	// SharedReadChecks shares a screen's allowed read check among people of the same groups, but on the clusters
+	// SharedReadChecksExclude names (chart auth.impersonation.sharedReadChecks, shared_read_checks.go).
+	SharedReadChecks        bool
+	SharedReadChecksExclude []string
 	// NoInformers keeps the overview informers from starting: a server of role "stream" serves no list, and whatever
 	// would read them lists instead, as before the first sync.
 	NoInformers bool
@@ -202,6 +208,13 @@ func NewService(ctx context.Context, registry cluster.Registry, watchEnabled boo
 	clientRates = rates{opts.ClientQPS, opts.ClientBurst, opts.ReviewQPS, opts.ReviewBurst}
 	installNamespace, nodeShellNamespace = opts.InstallNamespace, opts.NodeShellNamespace
 	informersOff = opts.NoInformers
+	sharedReadChecks.on, sharedReadChecks.exclude = opts.SharedReadChecks, opts.SharedReadChecksExclude
+	switch {
+	case opts.SharedReadChecks && opts.Impersonation:
+		slog.Info("k8s: allowed read checks of screens are shared by group", "user", groupCheckUser, "excluded_clusters", opts.SharedReadChecksExclude)
+	case opts.SharedReadChecks:
+		slog.Warn("k8s: shared read checks need auth.impersonation.enabled; every check is asked as Kubeast's own credential, as before")
+	}
 	s := &Service{
 		registry:          registry,
 		gitops:            opts.Gitops,
@@ -327,7 +340,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		return nil, fmt.Errorf("create dynamic client: %w", err)
 	}
 	promExt, promSvc := promSourceFromInfo(info)
-	return &clientBundle{
+	b := &clientBundle{
 		clientset:   clientset,
 		authz:       authz,
 		dynamic:     dynClient,
@@ -342,7 +355,9 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		protected:   protected,
 		cacheClient: cacheClient,
 		noInformers: informersOff,
-	}, nil
+	}
+	b.groupCheckUser = sharedCheckUserFor(info.ID)
+	return b, nil
 }
 
 // pool lazily builds the LRU client-bundle pool. Lazy so a zero-value Service

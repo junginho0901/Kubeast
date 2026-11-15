@@ -132,6 +132,9 @@ services:
       - REDIS_PORT=6379
       - REDIS_DB=0
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kubeast}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kubeast}
+      # chart auth.impersonation.sharedReadChecks (off; docs/cluster-requirements.md §1)
+      - SHARED_READ_CHECKS=${SHARED_READ_CHECKS:-false}
+      - SHARED_READ_CHECKS_EXCLUDE_CLUSTERS=${SHARED_READ_CHECKS_EXCLUDE_CLUSTERS:-}
     volumes:
       - kubeconfig_data:/kubeconfig:ro
     networks:
