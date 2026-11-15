@@ -146,7 +146,7 @@ test.describe('Number check — Timeline', () => {
     // rows on screen are the range it says, and the page itself does not scroll
     const items = Number((await page.getByTestId('timeline-count').innerText()).match(/\d+/)?.[0])
     await expect.poll(async () => {
-      const range = await pagerRange(page, 'timeline-pager')
+      const range = await pagerRange(page, 'timeline-pager', { uncounted: 'nan' })
       return { total: range.total, start: range.start, rows: range.end - range.start + 1 - (await page.getByTestId('timeline-row').count()) }
     }, { timeout: 15_000 }).toEqual({ total: items, start: 1, rows: 0 })
     expect(await pageScroll(page), 'the page scrolls past the screen').toBeLessThanOrEqual(1)
