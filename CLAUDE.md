@@ -57,7 +57,7 @@ Code that runs commands in a container through `pods/exec` must use short comman
 
 The handler pattern is documented in [AGENTS.md](AGENTS.md); use `audit.FromHTTPRequest(r)` to seed a record, then set `Service` (`audit.ServiceK8s` / `ServiceHelm` / `ServiceAI` / `ServiceAuth` / `ServiceAdmin`), `Action`, actor, target, and write via the handler's `auditStore`.
 
-Text a cluster wrote reaches the model only as a tool result, in both loops of the chat and of the investigator; `ai.toolResultsJSON` makes each one JSON object (`app/services/ai/tool_results.py`), and the two places that are not a tool result — an investigation's alert and the floating chat's screen — stay fenced (`tests/test_tool_results_json.py`). A change to the prompts, the tools or the loops runs the planted-instruction cases (`evals/ai-planted/`, scored by `scripts/ai_eval_planted.py`) for each model.
+Text a cluster wrote reaches the model only as a tool result, in both loops of the chat and of the investigator; `ai.toolResultsJSON` makes each one JSON object (`app/services/ai/tool_results.py`), and the places that are not a tool result — an investigation's alert and the floating chat's screen, fenced, and an approved write's result, an assistant message the history reads — are named in docs/ai-alerts.md "Planted instructions" and held by `tests/test_tool_results_json.py`; the MCP server hands answers to an external agent as they are. A change to the prompts, the tools or the loops runs the planted-instruction cases (`evals/ai-planted/`, scored by `scripts/ai_eval_planted.py`) for each model.
 
 ## Build & deploy
 

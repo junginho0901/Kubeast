@@ -885,7 +885,7 @@ async def session_chat_stream(
                     iteration=turn_no, audit_actor=audit_actor, audit_http=audit_http, call_id=call_id,
                 )
                 tool_calls_log.append(entry)
-                return events, tool_results.for_model(name, llm_text)
+                return events, tool_results.for_model(name, llm_text, limits.tool_result_chars(service))
 
             cc_prompt_chars = usage_acct.prompt_chars(messages, tools)
             try:
@@ -1067,7 +1067,7 @@ async def session_chat_stream(
                         "tool_call_id": tc_dict["id"],
                         "role": "tool",
                         "name": function_name,
-                        "content": tool_results.for_model(function_name, tool_message_content)
+                        "content": tool_results.for_model(function_name, tool_message_content, limits.tool_result_chars(service))
                     })
 
                 continue

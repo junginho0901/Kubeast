@@ -74,7 +74,7 @@ async def run_tool_turn(service, messages: list[dict[str, Any]], tools: Sequence
         })
         for c in calls:
             result = await run_tool(c.function.name, _args(c.function.arguments), step)
-            messages.append({"role": "tool", "tool_call_id": c.id, "content": tool_results.for_model(c.function.name, result)})
+            messages.append({"role": "tool", "tool_call_id": c.id, "content": tool_results.for_model(c.function.name, result, limits.tool_result_chars(service))})
     return out
 
 
@@ -89,7 +89,7 @@ async def _claude_code_turn(service, messages, tools, run_tool, *, max_steps, fi
         text = await run_tool(name, args, step)
         if tool_results.enabled():
             results.append(tool_results.as_json(name, text, args))
-            return [], tool_results.as_json(name, text)
+            return [], tool_results.for_model(name, text, limits.tool_result_chars(service))
         results.append(f"{name} {json.dumps(args, ensure_ascii=False)}\n{text}")
         return [], text
 

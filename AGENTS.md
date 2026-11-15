@@ -107,15 +107,15 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 
 ---
 
+## 클러스터 글과 모델
+
+- 클러스터에서 읽은 글은 도구 결과 자리로만 모델에 간다(채팅·알림 조사, 두 루프 모두). `ai.toolResultsJSON`이면 결과마다 JSON 객체 하나(`app/services/ai/tool_results.py`). 도구 결과가 아닌 자리 — 울타리 안의 조사 알림·떠 있는 채팅 화면, 기록이 읽는 assistant 메시지인 승인된 쓰기의 결과 — 는 docs/ai-alerts.md "Planted instructions"에 적고 `tests/test_tool_results_json.py`가 지킨다. MCP 서버는 바깥 에이전트에 답을 그대로 준다. 프롬프트·도구·루프를 바꾸면 심어 둔 지시 사례(`evals/ai-planted/`, `scripts/ai_eval_planted.py`)를 모델마다 돌린다.
+
 ## 빌드 / 배포
 
 - **빌드/배포는 항상 `scripts/rebuild-kind.sh` 를 통해 수행**한다. 직접 docker/kubectl 명령을 돌리지 않는다.
   게이트웨이(nginx.conf)는 `scripts/rebuild-kind.sh gateway` — 릴리스 값 그대로 `helm upgrade`로 다시 렌더한다.
   ConfigMap을 `kubectl apply`로 쓰면 kubectl이 필드 소유자가 돼 다음 `helm upgrade`(Helm 4 서버 측 적용)가 충돌로 멈춘다.
-
-## 클러스터 글과 모델
-
-- 클러스터에서 읽은 글은 도구 결과 자리로만 모델에 간다(채팅·알림 조사, 두 루프 모두). `ai.toolResultsJSON`이면 결과마다 JSON 객체 하나(`app/services/ai/tool_results.py`). 도구 결과가 아닌 두 자리(조사의 알림, 떠 있는 채팅의 화면)는 울타리 안에 둔다(`tests/test_tool_results_json.py`). 프롬프트·도구·루프를 바꾸면 심어 둔 지시 사례(`evals/ai-planted/`, `scripts/ai_eval_planted.py`)를 모델마다 돌린다.
 
 ## 컨테이너 exec
 
