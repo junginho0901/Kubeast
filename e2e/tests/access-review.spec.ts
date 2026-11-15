@@ -223,9 +223,11 @@ test.describe('Access review', () => {
 
     await page.getByTestId('access-review-tab-api_keys').click()
     await expect(page.getByTestId('access-review-table')).toContainText('e2e-review')
-    await search.fill('')
     await page.getByTestId('access-review-tab-roles').click()
+    // a role's permissions wrap, so Fit may put Admin past the first page: it is found by the search, as the account is
+    await search.fill('Admin')
     await expect(page.getByTestId('access-review-table')).toContainText('Admin')
+    await search.fill('')
     await page.getByTestId('access-review-tab-users').click()
 
     const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('access-review-export').click()])
