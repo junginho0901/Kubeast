@@ -238,12 +238,13 @@ def test_each_truth_fits_its_case_and_the_scorer():
 def test_each_truths_other_forms_score_as_it_says():
     """Read from each truth, hidden ones too, so no test file has to write a hidden case's answer: each accepted kind of
     a cause passes, a part of a cause (also_ok) the cause does not accept misses alone and costs nothing beside the
-    right causes, and a hop of the path that is no cause, named alone under the cause's kind, misses."""
+    right causes, and a hop of the path that is no cause, named alone under any kind a cause takes, misses."""
     for d, c in all_cases():
         filled = rca.fill_placeholders(truth_of(d), MARKS)
         if filled["control"]:
             continue
         right = [cause(tc["resource"], tc["kind"]) for tc in filled["causes"]]
+        kinds = sorted({k for tc in filled["causes"] for k in (tc["kind"], *(tc.get("accept_kinds") or []))})
         for i, tc in enumerate(filled["causes"]):
             for kind in tc.get("accept_kinds") or []:
                 s = rca.score_rca(block(right[:i] + [cause(tc["resource"], kind)] + right[i + 1:]), filled, CALLS)
@@ -251,15 +252,16 @@ def test_each_truths_other_forms_score_as_it_says():
         for part in filled["also_ok"]:
             if any(rca._is_truth_cause(tc, as_answered(part)) for tc in filled["causes"]):
                 continue  # an accepted name of the cause: taken as the cause, under its kinds
-            assert not rca.score_rca(block([cause(as_answered(part), filled["causes"][0]["kind"])]), filled, CALLS)["pass"], tell(d, c, part)
+            for kind in kinds:
+                assert not rca.score_rca(block([cause(as_answered(part), kind)]), filled, CALLS)["pass"], tell(d, c, part, kind)
             s = rca.score_rca(block(right + [cause(as_answered(part), "crash")]), filled, CALLS)
             assert s["pass"] and s["score"] == 1.0, tell(d, c, part, s)
         for hop in filled["path"]:
             named = as_answered(hop["resource"])
             if any(rca._is_truth_cause(tc, named) for tc in filled["causes"]):
                 continue
-            for tc in filled["causes"]:
-                assert not rca.score_rca(block([cause(named, tc["kind"])]), filled, CALLS)["pass"], tell(d, c, named, tc["kind"])
+            for kind in kinds:
+                assert not rca.score_rca(block([cause(named, kind)]), filled, CALLS)["pass"], tell(d, c, named, kind)
 
 
 # What names a hidden case's answer: each cause's name and namespace/name, and for a control the namespace/name of each
