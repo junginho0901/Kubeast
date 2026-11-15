@@ -37,6 +37,11 @@ AI_EVAL = _load_ai_eval()
 PASSWORD = "admin-pass"
 
 
+def admin_session():
+    """What the runner's main hands a case as the admin."""
+    return AI_EVAL.login("admin", PASSWORD)
+
+
 def block_for(question: str) -> dict:
     """The right block for the namespace the question names."""
     ns = re.search(r"shop-[0-9]+(?:-[a-z0-9]+)?", question).group(0)
@@ -75,6 +80,7 @@ class FakeKubeast:
         self.then = "ok"
         self.on_chat = lambda n: None
         self.totals = {"investigations": 2, "inbox": 3}
+        self.only_admin_signs_in = False
         self.lock = threading.Lock()
 
     def email_of(self, headers):
@@ -86,7 +92,7 @@ class FakeKubeast:
             if path == "/api/v1/auth/login":
                 user = next((u for u in self.users.values() if u["email"] == body.get("email")), None)
                 if not ((body.get("email") == "admin" and body.get("password") == PASSWORD)
-                        or (user and body.get("password") == user["password"])):
+                        or (user and body.get("password") == user["password"] and not self.only_admin_signs_in)):
                     return 401, {"detail": "bad credentials"}
                 token = f"t{len(self.tokens) + 1}"
                 self.tokens[token] = body["email"]
@@ -219,7 +225,7 @@ def case_dir(case: dict, truth: dict, root: Path | None = None) -> Path:
 
 def run(case=CASE, repeat=2, user="read"):
     d = case_dir(case, TRUTH)
-    admin = AI_EVAL.login("admin", PASSWORD)
+    admin = admin_session()
     args = argparse.Namespace(repeat=repeat, keep=False, user=user)
     return AI_EVAL.run_staged_case(d, json.loads((d / "case.json").read_text()), admin, {}, args, "20261115000000", d.parent / "truth")
 
@@ -251,16 +257,10 @@ def test_user_admin_and_a_cases_own_user():
 
 def test_a_read_account_that_cannot_be_made_is_a_setup_error():
     fake = FakeKubeast()
+    fake.only_admin_signs_in = True
     with Server(fake) as srv:
-        AI_EVAL_login = AI_EVAL.login
-        try:
-            AI_EVAL.login = lambda email, password: (_ for _ in ()).throw(AI_EVAL.urllib.error.URLError("refused")) if email != "admin" else AI_EVAL_login(email, password)
-            admin = AI_EVAL_login("admin", PASSWORD)
-            d = case_dir(CASE, TRUTH)
-            results = AI_EVAL.run_staged_case(d, CASE, admin, {}, argparse.Namespace(repeat=1, keep=False, user="read"), "20261115000000", d.parent / "truth")
-        finally:
-            AI_EVAL.login = AI_EVAL_login
-    assert results[0]["setup_error"].startswith("read account: URLError") and fake.chats == 0
+        results = run(repeat=1)
+    assert results[0]["setup_error"] == "read account: HTTP 401 Unauthorized" and fake.chats == 0
     assert fake.users == {} and len(fake.deleted) == 1  # the half-made account is deleted
     assert not any("inject.yaml" in c for c in srv.commands)
 
