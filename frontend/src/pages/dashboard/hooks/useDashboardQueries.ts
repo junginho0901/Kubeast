@@ -65,7 +65,7 @@ export function useDashboardQueries({
   // what the cluster refused of the top pods and nodes since this page opened
   const topRefusals = useRef<TopRefusals>({ ck })
 
-  const { data: overview, isLoading, isError: isOverviewError } = useQuery({
+  const { data: overview, isLoading, isError: isOverviewError, error: overviewError } = useQuery({
     queryKey: ['cluster-overview', ck],
     queryFn: () => api.getClusterOverview(false), // 자동 갱신은 캐시 사용
     // k8s-service answers from its informer store (no API listing per poll).
@@ -235,6 +235,7 @@ export function useDashboardQueries({
   return {
     overview,
     isOverviewError,
+    overviewError,
     isLoading,
     namespaces,
     isLoadingNamespaces,

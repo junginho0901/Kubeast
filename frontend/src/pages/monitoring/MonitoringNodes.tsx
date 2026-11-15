@@ -26,6 +26,7 @@ import { usePagedItems } from '@/hooks/usePagedItems'
 import { MonitoringSearch } from './MonitoringFilters'
 import { MetricsRefreshFailed } from './MetricsRefreshFailed'
 import { metricsReadPace, metricsRefreshFailure, metricsRefusal, refreshFailureForChat } from './metricsRefresh'
+import { metricsNotShownLayer, metricsTabView } from './metricsTabView'
 import type { NodeMetric } from './types'
 
 const COLUMNS = 5
@@ -101,8 +102,8 @@ export default function MonitoringNodes({
     placeholderData: (prev, prevQuery) =>
       prevQuery && prevQuery.queryKey[1] === currentCluster ? prev : undefined,
   })
-  // a refusal shows in place of the numbers, those read before it too, and so does no metrics.k8s.io
-  const refusal = metricsRefusal(error)
+  // a refusal shows in place of the numbers, those read before it too, and so does no metrics.k8s.io; the floating chat is told the same
+  const refusal = useMemo(() => metricsRefusal(error), [error])
   const notServed = isMetricsUnavailableError(error)
   const nodeMetrics = refusal || notServed ? undefined : nodeMetricsRead
 
@@ -125,9 +126,13 @@ export default function MonitoringNodes({
     return [...metrics, ...missing]
   }, [nodeMetrics, nodeList])
 
+  // what the tab draws in place of its rows, and the floating chat is told the same: no count of usage without rows
+  const view = metricsTabView({ isLoading, rows: nodeMetrics, refused: Boolean(refusal), error, metricsUnavailable })
+
   // 플로팅 AI 위젯용 스냅샷 — 노드 메트릭 요약
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(nodeMetrics)) return null
+    if (view === 'refused') return { source: 'base' as const, summary: '노드 모니터링 — 메트릭 볼 권한 없음', data: { tab: 'nodes', metrics_refused: refusal } }
+    if (view !== 'rows') return metricsNotShownLayer(t, 'nodes', view, { error, notice: metricsUnavailable })
     const items = [...allNodes].sort(
       (a, b) => (parsePercent(b.cpu_percent) ?? 0) - (parsePercent(a.cpu_percent) ?? 0),
     )
@@ -176,7 +181,7 @@ export default function MonitoringNodes({
         }),
       },
     }
-  }, [nodeMetrics, allNodes, refreshFailure])
+  }, [view, t, error, metricsUnavailable, allNodes, refreshFailure, refusal])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -226,12 +231,12 @@ export default function MonitoringNodes({
         </div>
       </div>
 
-      {isLoading ? (
+      {view === 'loading' ? (
         <div className="flex flex-col items-center justify-center py-12">
           <RefreshCw className="w-8 h-8 text-primary-400 animate-spin mb-4" />
           <p className="text-slate-400">{t('monitoring.loading')}</p>
         </div>
-      ) : nodeMetrics && nodeMetrics.length > 0 ? (
+      ) : view === 'rows' ? (
         <div className="flex-1 min-h-0 flex flex-col">
         {refreshFailure && <MetricsRefreshFailed failure={refreshFailure} retrying={!metricsUnavailable} testId="node-metrics-refresh-failed" />}
         <MonitoringSearch value={search} onChange={setSearch} placeholder={t('monitoring.nodes.searchPlaceholder', 'Search nodes by name...')} testId="monitoring-node-search" />
@@ -288,9 +293,9 @@ export default function MonitoringNodes({
           <ListPager currentPage={page} totalPages={totalPages} total={total} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="monitoring-node-pager" />
         </div>
         </div>
-      ) : refusal ? (
+      ) : view === 'refused' && refusal ? (
         <RefusedMetrics path="/cluster/metrics/nodes" reason={refusal.reason} testId="node-metrics-forbidden" />
-      ) : error && !isMetricsUnavailableError(error) ? (
+      ) : view === 'failed' && error ? (
         <div className="text-center py-12">
           <div className="flex flex-col items-center gap-4">
             <Activity className="w-12 h-12 text-red-400 animate-pulse" />
@@ -303,7 +308,7 @@ export default function MonitoringNodes({
         </div>
       ) : (
         <div className="text-center py-12">
-          <p className="text-slate-400">{t('monitoring.nodes.unavailable')}</p>
+          <p className="text-slate-400" data-testid="node-metrics-not-available">{t('monitoring.nodes.unavailable')}</p>
           <p className="text-sm text-slate-500 mt-2">{t('monitoring.metricsServerHint')}</p>
         </div>
       )}
