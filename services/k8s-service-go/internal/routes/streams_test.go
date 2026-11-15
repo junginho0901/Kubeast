@@ -115,6 +115,7 @@ func TestTheServerLeavesOutWhatItsRoleDoesNotServe(t *testing.T) {
 		"role, roleErr := config.ParseRole(cfg.ServerRole)",
 		"NoInformers:        !role.ServesAPI(),",
 		"if role.ServesAPI() && cfg.HealthcheckIntervalSec > 0 {",
+		"if role.ServesAPI() {\n\t\tdrainTracker = nodedrains.NewTracker(",
 		"if recorder.Enabled() && role.ServesStreams() {\n\t\tslog.Info(\"session recording enabled\"",
 		"if role.ServesStreams() {\n\t\tm.Gauge(\"kubeast_terminals_open\"",
 		"if recorder.Enabled() && role.ServesStreams() {\n\t\tm.Gauge(\"kubeast_session_recording_pending_bytes\"",

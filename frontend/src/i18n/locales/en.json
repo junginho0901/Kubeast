@@ -1614,7 +1614,13 @@
         "progressMessage": "Evicting pods from the node...",
         "success": "Completed",
         "doneMessage": "Node drain completed.",
-        "error": "Failed"
+        "error": "Failed",
+        "interrupted": "Interrupted",
+        "interruptedMessage": "The server running this drain stopped before it finished. Pods may still be on the node.",
+        "stillCordoned": "Still cordoned: {{nodes}}",
+        "notCordoned": "No node is left cordoned.",
+        "startAgain": "Start again",
+        "pods": "{{done}} of {{total}} pods evicted"
       }
     },
     "detail": {
