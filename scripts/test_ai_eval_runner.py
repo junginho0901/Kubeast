@@ -460,8 +460,8 @@ def test_a_round_records_counts_runs_under_a_suffix_and_writes_after_each_case()
     assert truth["causes"][0]["resource"] == "ConfigMap/shop-90-ab12/settings-b"
 
 
-def _main(fake, root, *flags):
-    out = root / "out"
+def _main(fake, root, *flags, out=None):
+    out = out or Path(tempfile.mkdtemp(prefix="ai-eval-out-")) / "out"  # one per run: two runs in one second share a stamp
     saved_argv = sys.argv
     screen, errors = io.StringIO(), io.StringIO()
     with Server(fake) as srv:
@@ -511,7 +511,7 @@ def test_the_hidden_total_is_written_only_once_the_run_ends():
 
     try:
         AI_EVAL.run_staged_case = one_case
-        code, out, _, screen, _ = _main(FakeKubeast(), root, "--hidden", "--alert-investigation-on")
+        code, out, _, screen, _ = _main(FakeKubeast(), root, "--hidden", "--alert-investigation-on", out=out)
     finally:
         AI_EVAL.run_staged_case = real
     assert code == 0 and len(tables) == 3
