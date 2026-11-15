@@ -2943,7 +2943,7 @@
       "selectFromList": "← 목록에서 선택",
       "customModel": "모델 이름 직접 입력 →",
       "selectModel": "모델 선택",
-      "modelPlaceholder": "예: gpt-4o-mini",
+      "modelPlaceholder": "예: gpt-6-luna",
       "azureDeploymentHint": "Azure OpenAI는 모델 이름이 아니라 배포 이름을 넣습니다(Azure AI Foundry → 배포).",
       "azureEndpointHint": "/openai/v1/로 끝나는 v1 주소를 넣습니다. 옛 배포 주소와 api-version은 지원하지 않습니다.",
       "required": "(필수)",
