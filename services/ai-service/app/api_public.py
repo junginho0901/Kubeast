@@ -58,6 +58,12 @@ def _provider_refusal(resp: httpx.Response, api_key: str) -> str:
     return f"HTTP {resp.status_code}: the server answered {kind}, {len(resp.content)} bytes, which is no model API's error"
 
 
+# Every chat call sends tools (tool_choice is left to the provider's default, as the chat's retry without it does):
+# a model that refuses them fails the test with the provider's message instead of passing it and failing the chat.
+_TEST_TOOLS = [{"type": "function", "function": {
+    "name": "noop", "description": "Not used: answer in text.", "parameters": {"type": "object", "properties": {}}}}]
+
+
 async def _test_openai_compatible(
     api_key: str,
     model: str,
@@ -67,7 +73,7 @@ async def _test_openai_compatible(
     judged: bool = True,
 ) -> dict:
     """Test OpenAI-compatible endpoints (OpenAI, Groq, DeepSeek, Mistral, etc.) — with the chat's parameter handling
-    (OpenAI's max_completion_tokens, a refused parameter left out), so a reasoning model passes as it chats."""
+    (OpenAI's max_completion_tokens, a refused parameter left out) and a tool, so a model passes only as it chats."""
     from openai import AsyncOpenAI
     from app.services.provider_adapter import _CompletionsProxy
 
@@ -80,6 +86,7 @@ async def _test_openai_compatible(
     resp = await _CompletionsProxy(client.chat.completions, provider, None, base_url).create(
         model=model,
         messages=[{"role": "user", "content": "ping"}],
+        tools=_TEST_TOOLS,
         max_tokens=5,
     )
     return {"success": True, "model": resp.model, "message": "Connection successful"}
@@ -186,6 +193,7 @@ async def _test_azure_openai(
     resp = await adapter.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": "ping"}],
+        tools=_TEST_TOOLS,
         max_tokens=5,
         timeout=15.0,
     )

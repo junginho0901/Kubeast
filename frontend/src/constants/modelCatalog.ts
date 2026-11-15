@@ -54,14 +54,15 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     needsBaseUrl: false,
     defaultApiKeyEnv: 'OPENAI_API_KEY',
     models: [
+      // None that OpenAI shuts down before 2027 (developers.openai.com/api/docs/deprecations, read 2026-11-15). GPT-6 Astra,
+      // GPT-6.1 Sol and GPT-6.1 Terra are left out: in Chat Completions, which the chat uses, they take no tools.
       { name: 'gpt-5.5', functionCalling: true },
+      { name: 'gpt-6-sol', functionCalling: true },
+      { name: 'gpt-6-luna', functionCalling: true },
       { name: 'gpt-5.4', functionCalling: true },
       { name: 'gpt-5.4-mini', functionCalling: true },
-      { name: 'gpt-5', functionCalling: true },
-      { name: 'gpt-5-mini', functionCalling: true },
-      { name: 'gpt-4o', functionCalling: true },
-      { name: 'gpt-4o-mini', functionCalling: true },
-      { name: 'o4-mini', functionCalling: true },
+      { name: 'gpt-4o', note: 'deprecated', functionCalling: true },
+      { name: 'gpt-4o-mini', note: 'deprecated', functionCalling: true },
     ],
   },
   {
