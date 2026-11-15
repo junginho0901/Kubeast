@@ -88,6 +88,30 @@ func TestNewRoleNameTheChartBindsIsForAGlobalAdmin(t *testing.T) {
 	}
 }
 
+// The chart hands over the names it binds (templates/configmap.yaml), so a Korean name holds back its own group only,
+// not every name of its length.
+func TestAKoreanNameTheChartBindsHoldsBackItsOwnGroup(t *testing.T) {
+	chartBindsKorean := func(c *config.Config) { c.ImpersonationCustomRoles = []string{"운영팀"} }
+	for _, c := range []struct {
+		role   string
+		want   int
+		reason string
+	}{
+		{"운영팀", http.StatusForbidden, "kubeast:role:~c6b4~c601~d300"},
+		{" 운영팀 ", http.StatusForbidden, "kubeast:role:~c6b4~c601~d300"},
+		{"개발팀", http.StatusCreated, ""},
+		{"운영 팀", http.StatusCreated, ""},
+	} {
+		t.Run(c.role, func(t *testing.T) {
+			api := newAuthAPIWith(t, pendingRequest{owner: "requester"}, chartBindsKorean, chartRoleRules()...)
+			w := api.call(api.actor(roleAdminOnly, nil), http.MethodPost, "/admin/roles", fmt.Sprintf(`{"name":%q,"permissions":[]}`, c.role))
+			if w.Code != c.want || !strings.Contains(w.Body.String(), c.reason) {
+				t.Fatalf("%d %s, want %d with %q", w.Code, w.Body.String(), c.want, c.reason)
+			}
+		})
+	}
+}
+
 // An install without such a list keeps today's rule, and one that sets the list
 // by hand may write role names rather than their slugs.
 func TestChartListDecidesWhichNamesAreHeldBack(t *testing.T) {

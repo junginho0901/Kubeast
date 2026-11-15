@@ -1,0 +1,17 @@
+# Threat model
+
+Each release writes one page covering only what that release changes. The pages follow the four questions of the [OWASP Threat Modeling Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Threat_Modeling_Cheat_Sheet.html): what are we working on, what can go wrong, what are we going to do about it, did we do a good enough job. The v0.8.1 page joins them into one model of the whole system.
+
+| Release | What it changes | Page |
+| --- | --- | --- |
+| v0.7.8 | A stream server for terminals and followed logs, state moving from a server's memory to PostgreSQL and Redis, several k8s-service and tool-server replicas and HPA, role names and the cluster groups they give | [v0.7.8](v0.7.8.md) |
+| v0.7.9 | What the AI reads from the cluster, new AI tools | not written yet |
+| v0.8.0 | The screen components that draw text | not written yet |
+| v0.8.1 | Module boundaries; the whole model | not written yet |
+
+How a page is written:
+
+- A data-flow sketch with its trust boundaries, then one table per change: the threat and its STRIDE letter, where it is (a file or route), what stops it (a pointer to code or to a decided plan line), what is left before the release and which step owns it, and how it is checked (a test, a guard spec, a fault test).
+- Every "what stops it" cell says whether the control is in `main`, in an unmerged draft, or only in the plan. What has not been checked is written as unconfirmed, with what to check.
+- A gap in released code is described by what is missing and how it will be fixed, not by how to use it. Security problems are reported privately, as [SECURITY.md](../../SECURITY.md) says.
+- The page is read again against the merged code before the release, and its statuses are updated.

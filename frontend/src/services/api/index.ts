@@ -104,5 +104,6 @@ export {
   disableMetrics,
   isForbiddenError,
   isMetricsDisabled,
+  isMetricsNotServedText,
   isMetricsUnavailableError,
 } from './client'

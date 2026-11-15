@@ -80,6 +80,18 @@ func (f *fakeStore) LastAnchor(context.Context) (*Anchor, error) {
 	return &a, nil
 }
 
+func (f *fakeStore) LastAnchorBy(_ context.Context, actor string) (*Anchor, error) {
+	for i := len(f.anchors) - 1; i >= 0; i-- {
+		if f.anchors[i].Actor == actor {
+			a := f.anchors[i]
+			return &a, nil
+		}
+	}
+	return nil, nil
+}
+
+func (f *fakeStore) AnchorLocked(_ context.Context, fn func(Store) error) error { return fn(f) }
+
 func (f *fakeStore) AnchorsIn(_ context.Context, from, to int64) ([]Anchor, error) {
 	out := []Anchor{}
 	for _, a := range f.anchors {
