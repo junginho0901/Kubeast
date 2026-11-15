@@ -116,11 +116,24 @@ type HealthChecker struct {
 	svc      *Service
 	registry healthRegistry
 	interval time.Duration
+	// writer, when set, says whether this replica writes clusters.health_status
+	// this sweep: of several replicas one does, so the column does not flip
+	// between their answers. Every replica still probes for its own breaker.
+	writer statusWriter
+}
+
+// statusWriter is pglock.Lock: true while this process holds the lock.
+type statusWriter interface {
+	Held(ctx context.Context) bool
 }
 
 func NewHealthChecker(svc *Service, registry healthRegistry, interval time.Duration) *HealthChecker {
 	return &HealthChecker{svc: svc, registry: registry, interval: interval}
 }
+
+// WriteStatusWhen makes the checker write clusters.health_status only in the
+// sweeps where w says this replica holds the writer's lock.
+func (hc *HealthChecker) WriteStatusWhen(w statusWriter) { hc.writer = w }
 
 // Run blocks until ctx is cancelled, sweeping every interval (plus once up front).
 func (hc *HealthChecker) Run(ctx context.Context) {
@@ -143,6 +156,7 @@ func (hc *HealthChecker) sweep(ctx context.Context) {
 		slog.Debug("healthcheck: list clusters failed", "err", err)
 		return
 	}
+	write := hc.writer == nil || hc.writer.Held(ctx)
 	var wg sync.WaitGroup
 	for _, m := range metas {
 		wg.Add(1)
@@ -156,6 +170,9 @@ func (hc *HealthChecker) sweep(ctx context.Context) {
 			// Authoritative probe: open/close the breaker immediately.
 			if hc.svc.health != nil {
 				hc.svc.health.setOpen(id, !up)
+			}
+			if !write {
+				return
 			}
 			if uerr := hc.registry.UpdateHealth(ctx, id, status); uerr != nil {
 				slog.Debug("healthcheck: update health failed", "id", id, "err", uerr)

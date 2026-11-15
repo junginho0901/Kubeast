@@ -128,6 +128,9 @@ func (r *Repository) SeedSystemRoles(ctx context.Context) error {
 	defer tx.Rollback(ctx)
 
 	for _, s := range seeds {
+		// No custom role makes a built-in's group: migration 25 renamed those and the
+		// database refuses new ones (roles_name_group_key). A new built-in name needs a
+		// migration that does the same for it before this seed writes it.
 		var roleID int
 		err := tx.QueryRow(ctx,
 			`INSERT INTO roles (name, description, is_system)

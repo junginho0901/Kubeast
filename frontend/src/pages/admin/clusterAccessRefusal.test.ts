@@ -110,7 +110,9 @@ describe('a refused change', () => {
   for (const file of ['./ClusterRoleMatrix.tsx', './ClusterAccessModal.tsx']) {
     it(`${file} keeps the reason of both its changes`, () => {
       const src = readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8')
-      expect(src.match(/onError: \(err\) => setRefusal\(refusalText\(err\)\)/g)?.length).toBe(2)
+      // a grant's refusal goes through grantRefusal, which names a role_same_group answer and gives any other the server's reason
+      expect(src.match(/onError: \(err\) => setRefusal\((refusalText|grantRefusal)\(err\)\)/g)?.length).toBe(2)
+      if (src.includes('setRefusal(grantRefusal(err))')) expect(src).toMatch(/const grantRefusal = [\s\S]*?: refusalText\(err\)\n {2}\}/)
       expect(src.match(/onMutate: \(\) => setRefusal\(null\)/g)?.length).toBe(2)
     })
   }

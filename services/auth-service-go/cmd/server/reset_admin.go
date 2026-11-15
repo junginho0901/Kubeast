@@ -18,6 +18,7 @@ import (
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/security"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
+	"github.com/junginho0901/kubeast/services/pkg/dbsession"
 )
 
 const actionAccountRecover = "user.account.recover"
@@ -57,7 +58,12 @@ func runResetAdmin(args []string, out io.Writer) int {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURLForPgx())
+	poolCfg, err := newPoolConfig(cfg.DatabaseURLForPgx(), dbsession.FromEnv())
+	if err != nil {
+		fmt.Fprintln(out, "reset-admin: database:", err)
+		return 1
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		fmt.Fprintln(out, "reset-admin: database:", err)
 		return 1

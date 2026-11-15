@@ -12,16 +12,18 @@ import (
 // them down (the same rule as the permission ceiling for grants — nobody
 // hands out more than they hold).
 
-// roleRank orders the built-in cluster roles for the ceiling. A custom role has
-// no rank: it keeps its name, since the cluster decides what its group may do
-// and a built-in name would be another identity there.
-var roleRank = map[string]int{"read": 1, "write": 2, "admin": 3}
+// roleRank orders the built-in cluster roles for the ceiling, by their exact
+// names (auth.IsBuiltinRole). A custom role has no rank: it keeps its name, since
+// the cluster decides what its group may do and a built-in name would be another
+// identity there; so does a custom role named as a built-in in other capitals,
+// which acts as no role group (auth.TakesBuiltinSlug).
+var roleRank = map[string]int{"Read": 1, "Write": 2, "Admin": 3}
 
-// roleAtMost lowers a built-in role that ranks above ceiling to ceiling. Any
-// other role comes back as it is.
+// roleAtMost lowers a built-in role that ranks above ceiling (Read, Write or
+// Admin, as the key stores it) to ceiling. Any other role comes back as it is.
 func roleAtMost(role, ceiling string) string {
-	r, builtin := roleRank[strings.ToLower(strings.TrimSpace(role))]
-	if builtin && r > roleRank[strings.ToLower(ceiling)] {
+	r, builtin := roleRank[role]
+	if builtin && r > roleRank[ceiling] {
 		return ceiling
 	}
 	return role
@@ -91,7 +93,7 @@ func narrowForAPIKey(matrix auth.PermissionMatrix, roles map[string]string, clus
 		out[c] = perms
 		if globalAdmin {
 			outRoles[c] = ceiling
-		} else if role := strings.TrimSpace(roles[c]); role != "" {
+		} else if role := roles[c]; strings.TrimSpace(role) != "" {
 			outRoles[c] = roleAtMost(role, ceiling)
 		}
 	}
