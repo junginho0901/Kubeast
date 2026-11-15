@@ -122,6 +122,8 @@ type Service struct {
 
 	// health tracks per-cluster reachability in memory for fail-fast (step 15).
 	health *clusterHealth
+	// checked is true while a HealthChecker runs: HealthCheck then answers from health for a cluster it probed.
+	checked atomic.Bool
 	// promQ coalesces + caches Prometheus queries per cluster (step 15).
 	promQ *promQueryCache
 	// limiters holds per-cluster rate limiters + circuit breakers (step 15).
@@ -783,12 +785,28 @@ func (s *Service) Cache() *cache.Cache { return s.cache }
 // WatchEnabled reports whether hot-reload is configured for this service.
 func (s *Service) WatchEnabled() bool { return s.watchEnabled }
 
-// HealthCheck pings the default cluster's K8s API server.
+// healthReadBudget bounds HealthCheck's own read of the default cluster, made only while no HealthChecker runs.
+const healthReadBudget = 2 * time.Second
+
+// errClusterDown is HealthCheck's answer while the default cluster's breaker is open.
+var errClusterDown = errors.New("the cluster's last health check or requests failed")
+
+// HealthCheck says whether the default cluster's API server answers. While a HealthChecker runs and has probed that
+// cluster, its breaker answers (the last probe and the requests since) and nothing is asked; otherwise one GET /version
+// within healthReadBudget.
 func (s *Service) HealthCheck(ctx context.Context) error {
 	b := s.defaultClientBundle()
 	if b == nil {
 		return errNotLoaded
 	}
+	if s.checked.Load() && s.health != nil && s.health.wasProbed(b.id) {
+		if s.ClusterDown(b.id) {
+			return errClusterDown
+		}
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, healthReadBudget)
+	defer cancel()
 	_, err := discovery.ToServerVersionInterfaceWithContext(b.clientset.Discovery()).ServerVersionWithContext(auth.AsKubeast(ctx))
 	return err
 }

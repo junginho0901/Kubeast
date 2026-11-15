@@ -13,7 +13,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
@@ -313,7 +312,7 @@ func (s *Service) getClusterOverviewUncached(ctx context.Context) (map[string]in
 	}
 
 	clusterVersion := ""
-	sv, err := discovery.ToDiscoveryInterfaceWithContext(cs.Discovery()).ServerVersionWithContext(ctx)
+	sv, err := s.clusterVersion(ctx)
 	if err == nil {
 		clusterVersion = sv.GitVersion
 	}

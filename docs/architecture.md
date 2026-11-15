@@ -124,7 +124,7 @@ Work that always runs:
   - with `dormantAccounts` on, locks dormant accounts every 24 hours
   - when an S3 sink is set, writes the audit anchor every 24 hours
 - k8s-service:
-  - checks the health of each registered cluster every 60 seconds (`multicluster.healthcheckIntervalSec`): every replica probes for its own fail-fast state, and the one holding a PostgreSQL advisory lock (on a connection of its own) writes `clusters.health_status`
+  - checks the health of each registered cluster every 60 seconds (`multicluster.healthcheckIntervalSec`): every replica probes for its own fail-fast state, and the one holding a PostgreSQL advisory lock (on a connection of its own) writes `clusters.health_status`. While it runs and has checked the default cluster, `/health` answers `kubernetes` from that state and asks the cluster nothing; before that, and with the check off (`0`), each `/health` reads the default cluster's `/version` within 2 seconds
   - cleans up the informer caches of clusters not used for a long time
   - on each replica, reads every registered cluster's `config_version` from the database every 5 seconds, give or take a second, one query (`internal/clustersync`); with Redis it also follows the other replicas' cluster change notices
   - when Redis did not answer at start, asks it again every 5 seconds until it answers, then moves the cache there

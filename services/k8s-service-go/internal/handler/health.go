@@ -30,14 +30,12 @@ func (h *Handler) Ready(w http.ResponseWriter, r *http.Request) {
 
 // HealthCheck handles GET /health, which the gateway's /health and the compose health check read.
 // 항상 200을 반환한다 — kubelet 의 probe 는 /livez(liveness)·/readyz(readiness)다.
-// kubernetes 연결 상태는 별도로 짧은 타임아웃으로 확인한다.
+// kubernetes 연결 상태는 클러스터 상태 확인기가 돌면 그 차단기로, 아니면 2초 안의 /version 한 번으로 답한다(k8s.Service.HealthCheck).
 // audit 블록은 감사 writer 상태(fail-closed 여부·DB 도달·쓰기 실패 수) —
 // 파드를 빼지는 않고(readiness 무관) 보이게만 한다.
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	k8sStatus := "connected"
-	ctx, cancel := context.WithTimeout(r.Context(), 500*time.Millisecond)
-	defer cancel()
-	if err := h.svc.HealthCheck(ctx); err != nil {
+	if err := h.svc.HealthCheck(r.Context()); err != nil {
 		k8sStatus = "disconnected"
 	}
 	body := map[string]interface{}{
@@ -45,6 +43,8 @@ func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		"kubernetes": k8sStatus,
 	}
 	if st, ok := h.auditStore.(audit.Statuser); ok {
+		ctx, cancel := context.WithTimeout(r.Context(), 500*time.Millisecond)
+		defer cancel()
 		body["audit"] = st.Status(ctx)
 	}
 	response.JSON(w, http.StatusOK, body)

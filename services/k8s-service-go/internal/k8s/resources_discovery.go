@@ -395,9 +395,12 @@ func (s *Service) GetClusterConfig(ctx context.Context) (map[string]interface{},
 		result["server"] = cluster.WithoutURLUser(rc.Host)
 	}
 
-	// Cluster version
-	sv, err := discovery.ToDiscoveryInterfaceWithContext(s.clientsetCtx(ctx).Discovery()).ServerVersionWithContext(ctx)
-	if err == nil {
+	b := s.bundleForCtx(ctx)
+	if b == nil {
+		return result, nil
+	}
+	// Cluster version, the one read kept for everyone
+	if sv, err := b.serverVersionInfo(ctx); err == nil {
 		result["version"] = map[string]interface{}{
 			"major":       sv.Major,
 			"minor":       sv.Minor,
@@ -411,7 +414,7 @@ func (s *Service) GetClusterConfig(ctx context.Context) (map[string]interface{},
 	}
 
 	// API groups
-	groups, err := discovery.ToDiscoveryInterfaceWithContext(s.discoveryCtx(ctx)).ServerGroupsWithContext(ctx)
+	groups, err := discovery.ToDiscoveryInterfaceWithContext(b.discovery).ServerGroupsWithContext(ctx)
 	if err == nil {
 		groupNames := make([]string, 0, len(groups.Groups))
 		for _, g := range groups.Groups {

@@ -227,7 +227,7 @@ func (s *Service) CollectHygiene(ctx context.Context, opts HygieneOptions) (Hygi
 	// Upgrade readiness. The server version decides the target; without it the
 	// upgrade checks do not run (and say so through the collector list). Read
 	// first: the pods are checked as they are listed.
-	if sv, err := discovery.ToDiscoveryInterfaceWithContext(cs.Discovery()).ServerVersionWithContext(ctx); ok("serverversion", err) {
+	if sv, err := s.clusterVersion(ctx); ok("serverversion", err) {
 		in.ServerVersion = sv.GitVersion
 	}
 	if sum, err := hygienePodSummaryOf(ctx, cs, hygieneTarget(opts, in.ServerVersion)); ok("pods", err) {

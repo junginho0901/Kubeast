@@ -21,13 +21,14 @@ type clusterHealth struct {
 	threshold int
 	fails     map[cluster.ID]int
 	open      map[cluster.ID]bool
+	probed    map[cluster.ID]bool // a health check has given its verdict
 }
 
 func newClusterHealth(threshold int) *clusterHealth {
 	if threshold < 1 {
 		threshold = 1
 	}
-	return &clusterHealth{threshold: threshold, fails: map[cluster.ID]int{}, open: map[cluster.ID]bool{}}
+	return &clusterHealth{threshold: threshold, fails: map[cluster.ID]int{}, open: map[cluster.ID]bool{}, probed: map[cluster.ID]bool{}}
 }
 
 // recordFailure is a live request error: open the breaker once threshold is hit.
@@ -51,6 +52,7 @@ func (h *clusterHealth) recordSuccess(id cluster.ID) {
 // setOpen is the authoritative health-check verdict (open immediately on fail).
 func (h *clusterHealth) setOpen(id cluster.ID, open bool) {
 	h.mu.Lock()
+	h.probed[id] = true
 	if open {
 		h.open[id] = true
 		h.fails[id] = h.threshold
@@ -65,6 +67,12 @@ func (h *clusterHealth) isOpen(id cluster.ID) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.open[id]
+}
+
+func (h *clusterHealth) wasProbed(id cluster.ID) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.probed[id]
 }
 
 // --- Service accessors (used by the fail-fast middleware + handlers). All
@@ -136,8 +144,11 @@ func NewHealthChecker(svc *Service, registry healthRegistry, interval time.Durat
 // sweeps where w says this replica holds the writer's lock.
 func (hc *HealthChecker) WriteStatusWhen(w statusWriter) { hc.writer = w }
 
-// Run blocks until ctx is cancelled, sweeping every interval (plus once up front).
+// Run blocks until ctx is cancelled, sweeping every interval (plus once up front). While it runs, Service.HealthCheck
+// answers from the breaker the sweeps set.
 func (hc *HealthChecker) Run(ctx context.Context) {
+	hc.svc.checked.Store(true)
+	defer hc.svc.checked.Store(false)
 	hc.sweep(ctx)
 	t := time.NewTicker(hc.interval)
 	defer t.Stop()
