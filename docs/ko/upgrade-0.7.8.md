@@ -55,7 +55,7 @@ helm get values kubeast -n kubeast -o yaml \
 kubectl version    # Server Version: v1.30 이상
 ```
 
-Service 뒤에 있는 차트 파드는 이제 SIGTERM 전에 `preStop`에서 `podShutdown.preStopSeconds`(5초)를 기다리며, 이때 쿠버네티스 내장 `sleep` 동작(1.30에서 베타·기본 켜짐, 1.34에서 GA)을 씁니다. 더 낮은 클러스터에서는 `podShutdown.preStopSeconds: 0`으로 둡니다(#856).
+Service 뒤에 있는 차트 파드는(번들 PostgreSQL과 Redis는 빼고) 이제 SIGTERM 전에 `preStop`에서 `podShutdown.preStopSeconds`(5초)를 기다리며, 이때 쿠버네티스 내장 `sleep` 동작(1.30에서 베타·기본 켜짐, 1.34에서 GA)을 씁니다. 더 낮은 클러스터에서는 `podShutdown.preStopSeconds: 0`으로 둡니다(#856).
 
 ### 1.4 노드 드레인
 
@@ -220,7 +220,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 
 **파드와 롤아웃**
 
-- Service 뒤의 파드는 SIGTERM 전에 `podShutdown.preStopSeconds`를 기다립니다. 종료 유예는 그 기다림, SIGTERM 뒤 서비스가 기다리는 시간, 5초를 더한 것이고 기본값으로는 35초입니다. k8s-service는 열린 터미널이 끝나도록 `streams.drainSeconds`(60)와 닫을 시간 5초를 더 주므로, 기본값으로 종료 유예가 100초입니다(#856, #824, #825).
+- Service 뒤의 파드는 SIGTERM 전에 `podShutdown.preStopSeconds`를 기다립니다. 번들 PostgreSQL과 Redis는 예외로, preStop 기다림이 없고 Kubernetes 기본 종료 유예(30초)를 씁니다. 종료 유예는 그 기다림, SIGTERM 뒤 서비스가 기다리는 시간, 5초를 더한 것이고 기본값으로는 35초입니다. k8s-service는 열린 터미널이 끝나도록 `streams.drainSeconds`(60)와 닫을 시간 5초를 더 주므로, 기본값으로 종료 유예가 100초입니다(#856, #824, #825).
 - liveness는 다른 것을 읽지 않는 `/livez`를 묻습니다. readiness는 `/readyz`를 묻고, 이것은 SIGTERM부터 503을 답하며 데이터베이스는 묻지 않습니다(#901).
 - 롤아웃은 새 파드를 하나 띄우고 그 파드가 준비된 뒤에만 옛 파드를 멈춥니다(`maxSurge: 1`, `maxUnavailable: 0`). 그래서 Deployment마다 파드 하나가 더 들어갈 자리가 필요합니다. PostgreSQL은 `Recreate`를 유지하고, Redis는 옛 파드를 먼저 내리기 시작한 뒤 새 파드를 만듭니다(`maxSurge: 0`). 옛 파드가 끝나는 몇 초 동안 둘이 같이 있을 수 있지만 데이터는 나누지 않습니다(emptyDir)(#901, #860).
 - `pdb.enabled`가 이제 `true`입니다. 파드가 둘 이상 남을 수 있는 Deployment(`replicas`, 또는 HPA를 켰을 때 `autoscaling.<service>.minReplicas`)는 `unhealthyPodEvictionPolicy: AlwaysAllow`인 PodDisruptionBudget을 받고, 파드 하나인 Deployment는 받지 않습니다(#901).

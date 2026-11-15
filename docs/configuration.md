@@ -136,9 +136,9 @@ podSecurity:
   hostUsers: false
   readOnlyRootFilesystem: true
 
-# Availability: a Deployment you raise to 2 or more replicas, or whose autoscaling keeps minReplicas 2 or more, gets a PodDisruptionBudget (pdb.maxUnavailable, 1; pdb.enabled: false leaves them out), and every rollout starts the new pod and stops an old one only once the new one is ready (postgres and redis stop first)
+# Availability: a Deployment you raise to 2 or more replicas, or whose autoscaling keeps minReplicas 2 or more, gets a PodDisruptionBudget (pdb.maxUnavailable, 1; pdb.enabled: false leaves them out), and every rollout starts the new pod and stops an old one only once the new one is ready (the old postgres and redis pods start stopping first)
 # Probes: liveness asks /livez, which reads nothing else; readiness asks /readyz, which answers 503 from SIGTERM on and never asks the database (a shared database down would take every pod out at once); the database's state is in auth-service's and session-service's /health and k8s-service's kubeast_audit_store_up
-# podShutdown.preStopSeconds: a pod behind a Service answers that long after it is told to stop (preStop sleep, Kubernetes 1.30 or later), then has 30 s to shut down (a server holding terminals: the drain's wait and close wait more); behind a load balancer that sends to pod IPs, set its deregistration delay plus a few seconds
+# podShutdown.preStopSeconds: a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) answers that long after it is told to stop (preStop sleep, Kubernetes 1.30 or later), then has 30 s to shut down (a server holding terminals: the drain's wait and close wait more); behind a load balancer that sends to pod IPs, set its deregistration delay plus a few seconds
 replicas:
   gateway: 1
 # One HPA per service, off by default; k8sService and toolServer above 1 pod need redis.enabled (docs/high-availability.md)
