@@ -155,10 +155,10 @@ jobs:
         run: |
           image=$(grep -o 'nginxinc/nginx-unprivileged:[^ ]*' helm/kubeast/values.yaml | head -1)
           hosts=()
-          for h in $(sed -n 's/^ *server \([a-z0-9-]*\):[0-9]*;$/\1/p' helm/kubeast/files/nginx.conf); do
+          while read -r h; do
             hosts+=(--add-host "$h:127.0.0.1")
-          done
-          for attempt in 1 2 3; do docker pull -q "$image" && break; sleep 10; done
+          done < <(sed -n 's/^ *server \([a-z0-9-]*\):[0-9]*;$/\1/p' helm/kubeast/files/nginx.conf)
+          for _ in 1 2 3; do docker pull -q "$image" && break; sleep 10; done
           docker run --rm "${hosts[@]}" -v "$PWD/helm/kubeast/files/nginx.conf:/etc/nginx/nginx.conf:ro" \
             --entrypoint nginx "$image" -t
       # Rendered-manifest assertions (helm/kubeast/tests/*_test.yaml): switch
