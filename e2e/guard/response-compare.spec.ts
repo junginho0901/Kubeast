@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import { test, expect } from '@playwright/test'
 
-import { compileRules, flatten, sortCells, type Answer, type IgnoreRule } from './response-compare'
+import { clusterOf, compileRules, flatten, sortCells, type Answer, type IgnoreRule } from './response-compare'
 
 // The comparison on its own: each kind of change must come out as what it is. No browser, no cluster.
 
@@ -93,6 +93,15 @@ test.describe('the response comparison', () => {
     const match = compileRules([{ route: '^/x$', cell: '^\\$\\.a', user: '^nsread$', why: 'because', pr: '#1' }])
     expect(match('/x', '$.a', 'nsread')?.pr).toBe('#1')
     expect(match('/x', '$.a', 'viewer')).toBeNull()
+  })
+
+  test('a rule may be for one cluster: the same answer on another cluster stays a real difference', () => {
+    const match = compileRules([{ route: '^/x$', cell: '^\\$status$', cluster: '^self$', newStatus: '^404$', why: 'no metrics-server there', pr: '#1' }])
+    expect(match('/x', '$status', 'viewer', '404', clusterOf('/x?cluster=self'))?.pr).toBe('#1')
+    expect(match('/x', '$status', 'viewer', '404', clusterOf('/x?cluster=default'))).toBeNull()
+    expect(match('/x', '$status', 'viewer', '404', clusterOf('/x'))).toBeNull()
+    expect(clusterOf('live test2 /apis/apps/v1/deployments?namespace=a')).toBe('test2')
+    expect(clusterOf('/api/v1/cluster/metrics/pods?namespace=web&cluster=self')).toBe('self')
   })
 
   test('a rule for a route the old build did not have keeps a server error of the new build a real difference', () => {

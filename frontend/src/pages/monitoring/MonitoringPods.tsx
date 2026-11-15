@@ -20,7 +20,6 @@ import { cpuToMillis, memoryToBytes } from '@/utils/resourceQuantity'
 import { usageTone } from './podUsage'
 import {
   api,
-  disableMetrics,
   isMetricsDisabled,
   isMetricsUnavailableError,
 } from '@/services/api'
@@ -36,7 +35,8 @@ import type { PodMetric } from './types'
 
 interface MonitoringPodsProps {
   metricsUnavailable: boolean
-  onMetricsUnavailable: () => void
+  /** whether the tab's last answer says the cluster serves no metrics.k8s.io (the page's notice) */
+  onMetricsUnavailable: (unavailable: boolean) => void
   namespaces: { name: string }[] | undefined
 }
 
@@ -76,20 +76,20 @@ export default function MonitoringPods({
     queryKey: ['pod-metrics', currentCluster, selectedNamespace],
     // with each pod's limits from k8s-service's pod rows, so the page takes no pod list
     queryFn: () => api.getPodMetrics(selectedNamespace === 'all' ? undefined : selectedNamespace, true),
-    // every 5 s, not again once the cluster refused it (metricsReadPace)
+    // every 5 s, not again once the cluster refused it, once a minute while it serves no metrics.k8s.io (metricsReadPace)
     ...metricsReadPace(() => metricsUnavailable || isMetricsDisabled()),
     enabled: !!selectedNamespace && !metricsUnavailable && !isMetricsDisabled(),
   })
-  // a refusal shows in place of the numbers, those read before it too, and goes to the floating chat as that
+  // a refusal shows in place of the numbers, those read before it too, and so does no metrics.k8s.io; the floating chat is told the same
   const refusal = useMemo(() => metricsRefusal(error), [error])
-  const podMetrics = refusal ? undefined : podMetricsRead
+  const notServed = isMetricsUnavailableError(error)
+  const podMetrics = refusal || notServed ? undefined : podMetricsRead
 
+  // a tab that has not answered yet (the Pods tab before a namespace is chosen) leaves the page's notice as it is
+  const answered = Boolean(error) || dataUpdatedAt > 0
   useEffect(() => {
-    if (error && isMetricsUnavailableError(error)) {
-      disableMetrics()
-      onMetricsUnavailable()
-    }
-  }, [error, onMetricsUnavailable])
+    if (answered) onMetricsUnavailable(notServed)
+  }, [answered, notServed, onMetricsUnavailable])
 
   const refreshFailure = useMemo(() => metricsRefreshFailure(error, podMetrics, dataUpdatedAt), [error, podMetrics, dataUpdatedAt])
 

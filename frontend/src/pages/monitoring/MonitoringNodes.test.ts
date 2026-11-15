@@ -85,6 +85,33 @@ describe('the Monitoring Nodes tab', () => {
     expect(html).not.toContain(FAILED)
   })
 
+  describe('a cluster that serves no metrics.k8s.io (k8s-service\'s 404)', () => {
+    const NOT_SERVED = () => httpError(404, { detail: 'the server could not find the requested resource' })
+
+    it('says the metrics are not available, as an empty answer did, with no failure', () => {
+      const html = render(failed(NOT_SERVED()))
+      expect(html).toContain(NOT_AVAILABLE)
+      expect(html).toContain('metrics-server is missing or not answering')
+      expect(html).not.toContain(FAILED)
+      expect(html).not.toContain('Retrying automatically')
+    })
+
+    it('in place of numbers read before, not as a failed refresh', () => {
+      const html = render(failed(NOT_SERVED(), [{ name: 'n1', cpu: '100m', cpu_percent: '5%', memory: '10Mi', memory_percent: '1%' }]))
+      expect(html).toContain(NOT_AVAILABLE)
+      expect(html).not.toContain('100m')
+      expect(html).not.toContain('node-metrics-refresh-failed')
+    })
+
+    it('is asked again after k8s-service\'s minute instead of every 5 s, and not tried again', () => {
+      seen.options.length = 0
+      render(seeded())
+      const options = seen.options.filter((o) => o.queryKey[0] === 'node-metrics').at(-1)
+      expect(options.refetchInterval({ state: { error: NOT_SERVED() } })).toBe(60_000)
+      expect(options.retry(0, NOT_SERVED())).toBe(false)
+    })
+  })
+
   it('a refused read still says the caller may not read them', () => {
     const html = render(failed(httpError(403)))
     expect(html).toContain('node-metrics-forbidden')

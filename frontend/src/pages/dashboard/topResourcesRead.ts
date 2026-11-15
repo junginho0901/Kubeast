@@ -1,10 +1,12 @@
 // The Dashboard's top pods and nodes read (GET /cluster/metrics/top-resources), every 5 s. A part the cluster refused
 // the caller (pod_metrics_refused, node_metrics_refused) is kept from that answer, named in the no-permission banner as a
 // read beside a list, and not asked again (`skip`) until the page is opened again or another cluster is chosen, when
-// the banner forgets it too. With both parts refused the read stops.
+// the banner forgets it too. With both parts refused the read stops. A cluster without metrics-server is asked again
+// after a minute, as Monitoring's tabs ask it (topResourcesPace).
 
-import type { TopResources } from '@/services/api'
+import { isMetricsNotServedText, isMetricsUnavailableError, type TopResources } from '@/services/api'
 import { recordForbidden } from '@/services/forbiddenStore'
+import { METRICS_NOT_SERVED_MS } from '../monitoring/metricsRefresh'
 
 /** The parts the cluster refused since the page opened on cluster `ck`, each with the cluster's reason. */
 export type TopRefusals = { ck: string; pods?: string; nodes?: string }
@@ -39,6 +41,21 @@ export function topResourcesPollMs(refused: TopRefusals | undefined, ck: string,
   return TOP_RESOURCES_POLL_MS
 }
 
+/**
+ * The read's pace: every 5 s, never again once both parts are refused, and after a minute while the cluster serves no
+ * metrics.k8s.io (METRICS_NOT_SERVED_MS, as metricsReadPace), so a metrics-server installed since shows. That answer
+ * is no session-long flag: Monitoring's tabs keep asking it for themselves. Neither it nor a refusal is tried again;
+ * another failure once.
+ */
+export function topResourcesPace(refused: () => TopRefusals | undefined, ck: string) {
+  return {
+    refetchInterval: (query: { state: { error: unknown } }): number | false =>
+      isMetricsUnavailableError(query.state.error) ? METRICS_NOT_SERVED_MS : topResourcesPollMs(refused(), ck, false),
+    retry: (failureCount: number, error: unknown): boolean => !isMetricsUnavailableError(error) && failureCount < 1,
+    retryDelay: 1000,
+  }
+}
+
 const hasRows = (r: TopResources) => (r.top_pods?.length ?? 0) > 0 || (r.top_nodes?.length ?? 0) > 0
 
 /**
@@ -60,7 +77,7 @@ export async function readTopResources(
   // The k8s-service answers 200 with empty lists and the metrics API error when the cluster has no metrics-server
   // ("could not find the requested resource").
   const apiErr = `${answer.pod_metrics_error || ''} ${answer.node_metrics_error || ''}`
-  if (/could not find the requested resource/i.test(apiErr)) {
+  if (isMetricsNotServedText(apiErr)) {
     const unavailable: any = new Error('metrics server not available')
     unavailable.response = { status: 503, data: { code: 'metrics_unavailable' } }
     throw unavailable

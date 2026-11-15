@@ -22,7 +22,10 @@ import (
 
 // metricsAPI stands in for an API server and its metrics.k8s.io: each namespace's pods as given, or the status a
 // namespace answers instead, or, while not served, the API server's plain 404 for a path no API group serves. It counts
-// the metrics lists asked and the most under way at once.
+// the metrics lists asked and the most under way at once. It serves the group's discovery document
+// (/apis/metrics.k8s.io) while served, as kube-aggregator does from the APIService whether or not metrics-server
+// answers; with discovery it also serves the whole API discovery, listing metrics.k8s.io while served, and the client
+// reads it.
 type metricsAPI struct {
 	notServed atomic.Bool
 	refused   bool                // every list answers 403 with a Status, as kube-apiserver refuses an identity
@@ -30,30 +33,122 @@ type metricsAPI struct {
 	status    map[string]int      // namespace → the status it answers instead of its list
 	broken    map[string]bool     // namespace → a 200 whose body is not JSON
 	delay     time.Duration       // how long a list that answers its items takes
+	discovery bool
+	// refusedUser: the caller whose lists answer 403, before the path is looked at, as the API server authorizes a
+	// request before it finds what serves the path
+	refusedUser string
+	// down: metrics-server registered and not answering: discovery names metrics.k8s.io/v1beta1 and its resources answer
+	// 503, as do its lists
+	down bool
+	// discoveryFails: discovery (/apis and /apis/metrics.k8s.io) answers 503 after discoveryDelay
+	discoveryFails bool
+	discoveryDelay time.Duration
 
 	mu      sync.Mutex
 	asked   []string
 	running int
 	most    int
+	// discoveryReads: the discovery requests, the group list (/apis: once a discovery read, twice when a group does not
+	// answer) and the metrics.k8s.io group's document
+	discoveryReads int
 }
 
 func (a *metricsAPI) service(t *testing.T) *Service {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(a.serve))
 	t.Cleanup(srv.Close)
-	cs, err := kubernetes.NewForConfig(&rest.Config{Host: srv.URL, QPS: -1})
+	cfg := &rest.Config{Host: srv.URL, QPS: -1}
+	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, "default") })
+	cs, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
+	b := &clientBundle{clientset: cs}
+	if a.discovery {
+		b.discovery = cs.Discovery()
+	}
 	s := &Service{}
-	s.defaultBundle.Store(&clientBundle{clientset: cs})
+	s.defaultBundle.Store(b)
 	return s
+}
+
+// serveDiscovery answers API discovery as a legacy (not aggregated) API server: core v1, apps/v1 and, while served,
+// metrics.k8s.io/v1beta1.
+func (a *metricsAPI) serveDiscovery(w http.ResponseWriter, r *http.Request) bool {
+	switch r.URL.Path {
+	case "/api":
+		_, _ = w.Write([]byte(`{"kind":"APIVersions","versions":["v1"]}`))
+	case "/api/v1":
+		_, _ = w.Write([]byte(`{"kind":"APIResourceList","groupVersion":"v1","resources":[{"name":"nodes","singularName":"node","namespaced":false,"kind":"Node","verbs":["get","list"]},{"name":"pods","singularName":"pod","namespaced":true,"kind":"Pod","verbs":["get","list"]}]}`))
+	case "/apis":
+		if a.discoveryFailed(w) {
+			return true
+		}
+		groups := []string{`{"name":"apps","versions":[{"groupVersion":"apps/v1","version":"v1"}],"preferredVersion":{"groupVersion":"apps/v1","version":"v1"}}`}
+		if !a.notServed.Load() {
+			groups = append(groups, `{"name":"metrics.k8s.io","versions":[`+metricsGV+`],"preferredVersion":`+metricsGV+`}`)
+		}
+		_, _ = fmt.Fprintf(w, `{"kind":"APIGroupList","apiVersion":"v1","groups":[%s]}`, strings.Join(groups, ","))
+	case "/apis/apps/v1":
+		_, _ = w.Write([]byte(`{"kind":"APIResourceList","groupVersion":"apps/v1","resources":[{"name":"deployments","singularName":"deployment","namespaced":true,"kind":"Deployment","verbs":["get","list"]}]}`))
+	case "/apis/metrics.k8s.io/v1beta1":
+		switch {
+		case a.notServed.Load():
+			http.NotFound(w, r)
+		case a.down:
+			unavailable(w)
+		default:
+			_, _ = w.Write([]byte(`{"kind":"APIResourceList","groupVersion":"metrics.k8s.io/v1beta1","resources":[{"name":"nodes","namespaced":false,"kind":"NodeMetrics","verbs":["get","list"]},{"name":"pods","namespaced":true,"kind":"PodMetrics","verbs":["get","list"]}]}`))
+		}
+	default:
+		return false
+	}
+	return true
+}
+
+const metricsGV = `{"groupVersion":"metrics.k8s.io/v1beta1","version":"v1beta1"}`
+
+// serveMetricsGroup answers the metrics.k8s.io group's discovery document, a 404 while not served.
+func (a *metricsAPI) serveMetricsGroup(w http.ResponseWriter, r *http.Request) {
+	if a.discoveryFailed(w) {
+		return
+	}
+	if a.notServed.Load() {
+		http.NotFound(w, r)
+		return
+	}
+	_, _ = w.Write([]byte(`{"kind":"APIGroup","apiVersion":"v1","name":"metrics.k8s.io","versions":[` + metricsGV + `],"preferredVersion":` + metricsGV + `}`))
+}
+
+// discoveryFailed counts a discovery request and, with discoveryFails, answers it 503.
+func (a *metricsAPI) discoveryFailed(w http.ResponseWriter) bool {
+	a.mu.Lock()
+	a.discoveryReads++
+	a.mu.Unlock()
+	time.Sleep(a.discoveryDelay)
+	if a.discoveryFails {
+		unavailable(w)
+	}
+	return a.discoveryFails
+}
+
+// unavailable is the aggregator's answer for an APIService whose server does not answer.
+func unavailable(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusServiceUnavailable)
+	_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"the server is currently unable to handle the request","reason":"ServiceUnavailable","code":503}`))
 }
 
 func (a *metricsAPI) serve(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.URL.Path == "/api/v1/nodes" {
 		_, _ = w.Write([]byte(`{"items":[]}`))
+		return
+	}
+	if r.URL.Path == "/apis/"+metricsGroup {
+		a.serveMetricsGroup(w, r)
+		return
+	}
+	if a.discovery && a.serveDiscovery(w, r) {
 		return
 	}
 	const prefix = "/apis/metrics.k8s.io/v1beta1/"
@@ -71,12 +166,17 @@ func (a *metricsAPI) serve(w http.ResponseWriter, r *http.Request) {
 		a.running--
 		a.mu.Unlock()
 	}()
-	if a.notServed.Load() {
+	sub := strings.TrimPrefix(r.URL.Path, prefix)
+	refused := a.refused || (a.refusedUser != "" && r.Header.Get(auth.HeaderImpersonateUser) == a.refusedUser)
+	if !refused && a.notServed.Load() {
 		http.NotFound(w, r) // what kube-apiserver's notfoundhandler writes
 		return
 	}
-	sub := strings.TrimPrefix(r.URL.Path, prefix)
-	if a.refused {
+	if !refused && a.down {
+		unavailable(w)
+		return
+	}
+	if refused {
 		resource, where := "nodes", "at the cluster scope"
 		if strings.HasSuffix(sub, "pods") {
 			resource, where = "pods", "at the cluster scope"
@@ -250,87 +350,6 @@ func TestTopPodsOfALimitedGrantAskAtMostEightNamespacesAtOnce(t *testing.T) {
 	}
 	if most < 2 || most > listFanOutWorkers {
 		t.Errorf("%d lists under way at once, want 2 to %d", most, listFanOutWorkers)
-	}
-}
-
-// A cluster that does not serve metrics.k8s.io is asked once: every caller of the cluster gets its answer for
-// metricsMissTTL, the same answer the cluster gives, then one caller asks again, and a metrics-server installed since
-// answers from that ask on.
-func TestAClusterWithoutTheMetricsAPIIsAskedOnceWithinTheMinute(t *testing.T) {
-	const notFound = "the server could not find the requested resource"
-	scope := loadNamespaces(20)
-	// the pods a metrics-server installed later answers
-	api := &metricsAPI{pods: map[string][]string{"default": {`{"metadata":{"name":"web","namespace":"default"},"containers":[{"name":"c","usage":{"cpu":"5m","memory":"10Mi"}}],"timestamp":"t"}`}}}
-	api.notServed.Store(true)
-	s := api.service(t)
-	wide := context.Background()
-
-	first, err := s.GetTopResources(wide, 5, 3, TopSkip{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := map[string]interface{}{"top_pods": []map[string]interface{}{}, "top_nodes": []map[string]interface{}{}, "pod_metrics_error": notFound, "node_metrics_error": notFound}
-	if !reflect.DeepEqual(first, want) {
-		t.Fatalf("first answer: %v", first)
-	}
-	if asked, _ := api.counts(); asked != 1 {
-		t.Fatalf("first request asked %d lists, want 1 (the node list after the pods' 404 is not asked)", asked)
-	}
-	again, _ := s.GetTopResources(wide, 5, 3, TopSkip{})
-	limited, _ := s.GetTopResources(limitedTo(scope), 5, 3, TopSkip{})
-	if asked, _ := api.counts(); asked != 1 {
-		t.Fatalf("asked %d lists within the minute, want 1", asked)
-	}
-	if !reflect.DeepEqual(again, first) {
-		t.Errorf("second answer %v, first %v", again, first)
-	}
-	// the limited grant's answer is the one the cluster gives it when asked
-	fresh := &metricsAPI{}
-	fresh.notServed.Store(true)
-	if asked, _ := fresh.service(t).GetTopResources(limitedTo(scope), 5, 3, TopSkip{}); !reflect.DeepEqual(limited, asked) {
-		t.Errorf("limited grant from the cluster's answer %v, asking %v", limited, asked)
-	}
-
-	b := s.defaultBundle.Load()
-	expire := func() {
-		m := b.metricsMissing.Load()
-		if m == nil {
-			t.Fatal("nothing remembered")
-		}
-		b.metricsMissing.Store(&metricsMiss{err: m.err, until: time.Now().Add(-time.Millisecond)})
-	}
-	// past the minute, a crowd asks once
-	expire()
-	var wg sync.WaitGroup
-	for range 20 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			got, _ := s.GetTopResources(wide, 5, 3, TopSkip{})
-			if !reflect.DeepEqual(got, first) {
-				t.Errorf("answer past the minute: %v", got)
-			}
-		}()
-	}
-	wg.Wait()
-	if asked, _ := api.counts(); asked != 2 {
-		t.Fatalf("20 callers past the minute asked %d lists in all, want 2", asked)
-	}
-
-	// metrics-server installed: the next ask past the minute is answered, and every request asks from then on
-	api.notServed.Store(false)
-	expire()
-	served, _ := s.GetTopResources(wide, 5, 3, TopSkip{})
-	if pods, _ := served["top_pods"].([]map[string]interface{}); len(pods) != 1 || served["pod_metrics_error"] != nil || served["node_metrics_error"] != nil {
-		t.Fatalf("answer once served: %v", served)
-	}
-	if b.metricsMissing.Load() != nil {
-		t.Error("still remembered as not served")
-	}
-	api.reset()
-	_, _ = s.GetTopResources(wide, 5, 3, TopSkip{})
-	if asked, _ := api.counts(); asked != 2 {
-		t.Errorf("a served cluster asked %d lists, want the pods' and the nodes'", asked)
 	}
 }
 

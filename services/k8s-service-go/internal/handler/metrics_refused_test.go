@@ -7,19 +7,24 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
-// refusingMetricsAPI answers every metrics.k8s.io list with the 403 Status kube-apiserver writes for an identity its RBAC
-// does not let list them, and counts the lists asked.
+// refusingMetricsAPI serves metrics.k8s.io in its discovery and answers every list of it with the 403 Status
+// kube-apiserver writes for an identity its RBAC does not let list them, and counts the lists asked.
 type refusingMetricsAPI struct {
-	mu    sync.Mutex
-	asked []string
+	mu        sync.Mutex
+	asked     []string
+	discovery atomic.Int64
 }
 
 func (a *refusingMetricsAPI) serve(w http.ResponseWriter, r *http.Request) {
+	if serveDiscovery(w, r, true, &a.discovery) {
+		return
+	}
 	const prefix = "/apis/metrics.k8s.io/v1beta1/"
 	sub, ok := strings.CutPrefix(r.URL.Path, prefix)
 	if !ok {
@@ -107,6 +112,9 @@ func TestMonitoringMetricsTheClusterRefusesSayItInTheClustersWords(t *testing.T)
 				}
 				if got := api.count(); got != c.lists*round {
 					t.Fatalf("round %d: %d lists asked in all, want %d: a refusal was kept", round, got, c.lists*round)
+				}
+				if reads := api.discovery.Load(); reads != 1 {
+					t.Fatalf("round %d: %d discovery reads, want one within its minute", round, reads)
 				}
 			}
 			if h.svc.ClusterDown("c1") {

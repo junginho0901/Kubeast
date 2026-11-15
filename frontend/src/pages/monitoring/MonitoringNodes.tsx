@@ -10,7 +10,6 @@ import {
 } from 'lucide-react'
 import {
   api,
-  disableMetrics,
   isMetricsDisabled,
   isMetricsUnavailableError,
 } from '@/services/api'
@@ -50,7 +49,8 @@ function UsageCell({ text, testId }: { text: string; testId: string }) {
 
 interface MonitoringNodesProps {
   metricsUnavailable: boolean
-  onMetricsUnavailable: () => void
+  /** whether the tab's last answer says the cluster serves no metrics.k8s.io (the page's notice) */
+  onMetricsUnavailable: (unavailable: boolean) => void
 }
 
 const parsePercent = (v?: string): number | null => {
@@ -97,21 +97,21 @@ export default function MonitoringNodes({
     queryKey: ['node-metrics', currentCluster],
     queryFn: api.getNodeMetrics,
     enabled: !metricsUnavailable && !isMetricsDisabled(),
-    // every 5 s, not again once the cluster refused it (metricsReadPace)
+    // every 5 s, not again once the cluster refused it, once a minute while it serves no metrics.k8s.io (metricsReadPace)
     ...metricsReadPace(() => metricsUnavailable || isMetricsDisabled()),
     placeholderData: (prev, prevQuery) =>
       prevQuery && prevQuery.queryKey[1] === currentCluster ? prev : undefined,
   })
-  // a refusal shows in place of the numbers, those read before it too, and goes to the floating chat as that
+  // a refusal shows in place of the numbers, those read before it too, and so does no metrics.k8s.io; the floating chat is told the same
   const refusal = useMemo(() => metricsRefusal(error), [error])
-  const nodeMetrics = refusal ? undefined : nodeMetricsRead
+  const notServed = isMetricsUnavailableError(error)
+  const nodeMetrics = refusal || notServed ? undefined : nodeMetricsRead
 
+  // a tab that has not answered yet (the Pods tab before a namespace is chosen) leaves the page's notice as it is
+  const answered = Boolean(error) || dataUpdatedAt > 0
   useEffect(() => {
-    if (error && isMetricsUnavailableError(error)) {
-      disableMetrics()
-      onMetricsUnavailable()
-    }
-  }, [error, onMetricsUnavailable])
+    if (answered) onMetricsUnavailable(notServed)
+  }, [answered, notServed, onMetricsUnavailable])
 
   const refreshFailure = useMemo(() => metricsRefreshFailure(error, nodeMetrics, dataUpdatedAt), [error, nodeMetrics, dataUpdatedAt])
 

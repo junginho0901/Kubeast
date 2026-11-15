@@ -14,7 +14,7 @@ const detailOf = (error: unknown): string | undefined => {
 }
 
 export function metricsRefreshFailure(error: unknown, rows: unknown, dataUpdatedAt: number): MetricsRefreshFailure | null {
-  if (!error || isForbiddenError(error) || !dataUpdatedAt || !Array.isArray(rows) || rows.length === 0) return null
+  if (!error || isForbiddenError(error) || isMetricsUnavailableError(error) || !dataUpdatedAt || !Array.isArray(rows) || rows.length === 0) return null
   const detail = detailOf(error)
   return { valuesFrom: dataUpdatedAt, ...(detail ? { detail } : {}) }
 }
@@ -34,18 +34,25 @@ export function metricsRefusal(error: unknown): { reason?: string } | null {
 }
 
 export const METRICS_POLL_MS = 5000
+/** How long k8s-service keeps its answer that a cluster serves no metrics.k8s.io (metricsVerdictTTL). */
+export const METRICS_NOT_SERVED_MS = 60_000
 
 /**
  * How the Nodes and Pods tabs read: every 5 s, a failure tried twice more, and neither a refused read nor the answer that
- * says metrics-server is missing asked again. A refused read is asked again when the tab is opened again or another
- * cluster (or namespace) is chosen, which is a query of its own, as the banner forgets its refusals on the route and the
- * cluster. `off`: metrics are off for this cluster.
+ * says metrics-server is missing tried again. A refused read is not asked again on the 5 s, and the answer that the
+ * cluster serves no metrics.k8s.io is asked again after the minute k8s-service keeps that answer, so a
+ * metrics-server installed since shows. Both are asked again when the tab is opened again or another cluster (or
+ * namespace) is chosen, which is a query of its own, as the banner forgets its refusals on the route and the cluster.
+ * `off`: metrics are off for this cluster.
  */
 export function metricsReadPace(off: () => boolean) {
   return {
     staleTime: METRICS_POLL_MS,
-    refetchInterval: (query: { state: { error: unknown } }): number | false =>
-      off() || isForbiddenError(query.state.error) ? false : METRICS_POLL_MS,
+    refetchInterval: (query: { state: { error: unknown } }): number | false => {
+      const error = query.state.error
+      if (off() || isForbiddenError(error)) return false
+      return isMetricsUnavailableError(error) ? METRICS_NOT_SERVED_MS : METRICS_POLL_MS
+    },
     retry: (failureCount: number, error: unknown): boolean =>
       !isMetricsUnavailableError(error) && !isForbiddenError(error) && failureCount < 2,
     retryDelay: (attemptIndex: number): number => Math.min(1000 * 2 ** attemptIndex, 5000),

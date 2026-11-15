@@ -132,11 +132,17 @@ export type ListStatusDetail = { url: string; state: 'ok' | 'notInstalled' | 'er
 
 const METRICS_UNAVAILABLE = 'metrics_unavailable'
 
+/** k8s-service's words for a cluster that serves no metrics.k8s.io (no metrics-server): the API server's 404 for the lists. */
+export const isMetricsNotServedText = (text: unknown): boolean =>
+  typeof text === 'string' && /could not find the requested resource/i.test(text)
+
 // Internal — used by domain files that want to fall through to a
 // "metrics-server unavailable" branch instead of bubbling the error.
+// The Nodes and Pods metrics reads answer 404 in those words when the cluster serves no metrics.k8s.io.
 export const isMetricsUnavailableResponse = (error: any): boolean => {
+  const data = error?.response?.data
+  if (error?.response?.status === 404) return isMetricsNotServedText(data?.detail)
   if (error?.response?.status !== 503) return false
-  const data = error.response.data
   return data?.detail === METRICS_UNAVAILABLE || data?.detail?.code === METRICS_UNAVAILABLE || data?.code === METRICS_UNAVAILABLE
 }
 
