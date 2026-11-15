@@ -213,6 +213,7 @@ func handlePrometheusQuery(ctx context.Context, args map[string]interface{}, hea
 		results = results[:promSeriesCap]
 		truncated = true
 	}
+	mostPoints := maxPoints(results)
 	if isRange {
 		for _, r := range results {
 			if pts, ok := r["points"].([]interface{}); ok && len(pts) > promPointsCap {
@@ -239,6 +240,18 @@ func handlePrometheusQuery(ctx context.Context, args map[string]interface{}, hea
 	}
 	if len(reply.Results) == 0 {
 		result["hint"] = "The query matched no series. Find the metric with prometheus_metrics and its labels with prometheus_labels instead of guessing (the cluster may not run the exporter that produces it)."
+	}
+	if resultDetails {
+		window, emptyReason := "", ""
+		if isRange {
+			window = windowDefault(args, time.Hour, "since", "since_time", "until_time")
+		} else if len(reply.Results) == 0 {
+			emptyReason = instantEmptyReason
+		}
+		if !isRange {
+			mostPoints = 0
+		}
+		addDetails(result, seriesCut(len(reply.Results), len(results), false, 0, mostPoints), window, emptyReason)
 	}
 	return marshalJSON(result)
 }
@@ -340,6 +353,11 @@ func handleLogSearch(ctx context.Context, args map[string]interface{}, headers h
 			reply["lines"] = lines[:limit]
 			reply["truncated"] = true
 		}
+		cut := ""
+		if reply["truncated"] == true {
+			cut = cutUnknown(min(len(lines), limit), "lines, the newest", "the store stops at the limit")
+		}
+		addDetails(reply, cut, windowDefault(args, time.Hour, "since"), "")
 		if len(lines) == 0 {
 			reply["hint"] = "No log line matched in the window. Widen since, drop the text filter, or check the pod/workload name with k8s_find_resource."
 		}

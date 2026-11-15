@@ -94,6 +94,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
     - 둘 중 하나라도 켜면 모델 호출마다 답 길이가 2,048 토큰 대신 채팅 기본값인 4,096 토큰까지 됩니다(모델에 `max_tokens`를 정해 두었으면 그 값이 먼저입니다). 여섯 제목 · 가설 12개까지 · 묶음이 2,048에 들어가지 않기 때문입니다. 그래도 묶음 중간에서 끊긴 답은 `block_cut`이고(제공자가 길이에서 멈췄다고 알리면 `finish_reason: length`도 적습니다), 반쪽 묶음은 보고서에서 떼고 더 짧게 한 번 더 받습니다.
     - Claude 구독에서는 Claude Code의 턴이 대화에 도구 결과를 남기지 않으므로, 한 번 더 묻는 글에 닫는 호출과 같이 그 조사의 도구 결과를 담습니다.
     - 원인마다 모델이 댄 번호를 이 조사의 호출이 아닌 것까지 `raw_evidence`로 같이 남겨 AI 평가가 틀린 근거 수를 셀 수 있게 하고, `result.checks`에는 두 스위치 중 무엇이 묶음을 읽었는지 적습니다. 데이터베이스가 받지 않는 NUL 문자는 행에 남기는 모든 칸(보고서 · 도구 호출 · 결과)에서 빼고, 그래도 행이 받지 않으면 실패로 까닭을 적고 토큰은 남깁니다.
+  - `ai.toolResultDetails`(기본 꺼짐)를 켜면 조사가 읽는 도구 결과에 잘린 결과에서 받은 양, 범위를 정하지 않았을 때 읽은 시간 범위, 빈 결과의 까닭, 결과가 가리키는 오브젝트의 콘솔 경로가 붙고, 보고서는 그 경로를 링크로 쓸 수 있습니다(상대 경로라 보고서를 읽는 그 콘솔에서 열림). [기능](features.md) 참고.
   - API는 `GET /api/v1/ai/investigations`(목록, `status`·`cluster`로 거르기)와 `/{id}`(상세: 보고서·도구 호출·토큰)이고, 권한은 `admin.investigations.read`입니다.
   - 상세에는 파드 로그가 인용될 수 있어 열람할 때마다 `ai.investigation.view`로 남깁니다.
   - 보존 기간은 `retention.investigationDays`(90일)입니다.

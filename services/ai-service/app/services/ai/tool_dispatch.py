@@ -19,7 +19,7 @@
 
 from typing import TYPE_CHECKING, Dict
 
-from app.services.ai import permissions, resolvers
+from app.services.ai import console_links, permissions, resolvers
 from app.services.ai.debug_dump import log, safe_error
 
 if TYPE_CHECKING:
@@ -432,6 +432,8 @@ async def execute_function_with_context(
         
         # 캐시에 저장 (5분 TTL). A refusal is not kept: the grant or the state behind it may change before it would expire.
         if not _is_refusal(result):
+            # AI_TOOL_RESULT_DETAILS: the console screens of what the call and its result name (off: the result as it came)
+            result = console_links.add(function_name, function_args, result, cluster)
             tool_context.cache[cache_key] = result
 
         log.debug("[DEBUG] Function result cached: %s", cache_key)
