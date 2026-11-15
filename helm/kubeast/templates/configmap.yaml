@@ -133,6 +133,8 @@ data:
   AI_CHAT_BUDGET_USER_DAILY_TOKENS: {{ .Values.ai.chat.budget.userDailyTokens | quote }}
   AI_CLAUDE_CODE_ENABLED: {{ .Values.ai.providers.claudeCode.enabled | quote }}
   AI_CLAUDE_CODE_MAX_CONCURRENT: {{ .Values.ai.providers.claudeCode.maxConcurrent | quote }}
+  AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL: {{ dig "maxConcurrentTotal" 0 .Values.ai.providers.claudeCode | int64 | quote }}
+  AI_CLAUDE_CODE_QUEUE_WAIT: {{ dig "queueWaitSeconds" 60 .Values.ai.providers.claudeCode | int64 | quote }}
   AI_CLAUDE_CODE_TURN_TIMEOUT: {{ .Values.ai.providers.claudeCode.turnTimeoutSeconds | quote }}
   AI_CLAUDE_CODE_MAX_TURNS: {{ .Values.ai.providers.claudeCode.maxTurns | quote }}
   MCP_ENABLED: {{ .Values.mcp.enabled | quote }}

@@ -394,14 +394,25 @@ ai:
   # 250 MB more; "" for a self-built image with --build-arg WITH_CLAUDE_CODE=true).
   # Also needs the token in claudeCodeOAuthToken (or CLAUDE_CODE_OAUTH_TOKEN in
   # apiKeysSecret) and a model config with that provider naming
-  # CLAUDE_CODE_OAUTH_TOKEN. Each running turn holds one Claude Code process;
-  # maxConcurrent caps the chat's (raise resources.aiService.limits.memory with
-  # it) and an alert investigation runs in one more slot of its own.
+  # CLAUDE_CODE_OAUTH_TOKEN. Each running turn holds one Claude Code process
+  # (up to about 300 MB): maxConcurrent caps the chat's on each ai-service server,
+  # and maxConcurrentTotal caps them across every replica through the database
+  # (0 = maxConcurrent), so the subscription's use stays within one limit however
+  # many servers run; a slot a stopped server held is free again after 60 s. A
+  # turn waits up to queueWaitSeconds for both (the chats say it is waiting),
+  # then ends as busy. An alert investigation runs in one more slot of its own on
+  # each server, outside maxConcurrentTotal. While the provider is on, ai-service's
+  # memory limit is the larger of resources.aiService.limits.memory and
+  # memoryLimit: 2Gi holds the service and maxConcurrent 2 + the investigator
+  # (about 300 MB each); raise it with maxConcurrent. "" leaves the limit as set.
   providers:
     claudeCode:
       enabled: false
       imageTagSuffix: "-claude-code"
-      maxConcurrent: 1
+      maxConcurrent: 2
+      maxConcurrentTotal: 0
+      memoryLimit: 2Gi
+      queueWaitSeconds: 60
       turnTimeoutSeconds: 300
       maxTurns: 10
 
