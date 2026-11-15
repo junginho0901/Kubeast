@@ -156,6 +156,8 @@ ai:
   apiKeysSecret: ""
   model: "gpt-4o-mini"
   baseUrlAllowedHosts: []  # 모델 설정의 base_url이 사설 주소(클러스터 안 Ollama, 사내 LLM 게이트웨이)면 여기에 등록하세요
+  refuseRepeatedReads: false # (alpha) true면 채팅 답·조사 하나 안에서 같은 도구·같은 인자의 읽기를 앞 호출이 답한 지 60초 안에 또 하면
+                             # 실행하지 않고 그 결과가 어디 있는지 모델에 알려 줍니다. 끄면 전과 같습니다
   providers:
     claudeCode: { enabled: false, maxConcurrent: 1, turnTimeoutSeconds: 300, maxTurns: 10 }
 
@@ -186,6 +188,22 @@ ingress:
   className: ""
   host: kubeast.example.com
   tls: false
+
+# 0.7.9에 더한 AI 스위치 — 모두 기본 꺼짐입니다. 끄면 모델이 받는 프롬프트·도구 정의가 0.7.8과 같습니다.
+# (alpha): 예고 없이 바뀌거나 없어질 수 있습니다. 자세한 것은 ai-alerts.md·features.md에 있습니다
+features:
+  alertInvestigation:
+    rules: false             # (alpha) true면 아래 시간창, 범위 묶음, 가설과 나눈 사실, 보고서의 여섯 절을 프롬프트에 넣습니다(ai-alerts.md)
+    changesFirst: false      # (alpha) true면 0번째 걸음으로 변경 시간창의 timeline 변경 보기를 첫 입력에 넣습니다(감사되는 도구 호출,
+                             # 모델 호출 아님). 시간창도 적습니다
+    ledger: false            # (alpha) true면 보고서 끝에 원인·경로·배제·가설 묶음을 두고, 가설마다 뒷받침·반박한 호출로 닫아 보고서
+                             # 아래에 따로 보여 줍니다(열린 가설이 있으면 한 번 더 묻습니다)
+    evidenceCheck: false     # (alpha) true면 원인마다 댄 호출이 답했고 원인 이름을 담는지 서버가 확인하고, 아니면 도구 없이 한 번 더
+                             # 묻고 그래도 안 되는 것은 확인 안 됨으로 적습니다. ledger와 함께면 묶음 하나, 다시 묻기 한 번
+    window:                  # 알림 시작 시각에서 셉니다. 끝은 늦어도 지금입니다
+      metricsMinutes: 15     # 시작 앞뒤로 이만큼의 지표(1–360)
+      logsMinutes: 5         # 시작 이만큼 전부터의 로그(0–1440)
+      changesHours: 4        # 시작 이만큼 전부터의 변경(1–168)
 
 # 멀티클러스터 부하/장애 격리 튜닝
 multicluster:

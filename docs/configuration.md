@@ -160,6 +160,8 @@ ai:
   baseUrlAllowedHosts: []  # register a host here when a model setting's base_url is a private address
                            # (in-cluster Ollama, internal LLM gateway).
                            # api_key_env is OPENAI/ANTHROPIC/GEMINI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN (claude-code only) or KUBEAST_AI_KEY_*
+  refuseRepeatedReads: false # (alpha) true: a read made again with the same tool and arguments in one chat answer or investigation, less
+                             # than 60 s after the first answered, is not run and the model is told where it has the result; off: as before
   providers:
     claudeCode: { enabled: false, maxConcurrent: 1, turnTimeoutSeconds: 300, maxTurns: 10 }
 
@@ -189,6 +191,23 @@ ingress:
   className: ""
   host: kubeast.example.com
   tls: false
+
+# AI switches added in 0.7.9, all off by default. Off, the model's prompts and tool definitions are as in 0.7.8.
+# (alpha): may change or go without notice. More in ai-alerts.md and features.md
+features:
+  alertInvestigation:
+    rules: false             # (alpha) true: the time windows below, the scope groups, facts kept apart from hypotheses and the report's
+                             # six headings, in the prompt (ai-alerts.md)
+    changesFirst: false      # (alpha) true: step 0 puts the timeline's changes over the change window into the first message (an audited
+                             # tool call, no model step); writes the windows too
+    ledger: false            # (alpha) true: the report ends with a block of causes, path, ruled out and hypotheses, each closed with the
+                             # calls for and against it, kept apart and shown under the report (asked once more while one is open)
+    evidenceCheck: false     # (alpha) true: the server checks that the calls each cause names answered and hold its name, asks once more
+                             # without tools otherwise and lists what still fails as not verified; with ledger, one block and one ask
+    window:                  # counted from the alert's start; ends are never past now
+      metricsMinutes: 15     # metrics this long either side of the start (1–360)
+      logsMinutes: 5         # logs from this long before the start (0–1440)
+      changesHours: 4        # changes from this long before the start (1–168)
 
 # Multi-cluster load/failure isolation tuning
 multicluster:
