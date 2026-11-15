@@ -33,5 +33,9 @@
  ],
  "cooldown_seconds": 30,
  "hidden": true,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ConsumerLagHigh", "service": "mailer"},
+  "annotations": {"summary": "mailer is falling behind on new orders", "description": "The oldest order mailer has not handled yet is several minutes old and keeps getting older; mailer reports no errors."}
+ }
 }

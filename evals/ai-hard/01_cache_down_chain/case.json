@@ -37,5 +37,9 @@
   "kubectl -n otel-demo wait --for=condition=Available deploy/valkey-cart --timeout=120s"
  ],
  "cooldown_seconds": 120,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceRequestsFailing", "service": "uptime-check"},
+  "annotations": {"summary": "Placing an order fails in the otel-demo shop", "description": "uptime-check, which watches the shop in otel-demo through frontend-proxy, has seen requests fail for the last few minutes, and the shop's checkouts fail."}
+ }
 }

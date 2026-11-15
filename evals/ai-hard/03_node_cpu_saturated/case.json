@@ -37,5 +37,9 @@
   "kubectl delete namespace reports-03 --ignore-not-found --wait=false"
  ],
  "cooldown_seconds": 90,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceSlow", "service": "search"},
+  "annotations": {"summary": "search responses are slow", "description": "search requests from storefront have taken seconds instead of tens of milliseconds for the last few minutes; no request fails."}
+ }
 }

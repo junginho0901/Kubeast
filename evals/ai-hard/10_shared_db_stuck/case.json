@@ -46,5 +46,9 @@
   "kubectl -n otel-demo exec deploy/astronomy-db -- psql -U postgres -d astronomy_db -q -c 'ALTER ROLE astronomy_user CONNECTION LIMIT -1'"
  ],
  "cooldown_seconds": 120,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceRequestsFailing", "service": "uptime-check"},
+  "annotations": {"summary": "Several pages of the otel-demo shop answer errors", "description": "uptime-check's product list requests to the shop in otel-demo have been failing or timing out for the last few minutes; recommendations and checkouts fail too."}
+ }
 }

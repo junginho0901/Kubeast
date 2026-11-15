@@ -46,5 +46,9 @@
  ],
  "cooldown_seconds": 30,
  "hidden": true,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceRequestsFailing", "service": "storefront"},
+  "annotations": {"summary": "storefront's thumbnails and orders fail", "description": "storefront's thumbnail requests and its order requests have been failing for the last few minutes; the order requests answer 502."}
+ }
 }
