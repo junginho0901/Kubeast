@@ -42,6 +42,36 @@ export function drawerResourceType(kind: string): string {
   return group ? `${kindResource(kind)}.${group}` : kindToPlural(kind)
 }
 
+type ObjectNamed = Pick<ResourceDetailTarget, 'kind' | 'name' | 'namespace' | 'apiVersion'> & { rawJson?: unknown }
+
+const crdOf = (t: { kind: string; rawJson?: unknown }): string => {
+  const crd = t.kind === 'CustomResourceInstance' ? (t.rawJson as Record<string, unknown> | undefined)?.crd_name : undefined
+  return typeof crd === 'string' ? crd : ''
+}
+
+// The group an apiVersion names ('' for the core group or none).
+export const apiGroupOf = (apiVersion: unknown): string =>
+  typeof apiVersion === 'string' && apiVersion.includes('/') ? apiVersion.split('/')[0] : ''
+
+// The type a drawer's object is read and saved as: a custom resource by its CRD's name (<plural>.<group>), since two
+// CRDs may serve a Kind of one name and their objects may share a namespace and name (Karpenter's NodePool and
+// EC2NodeClass "default"); a kind with a drawer of its own as drawerResourceType names it; another kind by the group of
+// the apiVersion the caller named, else its row's, as kubectl get <resource>.<group> — the Kind alone reads the group
+// discovery prefers, whose object may not be the one named.
+export function objectResourceType(t: { kind: string; apiVersion?: string; rawJson?: unknown }): string {
+  if (t.kind === 'CustomResourceInstance') return crdOf(t) || drawerResourceType(t.kind)
+  if (t.kind in DRAWER_GROUPS) return drawerResourceType(t.kind)
+  const group = apiGroupOf(t.apiVersion ?? (t.rawJson as Record<string, unknown> | undefined)?.apiVersion)
+  return group ? `${kindToPlural(t.kind)}.${group}` : drawerResourceType(t.kind)
+}
+
+// One object as the drawer's views know it: its kind, namespace and name, and what tells two of one Kind and name apart
+// — the type it is read as (a custom resource's CRD, another kind's group) and the apiVersion the caller named. A view
+// keyed by it starts over for another object instead of showing what it held of the one before.
+export function drawerObjectKey(t: ObjectNamed): string {
+  return JSON.stringify([t.kind, t.namespace ?? '', t.name, objectResourceType(t), t.apiVersion ?? ''])
+}
+
 // What a drawer's delete acts on, for the cluster's answer (SelfSubjectAccessReview): the group and resource, the
 // object's namespace — a Namespace's own name, the namespace the API server authorizes it in — and its name. A custom
 // resource carries its group and plural (crd_name = <plural>.<group>); none for a kind without a drawer of its own.
