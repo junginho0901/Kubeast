@@ -4,6 +4,7 @@ import { api } from '@/services/api'
 import { AlertCircle, Bot, Check, Loader2, Zap } from 'lucide-react'
 import {
   PROVIDER_CATALOG,
+  getDefaultModel,
   getProvider,
   type ProviderDef,
 } from '@/constants/modelCatalog'
@@ -24,7 +25,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
   const navigate = useNavigate()
 
   const [selectedProvider, setSelectedProvider] = useState('openai')
-  const [aiModel, setAiModel] = useState('gpt-6-luna')
+  const [aiModel, setAiModel] = useState(() => getDefaultModel('openai'))
   const [aiCustomModel, setAiCustomModel] = useState(false) // true = free text input
   // Env var in ai-service that holds the provider key — the key itself is never stored
   const [aiApiKeyEnv, setAiApiKeyEnv] = useState(PROVIDER_CATALOG[0].defaultApiKeyEnv)
@@ -41,7 +42,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
     setSelectedProvider(providerId)
     const prov = getProvider(providerId)
     if (prov) {
-      setAiModel(prov.models[0]?.name ?? '')
+      setAiModel(getDefaultModel(providerId))
       setAiCustomModel(false)
       setAiBaseUrl(prov.defaultBaseUrl ?? '')
       setAiApiKeyEnv(prov.defaultApiKeyEnv ?? '')
@@ -174,7 +175,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
                 onClick={() => {
                   setAiCustomModel(!aiCustomModel)
                   if (aiCustomModel && currentProviderDef.models.length > 0) {
-                    setAiModel(currentProviderDef.models[0].name)
+                    setAiModel(getDefaultModel(currentProviderDef.id))
                   }
                 }}
                 className="text-[10px] text-slate-500 hover:text-primary-400 transition"

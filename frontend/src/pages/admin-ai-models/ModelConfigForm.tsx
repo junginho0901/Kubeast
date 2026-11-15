@@ -14,7 +14,7 @@ import {
   CircleDot,
 } from 'lucide-react'
 import { useProviderAvailability } from '@/hooks/useProviderAvailability'
-import { providerOptions } from './helpers'
+import { listDefault, providerOptions } from './helpers'
 import type { ModelFormState } from './useModelForm'
 import { NAME_MAX } from '@/utils/nameLimits'
 
@@ -116,7 +116,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
                 onClick={() => {
                   setFormCustomModel(!formCustomModel)
                   if (formCustomModel && currentModelOptions.length > 0) {
-                    setFormModel(currentModelOptions[0].value)
+                    setFormModel(listDefault(formProvider, currentModelOptions.map((o) => o.value)))
                   }
                 }}
                 className="text-[10px] text-slate-500 hover:text-primary-400 transition"

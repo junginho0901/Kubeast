@@ -89,9 +89,12 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
 
 - An upgrade leaves the model of every saved setting as it is, also the `default-openai` setting ai-service made from `ai.model` at its first start. Change it in **Admin > AI Models** before 2027-01-14.
 - A gateway (LiteLLM and the like) answers only the model names it maps. Add `gpt-6-luna` there before a setting uses it.
+- Kubeast sends `reasoning_effort: "none"`, which `gpt-6-luna` needs to take tools in Chat Completions, only to the names `gpt-6-sol` and `gpt-6-luna` on the OpenAI and Azure OpenAI providers. A setting that reaches `gpt-6-luna` under another name (a gateway alias, provider `custom`, an Azure deployment) puts `"reasoning_effort": "none"` in its options, or its tool calls are refused.
 - An install with no saved setting and no `ai.model` of its own (a gateway at `ai.baseUrl` with no key) sends `gpt-6-luna` from the upgrade on. Map it on the gateway first, or set `ai.model` to a name the gateway maps.
-- Docker Compose reads `OPENAI_MODEL` from `.env`, which `install-docker.sh` run again without `--skip-env` writes as `gpt-6-luna`. Like `ai.model`, it names the model only while no setting is saved.
-- Price per 1M tokens: `gpt-6-luna` $0.10 input and $0.50 output, `gpt-4o-mini` $0.15 and $0.60 ([pricing](https://developers.openai.com/api/docs/pricing), read 2026-11-15).
+- A values file of your own that sets `ai.model: gpt-4o-mini` (one copied from `helm show values` of 0.7.7, for example) keeps it. Change it before 2027-01-14.
+- Docker Compose reads `OPENAI_MODEL` from `.env`, and `install-docker.sh` run again keeps the `OPENAI_MODEL` and `OPENAI_BASE_URL` already there. A `.env` written by 0.7.7 or earlier names `gpt-4o-mini`: change it before 2027-01-14. Like `ai.model`, it names the model only while no setting is saved.
+- With `KUBEAST_TAG` set to v0.7.7 or earlier, keep `OPENAI_MODEL` at a model those images can use: they send no `reasoning_effort`, so every tool call to `gpt-6-luna` is refused.
+- Price per 1M tokens: `gpt-6-luna` $0.10 input and $0.50 output, `gpt-4o-mini` $0.15 and $0.60. A request of more than 272K input tokens to `gpt-6-luna` is billed at twice the input and cached input prices and 1.5 times the output price, for the whole request. Reasoning tokens are billed as output ([pricing](https://developers.openai.com/api/docs/pricing), [model](https://developers.openai.com/api/docs/models/gpt-6-luna), [reasoning](https://developers.openai.com/api/docs/guides/reasoning), read 2026-11-15).
 
 ### Uninstall
 
