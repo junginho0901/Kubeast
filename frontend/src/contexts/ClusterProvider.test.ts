@@ -37,9 +37,9 @@ vi.mock('@/components/ResourceDetailDrawer', async () => {
   }
 })
 
-import { act, createElement, useLayoutEffect, type ReactNode } from 'react'
+import { act, createElement, Fragment, useLayoutEffect, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import type { InternalAxiosRequestConfig } from 'axios'
 import { AxiosError } from 'axios'
@@ -184,5 +184,35 @@ describe('an open drawer on a cluster switch', () => {
     await settle()
 
     expect(drawerMounts.count).toBe(2)
+  })
+})
+
+describe('the cluster context across navigations', () => {
+  const reads: string[] = []
+  let go: (to: string) => void = () => {}
+  let address = ''
+  function Reader() {
+    reads.push(useCluster().currentCluster)
+    return null
+  }
+  function Address() {
+    const location = useLocation()
+    const navigate = useNavigate()
+    go = navigate
+    address = location.search
+    return null
+  }
+
+  it('gives its readers the same value while the cluster stays, and a switch keeps the address the moment before it', async () => {
+    await mount(createElement(Fragment, null, createElement(Reader), createElement(Address)))
+    await settle()
+    reads.length = 0
+    await act(async () => go('/?cluster=a&namespace=ns1&node=n1'))
+    await act(async () => go('/?cluster=a&namespace=ns1&node=n2'))
+    expect(reads).toEqual([])
+
+    await act(async () => pick('b'))
+    await settle()
+    expect({ address, reads: [...new Set(reads)] }).toEqual({ address: '?cluster=b&namespace=ns1', reads: ['b'] })
   })
 })
