@@ -79,14 +79,15 @@ ask time it was asked.
 The account and earlier runs:
 
 - A hard case asks as a member the runner makes for it with Read on the case's cluster (the whole cluster), deleted
-  when the case ends; `--user admin` asks as the admin instead. A member holds no `admin.audit.read` or
+  when the case ends, with a password made for it and kept in memory; `--user admin` asks as the admin instead. A member holds no `admin.audit.read` or
   `admin.investigations.read`, so the chat's `audit_search` and `investigations` refuse it
   (`scripts/test_ai_eval_runner.py` reads that from the seeded roles and the tool permission tables).
 - Read still opens the Alerts inbox and an alert's investigation report (`alerts_inbox` with `with_report`, for
   whoever reads the whole cluster). For a chat round, keep `features.alertInvestigation.enabled` off (the inbox then
-  answers 404) or the inbox empty, and at least turn `features.alertInvestigation.automatic` off, so a fault of the
-  round (01, 07 and 10 can fire the demo's rules) starts no investigation the model could read and none takes the
-  model's one Claude Code place. The runner warns when the inbox holds alerts at the start.
+  answers 404), so a fault of the round (01, 07 and 10 can fire the demo's rules) starts no investigation the model
+  could read and none takes the model's one Claude Code place. A run with hard cases stops before the first case when
+  a cluster's investigation list answers at the start; `--alert-investigation-on` runs it anyway, with a warning and
+  `alert_investigation_on: true` in the round's record.
 - The round's record `<stamp>-round.json`, and the table's last line, give the account, the namespace suffix and how
   many investigations and inbox rows each cluster had before and after the round.
 - `--namespace-suffix random` (or a value of up to eight lowercase letters and digits) runs each case in
@@ -106,7 +107,8 @@ filled into `<out>/<time>-truth/<id>.json`), `time_tolerance_seconds`, `causes` 
 when it names every truth cause with an accepted kind and no decoy as a cause; a control passes only with
 `no_fault` and no cause other than kind `none`, and a fault case fails with `no_fault`. Its score is 1 less 0.25 for
 each other cause outside `also_ok`, the same resource named again under a kind its truth cause does not take
-included. Reported beside it: `started_at` within the tolerance, the required path hops in order, the causes whose
+included, and more than one such cause fails it (`EXTRAS_ALLOWED`): a right cause in a list of guesses is not a right
+answer. Reported beside it: `started_at` within the tolerance, the required path hops in order, the causes whose
 `evidence` points at no call that answered, and `pass_grounded` (pass with none of those). `expect` is still checked,
 as `prose_pass`. A truth's `symptom`, `distractor_at`, `variants_note` and a hop's `note` are for people.
 
@@ -117,8 +119,12 @@ or `no_fault` is scored as `block: loose`. A kind is read as `KINDS` writes it (
 (a namespace is lowercase, with no dot). A decoy whose name is only `*` (`Node/*`) is taken only by an answer that
 gives its kind: a bare name — a table, an index, a setting — is an extra cause, not a node.
 
-The table leaves hidden cases out: with two or more it gives their total, with one or a run of hidden cases only it
-says the results are in the JSON, so no `.md` or screen line gives one hidden case's score.
+The table leaves hidden cases out, and a hidden case's line on screen says `done` instead of pass or FAIL. Their total
+is written only in the run's last table, once the run ends, and only when two or more hidden cases have a scored row
+(a case whose setup failed has none): the tables written after each case, and a run of hidden cases only, say the
+results are in the JSON, so no `.md` or screen line, and no change between two tables, gives one hidden case's score.
+No test file holds a hidden case's answer either: the hidden truths are run from their folders, the scorer's own
+checks use made-up truths, and `scripts/test_ai_eval_cases.py` fails on a test file naming a hidden cause.
 
 `evals/ai-hard/` holds sixteen cases made of plain Kubernetes objects. Each folder has `case.json`, `truth.json`, the
 manifests it applies and `NOTES.md`: what the AI has to notice, the trap, how it is scored and what is unsure. None

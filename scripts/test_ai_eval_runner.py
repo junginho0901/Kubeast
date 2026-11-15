@@ -8,7 +8,9 @@ clock are replaced, so nothing here reaches kubectl, kind or a model.
   python3 scripts/test_ai_eval_runner.py        # the same checks without pytest
 """
 import argparse
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import re
@@ -80,6 +82,8 @@ class FakeKubeast:
         self.then = "ok"
         self.on_chat = lambda n: None
         self.totals = {"investigations": 2, "inbox": 3}
+        self.alert_investigation = True    # off: the investigation list and the inbox answer 404
+        self.passwords: list[str] = []     # each account's password as the admin set it
         self.only_admin_signs_in = False
         self.lock = threading.Lock()
 
@@ -104,8 +108,9 @@ class FakeKubeast:
             if path == "/api/v1/auth/roles":
                 return 200, [{"id": 1, "name": "Admin"}, {"id": 2, "name": "Member"}, {"id": 3, "name": "Read"}]
             if path == "/api/v1/auth/admin/users" and method == "POST" and admin:
-                uid = f"u{len(self.users) + 1}"
+                uid = f"u{len(self.users) + len(self.deleted) + 1}"
                 self.users[uid] = dict(body, id=uid)
+                self.passwords.append(body.get("password"))
                 return 201, {"id": uid}
             if path.startswith("/api/v1/auth/admin/users/") and admin:
                 parts = path.split("/")
@@ -134,6 +139,8 @@ class FakeKubeast:
                           {"usage": {"total_tokens": 100}}]
                 return (200, "".join(f"data: {json.dumps(e)}\n\n" for e in events) + "data: [DONE]\n\n", action == "slow")
             if path in ("/api/v1/ai/investigations", "/api/v1/alerts/inbox"):
+                if not self.alert_investigation:
+                    return 404, {"detail": "Not Found"}
                 if not admin and path.endswith("investigations"):
                     return 403, {"detail": "permission required: admin.investigations.read"}
                 key = "investigations" if path.endswith("investigations") else "inbox"
@@ -242,6 +249,26 @@ def test_a_hard_case_asks_as_a_read_account_made_for_it():
     assert fake.deleted == [uid] and fake.users == {}
     assert set(fake.sessions) == {"ai-eval-read-20261115000000-90@kubeast.local"}
     assert any(c.startswith("kubectl delete namespace shop-90") for c in srv.commands)
+
+
+def test_each_read_account_has_a_password_of_its_own_kept_in_memory():
+    fake = FakeKubeast()
+    with Server(fake):
+        results = run(repeat=1) + run(repeat=1)
+    assert len(fake.passwords) == 2 and len(set(fake.passwords)) == 2 and all(len(p) >= 32 for p in fake.passwords), fake.passwords
+    assert not hasattr(AI_EVAL, "READ_PASSWORD")
+    assert not any(p in json.dumps(results) for p in fake.passwords)
+
+
+def test_hidden_case_lines_on_screen_say_done():
+    fake = FakeKubeast()
+    fake.chat_script = ["ok", 502, 502]
+    screen = io.StringIO()
+    with Server(fake), contextlib.redirect_stdout(screen):
+        results = run(case={**CASE, "hidden": True}, repeat=1)
+    lines = [x for x in screen.getvalue().splitlines() if x.startswith("90_test_case ")]
+    assert len(lines) == 2 and [r["pass"] for r in results] == [True, False], (lines, results)
+    assert all(": done — " in x and "pass" not in x and "FAIL" not in x for x in lines), lines
 
 
 def test_user_admin_and_a_cases_own_user():
@@ -411,7 +438,7 @@ def test_a_round_records_counts_runs_under_a_suffix_and_writes_after_each_case()
         fake.on_chat = lambda n: fake.totals.__setitem__("inbox", 3 + n)
         try:
             AI_EVAL.run_staged_case = one_case
-            sys.argv = ["ai-eval.py", "--cases", str(root), "--out", str(out), "--namespace-suffix", "ab12"]
+            sys.argv = ["ai-eval.py", "--cases", str(root), "--out", str(out), "--namespace-suffix", "ab12", "--alert-investigation-on"]
             os.environ["E2E_USER_PASSWORD"] = PASSWORD
             assert AI_EVAL.main() == 0
         finally:
@@ -425,12 +452,73 @@ def test_a_round_records_counts_runs_under_a_suffix_and_writes_after_each_case()
     assert any(c.startswith("kubectl create namespace shop-90-ab12 ") for c in srv.commands)
     assert not any(re.search(r"shop-90(?![\w-])", c) for c in srv.commands)
     info = json.loads(next(out.glob("*-round.json")).read_text())
-    assert info["user"] == "read" and info["namespace_suffix"] == "ab12"
+    assert info["user"] == "read" and info["namespace_suffix"] == "ab12" and info["alert_investigation_on"] is True
     assert info["before"] == {"default": {"investigations": 2, "inbox": 3}} and info["after"] == {"default": {"investigations": 2, "inbox": 7}}
     md = next(out.glob("*-claude-haiku-5-5.md")).read_text()
-    assert "라운드: 계정 read · 네임스페이스 꼬리 ab12 · 조사/알림함 default 2/3 → default 2/7" in md
+    assert "라운드: 계정 read · 네임스페이스 꼬리 ab12 · 조사/알림함 default 2/3 → default 2/7 · 알림 조사 켬" in md
     truth = json.loads(next(out.glob("*-truth/90_a.json")).read_text())
     assert truth["causes"][0]["resource"] == "ConfigMap/shop-90-ab12/settings-b"
+
+
+def _main(fake, root, *flags):
+    out = root / "out"
+    saved_argv = sys.argv
+    screen, errors = io.StringIO(), io.StringIO()
+    with Server(fake) as srv:
+        try:
+            sys.argv = ["ai-eval.py", "--cases", str(root), "--out", str(out), *flags]
+            os.environ["E2E_USER_PASSWORD"] = PASSWORD
+            with contextlib.redirect_stdout(screen), contextlib.redirect_stderr(errors):
+                code = AI_EVAL.main()
+        finally:
+            sys.argv = saved_argv
+            os.environ.pop("E2E_USER_PASSWORD", None)
+    return code, out, srv.commands, screen.getvalue(), errors.getvalue()
+
+
+def test_a_chat_round_is_refused_while_alert_investigation_is_on_unless_asked():
+    root = Path(tempfile.mkdtemp(prefix="ai-eval-alerts-on-"))
+    case_dir(CASE, TRUTH, root)
+    fake = FakeKubeast()
+    code, out, commands, _, errors = _main(fake, root)
+    assert code == 2 and "features.alertInvestigation is on in default" in errors and "--alert-investigation-on" in errors
+    assert fake.chats == 0 and fake.users == {} and fake.deleted == [] and commands == [] and not out.exists()
+    fake.totals = {"investigations": 0, "inbox": 0}  # on, with nothing in it yet: still refused
+    assert _main(fake, root)[0] == 2 and fake.chats == 0
+    code, out, _, screen, _ = _main(fake, root, "--alert-investigation-on")
+    assert code == 0 and "WARNING: features.alertInvestigation is on in default" in screen
+    assert json.loads(next(out.glob("*-round.json")).read_text())["alert_investigation_on"] is True
+    fake = FakeKubeast()
+    fake.alert_investigation = False
+    code, out, _, screen, _ = _main(fake, root)
+    info = json.loads(next(out.glob("*-round.json")).read_text())
+    assert code == 0 and "WARNING" not in screen and info["alert_investigation_on"] is False
+    assert info["before"] == {"default": {"investigations": "HTTP 404", "inbox": "HTTP 404"}}
+
+
+def test_the_hidden_total_is_written_only_once_the_run_ends():
+    root = Path(tempfile.mkdtemp(prefix="ai-eval-hidden-total-"))
+    for cid, ns, hidden in (("90_a", "shop-90", False), ("91_h", "shop-91", True), ("92_h", "shop-92", True)):
+        case_dir({**CASE, "id": cid, "namespace": ns, "question": f"{ns} 원인?", "question_vague": f"{ns}?", "hidden": hidden},
+                 json.loads(json.dumps({**TRUTH, "id": cid}).replace("shop-90", ns)), root)
+    out = root / "out"
+    tables = []
+    real = AI_EVAL.run_staged_case
+
+    def one_case(d, case, *rest):
+        tables.append("".join(f.read_text() for f in out.glob("*-claude-haiku-5-5.md")) if out.exists() else "")
+        return real(d, case, *rest)
+
+    try:
+        AI_EVAL.run_staged_case = one_case
+        code, out, _, screen, _ = _main(FakeKubeast(), root, "--hidden", "--alert-investigation-on")
+    finally:
+        AI_EVAL.run_staged_case = real
+    assert code == 0 and len(tables) == 3
+    assert "숨김 사례: 합계는 실행이 끝난 뒤의 표에만" in tables[2] and not re.search(r"숨김 사례 \d+개", tables[2]), tables[2]
+    final = next(out.glob("*-claude-haiku-5-5.md")).read_text()
+    assert "숨김 사례 2개: 정답 4/4" in final and "91_h" not in final and "92_h" not in final
+    assert "숨김 사례 2개: 정답 4/4" in screen
 
 
 def test_a_namespace_suffix_is_written_only_as_a_whole_name():
