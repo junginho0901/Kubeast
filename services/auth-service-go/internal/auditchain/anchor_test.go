@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ func TestAnchorOnceWritesTheDigestAndLinksToThePreviousOne(t *testing.T) {
 	if first.ID != 1 || first.FromSeq != 1 || first.ToSeq != 7 || first.Rows != 7 || first.Sink != "archive" || first.Actor != "system" || first.PrevAnchorHash != nil {
 		t.Fatalf("first anchor = %+v", first)
 	}
-	if first.ObjectKey != "digests/2026/10/08/000509Z-1-7.json" {
+	if want := fmt.Sprintf("digests/2026/10/08/000509Z-1-7-%x.json", first.AnchorHash[:4]); first.ObjectKey != want {
 		t.Errorf("object key = %s", first.ObjectKey)
 	}
 	body := objects.objects[first.ObjectKey]
@@ -74,6 +75,37 @@ func TestAnchorOnceWritesTheDigestAndLinksToThePreviousOne(t *testing.T) {
 	}
 }
 
+func TestTwoEmptyAnchorsInOneSecondKeepBothDigests(t *testing.T) {
+	f := chainOf(3)
+	objects := newFakeObjects()
+	now := time.Date(2026, 11, 14, 3, 0, 0, 0, time.UTC)
+	a := &Anchorer{Store: f, Objects: objects, Sink: "archive", Now: func() time.Time { return now }}
+	if _, err := a.AnchorOnce(context.Background(), "system"); err != nil {
+		t.Fatal(err)
+	}
+	// Nothing sealed since: both anchors cover the same empty range in the same second.
+	first, err := a.AnchorOnce(context.Background(), "admin@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := a.AnchorOnce(context.Background(), "admin@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.FromSeq != second.FromSeq || first.ToSeq != second.ToSeq {
+		t.Fatalf("ranges differ: %d-%d and %d-%d", first.FromSeq, first.ToSeq, second.FromSeq, second.ToSeq)
+	}
+	if first.ObjectKey == second.ObjectKey {
+		t.Fatalf("both anchors use object key %s", first.ObjectKey)
+	}
+	for _, an := range []Anchor{first, second} {
+		sum := sha256.Sum256(objects.objects[an.ObjectKey])
+		if hex.EncodeToString(sum[:]) != hex.EncodeToString(an.AnchorHash) {
+			t.Errorf("digest of anchor %d was overwritten", an.ID)
+		}
+	}
+}
+
 func TestAnchorOnceStartsAtTheOldestSealedRowAfterAPurge(t *testing.T) {
 	f := chainOf(9)
 	f.rows = f.rows[4:] // seq 1..4 purged before the first anchor
@@ -89,7 +121,7 @@ func TestRunOnceRecordsTheSystemAuditActionOnSuccessAndFailure(t *testing.T) {
 	objects := newFakeObjects()
 	aud := &memAudit{}
 	a := &Anchorer{Store: f, Objects: objects, Sink: "archive", Audit: aud}
-	if _, err := a.RunOnce(context.Background()); err != nil {
+	if _, _, err := a.RunOnce(context.Background(), 24*time.Hour); err != nil {
 		t.Fatal(err)
 	}
 	if len(aud.recs) != 1 || aud.recs[0].Action != ActionAnchor || aud.recs[0].ActorEmail != "system" || aud.recs[0].Result != audit.ResultSuccess || aud.recs[0].TargetID != "archive" {
@@ -104,7 +136,7 @@ func TestRunOnceRecordsTheSystemAuditActionOnSuccessAndFailure(t *testing.T) {
 		t.Error("LastAt not set after a successful anchor")
 	}
 	objects.putErr = errors.New("bucket gone")
-	if _, err := a.RunOnce(context.Background()); err == nil {
+	if _, _, err := a.RunOnce(context.Background(), 24*time.Hour); err == nil {
 		t.Fatal("expected the put error")
 	}
 	if len(aud.recs) != 2 || aud.recs[1].Result != audit.ResultFailure || aud.recs[1].Error == "" {

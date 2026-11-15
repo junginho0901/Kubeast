@@ -104,7 +104,8 @@ func openHelmStream(t *testing.T, h *Handler, user string, namespaces []string) 
 func TestHelmStreamsKeepToTheServersWatchLimitAndStartPlaces(t *testing.T) {
 	retry := helmLimitRetry
 	helmLimitRetry = func() time.Duration { return 20 * time.Millisecond }
-	defer func() { helmLimitRetry = retry }()
+	// A cleanup registered before the streams runs after their servers close, which waits for the handlers reading it.
+	t.Cleanup(func() { helmLimitRetry = retry })
 
 	api := &helmWatchAPI{}
 	h, _ := liveHandler(t, api.serve, &atomic.Int32{})
@@ -170,6 +171,40 @@ func TestHelmStreamsKeepToTheServersWatchLimitAndStartPlaces(t *testing.T) {
 	if !eventuallyTrue(5*time.Second, func() bool { open, _, _ := api.counts(); return open == 30 }) {
 		open, _, _ := api.counts()
 		t.Errorf("%d Secret watches open after the change of hands, want 30", open)
+	}
+}
+
+// A Helm stream keeps the retry wait it opened with: the stream runs on until its request ends, so it reads the wait
+// once, not on each ask.
+func TestAHelmStreamKeepsTheRetryItOpenedWith(t *testing.T) {
+	retry := helmLimitRetry
+	helmLimitRetry = func() time.Duration { return 20 * time.Millisecond }
+	t.Cleanup(func() { helmLimitRetry = retry })
+
+	api := &helmWatchAPI{}
+	h, _ := liveHandler(t, api.serve, &atomic.Int32{})
+	mux := ws.NewMultiplexer(nil)
+	mux.MaxSubscriptions, mux.MaxWatchStarts = 1, 4
+	h.SetWatchLimits(mux)
+	holder := openHelmStream(t, h, "u0", []string{"team-0"})
+	if !eventuallyTrue(5*time.Second, func() bool { open, _, _ := api.counts(); return open == 1 }) {
+		t.Fatal("the first stream's Secret watch did not open")
+	}
+	waiting := openHelmStream(t, h, "u1", []string{"team-1"})
+	if !eventuallyTrue(5*time.Second, func() bool { return waiting.told.Load() > 0 }) {
+		t.Fatal("the second stream was not told the server's limit")
+	}
+
+	// Read again on each ask, this would keep the waiting stream from asking for an hour.
+	helmLimitRetry = func() time.Duration { return time.Hour }
+	at := waiting.told.Load()
+	time.Sleep(300 * time.Millisecond)
+	if got := waiting.told.Load() - at; got < 5 {
+		t.Fatalf("asks after the wait changed = %d, want at least 5", got)
+	}
+	holder.stop()
+	if !eventuallyTrue(5*time.Second, func() bool { return waiting.following.Load() == 1 }) {
+		t.Fatal("the waiting stream did not say it follows after the first stream ended")
 	}
 }
 

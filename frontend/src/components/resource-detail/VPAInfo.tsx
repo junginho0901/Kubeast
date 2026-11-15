@@ -114,7 +114,7 @@ export default function VPAInfo({ name, namespace }: Props) {
           )}
           {/* the target's read failed: its status is not known, not left out */}
           {!targetStatus && targetError && (
-            <InfoRow label="Target Status" value={<DescribeFailure error={targetError} />} />
+            <InfoRow label="Target Status" value={<DescribeFailure error={targetError} about={targetKind && targetName ? { kind: targetKind, name: targetName, namespace } : undefined} />} />
           )}
         </div>
       </InfoSection>
