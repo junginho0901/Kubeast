@@ -15,6 +15,8 @@ CHANGES_VIEW = "changes"
 # window of the same length before it. Its window is 5 minutes to 24 hours on whole minutes (its trace checks need them).
 NARROW_TOOL = "anomaly_rank"
 NARROW_MIN = timedelta(minutes=5)
+LOGS_AFTER = timedelta(hours=1)  # the logs window's end after the start at the latest
+LOGS_MAX_RANGE = timedelta(hours=24)  # the log search's longest range by default (LOG_SEARCH_MAX_RANGE)
 
 
 @dataclass(frozen=True)
@@ -43,7 +45,7 @@ def _utc(t: datetime) -> datetime:
 
 
 def of(starts_at: Optional[datetime], now: datetime, cfg) -> Windows:
-    """Ends never pass now: nothing is stored there yet."""
+    """Ends never pass now: nothing is stored there yet. The logs window ends an hour after the start at the latest."""
     now = _utc(now)
     note = ""
     if starts_at is None:
@@ -53,11 +55,12 @@ def of(starts_at: Optional[datetime], now: datetime, cfg) -> Windows:
     else:
         anchor = _utc(starts_at)
     either_side = timedelta(minutes=cfg.metrics_window_minutes)
+    logs_start = anchor - timedelta(minutes=cfg.logs_window_minutes)
     return Windows(
         anchor=anchor,
         now=now,
         metrics=Window(anchor - either_side, min(anchor + either_side, now)),
-        logs=Window(anchor - timedelta(minutes=cfg.logs_window_minutes), now),
+        logs=Window(logs_start, min(now, anchor + LOGS_AFTER, logs_start + LOGS_MAX_RANGE)),
         changes=Window(anchor - timedelta(hours=cfg.changes_window_hours), now),
         note=note,
     )
@@ -68,7 +71,8 @@ def describe(w: Windows, cfg) -> str:
     return (
         f"Time windows, counted from {start}; now is {stamp(w.now)}:\n"
         f"- metrics: {stamp(w.metrics.start)} to {stamp(w.metrics.end)} ({cfg.metrics_window_minutes} minutes either side of the start)\n"
-        f"- logs: {stamp(w.logs.start)} to {stamp(w.logs.end)} (from {cfg.logs_window_minutes} minutes before the start)\n"
+        f"- logs: {stamp(w.logs.start)} to {stamp(w.logs.end)} (from {cfg.logs_window_minutes} minutes before the start, "
+        "to an hour after it at the latest)\n"
         f"- changes: {stamp(w.changes.start)} to {stamp(w.changes.end)} (from {cfg.changes_window_hours} hours before the start)"
     )
 

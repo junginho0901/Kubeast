@@ -24,6 +24,7 @@
   읽기/쓰기/관리 툴은 **사용자 권한(JWT)에 따라 허용됩니다**.
   없는 이름, 없는 종류, 없는 기능(metrics-server 등)은 kubectl 오류 대신 **`not_found`(비슷한 이름 목록 포함)·`unknown_kind`·`unavailable` 결과**로 돌아옵니다.
   그래서 AI는 네임스페이스를 바꿔 가며 되묻지 않고, 한 번 찾아본 뒤 어디를 봤는지 말하고 질문합니다. 비슷한 이름은 그 사람의 네임스페이스 범위 안에서만 찾습니다.
+  - `ai.refuseRepeatedReads`(기본 꺼짐)를 켜면 한 답 안에서 같은 도구·같은 인자의 읽기를 앞 호출이 답한 지 60초 안에 또 할 때 실행하지 않고, 그 결과가 몇 번째 걸음에 있는지와 새로 읽으려면 인자를 바꾸라고 모델에 알려 줍니다. 그 호출의 `ai.tool.call` 행에는 `status: repeated`와 `repeat_of`(그 걸음)가 남습니다. 실패했거나 거부된 호출은 다시 할 수 있습니다.
   - 읽기 도구 52종에는 다음이 들어 있습니다.
     - 이름 조각이나 레이블로 여러 종류와 네임스페이스를 한 번에 찾는 `k8s_find_resource`
     - API 스키마를 묻는 `k8s_explain`
@@ -147,7 +148,7 @@
 - **모델 설정** — `ModelConfig` CRD와 DB로 관리하고, Admin UI에서 추가하고 테스트합니다.
   등급(`tier`, CRD `spec.tier`)이 `economy`인 설정을 켜 두면 채팅 이력 요약과 플로팅 어시스턴트는 보통 더 싼 그 모델을 쓰고, 채팅은 기본 모델을 그대로 씁니다.
   어느 쪽인지는 스트림의 `model_info.tier`로 알 수 있습니다. economy 설정이 없거나 키가 없어 쓸 수 없으면 둘 다 기본 모델을 씁니다.
-  - 설정마다 **답 최대 길이**(`max_tokens`, 비우면 채팅 답 4,096 · 알림 조사 한 단계 2,048)와 **도구 결과 최대 길이**(`tool_result_chars`, 1,000~200,000자, 비우면 6,000)를 편집 창(모든 공급자)이나 `ModelConfig` 리소스의 `spec.maxTokens`·`spec.toolResultChars`로 정할 수 있습니다(리소스의 CA 인증서는 `spec.caCert`). 설정의 옵션에 저장하며, 도구 결과 최대 길이는 공급자에 보내지 않습니다. 더 긴 결과는 그 길이에서 잘려 모델이 앞부분을 읽습니다. `k8s_get_pod_logs`, `logfiles`, `nodes_log`는 최신 줄이 있는 끝부분을 남기고, tool-server의 상한(`TOOL_OUTPUT_MAX_BYTES`)을 넘을 때도 그렇습니다. 구독은 Claude Code가 답 길이를 정합니다.
+  - 설정마다 **답 최대 길이**(`max_tokens`, 비우면 채팅 답 4,096 · 알림 조사 한 단계 2,048, 조사의 `evidenceCheck`나 `ledger`를 켜면 4,096)와 **도구 결과 최대 길이**(`tool_result_chars`, 1,000~200,000자, 비우면 6,000)를 편집 창(모든 공급자)이나 `ModelConfig` 리소스의 `spec.maxTokens`·`spec.toolResultChars`로 정할 수 있습니다(리소스의 CA 인증서는 `spec.caCert`). 설정의 옵션에 저장하며, 도구 결과 최대 길이는 공급자에 보내지 않습니다. 더 긴 결과는 그 길이에서 잘려 모델이 앞부분을 읽습니다. `k8s_get_pod_logs`, `logfiles`, `nodes_log`는 최신 줄이 있는 끝부분을 남기고, tool-server의 상한(`TOOL_OUTPUT_MAX_BYTES`)을 넘을 때도 그렇습니다. 구독은 Claude Code가 답 길이를 정합니다.
   - 카드마다 서버가 지금 그 설정으로 돌리는 곳(채팅 · 플로팅 어시스턴트 · 이력 요약 · 알림 조사)을 ai-service가 모델을 고르는 규칙 그대로 계산해 보여 줍니다. "활성"은 채팅을 돌리는 설정입니다.
   - OpenAI·Azure OpenAI에는 답 길이를 `max_completion_tokens`로 보냅니다. 추론 모델(o 시리즈, GPT-5)은 `max_tokens`를 받지 않습니다. 모델이 받지 않는 매개변수를 400으로 지목하면(추론 모델은 `temperature`·`top_p` 등을 거부) 그것을 빼고 한 번 다시 보내고, 그 모델에는 이후로도 보내지 않습니다.
 
