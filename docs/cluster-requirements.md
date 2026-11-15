@@ -23,7 +23,7 @@ A "target cluster" is a cluster Kubeast manages, including the cluster it is ins
 | --- | --- | --- | --- |
 | All | Kubeast permissions (RBAC) — §1 | `auth.impersonation.enabled` (on) | User requests get 403 from the cluster |
 | Alerts → AI investigation | Investigator identity RBAC — §1, Alertmanager or Grafana alerting that sends webhooks to Kubeast — §13 | `features.alertInvestigation.enabled` (off) | Alerts do not arrive, or the investigation's read tools get 403 from the cluster |
-| Node and pod usage, Monitoring, optimization (fallback) | metrics-server — §2 | — | Usage cells are empty and optimization shows "none" |
+| Node and pod usage, Monitoring, optimization (fallback) | metrics-server — §2 | — | The Dashboard's top resources, Monitoring and the Nodes page's top card tell every user "Metrics server not available for this cluster" (from the cluster's API discovery, §2); the node drawer's usage is empty and optimization shows "none" |
 | Drawer and dashboard graphs, optimization, storage analysis | Prometheus + metric collectors — §3 | `features.prometheus.enabled` (**off**) | Graph areas are hidden and optimization uses metrics-server point-in-time values |
 | Cost, optimization cost column | OpenCost — §4 | `features.cost.enabled` (on) | "OpenCost is not installed on this cluster" notice, no cost column |
 | Policy reports | The PolicyReport CRD and a tool that creates reports — §5 | `features.policyReports.enabled` (on) | "Not installed" notice |
@@ -77,7 +77,8 @@ A listed group holds its ClusterRoles whether or not a role of that name exists,
 Kubeast cannot compare those ClusterRoles with what a person holds, so a new name or a rename that makes a listed group takes all permissions (`*`, the global Admin). Anyone else holding `admin.roles.create` or `admin.roles.update` gets 403 and an audit row.
 So list the name and have a global admin create the role, or create the role first and list it after. From then on it is a role like any other: `admin.roles.update` edits it, and a role already stored under a listed name keeps working.
 Granting it, directly or by approving an access request, takes a global admin or an Admin of that cluster not limited to namespaces: they act there as `kubeast:admin`, which is `cluster-admin`, so they already hold whatever the binding gives. Anyone else holding `admin.users.update` gets 403 and an audit row, and the Cluster access choice and the Approve button say so. Read, Write and Admin listed for their grants limited to namespaces are not held back this way.
-The chart hands the list to auth-service as `IMPERSONATION_CUSTOM_ROLES`. Docker Compose has no chart: put the names in that variable in `.env` if you apply such bindings to your clusters.
+The chart hands the names to auth-service as `IMPERSONATION_CUSTOM_ROLES`, a comma in a name written as `-` (the same group). Docker Compose has no chart: put the names in that variable in `.env` if you apply such bindings to your clusters.
+A role's group is `kubeast:role:` and the slug of its name, which the role window shows; a character outside ASCII is written as `~` and its code point (`운영팀` → `kubeast:role:~c6b4~c601~d300`, [Features](features.md) "Role names"). Bind that group as written.
 
 **Deleting a role does not remove its bindings.** They stay on every cluster they were applied to, and the next role of that name acts with them.
 While the name is on the list, the rule above still holds.
@@ -114,6 +115,8 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 The node list, the Monitoring screen and the node drawer read their usage from `metrics.k8s.io`.
 So does the optimization table when there is no Prometheus (point-in-time values).
 A node's CPU, memory and percents are what `kubectl top nodes` prints: the share of the node's allocatable, not its capacity.
+Kubeast asks the metrics list first, so a cluster that answers it is asked nothing more. Only when a list answers 404 or 403 does it look in the cluster's API discovery for `metrics.k8s.io`: the discovery it read within the last minute, or else one `GET /apis/metrics.k8s.io` as `kubeast:cache`, which the default `system:discovery` ClusterRole allows. It keeps that answer, or a failure to read it, a minute per cluster.
+Where discovery does not list `metrics.k8s.io`, every user is told metrics-server is not available and no metrics list is asked in that minute; while discovery cannot be read, each user gets the cluster's own answer. A metrics-server installed since shows within two minutes. Check: `kubectl get --raw /apis/metrics.k8s.io` answers 404 on a cluster without it.
 
 - Install: [metrics-server chart](https://artifacthub.io/packages/helm/metrics-server/metrics-server) `3.14.0` (app 0.9.0), with `helm install metrics-server metrics-server/metrics-server --version 3.14.0 -n kube-system`.
   - On EKS the metrics-server add-on also works.
@@ -493,6 +496,7 @@ service:
 | What | Requirement |
 | --- | --- |
 | User namespaces | `podSecurity.hostUsers: false` (default) needs Kubernetes 1.33 or later and a node kernel that supports it (6.3 or later). Otherwise `true` |
+| Pod shutdown | Kubernetes 1.30 or later: the chart's pods behind a Service wait `podShutdown.preStopSeconds` (5 s) before SIGTERM with the native `preStop` `sleep` action (beta and on by default in 1.30, GA in 1.34), so a rolling update sends no new connection to a pod that has exited; `0` leaves the wait out |
 | Storage | With the built-in PostgreSQL, a PVC — the default StorageClass or `postgresql.storageClassName` |
 | Exposure | NodePort (default), LoadBalancer, or an Ingress controller (`ingress.enabled`) |
 | A proxy or load balancer in front | An idle timeout above 30 s (AWS ALB's default is 60 s). While quiet, a live list, terminal, node shell, followed log and AI answer send something every 25 s and the Helm releases stream every 30 s — a WebSocket ping, an SSE comment line — so they stay open; the gateway gives them 600 to 3 600 s itself |

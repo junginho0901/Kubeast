@@ -2082,9 +2082,12 @@ export interface ResourceGraphResponse {
 }
 
 export interface TopResources {
-  // set by k8s-service when the metrics API call failed (e.g. no metrics-server)
+  // set by k8s-service when the metrics API call failed (e.g. no metrics-server), the cluster's reason
   pod_metrics_error?: string
   node_metrics_error?: string
+  // the cluster refused that read (403); the dashboard keeps it and asks it no more (pages/dashboard/topResourcesRead)
+  pod_metrics_refused?: boolean
+  node_metrics_refused?: boolean
   top_pods: Array<{
     namespace: string
     name: string
@@ -2119,6 +2122,9 @@ export interface RoleWithDetails {
   updated_at: string
   // The chart binds this custom role's group: only a global admin or an Admin of the cluster gives it.
   chart_bound?: boolean
+  // Another role this custom role acts as on a cluster: its name, stored before such names were refused, differs only
+  // in letter case, spaces or punctuation (a built-in named first).
+  same_group_as?: string
 }
 
 export interface Member {
@@ -2409,3 +2415,15 @@ export interface SessionDetail {
   messages_before?: number
 }
 
+// GET /cluster/nodes/{name}/drain/status. Any server answers it from the database: `interrupted` is a drain whose
+// server stopped before it ended, `cordoned_nodes` the drain's nodes the cluster still has cordoned once it failed or
+// was interrupted ([] when none is, null when they could not be read).
+export interface DrainStatusAnswer {
+  id: string
+  node: string
+  status: string
+  message?: string | null
+  pods_total?: number | null
+  pods_done?: number | null
+  cordoned_nodes?: string[] | null
+}

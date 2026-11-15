@@ -25,4 +25,12 @@ describe('the Optimization stream', () => {
     })
     expect(seen).toEqual(['observed:| table |', 'answer:Lower the requests.', 'done'])
   })
+
+  it('a stream that could not start gives the reason and the key the server sent', async () => {
+    const body = '{"detail":"the answer stream could not start","error_key":"streamStartFailed"}'
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { status: 500 })))
+    const seen: Array<[string, string | null | undefined]> = []
+    await expect(aiApi.suggestOptimizationStream('apps', { onError: (e, key) => seen.push([e, key]) })).rejects.toThrow('the answer stream could not start')
+    expect(seen).toEqual([['the answer stream could not start', 'streamStartFailed']])
+  })
 })
