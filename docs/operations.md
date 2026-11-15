@@ -374,7 +374,7 @@ resources:
 - **Refused with it**: `sessionRecording.storage: file` (one volume, two pods) and `streams.replicas` above 1.
 - **NetworkPolicy**: `k8s-service-stream` takes connections from the gateway only, and reaches the database, Redis, auth-service, the clusters' API servers and `sessionRecording.egress`.
 - **In front of the gateway**: a load balancer's deregistration delay should end before the gateway pod does (AWS ALB: 300 s by default), and an Envoy Gateway route to the console should not cut a stream at its request timeout (15 s by default).
-- **Metrics**: `kubeast_terminals_open` and `kubeast_followed_logs_open` on each server.
+- **Metrics**: `kubeast_terminals_open` and `kubeast_followed_logs_open` on each stream server (k8s-service-stream; k8s-service with `streams.enabled` off).
 
 ## Adding trusted CAs (private CAs, TLS-intercepting proxies)
 

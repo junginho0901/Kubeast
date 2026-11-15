@@ -363,7 +363,7 @@ resources:
 - **함께 쓸 수 없는 값**: `sessionRecording.storage: file`(볼륨 하나를 파드 둘이 붙일 수 없음)과 1보다 큰 `streams.replicas`.
 - **NetworkPolicy**: `k8s-service-stream`은 게이트웨이에서만 연결을 받고, 데이터베이스·Redis·auth-service·클러스터 API 서버·`sessionRecording.egress`로만 나갑니다.
 - **게이트웨이 앞단**: 로드밸런서의 등록 해제 지연은 게이트웨이 파드가 끝나기 전에 끝나야 하고(AWS ALB 기본 300초), 콘솔로 가는 Envoy Gateway 라우트는 요청 타임아웃(기본 15초)에 스트림을 끊지 않게 두세요.
-- **지표**: 서버마다 `kubeast_terminals_open`, `kubeast_followed_logs_open`.
+- **지표**: 스트림 서버마다(k8s-service-stream, `streams.enabled`가 꺼져 있으면 k8s-service) `kubeast_terminals_open`, `kubeast_followed_logs_open`.
 
 ## 신뢰할 CA 추가 (사설 CA·TLS 가로채는 프록시)
 
