@@ -196,6 +196,80 @@ def test_staged_and_case_checks():
     assert rca.check_case(dict(old, answer_format="other"), True)
 
 
+def report(likely: str, checked: str = "- k8s_get_resources: pods of shop-x") -> str:
+    """An investigation report under the investigator's four headings."""
+    return f"## Summary\nSomething fails.\n\n## What I checked\n{checked}\n\n## Likely cause\n{likely}\n\n## Next steps\n- Look again.\n"
+
+
+def test_text_names_the_cause_and_its_kind():
+    s = rca.score_text(report("The new ConfigMap `settings-b` changed a setting the pricing pods read."), TRUTH)
+    assert s["section"] == "likely_cause" and s["pass"] and s["score"] == 1.0
+    assert s["causes"][0]["named_as"] == ["settings-b"]
+
+
+def test_text_accepts_another_name_and_kind():
+    s = rca.score_text(report("deploy/shop-x/pricing was rolled out to a new revision."), TRUTH)
+    assert s["pass"] and s["causes"][0]["kind_found"]
+
+
+def test_text_needs_the_kind_too():
+    s = rca.score_text(report("settings-b is involved somehow."), TRUTH)
+    assert not s["pass"] and s["causes"][0]["resource_found"] and not s["causes"][0]["kind_found"]
+
+
+def test_text_reads_only_the_likely_cause_section():
+    s = rca.score_text(report("checkout's calls fail; the reason is unclear.", checked="- settings-b: a ConfigMap setting"), TRUTH)
+    assert not s["pass"] and not s["causes"][0]["resource_found"]
+
+
+def test_text_without_headings_reads_the_whole_report():
+    s = rca.score_text("The ConfigMap settings-b holds a bad setting.", TRUTH)
+    assert s["section"] == "whole" and s["pass"]
+
+
+def test_text_lists_decoys_without_failing():
+    s = rca.score_text(report("The ConfigMap settings-b changed a setting; checkout and the nodes are fine."), TRUTH)
+    assert s["pass"] and s["decoys_named"] == ["checkout"]  # "nodes" names no Node: a wildcard name needs the kind
+    s = rca.score_text(report("Node/kind-worker is out of memory."), TRUTH)
+    assert not s["pass"] and s["decoys_named"] == ["Node/kind-worker"]
+
+
+def test_text_control_passes_only_when_it_says_no_fault():
+    assert rca.score_text(report("No fault found: orders work as expected; thumbnailer restarted once."), CONTROL)["pass"]
+    assert rca.score_text(report("문제가 없습니다. thumbnailer는 한 번 재시작했을 뿐입니다."), CONTROL)["pass"]
+    s = rca.score_text(report("thumbnailer crashed and broke the orders."), CONTROL)
+    assert not s["pass"] and s["decoys_named"] == ["thumbnailer"]
+
+
+def test_text_ignores_an_rca_block():
+    text = report("Unclear.") + "\n```rca\n" + json.dumps({"causes": [cause("ConfigMap/shop-x/settings-b")]}) + "\n```\n"
+    assert not rca.score_text(text, TRUTH)["pass"]
+
+
+def test_stored_result_scores_as_the_block_it_came_from():
+    block = {"no_fault": False, "causes": [cause("ConfigMap/shop-x/settings-b", evidence=[1, 3])], "path": GOOD_PATH, "ruled_out": []}
+    result = {"version": 1, "status": "ok", "no_fault": False, "path": GOOD_PATH, "ruled_out": [], "hypotheses": [],
+              "causes": [{"resource": "ConfigMap/shop-x/settings-b", "kind": "config_change", "started_at": "2026-11-13T10:01:00Z",
+                          "evidence": [{"call": 1, "tool": "timeline"}, {"call": 3, "tool": "loki_query", "failed": True}]}]}
+    assert rca.score_block(*rca.block_of_result(result), TRUTH, CALLS) == rca.score_rca(answer(block), TRUTH, CALLS)
+    assert rca.block_of_result(None) == (None, "missing")
+    assert rca.block_of_result({"status": "invalid", "causes": []}) == (None, "invalid")
+    assert rca.score_block(*rca.block_of_result({"status": "missing"}), TRUTH, CALLS)["block"] == "missing"
+
+
+def test_alert_checks_and_send_time():
+    staged = {"id": "01", "cluster": "self", "namespace": "eval-01", "question": "q", "inject_cmds": ["true"], "ask_after_seconds": [300]}
+    good = dict(staged, alert={"labels": {"alertname": "ServiceSlow", "service": "web"}, "annotations": {"summary": "slow"}})
+    assert rca.check_case(good, True) == [] and rca.is_staged({"alert": {}})
+    assert rca.alert_name(good) == "ServiceSlow" and rca.alert_after(good) == 300
+    assert rca.alert_after(dict(good, alert=dict(good["alert"], after_seconds=60))) == 60
+    assert rca.alert_after({"alert": {"rule": "R"}}) == 0 and rca.alert_name({"alert": {"rule": "R"}}) == "R"
+    assert any("truth.json" in p for p in rca.check_case(good, False))
+    for alert in ({"annotations": {"summary": "x"}}, {"labels": {"alertname": "A"}, "rule": "B"}, {"labels": {"alertname": 3}},
+                  {"labels": {"alertname": "A"}, "after_seconds": -1}, {"labels": {"alertname": "A"}, "extra": 1}, "ServiceSlow"):
+        assert rca.check_case(dict(staged, alert=alert), True), alert
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     failed = 0

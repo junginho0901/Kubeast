@@ -29,5 +29,9 @@
  ],
  "cooldown_seconds": 30,
  "hidden": true,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "DataStale", "service": "ledger"},
+  "annotations": {"summary": "Settlement data has not been updated for several minutes", "description": "ledger reports that its settlement data is older than expected."}
+ }
 }

@@ -189,6 +189,59 @@ def test_what_a_case_applies_holds_no_answer_word():
             assert not hit, f"{d.name}/{manifest.name}: {hit.group(0)!r}"
 
 
+# A phrase of each kind as an investigation report writes it (README "The alert path").
+KIND_PHRASES = {"crash": "keeps crashing", "oom": "is OOMKilled", "image": "has an ImagePullBackOff", "config_change": "has a changed setting",
+                "rollout": "was rolled out", "network_policy": "is blocked by a NetworkPolicy", "dns": "has wrong DNS settings",
+                "resource_limit": "is held back by its CPU limit", "quota": "is full: the ResourceQuota allows no more",
+                "node": "sits on a NotReady node", "dependency_down": "had no endpoints", "dependency_slow": "is slow", "storage": "has a full volume"}
+
+
+def likely(text: str) -> str:
+    return f"## Summary\nAn alert fired.\n\n## What I checked\n- the pods\n\n## Likely cause\n{text}\n\n## Next steps\n- none\n"
+
+
+def test_each_alert_is_what_monitoring_would_send_and_holds_no_answer_word():
+    alerting = {d.name for d, c in all_cases() if "alert" in c}
+    assert alerting, "no case has an alert"
+    for d, c in all_cases():
+        if "alert" not in c:
+            continue
+        alert = c["alert"]
+        labels = {"alertname": rca.alert_name(c), **alert.get("labels", {})}
+        assert METRIC_NAME.match(labels["alertname"]), d.name
+        assert all(LABEL_NAME.match(k) for k in labels), d.name
+        assert labels.get("namespace", c["namespace"]) == c["namespace"], d.name
+        assert labels.get("severity", "warning") in ("critical", "warning"), d.name  # the investigator's default severities
+        assert alert.get("annotations", {}).get("summary"), d.name
+        words = " ".join([*labels.values(), *alert.get("annotations", {}).values()])
+        hit = ANSWER_WORDS.search(words)
+        assert not hit, f"{d.name}: the alert says {hit.group(0)!r}"
+        truth = truth_of(d)
+        for tc in truth["causes"]:  # where the symptom shows, as the question says it; a cause the question names is that place
+            cause_name = tc["resource"].rsplit("/", 1)[-1].lower()
+            assert cause_name in c["question"].lower() or cause_name not in words.lower(), f"{d.name}: the alert names the cause"
+    shown = subprocess.run([sys.executable, "-I", str(HERE / "ai-eval.py"), "--cases", str(HARD), "--list", "--hidden", "--alerts"],
+                           capture_output=True, text=True, timeout=60)
+    assert shown.returncode == 0, shown.stdout + shown.stderr
+    listed = {line.split("|")[1].strip() for line in shown.stdout.splitlines()[2:] if line.startswith("|")}
+    assert listed == alerting
+
+
+def test_each_truth_scores_a_report_in_words():
+    for d, _ in all_cases():
+        filled = rca.fill_placeholders(truth_of(d), MARKS)
+        if filled["control"]:
+            assert rca.score_text(likely("No fault found; every call works as expected."), filled)["pass"], d.name
+            for x in filled["decoys"]:
+                s = rca.score_text(likely(f"{as_answered(x['resource'])} keeps crashing and is the cause."), filled)
+                assert not s["pass"], (d.name, x["resource"])
+            continue
+        right = " ".join(f"{as_answered(tc['resource'])} {KIND_PHRASES[tc['kind']]}." for tc in filled["causes"])
+        s = rca.score_text(likely(right), filled)
+        assert s["pass"] and s["section"] == "likely_cause", (d.name, s)
+        assert not rca.score_text(likely("No fault found; every call works as expected."), filled)["pass"], d.name
+
+
 # The rules file: rulefmt's fields (Prometheus refuses unknown ones), names, durations, and expressions whose
 # brackets close (promtool is not on the dev machines; the first `kind-otel-demo.sh up` checks the rest).
 GROUP_FIELDS = {"name", "interval", "limit", "query_offset", "rules", "labels"}

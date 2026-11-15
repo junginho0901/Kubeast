@@ -33,5 +33,9 @@
   "kubectl -n $NS rollout undo deploy/storefront"
  ],
  "cooldown_seconds": 30,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceRequestsFailing", "service": "storefront"},
+  "annotations": {"summary": "storefront cannot look up stock", "description": "storefront's stock lookups have been failing for the last few minutes."}
+ }
 }

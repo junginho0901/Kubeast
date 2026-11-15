@@ -1,6 +1,6 @@
-"""Hard cases for scripts/ai-eval.py: the answer block (rca_block_v0), its scoring, the per-run truth copy, the order
-of a case's steps and the case checks. Pure functions only — nothing here reaches a cluster or the API, so
-scripts/test_ai_eval_rca.py checks it with made-up answers.
+"""Hard cases for scripts/ai-eval.py: the answer block (rca_block_v0), its scoring, the free-text scoring of an alert
+investigation's report, the per-run truth copy, the order of a case's steps and the case checks. Pure functions only —
+nothing here reaches a cluster or the API, so scripts/test_ai_eval_rca.py checks it with made-up answers.
 """
 from __future__ import annotations
 
@@ -29,7 +29,37 @@ DEFAULT_INJECT_WAIT_SECONDS = 240
 # Fields that make a case run in stages (setup → baseline → inject → asks → undo); a case without any of them runs
 # exactly as the twelve easy cases always have.
 STAGED_FIELDS = ("question_vague", "answer_format", "baseline_seconds", "fault_start_at", "inject_cmds", "inject_wait",
-                 "fault_duration_seconds", "undo_cmds", "ask_after_seconds", "cooldown_seconds")
+                 "fault_duration_seconds", "undo_cmds", "ask_after_seconds", "cooldown_seconds", "alert")
+
+# A case's alert for the alert path (ai-eval.py --alerts, README "The alert path").
+ALERT_FIELDS = ("labels", "annotations", "rule", "match", "after_seconds", "fire_wait_seconds", "investigation_wait_seconds")
+DEFAULT_FIRE_WAIT_SECONDS = 600
+DEFAULT_INVESTIGATION_WAIT_SECONDS = 900
+
+# The free-text check of a report (score_text): words that say a cause of each kind, and words that say there is no
+# fault. Broad on purpose — the check only has to read the same way with and without the rca block.
+KIND_WORDS = {
+    "crash": r"crash|exit(ed)? (code|with)|restart|panic|재시작|비정상 종료",
+    "oom": r"\boom|out of memory|memory limit|메모리 (부족|한도|제한)",
+    "image": r"imagepull|errimage|image pull|(image|tag) (is )?(missing|not found|wrong)|이미지",
+    "config_change": r"config|setting|environment variable|\benv\b|설정|환경 ?변수",
+    "rollout": r"rollout|rolled out|roll-out|new (revision|replicaset|release)|롤아웃|배포",
+    "network_policy": r"network ?polic|netpol|ingress rule|egress rule|네트워크 ?정책",
+    "dns": r"\bdns|ndots|resolv|name resolution|search domain|이름 (풀이|해석)|검색 ?도메인",
+    "resource_limit": r"(cpu|memory) limit|throttl|\bcfs\b|limits?\b|스로틀|리소스 (한도|제한)",
+    "quota": r"quota|쿼터|할당량",
+    "node": r"\bnode\b|notready|not ready|cordon|taint|노드",
+    "dependency_down": r"no (ready )?endpoints|scaled (down|to (0|zero))|replicas:? 0|connection refused|unavailable|\bdown\b|엔드포인트|중단",
+    "dependency_slow": r"slow|latency|timeout|timed out|느려|지연",
+    "storage": r"\bpvc|persistentvolume|volume|disk|storage|볼륨|디스크|스토리지",
+}
+NO_FAULT_WORDS = re.compile(
+    r"no (current |ongoing |active |real )?(fault|problem|issue|outage|failure|incident)s?\b|nothing (is |was )?(wrong|broken|failing)"
+    r"|not (a|an) (fault|problem|issue|incident)|no (action|fix) (is )?(needed|required)"
+    r"|(working|running|behaving) (normally|as expected)|expected behaviou?r|false (positive|alarm)"
+    r"|정상(적|입니다|이다|으로|임)|문제(가|는)? 없|이상(이|은)? 없|장애(가|는)? 없", re.I)
+_HEADING = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+(.+?)[ \t#]*$", re.M)  # an ATX heading: a space after the #s
+_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
 
 _KIND_ALIASES = {
     "deploy": "deployment", "deployments": "deployment", "rs": "replicaset", "replicasets": "replicaset",
@@ -106,7 +136,50 @@ def check_case(case: dict, has_truth: bool) -> list[str]:
     for key in ("setup_cmds", "inject_cmds", "undo_cmds", "cleanup_cmds"):
         if not isinstance(case.get(key, []), list):
             problems.append(f"{key} is not a list")
+    return problems + check_alert(case, has_truth)
+
+
+def check_alert(case: dict, has_truth: bool) -> list[str]:
+    """What is wrong with a case's alert (empty when it has none)."""
+    alert = case.get("alert")
+    if alert is None:
+        return []
+    if not isinstance(alert, dict):
+        return ["alert is not an object"]
+    problems = [f"alert has unknown field {k!r}" for k in alert if k not in ALERT_FIELDS]
+    for key in ("labels", "annotations", "match"):
+        value = alert.get(key, {})
+        if not isinstance(value, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in value.items()):
+            problems.append(f"alert {key} is not an object of strings")
+    labels = alert.get("labels") if isinstance(alert.get("labels"), dict) else {}
+    rule = alert.get("rule")
+    if rule is not None and (not isinstance(rule, str) or not rule):
+        problems.append("alert rule is not a name")
+    if not labels.get("alertname") and not rule:
+        problems.append("alert has neither labels.alertname nor rule")
+    if rule and labels.get("alertname") and labels["alertname"] != rule:
+        problems.append("alert labels.alertname is not its rule's name")
+    for key in ("after_seconds", "fire_wait_seconds", "investigation_wait_seconds"):
+        v = alert.get(key)
+        if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or v < 0):
+            problems.append(f"alert {key} holds {v!r}")
+    if not has_truth:
+        problems.append("alert without truth.json")
     return problems
+
+
+def alert_name(case: dict) -> str:
+    alert = case.get("alert") or {}
+    return (alert.get("labels") or {}).get("alertname") or alert.get("rule") or ""
+
+
+def alert_after(case: dict) -> float:
+    """Seconds after the fault start a synthetic alert is posted: alert.after_seconds, else the case's first ask time."""
+    alert = case.get("alert") or {}
+    if alert.get("after_seconds") is not None:
+        return alert["after_seconds"]
+    first = ask_times(case)[0]
+    return 0 if first is None else first
 
 
 def fill_placeholders(obj, marks: dict):
@@ -240,7 +313,91 @@ def score_rca(answer: str, truth: dict, calls: list) -> dict:
     """Score an answer's rca block against a filled truth (README "The answer block"): every truth cause named with an
     accepted kind, no decoy named as a cause (a control: no_fault and no cause other than kind none), less for each
     extra cause. started_at, the path and the evidence are reported next to it, not folded into pass."""
-    block, status = extract_block(answer)
+    return score_block(*extract_block(answer), truth, calls)
+
+
+def block_of_result(result) -> tuple[dict | None, str]:
+    """An investigation's stored `result` (the rca block the server took off the report while
+    features.alertInvestigation.evidenceCheck or ledger is on) as (block, status) for score_block: each evidence
+    {call, tool} back to its call number. (None, "missing") when the row has no result."""
+    if not isinstance(result, dict):
+        return None, "missing"
+    status = result.get("status") or "ok"
+    if status != "ok":
+        return None, status
+    causes = []
+    for c in result.get("causes") or []:
+        if isinstance(c, dict):
+            calls = [e.get("call") for e in c.get("evidence") or [] if isinstance(e, dict)]
+            causes.append({**c, "evidence": [n for n in calls if isinstance(n, int)]})
+    return {"no_fault": result.get("no_fault"), "causes": causes, "path": result.get("path") or [],
+            "ruled_out": result.get("ruled_out") or []}, "ok"
+
+
+def likely_cause(report: str) -> tuple[str, str]:
+    """The report's "Likely cause" section (the investigator's four headings, investigation/prompt.py) and
+    "likely_cause"; the whole report and "whole" when it has no such heading. An rca block is left out."""
+    text = _BLOCK.sub("", report or "")
+    heads = list(_HEADING.finditer(text))
+    for i, m in enumerate(heads):
+        if m.group(1).strip().rstrip(":").lower() == "likely cause":
+            end = heads[i + 1].start() if i + 1 < len(heads) else len(text)
+            return text[m.end():end].strip(), "likely_cause"
+    return text.strip(), "whole"
+
+
+def _text_names(text: str) -> set[str]:
+    """What in a text can name an object: each run of name characters, and its last part after a slash."""
+    out = set()
+    for t in _TOKEN.findall(text):
+        t = t.strip("./-")
+        if t:
+            out.add(t)
+            out.add(t.rsplit("/", 1)[-1])
+    return out
+
+
+def _named_in_text(pattern: str, name: str) -> bool:
+    # A name that is only a wildcard ("Node/*") names something only when the text gives the kind too.
+    if not split_resource(pattern)[2].strip("*") and "/" not in name:
+        return False
+    return resource_matches(pattern, name)
+
+
+def score_text(report: str, truth: dict) -> dict:
+    """Score a report's words against a filled truth when it has no rca block (the alert path with v0.7.9's switches
+    off): in its "Likely cause" section (else the whole report) each truth cause named — its resource or an
+    accept_resources form — with a word of its kind or an accepted kind (KIND_WORDS); a control passes when that section
+    says there is no fault (NO_FAULT_WORDS). Decoys named there are listed, not held against it: a report names what it
+    ruled out in the same words. Weaker than the block's check; it is there so a run with the block and one without
+    compare on one measure."""
+    text, section = likely_cause(report)
+    names = _text_names(text)
+    no_fault = bool(NO_FAULT_WORDS.search(text))
+    causes = []
+    truth_causes = truth.get("causes") or []
+    truth_names = {n for n in names if any(_is_truth_cause(tc, n) for tc in truth_causes)}
+    # the kind is read with the cause's own names taken out, so "settings-b" alone does not say "setting"
+    rest = text
+    for n in sorted(truth_names, key=len, reverse=True):
+        rest = re.sub(r"(?<![\w./-])" + re.escape(n) + r"(?![\w-])", " ", rest)
+    for tc in truth_causes:
+        named = sorted(n for n in names if _is_truth_cause(tc, n))
+        kinds = [tc["kind"], *(tc.get("accept_kinds") or [])]
+        kind_words = [k for k in kinds if k in KIND_WORDS and re.search(KIND_WORDS[k], rest, re.I)]
+        causes.append({"resource": tc["resource"], "kind": tc["kind"], "resource_found": bool(named),
+                       "kind_found": bool(kind_words), "found": bool(named) and bool(kind_words), "named_as": named[:3]})
+    decoys = sorted({n for n in names - truth_names for d in truth.get("decoys") or [] if _named_in_text(d["resource"], n)})
+    if truth.get("control"):
+        ok = no_fault
+    else:
+        ok = bool(causes) and all(c["found"] for c in causes)
+    return {"section": section, "pass": ok, "score": 1.0 if ok else 0.0, "no_fault": no_fault, "causes": causes,
+            "decoys_named": decoys}
+
+
+def score_block(block: dict | None, status: str, truth: dict, calls: list) -> dict:
+    """score_rca for a block already read (from an answer, or an investigation's stored result)."""
     out = {"block": status, "pass": False, "score": 0.0, "no_fault": None, "causes": [], "extras": [], "decoys_taken": [],
            "also_ok_named": [], "time_ok": None, "path_ok": None, "path": [], "ungrounded": 0, "bad_evidence": [],
            "malformed": 0}

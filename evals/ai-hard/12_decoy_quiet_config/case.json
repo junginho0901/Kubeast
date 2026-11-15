@@ -30,5 +30,9 @@
   "kubectl -n $NS apply -f $CASE_DIR/setup.yaml"
  ],
  "cooldown_seconds": 30,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceRequestsFailing", "service": "storefront"},
+  "annotations": {"summary": "Adding items to the cart fails", "description": "storefront's add-to-cart requests have been failing for the last few minutes."}
+ }
 }

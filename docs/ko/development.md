@@ -113,6 +113,10 @@ npx playwright test cluster-hygiene.spec.ts   # 스펙 하나
   - 지표를 보낼 때는 `up`이 데모의 알림 규칙(`deploy/kind/otel-demo-rules.json`: 오류율, 95번째 백분위 지연, 재시작)도 그 Prometheus에 넣고 `down`이 뺍니다. 이 알림에는 `kubeast_eval="otel-demo"`가 붙고, 그 Prometheus가 Alertmanager로 보내는 알림은 이것뿐이며, Alertmanager는 이를 `default`의 웹훅으로 보냅니다. 예전 개발 설치에서는 `deploy/kind/second-cluster.yaml`을 먼저 다시 적용하세요.
 - TLS를 검사하는 프록시 뒤라면 `CILIUM_NODE_HOOK`처럼 `CHAOS_NODE_HOOK` 또는 `OTELDEMO_NODE_HOOK`을 설정하세요. 클러스터 이름을 받는 명령이며, 이미지를 받기 전에 실행됩니다.
 - 문제 칸, 실행 순서, `evals/ai-hard/`의 문제 10개는 [evals/ai/README.md](../../evals/ai/README.md)의 "Hard cases"에 있습니다.
+- `scripts/ai-eval.py --alerts`는 `alert`가 있는 문제를 채팅 대신 알림 조사로 돌리고 보고서를 채점합니다([evals/ai/README.md](../../evals/ai/README.md)의 "The alert path").
+  - 문제의 시험 규칙이 두 번째 클러스터의 Prometheus에 들어 있으면 알림은 그 Alertmanager를 거쳐 옵니다. `--alert-source auto` 또는 `synthetic`이면 러너가 Alertmanager 꼴로 웹훅에 직접 보냅니다. `evals/ai-hard/`의 문제 10개에는 아직 시험 규칙이 없어 직접 보냅니다.
+  - kind에서 아직 돌려 본 적이 없습니다.
+- 러너는 토큰이 끝나기 전과 401을 받았을 때 다시 로그인하고, 문제 하나가 끝날 때마다 결과 파일을 다시 씁니다. 그래서 개발 토큰 수명(120분)보다 긴 한 회차를 한 번의 실행으로 돌릴 수 있습니다.
 
 ### 소개 사이트 (`site/`)
 

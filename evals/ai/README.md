@@ -16,6 +16,11 @@ The model is the dev install's default: `scripts/kind-model-subscription.sh up <
 `deploy/kind/modelconfig-ollama.yaml` for the local model. Run once per model; each run writes
 `<time>-<model>.json` (every tool call with its arguments, the answer, usage) and `<time>-<model>.md` (the table).
 
+The runner signs in again before its token's lifetime is over (the token's `exp` less its `iat`, counted on this
+machine's clock from the sign-in, so no server time is compared with this machine's) and once more on a 401, sending
+that call again. It writes both files again after each case. So one call can run a round longer than the token lasts
+(120 minutes on the dev install), and a run that stops keeps the cases it finished.
+
 ## A case
 
 `<NN>_<name>/case.json`:
@@ -68,6 +73,7 @@ as above.
 | `cooldown_seconds` | a pause after the teardown |
 | `hidden` | `true`: run only with `--hidden`, and the table shows only the total |
 | `group` | `hidden_cause`, `trap`, `control` or `past`, for people reading the results; the runner does not read it |
+| `alert` | the alert that starts an investigation in `--alerts` runs ("The alert path" below); the chat path does not read it |
 
 Order: namespace, `setup.yaml` (`SETUP_TIME`), `setup_cmds`, `wait`, `settle_seconds` + `baseline_seconds`,
 `inject_cmds`, `inject_wait`, the asks (a `fault_duration_seconds` undo at its time), `undo_cmds`, the namespace
@@ -123,6 +129,85 @@ alerts that Prometheus sends to Alertmanager (`deploy/kind/second-cluster.yaml`)
 the webhook for `default`, so a firing rule starts an investigation (severity `warning`). The e2e specs pick alerts by
 `kubeast_e2e`, `e2e_run` or names of their own and do not see these. The thresholds (5 %, 1000 ms) are not measured
 on kind yet.
+
+## The alert path
+
+`--alerts` measures the alert investigation — the webhook, the worker, the report — on the same hard cases instead of
+the chat. Only the cases with an `alert` run. Each runs in stages as above, with the alert in place of the questions:
+before the fault the runner notes the cluster's investigations, then sends or waits for the alert, waits for its
+investigation to end, reads its report and scores it.
+
+```bash
+python3 scripts/ai-eval.py --cases evals/ai-hard --alerts --list --hidden    # the cases with an alert; no cluster
+python3 scripts/ai-eval.py --cases evals/ai-hard --alerts --alert-source auto --out /tmp/ai-eval-alerts --repeat 3
+```
+
+| Field of `alert` | |
+|---|---|
+| `labels`, `annotations` | the alert as Alertmanager would send it; `namespace` is the case's and `severity` `warning` unless given |
+| `rule` | the test Prometheus rule whose alert this is (its `alertname`); an add-on puts it into the second cluster's Prometheus, as `scripts/kind-otel-demo.sh` does its rules |
+| `match` | labels the fired alert must carry (default: the case's namespace) |
+| `after_seconds` | when the runner posts the alert, from the fault start (default: the case's first ask time) |
+| `fire_wait_seconds`, `investigation_wait_seconds` | how long to wait for the rule to fire (600) and for the investigation to end (900) |
+
+`--alert-source` picks where the alert comes from:
+
+- `real` (the default): the rule fires and Alertmanager posts it to the webhook. The runner waits for a new firing row
+  of that alert in the Alerts inbox. A case whose rule is not loaded, or that names none, is not run and says why.
+  Runs 2 to N send that alert again — its labels, annotations and start — under a fingerprint of their own
+  (`alert_source: replay`): Alertmanager sends a firing alert once, and the webhook folds a repeat into the first
+  investigation for `dedupeHours`.
+- `auto`: real where the case's rule is loaded, posted where it is not.
+- `synthetic`: always posted.
+
+The real path is what an install runs: the rule's own labels, its generator URL, a rule `prometheus_rules` finds by the
+alert's name. A posted alert needs no rule, no metric that shows the fault and no wait for a rule's `for`. The ten
+cases of `evals/ai-hard/` have no rule: most of their faults show only in logs, and five run on `self`, which has no
+Alertmanager. The only test rules today are the OpenTelemetry demo's, and the demo's cases (01–03, 07, 10, 11) are not
+written. So the ten run with `--alert-source auto` or `synthetic`, and their alert repeats what the question says.
+
+A posted alert is one alert in Alertmanager's message (version 4), sent with the cluster's own webhook token (the HMAC
+of `ALERT_WEBHOOK_TOKEN` from `kubeast-secrets`, which `webhookClusterTokensOnly` also takes), receiver `ai-eval`, a
+fingerprint per run and a start a minute before it is sent, never before the fault. The webhook must count it
+`accepted`; any other answer (duplicate, filtered, skipped, automatic off) is a setup failure with the counts. At the
+end of the case each alert the runner posted is sent again as resolved, so its inbox row is closed before the next
+case's investigator can read it with `alerts_inbox`.
+
+The investigation of an alert is a new one of the alert's fingerprint that holds the inbox row's `starts_at`, the match
+of #909, made by the alert's own start and never by comparing a received time with it, since the server and this
+machine keep different clocks. Without one, the newest new one of that fingerprint is taken (`matched_by` says
+which). The runner reads the detail of each new investigation of the alert once to match it and polls the
+investigations list every 5 s until the one it matched is done, failed or skipped, then reads that detail again; each
+detail read writes an `ai.investigation.view` row, the list none. A failed or skipped investigation is a row with
+`error`, not scored.
+
+How a report is scored, the same with v0.7.9's switches off and on:
+
+- `text` (`score_text`): the report's "Likely cause" section, or the whole report without that heading. Each truth
+  cause must be named — its resource's name or an `accept_resources` form — with a word of its kind or an accepted kind
+  (`KIND_WORDS`, read with the cause's own names taken out). A control passes when that section says there is no fault
+  (`NO_FAULT_WORDS`). Decoys named there are listed in `decoys_named`, not held against it, since a report names what
+  it ruled out in the same words. `pass` and `score` are this check's, so an off round and an on round compare. It is
+  weaker than the block's.
+- `rca` (`score_block`): with `features.alertInvestigation.evidenceCheck` or `ledger` on, the server takes the rca
+  block off the report and keeps it as the investigation's `result`, which is scored as the chat's block is. A report
+  that still ends in a block is read from the report. With both off the row has no `rca`.
+- `prose_pass`: the case's `expect`, as in the chat path. A control's row also has `wrong_suspect`: the text check found
+  no "no fault".
+
+Each row is in the same files as the chat's, with `form` `alert`: `alert_source`, `ask_after` and `late_seconds` for a
+posted alert, `alert_after_seconds` (fault start to the alert), `waited_seconds` (the alert to the end of the
+investigation), the fingerprint and `starts_at`, `investigation_id`, the report as `answer`, `calls` (each tool's
+arguments, `failed`, `result_chars` and `requests`), `tokens`, `model_calls` (the investigation's iterations) and
+`seconds` (its run time).
+
+Before a round: `features.alertInvestigation` on with a webhook token and `maxPerHour: 0` and `dailyTokenBudget: 0`
+(the dev values have all three), the investigation's model set (`features.alertInvestigation.model`, else the default),
+and `scripts/kind-logsearch.sh up`. For the real path, the add-on with the rules, and the second cluster's Prometheus
+and Alertmanager as `deploy/kind/second-cluster.yaml` and `deploy/kind/alertmanager.yaml` have them. With
+`dedupeHours` at its 24, a real alert whose labels already fired in that window folds into the earlier investigation,
+which the row says; posted alerts never fold. The alert path has not run on kind yet: its waits and the words of the
+text check are first guesses.
 
 ## Results
 
