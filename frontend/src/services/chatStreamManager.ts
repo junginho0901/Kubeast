@@ -144,21 +144,22 @@ export function withToolAccess(content: string, at: number, line: string): strin
   return `${content.substring(0, cut)}\n${line}\n${content.substring(cut)}`
 }
 
-// What a refused chat request says: its status and the server's reason. A body that is not the server's JSON (a proxy's
-// page) has nothing to show.
+// What a refused chat request says: its status and the server's reason, in the screen's words when the server names
+// them (error_key, as a stream refusal does). A body that is not the server's JSON (a proxy's page) has nothing to show.
 async function refusal(response: Response): Promise<Partial<ChatStreamState>> {
   const { status } = response
   const body = await response.text()
   let detail = ''
+  let key = ''
   try {
-    const parsed = JSON.parse(body)?.detail
-    if (typeof parsed === 'string') detail = parsed.slice(0, 300)
+    const parsed = JSON.parse(body)
+    if (typeof parsed?.detail === 'string') detail = parsed.detail.slice(0, 300)
+    if (typeof parsed?.error_key === 'string') key = parsed.error_key
   } catch {
     // not JSON
   }
-  return detail
-    ? { error: `HTTP ${status}: ${detail}`, errorKey: 'streamHttp', errorArgs: { status, detail } }
-    : { error: `HTTP ${status}`, errorKey: 'streamHttpStatus', errorArgs: { status } }
+  if (!detail) return { error: `HTTP ${status}`, errorKey: 'streamHttpStatus', errorArgs: { status } }
+  return { error: `HTTP ${status}: ${detail}`, errorKey: key || 'streamHttp', errorArgs: { status, detail } }
 }
 
 const STREAM_CUT = 'The connection closed before the answer finished, so the text above may be incomplete. Ask again for the whole answer.'

@@ -1799,6 +1799,7 @@
       "modelAddress": "AI model call failed ({{provider}}): the model's address is not allowed, so nothing was sent. An administrator runs Test on this model in Admin → AI Models to see why.",
       "streamHttp": "The chat request failed (HTTP {{status}}): {{detail}}",
       "streamHttpStatus": "The chat request failed (HTTP {{status}}).",
+      "streamStartFailed": "The answer stream could not start. Try again in a moment.",
       "streamCut": "The connection closed before the answer finished, so the text above may be incomplete. Ask again for the whole answer.",
       "streamEmpty": "The connection closed without an answer. Ask again.",
       "sessionNotFound": "This conversation no longer exists. Start a new one."
