@@ -47,6 +47,8 @@ function UsageCell({ text, testId }: { text: string; testId: string }) {
 }
 
 interface MonitoringNodesProps {
+  /** the page's notice "Metrics server not available for this cluster" is on screen */
+  pageNotice: boolean
   /** whether the tab's last answer says the cluster serves no metrics.k8s.io (the page's notice) */
   onMetricsUnavailable: (unavailable: boolean) => void
 }
@@ -75,6 +77,7 @@ const getLatestMetricTimestamp = (
 }
 
 export default function MonitoringNodes({
+  pageNotice,
   onMetricsUnavailable,
 }: MonitoringNodesProps) {
   const { t } = useTranslation()
@@ -128,7 +131,7 @@ export default function MonitoringNodes({
   // 플로팅 AI 위젯용 스냅샷 — 노드 메트릭 요약
   const aiSnapshot = useMemo(() => {
     if (view === 'refused') return { source: 'base' as const, summary: '노드 모니터링 — 메트릭 볼 권한 없음', data: { tab: 'nodes', metrics_refused: refusal } }
-    if (view !== 'rows') return metricsNotShownLayer(t, 'nodes', view, { error })
+    if (view !== 'rows') return metricsNotShownLayer(t, 'nodes', view, { error, notice: pageNotice })
     const items = [...allNodes].sort(
       (a, b) => (parsePercent(b.cpu_percent) ?? 0) - (parsePercent(a.cpu_percent) ?? 0),
     )
@@ -177,7 +180,7 @@ export default function MonitoringNodes({
         }),
       },
     }
-  }, [view, t, error, allNodes, refreshFailure, refusal])
+  }, [view, t, error, pageNotice, allNodes, refreshFailure, refusal])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 

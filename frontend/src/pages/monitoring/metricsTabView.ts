@@ -35,16 +35,19 @@ type Layer = { source: 'base'; summary: string; data: Record<string, unknown> }
 
 /**
  * The tab's layer while it shows no rows, in the words it shows: `metrics_error` with the reason, `metrics_unavailable`,
- * `no_samples`, or 0 pods in the chosen namespace. Null while it shows rows or a refusal (the tab's own layers), loads or
- * waits for a namespace.
+ * `no_samples`, or 0 pods in the chosen namespace, each after the page's notice while it shows. Null while it shows rows
+ * or a refusal (the tab's own layers), and while it loads or waits for a namespace with no notice above it.
  */
 export function metricsNotShownLayer(t: TFunction, tab: 'nodes' | 'pods', view: MetricsTabView, read: {
   error: unknown
   namespace?: string
+  /** the page's notice "Metrics server not available for this cluster" is on screen */
+  notice: boolean
 }): Layer | null {
   const scope = { tab, ...(tab === 'pods' ? { filters: { namespace: read.namespace } } : {}) }
   const title = t(tab === 'nodes' ? 'monitoring.nodes.title' : 'monitoring.pods.title')
-  const said = (...lines: (string | undefined)[]) => `${title} — ${lines.filter(Boolean).join(' — ')}`
+  const notice = read.notice ? t('monitoring.metricsUnavailable') : undefined
+  const said = (...lines: (string | undefined)[]) => `${title} — ${[notice, ...lines].filter(Boolean).join(' — ')}`
   const notAvailable = t(tab === 'nodes' ? 'monitoring.nodes.unavailable' : 'monitoring.pods.unavailableAll')
   switch (view) {
     case 'failed': {
@@ -65,6 +68,9 @@ export function metricsNotShownLayer(t: TFunction, tab: 'nodes' | 'pods', view: 
       return { source: 'base', summary: said(notAvailable, t('monitoring.metricsServerHint')), data: { ...scope, no_samples: true } }
     case 'none_in_namespace':
       return { source: 'base', summary: said(t('monitoring.pods.noPodsInNamespace', { namespace: read.namespace })), data: { ...scope, total_count: 0 } }
+    case 'prompt':
+    case 'loading':
+      return notice ? { source: 'base', summary: said(), data: { ...scope, metrics_unavailable: true } } : null
     default:
       return null
   }

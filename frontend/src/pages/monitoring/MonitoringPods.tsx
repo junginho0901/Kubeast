@@ -33,6 +33,8 @@ import { metricsNotShownLayer, metricsTabView } from './metricsTabView'
 import type { PodMetric } from './types'
 
 interface MonitoringPodsProps {
+  /** the page's notice "Metrics server not available for this cluster" is on screen */
+  pageNotice: boolean
   /** whether the tab's last answer says the cluster serves no metrics.k8s.io (the page's notice) */
   onMetricsUnavailable: (unavailable: boolean) => void
   namespaces: { name: string }[] | undefined
@@ -59,6 +61,7 @@ const getLatestMetricTimestamp = (
 }
 
 export default function MonitoringPods({
+  pageNotice,
   onMetricsUnavailable,
   namespaces,
 }: MonitoringPodsProps) {
@@ -98,7 +101,7 @@ export default function MonitoringPods({
     if (view === 'refused') {
       return { source: 'base' as const, summary: `Pod 모니터링 — ${selectedNamespace === 'all' ? '전체' : selectedNamespace} 메트릭 볼 권한 없음`, data: { tab: 'pods', filters: { namespace: selectedNamespace }, metrics_refused: refusal } }
     }
-    if (view !== 'rows' || !podMetrics) return metricsNotShownLayer(t, 'pods', view, { error, namespace: selectedNamespace })
+    if (view !== 'rows' || !podMetrics) return metricsNotShownLayer(t, 'pods', view, { error, namespace: selectedNamespace, notice: pageNotice })
     const items = [...podMetrics].sort((a, b) => {
       const aCpu = Number(String(a.cpu).replace(/[^0-9.]/g, '')) || 0
       const bCpu = Number(String(b.cpu).replace(/[^0-9.]/g, '')) || 0
@@ -122,7 +125,7 @@ export default function MonitoringPods({
         }),
       },
     }
-  }, [view, t, error, podMetrics, selectedNamespace, refreshFailure, refusal])
+  }, [view, t, error, pageNotice, podMetrics, selectedNamespace, refreshFailure, refusal])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 

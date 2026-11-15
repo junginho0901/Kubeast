@@ -71,9 +71,10 @@ export default function Monitoring() {
       )}
 
       {activeTab === 'nodes' ? (
-        <MonitoringNodes onMetricsUnavailable={handleMetricsUnavailable} />
+        <MonitoringNodes pageNotice={notServed} onMetricsUnavailable={handleMetricsUnavailable} />
       ) : (
         <MonitoringPods
+          pageNotice={notServed}
           onMetricsUnavailable={handleMetricsUnavailable}
           namespaces={namespaces}
         />

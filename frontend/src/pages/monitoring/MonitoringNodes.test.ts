@@ -43,7 +43,7 @@ const failed = (error: unknown, data?: unknown) => {
   return qc
 }
 const render = (qc: QueryClient, lng = 'en') => renderToStaticMarkup(createElement(I18nextProvider, { i18n: i18n.cloneInstance({ lng }) },
-  createElement(QueryClientProvider, { client: qc }, createElement(MonitoringNodes, { onMetricsUnavailable: () => {} }))))
+  createElement(QueryClientProvider, { client: qc }, createElement(MonitoringNodes, { pageNotice: false, onMetricsUnavailable: () => {} }))))
 
 const httpError = (status: number, data?: unknown) => Object.assign(new Error(`HTTP ${status}`), { response: { status, data } })
 const NOT_AVAILABLE = 'Node metrics are not available'
@@ -259,8 +259,8 @@ describe('the Monitoring Nodes tab', () => {
 describe('what the Nodes tab tells the floating chat in place of rows', () => {
   const HINT = en.monitoring.metricsServerHint
   const textOf = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/&amp;/g, '&').replace(/\s+/g, ' ')
-  const renderWith = (qc: QueryClient, { lng = 'en' } = {}) => renderToStaticMarkup(createElement(I18nextProvider, { i18n: i18n.cloneInstance({ lng }) },
-    createElement(QueryClientProvider, { client: qc }, createElement(MonitoringNodes, { onMetricsUnavailable: () => {} }))))
+  const renderWith = (qc: QueryClient, { notice = false, lng = 'en' } = {}) => renderToStaticMarkup(createElement(I18nextProvider, { i18n: i18n.cloneInstance({ lng }) },
+    createElement(QueryClientProvider, { client: qc }, createElement(MonitoringNodes, { pageNotice: notice, onMetricsUnavailable: () => {} }))))
   const emptyThen = (error?: unknown) => {
     const qc = seeded()
     qc.setQueryData(KEY, [])
@@ -270,9 +270,9 @@ describe('what the Nodes tab tells the floating chat in place of rows', () => {
     }
     return qc
   }
-  // each part of the layer's summary is on screen
-  const saysWhatTheTabShows = (html: string) => {
-    const parts = (chat.current?.summary ?? '').split(' — ')
+  // each part of the layer's summary is on screen (the page's notice is drawn by the page, above the tab)
+  const saysWhatTheTabShows = (html: string, skip: string[] = []) => {
+    const parts = (chat.current?.summary ?? '').split(' — ').filter((p) => !skip.includes(p))
     expect(parts.length).toBeGreaterThan(1)
     for (const part of parts) expect(textOf(html)).toContain(part)
     expect(chat.current?.summary).not.toContain('실시간')
@@ -306,7 +306,16 @@ describe('what the Nodes tab tells the floating chat in place of rows', () => {
     const html = renderWith(failed(httpError(503, { detail: 'metrics_unavailable' })))
     expect(html).toContain('data-testid="node-metrics-not-available"')
     expect(chat.current?.data).toEqual({ tab: 'nodes', metrics_unavailable: true })
+    expect(chat.current?.summary).not.toContain(en.monitoring.metricsUnavailable)
     saysWhatTheTabShows(html)
+  })
+
+  it('the page\'s notice on: its words first, then the tab\'s', () => {
+    const html = renderWith(failed(httpError(503, { detail: 'metrics_unavailable' })), { notice: true })
+    expect(html).toContain('data-testid="node-metrics-not-available"')
+    expect(chat.current?.data).toEqual({ tab: 'nodes', metrics_unavailable: true })
+    expect(chat.current?.summary).toBe(`${en.monitoring.nodes.title} — ${en.monitoring.metricsUnavailable} — ${NOT_AVAILABLE} — ${HINT}`)
+    saysWhatTheTabShows(html, [en.monitoring.metricsUnavailable])
   })
 
   it('#900\'s not-served answer (404): the layer is the block the tab draws for it, whichever the client reads it as', () => {
