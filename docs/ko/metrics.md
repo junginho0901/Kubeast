@@ -18,7 +18,9 @@ Kubeast **자신**의 상태를 Prometheus 텍스트 포맷으로 노출합니�
 | `kubeast_http_requests_in_flight` | gauge | `service` | 처리 중인 요청 수 |
 | `kubeast_audit_store_up` | gauge 0/1 | `service` | 감사 저장소가 행을 받을 수 있는지 나타냅니다(k8s-service: `audit.Guarded.Ready`, 2 s 캐시). 0이면 쓰기, Secret 열람, exec, AI 쓰기 툴이 503으로 거부됩니다 |
 | `kubeast_audit_write_failures_total` | counter | `service` | 기동 뒤 저장하지 못한 감사 행 수 |
-| `kubeast_ws_subscriptions` | gauge | `service` | k8s-service에 살아 있는 WebSocket 구독(로그·exec·watch) 수 |
+| `kubeast_ws_subscriptions` | gauge | `service` | k8s-service에 살아 있는 watch 수(`multicluster.wsMaxSubscriptions`에 세는 것): 실시간 목록의 WebSocket 구독과 Helm 릴리스 스트림의 Secret watch. 터미널·실시간 로그는 다음 두 줄 |
+| `kubeast_terminals_open` | gauge | `service` | k8s-service에 열려 있는 터미널(Pod exec, 노드 셸) 수 |
+| `kubeast_followed_logs_open` | gauge | `service` | k8s-service에 열려 있는 실시간 로그(컨테이너 출력, 로그 파일) 수 |
 | `kubeast_k8s_client_rate_wait_seconds` | histogram | `service`, `limiter`, `passed_over` | k8s-service가 클러스터 API 서버로 보내는 요청이 보내기 전에 클라이언트 속도를 기다린 시간입니다. 바로 나간 요청은 0이고, 클러스터를 모두 더한 값입니다(버킷 1 ms~60 s). `limiter`는 `user`(클라이언트 속도, `multicluster.clientQPS`·`clientBurst`) 또는 `review`(접근 확인 전용 속도, `multicluster.reviewQPS`를 정했을 때만)입니다. `passed_over`는 다시 묻는 접근 확인이 나중에 온 요청을 먼저 보낸 경우 `true`이며, 그렇게 양보하는 시간은 최대 10초입니다. 기다리다 그만둔 요청도 기다린 시간만큼 셉니다. dynamic 클라이언트(커스텀 리소스, apply)는 client-go의 자체 속도를 쓰므로 세지 않습니다 |
 | `kubeast_k8s_client_rate_waits_total` | counter | `service`, `limiter` | 그 속도를 조금이라도 기다린 클러스터 요청 수(차례를 받았든 못 받았든) |
 | `kubeast_audit_sink_pending` | gauge | `service`, `sink`, `type` | 감사 싱크(`audit.sinks`)가 아직 보내지 않은 감사 행 수. 전송을 맡은 auth-service 레플리카만 냅니다 |
