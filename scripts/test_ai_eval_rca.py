@@ -92,13 +92,29 @@ def test_extra_cause_costs_points_also_ok_does_not():
 
 def test_one_resource_under_many_kinds_costs_the_wrong_ones():
     block = {"causes": [cause("ConfigMap/shop-x/settings-b"), cause("ConfigMap/shop-x/settings-b", kind="dns"),
-                        cause("cm/shop-x/settings-b", kind="crash"), cause("ConfigMap/shop-x/settings-b", kind="rollout")]}
+                        cause("ConfigMap/shop-x/settings-b", kind="rollout")]}
     s = rca.score_rca(answer(block), TRUTH, CALLS)
-    assert s["pass"] and s["extras"] == ["ConfigMap/shop-x/settings-b", "cm/shop-x/settings-b"]
-    assert s["score"] == 0.5  # rollout is an accepted kind too: not an extra
+    assert s["pass"] and s["extras"] == ["ConfigMap/shop-x/settings-b"]
+    assert s["score"] == 0.75  # rollout is an accepted kind too: not an extra
+    block["causes"].append(cause("cm/shop-x/settings-b", kind="crash"))
+    s = rca.score_rca(answer(block), TRUTH, CALLS)
+    assert not s["pass"] and s["score"] == 0.0 and s["extras"] == ["ConfigMap/shop-x/settings-b", "cm/shop-x/settings-b"]
     s = rca.score_rca(answer({"causes": [cause("ConfigMap/shop-x/settings-b", kind="dns"), cause("ConfigMap/shop-x/settings-b", kind="node")]}), TRUTH, CALLS)
     assert not s["pass"] and s["score"] == 0.0 and s["extras"] == ["ConfigMap/shop-x/settings-b"]
     assert s["causes"][0]["answer_kind"] == "dns"
+
+
+def test_more_than_one_extra_cause_fails_a_right_answer():
+    right = cause("ConfigMap/shop-x/settings-b")
+    for n, passes, score in ((0, True, 1.0), (1, True, 0.75), (2, False, 0.0), (4, False, 0.0), (6, False, 0.0)):
+        guesses = [cause(f"Deployment/shop-x/guess{i}", kind="crash") for i in range(n)]
+        s = rca.score_rca(answer({"causes": [right, *guesses]}), TRUTH, CALLS)
+        assert (s["pass"], s["pass_grounded"], s["score"], len(s["extras"])) == (passes, passes, score, n), (n, s)
+    # every kind on the right resource and three more objects: one list of guesses
+    shotgun = [cause("ConfigMap/shop-x/settings-b", kind=k) for k in rca.KINDS if k != "none"]
+    shotgun += [cause(f"ConfigMap/shop-x/other-{i}") for i in range(3)]
+    s = rca.score_rca(answer({"causes": shotgun}), TRUTH, CALLS)
+    assert not s["pass"] and s["causes"][0]["found"] and len(s["extras"]) == 14
 
 
 def test_namespace_and_name_without_a_kind():
@@ -150,6 +166,9 @@ def test_fence_tags():
     text = "```json\n" + body + "\n```\n" + answer({"causes": [cause("Deployment/shop-x/checkout", kind="crash")]})
     assert rca.score_rca(text, TRUTH, CALLS)["block"] == "ok"  # a tagged block is taken before a loose one
     assert rca.strip_blocks("before\n```RCA\n{}\n```\nafter ```bash\nls\n```") == "before\n\nafter ```bash\nls\n```"
+    loose = "```json\n" + body + "\n```\n```\n{\"no_fault\": true}\n```\n"
+    kept = '```json\n{"items": []}\n```\n```json\nnot json\n```\n'
+    assert rca.strip_blocks("before\n" + loose + kept + "after") == "before\n\n\n" + kept + "after"  # what extract_block reads
 
 
 def test_pass_grounded():

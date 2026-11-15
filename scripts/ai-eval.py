@@ -44,6 +44,7 @@ import json
 import os
 import random
 import re
+import secrets
 import shutil
 import string
 import subprocess
@@ -63,7 +64,6 @@ ROOT = Path(__file__).resolve().parent.parent
 CASES = ROOT / "evals" / "ai"
 BASE = os.environ.get("E2E_BASE_URL", "http://localhost:30080").rstrip("/")
 KIND = {"self": "kubeast", "default": "kubeast-b"}  # Kubeast cluster ID → kind cluster
-READ_PASSWORD = "Eval-read-pass1!"
 # A token is used until this long before its lifetime is over (or a quarter of a short lifetime), then renewed: longer
 # than a chat turn or an investigation step may run (the cases' timeout_seconds, at most 420, and a minute), since the
 # server hands the token on to the turn's tool calls.
@@ -161,15 +161,17 @@ def admin_password(kc: str) -> str:
 
 def read_user(admin: Api, cluster: str, stamp: str) -> tuple[str, Api]:
     """A member with Read on cluster (the whole cluster, no other); returns (user id, its API). A member holds no
-    admin.audit.read or admin.investigations.read, so the chat's audit_search and investigations refuse it."""
+    admin.audit.read or admin.investigations.read, so the chat's audit_search and investigations refuse it. Its
+    password is made for this account and kept in memory only, so one left behind by a failed delete opens to no one."""
+    password = secrets.token_urlsafe(24)
     roles = admin.json("GET", "/api/v1/auth/roles")
     roles = roles if isinstance(roles, list) else roles.get("roles") or roles.get("items") or []
     member = next(x for x in roles if x["name"].lower() == "member")
     email = f"ai-eval-read-{stamp}@kubeast.local"
-    uid = admin.json("POST", "/api/v1/auth/admin/users", {"name": "AI eval read", "email": email, "password": READ_PASSWORD, "role_id": member["id"]})["id"]
+    uid = admin.json("POST", "/api/v1/auth/admin/users", {"name": "AI eval read", "email": email, "password": password, "role_id": member["id"]})["id"]
     try:
         admin.open("PUT", f"/api/v1/auth/admin/users/{uid}/cluster-roles/{cluster}", {"role": "Read"}).close()
-        reader = Api(email, READ_PASSWORD)
+        reader = Api(email, password)
         reader.login()
         return uid, reader
     except BaseException:
@@ -770,10 +772,11 @@ def when(at) -> str:
     return "now" if at is None else f"+{at}s"
 
 
-def table(results: list[dict], round_info: dict | None = None) -> str:
-    """The markdown table: one row per shown result, the rca and alert scores, and the totals. A hidden case's results
-    are left out; their total is shown only when two or more hidden cases ran, so no line gives one hidden case's
-    score."""
+def table(results: list[dict], round_info: dict | None = None, final: bool = True) -> str:
+    """The markdown table: one row per shown result, the rca and alert scores, and the totals. A hidden case's
+    results are left out; their total is given only in a run's last table (final) and only when two or more hidden
+    cases have a scored row (a case whose setup failed has none), so no line, and no change between the tables written
+    during a run, gives one hidden case's score."""
     rows = ["| 사례 | 정답 | 빠진 사실 | 안 부른 도구 | 도구 호출 (실패) | 토큰 | 초 |", "|---|---|---|---|---|---|---|"]
     shown = [r for r in results if not r.get("hidden")]
     mark = {True: "✅", False: "❌", None: "-"}
@@ -807,14 +810,17 @@ def table(results: list[dict], round_info: dict | None = None) -> str:
                         f"{' · '.join(t['decoys_named'])} | {mark[r['rca']['pass']] if 'rca' in r else '-'} | {r['seconds']} | {r['waited_seconds']} |")
     model = next((r["model"] for r in results if r.get("model")), "?")
     hidden = [r for r in results if r.get("hidden")]
-    hidden_ids = {r["id"] for r in hidden}
+    hidden_scored = [r for r in hidden if "setup_error" not in r]
+    scored_ids = {r["id"] for r in hidden_scored}
     if hidden and not shown:
         rows.append(f"\n숨김 사례만 든 실행: 결과는 JSON에만 · 모델 {model}")
     else:
-        if len(hidden_ids) >= 2:
-            rows.append(f"\n숨김 사례 {len(hidden_ids)}개: 정답 {sum(1 for r in hidden if r.get('pass'))}/{len(hidden)} (사례별 결과는 JSON에만)")
-        elif hidden_ids:
-            rows.append("\n숨김 사례 1개: 결과는 JSON에만")
+        if hidden and not final:
+            rows.append("\n숨김 사례: 합계는 실행이 끝난 뒤의 표에만 (사례별 결과는 JSON에만)")
+        elif len(scored_ids) >= 2:
+            rows.append(f"\n숨김 사례 {len(scored_ids)}개: 정답 {sum(1 for r in hidden_scored if r.get('pass'))}/{len(hidden_scored)} (사례별 결과는 JSON에만)")
+        elif hidden:
+            rows.append("\n숨김 사례: 채점된 사례가 둘이 안 되어 결과는 JSON에만")
         ok = sum(1 for r in shown if r.get("pass"))
         grounded = sum(1 for r in shown if r.get("pass_grounded"))
         rows.append(f"\n정답 {ok}/{len(shown)}" + (f" (근거 있는 정답 {grounded})" if scored else "") + (" · 숨김 빼고" if hidden else "") + f" · 모델 {model}")
@@ -830,6 +836,8 @@ def round_line(info: dict) -> str:
     line = f"\n라운드: 계정 {info.get('user')} · 네임스페이스 꼬리 {info.get('namespace_suffix') or '없음'} · 조사/알림함 {counts('before')}"
     if "after" in info:
         line += f" → {counts('after')}"
+    if info.get("alert_investigation_on"):
+        line += " · 알림 조사 켬(--alert-investigation-on)"
     return line
 
 
@@ -920,9 +928,17 @@ def listing(cases: list[tuple[Path, dict]]) -> str:
     return "\n".join(rows)
 
 
-def save(out: Path, stamp: str, results: list[dict], previous: str | None, round_info: dict | None = None) -> str:
-    """The JSON report and the table as they stand, named by the model once a result names it, and the round's
-    record (<stamp>-round.json); returns the name."""
+def investigation_on(counts: dict) -> list[str]:
+    """The clusters whose alert investigation is on at the round's start: their investigation list or inbox answered
+    a total (off, they answer 404)."""
+    return sorted(c for c, v in counts.items() if any(isinstance(v.get(k), int) and not isinstance(v.get(k), bool)
+                                                     for k in ("investigations", "inbox")))
+
+
+def save(out: Path, stamp: str, results: list[dict], previous: str | None, round_info: dict | None = None,
+         final: bool = True) -> str:
+    """The JSON report and the table as they stand (final: the run's last table, table()), named by the model once a
+    result names it, and the round's record (<stamp>-round.json); returns the name."""
     model = next((r["model"] for r in results if r.get("model")), "model")
     base = f"{stamp}-{model}"
     out.mkdir(parents=True, exist_ok=True)
@@ -930,7 +946,7 @@ def save(out: Path, stamp: str, results: list[dict], previous: str | None, round
         for ext in (".json", ".md"):
             (out / (previous + ext)).unlink(missing_ok=True)
     (out / f"{base}.json").write_text(json.dumps(results, ensure_ascii=False, indent=1))
-    (out / f"{base}.md").write_text(table(results, round_info) + "\n")
+    (out / f"{base}.md").write_text(table(results, round_info, final) + "\n")
     if round_info is not None:
         (out / f"{stamp}-round.json").write_text(json.dumps(round_info, ensure_ascii=False, indent=1) + "\n")
     return base
@@ -955,6 +971,10 @@ def main() -> int:
     ap.add_argument("--namespace-suffix", metavar="SUFFIX",
                     help="run each case in <namespace>-<SUFFIX> (random: four random letters and digits, new each run), so the "
                          "records of earlier runs name another namespace")
+    ap.add_argument("--alert-investigation-on", action="store_true",
+                    help="ask hard cases while features.alertInvestigation is on (the runner refuses otherwise): a Read account "
+                         "can open the investigation reports, and an investigation takes the model's Claude Code place; "
+                         "recorded as alert_investigation_on in <stamp>-round.json")
     args = ap.parse_args()
     try:
         suffix = namespace_suffix(args.namespace_suffix)
@@ -979,14 +999,21 @@ def main() -> int:
     stamp = time.strftime("%Y%m%d%H%M%S", time.gmtime())
     out = Path(args.out)
     truth_dir = out / f"{stamp}-truth"
-    copies = Path(tempfile.mkdtemp(prefix="ai-eval-cases-"))
     clusters = sorted({c["cluster"] for _, c in cases})
     round_info = {"user": "admin" if args.alerts else args.user, "namespace_suffix": suffix, "started": now_utc(),
                   "before": round_counts(admin, clusters)}
-    for cluster, counts in round_info["before"].items():
-        if round_info["user"] == "read" and isinstance(counts.get("inbox"), int) and counts["inbox"] > 0:
-            print(f"note: the alert inbox of {cluster} holds {counts['inbox']} alerts; a Read account can open their investigation "
-                  "reports (alerts_inbox) — evals/ai/README.md \"Hard cases\"", flush=True)
+    if not args.alerts and any(rca.is_staged(c) for _, c in cases):
+        on = investigation_on(round_info["before"])
+        round_info["alert_investigation_on"] = bool(on)
+        if on and not args.alert_investigation_on:
+            print(f"problem: features.alertInvestigation is on in {', '.join(on)} (its investigation list answers): a Read account "
+                  "can open the reports and an investigation takes the model's Claude Code place. Turn it off for a chat round "
+                  "(evals/ai/README.md \"Hard cases\"), or pass --alert-investigation-on to run anyway", file=sys.stderr)
+            return 2
+        if on:
+            print(f"WARNING: features.alertInvestigation is on in {', '.join(on)}; this round is not a measure of the chat alone "
+                  "(alert_investigation_on in the round record)", flush=True)
+    copies = Path(tempfile.mkdtemp(prefix="ai-eval-cases-"))
     results: list[dict] = []
     saved = None
     try:
@@ -1002,7 +1029,7 @@ def main() -> int:
                     r["run"] = n + 1
                     results.append(r)
                     print(f"{r['id']} run {n + 1}: {'pass' if r.get('pass') else 'FAIL'} — {len(r.get('calls', []))} calls, {r.get('seconds')} s", flush=True)
-            saved = save(out, stamp, results, saved, round_info)
+            saved = save(out, stamp, results, saved, round_info, final=False)
     finally:
         round_info["ended"] = now_utc()
         round_info["after"] = round_counts(admin, clusters)

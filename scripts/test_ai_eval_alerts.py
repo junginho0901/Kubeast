@@ -569,7 +569,7 @@ def test_the_table_shows_alert_rows_and_hides_hidden_ones():
         results, _, _ = run(repeat=1)
     text = AI_EVAL.table(results + [dict(results[0], id="92_kept", hidden=True)])
     assert "| 90_test_alert · #1 | synthetic | ✅ |" in text and "92_kept" not in text
-    assert "숨김 사례 1개" in text
+    assert "숨김 사례: 채점된 사례가 둘이 안 되어 결과는 JSON에만" in text
 
 
 def test_save_keeps_finished_cases_and_names_the_file_by_model():
