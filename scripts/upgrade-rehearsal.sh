@@ -36,6 +36,13 @@
 # session and ai at 4 replicas stop at the database connection sum while 3 render; a drain running during the upgrade;
 # a second upgrade to the same chart with one value changed; and, with REPLICAS, more than one replica.
 #
+# Roles whose names have characters outside ASCII (W8 QA Q-61, Q-66; ROLE_GROUPS=0 leaves them out), made on
+# FROM_VERSION: one bound by the chart, one by the custom roles template applied with kubectl as on a registered cluster
+# (one cluster plays both, so that template's impersonation rule is renamed), two making one group with #865. After the
+# upgrade: their names, grants and the group each request goes out as (X-Kubeast-Access), getting-started "Upgrade"'s
+# queries against what the migration did, the chart's binding replaced, the registered one refused until the template
+# is applied again, then its old binding deleted. A stored AI model config (default-openai) keeps its model (Q-74).
+#
 # A check whose change is not in this checkout (chart values, a check template or a migration's schema; never a
 # migration file number, which changes at merge) is a SKIP row naming that change's PR. REQUIRE lists the changes a
 # run must hold ("856 858 865 866 867 868 901", commas or spaces, or "all"): the run stops before making its cluster
@@ -49,7 +56,7 @@
 # as CALICO_NODE_HOOK), DOCKER_BUILD_ARGS (with --build), PROBE_TIMEOUT (10 s: a request
 # that has no answer by then is a hang), PG_GRACE (20 s after the bundled PostgreSQL is ready again), POOLER_IMAGE,
 # POOLER_MODE, POOLER, EXTRA_VALUES (a values file of no secret added to the FROM_VERSION install, e.g.
-# migrations.mode: job with SCENARIO=external-db), REQUIRE, KEEP, ALLOW_DIRTY, ALLOW_PARALLEL.
+# migrations.mode: job with SCENARIO=external-db), REQUIRE, KEEP, ALLOW_DIRTY, ALLOW_PARALLEL, ROLE_GROUPS (1).
 #
 # Safety: every kubectl and helm call names the rehearsal's kubeconfig file ($REH_OUT/kubeconfig) and its context;
 # the current context is never read. Cluster names must start with kubeast-reh. Passwords, tokens and keys are read
@@ -98,6 +105,16 @@ CHART="$OUT/chart-rc"
 CHART_VALUES="$OUT/chart-values.json"
 APP_SECRET=kubeast-secrets
 LOOKALIKE='rehearsal: stored before the name rule'
+# The roles of the group checks (section 11): FROM_VERSION writes each character outside ASCII as "-" in a role's
+# group, #865 as "~" and its code point. GR_CHART is bound by the chart (view), GR_REG by the template as on a
+# registered cluster (edit); GR_KEEP and GR_RENAMED make one group with #865, so the later is renamed.
+GROUPS_DESC='rehearsal: a name outside ASCII'
+GR_OLD='kubeast:role:---'
+GR_CHART='운영팀'; GR_CHART_NEW='kubeast:role:~c6b4~c601~d300'
+GR_REG='개발팀'; GR_REG_NEW='kubeast:role:~ac1c~bc1c~d300'
+GR_KEEP='Ops 팀'; GR_RENAMED='OPS-팀'; GR_PAIR_OLD='kubeast:role:ops--'; GR_PAIR_NEW='kubeast:role:ops-~d300'
+GROUPS_ON=0
+GROUPS_READY=0
 REQUIRE_LIST=" $(printf '%s' "${REQUIRE:-}" | tr ',#' '  ') "
 CREATED=0
 BG_PIDS=""
@@ -355,6 +372,7 @@ plan() { # --plan: the changes against the checkout, and the render stops on the
   write_values_from
   removed_value_checks render
   db_connection_checks render
+  if [ "$GROUPS_ON" = 1 ]; then groups_docs_queries plan; else groups_left_out plan; fi
 }
 # The checkout chart's values.yaml as JSON, as Helm reads it (scripts/values-paths.sh of #908 does the same).
 chart_values() {
@@ -515,9 +533,11 @@ EOF
 
 # --- 3. install FROM_VERSION as a user does ---
 write_values_from() {
+  local chart_role=""
+  [ "$GROUPS_ON" = 1 ] && chart_role=$(printf '      - name: "%s"\n        clusterRoles: [view]' "$GR_CHART")
   cat > "$OUT/values-from.yaml" <<EOF
-# What install.sh sets, plus what the test data needs: access requests, custom roles that act on the cluster,
-# session recording (stored in the database without a bucket).
+# What install.sh sets, plus what the test data needs: access requests, custom roles that act on the cluster (one with
+# a name outside ASCII, section 11), session recording (stored in the database without a bucket).
 gateway:
   service:
     type: NodePort
@@ -533,6 +553,7 @@ auth:
       - name: Write
         namespaces: [default]
         clusterRoles: [edit]
+$chart_role
 sessionRecording:
   enabled: true
 EOF
@@ -625,7 +646,9 @@ seed() {
   call POST /api/v1/auth/api-keys "$T1" "{\"name\":\"rh-key-u1-revoked\",\"expires_in_days\":30,\"cluster_ids\":[\"$CLUSTER_ID\"],\"role_ceiling\":\"Read\"}"
   expect 201 "second API key of rh-u1"; KGONE=$(jqb .key); local kgone_id; kgone_id=$(jqb .id); BODY=""
   call DELETE "/api/v1/auth/api-keys/$kgone_id" "$T1"; expect "200 204" "revoke rh-key-u1-revoked"
-  seed_write U1_PW U2_PW U3_PW U4_PW K1 KGONE
+  U6_PW=""; U7_PW=""
+  [ "$GROUPS_ON" = 1 ] && seed_groups
+  seed_write U1_PW U2_PW U3_PW U4_PW U6_PW U7_PW K1 KGONE
   unset K1 KGONE
   call POST /api/v1/auth/access-requests "$T1" "{\"cluster_id\":\"$CLUSTER_ID\",\"role\":\"Write\",\"duration_minutes\":480,\"reason\":\"rehearsal: approved on $FROM_VERSION\"}"
   expect 201 "access request of rh-u1"; local ar; ar=$(jqb .id)
@@ -633,13 +656,14 @@ seed() {
   call POST /api/v1/auth/access-requests "$T2" "{\"cluster_id\":\"$CLUSTER_ID\",\"role\":\"Write\",\"duration_minutes\":60,\"reason\":\"rehearsal: pending at the upgrade\"}"
   expect 201 "access request of rh-u2"
   call POST "/api/v1/sessions?cluster=$CLUSTER_ID" "$ATOK" '{"title":"rh-conversation-1"}'; expect "200 201" "the admin's conversation"
+  seed_model_config
   login "rh-u2@$DOMAIN" "Wrong$(newpw)"
   # Recordings stored in the database: one uploaded, one still open (written by FROM_VERSION, no owner) at the upgrade.
   psql_q "INSERT INTO session_recordings (id, kind, user_email, cluster, namespace, target, container, storage, status, started_at, ended_at, bytes, uploaded_bytes, parts, truncated, location)
           VALUES ('rec-reh-uploaded', 'exec', 'rh-u3@$DOMAIN', '$CLUSTER_ID', 'default', 'web-1', 'app', 'database', 'uploaded', now() - interval '30 minutes', now() - interval '29 minutes', 0, 0, 0, false, ''),
                  ('rec-reh-open', 'exec', 'rh-u3@$DOMAIN', '$CLUSTER_ID', 'default', 'web-1', 'app', 'database', 'recording', now() - interval '2 minutes', NULL, 0, 0, 0, false, '')" > /dev/null \
     || stop "insert the recording rows"
-  unset U1_PW U2_PW U3_PW U4_PW U5_PW
+  unset U1_PW U2_PW U3_PW U4_PW U5_PW U6_PW U7_PW
   for n in 1 2 3 4; do printf -v "T$n" '%s' ""; done
   info seed "data on $FROM_VERSION" "5 users · roles rh-ops rh-reader + stored ADMIN, ' read ', RH-OPS, ' PENDING ' (rh-u5's account level) · grants (rh-u4 ADMIN) · 2 keys (1 revoked) · 3 access requests (1 pending for RH-OPS) · 1 conversation · 2 recordings"
 }
@@ -661,6 +685,20 @@ seed_lookalikes() {
           VALUES ('ar-reh-lookalike', '$ID3', '$CLUSTER_ID', $r_rhops, 60, 'rehearsal: pending for the stored role RH-OPS', 'pending')" > /dev/null \
     || stop "insert the access request for RH-OPS"
   [ "$(psql_q "UPDATE auth_users SET role_id = $r_pending WHERE id = '$ID5' RETURNING id" | head -1)" = "$ID5" ] || stop "account level ' PENDING ' of rh-u5"
+}
+
+# seed_model_config: an AI model config stored as the one ai-service makes from OPENAI_MODEL when it starts with a key
+# and none stored (default-openai), with FROM_VERSION's chart ai.model. The upgrade must keep its model whatever the new
+# chart's default is (W8 QA Q-74). No key is set, so nothing calls a model.
+seed_model_config() {
+  local m
+  [ "$(value_of ai.enabled)" = true ] || { info seed "stored AI model config" "ai.enabled is not true: none stored"; return 0; }
+  m=$(value_of ai.model)
+  call POST /api/v1/ai/model-configs "$ATOK" "$(printf '{"name":"default-openai","provider":"openai","model":"%s","api_key_env":"OPENAI_API_KEY","enabled":true,"is_default":true}' "$m")"
+  case "$CODE" in
+    200|201) info seed "stored AI model config" "default-openai · openai · $m (chart ai.model of $FROM_VERSION)" ;;
+    *) row seed "stored AI model config" FAIL "HTTP $CODE $(jqb '.detail? // empty' | head -c 160)" ;;
+  esac
 }
 
 # snapshot WHEN: what the checks compare, names and states only (no secret, no row of a person's content)
@@ -692,19 +730,23 @@ snapshot() {
   pw=$(seed_get U1_PW); login "rh-u1@$DOMAIN" "$pw"; pw=""; t=$TOKEN
   call GET /api/v1/auth/api-keys "$t"; t=""
   jqb "$LIST | [.[] | .name] | sort | .[]" > "$d/api-keys.txt"
+  call GET /api/v1/ai/model-configs "$ATOK"
+  jqb "$LIST | [.[] | \"\(.name) \(.provider) \(.model) default=\(.is_default) enabled=\(.enabled) key=\(.api_key_env // \"-\")\"] | sort | .[]" > "$d/model-configs.txt"
+  value_of ai.model > "$d/chart-ai-model.txt"
   db_version > "$d/db-version.txt"
   BODY=""
 }
 # expected_after: with #865, what the before snapshot reads as once its migration has run (the migration's comment
 # says it): a role stored before the name rule is "<name trimmed>-renamed-<id>", its grants are gone (none of the seed's
 # is a temporary grant, which would go back to the role it restores instead) and its pending or approved requests are
-# expired with end_reason role_renamed. The other lines stay as they were.
+# expired with end_reason role_renamed. The other lines stay as they were. GR_RENAMED (section 11) is renamed so too.
 expected_after() {
   local e="$OUT/expected" ids
   rm -rf "$e"
   in_checkout 865 || return 0
   mkdir -p "$e"
   ids=$(awk '{print $1}' "$OUT/before/lookalike-roles.txt" | tr '\n' ' ')
+  [ "$GROUPS_ON" = 1 ] && [ -s "$OUT/groups-renamed-ids.txt" ] && ids="$ids$(tr '\n' ' ' < "$OUT/groups-renamed-ids.txt")"
   awk -v ids="$ids" 'BEGIN { n = split(ids, a, " "); for (i = 1; i <= n; i++) l[a[i]] = 1 }
     ($1 in l) { s = $0; sub(/^[0-9]+ \[/, "", s); sub(/\]$/, "", s); gsub(/^ +| +$/, "", s); print $1 " [" s "-renamed-" $1 "]"; next }
     { print }' "$OUT/before/roles.txt" > "$e/roles.txt"
@@ -715,7 +757,7 @@ expected_after() {
 compare_snapshots() {
   local f want name
   expected_after
-  for f in users teams roles grants access-requests recordings conversations api-keys; do
+  for f in users teams roles grants access-requests recordings conversations api-keys model-configs; do
     want="$OUT/before/$f.txt"; name="$f read back the same"
     if [ -f "$OUT/expected/$f.txt" ]; then want="$OUT/expected/$f.txt"; name="$f read back the same but for #865's changes"; fi
     if diff -q "$want" "$OUT/after/$f.txt" > /dev/null; then
@@ -725,6 +767,7 @@ compare_snapshots() {
     fi
   done
   [ -s "$OUT/before/users.txt" ] || row data "users snapshot has rows" FAIL "empty before snapshot"
+  info data "chart ai.model, a new config's default (before → after)" "$(cat "$OUT/before/chart-ai-model.txt") → $(cat "$OUT/after/chart-ai-model.txt") · stored: $(tr '\n' ' ' < "$OUT/after/model-configs.txt")"
   info data "recording status (before → after)" "$(paste -d' ' "$OUT/before/recording-status.txt" "$OUT/after/recording-status.txt" | awk '{print $1 ": " $2 " → " $4}' | tr '\n' ' ')"
 }
 
@@ -1205,6 +1248,261 @@ redis_checks() { # redis_checks PHASE single|users USERS_SECRET
   check "$a" "tool-server logs no Redis refusal (10 min)" 0 "${n:-0}"
 }
 
+# --- 11. roles whose names have characters outside ASCII (W8 QA Q-61, Q-66) ---
+# A step of seed_groups that does not go through is a FAIL row of area groups and leaves the group checks out; the rest
+# of the rehearsal goes on, and a FAIL in area groups does not stop the run before the upgrade as area before does.
+LIST_CM="/api/v1/cluster/namespaces/default/configmaps?cluster=$CLUSTER_ID"
+groups_left_out() { # groups_left_out AREA — the row for a run without the group checks
+  local name="roles outside ASCII: groups, renames, bindings (W8 QA Q-61, Q-66)"
+  if [ "${ROLE_GROUPS:-1}" != 0 ]; then skip "$1" "$name" 865 "no migration makes roles_name_group_key"
+  elif required 865; then row "$1" "$name" FAIL "REQUIRE names #865 and ROLE_GROUPS=0 leaves these checks out"
+  else row "$1" "$name" SKIP "ROLE_GROUPS=0"; fi
+}
+binding_name() { printf 'kubeast-role-%s-%s' "${1#kubeast:role:}" "$2"; } # binding_name GROUP CLUSTERROLE, as the template names it
+
+# seed_groups: the four roles (through the API when FROM_VERSION takes the name, else straight into the table as an
+# install from before its rule holds them: it refuses a name whose group another role has), rh-u6 given GR_CHART and
+# rh-u7 GR_REG on the cluster, and the custom roles template for GR_REG applied with kubectl. Sets GROUPS_READY.
+# shellcheck disable=SC2034 # U6_PW and U7_PW are read by name (${!v}) in seed_write and in the sign-ins
+seed_groups() {
+  local name perms rid p via n v id api body refusal="" given=""
+  GROUPS_READY=0
+  : > "$OUT/groups-roles.txt"; : > "$OUT/groups-renamed-ids.txt"
+  admin_login
+  for name in "$GR_CHART" "$GR_REG" "$GR_KEEP" "$GR_RENAMED"; do
+    perms='["menu.dashboard"]'
+    case "$name" in "$GR_CHART"|"$GR_REG") perms='["menu.workloads","menu.dashboard","resource.objects.read"]' ;; esac
+    call POST /api/v1/auth/admin/roles "$ATOK" "$(printf '{"name":"%s","description":"%s","permissions":%s}' "$name" "$GROUPS_DESC" "$perms")"
+    via=api
+    if [ "$CODE" != 201 ]; then
+      via="table (API $CODE)"
+      [ -n "$refusal" ] || refusal="$name: $(jqb '.detail? // empty')"
+      rid=$(psql_q "INSERT INTO roles (name, description) VALUES ('$name', '$GROUPS_DESC') RETURNING id" | head -1)
+      [ -n "$rid" ] || { row groups "roles outside ASCII made on $FROM_VERSION" FAIL "'$name': API $CODE, and the insert failed"; return 0; }
+      for p in $(printf '%s' "$perms" | jq -r '.[]'); do
+        psql_q "INSERT INTO role_permissions (role_id, permission) VALUES ($rid, '$p')" > /dev/null \
+          || { row groups "roles outside ASCII made on $FROM_VERSION" FAIL "permission $p of '$name'"; return 0; }
+      done
+    fi
+    rid=$(psql_q "SELECT id FROM roles WHERE name = '$name'")
+    [ -n "$rid" ] || { row groups "roles outside ASCII made on $FROM_VERSION" FAIL "no role '$name' stored ($via)"; return 0; }
+    printf '%s|%s|%s\n' "$rid" "$name" "$via" >> "$OUT/groups-roles.txt"
+    [ "$name" = "$GR_RENAMED" ] && printf '%s\n' "$rid" >> "$OUT/groups-renamed-ids.txt"
+  done
+  info groups "roles outside ASCII made on $FROM_VERSION" "$(awk -F'|' '{ printf "%s%s id %s %s", (NR > 1 ? " · " : ""), $2, $1, $3 }' "$OUT/groups-roles.txt")"
+  [ -z "$refusal" ] || info groups "$FROM_VERSION's answer to a name whose group another role has" "$refusal"
+  U6_PW=$(newpw); U7_PW=$(newpw)
+  for n in 6 7; do
+    v="U${n}_PW"
+    body=$(printf '{"name":"Rh User %s","email":"rh-u%s@%s","password":"%s","role_id":0,"team":"rh-team-a"}' "$n" "$n" "$DOMAIN" "${!v}")
+    call POST /api/v1/auth/admin/users "$ATOK" "$body"; body=""
+    [ "$CODE" = 201 ] || { row groups "users rh-u6 and rh-u7 made on $FROM_VERSION" FAIL "rh-u$n: HTTP $CODE $(jqb '.detail? // empty' | head -c 120)"; return 0; }
+    printf -v "ID$n" '%s' "$(jqb .id)"
+  done
+  for n in 6 7; do
+    id="ID$n"; name=$GR_CHART; [ "$n" = 7 ] && name=$GR_REG
+    rid=$(awk -F'|' -v n="$name" '$2 == n { print $1 }' "$OUT/groups-roles.txt")
+    call PUT "/api/v1/auth/admin/users/${!id}/cluster-roles/$CLUSTER_ID" "$ATOK" "$(printf '{"role":"%s"}' "$name")"
+    api=$CODE; via=api
+    if [ "$(psql_q "SELECT role_id FROM user_cluster_roles WHERE user_id = '${!id}' AND cluster_id = '$CLUSTER_ID'")" != "$rid" ]; then
+      psql_q "INSERT INTO user_cluster_roles (user_id, cluster_id, role_id) VALUES ('${!id}', '$CLUSTER_ID', $rid)
+              ON CONFLICT (user_id, cluster_id) DO UPDATE SET role_id = EXCLUDED.role_id" > /dev/null \
+        || { row groups "grants of rh-u6 and rh-u7 on $FROM_VERSION" FAIL "the grant row of rh-u$n (API $api)"; return 0; }
+      via="table (API $api)"
+    fi
+    given="$given${given:+ · }rh-u$n $name $via"
+  done
+  info groups "grants of rh-u6 and rh-u7 on $FROM_VERSION" "$given"
+  printf 'auth:\n  impersonation:\n    customRoles:\n      - name: "%s"\n        clusterRoles: [edit]\n' "$GR_REG" > "$OUT/registered-values.yaml"
+  registered_rbac from || { row groups "the custom roles template of $FROM_VERSION applied as on a registered cluster" FAIL "registered-rbac-from.log"; return 0; }
+  GROUPS_READY=1
+}
+
+# registered_rbac from|rc — the custom roles template for GR_REG (edit), rendered by FROM_VERSION's chart or the
+# candidate's and applied with kubectl, as on a registered cluster (the template's head comment; render-target-rbac.sh
+# renders it with the rest). This cluster is also the one Kubeast runs in, whose chart has an impersonation rule of the
+# same name, so the template's is renamed rehearsal-registered-impersonator.
+registered_rbac() {
+  local f="$OUT/registered-rbac-$1.yaml" src=("$CHART")
+  [ "$1" = from ] && src=("$CHART_OCI" --version "$FROM_VERSION")
+  hc template kubeast "${src[@]}" -s templates/impersonation-custom-roles.yaml -f "$OUT/registered-values.yaml" > "$f" 2> "$OUT/registered-rbac-$1.log" || return 1
+  sed -i.bak 's/kubeast-impersonator-custom-roles/rehearsal-registered-impersonator/g' "$f" && rm -f "$f.bak"
+  kc apply -f "$f" >> "$OUT/registered-rbac-$1.log" 2>&1
+}
+
+# groups_docs_queries AREA — getting-started "Upgrade"'s three queries into $OUT/docs-{preview,check,groups}.sql, picked
+# as TestPostgresUpgradeDocsQueriesSayWhatTheMigrationDoes picks them, and docs/ko giving the same.
+groups_docs_queries() {
+  local rc name="getting-started \"Upgrade\" gives the preview, check and groups queries, docs/ko the same"
+  python3 -I - "$ROOT/docs/getting-started.md" "$ROOT/docs/ko/getting-started.md" "$OUT" > "$OUT/docs-queries.txt" 2>&1 <<'EOF'
+import sys
+FENCE = "`" * 3
+def blocks(path):
+    found = {}
+    parts = open(path, encoding="utf-8").read().split(FENCE)
+    for i in range(1, len(parts), 2):
+        if not parts[i].startswith("sql\n"):
+            continue
+        sql = parts[i][4:]
+        if "AS same_group_as" in sql:
+            found["preview"] = sql
+        elif "FROM user_cluster_roles g JOIN roles r" in sql:
+            found["check"] = sql
+        elif "AS group_0_7_8" in sql:
+            found["groups"] = sql
+    return found
+en, ko = blocks(sys.argv[1]), blocks(sys.argv[2])
+missing = [k for k in ("preview", "check", "groups") if k not in en]
+if missing:
+    print("docs/getting-started.md has no " + ", ".join(missing) + " query")
+    sys.exit(1)
+for k, sql in en.items():
+    with open(sys.argv[3] + "/docs-" + k + ".sql", "w", encoding="utf-8") as f:
+        f.write(sql)
+if ko != en:
+    print("docs/ko/getting-started.md gives other queries")
+    sys.exit(2)
+print("en and ko give the same three")
+EOF
+  rc=$?
+  case "$rc" in
+    0) row "$1" "$name" PASS "$(cat "$OUT/docs-queries.txt")" ;;
+    2) row "$1" "$name" FAIL "$(cat "$OUT/docs-queries.txt")" ;;
+    *) row "$1" "$name" FAIL "$(head -c 200 "$OUT/docs-queries.txt")"; return 1 ;;
+  esac
+}
+
+# access_of PATH TOKEN — a GET as that token: sets CODE and ROLE_GROUP, the kubeast:role: group k8s-service sent the
+# cluster for it (its X-Kubeast-Access header, base64url JSON: "none" without such a group, "no-header" without one).
+access_of() {
+  local h tmp
+  h=$(mktemp "${TMPDIR:-/tmp}/reh.XXXXXX"); tmp=$(mktemp "${TMPDIR:-/tmp}/reh.XXXXXX")
+  CODE=$(curl -s -m "$CALL_TIMEOUT" -D "$h" -o "$tmp" -w '%{http_code}' -H @<(hdr "$2" "") "$GW$1")
+  [ -n "$CODE" ] || CODE=000
+  BODY=$(cat "$tmp")
+  ROLE_GROUP=$(python3 -I -c '
+import base64, json, sys
+g = "no-header"
+for line in sys.stdin:
+    k, _, v = line.partition(":")
+    if k.strip().lower() == "x-kubeast-access":
+        v = v.strip()
+        try:
+            a = json.loads(base64.urlsafe_b64decode(v + "=" * (-len(v) % 4)))
+            g = " ".join(x for x in sorted(a.get("groups") or []) if x.startswith("kubeast:role:")) or "none"
+        except Exception:
+            g = "unreadable"
+print(g)' < "$h")
+  rm -f "$h" "$tmp"
+}
+groups_token() { local pw; pw=$(seed_get "U$1_PW"); login "rh-u$1@$DOMAIN" "$pw"; pw=""; printf '%s' "$TOKEN"; } # groups_token 6|7
+can_create() { # can_create TOKEN — whether that identity may create ConfigMaps in default, as Kubeast's can-i answers
+  call GET "/api/v1/cluster/can-i?verb=create&resource=configmaps&namespace=default&cluster=$CLUSTER_ID" "$1"
+  if [ "$CODE" = 200 ]; then jqb '.allowed'; else printf 'HTTP %s' "$CODE"; fi
+}
+chart_group_bindings() { # the chart's ClusterRoleBindings of GR_CHART's group, before #865 or after: "<name> <subjects>"
+  kc get clusterrolebindings -o json | jq -r --arg a "$GR_OLD" --arg b "$GR_CHART_NEW" '[.items[]
+    | select(.metadata.annotations["meta.helm.sh/release-name"] == "kubeast")
+    | select(any(.subjects[]?; .kind == "Group" and (.name == $a or .name == $b)))
+    | "\(.metadata.name) \([.subjects[].name] | join(","))"] | sort | join("; ")'
+}
+old_group_left() { # the bindings and impersonation rules that still name GR_OLD
+  {
+    kc get clusterrolebindings,rolebindings -A -o json | jq -r --arg o "$GR_OLD" \
+      '.items[] | select(any(.subjects[]?; .kind == "Group" and .name == $o)) | "\(.kind)/\(.metadata.name)"'
+    kc get clusterroles -o json | jq -r --arg o "$GR_OLD" \
+      '.items[] | select(any(.rules[]?; any((.resourceNames // [])[]; . == $o))) | "ClusterRole/\(.metadata.name)"'
+  } | tr '\n' ' ' | sed 's/ $//'
+}
+
+# groups_before: on FROM_VERSION, before the upgrade — what getting-started's queries list, the group the two users'
+# requests go out as (one for both), and the chart's binding of that group.
+groups_before() {
+  [ "$GROUPS_ON" = 1 ] || { groups_left_out groups; return 0; }
+  [ "$GROUPS_READY" = 1 ] || return 0
+  groups_docs_queries groups || return 0
+  local got t6 t7 c6 g6
+  got=$(psql_q "$(cat "$OUT/docs-groups.sql")" | LC_ALL=C sort)
+  printf '%s\n' "$got" > "$OUT/before/docs-groups.txt"
+  check groups "getting-started's groups query on $FROM_VERSION: each role's group then and with #865" \
+    "$(printf '%s\n' "$GR_CHART|$GR_OLD|$GR_CHART_NEW" "$GR_REG|$GR_OLD|$GR_REG_NEW" "$GR_KEEP|$GR_PAIR_OLD|$GR_PAIR_NEW" "$GR_RENAMED|$GR_PAIR_OLD|$GR_PAIR_NEW" | LC_ALL=C sort | tr '\n' ';')" \
+    "$(printf '%s\n' "$got" | tr '\n' ';')"
+  if psql_q "$(cat "$OUT/docs-preview.sql")" > "$OUT/before/docs-preview-rows.txt" 2>&1; then
+    cut -d'|' -f1,3 "$OUT/before/docs-preview-rows.txt" | LC_ALL=C sort -t'|' -k1,1n > "$OUT/before/docs-preview.txt"
+    info groups "getting-started's preview on $FROM_VERSION: what the upgrade renames (id|same_group_as)" "$(tr '\n' ' ' < "$OUT/before/docs-preview.txt")"
+  else
+    : > "$OUT/before/docs-preview.txt"
+    row groups "getting-started's preview runs on $FROM_VERSION" FAIL "$(head -c 160 "$OUT/before/docs-preview-rows.txt")"
+  fi
+  t6=$(groups_token 6); t7=$(groups_token 7)
+  access_of "$LIST_CM" "$t6"; c6=$CODE; g6=$ROLE_GROUP
+  access_of "$LIST_CM" "$t7"
+  check groups "rh-u6's and rh-u7's ConfigMap lists answer and go out as one group on $FROM_VERSION" \
+    "200 $GR_OLD · 200 $GR_OLD" "$c6 $g6 · $CODE $ROLE_GROUP"
+  check groups "on $FROM_VERSION rh-u6 (chart: view) may create ConfigMaps through rh-u7's role's binding (edit)" true "$(can_create "$t6")"
+  check groups "the chart binds that group on $FROM_VERSION" "$(binding_name "$GR_OLD" view) $GR_OLD" "$(chart_group_bindings)"
+  t6=""; t7=""; BODY=""
+}
+
+# groups_after: once the migrations have run — the names and grants, the migration's rows against getting-started's
+# preview, the groups the requests go out as, the chart's binding replaced by helm upgrade, and the registered cluster's
+# way of getting-started "Upgrade": refused until the template is applied again, then the old binding deleted.
+groups_after() {
+  [ "$GROUPS_ON" = 1 ] && [ "$GROUPS_READY" = 1 ] || return 0
+  local want="" got="" rid name via renamed t6 t7 i t0 old
+  while IFS='|' read -r rid name via; do
+    if [ "$name" = "$GR_RENAMED" ]; then want="$want$rid [$name-renamed-$rid],"; else want="$want$rid [$name],"; fi
+    got="$got$rid [$(psql_q "SELECT name FROM roles WHERE id = $rid")],"
+  done < "$OUT/groups-roles.txt"
+  check groups "roles outside ASCII keep their names but the later of one #865 group (<name>-renamed-<id>)" "$want" "$got"
+  renamed=$(head -1 "$OUT/groups-renamed-ids.txt")
+  check groups "the migration's row for that one names the role whose group it shared" "$GR_KEEP" \
+    "$(psql_q "SELECT after->>'same_group_as' FROM auth_audit_logs WHERE actor_user_id = 'system' AND actor_email = 'migration' AND action = 'admin.roles.update' AND target_id = '$renamed'")"
+  check groups "getting-started's preview on $FROM_VERSION named what the migration renamed (id|same_group_as)" \
+    "$(tr '\n' ';' < "$OUT/before/docs-preview.txt")" \
+    "$(psql_q "SELECT target_id || '|' || coalesce(after->>'same_group_as', '') FROM auth_audit_logs
+               WHERE actor_user_id = 'system' AND actor_email = 'migration' AND action = 'admin.roles.update' AND after->>'reason' = 'same_group'" \
+       | LC_ALL=C sort -t'|' -k1,1n | tr '\n' ';')"
+  if got=$(psql_q "$(cat "$OUT/docs-check.sql")"); then
+    none_bad groups "getting-started's check after the upgrade lists no grant of a renamed role" "$(printf '%s' "$got" | tr '\n' ' ')" "none" "lists:"
+  else
+    row groups "getting-started's check after the upgrade lists no grant of a renamed role" FAIL "the query failed: $got"
+  fi
+  check groups "rh-u6 and rh-u7 keep their grants" "rh-u6 $GR_CHART · rh-u7 $GR_REG" \
+    "$(psql_q "SELECT string_agg(split_part(u.email, '@', 1) || ' ' || r.name, ' · ' ORDER BY u.email) FROM user_cluster_roles g
+               JOIN auth_users u ON u.id = g.user_id JOIN roles r ON r.id = g.role_id
+               WHERE u.email IN ('rh-u6@$DOMAIN', 'rh-u7@$DOMAIN') AND g.cluster_id = '$CLUSTER_ID'")"
+  t6=$(groups_token 6); t7=$(groups_token 7)
+  access_of "$LIST_CM" "$t6"
+  check groups "rh-u6's list answers as its #865 group (the chart's binding, replaced by helm upgrade)" "200 $GR_CHART_NEW" "$CODE $ROLE_GROUP"
+  check groups "the chart binds only that group, and its impersonation rule names it and not the old one" \
+    "$(binding_name "$GR_CHART_NEW" view) $GR_CHART_NEW · new yes old no" \
+    "$(chart_group_bindings) · $(kc get clusterrole kubeast-impersonator-custom-roles -o json | jq -r --arg o "$GR_OLD" --arg n "$GR_CHART_NEW" \
+        '[.rules[].resourceNames // [] | .[]] as $r | "new \(if any($r[]; . == $n) then "yes" else "no" end) old \(if any($r[]; . == $o) then "yes" else "no" end)"')"
+  access_of "$LIST_CM" "$t7"
+  check groups "rh-u7's list goes out as its #865 group, refused while the registered cluster binds the old one" "403 $GR_REG_NEW" "$CODE $ROLE_GROUP"
+  if registered_rbac rc; then
+    t0=$(date +%s)
+    for i in $(seq 1 23); do access_of "$LIST_CM" "$t7"; [ "$CODE" = 200 ] && break; sleep 2; done
+    if [ "$CODE $ROLE_GROUP" = "200 $GR_REG_NEW" ]; then
+      row groups "rh-u7's list answers once the candidate's template is applied again" PASS "200 $ROLE_GROUP, ${i} tries in $(( $(date +%s) - t0 ))s"
+    else
+      row groups "rh-u7's list answers once the candidate's template is applied again" FAIL "want 200 $GR_REG_NEW, got $CODE $ROLE_GROUP after $(( $(date +%s) - t0 ))s"
+    fi
+  else
+    row groups "rh-u7's list answers once the candidate's template is applied again" FAIL "the template did not render or apply (registered-rbac-rc.log)"
+  fi
+  old=$(binding_name "$GR_OLD" edit)
+  check groups "getting-started's name of the old binding is the one $FROM_VERSION's template made ($old)" "rendered · in the cluster" \
+    "$(grep -qxF -- "  name: $old" "$OUT/registered-rbac-from.yaml" && echo rendered || echo "not rendered") · $(kc get clusterrolebinding "$old" > /dev/null 2>&1 && echo "in the cluster" || echo "not in the cluster")"
+  kc delete clusterrolebinding "$old" --ignore-not-found > /dev/null 2>&1
+  none_bad groups "with it deleted, no binding or impersonation rule names $GR_OLD" "$(old_group_left)" "none" "still in:"
+  check groups "rh-u6 may not create ConfigMaps in default, rh-u7 may: the two groups are apart" "false true" "$(can_create "$t6") $(can_create "$t7")"
+  access_of "$LIST_CM" "$t7"
+  check groups "rh-u7's list still answers with the old binding deleted" 200 "$CODE"
+  t6=""; t7=""; BODY=""
+}
+
 # --- main ---
 case "${1:-}" in
   --delete)
@@ -1218,6 +1516,7 @@ case "$REPLICAS" in 1|2|3) ;; *) stop "REPLICAS is 1, 2 or 3" ;; esac
 require_names
 begin_output
 chart_values
+if [ "${ROLE_GROUPS:-1}" != 0 ] && in_checkout 865; then GROUPS_ON=1; fi
 if [ "$PLAN" = 1 ]; then
   say "upgrade rehearsal plan: checkout $HEAD8, out $OUT"
   plan
@@ -1236,6 +1535,7 @@ FROM_DB=$(db_version)
 snapshot before
 live_checks before
 if [ "$(awk -F'\t' '$1 == "before" && $3 == "FAIL"' "$RES" | wc -l | tr -d ' ')" != 0 ]; then stop "checks failed on $FROM_VERSION itself — fix the data before upgrading"; fi
+groups_before
 PG_UID_BEFORE=$(kc -n "$NS" get pods -l app=postgres -o jsonpath='{.items[0].metadata.uid}' 2>/dev/null)
 make_blocker
 prepare_candidate
@@ -1270,6 +1570,7 @@ snapshot after
 compare_snapshots
 live_checks after
 role_checks
+groups_after
 admin_login
 call GET "/api/v1/nodes/$WORKER/drain/status?cluster=$CLUSTER_ID&drain_id=$DRAIN_A" "$ATOK"
 if [ $(( PHASE_T0 - DRAIN_A_T )) -lt 240 ]; then
