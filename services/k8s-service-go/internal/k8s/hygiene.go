@@ -20,6 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -226,7 +227,7 @@ func (s *Service) CollectHygiene(ctx context.Context, opts HygieneOptions) (Hygi
 	// Upgrade readiness. The server version decides the target; without it the
 	// upgrade checks do not run (and say so through the collector list). Read
 	// first: the pods are checked as they are listed.
-	if sv, err := cs.Discovery().ServerVersion(); ok("serverversion", err) {
+	if sv, err := discovery.ToDiscoveryInterfaceWithContext(cs.Discovery()).ServerVersionWithContext(ctx); ok("serverversion", err) {
 		in.ServerVersion = sv.GitVersion
 	}
 	if sum, err := hygienePodSummaryOf(ctx, cs, hygieneTarget(opts, in.ServerVersion)); ok("pods", err) {
@@ -277,7 +278,7 @@ func (s *Service) CollectHygiene(ctx context.Context, opts HygieneOptions) (Hygi
 			in.CRDs = l.Items
 		}
 		// scheduling.k8s.io/v1alpha2 exists only on clusters that served it; its absence is not a failure.
-		if rl, err := s.discoveryCtx(ctx).ServerResourcesForGroupVersion("scheduling.k8s.io/v1alpha2"); err == nil && rl != nil {
+		if rl, err := discovery.ToDiscoveryInterfaceWithContext(s.discoveryCtx(ctx)).ServerResourcesForGroupVersionWithContext(ctx, "scheduling.k8s.io/v1alpha2"); err == nil && rl != nil {
 			for _, r := range rl.APIResources {
 				if strings.Contains(r.Name, "/") || !contains(r.Verbs, "list") {
 					continue

@@ -8,6 +8,7 @@ import (
 	"k8s.io/client-go/discovery"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/flight"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 const serverVersionTTL = 10 * time.Minute
@@ -34,7 +35,7 @@ func (b *clientBundle) serverVersion(ctx context.Context) string {
 		plain, cancel := context.WithCancel(context.Background())
 		defer context.AfterFunc(ctx, cancel)()
 		defer cancel()
-		sv, err := discovery.ToServerVersionInterfaceWithContext(b.discovery).ServerVersionWithContext(plain)
+		sv, err := discovery.ToServerVersionInterfaceWithContext(b.discovery).ServerVersionWithContext(auth.AsKubeast(plain))
 		if err != nil {
 			return "", err
 		}

@@ -104,6 +104,7 @@ type guardedTransport struct {
 
 func (t *guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if t.pinned != nil {
+		req = req.WithContext(auth.WithPinnedPerson(req.Context(), *t.pinned))
 		return protectedns.Pinned(t.base, t.rules.get(), t.clusterID, *t.pinned).RoundTrip(req)
 	}
 	return protectedns.RoundTripper(t.base, t.rules.get(), t.clusterID).RoundTrip(req)

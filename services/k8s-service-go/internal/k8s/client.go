@@ -639,9 +639,10 @@ var ErrNoUser = errors.New("no signed-in user in context")
 // UserRESTConfigFor returns a REST config that acts as the user in ctx even
 // for requests issued outside ctx. The per-request round tripper impersonates
 // only when the request's own context carries the user; a library that calls
-// the API with its own context (the Helm SDK) would otherwise go out as the
-// service account. The identity is pinned on a copy of the cluster config, the
-// same way the overview cache pins its fixed identity.
+// the API with its own context (the Helm SDK) would otherwise be refused
+// (auth.ErrNoPerson). The identity is pinned on a copy of the cluster config,
+// the same way the overview cache pins its fixed identity, and the pinned
+// transport hands it to the per-request one (auth.WithPinnedPerson).
 func (s *Service) UserRESTConfigFor(ctx context.Context) (*rest.Config, error) {
 	b, err := s.ForCtx(ctx)
 	if err != nil {
@@ -788,7 +789,7 @@ func (s *Service) HealthCheck(ctx context.Context) error {
 	if b == nil {
 		return errNotLoaded
 	}
-	_, err := b.clientset.Discovery().ServerVersion()
+	_, err := discovery.ToServerVersionInterfaceWithContext(b.clientset.Discovery()).ServerVersionWithContext(auth.AsKubeast(ctx))
 	return err
 }
 

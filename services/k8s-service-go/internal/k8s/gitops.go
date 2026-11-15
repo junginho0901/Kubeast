@@ -82,7 +82,7 @@ func (s *Service) matchForGitops(ctx context.Context, resourceType string) (reso
 	if !errors.As(err, &partial) {
 		return m, err
 	}
-	groups, lists, _ := s.discoveryCtx(ctx).ServerGroupsAndResources()
+	groups, lists, _ := discovery.ToDiscoveryInterfaceWithContext(s.discoveryCtx(ctx)).ServerGroupsAndResourcesWithContext(ctx)
 	found, matchErr := matchResource(preferredFirst(groups, lists), resourceType)
 	if matchErr != nil {
 		return resourceMatch{}, err // it may belong to a group that did not answer
