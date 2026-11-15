@@ -71,6 +71,12 @@ function HelmReleaseDetail() {
     },
     [namespace, name, queryClient],
   )
+  // The stream started over and cannot say what changed meanwhile: this release's queries on screen are read again.
+  const handleHelmResync = useCallback(() => {
+    for (const part of ['helm-release', 'helm-section', 'helm-history', 'helm-resources']) {
+      queryClient.invalidateQueries({ queryKey: [part, namespace, name] })
+    }
+  }, [namespace, name, queryClient])
 
   useHelmWatchList({
     cluster: currentCluster || 'default',
@@ -78,6 +84,7 @@ function HelmReleaseDetail() {
     enabled: !!namespace && !!name,
     queryKey: null,
     onEvent: handleHelmEvent,
+    onResync: handleHelmResync,
   })
 
   // 활성 탭 별로 상세 데이터를 함께 fetch — TanStack Query 가 자식 탭 컴포넌트와
