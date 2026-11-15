@@ -535,13 +535,14 @@ class PollFailed(Exception):
     """A read the alert path waits on failed POLL_ERRORS_IN_A_ROW times in a row."""
 
 
-def steady(read, tick=None):
-    """read(), tried again POLL_SECONDS later after a request error (an HTTP error, a timeout, a dropped connection; a
-    401 is signed in again by the Api first), with tick() between; PollFailed after POLL_ERRORS_IN_A_ROW in a row."""
+def steady(read, *args, tick=None):
+    """read(*args), tried again POLL_SECONDS later after a request error (an HTTP error, a timeout, a dropped
+    connection; a 401 is signed in again by the Api first), with tick() between; PollFailed after
+    POLL_ERRORS_IN_A_ROW in a row."""
     why = ""
     for n in range(POLL_ERRORS_IN_A_ROW):
         try:
-            return read()
+            return read(*args)
         except REQUEST_ERRORS as e:
             why = request_error(e)[0]
             if isinstance(e, urllib.error.HTTPError):
@@ -635,7 +636,7 @@ def wait_for_fired(admin: Api, case: dict, before: set, deadline: float, tick) -
     name, match = rca.alert_name(case), {"namespace": case["namespace"], **(alert.get("match") or {})}
     while True:
         tick()
-        fresh = [r for r in steady(lambda: inbox_rows(admin, case["cluster"], name), tick) if r["id"] not in before and r.get("status") == "firing"
+        fresh = [r for r in steady(inbox_rows, admin, case["cluster"], name, tick=tick) if r["id"] not in before and r.get("status") == "firing"
                  and all(((r.get("labels") or {}).get(k) or "") == v for k, v in match.items())]
         if fresh:
             return min(fresh, key=lambda r: r.get("first_received_at") or "")
@@ -653,24 +654,24 @@ def find_investigation(admin: Api, cluster: str, row: dict, before: set, deadlin
     chosen, how, looked = None, "", time.monotonic()
     while True:
         tick()
-        items = steady(lambda: investigations(admin, cluster), tick)
+        items = steady(investigations, admin, cluster, tick=tick)
         if how != "starts_at":
             new = [s for s in items if s["id"] not in before and s.get("alertname") == row["alertname"]]
             for s in new:
                 if s["id"] not in details:  # a detail read writes ai.investigation.view: once per investigation
-                    details[s["id"]] = steady(lambda: admin.json("GET", f"/api/v1/ai/investigations/{s['id']}"), tick)
+                    details[s["id"]] = steady(admin.json, "GET", f"/api/v1/ai/investigations/{s['id']}", tick=tick)
             mine = [details[s["id"]] for s in new if details[s["id"]].get("fingerprint") == row["fingerprint"]]
             exact = [d for d in mine if same_time(d.get("starts_at"), row.get("starts_at"))]
             if exact or (mine and chosen is None):
                 chosen, how = (exact or mine)[0]["id"], "starts_at" if exact else "fingerprint"
             elif chosen is None and time.monotonic() - looked > 30:
-                linked = (steady(lambda: admin.json("GET", f"/api/v1/alerts/inbox/{row['id']}"), tick).get("investigation") or {}).get("id")
+                linked = (steady(admin.json, "GET", f"/api/v1/alerts/inbox/{row['id']}", tick=tick).get("investigation") or {}).get("id")
                 if linked in before:
                     return None, f"folded into the earlier investigation {linked} (features.alertInvestigation.dedupeHours)"
         if chosen is not None:
             summary = next((s for s in items if s["id"] == chosen), None)
             if summary is not None and summary.get("status") in INVESTIGATION_END:
-                return steady(lambda: admin.json("GET", f"/api/v1/ai/investigations/{chosen}"), tick), how
+                return steady(admin.json, "GET", f"/api/v1/ai/investigations/{chosen}", tick=tick), how
         if time.monotonic() >= deadline:
             if chosen is not None:
                 return None, f"investigation {chosen} not finished in time"
@@ -734,8 +735,8 @@ def run_alert_case(case_dir: Path, case: dict, admin: Api, kcs: dict, args, stam
         st.marks["SETUP_TIME"] = setup_time
         time.sleep(case.get("settle_seconds", 0) + case.get("baseline_seconds", 0))
         try:
-            before = steady(lambda: investigation_ids(admin, cluster), tick)
-            rows_before = {r["id"] for r in steady(lambda: inbox_rows(admin, cluster, name), tick)} if source == "real" else set()
+            before = steady(investigation_ids, admin, cluster, tick=tick)
+            rows_before = {r["id"] for r in steady(inbox_rows, admin, cluster, name, tick=tick)} if source == "real" else set()
         except PollFailed as e:
             results.append({**head, "setup_error": f"before the fault: {e}"})
             return results
@@ -757,7 +758,7 @@ def run_alert_case(case_dir: Path, case: dict, admin: Api, kcs: dict, args, stam
                         results.append({**run_head, "alert_source": src, "setup_error": f"{name} did not fire within "
                                         f"{alert.get('fire_wait_seconds', rca.DEFAULT_FIRE_WAIT_SECONDS)} s of the fault start"})
                         break
-                    fired = steady(lambda: admin.json("GET", f"/api/v1/alerts/inbox/{row['id']}"), tick)
+                    fired = steady(admin.json, "GET", f"/api/v1/alerts/inbox/{row['id']}", tick=tick)
                     triggered, sent_at = time.monotonic(), now_utc()
                 else:
                     src = "synthetic" if source == "synthetic" else "replay"
@@ -780,7 +781,7 @@ def run_alert_case(case_dir: Path, case: dict, admin: Api, kcs: dict, args, stam
                     if counts.get("accepted") != 1:
                         results.append({**run_head, "alert_source": src, "setup_error": f"the webhook queued no investigation: {counts}"})
                         continue
-                    rows = steady(lambda: inbox_rows(admin, cluster, message["labels"]["alertname"]), tick)
+                    rows = steady(inbox_rows, admin, cluster, message["labels"]["alertname"], tick=tick)
                     row = next((r for r in rows if r["fingerprint"] == message["fingerprint"]), None)
                     if row is None:
                         results.append({**run_head, "alert_source": src, "setup_error": "the alert is not in the inbox after the webhook took it"})

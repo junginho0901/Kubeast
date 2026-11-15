@@ -540,6 +540,11 @@ def test_text_control_needs_no_fault_and_no_suspect():
     ]:
         s = rca.score_text(report(text), truth)
         assert not s["pass"] and not s["no_fault"], (text, s)
+    for text in ("No fault found, thumbnailer only restarted once.", "장애는 없고 thumbnailer는 한 번 재시작했습니다."):
+        s = rca.score_text(report(text), C13)  # the no-fault words are a clause of their own, naming nothing
+        assert s["pass"] and s["no_fault"], (text, s)
+    s = rca.score_text(report("orders slowed because of thumbnailer's restart."), C13)
+    assert not s["pass"] and s["decoys_named"] == ["thumbnailer"], s  # "because of" blames the object after it
     s = rca.score_text(report("No fault found. Deployment/shop-13/catalog's connection pool causes the order failures."), C13)
     assert not s["pass"] and s["no_fault"] and s["suspects"] == ["Deployment/shop-13/catalog"], s
     s = rca.score_text(report("thumbnailer restarted and caused the order failures, while orders itself is healthy."), C13)
@@ -553,6 +558,9 @@ def test_text_right_reports_the_second_review_read_as_wrong():
         ("storefront-config의 cart_url 설정이 바뀌었고 notifier 재시작은 무관합니다.", T12, 1.0),
         ("storefront-config changed the cart_url setting, while notifier's restarts are unrelated.", T12, 1.0),
         ("storefront-config changed cart_url and notifier is unrelated.", T12, 1.0),
+        ("storefront-config의 cart_url 설정이 바뀌어서 장바구니 호출이 실패하는데 notifier 재시작은 무관합니다.", T12, 1.0),
+        ("storefront-config's cart_url changed: notifier is unrelated.", T12, 1.0),
+        ("cart answers 404 because of storefront-config's cart_url change.", T12_PATH, 1.0),
         ("storefront-config's cart_url was edited in place from /api/v1/cart to /api/v2/cart; cart only serves /api/v1/cart and answers 404.",
          T12_PATH, 1.0),
         ("shop-api-settings raised WEB_WORKERS from 3 to 6, so shop-api is OOMKilled at its memory limit.", T22, 1.0),

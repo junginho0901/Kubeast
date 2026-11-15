@@ -487,12 +487,10 @@ def likely_cause(report: str) -> tuple[str, str]:
 
 
 def _text_names(text: str) -> set[str]:
-    """What in a text can name an object: each run of name characters that is no URL path ("/api/v1/cart"), and its
-    last part after a slash."""
+    """What in a text can name an object: each run of name characters, and its last part after a slash (a part of a URL
+    path, "/api/v1/cart", is found by no _name_at, so it names nothing)."""
     out = set()
     for m in _TOKEN.finditer(text):
-        if m.start() and text[m.start() - 1] == "/":
-            continue
         t = m.group(0).strip("./-")
         if t:
             out.add(t)
@@ -567,6 +565,11 @@ def _whose(at: int, places: dict) -> list:
     after = {i: min(b for b, _ in spans if b >= at) for i, spans in places.items() if any(b >= at for b, _ in spans)}
     best = min(after.values(), default=None)
     return [i for i, b in after.items() if b == best]
+
+
+def _whom(at: int, here: set, places: dict) -> list:
+    """The causes a kind word at `at` speaks of: the one its clause names (here), else _whose."""
+    return sorted(here) if len(here) == 1 else _whose(at, places)
 
 
 def score_text(report: str, truth: dict) -> dict:
@@ -674,14 +677,13 @@ def score_text(report: str, truth: dict) -> dict:
             continue
         words = _blank(cleared_text, {n for n in objects if own_name(n)})
         for cs, ce, here in live_by_clause:
-            def speak(at, kind, change=False):
-                for i in (sorted(here) if len(here) == 1 else _whose(at, places)):
-                    if not change or config_cause(i):
-                        said[i].add(kind)
             for a, _, kind in _kind_spans(words[cs:ce]):
-                speak(cs + a, kind)
+                for i in _whom(cs + a, here, places):
+                    said[i].add(kind)
             for m in CHANGE_WORDS.finditer(words[cs:ce]):
-                speak(cs + m.start(), "config_change", change=True)
+                for i in _whom(cs + m.start(), here, places):
+                    if config_cause(i):
+                        said[i].add("config_change")
     causes, extras = [], len(extra_objects)
     for i, tc in enumerate(truth_causes):
         own = {tc["kind"], *(tc.get("accept_kinds") or [])}
