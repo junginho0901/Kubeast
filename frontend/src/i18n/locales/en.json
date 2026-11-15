@@ -2769,7 +2769,8 @@
       "ok": "Healthy",
       "hint": "A cell is a Node, a dot a Pod. Click a cell, or press Enter on it, to see all its Pods.",
       "hintPaged": "A cell is a Node, a dot a Pod; the outlined cells are the boxes below. Click a cell, or press Enter on it, to see all its Pods.",
-      "openFirst": "Open {{node}}, the first of them"
+      "openFirst": "Open {{node}}, the first of them",
+      "roleDescription": "Node map"
     }
   },
   "namespaces": {
