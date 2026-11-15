@@ -526,7 +526,7 @@ tests:
           path: metadata.name
           value: RELEASE-NAME-ai-service
       - equal:
-          path: spec.egress[3]
+          path: spec.egress[4]
           value:
             to:
               - ipBlock:
@@ -540,7 +540,7 @@ tests:
           path: metadata.name
           value: RELEASE-NAME-tool-server
       - equal:
-          path: spec.egress[4]
+          path: spec.egress[5]
           value:
             to:
               - ipBlock:
@@ -552,7 +552,7 @@ tests:
           path: metadata.name
           value: RELEASE-NAME-tool-server
       - equal:
-          path: spec.egress[5]
+          path: spec.egress[6]
           value:
             to:
               - ipBlock:
@@ -562,7 +562,7 @@ tests:
           value: RELEASE-NAME-tool-server
       - lengthEqual:
           path: spec.egress
-          count: 6
+          count: 7
         documentSelector:
           path: metadata.name
           value: RELEASE-NAME-tool-server
