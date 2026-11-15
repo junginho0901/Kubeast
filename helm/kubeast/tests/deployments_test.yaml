@@ -1,4 +1,4 @@
-suite: deployments — replica guards for the single-process services
+suite: deployments — replicas, the database CA and the ai-service image
 # deployments.yaml includes configmap.yaml and secret.yaml for its checksum
 # annotation, so they must be rendered alongside; every assertion targets
 # deployments.yaml.
@@ -20,20 +20,18 @@ tests:
           value: 1
         template: deployments.yaml
 
-  - it: refuses replicas.k8sService above 1 (drain progress and client caches are in process memory)
+  # replicas.k8sService and replicas.toolServer above 1 need Redis: templates/checks/replicas.yaml, replicas_test.yaml
+  - it: renders replicas.k8sService and replicas.toolServer above 1
     set:
       replicas.k8sService: 2
-    asserts:
-      - failedTemplate:
-          errorPattern: replicas.k8sService must be 1
-        template: deployments.yaml
-
-  - it: refuses replicas.toolServer above 1 (per-process kubeconfig cache)
-    set:
       replicas.toolServer: 3
+    documentSelector:
+      path: metadata.name
+      value: tool-server
     asserts:
-      - failedTemplate:
-          errorPattern: replicas.toolServer must be 1
+      - equal:
+          path: spec.replicas
+          value: 3
         template: deployments.yaml
 
   - it: still lets stateless services scale

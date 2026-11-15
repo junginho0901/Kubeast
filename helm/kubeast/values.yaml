@@ -576,9 +576,12 @@ podSecurity:
   readOnlyRootFilesystem: true
 
 # --- Availability ---
-# k8sService and toolServer must stay at 1: node drain progress and per-cluster
-# client/kubeconfig caches live in process memory, so a second replica would
-# answer with stale or missing state. The chart refuses to render otherwise.
+# Pods per service (docs/high-availability.md). k8sService and toolServer above 1
+# need redis.enabled: k8s-service's pods share their list, YAML and Helm caches
+# through it, and both hear of a cluster's change there; the chart refuses to
+# render otherwise. The ModelConfig controller runs one pod (one works at a time,
+# by leader election), and so do the chart's postgres and redis: they have no key.
+# A service with autoscaling.<service>.enabled takes its count from its HPA instead.
 replicas:
   authService: 1
   aiService: 1
@@ -612,6 +615,22 @@ streams:
 pdb:
   enabled: false
   minAvailable: 1
+# One HorizontalPodAutoscaler (autoscaling/v2) per service, off by default. On, the
+# Deployment's replicas is left to it (turning it on in a running release sets the
+# count to 1 until the HPA's first sync: docs/high-availability.md). It scales on
+# CPU only, as a share of resources.<service>.requests.cpu, which must be set; the
+# cluster needs metrics-server. 80 is Kubernetes' own default target; set yours
+# from a load test. maxReplicas above 1 for k8sService and toolServer needs
+# redis.enabled. behavior goes into the HPA as written ({} = Kubernetes' defaults,
+# which scale down after 300 s of lower use).
+autoscaling:
+  authService: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
+  aiService: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
+  k8sService: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
+  sessionService: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
+  frontend: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
+  toolServer: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
+  gateway: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
 # zone + hostname spread, soft (ScheduleAnyway)
 topologySpread:
   enabled: true
