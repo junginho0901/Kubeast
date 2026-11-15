@@ -443,7 +443,7 @@ def test_text_kind_words_listed_after_two_causes_speak_of_the_nearer_one():
         assert (s["pass"], s["score"]) == (False, 0.0), (text, s)
         assert [(c["resource_found"], c["kind_found"], c["other_kinds"]) for c in s["causes"]] == [(True, False, []), (True, True, ["image"])]
     for text in ("gallery's new image tag is missing, and stock's selector config no longer matches its pods.",
-                 "gallery has a bad image tag; a selector config change hit stock.",  # a kind word goes to its own clause's cause
+                 "gallery's image tag is missing; a selector config change hit stock.",  # a kind word goes to its own clause's cause
                  "gallery는 이미지 태그가 잘못됐고 stock은 셀렉터 설정이 바뀌었습니다."):
         s = rca.score_text(report(text), TWO)
         assert (s["pass"], s["score"], s["extras"]) == (True, 1.0, 0), (text, s)
