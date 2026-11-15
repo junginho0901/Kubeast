@@ -288,7 +288,8 @@ async def test_with_every_v079_switch_off_the_model_is_sent_what_v078_sent(monke
 
 @pytest.mark.asyncio
 async def test_with_only_the_investigations_switches_on_a_chat_is_sent_and_asks_what_v078_did(monkeypatch):
-    """Alert investigations with each of their v0.7.9 steps on: a chat's round is v0.7.8's (its second call, what it asks tool-server)."""
+    """Alert investigations with each of their v0.7.9 steps on: a chat's round is v0.7.8's (its tools, its second call,
+    what it asks tool-server)."""
     for name in V079_SWITCHES:
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("REDACTION_PII", "true")
@@ -297,5 +298,6 @@ async def test_with_only_the_investigations_switches_on_a_chat_is_sent_and_asks_
                  "AI_RULE_CARDS_INVESTIGATIONS"):
         monkeypatch.setenv(name, "true")
     sent, asked = await _chat_calls(monkeypatch, QUESTIONS["en"], False, ROUND)
-    assert {"chat second call": _sha(sent[1]["messages"]), "chat tool-server calls": _sha(asked, sort_keys=True)} == {
-        name: V078[name] for name in ("chat second call", "chat tool-server calls")}
+    got = {"chat tools": _sha(sent[0]["tools"]), "chat second call": _sha(sent[1]["messages"]),
+           "chat tool-server calls": _sha(asked, sort_keys=True)}
+    assert got == {name: V078[name] for name in got}
