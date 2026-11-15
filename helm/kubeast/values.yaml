@@ -642,6 +642,13 @@ gateway:
   # [+ port], no path. Empty = same host and the Ingress host only.
   allowedOrigins: []
   #  - https://console.example.com
+  # true: each access log line, after nginx's default "combined" fields, also
+  # gives the request's time and the service's connect, header and response
+  # times in seconds ($request_time $upstream_connect_time
+  # $upstream_header_time $upstream_response_time), the service's address and
+  # the client's port. false = nginx's default lines.
+  accessLog:
+    upstreamTimes: false
 
 # --- Ingress (optional) ---
 ingress:

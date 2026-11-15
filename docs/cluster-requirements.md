@@ -23,7 +23,7 @@ A "target cluster" is a cluster Kubeast manages, including the cluster it is ins
 | --- | --- | --- | --- |
 | All | Kubeast permissions (RBAC) — §1 | `auth.impersonation.enabled` (on) | User requests get 403 from the cluster |
 | Alerts → AI investigation | Investigator identity RBAC — §1, Alertmanager or Grafana alerting that sends webhooks to Kubeast — §13 | `features.alertInvestigation.enabled` (off) | Alerts do not arrive, or the investigation's read tools get 403 from the cluster |
-| Node and pod usage, Monitoring, optimization (fallback) | metrics-server — §2 | — | Usage cells are empty and optimization shows "none" |
+| Node and pod usage, Monitoring, optimization (fallback) | metrics-server — §2 | — | The Dashboard's top resources, Monitoring and the Nodes page's top card tell every user "Metrics server not available for this cluster" (from the cluster's API discovery, §2); the node drawer's usage is empty and optimization shows "none" |
 | Drawer and dashboard graphs, optimization, storage analysis | Prometheus + metric collectors — §3 | `features.prometheus.enabled` (**off**) | Graph areas are hidden and optimization uses metrics-server point-in-time values |
 | Cost, optimization cost column | OpenCost — §4 | `features.cost.enabled` (on) | "OpenCost is not installed on this cluster" notice, no cost column |
 | Policy reports | The PolicyReport CRD and a tool that creates reports — §5 | `features.policyReports.enabled` (on) | "Not installed" notice |
@@ -115,6 +115,8 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 The node list, the Monitoring screen and the node drawer read their usage from `metrics.k8s.io`.
 So does the optimization table when there is no Prometheus (point-in-time values).
 A node's CPU, memory and percents are what `kubectl top nodes` prints: the share of the node's allocatable, not its capacity.
+Kubeast asks the metrics list first, so a cluster that answers it is asked nothing more. Only when a list answers 404 or 403 does it look in the cluster's API discovery for `metrics.k8s.io`: the discovery it read within the last minute, or else one `GET /apis/metrics.k8s.io` as `kubeast:cache`, which the default `system:discovery` ClusterRole allows. It keeps that answer, or a failure to read it, a minute per cluster.
+Where discovery does not list `metrics.k8s.io`, every user is told metrics-server is not available and no metrics list is asked in that minute; while discovery cannot be read, each user gets the cluster's own answer. A metrics-server installed since shows within two minutes. Check: `kubectl get --raw /apis/metrics.k8s.io` answers 404 on a cluster without it.
 
 - Install: [metrics-server chart](https://artifacthub.io/packages/helm/metrics-server/metrics-server) `3.14.0` (app 0.9.0), with `helm install metrics-server metrics-server/metrics-server --version 3.14.0 -n kube-system`.
   - On EKS the metrics-server add-on also works.

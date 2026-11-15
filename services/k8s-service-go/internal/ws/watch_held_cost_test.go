@@ -82,9 +82,9 @@ func TestASocketBehindHoldsItsQueuedFramesAsJSON(t *testing.T) {
 	runtime.GC()
 	var before runtime.MemStats
 	runtime.ReadMemStats(&before)
-	queues := make([]chan ResponseMessage, sockets)
+	queues := make([]chan *ResponseMessage, sockets)
 	for i := range queues {
-		queues[i] = make(chan ResponseMessage, queued)
+		queues[i] = make(chan *ResponseMessage, queued)
 		go m.runWatch(ctx, RequestMessage{Type: "REQUEST", Path: "/api/v1/namespaces/bulk/pods", Query: "watch=1"}, queues[i])
 	}
 	deadline := time.Now().Add(10 * time.Second)
@@ -147,11 +147,11 @@ func TestStalledWatchSubscriberHeldCost(t *testing.T) {
 			runtime.GC()
 			var before runtime.MemStats
 			runtime.ReadMemStats(&before)
-			queues := make([]chan ResponseMessage, watches)
+			queues := make([]chan *ResponseMessage, watches)
 			for i := range queues {
-				queues[i] = make(chan ResponseMessage, 256)
+				queues[i] = make(chan *ResponseMessage, 256)
 				if drained {
-					go func(ch chan ResponseMessage) {
+					go func(ch chan *ResponseMessage) {
 						for range ch {
 						}
 					}(queues[i])

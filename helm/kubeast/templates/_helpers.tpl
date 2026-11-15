@@ -56,6 +56,25 @@ every entry of gateway.allowedOrigins, comma-joined; empty with neither.
 {{- join "," $list -}}
 {{- end -}}
 
+{{- /*
+The gateway's accesslog.conf with gateway.accessLog.upstreamTimes: nginx's
+"combined" fields, then the request's time, the service's connect, header and
+response times, the service's address and the client's port, to the same
+place as nginx's default log. Empty when off, so the ConfigMap and the pods'
+checksum stay as without it. dig: the values of an earlier release, kept by
+--reuse-values, have no gateway.accessLog.
+*/ -}}
+{{- define "kubeast.gatewayAccessLog" -}}
+{{- if eq (toString (dig "accessLog" "upstreamTimes" false .Values.gateway)) "true" -}}
+log_format upstream_times '$remote_addr - $remote_user [$time_local] '
+                          '"$request" $status $body_bytes_sent '
+                          '"$http_referer" "$http_user_agent" '
+                          '$request_time $upstream_connect_time $upstream_header_time '
+                          '$upstream_response_time $upstream_addr $remote_port';
+access_log /var/log/nginx/access.log upstream_times;
+{{- end -}}
+{{- end -}}
+
 {{- define "kubeast.databaseUrl" -}}
 {{- $p := .Values.postgresql -}}
 {{- $host := ternary "postgres" ($p.externalHost | default "") $p.enabled -}}
