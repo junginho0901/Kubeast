@@ -78,7 +78,7 @@ func TestWSMemoryPerUser(t *testing.T) {
 
 	var summary strings.Builder
 	fmt.Fprintf(&summary, "%s, %s %s/%s, GOGC default, GOMEMLIMIT %q, the watches' HTTP/2 stream buffer %d, %s decoder, memory gate %v\n", time.Now().Format(time.RFC3339),
-		runtime.Version(), runtime.GOOS, runtime.GOARCH, os.Getenv("GOMEMLIMIT"), watchStreamBuffer, decoder, gate)
+		runtime.Version(), runtime.GOOS, runtime.GOARCH, os.Getenv("GOMEMLIMIT"), defaultWatchStreamWindow, decoder, gate)
 	fmt.Fprintf(&summary, "one event on the wire: pod %d bytes, node %d bytes, deployment %d bytes\n", len(watchPodJSON(0)), len(memNodeJSON(0)), len(memDeploymentJSON(0)))
 	fmt.Fprintf(&summary, "%-12s %6s %6s %9s %9s %9s %8s %9s %9s %9s %9s %7s %7s %6s\n", "scenario", "people", "watch", "live/p", "stack/p", "gor/p", "inuse/p", "rss/p", "peak/p", "left/p", "alloc/p", "open", "refused", "waits")
 	for _, sc := range []struct {

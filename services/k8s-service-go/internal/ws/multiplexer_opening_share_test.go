@@ -18,8 +18,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-// The opening places are the server's, and one cluster holds half of them at most: openings of two clusters together
-// stay within the server's places, and each cluster's within its share.
+// The opening places are the server's: openings of two clusters together stay within them, and both clusters open.
 func TestOpeningsOfEveryClusterShareThePlaces(t *testing.T) {
 	both := &tally{}
 	alpha := &chanAPI{objects: 20, gap: time.Millisecond, also: both}
@@ -55,19 +54,15 @@ func TestOpeningsOfEveryClusterShareThePlaces(t *testing.T) {
 		t.Errorf("%d of 24 lists got their objects", n)
 	}
 	t.Logf("read at once: alpha %d, beta %d, both %d", alpha.mostAtOnce(), beta.mostAtOnce(), both.mostAtOnce())
-	if a, b := alpha.mostAtOnce(), beta.mostAtOnce(); a > 2 || b > 2 {
-		t.Errorf("alpha %d and beta %d watches read at once, want at most a cluster's share of 2", a, b)
-	}
 	if got := both.mostAtOnce(); got > 4 {
 		t.Errorf("%d watches of two clusters read at once, want at most the server's 4 places", got)
 	}
 }
 
-// Clusters whose API servers do not answer hold none of the server's opening places: their watches wait for each
-// other within their shares, and another cluster's 50 lists open at once, also beside two such clusters whose shares
-// are all the places. On 70c842dc (one such cluster) they waited 11.8 s, its watches holding every place for
-// openingHoldFor each.
-func TestAClusterThatDoesNotAnswerHoldsNoOpeningPlace(t *testing.T) {
+// A cluster whose API server has not answered a start holds one opening place at a time: beside two such clusters,
+// another cluster's 50 lists open at once, and the dead clusters try again after startHoldFor. On 70c842dc (one such
+// cluster) they waited 11.8 s, its watches holding every place for openingHoldFor each.
+func TestAClusterThatDoesNotAnswerHoldsOneOpeningPlace(t *testing.T) {
 	dead1, dead2, ok := &chanAPI{hang: true}, &chanAPI{hang: true}, &chanAPI{objects: 1}
 	m := NewMultiplexer(chanClusters{"dead1": dead1, "dead2": dead2, "ok": ok})
 	m.startHoldFor = time.Second
@@ -83,12 +78,11 @@ func TestAClusterThatDoesNotAnswerHoldsNoOpeningPlace(t *testing.T) {
 	if opened != 50 || last > time.Second || limits != 0 {
 		t.Errorf("beside clusters that do not answer %d of 50 lists opened, the last after %v, with %d limit frames; want all within 1 s and none", opened, last, limits)
 	}
-	share := m.maxWatchOpenings() / 2
-	if n1, n2 := len(dead1.options()), len(dead2.options()); n1 > share || n2 > share {
-		t.Errorf("the dead clusters were asked %d and %d watches within startHoldFor, want at most their share of %d", n1, n2, share)
+	if n1, n2 := len(dead1.options()), len(dead2.options()); n1 > 1 || n2 > 1 {
+		t.Errorf("the dead clusters were asked %d and %d watches within startHoldFor, want one each", n1, n2)
 	}
-	// A start the API server keeps waiting gives its share back at startHoldFor: the cluster's next watches try.
-	eventually(t, "the dead cluster's next watches to start after startHoldFor", 5*time.Second, func() bool { return len(dead1.options()) > share })
+	// A start the API server keeps waiting gives its place back at startHoldFor: the cluster's next watch tries.
+	eventually(t, "the dead cluster's next watch to start after startHoldFor", 5*time.Second, func() bool { return len(dead1.options()) > 1 })
 }
 
 // A wait for a place whose notice cannot reach the browser (its socket's queue full) holds the place it then takes no
@@ -112,10 +106,11 @@ func TestAPlaceTakenWhileItsNoticeWaitsGoesBackInTime(t *testing.T) {
 	eventually(t, "the place to go back at startHoldFor while the notice still waits", time.Second, func() bool { return places.InUse() == 0 })
 }
 
-// A cluster whose API server answers every watch with a 503 after a while (overloaded, or a proxy timing out) holds
-// none of the server's opening places either. On 70c842dc (3 s, 60 watches) the other cluster's last list took 8.0 s.
-func TestAClusterThatFailsLateHoldsNoOpeningPlace(t *testing.T) {
-	dead, ok := &chanAPI{failAfter: time.Second}, &chanAPI{objects: 1}
+// A cluster whose API server answers every watch with a 503 after a while (overloaded, or a proxy timing out) is not
+// answering either: it holds one opening place at a time, and another cluster's lists open at once. On 70c842dc (3 s,
+// 60 watches) the other cluster's last list took 8.0 s.
+func TestAClusterThatFailsLateHoldsOneOpeningPlace(t *testing.T) {
+	dead, ok := &chanAPI{failAfter: 300 * time.Millisecond}, &chanAPI{objects: 1}
 	m := NewMultiplexer(chanClusters{"dead": dead, "ok": ok})
 	ctx := testCtx(t)
 	for i := 0; i < 60; i++ {
@@ -123,11 +118,18 @@ func TestAClusterThatFailsLateHoldsNoOpeningPlace(t *testing.T) {
 		go drain(ctx, out)
 		go chanWatch(ctx, m, "dead", fmt.Sprintf("watch=1&labelSelector=d%%3D%d", i), out)
 	}
-	time.Sleep(1500 * time.Millisecond) // past the first 503s: the dead watches are retrying
+	q := m.openingPlaces()
+	most := 0
+	for end := time.Now().Add(1500 * time.Millisecond); time.Now().Before(end); time.Sleep(time.Millisecond) {
+		most = max(most, q.heldBy("dead")) // past the first 503s: the dead watches are retrying
+	}
 	opened, last, limits := crowdOpens(ctx, m, "ok", 50, 10*time.Second)
-	t.Logf("healthy cluster: %d/50 opened, the last after %v, %d limit frames", opened, last, limits)
+	t.Logf("healthy cluster: %d/50 opened, the last after %v, %d limit frames; the dead cluster held at most %d places", opened, last, limits, most)
 	if opened != 50 || last > 2*time.Second || limits != 0 {
 		t.Errorf("beside a cluster that fails late %d of 50 lists opened, the last after %v, with %d limit frames; want all within 2 s and none", opened, last, limits)
+	}
+	if most != 1 {
+		t.Errorf("a cluster whose starts end in a 503 held %d places at once, want 1", most)
 	}
 }
 
@@ -189,8 +191,8 @@ func TestACrowdBehindWatchListsWithoutABookmarkOpensTheEarlierWay(t *testing.T) 
 	if opened != 24 || last > time.Second {
 		t.Errorf("%d of 24 lists opened, the last after %v; want all within 1 s", opened, last)
 	}
-	// The first share, and those that took a share given back before noBookmarkCaps had been counted.
-	if most := m.maxWatchOpenings()/2 + noBookmarkCaps - 1; watchLists > most {
+	// The first places, and those that took a place given back before noBookmarkCaps had been counted.
+	if most := m.maxWatchOpenings() + noBookmarkCaps - 1; watchLists > most {
 		t.Errorf("%d watches asked for a watch list, want at most %d", watchLists, most)
 	}
 }
@@ -256,7 +258,7 @@ func TestWatchListsStillSendingAtOpeningHoldForKeepTheWatchList(t *testing.T) {
 func TestAShortPauseDoesNotEndAnOpeningOfTheEarlierWay(t *testing.T) {
 	api := &chanAPI{objects: 20, stallAt: 10, stall: 30 * time.Millisecond, refuse: true}
 	m := NewMultiplexer(chanClusters{"alpha": api})
-	m.MaxWatchOpenings = 2 // a cluster's share is 1
+	m.MaxWatchOpenings = 1
 	ctx := testCtx(t)
 	var wg sync.WaitGroup
 	for i := 0; i < 4; i++ {
@@ -317,7 +319,7 @@ func TestAClusterThatRefusedWatchListsIsAskedAgainLater(t *testing.T) {
 	}
 }
 
-// A browser that reads slowly gives its opening place back and its watch waits with at most watchStreamBuffer of its
+// A browser that reads slowly gives its opening place back and its watch waits with at most WatchStreamWindow of its
 // list unread (HTTP/2 flow control): 16 slow browsers opening lists of 2 000 objects of 4 KB over TLS took the live
 // heap 66.8 MiB up on 70c842dc, Go's 4 MiB window a stream.
 func TestSlowBrowsersHoldLittleOfTheirLists(t *testing.T) {
@@ -348,6 +350,7 @@ func TestSlowBrowsersHoldLittleOfTheirLists(t *testing.T) {
 	}
 	m := NewMultiplexer(configClients{fakeClients{d}, cfg})
 	m.MaxWatchOpenings = 2
+	m.WatchStreamWindow = 256 << 10
 	m.heap = func() (uint64, uint64) { return 0, 0 }
 	ctx, cancel := context.WithCancel(context.Background())
 	defer func() {
@@ -374,7 +377,7 @@ func TestSlowBrowsersHoldLittleOfTheirLists(t *testing.T) {
 	grown := (float64(liveHeap()) - float64(before)) / (1 << 20)
 	t.Logf("16 slow browsers: live heap +%.1f MiB 2 s after their watches started, HTTP/2 requests %d", grown, h2.Load())
 	if grown > 16 {
-		t.Errorf("16 slow browsers' watches took the live heap %.1f MiB up, want at most 16 (16 × watchStreamBuffer is 4)", grown)
+		t.Errorf("16 slow browsers' watches took the live heap %.1f MiB up, want at most 16 (16 windows of 256 KiB are 4)", grown)
 	}
 }
 
@@ -383,4 +386,94 @@ func liveHeap() uint64 {
 	s := []metrics.Sample{{Name: "/gc/heap/live:bytes"}}
 	metrics.Read(s)
 	return s[0].Value.Uint64()
+}
+
+// A server with one cluster opens as many lists at once as it has places: the half a cluster may hold applies only
+// while another cluster waits. On cb3c5515 (review probe P-D) 64 openings of 0.2 s took 4.05 s with 8 places, at most
+// 4 at once.
+func TestOneClusterOpensWithEveryPlace(t *testing.T) {
+	api := &chanAPI{objects: 20, gap: 2 * time.Millisecond}
+	m := NewMultiplexer(chanClusters{"alpha": api})
+	m.MaxWatchOpenings = 4
+	ctx := testCtx(t)
+	var wg sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			out := make(chan *ResponseMessage, 64)
+			go chanWatch(ctx, m, "alpha", fmt.Sprintf("watch=1&labelSelector=a%%3D%d", i), out)
+			for frames, deadline := 0, time.After(20*time.Second); frames < api.objects; {
+				select {
+				case f := <-out:
+					if f.Type == "DATA" {
+						frames++
+					}
+				case <-deadline:
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	t.Logf("one cluster, 4 places: %d read at once", api.mostAtOnce())
+	if got := api.mostAtOnce(); got != 4 {
+		t.Errorf("%d watches of the only cluster were read at once, want the 4 places", got)
+	}
+}
+
+// A watch from no version takes its opening place before it starts: while another cluster holds every place it asks
+// its API server nothing, so no answered watch waits unread for a place (the API server closes a watch it cannot
+// write to past 100 ms).
+func TestAnOpeningTakesItsPlaceBeforeItsStart(t *testing.T) {
+	api := &chanAPI{objects: 1}
+	m := NewMultiplexer(chanClusters{"alpha": api})
+	places := m.openingPlaces()
+	places.setAnswering("other", true)
+	held := make([]func(), 0, places.Cap())
+	for i := 0; i < places.Cap(); i++ {
+		held = append(held, takeNow(t, places, "other"))
+	}
+	ctx := testCtx(t)
+	out := make(chan *ResponseMessage, 8)
+	go chanWatch(ctx, m, "alpha", "watch=1", out)
+	time.Sleep(100 * time.Millisecond)
+	if n := len(api.options()); n != 0 {
+		t.Fatalf("the API server was asked %d watches while every place was taken, want none", n)
+	}
+	held[0]()
+	if typ := firstFrame(out, 5*time.Second); typ != "DATA" {
+		t.Fatalf("once a place came back: %q, want DATA", typ)
+	}
+	for _, give := range held[1:] {
+		give()
+	}
+}
+
+// A watch whose context ends while it waits for a place, or while it holds one for a start the API server has not
+// answered, gives it back: no place or turn is kept for a socket that has gone.
+func TestAWatchWhoseContextEndsGivesItsPlaceBack(t *testing.T) {
+	dead := &chanAPI{hang: true}
+	m := NewMultiplexer(chanClusters{"dead": dead})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{}, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			chanWatch(ctx, m, "dead", fmt.Sprintf("watch=1&labelSelector=d%%3D%d", i), make(chan *ResponseMessage, 8))
+			done <- struct{}{}
+		}()
+	}
+	q := m.openingPlaces()
+	eventually(t, "one watch starting and one waiting", 5*time.Second, func() bool { return q.InUse() == 1 && q.waiters() == 1 })
+	cancel()
+	for i := 0; i < 2; i++ {
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("a watch did not end with its context")
+		}
+	}
+	if n, w := q.InUse(), q.waiters(); n != 0 || w != 0 {
+		t.Errorf("%d places in use and %d waiting after the sockets went, want none", n, w)
+	}
 }

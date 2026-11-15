@@ -107,6 +107,32 @@ tests:
             value: "4"
         template: deployments.yaml
 
+  - it: gives k8s-service the live lists' stream window, 1024 KiB by default
+    documentSelector:
+      path: metadata.name
+      value: k8s-service
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WS_WATCH_STREAM_WINDOW_KIB
+            value: "1024"
+        template: deployments.yaml
+
+  - it: gives k8s-service the stream window multicluster.wsWatchStreamWindowKiB sets
+    set:
+      multicluster.wsWatchStreamWindowKiB: 2048
+    documentSelector:
+      path: metadata.name
+      value: k8s-service
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WS_WATCH_STREAM_WINDOW_KIB
+            value: "2048"
+        template: deployments.yaml
+
   - it: keeps the CA out of pods that do not talk to the database
     set:
       postgresql.sslRootCert.secretName: rds-ca

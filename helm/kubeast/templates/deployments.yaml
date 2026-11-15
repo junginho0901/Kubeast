@@ -318,6 +318,8 @@ spec:
               value: "{{ $.Values.multicluster.wsWatchStartConcurrency | default 16 }}"
             - name: WS_WATCH_OPENING_CONCURRENCY
               value: "{{ $.Values.multicluster.wsWatchOpeningConcurrency | default 8 }}"
+            - name: WS_WATCH_STREAM_WINDOW_KIB
+              value: "{{ $.Values.multicluster.wsWatchStreamWindowKiB | default 1024 }}"
             - name: BIG_READ_CONCURRENCY
               value: "{{ $.Values.multicluster.bigReadConcurrency | default 2 }}"
             - name: EVENT_LIST_CONCURRENCY

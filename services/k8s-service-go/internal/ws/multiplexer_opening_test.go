@@ -140,8 +140,7 @@ func eventually(t *testing.T, what string, within time.Duration, ok func() bool)
 }
 
 // A watch from no version is asked as a watch list from the watch cache's version, and the watches of a restart open
-// a few at a time: each reads its objects only while it holds an opening place, one cluster half of them, and every
-// object reaches every list. At 700 people the openings after a restart took k8s-service from 121 to 285 MiB of live
+// a few at a time: each reads its objects only while it holds an opening place, and every object reaches every list. At 700 people the openings after a restart took k8s-service from 121 to 285 MiB of live
 // heap in two seconds while each watch went on at its first answer.
 func TestWatchesOpenAFewAtATime(t *testing.T) {
 	api := &chanAPI{objects: 20, gap: time.Millisecond}
@@ -176,9 +175,9 @@ func TestWatchesOpenAFewAtATime(t *testing.T) {
 			t.Errorf("list %d got %d of the %d objects", i, n, api.objects)
 		}
 	}
-	t.Logf("watches read at once: %d, for %d subscriptions and %d places (2 of one cluster)", api.mostAtOnce(), subscriptions, m.MaxWatchOpenings)
-	if got := api.mostAtOnce(); got > 2 {
-		t.Errorf("%d watches of one cluster were read at once, want at most its share of 2", got)
+	t.Logf("watches read at once: %d, for %d subscriptions and %d places", api.mostAtOnce(), subscriptions, m.MaxWatchOpenings)
+	if got := api.mostAtOnce(); got > m.MaxWatchOpenings {
+		t.Errorf("%d watches were read at once, want at most the %d places", got, m.MaxWatchOpenings)
 	}
 	o := api.options()[0]
 	if o.SendInitialEvents == nil || !*o.SendInitialEvents || o.ResourceVersionMatch != metav1.ResourceVersionMatchNotOlderThan || o.ResourceVersion != "0" || !o.AllowWatchBookmarks {
@@ -191,7 +190,7 @@ func TestWatchesOpenAFewAtATime(t *testing.T) {
 func TestAnOpeningHoldsItsPlaceUntilItsBookmark(t *testing.T) {
 	api := &chanAPI{objects: 30, gap: 10 * time.Millisecond}
 	m := NewMultiplexer(chanClusters{string(cluster.Default): api})
-	m.MaxWatchOpenings = 2 // a cluster's share is 1
+	m.MaxWatchOpenings = 1
 	m.openingHoldFor = 10 * time.Second
 	m.startHoldFor = 50 * time.Millisecond
 	ctx := testCtx(t)
@@ -530,9 +529,10 @@ func TestALongWaitForAnOpeningIsToldAsTheMemoryLimit(t *testing.T) {
 	m := muxOn(t, eventThenHold)
 	m.startNoticeAfter = 20 * time.Millisecond
 	places := m.openingPlaces()
+	places.setAnswering("other", true) // alone, it takes every place
 	held := make([]func(), 0, places.Cap())
 	for i := 0; i < places.Cap(); i++ {
-		release, err := places.Take(context.Background())
+		release, err := places.take(context.Background(), "other")
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -339,6 +339,7 @@ func main() {
 	wsMux.MaxSubscriptionsPerConn = cfg.WSMaxSubscriptionsPerConn
 	wsMux.MaxWatchStarts = cfg.WSWatchStartConcurrency
 	wsMux.MaxWatchOpenings = cfg.WSWatchOpeningConcurrency
+	wsMux.WatchStreamWindow = cfg.WSWatchStreamWindowKiB << 10
 	h.SetWatchLimits(wsMux)
 
 	// Open terminals, watches and followed logs end when the session behind them stops standing.
