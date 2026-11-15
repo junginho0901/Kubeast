@@ -16,13 +16,14 @@ tests:
           any: true
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
-      - notExists:
-          path: spec.strategy
+      - equal:
+          path: spec.strategy.rollingUpdate
+          value: {maxSurge: 1, maxUnavailable: 0}
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
       - equal:
           path: spec.template.spec.containers[0].readinessProbe.httpGet.path
-          value: /health
+          value: /readyz
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
       - notMatchRegex:
@@ -52,8 +53,8 @@ tests:
           value: 100
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
-      # the Deployment's default rollout (maxSurge 1, maxUnavailable 0 for one replica) brings the new pod up first,
-      # and the lists keep answering on /health while the old one drains; the preStop wait is podShutdown's
+      # the rollout (maxSurge 1, maxUnavailable 0) brings the new pod up first, and the old one answers /readyz with 503
+      # from SIGTERM on while it drains; the preStop wait is podShutdown's
       - equal:
           path: spec.template.spec.containers[0].lifecycle
           value: {preStop: {sleep: {seconds: 5}}}
@@ -61,7 +62,7 @@ tests:
         documentSelector: {path: metadata.name, value: k8s-service}
       - equal:
           path: spec.template.spec.containers[0].readinessProbe.httpGet.path
-          value: /health
+          value: /readyz
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
 
