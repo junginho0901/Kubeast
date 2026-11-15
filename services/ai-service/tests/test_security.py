@@ -1,5 +1,4 @@
 """JWT permission matrix: global ("*") vs per-cluster checks, no cross-cluster union (C1)."""
-import pytest
 
 from app.security import DEFAULT_CLUSTER, TokenPayload, _parse_permission_matrix
 
