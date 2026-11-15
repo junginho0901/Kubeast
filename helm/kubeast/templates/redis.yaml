@@ -29,7 +29,6 @@ spec:
       {{- end }}
     spec:
       automountServiceAccountToken: false
-      {{- include "kubeast.terminationGrace" . | nindent 6 }}
       {{- if $acl }}
       # fsGroup 999 reads the 0440 password files
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 999 "fsGroup" 999) | nindent 6 }}
@@ -107,7 +106,6 @@ spec:
               mountPath: /run/kubeast/redis-acl
               readOnly: true
             {{- end }}
-          {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             exec:
               command: {{ $probe }}
