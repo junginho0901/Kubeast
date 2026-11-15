@@ -17,6 +17,8 @@ The trap: blame product-catalog (it returns the errors), or frontend, checkout o
 
 How the scorer judges: cause = `astronomy-db` (Deployment, ReplicaSet, pod or Service) with kind `dependency_slow`, `dependency_down` or `config_change`. product-catalog, frontend, checkout, recommendation and accounting are decoys. Path: the database, then product-catalog (or accounting), then where the symptom shows. Start time ±2 min of the schema change.
 
+The alert path: the alert carries `namespace: otel-demo` (and `match` the same), where the cause is, so the investigator's token, which is limited to the alert's namespace, reads it; `job: uptime-check` says what measured the failures, since `uptime-check` itself sits in the case's own namespace, outside that token. The case has no `rule`, so it runs with `--alert-source auto` or `synthetic`; the demo's own rules can fire on the same fault and start investigations of their own.
+
 Unsure:
 - Not run on kind. The order of events (waits first, refusals once 15 connections are held) depends on the demo's traffic; at five load-generator users the refusals may take a minute or two to begin.
 - The open session is the database's own (the superuser through a local socket); Kubernetes shows no object for it, so the database is the deepest place the AI can name. The `kubectl exec` that runs it stays in the background on the machine running the case until the undo ends the session.

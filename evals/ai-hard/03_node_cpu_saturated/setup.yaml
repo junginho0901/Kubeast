@@ -25,7 +25,7 @@ spec:
               EOF
               chmod 755 /www/cgi-bin/q
               echo "level=info msg=\"search started\""
-              exec httpd -f -p 8080 -h /www
+              exec taskset -c 1 httpd -f -p 8080 -h /www
           ports: [{name: http, containerPort: 8080}]
           readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
           resources: {requests: {cpu: 20m, memory: 16Mi}, limits: {cpu: "1", memory: 32Mi}}
@@ -64,7 +64,7 @@ spec:
               EOF
               chmod 755 /www/cgi-bin/price
               echo "level=info msg=\"pricing started\""
-              exec httpd -f -p 8080 -h /www
+              exec taskset -c 1 httpd -f -p 8080 -h /www
           ports: [{name: http, containerPort: 8080}]
           readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
           resources: {requests: {cpu: 20m, memory: 16Mi}, limits: {cpu: "1", memory: 32Mi}}
@@ -103,7 +103,7 @@ spec:
               EOF
               chmod 755 /www/cgi-bin/resize
               echo "level=info msg=\"thumbnails started\""
-              exec httpd -f -p 8080 -h /www
+              exec taskset -c 1 httpd -f -p 8080 -h /www
           ports: [{name: http, containerPort: 8080}]
           readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
           resources: {requests: {cpu: 20m, memory: 16Mi}, limits: {cpu: "1", memory: 32Mi}}

@@ -16,7 +16,9 @@ What the AI has to notice:
 
 The trap: stop at checkout (where the order fails) or at cart (where the errors start); take "결제" literally and blame `payment`; read cart's errors as a cart fault.
 
-How the scorer judges: cause = `valkey-cart` (Deployment, ReplicaSet, pod, Service or Endpoints) with kind `dependency_down`. `cart` may be named beside it (`also_ok`); alone it misses the cause. checkout, payment and frontend are decoys. Path: valkey-cart, then cart, then where the symptom shows (checkout, frontend or frontend-proxy). Start time ±2 min of the scale.
+How the scorer judges: cause = `valkey-cart` (Deployment, ReplicaSet, pod, Service or Endpoints) with kind `dependency_down` or `config_change` (its replicas set to 0: the change and the state it left both say it). `cart` may be named beside it (`also_ok`); alone it misses the cause. checkout, payment and frontend are decoys. Path: valkey-cart, then cart, then where the symptom shows (checkout, frontend or frontend-proxy). Start time ±2 min of the scale.
+
+The alert path: the alert carries `namespace: otel-demo` (and `match` the same), where the cause is, so the investigator's token, which is limited to the alert's namespace, reads it; `job: uptime-check` says what measured the failures, since `uptime-check` itself sits in the case's own namespace, outside that token. The case has no `rule`, so it runs with `--alert-source auto` or `synthetic`; the demo's own rules can fire on the same fault and start investigations of their own.
 
 Unsure:
 - Not run on kind. How long a cart call takes to fail (the client's connect retries) and whether cart's errors come as spans with the exception or only as status was read from the demo's source (`ValkeyCartStore.cs`, 3.1.0), not measured.

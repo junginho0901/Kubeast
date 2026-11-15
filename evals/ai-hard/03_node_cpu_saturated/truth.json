@@ -1,7 +1,7 @@
 {
  "id": "03_node_cpu_saturated",
  "control": false,
- "symptom": "search, pricing and thumbnails calls go from tens of milliseconds to seconds at the same moment; the three services do not call each other; the node's CPU is at 100 %, most of it a Job in another namespace; no error, no restart, no throttling",
+ "symptom": "search, pricing and thumbnails calls go from tens of milliseconds to seconds at the same moment; the three services do not call each other; the node CPU their servers run on is at 100 %, nearly all of it a Job in another namespace; no error, no restart, no throttling",
  "fault_start": "{{INJECT_TIME}}",
  "fault_end": null,
  "time_tolerance_seconds": 120,
@@ -9,12 +9,12 @@
   {
    "resource": "Node/kubeast-b-control-plane",
    "kind": "node",
-   "accept_resources": ["^nodes?$", "control-plane", "monthly-report", "reports-03"],
+   "accept_resources": ["^nodes?$", "control-plane", "monthly-report", "(^|/)reports(/|$)"],
    "accept_kinds": ["resource_limit"]
   }
  ],
  "path": [
-  {"resource": "Node/kubeast-b-control-plane", "role": "cause", "required": true, "accept": ["^nodes?$", "control-plane", "monthly-report"], "note": "a Job run by hand from a monthly CronJob in reports-03 keeps one busy process per CPU, with a 500m request and no limit; its share of the contended CPU is twenty-five times a shop service's"},
+  {"resource": "Node/kubeast-b-control-plane", "role": "cause", "required": true, "accept": ["^nodes?$", "control-plane", "monthly-report"], "note": "a Job run by hand from a monthly CronJob in reports keeps two busy processes on the CPU the shop services' servers run on, with a 500m request and no limit; its share of that CPU is twenty-five times a shop service's"},
   {"resource": "Deployment/shop-03/search", "role": "symptom", "required": true, "accept": ["(^|/)(search|pricing|thumbnails|storefront|image-worker)$"]}
  ],
  "also_ok": [],

@@ -19,27 +19,28 @@
  ],
  "tools": [],
  "setup_cmds": [
-  "kubectl create namespace reports-03 --dry-run=client -o yaml | kubectl apply -f - && kubectl label namespace reports-03 kubeast.io/ai-eval=true --overwrite && kubectl -n reports-03 apply -f $CASE_DIR/reports.yaml"
+  "kubectl create namespace reports --dry-run=client -o yaml | kubectl apply -f - && kubectl -n reports apply -f $CASE_DIR/reports.yaml"
  ],
- "wait": "kubectl -n $NS wait --for=condition=Available deploy/search deploy/pricing deploy/thumbnails deploy/storefront deploy/image-worker --timeout=10s && kubectl -n reports-03 get cronjob monthly-report",
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/search deploy/pricing deploy/thumbnails deploy/storefront deploy/image-worker --timeout=10s && kubectl -n reports get cronjob monthly-report",
  "wait_seconds": 240,
  "baseline_seconds": 300,
  "inject_cmds": [
-  "kubectl -n reports-03 create job monthly-report-run --from=cronjob/monthly-report"
+  "kubectl -n reports create job monthly-report-run --from=cronjob/monthly-report"
  ],
- "inject_wait": "kubectl -n $NS logs deploy/storefront --since=30s | grep 'upstream=search' | grep -Eq 'duration_ms=([89][0-9]{2}|[0-9]{4,})'",
+ "inject_wait": "kubectl -n $NS logs deploy/storefront --since=30s | grep 'upstream=search' | grep -Eq 'duration_ms=([5-9][0-9]{2}|[0-9]{4,})'",
  "inject_wait_seconds": 180,
  "ask_after_seconds": [360],
  "undo_cmds": [
-  "kubectl -n reports-03 delete job monthly-report-run --ignore-not-found --wait=false"
+  "kubectl -n reports delete job monthly-report-run --ignore-not-found --wait=false"
  ],
  "cleanup_cmds": [
-  "kubectl delete namespace reports-03 --ignore-not-found --wait=false"
+  "kubectl delete namespace reports --ignore-not-found --wait=false"
  ],
  "cooldown_seconds": 90,
  "timeout_seconds": 420,
  "alert": {
-  "labels": {"alertname": "ServiceSlow", "service": "search"},
-  "annotations": {"summary": "search responses are slow", "description": "search requests from storefront have taken seconds instead of tens of milliseconds for the last few minutes; no request fails."}
+  "labels": {"alertname": "ServiceSlow", "namespace": "", "service": "search"},
+  "match": {"namespace": ""},
+  "annotations": {"summary": "search responses in shop-03 are slow", "description": "search requests from storefront in shop-03 have taken most of a second instead of tens of milliseconds for the last few minutes; no request fails."}
  }
 }

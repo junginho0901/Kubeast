@@ -10,7 +10,7 @@
    "resource": "Deployment/otel-demo/valkey-cart",
    "kind": "dependency_down",
    "accept_resources": ["(deployment|replicaset|pod|service|endpoints)/(otel-demo/)?valkey-cart", "^valkey"],
-   "accept_kinds": []
+   "accept_kinds": ["config_change"]
   }
  ],
  "path": [

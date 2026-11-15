@@ -123,7 +123,7 @@ says the results are in the JSON, so no `.md` or screen line gives one hidden ca
 `evals/ai-hard/` holds twenty-two cases. Each folder has `case.json`, `truth.json`, the manifests it applies and
 `NOTES.md`: what the AI has to notice, the trap, how it is scored and what is unsure. None has run on a cluster yet, so
 their sizes and waits are first guesses for the first run to measure. Nineteen are made of plain Kubernetes objects:
-they use only `docker.io/library/busybox:1.38.0`, namespaces `shop-NN` (and `edge`, `members`, `reports-03`),
+they use only `docker.io/library/busybox:1.38.0`, namespaces `shop-NN` (and `edge`, `members`, `reports`),
 business names and no Secret. The fault comes from data or settings, never from a branch in the code, and nothing a
 case applies names it (`scripts/test_ai_eval_cases.py`); case 20's new release is a boot script in a ConfigMap, the
 stand-in for a new image. Their answers lean on logs: run `scripts/kind-logsearch.sh up` first. Cases 01, 07 and 10
@@ -146,21 +146,27 @@ with a kind that says a change (`config_change`, `rollout`), so the symptom's wo
 `oom`, `dependency_down`) is a miss; each NOTES.md says which and why. `scripts/test_ai_eval_cases.py` holds such
 answers to a miss.
 
-The namespace a case makes besides its own (`edge` for 15, `members` for 18) carries no case number and no
+The namespace a case makes besides its own (`reports` for 03, `edge` for 15, `members` for 18) carries no case number and no
 `kubeast.io/ai-eval` label, so a namespace list does not tie it to the case; the case's `setup_cmds` and
 `cleanup_cmds` make and delete it by name. Run the cases only on the dev clusters: a namespace of that name already
 there would be deleted with the case.
 
-The hidden cases (08, 15, 18) measure whether a change to the prompts, the rule cards or the tool
+The hidden cases (02, 08, 11, 15, 18) measure whether a change to the prompts, the rule cards or the tool
 descriptions fits the cases it was tried on. Whoever writes those — a person or an agent — does not open these
 folders, their NOTES.md or their truth, nor a run's rows, table or log of a hidden case; the results are read as the
 round's total.
+
+A case's alert names the namespace where its cause is, since the investigator's token is limited to the alert's
+namespace: 01, 07 and 10 carry `namespace: otel-demo` (with `match` the same, and `job: uptime-check` for what
+measured it), and 03, whose cause is a Job in `reports` and the node, an empty `namespace`, which the webhook reads as
+none, so its investigator reads the whole cluster. 07's NetworkChaos in `chaos-mesh` holds the answer: the account
+that asks and the investigator must not read the `chaos-mesh.org` group, which 07's NOTES.md says how to check.
 
 | Case | Group | Problem | Needs on dev besides logs |
 |---|---|---|---|
 | 01 | chain | the cart's store is scaled to 0: cart calls fail, checkouts fail two calls up | the OpenTelemetry demo |
 | 02 | chain, hidden | a queue's topic config caps a fetch at one message; both consumer groups fall behind, nothing fails | |
-| 03 | chain | a batch Job in another namespace with no CPU limit saturates the node; three services that share no call slow together | the second cluster's Prometheus (node-exporter, cAdvisor) and metrics-server |
+| 03 | chain | a batch Job in another namespace with no CPU limit saturates the node CPU the services run on; three services that share no call slow together | the second cluster's Prometheus (node-exporter, cAdvisor) and metrics-server |
 | 04 | hidden cause | a new NetworkPolicy leaves one caller with no allow to one backend; both sides look healthy | `self`, whose kindnet enforces NetworkPolicy |
 | 05 | hidden cause | one workload is rolled out with its own `dnsConfig`; only its short-name calls fail | |
 | 06 | hidden cause | a rollout to a new ConfigMap with a bad value, held at 4 old and 2 new pods; asked at 5 and 65 minutes | |

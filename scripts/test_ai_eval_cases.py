@@ -250,6 +250,7 @@ WRONG_KIND = {
     "22_workers_over_memory": [("ConfigMap/shop-22/shop-api-settings", "oom"), ("ConfigMap/shop-22/shop-api-settings", "resource_limit")],
 }
 ALSO_RIGHT = {
+    "01_cache_down_chain": [("Deployment/otel-demo/valkey-cart", "config_change")],
     "16_past_outage": [("Deployment/shop-16/payments", "config_change")],
     "18_moved_namespace_old_address": [("ConfigMap/shop-18/web-settings", "dns")],
     "19_route_missing_hostname": [("Service/shop-19/frontdoor", "config_change"), ("frontdoor", "rollout")],
@@ -279,6 +280,23 @@ def test_the_symptom_alone_is_not_the_cause():
         for resource, kind in answers:
             s = rca.score_rca(block([cause(resource, kind)]), filled, CALLS)
             assert s["pass"] and s["score"] == 1.0, (name, resource, kind, s)
+
+
+def test_each_alert_names_the_namespace_of_its_causes():
+    """The investigator's token is limited to the alert's namespace label (the case's own unless the alert names one),
+    so the label is the namespace every truth cause is in, or empty — the whole cluster — for a cause of the cluster."""
+    alerting = [(d, c) for d, c in all_cases() if "alert" in c]
+    assert alerting
+    for d, c in alerting:
+        alert = c["alert"]
+        ns = (alert.get("labels") or {}).get("namespace", c["namespace"])
+        assert {"namespace": c["namespace"], **(alert.get("match") or {})}["namespace"] == ns, f"{d.name}: match is not the label"
+        truth = truth_of(d)
+        if truth["control"]:
+            assert ns == c["namespace"], d.name
+            continue
+        where = {parts[1] if len(parts) == 3 else "" for parts in (tc["resource"].split("/") for tc in truth["causes"])}
+        assert where == {ns}, (d.name, ns, where)
 
 
 def test_a_namespace_a_case_makes_besides_its_own_says_nothing_of_the_case():

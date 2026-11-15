@@ -17,10 +17,10 @@ spec:
             - name: main
               image: docker.io/library/busybox:1.38.0
               imagePullPolicy: IfNotPresent
-              command: [sh, -c]
+              command: [taskset, -c, "1", sh, -c]
               args:
                 - |
-                  n=$(nproc)
+                  n=2
                   echo "level=info msg=\"monthly report started\" partitions=$n"
                   i=1
                   while [ $i -le "$n" ]; do
@@ -28,8 +28,7 @@ spec:
                       p=0
                       while true; do
                         p=$((p + 1))
-                        head -c 20000000 /dev/urandom | sha256sum > /dev/null
-                        [ $((p % 30)) = 0 ] && echo "level=info msg=\"pages rendered\" partition=$i pages=$p"
+                        [ $((p % 200000)) = 0 ] && echo "level=info msg=\"pages rendered\" partition=$i pages=$((p / 1000))"
                       done
                     ) &
                     i=$((i + 1))

@@ -17,9 +17,13 @@ The trap: name product-catalog as the slow service (its span metrics' server lat
 
 How the scorer judges: the segment is scored as its two ends — causes frontend and product-catalog, both kind `dependency_slow`, named as two causes or as one ("frontend → product-catalog"). Either alone misses the other. recommendation, checkout, astronomy-db, currency and the node are decoys. Path: product-catalog, then frontend (or frontend-proxy). Start time ±2 min of the experiment.
 
+The alert path: the alert carries `namespace: otel-demo` (and `match` the same), where the cause is, so the investigator's token, which is limited to the alert's namespace, reads it; `job: uptime-check` says what measured the failures, since `uptime-check` itself sits in the case's own namespace, outside that token. The case has no `rule`, so it runs with `--alert-source auto` or `synthetic`; the demo's own rules can fire on the same fault and start investigations of their own.
+
+Who may read the experiment: the NetworkChaos in `chaos-mesh` names both ends and the delay, the answer itself. The account that asks (the member with Read the runner makes) and the investigator must not read the `chaos-mesh.org` API group. The investigator's ClusterRole (`kubeast:investigator`) names no such group unless `features.alertInvestigation.extraRules` adds one. Read is `view` plus `kubeast:cluster-reader`, neither of which names it, but `view` also takes every ClusterRole labelled `rbac.authorization.k8s.io/aggregate-to-view`, which a Chaos Mesh install could add; before a round, `kubectl auth can-i list networkchaos.chaos-mesh.org -n chaos-mesh --as <the member's email> --as-group kubeast:viewer` must answer no. `--user admin` reads it, so 07 asked as the admin is not a measure.
+
 Unsure:
 - Not run on kind. Chaos Mesh's delay needs the netem queueing discipline in the kind node's kernel (the Docker VM's), not checked.
 - Why the delay sits on product-catalog's side: frontend calls the Service's cluster IP, which kube-proxy rewrites outside frontend's network namespace, so a filter on product-catalog's pod addresses there would see no packet; product-catalog's replies carry frontend's pod address as written. Read from how kube-proxy and Chaos Mesh's `direction`/`target` work, not tested.
 - Delaying product-catalog's ACKs too makes frontend resend early; the client spans may grow by more than 700 ms.
-- The experiment object sits in `chaos-mesh`; a model that lists that namespace's objects reads the answer there. It has a 30-minute `duration` in case the undo does not run.
+- The experiment object sits in `chaos-mesh` (see above for who must not read it). It has a 30-minute `duration` in case the undo does not run.
 - The call graph reads the server side of each call for its latency (`traces_service_graph_request_server_seconds_bucket`), so its p90 for this edge does not move and its failing list stays empty; the case measures whether the traces themselves are read.

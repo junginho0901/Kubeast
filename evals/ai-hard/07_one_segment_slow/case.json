@@ -43,7 +43,8 @@
  "cooldown_seconds": 60,
  "timeout_seconds": 420,
  "alert": {
-  "labels": {"alertname": "ServiceSlow", "service": "uptime-check"},
+  "labels": {"alertname": "ServiceSlow", "namespace": "otel-demo", "job": "uptime-check"},
+  "match": {"namespace": "otel-demo"},
   "annotations": {"summary": "Product pages in the otel-demo shop are slow", "description": "uptime-check's product page requests to the shop in otel-demo have been much slower than usual for the last few minutes; none fails."}
  }
 }
