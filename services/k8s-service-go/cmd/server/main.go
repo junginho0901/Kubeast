@@ -24,6 +24,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/clustersync"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drain"
+	nodedrains "github.com/junginho0901/kubeast/services/k8s-service-go/internal/drains"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
@@ -31,6 +32,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nfm"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/pglock"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/routes"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/sessioncheck"
@@ -177,6 +179,10 @@ func main() {
 		hcCtx, hcCancel := context.WithCancel(context.Background())
 		defer hcCancel()
 		hc := k8s.NewHealthChecker(k8sSvc, registry, time.Duration(cfg.HealthcheckIntervalSec)*time.Second)
+		// Every replica probes for its own breaker; the one holding this lock writes the column.
+		healthLock := pglock.New(pgPool, healthStatusLockKey)
+		defer healthLock.Close()
+		hc.WriteStatusWhen(healthLock)
 		go hc.Run(hcCtx)
 	}
 
@@ -291,6 +297,18 @@ func main() {
 		os.Exit(1)
 	}
 	h.SetRecorder(recorder)
+
+	// Node drains keep their progress in the shared database, so any replica
+	// answers a drain's status and one whose server stopped reads as interrupted.
+	// A node drain is an API route: a server without the API runs no tracker.
+	var drainTracker *nodedrains.Tracker
+	if role.ServesAPI() {
+		drainTracker = nodedrains.NewTracker(nodedrains.PG{Pool: pgPool}, auditStore)
+		h.SetDrains(drainTracker)
+		drainCtx, drainCancel := context.WithCancel(context.Background())
+		defer drainCancel()
+		go drainTracker.Run(drainCtx)
+	}
 	recCtx, recCancel := context.WithCancel(context.Background())
 	defer recCancel()
 	// Only a server that opens terminals runs the recorder: an API server holds no recording to keep alive, and a row
@@ -479,6 +497,13 @@ func main() {
 			"terminals_ended_in_time", res.TerminalsLeft, "terminals_cut", res.TerminalsCut, "not_released", res.Unreleased)
 	}
 
+	// The drains this process runs end with it: say so at once rather than when their heartbeat goes stale.
+	// A drain asked for from here on answers 503 (the server still takes requests until srv.Shutdown).
+	if drainTracker != nil {
+		drainShutdown, drainShutdownCancel := context.WithTimeout(context.Background(), drainShutdownWait)
+		drainTracker.Shutdown(drainShutdown)
+		drainShutdownCancel()
+	}
 	shutdown(srv, recorder, serverShutdownWait, recorderShutdownWait)
 	slog.Info("server stopped")
 }
@@ -492,12 +517,22 @@ func clusterNotices(cfg config.Config) *redis.Client {
 	return redis.NewClient(cache.Options(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisUsername, cfg.RedisPassword))
 }
 
-// Both waits come after the preStop wait and, where STREAM_DRAIN_SECONDS is set, the drain's wait and streamCloseWait;
-// the chart's grace period is all of these + 5 s (kubeast.graceSeconds: their 25 s, the drain, the preStop wait).
+// The waits run one after another from SIGTERM: where STREAM_DRAIN_SECONDS is set, the drain's wait and
+// streamCloseWait first, then these three, which add up to 25 s. The chart's grace period (kubeast.graceSeconds) is
+// the preStop wait + the drain's wait + streamCloseWait + 25 s + 5 s to spare. The drains' 3 s (marking and their
+// audit rows) came out of the server's wait, which was 15 s.
 const (
-	serverShutdownWait   = 15 * time.Second
+	drainShutdownWait    = 3 * time.Second
+	serverShutdownWait   = 12 * time.Second
 	recorderShutdownWait = 10 * time.Second
+	// shutdownWaitsMax is the grace period the chart gives after the preStop wait and the drain's wait:
+	// streamCloseWait, these three and 5 s.
+	shutdownWaitsMax = 35 * time.Second
 )
+
+// healthStatusLockKey is the advisory lock of the replica that writes
+// clusters.health_status (arbitrary constant: "kubeast-health-status").
+const healthStatusLockKey int64 = 0x6b62686c74687374
 
 // shutdown stops the server, then gives the recorder a wait of its own: an open
 // event stream (a followed log, the Helm releases stream) keeps srv.Shutdown
