@@ -109,6 +109,7 @@ export function DashboardBody() {
   const {
     overview,
     isOverviewError,
+    overviewError,
     isLoading,
     namespaces,
     isLoadingNamespaces,
@@ -161,7 +162,7 @@ export function DashboardBody() {
   const defaultIssuesWindowMinutes = useClusterFeatures().data?.issues?.eventWindowMinutes ?? 60
 
   // 플로팅 AI 위젯의 "현재 화면 컨텍스트" snapshot — useDashboardAIContext hook 으로 분리
-  useDashboardAIContext({ overview, nodes, topResources, problemPods })
+  useDashboardAIContext({ overview, overviewError, nodes, topResources, problemPods })
   // the top cards' numbers that could not be read go to the floating chat as the cards say it
   useMetricsNotReadForChat(topResourcesNotRead(t, { loading: isLoadingTopResources, answer: topResources, failed: isTopResourcesError, error: topResourcesError, metricsUnavailable }))
 
@@ -503,6 +504,7 @@ export function DashboardBody() {
 
       <DashboardPodNodeStatus
         podStatusData={podStatusData}
+        podStatusFailure={overviewError}
         nodeStatusChartData={nodeStatusChartData}
         onPodStatusClick={handlePodStatusClick}
         onNodeStatusClick={handleNodeStatusClick}

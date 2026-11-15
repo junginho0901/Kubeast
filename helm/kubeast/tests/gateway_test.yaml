@@ -181,3 +181,74 @@ tests:
           pattern: '/api/v1/helm/releases/watch'
         template: gateway.yaml
         documentIndex: 0
+
+  - it: logs nginx's default access log lines unless gateway.accessLog.upstreamTimes is on
+    asserts:
+      - notExists:
+          path: data["accesslog.conf"]
+        template: gateway.yaml
+        documentIndex: 0
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'log_format|access_log +[^o ]'
+        template: gateway.yaml
+        documentIndex: 0
+      - notContains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: nginx-config
+            mountPath: /etc/nginx/conf.d/kubeast/accesslog.conf
+            subPath: accesslog.conf
+        template: gateway.yaml
+        documentIndex: 1
+
+  - it: with gateway.accessLog.upstreamTimes, logs the combined fields and how long the service took, beside an unchanged nginx.conf
+    set:
+      gateway.accessLog.upstreamTimes: true
+    asserts:
+      - equal:
+          path: data["accesslog.conf"]
+          value: |
+            log_format upstream_times '$remote_addr - $remote_user [$time_local] '
+                                      '"$request" $status $body_bytes_sent '
+                                      '"$http_referer" "$http_user_agent" '
+                                      '$request_time $upstream_connect_time $upstream_header_time '
+                                      '$upstream_response_time $upstream_addr $remote_port';
+            access_log /var/log/nginx/access.log upstream_times;
+        template: gateway.yaml
+        documentIndex: 0
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'log_format|access_log +[^o ]'
+        template: gateway.yaml
+        documentIndex: 0
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'include /etc/nginx/conf.d/kubeast/\*\.conf;'
+        template: gateway.yaml
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: nginx-config
+            mountPath: /etc/nginx/conf.d/kubeast/accesslog.conf
+            subPath: accesslog.conf
+        template: gateway.yaml
+        documentIndex: 1
+
+  - it: renders the default access log from values without gateway.accessLog (an earlier release's, kept by --reuse-values)
+    set:
+      gateway.accessLog: null
+    asserts:
+      - notExists:
+          path: data["accesslog.conf"]
+        template: gateway.yaml
+        documentIndex: 0
+      - notContains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: nginx-config
+            mountPath: /etc/nginx/conf.d/kubeast/accesslog.conf
+            subPath: accesslog.conf
+        template: gateway.yaml
+        documentIndex: 1

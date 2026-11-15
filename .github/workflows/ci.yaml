@@ -56,8 +56,28 @@ jobs:
           CGO_ENABLED: "0"
         run: go test -run 'JQ' .
 
+  # The race detector over k8s-service's live lists (internal/ws) and handlers (internal/handler), whose sockets,
+  # terminals and streams run goroutines that can outlive their request. A job of its own, beside the longer helm job,
+  # since its build with -race is not in the module cache.
+  go-race:
+    name: go race (k8s-service ws + handler)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: services/k8s-service-go/go.mod
+          cache-dependency-path: services/k8s-service-go/go.sum
+      - name: internal/ws
+        working-directory: services/k8s-service-go
+        run: go test -race ./internal/ws/
+      - name: internal/handler
+        working-directory: services/k8s-service-go
+        run: go test -race ./internal/handler/
+
   # The real migrations against PostgreSQL (services/pkg/dbmigrate/*_postgres_test.go):
-  # empty database to Required, idempotent re-run, legacy role column conversion.
+  # empty database to Required, idempotent re-run, legacy role column conversion;
+  # services/pkg/dbsession's session limits as the server applies them.
   # The tests skip themselves when DBMIGRATE_TEST_DATABASE_URL is unset, so the
   # plain go matrix above stays server-free.
   dbmigrate:
@@ -85,13 +105,19 @@ jobs:
         working-directory: services/pkg
         env:
           DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
-        run: go test ./dbmigrate/... ./cluster/... -run Postgres -v -count=1
+        run: go test ./dbmigrate/... ./cluster/... ./dbsession/... -run Postgres -v -count=1
       # auth-service's retention purge against the real schema (same server).
       - name: retention
         working-directory: services/auth-service-go
         env:
           DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
         run: go test ./internal/retention/... -run Postgres -v -count=1
+      # auth-service's audit anchors from two replicas at once (same server).
+      - name: audit chain anchors
+        working-directory: services/auth-service-go
+        env:
+          DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+        run: go test ./internal/auditchain/... -run Postgres -v -count=1
       # auth-service's repository: access request and sign-off pages, dormant
       # accounts next to the lock's, the AI usage query (both sources).
       - name: auth-service repository
@@ -99,13 +125,50 @@ jobs:
         env:
           DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
         run: go test ./internal/repository/... -run Postgres -v -count=1
+      # k8s-service's node drains from two replicas at once and the health status writer's lock (same server).
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: services/k8s-service-go/go.mod
+          cache-dependency-path: services/k8s-service-go/go.sum
+      - name: k8s-service node drains and health status lock
+        working-directory: services/k8s-service-go
+        env:
+          DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+        run: go test ./internal/drains/... ./internal/pglock/... -run Postgres -v -count=1
 
   python:
     name: ai-service (pytest)
     runs-on: ubuntu-latest
+    # tests/test_db_session_postgres.py: the session limits on a real server (skipped when
+    # DBMIGRATE_TEST_DATABASE_URL is unset).
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     defaults:
       run:
         working-directory: services/ai-service
+    # For the tests that need PostgreSQL (tests/*_postgres.py); they skip without DBMIGRATE_TEST_DATABASE_URL.
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -117,6 +180,8 @@ jobs:
             services/ai-service/requirements-dev.txt
       - run: pip install -r requirements.txt -r requirements-dev.txt
       - run: python -m pytest -q
+        env:
+          DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
 
   frontend:
     name: frontend (tsc + vitest)
@@ -151,7 +216,7 @@ jobs:
       # Rendered-manifest assertions (helm/kubeast/tests/*_test.yaml): switch
       # defaults, migrations hook Job, PVC retention, replica guards, secrets.
       - name: helm unittest
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: |
           # The plugin's install hook downloads its release from GitHub without retrying: five tries, 10 s apart.
           for attempt in 1 2 3 4 5; do
