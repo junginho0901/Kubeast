@@ -105,7 +105,7 @@ test.describe('Number check — node usage as kubectl top prints it', () => {
     const h = await adminHeaders(request)
     const nodes = async () => (await request.get(`/api/v1/cluster/metrics/nodes?cluster=${CLUSTER}`, { headers: h })).json() as Promise<NodeRow[]>
     const first = await nodes()
-    test.skip(first.length === 0, `no node metrics on cluster ${CLUSTER}`)
+    test.skip(!Array.isArray(first) || first.length === 0, `no node metrics on cluster ${CLUSTER}`)
 
     // metrics-server answers one sample per node until its next scrape: read Kubeast, kubectl top, Kubeast again,
     // and compare only when both Kubeast reads carry the same sample (timestamps), so all three saw the same usage.
@@ -138,7 +138,7 @@ test.describe('Number check — node usage as kubectl top prints it', () => {
   test('a node the metrics-server has no sample for is a card with -, counted in the total and the pager', async ({ page, request }) => {
     const h = await adminHeaders(request)
     const metrics = (await (await request.get(`/api/v1/cluster/metrics/nodes?cluster=${CLUSTER}`, { headers: h })).json()) as NodeRow[]
-    test.skip(metrics.length === 0, `no node metrics on cluster ${CLUSTER}`)
+    test.skip(!Array.isArray(metrics) || metrics.length === 0, `no node metrics on cluster ${CLUSTER}`)
     // a node that joined before the metrics-server's next scrape: in the node list, not in the metrics
     const joined = 'e2e-node-without-metrics'
     await page.route((u) => u.pathname === '/api/v1/cluster/nodes', async (route) => {
