@@ -337,6 +337,9 @@ func (h *Handler) LogFileStream(w http.ResponseWriter, r *http.Request) {
 	if !h.logFileGate(w, r) {
 		return
 	}
+	if h.refuseWhileLeaving(w) {
+		return
+	}
 	namespace, pod, container := chi.URLParam(r, "namespace"), chi.URLParam(r, "name"), r.URL.Query().Get("container")
 	if rerr := h.auditReady(r); rerr != nil {
 		h.refuseUnaudited(w, r, rerr)
@@ -344,6 +347,11 @@ func (h *Handler) LogFileStream(w http.ResponseWriter, r *http.Request) {
 	}
 	path, lines, e := h.logFileRequest(r, 0)
 	after := logFileAuditAfter(container, path, lines, true)
+	// A reconnecting EventSource names where its last line ended: go on from there instead of the last lines again.
+	from, resumed := parseLogFileMark(r.Header.Get("Last-Event-ID"))
+	if resumed {
+		after = audit.MustJSON(map[string]interface{}{"container": container, "path": path, "lines": lines, "follow": true, "resume_from": from.String()})
+	}
 	if e == nil {
 		e = h.logFileNamespaceError(namespace)
 	}
@@ -358,6 +366,8 @@ func (h *Handler) LogFileStream(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, release := h.holdSession(r.Context())
 	defer release()
+	ctx, leave := h.drain.HoldStream(ctx)
+	defer leave()
 	run := func(argv []string, out io.Writer) *logFileError {
 		var stderr bytes.Buffer
 		if err := h.runContainerCommand(ctx, namespace, pod, container, argv, out, &limitedWriter{w: &stderr, n: logFileStderrMax}); err != nil {
@@ -386,10 +396,15 @@ func (h *Handler) LogFileStream(w http.ResponseWriter, r *http.Request) {
 	st, e := stat()
 	var first *tailBuffer
 	var offset int64
+	// The same file, not shorter than where the browser's last line ended: the bytes after it.
+	resumeAt := resumed && e == nil && from.inode == st.inode && from.offset <= st.size
 	if e == nil {
 		offset = st.size
 		if lines > 0 {
 			offset = max(0, st.size-int64(lines)*logFileBytesPerLine)
+		}
+		if resumeAt {
+			offset = from.offset
 		}
 		first, e = read(offset, logFileReadMax)
 	}
@@ -422,10 +437,17 @@ func (h *Handler) LogFileStream(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 		return true
 	}
-	// stop ends the stream with the reason; the browser closes on "end".
-	stop := func(e *logFileError) {
+	// ended closes a stream whose context ended: the server leaving and the session's end say so, a gone client hears nothing.
+	ended := func() {
 		if sayStreamEnded(ctx, w, flusher) {
 			h.auditSessionEnd(ctx, r, "pod", pod, namespace, "log-file")
+		}
+	}
+	// stop ends the stream with the reason; the browser closes on "end". A command cut by the context's end (the server
+	// leaving during a poll's exec) is not the file's failure: the stream ends as the context's end does, and reconnects.
+	stop := func(e *logFileError) {
+		if ctx.Err() != nil {
+			ended()
 			return
 		}
 		slog.InfoContext(ctx, "log file stream stopped", "namespace", namespace, "pod", pod, "reason", e.reason, "detail", e.detail)
@@ -433,20 +455,49 @@ func (h *Handler) LogFileStream(w http.ResponseWriter, r *http.Request) {
 		write("end", "stream ended")
 	}
 
-	// The first read: the last `lines` lines before the end (the first, partial
-	// line dropped when the read starts mid-file).
+	// mark gives the browser where the lines it has end (the event id, which EventSource sends back as
+	// Last-Event-ID when it connects again): the file's inode and the offset after its last complete line.
 	var split lineSplitter
-	split.reset(offset > 0 && !first.truncatedAtLine())
+	mark := func() bool {
+		if split.skipPartial { // the bytes so far end inside a line it drops: no line start to mark yet
+			return true
+		}
+		if _, err := fmt.Fprintf(w, "id: %s\n\n", logFileMark{inode: st.inode, offset: offset - int64(len(split.carry))}); err != nil {
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+
+	// The first read: the last `lines` lines before the end (the first, partial
+	// line dropped when the read starts mid-file), or after a reconnect every
+	// line after the browser's last one, which starts a line.
 	data := first.Bytes()
+	if resumeAt {
+		split.reset(first.total > int64(len(data)) && !first.truncatedAtLine())
+		if skipped := first.total - int64(len(data)); skipped > 0 {
+			if !write("notice", fmt.Sprintf("skipped %d bytes while reconnecting: the file grew faster than it can be followed", skipped)) {
+				return
+			}
+		}
+	} else {
+		split.reset(offset > 0 && !first.truncatedAtLine())
+		if resumed && !write("notice", "the file was replaced or truncated while reconnecting; showing its last lines") {
+			return
+		}
+	}
 	offset += first.total
 	got := split.feed(data)
-	if len(got) > lines {
+	if !resumeAt && len(got) > lines {
 		got = got[len(got)-lines:]
 	}
 	for _, l := range got {
 		if !write("", l) {
 			return
 		}
+	}
+	if !mark() {
+		return
 	}
 
 	poll := time.NewTicker(logFilePollInterval)
@@ -466,9 +517,7 @@ func (h *Handler) LogFileStream(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-ctx.Done():
-			if sayStreamEnded(ctx, w, flusher) {
-				h.auditSessionEnd(ctx, r, "pod", pod, namespace, "log-file")
-			}
+			ended()
 			return
 		case <-heartbeat.C:
 			// A comment line keeps proxies (nginx: 60 s idle) from closing a quiet stream.
@@ -523,8 +572,37 @@ func (h *Handler) LogFileStream(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
+			if tb.total > 0 && !mark() {
+				return
+			}
 		}
 	}
+}
+
+// logFileMark is where the lines a followed file's browser has end: the event id of the stream.
+type logFileMark struct {
+	inode  string
+	offset int64
+}
+
+func (m logFileMark) String() string { return m.inode + ":" + strconv.FormatInt(m.offset, 10) }
+
+// parseLogFileMark reads a Last-Event-ID the stream wrote ("<inode>:<offset>"); anything else is no mark.
+func parseLogFileMark(s string) (logFileMark, bool) {
+	i := strings.LastIndexByte(s, ':')
+	if i <= 0 || i > 20 {
+		return logFileMark{}, false
+	}
+	for _, c := range s[:i] {
+		if c < '0' || c > '9' {
+			return logFileMark{}, false
+		}
+	}
+	off, err := strconv.ParseInt(s[i+1:], 10, 64)
+	if err != nil || off < 0 {
+		return logFileMark{}, false
+	}
+	return logFileMark{inode: s[:i], offset: off}, true
 }
 
 // tailBuffer keeps the last max bytes written to it, from a line start when

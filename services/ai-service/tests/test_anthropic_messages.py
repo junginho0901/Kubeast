@@ -8,7 +8,6 @@ unchanged, and sampling parameters on Claude 4.7 and later. The real
 investigation loop and the real optimization stream run against it.
 """
 import json
-from types import SimpleNamespace
 
 import httpx
 import pytest
