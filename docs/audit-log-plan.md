@@ -51,6 +51,7 @@ Viewing is through the admin screen (`admin.audit.read`) and CSV (`admin.audit.e
 - **Viewing and export**: `GET /api/v1/auth/admin/audit-logs` (filters, pages newest first with id breaking ties; the first page answers `as_of`, the highest id it counted, and the next pages pass it back so rows written meanwhile do not shift them), `GET /api/v1/auth/admin/audit-logs/export` (same filters and `as_of`, CSV UTF-8 BOM, the newest 50,000 rows at most — the list answers that limit as `export_limit`, the export the matching count as `X-Kubeast-Total`). Both are audited (`admin.audit.read`, `admin.audit.export`).
 - **Sinks (optional)**: the DB is the primary store, and sinks **copy** DB rows out.
   - One dispatcher in auth-service does this: of several replicas, the one that holds a Postgres advisory lock. For each sink, it reads the rows above its cursor (`audit_sink_cursors.last_id`), sends them in batches, and moves the cursor on success.
+  - The lock's connection asks the server for TCP keepalives (after 10 s quiet, every 5 s, 3 probes): when the sending replica's node is gone, the lock is free in about 25 s, not after the operating system's two hours.
   - The writing services (Go, Python) still INSERT only into the DB.
   - To avoid missing small ids committed late, it reads only rows older than 5 seconds.
   - Types:
