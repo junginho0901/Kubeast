@@ -28,15 +28,16 @@ const (
 		`"nodes":[{"id":"Deployment/shop/web","kind":"Deployment","name":"web","namespace":"shop","health":"warn"},` +
 		`{"id":"Service/shop/web","kind":"Service","name":"web","namespace":"shop","health":"ok"}],` +
 		`"edges":[{"source":"Service/shop/web","target":"Deployment/shop/web","type":"selector"}]}`
+	// cut by k8s-service (1 of 3 series), which AI_TOOL_RESULT_DETAILS would say in a cut field
 	roundLogQLAnswer = `{"resultType":"matrix","series":[{"metric":{"pod":"web-1"},"values":[[1763178000,"12"],[1763178300,"30"]]}],` +
-		`"seriesTotal":1,"truncated":false,"effectiveQuery":"sum by (pod) (count_over_time({namespace=\"shop\"} |= \"error\" [5m]))"}`
+		`"seriesTotal":3,"truncated":true,"effectiveQuery":"sum by (pod) (count_over_time({namespace=\"shop\"} |= \"error\" [5m]))"}`
 )
 
 // sha256 of each answer and of what tool-server asked k8s-service, as main d58cf599 gives them.
 var v078RoundAnswers = map[string]string{
 	"timeline":         "f926c99f44753357f21d03080289e1a471565aa3cb37f2dbe6de675af3a317ab",
 	"resource_graph":   "23a16d58c646f67889f593db831813209aee99430c63c89ade55773039174e2a",
-	"loki_query":       "f59c529b2736aa733f8c046e4890af061378c99d8387d557b8f51cb9cf2f86c2",
+	"loki_query":       "14c9c36b943ad3a492f25a3d72589fdb2348ba4bdddc2233b2f139d456d9c050",
 	"k8s_get_pod_logs": "3d6c255b40904e4bd26dea914659c78eee5bf83dc12d0639faad9eee604a3da3",
 	"asked":            "cb413b9c281639f171144101833b0a6d4f230585a506af4ed59dfffa38df4d9e",
 }
