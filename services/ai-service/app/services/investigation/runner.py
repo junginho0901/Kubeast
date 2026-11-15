@@ -68,6 +68,7 @@ def clean_error(err: Exception) -> str:
     return _OPAQUE.sub("[redacted]", safe_error(err))[:300]
 POLL_SECONDS = 15
 SUMMARY_CHARS = 500
+_USED = ("provider", "model", "prompt_tokens", "completion_tokens", "total_tokens")  # kept when the rest is refused
 
 
 class InvestigationError(Exception):
@@ -386,10 +387,8 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
                                                       usage=usage, progress=progress, finish_reason=turn.finish_reason,
                                                       tool_results=turn.results)
         steps += asked
-    report = answer + (inv_prompt.step_zero_note(unused, cfg.language) if unused else "")
     return {
-        # the database refuses a NUL in text and in JSON; a model may write one
-        "report": report.replace("\x00", ""),
+        "report": answer + (inv_prompt.step_zero_note(unused, cfg.language) if unused else ""),
         "tool_calls": tool_log,
         "iterations": steps,
         "provider": service.provider or "",
@@ -421,8 +420,14 @@ async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:
     if status == "failed":  # the tokens used before it failed count in the daily budget and AI usage too
         fields = used_fields(progress)
     duration_ms = int((time.monotonic() - started) * 1000)
-    await store.finish(db, row.id, status=status, error=error, **fields)
-    report = fields.get("report") or ""
+    try:
+        await store.finish(db, row.id, status=status, error=error, **fields)
+    except Exception as e:  # the row refused what the run wrote: failed with why, its tokens still counted
+        log.exception("investigation %s: the run's fields could not be stored", row.id)
+        status, error = "failed", f"the run's fields could not be stored: {type(e).__name__}: {clean_error(e)}"
+        fields = {k: v for k, v in fields.items() if k in _USED}
+        await store.finish(db, row.id, status=status, error=error, **fields)
+    report = store.without_nul(fields.get("report") or "")
     link = await link_for(cfg, db, row)
     await write_audit(
         action="ai.investigation.run",

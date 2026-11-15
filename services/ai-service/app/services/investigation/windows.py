@@ -11,11 +11,8 @@ from typing import Any, Optional
 
 CHANGES_TOOL = "timeline"
 CHANGES_VIEW = "changes"
-# The logs window ends this long after the start at the latest, and is never longer than the log search's longest range
-# (LOG_SEARCH_MAX_RANGE, 24 h by default), which refuses a longer one: an alert that started days ago is read near its
-# start, not over the days since.
-LOGS_AFTER = timedelta(hours=1)
-LOGS_MAX_RANGE = timedelta(hours=24)
+LOGS_AFTER = timedelta(hours=1)  # the logs window's end after the start at the latest
+LOGS_MAX_RANGE = timedelta(hours=24)  # the log search's longest range by default (LOG_SEARCH_MAX_RANGE)
 
 
 @dataclass(frozen=True)

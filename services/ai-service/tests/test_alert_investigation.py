@@ -932,6 +932,29 @@ async def test_worker_skips_a_queued_alert_while_paused(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_a_run_whose_fields_the_row_refuses_is_failed_with_why_and_keeps_its_tokens(monkeypatch):
+    service = FakeService([completion(content="## Summary\nok")])
+    audits, writes = [], []
+    install_loop(monkeypatch, service, audits)
+
+    async def finish(db, inv_id, **fields):
+        writes.append(fields)
+        if len(writes) == 1:
+            raise ValueError("unsupported Unicode escape sequence")
+
+    monkeypatch.setattr(runner.store, "finish", finish)
+    assert await runner.run_one(cfg(max_steps=2), None, row()) == "failed"
+    first, second = writes
+    assert first["status"] == "done" and first["report"] == "## Summary\nok"
+    assert second["error"] == "the run's fields could not be stored: ValueError: unsupported Unicode escape sequence"
+    assert set(second) == {"status", "error", "provider", "model", "prompt_tokens", "completion_tokens", "total_tokens"}
+    assert second["status"] == "failed" and second["total_tokens"] == 11  # still counted in the daily budget
+    run = audits[-1]
+    assert run["action"] == "ai.investigation.run" and run["result"] == "failure" and run["after"]["status"] == "failed"
+    assert run["after"]["total_tokens"] == 11 and run["error"] == second["error"]
+
+
+@pytest.mark.asyncio
 async def test_the_worker_logs_a_run_whose_end_could_not_be_stored_and_takes_the_next_row(monkeypatch, caplog):
     """A run whose store.finish raised (the database refusing a value) does not end the worker: the next rows run."""
     stop = asyncio.Event()

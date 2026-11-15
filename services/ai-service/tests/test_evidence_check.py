@@ -56,9 +56,36 @@ def test_split_reads_only_the_block_at_the_very_end():
     report, block, status = evidence.split(answer)
     assert status == "ok" and block["no_fault"] is True and block["causes"] == []
     assert report == f"{WEB_REPORT}\n\n{quoted}\n\nmore"  # an rca fence before the end stays in the report
-    # a block with text after it is not the block at the very end: the answer is kept whole and asked for again
+    # a quoted rca block after the block is no block at the end: asked for again, and no rca block stays in the report
     after = f"{WEB_REPORT}\n{rca(no_fault=True)}\n\nThe quoted text: {quoted}\nend"
-    assert evidence.split(after) == (after, None, "missing")
+    assert evidence.split(after) == (f"{WEB_REPORT}\n\n\nThe quoted text: \nend", None, "missing")
+    # with the provider stopped at the length it is cut, again with no rca block left
+    assert evidence.split(after, "length") == (f"{WEB_REPORT}\n\n\nThe quoted text: \nend", None, "cut")
+
+
+def test_closing_words_after_the_only_block_stay_in_the_report():
+    answer = f"{WEB_REPORT}\n\n{rca(no_fault=True)}\n\nLet me know if you want me to dig further."
+    report, block, status = evidence.split(answer)
+    assert status == "ok" and block["no_fault"] is True
+    assert report == f"{WEB_REPORT}\n\nLet me know if you want me to dig further."
+    # the words cut at the length: the block is whole, so it is read
+    report, block, status = evidence.split(f"{WEB_REPORT}\n\n{rca(no_fault=True)}\n\nAlso note that the", "length")
+    assert (status, report) == ("ok", f"{WEB_REPORT}\n\nAlso note that the") and block is not None
+    # a fence after the block (a command to run) is no block at the end, and the block leaves the report
+    fenced = f"{WEB_REPORT}\n\n{rca(no_fault=True)}\n\nRun:\n```bash\nkubectl get pods\n```"
+    report, block, status = evidence.split(fenced)
+    assert (block, status) == (None, "missing") and "```rca" not in report and report.endswith("```bash\nkubectl get pods\n```")
+    # three backticks inside the JSON on its own line do not end the block
+    inside = WEB_REPORT + '\n```rca\n{"causes": [], "ruled_out": ["log said ```oops```"]}\n```'
+    assert evidence.split(inside)[1:] == ({"causes": [], "ruled_out": ["log said ```oops```"]}, "ok")
+
+
+def test_an_rca_fence_that_never_closes_is_cut_only_when_the_answer_stopped_inside_a_block():
+    quoted = f"{WEB_REPORT}\nlog line: ```rca\nsomething\n## Next steps\nrestart"
+    assert evidence.split(quoted) == (quoted, None, "missing")  # a quoted fence: the text after it stays
+    assert evidence.split(quoted, "length") == (f"{WEB_REPORT}\nlog line:", None, "cut")
+    started = f"{WEB_REPORT}\n\n```rca\n  {{\"no_fault\": false, \"causes\": [{{\"resource\": \"Deployment/apps/web\""
+    assert evidence.split(started) == (WEB_REPORT, None, "cut")  # JSON follows the fence
 
 
 @pytest.mark.parametrize("answer, status", [

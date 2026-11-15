@@ -61,9 +61,9 @@ async def test_both_on_split_the_answer_once_and_keep_the_result(monkeypatch):
     splits = []
     real = rca.split
 
-    def counted(answer):
+    def counted(answer, *args):
         splits.append(answer)
-        return real(answer)
+        return real(answer, *args)
 
     monkeypatch.setattr(rca, "split", counted)
     service = _service(_reads_pods(), completion(content=GOOD))
@@ -97,6 +97,7 @@ async def test_both_checks_problems_go_in_one_second_ask(monkeypatch):
     assert "- h3 (Image web:1.5 crashes on start): its state is not one of cause, symptom, ruled_out or blocked" in text  # the ledger
     assert "These causes are not a hypothesis of state cause:\n- StatefulSet/apps/db" in text  # both: the cause has no cause hypothesis
     assert text.count("The calls of this investigation:") == 1 and text.endswith("No tools now.")
+    assert "ending with the rca block; nothing comes after the block." in text
     assert "leave it out of \"causes\"" in text and "Close every hypothesis" in text
     assert out["iterations"] == 3 and out["total_tokens"] == 33  # the second ask once, counted once
     assert out["report"] == "## Summary\nweb crashes."  # the second answer passed both: no note
@@ -122,8 +123,10 @@ async def test_what_still_fails_after_the_one_ask_is_listed_under_the_report_and
                              "서버 확인 안 됨: 아래 원인은 이 조사의 도구 결과로 확인되지 않아 가설로 읽어 주세요.\n"
                              f"- {DB}: {reason}")  # the evidence check's list: its cause only
     (h,) = out["result"]["hypotheses"]
-    assert h["closed"] is False and h["problems"] == [{"reason": "no_evidence", "side": "for"}, {"reason": "bad_calls", "calls": ["7"]}]
-    assert [f["kind"] for f in out["result"]["failures"]] == ["cause_name_missing", "hypothesis_no_evidence", "hypothesis_bad_calls"]
+    assert h["closed"] is False and h["problems"] == [{"reason": "no_evidence", "side": "for"}, {"reason": "bad_calls", "calls": ["7"]},
+                                                      {"reason": "not_verified"}]  # its cause is not verified either
+    assert [f["kind"] for f in out["result"]["failures"]] == ["cause_name_missing", "hypothesis_no_evidence", "hypothesis_bad_calls",
+                                                               "hypothesis_not_verified"]
     assert all(f["kind"] in rca.FAILURES for f in out["result"]["failures"])
     assert progress["evidence"]["unverified"] == 1 and out["result"]["asked_again"] is True
 
@@ -310,18 +313,105 @@ async def test_each_cause_says_whether_the_calls_show_it_and_the_result_which_ch
     assert out["result"]["checks"] == {"evidence": False, "ledger": True}
 
 
+class CapturedDB:
+    """store.finish's session: what each UPDATE wrote, as its bound values."""
+
+    def __init__(self):
+        self.written = []
+
+    def async_session(self):
+        db = self
+
+        class Session:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            async def execute(self, stmt):
+                db.written.append(stmt.compile().params)
+
+            async def commit(self):
+                pass
+
+        return Session()
+
+
 @pytest.mark.asyncio
-async def test_a_nul_the_model_wrote_reaches_neither_the_result_nor_the_report(monkeypatch):
+async def test_a_nul_the_model_wrote_is_in_no_field_the_row_or_the_audit_keeps(monkeypatch):
     answer = "## Summary\nthe data\u0000base.\n\n" + block(
         [cause("StatefulSet/apps/d\u0000b", [1, "9\u0000"], kind="dependency_down")],
         [hypothesis(id="h\u00003", statement="d\u0000own", resource=DB, state="cause", **{"for": ["x\u0000"]})])
-    service = _service(_reads_pods(), completion(content=answer), completion(content=answer))
-    install_loop(monkeypatch, service, [])
+    args = {"resource_type": "pods", "namespace": "apps", "label_selector": "app=w\u0000eb"}
+    service = _service(completion(calls=[tool_call("c1", "k8s_get_resources", args)]), completion(content=answer),
+                       completion(content=answer))
+    audits = []
+    install_loop(monkeypatch, service, audits)
     out = await runner.investigate(cfg(**BOTH), row())
-    kept = json.dumps(out["result"])
-    assert "\\u0000" not in kept and "\x00" not in out["report"]  # the database refuses both
+    assert "\\u0000" not in json.dumps(out["result"])  # the result's texts themselves
     assert out["result"]["causes"][0]["raw_evidence"] == [1, "9"] and out["result"]["hypotheses"][0]["statement"] == "down"
     assert {"kind": "cause_name_missing", "resource": "StatefulSet/apps/db"} in out["result"]["failures"]
+
+    service = _service(completion(calls=[tool_call("c1", "k8s_get_resources", args)]), completion(content=answer),
+                       completion(content=answer))
+    install_loop(monkeypatch, service, audits)
+    db = CapturedDB()
+    assert await runner.run_one(cfg(**BOTH), db, row()) == "done"
+    (written,) = db.written
+    assert written["status"] == "done" and written["tool_calls"][0]["args"]["label_selector"] == "app=web"
+    assert "\\u0000" not in json.dumps(written, default=str)  # report, tool calls, result: the database refuses NUL
+    run = [a for a in audits if a["action"] == "ai.investigation.run"][-1]
+    assert "\x00" not in run["after"]["summary"]
+
+
+def test_without_nul_takes_it_out_at_any_depth():
+    from app.services.investigation import store
+
+    kept = store.without_nul({"a\x00": ["x\x00", {"y": "z\x00", "n": 1, "none": None}], "t": ("q\x00",)})
+    assert kept == {"a": ["x", {"y": "z", "n": 1, "none": None}], "t": ["q"]}
+
+
+@pytest.mark.asyncio
+async def test_closing_words_after_the_block_keep_the_result_and_ask_nothing(monkeypatch):
+    for reply in (completion(content=GOOD + "\n\nLet me know if you want me to dig further."),
+                  at_length(GOOD + "\n\nAlso note that the")):  # cut in the words after a whole block
+        service = _service(_reads_pods(), reply)
+        install_loop(monkeypatch, service, [])
+        out = await runner.investigate(cfg(**BOTH), row())
+        assert len(service.completions.calls) == 2 and out["result"]["status"] == "ok" and out["result"]["failures"] == []
+        assert out["report"].startswith("## Summary\nweb crashes.\n\n") and "```rca" not in out["report"]
+
+
+@pytest.mark.asyncio
+async def test_a_block_with_a_fence_after_it_twice_leaves_no_rca_block_in_the_report(monkeypatch):
+    fenced = GOOD + "\n\nRun:\n```bash\nkubectl rollout undo deployment/web -n apps\n```"
+    service = _service(_reads_pods(), completion(content=fenced), completion(content=fenced))
+    install_loop(monkeypatch, service, [])
+    out = await runner.investigate(cfg(**BOTH), row())
+    assert len(service.completions.calls) == 3 and out["result"]["status"] == "missing"
+    assert "```rca" not in out["report"] and "kubectl rollout undo" in out["report"]
+
+
+@pytest.mark.asyncio
+async def test_with_both_on_a_cause_hypothesis_does_not_close_on_a_cause_the_calls_do_not_show(monkeypatch):
+    still = "## Summary\nthe database is down.\n\n" + block([cause(DB, [1], kind="dependency_down")],
+                                                            [hypothesis(id="h1", state="cause", resource=DB, **{"for": [1]})])
+    service = _service(_reads_pods(), completion(content=still), completion(content=still))
+    install_loop(monkeypatch, service, [])
+    progress = {}
+    out = await runner.investigate(cfg(**BOTH), row(), progress)
+    ask = service.completions.calls[2]["messages"][-1]["content"]
+    assert "- h1 (Image web:1.5 crashes on start): the evidence check did not verify the cause it is about" in ask
+    (h,) = out["result"]["hypotheses"]
+    assert h["closed"] is False and h["problems"] == [{"reason": "not_verified"}]  # "for" call 1 answered: only this
+    assert out["result"]["causes"][0]["verified"] is False and progress["ledger"]["not_closed"] == 1
+    assert progress["ledger"]["failures"] == ["cause_name_missing", "hypothesis_not_verified"]
+    for on in ({"evidence_check": True}, {"ledger": True}):  # one switch alone does not cross them
+        service = _service(_reads_pods(), completion(content=still), completion(content=still))
+        install_loop(monkeypatch, service, [])
+        out = await runner.investigate(cfg(max_steps=5, **on), row())
+        assert "hypothesis_not_verified" not in [f["kind"] for f in out["result"]["failures"]]
 
 
 def test_the_kinds_are_those_the_ai_evaluation_scores():

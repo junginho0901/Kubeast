@@ -10,8 +10,9 @@ answer is checked the same way when its block can be read. The row keeps what th
 (investigation/result.py), so the AI evaluation scores a block the kept report no longer shows. The tool results carry
 their call numbers (investigation/numbers.py).
 
-Only the block at the very end of the answer counts. The model's answers in a run with the block may be ANSWER_TOKENS
-long; one that still stops inside the block (or at its length before it) is `cut` and asked for once more, shorter.
+The block is the last rca block of the answer (split()); in any other reading no rca block stays in the report. The
+model's answers in a run with the block may be ANSWER_TOKENS long; one that still stops inside the block (or at its
+length before it) is `cut` and asked for once more, shorter.
 """
 
 from __future__ import annotations
@@ -34,18 +35,19 @@ FAILURES = (
     "cause_no_evidence", "cause_bad_calls", "cause_name_missing", "cause_after_alert",
     # both on: a cause no hypothesis of state cause is about
     "cause_not_in_ledger",
-    # ledger: a hypothesis not closed (ledger.check's reasons), or none while the block finds a fault
-    "hypothesis_open", "hypothesis_no_evidence", "hypothesis_no_reason", "hypothesis_bad_calls", "no_hypotheses",
+    # ledger: a hypothesis not closed (ledger.check's reasons, not_verified with both on), or none while the block finds a fault
+    "hypothesis_open", "hypothesis_no_evidence", "hypothesis_no_reason", "hypothesis_bad_calls", "hypothesis_not_verified",
+    "no_hypotheses",
 )
 
 FINAL_NOTE = " End it with the rca block."
 
-# The longest answer of a run with the block, in tokens, when the model's options set none: the chat's own default.
-# The 2 048 an investigation's answer has otherwise do not hold the six headings and a block with twelve hypotheses.
-ANSWER_TOKENS = 4096
+ANSWER_TOKENS = 4096  # a run with the block, when the model's options set none: the chat's default, not 2 048
 MAX_HYPOTHESES = 12
 
 _OPEN = re.compile(r"```[ \t]*rca[ \t]*\r?\n")
+_CLOSE = re.compile(r"^[ \t]*```", re.M)
+_CLOSED = re.compile(r"```[ \t]*rca[ \t]*\r?\n.*?```", re.S)
 _FENCE = "```"
 _ARGS_CHARS = 200
 
@@ -94,34 +96,51 @@ def instruction(*, evidence: bool, hypotheses: bool) -> str:
             "holding one JSON object:\n```rca\n" + shape + "```\n" + " ".join(says))
 
 
-def split(answer: str) -> tuple[str, Optional[dict], str]:
-    """(the answer without its rca block, the block's object, "ok" | "missing" | "invalid" | "cut").
+def _without_blocks(text: str) -> str:
+    return _CLOSED.sub("", text).rstrip()
 
-    Only a block at the very end of the answer, with nothing but space after its closing fence, is the block: an rca
-    fence earlier on (one quoted from a tool result) stays in the report, and a last one with text after it is no block
-    (missing). A last rca fence that never closes is an answer that stopped inside its block (cut), taken out of the
-    report. A block that is not an object, whose causes are not a list or hold an item that is not an object, is
-    invalid."""
+
+def split(answer: str, finish_reason: str = "") -> tuple[str, Optional[dict], str]:
+    """(the report, the block's object, "ok" | "missing" | "invalid" | "cut").
+
+    The block is the last rca block, closed by a fence that starts a line (or ends its JSON). Space after it, or closing
+    words with no fence when it is the answer's only rca fence, leave it the block; those words stay in the report and
+    an earlier rca fence stays too (one quoted from a tool result). A fence after it, or closing words after a second
+    rca block (a quoted one), is no block (missing). A last rca fence that never closes is the answer stopped inside its
+    block (cut) when the provider stopped at the length (`finish_reason` "length") or JSON follows it, else a quoted
+    fence (missing, its text kept). An answer stopped at the length with no block is cut. Outside ok, no closed rca
+    block stays in the report. A block that is not an object, whose causes are not a list or hold an item that is not
+    an object, is invalid."""
     text = answer or ""
+    stopped = finish_reason == "length"
     opens = list(_OPEN.finditer(text))
     if not opens:
-        return text.rstrip(), None, "missing"
+        return text.rstrip(), None, "cut" if stopped else "missing"
     last = opens[-1]
     body = text[last.end():]
-    end = body.find(_FENCE)
-    if end < 0:
-        return text[:last.start()].rstrip(), None, "cut"
-    if body[end + len(_FENCE):].strip():
-        return text.rstrip(), None, "missing"
-    report = text[:last.start()].rstrip()
+    close = _CLOSE.search(body)
+    inline = body.find(_FENCE)
+    if close is None and inline < 0:
+        if stopped or body.lstrip().startswith("{"):
+            return _without_blocks(text[:last.start()]), None, "cut"
+        return _without_blocks(text), None, "missing"
+    raw, after = (body[:close.start()], body[close.end():]) if close else (body[:inline], body[inline + len(_FENCE):])
+    words = after.strip()
+    if _FENCE in after or (words and len(opens) > 1):
+        return _without_blocks(text), None, "cut" if stopped else "missing"
+    before = text[:last.start()].rstrip()
     try:
-        block = json.loads(body[:end])
+        block = json.loads(raw)
     except (ValueError, RecursionError):
-        return report, None, "invalid"
+        block = None
     causes = block.get("causes") if isinstance(block, dict) else None
     if not isinstance(causes, list) or not all(isinstance(c, dict) for c in causes):
-        return report, None, "invalid"
-    return report, block, "ok"
+        return _joined(_without_blocks(before), words), None, "invalid"
+    return _joined(before, words), block, "ok"
+
+
+def _joined(report: str, words: str) -> str:
+    return f"{report}\n\n{words}" if words else report
 
 
 @dataclass
@@ -144,9 +163,7 @@ def check(answer: str, *, tool_log: list[dict[str, Any]], reads: Optional[list],
     from app.services.investigation import evidence as inv_evidence
     from app.services.investigation import ledger as inv_ledger
 
-    report, block, status = split(answer)
-    if status == "missing" and finish_reason == "length":
-        status = "cut"
+    report, block, status = split(answer, finish_reason)
     out = Checked(report, block, status)
     if status != "ok":
         failure: dict[str, Any] = {"kind": f"block_{status}"}
@@ -162,6 +179,11 @@ def check(answer: str, *, tool_log: list[dict[str, Any]], reads: Optional[list],
     if evidence and ledger:
         out.not_in_ledger = not_in_ledger(block, out.hypotheses)
         out.failures += [{"kind": "cause_not_in_ledger", "resource": r} for r in out.not_in_ledger]
+        unverified = {_name(p.resource) for p in out.cause_problems}
+        for h in out.hypotheses:  # a cause hypothesis does not close on a cause the calls do not show
+            if h["state"] == "cause" and _name(h.get("resource")) in unverified:
+                h["problems"] = [*h.get("problems", []), {"reason": "not_verified"}]
+                h["closed"] = False
     if ledger:
         out.failures += hypothesis_failures(block, out.hypotheses)
     return out
@@ -235,7 +257,7 @@ def ask_again(checked: Checked, calls: Iterable[tuple[str, Any, str]], *, eviden
         if any(f["kind"] == "no_hypotheses" for f in checked.failures):
             parts.append('Your rca block lists no hypotheses while "no_fault" is not true.')
         head = "\n\n".join(parts)
-    says = ["Write the whole report again, under the same headings, ending with the rca block."]
+    says = ["Write the whole report again, under the same headings, ending with the rca block; nothing comes after the block."]
     if evidence:
         says.append('A cause that no call shows is a hypothesis: say so in the report and leave it out of "causes"; when '
                     "another call does show it, give that call's number.")

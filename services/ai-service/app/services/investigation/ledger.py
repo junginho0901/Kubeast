@@ -99,6 +99,7 @@ _REASONS = {
     "no_evidence": 'no call that answered is given under "{side}"',
     "no_reason": 'it is blocked with no reason under "blocked"',
     "bad_calls": "{calls} name no call of this investigation",
+    "not_verified": "the evidence check did not verify the cause it is about",
 }
 
 
