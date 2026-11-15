@@ -82,7 +82,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
   -n kubeast --reset-then-reuse-values
 ```
 
-`--reset-then-reuse-values`는 직접 넣은 값을 그대로 두고 새 버전에 생긴 값을 더합니다. `--reuse-values`는 처음 설치한 버전의 기본값을 그대로 써서 뒤 버전에 생긴 값이 빠집니다. 차트는 그런 업그레이드를 이 안내와 함께 멈추고, 릴리스는 그대로 둡니다. `helm show values`에서 복사한 값 파일도 0.7.7부터는 같은 식으로 멈춥니다. 0.7.6 이하에서 복사한 파일은 `chartVersion`이 없지만, 0.7.8부터는 그 안의 `global.imageTag`(그 버전의 태그)로 멈춥니다. 직접 쓰는 값 파일에는 `chartVersion`과 `global.imageTag`를 넣지 마세요. 직접 빌드한 이미지의 `global.imageTag`처럼 릴리스의 `vX.Y.Z`가 아닌 태그는 멈추지 않습니다.
+`--reset-then-reuse-values`는 직접 넣은 값을 그대로 두고 새 버전에 생긴 값을 더합니다. `--reuse-values`는 처음 설치한 버전의 기본값을 그대로 써서 뒤 버전에 생긴 값이 빠지고, 이미지도 그 버전에 머뭅니다. 차트는 그런 업그레이드를 이 안내와 함께 멈추고, 릴리스는 그대로 둡니다. `helm show values`에서 복사한 값 파일도 0.7.7부터는 같은 식으로 멈춥니다. 0.7.6 이하에서 복사한 파일은 `chartVersion`이 없지만, 0.7.8부터는 그 안의 `global.imageTag`(그 버전의 태그)로 멈춥니다. 직접 쓰는 값 파일에는 `chartVersion`과 `global.imageTag`를 넣지 마세요. 직접 빌드한 이미지의 `global.imageTag`처럼 릴리스의 `vX.Y.Z`가 아닌 태그는 멈추지 않습니다. 직접 넣은 값을 새 버전이 더는 읽지 않을 때도 업그레이드가 멈추고 대신 넣을 값을 알려 줍니다. 그 값은 값 파일에서 빼세요.
 
 0.7.8로 업그레이드하면 이름이 다른 역할이나 기본 역할과 같은 그룹이 되는 사용자 정의 역할(`Admin` 옆의 `ADMIN`)의 이름을 `<이름>-renamed-<id>`로 바꾸고 그 역할의 클러스터 부여를 지우며, 바뀐 것마다 감사 행을 남깁니다. 무엇이 바뀌는지와 그 뒤에 할 일은 [기능](features.md)의 "역할 이름"에 있습니다. 업그레이드 전에 Kubeast 데이터베이스에서 아래 쿼리(읽기만 함)를 실행하면 이름이 바뀔 역할, 각 역할이 그룹을 함께 쓰는 역할(`same_group_as`), 각 역할의 부여·임시 부여의 복원·대기 중이거나 승인된 접근 요청·계정 등급 수를 볼 수 있습니다. `same_group_as`가 `Pending`인 역할의 계정 등급은 기본 `Pending`으로 옮겨지고, 나머지는 바뀐 이름의 역할에 남습니다.
 

@@ -147,7 +147,9 @@ pdb:
 # 터미널과 실시간 로그를 따로 맡는 서버, 기본 꺼짐(docs/ko/operations.md "터미널과 실시간 로그를 따로 맡는 서버")
 streams:
   enabled: false
+  replicas: 1            # 1 그대로 — 스트림 서버 둘 이상은 아직 지원하지 않습니다
   drainSeconds: 60       # 터미널을 맡은 서버가 교체될 때 열린 터미널을 기다리는 시간(꺼져 있으면 k8s-service)
+  preStopSeconds: 10     # k8s-service-stream이 드레인을 시작하기 전에 Service 엔드포인트에서 빠져 있는 시간
 topologySpread:
   enabled: true
 podShutdown:
@@ -156,6 +158,9 @@ resources:               # 컨테이너별 requests / memory limit(전체 목록
   aiService:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 1Gi }
+  k8sServiceStream:      # streams.enabled일 때만. 아직 재지 않아 k8sService 값으로 시작
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
 
 # AI 키 — ai-service 환경변수로만 주입하고 DB에는 저장하지 않습니다.
 # 모델 설정(UI/CRD)은 변수 이름(api_key_env)만 가리킵니다.
