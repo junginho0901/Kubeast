@@ -4426,6 +4426,7 @@
   "floatingChat": {
     "title": "AI Chat",
     "openAriaLabel": "AI Chat 열기",
+    "openTitle": "AI Chat 열기 ({{shortcut}})",
     "closeAriaLabel": "닫기",
     "copy": "복사",
     "copied": "복사됨",

@@ -4053,6 +4053,7 @@
   "floatingChat": {
     "title": "AI Chat",
     "openAriaLabel": "Open AI Chat",
+    "openTitle": "Open AI Chat ({{shortcut}})",
     "closeAriaLabel": "Close",
     "copy": "Copy",
     "copied": "Copied",
