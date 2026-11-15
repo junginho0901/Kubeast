@@ -161,6 +161,30 @@ tests:
             secretRef:
               name: kubeast-secrets
 
+  - it: with streams.enabled both k8s-service roles sign in as k8s-service, the stream server too
+    set:
+      streams.enabled: true
+    template: deployments.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: REDIS_USERNAME, value: k8s-service}
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: REDIS_USERNAME, value: k8s-service}
+        documentSelector: {path: metadata.name, value: k8s-service-stream}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: kubeast-redis-users
+                key: REDIS_K8S_SERVICE_PASSWORD
+                optional: true
+        documentSelector: {path: metadata.name, value: k8s-service-stream}
+
   - it: tool-server signs in as tool-server with its own password, which takes the place of kubeast-secrets' REDIS_PASSWORD
     template: deployments.yaml
     documentSelector: {path: metadata.name, value: tool-server}

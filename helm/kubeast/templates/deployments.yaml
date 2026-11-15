@@ -320,9 +320,8 @@ spec:
               value: "{{ $.Values.multicluster.bigReadConcurrency | default 2 }}"
             - name: EVENT_LIST_CONCURRENCY
               value: "{{ $.Values.multicluster.eventListConcurrency | default 4 }}"
-            {{- if $api }}
             {{- if include "kubeast.redisAcl" $ }}
-            # Redis user k8s-service (redis.acl); this REDIS_PASSWORD takes the place of kubeast-secrets' one. optional:
+            # Redis user k8s-service (redis.acl) in every role; this REDIS_PASSWORD takes the place of kubeast-secrets' one. optional:
             # a Secret of secrets.existingSecret without the key leaves the cache in memory instead of the pod not starting.
             - name: REDIS_USERNAME
               value: k8s-service
@@ -333,6 +332,7 @@ spec:
                   key: REDIS_K8S_SERVICE_PASSWORD
                   optional: true
             {{- end }}
+            {{- if $api }}
             {{- with $.Values.features.prometheus.auth.existingSecret }}
             - name: PROMETHEUS_AUTH_HEADER
               valueFrom:
