@@ -15,7 +15,7 @@ What the AI has to notice:
 
 The trap: blame each service in turn, or `search` (the busiest of shop-03 all along), or a caller; look for a CPU limit (case 09's shape) and find none; or stay inside the asked namespace and miss the Job.
 
-How the scorer judges: cause = the node (`Node/kubeast-b-control-plane`) with kind `node`, or the Job, its pods or its CronJob (kind `node` or `resource_limit`). search, thumbnails and storefront are decoys. Path: the node (or the Job), then a slow service. Start time ±2 min of the Job.
+How the scorer judges: cause = the node (`Node/kubeast-b-control-plane`) with kind `node`, or the Job, its pods or its CronJob (kind `node` or `resource_limit`); the namespace `reports` counts only with a kind or a path (`Namespace/reports`, `reports/monthly-report-…`), since "reports" alone is an English word ("the alert reports"). In a report's words a busy or saturated CPU is the node kind. search, thumbnails and storefront are decoys. Path: the node (or the Job), then a slow service. Start time ±2 min of the Job.
 
 The alert path: the cause is in `reports` and on the node, outside a token limited to `shop-03`, so the alert is sent with an empty `namespace` label, which the webhook reads as none: the investigator gets a token for the whole cluster (its ClusterRole reads nodes, Jobs and CronJobs) and the annotations name `shop-03`. `match` holds the same empty namespace; the case has no `rule`, so it runs only with `--alert-source auto` or `synthetic`.
 

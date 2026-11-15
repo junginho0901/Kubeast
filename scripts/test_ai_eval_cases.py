@@ -282,6 +282,16 @@ def test_the_symptom_alone_is_not_the_cause():
             assert s["pass"] and s["score"] == 1.0, (name, resource, kind, s)
 
 
+def test_03_takes_the_jobs_namespace_only_with_a_kind_or_a_path():
+    d = next(d for d, _ in all_cases() if d.name.startswith("03_"))
+    filled = rca.fill_placeholders(truth_of(d), MARKS)
+    for resource, passes in (("reports", False), ("Report/reports", False), ("Namespace/reports", True), ("ns/reports", True),
+                             ("reports/monthly-report-run-x7k2p", True), ("Job/reports/monthly-report-run", True),
+                             ("CronJob/reports/monthly-report", True), ("Node/kubeast-b-control-plane", True)):
+        s = rca.score_rca(block([cause(resource, "node")]), filled, CALLS)
+        assert s["pass"] == passes, (resource, s)
+
+
 def test_each_alert_names_the_namespace_of_its_causes():
     """The investigator's token is limited to the alert's namespace label (the case's own unless the alert names one),
     so the label is the namespace every truth cause is in, or empty — the whole cluster — for a cause of the cluster."""
