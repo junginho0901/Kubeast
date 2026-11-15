@@ -268,10 +268,13 @@ K8S_READONLY_TOOLS: List[Dict] = [
             "description": (
                 "What differs in one namespace between a window (default the last hour) and the window of the same length right before it, ranked "
                 "by the server before you look around: failing objects now (the issue check), container terminations by reason (OOMKilled, Error), "
-                "restarts, CPU throttling and memory against the limit (Prometheus), pressure on the nodes its pods run on. Each finding has check, "
+                "restarts, CPU throttling and memory against the limit (Prometheus), error log shapes and error line counts per container (the log "
+                "store), each service's requests, failed share and p90 from its server spans (the trace store), pressure on the nodes its pods run on. "
+                "Each finding has check, "
                 "target, verdict, a one-line summary, before / now / ratio (new: it was not there before) and up to 3 examples; at most 10, the new "
                 "first, then the larger ratio. normal lists the checks that found nothing; not_run the checks that could not run and why (no "
-                "Prometheus, no series, a grant limited to namespaces): not run is not normal, say so. Call it first when the user asks broadly what "
+                "Prometheus, log or trace store, no series, a grant limited to namespaces, no permission to read pod logs, logs too large to read): "
+                "not run is not normal, say so. Call it first when the user asks broadly what "
                 "is wrong or why something broke in a namespace, then read the objects it names. A finding is a lead, not a cause: check it."
             ),
             "parameters": {
