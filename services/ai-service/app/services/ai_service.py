@@ -3,20 +3,14 @@ AI 트러블슈팅 서비스
 """
 from bisect import bisect_right
 from typing import Callable, List, Dict, Optional, Any
-import httpx
 import re
 import json
 import os
-import sys
 import time
 from app.config import settings
-from datetime import datetime
-from app.security import decode_access_token
 from app.services.k8s_client import K8sServiceClient
 from app.services.tool_server_client import ToolServerClient
 from app.services.provider_adapter import ProviderAdapter
-from app.services.ai.prompts import SYSTEM_MESSAGE
-from app.services.ai.tools import K8S_READONLY_TOOLS, K8S_WRITE_TOOLS
 from app.services.ai.language import detect_response_language, build_language_directive
 from app.services.ai.tool_dispatch import execute_function_with_context
 from app.services.ai import formatters, permissions, tool_replay

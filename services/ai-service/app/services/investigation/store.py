@@ -21,6 +21,24 @@ _CAP_STATUSES = ("queued", "running", "done", "failed")
 BUSY_STATUSES = ("queued", "running", "done")
 
 
+@asynccontextmanager
+async def _session(db, held) -> AsyncIterator[Any]:
+    """`held`, the session of a webhook decision (alert_locked), or one of this call's own."""
+    if held is not None:
+        yield held
+        return
+    async with db.async_session() as s:
+        yield s
+
+
+async def _written(s, held) -> None:
+    """A write's end: committed in its own session, or sent in the held one, which alert_locked commits."""
+    if held is None:
+        await s.commit()
+    else:
+        await s.flush()
+
+
 async def cluster_exists(db, cluster: str) -> bool:
     """The clusters table belongs to auth-service; every service shares the database."""
     async with db.async_session() as s:
@@ -28,8 +46,8 @@ async def cluster_exists(db, cluster: str) -> bool:
         return row is not None
 
 
-async def find_recent(db, cluster: str, fingerprint: str, since: datetime) -> Optional[AlertInvestigation]:
-    async with db.async_session() as s:
+async def find_recent(db, cluster: str, fingerprint: str, since: datetime, *, held=None) -> Optional[AlertInvestigation]:
+    async with _session(db, held) as s:
         q = (
             select(AlertInvestigation)
             .where(
@@ -44,19 +62,20 @@ async def find_recent(db, cluster: str, fingerprint: str, since: datetime) -> Op
         return (await s.execute(q)).scalars().first()
 
 
-async def bump_repeat(db, inv_id: str, now: datetime) -> None:
-    async with db.async_session() as s:
+async def bump_repeat(db, inv_id: str, now: datetime, *, held=None) -> None:
+    async with _session(db, held) as s:
         await s.execute(
             update(AlertInvestigation)
             .where(AlertInvestigation.id == inv_id)
             .values(repeat_count=AlertInvestigation.repeat_count + 1, last_seen_at=now)
         )
-        await s.commit()
+        await _written(s, held)
 
 
-async def find_recent_skipped(db, cluster: str, fingerprint: str, since: datetime) -> Optional[AlertInvestigation]:
+async def find_recent_skipped(db, cluster: str, fingerprint: str, since: datetime, *,
+                              held=None) -> Optional[AlertInvestigation]:
     """The alert's newest skipped row since `since`: skipping the same alert again folds into it (fold_skip)."""
-    async with db.async_session() as s:
+    async with _session(db, held) as s:
         q = (
             select(AlertInvestigation)
             .where(
@@ -71,19 +90,19 @@ async def find_recent_skipped(db, cluster: str, fingerprint: str, since: datetim
         return (await s.execute(q)).scalars().first()
 
 
-async def fold_skip(db, inv_id: str, reason: str, now: datetime) -> None:
-    async with db.async_session() as s:
+async def fold_skip(db, inv_id: str, reason: str, now: datetime, *, held=None) -> None:
+    async with _session(db, held) as s:
         await s.execute(
             update(AlertInvestigation)
             .where(AlertInvestigation.id == inv_id)
             .values(repeat_count=AlertInvestigation.repeat_count + 1, last_seen_at=now, skip_reason=reason)
         )
-        await s.commit()
+        await _written(s, held)
 
 
-async def count_since(db, since: datetime) -> int:
+async def count_since(db, since: datetime, *, held=None) -> int:
     """The webhook's investigations since `since` (the hourly cap; the ones people asked for do not count)."""
-    async with db.async_session() as s:
+    async with _session(db, held) as s:
         q = select(func.count()).select_from(AlertInvestigation).where(
             AlertInvestigation.received_at >= since, AlertInvestigation.status.in_(_CAP_STATUSES),
             AlertInvestigation.requested_by == "",
@@ -91,10 +110,10 @@ async def count_since(db, since: datetime) -> int:
         return int((await s.execute(q)).scalar() or 0)
 
 
-async def tokens_since(db, since: datetime, *, manual: bool = False) -> int:
+async def tokens_since(db, since: datetime, *, manual: bool = False, held=None) -> int:
     """The tokens of the webhook's investigations since `since`, or of the ones people asked for (manual): each daily
     budget counts its own. A run counts once it has finished (runner.claim_refusal keeps the next one waiting)."""
-    async with db.async_session() as s:
+    async with _session(db, held) as s:
         q = select(func.coalesce(func.sum(AlertInvestigation.total_tokens), 0)).where(
             AlertInvestigation.received_at >= since,
             AlertInvestigation.requested_by != "" if manual else AlertInvestigation.requested_by == "",
@@ -106,9 +125,9 @@ async def tokens_since(db, since: datetime, *, manual: bool = False) -> int:
 REFUSAL_PREFIX = "provider refused ("
 
 
-async def last_refusal(db) -> Optional[AlertInvestigation]:
+async def last_refusal(db, *, held=None) -> Optional[AlertInvestigation]:
     """The newest failed run whose model provider refused it (runner.run_one's REFUSAL_PREFIX), or None."""
-    async with db.async_session() as s:
+    async with _session(db, held) as s:
         q = (
             select(AlertInvestigation)
             .where(AlertInvestigation.status == "failed", AlertInvestigation.finished_at.is_not(None))
@@ -122,12 +141,12 @@ async def last_refusal(db) -> Optional[AlertInvestigation]:
 _REFUSAL = re.compile(r"^provider refused \((\w+)(?:, until (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ))?\)")
 
 
-async def pause_state(db, minutes: int, now: datetime) -> Optional[tuple[str, datetime, datetime]]:
+async def pause_state(db, minutes: int, now: datetime, *, held=None) -> Optional[tuple[str, datetime, datetime]]:
     """(kind, refused at, until) while no investigation runs, else None: the model provider refused the newest failed
     run for credit or the key less than `minutes` ago, or for a usage window that has not lifted yet."""
     if minutes <= 0:
         return None
-    row = await last_refusal(db)
+    row = await last_refusal(db, held=held)
     match = _REFUSAL.match(row.error or "") if row is not None else None
     if match is None or row.finished_at is None:
         return None
@@ -138,9 +157,9 @@ async def pause_state(db, minutes: int, now: datetime) -> Optional[tuple[str, da
     return kind, row.finished_at, until
 
 
-async def pause_reason(db, minutes: int, now: datetime) -> str:
+async def pause_reason(db, minutes: int, now: datetime, *, held=None) -> str:
     """Why no investigation runs now (pause_state as the skip reason), or ""."""
-    state = await pause_state(db, minutes, now)
+    state = await pause_state(db, minutes, now, held=held)
     return skip_reasons.provider_paused(*state) if state else ""
 
 
@@ -151,13 +170,13 @@ async def skip(db, inv_id: str, reason: str) -> None:
         await s.commit()
 
 
-async def insert(db, **fields: Any) -> str:
+async def insert(db, *, held=None, **fields: Any) -> str:
     inv_id = fields.pop("id", None) or f"inv-{uuid.uuid4().hex[:16]}"
     now = utcnow()
     row = AlertInvestigation(id=inv_id, received_at=fields.pop("received_at", now), last_seen_at=now, **fields)
-    async with db.async_session() as s:
+    async with _session(db, held) as s:
         s.add(row)
-        await s.commit()
+        await _written(s, held)
     return inv_id
 
 
@@ -172,13 +191,46 @@ def alert_row_lock(cluster: str, fingerprint: str, starts_at: Optional[datetime]
 
 
 @asynccontextmanager
-async def alert_locked(db, cluster: str, fingerprint: str, starts_at: Optional[datetime]) -> AsyncIterator[None]:
+async def alert_locked(db, cluster: str, fingerprint: str, starts_at: Optional[datetime]) -> AsyncIterator[Any]:
     """Holds the alert's inbox row lock, as queue_requested does, until the block ends: two deliveries of one alert
-    at one moment, on one replica or two, decide one after the other, so the second finds the first one's row. The
-    block's writes commit in their own sessions before the lock is let go."""
+    at one moment, on one replica or two, decide one after the other, so the second finds the first one's row.
+
+    On PostgreSQL it yields the session holding the lock, which the block passes as held= to every read and write
+    of its decision: a delivery holds that one connection however long it waits for this lock or hourly_cap_locked
+    (the holder needs no second one, so waiters cannot leave it without a connection), and its writes commit when the
+    block ends, which lets the locks go. Under READ COMMITTED, PostgreSQL's default, each statement reads what was
+    committed before it began, so a delivery that waited reads the rows of the one before it. A block that raises
+    commits nothing. On sqlite (one process: local dev and tests) it yields None and each call commits in a session
+    of its own, as before."""
     async with db.async_session() as s:
         (await s.execute(alert_row_lock(cluster, fingerprint, starts_at))).first()
-        yield
+        if not _postgres(db):
+            yield None
+            return
+        yield s
+        await s.commit()
+
+
+# The pg_advisory_xact_lock key of the hourly cap: a fixed number no other lock of the database uses (auth-service's
+# auditchain takes 7_432_119_027 and 7_432_119_028, its audit sinks 0x6b62617564736e6b; k8s-service's
+# healthStatusLockKey 0x6b62686c74687374, through internal/pglock, is the replica writing clusters.health_status).
+HOURLY_CAP_LOCK = 0x4B55424541535448  # "KUBEASTH"
+
+
+def _postgres(db) -> bool:
+    return getattr(getattr(getattr(db, "engine", None), "dialect", None), "name", "") == "postgresql"
+
+
+@asynccontextmanager
+async def hourly_cap_locked(db, lock) -> AsyncIterator[None]:
+    """While the block runs no other webhook delivery, on any replica, counts the past hour's investigations or
+    writes its row: two different alerts at one moment on two replicas would each count without the other's row and
+    both be queued past max_per_hour. On PostgreSQL a transaction lock taken in `lock`, the session alert_locked
+    holds, so it needs no connection of its own and goes when that session commits the decision's writes; on sqlite
+    (lock is None: one process, local dev and tests) nothing. The webhook enters it only while the cap is on."""
+    if lock is not None and _postgres(db):
+        await lock.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": HOURLY_CAP_LOCK})
+    yield
 
 
 async def queue_requested(

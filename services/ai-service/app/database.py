@@ -4,11 +4,10 @@ Database models and session management
 from datetime import UTC, datetime
 from typing import Optional, List, Dict, Any
 from sqlalchemy import func
-from sqlalchemy import Column, String, DateTime, Text, JSON, Integer, ForeignKey, Boolean, UniqueConstraint, create_engine
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from sqlalchemy import Column, String, DateTime, Text, JSON, Integer, ForeignKey, Boolean, UniqueConstraint
+from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 import asyncio
-import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -189,9 +188,19 @@ class AlertInboxItem(Base):
     done_at = Column(DateTime, nullable=True)
 
 
+class ClaudeCodeSlot(Base):
+    """One install-wide Claude Code slot (00027_claude_code_slots.sql): owner '' is free (app/services/claude_code_slots.py)."""
+    __tablename__ = "claude_code_slots"
+
+    lane = Column(String, primary_key=True)
+    slot = Column(Integer, primary_key=True)
+    owner = Column(String, nullable=False, default="", server_default="")
+    heartbeat_at = Column(DateTime(timezone=True), nullable=True)
+
+
 # Schema version this build needs — the newest file in
 # services/pkg/dbmigrate/migrations (goose records it in goose_db_version).
-REQUIRED_SCHEMA_VERSION = 24
+REQUIRED_SCHEMA_VERSION = 28
 
 
 async def read_schema_version(engine) -> int:
@@ -318,7 +327,7 @@ class DatabaseService:
     async def update_session_title(self, session_id: str, title: str):
         """세션 제목 업데이트"""
         async with self.async_session() as db:
-            from sqlalchemy import select, update
+            from sqlalchemy import update
             await db.execute(
                 update(Session)
                 .where(Session.id == session_id)
@@ -405,7 +414,7 @@ class DatabaseService:
     async def update_context(self, session_id: str, state: Dict = None, cache: Dict = None):
         """세션 컨텍스트 업데이트"""
         async with self.async_session() as db:
-            from sqlalchemy import select, update
+            from sqlalchemy import update
             
             updates = {"updated_at": utcnow()}
             if state is not None:

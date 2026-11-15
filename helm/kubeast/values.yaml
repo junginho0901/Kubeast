@@ -26,7 +26,10 @@ admin:
 # looking the Secret up — which GitOps renderers such as Argo CD cannot do, so
 # every sync would rotate it). Set it to a Secret you manage (e.g. via
 # ExternalSecrets) holding these keys: POSTGRES_PASSWORD, DATABASE_URL,
-# REDIS_PASSWORD (redis requirepass; k8s-service's cache uses it),
+# REDIS_PASSWORD (redis requirepass while the Redis users are off),
+# REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD and, with the AI on,
+# REDIS_TOOL_SERVER_PASSWORD (the Redis users, read once
+# redis.acl.existingSecretHasKeys is true),
 # DEFAULT_ADMIN_PASSWORD, AI_APPROVAL_SECRET (shared by ai-service and
 # tool-server to sign write-tool approvals), INTERNAL_API_TOKEN (service token
 # tool-server and auth-service present on k8s-service's /internal routes; rotate
@@ -145,8 +148,9 @@ auth:
     # those bindings to groups first (docs/cluster-requirements.md §1).
     userPrefix: ""
     # A custom Kubeast role (anything but Read/Write/Admin) granted on a
-    # cluster acts there as group kubeast:role:<slug> (lowercase; any character
-    # other than a-z 0-9 . _ - becomes "-"). The impersonator ClusterRole allows
+    # cluster acts there as group kubeast:role:<slug> (A-Z lowercased, any other
+    # ASCII character but a-z 0-9 . _ - becomes "-", any other character "~" and
+    # its code point: 운영팀 -> ~c6b4~c601~d300). The impersonator ClusterRole allows
     # only the four fixed groups, so such a role gets 403 on every cluster call
     # until its group is allowed and bound. Each entry here renders both for
     # the installed cluster: the group joins an extra impersonator ClusterRole
@@ -390,14 +394,25 @@ ai:
   # 250 MB more; "" for a self-built image with --build-arg WITH_CLAUDE_CODE=true).
   # Also needs the token in claudeCodeOAuthToken (or CLAUDE_CODE_OAUTH_TOKEN in
   # apiKeysSecret) and a model config with that provider naming
-  # CLAUDE_CODE_OAUTH_TOKEN. Each running turn holds one Claude Code process;
-  # maxConcurrent caps the chat's (raise resources.aiService.limits.memory with
-  # it) and an alert investigation runs in one more slot of its own.
+  # CLAUDE_CODE_OAUTH_TOKEN. Each running turn holds one Claude Code process
+  # (up to about 300 MB): maxConcurrent caps the chat's on each ai-service server,
+  # and maxConcurrentTotal caps them across every replica through the database
+  # (0 = maxConcurrent), so the subscription's use stays within one limit however
+  # many servers run; a slot a stopped server held is free again after 60 s. A
+  # turn waits up to queueWaitSeconds for both (the chats say it is waiting),
+  # then ends as busy. An alert investigation runs in one more slot of its own on
+  # each server, outside maxConcurrentTotal. While the provider is on, ai-service's
+  # memory limit is the larger of resources.aiService.limits.memory and
+  # memoryLimit: 2Gi holds the service and maxConcurrent 2 + the investigator
+  # (about 300 MB each); raise it with maxConcurrent. "" leaves the limit as set.
   providers:
     claudeCode:
       enabled: false
       imageTagSuffix: "-claude-code"
-      maxConcurrent: 1
+      maxConcurrent: 2
+      maxConcurrentTotal: 0
+      memoryLimit: 2Gi
+      queueWaitSeconds: 60
       turnTimeoutSeconds: 300
       maxTurns: 10
 
@@ -572,6 +587,27 @@ replicas:
   frontend: 1
   toolServer: 1
   gateway: 1
+# --- Terminals and followed logs on their own server ---
+# Off: k8s-service serves everything, as before. On: a second Deployment of the
+# same image, k8s-service-stream (SERVER_ROLE stream), takes pod exec, the node
+# shell and the followed logs, and k8s-service (SERVER_ROLE api) the rest, so a
+# rollout of either does not cut the other's connections and a crowd of
+# terminals does not slow the lists. The gateway sends those paths to the new
+# Service. When the server holding the terminals is replaced (k8s-service when
+# off, k8s-service-stream when on) it ends the followed logs at once (the
+# browser reconnects and goes on after the last line), tells each terminal when
+# it will close, and waits drainSeconds for them before closing the rest; with
+# no terminal open it does not wait. Its terminationGracePeriodSeconds is the
+# preStop wait (podShutdown.preStopSeconds; preStopSeconds on k8s-service-stream)
+# + drainSeconds + the drain's close wait 5 s + the node drains' marking 3 s, the
+# server's shutdown 12 s and the recorder's last upload 10 s + 5 s to spare (100 s
+# by default).
+# sessionRecording.storage file is refused with it (s3 or database).
+streams:
+  enabled: false
+  replicas: 1        # must stay 1 for now (more than one stream server is not supported yet)
+  drainSeconds: 60   # how long open terminals get to end on their own
+  preStopSeconds: 10 # k8s-service-stream: out of the Service's endpoints before the drain starts
 # PDB is off while replicas are 1 (a minAvailable PDB would block node drains).
 pdb:
   enabled: false
@@ -579,6 +615,9 @@ pdb:
 # zone + hostname spread, soft (ScheduleAnyway)
 topologySpread:
   enabled: true
+# Seconds a pod behind a Service keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, its deregistration delay plus a few seconds.
+podShutdown:
+  preStopSeconds: 5
 
 # --- Resources (requests always; memory limits so a leak is contained) ---
 resources:
@@ -590,6 +629,10 @@ resources:
     limits: { memory: 1Gi }
   # 1Gi when many people use a large cluster at once: docs/architecture.md "Many different people on a large cluster".
   k8sService:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  # streams.enabled only; not measured yet, k8sService's for a start
+  k8sServiceStream:
     requests: { cpu: 100m, memory: 128Mi }
     limits: { memory: 512Mi }
   sessionService:
@@ -612,6 +655,8 @@ resources:
   postgres:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 1Gi }
+  # The chart's Redis evicts keys with a TTL (the cache) at 80% of this limit (maxmemory, volatile-lru); keys without one
+  # stay. Without a limit it caps at 80% of 128Mi.
   redis:
     requests: { cpu: 20m, memory: 32Mi }
     limits: { memory: 128Mi }
@@ -619,9 +664,32 @@ resources:
 # --- Redis ---
 redis:
   enabled: true
-  # requirepass. Empty = generated at install and kept across upgrades
-  # (REDIS_PASSWORD in kubeast-secrets); k8s-service's cache signs in with it.
+  # requirepass, used while the Redis users below are off. Empty = generated at
+  # install and kept across upgrades (REDIS_PASSWORD in kubeast-secrets).
   password: ""
+  # One Redis user per service (docs/configuration.md "Redis users"): k8s-service
+  # reaches only kubeast:* keys and channels with the commands its cache uses,
+  # tool-server only listens to the cluster change notices, the probes may only
+  # PING, and the default user is off. The passwords are generated at install and
+  # kept across upgrades in the Secret kubeast-redis-users
+  # (REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD, REDIS_TOOL_SERVER_PASSWORD).
+  # false = one password (requirepass) as before.
+  acl:
+    enabled: true
+    # With secrets.existingSecret the users stay off, and Redis keeps the one
+    # password, until this is true (or existingSecret below is set): put
+    # REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD and, with the AI on,
+    # REDIS_TOOL_SERVER_PASSWORD in that Secret first. An upgrade that can read
+    # the Secret stops when one is missing. Not read without
+    # secrets.existingSecret or with existingSecret below.
+    existingSecretHasKeys: false
+    # A Secret holding only the Redis users' keys (the three above), read key by
+    # key: each service then holds its own password only, where
+    # secrets.existingSecret, which every service takes whole as environment,
+    # gives each all of them. Set, the users are on, the chart makes no
+    # kubeast-redis-users, and an upgrade that can read it stops when a key is
+    # missing.
+    existingSecret: ""
 
 # --- Gateway ---
 gateway:
@@ -641,6 +709,13 @@ gateway:
   # [+ port], no path. Empty = same host and the Ingress host only.
   allowedOrigins: []
   #  - https://console.example.com
+  # true: each access log line, after nginx's default "combined" fields, also
+  # gives the request's time and the service's connect, header and response
+  # times in seconds ($request_time $upstream_connect_time
+  # $upstream_header_time $upstream_response_time), the service's address and
+  # the client's port. false = nginx's default lines.
+  accessLog:
+    upstreamTimes: false
 
 # --- Ingress (optional) ---
 ingress:

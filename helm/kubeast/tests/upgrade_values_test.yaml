@@ -83,3 +83,45 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no features.networkFlowMonitor
+  - it: stops values without a path 0.7.8 added, as v0.7.7's published defaults are
+    set:
+      podShutdown: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no podShutdown.preStopSeconds
+  - it: stops values without redis.acl, as v0.7.7's are (the Redis users)
+    set:
+      redis.acl: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no redis.acl
+  - it: stops values without redis.acl.existingSecretHasKeys (the Redis users with secrets.existingSecret)
+    set:
+      redis.acl.existingSecretHasKeys: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no redis.acl.existingSecretHasKeys
+  - it: stops values without redis.acl.existingSecret (the Redis users' own Secret)
+    set:
+      redis.acl.existingSecret: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no redis.acl.existingSecret
+  - it: stops values without ai.providers.claudeCode.maxConcurrentTotal, as v0.7.7's published defaults are
+    set:
+      ai.providers.claudeCode.maxConcurrentTotal: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.providers.claudeCode.maxConcurrentTotal
+  - it: stops values without ai.providers.claudeCode.queueWaitSeconds, as v0.7.7's published defaults are
+    set:
+      ai.providers.claudeCode.queueWaitSeconds: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.providers.claudeCode.queueWaitSeconds
+  - it: stops values without ai.providers.claudeCode.memoryLimit, as v0.7.7's published defaults are
+    set:
+      ai.providers.claudeCode.memoryLimit: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.providers.claudeCode.memoryLimit

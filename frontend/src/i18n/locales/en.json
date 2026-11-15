@@ -351,7 +351,8 @@
       "expired": "time elapsed",
       "not_reviewed": "not reviewed within 24 h",
       "revoked": "revoked by an admin",
-      "superseded": "role set by an admin"
+      "superseded": "role set by an admin",
+      "role_renamed": "role renamed by the upgrade"
     },
     "admin": {
       "subtitle": "Users ask for a higher role on a cluster for a limited time. Approving grants it until the time runs out, then the previous role comes back. You cannot decide your own request.",
@@ -495,6 +496,7 @@
       "title": "No permission",
       "body": "You do not have permission to view {{resources}} in this cluster. Ask an administrator for a role that includes it.",
       "customRole": "Your role \"{{role}}\" acts on this cluster as the Kubernetes group {{group}}. If every page shows this notice, the cluster has not allowed and bound that group yet (chart auth.impersonation.customRoles).",
+      "builtinName": "Your role \"{{role}}\" has a built-in role's name in other capitals or with spaces, so on this cluster it acts as no role group and the cluster refuses what it reads. Ask an administrator for a built-in role here, or to rename this one.",
       "readPermission": "Your role on this cluster holds neither resource.objects.read (lists and details) nor resource.*.read (All resources: read), so Kubeast reads no list for it. Ask an administrator to add one.",
       "namespaces": "Your access to this cluster is limited to the namespaces {{namespaces}}; cluster-wide pages and other namespaces are not shown."
     },
@@ -502,6 +504,7 @@
       "forbidden": "The cluster refuses live updates for part of this page. Rows may be out of date; refresh to read them again.",
       "limit": "This tab follows as many lists as one tab may. The rest are read about once a minute and go back to live updates by themselves when this tab has room.",
       "serverLimit": "The server follows as many lists as it can. The rows on this page are read about once a minute and go back to live updates by themselves when it has room.",
+      "serverMemory": "The server is short of memory, so it starts following no more lists for now. The rows on this page are read about once a minute and go back to live updates by themselves when it has room.",
       "unreachable": "The cluster cannot be reached, so live updates are paused. They come back by themselves.",
       "failed": "Live updates are paused because the cluster answered with an error. They come back by themselves.",
       "scope": "Your access is limited to namespaces, so objects of the whole cluster on this page do not update live. Rows may be out of date; refresh to read them again."
@@ -1611,7 +1614,13 @@
         "progressMessage": "Evicting pods from the node...",
         "success": "Completed",
         "doneMessage": "Node drain completed.",
-        "error": "Failed"
+        "error": "Failed",
+        "interrupted": "Interrupted",
+        "interruptedMessage": "The server running this drain stopped before it finished. Pods may still be on the node.",
+        "stillCordoned": "Still cordoned: {{nodes}}",
+        "notCordoned": "No node is left cordoned.",
+        "startAgain": "Start again",
+        "pods": "{{done}} of {{total}} pods evicted"
       }
     },
     "detail": {
@@ -1776,6 +1785,7 @@
     "copied": "Copied",
     "inputPlaceholder": "Type a message...",
     "stop": "Stop",
+    "waitingTurn": "Waiting for a turn — another question is running",
     "send": "Send",
     "confirmDeleteStreaming": "An answer is still generating. Stop and delete this chat?",
     "confirmDelete": "Delete this chat?",
@@ -1796,9 +1806,11 @@
       "modelAddress": "AI model call failed ({{provider}}): the model's address is not allowed, so nothing was sent. An administrator runs Test on this model in Admin → AI Models to see why.",
       "streamHttp": "The chat request failed (HTTP {{status}}): {{detail}}",
       "streamHttpStatus": "The chat request failed (HTTP {{status}}).",
+      "streamStartFailed": "The answer stream could not start. Try again in a moment.",
       "streamCut": "The connection closed before the answer finished, so the text above may be incomplete. Ask again for the whole answer.",
       "streamEmpty": "The connection closed without an answer. Ask again.",
-      "sessionNotFound": "This conversation no longer exists. Start a new one."
+      "sessionNotFound": "This conversation no longer exists. Start a new one.",
+      "claudeCodeBusy": "Claude Code is busy; ask again in a moment."
     },
     "errorAnswer": "Sorry, an error occurred while generating the answer: {{error}}",
     "errorSessionCreate": "Failed to create session: {{error}}",
@@ -2165,6 +2177,7 @@
     "next": "Next",
     "paginationRange": "Showing {{start}}-{{end}} of {{total}}",
     "paginationEmpty": "Showing 0 of 0",
+    "paginationNotCounted": "Showing - of -",
     "prev": "Previous",
     "readonly": "Read-only",
     "refresh": "Refresh",
@@ -3099,6 +3112,12 @@
     "signedOut": "Stopped: this sign-in was signed out. Sign in again.",
     "unverified": "Stopped: the session could not be verified. Sign in again."
   },
+  "serverShutdown": {
+    "terminalReplaced": "The server was replaced. Reconnect to open a new terminal.",
+    "terminalLost": "The connection to the server was lost. Reconnect to open a new terminal.",
+    "reconnect": "Reconnect",
+    "followStopped": "Following stopped: the server was replaced. Turn Follow on again to go on."
+  },
   "login": {
     "sessionEnded": "Your session ended: your account or access may have changed, or the session timed out. Sign in again.",
     "errors": {
@@ -3113,6 +3132,7 @@
       "ssoEmailUnverified": "The identity provider has not verified this email address.",
       "ssoEmailInvalid": "This name cannot be used for an account: it may not contain a colon, a space or a control character.",
       "ssoNoEmail": "The identity provider did not return an email address.",
+      "ssoRoleMissing": "The role this sign-in gives (auth.oidc.roleMapping or auth.oidc.defaultRole) does not exist. Ask an administrator: the server log names the role.",
       "tokenTooLarge": "Your roles differ across too many clusters to fit in a sign-in token. Ask an administrator to align them."
     },
     "sso": {
@@ -3745,6 +3765,15 @@
   },
   "adminRoles": {
     "deleteInUse": "Role \"{{name}}\" is still in use (accounts {{accounts}}, cluster grants {{grants}}, access requests {{requests}}). Give them another role first.",
+    "nameTakenBuiltinSame": "Role \"{{role}}\" already exists: it is a built-in role.",
+    "nameTakenSame": "Role \"{{role}}\" already exists. Choose another name.",
+    "nameTakenBuiltin": "Taken: it is the built-in role {{role}} apart from letter case or spaces.",
+    "nameTakenGroup": "On a cluster this name acts as the same Kubernetes group as role \"{{role}}\" ({{group}}). Choose another name.",
+    "groupHintEncoded": "A character outside ASCII is written as ~ and its Unicode code point (운 → ~c6b4), so Korean names of one length still make different groups.",
+    "nameTakenOther": "Another role's name makes the same group. Choose another name.",
+    "sameGroupNote": "Its name differs from role \"{{role}}\" only in letter case, spaces or punctuation, so it is not given on a cluster any more. A grant it already has acts as no role group where the other is a built-in role. Rename it.",
+    "sameGroupHint": "not grantable: same name as {{role}} apart from letter case or spaces",
+    "sameGroupRefused": "Role \"{{role}}\" is not given on a cluster: its name differs from role \"{{other}}\" only in letter case, spaces or punctuation. Rename it in Role Management first.",
     "systemRoles": {
       "pending": "Awaiting approval",
       "member": "Regular user (access per cluster grant)",
@@ -4052,6 +4081,7 @@
   "floatingChat": {
     "title": "AI Chat",
     "openAriaLabel": "Open AI Chat",
+    "openTitle": "Open AI Chat ({{shortcut}})",
     "closeAriaLabel": "Close",
     "copy": "Copy",
     "copied": "Copied",
