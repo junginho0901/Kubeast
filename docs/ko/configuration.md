@@ -134,7 +134,7 @@ podSecurity:
   readOnlyRootFilesystem: true
 
 # 가용성 — replicas를 2 이상으로 올릴 때는 pdb.enabled: true로 두세요
-# podShutdown.preStopSeconds: Service 뒤의 파드는 종료 요청 뒤 이 초만큼 더 응답하고(preStop sleep, Kubernetes 1.30 이상) 그다음 30초 안에 종료합니다. 파드 IP로 보내는 로드 밸런서 뒤라면 그 해제 지연(deregistration delay)에 몇 초를 더해 두세요
+# podShutdown.preStopSeconds: Service 뒤의 파드는 종료 요청 뒤 이 초만큼 더 응답하고(preStop sleep, Kubernetes 1.30 이상) 그다음 30초 안에 종료합니다(터미널을 맡은 서버는 드레인 대기와 닫기 대기만큼 더). 파드 IP로 보내는 로드 밸런서 뒤라면 그 해제 지연(deregistration delay)에 몇 초를 더해 두세요
 replicas:
   gateway: 1
 pdb:

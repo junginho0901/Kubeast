@@ -299,8 +299,14 @@ lifecycle:
 {{- end -}}
 {{- end -}}
 
+{{/* A grace period: the preStop wait, what the process waits for after SIGTERM — a drain's wait and close wait (.drain)
+     and the 25 s its shutdown takes (k8s-service: the server and the recorder) — and 5 s to spare. */}}
+{{- define "kubeast.graceSeconds" -}}
+{{- add .preStop (.drain | default 0) 25 5 -}}
+{{- end -}}
+
 {{- define "kubeast.terminationGrace" -}}
-terminationGracePeriodSeconds: {{ add 30 (include "kubeast.preStopSeconds" .) }}
+terminationGracePeriodSeconds: {{ include "kubeast.graceSeconds" (dict "preStop" (include "kubeast.preStopSeconds" .)) }}
 {{- end -}}
 
 {{/*
