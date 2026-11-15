@@ -42,6 +42,8 @@ class InvestigationSettings:
     # A firing inbox alert with no notification for this long shows "status unknown" (Alertmanager resends a
     # firing alert every repeat_interval, 4 h by default, so two missed resends).
     inbox_stale_hours: int = 8
+    # features.callGraph: the prompt asks for who calls whom (resource_graph include calls) and the cause → … → symptom path.
+    call_paths: bool = False
 
 
 def _on(name: str) -> bool:
@@ -75,4 +77,5 @@ def load() -> InvestigationSettings:
         ).strip(),
         internal_token=os.getenv("INTERNAL_API_TOKEN", "").strip(),
         inbox_stale_hours=min(24 * 30, max(1, _int("ALERT_INBOX_STALE_HOURS", 8))),
+        call_paths=os.getenv("CALL_GRAPH_ENABLED", "false").strip().lower() == "true",
     )

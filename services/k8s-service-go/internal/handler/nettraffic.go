@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netdrops"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
@@ -80,27 +81,36 @@ func (h *Handler) networkTrafficRelay(w http.ResponseWriter, r *http.Request, na
 }
 
 func (h *Handler) networkTrafficMetrics(w http.ResponseWriter, r *http.Request, namespaces, scope []string) {
-	ctx := r.Context()
 	rng, err := netdrops.ParseRange(r.URL.Query().Get("range"))
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	unavailable := func(reason string) {
-		response.JSON(w, http.StatusOK, nettraffic.Result{Reason: reason, Source: "metrics", Namespaces: namespaces, Range: rng.String(), Lines: []nettraffic.Line{}})
+	res, err := h.trafficFromMetrics(r.Context(), namespaces, scope, rng)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, res)
+}
+
+// trafficFromMetrics reads the traffic lines of the namespaces from the Hubble metrics in the cluster's Prometheus, as
+// the user; an answer without the metrics says why in Reason. The Resource Graph's lines and the AI's call graph
+// (resource_graph include calls) read through it.
+func (h *Handler) trafficFromMetrics(ctx context.Context, namespaces, scope []string, rng time.Duration) (nettraffic.Result, error) {
+	unavailable := func(reason string) (nettraffic.Result, error) {
+		return nettraffic.Result{Reason: reason, Source: "metrics", Namespaces: namespaces, Range: rng.String(), Lines: []nettraffic.Line{}}, nil
 	}
 	src := h.netdropsSource()
 	if !src.PrometheusAvailable(ctx) {
-		unavailable("no_prometheus")
-		return
+		return unavailable("no_prometheus")
 	}
 	shapes := map[string]nettraffic.Shape{}
 	found := false
 	for _, metric := range []string{nettraffic.TCPMetric, netdrops.Metric} {
 		labels, err := src.PrometheusLabels(ctx, "", metric, rng, 200)
 		if err != nil {
-			h.handleError(w, err)
-			return
+			return nettraffic.Result{}, err
 		}
 		found = found || len(labels) > 0
 		if shape, ok := nettraffic.DetectShape(labels); ok {
@@ -108,19 +118,16 @@ func (h *Handler) networkTrafficMetrics(w http.ResponseWriter, r *http.Request, 
 		}
 	}
 	if !found {
-		unavailable("no_metrics")
-		return
+		return unavailable("no_metrics")
 	}
 	if len(shapes) == 0 {
-		unavailable("no_context_labels")
-		return
+		return unavailable("no_context_labels")
 	}
 	rows := map[string][]nettraffic.Sample{}
 	for metric, shape := range shapes {
 		answer, err := src.PrometheusQuery(ctx, nettraffic.Query(metric, shape, namespaces, rng))
 		if err != nil {
-			h.handleError(w, err)
-			return
+			return nettraffic.Result{}, err
 		}
 		for _, row := range answer {
 			labels := make(map[string]string, len(row.Metric))
@@ -141,14 +148,13 @@ func (h *Handler) networkTrafficMetrics(w http.ResponseWriter, r *http.Request, 
 	if dropOK && drop.NoWorkload {
 		answer, err := src.PrometheusQuery(ctx, nettraffic.UnplacedDropsQuery(netdrops.Metric, rng))
 		if err != nil {
-			h.handleError(w, err)
-			return
+			return nettraffic.Result{}, err
 		}
 		if len(answer) > 0 {
 			res.UnplacedDrops = int64(math.Round(answer[0].Value))
 		}
 	}
-	response.JSON(w, http.StatusOK, res)
+	return res, nil
 }
 
 // podOwners names a pod's workload through the lookup, one namespace list at most each (netflows.MaxLookupNamespaces).

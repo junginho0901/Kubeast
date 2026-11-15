@@ -25,6 +25,7 @@ const (
 	graphNodesCap       = 200
 	graphEdgesCap       = 400
 	graphGroupMembers   = 5
+	graphCallsCap       = 40 // of k8s-service's 100: the busiest calls fit the model's cut with the objects
 	hygieneFindCap      = 200
 	policyRowsCap       = 200
 	netpolChecksCap     = 40
@@ -479,7 +480,18 @@ func handleResourceGraph(ctx context.Context, args map[string]interface{}, heade
 		return "", wrapBadRequest("namespace parameter is required")
 	}
 	// the healthy pods of a large owner as one node, as the page draws them
-	status, body, err := k8sServiceGet(ctx, headers, "/namespaces/"+url.PathEscape(namespace)+"/resource-graph", url.Values{"group_pods": {"1"}})
+	q := url.Values{"group_pods": {"1"}}
+	for _, inc := range argStringSlice(args, "include") {
+		if inc != "calls" {
+			return "", wrapBadRequest("include takes calls only")
+		}
+		q.Set("include", "calls")
+		// who calls whom over the window, as network_drops reads its range
+		if v := strings.TrimSpace(argString(args, "since", "")); v != "" {
+			q.Set("range", v)
+		}
+	}
+	status, body, err := k8sServiceGet(ctx, headers, "/namespaces/"+url.PathEscape(namespace)+"/resource-graph", q)
 	if err != nil {
 		return "", err
 	}
@@ -518,10 +530,39 @@ func handleResourceGraph(ctx context.Context, args map[string]interface{}, heade
 	capList(reply, "nodes", graphNodesCap)
 	capList(reply, "edges", graphEdgesCap)
 	reply["namespace"] = namespace
+	if calls, ok := reply["calls"].(map[string]interface{}); ok {
+		// asked for: before the objects, its paths and suspects before its edges, so a cut answer keeps them
+		total := calls["edges_total"]
+		capList(calls, "edges", graphCallsCap)
+		if total != nil {
+			calls["edges_total"] = total // k8s-service's count before its own cap
+		}
+		reply["calls_note"] = graphCallsNote
+		ordered, err := marshalOrdered(calls, []string{"available", "reason", "range", "sources", "paths", "no_start", "suspects", "suspects_total", "edges_total", "truncated"}, []string{"edges"})
+		if err != nil {
+			return "", err
+		}
+		reply["calls"] = json.RawMessage(ordered)
+	}
 	// the summary first, then the objects, the edges last
-	return marshalOrdered(reply, []string{"namespace", "counts_by_kind", "nodes_total", "edges_total", "truncated", "groups"},
+	return marshalOrdered(reply, []string{"namespace", "counts_by_kind", "nodes_total", "edges_total", "truncated", "groups", "calls_note", "calls"},
 		[]string{"nodes", "edges"})
 }
+
+// graphCallsNote reads the calls part of a graph answer to the model.
+const graphCallsNote = "calls: who calls whom over the range, from the traces' service graph metrics (requests, errors, error_ratio, p90_ms) and " +
+	"the Hubble metrics (connections, dropped, drop_reasons), read from the cluster's Prometheus. sources says which were read and why not (off, " +
+	"no_prometheus, no_metrics, namespace_limited, permission). An end with id is a box of this graph; service is a trace service name " +
+	"that fits no workload; a namespace alone is a peer outside the reader's grant or not named. A matched_by ending in _unscoped was " +
+	"placed by name because the metric names no namespace: a service of the same name in another namespace counts there too. errors are " +
+	"the calls either side marked failed, so a 4xx the caller saw (404, 401) counts: check in the traces or logs that they are 5xx before " +
+	"naming a cause. p90_ms is shown only and does not rank suspects: a failure that only slows calls may leave suspects empty. suspects are " +
+	"the failing workloads (the first 10 of suspects_total), those that call nothing failing first: a caller of a failing workload is more " +
+	"often its victim than its cause. failing_outside lists a suspect's failing calls to ends outside this graph (a database, another " +
+	"namespace): their health is not read here, and the cause may be there. paths run cause → … → symptom by id (each next one calls the " +
+	"one before); no_start cycle means every failing workload calls another failing one, so no path starts (read failing_callees). " +
+	"drop_reasons are Hubble's reasons for dropped connections (POLICY_DENIED: a network policy refused them; it may have refused them " +
+	"before the failure too). A missing edge is not proof there is no call (no traces, no Hubble metrics)."
 
 // handleNetworkPolicyCheck asks k8s-service whether NetworkPolicy allows src
 // to reach dst; it reads the policies, pods and namespaces as the user.

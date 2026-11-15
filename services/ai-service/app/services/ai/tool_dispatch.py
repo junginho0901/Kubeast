@@ -33,6 +33,12 @@ def _flag(value) -> bool:
     return bool(value)
 
 
+def _wants_calls(value) -> bool:
+    """resource_graph's include as the model may send it: ["calls"] or "calls"; anything else is dropped."""
+    items = value if isinstance(value, list) else [value]
+    return any(isinstance(v, str) and v.strip().lower() == "calls" for v in items)
+
+
 # Feature tools (tool-server → k8s-service): the string, boolean and integer
 # arguments each one declares. Anything else the model sends is dropped.
 # Integer arguments that may be zero or negative (a system boot index: 0 current, -1 previous).
@@ -87,7 +93,7 @@ FEATURE_TOOL_ARGS = {
     "network_flows": ({"namespace", "pod", "workload_kind", "workload_name", "verdict", "since"}, set(), {"limit"}),
     "network_drops": ({"namespace", "pod", "workload_kind", "workload_name", "since"}, set(), set()),
     "network_top_flows": ({"namespace", "pod", "workload_kind", "workload_name", "metric", "destination", "since"}, set(), set()),
-    "resource_graph": ({"namespace"}, set(), set()),
+    "resource_graph": ({"namespace", "since"}, set(), set()),
     "timeline": ({"view", "namespace", "since_time", "until_time", "event_type", "kind", "name"}, set(), {"limit"}),
     "anomaly_rank": ({"namespace", "since_time", "until_time", "workload_kind", "workload_name"}, set(), set()),
     "gpu": (set(), set(), set()),
@@ -375,6 +381,8 @@ async def execute_function_with_context(
                 tool_args[key] = resolvers._coerce_limit(service, function_args.get(key), default=0, max_value=1_000_000)
             if function_name == "prometheus_query" and _flag(function_args.get("chart")):
                 tool_args["range"] = True  # a graph needs points; chart/title/unit stay here (app/services/ai/charts.py)
+            if function_name == "resource_graph" and _wants_calls(function_args.get("include")):
+                tool_args["include"] = ["calls"]
             labels = function_args.get("alert_labels")
             if function_name in ("alerts_list", "alert_investigate") and isinstance(labels, dict):
                 tool_args["alert_labels"] = {str(k): str(v) for k, v in list(labels.items())[:10] if isinstance(v, (str, int, float))}

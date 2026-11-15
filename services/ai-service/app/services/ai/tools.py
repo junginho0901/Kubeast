@@ -23,6 +23,15 @@ TIMELINE_CHANGES_DESCRIPTION = (
     "not zero (without a namespace, every namespace's restarts need listing pods across the cluster: name a namespace). Use it first for \"why did this break?\", then line the changes up with when the symptom started."
 )
 
+# resource_graph's call parameters, offered only where the cluster has features.callGraph on (features.PARAM_GATES).
+CALLS_PARAM = "include"
+CALLS_SINCE_PARAM = "since"
+CALLS_DESCRIPTION = (
+    " With include [\"calls\"] it adds who calls whom over since — requests, errors and p90 latency from the traces, connections "
+    "and drops from the network — with the failing workloads that call nothing failing first and the cause → … → symptom paths "
+    "between them: when several services fail together, read it before blaming the one that shows the errors."
+)
+
 K8S_READONLY_TOOLS: List[Dict] = [
     {
         "type": "function",
@@ -1050,11 +1059,18 @@ K8S_READONLY_TOOLS: List[Dict] = [
                 "volume and config references (Pod → ConfigMap/Secret/PVC), Ingress → Service — as nodes and edges plus counts by kind. "
                 "Use it to answer \"what depends on Service X\", \"which pods does this ConfigMap feed\", \"what would break if I delete Y\". "
                 "Large namespaces are cut at 200 nodes and 400 edges; narrow with k8s_get_resources when the answer needs one object's neighbours."
+                + CALLS_DESCRIPTION
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "namespace": {"type": "string", "description": "The namespace to map"},
+                    CALLS_PARAM: {
+                        "type": "array",
+                        "items": {"type": "string", "enum": ["calls"]},
+                        "description": "[\"calls\"] adds the calls between the workloads (traces and network) over since",
+                    },
+                    CALLS_SINCE_PARAM: {"type": "string", "description": "With include calls: the range, e.g. 15m, 1h or 6h (1m to 24h, default 1h)"},
                 },
                 "required": ["namespace"],
             },
