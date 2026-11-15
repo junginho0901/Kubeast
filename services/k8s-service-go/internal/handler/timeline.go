@@ -93,6 +93,10 @@ func (h *Handler) GetNamespaceTimelineChanges(w http.ResponseWriter, r *http.Req
 }
 
 func (h *Handler) serveTimelineChanges(w http.ResponseWriter, r *http.Request, namespace string) {
+	if !h.cfg.TimelineChangesView {
+		http.NotFound(w, r) // no route, as before the view
+		return
+	}
 	ctx := r.Context()
 	// to the second, so callers asking for the window up to now at one moment share one read (GetTimelineChanges)
 	since, until, limit, err := timelineChangesWindow(r, time.Now().Truncate(time.Second))
