@@ -1,0 +1,20 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata: {name: shop-07}
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces: [otel-demo]
+    labelSelectors: {opentelemetry.io/name: product-catalog}
+  direction: to
+  target:
+    mode: all
+    selector:
+      namespaces: [otel-demo]
+      labelSelectors: {opentelemetry.io/name: frontend}
+  delay:
+    latency: 700ms
+    jitter: 0ms
+    correlation: "0"
+  duration: 30m

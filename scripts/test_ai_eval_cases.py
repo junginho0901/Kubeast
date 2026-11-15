@@ -37,13 +37,15 @@ def _load_ai_eval():
 
 AI_EVAL = _load_ai_eval()
 
-GROUPS = {"hidden_cause", "trap", "control", "past"}
+GROUPS = {"chain", "hidden_cause", "trap", "control", "past"}
 ROLES = {"cause", "via", "symptom"}
 PLACEHOLDERS = {"SETUP_TIME", "INJECT_TIME", "UNDO_TIME"}
 MARKS = {"SETUP_TIME": "2026-01-01T00:00:00Z", "INJECT_TIME": "2026-01-01T00:05:00Z", "UNDO_TIME": "2026-01-01T00:10:00Z"}
 CALLS = [{"tool": "timeline", "failed": False}, {"tool": "k8s_get_resources", "failed": False}]
-# Words in what a case applies that would tell the model the answer (README "Hard cases").
+# Words in what a case applies that would tell the model the answer (README "Hard cases"). The API group of Chaos
+# Mesh's kinds on an apiVersion line is the tool's own name, not one the case chose; the rest of such a file is read.
 ANSWER_WORDS = re.compile(r"\b(fault|faulty|broken|decoy|truth|inject|injected|injection|chaos|bug)\b", re.I)
+TOOL_API_GROUP = re.compile(r"^apiVersion: chaos-mesh\.org/v1alpha1$", re.M)
 
 
 def all_cases() -> list:
@@ -82,7 +84,7 @@ def resource_form(resource: str) -> bool:
 def test_every_hard_case_loads_with_no_field_problem():
     cases = all_cases()
     folders = sorted(d.name for d in HARD.iterdir() if (d / "case.json").exists())
-    assert [d.name for d, _ in cases] == folders and len(cases) == 16
+    assert [d.name for d, _ in cases] == folders and len(cases) == 22
     namespaces = [c["namespace"] for _, c in cases]
     assert len(set(namespaces)) == len(namespaces), "two cases share a namespace"
     for d, c in cases:
@@ -103,6 +105,15 @@ def test_hidden_cases_run_only_with_the_flag():
     shown, problems = AI_EVAL.load_cases(HARD, [], False)
     assert problems == [] and hidden
     assert {d.name for d, _ in shown} == every - hidden
+
+
+def test_each_group_of_more_than_one_case_has_a_hidden_one():
+    groups: dict = {}
+    for _, c in all_cases():
+        groups.setdefault(c["group"], []).append(bool(c.get("hidden")))
+    for group, hidden in groups.items():
+        assert len(hidden) < 2 or any(hidden), f"group {group}: no hidden case among {len(hidden)}"
+        assert not all(hidden), f"group {group}: every case hidden"
 
 
 def _list(*extra) -> subprocess.CompletedProcess:
@@ -216,6 +227,8 @@ def test_each_truth_fits_its_case_and_the_scorer():
         assert s["pass"] and s["score"] == 1.0, (d.name, s)
         assert s["time_ok"] is True and s["path_ok"] is True and s["ungrounded"] == 0, (d.name, s)
         assert not rca.score_rca(block([], no_fault=True), filled, CALLS)["pass"], d.name
+        for one in right if len(right) > 1 else []:  # a case of several causes: each alone is a miss
+            assert not rca.score_rca(block([one], path=path), filled, CALLS)["pass"], (d.name, one["resource"])
         for x in truth["decoys"]:
             s = rca.score_rca(block(right + [cause(as_answered(x["resource"]), "crash")]), filled, CALLS)
             assert not s["pass"] and s["decoys_taken"] == [as_answered(x["resource"])], (d.name, x["resource"])
@@ -237,6 +250,7 @@ WRONG_KIND = {
     "22_workers_over_memory": [("ConfigMap/shop-22/shop-api-settings", "oom"), ("ConfigMap/shop-22/shop-api-settings", "resource_limit")],
 }
 ALSO_RIGHT = {
+    "01_cache_down_chain": [("Deployment/otel-demo/valkey-cart", "config_change")],
     "16_past_outage": [("Deployment/shop-16/payments", "config_change")],
     "18_moved_namespace_old_address": [("ConfigMap/shop-18/web-settings", "dns")],
     "19_route_missing_hostname": [("Service/shop-19/frontdoor", "config_change"), ("frontdoor", "rollout")],
@@ -268,6 +282,23 @@ def test_the_symptom_alone_is_not_the_cause():
             assert s["pass"] and s["score"] == 1.0, (name, resource, kind, s)
 
 
+def test_each_alert_names_the_namespace_of_its_causes():
+    """The investigator's token is limited to the alert's namespace label (the case's own unless the alert names one),
+    so the label is the namespace every truth cause is in, or empty — the whole cluster — for a cause of the cluster."""
+    alerting = [(d, c) for d, c in all_cases() if "alert" in c]
+    assert alerting
+    for d, c in alerting:
+        alert = c["alert"]
+        ns = (alert.get("labels") or {}).get("namespace", c["namespace"])
+        assert {"namespace": c["namespace"], **(alert.get("match") or {})}["namespace"] == ns, f"{d.name}: match is not the label"
+        truth = truth_of(d)
+        if truth["control"]:
+            assert ns == c["namespace"], d.name
+            continue
+        where = {parts[1] if len(parts) == 3 else "" for parts in (tc["resource"].split("/") for tc in truth["causes"])}
+        assert where == {ns}, (d.name, ns, where)
+
+
 def test_a_namespace_a_case_makes_besides_its_own_says_nothing_of_the_case():
     own = {c["namespace"] for _, c in all_cases()}
     made: dict = {}
@@ -284,8 +315,8 @@ def test_a_namespace_a_case_makes_besides_its_own_says_nothing_of_the_case():
 
 def test_what_a_case_applies_holds_no_answer_word():
     for d, _ in all_cases():
-        for manifest in sorted(d.glob("*.yaml")):
-            hit = ANSWER_WORDS.search(manifest.read_text())
+        for manifest in sorted([*d.glob("*.yaml"), *d.glob("*.sql")]):
+            hit = ANSWER_WORDS.search(TOOL_API_GROUP.sub("", manifest.read_text()))
             assert not hit, f"{d.name}/{manifest.name}: {hit.group(0)!r}"
 
 
