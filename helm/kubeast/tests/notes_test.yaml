@@ -1,4 +1,4 @@
-suite: NOTES.txt — the note that Redis keeps one password with secrets.existingSecret
+suite: NOTES.txt — the notes that Redis keeps one password with secrets.existingSecret, and the database connections an external database must take
 templates:
   - NOTES.txt
 tests:
@@ -56,3 +56,26 @@ tests:
     asserts:
       - notMatchRegexRaw:
           pattern: Every backend holds every Redis
+
+  - it: prints the pods' most connections for an external database
+    set:
+      postgresql.enabled: false
+      postgresql.externalHost: db.example.com
+    asserts:
+      - matchRegexRaw:
+          pattern: can hold up to 154 connections to db\.example\.com
+
+  - it: prints nothing of it for the chart's PostgreSQL, which the install checks
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Database connections
+
+  - it: adds k8s-service-stream's pods to the sum for an external database with streams.enabled
+    set:
+      postgresql.enabled: false
+      postgresql.externalHost: db.example.com
+      streams.enabled: true
+      streams.replicas: 1
+    asserts:
+      - matchRegexRaw:
+          pattern: can hold up to 174 connections to db\.example\.com

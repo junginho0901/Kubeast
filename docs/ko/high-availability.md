@@ -33,18 +33,18 @@ Kubeast의 서비스는 기본으로 하나씩 파드 1개로 뜹니다.
 
 | 서비스 | 파드당 연결, 최대 | 수의 근거 |
 | --- | --- | --- |
-| auth-service | 20 | `services/auth-service-go/cmd/server/main.go`의 `MaxConns = 20` |
-| session-service | 20 | `services/session-service-go/cmd/server/main.go`의 `MaxConns = 20` |
-| k8s-service | 4와 노드가 프로세스에 주는 CPU 수 중 큰 쪽, 더하기 1 | pgx의 기본 풀 크기(`runtime.NumCPU()`. 차트가 CPU limit을 두지 않으므로 requests가 아니라 노드의 CPU 수)와, 연결을 따로 하나 쥐는 상태 확인 잠금 |
-| ai-service | 15 | SQLAlchemy 기본 풀: 5, 몰리면 10 더 |
-| ModelConfig controller | 몇 개 | 상한을 두지 않은 `database/sql`. 1대 |
-| 마이그레이션 Job | 도는 동안 몇 개 | `migrations.mode: job` |
+| auth-service | 20 | `postgresql.pool.authService.maxConns` |
+| session-service | 20 | `postgresql.pool.sessionService.maxConns` |
+| k8s-service | 10, 더하기 1 | `postgresql.pool.k8sService.maxConns`와, 풀 밖에서 연결을 따로 하나 쥐는 상태 확인 잠금(`internal/pglock`). k8s-service-stream은 풀만 |
+| ai-service | 15 | `postgresql.pool.aiService.maxConns` |
+| ModelConfig controller | 4 | `postgresql.pool.modelConfigController.maxConns`. 1대 |
+| 마이그레이션 | 도는 동안 4 | 마이그레이션 풀(`dbsession.MigrationPoolMaxConns`) |
 | tool-server, frontend, gateway | 0 | — |
 
-PostgreSQL의 `max_connections` 기본값은 100이고, 차트 내장 postgres는 이 값을 바꾸지 않습니다.
-바깥 데이터베이스는 자기 값을 씁니다. Kubeast 사용자가 superuser가 아니면 그중 3개는 기본으로 superuser 몫입니다.
-예: CPU 8개 노드에서 서비스마다 1대면 연결이 최대 20 + 20 + 9 + 15 = 64쯤, 그 네 서비스를 2대씩 띄우면 128쯤으로 100을 넘습니다.
-필요한 서비스만 대수를 올리거나(tool-server · gateway · frontend는 연결을 열지 않고, k8s-service는 노드 CPU 하나에 하나쯤), 연결을 더 받는 데이터베이스를 쓰세요.
+차트 내장 postgres는 `max_connections`를 `postgresql.maxConnections`(300)로 두고, 파드들이 그보다 많이 쥘 수 있으면 설치가 멈춥니다. 셈은 풀마다 배포 중의 파드 수(4분의 1을 올림해 더함, autoscaling을 켰으면 `maxReplicas`)를 곱해 더하고, 마이그레이션 4와 psql·PostgreSQL superuser 몫 10을 더합니다(`templates/checks/db-connections.yaml`).
+바깥 데이터베이스는 자기 한도를 쓰고, 차트는 그 값을 읽지 못합니다. NOTES가 같은 합을 적어 주니 그 값과 견주세요. Kubeast 사용자가 superuser가 아니면 그중 3개는 기본으로 superuser 몫입니다.
+예: 서비스마다 1대면 배포 중의 여분 파드까지 최대 154개, 서비스마다 3대면 286개입니다.
+`postgresql.maxConnections`를 올리거나, 풀이나 파드 수를 줄이거나, 연결을 더 받는 데이터베이스를 쓰세요.
 
 ## 대수 정하기
 

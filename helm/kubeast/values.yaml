@@ -557,6 +557,32 @@ postgresql:
   sslRootCert:
     secretName: ""
     key: ca.crt
+  # Time limits each service sets on its own database connections (PostgreSQL statement_timeout, lock_timeout,
+  # idle_in_transaction_session_timeout; PostgreSQL's default for each is no limit), in milliseconds, with SET
+  # statements once a connection is made (not startup parameters, which PgBouncer refuses by default). 0 sets
+  # nothing and leaves the database's setting. Behind RDS Proxy a SET pins the client connection to one database
+  # connection: set 0 there and put the limits in the proxy's initialization query or on the database role. The
+  # schema migrations always run without the statement and lock limits, also when the role sets them. Through
+  # PgBouncer use session pooling only: transaction pooling hands a server connection to other clients between
+  # transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's) does not stay with
+  # the client that made it.
+  sessionLimits:
+    statementTimeoutMs: 30000
+    lockTimeoutMs: 15000
+    idleInTransactionTimeoutMs: 300000
+  # Connections each pod of a service opens to the database at most (its pool). k8s-service's is a fixed 10 rather
+  # than pgx's count of the node's CPUs. templates/checks/db-connections.yaml holds their sum under maxConnections.
+  pool:
+    authService: { maxConns: 20 }
+    sessionService: { maxConns: 20 }
+    k8sService: { maxConns: 10 }
+    aiService: { maxConns: 15 }
+    modelConfigController: { maxConns: 4 }
+  # max_connections of the chart's PostgreSQL (postgresql.enabled; PostgreSQL's own default is 100). 300 holds the
+  # default pools with 3 pods of each service: one more pod each while a rollout surges, so 4 × (20 + 20 + 10 + 15)
+  # = 260, the controller's 2 × 4 = 8, the migration pool's 4 and 10 kept for psql and PostgreSQL's 3 superuser
+  # slots: 282.
+  maxConnections: 300
 
 # --- Pod security (Pod Security Standards "restricted") ---
 # Every workload runs as a fixed non-root uid matching its image USER
