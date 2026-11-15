@@ -11,6 +11,8 @@ type Config struct {
 	Port    int
 	Debug   bool
 	AppName string
+	// ServerRole is SERVER_ROLE as set; ParseRole reads it (role.go).
+	ServerRole string
 
 	// Kubernetes
 	InCluster       bool
@@ -143,6 +145,8 @@ func Load() Config {
 		Port:    pkgconfig.GetEnvInt("PORT", 8002),
 		Debug:   pkgconfig.GetEnvBool("DEBUG", false),
 		AppName: pkgconfig.GetEnv("APP_NAME", "k8s-service"),
+
+		ServerRole: pkgconfig.GetEnv("SERVER_ROLE", ""),
 
 		InCluster:       pkgconfig.GetEnvBool("IN_CLUSTER", false),
 		KubeconfigWatch: pkgconfig.GetEnvBool("KUBECONFIG_WATCH", false),
