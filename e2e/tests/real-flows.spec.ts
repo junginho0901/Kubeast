@@ -153,7 +153,9 @@ test('after one person signs out, the next one signs in to their own access and 
 
   const { ctx, page } = await freshPage(browser)
   await page.goto('/login')
-  await signIn(page)
+  // the first person is an admin of the run's own: its sign-out ends no token a later step uses
+  const first = await throwaway(request, 'first', 'Admin')
+  await signIn(page, first.email, first.password)
   await page.goto('/admin/users')
   // the list pages as many rows as fit the screen: find the account by its email
   await page.getByTestId('admin-users-search').fill(email)
@@ -267,8 +269,10 @@ test('signing out closes the live connection and stops the chat answers, and the
 
 test('the language and the colour mode chosen on Settings stay through a sign-out and the next sign-in', async ({ browser }) => {
   const { ctx, page } = await freshPage(browser)
+  const own = await throwaway(ctx.request, 'settings', 'Member')
   await page.goto('/login')
-  await signIn(page)
+  await signIn(page, own.email, own.password)
+  const signedInAt = Date.now()
   await page.evaluate(() => {
     localStorage.setItem('i18nextLng', 'ko')
     localStorage.setItem('kubeast.colorMode', 'light')
@@ -277,7 +281,8 @@ test('the language and the colour mode chosen on Settings stay through a sign-ou
   await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'light')
   await page.getByRole('button', { name: /Log out|로그아웃/ }).click()
   await expect(page).toHaveURL(/\/login/)
-  await signIn(page)
+  await pastTheSecondOf(signedInAt)
+  await signIn(page, own.email, own.password)
   await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'light')
   await expect(page.getByRole('button', { name: '로그아웃' })).toHaveCount(1, { timeout: 15000 })
   await page.evaluate(() => {
