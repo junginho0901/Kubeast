@@ -14,7 +14,7 @@ const read = (file: string) => readFileSync(file, 'utf8')
 const drawerWidth = () => {
   const src = read(join(dir, '../ResourceDetailDrawer.tsx'))
   const panel = src.match(/className="fixed inset-y-0 right-0 w-full max-w-\[(\d+)px\] [^"]*border-l\b[^"]*"/)
-  const content = src.match(/<div className="p-(\d+) space-y-6 text-sm">/)
+  const content = src.match(/<div className="p-(\d+) space-y-6 text-sm"[^>]*>/)
   expect(panel, 'the drawer panel: fixed, right, max-w-[Npx], border-l').not.toBeNull()
   expect(content, 'the Info tab content: p-N').not.toBeNull()
   return { max: Number(panel![1]), padding: Number(content![1]) * 4 }
