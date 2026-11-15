@@ -76,7 +76,7 @@ func TestWithEveryV079SwitchOffTheRoundsAnswersAreV078s(t *testing.T) {
 		if err != nil {
 			out = "error: " + err.Error()
 		}
-		if got := sha(out); got != v078RoundAnswers[c.tool] {
+		if got := roundSHA(out); got != v078RoundAnswers[c.tool] {
 			t.Errorf("%s answers %s, 0.7.8 %s:\n%s", c.tool, got, v078RoundAnswers[c.tool], out)
 		}
 	}
@@ -94,12 +94,12 @@ func TestWithEveryV079SwitchOffTheRoundsAnswersAreV078s(t *testing.T) {
 		}
 		asked = append(asked, r.Method+" "+r.URL.Path+"?"+strings.Join(parts, "&"))
 	}
-	if got := sha(strings.Join(asked, "\n")); got != v078RoundAnswers["asked"] {
+	if got := roundSHA(strings.Join(asked, "\n")); got != v078RoundAnswers["asked"] {
 		t.Errorf("asked k8s-service %s, 0.7.8 %s:\n%s", got, v078RoundAnswers["asked"], strings.Join(asked, "\n"))
 	}
 }
 
-func sha(s string) string {
+func roundSHA(s string) string {
 	sum := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(sum[:])
 }
