@@ -501,7 +501,7 @@ func accessCheckTTL() time.Duration {
 }
 
 // mayListPods asks whether the caller may list pods in namespace ("" = every
-// namespace), from the cache or by a SelfSubjectAccessReview.
+// namespace), from this process's answers or by a SelfSubjectAccessReview.
 func (s *Service) mayListPods(ctx context.Context, b *clientBundle, namespace string) (bool, error) {
 	return s.mayList(ctx, b, "pods", namespace)
 }
@@ -536,15 +536,14 @@ func (s *Service) mayGetNamespace(ctx context.Context, b *clientBundle, name str
 	return s.mayDo(ctx, b, "namespaces_get_allowed:"+name, authorizationv1.ResourceAttributes{Verb: "get", Resource: "namespaces", Namespace: name, Name: name})
 }
 
-// mayDo asks whether the caller may do what attrs describe, from the cache or by a SelfSubjectAccessReview, remembered
+// mayDo asks whether the caller may do what attrs describe, from this process's answers or by a SelfSubjectAccessReview, remembered
 // accessCheckTTL under what (with the cluster and the identity added).
 func (s *Service) mayDo(ctx context.Context, b *clientBundle, what string, attrs authorizationv1.ResourceAttributes) (bool, error) {
 	if b.authz == nil {
 		return true, nil
 	}
 	key := s.clusterCacheKey(ctx, what)
-	var allowed bool
-	if s.cache != nil && s.cache.Get(ctx, key, &allowed) {
+	if allowed, ok := s.rememberedAccess(ctx, key, what); ok {
 		return allowed, nil
 	}
 	if s.answered.askedAgain(key, time.Now()) {
@@ -552,8 +551,7 @@ func (s *Service) mayDo(ctx context.Context, b *clientBundle, what string, attrs
 	}
 	// The key holds the cluster and the identity the review goes out as, all its answer depends on.
 	return s.askOnce(ctx, key, func(ctx context.Context) (bool, error) {
-		var known bool
-		if s.cache != nil && s.cache.Get(ctx, key, &known) {
+		if known, ok := s.rememberedAccess(ctx, key, what); ok {
 			return known, nil
 		}
 		review, err := b.authz.SelfSubjectAccessReviews().Create(ctx, &authorizationv1.SelfSubjectAccessReview{
@@ -562,13 +560,21 @@ func (s *Service) mayDo(ctx context.Context, b *clientBundle, what string, attrs
 		if err != nil {
 			return false, err
 		}
-		ttl := accessCheckTTL()
-		if s.cache != nil {
-			s.cache.Set(ctx, key, review.Status.Allowed, ttl)
-		}
-		s.answered.answered(key, time.Now().Add(ttl))
+		end := time.Now().Add(accessCheckTTL())
+		s.accessAnswers.set(key, review.Status.Allowed, end)
+		s.answered.answered(key, end)
 		return review.Status.Allowed, nil
 	})
+}
+
+// rememberedAccess is the answer this process got for key and still keeps (accessAnswers), noted for a recorded call
+// as a cache hit.
+func (s *Service) rememberedAccess(ctx context.Context, key, question string) (bool, bool) {
+	allowed, ok := s.accessAnswers.get(key, time.Now())
+	if ok {
+		accesstrail.Cached(ctx, "cache "+question)
+	}
+	return allowed, ok
 }
 
 // askOnce is one access question to the cluster at a time per key, whoever waits on it.

@@ -26,7 +26,7 @@ var migrations embed.FS
 
 // Required is the schema version this build of the services needs. Bump it
 // together with every new migration file under migrations/.
-const Required int64 = 22
+const Required int64 = 24
 
 const (
 	dir          = "migrations"
