@@ -1941,11 +1941,30 @@ def _timeline_without_changes(tool: Dict) -> Dict:
     return {**tool, "function": fn}
 
 
+# With anomaly_rank on too, the chat's one order rule calls it first (prompts.ANOMALY_RANK_RULE_WITH_CHANGES): the changes
+# view's description then does not say "first".
+TIMELINE_FIRST = " Use it first for \"why did this break?\", then line the changes up with when the symptom started."
+TIMELINE_AFTER_ANOMALY_RANK = " For \"why did this break?\", line the changes up with when the symptom started."
+
+
+def _timeline_after_anomaly_rank(tool: Dict) -> Dict:
+    fn = dict(tool.get("function") or {})
+    if isinstance(fn.get("description"), str):
+        fn["description"] = fn["description"].replace(TIMELINE_FIRST, TIMELINE_AFTER_ANOMALY_RANK)
+    return {**tool, "function": fn}
+
+
 def offer_timeline_changes(tools: List[Dict]) -> List[Dict]:
-    """tools as the model is offered them: with AI_TIMELINE_CHANGES off, timeline without its changes view."""
+    """tools as the model is offered them: with AI_TIMELINE_CHANGES off, timeline without its changes view; with it and
+    ANOMALY_RANK_ENABLED on, the view's description without "first"."""
+    def timeline(t: Dict) -> bool:
+        return ((t or {}).get("function") or {}).get("name") == "timeline"
+
     if timeline_changes_on():
+        if anomaly_rank_on():
+            return [_timeline_after_anomaly_rank(t) if timeline(t) else t for t in tools]
         return tools
-    return [_timeline_without_changes(t) if ((t or {}).get("function") or {}).get("name") == "timeline" else t for t in tools]
+    return [_timeline_without_changes(t) if timeline(t) else t for t in tools]
 
 
 def without_params(tool: Dict, params: tuple, words: str) -> Dict:

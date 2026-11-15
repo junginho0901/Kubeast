@@ -2,6 +2,8 @@
 features.anomalyRank.enabled, off by default): off, the chat's system prompt is SYSTEM_MESSAGE as it was before the tool
 and the MCP server does not list it; on, its three lines follow the lines they belong after. The chat's and an
 investigation's tool lists follow the cluster's features (features.GATES) either way."""
+import hashlib
+
 import pytest
 
 from app.services.ai import prompts, tools
@@ -23,34 +25,66 @@ def test_the_switch_is_off_otherwise(monkeypatch, value):
     assert not tools.anomaly_rank_on()
 
 
-def test_off_the_prompt_names_no_anomaly_rank_and_on_three_lines_follow_their_lines(monkeypatch):
-    monkeypatch.delenv("AI_TIMELINE_CHANGES", raising=False)
-    monkeypatch.delenv("ANOMALY_RANK_ENABLED", raising=False)
-    assert prompts.system_message() == prompts.SYSTEM_MESSAGE and "anomaly_rank" not in prompts.SYSTEM_MESSAGE
+# sha256 of the chat's system prompt of this pull request as written (bc7ed386), before its lines went behind the switch
+V079_ANOMALY_RANK_PROMPT = "04927b8a0fc893f4cf6d7a727f7533a006a15dcc82a40035b0fa5c1f770138c7"
+SWITCHES = ("AI_TIMELINE_CHANGES", "ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED")
 
-    # with timeline's changes view off, the order rule has no step for it
-    monkeypatch.setenv("ANOMALY_RANK_ENABLED", "true")
-    on = prompts.system_message().split("\n")
-    for anchor, line in ((prompts._ISSUES_GUIDE, prompts.ANOMALY_RANK_GUIDE), (prompts._STATE_RULE, prompts.ANOMALY_RANK_RULE_WITHOUT_CHANGES),
+
+def _only(monkeypatch, *on):
+    for name in SWITCHES:
+        monkeypatch.delenv(name, raising=False)
+    for name in on:
+        monkeypatch.setenv(name, "true")
+    return prompts.system_message().split("\n")
+
+
+def test_off_the_prompt_names_no_anomaly_rank_and_on_it_is_this_pull_requests_prompt_to_the_byte(monkeypatch):
+    assert "\n".join(_only(monkeypatch)) == prompts.SYSTEM_MESSAGE and "anomaly_rank" not in prompts.SYSTEM_MESSAGE
+    on = _only(monkeypatch, "ANOMALY_RANK_ENABLED")
+    assert hashlib.sha256("\n".join(on).encode()).hexdigest() == V079_ANOMALY_RANK_PROMPT
+    for anchor, line in ((prompts._ISSUES_GUIDE, prompts.ANOMALY_RANK_GUIDE), (prompts._STATE_RULE, prompts.ANOMALY_RANK_RULE),
                          (prompts._ISSUES_SIGNATURE, prompts.ANOMALY_RANK_SIGNATURE)):
         assert on[on.index(anchor) + 1] == line
-    assert [line for line in on if line not in prompts.SYSTEM_MESSAGE.split("\n")] == [
-        prompts.ANOMALY_RANK_GUIDE, prompts.ANOMALY_RANK_RULE_WITHOUT_CHANGES, prompts.ANOMALY_RANK_SIGNATURE]
-    assert "changes" not in prompts.ANOMALY_RANK_RULE_WITHOUT_CHANGES and "`timeline`" not in prompts.ANOMALY_RANK_RULE_WITHOUT_CHANGES
+    # step 2 reads timeline's events and rollouts, which every install offers; no changes view
+    assert "`timeline`에서 그동안 바뀐 것" in prompts.ANOMALY_RANK_RULE and "view" not in prompts.ANOMALY_RANK_RULE
+    # resource_graph's calls on as well: the same words (step 3 says "where offered")
+    assert _only(monkeypatch, "ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED") == on
 
 
-def test_with_both_switches_on_one_order_rule_names_the_changes_view(monkeypatch):
-    monkeypatch.setenv("AI_TIMELINE_CHANGES", "true")
-    monkeypatch.setenv("ANOMALY_RANK_ENABLED", "true")
-    both = prompts.system_message().split("\n")
-    assert both[both.index(prompts._STATE_RULE) + 1] == prompts.ANOMALY_RANK_RULE and '`view: "changes"`' in prompts.ANOMALY_RANK_RULE
+def test_with_anomaly_rank_and_the_changes_view_on_one_order_rule_names_the_view(monkeypatch):
+    both = _only(monkeypatch, "AI_TIMELINE_CHANGES", "ANOMALY_RANK_ENABLED")
+    assert both[both.index(prompts._STATE_RULE) + 1] == prompts.ANOMALY_RANK_RULE_WITH_CHANGES
+    assert '`view: "changes"`' in prompts.ANOMALY_RANK_RULE_WITH_CHANGES
     # the changes view's own "changes first" rule gives way to the order rule; its guide and signature lines stay
     assert both[both.index(prompts._TIME_RULE) + 1] != prompts.TIMELINE_CHANGES_LINES[prompts._TIME_RULE].split("\n")[1]
     assert prompts.TIMELINE_CHANGES_LINES[prompts._TIMELINE_GUIDE] in both and prompts.TIMELINE_CHANGES_LINES[prompts._TIMELINE_SIGNATURE] in both
     assert sum("먼저 부를 도구를 정하는 규칙은 이것 하나입니다" in line or "바뀐 것부터 보세요" in line for line in both) == 1
-    monkeypatch.delenv("ANOMALY_RANK_ENABLED")
-    assert "\n".join(both) != prompts.system_message()
-    assert prompts.system_message() == "\n".join(prompts.TIMELINE_CHANGES_LINES.get(line, line) for line in prompts.SYSTEM_MESSAGE.split("\n"))
+    # the changes view alone is #873's prompt
+    assert "\n".join(_only(monkeypatch, "AI_TIMELINE_CHANGES")) == "\n".join(
+        prompts.TIMELINE_CHANGES_LINES.get(line, line) for line in prompts.SYSTEM_MESSAGE.split("\n"))
+
+
+def test_with_resource_graphs_calls_on_and_anomaly_rank_off_the_order_rule_names_no_anomaly_rank(monkeypatch):
+    calls = _only(monkeypatch, "CALL_GRAPH_ENABLED")
+    assert calls[calls.index(prompts._STATE_RULE) + 1] == prompts.CALL_GRAPH_RULE
+    assert [line for line in calls if line not in prompts.SYSTEM_MESSAGE.split("\n")] == [prompts.CALL_GRAPH_RULE]
+    for rule in (prompts.CALL_GRAPH_RULE, prompts.CALL_GRAPH_RULE_WITH_CHANGES):
+        assert "anomaly_rank" not in rule and 'include: ["calls"]' in rule and rule.index("`timeline`") < rule.index("resource_graph")
+    assert "view" not in prompts.CALL_GRAPH_RULE
+    both = _only(monkeypatch, "CALL_GRAPH_ENABLED", "AI_TIMELINE_CHANGES")
+    assert both[both.index(prompts._STATE_RULE) + 1] == prompts.CALL_GRAPH_RULE_WITH_CHANGES and '`view: "changes"`' in prompts.CALL_GRAPH_RULE_WITH_CHANGES
+    assert sum("먼저 부를 도구를 정하는 규칙은 이것 하나입니다" in line or "바뀐 것부터 보세요" in line for line in both) == 1
+
+
+def test_the_changes_views_description_says_first_only_without_anomaly_rank(monkeypatch):
+    def description():
+        (timeline,) = [t for t in tools.offer_timeline_changes(tools.K8S_READONLY_TOOLS) if t["function"]["name"] == "timeline"]
+        return timeline["function"]["description"]
+
+    _only(monkeypatch, "AI_TIMELINE_CHANGES")
+    assert description().endswith(tools.TIMELINE_FIRST)
+    _only(monkeypatch, "AI_TIMELINE_CHANGES", "ANOMALY_RANK_ENABLED")
+    assert description().endswith(tools.TIMELINE_AFTER_ANOMALY_RANK) and "Use it first" not in description()
 
 
 def test_the_mcp_server_lists_it_only_with_the_switch(monkeypatch):
