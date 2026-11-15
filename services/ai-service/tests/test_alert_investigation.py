@@ -1,6 +1,7 @@
 """Alert → AI investigation: the webhook's gates, the investigation loop, the admin reads."""
 
 import asyncio
+import contextlib
 import json
 from datetime import datetime, timedelta
 from types import SimpleNamespace
@@ -43,6 +44,8 @@ class FakeStore:
         self.pause = pause
         self.bumped = []
         self.inbox = []
+        self.locked = []
+        self._locks = {}
 
     def install(self, monkeypatch):
         async def record(db, **f):
@@ -77,15 +80,23 @@ class FakeStore:
             return self.tokens
 
         async def insert(db, **f):
+            await asyncio.sleep(0)  # a round trip: another delivery runs meanwhile
             f.setdefault("id", f"inv-{len(self.rows)}")
             self.rows.append(f)
             return f["id"]
+
+        @contextlib.asynccontextmanager
+        async def alert_locked(db, cluster, fingerprint, starts_at):
+            async with self._locks.setdefault((cluster, fingerprint, starts_at), asyncio.Lock()):
+                self.locked.append((cluster, fingerprint, starts_at))
+                yield
 
         async def pause_reason(db, minutes, now):
             return self.pause if minutes else ""
 
         for name, fn in dict(find_recent=find_recent, bump_repeat=bump_repeat, count_since=count_since, tokens_since=tokens_since, insert=insert,
-                             pause_reason=pause_reason, find_recent_skipped=find_recent_skipped, fold_skip=fold_skip).items():
+                             pause_reason=pause_reason, find_recent_skipped=find_recent_skipped, fold_skip=fold_skip,
+                             alert_locked=alert_locked).items():
             monkeypatch.setattr(store, name, fn)
 
 
@@ -137,6 +148,42 @@ async def test_gates_fold_a_repeat_into_the_recent_row(monkeypatch):
     assert counts["accepted"] == 1
     counts = await webhook.gate_and_queue(None, cfg(), "default", am_message(alert(fp="a")), NOW)
     assert counts["accepted"] == 1
+
+
+@pytest.mark.asyncio
+async def test_one_alert_arriving_twice_at_once_queues_one_investigation(monkeypatch):
+    """Two deliveries of one alert at one moment (two replicas, an Alertmanager HA pair) decide under the alert's
+    inbox row lock one after the other: one investigation, and the other delivery folds into it."""
+    fs = FakeStore()
+    fs.install(monkeypatch)
+    msg = am_message(alert(fp="a"))
+    first, second = await asyncio.gather(*(webhook.gate_and_queue(None, cfg(dedupe_hours=24), "self", msg, NOW) for _ in range(2)))
+    assert len(fs.rows) == 1 and fs.bumped == [fs.rows[0]["id"]]
+    assert sorted((c["accepted"], c["duplicate"]) for c in (first, second)) == [(0, 1), (1, 0)]
+    # the lock is the inbox row of this cluster, alert and start, the row inbox.record stored it in
+    assert fs.locked == [("self", "a", datetime(2026, 10, 13, 11, 59))] * 2
+
+
+@pytest.mark.asyncio
+async def test_one_skipped_alert_arriving_twice_at_once_writes_one_skipped_row(monkeypatch):
+    fs = FakeStore(rows=[{"id": f"r{i}", "cluster": "self", "fingerprint": f"x{i}", "status": "done", "received_at": NOW - timedelta(minutes=10)} for i in range(2)])
+    fs.install(monkeypatch)
+    msg = am_message(alert(fp="a"))
+    counts = await asyncio.gather(*(webhook.gate_and_queue(None, cfg(max_per_hour=2), "self", msg, NOW) for _ in range(2)))
+    assert [c["skipped"] for c in counts] == [1, 1]
+    skipped = [r for r in fs.rows if r["status"] == "skipped"]
+    assert len(skipped) == 1 and skipped[0].get("repeat_count") == 2
+
+
+def test_the_alert_lock_is_a_row_lock_on_its_inbox_row():
+    from sqlalchemy.dialects import postgresql
+
+    sql = str(store.alert_row_lock("self", "a", datetime(2026, 10, 13, 11, 59)).compile(dialect=postgresql.dialect()))
+    assert "FROM alert_inbox" in sql and sql.endswith("FOR UPDATE")
+    assert all(f"alert_inbox.{c} = " in sql for c in ("cluster", "fingerprint", "starts_at"))
+    # without startsAt, the alert's newest row, as inbox.record finds it
+    sql = str(store.alert_row_lock("self", "a", None).compile(dialect=postgresql.dialect()))
+    assert "starts_at = " not in sql and "ORDER BY alert_inbox.starts_at DESC" in sql and sql.endswith("FOR UPDATE")
 
 
 @pytest.mark.asyncio

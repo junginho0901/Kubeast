@@ -9,7 +9,7 @@ import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
 import CustomDropdown from '@/components/CustomDropdown'
 import { usePagination } from '@/components/resource-detail/usePagination'
-import { storeCut } from '@/utils/alertInbox'
+import { previewAnswers, storeCut } from '@/utils/alertInbox'
 
 // A silence in the cluster's alert store (features.alertStore.silences, resource.alert.silence): label conditions,
 // how long, why. The server adds the cluster's own condition, so the conditions here never need it; what the silence
@@ -135,7 +135,9 @@ export default function SilenceModal({ initial, maxHours, onClose }: {
 
         <section data-testid="silence-preview">
           <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('alertInbox.silence.affected', 'Alerts it would mute now')}</h3>
-          {previewError ? (
+          {!previewAnswers(asked, matchers) ? (
+            <p className="text-sm text-slate-500">-</p>
+          ) : previewError ? (
             <p className="text-sm text-amber-300">{previewError.detail || tr('alertInbox.silence.previewFailed', 'The conditions could not be checked.')}</p>
           ) : preview.data ? (
             <SilencePreviewAlerts preview={preview.data} />

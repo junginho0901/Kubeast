@@ -289,7 +289,8 @@ func main() {
 	h.SetLiveSessions(liveSessions)
 
 	// Console metrics (services/pkg/metrics): HTTP by route pattern, the audit
-	// store's readiness and write failures, live WebSocket subscriptions.
+	// store's readiness and write failures, live WebSocket subscriptions, the
+	// requests' wait for the client's rate to the clusters.
 	m := metrics.New("k8s")
 	m.Route = metrics.ChiRoute
 	if s, ok := any(auditStore).(audit.Statuser); ok {
@@ -297,6 +298,7 @@ func main() {
 	}
 	m.Gauge("kubeast_ws_subscriptions", "Live WebSocket subscriptions (logs, exec, watches) across all connections.",
 		func() float64 { return float64(wsMux.SubscriptionCount()) })
+	m.Registry.MustRegister(k8s.ClientWaitCollectors()...)
 	if recorder.Enabled() {
 		m.Gauge("kubeast_session_recording_pending_bytes", "Recorded terminal output not uploaded to the recording store yet.",
 			func() float64 { return float64(recorder.PendingBytes()) })

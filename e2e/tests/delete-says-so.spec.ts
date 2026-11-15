@@ -71,6 +71,41 @@ test.describe('A delete says what it deleted', () => {
     await expect(notice).toHaveCount(0)
   })
 
+  // The delete's answer is held until the drawer has moved to another ConfigMap (as back, forward or a link move it): the
+  // answer names the one deleted, and the drawer of the other stays open with no Delete window of the first.
+  test('a delete that answers after the drawer moved names the ConfigMap deleted and leaves the other one\'s drawer open', async ({ page }) => {
+    kubectl(`-n ${NS} create configmap e2e-ds-c --from-literal=k=v`)
+    kubectl(`-n ${NS} create configmap e2e-ds-d --from-literal=k=v`)
+    const at = (name: string) => `/configuration/configmaps?cluster=${CLUSTER}&namespace=${NS}&detail=${encodeURIComponent(`ConfigMap/${NS}/${name}`)}`
+    let answer!: () => void
+    const held = new Promise<void>((resolve) => { answer = resolve })
+    await page.route(`**/namespaces/${NS}/configmaps/e2e-ds-c**`, async (route) => {
+      if (route.request().method() !== 'DELETE') return route.fallback()
+      await held
+      await route.continue()
+    })
+
+    await page.goto(at('e2e-ds-c'))
+    const asked = page.waitForRequest((r) => r.method() === 'DELETE' && r.url().includes(`/configmaps/e2e-ds-c`))
+    await page.getByRole('button', { name: 'Delete ConfigMap', exact: true }).click()
+    await page.getByTestId('delete-dialog-confirm').click()
+    await asked
+
+    await page.evaluate((next) => {
+      window.history.pushState({}, '', next)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }, at('e2e-ds-d'))
+    await expect(page.getByTestId('delete-dialog-confirm'), 'the Delete window was for the first ConfigMap').toHaveCount(0)
+    answer()
+    await expect.poll(gone('configmap/e2e-ds-c'), { timeout: 20_000 }).toBe(true)
+
+    const notice = page.getByTestId('yaml-created')
+    await expect(notice.locator('p')).toHaveText([`Deleted: ConfigMap/e2e-ds-c (${NS})`])
+    await expect(page, 'the drawer stays on the other ConfigMap').toHaveURL(new RegExp(`detail=ConfigMap(%2F|/)${NS}(%2F|/)e2e-ds-d`))
+    await expect(page.getByRole('button', { name: 'Delete ConfigMap', exact: true })).toHaveCount(1)
+    expect(kubectl(`-n ${NS} get configmap e2e-ds-d -o name`)).toBe('configmap/e2e-ds-d')
+  })
+
   test('a pod deleted from Cluster View\'s menu is named deleted at the top of the page, until another page opens', async ({ page }) => {
     // sleep ignores SIGTERM: no grace period, so the pod goes within the test's time
     kubectl(`-n ${NS} run e2e-ds-pod --image=busybox:1.37 --image-pull-policy=IfNotPresent --restart=Never --overrides='{"spec":{"terminationGracePeriodSeconds":0}}' -- sleep 3600`)
