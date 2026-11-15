@@ -90,10 +90,12 @@ const (
 	reasonScope       = "scope"       // a kind no namespace holds, for a grant limited to namespaces
 )
 
-// Which limit a reasonLimit frame hit (limit_scope): closing a tab frees the tab's, not the server's.
+// Which limit a reasonLimit frame hit (limit_scope): closing a tab frees the tab's, not the server's; memory is the
+// server's room to open more (watchMemoryFull), which comes back by itself.
 const (
 	limitScopeTab    = "tab"
 	limitScopeServer = "server"
+	limitScopeMemory = "memory"
 )
 
 func (r RequestMessage) errorFrame(message, reason string) ResponseMessage {
@@ -215,6 +217,12 @@ type Multiplexer struct {
 	starts map[string]*limits.Slots // cluster -> places for starting a watch
 	// held are the live watches of streams outside the sockets (HoldWatches), which count against MaxSubscriptions too.
 	held int
+
+	// heap reads the live heap and the collector's limit; nil = heapNow.
+	heap func() (live, limit uint64)
+
+	// rowClients are the clients the watches go through, which decode what the rows read (watchClient).
+	rowClients rowClientCache
 }
 
 // SubscriptionCount is the number of live subscriptions across all connections and the watches HoldWatches holds (metrics).
@@ -451,6 +459,12 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				send(ctx, sendCh, req.limitFrame(fmt.Sprintf("max subscriptions reached for %s (%d), cannot create new watch", scope, limit), limitScope))
 				continue
 			}
+			// The watches already on go on; a new one waits, as the page asks again after half a minute to five.
+			if m.watchMemoryFull() {
+				m.mu.Unlock()
+				send(ctx, sendCh, req.limitFrame("k8s-service is short of memory, cannot create new watch for now", limitScopeMemory))
+				continue
+			}
 
 			subCtx, subCancel := context.WithCancel(ctx)
 			// Carry the target cluster so the watch hits the right cluster.
@@ -678,10 +692,11 @@ func (m *Multiplexer) followWatch(ctx context.Context, req RequestMessage, sendC
 		}
 		resync = resync || told
 		var watcher watch.Interface
+		watching := m.watchClient(ctx, dyn, notify)
 		if namespace != "" {
-			watcher, err = dyn.Resource(gvr).Namespace(namespace).Watch(ctx, opts)
+			watcher, err = watching.Resource(gvr).Namespace(namespace).Watch(ctx, opts)
 		} else {
-			watcher, err = dyn.Resource(gvr).Watch(ctx, opts)
+			watcher, err = watching.Resource(gvr).Watch(ctx, opts)
 		}
 		release()
 		if err != nil {

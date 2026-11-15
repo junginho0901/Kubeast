@@ -41,7 +41,8 @@ import (
 // follows, as the W2 load test's people kept them. The browsers and a fake API server (TLS, HTTP/2, as kube-apiserver)
 // run in a second process (TestWSMemoryPeer), so only the multiplexer's side is counted here. Run with
 // WS_MEMORY_PER_USER=1; WS_MEMORY_USERS sets the crowd (300), WS_MEMORY_OUT a folder for the summary and the heap and
-// goroutine profiles taken while the crowd is connected, WS_MEMORY_ONLY a comma-separated list of scenarios.
+// goroutine profiles taken while the crowd is connected, WS_MEMORY_ONLY a comma-separated list of scenarios, and
+// WS_MEMORY_WHOLE_DECODE=1 decodes the events with client-go's decoder, as before watch_decode.go.
 func TestWSMemoryPerUser(t *testing.T) {
 	if os.Getenv("WS_MEMORY_PER_USER") != "1" {
 		t.Skip("set WS_MEMORY_PER_USER=1 to measure")
@@ -69,17 +70,24 @@ func TestWSMemoryPerUser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := NewMultiplexer(fakeClients{d})
+	var clients ClientProvider = configClients{fakeClients{d}, cfg}
+	decoder := "shape"
+	if os.Getenv("WS_MEMORY_WHOLE_DECODE") == "1" {
+		clients, decoder = fakeClients{d}, "whole"
+	}
+	m := NewMultiplexer(clients)
+	// Every watch is counted: with GOMEMLIMIT set the crowd's opening would pass the share at which new watches wait.
+	m.heap = func() (uint64, uint64) { return 0, 0 }
 	wsURL := memMuxServer(t, m)
 
 	// One of each watch first: the HTTP/2 connection, the TLS session and the decoders' types are there before counting.
 	peer.crowd(t, m, wsURL, [][]memWatch{memWatches(memPodsOnNode(0), memNodes(), memDeployments(""))}, nil)
 
 	var summary strings.Builder
-	fmt.Fprintf(&summary, "%s, %s %s/%s, GOGC default, GOMEMLIMIT %q, HTTP/2 stream buffer %d (0 = Go's 4 MiB)\n", time.Now().Format(time.RFC3339),
-		runtime.Version(), runtime.GOOS, runtime.GOARCH, os.Getenv("GOMEMLIMIT"), streamBuffer)
+	fmt.Fprintf(&summary, "%s, %s %s/%s, GOGC default, GOMEMLIMIT %q, HTTP/2 stream buffer %d (0 = Go's 4 MiB), %s decoder\n", time.Now().Format(time.RFC3339),
+		runtime.Version(), runtime.GOOS, runtime.GOARCH, os.Getenv("GOMEMLIMIT"), streamBuffer, decoder)
 	fmt.Fprintf(&summary, "one event on the wire: pod %d bytes, node %d bytes, deployment %d bytes\n", len(watchPodJSON(0)), len(memNodeJSON(0)), len(memDeploymentJSON(0)))
-	fmt.Fprintf(&summary, "%-12s %6s %6s %9s %9s %9s %8s %9s %9s %9s\n", "scenario", "people", "watch", "live/p", "stack/p", "gor/p", "inuse/p", "rss/p", "peak/p", "left/p")
+	fmt.Fprintf(&summary, "%-12s %6s %6s %9s %9s %9s %8s %9s %9s %9s %9s\n", "scenario", "people", "watch", "live/p", "stack/p", "gor/p", "inuse/p", "rss/p", "peak/p", "left/p", "alloc/p")
 	for _, sc := range []struct {
 		name   string
 		people int
@@ -112,16 +120,18 @@ func TestWSMemoryPerUser(t *testing.T) {
 		})
 		after := takeMemSnapshot(true)
 		per := func(a, b uint64) float64 { return (float64(a) - float64(b)) / float64(sc.people) / 1024 }
-		line := fmt.Sprintf("%-12s %6d %6d %8.1fK %8.1fK %9.2f %7.1fK %8.1fK %8.1fK %8.1fK", sc.name, sc.people, watches,
+		line := fmt.Sprintf("%-12s %6d %6d %8.1fK %8.1fK %9.2f %7.1fK %8.1fK %8.1fK %8.1fK %8.1fK", sc.name, sc.people, watches,
 			per(held.heapAlloc, before.heapAlloc), per(held.stackInuse, before.stackInuse),
 			float64(held.goroutines-before.goroutines)/float64(sc.people), per(held.heapInuse, before.heapInuse),
-			per(held.rssLike, before.rssLike), per(peak, before.rssLike), per(after.heapAlloc, before.heapAlloc))
+			per(held.rssLike, before.rssLike), per(peak, before.rssLike), per(after.heapAlloc, before.heapAlloc),
+			per(held.totalAlloc, before.totalAlloc))
 		t.Log(line)
 		summary.WriteString(line + "\n")
 	}
 	summary.WriteString("live = heap of live objects after a GC; stack = goroutine stacks; gor = goroutines; inuse = heap spans in use and\n" +
 		"rss = memory the runtime holds and has not returned (Sys - HeapReleased), both before that GC; peak = the most rss while\n" +
-		"the crowd connected; left = live heap after the crowd left. All per person, minus the same before the crowd came.\n")
+		"the crowd connected; left = live heap after the crowd left; alloc = bytes allocated from before the crowd came until it\n" +
+		"had its first objects. All per person, minus the same before the crowd came.\n")
 	t.Log("\n" + summary.String())
 	if out != "" {
 		if err := os.WriteFile(filepath.Join(out, "summary.txt"), []byte(summary.String()), 0o644); err != nil {
@@ -130,9 +140,10 @@ func TestWSMemoryPerUser(t *testing.T) {
 	}
 }
 
-// An idle socket holds its reader, its session check and little else. It held 47 KiB of live heap while its queue
-// took 256 frames as values and gorilla gave it a write buffer of its own; by pointer and from a pool, about 18 KiB
-// (TestWSMemoryPerUser). The browsers run in a second process, so only the server's side is counted.
+// An idle socket holds its reader, its writer and little else. It held 47 KiB of live heap while its queue took 256
+// frames as values and gorilla gave it a write buffer of its own; by pointer and from a pool, about 18 KiB
+// (TestWSMemoryPerUser). Its session is checked by the one ticker of auth.LiveSessions, where it had a goroutine of its
+// own (3 a socket). The browsers run in a second process, so only the server's side is counted.
 func TestAnIdleSocketHoldsLittleOfItsOwn(t *testing.T) {
 	if testing.Short() {
 		t.Skip("starts a second process")
@@ -143,15 +154,20 @@ func TestAnIdleSocketHoldsLittleOfItsOwn(t *testing.T) {
 	wsURL := memMuxServer(t, m)
 	peer.crowd(t, m, wsURL, [][]memWatch{nil}, nil)
 	before := takeMemSnapshot(true)
-	var perSocket float64
+	var perSocket, goroutines float64
 	peer.crowd(t, m, wsURL, make([][]memWatch, sockets), func() {
 		held := takeMemSnapshot(true)
 		perSocket = (float64(held.heapAlloc) - float64(before.heapAlloc)) / sockets / 1024
+		goroutines = float64(held.goroutines-before.goroutines) / sockets
 	})
 	if perSocket > 30 {
 		t.Errorf("an idle socket holds %.1f KiB of live heap, want at most 30", perSocket)
 	}
-	t.Logf("an idle socket holds %.1f KiB of live heap", perSocket)
+	// the reader and the writer; the sweep is one for every socket
+	if goroutines > 2.05 {
+		t.Errorf("an idle socket holds %.2f goroutines, want 2", goroutines)
+	}
+	t.Logf("an idle socket holds %.1f KiB of live heap and %.2f goroutines", perSocket, goroutines)
 }
 
 // memMuxServer serves m's socket as k8s-service does behind the gateway: plain HTTP, each person signed in as an account
@@ -288,8 +304,8 @@ func memW2Kept(n int) [][]memWatch {
 }
 
 type memSnapshot struct {
-	heapAlloc, heapInuse, stackInuse, rssLike uint64
-	goroutines                                int
+	heapAlloc, heapInuse, stackInuse, rssLike, totalAlloc uint64
+	goroutines                                            int
 }
 
 func takeMemSnapshot(gc bool) memSnapshot {
@@ -299,7 +315,7 @@ func takeMemSnapshot(gc bool) memSnapshot {
 	}
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
-	return memSnapshot{heapAlloc: ms.HeapAlloc, heapInuse: ms.HeapInuse, stackInuse: ms.StackInuse, rssLike: ms.Sys - ms.HeapReleased, goroutines: runtime.NumGoroutine()}
+	return memSnapshot{heapAlloc: ms.HeapAlloc, heapInuse: ms.HeapInuse, stackInuse: ms.StackInuse, rssLike: ms.Sys - ms.HeapReleased, totalAlloc: ms.TotalAlloc, goroutines: runtime.NumGoroutine()}
 }
 
 // memHeld is Sys - HeapReleased from runtime/metrics, which does not stop the world.
