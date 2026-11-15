@@ -535,7 +535,7 @@ def test_a_chat_round_signs_in_again_when_the_token_ends_between_asks():
     with Server(fake):
         d = case_dir(CASE, TRUTH)
         admin = AI_EVAL.Api("admin", PASSWORD)
-        args = argparse.Namespace(repeat=2, keep=False)
+        args = argparse.Namespace(repeat=2, keep=False, user="admin")
         results = AI_EVAL.run_staged_case(d, json.loads((d / "case.json").read_text()), admin, {}, args, "20261115000000", d.parent / "truth")
     assert [(r["form"], r["run"]) for r in results] == [("question", 1), ("question", 2)], results
     assert all(r["pass"] and r["rca"]["pass"] and r["prose_pass"] and r["tokens"] == 100 for r in results)
@@ -554,9 +554,9 @@ def test_a_round_writes_its_report_after_each_case():
     seen = []
 
     def one_case(case_dir, case, *args):
-        seen.append(sorted(p.name for p in out.glob("*.json")) if out.exists() else [])
+        seen.append(sorted(p.name for p in out.glob("*-model.json")) if out.exists() else [])
         if case["id"] == "91_b":  # what a later case finds on disk is what a run killed there would leave
-            on_disk = json.loads(next(out.glob("*.json")).read_text())
+            on_disk = json.loads(next(out.glob("*-model.json")).read_text())
             assert [r["id"] for r in on_disk] == ["90_a"], on_disk
         return [{"id": case["id"], "title": "t", "form": "alert", "run": 1, "setup_error": "stand-in"}]
 
@@ -574,7 +574,9 @@ def test_a_round_writes_its_report_after_each_case():
             for k, v in saved.items():
                 setattr(AI_EVAL, k, v)
     assert seen[0] == [] and len(seen[1]) == 1
-    assert [r["id"] for r in json.loads(next(out.glob("*.json")).read_text())] == ["90_a", "91_b"]
+    assert [r["id"] for r in json.loads(next(out.glob("*-model.json")).read_text())] == ["90_a", "91_b"]
+    info = json.loads(next(out.glob("*-round.json")).read_text())
+    assert info["user"] == "admin" and info["before"]["default"]["investigations"] == 0 and "after" in info  # the investigator asks
 
 
 if __name__ == "__main__":

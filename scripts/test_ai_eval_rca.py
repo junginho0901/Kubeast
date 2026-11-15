@@ -87,7 +87,78 @@ def test_extra_cause_costs_points_also_ok_does_not():
                         cause("Deployment/shop-x/pricing", kind="rollout")]}
     s = rca.score_rca(answer(block), TRUTH, CALLS)
     assert s["pass"] and s["extras"] == ["Service/shop-x/pricing"]
-    assert s["score"] == 1.0 - rca.EXTRA_CAUSE_PENALTY
+    assert s["score"] == 0.75
+
+
+def test_one_resource_under_many_kinds_costs_the_wrong_ones():
+    block = {"causes": [cause("ConfigMap/shop-x/settings-b"), cause("ConfigMap/shop-x/settings-b", kind="dns"),
+                        cause("cm/shop-x/settings-b", kind="crash"), cause("ConfigMap/shop-x/settings-b", kind="rollout")]}
+    s = rca.score_rca(answer(block), TRUTH, CALLS)
+    assert s["pass"] and s["extras"] == ["ConfigMap/shop-x/settings-b", "cm/shop-x/settings-b"]
+    assert s["score"] == 0.5  # rollout is an accepted kind too: not an extra
+    s = rca.score_rca(answer({"causes": [cause("ConfigMap/shop-x/settings-b", kind="dns"), cause("ConfigMap/shop-x/settings-b", kind="node")]}), TRUTH, CALLS)
+    assert not s["pass"] and s["score"] == 0.0 and s["extras"] == ["ConfigMap/shop-x/settings-b"]
+    assert s["causes"][0]["answer_kind"] == "dns"
+
+
+def test_namespace_and_name_without_a_kind():
+    assert rca.split_resource("shop-09/catalog") == (None, "shop-09", "catalog")
+    assert rca.split_resource("svc/catalog") == ("service", None, "catalog")
+    assert rca.split_resource("Deployment/catalog") == ("deployment", None, "catalog")
+    assert rca.split_resource("deployments.apps/catalog") == ("deployment", None, "catalog")
+    assert rca.split_resource("NetworkChaos/delay") == ("networkchaos", None, "delay")
+    truth = {"control": False, "causes": [{"resource": "Deployment/shop-09/catalog", "kind": "resource_limit"}], "decoys": []}
+    s = rca.score_rca(answer({"causes": [cause("shop-09/catalog", kind="resource_limit")]}), truth, CALLS)
+    assert s["pass"] and s["score"] == 1.0 and s["extras"] == []
+    s = rca.score_rca(answer({"causes": [cause("shop-10/catalog", kind="resource_limit")]}), truth, CALLS)
+    assert not s["pass"] and s["extras"] == ["shop-10/catalog"]
+
+
+def test_a_bare_name_is_not_a_wildcard_decoy():
+    assert not rca.resource_matches("Node/*", "questions")
+    assert not rca.resource_matches("Node/*", "shop-x/questions")
+    assert rca.resource_matches("Node/*", "nodes/kind-worker")
+    block = {"causes": [cause("ConfigMap/shop-x/settings-b"), cause("questions", kind="storage")]}
+    s = rca.score_rca(answer(block), TRUTH, CALLS)
+    assert s["pass"] and s["decoys_taken"] == [] and s["extras"] == ["questions"]
+    assert s["score"] == 0.75
+
+
+def test_kind_spellings():
+    assert rca.normal_kind("ConfigChange") == "config_change"
+    assert rca.normal_kind("config-change") == "config_change"
+    assert rca.normal_kind("Config change") == "config_change"
+    assert rca.normal_kind("dependencyDown") == "dependency_down"
+    assert rca.normal_kind("OOM") == "oom"
+    for kind in ("ConfigChange", "config-change", "Config change", "CONFIG_CHANGE"):
+        s = rca.score_rca(answer({"causes": [cause("ConfigMap/shop-x/settings-b", kind=kind)]}), TRUTH, CALLS)
+        assert s["pass"] and s["score"] == 1.0, kind
+    s = rca.score_rca(answer({"no_fault": True, "causes": [cause("Deployment/shop-y/thumbnailer", kind="None")]}), CONTROL, CALLS)
+    assert s["pass"]
+
+
+def test_fence_tags():
+    body = json.dumps({"no_fault": False, "causes": [cause("ConfigMap/shop-x/settings-b")]})
+    for tag in ("rca", "RCA", "json rca", "rca json", " rca", "Rca"):
+        s = rca.score_rca(f"Words.\n\n```{tag}\n{body}\n```\n", TRUTH, CALLS)
+        assert s["block"] == "ok" and s["pass"], tag
+    for tag in ("json", ""):
+        s = rca.score_rca(f"Words.\n\n```{tag}\n{body}\n```\n", TRUTH, CALLS)
+        assert s["block"] == "loose" and s["pass"], tag
+    assert rca.score_rca("```yaml\n" + body + "\n```\n", TRUTH, CALLS)["block"] == "missing"
+    assert rca.score_rca('```json\n{"items": []}\n```\n', TRUTH, CALLS)["block"] == "missing"
+    text = "```json\n" + body + "\n```\n" + answer({"causes": [cause("Deployment/shop-x/checkout", kind="crash")]})
+    assert rca.score_rca(text, TRUTH, CALLS)["block"] == "ok"  # a tagged block is taken before a loose one
+    assert rca.strip_blocks("before\n```RCA\n{}\n```\nafter ```bash\nls\n```") == "before\n\nafter ```bash\nls\n```"
+
+
+def test_pass_grounded():
+    s = rca.score_rca(answer({"causes": [cause("ConfigMap/shop-x/settings-b", evidence=[1])]}), TRUTH, CALLS)
+    assert s["pass"] and s["pass_grounded"]
+    s = rca.score_rca(answer({"causes": [cause("ConfigMap/shop-x/settings-b", evidence=[3])]}), TRUTH, CALLS)
+    assert s["pass"] and not s["pass_grounded"]
+    s = rca.score_rca(answer({"causes": [cause("ConfigMap/shop-x/settings-b", evidence=[])]}), TRUTH, CALLS)
+    assert s["pass"] and not s["pass_grounded"] and s["ungrounded"] == 1
 
 
 def test_also_ok_is_not_an_extra():
@@ -142,6 +213,8 @@ def test_last_block_counts():
 
 def test_no_fault_on_a_real_fault_fails():
     assert not rca.score_rca(answer({"no_fault": True, "causes": []}), TRUTH, CALLS)["pass"]
+    s = rca.score_rca(answer({"no_fault": True, "causes": [cause("ConfigMap/shop-x/settings-b")], "path": GOOD_PATH}), TRUTH, CALLS)
+    assert not s["pass"] and s["score"] == 0.0 and s["causes"][0]["found"]
 
 
 def test_control_right_only_with_no_fault():
@@ -167,6 +240,13 @@ def test_fill_placeholders_keeps_the_original():
     filled = rca.fill_placeholders(truth, {"INJECT_TIME": "2026-11-13T10:00:00Z", "SETUP_TIME": "2026-11-13T09:50:00Z"})
     assert filled == {"fault_start": "2026-11-13T10:00:00Z", "fault_end": None, "note": "from 2026-11-13T09:50:00Z", "n": 3}
     assert truth["fault_start"] == "{{INJECT_TIME}}"
+
+
+def test_forms_take_turns_and_swap_each_run():
+    case = {"question": "q1", "question_vague": "q2"}
+    assert rca.ask_order(case, 3) == [("question", "q1", 1), ("question_vague", "q2", 1), ("question_vague", "q2", 2),
+                                      ("question", "q1", 2), ("question", "q1", 3), ("question_vague", "q2", 3)]
+    assert rca.ask_order({"question": "q1"}, 2) == [("question", "q1", 1), ("question", "q1", 2)]
 
 
 def test_question_forms_and_format():
