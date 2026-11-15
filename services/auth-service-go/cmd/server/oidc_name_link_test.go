@@ -81,6 +81,7 @@ func startLinkProvider(t *testing.T, settings func(*config.OIDCConfig), rules ..
 		t.Fatal(err)
 	}
 	db, pool := startFakePG(t, append(rules,
+		sessionState(0),
 		pgRule{match: "SELECT token_version FROM auth_users", oids: []uint32{integerOID}, rows: [][]any{{0}}},
 		pgRule{match: "FROM roles WHERE name",
 			oids: []uint32{integerOID, textOID, textOID, booleanOID, stampOID, stampOID},

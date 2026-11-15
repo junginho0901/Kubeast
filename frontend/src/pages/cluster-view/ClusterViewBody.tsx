@@ -51,7 +51,7 @@ export function ClusterViewBody() {
   useClusterAIContext({ nodes, summary, selectedNamespace, search })
 
   // Derived: the node boxes and map cells in order
-  const entries = useClusterDerived({ summary, nodes })
+  const entries = useClusterDerived({ summary, nodes, search })
 
   // 4 useEffects (ESC, context-menu auto-close, outside-click 2개)
   useClusterEffects()
@@ -75,6 +75,7 @@ export function ClusterViewBody() {
           all={summary?.all ?? 0}
           isLoading={isLoading}
           canDeletePod={canDeletePod}
+          nodeList={nodes}
         />
       )}
 

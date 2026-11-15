@@ -182,7 +182,7 @@ func podsFront(t testing.TB, api *podsAPI, shared bool) (*httptest.Server, *atom
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			user := req.Header.Get("X-Test-User")
 			perms := auth.PermissionMatrix{"alpha": {"resource.*.read"}}
-			next.ServeHTTP(w, req.WithContext(auth.WithPayload(req.Context(), auth.TokenPayload{UserID: user, Email: user, Perms: perms, Roles: map[string]string{"alpha": "read"}})))
+			next.ServeHTTP(w, req.WithContext(auth.WithPayload(req.Context(), auth.TokenPayload{UserID: user, Email: user, Perms: perms, Roles: map[string]string{"alpha": "Read"}})))
 		})
 	})
 	r.Use(h.ClusterMiddleware)

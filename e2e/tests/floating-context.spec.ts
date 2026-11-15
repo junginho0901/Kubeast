@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
+import { aiLayerScreens, clusterFor, prepareScreen, visitUrl } from './ai-layer-screens'
 import { turnToRow } from './list-pages'
 
 // The floating chat sends what is on screen (page_context) with each question. These tests stop the request in the
@@ -8,26 +9,11 @@ type Layer = { source: string; summary: string; data?: Record<string, unknown> }
 // session: the conversation the question went to (stand-in ids e2e-floating-ctx-1, -2 …)
 type PageContext = { path: string; page_type: string; base?: Layer | null; overlays: Layer[]; session?: string }
 
-// Every menu with a screen of its own, on the cluster that has what it shows: self (the dev install) for most,
-// default (the second cluster) for the pages that need Kyverno, metrics-server or OpenCost. Advanced Search sends
-// nothing until something is searched.
-const MENUS: [string, string][] = [
-  '/', '/cluster/namespaces', '/cluster/resource-graph', '/timeline', '/alerts', '/cluster/nodes',
-  '/workloads/pods', '/workloads/deployments', '/workloads/statefulsets', '/workloads/daemonsets', '/workloads/replicasets',
-  '/workloads/jobs', '/workloads/cronjobs', '/workloads/hpas', '/workloads/vpas', '/workloads/pdbs', '/storage',
-  '/network/services', '/network/endpoints', '/network/endpointslices', '/network/ingresses', '/network/ingressclasses',
-  '/network/networkpolicies', '/gateway/gateways', '/gateway/gatewayclasses', '/gateway/httproutes', '/gateway/grpcroutes',
-  '/gateway/referencegrants', '/gateway/backendtlspolicies', '/gateway/policies', '/gpu/dashboard', '/gpu/nodes', '/gpu/pods',
-  '/gpu/deviceclasses', '/gpu/resourceclaims', '/gpu/resourceclaimtemplates', '/gpu/resourceslices',
-  '/security/serviceaccounts', '/security/roles', '/security/clusterroles', '/security/rolebindings',
-  '/security/clusterrolebindings', '/configuration/configmaps', '/configuration/secrets', '/cluster/resourcequotas',
-  '/cluster/limitranges', '/cluster/priorityclasses', '/cluster/runtimeclasses', '/cluster/leases',
-  '/cluster/mutatingwebhookconfigurations', '/cluster/validatingwebhookconfigurations',
-  '/cluster/validatingadmissionpolicies', '/cluster/mutatingadmissionpolicies', '/custom-resources/instances',
-  '/custom-resources/groups', '/helm/releases', '/cluster-view',
-].map((path): [string, string] => [path, 'self']).concat([
-  ['/security/policyreports', 'default'], ['/monitoring', 'default'], ['/cost', 'default'],
-])
+// Every screen of the sidebar config (ai-layer-screens.ts) but those ai-layer-exempt.json names, on the cluster that
+// has what it shows: self (the dev install) for most, default (the second cluster) for the pages that need Kyverno,
+// metrics-server or OpenCost. ai-layers-every-screen.spec.ts (opt-in) holds the same screens in refused, failed, not
+// served and empty states.
+const MENUS: [string, string][] = aiLayerScreens().map((href): [string, string] => [href, clusterFor(href)])
 
 async function captureFloating(page: Page) {
   const sent: PageContext[] = []
@@ -112,10 +98,14 @@ test.describe('floating chat screen data', () => {
     await openChat(page)
     const missing: string[] = []
     for (const visit of ['first', 'again']) {
-      for (const [path, cluster] of MENUS) {
-        await navigate(page, `${path}?cluster=${cluster}`)
-        const ctx = await askForBase(page, sent, path)
-        if (ctx.path !== path || !ctx.base?.summary) missing.push(`${visit} ${path} (sent for ${ctx.path})`)
+      for (const [href, cluster] of MENUS) {
+        const path = href.split('?')[0]
+        await navigate(page, visitUrl(href, cluster))
+        // Advanced Search sends its layer once something is searched
+        await prepareScreen(page, href)
+        // Cluster Hygiene and Investigations read their reports for a while
+        const ctx = await askForBase(page, sent, path, 20000)
+        if (ctx.path !== path || !ctx.base?.summary) missing.push(`${visit} ${href} (sent for ${ctx.path})`)
       }
     }
     expect(missing).toEqual([])
@@ -364,20 +354,73 @@ test.describe('floating chat — a new conversation', () => {
   })
 })
 
+test.describe('floating chat — the keyboard shortcut', () => {
+  // ⌘/ on a Mac, Ctrl+/ elsewhere: Playwright's ControlOrMeta is the same choice for the browser's platform
+  test('⌘/ or Ctrl+/ opens the chat from a text field with the focus in its input, and closes it with the focus back', async ({ page }) => {
+    await page.goto('/admin/users')
+    const toggle = page.getByTestId('floating-chat-toggle')
+    const mac = await page.evaluate(() => /mac|iphone|ipad/i.test(navigator.platform))
+    await expect(toggle).toHaveAttribute('aria-keyshortcuts', mac ? 'Meta+Slash' : 'Control+Slash')
+    await expect(toggle).toHaveAttribute('title', mac ? 'Open AI Chat (⌘/)' : 'Open AI Chat (Ctrl+/)')
+
+    const field = page.getByTestId('admin-users-search')
+    await field.fill('abc')
+    await field.press('ControlOrMeta+Slash')
+    const panel = page.getByTestId('floating-chat-panel')
+    await expect(panel).toHaveCSS('opacity', '1')
+    await expect(page.getByTestId('floating-chat-input'), 'the window opens with the focus in its input').toBeFocused()
+    await expect(field, 'the shortcut typed nothing').toHaveValue('abc')
+
+    await page.keyboard.press('ControlOrMeta+Slash')
+    await expect(panel).toHaveCount(0)
+    await expect(field, 'the focus is back where it was').toBeFocused()
+    await expect(field).toHaveValue('abc')
+
+    // Escape closes it as before, the focus going back the same way
+    await page.keyboard.press('ControlOrMeta+Slash')
+    await expect(page.getByTestId('floating-chat-input')).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(panel).toHaveCount(0)
+    await expect(field).toBeFocused()
+
+    // opened from the page itself, it gives the focus to the button when it closes
+    await page.locator('h1').first().click()
+    await page.keyboard.press('ControlOrMeta+Slash')
+    await expect(page.getByTestId('floating-chat-input')).toBeFocused()
+    await page.keyboard.press('ControlOrMeta+Slash')
+    await expect(panel).toHaveCount(0)
+    await expect(toggle).toBeFocused()
+  })
+})
+
 test.describe('floating chat — signing out', () => {
-  // its own sign-in, so signing out does not end the session the other specs share
+  // A sign-out ends that sign-in on the server and auth_time is in whole seconds: an admin account of the run signs in
+  // and out here, so no token of the shared admin ends with it.
   test.use({ storageState: { cookies: [], origins: [] } })
 
-  test('signing out forgets the tab\'s floating conversation', async ({ page }) => {
-    const login = await page.request.post('/api/v1/auth/login', { data: { email: process.env.E2E_USER_EMAIL || 'admin', password: process.env.E2E_USER_PASSWORD || '' } })
-    expect(login.ok()).toBeTruthy()
-    const sent = await captureFloating(page)
-    await page.goto('/?cluster=self')
-    await ask(page, sent)
-    expect(await remembered(page)).toBe('e2e-floating-ctx-1')
+  test('signing out forgets the tab\'s floating conversation', async ({ page, request }) => {
+    const signIn = await request.post('/api/v1/auth/login', { data: { email: process.env.E2E_USER_EMAIL || 'admin', password: process.env.E2E_USER_PASSWORD || '' } })
+    expect(signIn.ok()).toBeTruthy()
+    const admin = { Authorization: `Bearer ${(await signIn.json()).access_token}`, 'X-Requested-With': 'XMLHttpRequest' }
+    const roles = (await (await request.get('/api/v1/auth/roles', { headers: admin })).json()) as { id: number; name: string }[]
+    const email = `e2e-floating-signout-${Date.now().toString(36)}@kubeast.local`
+    const password = 'E2e-floating-signout-throwaway-1!'
+    const made = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E floating sign-out', email, password, role_id: roles.find((r) => r.name === 'Admin')!.id } })
+    expect(made.status(), await made.text()).toBe(201)
+    const id = (await made.json()).id as string
+    try {
+      const login = await page.request.post('/api/v1/auth/login', { data: { email, password } })
+      expect(login.ok()).toBeTruthy()
+      const sent = await captureFloating(page)
+      await page.goto('/?cluster=self')
+      await ask(page, sent)
+      expect(await remembered(page)).toBe('e2e-floating-ctx-1')
 
-    await page.getByRole('button', { name: 'Log out' }).click()
-    await page.waitForURL('**/login')
-    expect(await remembered(page)).toBeNull()
+      await page.getByRole('button', { name: 'Log out' }).click()
+      await page.waitForURL('**/login')
+      expect(await remembered(page)).toBeNull()
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
+    }
   })
 })

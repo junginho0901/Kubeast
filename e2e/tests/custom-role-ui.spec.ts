@@ -53,6 +53,16 @@ test.describe('custom role in the UI', () => {
       await expect(notice, 'the same group').toHaveCount(0)
       await name.fill(`${roleName}-other`)
       await expect(notice).toHaveText(/ends the sessions|세션과 API 키 토큰이 끝나/)
+
+      // a name another role holds apart from letter case is said under the field, and Save waits (auth-service refuses it)
+      const taken = page.getByTestId('role-name-taken')
+      const save = page.getByTestId('role-dialog').getByRole('button', { name: /^(Save|저장)$/ })
+      await name.fill('ADMIN')
+      await expect(taken).toHaveText(/built-in role Admin apart from letter case|기본 역할 Admin의 이름과 같습니다/)
+      await expect(save, 'Save waits').toBeDisabled()
+      await name.fill(roleName.toUpperCase())
+      await expect(taken, 'its own name in capitals is free').toHaveCount(0)
+      await expect(save).toBeEnabled()
     } finally {
       await request.delete(`/api/v1/auth/admin/roles/${createdRole}`, { headers: bearer(admin), failOnStatusCode: false })
     }

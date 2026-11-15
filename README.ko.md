@@ -46,6 +46,7 @@ helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
 | [아키텍처](docs/ko/architecture.md) | 서비스 구성 · 컨테이너 이미지 · 자원 사용량 · 많은 사람이 쓸 때 메모리 |
 | [설정 (values.yaml)](docs/ko/configuration.md) | 차트 값 설명 |
 | [데이터베이스: TLS·백업·복원](docs/ko/database-backup-restore.md) | DB 연결 TLS · 백업·복원 · 보존 기간 |
+| [여러 대로 띄우기](docs/ko/high-availability.md) | 여러 대로 띄울 수 있는 서비스 · Redis와 데이터베이스 연결 · 대수와 autoscaling · 크기 표 |
 | [콘솔 메트릭](docs/ko/metrics.md) | Kubeast 자신의 `/metrics` |
 | [공급망 보안](docs/ko/supply-chain.md) | 이미지 스캔 · SBOM · 출처 증명 · 서명 |
 | [감사 로그 계획](docs/ko/audit-log-plan.md) | 감사 액션 카탈로그와 권한 매핑 |

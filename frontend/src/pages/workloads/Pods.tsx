@@ -84,9 +84,8 @@ export default function Pods() {
     placeholderData: keepSameRead(pageKey, ['offset', 'limit', 'sort', 'dir']),
     refetchInterval: (query) => podPagePollEvery(query.state.data),
   })
-  useEffect(() => {
-    if (page && page.total !== totalRows) setTotalRows(page.total)
-  }, [page, totalRows])
+  // in the render the answer comes, so no frame counts its rows with the total of the answer before
+  if (page && page.total !== totalRows) setTotalRows(page.total)
 
   // An open Pod drawer follows the list: when its row changed, its describe is read again.
   const lastPage = useRef<PodPage | undefined>(undefined)
@@ -323,6 +322,7 @@ spec:
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
         searching={!!search}
+        counted={page !== undefined}
         totalPages={totalPages}
         rowsPerPage={rowsPerPage}
         tableContainerRef={tableContainerRef}

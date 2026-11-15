@@ -8,6 +8,9 @@ import ko from '../i18n/locales/ko.json'
 import ForbiddenBanner from './ForbiddenBanner'
 import { hasPermission, type PermissionMatrix } from '@/utils/permissions'
 
+// what the notice tells the floating chat: sharedNotices.chat.test.ts
+vi.mock('@/hooks/useAIContext', () => ({ useAIContext: () => {} }))
+
 const state: { matrix: PermissionMatrix; clusterRole: string | null } = { matrix: {}, clusterRole: null }
 
 vi.mock('react-router-dom', () => ({ useLocation: () => ({ pathname: '/configmaps' }) }))
