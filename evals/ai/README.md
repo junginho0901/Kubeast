@@ -67,7 +67,7 @@ as above.
 | `undo_cmds` | shell steps that take the fault back; otherwise run after the last question |
 | `cooldown_seconds` | a pause after the teardown |
 | `hidden` | `true`: run only with `--hidden`, and the table shows only the total |
-| `group` | `hidden_cause`, `trap`, `control` or `past`, for people reading the results; the runner does not read it |
+| `group` | `chain`, `hidden_cause`, `trap`, `control` or `past`, for people reading the results; the runner does not read it |
 
 Order: namespace, `setup.yaml` (`SETUP_TIME`), `setup_cmds`, `wait`, `settle_seconds` + `baseline_seconds`,
 `inject_cmds`, `inject_wait`, the asks (a `fault_duration_seconds` undo at its time), `undo_cmds`, the namespace
@@ -83,26 +83,39 @@ Reported beside it: `started_at` within the tolerance, the required path hops in
 `evidence` points at no call that answered. `expect` is still checked, as `prose_pass`. A truth's `symptom`,
 `distractor_at`, `variants_note` and a hop's `note` are for people.
 
-`evals/ai-hard/` holds sixteen cases made of plain Kubernetes objects. Each folder has `case.json`, `truth.json`, the
-manifests it applies and `NOTES.md`: what the AI has to notice, the trap, how it is scored and what is unsure. None
-has run on a cluster yet, so their sizes and waits are first guesses for the first run to measure. They use only
-`docker.io/library/busybox:1.38.0`, namespaces `shop-NN` (and `edge-15`, `members-18`), business names and no
-Secret. The fault comes from data or settings, never from a branch in the code, and nothing a case applies names it
-(`scripts/test_ai_eval_cases.py`); case 20's new release is a boot script in a ConfigMap, the stand-in for a new
-image. Their answers lean on logs: run `scripts/kind-logsearch.sh up` first. The numbers leave room for the cases that
-need the OpenTelemetry demo or Chaos Mesh (01–03, 07, 10, 11), not written yet. Cases 17–22 follow outage shapes
-common in production — a batch read that saturates a database, a stale in-cluster address, a route without its
-hostname, a release that boots in one environment only, an OOM cascade, workers past the memory limit — each rebuilt
-small; the scripts whose behaviour they depend on (headers through busybox httpd, memory held per worker or shard and
-where the OOM kill lands) were checked in a local busybox 1.38.0 container, not on kind.
+`evals/ai-hard/` holds twenty-two cases. Each folder has `case.json`, `truth.json`, the manifests it applies and
+`NOTES.md`: what the AI has to notice, the trap, how it is scored and what is unsure. None has run on a cluster yet, so
+their sizes and waits are first guesses for the first run to measure. Nineteen are made of plain Kubernetes objects:
+they use only `docker.io/library/busybox:1.38.0`, namespaces `shop-NN` (and `edge-15`, `members-18`, `reports-03`),
+business names and no Secret. The fault comes from data or settings, never from a branch in the code, and nothing a
+case applies names it (`scripts/test_ai_eval_cases.py`); case 20's new release is a boot script in a ConfigMap, the
+stand-in for a new image. Their answers lean on logs: run `scripts/kind-logsearch.sh up` first. Cases 01, 07 and 10
+run on the OpenTelemetry demo (`scripts/kind-otel-demo.sh up`, metrics on), so their evidence is in traces and the
+call graph: their own namespace holds only `uptime-check`, which asks the shop through `frontend-proxy` and logs what
+it got, and the fault is made in `otel-demo` — a scale (01), a Chaos Mesh NetworkChaos in `chaos-mesh` (07,
+`scripts/kind-chaos.sh up`) and a schema change left open in the demo's database through `kubectl exec` (10). The
+demo's collector writes the service graph metrics (`traces_service_graph_*`, with the namespace on both sides) that
+the AI's call graph reads; a store the demo does not instrument is a node named by the calling span's
+`server.address`. Cases 17–22 follow outage shapes common in production — a batch read that saturates a database, a
+stale in-cluster address, a route without its hostname, a release that boots in one environment only, an OOM cascade,
+workers past the memory limit — each rebuilt small; the scripts whose behaviour they depend on (headers through
+busybox httpd, memory held per worker or shard and where the OOM kill lands) were checked in a local busybox 1.38.0
+container, not on kind. Every group of more than one case has a hidden one: 02 (chain), 08 and 18 (hidden cause), 11
+(trap), 15 (control); `scripts/test_ai_eval_cases.py` holds it.
 
 | Case | Group | Problem | Needs on dev besides logs |
 |---|---|---|---|
+| 01 | chain | the cart's store is scaled to 0: cart calls fail, checkouts fail two calls up | the OpenTelemetry demo |
+| 02 | chain, hidden | a queue's topic config caps a fetch at one message; both consumer groups fall behind, nothing fails | |
+| 03 | chain | a batch Job in another namespace with no CPU limit saturates the node; three services that share no call slow together | the second cluster's Prometheus (node-exporter, cAdvisor) and metrics-server |
 | 04 | hidden cause | a new NetworkPolicy leaves one caller with no allow to one backend; both sides look healthy | `self`, whose kindnet enforces NetworkPolicy |
 | 05 | hidden cause | one workload is rolled out with its own `dnsConfig`; only its short-name calls fail | |
 | 06 | hidden cause | a rollout to a new ConfigMap with a bad value, held at 4 old and 2 new pods; asked at 5 and 65 minutes | |
+| 07 | hidden cause | the packets from one service to one caller are held 700 ms: both ends look healthy, only the traces show where | the OpenTelemetry demo and Chaos Mesh |
 | 08 | hidden cause, hidden | a scale-up fills the ResourceQuota; a CronJob's pods cannot be created and the data goes stale | |
 | 09 | hidden cause | a 25m CPU limit makes one service slow with no error; a busier pod is the decoy | the second cluster's Prometheus (cAdvisor, kube-state-metrics) |
+| 10 | trap | a schema change left open locks two tables of the shared database; its callers fail, then the role's connections run out | the OpenTelemetry demo |
+| 11 | trap, hidden | two unrelated faults at once: a release whose image tag does not exist, and a Service switched to a version not deployed | |
 | 12 | trap | an old crash-looping pod with a DNS-looking error, and a quiet in-place ConfigMap edit | |
 | 13 | control | no fault; one unrelated container restart five minutes before the question | |
 | 14 | control | no fault; a clean rollout four minutes before the question | |

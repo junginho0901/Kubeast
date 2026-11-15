@@ -1,0 +1,182 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: search}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: search}}
+  template:
+    metadata: {labels: {app: search}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: WORK_BYTES, value: "6000000"}
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/cgi-bin
+              cat > /www/cgi-bin/q <<'EOF'
+              #!/bin/sh
+              h=$(head -c "$WORK_BYTES" /dev/zero | sha256sum | cut -c1-12)
+              printf 'Content-Type: application/json\r\n\r\n{"hits":[101,102,103],"key":"%s"}\n' "$h"
+              EOF
+              chmod 755 /www/cgi-bin/q
+              echo "level=info msg=\"search started\""
+              exec httpd -f -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 20m, memory: 16Mi}, limits: {cpu: "1", memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: search}
+spec:
+  selector: {app: search}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: pricing}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: pricing}}
+  template:
+    metadata: {labels: {app: pricing}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: WORK_BYTES, value: "2000000"}
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/cgi-bin
+              cat > /www/cgi-bin/price <<'EOF'
+              #!/bin/sh
+              h=$(head -c "$WORK_BYTES" /dev/zero | sha256sum | cut -c1-12)
+              printf 'Content-Type: application/json\r\n\r\n{"item":101,"price":129900,"rev":"%s"}\n' "$h"
+              EOF
+              chmod 755 /www/cgi-bin/price
+              echo "level=info msg=\"pricing started\""
+              exec httpd -f -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 20m, memory: 16Mi}, limits: {cpu: "1", memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: pricing}
+spec:
+  selector: {app: pricing}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: thumbnails}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: thumbnails}}
+  template:
+    metadata: {labels: {app: thumbnails}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: WORK_BYTES, value: "4000000"}
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/cgi-bin
+              cat > /www/cgi-bin/resize <<'EOF'
+              #!/bin/sh
+              h=$(head -c "$WORK_BYTES" /dev/zero | sha256sum | cut -c1-12)
+              printf 'Content-Type: application/json\r\n\r\n{"image":"101-320.jpg","etag":"%s"}\n' "$h"
+              EOF
+              chmod 755 /www/cgi-bin/resize
+              echo "level=info msg=\"thumbnails started\""
+              exec httpd -f -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 20m, memory: 16Mi}, limits: {cpu: "1", memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: thumbnails}
+spec:
+  selector: {app: thumbnails}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: storefront}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: storefront}}
+  template:
+    metadata: {labels: {app: storefront}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              now_cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }
+              call() {
+                t0=$(now_cs)
+                if out=$(wget -q -T 10 -O /dev/null "$2" 2>&1); then
+                  echo "level=info msg=\"$3\" upstream=$1 duration_ms=$(( ($(now_cs) - t0) * 10 ))"
+                else
+                  echo "level=error msg=\"upstream request failed\" upstream=$1 duration_ms=$(( ($(now_cs) - t0) * 10 )) err=\"$(echo $out)\""
+                fi
+              }
+              echo "level=info msg=\"storefront started\""
+              while true; do
+                call search http://search:8080/cgi-bin/q "search results page"
+                call pricing http://pricing:8080/cgi-bin/price "price shown"
+                sleep 2
+              done
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: image-worker}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: image-worker}}
+  template:
+    metadata: {labels: {app: image-worker}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              now_cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }
+              echo "level=info msg=\"image-worker started\""
+              n=0
+              while true; do
+                n=$((n + 1))
+                t0=$(now_cs)
+                if out=$(wget -q -T 10 -O /dev/null "http://thumbnails:8080/cgi-bin/resize?id=$((100 + n % 40))" 2>&1); then
+                  echo "level=info msg=\"thumbnail made\" upstream=thumbnails duration_ms=$(( ($(now_cs) - t0) * 10 ))"
+                else
+                  echo "level=error msg=\"upstream request failed\" upstream=thumbnails duration_ms=$(( ($(now_cs) - t0) * 10 )) err=\"$(echo $out)\""
+                fi
+                sleep 3
+              done
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}

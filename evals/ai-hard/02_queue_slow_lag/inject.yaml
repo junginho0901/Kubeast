@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: order-events-config}
+data:
+  broker.properties: |
+    fetch.max.bytes=1024
+    retention.ms=3600000
+    segment.bytes=104857600

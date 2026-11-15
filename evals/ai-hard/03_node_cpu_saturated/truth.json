@@ -1,0 +1,27 @@
+{
+ "id": "03_node_cpu_saturated",
+ "control": false,
+ "symptom": "search, pricing and thumbnails calls go from tens of milliseconds to seconds at the same moment; the three services do not call each other; the node's CPU is at 100 %, most of it a Job in another namespace; no error, no restart, no throttling",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "Node/kubeast-b-control-plane",
+   "kind": "node",
+   "accept_resources": ["^nodes?$", "control-plane", "monthly-report", "reports-03"],
+   "accept_kinds": ["resource_limit"]
+  }
+ ],
+ "path": [
+  {"resource": "Node/kubeast-b-control-plane", "role": "cause", "required": true, "accept": ["^nodes?$", "control-plane", "monthly-report"], "note": "a Job run by hand from a monthly CronJob in reports-03 keeps one busy process per CPU, with a 500m request and no limit; its share of the contended CPU is twenty-five times a shop service's"},
+  {"resource": "Deployment/shop-03/search", "role": "symptom", "required": true, "accept": ["(^|/)(search|pricing|thumbnails|storefront|image-worker)$"]}
+ ],
+ "also_ok": [],
+ "decoys": [
+  {"resource": "Deployment/shop-03/search", "why": "the busiest service of shop-03 before and after; slowed like the others, under its limit, nothing in it changed"},
+  {"resource": "Deployment/shop-03/thumbnails", "why": "slowed like the others; nothing in it changed"},
+  {"resource": "Deployment/shop-03/storefront", "why": "a caller; it only measures the slow answers"}
+ ],
+ "variants_note": "The dev clusters have one node each, so 'only the pods on that node' cannot be shown against pods on another; what the case keeps is three services that share no call slowing together, with the node as what they share. Naming the Job (or its CronJob) counts as naming the cause."
+}

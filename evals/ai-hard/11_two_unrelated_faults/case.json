@@ -1,0 +1,50 @@
+{
+ "id": "11_two_unrelated_faults",
+ "title": "Two unrelated faults at once: a release that cannot pull its image, and a Service switched to a version that is not there",
+ "group": "trap",
+ "cluster": "self",
+ "namespace": "shop-11",
+ "question": "self 클러스터 shop-11에서 상품 이미지가 안 뜨고 주문도 실패한대. 원인이 뭐야?",
+ "question_vague": "self 클러스터 shop-11 사이트 여기저기서 문제가 난다는데 원인 찾아줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "images"
+  ],
+  [
+   "ImagePull",
+   "ErrImagePull",
+   "1\\.38\\.0-r2",
+   "이미지 (태그|받|pull)"
+  ],
+  [
+   "inventory"
+  ],
+  [
+   "selector",
+   "셀렉터",
+   "선택자",
+   "v2",
+   "endpoint",
+   "엔드포인트"
+  ]
+ ],
+ "tools": [],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/images deploy/inventory deploy/orders deploy/storefront --timeout=10s",
+ "wait_seconds": 240,
+ "baseline_seconds": 240,
+ "inject_cmds": [
+  "kubectl -n $NS set image deploy/images main=docker.io/library/busybox:1.38.0-r2",
+  "kubectl -n $NS patch service inventory --type=merge -p '{\"spec\":{\"selector\":{\"app\":\"inventory\",\"version\":\"v2\"}}}'"
+ ],
+ "inject_wait": "kubectl -n $NS logs deploy/storefront --since=30s | grep 'request failed' | grep -q 'upstream=images' && kubectl -n $NS logs deploy/storefront --since=30s | grep 'request failed' | grep -q 'upstream=orders'",
+ "inject_wait_seconds": 180,
+ "ask_after_seconds": [360],
+ "undo_cmds": [
+  "kubectl -n $NS set image deploy/images main=docker.io/library/busybox:1.38.0",
+  "kubectl -n $NS patch service inventory --type=merge -p '{\"spec\":{\"selector\":{\"version\":\"v1\"}}}'"
+ ],
+ "cooldown_seconds": 30,
+ "hidden": true,
+ "timeout_seconds": 420
+}
