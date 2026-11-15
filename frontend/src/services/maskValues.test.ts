@@ -8,6 +8,7 @@ import { MessageBubble } from '@/pages/ai-chat/MessageBubble'
 import type { Message } from '@/pages/ai-chat/types'
 import { ChatStreamManager } from './chatStreamManager'
 import { stripToolDetails } from './chatTextUtils'
+import { resetSessionState } from './auth'
 import { forgetMaskValues, maskValuesFrom, maskValuesOf, rememberMaskValues, revealText } from './maskValues'
 
 // The values behind an answer's numbered placeholders come once with the saved answer and are drawn in their place, in
@@ -45,6 +46,12 @@ describe('the pairs a mask_values event carries', () => {
     expect(maskValuesOf(100)).toEqual(VALUES)
     forgetMaskValues()
     expect(maskValuesOf(100)).toBeUndefined()
+  })
+
+  it('forgets them when the session changes: a sign-out, or someone signing in on the tab without one', () => {
+    rememberMaskValues(7, VALUES)
+    resetSessionState()
+    expect(maskValuesOf(7)).toBeUndefined()
   })
 })
 

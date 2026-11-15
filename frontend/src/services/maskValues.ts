@@ -1,7 +1,10 @@
 // The values behind a chat answer's numbered placeholders (<EMAIL_1>, <PHONE_1>, <RRN_1>, <CARD_1>), for the person who
 // asked, whose own identity read them: ai-service sends them once with the saved answer (`mask_values`), and the answer is
 // drawn with them in the placeholders' place (chatMarkdown's revealPlaceholders). The answer's text, Copy and every save
-// keep the placeholders. They live in this tab's memory only: a reload or signing out shows the placeholders again.
+// keep the placeholders. They live in this tab's memory only: a reload, signing out or someone else signing in on the tab
+// shows the placeholders again (onSessionChange).
+
+import { onSessionChange } from './auth'
 
 export type MaskValues = Readonly<Record<string, string>>
 
@@ -49,3 +52,5 @@ export function maskValuesOf(messageId: number | null | undefined): MaskValues |
 export function forgetMaskValues() {
   byMessage.clear()
 }
+
+onSessionChange(forgetMaskValues)
