@@ -32,6 +32,12 @@ def read_back(content, switch, tool="k8s_get_pod_logs"):
     return entry["result"]
 
 
+@pytest.mark.parametrize("value,on", [("true", True), ("YES", True), (" on ", True), ("1", True), ("false", False), ("", False)])
+def test_the_switch_reads_as_every_switch_does(monkeypatch, value, on):
+    monkeypatch.setenv("AI_TOOL_RESULTS_JSON", value)
+    assert tool_results.enabled() is on
+
+
 def test_off_the_model_reads_each_answer_as_it_came(monkeypatch):
     monkeypatch.delenv("AI_TOOL_RESULTS_JSON", raising=False)
     for text in [PLANTED, '{"a": 1}', "", '{"items": [{"cut']:

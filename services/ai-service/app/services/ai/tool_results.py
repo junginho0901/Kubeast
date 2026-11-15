@@ -4,9 +4,9 @@ it cannot close or read as more than data; off, the model reads the answer as be
 from __future__ import annotations
 
 import json
-import os
 from typing import Any, Optional
 
+from app.services import switch
 from app.services.ai import formatters
 
 # Tools whose answer is text a container or the cluster wrote as it is: a log line that is one JSON object stays a string.
@@ -14,7 +14,7 @@ RAW_TEXT_TOOLS = frozenset({"k8s_get_pod_logs", "k8s_describe_resource", "k8s_ge
 
 
 def enabled() -> bool:
-    return os.getenv("AI_TOOL_RESULTS_JSON", "false").strip().lower() in ("true", "1", "on")
+    return switch.env_on("AI_TOOL_RESULTS_JSON")
 
 
 def as_json(tool: str, text: str, args: Optional[dict] = None) -> str:
