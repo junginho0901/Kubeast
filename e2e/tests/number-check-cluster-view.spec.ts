@@ -275,11 +275,16 @@ test.describe('Cluster View — number check', () => {
   })
 
   test('the floating chat is told the map\'s numbers, a node ready as kubectl prints it', async ({ page }) => {
-    // nodes as k8s-service writes kubectl's STATUS: two are ready (the first part is Ready)
+    // nodes as k8s-service writes kubectl's STATUS, beside the cluster's own (whatever their number; the node list's
+    // watch brings those again): of the five added, two are ready (the first part is Ready) and two cordoned
     const STATUSES = ['Ready', 'NotReady', 'Unknown', 'Ready,SchedulingDisabled', 'NotReady,SchedulingDisabled']
+    const own = { total: 0, ready: 0, cordoned: 0 }
     await page.route(/\/api\/v1\/cluster\/nodes(\?|$)/, async (route) => {
       const real = await (await route.fetch()).json() as { name: string; status: string }[]
-      return route.fulfill({ json: STATUSES.map((status, i) => ({ ...real[0], name: i === 0 ? real[0].name : `e2e-cv-node-${i}`, status })) })
+      own.total = real.length
+      own.ready = real.filter((n) => n.status.split(',')[0] === 'Ready').length
+      own.cordoned = real.filter((n) => n.status.split(',').includes('SchedulingDisabled')).length
+      return route.fulfill({ json: [...real, ...STATUSES.map((status, i) => ({ ...real[0], name: `e2e-cv-node-${i}`, status }))] })
     })
     const sent: { path: string; base?: { data?: { stats?: Record<string, number>; filters?: Record<string, string> } } | null }[] = []
     await page.route(/\/api\/v1\/sessions(\?|$)/, (route) =>
@@ -309,7 +314,7 @@ test.describe('Cluster View — number check', () => {
     await chooseNamespace(page, NS)
     await expect.poll(async () => cellTotals(await mapCells(page)), { timeout: 15_000 }).toEqual(perNode(pods(`-n ${NS}`)))
     await expect.configure({ soft: true }).poll(async () => (await ask())?.stats, { timeout: 15_000 }).toMatchObject({
-      total_nodes: STATUSES.length, ready_nodes: 2, cordoned_nodes: 2, total_pods: 6, warning_pods: KNOWN.warn, error_pods: KNOWN.error,
+      total_nodes: own.total + STATUSES.length, ready_nodes: own.ready + 2, cordoned_nodes: own.cordoned + 2, total_pods: 6, warning_pods: KNOWN.warn, error_pods: KNOWN.error,
     })
 
     // searched: the counts are of the pods found, named with the search next to the whole

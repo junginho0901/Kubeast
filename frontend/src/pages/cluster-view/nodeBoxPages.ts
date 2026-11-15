@@ -29,14 +29,15 @@ export interface OverviewPageState {
   anchor: string | null
 }
 
-// The overview page shown: the page holding the box it was turned to, so a node added or removed before that box does
-// not move the view (a pod coming or going moves no node: pages are by node); that node gone, the same page number,
-// never past the last. `keys` are the boxes' ?node= values in the map's order.
+// The overview page shown: the page whose first box is nearest the box it was turned to, so a node added or removed
+// before that box keeps nine of the ten boxes on screen and ten nodes keep all ten (a pod coming or going moves no
+// node: pages are by node); that node gone, the same page number. Never past the last. `keys` are the boxes' ?node=
+// values in the map's order.
 export function overviewPage(keys: readonly string[], state: OverviewPageState): number {
   const total = Math.max(1, Math.ceil(keys.length / NODE_BOXES_PER_PAGE))
   const at = state.anchor === null ? -1 : keys.indexOf(state.anchor)
-  if (at >= 0) return boxPageOf(at).page
-  return Math.min(Math.max(1, Math.floor(state.page) || 1), total)
+  const page = at >= 0 ? Math.round(at / NODE_BOXES_PER_PAGE) + 1 : Math.floor(state.page) || 1
+  return Math.min(Math.max(1, page), total)
 }
 
 type Named = { name: string; namespace: string }
@@ -89,28 +90,46 @@ export function nodeViewPage(
   return { ...nodePodsPage(keys.length, wanted), gone: view.pod !== null && focus < 0 }
 }
 
+// The address the node's own view should hold while it follows the pod a search opened: that pod's page, so the page
+// shown last is the one kept if the pod then goes. Null when the address already says it, or nothing is followed.
+export function followedPage(view: { page: number | null; pod: string | null }, shown: { page: number; gone: boolean }): { page: number; pod: string } | null {
+  if (view.pod === null || shown.gone || view.page === shown.page) return null
+  return { page: shown.page, pod: view.pod }
+}
+
+// Where a search typed in the node's own view goes: the first pod (by name) it matches among those shown, that pod
+// followed; null when none matches.
+export function searchStart<T extends Named>(ordered: readonly T[], matches: (pod: T) => boolean): { page: number; pod: string } | null {
+  const i = ordered.findIndex(matches)
+  return i < 0 ? null : { page: nodePageOf(i), pod: podKey(ordered[i]) }
+}
+
 export interface BoxShown {
   node: string
   shown: number
   total: number
+  /** the node's STATUS when it is not plain Ready (NotReady, Unknown, SchedulingDisabled) */
+  status?: string
 }
 
-// What the floating chat is told of the overview: the page of boxes shown of how many, and for each box how many of
-// its pods it draws. One page of whole boxes shows what the map's layer names (the search too): no layer of its own.
+const notReadyText = (status?: string) => (status && status !== 'Ready' ? ` (${status})` : '')
+
+// What the floating chat is told of the overview while it shows boxes: the page of boxes of how many, and for each box
+// its node's STATUS when not Ready and how many of its pods it draws. It stays while the overview is on screen, one
+// page or many, so it never comes back later as the newest layer (the top window) over a window opened since.
 export function boxPageLayer(page: number, totalPages: number, total: number, boxes: readonly BoxShown[], search: string): AIContextInput | null {
-  const cut = boxes.some((b) => b.shown < b.total)
-  if (totalPages <= 1 && !cut) return null
+  if (boxes.length === 0) return null
   const { start, end } = cellsOfPage(page, total)
   const searched = search ? ` · 검색 '${search}'` : ''
-  const each = boxes.map((b) => (b.shown < b.total ? `${b.node} Pod ${b.total}개 중 ${b.shown}개` : `${b.node} Pod ${b.total}개`))
+  const each = boxes.map((b) => `${b.node}${notReadyText(b.status)} ${b.shown < b.total ? `Pod ${b.total}개 중 ${b.shown}개` : `Pod ${b.total}개`}`)
   return {
     source: 'ClusterViewNodeBoxes',
-    summary: `클러스터 뷰 노드 박스 ${page}/${totalPages}쪽 — 노드 ${total}개 중 ${start + 1}-${end}번째${searched}: ${each.join(', ')}`,
+    summary: `클러스터 뷰 Node 박스 ${page}/${totalPages}쪽 — Node ${total}개 중 ${start + 1}-${end}번째${searched}: ${each.join(', ')}`,
     data: {
       node_boxes: {
         pagination: { current_page: page, total_pages: totalPages, page_size: NODE_BOXES_PER_PAGE, total_count: total, showing_count: boxes.length },
         nodes: boxes.map((b) => b.node),
-        boxes: boxes.map((b) => ({ node: b.node, pods_shown: b.shown, pods_total: b.total })),
+        boxes: boxes.map((b) => ({ node: b.node, ...(notReadyText(b.status) ? { status: b.status } : {}), pods_shown: b.shown, pods_total: b.total })),
         ...(search ? { search } : {}),
       },
     },
@@ -129,7 +148,9 @@ export interface NodeViewShown {
   matches: number
   pods: string[]
   focus: string | null
-  gone: boolean
+  /** why the opened pod is not shown: it left the node, or the namespace filter leaves it out */
+  gone: false | 'gone' | 'filtered'
+  status?: string
 }
 
 // What the floating chat is told of the node's own view: the node, the page, the range of its pods shown, whether only
@@ -138,19 +159,32 @@ export function nodeViewLayer(v: NodeViewShown): AIContextInput {
   const only = v.problemsOnly ? ' · 문제 Pod만' : ''
   const searched = v.search ? ` · 검색 '${v.search}' 맞는 Pod ${v.matches}개` : ''
   const range = v.total === 0 ? 'Pod 0개' : `Pod ${v.total}개 중 ${v.start + 1}-${v.end}번째`
-  const focus = v.focus === null ? '' : v.gone ? ` · 검색으로 연 Pod ${v.focus}는 이 Node에 더 없음` : ` · 검색으로 연 Pod ${v.focus}`
+  const focus = v.focus === null ? ''
+    : v.gone === 'gone' ? ` · 검색으로 연 Pod ${v.focus}: 이 Node에 더 없음`
+      : v.gone === 'filtered' ? ` · 검색으로 연 Pod ${v.focus}: Namespace 필터 밖`
+        : ` · 검색으로 연 Pod ${v.focus}`
   return {
     source: 'ClusterViewNodePods',
-    summary: `클러스터 뷰 Node ${v.node}만 보기 ${v.page}/${v.totalPages}쪽${only} — ${range}${searched}${focus}`,
+    summary: `클러스터 뷰 Node ${v.node}${notReadyText(v.status)}만 보기 ${v.page}/${v.totalPages}쪽${only} — ${range}${searched}${focus}`,
     data: {
       node_view: {
         node: v.node,
+        ...(notReadyText(v.status) ? { status: v.status } : {}),
         pagination: { current_page: v.page, total_pages: v.totalPages, page_size: NODE_PODS_PER_PAGE, total_count: v.total, showing_count: v.end - v.start },
         problems_only: v.problemsOnly,
         ...(v.search ? { search: v.search, matching_pods: v.matches } : {}),
-        ...(v.focus !== null ? { opened_on_pod: v.focus, opened_pod_gone: v.gone } : {}),
+        ...(v.focus !== null ? { opened_on_pod: v.focus, opened_pod_gone: v.gone === 'gone', ...(v.gone === 'filtered' ? { opened_pod_filtered_out: true } : {}) } : {}),
         pods: v.pods,
       },
     },
+  }
+}
+
+// What the floating chat is told of a node's own view whose node the cluster does not list (a link of another cluster).
+export function nodeMissingLayer(node: string): AIContextInput {
+  return {
+    source: 'ClusterViewNodePods',
+    summary: `클러스터 뷰 Node ${node}만 보기 — 이 클러스터에 그 Node가 없음`,
+    data: { node_view: { node, missing: true } },
   }
 }

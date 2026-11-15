@@ -75,6 +75,7 @@ export function ClusterViewBody() {
           all={summary?.all ?? 0}
           isLoading={isLoading}
           canDeletePod={canDeletePod}
+          nodeList={nodes}
         />
       )}
 

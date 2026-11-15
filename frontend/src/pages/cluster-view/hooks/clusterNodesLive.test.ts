@@ -1,9 +1,9 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, QueryObserver } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 import type { PodNodeSummary } from '@/services/api'
-import { NODE_LIST_KEY, useClusterPodsQuery } from './useClusterPodsQuery'
+import { NODE_LIST_KEY, slimNodes, useClusterPodsQuery } from './useClusterPodsQuery'
 import { deriveEntries } from './useClusterDerived'
 
 // Cluster View's node list follows the cluster: it is read once and then kept by the Nodes page's own watch of
@@ -47,5 +47,28 @@ describe('the live node list', () => {
     expect(order(summary(['w-3', 'cp-0', 'w-2', 'w-1', 'cp-1']), marked)).toEqual(['cp-0', 'cp-1', 'w-1:NotReady', 'w-2:Ready,SchedulingDisabled', 'w-3'])
     // w-3 removed: its pods gone from the map, its node from the list
     expect(order(summary(['cp-0', 'w-2', 'w-1', 'cp-1']), marked.filter((n) => n.name !== 'w-3'))).toEqual(['cp-0', 'cp-1', 'w-1:NotReady', 'w-2:Ready,SchedulingDisabled'])
+  })
+
+  it('keeps the same node list, and so the same entries, for a frame that changes nothing Cluster View reads', () => {
+    const client = new QueryClient()
+    const row = (status: string, age: string) => ({ name: 'w-1', roles: ['worker'], status, age, version: 'v1.37.0', internal_ip: '10.0.0.1' })
+    client.setQueryData(NODE_LIST_KEY, [row('Ready', '1d')])
+    const observer = new QueryObserver(client, { queryKey: NODE_LIST_KEY, queryFn: async () => [], select: slimNodes, enabled: false })
+    const stop = observer.subscribe(() => {})
+    const first = observer.getCurrentResult().data
+    const summary = { nodes: [{ node: 'w-1', total: 1, ok: 1, warn: 0, error: 0 }], total: 1, all: 1, revision: 'r', source: 'index' } as PodNodeSummary
+    // a status report: the age and other fields change, the name, roles and STATUS do not
+    client.setQueryData(NODE_LIST_KEY, [row('Ready', '1d1h')])
+    const same = observer.getCurrentResult().data
+    // it turns NotReady: a new list
+    client.setQueryData(NODE_LIST_KEY, [row('NotReady', '1d1h')])
+    const changed = observer.getCurrentResult().data
+    stop()
+    expect(first).toEqual([{ name: 'w-1', roles: ['worker'], status: 'Ready' }])
+    expect(same).toBe(first)
+    expect(changed).not.toBe(first)
+    expect(changed).toEqual([{ name: 'w-1', roles: ['worker'], status: 'NotReady' }])
+    // useClusterDerived keeps its entries while summary and nodes keep their references (useMemo); a new list moves them
+    expect(deriveEntries(summary, changed)[0].status).toBe('NotReady')
   })
 })

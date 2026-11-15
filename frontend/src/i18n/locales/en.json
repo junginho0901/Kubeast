@@ -2667,15 +2667,18 @@
     "noPods": "No pods found",
     "box": {
       "shown": "Showing {{shown}} of {{total}} Pods",
-      "more": "+{{count}} show all on this node",
-      "open": "Show all on this node"
+      "more": "+{{count}} show all on this Node",
+      "moreMatching": "+{{count}} matching · show all Pods on this Node",
+      "open": "Show all Pods on this Node"
     },
     "nodeView": {
       "path": "Cluster View path",
-      "all": "All nodes",
-      "problemsOnly": "Problem pods only",
-      "gone": "Pod {{pod}} is no longer on this node.",
-      "matches": "Pods matching \"{{query}}\" are outlined: {{count}} on this node."
+      "all": "All Nodes",
+      "problemsOnly": "Problem Pods only",
+      "gone": "Pod {{pod}} is no longer on this Node; a search finds it if it runs on another.",
+      "filtered": "Pod {{pod}} is outside the namespace filter ({{namespace}}).",
+      "missing": "Node {{node}} is not in this cluster.",
+      "matches": "Pods matching \"{{query}}\" are outlined: {{count}} on this Node."
     },
     "tabs": {
       "summary": "Summary",
@@ -2750,8 +2753,9 @@
       "error": "Error",
       "warn": "Warning",
       "ok": "Healthy",
-      "hint": "A cell is a node, a dot a pod. Click a cell to see all its pods.",
-      "hintPaged": "A cell is a node, a dot a pod; the outlined cells are the boxes below. Click a cell to see all its pods."
+      "hint": "A cell is a Node, a dot a Pod. Click a cell, or press Enter on it, to see all its Pods.",
+      "hintPaged": "A cell is a Node, a dot a Pod; the outlined cells are the boxes below. Click a cell, or press Enter on it, to see all its Pods.",
+      "openFirst": "Open {{node}}, the first of them"
     }
   },
   "namespaces": {

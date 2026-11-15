@@ -19,6 +19,16 @@ interface Params {
 // the Nodes page's key, so both read and follow one list
 export const NODE_LIST_KEY = ['cluster', 'nodes']
 
+export type ClusterViewNode = { name: string; roles: string[]; status: string }
+
+// What Cluster View reads of a node. A watch frame that changes nothing of it (a status report, an image or a label)
+// keeps the same array — TanStack shares a select's result as it shares data — so the map, the boxes and the layers
+// are not drawn again.
+export function slimNodes(rows: unknown): ClusterViewNode[] {
+  if (!Array.isArray(rows)) return []
+  return rows.map((n: any) => ({ name: String(n?.name ?? ''), roles: Array.isArray(n?.roles) ? n.roles.map(String) : [], status: String(n?.status ?? '') }))
+}
+
 export function useClusterPodsQuery({ selectedNamespace, search }: Params) {
   const queryClient = useQueryClient()
   const { data: namespaces } = useQuery({
@@ -48,6 +58,7 @@ export function useClusterPodsQuery({ selectedNamespace, search }: Params) {
   const { data: nodes } = useQuery({
     queryKey: NODE_LIST_KEY,
     queryFn: () => api.getNodes(false),
+    select: slimNodes,
   })
   // only once the list was read: a grant the cluster refuses nodes is not asked again by a watch
   useKubeWatchList({

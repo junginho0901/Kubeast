@@ -37,21 +37,18 @@ const PREVIEW_CARDS = 12 // nodeBoxPages.ts BOX_PREVIEW_CARDS
 const NODE_PODS_PER_PAGE = 60 // nodeBoxPages.ts NODE_PODS_PER_PAGE
 const podStandIn = (n: string, name: string, phase = 'Running') => ({ name, namespace: 'e2e', node_name: n, phase, status: phase, ready: phase === 'Running' ? '1/1' : '0/1', restart_count: 0, containers: [{ name: 'c', ready: phase === 'Running', state: { running: {} } }], init_containers: [], created_at: new Date().toISOString() })
 
-// 200 nodes of six pods stood in for the map and the boxes; a search finds the pod e2e-target-pod on the last node
+// 200 nodes of six pods stood in for the map and the boxes; a search finds the pod e2e-target-pod on the last node. The
+// summary counts what a search matches as the server's does (podRowHas: name, namespace, node).
 const NODES_200 = Array.from({ length: 200 }, (_, i) => `e2e-node-${String(i).padStart(3, '0')}`)
+const pods200 = (n: string) => Array.from({ length: 6 }, (_, i) => podStandIn(n, n === NODES_200[199] && i === 0 ? 'e2e-target-pod' : `${n}-p${i}`))
 async function standIn200Nodes(page: Page) {
-  const summary = (q: string | null) => {
-    const list = q ? NODES_200.slice(-1) : NODES_200
-    return { nodes: list.map((n) => ({ node: n, total: 6, ok: 6, warn: 0, error: 0 })), total: list.length * 6, all: NODES_200.length * 6, revision: `e2e-${q ?? ''}`, source: 'index' }
+  const summary = (q: string) => {
+    const nodes = NODES_200.map((node) => ({ node, total: pods200(node).filter((p) => [p.name, p.namespace, p.node_name].some((v) => v.includes(q))).length }))
+      .filter((c) => c.total > 0).map((c) => ({ ...c, ok: c.total, warn: 0, error: 0 }))
+    return { nodes, total: nodes.reduce((t, c) => t + c.total, 0), all: NODES_200.length * 6, revision: `e2e-${q}`, source: 'index' }
   }
-  await page.route('**/api/v1/cluster/pods/nodes?**', (route) => {
-    const q = new URL(route.request().url()).searchParams.get('q')
-    return route.fulfill({ json: summary(q) })
-  })
-  await page.route('**/api/v1/cluster/pods/on-node?**', (route) => {
-    const n = new URL(route.request().url()).searchParams.get('node') ?? ''
-    return route.fulfill({ json: Array.from({ length: 6 }, (_, i) => podStandIn(n, n === NODES_200[199] && i === 0 ? 'e2e-target-pod' : `${n}-p${i}`)) })
-  })
+  await page.route('**/api/v1/cluster/pods/nodes?**', (route) => route.fulfill({ json: summary(new URL(route.request().url()).searchParams.get('q') ?? '') }))
+  await page.route('**/api/v1/cluster/pods/on-node?**', (route) => route.fulfill({ json: pods200(new URL(route.request().url()).searchParams.get('node') ?? '') }))
 }
 
 test.describe('Cluster View — node map, boxes on screen, live', () => {
@@ -134,7 +131,7 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
     await expect(box(page, nodes[199])).toHaveCount(0)
 
     await page.getByPlaceholder(/Search pod name|Pod 이름/i).fill('e2e-target')
-    await expect(page.getByTestId('cluster-view-search-count')).toContainText('6')
+    await expect(page.getByTestId('cluster-view-search-count')).toContainText(/(Results|검색 결과): 1 /)
     await expect(card(page, 'e2e-target-pod')).toHaveCount(1)
     await expect(box(page, nodes[199])).toHaveCount(1)
     await expect(page.getByTestId('cluster-view-nodes-pager')).toContainText(/Showing 1-1 of 1|1개 중 1-1 표시/)
@@ -230,10 +227,18 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
     }
     expect(seen, 'every pod once, by name, over the five pages').toEqual(Array.from({ length: 250 }, (_, i) => `e2e-big-p${String(i).padStart(3, '0')}`))
 
-    // problem pods only: the ten Failed ones, on one page
+    // a search typed in the node's own view goes to the page of its first match, that card marked
+    const search = page.getByPlaceholder(/Search pod name|Pod 이름/i)
+    await search.fill('e2e-big-p20')
+    await expect(pager).toContainText(/Showing 181-240 of 250|250개 중 181-240 표시/)
+    await expect(big.locator('[data-testid="cluster-view-pod"][data-focus="true"]')).toContainText('e2e-big-p200')
+    await expect(page.getByTestId('cluster-view-node-matches')).toContainText(/: 10 on this Node|10개 있습니다/)
+
+    // problem pods only: the ten Failed ones, on one page; the matches counted among them (e2e-big-p205 is one)
     await page.getByTestId('cluster-view-problems-only').check()
     await expect(big.getByTestId('cluster-view-pod')).toHaveCount(10)
     await expect(pager).toContainText(/Showing 1-10 of 10|10개 중 1-10 표시/)
+    await expect(page.getByTestId('cluster-view-node-matches')).toContainText(/: 1 on this Node|1개 있습니다/)
   })
 
   test('a search opens the node\'s own view on the page of the pod it found, that card outlined', async ({ page }) => {
@@ -250,10 +255,12 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
     await expect(big.locator('[data-testid="cluster-view-pod"][data-match="true"]')).toHaveCount(1)
   })
 
-  test('a node not Ready or cordoned is marked on its cell, in the legend and on its box, as the node list says', async ({ page }) => {
-    // the map, the boxes and the node list stood in (the dev cluster's node is never changed): kubectl's STATUS per node
+  test('a node not Ready or cordoned is marked on its cell, in the legend and on its box, and follows a watch frame', async ({ page }) => {
+    // the map, the boxes and the node list stood in, and the node list's watch held in the browser (the dev cluster's node
+    // is never changed): kubectl's STATUS per node, then a MODIFIED frame on that watch
     const status: Record<string, string> = { 'e2e-mark-a': 'Ready', 'e2e-mark-b': 'NotReady', 'e2e-mark-c': 'Ready,SchedulingDisabled', 'e2e-mark-d': 'Unknown,SchedulingDisabled' }
     const names = Object.keys(status)
+    let row: Record<string, unknown> = {}
     await page.route('**/api/v1/cluster/pods/nodes?**', (route) => route.fulfill({
       json: { nodes: names.map((node) => ({ node, total: 2, ok: 2, warn: 0, error: 0 })), total: 8, all: 8, revision: 'e2e-marks', source: 'index' },
     }))
@@ -263,7 +270,24 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
     })
     await page.route(/\/api\/v1\/cluster\/nodes(\?|$)/, async (route) => {
       const real = await (await route.fetch()).json() as Record<string, unknown>[]
-      return route.fulfill({ json: names.map((name) => ({ ...real[0], name, status: status[name], roles: [] })) })
+      row = real[0]
+      return route.fulfill({ json: names.map((name) => ({ ...row, name, status: status[name], roles: [] })) })
+    })
+    let send: ((frame: object) => void) | undefined
+    let asked: { clusterId: string; path: string; query: string } | undefined
+    await page.routeWebSocket(/wsMultiplexer/, (ws) => {
+      const server = ws.connectToServer()
+      ws.onMessage((message) => {
+        const msg = JSON.parse(String(message))
+        // the node list's watch stays in the browser, so no frame of the dev cluster's node comes in
+        if (msg.path === '/api/v1/nodes') {
+          if (msg.type === 'REQUEST') asked = msg
+          return
+        }
+        server.send(message)
+      })
+      server.onMessage((message) => ws.send(message))
+      send = (frame) => ws.send(JSON.stringify(frame))
     })
     const canvas = page.getByTestId('cluster-view-map').locator('canvas')
     const badges = (node: string) => box(page, node).getByTestId('cluster-view-node-status')
@@ -276,19 +300,22 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
     await expect(badges('e2e-mark-b')).toHaveText(['NotReady'])
     await expect(badges('e2e-mark-c')).toHaveText(['SchedulingDisabled'])
     await expect(badges('e2e-mark-d')).toHaveText(['Unknown', 'SchedulingDisabled'])
-    // the node's own view says it too
-    await page.goto(`/cluster-view?cluster=${CLUSTER}&node=e2e-mark-b`)
-    await expect(page.getByTestId('cluster-view-node')).toHaveCount(1)
-    await expect(badges('e2e-mark-b')).toHaveText(['NotReady'])
 
-    // the list says b is Ready again and c no longer cordoned: their marks go
-    status['e2e-mark-b'] = 'Ready'
-    status['e2e-mark-c'] = 'Ready'
-    await page.goto(`/cluster-view?cluster=${CLUSTER}`)
-    await expect(canvas).toHaveAttribute('data-node-marks', JSON.stringify({ 'e2e-mark-d': 'Unknown,SchedulingDisabled' }))
-    await expect(page.getByTestId('cluster-view-map-not-ready')).toHaveText(/(Node not Ready|Ready가 아닌 Node) 1/)
-    await expect(badges('e2e-mark-b')).toHaveCount(0)
+    // a watch frame: e2e-mark-a turns NotReady and e2e-mark-c is uncordoned, with no reload
+    await expect.poll(() => Boolean(asked), { timeout: 20_000 }).toBe(true)
+    const frame = (name: string, s: string) => ({ ...asked, type: 'DATA', data: { type: 'MODIFIED', object: { ...row, name, status: s, roles: [] } } })
+    send!(frame('e2e-mark-a', 'NotReady'))
+    send!(frame('e2e-mark-c', 'Ready'))
+    await expect(canvas).toHaveAttribute('data-node-marks', JSON.stringify({ 'e2e-mark-a': 'NotReady', 'e2e-mark-b': 'NotReady', 'e2e-mark-d': 'Unknown,SchedulingDisabled' }), { timeout: 10_000 })
+    await expect(page.getByTestId('cluster-view-map-not-ready')).toHaveText(/(Node not Ready|Ready가 아닌 Node) 3/)
+    await expect(page.getByTestId('cluster-view-map-cordoned')).toHaveText(/SchedulingDisabled 1/)
+    await expect(badges('e2e-mark-a')).toHaveText(['NotReady'])
     await expect(badges('e2e-mark-c')).toHaveCount(0)
+
+    // the legend's count opens the first such node's own view
+    await page.getByTestId('cluster-view-map-cordoned').click()
+    await expect(page.getByTestId('cluster-view-node-view-name')).toHaveText('e2e-mark-d')
+    await expect(badges('e2e-mark-d')).toHaveText(['Unknown', 'SchedulingDisabled'])
   })
 
   test('a cell of the map opens its node\'s own view, and All nodes brings the overview back', async ({ page }) => {
@@ -312,6 +339,11 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
     await expect(page.getByTestId('cluster-view-node')).toHaveCount(1)
     await expect(page.getByTestId('cluster-view-node-view-name')).toHaveText(target)
     await expect(box(page, cells[last][0])).toBeInViewport()
+    // opening it was a history entry: Back returns to every node, Forward opens it again
+    await page.goBack()
+    await expect(page.getByTestId('cluster-view-node-view')).toHaveCount(0)
+    await page.goForward()
+    await expect(page.getByTestId('cluster-view-node-view-name')).toHaveText(target)
     await page.getByTestId('cluster-view-all-nodes').click()
     await expect(page).not.toHaveURL(/[?&]node=/)
     await expect(page.getByTestId('cluster-view-node-view')).toHaveCount(0)

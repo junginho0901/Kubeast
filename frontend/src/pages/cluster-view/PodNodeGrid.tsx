@@ -13,10 +13,11 @@ import { useClusterView } from './ClusterViewContext'
 import { pickMainContainer, podToDetail } from './types'
 import { ClusterNodeMap } from './ClusterNodeMap'
 import {
-  BOX_PREVIEW_CARDS, NODE_BOXES_PER_PAGE, NODE_PODS_PER_PAGE, boxPageLayer, boxPageOf, cellsOfPage, nameOrder, nodePageOf,
-  nodeViewLayer, nodeViewPage, overviewPage, podKey, previewOrder, type OverviewPageState,
+  BOX_PREVIEW_CARDS, NODE_BOXES_PER_PAGE, NODE_PODS_PER_PAGE, boxPageLayer, boxPageOf, cellsOfPage, followedPage, nameOrder, nodeMissingLayer,
+  nodePageOf, nodeViewLayer, nodeViewPage, overviewPage, podKey, previewOrder, searchStart, type OverviewPageState,
 } from './nodeBoxPages'
 import { UNSCHEDULED, type NodeEntry } from './hooks/useClusterDerived'
+import type { ClusterViewNode } from './hooks/useClusterPodsQuery'
 
 // The node map, then the overview: a box per node, NODE_BOXES_PER_PAGE boxes a page in the map's order, each drawing
 // at most BOX_PREVIEW_CARDS pod cards (problems first) and "show all" for the rest. A click on a map cell or on "show
@@ -35,6 +36,8 @@ interface Props {
   all: number
   isLoading: boolean
   canDeletePod: boolean
+  /** the live node list (name, roles, STATUS); undefined while it is not read */
+  nodeList?: ClusterViewNode[]
 }
 
 const SUBSCRIBE_AFTER_MS = 150 // a box scrolled past does not open a watch
@@ -46,7 +49,7 @@ const keyOf = (e: NodeEntry) => e.node || UNSCHEDULED
 const podMatches = (pod: PodInfo, q: string, node: string) => pod.name.toLowerCase().includes(q) || pod.namespace.toLowerCase().includes(q)
   || String(pod.node_name || node).toLowerCase().includes(q) || String(pod.pod_ip || '').toLowerCase().includes(q)
 
-export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod }: Props) {
+export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod, nodeList }: Props) {
   const { tr, searchQuery, selectedNamespace, nodeView, openNodeView, closeNodeView } = useClusterView()
 
   // the boxes are the nodes with a pod (that the search matched); a faded cell has no box
@@ -65,11 +68,15 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod }: 
   const q = searchQuery.trim()
 
   const viewAt = nodeView ? entries.findIndex((e) => keyOf(e) === nodeView.node) : -1
+  const listedNode = nodeView ? nodeList?.find((n) => n.name === nodeView.node) : undefined
   const viewEntry: NodeEntry | null = !nodeView ? null : viewAt >= 0 ? entries[viewAt] : {
     node: nodeView.node === UNSCHEDULED ? '' : nodeView.node,
     label: nodeView.node,
     counts: { node: nodeView.node, total: 0, ok: 0, warn: 0, error: 0 },
+    status: listedNode?.status,
   }
+  // a node the cluster does not list (a link of another cluster): said so, nothing read for it
+  const missing = !!nodeView && viewAt < 0 && nodeView.node !== UNSCHEDULED && nodeList !== undefined && !listedNode
   // the outlined cells: the node's own view's, else the boxes of the page shown while there is more than one
   const pageCells = cellsOfPage(page, listed.length)
   const outlined = nodeView
@@ -79,9 +86,18 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod }: 
       : { start: 0, end: 0 }
 
   // the floating chat is told which page of boxes is shown and how many of each box's pods it draws
-  const boxes = pageEntries.map((e) => ({ node: e.node || 'unscheduled', shown: Math.min(e.counts.total, BOX_PREVIEW_CARDS), total: e.counts.total }))
-  const layer = nodeView ? null : boxPageLayer(page, totalPages, total, boxes, q)
+  const boxes = pageEntries.map((e) => ({ node: e.node || 'unscheduled', shown: Math.min(e.counts.total, BOX_PREVIEW_CARDS), total: e.counts.total, status: e.status }))
+  const layer = missing ? nodeMissingLayer(nodeView!.node) : nodeView ? null : boxPageLayer(page, totalPages, total, boxes, q)
   useAIContext(layer, [JSON.stringify(layer)])
+
+  // the path line comes on screen when a box's "show all" opens a node's own view or one of its pages is turned to
+  const navRef = useRef<HTMLElement>(null)
+  const [navScroll, setNavScroll] = useState(false)
+  useEffect(() => {
+    if (!navScroll || !nodeView || !navRef.current) return
+    navRef.current.scrollIntoView({ block: 'nearest' })
+    setNavScroll(false)
+  }, [navScroll, nodeView])
 
   // the box brought to the top once its page is drawn: back from a node's own view, or the first box of a page turned to
   const [scrollTo, setScrollTo] = useState<{ at: number } | null>(null)
@@ -124,7 +140,9 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod }: 
         tr={tr}
         pageStart={outlined.start}
         pageEnd={outlined.end}
+        nodeList={nodeList}
         onSelect={(i) => openNodeView(keyOf(entries[i]))}
+        onOpenNode={(name) => openNodeView(name)}
       />
 
       {searchQuery && (
@@ -142,14 +160,20 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod }: 
 
       {viewEntry ? (
         <>
-          <nav className="flex flex-wrap items-center gap-2 text-sm" aria-label={tr('clusterView.nodeView.path', 'Cluster View path')} data-testid="cluster-view-node-view">
+          <nav ref={navRef} className="flex flex-wrap items-center gap-2 text-sm scroll-mt-20" aria-label={tr('clusterView.nodeView.path', 'Cluster View path')} data-testid="cluster-view-node-view">
             <button type="button" className="btn-row" onClick={back} data-testid="cluster-view-all-nodes">
-              {tr('clusterView.nodeView.all', 'All nodes')}
+              {tr('clusterView.nodeView.all', 'All Nodes')}
             </button>
             <span className="text-slate-500" aria-hidden="true">/</span>
             <span className="text-ink font-medium" data-testid="cluster-view-node-view-name">{viewEntry.label}</span>
           </nav>
-          <NodeBox key={keyOf(viewEntry)} entry={viewEntry} canDeletePod={canDeletePod} mode="all" />
+          {missing ? (
+            <div className="card text-sm text-slate-300" data-testid="cluster-view-node-missing">
+              {tr('clusterView.nodeView.missing', 'Node {{node}} is not in this cluster.', { node: viewEntry.label })}
+            </div>
+          ) : (
+            <NodeBox key={keyOf(viewEntry)} entry={viewEntry} canDeletePod={canDeletePod} mode="all" onNavigate={() => setNavScroll(true)} />
+          )}
         </>
       ) : (
         <>
@@ -177,7 +201,7 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod }: 
                   className={`absolute left-0 top-0 w-full ${row.index < pageEntries.length - 1 ? 'pb-6' : ''}`}
                   style={{ transform: `translateY(${row.start - virtualizer.options.scrollMargin}px)` }}
                 >
-                  <NodeBox entry={pageEntries[row.index]} canDeletePod={canDeletePod} mode="preview" />
+                  <NodeBox entry={pageEntries[row.index]} canDeletePod={canDeletePod} mode="preview" onNavigate={() => setNavScroll(true)} />
                 </div>
               ))}
             </div>
@@ -208,7 +232,7 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod }: 
 // A node's box. In the overview (`preview`) it draws at most BOX_PREVIEW_CARDS of its pods — those the search matches,
 // problems first — and opens the node's own view for the rest; in the node's own view (`all`) it draws a page of its
 // pods by name, the search's matches outlined, with "Problem pods only" and the footer under it.
-export function NodeBox({ entry, canDeletePod, mode }: { entry: NodeEntry; canDeletePod: boolean; mode: 'preview' | 'all' }) {
+export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: NodeEntry; canDeletePod: boolean; mode: 'preview' | 'all'; onNavigate?: () => void }) {
   const writesRefused = useWritesRefusedIn()
   const {
     tr,
@@ -224,6 +248,7 @@ export function NodeBox({ entry, canDeletePod, mode }: { entry: NodeEntry; canDe
     nodeView,
     openNodeView,
     setNodeViewPage,
+    moveNodeView,
   } = useClusterView()
 
   const [active, setActive] = useState(false)
@@ -281,15 +306,36 @@ export function NodeBox({ entry, canDeletePod, mode }: { entry: NodeEntry; canDe
   const orderedKeys = useMemo(() => ordered.map(podKey), [ordered])
   const focus = mode === 'all' && pods ? nodeView?.pod ?? null : null
   const shownPage = nodeViewPage(orderedKeys, { page: nodeView?.page ?? null, pod: focus }, q ? ordered.findIndex((pod) => podMatches(pod, q, entry.node)) : -1)
-  const matchCount = q ? found.length : 0
+  // the opened pod not shown: the namespace filter leaves its namespace out, or it left the node
+  const focusNamespace = focus?.split('/')[0] ?? ''
+  const focusHidden: false | 'gone' | 'filtered' = !shownPage.gone ? false : selectedNamespace !== 'all' && focusNamespace !== selectedNamespace ? 'filtered' : 'gone'
+  // the matches among the cards this view can show (Problem pods only counts within the problems)
+  const matchCount = q ? ordered.filter((pod) => podMatches(pod, q, entry.node)).length : 0
   const viewLayer = mode === 'all' && pods
     ? nodeViewLayer({
       node: entry.node || 'unscheduled', page: shownPage.page, totalPages: shownPage.totalPages, start: shownPage.start, end: shownPage.end,
       total: ordered.length, problemsOnly, search: searchQuery.trim(), matches: matchCount,
-      pods: orderedKeys.slice(shownPage.start, shownPage.end), focus, gone: shownPage.gone,
+      pods: orderedKeys.slice(shownPage.start, shownPage.end), focus, gone: focusHidden, status: entry.status,
     })
     : null
   useAIContext(viewLayer, [JSON.stringify(viewLayer)])
+
+  // following the opened pod, the address keeps its page, so the page shown last is the one kept if it then goes
+  const follow = mode === 'all' && nodeView ? followedPage({ page: nodeView.page, pod: focus }, shownPage) : null
+  const followPage = follow?.page
+  const followPod = follow?.pod
+  useEffect(() => {
+    if (followPage !== undefined && followPod) moveNodeView({ page: followPage, pod: followPod })
+  }, [followPage, followPod, moveNodeView])
+
+  // a search typed in this view goes to the page of its first match, that pod followed; cleared, it follows nothing
+  const searched = useRef(q)
+  useEffect(() => {
+    if (mode !== 'all' || !pods || searched.current === q) return
+    searched.current = q
+    const start = q ? searchStart(ordered, (pod) => podMatches(pod, q, entry.node)) : null
+    moveNodeView(start ?? { page: shownPage.page })
+  }, [mode, pods, q, ordered, entry.node, shownPage.page, moveNodeView])
 
   const handlePodClick = (pod: any) => {
     const detail = podToDetail(pod)
@@ -365,6 +411,7 @@ export function NodeBox({ entry, canDeletePod, mode }: { entry: NodeEntry; canDe
       const byName = nameOrder(list)
       const first = q && pods ? byName.findIndex((pod) => podMatches(pod, q, entry.node)) : -1
       openNodeView(keyOf(entry), first >= 0 ? { page: nodePageOf(first), pod: podKey(byName[first]) } : undefined)
+      onNavigate?.()
     }
     return (
       <div className="card" data-testid="cluster-view-node" data-node={entry.node}>
@@ -382,9 +429,11 @@ export function NodeBox({ entry, canDeletePod, mode }: { entry: NodeEntry; canDe
           )}
           {(hidden > 0 || q !== '') && (
             <button type="button" className="btn-row ml-auto" onClick={openAll} data-testid="cluster-view-node-more">
-              {hidden > 0
-                ? tr('clusterView.box.more', '+{{count}} show all on this node', { count: hidden })
-                : tr('clusterView.box.open', 'Show all on this node')}
+              {hidden > 0 && q !== ''
+                ? tr('clusterView.box.moreMatching', '+{{count}} matching · show all Pods on this Node', { count: hidden })
+                : hidden > 0
+                  ? tr('clusterView.box.more', '+{{count}} show all on this Node', { count: hidden })
+                  : tr('clusterView.box.open', 'Show all Pods on this Node')}
             </button>
           )}
         </div>
@@ -406,14 +455,16 @@ export function NodeBox({ entry, canDeletePod, mode }: { entry: NodeEntry; canDe
             {tr('clusterView.nodePodsCount', '{{count}} Pods', { count: pods ? list.length : entry.counts.total })}
           </span>
           {statusBadges}
-          {shownPage.gone && focus !== null && (
-            <span className="text-xs text-amber-300" data-testid="cluster-view-node-pod-gone">
-              {tr('clusterView.nodeView.gone', 'Pod {{pod}} is no longer on this node.', { pod: focus })}
+          {focusHidden && focus !== null && (
+            <span className="text-xs text-amber-300" data-testid="cluster-view-node-pod-gone" data-reason={focusHidden}>
+              {focusHidden === 'filtered'
+                ? tr('clusterView.nodeView.filtered', 'Pod {{pod}} is outside the namespace filter ({{namespace}}).', { pod: focus, namespace: selectedNamespace })
+                : tr('clusterView.nodeView.gone', 'Pod {{pod}} is no longer on this Node; a search finds it if it runs on another.', { pod: focus })}
             </span>
           )}
           {q !== '' && pods && (
             <span className="text-xs text-slate-400" data-testid="cluster-view-node-matches">
-              {tr('clusterView.nodeView.matches', 'Pods matching "{{query}}" are outlined: {{count}} on this node.', { query: searchQuery.trim(), count: matchCount })}
+              {tr('clusterView.nodeView.matches', 'Pods matching "{{query}}" are outlined: {{count}} on this Node.', { query: searchQuery.trim(), count: matchCount })}
             </span>
           )}
           <label className="ml-auto inline-flex items-center gap-2 text-sm text-slate-300">
@@ -423,10 +474,11 @@ export function NodeBox({ entry, canDeletePod, mode }: { entry: NodeEntry; canDe
               onChange={(event) => {
                 setProblemsOnly(event.target.checked)
                 setNodeViewPage(1)
+                onNavigate?.()
               }}
               data-testid="cluster-view-problems-only"
             />
-            {tr('clusterView.nodeView.problemsOnly', 'Problem pods only')}
+            {tr('clusterView.nodeView.problemsOnly', 'Problem Pods only')}
           </label>
         </div>
         {pods && ordered.length === 0 ? (
@@ -444,7 +496,10 @@ export function NodeBox({ entry, canDeletePod, mode }: { entry: NodeEntry; canDe
         totalPages={shownPage.totalPages}
         total={ordered.length}
         rowsPerPage={NODE_PODS_PER_PAGE}
-        onPageChange={setNodeViewPage}
+        onPageChange={(p) => {
+          setNodeViewPage(p)
+          onNavigate?.()
+        }}
         showPageSize={false}
         testId="cluster-view-node-pods-pager"
       />
