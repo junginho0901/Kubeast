@@ -6,12 +6,12 @@
 // doesn't have to thread `openDetail` through props).
 
 import { useTranslation } from 'react-i18next'
-import { AlertCircle, ShieldAlert } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 
 import { TopResources } from '@/services/api'
+import { RefusedMetrics } from '@/components/RefusedMetrics'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { failureText } from '@/utils/failureText'
-import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
 
 interface Props {
   topResources: TopResources | undefined
@@ -255,23 +255,6 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
             <p className="text-slate-400">{tr('dashboard.topResources.empty', 'No resource usage data')}</p>
           </div>
         )}
-      </div>
-    </div>
-  )
-}
-
-// The cluster refused the read: no permission, as Monitoring says it, with the cluster's reason. The dashboard asks it
-// no more until the page is opened again (topResourcesRead).
-function RefusedMetrics({ path, reason, testId }: { path: string; reason?: string; testId: string }) {
-  const { t } = useTranslation()
-  return (
-    <div className="text-center py-12" data-testid={testId}>
-      <div className="flex flex-col items-center gap-2">
-        <ShieldAlert className="w-8 h-8 text-amber-300" />
-        <p className="text-slate-400">
-          {t('common.forbiddenEmpty', { resource: forbiddenResourceFromUrl(path), defaultValue: 'You do not have permission to view {{resource}} in this cluster.' })}
-        </p>
-        {reason && <p className="text-xs text-slate-500 break-words">{reason}</p>}
       </div>
     </div>
   )
