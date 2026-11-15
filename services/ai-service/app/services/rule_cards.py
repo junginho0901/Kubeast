@@ -22,6 +22,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
+from app.services import switch
+
 log = logging.getLogger(__name__)
 
 DEFAULTS_FILE = Path(__file__).with_name("rule_cards.json")
@@ -166,12 +168,8 @@ def cards_of(added: str = "", removed: str = "") -> tuple[Card, ...]:
     return tuple(by_kind.values())
 
 
-def _on(name: str) -> bool:
-    return os.getenv(name, "false").strip().lower() == "true"
-
-
 def load() -> Settings:
-    chat, investigations = _on("AI_RULE_CARDS_CHAT"), _on("AI_RULE_CARDS_INVESTIGATIONS")
+    chat, investigations = switch.env_on("AI_RULE_CARDS_CHAT"), switch.env_on("AI_RULE_CARDS_INVESTIGATIONS")
     if not (chat or investigations):
         return Settings()
     return Settings(chat, investigations, cards_of(os.getenv("AI_RULE_CARDS", ""), os.getenv("AI_RULE_CARDS_REMOVE", "")))

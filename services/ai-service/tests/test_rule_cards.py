@@ -15,6 +15,7 @@ from app.services.investigation import runner
 from app.services.tool_whitelists import READONLY_TOOL_NAMES
 from tests.test_alert_investigation import FakeService, cfg, completion, install_loop, row
 from tests.test_chat_turn_edges import parsed, stream, text_chunk
+from tests.test_switch_cases import CASES
 
 # The hard evaluation cases' kinds of failure, "none" (no failure) aside.
 KINDS = ["crash", "oom", "image", "config_change", "rollout", "network_policy", "dns", "resource_limit", "quota", "node",
@@ -204,6 +205,15 @@ def test_the_switches_and_the_chart_cards_come_from_the_environment(monkeypatch)
     assert kinds(s.cards) == [k for k in KINDS if k != "storage"] + ["payments-db"]
     monkeypatch.setenv("AI_RULE_CARDS_CHAT", "TRUE")
     assert rule_cards.load().chat is True
+
+
+@pytest.mark.parametrize("case", CASES, ids=lambda c: repr(c["value"]))
+@pytest.mark.parametrize("name, field", [("AI_RULE_CARDS_CHAT", "chat"), ("AI_RULE_CARDS_INVESTIGATIONS", "investigations")])
+def test_each_switch_reads_the_one_switch_rule(monkeypatch, case, name, field):
+    for other in ("AI_RULE_CARDS_CHAT", "AI_RULE_CARDS_INVESTIGATIONS"):
+        monkeypatch.delenv(other, raising=False)
+    monkeypatch.setenv(name, case["value"])
+    assert getattr(rule_cards.load(), field) is case["on"]
 
 
 # --- an investigation ---------------------------------------------------------------------------------------------
