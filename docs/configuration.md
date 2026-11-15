@@ -175,7 +175,7 @@ ai:
   geminiApiKey: ""
   claudeCodeOAuthToken: ""  # Claude subscription setup-token (provider claude-code, personal use; see "4. Enable AI")
   apiKeysSecret: ""
-  model: "gpt-4o-mini"
+  model: "gpt-4o-mini-2024-07-18"
   baseUrlAllowedHosts: []  # register a host here when a model setting's base_url is a private address
                            # (in-cluster Ollama, internal LLM gateway).
                            # api_key_env is OPENAI/ANTHROPIC/GEMINI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN (claude-code only) or KUBEAST_AI_KEY_*

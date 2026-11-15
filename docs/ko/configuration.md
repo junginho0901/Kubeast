@@ -172,7 +172,7 @@ ai:
   geminiApiKey: ""
   claudeCodeOAuthToken: ""  # Claude 구독 setup-token(provider claude-code, 개인용). "4. AI 활성화"를 참고하세요
   apiKeysSecret: ""
-  model: "gpt-4o-mini"
+  model: "gpt-4o-mini-2024-07-18"
   baseUrlAllowedHosts: []  # 모델 설정의 base_url이 사설 주소(클러스터 안 Ollama, 사내 LLM 게이트웨이)면 여기에 등록하세요
   timelineChanges: false   # AI 도구 timeline의 changes 보기(기간 동안 바뀐 것, 값은 읽지 않음)와 그것을 먼저 보라는 채팅 지시를 켭니다
   redaction:
