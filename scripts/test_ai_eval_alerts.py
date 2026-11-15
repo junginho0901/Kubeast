@@ -95,6 +95,8 @@ class FakeKubeast:
         self.expire_at_chat = None
         self.invalidate_at_poll = None
         self.list_polls = 0
+        self.late_exact = False      # the webhook queues another firing's investigation of the alert first, its own one poll later
+        self.pending: list[tuple[int, tuple]] = []
         self.lock = threading.Lock()
         self.seq = 0
 
@@ -192,6 +194,10 @@ class FakeKubeast:
                     self.valid.clear()
                     self.unauthorized += 1
                     return 401, {"detail": "token expired"}
+                for at, args in list(self.pending):
+                    if self.list_polls >= at:
+                        self.pending.remove((at, args))
+                        self.add_inv(*args)
                 for inv in self.invs:
                     if inv["status"] in ("queued", "running"):
                         inv["polls"] += 1
@@ -222,7 +228,11 @@ class FakeKubeast:
             if self.refuse:
                 counts["duplicate"] += 1
                 continue
-            self.add_inv(cluster, row["alertname"], row["fingerprint"], row["starts_at"])
+            if self.late_exact:
+                self.add_inv(cluster, row["alertname"], row["fingerprint"], utc("2026-01-01T00:00:00Z"), report=NO_FAULT_REPORT)
+                self.pending.append((self.list_polls + 2, (cluster, row["alertname"], row["fingerprint"], row["starts_at"])))
+            else:
+                self.add_inv(cluster, row["alertname"], row["fingerprint"], row["starts_at"])
             if self.noise:  # another firing of the same alert, queued right after this one
                 self.add_inv(cluster, row["alertname"], "other-firing", row["starts_at"], report=NO_FAULT_REPORT)
             counts["accepted"] += 1
@@ -337,7 +347,7 @@ def test_api_renews_the_token_before_its_lifetime_is_over():
     with Server(fake) as srv:
         api = AI_EVAL.Api("admin", PASSWORD)
         api.json("GET", "/api/v1/ping")
-        srv.clock.sleep(7200 - AI_EVAL.RENEW_MARGIN_SECONDS - 1)
+        srv.clock.sleep(7200 - 480 - 1)
         api.json("GET", "/api/v1/ping")
         assert api.logins == 1
         srv.clock.sleep(2)
@@ -507,6 +517,50 @@ def test_a_401_in_the_middle_of_a_case_signs_in_again_and_goes_on():
     with Server(fake):
         results, admin, _ = run(repeat=1)
     assert results[0]["pass"] and admin.logins == 2 and fake.unauthorized == 1
+
+
+def test_an_investigation_of_its_start_that_comes_later_is_taken_over_one_of_its_fingerprint():
+    fake = FakeKubeast()
+    fake.late_exact, fake.noise = True, False
+    with Server(fake):
+        results, _, _ = run(repeat=1)
+    r = results[0]
+    exact = next(i for i in fake.invs if i["fingerprint"] == r["fingerprint"] and i["starts_at"] == r["starts_at"])
+    assert r["matched_by"] == "starts_at" and r["investigation_id"] == exact["id"] and r["pass"], r
+    assert len([i for i in fake.invs if i["fingerprint"] == r["fingerprint"]]) == 2
+
+
+def test_alert_source_is_auto_by_default():
+    fake = FakeKubeast()
+    root = Path(tempfile.mkdtemp(prefix="ai-eval-auto-"))
+    (root / CASE["id"]).mkdir()
+    (root / CASE["id"] / "case.json").write_text(json.dumps(CASE))
+    (root / CASE["id"] / "truth.json").write_text(json.dumps(TRUTH))
+    out = root / "out"
+    saved_argv, saved = sys.argv, AI_EVAL.webhook_token
+    with Server(fake):
+        try:
+            AI_EVAL.webhook_token = lambda kcs: WEBHOOK_TOKEN
+            sys.argv = ["ai-eval.py", "--cases", str(root), "--alerts", "--out", str(out)]
+            os.environ["E2E_USER_PASSWORD"] = PASSWORD
+            assert AI_EVAL.main() == 0
+        finally:
+            sys.argv = saved_argv
+            os.environ.pop("E2E_USER_PASSWORD", None)
+            AI_EVAL.webhook_token = saved
+    rows = json.loads(next(out.glob("*-claude-haiku-5-5.json")).read_text())
+    assert [(r["alert_source"], r["pass"]) for r in rows] == [("synthetic", True)], rows
+
+
+def test_a_fired_alert_without_a_namespace_label_matches_an_empty_namespace():
+    fake = FakeKubeast()
+    labels = {"alertname": "ServiceSlow", "severity": "warning", "kubeast_eval": "ai-hard"}
+    with Server(fake) as srv:
+        AI_EVAL.rule_loaded = lambda cluster, rule: True
+        srv.on_command = lambda cmd: fake.fire("default", labels, {"summary": "slow"}, "2026-11-15T10:00:00Z") if "inject.yaml" in cmd else None
+        case = {**CASE, "alert": {"labels": {"alertname": "ServiceSlow", "namespace": ""}, "rule": "ServiceSlow", "match": {"namespace": ""}}}
+        results, _, _ = run(case=case, source="real", repeat=1)
+    assert results[0]["alert_source"] == "real" and "setup_error" not in results[0], results
 
 
 def test_the_table_shows_alert_rows_and_hides_hidden_ones():

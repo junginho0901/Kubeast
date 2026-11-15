@@ -64,8 +64,10 @@ CASES = ROOT / "evals" / "ai"
 BASE = os.environ.get("E2E_BASE_URL", "http://localhost:30080").rstrip("/")
 KIND = {"self": "kubeast", "default": "kubeast-b"}  # Kubeast cluster ID → kind cluster
 READ_PASSWORD = "Eval-read-pass1!"
-# A token is used until this long before its lifetime is over (or a quarter of a short lifetime), then renewed.
-RENEW_MARGIN_SECONDS = 300
+# A token is used until this long before its lifetime is over (or a quarter of a short lifetime), then renewed: longer
+# than a chat turn or an investigation step may run (the cases' timeout_seconds, at most 420, and a minute), since the
+# server hands the token on to the turn's tool calls.
+RENEW_MARGIN_SECONDS = 480
 POLL_SECONDS = 5
 ALERT_SOURCES = ("real", "auto", "synthetic")
 INVESTIGATION_END = ("done", "failed", "skipped")
@@ -592,13 +594,13 @@ def wait_until(t: float, tick) -> None:
 
 def wait_for_fired(admin: Api, case: dict, before: set, deadline: float, tick) -> dict | None:
     """The first new firing inbox row of the case's alert whose labels hold alert.match (the case's namespace unless it
-    says otherwise), as Alertmanager delivered it; None at the deadline."""
+    says otherwise; "" for a label the alert does not carry), as Alertmanager delivered it; None at the deadline."""
     alert = case["alert"]
     name, match = rca.alert_name(case), {"namespace": case["namespace"], **(alert.get("match") or {})}
     while True:
         tick()
         fresh = [r for r in inbox_rows(admin, case["cluster"], name) if r["id"] not in before and r.get("status") == "firing"
-                 and all((r.get("labels") or {}).get(k) == v for k, v in match.items())]
+                 and all(((r.get("labels") or {}).get(k) or "") == v for k, v in match.items())]
         if fresh:
             return min(fresh, key=lambda r: r.get("first_received_at") or "")
         if time.monotonic() >= deadline:
@@ -609,23 +611,23 @@ def wait_for_fired(admin: Api, case: dict, before: set, deadline: float, tick) -
 def find_investigation(admin: Api, cluster: str, row: dict, before: set, deadline: float, tick) -> tuple[dict | None, str]:
     """The investigation of this firing, waited for until it is done, failed or skipped: a new one (not in before) of the
     row's fingerprint that holds the row's starts_at — #909's match, by the alert's own start and never by comparing a
-    received time with it — else the newest new one of that fingerprint. Returns (its detail, "starts_at" or
-    "fingerprint"), or (None, why)."""
+    received time with it — else the newest new one of that fingerprint, given up for one that holds the starts_at when
+    one comes while it runs. Returns (its detail, "starts_at" or "fingerprint"), or (None, why)."""
     details: dict[str, dict] = {}
     chosen, how, looked = None, "", time.monotonic()
     while True:
         tick()
         items = investigations(admin, cluster)
-        if chosen is None:
+        if how != "starts_at":
             new = [s for s in items if s["id"] not in before and s.get("alertname") == row["alertname"]]
             for s in new:
                 if s["id"] not in details:  # a detail read writes ai.investigation.view: once per investigation
                     details[s["id"]] = admin.json("GET", f"/api/v1/ai/investigations/{s['id']}")
             mine = [details[s["id"]] for s in new if details[s["id"]].get("fingerprint") == row["fingerprint"]]
             exact = [d for d in mine if same_time(d.get("starts_at"), row.get("starts_at"))]
-            if exact or mine:
+            if exact or (mine and chosen is None):
                 chosen, how = (exact or mine)[0]["id"], "starts_at" if exact else "fingerprint"
-            elif time.monotonic() - looked > 30:
+            elif chosen is None and time.monotonic() - looked > 30:
                 linked = (admin.json("GET", f"/api/v1/alerts/inbox/{row['id']}").get("investigation") or {}).get("id")
                 if linked in before:
                     return None, f"folded into the earlier investigation {linked} (features.alertInvestigation.dedupeHours)"
@@ -796,7 +798,7 @@ def table(results: list[dict], round_info: dict | None = None) -> str:
                         f"{mark[s['path_ok']]} | {s['ungrounded']} | {s['block']} |")
     alerts = [r for r in shown if "text" in r]
     if alerts:
-        rows += ["", "| 사례 · 회차 | 알림 | 글 채점 | 원인 이름 · 종류 | 고장 없음 | 미끼 언급 | rca | 조사 초 | 기다린 초 |",
+        rows += ["", "| 사례 · 회차 | 알림 | 글 채점 | 원인 이름 · 종류 | 고장 없음 | 원인으로 댄 미끼 | rca | 조사 초 | 기다린 초 |",
                  "|---|---|---|---|---|---|---|---|---|"]
         for r in alerts:
             t = r["text"]
@@ -894,6 +896,11 @@ def load_cases(root: Path, only: list[str], hidden: bool, alerts: bool = False) 
         if (case.get("hidden") and not hidden) or (alerts and "alert" not in case):
             continue
         problems += [f"{d.name}: {p}" for p in rca.check_case(case, (d / "truth.json").exists())]
+        if "alert" in case and (d / "truth.json").exists():
+            try:
+                problems += [f"{d.name}: {p}" for p in rca.check_alert_scope(case, json.loads((d / "truth.json").read_text()))]
+            except ValueError as e:
+                problems.append(f"{d.name}: truth.json: {e}")
         if case.get("cluster") not in KIND:
             problems.append(f"{d.name}: cluster {case.get('cluster')!r} is not one of {sorted(KIND)}")
         picked.append((d, case))
@@ -939,9 +946,9 @@ def main() -> int:
     ap.add_argument("--hidden", action="store_true", help="also run the cases marked hidden (the table shows only their total)")
     ap.add_argument("--list", action="store_true", help="list the cases that would run and check their fields; touches no cluster")
     ap.add_argument("--alerts", action="store_true", help="the alert investigation instead of the chat: the cases with an alert")
-    ap.add_argument("--alert-source", choices=ALERT_SOURCES, default="real",
-                    help="real: the test rule firing through Alertmanager, a case without a loaded rule not run; "
-                         "auto: real where the rule is loaded, else the runner posts the alert; synthetic: always posted")
+    ap.add_argument("--alert-source", choices=ALERT_SOURCES, default="auto",
+                    help="auto (default): the test rule firing through Alertmanager where it is loaded, else the runner posts the "
+                         "alert; real: only the rule, a case without a loaded rule not run; synthetic: always posted")
     ap.add_argument("--user", choices=USERS, default="read",
                     help="the account a hard case asks as: read (default), a member made for the case with Read on its cluster only, "
                          "which cannot read investigations or the audit log; admin, the signed-in admin. An easy case asks as its own user field")

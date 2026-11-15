@@ -36,8 +36,9 @@ ALERT_FIELDS = ("labels", "annotations", "rule", "match", "after_seconds", "fire
 DEFAULT_FIRE_WAIT_SECONDS = 600
 DEFAULT_INVESTIGATION_WAIT_SECONDS = 900
 
-# The free-text check of a report (score_text): words that say a cause of each kind, and words that say there is no
-# fault. Broad on purpose — the check only has to read the same way with and without the rca block.
+# The free-text check of a report (score_text): words that say a cause of each kind, words that say there is no fault,
+# words that rule a named object out and words that blame one. Broad on purpose — the check only has to read the same
+# way with and without the rca block.
 KIND_WORDS = {
     "crash": r"crash|exit(ed)? (code|with)|restart|panic|재시작|비정상 종료",
     "oom": r"\boom|out of memory|memory limit|메모리 (부족|한도|제한)",
@@ -53,13 +54,31 @@ KIND_WORDS = {
     "dependency_slow": r"slow|latency|timeout|timed out|느려|지연",
     "storage": r"\bpvc|persistentvolume|volume|disk|storage|볼륨|디스크|스토리지",
 }
+_FAULT_NOUNS = r"(fault|problem|issue|outage|failure|incident|error|cause|evidence|sign|trace)s?"
+# There is no fault: in a clause that names no object of the truth, the report's answer; next to a name, that name ruled out.
 NO_FAULT_WORDS = re.compile(
-    r"no (current |ongoing |active |real )?(fault|problem|issue|outage|failure|incident)s?\b|nothing (is |was )?(wrong|broken|failing)"
-    r"|not (a|an) (fault|problem|issue|incident)|no (action|fix) (is )?(needed|required)"
-    r"|(working|running|behaving) (normally|as expected)|expected behaviou?r|false (positive|alarm)"
-    r"|정상(적|입니다|이다|으로|임)|문제(가|는)? 없|이상(이|은)? 없|장애(가|는)? 없", re.I)
+    r"\bno (current |ongoing |active |real |actual )?(fault|problem|issue|outage|failure|incident)s?\b"
+    rf"|\b(found|find|see|saw|shows?) no {_FAULT_NOUNS}\b|\bno (evidence|sign|trace)s? (of|for)\b"
+    rf"|\b(could not|couldn'?t|did not|didn'?t|cannot|can'?t) (find|see) (a |an |any )?{_FAULT_NOUNS}\b"
+    r"|\bnothing (is |was |seems |looks )?(wrong|broken|failing|abnormal)|\bnothing points (at|to)\b"
+    r"|\bno (action|fix) (is )?(needed|required)|\bfalse (positive|alarm)"
+    r"|찾지 못했|찾을 수 없|발견(하지 못|되지 않)|장애(가|는)? 없|고장(이|은)? 없|문제(가|는)? 없|이상(이|은)? 없|흔적(이|은)? 없", re.I)
+# A named object ruled out: unchanged, normal, unrelated, not the cause.
+CLEAR_WORDS = re.compile(
+    r"\bnot (the |a |an )?(cause|culprit|problem|issue|fault|reason|involved|related|changed|at fault)\b|\bisn'?t (the |a )?(cause|problem)"
+    r"|\b(did|does|do|has|have) not (cause|break|affect|make|touch)|\b(didn|doesn|don|hasn|haven)'t (cause|break|affect|make|touch)"
+    r"|\bunchanged\b|\bno( \w+)? change|\bunrelated\b|\bruled? (it |this |them )?out\b|\bharmless\b"
+    r"|\blooks? (normal|fine|healthy|ok|okay|good|correct|as expected)|\b(is|are|was|were|stays?|stayed) (normal|fine|healthy|correct|ok|okay)\b"
+    r"|\b(working|running|behaving|answering|serving|finished|completed?) (normally|as expected|fine|cleanly)|\bas expected\b"
+    r"|\bexpected behaviou?r|\bas (it|they) should\b"
+    r"|정상|무관|(관계|관련)(가|이)? 없|원인(이|은|과는)? 아니|원인 아님|바뀌지 않|변경(이|은|되지)? ?(없|않)|영향(이|은)? 없", re.I)
+# A named object blamed: what it is said to have caused, not what happened to it ("restarted once" blames nothing).
+BLAME_WORDS = re.compile(r"caus|because|due to|\bbr(o|ea)k|fail|culprit|\bled to|\bleads? to|result(s|ed)? in|\b(is|went) down"
+                         r"|\bmade\b[^.;]{0,40}\b(slow|fail|break)|원인|때문|탓|실패|장애|느려지|망가", re.I)
 _HEADING = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+(.+?)[ \t#]*$", re.M)  # an ATX heading: a space after the #s
 _TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?。])\s+|\n+")
+_BULLET = re.compile(r"^\s*(?:[-*+•]|\d+[.)])\s+")
 
 _KIND_ALIASES = {
     "deploy": "deployment", "deployments": "deployment", "rs": "replicaset", "replicasets": "replicaset",
@@ -184,6 +203,40 @@ def check_alert(case: dict, has_truth: bool) -> list[str]:
             problems.append(f"alert {key} holds {v!r}")
     if not has_truth:
         problems.append("alert without truth.json")
+    return problems
+
+
+# Kinds with no namespace: a cause of one of these is read through Prometheus and the cluster-wide reads whatever the
+# alert's namespace.
+CLUSTER_SCOPED_KINDS = frozenset({"node", "namespace", "persistentvolume", "storageclass", "clusterrole", "clusterrolebinding",
+                                  "priorityclass", "runtimeclass", "customresourcedefinition", "volumeattachment"})
+
+
+def alert_namespaces(case: dict) -> list[tuple[str, str]]:
+    """(where, namespace) an investigation of the case's alert is limited to — the webhook takes the alert's namespace
+    label for the investigator's token: the posted alert's label (the case's namespace unless labels give one; "" for
+    none), and with a rule the namespace match picks the fired alert by."""
+    alert = case.get("alert") or {}
+    out = [("labels", str((alert.get("labels") or {}).get("namespace", case.get("namespace", ""))))]
+    if alert.get("rule"):
+        out.append(("match", str((alert.get("match") or {}).get("namespace", case.get("namespace", "")))))
+    return out
+
+
+def check_alert_scope(case: dict, truth: dict | None) -> list[str]:
+    """A case whose alert would give the investigator a token for one namespace while a truth cause is in another: it
+    could not read that cause. A cause of a kind with no namespace, and an alert with no namespace, are not held."""
+    if not isinstance(case.get("alert"), dict) or not truth:
+        return []
+    problems = []
+    for where, ns in alert_namespaces(case):
+        if not ns:
+            continue
+        for tc in truth.get("causes") or []:
+            kind, cause_ns, _ = split_resource(tc["resource"])
+            if kind not in CLUSTER_SCOPED_KINDS and cause_ns and cause_ns != ns.lower():
+                problems.append(f"alert {where} namespace {ns!r}, but cause {tc['resource']} is in {cause_ns!r}: "
+                                "the investigator's token would read only the alert's namespace")
     return problems
 
 
@@ -420,36 +473,94 @@ def _text_names(text: str) -> set[str]:
     return out
 
 
+def _statements(text: str) -> list[list[str]]:
+    """The text's sentences — a line or a bullet is one too — each as its clauses (split at ';')."""
+    out = []
+    for sentence in _SENTENCE_BREAK.split(text or ""):
+        sentence = _BULLET.sub("", sentence).strip()
+        if sentence:
+            out.append([c.strip() for c in sentence.split(";") if c.strip()])
+    return out
+
+
+def _without(text: str, names) -> str:
+    # a name ends at a character that cannot be part of it: an ASCII letter, digit, "_" or "-" continues it, Hangul does
+    # not, so "storefront-config가" loses the name and keeps its particle
+    for n in sorted(names, key=len, reverse=True):
+        text = re.sub(r"(?<![A-Za-z0-9_./-])" + re.escape(n) + r"(?![A-Za-z0-9_-])", " ", text)
+    return text
+
+
+def _says_kind(text: str, kinds) -> list[str]:
+    return [k for k in kinds if k in KIND_WORDS and re.search(KIND_WORDS[k], text, re.I)]
+
+
 def score_text(report: str, truth: dict) -> dict:
     """Score a report's words against a filled truth when it has no rca block (the alert path with v0.7.9's switches
-    off): in its "Likely cause" section (else the whole report) each truth cause named — its resource or an
-    accept_resources form — with a word of its kind or an accepted kind (KIND_WORDS); a control passes when that section
-    says there is no fault (NO_FAULT_WORDS). Decoys named there are listed, not held against it: a report names what it
-    ruled out in the same words. Weaker than the block's check; it is there so a run with the block and one without
-    compare on one measure."""
+    off), clause by clause in its "Likely cause" section (else the whole report; a sentence, a line or a bullet, split
+    at ';'). A clause holding NO_FAULT_WORDS or CLEAR_WORDS rules out the objects it names; NO_FAULT_WORDS in a clause,
+    or in its part before or after a colon, naming no object of the truth is the report saying there is no fault
+    (no_fault).
+
+    A fault case passes when the report does not say there is no fault and names each truth cause — its resource or an
+    accept_resources form — in a clause that does not rule it out, with a word of its kind or an accepted kind
+    (KIND_WORDS) in a sentence that names it so, read with the cause's own names taken out. A control passes when the
+    report says there is no fault or rules something out, and names no decoy as a cause: in a clause that does not rule
+    it out and holds BLAME_WORDS (decoys_named). Weaker than the block's check; it is there so a run with
+    the block and one without compare on one measure."""
     text, section = likely_cause(report)
-    names = _text_names(text)
-    no_fault = bool(NO_FAULT_WORDS.search(text))
-    causes = []
     truth_causes = truth.get("causes") or []
-    truth_names = {n for n in names if any(_is_truth_cause(tc, n) for tc in truth_causes)}
-    # the kind is read with the cause's own names taken out, so "settings-b" alone does not say "setting"
-    rest = text
-    for n in sorted(truth_names, key=len, reverse=True):
-        rest = re.sub(r"(?<![\w./-])" + re.escape(n) + r"(?![\w-])", " ", rest)
-    for tc in truth_causes:
-        named = sorted(n for n in names if _is_truth_cause(tc, n))
+    decoys, also_ok = truth.get("decoys") or [], truth.get("also_ok") or []
+
+    def of_truth(n):
+        return any(_is_truth_cause(tc, n) for tc in truth_causes)
+
+    def decoy(n):
+        return not of_truth(n) and any(resource_matches(d["resource"], n) for d in decoys)
+
+    no_fault = rules_out = False
+    sentences = {i: [] for i in range(len(truth_causes))}
+    named_as = {i: set() for i in range(len(truth_causes))}
+    ruled_out = {i: False for i in range(len(truth_causes))}
+    decoys_named, decoys_ruled_out = set(), set()
+    for clauses in _statements(text):
+        sentence = "; ".join(clauses)
+        for clause in clauses:
+            names = _text_names(clause)
+            known = {n for n in names if of_truth(n) or decoy(n) or any(resource_matches(a, n) for a in also_ok)}
+            denies = bool(NO_FAULT_WORDS.search(clause))
+            clears = denies or bool(CLEAR_WORDS.search(clause))
+            # "No fault found: thumbnailer restarted once" says so for the whole report: the part before a colon names nothing
+            no_fault = no_fault or any(NO_FAULT_WORDS.search(part) and not _text_names(part) & known for part in clause.split(":"))
+            rules_out = rules_out or clears
+            for i, tc in enumerate(truth_causes):
+                hits = {n for n in names if _is_truth_cause(tc, n)}
+                if hits and clears:
+                    ruled_out[i] = True
+                elif hits:
+                    sentences[i].append(sentence)
+                    named_as[i] |= hits
+            rest = _without(clause, known)
+            for n in names:
+                if decoy(n):
+                    if clears:
+                        decoys_ruled_out.add(n)
+                    elif BLAME_WORDS.search(rest):
+                        decoys_named.add(n)
+    causes = []
+    for i, tc in enumerate(truth_causes):
         kinds = [tc["kind"], *(tc.get("accept_kinds") or [])]
-        kind_words = [k for k in kinds if k in KIND_WORDS and re.search(KIND_WORDS[k], rest, re.I)]
-        causes.append({"resource": tc["resource"], "kind": tc["kind"], "resource_found": bool(named),
-                       "kind_found": bool(kind_words), "found": bool(named) and bool(kind_words), "named_as": named[:3]})
-    decoys = sorted({n for n in names - truth_names for d in truth.get("decoys") or [] if resource_matches(d["resource"], n)})
+        own = {n for s in sentences[i] for n in _text_names(s) if _is_truth_cause(tc, n)}
+        kind_words = _says_kind(_without(" ".join(sentences[i]), own), kinds)
+        causes.append({"resource": tc["resource"], "kind": tc["kind"], "resource_found": bool(named_as[i]),
+                       "kind_found": bool(kind_words), "found": bool(named_as[i]) and bool(kind_words),
+                       "named_as": sorted(named_as[i])[:3], "ruled_out": ruled_out[i] and not named_as[i]})
     if truth.get("control"):
-        ok = no_fault
+        ok = (no_fault or rules_out) and not decoys_named
     else:
-        ok = bool(causes) and all(c["found"] for c in causes)
+        ok = bool(causes) and not no_fault and all(c["found"] for c in causes)
     return {"section": section, "pass": ok, "score": 1.0 if ok else 0.0, "no_fault": no_fault, "causes": causes,
-            "decoys_named": decoys}
+            "decoys_named": sorted(decoys_named), "decoys_ruled_out": sorted(decoys_ruled_out - decoys_named)}
 
 
 def score_block(block: dict | None, status: str, truth: dict, calls: list) -> dict:

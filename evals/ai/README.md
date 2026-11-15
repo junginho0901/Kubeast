@@ -177,32 +177,36 @@ investigation to end, reads its report and scores it.
 
 ```bash
 python3 scripts/ai-eval.py --cases evals/ai-hard --alerts --list --hidden    # the cases with an alert; no cluster
-python3 scripts/ai-eval.py --cases evals/ai-hard --alerts --alert-source auto --out /tmp/ai-eval-alerts --repeat 3
+python3 scripts/ai-eval.py --cases evals/ai-hard --alerts --out /tmp/ai-eval-alerts --repeat 3
 ```
 
 | Field of `alert` | |
 |---|---|
-| `labels`, `annotations` | the alert as Alertmanager would send it; `namespace` is the case's and `severity` `warning` unless given |
+| `labels`, `annotations` | the alert as Alertmanager would send it; `namespace` is the case's and `severity` `warning` unless given (`"namespace": ""` sends none) |
 | `rule` | the test Prometheus rule whose alert this is (its `alertname`); an add-on puts it into the second cluster's Prometheus, as `scripts/kind-otel-demo.sh` does its rules |
-| `match` | labels the fired alert must carry (default: the case's namespace) |
+| `match` | labels the fired alert must carry (default: the case's namespace; `""` for a label it does not carry) |
 | `after_seconds` | when the runner posts the alert, from the fault start (default: the case's first ask time) |
 | `fire_wait_seconds`, `investigation_wait_seconds` | how long to wait for the rule to fire (600) and for the investigation to end (900) |
 
+The webhook gives the investigator a token for the alert's `namespace` label (none: the whole cluster), so a case whose
+alert names one namespace while a truth cause is in another is a field problem (`check_alert_scope`; a cause of a kind
+with no namespace, such as a Node, is not held). `--list` names it and a run does not start.
+
 `--alert-source` picks where the alert comes from:
 
-- `real` (the default): the rule fires and Alertmanager posts it to the webhook. The runner waits for a new firing row
-  of that alert in the Alerts inbox. A case whose rule is not loaded, or that names none, is not run and says why.
-  Runs 2 to N send that alert again — its labels, annotations and start — under a fingerprint of their own
-  (`alert_source: replay`): Alertmanager sends a firing alert once, and the webhook folds a repeat into the first
-  investigation for `dedupeHours`.
-- `auto`: real where the case's rule is loaded, posted where it is not.
+- `auto` (the default): real where the case's rule is loaded, posted where it is not.
+- `real`: the rule fires and Alertmanager posts it to the webhook. The runner waits for a new firing row of that alert
+  in the Alerts inbox. A case whose rule is not loaded, or that names none, is not run and says why. Runs 2 to N send
+  that alert again — its labels, annotations and start — under a fingerprint of their own (`alert_source: replay`):
+  Alertmanager sends a firing alert once, and the webhook folds a repeat into the first investigation for
+  `dedupeHours`.
 - `synthetic`: always posted.
 
 The real path is what an install runs: the rule's own labels, its generator URL, a rule `prometheus_rules` finds by the
 alert's name. A posted alert needs no rule, no metric that shows the fault and no wait for a rule's `for`. The ten
 cases of `evals/ai-hard/` have no rule: most of their faults show only in logs, and five run on `self`, which has no
 Alertmanager. The only test rules today are the OpenTelemetry demo's, and the demo's cases (01–03, 07, 10, 11) are not
-written. So the ten run with `--alert-source auto` or `synthetic`, and their alert repeats what the question says.
+written. So the ten are posted, and their alert repeats what the question says.
 
 A posted alert is one alert in Alertmanager's message (version 4), sent with the cluster's own webhook token (the HMAC
 of `ALERT_WEBHOOK_TOKEN` from `kubeast-secrets`, which `webhookClusterTokensOnly` also takes), receiver `ai-eval`, a
@@ -213,25 +217,33 @@ case's investigator can read it with `alerts_inbox`.
 
 The investigation of an alert is a new one of the alert's fingerprint that holds the inbox row's `starts_at`, the match
 of #909, made by the alert's own start and never by comparing a received time with it, since the server and this
-machine keep different clocks. Without one, the newest new one of that fingerprint is taken (`matched_by` says
-which). The runner reads the detail of each new investigation of the alert once to match it and polls the
+machine keep different clocks. Without one, the newest new one of that fingerprint is taken, and given up for one that
+holds the start if that comes while it runs (`matched_by` says which). The runner reads the detail of each new investigation of the alert once to match it and polls the
 investigations list every 5 s until the one it matched is done, failed or skipped, then reads that detail again; each
 detail read writes an `ai.investigation.view` row, the list none. A failed or skipped investigation is a row with
 `error`, not scored.
 
 How a report is scored, the same with v0.7.9's switches off and on:
 
-- `text` (`score_text`): the report's "Likely cause" section, or the whole report without that heading. Each truth
-  cause must be named — its resource's name or an `accept_resources` form — with a word of its kind or an accepted kind
-  (`KIND_WORDS`, read with the cause's own names taken out). A control passes when that section says there is no fault
-  (`NO_FAULT_WORDS`). Decoys named there are listed in `decoys_named`, not held against it, since a report names what
-  it ruled out in the same words. `pass` and `score` are this check's, so an off round and an on round compare. It is
-  weaker than the block's.
+- `text` (`score_text`): the report's "Likely cause" section, or the whole report without that heading, read clause
+  by clause (a sentence, a line or a bullet, split at `;`). A clause with `NO_FAULT_WORDS` ("no fault", "found no
+  evidence of", "nothing points at", "찾지 못했", "장애가 없") or `CLEAR_WORDS` ("not changed", "looks normal",
+  "unrelated", "not the cause", "정상", "무관") rules out what it names; `NO_FAULT_WORDS` naming no object of the truth
+  (before or after a colon) is the report saying there is no fault (`no_fault`).
+  - A fault case passes when the report does not say there is no fault and names each truth cause — its resource's
+    name or an `accept_resources` form — in a clause that does not rule it out, with a word of its kind or an accepted
+    kind (`KIND_WORDS`) in a sentence that names it so, read with the cause's own names taken out (a name ends at
+    Hangul, so a particle does not keep it). Decoys it blames are listed in `decoys_named`, not held against it: the
+    symptom is named beside its cause.
+  - A control passes when the report says there is no fault or rules something out, and names no decoy as a cause —
+    in a clause that does not rule it out and holds `BLAME_WORDS` ("caused", "broke", "because", "원인", "실패").
+    `decoys_ruled_out` lists those it cleared.
+  - `pass` and `score` are this check's, so an off round and an on round compare. It is weaker than the block's.
 - `rca` (`score_block`): with `features.alertInvestigation.evidenceCheck` or `ledger` on, the server takes the rca
   block off the report and keeps it as the investigation's `result`, which is scored as the chat's block is. A report
   that still ends in a block is read from the report. With both off the row has no `rca`.
-- `prose_pass`: the case's `expect`, as in the chat path. A control's row also has `wrong_suspect`: the text check found
-  no "no fault".
+- `prose_pass`: the case's `expect`, as in the chat path. A control's row also has `wrong_suspect`: the text check did
+  not pass.
 
 Each row is in the same files as the chat's, with `form` `alert`: `alert_source`, `ask_after` and `late_seconds` for a
 posted alert, `alert_after_seconds` (fault start to the alert), `waited_seconds` (the alert to the end of the

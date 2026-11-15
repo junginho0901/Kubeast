@@ -144,6 +144,40 @@ def test_hidden_results_show_only_a_total_of_two_or_more():
         assert not re.search(r"정답 \d|\d/[12]\b", text) and "08_kept" not in text and "15_other" not in text, text
 
 
+def test_every_alert_reads_the_namespace_of_its_causes():
+    for d, c in all_cases():
+        if "alert" in c:
+            assert rca.check_alert_scope(c, truth_of(d)) == [], d.name
+    case = {"id": "90", "namespace": "shop-90", "alert": {"labels": {"alertname": "X", "service": "uptime-check"}}}
+    truth = {"causes": [{"resource": "Deployment/otel-demo/valkey-cart", "kind": "dependency_down"}]}
+    problems = rca.check_alert_scope(case, truth)
+    assert len(problems) == 1 and "'shop-90'" in problems[0] and "Deployment/otel-demo/valkey-cart" in problems[0]
+    assert rca.check_alert_scope({**case, "alert": {"labels": {"alertname": "X", "namespace": "otel-demo"}}}, truth) == []
+    assert rca.check_alert_scope({**case, "alert": {"labels": {"alertname": "X", "namespace": ""}}}, truth) == []  # cluster-wide
+    on_node = {"causes": [{"resource": "Node/kubeast-b-control-plane", "kind": "node"}]}
+    assert rca.check_alert_scope(case, on_node) == []
+    ruled = {**case, "alert": {"labels": {"alertname": "X", "namespace": "otel-demo"}, "rule": "X"}}
+    assert len(rca.check_alert_scope(ruled, truth)) == 1  # the fired alert is picked in shop-90 (match's default)
+    assert rca.check_alert_scope({**ruled, "alert": {**ruled["alert"], "match": {"namespace": "otel-demo"}}}, truth) == []
+    root = Path(tempfile.mkdtemp(prefix="ai-eval-scope-"))
+    try:
+        src = next(d for d, c in all_cases() if "alert" in c and not truth_of(d)["control"])
+        shutil.copytree(src, root / src.name)
+        moved = json.loads((root / src.name / "case.json").read_text())
+        moved["alert"]["labels"]["namespace"] = "elsewhere"
+        (root / src.name / "case.json").write_text(json.dumps(moved))
+        out = subprocess.run([sys.executable, "-I", str(HERE / "ai-eval.py"), "--cases", str(root), "--list", "--hidden"],
+                             capture_output=True, text=True, timeout=60)
+        assert out.returncode == 1 and "alert labels namespace 'elsewhere'" in out.stdout, out.stdout
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_the_token_outlasts_a_turn_of_every_case():
+    for d, c in all_cases():
+        assert c.get("timeout_seconds", 300) + 60 <= AI_EVAL.RENEW_MARGIN_SECONDS == 480, d.name
+
+
 def test_every_hard_case_runs_under_a_namespace_suffix():
     root = Path(tempfile.mkdtemp(prefix="ai-eval-suffix-"))
     try:
@@ -151,7 +185,8 @@ def test_every_hard_case_runs_under_a_namespace_suffix():
             ns = c["namespace"]
             new_dir, new = AI_EVAL.with_suffix(d, c, "zz9", root)
             assert new_dir != d and new["namespace"] == f"{ns}-zz9" and new["id"] == c["id"], d.name
-            assert f"{ns}-zz9" in new["question"] and f"{ns}-zz9" in new["question_vague"], d.name
+            for form in ("question", "question_vague"):  # 01, 07 and 10 ask about otel-demo, not their own namespace
+                assert (f"{ns}-zz9" in new[form]) == (ns in c[form]), (d.name, form)
             whole = re.compile(r"(?<![A-Za-z0-9-])" + re.escape(ns) + r"(?![A-Za-z0-9-])")
             for f in sorted(new_dir.iterdir()):
                 if f.suffix in (".json", ".yaml"):
@@ -248,13 +283,21 @@ def test_each_alert_is_what_monitoring_would_send_and_holds_no_answer_word():
         labels = {"alertname": rca.alert_name(c), **alert.get("labels", {})}
         assert METRIC_NAME.match(labels["alertname"]), d.name
         assert all(LABEL_NAME.match(k) for k in labels), d.name
-        assert labels.get("namespace", c["namespace"]) == c["namespace"], d.name
+        truth = truth_of(d)
+        got = labels.get("namespace", c["namespace"])
+        spaces = {rca.split_resource(tc["resource"])[1] for tc in truth["causes"]
+                  if rca.split_resource(tc["resource"])[0] not in rca.CLUSTER_SCOPED_KINDS}
+        if not truth["causes"]:
+            assert got == c["namespace"], d.name  # a control: the namespace the question is about
+        elif got:
+            assert spaces == {got}, (d.name, got, spaces)  # the investigator's token reads the causes' namespace
+        else:
+            assert len(spaces) != 1, (d.name, spaces)  # none, a cluster-wide token: causes of no namespace (03's node)
         assert labels.get("severity", "warning") in ("critical", "warning"), d.name  # the investigator's default severities
         assert alert.get("annotations", {}).get("summary"), d.name
         words = " ".join([*labels.values(), *alert.get("annotations", {}).values()])
         hit = ANSWER_WORDS.search(words)
         assert not hit, f"{d.name}: the alert says {hit.group(0)!r}"
-        truth = truth_of(d)
         for tc in truth["causes"]:  # where the symptom shows, as the question says it; a cause the question names is that place
             cause_name = tc["resource"].rsplit("/", 1)[-1].lower()
             assert cause_name in c["question"].lower() or cause_name not in words.lower(), f"{d.name}: the alert names the cause"

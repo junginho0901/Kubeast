@@ -114,7 +114,7 @@ The harder cases of `scripts/ai-eval.py` need faults and services that call each
 - Behind a TLS-inspecting proxy, set `CHAOS_NODE_HOOK` or `OTELDEMO_NODE_HOOK` as for `CILIUM_NODE_HOOK`: a command that gets the cluster name, run before the images are pulled.
 - The case fields, the run order and the ten cases of `evals/ai-hard/` are in [evals/ai/README.md](../evals/ai/README.md) "Hard cases".
 - `scripts/ai-eval.py --alerts` runs the cases that carry an `alert` through the alert investigation instead of the chat and scores the report ([evals/ai/README.md](../evals/ai/README.md) "The alert path").
-  - The alert comes through the second cluster's Alertmanager when the case's test rule is loaded there; `--alert-source auto` or `synthetic` posts it to the webhook in Alertmanager's form instead. The ten cases of `evals/ai-hard/` have no test rule yet, so they are posted.
+  - The alert comes through the second cluster's Alertmanager when the case's test rule is loaded there, and is posted to the webhook in Alertmanager's form otherwise (`--alert-source auto`, the default; `real` runs only the rule, `synthetic` always posts). The ten cases of `evals/ai-hard/` have no test rule yet, so they are posted.
   - It has not run on kind yet.
 - The runner signs in again before its token runs out and on a 401, and writes its report after each case, so one call can run a round longer than the dev token's 120 minutes.
 

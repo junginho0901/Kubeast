@@ -307,11 +307,93 @@ def test_text_without_headings_reads_the_whole_report():
     assert s["section"] == "whole" and s["pass"]
 
 
-def test_text_lists_decoys_without_failing():
+def test_text_lists_decoys_ruled_out_and_blamed_without_failing_a_fault_case():
     s = rca.score_text(report("The ConfigMap settings-b changed a setting; checkout and the nodes are fine."), TRUTH)
-    assert s["pass"] and s["decoys_named"] == ["checkout"]  # "nodes" names no Node: a wildcard name needs the kind
-    s = rca.score_text(report("Node/kind-worker is out of memory."), TRUTH)
+    assert s["pass"] and s["decoys_named"] == [] and s["decoys_ruled_out"] == ["checkout"]  # "nodes" names no Node
+    s = rca.score_text(report("The ConfigMap settings-b changed a setting, so checkout fails."), TRUTH)
+    assert s["pass"] and s["decoys_named"] == ["checkout"]  # the symptom beside its cause: listed, not held against it
+    s = rca.score_text(report("Node/kind-worker ran out of memory and caused it."), TRUTH)
     assert not s["pass"] and s["decoys_named"] == ["Node/kind-worker"]
+
+
+# The review's reports (kubeast/raw/20261115/review-eval/findings.md 4), on truths shaped as cases 12, 13, 14, 18 and 19.
+T12 = {"control": False, "causes": [{"resource": "ConfigMap/shop-12/storefront-config", "kind": "config_change", "accept_resources": [],
+                                     "accept_kinds": []}],
+       "also_ok": [], "decoys": [{"resource": "Deployment/shop-12/notifier"}, {"resource": "Deployment/shop-12/cart"}]}
+C13 = {"control": True, "causes": [], "also_ok": [],
+       "decoys": [{"resource": "Deployment/shop-13/thumbnailer"}, {"resource": "Deployment/shop-13/orders"}]}
+C14 = {"control": True, "causes": [], "also_ok": [],
+       "decoys": [{"resource": "Deployment/shop-14/orders"}, {"resource": "ReplicaSet/shop-14/orders-<new>"}]}
+T18 = {"control": False, "causes": [{"resource": "ConfigMap/shop-18/web-settings", "kind": "config_change",
+                                     "accept_kinds": ["dns", "dependency_down"]}],
+       "also_ok": [], "decoys": [{"resource": "Deployment/shop-18/accounts"}]}
+T19 = {"control": False, "causes": [{"resource": "ConfigMap/shop-19/edge-routes", "kind": "config_change", "accept_kinds": []}],
+       "also_ok": ["Service/shop-19/frontdoor"], "decoys": [{"resource": "Deployment/shop-19/storefront"}]}
+
+
+def test_text_control_fails_when_it_names_a_decoy_as_the_cause():
+    for text, truth, blamed in [
+        ("The thumbnailer restart (exit 143) is what broke the orders. The other services are running normally.", C13, ["orders", "thumbnailer"]),
+        ("thumbnailer가 재시작(exit 143)하면서 주문이 실패했습니다. 나머지 서비스는 정상입니다.", C13, ["thumbnailer"]),
+        ("orders를 4.18.1로 롤아웃한 것이 느려진 원인입니다. 롤아웃 자체는 정상적으로 끝났습니다.", C14, ["orders"]),
+        ("The orders rollout made it slower. Nothing is broken.", C14, ["orders"]),
+    ]:
+        s = rca.score_text(report(text), truth)
+        assert not s["pass"] and s["decoys_named"] == blamed, (text, s)
+
+
+def test_text_control_passes_on_the_no_fault_words_it_missed():
+    for text, truth in [
+        ("Nothing points at a fault: the thumbnailer restarted once and has run since; orders answer every call.", C13),
+        ("주문 실패 흔적을 찾지 못했습니다. thumbnailer 재시작 1회는 주문 경로와 무관합니다.", C13),
+        ("I found no evidence of a fault. thumbnailer restarted once and orders answered every call.", C13),
+        ("No fault found: the orders rollout finished cleanly and latency stayed flat.", C14),
+        ("장애가 없습니다. thumbnailer는 한 번 재시작했을 뿐이고 orders는 모든 요청에 답합니다.", C13),
+    ]:
+        s = rca.score_text(report(text), truth)
+        assert s["pass"] and s["no_fault"] and s["decoys_named"] == [], (text, s)
+
+
+def test_text_fault_case_fails_when_its_cause_is_ruled_out():
+    for text, truth in [
+        ("storefront-config was not changed; I found no config change. cart is down.", T12),
+        ("storefront-config는 바뀌지 않았습니다. cart가 중단되었습니다.", T12),
+        ("edge-routes config looks normal; the 404 comes from storefront being down.", T19),
+    ]:
+        s = rca.score_text(report(text), truth)
+        assert not s["pass"] and not s["causes"][0]["resource_found"] and s["causes"][0]["ruled_out"], (text, s)
+
+
+def test_text_fault_case_fails_when_the_report_says_no_fault():
+    for text in ("No fault found. storefront-config and its settings look as expected.",
+                 "장애가 없습니다. storefront-config 설정을 바꾼 기록은 있습니다."):
+        s = rca.score_text(report(text), T12)
+        assert not s["pass"] and s["no_fault"], (text, s)
+
+
+def test_text_fault_case_with_the_rest_said_to_be_normal_passes():
+    for text in ("storefront-config's cart_url setting was edited in place; cart calls go to a dead address. The other services are running normally.",
+                 "storefront-config의 cart_url 설정이 바뀌어 장바구니 호출이 실패합니다. 나머지 서비스는 정상입니다.",
+                 "storefront-config changed the cart_url setting; notifier's restarts are unrelated.",
+                 "There is no problem with notifier; storefront-config changed the cart_url setting."):
+        s = rca.score_text(report(text), T12)
+        assert s["pass"] and not s["no_fault"], (text, s)
+
+
+def test_text_a_name_ends_at_hangul():
+    for text, truth in [("storefront-config가 원인입니다.", T12), ("storefront-config is the cause.", T12),
+                        ("web-settings를 확인해야 합니다.", T18), ("Check web-settings.", T18)]:
+        s = rca.score_text(report(text), truth)
+        assert not s["pass"] and s["causes"][0]["resource_found"] and not s["causes"][0]["kind_found"], (text, s)
+    assert rca.score_text(report("storefront-config가 원인입니다. 설정 값이 잘못됐습니다."), T12)["causes"][0]["kind_found"] is False
+    assert rca.score_text(report("storefront-config의 설정 값이 잘못됐습니다."), T12)["pass"]
+
+
+def test_text_kind_words_only_in_the_sentence_naming_the_cause():
+    s = rca.score_text(report("storefront-config is the cause. notifier's settings changed too."), T12)
+    assert not s["pass"] and not s["causes"][0]["kind_found"]
+    s = rca.score_text("**Summary** cart down.\n**Likely cause** cart is down.\n**Ruled out** storefront-config: config unchanged.", T12)
+    assert s["section"] == "whole" and not s["pass"]
 
 
 def test_text_control_passes_only_when_it_says_no_fault():
