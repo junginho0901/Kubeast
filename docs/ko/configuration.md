@@ -201,6 +201,10 @@ features:
     timeoutSeconds: 20       # 답 전체의 시간
     concurrency: 4           # 한 번에 도는 검사 수
     cacheSeconds: 60         # 같은 사용자·네임스페이스·구간은 이 시간 동안 메모리에서 답합니다
+    logMaxBytes: 10737418240 # 로그 검사는 먼저 로그 저장소 색인에 양을 묻고, 두 구간을 합쳐 이만큼(10 GiB)을 넘게 읽지 않습니다
+  logSearch:
+    queryMaxBytes: 0         # (alpha) 바이트 수를 정하면 AI의 loki_query가 먼저 저장소 색인에 양을 묻고, 넘으면 좁히는 법과 함께
+                             # 거절합니다(operations.md). 0이면 묻지 않고 전처럼 질의합니다
 
 # 멀티클러스터 부하/장애 격리 튜닝
 multicluster:

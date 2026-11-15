@@ -204,6 +204,10 @@ features:
     timeoutSeconds: 20       # the whole answer
     concurrency: 4           # checks at once
     cacheSeconds: 60         # the same caller, namespace and window answered from memory
+    logMaxBytes: 10737418240 # the log checks ask the log store's index first and read no more than this over both windows (10 GiB)
+  logSearch:
+    queryMaxBytes: 0         # (alpha) a number of bytes: the AI's loki_query asks the store's index first and is refused past it, with how
+                             # to narrow it (operations.md); 0: not asked, the query runs as before
 
 # Multi-cluster load/failure isolation tuning
 multicluster:
