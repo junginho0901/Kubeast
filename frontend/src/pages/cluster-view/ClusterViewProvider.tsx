@@ -28,22 +28,26 @@ export function ClusterViewProvider({ children }: { children: ReactNode }) {
   const viewPage = Number(params.get('nodePage')) || null
   const viewPod = params.get('pod')
   const nodeView = useMemo(() => (viewNode === null ? null : { node: viewNode, page: viewPage, pod: viewPod }), [viewNode, viewPage, viewPod])
-  const setView = useCallback((node: string | null, at: { page?: number; pod?: string } = {}) => setParams((prev) => {
-    const next = new URLSearchParams(prev)
+  // an address that would not change is not navigated to: no render of every useCluster screen, no Back entry
+  const changeParams = useCallback((change: (next: URLSearchParams) => void, replace: boolean) => {
+    const next = new URLSearchParams(params)
+    change(next)
+    if (next.toString() !== params.toString()) setParams(next, replace ? { replace: true } : undefined)
+  }, [params, setParams])
+  const setView = useCallback((node: string | null, at: { page?: number; pod?: string } = {}) => changeParams((next) => {
     for (const k of ['node', 'nodePage', 'pod']) next.delete(k)
     if (node !== null) next.set('node', node)
     if (node !== null && at.page) next.set('nodePage', String(at.page))
     if (node !== null && at.pod) next.set('pod', at.pod)
-    return next
-  }), [setParams])
-  const openNodeView = useCallback((node: string, at?: { page?: number; pod?: string }) => setView(node, at), [setView])
-  const moveNodeView = useCallback((at: { page: number; pod?: string | null }) => setParams((prev) => {
-    const next = new URLSearchParams(prev)
+  }, false), [changeParams])
+  const openNodeView = useCallback((node: string, at?: { page?: number; pod?: string }) => {
+    if (node !== viewNode) setView(node, at)
+  }, [setView, viewNode])
+  const moveNodeView = useCallback((at: { page: number; pod?: string | null }) => changeParams((next) => {
     next.set('nodePage', String(at.page))
     if (at.pod) next.set('pod', at.pod)
     else next.delete('pod')
-    return next
-  }, { replace: true }), [setParams])
+  }, true), [changeParams])
   const setNodeViewPage = useCallback((page: number) => moveNodeView({ page }), [moveNodeView])
   const closeNodeView = useCallback(() => setView(null), [setView])
 
