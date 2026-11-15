@@ -55,6 +55,9 @@ describe('an investigation result', () => {
     expect(notClosedText(RESULT.hypotheses[2], tr)).toBe('Not closed: no state of the four; 9 name no call of this investigation')
     expect(notClosedText({ ...RESULT.hypotheses[1], closed: false, problems: [{ reason: 'no_evidence', side: 'against' }] }, tr))
       .toBe('Not closed: no call that answered speaks against it')
+    expect(notClosedText({ ...RESULT.hypotheses[1], closed: false, problems: [{ reason: 'not_verified' }] }, tr))
+      .toBe(`Not closed: ${en.investigations.result.problem.not_verified}`)
+    expect(ko.investigations.result.problem.not_verified).toBeTruthy()
   })
 
   it('says when the block could not be read and when the model was asked again', () => {
@@ -136,6 +139,29 @@ describe("the report window's layer for the floating chat", () => {
     expect(reportForChat(noNotes, CHAT_REPORT_WITH_RESULT)).toBe(noNotes.slice(0, CHAT_REPORT_WITH_RESULT))
     const longNotes = `${'x'.repeat(3000)}\n\n---\n\n${'n'.repeat(CHAT_NOTES)}`  // notes past the room: the start only
     expect(reportForChat(longNotes, CHAT_REPORT_WITH_RESULT)).toBe(longNotes.slice(0, CHAT_REPORT_WITH_RESULT))
+  })
+
+  it('stays within the 8 KB layer budget with names at the server cap, leaving the hypotheses out first', () => {
+    const name = (i: number) => `Deployment/apps/${'w'.repeat(280)}-${i}`
+    const calls = [{ call: 1, tool: 'timeline' }, { call: 2, tool: 'k8s_get_pod_logs' }, { call: 3, tool: 'k8s_get_events' }]
+    const huge: InvestigationResult = {
+      ...RESULT,
+      causes: Array.from({ length: 10 }, (_v, i) => ({ ...RESULT.causes[0], resource: name(i), evidence: calls, verified: false, reason: 'name_missing' as const })),
+      path: Array.from({ length: 12 }, (_v, i) => name(i)),
+      ruled_out: Array.from({ length: 20 }, (_v, i) => name(i)),
+      hypotheses: Array.from({ length: 12 }, (_v, i) => ({ ...RESULT.hypotheses[1], id: `h${i}`, statement: 'x'.repeat(300), resource: name(i), for: calls })),
+    }
+    const data = reportLayer(investigation({ result: huge, report: 'r'.repeat(5000) })).data
+    expect(new Blob([JSON.stringify(data)]).size).toBeLessThanOrEqual(8192)
+    const told = data?.result as Record<string, unknown>
+    expect(told.hypotheses).toBeUndefined()
+    expect(told.hypotheses_left_out).toBe(12)
+    const causes = told.causes as { resource: string }[]
+    expect(causes.length).toBe(10)
+    expect(causes.every((c) => c.resource.length <= 120)).toBe(true)
+    expect((data?.report as string).length).toBe(CHAT_REPORT_WITH_RESULT)
+    // a result that fits leaves nothing out
+    expect(JSON.stringify(reportLayer(investigation({ result: RESULT })).data)).not.toContain('_left_out')
   })
 
   it('stays within the 8 KB layer budget with a full result', () => {

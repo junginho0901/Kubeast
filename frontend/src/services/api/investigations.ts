@@ -60,7 +60,7 @@ export interface InvestigationHypothesis {
   against: InvestigationCallRef[]
   blocked?: string
   closed: boolean
-  problems?: { reason: 'open' | 'no_evidence' | 'no_reason' | 'bad_calls'; side?: 'for' | 'against'; calls?: string[] }[]
+  problems?: { reason: 'open' | 'no_evidence' | 'no_reason' | 'bad_calls' | 'not_verified'; side?: 'for' | 'against'; calls?: string[] }[]
 }
 
 export type UnverifiedReason = 'no_evidence' | 'bad_calls' | 'name_missing' | 'after_alert'
@@ -77,12 +77,10 @@ export interface InvestigationCause {
   reason?: UnverifiedReason
 }
 
-// What the server read of the report's rca block (features.alertInvestigation.evidenceCheck or ledger; absent with
-// both off).
+// What the server read of the report's rca block (evidenceCheck or ledger on; absent with both off).
 export interface InvestigationResult {
   version: number
-  // ok: the block was read; missing / invalid: the report ended without a block it could read; cut: the answer
-  // stopped inside its block
+  // ok: read; missing / invalid: no block it could read; cut: the answer stopped inside its block
   status: 'ok' | 'missing' | 'invalid' | 'cut'
   no_fault: boolean | null
   causes: InvestigationCause[]

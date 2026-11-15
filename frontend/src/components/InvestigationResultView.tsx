@@ -4,10 +4,7 @@ import type { InvestigationCallRef, InvestigationResult, InvestigationToolCall }
 import { formatTime } from '@/utils/time'
 import { callLabel, ledgerOn, notClosedText, notVerifiedText, orderedHypotheses, resultNotes, stateBadge, stateText } from '@/utils/investigationResult'
 
-// The report's result and hypothesis ledger, under the report in its window (features.alertInvestigation.evidenceCheck
-// or ledger). Every text here came from a model that read an external alert, so it is drawn as plain text: no
-// Markdown, no HTML. A call number names a row of the window's tool calls, whose arguments show on hover. A cause the
-// calls do not show says so; the hypotheses show only when the ledger read the block.
+// The report's result (evidenceCheck or ledger) under the report: model text drawn as plain text, calls by their number.
 
 function Calls({ refs, toolCalls }: { refs: InvestigationCallRef[]; toolCalls: InvestigationToolCall[] }) {
   const { t } = useTranslation()

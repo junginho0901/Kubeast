@@ -4268,7 +4268,7 @@
       "activateConfirm": "Make \"{{name}}\" the model every chat uses? The model in use now stops being the default.",
       "advanced": "Advanced (local / self-hosted)",
       "maxTokens": "Answer length (tokens)",
-      "maxTokensHint": "Empty: 4,096 for chat answers, 2,048 for each alert investigation step. A reasoning model counts its reasoning in it.",
+      "maxTokensHint": "Empty: 4,096 for chat answers, 2,048 for each alert investigation step (4,096 with evidenceCheck or ledger on). A reasoning model counts its reasoning in it.",
       "maxTokensSubscription": "Claude Code sets the answer length for the subscription; this is not used.",
       "toolResultChars": "Tool result length (characters)",
       "toolResultCharsHint": "Empty: 6,000. A longer tool result is cut to this before the model reads it (1,000 to 200,000).",
@@ -4931,7 +4931,8 @@
         "no_evidence_for": "no call that answered speaks for it",
         "no_evidence_against": "no call that answered speaks against it",
         "no_reason": "no reason why it is blocked",
-        "bad_calls": "{{calls}} name no call of this investigation"
+        "bad_calls": "{{calls}} name no call of this investigation",
+        "not_verified": "the evidence check did not verify the cause it is about"
       },
       "notVerified": "Not verified: {{reason}}",
       "notVerifiedBare": "Not verified",
