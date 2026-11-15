@@ -523,7 +523,7 @@ describe('the live node list on the screen', () => {
       notReady: 'Node not Ready 2', notReadyOpens: 'Open spare-1, the first of them', cordoned: 'SchedulingDisabled 1',
     })
     // the map can be reached from the keyboard, says what it is, and the line under the legend names the cell reached
-    expect(html).toMatch(/<canvas role="group" aria-roledescription="Node map" aria-label="Node map: 2 nodes[^"]*"[^>]*tabindex="0"/)
+    expect(html).toMatch(/<canvas role="application" aria-roledescription="Node map" aria-label="Node map: 2 nodes[^"]*"[^>]*tabindex="0"/)
     expect(html).toMatch(/<p class="min-h-\[16px\]" aria-live="polite" data-testid="cluster-view-map-hover">A cell is a Node/)
     // the legend's buttons are not inside that line, so a cell reached does not take them away
     expect(html.match(/data-testid="cluster-view-map-hover">[^<]*<\/p>/)).not.toBeNull()

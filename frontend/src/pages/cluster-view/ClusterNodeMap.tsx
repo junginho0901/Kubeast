@@ -11,7 +11,8 @@ import { nodeCordoned, nodeReadiness } from '@/utils/nodeStatus'
 // While a search is on, the nodes with no pod it matched are faded. A node not Ready (kubectl's NotReady or Unknown)
 // has a solid red border, a cordoned one (SchedulingDisabled) a dashed yellow one, drawn over the page's outline, from
 // the live node list; the legend counts both from that list and each count opens the first such node. A click, or
-// Enter on the cell the arrow keys reach, opens that node's own view; the line under the legend names that cell.
+// Enter on the cell the arrow keys reach, opens that node's own view; the line under the legend names that cell. The
+// canvas is an `application` (WAI-ARIA 1.2), so a screen reader in browse mode passes the arrow keys and Enter to it.
 
 function cssColor(name: string, fallback: string): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
@@ -155,7 +156,7 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, nodeList
       <div ref={wrapRef} className="w-full">
         <canvas
           ref={canvasRef}
-          role="group"
+          role="application"
           aria-roledescription={tr('clusterView.map.roleDescription', 'Node map')}
           aria-label={notReady + cordoned > 0 ? `${aria} ${tr('clusterView.map.ariaMarks', '{{notReady}} nodes not Ready, {{cordoned}} SchedulingDisabled.', { notReady, cordoned })}` : aria}
           data-cells={JSON.stringify(entries.map((e) => [e.node, e.counts.ok, e.counts.warn, e.counts.error]))}
