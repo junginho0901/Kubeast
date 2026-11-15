@@ -123,7 +123,7 @@ func TestPersonsTokenOnTheClusterListKeepsItsChecks(t *testing.T) {
 		t.Error("the session's version was not read")
 	}
 
-	stale := newAuthAPIWith(t, pendingRequest{owner: "requester"}, investigationOn, pgRule{match: "SELECT token_version FROM auth_users", oids: []uint32{integerOID}, rows: [][]any{{5}}})
+	stale := newAuthAPIWith(t, pendingRequest{owner: "requester"}, investigationOn, sessionState(5))
 	if w := stale.fetch(stale.sessionToken(), http.MethodGet, "/api/v1/clusters?accessibleOnly=true", ""); w.Code != http.StatusUnauthorized {
 		t.Errorf("stale session: %d %s, want 401", w.Code, w.Body.String())
 	}
