@@ -146,9 +146,11 @@ test.describe.serial('open connections and what a global key opens', () => {
     expect(seen.log?.reason).toBe('session_revoked')
     expect(seen.log?.lines ?? 0).toBeGreaterThan(0)
 
-    const rows = (await (await request.get(`/api/v1/auth/admin/audit-logs?action=k8s.session.end&actor_email=${encodeURIComponent(email)}&limit=20`, { headers: bearer(admin) })).json()) as { items?: { ActorEmail?: string; After?: { stream?: string; reason?: string } }[] }
-    const streams = (rows.items ?? []).filter((r) => r.ActorEmail === email).map((r) => r.After?.stream).sort()
-    expect(streams).toEqual(['exec', 'pod-logs'])
+    // A terminal's row comes after its close: the shell is hung up first (remote_shell.go hangUp).
+    await expect.poll(async () => {
+      const rows = (await (await request.get(`/api/v1/auth/admin/audit-logs?action=k8s.session.end&actor_email=${encodeURIComponent(email)}&limit=20`, { headers: bearer(admin) })).json()) as { items?: { ActorEmail?: string; After?: { stream?: string; reason?: string } }[] }
+      return (rows.items ?? []).filter((r) => r.ActorEmail === email).map((r) => r.After?.stream).sort()
+    }, { timeout: 10_000 }).toEqual(['exec', 'pod-logs'])
     await page.context().close()
   })
 
