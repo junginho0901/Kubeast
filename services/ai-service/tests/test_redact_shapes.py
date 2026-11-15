@@ -44,6 +44,8 @@ def test_command_shapes(case):
 @pytest.mark.parametrize("case", CASES["text_with_personal_data"], ids=lambda c: c["name"])
 def test_personal_data_shapes(case):
     assert redact.redact_text(case["input"], redact.Options(pii=True))[0] == case["want"]
+    numbered = redact.redact_text(case["input"], redact.Options(pii=True, numbered=True))[0]
+    assert numbered == case.get("want_numbered", case["want"])
 
 
 def _table_of(key, by_value):
@@ -62,7 +64,7 @@ def test_numbered_personal_data(case):
     numbers.table = _table_of(case["key"], case.get("seed"))
     numbers.after = dict(case.get("after") or {})
     for text, want in zip(case["inputs"], case["want"], strict=True):
-        assert redact.redact_text(text, redact.Options(pii=True), numbers)[0] == want
+        assert redact.redact_text(text, redact.Options(pii=True, numbered=True), numbers)[0] == want
     assert {k: v for k, v in numbers.table.items() if v} == _table_of(case["key"], case["table"])
 
 

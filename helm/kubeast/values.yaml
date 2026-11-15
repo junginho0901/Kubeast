@@ -352,17 +352,21 @@ ai:
   # analysis, resource explanations and the floating widget's page snapshot.
   # A Secret's data is always stripped regardless of this switch. The screen
   # is not affected. pii adds e-mail / phone / resident-registration / card
-  # number masking, each value read as its kind and a number (<EMAIL_1>,
+  # number masking; disable lists rule names to skip (key_name, private_key,
+  # url_credentials, authorization, jwt, aws_key, provider_key, email, phone,
+  # rrn, card). Error messages shown on screen or written to the audit log are
+  # masked with every credential rule, whatever these settings. numbered (with
+  # pii, off by default) reads each value as its kind and a number (<EMAIL_1>,
   # <PHONE_1>, <RRN_1>, <CARD_1>) that stays the same within one chat answer or
   # alert investigation; a later answer numbers past what the conversation
-  # shows, so the same value then gets a new number; disable lists rule names
-  # to skip (key_name, private_key, url_credentials, authorization, jwt,
-  # aws_key, provider_key, email, phone, rrn, card). Error messages shown on
-  # screen or written to the audit log are masked with every credential rule,
-  # whatever these settings.
+  # shows, so the same value then gets a new number; a write holding <PHONE_n>,
+  # <RRN_n> or <CARD_n> is refused like one holding <EMAIL_n>. Off: one address
+  # keeps one <EMAIL_n> within a text and the other kinds read
+  # <REDACTED:phone>, <REDACTED:rrn>, <REDACTED:card>.
   redaction:
     enabled: true
     pii: false
+    numbered: false
     disable: []
   # Chat history sent to the model: the last historyMessages user/assistant
   # messages verbatim; with summary.enabled, everything before them is folded

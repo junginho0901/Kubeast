@@ -34,11 +34,20 @@ class _StandInToolServer:
     def handler(self, request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         self.requests.append(body)
+        if "masks" not in body:  # REDACTION_NUMBERED off: no table, masked as before numbering
+            out, stats = redact.redact_text(self.outputs.pop(0), redact.Options(pii=True))
+            return httpx.Response(200, json={"content": out, "redacted": stats.as_dict()})
         numbers = redact.Numbers(key=body["masks"]["key"])
         numbers.table = {kind: dict(by_key) for kind, by_key in body["masks"].get("table", {}).items()}
         numbers.after = dict(body["masks"].get("after", {}))
-        out, stats = redact.redact_text(self.outputs.pop(0), redact.Options(pii=True), numbers)
+        out, stats = redact.redact_text(self.outputs.pop(0), redact.Options(pii=True, numbered=True), numbers)
         return httpx.Response(200, json={"content": out, "redacted": stats.as_dict(), "masks": numbers.table})
+
+
+@pytest.fixture(autouse=True)
+def _numbered(monkeypatch):
+    """The cases below are those of REDACTION_NUMBERED (chart ai.redaction.numbered), but the last one."""
+    monkeypatch.setenv("REDACTION_NUMBERED", "true")
 
 
 class _Service(FakeService):
@@ -154,7 +163,7 @@ async def test_two_calls_at_once_end_with_one_number_for_each_value():
         numbers = redact.Numbers(key=body["masks"]["key"])
         numbers.table = body["masks"]["table"]
         value = "ann.planted@example.com" if body["arguments"]["pod"] == "a" else "bob.planted@example.com"
-        out, _ = redact.redact_text(f"user={value}", redact.Options(pii=True), numbers)
+        out, _ = redact.redact_text(f"user={value}", redact.Options(pii=True, numbered=True), numbers)
         return httpx.Response(200, json={"content": out, "masks": numbers.table})
 
     c = ToolServerClient(authorization="Bearer t")
@@ -303,3 +312,23 @@ def test_an_alert_quoting_an_earlier_report_numbers_past_its_placeholders(monkey
     msg = inv_prompt.alert_message(cluster="self", alert=alert, numbers=numbers)
     assert "now <EMAIL_2>, <PHONE_3>" in msg and "dana.planted" not in msg
     assert numbers.after == {"email": 1, "phone": 2}
+
+
+@pytest.mark.asyncio
+async def test_with_numbering_off_a_run_sends_no_table_and_masks_as_before(monkeypatch):
+    monkeypatch.setenv("REDACTION_PII", "true")
+    monkeypatch.delenv("REDACTION_NUMBERED")
+    stand_in = _StandInToolServer([LOG])
+    service = _Service([
+        completion(calls=[tool_call("c1", "k8s_get_resources", {"resource_type": "pods", "namespace": "apps"})]),
+        completion(content="## Summary\nok"),
+    ], stand_in)
+    install_loop(monkeypatch, service, [])
+    r = row(labels={"alertname": "LoginFailures", "user": "ann.planted@example.com"}, annotations={"summary": "paged 010-2222-3333"})
+    await runner.investigate(cfg(max_steps=5), r)
+    messages = service.completions.calls[-1]["messages"]
+    assert service.tool_server.numbers is None and [sorted(b) for b in stand_in.requests] == [["arguments", "name"]]
+    assert "<EMAIL_1>" in messages[1]["content"] and "<REDACTED:phone>" in messages[1]["content"]
+    (tool_text,) = [m["content"] for m in messages if isinstance(m, dict) and m.get("role") == "tool"]
+    assert "user=<EMAIL_1>" in tool_text and "user=<EMAIL_2>" in tool_text  # numbered within that answer alone
+    assert "<PHONE_" not in json.dumps([c["messages"] for c in service.completions.calls], ensure_ascii=False, default=str)

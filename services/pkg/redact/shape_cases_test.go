@@ -31,9 +31,10 @@ type shapeCases struct {
 		Want  []string `json:"want"`
 	} `json:"commands"`
 	TextWithPersonalData []struct {
-		Name  string `json:"name"`
-		Input string `json:"input"`
-		Want  string `json:"want"`
+		Name         string `json:"name"`
+		Input        string `json:"input"`
+		Want         string `json:"want"`
+		WantNumbered string `json:"want_numbered"`
 	} `json:"text_with_personal_data"`
 	NumberedPersonalData []struct {
 		Name   string                    `json:"name"`
@@ -92,7 +93,7 @@ func TestSharedShapeCases(t *testing.T) {
 		t.Run("numbered/"+c.Name, func(t *testing.T) {
 			n := &Numbers{Key: c.Key, Table: tableOf(c.Key, c.Seed), After: c.After}
 			for i, in := range c.Inputs {
-				if got, _ := TextNumbered(in, Options{Enabled: true, PII: true, Disabled: map[string]bool{}}, n); got != c.Want[i] {
+				if got, _ := TextNumbered(in, Options{Enabled: true, PII: true, Numbered: true, Disabled: map[string]bool{}}, n); got != c.Want[i] {
 					t.Errorf("text %d: got  %q\nwant %q", i, got, c.Want[i])
 				}
 			}
@@ -105,6 +106,13 @@ func TestSharedShapeCases(t *testing.T) {
 		t.Run("personal/"+c.Name, func(t *testing.T) {
 			if got, _ := Text(c.Input, Options{Enabled: true, PII: true, Disabled: map[string]bool{}}); got != c.Want {
 				t.Errorf("got  %q\nwant %q", got, c.Want)
+			}
+			want := c.WantNumbered
+			if want == "" {
+				want = c.Want
+			}
+			if got, _ := Text(c.Input, Options{Enabled: true, PII: true, Numbered: true, Disabled: map[string]bool{}}); got != want {
+				t.Errorf("numbered: got  %q\nwant %q", got, want)
 			}
 		})
 	}

@@ -18,10 +18,11 @@ import (
 const maskedWriteShown = 5
 
 var (
-	// A masked value (its name may hold spaces: a key's name, k8s_diff's "new value") and a numbered personal-data value
-	// (REDACTION_PII: services/pkg/redact numberedKinds).
-	writePlaceholder  = regexp.MustCompile(`(?:<|\\u003[cC])(REDACTED:[^<>"'\\\r\n]*|(?:EMAIL|PHONE|RRN|CARD)_[0-9]+)(?:>|\\u003[eE])`)
-	writeEncodedToken = regexp.MustCompile(`[A-Za-z0-9+/]{16,}={0,2}`)
+	// A masked value (its name may hold spaces: a key's name, k8s_diff's "new value") and a personal-data address (REDACTION_PII).
+	writePlaceholder = regexp.MustCompile(`(?:<|\\u003[cC])(REDACTED:[^<>"'\\\r\n]*|EMAIL_[0-9]+)(?:>|\\u003[eE])`)
+	// With REDACTION_NUMBERED, every numbered personal-data value (services/pkg/redact numberedKinds).
+	writeNumberedPlaceholder = regexp.MustCompile(`(?:<|\\u003[cC])(REDACTED:[^<>"'\\\r\n]*|(?:EMAIL|PHONE|RRN|CARD)_[0-9]+)(?:>|\\u003[eE])`)
+	writeEncodedToken        = regexp.MustCompile(`[A-Za-z0-9+/]{16,}={0,2}`)
 	// k8s-service's Secret mask means nothing outside a Secret, where three stars may be a value. A SecretList's items
 	// without a kind of their own are Secrets to kubectl.
 	writeSecretKindYAML = regexp.MustCompile(`(?m)^[ \t]*(?:-[ \t]+)?["']?kind["']?[ \t]*:[ \t]*["']?Secret(?:List)?["']?[ \t]*\r?$`)
@@ -59,6 +60,10 @@ func maskedWriteRefusal(found []string) string {
 // placeholdersInWrite lists what stands for a value in the arguments, in the order found.
 func placeholdersInWrite(args map[string]interface{}) []string {
 	namesSecret := namesSecrets(argString(args, "resource_type", ""))
+	placeholder := writePlaceholder
+	if redactOpts.Numbered {
+		placeholder = writeNumberedPlaceholder
+	}
 	var found []string
 	add := func(word string) {
 		for _, seen := range found {
@@ -69,7 +74,7 @@ func placeholdersInWrite(args map[string]interface{}) []string {
 		found = append(found, word)
 	}
 	for _, text := range writeArgumentTexts(args) {
-		for _, m := range writePlaceholder.FindAllStringSubmatch(text, -1) {
+		for _, m := range placeholder.FindAllStringSubmatch(text, -1) {
 			add("<" + m[1] + ">")
 		}
 		for _, token := range writeEncodedToken.FindAllString(text, -1) {
@@ -77,7 +82,7 @@ func placeholdersInWrite(args map[string]interface{}) []string {
 			if err != nil {
 				continue
 			}
-			for _, m := range writePlaceholder.FindAllStringSubmatch(string(decoded), -1) {
+			for _, m := range placeholder.FindAllStringSubmatch(string(decoded), -1) {
 				add("<" + m[1] + ">")
 			}
 		}

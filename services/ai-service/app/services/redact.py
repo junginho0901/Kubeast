@@ -28,6 +28,10 @@ class Options:
     enabled: bool = True
     pii: bool = False
     disabled: set = field(default_factory=set)
+    # With pii, every personal-data kind is numbered (<PHONE_1>) and a run's table numbers a value alike across its texts
+    # (REDACTION_NUMBERED, chart ai.redaction.numbered, default false). Off: one address keeps one <EMAIL_n> within a
+    # text, the other kinds are <REDACTED:kind>, and no table is used.
+    numbered: bool = False
 
     def on(self, rule: str) -> bool:
         return self.enabled and rule not in self.disabled
@@ -173,18 +177,18 @@ class Numbers:
 _NUMBERED_PLACEHOLDER = re.compile(r"<(EMAIL|PHONE|RRN|CARD)_([0-9]+)>")
 
 
-def is_numbered_placeholder(v: str) -> bool:
-    """A value that is already one of the numbered placeholders is not read as a value. Go: isNumberedPlaceholder."""
-    return v.startswith(("<EMAIL", "<PHONE_", "<RRN_", "<CARD_"))
-
-
 def from_env() -> Options:
     """REDACTION_ENABLED (default true) / REDACTION_PII (default false) /
-    REDACTION_DISABLE (comma list of rule names)."""
+    REDACTION_DISABLE (comma list of rule names) / REDACTION_NUMBERED (default false)."""
     enabled = os.getenv("REDACTION_ENABLED", "true").strip().lower() not in ("false", "0", "off")
     pii = os.getenv("REDACTION_PII", "false").strip().lower() in ("true", "1", "on")
     disabled = {x.strip().lower() for x in os.getenv("REDACTION_DISABLE", "").split(",") if x.strip()}
-    return Options(enabled=enabled, pii=pii, disabled=disabled)
+    return Options(enabled=enabled, pii=pii, disabled=disabled, numbered=numbered_on())
+
+
+def numbered_on() -> bool:
+    """REDACTION_NUMBERED (chart ai.redaction.numbered, default false): personal data numbered per run (Options.numbered)."""
+    return os.getenv("REDACTION_NUMBERED", "false").strip().lower() in ("true", "1", "on")
 
 
 # --- key-name rule ------------------------------------------------------------
@@ -236,7 +240,7 @@ def _value_looks_harmless(v: str) -> bool:
     v = v.strip()
     if v in ("", "null", "~", "[]", "{}", "[", "{", "|", ">", "|-", ">-"):
         return True
-    if v.startswith("<REDACTED") or v.startswith("<set to the key") or is_numbered_placeholder(v):
+    if v.startswith("<REDACTED") or v.startswith("<set to the key") or v.startswith("<EMAIL"):
         return True
     if v.lower() in _HARMLESS:
         return True
@@ -1263,8 +1267,8 @@ def _strip_secret_documents(text: str) -> Tuple[str, int]:
 # --- public API -------------------------------------------------------------------
 
 def redact_text(text: Optional[str], opts: Optional[Options] = None, numbers: Optional[Numbers] = None) -> Tuple[str, Stats]:
-    """Redact free text (logs, YAML, JSON, describe output). Personal data is numbered with ``numbers`` (one run's
-    table); without it the numbers start at 1 for this text."""
+    """Redact free text (logs, YAML, JSON, describe output). With Options.numbered, personal data is numbered with
+    ``numbers`` (one run's table), without it from 1 for this text; with numbered off ``numbers`` is not read."""
     stats = Stats()
     if not text:
         return text or "", stats
@@ -1329,7 +1333,22 @@ def redact_text(text: Optional[str], opts: Optional[Options] = None, numbers: Op
             text = _sub_count(_ENV_LIST_YAML, text, _env_yaml, stats, "key_name")
         text = _sub_on_credential_lines(_INLINE_QUOTED, text, _mask_inline_quoted, stats, "key_name")
         text = _sub_on_credential_lines(_INLINE_PAIR, text, _mask_inline_pair, stats, "key_name")
-    if o.pii:
+    if o.pii and not o.numbered:
+        if o.on("email"):
+            seen: Dict[str, int] = {}
+
+            def _email(m: re.Match) -> str:
+                seen.setdefault(m.group(0), len(seen) + 1)
+                return "<EMAIL_%d>" % seen[m.group(0)]
+
+            text = _sub_count(_EMAIL, text, _email, stats, "email")
+        if o.on("rrn"):
+            text = _sub_count(_KR_RRN, text, lambda m: "<REDACTED:rrn>", stats, "rrn")
+        if o.on("card"):
+            text = _sub_count(_CARD, text, lambda m: "<REDACTED:card>", stats, "card")
+        if o.on("phone"):
+            text = _sub_count(_KR_PHONE, text, lambda m: "<REDACTED:phone>", stats, "phone")
+    elif o.pii:
         n = numbers if numbers is not None else Numbers(key="")
         n.start_after(highest_numbers([text]))
         for kind, pattern in (("email", _EMAIL), ("rrn", _KR_RRN), ("card", _CARD), ("phone", _KR_PHONE)):
