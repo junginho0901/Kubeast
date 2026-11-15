@@ -208,6 +208,9 @@ features:
   logSearch:
     queryMaxBytes: 0         # (alpha) a number of bytes: the AI's loki_query asks the store's index first and is refused past it, with how
                              # to narrow it (operations.md); 0: not asked, the query runs as before
+  callGraph:
+    enabled: false           # (alpha) true: the AI tool resource_graph takes include calls, who calls whom from the traces' service graph
+                             # metrics and Hubble (cluster-requirements.md); off: include calls reads nothing and the AI is not offered it
 
 # Multi-cluster load/failure isolation tuning
 multicluster:

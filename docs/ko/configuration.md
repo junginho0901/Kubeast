@@ -205,6 +205,9 @@ features:
   logSearch:
     queryMaxBytes: 0         # (alpha) 바이트 수를 정하면 AI의 loki_query가 먼저 저장소 색인에 양을 묻고, 넘으면 좁히는 법과 함께
                              # 거절합니다(operations.md). 0이면 묻지 않고 전처럼 질의합니다
+  callGraph:
+    enabled: false           # (alpha) true면 AI 도구 resource_graph가 include calls를 받습니다 — 트레이스 서비스 그래프 지표와 Hubble로 본
+                             # 호출 관계(cluster-requirements.md). 끄면 include calls는 아무것도 읽지 않고 AI에 주지 않습니다
 
 # 멀티클러스터 부하/장애 격리 튜닝
 multicluster:
