@@ -190,6 +190,18 @@ ingress:
   host: kubeast.example.com
   tls: false
 
+# 0.7.9에 더한 AI 스위치 — 모두 기본 꺼짐입니다. 끄면 모델이 받는 프롬프트·도구 정의가 0.7.8과 같습니다.
+# (alpha): 예고 없이 바뀌거나 없어질 수 있습니다. 자세한 것은 ai-alerts.md·features.md에 있습니다
+features:
+  anomalyRank:
+    enabled: false           # (alpha) true면 AI 도구 anomaly_rank와 GET /namespaces/{namespace}/anomalies를 켭니다 — 한 네임스페이스가
+                             # 앞 구간과 무엇이 달라졌는지 순위로(cluster-requirements.md). 끄면 그 경로는 404이고 아무것도 읽지 않습니다
+    maxQueries: 12           # 답 하나가 저장소에 보낼 수 있는 질의 수
+    checkTimeoutSeconds: 5   # 검사 하나의 시간
+    timeoutSeconds: 20       # 답 전체의 시간
+    concurrency: 4           # 한 번에 도는 검사 수
+    cacheSeconds: 60         # 같은 사용자·네임스페이스·구간은 이 시간 동안 메모리에서 답합니다
+
 # 멀티클러스터 부하/장애 격리 튜닝
 multicluster:
   maxClusters: 20

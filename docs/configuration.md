@@ -193,6 +193,18 @@ ingress:
   host: kubeast.example.com
   tls: false
 
+# AI switches added in 0.7.9, all off by default. Off, the model's prompts and tool definitions are as in 0.7.8.
+# (alpha): may change or go without notice. More in ai-alerts.md and features.md
+features:
+  anomalyRank:
+    enabled: false           # (alpha) true: the AI tool anomaly_rank and GET /namespaces/{namespace}/anomalies, what differs in one
+                             # namespace from the window before, ranked (cluster-requirements.md); off: the route answers 404, reads nothing
+    maxQueries: 12           # store queries one answer may make
+    checkTimeoutSeconds: 5   # each check
+    timeoutSeconds: 20       # the whole answer
+    concurrency: 4           # checks at once
+    cacheSeconds: 60         # the same caller, namespace and window answered from memory
+
 # Multi-cluster load/failure isolation tuning
 multicluster:
   maxClusters: 20
