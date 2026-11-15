@@ -160,9 +160,10 @@ const (
 	// review L22).
 	defaultMaxSubscriptions        = 2000
 	defaultMaxSubscriptionsPerConn = 50
-	// defaultWatchStartsAtOnce: in TestWSMemoryPerUser 16 bring W2's 1 789 watches of 700 people back in about seven
-	// seconds, each holding its place through its opening (three and a half while each gave it back at its first answer).
+	// defaultWatchStartsAtOnce: at 50 ms a start, 16 bring 2 000 subscriptions back in about six seconds.
 	defaultWatchStartsAtOnce = 16
+	// defaultWatchOpeningsAtOnce: 8 × 5.5 MiB a node list opening = 44 MiB < 65 MiB from watchMemoryShare to 0.94 of 461.
+	defaultWatchOpeningsAtOnce = 8
 	// maxFrameBytes bounds a client → server frame: a REQUEST/CLOSE message
 	// is a few hundred bytes; anything larger is not ours (M30).
 	maxFrameBytes = 64 * 1024
@@ -210,21 +211,29 @@ type Multiplexer struct {
 	PanicRetryDelay time.Duration
 	provider        ClientProvider
 
-	// MaxWatchStarts is how many watches of one cluster may be starting at once: 0 = the default above.
+	// MaxWatchStarts is how many watches of one cluster may be waiting for the API server's first answer at once: 0 = the
+	// default above. The objects a watch from no version opens with come in under MaxWatchOpenings instead.
 	MaxWatchStarts int
+	// MaxWatchOpenings is how many watches of every cluster together may be receiving the objects they open with at
+	// once: 0 = defaultWatchOpeningsAtOnce.
+	MaxWatchOpenings int
 
-	// startNoticeAfter and startHoldFor: see takeWatchStart.
+	// startNoticeAfter and startHoldFor: see takeWatchStart; openingHoldFor: see takeOpening.
 	startNoticeAfter time.Duration
 	startHoldFor     time.Duration
+	openingHoldFor   time.Duration
 
-	mu     sync.Mutex
-	subs   map[string]*subscription // key -> subscription
-	starts map[string]*limits.Slots // cluster -> places for starting a watch
+	mu       sync.Mutex
+	subs     map[string]*subscription // key -> subscription
+	starts   map[string]*limits.Slots // cluster -> places for starting a watch
+	openings *limits.Slots            // the server's places for opening a watch from no version
+	// noWatchList are the clusters whose API server refused sendInitialEvents, and when (servesWatchList).
+	noWatchList map[string]time.Time
 	// held are the live watches of streams outside the sockets (HoldWatches), which count against MaxSubscriptions too.
 	held int
 
 	// heap reads the memory held against the collector's limit (heldBytes) and that limit; nil = heapNow.
-	heap func() (live, limit uint64)
+	heap func() (held, limit uint64)
 
 	// rowClients are the clients the watches go through, which decode what the rows read (watchClient).
 	rowClients rowClientCache
@@ -264,12 +273,7 @@ func (m *Multiplexer) StartWatch(ctx context.Context, clusterID string) (release
 	if err != nil {
 		return nil, err
 	}
-	once := sync.OnceFunc(give)
-	timer := time.AfterFunc(m.startHoldFor, once)
-	return func() {
-		timer.Stop()
-		once()
-	}, nil
+	return heldUntil(give, m.startHoldFor), nil
 }
 
 // WatchTimeoutSeconds is what a watch asks the API server to run for, spread as the sockets' watches are.
@@ -313,8 +317,10 @@ func NewMultiplexer(p ClientProvider) *Multiplexer {
 		provider:         p,
 		subs:             make(map[string]*subscription),
 		starts:           make(map[string]*limits.Slots),
+		noWatchList:      make(map[string]time.Time),
 		startNoticeAfter: 10 * time.Second,
 		startHoldFor:     5 * time.Second,
+		openingHoldFor:   2 * time.Second,
 	}
 }
 
@@ -529,10 +535,8 @@ func watchResumeDelay() time.Duration { return 500*time.Millisecond + rand.N(tim
 func watchTimeoutSeconds() int64 { return 270 + rand.Int64N(61) }
 
 // watchStartPlaces are the places for starting a watch on a cluster. client-go does not rate limit watches, so without
-// them every subscription of a restart reaches the API server at the same moment. A place is held for the wait for the
-// API server's first answer and, by a watch from no version, until the objects it sends as it opens are through
-// (openQuiet): at 700 people the opening of every watch at once after a restart took k8s-service from 121 to 285 MiB
-// of live heap in two seconds. A watch that is on holds none.
+// them every subscription of a restart reaches the API server at the same moment. Holding a place is only the wait for
+// the API server's first answer; a watch that is on holds none.
 func (m *Multiplexer) watchStartPlaces(id string) *limits.Slots {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -548,29 +552,119 @@ func (m *Multiplexer) watchStartPlaces(id string) *limits.Slots {
 
 // takeWatchStart waits for a place to start req's watch, which costs one parked goroutine and no frames. A wait past
 // startNoticeAfter is told to the client, whose list is not following meanwhile; told says the next watch has to say
-// it is back. ok is false when ctx ended. The place goes back by the time release is called or the start has held it
-// for startHoldFor, whichever comes first, so a server that does not answer, or an opening that does not end, does not
-// stop the queue.
+// it is back. ok is false when ctx ended. The place goes back by the time release is called or the API server has kept
+// the start waiting for startHoldFor, whichever comes first, so a server that does not answer does not stop the queue.
 func (m *Multiplexer) takeWatchStart(ctx context.Context, req RequestMessage, sendCh chan<- *ResponseMessage) (release func(), told, ok bool) {
 	places := m.watchStartPlaces(effectiveClusterID(subscriptionCluster(ctx, req.ClusterID)))
-	waiting, stop := context.WithTimeout(ctx, m.startNoticeAfter)
-	give, err := places.Take(waiting)
-	stop()
-	if err != nil {
-		if ctx.Err() != nil || !send(ctx, sendCh, req.errorFrame("waiting for a turn to start following the cluster", reasonUnreachable)) {
-			return nil, false, false
-		}
-		told = true
-		if give, err = places.Take(ctx); err != nil {
-			return nil, told, false
-		}
+	give, told, ok := m.takeTurn(ctx, places, func() {
+		send(ctx, sendCh, req.errorFrame("waiting for a turn to start following the cluster", reasonUnreachable))
+	})
+	if !ok {
+		return nil, told, false
 	}
+	return heldUntil(give, m.startHoldFor), told, true
+}
+
+// openingPlaces are the server's places for opening a watch from no version, whose API server sends every object there
+// is as it opens: one set for every cluster, since the memory they take is the process's (watchMemoryShare). At 700
+// people the openings of every watch at once after a restart took k8s-service from 121 to 285 MiB of live heap in two
+// seconds.
+func (m *Multiplexer) openingPlaces() *limits.Slots {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.openings == nil {
+		n := m.MaxWatchOpenings
+		if n <= 0 {
+			n = defaultWatchOpeningsAtOnce
+		}
+		m.openings = limits.NewSlots("watch opening", n)
+	}
+	return m.openings
+}
+
+// openingWaitMessage is the limit frame's message for a watch from no version waiting past startNoticeAfter for one of
+// the opening places.
+const openingWaitMessage = "k8s-service opens a few lists at a time to keep its memory in bounds; this one waits for its turn"
+
+// takeOpening waits for one of the opening places, before the watch's start place, so a crowd's openings wait without
+// holding what the starts of watches of changes and of resumed watches need. A wait past startNoticeAfter is told to
+// the client as the memory limit (limit_scope memory), which is what the places are for, and its list is read again
+// once the watch is on. The place goes back by the time release is called — forwardEvents calls it once the objects
+// are through — or after openingHoldFor.
+func (m *Multiplexer) takeOpening(ctx context.Context, req RequestMessage, sendCh chan<- *ResponseMessage) (release func(), told, ok bool) {
+	give, told, ok := m.takeTurn(ctx, m.openingPlaces(), func() {
+		send(ctx, sendCh, req.limitFrame(openingWaitMessage, limitScopeMemory))
+	})
+	if !ok {
+		return nil, told, false
+	}
+	return heldUntil(give, m.openingHoldFor), told, true
+}
+
+// takeTurn waits for one of places in a single place of its queue, calling notice once the wait passes
+// startNoticeAfter: ok is false when ctx ended, told says notice ran, which has ended by the time takeTurn returns.
+func (m *Multiplexer) takeTurn(ctx context.Context, places *limits.Slots, notice func()) (give func(), told, ok bool) {
+	noticed := make(chan struct{})
+	timer := time.AfterFunc(m.startNoticeAfter, func() {
+		defer close(noticed)
+		notice()
+	})
+	give, err := places.Take(ctx)
+	if !timer.Stop() {
+		<-noticed
+		told = true
+	}
+	if err != nil {
+		return nil, told, false
+	}
+	return give, told, true
+}
+
+// heldUntil gives back a place once, when the returned function is called or after at most.
+func heldUntil(give func(), at time.Duration) func() {
 	once := sync.OnceFunc(give)
-	timer := time.AfterFunc(m.startHoldFor, once)
+	timer := time.AfterFunc(at, once)
 	return func() {
 		timer.Stop()
 		once()
-	}, told, true
+	}
+}
+
+// watchListRetryAfter is how long a cluster whose API server refused sendInitialEvents opens watches the earlier way
+// before it is asked again: an upgrade or a feature gate turned on may change the answer.
+const watchListRetryAfter = 10 * time.Minute
+
+// servesWatchList says whether a watch from no version of cluster id is asked as a watch list (sendInitialEvents): the
+// API server then ends the objects it opens with in a bookmark (metav1.InitialEventsAnnotationKey). kube-apiserver
+// serves it by default in 1.32 and from 1.34 (feature gate WatchList; 1.27-1.31 and 1.33 refuse it with a 422).
+func (m *Multiplexer) servesWatchList(id string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	at, refused := m.noWatchList[id]
+	return !refused || time.Since(at) >= watchListRetryAfter
+}
+
+// refuseWatchList notes that cluster id refused sendInitialEvents.
+func (m *Multiplexer) refuseWatchList(id string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, noted := m.noWatchList[id]; !noted {
+		slog.Info("watch list refused: live lists of this cluster open without sendInitialEvents", "cluster", id)
+	}
+	if m.noWatchList == nil {
+		m.noWatchList = make(map[string]time.Time)
+	}
+	m.noWatchList[id] = time.Now()
+}
+
+// refusesWatchList is the API server's answer to sendInitialEvents it does not serve: a 422 naming sendInitialEvents
+// or resourceVersionMatch (k8s.io/apimachinery v0.37.2 pkg/apis/meta/internalversion/validation/validation.go:53-76).
+func refusesWatchList(err error) bool {
+	if !apierrors.IsInvalid(err) && !apierrors.IsBadRequest(err) {
+		return false
+	}
+	message := err.Error()
+	return strings.Contains(message, "sendInitialEvents") || strings.Contains(message, "resourceVersionMatch")
 }
 
 // forgetSubscription frees the place of a watch that has ended, unless a later REQUEST of the same key already holds it.
@@ -601,10 +695,12 @@ func resourceVersionExpired(err error) bool {
 	return apierrors.IsResourceExpired(err) || apierrors.IsGone(err)
 }
 
-// watchProgress is what a watch goes on from after a panic.
+// watchProgress is what a watch goes on from after a panic. on says a watch of this subscription has been on, so one
+// that has to open again from no version is not held back for memory as a new one is.
 type watchProgress struct {
 	version string
 	resync  bool
+	on      bool
 }
 
 // runWatch follows req until its context ends or there is nothing to follow. Nothing above it recovers, so a panic on one
@@ -701,16 +797,37 @@ func (m *Multiplexer) followWatch(ctx context.Context, req RequestMessage, sendC
 			FieldSelector:       fieldSelector,
 		}
 
+		// A watch from no version is sent every object there is as it opens: it waits for one of the server's opening
+		// places first, and one whose turn comes while memory is short waits as a new watch does — unless a watch of this
+		// list has been on, which goes on.
+		opening := !notify && lastResourceVersion == ""
+		endOpening := func() {}
+		if opening {
+			release, told, ok := m.takeOpening(ctx, req, sendCh)
+			if !ok {
+				return
+			}
+			if !progress.on && m.watchMemoryFull() {
+				release()
+				send(ctx, sendCh, req.limitFrame(memoryShortMessage, limitScopeMemory))
+				return
+			}
+			resync = resync || told
+			endOpening = release
+		}
+		clusterID := effectiveClusterID(subscriptionCluster(ctx, req.ClusterID))
+		watchList := opening && m.servesWatchList(clusterID)
+		if watchList {
+			// From any version the watch cache holds, as the watch from no version is (k8s.io/apiserver v0.37.2
+			// pkg/storage/cacher/cacher.go:1313-1322): no read of etcd, and the end of the objects is a bookmark.
+			opts.ResourceVersion = "0"
+			opts.SendInitialEvents = boolPtr(true)
+			opts.ResourceVersionMatch = metav1.ResourceVersionMatchNotOlderThan
+		}
+
 		release, told, ok := m.takeWatchStart(ctx, req, sendCh)
 		if !ok {
-			return
-		}
-		// A watch from no version sends every object there is as it opens: it keeps its place until they are through, and
-		// one whose turn comes while memory is short waits as a new watch does.
-		opening := !notify && lastResourceVersion == ""
-		if opening && m.watchMemoryFull() {
-			release()
-			send(ctx, sendCh, req.limitFrame(memoryShortMessage, limitScopeMemory))
+			endOpening()
 			return
 		}
 		resync = resync || told
@@ -721,13 +838,16 @@ func (m *Multiplexer) followWatch(ctx context.Context, req RequestMessage, sendC
 		} else {
 			watcher, err = watching.Resource(gvr).Watch(ctx, opts)
 		}
-		if err != nil || !opening {
-			release()
-		}
+		release()
 		if err != nil {
+			endOpening()
 			// Canceled while connecting: nobody is waiting for this watch, so it is no failure to report.
 			if ctx.Err() != nil {
 				return
+			}
+			if watchList && refusesWatchList(err) {
+				m.refuseWatchList(clusterID)
+				continue
 			}
 			if lastResourceVersion != "" && resourceVersionExpired(err) {
 				lastResourceVersion, resync = "", true
@@ -743,11 +863,13 @@ func (m *Multiplexer) followWatch(ctx context.Context, req RequestMessage, sendC
 			continue
 		}
 
+		progress.on = true
+
 		// Only now that the new watch is on: what is deleted after the client reads its list still reaches it as an event.
 		if resync {
 			resync = false
 			if !send(ctx, sendCh, req.frame("RESYNC")) {
-				release()
+				endOpening()
 				watcher.Stop()
 				return
 			}
@@ -757,11 +879,15 @@ func (m *Multiplexer) followWatch(ctx context.Context, req RequestMessage, sendC
 		if notify {
 			expired = forwardChanges(ctx, watcher, req, gvr.Resource, &lastResourceVersion, sendCh)
 		} else {
-			var opened func()
+			o := &openingTurn{watchList: watchList}
 			if opening {
-				opened = release
+				o.done = endOpening
 			}
-			expired = forwardEvents(ctx, watcher, req, gvr.Resource, &lastResourceVersion, sendCh, opened)
+			expired = forwardEvents(ctx, watcher, req, gvr.Resource, &lastResourceVersion, sendCh, o)
+			// A watch list cut before its bookmark goes on from no version: its last object's version is not its list's.
+			if o.cut() {
+				lastResourceVersion, resync = "", true
+			}
 		}
 
 		// Watch ended, retry
@@ -778,11 +904,10 @@ func (m *Multiplexer) followWatch(ctx context.Context, req RequestMessage, sendC
 }
 
 // forwardEvents sends a watch's events until it ends, moving resourceVersion along, and reports whether the API server
-// said that version has expired. opened, when set, is called once the objects the watch sends as it opens are through:
-// at the first openQuiet without an event, or when the watch ends.
-func forwardEvents(ctx context.Context, watcher watch.Interface, req RequestMessage, resource string, resourceVersion *string, sendCh chan<- *ResponseMessage, opened func()) bool {
+// said that version has expired. o is the watch's opening, whose place goes back once the objects the watch opens with
+// are through (openingTurn), and when the watch ends at the latest.
+func forwardEvents(ctx context.Context, watcher watch.Interface, req RequestMessage, resource string, resourceVersion *string, sendCh chan<- *ResponseMessage, o *openingTurn) bool {
 	defer watcher.Stop()
-	o := openingTurn{done: opened}
 	defer o.end()
 	events := watcher.ResultChan()
 	for {
@@ -793,6 +918,7 @@ func forwardEvents(ctx context.Context, watcher watch.Interface, req RequestMess
 		if ctx.Err() != nil {
 			return false
 		}
+		o.saw(event.Type)
 
 		// The dynamic client decodes this event's object to a Status, not to the resource's kind.
 		if event.Type == watch.Error {
@@ -828,35 +954,57 @@ func forwardEvents(ctx context.Context, watcher watch.Interface, req RequestMess
 			continue
 		}
 		f.Data = json.RawMessage(data)
-		if !send(ctx, sendCh, f) {
+		if !o.send(ctx, sendCh, f) {
 			return false
 		}
 	}
 }
 
-// openQuiet is how long a watch from no version waits for the next of the objects it sends as it opens before it counts
-// them through: the API server sends them one after another as fast as they are read.
-const openQuiet = 50 * time.Millisecond
+// openingQuiet is how long the opening of a watch whose API server serves no watch list waits for its next object
+// before it counts them through; a watch list ends them in a bookmark instead.
+const openingQuiet = 20 * time.Millisecond
 
-// openingTurn is a watch's wait for the end of the objects it sends as it opens, which it keeps its start place for.
+// openingTurn is the opening of a watch from no version, which holds one of the server's opening places (done) while
+// the objects the API server sends as it opens come in. The place goes back at the first of: an event that is not
+// ADDED — a watch list's bookmark (metav1.InitialEventsAnnotationKey, after the last object), or on a watch served
+// without one a change —; openingQuiet without an object on such a watch; a frame that would wait for the browser; the
+// end of the watch; openingHoldFor (takeOpening). So a list that keeps changing, or a slow browser, holds no place: what
+// comes for a slow browser waits in its socket's queue (256 frames) and, past it, unread in the HTTP/2 stream, whose
+// window bounds it to 4 MiB a watch (Go's transportDefaultStreamFlow); that memory counts in heldBytes, which stops
+// new openings.
 type openingTurn struct {
-	done  func()
-	timer *time.Timer
+	done      func()
+	watchList bool
+	through   bool // the watch list's bookmark came
+	timer     *time.Timer
 }
 
-// next is the watch's next event. While the opening is on and no event is waiting, it waits openQuiet for one; past
-// that the objects are through, done is called, and it waits as long as the next event takes.
+// saw notes an event: one that is not ADDED ends the opening.
+func (o *openingTurn) saw(t watch.EventType) {
+	if t == watch.Bookmark {
+		o.through = true
+	}
+	if t != watch.Added {
+		o.end()
+	}
+}
+
+// cut says the watch was a watch list that ended before its bookmark.
+func (o *openingTurn) cut() bool { return o.watchList && !o.through }
+
+// next is the watch's next event. While the opening of a watch served without a watch list is on and no event is
+// waiting, it waits openingQuiet for one; past that the objects are through.
 func (o *openingTurn) next(events <-chan watch.Event) (watch.Event, bool) {
-	if o.done != nil {
+	if o.done != nil && !o.watchList {
 		select {
 		case e, ok := <-events:
 			return e, ok
 		default:
 		}
 		if o.timer == nil {
-			o.timer = time.NewTimer(openQuiet)
+			o.timer = time.NewTimer(openingQuiet)
 		} else {
-			o.timer.Reset(openQuiet)
+			o.timer.Reset(openingQuiet)
 		}
 		select {
 		case e, ok := <-events:
@@ -870,7 +1018,20 @@ func (o *openingTurn) next(events <-chan watch.Event) (watch.Event, bool) {
 	return e, ok
 }
 
-// end calls done once.
+// send queues f, giving the opening's place back first when the browser's queue is full.
+func (o *openingTurn) send(ctx context.Context, sendCh chan<- *ResponseMessage, f ResponseMessage) bool {
+	if o.done != nil {
+		select {
+		case sendCh <- &f:
+			return true
+		default:
+			o.end()
+		}
+	}
+	return send(ctx, sendCh, f)
+}
+
+// end gives the place back once.
 func (o *openingTurn) end() {
 	if o.done != nil {
 		o.done()

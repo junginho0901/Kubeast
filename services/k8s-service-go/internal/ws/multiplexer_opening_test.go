@@ -4,25 +4,57 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"runtime"
 	"runtime/metrics"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
-// openingWatches is an API server whose watches send their objects one after another as they open, as a watch from no
-// version does, and then stay quiet; it counts the watches that are sending their objects at once.
-type openingWatches struct {
+// openingAPI is an API server whose watches from no version send their objects one after another as they open, then,
+// for a watch list (sendInitialEvents=true), the bookmark that ends them, then what changes says; a watch from a
+// version gets one event and stays quiet. It counts the watches that are sending their objects at once.
+type openingAPI struct {
 	objects int
 	gap     time.Duration
+	// changes, when set, is how often a change (MODIFIED) comes once the objects are sent, until the watch ends.
+	changes time.Duration
+	// cut ends the first watch after its objects, before its bookmark.
+	cut bool
+	// noWatchList answers sendInitialEvents with kube-apiserver's 422 of a server whose WatchList gate is off.
+	noWatchList bool
 
 	mu            sync.Mutex
 	sending, most int
+	asked         []url.Values
+	refused       int
 }
 
-func (s *openingWatches) serve(w http.ResponseWriter, r *http.Request) {
+func (s *openingAPI) serve(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	q := r.URL.Query()
+	if q.Get("watch") != "true" && q.Get("watch") != "1" {
+		fmt.Fprint(w, `{"kind":"PodList","apiVersion":"v1","metadata":{"resourceVersion":"100"},"items":[]}`)
+		return
+	}
+	s.mu.Lock()
+	s.asked = append(s.asked, q)
+	first := len(s.asked) == 1
+	if s.noWatchList && q.Get("sendInitialEvents") != "" {
+		s.refused++
+		s.mu.Unlock()
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		fmt.Fprint(w, `{"kind":"Status","apiVersion":"v1","status":"Failure","message":"ListOptions.meta.k8s.io \"\" is invalid: sendInitialEvents: Forbidden: sendInitialEvents is forbidden for watch unless the WatchList feature gate is enabled","reason":"Invalid","code":422}`)
+		return
+	}
+	s.mu.Unlock()
+	if q.Get("resourceVersion") != "" && q.Get("resourceVersion") != "0" {
+		eventThenHold(w, r)
+		return
+	}
 	s.mu.Lock()
 	s.sending++
 	s.most = max(s.most, s.sending)
@@ -35,25 +67,84 @@ func (s *openingWatches) serve(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	s.sending--
 	s.mu.Unlock()
+	if s.cut && first {
+		return
+	}
+	endInitialEvents(w, r, "v1", "Pod", "500")
+	w.(http.Flusher).Flush()
+	for i := 0; s.changes > 0 && r.Context().Err() == nil; i++ {
+		fmt.Fprintf(w, `{"type":"MODIFIED","object":{"apiVersion":"v1","kind":"Pod","metadata":{"name":"web-0","namespace":"demo","resourceVersion":"%d"},"spec":{"containers":[]},"status":{"phase":"Running"}}}`+"\n", 600+i)
+		w.(http.Flusher).Flush()
+		time.Sleep(s.changes)
+	}
 	<-r.Context().Done()
 }
 
-func (s *openingWatches) mostAtOnce() int {
+func (s *openingAPI) mostAtOnce() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.most
 }
 
-// A watch from no version sends every object there is as it opens, and the watches of a restart all open at once: each
-// keeps its start place until its objects are through, so a crowd's openings come a few at a time and every object
-// still reaches every list. At 700 people the openings after a restart took k8s-service from 121 to 285 MiB of live
-// heap in two seconds while the places went back at each watch's first answer.
-func TestWatchesOfAClusterOpenAFewAtATime(t *testing.T) {
-	api := &openingWatches{objects: 20, gap: 2 * time.Millisecond}
-	m := muxOn(t, api.serve)
-	m.MaxWatchStarts = 4
+func (s *openingAPI) queries() []url.Values {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]url.Values(nil), s.asked...)
+}
+
+// testCtx ends with the test, so a watch left running does not keep the fake API server's Close waiting.
+func testCtx(t *testing.T) context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	t.Cleanup(cancel)
+	return ctx
+}
+
+// drain reads out until ctx ends.
+func drain(ctx context.Context, out <-chan *ResponseMessage) {
+	for {
+		select {
+		case <-out:
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// firstFrame is the first frame of out, or "" after within.
+func firstFrame(out <-chan *ResponseMessage, within time.Duration) string {
+	select {
+	case f := <-out:
+		return f.Type
+	case <-time.After(within):
+		return ""
+	}
+}
+
+// watchOn runs a watch of cluster as the multiplexer does.
+func watchOn(ctx context.Context, m *Multiplexer, cluster, path, query string, out chan<- *ResponseMessage) {
+	m.runWatch(ctx, RequestMessage{ClusterID: cluster, Path: path, Query: query}, out)
+}
+
+func eventually(t *testing.T, what string, within time.Duration, ok func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(within)
+	for !ok() {
+		if time.Now().After(deadline) {
+			t.Fatalf("not within %v: %s", within, what)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// A watch from no version is asked as a watch list from the watch cache's version, and the watches of a restart open
+// a few at a time: each keeps an opening place until its bookmark, and every object reaches every list. At 700 people
+// the openings after a restart took k8s-service from 121 to 285 MiB of live heap in two seconds while each watch went on
+// at its first answer.
+func TestWatchesOpenAFewAtATime(t *testing.T) {
+	api := &openingAPI{objects: 20, gap: 2 * time.Millisecond}
+	m := muxOn(t, api.serve)
+	m.MaxWatchOpenings = 4
+	ctx := testCtx(t)
 	const subscriptions = 32
 	var wg sync.WaitGroup
 	frames := make([]int, subscriptions)
@@ -82,41 +173,338 @@ func TestWatchesOfAClusterOpenAFewAtATime(t *testing.T) {
 			t.Errorf("list %d got %d of the %d objects", i, n, api.objects)
 		}
 	}
-	t.Logf("watches sending their objects at once: %d, for %d subscriptions and %d places", api.mostAtOnce(), subscriptions, m.MaxWatchStarts)
-	if got := api.mostAtOnce(); got > m.MaxWatchStarts {
-		t.Errorf("%d watches sent their objects at once, want at most the %d places", got, m.MaxWatchStarts)
+	t.Logf("watches sending their objects at once: %d, for %d subscriptions and %d places", api.mostAtOnce(), subscriptions, m.MaxWatchOpenings)
+	if got := api.mostAtOnce(); got > m.MaxWatchOpenings {
+		t.Errorf("%d watches sent their objects at once, want at most the %d places", got, m.MaxWatchOpenings)
+	}
+	q := api.queries()[0]
+	if q.Get("sendInitialEvents") != "true" || q.Get("resourceVersionMatch") != "NotOlderThan" || q.Get("resourceVersion") != "0" || q.Get("allowWatchBookmarks") != "true" {
+		t.Errorf("a watch from no version asked %v, want a watch list from resourceVersion 0", q)
 	}
 }
 
-// An opening that does not end within startHoldFor, on a list that keeps changing, gives its place back then.
-func TestAnOpeningThatGoesOnGivesItsPlaceBackAfterAWhile(t *testing.T) {
-	api := &openingWatches{objects: 400, gap: 5 * time.Millisecond}
+// An opening keeps its place while its objects come, and a second one starts once the first's bookmark came.
+func TestAnOpeningHoldsItsPlaceUntilItsBookmark(t *testing.T) {
+	api := &openingAPI{objects: 30, gap: 10 * time.Millisecond}
 	m := muxOn(t, api.serve)
-	m.MaxWatchStarts = 1
-	m.startHoldFor = 50 * time.Millisecond
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	drain := func(out chan *ResponseMessage) {
+	m.MaxWatchOpenings = 1
+	m.openingHoldFor = 10 * time.Second
+	ctx := testCtx(t)
+	first, second := make(chan *ResponseMessage, 64), make(chan *ResponseMessage, 4)
+	go drain(ctx, first)
+	go watchInto(ctx, m, "/api/v1/pods", "watch=1", first)
+	eventually(t, "the first watch to start", 5*time.Second, func() bool { return len(api.queries()) == 1 })
+	go watchInto(ctx, m, "/api/v1/pods", "watch=1&labelSelector=a%3D1", second)
+	time.Sleep(100 * time.Millisecond) // a third of the first's objects
+	if n := m.openingPlaces().InUse(); n != 1 {
+		t.Errorf("%d opening places taken while the first watch's objects come, want 1", n)
+	}
+	if n := len(api.queries()); n != 1 {
+		t.Errorf("%d watches reached the API server while the first one opened, want 1", n)
+	}
+	if typ := firstFrame(second, 2*time.Second); typ != "DATA" {
+		t.Fatalf("the second list after the first's bookmark: %q, want DATA", typ)
+	}
+}
+
+// A watch list gives its place back at its bookmark, an empty one too, not at openingHoldFor.
+func TestAWatchListGivesItsPlaceBackAtItsBookmark(t *testing.T) {
+	for _, objects := range []int{0, 5} {
+		t.Run(fmt.Sprintf("%d objects", objects), func(t *testing.T) {
+			api := &openingAPI{objects: objects}
+			m := muxOn(t, api.serve)
+			m.MaxWatchOpenings = 1
+			m.openingHoldFor = 10 * time.Second
+			ctx := testCtx(t)
+			first := make(chan *ResponseMessage, 16)
+			go drain(ctx, first)
+			go watchInto(ctx, m, "/api/v1/pods", "watch=1", first)
+			eventually(t, "the opening place to come back after the bookmark", time.Second, func() bool {
+				return len(api.queries()) == 1 && m.openingPlaces().InUse() == 0
+			})
+		})
+	}
+}
+
+// A list that keeps changing once its objects are in holds no place: the next list opens at once, on a server that
+// serves watch lists (the bookmark) and on one that does not (the first change).
+func TestAListThatKeepsChangingHoldsNoPlace(t *testing.T) {
+	for _, noWatchList := range []bool{false, true} {
+		t.Run(fmt.Sprintf("watch list refused %v", noWatchList), func(t *testing.T) {
+			api := &openingAPI{objects: 5, changes: 5 * time.Millisecond, noWatchList: noWatchList}
+			m := muxOn(t, api.serve)
+			m.MaxWatchOpenings = 1
+			m.openingHoldFor = 10 * time.Second
+			ctx := testCtx(t)
+			busy, quiet := make(chan *ResponseMessage, 4), make(chan *ResponseMessage, 4)
+			go drain(ctx, busy)
+			go watchInto(ctx, m, "/api/v1/pods", "watch=1", busy)
+			time.Sleep(100 * time.Millisecond)
+			start := time.Now()
+			go watchInto(ctx, m, "/api/v1/pods", "watch=1&labelSelector=a%3Dquiet", quiet)
+			if typ := firstFrame(quiet, 2*time.Second); typ != "DATA" {
+				t.Fatalf("a list behind one that keeps changing: %q after %v, want DATA", typ, time.Since(start))
+			}
+			t.Logf("first frame of the list behind it after %v", time.Since(start))
+		})
+	}
+}
+
+// A browser that reads slowly holds no place: the opening's place goes back when a frame would wait for it.
+func TestASlowBrowserHoldsNoPlace(t *testing.T) {
+	api := &openingAPI{objects: 1000}
+	m := muxOn(t, api.serve)
+	m.MaxWatchOpenings = 1
+	m.openingHoldFor = 10 * time.Second
+	ctx := testCtx(t)
+	slow := make(chan *ResponseMessage, 4)
+	go func() {
 		for {
 			select {
-			case <-out:
+			case <-slow:
+				time.Sleep(10 * time.Millisecond)
 			case <-ctx.Done():
 				return
 			}
 		}
+	}()
+	go watchInto(ctx, m, "/api/v1/pods", "watch=1", slow)
+	eventually(t, "the slow browser's watch to start", 5*time.Second, func() bool { return len(api.queries()) == 1 })
+	other := make(chan *ResponseMessage, 4)
+	start := time.Now()
+	go watchInto(ctx, m, "/api/v1/pods", "watch=1&labelSelector=a%3Dother", other)
+	if typ := firstFrame(other, time.Second); typ != "DATA" {
+		t.Fatalf("a list behind a slow browser's opening: %q after %v, want DATA", typ, time.Since(start))
 	}
-	first, second := make(chan *ResponseMessage, 4), make(chan *ResponseMessage, 4)
-	go drain(first)
-	go watchInto(ctx, m, "/api/v1/pods", "watch=1", first)
-	time.Sleep(20 * time.Millisecond)
-	go watchInto(ctx, m, "/api/v1/pods", "watch=1&labelSelector=a%3D1", second)
-	select {
-	case f := <-second:
-		if f.Type != "DATA" {
-			t.Fatalf("the second list: %s, want DATA", f.Type)
+}
+
+// A watch of changes takes no opening place: it starts at once behind an opening that holds every place.
+func TestAWatchOfChangesDoesNotWaitBehindOpenings(t *testing.T) {
+	api := &openingAPI{objects: 300, gap: 10 * time.Millisecond}
+	m := muxOn(t, api.serve)
+	m.MaxWatchOpenings = 1
+	m.MaxWatchStarts = 1 // the opening gave its start place back at its first answer
+	m.openingHoldFor = 10 * time.Second
+	ctx := testCtx(t)
+	long := make(chan *ResponseMessage, 4)
+	go drain(ctx, long)
+	go watchInto(ctx, m, "/api/v1/pods", "watch=1", long)
+	eventually(t, "the long opening to start", 5*time.Second, func() bool { return m.openingPlaces().InUse() == 1 })
+	changes := make(chan *ResponseMessage, 4)
+	start := time.Now()
+	go watchInto(ctx, m, "/api/v1/pods", "watch=1&notify=1", changes)
+	if typ := firstFrame(changes, time.Second); typ != "CHANGED" {
+		t.Fatalf("a watch of changes behind a long opening: %q after %v, want CHANGED", typ, time.Since(start))
+	}
+}
+
+// The opening places are the server's, not a cluster's: openings of two clusters together stay within them.
+func TestOpeningsOfEveryClusterShareThePlaces(t *testing.T) {
+	api := &openingAPI{objects: 20, gap: 2 * time.Millisecond}
+	m := muxOn(t, api.serve)
+	m.MaxWatchOpenings = 2
+	ctx := testCtx(t)
+	var wg sync.WaitGroup
+	var lists atomic.Int64
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			out := make(chan *ResponseMessage, 4)
+			go watchOn(ctx, m, []string{"alpha", "beta"}[i%2], "/api/v1/pods", fmt.Sprintf("watch=1&labelSelector=a%%3D%d", i), out)
+			frames := 0
+			deadline := time.After(30 * time.Second)
+			for frames < api.objects {
+				select {
+				case f := <-out:
+					if f.Type == "DATA" {
+						frames++
+					}
+				case <-deadline:
+					return
+				}
+			}
+			lists.Add(1)
+		}()
+	}
+	wg.Wait()
+	if n := lists.Load(); n != 16 {
+		t.Errorf("%d of 16 lists got their objects", n)
+	}
+	if got := api.mostAtOnce(); got > 2 {
+		t.Errorf("%d watches of two clusters sent their objects at once, want at most the server's 2 places", got)
+	}
+}
+
+// A cluster whose API server refuses sendInitialEvents (the WatchList gate off, as in 1.33) opens the watch the earlier
+// way, and its next watches too, without asking again; another cluster still asks for a watch list.
+func TestAClusterThatRefusesWatchListsOpensTheEarlierWay(t *testing.T) {
+	api := &openingAPI{objects: 3, noWatchList: true}
+	m := muxOn(t, api.serve)
+	ctx := testCtx(t)
+	for i := 0; i < 2; i++ {
+		out := make(chan *ResponseMessage, 8)
+		go watchOn(ctx, m, "alpha", "/api/v1/pods", fmt.Sprintf("watch=1&labelSelector=a%%3D%d", i), out)
+		if typ := firstFrame(out, 5*time.Second); typ != "DATA" {
+			t.Fatalf("watch %d on a cluster that refuses watch lists: %q, want DATA", i, typ)
 		}
-	case <-time.After(time.Second):
-		t.Fatal("the second watch waited for an opening of two seconds")
+	}
+	api.mu.Lock()
+	refused := api.refused
+	api.mu.Unlock()
+	if refused != 1 {
+		t.Errorf("the cluster was asked for a watch list %d times, want once", refused)
+	}
+	for _, q := range api.queries()[1:] {
+		if q.Get("sendInitialEvents") != "" || q.Get("resourceVersionMatch") != "" || q.Get("resourceVersion") != "" {
+			t.Errorf("after the refusal a watch asked %v, want a watch from no version", q)
+		}
+	}
+	before := len(api.queries())
+	other := make(chan *ResponseMessage, 8)
+	go watchOn(ctx, m, "beta", "/api/v1/pods", "watch=1", other)
+	firstFrame(other, 5*time.Second)
+	if q := api.queries()[before]; q.Get("sendInitialEvents") != "true" {
+		t.Errorf("another cluster asked %v first, want a watch list", q)
+	}
+}
+
+// On a server that serves no watch list the opening ends when no object comes for openingQuiet.
+func TestAnOpeningWithoutAWatchListEndsWhenItsObjectsStop(t *testing.T) {
+	api := &openingAPI{objects: 5, noWatchList: true}
+	m := muxOn(t, api.serve)
+	m.MaxWatchOpenings = 1
+	m.openingHoldFor = 10 * time.Second
+	ctx := testCtx(t)
+	first := make(chan *ResponseMessage, 16)
+	go drain(ctx, first)
+	go watchInto(ctx, m, "/api/v1/pods", "watch=1", first)
+	eventually(t, "the earlier-way watch to start", 5*time.Second, func() bool { return len(api.queries()) == 2 })
+	eventually(t, "the opening place to come back once the objects stopped", time.Second, func() bool { return m.openingPlaces().InUse() == 0 })
+}
+
+// An opening that does not end, on a server that sends objects without end, gives its place back at openingHoldFor
+// and holds it until then.
+func TestAnOpeningThatGoesOnGivesItsPlaceBackAfterAWhile(t *testing.T) {
+	api := &openingAPI{objects: 400, gap: 5 * time.Millisecond}
+	m := muxOn(t, api.serve)
+	m.MaxWatchOpenings = 1
+	m.openingHoldFor = 300 * time.Millisecond
+	ctx := testCtx(t)
+	first, second := make(chan *ResponseMessage, 4), make(chan *ResponseMessage, 4)
+	go drain(ctx, first)
+	go watchInto(ctx, m, "/api/v1/pods", "watch=1", first)
+	eventually(t, "the first watch to start", 5*time.Second, func() bool { return len(api.queries()) == 1 })
+	go watchInto(ctx, m, "/api/v1/pods", "watch=1&labelSelector=a%3D1", second)
+	time.Sleep(100 * time.Millisecond)
+	if n := len(api.queries()); n != 1 {
+		t.Errorf("%d watches started before openingHoldFor, want 1", n)
+	}
+	if typ := firstFrame(second, 2*time.Second); typ != "DATA" {
+		t.Fatalf("the second list: %q, want DATA", typ)
+	}
+}
+
+// An opening the API server ends before its bookmark gives its place back at once, and the next watch opens from no
+// version again with the list read again: the last object's version is not the list's.
+func TestAnOpeningCutMidwayGivesItsPlaceBackAndOpensAgain(t *testing.T) {
+	api := &openingAPI{objects: 5, cut: true}
+	m := muxOn(t, api.serve)
+	m.MaxWatchOpenings = 1
+	m.openingHoldFor = 10 * time.Second
+	ctx := testCtx(t)
+	out := make(chan *ResponseMessage, 64)
+	go watchInto(ctx, m, "/api/v1/pods", "watch=1", out)
+	eventually(t, "the cut opening's place to come back", time.Second, func() bool {
+		return len(api.queries()) >= 1 && api.mostAtOnce() == 1 && m.openingPlaces().InUse() == 0
+	})
+	eventually(t, "the watch to open again", 5*time.Second, func() bool { return len(api.queries()) == 2 })
+	if q := api.queries()[1]; q.Get("sendInitialEvents") != "true" || q.Get("resourceVersion") != "0" {
+		t.Errorf("after the cut the watch asked %v, want a watch list again", q)
+	}
+	resync := false
+	for !resync {
+		select {
+		case f := <-out:
+			resync = f.Type == "RESYNC"
+		case <-time.After(5 * time.Second):
+			t.Fatal("no RESYNC after the cut opening")
+		}
+	}
+}
+
+// An opening whose RESYNC cannot be sent, its client gone, gives its place back at once.
+func TestAnOpeningWhoseResyncCannotBeSentGivesItsPlaceBack(t *testing.T) {
+	api := &openingAPI{objects: 1}
+	m := muxOn(t, api.serve)
+	m.MaxWatchOpenings = 1
+	m.openingHoldFor = 10 * time.Second
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	out := make(chan *ResponseMessage) // nobody reads
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		m.runWatch(ctx, RequestMessage{Path: "/api/v1/pods", Query: "watch=1", Resync: true}, out)
+	}()
+	eventually(t, "the watch to reach the API server", 5*time.Second, func() bool { return len(api.queries()) == 1 })
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+	waitEnded(t, done, 5*time.Second)
+	if n := m.openingPlaces().InUse(); n != 0 {
+		t.Errorf("%d opening places taken after the RESYNC could not be sent", n)
+	}
+}
+
+// A watch that has been on and has to open from no version again (its version expired) goes on while memory is short,
+// as the watches already on do; a new one waits.
+func TestAWatchThatWasOnOpensAgainWhileMemoryIsShort(t *testing.T) {
+	var opened atomic.Int64
+	m := muxOn(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, podEvent)
+		endInitialEvents(w, r, "v1", "Pod", "10")
+		w.(http.Flusher).Flush()
+		if opened.Add(1) == 1 {
+			fmt.Fprintln(w, expiredEvent)
+			return
+		}
+		<-r.Context().Done()
+	})
+	var short atomic.Bool
+	m.heap = func() (uint64, uint64) {
+		if short.Load() {
+			return 900, 1000
+		}
+		return 100, 1000
+	}
+	ctx := testCtx(t)
+	out := make(chan *ResponseMessage, 16)
+	go watchInto(ctx, m, "/api/v1/pods", "watch=1", out)
+	if f := <-out; f.Type != "DATA" {
+		t.Fatalf("first frame %s, want DATA", f.Type)
+	}
+	short.Store(true)
+	for _, want := range []string{"RESYNC", "DATA"} {
+		select {
+		case f := <-out:
+			if f.Type != want {
+				t.Fatalf("after its version expired while memory was short: %s %v, want %s", f.Type, f.Error, want)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("no %s after the version expired", want)
+		}
+	}
+	newOne := make(chan *ResponseMessage, 4)
+	go watchInto(ctx, m, "/api/v1/pods", "watch=1&labelSelector=a%3D1", newOne)
+	select {
+	case f := <-newOne:
+		data, _ := f.Error.(map[string]string)
+		if f.Type != "ERROR" || data["limit_scope"] != limitScopeMemory {
+			t.Fatalf("a new watch while memory was short: %s %v, want the memory limit", f.Type, f.Error)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a new watch while memory was short got nothing")
 	}
 }
 
@@ -129,9 +517,10 @@ func TestAWatchWhoseTurnComesWhileMemoryIsShortWaits(t *testing.T) {
 	m.heap = func() (uint64, uint64) { return 900, 1000 }
 	out := make(chan *ResponseMessage, 4)
 	done := make(chan struct{})
+	ctx := testCtx(t)
 	go func() {
 		defer close(done)
-		watchInto(context.Background(), m, "/api/v1/pods", "watch=1", out)
+		watchInto(ctx, m, "/api/v1/pods", "watch=1", out)
 	}()
 	waitEnded(t, done, 5*time.Second)
 	f := <-out
@@ -142,8 +531,40 @@ func TestAWatchWhoseTurnComesWhileMemoryIsShortWaits(t *testing.T) {
 	if n := api.startedSoFar(); n != 0 {
 		t.Errorf("%d watches reached the API server", n)
 	}
-	if n := m.watchStartPlaces("default").InUse(); n != 0 {
+	if n := m.watchStartPlaces("default").InUse() + m.openingPlaces().InUse(); n != 0 {
 		t.Errorf("%d places still taken", n)
+	}
+}
+
+// A wait for an opening place past startNoticeAfter is told as the memory limit, once, not as a cluster that cannot be
+// reached, and the list is read again once its watch is on.
+func TestALongWaitForAnOpeningIsToldAsTheMemoryLimit(t *testing.T) {
+	m := muxOn(t, eventThenHold)
+	m.startNoticeAfter = 20 * time.Millisecond
+	places := m.openingPlaces()
+	held := make([]func(), 0, places.Cap())
+	for i := 0; i < places.Cap(); i++ {
+		release, err := places.Take(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		held = append(held, release)
+	}
+	ctx := testCtx(t)
+	out := make(chan *ResponseMessage, 8)
+	go watchInto(ctx, m, "/api/v1/pods", "watch=1", out)
+	f := <-out
+	data, _ := f.Error.(map[string]string)
+	if f.Type != "ERROR" || data["reason"] != reasonLimit || data["limit_scope"] != limitScopeMemory || !strings.Contains(data["message"], "waits for its turn") {
+		t.Fatalf("after the long wait: %s %v", f.Type, f.Error)
+	}
+	for _, release := range held {
+		release()
+	}
+	for _, want := range []string{"RESYNC", "DATA"} {
+		if f := <-out; f.Type != want {
+			t.Fatalf("when its turn came: %s, want %s", f.Type, want)
+		}
 	}
 }
 

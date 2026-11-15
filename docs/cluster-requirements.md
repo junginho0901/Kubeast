@@ -327,6 +327,7 @@ Without the CRD, Kubeast answers with an empty list and "not installed" (`X-Kube
 | Apply without restart (Pod `resize` subresource) | API server 1.35 or later |
 | DRA screens | 1.31 or later (§6) |
 | Upgrade readiness check | Target = server minor + 1 (no requirement) |
+| Live lists opened as a watch list (`sendInitialEvents`, the API server's `WatchList` feature, on by default in 1.32 and from 1.34) | None: an API server that refuses it (1.27–1.31 and 1.33 by default) answers 422, and k8s-service opens that cluster's live lists as a plain watch for 10 minutes before it asks again. Check: `kubectl get --raw '/api/v1/namespaces/default/configmaps?watch=1&sendInitialEvents=true&resourceVersionMatch=NotOlderThan&resourceVersion=0&allowWatchBookmarks=true&timeoutSeconds=1'` ends with a `BOOKMARK` whose annotations hold `k8s.io/initial-events-end` |
 
 ## 9. Node shell
 
