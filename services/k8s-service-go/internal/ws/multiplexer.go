@@ -122,6 +122,9 @@ func watchFailure(err error) (message, reason string) {
 		return err.Error(), reasonNotServed
 	case errors.As(err, &status):
 		return response.Public(err), reasonFailed
+	case errors.Is(err, auth.ErrNoPerson):
+		// Kubeast did not send it: not the cluster's silence
+		return auth.ErrNoPerson.Error(), reasonFailed
 	}
 	return response.Public(err), reasonUnreachable
 }

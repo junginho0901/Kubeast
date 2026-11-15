@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,10 +42,13 @@ import (
 // cluster's kubeconfig is reloaded, so in-flight requests keep using the bundle
 // they captured and never observe a torn state.
 type clientBundle struct {
-	clientset  *kubernetes.Clientset
-	dynamic    dynamic.Interface
-	discovery  discovery.DiscoveryInterface
-	restConfig *rest.Config
+	clientset *kubernetes.Clientset
+	dynamic   dynamic.Interface
+	discovery discovery.DiscoveryInterface
+	// ownDiscovery is Kubeast's own reads' client (/health): the same transports, no client-side rate limit, so it
+	// waits behind no one's requests in clientset's turn limiter.
+	ownDiscovery *discovery.DiscoveryClient
+	restConfig   *rest.Config
 	// authz is clientset's authorization API (SelfSubjectAccessReview as the
 	// caller), kept as an interface so tests can answer it.
 	authz authorizationv1client.AuthorizationV1Interface
@@ -336,12 +340,19 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create dynamic client: %w", err)
 	}
+	ownCfg := rest.CopyConfig(cfg)
+	ownCfg.QPS, ownCfg.RateLimiter = -1, nil
+	ownDiscovery, err := discovery.NewDiscoveryClientForConfig(ownCfg)
+	if err != nil {
+		return nil, fmt.Errorf("create own discovery client: %w", err)
+	}
 	promExt, promSvc := promSourceFromInfo(info)
 	return &clientBundle{
 		clientset:     clientset,
 		authz:         authz,
 		dynamic:       dynClient,
 		discovery:     clientset.Discovery(),
+		ownDiscovery:  ownDiscovery,
 		restConfig:    cfg,
 		prom:          &promCache{},
 		promExt:       promExt,
@@ -530,7 +541,7 @@ func (s *Service) invalidateCaches() {
 	}
 }
 
-// dropDerivedCaches clears the discovery, Prometheus and access check answers this process keeps.
+// dropDerivedCaches clears the discovery, Prometheus, access check and health answers this process keeps.
 func (s *Service) dropDerivedCaches() {
 	s.apiResourcesMu.Lock()
 	s.apiResourcesCache = map[cluster.ID][]metav1.APIResourceList{}
@@ -541,6 +552,7 @@ func (s *Service) dropDerivedCaches() {
 	s.apiResourcesMu.Unlock()
 
 	s.invalidateResolveCache()
+	s.forgetHealthRead()
 
 	s.promQ.clear()
 	s.accessAnswers.clear()
@@ -797,7 +809,13 @@ type healthReading struct {
 	mu      sync.Mutex
 	at      time.Time
 	err     error
-	running chan struct{} // closed when the read under way ends; nil when none is
+	running *healthRun // nil when none is under way
+}
+
+// healthRun is one read: err is set before done closes.
+type healthRun struct {
+	done chan struct{}
+	err  error
 }
 
 // HealthCheck says whether the default cluster's API server answered GET /version, asked as Kubeast itself. One read
@@ -811,38 +829,61 @@ func (s *Service) HealthCheck(ctx context.Context) error {
 		h.mu.Unlock()
 		return err
 	}
-	done := h.running
-	if done == nil {
-		done = make(chan struct{})
-		h.running = done
-		go func() {
-			err := s.readHealth()
-			h.mu.Lock()
-			h.at, h.err, h.running = time.Now(), err, nil
-			h.mu.Unlock()
-			close(done)
-		}()
+	run := h.running
+	if run == nil {
+		run = &healthRun{done: make(chan struct{})}
+		h.running = run
+		go s.runHealthRead(run)
 	}
 	h.mu.Unlock()
 	select {
-	case <-done:
-		h.mu.Lock()
-		defer h.mu.Unlock()
-		return h.err
+	case <-run.done:
+		return run.err
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 }
 
-// readHealth is one GET /version of the default cluster within healthReadBudget.
+// runHealthRead answers run and, unless forgetHealthRead came meanwhile, keeps its answer for the next callers.
+func (s *Service) runHealthRead(run *healthRun) {
+	defer close(run.done)
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("health read panicked", "panic", r, "stack", string(debug.Stack()))
+			run.err = fmt.Errorf("health read panicked: %v", r)
+		}
+		h := &s.healthRead
+		h.mu.Lock()
+		if h.running == run {
+			h.at, h.err, h.running = time.Now(), run.err, nil
+		}
+		h.mu.Unlock()
+	}()
+	run.err = s.readHealth()
+}
+
+// forgetHealthRead drops the kept answer, for a default cluster that changed; a read under way answers its own callers.
+func (s *Service) forgetHealthRead() {
+	h := &s.healthRead
+	h.mu.Lock()
+	h.at, h.err, h.running = time.Time{}, nil, nil
+	h.mu.Unlock()
+}
+
+// readHealth is one GET /version of the default cluster within healthReadBudget once its bundle is found, through the
+// bundle's own client, which waits behind no one's requests.
 func (s *Service) readHealth() error {
-	ctx, cancel := context.WithTimeout(auth.AsKubeast(context.Background()), healthReadBudget)
-	defer cancel()
 	b := s.defaultClientBundle()
 	if b == nil {
 		return errNotLoaded
 	}
-	_, err := discovery.ToServerVersionInterfaceWithContext(b.clientset.Discovery()).ServerVersionWithContext(ctx)
+	ctx, cancel := context.WithTimeout(auth.AsKubeast(context.Background()), healthReadBudget)
+	defer cancel()
+	var dc discovery.DiscoveryInterface = b.ownDiscovery
+	if b.ownDiscovery == nil {
+		dc = b.clientset.Discovery()
+	}
+	_, err := discovery.ToServerVersionInterfaceWithContext(dc).ServerVersionWithContext(ctx)
 	return err
 }
 

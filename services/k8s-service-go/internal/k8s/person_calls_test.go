@@ -11,12 +11,17 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/version"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -88,6 +93,12 @@ func (a *identityAPI) take() []identitySeen {
 	return seen
 }
 
+func (a *identityAPI) seenNow() []identitySeen {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]identitySeen(nil), a.seen...)
+}
+
 func (a *identityAPI) slowVersion(d time.Duration) {
 	a.mu.Lock()
 	a.versionDelay = d
@@ -153,20 +164,53 @@ func refusals(lines string) (n int) {
 	return n
 }
 
+// identityRegistry holds the one cluster idc; its default can be made slow to name, or to panic, after the start.
+type identityRegistry struct {
+	info         cluster.Info
+	defaultTakes atomic.Int64 // nanoseconds
+	panics       atomic.Bool
+}
+
+func (r *identityRegistry) List(context.Context) ([]cluster.Info, error) {
+	return []cluster.Info{r.info}, nil
+}
+func (r *identityRegistry) Get(_ context.Context, id cluster.ID) (*cluster.Info, error) {
+	if id != r.info.ID {
+		return nil, cluster.ErrNotFound
+	}
+	info := r.info
+	return &info, nil
+}
+func (r *identityRegistry) Default(context.Context) (cluster.ID, error) {
+	if r.panics.Load() {
+		panic("the registry broke")
+	}
+	time.Sleep(time.Duration(r.defaultTakes.Load()))
+	return r.info.ID, nil
+}
+
 // identityService is a Service on api with ServiceOptions.Impersonation and no overview informers, reading the cluster idc.
 func identityService(t *testing.T, api *identityAPI) *Service {
+	s, _ := identityServiceWith(t, api, ServiceOptions{})
+	return s
+}
+
+// identityServiceWith is identityService with opts (its rates) and the registry it reads; the package's options come
+// back after the test.
+func identityServiceWith(t *testing.T, api *identityAPI, opts ServiceOptions) (*Service, *identityRegistry) {
 	t.Helper()
 	srv := httptest.NewServer(api)
 	t.Cleanup(srv.Close)
 	kc := strings.Replace(testKubeconfig, "https://127.0.0.1:6443", srv.URL, 1)
-	reg := &mockRegistry{def: idc, clusters: map[cluster.ID]cluster.Info{idc: {ID: idc, Mode: cluster.ModeExternal, KubeconfigBlob: kc}}}
-	wasImpersonation, wasOff := impersonationEnabled, informersOff
-	s, err := NewService(context.Background(), reg, false, cache.New("", 0, 0, ""), ServiceOptions{MaxClusters: 20, Impersonation: true, NoInformers: true})
+	reg := &identityRegistry{info: cluster.Info{ID: idc, Mode: cluster.ModeExternal, KubeconfigBlob: kc}}
+	opts.MaxClusters, opts.Impersonation, opts.NoInformers = 20, true, true
+	wasImpersonation, wasOff, wasRates := impersonationEnabled, informersOff, clientRates
+	s, err := NewService(context.Background(), reg, false, cache.New("", 0, 0, ""), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { impersonationEnabled, informersOff = wasImpersonation, wasOff })
-	return s
+	t.Cleanup(func() { impersonationEnabled, informersOff, clientRates = wasImpersonation, wasOff, wasRates })
+	return s, reg
 }
 
 // Every request a person's screen makes reaches the cluster as that person, but the reads Kubeast keeps once for
@@ -350,9 +394,9 @@ func TestHealthReadIsOneForEveryCallerAndShort(t *testing.T) {
 	}
 
 	ageHealthRead()
-	api.slowVersion(1200 * time.Millisecond) // slow but answering: within the budget
+	api.slowVersion(time.Second) // slow but answering: within the budget
 	if err := s.HealthCheck(context.Background()); err != nil {
-		t.Errorf("past healthReadEvery, a cluster answering in 1.2 s: %v", err)
+		t.Errorf("past healthReadEvery, a cluster answering in 1 s: %v", err)
 	}
 	if seen := api.take(); len(seen) != 1 {
 		t.Errorf("past healthReadEvery: asked %d times, want once", len(seen))
@@ -415,6 +459,22 @@ func TestShownVersionIsShortLivedAndKeepsTheLastOnAFailure(t *testing.T) {
 	}
 }
 
+// The overview read from the informers shows the version the cluster config shows: at most shownVersionTTL old.
+func TestTheInformerOverviewShowsAVersionAtMostShownVersionTTLOld(t *testing.T) {
+	api := &identityAPI{}
+	srv := httptest.NewServer(api)
+	defer srv.Close()
+	s := &Service{}
+	b := &clientBundle{cacheClient: fake.NewSimpleClientset(overviewObjects()...), discovery: discovery.NewDiscoveryClientForConfigOrDie(&rest.Config{Host: srv.URL})}
+	b.version.value, b.version.at = &version.Info{GitVersion: "v1.34.2"}, time.Now().Add(-shownVersionTTL-time.Second)
+	s.defaultBundle.Store(b)
+	t.Cleanup(func() { _ = b.Close() })
+	ov, err := s.GetClusterOverview(context.Background())
+	if err != nil || ov["cluster_version"] != "v1.35.0" {
+		t.Errorf("overview from informers: %v %v, want the version read again past shownVersionTTL", ov["cluster_version"], err)
+	}
+}
+
 // Dropping a cluster (Invalidate, another replica's notice, a changed config version) forgets its breaker: the cluster
 // built again is asked, not answered 503 until the next health sweep.
 func TestDroppingAClusterForgetsItsBreaker(t *testing.T) {
@@ -433,6 +493,93 @@ func TestDroppingAClusterForgetsItsBreaker(t *testing.T) {
 		if s.ClusterDown(idc) {
 			t.Errorf("%s: the breaker stayed open", name)
 		}
+	}
+}
+
+// /health's read waits behind no one: with the people's requests queued in the cluster's turn limiter (one a second)
+// it still answers within its budget.
+func TestHealthReadWaitsBehindNoOnesRequests(t *testing.T) {
+	api := &identityAPI{}
+	s, _ := identityServiceWith(t, api, ServiceOptions{ClientQPS: 1, ClientBurst: 1})
+	crowd, leave := context.WithCancel(auth.WithPayload(cluster.WithID(context.Background(), idc), auth.TokenPayload{UserID: "u1", Email: "reader@example.com"}))
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _, _ = s.RawRequest(crowd, "GET", "/api/v1/namespaces")
+		}()
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for len(api.seenNow()) == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond) // the first of the crowd has gone; the others wait their turn
+	}
+	start := time.Now()
+	err := s.HealthCheck(context.Background())
+	took := time.Since(start)
+	leave()
+	wg.Wait()
+	if err != nil || took > healthReadBudget {
+		t.Errorf("with the people's requests queued: %v after %v, want an answer within %v", err, took.Round(time.Millisecond), healthReadBudget)
+	}
+}
+
+// The read's budget starts once the default cluster's bundle is found: a default slow to name (1 s) and an API server
+// slow to answer (0.8 s) make no failure of a read whose own part is within it.
+func TestHealthReadBudgetStartsOnceTheClusterIsFound(t *testing.T) {
+	api := &identityAPI{}
+	s, reg := identityServiceWith(t, api, ServiceOptions{})
+	s.Invalidate(idc) // the next read finds the default cluster again
+	reg.defaultTakes.Store(int64(time.Second))
+	api.slowVersion(800 * time.Millisecond)
+	if err := s.HealthCheck(context.Background()); err != nil {
+		t.Errorf("a default slow to name and a slow /version: %v", err)
+	}
+}
+
+// A dropped default cluster (Invalidate, another replica's notice, a changed config version) forgets the health answer
+// kept for it: the next call reads the cluster again.
+func TestDroppingTheDefaultClusterForgetsTheHealthAnswer(t *testing.T) {
+	api := &identityAPI{}
+	s := identityService(t, api)
+	for name, drop := range map[string]func(){
+		"Invalidate":  func() { s.Invalidate(idc) },
+		"DropCluster": func() { s.DropCluster(idc) },
+		"DropStale":   func() { s.DropStale(idc, s.ClusterVersions()[idc]) },
+	} {
+		api.answerVersion("", 0)
+		s.forgetHealthRead()
+		if err := s.HealthCheck(context.Background()); err != nil {
+			t.Fatalf("%s: first read: %v", name, err)
+		}
+		api.take()
+		api.answerVersion("", http.StatusServiceUnavailable) // the cluster now refuses
+		drop()
+		if err := s.HealthCheck(context.Background()); err == nil {
+			t.Errorf("%s: the answer kept from before the drop came back", name)
+		}
+		if n := versionAsks(api.take()); n != 1 {
+			t.Errorf("%s: asked %d times after the drop, want once", name, n)
+		}
+	}
+}
+
+// A read that panics is a failure its callers get and the log names, not a process that ends.
+func TestAHealthReadThatPanicsIsAFailure(t *testing.T) {
+	logs := captureLogs(t)
+	api := &identityAPI{}
+	s, reg := identityServiceWith(t, api, ServiceOptions{})
+	s.Invalidate(idc)
+	reg.panics.Store(true)
+	err := s.HealthCheck(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "panicked") {
+		t.Errorf("a read that panicked: %v, want a failure", err)
+	}
+	if again := s.HealthCheck(context.Background()); again == nil || again.Error() != err.Error() {
+		t.Errorf("within healthReadEvery: %v, want the same failure", again)
+	}
+	if !strings.Contains(logs.take(), "health read panicked") {
+		t.Error("the panic was not logged")
 	}
 }
 

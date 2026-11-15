@@ -12,8 +12,8 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
-// serverVersionTTL is how old a version the features and the informer overview take; shownVersionTTL how old one the
-// screens that show it (cluster config, hygiene, the overview read without informers) take, so an upgrade shows soon.
+// serverVersionTTL is how old a version the features (resize) take; shownVersionTTL how old one the screens that show
+// it (the overview, the cluster config, hygiene) take, so an upgrade shows soon and they show one version.
 const (
 	serverVersionTTL = 10 * time.Minute
 	shownVersionTTL  = 30 * time.Second

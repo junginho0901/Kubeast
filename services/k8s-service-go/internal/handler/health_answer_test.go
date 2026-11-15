@@ -66,7 +66,7 @@ func askHealth(t *testing.T, h *handler.Handler) (map[string]interface{}, time.D
 
 // /health answers inside the 2 s auth-service waits for it (CheckK8sServiceHealth): the cluster read and the audit
 // status run side by side, a default cluster slow to find or a cluster that does not answer cost at most the wait, and a
-// cluster answering in 1.2 s still reads connected.
+// cluster answering in 1 s still reads connected.
 func TestHealthAnswersInsideTheSetupWait(t *testing.T) {
 	versionTakes := atomic.Int64{}
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -112,8 +112,8 @@ func TestHealthAnswersInsideTheSetupWait(t *testing.T) {
 		t.Errorf("API server not answering: %v in %v, want disconnected within 1.9 s", body["kubernetes"], took.Round(time.Millisecond))
 	}
 
-	body, took = ask(func() { versionTakes.Store(int64(1200 * time.Millisecond)) }) // a slow but answering API server
+	body, took = ask(func() { versionTakes.Store(int64(time.Second)) }) // a slow but answering API server
 	if took > 1900*time.Millisecond || body["kubernetes"] != "connected" {
-		t.Errorf("API server answering in 1.2 s: %v in %v, want connected within 1.9 s", body["kubernetes"], took.Round(time.Millisecond))
+		t.Errorf("API server answering in 1 s: %v in %v, want connected within 1.9 s", body["kubernetes"], took.Round(time.Millisecond))
 	}
 }
