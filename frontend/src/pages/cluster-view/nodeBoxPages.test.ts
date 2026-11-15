@@ -384,15 +384,48 @@ describe('the node\'s own view: its pods by name, sixty a page', () => {
     const asked = { page: 5, pod: null }
     const drained = nodeViewPage(keysOf(40), asked, -1)
     expect(drained.page).toBe(1)
-    expect(shownPageAddress(asked, drained)).toEqual({ page: 1, pod: null })
+    const all = 'n\nall\nall'
+    expect(shownPageAddress(asked, drained, all, { read: all, page: 5 })).toEqual({ page: 1, pod: null })
     // 300 back: page 1 still, where it was page 5 before
     expect({ before: nodeViewPage(keysOf(300), asked, -1).page, now: nodeViewPage(keysOf(300), { page: 1, pod: null }, -1).page }).toEqual({ before: 5, now: 1 })
     // the page shown is the page asked (no page asked reads as 1): nothing to write
-    expect(shownPageAddress({ page: 1, pod: null }, nodeViewPage(keysOf(300), { page: 1, pod: null }, -1))).toBeNull()
-    expect(shownPageAddress({ page: null, pod: null }, nodeViewPage(keysOf(40), { page: null, pod: null }, -1))).toBeNull()
+    expect(shownPageAddress({ page: 1, pod: null }, nodeViewPage(keysOf(300), { page: 1, pod: null }, -1), all, { read: all, page: 1 })).toBeNull()
+    expect(shownPageAddress({ page: null, pod: null }, nodeViewPage(keysOf(40), { page: null, pod: null }, -1), all, null)).toBeNull()
     // a pod followed is followedPage's; a pod gone keeps its note with the page shown
-    expect(shownPageAddress({ page: 5, pod: 'a/n-p001' }, nodeViewPage(keysOf(40), { page: 5, pod: 'a/n-p001' }, -1))).toBeNull()
-    expect(shownPageAddress({ page: 5, pod: 'a/n-p299' }, nodeViewPage(keysOf(40), { page: 5, pod: 'a/n-p299' }, -1))).toEqual({ page: 1, pod: 'a/n-p299' })
+    expect(shownPageAddress({ page: 5, pod: 'a/n-p001' }, nodeViewPage(keysOf(40), { page: 5, pod: 'a/n-p001' }, -1), all, { read: all, page: 5 })).toBeNull()
+    expect(shownPageAddress({ page: 5, pod: 'a/n-p299' }, nodeViewPage(keysOf(40), { page: 5, pod: 'a/n-p299' }, -1), all, { read: all, page: 5 })).toEqual({ page: 1, pod: 'a/n-p299' })
+    // the view's first answer (a link or a reload asking a page past the last) writes the page shown too
+    expect(shownPageAddress(asked, drained, all, null)).toEqual({ page: 1, pod: null })
+  })
+
+  it('keeps the page asked when another namespace or Problem pods only shows fewer pods, so coming back shows it again', () => {
+    const keysOf = (n: number) => nameOrder(podsFor('n', n)).map(podKey)
+    // the view as PodNodeGrid runs it: each answer may write the address (the effect), then becomes the last answer
+    let address: { page: number | null; pod: string | null } = { page: 4, pod: null }
+    let before: { read: string; page: number } | null = null
+    const answer = (count: number, read: string) => {
+      const shown = nodeViewPage(keysOf(count), address, -1)
+      const kept = shownPageAddress(address, shown, read, before)
+      if (kept) address = kept
+      before = { read, page: shown.page }
+      return { shown: shown.page, address: address.page }
+    }
+    // All namespaces on page 4 of 300 → a namespace of 30 pods → All again: page 4 kept in the address and shown again
+    expect(answer(300, 'n\nall\nall')).toEqual({ shown: 4, address: 4 })
+    expect(answer(30, 'n\nteam-a\nall')).toEqual({ shown: 1, address: 4 })
+    expect(answer(30, 'n\nteam-a\nall')).toEqual({ shown: 1, address: 4 })
+    expect(answer(300, 'n\nall\nall')).toEqual({ shown: 4, address: 4 })
+    // Problem pods only (12 of them) and off again: the same
+    expect(answer(12, 'n\nall\nproblems')).toEqual({ shown: 1, address: 4 })
+    expect(answer(300, 'n\nall\nall')).toEqual({ shown: 4, address: 4 })
+    // the same read shrinking under page 4 writes the page shown, and pods coming back keep it
+    expect(answer(150, 'n\nall\nall')).toEqual({ shown: 3, address: 3 })
+    expect(answer(150, 'n\nall\nall')).toEqual({ shown: 3, address: 3 })
+    expect(answer(300, 'n\nall\nall')).toEqual({ shown: 3, address: 3 })
+    // a namespace already past the address's page: its own shrinking does not write either
+    expect(answer(30, 'n\nteam-a\nall')).toEqual({ shown: 1, address: 3 })
+    expect(answer(20, 'n\nteam-a\nall')).toEqual({ shown: 1, address: 3 })
+    expect(answer(300, 'n\nall\nall')).toEqual({ shown: 3, address: 3 })
   })
 
   it('says the namespace filter leaves the opened pod out, not that it left the node', () => {
