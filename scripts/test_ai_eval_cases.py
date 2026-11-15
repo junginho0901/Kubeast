@@ -70,6 +70,12 @@ def cause(resource, kind, started_at=None):
     return {"resource": resource, "kind": kind, "started_at": started_at, "evidence": [1]}
 
 
+def tell(d: Path, c: dict, *what):
+    """A failure message about case d: what went wrong for a shown case, only the folder for a hidden one, whose names
+    and answers no test output gives (README "Hard cases")."""
+    return d.name if c.get("hidden") else (d.name, *what)
+
+
 CLUSTER_KINDS = {"Node", "Namespace", "PersistentVolume", "StorageClass", "ClusterRole", "ClusterRoleBinding"}
 
 
@@ -121,7 +127,7 @@ def test_list_shows_every_case_and_no_truth():
         told = [truth["symptom"]] + [tc["resource"] for tc in truth["causes"]]
         told += [x["resource"] for x in truth["decoys"]] + [x["why"] for x in truth["decoys"]]
         for text in told:
-            assert text not in every.stdout + every.stderr, f"{d.name}: --list printed {text!r}"
+            assert text not in every.stdout + every.stderr, tell(d, c, "--list printed", text)
 
 
 def test_hidden_results_show_only_a_total_of_two_or_more():
@@ -134,10 +140,18 @@ def test_hidden_results_show_only_a_total_of_two_or_more():
     other = dict(row, id="15_other", hidden=True, **{"pass": True})
     text = AI_EVAL.table([seen, *kept])
     assert "04_seen" in text and "08_kept" not in text
-    assert "숨김 사례 1개: 결과는 JSON에만" in text and "1/2" not in text
+    assert "숨김 사례: 채점된 사례가 둘이 안 되어 결과는 JSON에만" in text and "1/2" not in text
     assert "정답 1/1 (근거 있는 정답 1) · 숨김 빼고 · 모델 m" in text
     text = AI_EVAL.table([seen, *kept, other])
     assert "숨김 사례 2개: 정답 2/3" in text and "15_other" not in text
+    # a hidden case whose setup failed has no scored row: it does not make one hidden case's score a total
+    broken = {"id": "18_broken", "title": "t", "hidden": True, "setup_error": "x"}
+    text = AI_EVAL.table([seen, *kept, broken])
+    assert "숨김 사례: 채점된 사례가 둘이 안 되어 결과는 JSON에만" in text and not re.search(r"\d/[23]\b", text), text
+    # the tables written during a run give no total: the difference of two would be one hidden case's score
+    for rows in ([seen, *kept, other], [seen, *kept, other, dict(other, id="18_more", **{"pass": False})]):
+        text = AI_EVAL.table(rows, final=False)
+        assert "숨김 사례: 합계는 실행이 끝난 뒤의 표에만" in text and not re.search(r"정답 \d+/[2-9]", text), text
     for only_hidden in (kept, kept[:1], [other]):
         text = AI_EVAL.table(only_hidden, {"user": "read", "namespace_suffix": None, "before": {"default": {"investigations": 0, "inbox": 0}}})
         assert "숨김 사례만 든 실행: 결과는 JSON에만 · 모델 m" in text, text
@@ -156,7 +170,7 @@ def test_every_hard_case_runs_under_a_namespace_suffix():
             whole = re.compile(r"(?<![A-Za-z0-9-])" + re.escape(ns) + r"(?![A-Za-z0-9-])")
             for f in sorted(new_dir.iterdir()):
                 if f.suffix in (".json", ".yaml"):
-                    assert not whole.search(f.read_text()), f"{d.name}/{f.name} still names {ns}"
+                    assert not whole.search(f.read_text()), tell(d, c, f.name, "still names", ns)
             truth = json.loads((d / "truth.json").read_text())
             moved = rca.fill_placeholders(json.loads((new_dir / "truth.json").read_text()), MARKS)
             if truth["control"]:
@@ -208,17 +222,74 @@ def test_each_truth_fits_its_case_and_the_scorer():
             assert rca.score_rca(block([], no_fault=True), filled, CALLS)["pass"], d.name
             for x in truth["decoys"]:
                 s = rca.score_rca(block([cause(as_answered(x["resource"]), "crash")]), filled, CALLS)
-                assert not s["pass"] and s["decoys_taken"] == [as_answered(x["resource"])], (d.name, x["resource"])
+                assert not s["pass"] and s["decoys_taken"] == [as_answered(x["resource"])], tell(d, c, x["resource"])
             continue
         right = [cause(tc["resource"], tc["kind"], filled["fault_start"]) for tc in truth["causes"]]
         path = [as_answered(h["resource"]) for h in truth["path"]]
         s = rca.score_rca(block(right, path=path), filled, CALLS)
-        assert s["pass"] and s["score"] == 1.0, (d.name, s)
-        assert s["time_ok"] is True and s["path_ok"] is True and s["ungrounded"] == 0, (d.name, s)
+        assert s["pass"] and s["score"] == 1.0, tell(d, c, s)
+        assert s["time_ok"] is True and s["path_ok"] is True and s["ungrounded"] == 0, tell(d, c, s)
         assert not rca.score_rca(block([], no_fault=True), filled, CALLS)["pass"], d.name
         for x in truth["decoys"]:
             s = rca.score_rca(block(right + [cause(as_answered(x["resource"]), "crash")]), filled, CALLS)
-            assert not s["pass"] and s["decoys_taken"] == [as_answered(x["resource"])], (d.name, x["resource"])
+            assert not s["pass"] and s["decoys_taken"] == [as_answered(x["resource"])], tell(d, c, x["resource"])
+
+
+def test_each_truths_other_forms_score_as_it_says():
+    """Read from each truth, hidden ones too, so no test file has to write a hidden case's answer: each accepted kind of
+    a cause passes, a part of a cause (also_ok) the cause does not accept misses alone and costs nothing beside the
+    right causes, and a hop of the path that is no cause, named alone under the cause's kind, misses."""
+    for d, c in all_cases():
+        filled = rca.fill_placeholders(truth_of(d), MARKS)
+        if filled["control"]:
+            continue
+        right = [cause(tc["resource"], tc["kind"]) for tc in filled["causes"]]
+        for i, tc in enumerate(filled["causes"]):
+            for kind in tc.get("accept_kinds") or []:
+                s = rca.score_rca(block(right[:i] + [cause(tc["resource"], kind)] + right[i + 1:]), filled, CALLS)
+                assert s["pass"] and s["score"] == 1.0, tell(d, c, tc["resource"], kind, s)
+        for part in filled["also_ok"]:
+            if any(rca._is_truth_cause(tc, as_answered(part)) for tc in filled["causes"]):
+                continue  # an accepted name of the cause: taken as the cause, under its kinds
+            assert not rca.score_rca(block([cause(as_answered(part), filled["causes"][0]["kind"])]), filled, CALLS)["pass"], tell(d, c, part)
+            s = rca.score_rca(block(right + [cause(as_answered(part), "crash")]), filled, CALLS)
+            assert s["pass"] and s["score"] == 1.0, tell(d, c, part, s)
+        for hop in filled["path"]:
+            named = as_answered(hop["resource"])
+            if any(rca._is_truth_cause(tc, named) for tc in filled["causes"]):
+                continue
+            for tc in filled["causes"]:
+                assert not rca.score_rca(block([cause(named, tc["kind"])]), filled, CALLS)["pass"], tell(d, c, named, tc["kind"])
+
+
+# What names a hidden case's answer: each cause's name and namespace/name, and for a control the namespace/name of each
+# decoy it must not blame (a decoy's bare name is a common word: api, web).
+def _hidden_answer_names() -> dict:
+    out = {}
+    for d, c in all_cases():
+        if not c.get("hidden"):
+            continue
+        truth = truth_of(d)
+        causes = [tc["resource"].split("/") for tc in truth["causes"]]
+        decoys = [x["resource"].split("/") for x in truth["decoys"]] if truth["control"] else []
+        names = {p[-1] for p in causes} | {"/".join(p[-2:]) for p in causes + decoys if len(p) >= 3}
+        out[c["id"]] = {n for n in names if n.strip("*<>/")}
+    return out
+
+
+def test_no_test_file_names_a_hidden_cause():
+    """The test files are what someone reads to see how answers are scored, so they hold no hidden case's answer: the
+    hidden truths are run from their folders (test_each_truth_fits_its_case_and_the_scorer and the test above), the
+    scorer's own checks on made-up truths. A hit names the case and the line, not the name."""
+    names = _hidden_answer_names()
+    assert names, "no hidden case"
+    hits = []
+    for f in sorted(HERE.glob("test_ai_eval_*.py")):
+        for no, line in enumerate(f.read_text().splitlines(), 1):
+            for cid, forms in names.items():
+                if any(re.search(r"(?<![A-Za-z0-9_.-])" + re.escape(n) + r"(?![A-Za-z0-9_-])", line) for n in forms):
+                    hits.append(f"{f.name}:{no} names an answer of {cid}")
+    assert not hits, hits
 
 
 def test_what_a_case_applies_holds_no_answer_word():
