@@ -151,7 +151,9 @@ pdb:
 # "Terminals and followed logs on their own server")
 streams:
   enabled: false
+  replicas: 1            # stays 1: more than one stream server is not supported yet
   drainSeconds: 60       # how long open terminals get to end when their server is replaced (k8s-service when off)
+  preStopSeconds: 10     # k8s-service-stream leaves the Service's endpoints this long before the drain starts
 topologySpread:
   enabled: true
 podShutdown:
@@ -160,6 +162,9 @@ resources:               # per-container requests / memory limit (the full list 
   aiService:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 1Gi }
+  k8sServiceStream:      # streams.enabled only; k8sService's numbers for a start, not measured yet
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
 
 # AI keys: injected only as ai-service environment variables and not stored in the DB.
 # Model settings (UI/CRD) point only to the variable name (api_key_env).
