@@ -10,8 +10,10 @@ import fnmatch
 import importlib.util
 import json
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -122,15 +124,51 @@ def test_list_shows_every_case_and_no_truth():
             assert text not in every.stdout + every.stderr, f"{d.name}: --list printed {text!r}"
 
 
-def test_hidden_results_show_only_a_total():
+def test_hidden_results_show_only_a_total_of_two_or_more():
     truth = {"control": False, "causes": [{"resource": "ConfigMap/shop-x/settings", "kind": "config_change"}]}
     scored = rca.score_rca(block([cause("ConfigMap/shop-x/settings", "config_change")]), truth, CALLS)
     row = {"title": "t", "form": "question", "ask_after": 300, "run": 1, "missing": [], "forbidden": [],
-           "tools_missing": [], "calls": CALLS, "tokens": 0, "seconds": 1.0, "error": None, "rca": scored}
-    text = AI_EVAL.table([dict(row, id="04_seen", hidden=False, **{"pass": True}),
-                          dict(row, id="08_kept", hidden=True, **{"pass": False})])
+           "tools_missing": [], "calls": CALLS, "tokens": 0, "seconds": 1.0, "error": None, "rca": scored, "model": "m"}
+    seen = dict(row, id="04_seen", hidden=False, **{"pass": True, "pass_grounded": True})
+    kept = [dict(row, id="08_kept", hidden=True, **{"pass": False}), dict(row, id="08_kept", hidden=True, run=2, **{"pass": True})]
+    other = dict(row, id="15_other", hidden=True, **{"pass": True})
+    text = AI_EVAL.table([seen, *kept])
     assert "04_seen" in text and "08_kept" not in text
-    assert "숨김 사례 1개: 정답 0/1" in text
+    assert "숨김 사례 1개: 결과는 JSON에만" in text and "1/2" not in text
+    assert "정답 1/1 (근거 있는 정답 1) · 숨김 빼고 · 모델 m" in text
+    text = AI_EVAL.table([seen, *kept, other])
+    assert "숨김 사례 2개: 정답 2/3" in text and "15_other" not in text
+    for only_hidden in (kept, kept[:1], [other]):
+        text = AI_EVAL.table(only_hidden, {"user": "read", "namespace_suffix": None, "before": {"default": {"investigations": 0, "inbox": 0}}})
+        assert "숨김 사례만 든 실행: 결과는 JSON에만 · 모델 m" in text, text
+        assert not re.search(r"정답 \d|\d/[12]\b", text) and "08_kept" not in text and "15_other" not in text, text
+
+
+def test_every_hard_case_runs_under_a_namespace_suffix():
+    root = Path(tempfile.mkdtemp(prefix="ai-eval-suffix-"))
+    try:
+        for d, c in all_cases():
+            ns = c["namespace"]
+            new_dir, new = AI_EVAL.with_suffix(d, c, "zz9", root)
+            assert new_dir != d and new["namespace"] == f"{ns}-zz9" and new["id"] == c["id"], d.name
+            assert f"{ns}-zz9" in new["question"] and f"{ns}-zz9" in new["question_vague"], d.name
+            whole = re.compile(r"(?<![A-Za-z0-9-])" + re.escape(ns) + r"(?![A-Za-z0-9-])")
+            for f in sorted(new_dir.iterdir()):
+                if f.suffix in (".json", ".yaml"):
+                    assert not whole.search(f.read_text()), f"{d.name}/{f.name} still names {ns}"
+            truth = json.loads((d / "truth.json").read_text())
+            moved = rca.fill_placeholders(json.loads((new_dir / "truth.json").read_text()), MARKS)
+            if truth["control"]:
+                assert rca.score_rca(block([], no_fault=True), moved, CALLS)["pass"], d.name
+                continue
+            right = [cause(tc["resource"], tc["kind"], moved["fault_start"]) for tc in moved["causes"]]
+            assert rca.score_rca(block(right), moved, CALLS)["pass"], d.name
+            assert all(tc["resource"].split("/")[1] != ns for tc in moved["causes"]), d.name
+            old = [cause(tc["resource"], tc["kind"]) for tc in truth["causes"] if tc["resource"].split("/")[1] == ns]
+            if old and not any(tc.get("accept_resources") for tc in moved["causes"]):
+                assert not rca.score_rca(block(old), moved, CALLS)["pass"], d.name
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
 
 
 def test_each_truth_fits_its_case_and_the_scorer():

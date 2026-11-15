@@ -56,7 +56,7 @@ as above.
 
 | Field | |
 |---|---|
-| `question_vague` | the same problem without the symptom named, asked as its own chat after `question` |
+| `question_vague` | the same problem without the symptom named, asked as its own chat; the two forms take turns and swap their order every other run (specific, vague, vague, specific, …) |
 | `answer_format` | `rca_block_v0`: each question asks for a fenced `rca` JSON block at the end, scored against `truth.json` |
 | `baseline_seconds` | normal running after `wait` (and `settle_seconds`), before the fault |
 | `inject_cmds` | shell steps that make the fault (`$NS`, and `$CASE_DIR` the case folder); `INJECT_TIME` is taken before the first; a failing step is a setup failure |
@@ -71,17 +71,54 @@ as above.
 
 Order: namespace, `setup.yaml` (`SETUP_TIME`), `setup_cmds`, `wait`, `settle_seconds` + `baseline_seconds`,
 `inject_cmds`, `inject_wait`, the asks (a `fault_duration_seconds` undo at its time), `undo_cmds`, the namespace
-deleted, `cleanup_cmds`, `cooldown_seconds`. `--keep` leaves a case as it ends: no undo, no deletion.
+deleted, `cleanup_cmds`, `cooldown_seconds`. `--keep` leaves a case as it ends: no undo, no deletion. A failing
+`setup_cmds` step, a `wait` still false at `wait_seconds` and an `inject_wait` still false are a setup failure with
+the end of the output (400 characters), and the case is not asked. Each answer's `late_seconds` is how long after its
+ask time it was asked.
+
+The account and earlier runs:
+
+- A hard case asks as a member the runner makes for it with Read on the case's cluster (the whole cluster), deleted
+  when the case ends; `--user admin` asks as the admin instead. A member holds no `admin.audit.read` or
+  `admin.investigations.read`, so the chat's `audit_search` and `investigations` refuse it
+  (`scripts/test_ai_eval_runner.py` reads that from the seeded roles and the tool permission tables).
+- Read still opens the Alerts inbox and an alert's investigation report (`alerts_inbox` with `with_report`, for
+  whoever reads the whole cluster). For a chat round, keep `features.alertInvestigation.enabled` off (the inbox then
+  answers 404) or the inbox empty, and at least turn `features.alertInvestigation.automatic` off, so a fault of the
+  round (01, 07 and 10 can fire the demo's rules) starts no investigation the model could read and none takes the
+  model's one Claude Code place. The runner warns when the inbox holds alerts at the start.
+- The round's record `<stamp>-round.json`, and the table's last line, give the account, the namespace suffix and how
+  many investigations and inbox rows each cluster had before and after the round.
+- `--namespace-suffix random` (or a value of up to eight lowercase letters and digits) runs each case in
+  `<namespace>-<suffix>`: the runner copies the case folder and writes the new name wherever the old one stands as a
+  whole name (`case.json`, `truth.json`, the manifests), so the investigations, alerts and audit rows of earlier runs
+  name another namespace. Other namespaces a case makes (`edge-15`) keep their names.
+
+A request error of one chat turn — an HTTP error, a timeout, a dropped connection — is kept as that answer's `error`
+(`request_error`, `error_status`) and the case goes on; a 429 or 5xx is tried once more after 20 s. Three in a row
+end the case's asks (the undo and teardown still run). The report and the table are written after each case, so a
+run that stops keeps the cases it finished.
 
 `truth.json` holds `control`, `fault_start` and `fault_end` (`{{SETUP_TIME}}`, `{{INJECT_TIME}}`, `{{UNDO_TIME}}`,
 filled into `<out>/<time>-truth/<id>.json`), `time_tolerance_seconds`, `causes` (`resource` as
 `Kind/namespace/name`, `kind`, `accept_resources` and `accept_kinds`), `path` (`resource`, `role`, `required`,
 `accept`), `also_ok` and `decoys` (`*` and `<…>` stand for a generated part of a name). The last `rca` block passes
 when it names every truth cause with an accepted kind and no decoy as a cause; a control passes only with
-`no_fault` and no cause other than kind `none`. Its score is 1 less 0.25 for each other cause outside `also_ok`.
-Reported beside it: `started_at` within the tolerance, the required path hops in order, and the causes whose
-`evidence` points at no call that answered. `expect` is still checked, as `prose_pass`. A truth's `symptom`,
-`distractor_at`, `variants_note` and a hop's `note` are for people.
+`no_fault` and no cause other than kind `none`, and a fault case fails with `no_fault`. Its score is 1 less 0.25 for
+each other cause outside `also_ok`, the same resource named again under a kind its truth cause does not take
+included. Reported beside it: `started_at` within the tolerance, the required path hops in order, the causes whose
+`evidence` points at no call that answered, and `pass_grounded` (pass with none of those). `expect` is still checked,
+as `prose_pass`. A truth's `symptom`, `distractor_at`, `variants_note` and a hop's `note` are for people.
+
+How an answer is read: a fence whose info words hold `rca` in any case (```` ```rca ````, ```` ```RCA ````,
+```` ```json rca ````) is the block (`block: ok`); with none, a ```` ```json ```` or untagged block holding `causes`
+or `no_fault` is scored as `block: loose`. A kind is read as `KINDS` writes it (`ConfigChange`, `config-change` and
+`config change` are `config_change`). `namespace/name` without a kind is read as such when the first part is no kind
+(a namespace is lowercase, with no dot). A decoy whose name is only `*` (`Node/*`) is taken only by an answer that
+gives its kind: a bare name — a table, an index, a setting — is an extra cause, not a node.
+
+The table leaves hidden cases out: with two or more it gives their total, with one or a run of hidden cases only it
+says the results are in the JSON, so no `.md` or screen line gives one hidden case's score.
 
 `evals/ai-hard/` holds ten cases made of plain Kubernetes objects. Each folder has `case.json`, `truth.json`, the
 manifests it applies and `NOTES.md`: what the AI has to notice, the trap, how it is scored and what is unsure. None
@@ -110,9 +147,10 @@ scripts/kind-chaos.sh up                                     # Chaos Mesh in kub
 scripts/kind-otel-demo.sh up                                 # the OpenTelemetry demo in kubeast-b, and its alert rules
 python3 scripts/ai-eval.py --cases evals/ai-hard --list      # the cases and what is wrong with their fields; no cluster
 python3 scripts/ai-eval.py --cases evals/ai-hard --out /tmp/ai-eval-hard 06
-python3 scripts/ai-eval.py --cases evals/ai-hard --out /tmp/ai-eval-hard --repeat 3 --hidden
+python3 scripts/ai-eval.py --cases evals/ai-hard --out /tmp/ai-eval-hard --repeat 3 --hidden --namespace-suffix random
 python3 scripts/test_ai_eval_rca.py                          # the scoring checks, or pytest on that file
 python3 scripts/test_ai_eval_cases.py                        # the case folders and the demo's alert rules; no cluster
+python3 scripts/test_ai_eval_runner.py                       # the runner against a stand-in API; no cluster
 scripts/kind-otel-demo.sh down && scripts/kind-chaos.sh down
 ```
 
