@@ -566,6 +566,8 @@ def test_text_right_reports_the_second_review_read_as_wrong():
     ]:
         s = rca.score_text(report(text), truth)
         assert (s["pass"], s["score"], s["no_fault"]) == (True, score, False), (text, s)
+    s = rca.score_text(report("storefront-config's cart_url was edited from /api/v1/cart to /api/v2/cart."), T12)
+    assert (s["pass"], s["score"], s["extra_objects"]) == (True, 1.0, []), s  # a URL path names no object
     s = rca.score_text(report("catalog runs at its memory limit."), T09)
     assert s["causes"][0]["other_kinds"] == ["oom"]  # "memory limit" is one kind, not oom and resource_limit
     s = rca.score_text(report("Deployment/shop-09/catalog was changed and is throttled at its CPU limit."), T09)
