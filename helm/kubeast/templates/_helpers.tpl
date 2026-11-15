@@ -566,3 +566,43 @@ replicas: {{ index .root.Values.replicas .key }}
 true
 {{- end -}}
 {{- end -}}
+
+{{/*
+The most database connections the pods can hold at once: for each service its pool (postgresql.pool.<key>.maxConns)
+times its pods while a rollout runs — replicas.<key>, or autoscaling.<key>.maxReplicas while its HPA is on, plus a
+quarter of that rounded up (Kubernetes' default maxSurge; the Deployments set no strategy) — then the migration pool
+(4, dbsession.MigrationPoolMaxConns) and 10 kept for psql and PostgreSQL's 3 superuser slots. Each k8s-service pod
+adds one: the health status lock (internal/pglock) holds a connection of its own outside the pool. ai-service and the
+ModelConfig controller (one pod, two while it rolls) count with ai.enabled. With streams.enabled (read with dig, so
+values without streams render), k8s-service-stream runs the k8s-service image with its pool: streams.replicas pods
+plus one while it rolls (its strategy's maxSurge 1). templates/checks/db-connections.yaml, NOTES.txt.
+*/}}
+{{- define "kubeast.dbConnections" -}}
+{{- $services := list "authService" "sessionService" "k8sService" -}}
+{{- if .Values.ai.enabled -}}
+{{- $services = append $services "aiService" -}}
+{{- end -}}
+{{- $pool := .Values.postgresql.pool | default dict -}}
+{{- $total := 14 -}}
+{{- range $key := $services -}}
+{{- $pods := int (index $.Values.replicas $key) -}}
+{{- $hpa := index ($.Values.autoscaling | default dict) $key | default dict -}}
+{{- if dig "enabled" false $hpa -}}
+{{- $pods = int (dig "maxReplicas" $pods $hpa) -}}
+{{- end -}}
+{{- $pods = add $pods (div (add $pods 3) 4) -}}
+{{- $perPod := int (dig $key "maxConns" 0 $pool) -}}
+{{- if eq $key "k8sService" -}}
+{{- $perPod = add $perPod 1 -}}
+{{- end -}}
+{{- $total = add $total (mul $pods $perPod) -}}
+{{- end -}}
+{{- if .Values.ai.enabled -}}
+{{- $total = add $total (mul 2 (int (dig "modelConfigController" "maxConns" 0 $pool))) -}}
+{{- end -}}
+{{- $streams := .Values.streams | default dict -}}
+{{- if dig "enabled" false $streams -}}
+{{- $total = add $total (mul (add (int (dig "replicas" 1 $streams)) 1) (int (dig "k8sService" "maxConns" 0 $pool))) -}}
+{{- end -}}
+{{- $total -}}
+{{- end -}}

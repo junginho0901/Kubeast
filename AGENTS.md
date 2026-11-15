@@ -127,6 +127,11 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 - 서비스가 Redis에 새 명령을 보내기 시작하면 그 서비스 사용자 줄에 명령을 넣고 `tests/redis_test.yaml`에 케이스를 더한다. 빠뜨리면 Redis ACL을 켠 설치에서 그 명령이 거절(NOPERM)되고 캐시는 오류 없이 빈 것처럼 읽힌다.
   `services/pkg/redisacl`로 서비스가 보내는 명령을 그 줄과 비교하는 시험이 있다(k8s-service `internal/cache`, tool-server 클러스터 변경 알림). Redis 명령을 보내는 새 곳에도 같은 시험을 붙인다.
 
+## 데이터베이스 연결
+
+- 서비스마다 연결한 뒤 SET으로 세션 한도(statement 30초 · lock 15초 · idle-in-transaction 5분, 차트 `postgresql.sessionLimits`)를 걸고(`services/pkg/dbsession`, ai-service는 롤백에 풀리지 않게 autocommit으로 `app/db_session.py`), 마이그레이션은 값과 상관없이 statement · lock을 항상 0으로 둔다(`ApplyMigrations`).
+- 풀 크기는 서비스별 `postgresql.pool.<svc>.maxConns`이고, 새 서비스나 새 풀(잠금 전용 연결 포함)은 합계식 `kubeast.dbConnections`에 더한다 — `templates/checks/db-connections.yaml`이 그 합을 `postgresql.maxConnections` 아래로 막는다(`tests/db_connections_test.yaml`). PgBouncer는 session 모드만 쓴다.
+
 ## 컨테이너 exec
 
 - **서버가 `pods/exec`로 띄운 프로세스는 클라이언트가 끊겨도 컨테이너에 남는다**(TTY 유무와 무관, 컨테이너 런타임이
