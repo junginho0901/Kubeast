@@ -403,7 +403,8 @@ lifecycle:
 {{- end -}}
 
 {{/* A grace period: the preStop wait, what the process waits for after SIGTERM — a drain's wait and close wait (.drain)
-     and the 25 s its shutdown takes (k8s-service: the server and the recorder) — and 5 s to spare. */}}
+     and the 25 s its shutdown takes (k8s-service: the node drains' marking 3 s, the server 12 s, the recorder 10 s) — and
+     5 s to spare. services/k8s-service-go/cmd/server shutdown_test holds the same sum. */}}
 {{- define "kubeast.graceSeconds" -}}
 {{- add .preStop (.drain | default 0) 25 5 -}}
 {{- end -}}

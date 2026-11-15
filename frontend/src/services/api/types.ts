@@ -2415,3 +2415,15 @@ export interface SessionDetail {
   messages_before?: number
 }
 
+// GET /cluster/nodes/{name}/drain/status. Any server answers it from the database: `interrupted` is a drain whose
+// server stopped before it ended, `cordoned_nodes` the drain's nodes the cluster still has cordoned once it failed or
+// was interrupted ([] when none is, null when they could not be read).
+export interface DrainStatusAnswer {
+  id: string
+  node: string
+  status: string
+  message?: string | null
+  pods_total?: number | null
+  pods_done?: number | null
+  cordoned_nodes?: string[] | null
+}

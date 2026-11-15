@@ -56,3 +56,13 @@ func TestShutdownGivesTheRecorderItsOwnWaitAfterAStreamHeldTheServer(t *testing.
 		t.Fatalf("the recorder's last part failed after the server's wait: %v", rec.err)
 	}
 }
+
+// The waits run one after another from SIGTERM, after the drain's wait; with 5 s for the process to exit they stay
+// inside what the chart's grace period leaves after the preStop wait and the drain's wait (kubeast.graceSeconds).
+func TestTheShutdownWaitsFitTheTimeBeforeSIGKILL(t *testing.T) {
+	const margin = 5 * time.Second
+	if sum := streamCloseWait + drainShutdownWait + serverShutdownWait + recorderShutdownWait; sum+margin > shutdownWaitsMax {
+		t.Fatalf("close wait %s + drain %s + server %s + recorder %s = %s, past %s less a %s margin",
+			streamCloseWait, drainShutdownWait, serverShutdownWait, recorderShutdownWait, sum, shutdownWaitsMax, margin)
+	}
+}
