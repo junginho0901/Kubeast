@@ -203,7 +203,7 @@ func Load() Config {
 		AnomalyRankCacheSec:        pkgconfig.GetEnvInt("ANOMALY_RANK_CACHE_SEC", 60),
 		AnomalyRankLogMaxBytes:     int64(pkgconfig.GetEnvInt("ANOMALY_RANK_LOG_MAX_BYTES", 10<<30)),
 
-		CallGraphEnabled: pkgconfig.GetEnvBool("CALL_GRAPH_ENABLED", false),
+		CallGraphEnabled: pkgconfig.EnvSwitch("CALL_GRAPH_ENABLED"),
 
 		LogFilesEnabled:    pkgconfig.GetEnvBool("LOG_FILES_ENABLED", false),
 		LogFilesPaths:      pkgconfig.GetEnvList("LOG_FILES_PATHS", ""),

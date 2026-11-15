@@ -20,7 +20,7 @@
 from typing import TYPE_CHECKING, Dict
 
 from app.services.ai import permissions, resolvers
-from app.services.ai.tools import anomaly_rank_on, changes_view_on
+from app.services.ai.tools import CALLS_PARAMS, anomaly_rank_on, call_graph_on, changes_view_on
 from app.services.ai.debug_dump import dump, log, safe_error
 
 if TYPE_CHECKING:
@@ -386,6 +386,9 @@ async def execute_function_with_context(
                 tool_args["include"] = ["calls"]
             if function_name == "timeline" and not changes_view_on():
                 tool_args.pop("view", None)  # the changes view is reachable only with its switch (or step 0's)
+            if function_name == "resource_graph" and not call_graph_on():
+                for key in CALLS_PARAMS:  # the calls arguments reach tool-server only with the switch, as before them
+                    tool_args.pop(key, None)
             labels = function_args.get("alert_labels")
             if function_name in ("alerts_list", "alert_investigate") and isinstance(labels, dict):
                 tool_args["alert_labels"] = {str(k): str(v) for k, v in list(labels.items())[:10] if isinstance(v, (str, int, float))}

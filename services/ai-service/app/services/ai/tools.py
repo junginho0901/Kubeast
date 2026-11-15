@@ -1960,7 +1960,8 @@ def without_params(tool: Dict, params: tuple, words: str) -> Dict:
 
 
 def call_graph_on() -> bool:
-    """CALL_GRAPH_ENABLED (chart features.callGraph.enabled, default off; in the ConfigMap every service reads)."""
+    """CALL_GRAPH_ENABLED (chart features.callGraph.enabled, default off; in the ConfigMap every service reads), read with
+    the one switch rule (app/services/switch.py)."""
     return switch.env_on("CALL_GRAPH_ENABLED")
 
 

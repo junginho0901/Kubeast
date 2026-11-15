@@ -170,6 +170,7 @@ async def test_feature_tools_pass_declared_arguments_only():
 @pytest.mark.asyncio
 async def test_second_batch_feature_tools_pass_declared_arguments_only(monkeypatch):
     monkeypatch.setenv("ANOMALY_RANK_ENABLED", "true")  # off, dispatch answers anomaly_rank as an unknown function
+    monkeypatch.setenv("CALL_GRAPH_ENABLED", "true")  # off, resource_graph's calls arguments are dropped
     service = _service()
     await execute_function_with_context(
         service, "helm_read", {"what": "diff", "namespace": "kubeast", "release": "kubeast", "from": "5", "to": 6, "section": "values", "cluster": "x", "values": {"a": 1}}, _ctx(),
@@ -295,3 +296,16 @@ async def test_get_resources_passes_the_pods_offset():
     service._call_tool_server.reset_mock()
     await execute_function_with_context(service, "k8s_get_resources", {"resource_type": "pods", "namespace": "shop"}, _ctx())
     assert "offset" not in service._call_tool_server.await_args.args[1]
+
+
+@pytest.mark.asyncio
+async def test_resource_graphs_calls_arguments_reach_tool_server_only_with_the_call_graph_switch(monkeypatch):
+    args = {"namespace": "shop", "include": ["calls"], "since": "30m"}
+    monkeypatch.delenv("CALL_GRAPH_ENABLED", raising=False)
+    off = _service()
+    await execute_function_with_context(off, "resource_graph", dict(args), _ctx())
+    off._call_tool_server.assert_awaited_once_with("resource_graph", {"namespace": "shop"})
+    monkeypatch.setenv("CALL_GRAPH_ENABLED", "true")
+    on = _service()
+    await execute_function_with_context(on, "resource_graph", dict(args), _ctx())
+    on._call_tool_server.assert_awaited_once_with("resource_graph", {"namespace": "shop", "include": ["calls"], "since": "30m"})
