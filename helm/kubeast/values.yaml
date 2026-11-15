@@ -839,7 +839,8 @@ features:
   # throttling, memory against the limit, node pressure — ranked, at most ten.
   # The metric checks read the cluster's Prometheus (kube-state-metrics and
   # cAdvisor names); without it they are listed as not run. Off: the route
-  # answers 404, reads nothing and the AI is not offered the tool.
+  # answers 404, reads nothing, the AI is not offered the tool and the chat's
+  # system prompt and the MCP tool list do not name it.
   anomalyRank:
     enabled: false
     maxQueries: 12           # store queries one answer may make

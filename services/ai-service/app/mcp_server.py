@@ -43,7 +43,7 @@ from app.services.ai import features as feature_gate
 from app.services.ai.access import with_mode
 from app.services.ai.debug_dump import safe_error
 from app.services.ai.tools import ACTION_TOOLS as ACTION_TOOL_ENTRIES
-from app.services.ai.tools import ADMIN_READ_TOOLS, CLUSTER_METRICS_TOOLS, K8S_READONLY_TOOLS, K8S_WRITE_TOOLS, WRITE_PREVIEW_TOOLS, offer_timeline_changes
+from app.services.ai.tools import ADMIN_READ_TOOLS, CLUSTER_METRICS_TOOLS, K8S_READONLY_TOOLS, K8S_WRITE_TOOLS, WRITE_PREVIEW_TOOLS, anomaly_rank_on, offer_timeline_changes
 from app.services.k8s_client import K8sServiceClient
 from app.services.approval_token import ApprovalTokenUnavailable, sign as sign_approval
 from app.services.audit_target import EXEC_TOOL, pod_exec_row, tool_target, write_tool_input
@@ -88,6 +88,8 @@ def _read_tools() -> Dict[str, Tool]:
     tools: Dict[str, Tool] = {}
     for entry in offer_timeline_changes([*CLUSTER_METRICS_TOOLS, *K8S_READONLY_TOOLS, *ADMIN_READ_TOOLS, *WRITE_PREVIEW_TOOLS]):
         fn = entry["function"]
+        if fn["name"] == "anomaly_rank" and not anomaly_rank_on():
+            continue  # listed only where it is turned on (ANOMALY_RANK_ENABLED)
         tools[fn["name"]] = Tool(
             name=fn["name"],
             description=" ".join(str(fn.get("description", "")).split()),
