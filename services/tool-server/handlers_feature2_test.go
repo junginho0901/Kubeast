@@ -334,6 +334,30 @@ func TestCanI_And_ResourceGraph(t *testing.T) {
 	}
 }
 
+// timeline's view words pass the argument check only while k8s-service serves the changes view; with both switches
+// off a view other than summary or results is refused with the words of before.
+func TestViewWordsFollowTheChangesViewSwitches(t *testing.T) {
+	for _, c := range []struct {
+		chat, stepZero string
+		passes         bool
+	}{{"", "", false}, {"true", "", true}, {"", "true", true}} {
+		t.Setenv("AI_TIMELINE_CHANGES", c.chat)
+		t.Setenv("ALERT_INVESTIGATION_CHANGES_FIRST", c.stepZero)
+		for _, view := range []string{"events", "changes"} {
+			err := validateToolArgs(map[string]interface{}{"view": view})
+			if (err == nil) != c.passes {
+				t.Errorf("view %s with %+v: %v", view, c, err)
+			}
+			if err != nil && !strings.Contains(err.Error(), "one of summary, results") {
+				t.Errorf("view %s refused with other words: %v", view, err)
+			}
+		}
+		if err := validateToolArgs(map[string]interface{}{"view": "results"}); err != nil {
+			t.Errorf("results with %+v: %v", c, err)
+		}
+	}
+}
+
 func TestFeatureArgs2AndGate(t *testing.T) {
 	for _, args := range []map[string]interface{}{
 		{"what": "diff", "section": "values"}, {"view": "results"}, {"aggregate": "controller", "window": "7d"}, {"release": "kubeast"},
