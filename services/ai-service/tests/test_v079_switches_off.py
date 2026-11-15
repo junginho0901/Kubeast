@@ -1,8 +1,11 @@
 """With every v0.7.9 switch off, the model is sent what 0.7.8 sent, to the byte: the chat's and the floating chat's
 messages and tool definitions for a question in Korean, English and French (the system prompt, the language line, the
-floating page masked with REDACTION_PII on), the MCP server's tool list, and a text masked with REDACTION_PII on. Each is
-held as the sha256 of what the merge base of the v0.7.9 pull requests (main d58cf599, the prompt and tool files as in
-0.7.8) sends; a switch's words that reach the model with the switch off change one of them."""
+floating page masked with REDACTION_PII on), the chat's and an alert investigation's calls around one round of tools (ROUND)
+and what they ask tool-server, the MCP server's tool list, and a text masked with REDACTION_PII on. Each is held as the
+sha256 of what the merge base of the v0.7.9 pull requests (main d58cf599, the prompt and tool files as in 0.7.8) sends; a
+switch's words that reach the model with the switch off change one of them.
+Tool results are held for ROUND's stand-in answers only: AI_TOOL_RESULTS_JSON's off path for the other results is held by
+its own pull request's tests (#920), tool-server's answers by v079_round_answers_test.go."""
 import hashlib
 import json
 from types import SimpleNamespace
@@ -281,3 +284,18 @@ async def test_with_every_v079_switch_off_the_model_is_sent_what_v078_sent(monke
     monkeypatch.setenv("REDACTION_PII", "true")  # a 0.7.8 switch: the masking the model reads with it on
     got = await _what_the_model_reads(monkeypatch)
     assert got == V078
+
+
+@pytest.mark.asyncio
+async def test_with_only_the_investigations_switches_on_a_chat_is_sent_and_asks_what_v078_did(monkeypatch):
+    """Alert investigations with each of their v0.7.9 steps on: a chat's round is v0.7.8's (its second call, what it asks tool-server)."""
+    for name in V079_SWITCHES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("REDACTION_PII", "true")
+    for name in ("ALERT_INVESTIGATION_ENABLED", "ALERT_INVESTIGATION_CHANGES_FIRST", "ALERT_INVESTIGATION_NARROW_FIRST",
+                 "ALERT_INVESTIGATION_EVIDENCE_CHECK", "ALERT_INVESTIGATION_LEDGER", "ALERT_INVESTIGATION_RULES",
+                 "AI_RULE_CARDS_INVESTIGATIONS"):
+        monkeypatch.setenv(name, "true")
+    sent, asked = await _chat_calls(monkeypatch, QUESTIONS["en"], False, ROUND)
+    assert {"chat second call": _sha(sent[1]["messages"]), "chat tool-server calls": _sha(asked, sort_keys=True)} == {
+        name: V078[name] for name in ("chat second call", "chat tool-server calls")}
