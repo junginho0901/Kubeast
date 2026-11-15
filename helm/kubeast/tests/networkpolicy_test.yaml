@@ -547,3 +547,36 @@ tests:
         documentSelector:
           path: metadata.name
           value: RELEASE-NAME-tool-server
+
+  - it: with aiEgress.allowListOnly, an STS endpoint given as {cidr, port} opens that port
+    set:
+      networkPolicy.allowExternalEgressCIDRs: [160.79.104.0/23]
+      networkPolicy.aiEgress.allowListOnly: true
+      networkPolicy.aiEgress.clusterAPIs: [10.20.0.0/16]
+      networkPolicy.aiEgress.stsEndpoints:
+        - cidr: 10.20.8.0/22
+          port: 8443
+      aws.irsaRoleArn: arn:aws:iam::111122223333:role/kubeast
+    asserts:
+      - equal:
+          path: spec.egress[4]
+          value:
+            to:
+              - ipBlock:
+                  cidr: 10.20.8.0/22
+            ports:
+              - protocol: TCP
+                port: 8443
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+
+  - it: with aiEgress.allowListOnly, a role on k8s-service alone (S3 recordings, no EKS cluster) asks for no STS endpoint
+    set:
+      networkPolicy.allowExternalEgressCIDRs: [160.79.104.0/23]
+      networkPolicy.aiEgress.allowListOnly: true
+      networkPolicy.aiEgress.clusterAPIs: [10.20.0.0/16]
+      serviceAccounts.k8sService.annotations:
+        eks.amazonaws.com/role-arn: arn:aws:iam::111122223333:role/kubeast-recordings
+    asserts:
+      - notFailedTemplate: {}

@@ -26,7 +26,7 @@
 {{- if and .Values.networkPolicy.enabled .Values.ai.enabled $aiAllowListOnly }}
 {{- $irsa := or (dig "irsaRoleArn" "" .Values.aws) (dig "toolServer" "annotations" "eks.amazonaws.com/role-arn" "" .Values.serviceAccounts) }}
 {{- if and $irsa (not (dig "aiEgress" "stsEndpoints" (list) .Values.networkPolicy)) }}
-{{- fail "networkPolicy.aiEgress.allowListOnly with an IRSA role needs networkPolicy.aiEgress.stsEndpoints (the subnets of the STS VPC interface endpoint, port 443): without them tool-server gets no AWS credentials and every EKS cluster's AI tools fail" }}
+{{- fail "networkPolicy.aiEgress.allowListOnly with an IRSA role on tool-server needs networkPolicy.aiEgress.stsEndpoints (the subnets of the STS VPC interface endpoint, port 443): without them tool-server gets no AWS credentials and every EKS cluster's AI tools fail. With no EKS cluster to read, give the role to the services that use it through serviceAccounts.<service>.annotations instead of aws.irsaRoleArn" }}
 {{- end }}
 {{- if not .Values.networkPolicy.allowExternalEgressCIDRs }}
 {{- fail "networkPolicy.aiEgress.allowListOnly needs networkPolicy.allowExternalEgressCIDRs (the model providers): without it ai-service connects to no model" }}

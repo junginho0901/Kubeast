@@ -1728,6 +1728,7 @@
     }
   },
   "aiChat": {
+    "answerImage": "그림",
     "earlier": {
       "hidden": "표시되지 않은 이전 메시지: {{count}}개",
       "load": "이전 메시지 불러오기",

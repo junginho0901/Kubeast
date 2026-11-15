@@ -1,3 +1,4 @@
+import i18next from 'i18next'
 import remarkGfm from 'remark-gfm'
 import { defaultUrlTransform, type Options } from 'react-markdown'
 
@@ -26,23 +27,27 @@ interface AnswerNode {
   children?: AnswerNode[]
 }
 
-function linkImages(parent: AnswerNode) {
+// the words of an image with no alt where an address would be another link's text
+const imageWord = () => i18next.t('aiChat.answerImage', 'image') || 'image'
+
+function linkImages(parent: AnswerNode, inLinkOrHead: boolean) {
   parent.children = parent.children?.map((child) => {
     if (child.type !== 'element' || child.tagName !== 'img') {
-      linkImages(child)
+      linkImages(child, inLinkOrHead || child.tagName === 'a' || child.tagName === 'summary')
       return child
     }
     const { src, alt, title } = child.properties ?? {}
     const href = typeof src === 'string' ? aiImageSrc(src) : null
-    const text = (typeof alt === 'string' && alt) || href
-    const children = text ? [{ type: 'text', value: text }] : []
+    const words = typeof alt === 'string' && alt ? alt : null
     const properties = typeof title === 'string' ? { title } : {}
-    return href ? { type: 'element', tagName: 'a', properties: { ...properties, href }, children } : { type: 'element', tagName: 'span', properties, children }
+    if (inLinkOrHead) return { type: 'text', value: words ?? imageWord() }
+    if (href) return { type: 'element', tagName: 'a', properties: { ...properties, href }, children: [{ type: 'text', value: words ?? href }] }
+    return { type: 'element', tagName: 'span', properties, children: words ? [{ type: 'text', value: words }] : [] }
   })
 }
 
 // Drawing AI-written text fetches no image (another host's is a link, the console's own its text); runs before keepLinksInline.
-export const imagesAsLinks = () => (tree: AnswerNode) => linkImages(tree)
+export const imagesAsLinks = () => (tree: AnswerNode) => linkImages(tree, false)
 
 const BLOCKS = new Set(['blockquote', 'details', 'div', 'dl', 'figure', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'ol', 'p', 'pre', 'section', 'summary', 'table', 'ul'])
 
