@@ -21,6 +21,15 @@
 {{- end }}
 {{- /* ", k8s-service-stream" with streams.enabled: the stream server is a client wherever k8s-service is one. */ -}}
 {{- define "kubeast.np.alsoStream" }}{{ if .Values.streams.enabled }}, k8s-service-stream{{ end }}{{ end }}
+{{- $aiAllowListOnly := dig "aiEgress" "allowListOnly" false .Values.networkPolicy }}
+{{- if and .Values.networkPolicy.enabled .Values.ai.enabled $aiAllowListOnly }}
+{{- if not .Values.networkPolicy.allowExternalEgressCIDRs }}
+{{- fail "networkPolicy.aiEgress.allowListOnly needs networkPolicy.allowExternalEgressCIDRs (the model providers): without it ai-service connects to no model" }}
+{{- end }}
+{{- if not (or (dig "aiEgress" "clusterAPIs" (list) .Values.networkPolicy) .Values.networkPolicy.apiserverCIDR) }}
+{{- fail "networkPolicy.aiEgress.allowListOnly needs networkPolicy.aiEgress.clusterAPIs or networkPolicy.apiserverCIDR (the API servers tool-server reads): without them every AI tool fails" }}
+{{- end }}
+{{- end }}
 {{- if .Values.networkPolicy.enabled }}
 # Kubeast NetworkPolicy — opt-in. Default-deny + per-component whitelist.
 #
@@ -302,6 +311,7 @@ spec:
               - key: app
                 operator: In
                 values: [k8s-service, tool-server, auth-service]
+    {{- if not $aiAllowListOnly }}
     # 외부 LLM API — RFC1918 private 대역 제외 모든 공인 IP 허용 (443).
     # OpenAI / Anthropic / Gemini 등 IP 변동에 강건. 사내 게이트웨이는
     # allowExternalEgressCIDRs values 로 별도 명시.
@@ -315,6 +325,7 @@ spec:
       ports:
         - protocol: TCP
           port: 443
+    {{- end }}
     {{- range .Values.networkPolicy.allowExternalEgressCIDRs }}
     - to:
         - ipBlock:
@@ -564,6 +575,28 @@ spec:
         - protocol: TCP
           port: 6379
     {{- end }}
+    {{- if $aiAllowListOnly }}
+    {{- range (dig "aiEgress" "clusterAPIs" (list) .Values.networkPolicy) }}
+    - to:
+        - ipBlock:
+            cidr: {{ if kindIs "map" . }}{{ .cidr }}{{ else }}{{ . }}{{ end }}
+      ports:
+      {{- if and (kindIs "map" .) .port }}
+        - protocol: TCP
+          port: {{ .port }}
+      {{- else }}
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+      {{- end }}
+    {{- end }}
+    {{- with .Values.networkPolicy.apiserverCIDR }}
+    - to:
+        - ipBlock:
+            cidr: {{ . }}
+    {{- end }}
+    {{- else }}
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -572,6 +605,7 @@ spec:
           port: 443
         - protocol: TCP
           port: 6443
+    {{- end }}
 ---
 # model-config-controller-go: ingress 없음 (controller), kube-apiserver egress
 apiVersion: networking.k8s.io/v1

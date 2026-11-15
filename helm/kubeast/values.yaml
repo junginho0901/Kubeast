@@ -865,6 +865,9 @@ networkPolicy:
   # egress. Ports 443 and 6443 are already open to every address, private and
   # public; set this only for an API server on another port.
   apiserverCIDR: ""
+  aiEgress:
+    allowListOnly: false  # true: ai-service connects out only to allowExternalEgressCIDRs, tool-server only to clusterAPIs and apiserverCIDR (docs/cluster-requirements.md §15)
+    clusterAPIs: []       # API servers of the registered clusters, for tool-server: a CIDR opens 443 and 6443, {cidr: 203.0.113.10/32, port: 8443} another port
 
 # --- Feature flags ---
 # Optional integrations the operator can opt in/out of without changing

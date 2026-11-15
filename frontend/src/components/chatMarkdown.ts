@@ -1,6 +1,7 @@
 import { defaultUrlTransform, type Options } from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize'
+import { AnswerImage } from '@/components/AnswerImage'
 import { MarkdownLink } from '@/components/FloatingAIChat/MarkdownLink'
 import { MarkdownDetails, MarkdownSummary } from '@/components/MarkdownDisclosure'
 import { MarkdownTable } from '@/components/MarkdownTable'
@@ -156,7 +157,7 @@ function takersAsWords() {
 }
 
 // react-markdown blanks an address of a scheme it does not know; MarkdownLink checks each kubest:// link it gets. An
-// image keeps only another host's address (aiImageSrc).
+// image keeps only another host's address (aiImageSrc), which AnswerImage draws as a link.
 function urlTransform(url: string, key: string): string | null {
   if (key === 'src') return aiImageSrc(url)
   return url.startsWith('kubest://') ? url : defaultUrlTransform(url)
@@ -177,5 +178,5 @@ export const CHAT_MARKDOWN = {
   // tagfilter: an element that reads what follows as its own text (style, textarea, …) shows as words instead of hiding it
   rehypePlugins: [takersAsWords, [rehypeRaw, { tagfilter: true }], [rehypeSanitize, ANSWER_SCHEMA], keepLinksInline],
   urlTransform,
-  components: { a: MarkdownLink, details: MarkdownDetails, summary: MarkdownSummary, table: MarkdownTable },
+  components: { a: MarkdownLink, img: AnswerImage, details: MarkdownDetails, summary: MarkdownSummary, table: MarkdownTable },
 } satisfies Options
