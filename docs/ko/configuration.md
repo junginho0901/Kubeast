@@ -126,6 +126,7 @@ nodeShell:
 # 파드 보안(기본 Pod Security Standards restricted).
 # 사용자 네임스페이스를 지원하지 않는 클러스터(커널 6.3 미만)에서는 hostUsers: true로 두세요.
 # enabled: false는 securityContext를 두지 않아 uid·fsGroup을 플랫폼에 맡기고, Secret 파일을 0440 대신 0444로 마운트합니다.
+# 이때 audit.fileSinkVolume, sessionRecording.spoolVolume·fileVolume에 준 PVC는 uid 65532가 스스로 쓸 수 있어야 합니다(플랫폼이 fsGroup을 넣어 주면 됨 — OpenShift의 restricted SCC는 넣어 줍니다).
 podSecurity:
   enabled: true
   hostUsers: false
@@ -178,6 +179,8 @@ gateway:
     nodePort: 30333
   trustedProxies: []      # 앞단 프록시(Ingress 컨트롤러, LB) CIDR — 감사 로그의 클라이언트 주소를 그 뒤에서 읽습니다
   allowedOrigins: []      # 게이트웨이 자기 호스트와 Ingress 호스트 외에 API·WebSocket을 열어 줄 브라우저 origin(없으면 같은 호스트만)
+  accessLog:
+    upstreamTimes: false  # true면 접근 로그 줄마다 요청 시간, 서비스 연결·헤더·응답 시간(초), 서비스 주소, 클라이언트 포트를 덧붙입니다
 
 # Ingress (선택)
 ingress:

@@ -127,7 +127,9 @@ nodeShell:
 
 # Pod security (Pod Security Standards restricted by default). On clusters that do not support
 # user namespaces (kernel below 6.3), set hostUsers: true. enabled: false sets no securityContext, leaving
-# the uids and fsGroup to the platform, and Secret files then mount 0444 instead of 0440
+# the uids and fsGroup to the platform, and Secret files then mount 0444 instead of 0440. A PVC you give
+# audit.fileSinkVolume or sessionRecording.spoolVolume / fileVolume must then be writable by uid 65532
+# by itself, unless the platform adds an fsGroup (OpenShift's restricted SCCs do)
 podSecurity:
   enabled: true
   hostUsers: false
@@ -180,6 +182,8 @@ gateway:
     nodePort: 30333
   trustedProxies: []      # CIDRs of front proxies (Ingress controller, LB) — the client address in the audit log is read from behind them
   allowedOrigins: []      # browser origins to open the API and WebSocket to besides the gateway's own host and the Ingress host (none = same host only)
+  accessLog:
+    upstreamTimes: false  # true: each access log line also gives the request's time, the service's connect, header and response times (s), its address and the client's port
 
 # Ingress (optional)
 ingress:

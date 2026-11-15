@@ -41,6 +41,25 @@ every entry of gateway.allowedOrigins, comma-joined; empty with neither.
 {{- join "," $list -}}
 {{- end -}}
 
+{{- /*
+The gateway's accesslog.conf with gateway.accessLog.upstreamTimes: nginx's
+"combined" fields, then the request's time, the service's connect, header and
+response times, the service's address and the client's port, to the same
+place as nginx's default log. Empty when off, so the ConfigMap and the pods'
+checksum stay as without it. dig: the values of an earlier release, kept by
+--reuse-values, have no gateway.accessLog.
+*/ -}}
+{{- define "kubeast.gatewayAccessLog" -}}
+{{- if eq (toString (dig "accessLog" "upstreamTimes" false .Values.gateway)) "true" -}}
+log_format upstream_times '$remote_addr - $remote_user [$time_local] '
+                          '"$request" $status $body_bytes_sent '
+                          '"$http_referer" "$http_user_agent" '
+                          '$request_time $upstream_connect_time $upstream_header_time '
+                          '$upstream_response_time $upstream_addr $remote_port';
+access_log /var/log/nginx/access.log upstream_times;
+{{- end -}}
+{{- end -}}
+
 {{- define "kubeast.databaseUrl" -}}
 {{- $p := .Values.postgresql -}}
 {{- $host := ternary "postgres" ($p.externalHost | default "") $p.enabled -}}
@@ -231,8 +250,8 @@ resources:
 {{/*
 startupProbe of a service that opens its port only after waiting for the
 database at boot; liveness and readiness start once it passes. 180 s covers the
-longest wait (auth-service and session-service: 30 pings 2 s apart, then 60 s
-for the schema; k8s-service: AUDIT_DB_WAIT_SEC 90 s, then up to 10 s in
+longest wait (auth-service and session-service: 60 s for the database, at most
+5 s a ping, then 60 s for the schema; k8s-service: AUDIT_DB_WAIT_SEC 90 s, then up to 10 s in
 k8s.NewService) and 60 s of migrations. Usage, with the liveness path and port:
   {{ include "kubeast.startupProbe" (dict "path" "/health" "port" 8004) }}
 */}}

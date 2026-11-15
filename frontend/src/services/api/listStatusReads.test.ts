@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 type Answer = { status: number; data?: unknown }
 type Modules = {
   store: typeof import('../listStatusStore')
+  forbidden: typeof import('../forbiddenStore')
   client: typeof import('./client')['client']
   gpuApi: typeof import('./gpu')['gpuApi']
   networkApi: typeof import('./network')['networkApi']
@@ -39,6 +40,7 @@ beforeEach(async () => {
   vi.stubGlobal('window', Object.assign(new EventTarget(), { location: { search: '' } }))
   m = {
     store: await import('../listStatusStore'),
+    forbidden: await import('../forbiddenStore'),
     client: (await import('./client')).client,
     gpuApi: (await import('./gpu')).gpuApi,
     networkApi: (await import('./network')).networkApi,
@@ -74,6 +76,39 @@ describe('the GPU lists and the GPU metrics beside them', () => {
     answering({ '/cluster/gpu/dashboard': { status: 500, data: { detail: 'list pods: etcd timed out' } } })
     await settled(m.gpuApi.getGPUDashboard())
     expect(m.store.getListStatus('gpu')).toEqual({ state: 'error', code: 500, reason: 'list pods: etcd timed out' })
+  })
+})
+
+// A 403 on the same read (the cluster refuses the user its Prometheus) went into the segment's forbidden state, and
+// GPU Nodes' empty row said "You do not have permission to view gpu" over a list that answered. The banner still
+// names the refused read.
+describe('a refused read beside the list', () => {
+  const REFUSED = { detail: 'services "prometheus:9090" is forbidden: User "kubeast:viewer" cannot get resource "services/proxy"' }
+
+  it("the GPU metrics refused: the GPU list keeps no refusal, the banner names it, and it is not the list's answer", async () => {
+    answering({ '/cluster/gpu/metrics': { status: 403, data: REFUSED } })
+    await settled(m.gpuApi.getGPUMetrics())
+    expect(m.forbidden.isListForbidden('gpu')).toBe(false)
+    expect(m.forbidden.forbiddenLabels()).toEqual(['gpu'])
+    expect(m.store.isKindServed('gpu')).toBe(false)
+  })
+
+  it('the list refused after its metrics is still the list refused', async () => {
+    answering({
+      '/cluster/gpu/metrics': { status: 403, data: REFUSED },
+      '/cluster/gpu/dashboard': { status: 403, data: { detail: 'nodes is forbidden' } },
+    })
+    await settled(m.gpuApi.getGPUMetrics())
+    await settled(m.gpuApi.getGPUDashboard())
+    expect(m.forbidden.isListForbidden('gpu')).toBe(true)
+    expect(m.store.isKindServed('gpu')).toBe(true)
+  })
+
+  it("a Service drawer's sums refused leave the Services list unrefused", async () => {
+    answering({ '/cluster/namespaces/web/services/api/backend-usage': { status: 403, data: { detail: 'limited to namespaces (web)' } } })
+    await settled(m.networkApi.serviceBackendUsage('web', 'api'))
+    expect(m.forbidden.isListForbidden('services')).toBe(false)
+    expect(m.forbidden.forbiddenLabels()).toEqual(['Service'])
   })
 })
 

@@ -29,6 +29,7 @@ import (
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/retention"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/security"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/signins"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
@@ -38,16 +39,26 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
 )
 
-func pingWithRetry(ctx context.Context, pool *pgxpool.Pool, attempts int, wait time.Duration) error {
-	var err error
-	for i := 1; i <= attempts; i++ {
-		if err = pool.Ping(ctx); err == nil {
-			return nil
-		}
-		slog.Warn("database not ready", "attempt", i, "error", err)
-		time.Sleep(wait)
-	}
-	return err
+// Boot waits, inside the chart's 180 s startup probe (kubeast.startupProbe): the database, then the schema.
+const (
+	dbBootWait     = 60 * time.Second
+	schemaBootWait = 60 * time.Second
+)
+
+// waitForDatabase pings until the database answers, for up to wait or until ctx ends (SIGTERM). audit.WaitReady gives
+// each ping 5 s: without it one pgxpool connect runs for two minutes (pgxpool's ConnectTimeout default).
+func waitForDatabase(ctx context.Context, db audit.Pinger, wait time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
+	return audit.WaitReady(ctx, db, 2*time.Second)
+}
+
+// waitForSchema waits up to wait for the schema version this build needs. ctx also cuts a version read that hangs,
+// a few seconds past wait so dbmigrate's own "behind" error comes first.
+func waitForSchema(ctx context.Context, pool *pgxpool.Pool, wait time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, wait+5*time.Second)
+	defer cancel()
+	return dbmigrate.WaitFor(ctx, pool, dbmigrate.Required, wait)
 }
 
 func main() {
@@ -85,9 +96,8 @@ func main() {
 	}
 	defer pool.Close()
 
-	// Postgres may still be starting in the same rollout: wait up to ~60s
-	// instead of exiting into CrashLoopBackOff.
-	if err := pingWithRetry(ctx, pool, 30, 2*time.Second); err != nil {
+	// Postgres may still be starting in the same rollout: wait instead of exiting into CrashLoopBackOff.
+	if err := waitForDatabase(ctx, pool, dbBootWait); err != nil {
 		slog.Error("failed to ping database", "error", err)
 		os.Exit(1)
 	}
@@ -107,7 +117,7 @@ func main() {
 		return
 	}
 	if cfg.MigrationsMode == "job" {
-		if err := dbmigrate.WaitFor(ctx, pool, dbmigrate.Required, 60*time.Second); err != nil {
+		if err := waitForSchema(ctx, pool, schemaBootWait); err != nil {
 			slog.Error("database schema not ready", "error", err)
 			os.Exit(1)
 		}
@@ -176,6 +186,8 @@ func main() {
 	if cfg.AccessReview.Enabled {
 		slog.Info("access review enabled", "dormant_days", cfg.AccessReview.DormantDays, "interval_days", cfg.AccessReview.IntervalDays)
 	}
+	// Signed-out sign-ins stop mattering once every token of them has expired.
+	go signins.Run(ctx, signins.Cleaner{Store: repo, Keep: signins.KeepFor(time.Duration(cfg.JWTExpiresMinutes) * time.Minute)}, 10*time.Minute)
 	// Dormant accounts: lock accounts with no activity for Days, every
 	// SweepHours. The handler's "sweep now" uses the same sweeper.
 	dormantSweeper := dormant.Sweeper{Store: repo, Audit: auditStore, Days: cfg.DormantAccounts.Days, ExemptAdmins: cfg.DormantAccounts.ExemptAdmins}
@@ -239,8 +251,8 @@ func main() {
 	slog.Info("JWT keys loaded")
 
 	// Auth middleware (validates tokens using local public key, no JWKS fetch needed)
-	authMiddleware := security.AuthMiddleware(jwtMgr, repo.TokenVersionFor, cfg.AuthCookieName)
-	clusterListAuth := security.InvestigatorReadMiddleware(jwtMgr, repo.TokenVersionFor, cfg.AuthCookieName, cfg.AlertInvestigationEnabled)
+	authMiddleware := security.AuthMiddleware(jwtMgr, repo.SessionStateFor, cfg.AuthCookieName)
+	clusterListAuth := security.InvestigatorReadMiddleware(jwtMgr, repo.SessionStateFor, cfg.AuthCookieName, cfg.AlertInvestigationEnabled)
 
 	// Cluster registry: per-cluster kubeconfigs are stored as Secrets (k8s) or
 	// files (docker) and read at request time, so registering a cluster never
