@@ -1,8 +1,11 @@
 """With every v0.7.9 switch off, the model is sent what 0.7.8 sent, to the byte: the chat's and the floating chat's
 messages and tool definitions for a question in Korean, English and French (the system prompt, the language line, the
-floating page masked with REDACTION_PII on), the MCP server's tool list, and a text masked with REDACTION_PII on. Each is
-held as the sha256 of what the merge base of the v0.7.9 pull requests (main d58cf599, the prompt and tool files as in
-0.7.8) sends; a switch's words that reach the model with the switch off change one of them."""
+floating page masked with REDACTION_PII on), the chat's and an alert investigation's calls around one round of tools (ROUND)
+and what they ask tool-server, the MCP server's tool list, and a text masked with REDACTION_PII on. Each is held as the
+sha256 of what the merge base of the v0.7.9 pull requests (main d58cf599, the prompt and tool files as in 0.7.8) sends; a
+switch's words that reach the model with the switch off change one of them.
+Tool results are held for ROUND's stand-in answers only: AI_TOOL_RESULTS_JSON's off path for the other results is held by
+its own pull request's tests (#920), tool-server's answers by v079_round_answers_test.go."""
 import hashlib
 import json
 from types import SimpleNamespace
@@ -58,8 +61,8 @@ V078 = {
     "floating tools": "9bcba9d81a94dd1ebf1e506e8cbd3fc16cb1d1b761c776c575041173187681d7",
     "chat second call": "c58e7c62a59a34b888ecf2a60cb33e996641212e3b8ad4c4df185c2cc2b48793",
     "chat tool-server calls": "5d8da759a4d9aa10e638da55a396fda8b9dea31db8206d81ca9947db3e503c85",
-    "investigation first call": "aa4ff10ab51dc5bdedbd65c2e3fd54e2d5179e58881205d9093e0907fafd4435",
-    "investigation second call": "e2b27fc7f2a333b2c9622ffa7cf0fe7b523b7f73b26a410bc764f9937d6f277a",
+    "investigation first call": "7e132b9533a49709f916eed38eced504a8a62e59bd94b9d43a2f129f9bd58437",
+    "investigation second call": "c0724a074ee83bcaf119e67c050d1d21a895a7fc953cca8920ed71bfaba6e01c",
     "investigation tool-server calls": "5d8da759a4d9aa10e638da55a396fda8b9dea31db8206d81ca9947db3e503c85",
     "mcp tools": "a9102a1ecc66e0eb023b45a2bc01bb57f9346ad1d5894112c1991a9f2de5cc16",
     "masked text": "c86dd3f61d49c68ed59dfa80c31c1c899ee5a57da982c402a989c432dde6d902",
@@ -213,9 +216,15 @@ async def _investigation_calls(monkeypatch):
     from app.services.investigation import settings as inv_settings
     from tests.test_alert_investigation import FakeCompletions, completion, row, tool_call
 
+    class AsSent(FakeCompletions):
+        """Each call as it was sent: the runner goes on adding to the messages list it passed."""
+
+        async def create(self, **kw):
+            return await super().create(**json.loads(json.dumps(kw, default=str)))
+
     asked = []
-    # anomaly_rank is left out: 0.7.8's investigator refuses it as a tool outside its read-only list, which v0.7.9 widens
-    completions = FakeCompletions([completion(calls=[tool_call(f"c{i + 1}", n, a) for i, (n, a) in enumerate(ROUND) if n != "anomaly_rank"]),
+    # anomaly_rank too: 0.7.8's investigator refuses it as a tool outside its read-only list
+    completions = AsSent([completion(calls=[tool_call(f"c{i + 1}", n, a) for i, (n, a) in enumerate(ROUND)]),
                                    completion(content="## Summary\nok")])
     service = _service(monkeypatch, completions.create, asked)
 
@@ -275,3 +284,18 @@ async def test_with_every_v079_switch_off_the_model_is_sent_what_v078_sent(monke
     monkeypatch.setenv("REDACTION_PII", "true")  # a 0.7.8 switch: the masking the model reads with it on
     got = await _what_the_model_reads(monkeypatch)
     assert got == V078
+
+
+@pytest.mark.asyncio
+async def test_with_only_the_investigations_switches_on_a_chat_is_sent_and_asks_what_v078_did(monkeypatch):
+    """Alert investigations with each of their v0.7.9 steps on: a chat's round is v0.7.8's (its second call, what it asks tool-server)."""
+    for name in V079_SWITCHES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("REDACTION_PII", "true")
+    for name in ("ALERT_INVESTIGATION_ENABLED", "ALERT_INVESTIGATION_CHANGES_FIRST", "ALERT_INVESTIGATION_NARROW_FIRST",
+                 "ALERT_INVESTIGATION_EVIDENCE_CHECK", "ALERT_INVESTIGATION_LEDGER", "ALERT_INVESTIGATION_RULES",
+                 "AI_RULE_CARDS_INVESTIGATIONS"):
+        monkeypatch.setenv(name, "true")
+    sent, asked = await _chat_calls(monkeypatch, QUESTIONS["en"], False, ROUND)
+    assert {"chat second call": _sha(sent[1]["messages"]), "chat tool-server calls": _sha(asked, sort_keys=True)} == {
+        name: V078[name] for name in ("chat second call", "chat tool-server calls")}
