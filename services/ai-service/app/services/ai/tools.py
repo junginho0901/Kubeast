@@ -1473,7 +1473,7 @@ ADMIN_READ_TOOLS: List[Dict] = [
             "description": (
                 "The models set up for the AI (Admin → AI Models; permission admin.ai_models.*): name, provider, model, enabled, is_default, tier, used_for (what runs on it now: "
                 "chat, floating, summary, investigation), and its limits max_tokens and tool_result_chars. null limit = the call's default: 4096 tokens for a chat answer, 2048 for an "
-                "investigation step (4096 with features.alertInvestigation.evidenceCheck or ledger on), 6000 characters of a tool result. key_env_set says only whether a key variable is named: false is the card's \"No key env\" warning, null a provider that asks for "
+                "investigation step, 6000 characters of a tool result. key_env_set says only whether a key variable is named: false is the card's \"No key env\" warning, null a provider that asks for "
                 "no key. active names the model the chat runs on and providers what this install cannot run, with why. "
                 "It never answers an API key, the name of the variable holding one, a header, a certificate or an address, which stay on the screen, as do adding, changing and testing a model."
             ),

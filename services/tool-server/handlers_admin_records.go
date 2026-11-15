@@ -20,7 +20,7 @@ const (
 	recordingsNotFoundHint     = "session_recordings without recording_id lists the recordings and their ids."
 	recordingsOutputNote       = "These are a recording's details. What the terminal showed opens on the Session recordings screen (Admin → Session recordings), where each view is audited; no tool reads it."
 	recordingsOffNote          = "Session recording is off on this installation (sessionRecording.enabled). Earlier recordings stay listed."
-	aiModelsNote               = "A limit that is null is the call's default: 4096 tokens for a chat answer, 2048 for an investigation step (4096 with features.alertInvestigation.evidenceCheck or ledger on), 6000 characters of a tool result. key_env_set false is the card's No key env warning, and null a provider that asks for no key. Keys, the variables' names, addresses and other settings stay on the AI Models screen."
+	aiModelsNote               = "A limit that is null is the call's default: 4096 tokens for a chat answer, 2048 for an investigation step, 6000 characters of a tool result. key_env_set false is the card's No key env warning, and null a provider that asks for no key. Keys, the variables' names, addresses and other settings stay on the AI Models screen."
 )
 
 // A report as the Investigations list shows it; the screen's catalog key and values of skip_reason are its own wording.

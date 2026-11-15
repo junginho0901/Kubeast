@@ -933,7 +933,8 @@ async def test_worker_skips_a_queued_alert_while_paused(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_a_run_whose_fields_the_row_refuses_is_failed_with_why_and_keeps_its_tokens(monkeypatch):
-    service = FakeService([completion(content="## Summary\nok")])
+    service = FakeService([completion(calls=[tool_call("c1", "k8s_get_resources", {"resource_type": "pods", "namespace": "apps"})]),
+                           completion(content="## Summary\nok")])
     audits, writes = [], []
     install_loop(monkeypatch, service, audits)
 
@@ -948,10 +949,37 @@ async def test_a_run_whose_fields_the_row_refuses_is_failed_with_why_and_keeps_i
     assert first["status"] == "done" and first["report"] == "## Summary\nok"
     assert second["error"] == "the run's fields could not be stored: ValueError: unsupported Unicode escape sequence"
     assert set(second) == {"status", "error", "provider", "model", "prompt_tokens", "completion_tokens", "total_tokens"}
-    assert second["status"] == "failed" and second["total_tokens"] == 11  # still counted in the daily budget
+    assert second["status"] == "failed" and second["total_tokens"] == 22  # still counted in the daily budget
     run = audits[-1]
     assert run["action"] == "ai.investigation.run" and run["result"] == "failure" and run["after"]["status"] == "failed"
-    assert run["after"]["total_tokens"] == 11 and run["error"] == second["error"]
+    assert run["after"]["total_tokens"] == 22 and run["error"] == second["error"]
+    assert (run["after"]["tool_calls"], run["after"]["iterations"]) == (1, 2)  # counted before the fields were dropped
+
+
+@pytest.mark.asyncio
+async def test_a_failed_run_whose_row_refuses_its_fields_keeps_its_own_error(monkeypatch):
+    """A provider's refusal stays the row's error, so pause_reason still holds the next runs back."""
+    writes = []
+
+    async def refused(c, r, progress=None):
+        raise RuntimeError("credit balance too low")
+
+    async def audit(**kw):
+        return True
+
+    async def finish(db, inv_id, **fields):
+        writes.append(fields)
+        if len(writes) == 1:
+            raise OSError("connection reset")
+
+    monkeypatch.setattr(runner, "investigate", refused)
+    monkeypatch.setattr(runner, "classify", lambda e: SimpleNamespace(blocks=True, kind="credit", retry_at=None))
+    monkeypatch.setattr(runner, "write_audit", audit)
+    monkeypatch.setattr(runner.store, "finish", finish)
+    assert await runner.run_one(cfg(), None, row()) == "failed"
+    first, second = writes
+    assert second["status"] == "failed" and second["error"] == first["error"]
+    assert second["error"].startswith(store.REFUSAL_PREFIX)
 
 
 @pytest.mark.asyncio

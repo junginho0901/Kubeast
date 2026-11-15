@@ -58,9 +58,9 @@ def test_split_reads_only_the_block_at_the_very_end():
     assert report == f"{WEB_REPORT}\n\n{quoted}\n\nmore"  # an rca fence before the end stays in the report
     # a quoted rca block after the block is no block at the end: asked for again, and no rca block stays in the report
     after = f"{WEB_REPORT}\n{rca(no_fault=True)}\n\nThe quoted text: {quoted}\nend"
-    assert evidence.split(after) == (f"{WEB_REPORT}\n\n\nThe quoted text: \nend", None, "missing")
+    assert evidence.split(after) == (f"{WEB_REPORT}\n\n\nThe quoted text:\n\nend", None, "missing")
     # with the provider stopped at the length it is cut, again with no rca block left
-    assert evidence.split(after, "length") == (f"{WEB_REPORT}\n\n\nThe quoted text: \nend", None, "cut")
+    assert evidence.split(after, "length") == (f"{WEB_REPORT}\n\n\nThe quoted text:\n\nend", None, "cut")
 
 
 def test_closing_words_after_the_only_block_stay_in_the_report():
@@ -78,6 +78,21 @@ def test_closing_words_after_the_only_block_stay_in_the_report():
     # three backticks inside the JSON on its own line do not end the block
     inside = WEB_REPORT + '\n```rca\n{"causes": [], "ruled_out": ["log said ```oops```"]}\n```'
     assert evidence.split(inside)[1:] == ({"causes": [], "ruled_out": ["log said ```oops```"]}, "ok")
+    # nor do they leave a JSON tail when a fence after the block makes it missing: only that block leaves the report
+    tail = (WEB_REPORT + '\n\n```rca\n{"causes": [], "hypotheses": [{"statement": "panic``` at start"}]}\n```\n\n'
+            "Run:\n```bash\nkubectl rollout undo\n```")
+    assert evidence.split(tail) == (WEB_REPORT + "\n\nRun:\n```bash\nkubectl rollout undo\n```", None, "missing")
+
+
+@pytest.mark.parametrize("close", ["```json", "````", "```  "])
+def test_a_closing_line_of_backticks_or_a_language_name_goes_with_the_block(close):
+    report, block, status = evidence.split(f"{WEB_REPORT}\n\n```rca\n{{\"causes\": []}}\n{close}\n")
+    assert (report, block, status) == (WEB_REPORT, {"causes": []}, "ok")
+
+
+def test_an_rca_fence_with_no_json_in_it_is_a_quoted_one_and_its_text_stays():
+    quoted = f"{WEB_REPORT}\nlog line: ```rca\nsomething\n## Evidence\n```\nkubectl get pods\n```\n## Next steps\nrestart"
+    assert evidence.split(quoted) == (quoted, None, "missing")  # the code block's fence does not make it a block
 
 
 def test_an_rca_fence_that_never_closes_is_cut_only_when_the_answer_stopped_inside_a_block():
@@ -86,6 +101,13 @@ def test_an_rca_fence_that_never_closes_is_cut_only_when_the_answer_stopped_insi
     assert evidence.split(quoted, "length") == (f"{WEB_REPORT}\nlog line:", None, "cut")
     started = f"{WEB_REPORT}\n\n```rca\n  {{\"no_fault\": false, \"causes\": [{{\"resource\": \"Deployment/apps/web\""
     assert evidence.split(started) == (WEB_REPORT, None, "cut")  # JSON follows the fence
+    # the provider said it stopped by itself: the fence was left open, not cut
+    assert evidence.split(started, "stop") == (WEB_REPORT, None, "missing")
+    assert rca_block.unclosed(started) and not rca_block.unclosed(quoted)
+    # a whole object with only its closing fence missing is the block
+    whole = f"{WEB_REPORT}\n\n```rca\n{{\"no_fault\": true, \"causes\": []}}\n"
+    assert evidence.split(whole, "stop") == (WEB_REPORT, {"no_fault": True, "causes": []}, "ok")
+    assert evidence.split(whole, "length")[2] == "cut"
 
 
 @pytest.mark.parametrize("answer, status", [
