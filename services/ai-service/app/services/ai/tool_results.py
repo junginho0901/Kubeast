@@ -35,14 +35,23 @@ def as_json(tool: str, text: str, args: Optional[dict] = None) -> str:
     return json.dumps(entry, ensure_ascii=False)
 
 
+def _wrapped(tool: str, text: str, budget: int) -> str:
+    return as_json(tool, formatters._truncate_tool_result_for_llm(text, budget, tool=tool))
+
+
 def for_model(tool: str, text: str, limit: Optional[int] = None) -> str:
     """The text, or with the switch its object, cut so the object stays within limit (the model's tool_result_chars):
-    escaping adds characters, so the answer inside is cut again by what the object went over."""
+    escaping adds characters, so the answer inside keeps the most of it whose object fits."""
     if not enabled():
         return text
     out = as_json(tool, text)
-    budget = len(text)
-    while limit is not None and len(out) > limit and budget > 0:
-        budget -= len(out) - limit
-        out = as_json(tool, formatters._truncate_tool_result_for_llm(text, max(budget, 0), tool=tool))
-    return out
+    if limit is None or len(out) <= limit:
+        return out
+    low, high = 0, len(text)
+    while low < high:
+        mid = (low + high + 1) // 2
+        if len(_wrapped(tool, text, mid)) <= limit:
+            low = mid
+        else:
+            high = mid - 1
+    return _wrapped(tool, text, low)

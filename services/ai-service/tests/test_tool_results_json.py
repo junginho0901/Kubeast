@@ -81,6 +81,25 @@ def test_on_the_object_stays_within_the_models_limit_however_much_escaping_adds(
     assert tool_results.for_model(tool, "short", limit) == json.dumps({"tool": tool, "result": "short"})
 
 
+@pytest.mark.parametrize("tool,line", [
+    ("k8s_execute_command", "\x1b[1m\x1b[31m!\x1b[0m\x1b[2m\n"),
+    ("k8s_get_pod_logs", "\x01\x02\x03 tick \x04\x05\n"),
+])
+def test_on_an_answer_escaping_doubles_or_more_keeps_nine_tenths_of_what_could_fit(monkeypatch, tool, line):
+    from app.services.ai import formatters
+
+    monkeypatch.setenv("AI_TOOL_RESULTS_JSON", "true")
+    limit = 6000
+    text = line * 2000
+    cut = formatters._truncate_tool_result_for_llm(text, limit, tool=tool)
+    assert len(json.dumps(cut, ensure_ascii=False)) >= 2 * len(cut)
+    fits = max(n for n in range(0, len(cut) + 1, 25) if len(tool_results.as_json(tool, formatters._truncate_tool_result_for_llm(cut, n, tool=tool))) <= limit)
+    out = tool_results.for_model(tool, cut, limit)
+    kept = json.loads(out)["result"]
+    assert len(out) <= limit
+    assert len(kept) >= 0.9 * len(formatters._truncate_tool_result_for_llm(cut, fits, tool=tool))
+
+
 class Completions:
     """An API-key model that calls the log tool once, then answers; it keeps each request's messages."""
 
