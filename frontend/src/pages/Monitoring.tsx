@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { api, isMetricsDisabled } from '@/services/api'
+import { api } from '@/services/api'
 import MonitoringNodes from './monitoring/MonitoringNodes'
 import MonitoringPods from './monitoring/MonitoringPods'
 
@@ -12,8 +12,6 @@ import MonitoringPods from './monitoring/MonitoringPods'
 export default function Monitoring() {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<'nodes' | 'pods'>('nodes')
-  // metrics-server missing as another screen found it this session (disableMetrics): the tabs ask nothing
-  const [metricsUnavailable] = useState(() => isMetricsDisabled())
   // a tab's last answer says the cluster serves no metrics.k8s.io: the notice, while the tab asks again each minute
   const [notServed, setNotServed] = useState(false)
 
@@ -66,20 +64,17 @@ export default function Monitoring() {
         </div>
       </div>
 
-      {(metricsUnavailable || notServed) && (
+      {notServed && (
         <div className="shrink-0 rounded-lg border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-300">
           {t('monitoring.metricsUnavailable', 'Metrics server not available for this cluster')}
         </div>
       )}
 
       {activeTab === 'nodes' ? (
-        <MonitoringNodes
-          metricsUnavailable={metricsUnavailable}
-          onMetricsUnavailable={handleMetricsUnavailable}
-        />
+        <MonitoringNodes pageNotice={notServed} onMetricsUnavailable={handleMetricsUnavailable} />
       ) : (
         <MonitoringPods
-          metricsUnavailable={metricsUnavailable}
+          pageNotice={notServed}
           onMetricsUnavailable={handleMetricsUnavailable}
           namespaces={namespaces}
         />
