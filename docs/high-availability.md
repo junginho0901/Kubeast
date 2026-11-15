@@ -33,18 +33,18 @@ The chart refuses `replicas.k8sService` or `replicas.toolServer` above 1 with `r
 
 | Service | Connections per pod, at most | Where the number comes from |
 | --- | --- | --- |
-| auth-service | 20 | `MaxConns = 20` in `services/auth-service-go/cmd/server/main.go` |
-| session-service | 20 | `MaxConns = 20` in `services/session-service-go/cmd/server/main.go` |
-| k8s-service | the larger of 4 and the CPUs the node gives the process, plus 1 | pgx's default pool size (`runtime.NumCPU()`; the chart sets no CPU limit, so the node's count, not the request) and the health check's lock, which holds a connection of its own |
-| ai-service | 15 | SQLAlchemy's default pool: 5, and 10 more under load |
-| ModelConfig controller | a few | `database/sql` with no cap; one pod |
-| migration Job | a few, while it runs | `migrations.mode: job` |
+| auth-service | 20 | `postgresql.pool.authService.maxConns` |
+| session-service | 20 | `postgresql.pool.sessionService.maxConns` |
+| k8s-service | 10, plus 1 | `postgresql.pool.k8sService.maxConns`, and the health status lock (`internal/pglock`), which holds a connection of its own outside the pool; k8s-service-stream has the pool only |
+| ai-service | 15 | `postgresql.pool.aiService.maxConns` |
+| ModelConfig controller | 4 | `postgresql.pool.modelConfigController.maxConns`; one pod |
+| migrations | 4, while they run | the migration pool (`dbsession.MigrationPoolMaxConns`) |
 | tool-server, frontend, gateway | 0 | — |
 
-PostgreSQL's default `max_connections` is 100, and the chart's postgres keeps it.
-An external database has its own; when the Kubeast user is not a superuser, 3 of them are kept for superusers by default.
-For example, one pod of each service on a node of 8 CPUs can open about 20 + 20 + 9 + 15 = 64 connections, and two pods of each of those four about 128, which is more than 100.
-Raise the count of the services that need it (tool-server, the gateway and frontend open none, k8s-service about one per node CPU), or use a database that takes more connections.
+The chart's postgres sets `max_connections` to `postgresql.maxConnections` (300), and an install stops when the pods could hold more: each pool times the pods while a rollout runs (a quarter more, rounded up, or autoscaling's `maxReplicas` where it is on), plus 4 for the migrations and 10 kept for psql and PostgreSQL's superuser slots (`templates/checks/db-connections.yaml`).
+An external database has its own limit, which the chart cannot read: NOTES prints the same sum to compare with it. When the Kubeast user is not a superuser, 3 of its connections are kept for superusers by default.
+For example, one pod of each service can hold up to 154 connections with a rollout's extra pod counted, and three pods of each 286.
+Raise `postgresql.maxConnections`, lower the pools or the pod counts, or use a database that takes more connections.
 
 ## Set the count
 
