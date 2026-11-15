@@ -134,8 +134,8 @@ Secret. The fault comes from data or settings, never from a branch in the code, 
 (`scripts/test_ai_eval_cases.py`); case 20's new release is a boot script in a ConfigMap, the stand-in for a new
 image. Their answers lean on logs: run `scripts/kind-logsearch.sh up` first. The numbers leave room for the cases that
 need the OpenTelemetry demo or Chaos Mesh (01–03, 07, 10, 11), not written yet. Cases 17–22 follow outage shapes
-common in production — a batch read that saturates a database, a stale in-cluster address, a route without its
-hostname, a release that boots in one environment only, an OOM cascade, workers past the memory limit — each rebuilt
+common in production — a batch read that saturates a database, a route without its hostname, a release that boots in
+one environment only, an OOM cascade, workers past the memory limit, and 18, which is hidden — each rebuilt
 small; the scripts whose behaviour they depend on (headers through busybox httpd, memory held per worker or shard and
 where the OOM kill lands) were checked in a local busybox 1.38.0 container, not on kind.
 
@@ -145,7 +145,7 @@ with a kind that says a change (`config_change`, `rollout`), so the symptom's wo
 `oom`, `dependency_down`) is a miss; each NOTES.md says which and why. `scripts/test_ai_eval_cases.py` holds such
 answers to a miss.
 
-The namespace a case makes besides its own (`edge` for 15, `members` for 18) carries no case number and no
+A namespace a case makes besides its own (`edge`, `members`) carries no case number and no
 `kubeast.io/ai-eval` label, so a namespace list does not tie it to the case; the case's `setup_cmds` and
 `cleanup_cmds` make and delete it by name. Run the cases only on the dev clusters: a namespace of that name already
 there would be deleted with the case.
@@ -153,22 +153,24 @@ there would be deleted with the case.
 The hidden cases (08, 15, 18) measure whether a change to the prompts, the rule cards or the tool
 descriptions fits the cases it was tried on. Whoever writes those — a person or an agent — does not open these
 folders, their NOTES.md or their truth, nor a run's rows, table or log of a hidden case; the results are read as the
-round's total.
+round's total. A hidden case's answer stays in its folder: the table below gives no problem for it, the tests use
+made-up truths (`shop-x`) and read the hidden truths from their folders without printing a name, and no test file,
+PR description or commit message names a hidden case's cause or the shape of its fault.
 
 | Case | Group | Problem | Needs on dev besides logs |
 |---|---|---|---|
 | 04 | hidden cause | a new NetworkPolicy leaves one caller with no allow to one backend; both sides look healthy | `self`, whose kindnet enforces NetworkPolicy |
 | 05 | hidden cause | one workload is rolled out with its own `dnsConfig`; only its short-name calls fail | |
 | 06 | hidden cause | a rollout to a new ConfigMap with a bad value, held at 4 old and 2 new pods; asked at 5 and 65 minutes | |
-| 08 | hidden cause, hidden | a scale-up fills the ResourceQuota; a CronJob's pods cannot be created and the data goes stale | |
+| 08 | hidden cause, hidden | in its folder only | |
 | 09 | hidden cause | a 25m CPU limit makes one service slow with no error; a busier pod is the decoy | the second cluster's Prometheus (cAdvisor, kube-state-metrics) |
 | 12 | trap | an old crash-looping pod with a DNS-looking error, and a quiet in-place ConfigMap edit | |
 | 13 | control | no fault; one unrelated container restart five minutes before the question | |
 | 14 | control | no fault; a clean rollout four minutes before the question | |
-| 15 | control, hidden | no fault; traffic from another namespace rises fivefold and the HPA scales out | the second cluster's metrics-server and Prometheus |
+| 15 | control, hidden | in its folder only | the second cluster's metrics-server and Prometheus |
 | 16 | past | a Deployment scaled to 0 for five minutes, then back; asked at 6 and 70 minutes | the second cluster's Prometheus |
 | 17 | trap | a CronJob loses its cursor setting and reads a whole table every minute; the database's disk queue slows every caller while its CPU stays low | the second cluster's Prometheus (cAdvisor), for the CPU part |
-| 18 | hidden cause, hidden | a service's old namespace is emptied after a move; the frontend still calls the old address and treats the failure as signed out | |
+| 18 | hidden cause, hidden | in its folder only | |
 | 19 | hidden cause | the front Service is switched to a new edge whose routes lack the main hostname: 404 for one site, the backend healthy | |
 | 20 | hidden cause | a release that needs a setting only staging has is rolled out with `Recreate`; production is down; asked at 5 and 65 minutes | |
 | 21 | hidden cause | a bigger index leaves a three-node StatefulSet no room to lose a node; its rolling update starts an OOM cascade | the second cluster's Prometheus, for the memory steps |
