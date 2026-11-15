@@ -122,8 +122,8 @@ type Service struct {
 
 	// health tracks per-cluster reachability in memory for fail-fast (step 15).
 	health *clusterHealth
-	// checked is true while a HealthChecker runs: HealthCheck then answers from health for a cluster it probed.
-	checked atomic.Bool
+	// healthRead is HealthCheck's last read of the default cluster, which every caller shares.
+	healthRead healthReading
 	// promQ coalesces + caches Prometheus queries per cluster (step 15).
 	promQ *promQueryCache
 	// limiters holds per-cluster rate limiters + circuit breakers (step 15).
@@ -785,29 +785,64 @@ func (s *Service) Cache() *cache.Cache { return s.cache }
 // WatchEnabled reports whether hot-reload is configured for this service.
 func (s *Service) WatchEnabled() bool { return s.watchEnabled }
 
-// healthReadBudget bounds HealthCheck's own read of the default cluster, made only while no HealthChecker runs.
-const healthReadBudget = 2 * time.Second
+// healthReadBudget bounds HealthCheck's GET /version; healthReadEvery is how long one read's answer stands for every
+// caller, so open tabs asking /health every 5 s cost one read per replica in that time however many they are.
+const (
+	healthReadBudget = 1500 * time.Millisecond
+	healthReadEvery  = 5 * time.Second
+)
 
-// errClusterDown is HealthCheck's answer while the default cluster's breaker is open.
-var errClusterDown = errors.New("the cluster's last health check or requests failed")
+// healthReading is the last answer of HealthCheck's read and the read under way.
+type healthReading struct {
+	mu      sync.Mutex
+	at      time.Time
+	err     error
+	running chan struct{} // closed when the read under way ends; nil when none is
+}
 
-// HealthCheck says whether the default cluster's API server answers. While a HealthChecker runs and has probed that
-// cluster, its breaker answers (the last probe and the requests since) and nothing is asked; otherwise one GET /version
-// within healthReadBudget.
+// HealthCheck says whether the default cluster's API server answered GET /version, asked as Kubeast itself. One read
+// answers every caller for healthReadEvery; a caller waits for the read under way until its ctx ends, as finding the
+// default cluster's bundle is not bounded by the read's own budget.
 func (s *Service) HealthCheck(ctx context.Context) error {
+	h := &s.healthRead
+	h.mu.Lock()
+	if !h.at.IsZero() && time.Since(h.at) < healthReadEvery {
+		err := h.err
+		h.mu.Unlock()
+		return err
+	}
+	done := h.running
+	if done == nil {
+		done = make(chan struct{})
+		h.running = done
+		go func() {
+			err := s.readHealth()
+			h.mu.Lock()
+			h.at, h.err, h.running = time.Now(), err, nil
+			h.mu.Unlock()
+			close(done)
+		}()
+	}
+	h.mu.Unlock()
+	select {
+	case <-done:
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		return h.err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// readHealth is one GET /version of the default cluster within healthReadBudget.
+func (s *Service) readHealth() error {
+	ctx, cancel := context.WithTimeout(auth.AsKubeast(context.Background()), healthReadBudget)
+	defer cancel()
 	b := s.defaultClientBundle()
 	if b == nil {
 		return errNotLoaded
 	}
-	if s.checked.Load() && s.health != nil && s.health.wasProbed(b.id) {
-		if s.ClusterDown(b.id) {
-			return errClusterDown
-		}
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(ctx, healthReadBudget)
-	defer cancel()
-	_, err := discovery.ToServerVersionInterfaceWithContext(b.clientset.Discovery()).ServerVersionWithContext(auth.AsKubeast(ctx))
+	_, err := discovery.ToServerVersionInterfaceWithContext(b.clientset.Discovery()).ServerVersionWithContext(ctx)
 	return err
 }
 

@@ -63,7 +63,12 @@ Kubeast는 주소가 그 사람의 것인지 알 수 없습니다. `admin.users.
 그룹 바인딩을 권합니다. `User`를 묶는다면 그 사람의 계정이 이미 있는지, 계정이 ID 공급자에서 오는지 확인하세요.
 `auth.impersonation.userPrefix`(기본 비어 있음, 예: `kubeast:user:`)를 정하면 주소 앞에 Kubeast만의 이름이 붙습니다. 그러면 클러스터가 자기 로그인(OIDC, IAM)을 위해 주소로 묶은 바인딩이 같은 주소의 Kubeast 계정에 열리지 않습니다. 그룹 바인딩은 그대로 동작합니다. 정하면 클러스터가 보고 감사 로그에 적는 이름이 바뀌고, 주소로 묶은 `User` 바인딩은 Kubeast 요청에 더 이상 적용되지 않습니다. 등록한 모든 클러스터에서 그 바인딩을 먼저 그룹으로 옮기세요.
 
-**사람이 없는 요청.** Kubeast 자체 읽기(서버 버전, 클러스터마다 한 번 읽어 모두에게 쓰는 API 디스커버리, 상태 확인)는 `Impersonate-User` 헤더 없이 Kubeast 자격 증명으로 나가므로, 클러스터 감사 로그에는 Kubeast가 남습니다. 그 밖의 요청은 로그인한 사람을 알 수 없으면 보내지 않고, kubectl 도구도 실행하지 않습니다.
+**사람이 없는 요청.** 몇몇 읽기는 Kubeast 자체 읽기이고, 클러스터 감사 로그에는 Kubeast가 남습니다.
+
+- `Impersonate-User` 헤더 없이: 서버 버전, 클러스터마다 한 번 읽어 모두에게 쓰는 API 디스커버리, 상태 확인.
+- 고정 신원 `kubeast:cache`(§1의 `view` 권한)로: 개요 informer, 목록을 볼 수 있는 모두에게 한 번 읽어 쓰는 객체 이벤트와 노드의 파드, Kubeast가 도는 클러스터를 가리는 `kube-system` UID, `metrics.k8s.io` 그룹 확인, Prometheus·OpenCost Service 찾기.
+
+그 밖의 요청은 로그인한 사람을 알 수 없으면 보내지 않고, kubectl 도구도 실행하지 않습니다.
 
 **Write = Kubernetes 기본 `edit`**: kubectl로 `edit`을 받은 사람과 범위가 같으며, 다음 권한까지 포함합니다.
 

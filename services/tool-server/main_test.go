@@ -19,7 +19,14 @@ func TestMain(m *testing.M) {
 	kubectlExec = func(_ context.Context, args []string, _ *string) ([]byte, error) {
 		return nil, fmt.Errorf("a test reached kubectl without its stand-in: %v", args)
 	}
-	// The tests that read argv run kubectl as no one (no --as); a test of the identity sets it on with a person.
-	impersonationEnabled = false
 	os.Exit(m.Run())
+}
+
+// kubectlAsNoOne turns impersonationEnabled off for one test that calls a handler with a context holding no person
+// and reads kubectl's argv from its verb; the package's value comes back after it.
+func kubectlAsNoOne(t *testing.T) {
+	t.Helper()
+	was := impersonationEnabled
+	impersonationEnabled = false
+	t.Cleanup(func() { impersonationEnabled = was })
 }

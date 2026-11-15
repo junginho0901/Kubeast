@@ -12,7 +12,12 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
-const serverVersionTTL = 10 * time.Minute
+// serverVersionTTL is how old a version the features and the informer overview take; shownVersionTTL how old one the
+// screens that show it (cluster config, hygiene, the overview read without informers) take, so an upgrade shows soon.
+const (
+	serverVersionTTL = 10 * time.Minute
+	shownVersionTTL  = 30 * time.Second
+)
 
 // serverVersionCache is asked once for everyone: the version is the same whoever asks, and each ask waits in the clientset's rate limiter.
 type serverVersionCache struct {
@@ -24,25 +29,25 @@ type serverVersionCache struct {
 
 // serverVersion is the API server's GitVersion, asked at most every serverVersionTTL; the last one known when an ask fails.
 func (b *clientBundle) serverVersion(ctx context.Context) string {
-	info, _ := b.serverVersionInfo(ctx)
+	info, _ := b.serverVersionInfo(ctx, serverVersionTTL)
 	if info == nil {
 		return ""
 	}
 	return info.GitVersion
 }
 
-// clusterVersion is serverVersionInfo of the cluster in ctx.
+// clusterVersion is the version of the cluster in ctx for a screen that shows it, at most shownVersionTTL old.
 func (s *Service) clusterVersion(ctx context.Context) (*version.Info, error) {
 	b := s.bundleForCtx(ctx)
 	if b == nil {
 		return nil, errNotLoaded
 	}
-	return b.serverVersionInfo(ctx)
+	return b.serverVersionInfo(ctx, shownVersionTTL)
 }
 
-// serverVersionInfo is the API server's version as serverVersion keeps it, the last one known when an ask fails and the
+// serverVersionInfo is the API server's version read at most maxAge ago, the last one known when an ask fails and the
 // error only when none is. Callers do not change what it points to: every caller shares it.
-func (b *clientBundle) serverVersionInfo(ctx context.Context) (*version.Info, error) {
+func (b *clientBundle) serverVersionInfo(ctx context.Context, maxAge time.Duration) (*version.Info, error) {
 	c := &b.version
 	c.mu.Lock()
 	value, at := c.value, c.at
@@ -50,7 +55,7 @@ func (b *clientBundle) serverVersionInfo(ctx context.Context) (*version.Info, er
 	if b.discovery == nil {
 		return value, errNotLoaded
 	}
-	if value != nil && time.Since(at) < serverVersionTTL {
+	if value != nil && time.Since(at) < maxAge {
 		return value, nil
 	}
 	got, _, err := c.asks.Do(ctx, "", func(ctx context.Context) (*version.Info, error) {

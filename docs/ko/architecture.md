@@ -124,7 +124,8 @@ ghcr.io/junginho0901/kubeast-model-config-controller-go
   - `dormantAccounts`를 켜면 24시간마다 휴면 계정 잠금
   - S3 싱크를 지정했다면 24시간마다 감사 앵커
 - k8s-service
-  - 60초마다 등록된 클러스터별 상태 확인(`multicluster.healthcheckIntervalSec`). 확인은 서버마다 자기 빠른 실패 판단에 쓰고, `clusters.health_status`는 PostgreSQL advisory lock(따로 연 연결 하나)을 잡은 서버 한 대만 씀. 확인이 돌고 기본 클러스터를 한 번 확인한 뒤에는 `/health`의 `kubernetes`가 그 판단으로 답하고 클러스터에 묻지 않음. 그 전과 확인을 끈 때(`0`)는 `/health`마다 기본 클러스터의 `/version`을 2초 안에 읽음
+  - 60초마다 등록된 클러스터별 상태 확인(`multicluster.healthcheckIntervalSec`). 확인은 서버마다 자기 빠른 실패 판단에 쓰고, `clusters.health_status`는 PostgreSQL advisory lock(따로 연 연결 하나)을 잡은 서버 한 대만 씀
+  - `/health`(콘솔 머리 표시가 열린 탭마다 5초에 한 번 물음)는 기본 클러스터의 `/version`을 모든 호출자 몫으로 5초에 한 번만 읽고, 한 번 읽기는 1.5초 안에 끝남. 그래서 `kubernetes` 값은 클러스터보다 최대 약 7초 늦고, 탭 수만큼 늘지 않음. 답은 감사 저장소 상태를 함께 읽어 1.5초 안에 나가므로, auth-service가 기다리는 2초 안에 듦
   - 오래 쓰지 않은 클러스터의 informer 캐시 정리
   - 레플리카마다 5초(앞뒤 1초)마다 DB에서 등록된 클러스터의 `config_version` 읽기, 쿼리 하나(`internal/clustersync`). Redis가 있으면 다른 레플리카의 클러스터 변경 알림도 구독
   - 켜질 때 Redis가 답하지 않았으면 답할 때까지 5초마다 다시 묻기(답하면 캐시를 Redis로 옮김)

@@ -9,7 +9,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/discovery"
 
 	"github.com/junginho0901/kubeast/services/pkg/gitops"
 )
@@ -64,30 +63,13 @@ func (s *Service) GitopsManagedCustom(ctx context.Context, group, version, plura
 // resolveForGitops is ResolveResource plus the Kubeast path spellings that
 // are neither a plural nor a short name ("hpas" → "hpa", "pvcs" → "pvc").
 func (s *Service) resolveForGitops(ctx context.Context, resourceType string) (schema.GroupVersionResource, bool, error) {
-	m, err := s.matchForGitops(ctx, resourceType)
+	m, err := s.resolveResourceMatch(ctx, resourceType)
 	if errors.Is(err, errResourceTypeNotServed) && strings.HasSuffix(resourceType, "s") {
-		if short, err2 := s.matchForGitops(ctx, strings.TrimSuffix(resourceType, "s")); err2 == nil {
+		if short, err2 := s.resolveResourceMatch(ctx, strings.TrimSuffix(resourceType, "s")); err2 == nil {
 			return short.gvr, short.namespaced, nil
 		}
 	}
 	return m.gvr, m.namespaced, err
-}
-
-// matchForGitops also reads the groups that answered when another did not: an
-// aggregated API that is down fails discovery as a whole, and must not stop
-// every write of a cluster whose kinds can still be told apart.
-func (s *Service) matchForGitops(ctx context.Context, resourceType string) (resourceMatch, error) {
-	m, err := s.resolveResourceMatch(ctx, resourceType)
-	var partial *discovery.ErrGroupDiscoveryFailed
-	if !errors.As(err, &partial) {
-		return m, err
-	}
-	groups, lists, _ := discovery.ToDiscoveryInterfaceWithContext(s.discoveryCtx(ctx)).ServerGroupsAndResourcesWithContext(ctx)
-	found, matchErr := matchResource(preferredFirst(groups, lists), resourceType)
-	if matchErr != nil {
-		return resourceMatch{}, err // it may belong to a group that did not answer
-	}
-	return found, nil
 }
 
 func (s *Service) gitopsManagedGVR(ctx context.Context, gvr schema.GroupVersionResource, namespaced bool, namespace, name string) (gitops.Result, error) {

@@ -400,7 +400,7 @@ func (s *Service) GetClusterConfig(ctx context.Context) (map[string]interface{},
 		return result, nil
 	}
 	// Cluster version, the one read kept for everyone
-	if sv, err := b.serverVersionInfo(ctx); err == nil {
+	if sv, err := b.serverVersionInfo(ctx, shownVersionTTL); err == nil {
 		result["version"] = map[string]interface{}{
 			"major":       sv.Major,
 			"minor":       sv.Minor,

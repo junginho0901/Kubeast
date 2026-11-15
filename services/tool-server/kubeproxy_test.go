@@ -103,6 +103,7 @@ func TestKubectlThroughTheProxyTakesDefaultWhenNoNamespaceIsNamed(t *testing.T) 
 	kubectlProxy = p
 	defer func() { kubectlProxy = prevProxy }()
 	ctx := withClusterID(withKubeconfigPath(context.Background(), clusterKubeconfig(t, api.URL)), "c")
+	ctx = auth.WithPayload(ctx, auth.TokenPayload{Email: "a@example.com"})
 	argv, done, err := kubectlCommand(ctx, []string{"get", "deployments"})
 	if err != nil {
 		t.Fatal(err)
