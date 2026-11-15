@@ -11,18 +11,6 @@
 import os
 from typing import Dict, List
 
-# timeline's changes view, offered to the model only with AI_TIMELINE_CHANGES (chart ai.timelineChanges, off by default):
-# off, timeline is offered without the view parameter and without these words (offer_timeline_changes).
-TIMELINE_CHANGES_PARAM = "view"
-TIMELINE_CHANGES_DESCRIPTION = (
-    " view \"changes\" answers instead what changed from since_time to until_time (default the 4 hours before now, exact), newest first, at most 50: "
-    "rollouts compared with the revision before (images, the names of other pod template fields, the keys of env, labels and annotations that were added, "
-    "removed or changed — never a value), ConfigMap and Secret last writes and the field manager that wrote them (metadata only), Helm release revisions, "
-    "HPA last scales, node creations and condition changes, Argo CD syncs and container restarts with their reason. Each object keeps only its last write, "
-    "scale or restart. summary.changes_total and by_source count every change of the window; a source in summary.not_read or summary.skipped is null in by_source: not counted, "
-    "not zero (without a namespace, every namespace's restarts need listing pods across the cluster: name a namespace). Use it first for \"why did this break?\", then line the changes up with when the symptom started."
-)
-
 # resource_graph's call parameters, offered only where the cluster has features.callGraph on (features.PARAM_GATES), and
 # in the MCP server's list only with CALL_GRAPH_ENABLED (offer_call_graph).
 CALLS_PARAM = "include"
@@ -33,6 +21,18 @@ CALLS_DESCRIPTION = (
     " With include [\"calls\"] it adds who calls whom over since, or the fixed window since_time to until_time — requests, errors and "
     "p90 latency from the traces, connections and drops from the network — with the failing workloads that call nothing failing first "
     "and the cause → … → symptom paths between them: a caller of a failing service is more often its victim than its cause."
+)
+
+# timeline's changes view, offered to the model only with AI_TIMELINE_CHANGES (chart ai.timelineChanges, off by default):
+# off, timeline is offered without the view parameter and without these words (offer_timeline_changes).
+TIMELINE_CHANGES_PARAM = "view"
+TIMELINE_CHANGES_DESCRIPTION = (
+    " view \"changes\" answers instead what changed from since_time to until_time (default the 4 hours before now, exact), newest first, at most 50: "
+    "rollouts compared with the revision before (images, the names of other pod template fields, the keys of env, labels and annotations that were added, "
+    "removed or changed — never a value), ConfigMap and Secret last writes and the field manager that wrote them (metadata only), Helm release revisions, "
+    "HPA last scales, node creations and condition changes, Argo CD syncs and container restarts with their reason. Each object keeps only its last write, "
+    "scale or restart. summary.changes_total and by_source count every change of the window; a source in summary.not_read or summary.skipped is null in by_source: not counted, "
+    "not zero (without a namespace, every namespace's restarts need listing pods across the cluster: name a namespace). Use it first for \"why did this break?\", then line the changes up with when the symptom started."
 )
 
 K8S_READONLY_TOOLS: List[Dict] = [

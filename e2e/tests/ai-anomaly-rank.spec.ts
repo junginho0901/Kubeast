@@ -421,7 +421,7 @@ test.describe('AI tool anomaly_rank', () => {
     }
   })
 
-  test('the tool is offered where the switch is on; off, the route answers 404 and reads nothing', async ({ request }) => {
+  test('the tool is offered where the switch is on; off, the route answers 404, reads nothing and MCP does not know the tool', async ({ request }) => {
     test.skip(!mcpOn, 'the MCP server is off (mcp.enabled)')
     const clusters = JSON.parse((await call(request, admin, 'list_clusters', {})).text).clusters as { id: string; tools: string[] }[]
     for (const cluster of [SELF, SECOND]) {
@@ -433,9 +433,10 @@ test.describe('AI tool anomaly_rank', () => {
     if (!switchOn) {
       expect(res.status()).toBe(404)
       expect((await res.json()).detail).toBe(OFF)
+      // MCP lists anomaly_rank only with ANOMALY_RANK_ENABLED, the ConfigMap value of features.anomalyRank.enabled
       const out = await call(request, admin, 'anomaly_rank', { cluster: SELF, namespace: 'default' })
-      expect(out.isError, out.text).toBe(false)
-      expect(JSON.parse(out.text)).toEqual({ status: 'unavailable', feature: 'anomaly_rank', reason: OFF, alternative: 'issues' })
+      expect(out.isError, out.text).toBe(true)
+      expect(out.text).toBe('unknown tool: anomaly_rank')
       return
     }
     expect(res.status(), await res.text()).toBe(200)
