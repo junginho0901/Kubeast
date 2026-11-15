@@ -186,6 +186,8 @@ ai:
                            # off: <EMAIL_n> within one text, <REDACTED:phone>, <REDACTED:rrn>, <REDACTED:card>, no value shown
   refuseRepeatedReads: false # (alpha) true: a read made again with the same tool and arguments in one chat answer or investigation, less
                              # than 60 s after the first answered, is not run and the model is told where it has the result; off: as before
+  toolResultDetails: false # (alpha) true: tool results say "M of N" for a cut answer, the window read when the call named none, why an empty
+                           # one may be empty and the console paths of the objects they name, from what they hold (features.md); off: as before
   providers:
     claudeCode: { enabled: false, maxConcurrent: 2, maxConcurrentTotal: 0, memoryLimit: 2Gi, queueWaitSeconds: 60, turnTimeoutSeconds: 300, maxTurns: 10 }
     # maxConcurrent: Claude Code runs per ai-service server (memory); maxConcurrentTotal: across every replica
