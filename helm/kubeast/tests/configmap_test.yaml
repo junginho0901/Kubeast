@@ -641,3 +641,16 @@ tests:
       - equal:
           path: data.CLUSTER_STORE_ALLOWED_HOSTS
           value: prom.monitoring.svc,.corp.example.com
+
+  - it: keeps timeline's changes view from the AI by default and takes it from ai.timelineChanges
+    asserts:
+      - equal:
+          path: data.AI_TIMELINE_CHANGES
+          value: "false"
+  - it: offers timeline's changes view to the AI from ai.timelineChanges
+    set:
+      ai.timelineChanges: true
+    asserts:
+      - equal:
+          path: data.AI_TIMELINE_CHANGES
+          value: "true"
