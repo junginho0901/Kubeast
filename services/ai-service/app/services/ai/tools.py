@@ -1905,7 +1905,8 @@ def changes_view_on(session_id: object = None) -> bool:
 def anomaly_rank_on() -> bool:
     """ANOMALY_RANK_ENABLED (chart features.anomalyRank.enabled, default off; in the ConfigMap every service reads): the
     chat prompt names anomaly_rank and the MCP server lists it. The chat's and an investigation's tool lists follow the
-    cluster's features (features.GATES); dispatch answers it as an unknown function while it is off."""
+    cluster's features (features.GATES); while it is off dispatch answers it as an unknown function and an investigation as a
+    tool outside its read-only list (investigation.runner), as before the tool."""
     return switch.env_on("ANOMALY_RANK_ENABLED")
 
 
