@@ -535,3 +535,34 @@ this no longer matches fails there.
 {{- end -}}
 {{- $conf -}}
 {{- end -}}
+
+{{/*
+The services that run more than one pod when asked, as a JSON map of their values key to their Deployment's name:
+replicas.<key> and autoscaling.<key> (templates/hpa.yaml, templates/checks/replicas.yaml).
+*/}}
+{{- define "kubeast.scaledServices" -}}
+{{- $s := dict "authService" "auth-service" "k8sService" "k8s-service" "sessionService" "session-service" "frontend" "frontend" "gateway" "gateway" -}}
+{{- if .Values.ai.enabled -}}
+{{- $_ := set $s "aiService" "ai-service" -}}
+{{- $_ := set $s "toolServer" "tool-server" -}}
+{{- end -}}
+{{- toJson $s -}}
+{{- end -}}
+
+{{/*
+A Deployment's replicas: replicas.<key>, left out while autoscaling.<key>.enabled gives the count to its HPA.
+  {{ include "kubeast.replicas" (dict "root" $ "key" "k8sService") }}
+*/}}
+{{- define "kubeast.replicas" -}}
+{{- $hpa := index (.root.Values.autoscaling | default dict) .key | default dict -}}
+{{- if not $hpa.enabled -}}
+replicas: {{ index .root.Values.replicas .key }}
+{{- end -}}
+{{- end -}}
+
+{{/* "true" for a whole number: an integer from --set, or a number with no fraction from a values file. */}}
+{{- define "kubeast.wholeNumber" -}}
+{{- if or (kindIs "int" .) (kindIs "int64" .) (and (kindIs "float64" .) (eq (float64 .) (float64 (int .)))) -}}
+true
+{{- end -}}
+{{- end -}}
