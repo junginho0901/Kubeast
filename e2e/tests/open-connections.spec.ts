@@ -215,7 +215,9 @@ test.describe.serial('open connections and what a global key opens', () => {
     const signOuts = await rows('user.logout')
     expect(signOuts.map((r) => r.Result)).toEqual(['success'])
     expect(signOuts[0].After?.auth_time, 'the row names the sign-in that ended').toMatch(/^\d{4}-\d{2}-\d{2}T/)
-    expect((await rows('k8s.session.end')).map((r) => [r.After?.stream, r.After?.reason]).sort()).toEqual([['exec', 'session_signed_out'], ['pod-logs', 'session_signed_out']])
+    // A terminal's row comes after its close: the shell is hung up first (remote_shell.go hangUp).
+    await expect.poll(async () => (await rows('k8s.session.end')).map((r) => [r.After?.stream, r.After?.reason]).sort(), { timeout: 10_000 })
+      .toEqual([['exec', 'session_signed_out'], ['pod-logs', 'session_signed_out']])
     expect((await rows('user.token.refresh')).filter((r) => r.Result === 'failure').map((r) => r.Error)).toEqual(['session_signed_out'])
     await page.context().close()
   })
