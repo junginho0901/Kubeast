@@ -25,6 +25,12 @@ def _shown(events):
     return [e for e in events if isinstance(e, dict) and "mask_values" in e]
 
 
+@pytest.fixture(autouse=True)
+def _numbered(monkeypatch):
+    """The values come with the numbered placeholders (REDACTION_NUMBERED, chart ai.redaction.numbered); the last case is off."""
+    monkeypatch.setenv("REDACTION_NUMBERED", "true")
+
+
 @pytest.mark.asyncio
 async def test_the_chat_sends_the_values_once_and_keeps_none_of_them(monkeypatch):
     monkeypatch.setenv("REDACTION_PII", "true")
@@ -203,3 +209,21 @@ def test_a_placeholder_any_answer_held_gets_no_value_and_shapes_not_ours_are_dro
     numbers.keep({"<PHONE_1>": "010-1234-5678"})
     numbers.keep({"<PHONE_1>": "01012345678"})
     assert numbers.values == {"<PHONE_1>": "010-1234-5678"}
+
+
+@pytest.mark.asyncio
+async def test_with_numbering_off_the_chat_asks_for_no_values_and_sends_none(monkeypatch):
+    monkeypatch.setenv("REDACTION_PII", "true")
+    monkeypatch.delenv("REDACTION_NUMBERED")
+    stand_in = _StandInToolServer([LOG])
+    saved = []
+    replies = [stream([tool_call_chunk("k8s_get_pod_logs", json.dumps({"namespace": "apps", "pod_name": "web-1"}))]),
+               stream([text_chunk("<EMAIL_1> and <EMAIL_2> failed to sign in.")])]
+    service, calls, _ = chat_rig(monkeypatch, [SimpleNamespace(role="user", content="who failed?")], replies,
+                                 tool_server=_client_on(stand_in), saved=saved)
+    events = parsed([e async for e in service.session_chat_stream(session_id="s1", message="who failed?", audit_actor=ACTOR, audit_http={})])
+    assert service.tool_server.numbers is None and [sorted(r) for r in stand_in.requests] == [["arguments", "name"]]
+    assert _shown(events) == [] and events[-1] == "[DONE]"
+    assert "user=<EMAIL_1>" in saved[-1]["content"]
+    for value in PLANTED:
+        assert value not in json.dumps([events, saved, calls], ensure_ascii=False, default=str), value

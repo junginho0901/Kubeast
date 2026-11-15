@@ -680,12 +680,14 @@
     {
       "name": "next to Korean letters",
       "input": "전화01012345678입니다 메일bob@example.com입니다 주민9001011234567번 카드1234-5678-9012-3456번\n",
-      "want": "전화<PHONE_1>입니다 메일<EMAIL_1>입니다 주민<RRN_1>번 카드<CARD_1>번\n"
+      "want": "전화<REDACTED:phone>입니다 메일<EMAIL_1>입니다 주민<REDACTED:rrn>번 카드<REDACTED:card>번\n",
+      "want_numbered": "전화<PHONE_1>입니다 메일<EMAIL_1>입니다 주민<RRN_1>번 카드<CARD_1>번\n"
     },
     {
       "name": "with another space between the parts",
       "input": "카드1234　5678　9012　3456번 전화010　1234　5678 주민900101　1234567\n",
-      "want": "카드<CARD_1>번 전화<PHONE_1> 주민<RRN_1>\n"
+      "want": "카드<REDACTED:card>번 전화<REDACTED:phone> 주민<REDACTED:rrn>\n",
+      "want_numbered": "카드<CARD_1>번 전화<PHONE_1> 주민<RRN_1>\n"
     },
     {
       "name": "digits in the middle of ASCII stay",

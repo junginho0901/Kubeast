@@ -25,6 +25,9 @@ tests:
           path: data.REDACTION_PII
           value: "false"
       - equal:
+          path: data.REDACTION_NUMBERED
+          value: "false"
+      - equal:
           path: data.COOKIE_SECURE
           value: "true"
       - equal:
@@ -86,6 +89,7 @@ tests:
     set:
       ai.redaction.enabled: false
       ai.redaction.pii: true
+      ai.redaction.numbered: true
       ai.redaction.disable:
         - aws-keys
         - jwt
@@ -96,6 +100,9 @@ tests:
           value: "false"
       - equal:
           path: data.REDACTION_PII
+          value: "true"
+      - equal:
+          path: data.REDACTION_NUMBERED
           value: "true"
       - equal:
           path: data.REDACTION_DISABLE
@@ -922,3 +929,12 @@ tests:
       - equal:
           path: data.AI_TOOL_RESULT_DETAILS
           value: "true"
+
+  - it: values without ai.redaction.numbered, as an earlier chart's --reuse-values keeps them, render it off
+    set:
+      ai.redaction.pii: true
+      ai.redaction.numbered: null
+    asserts:
+      - equal:
+          path: data.REDACTION_NUMBERED
+          value: "false"

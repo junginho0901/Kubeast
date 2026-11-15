@@ -135,6 +135,8 @@ data:
   REDACTION_ENABLED: {{ .Values.ai.redaction.enabled | quote }}
   REDACTION_PII: {{ .Values.ai.redaction.pii | quote }}
   REDACTION_DISABLE: {{ join "," .Values.ai.redaction.disable | quote }}
+  {{- /* dig: values an earlier chart's --reuse-values lacks render as this chart's default */}}
+  REDACTION_NUMBERED: {{ dig "numbered" false .Values.ai.redaction | quote }}
   AI_DEBUG_DUMP: {{ .Values.ai.debugDump | quote }}
   AI_TIMELINE_CHANGES: {{ .Values.ai.timelineChanges | quote }}
   AI_CHAT_HISTORY_MESSAGES: {{ .Values.ai.chat.historyMessages | quote }}

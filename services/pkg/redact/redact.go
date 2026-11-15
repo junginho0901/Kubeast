@@ -46,6 +46,10 @@ type Options struct {
 	// private_key, url_credentials, authorization, jwt, aws_key, provider_key,
 	// email, phone, rrn, card.
 	Disabled map[string]bool
+	// Numbered numbers every personal-data kind (<PHONE_1>) with the caller's table, so a value keeps its number across
+	// the texts of one run (REDACTION_NUMBERED, chart ai.redaction.numbered, default false). Off: one address keeps one
+	// <EMAIL_n> within a text, the other kinds are <REDACTED:kind>, and no table is read.
+	Numbered bool
 }
 
 // Stats says what was replaced, for the audit row.
@@ -65,7 +69,7 @@ func (s *Stats) add(kind string, n int) {
 	s.Count += n
 }
 
-// FromEnv reads REDACTION_ENABLED / REDACTION_PII / REDACTION_DISABLE.
+// FromEnv reads REDACTION_ENABLED / REDACTION_PII / REDACTION_DISABLE / REDACTION_NUMBERED.
 func FromEnv() Options {
 	o := Options{Enabled: true, Disabled: map[string]bool{}}
 	if v := strings.TrimSpace(strings.ToLower(os.Getenv("REDACTION_ENABLED"))); v == "false" || v == "0" || v == "off" {
@@ -73,6 +77,9 @@ func FromEnv() Options {
 	}
 	if v := strings.TrimSpace(strings.ToLower(os.Getenv("REDACTION_PII"))); v == "true" || v == "1" || v == "on" {
 		o.PII = true
+	}
+	if v := strings.TrimSpace(strings.ToLower(os.Getenv("REDACTION_NUMBERED"))); v == "true" || v == "1" || v == "on" {
+		o.Numbered = true
 	}
 	for _, name := range strings.Split(os.Getenv("REDACTION_DISABLE"), ",") {
 		if name = strings.TrimSpace(strings.ToLower(name)); name != "" {
@@ -543,7 +550,7 @@ func valueLooksHarmless(v string) bool {
 	if v == "" || v == "null" || v == "~" || v == "[]" || v == "{}" || v == "[" || v == "{" || v == "|" || v == ">" || v == "|-" || v == ">-" {
 		return true
 	}
-	if strings.HasPrefix(v, "<REDACTED") || strings.HasPrefix(v, "<set to the key") || isNumberedPlaceholder(v) {
+	if strings.HasPrefix(v, "<REDACTED") || strings.HasPrefix(v, "<set to the key") || strings.HasPrefix(v, "<EMAIL") {
 		return true
 	}
 	switch strings.ToLower(v) {
@@ -893,10 +900,32 @@ func TextNumbered(s string, o Options, n *Numbers) (string, Stats) {
 	return redactPII(s, o, &st, n), st
 }
 
-// redactPII applies the personal-data rules: each value gets the placeholder of its kind with its number in n
-// (<EMAIL_1>, <RRN_1>, <CARD_1>, <PHONE_1>), the same number wherever n meets it again.
+// redactPII applies the personal-data rules. With o.Numbered each value gets the placeholder of its kind with its number
+// in n (<EMAIL_1>, <RRN_1>, <CARD_1>, <PHONE_1>), the same number wherever n meets it again; without it one address keeps
+// one placeholder across the text it is given and n is not read.
 func redactPII(s string, o Options, st *Stats, n *Numbers) string {
 	if !o.PII {
+		return s
+	}
+	if !o.Numbered {
+		if o.on("email") {
+			seen := map[string]int{}
+			s = replaceCount(emailAddr, s, func(m string) string {
+				if _, ok := seen[m]; !ok {
+					seen[m] = len(seen) + 1
+				}
+				return fmt.Sprintf("<EMAIL_%d>", seen[m])
+			}, st, "email")
+		}
+		if o.on("rrn") {
+			s = replaceCount(krRRN, s, func(string) string { return "<REDACTED:rrn>" }, st, "rrn")
+		}
+		if o.on("card") {
+			s = replaceCount(cardNum, s, func(string) string { return "<REDACTED:card>" }, st, "card")
+		}
+		if o.on("phone") {
+			s = replaceCount(krPhone, s, func(string) string { return "<REDACTED:phone>" }, st, "phone")
+		}
 		return s
 	}
 	if n == nil {
