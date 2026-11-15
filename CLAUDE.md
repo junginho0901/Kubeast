@@ -67,6 +67,8 @@ Code that runs commands in a container through `pods/exec` must use short comman
 
 The handler pattern is documented in [AGENTS.md](AGENTS.md); use `audit.FromHTTPRequest(r)` to seed a record, then set `Service` (`audit.ServiceK8s` / `ServiceHelm` / `ServiceAI` / `ServiceAuth` / `ServiceAdmin`), `Action`, actor, target, and write via the handler's `auditStore`.
 
+Text a cluster wrote reaches the model only as a tool result, in both loops of the chat and of the investigator; `ai.toolResultsJSON` makes each one JSON object (`app/services/ai/tool_results.py`), and the two places that are not a tool result — an investigation's alert and the floating chat's screen — stay fenced (`tests/test_tool_results_json.py`). A change to the prompts, the tools or the loops runs the planted-instruction cases (`evals/ai-planted/`, scored by `scripts/ai_eval_planted.py`) for each model.
+
 ## Build & deploy
 
 **Always build/deploy through `scripts/rebuild-kind.sh`** — do not run raw `docker build` / `kubectl` for deploys (per AGENTS.md). It builds the image, loads it into the kind cluster, and rollout-restarts the deployment. The dev cluster itself is installed from the Helm chart by `scripts/kind-deploy.sh` (values in `deploy/kind/values.yaml`, personal extras in the git-ignored `deploy/kind/values.local.yaml`); `scripts/reset-and-deploy.sh` recreates it or resets just the database.

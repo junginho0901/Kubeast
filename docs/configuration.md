@@ -189,6 +189,7 @@ ai:
     # maxConcurrent: Claude Code runs per ai-service server (memory); maxConcurrentTotal: across every replica
     # (0 = maxConcurrent); queueWaitSeconds: how long a turn waits for a slot before it ends as busy;
     # memoryLimit: ai-service's memory limit while the provider is on, if larger than resources.aiService.limits.memory
+  toolResultsJSON: false   # true: the model reads each tool result as one JSON object, cluster text as JSON strings (ai-alerts.md "Planted instructions")
 
 # Built-in PostgreSQL (false = external DB) and Redis (false = k8s-service caches in memory; tool-server only listens there for cluster changes)
 postgresql:

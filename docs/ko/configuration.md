@@ -183,6 +183,7 @@ ai:
     # maxConcurrent: 서버 한 대의 Claude Code 실행 수(메모리), maxConcurrentTotal: 복제본 전체(0 = maxConcurrent),
     # queueWaitSeconds: 칸을 기다리는 최대 시간. 넘으면 "바쁨"으로 끝납니다.
     # memoryLimit: 프로바이더가 켜져 있을 때 ai-service 메모리 한도. resources.aiService.limits.memory보다 클 때 씁니다
+  toolResultsJSON: false   # true면 모델이 도구 결과를 하나의 JSON 객체로, 클러스터 글을 JSON 문자열로 읽습니다(ai-alerts.md "심어 둔 지시")
 
 # 내장 PostgreSQL(false면 외부 DB)과 Redis(false면 k8s-service가 메모리에 캐시).
 # Redis에 캐시하는 곳은 k8s-service 하나이고, tool-server는 클러스터 바뀜 알림만 듣습니다.

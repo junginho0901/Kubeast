@@ -137,6 +137,10 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 
 - 아무도 고르지 않았을 때 쓰는 모델(차트 `ai.model`, ai-service 기본값, `install-docker.sh`, `docker-compose.yml`, `scripts/kind-model-*.sh`)은 고정된 스냅샷 ID로 적는다. `scripts/check-model-pins.py`(CI)가 별칭이면 실패하고, 기본값 자리가 새로 생기면 그 목록에 넣는다(`docs/ko/development.md` "기본 모델").
 
+## 클러스터 글과 모델
+
+- 클러스터에서 읽은 글은 도구 결과 자리로만 모델에 간다(채팅·알림 조사, 두 루프 모두). `ai.toolResultsJSON`이면 결과마다 JSON 객체 하나(`app/services/ai/tool_results.py`). 도구 결과가 아닌 두 자리(조사의 알림, 떠 있는 채팅의 화면)는 울타리 안에 둔다(`tests/test_tool_results_json.py`). 프롬프트·도구·루프를 바꾸면 심어 둔 지시 사례(`evals/ai-planted/`, `scripts/ai_eval_planted.py`)를 모델마다 돌린다.
+
 ## 컨테이너 exec
 
 - **서버가 `pods/exec`로 띄운 프로세스는 클라이언트가 끊겨도 컨테이너에 남는다**(TTY 유무와 무관, 컨테이너 런타임이

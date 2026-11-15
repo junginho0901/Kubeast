@@ -23,6 +23,7 @@ from app.services.ai import history as history_mod
 from app.services.ai import limits
 from app.services.ai import tool_replay
 from app.services.ai import repeats as repeats_mod
+from app.services.ai import tool_results
 from app.services.ai import usage as usage_acct
 from app.services.ai.debug_dump import dump, log, safe_error
 
@@ -940,7 +941,7 @@ async def session_chat_stream(
                     repeats=repeats,
                 )
                 tool_calls_log.append(entry)
-                return events, llm_text
+                return events, tool_results.for_model(name, llm_text)
 
             cc_prompt_chars = usage_acct.prompt_chars(messages, tools)
             try:
@@ -1123,7 +1124,7 @@ async def session_chat_stream(
                         "tool_call_id": tc_dict["id"],
                         "role": "tool",
                         "name": function_name,
-                        "content": tool_message_content
+                        "content": tool_results.for_model(function_name, tool_message_content)
                     })
 
                 continue
