@@ -20,6 +20,7 @@ _TEXTS = {
     "the system message": SYSTEM_MESSAGE,
     "the floating chat's system prompt": FLOATING_BASE_SYSTEM_PROMPT,
     "an investigation's system prompt": system_prompt(cluster="c1", namespace="shop", language="en"),
+    "an investigation's system prompt with the rules": system_prompt(cluster="c1", namespace="shop", language="en", rules=True),
     "an investigation's system prompt with the call paths": system_prompt(cluster="c1", namespace="shop", language="en", call_paths=True),
     "the tool descriptions": json.dumps(_ALL_TOOLS),
 }

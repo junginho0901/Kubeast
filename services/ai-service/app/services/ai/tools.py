@@ -26,10 +26,11 @@ TIMELINE_CHANGES_DESCRIPTION = (
 # resource_graph's call parameters, offered only where the cluster has features.callGraph on (features.PARAM_GATES).
 CALLS_PARAM = "include"
 CALLS_SINCE_PARAM = "since"
+CALLS_WINDOW_PARAMS = ("since_time", "until_time")
 CALLS_DESCRIPTION = (
-    " With include [\"calls\"] it adds who calls whom over since — requests, errors and p90 latency from the traces, connections "
-    "and drops from the network — with the failing workloads that call nothing failing first and the cause → … → symptom paths "
-    "between them: when several services fail together, read it before blaming the one that shows the errors."
+    " With include [\"calls\"] it adds who calls whom over since, or the fixed window since_time to until_time — requests, errors and "
+    "p90 latency from the traces, connections and drops from the network — with the failing workloads that call nothing failing first "
+    "and the cause → … → symptom paths between them: a caller of a failing service is more often its victim than its cause."
 )
 
 K8S_READONLY_TOOLS: List[Dict] = [
@@ -283,8 +284,9 @@ K8S_READONLY_TOOLS: List[Dict] = [
                 "target, verdict, a one-line summary, before / now / ratio (new: it was not there before) and up to 3 examples; at most 10, the new "
                 "first, then the larger ratio. normal lists the checks that found nothing; not_run the checks that could not run and why (no "
                 "Prometheus, log or trace store, no series, a grant limited to namespaces, no permission to read pod logs, logs too large to read): "
-                "not run is not normal, say so. Call it first when the user asks broadly what "
-                "is wrong or why something broke in a namespace, then read the objects it names. A finding is a lead, not a cause: check it."
+                "not run is not normal, say so. With call_order the call graph has put a failing workload whose callees are all well before "
+                "the workloads that call it (features.callGraph), else the order is by the counts. Read the objects it names: a finding is a "
+                "lead, not a cause, check it."
             ),
             "parameters": {
                 "type": "object",
@@ -1070,7 +1072,9 @@ K8S_READONLY_TOOLS: List[Dict] = [
                         "items": {"type": "string", "enum": ["calls"]},
                         "description": "[\"calls\"] adds the calls between the workloads (traces and network) over since",
                     },
-                    CALLS_SINCE_PARAM: {"type": "string", "description": "With include calls: the range, e.g. 15m, 1h or 6h (1m to 24h, default 1h)"},
+                    CALLS_SINCE_PARAM: {"type": "string", "description": "With include calls: the range back from now, e.g. 15m, 1h or 6h (1m to 24h, default 1h)"},
+                    CALLS_WINDOW_PARAMS[0]: {"type": "string", "description": "With include calls: the window's start, 30m, 1h or an RFC3339 time (instead of since; the window is 1m to 24h)"},
+                    CALLS_WINDOW_PARAMS[1]: {"type": "string", "description": "With include calls: the window's end as an RFC3339 time (default now)"},
                 },
                 "required": ["namespace"],
             },

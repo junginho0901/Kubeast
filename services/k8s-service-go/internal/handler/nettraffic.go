@@ -6,7 +6,6 @@ import (
 	"math"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netdrops"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
@@ -86,7 +85,7 @@ func (h *Handler) networkTrafficMetrics(w http.ResponseWriter, r *http.Request, 
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	res, err := h.trafficFromMetrics(r.Context(), namespaces, scope, rng)
+	res, err := h.trafficFromMetrics(r.Context(), h.netdropsSource(), namespaces, scope, promWindow{Range: rng})
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -94,21 +93,21 @@ func (h *Handler) networkTrafficMetrics(w http.ResponseWriter, r *http.Request, 
 	response.JSON(w, http.StatusOK, res)
 }
 
-// trafficFromMetrics reads the traffic lines of the namespaces from the Hubble metrics in the cluster's Prometheus, as
-// the user; an answer without the metrics says why in Reason. The Resource Graph's lines and the AI's call graph
-// (resource_graph include calls) read through it.
-func (h *Handler) trafficFromMetrics(ctx context.Context, namespaces, scope []string, rng time.Duration) (nettraffic.Result, error) {
+// trafficFromMetrics reads the traffic lines of the namespaces over w from the Hubble metrics in the cluster's
+// Prometheus through src, as the user; an answer without the metrics says why in Reason. The Resource Graph's lines and
+// the AI's call graph (resource_graph include calls) read through it.
+func (h *Handler) trafficFromMetrics(ctx context.Context, src netdropsSource, namespaces, scope []string, w promWindow) (nettraffic.Result, error) {
+	rng := w.Range
 	unavailable := func(reason string) (nettraffic.Result, error) {
 		return nettraffic.Result{Reason: reason, Source: "metrics", Namespaces: namespaces, Range: rng.String(), Lines: []nettraffic.Line{}}, nil
 	}
-	src := h.netdropsSource()
 	if !src.PrometheusAvailable(ctx) {
 		return unavailable("no_prometheus")
 	}
 	shapes := map[string]nettraffic.Shape{}
 	found := false
 	for _, metric := range []string{nettraffic.TCPMetric, netdrops.Metric} {
-		labels, err := src.PrometheusLabels(ctx, "", metric, rng, 200)
+		labels, err := w.labels(ctx, src, metric, 200)
 		if err != nil {
 			return nettraffic.Result{}, err
 		}
@@ -125,7 +124,7 @@ func (h *Handler) trafficFromMetrics(ctx context.Context, namespaces, scope []st
 	}
 	rows := map[string][]nettraffic.Sample{}
 	for metric, shape := range shapes {
-		answer, err := src.PrometheusQuery(ctx, nettraffic.Query(metric, shape, namespaces, rng))
+		answer, err := w.query(ctx, src, nettraffic.Query(metric, shape, namespaces, rng))
 		if err != nil {
 			return nettraffic.Result{}, err
 		}
@@ -146,7 +145,7 @@ func (h *Handler) trafficFromMetrics(ctx context.Context, namespaces, scope []st
 	res := nettraffic.FromMetrics(tcp, tcpOK, rows[nettraffic.TCPMetric], drop, dropOK, rows[netdrops.Metric], namespaces, scope, rng, owners)
 	// a metric that names pods only (Retina) may name neither end of a drop: those are in no line, so count them
 	if dropOK && drop.NoWorkload {
-		answer, err := src.PrometheusQuery(ctx, nettraffic.UnplacedDropsQuery(netdrops.Metric, rng))
+		answer, err := w.query(ctx, src, nettraffic.UnplacedDropsQuery(netdrops.Metric, rng))
 		if err != nil {
 			return nettraffic.Result{}, err
 		}

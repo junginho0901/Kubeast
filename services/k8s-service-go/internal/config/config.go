@@ -76,6 +76,7 @@ type Config struct {
 	AnomalyRankConcurrency     int
 	AnomalyRankCacheSec        int
 	AnomalyRankLogMaxBytes     int64
+
 	// Who calls whom on a namespace's graph (chart features.callGraph, the AI tool resource_graph with include calls):
 	// the traces' service graph metrics and the Hubble metrics in the cluster's Prometheus. Off = include calls reads
 	// nothing and answers that it is off.
@@ -205,7 +206,8 @@ func Load() Config {
 		AnomalyRankConcurrency:     pkgconfig.GetEnvInt("ANOMALY_RANK_CONCURRENCY", 4),
 		AnomalyRankCacheSec:        pkgconfig.GetEnvInt("ANOMALY_RANK_CACHE_SEC", 60),
 		AnomalyRankLogMaxBytes:     int64(pkgconfig.GetEnvInt("ANOMALY_RANK_LOG_MAX_BYTES", 10<<30)),
-		CallGraphEnabled:           pkgconfig.GetEnvBool("CALL_GRAPH_ENABLED", false),
+
+		CallGraphEnabled: pkgconfig.GetEnvBool("CALL_GRAPH_ENABLED", false),
 
 		LogFilesEnabled:    pkgconfig.GetEnvBool("LOG_FILES_ENABLED", false),
 		LogFilesPaths:      pkgconfig.GetEnvList("LOG_FILES_PATHS", ""),

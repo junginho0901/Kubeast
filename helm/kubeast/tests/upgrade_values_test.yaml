@@ -167,6 +167,24 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no ai.timelineChanges
+  - it: stops values without the investigation windows
+    set:
+      features.alertInvestigation.window: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.window
+  - it: stops values without the investigation rules switch
+    set:
+      features.alertInvestigation.rules: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.rules
+  - it: stops values without the step 0 switch
+    set:
+      features.alertInvestigation.changesFirst: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.changesFirst
   - it: stops values without features.callGraph, which this chart added
     set:
       features.callGraph: null

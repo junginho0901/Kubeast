@@ -239,10 +239,80 @@ type Result struct {
 	Normal        []string   `json:"normal"`
 	NotRun        []NotRun   `json:"not_run"`
 	StoreQueries  int        `json:"store_queries"`
+	// CallOrder: how the call graph ordered the findings of the namespace's failing workloads, present only when it was
+	// asked (features.callGraph on and findings on two workloads or more).
+	CallOrder *CallOrderNote `json:"call_order,omitempty"`
+}
+
+// MaxCallOrderSuspects bounds the suspects call_order names.
+const MaxCallOrderSuspects = 5
+
+// CallOrder is the call graph's order of the namespace's failing workloads (callgraph.Suspects: a failing workload
+// whose callees are all well first, its failing callers after it) and the workload each finding's target belongs to.
+// Assemble puts the findings of those workloads in that order within the places they hold among the ranked findings;
+// the other findings keep their places. A cause then comes before its victims whatever their counts.
+type CallOrder struct {
+	// Suspects are workload IDs in the call graph's order; empty when the call graph gave none (Note says why).
+	Suspects []string
+	// Workload is a finding target's workload ID, "" when it names none.
+	Workload func(target string) string
+	Note     CallOrderNote
+}
+
+// CallOrderNote is call_order in the answer.
+type CallOrderNote struct {
+	Applied bool   `json:"applied"`
+	Reason  string `json:"reason,omitempty"`
+	// Suspects: the call graph's first failing workloads, those whose callees are all well first.
+	Suspects []string `json:"suspects,omitempty"`
+	// Moved: the findings that changed place.
+	Moved int `json:"moved"`
+}
+
+// apply reorders found (ranked) as CallOrder says and counts the findings that moved.
+func (o *CallOrder) apply(found []Finding) int {
+	pos := make(map[string]int, len(o.Suspects))
+	for i, id := range o.Suspects {
+		if _, ok := pos[id]; !ok {
+			pos[id] = i
+		}
+	}
+	type placed struct {
+		at, rank int
+		f        Finding
+	}
+	var held []placed
+	for i, f := range found {
+		if o.Workload == nil {
+			break
+		}
+		if rank, ok := pos[o.Workload(f.Target)]; ok {
+			held = append(held, placed{at: i, rank: rank, f: f})
+		}
+	}
+	slots := make([]int, len(held))
+	for k, p := range held {
+		slots[k] = p.at
+	}
+	sort.SliceStable(held, func(a, b int) bool { return held[a].rank < held[b].rank })
+	moved := 0
+	for k, p := range held {
+		if p.at != slots[k] {
+			moved++
+		}
+		found[slots[k]] = p.f
+	}
+	return moved
 }
 
 // Assemble ranks the anomalous findings of every check and keeps the first MaxFindings; a check with none is normal.
 func Assemble(namespace string, wl *Workload, w Window, results []CheckResult, storeQueries int) Result {
+	return AssembleWith(namespace, wl, w, results, storeQueries, nil)
+}
+
+// AssembleWith is Assemble with the call graph's order of the failing workloads put on the ranked findings before
+// they are cut (order nil: Assemble).
+func AssembleWith(namespace string, wl *Workload, w Window, results []CheckResult, storeQueries int, order *CallOrder) Result {
 	out := Result{Namespace: namespace, Workload: wl, Window: windowJSON(w), ComparedWith: windowJSON(w.Before()),
 		Findings: []Finding{}, Normal: []string{}, NotRun: []NotRun{}, StoreQueries: storeQueries}
 	byCheck := map[string]CheckResult{}
@@ -271,6 +341,14 @@ func Assemble(namespace string, wl *Workload, w Window, results []CheckResult, s
 		}
 	}
 	Rank(found)
+	if order != nil {
+		note := order.Note
+		if len(order.Suspects) > 0 {
+			note.Applied, note.Moved = true, order.apply(found)
+			note.Suspects = append([]string{}, order.Suspects[:min(len(order.Suspects), MaxCallOrderSuspects)]...)
+		}
+		out.CallOrder = &note
+	}
 	out.FindingsTotal = len(found)
 	if len(found) > MaxFindings {
 		found = found[:MaxFindings]

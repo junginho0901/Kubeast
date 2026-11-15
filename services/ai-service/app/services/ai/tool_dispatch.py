@@ -93,7 +93,7 @@ FEATURE_TOOL_ARGS = {
     "network_flows": ({"namespace", "pod", "workload_kind", "workload_name", "verdict", "since"}, set(), {"limit"}),
     "network_drops": ({"namespace", "pod", "workload_kind", "workload_name", "since"}, set(), set()),
     "network_top_flows": ({"namespace", "pod", "workload_kind", "workload_name", "metric", "destination", "since"}, set(), set()),
-    "resource_graph": ({"namespace", "since"}, set(), set()),
+    "resource_graph": ({"namespace", "since", "since_time", "until_time"}, set(), set()),
     "timeline": ({"view", "namespace", "since_time", "until_time", "event_type", "kind", "name"}, set(), {"limit"}),
     "anomaly_rank": ({"namespace", "since_time", "until_time", "workload_kind", "workload_name"}, set(), set()),
     "gpu": (set(), set(), set()),

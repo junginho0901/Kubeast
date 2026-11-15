@@ -7,7 +7,11 @@ same path the chat uses — tool-server checks the token's ai.tool.* rights and
 namespace, the cluster sees kubeast:investigator. At most max_steps model calls;
 the last one gets no tools, so it must answer (as HolmesGPT does) — the loop is
 app.services.ai.tool_turn, which hands it to Claude Code on a Claude subscription.
-The whole run is bounded by timeout_seconds.
+The whole run is bounded by timeout_seconds. With rules, changes_first or
+narrow_first on, the first message also holds the time windows counted from the
+alert's start, with changes_first what changed in the change window and with
+narrow_first anomaly_rank over the metrics window, read as step 0 before the
+first model call in that order (investigation/windows.py).
 """
 
 from __future__ import annotations
@@ -35,6 +39,7 @@ from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import settings as inv_settings
 from app.services.investigation import inbox, skip_reasons, store
 from app.services.investigation import webhook
+from app.services.investigation import windows as inv_windows
 
 log = logging.getLogger(__name__)
 
@@ -163,16 +168,12 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     from app.services.ai import features as feature_gate
     tools = await feature_gate.gate_tools(readonly_tool_filter(service._get_tools_definition()), service)
     context = ToolContext(session_id=f"investigation:{row.id}")
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language, call_paths=cfg.call_paths)},
-        {"role": "user", "content": inv_prompt.alert_message(
-            cluster=row.cluster, alert=alert_view(row), numbers=getattr(service.tool_server, "numbers", None))},
-    ]
     tool_log: list[dict[str, Any]] = []
 
-    async def run_tool(name: str, args: dict, step: int) -> str:
+    async def call_tool(name: str, args: dict, step: int) -> tuple[str, Any, dict[str, Any]]:
+        """The text the model reads, the tool's own answer (None when it did not run) and the call's log entry."""
         entry: dict[str, Any] = {"tool": name, "args": args, "step": step}
-        ran = False
+        ran, raw = False, None
         if name not in READONLY_TOOL_NAMES:
             result = json.dumps({"error": f"'{name}' is not a read-only tool; investigations only read"})
             entry["error"] = "not a read-only tool"
@@ -227,17 +228,77 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         if stored is False and ran and fail_closed_enabled():
             # As on the screens, a read nobody could find later gives no answer.
             entry["error"] = "audit unavailable"
-            return json.dumps({"status": "audit_unavailable"})
-        return result
+            return json.dumps({"status": "audit_unavailable"}), raw, entry
+        return result, raw, entry
 
+    async def run_tool(name: str, args: dict, step: int) -> str:
+        return (await call_tool(name, args, step))[0]
+
+    async def changes_first(windows: inv_windows.Windows) -> str:
+        """Step 0: the changes view through the same call as the model's (rights, masking, limits, audit row), no model
+        step spent. Without it the investigation goes on and the report says why."""
+        nonlocal unused
+        offered = {(t.get("function") or {}).get("name") for t in tools}
+        if inv_windows.CHANGES_TOOL not in offered:
+            unused = f"{inv_windows.CHANGES_TOOL} is not offered to this investigation"
+            return inv_prompt.no_changes_block(unused)
+        args = inv_windows.changes_args(windows, row.namespace)
+        text, raw, entry = await call_tool(inv_windows.CHANGES_TOOL, args, 0)
+        if entry.get("error"):
+            unused = f"{inv_windows.CHANGES_TOOL} answered: {entry['error']}"
+        elif not inv_windows.is_changes_answer(raw):
+            unused = f"{inv_windows.CHANGES_TOOL} did not answer the {inv_windows.CHANGES_VIEW} view"
+        if unused:
+            return inv_prompt.no_changes_block(unused)
+        return inv_prompt.changes_block(text, args)
+
+    async def narrow_first(windows: inv_windows.Windows) -> str:
+        """Step 0, after the changes: anomaly_rank over the metrics window of the alert's namespace through the same call,
+        one call, its own bounds (store queries, seconds, the answer's size) kept by k8s-service and tool-server."""
+        nonlocal unnarrowed
+        offered = {(t.get("function") or {}).get("name") for t in tools}
+        if inv_windows.NARROW_TOOL not in offered:
+            unnarrowed = f"{inv_windows.NARROW_TOOL} is not offered to this investigation"
+        elif not row.namespace:
+            unnarrowed = "the alert names no namespace"
+        if unnarrowed:
+            return inv_prompt.no_narrowing_block(unnarrowed)
+        args = inv_windows.narrow_args(windows, row.namespace)
+        text, raw, entry = await call_tool(inv_windows.NARROW_TOOL, args, 0)
+        if entry.get("error"):
+            unnarrowed = f"{inv_windows.NARROW_TOOL} answered: {entry['error']}"
+        elif not inv_windows.is_narrowing_answer(raw):
+            unnarrowed = f"{inv_windows.NARROW_TOOL} did not answer with findings"
+        if unnarrowed:
+            return inv_prompt.no_narrowing_block(unnarrowed)
+        return inv_prompt.narrowing_block(text, args)
+
+    first: list[str] = []
+    unused = ""  # why step 0 gave nothing to use
+    unnarrowed = ""  # why step 0's narrowing gave nothing to use
+    if cfg.rules or cfg.changes_first or cfg.narrow_first:
+        windows = inv_windows.of(row.starts_at, utcnow(), cfg)
+        first.append(inv_windows.describe(windows, cfg))
+        if cfg.changes_first:
+            first.append(await changes_first(windows))
+        if cfg.narrow_first:
+            first.append(await narrow_first(windows))
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language,
+                                                               rules=cfg.rules, call_paths=cfg.call_paths)},
+        {"role": "user", "content": inv_prompt.alert_message(
+            cluster=row.cluster, alert=alert_view(row), context="\n\n".join(first),
+            numbers=getattr(service.tool_server, "numbers", None))},
+    ]
     turn = await run_tool_turn(service, messages, tools, run_tool, max_steps=cfg.max_steps,
-                               final_message=inv_prompt.final_step_message(), remaining=remaining, lane="investigation",
+                               final_message=inv_prompt.final_step_message(cfg.rules), remaining=remaining, lane="investigation",
                                usage=progress["usage"])
     usage = turn.usage
     if not turn.answer:
         raise InvestigationError("the model returned no report")
     return {
-        "report": turn.answer,
+        "report": turn.answer + (inv_prompt.step_zero_note(unused, cfg.language) if unused else "")
+        + (inv_prompt.narrowing_note(unnarrowed, cfg.language) if unnarrowed else ""),
         "tool_calls": tool_log,
         "iterations": turn.steps,
         "provider": service.provider or "",

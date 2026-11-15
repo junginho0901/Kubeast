@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -486,9 +487,8 @@ func handleResourceGraph(ctx context.Context, args map[string]interface{}, heade
 			return "", wrapBadRequest("include takes calls only")
 		}
 		q.Set("include", "calls")
-		// who calls whom over the window, as network_drops reads its range
-		if v := strings.TrimSpace(argString(args, "since", "")); v != "" {
-			q.Set("range", v)
+		if err := setCallsWindow(q, args, time.Now()); err != nil {
+			return "", err
 		}
 	}
 	status, body, err := k8sServiceGet(ctx, headers, "/namespaces/"+url.PathEscape(namespace)+"/resource-graph", q)
@@ -538,7 +538,7 @@ func handleResourceGraph(ctx context.Context, args map[string]interface{}, heade
 			calls["edges_total"] = total // k8s-service's count before its own cap
 		}
 		reply["calls_note"] = graphCallsNote
-		ordered, err := marshalOrdered(calls, []string{"available", "reason", "range", "sources", "paths", "no_start", "suspects", "suspects_total", "edges_total", "truncated"}, []string{"edges"})
+		ordered, err := marshalOrdered(calls, []string{"available", "reason", "range", "window", "sources", "paths", "no_start", "suspects", "suspects_total", "edges_total", "truncated"}, []string{"edges"})
 		if err != nil {
 			return "", err
 		}
@@ -547,6 +547,42 @@ func handleResourceGraph(ctx context.Context, args map[string]interface{}, heade
 	// the summary first, then the objects, the edges last
 	return marshalOrdered(reply, []string{"namespace", "counts_by_kind", "nodes_total", "edges_total", "truncated", "groups", "calls_note", "calls"},
 		[]string{"nodes", "edges"})
+}
+
+// setCallsWindow sets the window of who calls whom: since_time (1h, 30m or an RFC3339 time) to until_time (RFC3339,
+// default now), parsed as anomaly_rank parses them, as start and end; else since back from now, as network_drops reads
+// its range. k8s-service holds the window to 1m–24h.
+func setCallsWindow(q url.Values, args map[string]interface{}, now time.Time) error {
+	sinceTime, untilTime := argString(args, "since_time", ""), argString(args, "until_time", "")
+	since := strings.TrimSpace(argString(args, "since", ""))
+	if sinceTime == "" && untilTime == "" {
+		if since != "" {
+			q.Set("range", since)
+		}
+		return nil
+	}
+	end := now
+	if untilTime != "" {
+		t, err := time.Parse(time.RFC3339, untilTime)
+		if err != nil {
+			return wrapBadRequest("until_time must be an RFC3339 time")
+		}
+		if t.Before(end) {
+			end = t
+		}
+		q.Set("end", t.UTC().Format(time.RFC3339))
+	}
+	switch {
+	case sinceTime != "":
+		t, err := parseFromTime(sinceTime, end)
+		if err != nil {
+			return wrapBadRequest("since_time: " + err.Error())
+		}
+		q.Set("start", t.UTC().Format(time.RFC3339))
+	case since != "":
+		q.Set("range", since)
+	}
+	return nil
 }
 
 // graphCallsNote reads the calls part of a graph answer to the model.

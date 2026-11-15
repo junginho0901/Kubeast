@@ -6,9 +6,11 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
@@ -385,6 +387,52 @@ func TestResourceGraphCalls(t *testing.T) {
 	}
 	if _, err := handleResourceGraph(ctxFor("c1"), map[string]interface{}{"namespace": "shop", "include": "everything"}, bearer()); !errors.Is(err, errBadRequest) {
 		t.Fatalf("include: %v", err)
+	}
+}
+
+// since_time and until_time give a fixed window, parsed as anomaly_rank parses them; without them since stays the range.
+func TestResourceGraphCallsWindow(t *testing.T) {
+	now := time.Date(2026, 11, 15, 1, 30, 0, 0, time.UTC)
+	for _, c := range []struct {
+		args            map[string]interface{}
+		start, end, rng string
+	}{
+		{map[string]interface{}{"since": "30m"}, "", "", "30m"},
+		{map[string]interface{}{"since_time": "2026-11-15T00:45:00Z", "until_time": "2026-11-15T01:15:00Z"}, "2026-11-15T00:45:00Z", "2026-11-15T01:15:00Z", ""},
+		// a relative start counts back from until_time, or from now; since_time wins over since
+		{map[string]interface{}{"since_time": "30m", "until_time": "2026-11-15T01:00:00Z", "since": "6h"}, "2026-11-15T00:30:00Z", "2026-11-15T01:00:00Z", ""},
+		{map[string]interface{}{"since_time": "45m"}, "2026-11-15T00:45:00Z", "", ""},
+		// an end with since: the range back from that end
+		{map[string]interface{}{"until_time": "2026-11-15T01:00:00Z", "since": "15m"}, "", "2026-11-15T01:00:00Z", "15m"},
+	} {
+		q := url.Values{}
+		if err := setCallsWindow(q, c.args, now); err != nil || q.Get("start") != c.start || q.Get("end") != c.end || q.Get("range") != c.rng {
+			t.Fatalf("%v: %s %v", c.args, q.Encode(), err)
+		}
+	}
+	for _, args := range []map[string]interface{}{{"until_time": "soon"}, {"since_time": "yesterday"}} {
+		if err := setCallsWindow(url.Values{}, args, now); !errors.Is(err, errBadRequest) {
+			t.Fatalf("%v: %v", args, err)
+		}
+	}
+	seen := fakeK8sService(t, func(r *http.Request) (int, string) {
+		return 200, `{"nodes":[],"edges":[],"calls":{"available":true,"range":"30m0s","window":{"start":"2026-11-15T00:45:00Z","end":"2026-11-15T01:15:00Z"},"sources":[],"paths":[],"suspects":[],"edges_total":0,"edges":[]}}`
+	})
+	out, err := handleResourceGraph(ctxFor("c1"), map[string]interface{}{"namespace": "shop", "include": []interface{}{"calls"},
+		"since_time": "2026-11-15T00:45:00Z", "until_time": "2026-11-15T01:15:00Z"}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q := (*seen)[0].URL.Query(); q.Get("start") != "2026-11-15T00:45:00Z" || q.Get("end") != "2026-11-15T01:15:00Z" || q.Has("range") {
+		t.Fatalf("request: %s", (*seen)[0].URL.RawQuery)
+	}
+	if i, j := strings.Index(out, `"window":`), strings.Index(out, `"sources":`); i < 0 || i > j {
+		t.Fatalf("window before sources: %s", out)
+	}
+	// without include the window is not sent
+	_, _ = handleResourceGraph(ctxFor("c1"), map[string]interface{}{"namespace": "shop", "since_time": "45m"}, bearer())
+	if q := (*seen)[1].URL.Query(); q.Has("start") || q.Has("end") {
+		t.Fatalf("no include: %s", (*seen)[1].URL.RawQuery)
 	}
 }
 

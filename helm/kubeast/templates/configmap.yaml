@@ -204,6 +204,12 @@ data:
   ALERT_INVESTIGATION_PROVIDER_PAUSE_MINUTES: {{ .providerPauseMinutes | int64 | quote }}
   ALERT_INVESTIGATION_MAX_STEPS: {{ .maxSteps | int64 | quote }}
   ALERT_INVESTIGATION_TIMEOUT_SECONDS: {{ .timeoutSeconds | int64 | quote }}
+  ALERT_INVESTIGATION_RULES: {{ .rules | quote }}
+  ALERT_INVESTIGATION_CHANGES_FIRST: {{ .changesFirst | quote }}
+  ALERT_INVESTIGATION_NARROW_FIRST: {{ dig "narrowFirst" false . | quote }}
+  ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES: {{ .window.metricsMinutes | int64 | quote }}
+  ALERT_INVESTIGATION_LOGS_WINDOW_MINUTES: {{ .window.logsMinutes | int64 | quote }}
+  ALERT_INVESTIGATION_CHANGES_WINDOW_HOURS: {{ .window.changesHours | int64 | quote }}
   ALERT_INVESTIGATION_MODEL: {{ .model | quote }}
   ALERT_INVESTIGATION_LANGUAGE: {{ .language | quote }}
   ALERT_INVESTIGATION_CONSOLE_URL: {{ .consoleUrl | quote }}
