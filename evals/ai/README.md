@@ -86,7 +86,7 @@ Reported beside it: `started_at` within the tolerance, the required path hops in
 `evals/ai-hard/` holds sixteen cases made of plain Kubernetes objects. Each folder has `case.json`, `truth.json`, the
 manifests it applies and `NOTES.md`: what the AI has to notice, the trap, how it is scored and what is unsure. None
 has run on a cluster yet, so their sizes and waits are first guesses for the first run to measure. They use only
-`docker.io/library/busybox:1.38.0`, namespaces `shop-NN` (and `edge-15`, `members-18`), business names and no
+`docker.io/library/busybox:1.38.0`, namespaces `shop-NN` (and `edge`, `members`), business names and no
 Secret. The fault comes from data or settings, never from a branch in the code, and nothing a case applies names it
 (`scripts/test_ai_eval_cases.py`); case 20's new release is a boot script in a ConfigMap, the stand-in for a new
 image. Their answers lean on logs: run `scripts/kind-logsearch.sh up` first. The numbers leave room for the cases that
@@ -95,6 +95,22 @@ common in production — a batch read that saturates a database, a stale in-clus
 hostname, a release that boots in one environment only, an OOM cascade, workers past the memory limit — each rebuilt
 small; the scripts whose behaviour they depend on (headers through busybox httpd, memory held per worker or shard and
 where the OOM kill lands) were checked in a local busybox 1.38.0 container, not on kind.
+
+A truth's cause is what changed or what has to change, not where the symptom shows: where a fault is a change (a
+rollout, a ConfigMap, a selector, a scale), the workload that only shows the symptom is in `also_ok`, or is taken only
+with a kind that says a change (`config_change`, `rollout`), so the symptom's workload with the symptom's kind (`crash`,
+`oom`, `dependency_down`) is a miss; each NOTES.md says which and why. `scripts/test_ai_eval_cases.py` holds such
+answers to a miss.
+
+The namespace a case makes besides its own (`edge` for 15, `members` for 18) carries no case number and no
+`kubeast.io/ai-eval` label, so a namespace list does not tie it to the case; the case's `setup_cmds` and
+`cleanup_cmds` make and delete it by name. Run the cases only on the dev clusters: a namespace of that name already
+there would be deleted with the case.
+
+The hidden cases (08, 15, 18) measure whether a change to the prompts, the rule cards or the tool
+descriptions fits the cases it was tried on. Whoever writes those — a person or an agent — does not open these
+folders, their NOTES.md or their truth, nor a run's rows, table or log of a hidden case; the results are read as the
+round's total.
 
 | Case | Group | Problem | Needs on dev besides logs |
 |---|---|---|---|

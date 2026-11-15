@@ -15,7 +15,9 @@ What the AI has to notice:
 
 The trap: blame `assets` (the URL mentions the manifest), call it a plain crash with no change behind it, or name `preview-web` because it is "the 2.4.0 one"; at 65 min, answer from the crash loop alone without the rollout.
 
-How the scorer judges: cause = `shop-web` (Deployment, its ReplicaSet or pods, or the release ConfigMap 2.4.0) with kind `rollout`, `crash` or `config_change`. `shop-web-config` may be named beside it (`also_ok`). `preview-web` and `assets` are decoys. Path: `shop-web` first, its Service (or the visitor) last. Start time ±2 min of the patch.
+How the scorer judges: cause = what changed — the rollout of `shop-web` to 2.4.0: the Deployment or its ReplicaSet, the release ConfigMap `shop-web-release-2-4-0`, or the env file ConfigMap `shop-web-config` that lacks `asset_host` — with kind `rollout` or `config_change`. `crash` is not taken: it is what the pod list shows, so the Deployment with `crash` (or a pod alone) is the symptom, not the cause. The pods may be named beside the cause (`also_ok`). `preview-web` and `assets` are decoys. Path: `shop-web` first, its Service (or the visitor) last. Start time ±2 min of the patch. The prose check asks for `asset_host` or the manifest, and for the release or the rollout.
+
+Why the Deployment still counts: the release is part of its pod template, so the Deployment is the object that changed; what tells "its rollout broke it" from "it crashes" is the kind. The release objects alone (ReplicaSet and ConfigMap only) would fail the most natural right answer, the Deployment with `rollout`.
 
 Unsure:
 - `Recreate` is what makes this a full outage; with a rolling update and a readiness probe the old pods would have stayed. That is the realistic part (the outage needs the missing safety net too), but a reviewer may prefer a rolling update without a readiness probe, which races.

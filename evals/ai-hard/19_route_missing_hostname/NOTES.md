@@ -13,9 +13,11 @@ What the AI has to notice:
 - `frontdoor` now selects `edge`, and `edge-routes` has no `www.shop.example` line while `edge-legacy-routes` has one.
 - The probe that keeps passing checks a different hostname.
 
-The trap: blame `storefront` ("returns 404"), the old edge, DNS, or stop at "the Service selector changed" without what is missing in the new routes.
+The trap: blame `storefront` ("returns 404"), the old edge or DNS.
 
-How the scorer judges: cause = the ConfigMap `edge-routes` with kind `config_change`. `frontdoor` and `edge` may be named beside it (`also_ok`); alone they miss the missing hostname. `storefront`, `edge-legacy` and `helpdesk` are decoys. Path: `edge-routes` first, `frontdoor` (or the visitor) last. Start time ±2 min of the selector patch.
+How the scorer judges: cause = either end of the cut-over — the Service `frontdoor` (its selector switch, the change) or the ConfigMap `edge-routes` (the hostname it lacks) — with kind `config_change` or `rollout`. `edge` may be named beside it (`also_ok`); alone it misses both. The prose check asks for `edge-routes` and the hostname, so an answer that stops at the selector passes the block and not the prose. `storefront`, `edge-legacy` and `helpdesk` are decoys. Path: `edge-routes` first, `frontdoor` (or the visitor) last. Start time ±2 min of the selector patch.
+
+Why `frontdoor` counts: the selector switch is what changed when the site broke, and switching it back is a fix as good as adding the hostname; cases 20–22 score what changed, so this one does too. Scoring only `edge-routes` would fail that answer.
 
 Unsure:
 - A selector patch makes no event; the change shows in `frontdoor`'s managedFields time and in when the edge logs begin. A view of recent changes that reads managedFields would see it.
