@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { GAP, layoutMap } from './nodeMapLayout'
+import { GAP, layoutMap, mapKey } from './nodeMapLayout'
 import type { NodeEntry } from './hooks/useClusterDerived'
 
 const nodes = (n: number, pods: (i: number) => number): NodeEntry[] =>
@@ -27,5 +27,26 @@ describe('node map layout', () => {
   it('a small cluster gets large cells, a large one small cells', () => {
     expect(layoutMap(1100, nodes(2, () => 20)).cell).toBe(48)
     expect(layoutMap(1100, nodes(1000, () => 20)).cell).toBeLessThan(20)
+  })
+})
+
+describe('the node map from the keyboard', () => {
+  it('moves along the cells with the arrows, stopping at the ends, and opens the cell reached with Enter or Space', () => {
+    // 25 cells in rows of 10
+    expect(mapKey('ArrowRight', null, 25, 10)).toEqual({ hover: 1 })
+    expect(mapKey('ArrowDown', 3, 25, 10)).toEqual({ hover: 13 })
+    expect(mapKey('ArrowDown', 18, 25, 10)).toEqual({ hover: 24 })
+    expect(mapKey('ArrowUp', 4, 25, 10)).toEqual({ hover: 0 })
+    expect(mapKey('ArrowLeft', 0, 25, 10)).toEqual({ hover: 0 })
+    expect(mapKey('Enter', 13, 25, 10)).toEqual({ open: 13 })
+    expect(mapKey(' ', null, 25, 10)).toEqual({ open: 0 })
+    expect([mapKey('Tab', 3, 25, 10), mapKey('a', 3, 25, 10), mapKey('constructor', 3, 25, 10)]).toEqual([null, null, null])
+  })
+
+  it('opens the last cell, never one past it, when the cells became fewer under the cell reached', () => {
+    // the 25th cell reached, then the map down to 3 cells (its pods gone, a search narrowed)
+    expect(mapKey('Enter', 24, 3, 10)).toEqual({ open: 2 })
+    expect(mapKey('ArrowLeft', 24, 3, 10)).toEqual({ hover: 1 })
+    expect(mapKey('Enter', 0, 0, 10)).toBeNull()
   })
 })

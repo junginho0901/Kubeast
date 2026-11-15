@@ -29,15 +29,23 @@ export interface OverviewPageState {
   anchor: string | null
 }
 
-// The overview page shown: the page whose first box is nearest the box it was turned to, so a node added or removed
-// before that box keeps nine of the ten boxes on screen and ten nodes keep all ten (a pod coming or going moves no
-// node: pages are by node); that node gone, the same page number. Never past the last. `keys` are the boxes' ?node=
-// values in the map's order.
+// The overview page shown: the page whose first box is nearest the box it was turned to (a tie, the page holding it),
+// so a node added or removed before that box keeps nine of the ten boxes on screen and ten nodes keep all ten (a pod
+// coming or going moves no node: pages are by node); that node gone, the same page number. Never past the last.
+// `keys` are the boxes' ?node= values in the map's order.
 export function overviewPage(keys: readonly string[], state: OverviewPageState): number {
   const total = Math.max(1, Math.ceil(keys.length / NODE_BOXES_PER_PAGE))
   const at = state.anchor === null ? -1 : keys.indexOf(state.anchor)
-  const page = at >= 0 ? Math.round(at / NODE_BOXES_PER_PAGE) + 1 : Math.floor(state.page) || 1
+  const page = at >= 0
+    ? Math.floor(at / NODE_BOXES_PER_PAGE) + (at % NODE_BOXES_PER_PAGE > NODE_BOXES_PER_PAGE / 2 ? 2 : 1)
+    : Math.floor(state.page) || 1
   return Math.min(Math.max(1, page), total)
+}
+
+// The state to keep once page `shown` is drawn for a box turned to that is gone (or a page past the last): that page and its first box, so nodes coming back do not move the view; null when nothing changes.
+export function keptOverview(keys: readonly string[], state: OverviewPageState, shown: number): OverviewPageState | null {
+  if (keys.length === 0 || (state.anchor !== null ? keys.includes(state.anchor) : Math.floor(state.page) === shown)) return null
+  return { page: shown, anchor: keys[(shown - 1) * NODE_BOXES_PER_PAGE] ?? null }
 }
 
 type Named = { name: string; namespace: string }
@@ -94,6 +102,12 @@ export function nodeViewPage(
 // shown last is the one kept if the pod then goes. Null when the address already says it, or nothing is followed.
 export function followedPage(view: { page: number | null; pod: string | null }, shown: { page: number; gone: boolean }): { page: number; pod: string } | null {
   if (view.pod === null || shown.gone || view.page === shown.page) return null
+  return { page: shown.page, pod: view.pod }
+}
+
+// The address of a node's own view following no pod (or one gone) whose page shown is not the page asked (past the last): the page shown, so pods coming back do not move the view; null when it already says it.
+export function shownPageAddress(view: { page: number | null; pod: string | null }, shown: { page: number; gone: boolean }): { page: number; pod: string | null } | null {
+  if ((view.pod !== null && !shown.gone) || (view.page ?? 1) === shown.page) return null
   return { page: shown.page, pod: view.pod }
 }
 
