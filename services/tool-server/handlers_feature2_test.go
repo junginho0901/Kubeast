@@ -434,6 +434,8 @@ func TestResourceGraphCallsWindow(t *testing.T) {
 	if q := (*seen)[1].URL.Query(); q.Has("start") || q.Has("end") {
 		t.Fatalf("no include: %s", (*seen)[1].URL.RawQuery)
 	}
+}
+
 // timeline's view words pass the argument check only while k8s-service serves the changes view; with both switches
 // off a view other than summary or results is refused with the words of before.
 func TestViewWordsFollowTheChangesViewSwitches(t *testing.T) {
