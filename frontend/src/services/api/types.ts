@@ -2122,6 +2122,9 @@ export interface RoleWithDetails {
   updated_at: string
   // The chart binds this custom role's group: only a global admin or an Admin of the cluster gives it.
   chart_bound?: boolean
+  // Another role this custom role acts as on a cluster: its name, stored before such names were refused, differs only
+  // in letter case, spaces or punctuation (a built-in named first).
+  same_group_as?: string
 }
 
 export interface Member {

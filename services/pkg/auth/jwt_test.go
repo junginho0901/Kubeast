@@ -171,6 +171,16 @@ func TestMiddleware_PendingRoleIsScoped(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("admin → /api/v1/pods: got %d", rec.Code)
 	}
+	// the built-in is known by its exact name: another spelling is not that account level
+	for _, role := range []string{"PENDING", "pending", " pending-team "} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/pods", nil)
+		req.Header.Set("Authorization", "Bearer "+signClaims(t, s.key, "kid-a", jwt.MapClaims{"role": role, "permissions": map[string][]string{}}))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusNoContent {
+			t.Errorf("%q → /api/v1/pods: got %d, want it not read as Pending", role, rec.Code)
+		}
+	}
 }
 
 func TestValidate_RotatedKeyNewKidIsFetched(t *testing.T) {
