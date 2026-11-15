@@ -1915,6 +1915,13 @@ def timeline_changes_on() -> bool:
     return os.getenv("AI_TIMELINE_CHANGES", "false").strip().lower() == "true"
 
 
+def anomaly_rank_on() -> bool:
+    """ANOMALY_RANK_ENABLED (chart features.anomalyRank.enabled, default off; in the ConfigMap every service reads): the
+    chat prompt names anomaly_rank and the MCP server lists it. The chat's and an investigation's tool lists follow the
+    cluster's features (features.GATES)."""
+    return os.getenv("ANOMALY_RANK_ENABLED", "false").strip().lower() == "true"
+
+
 def _timeline_without_changes(tool: Dict) -> Dict:
     fn = dict(tool.get("function") or {})
     parameters = dict(fn.get("parameters") or {})

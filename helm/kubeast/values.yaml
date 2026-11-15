@@ -1041,7 +1041,8 @@ features:
   # (features.traceStore), each through the door of its own tools
   # (resource.pod.read, get pods/log, audited as k8s.pod.logs.logql and
   # k8s.traces.query); without one, its checks are listed as not run. Off: the
-  # route answers 404, reads nothing and the AI is not offered the tool.
+  # route answers 404, reads nothing, the AI is not offered the tool and the
+  # chat's system prompt and the MCP tool list do not name it.
   anomalyRank:
     enabled: false
     maxQueries: 12           # store queries one answer may make
