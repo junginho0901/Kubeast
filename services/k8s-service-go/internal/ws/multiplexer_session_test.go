@@ -78,11 +78,11 @@ func TestASocketWhoseSessionEndsClosesWithinTheCheckInterval(t *testing.T) {
 	m := muxOn(t, eventThenHold)
 	var revoked atomic.Int32
 	m.Sessions = auth.NewLiveSessions(auth.LiveSessionConfig{
-		Lookup: func(_ context.Context, userID, _ string) (int, error) {
+		Lookup: func(_ context.Context, userID, _ string) (auth.SessionState, error) {
 			if userID == "ended" {
-				return int(revoked.Load()), nil
+				return auth.SessionState{Version: int(revoked.Load())}, nil
 			}
-			return 0, nil
+			return auth.SessionState{}, nil
 		},
 		CheckEvery: every, CacheTTL: time.Millisecond,
 	})
