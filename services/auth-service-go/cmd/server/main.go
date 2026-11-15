@@ -231,6 +231,7 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("system roles seeded")
+	warnRoleSettings(ctx, repo, cfg)
 
 	// Bootstrap default users
 	bootstrapUsers(ctx, repo, cfg)

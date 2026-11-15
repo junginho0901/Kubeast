@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -16,8 +17,15 @@ import (
 
 // Cache provides Redis caching with in-memory fallback.
 type Cache struct {
-	rdb       *redis.Client
-	connected bool
+	// rdb is the Redis the cache is in; nil = the map below. standby is the client of a Redis that did not answer at
+	// start, asked again by Reconnect, which moves the cache there once it answers.
+	rdb     atomic.Pointer[redis.Client]
+	standby *redis.Client
+	// owed: FlushAll emptied the map while a Redis was set up but not in use, so the cache in that Redis, which other
+	// replicas read, was not flushed. Reconnect flushes it when it moves there.
+	owed atomic.Bool
+	// noTTL logs once that an entry came without a positive TTL (Set).
+	noTTL sync.Once
 
 	mu      sync.RWMutex
 	mem     map[string]memEntry
@@ -29,6 +37,27 @@ type Cache struct {
 type memEntry struct {
 	data    []byte
 	expires time.Time
+}
+
+// Prefix starts every key the cache reads, writes and deletes in Redis; callers name keys without it. FlushAll deletes
+// these keys only, so a Redis database shared with another application, or with keys Kubeast keeps for longer, keeps
+// the rest.
+const Prefix = "kubeast:cache:"
+
+// MaxTTL is the longest the cache keeps an entry (the Helm list's generation mark). An entry set without a positive
+// TTL is kept this long: nothing the cache writes stays in Redis for ever.
+const MaxTTL = time.Hour
+
+// Options is the connection NewWithUser makes, for another client of the same Redis signing in as the same user.
+func Options(host string, port, db int, username, password string) *redis.Options {
+	return &redis.Options{
+		Addr:        fmt.Sprintf("%s:%d", host, port),
+		Username:    username,
+		Password:    password,
+		DB:          db,
+		DialTimeout: 5 * time.Second,
+		ReadTimeout: 5 * time.Second,
+	}
 }
 
 // New connects to Redis at host:port (password empty = no AUTH, the local
@@ -49,25 +78,17 @@ func NewWithUser(host string, port, db int, username, password string) *Cache {
 		return c
 	}
 
-	rdb := redis.NewClient(&redis.Options{
-		Addr:        fmt.Sprintf("%s:%d", host, port),
-		Username:    username,
-		Password:    password,
-		DB:          db,
-		DialTimeout: 5 * time.Second,
-		ReadTimeout: 5 * time.Second,
-	})
+	rdb := redis.NewClient(Options(host, port, db, username, password))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := rdb.Ping(ctx).Err(); err != nil {
-		slog.Warn("redis not available, using in-memory cache", "err", err)
-		c.connected = false
+		slog.Warn("redis not available, using in-memory cache until it answers", "err", err)
+		c.standby = rdb
 	} else {
 		slog.Info("redis connected", "addr", fmt.Sprintf("%s:%d", host, port))
-		c.rdb = rdb
-		c.connected = true
+		c.rdb.Store(rdb)
 	}
 
 	return c
@@ -89,8 +110,8 @@ func (c *Cache) Peek(ctx context.Context, key string, dest interface{}) bool {
 }
 
 func (c *Cache) get(ctx context.Context, key string, dest interface{}) bool {
-	if c.connected {
-		data, err := c.rdb.Get(ctx, key).Bytes()
+	if rdb := c.rdb.Load(); rdb != nil {
+		data, err := rdb.Get(ctx, Prefix+key).Bytes()
 		if err != nil {
 			return false
 		}
@@ -114,14 +135,21 @@ func (c *Cache) get(ctx context.Context, key string, dest interface{}) bool {
 	return json.Unmarshal(entry.data, dest) == nil
 }
 
+// Set keeps value under key for ttl; a ttl that is not positive keeps it for MaxTTL.
 func (c *Cache) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return
 	}
+	if ttl <= 0 {
+		ttl = MaxTTL
+		c.noTTL.Do(func() {
+			slog.Warn("cache: an entry set without a positive TTL is kept for the longest TTL", "key", cacheName(key), "ttl", MaxTTL)
+		})
+	}
 
-	if c.connected {
-		c.rdb.Set(ctx, key, data, ttl)
+	if rdb := c.rdb.Load(); rdb != nil {
+		rdb.Set(ctx, Prefix+key, data, ttl)
 		return
 	}
 
@@ -159,10 +187,10 @@ func invalidationContext(ctx context.Context) (context.Context, context.CancelFu
 }
 
 func (c *Cache) Delete(ctx context.Context, key string) {
-	if c.connected {
+	if rdb := c.rdb.Load(); rdb != nil {
 		ctx, cancel := invalidationContext(ctx)
 		defer cancel()
-		c.rdb.Del(ctx, key)
+		rdb.Del(ctx, Prefix+key)
 		return
 	}
 	c.mu.Lock()
@@ -171,12 +199,12 @@ func (c *Cache) Delete(ctx context.Context, key string) {
 }
 
 func (c *Cache) DeletePattern(ctx context.Context, pattern string) {
-	if c.connected {
+	if rdb := c.rdb.Load(); rdb != nil {
 		ctx, cancel := invalidationContext(ctx)
 		defer cancel()
-		iter := c.rdb.Scan(ctx, 0, pattern, 100).Iterator()
+		iter := rdb.Scan(ctx, 0, Prefix+pattern, 100).Iterator()
 		for iter.Next(ctx) {
-			c.rdb.Del(ctx, iter.Val())
+			rdb.Del(ctx, iter.Val())
 		}
 		return
 	}
@@ -192,19 +220,96 @@ func (c *Cache) DeletePattern(ctx context.Context, pattern string) {
 }
 
 func (c *Cache) IsConnected() bool {
-	return c.connected
+	return c.rdb.Load() != nil
+}
+
+// Reconnect, for a cache whose Redis did not answer at start, asks Redis every interval until it answers and then
+// moves the cache there: the map is dropped, and the flush owed for changes taken meanwhile (FlushAll) is done in
+// Redis. It returns then, or when ctx ends, and at once for a cache in Redis or with no Redis set up.
+func (c *Cache) Reconnect(ctx context.Context, every time.Duration) {
+	if c.standby == nil || c.IsConnected() {
+		return
+	}
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for !c.moveToRedis(ctx) {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+// moveToRedis moves the cache to the standby Redis if it answers.
+func (c *Cache) moveToRedis(ctx context.Context) bool {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := c.standby.Ping(ctx).Err(); err != nil {
+		return false
+	}
+	c.rdb.Store(c.standby)
+	c.mu.Lock()
+	c.mem = make(map[string]memEntry)
+	c.mu.Unlock()
+	owed := c.owed.Swap(false)
+	slog.Info("redis answered, the cache moves there from memory", "addr", c.standby.Options().Addr, "flush_owed", owed)
+	if owed {
+		if err := flushPrefix(ctx, c.standby); err != nil {
+			slog.Warn("cache: flush owed for changes taken while in memory failed; those entries end with their TTL", "err", err)
+		}
+	}
+	return true
 }
 
 // FlushAll drops every entry. Use sparingly — only when cached data may no
 // longer reflect reality (e.g. after the underlying K8s cluster changes).
+// In Redis it deletes the keys under Prefix and no other.
 func (c *Cache) FlushAll(ctx context.Context) error {
-	if c.connected {
-		return c.rdb.FlushDB(ctx).Err()
+	if rdb := c.rdb.Load(); rdb != nil {
+		return flushPrefix(ctx, rdb)
 	}
 	c.mu.Lock()
 	c.mem = make(map[string]memEntry)
 	c.mu.Unlock()
+	if c.standby != nil {
+		c.owed.Store(true)
+		// moved to Redis meanwhile, past its look at owed
+		if rdb := c.rdb.Load(); rdb != nil && c.owed.Swap(false) {
+			return flushPrefix(ctx, rdb)
+		}
+	}
 	return nil
+}
+
+// flushBatch is how many keys one SCAN step asks for and one UNLINK removes.
+const flushBatch = 1000
+
+// flushPrefix unlinks the keys under Prefix, found by SCAN MATCH. A key written during the scan may stay, as one
+// written right after a FLUSHDB would.
+func flushPrefix(ctx context.Context, rdb *redis.Client) error {
+	batch := make([]string, 0, flushBatch)
+	unlink := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		err := rdb.Unlink(ctx, batch...).Err()
+		batch = batch[:0]
+		return err
+	}
+	iter := rdb.Scan(ctx, 0, Prefix+"*", flushBatch).Iterator()
+	for iter.Next(ctx) {
+		batch = append(batch, iter.Val())
+		if len(batch) == flushBatch {
+			if err := unlink(); err != nil {
+				return err
+			}
+		}
+	}
+	if err := iter.Err(); err != nil {
+		return err
+	}
+	return unlink()
 }
 
 // cacheName is a key without its cluster and identity parts (k8s.Service

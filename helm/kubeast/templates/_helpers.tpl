@@ -3,9 +3,24 @@
 {{- end -}}
 
 {{/* Group slug of a Kubeast role name, as services/pkg/auth/impersonation.go
-     computes it: lowercase, anything but a-z 0-9 . _ - becomes "-". */}}
+     computes it: A-Z, U+0130 and U+212A lowered, a-z 0-9 . _ - kept, other
+     ASCII "-", any other character "~" and its code point in four hex digits
+     ("~~" and six above U+FFFF), read from printf's %+q escape. */}}
 {{- define "kubeast.roleSlug" -}}
-{{- regexReplaceAll "[^a-z0-9._-]" (lower (trim .)) "-" -}}
+{{- range $c := splitList "" (trim .) -}}
+{{- if regexMatch `^[a-z0-9._-]$` $c -}}{{ $c }}
+{{- else if regexMatch `^[A-Z]$` $c -}}{{ lower $c }}
+{{- else if eq $c "\u0130" -}}i
+{{- else if eq $c "\u212a" -}}k
+{{- else if regexMatch `^[\x00-\x7f]$` $c -}}-
+{{- else -}}
+{{- $q := printf "%+q" $c -}}
+{{- if regexMatch `^"\\u[0-9a-f]{4}"$` $q -}}~{{ substr 3 7 $q }}
+{{- else if regexMatch `^"\\U00[0-9a-f]{6}"$` $q -}}~~{{ substr 5 11 $q }}
+{{- else -}}~fffd
+{{- end -}}
+{{- end -}}
+{{- end -}}
 {{- end }}
 
 {{- define "kubeast.labels" -}}
@@ -107,6 +122,25 @@ every entry of gateway.allowedOrigins, comma-joined; empty with neither.
 {{- $list = append $list . -}}
 {{- end -}}
 {{- join "," $list -}}
+{{- end -}}
+
+{{- /*
+The gateway's accesslog.conf with gateway.accessLog.upstreamTimes: nginx's
+"combined" fields, then the request's time, the service's connect, header and
+response times, the service's address and the client's port, to the same
+place as nginx's default log. Empty when off, so the ConfigMap and the pods'
+checksum stay as without it. dig: the values of an earlier release, kept by
+--reuse-values, have no gateway.accessLog.
+*/ -}}
+{{- define "kubeast.gatewayAccessLog" -}}
+{{- if eq (toString (dig "accessLog" "upstreamTimes" false .Values.gateway)) "true" -}}
+log_format upstream_times '$remote_addr - $remote_user [$time_local] '
+                          '"$request" $status $body_bytes_sent '
+                          '"$http_referer" "$http_user_agent" '
+                          '$request_time $upstream_connect_time $upstream_header_time '
+                          '$upstream_response_time $upstream_addr $remote_port';
+access_log /var/log/nginx/access.log upstream_times;
+{{- end -}}
 {{- end -}}
 
 {{- define "kubeast.databaseUrl" -}}
@@ -314,6 +348,35 @@ startupProbe:
   failureThreshold: {{ div 180 $period }}
 {{- end -}}
 
+{{/* A pod behind a Service answers podShutdown.preStopSeconds more while its endpoint leaves, then gets SIGTERM with the 30 s its shutdown fits in. */}}
+{{- define "kubeast.preStopSeconds" -}}
+{{- $s := .Values.podShutdown.preStopSeconds -}}
+{{- if or (not (or (kindIs "float64" $s) (kindIs "int64" $s) (kindIs "int" $s))) (lt (float64 $s) 0.0) (ne (float64 $s) (float64 (int $s))) -}}
+{{- fail (printf "podShutdown.preStopSeconds must be a whole number of seconds, 0 or more (0 = no wait): %v" $s) -}}
+{{- end -}}
+{{- int $s -}}
+{{- end -}}
+
+{{- define "kubeast.preStop" -}}
+{{- $s := int (include "kubeast.preStopSeconds" .) -}}
+{{- if gt $s 0 -}}
+lifecycle:
+  preStop:
+    sleep:
+      seconds: {{ $s }}
+{{- end -}}
+{{- end -}}
+
+{{/* A grace period: the preStop wait, what the process waits for after SIGTERM — a drain's wait and close wait (.drain)
+     and the 25 s its shutdown takes (k8s-service: the server and the recorder) — and 5 s to spare. */}}
+{{- define "kubeast.graceSeconds" -}}
+{{- add .preStop (.drain | default 0) 25 5 -}}
+{{- end -}}
+
+{{- define "kubeast.terminationGrace" -}}
+terminationGracePeriodSeconds: {{ include "kubeast.graceSeconds" (dict "preStop" (include "kubeast.preStopSeconds" .)) }}
+{{- end -}}
+
 {{/*
 Annotations of one of the chart's ServiceAccounts: serviceAccounts.<key>.annotations,
 over the aws.irsaRoleArn role when eksAuth (k8s-service and tool-server run
@@ -347,11 +410,15 @@ annotations:
 {{- range .Values.audit.sinks }}{{ if eq (toString .type) "file" }}true{{ end }}{{ end }}
 {{- end -}}
 
-{{/* k8s-service volumes for terminal session recording (spool, file store, store Secret). */}}
+{{/* k8s-service volumes for terminal session recording (spool, file store, store Secret): (dict "root" $ "spool" bool).
+     The spool is where the terminals open (SERVER_ROLE all or stream); k8s-service of role api only reads the store. */}}
 {{- define "kubeast.recordingVolumeMounts" -}}
+{{- with .root }}
 {{- if .Values.sessionRecording.enabled }}
+{{- if $.spool }}
 - name: recording-spool
   mountPath: /var/lib/kubeast-recordings
+{{- end }}
 {{- if eq (toString .Values.sessionRecording.storage) "file" }}
 - name: recording-store
   mountPath: /var/lib/kubeast-recordings-store
@@ -362,12 +429,16 @@ annotations:
   readOnly: true
 {{- end }}
 {{- end }}
+{{- end }}
 {{- end -}}
 
 {{- define "kubeast.recordingVolumes" -}}
+{{- with .root }}
 {{- if .Values.sessionRecording.enabled }}
+{{- if $.spool }}
 - name: recording-spool
   {{- toYaml (.Values.sessionRecording.spoolVolume | default (dict "emptyDir" (dict))) | nindent 2 }}
+{{- end }}
 {{- if eq (toString .Values.sessionRecording.storage) "file" }}
 - name: recording-store
   {{- toYaml .Values.sessionRecording.fileVolume | nindent 2 }}
@@ -377,6 +448,7 @@ annotations:
   secret:
     secretName: {{ .Values.sessionRecording.secret }}
     defaultMode: {{ include "kubeast.secretMode" . }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end -}}
@@ -395,3 +467,35 @@ true
 {{- end -}}
 {{- end }}
 
+
+{{/*
+The gateway's nginx.conf: files/nginx.conf as written, or with streams.enabled the terminals' and followed logs'
+locations (the ones holding exec/ws, logs/stream, logfiles/stream and debug-shell/ws, each with its 3600 s timeouts)
+sent to k8s-service-stream, plus a location for a node shell as API clients open it. The upstream is in
+conf.d/kubeast/streams.conf. tests/streams_test.yaml counts the locations that changed, so an edit of the file that
+this no longer matches fails there.
+*/}}
+{{- define "kubeast.gatewayNginxConf" -}}
+{{- $conf := .Files.Get "files/nginx.conf" -}}
+{{- if .Values.streams.enabled -}}
+{{- $conf = regexReplaceAll `(location ~ \^/api/v1/[^\n]*(?:\(exec/ws\|logs/stream\|logfiles/stream\)|debug-shell/ws)\$ \{\n(?:[ \t]*rewrite [^\n]*\n)?[ \t]*proxy_pass http://)k8s-service;` $conf "${1}k8s-service-stream;" -}}
+{{- $nodeShell := `        # A node shell as API clients open it (streams.enabled): to the stream server, kept open while quiet.
+        location ~ ^/api/v1/nodes/[^/]+/debug-shell/ws$ {
+            proxy_pass http://k8s-service-stream;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            proxy_cache_bypass $http_upgrade;
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+        }
+
+` -}}
+{{- $conf = replace "        location /api/v1/nodes {\n" (print $nodeShell "        location /api/v1/nodes {\n") $conf -}}
+{{- end -}}
+{{- $conf -}}
+{{- end -}}

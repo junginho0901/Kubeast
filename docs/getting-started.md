@@ -68,6 +68,7 @@ The script prints the address and the admin password once sign-in answers.
   - For a kind cluster, paste `kind get kubeconfig --internal --name <cluster>` and connect the containers that talk to it to kind's network: `docker network connect kind <dir>-auth-service-1`, and the same for `k8s-service` and `tool-server` (`<dir>` is the checkout folder's name, the Compose project).
 - Only the gateway port is published. Reach the other services with `docker compose exec`.
 - Running the script again (for example with another `--port`) keeps the passwords and keys in `.env`, because the database volume keeps the password it was created with.
+- Stopping or replacing a container (`docker compose stop`, `up` with a new image) gives each Kubeast service 35 s to finish (`stop_grace_period`), the chart's grace period with the default `podShutdown.preStopSeconds: 5` for a pod that runs no terminal drain. k8s-service runs none here: Compose stops a container before it starts the next, so no other server would take its terminals over. PostgreSQL and Redis get 30 s, the Kubernetes default grace period. Docker's default of 10 s would stop a service in the middle of its shutdown and can cut PostgreSQL's.
 
 `docker-compose` pulls the published images. By default it uses the version of the tag you checked out; set `KUBEAST_TAG` to change it.
 To build from source:
@@ -84,6 +85,45 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
 ```
 
 `--reset-then-reuse-values` keeps the values you set and adds what the new version brings. `--reuse-values` keeps the defaults of the version you installed, so a value a later version added is missing and the images stay at that version; the chart stops such an upgrade with this hint and leaves the release as it was. A values file of your own copied from `helm show values` of 0.7.7 or later stops the same way. One copied from 0.7.6 or earlier holds no `chartVersion`, and stops on its `global.imageTag`, that version's tag, from 0.7.8 on. Leave `chartVersion` and `global.imageTag` out of a values file of your own. A `global.imageTag` of an image you built yourself, not a release's `vX.Y.Z`, is not stopped.
+
+Upgrading to 0.7.8 renames the custom roles whose names make another role's group or a built-in's (`ADMIN` beside `Admin`) to `<name>-renamed-<id>` and removes their cluster grants, with an audit row for each change. [Features](features.md) "Role names" says what changes and what to do after. Before the upgrade, this query on Kubeast's database (it reads only) lists the roles it will rename, the role whose group each shares (`same_group_as`), and how many grants, restores of a temporary grant, pending or approved access requests and account levels each holds. The account levels of a role whose `same_group_as` is `Pending` move to the built-in `Pending`; the others stay on the renamed role.
+
+```sql
+WITH b(name, slug) AS (VALUES ('Pending', 'pending'), ('Member', 'member'), ('Read', 'read'), ('Write', 'write'), ('Admin', 'admin')),
+s AS (
+  SELECT ro.id, ro.name, ro.is_system,
+         (SELECT coalesce(string_agg(CASE WHEN p BETWEEN 97 AND 122 OR p BETWEEN 48 AND 57 OR p IN (45, 46, 95) THEN c
+                                          WHEN p < 128 THEN '-'
+                                          WHEN p < 65536 THEN '~' || lpad(to_hex(p), 4, '0')
+                                          ELSE '~~' || lpad(to_hex(p), 6, '0') END, '' ORDER BY i), '')
+            FROM unnest(string_to_array(translate(btrim(ro.name, E' \t\n\u000b\f\r\u0085                 　'),
+                                                  E'ABCDEFGHIJKLMNOPQRSTUVWXYZİK', 'abcdefghijklmnopqrstuvwxyzik'), NULL))
+                 WITH ORDINALITY AS t(c, i),
+                 LATERAL ascii(c) AS p) AS slug
+    FROM roles ro),
+g AS (
+  SELECT s.*, b.name AS builtin_name, coalesce(s.name = b.name, false) AS is_builtin,
+         coalesce(b.name, first_value(s.name) OVER w) AS keeper, row_number() OVER w AS place
+    FROM s LEFT JOIN b ON b.slug = s.slug
+  WINDOW w AS (PARTITION BY s.slug ORDER BY coalesce(s.name = b.name, false) DESC, s.is_system DESC, s.id))
+SELECT g.id, g.name, g.keeper AS same_group_as,
+       (SELECT count(*) FROM user_cluster_roles u WHERE u.role_id = g.id) AS grants,
+       (SELECT count(*) FROM user_cluster_roles u WHERE u.restore_role_id = g.id) AS restores,
+       (SELECT count(*) FROM access_requests a WHERE a.role_id = g.id AND a.status IN ('pending', 'approved')) AS open_requests,
+       (SELECT count(*) FROM auth_users a WHERE a.role_id = g.id) AS account_levels
+  FROM g
+ WHERE NOT g.is_builtin AND (g.place > 1 OR g.builtin_name IS NOT NULL)
+ ORDER BY g.id;
+```
+
+A pod of the version before keeps serving while the migration runs, and a grant it writes in the moment before the migration commits stays on the renamed role. Right after the upgrade, before anyone grants a renamed role again, this query lists such grants; it lists none in the usual case. Remove one in Cluster access unless the role is wanted.
+
+```sql
+SELECT g.user_id, g.cluster_id, r.name
+  FROM user_cluster_roles g JOIN roles r ON r.id = g.role_id
+ WHERE r.id IN (SELECT target_id::int FROM auth_audit_logs
+                 WHERE actor_user_id = 'system' AND actor_email = 'migration' AND action = 'admin.roles.update');
+```
 
 From 0.7.8 k8s-service and tool-server sign in to the chart's Redis as users of their own. With `secrets.existingSecret`, Redis keeps one password until you add `REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD` and, with the AI on, `REDIS_TOOL_SERVER_PASSWORD` to that Secret and set `redis.acl.existingSecretHasKeys: true` ([Redis users](configuration.md#redis-users)).
 

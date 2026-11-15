@@ -147,4 +147,5 @@ For the cluster-side bindings, see [cluster-requirements §1](cluster-requiremen
 | `oidc_email_unverified` | `email_verified=false` | Email verification at the provider |
 | `oidc_domain` | Outside `allowedDomains` | The value |
 | `oidc_email_invalid` | A first sign-in whose name cannot be a Kubernetes user: it holds a colon (`system:`, `eks:`, `kubeast:` and the like are kept for the cluster's own users), a space or a control character. An account that already exists is not refused | `claims.email` |
-| `oidc_provision` | Creating the account or applying the role failed | The role names in `roleMapping` (a role that does not exist fails), DB |
+| `oidc_role_missing` | No role holds the exact name `roleMapping` (for the person's group) or `defaultRole` gives: the setting misspells it, or an upgrade renamed the role (0.7.8, [Features](features.md) "Role names"). The server log line and the failure row (`after.role`, `after.setting`) name both | The value, against Admin → Roles. auth-service warns at start of each such name with its setting |
+| `oidc_provision` | Creating the account or applying the role failed | DB |

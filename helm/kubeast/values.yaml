@@ -148,8 +148,9 @@ auth:
     # those bindings to groups first (docs/cluster-requirements.md §1).
     userPrefix: ""
     # A custom Kubeast role (anything but Read/Write/Admin) granted on a
-    # cluster acts there as group kubeast:role:<slug> (lowercase; any character
-    # other than a-z 0-9 . _ - becomes "-"). The impersonator ClusterRole allows
+    # cluster acts there as group kubeast:role:<slug> (A-Z lowercased, any other
+    # ASCII character but a-z 0-9 . _ - becomes "-", any other character "~" and
+    # its code point: 운영팀 -> ~c6b4~c601~d300). The impersonator ClusterRole allows
     # only the four fixed groups, so such a role gets 403 on every cluster call
     # until its group is allowed and bound. Each entry here renders both for
     # the installed cluster: the group joins an extra impersonator ClusterRole
@@ -575,6 +576,26 @@ replicas:
   frontend: 1
   toolServer: 1
   gateway: 1
+# --- Terminals and followed logs on their own server ---
+# Off: k8s-service serves everything, as before. On: a second Deployment of the
+# same image, k8s-service-stream (SERVER_ROLE stream), takes pod exec, the node
+# shell and the followed logs, and k8s-service (SERVER_ROLE api) the rest, so a
+# rollout of either does not cut the other's connections and a crowd of
+# terminals does not slow the lists. The gateway sends those paths to the new
+# Service. When the server holding the terminals is replaced (k8s-service when
+# off, k8s-service-stream when on) it ends the followed logs at once (the
+# browser reconnects and goes on after the last line), tells each terminal when
+# it will close, and waits drainSeconds for them before closing the rest; with
+# no terminal open it does not wait. Its terminationGracePeriodSeconds is the
+# preStop wait (podShutdown.preStopSeconds; preStopSeconds on k8s-service-stream)
+# + drainSeconds + the drain's close wait 5 s + the server's shutdown 15 s and the
+# recorder's last upload 10 s + 5 s to spare (100 s by default).
+# sessionRecording.storage file is refused with it (s3 or database).
+streams:
+  enabled: false
+  replicas: 1        # must stay 1 for now (client caches)
+  drainSeconds: 60   # how long open terminals get to end on their own
+  preStopSeconds: 10 # k8s-service-stream: out of the Service's endpoints before the drain starts
 # PDB is off while replicas are 1 (a minAvailable PDB would block node drains).
 pdb:
   enabled: false
@@ -582,6 +603,9 @@ pdb:
 # zone + hostname spread, soft (ScheduleAnyway)
 topologySpread:
   enabled: true
+# Seconds a pod behind a Service keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, its deregistration delay plus a few seconds.
+podShutdown:
+  preStopSeconds: 5
 
 # --- Resources (requests always; memory limits so a leak is contained) ---
 resources:
@@ -593,6 +617,10 @@ resources:
     limits: { memory: 1Gi }
   # 1Gi when many people use a large cluster at once: docs/architecture.md "Many different people on a large cluster".
   k8sService:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  # streams.enabled only; not measured yet, k8sService's for a start
+  k8sServiceStream:
     requests: { cpu: 100m, memory: 128Mi }
     limits: { memory: 512Mi }
   sessionService:
@@ -669,6 +697,13 @@ gateway:
   # [+ port], no path. Empty = same host and the Ingress host only.
   allowedOrigins: []
   #  - https://console.example.com
+  # true: each access log line, after nginx's default "combined" fields, also
+  # gives the request's time and the service's connect, header and response
+  # times in seconds ($request_time $upstream_connect_time
+  # $upstream_header_time $upstream_response_time), the service's address and
+  # the client's port. false = nginx's default lines.
+  accessLog:
+    upstreamTimes: false
 
 # --- Ingress (optional) ---
 ingress:
