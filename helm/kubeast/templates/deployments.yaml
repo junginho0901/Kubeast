@@ -8,6 +8,7 @@ metadata:
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
   {{- include "kubeast.replicas" (dict "root" $ "key" "authService") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
   selector:
     matchLabels:
       app: auth-service
@@ -84,13 +85,13 @@ spec:
           {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             httpGet:
-              path: /health
+              path: /readyz
               port: 8004
             initialDelaySeconds: 3
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /health
+              path: /livez
               port: 8004
             initialDelaySeconds: 5
             periodSeconds: 30
@@ -148,6 +149,7 @@ metadata:
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
   {{- include "kubeast.replicas" (dict "root" $ "key" "aiService") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
   selector:
     matchLabels:
       app: ai-service
@@ -230,6 +232,7 @@ metadata:
 spec:
   {{- if $api }}
   {{- include "kubeast.replicas" (dict "root" $ "key" "k8sService") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
   {{- else }}
   {{- if gt (int $.Values.streams.replicas) 1 }}
   {{- fail "streams.replicas must be 1: more than one stream server is not supported yet" }}
@@ -389,16 +392,13 @@ spec:
           {{- end }}
           readinessProbe:
             httpGet:
-              {{- if not $api }}
-              # /ready answers 503 once the server is draining; /health stays 200 for the liveness probe
-              {{- end }}
-              path: {{ ternary "/health" "/ready" $api }}
+              path: /readyz
               port: 8002
             initialDelaySeconds: 3
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /health
+              path: /livez
               port: 8002
             initialDelaySeconds: 10
             periodSeconds: 30
@@ -438,6 +438,7 @@ metadata:
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
   {{- include "kubeast.replicas" (dict "root" $ "key" "sessionService") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
   selector:
     matchLabels:
       app: session-service
@@ -474,13 +475,13 @@ spec:
           {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             httpGet:
-              path: /health
+              path: /readyz
               port: 8003
             initialDelaySeconds: 3
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /health
+              path: /livez
               port: 8003
             initialDelaySeconds: 10
             periodSeconds: 30
@@ -496,6 +497,7 @@ metadata:
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
   {{- include "kubeast.replicas" (dict "root" $ "key" "frontend") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
   selector:
     matchLabels:
       app: frontend
@@ -547,6 +549,7 @@ metadata:
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
   {{- include "kubeast.replicas" (dict "root" $ "key" "toolServer") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
   selector:
     matchLabels:
       app: tool-server
@@ -611,13 +614,13 @@ spec:
           {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             httpGet:
-              path: /health
+              path: /readyz
               port: 8086
             initialDelaySeconds: 2
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /health
+              path: /livez
               port: 8086
             initialDelaySeconds: 5
             periodSeconds: 30
@@ -636,6 +639,8 @@ metadata:
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
   replicas: 1
+  # Leader election keeps the new controller waiting until the old one lets go.
+  {{- include "kubeast.rollingUpdate" . | nindent 2 }}
   selector:
     matchLabels:
       app: model-config-controller-go

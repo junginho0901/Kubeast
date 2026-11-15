@@ -143,3 +143,11 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 - 노드 셸 파드의 로그는 터미널에 찍힌 전부다. 네임스페이스 없는 로그 저장소 읽기(검색·LogQL·레이블·패턴)는 그 클러스터에 `resource.node.shell`이 없으면 질의의 매처로 노드 셸 네임스페이스를 뺀다(`hiddenLogNamespace`).
 - exec 명령은 인자 배열로 넘기고 셸을 거치지 않는다. 사용자 입력이 들어가는 인자는 허용 목록으로 검증하고 `--`로 옵션 파싱을 끝낸다.
 - 로컬 실행은 [docker-compose.yml](docker-compose.yml) 참고.
+
+## 종료(SIGTERM)
+
+- Go 서비스(auth · k8s · session · tool-server)는 SIGTERM을 받으면 먼저 준비 상태를 내린다: `services/pkg/probe`의 `Leave`로 `/readyz`가 503이 되고,
+  `probe.Hold`로 잡은 오래 열린 연결(WebSocket · 이벤트 스트림 · 따라가는 로그)을 끝낸 뒤 `probe.Wait`로 기다린다(차트 grace에서 preStop 뒤 남는 30초 안).
+- `/readyz`는 서버가 받고 있고 떠나는 중이 아닌지만 본다. DB나 다른 서비스는 묻지 않는다 — 모든 레플리카가 같이 쓰므로 하나가 죽으면 레플리카가 한꺼번에 Service에서 빠진다.
+- 이렇게 끝나는 WebSocket은 1001 `server_shutdown`(`probe.ShutdownCloseCode` · `ShutdownReason`)으로 닫고, 터미널은 그 이유로 `k8s.session.end` 행을 남긴다.
+  새 오래 열린 연결은 `probe.Hold`, 터미널(Pod exec · 노드 셸)은 `probe.HoldTerminal`을 쓴다. 스트림 drain이 켜져 시작 때 `probe.HandOverTerminals`를 부르면 터미널은 drain이 닫는다(merge plan S21).

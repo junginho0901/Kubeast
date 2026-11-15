@@ -127,6 +127,8 @@ SELECT g.user_id, g.cluster_id, r.name
 
 From 0.7.8 k8s-service and tool-server sign in to the chart's Redis as users of their own. With `secrets.existingSecret`, Redis keeps one password until you add `REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD` and, with the AI on, `REDIS_TOOL_SERVER_PASSWORD` to that Secret and set `redis.acl.existingSecretHasKeys: true` ([Redis users](configuration.md#redis-users)).
 
+From 0.7.8, `pdb.minAvailable` is gone: a service gets a PodDisruptionBudget only when it is set to two or more replicas or autoscales with `minReplicas` 2 or more, and `pdb.maxUnavailable` (1) says how many of them a node drain may evict at once. Values that still set `pdb.minAvailable` stop the upgrade and say so; take it out, and set `pdb.maxUnavailable` if you want another number.
+
 ### Uninstall
 
 ```bash

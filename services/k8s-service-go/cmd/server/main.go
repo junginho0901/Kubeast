@@ -49,6 +49,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/logger"
 	"github.com/junginho0901/kubeast/services/pkg/memlimit"
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
+	"github.com/junginho0901/kubeast/services/pkg/probe"
 )
 
 // streamCloseWait is how long the drain waits, after the wait, for the cut terminals to say so and hang their shells up
@@ -198,6 +199,11 @@ func main() {
 	// Init handler
 	h := handler.New(k8sSvc, cfg, auditStore)
 	h.SetHygieneStore(hygiene.NewStore(pgPool))
+	// Readiness: not from SIGTERM on, when open terminals, watches and followed logs are told to connect again. The
+	// database stays out of it: lists and reads go on while the audit store is down (writes answer 503), and a shared
+	// database would take every replica out of the Service at once.
+	ready := probe.New()
+	h.SetLeaving(ready)
 
 	// Log files view (off unless LOG_FILES_ENABLED): a bad path pattern stops
 	// the service instead of widening what can be read.
@@ -340,11 +346,16 @@ func main() {
 		AbsoluteLifetime: time.Duration(cfg.SessionAbsoluteHours) * time.Hour,
 	})
 	wsMux.Sessions = liveSessions
+	wsMux.Leaving = ready
 	h.SetLiveSessions(liveSessions)
 
 	// Open terminals and followed logs, held so a server being replaced ends them in order (STREAM_DRAIN_SECONDS).
 	streams := drain.New()
 	h.SetDrain(streams)
+	if cfg.StreamDrainSeconds >= 0 {
+		// The drain warns each terminal and closes it in order; probe.Leave leaves the terminals to it (merge plan S21).
+		ready.HandOverTerminals()
+	}
 
 	// Console metrics (services/pkg/metrics): HTTP by route pattern, the audit
 	// store's readiness and write failures, live watches, open terminals and followed logs, the
@@ -401,6 +412,9 @@ func main() {
 	// Public routes
 	r.Get("/", h.HealthRoot)
 	r.Get("/health", h.HealthCheck)
+	r.Get("/livez", ready.Live)
+	// /ready is the name the drain gave readiness first: the same answer as /readyz (merge plan S22).
+	r.Get("/readyz", h.Ready)
 	r.Get("/ready", h.Ready)
 	r.Get("/metrics", m.Handler().ServeHTTP)
 
@@ -494,6 +508,10 @@ func main() {
 	<-done
 	slog.Info("shutting down server...")
 
+	// Not ready from here on, and the followed logs and live lists end with 1001 and connect again elsewhere
+	// (probe.Leave). Where the drain is set the terminals are its own (HandOverTerminals): it tells each when it closes.
+	ready.Leave()
+
 	// net/http's Shutdown neither closes nor waits for the terminals' hijacked sockets and waits on an event stream
 	// until its context ends: the drain ends both first, in order (internal/drain).
 	if cfg.StreamDrainSeconds >= 0 {
@@ -513,7 +531,7 @@ func main() {
 		drainTracker.Shutdown(drainShutdown)
 		drainShutdownCancel()
 	}
-	shutdown(srv, recorder, serverShutdownWait, recorderShutdownWait)
+	shutdown(srv, ready, recorder, serverShutdownWait, recorderShutdownWait)
 	slog.Info("server stopped")
 }
 
@@ -543,15 +561,18 @@ const (
 // clusters.health_status (arbitrary constant: "kubeast-health-status").
 const healthStatusLockKey int64 = 0x6b62686c74687374
 
-// shutdown stops the server, then gives the recorder a wait of its own: an open
-// event stream (a followed log, the Helm releases stream) keeps srv.Shutdown
-// waiting until its context ends, and the recorder's last parts and rows would
-// get a spent one. The recorder takes its turn whatever srv.Shutdown returned.
-func shutdown(srv interface{ Shutdown(context.Context) error }, recorder interface{ Shutdown(context.Context) }, serverWait, recorderWait time.Duration) {
+// shutdown stops the server, waits within the same time for the connections it
+// leaves alone (WebSockets, which Leave closed with 1001 and whose shells hang
+// up), then gives the recorder a wait of its own: an open event stream that is
+// not held keeps srv.Shutdown waiting until its context ends, and the recorder's
+// last parts and rows would get a spent one. The recorder takes its turn
+// whatever srv.Shutdown returned.
+func shutdown(srv interface{ Shutdown(context.Context) error }, held interface{ Wait(context.Context) bool }, recorder interface{ Shutdown(context.Context) }, serverWait, recorderWait time.Duration) {
 	ctx, cancel := context.WithTimeout(context.Background(), serverWait)
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("server shutdown error", "err", err)
 	}
+	held.Wait(ctx)
 	cancel()
 	// End live recordings and upload what is left before the process goes.
 	ctx, cancel = context.WithTimeout(context.Background(), recorderWait)
