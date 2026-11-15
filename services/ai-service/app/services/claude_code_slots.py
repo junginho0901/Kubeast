@@ -1,5 +1,5 @@
 """The install-wide limit on Claude Code runs (chart ai.providers.claudeCode.maxConcurrentTotal), shared by every
-ai-service replica through the rows of claude_code_slots (services/pkg/dbmigrate 00025).
+ai-service replica through the rows of claude_code_slots (services/pkg/dbmigrate 00027).
 
 A run takes a slot with one short conditional UPDATE: the slot is free (owner '') or its holder has not refreshed its
 heartbeat for STALE_SECONDS. While the run goes on its holder refreshes the heartbeat every HEARTBEAT_SECONDS, and it

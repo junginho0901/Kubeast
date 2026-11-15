@@ -21,7 +21,7 @@ func TestPostgresEndedSignIns(t *testing.T) {
 	repo := repository.New(pool)
 	role := roleID(t, pool, "e2e-ended")
 	for _, id := range []string{"u1", "u2"} {
-		exec(t, pool, `INSERT INTO auth_users (id, name, email, role_id, password_hash, token_version) VALUES ($1, $1, $1 || '@example.com', $2, 'x', 3)`, id, role)
+		exec(t, pool, `INSERT INTO auth_users (id, name, email, role_id, password_hash, token_version) VALUES ($1, $2, $3, $4, 'x', 3)`, id, id, id+"@example.com", role)
 	}
 
 	for range 2 {

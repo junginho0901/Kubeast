@@ -667,3 +667,30 @@ tests:
       - equal:
           path: data.CLUSTER_STORE_ALLOWED_HOSTS
           value: prom.monitoring.svc,.corp.example.com
+
+  # auth-service makes each group from the names as the chart does (handler/role.go); a comma, which would split the
+  # list, goes as "-", which makes the same group.
+  - it: hands auth-service the names of the custom roles the chart binds
+    set:
+      auth.impersonation.customRoles:
+        - name: SRE Team
+          clusterRoles: [view]
+        - name: 운영팀
+          clusterRoles: [view]
+        - name: "a,b"
+          clusterRoles: [view]
+    asserts:
+      - equal:
+          path: data.IMPERSONATION_CUSTOM_ROLES
+          value: "SRE Team,운영팀,a-b"
+
+  - it: hands auth-service no names while auth.impersonation.enabled is false
+    set:
+      auth.impersonation.enabled: false
+      auth.impersonation.customRoles:
+        - name: SRE Team
+          clusterRoles: [view]
+    asserts:
+      - equal:
+          path: data.IMPERSONATION_CUSTOM_ROLES
+          value: ""

@@ -250,7 +250,8 @@ func (h *ClustersHandler) DeleteCluster(w http.ResponseWriter, r *http.Request) 
 	h.audit(r, "admin.cluster.delete", payload, string(id), before, map[string]any{"deleted": true}, nil)
 	// Drop k8s-service's cached client bundle and tool-server's cached
 	// kubeconfig so a re-registration under the same id is not served from the
-	// old kubeconfig.
+	// old kubeconfig. A k8s-service process the call misses drops the bundle
+	// when its read of the versions no longer has the row.
 	h.invalidateK8sBundle(r, id)
 	h.invalidateToolServer(r, id)
 	w.WriteHeader(http.StatusNoContent)
@@ -319,15 +320,17 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 				"This kubeconfig points to a different cluster than the one registered. Delete and re-register instead.")
 			return
 		}
-		if _, werr := h.secrets.WriteKubeconfig(r.Context(), id, *req.Kubeconfig); werr != nil {
-			h.audit(r, "admin.cluster.update", payload, string(id), nil, rotate, fmt.Errorf("store kubeconfig: %w", werr))
-			response.Error(w, http.StatusInternalServerError, "store kubeconfig: "+werr.Error())
+		// The Secret is written inside the row change that sets a new
+		// config_version (and the UID, when the probe read one), which commits
+		// only when the write went through. Every k8s-service process reads the
+		// versions and drops a connection built from an older one, also when the
+		// call below reaches none of them. A failure puts the Secret back, gives
+		// the cluster one more new version once it had been written, and answers
+		// it, naming a Secret that could not be put back.
+		staged := []*stagedSecret{h.stageKubeconfig(id, *req.Kubeconfig)}
+		if err := h.registry.ReplaceKubeconfig(r.Context(), id, newUID, secretWrites(staged)); err != nil {
+			h.failClusterChange(w, r, payload, id, nil, rotate, staged, err)
 			return
-		}
-		if newUID != "" {
-			if uerr := h.registry.SetClusterUID(r.Context(), id, newUID); uerr != nil {
-				slog.Warn("cluster: set uid after rotation failed", "id", id, "err", uerr)
-			}
 		}
 		// Drop downstream caches so the new kubeconfig takes effect immediately:
 		// k8s-service's client bundle (UI) AND tool-server's kubeconfig cache (AI
@@ -374,7 +377,10 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	// The Authorization header goes to the cluster-prometheus-<id> Secret; the
-	// row only keeps the Secret's name, and "none" removes both.
+	// row only keeps the Secret's name, and "none" removes both. The Secret is
+	// written inside the row change (UpdateMetaStoring) and removed after it.
+	var staged []*stagedSecret
+	var unnamed []string // header Secrets the row stops naming
 	promAuthChange := ""
 	if req.PrometheusAuth != nil {
 		header, verr := prometheusAuthHeader(*req.PrometheusAuth)
@@ -384,9 +390,7 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 		}
 		if header == "" {
 			if name, _ := h.registry.PrometheusAuthSecretName(r.Context(), id); name != "" && h.secrets != nil {
-				if derr := h.secrets.DeleteSecret(r.Context(), name); derr != nil {
-					slog.Warn("cluster: prometheus auth secret delete failed", "id", id, "err", derr)
-				}
+				unnamed = append(unnamed, name)
 			}
 			cleared := ""
 			patch.PrometheusAuthSecretName = &cleared
@@ -397,11 +401,7 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 			name := cluster.PrometheusSecretName(id)
-			if werr := h.secrets.WriteValue(r.Context(), name, cluster.PrometheusAuthKey, header); werr != nil {
-				h.audit(r, "admin.cluster.update", payload, string(id), nil, map[string]string{"prometheus_auth": "set"}, fmt.Errorf("store prometheus auth: %w", werr))
-				response.Error(w, http.StatusInternalServerError, "store prometheus auth: "+werr.Error())
-				return
-			}
+			staged = append(staged, h.stageValue("prometheus auth", name, cluster.PrometheusAuthKey, header))
 			patch.PrometheusAuthSecretName = &name
 			promAuthChange = "set"
 		}
@@ -416,9 +416,7 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 		}
 		if header == "" {
 			if name, _ := h.registry.LogSearchAuthSecretName(r.Context(), id); name != "" && h.secrets != nil {
-				if derr := h.secrets.DeleteSecret(r.Context(), name); derr != nil {
-					slog.Warn("cluster: log search auth secret delete failed", "id", id, "err", derr)
-				}
+				unnamed = append(unnamed, name)
 			}
 			cleared := ""
 			patch.LogSearchAuthSecretName = &cleared
@@ -429,28 +427,32 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 			name := cluster.LogSearchSecretName(id)
-			if werr := h.secrets.WriteValue(r.Context(), name, cluster.LogSearchAuthKey, header); werr != nil {
-				h.audit(r, "admin.cluster.update", payload, string(id), nil, map[string]string{"log_search_auth": "set"}, fmt.Errorf("store log search auth: %w", werr))
-				response.Error(w, http.StatusInternalServerError, "store log search auth: "+werr.Error())
-				return
-			}
+			staged = append(staged, h.stageValue("log search auth", name, cluster.LogSearchAuthKey, header))
 			patch.LogSearchAuthSecretName = &name
 			logSearchAuthChange = "set"
 		}
 	}
 
-	meta, err := h.registry.UpdateMeta(r.Context(), id, patch)
-	if errors.Is(err, cluster.ErrNotFound) {
-		response.Error(w, http.StatusNotFound, "Cluster not found")
+	// A patch that changes the connection sets a new config_version in the
+	// same row change, which commits only when the header Secrets are written.
+	meta, err := h.registry.UpdateMetaStoring(r.Context(), id, patch, secretWrites(staged))
+	if err != nil {
+		var asked interface{}
+		if promAuthChange != "" || logSearchAuthChange != "" {
+			asked = map[string]string{"prometheus_auth": promAuthChange, "log_search_auth": logSearchAuthChange}
+		}
+		h.failClusterChange(w, r, payload, id, before, asked, staged, err)
 		return
 	}
-	if err != nil {
-		h.audit(r, "admin.cluster.update", payload, string(id), before, nil, err)
-		response.InternalError(w, r, err)
-		return
+	for _, name := range unnamed {
+		if derr := h.secrets.DeleteSecret(r.Context(), name); derr != nil {
+			slog.Warn("cluster: auth secret delete failed", "id", id, "secret", name, "err", derr)
+		}
 	}
 	// A changed Prometheus source or log store takes effect on the next query:
-	// k8s-service keeps both on its per-cluster bundle.
+	// k8s-service keeps both on its per-cluster bundle. UpdateMetaStoring set a new
+	// config_version for it, which every k8s-service process reads; the call
+	// tells one of them at once.
 	if req.PrometheusURL != nil || req.PrometheusClusterLabel != nil || req.PrometheusAuth != nil || req.PrometheusService != nil ||
 		req.LogSearchURL != nil || req.LogSearchTenant != nil || req.LogSearchClusterLabel != nil || req.LogSearchAuth != nil {
 		h.invalidateK8sBundle(r, id)
@@ -466,8 +468,8 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 
 // invalidateK8sBundle tells k8s-service to drop its cached client bundle for id
 // (after a kubeconfig rotation) by calling its internal endpoint, forwarding the
-// admin's token. Best-effort: a failure leaves a stale bundle that self-heals on
-// the next connection error, so it never blocks the rotation response.
+// admin's token. Best-effort: the processes it misses drop the bundle within
+// seconds from the cluster's config_version, so it never blocks the response.
 func (h *ClustersHandler) invalidateK8sBundle(r *http.Request, id cluster.ID) {
 	base := strings.TrimRight(h.cfg.K8sServiceURL, "/")
 	if base == "" {
