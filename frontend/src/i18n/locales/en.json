@@ -1779,6 +1779,7 @@
     "copied": "Copied",
     "inputPlaceholder": "Type a message...",
     "stop": "Stop",
+    "waitingTurn": "Waiting for a turn — another question is running",
     "send": "Send",
     "confirmDeleteStreaming": "An answer is still generating. Stop and delete this chat?",
     "confirmDelete": "Delete this chat?",
@@ -1802,7 +1803,8 @@
       "streamStartFailed": "The answer stream could not start. Try again in a moment.",
       "streamCut": "The connection closed before the answer finished, so the text above may be incomplete. Ask again for the whole answer.",
       "streamEmpty": "The connection closed without an answer. Ask again.",
-      "sessionNotFound": "This conversation no longer exists. Start a new one."
+      "sessionNotFound": "This conversation no longer exists. Start a new one.",
+      "claudeCodeBusy": "Claude Code is busy; ask again in a moment."
     },
     "errorAnswer": "Sorry, an error occurred while generating the answer: {{error}}",
     "errorSessionCreate": "Failed to create session: {{error}}",
