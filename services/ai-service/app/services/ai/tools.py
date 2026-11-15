@@ -1902,8 +1902,8 @@ def changes_view_on() -> bool:
 def anomaly_rank_on() -> bool:
     """ANOMALY_RANK_ENABLED (chart features.anomalyRank.enabled, default off; in the ConfigMap every service reads): the
     chat prompt names anomaly_rank and the MCP server lists it. The chat's and an investigation's tool lists follow the
-    cluster's features (features.GATES)."""
-    return os.getenv("ANOMALY_RANK_ENABLED", "false").strip().lower() == "true"
+    cluster's features (features.GATES); dispatch answers it as an unknown function while it is off."""
+    return switch.env_on("ANOMALY_RANK_ENABLED")
 
 
 def _timeline_without_changes(tool: Dict) -> Dict:

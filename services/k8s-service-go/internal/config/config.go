@@ -187,7 +187,7 @@ func Load() Config {
 		AlertInvestigationEnabled: pkgconfig.GetEnvBool("ALERT_INVESTIGATION_ENABLED", false),
 		TimelineChangesView:       pkgconfig.EnvSwitch("AI_TIMELINE_CHANGES") || pkgconfig.EnvSwitch("ALERT_INVESTIGATION_CHANGES_FIRST"),
 
-		AnomalyRankEnabled:         pkgconfig.GetEnvBool("ANOMALY_RANK_ENABLED", false),
+		AnomalyRankEnabled:         pkgconfig.EnvSwitch("ANOMALY_RANK_ENABLED"),
 		AnomalyRankMaxQueries:      pkgconfig.GetEnvInt("ANOMALY_RANK_MAX_QUERIES", 12),
 		AnomalyRankCheckTimeoutSec: pkgconfig.GetEnvInt("ANOMALY_RANK_CHECK_TIMEOUT_SEC", 5),
 		AnomalyRankTimeoutSec:      pkgconfig.GetEnvInt("ANOMALY_RANK_TIMEOUT_SEC", 20),

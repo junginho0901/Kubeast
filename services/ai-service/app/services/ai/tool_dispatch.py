@@ -20,7 +20,7 @@
 from typing import TYPE_CHECKING, Dict
 
 from app.services.ai import permissions, resolvers
-from app.services.ai.tools import changes_view_on
+from app.services.ai.tools import anomaly_rank_on, changes_view_on
 from app.services.ai.debug_dump import dump, log, safe_error
 
 if TYPE_CHECKING:
@@ -350,7 +350,7 @@ async def execute_function_with_context(
                 tool_args["resource_manifest"] = function_args["resource_manifest"]
             result = await service._call_tool_server(function_name, tool_args)
 
-        elif function_name in FEATURE_TOOL_ARGS:
+        elif function_name in FEATURE_TOOL_ARGS and not (function_name == "anomaly_rank" and not anomaly_rank_on()):
             # Feature tools: tool-server calls k8s-service as the user; only the
             # declared arguments travel, booleans and integers normalised.
             spec = FEATURE_TOOL_ARGS[function_name]
