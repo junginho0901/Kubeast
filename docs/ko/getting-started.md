@@ -87,7 +87,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
 
 - 업그레이드는 저장된 모델 설정의 모델을 바꾸지 않습니다. ai-service가 처음 시작할 때 `ai.model`로 만든 `default-openai` 설정도 그대로입니다. 2027-01-14 전에 **Admin > AI Models**에서 바꾸세요.
 - 게이트웨이(LiteLLM 등)는 등록한 모델 이름에만 답합니다. 설정에서 쓰기 전에 게이트웨이에 `gpt-6-luna`를 추가하세요.
-- `gpt-6-luna`는 Chat Completions에서 `reasoning_effort: "none"`일 때만 도구를 받습니다. Kubeast는 이 값을 OpenAI · Azure OpenAI 공급자의 `gpt-6-sol` · `gpt-6-luna`라는 이름에만 보냅니다. 다른 이름으로 `gpt-6-luna`에 닿는 설정(게이트웨이 별칭, 공급자 `custom`, Azure 배포)은 옵션에 `"reasoning_effort": "none"`을 넣으세요. 넣지 않으면 도구 호출이 거절됩니다.
+- `gpt-6-luna`는 Chat Completions에서 `reasoning_effort: "none"`일 때만 도구를 받습니다. Kubeast는 OpenAI · Azure OpenAI 공급자의 `gpt-6-sol` · `gpt-6-luna`라는 이름에는 모든 호출에 이 값을 보냅니다. 다른 이름으로 `gpt-6-luna`에 닿는 설정(게이트웨이 별칭, 공급자 `custom`, Azure 배포)은 처음 거절된 도구 호출을 `none`으로 다시 보내고, 그 뒤로는 처음부터 `none`을 보냅니다(ai-service 파드마다, 재시작 전까지). 첫 호출부터 보내려면 그 설정의 옵션에 `"reasoning_effort": "none"`을 넣으세요.
 - 저장된 설정이 없고 `ai.model`도 직접 넣지 않은 설치(키 없이 `ai.baseUrl`의 게이트웨이를 쓰는 설치)는 업그레이드 뒤 `gpt-6-luna`를 보냅니다. 게이트웨이에 먼저 등록하거나, `ai.model`을 게이트웨이에 있는 이름으로 넣으세요.
 - 직접 쓰는 값 파일에 `ai.model: gpt-4o-mini`가 있으면(예: 0.7.7의 `helm show values`에서 복사한 파일) 그대로 남습니다. 2027-01-14 전에 바꾸세요.
 - Docker Compose는 `.env`의 `OPENAI_MODEL`을 읽습니다. `install-docker.sh`를 다시 돌려도 이미 있는 `OPENAI_MODEL`과 `OPENAI_BASE_URL`은 그대로 둡니다. 0.7.7 이하가 쓴 `.env`에는 `gpt-4o-mini`가 있으니 2027-01-14 전에 바꾸세요. `ai.model`처럼 저장된 설정이 없을 때만 모델을 정합니다.
