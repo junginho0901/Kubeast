@@ -33,6 +33,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
+	"github.com/junginho0901/kubeast/services/pkg/dbsession"
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
 	"github.com/junginho0901/kubeast/services/pkg/memlimit"
@@ -77,13 +78,14 @@ func main() {
 
 	// Database
 	dbURL := cfg.DatabaseURLForPgx()
-	poolCfg, err := pgxpool.ParseConfig(dbURL)
+	sessionLimits := dbsession.FromEnv()
+	poolCfg, err := newPoolConfig(dbURL, sessionLimits)
 	if err != nil {
 		slog.Error("failed to parse database URL", "error", err)
 		os.Exit(1)
 	}
-	poolCfg.MaxConns = 20
-	poolCfg.MinConns = 2
+	slog.Info("database session limits", "statement_timeout", sessionLimits.StatementTimeout,
+		"lock_timeout", sessionLimits.LockTimeout, "idle_in_transaction_session_timeout", sessionLimits.IdleInTransaction)
 
 	// SIGINT/SIGTERM cancels ctx: the background workers stop and give back their connections (the audit sinks
 	// hold one for their leader lock), so pool.Close returns instead of waiting out the pod's grace period.
@@ -108,7 +110,7 @@ func main() {
 	// MIGRATIONS_MODE=startup applies pending migrations here, and =job only
 	// waits for the version this build needs because a Job already ran them.
 	if cfg.MigrateOnly {
-		v, err := dbmigrate.Up(ctx, pool)
+		v, err := migrate(ctx, dbURL, sessionLimits)
 		if err != nil {
 			slog.Error("migrations failed", "error", err)
 			os.Exit(1)
@@ -122,7 +124,7 @@ func main() {
 			os.Exit(1)
 		}
 	} else {
-		v, err := dbmigrate.Up(ctx, pool)
+		v, err := migrate(ctx, dbURL, sessionLimits)
 		if err != nil {
 			slog.Error("migrations failed", "error", err)
 			os.Exit(1)
@@ -231,6 +233,7 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("system roles seeded")
+	warnRoleSettings(ctx, repo, cfg)
 
 	// Bootstrap default users
 	bootstrapUsers(ctx, repo, cfg)

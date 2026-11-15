@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drains"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -32,7 +33,7 @@ func TestADrainsStatusIsReadOnItsOwnClusterOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows := make(drainRows, 4)
-	h := &Handler{svc: svc, auditStore: rows}
+	h := &Handler{svc: svc, auditStore: rows, drains: drains.NewTracker(drains.NewMemory(nil), rows)}
 	request := func(method, target string, clusterID cluster.ID, perms auth.PermissionMatrix) *http.Request {
 		r := httptest.NewRequest(method, target, nil)
 		rc := chi.NewRouteContext()

@@ -32,6 +32,9 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
     setDrainStatus,
     drainError,
     setDrainError,
+    drainCordoned,
+    drainPods,
+    startDrain,
     drainId,
     showNodeShell,
     setShowNodeShell,
@@ -48,12 +51,15 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
 
   const showDrainStatus = drainStatus !== 'idle' || !!drainId || !!drainError
   const drainMeta = drainStatus === 'success'
-    ? { icon: CheckCircle2, label: 'Completed', tone: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' }
+    ? { icon: CheckCircle2, label: tr('nodes.drain.status.success', 'Completed'), tone: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' }
     : drainStatus === 'error'
-    ? { icon: AlertTriangle, label: 'Failed', tone: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' }
+    ? { icon: AlertTriangle, label: tr('nodes.drain.status.error', 'Failed'), tone: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' }
+    : drainStatus === 'interrupted'
+    ? { icon: AlertTriangle, label: tr('nodes.drain.status.interrupted', 'Interrupted'), tone: 'text-amber-300', bg: 'bg-amber-500/10', border: 'border-amber-500/20' }
     : drainStatus === 'draining'
-    ? { icon: Loader2, label: 'Draining', tone: 'text-primary-300', bg: 'bg-primary-500/10', border: 'border-primary-500/20' }
-    : { icon: Clock, label: 'Queued', tone: 'text-amber-300', bg: 'bg-amber-500/10', border: 'border-amber-500/20' }
+    ? { icon: Loader2, label: tr('nodes.drain.status.draining', 'Draining'), tone: 'text-primary-300', bg: 'bg-primary-500/10', border: 'border-primary-500/20' }
+    : { icon: Clock, label: tr('nodes.drain.status.pending', 'Queued'), tone: 'text-amber-300', bg: 'bg-amber-500/10', border: 'border-amber-500/20' }
+  const drainEndedShort = drainStatus === 'interrupted' || drainStatus === 'error'
 
   return (
     <>
@@ -96,11 +102,29 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
 
       {/* Drain Status Banner */}
       {showDrainStatus && (
-        <div className={`flex items-start gap-3 rounded-lg border px-3 py-2 ${drainMeta.bg} ${drainMeta.border}`}>
+        <div data-testid="node-drain-status" className={`flex items-start gap-3 rounded-lg border px-3 py-2 ${drainMeta.bg} ${drainMeta.border}`}>
           <drainMeta.icon className={`w-4 h-4 mt-0.5 ${drainMeta.tone} ${drainStatus === 'draining' ? 'animate-spin' : ''}`} />
           <div className="flex-1">
             <span className={`text-xs font-semibold ${drainMeta.tone}`}><Tx text="Drain: {{status}}" values={{ status: drainMeta.label }} /></span>
+            {drainStatus === 'draining' && drainPods && (
+              <div className="mt-1 text-xs text-slate-300">{tr('nodes.drain.status.pods', '{{done}} of {{total}} pods evicted', drainPods)}</div>
+            )}
+            {drainStatus === 'interrupted' && (
+              <div className="mt-1 text-xs text-amber-200">{tr('nodes.drain.status.interruptedMessage', 'The server running this drain stopped before it finished. Pods may still be on the node.')}</div>
+            )}
             {drainError && <div className="mt-1 text-xs text-red-300">{drainError}</div>}
+            {drainEndedShort && drainCordoned && (
+              <div data-testid="node-drain-cordoned" className="mt-1 text-xs text-slate-300">
+                {drainCordoned.length > 0
+                  ? tr('nodes.drain.status.stillCordoned', 'Still cordoned: {{nodes}}', { nodes: drainCordoned.join(', ') })
+                  : tr('nodes.drain.status.notCordoned', 'No node is left cordoned.')}
+              </div>
+            )}
+            {drainStatus === 'interrupted' && has('resource.node.drain') && (
+              <button type="button" className="btn-row mt-2" data-testid="node-drain-start-again" onClick={startDrain} disabled={isDrainMut || isSchedulingMut}>
+                {tr('nodes.drain.status.startAgain', 'Start again')}
+              </button>
+            )}
           </div>
         </div>
       )}

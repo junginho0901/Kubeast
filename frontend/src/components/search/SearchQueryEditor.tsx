@@ -127,6 +127,7 @@ export default function SearchQueryEditor({
           <button
             onClick={onClear}
             className="p-2 mr-1 text-slate-400 hover:text-ink transition-colors"
+            aria-label={t('common.clearSearch', 'Clear the search')}
           >
             <X className="w-4 h-4" />
           </button>

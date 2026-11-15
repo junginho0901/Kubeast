@@ -1,11 +1,13 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 
 import { usePageContext } from '../PageContext'
 import { useResourceDetail } from '../ResourceDetailContext'
 // The panel carries the markdown renderer; fetch it when first opened.
 const ChatPanel = lazy(() => import('./ChatPanel').then((m) => ({ default: m.ChatPanel })))
 import { ToggleButton } from './ToggleButton'
+import { focusOrigin, returnFocus } from './focusReturn'
 import { FLOATING_SESSION_KEY } from '@/services/floatingChatSession'
+import { useChatShortcut } from '@/hooks/useChatShortcut'
 
 const ANIM_MS = 200
 
@@ -25,6 +27,8 @@ function readPersistedSessionId(): string | null {
  * - 토글 버튼 ↔ 패널 전환 시 200ms fade + scale 애니메이션
  *   - mount/unmount 와 visible 상태를 분리하여 exit 애니메이션 후 DOM 제거
  * - 모달 위(z 1300)에 뜨고, 상세 드로어(폭 740px)가 열려 있으면 드로어 왼쪽 바깥으로 옮김 — 1348px 미만 화면은 그대로
+ * - ⌘/ (Mac) · Ctrl+/ 로 열고 닫음 (`useChatShortcut`): 이 컴포넌트가 있는 동안만 — AI 가 꺼져 있으면 Layout 이 그리지 않음
+ * - 열면 입력칸에 포커스, 닫으면 열 때 포커스가 있던 곳(없으면 토글 버튼)으로 돌려줌
  */
 export default function FloatingAIChat() {
   const { pageType, pageTitle, getSnapshot, consumeContextChanged } = usePageContext()
@@ -49,6 +53,28 @@ export default function FloatingAIChat() {
       // sessionStorage 사용 불가 (private 모드 등) — in-memory 만 유지
     }
   }, [])
+
+  const toggleRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const openedFrom = useRef<HTMLElement | null>(null)
+  const focusToggle = useRef(false)
+  const open = useCallback(() => {
+    openedFrom.current = focusOrigin(document)
+    focusToggle.current = false
+    setIsOpen(true)
+  }, [])
+  const close = useCallback(() => {
+    setIsOpen(false)
+    focusToggle.current = returnFocus(document, panelRef.current, openedFrom.current, toggleRef.current) === 'toggle'
+    openedFrom.current = null
+  }, [])
+  // the button takes the focus once it is shown again, not while it is aria-hidden, and only if nothing took it meanwhile
+  useEffect(() => {
+    if (!toggleVisible || !focusToggle.current) return
+    focusToggle.current = false
+    if (!focusOrigin(document)) toggleRef.current?.focus()
+  }, [toggleVisible])
+  useChatShortcut(pageType !== 'ai-chat', () => (isOpen ? close() : open()))
 
   useEffect(() => {
     if (isOpen) {
@@ -79,11 +105,12 @@ export default function FloatingAIChat() {
 
   return (
     <>
-      <ToggleButton onClick={() => setIsOpen(true)} visible={toggleVisible} docked={docked} />
+      <ToggleButton onClick={open} visible={toggleVisible} docked={docked} buttonRef={toggleRef} />
       {panelMounted && (
         <Suspense fallback={null}>
           <ChatPanel
-            onClose={() => setIsOpen(false)}
+            onClose={close}
+            panelRef={panelRef}
             getSnapshot={getSnapshot}
             consumeContextChanged={consumeContextChanged}
             currentPageTitle={pageTitle}

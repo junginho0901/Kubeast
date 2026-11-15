@@ -46,6 +46,9 @@ class FakeStore:
         self.inbox = []
         self.locked = []
         self._locks = {}
+        # what each decision call got as held=, and what alert_locked yields (the real one: its session on PostgreSQL)
+        self.held = []
+        self.lock_session = None
 
     def install(self, monkeypatch):
         async def record(db, **f):
@@ -54,32 +57,39 @@ class FakeStore:
 
         monkeypatch.setattr(inbox, "record", record)
 
-        async def find_recent(db, cluster, fingerprint, since):
+        async def find_recent(db, cluster, fingerprint, since, held=None):
+            self.held.append(("find_recent", held))
             for r in self.rows:
                 if r["cluster"] == cluster and r["fingerprint"] == fingerprint and r["received_at"] >= since and r["status"] != "skipped":
                     return SimpleNamespace(**r)
             return None
 
-        async def bump_repeat(db, inv_id, now):
+        async def bump_repeat(db, inv_id, now, held=None):
+            self.held.append(("bump_repeat", held))
             self.bumped.append(inv_id)
 
-        async def find_recent_skipped(db, cluster, fingerprint, since):
+        async def find_recent_skipped(db, cluster, fingerprint, since, held=None):
+            self.held.append(("find_recent_skipped", held))
             for r in reversed(self.rows):
                 if r["cluster"] == cluster and r["fingerprint"] == fingerprint and r["received_at"] >= since and r["status"] == "skipped":
                     return SimpleNamespace(**r)
             return None
 
-        async def fold_skip(db, inv_id, reason, now):
+        async def fold_skip(db, inv_id, reason, now, held=None):
+            self.held.append(("fold_skip", held))
             row = next(r for r in self.rows if r["id"] == inv_id)
             row.update(repeat_count=row.get("repeat_count", 1) + 1, last_seen_at=now, skip_reason=reason)
 
-        async def count_since(db, since):
+        async def count_since(db, since, held=None):
+            self.held.append(("count_since", held))
             return sum(1 for r in self.rows if r["received_at"] >= since and r["status"] != "skipped")
 
-        async def tokens_since(db, since):
+        async def tokens_since(db, since, held=None):
+            self.held.append(("tokens_since", held))
             return self.tokens
 
-        async def insert(db, **f):
+        async def insert(db, held=None, **f):
+            self.held.append(("insert", held))
             await asyncio.sleep(0)  # a round trip: another delivery runs meanwhile
             f.setdefault("id", f"inv-{len(self.rows)}")
             self.rows.append(f)
@@ -89,9 +99,10 @@ class FakeStore:
         async def alert_locked(db, cluster, fingerprint, starts_at):
             async with self._locks.setdefault((cluster, fingerprint, starts_at), asyncio.Lock()):
                 self.locked.append((cluster, fingerprint, starts_at))
-                yield
+                yield self.lock_session
 
-        async def pause_reason(db, minutes, now):
+        async def pause_reason(db, minutes, now, held=None):
+            self.held.append(("pause_reason", held))
             return self.pause if minutes else ""
 
         for name, fn in dict(find_recent=find_recent, bump_repeat=bump_repeat, count_since=count_since, tokens_since=tokens_since, insert=insert,
@@ -173,6 +184,71 @@ async def test_one_skipped_alert_arriving_twice_at_once_writes_one_skipped_row(m
     assert [c["skipped"] for c in counts] == [1, 1]
     skipped = [r for r in fs.rows if r["status"] == "skipped"]
     assert len(skipped) == 1 and skipped[0].get("repeat_count") == 2
+
+
+def _fake_hourly_lock(monkeypatch):
+    """store.hourly_cap_locked as one lock of this process; the list it returns grows each time it is entered."""
+    held, entered = asyncio.Lock(), []
+
+    @contextlib.asynccontextmanager
+    async def hourly_cap_locked(db, lock):
+        async with held:
+            entered.append(lock)
+            yield
+
+    monkeypatch.setattr(store, "hourly_cap_locked", hourly_cap_locked)
+    return entered
+
+
+@pytest.mark.asyncio
+async def test_two_different_alerts_at_once_queue_no_more_than_the_hourly_cap(monkeypatch):
+    """One investigation left in the hour and two different alerts at one moment (two replicas): the count and the
+    row it allows are one step, so the second counts the first one's row and is skipped."""
+    fs = FakeStore(rows=[{"id": "r0", "cluster": "self", "fingerprint": "x0", "status": "done", "received_at": NOW - timedelta(minutes=10)}])
+    fs.install(monkeypatch)
+    entered = _fake_hourly_lock(monkeypatch)
+    settings = cfg(max_per_hour=2)
+    counts = await asyncio.gather(*(webhook.gate_and_queue(None, settings, "self", am_message(alert(fp=fp)), NOW) for fp in ("a", "b")))
+    assert sorted((c["accepted"], c["skipped"]) for c in counts) == [(0, 1), (1, 0)]
+    assert [r["status"] for r in fs.rows[1:]].count("queued") == 1 and len(entered) == 2
+
+
+@pytest.mark.asyncio
+async def test_without_an_hourly_cap_no_delivery_waits_for_the_hourly_lock(monkeypatch):
+    fs = FakeStore()
+    fs.install(monkeypatch)
+    entered = _fake_hourly_lock(monkeypatch)
+    counts = await asyncio.gather(*(webhook.gate_and_queue(None, cfg(max_per_hour=0), "self", am_message(alert(fp=fp)), NOW) for fp in ("a", "b")))
+    assert [c["accepted"] for c in counts] == [1, 1] and entered == []
+
+
+async def test_the_hourly_lock_asks_nothing_of_sqlite(sqlite_db):
+    async with store.alert_locked(sqlite_db, "self", "a", None) as lock:
+        assert lock is None  # sqlite: each call commits in a session of its own, as before
+        async with store.hourly_cap_locked(sqlite_db, lock):
+            assert await store.count_since(sqlite_db, NOW - timedelta(hours=1), held=lock) == 0
+
+
+@pytest.mark.asyncio
+async def test_the_decision_reads_and_writes_through_the_session_holding_the_lock(monkeypatch):
+    """On PostgreSQL alert_locked yields its session; every read and write of the decision goes through it, so a
+    delivery waiting for the locks holds one connection and the one deciding needs no other."""
+    session = object()
+    fs = FakeStore(rows=[{"id": "r0", "cluster": "self", "fingerprint": "dup", "status": "done", "received_at": NOW - timedelta(minutes=10)},
+                         {"id": "r1", "cluster": "self", "fingerprint": "x1", "status": "done", "received_at": NOW - timedelta(minutes=10)}])
+    fs.lock_session = session
+    fs.install(monkeypatch)
+    _fake_hourly_lock(monkeypatch)
+    capped = cfg(max_per_hour=2, dedupe_hours=24)
+    counts = await webhook.gate_and_queue(None, capped, "self", am_message(alert(fp="dup"), alert(fp="new")), NOW)
+    assert (counts["duplicate"], counts["skipped"]) == (1, 1)  # a repeat folded; the hourly cap reached
+    budget = cfg(max_per_hour=0, dedupe_hours=24, daily_token_budget=5000, provider_pause_minutes=30)
+    assert (await webhook.gate_and_queue(None, budget, "self", am_message(alert(fp="other")), NOW))["accepted"] == 1
+    again = await webhook.gate_and_queue(None, capped, "self", am_message(alert(fp="new")), NOW)
+    assert again["skipped"] == 1  # folded into the skipped row of "new"
+    assert {name for name, _ in fs.held} == {"find_recent", "bump_repeat", "count_since", "tokens_since", "pause_reason",
+                                             "find_recent_skipped", "fold_skip", "insert"}
+    assert all(held is session for _, held in fs.held)
 
 
 def test_the_alert_lock_is_a_row_lock_on_its_inbox_row():
