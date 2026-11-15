@@ -142,7 +142,7 @@ kubectl --context <cluster> auth can-i list pods -A --as=kubeast:group-check:che
 
 - 클러스터 감사 로그에는 그 허용된 확인이 사람이 아니라 `kubeast:group-check:…`와 그 그룹으로 남습니다. 거절, can-i, 그 사람으로 하는 읽기는 지금처럼 사람 이름으로 남습니다.
 - 한 사람의 화면이 그 사람으로 묻는 것은 여덟 개쯤에서 can-i 하나로 줄고, 네임스페이스 N개로 묶인 부여는 그 그룹의 질문을 같은 그룹 모두를 위해 한 번 묻습니다. 레플리카마다 따로 물으므로 R대면 나눠 쓰는 질문도 최대 R배입니다. 사람의 확인과 같은 클라이언트 속도(`multicluster.clientQPS`, 정했다면 `reviewQPS`)에서 차례를 기다리며, 속도를 더하지 않습니다.
-- `excludeClusters`에 등록 클러스터 ID가 아닌 항목이 있으면 k8s-service가 시작할 때와 클러스터가 바뀐 뒤 경고합니다. 그런 항목은 아무 클러스터도 빼지 않습니다.
+- `excludeClusters`에 등록 클러스터 ID가 아닌 항목이 있으면 k8s-service가 시작할 때와 클러스터가 바뀐 뒤 경고합니다. 그런 항목은 아무 클러스터도 빼지 않습니다. 시작할 때 레지스트리를 읽지 못했다면 다음 클러스터 변경 때 경고합니다.
 - `auth.impersonation.enabled`가 꺼져 있으면 이 스위치는 아무것도 하지 않습니다.
 
 ## 2. metrics-server

@@ -20,7 +20,8 @@ import (
 )
 
 // switchOffReviewsFile is what the first screens of three people sent on main b4d6a944, before the checks could be
-// shared: UPDATE_SWITCH_OFF_REVIEWS=1 writes it from the code as it is.
+// shared. A body's sha256 follows client-go's encoding: after a dependency bump record it again from main's code, not
+// from a branch that changes the checks (UPDATE_SWITCH_OFF_REVIEWS=1 writes it from the code it runs in).
 const switchOffReviewsFile = "testdata/switch_off_reviews.json"
 
 // sentReview is one review as the cluster got it: who it went out as, what it asks and its bytes.

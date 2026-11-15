@@ -138,7 +138,7 @@ kubectl --context <cluster> auth can-i list pods -A --as=kubeast:group-check:che
 
 - The cluster's audit log names `kubeast:group-check:…` and the groups for those allowed checks, not the person. Refusals, can-i and the reads made as the person still name the person.
 - What one person's screens ask as itself drops from about eight to its can-i; a grant limited to N namespaces asks its groups' questions once for everyone with that grant's groups. Each replica asks for itself, so R replicas ask up to R times as many shared questions. They take their turn on the same client rate (`multicluster.clientQPS`, or `reviewQPS` when set) as the person's checks; no rate is added.
-- k8s-service warns at start, and after a cluster changes, of an `excludeClusters` entry that is no registered cluster's id: such an entry leaves nothing out.
+- k8s-service warns at start, and after a cluster changes, of an `excludeClusters` entry that is no registered cluster's id: such an entry leaves nothing out. A start that could not read the registry warns at the next cluster change.
 - With `auth.impersonation.enabled` off the switch does nothing.
 
 ## 2. metrics-server
