@@ -355,29 +355,31 @@ test.describe('floating chat — a new conversation', () => {
 })
 
 test.describe('floating chat — the keyboard shortcut', () => {
-  // ⌘/ on a Mac, Ctrl+/ elsewhere: Playwright's ControlOrMeta is the same choice for the browser's platform
+  // ⌘/ on a Mac, Ctrl+/ elsewhere, as the page reads its platform (navigator.platform): the chromium project's Desktop
+  // Chrome device says Windows on any host, while Playwright's ControlOrMeta follows the host's OS, so the keys come from the page
   test('⌘/ or Ctrl+/ opens the chat from a text field with the focus in its input, and closes it with the focus back', async ({ page }) => {
     await page.goto('/admin/users')
     const toggle = page.getByTestId('floating-chat-toggle')
     const mac = await page.evaluate(() => /mac|iphone|ipad/i.test(navigator.platform))
-    await expect(toggle).toHaveAttribute('aria-keyshortcuts', mac ? 'Meta+Slash' : 'Control+Slash')
+    const shortcut = mac ? 'Meta+Slash' : 'Control+Slash'
+    await expect(toggle).toHaveAttribute('aria-keyshortcuts', shortcut)
     await expect(toggle).toHaveAttribute('title', mac ? 'Open AI Chat (⌘/)' : 'Open AI Chat (Ctrl+/)')
 
     const field = page.getByTestId('admin-users-search')
     await field.fill('abc')
-    await field.press('ControlOrMeta+Slash')
+    await field.press(shortcut)
     const panel = page.getByTestId('floating-chat-panel')
     await expect(panel).toHaveCSS('opacity', '1')
     await expect(page.getByTestId('floating-chat-input'), 'the window opens with the focus in its input').toBeFocused()
     await expect(field, 'the shortcut typed nothing').toHaveValue('abc')
 
-    await page.keyboard.press('ControlOrMeta+Slash')
+    await page.keyboard.press(shortcut)
     await expect(panel).toHaveCount(0)
     await expect(field, 'the focus is back where it was').toBeFocused()
     await expect(field).toHaveValue('abc')
 
     // Escape closes it as before, the focus going back the same way
-    await page.keyboard.press('ControlOrMeta+Slash')
+    await page.keyboard.press(shortcut)
     await expect(page.getByTestId('floating-chat-input')).toBeFocused()
     await page.keyboard.press('Escape')
     await expect(panel).toHaveCount(0)
@@ -385,9 +387,9 @@ test.describe('floating chat — the keyboard shortcut', () => {
 
     // opened from the page itself, it gives the focus to the button when it closes
     await page.locator('h1').first().click()
-    await page.keyboard.press('ControlOrMeta+Slash')
+    await page.keyboard.press(shortcut)
     await expect(page.getByTestId('floating-chat-input')).toBeFocused()
-    await page.keyboard.press('ControlOrMeta+Slash')
+    await page.keyboard.press(shortcut)
     await expect(panel).toHaveCount(0)
     await expect(toggle).toBeFocused()
   })
