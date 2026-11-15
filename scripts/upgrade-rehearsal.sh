@@ -187,19 +187,25 @@ stop_fg() { # TERM to that command (and to its own child, when CMD was a functio
   [ "$i" = 10 ] && kill -KILL "$FG_PID" 2>/dev/null
   FG_PID=""
 }
-on_signal() { # on_signal CODE [hup]
-  # A closed terminal sends HUP to the whole process group, the tee of run.log too: from here the output goes to
-  # run.log alone and a write to the dead pipe no longer ends the script, so the cleanup reaches the cluster's deletion.
-  if [ "${2:-}" = hup ]; then trap '' PIPE HUP; exec >> "$OUT/run.log" 2>&1; fi
+on_signal() { # on_signal CODE [log]
+  # A closed terminal sends HUP to the whole process group, the tee of run.log too, and a CI cancel or `timeout` sends
+  # TERM to it the same way: from here the output goes to run.log alone, so the cleanup's lines are kept and none is left
+  # in bash's buffer to come out in the next pipe (verdict.txt). Ctrl-C's INT leaves the tee, which bash started
+  # ignoring INT.
+  if [ "${2:-}" = log ]; then trap '' HUP; exec >> "$OUT/run.log" 2>&1; fi
   stop_fg
   exit "$1"
 }
 begin_output() { # the run's output on screen and in run.log, and the traps that end it
   mkdir -p "$OUT"; : > "$RES"
   exec > >(tee -a "$OUT/run.log") 2>&1
+  # a write to the tee once it has ended (before the trap below has run) fails instead of ending the script; set after
+  # the tee starts, so the tee keeps the default
+  trap '' PIPE
   trap cleanup EXIT
-  trap 'on_signal 130' INT TERM
-  trap 'on_signal 129 hup' HUP
+  trap 'on_signal 130' INT
+  trap 'on_signal 143 log' TERM
+  trap 'on_signal 129 log' HUP
 }
 delete_cluster() {
   case "$CLUSTER" in kubeast-reh*) ;; *) echo "not deleting $CLUSTER: not a rehearsal cluster name"; return 1 ;; esac
