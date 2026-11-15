@@ -10,7 +10,7 @@ import (
 )
 
 // sharedGroupAPI is an install holding roles of one group, ADMIN beside the built-in Admin and a-b beside a b, which
-// migration 23 and its index leave none of: the refusals are a second check. Role id and name are what the grant names
+// migration 25 and its index leave none of: the refusals are a second check. Role id and name are what the grant names
 // and the pending request r1 asks for.
 func sharedGroupAPI(t *testing.T, id int, name string) *authAPI {
 	t.Helper()

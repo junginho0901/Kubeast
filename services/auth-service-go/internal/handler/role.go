@@ -100,7 +100,7 @@ func refuseTakenName(w http.ResponseWriter, t *nameTaken) {
 // on a cluster comes from the name alone (auth.RoleGroupSlug), so another role
 // with the same slug shares that group and its bindings, and a built-in's name
 // in other capitals acts as the built-in. id is the role being renamed, 0 for a
-// new one. nil means the name is free. Migration 23 renamed the stored roles
+// new one. nil means the name is free. Migration 25 renamed the stored roles
 // that shared a group, and the database refuses such a name too
 // (roles_name_group_key).
 func (h *RoleHandler) roleNameConflict(ctx context.Context, name string, id int) (*nameTaken, error) {
@@ -206,7 +206,7 @@ func (h *RoleHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
 		// ChartBound: a grant of this role takes a global admin or an Admin of the cluster (chartBoundGrantCeiling).
 		ChartBound bool `json:"chart_bound,omitempty"`
 		// SameGroupAs: another role this custom role acts as on a cluster, its name differing only in letter case,
-		// spaces or punctuation, for the pickers to say so. Migration 23 renamed such roles and the database refuses
+		// spaces or punctuation, for the pickers to say so. Migration 25 renamed such roles and the database refuses
 		// new ones, so it reads none; the refusals that read it stay as a second check.
 		SameGroupAs string `json:"same_group_as,omitempty"`
 	}

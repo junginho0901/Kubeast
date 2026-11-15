@@ -30,7 +30,7 @@ const (
 	EndReasonNotReviewed = "not_reviewed" // pending for longer than the request TTL
 	EndReasonRevoked     = "revoked"      // an admin revoked the grant
 	EndReasonSuperseded  = "superseded"   // an admin set the role by hand
-	EndReasonRoleRenamed = "role_renamed" // migration 23 renamed the role, which shared another role's group
+	EndReasonRoleRenamed = "role_renamed" // migration 25 renamed the role, which shared another role's group
 )
 
 // ErrAccessRequestNotPending is returned by a decision or cancel on a request

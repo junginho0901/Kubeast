@@ -22,8 +22,15 @@ type Store interface {
 	Bounds(ctx context.Context) (oldest, newest, unsealed int64, err error)
 	Rows(ctx context.Context, fromSeq, toSeq int64, limit int) ([]Row, error)
 	LastAnchor(ctx context.Context) (*Anchor, error)
+	// LastAnchorBy is the newest anchor written by actor, nil when none.
+	LastAnchorBy(ctx context.Context, actor string) (*Anchor, error)
 	AnchorsIn(ctx context.Context, fromSeq, toSeq int64) ([]Anchor, error)
 	InsertAnchor(ctx context.Context, a Anchor) (int64, error)
+	// AnchorLocked runs fn with a Store whose reads and writes share one
+	// transaction holding the anchor lock (waiting for it), committed when
+	// fn returns nil: replicas write one anchor at a time, each after the
+	// one before it is committed.
+	AnchorLocked(ctx context.Context, fn func(Store) error) error
 	ReviewHashesBetween(ctx context.Context, since, until time.Time) ([]ReviewHash, error)
 	ReviewHashes(ctx context.Context, ids []string) (map[string][]byte, error)
 }
@@ -32,8 +39,27 @@ type Store interface {
 // the sink dispatcher's).
 const lockKey int64 = 7_432_119_027
 
-// PG is the Store over the shared database.
-type PG struct{ Pool *pgxpool.Pool }
+// anchorLockKey is the advisory lock an anchor's transaction takes.
+const anchorLockKey int64 = 7_432_119_028
+
+// PG is the Store over the shared database. In AnchorLocked's fn its queries
+// run in the lock's transaction (tx).
+type PG struct {
+	Pool *pgxpool.Pool
+	tx   pgx.Tx
+}
+
+type dbtx interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}
+
+func (p PG) db() dbtx {
+	if p.tx != nil {
+		return p.tx
+	}
+	return p.Pool
+}
 
 func (p PG) SealBatch(ctx context.Context, limit int) (int, Head, error) {
 	if limit <= 0 {
@@ -100,11 +126,7 @@ func (p PG) SealBatch(ctx context.Context, limit int) (int, Head, error) {
 	return len(sealed), newHead, nil
 }
 
-type querier interface {
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-}
-
-func readHead(ctx context.Context, q querier) (Head, error) {
+func readHead(ctx context.Context, q dbtx) (Head, error) {
 	var h Head
 	err := q.QueryRow(ctx, `SELECT chain_seq, row_hash FROM auth_audit_logs WHERE chain_seq IS NOT NULL ORDER BY chain_seq DESC LIMIT 1`).Scan(&h.Seq, &h.Hash)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -113,10 +135,10 @@ func readHead(ctx context.Context, q querier) (Head, error) {
 	return h, err
 }
 
-func (p PG) Head(ctx context.Context) (Head, error) { return readHead(ctx, p.Pool) }
+func (p PG) Head(ctx context.Context) (Head, error) { return readHead(ctx, p.db()) }
 
 func (p PG) Bounds(ctx context.Context) (oldest, newest, unsealed int64, err error) {
-	err = p.Pool.QueryRow(ctx, `
+	err = p.db().QueryRow(ctx, `
 		SELECT COALESCE(MIN(chain_seq), 0), COALESCE(MAX(chain_seq), 0),
 		       (SELECT COUNT(*) FROM auth_audit_logs WHERE chain_seq IS NULL)
 		  FROM auth_audit_logs WHERE chain_seq IS NOT NULL`).Scan(&oldest, &newest, &unsealed)
@@ -124,7 +146,7 @@ func (p PG) Bounds(ctx context.Context) (oldest, newest, unsealed int64, err err
 }
 
 func (p PG) Rows(ctx context.Context, fromSeq, toSeq int64, limit int) ([]Row, error) {
-	rows, err := p.Pool.Query(ctx, `SELECT chain_seq, id, prev_hash, row_hash, `+CanonSQL+`
+	rows, err := p.db().Query(ctx, `SELECT chain_seq, id, prev_hash, row_hash, `+CanonSQL+`
 		  FROM auth_audit_logs WHERE chain_seq BETWEEN $1 AND $2 ORDER BY chain_seq LIMIT $3`, fromSeq, toSeq, limit)
 	if err != nil {
 		return nil, err
@@ -149,8 +171,8 @@ func scanAnchor(row pgx.Row) (Anchor, error) {
 	return a, err
 }
 
-func (p PG) LastAnchor(ctx context.Context) (*Anchor, error) {
-	a, err := scanAnchor(p.Pool.QueryRow(ctx, `SELECT `+anchorColumns+` FROM audit_anchors ORDER BY id DESC LIMIT 1`))
+func optionalAnchor(row pgx.Row) (*Anchor, error) {
+	a, err := scanAnchor(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -160,8 +182,31 @@ func (p PG) LastAnchor(ctx context.Context) (*Anchor, error) {
 	return &a, nil
 }
 
+func (p PG) LastAnchor(ctx context.Context) (*Anchor, error) {
+	return optionalAnchor(p.db().QueryRow(ctx, `SELECT `+anchorColumns+` FROM audit_anchors ORDER BY id DESC LIMIT 1`))
+}
+
+func (p PG) LastAnchorBy(ctx context.Context, actor string) (*Anchor, error) {
+	return optionalAnchor(p.db().QueryRow(ctx, `SELECT `+anchorColumns+` FROM audit_anchors WHERE actor = $1 ORDER BY id DESC LIMIT 1`, actor))
+}
+
+func (p PG) AnchorLocked(ctx context.Context, fn func(Store) error) error {
+	tx, err := p.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, anchorLockKey); err != nil {
+		return err
+	}
+	if err := fn(PG{Pool: p.Pool, tx: tx}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func (p PG) AnchorsIn(ctx context.Context, fromSeq, toSeq int64) ([]Anchor, error) {
-	rows, err := p.Pool.Query(ctx, `SELECT `+anchorColumns+` FROM audit_anchors WHERE to_seq BETWEEN $1 AND $2 ORDER BY id`, fromSeq, toSeq)
+	rows, err := p.db().Query(ctx, `SELECT `+anchorColumns+` FROM audit_anchors WHERE to_seq BETWEEN $1 AND $2 ORDER BY id`, fromSeq, toSeq)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +224,7 @@ func (p PG) AnchorsIn(ctx context.Context, fromSeq, toSeq int64) ([]Anchor, erro
 
 func (p PG) InsertAnchor(ctx context.Context, a Anchor) (int64, error) {
 	var id int64
-	err := p.Pool.QueryRow(ctx, `INSERT INTO audit_anchors (created_at, from_seq, to_seq, row_count, head_hash, prev_anchor_hash, anchor_hash, sink, object_key, actor)
+	err := p.db().QueryRow(ctx, `INSERT INTO audit_anchors (created_at, from_seq, to_seq, row_count, head_hash, prev_anchor_hash, anchor_hash, sink, object_key, actor)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
 		a.CreatedAt.UTC(), a.FromSeq, a.ToSeq, a.Rows, a.HeadHash, a.PrevAnchorHash, a.AnchorHash, a.Sink, a.ObjectKey, a.Actor).Scan(&id)
 	return id, err
@@ -190,7 +235,7 @@ func (p PG) ReviewHashesBetween(ctx context.Context, since, until time.Time) ([]
 	if since.IsZero() {
 		since = time.Unix(0, 0)
 	}
-	rows, err := p.Pool.Query(ctx, `SELECT id, reviewed_at, sha256(convert_to(snapshot::text, 'UTF8')) FROM access_reviews
+	rows, err := p.db().Query(ctx, `SELECT id, reviewed_at, sha256(convert_to(snapshot::text, 'UTF8')) FROM access_reviews
 		 WHERE reviewed_at > $1 AND reviewed_at <= $2 ORDER BY reviewed_at, id`, since.UTC(), until.UTC())
 	if err != nil {
 		return nil, err
@@ -212,7 +257,7 @@ func (p PG) ReviewHashes(ctx context.Context, ids []string) (map[string][]byte, 
 	if len(ids) == 0 {
 		return out, nil
 	}
-	rows, err := p.Pool.Query(ctx, `SELECT id, sha256(convert_to(snapshot::text, 'UTF8')) FROM access_reviews WHERE id = ANY($1)`, ids)
+	rows, err := p.db().Query(ctx, `SELECT id, sha256(convert_to(snapshot::text, 'UTF8')) FROM access_reviews WHERE id = ANY($1)`, ids)
 	if err != nil {
 		return nil, err
 	}

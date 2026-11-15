@@ -1,4 +1,4 @@
-{"about": "The group a role name makes (kubeast:role:<slug>), one rule in four places: auth.RoleGroupSlug (impersonation_test.go), the database's role_group_slug of migration 23 (role_names_postgres_test.go), roleGroupSlug (roleGroup.test.ts) and the chart's kubeast.roleSlug (k8s-service chart_role_slug_test.go). Go's whitespace is trimmed, U+FEFF is not; U+0130 and U+212A lower to ASCII; anything else outside [a-z0-9._-] is one '-' per character.",
+{"about": "The group a role name makes (kubeast:role:<slug>), one rule in four places: auth.RoleGroupSlug (impersonation_test.go), the database's role_group_slug of migration 25 (role_names_postgres_test.go), roleGroupSlug (roleGroup.test.ts) and the chart's kubeast.roleSlug (k8s-service chart_role_slug_test.go). Go's whitespace is trimmed, U+FEFF is not; U+0130 and U+212A lower to ASCII; anything else outside [a-z0-9._-] is one '-' per character.",
 "cases": [
   {"name": "Admin", "slug": "admin"},
   {"name": "ADMIN", "slug": "admin"},

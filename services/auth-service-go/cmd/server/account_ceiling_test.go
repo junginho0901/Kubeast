@@ -463,7 +463,7 @@ func TestTakenRoleNameSaysWhichRoleHoldsIt(t *testing.T) {
 }
 
 // Two saves at one moment can both pass the check; the database's index of the
-// group each name makes (migration 23) or its unique name refuses the second,
+// group each name makes (migration 25) or its unique name refuses the second,
 // which reads as a taken name with its audit row, not as a server error.
 func TestRoleNameTheDatabaseRefusesReadsAsTaken(t *testing.T) {
 	global := auth.PermissionMatrix{"*": {"*"}}

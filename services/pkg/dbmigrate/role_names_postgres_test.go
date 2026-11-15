@@ -32,8 +32,8 @@ func TestPostgresRoleNamesOneGroupEach(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.UpTo(ctx, 22); err != nil {
-		t.Fatalf("up to 22: %v", err)
+	if _, err := p.UpTo(ctx, 24); err != nil {
+		t.Fatalf("up to 24: %v", err)
 	}
 	exec := func(sql string, args ...any) {
 		t.Helper()
@@ -88,8 +88,8 @@ func TestPostgresRoleNamesOneGroupEach(t *testing.T) {
 	exec(grant, "u-requested", ids["team"], nil, nil, nil, nil, nil)
 	exec(grant, "u-team", ids["team"], nil, nil, nil, nil, nil)
 
-	if _, err := p.UpTo(ctx, 23); err != nil {
-		t.Fatalf("up to 23 over roles of one group: %v", err)
+	if _, err := p.UpTo(ctx, 25); err != nil {
+		t.Fatalf("up to 25 over roles of one group: %v", err)
 	}
 
 	names := func() map[int]string {
@@ -300,8 +300,8 @@ func TestPostgresPendingGroupAccountLevelsStayPending(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := p.UpTo(ctx, 22); err != nil {
-				t.Fatalf("up to 22: %v", err)
+			if _, err := p.UpTo(ctx, 24); err != nil {
+				t.Fatalf("up to 24: %v", err)
 			}
 			roles := []struct {
 				name   string
@@ -329,8 +329,8 @@ func TestPostgresPendingGroupAccountLevelsStayPending(t *testing.T) {
 				}
 			}
 
-			if _, err := p.UpTo(ctx, 23); err != nil {
-				t.Fatalf("up to 23: %v", err)
+			if _, err := p.UpTo(ctx, 25); err != nil {
+				t.Fatalf("up to 25: %v", err)
 			}
 
 			var pending int
@@ -383,8 +383,8 @@ func TestPostgresRenamedRoleNamesTrimmedAsGo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.UpTo(ctx, 22); err != nil {
-		t.Fatalf("up to 22: %v", err)
+	if _, err := p.UpTo(ctx, 24); err != nil {
+		t.Fatalf("up to 24: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `INSERT INTO roles (name, is_system) VALUES ('Admin', true)`); err != nil {
 		t.Fatal(err)
@@ -405,8 +405,8 @@ func TestPostgresRenamedRoleNamesTrimmedAsGo(t *testing.T) {
 		want[id] = fmt.Sprintf("%s-renamed-%d", strings.TrimSpace(name), id)
 	}
 
-	if _, err := p.UpTo(ctx, 23); err != nil {
-		t.Fatalf("up to 23: %v", err)
+	if _, err := p.UpTo(ctx, 25); err != nil {
+		t.Fatalf("up to 25: %v", err)
 	}
 
 	for id, name := range want {
@@ -468,8 +468,8 @@ func TestPostgresUpgradeDocsQueriesSayWhatTheMigrationDoes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.UpTo(ctx, 22); err != nil {
-		t.Fatalf("up to 22: %v", err)
+	if _, err := p.UpTo(ctx, 24); err != nil {
+		t.Fatalf("up to 24: %v", err)
 	}
 	exec := func(sql string, args ...any) {
 		t.Helper()
@@ -525,8 +525,8 @@ func TestPostgresUpgradeDocsQueriesSayWhatTheMigrationDoes(t *testing.T) {
 		t.Errorf("the preview lists %+v, want %+v", preview, want)
 	}
 
-	if _, err := p.UpTo(ctx, 23); err != nil {
-		t.Fatalf("up to 23: %v", err)
+	if _, err := p.UpTo(ctx, 25); err != nil {
+		t.Fatalf("up to 25: %v", err)
 	}
 	renamed := map[int]string{}
 	rows, err = pool.Query(ctx, `SELECT target_id::int, after->>'same_group_as' FROM auth_audit_logs
