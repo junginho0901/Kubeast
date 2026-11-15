@@ -12,8 +12,8 @@ narrow_first on, the first message also holds the time windows counted from the
 alert's start, with changes_first what changed in the change window and with
 narrow_first anomaly_rank over the metrics window, read as step 0 before the
 first model call in that order (investigation/windows.py). With any of rules,
-changes_first, evidence_check or ledger on, each tool result the model reads starts
-with its call number, step 0 being call 1 (investigation/numbers.py). With ai.refuseRepeatedReads a read
+changes_first, narrow_first, evidence_check, ledger or call_paths on, each tool result
+the model reads starts with its call number, step 0 being call 1 (investigation/numbers.py). With ai.refuseRepeatedReads a read
 repeated within the run is not run again (app/services/ai/repeats.py). With
 evidence_check or ledger on, the report ends with the rca block (investigation/rca.py):
 the runner takes it out once, holds its causes to the run's calls (evidence_check,

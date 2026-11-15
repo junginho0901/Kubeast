@@ -73,7 +73,7 @@ _CALLS_PATH = (
     "- Find what changed at a path's first workload just before (a rollout, config, a restart, traffic) with timeline, and name that "
     "change as the root cause.\n"
     "- Under \"Likely cause\", write the path from the cause to the alert's symptom as cause → … → symptom, each link followed by "
-    "the number of the tool call that showed it, counting your calls from 1 (for example: api (call 4) → web (call 2) → the "
+    "the [call N] number shown before the result that showed it (for example: api (call 4) → web (call 2) → the "
     "alert). A link no call showed is marked as a guess; a path the calls do not support is not written.\n"
 )
 
