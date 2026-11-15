@@ -115,9 +115,10 @@ type Service struct {
 	promQ *promQueryCache
 	// limiters holds per-cluster rate limiters + circuit breakers (step 15).
 	limiters *clusterLimiters
-	// accessChecks is one access question to the cluster at a time per identity and question.
-	accessChecks flight.Group[bool]
-	answered     answeredChecks
+	// accessChecks is one access question to the cluster at a time per identity and question; accessAnswers its answers.
+	accessChecks  flight.Group[bool]
+	accessAnswers accessAnswers
+	answered      answeredChecks
 
 	watchEnabled bool
 
@@ -457,6 +458,7 @@ func (s *Service) invalidateCaches() {
 	s.invalidateResolveCache()
 
 	s.promQ.clear()
+	s.accessAnswers.clear()
 
 	if s.cache != nil {
 		// Best-effort: ignore errors from Redis flush.
