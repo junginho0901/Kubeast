@@ -41,5 +41,9 @@
  ],
  "cooldown_seconds": 30,
  "hidden": true,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "AccountPagesSignedOut", "service": "web"},
+  "annotations": {"summary": "Signed-in visitors get the sign-in page again", "description": "For the last few minutes web has served the account page as signed out to every visitor who had just signed in; the sign-ins themselves succeed."}
+ }
 }

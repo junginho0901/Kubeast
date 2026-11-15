@@ -31,5 +31,9 @@
   "kubectl -n $NS patch service frontdoor --type=merge -p '{\"spec\":{\"selector\":{\"app\":\"edge-legacy\"}}}'"
  ],
  "cooldown_seconds": 30,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceRequestsFailing", "service": "storefront", "host": "www.shop.example"},
+  "annotations": {"summary": "www.shop.example answers 404", "description": "Every request to www.shop.example has returned HTTP 404 for the last few minutes."}
+ }
 }
