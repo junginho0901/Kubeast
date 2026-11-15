@@ -95,7 +95,7 @@ services:
       - .env
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
       # model configs may point at private hosts listed here (Ollama on the host)
       - AI_BASE_URL_ALLOWED_HOSTS=${AI_BASE_URL_ALLOWED_HOSTS:-host.docker.internal}
