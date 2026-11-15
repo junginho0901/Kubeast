@@ -19,6 +19,8 @@
           port: {{ .Values.postgresql.externalPort | default 5432 }}
 {{- end }}
 {{- end }}
+{{- /* ", k8s-service-stream" with streams.enabled: the stream server is a client wherever k8s-service is one. */ -}}
+{{- define "kubeast.np.alsoStream" }}{{ if .Values.streams.enabled }}, k8s-service-stream{{ end }}{{ end }}
 {{- if .Values.networkPolicy.enabled }}
 # Kubeast NetworkPolicy — opt-in. Default-deny + per-component whitelist.
 #
@@ -94,7 +96,7 @@ spec:
             matchExpressions:
               - key: app
                 operator: In
-                values: [frontend, ai-service, k8s-service, session-service, auth-service]
+                values: [frontend, ai-service, k8s-service{{ include "kubeast.np.alsoStream" . }}, session-service, auth-service]
 ---
 # frontend: ingress=gateway 만, egress=DNS 만 (default-deny + allow-dns 로 커버됨)
 apiVersion: networking.k8s.io/v1
@@ -140,7 +142,7 @@ spec:
                 operator: In
                 # every DATABASE_URL reader: auth, ai, session, k8s (audit),
                 # the ModelConfig controller and the migration Job
-                values: [auth-service, ai-service, session-service, k8s-service, model-config-controller-go, kubeast-migrate]
+                values: [auth-service, ai-service, session-service, k8s-service{{ include "kubeast.np.alsoStream" . }}, model-config-controller-go, kubeast-migrate]
       ports:
         - protocol: TCP
           port: 5432
@@ -165,7 +167,7 @@ spec:
             matchExpressions:
               - key: app
                 operator: In
-                values: [k8s-service] # the only Redis client (resource cache)
+                values: [k8s-service{{ include "kubeast.np.alsoStream" . }}] # the only Redis client (resource cache)
       ports:
         - protocol: TCP
           port: 6379
@@ -196,7 +198,7 @@ spec:
                 operator: In
                 # gateway: 외부 진입, k8s-service / session-service: JWKS endpoint 조회,
                 # auth-service-go 의 setup handler 가 k8s-service health 조회
-                values: [gateway, k8s-service, session-service, ai-service, tool-server]
+                values: [gateway, k8s-service{{ include "kubeast.np.alsoStream" . }}, session-service, ai-service, tool-server]
   egress:
 {{- include "kubeast.np.postgresEgress" . }}
     # k8s-service health check (dockersetup.GetStatus)
@@ -441,6 +443,68 @@ spec:
           port: {{ if kindIs "map" . }}{{ .port | default 443 }}{{ else }}443{{ end }}
     {{- end }}
     {{- end }}
+{{- if .Values.streams.enabled }}
+---
+# k8s-service-stream (streams.enabled): the terminals and followed logs from the gateway only; out to the database
+# (audit), Redis, auth-service (JWKS, token version, sessions), the clusters' API servers and the recording store —
+# k8s-service's egress without the metrics, log, trace, alert and flow stores, whose routes it does not serve.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-k8s-service-stream
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: k8s-service-stream
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: gateway
+      ports:
+        - protocol: TCP
+          port: 8002
+  egress:
+{{- include "kubeast.np.postgresEgress" . }}
+{{- if .Values.redis.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+{{- end }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: auth-service
+      ports:
+        - protocol: TCP
+          port: 8004
+    # kube-apiserver, as k8s-service reaches it
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+    {{- with .Values.networkPolicy.apiserverCIDR }}
+    - to:
+        - ipBlock:
+            cidr: {{ . }}
+    {{- end }}
+    {{- with .Values.sessionRecording.egress }}
+    # session recording store (sessionRecording.egress)
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}
 {{- if .Values.ai.enabled }}
 ---
 # tool-server: ai-service 에서 inbound, kube-apiserver + ai-service egress
@@ -576,7 +640,7 @@ spec:
     matchExpressions:
       - key: app
         operator: In
-        values: [auth-service, ai-service, k8s-service, session-service, tool-server]
+        values: [auth-service, ai-service, k8s-service{{ include "kubeast.np.alsoStream" . }}, session-service, tool-server]
   policyTypes: [Ingress]
   ingress:
     - from:

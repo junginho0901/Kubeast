@@ -70,6 +70,10 @@ type clientBundle struct {
 	// events is one read of an object's events as kubeast:cache for everyone asking; eventsRefused the namespaces it was refused, until when
 	events        flight.Group[*corev1.EventList]
 	eventsRefused sync.Map
+	// metricsServed is this cluster's answer to whether it serves metrics.k8s.io and when it was taken; metricsServedRead
+	// is one read of it for everyone asking (metrics.go)
+	metricsServed     atomic.Pointer[metricsVerdict]
+	metricsServedRead flight.Group[metricsServing]
 
 	// configVersion is the registry's config_version of the Info this bundle
 	// was built from (internal/clustersync drops it once the registry has
@@ -85,6 +89,8 @@ type clientBundle struct {
 	infMu       sync.Mutex
 	inf         *clusterInformers
 	infFailedAt time.Time
+	// noInformers: the overview informers never start here (ServiceOptions.NoInformers); readers list instead.
+	noInformers bool
 }
 
 // Close stops the bundle's informers (LRU eviction, kubeconfig rotation).
@@ -144,6 +150,8 @@ type Service struct {
 	apiResourcesCache map[cluster.ID][]metav1.APIResourceList
 	apiResourcesAt    map[cluster.ID]time.Time
 	apiResourcesRead  map[cluster.ID]time.Time // when the lists were read, which apiResourcesAt shortens for a partial answer
+	// apiResourcesFailed: the API groups of that read that did not answer (an aggregated API whose server is down)
+	apiResourcesFailed map[cluster.ID][]string
 	// apiResourcesSF is one discovery read per cluster at a time; apiResourcesGen moves when the caches are cleared, so
 	// a read that started before is not kept.
 	apiResourcesSF  singleflight.Group
@@ -176,6 +184,9 @@ type ServiceOptions struct {
 	InstallNamespace   string
 	NodeShellNamespace string
 	Gitops             gitops.Config // Argo CD guard (chart gitops.argocd)
+	// NoInformers keeps the overview informers from starting: a server of role "stream" serves no list, and whatever
+	// would read them lists instead, as before the first sync.
+	NoInformers bool
 }
 
 // impersonationEnabled and execCommands are read by buildClientBundle (set once
@@ -184,6 +195,7 @@ var (
 	impersonationEnabled bool
 	execCommands         []string
 	clientRates          rates
+	informersOff         bool
 )
 
 // rates are ServiceOptions' client rates, read by buildClientBundle.
@@ -197,6 +209,7 @@ func NewService(ctx context.Context, registry cluster.Registry, watchEnabled boo
 	execCommands = opts.ExecCommands
 	clientRates = rates{opts.ClientQPS, opts.ClientBurst, opts.ReviewQPS, opts.ReviewBurst}
 	installNamespace, nodeShellNamespace = opts.InstallNamespace, opts.NodeShellNamespace
+	informersOff = opts.NoInformers
 	s := &Service{
 		registry:          registry,
 		gitops:            opts.Gitops,
@@ -300,7 +313,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	cfg.Wrap(kubetrail.RoundTripper)
 	// on a copy, so the dynamic client and UserRESTConfigFor keep rates of their own as before
 	userCfg := rest.CopyConfig(cfg)
-	userCfg.RateLimiter = newTurnLimiter(cfg.QPS, cfg.Burst)
+	userCfg.RateLimiter = newTurnLimiter(cfg.QPS, cfg.Burst, clientWait.forLimiter(limiterUser))
 	clientset, err := kubernetes.NewForConfig(userCfg)
 	if err != nil {
 		return nil, fmt.Errorf("create clientset: %w", err)
@@ -310,7 +323,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		// the same wrapped transports, so a review carries the caller's impersonation as before
 		reviewCfg := rest.CopyConfig(cfg)
 		reviewCfg.QPS, reviewCfg.Burst = float32(clientRates.reviewQPS), max(clientRates.reviewBurst, clientRates.reviewQPS)
-		reviewCfg.RateLimiter = newTurnLimiter(reviewCfg.QPS, reviewCfg.Burst)
+		reviewCfg.RateLimiter = newTurnLimiter(reviewCfg.QPS, reviewCfg.Burst, clientWait.forLimiter(limiterReview))
 		reviews, err := kubernetes.NewForConfig(reviewCfg)
 		if err != nil {
 			return nil, fmt.Errorf("create review clientset: %w", err)
@@ -337,6 +350,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		id:            info.ID,
 		protected:     protected,
 		cacheClient:   cacheClient,
+		noInformers:   informersOff,
 	}, nil
 }
 
@@ -520,6 +534,7 @@ func (s *Service) dropDerivedCaches() {
 	s.apiResourcesCache = map[cluster.ID][]metav1.APIResourceList{}
 	s.apiResourcesAt = map[cluster.ID]time.Time{}
 	s.apiResourcesRead = map[cluster.ID]time.Time{}
+	s.apiResourcesFailed = map[cluster.ID][]string{}
 	s.apiResourcesGen++
 	s.apiResourcesMu.Unlock()
 
