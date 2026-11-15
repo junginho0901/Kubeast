@@ -100,7 +100,9 @@ LOOKALIKE='rehearsal: stored before the name rule'
 REQUIRE_LIST=" $(printf '%s' "${REQUIRE:-}" | tr ',#' '  ') "
 CREATED=0
 BG_PIDS=""
+FG_PID=""
 TMP_VALUES=""
+CALL_TIMEOUT=60
 
 now() { date '+%H:%M:%S'; }
 say() { echo "$(now) $*"; }
@@ -152,9 +154,11 @@ print_table() {
   fi
   echo "PASS $p · FAIL $f · SKIP $s · results $RES"
   [ "$s" = 0 ] || echo "each SKIP names the change it waits for (not in this checkout); REQUIRE=<those numbers> makes them fail"
-  local word=RESULT
+  [ "$s" = 0 ] || [ -n "${REQUIRE:-}" ] || warn "$s checks skipped and REQUIRE is not set: a release run sets REQUIRE=all, so that a skipped check fails"
+  local word=RESULT verdict=FAIL
   [ "$PLAN" = 1 ] && word=PLAN
-  if [ "$f" = 0 ] && [ "${COMPLETE:-0}" = 1 ]; then echo "$word: PASS"; else echo "$word: FAIL"; fi | tee "$OUT/verdict.txt"
+  if [ "$f" = 0 ] && [ "${COMPLETE:-0}" = 1 ]; then verdict=PASS; [ "$s" = 0 ] || verdict="PASS (SKIP $s)"; fi
+  echo "$word: $verdict" | tee "$OUT/verdict.txt"
 }
 
 stop_bg() {
@@ -162,6 +166,26 @@ stop_bg() {
   for p in $BG_PIDS; do kill "$p" 2>/dev/null; done
   BG_PIDS=""
 }
+# fg_run CMD... — a long command (helm --wait, kind create, docker build) as a child the signal trap can stop: bash runs
+# a trap only once a foreground command has ended, but a `wait` it interrupts.
+fg_run() {
+  "$@" &
+  FG_PID=$!
+  wait "$FG_PID"
+  local rc=$?
+  FG_PID=""
+  return "$rc"
+}
+stop_fg() { # TERM to that command (and to its own child, when CMD was a function such as hc), then up to 10 s for it to end
+  [ -n "$FG_PID" ] || return 0
+  pkill -TERM -P "$FG_PID" 2>/dev/null
+  kill -TERM "$FG_PID" 2>/dev/null
+  local i
+  for i in $(seq 1 10); do kill -0 "$FG_PID" 2>/dev/null || break; sleep 1; done
+  [ "$i" = 10 ] && kill -KILL "$FG_PID" 2>/dev/null
+  FG_PID=""
+}
+on_signal() { stop_fg; exit 130; }
 delete_cluster() {
   case "$CLUSTER" in kubeast-reh*) ;; *) echo "not deleting $CLUSTER: not a rehearsal cluster name"; return 1 ;; esac
   kind delete cluster --name "$CLUSTER" --kubeconfig "$KC" > /dev/null 2>&1 || return 1
@@ -169,6 +193,7 @@ delete_cluster() {
 }
 cleanup() {
   local rc=$?
+  stop_fg
   stop_bg
   [ -n "$TMP_VALUES" ] && rm -f "$TMP_VALUES"
   print_table
@@ -215,9 +240,9 @@ call() {
   local m=$1 p=$2 t=$3 b=${4:-} tmp
   tmp=$(mktemp "${TMPDIR:-/tmp}/reh.XXXXXX")
   if [ -n "$b" ]; then
-    CODE=$(printf '%s' "$b" | curl -s -m 60 -o "$tmp" -w '%{http_code}' -X "$m" -H @<(hdr "$t" json) --data-binary @- "$GW$p")
+    CODE=$(printf '%s' "$b" | curl -s -m "$CALL_TIMEOUT" -o "$tmp" -w '%{http_code}' -X "$m" -H @<(hdr "$t" json) --data-binary @- "$GW$p")
   else
-    CODE=$(curl -s -m 60 -o "$tmp" -w '%{http_code}' -X "$m" -H @<(hdr "$t" "") "$GW$p")
+    CODE=$(curl -s -m "$CALL_TIMEOUT" -o "$tmp" -w '%{http_code}' -X "$m" -H @<(hdr "$t" "") "$GW$p")
   fi
   BODY=$(cat "$tmp"); rm -f "$tmp"
   [ -n "$CODE" ] || CODE=000
@@ -356,7 +381,7 @@ nodes:
 EOF
   local t0; t0=$(date +%s)
   CREATED=1
-  kind create cluster --name "$CLUSTER" --config "$OUT/kind.yaml" --kubeconfig "$KC" --wait 180s > "$OUT/kind-create.log" 2>&1 \
+  fg_run kind create cluster --name "$CLUSTER" --config "$OUT/kind.yaml" --kubeconfig "$KC" --wait 180s > "$OUT/kind-create.log" 2>&1 \
     || { tail -5 "$OUT/kind-create.log"; stop "kind create cluster (kind-create.log)"; }
   chmod 600 "$KC"
   say "cluster $CLUSTER made in $(( $(date +%s) - t0 ))s"
@@ -516,7 +541,7 @@ for d in re.split(r"(?m)^---\s*$", sys.stdin.read()):
     info install "values added at install (kept by every upgrade)" "$EXTRA_VALUES"
   fi
   local t0; t0=$(date +%s)
-  hc install kubeast "$CHART_OCI" --version "$FROM_VERSION" --create-namespace -f "$OUT/values-from.yaml" ${extra[@]+"${extra[@]}"} \
+  fg_run hc install kubeast "$CHART_OCI" --version "$FROM_VERSION" --create-namespace -f "$OUT/values-from.yaml" ${extra[@]+"${extra[@]}"} \
     --wait --timeout 15m > "$OUT/install-from.log" 2>&1 || { tail -8 "$OUT/install-from.log"; stop "helm install $FROM_VERSION (install-from.log)"; }
   [ -n "$TMP_VALUES" ] && { rm -f "$TMP_VALUES"; TMP_VALUES=""; }
   say "installed $FROM_VERSION in $(( $(date +%s) - t0 ))s"
@@ -620,12 +645,15 @@ snapshot() {
   psql_q "SELECT id || ' [' || name || ']' FROM roles WHERE NOT is_system ORDER BY id" > "$d/roles.txt"
   psql_q "SELECT u.email || ' ' || g.cluster_id || ' ' || r.id || ' [' || r.name || ']' FROM user_cluster_roles g JOIN auth_users u ON u.id = g.user_id JOIN roles r ON r.id = g.role_id WHERE u.email LIKE '%@$DOMAIN' ORDER BY 1" > "$d/grants.txt"
   psql_q "SELECT role_id || ' ' || status || ' ' || coalesce(end_reason, '-') || ' ' || reason FROM access_requests WHERE reason LIKE 'rehearsal%' ORDER BY reason" > "$d/access-requests.txt"
-  # the roles stored before the name rule, and what an upgrade with #865 ends for them: "<grants> <requests>"
+  # the roles stored before the name rule, and what an upgrade with #865 changes for them: "<grants> <requests>
+  # <accounts>" — accounts whose account level is one of them in Pending's group (ASCII names: trimmed, any case)
   psql_q "SELECT id || ' [' || name || ']' FROM roles WHERE description = '$LOOKALIKE' ORDER BY id" > "$d/lookalike-roles.txt"
   psql_q "WITH l AS (SELECT id FROM roles WHERE description = '$LOOKALIKE')
           SELECT ((SELECT count(*) FROM user_cluster_roles WHERE role_id IN (SELECT id FROM l))
                 + (SELECT count(*) FROM user_cluster_roles WHERE restore_role_id IN (SELECT id FROM l) AND role_id NOT IN (SELECT id FROM l)))::text
-               || ' ' || (SELECT count(*) FROM access_requests WHERE role_id IN (SELECT id FROM l) AND status IN ('pending', 'approved'))::text" > "$d/lookalike-holds.txt"
+               || ' ' || (SELECT count(*) FROM access_requests WHERE role_id IN (SELECT id FROM l) AND status IN ('pending', 'approved'))::text
+               || ' ' || (SELECT count(*) FROM auth_users u JOIN roles r ON r.id = u.role_id
+                          WHERE r.id IN (SELECT id FROM l) AND lower(btrim(r.name)) = 'pending')::text" > "$d/lookalike-holds.txt"
   psql_q "SELECT id || ' ' || storage FROM session_recordings WHERE id LIKE 'rec-reh-%' ORDER BY 1" > "$d/recordings.txt"
   psql_q "SELECT id || ' ' || status FROM session_recordings WHERE id LIKE 'rec-reh-%' ORDER BY 1" > "$d/recording-status.txt"
   psql_q "SELECT title FROM sessions WHERE title LIKE 'rh-%' ORDER BY 1" > "$d/conversations.txt"
@@ -714,7 +742,7 @@ role_checks() {
     skip roles "role names one per group: renames, grants, requests, audit rows" 865 "no migration makes roles_name_group_key"
     return
   fi
-  local l="(SELECT id FROM roles WHERE description = '$LOOKALIKE')" want holds n_grants n_requests n_renamed
+  local l="(SELECT id FROM roles WHERE description = '$LOOKALIKE')" want holds n_grants n_requests n_accounts n_renamed
   check roles "the database has role_group_slug(text) and the unique index roles_name_group_key" "t t" \
     "$(psql_q "SELECT (to_regprocedure('role_group_slug(text)') IS NOT NULL)::text || ' ' || EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'roles_name_group_key')::text" | sed 's/true/t/g; s/false/f/g')"
   want=$(awk '{ s = $0; sub(/^[0-9]+ \[/, "", s); sub(/\]$/, "", s); gsub(/^ +| +$/, "", s); printf "%s%s [%s-renamed-%s]", (NR > 1 ? "," : ""), $1, s, $1 }' "$OUT/before/lookalike-roles.txt")
@@ -723,17 +751,18 @@ role_checks() {
   check roles "rh-ops, made first in its group, keeps its name" "$(grep ' \[rh-ops\]$' "$OUT/before/roles.txt" | tr '\n' ',' | sed 's/,$//')" \
     "$(psql_q "SELECT string_agg(id || ' [' || name || ']', ',' ORDER BY id) FROM roles WHERE role_group_slug(name) = 'rh-ops'")"
   holds=$(cat "$OUT/before/lookalike-holds.txt")
-  n_grants=${holds%% *}; n_requests=${holds##* }
+  read -r n_grants n_requests n_accounts <<< "$holds"
   n_renamed=$(grep -c . "$OUT/before/lookalike-roles.txt")
   check roles "grants of the renamed roles removed (before: $n_grants, rh-u4's ADMIN)" 0 \
     "$(psql_q "SELECT count(*) FROM user_cluster_roles WHERE role_id IN $l OR restore_role_id IN $l")"
   check roles "their pending and approved requests ended role_renamed (before: $n_requests)" "ended $n_requests · open 0" \
     "$(psql_q "SELECT 'ended ' || count(*) FILTER (WHERE status = 'expired' AND end_reason = 'role_renamed') || ' · open ' || count(*) FILTER (WHERE status IN ('pending', 'approved')) FROM access_requests WHERE role_id IN $l")"
   check roles "audit rows by system/migration, per action" \
-    "admin.roles.update $n_renamed · user.cluster_role.unset $n_grants · access.request.expire $n_requests" \
+    "admin.roles.update $n_renamed · user.cluster_role.unset $n_grants · access.request.expire $n_requests · user.role.update $n_accounts" \
     "$(psql_q "SELECT 'admin.roles.update ' || count(*) FILTER (WHERE action = 'admin.roles.update' AND target_type = 'role' AND target_id IN (SELECT id::text FROM roles WHERE description = '$LOOKALIKE') AND after->>'reason' = 'same_group')
                   || ' · user.cluster_role.unset ' || count(*) FILTER (WHERE action = 'user.cluster_role.unset' AND after->>'reason' = 'role_renamed')
                   || ' · access.request.expire ' || count(*) FILTER (WHERE action = 'access.request.expire' AND after->>'end_reason' = 'role_renamed')
+                  || ' · user.role.update ' || count(*) FILTER (WHERE action = 'user.role.update' AND after->>'reason' = 'role_renamed')
                FROM auth_audit_logs WHERE actor_user_id = 'system' AND actor_email = 'migration'")"
   admin_login
   call GET /api/v1/auth/roles "$ATOK"
@@ -798,7 +827,7 @@ build_images() {
     f=(); [ -n "$df" ] && f=(-f "$ROOT/$ctx/$df")
     t0=$(date +%s)
     # shellcheck disable=SC2086 # DOCKER_BUILD_ARGS is a list of words
-    nice -n 10 docker build ${DOCKER_BUILD_ARGS:-} -t "kubeast/$name:$IMAGE_TAG" ${f[@]+"${f[@]}"} "$ROOT/$ctx" > "$OUT/build-$name.log" 2>&1 \
+    fg_run nice -n 10 docker build ${DOCKER_BUILD_ARGS:-} -t "kubeast/$name:$IMAGE_TAG" ${f[@]+"${f[@]}"} "$ROOT/$ctx" > "$OUT/build-$name.log" 2>&1 \
       || { tail -5 "$OUT/build-$name.log"; stop "build $name (build-$name.log)"; }
     say "built kubeast/$name:$IMAGE_TAG in $(( $(date +%s) - t0 ))s"
   done
@@ -935,11 +964,13 @@ db_connection_checks() {
 }
 
 # --- 8. requests during an upgrade: every second, each target once, in parallel; a request with no answer after
-# PROBE_TIMEOUT seconds is a hang. The bundled PostgreSQL and Redis pods are sampled every second beside them. ---
+# PROBE_TIMEOUT seconds is a hang. The bundled PostgreSQL and Redis pods are sampled every second beside them. Both
+# loops end once the script is gone ($$ in a background subshell is the script's), also after a kill -9. ---
 probe_loop() { # probe_loop FILE
   local file=$1 now tok_at=0 spec name path auth pw
   PTOK=""
-  while :; do
+  CALL_TIMEOUT=$PROBE_TIMEOUT # the token refresh holds up a second no longer than a request may take
+  while kill -0 "$$" 2> /dev/null; do
     now=$(date +%s)
     if [ $((now - tok_at)) -ge 240 ] || [ -z "$PTOK" ]; then
       pw=$(secret_key "$APP_SECRET" DEFAULT_ADMIN_PASSWORD 2>/dev/null); login admin "$pw"; pw=""
@@ -955,16 +986,20 @@ probe_loop() { # probe_loop FILE
         echo "$now $name ${r:-000 0} $rc" >> "$file"
       ) &
     done
-    sleep 1
+    # the next round at the next second of the clock, so the rounds count the seconds
+    while [ "$(date +%s)" = "$now" ]; do sleep 0.2; done
   done
 }
 pods_loop() { # pods_loop FILE — "<epoch> app=ready ..." for the bundled PostgreSQL and Redis
-  while :; do
+  while kill -0 "$$" 2> /dev/null; do
     echo "$(date +%s) $(kc -n "$NS" get pods -l 'app in (postgres,redis)' -o jsonpath='{range .items[*]}{.metadata.labels.app}={.status.containerStatuses[0].ready}{" "}{end}' 2>/dev/null)" >> "$1"
     sleep 1
   done
 }
-probe_summary() { # probe_summary PHASE FILE PODSFILE — rows per target; DB targets may fail while PostgreSQL is down
+# probe_summary PHASE FILE PODSFILE SECONDS — rows per target; DB targets may fail while PostgreSQL is down. A target
+# passes with no hang, no non-2xx outside that window, and requests sent in at least 80 % of the SECONDS the probes ran
+# (a loop that stopped or stalled part way does not pass).
+probe_summary() {
   python3 -I - "$2" "$3" "$PG_GRACE" "$PROBE_TIMEOUT" > "$OUT/$1-probe-summary.tsv" <<'EOF'
 import sys
 probe, pods, grace, timeout = sys.argv[1], sys.argv[2], int(sys.argv[3]), float(sys.argv[4])
@@ -1012,30 +1047,37 @@ for name in sorted(stats):
     codes = ",".join(f"{c}x{n}" for c, n in sorted(s["codes"].items()))
     print(f"{name}\t{s['n']}\t{s['bad']}\t{s['expected']}\t{s['hang']}\t{s['max']:.2f}\t{codes}")
 EOF
-  local w name n bad exp hang mx codes
+  local w name n bad exp hang mx codes secs=$4 min seen=" "
+  min=$(( secs * 8 / 10 ))
   w=$(awk -F'\t' '$1 == "window" {print $2 " PostgreSQL down: " $3}' "$OUT/$1-probe-summary.tsv")
   info "$1" "bundled PostgreSQL restarts during the upgrade" "$w"
   while IFS=$'\t' read -r name n bad exp hang mx codes; do
     [ "$name" = window ] && continue
-    if [ "$bad" = 0 ] && [ "$hang" = 0 ] && [ "$n" -ge 5 ]; then
-      row "$1" "requests to $name answered" PASS "$n sent · non-2xx $exp (in the PostgreSQL window) · hangs 0 · slowest ${mx}s"
+    seen="$seen$name "
+    if [ "$bad" = 0 ] && [ "$hang" = 0 ] && [ "$n" -ge "$min" ]; then
+      row "$1" "requests to $name answered" PASS "$n sent in ${secs}s · non-2xx $exp (in the PostgreSQL window) · hangs 0 · slowest ${mx}s"
     else
-      row "$1" "requests to $name answered" FAIL "$n sent · non-2xx outside the window $bad ($codes) · in it $exp · hangs $hang · slowest ${mx}s"
+      row "$1" "requests to $name answered" FAIL "$n sent in ${secs}s (want $min or more) · non-2xx outside the window $bad ($codes) · in it $exp · hangs $hang · slowest ${mx}s"
     fi
   done < "$OUT/$1-probe-summary.tsv"
+  for name in gateway auth-jwks frontend k8s-list sessions auth-me; do
+    case "$seen" in *" $name "*) ;; *) row "$1" "requests to $name answered" FAIL "none sent in ${secs}s" ;; esac
+  done
 }
 
 # upgrade_phase PHASE HELM_ARGS... — the upgrade with probes running; sets PHASE_T0
 upgrade_phase() {
   local phase=$1; shift
   : > "$OUT/$phase-probe.txt"; : > "$OUT/$phase-pods.txt"
+  local probe_t0 probe_secs
+  probe_t0=$(date +%s)
   probe_loop "$OUT/$phase-probe.txt" & BG_PIDS="$BG_PIDS $!"
   pods_loop "$OUT/$phase-pods.txt" & BG_PIDS="$BG_PIDS $!"
   sleep 5
   kc -n "$NS" get pods -o wide > "$OUT/$phase-pods-before.txt"
   PHASE_T0=$(date +%s)
   say "$phase: helm upgrade $*"
-  hc upgrade kubeast "$CHART" "$@" --wait --timeout 15m > "$OUT/$phase-helm.log" 2>&1
+  fg_run hc upgrade kubeast "$CHART" "$@" --wait --timeout 15m > "$OUT/$phase-helm.log" 2>&1
   local rc=$? d
   say "$phase: helm exit $rc after $(( $(date +%s) - PHASE_T0 ))s"
   if [ "$rc" != 0 ]; then
@@ -1046,11 +1088,12 @@ upgrade_phase() {
     kc -n "$NS" rollout status "deploy/$d" --timeout=300s > /dev/null || { stop_bg; stop "$phase: deploy/$d did not roll out"; }
   done
   sleep 15
+  probe_secs=$(( $(date +%s) - probe_t0 ))
   stop_bg
   sleep "$PROBE_TIMEOUT"
   kc -n "$NS" get pods -o wide > "$OUT/$phase-pods-after.txt"
   row "$phase" "helm upgrade $*" PASS "$(( $(date +%s) - PHASE_T0 ))s, revision $(hc list -o json | jq -r '.[] | select(.name == "kubeast") | .revision')"
-  probe_summary "$phase" "$OUT/$phase-probe.txt" "$OUT/$phase-pods.txt"
+  probe_summary "$phase" "$OUT/$phase-probe.txt" "$OUT/$phase-pods.txt" "$probe_secs"
 }
 
 # --- 9. pod settings after the upgrade ---
@@ -1122,7 +1165,7 @@ require_names
 mkdir -p "$OUT"; : > "$RES"
 exec > >(tee -a "$OUT/run.log") 2>&1
 trap cleanup EXIT
-trap 'exit 130' INT TERM
+trap on_signal INT TERM
 chart_values
 if [ "$PLAN" = 1 ]; then
   say "upgrade rehearsal plan: checkout $HEAD8, out $OUT"
@@ -1216,13 +1259,20 @@ if in_checkout 856; then
     start_drain; DRAIN_B=$DRAIN_ID
     upgrade_phase B --reset-then-reuse-values --set podShutdown.preStopSeconds=$(( $(value_of podShutdown.preStopSeconds) + 1 ))
     admin_login
+    # A status check, not a timing: it is read from the end of phase B (rollout done, 15 s, PROBE_TIMEOUT), up to 45
+    # times 2 s apart, and the row gives the seconds since phase B's helm upgrade began; when the server running the
+    # drain was replaced is not measured.
     st=""
     for _ in $(seq 1 45); do
       call GET "/api/v1/nodes/$WORKER/drain/status?cluster=$CLUSTER_ID&drain_id=$DRAIN_B" "$ATOK"
       st=$(jqb .status); [ "$st" = interrupted ] && break
       sleep 2
     done
-    check B "a drain whose server was replaced reads interrupted (#858)" interrupted "$st"
+    if [ "$st" = interrupted ]; then
+      row B "a drain whose server was replaced reads interrupted (#858)" PASS "interrupted, read $(( $(date +%s) - PHASE_T0 ))s after phase B's helm upgrade began"
+    else
+      row B "a drain whose server was replaced reads interrupted (#858)" FAIL "want interrupted, got '$st' ($(( $(date +%s) - PHASE_T0 ))s after phase B's helm upgrade began)"
+    fi
     check B "its answer names $WORKER as still cordoned" yes "$(jqb "(.cordoned_nodes // []) | if any(.[]; . == \"$WORKER\") then \"yes\" else \"no\" end")"
   else
     skip B "drain interrupted" 858 "no migration makes the table node_drains"
