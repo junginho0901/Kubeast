@@ -125,6 +125,7 @@ GET /api/v1/mutatingwebhookconfigurations cluster-object
 GET /api/v1/mutatingwebhookconfigurations/{name}/describe cluster-object
 GET /api/v1/mutatingwebhookconfigurations/{name}/yaml cluster-object
 GET /api/v1/namespaces narrowed
+GET /api/v1/namespaces/{namespace}/anomalies path
 GET /api/v1/namespaces/{namespace}/backendtlspolicies path
 GET /api/v1/namespaces/{namespace}/backendtlspolicies/{name}/describe path
 GET /api/v1/namespaces/{namespace}/configmaps path

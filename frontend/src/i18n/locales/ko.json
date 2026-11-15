@@ -4006,6 +4006,7 @@
         "ai_tool_resource_graph": "읽기 도구: 네임스페이스 리소스 그래프",
         "ai_tool_timeline": "읽기 도구: 변경 이력(이벤트·롤아웃)",
         "ai_tool_gpu": "읽기 도구: GPU·DRA 요약",
+        "ai_tool_anomaly_rank": "읽기 도구: 앞 구간과 달라진 것 순위",
         "ai_tool_hygiene": "관리자 도구: 클러스터 위생 점검 보고",
         "ai_tool_k8s_jq_query": "읽기 도구: 리소스 목록을 jq로 걸러 보기",
         "ai_tool_k8s_tabular_query": "읽기 도구: 고른 열만 표로 보기",

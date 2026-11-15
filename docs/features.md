@@ -41,6 +41,7 @@
     - The kubectl tools reach the cluster through a proxy inside tool-server that adds the identity and the `Audit-ID`; kubectl's own discovery reads are not listed.
   - Tools that use Kubeast features call the k8s-service API **with that person's token** rather than kubectl, so permissions, audit and masking are the same as in the UI. These tools are:
     - `issues`: an issue check of pods, workloads, nodes, PVCs and warning events at once
+    - `anomaly_rank`: what differs in one namespace (or one workload's pods) between a window, the last hour by default, and the window of the same length before it, ranked by the server before the model looks around — failing objects now, container terminations by reason, restarts, CPU throttling and memory near the limit from the cluster's Prometheus, pressure on the nodes its pods run on. At most 10 findings, the new first, about 3,000 characters; each check that found nothing is listed as normal and each that could not run (no Prometheus or no series, a grant limited to namespaces, its time or query budget spent) as not run, with why. Off by default (`features.anomalyRank`)
     - `prometheus_query`: PromQL instant and range queries, absolute time ranges too. Given `chart=true`, a title and a unit, the result becomes a **graph below the answer**.
       - The graph is the same in AI Chat and floating, holds up to 10 series, has "View larger", and is kept in saved answers.
     - `prometheus_metrics` and `prometheus_labels`: find metric names, types and descriptions, and label names and values, before querying
@@ -75,6 +76,7 @@
     - `hygiene`: the hygiene report (an Admin grant on the cluster)
   - A tool is left out of the tool list (`/api/v1/features`, 1-minute cache) when:
     - the cluster does not have the feature: Prometheus is not set up, there is no log, trace or alert store, network flows are off, or cost or policy reports are off
+    - the install has not turned it on: `anomaly_rank` with `features.anomalyRank.enabled` off
     - the person lacks the permission k8s-service checks: `resource.hygiene.scan` (or `admin.hygiene.read`), `resource.helm.read`, `resource.policyreport.read`, `resource.cost.read` or `resource.networkflow.read`
   - Results are cut at 100 series, 120 points, 200 log lines, 200 rows, 200 graph nodes/400 edges and 64 KB of text.
   - A range result (`prometheus_query` and `loki_query` metric queries) can be longer than what the model reads at once (the model's tool result length, 6,000 characters unless set). Then it is not cut.

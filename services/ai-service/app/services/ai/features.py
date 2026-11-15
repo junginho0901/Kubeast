@@ -84,6 +84,10 @@ def _log_files_on(features: Dict[str, Any], cluster: str) -> bool:
     return bool((features.get("logFiles") or {}).get("enabled"))
 
 
+def _anomaly_rank_on(features: Dict[str, Any], cluster: str) -> bool:
+    return bool((features.get("anomalyRank") or {}).get("enabled"))
+
+
 # tool name → does this cluster serve it. Tools not listed are always offered.
 GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "prometheus_query": _prometheus_on,
@@ -109,6 +113,7 @@ GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "alert_investigate": _investigate_now_on,
     "alerts_inbox": _alert_inbox_on,
     "logfiles": _log_files_on,
+    "anomaly_rank": _anomaly_rank_on,
 }
 
 # tool name → (scope, the permission that names it) of the screen's route. Without what the route asks the call could

@@ -305,6 +305,11 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleIssues,
 	})
 	register(ToolDefinition{
+		Name:        "anomaly_rank",
+		Description: "What differs in one namespace between a window and the window before it, ranked: failing objects, terminations by reason, restarts, CPU throttling, memory near the limit, node pressure",
+		Handler:     handleAnomalyRank,
+	})
+	register(ToolDefinition{
 		Name:        "hygiene",
 		Description: "The cluster hygiene report (Pod Security, image tags, TLS expiry, upgrade readiness) — Admin",
 		Handler:     handleHygiene,

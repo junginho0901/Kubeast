@@ -264,6 +264,32 @@ K8S_READONLY_TOOLS: List[Dict] = [
     {
         "type": "function",
         "function": {
+            "name": "anomaly_rank",
+            "description": (
+                "What differs in one namespace between a window (default the last hour) and the window of the same length right before it, ranked "
+                "by the server before you look around: failing objects now (the issue check), container terminations by reason (OOMKilled, Error), "
+                "restarts, CPU throttling and memory against the limit (Prometheus), pressure on the nodes its pods run on. Each finding has check, "
+                "target, verdict, a one-line summary, before / now / ratio (new: it was not there before) and up to 3 examples; at most 10, the new "
+                "first, then the larger ratio. normal lists the checks that found nothing; not_run the checks that could not run and why (no "
+                "Prometheus, no series, a grant limited to namespaces): not run is not normal, say so. Call it first when the user asks broadly what "
+                "is wrong or why something broke in a namespace, then read the objects it names. A finding is a lead, not a cause: check it."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string", "description": "The namespace to compare"},
+                    "since_time": {"type": "string", "description": "Start: 1h, 30m or an RFC3339 time (default an hour before the end); the window is 5 minutes to 24 hours"},
+                    "until_time": {"type": "string", "description": "End as an RFC3339 time (default now)"},
+                    "workload_kind": {"type": "string", "enum": ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Job", "CronJob"], "description": "Only this workload's pods, with workload_name"},
+                    "workload_name": {"type": "string", "description": "The workload's name, with workload_kind"},
+                },
+                "required": ["namespace"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "prometheus_query",
             "description": (
                 "Run a PromQL expression against the Prometheus Kubeast reads for this cluster (its own Prometheus Service, or the external store "
