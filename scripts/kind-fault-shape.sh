@@ -190,12 +190,20 @@ foreign_after() {
 CLAIMED=""
 claim_next() { CLAIMED=$(( $(revision) + 1 )); echo "$CLAIMED" >> "$MADE"; }
 # after helm: a claimed number helm did not use (it failed before making a revision) comes off the list, or another
-# tool's next revision would take it and count as this script's
+# tool's next revision would take it and count as this script's. A history that cannot be read, or reads empty, says
+# nothing of it: the number stays (helm got as far as the cluster, so it most likely made it), and the reason is printed
 settle_claim() {
   [ -n "$CLAIMED" ] || return 0
-  if ! history_json | jq -e --argjson r "$CLAIMED" 'any(.[]; .revision == $r)' >/dev/null; then
-    { grep -vx "$CLAIMED" "$MADE" || true; } > "$MADE.tmp" && mv "$MADE.tmp" "$MADE"
-  fi
+  local hist made why
+  hist=$(history_json) || hist=""
+  made=$(jq -r --argjson r "$CLAIMED" 'if length == 0 then "empty" else any(.[]; .revision == $r) end' <<<"$hist" 2>/dev/null) || made=""
+  case "$made" in
+    true) ;;
+    false) { grep -vx "$CLAIMED" "$MADE" || true; } > "$MADE.tmp" && mv "$MADE.tmp" "$MADE" ;;
+    *)
+      if [ "$made" = empty ]; then why="read empty"; else why="could not be read"; fi
+      echo "revision $CLAIMED stays listed as $TAG's in $MADE: helm history $why, so whether helm made it is not known. If helm history shows no revision $CLAIMED, take the line out of $MADE, or another tool's revision of that number counts as this script's." >&2 ;;
+  esac
   CLAIMED=""
 }
 
