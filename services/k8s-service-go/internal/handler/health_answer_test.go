@@ -116,4 +116,7 @@ func TestHealthAnswersInsideTheSetupWait(t *testing.T) {
 	if took > 1900*time.Millisecond || body["kubernetes"] != "connected" {
 		t.Errorf("API server answering in 1 s: %v in %v, want connected within 1.9 s", body["kubernetes"], took.Round(time.Millisecond))
 	}
+	if took > 1300*time.Millisecond { // 1 s beside the audit status's 0.4 s, not after it
+		t.Errorf("API server answering in 1 s with an audit status of 0.4 s: answered in %v, want the two read side by side", took.Round(time.Millisecond))
+	}
 }
