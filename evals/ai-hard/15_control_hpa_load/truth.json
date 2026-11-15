@@ -11,7 +11,7 @@
  "decoys": [
   {"resource": "HorizontalPodAutoscaler/shop-15/api", "why": "scaled out as designed; its events say why"},
   {"resource": "Deployment/shop-15/api", "why": "more pods and higher CPU, all within requests and limits, no throttling, no errors"},
-  {"resource": "Deployment/edge-15/gateway", "why": "the traffic source outside the asked namespace; more traffic is not a fault"}
+  {"resource": "Deployment/edge/gateway", "why": "the traffic source outside the asked namespace; more traffic is not a fault"}
  ],
  "distractor_at": "{{INJECT_TIME}}"
 }

@@ -82,7 +82,7 @@ def resource_form(resource: str) -> bool:
 def test_every_hard_case_loads_with_no_field_problem():
     cases = all_cases()
     folders = sorted(d.name for d in HARD.iterdir() if (d / "case.json").exists())
-    assert [d.name for d, _ in cases] == folders and len(cases) == 10
+    assert [d.name for d, _ in cases] == folders and len(cases) == 16
     namespaces = [c["namespace"] for _, c in cases]
     assert len(set(namespaces)) == len(namespaces), "two cases share a namespace"
     for d, c in cases:
@@ -219,6 +219,67 @@ def test_each_truth_fits_its_case_and_the_scorer():
         for x in truth["decoys"]:
             s = rca.score_rca(block(right + [cause(as_answered(x["resource"]), "crash")]), filled, CALLS)
             assert not s["pass"] and s["decoys_taken"] == [as_answered(x["resource"])], (d.name, x["resource"])
+
+
+# The workload where the symptom shows, with the kind the pod list shows, is not the cause of these cases (README
+# "Hard cases"): it misses alone and costs nothing beside a right cause. WRONG_KIND: the cause under a kind of the
+# symptom. ALSO_RIGHT: other forms a NOTES.md takes.
+SYMPTOM_ONLY = {
+    "18_moved_namespace_old_address": [("Deployment/shop-18/web", "dependency_down"), ("Pod/shop-18/web-7f9c4d8b6-x2k4p", "dns")],
+    "19_route_missing_hostname": [("Deployment/shop-19/edge", "config_change")],
+    "20_boot_fails_one_env": [("Pod/shop-20/shop-web-7f9c4d8b6-x2k4p", "crash"), ("Pod/shop-20/shop-web-7f9c4d8b6-x2k4p", "rollout")],
+    "21_oom_cascade": [("StatefulSet/shop-21/search", "oom"), ("StatefulSet/shop-21/search", "rollout"), ("Pod/shop-21/search-1", "oom")],
+    "22_workers_over_memory": [("Deployment/shop-22/shop-api", "oom"), ("Deployment/shop-22/shop-api", "rollout")],
+}
+WRONG_KIND = {
+    "20_boot_fails_one_env": [("Deployment/shop-20/shop-web", "crash")],
+    "21_oom_cascade": [("ConfigMap/shop-21/search-indexes-2", "oom")],
+    "22_workers_over_memory": [("ConfigMap/shop-22/shop-api-settings", "oom"), ("ConfigMap/shop-22/shop-api-settings", "resource_limit")],
+}
+ALSO_RIGHT = {
+    "16_past_outage": [("Deployment/shop-16/payments", "config_change")],
+    "18_moved_namespace_old_address": [("ConfigMap/shop-18/web-settings", "dns")],
+    "19_route_missing_hostname": [("Service/shop-19/frontdoor", "config_change"), ("frontdoor", "rollout")],
+    "20_boot_fails_one_env": [("Deployment/shop-20/shop-web", "rollout"), ("ReplicaSet/shop-20/shop-web-7f9c4d8b6", "rollout"),
+                              ("ConfigMap/shop-20/shop-web-release-2-4-0", "config_change"), ("ConfigMap/shop-20/shop-web-config", "config_change")],
+    "21_oom_cascade": [("ConfigMap/shop-21/search-indexes-2", "rollout")],
+    "22_workers_over_memory": [("ConfigMap/shop-22/shop-api-settings", "config_change")],
+}
+
+
+def test_the_symptom_alone_is_not_the_cause():
+    cases = {d.name: d for d, _ in all_cases()}
+    assert set(SYMPTOM_ONLY) | set(WRONG_KIND) | set(ALSO_RIGHT) <= set(cases)
+    for name, answers in SYMPTOM_ONLY.items():
+        filled = rca.fill_placeholders(truth_of(cases[name]), MARKS)
+        right = [cause(tc["resource"], tc["kind"]) for tc in filled["causes"]]
+        for resource, kind in answers:
+            assert not rca.score_rca(block([cause(resource, kind)]), filled, CALLS)["pass"], (name, resource, kind)
+            s = rca.score_rca(block(right + [cause(resource, kind)]), filled, CALLS)
+            assert s["pass"] and s["score"] == 1.0, (name, resource, kind, s)
+    for name, answers in WRONG_KIND.items():
+        filled = rca.fill_placeholders(truth_of(cases[name]), MARKS)
+        for resource, kind in answers:
+            assert not rca.score_rca(block([cause(resource, kind)]), filled, CALLS)["pass"], (name, resource, kind)
+    for name, answers in ALSO_RIGHT.items():
+        filled = rca.fill_placeholders(truth_of(cases[name]), MARKS)
+        for resource, kind in answers:
+            s = rca.score_rca(block([cause(resource, kind)]), filled, CALLS)
+            assert s["pass"] and s["score"] == 1.0, (name, resource, kind, s)
+
+
+def test_a_namespace_a_case_makes_besides_its_own_says_nothing_of_the_case():
+    own = {c["namespace"] for _, c in all_cases()}
+    made: dict = {}
+    for d, c in all_cases():
+        setup, cleanup = " ".join(c.get("setup_cmds", [])), " ".join(c.get("cleanup_cmds", []))
+        assert "kubeast.io/ai-eval" not in setup, f"{d.name}: a label the case's own namespace has"
+        for ns in re.findall(r"kubectl create namespace ([a-z0-9-]+)", setup):
+            assert not re.search(r"-\d+$", ns), f"{d.name}: {ns} carries a number"
+            assert ns not in own and ns not in made, f"{d.name}: {ns} is also {made.get(ns, 'a case namespace')}"
+            made[ns] = d.name
+            assert re.search(rf"kubectl delete namespace {re.escape(ns)}(\s|$)", cleanup), f"{d.name}: {ns} is not deleted by name"
+    assert made, "no case makes a second namespace"
 
 
 def test_what_a_case_applies_holds_no_answer_word():

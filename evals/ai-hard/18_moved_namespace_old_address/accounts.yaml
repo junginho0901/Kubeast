@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: accounts}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: accounts}}
+  template:
+    metadata: {labels: {app: accounts}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/cgi-bin
+              cat > /www/cgi-bin/signin <<'EOF'
+              #!/bin/sh
+              body=$(head -c "${CONTENT_LENGTH:-0}")
+              user=$(echo "$body" | sed -n 's/.*user=\([a-z0-9]*\).*/\1/p')
+              token="s-$(echo -n "$user" | md5sum | cut -c1-8)"
+              echo "level=info msg=\"signed in\" user=$user" >&2
+              printf 'Content-Type: text/plain\r\n\r\ntoken=%s\n' "$token"
+              EOF
+              cat > /www/cgi-bin/session <<'EOF'
+              #!/bin/sh
+              token=$(echo "&$QUERY_STRING" | sed -n 's/.*&token=\([^&]*\).*/\1/p')
+              case "$token" in
+                s-????????)
+                  echo "level=info msg=\"session lookup\" result=valid" >&2
+                  printf 'Content-Type: application/json\r\n\r\n{"valid":true}\n'
+                  ;;
+                *)
+                  echo "level=info msg=\"session lookup\" result=unknown" >&2
+                  printf 'Status: 404 Not Found\r\nContent-Type: application/json\r\n\r\n{"valid":false}\n'
+                  ;;
+              esac
+              EOF
+              chmod 755 /www/cgi-bin/signin /www/cgi-bin/session
+              echo "level=info msg=\"accounts started\""
+              exec httpd -f -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: accounts}
+spec:
+  selector: {app: accounts}
+  ports: [{name: http, port: 8080, targetPort: http}]

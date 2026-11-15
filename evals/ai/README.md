@@ -121,7 +121,7 @@ The account and earlier runs:
 - `--namespace-suffix random` (or a value of up to eight lowercase letters and digits) runs each case in
   `<namespace>-<suffix>`: the runner copies the case folder and writes the new name wherever the old one stands as a
   whole name (`case.json`, `truth.json`, the manifests), so the investigations, alerts and audit rows of earlier runs
-  name another namespace. Other namespaces a case makes (`edge-15`) keep their names.
+  name another namespace. Other namespaces a case makes (`edge`, `members`) keep their names.
 
 A request error of one chat turn — an HTTP error, a timeout, a dropped connection — is kept as that answer's `error`
 (`request_error`, `error_status`) and the case goes on; a 429 or 5xx is tried once more after 20 s. Three in a row
@@ -149,13 +149,34 @@ gives its kind: a bare name — a table, an index, a setting — is an extra cau
 The table leaves hidden cases out: with two or more it gives their total, with one or a run of hidden cases only it
 says the results are in the JSON, so no `.md` or screen line gives one hidden case's score.
 
-`evals/ai-hard/` holds ten cases made of plain Kubernetes objects. Each folder has `case.json`, `truth.json`, the
+`evals/ai-hard/` holds sixteen cases made of plain Kubernetes objects. Each folder has `case.json`, `truth.json`, the
 manifests it applies and `NOTES.md`: what the AI has to notice, the trap, how it is scored and what is unsure. None
 has run on a cluster yet, so their sizes and waits are first guesses for the first run to measure. They use only
-`docker.io/library/busybox:1.38.0`, namespaces `shop-NN` (and `edge-15`), business names and no Secret. The fault
-comes from data or settings, never from a branch in the code, and nothing a case applies names it
-(`scripts/test_ai_eval_cases.py`). Their answers lean on logs: run `scripts/kind-logsearch.sh up` first. The numbers
-leave room for the cases that need the OpenTelemetry demo or Chaos Mesh (01–03, 07, 10, 11), not written yet.
+`docker.io/library/busybox:1.38.0`, namespaces `shop-NN` (and `edge`, `members`), business names and no
+Secret. The fault comes from data or settings, never from a branch in the code, and nothing a case applies names it
+(`scripts/test_ai_eval_cases.py`); case 20's new release is a boot script in a ConfigMap, the stand-in for a new
+image. Their answers lean on logs: run `scripts/kind-logsearch.sh up` first. The numbers leave room for the cases that
+need the OpenTelemetry demo or Chaos Mesh (01–03, 07, 10, 11), not written yet. Cases 17–22 follow outage shapes
+common in production — a batch read that saturates a database, a stale in-cluster address, a route without its
+hostname, a release that boots in one environment only, an OOM cascade, workers past the memory limit — each rebuilt
+small; the scripts whose behaviour they depend on (headers through busybox httpd, memory held per worker or shard and
+where the OOM kill lands) were checked in a local busybox 1.38.0 container, not on kind.
+
+A truth's cause is what changed or what has to change, not where the symptom shows: where a fault is a change (a
+rollout, a ConfigMap, a selector, a scale), the workload that only shows the symptom is in `also_ok`, or is taken only
+with a kind that says a change (`config_change`, `rollout`), so the symptom's workload with the symptom's kind (`crash`,
+`oom`, `dependency_down`) is a miss; each NOTES.md says which and why. `scripts/test_ai_eval_cases.py` holds such
+answers to a miss.
+
+The namespace a case makes besides its own (`edge` for 15, `members` for 18) carries no case number and no
+`kubeast.io/ai-eval` label, so a namespace list does not tie it to the case; the case's `setup_cmds` and
+`cleanup_cmds` make and delete it by name. Run the cases only on the dev clusters: a namespace of that name already
+there would be deleted with the case.
+
+The hidden cases (08, 15, 18) measure whether a change to the prompts, the rule cards or the tool
+descriptions fits the cases it was tried on. Whoever writes those — a person or an agent — does not open these
+folders, their NOTES.md or their truth, nor a run's rows, table or log of a hidden case; the results are read as the
+round's total.
 
 | Case | Group | Problem | Needs on dev besides logs |
 |---|---|---|---|
@@ -169,6 +190,12 @@ leave room for the cases that need the OpenTelemetry demo or Chaos Mesh (01–03
 | 14 | control | no fault; a clean rollout four minutes before the question | |
 | 15 | control, hidden | no fault; traffic from another namespace rises fivefold and the HPA scales out | the second cluster's metrics-server and Prometheus |
 | 16 | past | a Deployment scaled to 0 for five minutes, then back; asked at 6 and 70 minutes | the second cluster's Prometheus |
+| 17 | trap | a CronJob loses its cursor setting and reads a whole table every minute; the database's disk queue slows every caller while its CPU stays low | the second cluster's Prometheus (cAdvisor), for the CPU part |
+| 18 | hidden cause, hidden | a service's old namespace is emptied after a move; the frontend still calls the old address and treats the failure as signed out | |
+| 19 | hidden cause | the front Service is switched to a new edge whose routes lack the main hostname: 404 for one site, the backend healthy | |
+| 20 | hidden cause | a release that needs a setting only staging has is rolled out with `Recreate`; production is down; asked at 5 and 65 minutes | |
+| 21 | hidden cause | a bigger index leaves a three-node StatefulSet no room to lose a node; its rolling update starts an OOM cascade | the second cluster's Prometheus, for the memory steps |
+| 22 | hidden cause | the worker count raised past what the memory limit holds; OOMKilled every time the workers warm up | the second cluster's Prometheus, for the memory climb |
 
 ```bash
 scripts/kind-logsearch.sh up && scripts/kind-tracing.sh up   # the stores the demo writes to
