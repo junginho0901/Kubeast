@@ -54,6 +54,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서입니다.
   - `GET /api/v1/auth/admin/audit-logs/export` — 같은 필터와 `as_of`, CSV UTF-8 BOM, 최신 50,000행까지(목록 답의 `export_limit`이 그 한도, 내보내기 답의 `X-Kubeast-Total`이 맞는 전체 수)
 - **싱크(선택)**: 1차 저장소는 DB이고, 싱크는 DB 행을 **밖으로 복사**합니다.
   - auth-service의 디스패처 하나(여러 replica 중 Postgres advisory lock을 잡은 것)가 싱크마다 커서(`audit_sink_cursors.last_id`)보다 큰 행을 읽어 배치로 보내고, 성공하면 커서를 옮깁니다.
+  - 그 잠금의 연결은 서버에 TCP keepalive(10초 조용하면, 5초마다, 3번)를 요청합니다. 보내던 replica의 노드가 사라지면 운영체제 기본값인 두 시간이 아니라 약 25초 뒤에 잠금이 풀립니다.
   - 감사를 쓰는 서비스(Go·Python)는 그대로 DB에만 INSERT합니다.
   - 늦게 커밋된 작은 id를 놓치지 않도록 5초가 지난 행만 읽습니다.
   - 종류:
