@@ -1,0 +1,55 @@
+{
+  "about": "The 🔐 line under a tool block's name for an Access (services/pkg/auth.Access): toolAccess.ts accessLine while the answer streams and ai-service app/services/ai/access.py line in the saved answer write the same text. chatStreamManager.test.ts and ai-service tests/test_tool_access.py run every case.",
+  "cases": [
+    {
+      "name": "read role",
+      "access": { "cluster": "prod", "kind": "person", "user": "a@example.com", "groups": ["kubeast:authenticated", "kubeast:viewer"], "role": "Read", "impersonation": true, "mode": "read" },
+      "line": "<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> <code>kubeast:viewer</code> · role Read · whole cluster · read-only</p>"
+    },
+    {
+      "name": "write role limited to namespaces",
+      "access": { "cluster": "prod", "kind": "person", "user": "a@example.com", "groups": ["kubeast:authenticated", "kubeast:role:write"], "role": "Write", "namespaces": ["shop", "payments"], "impersonation": true, "mode": "write" },
+      "line": "<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> <code>kubeast:role:write</code> · role Write · namespaces shop, payments · write</p>"
+    },
+    {
+      "name": "global admin",
+      "access": { "cluster": "prod", "kind": "person", "user": "a@example.com", "groups": ["kubeast:admin", "kubeast:authenticated"], "role": "*", "impersonation": true },
+      "line": "<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:admin</code> <code>kubeast:authenticated</code> · global admin · whole cluster · read-only</p>"
+    },
+    {
+      "name": "api key",
+      "access": { "cluster": "prod", "kind": "api_key", "api_key": "k-1", "user": "a@example.com", "groups": ["kubeast:authenticated", "kubeast:viewer"], "role": "Read", "impersonation": true },
+      "line": "<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> (API key) · groups <code>kubeast:authenticated</code> <code>kubeast:viewer</code> · role Read · whole cluster · read-only</p>"
+    },
+    {
+      "name": "alert investigator",
+      "access": { "cluster": "prod", "kind": "investigator", "user": "kubeast:investigator", "groups": ["kubeast:investigator"], "impersonation": true },
+      "line": "<p><strong>🔐 Ran as:</strong> <code>kubeast:investigator</code> · groups <code>kubeast:investigator</code> · alert investigator · read-only</p>"
+    },
+    {
+      "name": "impersonation off",
+      "access": { "cluster": "prod", "kind": "person", "role": "Read", "impersonation": false },
+      "line": "<p><strong>🔐 Ran as:</strong> ⚠️ Kubeast's own credential, not this user's permissions (impersonation is off) · role Read · whole cluster · read-only</p>"
+    },
+    {
+      "name": "no role in this cluster",
+      "access": { "cluster": "prod", "kind": "person", "user": "a@example.com", "groups": ["kubeast:authenticated", "kubeast:viewer"], "role": "", "impersonation": true },
+      "line": "<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> <code>kubeast:viewer</code> · no role in this cluster · whole cluster · read-only</p>"
+    },
+    {
+      "name": "a custom role with a built-in's name and spaces gives no role group",
+      "access": { "cluster": "prod", "kind": "person", "user": "a@example.com", "groups": ["kubeast:authenticated"], "role": " Admin ", "no_role_group": true, "impersonation": true, "mode": "read" },
+      "line": "<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> · role \" Admin \" (named as a built-in role in other capitals or with spaces: no role group) · whole cluster · read-only</p>"
+    },
+    {
+      "name": "a custom role with a built-in's name in capitals, limited to namespaces",
+      "access": { "cluster": "prod", "kind": "api_key", "api_key": "k-2", "user": "a@example.com", "groups": ["kubeast:authenticated"], "role": "WRITE", "no_role_group": true, "namespaces": ["shop"], "impersonation": true, "mode": "write" },
+      "line": "<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> (API key) · groups <code>kubeast:authenticated</code> · role \"WRITE\" (named as a built-in role in other capitals or with spaces: no role group) · namespaces shop · write</p>"
+    },
+    {
+      "name": "a custom role's name as stored, escaped",
+      "access": { "cluster": "prod", "kind": "person", "user": "a@example.com", "groups": ["kubeast:authenticated", "kubeast:role:ops-a-b"], "role": "ops \"a\"&<b>", "impersonation": true },
+      "line": "<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> <code>kubeast:role:ops-a-b</code> · role ops &quot;a&quot;&amp;&lt;b&gt; · whole cluster · read-only</p>"
+    }
+  ]
+}

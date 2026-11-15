@@ -50,9 +50,9 @@ func TestAuthMiddleware_RefusesASystemToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	asked := false
-	lookup := func(context.Context, string, string) (int, error) {
+	lookup := func(context.Context, string, string) (auth.SessionState, error) {
 		asked = true
-		return 0, nil
+		return auth.SessionState{}, nil
 	}
 	w, seen := serve(AuthMiddleware(m, lookup, "kubeast.token"), withBearer(tok))
 	if w.Code != http.StatusForbidden || seen != nil {
@@ -90,11 +90,11 @@ func TestInvestigatorReadMiddleware(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lookup := func(_ context.Context, userID, _ string) (int, error) {
+	lookup := func(_ context.Context, userID, _ string) (auth.SessionState, error) {
 		if userID != "u1" {
-			return 0, errors.New("no such user")
+			return auth.SessionState{}, errors.New("no such user")
 		}
-		return 3, nil
+		return auth.SessionState{Version: 3}, nil
 	}
 	inCookie := httptest.NewRequest(http.MethodGet, "/api/v1/clusters", nil)
 	inCookie.AddCookie(&http.Cookie{Name: "kubeast.token", Value: investigator})
@@ -139,7 +139,9 @@ func TestInvestigatorReadMiddleware_KeepsTheTokensLimits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lookup := func(context.Context, string, string) (int, error) { return 0, errors.New("no such user") }
+	lookup := func(context.Context, string, string) (auth.SessionState, error) {
+		return auth.SessionState{}, errors.New("no such user")
+	}
 	w, seen := serve(InvestigatorReadMiddleware(m, lookup, "kubeast.token", true), withBearer(tok))
 	if w.Code != http.StatusOK || seen == nil {
 		t.Fatalf("%d %s, want 200", w.Code, w.Body.String())

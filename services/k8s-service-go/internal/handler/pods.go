@@ -318,7 +318,7 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 	stream, err := h.retryStreamPodLogs(ctx, w, flusher, namespace, name, container, tail, since)
 	if err != nil {
 		// 이미 client 에 error 이벤트 전송됨
-		_ = h.recordAuditWithPayload(r, "k8s.pod.logs.read", "pod", name, namespace, err, nil, after)
+		_ = h.recordAuditAfterClose(r, "k8s.pod.logs.read", "pod", name, namespace, err, nil, after)
 		sayStreamEnded(ctx, w, flusher)
 		return
 	}

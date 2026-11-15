@@ -3,9 +3,24 @@
 {{- end -}}
 
 {{/* Group slug of a Kubeast role name, as services/pkg/auth/impersonation.go
-     computes it: lowercase, anything but a-z 0-9 . _ - becomes "-". */}}
+     computes it: A-Z, U+0130 and U+212A lowered, a-z 0-9 . _ - kept, other
+     ASCII "-", any other character "~" and its code point in four hex digits
+     ("~~" and six above U+FFFF), read from printf's %+q escape. */}}
 {{- define "kubeast.roleSlug" -}}
-{{- regexReplaceAll "[^a-z0-9._-]" (lower (trim .)) "-" -}}
+{{- range $c := splitList "" (trim .) -}}
+{{- if regexMatch `^[a-z0-9._-]$` $c -}}{{ $c }}
+{{- else if regexMatch `^[A-Z]$` $c -}}{{ lower $c }}
+{{- else if eq $c "\u0130" -}}i
+{{- else if eq $c "\u212a" -}}k
+{{- else if regexMatch `^[\x00-\x7f]$` $c -}}-
+{{- else -}}
+{{- $q := printf "%+q" $c -}}
+{{- if regexMatch `^"\\u[0-9a-f]{4}"$` $q -}}~{{ substr 3 7 $q }}
+{{- else if regexMatch `^"\\U00[0-9a-f]{6}"$` $q -}}~~{{ substr 5 11 $q }}
+{{- else -}}~fffd
+{{- end -}}
+{{- end -}}
+{{- end -}}
 {{- end }}
 
 {{- define "kubeast.labels" -}}
@@ -39,6 +54,25 @@ every entry of gateway.allowedOrigins, comma-joined; empty with neither.
 {{- $list = append $list . -}}
 {{- end -}}
 {{- join "," $list -}}
+{{- end -}}
+
+{{- /*
+The gateway's accesslog.conf with gateway.accessLog.upstreamTimes: nginx's
+"combined" fields, then the request's time, the service's connect, header and
+response times, the service's address and the client's port, to the same
+place as nginx's default log. Empty when off, so the ConfigMap and the pods'
+checksum stay as without it. dig: the values of an earlier release, kept by
+--reuse-values, have no gateway.accessLog.
+*/ -}}
+{{- define "kubeast.gatewayAccessLog" -}}
+{{- if eq (toString (dig "accessLog" "upstreamTimes" false .Values.gateway)) "true" -}}
+log_format upstream_times '$remote_addr - $remote_user [$time_local] '
+                          '"$request" $status $body_bytes_sent '
+                          '"$http_referer" "$http_user_agent" '
+                          '$request_time $upstream_connect_time $upstream_header_time '
+                          '$upstream_response_time $upstream_addr $remote_port';
+access_log /var/log/nginx/access.log upstream_times;
+{{- end -}}
 {{- end -}}
 
 {{- define "kubeast.databaseUrl" -}}
@@ -231,8 +265,8 @@ resources:
 {{/*
 startupProbe of a service that opens its port only after waiting for the
 database at boot; liveness and readiness start once it passes. 180 s covers the
-longest wait (auth-service and session-service: 30 pings 2 s apart, then 60 s
-for the schema; k8s-service: AUDIT_DB_WAIT_SEC 90 s, then up to 10 s in
+longest wait (auth-service and session-service: 60 s for the database, at most
+5 s a ping, then 60 s for the schema; k8s-service: AUDIT_DB_WAIT_SEC 90 s, then up to 10 s in
 k8s.NewService) and 60 s of migrations. Usage, with the liveness path and port:
   {{ include "kubeast.startupProbe" (dict "path" "/health" "port" 8004) }}
 */}}

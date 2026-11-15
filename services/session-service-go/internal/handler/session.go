@@ -366,18 +366,43 @@ func (h *SessionHandler) SaveMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	saved := 0
 	for _, msg := range req.Messages {
-		if _, err := h.repo.AddMessage(r.Context(), sessionID, msg.Role, msg.Content, msg.ToolCalls, StoppedUsage(msg)); err != nil {
+		if msg.Answers != nil {
+			asked, err := h.stillAsked(r, sessionID, *msg.Answers)
+			if err != nil {
+				slog.Error("get messages failed", "error", err)
+				response.InternalError(w, r, err)
+				return
+			}
+			if !asked {
+				continue
+			}
+		}
+		if _, err := h.repo.AddMessage(r.Context(), sessionID, msg.Role, msg.Content, msg.ToolCalls, MarkerUsage(msg)); err != nil {
 			slog.Error("add message failed", "error", err)
 			response.InternalError(w, r, err)
 			return
 		}
+		saved++
 	}
 
 	response.JSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Messages saved successfully",
+		"saved":   saved,
 	})
+}
+
+// stillAsked says whether the conversation's newest message is this question, so an answer to it may follow. A stream
+// that lost only its end had its answer saved by ai-service before the end was sent, and the page's copy would be a
+// second one.
+func (h *SessionHandler) stillAsked(r *http.Request, sessionID, question string) (bool, error) {
+	newest, err := h.repo.GetMessages(r.Context(), sessionID, 1)
+	if err != nil {
+		return false, err
+	}
+	return len(newest) == 1 && newest[0].Role == "user" && newest[0].Content == question, nil
 }
 
 // DeleteSession handles DELETE /sessions/{session_id}
