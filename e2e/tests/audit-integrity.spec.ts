@@ -95,7 +95,9 @@ test.describe('Audit log integrity', () => {
     const res = await request.post('/api/v1/auth/admin/audit/integrity/anchor', { headers: bearer(admin) })
     expect(res.ok(), `anchor: ${res.status()} ${await res.text()}`).toBeTruthy()
     const anchor = await res.json()
-    expect(anchor.object_key).toMatch(/^digests\/\d{4}\/\d{2}\/\d{2}\/\d{6}Z-\d+-\d+\.json$/)
+    // the key ends with the first 8 hex characters of the anchor hash, so two anchors in one second over one range keep both digests
+    expect(anchor.object_key).toMatch(/^digests\/\d{4}\/\d{2}\/\d{2}\/\d{6}Z-\d+-\d+-[0-9a-f]{8}\.json$/)
+    expect(anchor.object_key.endsWith(`-${String(anchor.anchor_hash).slice(0, 8)}.json`), `${anchor.object_key} ends with the anchor hash's first 8`).toBe(true)
     expect(anchor.actor).toBe(ADMIN_EMAIL)
 
     // The digest object is in the stand-in under the sink's prefix and says what the anchor row says.
