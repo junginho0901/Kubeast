@@ -2,11 +2,35 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"testing"
 )
+
+// roleGroupSlugCasesFile is the one table of the group a role name makes, also run by the database's role_group_slug
+// (services/pkg/dbmigrate role_names_postgres_test.go) and the frontend's roleGroupSlug (roleGroup.test.ts).
+const roleGroupSlugCasesFile = "../../../frontend/src/utils/roleGroupSlug.cases.json"
+
+func TestRoleGroupSlugCases(t *testing.T) {
+	raw, err := os.ReadFile(roleGroupSlugCasesFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var file struct {
+		Cases []struct{ Name, Slug string }
+	}
+	if err := json.Unmarshal(raw, &file); err != nil || len(file.Cases) == 0 {
+		t.Fatalf("%s: %v (%d cases)", roleGroupSlugCasesFile, err, len(file.Cases))
+	}
+	for _, c := range file.Cases {
+		if got := RoleGroupSlug(c.Name); got != c.Slug {
+			t.Errorf("RoleGroupSlug(%q) = %q, want %q", c.Name, got, c.Slug)
+		}
+	}
+}
 
 func TestImpersonation_Groups(t *testing.T) {
 	cases := []struct {
@@ -90,5 +114,53 @@ func TestKubectlImpersonationArgs(t *testing.T) {
 	want := []string{"--as", "a@example.com", "--as-group", GroupAuthenticated, "--as-group", GroupViewer}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("args = %v, want %v", got, want)
+	}
+}
+
+// A built-in role is known by its exact seeded name. A custom role whose name makes a built-in's slug (stored before
+// such names were refused) acts as no role group, cluster-wide or limited to namespaces: never as the built-in's group
+// nor as the kubeast:role:<slug> the chart binds for the built-ins' grants limited to namespaces.
+func TestImpersonation_RoleNamesOfTheBuiltInsInOtherForms(t *testing.T) {
+	const cluster = "prod"
+	for _, c := range []struct {
+		role      string
+		wide, ns  []string
+		isBuiltin bool
+		takesSlug bool
+	}{
+		{"Admin", []string{GroupAdmin, GroupAuthenticated}, []string{GroupAuthenticated, "kubeast:role:admin"}, true, false},
+		{"Write", []string{GroupAuthenticated, GroupOperator}, []string{GroupAuthenticated, "kubeast:role:write"}, true, false},
+		{"Read", []string{GroupAuthenticated, GroupViewer}, []string{GroupAuthenticated, "kubeast:role:read"}, true, false},
+		{"Member", []string{GroupAuthenticated, "kubeast:role:member"}, []string{GroupAuthenticated, "kubeast:role:member"}, true, false},
+		{"ADMIN", []string{GroupAuthenticated}, []string{GroupAuthenticated}, false, true},
+		{"admin", []string{GroupAuthenticated}, []string{GroupAuthenticated}, false, true},
+		{" Admin ", []string{GroupAuthenticated}, []string{GroupAuthenticated}, false, true},
+		{"WRITE", []string{GroupAuthenticated}, []string{GroupAuthenticated}, false, true},
+		{"write", []string{GroupAuthenticated}, []string{GroupAuthenticated}, false, true},
+		{" read ", []string{GroupAuthenticated}, []string{GroupAuthenticated}, false, true},
+		{"PENDING", []string{GroupAuthenticated}, []string{GroupAuthenticated}, false, true},
+		{"sre-oncall", []string{GroupAuthenticated, "kubeast:role:sre-oncall"}, []string{GroupAuthenticated, "kubeast:role:sre-oncall"}, false, false},
+		{"admin-2", []string{GroupAuthenticated, "kubeast:role:admin-2"}, []string{GroupAuthenticated, "kubeast:role:admin-2"}, false, false},
+	} {
+		if IsBuiltinRole(c.role) != c.isBuiltin || TakesBuiltinSlug(c.role) != c.takesSlug {
+			t.Errorf("%q: IsBuiltinRole %v, TakesBuiltinSlug %v; want %v, %v", c.role, IsBuiltinRole(c.role), TakesBuiltinSlug(c.role), c.isBuiltin, c.takesSlug)
+		}
+		for _, scope := range []struct {
+			name       string
+			namespaces map[string][]string
+			want       []string
+		}{
+			{"cluster-wide", nil, c.wide},
+			{"limited to namespaces", map[string][]string{cluster: {"shop"}}, c.ns},
+		} {
+			p := TokenPayload{Email: "a@example.com", Roles: map[string]string{cluster: c.role}, Namespaces: scope.namespaces}
+			if _, groups := p.Impersonation(cluster); !reflect.DeepEqual(groups, scope.want) {
+				t.Errorf("%q %s: groups %v, want %v", c.role, scope.name, groups, scope.want)
+			}
+			// the 🔐 line shows the same identity, the role as stored and whether it gives no role group
+			if a := p.Access(cluster, true); !reflect.DeepEqual(a.Groups, scope.want) || a.Role != c.role || a.NoRoleGroup != c.takesSlug {
+				t.Errorf("%q %s: Access %+v, want groups %v", c.role, scope.name, a, scope.want)
+			}
+		}
 	}
 }

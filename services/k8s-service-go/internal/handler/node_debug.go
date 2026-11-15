@@ -47,6 +47,9 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "node shell is disabled (NODE_SHELL_ENABLED)", http.StatusForbidden)
 		return
 	}
+	if h.refuseTerminalWhileLeaving(w) {
+		return
+	}
 
 	nodeName := chi.URLParam(r, "name")
 	// The debug pod always runs in the dedicated privileged namespace with an
@@ -94,6 +97,8 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	ctx, release := h.holdSession(ctx)
 	defer release()
+	ctx, leave := h.drain.HoldTerminal(ctx)
+	defer leave()
 	// The socket's reader from here on: closing the window while the pod is
 	// still starting ends the wait (and deletes the pod) instead of the timeout.
 	in := readFrames(ctx, conn)
@@ -211,11 +216,11 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	for running := false; !running; {
 		select {
 		case <-ctx.Done():
-			// The cause: a session's end says which, where ctx.Err() only says canceled.
+			// The cause: a session's end or the server leaving says which, where ctx.Err() only says canceled.
 			fail(context.Cause(ctx))
-			if code := auth.SessionEndCode(ctx); code != "" {
-				_ = conn.WriteMessage(websocket.TextMessage, []byte(sessionEndNotice(code, r.URL.Query().Get("lang"))))
-				_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(auth.SessionEndedCloseCode, code), time.Now().Add(time.Second))
+			if notice, closeCode, reason, ended := serverEnded(ctx, r.URL.Query().Get("lang")); ended {
+				_ = conn.WriteMessage(websocket.TextMessage, []byte(notice))
+				_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(closeCode, reason), time.Now().Add(time.Second))
 			}
 			return
 		case _, open := <-in:

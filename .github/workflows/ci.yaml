@@ -182,7 +182,7 @@ jobs:
       # Rendered-manifest assertions (helm/kubeast/tests/*_test.yaml): switch
       # defaults, migrations hook Job, PVC retention, replica guards, secrets.
       - name: helm unittest
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: |
           # The plugin's install hook downloads its release from GitHub without retrying: five tries, 10 s apart.
           for attempt in 1 2 3 4 5; do
