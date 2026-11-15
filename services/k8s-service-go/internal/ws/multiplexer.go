@@ -277,6 +277,9 @@ func WatchTimeoutSeconds() int64 { return watchTimeoutSeconds() }
 // WatchResumeDelay is the wait before a watch that ended goes on, spread as the sockets' watches are.
 func WatchResumeDelay() time.Duration { return watchResumeDelay() }
 
+// ResourceVersionExpired is the API server saying a watch cannot go on from the version it was asked for.
+func ResourceVersionExpired(err error) bool { return resourceVersionExpired(err) }
+
 // subscriptionCluster is the cluster a REQUEST targets: its own clusterId, or
 // the connection's cluster that the HTTP ClusterMiddleware resolved.
 func subscriptionCluster(ctx context.Context, id string) string {
