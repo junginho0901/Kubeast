@@ -52,6 +52,13 @@ describe('AIMarkdown', () => {
     }
   })
 
+  it('an image inside a link is its words, which open the link', () => {
+    const html = render('[![Runbook](https://example.test/img.png)](https://example.test/runbook)')
+    expect(html).not.toContain('example.test/img.png')
+    expect(html).toMatch(/<a href="https:\/\/example\.test\/runbook" target="_blank" rel="noopener noreferrer"[^>]*>Runbook<\/a>/)
+    expect(html.match(/<a\b/g)?.length).toBe(1)
+  })
+
   it('keeps tables and ranges as the shared Markdown rules read them', () => {
     const html = render('| a | b |\n|---|---|\n| 1 | 2 |\n\n10~14%')
     expect(html).toContain('<table>')

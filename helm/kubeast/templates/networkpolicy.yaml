@@ -20,7 +20,14 @@
 {{- end }}
 {{- end }}
 {{- $aiAllowListOnly := dig "aiEgress" "allowListOnly" false .Values.networkPolicy }}
+{{- if and .Values.ai.enabled $aiAllowListOnly (not .Values.networkPolicy.enabled) }}
+{{- fail "networkPolicy.aiEgress.allowListOnly needs networkPolicy.enabled: without the policies nothing holds the AI services to the lists" }}
+{{- end }}
 {{- if and .Values.networkPolicy.enabled .Values.ai.enabled $aiAllowListOnly }}
+{{- $irsa := or (dig "irsaRoleArn" "" .Values.aws) (dig "toolServer" "annotations" "eks.amazonaws.com/role-arn" "" .Values.serviceAccounts) }}
+{{- if and $irsa (not (dig "aiEgress" "stsEndpoints" (list) .Values.networkPolicy)) }}
+{{- fail "networkPolicy.aiEgress.allowListOnly with an IRSA role needs networkPolicy.aiEgress.stsEndpoints (the subnets of the STS VPC interface endpoint, port 443): without them tool-server gets no AWS credentials and every EKS cluster's AI tools fail" }}
+{{- end }}
 {{- if not .Values.networkPolicy.allowExternalEgressCIDRs }}
 {{- fail "networkPolicy.aiEgress.allowListOnly needs networkPolicy.allowExternalEgressCIDRs (the model providers): without it ai-service connects to no model" }}
 {{- end }}
@@ -520,6 +527,14 @@ spec:
     - to:
         - ipBlock:
             cidr: {{ . }}
+    {{- end }}
+    {{- range (dig "aiEgress" "stsEndpoints" (list) .Values.networkPolicy) }}
+    - to:
+        - ipBlock:
+            cidr: {{ if kindIs "map" . }}{{ .cidr }}{{ else }}{{ . }}{{ end }}
+      ports:
+        - protocol: TCP
+          port: {{ if kindIs "map" . }}{{ .port | default 443 }}{{ else }}443{{ end }}
     {{- end }}
     {{- else }}
     - to:

@@ -106,7 +106,7 @@ describe.each(SURFACES)('%s: what an answer cannot draw', (_name, render) => {
   })
 
   it('a link in the head of a disclosure is its words, and one in the body stays a link', () => {
-    for (const head of ['<a href="https://example.test/head">docs</a>', 'see <b><a href="https://example.test/head">docs</a></b>']) {
+    for (const head of ['<a href="https://example.test/head">docs</a>', 'see <b><a href="https://example.test/head">docs</a></b>', '<img src="https://example.test/head" alt="docs">']) {
       const html = render(`<details>\n<summary>${head}</summary>\n\n[body](https://example.test/body)\n\n</details>`)
       expect(html).not.toContain('https://example.test/head')
       expect(html).toContain('docs')
@@ -378,6 +378,15 @@ describe.each(SURFACES)('%s: what an answer keeps', (_name, render) => {
     expect(anchor(html, 'https://example.test/a.png')).toContain('target="_blank"')
     expect(html).toContain('>A chart</a>')
     expect(html).toContain('>https://example.test/b.png</a>')
+  })
+
+  it('an image inside a link is its words, so the words open the link and not the image\'s address', () => {
+    for (const md of ['[![Runbook](https://example.test/img.png)](https://example.test/runbook)', '<a href="https://example.test/runbook"><img src="https://example.test/img.png" alt="Runbook"></a>']) {
+      const html = render(md)
+      expect(html).not.toContain('example.test/img.png')
+      expect(html).toMatch(/<a\b[^>]*href="https:\/\/example\.test\/runbook"[^>]*>Runbook<\/a>/)
+      expect(elements(html).filter((tag) => tag === 'a')).toEqual(['a'])
+    }
   })
 
   it('an image on the console\'s own host keeps its text and loses its address, so drawing the answer asks the console nothing', () => {
