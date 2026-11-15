@@ -9,7 +9,7 @@ from typing import Optional
 import httpx
 
 from fastapi import APIRouter, Header, HTTPException, Depends, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from app.models.ai import SessionChatRequest
 from app.models.floating_ai import FloatingChatRequest
 from pydantic import ValidationError
@@ -28,10 +28,11 @@ def _validation_message(err: ValidationError) -> str:
     return msg[len("Value error, "):] if msg.startswith("Value error, ") else msg
 
 
-def _stream_start_failed(stream: str, err: Exception) -> HTTPException:
-    """The error goes to the log; the caller reads a fixed message, as response.Public keeps internal text out in Go."""
+def _stream_start_failed(stream: str, err: Exception) -> JSONResponse:
+    """The error goes to the log; the caller reads a fixed message, as response.Public keeps internal text out in Go.
+    error_key names the screen's words for it (aiChat.error.*), as the budget refusal's event does."""
     logger.error("%s stream could not start: %s", stream, safe_error(err))
-    return HTTPException(status_code=500, detail="the answer stream could not start")
+    return JSONResponse(status_code=500, content={"detail": "the answer stream could not start", "error_key": "streamStartFailed"})
 
 
 def _extract_audit_meta(request: Request, authorization: str) -> tuple[dict, dict]:
@@ -256,7 +257,7 @@ async def session_chat(
             },
         )
     except Exception as e:
-        raise _stream_start_failed("session chat", e) from e
+        return _stream_start_failed("session chat", e)
 
 
 # ---- AI write-tool approvals (H2) ----
@@ -528,7 +529,7 @@ async def floating_session_chat(
             },
         )
     except Exception as e:
-        raise _stream_start_failed("floating chat", e) from e
+        return _stream_start_failed("floating chat", e)
 
 
 @router.get("/suggest-optimization/stream")
@@ -553,7 +554,7 @@ async def suggest_optimization_stream(
             },
         )
     except Exception as e:
-        raise _stream_start_failed("optimization", e) from e
+        return _stream_start_failed("optimization", e)
 
 
 @router.get("/config")

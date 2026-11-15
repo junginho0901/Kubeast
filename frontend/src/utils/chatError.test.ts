@@ -35,6 +35,13 @@ describe('chatErrorText', () => {
     expect(chatErrorText(await tFor('en'), 'Session not found', 'sessionNotFound')).toBe('This conversation no longer exists. Start a new one.')
   })
 
+  it('says a stream that could not start in the screen language', async () => {
+    expect(chatErrorText(await tFor('ko'), 'HTTP 500: the answer stream could not start', 'streamStartFailed', { status: 500 }))
+      .toBe('답변 스트림을 시작하지 못했습니다. 잠시 뒤 다시 시도하세요.')
+    expect(chatErrorText(await tFor('en'), 'the answer stream could not start', 'streamStartFailed'))
+      .toBe('The answer stream could not start. Try again in a moment.')
+  })
+
   it('names the provider of a failed model call in the screen language, the same wording on every provider', async () => {
     const args = { provider: 'Claude subscription', detail: 'Claude Code failed: timeout' }
     expect(chatErrorText(await tFor('ko'), 'AI model call failed (Claude subscription): Claude Code failed: timeout', 'modelCall', args))

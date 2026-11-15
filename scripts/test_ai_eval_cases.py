@@ -10,8 +10,10 @@ import fnmatch
 import importlib.util
 import json
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -35,13 +37,15 @@ def _load_ai_eval():
 
 AI_EVAL = _load_ai_eval()
 
-GROUPS = {"hidden_cause", "trap", "control", "past"}
+GROUPS = {"chain", "hidden_cause", "trap", "control", "past"}
 ROLES = {"cause", "via", "symptom"}
 PLACEHOLDERS = {"SETUP_TIME", "INJECT_TIME", "UNDO_TIME"}
 MARKS = {"SETUP_TIME": "2026-01-01T00:00:00Z", "INJECT_TIME": "2026-01-01T00:05:00Z", "UNDO_TIME": "2026-01-01T00:10:00Z"}
 CALLS = [{"tool": "timeline", "failed": False}, {"tool": "k8s_get_resources", "failed": False}]
-# Words in what a case applies that would tell the model the answer (README "Hard cases").
+# Words in what a case applies that would tell the model the answer (README "Hard cases"). The API group of Chaos
+# Mesh's kinds on an apiVersion line is the tool's own name, not one the case chose; the rest of such a file is read.
 ANSWER_WORDS = re.compile(r"\b(fault|faulty|broken|decoy|truth|inject|injected|injection|chaos|bug)\b", re.I)
+TOOL_API_GROUP = re.compile(r"^apiVersion: chaos-mesh\.org/v1alpha1$", re.M)
 
 
 def all_cases() -> list:
@@ -80,7 +84,7 @@ def resource_form(resource: str) -> bool:
 def test_every_hard_case_loads_with_no_field_problem():
     cases = all_cases()
     folders = sorted(d.name for d in HARD.iterdir() if (d / "case.json").exists())
-    assert [d.name for d, _ in cases] == folders and len(cases) == 16
+    assert [d.name for d, _ in cases] == folders and len(cases) == 22
     namespaces = [c["namespace"] for _, c in cases]
     assert len(set(namespaces)) == len(namespaces), "two cases share a namespace"
     for d, c in cases:
@@ -103,6 +107,15 @@ def test_hidden_cases_run_only_with_the_flag():
     assert {d.name for d, _ in shown} == every - hidden
 
 
+def test_each_group_of_more_than_one_case_has_a_hidden_one():
+    groups: dict = {}
+    for _, c in all_cases():
+        groups.setdefault(c["group"], []).append(bool(c.get("hidden")))
+    for group, hidden in groups.items():
+        assert len(hidden) < 2 or any(hidden), f"group {group}: no hidden case among {len(hidden)}"
+        assert not all(hidden), f"group {group}: every case hidden"
+
+
 def _list(*extra) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, "-I", str(HERE / "ai-eval.py"), "--cases", str(HARD), "--list", *extra],
                           capture_output=True, text=True, timeout=60)
@@ -122,15 +135,86 @@ def test_list_shows_every_case_and_no_truth():
             assert text not in every.stdout + every.stderr, f"{d.name}: --list printed {text!r}"
 
 
-def test_hidden_results_show_only_a_total():
+def test_hidden_results_show_only_a_total_of_two_or_more():
     truth = {"control": False, "causes": [{"resource": "ConfigMap/shop-x/settings", "kind": "config_change"}]}
     scored = rca.score_rca(block([cause("ConfigMap/shop-x/settings", "config_change")]), truth, CALLS)
     row = {"title": "t", "form": "question", "ask_after": 300, "run": 1, "missing": [], "forbidden": [],
-           "tools_missing": [], "calls": CALLS, "tokens": 0, "seconds": 1.0, "error": None, "rca": scored}
-    text = AI_EVAL.table([dict(row, id="04_seen", hidden=False, **{"pass": True}),
-                          dict(row, id="08_kept", hidden=True, **{"pass": False})])
+           "tools_missing": [], "calls": CALLS, "tokens": 0, "seconds": 1.0, "error": None, "rca": scored, "model": "m"}
+    seen = dict(row, id="04_seen", hidden=False, **{"pass": True, "pass_grounded": True})
+    kept = [dict(row, id="08_kept", hidden=True, **{"pass": False}), dict(row, id="08_kept", hidden=True, run=2, **{"pass": True})]
+    other = dict(row, id="15_other", hidden=True, **{"pass": True})
+    text = AI_EVAL.table([seen, *kept])
     assert "04_seen" in text and "08_kept" not in text
-    assert "숨김 사례 1개: 정답 0/1" in text
+    assert "숨김 사례 1개: 결과는 JSON에만" in text and "1/2" not in text
+    assert "정답 1/1 (근거 있는 정답 1) · 숨김 빼고 · 모델 m" in text
+    text = AI_EVAL.table([seen, *kept, other])
+    assert "숨김 사례 2개: 정답 2/3" in text and "15_other" not in text
+    for only_hidden in (kept, kept[:1], [other]):
+        text = AI_EVAL.table(only_hidden, {"user": "read", "namespace_suffix": None, "before": {"default": {"investigations": 0, "inbox": 0}}})
+        assert "숨김 사례만 든 실행: 결과는 JSON에만 · 모델 m" in text, text
+        assert not re.search(r"정답 \d|\d/[12]\b", text) and "08_kept" not in text and "15_other" not in text, text
+
+
+def test_every_alert_reads_the_namespace_of_its_causes():
+    for d, c in all_cases():
+        if "alert" in c:
+            assert rca.check_alert_scope(c, truth_of(d)) == [], d.name
+    case = {"id": "90", "namespace": "shop-90", "alert": {"labels": {"alertname": "X", "service": "uptime-check"}}}
+    truth = {"causes": [{"resource": "Deployment/otel-demo/valkey-cart", "kind": "dependency_down"}]}
+    problems = rca.check_alert_scope(case, truth)
+    assert len(problems) == 1 and "'shop-90'" in problems[0] and "Deployment/otel-demo/valkey-cart" in problems[0]
+    assert rca.check_alert_scope({**case, "alert": {"labels": {"alertname": "X", "namespace": "otel-demo"}}}, truth) == []
+    assert rca.check_alert_scope({**case, "alert": {"labels": {"alertname": "X", "namespace": ""}}}, truth) == []  # cluster-wide
+    on_node = {"causes": [{"resource": "Node/kubeast-b-control-plane", "kind": "node"}]}
+    assert rca.check_alert_scope(case, on_node) == []
+    ruled = {**case, "alert": {"labels": {"alertname": "X", "namespace": "otel-demo"}, "rule": "X"}}
+    assert len(rca.check_alert_scope(ruled, truth)) == 1  # the fired alert is picked in shop-90 (match's default)
+    assert rca.check_alert_scope({**ruled, "alert": {**ruled["alert"], "match": {"namespace": "otel-demo"}}}, truth) == []
+    root = Path(tempfile.mkdtemp(prefix="ai-eval-scope-"))
+    try:
+        src = next(d for d, c in all_cases() if "alert" in c and not truth_of(d)["control"])
+        shutil.copytree(src, root / src.name)
+        moved = json.loads((root / src.name / "case.json").read_text())
+        moved["alert"]["labels"]["namespace"] = "elsewhere"
+        (root / src.name / "case.json").write_text(json.dumps(moved))
+        out = subprocess.run([sys.executable, "-I", str(HERE / "ai-eval.py"), "--cases", str(root), "--list", "--hidden"],
+                             capture_output=True, text=True, timeout=60)
+        assert out.returncode == 1 and "alert labels namespace 'elsewhere'" in out.stdout, out.stdout
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_the_token_outlasts_a_turn_of_every_case():
+    for d, c in all_cases():
+        assert c.get("timeout_seconds", 300) + 60 <= AI_EVAL.RENEW_MARGIN_SECONDS == 480, d.name
+
+
+def test_every_hard_case_runs_under_a_namespace_suffix():
+    root = Path(tempfile.mkdtemp(prefix="ai-eval-suffix-"))
+    try:
+        for d, c in all_cases():
+            ns = c["namespace"]
+            new_dir, new = AI_EVAL.with_suffix(d, c, "zz9", root)
+            assert new_dir != d and new["namespace"] == f"{ns}-zz9" and new["id"] == c["id"], d.name
+            for form in ("question", "question_vague"):  # 01, 07 and 10 ask about otel-demo, not their own namespace
+                assert (f"{ns}-zz9" in new[form]) == (ns in c[form]), (d.name, form)
+            whole = re.compile(r"(?<![A-Za-z0-9-])" + re.escape(ns) + r"(?![A-Za-z0-9-])")
+            for f in sorted(new_dir.iterdir()):
+                if f.suffix in (".json", ".yaml"):
+                    assert not whole.search(f.read_text()), f"{d.name}/{f.name} still names {ns}"
+            truth = json.loads((d / "truth.json").read_text())
+            moved = rca.fill_placeholders(json.loads((new_dir / "truth.json").read_text()), MARKS)
+            if truth["control"]:
+                assert rca.score_rca(block([], no_fault=True), moved, CALLS)["pass"], d.name
+                continue
+            right = [cause(tc["resource"], tc["kind"], moved["fault_start"]) for tc in moved["causes"]]
+            assert rca.score_rca(block(right), moved, CALLS)["pass"], d.name
+            assert all(tc["resource"].split("/")[1] != ns for tc in moved["causes"]), d.name
+            old = [cause(tc["resource"], tc["kind"]) for tc in truth["causes"] if tc["resource"].split("/")[1] == ns]
+            if old and not any(tc.get("accept_resources") for tc in moved["causes"]):
+                assert not rca.score_rca(block(old), moved, CALLS)["pass"], d.name
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
 
 
 def test_each_truth_fits_its_case_and_the_scorer():
@@ -177,16 +261,158 @@ def test_each_truth_fits_its_case_and_the_scorer():
         assert s["pass"] and s["score"] == 1.0, (d.name, s)
         assert s["time_ok"] is True and s["path_ok"] is True and s["ungrounded"] == 0, (d.name, s)
         assert not rca.score_rca(block([], no_fault=True), filled, CALLS)["pass"], d.name
+        for one in right if len(right) > 1 else []:  # a case of several causes: each alone is a miss
+            assert not rca.score_rca(block([one], path=path), filled, CALLS)["pass"], (d.name, one["resource"])
         for x in truth["decoys"]:
             s = rca.score_rca(block(right + [cause(as_answered(x["resource"]), "crash")]), filled, CALLS)
             assert not s["pass"] and s["decoys_taken"] == [as_answered(x["resource"])], (d.name, x["resource"])
 
 
+# The workload where the symptom shows, with the kind the pod list shows, is not the cause of these cases (README
+# "Hard cases"): it misses alone and costs nothing beside a right cause. WRONG_KIND: the cause under a kind of the
+# symptom. ALSO_RIGHT: other forms a NOTES.md takes.
+SYMPTOM_ONLY = {
+    "18_moved_namespace_old_address": [("Deployment/shop-18/web", "dependency_down"), ("Pod/shop-18/web-7f9c4d8b6-x2k4p", "dns")],
+    "19_route_missing_hostname": [("Deployment/shop-19/edge", "config_change")],
+    "20_boot_fails_one_env": [("Pod/shop-20/shop-web-7f9c4d8b6-x2k4p", "crash"), ("Pod/shop-20/shop-web-7f9c4d8b6-x2k4p", "rollout")],
+    "21_oom_cascade": [("StatefulSet/shop-21/search", "oom"), ("StatefulSet/shop-21/search", "rollout"), ("Pod/shop-21/search-1", "oom")],
+    "22_workers_over_memory": [("Deployment/shop-22/shop-api", "oom"), ("Deployment/shop-22/shop-api", "rollout")],
+}
+WRONG_KIND = {
+    "20_boot_fails_one_env": [("Deployment/shop-20/shop-web", "crash")],
+    "21_oom_cascade": [("ConfigMap/shop-21/search-indexes-2", "oom")],
+    "22_workers_over_memory": [("ConfigMap/shop-22/shop-api-settings", "oom"), ("ConfigMap/shop-22/shop-api-settings", "resource_limit")],
+}
+ALSO_RIGHT = {
+    "01_cache_down_chain": [("Deployment/otel-demo/valkey-cart", "config_change")],
+    "16_past_outage": [("Deployment/shop-16/payments", "config_change")],
+    "18_moved_namespace_old_address": [("ConfigMap/shop-18/web-settings", "dns")],
+    "19_route_missing_hostname": [("Service/shop-19/frontdoor", "config_change"), ("frontdoor", "rollout")],
+    "20_boot_fails_one_env": [("Deployment/shop-20/shop-web", "rollout"), ("ReplicaSet/shop-20/shop-web-7f9c4d8b6", "rollout"),
+                              ("ConfigMap/shop-20/shop-web-release-2-4-0", "config_change"), ("ConfigMap/shop-20/shop-web-config", "config_change")],
+    "21_oom_cascade": [("ConfigMap/shop-21/search-indexes-2", "rollout")],
+    "22_workers_over_memory": [("ConfigMap/shop-22/shop-api-settings", "config_change")],
+}
+
+
+def test_the_symptom_alone_is_not_the_cause():
+    cases = {d.name: d for d, _ in all_cases()}
+    assert set(SYMPTOM_ONLY) | set(WRONG_KIND) | set(ALSO_RIGHT) <= set(cases)
+    for name, answers in SYMPTOM_ONLY.items():
+        filled = rca.fill_placeholders(truth_of(cases[name]), MARKS)
+        right = [cause(tc["resource"], tc["kind"]) for tc in filled["causes"]]
+        for resource, kind in answers:
+            assert not rca.score_rca(block([cause(resource, kind)]), filled, CALLS)["pass"], (name, resource, kind)
+            s = rca.score_rca(block(right + [cause(resource, kind)]), filled, CALLS)
+            assert s["pass"] and s["score"] == 1.0, (name, resource, kind, s)
+    for name, answers in WRONG_KIND.items():
+        filled = rca.fill_placeholders(truth_of(cases[name]), MARKS)
+        for resource, kind in answers:
+            assert not rca.score_rca(block([cause(resource, kind)]), filled, CALLS)["pass"], (name, resource, kind)
+    for name, answers in ALSO_RIGHT.items():
+        filled = rca.fill_placeholders(truth_of(cases[name]), MARKS)
+        for resource, kind in answers:
+            s = rca.score_rca(block([cause(resource, kind)]), filled, CALLS)
+            assert s["pass"] and s["score"] == 1.0, (name, resource, kind, s)
+
+
+def test_each_alert_names_the_namespace_of_its_causes():
+    """The investigator's token is limited to the alert's namespace label (the case's own unless the alert names one),
+    so the label is the namespace every truth cause is in, or empty — the whole cluster — for a cause of the cluster."""
+    alerting = [(d, c) for d, c in all_cases() if "alert" in c]
+    assert alerting
+    for d, c in alerting:
+        alert = c["alert"]
+        ns = (alert.get("labels") or {}).get("namespace", c["namespace"])
+        assert {"namespace": c["namespace"], **(alert.get("match") or {})}["namespace"] == ns, f"{d.name}: match is not the label"
+        truth = truth_of(d)
+        if truth["control"]:
+            assert ns == c["namespace"], d.name
+            continue
+        where = {parts[1] if len(parts) == 3 else "" for parts in (tc["resource"].split("/") for tc in truth["causes"])}
+        assert where == {ns}, (d.name, ns, where)
+
+
+def test_a_namespace_a_case_makes_besides_its_own_says_nothing_of_the_case():
+    own = {c["namespace"] for _, c in all_cases()}
+    made: dict = {}
+    for d, c in all_cases():
+        setup, cleanup = " ".join(c.get("setup_cmds", [])), " ".join(c.get("cleanup_cmds", []))
+        assert "kubeast.io/ai-eval" not in setup, f"{d.name}: a label the case's own namespace has"
+        for ns in re.findall(r"kubectl create namespace ([a-z0-9-]+)", setup):
+            assert not re.search(r"-\d+$", ns), f"{d.name}: {ns} carries a number"
+            assert ns not in own and ns not in made, f"{d.name}: {ns} is also {made.get(ns, 'a case namespace')}"
+            made[ns] = d.name
+            assert re.search(rf"kubectl delete namespace {re.escape(ns)}(\s|$)", cleanup), f"{d.name}: {ns} is not deleted by name"
+    assert made, "no case makes a second namespace"
+
+
 def test_what_a_case_applies_holds_no_answer_word():
     for d, _ in all_cases():
-        for manifest in sorted(d.glob("*.yaml")):
-            hit = ANSWER_WORDS.search(manifest.read_text())
+        for manifest in sorted([*d.glob("*.yaml"), *d.glob("*.sql")]):
+            hit = ANSWER_WORDS.search(TOOL_API_GROUP.sub("", manifest.read_text()))
             assert not hit, f"{d.name}/{manifest.name}: {hit.group(0)!r}"
+
+
+# A phrase of each kind as an investigation report writes it (README "The alert path").
+KIND_PHRASES = {"crash": "keeps crashing", "oom": "is OOMKilled", "image": "has an ImagePullBackOff", "config_change": "has a changed setting",
+                "rollout": "was rolled out", "network_policy": "is blocked by a NetworkPolicy", "dns": "has wrong DNS settings",
+                "resource_limit": "is held back by its CPU limit", "quota": "is full: the ResourceQuota allows no more",
+                "node": "sits on a NotReady node", "dependency_down": "had no endpoints", "dependency_slow": "is slow", "storage": "has a full volume"}
+
+
+def likely(text: str) -> str:
+    return f"## Summary\nAn alert fired.\n\n## What I checked\n- the pods\n\n## Likely cause\n{text}\n\n## Next steps\n- none\n"
+
+
+def test_each_alert_is_what_monitoring_would_send_and_holds_no_answer_word():
+    alerting = {d.name for d, c in all_cases() if "alert" in c}
+    assert alerting, "no case has an alert"
+    for d, c in all_cases():
+        if "alert" not in c:
+            continue
+        alert = c["alert"]
+        labels = {"alertname": rca.alert_name(c), **alert.get("labels", {})}
+        assert METRIC_NAME.match(labels["alertname"]), d.name
+        assert all(LABEL_NAME.match(k) for k in labels), d.name
+        truth = truth_of(d)
+        got = labels.get("namespace", c["namespace"])
+        spaces = {rca.split_resource(tc["resource"])[1] for tc in truth["causes"]
+                  if rca.split_resource(tc["resource"])[0] not in rca.CLUSTER_SCOPED_KINDS}
+        if not truth["causes"]:
+            assert got == c["namespace"], d.name  # a control: the namespace the question is about
+        elif got:
+            assert spaces == {got}, (d.name, got, spaces)  # the investigator's token reads the causes' namespace
+        else:
+            assert len(spaces) != 1, (d.name, spaces)  # none, a cluster-wide token: causes of no namespace (03's node)
+        assert labels.get("severity", "warning") in ("critical", "warning"), d.name  # the investigator's default severities
+        assert alert.get("annotations", {}).get("summary"), d.name
+        words = " ".join([*labels.values(), *alert.get("annotations", {}).values()])
+        hit = ANSWER_WORDS.search(words)
+        assert not hit, f"{d.name}: the alert says {hit.group(0)!r}"
+        for tc in truth["causes"]:  # where the symptom shows, as the question says it; a cause the question names is that place
+            cause_name = tc["resource"].rsplit("/", 1)[-1].lower()
+            assert cause_name in c["question"].lower() or cause_name not in words.lower(), f"{d.name}: the alert names the cause"
+    shown = subprocess.run([sys.executable, "-I", str(HERE / "ai-eval.py"), "--cases", str(HARD), "--list", "--hidden", "--alerts"],
+                           capture_output=True, text=True, timeout=60)
+    assert shown.returncode == 0, shown.stdout + shown.stderr
+    listed = {line.split("|")[1].strip() for line in shown.stdout.splitlines()[2:] if line.startswith("|")}
+    assert listed == alerting
+
+
+def test_each_truth_scores_a_report_in_words():
+    for d, _ in all_cases():
+        filled = rca.fill_placeholders(truth_of(d), MARKS)
+        if filled["control"]:
+            assert rca.score_text(likely("No fault found; every call works as expected."), filled)["pass"], d.name
+            for x in filled["decoys"]:
+                s = rca.score_text(likely(f"{as_answered(x['resource'])} keeps crashing and is the cause."), filled)
+                assert not s["pass"], (d.name, x["resource"])
+            continue
+        right = " ".join(f"{as_answered(tc['resource'])} {KIND_PHRASES[tc['kind']]}." for tc in filled["causes"])
+        s = rca.score_text(likely(right), filled)
+        assert s["pass"] and s["section"] == "likely_cause", (d.name, s)
+        assert not rca.score_text(likely("No fault found; every call works as expected."), filled)["pass"], d.name
 
 
 # The rules file: rulefmt's fields (Prometheus refuses unknown ones), names, durations, and expressions whose

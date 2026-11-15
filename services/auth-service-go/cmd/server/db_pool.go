@@ -28,7 +28,8 @@ func newPoolConfig(dbURL string, sessionLimits dbsession.Limits) (*pgxpool.Confi
 	return cfg, nil
 }
 
-// newMigrationPoolConfig is the pool the schema migrations run through, without the statement and lock limits.
+// newMigrationPoolConfig is the pool the schema migrations run through, without the statement and lock limits (also
+// those of the role).
 func newMigrationPoolConfig(dbURL string, sessionLimits dbsession.Limits) (*pgxpool.Config, error) {
 	cfg, err := pgxpool.ParseConfig(dbURL)
 	if err != nil {

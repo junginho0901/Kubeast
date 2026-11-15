@@ -50,6 +50,7 @@ class Problem:
     resource: str
     reason: str                  # no_evidence | bad_calls | name_missing | after_alert
     values: dict[str, Any] = field(default_factory=dict)
+    index: int = -1              # the cause's place in the block's causes, from 0
 
 
 def resource_name(resource: str) -> str:
@@ -90,15 +91,17 @@ def _number(n: Any) -> Optional[int]:
 
 
 def check(block: dict, reads: list[Read], alert_start: Optional[datetime]) -> tuple[int, list[Problem]]:
-    """(the causes checked, what is wrong with them). Causes of kind none are not causes; the rows keep UTC without a
-    zone, as `alert_start` does."""
-    causes = [c for c in block.get("causes") or [] if isinstance(c, dict) and str(c.get("kind", "")).lower() != "none"]
+    """(the causes checked, what is wrong with them). An entry of kind "none" is not a cause (rca.is_cause); one
+    whose kind is missing or null is. The rows keep UTC without a zone, as `alert_start` does."""
+    given = block.get("causes")
+    causes = [(i, c) for i, c in enumerate(given if isinstance(given, list) else [])
+              if isinstance(c, dict) and rca.is_cause(c)]
     problems: list[Problem] = []
-    for c in causes:
+    for index, c in causes:
         resource = str(c.get("resource") or "").strip()
         numbers = c.get("evidence") if isinstance(c.get("evidence"), list) else []
         if not numbers:
-            problems.append(Problem(resource, "no_evidence"))
+            problems.append(Problem(resource, "no_evidence", index=index))
             continue
         good, bad = [], []
         for n in numbers:
@@ -108,14 +111,15 @@ def check(block: dict, reads: list[Read], alert_start: Optional[datetime]) -> tu
                 read = reads[read.same_as - 1]
             (good if read is not None and not read.failed else bad).append((n, read))
         if not good:
-            problems.append(Problem(resource, "bad_calls", {"calls": [n for n, _ in bad]}))
+            problems.append(Problem(resource, "bad_calls", {"calls": [n for n, _ in bad]}, index))
             continue
         if not any(_names(read.text, resource_name(resource)) for _, read in good):
-            problems.append(Problem(resource, "name_missing", {"name": resource_name(resource), "calls": [n for n, _ in good]}))
+            problems.append(Problem(resource, "name_missing", {"name": resource_name(resource), "calls": [n for n, _ in good]},
+                                    index))
             continue
         started = _time(c.get("started_at"))
         if alert_start is not None and started is not None and started > alert_start + START_TOLERANCE:
-            problems.append(Problem(resource, "after_alert", {"at": _stamp(started), "start": _stamp(alert_start)}))
+            problems.append(Problem(resource, "after_alert", {"at": _stamp(started), "start": _stamp(alert_start)}, index))
     return len(causes), problems
 
 

@@ -60,21 +60,39 @@ export interface InvestigationHypothesis {
   against: InvestigationCallRef[]
   blocked?: string
   closed: boolean
-  problems?: { reason: 'open' | 'no_evidence' | 'no_reason' | 'bad_calls'; side?: 'for' | 'against'; calls?: string[] }[]
+  problems?: { reason: 'open' | 'no_evidence' | 'no_reason' | 'bad_calls' | 'not_verified'; side?: 'for' | 'against'; calls?: string[] }[]
 }
 
-// What the server read of the report's rca block (features.alertInvestigation.ledger; absent without it).
+export type UnverifiedReason = 'no_evidence' | 'bad_calls' | 'name_missing' | 'after_alert'
+
+export interface InvestigationCause {
+  resource: string
+  kind: string
+  started_at: string | null
+  evidence: InvestigationCallRef[]
+  // the numbers as the model gave them, those that name no call of the run too (the AI evaluation counts them)
+  raw_evidence?: (number | string)[]
+  // with evidenceCheck: whether the run's calls show the cause, and why not (absent for kind none)
+  verified?: boolean
+  reason?: UnverifiedReason
+}
+
+// What the server read of the report's rca block (evidenceCheck or ledger on; absent with both off).
 export interface InvestigationResult {
   version: number
-  // ok: the block was read; missing / invalid: the report ended without a block it could read
-  status: 'ok' | 'missing' | 'invalid'
+  // ok: read; missing / invalid: no block it could read; cut: the answer stopped inside its block
+  status: 'ok' | 'missing' | 'invalid' | 'cut'
   no_fault: boolean | null
-  causes: { resource: string; kind: string; started_at: string | null; evidence: InvestigationCallRef[] }[]
+  causes: InvestigationCause[]
   path: string[]
   ruled_out: string[]
   hypotheses: InvestigationHypothesis[]
   asked_again: boolean
   ask_failed?: boolean
+  // what the checks still found wrong, each a kind of the server's rca.FAILURES
+  failures?: { kind: string; resource?: string; id?: string; finish_reason?: string }[]
+  // the switches that read the block; absent on a row written before it was kept
+  checks?: { evidence: boolean; ledger: boolean }
 }
 
 export interface Investigation extends InvestigationSummary {

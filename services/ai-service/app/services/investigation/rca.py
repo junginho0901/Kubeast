@@ -9,6 +9,10 @@ the model is asked once more without tools, every problem of both checks in one 
 answer is checked the same way when its block can be read. The row keeps what the server read as `result`
 (investigation/result.py), so the AI evaluation scores a block the kept report no longer shows. The tool results carry
 their call numbers (investigation/numbers.py).
+
+The block is the last rca block of the answer (split()); in any other reading no rca block stays in the report. The
+model's answers in a run with the block may be ANSWER_TOKENS long; one that still stops inside the block (or at its
+length before it) is `cut` and asked for once more, shorter.
 """
 
 from __future__ import annotations
@@ -25,23 +29,37 @@ KINDS = ("crash", "oom", "image", "config_change", "rollout", "network_policy", 
 
 # What check() can find wrong, both checks together.
 FAILURES = (
-    "block_missing", "block_invalid",
+    # no block at the very end, one that is not the shape below, one the answer stopped inside
+    "block_missing", "block_invalid", "block_cut",
     # evidenceCheck: a cause no call of the run shows (evidence.check's reasons)
     "cause_no_evidence", "cause_bad_calls", "cause_name_missing", "cause_after_alert",
     # both on: a cause no hypothesis of state cause is about
     "cause_not_in_ledger",
-    # ledger: a hypothesis not closed (ledger.check's reasons), or none while the block finds a fault
-    "hypothesis_open", "hypothesis_no_evidence", "hypothesis_no_reason", "hypothesis_bad_calls", "no_hypotheses",
+    # ledger: a hypothesis not closed (ledger.check's reasons, not_verified with both on), or none while the block finds a fault
+    "hypothesis_open", "hypothesis_no_evidence", "hypothesis_no_reason", "hypothesis_bad_calls", "hypothesis_not_verified",
+    "no_hypotheses",
 )
 
 FINAL_NOTE = " End it with the rca block."
 
-_BLOCK = re.compile(r"```[ \t]*rca[ \t]*\r?\n(.*?)```", re.S)
+ANSWER_TOKENS = 4096  # a run with the block, when the model's options set none: the chat's default, not 2 048
+MAX_HYPOTHESES = 12
+
+_OPEN = re.compile(r"```[ \t]*rca[ \t]*\r?\n")
+_CLOSE = re.compile(r"^[ \t]*```", re.M)
+_CLOSED = re.compile(r"```[ \t]*rca[ \t]*\r?\n.*?```", re.S)
+_FENCE = "```"
 _ARGS_CHARS = 200
 
 
 def on(cfg) -> bool:
     return bool(cfg.evidence_check or cfg.ledger)
+
+
+def is_cause(c: dict) -> bool:
+    """Whether an entry of the block's causes is a cause: only kind "none" (a string, any case) says it is not."""
+    kind = c.get("kind")
+    return not (isinstance(kind, str) and kind.strip().lower() == "none")
 
 
 def instruction(*, evidence: bool, hypotheses: bool) -> str:
@@ -62,13 +80,15 @@ def instruction(*, evidence: bool, hypotheses: bool) -> str:
         says.append('A cause no result shows is a hypothesis: say so in the report and leave it out of "causes".')
     if hypotheses:
         says.append(
-            "List every hypothesis you weighed, the ones you set aside too. Close each one: cause or symptom with the calls "
-            "whose results show it under \"for\", ruled_out with the calls that show it is not the cause under \"against\", "
+            f"List every hypothesis you weighed, the ones you set aside too, at most {MAX_HYPOTHESES}. Close each one: "
+            "cause or symptom with the calls whose results show it under \"for\", ruled_out with the calls that show it "
+            "is not the cause under \"against\", "
             "blocked with the reason it could not be checked (a refused or missing tool) under \"blocked\". \"evidence\", "
             "\"for\" and \"against\" hold call numbers only.")
         if evidence:
             says.append('Each cause in "causes" is also a hypothesis of state cause about the same object.')
     says.append('If you find no fault, answer "no_fault": true and "causes": [].')
+    says.append("Keep the report brief so that the whole block fits after it; nothing comes after the block.")
     says.append("The server checks the block against this investigation's calls and takes it out of the report"
                 + (", and shows the hypotheses as a table under it: do not write that table yourself." if hypotheses
                    else " that is kept."))
@@ -76,20 +96,51 @@ def instruction(*, evidence: bool, hypotheses: bool) -> str:
             "holding one JSON object:\n```rca\n" + shape + "```\n" + " ".join(says))
 
 
-def split(answer: str) -> tuple[str, Optional[dict], str]:
-    """(the answer without its rca blocks, the last block's object, "ok" | "missing" | "invalid"). A block that is not
-    an object, or whose causes are not a list, is invalid."""
-    blocks = _BLOCK.findall(answer or "")
-    report = _BLOCK.sub("", answer or "").rstrip()
-    if not blocks:
-        return report, None, "missing"
+def _without_blocks(text: str) -> str:
+    return _CLOSED.sub("", text).rstrip()
+
+
+def split(answer: str, finish_reason: str = "") -> tuple[str, Optional[dict], str]:
+    """(the report, the block's object, "ok" | "missing" | "invalid" | "cut").
+
+    The block is the last rca block, closed by a fence that starts a line (or ends its JSON). Space after it, or closing
+    words with no fence when it is the answer's only rca fence, leave it the block; those words stay in the report and
+    an earlier rca fence stays too (one quoted from a tool result). A fence after it, or closing words after a second
+    rca block (a quoted one), is no block (missing). A last rca fence that never closes is the answer stopped inside its
+    block (cut) when the provider stopped at the length (`finish_reason` "length") or JSON follows it, else a quoted
+    fence (missing, its text kept). An answer stopped at the length with no block is cut. Outside ok, no closed rca
+    block stays in the report. A block that is not an object, whose causes are not a list or hold an item that is not
+    an object, is invalid."""
+    text = answer or ""
+    stopped = finish_reason == "length"
+    opens = list(_OPEN.finditer(text))
+    if not opens:
+        return text.rstrip(), None, "cut" if stopped else "missing"
+    last = opens[-1]
+    body = text[last.end():]
+    close = _CLOSE.search(body)
+    inline = body.find(_FENCE)
+    if close is None and inline < 0:
+        if stopped or body.lstrip().startswith("{"):
+            return _without_blocks(text[:last.start()]), None, "cut"
+        return _without_blocks(text), None, "missing"
+    raw, after = (body[:close.start()], body[close.end():]) if close else (body[:inline], body[inline + len(_FENCE):])
+    words = after.strip()
+    if _FENCE in after or (words and len(opens) > 1):
+        return _without_blocks(text), None, "cut" if stopped else "missing"
+    before = text[:last.start()].rstrip()
     try:
-        block = json.loads(blocks[-1])
-    except ValueError:
-        return report, None, "invalid"
-    if not isinstance(block, dict) or not isinstance(block.get("causes") or [], list):
-        return report, None, "invalid"
-    return report, block, "ok"
+        block = json.loads(raw)
+    except (ValueError, RecursionError):
+        block = None
+    causes = block.get("causes") if isinstance(block, dict) else None
+    if not isinstance(causes, list) or not all(isinstance(c, dict) for c in causes):
+        return _joined(_without_blocks(before), words), None, "invalid"
+    return _joined(before, words), block, "ok"
+
+
+def _joined(report: str, words: str) -> str:
+    return f"{report}\n\n{words}" if words else report
 
 
 @dataclass
@@ -97,7 +148,7 @@ class Checked:
     """One answer as the checks read it."""
     report: str                     # the answer without its block
     block: Optional[dict]
-    status: str                     # ok | missing | invalid
+    status: str                     # ok | missing | invalid | cut
     causes: int = 0                 # the causes the evidence check held (kind none is not a cause)
     cause_problems: list = field(default_factory=list)       # evidence.Problem, evidenceCheck on
     hypotheses: list[dict[str, Any]] = field(default_factory=list)  # ledger.check, ledger on
@@ -106,14 +157,19 @@ class Checked:
 
 
 def check(answer: str, *, tool_log: list[dict[str, Any]], reads: Optional[list], alert_start, evidence: bool,
-          ledger: bool) -> Checked:
+          ledger: bool, finish_reason: str = "") -> Checked:
+    """`finish_reason`: the provider's for the answer; "length" (it stopped at its answer length) makes a missing block
+    a cut one and is kept with the failure."""
     from app.services.investigation import evidence as inv_evidence
     from app.services.investigation import ledger as inv_ledger
 
-    report, block, status = split(answer)
+    report, block, status = split(answer, finish_reason)
     out = Checked(report, block, status)
     if status != "ok":
-        out.failures = [{"kind": f"block_{status}"}]
+        failure: dict[str, Any] = {"kind": f"block_{status}"}
+        if finish_reason == "length":
+            failure["finish_reason"] = "length"
+        out.failures = [failure]
         return out
     if evidence:
         out.causes, out.cause_problems = inv_evidence.check(block, reads or [], alert_start)
@@ -123,6 +179,11 @@ def check(answer: str, *, tool_log: list[dict[str, Any]], reads: Optional[list],
     if evidence and ledger:
         out.not_in_ledger = not_in_ledger(block, out.hypotheses)
         out.failures += [{"kind": "cause_not_in_ledger", "resource": r} for r in out.not_in_ledger]
+        unverified = {_name(p.resource) for p in out.cause_problems}
+        for h in out.hypotheses:  # a cause hypothesis does not close on a cause the calls do not show
+            if h["state"] == "cause" and _name(h.get("resource")) in unverified:
+                h["problems"] = [*h.get("problems", []), {"reason": "not_verified"}]
+                h["closed"] = False
     if ledger:
         out.failures += hypothesis_failures(block, out.hypotheses)
     return out
@@ -151,8 +212,9 @@ def _name(resource: Any) -> str:
 def not_in_ledger(block: dict, hypotheses: list[dict[str, Any]]) -> list[str]:
     """The causes no hypothesis of state cause is about, by the object's name."""
     named = {_name(h.get("resource")) for h in hypotheses if h.get("state") == "cause"}
-    return [str(c.get("resource") or "").strip() for c in block.get("causes") or []
-            if isinstance(c, dict) and str(c.get("kind", "")).lower() != "none" and _name(c.get("resource")) not in named]
+    causes = block.get("causes")
+    return [str(c.get("resource") or "").strip() for c in (causes if isinstance(causes, list) else [])
+            if isinstance(c, dict) and is_cause(c) and _name(c.get("resource")) not in named]
 
 
 def rows(tool_log: list[dict[str, Any]], same_as: Optional[dict[int, int]] = None) -> list[tuple[str, Any, str]]:
@@ -174,7 +236,10 @@ def ask_again(checked: Checked, calls: Iterable[tuple[str, Any, str]], *, eviden
     from app.services.investigation import evidence as inv_evidence
     from app.services.investigation import ledger as inv_ledger
 
-    if checked.status != "ok":
+    if checked.status == "cut":
+        head = ("Your report was cut off before its rca block ended, so the server could not check it against this "
+                "investigation's calls. Keep the report brief so that the whole block fits after it.")
+    elif checked.status != "ok":
         head = "Your report did not end with a valid rca block, so the server could not check it against this investigation's calls."
     else:
         parts = []
@@ -192,7 +257,7 @@ def ask_again(checked: Checked, calls: Iterable[tuple[str, Any, str]], *, eviden
         if any(f["kind"] == "no_hypotheses" for f in checked.failures):
             parts.append('Your rca block lists no hypotheses while "no_fault" is not true.')
         head = "\n\n".join(parts)
-    says = ["Write the whole report again, under the same headings, ending with the rca block."]
+    says = ["Write the whole report again, under the same headings, ending with the rca block; nothing comes after the block."]
     if evidence:
         says.append('A cause that no call shows is a hypothesis: say so in the report and leave it out of "causes"; when '
                     "another call does show it, give that call's number.")

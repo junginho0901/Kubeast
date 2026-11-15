@@ -73,6 +73,7 @@ auth:
   #   it automatically goes back to the previous role (audit log access.request.* / access.grant.expire).
   # It takes effect only on clusters whose RBAC binds that role's group: on a production cluster
   # that binds only viewer, the user still gets 403 after elevation.
+  # roles names each role exactly; an entry that is a built-in's name in other capitals (WRITE) stands for the built-in.
   accessRequests:
     enabled: false
     maxHours: 8
@@ -150,7 +151,9 @@ pdb:
 # "Terminals and followed logs on their own server")
 streams:
   enabled: false
+  replicas: 1            # stays 1: more than one stream server is not supported yet
   drainSeconds: 60       # how long open terminals get to end when their server is replaced (k8s-service when off)
+  preStopSeconds: 10     # k8s-service-stream leaves the Service's endpoints this long before the drain starts
 topologySpread:
   enabled: true
 podShutdown:
@@ -159,6 +162,9 @@ resources:               # per-container requests / memory limit (the full list 
   aiService:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 1Gi }
+  k8sServiceStream:      # streams.enabled only; k8sService's numbers for a start, not measured yet
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
 
 # AI keys: injected only as ai-service environment variables and not stored in the DB.
 # Model settings (UI/CRD) point only to the variable name (api_key_env).
@@ -173,6 +179,7 @@ ai:
   baseUrlAllowedHosts: []  # register a host here when a model setting's base_url is a private address
                            # (in-cluster Ollama, internal LLM gateway).
                            # api_key_env is OPENAI/ANTHROPIC/GEMINI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN (claude-code only) or KUBEAST_AI_KEY_*
+  timelineChanges: false   # offer the AI tool timeline's changes view (what changed in a window, no value read) and the chat's instruction to read it first
   providers:
     claudeCode: { enabled: false, maxConcurrent: 2, maxConcurrentTotal: 0, memoryLimit: 2Gi, queueWaitSeconds: 60, turnTimeoutSeconds: 300, maxTurns: 10 }
     # maxConcurrent: Claude Code runs per ai-service server (memory); maxConcurrentTotal: across every replica
@@ -185,7 +192,7 @@ postgresql:
   user: kubeast
   password: ""          # when empty, generated at install and kept across upgrades (look it up in the secret). Required for an external DB (enabled: false)
   database: kubeast
-  sessionLimits: { statementTimeoutMs: 30000, lockTimeoutMs: 15000, idleInTransactionTimeoutMs: 300000 }  # PostgreSQL statement_timeout, lock_timeout and idle_in_transaction_session_timeout each service SETs on its connections once connected (migrations run without the first two); 0 sets nothing. Behind RDS Proxy a SET pins the session: set 0 and put them in the proxy's initialization query or on the database role
+  sessionLimits: { statementTimeoutMs: 30000, lockTimeoutMs: 15000, idleInTransactionTimeoutMs: 300000 }  # PostgreSQL statement_timeout, lock_timeout and idle_in_transaction_session_timeout each service SETs on its connections once connected (migrations always run without the first two, also when the role sets them); 0 sets nothing. Behind RDS Proxy a SET pins the session: set 0 and put them in the proxy's initialization query or on the database role. Through PgBouncer use session pooling only: transaction pooling hands a server connection to other clients between transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's) does not stay with its client
   pool: { authService: { maxConns: 20 }, sessionService: { maxConns: 20 }, k8sService: { maxConns: 10 }, aiService: { maxConns: 15 }, modelConfigController: { maxConns: 4 } }  # connections per pod; with the chart's PostgreSQL the install stops when the pods (a rollout's extra pod and autoscaling's maxReplicas counted) could open more than maxConnections, for an external database NOTES prints the sum to compare with its max_connections
   maxConnections: 300   # the chart's PostgreSQL max_connections
 # An upgrade stops Redis before its new pod starts (Recreate), so the cache is empty for a few seconds.

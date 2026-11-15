@@ -69,7 +69,8 @@ test.afterAll(() => {
 type Cell = [node: string, ok: number, warn: number, error: number]
 const mapCells = async (page: Page): Promise<Cell[]> =>
   JSON.parse((await page.getByTestId('cluster-view-map').locator('canvas').getAttribute('data-cells')) ?? '[]')
-const cellTotals = (cells: Cell[]) => Object.fromEntries(cells.map(([n, ok, warn, error]) => [n, ok + warn + error]).sort(([a], [b]) => (a < b ? -1 : 1)))
+// a node's pods per cell; while a search is on, the nodes it matched nothing on are faded cells of no pods, left out
+const cellTotals = (cells: Cell[]) => Object.fromEntries(cells.filter(([, ok, warn, error]) => ok + warn + error > 0).map(([n, ok, warn, error]) => [n, ok + warn + error]).sort(([a], [b]) => (a < b ? -1 : 1)))
 const sumLevels = (cells: Cell[]) => cells.reduce((t, [, ok, warn, error]) => ({ ok: t.ok + ok, warn: t.warn + warn, error: t.error + error }), { ok: 0, warn: 0, error: 0 })
 // the legend's three numbers, as written (the legend shows them while no cell is hovered)
 async function legend(page: Page) {
@@ -87,7 +88,7 @@ async function footerTotal(page: Page) {
 const badge = async (page: Page, node: string) => Number(/(\d+)/.exec(await nodeBox(page, node).locator('.badge').first().innerText())?.[1] ?? NaN)
 // a box's cards by the icon each draws: green check, yellow alert, red x
 async function cardLevels(page: Page, node: string) {
-  const cards = nodeBox(page, node).locator('button')
+  const cards = nodeBox(page, node).getByTestId('cluster-view-pod')
   const n = (sel: string) => cards.locator(sel).count()
   return {
     ok: await n('svg.lucide-circle-check, svg.lucide-check-circle, svg.lucide-circle-check-big, svg.lucide-check-circle-2'),
@@ -137,7 +138,7 @@ test.describe('Cluster View — number check', () => {
     for (const [node, total] of Object.entries(want)) {
       const b = nodeBox(page, node)
       await b.scrollIntoViewIfNeeded()
-      await expect(b.locator('button')).toHaveCount(total, { timeout: 15_000 })
+      await expect(b.getByTestId('cluster-view-pod')).toHaveCount(total, { timeout: 15_000 })
       expect.soft(await badge(page, node), `badge of ${node || 'Unscheduled'}`).toBe(total)
       const cell = (await mapCells(page)).find(([n]) => n === node)!
       expect.soft(await cardLevels(page, node), `cards of ${node || 'Unscheduled'}`).toEqual({ ok: cell[1], warn: cell[2], error: cell[3] })
@@ -160,7 +161,7 @@ test.describe('Cluster View — number check', () => {
     await expect.poll(async () => cellTotals(await mapCells(page)), { timeout: 10_000 }).toEqual(perNode(runs))
     expect(await footerTotal(page), 'the footer counts the nodes the pods found are on').toBe(Object.keys(perNode(runs)).length)
     for (const [node, total] of Object.entries(perNode(runs))) {
-      await expect(nodeBox(page, node).locator('button')).toHaveCount(total, { timeout: 15_000 })
+      await expect(nodeBox(page, node).getByTestId('cluster-view-pod')).toHaveCount(total, { timeout: 15_000 })
       expect.soft(await badge(page, node), `badge of ${node} while searching`).toBe(total)
     }
 
@@ -174,7 +175,7 @@ test.describe('Cluster View — number check', () => {
       await expect.poll(async () => cellTotals(await mapCells(page)), { message: `map while searching ${text}`, timeout: 10_000 }).toEqual(perNode(hits))
       expect(await footerTotal(page), `the footer while searching ${text}`).toBe(Object.keys(perNode(hits)).length)
       for (const [node, total] of Object.entries(perNode(hits))) {
-        if (node) await expect(nodeBox(page, node).locator('button'), `pods drawn on ${node} for ${text}`).toHaveCount(total, { timeout: 15_000 })
+        if (node) await expect(nodeBox(page, node).getByTestId('cluster-view-pod'), `pods drawn on ${node} for ${text}`).toHaveCount(total, { timeout: 15_000 })
       }
     }
 
@@ -221,7 +222,7 @@ test.describe('Cluster View — number check', () => {
       await expect(page.getByTestId('cluster-view-map')).toBeVisible()
       await chooseNamespace(page, ns)
       await expect.poll(() => cardLevels(page, node), { timeout: 20_000 }).toEqual({ ok: 1, warn: 0, error: 0 })
-      await expect(nodeBox(page, node).locator('button')).toContainText('Succeeded')
+      await expect(nodeBox(page, node).getByTestId('cluster-view-pod')).toContainText('Succeeded')
       await expect.poll(async () => sumLevels(await mapCells(page)), { timeout: 15_000 }).toEqual({ ok: 1, warn: 0, error: 0 })
     } finally {
       k(`delete namespace/${ns} --wait=false --ignore-not-found`)
@@ -274,11 +275,16 @@ test.describe('Cluster View — number check', () => {
   })
 
   test('the floating chat is told the map\'s numbers, a node ready as kubectl prints it', async ({ page }) => {
-    // nodes as k8s-service writes kubectl's STATUS: two are ready (the first part is Ready)
+    // nodes as k8s-service writes kubectl's STATUS, beside the cluster's own (whatever their number; the node list's
+    // watch brings those again): of the five added, two are ready (the first part is Ready) and two cordoned
     const STATUSES = ['Ready', 'NotReady', 'Unknown', 'Ready,SchedulingDisabled', 'NotReady,SchedulingDisabled']
+    const own = { total: 0, ready: 0, cordoned: 0 }
     await page.route(/\/api\/v1\/cluster\/nodes(\?|$)/, async (route) => {
       const real = await (await route.fetch()).json() as { name: string; status: string }[]
-      return route.fulfill({ json: STATUSES.map((status, i) => ({ ...real[0], name: i === 0 ? real[0].name : `e2e-cv-node-${i}`, status })) })
+      own.total = real.length
+      own.ready = real.filter((n) => n.status.split(',')[0] === 'Ready').length
+      own.cordoned = real.filter((n) => n.status.split(',').includes('SchedulingDisabled')).length
+      return route.fulfill({ json: [...real, ...STATUSES.map((status, i) => ({ ...real[0], name: `e2e-cv-node-${i}`, status }))] })
     })
     const sent: { path: string; base?: { data?: { stats?: Record<string, number>; filters?: Record<string, string> } } | null }[] = []
     await page.route(/\/api\/v1\/sessions(\?|$)/, (route) =>
@@ -308,7 +314,7 @@ test.describe('Cluster View — number check', () => {
     await chooseNamespace(page, NS)
     await expect.poll(async () => cellTotals(await mapCells(page)), { timeout: 15_000 }).toEqual(perNode(pods(`-n ${NS}`)))
     await expect.configure({ soft: true }).poll(async () => (await ask())?.stats, { timeout: 15_000 }).toMatchObject({
-      total_nodes: STATUSES.length, ready_nodes: 2, total_pods: 6, warning_pods: KNOWN.warn, error_pods: KNOWN.error,
+      total_nodes: own.total + STATUSES.length, ready_nodes: own.ready + 2, cordoned_nodes: own.cordoned + 2, total_pods: 6, warning_pods: KNOWN.warn, error_pods: KNOWN.error,
     })
 
     // searched: the counts are of the pods found, named with the search next to the whole

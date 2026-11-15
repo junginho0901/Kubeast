@@ -90,7 +90,7 @@ export default function AdminRoles() {
         role: taken.role, group: `kubeast:role:${roleGroupSlug(name)}`,
       })
     }
-    return tr('adminRoles.nameTakenOther', 'Taken by another role apart from letter case. Choose another name.')
+    return tr('adminRoles.nameTakenOther', "Another role's name makes the same group. Choose another name.")
   }
   const serverRefusal = (err: any, fallback: string) => {
     const data = err?.response?.data
@@ -505,6 +505,15 @@ export default function AdminRoles() {
                   'adminRoles.groupHint',
                   'On a cluster this role acts as the Kubernetes group {{group}}. Each cluster must allow and bind that group (chart auth.impersonation.customRoles), or every request there is refused.',
                   { group: customRoleGroup(formName) },
+                )}
+                {customRoleGroup(formName)?.includes('~') && (
+                  <>
+                    {' '}
+                    {tr(
+                      'adminRoles.groupHintEncoded',
+                      'A character outside ASCII is written as ~ and its Unicode code point (운 → ~c6b4), so Korean names of one length still make different groups.',
+                    )}
+                  </>
                 )}
               </p>
             )}

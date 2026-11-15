@@ -7,20 +7,16 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
-// putBackTimeout bounds putting back the Secrets of a change that did not commit, which goes on after its request.
-const putBackTimeout = 10 * time.Second
-
 // stagedSecret is one Secret write run inside a clusters row change (cluster.PostgresRegistry ReplaceKubeconfig,
 // UpdateMetaStoring), which commits only when every write went through. It reads the value it replaces first, so when
-// the row change does not commit after it wrote, putBackAll restores that value and the Secret again matches the
-// config_version k8s-service compares.
+// the row change does not commit after it wrote, putBackAll restores that value (the registry runs it while the row is
+// still locked) and the Secret again matches the config_version k8s-service compares.
 type stagedSecret struct {
 	what  string // "kubeconfig", "prometheus auth", "log search auth"
 	value string
@@ -60,61 +56,66 @@ func (h *ClustersHandler) stageValue(what, name, key, value string) *stagedSecre
 	return s
 }
 
-// storeAll is the store of a row change: it writes each staged Secret in order and stops at the first that fails.
-func storeAll(staged []*stagedSecret) func(context.Context) error {
+// secretWrites is the cluster.SecretWrites of a row change: storeAll, and putBackAll when it does not commit.
+func secretWrites(staged []*stagedSecret) cluster.SecretWrites {
 	if len(staged) == 0 {
-		return nil
+		return cluster.SecretWrites{}
 	}
-	return func(ctx context.Context) error {
-		for _, s := range staged {
-			if s.read != nil {
-				if v, err := s.read(ctx); err == nil {
-					s.before, s.hasBefore = v, true
-				}
-			}
-			if err := s.write(ctx, s.value); err != nil {
-				s.err, s.unsure = err, ctx.Err() != nil
-				return fmt.Errorf("store %s: %w", s.what, err)
-			}
-			s.written = true
-		}
-		return nil
+	return cluster.SecretWrites{
+		Store:   func(ctx context.Context) error { return storeAll(ctx, staged) },
+		PutBack: func(ctx context.Context) (bool, string) { return putBackAll(ctx, staged) },
 	}
 }
 
+// storeAll writes each staged Secret in order and stops at the first that fails.
+func storeAll(ctx context.Context, staged []*stagedSecret) error {
+	for _, s := range staged {
+		if s.read != nil {
+			if v, err := s.read(ctx); err == nil {
+				s.before, s.hasBefore = v, true
+			}
+		}
+		if err := s.write(ctx, s.value); err != nil {
+			s.err, s.unsure = err, ctx.Err() != nil
+			return fmt.Errorf("store %s: %w", s.what, err)
+		}
+		s.written = true
+	}
+	return nil
+}
+
 // putBackAll writes back what each staged Secret written, or whose write ran out of time, replaced, once their row
-// change did not commit, and says what may stay as written ("" when nothing does).
-func putBackAll(ctx context.Context, staged []*stagedSecret) string {
-	var left []string
+// change did not commit. changed is whether any of them had changed; left says what may stay as written ("" when
+// nothing does).
+func putBackAll(ctx context.Context, staged []*stagedSecret) (changed bool, left string) {
+	var stays []string
 	for _, s := range staged {
 		if !s.written && !s.unsure {
 			continue
 		}
+		changed = true
 		if !s.hasBefore {
-			left = append(left, s.what+" (the value before was not read)")
+			stays = append(stays, s.what+" (the value before was not read)")
 			continue
 		}
 		if err := s.write(ctx, s.before); err != nil {
-			left = append(left, fmt.Sprintf("%s (%v)", s.what, err))
+			stays = append(stays, fmt.Sprintf("%s (%v)", s.what, err))
 			continue
 		}
 		s.written, s.unsure = false, false
 	}
-	return strings.Join(left, ", ")
+	return changed, strings.Join(stays, ", ")
 }
 
-// failClusterChange answers a clusters row change that did not commit: the Secrets it wrote are put back, the audit
-// row records the failure, and the answer is 404 for a row gone, 500 with the store's reason for a Secret not written
-// and 500 for the database.
+// failClusterChange answers a clusters row change that did not commit. The registry has put back the Secrets it wrote;
+// what it could not undo (cluster.PutBackError) is named in the audit row and in the answer. The answer is 404 for a
+// row gone, 500 with the store's reason for a Secret not written and 500 for the database.
 func (h *ClustersHandler) failClusterChange(w http.ResponseWriter, r *http.Request, payload auth.TokenPayload, id cluster.ID, before, after interface{}, staged []*stagedSecret, err error) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), putBackTimeout)
-	defer cancel()
-	opErr := err
-	if left := putBackAll(ctx, staged); left != "" {
-		opErr = fmt.Errorf("%w; left as written: %s", err, left)
-		slog.Error("cluster: secrets written for a change that did not commit were not put back", "id", id, "left", left)
+	var notUndone *cluster.PutBackError
+	if errors.As(err, &notUndone) {
+		slog.Error("cluster: secrets written for a change that did not commit were not all put back", "id", id, "left", notUndone.Left)
 	}
-	h.audit(r, "admin.cluster.update", payload, string(id), before, after, opErr)
+	h.audit(r, "admin.cluster.update", payload, string(id), before, after, err)
 	var storeFailed bool
 	for _, s := range staged {
 		if s.err != nil {
@@ -123,9 +124,12 @@ func (h *ClustersHandler) failClusterChange(w http.ResponseWriter, r *http.Reque
 	}
 	switch {
 	case storeFailed:
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.Error(w, http.StatusInternalServerError, response.Public(err))
 	case errors.Is(err, cluster.ErrNotFound):
 		response.Error(w, http.StatusNotFound, "Cluster not found")
+	case notUndone != nil:
+		slog.Error("internal error", "method", r.Method, "path", r.URL.Path, "err", err)
+		response.Error(w, http.StatusInternalServerError, "internal server error; "+response.Public(errors.New(notUndone.Left)))
 	default:
 		response.InternalError(w, r, err)
 	}

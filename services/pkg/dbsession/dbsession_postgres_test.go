@@ -18,6 +18,12 @@ const advisoryTestKey int64 = 7_432_119_900
 
 func connectWith(t *testing.T, apply func(*pgconn.Config)) *pgx.Conn {
 	t.Helper()
+	return connectAs(t, "", "", apply)
+}
+
+// connectAs is connectWith signed in as user with password; an empty user keeps the URL's.
+func connectAs(t *testing.T, user, password string, apply func(*pgconn.Config)) *pgx.Conn {
+	t.Helper()
 	raw := os.Getenv("DBMIGRATE_TEST_DATABASE_URL")
 	if raw == "" {
 		t.Skip("DBMIGRATE_TEST_DATABASE_URL not set: needs a PostgreSQL server")
@@ -25,6 +31,9 @@ func connectWith(t *testing.T, apply func(*pgconn.Config)) *pgx.Conn {
 	cfg, err := pgx.ParseConfig(raw)
 	if err != nil {
 		t.Fatalf("ParseConfig: %v", err)
+	}
+	if user != "" {
+		cfg.User, cfg.Password = user, password
 	}
 	if apply != nil {
 		apply(&cfg.Config)
@@ -163,4 +172,41 @@ func TestPostgres_MigrationConnectionsHaveNoStatementOrLockLimit(t *testing.T) {
 	if _, err := conn.Exec(context.Background(), "SELECT pg_sleep(0.5)"); err != nil {
 		t.Fatalf("pg_sleep(0.5) past the request limit: %v", err)
 	}
+}
+
+// The RDS Proxy advice: the variables at 0 and the limits on the database role. The migration connections still run
+// without the role's statement and lock limits, while a connection of the services keeps them.
+func TestPostgres_MigrationConnectionsLiftTheRolesLimits(t *testing.T) {
+	ctx := context.Background()
+	const role, password = "kubeast_dbsession_role_limits", "dbsession-test"
+	admin := connectWith(t, nil)
+	for _, stmt := range []string{
+		"DROP ROLE IF EXISTS " + role,
+		"CREATE ROLE " + role + " LOGIN PASSWORD '" + password + "'",
+		"ALTER ROLE " + role + " SET statement_timeout = '200ms'",
+		"ALTER ROLE " + role + " SET lock_timeout = '100ms'",
+	} {
+		if _, err := admin.Exec(ctx, stmt); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
+	}
+	t.Cleanup(func() { _, _ = admin.Exec(context.Background(), "DROP ROLE IF EXISTS "+role) })
+
+	plain := connectAs(t, role, password, Limits{}.Apply)
+	if got := show(t, plain, ParamStatementTimeout); got != "200ms" {
+		t.Fatalf("SHOW statement_timeout as the role = %q, want the role's 200ms", got)
+	}
+	_ = plain.Close(ctx)
+
+	mig := connectAs(t, role, password, Limits{}.ApplyMigrations)
+	if got := show(t, mig, ParamStatementTimeout); got != "0" {
+		t.Fatalf("SHOW statement_timeout on a migration connection = %q, want 0", got)
+	}
+	if got := show(t, mig, ParamLockTimeout); got != "0" {
+		t.Fatalf("SHOW lock_timeout on a migration connection = %q, want 0", got)
+	}
+	if _, err := mig.Exec(ctx, "SELECT pg_sleep(0.5)"); err != nil {
+		t.Fatalf("pg_sleep(0.5) past the role's 200 ms: %v", err)
+	}
+	_ = mig.Close(ctx)
 }

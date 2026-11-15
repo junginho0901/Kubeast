@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -44,7 +45,7 @@ func TestEvictAll_RetriesPDBThenSucceeds(t *testing.T) {
 	cs := fake.NewSimpleClientset(&pod)
 	calls := evictionReactor(cs, 2)
 
-	blocked := evictAll(context.Background(), cs, []corev1.Pod{pod})
+	blocked := evictAll(context.Background(), cs, []corev1.Pod{pod}, nil)
 	if len(blocked) != 0 {
 		t.Fatalf("expected eviction to succeed after PDB retries, got %v", blocked)
 	}
@@ -64,7 +65,7 @@ func TestEvictAll_PDBBlockedIsReportedNeverForceDeleted(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
-	blocked := evictAll(ctx, cs, []corev1.Pod{pod})
+	blocked := evictAll(ctx, cs, []corev1.Pod{pod}, nil)
 	if len(blocked) != 1 || !strings.Contains(blocked[0], "PodDisruptionBudget") {
 		t.Fatalf("expected the PDB-blocked pod to be reported, got %v", blocked)
 	}
@@ -96,7 +97,7 @@ func TestEvictAll_BlockedPodDoesNotStarveTheOthers(t *testing.T) {
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
-	blocked := evictAll(ctx, cs, []corev1.Pod{held, free})
+	blocked := evictAll(ctx, cs, []corev1.Pod{held, free}, nil)
 	if len(blocked) != 1 || !strings.HasPrefix(blocked[0], "app/db-0") {
 		t.Fatalf("only the PDB-held pod must be reported, got %v", blocked)
 	}
@@ -117,8 +118,63 @@ func TestEvictAll_OtherErrorsAreReportedWithoutRetry(t *testing.T) {
 		calls++
 		return true, nil, apierrors.NewForbidden(corev1.Resource("pods"), "job-1", nil)
 	})
-	blocked := evictAll(context.Background(), cs, []corev1.Pod{pod})
+	blocked := evictAll(context.Background(), cs, []corev1.Pod{pod}, nil)
 	if len(blocked) != 1 || calls != 1 {
 		t.Fatalf("forbidden must be reported after one attempt, got blocked=%v calls=%d", blocked, calls)
 	}
+}
+
+// While the drain is held (ready waits) no eviction is made; when ready lets it go the pod is evicted,
+// and when ready ends with an error the pod is reported with it, never evicted.
+func TestEvictAll_WaitsForReadyBeforeEachEviction(t *testing.T) {
+	evictRetryInterval = time.Millisecond
+	pod := drainTestPod("web-1")
+	cs := fake.NewSimpleClientset(&pod)
+	calls := evictionReactor(cs, 0)
+	release := make(chan struct{})
+	waited := make(chan struct{})
+	ready := func(ctx context.Context) error {
+		close(waited)
+		<-release
+		return nil
+	}
+	done := make(chan []string, 1)
+	go func() { done <- evictAll(context.Background(), cs, []corev1.Pod{pod}, ready) }()
+	<-waited
+	time.Sleep(50 * time.Millisecond)
+	select {
+	case <-done:
+		t.Fatal("evictAll returned while ready held it")
+	default:
+	}
+	if evictions(cs) != 0 {
+		t.Fatal("a pod was evicted while ready held the drain")
+	}
+	close(release)
+	if blocked := <-done; len(blocked) != 0 || *calls != 1 {
+		t.Fatalf("after ready let it go: blocked %v, %d eviction calls", blocked, *calls)
+	}
+
+	held := drainTestPod("web-2")
+	cs = fake.NewSimpleClientset(&held)
+	evictionReactor(cs, 0)
+	stopped := func(context.Context) error {
+		return errors.New("held while this server could not save its drain heartbeat")
+	}
+	if blocked := evictAll(context.Background(), cs, []corev1.Pod{held}, stopped); len(blocked) != 1 || !strings.Contains(blocked[0], "held while") {
+		t.Fatalf("a drain that ended while held: %v", blocked)
+	}
+	if evictions(cs) != 0 {
+		t.Fatal("a pod was evicted after ready ended with an error")
+	}
+}
+
+func evictions(cs *fake.Clientset) int {
+	n := 0
+	for _, a := range cs.Actions() {
+		if a.GetVerb() == "create" && a.GetSubresource() == "eviction" {
+			n++
+		}
+	}
+	return n
 }

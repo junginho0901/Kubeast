@@ -116,6 +116,7 @@ func (h *Handler) refuseTerminalWhileLeaving(w http.ResponseWriter) bool {
 // auditSessionEnd writes the row of a connection the server ended — its session stopped standing, or the server is
 // being replaced (the drain, or a terminal the server's leaving closed; a followed log the leaving ended reconnects by
 // itself and has none); other ends are the user's own and have none.
+// The browser closes on the end frame sent before it, so the row does not wait on the request.
 func (h *Handler) auditSessionEnd(ctx context.Context, r *http.Request, targetType, target, namespace, stream string) {
 	code := auth.SessionEndCode(ctx)
 	why := "connection closed: session ended"
@@ -129,6 +130,6 @@ func (h *Handler) auditSessionEnd(ctx context.Context, r *http.Request, targetTy
 		return
 	}
 	slog.InfoContext(r.Context(), why, "stream", stream, "target", target, "reason", code)
-	_ = h.recordAuditWithPayload(r, auditSessionEndAction, targetType, target, namespace, nil, nil,
+	_ = h.recordAuditAfterClose(r, auditSessionEndAction, targetType, target, namespace, nil, nil,
 		audit.MustJSON(map[string]interface{}{"stream": stream, "reason": code}))
 }

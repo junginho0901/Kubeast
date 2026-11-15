@@ -2,11 +2,35 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"testing"
 )
+
+// roleGroupSlugCasesFile is the one table of the group a role name makes, also run by the database's role_group_slug
+// (services/pkg/dbmigrate role_names_postgres_test.go) and the frontend's roleGroupSlug (roleGroup.test.ts).
+const roleGroupSlugCasesFile = "../../../frontend/src/utils/roleGroupSlug.cases.json"
+
+func TestRoleGroupSlugCases(t *testing.T) {
+	raw, err := os.ReadFile(roleGroupSlugCasesFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var file struct {
+		Cases []struct{ Name, Slug string }
+	}
+	if err := json.Unmarshal(raw, &file); err != nil || len(file.Cases) == 0 {
+		t.Fatalf("%s: %v (%d cases)", roleGroupSlugCasesFile, err, len(file.Cases))
+	}
+	for _, c := range file.Cases {
+		if got := RoleGroupSlug(c.Name); got != c.Slug {
+			t.Errorf("RoleGroupSlug(%q) = %q, want %q", c.Name, got, c.Slug)
+		}
+	}
+}
 
 func TestImpersonation_Groups(t *testing.T) {
 	cases := []struct {

@@ -70,6 +70,7 @@ auth:
   # 감사 로그는 access.request.* / access.grant.expire로 남습니다.
   # 클러스터 RBAC이 그 역할의 그룹을 바인딩한 클러스터에서만 효력이 있습니다.
   # viewer만 바인딩한 운영 클러스터에서는 승격돼도 403입니다.
+  # roles는 역할을 이름 그대로 적습니다. 기본 역할 이름을 대소문자만 달리 쓴 항목(WRITE)은 그 기본 역할을 뜻합니다.
   accessRequests:
     enabled: false
     maxHours: 8
@@ -146,7 +147,9 @@ pdb:
 # 터미널과 실시간 로그를 따로 맡는 서버, 기본 꺼짐(docs/ko/operations.md "터미널과 실시간 로그를 따로 맡는 서버")
 streams:
   enabled: false
+  replicas: 1            # 1 그대로 — 스트림 서버 둘 이상은 아직 지원하지 않습니다
   drainSeconds: 60       # 터미널을 맡은 서버가 교체될 때 열린 터미널을 기다리는 시간(꺼져 있으면 k8s-service)
+  preStopSeconds: 10     # k8s-service-stream이 드레인을 시작하기 전에 Service 엔드포인트에서 빠져 있는 시간
 topologySpread:
   enabled: true
 podShutdown:
@@ -155,6 +158,9 @@ resources:               # 컨테이너별 requests / memory limit(전체 목록
   aiService:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 1Gi }
+  k8sServiceStream:      # streams.enabled일 때만. 아직 재지 않아 k8sService 값으로 시작
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
 
 # AI 키 — ai-service 환경변수로만 주입하고 DB에는 저장하지 않습니다.
 # 모델 설정(UI/CRD)은 변수 이름(api_key_env)만 가리킵니다.
@@ -168,6 +174,7 @@ ai:
   apiKeysSecret: ""
   model: "gpt-4o-mini"
   baseUrlAllowedHosts: []  # 모델 설정의 base_url이 사설 주소(클러스터 안 Ollama, 사내 LLM 게이트웨이)면 여기에 등록하세요
+  timelineChanges: false   # AI 도구 timeline의 changes 보기(기간 동안 바뀐 것, 값은 읽지 않음)와 그것을 먼저 보라는 채팅 지시를 켭니다
   providers:
     claudeCode: { enabled: false, maxConcurrent: 2, maxConcurrentTotal: 0, memoryLimit: 2Gi, queueWaitSeconds: 60, turnTimeoutSeconds: 300, maxTurns: 10 }
     # maxConcurrent: 서버 한 대의 Claude Code 실행 수(메모리), maxConcurrentTotal: 복제본 전체(0 = maxConcurrent),
@@ -181,7 +188,7 @@ postgresql:
   user: kubeast
   password: ""          # 비우면 설치 때 생성하고 업그레이드해도 유지합니다(secret에서 확인). 외부 DB(enabled: false)면 필수입니다
   database: kubeast
-  sessionLimits: { statementTimeoutMs: 30000, lockTimeoutMs: 15000, idleInTransactionTimeoutMs: 300000 }  # 각 서비스가 연결한 뒤 SET으로 거는 PostgreSQL statement_timeout, lock_timeout, idle_in_transaction_session_timeout입니다(마이그레이션은 앞의 둘 없이 돕니다). 0이면 걸지 않습니다. RDS Proxy 뒤에서는 SET이 세션을 고정(pinning)하니 0으로 두고 프록시의 초기화 쿼리나 데이터베이스 역할(role)에 거세요
+  sessionLimits: { statementTimeoutMs: 30000, lockTimeoutMs: 15000, idleInTransactionTimeoutMs: 300000 }  # 각 서비스가 연결한 뒤 SET으로 거는 PostgreSQL statement_timeout, lock_timeout, idle_in_transaction_session_timeout입니다(마이그레이션은 역할(role)에 걸려 있어도 앞의 둘 없이 돕니다). 0이면 걸지 않습니다. RDS Proxy 뒤에서는 SET이 세션을 고정(pinning)하니 0으로 두고 프록시의 초기화 쿼리나 데이터베이스 역할(role)에 거세요. PgBouncer는 session 풀링으로만 쓰세요. transaction 풀링은 트랜잭션 사이에 서버 연결을 다른 클라이언트에게 넘기므로 SET이나 세션 advisory lock(마이그레이션, 감사 디스패처)이 그것을 건 클라이언트에 남지 않습니다
   pool: { authService: { maxConns: 20 }, sessionService: { maxConns: 20 }, k8sService: { maxConns: 10 }, aiService: { maxConns: 15 }, modelConfigController: { maxConns: 4 } }  # 파드 하나의 연결 수입니다. 차트의 PostgreSQL이면 파드들(롤아웃 때 하나 더, 오토스케일링의 maxReplicas 포함)이 maxConnections보다 많이 열 수 있을 때 설치가 멈추고, 외부 데이터베이스면 NOTES가 그 합을 보여 주니 그쪽 max_connections와 비교하세요
   maxConnections: 300   # 차트 PostgreSQL의 max_connections
 # 업그레이드할 때 Redis는 옛 파드를 멈춘 뒤 새 파드를 띄우므로(Recreate) 몇 초 동안 캐시가 비어 있습니다.

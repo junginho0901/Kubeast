@@ -7,10 +7,10 @@
  "time_tolerance_seconds": 120,
  "causes": [
   {
-   "resource": "Deployment/shop-22/shop-api",
-   "kind": "oom",
-   "accept_resources": ["shop-api-settings", "^(deployment|replicaset|pod)/(shop-22/)?shop-api(-[a-z0-9]{6,10})?(-[a-z0-9]{5})?$", "^shop-api$"],
-   "accept_kinds": ["config_change", "resource_limit"]
+   "resource": "ConfigMap/shop-22/shop-api-settings",
+   "kind": "config_change",
+   "accept_resources": ["shop-api-settings", "WEB_WORKERS"],
+   "accept_kinds": ["rollout"]
   }
  ],
  "path": [
@@ -18,7 +18,7 @@
   {"resource": "Deployment/shop-22/shop-api", "role": "via", "required": true, "accept": ["^(deployment|replicaset|pod)/(shop-22/)?shop-api(-[a-z0-9]{6,10})?(-[a-z0-9]{5})?$", "^shop-api$"], "note": "one worker's OOM kill stops the whole container; it warms up again and is killed again"},
   {"resource": "Deployment/shop-22/visitor", "role": "symptom", "required": true, "accept": ["visitor", "service/(shop-22/)?shop-api"]}
  ],
- "also_ok": [],
+ "also_ok": ["Deployment/shop-22/shop-api", "ReplicaSet/shop-22/shop-api-<hash>", "Pod/shop-22/shop-api-<hash>", "Service/shop-22/shop-api"],
  "decoys": [
   {"resource": "Deployment/shop-22/session-cache", "why": "the pod closest to its memory limit (about 80 %) the whole time, before and after; never killed"},
   {"resource": "Deployment/shop-22/visitor", "why": "the caller"},

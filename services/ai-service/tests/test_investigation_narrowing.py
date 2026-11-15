@@ -9,7 +9,6 @@ from types import SimpleNamespace
 import pytest
 
 from app.services.ai import features as feature_gate
-from app.services.investigation import numbers
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import runner
 from app.services.investigation import settings as inv_settings
@@ -231,12 +230,12 @@ def test_one_path_instruction_with_the_rules_and_the_call_graph():
     both = inv_prompt.system_prompt(cluster="self", namespace="apps", language="en", rules=True, call_paths=True)
     assert both.count("cause → … → symptom") == 1  # the rules' Likely cause chain
     assert both.count('include ["calls"]') == 1 and "since_time a little before the alert started" in both
-    assert "counting your calls from 1" not in both and "Find what changed at a path's first workload" not in both
+    assert "the [call N] number shown before the result that showed it" not in both and "Find what changed at a path's first workload" not in both
     rules = inv_prompt.system_prompt(cluster="self", namespace="apps", language="en", rules=True)
     assert both.replace(inv_prompt.call_path_rules(True), "") == rules
     # the call graph alone keeps its own path instruction
     calls = inv_prompt.system_prompt(cluster="self", namespace="apps", language="en", call_paths=True)
-    assert calls.count("cause → … → symptom") == 1 and "counting your calls from 1" in calls
+    assert calls.count("cause → … → symptom") == 1 and "the [call N] number shown before the result that showed it" in calls
 
 
 @pytest.mark.asyncio
@@ -245,6 +244,5 @@ async def test_both_switches_on_narrow_first_and_ask_for_the_calls(monkeypatch):
     service = NarrowService([completion(content="## Summary\nok")])
     out = await run(monkeypatch, service, rules=True, changes_first=True, narrow_first=True, call_paths=True)
     system, first = service.completions.calls[0]["messages"][0]["content"], first_message(service)
-    # the rules number the calls (investigation/numbers.py), so the system prompt ends with the note on call numbers
-    assert system == inv_prompt.system_prompt(cluster="self", namespace="apps", language="en", rules=True, call_paths=True) + numbers.NOTE
+    assert system == inv_prompt.system_prompt(cluster="self", namespace="apps", language="en", rules=True, call_paths=True)
     assert first.index("<<<CHANGES") < first.index("<<<NARROWING") and [c["step"] for c in out["tool_calls"]] == [0, 0]

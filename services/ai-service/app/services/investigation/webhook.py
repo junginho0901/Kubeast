@@ -28,7 +28,7 @@ import hashlib
 import hmac
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
@@ -92,11 +92,14 @@ def fingerprint_of(alert: AmAlert) -> str:
 
 
 def parse_time(value: Optional[str]) -> Optional[datetime]:
+    """An RFC 3339 time as the naive UTC the columns keep (an offset converted, nanoseconds cut to microseconds, no
+    offset read as UTC); None when missing, Go's zero time or unreadable."""
     if not value or value.startswith("0001-"):
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
-    except ValueError:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed.astimezone(UTC).replace(tzinfo=None) if parsed.tzinfo else parsed
+    except (ValueError, OverflowError):
         return None
 
 

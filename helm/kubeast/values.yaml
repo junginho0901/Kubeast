@@ -148,8 +148,9 @@ auth:
     # those bindings to groups first (docs/cluster-requirements.md §1).
     userPrefix: ""
     # A custom Kubeast role (anything but Read/Write/Admin) granted on a
-    # cluster acts there as group kubeast:role:<slug> (lowercase; any character
-    # other than a-z 0-9 . _ - becomes "-"). The impersonator ClusterRole allows
+    # cluster acts there as group kubeast:role:<slug> (A-Z lowercased, any other
+    # ASCII character but a-z 0-9 . _ - becomes "-", any other character "~" and
+    # its code point: 운영팀 -> ~c6b4~c601~d300). The impersonator ClusterRole allows
     # only the four fixed groups, so such a role gets 403 on every cluster call
     # until its group is allowed and bound. Each entry here renders both for
     # the installed cluster: the group joins an extra impersonator ClusterRole
@@ -428,6 +429,14 @@ ai:
   # log (redacted, length-capped). Debugging only — off keeps them out of the
   # cluster log pipeline.
   debugDump: false
+  # The AI tool timeline's changes view (view: changes — what changed in a
+  # window: rollouts compared with the revision before, ConfigMap and Secret
+  # writes as metadata, Helm revisions, HPA scales, node conditions, Argo CD
+  # syncs, restarts; no value read) and the chat's instruction to read it first
+  # when asked why something broke. Off: the chat, alert investigations and the
+  # MCP server are offered timeline without it and the chat's instructions do
+  # not name it; k8s-service still serves the route.
+  timelineChanges: false
   # Provider claude-code: the chat with a Claude Pro/Max subscription instead of
   # an API key. Claude Code makes each model call and the chat's own tools answer
   # its tool calls (same tools, approval card for writes, masking and audit).
@@ -605,7 +614,10 @@ postgresql:
   # statements once a connection is made (not startup parameters, which PgBouncer refuses by default). 0 sets
   # nothing and leaves the database's setting. Behind RDS Proxy a SET pins the client connection to one database
   # connection: set 0 there and put the limits in the proxy's initialization query or on the database role. The
-  # schema migrations run without the statement and lock limits.
+  # schema migrations always run without the statement and lock limits, also when the role sets them. Through
+  # PgBouncer use session pooling only: transaction pooling hands a server connection to other clients between
+  # transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's) does not stay with
+  # the client that made it.
   sessionLimits:
     statementTimeoutMs: 30000
     lockTimeoutMs: 15000
@@ -947,7 +959,8 @@ features:
   # it is not held to maxPerHour and has its own daily budget, none by
   # default. One investigation took about 60,000 tokens when measured (657
   # runs on a dev install, Claude Haiku 5.5 averaged 66,424), so 200000 is
-  # about three a day.
+  # about three a day — fewer with evidenceCheck or ledger on, whose
+  # instruction goes with every model call and which may ask once more.
   alertInvestigation:
     enabled: false
     # true refuses the shared token: every receiver must send its cluster's own.
@@ -960,7 +973,7 @@ features:
     dailyTokenBudget: 200000  # the webhook's investigations, per UTC day; 0 = no budget
     manualDailyTokenBudget: 0  # "Investigate now" investigations, per UTC day; 0 = no budget (the permission decides who)
     providerPauseMinutes: 30  # after the model provider refuses for credit or the key, new alerts are skipped this long; 0 = no pause
-    maxSteps: 8               # model calls per investigation; the last one gets no tools
+    maxSteps: 8               # model calls per investigation (+1 when evidenceCheck or ledger asks again); the last one gets no tools
     timeoutSeconds: 300
     # The time windows below, the scope groups (affected, checked and normal,
     # changed for another reason, not looked at), facts kept apart from

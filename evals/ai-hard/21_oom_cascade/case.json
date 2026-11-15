@@ -40,5 +40,9 @@
   "kubectl -n $NS delete pod -l app=search --wait=false"
  ],
  "cooldown_seconds": 30,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceRequestsFailing", "service": "storefront"},
+  "annotations": {"summary": "storefront cannot find products", "description": "storefront's product lookups have been failing for the last few minutes."}
+ }
 }

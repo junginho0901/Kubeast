@@ -17,15 +17,35 @@ export function isBuiltinRole(name: string | null | undefined): boolean {
 
 // Not a built-in's name, but a built-in's slug ("ADMIN", " read "): such a role acts as no role group on a cluster.
 export function takesBuiltinSlug(name: string | null | undefined): boolean {
-  if (!name || !name.trim() || isBuiltinRole(name)) return false
+  if (!name || !trimSpace(name) || isBuiltinRole(name)) return false
   return Object.values(BUILT_IN_SLUGS).includes(roleGroupSlug(name))
 }
 
-// Lowercase; anything other than a-z 0-9 . _ - becomes "-" (groupSlug in Go).
+// Go's strings.TrimSpace: its whitespace, not String.trim's (which also takes U+FEFF and leaves U+0085).
+const GO_SPACE = '\\t\\n\\v\\f\\r \\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000'
+const GO_SPACE_ENDS = new RegExp(`^[${GO_SPACE}]+|[${GO_SPACE}]+$`, 'g')
+
+function trimSpace(name: string): string {
+  return name.replace(GO_SPACE_ENDS, '')
+}
+
+// A-Z, U+0130 and U+212A lowered to ASCII, a-z 0-9 . _ - kept, any other ASCII character "-", any other character "~"
+// and its code point in four hex digits ("~~" and six above U+FFFF), as groupSlug in Go and the database's
+// role_group_slug (roleGroupSlug.cases.json holds the four equal). A lone surrogate is U+FFFD, as Go reads it.
 export function roleGroupSlug(name: string): string {
-  return Array.from(name.trim().toLowerCase())
-    .map((c) => (/^[a-z0-9._-]$/.test(c) ? c : '-'))
-    .join('')
+  let slug = ''
+  for (const c of trimSpace(name)) {
+    const p = c.codePointAt(0) ?? 0
+    if (p >= 0x41 && p <= 0x5a) slug += String.fromCharCode(p + 0x20)
+    else if (p === 0x130) slug += 'i'
+    else if (p === 0x212a) slug += 'k'
+    else if (/^[a-z0-9._-]$/.test(c)) slug += c
+    else if (p < 0x80) slug += '-'
+    else if (p >= 0xd800 && p <= 0xdfff) slug += '~fffd'
+    else if (p <= 0xffff) slug += `~${p.toString(16).padStart(4, '0')}`
+    else slug += `~~${p.toString(16).padStart(6, '0')}`
+  }
+  return slug
 }
 
 // Whether saving this edit ends the sessions of those holding the role, as auth-service's tokensEndedBy decides: a
@@ -39,7 +59,7 @@ export function roleEditEndsSessions(before: { name: string; permissions?: strin
 // The role holding a name, as auth-service's roleNameConflict reads it: the first other role (in the list's id order)
 // whose name makes the same group, so a name differing from it only in letter case, spaces or punctuation is taken.
 // editing is the role being renamed: its own name is never taken, and its stored name sent back as the form sends it
-// (trimmed) is not checked again, so a name stored before the rule stays usable.
+// (trimmed) is not checked again, as auth-service does not check it.
 export type TakenRoleName = { role: string; builtin: boolean; sameName: boolean }
 
 export function takenRoleName(
@@ -47,8 +67,8 @@ export function takenRoleName(
   roles: ReadonlyArray<{ id: number; name: string; is_system: boolean }>,
   editing?: { id: number; name: string } | null,
 ): TakenRoleName | null {
-  const trimmed = name.trim()
-  if (!trimmed || (editing && trimmed === editing.name.trim())) return null
+  const trimmed = trimSpace(name)
+  if (!trimmed || (editing && trimmed === trimSpace(editing.name))) return null
   const slug = roleGroupSlug(trimmed)
   const other = roles.find((r) => r.id !== editing?.id && roleGroupSlug(r.name) === slug)
   return other ? { role: other.name, builtin: other.is_system, sameName: other.name === trimmed } : null

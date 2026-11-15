@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
+import { aiLayerScreens, clusterFor, prepareScreen, visitUrl } from './ai-layer-screens'
 import { turnToRow } from './list-pages'
 
 // The floating chat sends what is on screen (page_context) with each question. These tests stop the request in the
@@ -8,26 +9,11 @@ type Layer = { source: string; summary: string; data?: Record<string, unknown> }
 // session: the conversation the question went to (stand-in ids e2e-floating-ctx-1, -2 …)
 type PageContext = { path: string; page_type: string; base?: Layer | null; overlays: Layer[]; session?: string }
 
-// Every menu with a screen of its own, on the cluster that has what it shows: self (the dev install) for most,
-// default (the second cluster) for the pages that need Kyverno, metrics-server or OpenCost. Advanced Search sends
-// nothing until something is searched.
-const MENUS: [string, string][] = [
-  '/', '/cluster/namespaces', '/cluster/resource-graph', '/timeline', '/alerts', '/cluster/nodes',
-  '/workloads/pods', '/workloads/deployments', '/workloads/statefulsets', '/workloads/daemonsets', '/workloads/replicasets',
-  '/workloads/jobs', '/workloads/cronjobs', '/workloads/hpas', '/workloads/vpas', '/workloads/pdbs', '/storage',
-  '/network/services', '/network/endpoints', '/network/endpointslices', '/network/ingresses', '/network/ingressclasses',
-  '/network/networkpolicies', '/gateway/gateways', '/gateway/gatewayclasses', '/gateway/httproutes', '/gateway/grpcroutes',
-  '/gateway/referencegrants', '/gateway/backendtlspolicies', '/gateway/policies', '/gpu/dashboard', '/gpu/nodes', '/gpu/pods',
-  '/gpu/deviceclasses', '/gpu/resourceclaims', '/gpu/resourceclaimtemplates', '/gpu/resourceslices',
-  '/security/serviceaccounts', '/security/roles', '/security/clusterroles', '/security/rolebindings',
-  '/security/clusterrolebindings', '/configuration/configmaps', '/configuration/secrets', '/cluster/resourcequotas',
-  '/cluster/limitranges', '/cluster/priorityclasses', '/cluster/runtimeclasses', '/cluster/leases',
-  '/cluster/mutatingwebhookconfigurations', '/cluster/validatingwebhookconfigurations',
-  '/cluster/validatingadmissionpolicies', '/cluster/mutatingadmissionpolicies', '/custom-resources/instances',
-  '/custom-resources/groups', '/helm/releases', '/cluster-view',
-].map((path): [string, string] => [path, 'self']).concat([
-  ['/security/policyreports', 'default'], ['/monitoring', 'default'], ['/cost', 'default'],
-])
+// Every screen of the sidebar config (ai-layer-screens.ts) but those ai-layer-exempt.json names, on the cluster that
+// has what it shows: self (the dev install) for most, default (the second cluster) for the pages that need Kyverno,
+// metrics-server or OpenCost. ai-layers-every-screen.spec.ts (opt-in) holds the same screens in refused, failed, not
+// served and empty states.
+const MENUS: [string, string][] = aiLayerScreens().map((href): [string, string] => [href, clusterFor(href)])
 
 async function captureFloating(page: Page) {
   const sent: PageContext[] = []
@@ -112,10 +98,14 @@ test.describe('floating chat screen data', () => {
     await openChat(page)
     const missing: string[] = []
     for (const visit of ['first', 'again']) {
-      for (const [path, cluster] of MENUS) {
-        await navigate(page, `${path}?cluster=${cluster}`)
-        const ctx = await askForBase(page, sent, path)
-        if (ctx.path !== path || !ctx.base?.summary) missing.push(`${visit} ${path} (sent for ${ctx.path})`)
+      for (const [href, cluster] of MENUS) {
+        const path = href.split('?')[0]
+        await navigate(page, visitUrl(href, cluster))
+        // Advanced Search sends its layer once something is searched
+        await prepareScreen(page, href)
+        // Cluster Hygiene and Investigations read their reports for a while
+        const ctx = await askForBase(page, sent, path, 20000)
+        if (ctx.path !== path || !ctx.base?.summary) missing.push(`${visit} ${href} (sent for ${ctx.path})`)
       }
     }
     expect(missing).toEqual([])

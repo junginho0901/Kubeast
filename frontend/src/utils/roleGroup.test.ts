@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { customRoleGroup, isBuiltinRole, roleEditEndsSessions, roleGroupSlug, sameGroupRefusal, takenRoleName, takesBuiltinSlug } from './roleGroup'
+import SLUG_CASES from './roleGroupSlug.cases.json'
+
+// auth.RoleGroupSlug and the database's role_group_slug run the same table (TestRoleGroupSlugCases,
+// TestPostgresRoleNamesOneGroupEach), so the role form refuses what the server and the database refuse.
+describe('roleGroupSlug', () => {
+  it.each(SLUG_CASES.cases)('$name makes $slug', ({ name, slug }) => {
+    expect(roleGroupSlug(name)).toBe(slug)
+  })
+})
 
 // auth-service tokensEndedBy: only what a token held and no longer may ends a session.
 describe('roleEditEndsSessions', () => {
@@ -67,8 +76,26 @@ describe('roleGroup', () => {
     expect(customRoleGroup('sre-readonly')).toBe('kubeast:role:sre-readonly')
     expect(customRoleGroup('Infra Manager')).toBe('kubeast:role:infra-manager')
     expect(roleGroupSlug('dev_team.v2')).toBe('dev_team.v2')
-    expect(roleGroupSlug('개발자 A')).toBe('----a')
+    expect(roleGroupSlug('개발자 A')).toBe('~ac1c~bc1c~c790-a')
     expect(roleGroupSlug('a/b:c')).toBe('a-b-c')
+    // a lone surrogate reaches Go as U+FFFD (encoding/json), so the form shows the group the server makes
+    expect(roleGroupSlug('a\ud800b')).toBe(roleGroupSlug('a\ufffdb'))
+  })
+
+  // Korean and other names outside ASCII: two names share a group only when they differ in A-Z letter case, spaces or
+  // punctuation, and no ASCII name makes the group of one of them.
+  it('gives names outside ASCII a group of their own', () => {
+    expect(customRoleGroup('운영팀')).toBe('kubeast:role:~c6b4~c601~d300')
+    expect(roleGroupSlug('운영팀')).not.toBe(roleGroupSlug('개발팀'))
+    expect(roleGroupSlug('운영 팀')).toBe(roleGroupSlug('운영-팀'))
+    expect(roleGroupSlug('OPS팀')).toBe(roleGroupSlug('ops팀'))
+    for (const ascii of ['~c6b4~c601~d300', 'uc6b4uc601ud300', '-c6b4-c601-d300']) {
+      expect(roleGroupSlug(ascii)).not.toBe(roleGroupSlug('운영팀'))
+    }
+    const roles = [{ id: 1, name: '운영팀', is_system: false }]
+    expect(takenRoleName('개발팀', roles)).toBeNull()
+    expect(takenRoleName('운영 팀', roles)).toBeNull()
+    expect(takenRoleName('운영팀 ', roles)).toEqual({ role: '운영팀', builtin: false, sameName: true })
   })
 })
 

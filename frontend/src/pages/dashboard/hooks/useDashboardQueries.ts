@@ -1,24 +1,20 @@
 // Dashboard data fetching — every useQuery the page consumes plus
-// the metricsUnavailable flag and its two side-effects (cancel
-// in-flight top-resources queries when metrics flip unavailable;
-// flip the flag when the top-resources query reports the
-// metrics-server is gone). Extracted from Dashboard.tsx so the page
+// metricsUnavailable, read from the top-resources query's last answer
+// (the cluster serves no metrics.k8s.io; asked again after a minute,
+// topResourcesPace). Extracted from Dashboard.tsx so the page
 // no longer has to declare 12 useQuery calls inline; one hook call
 // returns everything it needs.
 //
 // `enabled` flags depend on which modal is open / which stat card is
 // selected — those are passed in as plain booleans so the hook stays
-// pure (no UI state of its own besides metricsUnavailable, which is
-// genuinely about the data layer).
+// pure (no UI state of its own).
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   api,
   TopResources,
-  disableMetrics,
-  isMetricsDisabled,
   isMetricsUnavailableError,
 } from '@/services/api'
 import { readPodPageSince } from '@/services/podPageRead'
@@ -26,7 +22,7 @@ import { useCluster } from '@/contexts/ClusterContext'
 import { keepSameRead } from '@/utils/keepSameRead'
 
 import type { ResourceType } from '../types'
-import { readTopResources, topResourcesPollMs, type TopRefusals } from '../topResourcesRead'
+import { readTopResources, topResourcesPace, type TopRefusals } from '../topResourcesRead'
 
 export const DASHBOARD_POD_PAGE = 50
 // the server's most groups (PodGroupTopMax): past it the rest is one "(other)" and those namespaces get no pod count
@@ -66,11 +62,10 @@ export function useDashboardQueries({
   // Appended as a suffix so existing prefix-based invalidate/removeQueries that
   // reference e.g. ['cluster-overview'] still match. 'default' mirrors the server fallback.
   const ck = currentCluster || 'default'
-  const [metricsUnavailable, setMetricsUnavailable] = useState(() => isMetricsDisabled())
   // what the cluster refused of the top pods and nodes since this page opened
   const topRefusals = useRef<TopRefusals>({ ck })
 
-  const { data: overview, isLoading, isError: isOverviewError } = useQuery({
+  const { data: overview, isLoading, isError: isOverviewError, error: overviewError } = useQuery({
     queryKey: ['cluster-overview', ck],
     queryFn: () => api.getClusterOverview(false), // 자동 갱신은 캐시 사용
     // k8s-service answers from its informer store (no API listing per poll).
@@ -79,7 +74,7 @@ export function useDashboardQueries({
   })
 
   // 네임스페이스 목록
-  const { data: namespaces, isLoading: isLoadingNamespaces } = useQuery({
+  const { data: namespaces, isLoading: isLoadingNamespaces, error: namespacesError } = useQuery({
     queryKey: ['namespaces', ck],
     queryFn: () => api.getNamespaces(),
     enabled: selectedResourceType === 'namespaces',
@@ -89,7 +84,7 @@ export function useDashboardQueries({
   // worked out on the server — not every pod of the cluster. The rows stay while another page loads; another phase,
   // search or cluster waits for its own answer.
   const podPageKey = ['dashboard-pods-page', ck, podQuery.q, selectedPodStatus, podQuery.page]
-  const { data: podPage, isLoading: isLoadingPods } = useQuery({
+  const { data: podPage, isLoading: isLoadingPods, error: podPageError } = useQuery({
     queryKey: podPageKey,
     queryFn: () => readPodPageSince(queryClient, podPageKey, {
       q: podQuery.q || undefined, phase: selectedPodStatus ?? undefined, offset: (podQuery.page - 1) * DASHBOARD_POD_PAGE, limit: DASHBOARD_POD_PAGE,
@@ -138,7 +133,7 @@ export function useDashboardQueries({
 
   // Every namespace's Services and Deployments in one request each (the server lists them as the caller, per
   // namespace for a grant limited to namespaces); the Namespaces window counts them per namespace.
-  const { data: allServices, isLoading: isLoadingServices, isError: isServicesError } = useQuery({
+  const { data: allServices, isLoading: isLoadingServices, isError: isServicesError, error: servicesError } = useQuery({
     queryKey: ['all-services', ck],
     queryFn: () => api.getAllServices(),
     enabled: selectedResourceType === 'services' || selectedResourceType === 'namespaces',
@@ -146,7 +141,7 @@ export function useDashboardQueries({
   })
 
   // 전체 Deployments 목록
-  const { data: allDeployments, isLoading: isLoadingDeployments, isError: isDeploymentsError } = useQuery({
+  const { data: allDeployments, isLoading: isLoadingDeployments, isError: isDeploymentsError, error: deploymentsError } = useQuery({
     queryKey: ['all-deployments', ck],
     queryFn: () => api.getAllDeployments(),
     enabled: selectedResourceType === 'deployments' || selectedResourceType === 'namespaces' || isStorageModalOpen,
@@ -162,7 +157,7 @@ export function useDashboardQueries({
   })
 
   // 전체 PVC 목록 — Storage 모달이 열려 있을 때는 사용률(Prometheus)까지.
-  const { data: allPVCs, isLoading: isLoadingPVCs } = useQuery({
+  const { data: allPVCs, isLoading: isLoadingPVCs, error: pvcsError } = useQuery({
     queryKey: ['all-pvcs', ck, isStorageModalOpen ? 'usage' : 'plain'],
     queryFn: () => api.getPVCs(undefined, false, isStorageModalOpen),
     enabled: selectedResourceType === 'pvcs' || isStorageModalOpen,
@@ -208,9 +203,9 @@ export function useDashboardQueries({
     queryKey: ['top-resources', ck],
     // a part the cluster refused is kept and not asked again until the page opens again (topResourcesRead)
     queryFn: () => readTopResources(ck, (skip) => api.getTopResources(5, 3, skip), topRefusals),
-    enabled: !metricsUnavailable && !isMetricsDisabled(),
     staleTime: 5000, // 5초간 fresh 상태 유지
-    refetchInterval: () => topResourcesPollMs(topRefusals.current, ck, metricsUnavailable || isMetricsDisabled()),
+    // every 5 s; a cluster without metrics-server once a minute, so a metrics-server installed since shows
+    ...topResourcesPace(() => topRefusals.current, ck),
     placeholderData: (previousData, previousQuery) => {
       // Keep the prior frame to avoid flicker on the 5s refetch — but ONLY within
       // the same cluster. The key's 2nd segment is the cluster; if it differs,
@@ -225,29 +220,13 @@ export function useDashboardQueries({
       }
       return undefined
     },
-    retry: (failureCount, error) => {
-      if (isMetricsUnavailableError(error)) return false
-      return failureCount < 1
-    },
-    retryDelay: 1000,
     gcTime: 60000,
   })
-
-  useEffect(() => {
-    if (isMetricsUnavailableError(topResourcesError)) {
-      disableMetrics()
-      setMetricsUnavailable(true)
-    }
-  }, [topResourcesError])
-
-  useEffect(() => {
-    if (metricsUnavailable) {
-      queryClient.cancelQueries({ queryKey: ['top-resources', ck] })
-    }
-  }, [metricsUnavailable, queryClient, ck])
+  // its last answer says the cluster serves no metrics.k8s.io, until an answer with rows
+  const metricsUnavailable = isMetricsUnavailableError(topResourcesError)
 
   // 노드 목록 (모달용)
-  const { data: modalNodes, isLoading: isLoadingNodes } = useQuery({
+  const { data: modalNodes, isLoading: isLoadingNodes, error: modalNodesError } = useQuery({
     queryKey: ['modal-nodes', ck],
     queryFn: () => api.getNodes(false), // 자동 갱신은 캐시 사용
     enabled: selectedResourceType === 'nodes',
@@ -256,6 +235,7 @@ export function useDashboardQueries({
   return {
     overview,
     isOverviewError,
+    overviewError,
     isLoading,
     namespaces,
     isLoadingNamespaces,
@@ -292,6 +272,15 @@ export function useDashboardQueries({
     topResourcesError,
     modalNodes,
     isLoadingNodes,
+    // each window's list that was not read, refused or failed, with the error saying why (none while its rows show)
+    windowListErrors: {
+      namespaces: Array.isArray(namespaces) ? null : namespacesError,
+      pods: podPage ? null : podPageError,
+      services: Array.isArray(allServices) ? null : servicesError,
+      deployments: Array.isArray(allDeployments) ? null : deploymentsError,
+      pvcs: Array.isArray(allPVCs) ? null : pvcsError,
+      nodes: Array.isArray(modalNodes) ? null : modalNodesError,
+    } satisfies Record<ResourceType, unknown>,
     metricsUnavailable,
   }
 }

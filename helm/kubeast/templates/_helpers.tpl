@@ -3,9 +3,24 @@
 {{- end -}}
 
 {{/* Group slug of a Kubeast role name, as services/pkg/auth/impersonation.go
-     computes it: lowercase, anything but a-z 0-9 . _ - becomes "-". */}}
+     computes it: A-Z, U+0130 and U+212A lowered, a-z 0-9 . _ - kept, other
+     ASCII "-", any other character "~" and its code point in four hex digits
+     ("~~" and six above U+FFFF), read from printf's %+q escape. */}}
 {{- define "kubeast.roleSlug" -}}
-{{- regexReplaceAll "[^a-z0-9._-]" (lower (trim .)) "-" -}}
+{{- range $c := splitList "" (trim .) -}}
+{{- if regexMatch `^[a-z0-9._-]$` $c -}}{{ $c }}
+{{- else if regexMatch `^[A-Z]$` $c -}}{{ lower $c }}
+{{- else if eq $c "\u0130" -}}i
+{{- else if eq $c "\u212a" -}}k
+{{- else if regexMatch `^[\x00-\x7f]$` $c -}}-
+{{- else -}}
+{{- $q := printf "%+q" $c -}}
+{{- if regexMatch `^"\\u[0-9a-f]{4}"$` $q -}}~{{ substr 3 7 $q }}
+{{- else if regexMatch `^"\\U00[0-9a-f]{6}"$` $q -}}~~{{ substr 5 11 $q }}
+{{- else -}}~fffd
+{{- end -}}
+{{- end -}}
+{{- end -}}
 {{- end }}
 
 {{- define "kubeast.labels" -}}
@@ -56,7 +71,8 @@ ${k8s_service} and ${probe} stand, so no password is in this text, the pod spec 
 - tool-server (with the AI on): the cluster change notice channel, to listen to, and no key — SUBSCRIBE, UNSUBSCRIBE,
   PING (go-redis checks a subscription with it) and SELECT. It publishes nothing and reads no cache key.
 Every command named must exist in the image's Valkey, or Valkey refuses the file and does not start. A command the
-code starts to use is added here with a case in tests/redis_test.yaml.
+code starts to use is added here with a case in tests/redis_test.yaml; the services' tests hold what their code sends
+to these lines (services/pkg/redisacl).
 */}}
 {{/*
 maxmemory of the chart's Redis, in bytes: 80% of resources.redis.limits.memory, so Valkey evicts before the container
@@ -562,8 +578,8 @@ true
 
 {{/*
 The most database connections the pods can hold at once: for each service its pool (postgresql.pool.<key>.maxConns)
-times its pods while a rollout runs — replicas.<key>, or autoscaling.<key>.maxReplicas while its HPA is on, plus a
-quarter of that rounded up (Kubernetes' default maxSurge; the Deployments set no strategy) — then the migration pool
+times its pods while a rollout runs — replicas.<key>, or autoscaling.<key>.maxReplicas while its HPA is on, plus one
+(every Deployment's maxSurge 1, kubeast.rollingUpdate) — then the migration pool
 (4, dbsession.MigrationPoolMaxConns) and 10 kept for psql and PostgreSQL's 3 superuser slots. Each k8s-service pod
 adds one: the health status lock (internal/pglock) holds a connection of its own outside the pool. ai-service and the
 ModelConfig controller (one pod, two while it rolls) count with ai.enabled. With streams.enabled (read with dig, so
@@ -583,7 +599,7 @@ plus one while it rolls (its strategy's maxSurge 1). templates/checks/db-connect
 {{- if dig "enabled" false $hpa -}}
 {{- $pods = int (dig "maxReplicas" $pods $hpa) -}}
 {{- end -}}
-{{- $pods = add $pods (div (add $pods 3) 4) -}}
+{{- $pods = add $pods 1 -}}
 {{- $perPod := int (dig $key "maxConns" 0 $pool) -}}
 {{- if eq $key "k8sService" -}}
 {{- $perPod = add $perPod 1 -}}

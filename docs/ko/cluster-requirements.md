@@ -23,7 +23,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 예
 | --- | --- | --- | --- |
 | 전체 | Kubeast 권한(RBAC) — §1 | `auth.impersonation.enabled`(켬) | 클러스터가 사용자 요청을 403으로 거부 |
 | 알림 → AI 조사 | 조사 신원 RBAC — §1, Kubeast로 웹훅을 보내는 Alertmanager 또는 Grafana 알림 — §13 | `features.alertInvestigation.enabled`(끔) | 알림이 오지 않거나, 조사용 읽기 도구가 클러스터에서 403 |
-| 노드·파드 사용량, Monitoring, 최적화(대체 수단) | metrics-server — §2 | — | 사용량 칸이 비고, 최적화는 "없음" |
+| 노드·파드 사용량, Monitoring, 최적화(대체 수단) | metrics-server — §2 | — | 대시보드 상위 리소스, Monitoring, 노드 페이지 상단 카드가 모든 사용자에게 "이 클러스터에 메트릭 서버가 없습니다"를 표시(클러스터의 API discovery로 판정, §2), 노드 드로어의 사용량은 비고, 최적화는 "없음" |
 | 드로어·대시보드 그래프, 최적화, 스토리지 분석 | Prometheus + 지표 수집기 — §3 | `features.prometheus.enabled`(**끔**) | 그래프 영역이 숨겨지고, 최적화는 metrics-server 순간값 사용 |
 | 비용(Cost), 최적화 비용 열 | OpenCost — §4 | `features.cost.enabled`(켬) | "OpenCost 없음" 안내, 비용 열 없음 |
 | 정책 보고서 | PolicyReport CRD와 보고서를 만드는 도구 — §5 | `features.policyReports.enabled`(켬) | "설치 안 됨" 안내 |
@@ -37,7 +37,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 예
 | AI 트레이스 읽기 | 스팬을 Tempo로 보내는 수집기(리소스 속성 `k8s.cluster.name`·`k8s.namespace.name`), `pods/log` 읽기 권한 — §14 끝 | `features.traceStore.enabled`(끔) | `traces_*` 도구가 빠지고 API는 404 |
 | 위생·업그레이드 점검의 폐기 API 항목 | API 서버 `/metrics` 읽기 권한 — §11 | `features.hygiene.enabled`(켬) | 그 항목만 "수집 실패"로 표시 |
 | Argo CD 가드 | Argo CD 추적 어노테이션 — §12 | `gitops.argocd.enabled`(끔) | 배지·경고 없음 |
-| AI `timeline`의 `view: "changes"` | 사용자의 ReplicaSet·ControllerRevision·ConfigMap·Secret(메타데이터만 요청, `as=PartialObjectMetadataList`)·HPA·파드·노드 `list`, Argo CD가 돌아가는 곳이면 `applications.argoproj.io` `list` — §1. `view`에는 Secret이 없어 Read는 Secret과 Helm 릴리스를 못 읽습니다. 네임스페이스 없이 부르면 전체 네임스페이스의 재시작에는 클러스터 전체 파드 `list`가 필요합니다(접근 검토로 확인) | — | 목록을 못 읽는 출처는 `summary.not_read`(전체 재시작은 `summary.skipped`)에 이름이 오르고 null로 셉니다. 나머지는 그대로 답합니다 |
+| AI `timeline`의 `view: "changes"`(`ai.timelineChanges`) | 사용자의 ReplicaSet·ControllerRevision·ConfigMap·Secret(메타데이터만 요청, `as=PartialObjectMetadataList`)·HPA·파드·노드 `list`, Argo CD가 돌아가는 곳이면 `applications.argoproj.io` `list` — §1. `view`에는 Secret이 없어 Read는 Secret과 Helm 릴리스를 못 읽습니다. 네임스페이스 없이 부르면 전체 네임스페이스의 재시작에는 클러스터 전체 파드 `list`가 필요합니다(접근 검토로 확인) | — | 목록을 못 읽는 출처는 `summary.not_read`(전체 재시작은 `summary.skipped`)에 이름이 오르고 null로 셉니다. 나머지는 그대로 답합니다 |
 | NetworkPolicy 보기와 연결 확인 | NetworkPolicy를 강제하는 네트워크 플러그인, 관련 네임스페이스 읽기 권한 — §7 | — | 답은 정책이 말하는 것이지 클러스터가 하는 것이 아님. 규칙이 사용자가 읽지 못하는 네임스페이스 레이블을 쓰면 "알 수 없음" |
 | 최근 흐름(드로어, AI `network_flows`) | TLS로 서비스하는 Cilium Hubble Relay, Relay Service의 `services/proxy` create 권한 — §16 | `features.networkFlows.enabled`(끔) | 칸과 도구가 빠지고 API는 404. 클러스터 권한이 없으면 403 |
 | 네트워크 차단(드로어, AI `network_drops`) | 클러스터 Prometheus에 워크로드 레이블이 붙은 Hubble 차단 지표 — §17 | Prometheus(§3) | 칸이 나오지 않고, 도구는 지표가 없다고 알려 줌 |
@@ -80,7 +80,8 @@ Kubeast 화면에서 셸은 Admin만 열 수 있지만, 클러스터 권한으�
 Kubeast는 그 ClusterRole과 사람이 가진 권한을 비교할 수 없으므로, 목록의 그룹이 되는 새 이름과 이름 바꾸기에는 모든 권한(`*`, 전역 Admin)이 필요합니다. `admin.roles.create`나 `admin.roles.update`를 가진 다른 사람은 403을 받고 감사 행이 남습니다.
 그러니 이름을 목록에 적고 전역 Admin이 역할을 만들거나, 역할을 먼저 만들고 나서 목록에 적으세요. 그 뒤로는 다른 역할과 같습니다. `admin.roles.update`로 고칠 수 있고, 목록의 이름으로 이미 저장된 역할은 그대로 동작합니다.
 그 역할의 부여(직접 부여나 접근 요청 승인)는 전역 관리자나 그 클러스터의 Admin(Namespace 한정 없음)만 할 수 있습니다. 이들은 그 클러스터에서 `kubeast:admin`, 곧 `cluster-admin`으로 동작하므로 바인딩이 주는 것을 이미 가졌습니다. `admin.users.update`를 가진 다른 사람은 403을 받고 감사 행이 남으며, 클러스터 접근 선택지와 승인 버튼도 그렇게 보입니다. Namespace 한정 부여를 위해 목록에 적은 Read·Write·Admin은 이렇게 막지 않습니다.
-차트는 이 목록을 `IMPERSONATION_CUSTOM_ROLES`로 auth-service에 넘깁니다. Docker Compose에는 차트가 없으므로, 클러스터에 이런 바인딩을 적용했다면 `.env`의 이 변수에 이름을 적으세요.
+차트는 이 이름들을 `IMPERSONATION_CUSTOM_ROLES`로 auth-service에 넘깁니다. 이름 안의 쉼표는 `-`로 넘깁니다(같은 그룹). Docker Compose에는 차트가 없으므로, 클러스터에 이런 바인딩을 적용했다면 `.env`의 이 변수에 이름을 적으세요.
+역할의 그룹은 `kubeast:role:`에 이름의 slug를 붙인 것이고, 역할 창에 나옵니다. ASCII가 아닌 글자는 `~`와 코드 포인트로 적습니다(`운영팀` → `kubeast:role:~c6b4~c601~d300`, [기능](features.md) "역할 이름"). 그 그룹을 적힌 그대로 바인딩하세요.
 
 **역할을 지워도 바인딩은 지워지지 않습니다.** 적용된 모든 클러스터에 남고, 다음에 그 이름으로 만든 역할이 그 바인딩으로 동작합니다.
 이름이 목록에 있는 동안은 위 규칙이 그대로 걸립니다.
@@ -119,6 +120,8 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 ## 2. metrics-server
 
 노드 목록, Monitoring 화면, 노드 드로어의 사용량과, Prometheus가 없을 때 최적화 표에 나오는 사용량(순간값)은 `metrics.k8s.io`에서 읽습니다.
+Kubeast는 metrics 목록을 먼저 묻습니다. 그래서 목록이 답하는 클러스터에는 더 묻는 것이 없습니다. 목록이 404나 403을 답할 때만 클러스터의 API discovery에서 `metrics.k8s.io`를 찾습니다. 1분 안에 읽은 discovery가 있으면 그것을 쓰고, 없으면 `kubeast:cache`로 `GET /apis/metrics.k8s.io`를 한 번 읽습니다. 기본 `system:discovery` ClusterRole이 이 읽기를 허용합니다. 그 답과 읽기 실패는 클러스터마다 1분 동안 씁니다.
+discovery에 `metrics.k8s.io`가 없으면 모든 사용자에게 metrics-server를 사용할 수 없다고 알리고, 그 1분 동안 metrics 목록은 묻지 않습니다. discovery를 읽지 못하는 동안에는 사용자마다 클러스터가 준 답을 그대로 받습니다. 나중에 설치한 metrics-server는 2분 안에 보입니다. 확인: metrics-server가 없는 클러스터에서는 `kubectl get --raw /apis/metrics.k8s.io`가 404를 답합니다.
 
 - 설치: [metrics-server 차트](https://artifacthub.io/packages/helm/metrics-server/metrics-server) `3.14.0`(앱 0.9.0)
   - `helm install metrics-server metrics-server/metrics-server --version 3.14.0 -n kube-system`

@@ -76,6 +76,7 @@ func TestPostgresTwoServersShareADrainAndItsInterruption(t *testing.T) {
 	}
 	a.beat(context.Background())
 	stopBeats(t, pool, "d1", a.staleAfter-time.Second)
+	inContact(b)
 	if r := status(t, b, "d1"); r.Status != StatusDraining {
 		t.Fatalf("before the stale time: %+v", r)
 	}
@@ -110,6 +111,7 @@ func TestPostgresOneTakerWhenServersMarkAtOnce(t *testing.T) {
 	start := make(chan struct{})
 	for i := range 12 {
 		tr := NewTracker(PG{pool}, rows)
+		inContact(tr)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -139,6 +141,7 @@ func TestPostgresABeatAndAMarkAtOnceAgree(t *testing.T) {
 		a, b := NewTracker(PG{pool}, nil), NewTracker(PG{pool}, nil)
 		running := begin(t, a, id, "n1")
 		stopBeats(t, pool, id, a.staleAfter+time.Second)
+		inContact(b)
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() { defer wg.Done(); a.beat(context.Background()) }()
@@ -149,6 +152,28 @@ func TestPostgresABeatAndAMarkAtOnceAgree(t *testing.T) {
 		if (r.Status == StatusInterrupted) != stopped {
 			t.Fatalf("%s: row %s, owner stopped %v", id, r.Status, stopped)
 		}
+	}
+}
+
+// A server that has just reached the database (a restarted one, or any after a pause of the database)
+// reads a stale drain as it is and only checks the database in its sweep; once its calls have answered
+// for the stale time it marks the drain.
+func TestPostgresAServerJudgesOnlyAfterItsOwnContact(t *testing.T) {
+	pool := freshDB(t)
+	rows := &auditRows{}
+	begin(t, NewTracker(PG{pool}, rows), "d1", "n1")
+	stopBeats(t, pool, "d1", time.Minute)
+	b := NewTracker(PG{pool}, rows)
+	if r := status(t, b, "d1"); r.Status != StatusPending || !r.Open() || !r.Stale {
+		t.Fatalf("a server just in contact reads %+v", r)
+	}
+	b.sweep(context.Background())
+	if r, _ := (PG{pool}).Get(context.Background(), "d1", b.staleAfter); r == nil || !r.Open() || len(rows.all()) != 0 {
+		t.Fatalf("the sweep of a server just in contact marked %+v", r)
+	}
+	inContact(b)
+	if r := status(t, b, "d1"); r.Status != StatusInterrupted || len(rows.all()) != 1 {
+		t.Fatalf("a server in contact for the stale time reads %+v, %d rows", r, len(rows.all()))
 	}
 }
 

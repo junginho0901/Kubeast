@@ -11,7 +11,8 @@ import { QueryClient, QueryObserver } from '@tanstack/react-query'
 import type { TopResources } from '@/services/api'
 import { isMetricsUnavailableError } from '@/services/api'
 import { forbiddenLabels, resetForbidden } from '@/services/forbiddenStore'
-import { keepRefusals, readTopResources, skipOf, topResourcesPollMs, type TopRefusals } from './topResourcesRead'
+import { METRICS_NOT_SERVED_MS } from '../monitoring/metricsRefresh'
+import { keepRefusals, readTopResources, skipOf, topResourcesPace, topResourcesPollMs, type TopRefusals } from './topResourcesRead'
 
 // The cluster's words for a Read grant limited to namespaces, as k8s-service passes them on
 const PODS_REFUSED = 'pods.metrics.k8s.io is forbidden: User "u1" cannot list resource "pods" in API group "metrics.k8s.io" in the namespace "web"'
@@ -28,12 +29,12 @@ const bothRefused: TopResources = {
 function watch(answer: (skip?: string) => TopResources) {
   const read = vi.fn(async (skip?: string) => answer(skip))
   const refusals = { current: { ck: 'c1' } as TopRefusals }
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const client = new QueryClient()
   const observer = new QueryObserver<TopResources>(client, {
     queryKey: ['top-resources', 'c1'],
     queryFn: () => readTopResources('c1', read, refusals),
     staleTime: 5000,
-    refetchInterval: () => topResourcesPollMs(refusals.current, 'c1', false),
+    ...topResourcesPace(() => refusals.current, 'c1'),
   })
   const stop = observer.subscribe(() => {})
   return { read, observer, stop, client }
@@ -82,6 +83,25 @@ describe('the Dashboard top pods and nodes read', () => {
     const err = await readTopResources('c1', read, refusals).catch((e) => e)
     expect(isMetricsUnavailableError(err)).toBe(true)
     expect(refusals.current).toEqual({ ck: 'c1', pods: undefined, nodes: undefined })
+  })
+
+  it('asks a cluster without metrics-server again after a minute, not every 5 s', async () => {
+    let served = false
+    const notServed = { top_pods: [], top_nodes: [], pod_metrics_error: NOT_SERVED, node_metrics_error: NOT_SERVED } as TopResources
+    const { read, observer, stop, client } = watch(() => (served ? { top_pods: [], top_nodes: [node] } as TopResources : notServed))
+    await vi.advanceTimersByTimeAsync(METRICS_NOT_SERVED_MS - 1_000)
+    expect(read).toHaveBeenCalledTimes(1)
+    expect(isMetricsUnavailableError(observer.getCurrentResult().error)).toBe(true)
+    // a metrics-server installed meanwhile shows at the minute, and the read goes back to its 5 s
+    served = true
+    await vi.advanceTimersByTimeAsync(1_500)
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(observer.getCurrentResult().error).toBeNull()
+    expect(observer.getCurrentResult().data?.top_nodes).toEqual([node])
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(read).toHaveBeenCalledTimes(3)
+    stop()
+    client.clear()
   })
 
   it('asks everything again on another cluster', async () => {

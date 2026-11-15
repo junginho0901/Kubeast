@@ -129,3 +129,5 @@ func (p PG) Purge(ctx context.Context, keep time.Duration, batch int) (int64, er
 	}
 	return tag.RowsAffected(), nil
 }
+
+func (p PG) Ping(ctx context.Context) error { return p.Pool.Ping(ctx) }

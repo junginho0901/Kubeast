@@ -75,14 +75,16 @@ jobs:
         working-directory: services/k8s-service-go
         run: go test -race ./internal/handler/
 
-  # The real migrations against PostgreSQL (services/pkg/dbmigrate/*_postgres_test.go):
-  # empty database to Required, idempotent re-run, legacy role column conversion;
-  # services/pkg/dbsession's session limits as the server applies them.
-  # The tests skip themselves when DBMIGRATE_TEST_DATABASE_URL is unset, so the
-  # plain go matrix above stays server-free.
+  # Every Go test that needs PostgreSQL, found rather than listed (scripts/postgres-tests.sh):
+  # each package whose tests read DBMIGRATE_TEST_DATABASE_URL runs whole against this server —
+  # the migrations, the cluster registry, auth-service's retention purge and repository,
+  # k8s-service's recording, and any new one without a change here. The tests skip themselves
+  # when the variable is unset, so the plain go matrix above stays server-free.
   dbmigrate:
     name: dbmigrate (postgres)
     runs-on: ubuntu-latest
+    # about 2 minutes (1 m 48 s on a cold cache); a test that hangs stops here, not at the 6-hour default
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:15-alpine
@@ -97,44 +99,15 @@ jobs:
           - 5432:5432
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The modules' go.mod minimums differ; the images build with 1.27 (golang:1.27-alpine).
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: services/pkg/go.mod
-          cache-dependency-path: services/pkg/go.sum
-      - name: test
-        working-directory: services/pkg
+          go-version: "1.27"
+          cache-dependency-path: services/**/go.sum
+      - name: every test that needs PostgreSQL
         env:
           DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
-        run: go test ./dbmigrate/... ./cluster/... ./dbsession/... -run Postgres -v -count=1
-      # auth-service's retention purge against the real schema (same server).
-      - name: retention
-        working-directory: services/auth-service-go
-        env:
-          DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
-        run: go test ./internal/retention/... -run Postgres -v -count=1
-      # auth-service's audit anchors from two replicas at once (same server).
-      - name: audit chain anchors
-        working-directory: services/auth-service-go
-        env:
-          DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
-        run: go test ./internal/auditchain/... -run Postgres -v -count=1
-      # auth-service's repository: access request and sign-off pages, dormant
-      # accounts next to the lock's, the AI usage query (both sources).
-      - name: auth-service repository
-        working-directory: services/auth-service-go
-        env:
-          DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
-        run: go test ./internal/repository/... -run Postgres -v -count=1
-      # k8s-service's node drains from two replicas at once and the health status writer's lock (same server).
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: services/k8s-service-go/go.mod
-          cache-dependency-path: services/k8s-service-go/go.sum
-      - name: k8s-service node drains and health status lock
-        working-directory: services/k8s-service-go
-        env:
-          DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
-        run: go test ./internal/drains/... ./internal/pglock/... -run Postgres -v -count=1
+        run: scripts/postgres-tests.sh
 
   python:
     name: ai-service (pytest)
@@ -142,7 +115,8 @@ jobs:
     defaults:
       run:
         working-directory: services/ai-service
-    # For the tests that need PostgreSQL (tests/*_postgres.py); they skip without DBMIGRATE_TEST_DATABASE_URL.
+    # For the tests that need PostgreSQL (tests/*_postgres.py: the alert webhook's locks, the session limits of
+    # test_db_session_postgres.py); they skip without DBMIGRATE_TEST_DATABASE_URL.
     services:
       postgres:
         image: postgres:15-alpine
@@ -169,8 +143,8 @@ jobs:
         env:
           DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
 
-  # scripts/ai-eval.py's scoring and the hard cases of evals/ai-hard with the demo's alert rules: standard library only,
-  # no cluster.
+  # scripts/ai-eval.py's scoring, the hard cases of evals/ai-hard with the demo's alert rules, and the runner's chat path,
+  # sign-in and alert path against a stand-in API on 127.0.0.1: standard library only, no cluster.
   ai-eval-scripts:
     name: ai-eval scripts (stdlib tests)
     runs-on: ubuntu-latest
@@ -181,6 +155,8 @@ jobs:
           python-version: "3.14"
       - run: python -I scripts/test_ai_eval_rca.py
       - run: python -I scripts/test_ai_eval_cases.py
+      - run: python -I scripts/test_ai_eval_runner.py
+      - run: python -I scripts/test_ai_eval_alerts.py
 
   frontend:
     name: frontend (tsc + vitest)
@@ -208,23 +184,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # the release tags for the upgrade checks, the pull request's merge base for the docs check
+          fetch-depth: 0
       - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
         with:
           version: v4.3.0
       - run: helm lint helm/kubeast
-      # The gateway's nginx.conf read by the nginx of the chart's image. nginx resolves each upstream's name when it
-      # loads the file, so the names point at the loopback here.
-      - name: nginx -t (gateway)
-        timeout-minutes: 5
-        run: |
-          image=$(grep -o 'nginxinc/nginx-unprivileged:[^ ]*' helm/kubeast/values.yaml | head -1)
-          hosts=()
-          for h in $(sed -n 's/^ *server \([a-z0-9-]*\):[0-9]*;$/\1/p' helm/kubeast/files/nginx.conf); do
-            hosts+=(--add-host "$h:127.0.0.1")
-          done
-          for attempt in 1 2 3; do docker pull -q "$image" && break; sleep 10; done
-          docker run --rm "${hosts[@]}" -v "$PWD/helm/kubeast/files/nginx.conf:/etc/nginx/nginx.conf:ro" \
-            --entrypoint nginx "$image" -t
       # Rendered-manifest assertions (helm/kubeast/tests/*_test.yaml): switch
       # defaults, migrations hook Job, PVC retention, replica guards, secrets.
       - name: helm unittest
@@ -246,9 +212,11 @@ jobs:
           helm unittest helm/kubeast
       # `helm upgrade --reuse-values` from every release: stops with the upgrade hint or loses nothing.
       - name: upgrade from earlier releases
-        run: |
-          git fetch --no-tags --depth=1 origin '+refs/tags/v*:refs/tags/v*'
-          scripts/chart-upgrade-values.sh
+        run: scripts/chart-upgrade-values.sh
+      # A values path the last release has and this chart has not stops at templates/checks/removed-values.yaml.
+      - name: removed values stop
+        if: ${{ !cancelled() }}
+        run: scripts/chart-removed-values.sh
       - name: kubeconform
         timeout-minutes: 10
         env:
@@ -261,6 +229,14 @@ jobs:
           tar xzf kubeconform.tar.gz
           helm template kubeast helm/kubeast --namespace kubeast --set pdb.enabled=true \
             | ./kubeconform -strict -summary -kubernetes-version 1.33.0 -ignore-missing-schemas
+      # docs/X.md with docs/ko/X.md, a new values path in docs/configuration.md (en, ko); a commit trailer
+      # `Docs-Pair: en-only [<file>...] <reason>` (ko-only, values-not-in-docs) says why one side stays.
+      - name: docs in both languages, new values documented
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: scripts/check-docs-pair.sh "$BASE_SHA" "$HEAD_SHA"
 
   gofmt:
     name: gofmt

@@ -20,7 +20,7 @@
 ├── deploy/examples/target-cluster/   # 대상 클러스터 준비물 예시 값 (Prometheus·OpenCost 차트, 클러스터별 RBAC 값 — docs/ko/cluster-requirements.md)
 ├── docs/                            # 운영 문서 (클러스터 준비물·SSO·메트릭·감사·백업·공급망)
 ├── e2e/                             # Playwright E2E (라이브 클러스터 대상)
-│   ├── actions/                     # 옵트인 동작 스위트 — UI 동작 92개 + kubectl 검증 (E2E_ACTIONS=1 --project=actions)
+│   ├── actions/                     # 옵트인 동작 스위트 — UI 동작 94개 + kubectl 검증 (E2E_ACTIONS=1 --project=actions)
 │   └── demo/                        # 소개 사이트 영상 대본 (E2E_DEMO=1 --project=demo, scripts/site-media.sh)
 ├── scripts/                         # 빌드/배포/개발 스크립트
 ├── site/                            # 소개 사이트 (GitHub Pages, .github/workflows/pages.yaml)
@@ -95,7 +95,7 @@ npx playwright test cluster-hygiene.spec.ts   # 스펙 하나
 - **감사 싱크·세션 기록 스펙** — `deploy/kind/devtools.yaml`(S3 스탠드인, Mailpit, 웹훅 수신기)과 dev 값의 싱크 설정, `sessionRecording.enabled`가 필요합니다.
 - 리셋하면 위 데이터가 모두 사라지므로 다시 만드세요.
 
-`e2e/actions/`는 UI 동작 92개를 두 번째 클러스터에 실행하고 `kubectl`로 결과를 확인하는 옵트인 동작 스위트(약 12분)라서 기본 실행에 들어가지 않습니다.
+`e2e/actions/`는 UI 동작 94개를 두 번째 클러스터에 실행하고 `kubectl`로 결과를 확인하는 옵트인 동작 스위트(약 12분)라서 기본 실행에 들어가지 않습니다.
 `E2E_ACTIONS=1 npx playwright test --project=actions`로 실행하고, 전제 조건은 [e2e/actions/README.md](../../e2e/actions/README.md)를 보세요.
 
 ### AI 평가용 고장·데모 서비스
@@ -108,11 +108,16 @@ npx playwright test cluster-hygiene.spec.ts   # 스펙 하나
 - `scripts/kind-otel-demo.sh up|down`: OpenTelemetry Demo(차트 0.42.6), 네임스페이스 `otel-demo`.
   - `scripts/kind-logsearch.sh up`과 `scripts/kind-tracing.sh up`을 먼저 실행하세요.
   - 데모에 딸린 Jaeger·Grafana·Prometheus·OpenSearch는 끕니다. 데모 수집기는 트레이스를 그 Tempo로, 로그를 그 Loki로, 지표를 두 번째 클러스터의 Prometheus로 보냅니다(`OTELDEMO_METRICS=0`이면 지표는 보내지 않습니다).
+  - 그 지표에는 누가 누구를 부르는지도 들어 있으며(`traces_service_graph_*`, 수집기의 `service_graph` 커넥터가 양쪽 네임스페이스를 붙여 씁니다), AI의 호출 관계가 이것을 읽습니다.
   - 첫 `up`은 Docker VM의 사용 가능 메모리가 렌더의 메모리 limit 합(약 6.7 GiB)보다 적으면 거절합니다. 더 가벼운 대안인 Online Boutique는 스크립트 머리말에 적혀 있습니다.
   - 서비스가 출력도 하고 OTLP로도 보내는 줄은 Loki에 두 번 들어갑니다.
   - 지표를 보낼 때는 `up`이 데모의 알림 규칙(`deploy/kind/otel-demo-rules.json`: 오류율, 95번째 백분위 지연, 재시작)도 그 Prometheus에 넣고 `down`이 뺍니다. 이 알림에는 `kubeast_eval="otel-demo"`가 붙고, 그 Prometheus가 Alertmanager로 보내는 알림은 이것뿐이며, Alertmanager는 이를 `default`의 웹훅으로 보냅니다. 예전 개발 설치에서는 `deploy/kind/second-cluster.yaml`을 먼저 다시 적용하세요.
 - TLS를 검사하는 프록시 뒤라면 `CILIUM_NODE_HOOK`처럼 `CHAOS_NODE_HOOK` 또는 `OTELDEMO_NODE_HOOK`을 설정하세요. 클러스터 이름을 받는 명령이며, 이미지를 받기 전에 실행됩니다.
-- 문제 칸, 실행 순서, `evals/ai-hard/`의 문제 16개는 [evals/ai/README.md](../../evals/ai/README.md)의 "Hard cases"에 있습니다.
+- 문제 칸, 실행 순서, `evals/ai-hard/`의 문제 22개는 [evals/ai/README.md](../../evals/ai/README.md)의 "Hard cases"에 있습니다.
+- `scripts/ai-eval.py --alerts`는 `alert`가 있는 문제를 채팅 대신 알림 조사로 돌리고 보고서를 채점합니다([evals/ai/README.md](../../evals/ai/README.md)의 "The alert path").
+  - 문제의 시험 규칙이 두 번째 클러스터의 Prometheus에 들어 있으면 알림은 그 Alertmanager를 거쳐 오고, 없으면 러너가 Alertmanager 꼴로 웹훅에 직접 보냅니다(`--alert-source auto`, 기본값. `real`은 규칙으로만, `synthetic`은 늘 직접). `evals/ai-hard/`의 문제 22개에는 아직 시험 규칙이 없어 직접 보냅니다.
+  - kind에서 아직 돌려 본 적이 없습니다.
+- 러너는 토큰이 끝나기 전과 401을 받았을 때 다시 로그인하고, 문제 하나가 끝날 때마다 결과 파일을 다시 씁니다. 그래서 개발 토큰 수명(120분)보다 긴 한 회차를 한 번의 실행으로 돌릴 수 있습니다.
 
 ### 소개 사이트 (`site/`)
 

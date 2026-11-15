@@ -392,7 +392,7 @@ func TestPostgresRoleEditEndsTheTokensItNames(t *testing.T) {
 		{repository.RoleTokensOfGrants, map[string]int{"granted": 1, "global": 0, "both": 1, "neither": 0}},
 		{repository.RoleTokensOfAllHolders, map[string]int{"granted": 2, "global": 1, "both": 2, "neither": 0}},
 	} {
-		if _, err := repo.UpdateRole(ctx, held, "t-held", "edited", []string{"resource.*.read"}, c.tokens, true); err != nil {
+		if _, err := repo.UpdateRole(ctx, held, "t-held", "edited", []string{"resource.*.read"}, c.tokens); err != nil {
 			t.Fatal(err)
 		}
 		if got := versions(); !maps.Equal(got, c.want) {

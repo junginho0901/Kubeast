@@ -84,6 +84,11 @@ func (h *Handler) DrainNode(w http.ResponseWriter, r *http.Request) {
 	row := drains.Row{ID: drainID, Cluster: string(clusterID), Node: nodeName, UserID: payload.UserID, UserEmail: payload.Email}
 	if err := h.drains.Begin(r.Context(), row, end, cancel); err != nil {
 		cancel()
+		if errors.Is(err, drains.ErrShuttingDown) {
+			h.recordAuditWithPayload(r, "k8s.node.drain", "node", nodeName, "", fmt.Errorf("drain not started: %w", err), nil, started)
+			response.Error(w, http.StatusServiceUnavailable, "this server is shutting down; start the drain again")
+			return
+		}
 		h.recordAuditWithPayload(r, "k8s.node.drain", "node", nodeName, "", fmt.Errorf("drain progress not saved: %w", err), nil, started)
 		response.Error(w, http.StatusServiceUnavailable, "drain progress could not be saved")
 		return
@@ -174,7 +179,8 @@ func cordonedOf(ctx context.Context, cs kubernetes.Interface, names []string) []
 }
 
 // runDrain cordons the node and evicts its pods, writing its progress to the
-// drain's row, and returns how it ended.
+// drain's row, and returns how it ended. The cordon and every eviction wait
+// while this server's drain heartbeat is not being saved (drains.Tracker.Ready).
 func (h *Handler) runDrain(parent context.Context, nodeName, drainID string) (status, message string) {
 	ctx, cancel := context.WithTimeout(parent, 5*time.Minute)
 	defer cancel()
@@ -187,6 +193,9 @@ func (h *Handler) runDrain(parent context.Context, nodeName, drainID string) (st
 	}
 
 	// Step 1: Cordon
+	if err := h.drains.Ready(ctx); err != nil {
+		return drains.StatusError, fmt.Sprintf("not cordoned: %v", err)
+	}
 	if err := h.svc.CordonNode(ctx, nodeName); err != nil {
 		return drains.StatusError, fmt.Sprintf("cordon failed: %v", err)
 	}
@@ -215,7 +224,7 @@ func (h *Handler) runDrain(parent context.Context, nodeName, drainID string) (st
 	total, done := len(candidates), 0
 	h.drains.Progress(drainID, drains.Progress{PodsTotal: &total, PodsDone: &done})
 
-	if blocked := evictAll(ctx, clientset, candidates); len(blocked) > 0 {
+	if blocked := evictAll(ctx, clientset, candidates, h.drains.Ready); len(blocked) > 0 {
 		slog.Warn("drain incomplete", "node", nodeName, "blocked", len(blocked))
 		return drains.StatusError, fmt.Sprintf("drain incomplete: %d of %d pods could not be evicted (node stays cordoned): %s",
 			len(blocked), len(candidates), strings.Join(blocked, "; "))
@@ -236,8 +245,9 @@ var evictRetryInterval = 5 * time.Second
 
 // evictAll evicts the pods concurrently (as kubectl drain does, so one pod
 // held by a PDB does not starve the others) and returns "ns/name: reason" for
-// the ones that could not be evicted before the deadline.
-func evictAll(ctx context.Context, cs kubernetes.Interface, pods []corev1.Pod) []string {
+// the ones that could not be evicted before the deadline. ready (nil: none)
+// is waited for before each eviction call.
+func evictAll(ctx context.Context, cs kubernetes.Interface, pods []corev1.Pod, ready func(context.Context) error) []string {
 	var (
 		mu      sync.Mutex
 		wg      sync.WaitGroup
@@ -247,7 +257,7 @@ func evictAll(ctx context.Context, cs kubernetes.Interface, pods []corev1.Pod) [
 		wg.Add(1)
 		go func(pod *corev1.Pod) {
 			defer wg.Done()
-			if err := evictWithRetry(ctx, cs, pod); err != nil {
+			if err := evictWithRetry(ctx, cs, pod, ready); err != nil {
 				mu.Lock()
 				blocked = append(blocked, fmt.Sprintf("%s/%s: %v", pod.Namespace, pod.Name, err))
 				mu.Unlock()
@@ -259,8 +269,13 @@ func evictAll(ctx context.Context, cs kubernetes.Interface, pods []corev1.Pod) [
 	return blocked
 }
 
-func evictWithRetry(ctx context.Context, cs kubernetes.Interface, pod *corev1.Pod) error {
+func evictWithRetry(ctx context.Context, cs kubernetes.Interface, pod *corev1.Pod, ready func(context.Context) error) error {
 	for {
+		if ready != nil {
+			if err := ready(ctx); err != nil {
+				return err
+			}
+		}
 		err := evictPod(ctx, cs, pod)
 		switch {
 		case err == nil, apierrors.IsNotFound(err):

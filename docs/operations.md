@@ -232,7 +232,8 @@ The AI tool `logfiles` lists and reads the same files through the same routes, w
   - Now and then, it checks size and inode with `ls -lindL` to follow truncation and replacement (log rotation).
   - Each command ends right away.
   - An SSE comment every 20 seconds keeps the proxy from closing an idle connection (nginx 60 seconds).
-  - When the connection drops, the browser does not reconnect by itself. A reconnect would read the last lines again and add another audit row.
+  - When the connection drops (the server restarting in an upgrade, a network cut), the browser connects again by itself and sends the mark of the last line it got (`Last-Event-ID` = `<inode>:<offset>`). The stream goes on after that line instead of reading the last lines again. If the file was replaced or truncated in between, it shows the file's last lines with a notice.
+  - Each reconnect is an audited read of its own; its row's `after.resume_from` says where it went on from.
   - One read returns at most `maxLines` (default 2000) lines.
 
 ```yaml

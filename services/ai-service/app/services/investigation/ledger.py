@@ -25,7 +25,7 @@ from app.services.investigation.rca import FINAL_NOTE  # noqa: F401 - the shared
 
 STATES = ("cause", "symptom", "ruled_out", "blocked")
 OPEN = "open"
-MAX_HYPOTHESES = 12
+MAX_HYPOTHESES = rca.MAX_HYPOTHESES  # the instruction names it too
 
 # The instruction with the ledger alone; the runner asks rca.instruction for the switches that are on.
 INSTRUCTION = rca.instruction(evidence=False, hypotheses=True)
@@ -57,7 +57,7 @@ def check(block: Optional[dict], tool_log: list[dict[str, Any]]) -> list[dict[st
         elif state == "blocked" and not blocked:
             problems.append({"reason": "no_reason"})
         if bad_pro or bad_con:
-            problems.append({"reason": "bad_calls", "calls": [str(v) for v in bad_pro + bad_con]})
+            problems.append({"reason": "bad_calls", "calls": [inv_result.text(str(v)) for v in bad_pro + bad_con]})
         entry: dict[str, Any] = {
             "id": inv_result.text(h.get("id")) or f"h{i}",
             "statement": inv_result.text(h.get("statement")),
@@ -99,6 +99,7 @@ _REASONS = {
     "no_evidence": 'no call that answered is given under "{side}"',
     "no_reason": 'it is blocked with no reason under "blocked"',
     "bad_calls": "{calls} name no call of this investigation",
+    "not_verified": "the evidence check did not verify the cause it is about",
 }
 
 

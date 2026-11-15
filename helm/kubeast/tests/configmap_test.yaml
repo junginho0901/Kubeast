@@ -773,6 +773,33 @@ tests:
           path: data.CLUSTER_STORE_ALLOWED_HOSTS
           value: prom.monitoring.svc,.corp.example.com
 
+  # auth-service makes each group from the names as the chart does (handler/role.go); a comma, which would split the
+  # list, goes as "-", which makes the same group.
+  - it: hands auth-service the names of the custom roles the chart binds
+    set:
+      auth.impersonation.customRoles:
+        - name: SRE Team
+          clusterRoles: [view]
+        - name: 운영팀
+          clusterRoles: [view]
+        - name: "a,b"
+          clusterRoles: [view]
+    asserts:
+      - equal:
+          path: data.IMPERSONATION_CUSTOM_ROLES
+          value: "SRE Team,운영팀,a-b"
+
+  - it: hands auth-service no names while auth.impersonation.enabled is false
+    set:
+      auth.impersonation.enabled: false
+      auth.impersonation.customRoles:
+        - name: SRE Team
+          clusterRoles: [view]
+    asserts:
+      - equal:
+          path: data.IMPERSONATION_CUSTOM_ROLES
+          value: ""
+
   - it: hands the database session limits to every service, in milliseconds
     asserts:
       - equal:
@@ -827,6 +854,19 @@ tests:
           path: data.DB_POOL_MAX_K8S
           value: "16"
 
+  - it: keeps timeline's changes view from the AI by default and takes it from ai.timelineChanges
+    asserts:
+      - equal:
+          path: data.AI_TIMELINE_CHANGES
+          value: "false"
+  - it: offers timeline's changes view to the AI from ai.timelineChanges
+    set:
+      ai.timelineChanges: true
+    asserts:
+      - equal:
+          path: data.AI_TIMELINE_CHANGES
+          value: "true"
+
   - it: keeps the call graph off by default and takes it from features.callGraph
     asserts:
       - equal:
@@ -847,6 +887,7 @@ tests:
       - equal:
           path: data.ALERT_INVESTIGATION_NARROW_FIRST
           value: "false"
+
   - it: keeps the repeated read refusal and the investigation's evidence check off by default
     asserts:
       - equal:
@@ -867,6 +908,7 @@ tests:
       - equal:
           path: data.ALERT_INVESTIGATION_EVIDENCE_CHECK
           value: "true"
+
   - it: keeps the tool result details off by default
     asserts:
       - equal:

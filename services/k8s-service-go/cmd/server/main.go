@@ -525,6 +525,7 @@ func main() {
 	}
 
 	// The drains this process runs end with it: say so at once rather than when their heartbeat goes stale.
+	// A drain asked for from here on answers 503 (the server still takes requests until srv.Shutdown).
 	if drainTracker != nil {
 		drainShutdown, drainShutdownCancel := context.WithTimeout(context.Background(), drainShutdownWait)
 		drainTracker.Shutdown(drainShutdown)
@@ -534,8 +535,8 @@ func main() {
 	slog.Info("server stopped")
 }
 
-// clusterNotices is the Redis client of clustersync's change notices, signed in as the cache's user: the chart's
-// redis.acl turns the default user off, so a client without REDIS_USERNAME is refused. nil with no Redis (REDIS_HOST "").
+// clusterNotices is clustersync's Redis client, signed in as the cache is (REDIS_USERNAME, the chart's redis.acl);
+// nil without Redis.
 func clusterNotices(cfg config.Config) *redis.Client {
 	if cfg.RedisHost == "" {
 		return nil

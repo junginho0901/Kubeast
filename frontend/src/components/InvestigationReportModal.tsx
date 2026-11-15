@@ -131,7 +131,7 @@ export default function InvestigationReportModal({ id, load, onClose }: {
               <table className="w-full text-xs" data-testid="investigation-tools">
                 <thead className="text-slate-500">
                   <tr>
-                    {data.result && <th className="px-2 py-1 text-left">{tr('investigations.tool.call', 'Call')}</th>}
+                    <th className="px-2 py-1 text-left">{tr('investigations.tool.call', 'Call')}</th>
                     <th className="px-2 py-1 text-left">#</th>
                     <th className="px-2 py-1 text-left">{tr('investigations.tool.name', 'Tool')}</th>
                     <th className="px-2 py-1 text-left">{tr('investigations.tool.args', 'Arguments')}</th>
@@ -141,7 +141,7 @@ export default function InvestigationReportModal({ id, load, onClose }: {
                 <tbody>
                   {data.tool_calls.map((c, i) => (
                     <tr key={i} className="border-t border-slate-800">
-                      {data.result && <td className="px-2 py-1 font-mono text-slate-400" data-testid="investigation-call-number">#{i + 1}</td>}
+                      <td className="px-2 py-1 font-mono text-slate-400" data-testid="investigation-call-number">#{i + 1}</td>
                       <td className="px-2 py-1 text-slate-500">{c.step}</td>
                       <td className="px-2 py-1 font-mono text-slate-200">{c.tool}</td>
                       <td className="px-2 py-1 font-mono text-slate-400"><span className="block max-w-[420px] truncate" title={JSON.stringify(c.args)}>{JSON.stringify(c.args)}</span></td>

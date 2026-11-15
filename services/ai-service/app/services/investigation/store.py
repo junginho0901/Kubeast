@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional
 
-from sqlalchemy import func, or_, select, text, update
+from sqlalchemy import and_, case, func, or_, select, text, update
 
 from app.database import AlertInboxItem, AlertInvestigation, utcnow
 from app.services.investigation import skip_reasons
@@ -215,6 +215,10 @@ async def alert_locked(db, cluster: str, fingerprint: str, starts_at: Optional[d
 # auditchain takes 7_432_119_027 and 7_432_119_028, its audit sinks 0x6b62617564736e6b; k8s-service's
 # healthStatusLockKey 0x6b62686c74687374, through internal/pglock, is the replica writing clusters.health_status).
 HOURLY_CAP_LOCK = 0x4B55424541535448  # "KUBEASTH"
+# lock_timeout and statement_timeout while the hourly cap's lock is waited for and held: the deliveries of every
+# replica queue on it, so its wait sets its own limits, kept to the transaction, over the connections' 15 s and 30 s
+# (postgresql.sessionLimits, app/db_session.py).
+HOURLY_CAP_LOCK_WAIT = "90s"
 
 
 def _postgres(db) -> bool:
@@ -229,6 +233,10 @@ async def hourly_cap_locked(db, lock) -> AsyncIterator[None]:
     holds, so it needs no connection of its own and goes when that session commits the decision's writes; on sqlite
     (lock is None: one process, local dev and tests) nothing. The webhook enters it only while the cap is on."""
     if lock is not None and _postgres(db):
+        await lock.execute(
+            text("SELECT set_config('lock_timeout', :wait, true), set_config('statement_timeout', :wait, true)"),
+            {"wait": HOURLY_CAP_LOCK_WAIT},
+        )
         await lock.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": HOURLY_CAP_LOCK})
     yield
 
@@ -236,10 +244,10 @@ async def hourly_cap_locked(db, lock) -> AsyncIterator[None]:
 async def queue_requested(
     db, item: AlertInboxItem, *, requested_by: str, now: datetime, record: Callable[[str], Awaitable[bool]],
 ) -> tuple[Optional[str], bool]:
-    """A person's "Investigate now" on an inbox alert: (the id of this firing's investigation, False) when one is
-    queued, running or done, else (a new queued row's id, True) — written as the webhook writes a row, and kept only
-    when record(id) stored its audit row ((None, False) when it did not). The inbox row stays locked meanwhile, so two
-    presses at once queue one investigation."""
+    """A person's "Investigate now" on an inbox alert: (the id of this firing's investigation, as
+    inbox.investigations_for picks it, False) when one is queued, running or done, else (a new queued row's id, True)
+    — written as the webhook writes a row, and kept only when record(id) stored its audit row ((None, False) when it
+    did not). The inbox row stays locked meanwhile, so two presses at once queue one investigation."""
     async with db.async_session() as s:
         await s.execute(select(AlertInboxItem.id).where(AlertInboxItem.id == item.id).with_for_update())
         q = (
@@ -247,9 +255,16 @@ async def queue_requested(
             .where(
                 AlertInvestigation.cluster == item.cluster,
                 AlertInvestigation.fingerprint == item.fingerprint,
-                or_(AlertInvestigation.received_at >= item.starts_at, AlertInvestigation.last_seen_at >= item.starts_at),
+                or_(
+                    AlertInvestigation.starts_at == item.starts_at,
+                    and_(
+                        or_(AlertInvestigation.starts_at.is_(None), AlertInvestigation.starts_at <= item.starts_at),
+                        or_(AlertInvestigation.received_at >= item.first_received_at, AlertInvestigation.last_seen_at >= item.first_received_at),
+                    ),
+                ),
             )
-            .order_by(AlertInvestigation.received_at.desc())
+            # the one holding this firing's starts_at first (a NULL starts_at sorts with the others)
+            .order_by(case((AlertInvestigation.starts_at == item.starts_at, 0), else_=1), AlertInvestigation.received_at.desc())
             .limit(1)
         )
         current = (await s.execute(q)).scalars().first()
@@ -323,7 +338,19 @@ async def requeue_or_fail(db, inv_id: str) -> str:
         return "failed" if res.rowcount else ""
 
 
+def without_nul(value: Any) -> Any:
+    """`value` with NUL taken out of every string at any depth: the database refuses it in text and in JSON."""
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, (list, tuple)):
+        return [without_nul(v) for v in value]
+    if isinstance(value, dict):
+        return {without_nul(k): without_nul(v) for k, v in value.items()}
+    return value
+
+
 async def finish(db, inv_id: str, **fields: Any) -> None:
+    fields = without_nul(fields)
     fields.setdefault("finished_at", utcnow())
     async with db.async_session() as s:
         await s.execute(update(AlertInvestigation).where(AlertInvestigation.id == inv_id).values(**fields))

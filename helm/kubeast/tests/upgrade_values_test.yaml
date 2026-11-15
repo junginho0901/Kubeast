@@ -179,6 +179,12 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no pdb.maxUnavailable
+  - it: stops values without ai.timelineChanges, which this chart added
+    set:
+      ai.timelineChanges: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.timelineChanges
   - it: stops values without the investigation windows
     set:
       features.alertInvestigation.window: null

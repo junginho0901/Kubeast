@@ -177,11 +177,8 @@ func (t RoleTokens) statement() string {
 }
 
 // UpdateRole changes the role and ends the tokens in one transaction, so no edit
-// that takes something away stands while the old tokens still work. sameName
-// says the name is the stored one as the handler reads it (trimmed): a name
-// kept from before migration 00025 keeps its mark then, and a rename clears it,
-// so the new name is held to the index of names ignoring case.
-func (r *Repository) UpdateRole(ctx context.Context, id int, name, description string, permissions []string, tokens RoleTokens, sameName bool) (*model.RoleWithPermissions, error) {
+// that takes something away stands while the old tokens still work.
+func (r *Repository) UpdateRole(ctx context.Context, id int, name, description string, permissions []string, tokens RoleTokens) (*model.RoleWithPermissions, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -190,10 +187,10 @@ func (r *Repository) UpdateRole(ctx context.Context, id int, name, description s
 
 	var role model.Role
 	err = tx.QueryRow(ctx,
-		`UPDATE roles SET name = $1, description = $2, updated_at = NOW(), name_kept = (name_kept AND $4)
+		`UPDATE roles SET name = $1, description = $2, updated_at = NOW()
 		 WHERE id = $3
 		 RETURNING id, name, description, is_system, created_at, updated_at`,
-		name, description, id, sameName,
+		name, description, id,
 	).Scan(&role.ID, &role.Name, &role.Description, &role.IsSystem, &role.CreatedAt, &role.UpdatedAt)
 	if err != nil {
 		return nil, err

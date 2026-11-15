@@ -1,8 +1,10 @@
 // What a followed log file does with its event stream (LogFilesView). Lines and notices go on screen; the server's
 // "end", its error event or the session's end stop following. A dropped connection (the server going away in an
 // upgrade, a network cut) does not: the browser connects again after the server's retry time and sends the mark of
-// the last line it got (Last-Event-ID), from which k8s-service goes on, so no line shows twice. Each reconnect is its
-// own audited read, its row saying where it went on from.
+// the last line it got (Last-Event-ID), from which k8s-service goes on. The mark comes after each batch of lines, so a
+// cut in the middle of a batch (a proxy, the network) shows again the lines of that batch the browser already had; a
+// server that leaves ends between batches and repeats none. Each reconnect is its own audited read, its row saying
+// where it went on from.
 import { SESSION_ENDED_EVENT } from '@/services/auth'
 
 // EventSource.CONNECTING, which the tests' stand-in has no class for.

@@ -351,7 +351,8 @@
       "expired": "time elapsed",
       "not_reviewed": "not reviewed within 24 h",
       "revoked": "revoked by an admin",
-      "superseded": "role set by an admin"
+      "superseded": "role set by an admin",
+      "role_renamed": "role renamed by the upgrade"
     },
     "admin": {
       "subtitle": "Users ask for a higher role on a cluster for a limited time. Approving grants it until the time runs out, then the previous role comes back. You cannot decide your own request.",
@@ -1805,6 +1806,7 @@
       "modelAddress": "AI model call failed ({{provider}}): the model's address is not allowed, so nothing was sent. An administrator runs Test on this model in Admin → AI Models to see why.",
       "streamHttp": "The chat request failed (HTTP {{status}}): {{detail}}",
       "streamHttpStatus": "The chat request failed (HTTP {{status}}).",
+      "streamStartFailed": "The answer stream could not start. Try again in a moment.",
       "streamCut": "The connection closed before the answer finished, so the text above may be incomplete. Ask again for the whole answer.",
       "streamEmpty": "The connection closed without an answer. Ask again.",
       "sessionNotFound": "This conversation no longer exists. Start a new one.",
@@ -2677,6 +2679,21 @@
     "restarts": "Restarts: {{count}}",
     "podDeleting": "Deleting...",
     "noPods": "No pods found",
+    "box": {
+      "shown": "Showing {{shown}} of {{total}} Pods",
+      "more": "+{{count}} show all on this Node",
+      "moreMatching": "+{{count}} matching · show all Pods on this Node",
+      "open": "Show all Pods on this Node"
+    },
+    "nodeView": {
+      "path": "Cluster View path",
+      "all": "All Nodes",
+      "problemsOnly": "Problem Pods only",
+      "gone": "Pod {{pod}} is no longer on this Node; a search finds it if it runs on another.",
+      "filtered": "Pod {{pod}} is outside the namespace filter ({{namespace}}).",
+      "missing": "Node {{node}} is not in this cluster.",
+      "matches": "Pods matching \"{{query}}\" are outlined: {{count}} on this Node."
+    },
     "tabs": {
       "summary": "Summary",
       "logs": "Logs",
@@ -2743,11 +2760,17 @@
     "map": {
       "aria": "Node map: {{nodes}} nodes, {{pods}} pods ({{error}} errors, {{warn}} warnings)",
       "hover": "{{node}} · {{total}} pods · {{error}} errors · {{warn}} warnings",
+      "hoverStatus": "{{node}} · {{status}} · {{total}} pods · {{error}} errors · {{warn}} warnings",
+      "ariaMarks": "{{notReady}} nodes not Ready, {{cordoned}} SchedulingDisabled.",
+      "notReady": "Node not Ready",
+      "cordoned": "SchedulingDisabled",
       "error": "Error",
       "warn": "Warning",
       "ok": "Healthy",
-      "hint": "A cell is a node, a dot a pod. Click a cell to go to the node.",
-      "hintPaged": "A cell is a node, a dot a pod; the outlined cells are the boxes below. Click a cell to go to the node."
+      "hint": "A cell is a Node, a dot a Pod. Click a cell, or press Enter on it, to see all its Pods.",
+      "hintPaged": "A cell is a Node, a dot a Pod; the outlined cells are the boxes below. Click a cell, or press Enter on it, to see all its Pods.",
+      "openFirst": "Open {{node}}, the first of them",
+      "roleDescription": "Node map"
     }
   },
   "namespaces": {
@@ -3132,6 +3155,7 @@
       "ssoEmailUnverified": "The identity provider has not verified this email address.",
       "ssoEmailInvalid": "This name cannot be used for an account: it may not contain a colon, a space or a control character.",
       "ssoNoEmail": "The identity provider did not return an email address.",
+      "ssoRoleMissing": "The role this sign-in gives (auth.oidc.roleMapping or auth.oidc.defaultRole) does not exist. Ask an administrator: the server log names the role.",
       "tokenTooLarge": "Your roles differ across too many clusters to fit in a sign-in token. Ask an administrator to align them."
     },
     "sso": {
@@ -3768,7 +3792,8 @@
     "nameTakenSame": "Role \"{{role}}\" already exists. Choose another name.",
     "nameTakenBuiltin": "Taken: it is the built-in role {{role}} apart from letter case or spaces.",
     "nameTakenGroup": "On a cluster this name acts as the same Kubernetes group as role \"{{role}}\" ({{group}}). Choose another name.",
-    "nameTakenOther": "Taken by another role apart from letter case. Choose another name.",
+    "groupHintEncoded": "A character outside ASCII is written as ~ and its Unicode code point (운 → ~c6b4), so Korean names of one length still make different groups.",
+    "nameTakenOther": "Another role's name makes the same group. Choose another name.",
     "sameGroupNote": "Its name differs from role \"{{role}}\" only in letter case, spaces or punctuation, so it is not given on a cluster any more. A grant it already has acts as no role group where the other is a built-in role. Rename it.",
     "sameGroupHint": "not grantable: same name as {{role}} apart from letter case or spaces",
     "sameGroupRefused": "Role \"{{role}}\" is not given on a cluster: its name differs from role \"{{other}}\" only in letter case, spaces or punctuation. Rename it in Role Management first.",
@@ -4298,7 +4323,7 @@
       "activateConfirm": "Make \"{{name}}\" the model every chat uses? The model in use now stops being the default.",
       "advanced": "Advanced (local / self-hosted)",
       "maxTokens": "Answer length (tokens)",
-      "maxTokensHint": "Empty: 4,096 for chat answers, 2,048 for each alert investigation step. A reasoning model counts its reasoning in it.",
+      "maxTokensHint": "Empty: 4,096 for chat answers, 2,048 for each alert investigation step (4,096 with evidenceCheck or ledger on). A reasoning model counts its reasoning in it.",
       "maxTokensSubscription": "Claude Code sets the answer length for the subscription; this is not used.",
       "toolResultChars": "Tool result length (characters)",
       "toolResultCharsHint": "Empty: 6,000. A longer tool result is cut to this before the model reads it (1,000 to 200,000).",
@@ -4930,7 +4955,9 @@
     },
     "result": {
       "title": "Result and hypotheses",
+      "titleCauses": "Result",
       "missing": "The report did not end with a result block the server could read, so it has no causes or hypotheses to show.",
+      "cut": "The answer reached its length limit inside its result block, so the report has no causes or hypotheses to show.",
       "askedAgain": "The model was asked once more without tools, because a cause or a hypothesis was not shown by the calls or the block was missing.",
       "askFailed": "The model was asked once more without tools and that call failed: this is the first report.",
       "noFault": "The report finds no fault.",
@@ -4959,7 +4986,16 @@
         "no_evidence_for": "no call that answered speaks for it",
         "no_evidence_against": "no call that answered speaks against it",
         "no_reason": "no reason why it is blocked",
-        "bad_calls": "{{calls}} name no call of this investigation"
+        "bad_calls": "{{calls}} name no call of this investigation",
+        "not_verified": "the evidence check did not verify the cause it is about"
+      },
+      "notVerified": "Not verified: {{reason}}",
+      "notVerifiedBare": "Not verified",
+      "unverified": {
+        "no_evidence": "no call is given for it",
+        "bad_calls": "the calls given are not calls of this investigation that answered",
+        "name_missing": "its name does not appear in what the calls returned",
+        "after_alert": "it starts after the alert did"
       }
     }
   },

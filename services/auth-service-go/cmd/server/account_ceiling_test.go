@@ -319,7 +319,7 @@ func roleNameRules() []pgRule {
 	return []pgRule{
 		{match: "name, is_system FROM roles ORDER BY id", oids: []uint32{integerOID, textOID, booleanOID}, rows: [][]any{
 			row(20, "Pending", true), row(roleMember, "Member", true), row(roleRead, "Read", true), row(2, "Write", true), row(roleAdmin, "Admin", true),
-			row(roleCustom, "custom", false), row(roleStoredAdmin, "ADMIN", false), row(9, "sre-admin", false), row(15, "a b", false), row(16, "운영", false), row(18, "a-b", false),
+			row(roleCustom, "custom", false), row(roleStoredAdmin, "ADMIN", false), row(9, "sre-admin", false), row(15, "a b", false), row(16, "운영", false), row(18, "a-b", false), row(19, "Ops 팀", false),
 		}},
 		{match: "INSERT INTO roles", oids: []uint32{integerOID, textOID, textOID, booleanOID, stampOID, stampOID},
 			rows: [][]any{{30, "new", "", false, pgNow(), pgNow()}}},
@@ -357,11 +357,15 @@ func TestNewRoleNameCannotShareAKubernetesGroup(t *testing.T) {
 		{"a-b", http.StatusBadRequest, "a b"},
 		{"A!B", http.StatusBadRequest, "a b"},
 		{" custom", http.StatusBadRequest, "custom"},
-		{"개발", http.StatusBadRequest, "운영"},
+		{"OPS-팀", http.StatusBadRequest, "Ops 팀"},
+		{" 운영", http.StatusBadRequest, "운영"},
 		{"team-reader", http.StatusCreated, ""},
 		{"Infra Manager", http.StatusCreated, ""},
 		{"admin-2", http.StatusCreated, ""},
 		{"운영팀", http.StatusCreated, ""},
+		// a Korean name of the same length as another makes a group of its own
+		{"개발", http.StatusCreated, ""},
+		{"운영 팀", http.StatusCreated, ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			api := newAuthAPI(t, pendingRequest{owner: "requester"}, roleNameRules()...)
@@ -462,27 +466,27 @@ func TestTakenRoleNameSaysWhichRoleHoldsIt(t *testing.T) {
 	}
 }
 
-// Two saves at one moment can both pass the check; the database's index of
-// names ignoring case (migration 00025) or its unique name refuses the second,
+// Two saves at one moment can both pass the check; the database's index of the
+// group each name makes (migration 25) or its unique name refuses the second,
 // which reads as a taken name with its audit row, not as a server error.
 func TestRoleNameTheDatabaseRefusesReadsAsTaken(t *testing.T) {
 	global := auth.PermissionMatrix{"*": {"*"}}
 	for _, c := range []struct {
 		name, method, path, body, constraint, action string
 	}{
-		{"a new role, ignoring case", http.MethodPost, "/admin/roles", `{"name":"team-reader","permissions":[]}`, "roles_name_folded_key", "admin.roles.create"},
+		{"a new role of another's group", http.MethodPost, "/admin/roles", `{"name":"team-reader","permissions":[]}`, "roles_name_group_key", "admin.roles.create"},
 		{"a new role, as written", http.MethodPost, "/admin/roles", `{"name":"team-reader","permissions":[]}`, "roles_name_key", "admin.roles.create"},
-		{"a rename", http.MethodPut, fmt.Sprintf("/admin/roles/%d", roleCustom), `{"name":"renamed","permissions":[]}`, "roles_name_folded_key", "admin.roles.update"},
+		{"a rename", http.MethodPut, fmt.Sprintf("/admin/roles/%d", roleCustom), `{"name":"renamed","permissions":[]}`, "roles_name_group_key", "admin.roles.update"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			api := newAuthAPI(t, pendingRequest{owner: "requester"}, roleNameRules()...)
 			api.db.refuseOn("INSERT INTO roles", "23505", c.constraint)
 			api.db.refuseOn("UPDATE roles SET", "23505", c.constraint)
 			w := api.call(api.actor(global, nil), c.method, c.path, c.body)
-			if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), `"code":"role_name_taken"`) || !strings.Contains(w.Body.String(), "taken by another role") {
+			if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), `"code":"role_name_taken"`) || !strings.Contains(w.Body.String(), "same group as another role") {
 				t.Fatalf("%d %s, want 400 role_name_taken", w.Code, w.Body.String())
 			}
-			if rows := api.store.failures(c.action); len(rows) != 1 || !strings.Contains(rows[0].Error, "taken by another role") {
+			if rows := api.store.failures(c.action); len(rows) != 1 || !strings.Contains(rows[0].Error, "same group as another role") {
 				t.Errorf("audit failures = %+v, want one saying the name is taken", rows)
 			}
 		})

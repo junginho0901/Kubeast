@@ -1,0 +1,59 @@
+{
+  "screens": [
+    {
+      "path": "/ai-chat",
+      "reason": "AI Chat is the full chat: the floating chat is not drawn on it (FloatingAIChat returns nothing for page type ai-chat), so nothing is sent from it.",
+      "pr": "#376"
+    },
+    {
+      "path": "/admin/clusters",
+      "reason": "An admin screen: nothing on it goes to the model (utils/aiContext/privateScreens.ts, PageContextProvider).",
+      "pr": "#377"
+    },
+    {
+      "path": "/admin/users",
+      "reason": "An admin screen: nothing on it goes to the model (utils/aiContext/privateScreens.ts, PageContextProvider).",
+      "pr": "#377"
+    },
+    {
+      "path": "/admin/roles",
+      "reason": "An admin screen: nothing on it goes to the model (utils/aiContext/privateScreens.ts, PageContextProvider).",
+      "pr": "#377"
+    },
+    {
+      "path": "/admin/access-requests",
+      "reason": "An admin screen: nothing on it goes to the model (utils/aiContext/privateScreens.ts, PageContextProvider).",
+      "pr": "#377"
+    },
+    {
+      "path": "/admin/access-review",
+      "reason": "An admin screen: nothing on it goes to the model (utils/aiContext/privateScreens.ts, PageContextProvider).",
+      "pr": "#377"
+    },
+    {
+      "path": "/admin/organizations",
+      "reason": "An admin screen: nothing on it goes to the model (utils/aiContext/privateScreens.ts, PageContextProvider).",
+      "pr": "#377"
+    },
+    {
+      "path": "/admin/ai-models",
+      "reason": "An admin screen: nothing on it goes to the model (utils/aiContext/privateScreens.ts, PageContextProvider).",
+      "pr": "#377"
+    },
+    {
+      "path": "/admin/audit",
+      "reason": "An admin screen: nothing on it goes to the model (utils/aiContext/privateScreens.ts, PageContextProvider).",
+      "pr": "#377"
+    },
+    {
+      "path": "/admin/session-recordings",
+      "reason": "An admin screen: nothing on it goes to the model (utils/aiContext/privateScreens.ts, PageContextProvider).",
+      "pr": "#377"
+    },
+    {
+      "path": "/admin/ai-usage",
+      "reason": "An admin screen: nothing on it goes to the model (utils/aiContext/privateScreens.ts, PageContextProvider).",
+      "pr": "#377"
+    }
+  ]
+}

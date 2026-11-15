@@ -4,7 +4,6 @@ metadata: {name: shop-api-settings}
 data:
   WEB_WORKERS: "3"
   WORKER_THREADS: "4"
-  WORKER_CACHE_MB: "12"
   REQUEST_TIMEOUT_SECONDS: "15"
 ---
 apiVersion: apps/v1
@@ -33,15 +32,15 @@ spec:
                 k=0
                 echo "level=info msg=\"worker booted\" worker=$1 threads=$WORKER_THREADS"
                 while true; do
-                  if [ $k -lt "$WORKER_CACHE_MB" ]; then
+                  if [ $k -lt 12 ]; then
                     k=$((k + 1))
                     eval "page_$k=\$(head -c 1048576 /dev/zero | tr '\\000' x)"
-                    [ $k = "$WORKER_CACHE_MB" ] && echo "level=info msg=\"page cache warm\" worker=$1 cache_mb=$k"
+                    [ $k = 12 ] && echo "level=info msg=\"page cache warm\" worker=$1 cache_mb=$k"
                   fi
                   sleep 8
                 done
               }
-              echo "level=info msg=\"booting\" workers=$WEB_WORKERS threads=$WORKER_THREADS cache_mb_per_worker=$WORKER_CACHE_MB"
+              echo "level=info msg=\"booting\" workers=$WEB_WORKERS threads=$WORKER_THREADS"
               pids=""
               i=1
               while [ $i -le "$WEB_WORKERS" ]; do worker $i & pids="$pids $!"; i=$((i + 1)); done

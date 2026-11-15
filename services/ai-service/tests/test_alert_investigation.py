@@ -133,6 +133,16 @@ def test_parse_time():
     assert webhook.parse_time("garbage") is None
 
 
+def test_parse_time_reads_an_offset_as_the_utc_moment_it_names():
+    """The columns keep naive UTC: a sender writing its own zone names the same moment as one writing Z."""
+    moment = datetime(2026, 10, 13, 11, 59, 0, 123456)
+    for text in ("2026-10-13T11:59:00.123456789Z", "2026-10-13T20:59:00.123456789+09:00", "2026-10-13T06:59:00.123456789-05:00",
+                 "2026-10-14T02:59:00.123456+15:00", "2026-10-13T11:59:00.123456+00:00"):
+        assert webhook.parse_time(text) == moment, text
+    assert webhook.parse_time("2026-10-13T11:59:00") == datetime(2026, 10, 13, 11, 59)  # no offset: read as UTC
+    assert webhook.parse_time("9999-12-31T23:00:00-05:00") is None  # past what a datetime holds in UTC
+
+
 @pytest.mark.asyncio
 async def test_gates_filter_resolve_queue(monkeypatch):
     fs = FakeStore()
@@ -1055,6 +1065,67 @@ async def test_worker_skips_a_queued_alert_while_paused(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_a_run_whose_fields_the_row_refuses_is_failed_with_why_and_keeps_its_tokens(monkeypatch):
+    service = FakeService([completion(content="## Summary\nok")])
+    audits, writes = [], []
+    install_loop(monkeypatch, service, audits)
+
+    async def finish(db, inv_id, **fields):
+        writes.append(fields)
+        if len(writes) == 1:
+            raise ValueError("unsupported Unicode escape sequence")
+
+    monkeypatch.setattr(runner.store, "finish", finish)
+    assert await runner.run_one(cfg(max_steps=2), None, row()) == "failed"
+    first, second = writes
+    assert first["status"] == "done" and first["report"] == "## Summary\nok"
+    assert second["error"] == "the run's fields could not be stored: ValueError: unsupported Unicode escape sequence"
+    assert set(second) == {"status", "error", "provider", "model", "prompt_tokens", "completion_tokens", "total_tokens"}
+    assert second["status"] == "failed" and second["total_tokens"] == 11  # still counted in the daily budget
+    run = audits[-1]
+    assert run["action"] == "ai.investigation.run" and run["result"] == "failure" and run["after"]["status"] == "failed"
+    assert run["after"]["total_tokens"] == 11 and run["error"] == second["error"]
+
+
+@pytest.mark.asyncio
+async def test_the_worker_logs_a_run_whose_end_could_not_be_stored_and_takes_the_next_row(monkeypatch, caplog):
+    """A run whose store.finish raised (the database refusing a value) does not end the worker: the next rows run."""
+    stop = asyncio.Event()
+    queued, ran = [row(id="inv-nul"), row(id="inv-next")], []
+
+    async def get_db():
+        return object()
+
+    async def claim_next(db):
+        if queued:
+            return queued.pop(0)
+        stop.set()
+        return None
+
+    async def nothing(*a, **k):
+        return 0
+
+    async def not_paused(db, minutes, now):
+        return ""
+
+    async def run_one(c, db, r):
+        ran.append(r.id)
+        if r.id == "inv-nul":
+            raise ValueError("unsupported Unicode escape sequence")
+
+    monkeypatch.setattr(runner, "get_db_service", get_db)
+    monkeypatch.setattr(runner.store, "claim_next", claim_next)
+    monkeypatch.setattr(runner.store, "fail_stale_running", nothing)
+    monkeypatch.setattr(runner.store, "pause_reason", not_paused)
+    monkeypatch.setattr(runner.store, "tokens_since", nothing)
+    monkeypatch.setattr(runner, "run_one", run_one)
+    monkeypatch.setattr(runner, "POLL_SECONDS", 0.01)
+    await asyncio.wait_for(runner.worker(stop), timeout=5)
+    assert ran == ["inv-nul", "inv-next"]
+    assert "investigation inv-nul: not finished" in caplog.text and "unsupported Unicode escape" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_a_tool_is_not_run_when_the_audit_store_goes_down_mid_investigation(monkeypatch):
     # up when the run starts, down by the first tool call: the tool does not read the cluster and its row is a failure
     service = FakeService([
@@ -1292,3 +1363,79 @@ async def test_the_worker_requeues_the_row_it_runs_when_it_is_cancelled(monkeypa
     with pytest.raises(asyncio.CancelledError):
         await task
     assert requeued == ["inv-held"]
+
+
+@pytest.mark.asyncio
+async def test_a_worker_told_to_stop_ends_the_run_it_holds_and_takes_no_other(monkeypatch):
+    claimed, finished, requeued = [], [], []
+
+    async def claim_next(_db):
+        claimed.append(f"inv-{len(claimed)}")
+        return SimpleNamespace(id=claimed[-1], requested_by="")
+
+    async def no_stale(*_a, **_k):
+        return 0
+
+    async def no_refusal(*_a, **_k):
+        return ""
+
+    running, release = asyncio.Event(), asyncio.Event()
+
+    async def run_one(_cfg, _db, row):
+        running.set()
+        await release.wait()
+        finished.append(row.id)
+
+    async def requeue_or_fail(_db, inv_id):
+        requeued.append(inv_id)
+        return "queued"
+
+    async def db_service():
+        return object()
+
+    monkeypatch.setattr(runner, "get_db_service", db_service)
+    monkeypatch.setattr(runner, "fail_stale", no_stale)
+    monkeypatch.setattr(runner.store, "claim_next", claim_next)
+    monkeypatch.setattr(runner, "claim_refusal", no_refusal)
+    monkeypatch.setattr(runner, "run_one", run_one)
+    monkeypatch.setattr(runner.store, "requeue_or_fail", requeue_or_fail)
+    stop = asyncio.Event()
+    task = asyncio.create_task(runner.worker(stop))
+    await asyncio.wait_for(running.wait(), timeout=2)
+    stop.set()
+    release.set()
+    await asyncio.wait_for(task, timeout=2)
+    assert (claimed, finished, requeued) == (["inv-0"], ["inv-0"], [])
+
+
+@pytest.mark.asyncio
+async def test_the_stop_signal_stops_the_worker_taking_runs_before_uvicorn_ends_the_lifespan(monkeypatch):
+    # uvicorn 0.54 waits up to --timeout-graceful-shutdown for the answers in flight before the lifespan ends: the
+    # worker's stop is set when SIGTERM comes, and uvicorn's own handler still gets the signal.
+    import signal
+
+    import uvicorn
+
+    import main
+
+    seen = {}
+
+    async def worker(stop):
+        seen["stop"] = stop
+        await asyncio.sleep(60)
+
+    monkeypatch.setattr(runner, "worker", worker)
+    monkeypatch.setattr(main.investigation_settings, "load", lambda: SimpleNamespace(enabled=True))
+    server = uvicorn.Server(uvicorn.Config(main.app))
+    original = signal.signal(signal.SIGTERM, server.handle_exit)
+    try:
+        async with main.lifespan(main.app):
+            await asyncio.sleep(0)
+            stop = seen["stop"]
+            assert not stop.is_set()
+            signal.raise_signal(signal.SIGTERM)
+            await asyncio.wait_for(stop.wait(), timeout=2)
+            assert server.should_exit  # uvicorn starts its graceful wait as before
+        assert signal.getsignal(signal.SIGTERM) == server.handle_exit
+    finally:
+        signal.signal(signal.SIGTERM, original)

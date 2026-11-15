@@ -9,7 +9,7 @@
  "answer_format": "rca_block_v0",
  "expect": [
   [
-   "members-18"
+   "(?<![A-Za-z0-9-])members(?![A-Za-z0-9-])"
   ],
   [
    "web-settings",
@@ -21,25 +21,29 @@
  ],
  "tools": [],
  "setup_cmds": [
-  "kubectl create namespace members-18 --dry-run=client -o yaml | kubectl apply -f - && kubectl label namespace members-18 kubeast.io/ai-eval=true --overwrite && kubectl -n members-18 apply -f $CASE_DIR/accounts.yaml",
+  "kubectl create namespace members --dry-run=client -o yaml | kubectl apply -f - && kubectl -n members apply -f $CASE_DIR/accounts.yaml",
   "kubectl -n $NS apply -f $CASE_DIR/accounts.yaml"
  ],
- "wait": "kubectl -n $NS wait --for=condition=Available deploy/web deploy/accounts deploy/visitor --timeout=10s && kubectl -n members-18 wait --for=condition=Available deploy/accounts --timeout=10s && kubectl -n $NS logs deploy/visitor --since=15s | grep -q 'account page shown'",
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/web deploy/accounts deploy/visitor --timeout=10s && kubectl -n members wait --for=condition=Available deploy/accounts --timeout=10s && kubectl -n $NS logs deploy/visitor --since=15s | grep -q 'account page shown'",
  "wait_seconds": 300,
  "baseline_seconds": 180,
  "inject_cmds": [
-  "kubectl -n members-18 delete deploy/accounts svc/accounts --wait=true"
+  "kubectl -n members delete deploy/accounts svc/accounts --wait=true"
  ],
  "inject_wait": "kubectl -n $NS logs deploy/visitor --since=20s | grep -q 'asks to sign in again'",
  "inject_wait_seconds": 180,
  "ask_after_seconds": [300],
  "undo_cmds": [
-  "kubectl -n members-18 apply -f $CASE_DIR/accounts.yaml"
+  "kubectl -n members apply -f $CASE_DIR/accounts.yaml"
  ],
  "cleanup_cmds": [
-  "kubectl delete namespace members-18 --ignore-not-found --wait=false"
+  "kubectl delete namespace members --ignore-not-found --wait=false"
  ],
  "cooldown_seconds": 30,
  "hidden": true,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "AccountPagesSignedOut", "service": "web"},
+  "annotations": {"summary": "Signed-in visitors get the sign-in page again", "description": "For the last few minutes web has served the account page as signed out to every visitor who had just signed in; the sign-ins themselves succeed."}
+ }
 }

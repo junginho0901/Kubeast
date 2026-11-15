@@ -85,6 +85,29 @@ describe("the report window's result and hypotheses", () => {
     expect(html).toContain(`>${en.common.none}<`)
   })
 
+  it('marks a cause the calls do not show as not verified', async () => {
+    const html = await render({ ...RESULT, causes: [{ ...RESULT.causes[0], verified: false, reason: 'name_missing' }, { ...RESULT.causes[0], resource: 'Pod/apps/web-1', verified: true }] })
+    const marks = [...html.matchAll(/data-testid="investigation-cause-unverified">([^<]*)</g)].map((m) => m[1])
+    expect(marks).toEqual([`Not verified: ${en.investigations.result.unverified.name_missing}`])
+    expect(await render({ ...RESULT, causes: [{ ...RESULT.causes[0], verified: false, reason: 'after_alert' }] }, 'ko'))
+      .toContain(`확인 안 됨: ${ko.investigations.result.unverified.after_alert}`)
+  })
+
+  it('shows no hypotheses when the ledger did not read the block', async () => {
+    const html = await render({ ...RESULT, hypotheses: [], checks: { evidence: true, ledger: false } })
+    expect(html).not.toContain('Hypotheses (')
+    expect(html).not.toContain('data-testid="investigation-hypotheses"')
+    expect(html).toContain(`>${en.investigations.result.titleCauses}<`)
+    expect(html).toContain('data-testid="investigation-result-causes"')
+    expect(await render({ ...RESULT, checks: { evidence: false, ledger: true } })).toContain('Hypotheses (4)')
+  })
+
+  it('says the answer stopped inside its block', async () => {
+    const html = await render({ ...RESULT, status: 'cut', causes: [], path: [], ruled_out: [], hypotheses: [], asked_again: true })
+    expect(html).toContain(en.investigations.result.cut)
+    expect(html).not.toContain(en.investigations.result.missing)
+  })
+
   it('reads in Korean from the catalog', async () => {
     const html = await render(RESULT, 'ko')
     expect(html).toContain(ko.investigations.result.title)

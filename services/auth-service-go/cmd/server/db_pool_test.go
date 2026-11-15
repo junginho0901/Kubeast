@@ -107,3 +107,15 @@ func TestMigrationPoolHasNoStatementOrLockLimit(t *testing.T) {
 	pingThrough(t, cfg)
 	assertSetFirst(t, srv, "SET statement_timeout = 0; SET lock_timeout = 0; SET idle_in_transaction_session_timeout = 300000")
 }
+
+// With every limit at 0 (the limits on the role, behind RDS Proxy) the migration pool still lifts the statement and
+// lock limits the role would give it.
+func TestMigrationPoolLiftsTheStatementAndLockLimitsWithEveryLimitZero(t *testing.T) {
+	srv := dbsessiontest.Start(t)
+	cfg, err := newMigrationPoolConfig(srv.URL(), dbsession.Limits{})
+	if err != nil {
+		t.Fatalf("newMigrationPoolConfig: %v", err)
+	}
+	pingThrough(t, cfg)
+	assertSetFirst(t, srv, "SET statement_timeout = 0; SET lock_timeout = 0")
+}

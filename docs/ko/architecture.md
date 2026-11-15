@@ -53,7 +53,7 @@ NGINX 게이트웨이가 모든 요청을 받아 각 마이크로서비스로 �
 | `postgres` | — | 5432 | 메인 DB (durable state) — PostgreSQL 18 |
 | `redis` | — | 6379 | k8s-service 캐시 — Valkey 9.1(Redis 프로토콜). k8s-service와 tool-server(클러스터 바뀜 알림만)가 각자 자기 Redis 사용자로 로그인하고, 이 둘만 연결할 수 있습니다([Redis 사용자](configuration.md#redis-사용자)). `redis.enabled: false`면 k8s-service가 메모리에 캐시합니다 |
 
-k8s-service는 Redis에 캐시를 키 앞머리 `kubeast:cache:` 아래에 쓰고, 모든 항목은 최대 1시간 뒤에 만료됩니다. 클러스터 등록이 바뀌면 그 앞머리의 키만 지우므로(`SCAN`과 `UNLINK`) 같은 Redis 데이터베이스의 다른 키는 남습니다. 시작할 때 Redis가 답하지 않은 k8s-service는 메모리에 캐시하고 5초마다 Redis에 다시 묻다가, 답하면 캐시를 Redis로 옮깁니다. 어느 클러스터가 바뀌었는지는 Redis가 아니라 PostgreSQL에 둡니다. auth-service가 kubeconfig를 바꾸거나 Prometheus·로그 저장소 설정을 바꾸는 데이터베이스 거래에서 클러스터의 `config_version`을 새 값으로 바꿉니다. 이 거래는 Secret을 쓴 뒤에만 반영되고, 실패하면 오류로 답하며 둘 다 그대로 둡니다. 모든 k8s-service가 5초마다 이 값을 읽어 다른 값으로 만든 연결과 지운 클러스터의 연결을 버립니다. Redis가 있으면 auth-service가 알린 k8s-service가 다른 k8s-service에도 바로 알립니다(채널 `kubeast:clusters:changed:<db>`).
+k8s-service는 Redis에 캐시를 키 앞머리 `kubeast:cache:` 아래에 쓰고, 모든 항목은 최대 1시간 뒤에 만료됩니다. 클러스터 등록이 바뀌면 그 앞머리의 키만 지우므로(`SCAN`과 `UNLINK`) 같은 Redis 데이터베이스의 다른 키는 남습니다. 시작할 때 Redis가 답하지 않은 k8s-service는 메모리에 캐시하고 5초마다 Redis에 다시 묻다가, 답하면 캐시를 Redis로 옮깁니다. 어느 클러스터가 바뀌었는지는 Redis가 아니라 PostgreSQL에 둡니다. auth-service가 kubeconfig를 바꾸거나 Prometheus·로그 저장소 설정을 바꾸는 데이터베이스 거래에서 클러스터의 `config_version`을 새 값으로 바꿉니다. 이 거래는 Secret을 쓴 뒤에만 반영됩니다. 실패하면 오류로 답합니다. 쓴 Secret은 클러스터 행을 잠근 채로 되돌리므로, 같은 클러스터를 바꾸려고 기다리던 변경은 그 값을 보지 않습니다. 그 뒤 클러스터의 `config_version`을 한 번 더 새 값으로 바꾸므로, 그사이 쓴 Secret으로 만든 연결도 버립니다. 되돌리지 못한 Secret은 응답과 감사 행에 이름이 남습니다. 모든 k8s-service가 5초마다 이 값을 읽어 다른 값으로 만든 연결과 지운 클러스터의 연결을 버립니다. Redis가 있으면 auth-service가 알린 k8s-service가 다른 k8s-service에도 바로 알립니다(채널 `kubeast:clusters:changed:<db>`).
 
 ## 컨테이너 이미지
 
@@ -126,6 +126,8 @@ ghcr.io/junginho0901/kubeast-model-config-controller-go
 - k8s-service
   - 60초마다 등록된 클러스터별 상태 확인(`multicluster.healthcheckIntervalSec`). 확인은 서버마다 자기 빠른 실패 판단에 쓰고, `clusters.health_status`는 PostgreSQL advisory lock(따로 연 연결 하나)을 잡은 서버 한 대만 씀
   - 오래 쓰지 않은 클러스터의 informer 캐시 정리
+  - 레플리카마다 5초(앞뒤 1초)마다 DB에서 등록된 클러스터의 `config_version` 읽기, 쿼리 하나(`internal/clustersync`). Redis가 있으면 다른 레플리카의 클러스터 변경 알림도 구독
+  - 켜질 때 Redis가 답하지 않았으면 답할 때까지 5초마다 다시 묻기(답하면 캐시를 Redis로 옮김)
   - 노드 드레인을 맡은 동안 5초마다 살아 있음을 적음 · 10초마다 맡은 서버가 멈춘 드레인을 중단됨으로 적음 · 1시간마다 하루 전에 끝난 드레인 지움(`node_drains`)
 
 표의 MCP, 알림 조사, 세션 녹화, 노드 셸, `features.*` 줄은 코드를 보고 적은 값입니다. 파드가 생기지 않아 따로 재지 않았고, MCP 값은 2026-10-13에 측정했습니다.
@@ -165,6 +167,7 @@ v0.7.6 코드로 2026-11-08에 잰 값입니다. k8s-service 하나를 차트 �
 
 이 한도들을 정하는 차트 값과 2026-10-30에 잰 값은 영어 문서의 [Many users](../architecture.md#many-users)에 있습니다. 그중 몇 가지는 이렇게 걸립니다.
 
+- 새 실시간 watch는 마지막 수집이 찾은 k8s-service의 살아 있는 힙이 수집기 한도의 75 %를 넘은 동안 `multicluster.wsMaxSubscriptions`를 넘었을 때처럼 기다리고(`watchMemoryFull`), 화면은 서버의 메모리가 모자라다고 말합니다. 이미 켜진 watch는 그대로 갑니다. Pod · Node · Deployment watch는 행이 읽는 것만 디코드합니다(`watch_decode.go`).
 - Helm 화면의 스트림도 `multicluster.wsMaxSubscriptions`에 셉니다(watch 하나, 네임스페이스로 한정된 grant면 네임스페이스마다 하나). 한도를 넘으면 같은 알림이 그렇다고 말하고, 스트림은 30초~5분 뒤 다시 묻습니다. watch 시작도 `multicluster.wsWatchStartConcurrency` 자리를 거칩니다.
 - Cluster View의 노드 칸, Node 드로어의 파드 표와 Allocated Resources는 그 순간 묻는 모두를 위해 노드마다 한 번 `kubeast:cache`로 읽고, 사람마다 자기 신원이 파드를 볼 수 있는 네임스페이스만 남깁니다(SelfSubjectAccessReview, 60초). Allocated Resources의 합은 kubectl describe node와 같은 계산입니다(init 컨테이너는 가장 큰 값, 사이드카 더함, pod overhead).
 - 노드 칸을 그 사람으로 읽는 목록(접근 확인이 거부한 네임스페이스, 재시작 뒤 informer가 동기화되기 전, `kubeast:cache`가 거부될 때)도 공유 읽기와 같은 노드 읽기 자리 16개를 거칩니다.
@@ -172,4 +175,3 @@ v0.7.6 코드로 2026-11-08에 잰 값입니다. k8s-service 하나를 차트 �
 - 여러 쪽 읽기(`multicluster.bigReadConcurrency`)는 자리를 기다리는 동안 읽은 쪽을 쥐지 않고 다음 쪽의 위치만 쥡니다. 2026-11-08 전에는 기다리는 읽기마다 쪽 하나를 쥐었습니다(파드 256개 × 64 KiB에 16 MiB).
 - Pods 화면은 3초마다 페이지를 다시 읽고, 화면이 세는 파드(고른 네임스페이스, 전체면 사용자가 볼 수 있는 모든 네임스페이스의 파드)가 10 000개를 넘으면 10초마다 읽습니다. 그래서 큰 클러스터에서는 k8s-service가 받은 변경이 10초 안에 화면에 보입니다. 읽을 때마다 가진 판 번호를 보내고 k8s-service가 가진 행에서 답을 받습니다. 사용자가 볼 수 있는 행이 안 바뀌었으면 정렬하기 전에 `unchanged`로 답합니다. 클러스터로 가는 요청이 아닙니다(위 표: 서로 다른 500명이 파드 50 000개에서 켜 둔 동안 p95 16 ms). 행을 사용자 신원으로 받는 동안(informer 동기화 전, `kubeast:cache`가 파드를 watch할 수 없을 때)은 30초마다 읽습니다.
 - Pods 화면 · 노드 지도 · 노드 목록이 파드 행을 다루는 일은 CPU 수만큼, 많아야 8개가 한꺼번에 돕니다. 차트가 CPU limit을 두지 않아 Go는 노드의 CPU를 모두 세고, 하나가 파드 50 000개에서 행 약 2 MB를 쥡니다. k8s-service 환경 변수 `POD_ROW_CONCURRENCY`로 다른 수를 정할 수 있습니다.
-- 게이트웨이는 서비스로 가는 연결을 다음 요청에 다시 쓰려고 쉬는 채로 둡니다. 모든 경로가 나눠 쓰고, 워커마다 k8s-service로 64개, 다른 서비스로 32개까지입니다. 쉬는 연결은 서비스보다 먼저 닫습니다(auth-service · session-service는 60초, ai-service의 uvicorn은 5초에 닫음). 진행 중인 요청은 연결을 하나씩 쥐므로, 한꺼번에 몰린 요청은 그 수를 넘는 만큼 새 연결을 엽니다. 아직 받지 않은 연결은 4 096개까지 줄을 섭니다(`listen … backlog`, nginx 기본값 511). 커널은 이 수를 파드 네트워크 네임스페이스의 `net.core.somaxconn`으로 자르고, 그 기본값은 Linux 5.4부터 4 096입니다.

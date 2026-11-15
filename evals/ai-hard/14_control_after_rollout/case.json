@@ -28,5 +28,9 @@
  "ask_after_seconds": [240],
  "undo_cmds": [],
  "cooldown_seconds": 30,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceSlow", "service": "orders"},
+  "annotations": {"summary": "Order processing reportedly got slower", "description": "Users report that order processing in shop-14 has become slow."}
+ }
 }

@@ -9,6 +9,7 @@
 # lists namespaces, with a RoleBinding in each of them. Apply to every
 # registered cluster:
 #   helm template kubeast helm/kubeast -s templates/impersonation-custom-roles.yaml -f <values> | kubectl --context <cluster> apply -f -
+# Before 0.7.8 each character outside ASCII in a name was "-" in its group: after that upgrade apply this again and delete the old groups' kubeast-role-<old slug>-* bindings (docs/getting-started.md "Upgrade").
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:

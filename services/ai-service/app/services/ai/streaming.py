@@ -21,12 +21,12 @@ from app.services.ai import charts
 from app.services.ai import formatters
 from app.services.ai import history as history_mod
 from app.services.ai import limits
-from app.services.ai import repeats as repeats_mod
 from app.services.ai import tool_replay
+from app.services.ai import repeats as repeats_mod
 from app.services.ai import usage as usage_acct
 from app.services.ai.debug_dump import dump, log, safe_error
 
-from app.services.ai.prompts import SYSTEM_MESSAGE
+from app.services.ai.prompts import system_message
 from app.services.prompt_fence import inside_tag
 from app.services.audit_target import shown_tool_args
 from app.services.redact import Numbers, highest_numbers, redact_text
@@ -807,7 +807,7 @@ async def session_chat_stream(
 
         messages = [{
             "role": "system",
-            "content": system_prompt_override or SYSTEM_MESSAGE,
+            "content": system_prompt_override or system_message(),
         }]
         summary_outcome = None
         if older_history and history_mod.enabled():
