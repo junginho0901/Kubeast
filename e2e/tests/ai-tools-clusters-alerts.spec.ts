@@ -298,7 +298,8 @@ print(json.dumps({
 
       // While one runs a press starts nothing.
       const running = `inv-e2e-sym1-${run}-r`
-      insert(alert, running, { status: `'running'`, started_at: `now() at time zone 'utc'` })
+      // with the row's starts_at, as the webhook and "Investigate now" store it (an investigation holding it is the row's first)
+      insert(alert, running, { status: `'running'`, started_at: `now() at time zone 'utc'`, starts_at: `(SELECT starts_at FROM alert_inbox WHERE id = '${alert.id}')` })
       const held = await answerOf(request, admin, TOOL, { alert_id: alert.id })
       expect({ started: held.started, id: held.investigation.id, status: held.investigation.status, reason: held.investigate_now.reason })
         .toEqual({ started: false, id: running, status: 'running', reason: 'investigating' })
