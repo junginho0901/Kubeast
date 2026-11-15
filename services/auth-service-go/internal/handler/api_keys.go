@@ -302,7 +302,7 @@ func (h *AuthHandler) ExchangeAPIKey(w http.ResponseWriter, r *http.Request) {
 		refuse("key expired")
 		return
 	}
-	if strings.EqualFold(user.RoleName, "pending") {
+	if user.RoleName == "Pending" {
 		refuse("owner pending approval")
 		return
 	}
