@@ -43,6 +43,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
+	"github.com/junginho0901/kubeast/services/pkg/dbsession"
 	"github.com/junginho0901/kubeast/services/pkg/internalauth"
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 	"github.com/junginho0901/kubeast/services/pkg/logger"
@@ -90,7 +91,15 @@ func main() {
 	// Shared Postgres pool: the audit log and the cluster registry.
 	bootCtx, bootCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer bootCancel()
-	pgPool, pgErr := pgxpool.New(bootCtx, cfg.DatabaseURLForPgx())
+	sessionLimits := dbsession.FromEnv()
+	pgCfg, pgErr := newPoolConfig(cfg.DatabaseURLForPgx(), sessionLimits)
+	if pgErr != nil {
+		slog.Error("failed to parse database URL", "error", pgErr)
+		os.Exit(1)
+	}
+	slog.Info("database session limits", "statement_timeout", sessionLimits.StatementTimeout,
+		"lock_timeout", sessionLimits.LockTimeout, "idle_in_transaction_session_timeout", sessionLimits.IdleInTransaction)
+	pgPool, pgErr := pgxpool.NewWithConfig(bootCtx, pgCfg)
 	if pgErr != nil {
 		slog.Error("failed to create postgres pool", "error", pgErr)
 		os.Exit(1)
