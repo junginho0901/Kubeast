@@ -2,7 +2,7 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 
 import {
   CLUSTER, NS, Probe, STAMP, bearer, deploymentExists, internalKubeconfig, kubectl, kubectlOk, login, podLog, readyPods, restartCounts,
-  restartsSince, rolledOut, show, sleep, stopFor, takeDown, undoPending, type Answer,
+  podsOf, restartsSince, rolledOut, show, sleep, stopFor, takeDown, undoPending, type Answer,
 } from './shared'
 
 // PR #866 (one Redis user per service): the chart's Valkey runs an ACL file — k8s-service reaches kubeast:* keys and
@@ -30,6 +30,14 @@ const redisSpec = (): RedisContainer | null => {
 }
 const aclOn = () => !!redisSpec()?.args?.includes('--aclfile')
 const usersSecret = () => redisSpec()?.env?.find((e) => e.name === 'REDISCLI_AUTH')?.valueFrom?.secretKeyRef?.name ?? 'kubeast-redis-users'
+
+// ready addresses of a Service's EndpointSlices: what kube-proxy sends to
+function readyEndpoints(service: string): number {
+  const raw = JSON.parse(kubectl(['-n', NS, 'get', 'endpointslices', '-l', `kubernetes.io/service-name=${service}`, '-o', 'json'])) as {
+    items: { endpoints?: { addresses: string[]; conditions?: { ready?: boolean } }[] }[]
+  }
+  return raw.items.flatMap((s) => s.endpoints ?? []).filter((e) => e.conditions?.ready !== false).reduce((n, e) => n + e.addresses.length, 0)
+}
 
 function password(key: string): string {
   const b64 = kubectl(['-n', NS, 'get', 'secret', usersSecret(), '-o', `jsonpath={.data.${key}}`])
@@ -133,10 +141,13 @@ test.describe('Redis users per service (PR #866)', () => {
       const seen: { at: number; text: string }[] = []
       let patchedAt = 0
       let outage: { offAt: number; onAt: number } | null = null
+      let redisAtPatch: { pods: number; endpoints: number } | null = null
       try {
         // every tool-server replica keeps the first kubeconfig: as many calls as replicas and more, through the Service
         for (let i = 0; i < replicas * 4; i++) expect(await nodesByTool(request, token, id), 'the tool reads the first cluster').toContain(`${OLD_KIND}-`)
         const follow = async () => {
+          // what could answer as Redis right before the change: its pods (terminating ones too) and ready endpoints
+          if (redisDown) redisAtPatch = { pods: podsOf(REDIS).length, endpoints: readyEndpoints(REDIS) }
           const patch = await request.patch(`/api/v1/clusters/${id}`, { headers: admin, data: { kubeconfig: newKc }, timeout: 60_000 })
           patchedAt = Date.now()
           expect(patch.status(), await patch.text()).toBe(200)
@@ -152,8 +163,8 @@ test.describe('Redis users per service (PR #866)', () => {
         await request.delete(`/api/v1/clusters/${id}`, { headers: admin, failOnStatusCode: false })
       }
       test.info().attach('tool-answers.json', { body: JSON.stringify(seen), contentType: 'application/json' })
-      if (outage) test.info().attach('timeline.json', { body: JSON.stringify({ redisGone: new Date(outage.offAt).toISOString(), patched: new Date(patchedAt).toISOString(), redisBack: new Date(outage.onAt).toISOString() }, null, 2), contentType: 'application/json' })
-      if (outage) expect(patchedAt, 'the change was made after every Redis pod was gone').toBeGreaterThan(outage.offAt)
+      if (outage) test.info().attach('timeline.json', { body: JSON.stringify({ redisGone: new Date(outage.offAt).toISOString(), patched: new Date(patchedAt).toISOString(), redisBack: new Date(outage.onAt).toISOString(), redisAtPatch }, null, 2), contentType: 'application/json' })
+      if (redisDown) expect(redisAtPatch, 'Redis pods and ready endpoints right before the change').toEqual({ pods: 0, endpoints: 0 })
       const late = seen.filter((s) => s.at > 10_000 && !s.text.includes(`${NEW_KIND}-`))
       expect(seen.filter((s) => s.at > 10_000).length, 'calls after the first 10 s').toBeGreaterThan(replicas * 4)
       expect(late.map((s) => `+${s.at}ms ${s.text.slice(0, 80)}`), `answers not from ${NEW_KIND} later than 10 s after the change`).toEqual([])

@@ -151,9 +151,11 @@ test.describe('Claude Code slots across replicas (PR #859, M-4)', () => {
     const tb = turn(fb, token, sb, 'Answer with the single word: ok')
     await expect.poll(() => [queuedAt(ta, true) !== null, queuedAt(tb, true) !== null], { message: 'both turns say they wait', timeout: 15_000 }).toEqual([true, true])
     const samples: Sample[] = []
+    // stamped before the read: a sample at or after a turn's start was read after it
     const sample = () => {
+      const at = Date.now()
       const rows = slots()
-      const s = { at: Date.now(), byA: rows.filter((r) => r.owner.startsWith(`${a}-`)).length, byB: rows.filter((r) => r.owner.startsWith(`${b}-`)).length }
+      const s = { at, byA: rows.filter((r) => r.owner.startsWith(`${a}-`)).length, byB: rows.filter((r) => r.owner.startsWith(`${b}-`)).length }
       samples.push(s)
       return s
     }

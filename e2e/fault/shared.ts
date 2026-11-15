@@ -136,7 +136,7 @@ export function restartsSince(before: Record<string, number>): Record<string, nu
   return Object.fromEntries(Object.entries(now).filter(([name, n]) => name in before && n > before[name]).map(([name, n]) => [name, n - before[name]]))
 }
 
-// SIGKILL as a crash does it: no preStop, no grace, no shutdown code of the server.
+// A force delete: no preStop, and SIGKILL 2 s after SIGTERM (the kubelet's shortest grace) — killNoSignal sends no SIGTERM.
 export function killPod(name: string): number {
   const at = Date.now()
   kubectl(['-n', NS, 'delete', 'pod', name, '--grace-period=0', '--force', '--wait=false'])
@@ -180,13 +180,14 @@ for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
   process.on(sig, on)
 }
 
-// A detached process that runs `kubectl <argv>` on the install's cluster once this worker is gone, however it went
-// (SIGKILL too; it looks every 2 s), unless stopped first. It reads the kubeconfig from kind again, since the worker's
-// copy goes with the worker.
-export function whenGone(argv: string[]): () => void {
-  const script = 'k="$1"; shift; while kill -0 "$PARENT" 2>/dev/null; do sleep 2; done; '
-    + 'kc=$(mktemp) || exit 1; kind get kubeconfig --name "$k" > "$kc" && kubectl --kubeconfig "$kc" --context "kind-$k" "$@"; rm -f "$kc"'
-  const child = spawn('sh', ['-c', script, 'when-gone', KIND, ...argv], { detached: true, stdio: 'ignore', env: { ...process.env, PARENT: String(process.pid) } })
+// A detached process that runs each `kubectl <args>` in turn on a kind cluster (the install's unless named) once this
+// worker is gone, however it went (SIGKILL too; it looks every 2 s), unless stopped first. It reads the kubeconfig from
+// kind again, since the worker's copy goes with the worker.
+const shq = (a: string) => `'${a.replace(/'/g, `'\\''`)}'`
+export function whenGone(commands: string[][], kind = KIND): () => void {
+  const run = commands.map((c) => `kubectl --kubeconfig "$kc" --context ${shq(`kind-${kind}`)} ${c.map(shq).join(' ')}`).join('; ')
+  const script = `while kill -0 "$PARENT" 2>/dev/null; do sleep 2; done; kc=$(mktemp) || exit 1; kind get kubeconfig --name ${shq(kind)} > "$kc" && { ${run}; }; rm -f "$kc"`
+  const child = spawn('sh', ['-c', script], { detached: true, stdio: 'ignore', env: { ...process.env, PARENT: String(process.pid) } })
   child.unref()
   return () => { try { process.kill(-child.pid!, 'SIGKILL') } catch { /* it ran already */ } }
 }
@@ -300,7 +301,8 @@ export function rolledOut(deploy: string, timeoutSeconds = 180) {
 // for the rollout and returns when.
 export async function takeDown(deploy: string, goneWithinMs = 120_000): Promise<{ offAt: number; bringBack: () => number }> {
   const had = replicasOf(deploy)
-  const stopWatcher = whenGone(['-n', NS, 'scale', `deploy/${deploy}`, `--replicas=${had}`])
+  if (had < 1) throw new Error(`${deploy} is already at 0 replicas — left by an interrupted run? Scale it back first (README "After a run that stopped half way")`)
+  const stopWatcher = whenGone([['-n', NS, 'scale', `deploy/${deploy}`, `--replicas=${had}`]])
   const drop = atExit(`scale ${deploy} back to ${had}`, () => { scale(deploy, had); stopWatcher() })
   let onAt = 0
   const bringBack = () => {

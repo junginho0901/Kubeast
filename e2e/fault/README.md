@@ -38,8 +38,9 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
   cordon on test2, a pod it made) is registered with `atExit` as it is changed. A test's `finally` does not run when
   Playwright interrupts it (Ctrl-C, a test timeout: the body is left where it waits), so the list also runs in each
   file's `afterEach` (`undoPending`), on the worker's exit and on SIGINT, SIGTERM and SIGHUP. For a worker killed
-  outright, a scaled-down Deployment is scaled back by a detached process that waits for the worker to be gone
-  (`whenGone`), and a frozen container is resumed by one `seconds` + 30 s after the freeze. Port-forwards run under a
+  outright, a detached process that waits for the worker to be gone (`whenGone`) scales a Deployment back and deletes
+  the drain tests' namespace on test2 and uncordons its node, and a frozen container is resumed by one `seconds` + 30 s
+  after the freeze. Port-forwards run under a
   shell that ends them when the worker is gone, and the kubeconfig copy is removed on exit.
 - `wsSubscriptions` reads a k8s-service pod's `kubeast_ws_subscriptions` through its port-forward: the pod whose count
   went up when a page opened its live list is the one that holds it. `watchListSockets` keeps each `/wsMultiplexer`
@@ -48,7 +49,8 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
 - `takeDown(deploy)` scales a Deployment to 0 and waits until none of its pods is left — `podsOf` counts a pod being
   deleted, which still answers through its preStop and grace (Redis has a 5 s preStop) — so what a test does with it
   "off" starts only then; `stopFor(deploy, seconds)` keeps it off `seconds` from that moment and brings it back,
-  waiting for the rollout, and returns when it went off and came back for the test's `timeline.json`.
+  waiting for the rollout, and returns when it went off and came back for the test's `timeline.json`. A Deployment
+  already at 0 replicas (left by an interrupted run) stops the test: it would "bring it back" to 0.
 - Passwords (the Redis users') are read from their Secret and given to `valkey-cli` on stdin, never on a command line.
 
 ## Files
@@ -134,7 +136,8 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
   KEYS and SCAN and may PING; k8s-service may SET, GET and PUBLISH under `kubeast:` and is refused keys and channels
   outside it, FLUSHALL, FLUSHDB, KEYS, CONFIG, EVAL, HSET and ACL.
 - tool-server answers from the new kubeconfig on every call later than 10 s after the change, with the change notice
-  and with Redis stopped (its 10 s keep alone; the change is made after every Redis pod is gone).
+  and with Redis stopped (its 10 s keep alone): right before the change Redis has no pod, terminating ones included,
+  and no ready endpoint.
 - F-8: every screen read answers 200 while Redis is off for 60 s (from the moment its last pod is gone) and while it
   comes back, no restart of the pods that stayed, `kubeast:cache:` keys are in Redis again afterwards.
 - F-8 for #857: a k8s-service started while Redis was down logs that it runs on the in-memory cache, logs within 15 s
@@ -191,7 +194,11 @@ scripts/kind-fault-shape.sh back    # roll back to the noted revision; its two h
 scripts/kind-model-subscription.sh down              # last
 ```
 
-`start` notes the revision, its time in `helm history`, the hashes of `helm get values` and `helm get values --all`,
+`start` first prints the installed chart's name, version and app version (`helm get metadata`) and stops when this
+checkout's chart does not render what is installed: the release's manifest against a server dry run of the same upgrade
+(so `lookup` reads what is installed), Secrets left out of both, the differing documents listed
+(`FAULT_SHAPE_ACCEPT_CHART=1` starts anyway). It notes the revision, its time in `helm history`, the hashes of
+`helm get values` and `helm get values --all`,
 a hash of the chart directory's files, and a copy of the values (a 0600 file next to the start, under the git-ignored
 `.kind-data/`, for `back-values`). Every upgrade and rollback runs with `--history-max 0` and `--wait`; each upgrade is
 described `kind-fault-shape <shape> chart=<hash>`, and each step prints the revision and both hashes before and after,
@@ -202,14 +209,16 @@ start was made by something else (another script's upgrade — `kind-model-subsc
 be undone by the rollback, and keeps only 10 revisions), when the noted revision is no longer the one noted (pruned,
 or the release installed again), and a switch also when this checkout's chart files differ from the start's (the
 templates would change too). `back-values` is the way back then: `helm upgrade --reset-values -f <the copy>` with this
-checkout's chart, if its files are the start's, and the same hash check.
+checkout's chart, if its files are the start's, and the same hash check; it needs only the start file and the copy, so
+it also works when the noted revision is gone.
 
 helm runs in the background of the script, so Ctrl-C, TERM or a closed terminal (HUP) reaches its trap at once: it
 stops helm (SIGINT, which helm ends as a failed upgrade; SIGTERM if it is still there 30 s later), rolls back to the revision before the switch and checks the hashes (`ROLLBACK_BROKEN` and exit 3 when they
 differ, the start's files kept). The rollbacks, there and in `back`, ignore those signals until they end; after a
 closed terminal the rollback writes to `<start file>.log`. Each revision the script makes is listed (`<start>.made`)
-before helm runs, so a release it left `pending-upgrade` or `pending-rollback` (its shell killed outright) is put back
-with `back`; one left so by something else is refused like any other revision the script did not make.
+before helm runs, and taken off again when helm made none, so a release it left `pending-upgrade` or
+`pending-rollback` (its shell killed outright) is put back with `back`; one left so by something else is refused like
+any other revision the script did not make.
 
 ## What a run leaves for the record
 

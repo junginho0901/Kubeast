@@ -17,12 +17,17 @@
 # computed values (--all), never the values themselves (they hold passwords; the copy kept for back-values is a 0600
 # file next to the start, under the git-ignored .kind-data/).
 #
+# `start` also stops when this checkout's chart does not render what is installed (the release's manifest against a
+# server dry run of the same upgrade, Secrets left out; FAULT_SHAPE_ACCEPT_CHART=1 to start anyway), and prints the
+# installed chart's name, version and app version.
+#
 # Every upgrade and rollback keeps all revisions (--history-max 0), and every upgrade is described
 # "kind-fault-shape <shape> chart=<files hash>". Between start and back nothing else may change the release:
 # a switch and `back` stop when a revision after the start was made by something else (another script's helm upgrade
 # — kind-model-subscription.sh, rebuild-kind.sh — would be undone by the rollback, and keeps only 10 revisions), when
-# the noted revision is no longer the one noted (pruned, or the release installed again), or when this checkout's chart
-# files differ from the start's (a switch would change the templates too). back-values is the way back then.
+# the noted revision is no longer the one noted (pruned, or the release installed again), and a switch also when this
+# checkout's chart files differ from the start's (it would change the templates too). back-values is the way back then:
+# it needs only the start file and its values copy, and the chart files of the start.
 #
 # A shape is first rendered on the server (--dry-run=server) and nothing changes if the chart refuses it. helm runs in
 # the background and this shell waits for it, so Ctrl-C, TERM or a closed terminal (HUP) reaches the trap at once: it
@@ -98,8 +103,47 @@ ready_as_set() {
   return 1
 }
 
+# The documents that differ between the release's manifest and what this checkout's chart renders with the release's
+# values — a server dry run of the same upgrade, so lookup reads what is installed — Secrets left out of both. Empty
+# when the checkout's chart is the installed one; "not rendered" when the chart refuses the values.
+manifest_diff() {
+  local live rendered
+  live=$(mktemp); rendered=$(mktemp)
+  h get manifest "$RELEASE" > "$live"
+  if ! h upgrade "$RELEASE" "$CHART" --reset-then-reuse-values --dry-run=server --hide-secret 2>/dev/null \
+      | awk '/^MANIFEST:$/ {on=1; next} /^NOTES:$/ {on=0} on' > "$rendered" || [ ! -s "$rendered" ]; then
+    echo "not rendered: $CHART refuses the release's values"
+    rm -f "$live" "$rendered"
+    return
+  fi
+  python3 - "$live" "$rendered" <<'PY'
+import hashlib, re, sys
+def docs(path):
+    out = {}
+    for doc in re.split(r'(?m)^---\s*$', open(path).read()):
+        lines = [l.rstrip() for l in doc.splitlines() if l.strip()]
+        if not lines or 'kind: Secret' in lines:
+            continue
+        src = next((l for l in lines if l.startswith('# Source:')), lines[0])
+        out.setdefault(hashlib.sha256('\n'.join(lines).encode()).hexdigest(), src)
+    return out
+live, mine = docs(sys.argv[1]), docs(sys.argv[2])
+for h in sorted(set(live) ^ set(mine)):
+    print(('installed only: ' if h in live else 'this checkout only: ') + (live.get(h) or mine.get(h)))
+PY
+  rm -f "$live" "$rendered"
+}
+
 note_start() {
   [ "$(release_status)" = deployed ] || die "release $RELEASE is $(release_status), not deployed: finish or roll back that operation first"
+  h get metadata "$RELEASE" -o json | jq -r '"  installed: chart \(.chart // "?") \(.version // "?"), app \(.appVersion // "?"), revision \(.revision // "?")"'
+  local diff
+  diff=$(manifest_diff)
+  if [ -n "$diff" ] && [ -z "${FAULT_SHAPE_ACCEPT_CHART:-}" ]; then
+    echo "$diff" | sed 's/^/  /' >&2
+    die "the chart in $CHART does not render what is installed (above): the shapes would change the templates too. Run from the checkout the release was installed from, or FAULT_SHAPE_ACCEPT_CHART=1 to start anyway. Nothing changed."
+  fi
+  [ -z "$diff" ] || { echo "  accepted (FAULT_SHAPE_ACCEPT_CHART): the checkout's chart differs from the installed one in:"; echo "$diff" | sed 's/^/    /'; }
   mkdir -p "$(dirname "$STATE")"
   local rev given all updated
   rev=$(revision); given=$(given_hash); all=$(all_hash)
@@ -113,14 +157,19 @@ note_start() {
   shape_now
 }
 
-# the noted start, read as data (the file is not sourced), and checked against the release's history
-load_start() {
+# the noted start, read as data (the file is not sourced); back-values needs no more than this
+read_start() {
   [ -f "$STATE" ] || return 1
   field() { sed -n "s/^$1=\\(.*\\)$/\\1/p" "$STATE"; }
   START_REV=$(field REV); START_UPDATED=$(field UPDATED); START_GIVEN=$(field GIVEN); START_ALL=$(field ALL)
   START_CHART=$(field CHART); START_AT=$(field AT)
   case "$START_REV$START_GIVEN$START_ALL$START_CHART" in *[!0-9a-f]*|'') die "$STATE is not a start this script noted: remove $STATE* and run start" ;; esac
   [ -f "$VALUES" ] && [ -f "$MADE" ] || die "$STATE has lost its values copy or its list of revisions: remove $STATE* and run start"
+}
+
+# read_start, and the noted revision still the one noted (a switch and back build on it)
+load_start() {
+  read_start || return 1
   local updated
   updated=$(history_json | jq -r --argjson r "$START_REV" '.[] | select(.revision == $r) | .updated')
   [ -n "$updated" ] && [ "$updated" = "$START_UPDATED" ] || die "the start noted $START_AT names revision $START_REV of $START_UPDATED, which the release no longer has as it was (pruned, or the release installed again): it is not this release's start. Use back-values if the values copy is still the one you want, else remove $STATE* and start again."
@@ -136,7 +185,17 @@ foreign_after() {
 
 # The revision the next helm upgrade or rollback will make (helm takes the latest + 1), listed as this script's before
 # it runs: a pending or failed one (helm describes those itself) and one left by a shell killed outright count too.
-claim_next() { echo $(( $(revision) + 1 )) >> "$MADE"; }
+CLAIMED=""
+claim_next() { CLAIMED=$(( $(revision) + 1 )); echo "$CLAIMED" >> "$MADE"; }
+# after helm: a claimed number helm did not use (it failed before making a revision) comes off the list, or another
+# tool's next revision would take it and count as this script's
+settle_claim() {
+  [ -n "$CLAIMED" ] || return 0
+  if ! history_json | jq -e --argjson r "$CLAIMED" 'any(.[]; .revision == $r)' >/dev/null; then
+    { grep -vx "$CLAIMED" "$MADE" || true; } > "$MADE.tmp" && mv "$MADE.tmp" "$MADE"
+  fi
+  CLAIMED=""
+}
 
 HELM_PID="" GOT_HUP=""
 # helm in the background, started as itself (not through the h function, which would background a subshell and give
@@ -182,11 +241,14 @@ roll_back_to_pre() {
   quiet_signals
   if [ -n "$GOT_HUP" ]; then exec >>"$STATE.log" 2>&1; echo "$(date -u +%FT%TZ) terminal closed during $SHAPE"; fi
   echo "═══ switching to $SHAPE stopped: rolling back to revision $PRE_REV ═══" >&2
+  settle_claim
   claim_next
   if ! h rollback "$RELEASE" "$PRE_REV" --history-max 0 --wait --timeout "$TIMEOUT" >&2; then
+    settle_claim
     echo "ROLLBACK_BROKEN: helm rollback to $PRE_REV failed; the install is not in a known shape. Fix it by hand (helm history $RELEASE)." >&2
     exit 3
   fi
+  settle_claim
   local given all
   given=$(given_hash); all=$(all_hash)
   show "after the rollback" "$(revision)" "$given" "$all" >&2
@@ -247,6 +309,7 @@ switch() {
   claim_next
   run_helm upgrade "$RELEASE" "$CHART" --reset-then-reuse-values --history-max 0 --set "$sets" --wait --timeout "$TIMEOUT" \
     --description "$TAG $SHAPE chart=$(short "$START_CHART")" >"$out"
+  settle_claim
   grep -E '^(REVISION|STATUS):' "$out" || true
   rm -f "$out"
   local given all
@@ -288,12 +351,13 @@ back() {
   quiet_signals
   claim_next
   h rollback "$RELEASE" "$START_REV" --history-max 0 --wait --timeout "$TIMEOUT" \
-    || { echo "ROLLBACK_BROKEN: helm rollback to $START_REV failed (helm history $RELEASE)" >&2; exit 3; }
+    || { settle_claim; echo "ROLLBACK_BROKEN: helm rollback to $START_REV failed (helm history $RELEASE)" >&2; exit 3; }
+  settle_claim
   check_back "the rollback"
 }
 
 back_values() {
-  load_start || die "no start noted ($STATE): nothing to go back to"
+  read_start || die "no start noted ($STATE): nothing to go back to"
   [ "$(chart_hash)" = "$START_CHART" ] || die "the chart files in $CHART differ from the ones noted at start: back-values would also change the templates. Run it from the checkout of the start."
   echo "═══ helm upgrade $RELEASE --reset-values -f $VALUES (Ctrl-C, TERM and HUP ignored until it ends) ═══"
   quiet_signals
@@ -301,7 +365,8 @@ back_values() {
   local out
   out=$(mktemp)
   h upgrade "$RELEASE" "$CHART" --reset-values -f "$VALUES" --history-max 0 --wait --timeout "$TIMEOUT" --description "$TAG back-values" >"$out" \
-    || { rm -f "$out"; echo "ROLLBACK_BROKEN: helm upgrade with the start's values failed (helm history $RELEASE)" >&2; exit 3; }
+    || { rm -f "$out"; settle_claim; echo "ROLLBACK_BROKEN: helm upgrade with the start's values failed (helm history $RELEASE)" >&2; exit 3; }
+  settle_claim
   grep -E '^(REVISION|STATUS):' "$out" || true
   rm -f "$out"
   check_back "back-values"
@@ -312,7 +377,7 @@ status() {
   given=$(given_hash); all=$(all_hash)
   echo "release $RELEASE ($(release_status))"
   show now "$(revision)" "$given" "$all"
-  if load_start; then
+  if read_start; then
     show start "$START_REV" "$START_GIVEN" "$START_ALL"
     if [ "$given" = "$START_GIVEN" ] && [ "$all" = "$START_ALL" ]; then echo "  = the start's values"; else echo "  ≠ the start's values"; fi
     if [ "$(chart_hash)" = "$START_CHART" ]; then echo "  chart files = the start's"; else echo "  chart files ≠ the start's ($CHART)"; fi

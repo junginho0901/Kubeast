@@ -1,7 +1,7 @@
 import { test, expect, type APIRequestContext, type BrowserContext } from '@playwright/test'
 
 import {
-  CLUSTER, NS, Probe, STAMP, aroundKill, atExit, bearer, deploymentExists, dockerFreezeTarget, envOf, forwardTo, freeze, freezeTargetOf,
+  CLUSTER, NS, Probe, STAMP, aroundKill, atExit, bearer, whenGone, deploymentExists, dockerFreezeTarget, envOf, forwardTo, freeze, freezeTargetOf,
   killNoSignal, killPod, kindKubectl, kubectl, kubectlOk, lastEnd, listSocketBack, listSockets, login, onPod, psql, readyPods, restartCounts,
   restartsSince, rolledOut, show, sleep, stopFor, stopPod, undoPending, watchListSockets, wsSubscriptions, type Answer, type Forward, type FreezeTarget,
 } from './shared'
@@ -61,14 +61,17 @@ const FREEZE_READS = [
 type Status = { id: string; node: string; status: string; message?: string; pods_total?: number; pods_done?: number; cordoned_nodes?: string[] | null }
 type Row = { Action: string; Result: string; Error: string; TargetID: string; After: Record<string, unknown> | null }
 
-// A run cut half way (Ctrl-C, the worker stopped) still deletes the namespace and uncordons the node (atExit).
+// A run cut half way still deletes the namespace and uncordons the node: atExit (Ctrl-C, a timeout through the
+// afterEach, the worker's exit), and whenGone on test2 when the worker is killed outright.
 const held = new Map<string, () => void>()
 
 function holdNode(ns: string): string {
   const node = remote!(['get', 'nodes', '-o', 'jsonpath={.items[0].metadata.name}'])
-  held.set(ns, atExit(`delete namespace ${ns} on ${DRAIN_KIND} and uncordon ${node}`, () => {
-    try { remote!(['delete', 'namespace', ns, '--ignore-not-found', '--wait=false']) } finally { remote!(['uncordon', node]) }
-  }))
+  const stopWatcher = whenGone([['delete', 'namespace', ns, '--ignore-not-found', '--wait=false'], ['uncordon', node]], DRAIN_KIND)
+  const drop = atExit(`delete namespace ${ns} on ${DRAIN_KIND} and uncordon ${node}`, () => {
+    try { remote!(['delete', 'namespace', ns, '--ignore-not-found', '--wait=false']) } finally { remote!(['uncordon', node]); stopWatcher() }
+  })
+  held.set(ns, () => { drop(); stopWatcher() })
   remote!(['apply', '-f', '-'], `apiVersion: v1
 kind: Namespace
 metadata: {name: ${ns}, labels: {kubeast.io/e2e: w6-drain}}
@@ -430,16 +433,17 @@ test.describe('drain progress in the database (PR #858)', () => {
     try {
       probe = new Probe(request, reads, headers, 100, 10_000)
       await sleep(5_000)
-      // 60 s from the moment the PostgreSQL pod is gone; no delete is sent past 57 s of it, so the outage stays 60 s
+      // 60 s from the moment the PostgreSQL pod is gone; each delete's wait ends by then, so the outage stays 60 s
       outage = await stopFor('postgres', 60, async (offAt) => {
         await sleep(10_000)
         const drain = await request.post(`/api/v1/cluster/nodes/${node}/drain?cluster=${DRAIN_CLUSTER}`, { headers, failOnStatusCode: false, timeout: 15_000 }).catch(() => null)
         drainDuring = drain?.status() ?? 0
         // a ConfigMap delete on test2 every 3 s while it is off: refused (the ConfigMap stays), or done with its row
         for (const name of maps) {
-          if (Date.now() - offAt > 57_000) break
+          const left = 60_000 - (Date.now() - offAt)
+          if (left < 1_000) break
           const at = Date.now()
-          const res = await request.delete(`/api/v1/cluster/namespaces/${ns}/configmaps/${name}?cluster=${DRAIN_CLUSTER}`, { headers, failOnStatusCode: false, timeout: 15_000 }).catch(() => null)
+          const res = await request.delete(`/api/v1/cluster/namespaces/${ns}/configmaps/${name}?cluster=${DRAIN_CLUSTER}`, { headers, failOnStatusCode: false, timeout: Math.min(15_000, left) }).catch(() => null)
           writes.push({ name, status: res?.status() ?? 0, at })
           await sleep(3_000)
         }
