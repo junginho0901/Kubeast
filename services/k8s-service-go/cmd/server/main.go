@@ -80,7 +80,7 @@ func main() {
 	}
 
 	// Init Redis cache. One whose Redis did not answer is in memory until Redis answers (asked every 5 s).
-	redisCache := cache.New(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisPassword)
+	redisCache := cache.NewWithUser(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisUsername, cfg.RedisPassword)
 	cacheCtx, cacheCancel := context.WithCancel(context.Background())
 	defer cacheCancel()
 	go redisCache.Reconnect(cacheCtx, 5*time.Second)
@@ -157,11 +157,7 @@ func main() {
 	}
 	// A cluster changed in the registry is dropped on every replica (internal/clustersync): each reads the clusters'
 	// config_version every 5 s, and with Redis the replica auth-service tells notifies the others at once.
-	var notices *redis.Client
-	if cfg.RedisHost != "" {
-		notices = redis.NewClient(cache.Options(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisPassword))
-	}
-	changes := clustersync.New(registry, notices)
+	changes := clustersync.New(registry, clusterNotices(cfg))
 	k8sSvc.SetChangeNotifier(changes)
 	syncCtx, syncCancel := context.WithCancel(context.Background())
 	defer syncCancel()
@@ -485,6 +481,15 @@ func main() {
 
 	shutdown(srv, recorder, serverShutdownWait, recorderShutdownWait)
 	slog.Info("server stopped")
+}
+
+// clusterNotices is clustersync's Redis client, signed in as the cache is (REDIS_USERNAME, the chart's redis.acl);
+// nil without Redis.
+func clusterNotices(cfg config.Config) *redis.Client {
+	if cfg.RedisHost == "" {
+		return nil
+	}
+	return redis.NewClient(cache.Options(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisUsername, cfg.RedisPassword))
 }
 
 // Both waits come after the preStop wait and, where STREAM_DRAIN_SECONDS is set, the drain's wait and streamCloseWait;

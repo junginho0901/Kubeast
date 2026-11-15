@@ -34,6 +34,74 @@ app.kubernetes.io/part-of: kubeast
 {{ .Values.secrets.existingSecret | default "kubeast-secrets" }}
 {{- end -}}
 
+{{- /* "true" when the chart's Redis runs one user per service (redis.acl): with the chart's own Secrets, with
+       redis.acl.existingSecret, or with secrets.existingSecret once redis.acl.existingSecretHasKeys says it holds
+       the users' passwords. Values only, never whether a key exists. */ -}}
+{{- define "kubeast.redisAcl" -}}
+{{- if and .Values.redis.enabled .Values.redis.acl.enabled (or (not .Values.secrets.existingSecret) .Values.redis.acl.existingSecretHasKeys .Values.redis.acl.existingSecret) }}true{{ end -}}
+{{- end -}}
+
+{{- /* The Secret holding the Redis users' passwords: redis.acl.existingSecret, else secrets.existingSecret, else the
+       chart's kubeast-redis-users. */ -}}
+{{- define "kubeast.redisUsersSecretName" -}}
+{{ .Values.redis.acl.existingSecret | default .Values.secrets.existingSecret | default "kubeast-redis-users" }}
+{{- end -}}
+
+{{- /* The other way out of a missing Redis user key, for the acl container's message. */ -}}
+{{- define "kubeast.redisUsersWayOut" -}}
+{{- if .Values.redis.acl.existingSecret -}}
+unset redis.acl.existingSecret
+{{- else if .Values.secrets.existingSecret -}}
+set redis.acl.existingSecretHasKeys=false
+{{- else -}}
+set redis.acl.enabled=false
+{{- end -}}
+{{- end -}}
+
+{{/*
+The chart's Redis users (Valkey ACL file). The redis pod's first container adds each password's SHA-256 where
+${k8s_service} and ${probe} stand, so no password is in this text, the pod spec or Valkey's arguments.
+- default: off and allowed nothing, so a connection that has not signed in as a user below gets NOAUTH. AUTH and
+  HELLO, which sign in, take no rule.
+- k8s-service: keys and channels under kubeast: only, and the commands of internal/cache and internal/clustersync —
+  single-key reads, writes and deletes, SCAN for the pattern deletes, publish and subscribe (the cluster change
+  notices), PING and SELECT (REDIS_DB). The cluster versions are in the database, so no hash or MULTI/EXEC. go-redis's CLIENT SETINFO and CLIENT MAINT_NOTIFICATIONS on connect are
+  refused, which it ignores. No FLUSHALL, FLUSHDB, KEYS, CONFIG, DEBUG, ACL, MONITOR, EVAL or SCRIPT.
+- probe: PING, for the readiness and liveness probes.
+- tool-server (with the AI on): the cluster change notice channel, to listen to, and no key — SUBSCRIBE, UNSUBSCRIBE,
+  PING (go-redis checks a subscription with it) and SELECT. It publishes nothing and reads no cache key.
+Every command named must exist in the image's Valkey, or Valkey refuses the file and does not start. A command the
+code starts to use is added here with a case in tests/redis_test.yaml; the services' tests hold what their code sends
+to these lines (services/pkg/redisacl).
+*/}}
+{{/*
+maxmemory of the chart's Redis, in bytes: 80% of resources.redis.limits.memory, so Valkey evicts before the container
+reaches its limit (the rest is Valkey's own memory and the allocator's). Without a limit, 80% of 128Mi, the chart's
+default limit. The quantity is bytes or a number with a Kubernetes suffix (Ki Mi Gi Ti Pi Ei, k M G T P E, m).
+*/}}
+{{- define "kubeast.redisMaxmemory" -}}
+{{- $limit := "128Mi" -}}
+{{- with index .Values.resources "redis" }}{{ with .limits }}{{ with .memory }}{{ $limit = toString . }}{{ end }}{{ end }}{{ end -}}
+{{- $re := "^([0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E|m)?$" -}}
+{{- if not (regexMatch $re $limit) }}{{ fail (printf "resources.redis.limits.memory %q is not a memory quantity (bytes, or a number with Ki, Mi, Gi, k, M, G …)" $limit) }}{{ end -}}
+{{- $units := dict "" 1 "m" 0.001 "k" 1000 "M" 1000000 "G" 1000000000 "T" 1000000000000 "P" 1000000000000000 "E" 1000000000000000000 "Ki" 1024 "Mi" 1048576 "Gi" 1073741824 "Ti" 1099511627776 "Pi" 1125899906842624 "Ei" 1152921504606846976 -}}
+{{- mulf (regexReplaceAll $re $limit "${1}" | float64) (index $units (regexReplaceAll $re $limit "${2}")) 0.8 | floor | int64 -}}
+{{- end -}}
+
+{{- define "kubeast.redisUsersAcl" -}}
+user default off resetkeys resetchannels -@all
+user k8s-service on #${k8s_service} resetkeys ~kubeast:* resetchannels &kubeast:* -@all +ping +select +get +set +del +unlink +scan +publish +subscribe +unsubscribe
+user probe on #${probe} resetkeys resetchannels -@all +ping
+{{- if .Values.ai.enabled }}
+user tool-server on #${tool_server} resetkeys resetchannels &kubeast:clusters:changed:* -@all +ping +select +subscribe +unsubscribe
+{{- end }}
+{{- end -}}
+
+{{- /* The keys of the Redis users' passwords the redis pod reads, space-separated: tool-server's with the AI on. */ -}}
+{{- define "kubeast.redisUserKeys" -}}
+REDIS_K8S_SERVICE_PASSWORD REDIS_PROBE_PASSWORD{{ if .Values.ai.enabled }} REDIS_TOOL_SERVER_PASSWORD{{ end }}
+{{- end -}}
+
 {{/*
 DATABASE_URL — the one URL every service reads. The Go services (pgx) and the
 ai-service (asyncpg, via app/db_ssl.py) both take libpq's sslmode / sslrootcert
