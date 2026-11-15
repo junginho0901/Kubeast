@@ -158,7 +158,7 @@ func TestAnIdleSocketHoldsLittleOfItsOwn(t *testing.T) {
 // of their own (?u=) with a live session check.
 func memMuxServer(t *testing.T, m *Multiplexer) string {
 	t.Helper()
-	m.Sessions = auth.NewLiveSessions(auth.LiveSessionConfig{Lookup: func(context.Context, string, string) (int, error) { return 0, nil }})
+	m.Sessions = auth.NewLiveSessions(auth.LiveSessionConfig{Lookup: func(context.Context, string, string) (auth.SessionState, error) { return auth.SessionState{}, nil }})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := auth.TokenPayload{UserID: "load-" + r.URL.Query().Get("u"), Perms: everyCluster}
 		m.HandleWebSocket(w, r.WithContext(auth.WithPayload(cluster.WithID(r.Context(), cluster.Default), p)))
