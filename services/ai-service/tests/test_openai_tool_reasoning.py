@@ -65,6 +65,22 @@ def azure_unknown(body):
     return None
 
 
+def temperature_first(body):
+    """A deployment that answers the temperature before the tools at an effort other than "none"."""
+    effort = body.get("reasoning_effort", "medium")
+    if "temperature" in body and effort != "none":
+        return bad_request("Unsupported value: 'temperature' does not support 0.7 with this model. Only the default (1) "
+                           "value is supported.", param="temperature", code="unsupported_value")
+    return luna(body)
+
+
+def gateway_without_the_parameter(body):
+    """A gateway in front of such a model that does not take reasoning_effort itself."""
+    if "reasoning_effort" in body:
+        return bad_request("Unrecognized request argument supplied: reasoning_effort")
+    return luna(body)
+
+
 def no_tools(body):
     if body.get("tools"):
         return bad_request(f"{body['model']} does not support tools", param="tools")
@@ -143,6 +159,44 @@ async def test_a_tools_refusal_at_the_default_effort_gets_the_call_again_at_none
     other = ProviderAdapter(provider=provider, model="another", api_key="k", base_url=base)
     await other.chat.completions.create(model="another", messages=MSG, temperature=0.3)
     assert "reasoning_effort" not in bodies[4]
+
+
+@pytest.mark.asyncio
+async def test_a_temperature_refused_at_the_default_effort_is_sent_again_at_none(monkeypatch):
+    bodies = serve(monkeypatch, temperature_first)
+    adapter = ProviderAdapter(provider="azure", model="prod-chat", api_key="k", base_url=AZURE)
+    await adapter.chat.completions.create(model="prod-chat", messages=MSG, tools=TOOLS, temperature=0.7)
+    assert [(b.get("reasoning_effort"), b.get("temperature")) for b in bodies] == [
+        (None, 0.7), (None, None), ("none", 0.7)]
+    assert "temperature" not in provider_adapter._refused.get(("azure", AZURE, "prod-chat"), set())
+    await adapter.chat.completions.create(model="prod-chat", messages=MSG, temperature=0.3)
+    assert len(bodies) == 4 and (bodies[3]["reasoning_effort"], bodies[3]["temperature"]) == ("none", 0.3)
+
+
+@pytest.mark.asyncio
+async def test_a_temperature_a_summary_had_refused_is_sent_again_once_tools_need_none(monkeypatch):
+    bodies = serve(monkeypatch, temperature_first)
+    adapter = ProviderAdapter(provider="azure", model="prod-chat", api_key="k", base_url=AZURE)
+    # a summary first, at the default effort: its temperature is refused and left out from then on
+    await adapter.chat.completions.create(model="prod-chat", messages=MSG, temperature=0.3)
+    assert provider_adapter._refused[("azure", AZURE, "prod-chat")] == {"temperature"}
+    await adapter.chat.completions.create(model="prod-chat", messages=MSG, tools=TOOLS, temperature=0.7)
+    assert [(b.get("reasoning_effort"), b.get("temperature")) for b in bodies] == [
+        (None, 0.3), (None, None), (None, None), ("none", 0.7)]
+    assert provider_adapter._refused[("azure", AZURE, "prod-chat")] == set()
+
+
+@pytest.mark.asyncio
+async def test_a_gateway_that_refuses_the_parameter_ends_with_the_providers_refusal(monkeypatch):
+    bodies = serve(monkeypatch, gateway_without_the_parameter)
+    adapter = ProviderAdapter(provider="custom", model="team-default", api_key="k", base_url="https://gw.internal/v1")
+    with pytest.raises(openai.BadRequestError, match="Function tools with reasoning_effort"):
+        await adapter.chat.completions.create(model="team-default", messages=MSG, tools=TOOLS)
+    assert [b.get("reasoning_effort") for b in bodies] == [None, "none", None]
+    # the next call goes without it at once and is not sent again at "none"
+    with pytest.raises(openai.BadRequestError, match="Function tools with reasoning_effort"):
+        await adapter.chat.completions.create(model="team-default", messages=MSG, tools=TOOLS)
+    assert len(bodies) == 4 and "reasoning_effort" not in bodies[3]
 
 
 @pytest.mark.asyncio
@@ -250,6 +304,28 @@ async def test_a_deployment_of_another_name_passes_the_connection_test_as_it_cha
     bodies = serve(monkeypatch, luna)
     out = await api_public._test_model_connection(dict(AZURE_TEST))
     assert out["success"] is True and [b.get("reasoning_effort") for b in bodies] == [None, "none"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("options,detail", [
+    ({"max_tokens": 0}, "options.max_tokens must be a whole number from 1 to 1000000"),
+    ({"max_tokens": 5_000_000}, "options.max_tokens must be a whole number from 1 to 1000000"),
+    ({"max_tokens": "8000"}, "options.max_tokens must be a whole number from 1 to 1000000"),
+    ({"tool_result_chars": 10}, "options.tool_result_chars must be a whole number from 1000 to 200000"),
+])
+async def test_connection_test_options_a_save_would_refuse_are_refused_in_its_words(monkeypatch, azure_key, options,
+                                                                                     detail):
+    from fastapi import HTTPException
+    from pydantic import ValidationError
+
+    from app.models.model_config import ModelConfigCreate
+
+    with pytest.raises(ValidationError, match=detail.split(" must")[0].replace(".", r"\.")):
+        ModelConfigCreate(name="n", provider="azure", model="prod-chat", base_url=AZURE, options=options)
+    bodies = serve(monkeypatch)
+    with pytest.raises(HTTPException) as e:
+        await api_public._test_model_connection(dict(AZURE_TEST, options=options))
+    assert (e.value.status_code, e.value.detail) == (400, detail) and bodies == []
 
 
 @pytest.mark.asyncio

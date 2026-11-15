@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 import httpx
 
 from app.security import require_admin, require_auth
+from app.services.ai import limits
 from app.services.ai.debug_dump import safe_error
 from app.services import claude_code, model_config_policy
 from app.services.anthropic_messages import API_VERSION as ANTHROPIC_VERSION, api_root as anthropic_root
@@ -295,6 +296,10 @@ async def _test_model_connection(request: dict) -> dict:
     options = body.get("options")
     if options is not None and not isinstance(options, dict):
         raise HTTPException(status_code=400, detail="options must be an object")
+    try:
+        limits.check(options)  # what a save of these options would refuse, in its words
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     ca_problem = ca_cert_problem(body.get("ca_cert"))
     if ca_problem:
         raise HTTPException(status_code=400, detail=ca_problem)
