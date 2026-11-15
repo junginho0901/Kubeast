@@ -389,6 +389,62 @@ def test_text_a_name_ends_at_hangul():
     assert rca.score_text(report("storefront-config의 설정 값이 잘못됐습니다."), T12)["pass"]
 
 
+T09 = {"control": False, "causes": [{"resource": "Deployment/shop-09/catalog", "kind": "resource_limit", "accept_kinds": [],
+                                     "accept_resources": ["(deployment|replicaset|pod)/(shop-09/)?catalog", "^catalog"]}],
+       "path": [{"resource": "Deployment/shop-09/catalog", "role": "cause"}, {"resource": "Deployment/shop-09/storefront", "role": "symptom"}],
+       "also_ok": [], "decoys": [{"resource": "Deployment/shop-09/recommender"}, {"resource": "Node/*"},
+                                 {"resource": "Deployment/shop-09/storefront"}]}
+T11 = {"control": False, "causes": [
+           {"resource": "Deployment/shop-11/images", "kind": "image", "accept_kinds": ["rollout"],
+            "accept_resources": ["(deployment|replicaset|pod)/(shop-11/)?images", "^images"]},
+           {"resource": "Service/shop-11/inventory", "kind": "config_change", "accept_kinds": ["dependency_down"],
+            "accept_resources": ["(service|endpoints|endpointslice)/(shop-11/)?inventory", "^inventory$"]}],
+       "path": [{"resource": "Deployment/shop-11/images", "role": "cause"}, {"resource": "Service/shop-11/inventory", "role": "cause"},
+                {"resource": "Deployment/shop-11/orders", "role": "via"}, {"resource": "Deployment/shop-11/storefront", "role": "symptom"}],
+       "also_ok": [], "decoys": [{"resource": "Deployment/shop-11/storefront"}, {"resource": "Deployment/shop-11/orders"},
+                                 {"resource": "Deployment/shop-11/inventory"}]}
+
+
+def test_text_a_shotgun_of_kinds_does_not_pass():
+    for text in ("catalog: maybe a config change, a restart, slow dependency, a limit or the node.",
+                 "catalog: 설정 변경, 재시작, 응답 지연, 리소스 한도 또는 노드 문제일 수 있습니다."):
+        s = rca.score_text(report(text), T09)
+        assert (s["pass"], s["score"], s["extras"]) == (False, 0.0, 3), (text, s)
+        assert s["causes"][0]["found"] and s["causes"][0]["other_kinds"] == ["config_change", "crash", "dependency_slow", "node"]
+
+
+def test_text_kind_words_listed_after_two_causes_speak_of_the_nearer_one():
+    for text in ("images and inventory: image pull issue, config, endpoints down.",
+                 "images와 inventory: 이미지 풀 문제, 설정, 엔드포인트 중단."):
+        s = rca.score_text(report(text), T11)
+        assert (s["pass"], s["score"]) == (False, 0.0), (text, s)
+        assert [(c["resource_found"], c["kind_found"], c["other_kinds"]) for c in s["causes"]] == [(True, False, []), (True, True, ["image"])]
+    for text in ("images' new image tag is missing, and inventory's selector config no longer matches its pods.",
+                 "images는 이미지 태그가 잘못됐고 inventory는 셀렉터 설정이 바뀌었습니다."):
+        s = rca.score_text(report(text), T11)
+        assert (s["pass"], s["score"], s["extras"]) == (True, 1.0, 0), (text, s)
+
+
+def test_text_other_objects_named_as_causes_cost_points():
+    s = rca.score_text(report("catalog, recommender or Deployment/shop-09/orders-db could be the cause of the CPU limit."), T09)
+    assert (s["pass"], s["score"], s["extras"]) == (False, 0.0, 2)
+    assert s["extra_objects"] == ["Deployment/shop-09/orders-db", "recommender"]
+    s = rca.score_text(report("catalog hits its CPU limit and is throttled, and recommender adds load."), T09)
+    assert (s["pass"], s["score"], s["extras"], s["extra_objects"]) == (True, 0.75, 1, ["recommender"])
+    s = rca.score_text(report("catalog hits its CPU limit and is throttled; recommender is busier but unrelated."), T09)
+    assert (s["pass"], s["score"], s["extras"]) == (True, 1.0, 0)  # ruled out: no extra
+
+
+def test_text_the_symptom_and_one_more_kind_word_are_free():
+    for text in ("catalog runs at its 25m CPU limit, so its requests are throttled and storefront's product list is slow.",
+                 "catalog가 25m CPU 한도에 걸려 스로틀되고, 그래서 storefront의 상품 목록이 느려졌습니다."):
+        s = rca.score_text(report(text), T09)
+        assert (s["pass"], s["score"], s["extras"], s["extra_objects"]) == (True, 1.0, 0, []), (text, s)
+        assert s["causes"][0]["other_kinds"] == ["dependency_slow"]
+    s = rca.score_text(report("catalog runs at its CPU limit and is slow; it also restarted."), T09)
+    assert (s["pass"], s["score"], s["extras"]) == (True, 0.75, 1)
+
+
 def test_text_kind_words_only_in_the_sentence_naming_the_cause():
     s = rca.score_text(report("storefront-config is the cause. notifier's settings changed too."), T12)
     assert not s["pass"] and not s["causes"][0]["kind_found"]

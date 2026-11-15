@@ -232,9 +232,14 @@ How a report is scored, the same with v0.7.9's switches off and on:
   (before or after a colon) is the report saying there is no fault (`no_fault`).
   - A fault case passes when the report does not say there is no fault and names each truth cause — its resource's
     name or an `accept_resources` form — in a clause that does not rule it out, with a word of its kind or an accepted
-    kind (`KIND_WORDS`) in a sentence that names it so, read with the cause's own names taken out (a name ends at
-    Hangul, so a particle does not keep it). Decoys it blames are listed in `decoys_named`, not held against it: the
+    kind (`KIND_WORDS`) in a sentence that names it so, read with the objects' own names taken out (a name ends at
+    Hangul, so a particle does not keep it). A kind word speaks of one cause: the one its clause names, else the one
+    named nearest before it, else after it. Decoys it blames are listed in `decoys_named`, not held against it: the
     symptom is named beside its cause.
+  - As the block's extras, each costs 0.25 (`extras`): another object named in a cause sentence — a decoy or a
+    `Kind/name`, not a truth cause, `also_ok` or a hop of `path` (`extra_objects`) — and each kind word a cause is given
+    beyond its own kinds and one more (the symptom's, `other_kinds`). More than one (`TEXT_EXTRAS_ALLOWED`) reads as a
+    list of guesses and does not pass.
   - A control passes when the report says there is no fault or rules something out, and names no decoy as a cause —
     in a clause that does not rule it out and holds `BLAME_WORDS` ("caused", "broke", "because", "원인", "실패").
     `decoys_ruled_out` lists those it cleared.

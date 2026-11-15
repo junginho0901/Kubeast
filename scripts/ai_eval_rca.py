@@ -23,6 +23,8 @@ KINDS = ("crash", "oom", "image", "config_change", "rollout", "network_policy", 
 
 # What an extra cause (not a truth cause, not in also_ok, not a decoy) takes off a right answer's 1.0.
 EXTRA_CAUSE_PENALTY = 0.25
+# score_text: extras (another object named as a cause, a kind word past a cause's own and one more) a passing report may hold.
+TEXT_EXTRAS_ALLOWED = 1
 DEFAULT_TIME_TOLERANCE_SECONDS = 120
 DEFAULT_INJECT_WAIT_SECONDS = 240
 
@@ -483,16 +485,39 @@ def _statements(text: str) -> list[list[str]]:
     return out
 
 
-def _without(text: str, names) -> str:
+def _name_at(name: str) -> re.Pattern:
     # a name ends at a character that cannot be part of it: an ASCII letter, digit, "_" or "-" continues it, Hangul does
-    # not, so "storefront-config가" loses the name and keeps its particle
+    # not, so "storefront-config가" holds the name and its particle
+    return re.compile(r"(?<![A-Za-z0-9_./-])" + re.escape(name) + r"(?![A-Za-z0-9_-])")
+
+
+def _blank(text: str, names) -> str:
+    """text with each name written over in spaces, so the places of the other words stay."""
     for n in sorted(names, key=len, reverse=True):
-        text = re.sub(r"(?<![A-Za-z0-9_./-])" + re.escape(n) + r"(?![A-Za-z0-9_-])", " ", text)
+        text = _name_at(n).sub(lambda m: " " * len(m.group(0)), text)
+    return text
+
+
+def _without(text: str, names) -> str:
+    for n in sorted(names, key=len, reverse=True):
+        text = _name_at(n).sub(" ", text)
     return text
 
 
 def _says_kind(text: str, kinds) -> list[str]:
     return [k for k in kinds if k in KIND_WORDS and re.search(KIND_WORDS[k], text, re.I)]
+
+
+def _whose(at: int, places: dict) -> list:
+    """The causes a kind word at `at` speaks of: the cause named nearest before it ("images has a bad image"), else the
+    one named nearest after it ("a bad image in images")."""
+    before = {i: max(e for _, e in spans if e <= at) for i, spans in places.items() if any(e <= at for _, e in spans)}
+    if before:
+        best = max(before.values())
+        return [i for i, e in before.items() if e == best]
+    after = {i: min(b for b, _ in spans if b >= at) for i, spans in places.items() if any(b >= at for b, _ in spans)}
+    best = min(after.values(), default=None)
+    return [i for i, b in after.items() if b == best]
 
 
 def score_text(report: str, truth: dict) -> dict:
@@ -502,15 +527,21 @@ def score_text(report: str, truth: dict) -> dict:
     or in its part before or after a colon, naming no object of the truth is the report saying there is no fault
     (no_fault).
 
-    A fault case passes when the report does not say there is no fault and names each truth cause — its resource or an
-    accept_resources form — in a clause that does not rule it out, with a word of its kind or an accepted kind
-    (KIND_WORDS) in a sentence that names it so, read with the cause's own names taken out. A control passes when the
-    report says there is no fault or rules something out, and names no decoy as a cause: in a clause that does not rule
-    it out and holds BLAME_WORDS (decoys_named). Weaker than the block's check; it is there so a run with
-    the block and one without compare on one measure."""
+    A fault case passes when the report does not say there is no fault, names each truth cause — its resource or an
+    accept_resources form — in a clause that does not rule it out, and gives it a word of its kind or an accepted kind
+    (KIND_WORDS). A kind word counts only in a sentence naming a cause so, outside the clauses that rule something out,
+    with the objects' own names taken out, and speaks of one cause: the one its clause names, else the one named
+    nearest before it, else after it. As the block's extras, a cause sentence that also names another object as a cause
+    (a decoy or a Kind/name, not one of the truth's causes, also_ok or path) costs EXTRA_CAUSE_PENALTY, and so does each
+    kind word a cause is given beyond its own kinds and one more (the symptom's: "throttled, so it is slow"). A report
+    with more than TEXT_EXTRAS_ALLOWED of them reads as a list of guesses and does not pass.
+
+    A control passes when the report says there is no fault or rules something out, and names no decoy as a cause: in a
+    clause that does not rule it out and holds BLAME_WORDS (decoys_named). Weaker than the block's check; it is there so
+    a run with the block and one without compare on one measure."""
     text, section = likely_cause(report)
     truth_causes = truth.get("causes") or []
-    decoys, also_ok = truth.get("decoys") or [], truth.get("also_ok") or []
+    decoys, also_ok, path = truth.get("decoys") or [], truth.get("also_ok") or [], truth.get("path") or []
 
     def of_truth(n):
         return any(_is_truth_cause(tc, n) for tc in truth_causes)
@@ -518,28 +549,39 @@ def score_text(report: str, truth: dict) -> dict:
     def decoy(n):
         return not of_truth(n) and any(resource_matches(d["resource"], n) for d in decoys)
 
+    def in_truth(n):  # a cause, a part of one, or a hop of its path (the symptom named beside its cause)
+        return (of_truth(n) or any(resource_matches(a, n) for a in also_ok)
+                or any(resource_matches(h["resource"], n) or _search_any(h.get("accept"), n) for h in path))
+
+    def other_object(n):
+        return not in_truth(n) and (decoy(n) or ("/" in n and split_resource(n)[0] in _KNOWN_KINDS))
+
     no_fault = rules_out = False
-    sentences = {i: [] for i in range(len(truth_causes))}
     named_as = {i: set() for i in range(len(truth_causes))}
     ruled_out = {i: False for i in range(len(truth_causes))}
-    decoys_named, decoys_ruled_out = set(), set()
+    said = {i: set() for i in range(len(truth_causes))}
+    extra_objects, decoys_named, decoys_ruled_out = set(), set(), set()
     for clauses in _statements(text):
-        sentence = "; ".join(clauses)
+        sentence, at = "; ".join(clauses), 0
+        live, places, objects, known_here = [], {}, set(), set()  # live: (start, end, causes named there) of each clause not ruling out
         for clause in clauses:
             names = _text_names(clause)
             known = {n for n in names if of_truth(n) or decoy(n) or any(resource_matches(a, n) for a in also_ok)}
+            known_here |= known
             denies = bool(NO_FAULT_WORDS.search(clause))
             clears = denies or bool(CLEAR_WORDS.search(clause))
             # "No fault found: thumbnailer restarted once" says so for the whole report: the part before a colon names nothing
             no_fault = no_fault or any(NO_FAULT_WORDS.search(part) and not _text_names(part) & known for part in clause.split(":"))
             rules_out = rules_out or clears
+            here = set()
             for i, tc in enumerate(truth_causes):
                 hits = {n for n in names if _is_truth_cause(tc, n)}
                 if hits and clears:
                     ruled_out[i] = True
                 elif hits:
-                    sentences[i].append(sentence)
                     named_as[i] |= hits
+                    here.add(i)
+                    places.setdefault(i, []).extend((at + m.start(), at + m.end()) for n in hits for m in _name_at(n).finditer(clause))
             rest = _without(clause, known)
             for n in names:
                 if decoy(n):
@@ -547,20 +589,37 @@ def score_text(report: str, truth: dict) -> dict:
                         decoys_ruled_out.add(n)
                     elif BLAME_WORDS.search(rest):
                         decoys_named.add(n)
-    causes = []
+            if not clears:
+                live.append((at, at + len(clause), here))
+                objects |= {n for n in names if other_object(n)}
+            at += len(clause) + 2
+        if not places:
+            continue
+        extra_objects |= objects
+        words = _blank(sentence, known_here)
+        for start, end, here in live:
+            for kind, pattern in KIND_WORDS.items():
+                for m in re.finditer(pattern, words[start:end], re.I):
+                    for i in (sorted(here) if len(here) == 1 else _whose(start + m.start(), places)):
+                        said[i].add(kind)
+    causes, extras = [], len(extra_objects)
     for i, tc in enumerate(truth_causes):
-        kinds = [tc["kind"], *(tc.get("accept_kinds") or [])]
-        own = {n for s in sentences[i] for n in _text_names(s) if _is_truth_cause(tc, n)}
-        kind_words = _says_kind(_without(" ".join(sentences[i]), own), kinds)
+        own = {tc["kind"], *(tc.get("accept_kinds") or [])}
+        other = sorted(said[i] - own)
+        extras += max(0, len(other) - 1)
+        kind_found = bool(said[i] & own)
         causes.append({"resource": tc["resource"], "kind": tc["kind"], "resource_found": bool(named_as[i]),
-                       "kind_found": bool(kind_words), "found": bool(named_as[i]) and bool(kind_words),
+                       "kind_found": kind_found, "found": bool(named_as[i]) and kind_found, "other_kinds": other,
                        "named_as": sorted(named_as[i])[:3], "ruled_out": ruled_out[i] and not named_as[i]})
     if truth.get("control"):
-        ok = (no_fault or rules_out) and not decoys_named
+        ok, extras = (no_fault or rules_out) and not decoys_named, 0
+        score = 1.0 if ok else 0.0
     else:
-        ok = bool(causes) and not no_fault and all(c["found"] for c in causes)
-    return {"section": section, "pass": ok, "score": 1.0 if ok else 0.0, "no_fault": no_fault, "causes": causes,
-            "decoys_named": sorted(decoys_named), "decoys_ruled_out": sorted(decoys_ruled_out - decoys_named)}
+        ok = bool(causes) and not no_fault and all(c["found"] for c in causes) and extras <= TEXT_EXTRAS_ALLOWED
+        score = max(0.0, 1.0 - EXTRA_CAUSE_PENALTY * extras) if ok else 0.0
+    return {"section": section, "pass": ok, "score": score, "no_fault": no_fault, "causes": causes, "extras": extras,
+            "extra_objects": sorted(extra_objects), "decoys_named": sorted(decoys_named),
+            "decoys_ruled_out": sorted(decoys_ruled_out - decoys_named)}
 
 
 def score_block(block: dict | None, status: str, truth: dict, calls: list) -> dict:
