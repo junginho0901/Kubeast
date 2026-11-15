@@ -4268,7 +4268,7 @@
       "activateConfirm": "Make \"{{name}}\" the model every chat uses? The model in use now stops being the default.",
       "advanced": "Advanced (local / self-hosted)",
       "maxTokens": "Answer length (tokens)",
-      "maxTokensHint": "Empty: 4,096 for chat answers, 2,048 for each alert investigation step (4,096 with evidenceCheck or ledger on). A reasoning model counts its reasoning in it.",
+      "maxTokensHint": "Empty: 4,096 for chat answers, 2,048 for each alert investigation step. A reasoning model counts its reasoning in it.",
       "maxTokensSubscription": "Claude Code sets the answer length for the subscription; this is not used.",
       "toolResultChars": "Tool result length (characters)",
       "toolResultCharsHint": "Empty: 6,000. A longer tool result is cut to this before the model reads it (1,000 to 200,000).",

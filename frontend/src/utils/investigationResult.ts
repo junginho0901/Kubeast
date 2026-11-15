@@ -101,7 +101,7 @@ export const CHAT_REPORT_WITH_RESULT = 2048
 const NOTE_RULE = '\n\n---\n\n'  // the server's notes under a report each follow this rule
 export const CHAT_NOTES = 1024
 const CHAT_TEXT = 120
-const LEAVE_OUT = ['hypotheses', 'ruled_out', 'path', 'causes'] as const  // in this order while the layer is past 8 KB
+const LEAVE_OUT = ['hypotheses', 'ruled_out', 'path'] as const  // in this order while the layer is past 8 KB
 
 const short = (s: string) => (s.length > CHAT_TEXT ? `${s.slice(0, CHAT_TEXT - 1)}…` : s)
 
@@ -143,17 +143,30 @@ export function resultForChat(result: InvestigationResult): Record<string, unkno
   }
 }
 
-// The result's lists left out, LEAVE_OUT first, while the layer is past 8 KB (enforceTokenBudget would keep none of it).
+// Past 8 KB: LEAVE_OUT, then the calls' arguments and half the calls, the causes last (enforceTokenBudget halves calls first).
 function withinBudget(data: Record<string, unknown>): Record<string, unknown> {
   const result = data.result as Record<string, unknown> | undefined
-  for (const key of LEAVE_OUT) {
-    if (!result || new Blob([JSON.stringify(data)]).size <= MAX_LAYER_BYTES) break
-    const list = result[key]
-    if (Array.isArray(list)) {
+  const over = () => new Blob([JSON.stringify(data)]).size > MAX_LAYER_BYTES
+  const leaveOut = (key: string) => {
+    const list = result?.[key]
+    if (result && Array.isArray(list)) {
       delete result[key]
       result[`${key}_left_out`] = list.length
     }
   }
+  if (!result) return data
+  for (const key of LEAVE_OUT) if (over()) leaveOut(key)
+  let calls = data.tool_calls as Record<string, unknown>[]
+  if (over()) {
+    calls = calls.map((call) => Object.fromEntries(Object.entries(call).filter(([key]) => key !== 'args')))
+    data.tool_calls = calls
+    data.tool_args_left_out = true
+  }
+  while (over() && calls.length > 1) {
+    data.tool_calls = calls = calls.slice(0, Math.ceil(calls.length / 2))
+    data.tool_calls_shown = calls.length
+  }
+  if (over()) leaveOut('causes')
   return data
 }
 
