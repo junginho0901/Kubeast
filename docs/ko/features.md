@@ -146,6 +146,8 @@
   - 설정마다 **답 최대 길이**(`max_tokens`, 비우면 채팅 답 4,096 · 알림 조사 한 단계 2,048)와 **도구 결과 최대 길이**(`tool_result_chars`, 1,000~200,000자, 비우면 6,000)를 편집 창(모든 공급자)이나 `ModelConfig` 리소스의 `spec.maxTokens`·`spec.toolResultChars`로 정할 수 있습니다(리소스의 CA 인증서는 `spec.caCert`). 설정의 옵션에 저장하며, 도구 결과 최대 길이는 공급자에 보내지 않습니다. 더 긴 결과는 그 길이에서 잘려 모델이 앞부분을 읽습니다. `k8s_get_pod_logs`, `logfiles`, `nodes_log`는 최신 줄이 있는 끝부분을 남기고, tool-server의 상한(`TOOL_OUTPUT_MAX_BYTES`)을 넘을 때도 그렇습니다. 구독은 Claude Code가 답 길이를 정합니다.
   - 카드마다 서버가 지금 그 설정으로 돌리는 곳(채팅 · 플로팅 어시스턴트 · 이력 요약 · 알림 조사)을 ai-service가 모델을 고르는 규칙 그대로 계산해 보여 줍니다. "활성"은 채팅을 돌리는 설정입니다.
   - OpenAI·Azure OpenAI에는 답 길이를 `max_completion_tokens`로 보냅니다. 추론 모델(o 시리즈, GPT-5)은 `max_tokens`를 받지 않습니다. 모델이 받지 않는 매개변수를 400으로 지목하면(추론 모델은 `temperature`·`top_p` 등을 거부) 그것을 빼고 한 번 다시 보내고, 그 모델에는 이후로도 보내지 않습니다.
+  - OpenAI·Azure OpenAI에 도구를 붙인 호출은 `reasoning_effort: "none"`을 같이 보냅니다. GPT-6 Sol·GPT-6 Luna는 Chat Completions에서 `none`일 때만 함수 도구를 받습니다. 이 매개변수나 값을 받지 않는 모델은 거부하고, 위와 같이 그것을 빼고 다시 보냅니다. 설정의 옵션에 `reasoning_effort`가 있으면 그 값을 그대로 보냅니다. 도구가 없는 호출은 전과 같습니다.
+  - 연결 테스트는 채팅 호출이 늘 도구를 보내는 것처럼 도구 정의 하나를 보냅니다. 그래서 도구를 받지 않는 모델은 공급자의 메시지와 함께 테스트에서 실패합니다.
 
 ## 🌐 멀티클러스터 & RBAC
 

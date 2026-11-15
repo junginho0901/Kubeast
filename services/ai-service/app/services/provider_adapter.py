@@ -55,9 +55,11 @@ _COMPLETION_TOKENS_PROVIDERS = frozenset({"openai"}) | AZURE_PROVIDERS
 # Parameters a model may refuse (reasoning models refuse sampling): named by the provider's 400, dropped and retried.
 _DROPPABLE = frozenset({
     "temperature", "top_p", "presence_penalty", "frequency_penalty", "logprobs", "top_logprobs", "logit_bias",
-    "max_tokens", "seed", "stop",
+    "max_tokens", "seed", "stop", "reasoning_effort",
 })
-_REFUSED_IN_MESSAGE = re.compile(r"Unsupported (?:parameter|value): '(\w+)'")
+# Azure's form names the parameter without quotes.
+_REFUSED_IN_MESSAGE = re.compile(
+    r"Unsupported (?:parameter|value): '(\w+)'|Unrecognized request argument supplied: (\w+)")
 # (provider, base URL, model) → the parameters it refused, so later calls leave them out.
 _refused: Dict[tuple, set] = {}
 
@@ -68,7 +70,7 @@ def _refused_param(err: Exception) -> Optional[str]:
     param = getattr(err, "param", None)
     if not param:
         m = _REFUSED_IN_MESSAGE.search(str(err))
-        param = m.group(1) if m else None
+        param = (m.group(1) or m.group(2)) if m else None
     return param if param in _DROPPABLE else None
 
 
@@ -106,6 +108,10 @@ class _CompletionsProxy:
                 kwargs["extra_body"] = extra_body
         if self._provider in _COMPLETION_TOKENS_PROVIDERS:
             _leave_out(kwargs, "max_tokens")
+            # GPT-6 Sol and Luna take function tools in Chat Completions only at "none"; a model without it refuses it.
+            given = "reasoning_effort" in kwargs or "reasoning_effort" in (kwargs.get("extra_body") or {})
+            if kwargs.get("tools") and not given:
+                kwargs["reasoning_effort"] = "none"
         key = (self._provider, self._base_url, kwargs.get("model"))
         for param in _refused.get(key, ()):
             _leave_out(kwargs, param)
