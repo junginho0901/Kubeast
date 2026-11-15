@@ -27,6 +27,8 @@ With `METRICS_ENABLED=false` (chart `metrics.enabled`), it returns 404.
 | `kubeast_audit_store_up` | gauge 0/1 | `service` | Whether the audit store takes rows (k8s-service: `audit.Guarded.Ready`, 2 s cache). At 0, writes, Secret reveals, exec and AI write tools are refused with 503 |
 | `kubeast_audit_write_failures_total` | counter | `service` | Audit rows that could not be stored since start |
 | `kubeast_ws_subscriptions` | gauge | `service` | Live WebSocket subscriptions (logs, exec, watch) in k8s-service |
+| `kubeast_k8s_client_rate_wait_seconds` | histogram | `service`, `limiter`, `passed_over` | How long a request from k8s-service to a cluster's API server waited for the client's rate before it was sent, 0 when it went at once, summed over clusters (buckets 1 ms to 60 s). `limiter` is `user` (the clients' rate, `multicluster.clientQPS` and `clientBurst`) or `review` (the access checks' own rate, only with `multicluster.reviewQPS` set). `passed_over` is `true` for an access check asked again that let a later request go first, at most 10 s. A request that stopped waiting counts the time it waited. The dynamic client (custom resources, applies) keeps client-go's own rate and is not counted |
+| `kubeast_k8s_client_rate_waits_total` | counter | `service`, `limiter` | Requests to a cluster that waited for that rate at all, given their turn or not |
 | `kubeast_audit_sink_pending` | gauge | `service`, `sink`, `type` | Audit rows an audit sink (`audit.sinks`) has not sent yet. Only the auth-service replica that does the sending exposes it |
 | `kubeast_audit_sink_failures_total` | counter | same | Failed sends since that replica started sending |
 | `kubeast_audit_sink_last_success_timestamp_seconds` | gauge | same | When the sink cursor last moved forward (starting from the time sending began) |
@@ -70,6 +72,7 @@ Useful expressions:
 
 - Request rate per service: `sum by (service) (rate(kubeast_http_requests_total[5m]))`
 - p95 per route: `histogram_quantile(0.95, sum by (route, le) (rate(kubeast_http_request_duration_seconds_bucket{service="k8s"}[5m])))`
+- p95 wait for the client's rate to the clusters: `histogram_quantile(0.95, sum by (limiter, le) (rate(kubeast_k8s_client_rate_wait_seconds_bucket[5m])))`. Near 0 the rate is not what slows the screens; seconds while the API server answers without 429 point at `multicluster.clientQPS` and `clientBurst` (or `reviewQPS` for the access checks)
 
 ## Check
 
