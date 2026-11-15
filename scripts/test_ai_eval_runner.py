@@ -461,7 +461,7 @@ def test_a_round_records_counts_runs_under_a_suffix_and_writes_after_each_case()
 
 
 def _main(fake, root, *flags):
-    out = root / "out"
+    out = Path(tempfile.mkdtemp(prefix="ai-eval-out-")) / "out"  # one per run: two runs in one second share a stamp
     saved_argv = sys.argv
     screen, errors = io.StringIO(), io.StringIO()
     with Server(fake) as srv:
