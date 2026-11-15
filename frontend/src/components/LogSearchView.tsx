@@ -11,7 +11,7 @@ import { api } from '@/services/api'
 import type { LogSearchLine } from '@/services/api/types'
 import { useCluster } from '@/contexts/ClusterContext'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
-import { formatBytes, highlightParts, rangeOptions } from '@/utils/logSearch'
+import { formatBytes, highlightParts, keepsLines, logSearchRead, rangeOptions } from '@/utils/logSearch'
 import { traceTemplates } from '@/utils/features'
 import { fillTraceTemplate } from '@/utils/traceLinks'
 import { absoluteTitle, formatTime } from '@/utils/time'
@@ -35,6 +35,8 @@ interface Submitted {
   end: string
   // LogQL written by hand (features.logSearch.logql): the server adds the scope matchers.
   logql?: string
+  // what it reads (logSearchRead): the lines on screen stay only for the same read
+  read: string
 }
 
 export function LogSearchView({ namespace, pod, workload, container, size = 'md', leading }: Props) {
@@ -64,6 +66,8 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
   const [query, setQuery] = useState('{}')
   const [effective, setEffective] = useState<string | undefined>()
   const seq = useRef(0)
+  // the read the lines on screen answer
+  const linesRead = useRef<string | null>(null)
 
   const errorText = useCallback(
     (err: any): string => {
@@ -83,6 +87,14 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
       const mine = ++seq.current
       setBusy(true)
       setError(null)
+      if (!keepsLines(linesRead.current, s.read, older !== undefined)) {
+        linesRead.current = null
+        setLines([])
+        setTruncated(false)
+        setOldest(undefined)
+        setBytes(0)
+        setEffective(undefined)
+      }
       try {
         const res =
           s.logql !== undefined
@@ -100,6 +112,7 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
                 end: older ?? s.end,
               })
         if (mine !== seq.current) return
+        linesRead.current = s.read
         setEffective(res.effectiveQuery)
         setLines((prev) => (older ? [...prev, ...res.lines] : res.lines))
         setTruncated(res.truncated)
@@ -116,17 +129,19 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
 
   const search = useCallback(() => {
     const end = new Date()
+    const filter = { q: logql ? '' : text.trim(), regex, ignoreCase, minutes, logql: logql ? query.trim() : undefined }
     const s: Submitted = {
-      q: logql ? '' : text.trim(),
+      q: filter.q,
       regex,
       ignoreCase,
       start: new Date(end.getTime() - minutes * 60_000).toISOString(),
       end: end.toISOString(),
-      logql: logql ? query.trim() : undefined,
+      logql: filter.logql,
+      read: logSearchRead({ cluster: currentCluster, namespace, pod, container, kind: workload?.kind, name: workload?.name }, filter),
     }
     setSubmitted(s)
     void run(s, undefined)
-  }, [text, regex, ignoreCase, minutes, logql, query, run])
+  }, [text, regex, ignoreCase, minutes, logql, query, run, currentCluster, namespace, pod, container, workload?.kind, workload?.name])
 
   // Opening the view, or a different pod / container / workload, searches once.
   useEffect(() => {
