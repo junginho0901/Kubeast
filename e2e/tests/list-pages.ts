@@ -3,8 +3,8 @@ import { expect, type Locator, type Page } from '@playwright/test'
 // Reading a list that has the ListPager footer (components/ListPager.tsx) across its pages. The list pages page as
 // many rows as fit the screen (or the footer's fixed choice), so a row a test made is not always on the first page.
 
-// how long a footer may take to come: the chromium project sets no action timeout, and a read inside expect.poll
-// must fail and be asked again rather than wait for the whole test
+// how long a footer may take to come: the chromium project sets no action timeout. expect.poll (Playwright 1.59) calls
+// its reader outside a try, so a reader that throws fails the poll at once: a footer that has not counted yet answers NaN
 const WAIT = 15_000
 
 // The range and the total the footer says: "Showing 1-12 of 523" / "523개 중 1-12 표시".
@@ -15,6 +15,8 @@ export async function pagerRange(page: Page, pagerId: string): Promise<{ start: 
   const ko = /(\d+)개 중 (\d+)-(\d+) 표시/.exec(text)
   if (ko) return { start: Number(ko[2]), end: Number(ko[3]), total: Number(ko[1]) }
   if (/Showing 0 of 0|0개 중 0 표시/.test(text)) return { start: 0, end: 0, total: 0 }
+  // not counted yet ("Showing - of -" while the first read comes): no number, so a poll asks again
+  if (/Showing - of -|-개 중 - 표시/.test(text)) return { start: NaN, end: NaN, total: NaN }
   throw new Error(`${pagerId}: no range in "${text}"`)
 }
 

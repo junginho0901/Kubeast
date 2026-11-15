@@ -74,7 +74,7 @@ export function useDashboardQueries({
   })
 
   // 네임스페이스 목록
-  const { data: namespaces, isLoading: isLoadingNamespaces } = useQuery({
+  const { data: namespaces, isLoading: isLoadingNamespaces, error: namespacesError } = useQuery({
     queryKey: ['namespaces', ck],
     queryFn: () => api.getNamespaces(),
     enabled: selectedResourceType === 'namespaces',
@@ -84,7 +84,7 @@ export function useDashboardQueries({
   // worked out on the server — not every pod of the cluster. The rows stay while another page loads; another phase,
   // search or cluster waits for its own answer.
   const podPageKey = ['dashboard-pods-page', ck, podQuery.q, selectedPodStatus, podQuery.page]
-  const { data: podPage, isLoading: isLoadingPods } = useQuery({
+  const { data: podPage, isLoading: isLoadingPods, error: podPageError } = useQuery({
     queryKey: podPageKey,
     queryFn: () => readPodPageSince(queryClient, podPageKey, {
       q: podQuery.q || undefined, phase: selectedPodStatus ?? undefined, offset: (podQuery.page - 1) * DASHBOARD_POD_PAGE, limit: DASHBOARD_POD_PAGE,
@@ -133,7 +133,7 @@ export function useDashboardQueries({
 
   // Every namespace's Services and Deployments in one request each (the server lists them as the caller, per
   // namespace for a grant limited to namespaces); the Namespaces window counts them per namespace.
-  const { data: allServices, isLoading: isLoadingServices, isError: isServicesError } = useQuery({
+  const { data: allServices, isLoading: isLoadingServices, isError: isServicesError, error: servicesError } = useQuery({
     queryKey: ['all-services', ck],
     queryFn: () => api.getAllServices(),
     enabled: selectedResourceType === 'services' || selectedResourceType === 'namespaces',
@@ -141,7 +141,7 @@ export function useDashboardQueries({
   })
 
   // 전체 Deployments 목록
-  const { data: allDeployments, isLoading: isLoadingDeployments, isError: isDeploymentsError } = useQuery({
+  const { data: allDeployments, isLoading: isLoadingDeployments, isError: isDeploymentsError, error: deploymentsError } = useQuery({
     queryKey: ['all-deployments', ck],
     queryFn: () => api.getAllDeployments(),
     enabled: selectedResourceType === 'deployments' || selectedResourceType === 'namespaces' || isStorageModalOpen,
@@ -157,7 +157,7 @@ export function useDashboardQueries({
   })
 
   // 전체 PVC 목록 — Storage 모달이 열려 있을 때는 사용률(Prometheus)까지.
-  const { data: allPVCs, isLoading: isLoadingPVCs } = useQuery({
+  const { data: allPVCs, isLoading: isLoadingPVCs, error: pvcsError } = useQuery({
     queryKey: ['all-pvcs', ck, isStorageModalOpen ? 'usage' : 'plain'],
     queryFn: () => api.getPVCs(undefined, false, isStorageModalOpen),
     enabled: selectedResourceType === 'pvcs' || isStorageModalOpen,
@@ -226,7 +226,7 @@ export function useDashboardQueries({
   const metricsUnavailable = isMetricsUnavailableError(topResourcesError)
 
   // 노드 목록 (모달용)
-  const { data: modalNodes, isLoading: isLoadingNodes } = useQuery({
+  const { data: modalNodes, isLoading: isLoadingNodes, error: modalNodesError } = useQuery({
     queryKey: ['modal-nodes', ck],
     queryFn: () => api.getNodes(false), // 자동 갱신은 캐시 사용
     enabled: selectedResourceType === 'nodes',
@@ -272,6 +272,15 @@ export function useDashboardQueries({
     topResourcesError,
     modalNodes,
     isLoadingNodes,
+    // each window's list that was not read, refused or failed, with the error saying why (none while its rows show)
+    windowListErrors: {
+      namespaces: Array.isArray(namespaces) ? null : namespacesError,
+      pods: podPage ? null : podPageError,
+      services: Array.isArray(allServices) ? null : servicesError,
+      deployments: Array.isArray(allDeployments) ? null : deploymentsError,
+      pvcs: Array.isArray(allPVCs) ? null : pvcsError,
+      nodes: Array.isArray(modalNodes) ? null : modalNodesError,
+    } satisfies Record<ResourceType, unknown>,
     metricsUnavailable,
   }
 }
