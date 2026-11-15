@@ -24,6 +24,11 @@
     {"value": "01", "on": false},
     {"value": "truee", "on": false},
     {"value": "enabled", "on": false},
-    {"value": "true,false", "on": false}
+    {"value": "true,false", "on": false},
+    {"value": "\u001ctrue", "on": false},
+    {"value": "true\u001f", "on": false},
+    {"value": "\u00a0true\u3000", "on": true},
+    {"value": "\u0085on", "on": true},
+    {"value": "\u200btrue", "on": false}
   ]
 }
