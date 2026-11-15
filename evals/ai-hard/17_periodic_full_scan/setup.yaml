@@ -1,3 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: orders-db-conf}
+data:
+  storage.conf: |
+    row_count=6600000
+    read_rows_per_second=20000
+    io_depth=8
+    io_latency_ms=40
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata: {name: orders-db}
@@ -12,57 +22,59 @@ spec:
         - name: main
           image: docker.io/library/busybox:1.38.0
           imagePullPolicy: IfNotPresent
-          env:
-            - {name: TABLE_ROWS, value: "6600000"}
-            - {name: ROWS_PER_SECOND, value: "20000"}
-            - {name: READS_IN_FLIGHT_PER_RANGE_READ, value: "8"}
-            - {name: IO_WAIT_MS_PER_QUEUED_READ, value: "40"}
+          volumeMounts:
+            - {name: conf, mountPath: /etc/orders-db, readOnly: true}
           command: [sh, -c]
           args:
             - |
-              mkdir -p /www/cgi-bin /tmp/range-reads
+              mkdir -p /www/cgi-bin /tmp/running
               cat > /www/cgi-bin/query <<'EOF'
               #!/bin/sh
+              . /etc/orders-db/storage.conf
               arg() { echo "&$QUERY_STRING" | sed -n "s/.*&$1=\([^&]*\).*/\1/p"; }
               now_cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }
               client=$(arg client); table=$(arg table); since=$(arg since_id)
               t0=$(now_cs)
-              queued=$(( $(ls /tmp/range-reads | wc -l) * READS_IN_FLIGHT_PER_RANGE_READ ))
+              queued=$(( $(ls /tmp/running | wc -l) * io_depth ))
               if [ -n "$since" ]; then
-                rows=$(( TABLE_ROWS - since )); [ "$rows" -lt 1 ] && rows=1
+                rows=$(( row_count - since )); [ "$rows" -lt 1 ] && rows=1
                 where="id > $since"
-                echo "$client $(date +%s)" > /tmp/range-reads/$$
+                echo "$client $(date +%s)" > /tmp/running/$$
               else
                 rows=1; where="id = $(arg id)"
               fi
-              ms=$(( 20 + rows * 1000 / ROWS_PER_SECOND + queued * IO_WAIT_MS_PER_QUEUED_READ ))
+              ms=$(( 20 + rows * 1000 / read_rows_per_second + queued * io_latency_ms ))
               sleep $(( ms / 1000 )).$(printf '%03d' $(( ms % 1000 )))
-              rm -f /tmp/range-reads/$$
+              rm -f /tmp/running/$$
               took=$(( ($(now_cs) - t0) * 10 ))
               if [ "$took" -ge 500 ]; then
-                echo "level=warn msg=\"slow query\" client=$client query=\"select * from $table where $where\" rows_examined=$rows io_wait_ms=$(( queued * IO_WAIT_MS_PER_QUEUED_READ )) duration_ms=$took" >&2
+                echo "level=warn msg=\"slow query\" client=$client query=\"select * from $table where $where\" rows_examined=$rows io_wait_ms=$(( queued * io_latency_ms )) duration_ms=$took" >&2
               fi
               printf 'Content-Type: application/json\r\n\r\n{"table":"%s","rows_examined":%d,"rows":0}\n' "$table" "$rows"
               EOF
               chmod 755 /www/cgi-bin/query
+              . /etc/orders-db/storage.conf
               (
                 while true; do
                   sleep 15
                   n=0; oldest=""; who="-"
-                  for f in /tmp/range-reads/*; do
+                  for f in /tmp/running/*; do
                     read c t < "$f" 2>/dev/null || continue
                     n=$((n + 1))
                     if [ -z "$oldest" ] || [ "$t" -lt "$oldest" ]; then oldest=$t; who=$c; fi
                   done
                   age=0; [ -n "$oldest" ] && age=$(( $(date +%s) - oldest ))
-                  echo "level=info msg=\"storage stats\" running_range_reads=$n disk_queue_depth=$(( n * READS_IN_FLIGHT_PER_RANGE_READ )) read_iops=$(( 40 + n * 600 )) oldest_query_seconds=$age oldest_query_client=$who"
+                  echo "level=info msg=\"storage stats\" running_range_reads=$n disk_queue_depth=$(( n * io_depth )) read_iops=$(( 40 + n * 600 )) oldest_query_seconds=$age oldest_query_client=$who"
                 done
               ) &
-              echo "level=info msg=\"orders-db started\" table_rows=$TABLE_ROWS"
+              echo "level=info msg=\"orders-db started\" table_rows=$row_count"
               exec httpd -f -p 5432 -h /www
           ports: [{name: db, containerPort: 5432}]
           readinessProbe: {tcpSocket: {port: db}, periodSeconds: 5}
           resources: {requests: {cpu: 50m, memory: 32Mi}, limits: {cpu: "1", memory: 96Mi}}
+      volumes:
+        - name: conf
+          configMap: {name: orders-db-conf}
 ---
 apiVersion: v1
 kind: Service

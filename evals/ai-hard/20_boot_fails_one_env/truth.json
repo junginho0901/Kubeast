@@ -9,8 +9,8 @@
   {
    "resource": "Deployment/shop-20/shop-web",
    "kind": "rollout",
-   "accept_resources": ["shop-web-release-2-4-0", "^(deployment|replicaset|pod)/(shop-20/)?shop-web(-[a-z0-9]{6,10})?(-[a-z0-9]{5})?$", "^shop-web$"],
-   "accept_kinds": ["crash", "config_change"]
+   "accept_resources": ["shop-web-release-2-4-0", "shop-web-config", "^(deployment|replicaset)/(shop-20/)?shop-web(-[a-z0-9]{6,10})?$", "^shop-web$"],
+   "accept_kinds": ["config_change"]
   }
  ],
  "path": [
@@ -18,7 +18,7 @@
   {"resource": "ReplicaSet/shop-20/shop-web-<new>", "role": "via", "required": false, "accept": ["replicaset/(shop-20/)?shop-web"], "note": "Recreate: the old pods were gone before the new ones failed"},
   {"resource": "Service/shop-20/shop-web", "role": "symptom", "required": true, "accept": ["service/(shop-20/)?shop-web", "visitor", "endpoint"]}
  ],
- "also_ok": ["ConfigMap/shop-20/shop-web-config"],
+ "also_ok": ["Pod/shop-20/shop-web-<hash>"],
  "decoys": [
   {"resource": "Deployment/shop-20/preview-web", "why": "runs the same 2.4.0 release with the staging settings, which hold asset_host; healthy throughout"},
   {"resource": "Deployment/shop-20/assets", "why": "serves the manifest; preview-web reads it"}

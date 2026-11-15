@@ -15,7 +15,9 @@ What the AI has to notice:
 
 The trap: blame the last pod to die, the "heavy" periodic report, or "the new pods fail" (the old one died too); or call it a crash without the memory arithmetic.
 
-How the scorer judges: cause = `search` (the StatefulSet, a pod, or the new ConfigMap) with kind `oom`, `resource_limit`, `config_change` or `rollout`. `report-builder`, `storefront` and the node are decoys. Path: `search` before `storefront`. Start time ±2 min of the patch.
+How the scorer judges: cause = what changed, the new ConfigMap `search-indexes-2` (the third index), with kind `config_change` or `rollout`. The StatefulSet, its pods and its Service may be named beside it (`also_ok`); alone they miss the cause: `search` with `oom` is what the pod states show, and `search` with `rollout` stops at "the new pods fail", which the old pod's death contradicts. `report-builder`, `storefront` and the node are decoys. Path: `search-indexes-2`, then `search`, then `storefront`. Start time ±2 min of the patch.
+
+Why not the StatefulSet with a change kind, as in case 20: there the release alone breaks the new pods; here the rollout only removes a node, and what leaves no room for that is the bigger index, which only the ConfigMap names.
 
 Unsure:
 - Checked in local busybox 1.38.0 containers with a 48m limit (not on kind): three nodes form at 22 MB each (about 26 MB in the cgroup), survive a loss at 33 MB (38 MB), and with the third index a node at 35 MB of three is OOMKilled at 53 MB of two, after which the old node dies at 66 MB alone. kind's kubelet, the StatefulSet controller's timing and the restart back-off were not part of that check.

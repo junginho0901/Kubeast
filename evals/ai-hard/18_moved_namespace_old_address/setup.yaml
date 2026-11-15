@@ -3,7 +3,7 @@ kind: ConfigMap
 metadata: {name: web-settings}
 data:
   PUBLIC_URL: "https://www.shop.example"
-  ACCOUNTS_INTERNAL_URL: "http://accounts.members-18.svc.cluster.local:8080"
+  ACCOUNTS_INTERNAL_URL: "http://accounts.members.svc.cluster.local:8080"
   SESSION_COOKIE: session
   PAGE_CACHE_SECONDS: "30"
 ---

@@ -41,8 +41,17 @@ _KIND_ALIASES = {
     "namespaces": "namespace", "pvc": "persistentvolumeclaim", "persistentvolumeclaims": "persistentvolumeclaim",
     "ep": "endpoints", "secrets": "secret", "ing": "ingress", "ingresses": "ingress",
 }
+# Kinds the first part of "a/b" may name; a first part that is none of them, with no dot and no capital, is a namespace.
+_KNOWN_KINDS = frozenset({
+    "pod", "deployment", "replicaset", "statefulset", "daemonset", "job", "cronjob", "service", "endpoints", "endpointslice",
+    "ingress", "ingressclass", "networkpolicy", "configmap", "secret", "serviceaccount", "role", "rolebinding",
+    "clusterrole", "clusterrolebinding", "namespace", "node", "persistentvolume", "persistentvolumeclaim", "storageclass",
+    "resourcequota", "limitrange", "horizontalpodautoscaler", "poddisruptionbudget", "priorityclass", "event", "lease",
+    "gateway", "httproute", "networkchaos", "podchaos", "stresschaos", *_KIND_ALIASES, *_KIND_ALIASES.values(),
+})
 _PLACEHOLDER = re.compile(r"\{\{(\w+)\}\}")
-_BLOCK = re.compile(r"```[ \t]*rca[ \t]*\r?\n(.*?)```", re.S)
+# A fenced block: its info words (```rca, ```RCA, ```json rca) and its body.
+_FENCE = re.compile(r"```[ \t]*([^\n`]*)\r?\n(.*?)```", re.S)
 
 
 def is_staged(case: dict) -> bool:
@@ -55,6 +64,16 @@ def question_forms(case: dict) -> list[tuple[str, str]]:
     if case.get("question_vague"):
         forms.append(("question_vague", case["question_vague"]))
     return forms
+
+
+def ask_order(case: dict, repeat: int) -> list[tuple[str, str, int]]:
+    """(form, question, run) for one ask time: the forms take turns and swap their order every other run (specific,
+    vague, vague, specific, ...), so neither form is always the one asked later."""
+    forms = question_forms(case)
+    order = []
+    for n in range(repeat):
+        order += [(form, text, n + 1) for form, text in (forms if n % 2 == 0 else forms[::-1])]
+    return order
 
 
 def question_with_format(question: str, answer_format: str | None) -> str:
@@ -123,16 +142,41 @@ def fill_placeholders(obj, marks: dict):
     return obj
 
 
+def _fences(text: str) -> list[tuple[list[str], str, re.Match]]:
+    return [([w for w in re.split(r"[^a-z0-9_-]+", m.group(1).lower()) if w], m.group(2), m) for m in _FENCE.finditer(text or "")]
+
+
+def strip_blocks(text: str) -> str:
+    """The text without its rca blocks."""
+    out, at = [], 0
+    for words, _, m in _fences(text):
+        if "rca" in words:
+            out.append(text[at:m.start()])
+            at = m.end()
+    return "".join(out) + (text or "")[at:]
+
+
 def extract_block(answer: str) -> tuple[dict | None, str]:
-    """The last ```rca block of an answer as (object, "ok"), or (None, "missing" | "invalid")."""
-    blocks = _BLOCK.findall(answer or "")
-    if not blocks:
-        return None, "missing"
-    try:
-        block = json.loads(blocks[-1])
-    except ValueError:
-        return None, "invalid"
-    return (block, "ok") if isinstance(block, dict) else (None, "invalid")
+    """The last rca block of an answer — a fence whose info words hold rca in any case (```rca, ```RCA, ```json rca)
+    — as (object, "ok"); with none, the last ```json (or untagged) block holding an object with causes or no_fault as
+    (object, "loose"); else (None, "missing" | "invalid")."""
+    fences = _fences(answer)
+    tagged = [body for words, body, _ in fences if "rca" in words]
+    if tagged:
+        try:
+            block = json.loads(tagged[-1])
+        except ValueError:
+            return None, "invalid"
+        return (block, "ok") if isinstance(block, dict) else (None, "invalid")
+    for words, body, _ in reversed(fences):
+        if words in ([], ["json"]):
+            try:
+                block = json.loads(body)
+            except ValueError:
+                continue
+            if isinstance(block, dict) and ("causes" in block or "no_fault" in block):
+                return block, "loose"
+    return None, "missing"
 
 
 def parse_time(value) -> datetime | None:
@@ -153,13 +197,27 @@ def _kind(text: str | None) -> str | None:
     return _KIND_ALIASES.get(k, k)
 
 
+def _is_kind(part: str) -> bool:
+    # a namespace is a lowercase DNS label: a dot ("deployments.apps") or a capital ("NetworkChaos") makes a kind
+    return "." in part or part != part.lower() or _kind(part) in _KNOWN_KINDS
+
+
+def normal_kind(value) -> str:
+    """A cause kind as KINDS writes it: "ConfigChange", "config-change" and "Config change" are "config_change"."""
+    text = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", str(value or "").strip())
+    return re.sub(r"[\s_-]+", "_", text).strip("_").lower()
+
+
 def split_resource(text: str) -> tuple[str | None, str | None, str]:
-    """"Kind/namespace/name" → (kind, namespace, name); "Kind/name" → (kind, None, name); "name" → (None, None, name)."""
+    """"Kind/namespace/name" → (kind, namespace, name); "Kind/name" → (kind, None, name); "namespace/name" (a first
+    part that is no kind) → (None, namespace, name); "name" → (None, None, name)."""
     parts = [p.strip() for p in str(text).strip().split("/") if p.strip()]
     if len(parts) >= 3:
         return _kind(parts[0]), parts[1].lower(), "/".join(parts[2:]).lower()
     if len(parts) == 2:
-        return _kind(parts[0]), None, parts[1].lower()
+        if _is_kind(parts[0]):
+            return _kind(parts[0]), None, parts[1].lower()
+        return None, parts[0].lower(), parts[1].lower()
     return None, None, (parts[0].lower() if parts else "")
 
 
@@ -172,10 +230,13 @@ def _segment(pattern: str) -> re.Pattern:
 
 def resource_matches(pattern: str, answer: str) -> bool:
     """Whether an answer's resource is the truth's "Kind/namespace/name" (which may hold * and <...>). A part the answer
-    leaves out (kind, namespace) is not held against it."""
+    leaves out (kind, namespace) is not held against it, except that a name of only "*" ("Node/*") is matched only by
+    an answer that gives the kind: a bare name (a table, an index, a setting) is not a node."""
     pk, pns, pname = split_resource(pattern)
     ak, ans, aname = split_resource(answer)
     if not aname or not _segment(pname).fullmatch(aname):
+        return False
+    if not pname.strip("*") and not (pk and ak):
         return False
     if pk and ak and not _segment(pk).fullmatch(ak):
         return False
@@ -239,11 +300,13 @@ def _path(truth_path: list, answer_path: list) -> tuple[bool | None, list]:
 def score_rca(answer: str, truth: dict, calls: list) -> dict:
     """Score an answer's rca block against a filled truth (README "The answer block"): every truth cause named with an
     accepted kind, no decoy named as a cause (a control: no_fault and no cause other than kind none), less for each
-    extra cause. started_at, the path and the evidence are reported next to it, not folded into pass."""
+    extra cause — the same resource named again under a kind its truth cause does not take is one too. started_at, the
+    path and the evidence are reported next to it, not folded into pass; pass_grounded is pass with every named cause
+    pointing at a call that answered."""
     block, status = extract_block(answer)
-    out = {"block": status, "pass": False, "score": 0.0, "no_fault": None, "causes": [], "extras": [], "decoys_taken": [],
-           "also_ok_named": [], "time_ok": None, "path_ok": None, "path": [], "ungrounded": 0, "bad_evidence": [],
-           "malformed": 0}
+    out = {"block": status, "pass": False, "pass_grounded": False, "score": 0.0, "no_fault": None, "causes": [], "extras": [],
+           "decoys_taken": [], "also_ok_named": [], "time_ok": None, "path_ok": None, "path": [], "ungrounded": 0,
+           "bad_evidence": [], "malformed": 0}
     if block is None:
         return out
     no_fault = block.get("no_fault") is True
@@ -254,15 +317,26 @@ def score_rca(answer: str, truth: dict, calls: list) -> dict:
             answer_causes.append(c)
         else:
             out["malformed"] += 1
-    real = [c for c in answer_causes if str(c.get("kind", "")).lower() != "none"]
+    real = [c for c in answer_causes if normal_kind(c.get("kind")) != "none"]
     truth_causes = truth.get("causes") or []
 
-    # Each answer cause is a truth cause, a part of one (also_ok), a decoy or an extra — in that order.
-    for c in real:
+    # A truth cause's answer is the first answer cause naming it with an accepted kind, else the first naming it.
+    picks = []
+    for tc in truth_causes:
+        kinds = {normal_kind(k) for k in (tc["kind"], *(tc.get("accept_kinds") or []))}
+        named = [i for i, c in enumerate(real) if _is_truth_cause(tc, c["resource"])]
+        right = [i for i in named if normal_kind(real[i].get("kind")) in kinds]
+        picks.append((tc, named, right))
+    used = {i for _, named, right in picks for i in (right or named[:1])}
+
+    # Each other answer cause is the same resource again, a part of a truth cause (also_ok), a decoy or an extra.
+    for i, c in enumerate(real):
         r = c["resource"]
-        if any(_is_truth_cause(tc, r) for tc in truth_causes):
+        if i in used:
             continue
-        if any(resource_matches(a, r) for a in truth.get("also_ok") or []):
+        if any(_is_truth_cause(tc, r) for tc in truth_causes):
+            out["extras"].append(r)
+        elif any(resource_matches(a, r) for a in truth.get("also_ok") or []):
             out["also_ok_named"].append(r)
         elif any(resource_matches(d["resource"], r) for d in truth.get("decoys") or []):
             out["decoys_taken"].append(r)
@@ -275,10 +349,9 @@ def score_rca(answer: str, truth: dict, calls: list) -> dict:
     start = parse_time(truth.get("fault_start"))
     tolerance = truth.get("time_tolerance_seconds") or DEFAULT_TIME_TOLERANCE_SECONDS
     times = []
-    for tc in truth_causes:
-        named = [c for c in real if _is_truth_cause(tc, c["resource"])]
-        kinds = {tc["kind"], *(tc.get("accept_kinds") or [])}
-        right = [c for c in named if str(c.get("kind", "")).lower() in kinds]
+    for tc, named_at, right_at in picks:
+        named = [real[i] for i in named_at]
+        right = [real[i] for i in right_at]
         pick = (right or named or [None])[0]
         row = {"resource": tc["resource"], "kind": tc["kind"], "found": bool(right), "resource_found": bool(named),
                "answer_resource": pick and pick["resource"], "answer_kind": pick and pick.get("kind"),
@@ -304,4 +377,5 @@ def score_rca(answer: str, truth: dict, calls: list) -> dict:
         out["pass"] = (not no_fault) and bool(truth_causes) and all(r["found"] for r in out["causes"]) and not out["decoys_taken"]
     if out["pass"]:
         out["score"] = max(0.0, 1.0 - EXTRA_CAUSE_PENALTY * len(out["extras"]))
+    out["pass_grounded"] = out["pass"] and out["ungrounded"] == 0
     return out

@@ -10,8 +10,10 @@ import fnmatch
 import importlib.util
 import json
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -133,15 +135,52 @@ def test_list_shows_every_case_and_no_truth():
             assert text not in every.stdout + every.stderr, f"{d.name}: --list printed {text!r}"
 
 
-def test_hidden_results_show_only_a_total():
+def test_hidden_results_show_only_a_total_of_two_or_more():
     truth = {"control": False, "causes": [{"resource": "ConfigMap/shop-x/settings", "kind": "config_change"}]}
     scored = rca.score_rca(block([cause("ConfigMap/shop-x/settings", "config_change")]), truth, CALLS)
     row = {"title": "t", "form": "question", "ask_after": 300, "run": 1, "missing": [], "forbidden": [],
-           "tools_missing": [], "calls": CALLS, "tokens": 0, "seconds": 1.0, "error": None, "rca": scored}
-    text = AI_EVAL.table([dict(row, id="04_seen", hidden=False, **{"pass": True}),
-                          dict(row, id="08_kept", hidden=True, **{"pass": False})])
+           "tools_missing": [], "calls": CALLS, "tokens": 0, "seconds": 1.0, "error": None, "rca": scored, "model": "m"}
+    seen = dict(row, id="04_seen", hidden=False, **{"pass": True, "pass_grounded": True})
+    kept = [dict(row, id="08_kept", hidden=True, **{"pass": False}), dict(row, id="08_kept", hidden=True, run=2, **{"pass": True})]
+    other = dict(row, id="15_other", hidden=True, **{"pass": True})
+    text = AI_EVAL.table([seen, *kept])
     assert "04_seen" in text and "08_kept" not in text
-    assert "숨김 사례 1개: 정답 0/1" in text
+    assert "숨김 사례 1개: 결과는 JSON에만" in text and "1/2" not in text
+    assert "정답 1/1 (근거 있는 정답 1) · 숨김 빼고 · 모델 m" in text
+    text = AI_EVAL.table([seen, *kept, other])
+    assert "숨김 사례 2개: 정답 2/3" in text and "15_other" not in text
+    for only_hidden in (kept, kept[:1], [other]):
+        text = AI_EVAL.table(only_hidden, {"user": "read", "namespace_suffix": None, "before": {"default": {"investigations": 0, "inbox": 0}}})
+        assert "숨김 사례만 든 실행: 결과는 JSON에만 · 모델 m" in text, text
+        assert not re.search(r"정답 \d|\d/[12]\b", text) and "08_kept" not in text and "15_other" not in text, text
+
+
+def test_every_hard_case_runs_under_a_namespace_suffix():
+    root = Path(tempfile.mkdtemp(prefix="ai-eval-suffix-"))
+    try:
+        for d, c in all_cases():
+            ns = c["namespace"]
+            new_dir, new = AI_EVAL.with_suffix(d, c, "zz9", root)
+            assert new_dir != d and new["namespace"] == f"{ns}-zz9" and new["id"] == c["id"], d.name
+            for form in ("question", "question_vague"):  # 01, 07 and 10 ask about otel-demo, not their own namespace
+                assert (f"{ns}-zz9" in new[form]) == (ns in c[form]), (d.name, form)
+            whole = re.compile(r"(?<![A-Za-z0-9-])" + re.escape(ns) + r"(?![A-Za-z0-9-])")
+            for f in sorted(new_dir.iterdir()):
+                if f.suffix in (".json", ".yaml"):
+                    assert not whole.search(f.read_text()), f"{d.name}/{f.name} still names {ns}"
+            truth = json.loads((d / "truth.json").read_text())
+            moved = rca.fill_placeholders(json.loads((new_dir / "truth.json").read_text()), MARKS)
+            if truth["control"]:
+                assert rca.score_rca(block([], no_fault=True), moved, CALLS)["pass"], d.name
+                continue
+            right = [cause(tc["resource"], tc["kind"], moved["fault_start"]) for tc in moved["causes"]]
+            assert rca.score_rca(block(right), moved, CALLS)["pass"], d.name
+            assert all(tc["resource"].split("/")[1] != ns for tc in moved["causes"]), d.name
+            old = [cause(tc["resource"], tc["kind"]) for tc in truth["causes"] if tc["resource"].split("/")[1] == ns]
+            if old and not any(tc.get("accept_resources") for tc in moved["causes"]):
+                assert not rca.score_rca(block(old), moved, CALLS)["pass"], d.name
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
 
 
 def test_each_truth_fits_its_case_and_the_scorer():
@@ -193,6 +232,67 @@ def test_each_truth_fits_its_case_and_the_scorer():
         for x in truth["decoys"]:
             s = rca.score_rca(block(right + [cause(as_answered(x["resource"]), "crash")]), filled, CALLS)
             assert not s["pass"] and s["decoys_taken"] == [as_answered(x["resource"])], (d.name, x["resource"])
+
+
+# The workload where the symptom shows, with the kind the pod list shows, is not the cause of these cases (README
+# "Hard cases"): it misses alone and costs nothing beside a right cause. WRONG_KIND: the cause under a kind of the
+# symptom. ALSO_RIGHT: other forms a NOTES.md takes.
+SYMPTOM_ONLY = {
+    "18_moved_namespace_old_address": [("Deployment/shop-18/web", "dependency_down"), ("Pod/shop-18/web-7f9c4d8b6-x2k4p", "dns")],
+    "19_route_missing_hostname": [("Deployment/shop-19/edge", "config_change")],
+    "20_boot_fails_one_env": [("Pod/shop-20/shop-web-7f9c4d8b6-x2k4p", "crash"), ("Pod/shop-20/shop-web-7f9c4d8b6-x2k4p", "rollout")],
+    "21_oom_cascade": [("StatefulSet/shop-21/search", "oom"), ("StatefulSet/shop-21/search", "rollout"), ("Pod/shop-21/search-1", "oom")],
+    "22_workers_over_memory": [("Deployment/shop-22/shop-api", "oom"), ("Deployment/shop-22/shop-api", "rollout")],
+}
+WRONG_KIND = {
+    "20_boot_fails_one_env": [("Deployment/shop-20/shop-web", "crash")],
+    "21_oom_cascade": [("ConfigMap/shop-21/search-indexes-2", "oom")],
+    "22_workers_over_memory": [("ConfigMap/shop-22/shop-api-settings", "oom"), ("ConfigMap/shop-22/shop-api-settings", "resource_limit")],
+}
+ALSO_RIGHT = {
+    "16_past_outage": [("Deployment/shop-16/payments", "config_change")],
+    "18_moved_namespace_old_address": [("ConfigMap/shop-18/web-settings", "dns")],
+    "19_route_missing_hostname": [("Service/shop-19/frontdoor", "config_change"), ("frontdoor", "rollout")],
+    "20_boot_fails_one_env": [("Deployment/shop-20/shop-web", "rollout"), ("ReplicaSet/shop-20/shop-web-7f9c4d8b6", "rollout"),
+                              ("ConfigMap/shop-20/shop-web-release-2-4-0", "config_change"), ("ConfigMap/shop-20/shop-web-config", "config_change")],
+    "21_oom_cascade": [("ConfigMap/shop-21/search-indexes-2", "rollout")],
+    "22_workers_over_memory": [("ConfigMap/shop-22/shop-api-settings", "config_change")],
+}
+
+
+def test_the_symptom_alone_is_not_the_cause():
+    cases = {d.name: d for d, _ in all_cases()}
+    assert set(SYMPTOM_ONLY) | set(WRONG_KIND) | set(ALSO_RIGHT) <= set(cases)
+    for name, answers in SYMPTOM_ONLY.items():
+        filled = rca.fill_placeholders(truth_of(cases[name]), MARKS)
+        right = [cause(tc["resource"], tc["kind"]) for tc in filled["causes"]]
+        for resource, kind in answers:
+            assert not rca.score_rca(block([cause(resource, kind)]), filled, CALLS)["pass"], (name, resource, kind)
+            s = rca.score_rca(block(right + [cause(resource, kind)]), filled, CALLS)
+            assert s["pass"] and s["score"] == 1.0, (name, resource, kind, s)
+    for name, answers in WRONG_KIND.items():
+        filled = rca.fill_placeholders(truth_of(cases[name]), MARKS)
+        for resource, kind in answers:
+            assert not rca.score_rca(block([cause(resource, kind)]), filled, CALLS)["pass"], (name, resource, kind)
+    for name, answers in ALSO_RIGHT.items():
+        filled = rca.fill_placeholders(truth_of(cases[name]), MARKS)
+        for resource, kind in answers:
+            s = rca.score_rca(block([cause(resource, kind)]), filled, CALLS)
+            assert s["pass"] and s["score"] == 1.0, (name, resource, kind, s)
+
+
+def test_a_namespace_a_case_makes_besides_its_own_says_nothing_of_the_case():
+    own = {c["namespace"] for _, c in all_cases()}
+    made: dict = {}
+    for d, c in all_cases():
+        setup, cleanup = " ".join(c.get("setup_cmds", [])), " ".join(c.get("cleanup_cmds", []))
+        assert "kubeast.io/ai-eval" not in setup, f"{d.name}: a label the case's own namespace has"
+        for ns in re.findall(r"kubectl create namespace ([a-z0-9-]+)", setup):
+            assert not re.search(r"-\d+$", ns), f"{d.name}: {ns} carries a number"
+            assert ns not in own and ns not in made, f"{d.name}: {ns} is also {made.get(ns, 'a case namespace')}"
+            made[ns] = d.name
+            assert re.search(rf"kubectl delete namespace {re.escape(ns)}(\s|$)", cleanup), f"{d.name}: {ns} is not deleted by name"
+    assert made, "no case makes a second namespace"
 
 
 def test_what_a_case_applies_holds_no_answer_word():
