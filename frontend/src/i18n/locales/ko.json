@@ -2181,6 +2181,7 @@
     "next": "다음",
     "paginationRange": "{{total}}개 중 {{start}}-{{end}} 표시",
     "paginationEmpty": "0개 중 0 표시",
+    "paginationNotCounted": "-개 중 - 표시",
     "selectNamespace": "Namespace를 선택하세요",
     "refreshForce": "새로고침 (강제 갱신)",
     "noOptions": "옵션 없음",

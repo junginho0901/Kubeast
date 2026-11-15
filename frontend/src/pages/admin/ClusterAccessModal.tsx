@@ -124,7 +124,7 @@ export default function ClusterAccessModal({
               </p>
             </div>
           </div>
-          <button type="button" onClick={() => pending || onClose()} className="text-slate-400 hover:text-ink">
+          <button type="button" onClick={() => pending || onClose()} className="text-slate-400 hover:text-ink" aria-label={tr('common.close', 'Close')}>
             <X className="w-5 h-5" />
           </button>
         </div>
