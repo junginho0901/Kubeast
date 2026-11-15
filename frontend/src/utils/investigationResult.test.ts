@@ -164,6 +164,20 @@ describe("the report window's layer for the floating chat", () => {
     expect(JSON.stringify(reportLayer(investigation({ result: RESULT })).data)).not.toContain('_left_out')
   })
 
+  it("gives up the hypotheses, then the calls' arguments, before the causes when 24 calls fill the layer", () => {
+    const query = (i: number) => `sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="apps", pod=~"web-.*"}[5m])) # ${i} ${'x'.repeat(120)}`
+    const calls = Array.from({ length: 24 }, (_v, i) => ({ tool: 'prometheus_query', args: { query: query(i) }, step: 1, result_chars: 900 }))
+    const data = reportLayer(investigation({ result: RESULT, tool_calls: calls, report: 'r'.repeat(5000) })).data
+    expect(new Blob([JSON.stringify(data)]).size).toBeLessThanOrEqual(8192)
+    const told = data?.result as Record<string, unknown>
+    expect(told.hypotheses_left_out).toBe(4)
+    expect((told.causes as unknown[]).length).toBe(1)
+    const shown = data?.tool_calls as Record<string, unknown>[]
+    expect(shown.length).toBe(24)
+    expect(shown.every((c) => !('args' in c) && c.tool === 'prometheus_query')).toBe(true)
+    expect(data?.tool_args_left_out).toBe(true)
+  })
+
   it('stays within the 8 KB layer budget with a full result', () => {
     const long = 'x'.repeat(300)
     const full: InvestigationResult = {

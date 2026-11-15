@@ -414,6 +414,39 @@ async def test_with_both_on_a_cause_hypothesis_does_not_close_on_a_cause_the_cal
         assert "hypothesis_not_verified" not in [f["kind"] for f in out["result"]["failures"]]
 
 
+@pytest.mark.asyncio
+async def test_a_second_answer_without_a_report_before_its_block_leaves_the_first(monkeypatch):
+    first = "## Summary\nthe database is down.\n\n" + block([cause(DB, [1], kind="dependency_down")], [web_hypothesis()])
+    fixed = block([web_cause()], [web_hypothesis()])
+    for second in (fixed + "\n\nLet me know if you need anything else.", "Here is the corrected block:\n" + fixed, fixed):
+        service = _service(_reads_pods(), completion(content=first), completion(content=second))
+        install_loop(monkeypatch, service, [])
+        out = await runner.investigate(cfg(**BOTH), row())
+        assert out["report"].startswith("## Summary\nthe database is down.\n\n---\n\nNot verified by the server"), second
+        assert [f["kind"] for f in out["result"]["failures"]][0] == "cause_name_missing"
+    assert rca.has_report("## Summary\nweb crashes.\n\n" + fixed + "\n\nThanks.")
+
+
+@pytest.mark.asyncio
+async def test_a_block_left_open_by_the_model_is_asked_to_be_closed_not_shortened(monkeypatch):
+    left_open = at_length(CUT)
+    left_open.choices[0].finish_reason = "stop"
+    service = _service(_reads_pods(), left_open, completion(content=GOOD))
+    install_loop(monkeypatch, service, [])
+    out = await runner.investigate(cfg(**BOTH), row())
+    ask = service.completions.calls[2]["messages"][-1]["content"]
+    assert ask.startswith("Your rca block has no closing fence") and "cut off" not in ask
+    assert out["report"] == "## Summary\nweb crashes." and out["result"]["failures"] == []
+
+
+def test_a_cause_with_no_name_does_not_open_every_cause_hypothesis_with_no_name():
+    answer = "## Summary\nx\n\n" + block([cause("", [])], [hypothesis(resource="", state="cause", **{"for": [1]})])
+    checked = rca.check(answer, tool_log=[{"tool": "k8s_get_resources"}], reads=[evidence.Read("k8s_get_resources", PODS, text=POD_TABLE)],
+                        alert_start=None, evidence=True, ledger=True)
+    assert [p.reason for p in checked.cause_problems] == ["no_evidence"]
+    assert checked.hypotheses[0]["closed"] is True and "hypothesis_not_verified" not in [f["kind"] for f in checked.failures]
+
+
 def test_the_kinds_are_those_the_ai_evaluation_scores():
     path = Path(__file__).resolve().parents[3] / "scripts" / "ai_eval_rca.py"
     if not path.exists():

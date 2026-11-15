@@ -167,7 +167,8 @@ async def settle(service, messages: list[dict[str, Any]], answer: str, *, tool_l
 
     The answer is split once and the checks of the switches that are on read that one block. While one finds a
     problem, one model call without tools asks for the report again with every problem of both in one message; its
-    answer replaces the first only when it has text and a block that can be read, and is checked the same way. A
+    answer replaces the first only when it has a report with a heading before a block that can be read, and is checked
+    the same way. A
     second call that fails or finds the time up leaves the first answer. With evidenceCheck the causes still not
     shown are listed under the report; with the ledger the hypotheses stay in `result` with their reasons. Each switch
     leaves its counts in `progress` for the run's audit row (`evidence`, `ledger`). `finish_reason`: the provider's
@@ -195,7 +196,7 @@ async def settle(service, messages: list[dict[str, Any]], answer: str, *, tool_l
             second, second_finish, ask_failed = "", "", True
         if second:
             again = check(second, second_finish)
-            if again.status == "ok" and again.report.strip():
+            if again.status == "ok" and rca.has_report(second):  # a block alone, or with words around it, is no report
                 kept = again
     report = kept.report
     if cfg.evidence_check:
@@ -462,12 +463,14 @@ async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:
     if status == "failed":  # the tokens used before it failed count in the daily budget and AI usage too
         fields = used_fields(progress)
     duration_ms = int((time.monotonic() - started) * 1000)
+    calls, iterations = len(fields.get("tool_calls") or []), fields.get("iterations")
     try:
         await store.finish(db, row.id, status=status, error=error, **fields)
-    except Exception as e:  # the row refused what the run wrote: failed with why, its tokens still counted
+    except Exception as e:  # the row refused what the run wrote: failed (a failed run keeps its error), tokens counted
         log.exception("investigation %s: the run's fields could not be stored", row.id)
-        status, error = "failed", f"the run's fields could not be stored: {type(e).__name__}: {clean_error(e)}"
-        fields = {k: v for k, v in fields.items() if k in _USED}
+        if status == "done":
+            error = f"the run's fields could not be stored: {type(e).__name__}: {clean_error(e)}"
+        status, fields = "failed", {k: v for k, v in fields.items() if k in _USED}
         await store.finish(db, row.id, status=status, error=error, **fields)
     report = store.without_nul(fields.get("report") or "")
     link = await link_for(cfg, db, row)
@@ -491,8 +494,8 @@ async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:
             "prompt_tokens": fields.get("prompt_tokens"),
             "completion_tokens": fields.get("completion_tokens"),
             "total_tokens": fields.get("total_tokens"),
-            "tool_calls": len(fields.get("tool_calls") or []),
-            "iterations": fields.get("iterations"),
+            "tool_calls": calls,
+            "iterations": iterations,
             "duration_ms": duration_ms,
             "summary": report[:SUMMARY_CHARS],
             "link": link,

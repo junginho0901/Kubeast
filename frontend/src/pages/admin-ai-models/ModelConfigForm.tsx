@@ -240,7 +240,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
           <p className="mt-1 text-[10px] text-slate-500">
             {formProvider === 'claude-code'
               ? tr('admin.aiModels.maxTokensSubscription', 'Claude Code sets the answer length for the subscription; this is not used.')
-              : tr('admin.aiModels.maxTokensHint', 'Empty: 4,096 for chat answers, 2,048 for each alert investigation step (4,096 with evidenceCheck or ledger on). A reasoning model counts its reasoning in it.')}
+              : tr('admin.aiModels.maxTokensHint', 'Empty: 4,096 for chat answers, 2,048 for each alert investigation step. A reasoning model counts its reasoning in it.')}
           </p>
         </div>
         <div>
