@@ -496,6 +496,31 @@ def test_a_chat_round_is_refused_while_alert_investigation_is_on_unless_asked():
     assert info["before"] == {"default": {"investigations": "HTTP 404", "inbox": "HTTP 404"}}
 
 
+def test_the_hidden_total_is_written_only_once_the_run_ends():
+    root = Path(tempfile.mkdtemp(prefix="ai-eval-hidden-total-"))
+    for cid, ns, hidden in (("90_a", "shop-90", False), ("91_h", "shop-91", True), ("92_h", "shop-92", True)):
+        case_dir({**CASE, "id": cid, "namespace": ns, "question": f"{ns} 원인?", "question_vague": f"{ns}?", "hidden": hidden},
+                 json.loads(json.dumps({**TRUTH, "id": cid}).replace("shop-90", ns)), root)
+    out = root / "out"
+    tables = []
+    real = AI_EVAL.run_staged_case
+
+    def one_case(d, case, *rest):
+        tables.append("".join(f.read_text() for f in out.glob("*-claude-haiku-5-5.md")) if out.exists() else "")
+        return real(d, case, *rest)
+
+    try:
+        AI_EVAL.run_staged_case = one_case
+        code, out, _, screen, _ = _main(FakeKubeast(), root, "--hidden", "--alert-investigation-on")
+    finally:
+        AI_EVAL.run_staged_case = real
+    assert code == 0 and len(tables) == 3
+    assert "숨김 사례: 합계는 실행이 끝난 뒤의 표에만" in tables[2] and not re.search(r"숨김 사례 \d+개", tables[2]), tables[2]
+    final = next(out.glob("*-claude-haiku-5-5.md")).read_text()
+    assert "숨김 사례 2개: 정답 4/4" in final and "91_h" not in final and "92_h" not in final
+    assert "숨김 사례 2개: 정답 4/4" in screen
+
+
 def test_a_namespace_suffix_is_written_only_as_a_whole_name():
     d = case_dir({**CASE, "question": "shop-90에서 실패, shop-901 말고, my-shop-90 말고"}, TRUTH)
     root = Path(tempfile.mkdtemp(prefix="ai-eval-suffix-"))
