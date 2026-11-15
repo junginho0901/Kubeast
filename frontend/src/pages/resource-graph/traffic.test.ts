@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getBezierPath, Position } from '@xyflow/react'
 import type { ClusterFeatures, NetflowGroup, ResourceGraphNode, TrafficLine } from '@/services/api'
-import { anchorOf, boxHeight, buildTraffic, byPort, checkFor, endText, lineState, MAX_ROWS, metricsFailure, pointOnBezier, portText, rowCenter, roundedPath, trafficParams, trafficSources, PEER_KIND } from './traffic'
+import { anchorOf, boxHeight, buildTraffic, byPort, checkFor, endText, lineState, MAX_ROWS, metricsFailure, pickedLine, pointOnBezier, portText, rowCenter, roundedPath, trafficParams, trafficSources, PEER_KIND } from './traffic'
 
 const node = (kind: string, namespace: string, name: string): ResourceGraphNode => ({ id: `${kind}/${namespace}/${name}`, kind, name, namespace, status: 'Running' })
 const shown = new Map([node('Deployment', 'shop', 'web'), node('Deployment', 'shop', 'client'), node('Pod', 'shop', 'debug'), node('StatefulSet', 'shop', 'db')].map((n) => [n.id, n]))
@@ -241,5 +241,24 @@ describe('a peer the metric did not name', () => {
     expect(endText({ unnamed: true })).toBe('not named')
     const line = { from: { unnamed: true }, to: { namespace: 'shop', kind: 'Deployment', name: 'web' }, allowed: 0, dropped: 3 }
     expect(checkFor(line as TrafficLine)).toBeNull()
+  })
+})
+
+// The panel of a picked line kept the line object of the answer it was picked in: after another namespace, cluster
+// or source the new answer came and the panel showed the old line's counts and ports beside the new answer's window.
+describe('pickedLine', () => {
+  const before = [line(client, web, 40, 0, { ports: [{ port: 80, protocol: 'TCP', allowed: 40 }] }), line(web, client, 3, 5)]
+  // another answer: other objects, the same places in the list (the edge ids are traffic-0, traffic-1 again)
+  const after = [line(client, web, 7, 0, { ports: [{ port: 80, protocol: 'TCP', allowed: 7 }] }), line(web, client, 1, 0)]
+  const picked = { id: 'traffic-0', line: before[0] }
+
+  it('is the line while the answer on screen holds it', () => {
+    expect(pickedLine(picked, before)).toBe(picked)
+  })
+
+  it('is none once another answer is on screen, or none is', () => {
+    expect(pickedLine(picked, after)).toBeNull()
+    expect(pickedLine(picked, undefined)).toBeNull()
+    expect(pickedLine(null, before)).toBeNull()
   })
 })

@@ -11,6 +11,11 @@
       "pr": "fix/w3-screen-search"
     },
     {
+      "screen": "^\\w+ · /(monitoring|cluster/nodes) on self$",
+      "why": "self has no metrics-server and its metrics reads now say so (a 404, not an empty list): Monitoring shows the page's \"Metrics server not available for this cluster\" above the tab's \"not available\", and the Nodes page's top card says it in place of \"No metrics available\".",
+      "pr": "#900"
+    },
+    {
       "screen": "^\\w+ · /cluster-view on ",
       "why": "Cluster View pages its node boxes ten at a time, so the list footer (the range shown and Prev / Next) is under the boxes on every cluster; with more than one page the map outlines the cells of the page shown.",
       "pr": "#869"
