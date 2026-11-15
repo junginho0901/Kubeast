@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Browser, type Page } from '@playwright/test'
 
-import { compileRules, routeOf, sortCells, type Answer, type Difference, type IgnoreRule } from './response-compare'
+import { clusterOf, compileRules, routeOf, sortCells, type Answer, type Difference, type IgnoreRule } from './response-compare'
 import {
   ADMIN_EMAIL, ADMIN_PASSWORD, BASE, CLUSTER, DRAWER, DRAWER_KINDS, DRAWERS, NS_A, PW, ROLES, SIDEBAR,
   applyFixtures, bearer, drawerTargets, kubectl, login, loginUI, openCluster, quiet, removeFixtures, roleTable, track,
@@ -213,7 +213,7 @@ function rowOf(user: string, request: string, route: string, screens: Set<string
   const real: Difference[] = []
   const known: Row['known'] = []
   for (const d of sorted.real) {
-    const rule = ignored(route, d.cell, user, String(n.status))
+    const rule = ignored(route, d.cell, user, String(n.status), clusterOf(request))
     if (rule) known.push({ ...d, why: rule.why, pr: rule.pr })
     else real.push(d)
   }

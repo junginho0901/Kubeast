@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import { test, expect } from '@playwright/test'
 
-import { compileRules, flatten, sortCells, type Answer, type IgnoreRule } from './response-compare'
+import { clusterOf, compileRules, flatten, sortCells, type Answer, type IgnoreRule } from './response-compare'
 
 // The comparison on its own: each kind of change must come out as what it is. No browser, no cluster.
 
@@ -83,6 +83,27 @@ test.describe('the response comparison', () => {
     expect(cells).toContain('$[Cluster].permissions[resource.hygiene.scan].key')
   })
 
+  test('discovery lists pair by their groupVersion: the same lists in another order are the order cell only', () => {
+    const list = (groupVersion: string, ...kinds: string[]) =>
+      ({ groupVersion, resources: kinds.map((kind) => ({ name: `${kind.toLowerCase()}s`, kind, namespaced: true, verbs: ['get', 'list'] })) })
+    const old = answer([list('apps/v1', 'Deployment'), list('v1', 'Pod', 'Service')])
+    const moved = sortCells(old, answer([list('v1', 'Pod', 'Service'), list('apps/v1', 'Deployment')]), old)
+    expect(moved.real.map((d) => d.cell)).toEqual(['$.$order'])
+    const changed = sortCells(old, answer([list('v1', 'Pod'), list('apps/v1', 'Deployment')]), old)
+    expect(changed.real.map((d) => d.cell).sort()).toEqual([
+      '$.$order',
+      '$[v1].resources.$length',
+      '$[v1].resources.$order',
+      '$[v1].resources[Service//services].kind',
+      '$[v1].resources[Service//services].name',
+      '$[v1].resources[Service//services].namespaced',
+      '$[v1].resources[Service//services].verbs.$length',
+      '$[v1].resources[Service//services].verbs.$order',
+      '$[v1].resources[Service//services].verbs[get]',
+      '$[v1].resources[Service//services].verbs[list]',
+    ])
+  })
+
   test('a rollout\'s revisions are rows of their own', () => {
     const rollout = (revision: number, replicas: number) => ({ name: 'web', namespace: 'n', revision, replicas })
     const s = sortCells(answer([rollout(1, 2), rollout(2, 3)]), answer([rollout(1, 2), rollout(2, 4)]), answer([rollout(1, 2), rollout(2, 3)]))
@@ -93,6 +114,15 @@ test.describe('the response comparison', () => {
     const match = compileRules([{ route: '^/x$', cell: '^\\$\\.a', user: '^nsread$', why: 'because', pr: '#1' }])
     expect(match('/x', '$.a', 'nsread')?.pr).toBe('#1')
     expect(match('/x', '$.a', 'viewer')).toBeNull()
+  })
+
+  test('a rule may be for one cluster: the same answer on another cluster stays a real difference', () => {
+    const match = compileRules([{ route: '^/x$', cell: '^\\$status$', cluster: '^self$', newStatus: '^404$', why: 'no metrics-server there', pr: '#1' }])
+    expect(match('/x', '$status', 'viewer', '404', clusterOf('/x?cluster=self'))?.pr).toBe('#1')
+    expect(match('/x', '$status', 'viewer', '404', clusterOf('/x?cluster=default'))).toBeNull()
+    expect(match('/x', '$status', 'viewer', '404', clusterOf('/x'))).toBeNull()
+    expect(clusterOf('live test2 /apis/apps/v1/deployments?namespace=a')).toBe('test2')
+    expect(clusterOf('/api/v1/cluster/metrics/pods?namespace=web&cluster=self')).toBe('self')
   })
 
   test('a rule for a route the old build did not have keeps a server error of the new build a real difference', () => {
