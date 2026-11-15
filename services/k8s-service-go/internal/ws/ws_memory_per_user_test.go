@@ -87,7 +87,7 @@ func TestWSMemoryPerUser(t *testing.T) {
 	fmt.Fprintf(&summary, "%s, %s %s/%s, GOGC default, GOMEMLIMIT %q, HTTP/2 stream buffer %d (0 = Go's 4 MiB), %s decoder\n", time.Now().Format(time.RFC3339),
 		runtime.Version(), runtime.GOOS, runtime.GOARCH, os.Getenv("GOMEMLIMIT"), streamBuffer, decoder)
 	fmt.Fprintf(&summary, "one event on the wire: pod %d bytes, node %d bytes, deployment %d bytes\n", len(watchPodJSON(0)), len(memNodeJSON(0)), len(memDeploymentJSON(0)))
-	fmt.Fprintf(&summary, "%-12s %6s %6s %9s %9s %9s %8s %9s %9s %9s %9s\n", "scenario", "people", "watch", "live/p", "stack/p", "gor/p", "inuse/p", "rss/p", "peak/p", "left/p", "alloc/p")
+	fmt.Fprintf(&summary, "%-12s %6s %6s %9s %9s %9s %8s %9s %9s %9s %9s %7s\n", "scenario", "people", "watch", "live/p", "stack/p", "gor/p", "inuse/p", "rss/p", "peak/p", "left/p", "alloc/p", "open")
 	for _, sc := range []struct {
 		name   string
 		people int
@@ -120,18 +120,19 @@ func TestWSMemoryPerUser(t *testing.T) {
 		})
 		after := takeMemSnapshot(true)
 		per := func(a, b uint64) float64 { return (float64(a) - float64(b)) / float64(sc.people) / 1024 }
-		line := fmt.Sprintf("%-12s %6d %6d %8.1fK %8.1fK %9.2f %7.1fK %8.1fK %8.1fK %8.1fK %8.1fK", sc.name, sc.people, watches,
+		line := fmt.Sprintf("%-12s %6d %6d %8.1fK %8.1fK %9.2f %7.1fK %8.1fK %8.1fK %8.1fK %8.1fK %6.1fs", sc.name, sc.people, watches,
 			per(held.heapAlloc, before.heapAlloc), per(held.stackInuse, before.stackInuse),
 			float64(held.goroutines-before.goroutines)/float64(sc.people), per(held.heapInuse, before.heapInuse),
 			per(held.rssLike, before.rssLike), per(peak, before.rssLike), per(after.heapAlloc, before.heapAlloc),
-			per(held.totalAlloc, before.totalAlloc))
+			per(held.totalAlloc, before.totalAlloc), peer.opened.Seconds())
 		t.Log(line)
 		summary.WriteString(line + "\n")
 	}
 	summary.WriteString("live = heap of live objects after a GC; stack = goroutine stacks; gor = goroutines; inuse = heap spans in use and\n" +
 		"rss = memory the runtime holds and has not returned (Sys - HeapReleased), both before that GC; peak = the most rss while\n" +
 		"the crowd connected; left = live heap after the crowd left; alloc = bytes allocated from before the crowd came until it\n" +
-		"had its first objects. All per person, minus the same before the crowd came.\n")
+		"had its first objects. All per person, minus the same before the crowd came. open = from connecting until every watch\n" +
+		"had its first objects.\n")
 	t.Log("\n" + summary.String())
 	if out != "" {
 		if err := os.WriteFile(filepath.Join(out, "summary.txt"), []byte(summary.String()), 0o644); err != nil {
@@ -348,6 +349,8 @@ type memPeer struct {
 	api   string
 	in    io.Writer
 	lines chan string
+	// opened is how long the last crowd took from connecting until every watch had its first objects.
+	opened time.Duration
 }
 
 // startMemPeer runs TestWSMemoryPeer in a second process and reads its API server's address.
@@ -427,10 +430,12 @@ func (p *memPeer) crowd(t *testing.T, m *Multiplexer, wsURL string, plan [][]mem
 			}
 		}
 	}()
+	start := time.Now()
 	fmt.Fprintf(p.in, "OPEN %s %s\n", wsURL, b)
 	if got := p.next(t); !strings.HasPrefix(got, "READY ") {
 		t.Fatalf("peer: %s", got)
 	}
+	p.opened = time.Since(start)
 	waitSubscriptions(t, m, watches)
 	close(done)
 	time.Sleep(2 * time.Second)

@@ -8,42 +8,76 @@ import (
 )
 
 // watchMemoryShare is the share of the collector's limit (GOMEMLIMIT, which services/pkg/memlimit sets to 90 % of the
-// container's) past which the live heap lets no new watch open. A watch decodes every object there is as it opens: in
-// TestWSMemoryPerUser 700 people reopening their screens at once held 640 KiB more each while the first objects came
-// in, and opening the node list of 1 000 nodes 4.3-5.1 MiB each; on 512 Mi that burst ended k8s-service six times in a
-// row in the W2 load test, each restart bringing every watch back at once.
-const watchMemoryShare = 0.75
+// container's) past which the memory the next collection cannot give back lets no new watch open. A watch decodes every
+// object there is as it opens: opening the node list of 1 000 nodes held 3.1-5.1 MiB a person in TestWSMemoryPerUser,
+// so the starts under way at once (MaxWatchStarts, 16) take up to the fifth of 461 MiB this leaves. In the W2 load test
+// 700 people held 0.56-0.62 of the limit with their screens open and k8s-service ran out of memory past 0.94.
+const watchMemoryShare = 0.8
 
-// watchMemoryFull says whether the heap the last collection found live is past watchMemoryShare of the collector's
-// limit. Without a limit (GOMEMLIMIT unset outside a container) nothing waits.
+// memoryShortMessage is the limit frame's message for a watch that waits for memory.
+const memoryShortMessage = "k8s-service is short of memory, cannot create new watch for now"
+
+// watchMemoryFull says whether the memory held against the collector's limit is past watchMemoryShare of it. Without a
+// limit (GOMEMLIMIT unset outside a container) nothing waits.
 func (m *Multiplexer) watchMemoryFull() bool {
 	read := m.heap
 	if read == nil {
 		read = heapNow.read
 	}
-	live, limit := read()
-	return limit > 0 && limit < math.MaxInt64 && float64(live) > watchMemoryShare*float64(limit)
+	held, limit := read()
+	return limit > 0 && limit < math.MaxInt64 && float64(held) > watchMemoryShare*float64(limit)
 }
 
-// heapReading is the live heap and the collector's limit, read through runtime/metrics, which does not stop the world as
-// runtime.ReadMemStats does, and at most once a second whatever the number of REQUESTs.
+// heapReading is the memory the next collection cannot give back and the collector's limit, read through
+// runtime/metrics, which does not stop the world as runtime.ReadMemStats does, and at most once a second whatever the
+// number of REQUESTs.
 type heapReading struct {
 	mu          sync.Mutex
 	at          time.Time
-	live, limit uint64
+	held, limit uint64
 }
 
 var heapNow heapReading
 
-func (h *heapReading) read() (live, limit uint64) {
+// heldSamples are what heldBytes reads.
+var heldSamples = []string{
+	"/gc/heap/live:bytes",
+	"/gc/gomemlimit:bytes",
+	"/memory/classes/total:bytes",
+	"/memory/classes/heap/objects:bytes",
+	"/memory/classes/heap/unused:bytes",
+	"/memory/classes/heap/free:bytes",
+	"/memory/classes/heap/released:bytes",
+}
+
+func (h *heapReading) read() (held, limit uint64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if now := time.Now(); now.Sub(h.at) >= time.Second {
-		s := []metrics.Sample{{Name: "/gc/heap/live:bytes"}, {Name: "/gc/gomemlimit:bytes"}}
+		s := make([]metrics.Sample, len(heldSamples))
+		for i, name := range heldSamples {
+			s[i].Name = name
+		}
 		metrics.Read(s)
-		h.live, h.limit, h.at = sampleBytes(s[0]), sampleBytes(s[1]), now
+		v := make([]uint64, len(s))
+		for i := range s {
+			v[i] = sampleBytes(s[i])
+		}
+		h.held, h.limit, h.at = heldBytes(v[0], v[2], v[3], v[4], v[5], v[6]), v[1], now
 	}
-	return h.live, h.limit
+	return h.held, h.limit
+}
+
+// heldBytes is the heap the last collection found live and everything else the runtime holds outside the heap's objects
+// and its free and returned room — goroutine stacks, the runtime's own structures —, which the collector's limit counts
+// too. At 700 people of the W2 load test the stacks alone were 58-92 MiB of the 461 MiB limit, so the live heap could
+// not reach three quarters of the limit before k8s-service ran out of memory.
+func heldBytes(live, total, objects, unused, free, released uint64) uint64 {
+	heap := objects + unused + free + released
+	if total < heap {
+		return live
+	}
+	return live + total - heap
 }
 
 func sampleBytes(s metrics.Sample) uint64 {

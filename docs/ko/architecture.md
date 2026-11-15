@@ -167,7 +167,8 @@ v0.7.6 코드로 2026-11-08에 잰 값입니다. k8s-service 하나를 차트 �
 
 이 한도들을 정하는 차트 값과 2026-10-30에 잰 값은 영어 문서의 [Many users](../architecture.md#many-users)에 있습니다. 그중 몇 가지는 이렇게 걸립니다.
 
-- 새 실시간 watch는 마지막 수집이 찾은 k8s-service의 살아 있는 힙이 수집기 한도의 75 %를 넘은 동안 `multicluster.wsMaxSubscriptions`를 넘었을 때처럼 기다리고(`watchMemoryFull`), 화면은 서버의 메모리가 모자라다고 말합니다. 이미 켜진 watch는 그대로 갑니다. Pod · Node · Deployment watch는 행이 읽는 것만 디코드합니다(`watch_decode.go`).
+- 새 실시간 watch는 k8s-service가 수집기 한도에 맞서 쥔 메모리(마지막 수집이 찾은 살아 있는 힙, 고루틴 스택, 런타임 자체 몫)가 그 한도의 80 %를 넘은 동안 `multicluster.wsMaxSubscriptions`를 넘었을 때처럼 기다리고(`watchMemoryFull`), 화면은 서버의 메모리가 모자라다고 말합니다. 화면이 watch를 청할 때와 그 watch가 열릴 차례가 왔을 때 두 번 봅니다. 처음 꼴은 살아 있는 힙만 75 %와 견줬는데, 700명에서는 스택만 한도 461 MiB 가운데 58~92 MiB여서 그 몫에 닿을 때가 곧 메모리가 다 찬 때였고, 둘째 W2 밤(2026-11-15)에 k8s-service가 네 번 메모리가 다 차 재시작했습니다. 이미 켜진 watch는 그대로 갑니다.
+- 버전 없이 여는 watch는 있는 객체를 모두 보내며 열리므로, 그 객체가 다 지나갈 때까지(50 ms 동안 객체가 없을 때까지) `multicluster.wsWatchStartConcurrency` 자리를 쥡니다. 둘째 W2 밤에 재시작 뒤 700명의 소켓이 돌아오자, watch마다 첫 답에서 자리를 돌려주던 때는 살아 있는 힙이 2초 만에 121 MiB에서 285 MiB로 늘었고 30초 뒤 메모리가 다 찼습니다. `TestWSMemoryPerUser`에서 수집기 한도 461 MiB로 700명이 W2의 켜 둔 화면을 한꺼번에 열 때 사람당 더 쥔 최고가 616~646 KiB에서 320~329 KiB가 됐고, 모든 watch가 열리기까지 3.4초에서 7.3초가 됐습니다. 5초 쥔 자리는 다음 차례에 넘깁니다. Pod · Node · Deployment watch는 행이 읽는 것만 디코드합니다(`watch_decode.go`).
 - Helm 화면의 스트림도 `multicluster.wsMaxSubscriptions`에 셉니다(watch 하나, 네임스페이스로 한정된 grant면 네임스페이스마다 하나). 한도를 넘으면 같은 알림이 그렇다고 말하고, 스트림은 30초~5분 뒤 다시 묻습니다. watch 시작도 `multicluster.wsWatchStartConcurrency` 자리를 거칩니다.
 - Cluster View의 노드 칸, Node 드로어의 파드 표와 Allocated Resources는 그 순간 묻는 모두를 위해 노드마다 한 번 `kubeast:cache`로 읽고, 사람마다 자기 신원이 파드를 볼 수 있는 네임스페이스만 남깁니다(SelfSubjectAccessReview, 60초). Allocated Resources의 합은 kubectl describe node와 같은 계산입니다(init 컨테이너는 가장 큰 값, 사이드카 더함, pod overhead).
 - 노드 칸을 그 사람으로 읽는 목록(접근 확인이 거부한 네임스페이스, 재시작 뒤 informer가 동기화되기 전, `kubeast:cache`가 거부될 때)도 공유 읽기와 같은 노드 읽기 자리 16개를 거칩니다.
