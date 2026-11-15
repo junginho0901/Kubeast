@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api } from '@/services/api'
 import type { PolicyReportNamespaceRow, PolicyReportPolicyRow, PolicyReportResult, PolicyReportResults, PolicyReportSummary } from '@/services/api/types'
@@ -13,8 +13,10 @@ import { useAIContext } from '@/hooks/useAIContext'
 import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { classifyReadFailure, failureFields } from '@/utils/aiContext/readFailure'
 import { policyResultTarget } from '@/utils/detailTargets'
 import { formatTime, utcTitle } from '@/utils/time'
+import { keepSameRead } from '@/utils/keepSameRead'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 
 // Security → Policy Reports: what the cluster's policy engine (Kyverno, Trivy Operator, …) wrote into
@@ -141,18 +143,24 @@ export default function PolicyReports() {
   const { containerRef: tableContainerRef, bodyRef: tableBodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({
     recalculationKey: tab === 'results' ? tab : `${tab}:${tab === 'policies' ? sortedPolicies.length : sortedNamespaces.length}`,
   })
-  // the results tab asks the server for the page on screen, in the order of its header
+  // the results tab asks the server for the page on screen, in the order of its header, and searches once typing pauses
+  const [resultsSearch, setResultsSearch] = useState('')
+  useEffect(() => {
+    const id = setTimeout(() => setResultsSearch(searchQuery), 250)
+    return () => clearTimeout(id)
+  }, [searchQuery])
   const resultsSort = sortKey === 'result' || sortKey === 'policy' || sortKey === 'namespace' || sortKey === 'name' ? sortKey : undefined
   const resultsParams = {
-    namespace, policy, source: policySource, result: RESULT_PARAM[resultFilter], severity, search: searchQuery,
+    namespace, policy, source: policySource, result: RESULT_PARAM[resultFilter], severity, search: resultsSearch,
     offset: (currentPage - 1) * rowsPerPage, limit: rowsPerPage, sort: resultsSort, dir: sortDir,
   }
   const resultsKey = ['cluster', 'policyreports', 'results', resultsParams]
+  // the rows stay while another page or order of them loads; another filter or search waits for its own answer
   const resultsQuery = useQuery({
     queryKey: resultsKey,
     queryFn: () => api.getPolicyReportResults(resultsParams),
     enabled: installed && tab === 'results',
-    placeholderData: keepPreviousData,
+    placeholderData: keepSameRead(resultsKey, ['offset', 'limit', 'sort', 'dir']),
     retry: false,
   })
   const results = useMemo<PolicyReportResults | null>(
@@ -178,16 +186,22 @@ export default function PolicyReports() {
   const pagedPolicies = useMemo(() => pageSlice(sortedPolicies), [sortedPolicies, currentPage, rowsPerPage]) // eslint-disable-line react-hooks/exhaustive-deps
   const pagedNamespaces = useMemo(() => pageSlice(sortedNamespaces), [sortedNamespaces, currentPage, rowsPerPage]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The Results tab's rows are told once they are read: nothing is counted while the first read is on its way, and a
+  // read that failed or was refused says so with its reason, as the table does, never "0 results".
+  const resultsUnread = tab === 'results' && !results
+  const resultsError = resultsUnread && resultsQuery.isError ? resultsQuery.error : null
   const aiSnapshot = useMemo(() => {
     if (!summary) return null
     const list = tab === 'policies' ? pagedPolicies : tab === 'namespaces' ? pagedNamespaces : pagedResults
+    const unread = resultsError ? (classifyReadFailure(resultsError).refused ? '; the results were refused' : '; the results could not be read') : ''
     return {
       source: 'base' as const,
-      summary: `Policy reports: ${summary.totals.fail} fail, ${summary.totals.warn} warn, ${summary.totals.error} error over ${summary.reports} reports (${tab})`,
+      summary: `Policy reports: ${summary.totals.fail} fail, ${summary.totals.warn} warn, ${summary.totals.error} error over ${summary.reports} reports (${tab})${unread}`,
       data: {
         filters: { tab, namespace: namespace || undefined, policy: policy || undefined, policySource: policySource || undefined, result: resultFilter, severity: severity || undefined, search: searchQuery || undefined, scoped: summary.scoped },
         stats: { ...summary.totals, reports: summary.reports, truncated: summary.truncated, cluster_reports_error: clusterReportsError },
-        ...summarizeList(list as unknown as Record<string, unknown>[], {
+        ...(resultsError ? failureFields('results', resultsError) : {}),
+        ...(resultsUnread ? {} : summarizeList(list as unknown as Record<string, unknown>[], {
           total: rowCount,
           currentPage,
           pageSize: rowsPerPage,
@@ -195,10 +209,10 @@ export default function PolicyReports() {
           pickFields: tab === 'results'
             ? ['result', 'severity', 'policy', 'rule', 'kind', 'api_version', 'name', 'selector', 'namespace', 'message']
             : tab === 'policies' ? ['policy', 'category', 'severity', 'source', 'fail', 'warn', 'error', 'pass', 'skip'] : ['namespace', 'policies', 'fail', 'warn', 'error', 'pass', 'skip'],
-        }),
+        })),
       },
     }
-  }, [summary, clusterReportsError, tab, pagedPolicies, pagedNamespaces, pagedResults, rowCount, currentPage, rowsPerPage, namespace, policy, policySource, resultFilter, severity, searchQuery])
+  }, [summary, clusterReportsError, tab, pagedPolicies, pagedNamespaces, pagedResults, resultsUnread, resultsError, rowCount, currentPage, rowsPerPage, namespace, policy, policySource, resultFilter, severity, searchQuery])
   useAIContext(aiSnapshot, [aiSnapshot])
 
   // Force refresh: past the server's one-minute cache, so a fix shows up as soon as the engine reports it.

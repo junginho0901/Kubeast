@@ -20,6 +20,7 @@ import { isProtectedNamespaceError } from '@/utils/protectedNamespace'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { useRefresh } from '@/hooks/useRefresh'
 import { NOT_COUNTED } from '@/utils/listCounts'
+import { failureText } from '@/utils/failureText'
 
 export default function HelmReleasesPage() {
   const { t } = useTranslation()
@@ -51,13 +52,11 @@ export default function HelmReleasesPage() {
     staleTime: 0,
   }))
 
+  // Another namespace or cluster waits for its own answer, as on first open: the releases of the one before are not
+  // its releases.
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey,
     queryFn: () => api.helm.listReleases(namespace ? { namespace } : undefined),
-    // keepPreviousData for smooth namespace-filter changes, but only within the
-    // same cluster so a switch never lingers on the prior cluster's releases.
-    placeholderData: (prev, prevQuery) =>
-      prevQuery && prevQuery.queryKey[1] === cluster ? prev : undefined,
     staleTime: Infinity,
   })
 
@@ -65,6 +64,8 @@ export default function HelmReleasesPage() {
   // Secrets (a viewer) gets 403 from the list: say so instead of "no releases".
   const helmForbidden =
     (error as { response?: { status?: number } } | null)?.response?.status === 403
+  // any other failure with no rows is not "no releases": the page says it could not read them, with the reason
+  const listFailed = !helmForbidden && !!error && !Array.isArray(data)
 
   useHelmWatchList({
     cluster,
@@ -175,7 +176,8 @@ export default function HelmReleasesPage() {
 
   useReleasesAISnapshot({
     loaded: data !== undefined,
-    items,
+    error: helmForbidden || listFailed ? error : null,
+    stats,
     paged,
     sortedCount: sorted.length,
     currentPage,
@@ -233,6 +235,14 @@ export default function HelmReleasesPage() {
           className="flex items-center justify-center rounded-lg border border-dashed border-slate-700 bg-slate-800/20 py-16 text-center text-slate-400"
         >
           {isProtectedNamespaceError(error) ? t('helmReleases.protected') : t('helmReleases.forbidden')}
+        </div>
+      ) : listFailed ? (
+        <div
+          role="alert"
+          data-testid="helm-read-failed"
+          className="flex items-center justify-center rounded-lg border border-dashed border-slate-700 bg-slate-800/20 px-4 py-16 text-center text-red-400 break-words"
+        >
+          {t('common.readFailed', { defaultValue: 'Could not read the list: {{reason}}', reason: failureText(error) })}
         </div>
       ) : (
         <ReleaseTable

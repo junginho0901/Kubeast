@@ -21,6 +21,8 @@ import { readsHygiene } from '@/utils/adminAccess'
 import { hygieneFindingTarget } from '@/utils/detailTargets'
 import { utcTitle } from '@/utils/time'
 import { failureText } from '@/utils/failureText'
+import { failureFields } from '@/utils/aiContext/readFailure'
+import { keepSameRead } from '@/utils/keepSameRead'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { failureOf } from '@/hooks/useRefresh'
 import { ActionFailure } from '@/components/ActionFailure'
@@ -104,14 +106,15 @@ export default function ClusterHygiene() {
   const [historyRowsIn, setHistoryRowsIn] = useState(false)
   const historyTable = useAdaptiveTable({ rowHeight: 37, recalculationKey: `${tab}:${historyRowsIn}` })
   const historyPage = Math.floor(historyFirst / historyTable.rowsPerPage) + 1
+  const historyKey = ['hygiene', cluster, 'history', historyPage, historyTable.rowsPerPage]
   const { data: historyAnswer, isLoading: historyLoading } = useQuery({
-    queryKey: ['hygiene', cluster, 'history', historyPage, historyTable.rowsPerPage],
+    queryKey: historyKey,
     queryFn: async () => ({
       ...(await api.listHygieneReviews(cluster, { limit: historyTable.rowsPerPage, offset: (historyPage - 1) * historyTable.rowsPerPage })),
       page: historyPage, limit: historyTable.rowsPerPage,
     }),
     enabled: !!cluster && (tab === 'history' || !!viewId),
-    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[1] === cluster ? prev : undefined),
+    placeholderData: keepSameRead(historyKey, [3, 4]),
   })
   const history = historyAnswer?.items ?? []
   const historyTotal = historyAnswer?.total ?? 0
@@ -190,8 +193,18 @@ export default function ClusterHygiene() {
   // every finding the scan found; the report lists at most 5000 of them
   const total = counts ? counts.critical + counts.warning + counts.info + counts.exempt : 0
 
+  // Before a report: the first scan (or a sign-off's stored report) still coming reads "Scanning..." where the findings
+  // go, and a scan that failed reads its reason above them; the layer says the same, with no count.
+  const scanning = !report && (isLoading || (!!viewId && !viewed))
+  const scanFailed = !report && !scanning && !viewId && reportError ? reportError : null
   // who signed off and the sign-off notes stay out (people's names, free text)
-  useAIContext(report ? {
+  useAIContext(scanning ? {
+    summary: `클러스터 정리 점검 — ${cluster}${viewId ? ' (지난 검토 시점 보고서)' : ''}: 점검 중...`,
+    data: { cluster, tab, viewing_snapshot: !!viewId, scanning: true },
+  } : scanFailed ? {
+    summary: `클러스터 정리 점검 — ${cluster}: ${failureText(scanFailed)}`,
+    data: { cluster, tab, ...failureFields('report', scanFailed) },
+  } : report ? {
     summary: `클러스터 정리 점검 — ${cluster}${viewId ? ' (지난 검토 시점 보고서)' : ''}: critical ${report.counts.critical}, warning ${report.counts.warning}, info ${report.counts.info}, 예외 ${report.counts.exempt}`,
     data: {
       cluster, tab, viewing_snapshot: !!viewId, generated_at: report.generated_at,
@@ -209,7 +222,7 @@ export default function ClusterHygiene() {
         message: f.message, exempt: f.exempt, exempt_reason: f.exempt_reason,
       })),
     },
-  } : null, [report, cluster, viewId, tab, live, history, historyAnswer, historyTotal, historyShownPage, severity, check, search, findings, total])
+  } : null, [scanning, scanFailed, report, cluster, viewId, tab, live, history, historyAnswer, historyTotal, historyShownPage, severity, check, search, findings, total])
 
   // the sign-off window says what it is for, not its note
   const signWindow = signing && !viewId && canSignoff
