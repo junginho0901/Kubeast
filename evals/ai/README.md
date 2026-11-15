@@ -114,14 +114,15 @@ ask time it was asked.
 The account and earlier runs:
 
 - A hard case asks as a member the runner makes for it with Read on the case's cluster (the whole cluster), deleted
-  when the case ends; `--user admin` asks as the admin instead. A member holds no `admin.audit.read` or
+  when the case ends, with a password made for it and kept in memory; `--user admin` asks as the admin instead. A member holds no `admin.audit.read` or
   `admin.investigations.read`, so the chat's `audit_search` and `investigations` refuse it
   (`scripts/test_ai_eval_runner.py` reads that from the seeded roles and the tool permission tables).
 - Read still opens the Alerts inbox and an alert's investigation report (`alerts_inbox` with `with_report`, for
   whoever reads the whole cluster). For a chat round, keep `features.alertInvestigation.enabled` off (the inbox then
-  answers 404) or the inbox empty, and at least turn `features.alertInvestigation.automatic` off, so a fault of the
-  round (01, 07 and 10 can fire the demo's rules) starts no investigation the model could read and none takes the
-  model's one Claude Code place. The runner warns when the inbox holds alerts at the start.
+  answers 404), so a fault of the round (01, 07 and 10 can fire the demo's rules) starts no investigation the model
+  could read and none takes the model's one Claude Code place. A run with hard cases stops before the first case when
+  a cluster's investigation list answers at the start; `--alert-investigation-on` runs it anyway, with a warning and
+  `alert_investigation_on: true` in the round's record.
 - The round's record `<stamp>-round.json`, and the table's last line, give the account, the namespace suffix and how
   many investigations and inbox rows each cluster had before and after the round.
 - `--namespace-suffix random` (or a value of up to eight lowercase letters and digits) runs each case in
@@ -141,7 +142,8 @@ filled into `<out>/<time>-truth/<id>.json`), `time_tolerance_seconds`, `causes` 
 when it names every truth cause with an accepted kind and no decoy as a cause; a control passes only with
 `no_fault` and no cause other than kind `none`, and a fault case fails with `no_fault`. Its score is 1 less 0.25 for
 each other cause outside `also_ok`, the same resource named again under a kind its truth cause does not take
-included. Reported beside it: `started_at` within the tolerance, the required path hops in order, the causes whose
+included, and more than one such cause fails it (`EXTRAS_ALLOWED`): a right cause in a list of guesses is not a right
+answer. Reported beside it: `started_at` within the tolerance, the required path hops in order, the causes whose
 `evidence` points at no call that answered, and `pass_grounded` (pass with none of those). `expect` is still checked,
 as `prose_pass`. A truth's `symptom`, `distractor_at`, `variants_note` and a hop's `note` are for people.
 
@@ -152,8 +154,12 @@ or `no_fault` is scored as `block: loose`. A kind is read as `KINDS` writes it (
 (a namespace is lowercase, with no dot). A decoy whose name is only `*` (`Node/*`) is taken only by an answer that
 gives its kind: a bare name — a table, an index, a setting — is an extra cause, not a node.
 
-The table leaves hidden cases out: with two or more it gives their total, with one or a run of hidden cases only it
-says the results are in the JSON, so no `.md` or screen line gives one hidden case's score.
+The table leaves hidden cases out, and a hidden case's line on screen says `done` instead of pass or FAIL. Their total
+is written only in the run's last table, once the run ends, and only when two or more hidden cases have a scored row
+(a case whose setup failed has none): the tables written after each case, and a run of hidden cases only, say the
+results are in the JSON, so no `.md` or screen line, and no change between two tables, gives one hidden case's score.
+No test file holds a hidden case's answer either: the hidden truths are run from their folders, the scorer's own
+checks use made-up truths, and `scripts/test_ai_eval_cases.py` fails on a test file naming a hidden cause.
 
 `evals/ai-hard/` holds twenty-two cases. Each folder has `case.json`, `truth.json`, the manifests it applies and
 `NOTES.md`: what the AI has to notice, the trap, how it is scored and what is unsure. None has run on a cluster yet, so
@@ -206,14 +212,14 @@ that asks and the investigator must not read the `chaos-mesh.org` group, which 0
 | 05 | hidden cause | one workload is rolled out with its own `dnsConfig`; only its short-name calls fail | |
 | 06 | hidden cause | a rollout to a new ConfigMap with a bad value, held at 4 old and 2 new pods; asked at 5 and 65 minutes | |
 | 07 | hidden cause | the packets from one service to one caller are held 700 ms: both ends look healthy, only the traces show where | the OpenTelemetry demo and Chaos Mesh |
-| 08 | hidden cause, hidden | a scale-up fills the ResourceQuota; a CronJob's pods cannot be created and the data goes stale | |
+| 08 | hidden cause, hidden | in its folder only | |
 | 09 | hidden cause | a 25m CPU limit makes one service slow with no error; a busier pod is the decoy | the second cluster's Prometheus (cAdvisor, kube-state-metrics) |
 | 10 | trap | a schema change left open locks two tables of the shared database; its callers fail, then the role's connections run out | the OpenTelemetry demo |
 | 11 | trap, hidden | two unrelated faults at once: a release whose image tag does not exist, and a Service switched to a version not deployed | |
 | 12 | trap | an old crash-looping pod with a DNS-looking error, and a quiet in-place ConfigMap edit | |
 | 13 | control | no fault; one unrelated container restart five minutes before the question | |
 | 14 | control | no fault; a clean rollout four minutes before the question | |
-| 15 | control, hidden | no fault; traffic from another namespace rises fivefold and the HPA scales out | the second cluster's metrics-server and Prometheus |
+| 15 | control, hidden | in its folder only | the second cluster's metrics-server and Prometheus |
 | 16 | past | a Deployment scaled to 0 for five minutes, then back; asked at 6 and 70 minutes | the second cluster's Prometheus |
 | 17 | trap | a CronJob loses its cursor setting and reads a whole table every minute; the database's disk queue slows every caller while its CPU stays low | the second cluster's Prometheus (cAdvisor), for the CPU part |
 | 18 | hidden cause, hidden | a service's old namespace is emptied after a move; the frontend still calls the old address and treats the failure as signed out | |
@@ -265,7 +271,8 @@ python3 scripts/ai-eval.py --cases evals/ai-hard --alerts --out /tmp/ai-eval-ale
 
 The webhook gives the investigator a token for the alert's `namespace` label (none: the whole cluster), so a case whose
 alert names one namespace while a truth cause is in another is a field problem (`check_alert_scope`; a cause of a kind
-with no namespace, such as a Node, is not held). `--list` names it and a run does not start.
+with no namespace, such as a Node, is not held). `--list` names it and a run does not start; for a hidden case the
+line names nothing of its truth.
 
 `--alert-source` picks where the alert comes from:
 
@@ -287,7 +294,8 @@ alert repeats what the question says.
 A posted alert is one alert in Alertmanager's message (version 4), sent with the cluster's own webhook token (the HMAC
 of `ALERT_WEBHOOK_TOKEN` from `kubeast-secrets`, which `webhookClusterTokensOnly` also takes), receiver `ai-eval`, a
 fingerprint per run and a start a minute before it is sent, never before the fault. The webhook must count it
-`accepted`; any other answer (duplicate, filtered, skipped, automatic off) is a setup failure with the counts. At the
+`accepted`; any other answer (duplicate, filtered, skipped, automatic off) is a setup failure with the counts. A post
+answered 429 or 5xx is sent once more after 20 s. At the
 end of the case each alert the runner posted is sent again as resolved, so its inbox row is closed before the next
 case's investigator can read it with `alerts_inbox`.
 
@@ -296,29 +304,38 @@ of #909, made by the alert's own start and never by comparing a received time wi
 machine keep different clocks. Without one, the newest new one of that fingerprint is taken, and given up for one that
 holds the start if that comes while it runs (`matched_by` says which). The runner reads the detail of each new investigation of the alert once to match it and polls the
 investigations list every 5 s until the one it matched is done, failed or skipped, then reads that detail again; each
-detail read writes an `ai.investigation.view` row, the list none. A failed or skipped investigation is a row with
-`error`, not scored.
+detail read writes an `ai.investigation.view` row, the list none. A read the runner waits on (the inbox, the list, a
+detail) that fails — an HTTP error, a timeout, a dropped connection — is read again 5 s later; six failures in a row
+end that run of the case as a setup failure, and the next run and case go on. A failed or skipped investigation is a
+row with `error`, not scored. A hidden case's line on screen says `done`.
 
 How a report is scored, the same with v0.7.9's switches off and on:
 
-- `text` (`score_text`): the report's "Likely cause" section, or the whole report without that heading, read clause
-  by clause (a sentence, a line or a bullet, split at `;`). A clause with `NO_FAULT_WORDS` ("no fault", "found no
-  evidence of", "nothing points at", "찾지 못했", "장애가 없") or `CLEAR_WORDS` ("not changed", "looks normal",
-  "unrelated", "not the cause", "정상", "무관") rules out what it names; `NO_FAULT_WORDS` naming no object of the truth
-  (before or after a colon) is the report saying there is no fault (`no_fault`).
-  - A fault case passes when the report does not say there is no fault and names each truth cause — its resource's
-    name or an `accept_resources` form — in a clause that does not rule it out, with a word of its kind or an accepted
-    kind (`KIND_WORDS`) in a sentence that names it so, read with the objects' own names taken out (a name ends at
-    Hangul, so a particle does not keep it). A kind word speaks of one cause: the one its clause names, else the one
-    named nearest before it, else after it. Decoys it blames are listed in `decoys_named`, not held against it: the
-    symptom is named beside its cause.
-  - As the block's extras, each costs 0.25 (`extras`): another object named in a cause sentence — a decoy or a
-    `Kind/name`, not a truth cause, `also_ok` or a hop of `path` (`extra_objects`) — and each kind word a cause is given
-    beyond its own kinds and one more (the symptom's, `other_kinds`). More than one (`TEXT_EXTRAS_ALLOWED`) reads as a
-    list of guesses and does not pass.
-  - A control passes when the report says there is no fault or rules something out, and names no decoy as a cause —
-    in a clause that does not rule it out and holds `BLAME_WORDS` ("caused", "broke", "because", "원인", "실패").
-    `decoys_ruled_out` lists those it cleared.
+- `text` (`score_text`): the report's "Likely cause" section, or the whole report without that heading. A sentence
+  (a line and a bullet are one too) parts into clauses at `;`, `,`, while, but, and, though, -고, -지만 and -며, a
+  part that names no object going on the one before it ("restarted and caused the errors", "busier but unrelated").
+  In a clause, `NO_FAULT_WORDS` ("no fault", "found no evidence of", "nothing points at", "찾지 못했", "장애가 없") and
+  `CLEAR_WORDS` ("not changed", "looks normal", "unrelated", "not the cause", "정상", "무관") rule out the one object
+  named nearest before them (else after); the others named there stay. `NO_FAULT_WORDS` in a clause, or its part
+  before or after a colon, naming no object is the report saying there is no fault (`no_fault`) — unless it speaks of
+  the others ("No problems elsewhere", "no issues in the other workloads", `OTHERS_WORDS`), which rules them out. A
+  blame word blames one object: `CAUSE_WORDS` ("caused", "the culprit", "원인", "때문") and `FAIL_WORDS` ("broke",
+  "fails", "is down", "실패") the one named nearest before them, `CAUSED_BY_WORDS` ("because of", "due to") the one
+  nearest after; `FAIL_WORDS` blame no object of the truth's path, whose failure is the symptom ("so checkout fails").
+  - A fault case passes when the report does not say there is no fault, names each truth cause — its resource's name
+    or an `accept_resources` form — where it is not ruled out, gives it a word of its kind or an accepted kind
+    (`KIND_WORDS`; for a ConfigMap or Secret cause a change, `CHANGE_WORDS` such as "raised", "edited", "바뀌", is
+    `config_change`), blames no decoy (`decoys_named`) and holds at most one extra. A kind word counts in a sentence
+    that names a cause, outside the ruling-out words and the clauses whose every object is ruled out, read with the
+    objects' own names taken out (a name ends at Hangul, so a particle does not keep it). One stretch of words is one
+    kind ("memory limit" is `oom`). A kind word speaks of one cause: the one its clause names, else the one named
+    nearest before it, else after it.
+  - As the block's extras, each costs 0.25 (`extras`): another object the section names without ruling it out, in any
+    sentence — a decoy or a `Kind/name`, not a truth cause, `also_ok` or a hop of `path` (`extra_objects`) — and each
+    kind word a cause is given beyond its own kinds and one more (the symptom's, `other_kinds`). More than one
+    (`EXTRAS_ALLOWED`, the block's too) reads as a list of guesses and does not pass.
+  - A control passes when the report says there is no fault and blames no decoy and no other `Kind/name` (`suspects`).
+    "X is normal" alone is not a no-fault answer. `decoys_ruled_out` lists those it cleared.
   - `pass` and `score` are this check's, so an off round and an on round compare. It is weaker than the block's.
 - `rca` (`score_block`): with `features.alertInvestigation.evidenceCheck` or `ledger` on, the server takes the rca
   block off the report and keeps it as the investigation's `result`, which is scored as the chat's block is. A report
