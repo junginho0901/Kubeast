@@ -151,7 +151,8 @@ def test_every_hard_case_runs_under_a_namespace_suffix():
             ns = c["namespace"]
             new_dir, new = AI_EVAL.with_suffix(d, c, "zz9", root)
             assert new_dir != d and new["namespace"] == f"{ns}-zz9" and new["id"] == c["id"], d.name
-            assert f"{ns}-zz9" in new["question"] and f"{ns}-zz9" in new["question_vague"], d.name
+            for form in ("question", "question_vague"):  # 01, 07 and 10 ask about otel-demo, not their own namespace
+                assert (f"{ns}-zz9" in new[form]) == (ns in c[form]), (d.name, form)
             whole = re.compile(r"(?<![A-Za-z0-9-])" + re.escape(ns) + r"(?![A-Za-z0-9-])")
             for f in sorted(new_dir.iterdir()):
                 if f.suffix in (".json", ".yaml"):
