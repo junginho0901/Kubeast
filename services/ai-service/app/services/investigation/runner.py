@@ -258,6 +258,8 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         offered = {(t.get("function") or {}).get("name") for t in tools}
         if inv_windows.NARROW_TOOL not in offered:
             unnarrowed = f"{inv_windows.NARROW_TOOL} is not offered to this investigation"
+        elif not anomaly_rank_on():  # call_tool refuses it
+            unnarrowed = f"{inv_windows.NARROW_TOOL} is off in ai-service (ANOMALY_RANK_ENABLED)"
         elif not row.namespace:
             unnarrowed = "the alert names no namespace"
         if unnarrowed:

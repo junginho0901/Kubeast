@@ -15,6 +15,7 @@ from app.services.investigation import settings as inv_settings
 from app.services.investigation import windows as inv_windows
 from tests.test_alert_investigation import NOW, FakeService, cfg, completion, install_loop, row, tool_call
 from tests.test_investigation_window import CHANGES, STARTED, STEP_ZERO_ARGS, ChangesService, TimelineTool, at_now, first_message
+from tests.test_switch_cases import CASES
 
 NARROW_ARGS = {"namespace": "apps", "since_time": "2026-10-13T11:35:00Z"}  # the metrics window; until_time: the tool's now
 FINDING = {"check": "restarts", "target": "Pod/web-1", "verdict": "anomalous", "summary": "6 restarts in the window, 1 before",
@@ -47,11 +48,13 @@ class NarrowService(NarrowTool, FakeService):
         self.timeline_answer = timeline_answer
 
 
-def anomaly_rank_on(monkeypatch, on=True):
+def anomaly_rank_on(monkeypatch, on=True, in_ai_service=None):
+    """features.anomalyRank.enabled: the cluster's feature and ai-service's ANOMALY_RANK_ENABLED (one ConfigMap)."""
     async def fetch(k8s, cluster):
         return {"anomalyRank": {"enabled": on}}
 
     monkeypatch.setattr(feature_gate, "fetch_features", fetch)
+    monkeypatch.setenv("ANOMALY_RANK_ENABLED", "true" if (on if in_ai_service is None else in_ai_service) else "false")
 
 
 async def run(monkeypatch, service, audits=None, **kw):
@@ -86,10 +89,12 @@ def test_the_narrowing_answer_is_told_from_another():
 def test_the_switch_is_off_by_default(monkeypatch):
     monkeypatch.delenv("ALERT_INVESTIGATION_NARROW_FIRST", raising=False)
     assert inv_settings.load().narrow_first is False
-    monkeypatch.setenv("ALERT_INVESTIGATION_NARROW_FIRST", "true")
-    assert inv_settings.load().narrow_first is True
-    monkeypatch.setenv("ALERT_INVESTIGATION_NARROW_FIRST", "yes")
-    assert inv_settings.load().narrow_first is False
+
+
+@pytest.mark.parametrize("case", CASES, ids=lambda c: repr(c["value"]))
+def test_the_switch_reads_the_one_switch_rule(monkeypatch, case):
+    monkeypatch.setenv("ALERT_INVESTIGATION_NARROW_FIRST", case["value"])
+    assert inv_settings.load().narrow_first is case["on"]
 
 
 def test_the_narrowing_goes_between_markers_the_cluster_text_cannot_end():
@@ -168,6 +173,16 @@ async def test_a_cluster_without_the_narrowing_is_not_asked_and_the_report_says_
     assert "could not narrow the namespace down (anomaly_rank is not offered to this investigation)" in first_message(service)
     assert out["report"].endswith("Step 0 (the narrowing, read before the first model call) gave nothing to use: "
                                   "anomaly_rank is not offered to this investigation. The investigation went on without it.")
+
+
+@pytest.mark.asyncio
+async def test_with_ai_services_switch_off_the_narrowing_is_not_asked_and_the_report_says_so(monkeypatch):
+    anomaly_rank_on(monkeypatch, in_ai_service=False)
+    service = NarrowService([completion(content="## Summary\nok")])
+    audits = []
+    out = await run(monkeypatch, service, audits, narrow_first=True)
+    assert service.executed == [] and audits == [] and out["tool_calls"] == []
+    assert "could not narrow the namespace down (anomaly_rank is off in ai-service (ANOMALY_RANK_ENABLED))" in first_message(service)
 
 
 @pytest.mark.asyncio
