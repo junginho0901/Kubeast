@@ -662,7 +662,7 @@ autoscaling:
 # zone + hostname spread, soft (ScheduleAnyway)
 topologySpread:
   enabled: true
-# Seconds a pod behind a Service keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, its deregistration delay plus a few seconds.
+# Seconds a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, its deregistration delay plus a few seconds.
 podShutdown:
   preStopSeconds: 5
 
