@@ -62,7 +62,7 @@ func TestWatchesOfAClusterStartAFewAtATimeAndAllStart(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			out := make(chan ResponseMessage, 4)
+			out := make(chan *ResponseMessage, 4)
 			go watchInto(ctx, m, "/api/v1/pods", "watch=1", out)
 			select {
 			case f := <-out:
@@ -110,7 +110,7 @@ func TestWatchesWaitingForATurnHoldLittleAndLeaveWhenClosed(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	const waiting = 500
-	out := make(chan ResponseMessage, 1)
+	out := make(chan *ResponseMessage, 1)
 	var done sync.WaitGroup
 	for i := 0; i < waiting; i++ {
 		done.Add(1)
@@ -166,7 +166,7 @@ func TestALongWaitForATurnIsSaidAndTheListIsReadAgain(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	out := make(chan ResponseMessage, 8)
+	out := make(chan *ResponseMessage, 8)
 	go watchInto(ctx, m, "/api/v1/pods", "watch=1", out)
 	f := <-out
 	data, _ := f.Error.(map[string]string)
@@ -201,7 +201,7 @@ func TestAStartThatHangsGivesUpItsPlaceAfterAWhile(t *testing.T) {
 	defer cancel()
 	want := int64(defaultWatchStartsAtOnce + 4)
 	for i := int64(0); i < want; i++ {
-		go watchInto(ctx, m, "/api/v1/pods", "watch=1", make(chan ResponseMessage, 4))
+		go watchInto(ctx, m, "/api/v1/pods", "watch=1", make(chan *ResponseMessage, 4))
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for reached.Load() < want {
@@ -260,7 +260,7 @@ func TestWatchesStartedTogetherDoNotEndTogether(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for i := 0; i < 64; i++ {
-		go watchInto(ctx, m, "/api/v1/pods", "watch=1", make(chan ResponseMessage, 4))
+		go watchInto(ctx, m, "/api/v1/pods", "watch=1", make(chan *ResponseMessage, 4))
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for asks.Load() < 64 {
