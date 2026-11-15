@@ -46,6 +46,26 @@ def test_personal_data_shapes(case):
     assert redact.redact_text(case["input"], redact.Options(pii=True))[0] == case["want"]
 
 
+def _table_of(key, by_value):
+    """A fixture's table, whose keys are the values, as Numbers keeps it."""
+    return {kind: {redact.mask_key(key, kind, v): n for v, n in values.items()} for kind, values in (by_value or {}).items() if values}
+
+
+@pytest.mark.parametrize("case", CASES["mask_keys"], ids=lambda c: c["kind"] + "/" + c["value"])
+def test_mask_keys(case):
+    assert redact.mask_key(case["key"], case["kind"], case["value"]) == case["want"]
+
+
+@pytest.mark.parametrize("case", CASES["numbered_personal_data"], ids=lambda c: c["name"])
+def test_numbered_personal_data(case):
+    numbers = redact.Numbers(key=case["key"])
+    numbers.table = _table_of(case["key"], case.get("seed"))
+    numbers.after = dict(case.get("after") or {})
+    for text, want in zip(case["inputs"], case["want"], strict=True):
+        assert redact.redact_text(text, redact.Options(pii=True), numbers)[0] == want
+    assert {k: v for k, v in numbers.table.items() if v} == _table_of(case["key"], case["table"])
+
+
 def test_the_floating_snapshot_loses_a_key_written_right_after_a_korean_word():
     ctx = PageContextPayload(
         page_type="resource-list", page_title="Pods", path="/workloads/pods", snapshot_at="2026-11-07T00:00:00Z",
