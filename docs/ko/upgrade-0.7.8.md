@@ -15,6 +15,7 @@
 - Kubeast에서 시작한 노드 드레인은 업그레이드 전에 끝냅니다(#858).
 - 레플리카가 많으면 데이터베이스 연결 수가 `postgresql.maxConnections`(300) 안에 들어와야 하고, 아니면 업그레이드가 멈춥니다(#868).
 - 다른 역할과 같은 역할 그룹이 되는 이름의 사용자 정의 역할은 이름이 바뀌고 클러스터 부여를 잃으며, 바뀐 것마다 감사 행이 남습니다(#865).
+- ASCII가 아닌 글자가 든 역할 이름은 자기 그룹을 받습니다(`운영팀`은 `kubeast:role:~c6b4~c601~d300`으로 동작하고, 0.7.7에서는 `kubeast:role:---`였습니다). 그래서 클러스터에서 옛 그룹에 바인딩한 RBAC는 그 역할에 더는 적용되지 않습니다(#865).
 - 서비스 말고도 차트의 PostgreSQL과 Redis가 한 번 다시 시작합니다. 데이터베이스가 잠깐 멈추고 캐시는 비어서 시작합니다(#866, #868).
 - 먼저 데이터베이스를 백업합니다. 되돌려도 역할 이름 바꾸기는 되돌아가지 않습니다.
 
@@ -63,31 +64,30 @@ kubectl get nodes    # STATUS Ready,SchedulingDisabled
 
 ### 1.5 역할 이름
 
-업그레이드는 다른 역할이나 기본 역할과 같은 역할 그룹이 되는 이름의 사용자 정의 역할(`Admin` 옆의 `ADMIN`, ` read `, `a b` 옆의 `a-b`)의 이름을 바꾸고, 그 역할이 클러스터에서 가졌던 것을 지웁니다([5](#5-이번-업그레이드에서-한-번-일어나는-일), #865).
+업그레이드는 다른 역할이나 기본 역할과 같은 역할 그룹이 되는 이름의 사용자 정의 역할(`Admin` 옆의 `ADMIN`, ` read `, `a b` 옆의 `a-b`, `Ops 팀` 옆의 `OPS-팀`)의 이름을 바꾸고, 그 역할이 클러스터에서 가졌던 것을 지웁니다([5](#5-이번-업그레이드에서-한-번-일어나는-일), #865).
+이제 ASCII가 아닌 글자는 그룹에 코드 포인트로 남으므로, 글자 수가 같은 한글 이름(`운영팀`, `개발팀`)은 서로 다른 그룹이 되어 이름이 바뀌지 않고 부여도 그대로 남습니다.
 
-아래 질의가 그런 역할을 마이그레이션 규칙에 가깝게 보여 줍니다. 한 행이 한 그룹이고, 기본 역할(없으면 가장 오래된 역할)을 뺀 나머지 이름이 바뀝니다.
+[설치와 첫 설정](getting-started.md#업그레이드)의 "업그레이드"에 업그레이드가 이름을 바꿀 역할을 보여 주는 읽기 전용 쿼리가 있습니다. 각 역할이 그룹을 함께 쓰는 역할(`same_group_as`)과 각 역할의 부여·임시 부여의 복원·대기 중이거나 승인된 접근 요청·계정 등급 수가 나옵니다.
+그 쿼리를 `preview.sql`에 복사해 실행합니다.
 
 ```bash
-kubectl -n kubeast exec -i deploy/postgres -c postgres -- psql -U kubeast -d kubeast <<'SQL'
-WITH g AS (
-  SELECT id, name,
-         regexp_replace(translate(btrim(name), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'),
-                        '[^a-z0-9._-]', '-', 'g') AS grp
-  FROM roles)
-SELECT grp, string_agg(name, ' | ' ORDER BY id) AS names
-FROM g GROUP BY grp
-HAVING count(*) > 1
-    OR (grp IN ('pending', 'member', 'read', 'write', 'admin')
-        AND bool_and(name NOT IN ('Pending', 'Member', 'Read', 'Write', 'Admin')));
-SQL
+kubectl -n kubeast exec -i deploy/postgres -c postgres -- psql -U kubeast -d kubeast < preview.sql
 ```
 
 행이 없으면 이름이 바뀌는 역할이 없습니다. 행이 있으면 그 역할을 누가 어느 클러스터에서 가졌는지(Admin → Users → Cluster access) 적어 두어 나중에 다시 부여할 수 있게 합니다.
+`same_group_as`가 `Pending`인 행의 계정 등급은 기본 `Pending`으로 옮겨지고, 나머지는 바뀐 이름의 역할에 남습니다.
 
-옛 이름으로 그런 역할을 적은 차트 설정은 업그레이드 뒤 어떤 역할도 가리키지 않습니다.
+이름에 ASCII가 아닌 글자가 든 사용자 정의 역할은 새 그룹으로 동작합니다. 0.7.7은 그런 글자를 하나씩 `-`로 적었고(`운영팀`은 `kubeast:role:---`), 0.7.8은 `~`와 코드 포인트로 적습니다(`kubeast:role:~c6b4~c601~d300`).
+옛 그룹에 바인딩한 RBAC는 그 역할에 더는 적용되지 않습니다. 등록한 클러스터마다 Kubeast 역할 그룹의 바인딩을 나열하고, 이름에서 그런 글자가 있는 자리에 그룹이 `-`를 가진 것을 적어 둡니다.
 
 ```bash
-helm get values kubeast -n kubeast -o yaml | grep -n -A6 -E 'roleMapping|clusterGroupMapping|accessRequests'
+kubectl get clusterrolebindings,rolebindings -A -o wide | grep 'kubeast:role:'
+```
+
+역할 이름을 적는 차트 설정과, 각 설정이 바뀐 역할의 옛 이름으로 어떻게 되는지는 [6](#6-업그레이드한-뒤)에 있습니다.
+
+```bash
+helm get values kubeast -n kubeast -o yaml | grep -n -A6 -E 'roleMapping|defaultRole|clusterGroupMapping|accessRequests|customRoles'
 ```
 
 ### 1.6 데이터베이스 연결
@@ -191,7 +191,8 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 | 직접 고른 `images.redis` | 아무 Redis | Valkey나 Redis 6.2 이상 | #866 |
 | Claude Code를 켜고 메모리 limit을 그대로 둘 때 | `resources.aiService.limits.memory` | `ai.providers.claudeCode.memoryLimit: ""` | #859 |
 | Claude Code를 켜고 서버마다 한 턴만 둘 때 | `maxConcurrent: 1`(기본값) | `ai.providers.claudeCode.maxConcurrent: 1`(기본값 2) | #859 |
-| 이름이 바뀐 역할을 차트 설정이 적고 있을 때([1.5](#15-역할-이름)) | 옛 이름 | 역할 이름을 원하는 대로 고친 뒤 새 이름 | #865 |
+| 이름이 바뀐 역할을 차트 설정이 적고 있을 때([1.5](#15-역할-이름)) | 옛 이름 | 뜻한 역할의 이름. 새 이름, 역할에 새로 준 이름, 또는 기본 역할 | #865 |
+| `auth.accessRequests.roles`가 기본 역할 이름을 대소문자만 달리 적었을 때(`WRITE`) | 그 이름의 사용자 정의 역할 | 기본 역할(`Write`)로 읽힘. 뜻한 역할의 이름을 적습니다 | #865 |
 | `replicas`나 `autoscaling`에 서비스 일곱 개가 아닌 키가 있을 때 | 무시됨 | 멈춤. 키는 `authService`, `aiService`, `k8sService`, `sessionService`, `frontend`, `toolServer`, `gateway`입니다 | #867 |
 | 0.7.8이 더는 읽지 않는 값 | 무시됨 | 멈추고 대신 넣을 값을 알려 줍니다 | #908 |
 | `chartVersion`이나 릴리스의 `global.imageTag`가 든 값 파일 | `chartVersion`으로 멈춤 | 릴리스의 `global.imageTag`로도 멈춤. 둘 다 뺍니다 | #818 |
@@ -221,7 +222,8 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 
 - 서비스마다 연결이 되면 `SET`으로 `statement_timeout` 30초, `lock_timeout` 15초, `idle_in_transaction_session_timeout` 5분을 둡니다. 마이그레이션은 앞의 둘 없이 돕니다. `0`이면 아무것도 두지 않고 데이터베이스 설정을 따릅니다(#868).
 - 서비스별 풀: auth-service 20, session-service 20, k8s-service 10(노드 CPU 수 대신 고정값), ai-service 15, ModelConfig controller 4입니다(#868).
-- 새 표나 열: 기록 소유자(#851), 로그아웃한 로그인(#849), 클러스터 버전(#857), 노드 드레인(#858), Claude Code 자리(#859), 역할 이름(#865), 조사 재대기(#901)입니다.
+- 새 표나 열: 기록 소유자(#851), 로그아웃한 로그인(#849), 클러스터 버전(#857), 노드 드레인(#858), Claude Code 자리(#859), 조사 재대기(#901)입니다.
+- 역할 이름마다 만들어지는 그룹에 고유 인덱스가 생깁니다. 데이터베이스가 다른 역할의 그룹이 되는 이름을 거부합니다(#865).
 
 **Redis**
 
@@ -232,7 +234,11 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 **로그인, 역할, AI**
 
 - 로그아웃하면 서버에서 그 로그인이 끝납니다. 그 토큰은 거부되고 갱신할 수 없습니다(#849).
-- 기본 역할은 정확한 이름(`Pending`, `Member`, `Read`, `Write`, `Admin`)으로만 알아보고, `Pending` 계정 등급도 서비스의 미들웨어, API 키 교환, ai-service, Admin Users 어디서나 정확한 이름으로만 알아봅니다. 다른 역할과 같은 그룹이 되는 역할의 부여, 승인, OIDC 그룹 동기화는 거부됩니다(400 `role_same_group`)(#865).
+- 기본 역할은 정확한 이름(`Pending`, `Member`, `Read`, `Write`, `Admin`)으로만 알아보고, `Pending` 계정 등급도 서비스의 미들웨어, API 키 교환, ai-service, Admin Users 어디서나 정확한 이름으로만 알아봅니다. 다른 역할과 같은 그룹이 되는 역할의 부여, 승인, OIDC 그룹 동기화는 거부됩니다(400 `role_same_group`). 업그레이드 뒤에는 그런 역할이 저장되어 있지 않으므로 이것은 두 번째 확인입니다(#865).
+- 역할의 그룹은 ASCII를 전과 같이 두고, 그 밖의 글자는 `~`와 코드 포인트 16진수 네 자리로 적습니다(U+FFFF 위는 `~~`와 여섯 자리). `운영팀`은 `kubeast:role:~c6b4~c601~d300`, `개발팀`은 `kubeast:role:~ac1c~bc1c~d300`입니다. 두 이름은 `A`–`Z` 대소문자·공백·ASCII 기호만 다를 때만 같은 그룹이 됩니다(`Ops 팀`, `OPS-팀`). 역할 창이 이름이 만드는 그룹을 보여 줍니다(#865).
+- 차트는 `auth.impersonation.customRoles`의 그룹 대신 이름을 auth-service에 넘기고(`IMPERSONATION_CUSTOM_ROLES`, 이름 안의 쉼표는 `-`), auth-service가 그룹을 직접 만듭니다. 값은 바꾸지 않아도 됩니다(#865).
+- auth-service는 시작할 때 `auth.oidc.roleMapping`, `auth.oidc.defaultRole`, `auth.oidc.clusterGroupMapping`, `auth.accessRequests.roles`, `auth.impersonation.customRoles`의 역할 이름 가운데 그 이름 그대로인 역할이 없는 것마다(`customRoles`는 그 그룹이 되는 역할이 없을 때) 경고를 남깁니다. `roleMapping`이나 `defaultRole`이 없는 역할을 적은 로그인은 `oidc_role_missing`으로 실패합니다. 0.7.7에서는 `oidc_provision`이었습니다(#865).
+- 기본 역할 이름을 대소문자만 달리 쓴 `auth.accessRequests.roles` 항목(`WRITE`)은 기본 역할(`Write`)을 뜻합니다(#865).
 - Claude Code 턴은 데이터베이스의 설치 전체 자리(`maxConcurrentTotal`)를 씁니다. 턴은 자리를 `queueWaitSeconds`까지 기다립니다(#859).
 - 알림의 `startsAt`은 보낸 쪽이 어떤 오프셋을 쓰든 UTC로 저장됩니다(#909).
 
@@ -244,7 +250,8 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 
 ## 5. 이번 업그레이드에서 한 번 일어나는 일
 
-- **역할 이름 바뀜**(#865). 기본 역할의 그룹(`ADMIN`, ` read `)이나 다른 역할의 그룹(`a b` 옆의 `a-b`)이 되는 이름의 사용자 정의 역할은 `<이름>-renamed-<id>`로 이름이 바뀝니다. 한 그룹의 역할들 가운데 기본 역할, 없으면 가장 오래된 역할이 이름을 지킵니다. 이름이 바뀐 역할은 클러스터 부여와 열린 접근 요청을 잃습니다. 임시 부여는 되돌릴 역할로 돌아가고, 대기 중이거나 승인된 요청은 `role_renamed`로 끝나며, 부여가 바뀐 사람은 다시 로그인합니다. 계정 등급은 바뀐 이름의 역할로 남습니다. 바뀐 것마다 `system` / `migration`이 남긴 감사 행이 있습니다(`admin.roles.update`, `user.cluster_role.unset`, `access.request.expire`). 그 뒤로는 데이터베이스가 그런 이름을 거부합니다. 다음에 할 일은 [6](#6-업그레이드한-뒤)에 있고, 자세한 내용은 [기능](features.md)의 "역할 이름"에 있습니다.
+- **역할 이름 바뀜**(#865). 기본 역할의 그룹(`ADMIN`, ` read `, `PENDING`)이나 다른 역할의 그룹(`a b` 옆의 `a-b`, `Ops 팀` 옆의 `OPS-팀`)이 되는 이름의 사용자 정의 역할은 `<이름>-renamed-<id>`로 이름이 바뀝니다. 한 그룹의 역할들 가운데 기본 역할, 없으면 가장 오래된 역할이 이름을 지킵니다. 글자 수가 같은 한글 이름은 서로 다른 그룹이라 이름을 지킵니다. 이름이 바뀐 역할은 클러스터 부여와 열린 접근 요청을 잃습니다. 그 역할의 부여는 지워지고(임시 부여는 되돌릴 역할로 돌아감), 그 역할로 돌아갈 임시 부여는 끝날 때 돌아갈 역할 없이 끝나며, 대기 중이거나 승인된 요청은 `role_renamed`로 끝납니다. 부여가 바뀐 사람과 계정 등급이 그런 역할인 계정은 다시 로그인합니다. 계정 등급은 바뀐 이름의 역할로 남지만, `Pending` 그룹의 역할(`PENDING`)은 예외로 기본 `Pending`으로 옮겨지고 계속 승인을 기다립니다. 바뀐 것마다 `system` / `migration`이 남긴 감사 행이 있습니다(`admin.roles.update`, `user.cluster_role.unset`, `access.request.expire`, `user.role.update`). 그 뒤로는 데이터베이스가 그런 이름을 거부합니다. 다음에 할 일은 [6](#6-업그레이드한-뒤)에 있고, 자세한 내용은 [기능](features.md)의 "역할 이름"에 있습니다.
+- **ASCII가 아닌 역할 이름의 새 그룹**(#865). 이름에 ASCII가 아닌 글자가 든 사용자 정의 역할은 클러스터에서 새 그룹으로 동작하고(`운영팀`: `kubeast:role:---` → `kubeast:role:~c6b4~c601~d300`), 옛 그룹에 바인딩한 RBAC는 새 그룹을 바인딩할 때까지 그 역할에 적용되지 않습니다([6](#6-업그레이드한-뒤)). 그런 이름이 `auth.impersonation.customRoles`에 있으면 Kubeast가 도는 클러스터에서는 업그레이드가 옛 그룹의 바인딩을 새 그룹의 바인딩으로 바꿉니다. 다른 등록 클러스터에는 0.7.8 렌더를 적용할 때까지 옛 바인딩이 남습니다.
 - **PostgreSQL이 한 번 다시 시작함**(#868). 파드가 이제 `max_connections`를 받아 시작하므로 새 파드가 뜨는 동안 데이터베이스가 멈춥니다. 다시 뜰 때까지 쓰기와 민감한 읽기는 데이터베이스가 다시 시작할 때마다 그렇듯 503 `audit unavailable`을 답합니다.
 - **Redis와 k8s-service가 다시 시작하고 캐시가 비어서 시작함**(#866, #857). 0.7.7 k8s-service 파드가 사라질 때까지 그 파드가 새 Redis에 보내는 요청은 거부되고 캐시 미스로 처리됩니다.
 - **다른 시간대를 쓰는 곳에서 온 알림**(#909). 0.7.7까지는 `startsAt`의 오프셋을 버렸습니다. 업그레이드 뒤에도 울리는 그런 알림은 받은 편지함에 새 행이 생기고, 옛 행은 `inbox.staleAfterHours`가 지나면 Status unknown이 됩니다.
@@ -267,9 +274,39 @@ kubectl -n kubeast exec deploy/postgres -c postgres -- \
   psql -U kubeast -d kubeast -c "SELECT id, name FROM roles WHERE name LIKE '%-renamed-%' ORDER BY id"
 ```
 
-- 이름이 바뀐 역할이 아직 필요하면 역할 관리에서 원하는 이름을 준 뒤 그 클러스터에 다시 부여합니다. 누구에게 줄지는 [1.5](#15-역할-이름)에서 적어 둔 목록에 있습니다.
-- 옛 이름으로 그 역할을 적은 차트 설정(`auth.oidc.roleMapping`, `auth.oidc.clusterGroupMapping`, `auth.accessRequests.roles`)을 새 이름으로 바꾸고 `--reset-then-reuse-values`로 다시 업그레이드합니다.
-- `Pending` 계정 등급은 어디서나 정확한 이름으로만 알아봅니다. 계정 등급이 이름이 바뀐 역할(예: `PENDING`)이던 계정은 더는 Pending으로 읽히지 않으므로, Admin → Users에서 원하는 등급을 줍니다.
+마이그레이션이 도는 동안에도 0.7.7 파드가 요청을 받습니다. 마이그레이션이 커밋하기 직전에 그 파드가 쓴 부여는 바뀐 이름의 역할에 남습니다.
+업그레이드 직후, 누군가 바뀐 역할을 다시 부여하기 전에 아래 명령으로 그런 부여를 볼 수 있습니다. 보통은 아무것도 나오지 않습니다. 나온 부여는 그 역할이 필요하지 않으면 Cluster access에서 지웁니다.
+
+```bash
+kubectl -n kubeast exec -i deploy/postgres -c postgres -- psql -U kubeast -d kubeast <<'SQL'
+SELECT g.user_id, g.cluster_id, r.name
+  FROM user_cluster_roles g JOIN roles r ON r.id = g.role_id
+ WHERE r.id IN (SELECT target_id::int FROM auth_audit_logs
+                 WHERE actor_user_id = 'system' AND actor_email = 'migration' AND action = 'admin.roles.update');
+SQL
+```
+
+- 이름이 바뀐 역할이 아직 필요하면 그 클러스터에 다시 부여합니다. 누구에게 줄지는 [1.5](#15-역할-이름)에서 적어 둔 목록에 있습니다. 새 이름은 이미 유일하므로 먼저 이름을 고칠 필요는 없습니다.
+- 계정 등급이 이름이 바뀐 역할이던 계정은 다시 로그인하고 그 역할을 유지합니다. `Pending` 그룹의 역할이던 계정은 예외로 이제 기본 `Pending`에 있고, 전처럼 Admin → Users에서 승인을 기다립니다. `Pending` 계정 등급은 어디서나 정확한 이름으로만 알아봅니다.
+
+**역할 이름을 적는 차트 설정**(#865). auth-service는 시작할 때 설정이 적은 역할 이름 가운데 그 이름 그대로인 역할이 없는 것마다(`auth.impersonation.customRoles`는 그 그룹이 되는 역할이 없을 때) 설정, 역할, 그 결과(`outcome`), 이름이 만드는 그룹의 역할(`same_group_as`)과 함께 경고를 남깁니다.
+
+```bash
+kubectl -n kubeast logs deploy/auth-service | grep 'a chart setting names a role not stored as written'
+```
+
+바꾸기 전까지, 이름이 바뀐 역할을 옛 이름으로 적은 설정은 다음과 같이 됩니다.
+
+- `auth.oidc.roleMapping`, `auth.oidc.defaultRole`: 그 설정이 적용되는 사람의 로그인이 `oidc_role_missing`으로 실패합니다([OIDC](oidc.md) §6).
+- `auth.oidc.clusterGroupMapping`: 그 클러스터 부여만 로그에 경고를 남기고 건너뛰며, 로그인은 계속됩니다.
+- `auth.accessRequests.roles`: 기본 역할 이름을 대소문자만 달리 쓴 항목(`WRITE`)은 기본 역할(`Write`)을 뜻합니다. 기본 역할의 권한은 이름이 바뀐 사용자 정의 역할보다 넓을 수 있습니다. 그 밖의 옛 이름은 `Unknown role`로 거절됩니다.
+- `auth.impersonation.customRoles`: 차트는 이름이 만드는 그룹을 바인딩합니다. 그 그룹은 이제 이름을 지킨 역할이 갖거나, 어떤 역할에도 붙지 않습니다.
+
+각 설정을 뜻한 역할의 이름으로 바꾸고 `--reset-then-reuse-values`로 다시 업그레이드합니다.
+
+**ASCII가 아닌 역할 이름의 그룹**(#865). 역할 관리의 역할 창이 각 역할이 이제 만드는 그룹을 보여 줍니다.
+등록한 클러스터마다 그 그룹을 impersonator에 허용하고, 옛 그룹을 바인딩했던 곳([1.5](#15-역할-이름)에서 나열한 바인딩)에 바인딩합니다. 둘 다 [클러스터 요구 사항](cluster-requirements.md) §1에 있습니다.
+`auth.impersonation.customRoles`의 이름은 Kubeast가 도는 클러스터를 뺀 등록 클러스터마다 0.7.8 렌더(`scripts/render-target-rbac.sh`)를 적용하고, 거기 남은 옛 그룹의 바인딩(`kubeast-role-<옛 slug>-<ClusterRole>`, `view`에 바인딩한 `운영팀`이면 `kubeast-role-----view`)을 지웁니다. `helm upgrade`는 Kubeast가 도는 클러스터에서만 그 바인딩을 바꿨습니다.
 
 **cordon된 노드**(#858). 등록한 클러스터마다 `kubectl get nodes`를 보고, 끊긴 드레인이 cordon된 채 남긴 노드는 `kubectl uncordon <node>`로 풉니다.
 
@@ -283,7 +320,8 @@ helm rollback kubeast <revision> -n kubeast
 ```
 
 - **데이터베이스**: 0.7.8의 표와 열은 남고 0.7.7은 그대로 시작합니다. 0.7.7의 마이그레이션은 앞선 데이터베이스에서 적용할 것을 찾지 못하고, 서비스는 스키마 22 이상을 기다립니다.
-- **역할**(#865): 바뀐 이름과 지워진 부여는 그대로 남습니다. [1.9](#19-데이터베이스-백업)의 덤프를 복원해야만 옛 이름과 부여가 돌아오며, 그러면 데이터베이스 전체가 그 시점으로 돌아갑니다.
+- **역할**(#865): 바뀐 이름, 지워진 부여, `Pending`으로 옮겨진 계정 등급은 그대로 남고, 다른 역할의 그룹이 되는 이름을 거부하는 인덱스도 남습니다. [1.9](#19-데이터베이스-백업)의 덤프를 복원해야만 옛 이름과 부여가 돌아오며, 그러면 데이터베이스 전체가 그 시점으로 돌아갑니다.
+- **역할 그룹**(#865): 0.7.7은 옛 그룹을 다시 만들므로(`운영팀`은 `kubeast:role:---`로 동작) 새 그룹에 만든 바인딩은 0.7.7에서 적용되지 않습니다.
 - **로그아웃**(#849): 0.7.7의 auth-service는 로그아웃한 로그인을 읽지 않으므로, 로그아웃한 로그인의 토큰도 만료될 때까지(`auth.tokenTTLMinutes`, 기본 15분) 다시 받아들입니다.
 - **Redis**(#866): 0.7.7의 Redis가 비밀번호 하나(`REDIS_PASSWORD`, `kubeast-secrets`에 그대로 있음)로 돌아오고, 그 k8s-service가 그 비밀번호로 로그인합니다. 그 Redis가 답하기 전에 뜬 0.7.7 k8s-service 파드는 다시 시작할 때까지 메모리에 캐시합니다. `kubeast-redis-users`는 남고(`helm.sh/resource-policy: keep`), 다음 업그레이드가 그 비밀번호를 다시 읽습니다.
 - **PostgreSQL**(#868)은 한 번 더 다시 시작하고 `max_connections` 100으로 돌아갑니다.
@@ -309,5 +347,6 @@ git fetch --tags && git checkout v0.7.8
 - **멈출 때 기다림**: Kubeast 서비스 일곱 개와 Redis에 멈출 시간을 35초 줍니다(`stop_grace_period`. Docker 기본값은 10초). 기본값일 때 차트가 서비스에 주는 시간입니다. `docker compose stop`과 업그레이드는 컨테이너마다 그만큼 걸릴 수 있습니다. `preStop` 기다림, 터미널 드레인, PodDisruptionBudget, HPA는 없습니다(#856).
 - **Redis**: 전과 같이 사용자도 비밀번호도 없고 Compose 네트워크 안에서만 닿습니다(#866은 차트만 바꿉니다).
 - **데이터베이스 한도**: 같은 세션 한도와 풀이 기본으로 적용됩니다. 바꾸려면 `.env`에 `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS`(`0`이면 두지 않음)나 `DB_POOL_MAX_AUTH`, `DB_POOL_MAX_SESSION`, `DB_POOL_MAX_K8S`, `DB_POOL_MAX_AI`를 넣습니다. Compose의 PostgreSQL은 기본 `max_connections`(100)를 그대로 쓰며, 서비스마다 컨테이너 하나면 그 안에 들어갑니다(#868).
-- **차트와 같은 것**: 마이그레이션, 역할 이름 바꾸기([1.5](#15-역할-이름)의 질의는 `docker compose exec -T postgres psql -U kubeast -d kubeast`로 돌림), 알림 시간의 UTC 저장, 캐시가 비어서 시작하는 것, 드레인([1.4](#14-노드-드레인))은 차트와 같습니다.
+- **사용자 정의 역할 바인딩**: `.env`의 `IMPERSONATION_CUSTOM_ROLES`는 전과 같이 역할 이름을 받습니다. ASCII가 아닌 이름의 새 그룹은 클러스터에 바인딩합니다([6](#6-업그레이드한-뒤)).
+- **차트와 같은 것**: 마이그레이션, 역할 이름 바꾸기([1.5](#15-역할-이름)와 [6](#6-업그레이드한-뒤)의 쿼리는 `kubectl -n kubeast exec -i deploy/postgres -c postgres -- psql -U kubeast -d kubeast` 대신 `docker compose exec -T postgres psql -U kubeast -d kubeast`로 돌림), 알림 시간의 UTC 저장, 캐시가 비어서 시작하는 것, 드레인([1.4](#14-노드-드레인))은 차트와 같습니다.
 - **되돌리기**: `git checkout v0.7.7 && ./install-docker.sh --port <지금 포트>`를 씁니다. Redis를 빼면 [7](#7-077로-되돌리기)의 내용이 그대로 적용됩니다.

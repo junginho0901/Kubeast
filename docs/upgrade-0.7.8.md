@@ -15,6 +15,7 @@ The commands below use the release name `kubeast` in the namespace `kubeast`; pu
 - Finish node drains started from Kubeast before you upgrade (#858).
 - Many replicas: the database connections must fit `postgresql.maxConnections` (300) or the upgrade stops (#868).
 - Custom roles whose names make the same role group as another role are renamed and lose their cluster grants, with an audit row for each change (#865).
+- Role names with characters outside ASCII get groups of their own (`운영팀` acts as `kubeast:role:~c6b4~c601~d300`; in 0.7.7 it was `kubeast:role:---`), so RBAC bound to the old group on your clusters stops applying to them (#865).
 - Besides the services, the chart's PostgreSQL and Redis restart once: the database pauses for a moment and the cache starts empty (#866, #868).
 - Back up the database first: a rollback does not undo the role renames.
 
@@ -63,31 +64,30 @@ From 0.7.8 a drain's progress is in the database, and one cut short reads "Inter
 
 ### 1.5 Role names
 
-The upgrade renames the custom roles whose names make the same role group as another role or a built-in's (`ADMIN` beside `Admin`, ` read `, `a-b` beside `a b`), and removes what they held on clusters ([5](#5-one-time-effects-of-this-upgrade), #865).
+The upgrade renames the custom roles whose names make the same role group as another role or a built-in's (`ADMIN` beside `Admin`, ` read `, `a-b` beside `a b`, `OPS-팀` beside `Ops 팀`), and removes what they held on clusters ([5](#5-one-time-effects-of-this-upgrade), #865).
+A character outside ASCII now keeps its code point in the group, so Korean names of one length (`운영팀`, `개발팀`) make different groups, are not renamed and keep their grants.
 
-This query lists them, close to the rule the migration uses (each row is one group; all but the built-in, else the oldest, are renamed):
+[Getting started](getting-started.md#upgrade) "Upgrade" has a query that reads only and lists the roles the upgrade will rename: the role whose group each shares (`same_group_as`), and how many grants, restores of a temporary grant, pending or approved access requests and account levels each holds.
+Copy it into `preview.sql` and run it:
 
 ```bash
-kubectl -n kubeast exec -i deploy/postgres -c postgres -- psql -U kubeast -d kubeast <<'SQL'
-WITH g AS (
-  SELECT id, name,
-         regexp_replace(translate(btrim(name), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'),
-                        '[^a-z0-9._-]', '-', 'g') AS grp
-  FROM roles)
-SELECT grp, string_agg(name, ' | ' ORDER BY id) AS names
-FROM g GROUP BY grp
-HAVING count(*) > 1
-    OR (grp IN ('pending', 'member', 'read', 'write', 'admin')
-        AND bool_and(name NOT IN ('Pending', 'Member', 'Read', 'Write', 'Admin')));
-SQL
+kubectl -n kubeast exec -i deploy/postgres -c postgres -- psql -U kubeast -d kubeast < preview.sql
 ```
 
 No rows: nothing is renamed. With rows, note who holds those roles on which cluster (Admin → Users → Cluster access), so you can grant them again after.
+The account levels of a row whose `same_group_as` is `Pending` move to the built-in `Pending`; the others stay on the renamed role.
 
-A chart setting that names such a role by its old name names no role after the upgrade:
+A custom role whose name holds a character outside ASCII acts as a new group: 0.7.7 wrote each such character as `-` (`운영팀` was `kubeast:role:---`), 0.7.8 writes `~` and its code point (`kubeast:role:~c6b4~c601~d300`).
+RBAC bound to the old group stops applying to the role. On each registered cluster, list the bindings of Kubeast's role groups and note those whose group has a `-` where the name has such a character:
 
 ```bash
-helm get values kubeast -n kubeast -o yaml | grep -n -A6 -E 'roleMapping|clusterGroupMapping|accessRequests'
+kubectl get clusterrolebindings,rolebindings -A -o wide | grep 'kubeast:role:'
+```
+
+The chart settings that name roles, and what each does with a renamed role's old name, are in [6](#6-after-you-upgrade):
+
+```bash
+helm get values kubeast -n kubeast -o yaml | grep -n -A6 -E 'roleMapping|defaultRole|clusterGroupMapping|accessRequests|customRoles'
 ```
 
 ### 1.6 Database connections
@@ -191,7 +191,8 @@ Only the rows that match your install. A row marked "stops" stops the upgrade, w
 | `images.redis` of your own | any Redis | Valkey, or Redis 6.2 or later | #866 |
 | Claude Code on, keep the memory limit | `resources.aiService.limits.memory` | `ai.providers.claudeCode.memoryLimit: ""` | #859 |
 | Claude Code on, keep one turn per server | `maxConcurrent: 1` (default) | `ai.providers.claudeCode.maxConcurrent: 1` (default 2) | #859 |
-| A chart setting names a renamed role ([1.5](#15-role-names)) | old name | The new name, after renaming the role as you want it | #865 |
+| A chart setting names a renamed role ([1.5](#15-role-names)) | old name | The name of the role you mean: the new name, a name you give the role, or a built-in | #865 |
+| `auth.accessRequests.roles` spells a built-in in other capitals (`WRITE`) | a custom role of that name | Read as the built-in (`Write`): write the name of the role you mean | #865 |
 | `replicas` or `autoscaling` with a key other than the seven services | ignored | Stops. The keys are `authService`, `aiService`, `k8sService`, `sessionService`, `frontend`, `toolServer`, `gateway` | #867 |
 | A value 0.7.8 no longer reads | ignored | Stops and says what to set instead | #908 |
 | A values file holding `chartVersion` or a release's `global.imageTag` | stops on `chartVersion` | Also stops on a release's `global.imageTag`: leave both out | #818 |
@@ -221,7 +222,8 @@ New values whose defaults need nothing from you: `podShutdown.preStopSeconds` (5
 
 - Each service sets `statement_timeout` 30 s, `lock_timeout` 15 s and `idle_in_transaction_session_timeout` 5 min on its connections, with `SET` once connected; the migrations run without the first two. `0` sets nothing and leaves the database's setting (#868).
 - Pools per service: auth-service 20, session-service 20, k8s-service 10 (a fixed number instead of one per node CPU), ai-service 15, ModelConfig controller 4 (#868).
-- New tables or columns: recording owners (#851), signed-out sign-ins (#849), cluster versions (#857), node drains (#858), Claude Code slots (#859), role names (#865), investigation requeues (#901).
+- New tables or columns: recording owners (#851), signed-out sign-ins (#849), cluster versions (#857), node drains (#858), Claude Code slots (#859), investigation requeues (#901).
+- A unique index on the group each role name makes: the database refuses a name that makes another role's group (#865).
 
 **Redis**
 
@@ -232,7 +234,11 @@ New values whose defaults need nothing from you: `podShutdown.preStopSeconds` (5
 **Sign-in, roles and AI**
 
 - Signing out ends the sign-in on the server: its tokens are refused and cannot be refreshed (#849).
-- A built-in role is known by its exact name (`Pending`, `Member`, `Read`, `Write`, `Admin`), and so is the `Pending` account level everywhere: the services' middleware, the API key exchange, ai-service and Admin Users. A grant, an approval or an OIDC group sync of a role sharing another role's group is refused (400 `role_same_group`) (#865).
+- A built-in role is known by its exact name (`Pending`, `Member`, `Read`, `Write`, `Admin`), and so is the `Pending` account level everywhere: the services' middleware, the API key exchange, ai-service and Admin Users. A grant, an approval or an OIDC group sync of a role sharing another role's group is refused (400 `role_same_group`); after the upgrade no such role is stored, so this is a second check (#865).
+- A role's group keeps ASCII as before and writes any other character as `~` and its code point in four hex digits (`~~` and six above U+FFFF): `운영팀` is `kubeast:role:~c6b4~c601~d300`, `개발팀` `kubeast:role:~ac1c~bc1c~d300`. Two names share a group only when they differ in `A`–`Z` letter case, spaces or ASCII punctuation (`Ops 팀`, `OPS-팀`). The role window shows the group a name makes (#865).
+- The chart hands auth-service the names in `auth.impersonation.customRoles` (`IMPERSONATION_CUSTOM_ROLES`, a comma in a name written as `-`) instead of their groups, and auth-service makes each group itself. Your values need no change (#865).
+- auth-service logs a warning at start for each role name in `auth.oidc.roleMapping`, `auth.oidc.defaultRole`, `auth.oidc.clusterGroupMapping`, `auth.accessRequests.roles` and `auth.impersonation.customRoles` that no role holds as written (for `customRoles`, whose group no role makes). A sign-in whose `roleMapping` or `defaultRole` names no role fails as `oidc_role_missing`; 0.7.7 failed it as `oidc_provision` (#865).
+- An `auth.accessRequests.roles` entry that is a built-in's name in other capitals (`WRITE`) stands for the built-in (`Write`) (#865).
 - Claude Code turns take install-wide slots in the database (`maxConcurrentTotal`); a turn waits up to `queueWaitSeconds` for one (#859).
 - An alert's `startsAt` is stored in UTC, whatever offset the sender writes (#909).
 
@@ -244,7 +250,8 @@ New values whose defaults need nothing from you: `podShutdown.preStopSeconds` (5
 
 ## 5. One-time effects of this upgrade
 
-- **Roles renamed** (#865). A custom role whose name makes a built-in's group (`ADMIN`, ` read `) or another role's group (`a-b` beside `a b`) is renamed `<name>-renamed-<id>`; of the roles of one group, the built-in, else the oldest, keeps its name. A renamed role loses its cluster grants and open access requests: a temporary grant goes back to the role it would restore, pending and approved requests end with `role_renamed`, and the people whose grants changed sign in again. An account level stays on the renamed role. Each change is an audit row by `system` / `migration` (`admin.roles.update`, `user.cluster_role.unset`, `access.request.expire`). From then on the database refuses such a name. What to do next is in [6](#6-after-you-upgrade); [Features](features.md) "Role names" has the details.
+- **Roles renamed** (#865). A custom role whose name makes a built-in's group (`ADMIN`, ` read `, `PENDING`) or another role's group (`a-b` beside `a b`, `OPS-팀` beside `Ops 팀`) is renamed `<name>-renamed-<id>`; of the roles of one group, the built-in, else the oldest, keeps its name. Korean names of one length make different groups and keep their names. A renamed role loses its cluster grants and open access requests: its grants are removed (a temporary grant goes back to the role it would restore), a temporary grant that would bring it back ends with nothing to restore, and pending and approved requests end with `role_renamed`. The people whose grants changed and the accounts whose account level is such a role sign in again. An account level stays on the renamed role, except one of `Pending`'s group (`PENDING`), which moves to the built-in `Pending` and still waits for approval. Each change is an audit row by `system` / `migration` (`admin.roles.update`, `user.cluster_role.unset`, `access.request.expire`, `user.role.update`). From then on the database refuses such a name. What to do next is in [6](#6-after-you-upgrade); [Features](features.md) "Role names" has the details.
+- **New groups for role names outside ASCII** (#865). A custom role whose name holds a character outside ASCII acts on clusters as a new group (`운영팀`: `kubeast:role:---` → `kubeast:role:~c6b4~c601~d300`), and RBAC bound to the old group no longer applies to it until the new group is bound ([6](#6-after-you-upgrade)). With such a name in `auth.impersonation.customRoles`, the upgrade replaces the bindings of the old group with those of the new one on the cluster Kubeast runs in; other registered clusters keep the old ones until you apply the 0.7.8 render.
 - **PostgreSQL restarts once** (#868). Its pod now starts with `max_connections`, so the database pauses while the new pod starts. Writes and sensitive reads answer 503 `audit unavailable` until it is back, as on any restart of the database.
 - **Redis and k8s-service restart, and the cache starts empty** (#866, #857). Until the 0.7.7 k8s-service pod has gone, its requests to the new Redis are refused and read as cache misses.
 - **Alerts from a sender that writes another zone** (#909). Up to 0.7.7 the offset of `startsAt` was dropped. Such an alert still firing after the upgrade gets a new inbox row, and the old row reads Status unknown after `inbox.staleAfterHours`.
@@ -267,9 +274,39 @@ kubectl -n kubeast exec deploy/postgres -c postgres -- \
   psql -U kubeast -d kubeast -c "SELECT id, name FROM roles WHERE name LIKE '%-renamed-%' ORDER BY id"
 ```
 
-- If a renamed role is still wanted, give it the name you want in Role Management, then grant it again on its clusters; the list you made in [1.5](#15-role-names) says to whom.
-- Change a chart setting that names it by its old name (`auth.oidc.roleMapping`, `auth.oidc.clusterGroupMapping`, `auth.accessRequests.roles`) to the new name, and upgrade again with `--reset-then-reuse-values`.
-- The `Pending` account level is matched by its exact name everywhere. An account whose level was a renamed role (`PENDING`, for example) is not read as Pending any more; set the level you want in Admin → Users.
+A 0.7.7 pod keeps serving while the migration runs, and a grant it writes in the moment before the migration commits stays on the renamed role.
+Right after the upgrade, before anyone grants a renamed role again, this lists such grants; it lists none in the usual case. Remove one in Cluster access unless the role is wanted:
+
+```bash
+kubectl -n kubeast exec -i deploy/postgres -c postgres -- psql -U kubeast -d kubeast <<'SQL'
+SELECT g.user_id, g.cluster_id, r.name
+  FROM user_cluster_roles g JOIN roles r ON r.id = g.role_id
+ WHERE r.id IN (SELECT target_id::int FROM auth_audit_logs
+                 WHERE actor_user_id = 'system' AND actor_email = 'migration' AND action = 'admin.roles.update');
+SQL
+```
+
+- If a renamed role is still wanted, grant it again on its clusters; the list you made in [1.5](#15-role-names) says to whom. Its new name is already unique, so it need not be renamed first.
+- An account whose account level was a renamed role signs in again and keeps that role, except one of `Pending`'s group, which is now on the built-in `Pending` and waits for approval in Admin → Users as before. The `Pending` account level is matched by its exact name everywhere.
+
+**Chart settings that name roles** (#865). auth-service logs a warning at start for each role name a setting gives that no role holds as written (for `auth.impersonation.customRoles`, whose group no role makes), with the setting, the role, what follows (`outcome`) and the role whose group the name makes (`same_group_as`):
+
+```bash
+kubectl -n kubeast logs deploy/auth-service | grep 'a chart setting names a role not stored as written'
+```
+
+Until you change it, a setting naming a renamed role by its old name works out as follows:
+
+- `auth.oidc.roleMapping`, `auth.oidc.defaultRole`: the sign-in of a person it applies to fails with `oidc_role_missing` ([OIDC](oidc.md) §6).
+- `auth.oidc.clusterGroupMapping`: that cluster grant is skipped with a warning in the log, and the sign-in goes on.
+- `auth.accessRequests.roles`: an entry that is a built-in's name in other capitals (`WRITE`) stands for the built-in (`Write`), whose permissions may be wider than the renamed custom role's. Any other old name is refused as `Unknown role`.
+- `auth.impersonation.customRoles`: the chart binds the group the name makes, which the role that kept its name now holds, or no role.
+
+Change each to the name of the role you mean and upgrade again with `--reset-then-reuse-values`.
+
+**Groups of role names outside ASCII** (#865). Role Management's role window shows the group each role now makes.
+On each registered cluster, allow the impersonator that group and bind it where the old group was bound (the bindings you listed in [1.5](#15-role-names)); [Cluster requirements](cluster-requirements.md) §1 has both.
+For names in `auth.impersonation.customRoles`, apply the 0.7.8 render (`scripts/render-target-rbac.sh`) to each registered cluster other than the one Kubeast runs in, and delete the old group's bindings there, named `kubeast-role-<old slug>-<ClusterRole>` (`kubeast-role-----view` for `운영팀` bound to `view`). `helm upgrade` replaced them only on the cluster Kubeast runs in.
 
 **Cordoned nodes** (#858). On each registered cluster, `kubectl get nodes`; run `kubectl uncordon <node>` for a node a drain cut short left cordoned.
 
@@ -283,7 +320,8 @@ helm rollback kubeast <revision> -n kubeast
 ```
 
 - **Database**: the 0.7.8 tables and columns stay, and 0.7.7 still starts. Its migrations find nothing to apply on a database that is ahead, and its services wait for schema 22 or later.
-- **Roles** (#865): the renames and the removed grants stay. Only restoring the dump from [1.9](#19-back-up-the-database) brings the old names and grants back, and it takes the whole database back to that moment.
+- **Roles** (#865): the renames, the removed grants and the account levels moved to `Pending` stay, and so does the index that refuses a name making another role's group. Only restoring the dump from [1.9](#19-back-up-the-database) brings the old names and grants back, and it takes the whole database back to that moment.
+- **Role groups** (#865): 0.7.7 makes the old groups again (`운영팀` acts as `kubeast:role:---`), so a binding made for a new group does not apply under it.
 - **Sign-outs** (#849): 0.7.7's auth-service does not read the signed-out sign-ins, so a token whose sign-in was signed out is taken again until it expires (`auth.tokenTTLMinutes`, 15 minutes by default).
 - **Redis** (#866): 0.7.7's Redis comes back with one password (`REDIS_PASSWORD`, still in `kubeast-secrets`), and its k8s-service signs in with it. A 0.7.7 k8s-service pod that starts before that Redis answers keeps its cache in memory until it restarts. `kubeast-redis-users` stays (`helm.sh/resource-policy: keep`), and the next upgrade reads its passwords again.
 - **PostgreSQL** (#868) restarts again and goes back to `max_connections` 100.
@@ -309,5 +347,6 @@ What differs from the chart:
 - **Stop wait**: the seven Kubeast services and Redis get 35 s to stop (`stop_grace_period`; Docker's default is 10 s), what the chart gives a service with the defaults. `docker compose stop` and the upgrade can take that long per container. There is no `preStop` wait, terminal drain, PodDisruptionBudget or HPA (#856).
 - **Redis**: as before, with no users and no password, reachable only on the Compose network (#866 changes the chart only).
 - **Database limits**: the same session limits and pools apply by default. To change them, set `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS` (`0` sets nothing) or `DB_POOL_MAX_AUTH`, `DB_POOL_MAX_SESSION`, `DB_POOL_MAX_K8S`, `DB_POOL_MAX_AI` in `.env`. Compose's PostgreSQL keeps its default `max_connections` (100), which one container of each service fits (#868).
-- **The same as the chart**: the migrations, the role renames ([1.5](#15-role-names), run the query with `docker compose exec -T postgres psql -U kubeast -d kubeast`), the alert times in UTC, the cache starting empty and the drains ([1.4](#14-node-drains)).
+- **Custom role bindings**: `IMPERSONATION_CUSTOM_ROLES` in `.env` takes role names, as before. Bind the new group of a name outside ASCII on your clusters ([6](#6-after-you-upgrade)).
+- **The same as the chart**: the migrations, the role renames (run the queries of [1.5](#15-role-names) and [6](#6-after-you-upgrade) with `docker compose exec -T postgres psql -U kubeast -d kubeast` in place of `kubectl -n kubeast exec -i deploy/postgres -c postgres -- psql -U kubeast -d kubeast`), the alert times in UTC, the cache starting empty and the drains ([1.4](#14-node-drains)).
 - **Rollback**: `git checkout v0.7.7 && ./install-docker.sh --port <your port>`. The notes in [7](#7-rolling-back-to-077) apply, Redis aside.
