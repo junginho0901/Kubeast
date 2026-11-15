@@ -83,6 +83,14 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
 
 `--reset-then-reuse-values`는 직접 넣은 값을 그대로 두고 새 버전에 생긴 값을 더합니다. `--reuse-values`는 처음 설치한 버전의 기본값을 그대로 써서 뒤 버전에 생긴 값이 빠집니다. 차트는 그런 업그레이드를 이 안내와 함께 멈추고, 릴리스는 그대로 둡니다. `helm show values`에서 복사한 값 파일도 0.7.7부터는 같은 식으로 멈춥니다. 0.7.6 이하에서 복사한 파일은 `chartVersion`이 없지만, 0.7.8부터는 그 안의 `global.imageTag`(그 버전의 태그)로 멈춥니다. 직접 쓰는 값 파일에는 `chartVersion`과 `global.imageTag`를 넣지 마세요. 직접 빌드한 이미지의 `global.imageTag`처럼 릴리스의 `vX.Y.Z`가 아닌 태그는 멈추지 않습니다.
 
+**0.7.8부터 기본 모델은 `gpt-4o-mini` 대신 `gpt-6-luna`입니다.** OpenAI는 2027-01-14에 `gpt-4o-mini-2024-07-18`을 종료하고 대체 모델로 `gpt-6-luna`를 안내합니다([deprecations](https://developers.openai.com/api/docs/deprecations)).
+
+- 업그레이드는 저장된 모델 설정의 모델을 바꾸지 않습니다. ai-service가 처음 시작할 때 `ai.model`로 만든 `default-openai` 설정도 그대로입니다. 2027-01-14 전에 **Admin > AI Models**에서 바꾸세요.
+- 게이트웨이(LiteLLM 등)는 등록한 모델 이름에만 답합니다. 설정에서 쓰기 전에 게이트웨이에 `gpt-6-luna`를 추가하세요.
+- 저장된 설정이 없고 `ai.model`도 직접 넣지 않은 설치(키 없이 `ai.baseUrl`의 게이트웨이를 쓰는 설치)는 업그레이드 뒤 `gpt-6-luna`를 보냅니다. 게이트웨이에 먼저 등록하거나, `ai.model`을 게이트웨이에 있는 이름으로 넣으세요.
+- Docker Compose는 `.env`의 `OPENAI_MODEL`을 읽습니다. `install-docker.sh`를 `--skip-env` 없이 다시 돌리면 이 값을 `gpt-6-luna`로 씁니다. `ai.model`처럼 저장된 설정이 없을 때만 모델을 정합니다.
+- 1M 토큰당 가격: `gpt-6-luna` 입력 $0.10 · 출력 $0.50, `gpt-4o-mini` 입력 $0.15 · 출력 $0.60([pricing](https://developers.openai.com/api/docs/pricing), 2026-11-15 확인).
+
 ### 제거
 
 ```bash

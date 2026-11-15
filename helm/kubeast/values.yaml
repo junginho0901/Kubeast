@@ -329,7 +329,7 @@ ai:
   # claude-code (providers.claudeCode below); rendered as CLAUDE_CODE_OAUTH_TOKEN.
   claudeCodeOAuthToken: ""
   apiKeysSecret: ""
-  model: "gpt-4o-mini"
+  model: "gpt-6-luna"
   baseUrl: ""
   # A model config's base_url must be a public http(s) endpoint; hosts that
   # resolve to private addresses (an in-cluster Ollama, an internal LLM

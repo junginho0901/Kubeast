@@ -151,7 +151,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
               type="text"
               value={formModel}
               onChange={(e) => setFormModel(e.target.value)}
-              placeholder={currentProviderDef.modelPlaceholder ?? tr('admin.aiModels.modelPlaceholder', 'e.g. gpt-4o-mini')}
+              placeholder={currentProviderDef.modelPlaceholder ?? tr('admin.aiModels.modelPlaceholder', 'e.g. gpt-6-luna')}
               data-testid="model-input"
               className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />

@@ -85,6 +85,14 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
 
 `--reset-then-reuse-values` keeps the values you set and adds what the new version brings. `--reuse-values` keeps the defaults of the version you installed, so a value a later version added is missing and the images stay at that version; the chart stops such an upgrade with this hint and leaves the release as it was. A values file of your own copied from `helm show values` of 0.7.7 or later stops the same way. One copied from 0.7.6 or earlier holds no `chartVersion`, and stops on its `global.imageTag`, that version's tag, from 0.7.8 on. Leave `chartVersion` and `global.imageTag` out of a values file of your own. A `global.imageTag` of an image you built yourself, not a release's `vX.Y.Z`, is not stopped.
 
+**The default model is `gpt-6-luna` from 0.7.8, in place of `gpt-4o-mini`.** OpenAI shuts down `gpt-4o-mini-2024-07-18` on 2027-01-14 and names `gpt-6-luna` as its replacement ([deprecations](https://developers.openai.com/api/docs/deprecations)).
+
+- An upgrade leaves the model of every saved setting as it is, also the `default-openai` setting ai-service made from `ai.model` at its first start. Change it in **Admin > AI Models** before 2027-01-14.
+- A gateway (LiteLLM and the like) answers only the model names it maps. Add `gpt-6-luna` there before a setting uses it.
+- An install with no saved setting and no `ai.model` of its own (a gateway at `ai.baseUrl` with no key) sends `gpt-6-luna` from the upgrade on. Map it on the gateway first, or set `ai.model` to a name the gateway maps.
+- Docker Compose reads `OPENAI_MODEL` from `.env`, which `install-docker.sh` run again without `--skip-env` writes as `gpt-6-luna`. Like `ai.model`, it names the model only while no setting is saved.
+- Price per 1M tokens: `gpt-6-luna` $0.10 input and $0.50 output, `gpt-4o-mini` $0.15 and $0.60 ([pricing](https://developers.openai.com/api/docs/pricing), read 2026-11-15).
+
 ### Uninstall
 
 ```bash
