@@ -300,11 +300,15 @@ func main() {
 
 	// Node drains keep their progress in the shared database, so any replica
 	// answers a drain's status and one whose server stopped reads as interrupted.
-	drainTracker := drains.NewTracker(drains.PG{Pool: pgPool}, auditStore)
-	h.SetDrains(drainTracker)
-	drainCtx, drainCancel := context.WithCancel(context.Background())
-	defer drainCancel()
-	go drainTracker.Run(drainCtx)
+	// A node drain is an API route: a server without the API runs no tracker.
+	var drainTracker *drains.Tracker
+	if role.ServesAPI() {
+		drainTracker = drains.NewTracker(drains.PG{Pool: pgPool}, auditStore)
+		h.SetDrains(drainTracker)
+		drainCtx, drainCancel := context.WithCancel(context.Background())
+		defer drainCancel()
+		go drainTracker.Run(drainCtx)
+	}
 	recCtx, recCancel := context.WithCancel(context.Background())
 	defer recCancel()
 	// Only a server that opens terminals runs the recorder: an API server holds no recording to keep alive, and a row
@@ -495,9 +499,11 @@ func main() {
 
 	// The drains this process runs end with it: say so at once rather than when their heartbeat goes stale.
 	// A drain asked for from here on answers 503 (the server still takes requests until srv.Shutdown).
-	drainShutdown, drainShutdownCancel := context.WithTimeout(context.Background(), drainShutdownWait)
-	drainTracker.Shutdown(drainShutdown)
-	drainShutdownCancel()
+	if drainTracker != nil {
+		drainShutdown, drainShutdownCancel := context.WithTimeout(context.Background(), drainShutdownWait)
+		drainTracker.Shutdown(drainShutdown)
+		drainShutdownCancel()
+	}
 	shutdown(srv, recorder, serverShutdownWait, recorderShutdownWait)
 	slog.Info("server stopped")
 }
