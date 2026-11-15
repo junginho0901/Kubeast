@@ -63,7 +63,7 @@ export function PodDetailTabBody({ manifest, describeData, describeError }: Prop
         />
       )}
 
-      {activeTab === 'describe' && !describeData && <DescribeFailure error={describeError} className="py-4" />}
+      {activeTab === 'describe' && !describeData && <DescribeFailure error={describeError} className="py-4" about={{ kind: 'Pod', name: selectedPod.name, namespace: selectedPod.namespace }} />}
       {activeTab === 'describe' && describeData && (
         <PodDescribeTab data={describeData} na={na} tr={tr} />
       )}
