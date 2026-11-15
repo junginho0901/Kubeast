@@ -71,9 +71,11 @@ async def _test_openai_compatible(
     verify: Union[bool, ssl.SSLContext] = True,
     provider: str = "",
     judged: bool = True,
+    options: Optional[dict] = None,
 ) -> dict:
     """Test OpenAI-compatible endpoints (OpenAI, Groq, DeepSeek, Mistral, etc.) — with the chat's parameter handling
-    (OpenAI's max_completion_tokens, a refused parameter left out) and a tool, so a model passes only as it chats."""
+    (OpenAI's max_completion_tokens, a refused parameter left out), the config's options and a tool, so a model passes
+    only as it chats."""
     from openai import AsyncOpenAI
     from app.services.provider_adapter import _CompletionsProxy
 
@@ -83,7 +85,7 @@ async def _test_openai_compatible(
         http_client=model_client(verify, judged=judged),
         timeout=15.0,
     )
-    resp = await _CompletionsProxy(client.chat.completions, provider, None, base_url).create(
+    resp = await _CompletionsProxy(client.chat.completions, provider, options, base_url).create(
         model=model,
         messages=[{"role": "user", "content": "ping"}],
         tools=_TEST_TOOLS,
@@ -183,13 +185,14 @@ async def _test_azure_openai(
     base_url: str,
     tls_verify: bool = True,
     ca_cert: Optional[str] = None,
+    options: Optional[dict] = None,
 ) -> dict:
-    """Azure OpenAI (v1 API): through the same ProviderAdapter the chat uses, so a passing
+    """Azure OpenAI (v1 API): through the same ProviderAdapter the chat uses, with the config's options, so a passing
     test means the chat reaches the deployment the same way."""
     from app.services.provider_adapter import ProviderAdapter
 
     adapter = ProviderAdapter(provider=provider, model=model, api_key=api_key, base_url=base_url,
-                              tls_verify=tls_verify, ca_cert=ca_cert)
+                              tls_verify=tls_verify, ca_cert=ca_cert, options=options)
     resp = await adapter.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": "ping"}],
@@ -264,7 +267,7 @@ async def test_model_connection(raw: Request, payload=Depends(require_auth), req
 async def _test_model_connection(request: dict) -> dict:
     """
     모델 연결 테스트 (admin.ai_models.*).
-    body: { provider, model, base_url?, api_key_env?, api_key?, tls_verify?, ca_cert? }
+    body: { provider, model, base_url?, api_key_env?, api_key?, tls_verify?, ca_cert?, options? }
     api_key_env names an environment variable of this service (how saved
     configs reference keys); api_key is a literal for ad-hoc API use.
     """
@@ -288,6 +291,10 @@ async def _test_model_connection(request: dict) -> dict:
         if not api_key:
             raise HTTPException(status_code=400, detail=f"environment variable {api_key_env} is not set in ai-service")
     model = body.get("model", "")
+    # The options the config saves, which the chat sends with every call (OpenAI-compatible and Azure tests)
+    options = body.get("options")
+    if options is not None and not isinstance(options, dict):
+        raise HTTPException(status_code=400, detail="options must be an object")
     ca_problem = ca_cert_problem(body.get("ca_cert"))
     if ca_problem:
         raise HTTPException(status_code=400, detail=ca_problem)
@@ -318,7 +325,7 @@ async def _test_model_connection(request: dict) -> dict:
 
         elif provider in model_config_policy.AZURE_PROVIDERS:
             return await _test_azure_openai(provider, api_key, model, user_base_url,
-                                            body.get("tls_verify", True), body.get("ca_cert"))
+                                            body.get("tls_verify", True), body.get("ca_cert"), options=options)
 
         elif provider == "ollama":
             return await _test_ollama(model, user_base_url or "http://localhost:11434", verify, judged=judged)
@@ -331,7 +338,8 @@ async def _test_model_connection(request: dict) -> dict:
                     status_code=400,
                     detail=f"base_url is required for provider '{provider}'",
                 )
-            return await _test_openai_compatible(api_key, model, base, verify, provider=provider, judged=judged)
+            return await _test_openai_compatible(api_key, model, base, verify, provider=provider, judged=judged,
+                                                 options=options)
 
     except HTTPException:
         raise
