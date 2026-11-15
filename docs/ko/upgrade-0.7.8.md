@@ -106,7 +106,7 @@ helm get values kubeast -n kubeast -o yaml | grep -n -A6 -E 'roleMapping|default
 | k8s-service-stream(`streams.enabled`일 때) | `postgresql.pool.k8sService.maxConns` × (`streams.replicas` + 1) |
 | 마이그레이션과 남겨 둘 몫 | 4 + 10 |
 
-"파드 수"는 `replicas.<service>`이고, HPA를 켠 서비스는 `autoscaling.<service>.maxReplicas`입니다. "롤아웃 파드 수"는 롤아웃 몫으로 파드 수의 4분의 1을 올림해 더한 수입니다. 파드 1개면 2, 4개면 5입니다. 롤아웃은 파드를 한 번에 하나만 더 띄우므로(#901), 파드가 4개를 넘으면 검사가 롤아웃이 실제로 여는 것보다 많이 셉니다.
+"파드 수"는 `replicas.<service>`이고, HPA를 켠 서비스는 `autoscaling.<service>.maxReplicas`입니다. "롤아웃 파드 수"는 롤아웃 몫으로 하나를 더한 수입니다. 롤아웃은 파드를 한 번에 하나만 더 띄웁니다(`maxSurge: 1`, #901). 파드 1개면 2, 4개면 5입니다.
 상태 확인 잠금은 k8s-service 파드마다 풀 밖에 자기 연결을 하나 둡니다. k8s-service-stream은 두지 않습니다(#858).
 AI를 켜고 서비스마다 파드 1개면 20 × 2 + 20 × 2 + 11 × 2 + 15 × 2 + 4 × 2 + 14 = 40 + 40 + 22 + 30 + 8 + 14 = 154입니다.
 auth-service, session-service, ai-service를 4개씩 띄우면 20 × 5 + 20 × 5 + 11 × 2 + 15 × 5 + 4 × 2 + 14 = 100 + 100 + 22 + 75 + 8 + 14 = 319로 300을 넘어 업그레이드가 멈추고, 메시지가 합계를 알려 줍니다.

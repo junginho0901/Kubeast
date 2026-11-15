@@ -106,7 +106,7 @@ The sum the chart checks:
 | k8s-service-stream, with `streams.enabled` | `postgresql.pool.k8sService.maxConns` × (`streams.replicas` + 1) |
 | migrations and kept | 4 + 10 |
 
-"pods" is `replicas.<service>`, or `autoscaling.<service>.maxReplicas` while its HPA is on. "Rolling pods" adds a quarter of them, rounded up, for a rollout: 2 for one pod, 5 for four. A rollout starts one extra pod at a time (#901), so past four pods the check counts more than a rollout opens.
+"pods" is `replicas.<service>`, or `autoscaling.<service>.maxReplicas` while its HPA is on. "Rolling pods" adds one for a rollout, which starts one extra pod at a time (`maxSurge: 1`, #901): 2 for one pod, 5 for four.
 The health status lock holds a connection of its own outside k8s-service's pool, on each k8s-service pod; k8s-service-stream holds none (#858).
 One pod of each service with the AI on: 20 × 2 + 20 × 2 + 11 × 2 + 15 × 2 + 4 × 2 + 14 = 40 + 40 + 22 + 30 + 8 + 14 = 154.
 auth-service, session-service and ai-service at 4 pods each: 20 × 5 + 20 × 5 + 11 × 2 + 15 × 5 + 4 × 2 + 14 = 100 + 100 + 22 + 75 + 8 + 14 = 319, past 300, and the upgrade stops; the message names the sum.
