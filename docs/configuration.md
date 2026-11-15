@@ -73,6 +73,7 @@ auth:
   #   it automatically goes back to the previous role (audit log access.request.* / access.grant.expire).
   # It takes effect only on clusters whose RBAC binds that role's group: on a production cluster
   # that binds only viewer, the user still gets 403 after elevation.
+  # roles names each role exactly; an entry that is a built-in's name in other capitals (WRITE) stands for the built-in.
   accessRequests:
     enabled: false
     maxHours: 8
@@ -136,11 +137,16 @@ podSecurity:
   readOnlyRootFilesystem: true
 
 # Availability: set pdb.enabled: true when you raise replicas to 2 or more
-# podShutdown.preStopSeconds: a pod behind a Service answers that long after it is told to stop (preStop sleep, Kubernetes 1.30 or later), then has 30 s to shut down; behind a load balancer that sends to pod IPs, set its deregistration delay plus a few seconds
+# podShutdown.preStopSeconds: a pod behind a Service answers that long after it is told to stop (preStop sleep, Kubernetes 1.30 or later), then has 30 s to shut down (a server holding terminals: the drain's wait and close wait more); behind a load balancer that sends to pod IPs, set its deregistration delay plus a few seconds
 replicas:
   gateway: 1
 pdb:
   enabled: false
+# Terminals and followed logs on a server of their own, off by default (docs/operations.md
+# "Terminals and followed logs on their own server")
+streams:
+  enabled: false
+  drainSeconds: 60       # how long open terminals get to end when their server is replaced (k8s-service when off)
 topologySpread:
   enabled: true
 podShutdown:
@@ -185,6 +191,8 @@ gateway:
     nodePort: 30333
   trustedProxies: []      # CIDRs of front proxies (Ingress controller, LB) — the client address in the audit log is read from behind them
   allowedOrigins: []      # browser origins to open the API and WebSocket to besides the gateway's own host and the Ingress host (none = same host only)
+  accessLog:
+    upstreamTimes: false  # true: each access log line also gives the request's time, the service's connect, header and response times (s), its address and the client's port
 
 # Ingress (optional)
 ingress:
