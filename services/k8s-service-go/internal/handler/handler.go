@@ -14,6 +14,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/alerts"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drain"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/flight"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/helm"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
@@ -41,6 +42,8 @@ type Handler struct {
 	recorder   *recording.Manager // nil or disabled: terminals are not recorded
 	// liveSessions ends long-lived answers with their session (nil: not checked).
 	liveSessions *auth.LiveSessions
+	// drain ends the terminals and followed logs when the server is replaced (nil: they are cut when it exits).
+	drain *drain.Drain
 	// hygieneStore keeps cluster hygiene sign-offs (nil in tests: no history).
 	hygieneStore hygiene.Store
 	// hygieneScan replaces svc.CollectHygiene in tests.
@@ -91,6 +94,9 @@ func (h *Handler) SetWatchLimits(m *ws.Multiplexer) { h.watchLimits = m }
 
 // SetLiveSessions sets what ends open terminals and followed streams when their session stops standing.
 func (h *Handler) SetLiveSessions(s *auth.LiveSessions) { h.liveSessions = s }
+
+// SetDrain sets what holds the terminals and followed logs while the server is being replaced.
+func (h *Handler) SetDrain(d *drain.Drain) { h.drain = d }
 
 // New creates a new Handler. The helm service is derived from the same
 // k8s.Service and cache so Helm SDK calls observe the kubeconfig

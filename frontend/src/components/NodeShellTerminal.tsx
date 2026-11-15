@@ -8,6 +8,7 @@ import { handleUnauthorized } from '@/services/auth'
 import { getCurrentClusterID } from '@/services/clusterRef'
 import { nodeShellStatusLines, parseNodeShellStatus } from '@/utils/nodeShellStatus'
 import { uiLang } from '@/utils/uiLang'
+import { terminalEnd, terminalEndText, type TerminalEnd } from '@/utils/serverShutdown'
 
 interface NodeShellTerminalProps {
   nodeName: string
@@ -47,6 +48,9 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
   // connecting: socket opening · starting: the debug pod is coming up ·
   // connected: the shell is attached · error / closed: it ended.
   const [status, setStatus] = useState<'connecting' | 'starting' | 'connected' | 'error' | 'closed'>('connecting')
+  // A shell the server could not keep (replaced, or the connection dropped) offers a new one; attempt opens it.
+  const [ended, setEnded] = useState<TerminalEnd | null>(null)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     const term = new Terminal({
@@ -124,6 +128,11 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
       }
       setStatus((prev) => (prev === 'error' ? prev : 'closed'))
       term.writeln(tRef.current('nodes.shell.disconnected', 'Disconnected.'))
+      const end = terminalEnd(event.code, event.reason)
+      if (end) {
+        term.writeln(terminalEndText(end, (key, fallback) => tRef.current(key, fallback)))
+        setEnded(end)
+      }
     }
 
     const disposable = term.onData((data) => {
@@ -149,7 +158,7 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
       }
       term.dispose()
     }
-  }, [nodeName, namespace, image])
+  }, [nodeName, namespace, image, attempt])
 
   return (
     <div className="flex h-full flex-col">
@@ -170,20 +179,35 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
                     : t('nodes.shell.statusError', 'Connection error')}
           </p>
         </div>
-        <button
-          type="button"
-          className="text-slate-400 hover:text-ink"
-          onClick={() => {
-            try {
-              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                wsRef.current.send('exit\r')
-              }
-            } catch { /* socket already closing */ }
-            onClose()
-          }}
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          {ended && (
+            <button
+              type="button"
+              className="btn-row"
+              onClick={() => {
+                setEnded(null)
+                setStatus('connecting')
+                setAttempt((n) => n + 1)
+              }}
+            >
+              {t('serverShutdown.reconnect', 'Reconnect')}
+            </button>
+          )}
+          <button
+            type="button"
+            className="text-slate-400 hover:text-ink"
+            onClick={() => {
+              try {
+                if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                  wsRef.current.send('exit\r')
+                }
+              } catch { /* socket already closing */ }
+              onClose()
+            }}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
       <div className="flex-1 bg-slate-950" ref={containerRef} />
     </div>
