@@ -64,6 +64,12 @@ _REFUSED_IN_MESSAGE = re.compile(
 _refused: Dict[tuple, set] = {}
 # Function tools in Chat Completions only with reasoning_effort "none" (developers.openai.com/api/docs/guides/latest-model).
 _TOOLS_ONLY_WITHOUT_REASONING = re.compile(r"gpt-6-(?:sol|luna)(?:-\d{4}-\d{2}-\d{2})?")
+# Such a model's 400 for tools sent at its default effort, whatever name a deployment or gateway gives it.
+_TOOLS_NEED_NO_REASONING = re.compile(r"function tools with reasoning_effort are not supported", re.IGNORECASE)
+# (provider, base URL, model) that answered so: later calls send "none" from the start.
+_without_reasoning: set = set()
+# What a model refuses only at an effort other than "none" (the latest-model guide above).
+_SAMPLING_AT_NONE = frozenset({"temperature", "top_p", "top_logprobs", "logprobs"})
 
 
 def _refused_param(err: Exception) -> Optional[str]:
@@ -74,6 +80,10 @@ def _refused_param(err: Exception) -> Optional[str]:
         m = _REFUSED_IN_MESSAGE.search(str(err))
         param = (m.group(1) or m.group(2)) if m else None
     return param if param in _DROPPABLE else None
+
+
+def _needs_no_reasoning(err: Exception) -> bool:
+    return getattr(err, "status_code", None) == 400 and bool(_TOOLS_NEED_NO_REASONING.search(str(err)))
 
 
 def _leave_out(kwargs: Dict[str, Any], param: str) -> None:
@@ -110,22 +120,44 @@ class _CompletionsProxy:
                 kwargs["extra_body"] = extra_body
         if self._provider in _COMPLETION_TOKENS_PROVIDERS:
             _leave_out(kwargs, "max_tokens")
-            given = "reasoning_effort" in kwargs or "reasoning_effort" in (kwargs.get("extra_body") or {})
-            if kwargs.get("tools") and not given and _TOOLS_ONLY_WITHOUT_REASONING.fullmatch(str(kwargs.get("model") or "")):
-                kwargs["reasoning_effort"] = "none"
         key = (self._provider, self._base_url, kwargs.get("model"))
-        for param in _refused.get(key, ()):
+        # Every call of such a model, with tools or not: at its default effort the reasoning takes the answer's length
+        # (a summary comes back empty) and temperature is refused.
+        given = "reasoning_effort" in kwargs or "reasoning_effort" in (kwargs.get("extra_body") or {})
+        named = self._provider in _COMPLETION_TOKENS_PROVIDERS and _TOOLS_ONLY_WITHOUT_REASONING.fullmatch(
+            str(kwargs.get("model") or ""))
+        if not given and (named or key in _without_reasoning):
+            kwargs["reasoning_effort"] = "none"
+        dropped: Dict[str, Any] = {}
+
+        def drop(param: str) -> None:
+            if param in kwargs:
+                dropped[param] = kwargs[param]
             _leave_out(kwargs, param)
+
+        for param in list(_refused.get(key, ())):
+            drop(param)
         while True:
             try:
                 return await self._inner.create(**kwargs)
             except Exception as e:
+                # Sent once at "none" at most: after it reasoning_effort is in the call, or refused and remembered.
+                if (not given and kwargs.get("tools") and "reasoning_effort" not in kwargs
+                        and "reasoning_effort" not in _refused.get(key, ()) and _needs_no_reasoning(e)):
+                    logger.info("model %s takes tools only at reasoning_effort none; sending it", kwargs.get("model"))
+                    _without_reasoning.add(key)
+                    kwargs["reasoning_effort"] = "none"
+                    # refused at the default effort, taken at "none": sent again, and no longer left out
+                    for param in _SAMPLING_AT_NONE & dropped.keys():
+                        kwargs[param] = dropped.pop(param)
+                        _refused.get(key, set()).discard(param)
+                    continue
                 param = _refused_param(e)
                 if param is None or param not in kwargs:
                     raise
                 logger.info("model %s refused %s; leaving it out", kwargs.get("model"), param)
                 _refused.setdefault(key, set()).add(param)
-                _leave_out(kwargs, param)
+                drop(param)
 
     def __getattr__(self, name):
         # create 외 다른 속성(list 등)은 원본으로 위임

@@ -32,9 +32,9 @@ export function useModelForm() {
   const [formLimitsError, setFormLimitsError] = useState<LimitsError | null>(null)
 
   const [testing, setTesting] = useState(false)
-  // the Test answer, of the values it tested (provider, model, base URL, key variable, CA): an edit of any drops it
+  // the Test answer, of the values it tested (provider, model, base URL, key variable, CA, options): an edit of any drops it
   const [testResult, setTestResult] = useResultFor<{ success: boolean; message: string }>(
-    [formProvider, formModel, formBaseUrl, formApiKeyEnv.trim(), formCaCert.trim()],
+    [formProvider, formModel, formBaseUrl, formApiKeyEnv.trim(), formCaCert.trim(), formOptions.trim()],
   )
 
 
@@ -176,6 +176,33 @@ export function useModelForm() {
     }
   }
 
+  // The options a save stores (the JSON field and the two limits), or undefined once the form says why it cannot
+  const readOptions = (): { options: Record<string, unknown> | null } | undefined => {
+    const optsRaw = formOptions.trim()
+    let rest: Record<string, unknown> | null = null
+    if (optsRaw) {
+      try {
+        const parsed = JSON.parse(optsRaw)
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          setFormOptionsError('Options must be a JSON object, e.g. {"temperature": 0.7}')
+          return undefined
+        }
+        rest = parsed
+        setFormOptionsError(null)
+      } catch {
+        setFormOptionsError('Invalid JSON')
+        return undefined
+      }
+    }
+    const built = buildOptions(rest, formMaxTokens, formToolResultChars)
+    if ('error' in built) {
+      setFormLimitsError(built.error)
+      return undefined
+    }
+    setFormLimitsError(null)
+    return built
+  }
+
   const handleSubmit = () => {
     const payload: Record<string, any> = {
       name: formName,
@@ -196,28 +223,8 @@ export function useModelForm() {
       payload.ca_cert = null  // 편집 중 비우면 제거
     }
     // 생성 옵션(JSON) — 파싱 검증
-    const optsRaw = formOptions.trim()
-    let rest: Record<string, unknown> | null = null
-    if (optsRaw) {
-      try {
-        const parsed = JSON.parse(optsRaw)
-        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-          setFormOptionsError('Options must be a JSON object, e.g. {"temperature": 0.7}')
-          return
-        }
-        rest = parsed
-        setFormOptionsError(null)
-      } catch {
-        setFormOptionsError('Invalid JSON')
-        return
-      }
-    }
-    const built = buildOptions(rest, formMaxTokens, formToolResultChars)
-    if ('error' in built) {
-      setFormLimitsError(built.error)
-      return
-    }
-    setFormLimitsError(null)
+    const built = readOptions()
+    if (!built) return
     if (built.options) {
       payload.options = built.options
     } else if (editingId) {
@@ -235,6 +242,9 @@ export function useModelForm() {
       setTestResult({ success: false, message: 'Enter the name of the env var that holds the API key' })
       return
     }
+    // the chat sends the saved options with every call, so the test sends them too
+    const built = readOptions()
+    if (!built) return
     setTesting(true)
     setTestResult(null)
     try {
@@ -244,6 +254,7 @@ export function useModelForm() {
         base_url: formBaseUrl || undefined,
         api_key_env: formApiKeyEnv.trim() || undefined,
         ca_cert: formCaCert.trim() || undefined,
+        options: built.options ?? undefined,
       })
       setTestResult(result)
     } catch (e: any) {
