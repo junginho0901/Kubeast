@@ -137,6 +137,7 @@ podSecurity:
   readOnlyRootFilesystem: true
 
 # Availability: set pdb.enabled: true when you raise replicas to 2 or more
+# podShutdown.preStopSeconds: a pod behind a Service answers that long after it is told to stop (preStop sleep, Kubernetes 1.30 or later), then has 30 s to shut down (a server holding terminals: the drain's wait and close wait more); behind a load balancer that sends to pod IPs, set its deregistration delay plus a few seconds
 replicas:
   gateway: 1
 pdb:
@@ -148,6 +149,8 @@ streams:
   drainSeconds: 60       # how long open terminals get to end when their server is replaced (k8s-service when off)
 topologySpread:
   enabled: true
+podShutdown:
+  preStopSeconds: 5
 resources:               # per-container requests / memory limit (the full list is in values.yaml)
   aiService:
     requests: { cpu: 100m, memory: 256Mi }

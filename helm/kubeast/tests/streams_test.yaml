@@ -40,7 +40,7 @@ tests:
         template: configmap.yaml
         documentSelector: {path: metadata.name, value: kubeast-config}
 
-  - it: drains the one default k8s-service too — the wait from streams.drainSeconds, a grace period of the wait + 30, no preStop
+  - it: drains the one default k8s-service too — the wait from streams.drainSeconds, a grace period past the wait, podShutdown's preStop
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
@@ -49,13 +49,14 @@ tests:
         documentSelector: {path: metadata.name, value: k8s-service}
       - equal:
           path: spec.template.spec.terminationGracePeriodSeconds
-          value: 90
+          value: 100
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
       # the Deployment's default rollout (maxSurge 1, maxUnavailable 0 for one replica) brings the new pod up first,
-      # and the lists keep answering on /health while the old one drains
-      - notExists:
+      # and the lists keep answering on /health while the old one drains; the preStop wait is podShutdown's
+      - equal:
           path: spec.template.spec.containers[0].lifecycle
+          value: {preStop: {sleep: {seconds: 5}}}
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
       - equal:
@@ -75,7 +76,7 @@ tests:
         documentSelector: {path: metadata.name, value: k8s-service}
       - equal:
           path: spec.template.spec.terminationGracePeriodSeconds
-          value: 150
+          value: 160
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
 
@@ -139,13 +140,13 @@ tests:
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service-stream}
       - equal:
-          path: spec.template.spec.containers[0].lifecycle.preStop.sleep.seconds
-          value: 10
+          path: spec.template.spec.containers[0].lifecycle
+          value: {preStop: {sleep: {seconds: 10}}}
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service-stream}
       - equal:
           path: spec.template.spec.terminationGracePeriodSeconds
-          value: 100
+          value: 105
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service-stream}
       - equal:
@@ -163,19 +164,21 @@ tests:
           value: /health
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service-stream}
-      # the api server holds no terminal: no drain, Kubernetes' grace period
+      # the api server holds no terminal: no drain, podShutdown's preStop + 30
       - notContains:
           path: spec.template.spec.containers[0].env
           content: {name: STREAM_DRAIN_SECONDS}
           any: true
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
-      - notExists:
+      - equal:
           path: spec.template.spec.containers[0].lifecycle
+          value: {preStop: {sleep: {seconds: 5}}}
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
-      - notExists:
+      - equal:
           path: spec.template.spec.terminationGracePeriodSeconds
+          value: 35
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
 
@@ -192,7 +195,7 @@ tests:
         documentSelector: {path: metadata.name, value: k8s-service-stream}
       - equal:
           path: spec.template.spec.terminationGracePeriodSeconds
-          value: 335
+          value: 340
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service-stream}
 

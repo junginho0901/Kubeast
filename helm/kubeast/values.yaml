@@ -583,9 +583,10 @@ replicas:
 # off, k8s-service-stream when on) it ends the followed logs at once (the
 # browser reconnects and goes on after the last line), tells each terminal when
 # it will close, and waits drainSeconds for them before closing the rest; with
-# no terminal open it does not wait. Its terminationGracePeriodSeconds is
-# drainSeconds + 30 (+ preStopSeconds on k8s-service-stream): the drain's close
-# wait 5 s, the server's shutdown 15 s and the recorder's last upload 10 s.
+# no terminal open it does not wait. Its terminationGracePeriodSeconds is the
+# preStop wait (podShutdown.preStopSeconds; preStopSeconds on k8s-service-stream)
+# + drainSeconds + the drain's close wait 5 s + the server's shutdown 15 s and the
+# recorder's last upload 10 s + 5 s to spare (100 s by default).
 # sessionRecording.storage file is refused with it (s3 or database).
 streams:
   enabled: false
@@ -599,6 +600,9 @@ pdb:
 # zone + hostname spread, soft (ScheduleAnyway)
 topologySpread:
   enabled: true
+# Seconds a pod behind a Service keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, its deregistration delay plus a few seconds.
+podShutdown:
+  preStopSeconds: 5
 
 # --- Resources (requests always; memory limits so a leak is contained) ---
 resources:
