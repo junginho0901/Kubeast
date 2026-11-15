@@ -160,6 +160,12 @@ ai:
   baseUrlAllowedHosts: []  # register a host here when a model setting's base_url is a private address
                            # (in-cluster Ollama, internal LLM gateway).
                            # api_key_env is OPENAI/ANTHROPIC/GEMINI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN (claude-code only) or KUBEAST_AI_KEY_*
+  ruleCards:               # per kind of failure, the checks that often find its cause and their tools (features.md "Rule cards")
+    chat: false            # (alpha) true: a chat question naming a failure a card knows gets at most two cards for that turn
+    investigations: false  # (alpha) true: an alert investigation's first message holds at most two, picked by the alert's name and labels
+                           # off, both: the cards file is not read and the chat and investigations are as before
+    cards: []              # more cards of the same shape (a kind already there is replaced); the defaults are app/services/rule_cards.json
+    remove: []             # default kinds left out, e.g. [network_policy]
   providers:
     claudeCode: { enabled: false, maxConcurrent: 1, turnTimeoutSeconds: 300, maxTurns: 10 }
 
