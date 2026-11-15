@@ -8,9 +8,11 @@ cluster: the runner's shell steps and clock are replaced, so nothing here reache
 """
 import argparse
 import base64
+import contextlib
 import hashlib
 import hmac
 import importlib.util
+import io
 import json
 import os
 import subprocess
@@ -96,6 +98,9 @@ class FakeKubeast:
         self.invalidate_at_poll = None
         self.list_polls = 0
         self.late_exact = False      # the webhook queues another firing's investigation of the alert first, its own one poll later
+        self.list_errors: dict = {}  # investigation list poll number → the HTTP status it answers instead
+        self.list_error_after = None # from this poll on, every investigation list read answers 502
+        self.webhook_errors: list = []  # statuses the next firing posts answer, in turn
         self.pending: list[tuple[int, tuple]] = []
         self.lock = threading.Lock()
         self.seq = 0
@@ -190,6 +195,10 @@ class FakeKubeast:
                 return (200, row) if row else (404, {"detail": "alert not found"})
             if path == "/api/v1/ai/investigations":
                 self.list_polls += 1
+                if self.list_polls in self.list_errors:
+                    return self.list_errors[self.list_polls], {"detail": "stand-in error"}
+                if self.list_error_after is not None and self.list_polls >= self.list_error_after:
+                    return 502, {"detail": "stand-in error"}
                 if self.invalidate_at_poll == self.list_polls:
                     self.valid.clear()
                     self.unauthorized += 1
@@ -214,6 +223,8 @@ class FakeKubeast:
         own = hmac.new(WEBHOOK_TOKEN.encode(), cluster.encode(), hashlib.sha256).hexdigest()
         if headers.get("Authorization") != f"Bearer {own}":
             return 401, {"detail": "invalid webhook token"}
+        if self.webhook_errors and body["alerts"][0]["status"] == "firing":
+            return self.webhook_errors.pop(0), {"detail": "stand-in error"}
         self.webhooks.append({"cluster": cluster, "body": body})
         counts = {"accepted": 0, "duplicate": 0, "resolved": 0, "stored": 0}
         for alert in body["alerts"]:
@@ -528,6 +539,59 @@ def test_an_investigation_of_its_start_that_comes_later_is_taken_over_one_of_its
     exact = next(i for i in fake.invs if i["fingerprint"] == r["fingerprint"] and i["starts_at"] == r["starts_at"])
     assert r["matched_by"] == "starts_at" and r["investigation_id"] == exact["id"] and r["pass"], r
     assert len([i for i in fake.invs if i["fingerprint"] == r["fingerprint"]]) == 2
+
+
+def test_a_502_while_waiting_is_read_again_and_the_case_goes_on():
+    fake = FakeKubeast()
+    fake.list_errors = {3: 502}
+    with Server(fake):
+        results, _, _ = run(repeat=1)
+    assert results[0]["pass"] and "setup_error" not in results[0] and fake.list_polls >= 4, results
+
+
+def test_reads_failing_in_a_row_end_that_run_only():
+    fake = FakeKubeast()
+    fake.list_error_after = 2  # the list read before the fault answers; every read after it fails
+    with Server(fake) as srv:
+        results, _, _ = run(repeat=2)
+    assert [r["run"] for r in results] == [1, 2], results
+    for r in results:
+        assert r["setup_error"] == f"request failed: {AI_EVAL.POLL_ERRORS_IN_A_ROW} reads in a row failed: HTTP 502 Bad Gateway", r
+    assert [w["body"]["alerts"][0]["status"] for w in fake.webhooks] == ["firing", "firing", "resolved", "resolved"]
+    assert any(c.startswith("kubectl delete namespace shop-90") for c in srv.commands)
+
+
+def test_a_webhook_post_answered_503_is_sent_once_more():
+    fake = FakeKubeast()
+    fake.webhook_errors = [503]
+    with Server(fake):
+        results, _, _ = run(repeat=1)
+    assert results[0]["pass"] and "setup_error" not in results[0], results
+    fake = FakeKubeast()
+    fake.webhook_errors = [503, 503]
+    with Server(fake):
+        results, _, _ = run(repeat=1)
+    assert results[0]["setup_error"] == "request failed: HTTP 503 Service Unavailable", results
+
+
+def test_hidden_alert_lines_say_done_and_name_no_truth():
+    fake = FakeKubeast()
+    screen = io.StringIO()
+    with Server(fake), contextlib.redirect_stdout(screen):
+        results, _, _ = run(case={**CASE, "hidden": True}, repeat=1)
+    lines = [x for x in screen.getvalue().splitlines() if x.startswith("90_test_alert alert")]
+    assert results[0]["pass"] and len(lines) == 1 and ": done — " in lines[0] and "pass" not in lines[0], lines
+    root = Path(tempfile.mkdtemp(prefix="ai-eval-hidden-scope-"))
+    for cid, hidden in (("90_shown", False), ("91_kept", True)):
+        (root / cid).mkdir()
+        (root / cid / "case.json").write_text(json.dumps({**CASE, "id": cid, "hidden": hidden, "alert": {**CASE["alert"], "labels": {
+            **CASE["alert"]["labels"], "namespace": "elsewhere"}}}))
+        (root / cid / "truth.json").write_text(json.dumps({**TRUTH, "id": cid}))
+    _, problems = AI_EVAL.load_cases(root, [], True, alerts=True)
+    shown = [x for x in problems if x.startswith("90_shown")]
+    kept = [x for x in problems if x.startswith("91_kept")]
+    assert shown and "ConfigMap/shop-90/settings-b" in shown[0], problems
+    assert kept and not any("settings-b" in x or "shop-90" in x for x in kept), kept
 
 
 def test_alert_source_is_auto_by_default():

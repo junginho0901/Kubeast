@@ -196,7 +196,8 @@ python3 scripts/ai-eval.py --cases evals/ai-hard --alerts --out /tmp/ai-eval-ale
 
 The webhook gives the investigator a token for the alert's `namespace` label (none: the whole cluster), so a case whose
 alert names one namespace while a truth cause is in another is a field problem (`check_alert_scope`; a cause of a kind
-with no namespace, such as a Node, is not held). `--list` names it and a run does not start.
+with no namespace, such as a Node, is not held). `--list` names it and a run does not start; for a hidden case the
+line names nothing of its truth.
 
 `--alert-source` picks where the alert comes from:
 
@@ -217,7 +218,8 @@ written. So the ten are posted, and their alert repeats what the question says.
 A posted alert is one alert in Alertmanager's message (version 4), sent with the cluster's own webhook token (the HMAC
 of `ALERT_WEBHOOK_TOKEN` from `kubeast-secrets`, which `webhookClusterTokensOnly` also takes), receiver `ai-eval`, a
 fingerprint per run and a start a minute before it is sent, never before the fault. The webhook must count it
-`accepted`; any other answer (duplicate, filtered, skipped, automatic off) is a setup failure with the counts. At the
+`accepted`; any other answer (duplicate, filtered, skipped, automatic off) is a setup failure with the counts. A post
+answered 429 or 5xx is sent once more after 20 s. At the
 end of the case each alert the runner posted is sent again as resolved, so its inbox row is closed before the next
 case's investigator can read it with `alerts_inbox`.
 
@@ -226,29 +228,38 @@ of #909, made by the alert's own start and never by comparing a received time wi
 machine keep different clocks. Without one, the newest new one of that fingerprint is taken, and given up for one that
 holds the start if that comes while it runs (`matched_by` says which). The runner reads the detail of each new investigation of the alert once to match it and polls the
 investigations list every 5 s until the one it matched is done, failed or skipped, then reads that detail again; each
-detail read writes an `ai.investigation.view` row, the list none. A failed or skipped investigation is a row with
-`error`, not scored.
+detail read writes an `ai.investigation.view` row, the list none. A read the runner waits on (the inbox, the list, a
+detail) that fails — an HTTP error, a timeout, a dropped connection — is read again 5 s later; six failures in a row
+end that run of the case as a setup failure, and the next run and case go on. A failed or skipped investigation is a
+row with `error`, not scored. A hidden case's line on screen says `done`.
 
 How a report is scored, the same with v0.7.9's switches off and on:
 
-- `text` (`score_text`): the report's "Likely cause" section, or the whole report without that heading, read clause
-  by clause (a sentence, a line or a bullet, split at `;`). A clause with `NO_FAULT_WORDS` ("no fault", "found no
-  evidence of", "nothing points at", "찾지 못했", "장애가 없") or `CLEAR_WORDS` ("not changed", "looks normal",
-  "unrelated", "not the cause", "정상", "무관") rules out what it names; `NO_FAULT_WORDS` naming no object of the truth
-  (before or after a colon) is the report saying there is no fault (`no_fault`).
-  - A fault case passes when the report does not say there is no fault and names each truth cause — its resource's
-    name or an `accept_resources` form — in a clause that does not rule it out, with a word of its kind or an accepted
-    kind (`KIND_WORDS`) in a sentence that names it so, read with the objects' own names taken out (a name ends at
-    Hangul, so a particle does not keep it). A kind word speaks of one cause: the one its clause names, else the one
-    named nearest before it, else after it. Decoys it blames are listed in `decoys_named`, not held against it: the
-    symptom is named beside its cause.
-  - As the block's extras, each costs 0.25 (`extras`): another object named in a cause sentence — a decoy or a
-    `Kind/name`, not a truth cause, `also_ok` or a hop of `path` (`extra_objects`) — and each kind word a cause is given
-    beyond its own kinds and one more (the symptom's, `other_kinds`). More than one (`TEXT_EXTRAS_ALLOWED`) reads as a
-    list of guesses and does not pass.
-  - A control passes when the report says there is no fault or rules something out, and names no decoy as a cause —
-    in a clause that does not rule it out and holds `BLAME_WORDS` ("caused", "broke", "because", "원인", "실패").
-    `decoys_ruled_out` lists those it cleared.
+- `text` (`score_text`): the report's "Likely cause" section, or the whole report without that heading. A sentence
+  (a line and a bullet are one too) parts into clauses at `;`, `,`, while, but, and, though, -고, -지만 and -며, a
+  part that names no object going on the one before it ("restarted and caused the errors", "busier but unrelated").
+  In a clause, `NO_FAULT_WORDS` ("no fault", "found no evidence of", "nothing points at", "찾지 못했", "장애가 없") and
+  `CLEAR_WORDS` ("not changed", "looks normal", "unrelated", "not the cause", "정상", "무관") rule out the one object
+  named nearest before them (else after); the others named there stay. `NO_FAULT_WORDS` in a clause, or its part
+  before or after a colon, naming no object is the report saying there is no fault (`no_fault`) — unless it speaks of
+  the others ("No problems elsewhere", "no issues in the other workloads", `OTHERS_WORDS`), which rules them out. A
+  blame word blames one object: `CAUSE_WORDS` ("caused", "the culprit", "원인", "때문") and `FAIL_WORDS` ("broke",
+  "fails", "is down", "실패") the one named nearest before them, `CAUSED_BY_WORDS` ("because of", "due to") the one
+  nearest after; `FAIL_WORDS` blame no object of the truth's path, whose failure is the symptom ("so checkout fails").
+  - A fault case passes when the report does not say there is no fault, names each truth cause — its resource's name
+    or an `accept_resources` form — where it is not ruled out, gives it a word of its kind or an accepted kind
+    (`KIND_WORDS`; for a ConfigMap or Secret cause a change, `CHANGE_WORDS` such as "raised", "edited", "바뀌", is
+    `config_change`), blames no decoy (`decoys_named`) and holds at most one extra. A kind word counts in a sentence
+    that names a cause, outside the ruling-out words and the clauses whose every object is ruled out, read with the
+    objects' own names taken out (a name ends at Hangul, so a particle does not keep it). One stretch of words is one
+    kind ("memory limit" is `oom`). A kind word speaks of one cause: the one its clause names, else the one named
+    nearest before it, else after it.
+  - As the block's extras, each costs 0.25 (`extras`): another object the section names without ruling it out, in any
+    sentence — a decoy or a `Kind/name`, not a truth cause, `also_ok` or a hop of `path` (`extra_objects`) — and each
+    kind word a cause is given beyond its own kinds and one more (the symptom's, `other_kinds`). More than one
+    (`EXTRAS_ALLOWED`, the block's too) reads as a list of guesses and does not pass.
+  - A control passes when the report says there is no fault and blames no decoy and no other `Kind/name` (`suspects`).
+    "X is normal" alone is not a no-fault answer. `decoys_ruled_out` lists those it cleared.
   - `pass` and `score` are this check's, so an off round and an on round compare. It is weaker than the block's.
 - `rca` (`score_block`): with `features.alertInvestigation.evidenceCheck` or `ledger` on, the server takes the rca
   block off the report and keeps it as the investigation's `result`, which is scored as the chat's block is. A report
