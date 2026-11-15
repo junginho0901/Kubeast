@@ -93,6 +93,9 @@ def test_a_closing_line_of_backticks_or_a_language_name_goes_with_the_block(clos
 def test_an_rca_fence_with_no_json_in_it_is_a_quoted_one_and_its_text_stays():
     quoted = f"{WEB_REPORT}\nlog line: ```rca\nsomething\n## Evidence\n```\nkubectl get pods\n```\n## Next steps\nrestart"
     assert evidence.split(quoted) == (quoted, None, "missing")  # the code block's fence does not make it a block
+    # words that are not JSON at all after an rca line: a fence quoted from a tool result, not a broken block
+    words = WEB_REPORT + "\n```rca\nnot json\n```"
+    assert evidence.split(words) == (words, None, "missing")
 
 
 def test_an_rca_fence_that_never_closes_is_cut_only_when_the_answer_stopped_inside_a_block():
@@ -113,8 +116,8 @@ def test_an_rca_fence_that_never_closes_is_cut_only_when_the_answer_stopped_insi
 @pytest.mark.parametrize("answer, status", [
     (WEB_REPORT, "missing"),
     (WEB_REPORT + "\n```json\n{\"causes\": []}\n```", "missing"),
-    (WEB_REPORT + "\n```rca\nnot json\n```", "invalid"),
-    (WEB_REPORT + "\n```rca\n[1, 2]\n```", "invalid"),
+    (WEB_REPORT + "\n```rca\n[1, 2]\n```", "invalid"),  # JSON the model meant as its block, the wrong shape
+    (WEB_REPORT + "\n```rca\n\"causes\": []\n```", "invalid"),  # JSON that parses in part: still its block
     (WEB_REPORT + "\n```rca\n{\"causes\": \"web\"}\n```", "invalid"),
     (WEB_REPORT + "\n```rca\n{\"causes\": {}}\n```", "invalid"),
     (WEB_REPORT + "\n```rca\n{\"causes\": null}\n```", "invalid"),

@@ -184,6 +184,8 @@ ai:
     numbered: false        # with redaction.pii: every personal-data kind as its kind and a number per chat answer or investigation (<PHONE_1>),
                            # writes holding those refused, the asker's chat answer shows the values in their place;
                            # off: <EMAIL_n> within one text, <REDACTED:phone>, <REDACTED:rrn>, <REDACTED:card>, no value shown
+  refuseRepeatedReads: false # (alpha) true: a read made again with the same tool and arguments in one chat answer or investigation, less
+                             # than 60 s after the first answered, is not run and the model is told where it has the result; off: as before
   providers:
     claudeCode: { enabled: false, maxConcurrent: 2, maxConcurrentTotal: 0, memoryLimit: 2Gi, queueWaitSeconds: 60, turnTimeoutSeconds: 300, maxTurns: 10 }
     # maxConcurrent: Claude Code runs per ai-service server (memory); maxConcurrentTotal: across every replica
@@ -241,6 +243,10 @@ features:
                              # tool call, no model step); writes the windows too
     narrowFirst: false       # (alpha) true: step 0, after the changes, puts anomaly_rank (features.anomalyRank) over the metrics window
                              # into the first message; writes the windows too
+    ledger: false            # (alpha) true: the report ends with a block of causes, path, ruled out and hypotheses, each closed with the
+                             # calls for and against it, kept apart and shown under the report (asked once more while one is open)
+    evidenceCheck: false     # (alpha) true: the server checks that the calls each cause names answered and hold its name, asks once more
+                             # without tools otherwise and lists what still fails as not verified; with ledger, one block and one ask
     window:                  # counted from the alert's start; ends are never past now
       metricsMinutes: 15     # metrics this long either side of the start (1–360)
       logsMinutes: 5         # logs from this long before the start (0–1440)

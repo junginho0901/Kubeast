@@ -178,6 +178,8 @@ ai:
   redaction:
     numbered: false        # redaction.pii와 함께: 개인 값 네 종류를 채팅 답·조사마다 종류와 번호로(<PHONE_1>), 그 글자를 담은 쓰기는 거절.
                            # 물은 사람의 채팅 답에는 그 자리에 값이 보임. 끄면 한 글 안의 <EMAIL_n>과 <REDACTED:phone>·<REDACTED:rrn>·<REDACTED:card>, 값 안 보임
+  refuseRepeatedReads: false # (alpha) true면 채팅 답·조사 하나 안에서 같은 도구·같은 인자의 읽기를 앞 호출이 답한 지 60초 안에 또 하면
+                             # 실행하지 않고 그 결과가 어디 있는지 모델에 알려 줍니다. 끄면 전과 같습니다
   providers:
     claudeCode: { enabled: false, maxConcurrent: 2, maxConcurrentTotal: 0, memoryLimit: 2Gi, queueWaitSeconds: 60, turnTimeoutSeconds: 300, maxTurns: 10 }
     # maxConcurrent: 서버 한 대의 Claude Code 실행 수(메모리), maxConcurrentTotal: 복제본 전체(0 = maxConcurrent),
@@ -235,6 +237,10 @@ features:
                              # 모델 호출 아님). 시간창도 적습니다
     narrowFirst: false       # (alpha) true면 0번째 걸음에서 변경 다음에 지표 시간창의 anomaly_rank(features.anomalyRank)를 첫 입력에
                              # 넣습니다. 시간창도 적습니다
+    ledger: false            # (alpha) true면 보고서 끝에 원인·경로·배제·가설 묶음을 두고, 가설마다 뒷받침·반박한 호출로 닫아 보고서
+                             # 아래에 따로 보여 줍니다(열린 가설이 있으면 한 번 더 묻습니다)
+    evidenceCheck: false     # (alpha) true면 원인마다 댄 호출이 답했고 원인 이름을 담는지 서버가 확인하고, 아니면 도구 없이 한 번 더
+                             # 묻고 그래도 안 되는 것은 확인 안 됨으로 적습니다. ledger와 함께면 묶음 하나, 다시 묻기 한 번
     window:                  # 알림 시작 시각에서 셉니다. 끝은 늦어도 지금입니다
       metricsMinutes: 15     # 시작 앞뒤로 이만큼의 지표(1–360)
       logsMinutes: 5         # 시작 이만큼 전부터의 로그(0–1440)

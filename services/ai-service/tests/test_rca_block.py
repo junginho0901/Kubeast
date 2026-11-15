@@ -439,6 +439,22 @@ async def test_a_block_left_open_by_the_model_is_asked_to_be_closed_not_shortene
     assert out["report"] == "## Summary\nweb crashes." and out["result"]["failures"] == []
 
 
+def test_each_status_gets_its_own_second_ask():
+    def ask(answer, finish=""):
+        checked = rca.check(answer, tool_log=[], reads=[], alert_start=None, evidence=True, ledger=False, finish_reason=finish)
+        return checked.status, rca.ask_again(checked, [], evidence=True, ledger=False)
+
+    report = "## Summary\nweb crashes."
+    status, text = ask(report + "\n```rca\n[1, 2]\n```")
+    assert status == "invalid" and text.startswith("Your rca block is not the JSON asked for") and "Fix the block's JSON" in text
+    status, text = ask(report + "\n```rca\nnot json\n```")
+    assert status == "missing" and text.startswith("Your report did not end with a valid rca block")
+    status, text = ask(report + '\n```rca\n{"causes": [', "stop")
+    assert status == "missing" and text.startswith("Your rca block has no closing fence")
+    status, text = ask(report + '\n```rca\n{"causes": [', "length")
+    assert status == "cut" and text.startswith("Your report was cut off before its rca block ended")
+
+
 def test_a_cause_with_no_name_does_not_open_every_cause_hypothesis_with_no_name():
     answer = "## Summary\nx\n\n" + block([cause("", [])], [hypothesis(resource="", state="cause", **{"for": [1]})])
     checked = rca.check(answer, tool_log=[{"tool": "k8s_get_resources"}], reads=[evidence.Read("k8s_get_resources", PODS, text=POD_TABLE)],

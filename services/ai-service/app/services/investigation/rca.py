@@ -112,14 +112,29 @@ def _close(body: str) -> Optional[tuple[int, int]]:
     return at, rest.end() if rest else fence_end
 
 
+def _jsonish(raw: str) -> bool:
+    """Whether the text after an rca fence is JSON the model meant as its block, whole or broken: it starts with { or
+    [, or parses at least in part. Words that are not JSON at all are a fence quoted from a tool result."""
+    text = raw.strip()
+    if text[:1] in ("{", "["):
+        return True
+    try:
+        json.loads(text)
+    except json.JSONDecodeError as e:
+        return e.pos > 0
+    except (ValueError, RecursionError):
+        return False
+    return True
+
+
 def _without_blocks(text: str) -> str:
-    """The text without its closed rca blocks; a fence whose text is not a JSON object (a quoted one) stays."""
+    """The text without its closed rca blocks; a fence whose text is not JSON (a quoted one) stays."""
     kept, pos = [], 0
     for m in _OPEN.finditer(text):
         if m.start() < pos:
             continue
         span = _close(text[m.end():])
-        if span is None or not text[m.end():m.end() + span[0]].lstrip().startswith("{"):
+        if span is None or not _jsonish(text[m.end():m.end() + span[0]]):
             continue
         kept.append(text[pos:m.start()])
         pos = m.end() + span[1]
@@ -139,11 +154,11 @@ def _block(raw: str) -> Optional[dict]:
 def split(answer: str, finish_reason: str = "") -> tuple[str, Optional[dict], str]:
     """(the report, the block's object, "ok" | "missing" | "invalid" | "cut").
 
-    The block is the last rca fence holding a JSON object, closed by a fence that starts a line (or ends its JSON; the
+    The block is the last rca fence holding JSON, whole or broken (_jsonish), closed by a fence that starts a line (or ends its JSON; the
     rest of the closing line goes with it when it is only backticks or a language name). Space after it, or closing
     words with no fence when it is the answer's only rca fence, leave it the block; those words stay in the report, and
     an earlier rca fence stays too (one quoted from a tool result). A fence after it, or closing words after a second
-    rca fence, is no block (missing): only that block leaves the report. A last rca fence with no JSON object in it is
+    rca fence, is no block (missing): only that block leaves the report. A last rca fence whose text is not JSON at all is
     a quoted one (missing, its text kept). One that never closes is cut when the provider stopped at the length
     (`finish_reason` "length"); with a whole JSON object after it, it is the block; with other JSON it is cut, or
     missing when the provider said it stopped by itself ("stop"). An answer stopped at the length with no block is
@@ -160,13 +175,13 @@ def split(answer: str, finish_reason: str = "") -> tuple[str, Optional[dict], st
     if span is None:
         if stopped:
             return _without_blocks(before), None, "cut"
-        if not body.lstrip().startswith("{"):
+        if not _jsonish(body):
             return _without_blocks(text), None, "missing"
         if (block := _block(body)) is not None:
             return before.rstrip(), block, "ok"
         return _without_blocks(before), None, "missing" if finish_reason == "stop" else "cut"
     raw, after = body[:span[0]], body[span[1]:]
-    if not raw.lstrip().startswith("{"):
+    if not _jsonish(raw):
         return _without_blocks(text), None, "cut" if stopped else "missing"
     words = after.strip()
     if _FENCE in after or (words and len(opens) > 1):
@@ -196,7 +211,7 @@ def unclosed(answer: str) -> bool:
     """Whether the answer's last rca fence holds JSON and never closes."""
     opens = list(_OPEN.finditer(answer or ""))
     body = answer[opens[-1].end():] if opens else ""
-    return bool(opens) and _close(body) is None and body.lstrip().startswith("{")
+    return bool(opens) and _close(body) is None and _jsonish(body)
 
 
 @dataclass
@@ -299,6 +314,9 @@ def ask_again(checked: Checked, calls: Iterable[tuple[str, Any, str]], *, eviden
     elif checked.unclosed:
         head = ("Your rca block has no closing fence, so the server could not read it. Close the block with ``` on a "
                 "line of its own.")
+    elif checked.status == "invalid":
+        head = ("Your rca block is not the JSON asked for (one object whose \"causes\" is a list of objects), so the "
+                "server could not read it. Fix the block's JSON.")
     elif checked.status != "ok":
         head = "Your report did not end with a valid rca block, so the server could not check it against this investigation's calls."
     else:
