@@ -3,12 +3,13 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Page, type WebSocketRoute } from '@playwright/test'
 
 // What a screen asks of the server while nothing changes, counted request by request on cluster `self` in a namespace of
 // this file's: an open drawer whose watch answers reads its object when it changes and not on the clock, a watch that
 // does not answer goes back to the clock, the pages of pods send the revision they hold, a Pod drawer reads when its own
-// row changes, and a list the server has no room to follow is read on the clock and follows again by itself.
+// row changes, a list the server has no room to follow is read on the clock and follows again by itself, and a list whose
+// socket came back is read once.
 
 const NS = 'e2e-reads-on-change'
 const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
@@ -277,5 +278,44 @@ test.describe('what a screen asks of the server', () => {
     // and follows again, with no reload: this row comes well before the next minute
     kubectl(`-n ${NS} create configmap live-again --from-literal=a=1`)
     await expect(page.locator('main tbody tr').filter({ hasText: 'live-again' }), 'a row by the watch').toHaveCount(1, { timeout: 5_000 })
+  })
+
+  // Nothing tells a list of a delete while its socket is gone, and the watch that opens on the next socket sends the
+  // objects there are: the list says it missed the gap, and the server's RESYNC has it read once.
+  test('a list whose socket came back leaves out a row deleted meanwhile, with one read and no reload', async ({ page }) => {
+    test.setTimeout(120_000)
+    for (const name of ['gone-meanwhile', 'stays']) kubectl(`-n ${NS} create configmap ${name} --from-literal=a=1`)
+    const sockets: { page: WebSocketRoute; server: WebSocketRoute; relay: boolean }[] = []
+    await page.routeWebSocket(/wsMultiplexer/, (ws) => {
+      const server = ws.connectToServer()
+      const socket = { page: ws, server, relay: true }
+      sockets.push(socket)
+      ws.onMessage((message) => server.send(message))
+      server.onMessage((message) => { if (socket.relay) ws.send(message) })
+    })
+    const lists = counter(page, (u) => u.pathname === `/api/v1/cluster/namespaces/${NS}/configmaps`)
+    await page.goto(`/configuration/configmaps?cluster=self&namespace=${NS}`)
+    const row = (name: string) => page.locator('main tbody tr').filter({ has: page.getByRole('cell', { name, exact: true }) })
+    await expect(row('gone-meanwhile')).toHaveCount(1, { timeout: 20_000 })
+    await expect(row('stays')).toHaveCount(1)
+    await expect.poll(lists.count, { timeout: 10_000 }).toBeGreaterThanOrEqual(1)
+
+    // the socket brings nothing more, the object goes, then the socket closes
+    const first = sockets[sockets.length - 1]
+    first.relay = false
+    kubectl(`-n ${NS} delete configmap gone-meanwhile --wait=true`)
+    await page.waitForTimeout(2_000)
+    await expect(row('gone-meanwhile'), 'nothing told the list').toHaveCount(1)
+    const readsBefore = lists.count()
+    const socketsBefore = sockets.length
+    await first.server.close()
+    await first.page.close()
+    await expect.poll(() => sockets.length, { timeout: 40_000, message: 'the page opens another socket' }).toBeGreaterThan(socketsBefore)
+
+    // the read waits up to five seconds after the watch is on
+    await expect(row('gone-meanwhile')).toHaveCount(0, { timeout: 20_000 })
+    await expect(row('stays')).toHaveCount(1)
+    await page.waitForTimeout(6_000)
+    expect(lists.count() - readsBefore, 'one read of the list').toBe(1)
   })
 })
