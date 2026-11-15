@@ -77,6 +77,24 @@ async def run_tool_turn(service, messages: list[dict[str, Any]], tools: Sequence
     return out
 
 
+async def answer_once(service, messages: list[dict[str, Any]], *, remaining: Callable[[], float], lane: str = "chat",
+                      usage: Optional[dict[str, Any]] = None) -> str:
+    """One more model call without tools, after a turn (the investigator's evidence check asks again with it): the
+    API-key path's call, or Claude Code's plain completion on a subscription. Its tokens are added to `usage`."""
+    if getattr(service, "provider", None) == "claude-code":
+        done = await asyncio.wait_for(service.client.claude_code.complete(messages, lane=lane), timeout=remaining())
+        if usage is not None:
+            usage_acct.add_usage(usage, done.usage, prompt_chars=usage_acct.prompt_chars(messages, None))
+        return (done.text or "").strip()
+    resp = await asyncio.wait_for(
+        service.client.chat.completions.create(model=service.model, messages=messages, temperature=0.2,
+                                               max_tokens=limits.answer_tokens(service, 2048), timeout=min(120.0, remaining())),
+        timeout=remaining())
+    if usage is not None:
+        usage_acct.add_usage(usage, getattr(resp, "usage", None), prompt_chars=usage_acct.prompt_chars(messages, None))
+    return (resp.choices[0].message.content or "").strip()
+
+
 async def _claude_code_turn(service, messages, tools, run_tool, *, max_steps, final_message, remaining, lane,
                             out: Optional[ToolTurn] = None) -> ToolTurn:
     from app.services.claude_code import TurnResult

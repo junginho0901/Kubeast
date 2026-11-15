@@ -78,6 +78,8 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   - 모델은 `model`(ModelConfig 이름) 또는 기본 모델을 쓰고, 모델 호출은 `maxSteps`(8)번까지, 전체 시간은 `timeoutSeconds`(300)까지입니다. 마지막 호출에는 도구를 주지 않으므로 답이 돌아옵니다.
   - 알림의 라벨·주석은 프롬프트에서 "신뢰하지 않는 데이터"로 분리합니다.
 - **보고서**: 요약 · 확인한 것 · 가능한 원인 · 다음에 볼 것으로 구성됩니다(`language`, 기본 en).
+  - `ai.refuseRepeatedReads`(기본 꺼짐)는 채팅 답과 같이 조사에도 걸립니다. 같은 도구·같은 인자의 읽기를 앞 호출이 답한 지 60초 안에 또 하면 실행하지 않고, 그 결과가 몇 번째 걸음에 있는지 모델에 알려 줍니다. 그 호출의 `ai.tool.call` 행과 도구 호출 기록에는 `repeat_of`(그 걸음)가 남습니다.
+  - `evidenceCheck`(기본 꺼짐)를 켜면 보고서 끝에 `rca` 묶음이 붙습니다. 원인마다 고장 종류·시작 시각·그 원인을 보여 준 도구 호출 번호를 적습니다(모델은 도구 결과마다 `[call N]`을 받습니다). 보고서를 저장하기 전에 서버가 원인마다 댄 호출이 오류 없이 답했는지, 그 결과에 원인 이름이 나오는지, 원인이 알림보다 늦게 시작하지 않았는지 확인합니다. 어긋나는 원인이 있거나 묶음이 없으면 도구 없이 모델을 한 번 더 불러 보고서를 다시 받고(토큰은 그 조사에 셈), 그래도 어긋나는 원인은 보고서 아래에 "서버 확인 안 됨"으로 적습니다. 묶음은 저장하는 보고서에서 빼고, 조사의 `ai.investigation.run` 행에 `evidence`(건수만)를 남깁니다.
   - API는 `GET /api/v1/ai/investigations`(목록, `status`·`cluster`로 거르기)와 `/{id}`(상세: 보고서·도구 호출·토큰)이고, 권한은 `admin.investigations.read`입니다.
   - 상세에는 파드 로그가 인용될 수 있어 열람할 때마다 `ai.investigation.view`로 남깁니다.
   - 보존 기간은 `retention.investigationDays`(90일)입니다.
