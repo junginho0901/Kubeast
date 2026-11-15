@@ -41,7 +41,7 @@ The chart refuses `replicas.k8sService` or `replicas.toolServer` above 1 with `r
 | migrations | 4, while they run | the migration pool (`dbsession.MigrationPoolMaxConns`) |
 | tool-server, frontend, gateway | 0 | — |
 
-The chart's postgres sets `max_connections` to `postgresql.maxConnections` (300), and an install stops when the pods could hold more: each pool times the pods while a rollout runs (a quarter more, rounded up, or autoscaling's `maxReplicas` where it is on), plus 4 for the migrations and 10 kept for psql and PostgreSQL's superuser slots (`templates/checks/db-connections.yaml`).
+The chart's postgres sets `max_connections` to `postgresql.maxConnections` (300), and an install stops when the pods could hold more: each pool times the pods while a rollout runs (one more than the count, each Deployment's `maxSurge` being 1, and autoscaling's `maxReplicas` where it is on), plus 4 for the migrations and 10 kept for psql and PostgreSQL's superuser slots (`templates/checks/db-connections.yaml`).
 An external database has its own limit, which the chart cannot read: NOTES prints the same sum to compare with it. When the Kubeast user is not a superuser, 3 of its connections are kept for superusers by default.
 For example, one pod of each service can hold up to 154 connections with a rollout's extra pod counted, and three pods of each 286.
 Raise `postgresql.maxConnections`, lower the pools or the pod counts, or use a database that takes more connections.
@@ -56,7 +56,7 @@ replicas:
   frontend: 2
 ```
 
-- `pdb.enabled: true` keeps `pdb.minAvailable` pods of every service during a node drain. Turn it on only when every service runs two or more pods: for a service of one pod it blocks the drain.
+- `pdb.enabled` (on by default) gives each service that runs two or more pods, or whose autoscaling keeps `minReplicas` 2 or more, a PodDisruptionBudget that lets `pdb.maxUnavailable` (1) of its pods be evicted at once; a service of one pod gets none, so it never blocks a drain.
 
 ## Let an HPA set the count
 

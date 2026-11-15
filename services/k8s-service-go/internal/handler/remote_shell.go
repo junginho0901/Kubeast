@@ -14,6 +14,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drain"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/probe"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/httpstream"
 	"k8s.io/client-go/kubernetes"
@@ -183,7 +184,8 @@ func serverLeftNotice(lang string) string {
 }
 
 // serverEnded says why a held terminal ended when the server ended it — its session stopped standing
-// (auth.LiveSessions) or the server is being replaced (drain) — with the line, close code and reason it gets. ok is
+// (auth.LiveSessions) or the server is being replaced (drain) or is leaving without a drain (probe.ErrLeaving) — with
+// the line, close code and reason it gets. ok is
 // false for any other end: the browser went away, the shell exited.
 func serverEnded(ctx context.Context, lang string) (notice string, closeCode int, reason string, ok bool) {
 	if code := auth.SessionEndCode(ctx); code != "" {
@@ -192,7 +194,20 @@ func serverEnded(ctx context.Context, lang string) (notice string, closeCode int
 	if drain.Ended(ctx) {
 		return serverLeftNotice(lang), drain.CloseCode, drain.Code, true
 	}
+	if probe.IsLeaving(ctx) {
+		return serverRestartNotice(lang), probe.ShutdownCloseCode, probe.ShutdownReason, true
+	}
 	return "", 0, "", false
+}
+
+// serverRestartNotice is the line a terminal ends with when its server stops (an upgrade or a node change) with no
+// drain to warn it first (probe.Leave), in the screen's language. The shell is hung up; a new one opens on a server
+// that stays.
+func serverRestartNotice(lang string) string {
+	if strings.HasPrefix(strings.ToLower(lang), "ko") {
+		return "\r\n[Kubeast] 서버가 다시 시작되어 이 터미널을 닫았습니다. 터미널을 다시 여세요.\r\n"
+	}
+	return "\r\n[Kubeast] This terminal was closed: the server is restarting. Open the terminal again.\r\n"
 }
 
 func hangUp(w io.Writer, pause time.Duration) {
@@ -219,9 +234,10 @@ func hangUp(w io.Writer, pause time.Duration) {
 // lang, the screen's language the page sent.
 //
 // A ctx ended by the session (auth.LiveSessions) or by the server leaving
-// (drain) says why on the terminal and closes the socket, which from here on is
-// a browser going away: the shell is hung up, not left running in the
-// container. A server that starts leaving first says, on the terminal, when it
+// (drain, or probe.ErrLeaving where no drain holds the terminals; close code
+// 1001) says why on the terminal and closes the socket, which from here on is a
+// browser going away: the shell is hung up, not left running in the container.
+// A server that starts leaving with a drain first says, on the terminal, when it
 // will close (drain.Warning).
 func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cfg *rest.Config, u *url.URL, rec *recording.Session, lang string) error {
 	exec, err := newShellExecutor(cfg, u)

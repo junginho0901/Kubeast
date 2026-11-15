@@ -17,17 +17,17 @@ tests:
       - hasDocuments:
           count: 0
 
-  - it: stops ten auth-service pods, 13 of them in a rollout at 20 connections each
+  - it: stops ten auth-service pods, 11 of them in a rollout at 20 connections each
     set:
       replicas.authService: 10
     asserts:
       - failedTemplate:
-          errorPattern: can hold up to 374 database connections
+          errorPattern: can hold up to 334 database connections
 
   - it: takes them with max_connections raised to the sum
     set:
       replicas.authService: 10
-      postgresql.maxConnections: 374
+      postgresql.maxConnections: 334
     asserts:
       - hasDocuments:
           count: 0
@@ -38,7 +38,7 @@ tests:
       autoscaling.k8sService.maxReplicas: 30
     asserts:
       - failedTemplate:
-          errorPattern: can hold up to 550 database connections
+          errorPattern: can hold up to 473 database connections
 
   - it: counts replicas while the HPA is off
     set:
@@ -51,14 +51,14 @@ tests:
   - it: leaves ai-service and the ModelConfig controller out with ai.enabled false
     set:
       ai.enabled: false
-      replicas.authService: 8
+      replicas.authService: 9
     asserts:
       - hasDocuments:
           count: 0
 
   - it: counts them with AI on
     set:
-      replicas.authService: 8
+      replicas.authService: 9
     asserts:
       - failedTemplate:
           errorPattern: can hold up to 314 database connections

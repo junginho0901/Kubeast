@@ -9,6 +9,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drain"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/probe"
 )
 
 // streamEndedEvent names the event a stream's last frame carries when its session stopped standing.
@@ -24,15 +25,44 @@ const serverLeavingRetryMs = 1000
 // auditSessionEndAction is the row of a terminal or followed log the server ended, next to the row that opened it.
 const auditSessionEndAction = "k8s.session.end"
 
+// leavingRetryMillis is the reconnection time a stream ended by the server leaving gives the browser's EventSource,
+// which then asks again, with Last-Event-ID, through the Service to a pod that stays.
+const leavingRetryMillis = 1000
+
 // holdSession ties a long-lived answer on ctx to the session of its caller (auth.LiveSessions).
+// It also ends, with probe.ErrLeaving as the cause, when the server starts to leave.
 func (h *Handler) holdSession(ctx context.Context) (context.Context, func()) {
 	payload, _ := auth.FromContext(ctx)
-	return h.liveSessions.Hold(ctx, payload)
+	ctx, endSession := h.liveSessions.Hold(ctx, payload)
+	ctx, endHold := h.leaving.Hold(ctx)
+	return ctx, func() {
+		endHold()
+		endSession()
+	}
 }
 
-// sayStreamEnded tells an event stream why it ends when that is its session or its server leaving, and reports
-// whether it was one of them.
+// holdTerminal is holdSession for a terminal (pod exec, node shell): when the terminals were handed over to another
+// owner (probe.HandOverTerminals, merge plan S21), the server's leaving leaves the terminal to that owner.
+func (h *Handler) holdTerminal(ctx context.Context) (context.Context, func()) {
+	payload, _ := auth.FromContext(ctx)
+	ctx, endSession := h.liveSessions.Hold(ctx, payload)
+	ctx, endHold := h.leaving.HoldTerminal(ctx)
+	return ctx, func() {
+		endHold()
+		endSession()
+	}
+}
+
+// sayStreamEnded tells an event stream why it ends when that is its session or its server being replaced (the drain),
+// and reports whether it was one of them. A stream the server's leaving ended (probe.Leave) gets a short reconnection
+// time instead and is not a session's end: the browser asks again, with Last-Event-ID, of a pod that stays.
 func sayStreamEnded(ctx context.Context, w http.ResponseWriter, flusher http.Flusher) bool {
+	if probe.IsLeaving(ctx) {
+		if _, err := fmt.Fprintf(w, "retry: %d\n\n", leavingRetryMillis); err == nil {
+			flusher.Flush()
+		}
+		return false
+	}
 	if code := auth.SessionEndCode(ctx); code != "" {
 		if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", streamEndedEvent, code); err == nil {
 			flusher.Flush()
@@ -84,13 +114,17 @@ func (h *Handler) refuseTerminalWhileLeaving(w http.ResponseWriter) bool {
 }
 
 // auditSessionEnd writes the row of a connection the server ended — its session stopped standing, or the server is
-// being replaced; other ends are the user's own and have none.
+// being replaced (the drain, or a terminal the server's leaving closed; a followed log the leaving ended reconnects by
+// itself and has none); other ends are the user's own and have none.
 // The browser closes on the end frame sent before it, so the row does not wait on the request.
 func (h *Handler) auditSessionEnd(ctx context.Context, r *http.Request, targetType, target, namespace, stream string) {
 	code := auth.SessionEndCode(ctx)
 	why := "connection closed: session ended"
 	if code == "" && drain.Ended(ctx) {
 		code, why = drain.Code, "connection closed: server shutting down"
+	}
+	if code == "" && probe.IsLeaving(ctx) && (stream == "exec" || stream == "node-shell") {
+		code, why = probe.ShutdownReason, "connection closed: server shutting down"
 	}
 	if code == "" {
 		return
