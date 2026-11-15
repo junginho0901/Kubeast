@@ -123,6 +123,8 @@ SELECT g.user_id, g.cluster_id, r.name
                  WHERE actor_user_id = 'system' AND actor_email = 'migration' AND action = 'admin.roles.update');
 ```
 
+0.7.8부터 k8s-service와 tool-server는 자기 사용자로 차트의 Redis에 로그인합니다. `secrets.existingSecret`을 쓰면 그 Secret에 `REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD`, AI를 켰다면 `REDIS_TOOL_SERVER_PASSWORD`까지 넣고 `redis.acl.existingSecretHasKeys: true`로 둘 때까지 비밀번호 하나를 그대로 씁니다([Redis 사용자](configuration.md#redis-사용자)).
+
 ### 제거
 
 ```bash
@@ -137,6 +139,7 @@ helm uninstall kubeast -n kubeast      # K8s
 | PersistentVolumeClaim `kubeast-postgres-data` | 데이터베이스(`postgresql.persistence.resourcePolicy: keep`) |
 | Secret `kubeast-secrets` | 데이터베이스·관리자 비밀번호, values에 넣은 AI 키, 웹훅·내부 토큰 |
 | Secret `kubeast-auth-keys` | 로그인 토큰에 서명하는 키 |
+| Secret `kubeast-redis-users` | Redis 사용자의 비밀번호([Redis 사용자](configuration.md#redis-사용자)) |
 | 레이블 `app.kubernetes.io/managed-by=kubeast`가 붙은 Secret | Kubeast가 등록한 클러스터마다 쓴 것: 그 kubeconfig, 저장소의 인증 헤더 |
 | CustomResourceDefinition `modelconfigs.ai.kubeast.io` | 리소스로 쓰는 AI 모델의 종류와 그 리소스 |
 | Namespace `kubeast` | Helm은 네임스페이스를 지우지 않습니다 |

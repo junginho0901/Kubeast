@@ -125,6 +125,8 @@ SELECT g.user_id, g.cluster_id, r.name
                  WHERE actor_user_id = 'system' AND actor_email = 'migration' AND action = 'admin.roles.update');
 ```
 
+From 0.7.8 k8s-service and tool-server sign in to the chart's Redis as users of their own. With `secrets.existingSecret`, Redis keeps one password until you add `REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD` and, with the AI on, `REDIS_TOOL_SERVER_PASSWORD` to that Secret and set `redis.acl.existingSecretHasKeys: true` ([Redis users](configuration.md#redis-users)).
+
 ### Uninstall
 
 ```bash
@@ -139,6 +141,7 @@ helm uninstall kubeast -n kubeast      # K8s
 | PersistentVolumeClaim `kubeast-postgres-data` | The database (`postgresql.persistence.resourcePolicy: keep`) |
 | Secret `kubeast-secrets` | The database and admin passwords, the AI keys set in the values, the webhook and internal tokens |
 | Secret `kubeast-auth-keys` | The keys that sign sign-in tokens |
+| Secret `kubeast-redis-users` | The passwords of the Redis users ([Redis users](configuration.md#redis-users)) |
 | Secrets labelled `app.kubernetes.io/managed-by=kubeast` | What Kubeast wrote for registered clusters: each one's kubeconfig, a store's authorization header |
 | CustomResourceDefinition `modelconfigs.ai.kubeast.io` | The kind of AI models written as resources, and those resources |
 | Namespace `kubeast` | Helm does not delete a namespace |
