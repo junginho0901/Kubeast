@@ -1,0 +1,27 @@
+{
+ "id": "04_netpol_block",
+ "control": false,
+ "symptom": "storefront's calls to catalog time out; its calls to reviews keep working",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "NetworkPolicy/shop-04/allow-from-gateway",
+   "kind": "network_policy",
+   "accept_resources": ["allow-from-gateway"],
+   "accept_kinds": []
+  }
+ ],
+ "path": [
+  {"resource": "NetworkPolicy/shop-04/allow-from-gateway", "role": "cause", "required": true, "accept": ["allow-from-gateway"]},
+  {"resource": "Deployment/shop-04/catalog", "role": "via", "required": false, "accept": ["catalog"]},
+  {"resource": "Deployment/shop-04/storefront", "role": "symptom", "required": true, "accept": ["storefront"]}
+ ],
+ "also_ok": [],
+ "decoys": [
+  {"resource": "Deployment/shop-04/catalog", "why": "the blocked backend: Running, Ready, no restarts, nothing in its own logs"},
+  {"resource": "Service/shop-04/catalog", "why": "has ready endpoints the whole time"},
+  {"resource": "NetworkPolicy/shop-04/allow-same-namespace", "why": "the older policy; it only adds an allow for reviews, which is why reviews still works"}
+ ]
+}

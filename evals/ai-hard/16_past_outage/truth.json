@@ -1,0 +1,27 @@
+{
+ "id": "16_past_outage",
+ "control": false,
+ "symptom": "for five minutes storefront's payment calls failed (no endpoints behind the Service); before and after, every call succeeds",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": "{{UNDO_TIME}}",
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "Deployment/shop-16/payments",
+   "kind": "dependency_down",
+   "accept_resources": ["(deployment|replicaset|pod|service)/(shop-16/)?payments", "^payments"],
+   "accept_kinds": []
+  }
+ ],
+ "path": [
+  {"resource": "Deployment/shop-16/payments", "role": "cause", "required": true, "accept": ["payments"], "note": "scaled to 0 replicas, back to 1 five minutes later"},
+  {"resource": "Service/shop-16/payments", "role": "via", "required": false, "accept": ["service/(shop-16/)?payments", "endpoint"], "note": "no endpoints while at 0"},
+  {"resource": "Deployment/shop-16/storefront", "role": "symptom", "required": true, "accept": ["storefront"]}
+ ],
+ "also_ok": ["Service/shop-16/payments"],
+ "decoys": [
+  {"resource": "Deployment/shop-16/storefront", "why": "where the errors were logged; it never changed"},
+  {"resource": "Deployment/shop-16/catalog", "why": "unaffected the whole time"}
+ ],
+ "variants_note": "At 360 s the fault has just been undone and its events are still in the cluster. At 4200 s (70 min) both scale events have passed the default 1 h event TTL; what remains is storefront's error lines in Loki, kube-state-metrics' replica series in Prometheus (2 h retention on dev), the payments pod's age and the Deployment's managedFields time for the scale subresource."
+}
