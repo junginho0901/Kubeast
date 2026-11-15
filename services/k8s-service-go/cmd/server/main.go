@@ -276,8 +276,8 @@ func main() {
 	h.SetRecorder(recorder)
 	recCtx, recCancel := context.WithCancel(context.Background())
 	defer recCancel()
-	// Only a server that opens terminals writes recordings: Run's recovery marks a row whose spool file it does not
-	// hold as interrupted, which on an API server would be every live recording of the stream server.
+	// Only a server that opens terminals runs the recorder: an API server holds no recording to keep alive, and a row
+	// its recovery took from a stopped stream server would end interrupted, the spool volume being the stream server's.
 	if recorder.Enabled() && role.ServesStreams() {
 		slog.Info("session recording enabled", "storage", recCfg.Storage, "chunk_sec", recCfg.ChunkSeconds, "required", recCfg.Required)
 		go recorder.Run(recCtx)
