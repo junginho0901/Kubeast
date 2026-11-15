@@ -52,6 +52,8 @@ The NGINX gateway receives every request and routes it to the microservices. Pos
 | `postgres` | — | 5432 | Main DB (durable state), PostgreSQL 18 |
 | `redis` | — | 6379 | k8s-service cache, Valkey 9.1 (Redis protocol). With `redis.enabled: false`, k8s-service caches in memory |
 
+k8s-service writes its cache in Redis under the key prefix `kubeast:cache:`, every entry with a time to live of at most an hour, and a change of a cluster's registration deletes only those keys (`SCAN` and `UNLINK`), so other keys in the same Redis database stay. A k8s-service whose Redis did not answer at start caches in memory and asks Redis again every 5 s; once it answers, the cache moves there. Which clusters changed is kept in PostgreSQL, not in Redis: auth-service gives a cluster a new `config_version` in the database transaction that replaces its kubeconfig or changes its Prometheus or log store, which commits only once the Secret is written. A change that fails answers an error: the Secret it wrote is put back with the cluster's row locked, so a change of the same cluster waiting for it does not see it, and the cluster then gets one more new `config_version`, so a connection made from the written Secret meanwhile is dropped too; a Secret that could not be put back is named in the answer and in the audit row. Every k8s-service reads the versions every 5 s and drops a connection built from another version or to a deleted cluster. With Redis, the k8s-service that auth-service tells also notifies the others at once (channel `kubeast:clusters:changed:<db>`).
+
 ## Container images
 
 All are published as public packages on ghcr.io.
@@ -124,6 +126,8 @@ Work that always runs:
 - k8s-service:
   - checks the health of each registered cluster every 60 seconds (`multicluster.healthcheckIntervalSec`)
   - cleans up the informer caches of clusters not used for a long time
+  - on each replica, reads every registered cluster's `config_version` from the database every 5 seconds, give or take a second, one query (`internal/clustersync`); with Redis it also follows the other replicas' cluster change notices
+  - when Redis did not answer at start, asks it again every 5 seconds until it answers, then moves the cache there
 
 The MCP, alert investigation, session recording, node shell and `features.*` rows are based on the code. They create no pods, so they were not measured separately. The MCP value was measured on 2026-10-13.
 
