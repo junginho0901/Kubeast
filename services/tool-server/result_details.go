@@ -8,12 +8,14 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
+
+	"github.com/junginho0901/kubeast/services/pkg/config"
 )
 
-var resultDetails = strings.EqualFold(strings.TrimSpace(os.Getenv("AI_TOOL_RESULT_DETAILS")), "true")
+// resultDetails is AI_TOOL_RESULT_DETAILS by the one switch rule (config.SwitchOn), read at each answer.
+func resultDetails() bool { return config.EnvSwitch("AI_TOOL_RESULT_DETAILS") }
 
 const (
 	// Prometheus's own default (--query.lookback-delta).
@@ -110,7 +112,7 @@ func seriesCut(total, kept int, storeStopped bool, counted, mostPoints int) stri
 
 // addDetails sets the details that are not empty when the switch is on.
 func addDetails(result map[string]interface{}, cut, window, emptyReason string) {
-	if !resultDetails {
+	if !resultDetails() {
 		return
 	}
 	for k, v := range map[string]string{"cut": cut, "default_window": window, "empty_reason": emptyReason} {

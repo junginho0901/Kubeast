@@ -15,9 +15,11 @@ var detailKeys = []string{"cut", "default_window", "empty_reason"}
 
 func withDetails(t *testing.T, on bool) {
 	t.Helper()
-	was := resultDetails
-	resultDetails = on
-	t.Cleanup(func() { resultDetails = was })
+	if on {
+		t.Setenv("AI_TOOL_RESULT_DETAILS", "true")
+	} else {
+		t.Setenv("AI_TOOL_RESULT_DETAILS", "")
+	}
 }
 
 func seriesJSON(n, points int) string {
@@ -210,9 +212,13 @@ func TestResultDetails_OnSaysWhatTheAnswerHolds(t *testing.T) {
 	}
 }
 
-func TestResultDetails_OffWithoutTheVariable(t *testing.T) {
-	if resultDetails {
-		t.Fatal("AI_TOOL_RESULT_DETAILS is on without being set to true")
+// Off unset (empty), and otherwise by the one switch rule (services/pkg/config.SwitchOn).
+func TestResultDetails_OffByDefaultAndReadByTheSwitchRule(t *testing.T) {
+	for v, want := range map[string]bool{"": false, "false": false, "0": false, "t": false, "true": true, " Yes ": true, "1": true, "ON": true} {
+		t.Setenv("AI_TOOL_RESULT_DETAILS", v)
+		if got := resultDetails(); got != want {
+			t.Errorf("AI_TOOL_RESULT_DETAILS=%q: %v, want %v", v, got, want)
+		}
 	}
 }
 

@@ -241,7 +241,7 @@ func handlePrometheusQuery(ctx context.Context, args map[string]interface{}, hea
 	if len(reply.Results) == 0 {
 		result["hint"] = "The query matched no series. Find the metric with prometheus_metrics and its labels with prometheus_labels instead of guessing (the cluster may not run the exporter that produces it)."
 	}
-	if resultDetails {
+	if resultDetails() {
 		window, emptyReason := "", ""
 		if isRange {
 			window = windowDefault(args, time.Hour, "since", "since_time", "until_time")

@@ -11,6 +11,7 @@ import pytest
 
 from app.services.ai import console_links
 from app.services.ai.tool_dispatch import execute_function_with_context
+from tests.test_switch_cases import CASES
 
 FRONTEND = Path(__file__).resolve().parents[3] / "frontend" / "src"
 
@@ -61,14 +62,15 @@ def off(monkeypatch):
     monkeypatch.delenv(console_links.ENV, raising=False)
 
 
-def test_the_switch_is_off_unless_set_to_true(monkeypatch):
+def test_the_switch_is_off_unset(monkeypatch):
     monkeypatch.delenv(console_links.ENV, raising=False)
     assert console_links.enabled() is False
-    for value in ("1", "yes", "on", ""):
-        monkeypatch.setenv(console_links.ENV, value)
-        assert console_links.enabled() is False
-    monkeypatch.setenv(console_links.ENV, "True")
-    assert console_links.enabled() is True
+
+
+@pytest.mark.parametrize("case", CASES, ids=lambda c: repr(c["value"]))
+def test_the_switch_reads_the_one_switch_rule(monkeypatch, case):
+    monkeypatch.setenv(console_links.ENV, case["value"])
+    assert console_links.enabled() is case["on"]
 
 
 @pytest.mark.asyncio

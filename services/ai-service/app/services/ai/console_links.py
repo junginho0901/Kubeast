@@ -11,10 +11,11 @@ cut at the model's length keeps it. Off, results are as they were."""
 from __future__ import annotations
 
 import json
-import os
 import re
 from typing import Any, Iterable, Optional
 from urllib.parse import urlencode
+
+from app.services import switch
 
 ENV = "AI_TOOL_RESULT_DETAILS"
 MAX_LINKS = 8
@@ -67,7 +68,7 @@ _ALERT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$")
 
 
 def enabled() -> bool:
-    return os.getenv(ENV, "false").strip().lower() == "true"
+    return switch.env_on(ENV)
 
 
 def kind_of(value: Any) -> Optional[str]:
