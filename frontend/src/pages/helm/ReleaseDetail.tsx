@@ -17,6 +17,7 @@ import ResourcesTab from './tabs/ResourcesTab'
 import UninstallModal from './modals/UninstallModal'
 import TestResultModal from './modals/TestResultModal'
 import { isProtectedNamespaceError } from '@/utils/protectedNamespace'
+import { failureFields } from '@/utils/aiContext/readFailure'
 
 type TabKey = 'overview' | 'values' | 'manifest' | 'notes' | 'history' | 'resources'
 
@@ -103,6 +104,8 @@ function HelmReleaseDetail() {
     queryFn: () => api.helm.getResources(namespace, name),
     enabled: !!namespace && !!name && tab === 'resources',
   })
+  const historyError = historyQuery.isError ? historyQuery.error : null
+  const resourcesError = resourcesQuery.isError ? resourcesQuery.error : null
 
   // 플로팅 AI 위젯용 스냅샷 (현재 활성 탭 기준)
   // active_tab 에 따라 추가 데이터 (manifest/values/notes/history/resources) 를
@@ -124,9 +127,9 @@ function HelmReleaseDetail() {
       const text = (sectionQuery.data as any)?.content
       const yaml = truncate(text)
       if (yaml) tabContent = { [`${tab}_text`]: yaml }
-    } else if (tab === 'history') {
+    } else if (tab === 'history' && Array.isArray(historyQuery.data)) {
       // the newest first, as the History tab lists them, with the history answer's own fields (chartVersion, appVersion)
-      const items = Array.isArray(historyQuery.data) ? [...historyQuery.data].sort((a, b) => b.revision - a.revision) : []
+      const items = [...historyQuery.data].sort((a, b) => b.revision - a.revision)
       tabContent = {
         history: items.slice(0, 20).map((h) => ({
           revision: h.revision,
@@ -138,8 +141,8 @@ function HelmReleaseDetail() {
         })),
         history_total: items.length,
       }
-    } else if (tab === 'resources') {
-      const items = Array.isArray(resourcesQuery.data) ? resourcesQuery.data : []
+    } else if (tab === 'resources' && Array.isArray(resourcesQuery.data)) {
+      const items = resourcesQuery.data
       tabContent = {
         resources: items.slice(0, 30).map((r) => ({
           kind: r.kind,
@@ -149,6 +152,10 @@ function HelmReleaseDetail() {
         })),
         resources_total: items.length,
       }
+    } else if (tab === 'history' || tab === 'resources') {
+      // a tab still reading tells no count, and one whose read failed says why, as the tab does — never 0 of them
+      const err = tab === 'history' ? historyError : resourcesError
+      if (err) tabContent = failureFields(tab, err)
     }
 
     return {
@@ -167,7 +174,7 @@ function HelmReleaseDetail() {
         ...(tabContent ?? {}),
       },
     }
-  }, [detailQuery.data, tab, sectionQuery.data, historyQuery.data, resourcesQuery.data])
+  }, [detailQuery.data, tab, sectionQuery.data, historyQuery.data, historyError, resourcesQuery.data, resourcesError])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
