@@ -1170,11 +1170,11 @@ spec_checks() { # spec_checks PHASE
   fi
   if in_checkout 856; then
     pre=$(value_of podShutdown.preStopSeconds)
-    # every Deployment a Service selects, except the bundled PostgreSQL
-    bad=$(jq -r --argjson s "${pre:-0}" '[.items[] | select(.kind == "Service" and .metadata.name != "postgres") | .spec.selector.app] as $apps
+    # every Deployment a Service selects, except the bundled PostgreSQL and Redis, which have no preStop wait
+    bad=$(jq -r --argjson s "${pre:-0}" '[.items[] | select(.kind == "Service" and (.metadata.name | IN("postgres", "redis") | not)) | .spec.selector.app] as $apps
       | [.items[] | select(.kind == "Deployment" and (.spec.template.metadata.labels.app | IN($apps[]))) | .spec.template.spec as $p
          | select(($p.containers[0].lifecycle.preStop.sleep.seconds // 0) != $s or ($p.terminationGracePeriodSeconds // 30) < ($s + 30)) | .metadata.name] | join(" ")' "$json")
-    none_bad "$a" "preStop sleep $pre s and grace ≥ $((pre + 30)) s behind each Service" "$bad" "every Deployment behind a Service but postgres" "not on:"
+    none_bad "$a" "preStop sleep $pre s and grace ≥ $((pre + 30)) s behind each Service" "$bad" "every Deployment behind a Service but postgres and redis" "not on:"
   else
     skip "$a" "preStop and grace period" 856 "podShutdown.preStopSeconds not in the chart"
   fi
