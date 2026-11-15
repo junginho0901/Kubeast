@@ -107,3 +107,9 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no features.callGraph
+  - it: stops values without ai.timelineChanges, which this chart added
+    set:
+      ai.timelineChanges: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.timelineChanges

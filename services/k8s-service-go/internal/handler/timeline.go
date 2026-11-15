@@ -10,6 +10,8 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/response"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 )
 
 // GetClusterTimeline handles GET /api/v1/timeline — events and rollout history
@@ -78,6 +80,79 @@ func (h *Handler) GetResourceTimeline(w http.ResponseWriter, r *http.Request) {
 
 	h.svc.Cache().Set(ctx, cacheKey, result, 30*time.Second)
 	response.JSON(w, http.StatusOK, result)
+}
+
+// GetClusterTimelineChanges handles GET /api/v1/timeline/changes — what changed in every namespace the caller reads.
+func (h *Handler) GetClusterTimelineChanges(w http.ResponseWriter, r *http.Request) {
+	h.serveTimelineChanges(w, r, metav1.NamespaceAll)
+}
+
+// GetNamespaceTimelineChanges handles GET /api/v1/namespaces/{namespace}/timeline/changes
+func (h *Handler) GetNamespaceTimelineChanges(w http.ResponseWriter, r *http.Request) {
+	h.serveTimelineChanges(w, r, chi.URLParam(r, "namespace"))
+}
+
+func (h *Handler) serveTimelineChanges(w http.ResponseWriter, r *http.Request, namespace string) {
+	ctx := r.Context()
+	// to the second, so callers asking for the window up to now at one moment share one read (GetTimelineChanges)
+	since, until, limit, err := timelineChangesWindow(r, time.Now().Truncate(time.Second))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// read as the caller, so kept per identity
+	cacheKey := h.svc.IdentityCacheKey(ctx, "timeline|changes|"+namespace+"|"+r.URL.RawQuery)
+	var cached interface{}
+	if h.svc.Cache().Get(ctx, cacheKey, &cached) {
+		response.JSON(w, http.StatusOK, cached)
+		return
+	}
+
+	result, err := h.svc.GetTimelineChanges(ctx, namespace, since, until, limit)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	h.svc.Cache().Set(ctx, cacheKey, result, 30*time.Second)
+	response.JSON(w, http.StatusOK, result)
+}
+
+// timelineChangesSpan is a changes view's window when no start is given: the four hours before its end.
+const timelineChangesSpan = 4 * time.Hour
+
+// timelineChangesWindow is a changes view's since and until (RFC3339; until defaults to now and is cut there, since to
+// timelineChangesSpan before until, at most timelineMaxHours back) and limit (1 to k8s.TimelineChangesMax, the default).
+func timelineChangesWindow(r *http.Request, now time.Time) (since, until time.Time, limit int, err error) {
+	until = now
+	if raw := r.URL.Query().Get("until"); raw != "" {
+		t, perr := time.Parse(time.RFC3339, raw)
+		if perr != nil {
+			return since, until, 0, fmt.Errorf("until must be an RFC3339 time")
+		}
+		if t.Before(now) {
+			until = t
+		}
+	}
+	since = until.Add(-timelineChangesSpan)
+	if raw := r.URL.Query().Get("since"); raw != "" {
+		t, perr := time.Parse(time.RFC3339, raw)
+		if perr != nil {
+			return since, until, 0, fmt.Errorf("since must be an RFC3339 time")
+		}
+		since = t
+	}
+	if !since.Before(until) {
+		return since, until, 0, fmt.Errorf("since must be before until and before now")
+	}
+	if now.Sub(since) > timelineMaxHours*time.Hour {
+		return since, until, 0, fmt.Errorf("since reaches at most %d days back", timelineMaxHours/24)
+	}
+	if limit, err = timelineNumber(r, "limit", k8s.TimelineChangesMax, k8s.TimelineChangesMax); err != nil {
+		return since, until, 0, err
+	}
+	return since, until, limit, nil
 }
 
 // timelineMaxHours is the longest window a timeline reads, the AI tool's 90 days. Far past it the hours overflow into a

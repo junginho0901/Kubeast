@@ -153,6 +153,9 @@ func cutHygieneReport(report map[string]interface{}, args map[string]interface{}
 // filtered result rows of PolicyReport / ClusterPolicyReport.
 func handlePolicyReports(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
 	view := argString(args, "view", policyDefaultTop)
+	if view != "summary" && view != "results" {
+		return "", wrapBadRequest("view is summary or results")
+	}
 	offset := max(argInt(args, "offset", 0), 0)
 	q := url.Values{}
 	if ns := argString(args, "namespace", ""); ns != "" {

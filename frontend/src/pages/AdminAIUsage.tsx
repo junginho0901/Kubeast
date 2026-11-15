@@ -14,6 +14,7 @@ import { avgPromptChars, cachedPercent, isInvestigationRow, usageCuts, usageRowK
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { failureOf } from '@/hooks/useRefresh'
+import { keepSameRead } from '@/utils/keepSameRead'
 
 // Admin view over the ai.chat.complete audit records (chat turns, Optimization
 // explanations) and, in rows of their own, the ai.investigation.run records:
@@ -39,8 +40,9 @@ export default function AdminAIUsage() {
   // the first row on screen: a new rows per page (Fit or a choice) shows the page that holds it
   const [firstRow, setFirstRow] = useState(0)
 
-  // Days are inclusive on both ends; the API takes [since, until). A day that is
-  // not typed as YYYY-MM-DD yet keeps the last report on screen.
+  // Days are inclusive on both ends; the API takes [since, until). A day that is not typed as YYYY-MM-DD yet asks
+  // nothing and keeps the last report of the same grouping on screen; a range that reads, or another grouping, waits
+  // for its own answer as on first open.
   const { query, rangeOk } = useMemo(() => {
     const since = parseTypedTime(sinceDay)
     const until = parseTypedTime(untilDay)
@@ -54,11 +56,12 @@ export default function AdminAIUsage() {
     }
   }, [sinceDay, untilDay, group])
 
+  const usageKey = ['admin-ai-usage', query]
   const { data, isLoading, isFetching, refetch, error: listError, errorUpdatedAt } = useQuery({
-    queryKey: ['admin-ai-usage', query],
+    queryKey: usageKey,
     queryFn: () => api.adminAIUsage(query),
     enabled: rangeOk,
-    placeholderData: (previous) => previous,
+    placeholderData: rangeOk ? undefined : keepSameRead(usageKey, ['since', 'until']),
     // Each read is itself audited (admin.audit.read), so no background polling.
     staleTime: 60_000,
     refetchInterval: false,
@@ -73,7 +76,7 @@ export default function AdminAIUsage() {
   const partialTokens = rows.some((r) => r.token_requests < r.requests)
   const totals = usageTotals(data)
   const cuts = usageCuts(data)
-  // the rows on screen are the answer's: while another group loads they keep their own heading
+  // the heading is the grouping of the answer on screen
   const shownGroup: AIUsageGroup = data?.group ?? group
 
   const groupLabel: Record<AIUsageGroup, string> = {

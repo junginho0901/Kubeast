@@ -565,3 +565,133 @@ func TestTimeline_EventTypeIsOneOfTheTwoTheAPITakes(t *testing.T) {
 		}
 	}
 }
+
+func timelineChangesReply(t *testing.T, changes []timelineRow, total int, notRead map[string]interface{}) string {
+	t.Helper()
+	summary := map[string]interface{}{"changes_total": total, "changes_shown": len(changes), "by_source": map[string]interface{}{"rollouts": total}}
+	if notRead != nil {
+		summary["not_read"] = notRead
+	}
+	out, err := marshalJSON(map[string]interface{}{"changes": changes, "summary": summary})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// view changes asks the changes route with the window as given, to the second, and answers its rows and counts with
+// the view named, so a caller can tell this answer from the events one.
+func TestTimeline_ChangesViewAsksTheChangesRouteForTheExactWindow(t *testing.T) {
+	rows := []timelineRow{{"when": "2026-11-14T13:00:00Z", "kind": "Deployment", "name": "web", "namespace": "shop", "what": "rollout", "from": 3, "to": 4}}
+	seen := fakeK8sService(t, func(*http.Request) (int, string) { return 200, timelineChangesReply(t, rows, 1, nil) })
+	now := time.Now().UTC().Truncate(time.Second)
+	since, until := now.Add(-5*time.Hour-15*time.Second).Format(time.RFC3339), now.Add(-time.Hour-15*time.Second).Format(time.RFC3339)
+	out, err := handleTimeline(ctxFor("c1"), args{"view": "changes", "namespace": "shop", "since_time": since, "until_time": until}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := (*seen)[0]
+	q := r.URL.Query()
+	if r.URL.Path != "/api/v1/namespaces/shop/timeline/changes" || r.Header.Get("Authorization") != "Bearer user-token" {
+		t.Fatalf("request: %s auth=%q", r.URL.Path, r.Header.Get("Authorization"))
+	}
+	if q.Get("since") != since || q.Get("until") != until || q.Get("limit") != "50" || q.Get("cluster") != "c1" || q.Has("hours") {
+		t.Fatalf("query: %s", r.URL.RawQuery)
+	}
+	m := decode(t, out)
+	if m["view"] != "changes" || m["namespace"] != "shop" {
+		t.Fatalf("answer: %v", m)
+	}
+	if got := rowNames(t, m["changes"]); !reflect.DeepEqual(got, []string{"web"}) {
+		t.Fatalf("changes = %v", got)
+	}
+	if _, cut := m["changes_note"]; cut {
+		t.Fatalf("a whole list is said to be cut: %v", m)
+	}
+	if !strings.HasPrefix(out, `{"view":"changes"`) {
+		t.Fatalf("the view is not the first thing a cut answer keeps: %.80s", out)
+	}
+}
+
+// With no window the changes are the four hours before now, every namespace the caller reads; a list cut at 50 says
+// so with the count, and a source not read is said to be not counted.
+func TestTimeline_ChangesViewDefaultsAndSaysWhatItDidNotList(t *testing.T) {
+	rows := make([]timelineRow, 50)
+	for i := range rows {
+		rows[i] = timelineRow{"when": "2026-11-14T13:00:00Z", "kind": "ConfigMap", "name": "cm-" + strconv.Itoa(i), "namespace": "shop", "what": "written"}
+	}
+	seen := fakeK8sService(t, func(*http.Request) (int, string) {
+		return 200, timelineChangesReply(t, rows, 70, map[string]interface{}{"secrets": "secrets is forbidden"})
+	})
+	before := time.Now()
+	out, err := handleTimeline(ctxFor("c1", "shop", "web"), args{"view": "changes", "limit": 500}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := (*seen)[0]
+	q := r.URL.Query()
+	since, err1 := time.Parse(time.RFC3339, q.Get("since"))
+	until, err2 := time.Parse(time.RFC3339, q.Get("until"))
+	if r.URL.Path != "/api/v1/timeline/changes" || err1 != nil || err2 != nil || q.Get("limit") != "50" {
+		t.Fatalf("request: %s %s", r.URL.Path, r.URL.RawQuery)
+	}
+	if span := until.Sub(since); span != 4*time.Hour || until.Before(before.Add(-2*time.Second)) {
+		t.Fatalf("window %s to %s, want the four hours before now", since, until)
+	}
+	m := decode(t, out)
+	if got := m["namespace"]; !reflect.DeepEqual(got, []interface{}{"shop", "web"}) {
+		t.Fatalf("namespace = %v, want the grant's", got)
+	}
+	if note, _ := m["changes_note"].(string); !strings.Contains(note, "newest 50 of the 70") {
+		t.Fatalf("changes_note = %q", note)
+	}
+	if note, _ := m["not_read_note"].(string); !strings.Contains(note, "not counted, not zero") {
+		t.Fatalf("not_read_note = %q", note)
+	}
+}
+
+// The events view's narrowing arguments are refused with view changes, and a view neither tool knows is refused by
+// both, before anything is asked.
+func TestTimeline_ViewIsEventsOrChanges(t *testing.T) {
+	seen := fakeK8sService(t, func(*http.Request) (int, string) { return 200, `{}` })
+	for _, a := range []args{
+		{"view": "changes", "kind": "Deployment"},
+		{"view": "changes", "namespace": "shop", "kind": "Deployment", "name": "web"},
+		{"view": "changes", "event_type": "Warning"},
+		{"view": "changes", "since_time": "2026-11-14T10:00:00Z", "until_time": "2026-11-14T09:00:00Z"},
+		{"view": "changes", "since_time": "200d"},
+		{"view": "summary"},
+	} {
+		if _, err := handleTimeline(ctxFor("c1"), a, bearer()); !errors.Is(err, errBadRequest) {
+			t.Errorf("%v: %v, want a bad request", a, err)
+		}
+	}
+	if _, err := handlePolicyReports(ctxFor("c1"), args{"view": "changes"}, bearer()); !errors.Is(err, errBadRequest) {
+		t.Errorf("policy_reports view changes: %v, want a bad request", err)
+	}
+	if len(*seen) != 0 {
+		t.Fatalf("k8s-service asked: %v", (*seen)[0].URL)
+	}
+	if err := validateToolArgs(args{"view": "changes"}); err != nil {
+		t.Fatalf("view changes refused by the argument check: %v", err)
+	}
+}
+
+// A source k8s-service skipped (every namespace's restarts for a caller who may not list pods across the cluster) is
+// said to be not counted, and an answer with nothing listed is then no "nothing changed".
+func TestTimeline_ChangesViewSaysWhatWasSkipped(t *testing.T) {
+	fakeK8sService(t, func(*http.Request) (int, string) {
+		return 200, `{"changes":[],"summary":{"changes_total":0,"changes_shown":0,"by_source":{"pods":null},"skipped":{"pods":"name a namespace"}}}`
+	})
+	out, err := handleTimeline(ctxFor("c1"), args{"view": "changes"}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := decode(t, out)
+	if note, _ := m["skipped_note"].(string); !strings.Contains(note, "not counted, not zero") {
+		t.Fatalf("skipped_note = %q", note)
+	}
+	if _, nothing := m["hint"]; nothing {
+		t.Fatalf("a skipped source reads as nothing changed: %v", m)
+	}
+}
