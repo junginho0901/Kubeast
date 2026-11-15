@@ -182,7 +182,8 @@ async def test_with_ai_services_switch_off_the_narrowing_is_not_asked_and_the_re
     audits = []
     out = await run(monkeypatch, service, audits, narrow_first=True)
     assert service.executed == [] and audits == [] and out["tool_calls"] == []
-    assert "could not narrow the namespace down (anomaly_rank is off in ai-service (ANOMALY_RANK_ENABLED))" in first_message(service)
+    assert ("could not narrow the namespace down (ANOMALY_RANK_ENABLED is off in ai-service, so anomaly_rank is refused)"
+            in first_message(service))
 
 
 @pytest.mark.asyncio
