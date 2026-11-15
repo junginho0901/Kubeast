@@ -20,7 +20,7 @@
 from typing import TYPE_CHECKING, Dict
 
 from app.services.ai import permissions, resolvers
-from app.services.ai.debug_dump import dump, log, safe_error
+from app.services.ai.debug_dump import log, safe_error
 
 if TYPE_CHECKING:
     from app.services.ai_service import AIService, ToolContext
