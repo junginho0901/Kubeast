@@ -266,7 +266,7 @@ func TestExpiredResourceVersionIsNotAskedForAgain(t *testing.T) {
 			})
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			out := make(chan ResponseMessage, 100)
+			out := make(chan *ResponseMessage, 100)
 			done := make(chan struct{})
 			go func() { defer close(done); watchInto(ctx, m, "/api/v1/pods", "watch=1", out) }()
 
@@ -300,7 +300,7 @@ func TestExpiredResourceVersionAsksTheClientToReadTheListAgain(t *testing.T) {
 			})
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			out := make(chan ResponseMessage, 100)
+			out := make(chan *ResponseMessage, 100)
 			done := make(chan struct{})
 			go func() { defer close(done); watchInto(ctx, m, "/api/v1/pods", "watch=1", out) }()
 
@@ -347,7 +347,7 @@ func TestBookmarkMovesTheResumePointAndStaysOnTheServer(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	out := make(chan ResponseMessage, 100)
+	out := make(chan *ResponseMessage, 100)
 	done := make(chan struct{})
 	go func() { defer close(done); watchInto(ctx, m, "/api/v1/pods", "watch=1", out) }()
 
@@ -400,9 +400,9 @@ func TestCanceledWatchEndsWithItsSendQueueFull(t *testing.T) {
 			m := muxOn(t, c.api)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			out := make(chan ResponseMessage, 256)
+			out := make(chan *ResponseMessage, 256)
 			for len(out) < cap(out) {
-				out <- ResponseMessage{Type: "ALREADY-QUEUED"}
+				out <- &ResponseMessage{Type: "ALREADY-QUEUED"}
 			}
 			done := make(chan struct{})
 			go func() { defer close(done); watchInto(ctx, m, c.path, "watch=1", out) }()
@@ -432,7 +432,7 @@ func TestCanceledWatchDoesNotWaitOutItsRetryDelay(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	out := make(chan ResponseMessage, 256)
+	out := make(chan *ResponseMessage, 256)
 	done := make(chan struct{})
 	go func() { defer close(done); watchInto(ctx, m, "/api/v1/pods", "watch=1", out) }()
 	<-failed
@@ -546,7 +546,7 @@ func TestFramesNameNoClusterWhenTheRequestNamedNone(t *testing.T) {
 }
 
 // watchInto runs a watch of the default cluster as the multiplexer does.
-func watchInto(ctx context.Context, m *Multiplexer, path, query string, out chan<- ResponseMessage) {
+func watchInto(ctx context.Context, m *Multiplexer, path, query string, out chan<- *ResponseMessage) {
 	m.runWatch(ctx, RequestMessage{Path: path, Query: query}, out)
 }
 
