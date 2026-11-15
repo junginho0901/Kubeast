@@ -471,8 +471,8 @@ func main() {
 	slog.Info("server stopped")
 }
 
-// Both waits come after the drain and fit the pod's grace period: 30 s by default, or the drain's wait + 30 s
-// (streamCloseWait, then these two) where STREAM_DRAIN_SECONDS is set.
+// Both waits come after the preStop wait and, where STREAM_DRAIN_SECONDS is set, the drain's wait and streamCloseWait;
+// the chart's grace period is all of these + 5 s (kubeast.graceSeconds: their 25 s, the drain, the preStop wait).
 const (
 	serverShutdownWait   = 15 * time.Second
 	recorderShutdownWait = 10 * time.Second

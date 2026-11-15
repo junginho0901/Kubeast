@@ -57,6 +57,7 @@ spec:
         checksum/nginx-config: {{ print (include "kubeast.gatewayNginxConf" .) (toJson .Values.gateway.trustedProxies) $accessLog | sha256sum }}
     spec:
       automountServiceAccountToken: false
+      {{- include "kubeast.terminationGrace" . | nindent 6 }}
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 101) | nindent 6 }}
       {{- include "kubeast.topologySpread" (dict "root" $ "app" "gateway") | nindent 6 }}
       containers:
@@ -87,6 +88,7 @@ spec:
             {{- end }}
             - name: tmp
               mountPath: /tmp
+          {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /healthz
