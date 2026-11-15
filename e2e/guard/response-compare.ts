@@ -91,19 +91,29 @@ export function sortCells(old1: Answer, fresh: Answer, old2: Answer): Sorted {
   return { cells: all.size, real, noise }
 }
 
-// A known difference: which requests (route), which cells, optionally whose answers (user), why, and the PR that made
-// it. A rule with no reason or PR is refused; the file's changes show in the diff of whichever PR adds to it. A rule whose
-// cells take in `$status` names the status the new build answers (newStatus), so a server error is never a known difference.
-export type IgnoreRule = { route: string; cell: string; user?: string; newStatus?: string; why: string; pr: string }
-export function compileRules(rules: IgnoreRule[]): ((route: string, cell: string, user?: string, newStatus?: string) => IgnoreRule | null) {
+// A known difference: which requests (route), which cells, optionally whose answers (user) and on which cluster
+// (cluster), why, and the PR that made it. A rule with no reason or PR is refused; the file's changes show in the diff of
+// whichever PR adds to it. A rule whose cells take in `$status` names the status the new build answers (newStatus), so a
+// server error is never a known difference.
+export type IgnoreRule = { route: string; cell: string; user?: string; cluster?: string; newStatus?: string; why: string; pr: string }
+export function compileRules(rules: IgnoreRule[]): ((route: string, cell: string, user?: string, newStatus?: string, cluster?: string) => IgnoreRule | null) {
   const compiled = rules.map((r) => {
     if (!r.why?.trim() || !r.pr?.trim()) throw new Error(`an ignore rule needs a reason and a PR: ${JSON.stringify(r)}`)
     const cell = new RegExp(r.cell)
     if (cell.test('$status') && !r.newStatus) throw new Error(`an ignore rule that takes in $status names newStatus: ${JSON.stringify(r)}`)
-    return { rule: r, route: new RegExp(r.route), cell, user: r.user ? new RegExp(r.user) : null, newStatus: r.newStatus ? new RegExp(r.newStatus) : null }
+    const pattern = (p?: string) => (p ? new RegExp(p) : null)
+    return { rule: r, route: new RegExp(r.route), cell, user: pattern(r.user), cluster: pattern(r.cluster), newStatus: pattern(r.newStatus) }
   })
-  return (route, cell, user = '', newStatus = '') => compiled.find((c) => c.route.test(route) && c.cell.test(cell)
-    && (!c.user || c.user.test(user)) && (!c.newStatus || c.newStatus.test(newStatus)))?.rule ?? null
+  return (route, cell, user = '', newStatus = '', cluster = '') => compiled.find((c) => c.route.test(route) && c.cell.test(cell)
+    && (!c.user || c.user.test(user)) && (!c.cluster || c.cluster.test(cluster)) && (!c.newStatus || c.newStatus.test(newStatus)))?.rule ?? null
+}
+
+// The cluster a request asked: a GET's `cluster` parameter, a live request's cluster id ("live <cluster> <path>?<query>").
+export function clusterOf(request: string): string {
+  const live = /^live (\S*) /.exec(request)
+  if (live) return live[1]
+  const query = request.split('?')[1] ?? ''
+  return new URLSearchParams(query).get('cluster') ?? ''
 }
 
 // /api/v1/cluster/pods/x?cluster=self → the same text; rows of the table group by path without the query.
