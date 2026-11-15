@@ -26,9 +26,10 @@
 # What it checks after the upgrade: the migrations reach the newest file of services/pkg/dbmigrate/migrations; what
 # was made on FROM_VERSION reads back the same (users, teams, custom roles, grants, API keys, access requests,
 # conversations, recordings, the audit chain) and the old passwords and key still sign in; custom roles whose names a
-# built-in or an older role has in other letters or with spaces around (stored straight into the table, with a grant
-# and a pending access request) renamed <name>-renamed-<id>, their grant removed, their request ended role_renamed,
-# one audit row by system/migration for each, and a new role of such a name refused; readiness and liveness probes,
+# built-in or an older role has in other letters or with spaces around (stored straight into the table, with a grant,
+# a pending access request and an account level " PENDING ") renamed <name>-renamed-<id>, their grant removed, their
+# request ended role_renamed, that account at the built-in Pending, one audit row by system/migration for each, and a
+# new role of such a name refused; readiness and liveness probes,
 # preStop and the rollout strategy of each Deployment; the requests sent every second during the upgrade (non-2xx and
 # hangs, apart from the bundled PostgreSQL's restart); that `--reuse-values` and a values file copied from FROM_VERSION
 # stop with the --reset-then-reuse-values hint, values setting pdb.minAvailable stop with what replaces it, and auth,
@@ -103,6 +104,7 @@ BG_PIDS=""
 FG_PID=""
 TMP_VALUES=""
 CALL_TIMEOUT=60
+TOKEN_REFRESH=240
 
 now() { date '+%H:%M:%S'; }
 say() { echo "$(now) $*"; }
@@ -185,7 +187,20 @@ stop_fg() { # TERM to that command (and to its own child, when CMD was a functio
   [ "$i" = 10 ] && kill -KILL "$FG_PID" 2>/dev/null
   FG_PID=""
 }
-on_signal() { stop_fg; exit 130; }
+on_signal() { # on_signal CODE [hup]
+  # A closed terminal sends HUP to the whole process group, the tee of run.log too: from here the output goes to
+  # run.log alone and a write to the dead pipe no longer ends the script, so the cleanup reaches the cluster's deletion.
+  if [ "${2:-}" = hup ]; then trap '' PIPE HUP; exec >> "$OUT/run.log" 2>&1; fi
+  stop_fg
+  exit "$1"
+}
+begin_output() { # the run's output on screen and in run.log, and the traps that end it
+  mkdir -p "$OUT"; : > "$RES"
+  exec > >(tee -a "$OUT/run.log") 2>&1
+  trap cleanup EXIT
+  trap 'on_signal 130' INT TERM
+  trap 'on_signal 129 hup' HUP
+}
 delete_cluster() {
   case "$CLUSTER" in kubeast-reh*) ;; *) echo "not deleting $CLUSTER: not a rehearsal cluster name"; return 1 ;; esac
   kind delete cluster --name "$CLUSTER" --kubeconfig "$KC" > /dev/null 2>&1 || return 1
@@ -193,6 +208,7 @@ delete_cluster() {
 }
 cleanup() {
   local rc=$?
+  trap '' PIPE HUP
   stop_fg
   stop_bg
   [ -n "$TMP_VALUES" ] && rm -f "$TMP_VALUES"
@@ -567,10 +583,11 @@ seed() {
   expect 201 "role rh-ops"
   call POST /api/v1/auth/admin/roles "$ATOK" '{"name":"rh-reader","description":"rehearsal","permissions":["menu.*","resource.*.read"]}'
   expect 201 "role rh-reader"
-  U1_PW=$(newpw); U2_PW=$(newpw); U3_PW=$(newpw); U4_PW=$(newpw)
+  U1_PW=$(newpw); U2_PW=$(newpw); U3_PW=$(newpw); U4_PW=$(newpw); U5_PW=$(newpw)
   seed_write U1_PW U2_PW U3_PW U4_PW
   local n v body
-  for n in 1 2 3 4; do
+  # rh-u5 never signs in: seed_lookalikes makes its account level a role FROM_VERSION reads as Pending
+  for n in 1 2 3 4 5; do
     v="U${n}_PW"
     body=$(printf '{"name":"Rh User %s","email":"rh-u%s@%s","password":"%s","role_id":0,"team":"rh-team-a"}' "$n" "$n" "$DOMAIN" "${!v}")
     call POST /api/v1/auth/admin/users "$ATOK" "$body"; body=""; expect 201 "user rh-u$n"
@@ -584,20 +601,7 @@ seed() {
   grant 1 Read; expect 200 "grant Read to rh-u1"
   grant 2 rh-ops; expect 200 "grant rh-ops to rh-u2"
   grant 3 Write '["default"]'; expect 200 "grant Write in default to rh-u3"
-  # Custom roles whose names a built-in or another role has in other letters or with spaces around: FROM_VERSION
-  # refuses them when made, but an install can hold them from before that rule, so they go straight into the table.
-  local rid
-  for v in "ADMIN" " read " "RH-OPS"; do
-    rid=$(psql_q "INSERT INTO roles (name, description) VALUES ('$v', '$LOOKALIKE') RETURNING id" | head -1)
-    [ -n "$rid" ] || stop "insert role '$v'"
-    psql_q "INSERT INTO role_permissions (role_id, permission) VALUES ($rid, 'menu.dashboard')" > /dev/null || stop "permission of role '$v'"
-    [ "$v" = ADMIN ] && R_ADMIN_LIKE=$rid
-    [ "$v" = RH-OPS ] && R_RHOPS_LIKE=$rid
-  done
-  # A pending access request for one of them, as a request made before the rule leaves it.
-  psql_q "INSERT INTO access_requests (id, user_id, cluster_id, role_id, duration_minutes, reason, status)
-          VALUES ('ar-reh-lookalike', '$ID3', '$CLUSTER_ID', $R_RHOPS_LIKE, 60, 'rehearsal: pending for the stored role RH-OPS', 'pending')" > /dev/null \
-    || stop "insert the access request for RH-OPS"
+  seed_lookalikes
   # The grant through the API when FROM_VERSION takes the name as that role; else (refused, or given to the
   # built-in) the row goes into the table.
   grant 4 ADMIN
@@ -629,9 +633,28 @@ seed() {
           VALUES ('rec-reh-uploaded', 'exec', 'rh-u3@$DOMAIN', '$CLUSTER_ID', 'default', 'web-1', 'app', 'database', 'uploaded', now() - interval '30 minutes', now() - interval '29 minutes', 0, 0, 0, false, ''),
                  ('rec-reh-open', 'exec', 'rh-u3@$DOMAIN', '$CLUSTER_ID', 'default', 'web-1', 'app', 'database', 'recording', now() - interval '2 minutes', NULL, 0, 0, 0, false, '')" > /dev/null \
     || stop "insert the recording rows"
-  unset U1_PW U2_PW U3_PW U4_PW
+  unset U1_PW U2_PW U3_PW U4_PW U5_PW
   for n in 1 2 3 4; do printf -v "T$n" '%s' ""; done
-  info seed "data on $FROM_VERSION" "4 users · roles rh-ops rh-reader + stored ADMIN, ' read ', RH-OPS · grants (rh-u4 ADMIN) · 2 keys (1 revoked) · 3 access requests (1 pending for RH-OPS) · 1 conversation · 2 recordings"
+  info seed "data on $FROM_VERSION" "5 users · roles rh-ops rh-reader + stored ADMIN, ' read ', RH-OPS, ' PENDING ' (rh-u5's account level) · grants (rh-u4 ADMIN) · 2 keys (1 revoked) · 3 access requests (1 pending for RH-OPS) · 1 conversation · 2 recordings"
+}
+
+# seed_lookalikes: custom roles whose names a built-in or another role has in other letters or with spaces around.
+# FROM_VERSION refuses them when made, but an install can hold them from before that rule, so they go straight into
+# the table, with what an install can hold of them: a pending access request (rh-u3 for RH-OPS) and an account level
+# (rh-u5 at " PENDING ", which FROM_VERSION reads ignoring case as Pending: an account waiting for approval). Needs
+# ID3, ID5 and CLUSTER_ID; sets R_ADMIN_LIKE. rh-u4's grant of ADMIN is the seed's.
+seed_lookalikes() {
+  local v rid r_rhops="" r_pending=""
+  for v in "ADMIN" " read " "RH-OPS" " PENDING "; do
+    rid=$(psql_q "INSERT INTO roles (name, description) VALUES ('$v', '$LOOKALIKE') RETURNING id" | head -1)
+    [ -n "$rid" ] || stop "insert role '$v'"
+    psql_q "INSERT INTO role_permissions (role_id, permission) VALUES ($rid, 'menu.dashboard')" > /dev/null || stop "permission of role '$v'"
+    case "$v" in ADMIN) R_ADMIN_LIKE=$rid ;; RH-OPS) r_rhops=$rid ;; " PENDING ") r_pending=$rid ;; esac
+  done
+  psql_q "INSERT INTO access_requests (id, user_id, cluster_id, role_id, duration_minutes, reason, status)
+          VALUES ('ar-reh-lookalike', '$ID3', '$CLUSTER_ID', $r_rhops, 60, 'rehearsal: pending for the stored role RH-OPS', 'pending')" > /dev/null \
+    || stop "insert the access request for RH-OPS"
+  [ "$(psql_q "UPDATE auth_users SET role_id = $r_pending WHERE id = '$ID5' RETURNING id" | head -1)" = "$ID5" ] || stop "account level ' PENDING ' of rh-u5"
 }
 
 # snapshot WHEN: what the checks compare, names and states only (no secret, no row of a person's content)
@@ -654,6 +677,8 @@ snapshot() {
                || ' ' || (SELECT count(*) FROM access_requests WHERE role_id IN (SELECT id FROM l) AND status IN ('pending', 'approved'))::text
                || ' ' || (SELECT count(*) FROM auth_users u JOIN roles r ON r.id = u.role_id
                           WHERE r.id IN (SELECT id FROM l) AND lower(btrim(r.name)) = 'pending')::text" > "$d/lookalike-holds.txt"
+  psql_q "SELECT u.email || ' ' || u.token_version FROM auth_users u JOIN roles r ON r.id = u.role_id
+          WHERE r.description = '$LOOKALIKE' AND lower(btrim(r.name)) = 'pending' ORDER BY 1" > "$d/lookalike-accounts.txt"
   psql_q "SELECT id || ' ' || storage FROM session_recordings WHERE id LIKE 'rec-reh-%' ORDER BY 1" > "$d/recordings.txt"
   psql_q "SELECT id || ' ' || status FROM session_recordings WHERE id LIKE 'rec-reh-%' ORDER BY 1" > "$d/recording-status.txt"
   psql_q "SELECT title FROM sessions WHERE title LIKE 'rh-%' ORDER BY 1" > "$d/conversations.txt"
@@ -735,24 +760,35 @@ live_checks() {
 
 # role_checks: #865 (one role per group, its migration's comment says what it does to the roles stored before): the
 # schema it adds, each stored look-alike renamed "<name trimmed>-renamed-<id>" while rh-ops (made first, through the
-# API) keeps its name, their grants removed, their pending and approved requests ended role_renamed, the audit rows by
-# system/migration counted per action against what the before snapshot held, and the name rule on a new role.
+# API) keeps its name, their grants removed, their pending and approved requests ended role_renamed, an account level
+# of Pending's group (rh-u5) moved to the built-in Pending with its tokens ended, the audit rows by system/migration
+# counted per action against what the before snapshot held, and the name rule on a new role.
 role_checks() {
   if ! in_checkout 865; then
     skip roles "role names one per group: renames, grants, requests, audit rows" 865 "no migration makes roles_name_group_key"
     return
   fi
-  local l="(SELECT id FROM roles WHERE description = '$LOOKALIKE')" want holds n_grants n_requests n_accounts n_renamed
-  check roles "the database has role_group_slug(text) and the unique index roles_name_group_key" "t t" \
-    "$(psql_q "SELECT (to_regprocedure('role_group_slug(text)') IS NOT NULL)::text || ' ' || EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'roles_name_group_key')::text" | sed 's/true/t/g; s/false/f/g')"
-  want=$(awk '{ s = $0; sub(/^[0-9]+ \[/, "", s); sub(/\]$/, "", s); gsub(/^ +| +$/, "", s); printf "%s%s [%s-renamed-%s]", (NR > 1 ? "," : ""), $1, s, $1 }' "$OUT/before/lookalike-roles.txt")
-  check roles "ADMIN, ' read ', RH-OPS stored before the rule are <name>-renamed-<id>" "$want" \
-    "$(psql_q "SELECT string_agg(id || ' [' || name || ']', ',' ORDER BY id) FROM roles WHERE id IN $l")"
-  check roles "rh-ops, made first in its group, keeps its name" "$(grep ' \[rh-ops\]$' "$OUT/before/roles.txt" | tr '\n' ',' | sed 's/,$//')" \
-    "$(psql_q "SELECT string_agg(id || ' [' || name || ']', ',' ORDER BY id) FROM roles WHERE role_group_slug(name) = 'rh-ops'")"
+  local l="(SELECT id FROM roles WHERE description = '$LOOKALIKE')" want got holds n_grants n_requests n_accounts n_renamed email tv
   holds=$(cat "$OUT/before/lookalike-holds.txt")
   read -r n_grants n_requests n_accounts <<< "$holds"
   n_renamed=$(grep -c . "$OUT/before/lookalike-roles.txt")
+  check roles "the database has role_group_slug(text) and the unique index roles_name_group_key" "t t" \
+    "$(psql_q "SELECT (to_regprocedure('role_group_slug(text)') IS NOT NULL)::text || ' ' || EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'roles_name_group_key')::text" | sed 's/true/t/g; s/false/f/g')"
+  want=$(awk '{ s = $0; sub(/^[0-9]+ \[/, "", s); sub(/\]$/, "", s); gsub(/^ +| +$/, "", s); printf "%s%s [%s-renamed-%s]", (NR > 1 ? "," : ""), $1, s, $1 }' "$OUT/before/lookalike-roles.txt")
+  check roles "the $n_renamed roles stored before the rule are <name>-renamed-<id>" "$want" \
+    "$(psql_q "SELECT string_agg(id || ' [' || name || ']', ',' ORDER BY id) FROM roles WHERE id IN $l")"
+  check roles "rh-ops, made first in its group, keeps its name" "$(grep ' \[rh-ops\]$' "$OUT/before/roles.txt" | tr '\n' ',' | sed 's/,$//')" \
+    "$(psql_q "SELECT string_agg(id || ' [' || name || ']', ',' ORDER BY id) FROM roles WHERE role_group_slug(name) = 'rh-ops'")"
+  if [ -s "$OUT/before/lookalike-accounts.txt" ]; then
+    want=""; got=""
+    while read -r email tv; do
+      want="$want$email Pending t,"
+      got="$got$(psql_q "SELECT u.email || ' ' || r.name || ' ' || (u.token_version > $tv)::text FROM auth_users u JOIN roles r ON r.id = u.role_id WHERE u.email = '$email'" | sed 's/true$/t/; s/false$/f/'),"
+    done < "$OUT/before/lookalike-accounts.txt"
+    check roles "accounts at ' PENDING ' are at the built-in Pending, token_version up" "$want" "$got"
+  else
+    row roles "accounts at ' PENDING ' are at the built-in Pending, token_version up" FAIL "no account held a role of Pending's group before the upgrade (seed_lookalikes)"
+  fi
   check roles "grants of the renamed roles removed (before: $n_grants, rh-u4's ADMIN)" 0 \
     "$(psql_q "SELECT count(*) FROM user_cluster_roles WHERE role_id IN $l OR restore_role_id IN $l")"
   check roles "their pending and approved requests ended role_renamed (before: $n_requests)" "ended $n_requests · open 0" \
@@ -967,14 +1003,20 @@ db_connection_checks() {
 # PROBE_TIMEOUT seconds is a hang. The bundled PostgreSQL and Redis pods are sampled every second beside them. Both
 # loops end once the script is gone ($$ in a background subshell is the script's), also after a kill -9. ---
 probe_loop() { # probe_loop FILE
-  local file=$1 now tok_at=0 spec name path auth pw
+  local file=$1 now tok_at=0 next_try=0 spec name path auth pw=""
   PTOK=""
-  CALL_TIMEOUT=$PROBE_TIMEOUT # the token refresh holds up a second no longer than a request may take
   while kill -0 "$$" 2> /dev/null; do
     now=$(date +%s)
-    if [ $((now - tok_at)) -ge 240 ] || [ -z "$PTOK" ]; then
-      pw=$(secret_key "$APP_SECRET" DEFAULT_ADMIN_PASSWORD 2>/dev/null); login admin "$pw"; pw=""
-      [ -n "$TOKEN" ] && { PTOK=$TOKEN; tok_at=$now; }
+    # A new token every TOKEN_REFRESH seconds. With a token still in hand a sign-in gets 3 s and one that fails is
+    # tried again 30 s later (5 s without one), so a slow or refused sign-in during the upgrade holds up the rounds
+    # for a few seconds, not every second. The admin password stays in this loop's memory only.
+    if [ "$now" -ge "$next_try" ] && { [ -z "$PTOK" ] || [ $((now - tok_at)) -ge "$TOKEN_REFRESH" ]; }; then
+      [ -n "$pw" ] || pw=$(secret_key "$APP_SECRET" DEFAULT_ADMIN_PASSWORD 2>/dev/null)
+      CALL_TIMEOUT=$PROBE_TIMEOUT; [ -n "$PTOK" ] && CALL_TIMEOUT=3
+      login admin "$pw"
+      if [ -n "$TOKEN" ]; then PTOK=$TOKEN; tok_at=$now
+      elif [ -n "$PTOK" ]; then next_try=$((now + 30)); pw=""
+      else next_try=$((now + 5)); pw=""; fi
     fi
     for spec in "gateway|/healthz|" "auth-jwks|/api/v1/auth/jwks.json|" "frontend|/|" \
                 "k8s-list|/api/v1/cluster/namespaces/default/configmaps?cluster=$CLUSTER_ID|t" \
@@ -1162,10 +1204,7 @@ esac
 case "$SCENARIO" in default|existing-secret|external-db) ;; *) stop "SCENARIO is default, existing-secret or external-db" ;; esac
 case "$REPLICAS" in 1|2|3) ;; *) stop "REPLICAS is 1, 2 or 3" ;; esac
 require_names
-mkdir -p "$OUT"; : > "$RES"
-exec > >(tee -a "$OUT/run.log") 2>&1
-trap cleanup EXIT
-trap on_signal INT TERM
+begin_output
 chart_values
 if [ "$PLAN" = 1 ]; then
   say "upgrade rehearsal plan: checkout $HEAD8, out $OUT"
