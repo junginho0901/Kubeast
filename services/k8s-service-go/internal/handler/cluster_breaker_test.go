@@ -15,12 +15,15 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
-// breakerHandler is a Handler on the cluster c1, whose API server answers /version.
+// breakerHandler is a Handler on the cluster c1, whose API server answers /version and 503 for downAPIPath.
 func breakerHandler(t *testing.T, opts k8s.ServiceOptions) *Handler {
 	t.Helper()
 	h, _ := countedBreakerHandler(t, opts)
 	return h
 }
+
+// downAPIPath is an aggregated API whose server is down: the API server answers it 503.
+const downAPIPath = "/apis/metrics.k8s.io/v1beta1/nodes"
 
 // countedBreakerHandler is breakerHandler with the number of requests its API server got.
 func countedBreakerHandler(t *testing.T, opts k8s.ServiceOptions) (*Handler, *atomic.Int32) {
@@ -28,6 +31,12 @@ func countedBreakerHandler(t *testing.T, opts k8s.ServiceOptions) (*Handler, *at
 	var hits atomic.Int32
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
+		if r.URL.Path == downAPIPath {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"ServiceUnavailable","code":503}`))
+			return
+		}
 		if r.URL.Path != "/version" {
 			http.NotFound(w, r)
 			return
@@ -388,6 +397,42 @@ func TestATrialThatDidNotRunGivesItsTryBack(t *testing.T) {
 		a.reached = 0
 		if code := askC1(a.h, a.askTheCluster).Code; code != http.StatusOK || a.reached != 1 || a.h.svc.ClusterDown("c1") {
 			t.Fatalf("the next request: %d with the handler run %d times, open %v: want it to try and close", code, a.reached, a.h.svc.ClusterDown("c1"))
+		}
+	})
+}
+
+// A 5xx of the API server (an aggregated API whose server is down) is no answer: a trial it answered closes nothing, and
+// for another request it clears no failures, even when the handler goes on to write 200.
+func TestA5xxOfTheAPIServerIsNoAnswer(t *testing.T) {
+	askTheDownAPI := func(a *breakerAnswers) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			a.reached++
+			if _, code, err := a.h.svc.RawRequest(r.Context(), http.MethodGet, downAPIPath); err == nil || code != http.StatusServiceUnavailable {
+				t.Errorf("the down API: %d %v, want its 503", code, err)
+			}
+			w.WriteHeader(http.StatusOK)
+		}
+	}
+	t.Run("a trial", func(t *testing.T) {
+		const period = 500 * time.Millisecond
+		a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 1, BreakerOpen: period})}
+		openC1(t, a)
+		time.Sleep(period + 50*time.Millisecond)
+		a.reached = 0
+		if code := askC1(a.h, askTheDownAPI(a)).Code; code != http.StatusOK || a.reached != 1 {
+			t.Fatalf("the trial: %d with the handler run %d times", code, a.reached)
+		}
+		if !a.h.svc.ClusterDown("c1") {
+			t.Error("a 503 of the API server closed the breaker")
+		}
+	})
+	t.Run("another request", func(t *testing.T) {
+		a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 2, BreakerOpen: time.Minute})}
+		askC1(a.h, a.failAsTheCluster)
+		askC1(a.h, askTheDownAPI(a))
+		askC1(a.h, a.failAsTheCluster)
+		if !a.h.svc.ClusterDown("c1") {
+			t.Error("a 503 of the API server between two failures cleared the count")
 		}
 	})
 }

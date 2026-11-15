@@ -28,7 +28,7 @@ import (
 // API-server timeout — so one dead cluster can't tie up requests. The live
 // response then feeds the health state back: a connectivity 503 marks the
 // cluster down (so the next request fails fast before the periodic poll), an
-// answer of the API server clears the count. Open, only the one request let through after MC_BREAKER_OPEN_SEC closes it.
+// answer of the API server clears the count. Open, among requests only the one let through after MC_BREAKER_OPEN_SEC closes it.
 func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		payload, ok := auth.FromContext(r.Context())
