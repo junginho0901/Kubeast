@@ -12,6 +12,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/clustersync"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/clusternotice"
 )
 
 // replicaService is one k8s-service with a cached bundle for each id and a cache on c.
@@ -175,7 +176,7 @@ func TestAnInvalidationOnOneReplicaDropsTheBundleOnTheOthers(t *testing.T) {
 		t.Cleanup(func() { cancel(); <-done })
 		services = append(services, s)
 	}
-	if !eventually(t, 5*time.Second, func() bool { return mr.PubSubNumSub(clustersync.ChannelFor(0))[clustersync.ChannelFor(0)] == 3 }) {
+	if !eventually(t, 5*time.Second, func() bool { return mr.PubSubNumSub(clusternotice.ChannelFor(0))[clusternotice.ChannelFor(0)] == 3 }) {
 		t.Fatal("not subscribed")
 	}
 
