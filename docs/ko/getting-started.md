@@ -83,6 +83,67 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
 
 `--reset-then-reuse-values`는 직접 넣은 값을 그대로 두고 새 버전에 생긴 값을 더합니다. `--reuse-values`는 처음 설치한 버전의 기본값을 그대로 써서 뒤 버전에 생긴 값이 빠집니다. 차트는 그런 업그레이드를 이 안내와 함께 멈추고, 릴리스는 그대로 둡니다. `helm show values`에서 복사한 값 파일도 0.7.7부터는 같은 식으로 멈춥니다. 0.7.6 이하에서 복사한 파일은 `chartVersion`이 없지만, 0.7.8부터는 그 안의 `global.imageTag`(그 버전의 태그)로 멈춥니다. 직접 쓰는 값 파일에는 `chartVersion`과 `global.imageTag`를 넣지 마세요. 직접 빌드한 이미지의 `global.imageTag`처럼 릴리스의 `vX.Y.Z`가 아닌 태그는 멈추지 않습니다.
 
+0.7.8로 업그레이드하면 이름이 다른 역할이나 기본 역할과 같은 그룹이 되는 사용자 정의 역할(`Admin` 옆의 `ADMIN`)의 이름을 `<이름>-renamed-<id>`로 바꾸고 그 역할의 클러스터 부여를 지우며, 바뀐 것마다 감사 행을 남깁니다. 무엇이 바뀌는지와 그 뒤에 할 일은 [기능](features.md)의 "역할 이름"에 있습니다. 업그레이드 전에 Kubeast 데이터베이스에서 아래 쿼리(읽기만 함)를 실행하면 이름이 바뀔 역할, 각 역할이 그룹을 함께 쓰는 역할(`same_group_as`), 각 역할의 부여·임시 부여의 복원·대기 중이거나 승인된 접근 요청·계정 등급 수를 볼 수 있습니다. `same_group_as`가 `Pending`인 역할의 계정 등급은 기본 `Pending`으로 옮겨지고, 나머지는 바뀐 이름의 역할에 남습니다.
+
+```sql
+WITH b(name, slug) AS (VALUES ('Pending', 'pending'), ('Member', 'member'), ('Read', 'read'), ('Write', 'write'), ('Admin', 'admin')),
+s AS (
+  SELECT ro.id, ro.name, ro.is_system,
+         (SELECT coalesce(string_agg(CASE WHEN p BETWEEN 97 AND 122 OR p BETWEEN 48 AND 57 OR p IN (45, 46, 95) THEN c
+                                          WHEN p < 128 THEN '-'
+                                          WHEN p < 65536 THEN '~' || lpad(to_hex(p), 4, '0')
+                                          ELSE '~~' || lpad(to_hex(p), 6, '0') END, '' ORDER BY i), '')
+            FROM unnest(string_to_array(translate(btrim(ro.name, E' \t\n\u000b\f\r\u0085                 　'),
+                                                  E'ABCDEFGHIJKLMNOPQRSTUVWXYZİK', 'abcdefghijklmnopqrstuvwxyzik'), NULL))
+                 WITH ORDINALITY AS t(c, i),
+                 LATERAL ascii(c) AS p) AS slug
+    FROM roles ro),
+g AS (
+  SELECT s.*, b.name AS builtin_name, coalesce(s.name = b.name, false) AS is_builtin,
+         coalesce(b.name, first_value(s.name) OVER w) AS keeper, row_number() OVER w AS place
+    FROM s LEFT JOIN b ON b.slug = s.slug
+  WINDOW w AS (PARTITION BY s.slug ORDER BY coalesce(s.name = b.name, false) DESC, s.is_system DESC, s.id))
+SELECT g.id, g.name, g.keeper AS same_group_as,
+       (SELECT count(*) FROM user_cluster_roles u WHERE u.role_id = g.id) AS grants,
+       (SELECT count(*) FROM user_cluster_roles u WHERE u.restore_role_id = g.id) AS restores,
+       (SELECT count(*) FROM access_requests a WHERE a.role_id = g.id AND a.status IN ('pending', 'approved')) AS open_requests,
+       (SELECT count(*) FROM auth_users a WHERE a.role_id = g.id) AS account_levels
+  FROM g
+ WHERE NOT g.is_builtin AND (g.place > 1 OR g.builtin_name IS NOT NULL)
+ ORDER BY g.id;
+```
+
+마이그레이션이 도는 동안에도 이전 버전의 파드가 요청을 받습니다. 마이그레이션이 커밋하기 직전에 그 파드가 쓴 부여는 바뀐 이름의 역할에 남습니다. 업그레이드 직후, 누군가 바뀐 역할을 다시 부여하기 전에 아래 쿼리로 그런 부여를 볼 수 있습니다. 보통은 아무것도 나오지 않습니다. 나온 부여는 그 역할이 필요하지 않으면 Cluster access에서 지우세요.
+
+```sql
+SELECT g.user_id, g.cluster_id, r.name
+  FROM user_cluster_roles g JOIN roles r ON r.id = g.role_id
+ WHERE r.id IN (SELECT target_id::int FROM auth_audit_logs
+                 WHERE actor_user_id = 'system' AND actor_email = 'migration' AND action = 'admin.roles.update');
+```
+
+0.7.8로 업그레이드하면 이름에 ASCII가 아닌 글자가 든 역할도 새 그룹을 받습니다. 0.7.7은 그런 글자를 하나마다 `-`로 적었고(`운영팀`은 `kubeast:role:---`), 0.7.8은 `~`와 코드 포인트로 적습니다(`kubeast:role:~c6b4~c601~d300`, [기능](features.md)의 "역할 이름"). 옛 그룹만 허용하고 바인딩한 클러스터는 새 그룹을 허용하고 바인딩할 때까지 그 사람들의 요청을 거부합니다(403). Kubeast가 설치된 클러스터 말고 등록한 모든 클러스터에 사용자 정의 역할 템플릿을 다시 적용하고(`scripts/render-target-rbac.sh`, [클러스터 요구 사항](cluster-requirements.md) §1), 템플릿이 옛 그룹에 만든 바인딩 `kubeast-role-<옛 슬러그>-<ClusterRole>`(`운영팀`을 `view`에 묶었으면 `kubeast-role-----view`)을 지우세요. `kubectl apply`는 그 바인딩을 지우지 않습니다. Kubeast가 설치된 클러스터에서는 `helm upgrade`가 바꿉니다. 모든 클러스터에서 직접 쓴 `kubeast:role:<옛 슬러그>`(impersonation 규칙이나 바인딩)는 새 그룹으로 바꾸세요. 업그레이드 전에 아래 쿼리(읽기만 함)를 실행하면 그런 역할과 각 역할의 0.7.7 그룹·0.7.8 그룹을 볼 수 있습니다. 역할 이름이 모두 ASCII면 아무것도 나오지 않습니다.
+
+```sql
+WITH s AS (
+  SELECT ro.name,
+         string_agg(CASE WHEN p BETWEEN 97 AND 122 OR p BETWEEN 48 AND 57 OR p IN (45, 46, 95) THEN c ELSE '-' END, '' ORDER BY i) AS slug_0_7_7,
+         string_agg(CASE WHEN p BETWEEN 97 AND 122 OR p BETWEEN 48 AND 57 OR p IN (45, 46, 95) THEN c
+                         WHEN p < 128 THEN '-'
+                         WHEN p < 65536 THEN '~' || lpad(to_hex(p), 4, '0')
+                         ELSE '~~' || lpad(to_hex(p), 6, '0') END, '' ORDER BY i) AS slug_0_7_8
+    FROM roles ro,
+         unnest(string_to_array(translate(btrim(ro.name, E' \t\n\u000b\f\r\u0085                 　'),
+                                          E'ABCDEFGHIJKLMNOPQRSTUVWXYZİK', 'abcdefghijklmnopqrstuvwxyzik'), NULL))
+           WITH ORDINALITY AS t(c, i),
+         LATERAL ascii(c) AS p
+   GROUP BY ro.id, ro.name)
+SELECT name, 'kubeast:role:' || slug_0_7_7 AS group_0_7_7, 'kubeast:role:' || slug_0_7_8 AS group_0_7_8
+  FROM s
+ WHERE slug_0_7_7 <> slug_0_7_8
+ ORDER BY name;
+```
+
 ### 제거
 
 ```bash

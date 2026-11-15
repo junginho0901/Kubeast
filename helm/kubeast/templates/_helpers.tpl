@@ -3,9 +3,24 @@
 {{- end -}}
 
 {{/* Group slug of a Kubeast role name, as services/pkg/auth/impersonation.go
-     computes it: lowercase, anything but a-z 0-9 . _ - becomes "-". */}}
+     computes it: A-Z, U+0130 and U+212A lowered, a-z 0-9 . _ - kept, other
+     ASCII "-", any other character "~" and its code point in four hex digits
+     ("~~" and six above U+FFFF), read from printf's %+q escape. */}}
 {{- define "kubeast.roleSlug" -}}
-{{- regexReplaceAll "[^a-z0-9._-]" (lower (trim .)) "-" -}}
+{{- range $c := splitList "" (trim .) -}}
+{{- if regexMatch `^[a-z0-9._-]$` $c -}}{{ $c }}
+{{- else if regexMatch `^[A-Z]$` $c -}}{{ lower $c }}
+{{- else if eq $c "\u0130" -}}i
+{{- else if eq $c "\u212a" -}}k
+{{- else if regexMatch `^[\x00-\x7f]$` $c -}}-
+{{- else -}}
+{{- $q := printf "%+q" $c -}}
+{{- if regexMatch `^"\\u[0-9a-f]{4}"$` $q -}}~{{ substr 3 7 $q }}
+{{- else if regexMatch `^"\\U00[0-9a-f]{6}"$` $q -}}~~{{ substr 5 11 $q }}
+{{- else -}}~fffd
+{{- end -}}
+{{- end -}}
+{{- end -}}
 {{- end }}
 
 {{- define "kubeast.labels" -}}

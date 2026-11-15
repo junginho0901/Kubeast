@@ -77,7 +77,8 @@ A listed group holds its ClusterRoles whether or not a role of that name exists,
 Kubeast cannot compare those ClusterRoles with what a person holds, so a new name or a rename that makes a listed group takes all permissions (`*`, the global Admin). Anyone else holding `admin.roles.create` or `admin.roles.update` gets 403 and an audit row.
 So list the name and have a global admin create the role, or create the role first and list it after. From then on it is a role like any other: `admin.roles.update` edits it, and a role already stored under a listed name keeps working.
 Granting it, directly or by approving an access request, takes a global admin or an Admin of that cluster not limited to namespaces: they act there as `kubeast:admin`, which is `cluster-admin`, so they already hold whatever the binding gives. Anyone else holding `admin.users.update` gets 403 and an audit row, and the Cluster access choice and the Approve button say so. Read, Write and Admin listed for their grants limited to namespaces are not held back this way.
-The chart hands the list to auth-service as `IMPERSONATION_CUSTOM_ROLES`. Docker Compose has no chart: put the names in that variable in `.env` if you apply such bindings to your clusters.
+The chart hands the names to auth-service as `IMPERSONATION_CUSTOM_ROLES`, a comma in a name written as `-` (the same group). Docker Compose has no chart: put the names in that variable in `.env` if you apply such bindings to your clusters.
+A role's group is `kubeast:role:` and the slug of its name, which the role window shows; a character outside ASCII is written as `~` and its code point (`운영팀` → `kubeast:role:~c6b4~c601~d300`, [Features](features.md) "Role names"). Bind that group as written.
 
 **Deleting a role does not remove its bindings.** They stay on every cluster they were applied to, and the next role of that name acts with them.
 While the name is on the list, the rule above still holds.
