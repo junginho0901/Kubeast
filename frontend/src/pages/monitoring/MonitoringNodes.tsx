@@ -10,7 +10,6 @@ import {
 } from 'lucide-react'
 import {
   api,
-  isMetricsDisabled,
   isMetricsUnavailableError,
 } from '@/services/api'
 import { RefusedMetrics } from '@/components/RefusedMetrics'
@@ -48,7 +47,6 @@ function UsageCell({ text, testId }: { text: string; testId: string }) {
 }
 
 interface MonitoringNodesProps {
-  metricsUnavailable: boolean
   /** whether the tab's last answer says the cluster serves no metrics.k8s.io (the page's notice) */
   onMetricsUnavailable: (unavailable: boolean) => void
 }
@@ -77,7 +75,6 @@ const getLatestMetricTimestamp = (
 }
 
 export default function MonitoringNodes({
-  metricsUnavailable,
   onMetricsUnavailable,
 }: MonitoringNodesProps) {
   const { t } = useTranslation()
@@ -96,9 +93,8 @@ export default function MonitoringNodes({
   const { data: nodeMetricsRead, isLoading, error, dataUpdatedAt } = useQuery<NodeMetric[], Error>({
     queryKey: ['node-metrics', currentCluster],
     queryFn: api.getNodeMetrics,
-    enabled: !metricsUnavailable && !isMetricsDisabled(),
     // every 5 s, not again once the cluster refused it, once a minute while it serves no metrics.k8s.io (metricsReadPace)
-    ...metricsReadPace(() => metricsUnavailable || isMetricsDisabled()),
+    ...metricsReadPace(),
     placeholderData: (prev, prevQuery) =>
       prevQuery && prevQuery.queryKey[1] === currentCluster ? prev : undefined,
   })
@@ -127,12 +123,12 @@ export default function MonitoringNodes({
   }, [nodeMetrics, nodeList])
 
   // what the tab draws in place of its rows, and the floating chat is told the same: no count of usage without rows
-  const view = metricsTabView({ isLoading, rows: nodeMetrics, refused: Boolean(refusal), error, metricsUnavailable })
+  const view = metricsTabView({ isLoading, rows: nodeMetrics, refused: Boolean(refusal), error })
 
   // 플로팅 AI 위젯용 스냅샷 — 노드 메트릭 요약
   const aiSnapshot = useMemo(() => {
     if (view === 'refused') return { source: 'base' as const, summary: '노드 모니터링 — 메트릭 볼 권한 없음', data: { tab: 'nodes', metrics_refused: refusal } }
-    if (view !== 'rows') return metricsNotShownLayer(t, 'nodes', view, { error, notice: metricsUnavailable })
+    if (view !== 'rows') return metricsNotShownLayer(t, 'nodes', view, { error })
     const items = [...allNodes].sort(
       (a, b) => (parsePercent(b.cpu_percent) ?? 0) - (parsePercent(a.cpu_percent) ?? 0),
     )
@@ -181,7 +177,7 @@ export default function MonitoringNodes({
         }),
       },
     }
-  }, [view, t, error, metricsUnavailable, allNodes, refreshFailure, refusal])
+  }, [view, t, error, allNodes, refreshFailure, refusal])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -238,7 +234,7 @@ export default function MonitoringNodes({
         </div>
       ) : view === 'rows' ? (
         <div className="flex-1 min-h-0 flex flex-col">
-        {refreshFailure && <MetricsRefreshFailed failure={refreshFailure} retrying={!metricsUnavailable} testId="node-metrics-refresh-failed" />}
+        {refreshFailure && <MetricsRefreshFailed failure={refreshFailure} testId="node-metrics-refresh-failed" />}
         <MonitoringSearch value={search} onChange={setSearch} placeholder={t('monitoring.nodes.searchPlaceholder', 'Search nodes by name...')} testId="monitoring-node-search" />
         {/* one row a node, the columns kubectl top nodes prints */}
         <div ref={containerRef} className="flex-1 min-h-0 flex flex-col">

@@ -63,7 +63,7 @@ const client = (rows: unknown, error: unknown) => {
   return qc
 }
 const render = (qc: QueryClient, lng = 'en') => renderToStaticMarkup(createElement(I18nextProvider, { i18n: i18n.cloneInstance({ lng }) },
-  createElement(QueryClientProvider, { client: qc }, createElement(MonitoringPods, { metricsUnavailable: false, onMetricsUnavailable: () => {}, namespaces: [{ name: 'shop' }] as never }))))
+  createElement(QueryClientProvider, { client: qc }, createElement(MonitoringPods, { onMetricsUnavailable: () => {}, namespaces: [{ name: 'shop' }] as never }))))
 
 describe('choosing another namespace on the Pods tab', () => {
   const WEB_ROWS = [{ namespace: 'web', name: 'front-0', cpu: '7m', memory: '8Mi', timestamp: '2026-11-07T03:59:15Z' }]
@@ -330,7 +330,7 @@ describe('what sits above the pod table', () => {
 // The floating chat is told what the tab draws where its rows go, never a count of usage the screen does not show, and the
 // cards say no number the tab contradicts: an empty answer for one namespace ("No pods in … namespace", the cards at 0),
 // for every namespace (not available, no cards), a failed read after an empty one, the answer that says metrics-server
-// is missing, the page's notice and #900's not-served answer (404) each go as the tab says them.
+// is missing and #900's not-served answer (404) each go as the tab says them.
 describe('what the Pods tab tells the floating chat in place of rows', () => {
   const HINT = en.monitoring.metricsServerHint
   const NOT_AVAILABLE = en.monitoring.pods.unavailableAll
@@ -345,15 +345,15 @@ describe('what the Pods tab tells the floating chat in place of rows', () => {
     }
     return qc
   }
-  const renderOn = (namespace: string, qc: QueryClient, { notice = false, lng = 'en' } = {}) => {
+  const renderOn = (namespace: string, qc: QueryClient, { lng = 'en' } = {}) => {
     picked.done = false
     picked.namespace = namespace
     return renderToStaticMarkup(createElement(I18nextProvider, { i18n: i18n.cloneInstance({ lng }) },
-      createElement(QueryClientProvider, { client: qc }, createElement(MonitoringPods, { metricsUnavailable: notice, onMetricsUnavailable: () => {}, namespaces: [{ name: 'shop' }] as never }))))
+      createElement(QueryClientProvider, { client: qc }, createElement(MonitoringPods, { onMetricsUnavailable: () => {}, namespaces: [{ name: 'shop' }] as never }))))
   }
   const card = (html: string, label: string) => html.split(label)[1]?.match(/text-2xl[^>]*>([^<]*)</)?.[1]
-  const saysWhatTheTabShows = (html: string, skip: string[] = []) => {
-    const parts = (chat.current?.summary ?? '').split(' — ').filter((p) => !skip.includes(p))
+  const saysWhatTheTabShows = (html: string) => {
+    const parts = (chat.current?.summary ?? '').split(' — ')
     expect(parts.length).toBeGreaterThan(1)
     for (const part of parts) expect(textOf(html)).toContain(part)
     expect(chat.current?.summary).not.toContain('실시간')
@@ -393,14 +393,6 @@ describe('what the Pods tab tells the floating chat in place of rows', () => {
     expect(html).not.toContain('No pods in shop namespace')
     expect(chat.current?.data).toEqual({ tab: 'pods', filters: { namespace: 'shop' }, metrics_unavailable: true })
     saysWhatTheTabShows(html)
-  })
-
-  it('the page\'s notice on: its words first, then the tab\'s, and no "No pods"', () => {
-    const html = renderOn('shop', answered('shop', null), { notice: true })
-    expect(html).toContain('data-testid="pod-metrics-not-available"')
-    expect(html).not.toContain('No pods in shop namespace')
-    expect(chat.current?.summary).toBe(`${en.monitoring.pods.title} — ${en.monitoring.metricsUnavailable} — ${NOT_AVAILABLE} — ${HINT}`)
-    saysWhatTheTabShows(html, [en.monitoring.metricsUnavailable])
   })
 
   it('#900\'s not-served answer (404): the layer is the block the tab draws for it, whichever the client reads it as', () => {

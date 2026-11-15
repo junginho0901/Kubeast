@@ -3,9 +3,9 @@ import type { TFunction } from 'i18next'
 import { isMetricsUnavailableError } from '@/services/api'
 
 // What a Monitoring tab draws where its rows go, decided once for the screen and for the floating chat, so the chat is
-// told what the screen says: the rows, a refusal, a failed read with no rows to keep, metrics-server missing (the
-// page's notice, or an answer that says so), an answer with no samples, or on the Pods tab with one namespace no pods
-// there. A tab that shows no rows tells the chat no count of usage.
+// told what the screen says: the rows, a refusal, a failed read with no rows to keep, metrics-server missing (an
+// answer that says so), an answer with no samples, or on the Pods tab with one namespace no pods there. A tab that
+// shows no rows tells the chat no count of usage.
 export type MetricsTabView = 'prompt' | 'loading' | 'rows' | 'refused' | 'failed' | 'unavailable' | 'no_samples' | 'none_in_namespace'
 
 export function metricsTabView(read: {
@@ -15,14 +15,12 @@ export function metricsTabView(read: {
   rows: readonly unknown[] | undefined
   refused: boolean
   error: unknown
-  /** metrics-server is missing as the page knows it (its notice): the tab asks nothing */
-  metricsUnavailable: boolean
 }): MetricsTabView {
   if (read.namespace === '') return 'prompt'
   if (read.isLoading) return 'loading'
   if (read.rows && read.rows.length > 0) return 'rows'
   if (read.refused) return 'refused'
-  const missing = read.metricsUnavailable || isMetricsUnavailableError(read.error)
+  const missing = isMetricsUnavailableError(read.error)
   if (read.error && !missing) return 'failed'
   if (missing) return 'unavailable'
   return read.namespace && read.namespace !== 'all' ? 'none_in_namespace' : 'no_samples'
@@ -43,8 +41,6 @@ type Layer = { source: 'base'; summary: string; data: Record<string, unknown> }
 export function metricsNotShownLayer(t: TFunction, tab: 'nodes' | 'pods', view: MetricsTabView, read: {
   error: unknown
   namespace?: string
-  /** the page's notice "Metrics server not available for this cluster" is on screen */
-  notice: boolean
 }): Layer | null {
   const scope = { tab, ...(tab === 'pods' ? { filters: { namespace: read.namespace } } : {}) }
   const title = t(tab === 'nodes' ? 'monitoring.nodes.title' : 'monitoring.pods.title')
@@ -62,7 +58,7 @@ export function metricsNotShownLayer(t: TFunction, tab: 'nodes' | 'pods', view: 
     case 'unavailable':
       return {
         source: 'base',
-        summary: said(read.notice ? t('monitoring.metricsUnavailable') : undefined, notAvailable, t('monitoring.metricsServerHint')),
+        summary: said(notAvailable, t('monitoring.metricsServerHint')),
         data: { ...scope, metrics_unavailable: true },
       }
     case 'no_samples':
