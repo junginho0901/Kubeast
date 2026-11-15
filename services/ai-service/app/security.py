@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Dict, FrozenSet, Iterable, Mapping, Optional, Tuple
 
 import jwt
-from fastapi import Depends, Header, HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 
 
 AUTH_JWKS_URL = os.getenv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json")
