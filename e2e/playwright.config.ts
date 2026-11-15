@@ -10,6 +10,10 @@ const GUARD = process.env.E2E_GUARD === '1'
 // tests/rollout-in-use.spec.ts restarts the install's services: E2E_ROLLOUT=1 adds the rollout project, chromium leaves it out.
 const ROLLOUT = process.env.E2E_ROLLOUT === '1'
 const ROLLOUT_SPEC = /rollout-in-use\.spec\.ts$/
+// The floating chat's layers on every screen in refused, failed, not served and empty states: E2E_AI_LAYERS=1 adds the
+// ai-layers project (tests/ai-layers-every-screen.spec.ts, which the chromium project leaves out).
+const AI_LAYERS = process.env.E2E_AI_LAYERS === '1'
+const AI_LAYERS_SPEC = /ai-layers-every-screen\.spec\.ts$/
 
 // E2E config — runs against the kind cluster's gateway (port 8000).
 // Snapshots are committed-equivalent baselines that the refactor PRs
@@ -60,7 +64,7 @@ export default defineConfig({
         permissions: ['clipboard-read', 'clipboard-write'],
       },
       dependencies: ['setup'],
-      testIgnore: [/auth\.setup\.ts/, ROLLOUT_SPEC],
+      testIgnore: [/auth\.setup\.ts/, ROLLOUT_SPEC, AI_LAYERS_SPEC],
     },
     ...(ROLLOUT
       ? [
@@ -71,6 +75,24 @@ export default defineConfig({
               ...devices['Desktop Chrome'],
               viewport: { width: 1440, height: 900 },
               locale: 'en-US',
+              storageState: '.auth/user.json',
+            },
+            dependencies: ['setup'],
+          },
+        ]
+      : []),
+    ...(AI_LAYERS
+      ? [
+          {
+            name: 'ai-layers',
+            testMatch: AI_LAYERS_SPEC,
+            use: {
+              ...devices['Desktop Chrome'],
+              // a missing element fails its step instead of the whole test timeout (Playwright Test defaults both to 0)
+              actionTimeout: 15_000,
+              navigationTimeout: 30_000,
+              viewport: { width: 1440, height: 900 },
+              locale: 'en-US', // the spec reads the screen's notices by the English catalog
               storageState: '.auth/user.json',
             },
             dependencies: ['setup'],
