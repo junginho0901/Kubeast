@@ -159,7 +159,7 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
     let found = false
     for (let x = 4; x < Math.min(at.width, 900) && !found; x += 6) {
       await page.mouse.move(at.x + x, at.y + 6)
-      found = (await page.getByTestId('cluster-view-map-legend').innerText()).startsWith(`${target} `)
+      found = (await page.getByTestId('cluster-view-map-hover').innerText()).startsWith(`${target} `)
     }
     expect(found, `the legend names ${target} under the mouse`).toBe(true)
     await page.mouse.down()
@@ -331,7 +331,7 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
     let found = false
     for (let x = 4; x < Math.min(at.width, 600) && !found; x += 6) {
       await page.mouse.move(at.x + x, at.y + 6)
-      found = (await page.getByTestId('cluster-view-map-legend').innerText()).startsWith(target)
+      found = (await page.getByTestId('cluster-view-map-hover').innerText()).startsWith(target)
     }
     expect(found).toBe(true)
     await page.mouse.down()
@@ -339,8 +339,10 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
     await expect(page.getByTestId('cluster-view-node')).toHaveCount(1)
     await expect(page.getByTestId('cluster-view-node-view-name')).toHaveText(target)
     await expect(box(page, cells[last][0])).toBeInViewport()
-    // opening it was a history entry: Back returns to every node, Forward opens it again
+    // opening it was a history entry: Back returns to every node of this page, Forward opens it again
     await page.goBack()
+    await expect(page).toHaveURL(new RegExp(`/cluster-view\\?cluster=${CLUSTER}$`))
+    await expect(page.getByTestId('cluster-view-nodes')).toBeVisible()
     await expect(page.getByTestId('cluster-view-node-view')).toHaveCount(0)
     await page.goForward()
     await expect(page.getByTestId('cluster-view-node-view-name')).toHaveText(target)
@@ -348,5 +350,8 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
     await expect(page).not.toHaveURL(/[?&]node=/)
     await expect(page.getByTestId('cluster-view-node-view')).toHaveCount(0)
     await expect(box(page, cells[last][0])).toBeInViewport()
+    // All Nodes was a history entry too: Back opens the node's own view again
+    await page.goBack()
+    await expect(page.getByTestId('cluster-view-node-view-name')).toHaveText(target)
   })
 })

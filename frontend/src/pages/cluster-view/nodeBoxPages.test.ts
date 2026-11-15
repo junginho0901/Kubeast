@@ -14,7 +14,7 @@ import { PodNodeGrid } from './PodNodeGrid'
 import { useClusterDerived } from './hooks/useClusterDerived'
 import {
   BOX_PREVIEW_CARDS, NODE_BOXES_PER_PAGE, NODE_PODS_PER_PAGE, boxPageLayer, boxPageOf, cellsOfPage, nameOrder, nodePageOf, nodePodsPage,
-  followedPage, nodeMissingLayer, nodeViewLayer, nodeViewPage, overviewPage, podKey, previewOrder, searchStart,
+  followedPage, keptOverview, nodeMissingLayer, nodeViewLayer, nodeViewPage, overviewPage, podKey, previewOrder, searchStart, shownPageAddress,
 } from './nodeBoxPages'
 
 // Cluster View on 1 000 nodes: the map draws a cell for every node; the overview under it is a page of ten node boxes in
@@ -187,6 +187,35 @@ describe('the overview: ten node boxes a page, each of at most twelve cards', ()
     expect({ page: overviewPage(tenMore, turned), kept: kept(tenMore) }).toEqual({ page: 55, kept: 10 })
   })
 
+  it('keeps the box it was turned to on screen when five boxes before it vanished, a tie taking the page holding it', () => {
+    const keys = Array.from({ length: 1000 }, (_, i) => `node-${pad(i, 4)}`)
+    const turned = { page: 54, anchor: keys[530] }
+    const fiveGone = keys.slice(5)
+    expect(fiveGone.indexOf('node-0530')).toBe(525)
+    const page = overviewPage(fiveGone, turned)
+    expect({ page, shown: fiveGone.slice((page - 1) * 10, page * 10).includes('node-0530') }).toEqual({ page: 53, shown: true })
+    // six or four gone: the page holding six of the ten, as before
+    expect(overviewPage(keys.slice(6), turned)).toBe(53)
+    expect(overviewPage(keys.slice(4), turned)).toBe(54)
+  })
+
+  it('keeps the page shown when the box turned to is gone, so nodes coming back do not move the view to the page asked', () => {
+    const keys = Array.from({ length: 999 }, (_, i) => `node-${pad(i, 4)}`)
+    const turned = { page: 54, anchor: 'node-0530' }
+    // the box turned to gone and the nodes down to 200: page 20 is shown, and kept with its first box
+    const fewer = keys.slice(0, 200)
+    expect(overviewPage(fewer, turned)).toBe(20)
+    const kept = keptOverview(fewer, turned, 20)
+    expect(kept).toEqual({ page: 20, anchor: 'node-0190' })
+    // the 999 back: page 20 still, where it was page 54 before
+    expect({ before: overviewPage(keys, turned), now: overviewPage(keys, kept!) }).toEqual({ before: 54, now: 20 })
+    expect(keptOverview(keys, kept!, 20)).toBeNull()
+    // the box turned to still there, or nothing listed yet: nothing to keep
+    expect(keptOverview(keys, turned, 54)).toBeNull()
+    expect(keptOverview([], turned, 1)).toBeNull()
+    expect(keptOverview(keys, { page: 1, anchor: null }, 1)).toBeNull()
+  })
+
   it('pages over the nodes a search matched, the other cells faded on the map', () => {
     const matched = NAMES.filter((n) => n.endsWith('7'))
     const nodeList = [...NODES, ...NAMES.slice(1).map((name) => ({ name, roles: [] }))]
@@ -349,6 +378,23 @@ describe('the node\'s own view: its pods by name, sixty a page', () => {
     expect(render(summaryOf(['n']), { lng: 'ko', nodeView: { node: 'n', page: 2, pod: 'a/n-p060' }, pods: { n: [] } })).toContain('Pod a/n-p060: 이 Node에 더 없습니다.')
   })
 
+  it('writes a page past the last as the page shown, so pods coming back do not move the view to it', () => {
+    const keysOf = (n: number) => nameOrder(podsFor('n', n)).map(podKey)
+    // on page 5 of 300, the node drained to 40: page 1 is shown, and the address is told page 1
+    const asked = { page: 5, pod: null }
+    const drained = nodeViewPage(keysOf(40), asked, -1)
+    expect(drained.page).toBe(1)
+    expect(shownPageAddress(asked, drained)).toEqual({ page: 1, pod: null })
+    // 300 back: page 1 still, where it was page 5 before
+    expect({ before: nodeViewPage(keysOf(300), asked, -1).page, now: nodeViewPage(keysOf(300), { page: 1, pod: null }, -1).page }).toEqual({ before: 5, now: 1 })
+    // the page shown is the page asked (no page asked reads as 1): nothing to write
+    expect(shownPageAddress({ page: 1, pod: null }, nodeViewPage(keysOf(300), { page: 1, pod: null }, -1))).toBeNull()
+    expect(shownPageAddress({ page: null, pod: null }, nodeViewPage(keysOf(40), { page: null, pod: null }, -1))).toBeNull()
+    // a pod followed is followedPage's; a pod gone keeps its note with the page shown
+    expect(shownPageAddress({ page: 5, pod: 'a/n-p001' }, nodeViewPage(keysOf(40), { page: 5, pod: 'a/n-p001' }, -1))).toBeNull()
+    expect(shownPageAddress({ page: 5, pod: 'a/n-p299' }, nodeViewPage(keysOf(40), { page: 5, pod: 'a/n-p299' }, -1))).toEqual({ page: 1, pod: 'a/n-p299' })
+  })
+
   it('says the namespace filter leaves the opened pod out, not that it left the node', () => {
     const filtered = renderWith(ClusterViewContext, createElement(Screen, { summary: summaryOf(['n']) }), {
       nodeView: { node: 'n', page: 1, pod: 'a/n-p005' }, pods: {}, namespace: 'b', namespacePods: { n: podsFor('n', 20).map((p) => ({ ...p, namespace: 'b' })) },
@@ -476,8 +522,11 @@ describe('the live node list on the screen', () => {
       cells: ['cp-0', 'node-001'], marks: null,
       notReady: 'Node not Ready 2', notReadyOpens: 'Open spare-1, the first of them', cordoned: 'SchedulingDisabled 1',
     })
-    // the map can be reached from the keyboard
-    expect(html).toMatch(/<canvas[^>]*tabindex="0"/)
+    // the map can be reached from the keyboard, says what it is, and the line under the legend names the cell reached
+    expect(html).toMatch(/<canvas role="group" aria-roledescription="Node map" aria-label="Node map: 2 nodes[^"]*"[^>]*tabindex="0"/)
+    expect(html).toMatch(/<p class="min-h-\[16px\]" aria-live="polite" data-testid="cluster-view-map-hover">A cell is a Node/)
+    // the legend's buttons are not inside that line, so a cell reached does not take them away
+    expect(html.match(/data-testid="cluster-view-map-hover">[^<]*<\/p>/)).not.toBeNull()
   })
 
   it('drops the box of a node removed, the others keeping their places', () => {

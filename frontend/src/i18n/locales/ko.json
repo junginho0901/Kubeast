@@ -2769,7 +2769,8 @@
       "ok": "정상",
       "hint": "칸 하나가 Node, 점 하나가 Pod입니다. 칸을 누르거나 칸에서 Enter를 누르면 그 Node의 Pod를 모두 보여 줍니다.",
       "hintPaged": "칸 하나가 Node, 점 하나가 Pod이고, 테두리를 친 칸이 아래 상자입니다. 칸을 누르거나 칸에서 Enter를 누르면 그 Node의 Pod를 모두 보여 줍니다.",
-      "openFirst": "{{node}} 열기(그중 첫 Node)"
+      "openFirst": "{{node}} 열기(그중 첫 Node)",
+      "roleDescription": "Node 지도"
     }
   },
   "namespaces": {
