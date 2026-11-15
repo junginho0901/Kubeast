@@ -20,7 +20,7 @@
 ├── deploy/examples/target-cluster/   # 대상 클러스터 준비물 예시 값 (Prometheus·OpenCost 차트, 클러스터별 RBAC 값 — docs/ko/cluster-requirements.md)
 ├── docs/                            # 운영 문서 (클러스터 준비물·SSO·메트릭·감사·백업·공급망)
 ├── e2e/                             # Playwright E2E (라이브 클러스터 대상)
-│   ├── actions/                     # 옵트인 동작 스위트 — UI 동작 92개 + kubectl 검증 (E2E_ACTIONS=1 --project=actions)
+│   ├── actions/                     # 옵트인 동작 스위트 — UI 동작 94개 + kubectl 검증 (E2E_ACTIONS=1 --project=actions)
 │   └── demo/                        # 소개 사이트 영상 대본 (E2E_DEMO=1 --project=demo, scripts/site-media.sh)
 ├── scripts/                         # 빌드/배포/개발 스크립트
 ├── site/                            # 소개 사이트 (GitHub Pages, .github/workflows/pages.yaml)
@@ -95,7 +95,7 @@ npx playwright test cluster-hygiene.spec.ts   # 스펙 하나
 - **감사 싱크·세션 기록 스펙** — `deploy/kind/devtools.yaml`(S3 스탠드인, Mailpit, 웹훅 수신기)과 dev 값의 싱크 설정, `sessionRecording.enabled`가 필요합니다.
 - 리셋하면 위 데이터가 모두 사라지므로 다시 만드세요.
 
-`e2e/actions/`는 UI 동작 92개를 두 번째 클러스터에 실행하고 `kubectl`로 결과를 확인하는 옵트인 동작 스위트(약 12분)라서 기본 실행에 들어가지 않습니다.
+`e2e/actions/`는 UI 동작 94개를 두 번째 클러스터에 실행하고 `kubectl`로 결과를 확인하는 옵트인 동작 스위트(약 12분)라서 기본 실행에 들어가지 않습니다.
 `E2E_ACTIONS=1 npx playwright test --project=actions`로 실행하고, 전제 조건은 [e2e/actions/README.md](../../e2e/actions/README.md)를 보세요.
 
 ### 소개 사이트 (`site/`)
