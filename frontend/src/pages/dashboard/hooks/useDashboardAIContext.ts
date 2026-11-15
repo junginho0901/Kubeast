@@ -59,26 +59,23 @@ export function useDashboardAIContext({ overview, nodes, topResources, problemPo
               status: n.status,
             }))
           : undefined,
-        // 화면 우측 위젯: Top 5 Pods / Top 3 Nodes (CPU·Memory 사용량 상위)
-        top_pods: Array.isArray(topResources?.top_pods)
-          ? topResources!.top_pods.slice(0, 5).map((p: any) => ({
-              name: p.name,
-              namespace: p.namespace,
-              cpu: p.cpu,
-              memory: p.memory,
-              cpu_percent: p.cpu_percent,
-              memory_percent: p.memory_percent,
-            }))
-          : undefined,
-        top_nodes: Array.isArray(topResources?.top_nodes)
-          ? topResources!.top_nodes.slice(0, 3).map((n: any) => ({
-              name: n.name,
-              cpu: n.cpu,
-              memory: n.memory,
-              cpu_percent: n.cpu_percent,
-              memory_percent: n.memory_percent,
-            }))
-          : undefined,
+        // 화면 우측 위젯: Top 5 Pods / Top 3 Nodes (CPU·Memory 사용량 상위). A part with no rows the cluster refused or
+        // failed shows that in their place (DashboardTopResources), so it goes as that with the reason, not as no rows.
+        ...topPart('top_pods', topResources?.top_pods, topResources?.pod_metrics_refused, topResources?.pod_metrics_error, 5, (p: any) => ({
+          name: p.name,
+          namespace: p.namespace,
+          cpu: p.cpu,
+          memory: p.memory,
+          cpu_percent: p.cpu_percent,
+          memory_percent: p.memory_percent,
+        })),
+        ...topPart('top_nodes', topResources?.top_nodes, topResources?.node_metrics_refused, topResources?.node_metrics_error, 3, (n: any) => ({
+          name: n.name,
+          cpu: n.cpu,
+          memory: n.memory,
+          cpu_percent: n.cpu_percent,
+          memory_percent: n.memory_percent,
+        })),
         // the problem pods, errors then warnings first (the server's sort=health), and how many there are by
         // card colour — the whole cluster's, not only what a window has loaded
         failed_pods: problemPods
@@ -93,4 +90,21 @@ export function useDashboardAIContext({ overview, nodes, topResources, problemPo
   }, [overview, nodes, topResources, problemPods])
 
   useAIContext(aiSnapshot, [aiSnapshot])
+}
+
+// One of the top widgets as its card shows it: its rows, else the cluster's refusal (`<key>_refused`) or the read's
+// failure (`<key>_error`) with the reason, else no rows.
+export function topPart(
+  key: 'top_pods' | 'top_nodes',
+  rows: unknown,
+  refused: boolean | undefined,
+  error: string | undefined,
+  limit: number,
+  pick: (row: any) => Record<string, unknown>,
+): Record<string, unknown> {
+  if (!Array.isArray(rows)) return {}
+  if (rows.length > 0) return { [key]: rows.slice(0, limit).map(pick) }
+  if (refused) return { [`${key}_refused`]: { reason: error ?? '' } }
+  if (error) return { [`${key}_error`]: { reason: error } }
+  return { [key]: [] }
 }

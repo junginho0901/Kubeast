@@ -6,11 +6,12 @@
 // doesn't have to thread `openDetail` through props).
 
 import { useTranslation } from 'react-i18next'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, ShieldAlert } from 'lucide-react'
 
 import { TopResources } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { failureText } from '@/utils/failureText'
+import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
 
 interface Props {
   topResources: TopResources | undefined
@@ -98,6 +99,8 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
               </button>
             ))}
           </div>
+        ) : topResources?.pod_metrics_refused ? (
+          <RefusedMetrics path="/cluster/metrics/pods" reason={topResources.pod_metrics_error} testId="top-pods-refused" />
         ) : topResources?.pod_metrics_error ? (
           // 메트릭 수집 실패 (Node 메트릭은 있을 수 있음) — the server's pod_metrics_error, with its reason
           <div className="text-center py-12" data-testid="top-pods-metrics-error">
@@ -234,6 +237,8 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
               )
             })}
           </div>
+        ) : topResources?.node_metrics_refused ? (
+          <RefusedMetrics path="/cluster/metrics/nodes" reason={topResources.node_metrics_error} testId="top-nodes-refused" />
         ) : topResources?.node_metrics_error ? (
           // 메트릭 수집 실패 (파드 메트릭은 있을 수 있음) — the server's node_metrics_error, with its reason
           <div className="text-center py-12" data-testid="top-nodes-metrics-error">
@@ -250,6 +255,23 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
             <p className="text-slate-400">{tr('dashboard.topResources.empty', 'No resource usage data')}</p>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// The cluster refused the read: no permission, as Monitoring says it, with the cluster's reason. The dashboard asks it
+// no more until the page is opened again (topResourcesRead).
+function RefusedMetrics({ path, reason, testId }: { path: string; reason?: string; testId: string }) {
+  const { t } = useTranslation()
+  return (
+    <div className="text-center py-12" data-testid={testId}>
+      <div className="flex flex-col items-center gap-2">
+        <ShieldAlert className="w-8 h-8 text-amber-300" />
+        <p className="text-slate-400">
+          {t('common.forbiddenEmpty', { resource: forbiddenResourceFromUrl(path), defaultValue: 'You do not have permission to view {{resource}} in this cluster.' })}
+        </p>
+        {reason && <p className="text-xs text-slate-500 break-words">{reason}</p>}
       </div>
     </div>
   )
