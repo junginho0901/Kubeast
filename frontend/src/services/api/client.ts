@@ -146,19 +146,6 @@ export const isMetricsUnavailableResponse = (error: any): boolean => {
   return data?.detail === METRICS_UNAVAILABLE || data?.detail?.code === METRICS_UNAVAILABLE || data?.code === METRICS_UNAVAILABLE
 }
 
-// Per-cluster flag — once a metrics call fails with metrics_unavailable the UI
-// flips it so subsequent panels short-circuit instead of re-issuing the same
-// failing requests. Keyed by cluster so a cluster WITHOUT metrics-server doesn't
-// permanently disable metrics for one that HAS it (multi-cluster).
-const metricsDisabledClusters = new Set<string>()
-const metricsClusterKey = (): string => getCurrentClusterID() || 'default'
-
-export const disableMetrics = (): void => {
-  metricsDisabledClusters.add(metricsClusterKey())
-}
-
-export const isMetricsDisabled = (): boolean => metricsDisabledClusters.has(metricsClusterKey())
-
 /** The request answered 403: the section says "no permission", not that the cluster has nothing. */
 export const isForbiddenError = (err: any): boolean => err?.response?.status === 403
 

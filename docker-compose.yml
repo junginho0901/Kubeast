@@ -1,5 +1,10 @@
 # Only the gateway is published. Every other service is reachable inside msa-network only;
 # use `docker compose exec` (or an override file) to reach one directly.
+# stop_grace_period 35s on each Kubeast service is the chart's grace period for a pod that runs no terminal drain:
+# podShutdown.preStopSeconds 5, the waits after SIGTERM (25 s at most, k8s-service's) and 5 s to spare. Docker's own 10 s
+# would stop a service in the middle of its shutdown. k8s-service runs no terminal drain here: Compose stops a container
+# before it starts the next, so no other server would take its terminals over. postgres and redis get 30 s, the
+# Kubernetes default grace period of a pod with no preStop wait under Recreate, so a clean PostgreSQL shutdown is not cut.
 services:
   # The services run as UID 65532; Docker creates named volumes owned by root.
   volume-init:
@@ -33,6 +38,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    stop_grace_period: 30s
 
   # Redis (캐싱 및 세션 관리)
   redis:
@@ -45,6 +51,8 @@ services:
       timeout: 3s
       retries: 5
     restart: unless-stopped
+    # the Kubernetes default the chart gives Redis once it has no preStop wait under Recreate, as postgres
+    stop_grace_period: 30s
 
   # Auth Service (Go)
   auth-service:
@@ -78,6 +86,7 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # AI Service
   ai-service:
@@ -86,7 +95,7 @@ services:
       - .env
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
       # model configs may point at private hosts listed here (Ollama on the host)
       - AI_BASE_URL_ALLOWED_HOSTS=${AI_BASE_URL_ALLOWED_HOSTS:-host.docker.internal}
@@ -110,6 +119,7 @@ services:
       auth-service:
         condition: service_started
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # K8s Service (Go)
   k8s-service:
@@ -144,6 +154,7 @@ services:
       auth-service:
         condition: service_started
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # Session Service (Go)
   session-service:
@@ -164,6 +175,7 @@ services:
       auth-service:
         condition: service_started
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # Tool Server (K8s tool executor)
   tool-server:
@@ -188,6 +200,7 @@ services:
       auth-service:
         condition: service_started
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # API Gateway (NGINX)
   gateway:
@@ -206,6 +219,7 @@ services:
       - session-service
       - frontend
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # Frontend
   frontend:
@@ -213,6 +227,7 @@ services:
     networks:
       - msa-network
     restart: unless-stopped
+    stop_grace_period: 35s
 
 networks:
   msa-network:

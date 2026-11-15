@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQueryClient, useIsFetching, type QueryClient } from '@tanstack/react-query'
 
@@ -9,6 +9,7 @@ import { resetForbidden } from '@/services/forbiddenStore'
 import { resetListStatus } from '@/services/listStatusStore'
 import { resetWatchProblems } from '@/services/watchProblemStore'
 import { dropClusterQueries, isClusterScopedQueryKey } from '@/utils/clusterQueryScope'
+import { paramsForCluster } from '@/utils/clusterScopedParams'
 import { ClusterContext, STORAGE_KEY } from './ClusterContext'
 
 // Everything that holds what a cluster answered moves to `cluster`: the requests from here on, the cluster-scoped
@@ -88,8 +89,14 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t)
   }, [isSwitching, clusterFetching])
 
-  // The URL changes here; the screen follows in the layout effect above.
-  const setCurrentCluster = (id: string) => {
+  // The URL changes here; the screen follows in the layout effect above. The address is read through a ref, so the
+  // context value changes with the cluster or the indicator, not with every navigation.
+  const latest = useRef({ searchParams, setSearchParams, currentCluster })
+  useLayoutEffect(() => {
+    latest.current = { searchParams, setSearchParams, currentCluster }
+  })
+  const setCurrentCluster = useCallback((id: string) => {
+    const { searchParams, setSearchParams, currentCluster } = latest.current
     // A user-driven change from one cluster to another leaves an audit row.
     // The picker's first auto-select ('' → cluster) is not a switch.
     if (id && currentCluster && id !== currentCluster) {
@@ -98,17 +105,13 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(STORAGE_KEY, id)
     }
-    const next = new URLSearchParams(searchParams)
-    if (id) {
-      next.set('cluster', id)
-    } else {
-      next.delete('cluster')
-    }
-    setSearchParams(next, { replace: true })
-  }
+    // a node of the cluster before (Cluster View's ?node=) is not one of the new cluster's
+    setSearchParams(paramsForCluster(searchParams, id, currentCluster), { replace: true })
+  }, [])
+  const value = useMemo(() => ({ currentCluster, setCurrentCluster, isSwitching }), [currentCluster, setCurrentCluster, isSwitching])
 
   return (
-    <ClusterContext.Provider value={{ currentCluster, setCurrentCluster, isSwitching }}>
+    <ClusterContext.Provider value={value}>
       {children}
     </ClusterContext.Provider>
   )

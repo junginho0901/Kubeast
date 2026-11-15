@@ -18,6 +18,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/limits"
+	"github.com/junginho0901/kubeast/services/pkg/probe"
 	"github.com/junginho0901/kubeast/services/pkg/protectedns"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -201,6 +202,9 @@ type Multiplexer struct {
 	MaxSubscriptionsPerConn int
 	// Sessions ends a socket whose session stopped standing (nil: not checked).
 	Sessions *auth.LiveSessions
+	// Leaving ends every socket with close code 1001 when the server starts to leave (nil: never). The browser
+	// connects again and asks for its lists, which a pod that stays answers.
+	Leaving *probe.Probe
 	// PanicRetryDelay is the wait after a panic; 0 = the five seconds a failed watch waits.
 	PanicRetryDelay time.Duration
 	provider        ClientProvider
@@ -273,6 +277,9 @@ func WatchTimeoutSeconds() int64 { return watchTimeoutSeconds() }
 // WatchResumeDelay is the wait before a watch that ended goes on, spread as the sockets' watches are.
 func WatchResumeDelay() time.Duration { return watchResumeDelay() }
 
+// ResourceVersionExpired is the API server saying a watch cannot go on from the version it was asked for.
+func ResourceVersionExpired(err error) bool { return resourceVersionExpired(err) }
+
 // subscriptionCluster is the cluster a REQUEST targets: its own clusterId, or
 // the connection's cluster that the HTTP ClusterMiddleware resolved.
 func subscriptionCluster(ctx context.Context, id string) string {
@@ -336,9 +343,11 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	// Every watch of this socket hangs off the session it opened with.
+	// Every watch of this socket hangs off the session it opened with, and off the server staying.
 	ctx, release := m.Sessions.Hold(ctx, payload)
 	defer release()
+	ctx, releaseHold := m.Leaving.Hold(ctx)
+	defer releaseHold()
 
 	// Keepalive: pong 받을 때마다 ReadDeadline 갱신. 60초 안에 pong 없으면
 	// ReadMessage 가 timeout 으로 break → defer 의 disconnect 처리.
@@ -373,6 +382,8 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				if code := auth.SessionEndCode(ctx); code != "" {
 					slog.Info("ws closed: session ended", "id", wsID, "user", payload.UserID, "reason", code)
 					_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(auth.SessionEndedCloseCode, code), time.Now().Add(writeWait))
+				} else if probe.IsLeaving(ctx) {
+					_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(probe.ShutdownCloseCode, probe.ShutdownReason), time.Now().Add(writeWait))
 				}
 				return
 			case msg, ok := <-sendCh:

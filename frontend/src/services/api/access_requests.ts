@@ -16,7 +16,7 @@ export interface AccessRequestsConfig {
 }
 
 export type AccessRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'expired'
-export type AccessRequestEndReason = 'expired' | 'not_reviewed' | 'revoked' | 'superseded'
+export type AccessRequestEndReason = 'expired' | 'not_reviewed' | 'revoked' | 'superseded' | 'role_renamed'
 
 // When the read after saving fails the server answers what it has: the id, and on a create the status.
 export type AccessRequestSaved = AccessRequest | { id: string; status?: AccessRequest['status'] }
