@@ -145,12 +145,12 @@ leave room for the cases that need the OpenTelemetry demo or Chaos Mesh (01–03
 | 04 | hidden cause | a new NetworkPolicy leaves one caller with no allow to one backend; both sides look healthy | `self`, whose kindnet enforces NetworkPolicy |
 | 05 | hidden cause | one workload is rolled out with its own `dnsConfig`; only its short-name calls fail | |
 | 06 | hidden cause | a rollout to a new ConfigMap with a bad value, held at 4 old and 2 new pods; asked at 5 and 65 minutes | |
-| 08 | hidden cause, hidden | a scale-up fills the ResourceQuota; a CronJob's pods cannot be created and the data goes stale | |
+| 08 | hidden cause, hidden | in its folder only | |
 | 09 | hidden cause | a 25m CPU limit makes one service slow with no error; a busier pod is the decoy | the second cluster's Prometheus (cAdvisor, kube-state-metrics) |
 | 12 | trap | an old crash-looping pod with a DNS-looking error, and a quiet in-place ConfigMap edit | |
 | 13 | control | no fault; one unrelated container restart five minutes before the question | |
 | 14 | control | no fault; a clean rollout four minutes before the question | |
-| 15 | control, hidden | no fault; traffic from another namespace rises fivefold and the HPA scales out | the second cluster's metrics-server and Prometheus |
+| 15 | control, hidden | in its folder only | the second cluster's metrics-server and Prometheus |
 | 16 | past | a Deployment scaled to 0 for five minutes, then back; asked at 6 and 70 minutes | the second cluster's Prometheus |
 
 ```bash
