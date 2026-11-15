@@ -3,9 +3,24 @@
 {{- end -}}
 
 {{/* Group slug of a Kubeast role name, as services/pkg/auth/impersonation.go
-     computes it: lowercase, anything but a-z 0-9 . _ - becomes "-". */}}
+     computes it: A-Z, U+0130 and U+212A lowered, a-z 0-9 . _ - kept, other
+     ASCII "-", any other character "~" and its code point in four hex digits
+     ("~~" and six above U+FFFF), read from printf's %+q escape. */}}
 {{- define "kubeast.roleSlug" -}}
-{{- regexReplaceAll "[^a-z0-9._-]" (lower (trim .)) "-" -}}
+{{- range $c := splitList "" (trim .) -}}
+{{- if regexMatch `^[a-z0-9._-]$` $c -}}{{ $c }}
+{{- else if regexMatch `^[A-Z]$` $c -}}{{ lower $c }}
+{{- else if eq $c "\u0130" -}}i
+{{- else if eq $c "\u212a" -}}k
+{{- else if regexMatch `^[\x00-\x7f]$` $c -}}-
+{{- else -}}
+{{- $q := printf "%+q" $c -}}
+{{- if regexMatch `^"\\u[0-9a-f]{4}"$` $q -}}~{{ substr 3 7 $q }}
+{{- else if regexMatch `^"\\U00[0-9a-f]{6}"$` $q -}}~~{{ substr 5 11 $q }}
+{{- else -}}~fffd
+{{- end -}}
+{{- end -}}
+{{- end -}}
 {{- end }}
 
 {{- define "kubeast.labels" -}}
@@ -17,6 +32,74 @@ app.kubernetes.io/part-of: kubeast
 {{- /* The Secret every service reads its credentials from. */ -}}
 {{- define "kubeast.secretsName" -}}
 {{ .Values.secrets.existingSecret | default "kubeast-secrets" }}
+{{- end -}}
+
+{{- /* "true" when the chart's Redis runs one user per service (redis.acl): with the chart's own Secrets, with
+       redis.acl.existingSecret, or with secrets.existingSecret once redis.acl.existingSecretHasKeys says it holds
+       the users' passwords. Values only, never whether a key exists. */ -}}
+{{- define "kubeast.redisAcl" -}}
+{{- if and .Values.redis.enabled .Values.redis.acl.enabled (or (not .Values.secrets.existingSecret) .Values.redis.acl.existingSecretHasKeys .Values.redis.acl.existingSecret) }}true{{ end -}}
+{{- end -}}
+
+{{- /* The Secret holding the Redis users' passwords: redis.acl.existingSecret, else secrets.existingSecret, else the
+       chart's kubeast-redis-users. */ -}}
+{{- define "kubeast.redisUsersSecretName" -}}
+{{ .Values.redis.acl.existingSecret | default .Values.secrets.existingSecret | default "kubeast-redis-users" }}
+{{- end -}}
+
+{{- /* The other way out of a missing Redis user key, for the acl container's message. */ -}}
+{{- define "kubeast.redisUsersWayOut" -}}
+{{- if .Values.redis.acl.existingSecret -}}
+unset redis.acl.existingSecret
+{{- else if .Values.secrets.existingSecret -}}
+set redis.acl.existingSecretHasKeys=false
+{{- else -}}
+set redis.acl.enabled=false
+{{- end -}}
+{{- end -}}
+
+{{/*
+The chart's Redis users (Valkey ACL file). The redis pod's first container adds each password's SHA-256 where
+${k8s_service} and ${probe} stand, so no password is in this text, the pod spec or Valkey's arguments.
+- default: off and allowed nothing, so a connection that has not signed in as a user below gets NOAUTH. AUTH and
+  HELLO, which sign in, take no rule.
+- k8s-service: keys and channels under kubeast: only, and the commands of internal/cache and internal/clustersync —
+  single-key reads, writes and deletes, SCAN for the pattern deletes, publish and subscribe (the cluster change
+  notices), PING and SELECT (REDIS_DB). The cluster versions are in the database, so no hash or MULTI/EXEC. go-redis's CLIENT SETINFO and CLIENT MAINT_NOTIFICATIONS on connect are
+  refused, which it ignores. No FLUSHALL, FLUSHDB, KEYS, CONFIG, DEBUG, ACL, MONITOR, EVAL or SCRIPT.
+- probe: PING, for the readiness and liveness probes.
+- tool-server (with the AI on): the cluster change notice channel, to listen to, and no key — SUBSCRIBE, UNSUBSCRIBE,
+  PING (go-redis checks a subscription with it) and SELECT. It publishes nothing and reads no cache key.
+Every command named must exist in the image's Valkey, or Valkey refuses the file and does not start. A command the
+code starts to use is added here with a case in tests/redis_test.yaml; the services' tests hold what their code sends
+to these lines (services/pkg/redisacl).
+*/}}
+{{/*
+maxmemory of the chart's Redis, in bytes: 80% of resources.redis.limits.memory, so Valkey evicts before the container
+reaches its limit (the rest is Valkey's own memory and the allocator's). Without a limit, 80% of 128Mi, the chart's
+default limit. The quantity is bytes or a number with a Kubernetes suffix (Ki Mi Gi Ti Pi Ei, k M G T P E, m).
+*/}}
+{{- define "kubeast.redisMaxmemory" -}}
+{{- $limit := "128Mi" -}}
+{{- with index .Values.resources "redis" }}{{ with .limits }}{{ with .memory }}{{ $limit = toString . }}{{ end }}{{ end }}{{ end -}}
+{{- $re := "^([0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E|m)?$" -}}
+{{- if not (regexMatch $re $limit) }}{{ fail (printf "resources.redis.limits.memory %q is not a memory quantity (bytes, or a number with Ki, Mi, Gi, k, M, G …)" $limit) }}{{ end -}}
+{{- $units := dict "" 1 "m" 0.001 "k" 1000 "M" 1000000 "G" 1000000000 "T" 1000000000000 "P" 1000000000000000 "E" 1000000000000000000 "Ki" 1024 "Mi" 1048576 "Gi" 1073741824 "Ti" 1099511627776 "Pi" 1125899906842624 "Ei" 1152921504606846976 -}}
+{{- mulf (regexReplaceAll $re $limit "${1}" | float64) (index $units (regexReplaceAll $re $limit "${2}")) 0.8 | floor | int64 -}}
+{{- end -}}
+
+{{- define "kubeast.redisUsersAcl" -}}
+user default off resetkeys resetchannels -@all
+user k8s-service on #${k8s_service} resetkeys ~kubeast:* resetchannels &kubeast:* -@all +ping +select +get +set +del +unlink +scan +publish +subscribe +unsubscribe
+user probe on #${probe} resetkeys resetchannels -@all +ping
+{{- if .Values.ai.enabled }}
+user tool-server on #${tool_server} resetkeys resetchannels &kubeast:clusters:changed:* -@all +ping +select +subscribe +unsubscribe
+{{- end }}
+{{- end -}}
+
+{{- /* The keys of the Redis users' passwords the redis pod reads, space-separated: tool-server's with the AI on. */ -}}
+{{- define "kubeast.redisUserKeys" -}}
+REDIS_K8S_SERVICE_PASSWORD REDIS_PROBE_PASSWORD{{ if .Values.ai.enabled }} REDIS_TOOL_SERVER_PASSWORD{{ end }}
 {{- end -}}
 
 {{/*
@@ -39,6 +122,25 @@ every entry of gateway.allowedOrigins, comma-joined; empty with neither.
 {{- $list = append $list . -}}
 {{- end -}}
 {{- join "," $list -}}
+{{- end -}}
+
+{{- /*
+The gateway's accesslog.conf with gateway.accessLog.upstreamTimes: nginx's
+"combined" fields, then the request's time, the service's connect, header and
+response times, the service's address and the client's port, to the same
+place as nginx's default log. Empty when off, so the ConfigMap and the pods'
+checksum stay as without it. dig: the values of an earlier release, kept by
+--reuse-values, have no gateway.accessLog.
+*/ -}}
+{{- define "kubeast.gatewayAccessLog" -}}
+{{- if eq (toString (dig "accessLog" "upstreamTimes" false .Values.gateway)) "true" -}}
+log_format upstream_times '$remote_addr - $remote_user [$time_local] '
+                          '"$request" $status $body_bytes_sent '
+                          '"$http_referer" "$http_user_agent" '
+                          '$request_time $upstream_connect_time $upstream_header_time '
+                          '$upstream_response_time $upstream_addr $remote_port';
+access_log /var/log/nginx/access.log upstream_times;
+{{- end -}}
 {{- end -}}
 
 {{- define "kubeast.databaseUrl" -}}
@@ -229,6 +331,41 @@ resources:
 {{- end -}}
 
 {{/*
+A memory quantity as bytes ("2Gi", "512Mi", "1500M", "1073741824"), or -1 for a form it does not read.
+*/}}
+{{- define "kubeast.memoryBytes" -}}
+{{- $q := toString . | trim -}}
+{{- $num := regexFind "^[0-9]+(\\.[0-9]+)?" $q -}}
+{{- $unit := trimPrefix $num $q -}}
+{{- $mult := dict "" 1.0 "k" 1000.0 "M" 1000000.0 "G" 1000000000.0 "T" 1000000000000.0 "Ki" 1024.0 "Mi" 1048576.0 "Gi" 1073741824.0 "Ti" 1099511627776.0 -}}
+{{- if and $num (hasKey $mult $unit) -}}{{ mulf (float64 $num) (index $mult $unit) }}{{- else -}}-1{{- end -}}
+{{- end -}}
+
+{{/*
+ai-service's resources: resources.aiService, and while the Claude subscription provider is on a memory limit of at
+least ai.providers.claudeCode.memoryLimit, since each Claude Code run is a process of its own in the container. A limit
+already larger stays, no limit stays none, and memoryLimit "" turns the rule off.
+*/}}
+{{- define "kubeast.aiServiceResources" -}}
+{{- $r := deepCopy (.Values.resources.aiService | default dict) -}}
+{{- $cc := .Values.ai.providers.claudeCode -}}
+{{- $floor := toString (dig "memoryLimit" "2Gi" $cc) -}}
+{{- $limits := get $r "limits" | default dict -}}
+{{- $have := toString (get $limits "memory" | default "") -}}
+{{- if and $cc.enabled $floor $have -}}
+{{- $haveBytes := include "kubeast.memoryBytes" $have | float64 -}}
+{{- if and (ge $haveBytes 0.0) (gt (include "kubeast.memoryBytes" $floor | float64) $haveBytes) -}}
+{{- $_ := set $limits "memory" $floor -}}
+{{- $_ := set $r "limits" $limits -}}
+{{- end -}}
+{{- end -}}
+{{- if $r }}
+resources:
+  {{- toYaml $r | nindent 2 }}
+{{- end }}
+{{- end -}}
+
+{{/*
 startupProbe of a service that opens its port only after waiting for the
 database at boot; liveness and readiness start once it passes. 180 s covers the
 longest wait (auth-service and session-service: 60 s for the database, at most
@@ -265,8 +402,15 @@ lifecycle:
 {{- end -}}
 {{- end -}}
 
+{{/* A grace period: the preStop wait, what the process waits for after SIGTERM — a drain's wait and close wait (.drain)
+     and the 25 s its shutdown takes (k8s-service: the node drains' marking 3 s, the server 12 s, the recorder 10 s) — and
+     5 s to spare. services/k8s-service-go/cmd/server shutdown_test holds the same sum. */}}
+{{- define "kubeast.graceSeconds" -}}
+{{- add .preStop (.drain | default 0) 25 5 -}}
+{{- end -}}
+
 {{- define "kubeast.terminationGrace" -}}
-terminationGracePeriodSeconds: {{ add 30 (include "kubeast.preStopSeconds" .) }}
+terminationGracePeriodSeconds: {{ include "kubeast.graceSeconds" (dict "preStop" (include "kubeast.preStopSeconds" .)) }}
 {{- end -}}
 
 {{/* A rollout starts one new pod and stops an old one only once the new one is ready, so the Service always has a ready pod (postgres and redis keep Recreate: two must not share their data). */}}
@@ -311,11 +455,15 @@ annotations:
 {{- range .Values.audit.sinks }}{{ if eq (toString .type) "file" }}true{{ end }}{{ end }}
 {{- end -}}
 
-{{/* k8s-service volumes for terminal session recording (spool, file store, store Secret). */}}
+{{/* k8s-service volumes for terminal session recording (spool, file store, store Secret): (dict "root" $ "spool" bool).
+     The spool is where the terminals open (SERVER_ROLE all or stream); k8s-service of role api only reads the store. */}}
 {{- define "kubeast.recordingVolumeMounts" -}}
+{{- with .root }}
 {{- if .Values.sessionRecording.enabled }}
+{{- if $.spool }}
 - name: recording-spool
   mountPath: /var/lib/kubeast-recordings
+{{- end }}
 {{- if eq (toString .Values.sessionRecording.storage) "file" }}
 - name: recording-store
   mountPath: /var/lib/kubeast-recordings-store
@@ -326,12 +474,16 @@ annotations:
   readOnly: true
 {{- end }}
 {{- end }}
+{{- end }}
 {{- end -}}
 
 {{- define "kubeast.recordingVolumes" -}}
+{{- with .root }}
 {{- if .Values.sessionRecording.enabled }}
+{{- if $.spool }}
 - name: recording-spool
   {{- toYaml (.Values.sessionRecording.spoolVolume | default (dict "emptyDir" (dict))) | nindent 2 }}
+{{- end }}
 {{- if eq (toString .Values.sessionRecording.storage) "file" }}
 - name: recording-store
   {{- toYaml .Values.sessionRecording.fileVolume | nindent 2 }}
@@ -341,6 +493,7 @@ annotations:
   secret:
     secretName: {{ .Values.sessionRecording.secret }}
     defaultMode: {{ include "kubeast.secretMode" . }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end -}}
@@ -359,3 +512,106 @@ true
 {{- end -}}
 {{- end }}
 
+
+{{/*
+The gateway's nginx.conf: files/nginx.conf as written, or with streams.enabled the terminals' and followed logs'
+locations (the ones holding exec/ws, logs/stream, logfiles/stream and debug-shell/ws, each with its 3600 s timeouts)
+sent to k8s-service-stream, plus a location for a node shell as API clients open it. The upstream is in
+conf.d/kubeast/streams.conf. tests/streams_test.yaml counts the locations that changed, so an edit of the file that
+this no longer matches fails there.
+*/}}
+{{- define "kubeast.gatewayNginxConf" -}}
+{{- $conf := .Files.Get "files/nginx.conf" -}}
+{{- if .Values.streams.enabled -}}
+{{- $conf = regexReplaceAll `(location ~ \^/api/v1/[^\n]*(?:\(exec/ws\|logs/stream\|logfiles/stream\)|debug-shell/ws)\$ \{\n(?:[ \t]*rewrite [^\n]*\n)?[ \t]*proxy_pass http://)k8s-service;` $conf "${1}k8s-service-stream;" -}}
+{{- $nodeShell := `        # A node shell as API clients open it (streams.enabled): to the stream server, kept open while quiet.
+        location ~ ^/api/v1/nodes/[^/]+/debug-shell/ws$ {
+            proxy_pass http://k8s-service-stream;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            proxy_cache_bypass $http_upgrade;
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+        }
+
+` -}}
+{{- $conf = replace "        location /api/v1/nodes {\n" (print $nodeShell "        location /api/v1/nodes {\n") $conf -}}
+{{- end -}}
+{{- $conf -}}
+{{- end -}}
+
+{{/*
+The services that run more than one pod when asked, as a JSON map of their values key to their Deployment's name:
+replicas.<key> and autoscaling.<key> (templates/hpa.yaml, templates/checks/replicas.yaml).
+*/}}
+{{- define "kubeast.scaledServices" -}}
+{{- $s := dict "authService" "auth-service" "k8sService" "k8s-service" "sessionService" "session-service" "frontend" "frontend" "gateway" "gateway" -}}
+{{- if .Values.ai.enabled -}}
+{{- $_ := set $s "aiService" "ai-service" -}}
+{{- $_ := set $s "toolServer" "tool-server" -}}
+{{- end -}}
+{{- toJson $s -}}
+{{- end -}}
+
+{{/*
+A Deployment's replicas: replicas.<key>, left out while autoscaling.<key>.enabled gives the count to its HPA.
+  {{ include "kubeast.replicas" (dict "root" $ "key" "k8sService") }}
+*/}}
+{{- define "kubeast.replicas" -}}
+{{- $hpa := index (.root.Values.autoscaling | default dict) .key | default dict -}}
+{{- if not $hpa.enabled -}}
+replicas: {{ index .root.Values.replicas .key }}
+{{- end -}}
+{{- end -}}
+
+{{/* "true" for a whole number: an integer from --set, or a number with no fraction from a values file. */}}
+{{- define "kubeast.wholeNumber" -}}
+{{- if or (kindIs "int" .) (kindIs "int64" .) (and (kindIs "float64" .) (eq (float64 .) (float64 (int .)))) -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+The most database connections the pods can hold at once: for each service its pool (postgresql.pool.<key>.maxConns)
+times its pods while a rollout runs — replicas.<key>, or autoscaling.<key>.maxReplicas while its HPA is on, plus a
+quarter of that rounded up (Kubernetes' default maxSurge; the Deployments set no strategy) — then the migration pool
+(4, dbsession.MigrationPoolMaxConns) and 10 kept for psql and PostgreSQL's 3 superuser slots. Each k8s-service pod
+adds one: the health status lock (internal/pglock) holds a connection of its own outside the pool. ai-service and the
+ModelConfig controller (one pod, two while it rolls) count with ai.enabled. With streams.enabled (read with dig, so
+values without streams render), k8s-service-stream runs the k8s-service image with its pool: streams.replicas pods
+plus one while it rolls (its strategy's maxSurge 1). templates/checks/db-connections.yaml, NOTES.txt.
+*/}}
+{{- define "kubeast.dbConnections" -}}
+{{- $services := list "authService" "sessionService" "k8sService" -}}
+{{- if .Values.ai.enabled -}}
+{{- $services = append $services "aiService" -}}
+{{- end -}}
+{{- $pool := .Values.postgresql.pool | default dict -}}
+{{- $total := 14 -}}
+{{- range $key := $services -}}
+{{- $pods := int (index $.Values.replicas $key) -}}
+{{- $hpa := index ($.Values.autoscaling | default dict) $key | default dict -}}
+{{- if dig "enabled" false $hpa -}}
+{{- $pods = int (dig "maxReplicas" $pods $hpa) -}}
+{{- end -}}
+{{- $pods = add $pods (div (add $pods 3) 4) -}}
+{{- $perPod := int (dig $key "maxConns" 0 $pool) -}}
+{{- if eq $key "k8sService" -}}
+{{- $perPod = add $perPod 1 -}}
+{{- end -}}
+{{- $total = add $total (mul $pods $perPod) -}}
+{{- end -}}
+{{- if .Values.ai.enabled -}}
+{{- $total = add $total (mul 2 (int (dig "modelConfigController" "maxConns" 0 $pool))) -}}
+{{- end -}}
+{{- $streams := .Values.streams | default dict -}}
+{{- if dig "enabled" false $streams -}}
+{{- $total = add $total (mul (add (int (dig "replicas" 1 $streams)) 1) (int (dig "k8sService" "maxConns" 0 $pool))) -}}
+{{- end -}}
+{{- $total -}}
+{{- end -}}

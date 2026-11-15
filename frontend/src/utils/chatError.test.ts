@@ -19,9 +19,27 @@ describe('chatErrorText', () => {
     expect(chatErrorText(en_t, 'x', 'budgetUserDaily', { used: 250000, limit: 200000 })).toContain(`over the daily budget of ${(200000).toLocaleString()}`)
   })
 
+  it('says Claude Code is busy in the screen language', async () => {
+    const args = { provider: 'Claude subscription' }
+    expect(chatErrorText(await tFor('en'), 'x', 'claudeCodeBusy', args)).toBe('Claude Code is busy; ask again in a moment.')
+    expect(chatErrorText(await tFor('ko'), 'x', 'claudeCodeBusy', args)).toBe('Claude Code가 바쁩니다. 잠시 뒤 다시 질문하세요.')
+  })
+
+  it('has the waiting line of both chats in both languages', () => {
+    expect(en.aiChat.waitingTurn).toBe('Waiting for a turn — another question is running')
+    expect(ko.aiChat.waitingTurn).toBe('차례를 기다립니다 — 다른 질문을 처리하고 있습니다.')
+  })
+
   it('says a conversation that is gone in the screen language', async () => {
     expect(chatErrorText(await tFor('ko'), 'Session not found', 'sessionNotFound')).toBe('이 대화는 더 이상 없습니다. 새 대화를 시작하세요.')
     expect(chatErrorText(await tFor('en'), 'Session not found', 'sessionNotFound')).toBe('This conversation no longer exists. Start a new one.')
+  })
+
+  it('says a stream that could not start in the screen language', async () => {
+    expect(chatErrorText(await tFor('ko'), 'HTTP 500: the answer stream could not start', 'streamStartFailed', { status: 500 }))
+      .toBe('답변 스트림을 시작하지 못했습니다. 잠시 뒤 다시 시도하세요.')
+    expect(chatErrorText(await tFor('en'), 'the answer stream could not start', 'streamStartFailed'))
+      .toBe('The answer stream could not start. Try again in a moment.')
   })
 
   it('names the provider of a failed model call in the screen language, the same wording on every provider', async () => {

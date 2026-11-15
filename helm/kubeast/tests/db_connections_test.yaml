@@ -1,0 +1,118 @@
+suite: database connections — the pods' pools against the chart's PostgreSQL max_connections
+templates:
+  - checks/db-connections.yaml
+tests:
+  - it: renders nothing on the defaults (one pod each, 154 connections at most, max_connections 300)
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: fits three pods of each service in the default 300 (286 with a rollout's extra pod)
+    set:
+      replicas.authService: 3
+      replicas.sessionService: 3
+      replicas.k8sService: 3
+      replicas.aiService: 3
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: stops ten auth-service pods, 13 of them in a rollout at 20 connections each
+    set:
+      replicas.authService: 10
+    asserts:
+      - failedTemplate:
+          errorPattern: can hold up to 374 database connections
+
+  - it: takes them with max_connections raised to the sum
+    set:
+      replicas.authService: 10
+      postgresql.maxConnections: 374
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: counts autoscaling's maxReplicas while the HPA is on
+    set:
+      autoscaling.k8sService.enabled: true
+      autoscaling.k8sService.maxReplicas: 30
+    asserts:
+      - failedTemplate:
+          errorPattern: can hold up to 550 database connections
+
+  - it: counts replicas while the HPA is off
+    set:
+      autoscaling.k8sService.enabled: false
+      autoscaling.k8sService.maxReplicas: 30
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: leaves ai-service and the ModelConfig controller out with ai.enabled false
+    set:
+      ai.enabled: false
+      replicas.authService: 8
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: counts them with AI on
+    set:
+      replicas.authService: 8
+    asserts:
+      - failedTemplate:
+          errorPattern: can hold up to 314 database connections
+
+  - it: does not check an external database, whose limit it cannot read
+    set:
+      postgresql.enabled: false
+      replicas.authService: 10
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: refuses a pool size that is not a whole number of 1 or more
+    set:
+      postgresql.pool.authService.maxConns: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: postgresql.pool.authService.maxConns must be a whole number, 1 or more
+
+  - it: refuses a fractional pool size
+    set:
+      postgresql.pool.sessionService.maxConns: 2.5
+    asserts:
+      - failedTemplate:
+          errorPattern: postgresql.pool.sessionService.maxConns must be a whole number, 1 or more
+
+  - it: refuses a pool of a service that has none
+    set:
+      postgresql.pool.redis.maxConns: 3
+    asserts:
+      - failedTemplate:
+          errorPattern: "postgresql.pool.redis: no such service"
+
+  - it: refuses a max_connections below 20
+    set:
+      postgresql.maxConnections: 10
+    asserts:
+      - failedTemplate:
+          errorPattern: postgresql.maxConnections must be a whole number, 20 or more
+
+  - it: counts k8s-service-stream with streams.enabled, one pod and one while it rolls at k8s-service's pool
+    set:
+      streams.enabled: true
+      streams.replicas: 1
+      postgresql.maxConnections: 160
+    asserts:
+      - failedTemplate:
+          errorPattern: can hold up to 174 database connections
+
+  - it: leaves k8s-service-stream out with streams.enabled false
+    set:
+      streams.enabled: false
+      streams.replicas: 1
+      postgresql.maxConnections: 160
+    asserts:
+      - hasDocuments:
+          count: 0

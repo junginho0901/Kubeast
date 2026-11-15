@@ -1,5 +1,7 @@
 suite: pod shutdown — a pod behind a Service answers while its endpoint leaves, then stops
-# grace = podShutdown.preStopSeconds + the 30 s each shutdown fits in (tool-server 25 s, k8s-service 15 s + 10 s for the recorder).
+# grace = the preStop wait + the waits after SIGTERM + 5 s (kubeast.graceSeconds): 25 s for each shutdown (tool-server 25 s,
+# k8s-service 3 s for the node drains, 12 s for the server, 10 s for the recorder), and on a k8s-service that holds
+# terminals the drain's wait + its 5 s close wait.
 templates:
   - deployments.yaml
   - gateway.yaml
@@ -30,10 +32,41 @@ tests:
     documentSelector: { path: metadata.name, value: ai-service }
     asserts: *waits
 
-  - it: gives k8s-service the preStop wait inside its grace period
+  - it: gives k8s-service the preStop wait, then the drain of its terminals, inside its grace period
     template: deployments.yaml
     documentSelector: { path: metadata.name, value: k8s-service }
-    asserts: *waits
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 5 } }
+      # 5 preStop + 60 streams.drainSeconds + 5 close wait + 25 shutdown + 5
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 100
+
+  - it: gives each k8s-service role its own preStop wait and the waits it makes after SIGTERM, + 5 s
+    set:
+      streams.enabled: true
+    template: deployments.yaml
+    asserts:
+      # api: 5 podShutdown.preStopSeconds + 25 shutdown + 5
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle
+          value: { preStop: { sleep: { seconds: 5 } } }
+        documentSelector: { path: metadata.name, value: k8s-service }
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 35
+        documentSelector: { path: metadata.name, value: k8s-service }
+      # stream: 10 streams.preStopSeconds + 60 drain + 5 close wait + 25 shutdown + 5
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle
+          value: { preStop: { sleep: { seconds: 10 } } }
+        documentSelector: { path: metadata.name, value: k8s-service-stream }
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 105
+        documentSelector: { path: metadata.name, value: k8s-service-stream }
 
   - it: gives session-service the preStop wait inside its grace period
     template: deployments.yaml
@@ -55,15 +88,11 @@ tests:
     documentSelector: { path: kind, value: Deployment }
     asserts: *waits
 
-  - it: gives redis the preStop wait inside its grace period
-    template: redis.yaml
-    documentSelector: { path: kind, value: Deployment }
-    asserts: *waits
-
   - it: leaves the wait out where no Service sends traffic or no other pod takes it over
     templates:
       - deployments.yaml
       - postgres.yaml
+      - redis.yaml
     asserts:
       - notExists:
           path: spec.template.spec.containers[0].lifecycle
@@ -78,6 +107,19 @@ tests:
           value: Recreate
         documentSelector: { path: kind, value: Deployment }
         template: postgres.yaml
+      - notExists:
+          path: spec.template.spec.containers[0].lifecycle
+        documentSelector: { path: kind, value: Deployment }
+        template: redis.yaml
+      - notExists:
+          path: spec.template.spec.terminationGracePeriodSeconds
+        documentSelector: { path: kind, value: Deployment }
+        template: redis.yaml
+      - equal:
+          path: spec.strategy.type
+          value: Recreate
+        documentSelector: { path: kind, value: Deployment }
+        template: redis.yaml
 
   - it: waits podShutdown.preStopSeconds and keeps 30 s after it
     set:
@@ -96,19 +138,27 @@ tests:
     set:
       podShutdown.preStopSeconds: 0
     template: deployments.yaml
-    documentSelector: { path: metadata.name, value: k8s-service }
     asserts:
       - notExists:
           path: spec.template.spec.containers[0].lifecycle
+        documentSelector: { path: metadata.name, value: tool-server }
       - equal:
           path: spec.template.spec.terminationGracePeriodSeconds
           value: 30
+        documentSelector: { path: metadata.name, value: tool-server }
+      - notExists:
+          path: spec.template.spec.containers[0].lifecycle
+        documentSelector: { path: metadata.name, value: k8s-service }
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 95
+        documentSelector: { path: metadata.name, value: k8s-service }
 
-  # Helm renders same-depth templates in reverse name order and stops at the first that fails: redis.yaml.
+  # Helm renders same-depth templates in reverse name order and stops at the first that fails: gateway.yaml.
   - it: refuses a negative wait
     set:
       podShutdown.preStopSeconds: -1
-    template: redis.yaml
+    template: gateway.yaml
     asserts:
       - failedTemplate:
           errorPattern: "podShutdown.preStopSeconds must be a whole number of seconds, 0 or more"
@@ -116,7 +166,7 @@ tests:
   - it: refuses a wait that is not a whole number of seconds
     set:
       podShutdown.preStopSeconds: "5s"
-    template: redis.yaml
+    template: gateway.yaml
     asserts:
       - failedTemplate:
           errorPattern: "podShutdown.preStopSeconds must be a whole number of seconds, 0 or more"

@@ -11,9 +11,11 @@ import CustomDropdown from '@/components/CustomDropdown'
 import { api } from '@/services/api'
 import { getCurrentClusterID } from '@/services/clusterRef'
 import { liveSessionEndText } from '@/utils/liveSessionEnd'
+import { SERVER_SHUTDOWN_EVENT } from '@/utils/serverShutdown'
 import { followLogFile } from './logFileFollow'
 import { useCluster } from '@/contexts/ClusterContext'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
+import { useResultFor } from '@/hooks/useResultFor'
 
 const LINE_OPTIONS = [100, 500, 1000, 2000]
 // Following keeps this many lines on screen; older ones scroll away.
@@ -93,7 +95,8 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
   const [lines, setLines] = useState(lineOptions[0])
   const [follow, setFollow] = useState(false)
   const [streamText, setStreamText] = useState('')
-  const [streamNote, setStreamNote] = useState<string | null>(null)
+  // why following stopped, said only for the file it followed (another container, pod or file has no such line)
+  const [streamNote, setStreamNote] = useResultFor<string>([currentCluster, namespace, pod, container, path])
   const [reconnecting, setReconnecting] = useState(false)
   const outputRef = useRef<HTMLDivElement>(null)
 
@@ -167,11 +170,14 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
         }
       },
     })
+    // The server was replaced (the drain's event): the browser connects again after its retry time and goes on after
+    // the last line shown, as for any dropped connection.
+    es.addEventListener(SERVER_SHUTDOWN_EVENT, () => setReconnecting(true))
     return () => {
       es.close()
       setReconnecting(false)
     }
-  }, [follow, path, lines, container, namespace, pod, currentCluster, t])
+  }, [follow, path, lines, container, namespace, pod, currentCluster, t, setStreamNote])
 
   // The newest lines are at the end: keep them in view, as the container output does.
   useEffect(() => {

@@ -12,7 +12,9 @@ import { test, expect, type Page } from '@playwright/test'
 // what its ResourceQuota counts, and every drawer but the node's has its Events section — "None" when kubectl lists no
 // event about the object. A drawer is read until it matches or 20 s pass, then
 // every difference is listed (expect.soft), and a number on a drawer that nothing here compares fails too. A Service
-// drawer's backend pod usage names exactly the pods of its ready endpoints in its Prometheus reads (the answers stood in).
+// drawer's backend pod usage names exactly the pods of its ready endpoints in its Prometheus reads (the answers stood in),
+// and the server's sum of it is what the drawer's queries answer — on default, whose Prometheus scrapes cAdvisor, with a
+// Service of this run there (self has no Prometheus).
 
 const NS = 'e2e-numbers'
 const kindName = 'kubeast'
@@ -602,6 +604,38 @@ const TARGETS: Target[] = [
   },
 ]
 
+// the second kind cluster, registered as default, read when the backend-usage test runs (null without it)
+const B_CLUSTER = 'default'
+const B_LABEL = 'kubeast.io/e2e=backend-usage'
+const RUN = Date.now().toString(36)
+let kubectlB: ((args: string, input?: string) => string) | null | undefined
+function second(): ((args: string, input?: string) => string) | null {
+  if (kubectlB !== undefined) return kubectlB
+  try {
+    const kcB = execSync('kind get kubeconfig --name kubeast-b', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] })
+    const kcBPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-number-drawers-b-')), 'kubeconfig')
+    fs.writeFileSync(kcBPath, kcB, { mode: 0o600 })
+    kubectlB = (args, input) => execSync(`kubectl --kubeconfig ${kcBPath} ${args}`, { encoding: 'utf8', input, stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+  } catch {
+    kubectlB = null
+  }
+  return kubectlB
+}
+
+// The pods' matcher as the drawer writes it (serviceBackend.ts podNamesPattern) and the server for each of its matchers
+// (backendPodPatterns): each name escaped, a PromQL string doubling the backslash, and the names that share the part
+// before their last "-" (a workload's pods) written once with their ends grouped
+function drawerPodPattern(names: string[]): string {
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, (c) => `\\\\${c}`)
+  const groups = new Map<string, string[]>()
+  for (const name of [...new Set(names)].sort()) {
+    const cut = name.lastIndexOf('-')
+    const head = cut > 0 ? name.slice(0, cut + 1) : ''
+    groups.set(head, [...(groups.get(head) ?? []), cut > 0 ? name.slice(cut + 1) : name])
+  }
+  return [...groups].map(([head, tails]) => (tails.length === 1 ? esc(head + tails[0]) : `${esc(head)}(${tails.map(esc).join('|')})`)).join('|')
+}
+
 test.describe('number check — drawers', () => {
   test.beforeAll(async () => {
     test.setTimeout(200_000)
@@ -620,9 +654,14 @@ test.describe('number check — drawers', () => {
     }
   })
 
-  // the next spec (the list check) applies the same namespace: it must be gone, not terminating
+  // the next spec (the list check) applies the same namespace: it must be gone, not terminating; the backend-usage
+  // test's namespace on default goes too
   test.afterAll(() => {
-    kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)
+    try {
+      kubectlB?.(`delete namespace -l ${B_LABEL} --wait=false --ignore-not-found`)
+    } finally {
+      kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)
+    }
   })
 
   test('every drawer shows the numbers the cluster has', async ({ page }) => {
@@ -700,37 +739,106 @@ test.describe('number check — drawers', () => {
   })
 
   // The sums the drawer reads from the server for a Service past one query: the same three queries over the same pods,
-  // asked of Prometheus here directly at the same moment (a scrape between the two reads is asked again).
+  // asked of Prometheus here directly at the same moment (a scrape between the two reads is asked again). Self has no
+  // Prometheus, so this runs on default, whose Prometheus scrapes cAdvisor every 30 s (deploy/kind/second-cluster.yaml),
+  // in a namespace of this run: a Service in front of three ready pause pods and an nginx pod its readiness probe never
+  // passes — an endpoint, not a ready one, with series of its own that a wrong sum would add. The queries are written as
+  // the drawer writes them, which is the server's text to the byte, so k8s-service answers both from one read of
+  // Prometheus (its query cache, multicluster.queryCacheTTLSec): a new container's CPU rate moves with the moment it is
+  // read (Prometheus extrapolates to the end of the window), and two reads of it apart would not agree to the digit.
   test('the server sums the usage of the pods of a Service\'s ready endpoints as the drawer\'s queries do', async ({ page }) => {
-    test.setTimeout(120_000)
-    const features = await (await page.request.get('/api/v1/cluster/features?cluster=self')).json()
-    test.skip(features?.prometheus?.enabled === false || features?.prometheus?.namespaceLimited === true, 'the drawer reads no Prometheus on self')
-    const slices: Obj[] = JSON.parse(kubectl(`get endpointslices -n ${NS} -l kubernetes.io/service-name=num-web -o json`)).items
-    const want = [...new Set(slices.flatMap((s) => (s.endpoints ?? [])
-      .filter((e: Obj) => (e.conditions?.ready ?? true) && e.targetRef?.kind === 'Pod' && (e.targetRef.namespace ?? NS) === NS)
-      .map((e: Obj) => String(e.targetRef.name))))].sort()
-    expect(want.length, 'kubectl lists the ready pods of num-web').toBe(3)
-    const server = async () => (await page.request.get(`/api/v1/cluster/namespaces/${NS}/services/num-web/backend-usage`, { params: { cluster: 'self' } })).json()
+    test.setTimeout(600_000)
+    const k = second()
+    const clusters = await (await page.request.get('/api/v1/clusters')).json()
+    const registered = (Array.isArray(clusters) ? clusters : clusters.items ?? []).some((c: Obj) => c.id === B_CLUSTER)
+    test.skip(!k || !registered, `needs the second kind cluster (kubeast-b), registered as ${B_CLUSTER}`)
+    const kb = k!
+    const features = await (await page.request.get(`/api/v1/cluster/features?cluster=${B_CLUSTER}`)).json()
+    test.skip(features?.prometheus?.enabled === false || features?.prometheus?.namespaceLimited === true, `the drawer reads no Prometheus on ${B_CLUSTER}`)
+    const direct = async (query: string) => {
+      const body = await (await page.request.get('/api/v1/cluster/prometheus/query', { params: { query, cluster: B_CLUSTER } })).json()
+      return body?.results?.[0]?.value ?? null
+    }
+    const up = await (await page.request.get('/api/v1/cluster/prometheus/query', { params: { query: 'up', cluster: B_CLUSTER } })).json()
+    test.skip(up?.available !== true, `no Prometheus answers for ${B_CLUSTER} (deploy/kind/second-cluster.yaml)`)
+
+    const ns = `e2e-bkusage-${RUN}`
+    const [labelKey, labelValue] = B_LABEL.split('=')
+    kb(`delete namespace -l ${B_LABEL} --wait=false --ignore-not-found`)
+    kb('apply -f -', JSON.stringify({ apiVersion: 'v1', kind: 'Namespace', metadata: { name: ns, labels: { [labelKey]: labelValue } } }))
+    const app = { app: 'bku-web' }
+    kb('apply -f -', JSON.stringify({
+      apiVersion: 'v1', kind: 'List', items: [
+        {
+          apiVersion: 'apps/v1', kind: 'Deployment', metadata: { name: 'bku-web', namespace: ns },
+          spec: {
+            replicas: 3, selector: { matchLabels: { ...app, tier: 'ready' } },
+            template: {
+              metadata: { labels: { ...app, tier: 'ready' } },
+              spec: { terminationGracePeriodSeconds: 0, containers: [{ name: 'app', image: 'registry.k8s.io/pause:3.10', imagePullPolicy: 'IfNotPresent' }] },
+            },
+          },
+        },
+        // nginx (on the node for the Prometheus basic-auth front), so its working set is not a pause pod's; nothing
+        // listens on 8081
+        {
+          apiVersion: 'v1', kind: 'Pod', metadata: { name: 'bku-unready', namespace: ns, labels: { ...app, tier: 'unready' } },
+          spec: {
+            terminationGracePeriodSeconds: 0,
+            containers: [{ name: 'app', image: 'nginx:1.31-alpine', imagePullPolicy: 'IfNotPresent', readinessProbe: { tcpSocket: { port: 8081 }, periodSeconds: 2 } }],
+          },
+        },
+        { apiVersion: 'v1', kind: 'Service', metadata: { name: 'bku-web', namespace: ns }, spec: { selector: app, ports: [{ name: 'http', port: 80, targetPort: 80 }] } },
+      ],
+    }))
+    kb(`rollout status deployment/bku-web -n ${ns} --timeout=120s`)
+    kb(`wait --for=jsonpath='{.status.phase}'=Running pod/bku-unready -n ${ns} --timeout=60s`)
+    // the pods of bku-web's ready (or not ready) endpoints, as its EndpointSlices name them
+    const endpointPods = (ready: boolean) => {
+      const slices: Obj[] = JSON.parse(kb(`get endpointslices -n ${ns} -l kubernetes.io/service-name=bku-web -o json`)).items
+      return [...new Set(slices.flatMap((s) => (s.endpoints ?? [])
+        .filter((e: Obj) => (e.conditions?.ready ?? true) === ready && e.targetRef?.kind === 'Pod' && (e.targetRef.namespace ?? ns) === ns)
+        .map((e: Obj) => String(e.targetRef.name))))].sort()
+    }
+    await expect.poll(() => [endpointPods(true).length, endpointPods(false)], {
+      timeout: 30_000, message: 'the EndpointSlices of bku-web name three ready pods and bku-unready not ready',
+    }).toEqual([3, ['bku-unready']])
+    const want = endpointPods(true)
+    expect(want.length, 'kubectl lists the ready pods of bku-web').toBe(3)
+    // a rate needs two samples: every pod's container has two in Prometheus, the not-ready one's too
+    const every = `{namespace="${ns}",pod=~"${drawerPodPattern([...want, 'bku-unready'])}",container!="",container!="POD"}`
+    await expect.poll(async () => [
+      await direct(`count(count by(pod)(rate(container_cpu_usage_seconds_total${every}[5m])))`),
+      await direct(`count(count by(pod)(container_memory_working_set_bytes${every}))`),
+    ], {
+      timeout: 240_000, intervals: [5000],
+      message: `the Prometheus of ${B_CLUSTER} holds two cAdvisor samples of each of the four pods (scrape_interval 30s, deploy/kind/second-cluster.yaml)`,
+    }).toEqual([4, 4])
+
+    const server = async () => (await page.request.get(`/api/v1/cluster/namespaces/${ns}/services/bku-web/backend-usage`, { params: { cluster: B_CLUSTER } })).json()
     const first = await server()
-    test.skip(first.available !== true, 'no Prometheus answers for self')
+    expect(first.available, `the server reads the Prometheus of ${B_CLUSTER}`).toBe(true)
     expect(first.pods).toBe(want.length)
     expect(first.queries).toBe(3)
-    // a PromQL string doubles the backslash of an escaped dot
-    const pods = want.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, (c) => `\\\\${c}`)).join('|')
-    const sel = `{namespace="${NS}",pod=~"${pods}",container!="",container!="POD"}`
+    const pods = drawerPodPattern(want)
+    const sel = `{namespace="${ns}",pod=~"${pods}",container!="",container!="POD"}`
     const queries = [
       `sum(rate(container_cpu_usage_seconds_total${sel}[5m])) * 1000`,
       `sum(container_memory_working_set_bytes${sel})`,
       `count(count by(pod)(container_cpu_usage_seconds_total${sel}))`,
     ]
-    const direct = async (query: string) => {
-      const body = await (await page.request.get('/api/v1/cluster/prometheus/query', { params: { query, cluster: 'self' } })).json()
-      return body?.results?.[0]?.value ?? null
-    }
+    let got: unknown[] = []
     await expect.poll(async () => {
       const [sums, ...asked] = await Promise.all([server(), ...queries.map(direct)])
-      const got = [sums.cpu_millicores, sums.memory_bytes, sums.pod_count]
+      got = [sums.cpu_millicores, sums.memory_bytes, sums.pod_count]
       return JSON.stringify(got) === JSON.stringify(asked) ? 'same' : JSON.stringify({ server: got, prometheus: asked })
-    }, { timeout: 60_000, intervals: [2000] }).toBe('same')
+    }, { timeout: 90_000, intervals: [2000] }).toBe('same')
+    // what agreed is the usage of the three ready pods, not two empty answers, and it leaves out the not-ready pod's
+    // working set, which the four pods' sum holds
+    const [cpu, memory, count] = got as [number | null, number | null, number | null]
+    expect(count, 'the ready pods Prometheus has CPU series of').toBe(want.length)
+    expect(typeof cpu, 'the CPU rate of the ready pods').toBe('number')
+    expect(memory, 'the working set of the ready pods').toBeGreaterThan(0)
+    expect(await direct(`sum(container_memory_working_set_bytes${every})`), 'the working set of the four pods').toBeGreaterThan(memory!)
   })
 })

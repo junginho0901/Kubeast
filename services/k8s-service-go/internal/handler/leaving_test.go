@@ -56,10 +56,10 @@ func TestAServerLeavingTellsTheTerminalAndHangsUpTheShell(t *testing.T) {
 }
 
 func TestServerLeavingNoticeFollowsTheScreenLanguage(t *testing.T) {
-	if got := serverLeavingNotice("ko-KR"); !strings.Contains(got, "서버가 다시 시작되어") {
+	if got := serverRestartNotice("ko-KR"); !strings.Contains(got, "서버가 다시 시작되어") {
 		t.Fatalf("ko notice = %q", got)
 	}
-	if got := serverLeavingNotice(""); !strings.Contains(got, "Open the terminal again") {
+	if got := serverRestartNotice(""); !strings.Contains(got, "Open the terminal again") {
 		t.Fatalf("default notice = %q", got)
 	}
 }

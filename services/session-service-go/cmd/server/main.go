@@ -18,6 +18,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
+	"github.com/junginho0901/kubeast/services/pkg/dbsession"
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
 	"github.com/junginho0901/kubeast/services/pkg/memlimit"
@@ -61,13 +62,14 @@ func main() {
 
 	// Connect to database
 	dbURL := cfg.DatabaseURLForPgx()
-	poolCfg, err := pgxpool.ParseConfig(dbURL)
+	sessionLimits := dbsession.FromEnv()
+	poolCfg, err := newPoolConfig(dbURL, sessionLimits)
 	if err != nil {
 		slog.Error("failed to parse database URL", "error", err)
 		os.Exit(1)
 	}
-	poolCfg.MaxConns = 20
-	poolCfg.MinConns = 2
+	slog.Info("database session limits", "statement_timeout", sessionLimits.StatementTimeout,
+		"lock_timeout", sessionLimits.LockTimeout, "idle_in_transaction_session_timeout", sessionLimits.IdleInTransaction)
 
 	ctx := context.Background()
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)

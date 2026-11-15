@@ -59,6 +59,16 @@ func TestShutdownGivesTheRecorderItsOwnWaitAfterAStreamHeldTheServer(t *testing.
 	}
 }
 
+// The waits run one after another from SIGTERM, after the drain's wait; with 5 s for the process to exit they stay
+// inside what the chart's grace period leaves after the preStop wait and the drain's wait (kubeast.graceSeconds).
+func TestTheShutdownWaitsFitTheTimeBeforeSIGKILL(t *testing.T) {
+	const margin = 5 * time.Second
+	if sum := streamCloseWait + drainShutdownWait + serverShutdownWait + recorderShutdownWait; sum+margin > shutdownWaitsMax {
+		t.Fatalf("close wait %s + drain %s + server %s + recorder %s = %s, past %s less a %s margin",
+			streamCloseWait, drainShutdownWait, serverShutdownWait, recorderShutdownWait, sum, shutdownWaitsMax, margin)
+	}
+}
+
 // A socket held through probe.Hold hears the server leave, closes and is released; shutdown waits for that and no longer.
 func TestShutdownWaitsForTheHeldConnectionsToClose(t *testing.T) {
 	p := probe.New()

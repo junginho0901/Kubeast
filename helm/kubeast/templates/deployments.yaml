@@ -7,8 +7,8 @@ metadata:
     app: auth-service
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicas.authService }}
-  {{- include "kubeast.rollingUpdate" . | nindent 2 }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "authService") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
   selector:
     matchLabels:
       app: auth-service
@@ -148,8 +148,8 @@ metadata:
     app: ai-service
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicas.aiService }}
-  {{- include "kubeast.rollingUpdate" . | nindent 2 }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "aiService") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
   selector:
     matchLabels:
       app: ai-service
@@ -169,7 +169,7 @@ spec:
           image: "{{ .Values.images.aiService }}:{{ .Values.global.imageTag }}{{ if .Values.ai.providers.claudeCode.enabled }}{{ .Values.ai.providers.claudeCode.imageTagSuffix }}{{ end }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
-          {{- include "kubeast.resources" (dict "root" $ "key" "aiService") | nindent 10 }}
+          {{- include "kubeast.aiServiceResources" $ | nindent 10 }}
           ports:
             - containerPort: 8001
           envFrom:
@@ -210,93 +210,138 @@ spec:
         {{- include "kubeast.dbCAVolume" . | nindent 8 }}
         {{- include "kubeast.customCAVolume" . | nindent 8 }}
 {{- end }}
+{{- /* One Deployment (SERVER_ROLE all) or, with streams.enabled, two of the same image: k8s-service (api) and
+       k8s-service-stream (stream), which serves the terminals and followed logs and drains them when replaced. */}}
+{{- range $role := ternary (list "api" "stream") (list "all") $.Values.streams.enabled }}
+{{- $name := ternary "k8s-service-stream" "k8s-service" (eq $role "stream") }}
+{{- $api := ne $role "stream" }}
+{{- $streams := ne $role "api" }}
+{{- /* the store credentials and Hubble / NFM secrets only where their routes are served; the recording spool where terminals open */}}
+{{- $nfTLS := and $api $.Values.features.networkFlows.enabled $.Values.features.networkFlows.tls.existingSecret }}
+{{- $nfm := and $api $.Values.features.networkFlowMonitor.enabled $.Values.features.networkFlowMonitor.existingSecret }}
+{{- $recording := and $.Values.sessionRecording.enabled (or $streams $.Values.sessionRecording.secret) }}
 ---
-# --- K8s Service ---
+# --- K8s Service{{ if eq $role "stream" }} (terminals and followed logs){{ end }} ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: k8s-service
+  name: {{ $name }}
   labels:
-    app: k8s-service
-    {{- include "kubeast.labels" . | nindent 4 }}
+    app: {{ $name }}
+    {{- include "kubeast.labels" $ | nindent 4 }}
 spec:
-  {{- if gt (int .Values.replicas.k8sService) 1 }}
-  {{- fail "replicas.k8sService must be 1: node drain progress and per-cluster client caches live in process memory" }}
+  {{- if $api }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "k8sService") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
+  {{- else }}
+  {{- if gt (int $.Values.streams.replicas) 1 }}
+  {{- fail "streams.replicas must be 1: more than one stream server is not supported yet" }}
   {{- end }}
-  replicas: {{ .Values.replicas.k8sService }}
-  {{- include "kubeast.rollingUpdate" . | nindent 2 }}
+  {{- if eq (toString $.Values.sessionRecording.storage) "file" }}
+  {{- fail "sessionRecording.storage file and streams.enabled: the stream server writes the recordings and k8s-service reads them, and one file volume is mounted by one pod — use s3 or database" }}
+  {{- end }}
+  replicas: {{ $.Values.streams.replicas }}
+  # a new server is ready before the old one starts draining its terminals
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  {{- end }}
   selector:
     matchLabels:
-      app: k8s-service
+      app: {{ $name }}
   template:
     metadata:
       labels:
-        app: k8s-service
+        app: {{ $name }}
       annotations:
-        checksum/config: {{ include "kubeast.configChecksum" . }}
+        checksum/config: {{ include "kubeast.configChecksum" $ }}
     spec:
       serviceAccountName: k8s-service
-      {{- include "kubeast.terminationGrace" . | nindent 6 }}
+      # the preStop wait, {{ if $streams }}the drain (STREAM_DRAIN_SECONDS) and its close wait, {{ end }}the server's shutdown and the recorder's, 5 s to spare
+      terminationGracePeriodSeconds: {{ include "kubeast.graceSeconds" (dict "preStop" (ternary (include "kubeast.preStopSeconds" $) (int $.Values.streams.preStopSeconds) $api) "drain" (ternary (add (int $.Values.streams.drainSeconds) 5) 0 $streams)) }}
       # recording on: fsGroup lets uid 65532 read the 0440 recording Secret and write a spool/store PVC
-      {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532 "fsGroup" (ternary 65532 0 .Values.sessionRecording.enabled)) | nindent 6 }}
-      {{- include "kubeast.topologySpread" (dict "root" $ "app" "k8s-service") | nindent 6 }}
+      {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532 "fsGroup" (ternary 65532 0 $.Values.sessionRecording.enabled)) | nindent 6 }}
+      {{- include "kubeast.topologySpread" (dict "root" $ "app" $name) | nindent 6 }}
       containers:
-        - name: k8s-service
-          image: "{{ .Values.images.k8sService }}:{{ .Values.global.imageTag }}"
-          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
-          {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
-          {{- include "kubeast.resources" (dict "root" $ "key" "k8sService") | nindent 10 }}
+        - name: {{ $name }}
+          image: "{{ $.Values.images.k8sService }}:{{ $.Values.global.imageTag }}"
+          imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
+          {{- include "kubeast.containerSecurityContext" $ | nindent 10 }}
+          {{- include "kubeast.resources" (dict "root" $ "key" (ternary "k8sService" "k8sServiceStream" $api)) | nindent 10 }}
           ports:
             - containerPort: 8002
           envFrom:
             - configMapRef:
                 name: kubeast-config
             - secretRef:
-                name: {{ include "kubeast.secretsName" . }}
+                name: {{ include "kubeast.secretsName" $ }}
           # Multi-cluster load / failure-isolation knobs (step 15). All optional;
           # code defaults apply when unset. rateLimitQPS=0 disables rate limiting.
           env:
+            {{- if ne $role "all" }}
+            - name: SERVER_ROLE
+              value: {{ $role | quote }}
+            {{- end }}
+            {{- if $streams }}
+            - name: STREAM_DRAIN_SECONDS
+              value: {{ $.Values.streams.drainSeconds | int | quote }}
+            {{- end }}
             - name: MC_MAX_CLUSTERS
-              value: "{{ .Values.multicluster.maxClusters }}"
+              value: "{{ $.Values.multicluster.maxClusters }}"
             - name: MC_HEALTHCHECK_INTERVAL_SEC
-              value: "{{ .Values.multicluster.healthcheckIntervalSec }}"
+              value: "{{ $.Values.multicluster.healthcheckIntervalSec }}"
             - name: MC_QUERY_CACHE_TTL_SEC
-              value: "{{ .Values.multicluster.queryCacheTTLSec }}"
+              value: "{{ $.Values.multicluster.queryCacheTTLSec }}"
             - name: MC_RATE_LIMIT_QPS
-              value: "{{ .Values.multicluster.rateLimitQPS }}"
+              value: "{{ $.Values.multicluster.rateLimitQPS }}"
             - name: MC_RATE_LIMIT_BURST
-              value: "{{ .Values.multicluster.rateLimitBurst }}"
+              value: "{{ $.Values.multicluster.rateLimitBurst }}"
             - name: MC_BREAKER_CONSECUTIVE_FAILS
-              value: "{{ .Values.multicluster.breakerConsecutiveFails }}"
+              value: "{{ $.Values.multicluster.breakerConsecutiveFails }}"
             - name: MC_BREAKER_OPEN_SEC
-              value: "{{ .Values.multicluster.breakerOpenSec }}"
+              value: "{{ $.Values.multicluster.breakerOpenSec }}"
             - name: MC_CLIENT_QPS
-              value: "{{ .Values.multicluster.clientQPS | default 100 }}"
+              value: "{{ $.Values.multicluster.clientQPS | default 100 }}"
             - name: MC_CLIENT_BURST
-              value: "{{ .Values.multicluster.clientBurst | default 200 }}"
+              value: "{{ $.Values.multicluster.clientBurst | default 200 }}"
             - name: MC_REVIEW_QPS
-              value: "{{ .Values.multicluster.reviewQPS | default 0 }}"
+              value: "{{ $.Values.multicluster.reviewQPS | default 0 }}"
             - name: MC_REVIEW_BURST
-              value: "{{ .Values.multicluster.reviewBurst | default 0 }}"
+              value: "{{ $.Values.multicluster.reviewBurst | default 0 }}"
             - name: WS_MAX_SUBSCRIPTIONS
-              value: "{{ .Values.multicluster.wsMaxSubscriptions | default 2000 }}"
+              value: "{{ $.Values.multicluster.wsMaxSubscriptions | default 2000 }}"
             - name: WS_MAX_SUBSCRIPTIONS_PER_CONN
-              value: "{{ .Values.multicluster.wsMaxSubscriptionsPerConn | default 50 }}"
+              value: "{{ $.Values.multicluster.wsMaxSubscriptionsPerConn | default 50 }}"
             - name: WS_WATCH_START_CONCURRENCY
-              value: "{{ .Values.multicluster.wsWatchStartConcurrency | default 16 }}"
+              value: "{{ $.Values.multicluster.wsWatchStartConcurrency | default 16 }}"
             - name: BIG_READ_CONCURRENCY
-              value: "{{ .Values.multicluster.bigReadConcurrency | default 2 }}"
+              value: "{{ $.Values.multicluster.bigReadConcurrency | default 2 }}"
             - name: EVENT_LIST_CONCURRENCY
-              value: "{{ .Values.multicluster.eventListConcurrency | default 4 }}"
-            {{- with .Values.features.prometheus.auth.existingSecret }}
+              value: "{{ $.Values.multicluster.eventListConcurrency | default 4 }}"
+            {{- if include "kubeast.redisAcl" $ }}
+            # Redis user k8s-service (redis.acl) in every role; this REDIS_PASSWORD takes the place of kubeast-secrets' one. optional:
+            # a Secret of secrets.existingSecret without the key leaves the cache in memory instead of the pod not starting.
+            - name: REDIS_USERNAME
+              value: k8s-service
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kubeast.redisUsersSecretName" $ }}
+                  key: REDIS_K8S_SERVICE_PASSWORD
+                  optional: true
+            {{- end }}
+            {{- if $api }}
+            {{- with $.Values.features.prometheus.auth.existingSecret }}
             - name: PROMETHEUS_AUTH_HEADER
               valueFrom:
                 secretKeyRef:
                   name: {{ . | quote }}
                   key: authorization
             {{- end }}
-            {{- if .Values.features.logSearch.enabled }}
-            {{- with .Values.features.logSearch.auth.existingSecret }}
+            {{- if $.Values.features.logSearch.enabled }}
+            {{- with $.Values.features.logSearch.auth.existingSecret }}
             - name: LOG_SEARCH_AUTH_HEADER
               valueFrom:
                 secretKeyRef:
@@ -304,8 +349,8 @@ spec:
                   key: authorization
             {{- end }}
             {{- end }}
-            {{- if .Values.features.traceStore.enabled }}
-            {{- with .Values.features.traceStore.auth.existingSecret }}
+            {{- if $.Values.features.traceStore.enabled }}
+            {{- with $.Values.features.traceStore.auth.existingSecret }}
             - name: TRACE_STORE_AUTH_HEADER
               valueFrom:
                 secretKeyRef:
@@ -313,8 +358,8 @@ spec:
                   key: authorization
             {{- end }}
             {{- end }}
-            {{- if .Values.features.alertStore.enabled }}
-            {{- with .Values.features.alertStore.auth.existingSecret }}
+            {{- if $.Values.features.alertStore.enabled }}
+            {{- with $.Values.features.alertStore.auth.existingSecret }}
             - name: ALERT_STORE_AUTH_HEADER
               valueFrom:
                 secretKeyRef:
@@ -322,26 +367,29 @@ spec:
                   key: authorization
             {{- end }}
             {{- end }}
-            {{- with include "kubeast.awsEnv" . }}{{ nindent 12 . }}{{- end }}
-            {{- with include "kubeast.customCAGoEnv" . }}{{ . | trim | nindent 12 }}{{ end }}
-          {{- if or .Values.postgresql.sslRootCert.secretName .Values.sessionRecording.enabled .Values.customCAs (and .Values.features.networkFlows.enabled .Values.features.networkFlows.tls.existingSecret) (and .Values.features.networkFlowMonitor.enabled .Values.features.networkFlowMonitor.existingSecret) }}
+            {{- end }}
+            {{- with include "kubeast.awsEnv" $ }}{{ nindent 12 . }}{{- end }}
+            {{- with include "kubeast.customCAGoEnv" $ }}{{ . | trim | nindent 12 }}{{ end }}
+          {{- if or $.Values.postgresql.sslRootCert.secretName $recording $.Values.customCAs $nfTLS $nfm }}
           volumeMounts:
-            {{- with include "kubeast.dbCAVolumeMount" . }}{{ . | trim | nindent 12 }}{{ end }}
-            {{- with include "kubeast.recordingVolumeMounts" . }}{{ . | trim | nindent 12 }}{{ end }}
-            {{- with include "kubeast.customCAVolumeMount" . }}{{ . | trim | nindent 12 }}{{ end }}
-            {{- if and .Values.features.networkFlows.enabled .Values.features.networkFlows.tls.existingSecret }}
+            {{- with include "kubeast.dbCAVolumeMount" $ }}{{ . | trim | nindent 12 }}{{ end }}
+            {{- with include "kubeast.recordingVolumeMounts" (dict "root" $ "spool" $streams) }}{{ . | trim | nindent 12 }}{{ end }}
+            {{- with include "kubeast.customCAVolumeMount" $ }}{{ . | trim | nindent 12 }}{{ end }}
+            {{- if $nfTLS }}
             - name: network-flows-tls
               mountPath: /etc/kubeast/network-flows
               readOnly: true
             {{- end }}
-            {{- if and .Values.features.networkFlowMonitor.enabled .Values.features.networkFlowMonitor.existingSecret }}
+            {{- if $nfm }}
             - name: network-flow-monitor
               mountPath: /etc/kubeast/network-flow-monitor
               readOnly: true
             {{- end }}
           {{- end }}
           {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8002) | nindent 10 }}
-          {{- include "kubeast.preStop" . | nindent 10 }}
+          {{- if $api }}
+          {{- include "kubeast.preStop" $ | nindent 10 }}
+          {{- end }}
           readinessProbe:
             httpGet:
               path: /readyz
@@ -354,22 +402,31 @@ spec:
               port: 8002
             initialDelaySeconds: 10
             periodSeconds: 30
-      {{- if or .Values.postgresql.sslRootCert.secretName .Values.sessionRecording.enabled .Values.customCAs (and .Values.features.networkFlows.enabled .Values.features.networkFlows.tls.existingSecret) (and .Values.features.networkFlowMonitor.enabled .Values.features.networkFlowMonitor.existingSecret) }}
+          {{- if not $api }}
+          # out of the Service's endpoints before SIGTERM starts the drain (sleep action: the image has no shell);
+          # streams.preStopSeconds is this container's one preStop wait, podShutdown.preStopSeconds is the api server's
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: {{ $.Values.streams.preStopSeconds | int }}
+          {{- end }}
+      {{- if or $.Values.postgresql.sslRootCert.secretName $recording $.Values.customCAs $nfTLS $nfm }}
       volumes:
-        {{- with include "kubeast.dbCAVolume" . }}{{ . | trim | nindent 8 }}{{ end }}
-        {{- with include "kubeast.recordingVolumes" . }}{{ . | trim | nindent 8 }}{{ end }}
-        {{- with include "kubeast.customCAVolume" . }}{{ . | trim | nindent 8 }}{{ end }}
-        {{- if and .Values.features.networkFlows.enabled .Values.features.networkFlows.tls.existingSecret }}
+        {{- with include "kubeast.dbCAVolume" $ }}{{ . | trim | nindent 8 }}{{ end }}
+        {{- with include "kubeast.recordingVolumes" (dict "root" $ "spool" $streams) }}{{ . | trim | nindent 8 }}{{ end }}
+        {{- with include "kubeast.customCAVolume" $ }}{{ . | trim | nindent 8 }}{{ end }}
+        {{- if $nfTLS }}
         - name: network-flows-tls
           secret:
-            secretName: {{ .Values.features.networkFlows.tls.existingSecret | quote }}
+            secretName: {{ $.Values.features.networkFlows.tls.existingSecret | quote }}
         {{- end }}
-        {{- if and .Values.features.networkFlowMonitor.enabled .Values.features.networkFlowMonitor.existingSecret }}
+        {{- if $nfm }}
         - name: network-flow-monitor
           secret:
-            secretName: {{ .Values.features.networkFlowMonitor.existingSecret | quote }}
+            secretName: {{ $.Values.features.networkFlowMonitor.existingSecret | quote }}
         {{- end }}
       {{- end }}
+{{- end }}
 ---
 # --- Session Service ---
 apiVersion: apps/v1
@@ -380,8 +437,8 @@ metadata:
     app: session-service
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicas.sessionService }}
-  {{- include "kubeast.rollingUpdate" . | nindent 2 }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "sessionService") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
   selector:
     matchLabels:
       app: session-service
@@ -439,8 +496,8 @@ metadata:
     app: frontend
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicas.frontend }}
-  {{- include "kubeast.rollingUpdate" . | nindent 2 }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "frontend") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
   selector:
     matchLabels:
       app: frontend
@@ -491,11 +548,8 @@ metadata:
     app: tool-server
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  {{- if gt (int .Values.replicas.toolServer) 1 }}
-  {{- fail "replicas.toolServer must be 1: the per-cluster kubeconfig cache and its invalidation endpoint are per process" }}
-  {{- end }}
-  replicas: {{ .Values.replicas.toolServer }}
-  {{- include "kubeast.rollingUpdate" . | nindent 2 }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "toolServer") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
   selector:
     matchLabels:
       app: tool-server
@@ -539,6 +593,18 @@ spec:
               value: /tmp/kube-cache
             - name: TOOL_SERVER_KUBECTL_CONCURRENCY
               value: "{{ .Values.multicluster.toolServerKubectlConcurrency | default 3 }}"
+            {{- if include "kubeast.redisAcl" . }}
+            # Redis user tool-server (redis.acl): listens to the cluster change notices, reads no key. This REDIS_PASSWORD
+            # takes the place of kubeast-secrets' one; optional, as k8s-service's: without it the kubeconfigs still expire.
+            - name: REDIS_USERNAME
+              value: tool-server
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kubeast.redisUsersSecretName" . }}
+                  key: REDIS_TOOL_SERVER_PASSWORD
+                  optional: true
+            {{- end }}
             {{- with include "kubeast.awsEnv" . }}{{ nindent 12 . }}{{- end }}
             {{- with include "kubeast.customCAGoEnv" . }}{{ . | trim | nindent 12 }}{{ end }}
           volumeMounts:

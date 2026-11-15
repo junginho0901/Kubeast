@@ -162,7 +162,7 @@ export default function Layout() {
 
   const handleLogout = () => {
     // The session is the HttpOnly cookie; the logout response clears it.
-    void logoutSession()
+    void logoutSession({ asked: true })
     queryClient.clear()
     navigate('/login')
   }

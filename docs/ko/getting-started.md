@@ -67,6 +67,7 @@ cd Kubeast
   - kind 클러스터라면 `kind get kubeconfig --internal --name <클러스터>`를 붙여 넣고, 클러스터와 통신하는 컨테이너를 kind 네트워크에 연결하세요: `docker network connect kind <폴더>-auth-service-1`, `k8s-service`와 `tool-server`도 같은 방식입니다(`<폴더>`는 내려받은 폴더 이름, 곧 Compose 프로젝트 이름).
 - 밖으로 여는 포트는 Gateway 하나뿐입니다. 다른 서비스에는 `docker compose exec`로 들어가세요.
 - 스크립트를 다시 실행해도(예: `--port`를 바꿔서) `.env`의 비밀번호와 키는 그대로 둡니다. 데이터베이스 볼륨이 처음 만들 때의 비밀번호를 기억하기 때문입니다.
+- 컨테이너를 멈추거나 바꿀 때(`docker compose stop`, 새 이미지로 `up`) Kubeast 서비스마다 마무리할 시간 35초를 줍니다(`stop_grace_period`). 기본 `podShutdown.preStopSeconds: 5`일 때, 터미널 드레인을 하지 않는 파드에 차트가 주는 종료 유예와 같습니다. 여기서는 k8s-service도 드레인하지 않습니다. Compose는 컨테이너를 멈춘 뒤에 다음 컨테이너를 띄우므로 터미널을 넘겨받을 다른 서버가 없습니다. PostgreSQL과 Redis에는 Kubernetes 기본 종료 유예인 30초를 줍니다. Docker 기본값 10초면 서비스가 마무리 도중에 멈추고, PostgreSQL의 종료도 끊길 수 있습니다.
 
 `docker-compose`는 게시된 이미지를 pull합니다. 기본은 내려받은 태그의 버전이며 `KUBEAST_TAG`로 바꿀 수 있습니다. 소스에서 빌드하려면 다음을 실행하세요.
 
@@ -82,6 +83,47 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
 ```
 
 `--reset-then-reuse-values`는 직접 넣은 값을 그대로 두고 새 버전에 생긴 값을 더합니다. `--reuse-values`는 처음 설치한 버전의 기본값을 그대로 써서 뒤 버전에 생긴 값이 빠집니다. 차트는 그런 업그레이드를 이 안내와 함께 멈추고, 릴리스는 그대로 둡니다. `helm show values`에서 복사한 값 파일도 0.7.7부터는 같은 식으로 멈춥니다. 0.7.6 이하에서 복사한 파일은 `chartVersion`이 없지만, 0.7.8부터는 그 안의 `global.imageTag`(그 버전의 태그)로 멈춥니다. 직접 쓰는 값 파일에는 `chartVersion`과 `global.imageTag`를 넣지 마세요. 직접 빌드한 이미지의 `global.imageTag`처럼 릴리스의 `vX.Y.Z`가 아닌 태그는 멈추지 않습니다.
+
+0.7.8로 업그레이드하면 이름이 다른 역할이나 기본 역할과 같은 그룹이 되는 사용자 정의 역할(`Admin` 옆의 `ADMIN`)의 이름을 `<이름>-renamed-<id>`로 바꾸고 그 역할의 클러스터 부여를 지우며, 바뀐 것마다 감사 행을 남깁니다. 무엇이 바뀌는지와 그 뒤에 할 일은 [기능](features.md)의 "역할 이름"에 있습니다. 업그레이드 전에 Kubeast 데이터베이스에서 아래 쿼리(읽기만 함)를 실행하면 이름이 바뀔 역할, 각 역할이 그룹을 함께 쓰는 역할(`same_group_as`), 각 역할의 부여·임시 부여의 복원·대기 중이거나 승인된 접근 요청·계정 등급 수를 볼 수 있습니다. `same_group_as`가 `Pending`인 역할의 계정 등급은 기본 `Pending`으로 옮겨지고, 나머지는 바뀐 이름의 역할에 남습니다.
+
+```sql
+WITH b(name, slug) AS (VALUES ('Pending', 'pending'), ('Member', 'member'), ('Read', 'read'), ('Write', 'write'), ('Admin', 'admin')),
+s AS (
+  SELECT ro.id, ro.name, ro.is_system,
+         (SELECT coalesce(string_agg(CASE WHEN p BETWEEN 97 AND 122 OR p BETWEEN 48 AND 57 OR p IN (45, 46, 95) THEN c
+                                          WHEN p < 128 THEN '-'
+                                          WHEN p < 65536 THEN '~' || lpad(to_hex(p), 4, '0')
+                                          ELSE '~~' || lpad(to_hex(p), 6, '0') END, '' ORDER BY i), '')
+            FROM unnest(string_to_array(translate(btrim(ro.name, E' \t\n\u000b\f\r\u0085                 　'),
+                                                  E'ABCDEFGHIJKLMNOPQRSTUVWXYZİK', 'abcdefghijklmnopqrstuvwxyzik'), NULL))
+                 WITH ORDINALITY AS t(c, i),
+                 LATERAL ascii(c) AS p) AS slug
+    FROM roles ro),
+g AS (
+  SELECT s.*, b.name AS builtin_name, coalesce(s.name = b.name, false) AS is_builtin,
+         coalesce(b.name, first_value(s.name) OVER w) AS keeper, row_number() OVER w AS place
+    FROM s LEFT JOIN b ON b.slug = s.slug
+  WINDOW w AS (PARTITION BY s.slug ORDER BY coalesce(s.name = b.name, false) DESC, s.is_system DESC, s.id))
+SELECT g.id, g.name, g.keeper AS same_group_as,
+       (SELECT count(*) FROM user_cluster_roles u WHERE u.role_id = g.id) AS grants,
+       (SELECT count(*) FROM user_cluster_roles u WHERE u.restore_role_id = g.id) AS restores,
+       (SELECT count(*) FROM access_requests a WHERE a.role_id = g.id AND a.status IN ('pending', 'approved')) AS open_requests,
+       (SELECT count(*) FROM auth_users a WHERE a.role_id = g.id) AS account_levels
+  FROM g
+ WHERE NOT g.is_builtin AND (g.place > 1 OR g.builtin_name IS NOT NULL)
+ ORDER BY g.id;
+```
+
+마이그레이션이 도는 동안에도 이전 버전의 파드가 요청을 받습니다. 마이그레이션이 커밋하기 직전에 그 파드가 쓴 부여는 바뀐 이름의 역할에 남습니다. 업그레이드 직후, 누군가 바뀐 역할을 다시 부여하기 전에 아래 쿼리로 그런 부여를 볼 수 있습니다. 보통은 아무것도 나오지 않습니다. 나온 부여는 그 역할이 필요하지 않으면 Cluster access에서 지우세요.
+
+```sql
+SELECT g.user_id, g.cluster_id, r.name
+  FROM user_cluster_roles g JOIN roles r ON r.id = g.role_id
+ WHERE r.id IN (SELECT target_id::int FROM auth_audit_logs
+                 WHERE actor_user_id = 'system' AND actor_email = 'migration' AND action = 'admin.roles.update');
+```
+
+0.7.8부터 k8s-service와 tool-server는 자기 사용자로 차트의 Redis에 로그인합니다. `secrets.existingSecret`을 쓰면 그 Secret에 `REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD`, AI를 켰다면 `REDIS_TOOL_SERVER_PASSWORD`까지 넣고 `redis.acl.existingSecretHasKeys: true`로 둘 때까지 비밀번호 하나를 그대로 씁니다([Redis 사용자](configuration.md#redis-사용자)).
 
 0.7.8부터 `pdb.minAvailable`은 없습니다. 레플리카를 2개 이상으로 두거나 autoscaling의 `minReplicas`가 2 이상인 서비스만 PodDisruptionBudget을 받고, 노드 drain이 그중 한 번에 몇 개를 내보낼 수 있는지는 `pdb.maxUnavailable`(1)이 정합니다. 값에 `pdb.minAvailable`이 남아 있으면 업그레이드가 그렇다고 말하고 멈춥니다. 그 줄을 지우고, 다른 수를 원하면 `pdb.maxUnavailable`을 넣으세요.
 
@@ -99,6 +141,7 @@ helm uninstall kubeast -n kubeast      # K8s
 | PersistentVolumeClaim `kubeast-postgres-data` | 데이터베이스(`postgresql.persistence.resourcePolicy: keep`) |
 | Secret `kubeast-secrets` | 데이터베이스·관리자 비밀번호, values에 넣은 AI 키, 웹훅·내부 토큰 |
 | Secret `kubeast-auth-keys` | 로그인 토큰에 서명하는 키 |
+| Secret `kubeast-redis-users` | Redis 사용자의 비밀번호([Redis 사용자](configuration.md#redis-사용자)) |
 | 레이블 `app.kubernetes.io/managed-by=kubeast`가 붙은 Secret | Kubeast가 등록한 클러스터마다 쓴 것: 그 kubeconfig, 저장소의 인증 헤더 |
 | CustomResourceDefinition `modelconfigs.ai.kubeast.io` | 리소스로 쓰는 AI 모델의 종류와 그 리소스 |
 | Namespace `kubeast` | Helm은 네임스페이스를 지우지 않습니다 |
@@ -271,11 +314,19 @@ Claude Code가 부르는 도구는 채팅의 도구 코드가 이 프로세스 �
   - ai-service가 받은 환경변수는 경로, 프록시, CA 변수를 빼고 모두 빈 값으로 덮어쓰므로 모델 키나 DB 주소가 넘어가지 않습니다.
   - 토큰은 `CLAUDE_CODE_OAUTH_TOKEN`으로만 전달합니다.
 - **규칙**: `CLAUDE_CODE_OAUTH_TOKEN`은 claude-code만 쓸 수 있고, claude-code는 base_url과 다른 공급자의 키 변수를 받지 않습니다. 꺼진 설치에서 새 claude-code 설정을 저장하면 400으로 거절되고, 연결 테스트가 그 이유를 보여 줍니다.
-- **한도**: 동시에 실행되는 턴은 `maxConcurrent`까지입니다(기본 1, 나머지는 대기).
+- **한도**: 채팅 턴은 두 한도 아래의 칸을 이 순서로 잡아야 실행됩니다.
+  - `maxConcurrent`(기본 2)는 ai-service 서버 한 대의 한도입니다. 서버 한 대가 동시에 띄우는 Claude Code 프로세스 수이므로 메모리를 정합니다.
+  - `maxConcurrentTotal`(기본 0, `maxConcurrent`와 같은 수라는 뜻)은 설치 전체의 한도입니다. ai-service 복제본이 모두 DB로 함께 세므로, 서버가 몇 대든 구독 사용량이 이 수를 넘지 않습니다. 서버당 2 × 3대면 `maxConcurrentTotal`이 6 이상일 때만 6개가 동시에 실행됩니다.
+  - 칸을 잡은 서버가 멈추면(장애, 노드 유실) 그 칸은 60초 뒤 저절로 풀립니다.
+  - DB가 응답하지 않아 서버가 60초 동안 칸을 갱신하지 못하면 그 칸은 다음 차례가 가져가고, 이미 실행 중인 답변은 끝까지 갑니다. 그 답변이 끝날 때까지 설치 전체에서 `maxConcurrentTotal`보다 하나 더 실행될 수 있고, 서버마다의 `maxConcurrent`는 그대로 지켜집니다.
   - 한 턴은 `turnTimeoutSeconds`(기본 300초)와 `maxTurns`(기본 모델 호출 10회)를 넘지 않습니다.
-  - 턴마다 Claude Code 프로세스(최대 약 300 MB)가 하나씩 뜨므로, `maxConcurrent`를 올리면 `resources.aiService.limits.memory`도 함께 올리세요.
+  - 턴마다 Claude Code 프로세스(최대 약 300 MB)가 하나씩 뜹니다. 프로바이더가 켜져 있으면 ai-service의 메모리 한도는 `resources.aiService.limits.memory`(기본 1Gi)와 `ai.providers.claudeCode.memoryLimit`(기본 2Gi: 서비스 자체와 채팅 프로세스 2개, 조사 프로세스 1개) 중 큰 값입니다. `maxConcurrent`를 올리면 하나에 300 MB쯤씩 `memoryLimit`도 올리세요. `""`로 두면 `resources.aiService.limits.memory` 그대로 둡니다.
+- **기다림**: 칸이 비지 않은 턴은 `queueWaitSeconds`(기본 60초)까지 기다립니다.
+  - 그동안 AI Chat과 플로팅 채팅에 "차례를 기다립니다 — 다른 질문을 처리하고 있습니다."가 보입니다.
+  - 그 시간을 넘기면 답변이 "Claude Code가 바쁩니다. 잠시 뒤 다시 질문하세요."로 끝납니다.
+  - 중단을 누르면 바로 줄에서 빠지고 칸을 잡지 않습니다.
 - **알림 → AI 조사**도 이 프로바이더로 실행됩니다.
-  - 조사기는 한 번에 하나씩 돌며 채팅과 별도의 칸을 쓰므로, 조사 중에도 채팅이 기다리지 않습니다.
-  - 그래서 조사가 켜져 있으면 Claude Code 프로세스가 `maxConcurrent` + 1개까지 뜹니다.
+  - 조사기는 서버마다 한 번에 하나씩 돌며 채팅과 별도의 칸을 쓰고 `maxConcurrentTotal`에 세지 않으므로, 조사 중에도 채팅이 기다리지 않습니다. 서버가 3대면 조사가 3개까지 동시에 돕니다.
+  - 그래서 조사가 켜져 있으면 서버 한 대에 Claude Code 프로세스가 `maxConcurrent` + 1개까지 뜹니다.
   - 단계 상한은 API 키를 쓸 때와 같은 `maxSteps`이며, 마지막 단계에서는 도구 없이 보고서를 씁니다.
 - **안 되는 것**: 공급자 모델 목록은 없습니다. 내장 목록에서 고르거나 이름을 직접 입력하세요.

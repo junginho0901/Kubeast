@@ -29,9 +29,11 @@ import (
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/retention"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/security"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/signins"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
+	"github.com/junginho0901/kubeast/services/pkg/dbsession"
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
 	"github.com/junginho0901/kubeast/services/pkg/memlimit"
@@ -77,13 +79,14 @@ func main() {
 
 	// Database
 	dbURL := cfg.DatabaseURLForPgx()
-	poolCfg, err := pgxpool.ParseConfig(dbURL)
+	sessionLimits := dbsession.FromEnv()
+	poolCfg, err := newPoolConfig(dbURL, sessionLimits)
 	if err != nil {
 		slog.Error("failed to parse database URL", "error", err)
 		os.Exit(1)
 	}
-	poolCfg.MaxConns = 20
-	poolCfg.MinConns = 2
+	slog.Info("database session limits", "statement_timeout", sessionLimits.StatementTimeout,
+		"lock_timeout", sessionLimits.LockTimeout, "idle_in_transaction_session_timeout", sessionLimits.IdleInTransaction)
 
 	// SIGINT/SIGTERM cancels ctx: the background workers stop and give back their connections (the audit sinks
 	// hold one for their leader lock), so pool.Close returns instead of waiting out the pod's grace period.
@@ -108,7 +111,7 @@ func main() {
 	// MIGRATIONS_MODE=startup applies pending migrations here, and =job only
 	// waits for the version this build needs because a Job already ran them.
 	if cfg.MigrateOnly {
-		v, err := dbmigrate.Up(ctx, pool)
+		v, err := migrate(ctx, dbURL, sessionLimits)
 		if err != nil {
 			slog.Error("migrations failed", "error", err)
 			os.Exit(1)
@@ -122,7 +125,7 @@ func main() {
 			os.Exit(1)
 		}
 	} else {
-		v, err := dbmigrate.Up(ctx, pool)
+		v, err := migrate(ctx, dbURL, sessionLimits)
 		if err != nil {
 			slog.Error("migrations failed", "error", err)
 			os.Exit(1)
@@ -186,6 +189,8 @@ func main() {
 	if cfg.AccessReview.Enabled {
 		slog.Info("access review enabled", "dormant_days", cfg.AccessReview.DormantDays, "interval_days", cfg.AccessReview.IntervalDays)
 	}
+	// Signed-out sign-ins stop mattering once every token of them has expired.
+	go signins.Run(ctx, signins.Cleaner{Store: repo, Keep: signins.KeepFor(time.Duration(cfg.JWTExpiresMinutes) * time.Minute)}, 10*time.Minute)
 	// Dormant accounts: lock accounts with no activity for Days, every
 	// SweepHours. The handler's "sweep now" uses the same sweeper.
 	dormantSweeper := dormant.Sweeper{Store: repo, Audit: auditStore, Days: cfg.DormantAccounts.Days, ExemptAdmins: cfg.DormantAccounts.ExemptAdmins}
@@ -229,6 +234,7 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("system roles seeded")
+	warnRoleSettings(ctx, repo, cfg)
 
 	// Bootstrap default users
 	bootstrapUsers(ctx, repo, cfg)
@@ -249,8 +255,8 @@ func main() {
 	slog.Info("JWT keys loaded")
 
 	// Auth middleware (validates tokens using local public key, no JWKS fetch needed)
-	authMiddleware := security.AuthMiddleware(jwtMgr, repo.TokenVersionFor, cfg.AuthCookieName)
-	clusterListAuth := security.InvestigatorReadMiddleware(jwtMgr, repo.TokenVersionFor, cfg.AuthCookieName, cfg.AlertInvestigationEnabled)
+	authMiddleware := security.AuthMiddleware(jwtMgr, repo.SessionStateFor, cfg.AuthCookieName)
+	clusterListAuth := security.InvestigatorReadMiddleware(jwtMgr, repo.SessionStateFor, cfg.AuthCookieName, cfg.AlertInvestigationEnabled)
 
 	// Cluster registry: per-cluster kubeconfigs are stored as Secrets (k8s) or
 	// files (docker) and read at request time, so registering a cluster never

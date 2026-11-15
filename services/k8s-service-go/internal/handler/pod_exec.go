@@ -45,6 +45,9 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	if h.refuseTerminalWhileLeaving(w) {
+		return
+	}
 
 	namespace := chi.URLParam(r, "namespace")
 	podName := chi.URLParam(r, "name")
@@ -84,7 +87,12 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	ctx, release := h.holdTerminal(ctx)
-	defer endTerminal(rec, release)
+	ctx, leave := h.drain.HoldTerminal(ctx)
+	// The recording closes before the drain and the probe count the terminal as ended.
+	defer endTerminal(rec, func() {
+		leave()
+		release()
+	})
 
 	// The exec runs on the request's cluster as the signed-in user: the
 	// executor builds its transport from this config, identity included.

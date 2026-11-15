@@ -2,6 +2,8 @@
 {{- if .Values.pdb.enabled }}
 {{- $apps := list (list "auth-service" "authService") (list "k8s-service" "k8sService") (list "session-service" "sessionService") (list "frontend" "frontend") (list "gateway" "gateway") }}
 {{- if .Values.ai.enabled }}{{- $apps = concat $apps (list (list "ai-service" "aiService") (list "tool-server" "toolServer")) }}{{- end }}
+{{- /* the stream server's count is streams.replicas */}}
+{{- if .Values.streams.enabled }}{{- $apps = append $apps (list "k8s-service-stream" "") }}{{- end }}
 {{- $max := .Values.pdb.maxUnavailable }}
 {{- if or (not (or (kindIs "float64" $max) (kindIs "int64" $max) (kindIs "int" $max))) (lt (float64 $max) 1.0) (ne (float64 $max) (float64 (int $max))) }}
 {{- fail (printf "pdb.maxUnavailable must be a whole number of pods, 1 or more (0 would stop every node drain): %v" $max) }}
@@ -11,7 +13,8 @@
 {{- range $app := $apps }}
 {{- $name := index $app 0 }}
 {{- $key := index $app 1 }}
-{{- $least := int (index $.Values.replicas $key) }}
+{{- $least := int $.Values.streams.replicas }}
+{{- if $key }}{{- $least = int (index $.Values.replicas $key) }}{{- end }}
 {{- if dig $key "enabled" false $autoscaling }}
 {{- $least = int (dig $key "minReplicas" 1 $autoscaling) }}
 {{- end }}
