@@ -62,6 +62,8 @@ _REFUSED_IN_MESSAGE = re.compile(
     r"Unsupported (?:parameter|value): '(\w+)'|Unrecognized request argument supplied: (\w+)")
 # (provider, base URL, model) → the parameters it refused, so later calls leave them out.
 _refused: Dict[tuple, set] = {}
+# Function tools in Chat Completions only with reasoning_effort "none" (developers.openai.com/api/docs/guides/latest-model).
+_TOOLS_ONLY_WITHOUT_REASONING = re.compile(r"gpt-6-(?:sol|luna)(?:-\d{4}-\d{2}-\d{2})?")
 
 
 def _refused_param(err: Exception) -> Optional[str]:
@@ -108,9 +110,8 @@ class _CompletionsProxy:
                 kwargs["extra_body"] = extra_body
         if self._provider in _COMPLETION_TOKENS_PROVIDERS:
             _leave_out(kwargs, "max_tokens")
-            # GPT-6 Sol and Luna take function tools in Chat Completions only at "none"; a model without it refuses it.
             given = "reasoning_effort" in kwargs or "reasoning_effort" in (kwargs.get("extra_body") or {})
-            if kwargs.get("tools") and not given:
+            if kwargs.get("tools") and not given and _TOOLS_ONLY_WITHOUT_REASONING.fullmatch(str(kwargs.get("model") or "")):
                 kwargs["reasoning_effort"] = "none"
         key = (self._provider, self._base_url, kwargs.get("model"))
         for param in _refused.get(key, ()):
