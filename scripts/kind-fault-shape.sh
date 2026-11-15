@@ -105,17 +105,20 @@ ready_as_set() {
 
 # The documents that differ between the release's manifest and what this checkout's chart renders with the release's
 # values — a server dry run of the same upgrade, so lookup reads what is installed — Secrets left out of both. Empty
-# when the checkout's chart is the installed one; "not rendered" when the chart refuses the values.
+# when the checkout's chart is the installed one; "not rendered" when the chart refuses the values, with helm's error
+# lines (as a switch's dry run prints them).
 manifest_diff() {
-  local live rendered
-  live=$(mktemp); rendered=$(mktemp)
+  local live rendered err
+  live=$(mktemp); rendered=$(mktemp); err=$(mktemp)
   h get manifest "$RELEASE" > "$live"
-  if ! h upgrade "$RELEASE" "$CHART" --reset-then-reuse-values --dry-run=server --hide-secret 2>/dev/null \
+  if ! h upgrade "$RELEASE" "$CHART" --reset-then-reuse-values --dry-run=server --hide-secret 2>"$err" \
       | awk '/^MANIFEST:$/ {on=1; next} /^NOTES:$/ {on=0} on' > "$rendered" || [ ! -s "$rendered" ]; then
     echo "not rendered: $CHART refuses the release's values"
-    rm -f "$live" "$rendered"
+    { grep -E '^(Error|error)' "$err" || head -5 "$err"; } | sed 's/^/  helm: /'
+    rm -f "$live" "$rendered" "$err"
     return
   fi
+  rm -f "$err"
   python3 - "$live" "$rendered" <<'PY'
 import hashlib, re, sys
 def docs(path):
