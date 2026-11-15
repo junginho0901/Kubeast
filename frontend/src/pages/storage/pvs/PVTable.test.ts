@@ -1,13 +1,16 @@
 import { createElement, createRef } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { PVInfo } from '@/services/api'
 import en from '@/i18n/locales/en.json'
 import ko from '@/i18n/locales/ko.json'
 import { PVTable } from './PVTable'
 import { normalizeWatchPvObject } from './pvWatchNormalize'
 import { pvToRawJson } from './pvHelpers'
+
+// the shared notices tell the floating chat; this test reads the screen
+vi.mock('@/hooks/useAIContext', () => ({ useAIContext: () => {} }))
 
 const tr = (_key: string, fallback: string) => fallback
 const pv = (fields: Partial<PVInfo>): PVInfo => ({ name: 'vol', status: 'Failed', capacity: '1Gi', access_modes: ['ReadWriteOnce'], reclaim_policy: 'Retain', created_at: '', ...fields })
