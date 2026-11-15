@@ -1,9 +1,11 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Send, Square } from 'lucide-react'
 import { useAutoGrowTextarea, useChatTextareaKeys } from '@/hooks/useChatTextarea'
 
 interface InputAreaProps {
+  /** the textarea, which the panel focuses when it opens */
+  inputRef: RefObject<HTMLTextAreaElement | null>
   /** false (or a promise of it): the question was not sent, so it goes back in the box */
   onSubmit: (message: string) => unknown
   onStop: () => void
@@ -16,10 +18,9 @@ interface InputAreaProps {
 /**
  * 질문 입력 영역. 엔터로 전송, Shift+Enter 줄바꿈, 스트리밍 중엔 중지 버튼 표시.
  */
-export function InputArea({ onSubmit, onStop, isStreaming, disabled, onNewChat }: InputAreaProps) {
+export function InputArea({ inputRef: ref, onSubmit, onStop, isStreaming, disabled, onNewChat }: InputAreaProps) {
   const { t } = useTranslation()
   const [value, setValue] = useState('')
-  const ref = useRef<HTMLTextAreaElement>(null)
   useAutoGrowTextarea(ref, value, 128)
 
   const handleSubmit = (e?: FormEvent) => {

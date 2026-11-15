@@ -9,6 +9,7 @@ import { resetForbidden } from '@/services/forbiddenStore'
 import { resetListStatus } from '@/services/listStatusStore'
 import { resetWatchProblems } from '@/services/watchProblemStore'
 import { dropClusterQueries, isClusterScopedQueryKey } from '@/utils/clusterQueryScope'
+import { paramsForCluster } from '@/utils/clusterScopedParams'
 import { ClusterContext, STORAGE_KEY } from './ClusterContext'
 
 // Everything that holds what a cluster answered moves to `cluster`: the requests from here on, the cluster-scoped
@@ -98,13 +99,8 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(STORAGE_KEY, id)
     }
-    const next = new URLSearchParams(searchParams)
-    if (id) {
-      next.set('cluster', id)
-    } else {
-      next.delete('cluster')
-    }
-    setSearchParams(next, { replace: true })
+    // a node of the cluster before (Cluster View's ?node=) is not one of the new cluster's
+    setSearchParams(paramsForCluster(searchParams, id, currentCluster), { replace: true })
   }
 
   return (

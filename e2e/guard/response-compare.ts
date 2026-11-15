@@ -20,8 +20,8 @@ function nameOf(row: Record<string, unknown>): string | null {
     if (typeof v === 'string' || typeof v === 'number') return String(v)
   }
   const named = (at(row, 'metadata.name') ?? row.name) as unknown
-  // a group of a catalog (the permissions' categories) is named by its category
-  if (typeof named !== 'string') return typeof row.category === 'string' ? row.category : null
+  // a group of a catalog (the permissions' categories) is named by its category, a discovery list by its groupVersion
+  if (typeof named !== 'string') return typeof row.category === 'string' ? row.category : typeof row.groupVersion === 'string' ? row.groupVersion : null
   const ns = (at(row, 'metadata.namespace') ?? row.namespace) as unknown
   const kind = row.kind ?? row.type
   // a rollout's revisions share the owner's name
