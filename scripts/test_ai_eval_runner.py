@@ -39,7 +39,7 @@ PASSWORD = "admin-pass"
 
 def admin_session():
     """What the runner's main hands a case as the admin."""
-    return AI_EVAL.login("admin", PASSWORD)
+    return AI_EVAL.Api("admin", PASSWORD)
 
 
 def block_for(question: str) -> dict:

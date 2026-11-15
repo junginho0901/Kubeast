@@ -36,5 +36,9 @@
  ],
  "cooldown_seconds": 60,
  "hidden": true,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceSlow", "service": "api"},
+  "annotations": {"summary": "api responses reportedly got a little slower", "description": "Users report that api responses in shop-15 are a little slower than usual."}
+ }
 }

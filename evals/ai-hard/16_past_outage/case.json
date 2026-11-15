@@ -37,5 +37,10 @@
  ],
  "ask_after_seconds": [360, 4200],
  "cooldown_seconds": 30,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceRequestsFailing", "service": "storefront"},
+  "annotations": {"summary": "storefront cannot complete a payment", "description": "storefront's payment requests have been failing for the last few minutes."},
+  "after_seconds": 120
+ }
 }

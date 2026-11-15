@@ -13,23 +13,32 @@ baseline, the fault injected, each question form asked at each ask time (--repea
 the namespace deleted. Its answer ends in an rca block scored against truth.json, whose filled copy is written
 next to the report.
 
+With --alerts the alert investigation is measured instead of the chat (README "The alert path"): each hard case
+with an `alert` runs in stages as above, but instead of the questions its alert reaches Kubeast's webhook — through
+the second cluster's Prometheus and Alertmanager when the case's test rule is loaded there, or posted by the runner in
+Alertmanager's form — and the investigation's report is scored against truth.json.
+
   python3 scripts/ai-eval.py --out /tmp/eval            # every case
   python3 scripts/ai-eval.py --out /tmp/eval 03 07      # cases whose id starts with 03 or 07
   python3 scripts/ai-eval.py --out /tmp/eval --repeat 3 --keep
   python3 scripts/ai-eval.py --cases evals/ai-hard --list
   python3 scripts/ai-eval.py --cases evals/ai-hard --out /tmp/eval-hard 06
   python3 scripts/ai-eval.py --cases evals/ai-hard --out /tmp/eval-hard --namespace-suffix random
+  python3 scripts/ai-eval.py --cases evals/ai-hard --alerts --alert-source auto --out /tmp/eval-alerts
 
 A hard case asks as a member made for it with Read on its cluster only (--user admin asks as the admin), so the
 chat cannot read the investigations or the audit log of earlier runs. An HTTP error, a timeout or a dropped
-connection is kept as that answer's error (a 429 or 5xx is tried once more) and the case goes on; the report is
-written after each case. Credentials come from the cluster (the admin password in kubeast-secrets) and are never
-printed.
+connection is kept as that answer's error (a 429 or 5xx is tried once more) and the case goes on. Credentials come
+from the cluster (the admin password and the webhook token in kubeast-secrets) and are never printed. The runner
+signs in again before its token's lifetime is over and on a 401, so one call can run a whole round; the report files
+are written again after each case, so a run that stops keeps the cases it finished.
 """
 from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
+import hmac
 import http.client
 import json
 import os
@@ -55,6 +64,13 @@ CASES = ROOT / "evals" / "ai"
 BASE = os.environ.get("E2E_BASE_URL", "http://localhost:30080").rstrip("/")
 KIND = {"self": "kubeast", "default": "kubeast-b"}  # Kubeast cluster ID → kind cluster
 READ_PASSWORD = "Eval-read-pass1!"
+# A token is used until this long before its lifetime is over (or a quarter of a short lifetime), then renewed: longer
+# than a chat turn or an investigation step may run (the cases' timeout_seconds, at most 420, and a minute), since the
+# server hands the token on to the turn's tool calls.
+RENEW_MARGIN_SECONDS = 480
+POLL_SECONDS = 5
+ALERT_SOURCES = ("real", "auto", "synthetic")
+INVESTIGATION_END = ("done", "failed", "skipped")
 USERS = ("read", "admin")
 # One chat turn's request error: a 429 or 5xx is tried once more after this wait; this many in a row end the case.
 RETRY_STATUSES = (429, 500, 502, 503, 504)
@@ -89,9 +105,53 @@ def request(method: str, path: str, token: str = "", body: dict | None = None, t
     return urllib.request.urlopen(req, timeout=timeout)
 
 
-def login(email: str, password: str) -> str:
-    with request("POST", "/api/v1/auth/login", body={"email": email, "password": password}) as r:
-        return json.load(r)["access_token"]
+def token_lifetime(token: str) -> float | None:
+    """exp − iat of a JWT, both written by the server's clock; None when it holds no such numbers."""
+    try:
+        part = token.split(".")[1]
+        claims = json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
+        life = float(claims["exp"]) - float(claims["iat"])
+    except (IndexError, KeyError, TypeError, ValueError):
+        return None
+    return life if life > 0 else None
+
+
+class Api:
+    """Kubeast's API as one account. It signs in on first use and again before the token's lifetime is over — exp − iat
+    counted on this machine's monotonic clock from the sign-in, so no server time is compared with this machine's — and
+    once more on a 401, sending that call again once. The password stays in memory and is never printed."""
+
+    def __init__(self, email: str, password: str):
+        self.email, self._password = email, password
+        self._token, self._renew_at, self.logins = "", 0.0, 0
+
+    def login(self) -> str:
+        with request("POST", "/api/v1/auth/login", body={"email": self.email, "password": self._password}) as r:
+            self._token = json.load(r)["access_token"]
+        self.logins += 1
+        life = token_lifetime(self._token)
+        self._renew_at = float("inf") if life is None else time.monotonic() + life - min(RENEW_MARGIN_SECONDS, life / 4)
+        return self._token
+
+    def token(self) -> str:
+        if not self._token or time.monotonic() >= self._renew_at:
+            self.login()
+        return self._token
+
+    def open(self, method: str, path: str, body: dict | None = None, timeout: int = 60, cluster: str = ""):
+        try:
+            return request(method, path, self.token(), body, timeout, cluster)
+        except urllib.error.HTTPError as e:
+            if e.code != 401:
+                raise
+            e.close()
+        self.login()
+        return request(method, path, self._token, body, timeout, cluster)
+
+    def json(self, method: str, path: str, body: dict | None = None, timeout: int = 60):
+        with self.open(method, path, body, timeout) as r:
+            raw = r.read()
+        return json.loads(raw) if raw else None
 
 
 def admin_password(kc: str) -> str:
@@ -99,21 +159,21 @@ def admin_password(kc: str) -> str:
     return base64.b64decode(out).decode()
 
 
-def read_user(admin: str, cluster: str, stamp: str) -> tuple[str, str]:
-    """A member with Read on cluster (the whole cluster, no other); returns (user id, token). A member holds no
+def read_user(admin: Api, cluster: str, stamp: str) -> tuple[str, Api]:
+    """A member with Read on cluster (the whole cluster, no other); returns (user id, its API). A member holds no
     admin.audit.read or admin.investigations.read, so the chat's audit_search and investigations refuse it."""
-    with request("GET", "/api/v1/auth/roles", admin) as r:
-        roles = json.load(r)
+    roles = admin.json("GET", "/api/v1/auth/roles")
     roles = roles if isinstance(roles, list) else roles.get("roles") or roles.get("items") or []
     member = next(x for x in roles if x["name"].lower() == "member")
     email = f"ai-eval-read-{stamp}@kubeast.local"
-    with request("POST", "/api/v1/auth/admin/users", admin, {"name": "AI eval read", "email": email, "password": READ_PASSWORD, "role_id": member["id"]}) as r:
-        uid = json.load(r)["id"]
+    uid = admin.json("POST", "/api/v1/auth/admin/users", {"name": "AI eval read", "email": email, "password": READ_PASSWORD, "role_id": member["id"]})["id"]
     try:
-        request("PUT", f"/api/v1/auth/admin/users/{uid}/cluster-roles/{cluster}", admin, {"role": "Read"}).close()
-        return uid, login(email, READ_PASSWORD)
+        admin.open("PUT", f"/api/v1/auth/admin/users/{uid}/cluster-roles/{cluster}", {"role": "Read"}).close()
+        reader = Api(email, READ_PASSWORD)
+        reader.login()
+        return uid, reader
     except BaseException:
-        request("DELETE", f"/api/v1/auth/admin/users/{uid}", admin).close()
+        admin.open("DELETE", f"/api/v1/auth/admin/users/{uid}").close()
         raise
 
 
@@ -152,14 +212,14 @@ def add_event(out: dict, e: dict) -> None:
         out["model_calls"] += 1
 
 
-def ask(token: str, cluster: str, question: str, timeout: int) -> dict:
+def ask(api: Api, cluster: str, question: str, timeout: int) -> dict:
     """One chat turn: the model, the tool calls (name, args, error or not), the answer, the usage, the seconds."""
-    with request("POST", "/api/v1/sessions", token, {"title": "ai-eval"}, cluster=cluster) as r:
+    with api.open("POST", "/api/v1/sessions", {"title": "ai-eval"}, cluster=cluster) as r:
         sid = json.load(r)["id"]
     out = {"model": None, "provider": None, "calls": [], "answer": "", "error": None, "tokens": 0, "model_calls": 0}
     started = time.monotonic()
     try:
-        with request("POST", f"/api/v1/ai/sessions/{sid}/chat", token, {"message": question}, timeout=timeout, cluster=cluster) as r:
+        with api.open("POST", f"/api/v1/ai/sessions/{sid}/chat", {"message": question}, timeout=timeout, cluster=cluster) as r:
             for raw in r:
                 line = raw.decode("utf-8", "replace").strip()
                 if not line.startswith("data: ") or line == "data: [DONE]":
@@ -173,7 +233,7 @@ def ask(token: str, cluster: str, question: str, timeout: int) -> dict:
     finally:
         out["seconds"] = round(time.monotonic() - started, 1)
         try:
-            request("DELETE", f"/api/v1/sessions/{sid}", token).close()
+            api.open("DELETE", f"/api/v1/sessions/{sid}").close()
         except Exception:
             pass
     return out
@@ -186,14 +246,15 @@ def request_error(e: BaseException) -> tuple[str, int | None, bool]:
     return f"{type(e).__name__}: {e}", None, False
 
 
-def ask_kept(token: str, cluster: str, question: str, timeout: int) -> dict:
+def ask_kept(api: Api, cluster: str, question: str, timeout: int) -> dict:
     """ask(), with an HTTP error, a timeout or a dropped connection kept as the turn's error (request_error,
-    error_status) instead of ending the case; a 429 or 5xx is tried once more after RETRY_WAIT_SECONDS."""
+    error_status) instead of ending the case; a 429 or 5xx is tried once more after RETRY_WAIT_SECONDS. A 401 is
+    signed in again by the Api first."""
     tries: list[str] = []
     while True:
         started = time.monotonic()
         try:
-            run = ask(token, cluster, question, timeout)
+            run = ask(api, cluster, question, timeout)
         except REQUEST_ERRORS as e:
             why, status, again = request_error(e)
             if isinstance(e, urllib.error.HTTPError):
@@ -256,7 +317,7 @@ def user_of(case: dict, args) -> str:
     return (getattr(args, "user", None) or "read") if rca.is_staged(case) else "admin"
 
 
-def run_case(case_dir: Path, admin: str, kcs: dict, keep: bool, stamp: str) -> dict:
+def run_case(case_dir: Path, admin: Api, kcs: dict, keep: bool, stamp: str) -> dict:
     case = json.loads((case_dir / "case.json").read_text())
     cluster, ns = case["cluster"], case["namespace"]
     kc = kubeconfig(KIND[cluster], kcs)
@@ -264,14 +325,14 @@ def run_case(case_dir: Path, admin: str, kcs: dict, keep: bool, stamp: str) -> d
     if error:
         return {"id": case["id"], "setup_error": error}
     time.sleep(case.get("settle_seconds", 0))
-    uid, token = None, admin
+    uid, api = None, admin
     if case.get("user") == "read":
-        uid, token = read_user(admin, cluster, stamp)
+        uid, api = read_user(admin, cluster, stamp)
     try:
-        run = ask_kept(token, cluster, case["question"], case.get("timeout_seconds", 300))
+        run = ask_kept(api, cluster, case["question"], case.get("timeout_seconds", 300))
     finally:
         if uid:
-            request("DELETE", f"/api/v1/auth/admin/users/{uid}", admin).close()
+            admin.open("DELETE", f"/api/v1/auth/admin/users/{uid}").close()
         if not keep:
             sh(f"kubectl delete namespace {ns} --ignore-not-found --wait=false", kc)
             for step in case.get("cleanup_cmds", []):
@@ -300,59 +361,97 @@ def poll(cmd: str, kc: str, seconds: int, env: dict) -> tuple[bool, str]:
         time.sleep(5)
 
 
-def run_staged_case(case_dir: Path, case: dict, admin: str, kcs: dict, args, stamp: str, truth_dir: Path) -> list[dict]:
+def inject(case: dict, ns: str, kc: str, env: dict, marks: dict) -> str | None:
+    """inject_cmds (INJECT_TIME taken before the first) and inject_wait; the setup error that stops the case, if any."""
+    if not case.get("inject_cmds"):
+        return None
+    marks["INJECT_TIME"] = (now_utc(), time.monotonic())
+    failed = run_steps(case["inject_cmds"], ns, kc, env)
+    if failed:
+        return f"inject {failed}"
+    if case.get("inject_wait"):
+        seconds = case.get("inject_wait_seconds", rca.DEFAULT_INJECT_WAIT_SECONDS)
+        ok, last = poll(case["inject_wait"].replace("$NS", ns), kc, seconds, env)
+        if not ok:
+            return f"inject_wait still false after {seconds} s: {last[-400:]}"
+    return None
+
+
+def fault_start(case: dict, marks: dict) -> float:
+    return marks["SETUP_TIME" if case.get("fault_start_at") == "setup" or "INJECT_TIME" not in marks else "INJECT_TIME"][1]
+
+
+class Stage:
+    """A staged case's marks, errors and undo, and its end: the undo of an injection that ran (even in part) and was not
+    undone, the namespace and cleanup_cmds (both left with --keep), the filled truth copy, the marks on each result and
+    the cooldown."""
+
+    def __init__(self, case: dict, case_dir: Path, kc: str):
+        self.case, self.kc, self.ns = case, kc, case["namespace"]
+        self.env = {"CASE_DIR": str(case_dir)}
+        self.truth = json.loads((case_dir / "truth.json").read_text()) if (case_dir / "truth.json").exists() else None
+        self.marks: dict[str, tuple[str, float]] = {}
+        self.errors: list[str] = []
+        self.undone = False
+
+    def utc_marks(self) -> dict:
+        return {k: v[0] for k, v in self.marks.items()}
+
+    def filled_truth(self) -> dict:
+        return rca.fill_placeholders(self.truth, self.utc_marks())
+
+    def undo(self) -> None:
+        if self.case.get("undo_cmds"):
+            failed = run_steps(self.case["undo_cmds"], self.ns, self.kc, self.env)
+            if failed:
+                self.errors.append(f"undo {failed}")
+        self.marks["UNDO_TIME"] = (now_utc(), time.monotonic())
+        self.undone = True
+
+    def close(self, results: list[dict], keep: bool, interrupted: bool, truth_dir: Path) -> None:
+        if not keep:
+            if not self.undone and "INJECT_TIME" in self.marks and self.case.get("undo_cmds"):
+                self.undo()
+            sh(f"kubectl delete namespace {self.ns} --ignore-not-found --wait=false", self.kc)
+            for step in self.case.get("cleanup_cmds", []):
+                sh(step.replace("$NS", self.ns), self.kc, env=self.env)
+        if self.truth is not None and self.marks:
+            truth_dir.mkdir(parents=True, exist_ok=True)
+            (truth_dir / f"{self.case['id']}.json").write_text(json.dumps(self.filled_truth(), ensure_ascii=False, indent=1) + "\n")
+        for r in results:
+            r["stage"] = {**self.utc_marks(), "errors": self.errors}
+        if not keep and not interrupted:
+            time.sleep(self.case.get("cooldown_seconds", 0))
+
+
+def run_staged_case(case_dir: Path, case: dict, admin: Api, kcs: dict, args, stamp: str, truth_dir: Path) -> list[dict]:
     """A hard case in one setup: setup → baseline → inject → asks (each form × --repeat at each ask time, the undo of a
     fault_duration_seconds case among them) → undo → namespace and cleanup → cooldown. One result per ask."""
-    cluster, ns = case["cluster"], case["namespace"]
-    kc = kubeconfig(KIND[cluster], kcs)
-    env = {"CASE_DIR": str(case_dir)}
-    truth = json.loads((case_dir / "truth.json").read_text()) if (case_dir / "truth.json").exists() else None
-    marks: dict[str, tuple[str, float]] = {}
-    errors: list[str] = []
+    cluster = case["cluster"]
+    st = Stage(case, case_dir, kubeconfig(KIND[cluster], kcs))
     results: list[dict] = []
     user = user_of(case, args)
-    head = {"id": case["id"], "title": case.get("title", ""), "hidden": bool(case.get("hidden")), "namespace": ns, "user": user}
-    uid, undone, interrupted = None, False, False
-
-    def utc_marks() -> dict:
-        return {k: v[0] for k, v in marks.items()}
-
-    def undo() -> None:
-        nonlocal undone
-        if case.get("undo_cmds"):
-            failed = run_steps(case["undo_cmds"], ns, kc, env)
-            if failed:
-                errors.append(f"undo {failed}")
-        marks["UNDO_TIME"] = (now_utc(), time.monotonic())
-        undone = True
-
+    head = {"id": case["id"], "title": case.get("title", ""), "hidden": bool(case.get("hidden")), "namespace": st.ns, "user": user}
+    uid, interrupted = None, False
     try:
-        token = admin
+        api = admin
         if user == "read":
             try:
-                uid, token = read_user(admin, cluster, f"{stamp}-{case['id'][:2]}")
+                uid, api = read_user(admin, cluster, f"{stamp}-{case['id'][:2]}")
             except (*REQUEST_ERRORS, ValueError, KeyError, StopIteration) as e:
                 results.append({**head, "setup_error": f"read account: {request_error(e)[0]}"[:400]})
                 return results
-        error, setup_time = prepare(case, case_dir, kc)
+        error, setup_time = prepare(case, case_dir, st.kc)
         if error:
             results.append({**head, "setup_error": error})
             return results
-        marks["SETUP_TIME"] = setup_time
+        st.marks["SETUP_TIME"] = setup_time
         time.sleep(case.get("settle_seconds", 0) + case.get("baseline_seconds", 0))
-        if case.get("inject_cmds"):
-            marks["INJECT_TIME"] = (now_utc(), time.monotonic())
-            failed = run_steps(case["inject_cmds"], ns, kc, env)
-            if failed:
-                results.append({**head, "setup_error": f"inject {failed}"})
-                return results
-            if case.get("inject_wait"):
-                seconds = case.get("inject_wait_seconds", rca.DEFAULT_INJECT_WAIT_SECONDS)
-                ok, last = poll(case["inject_wait"].replace("$NS", ns), kc, seconds, env)
-                if not ok:
-                    results.append({**head, "setup_error": f"inject_wait still false after {seconds} s: {last[-400:]}"})
-                    return results
-        start = marks["SETUP_TIME" if case.get("fault_start_at") == "setup" or "INJECT_TIME" not in marks else "INJECT_TIME"][1]
+        error = inject(case, st.ns, st.kc, st.env, st.marks)
+        if error:
+            results.append({**head, "setup_error": error})
+            return results
+        start = fault_start(case, st.marks)
         in_a_row = 0
         for what, at in rca.schedule(case):
             if in_a_row >= MAX_ERRORS_IN_A_ROW:
@@ -363,18 +462,18 @@ def run_staged_case(case_dir: Path, case: dict, admin: str, kcs: dict, args, sta
                     print(f"{case['id']}: {what} at +{at} s, waiting {round(wait)} s", flush=True)
                 time.sleep(max(0.0, wait))
             if what == "undo":
-                undo()
+                st.undo()
                 continue
             due = time.monotonic() if at is None else start + at
             for form, question, n in rca.ask_order(case, args.repeat):
                 late = max(0.0, time.monotonic() - due)
                 asked_at = now_utc()
-                run = ask_kept(token, cluster, rca.question_with_format(question, case.get("answer_format")), case.get("timeout_seconds", 300))
+                run = ask_kept(api, cluster, rca.question_with_format(question, case.get("answer_format")), case.get("timeout_seconds", 300))
                 r = {**head, "form": form, "ask_after": at, "asked_at": asked_at, "late_seconds": round(late), "run": n,
                      **run, **grade(case, run)}
-                if case.get("answer_format") == "rca_block_v0" and truth is not None:
+                if case.get("answer_format") == "rca_block_v0" and st.truth is not None:
                     r["prose_pass"] = r["pass"]
-                    r["rca"] = rca.score_rca(run["answer"], rca.fill_placeholders(truth, utc_marks()), run["calls"])
+                    r["rca"] = rca.score_rca(run["answer"], st.filled_truth(), run["calls"])
                     r["pass"] = r["rca"]["pass"] and not run["error"]
                     r["pass_grounded"] = r["pass"] and r["rca"]["ungrounded"] == 0
                 results.append(r)
@@ -382,7 +481,7 @@ def run_staged_case(case_dir: Path, case: dict, admin: str, kcs: dict, args, sta
                 print(f"{case['id']} {form} {when(at)} run {n}: {shown} — {len(run['calls'])} calls, {run['seconds']} s", flush=True)
                 in_a_row = in_a_row + 1 if run.get("request_error") else 0
                 if in_a_row >= MAX_ERRORS_IN_A_ROW:
-                    errors.append(f"stopped after {in_a_row} request errors in a row")
+                    st.errors.append(f"stopped after {in_a_row} request errors in a row")
                     break
     except BaseException:
         interrupted = True
@@ -390,22 +489,280 @@ def run_staged_case(case_dir: Path, case: dict, admin: str, kcs: dict, args, sta
     finally:
         if uid:
             try:
-                request("DELETE", f"/api/v1/auth/admin/users/{uid}", admin).close()
+                admin.open("DELETE", f"/api/v1/auth/admin/users/{uid}").close()
             except REQUEST_ERRORS as e:
-                errors.append(f"read account not deleted: {request_error(e)[0]}"[:300])
-        if not args.keep:
-            if not undone and "INJECT_TIME" in marks and case.get("undo_cmds"):  # an injection that ran, even in part
-                undo()
-            sh(f"kubectl delete namespace {ns} --ignore-not-found --wait=false", kc)
-            for step in case.get("cleanup_cmds", []):
-                sh(step.replace("$NS", ns), kc, env=env)
-        if truth is not None and marks:
-            truth_dir.mkdir(parents=True, exist_ok=True)
-            (truth_dir / f"{case['id']}.json").write_text(json.dumps(rca.fill_placeholders(truth, utc_marks()), ensure_ascii=False, indent=1) + "\n")
-        for r in results:
-            r["stage"] = {**utc_marks(), "errors": errors}
-        if not args.keep and not interrupted:
-            time.sleep(case.get("cooldown_seconds", 0))
+                st.errors.append(f"read account not deleted: {request_error(e)[0]}"[:300])
+        st.close(results, args.keep, interrupted, truth_dir)
+    return results
+
+
+# --- the alert path (README "The alert path") ---
+
+def webhook_token(kcs: dict) -> str:
+    out = sh("kubectl -n kubeast get secret kubeast-secrets -o jsonpath='{.data.ALERT_WEBHOOK_TOKEN}'", kubeconfig("kubeast", kcs)).stdout
+    return base64.b64decode(out).decode()
+
+
+def cluster_webhook_token(token: str, cluster: str) -> str:
+    """One cluster's webhook token, as ai-service's webhook.cluster_token makes it; taken with
+    features.alertInvestigation.webhookClusterTokensOnly too."""
+    return hmac.new(token.encode(), cluster.encode(), hashlib.sha256).hexdigest()
+
+
+def post_alert(cluster: str, alert: dict, token: str) -> dict:
+    """One alert to the webhook in Alertmanager's message form (version 4); the webhook's counts."""
+    message = {"version": "4", "groupKey": '{}:{alertname="%s"}' % alert["labels"].get("alertname", ""), "status": alert["status"],
+               "receiver": "ai-eval", "externalURL": "http://ai-eval.invalid", "alerts": [alert]}
+    with request("POST", f"/api/v1/alerts/webhook?cluster={urllib.parse.quote(cluster)}", cluster_webhook_token(token, cluster), message) as r:
+        return json.load(r)
+
+
+def synthetic_alert(case: dict, fingerprint: str, starts_at: str) -> dict:
+    """The case's alert as Alertmanager would send it: alertname, the case's namespace and severity warning unless its
+    labels say otherwise, and a fingerprint of the run's own."""
+    alert = case["alert"]
+    labels = {"alertname": rca.alert_name(case), "namespace": case["namespace"], "severity": "warning", **(alert.get("labels") or {})}
+    return {"status": "firing", "labels": labels, "annotations": dict(alert.get("annotations") or {}), "startsAt": starts_at,
+            "endsAt": "0001-01-01T00:00:00Z", "generatorURL": "", "fingerprint": fingerprint}
+
+
+def replay_alert(item: dict, n: int) -> dict:
+    """The alert Alertmanager sent (its inbox window), again under a fingerprint of its own: the investigator reads the
+    same labels, annotations and start, and the webhook takes it as a new alert instead of a repeat."""
+    return {"status": "firing", "labels": dict(item["labels"]), "annotations": dict(item.get("annotations") or {}),
+            "startsAt": item["starts_at"], "endsAt": "0001-01-01T00:00:00Z", "generatorURL": item.get("generator_url") or "",
+            "fingerprint": f"{item['fingerprint'][:48]}-replay{n}"}
+
+
+def resolved(alert: dict) -> dict:
+    return {**alert, "status": "resolved", "endsAt": now_utc()}
+
+
+def rule_loaded(cluster: str, rule: str) -> bool:
+    """Whether the cluster's Prometheus (NodePort 30090 on its kind node, deploy/kind/second-cluster.yaml) has an alert
+    rule of that name loaded, that is whether the add-on that puts the test rules in is up."""
+    try:
+        r = subprocess.run(["docker", "exec", f"{KIND[cluster]}-control-plane", "curl", "-sf", "http://127.0.0.1:30090/api/v1/rules"],
+                           capture_output=True, text=True, timeout=30)
+        groups = json.loads(r.stdout)["data"]["groups"] if r.returncode == 0 else []
+    except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError):
+        return False
+    return any(x.get("name") == rule for g in groups for x in g.get("rules") or [])
+
+
+def pick_source(case: dict, choice: str) -> tuple[str | None, str | None]:
+    """real when the case's test rule is loaded; otherwise synthetic with --alert-source auto, or a problem."""
+    rule = (case.get("alert") or {}).get("rule")
+    if choice == "synthetic":
+        return "synthetic", None
+    if rule and rule_loaded(case["cluster"], rule):
+        return "real", None
+    if choice == "auto":
+        return "synthetic", None
+    why = f"test rule {rule} is not loaded in the Prometheus of cluster {case['cluster']}" if rule else "the case names no test rule (alert.rule)"
+    return None, f"{why}; --alert-source auto or synthetic posts the alert instead"
+
+
+def investigation_ids(admin: Api, cluster: str) -> set[str]:
+    return {s["id"] for s in investigations(admin, cluster)}
+
+
+def investigations(admin: Api, cluster: str) -> list[dict]:
+    """The cluster's newest 200 investigations, newest first (summaries: no audit row is written for them)."""
+    return admin.json("GET", f"/api/v1/ai/investigations?cluster={urllib.parse.quote(cluster)}&limit=200")["items"]
+
+
+def inbox_rows(admin: Api, cluster: str, alertname: str) -> list[dict]:
+    q = urllib.parse.urlencode({"cluster": cluster, "q": alertname, "limit": 200})
+    return [r for r in admin.json("GET", f"/api/v1/alerts/inbox?{q}")["items"] if r.get("alertname") == alertname]
+
+
+def same_time(a, b) -> bool:
+    if not a or not b:
+        return False
+    return a == b or (rca.parse_time(a) is not None and rca.parse_time(a) == rca.parse_time(b))
+
+
+def wait_until(t: float, tick) -> None:
+    while True:
+        tick()
+        left = t - time.monotonic()
+        if left <= 0:
+            return
+        time.sleep(min(POLL_SECONDS, left))
+
+
+def wait_for_fired(admin: Api, case: dict, before: set, deadline: float, tick) -> dict | None:
+    """The first new firing inbox row of the case's alert whose labels hold alert.match (the case's namespace unless it
+    says otherwise; "" for a label the alert does not carry), as Alertmanager delivered it; None at the deadline."""
+    alert = case["alert"]
+    name, match = rca.alert_name(case), {"namespace": case["namespace"], **(alert.get("match") or {})}
+    while True:
+        tick()
+        fresh = [r for r in inbox_rows(admin, case["cluster"], name) if r["id"] not in before and r.get("status") == "firing"
+                 and all(((r.get("labels") or {}).get(k) or "") == v for k, v in match.items())]
+        if fresh:
+            return min(fresh, key=lambda r: r.get("first_received_at") or "")
+        if time.monotonic() >= deadline:
+            return None
+        time.sleep(POLL_SECONDS)
+
+
+def find_investigation(admin: Api, cluster: str, row: dict, before: set, deadline: float, tick) -> tuple[dict | None, str]:
+    """The investigation of this firing, waited for until it is done, failed or skipped: a new one (not in before) of the
+    row's fingerprint that holds the row's starts_at — #909's match, by the alert's own start and never by comparing a
+    received time with it — else the newest new one of that fingerprint, given up for one that holds the starts_at when
+    one comes while it runs. Returns (its detail, "starts_at" or "fingerprint"), or (None, why)."""
+    details: dict[str, dict] = {}
+    chosen, how, looked = None, "", time.monotonic()
+    while True:
+        tick()
+        items = investigations(admin, cluster)
+        if how != "starts_at":
+            new = [s for s in items if s["id"] not in before and s.get("alertname") == row["alertname"]]
+            for s in new:
+                if s["id"] not in details:  # a detail read writes ai.investigation.view: once per investigation
+                    details[s["id"]] = admin.json("GET", f"/api/v1/ai/investigations/{s['id']}")
+            mine = [details[s["id"]] for s in new if details[s["id"]].get("fingerprint") == row["fingerprint"]]
+            exact = [d for d in mine if same_time(d.get("starts_at"), row.get("starts_at"))]
+            if exact or (mine and chosen is None):
+                chosen, how = (exact or mine)[0]["id"], "starts_at" if exact else "fingerprint"
+            elif chosen is None and time.monotonic() - looked > 30:
+                linked = (admin.json("GET", f"/api/v1/alerts/inbox/{row['id']}").get("investigation") or {}).get("id")
+                if linked in before:
+                    return None, f"folded into the earlier investigation {linked} (features.alertInvestigation.dedupeHours)"
+        if chosen is not None:
+            summary = next((s for s in items if s["id"] == chosen), None)
+            if summary is not None and summary.get("status") in INVESTIGATION_END:
+                return admin.json("GET", f"/api/v1/ai/investigations/{chosen}"), how
+        if time.monotonic() >= deadline:
+            if chosen is not None:
+                return None, f"investigation {chosen} not finished in time"
+            return None, ("no investigation of this alert was queued: features.alertInvestigation.automatic off, its severity "
+                          "not in severities, or a cap")
+        time.sleep(POLL_SECONDS)
+
+
+def alert_result(case: dict, truth: dict, detail: dict) -> dict:
+    """An investigation's detail as a result row: the report as the answer, its tool calls, tokens, model calls and run
+    time; the report's words scored with score_text (pass and score, the same with v0.7.9's switches on or off), its
+    rca block — the stored result, else a block still in the report — with score_block beside it, expect as prose_pass."""
+    calls = [{"tool": c.get("tool"), "args": c.get("args"), "failed": bool(c.get("error")),
+              **{k: c[k] for k in ("step", "error", "result_chars", "requests") if k in c}} for c in detail.get("tool_calls") or []]
+    status = detail.get("status")
+    error = None if status == "done" else f"investigation {status}: {detail.get('error') or detail.get('skip_reason') or ''}"[:300]
+    run = {"model": detail.get("model"), "provider": detail.get("provider"), "calls": calls, "answer": detail.get("report") or "",
+           "error": error, "tokens": detail.get("total_tokens") or 0, "model_calls": detail.get("iterations") or 0,
+           "seconds": round((detail.get("duration_ms") or 0) / 1000, 1)}
+    r = {"investigation_id": detail.get("id"), **run, **grade(case, run)}
+    r["prose_pass"] = r["pass"]
+    r["text"] = rca.score_text(run["answer"], truth)
+    block, block_status = rca.block_of_result(detail.get("result"))
+    if detail.get("result") is None:
+        block, block_status = rca.extract_block(run["answer"])
+    if detail.get("result") is not None or block_status != "missing":
+        r["rca"] = rca.score_block(block, block_status, truth, calls)
+    r["pass"] = r["text"]["pass"] and not error
+    r["score"] = r["text"]["score"] if not error else 0.0
+    if truth.get("control"):
+        r["wrong_suspect"] = not r["text"]["pass"]
+    return r
+
+
+def run_alert_case(case_dir: Path, case: dict, admin: Api, kcs: dict, args, stamp: str, truth_dir: Path, wtoken: str) -> list[dict]:
+    """A hard case whose alert starts an investigation: setup → baseline → inject → the alert (--repeat runs, one after
+    another) → each investigation waited for and scored → undo → namespace and cleanup → cooldown. Run 1 is the test
+    rule firing through Alertmanager when it is loaded (later runs replay that alert) or the case's alert posted at
+    alert.after_seconds; the alerts the runner posted are resolved at the end."""
+    cluster = case["cluster"]
+    alert, name = case["alert"], rca.alert_name(case)
+    head = {"id": case["id"], "title": case.get("title", ""), "hidden": bool(case.get("hidden")), "form": "alert"}
+    source, problem = pick_source(case, args.alert_source)
+    if problem:
+        return [{**head, "setup_error": problem}]
+    st = Stage(case, case_dir, kubeconfig(KIND[cluster], kcs))
+    results: list[dict] = []
+    sent: list[dict] = []
+    interrupted = False
+
+    def tick() -> None:  # a fault_duration_seconds undo, at its time, while the runner waits
+        duration = case.get("fault_duration_seconds")
+        if duration is not None and not st.undone and "INJECT_TIME" in st.marks and time.monotonic() >= st.marks["INJECT_TIME"][1] + duration:
+            st.undo()
+
+    try:
+        error, setup_time = prepare(case, case_dir, st.kc)
+        if error:
+            results.append({**head, "setup_error": error})
+            return results
+        st.marks["SETUP_TIME"] = setup_time
+        time.sleep(case.get("settle_seconds", 0) + case.get("baseline_seconds", 0))
+        before = investigation_ids(admin, cluster)
+        rows_before = {r["id"] for r in inbox_rows(admin, cluster, name)} if source == "real" else set()
+        error = inject(case, st.ns, st.kc, st.env, st.marks)
+        if error:
+            results.append({**head, "setup_error": error})
+            return results
+        start = fault_start(case, st.marks)
+        fired = None
+        for n in range(args.repeat):
+            run_head = {**head, "run": n + 1}
+            at = None
+            if source == "real" and n == 0:
+                src = "real"
+                row = wait_for_fired(admin, case, rows_before, start + alert.get("fire_wait_seconds", rca.DEFAULT_FIRE_WAIT_SECONDS), tick)
+                if row is None:
+                    results.append({**run_head, "alert_source": src, "setup_error": f"{name} did not fire within "
+                                    f"{alert.get('fire_wait_seconds', rca.DEFAULT_FIRE_WAIT_SECONDS)} s of the fault start"})
+                    break
+                fired = admin.json("GET", f"/api/v1/alerts/inbox/{row['id']}")
+                triggered, sent_at = time.monotonic(), now_utc()
+            else:
+                src = "synthetic" if source == "synthetic" else "replay"
+                if src == "synthetic":
+                    at = rca.alert_after(case)
+                    if n == 0:
+                        wait_until(start + at, tick)
+                triggered, sent_at = time.monotonic(), now_utc()
+                if src == "synthetic":
+                    # started a minute before it is sent, as Alertmanager's are, but not before the fault (#909's e2e)
+                    starts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - min(60.0, max(0.0, triggered - start))))
+                    message = synthetic_alert(case, f"ai-eval-{stamp}-{case['id'][:24]}-{n + 1}", starts)
+                else:
+                    message = replay_alert(fired, n + 1)
+                counts = post_alert(cluster, message, wtoken)
+                sent.append(message)
+                if counts.get("accepted") != 1:
+                    results.append({**run_head, "alert_source": src, "setup_error": f"the webhook queued no investigation: {counts}"})
+                    continue
+                row = next((r for r in inbox_rows(admin, cluster, message["labels"]["alertname"]) if r["fingerprint"] == message["fingerprint"]), None)
+                if row is None:
+                    results.append({**run_head, "alert_source": src, "setup_error": "the alert is not in the inbox after the webhook took it"})
+                    continue
+            deadline = time.monotonic() + alert.get("investigation_wait_seconds", rca.DEFAULT_INVESTIGATION_WAIT_SECONDS)
+            detail, how = find_investigation(admin, cluster, row, before, deadline, tick)
+            trigger = {"alert_source": src, "ask_after": at, "asked_at": sent_at, "alert_after_seconds": round(triggered - start),
+                       "late_seconds": 0 if at is None else round(max(0.0, triggered - (start + at))),
+                       "waited_seconds": round(time.monotonic() - triggered), "fingerprint": row["fingerprint"],
+                       "starts_at": row.get("starts_at"), "matched_by": how if detail else None}
+            if detail is None:
+                results.append({**run_head, **trigger, "setup_error": how})
+                continue
+            before.add(detail["id"])
+            r = {**run_head, **trigger, **alert_result(case, st.filled_truth(), detail)}
+            results.append(r)
+            shown = "done" if head["hidden"] else ("pass" if r["pass"] else "FAIL")
+            print(f"{case['id']} alert {src} run {n + 1}: {shown} — {len(r['calls'])} calls, {r['seconds']} s", flush=True)
+    except BaseException:
+        interrupted = True
+        raise
+    finally:
+        for message in sent:  # the inbox rows the runner made stop firing, so no later case reads them as open
+            try:
+                post_alert(cluster, resolved(message), wtoken)
+            except (urllib.error.URLError, OSError, ValueError) as e:
+                st.errors.append(f"resolve {message['fingerprint']}: {e}"[:300])
+        st.close(results, args.keep, interrupted, truth_dir)
     return results
 
 
@@ -414,10 +771,12 @@ def when(at) -> str:
 
 
 def table(results: list[dict], round_info: dict | None = None) -> str:
-    """The markdown table: one row per shown result, the rca scores, and the totals. A hidden case's results are left
-    out; their total is shown only when two or more hidden cases ran, so no line gives one hidden case's score."""
+    """The markdown table: one row per shown result, the rca and alert scores, and the totals. A hidden case's results
+    are left out; their total is shown only when two or more hidden cases ran, so no line gives one hidden case's
+    score."""
     rows = ["| 사례 | 정답 | 빠진 사실 | 안 부른 도구 | 도구 호출 (실패) | 토큰 | 초 |", "|---|---|---|---|---|---|---|"]
     shown = [r for r in results if not r.get("hidden")]
+    mark = {True: "✅", False: "❌", None: "-"}
     for r in shown:
         if "setup_error" in r:
             rows.append(f"| {r['id']} | 준비 실패 | {r['setup_error'][:80]} | | | | |")
@@ -432,12 +791,20 @@ def table(results: list[dict], round_info: dict | None = None) -> str:
     if scored:
         rows += ["", "| 사례 · 질문 · 시점 · 회차 | 원인 | 근거 있는 정답 | 점수 | 미끼 | 더 댄 것 | 시각 | 경로 | 근거 없음 | 묶음 |",
                  "|---|---|---|---|---|---|---|---|---|---|"]
-        mark = {True: "✅", False: "❌", None: "-"}
         for r in scored:
             s = r["rca"]
             rows.append(f"| {r['id']} · {r['form']} · {when(r['ask_after'])} · #{r['run']} | {mark[s['pass']]} | {mark[s.get('pass_grounded')]} | "
                         f"{s['score']:.2f} | {' · '.join(s['decoys_taken'])} | {' · '.join(s['extras'])} | {mark[s['time_ok']]} | "
                         f"{mark[s['path_ok']]} | {s['ungrounded']} | {s['block']} |")
+    alerts = [r for r in shown if "text" in r]
+    if alerts:
+        rows += ["", "| 사례 · 회차 | 알림 | 글 채점 | 원인 이름 · 종류 | 고장 없음 | 원인으로 댄 미끼 | rca | 조사 초 | 기다린 초 |",
+                 "|---|---|---|---|---|---|---|---|---|"]
+        for r in alerts:
+            t = r["text"]
+            causes = " · ".join(f"{mark[c['resource_found']]}{mark[c['kind_found']]}" for c in t["causes"])
+            rows.append(f"| {r['id']} · #{r['run']} | {r['alert_source']} | {mark[t['pass']]} | {causes} | {mark[t['no_fault']]} | "
+                        f"{' · '.join(t['decoys_named'])} | {mark[r['rca']['pass']] if 'rca' in r else '-'} | {r['seconds']} | {r['waited_seconds']} |")
     model = next((r["model"] for r in results if r.get("model")), "?")
     hidden = [r for r in results if r.get("hidden")]
     hidden_ids = {r["id"] for r in hidden}
@@ -497,7 +864,7 @@ def namespace_suffix(value: str | None) -> str | None:
     return value
 
 
-def round_counts(token: str, clusters: list[str]) -> dict:
+def round_counts(api: Api, clusters: list[str]) -> dict:
     """Per cluster, how many alert investigations and alert inbox rows there are (the lists' total, read as the admin),
     or why not ("HTTP 404" while features.alertInvestigation is off)."""
     out = {}
@@ -506,8 +873,7 @@ def round_counts(token: str, clusters: list[str]) -> dict:
         row = {}
         for key, path in (("investigations", f"/api/v1/ai/investigations?cluster={q}&limit=1"), ("inbox", f"/api/v1/alerts/inbox?cluster={q}&limit=1")):
             try:
-                with request("GET", path, token) as r:
-                    row[key] = (json.load(r) or {}).get("total")
+                row[key] = (api.json("GET", path) or {}).get("total")
             except urllib.error.HTTPError as e:
                 e.close()
                 row[key] = f"HTTP {e.code}"
@@ -515,6 +881,43 @@ def round_counts(token: str, clusters: list[str]) -> dict:
                 row[key] = type(e).__name__
         out[cluster] = row
     return out
+
+
+def load_cases(root: Path, only: list[str], hidden: bool, alerts: bool = False) -> tuple[list[tuple[Path, dict]], list[str]]:
+    """(case dir, case) for each case to run, and the problems that stop the run. With alerts, only the cases with an
+    alert."""
+    picked, problems = [], []
+    for d in sorted(d for d in root.iterdir() if (d / "case.json").exists() and (not only or any(d.name.startswith(p) for p in only))):
+        try:
+            case = json.loads((d / "case.json").read_text())
+        except ValueError as e:
+            problems.append(f"{d.name}: case.json: {e}")
+            continue
+        if (case.get("hidden") and not hidden) or (alerts and "alert" not in case):
+            continue
+        problems += [f"{d.name}: {p}" for p in rca.check_case(case, (d / "truth.json").exists())]
+        if "alert" in case and (d / "truth.json").exists():
+            try:
+                problems += [f"{d.name}: {p}" for p in rca.check_alert_scope(case, json.loads((d / "truth.json").read_text()))]
+            except ValueError as e:
+                problems.append(f"{d.name}: truth.json: {e}")
+        if case.get("cluster") not in KIND:
+            problems.append(f"{d.name}: cluster {case.get('cluster')!r} is not one of {sorted(KIND)}")
+        picked.append((d, case))
+    return picked, problems
+
+
+def listing(cases: list[tuple[Path, dict]]) -> str:
+    rows = ["| id | cluster | namespace | staged | forms | ask after (s) | alert | truth | hidden |", "|---|---|---|---|---|---|---|---|---|"]
+    for d, c in cases:
+        staged = rca.is_staged(c)
+        times = ", ".join("now" if t is None else str(t) for t in rca.ask_times(c)) if staged else ""
+        alert = ""
+        if isinstance(c.get("alert"), dict):
+            alert = f"{rca.alert_name(c)} +{rca.alert_after(c)}s" + (" (rule)" if c["alert"].get("rule") else "")
+        rows.append(f"| {c.get('id')} | {c.get('cluster')} | {c.get('namespace')} | {'yes' if staged else ''} | "
+                    f"{len(rca.question_forms(c))} | {times} | {alert} | {'yes' if (d / 'truth.json').exists() else ''} | {'yes' if c.get('hidden') else ''} |")
+    return "\n".join(rows)
 
 
 def save(out: Path, stamp: str, results: list[dict], previous: str | None, round_info: dict | None = None) -> str:
@@ -533,34 +936,6 @@ def save(out: Path, stamp: str, results: list[dict], previous: str | None, round
     return base
 
 
-def load_cases(root: Path, only: list[str], hidden: bool) -> tuple[list[tuple[Path, dict]], list[str]]:
-    """(case dir, case) for each case to run, and the problems that stop the run."""
-    picked, problems = [], []
-    for d in sorted(d for d in root.iterdir() if (d / "case.json").exists() and (not only or any(d.name.startswith(p) for p in only))):
-        try:
-            case = json.loads((d / "case.json").read_text())
-        except ValueError as e:
-            problems.append(f"{d.name}: case.json: {e}")
-            continue
-        if case.get("hidden") and not hidden:
-            continue
-        problems += [f"{d.name}: {p}" for p in rca.check_case(case, (d / "truth.json").exists())]
-        if case.get("cluster") not in KIND:
-            problems.append(f"{d.name}: cluster {case.get('cluster')!r} is not one of {sorted(KIND)}")
-        picked.append((d, case))
-    return picked, problems
-
-
-def listing(cases: list[tuple[Path, dict]]) -> str:
-    rows = ["| id | cluster | namespace | staged | forms | ask after (s) | truth | hidden |", "|---|---|---|---|---|---|---|---|"]
-    for d, c in cases:
-        staged = rca.is_staged(c)
-        times = ", ".join("now" if t is None else str(t) for t in rca.ask_times(c)) if staged else ""
-        rows.append(f"| {c.get('id')} | {c.get('cluster')} | {c.get('namespace')} | {'yes' if staged else ''} | "
-                    f"{len(rca.question_forms(c))} | {times} | {'yes' if (d / 'truth.json').exists() else ''} | {'yes' if c.get('hidden') else ''} |")
-    return "\n".join(rows)
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("only", nargs="*", help="case id prefixes")
@@ -570,6 +945,10 @@ def main() -> int:
     ap.add_argument("--keep", action="store_true", help="leave each case as it ends: namespace kept, no undo, no cleanup")
     ap.add_argument("--hidden", action="store_true", help="also run the cases marked hidden (the table shows only their total)")
     ap.add_argument("--list", action="store_true", help="list the cases that would run and check their fields; touches no cluster")
+    ap.add_argument("--alerts", action="store_true", help="the alert investigation instead of the chat: the cases with an alert")
+    ap.add_argument("--alert-source", choices=ALERT_SOURCES, default="auto",
+                    help="auto (default): the test rule firing through Alertmanager where it is loaded, else the runner posts the "
+                         "alert; real: only the rule, a case without a loaded rule not run; synthetic: always posted")
     ap.add_argument("--user", choices=USERS, default="read",
                     help="the account a hard case asks as: read (default), a member made for the case with Read on its cluster only, "
                          "which cannot read investigations or the audit log; admin, the signed-in admin. An easy case asks as its own user field")
@@ -581,7 +960,7 @@ def main() -> int:
         suffix = namespace_suffix(args.namespace_suffix)
     except ValueError as e:
         ap.error(str(e))
-    cases, problems = load_cases(Path(args.cases).resolve(), args.only, args.hidden)  # $CASE_DIR is absolute
+    cases, problems = load_cases(Path(args.cases).resolve(), args.only, args.hidden, args.alerts)  # $CASE_DIR is absolute
     if args.list:
         print(listing(cases))
         for p in problems:
@@ -594,15 +973,18 @@ def main() -> int:
             print(f"problem: {p}", file=sys.stderr)
         return 2
     kcs: dict = {}
-    admin = login(os.environ.get("E2E_USER_EMAIL", "admin"), os.environ.get("E2E_USER_PASSWORD") or admin_password(kubeconfig("kubeast", kcs)))
+    admin = Api(os.environ.get("E2E_USER_EMAIL", "admin"), os.environ.get("E2E_USER_PASSWORD") or admin_password(kubeconfig("kubeast", kcs)))
+    admin.login()
+    wtoken = webhook_token(kcs) if args.alerts else ""
     stamp = time.strftime("%Y%m%d%H%M%S", time.gmtime())
     out = Path(args.out)
     truth_dir = out / f"{stamp}-truth"
     copies = Path(tempfile.mkdtemp(prefix="ai-eval-cases-"))
     clusters = sorted({c["cluster"] for _, c in cases})
-    round_info = {"user": args.user, "namespace_suffix": suffix, "started": now_utc(), "before": round_counts(admin, clusters)}
+    round_info = {"user": "admin" if args.alerts else args.user, "namespace_suffix": suffix, "started": now_utc(),
+                  "before": round_counts(admin, clusters)}
     for cluster, counts in round_info["before"].items():
-        if args.user == "read" and isinstance(counts.get("inbox"), int) and counts["inbox"] > 0:
+        if round_info["user"] == "read" and isinstance(counts.get("inbox"), int) and counts["inbox"] > 0:
             print(f"note: the alert inbox of {cluster} holds {counts['inbox']} alerts; a Read account can open their investigation "
                   "reports (alerts_inbox) — evals/ai/README.md \"Hard cases\"", flush=True)
     results: list[dict] = []
@@ -610,7 +992,9 @@ def main() -> int:
     try:
         for case_dir, case in cases:
             case_dir, case = with_suffix(case_dir, case, suffix, copies)
-            if rca.is_staged(case):
+            if args.alerts:
+                results += run_alert_case(case_dir, case, admin, kcs, args, stamp, truth_dir, wtoken)
+            elif rca.is_staged(case):
                 results += run_staged_case(case_dir, case, admin, kcs, args, stamp, truth_dir)
             else:
                 for n in range(args.repeat):

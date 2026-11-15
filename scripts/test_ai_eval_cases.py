@@ -155,6 +155,40 @@ def test_hidden_results_show_only_a_total_of_two_or_more():
         assert not re.search(r"정답 \d|\d/[12]\b", text) and "08_kept" not in text and "15_other" not in text, text
 
 
+def test_every_alert_reads_the_namespace_of_its_causes():
+    for d, c in all_cases():
+        if "alert" in c:
+            assert rca.check_alert_scope(c, truth_of(d)) == [], d.name
+    case = {"id": "90", "namespace": "shop-90", "alert": {"labels": {"alertname": "X", "service": "uptime-check"}}}
+    truth = {"causes": [{"resource": "Deployment/otel-demo/valkey-cart", "kind": "dependency_down"}]}
+    problems = rca.check_alert_scope(case, truth)
+    assert len(problems) == 1 and "'shop-90'" in problems[0] and "Deployment/otel-demo/valkey-cart" in problems[0]
+    assert rca.check_alert_scope({**case, "alert": {"labels": {"alertname": "X", "namespace": "otel-demo"}}}, truth) == []
+    assert rca.check_alert_scope({**case, "alert": {"labels": {"alertname": "X", "namespace": ""}}}, truth) == []  # cluster-wide
+    on_node = {"causes": [{"resource": "Node/kubeast-b-control-plane", "kind": "node"}]}
+    assert rca.check_alert_scope(case, on_node) == []
+    ruled = {**case, "alert": {"labels": {"alertname": "X", "namespace": "otel-demo"}, "rule": "X"}}
+    assert len(rca.check_alert_scope(ruled, truth)) == 1  # the fired alert is picked in shop-90 (match's default)
+    assert rca.check_alert_scope({**ruled, "alert": {**ruled["alert"], "match": {"namespace": "otel-demo"}}}, truth) == []
+    root = Path(tempfile.mkdtemp(prefix="ai-eval-scope-"))
+    try:
+        src = next(d for d, c in all_cases() if "alert" in c and not truth_of(d)["control"])
+        shutil.copytree(src, root / src.name)
+        moved = json.loads((root / src.name / "case.json").read_text())
+        moved["alert"]["labels"]["namespace"] = "elsewhere"
+        (root / src.name / "case.json").write_text(json.dumps(moved))
+        out = subprocess.run([sys.executable, "-I", str(HERE / "ai-eval.py"), "--cases", str(root), "--list", "--hidden"],
+                             capture_output=True, text=True, timeout=60)
+        assert out.returncode == 1 and "alert labels namespace 'elsewhere'" in out.stdout, out.stdout
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_the_token_outlasts_a_turn_of_every_case():
+    for d, c in all_cases():
+        assert c.get("timeout_seconds", 300) + 60 <= AI_EVAL.RENEW_MARGIN_SECONDS == 480, d.name
+
+
 def test_every_hard_case_runs_under_a_namespace_suffix():
     root = Path(tempfile.mkdtemp(prefix="ai-eval-suffix-"))
     try:
@@ -318,6 +352,67 @@ def test_what_a_case_applies_holds_no_answer_word():
         for manifest in sorted([*d.glob("*.yaml"), *d.glob("*.sql")]):
             hit = ANSWER_WORDS.search(TOOL_API_GROUP.sub("", manifest.read_text()))
             assert not hit, f"{d.name}/{manifest.name}: {hit.group(0)!r}"
+
+
+# A phrase of each kind as an investigation report writes it (README "The alert path").
+KIND_PHRASES = {"crash": "keeps crashing", "oom": "is OOMKilled", "image": "has an ImagePullBackOff", "config_change": "has a changed setting",
+                "rollout": "was rolled out", "network_policy": "is blocked by a NetworkPolicy", "dns": "has wrong DNS settings",
+                "resource_limit": "is held back by its CPU limit", "quota": "is full: the ResourceQuota allows no more",
+                "node": "sits on a NotReady node", "dependency_down": "had no endpoints", "dependency_slow": "is slow", "storage": "has a full volume"}
+
+
+def likely(text: str) -> str:
+    return f"## Summary\nAn alert fired.\n\n## What I checked\n- the pods\n\n## Likely cause\n{text}\n\n## Next steps\n- none\n"
+
+
+def test_each_alert_is_what_monitoring_would_send_and_holds_no_answer_word():
+    alerting = {d.name for d, c in all_cases() if "alert" in c}
+    assert alerting, "no case has an alert"
+    for d, c in all_cases():
+        if "alert" not in c:
+            continue
+        alert = c["alert"]
+        labels = {"alertname": rca.alert_name(c), **alert.get("labels", {})}
+        assert METRIC_NAME.match(labels["alertname"]), d.name
+        assert all(LABEL_NAME.match(k) for k in labels), d.name
+        truth = truth_of(d)
+        got = labels.get("namespace", c["namespace"])
+        spaces = {rca.split_resource(tc["resource"])[1] for tc in truth["causes"]
+                  if rca.split_resource(tc["resource"])[0] not in rca.CLUSTER_SCOPED_KINDS}
+        if not truth["causes"]:
+            assert got == c["namespace"], d.name  # a control: the namespace the question is about
+        elif got:
+            assert spaces == {got}, (d.name, got, spaces)  # the investigator's token reads the causes' namespace
+        else:
+            assert len(spaces) != 1, (d.name, spaces)  # none, a cluster-wide token: causes of no namespace (03's node)
+        assert labels.get("severity", "warning") in ("critical", "warning"), d.name  # the investigator's default severities
+        assert alert.get("annotations", {}).get("summary"), d.name
+        words = " ".join([*labels.values(), *alert.get("annotations", {}).values()])
+        hit = ANSWER_WORDS.search(words)
+        assert not hit, f"{d.name}: the alert says {hit.group(0)!r}"
+        for tc in truth["causes"]:  # where the symptom shows, as the question says it; a cause the question names is that place
+            cause_name = tc["resource"].rsplit("/", 1)[-1].lower()
+            assert cause_name in c["question"].lower() or cause_name not in words.lower(), f"{d.name}: the alert names the cause"
+    shown = subprocess.run([sys.executable, "-I", str(HERE / "ai-eval.py"), "--cases", str(HARD), "--list", "--hidden", "--alerts"],
+                           capture_output=True, text=True, timeout=60)
+    assert shown.returncode == 0, shown.stdout + shown.stderr
+    listed = {line.split("|")[1].strip() for line in shown.stdout.splitlines()[2:] if line.startswith("|")}
+    assert listed == alerting
+
+
+def test_each_truth_scores_a_report_in_words():
+    for d, _ in all_cases():
+        filled = rca.fill_placeholders(truth_of(d), MARKS)
+        if filled["control"]:
+            assert rca.score_text(likely("No fault found; every call works as expected."), filled)["pass"], d.name
+            for x in filled["decoys"]:
+                s = rca.score_text(likely(f"{as_answered(x['resource'])} keeps crashing and is the cause."), filled)
+                assert not s["pass"], (d.name, x["resource"])
+            continue
+        right = " ".join(f"{as_answered(tc['resource'])} {KIND_PHRASES[tc['kind']]}." for tc in filled["causes"])
+        s = rca.score_text(likely(right), filled)
+        assert s["pass"] and s["section"] == "likely_cause", (d.name, s)
+        assert not rca.score_text(likely("No fault found; every call works as expected."), filled)["pass"], d.name
 
 
 # The rules file: rulefmt's fields (Prometheus refuses unknown ones), names, durations, and expressions whose
