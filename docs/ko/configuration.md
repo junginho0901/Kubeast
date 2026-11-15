@@ -199,7 +199,7 @@ redis:
     existingSecretHasKeys: false  # secrets.existingSecret을 쓸 때: 그 Secret에 사용자 비밀번호를 넣은 뒤 true
     existingSecret: ""            # 사용자 키만 든 Secret. 서비스마다 자기 키만 읽습니다
 networkPolicy:
-  enabled: true         # 기본 거부 + 서비스가 쓰는 흐름만 허용합니다. NetworkPolicy를 강제하지 않는 CNI(kindnet 등)에서는 영향이 없습니다
+  enabled: true         # 기본 거부 + 서비스가 쓰는 흐름만 허용합니다. NetworkPolicy를 강제하지 않는 CNI(Flannel 등)에서는 영향이 없습니다. kind의 kindnet은 kind 0.24부터 강제합니다
 
 # Gateway 노출 방식
 gateway:

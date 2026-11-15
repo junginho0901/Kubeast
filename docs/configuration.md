@@ -203,7 +203,7 @@ redis:
     existingSecretHasKeys: false  # with secrets.existingSecret: true once that Secret holds the users' passwords
     existingSecret: ""            # a Secret of the users' keys alone; each service then reads only its own key
 networkPolicy:
-  enabled: true         # default deny, plus only the flows the services use. Harmless on CNIs that do not enforce NetworkPolicy (kindnet, etc.)
+  enabled: true         # default deny, plus only the flows the services use. Harmless on CNIs that do not enforce NetworkPolicy (Flannel, etc.); kind's kindnet enforces it since kind 0.24
 
 # Gateway exposure
 gateway:
