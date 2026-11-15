@@ -70,6 +70,7 @@ auth:
   # 감사 로그는 access.request.* / access.grant.expire로 남습니다.
   # 클러스터 RBAC이 그 역할의 그룹을 바인딩한 클러스터에서만 효력이 있습니다.
   # viewer만 바인딩한 운영 클러스터에서는 승격돼도 403입니다.
+  # roles는 역할을 이름 그대로 적습니다. 기본 역할 이름을 대소문자만 달리 쓴 항목(WRITE)은 그 기본 역할을 뜻합니다.
   accessRequests:
     enabled: false
     maxHours: 8
@@ -138,6 +139,10 @@ replicas:
   gateway: 1
 pdb:
   enabled: false
+# 터미널과 실시간 로그를 따로 맡는 서버, 기본 꺼짐(docs/ko/operations.md "터미널과 실시간 로그를 따로 맡는 서버")
+streams:
+  enabled: false
+  drainSeconds: 60       # 터미널을 맡은 서버가 교체될 때 열린 터미널을 기다리는 시간(꺼져 있으면 k8s-service)
 topologySpread:
   enabled: true
 podShutdown:
@@ -182,6 +187,8 @@ gateway:
     nodePort: 30333
   trustedProxies: []      # 앞단 프록시(Ingress 컨트롤러, LB) CIDR — 감사 로그의 클라이언트 주소를 그 뒤에서 읽습니다
   allowedOrigins: []      # 게이트웨이 자기 호스트와 Ingress 호스트 외에 API·WebSocket을 열어 줄 브라우저 origin(없으면 같은 호스트만)
+  accessLog:
+    upstreamTimes: false  # true면 접근 로그 줄마다 요청 시간, 서비스 연결·헤더·응답 시간(초), 서비스 주소, 클라이언트 포트를 덧붙입니다
 
 # Ingress (선택)
 ingress:

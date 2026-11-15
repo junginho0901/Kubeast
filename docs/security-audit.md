@@ -181,7 +181,8 @@ An exec through an AI tool has no recording: it is one command and its result, n
   - `file`: a PVC.
 - **Interrupted sessions**: a session cut off for reasons on the k8s-service side stays as `interrupted`.
   - A graceful shutdown (rollout, drain) or a container restart uploads all the remaining output.
-  - If the pod disappears entirely, only the chunks uploaded before that remain.
+  - If the pod disappears entirely, only the chunks uploaded before that remain. Another k8s-service marks its recordings `interrupted` one to one and a half minutes after that pod last said it holds them.
+  - During a rollout the new pod starts while the old one still records; it leaves those recordings to the old pod.
   - The size in the list is the size kept (uploaded). The play button is disabled when no chunk was uploaded.
 - **When the terminal drops**: if the terminal goes away without `exit` because the browser tab was closed or the network dropped, k8s-service sends Ctrl-C and Ctrl-D to the shell to end it.
   - The container runtime does not clean up the processes of a disconnected exec.

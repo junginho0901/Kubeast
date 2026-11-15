@@ -34,14 +34,14 @@ func TestAuthMiddleware_TokenVersionRevokes(t *testing.T) {
 	perms := auth.PermissionMatrix{"*": {"*"}}
 	current := 3
 	revoked := map[string]bool{}
-	lookup := func(ctx context.Context, userID, apiKeyID string) (int, error) {
+	lookup := func(ctx context.Context, userID, apiKeyID string) (auth.SessionState, error) {
 		if userID != "u1" {
-			return 0, errors.New("no such user")
+			return auth.SessionState{}, errors.New("no such user")
 		}
 		if apiKeyID != "" && revoked[apiKeyID] {
-			return 0, errors.New("api key revoked")
+			return auth.SessionState{}, errors.New("api key revoked")
 		}
-		return current, nil
+		return auth.SessionState{Version: current}, nil
 	}
 	mw := AuthMiddleware(m, lookup, "kubeast.token")
 
