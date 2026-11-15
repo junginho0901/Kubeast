@@ -9,7 +9,7 @@
   {
    "resource": "Node/kubeast-b-control-plane",
    "kind": "node",
-   "accept_resources": ["^nodes?$", "control-plane", "monthly-report", "(^|/)reports(/|$)"],
+   "accept_resources": ["^nodes?$", "control-plane", "monthly-report", "^namespace/reports$", "(^|/)reports/"],
    "accept_kinds": ["resource_limit"]
   }
  ],

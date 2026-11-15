@@ -343,9 +343,9 @@ def test_no_test_file_names_a_hidden_cause():
 
 # The workload where the symptom shows, with the kind the pod list shows, is not the cause of these cases (README
 # "Hard cases"): it misses alone and costs nothing beside a right cause. WRONG_KIND: the cause under a kind of the
-# symptom. ALSO_RIGHT: other forms a NOTES.md takes.
+# symptom. ALSO_RIGHT: other forms a NOTES.md takes. Shown cases only: a hidden case's are read from its truth
+# (test_each_truths_other_forms_score_as_it_says), so no test file writes its answer.
 SYMPTOM_ONLY = {
-    "18_moved_namespace_old_address": [("Deployment/shop-18/web", "dependency_down"), ("Pod/shop-18/web-7f9c4d8b6-x2k4p", "dns")],
     "19_route_missing_hostname": [("Deployment/shop-19/edge", "config_change")],
     "20_boot_fails_one_env": [("Pod/shop-20/shop-web-7f9c4d8b6-x2k4p", "crash"), ("Pod/shop-20/shop-web-7f9c4d8b6-x2k4p", "rollout")],
     "21_oom_cascade": [("StatefulSet/shop-21/search", "oom"), ("StatefulSet/shop-21/search", "rollout"), ("Pod/shop-21/search-1", "oom")],
@@ -359,7 +359,6 @@ WRONG_KIND = {
 ALSO_RIGHT = {
     "01_cache_down_chain": [("Deployment/otel-demo/valkey-cart", "config_change")],
     "16_past_outage": [("Deployment/shop-16/payments", "config_change")],
-    "18_moved_namespace_old_address": [("ConfigMap/shop-18/web-settings", "dns")],
     "19_route_missing_hostname": [("Service/shop-19/frontdoor", "config_change"), ("frontdoor", "rollout")],
     "20_boot_fails_one_env": [("Deployment/shop-20/shop-web", "rollout"), ("ReplicaSet/shop-20/shop-web-7f9c4d8b6", "rollout"),
                               ("ConfigMap/shop-20/shop-web-release-2-4-0", "config_change"), ("ConfigMap/shop-20/shop-web-config", "config_change")],
@@ -369,7 +368,7 @@ ALSO_RIGHT = {
 
 
 def test_the_symptom_alone_is_not_the_cause():
-    cases = {d.name: d for d, _ in all_cases()}
+    cases = {d.name: d for d, c in all_cases() if not c.get("hidden")}
     assert set(SYMPTOM_ONLY) | set(WRONG_KIND) | set(ALSO_RIGHT) <= set(cases)
     for name, answers in SYMPTOM_ONLY.items():
         filled = rca.fill_placeholders(truth_of(cases[name]), MARKS)
@@ -387,6 +386,16 @@ def test_the_symptom_alone_is_not_the_cause():
         for resource, kind in answers:
             s = rca.score_rca(block([cause(resource, kind)]), filled, CALLS)
             assert s["pass"] and s["score"] == 1.0, (name, resource, kind, s)
+
+
+def test_03_takes_the_jobs_namespace_only_with_a_kind_or_a_path():
+    d = next(d for d, _ in all_cases() if d.name.startswith("03_"))
+    filled = rca.fill_placeholders(truth_of(d), MARKS)
+    for resource, passes in (("reports", False), ("Report/reports", False), ("Namespace/reports", True), ("ns/reports", True),
+                             ("reports/monthly-report-run-x7k2p", True), ("Job/reports/monthly-report-run", True),
+                             ("CronJob/reports/monthly-report", True), ("Node/kubeast-b-control-plane", True)):
+        s = rca.score_rca(block([cause(resource, "node")]), filled, CALLS)
+        assert s["pass"] == passes, (resource, s)
 
 
 def test_each_alert_names_the_namespace_of_its_causes():

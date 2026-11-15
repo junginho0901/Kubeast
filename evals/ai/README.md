@@ -175,8 +175,8 @@ it got, and the fault is made in `otel-demo` — a scale (01), a Chaos Mesh Netw
 demo's collector writes the service graph metrics (`traces_service_graph_*`, with the namespace on both sides) that
 the AI's call graph reads; a store the demo does not instrument is a node named by the calling span's
 `server.address`. Cases 17–22 follow outage shapes common in production — a batch read that saturates a database, a
-stale in-cluster address, a route without its hostname, a release that boots in one environment only, an OOM cascade,
-workers past the memory limit — each rebuilt small; the scripts whose behaviour they depend on (headers through
+route without its hostname, a release that boots in one environment only, an OOM cascade, workers past the memory
+limit, and 18, which is hidden — each rebuilt small; the scripts whose behaviour they depend on (headers through
 busybox httpd, memory held per worker or shard and where the OOM kill lands) were checked in a local busybox 1.38.0
 container, not on kind. Every group of more than one case has a hidden one: 02 (chain), 08 and 18 (hidden cause), 11
 (trap), 15 (control); `scripts/test_ai_eval_cases.py` holds it.
@@ -187,7 +187,7 @@ with a kind that says a change (`config_change`, `rollout`), so the symptom's wo
 `oom`, `dependency_down`) is a miss; each NOTES.md says which and why. `scripts/test_ai_eval_cases.py` holds such
 answers to a miss.
 
-The namespace a case makes besides its own (`reports` for 03, `edge` for 15, `members` for 18) carries no case number and no
+A namespace a case makes besides its own (`reports` for 03, and `edge` and `members`) carries no case number and no
 `kubeast.io/ai-eval` label, so a namespace list does not tie it to the case; the case's `setup_cmds` and
 `cleanup_cmds` make and delete it by name. Run the cases only on the dev clusters: a namespace of that name already
 there would be deleted with the case.
@@ -195,7 +195,9 @@ there would be deleted with the case.
 The hidden cases (02, 08, 11, 15, 18) measure whether a change to the prompts, the rule cards or the tool
 descriptions fits the cases it was tried on. Whoever writes those — a person or an agent — does not open these
 folders, their NOTES.md or their truth, nor a run's rows, table or log of a hidden case; the results are read as the
-round's total.
+round's total. A hidden case's answer stays in its folder: the table below gives no problem for it, the tests use
+made-up truths (`shop-x`) and read the hidden truths from their folders without printing a name, and no test file,
+PR description or commit message names a hidden case's cause or the shape of its fault.
 
 A case's alert names the namespace where its cause is, since the investigator's token is limited to the alert's
 namespace: 01, 07 and 10 carry `namespace: otel-demo` (with `match` the same, and `job: uptime-check` for what
@@ -206,7 +208,7 @@ that asks and the investigator must not read the `chaos-mesh.org` group, which 0
 | Case | Group | Problem | Needs on dev besides logs |
 |---|---|---|---|
 | 01 | chain | the cart's store is scaled to 0: cart calls fail, checkouts fail two calls up | the OpenTelemetry demo |
-| 02 | chain, hidden | a queue's topic config caps a fetch at one message; both consumer groups fall behind, nothing fails | |
+| 02 | chain, hidden | in its folder only | |
 | 03 | chain | a batch Job in another namespace with no CPU limit saturates the node CPU the services run on; three services that share no call slow together | the second cluster's Prometheus (node-exporter, cAdvisor) and metrics-server |
 | 04 | hidden cause | a new NetworkPolicy leaves one caller with no allow to one backend; both sides look healthy | `self`, whose kindnet enforces NetworkPolicy |
 | 05 | hidden cause | one workload is rolled out with its own `dnsConfig`; only its short-name calls fail | |
@@ -215,14 +217,14 @@ that asks and the investigator must not read the `chaos-mesh.org` group, which 0
 | 08 | hidden cause, hidden | in its folder only | |
 | 09 | hidden cause | a 25m CPU limit makes one service slow with no error; a busier pod is the decoy | the second cluster's Prometheus (cAdvisor, kube-state-metrics) |
 | 10 | trap | a schema change left open locks two tables of the shared database; its callers fail, then the role's connections run out | the OpenTelemetry demo |
-| 11 | trap, hidden | two unrelated faults at once: a release whose image tag does not exist, and a Service switched to a version not deployed | |
+| 11 | trap, hidden | in its folder only | |
 | 12 | trap | an old crash-looping pod with a DNS-looking error, and a quiet in-place ConfigMap edit | |
 | 13 | control | no fault; one unrelated container restart five minutes before the question | |
 | 14 | control | no fault; a clean rollout four minutes before the question | |
 | 15 | control, hidden | in its folder only | the second cluster's metrics-server and Prometheus |
 | 16 | past | a Deployment scaled to 0 for five minutes, then back; asked at 6 and 70 minutes | the second cluster's Prometheus |
 | 17 | trap | a CronJob loses its cursor setting and reads a whole table every minute; the database's disk queue slows every caller while its CPU stays low | the second cluster's Prometheus (cAdvisor), for the CPU part |
-| 18 | hidden cause, hidden | a service's old namespace is emptied after a move; the frontend still calls the old address and treats the failure as signed out | |
+| 18 | hidden cause, hidden | in its folder only | |
 | 19 | hidden cause | the front Service is switched to a new edge whose routes lack the main hostname: 404 for one site, the backend healthy | |
 | 20 | hidden cause | a release that needs a setting only staging has is rolled out with `Recreate`; production is down; asked at 5 and 65 minutes | |
 | 21 | hidden cause | a bigger index leaves a three-node StatefulSet no room to lose a node; its rolling update starts an OOM cascade | the second cluster's Prometheus, for the memory steps |
