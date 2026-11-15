@@ -694,3 +694,57 @@ tests:
       - equal:
           path: data.IMPERSONATION_CUSTOM_ROLES
           value: ""
+
+  - it: hands the database session limits to every service, in milliseconds
+    asserts:
+      - equal:
+          path: data.DB_STATEMENT_TIMEOUT_MS
+          value: "30000"
+      - equal:
+          path: data.DB_LOCK_TIMEOUT_MS
+          value: "15000"
+      - equal:
+          path: data.DB_IDLE_IN_TRANSACTION_TIMEOUT_MS
+          value: "300000"
+
+  - it: passes 0 and changed session limits as they are set
+    set:
+      postgresql.sessionLimits.statementTimeoutMs: 0
+      postgresql.sessionLimits.lockTimeoutMs: 5000
+      postgresql.sessionLimits.idleInTransactionTimeoutMs: 600000
+    asserts:
+      - equal:
+          path: data.DB_STATEMENT_TIMEOUT_MS
+          value: "0"
+      - equal:
+          path: data.DB_LOCK_TIMEOUT_MS
+          value: "5000"
+      - equal:
+          path: data.DB_IDLE_IN_TRANSACTION_TIMEOUT_MS
+          value: "600000"
+
+  - it: hands each service its database pool size
+    asserts:
+      - equal:
+          path: data.DB_POOL_MAX_AUTH
+          value: "20"
+      - equal:
+          path: data.DB_POOL_MAX_SESSION
+          value: "20"
+      - equal:
+          path: data.DB_POOL_MAX_K8S
+          value: "10"
+      - equal:
+          path: data.DB_POOL_MAX_AI
+          value: "15"
+      - equal:
+          path: data.DB_POOL_MAX_MODEL_CONFIG
+          value: "4"
+
+  - it: passes a changed pool size as it is set
+    set:
+      postgresql.pool.k8sService.maxConns: 16
+    asserts:
+      - equal:
+          path: data.DB_POOL_MAX_K8S
+          value: "16"
