@@ -83,6 +83,8 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
 
 `--reset-then-reuse-values`는 직접 넣은 값을 그대로 두고 새 버전에 생긴 값을 더합니다. `--reuse-values`는 처음 설치한 버전의 기본값을 그대로 써서 뒤 버전에 생긴 값이 빠집니다. 차트는 그런 업그레이드를 이 안내와 함께 멈추고, 릴리스는 그대로 둡니다. `helm show values`에서 복사한 값 파일도 0.7.7부터는 같은 식으로 멈춥니다. 0.7.6 이하에서 복사한 파일은 `chartVersion`이 없지만, 0.7.8부터는 그 안의 `global.imageTag`(그 버전의 태그)로 멈춥니다. 직접 쓰는 값 파일에는 `chartVersion`과 `global.imageTag`를 넣지 마세요. 직접 빌드한 이미지의 `global.imageTag`처럼 릴리스의 `vX.Y.Z`가 아닌 태그는 멈추지 않습니다.
 
+0.7.9부터 기본 모델 `ai.model`은 스냅샷 `gpt-4o-mini-2024-07-18`입니다. `gpt-4o-mini`와 같은 모델입니다. 등록한 모델이 없을 때(Admin → AI Models)만 쓰입니다. `ai.baseUrl` 뒤의 OpenAI 호환 게이트웨이(LiteLLM 등)가 `gpt-4o-mini` 이름만 매핑해 두었다면 모델이 없다고 답합니다. `ai.model: gpt-4o-mini`로 두거나 게이트웨이에 스냅샷 이름을 더하세요.
+
 ### 제거
 
 ```bash

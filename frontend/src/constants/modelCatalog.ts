@@ -60,6 +60,7 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
       { name: 'gpt-5', functionCalling: true },
       { name: 'gpt-5-mini', functionCalling: true },
       { name: 'gpt-4o', functionCalling: true },
+      { name: 'gpt-4o-mini-2024-07-18', functionCalling: true },
       { name: 'gpt-4o-mini', functionCalling: true },
       { name: 'o4-mini', functionCalling: true },
     ],

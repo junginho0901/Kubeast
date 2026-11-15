@@ -41,6 +41,8 @@ The Pods list is paged by k8s-service (`GET /api/v1/pods/page`, `internal/k8s/po
 
 The whole pod list API (`GET /namespaces/{namespace}/pods`) keeps each row as its JSON as the pages come (`GetPodsJSON`, the bytes `json.Marshal` gives the rows — `TestPodsJSONIsTheRowsAsTheyWereWritten`), since the rows held as maps took 8.3 times the answer, about 300 MiB on 50 000 pods (`TestAWholeReadOfANamespacesPodsHoldsLittleMoreThanItsAnswer`). One account's reads of it at one moment share an answer through `handler.Shared` (`TestTenReadsOfANamespacesPodsByOnePersonListItAtMostTwice`); different accounts each make their own.
 
+A model an install, the first-run setup page or a dev script uses when nobody chose one (chart `ai.model`, ai-service's defaults, `install-docker.sh`, `.env.example`, `docker-compose.yml`, `SetupAIModelPage`, `scripts/kind-model-*.sh`) is written as a pinned snapshot ID: `scripts/check-model-pins.py` (CI) fails on an alias, and a new default place goes into its list (`docs/development.md` "Default models").
+
 ## Audit logging — mandatory (read before touching any Go handler)
 
 > Authoritative rules: [AGENTS.md](AGENTS.md) and [docs/audit-log-plan.md](docs/audit-log-plan.md). PRs that add/modify a write-class HTTP handler **without** an audit call are rejected.

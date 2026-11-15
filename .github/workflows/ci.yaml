@@ -322,3 +322,15 @@ jobs:
           echo "${ZEITGEIST_SHA256}  zeitgeist" | sha256sum -c -
           chmod +x zeitgeist
           ./zeitgeist validate --local-only --base-path . --config deploy/dependencies.yaml
+
+  # Every default model is a pinned snapshot ID (scripts/check-model-pins.py): standard library only.
+  model-pins:
+    name: default models are pinned snapshots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - run: python -I scripts/test_check_model_pins.py
+      - run: python -I scripts/check-model-pins.py
