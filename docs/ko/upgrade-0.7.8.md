@@ -39,7 +39,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 
 지금 값으로 0.7.8을 렌더하고 아무것도 바꾸지 않습니다. 검사가 멈추면 Helm이 무엇을 바꿔야 하는지 담은 오류를 출력하고, 그 목록은 [3](#3-바꿔야-하는-값)의 표에 있습니다. `--dry-run=server`(Helm 3.13 이상)는 차트가 Secret을 읽게 하므로 [1.7](#17-secretsexistingsecret과-redis-사용자)의 Redis 사용자 검사도 돕니다.
 
-이 드라이런은 렌더와 차트의 검사만 봅니다. 객체를 API 서버에 보내지 않으므로, 업그레이드 때 API 서버가 거절할 것(바꿀 수 없는 필드, 다른 관리자가 가진 필드)은 여기서 걸리지 않습니다. 서버 측 적용을 쓰는 Helm 4라면 아래처럼 렌더한 객체를 Helm의 이름으로 API 서버에 드라이런으로 보내 볼 수 있습니다. `helm template`은 클러스터에서 아무것도 읽지 않고, 값이 다른 네임스페이스에 두는 객체는 네임스페이스 오류로 멈추므로 그 `-n`으로 따로 보냅니다.
+이 드라이런은 렌더와 차트의 검사만 봅니다. 객체를 API 서버에 보내지 않으므로, 업그레이드 때 API 서버가 거절할 것(바꿀 수 없는 필드, 다른 관리자가 가진 필드)은 여기서 걸리지 않습니다. 업그레이드가 서버 측으로 적용될 때(Helm 4에서 `--server-side=true`, 또는 기본값 `auto`이고 직전 릴리스를 서버 측으로 적용했을 때)는 아래처럼 렌더한 객체를 Helm의 이름으로 API 서버에 드라이런으로 보내 볼 수 있습니다. `helm template`은 클러스터에서 아무것도 읽지 않고, 값이 다른 네임스페이스에 두는 객체는 네임스페이스 오류로 멈추므로 그 `-n`으로 따로 보냅니다.
 
 ```bash
 helm get values kubeast -n kubeast -o yaml \
@@ -47,7 +47,7 @@ helm get values kubeast -n kubeast -o yaml \
   | kubectl apply --server-side --dry-run=server --field-manager=helm -n kubeast -f -
 ```
 
-설치 안내(예: [1.6](#16-데이터베이스-연결)의 바깥 데이터베이스 연결 합계)를 보려면 `> /dev/null` 없이 돌리고 끝의 `NOTES:`를 읽습니다.
+설치 안내(예: [1.6](#16-데이터베이스-연결)의 바깥 데이터베이스 연결 합계)를 보려면 `helm upgrade` 드라이런을 `> /dev/null` 없이 돌리고 끝의 `NOTES:`를 읽습니다.
 
 ### 1.3 Kubernetes 버전
 

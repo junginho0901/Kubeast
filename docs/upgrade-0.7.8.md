@@ -39,7 +39,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 
 It renders 0.7.8 with your values and changes nothing. A check that stops it makes Helm print an error saying what to change; the table in [3](#3-values-you-must-change) lists them. `--dry-run=server` (Helm 3.13 or later) lets the chart read your Secrets, so the Redis users check in [1.7](#17-secretsexistingsecret-and-the-redis-users) runs too.
 
-It checks the render and the chart's own checks only. It does not send the objects to the API server, so what the API server would refuse on the upgrade, a field it does not let change or a field another manager owns, passes it. With Helm 4, which applies server-side, this sends the rendered objects to the API server as a dry run in Helm's name; `helm template` reads nothing from the cluster, and an object your values put in another namespace stops it with a namespace error, so send those with their own `-n`:
+It checks the render and the chart's own checks only. It does not send the objects to the API server, so what the API server would refuse on the upgrade, a field it does not let change or a field another manager owns, passes it. When the upgrade applies server-side (Helm 4 with `--server-side=true`, or with its default `auto` when the release was last applied server-side), this sends the rendered objects to the API server as a dry run in Helm's name; `helm template` reads nothing from the cluster, and an object your values put in another namespace stops it with a namespace error, so send those with their own `-n`:
 
 ```bash
 helm get values kubeast -n kubeast -o yaml \
@@ -47,7 +47,7 @@ helm get values kubeast -n kubeast -o yaml \
   | kubectl apply --server-side --dry-run=server --field-manager=helm -n kubeast -f -
 ```
 
-To see the install notes, for example the connection sum for an external database ([1.6](#16-database-connections)), run it without `> /dev/null` and read `NOTES:` at the end.
+To see the install notes, for example the connection sum for an external database ([1.6](#16-database-connections)), run the `helm upgrade` dry run without `> /dev/null` and read `NOTES:` at the end.
 
 ### 1.3 Kubernetes version
 
