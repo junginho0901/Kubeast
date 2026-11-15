@@ -16,13 +16,14 @@ tests:
           any: true
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
-      - notExists:
-          path: spec.strategy
+      - equal:
+          path: spec.strategy.rollingUpdate
+          value: {maxSurge: 1, maxUnavailable: 0}
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
       - equal:
           path: spec.template.spec.containers[0].readinessProbe.httpGet.path
-          value: /health
+          value: /readyz
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
       - notMatchRegex:
@@ -52,8 +53,8 @@ tests:
           value: 100
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
-      # the Deployment's default rollout (maxSurge 1, maxUnavailable 0 for one replica) brings the new pod up first,
-      # and the lists keep answering on /health while the old one drains; the preStop wait is podShutdown's
+      # the rollout (maxSurge 1, maxUnavailable 0) brings the new pod up first, and the old one answers /readyz with 503
+      # from SIGTERM on while it drains; the preStop wait is podShutdown's
       - equal:
           path: spec.template.spec.containers[0].lifecycle
           value: {preStop: {sleep: {seconds: 5}}}
@@ -61,7 +62,7 @@ tests:
         documentSelector: {path: metadata.name, value: k8s-service}
       - equal:
           path: spec.template.spec.containers[0].readinessProbe.httpGet.path
-          value: /health
+          value: /readyz
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service}
 
@@ -130,7 +131,7 @@ tests:
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service-stream}
 
-  - it: drains the stream server for drainSeconds after the preStop sleep, ready on /ready, replaced before it leaves
+  - it: drains the stream server for drainSeconds after the preStop sleep, ready on /readyz, replaced before it leaves
     set:
       streams.enabled: true
     asserts:
@@ -156,12 +157,12 @@ tests:
         documentSelector: {path: metadata.name, value: k8s-service-stream}
       - equal:
           path: spec.template.spec.containers[0].readinessProbe.httpGet.path
-          value: /ready
+          value: /readyz
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service-stream}
       - equal:
           path: spec.template.spec.containers[0].livenessProbe.httpGet.path
-          value: /health
+          value: /livez
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service-stream}
       # the api server holds no terminal: no drain, podShutdown's preStop + 30
@@ -380,16 +381,15 @@ tests:
           content: k8s-service-stream
         documentSelector: {path: metadata.name, value: RELEASE-NAME-auth-service}
 
-  - it: counts the stream server among the PodDisruptionBudgets and the setup restarts
+  # one stream server can be down to no pod, so it gets no PodDisruptionBudget (it would hold a node drain)
+  - it: gives the one stream server no PodDisruptionBudget and counts it among the setup restarts
     set:
       streams.enabled: true
       pdb.enabled: true
     asserts:
-      - equal:
-          path: spec.selector.matchLabels.app
-          value: k8s-service-stream
+      - hasDocuments:
+          count: 0
         template: pdb.yaml
-        documentSelector: {path: metadata.name, value: k8s-service-stream}
       - equal:
           path: data.SETUP_RESTART_DEPLOYMENTS
           value: k8s-service,tool-server,k8s-service-stream

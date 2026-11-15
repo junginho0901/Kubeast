@@ -302,6 +302,35 @@ async def claim_next(db) -> Optional[AlertInvestigation]:
         return row
 
 
+STOPPED_TWICE = "interrupted: the server stopped twice"
+
+
+async def requeue_or_fail(db, inv_id: str) -> str:
+    """A running row whose ai-service is stopping before the run ended: back in the queue the first time (a replica or
+    the pod that replaces it takes it from the start, stop_requeues counts it), failed the second time. Only while it
+    is still running, so a row that ended stays as it ended. Answers "queued", "failed" or "" (nothing changed)."""
+    async with db.async_session() as s:
+        res = await s.execute(
+            update(AlertInvestigation)
+            .where(
+                AlertInvestigation.id == inv_id,
+                AlertInvestigation.status == "running",
+                AlertInvestigation.stop_requeues == 0,
+            )
+            .values(status="queued", started_at=None, stop_requeues=AlertInvestigation.stop_requeues + 1)
+        )
+        if res.rowcount:
+            await s.commit()
+            return "queued"
+        res = await s.execute(
+            update(AlertInvestigation)
+            .where(AlertInvestigation.id == inv_id, AlertInvestigation.status == "running")
+            .values(status="failed", error=STOPPED_TWICE, finished_at=utcnow())
+        )
+        await s.commit()
+        return "failed" if res.rowcount else ""
+
+
 async def finish(db, inv_id: str, **fields: Any) -> None:
     fields.setdefault("finished_at", utcnow())
     async with db.async_session() as s:

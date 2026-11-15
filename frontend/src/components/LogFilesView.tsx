@@ -10,9 +10,9 @@ import { RefreshCw, Radio } from 'lucide-react'
 import CustomDropdown from '@/components/CustomDropdown'
 import { api } from '@/services/api'
 import { getCurrentClusterID } from '@/services/clusterRef'
-import { SESSION_ENDED_EVENT } from '@/services/auth'
 import { liveSessionEndText } from '@/utils/liveSessionEnd'
 import { SERVER_SHUTDOWN_EVENT } from '@/utils/serverShutdown'
+import { followLogFile } from './logFileFollow'
 import { useCluster } from '@/contexts/ClusterContext'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { useResultFor } from '@/hooks/useResultFor'
@@ -97,6 +97,7 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
   const [streamText, setStreamText] = useState('')
   // why following stopped, said only for the file it followed (another container, pod or file has no such line)
   const [streamNote, setStreamNote] = useResultFor<string>([currentCluster, namespace, pod, container, path])
+  const [reconnecting, setReconnecting] = useState(false)
   const outputRef = useRef<HTMLDivElement>(null)
 
   const errorText = (err: any): string => {
@@ -145,6 +146,7 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
     if (!follow || !path || !container) return
     setStreamText('')
     setStreamNote(null)
+    setReconnecting(false)
     // EventSource bypasses the axios cluster interceptor — add ?cluster=.
     const clusterId = getCurrentClusterID()
     const url =
@@ -152,36 +154,29 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
       `?container=${encodeURIComponent(container)}&path=${encodeURIComponent(path)}&lines=${lines}` +
       (clusterId ? `&cluster=${encodeURIComponent(clusterId)}` : '')
     const es = new EventSource(url, { withCredentials: true })
-    es.onmessage = (e) => setStreamText((prev) => keepLastLines(prev + e.data + '\n'))
-    es.addEventListener('notice', (e) => {
-      setStreamText((prev) => keepLastLines(prev + '» ' + (e as MessageEvent).data + '\n'))
+    // A dropped connection reconnects and goes on after the last line shown (logFileFollow). After a stop the
+    // content view re-reads the file, which also shows why it failed.
+    followLogFile(es, {
+      line: (text) => setStreamText((prev) => keepLastLines(prev + text + '\n')),
+      notice: (text) => setStreamText((prev) => keepLastLines(prev + '» ' + text + '\n')),
+      reconnecting: setReconnecting,
+      stopped: (why) => {
+        setFollow(false)
+        if (why.kind === 'end') setStreamNote(t('clusterView.logFiles.streamEnded', 'Following stopped.'))
+        else if (why.kind === 'session') setStreamNote(liveSessionEndText(t, why.code))
+        else {
+          const reason = why.reason || t('clusterView.logs.streamError', 'An error occurred while streaming logs.')
+          setStreamNote(t('clusterView.logFiles.streamFailed', 'Following stopped: {{reason}}', { reason }))
+        }
+      },
     })
-    es.addEventListener('end', () => {
+    // The server was replaced (the drain's event): the browser connects again after its retry time and goes on after
+    // the last line shown, as for any dropped connection.
+    es.addEventListener(SERVER_SHUTDOWN_EVENT, () => setReconnecting(true))
+    return () => {
       es.close()
-      setFollow(false)
-      setStreamNote(t('clusterView.logFiles.streamEnded', 'Following stopped.'))
-    })
-    es.addEventListener(SESSION_ENDED_EVENT, (e) => {
-      es.close()
-      setFollow(false)
-      setStreamNote(liveSessionEndText(t, (e as MessageEvent).data))
-    })
-    // The server was replaced: following again reads the last lines from a server that stays.
-    es.addEventListener(SERVER_SHUTDOWN_EVENT, () => {
-      es.close()
-      setFollow(false)
-      setStreamNote(t('serverShutdown.followStopped', 'Following stopped: the server was replaced. Turn Follow on again to go on.'))
-    })
-    // Never let the browser reconnect on its own: a reconnect reads the last
-    // lines again (duplicates on screen) and is another audited read. After a
-    // stop the content view re-reads the file, which also shows why it failed.
-    es.onerror = (e) => {
-      es.close()
-      setFollow(false)
-      const reason = (e as MessageEvent).data || t('clusterView.logs.streamError', 'An error occurred while streaming logs.')
-      setStreamNote(t('clusterView.logFiles.streamFailed', 'Following stopped: {{reason}}', { reason }))
+      setReconnecting(false)
     }
-    return () => es.close()
   }, [follow, path, lines, container, namespace, pod, currentCluster, t, setStreamNote])
 
   // The newest lines are at the end: keep them in view, as the container output does.
@@ -274,6 +269,9 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
         {t('clusterView.logFiles.notice', 'File contents are shown as they are, without masking. Each read is recorded in the audit log.')}
         {!follow && content.data?.truncated ? ` ${t('clusterView.logFiles.truncated', 'The output is large; only its end is shown.')}` : ''}
         {streamNote ? ` ${streamNote}` : ''}
+        {follow && reconnecting ? (
+          <span data-testid="logfile-reconnecting">{` ${t('clusterView.logFiles.reconnecting', 'The connection dropped; reconnecting and going on after the last line shown...')}`}</span>
+        ) : null}
       </p>
       <div
         ref={outputRef}
