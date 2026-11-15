@@ -32,6 +32,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/junginho0901/kubeast/services/pkg/config"
 )
 
 // Options is read from the environment once at startup (FromEnv).
@@ -78,9 +80,7 @@ func FromEnv() Options {
 	if v := strings.TrimSpace(strings.ToLower(os.Getenv("REDACTION_PII"))); v == "true" || v == "1" || v == "on" {
 		o.PII = true
 	}
-	if v := strings.TrimSpace(strings.ToLower(os.Getenv("REDACTION_NUMBERED"))); v == "true" || v == "1" || v == "on" {
-		o.Numbered = true
-	}
+	o.Numbered = config.EnvSwitch("REDACTION_NUMBERED") // the one switch rule, as ai-service's app/services/switch.py
 	for _, name := range strings.Split(os.Getenv("REDACTION_DISABLE"), ",") {
 		if name = strings.TrimSpace(strings.ToLower(name)); name != "" {
 			o.Disabled[name] = true
