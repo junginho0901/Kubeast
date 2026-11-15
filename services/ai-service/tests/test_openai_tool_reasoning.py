@@ -194,10 +194,46 @@ async def test_the_retry_and_the_left_out_parameter_are_each_one_line_in_the_pod
     lines = [line for line in buf.getvalue().splitlines() if "prod-chat" in line]
     assert [line.split(" kubeast.ai ", 1)[1] for line in lines] == [
         "model prod-chat refused temperature; leaving it out",
-        "model prod-chat takes tools only at reasoning_effort none; sending it",
+        "model prod-chat takes tools only at reasoning_effort none; sending it with temperature again",
     ]
     assert all(" INFO " in line for line in lines)
     assert "sk-secret-123" not in buf.getvalue() and "prompt-xyz" not in buf.getvalue()
+
+
+@pytest.mark.asyncio
+async def test_a_default_effort_refusal_that_comes_back_after_none_is_for_that_call_only(monkeypatch):
+    import asyncio
+
+    tools_done = asyncio.Event()
+    bodies = []
+
+    async def handler(request):
+        body = json.loads(request.content)
+        bodies.append(body)
+        if "temperature" in body and body.get("reasoning_effort", "medium") != "none" and not body.get("tools"):
+            await tools_done.wait()  # the summary's answer comes back after the tool call has ended
+        return temperature_first(body) or httpx.Response(200, json=COMPLETION)
+
+    class Fake(httpx.AsyncClient):
+        def __init__(self, **_kw):
+            super().__init__(transport=httpx.MockTransport(handler))
+
+    monkeypatch.setattr(httpx, "AsyncClient", Fake)
+    provider_adapter._refused.clear()
+    provider_adapter._without_reasoning.clear()
+    key = ("azure", AZURE, "prod-chat")
+    adapter = ProviderAdapter(provider="azure", model="prod-chat", api_key="k", base_url=AZURE)
+    # a new pod: a summary at the default effort and a tool call go out together
+    summary = asyncio.create_task(adapter.chat.completions.create(model="prod-chat", messages=MSG, temperature=0.2))
+    await asyncio.sleep(0)
+    await adapter.chat.completions.create(model="prod-chat", messages=MSG, tools=TOOLS, temperature=0.7)
+    tools_done.set()
+    await summary
+    assert key in provider_adapter._without_reasoning
+    assert "temperature" not in provider_adapter._refused.get(key, set())
+    await adapter.chat.completions.create(model="prod-chat", messages=MSG, tools=TOOLS, temperature=0.7)
+    await adapter.chat.completions.create(model="prod-chat", messages=MSG, temperature=0.2)
+    assert [(b.get("reasoning_effort"), b.get("temperature")) for b in bodies[-2:]] == [("none", 0.7), ("none", 0.2)]
 
 
 @pytest.mark.asyncio
