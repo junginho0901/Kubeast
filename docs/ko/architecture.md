@@ -51,7 +51,7 @@ NGINX 게이트웨이가 모든 요청을 받아 각 마이크로서비스로 �
 | `model-config-controller` | Go (controller-runtime) | — | `ModelConfig` CRD 컨트롤러 |
 | `frontend` | React + Vite + TS | 5173 | UI (prod는 정적 빌드를 nginx로 서빙) |
 | `postgres` | — | 5432 | 메인 DB (durable state) — PostgreSQL 18 |
-| `redis` | — | 6379 | k8s-service 캐시 — Valkey 9.1(Redis 프로토콜). `redis.enabled: false`면 k8s-service가 메모리에 캐시합니다 |
+| `redis` | — | 6379 | k8s-service 캐시 — Valkey 9.1(Redis 프로토콜). k8s-service와 tool-server(클러스터 바뀜 알림만)가 각자 자기 Redis 사용자로 로그인하고, 이 둘만 연결할 수 있습니다([Redis 사용자](configuration.md#redis-사용자)). `redis.enabled: false`면 k8s-service가 메모리에 캐시합니다 |
 
 k8s-service는 Redis에 캐시를 키 앞머리 `kubeast:cache:` 아래에 쓰고, 모든 항목은 최대 1시간 뒤에 만료됩니다. 클러스터 등록이 바뀌면 그 앞머리의 키만 지우므로(`SCAN`과 `UNLINK`) 같은 Redis 데이터베이스의 다른 키는 남습니다. 시작할 때 Redis가 답하지 않은 k8s-service는 메모리에 캐시하고 5초마다 Redis에 다시 묻다가, 답하면 캐시를 Redis로 옮깁니다. 어느 클러스터가 바뀌었는지는 Redis가 아니라 PostgreSQL에 둡니다. auth-service가 kubeconfig를 바꾸거나 Prometheus·로그 저장소 설정을 바꾸는 데이터베이스 거래에서 클러스터의 `config_version`을 새 값으로 바꿉니다. 이 거래는 Secret을 쓴 뒤에만 반영됩니다. 실패하면 오류로 답합니다. 쓴 Secret은 클러스터 행을 잠근 채로 되돌리므로, 같은 클러스터를 바꾸려고 기다리던 변경은 그 값을 보지 않습니다. 그 뒤 클러스터의 `config_version`을 한 번 더 새 값으로 바꾸므로, 그사이 쓴 Secret으로 만든 연결도 버립니다. 되돌리지 못한 Secret은 응답과 감사 행에 이름이 남습니다. 모든 k8s-service가 5초마다 이 값을 읽어 다른 값으로 만든 연결과 지운 클러스터의 연결을 버립니다. Redis가 있으면 auth-service가 알린 k8s-service가 다른 k8s-service에도 바로 알립니다(채널 `kubeast:clusters:changed:<db>`).
 
@@ -108,7 +108,7 @@ ghcr.io/junginho0901/kubeast-model-config-controller-go
 | 켜는 것 | 늘어나는 파드 | 놀 때 메모리 | 백그라운드 작업 |
 | --- | --- | --- | --- |
 | `ai.enabled` (기본 켬) | 3 — ai-service · tool-server · ModelConfig 컨트롤러 | +약 155 MiB | 컨트롤러가 ModelConfig를 감시합니다. ai-service·tool-server는 요청이 올 때만 일합니다 |
-| `redis.enabled` (기본 켬) | 1 | +9 MiB | 없음 — 끄면 k8s-service가 메모리에 캐시합니다(Redis를 쓰는 곳은 k8s-service뿐) |
+| `redis.enabled` (기본 켬) | 1 | +9 MiB | 없음 — 끄면 k8s-service가 메모리에 캐시하고, tool-server의 kubeconfig는 클러스터 바뀜 알림 없이 10초에 만료됩니다 |
 | `mcp.enabled` | 0 | ai-service 안에서 약 +15 MiB(MCP SDK) | 없음 |
 | `features.alertInvestigation` | 0 | 0 | 없음 — 알림 웹훅이 올 때만 조사 |
 | `sessionRecording.enabled` | 0 | 0 | exec·노드 셸이 열려 있는 동안 녹화 조각을 업로드 |

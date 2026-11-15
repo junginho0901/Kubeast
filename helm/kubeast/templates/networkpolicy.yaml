@@ -167,7 +167,8 @@ spec:
             matchExpressions:
               - key: app
                 operator: In
-                values: [k8s-service{{ include "kubeast.np.alsoStream" . }}] # the only Redis client (resource cache)
+                # each signed in as its own Redis user (redis.acl); tool-server listens to the cluster change notices
+                values: {{ if .Values.ai.enabled }}[k8s-service{{ include "kubeast.np.alsoStream" . }}, tool-server]{{ else }}[k8s-service{{ include "kubeast.np.alsoStream" . }}]{{ end }}
       ports:
         - protocol: TCP
           port: 6379
@@ -553,6 +554,16 @@ spec:
       ports:
         - protocol: TCP
           port: 8004
+    {{- if .Values.redis.enabled }}
+    # the cluster change notices on the chart's Redis
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    {{- end }}
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
