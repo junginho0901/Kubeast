@@ -50,7 +50,9 @@ The NGINX gateway receives every request and routes it to the microservices. Pos
 | `model-config-controller` | Go (controller-runtime) | — | `ModelConfig` CRD controller |
 | `frontend` | React + Vite + TS | 5173 | UI (static build in prod, served by nginx) |
 | `postgres` | — | 5432 | Main DB (durable state), PostgreSQL 18 |
-| `redis` | — | 6379 | k8s-service cache, Valkey 9.1 (Redis protocol). With `redis.enabled: false`, k8s-service caches in memory |
+| `redis` | — | 6379 | k8s-service cache, Valkey 9.1 (Redis protocol). k8s-service and tool-server (cluster change notices only) each sign in as their own Redis user, and only they may connect ([Redis users](configuration.md#redis-users)). With `redis.enabled: false`, k8s-service caches in memory |
+
+k8s-service writes its cache in Redis under the key prefix `kubeast:cache:`, every entry with a time to live of at most an hour, and a change of a cluster's registration deletes only those keys (`SCAN` and `UNLINK`), so other keys in the same Redis database stay. A k8s-service whose Redis did not answer at start caches in memory and asks Redis again every 5 s; once it answers, the cache moves there. Which clusters changed is kept in PostgreSQL, not in Redis: auth-service gives a cluster a new `config_version` in the database transaction that replaces its kubeconfig or changes its Prometheus or log store, which commits only once the Secret is written. A change that fails answers an error: the Secret it wrote is put back with the cluster's row locked, so a change of the same cluster waiting for it does not see it, and the cluster then gets one more new `config_version`, so a connection made from the written Secret meanwhile is dropped too; a Secret that could not be put back is named in the answer and in the audit row. Every k8s-service reads the versions every 5 s and drops a connection built from another version or to a deleted cluster. With Redis, the k8s-service that auth-service tells also notifies the others at once (channel `kubeast:clusters:changed:<db>`).
 
 ## Container images
 
@@ -106,7 +108,7 @@ The requests of the minimal install are set as follows:
 | Turned on | Added pods | Idle memory | Background work |
 | --- | --- | --- | --- |
 | `ai.enabled` (on by default) | 3: ai-service, tool-server, ModelConfig controller | +about 155 MiB | The controller watches ModelConfigs. ai-service and tool-server work only when requests come in |
-| `redis.enabled` (on by default) | 1 | +9 MiB | None. When off, k8s-service caches in memory (it is the only user of Redis) |
+| `redis.enabled` (on by default) | 1 | +9 MiB | None. When off, k8s-service caches in memory and tool-server's kubeconfigs expire in 10 s without the cluster change notices |
 | `mcp.enabled` | 0 | about +15 MiB inside ai-service (MCP SDK) | None |
 | `features.alertInvestigation` | 0 | 0 | None; it investigates when an alert webhook arrives |
 | `sessionRecording.enabled` | 0 | 0 | Uploads chunks while exec or a node shell is open |
@@ -122,8 +124,11 @@ Work that always runs:
   - with `dormantAccounts` on, locks dormant accounts every 24 hours
   - when an S3 sink is set, writes the audit anchor every 24 hours
 - k8s-service:
-  - checks the health of each registered cluster every 60 seconds (`multicluster.healthcheckIntervalSec`)
+  - checks the health of each registered cluster every 60 seconds (`multicluster.healthcheckIntervalSec`): every replica probes for its own fail-fast state, and the one holding a PostgreSQL advisory lock (on a connection of its own) writes `clusters.health_status`
   - cleans up the informer caches of clusters not used for a long time
+  - on each replica, reads every registered cluster's `config_version` from the database every 5 seconds, give or take a second, one query (`internal/clustersync`); with Redis it also follows the other replicas' cluster change notices
+  - when Redis did not answer at start, asks it again every 5 seconds until it answers, then moves the cache there
+  - while it runs a node drain, writes that it is alive every 5 seconds; every 10 seconds marks the drains whose server stopped as interrupted; every hour deletes drains that finished a day ago (`node_drains`)
 
 The MCP, alert investigation, session recording, node shell and `features.*` rows are based on the code. They create no pods, so they were not measured separately. The MCP value was measured on 2026-10-13.
 

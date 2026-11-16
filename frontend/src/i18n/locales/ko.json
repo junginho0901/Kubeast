@@ -1615,7 +1615,13 @@
         "progressMessage": "Node에서 Pod를 축출하는 중입니다...",
         "success": "완료",
         "doneMessage": "Node 드레인이 완료되었습니다.",
-        "error": "실패"
+        "error": "실패",
+        "interrupted": "중단됨",
+        "interruptedMessage": "이 드레인을 맡은 서버가 끝나기 전에 멈췄습니다. Node에 Pod가 남아 있을 수 있습니다.",
+        "stillCordoned": "아직 cordon 상태: {{nodes}}",
+        "notCordoned": "cordon 상태로 남은 Node가 없습니다.",
+        "startAgain": "다시 시작",
+        "pods": "Pod {{total}}개 중 {{done}}개 축출"
       }
     },
     "detail": {
@@ -1779,6 +1785,7 @@
     "copied": "복사됨",
     "inputPlaceholder": "메시지를 입력하세요...",
     "stop": "중단",
+    "waitingTurn": "차례를 기다립니다 — 다른 질문을 처리하고 있습니다.",
     "send": "전송",
     "confirmDeleteStreaming": "현재 답변 생성 중입니다. 중단하고 이 대화를 삭제하시겠습니까?",
     "confirmDelete": "이 대화를 삭제하시겠습니까?",
@@ -1797,9 +1804,11 @@
       "modelAddress": "AI 모델을 호출하지 못했습니다 ({{provider}}): 모델 주소가 허용되지 않아 아무것도 보내지 않았습니다. 관리자가 Admin → AI Models에서 이 모델의 연결 테스트로 이유를 확인하세요.",
       "streamHttp": "채팅 요청이 실패했습니다 (HTTP {{status}}): {{detail}}",
       "streamHttpStatus": "채팅 요청이 실패했습니다 (HTTP {{status}}).",
+      "streamStartFailed": "답변 스트림을 시작하지 못했습니다. 잠시 뒤 다시 시도하세요.",
       "streamCut": "답변이 끝나기 전에 연결이 끊겼습니다. 위 내용은 일부일 수 있습니다. 전체 답변이 필요하면 다시 질문하세요.",
       "streamEmpty": "답변 없이 연결이 끊겼습니다. 다시 질문하세요.",
-      "sessionNotFound": "이 대화는 더 이상 없습니다. 새 대화를 시작하세요."
+      "sessionNotFound": "이 대화는 더 이상 없습니다. 새 대화를 시작하세요.",
+      "claudeCodeBusy": "Claude Code가 바쁩니다. 잠시 뒤 다시 질문하세요."
     },
     "errorAnswer": "죄송합니다. 답변을 생성하는 중 오류가 발생했습니다: {{error}}",
     "errorSessionCreate": "세션 생성에 실패했습니다: {{error}}",
@@ -2607,6 +2616,7 @@
       "waiting": "새 줄을 기다리는 중...",
       "streamEnded": "실시간 보기가 끝났습니다.",
       "streamFailed": "실시간 보기가 끊겼습니다: {{reason}}",
+      "reconnecting": "연결이 끊겨 다시 연결하는 중입니다. 다시 붙으면 마지막으로 보인 줄 다음부터 이어집니다.",
       "errors": {
         "disabled": "로그 파일 보기가 꺼져 있습니다.",
         "namespace": "이 Namespace에서는 로그 파일 보기가 켜져 있지 않습니다.",
@@ -2668,6 +2678,21 @@
     "restarts": "재시작: {{count}}",
     "podDeleting": "삭제 중...",
     "noPods": "Pod가 없습니다",
+    "box": {
+      "shown": "Pod {{total}}개 중 {{shown}}개를 보여 줍니다.",
+      "more": "+{{count}} 이 Node 전부 보기",
+      "moreMatching": "맞는 Pod +{{count}} · 이 Node의 Pod 전부 보기",
+      "open": "이 Node의 Pod 전부 보기"
+    },
+    "nodeView": {
+      "path": "Cluster View 위치",
+      "all": "전체 Node",
+      "problemsOnly": "문제 Pod만",
+      "gone": "Pod {{pod}}: 이 Node에 더 없습니다. 다른 Node에서 돌고 있으면 검색으로 찾을 수 있습니다.",
+      "filtered": "Pod {{pod}}: Namespace 필터({{namespace}}) 밖에 있습니다.",
+      "missing": "Node {{node}}: 이 클러스터에 없습니다.",
+      "matches": "\"{{query}}\"에 맞는 Pod에 테두리를 쳤습니다. 이 Node에 {{count}}개 있습니다."
+    },
     "tabs": {
       "summary": "요약",
       "logs": "로그",
@@ -2733,12 +2758,19 @@
       "loading": "불러오는 중..."
     },
     "map": {
-      "aria": "노드 지도: 노드 {{nodes}}개, Pod {{pods}}개(오류 {{error}}, 주의 {{warn}})",
+      "aria": "Node 지도: Node {{nodes}}개, Pod {{pods}}개(오류 {{error}}, 주의 {{warn}})",
       "hover": "{{node}} · Pod {{total}}개 · 오류 {{error}} · 주의 {{warn}}",
+      "hoverStatus": "{{node}} · {{status}} · Pod {{total}}개 · 오류 {{error}} · 주의 {{warn}}",
+      "ariaMarks": "Ready가 아닌 Node {{notReady}}개, SchedulingDisabled {{cordoned}}개입니다.",
+      "notReady": "Ready가 아닌 Node",
+      "cordoned": "SchedulingDisabled",
       "error": "오류",
       "warn": "주의",
       "ok": "정상",
-      "hint": "칸 하나가 노드, 점 하나가 Pod입니다. 칸을 누르면 그 노드로 이동합니다."
+      "hint": "칸 하나가 Node, 점 하나가 Pod입니다. 칸을 누르거나 칸에서 Enter를 누르면 그 Node의 Pod를 모두 보여 줍니다.",
+      "hintPaged": "칸 하나가 Node, 점 하나가 Pod이고, 테두리를 친 칸이 아래 상자입니다. 칸을 누르거나 칸에서 Enter를 누르면 그 Node의 Pod를 모두 보여 줍니다.",
+      "openFirst": "{{node}} 열기(그중 첫 Node)",
+      "roleDescription": "Node 지도"
     }
   },
   "namespaces": {
@@ -2911,7 +2943,7 @@
       "selectFromList": "← 목록에서 선택",
       "customModel": "모델 이름 직접 입력 →",
       "selectModel": "모델 선택",
-      "modelPlaceholder": "예: gpt-4o-mini",
+      "modelPlaceholder": "예: gpt-6-luna",
       "azureDeploymentHint": "Azure OpenAI는 모델 이름이 아니라 배포 이름을 넣습니다(Azure AI Foundry → 배포).",
       "azureEndpointHint": "/openai/v1/로 끝나는 v1 주소를 넣습니다. 옛 배포 주소와 api-version은 지원하지 않습니다.",
       "required": "(필수)",

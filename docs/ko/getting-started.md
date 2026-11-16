@@ -67,6 +67,7 @@ cd Kubeast
   - kind 클러스터라면 `kind get kubeconfig --internal --name <클러스터>`를 붙여 넣고, 클러스터와 통신하는 컨테이너를 kind 네트워크에 연결하세요: `docker network connect kind <폴더>-auth-service-1`, `k8s-service`와 `tool-server`도 같은 방식입니다(`<폴더>`는 내려받은 폴더 이름, 곧 Compose 프로젝트 이름).
 - 밖으로 여는 포트는 Gateway 하나뿐입니다. 다른 서비스에는 `docker compose exec`로 들어가세요.
 - 스크립트를 다시 실행해도(예: `--port`를 바꿔서) `.env`의 비밀번호와 키는 그대로 둡니다. 데이터베이스 볼륨이 처음 만들 때의 비밀번호를 기억하기 때문입니다.
+- 컨테이너를 멈추거나 바꿀 때(`docker compose stop`, 새 이미지로 `up`) Kubeast 서비스마다 마무리할 시간 35초를 줍니다(`stop_grace_period`). 기본 `podShutdown.preStopSeconds: 5`일 때, 터미널 드레인을 하지 않는 파드에 차트가 주는 종료 유예와 같습니다. 여기서는 k8s-service도 드레인하지 않습니다. Compose는 컨테이너를 멈춘 뒤에 다음 컨테이너를 띄우므로 터미널을 넘겨받을 다른 서버가 없습니다. PostgreSQL과 Redis에는 Kubernetes 기본 종료 유예인 30초를 줍니다. Docker 기본값 10초면 서비스가 마무리 도중에 멈추고, PostgreSQL의 종료도 끊길 수 있습니다.
 
 `docker-compose`는 게시된 이미지를 pull합니다. 기본은 내려받은 태그의 버전이며 `KUBEAST_TAG`로 바꿀 수 있습니다. 소스에서 빌드하려면 다음을 실행하세요.
 
@@ -76,12 +77,14 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 
 ### 업그레이드
 
+0.7.7에서 0.7.8로 올릴 때는 먼저 [0.7.7에서 0.7.8로 업그레이드](upgrade-0.7.8.md)를 읽습니다. 업그레이드 전에 확인할 것, 바뀌는 것, 되돌리는 방법이 있습니다.
+
 ```bash
 helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
   -n kubeast --reset-then-reuse-values
 ```
 
-`--reset-then-reuse-values`는 직접 넣은 값을 그대로 두고 새 버전에 생긴 값을 더합니다. `--reuse-values`는 처음 설치한 버전의 기본값을 그대로 써서 뒤 버전에 생긴 값이 빠집니다. 차트는 그런 업그레이드를 이 안내와 함께 멈추고, 릴리스는 그대로 둡니다. `helm show values`에서 복사한 값 파일도 0.7.7부터는 같은 식으로 멈춥니다. 0.7.6 이하에서 복사한 파일은 `chartVersion`이 없지만, 0.7.8부터는 그 안의 `global.imageTag`(그 버전의 태그)로 멈춥니다. 직접 쓰는 값 파일에는 `chartVersion`과 `global.imageTag`를 넣지 마세요. 직접 빌드한 이미지의 `global.imageTag`처럼 릴리스의 `vX.Y.Z`가 아닌 태그는 멈추지 않습니다.
+`--reset-then-reuse-values`는 직접 넣은 값을 그대로 두고 새 버전에 생긴 값을 더합니다. `--reuse-values`는 처음 설치한 버전의 기본값을 그대로 써서 뒤 버전에 생긴 값이 빠지고, 이미지도 그 버전에 머뭅니다. 차트는 그런 업그레이드를 이 안내와 함께 멈추고, 릴리스는 그대로 둡니다. `helm show values`에서 복사한 값 파일도 0.7.7부터는 같은 식으로 멈춥니다. 0.7.6 이하에서 복사한 파일은 `chartVersion`이 없지만, 0.7.8부터는 그 안의 `global.imageTag`(그 버전의 태그)로 멈춥니다. 직접 쓰는 값 파일에는 `chartVersion`과 `global.imageTag`를 넣지 마세요. 직접 빌드한 이미지의 `global.imageTag`처럼 릴리스의 `vX.Y.Z`가 아닌 태그는 멈추지 않습니다. 직접 넣은 값을 새 버전이 더는 읽지 않을 때도 업그레이드가 멈추고 대신 넣을 값을 알려 줍니다. 그 값은 값 파일에서 빼세요.
 
 0.7.8로 업그레이드하면 이름이 다른 역할이나 기본 역할과 같은 그룹이 되는 사용자 정의 역할(`Admin` 옆의 `ADMIN`)의 이름을 `<이름>-renamed-<id>`로 바꾸고 그 역할의 클러스터 부여를 지우며, 바뀐 것마다 감사 행을 남깁니다. 무엇이 바뀌는지와 그 뒤에 할 일은 [기능](features.md)의 "역할 이름"에 있습니다. 업그레이드 전에 Kubeast 데이터베이스에서 아래 쿼리(읽기만 함)를 실행하면 이름이 바뀔 역할, 각 역할이 그룹을 함께 쓰는 역할(`same_group_as`), 각 역할의 부여·임시 부여의 복원·대기 중이거나 승인된 접근 요청·계정 등급 수를 볼 수 있습니다. `same_group_as`가 `Pending`인 역할의 계정 등급은 기본 `Pending`으로 옮겨지고, 나머지는 바뀐 이름의 역할에 남습니다.
 
@@ -144,6 +147,21 @@ SELECT name, 'kubeast:role:' || slug_0_7_7 AS group_0_7_7, 'kubeast:role:' || sl
  ORDER BY name;
 ```
 
+0.7.8부터 k8s-service와 tool-server는 자기 사용자로 차트의 Redis에 로그인합니다. `secrets.existingSecret`을 쓰면 그 Secret에 `REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD`, AI를 켰다면 `REDIS_TOOL_SERVER_PASSWORD`까지 넣고 `redis.acl.existingSecretHasKeys: true`로 둘 때까지 비밀번호 하나를 그대로 씁니다([Redis 사용자](configuration.md#redis-사용자)).
+
+0.7.8부터 `pdb.minAvailable`은 없습니다. 레플리카를 2개 이상으로 두거나 autoscaling의 `minReplicas`가 2 이상인 서비스만 PodDisruptionBudget을 받고, 노드 drain이 그중 한 번에 몇 개를 내보낼 수 있는지는 `pdb.maxUnavailable`(1)이 정합니다. 값에 `pdb.minAvailable`이 남아 있으면 업그레이드가 그렇다고 말하고 멈춥니다. 그 줄을 지우고, 다른 수를 원하면 `pdb.maxUnavailable`을 넣으세요.
+
+**0.7.8부터 기본 모델은 `gpt-4o-mini` 대신 `gpt-6-luna`입니다.** OpenAI는 2027-01-14에 `gpt-4o-mini-2024-07-18`을 종료하고 대체 모델로 `gpt-6-luna`를 안내합니다([deprecations](https://developers.openai.com/api/docs/deprecations)).
+
+- 업그레이드는 저장된 모델 설정의 모델을 바꾸지 않습니다. ai-service가 처음 시작할 때 `ai.model`로 만든 `default-openai` 설정도 그대로입니다. 2027-01-14 전에 **Admin > AI Models**에서 바꾸세요.
+- 게이트웨이(LiteLLM 등)는 등록한 모델 이름에만 답합니다. 설정에서 쓰기 전에 게이트웨이에 `gpt-6-luna`를 추가하세요.
+- `gpt-6-luna`는 Chat Completions에서 `reasoning_effort: "none"`일 때만 도구를 받습니다. Kubeast는 OpenAI · Azure OpenAI 공급자의 `gpt-6-sol` · `gpt-6-luna`라는 이름에는 모든 호출에 이 값을 보냅니다. 다른 이름으로 `gpt-6-luna`에 닿는 설정(게이트웨이 별칭, 공급자 `custom`, Azure 배포)은 도구 호출이 OpenAI의 400 "Function tools with reasoning_effort are not supported"로 거절되면 그 호출을 `none`으로 다시 보내고, 그 뒤로는 처음부터 `none`을 보냅니다(ai-service 파드마다, 재시작 전까지. [기능](features.md)의 "AI 어시스턴트"). 다른 문구의 거절은 `none`으로 다시 보내지 않습니다. Azure OpenAI와 게이트웨이가 OpenAI와 같은 문구를 쓰는지는 확인하지 않았습니다. 첫 호출부터 보내려면 그 설정의 옵션에 `"reasoning_effort": "none"`을 넣으세요.
+- 저장된 설정이 없고 `ai.model`도 직접 넣지 않은 설치(키 없이 `ai.baseUrl`의 게이트웨이를 쓰는 설치)는 업그레이드 뒤 `gpt-6-luna`를 보냅니다. 게이트웨이에 먼저 등록하거나, `ai.model`을 게이트웨이에 있는 이름으로 넣으세요.
+- 직접 쓰는 값 파일에 `ai.model: gpt-4o-mini`가 있으면(예: 0.7.7의 `helm show values`에서 복사한 파일) 그대로 남습니다. 2027-01-14 전에 바꾸세요.
+- Docker Compose는 `.env`의 `OPENAI_MODEL`을 읽습니다. `install-docker.sh`를 다시 돌려도 이미 있는 `OPENAI_MODEL`과 `OPENAI_BASE_URL`은 그대로 둡니다. 0.7.7 이하가 쓴 `.env`에는 `gpt-4o-mini`가 있으니 2027-01-14 전에 바꾸세요. `ai.model`처럼 저장된 설정이 없을 때만 모델을 정합니다.
+- `KUBEAST_TAG`를 v0.7.7 이하로 두면 `OPENAI_MODEL`도 그 이미지가 쓸 수 있는 모델로 두세요. 그 이미지는 `reasoning_effort`를 보내지 않아 `gpt-6-luna`로 가는 도구 호출이 모두 거절됩니다.
+- 1M 토큰당 가격: `gpt-6-luna` 입력 $0.10 · 출력 $0.50, `gpt-4o-mini` 입력 $0.15 · 출력 $0.60. `gpt-6-luna`에 입력이 272K 토큰을 넘는 요청은 그 요청 전체가 입력 · 캐시 입력 2배, 출력 1.5배로 청구됩니다. 추론 토큰은 출력으로 청구됩니다([pricing](https://developers.openai.com/api/docs/pricing), [모델](https://developers.openai.com/api/docs/models/gpt-6-luna), [reasoning](https://developers.openai.com/api/docs/guides/reasoning), 2026-11-15 확인).
+
 ### 제거
 
 ```bash
@@ -158,6 +176,7 @@ helm uninstall kubeast -n kubeast      # K8s
 | PersistentVolumeClaim `kubeast-postgres-data` | 데이터베이스(`postgresql.persistence.resourcePolicy: keep`) |
 | Secret `kubeast-secrets` | 데이터베이스·관리자 비밀번호, values에 넣은 AI 키, 웹훅·내부 토큰 |
 | Secret `kubeast-auth-keys` | 로그인 토큰에 서명하는 키 |
+| Secret `kubeast-redis-users` | Redis 사용자의 비밀번호([Redis 사용자](configuration.md#redis-사용자)) |
 | 레이블 `app.kubernetes.io/managed-by=kubeast`가 붙은 Secret | Kubeast가 등록한 클러스터마다 쓴 것: 그 kubeconfig, 저장소의 인증 헤더 |
 | CustomResourceDefinition `modelconfigs.ai.kubeast.io` | 리소스로 쓰는 AI 모델의 종류와 그 리소스 |
 | Namespace `kubeast` | Helm은 네임스페이스를 지우지 않습니다 |
@@ -330,11 +349,19 @@ Claude Code가 부르는 도구는 채팅의 도구 코드가 이 프로세스 �
   - ai-service가 받은 환경변수는 경로, 프록시, CA 변수를 빼고 모두 빈 값으로 덮어쓰므로 모델 키나 DB 주소가 넘어가지 않습니다.
   - 토큰은 `CLAUDE_CODE_OAUTH_TOKEN`으로만 전달합니다.
 - **규칙**: `CLAUDE_CODE_OAUTH_TOKEN`은 claude-code만 쓸 수 있고, claude-code는 base_url과 다른 공급자의 키 변수를 받지 않습니다. 꺼진 설치에서 새 claude-code 설정을 저장하면 400으로 거절되고, 연결 테스트가 그 이유를 보여 줍니다.
-- **한도**: 동시에 실행되는 턴은 `maxConcurrent`까지입니다(기본 1, 나머지는 대기).
+- **한도**: 채팅 턴은 두 한도 아래의 칸을 이 순서로 잡아야 실행됩니다.
+  - `maxConcurrent`(기본 2)는 ai-service 서버 한 대의 한도입니다. 서버 한 대가 동시에 띄우는 Claude Code 프로세스 수이므로 메모리를 정합니다.
+  - `maxConcurrentTotal`(기본 0, `maxConcurrent`와 같은 수라는 뜻)은 설치 전체의 한도입니다. ai-service 복제본이 모두 DB로 함께 세므로, 서버가 몇 대든 구독 사용량이 이 수를 넘지 않습니다. 서버당 2 × 3대면 `maxConcurrentTotal`이 6 이상일 때만 6개가 동시에 실행됩니다.
+  - 칸을 잡은 서버가 멈추면(장애, 노드 유실) 그 칸은 60초 뒤 저절로 풀립니다.
+  - DB가 응답하지 않아 서버가 60초 동안 칸을 갱신하지 못하면 그 칸은 다음 차례가 가져가고, 이미 실행 중인 답변은 끝까지 갑니다. 그 답변이 끝날 때까지 설치 전체에서 `maxConcurrentTotal`보다 하나 더 실행될 수 있고, 서버마다의 `maxConcurrent`는 그대로 지켜집니다.
   - 한 턴은 `turnTimeoutSeconds`(기본 300초)와 `maxTurns`(기본 모델 호출 10회)를 넘지 않습니다.
-  - 턴마다 Claude Code 프로세스(최대 약 300 MB)가 하나씩 뜨므로, `maxConcurrent`를 올리면 `resources.aiService.limits.memory`도 함께 올리세요.
+  - 턴마다 Claude Code 프로세스(최대 약 300 MB)가 하나씩 뜹니다. 프로바이더가 켜져 있으면 ai-service의 메모리 한도는 `resources.aiService.limits.memory`(기본 1Gi)와 `ai.providers.claudeCode.memoryLimit`(기본 2Gi: 서비스 자체와 채팅 프로세스 2개, 조사 프로세스 1개) 중 큰 값입니다. `maxConcurrent`를 올리면 하나에 300 MB쯤씩 `memoryLimit`도 올리세요. `""`로 두면 `resources.aiService.limits.memory` 그대로 둡니다.
+- **기다림**: 칸이 비지 않은 턴은 `queueWaitSeconds`(기본 60초)까지 기다립니다.
+  - 그동안 AI Chat과 플로팅 채팅에 "차례를 기다립니다 — 다른 질문을 처리하고 있습니다."가 보입니다.
+  - 그 시간을 넘기면 답변이 "Claude Code가 바쁩니다. 잠시 뒤 다시 질문하세요."로 끝납니다.
+  - 중단을 누르면 바로 줄에서 빠지고 칸을 잡지 않습니다.
 - **알림 → AI 조사**도 이 프로바이더로 실행됩니다.
-  - 조사기는 한 번에 하나씩 돌며 채팅과 별도의 칸을 쓰므로, 조사 중에도 채팅이 기다리지 않습니다.
-  - 그래서 조사가 켜져 있으면 Claude Code 프로세스가 `maxConcurrent` + 1개까지 뜹니다.
+  - 조사기는 서버마다 한 번에 하나씩 돌며 채팅과 별도의 칸을 쓰고 `maxConcurrentTotal`에 세지 않으므로, 조사 중에도 채팅이 기다리지 않습니다. 서버가 3대면 조사가 3개까지 동시에 돕니다.
+  - 그래서 조사가 켜져 있으면 서버 한 대에 Claude Code 프로세스가 `maxConcurrent` + 1개까지 뜹니다.
   - 단계 상한은 API 키를 쓸 때와 같은 `maxSteps`이며, 마지막 단계에서는 도구 없이 보고서를 씁니다.
 - **안 되는 것**: 공급자 모델 목록은 없습니다. 내장 목록에서 고르거나 이름을 직접 입력하세요.

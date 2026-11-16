@@ -7,7 +7,8 @@ metadata:
     app: auth-service
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicas.authService }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "authService") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
   selector:
     matchLabels:
       app: auth-service
@@ -19,6 +20,7 @@ spec:
         checksum/config: {{ include "kubeast.configChecksum" . }}
     spec:
       serviceAccountName: auth-service
+      {{- include "kubeast.terminationGrace" . | nindent 6 }}
       # fsGroup lets uid 65532 read the 0440 Secret-mounted signing key
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532 "fsGroup" 65532) | nindent 6 }}
       {{- include "kubeast.topologySpread" (dict "root" $ "app" "auth-service") | nindent 6 }}
@@ -80,15 +82,16 @@ spec:
             {{- include "kubeast.dbCAVolumeMount" . | nindent 12 }}
             {{- include "kubeast.customCAVolumeMount" . | nindent 12 }}
           {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8004) | nindent 10 }}
+          {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             httpGet:
-              path: /health
+              path: /readyz
               port: 8004
             initialDelaySeconds: 3
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /health
+              path: /livez
               port: 8004
             initialDelaySeconds: 5
             periodSeconds: 30
@@ -145,7 +148,8 @@ metadata:
     app: ai-service
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicas.aiService }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "aiService") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
   selector:
     matchLabels:
       app: ai-service
@@ -157,6 +161,7 @@ spec:
         checksum/config: {{ include "kubeast.configChecksum" . }}
     spec:
       automountServiceAccountToken: false
+      {{- include "kubeast.terminationGrace" . | nindent 6 }}
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}
       {{- include "kubeast.topologySpread" (dict "root" $ "app" "ai-service") | nindent 6 }}
       containers:
@@ -164,7 +169,7 @@ spec:
           image: "{{ .Values.images.aiService }}:{{ .Values.global.imageTag }}{{ if .Values.ai.providers.claudeCode.enabled }}{{ .Values.ai.providers.claudeCode.imageTagSuffix }}{{ end }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
-          {{- include "kubeast.resources" (dict "root" $ "key" "aiService") | nindent 10 }}
+          {{- include "kubeast.aiServiceResources" $ | nindent 10 }}
           ports:
             - containerPort: 8001
           envFrom:
@@ -186,6 +191,7 @@ spec:
               mountPath: /tmp
             {{- include "kubeast.dbCAVolumeMount" . | nindent 12 }}
             {{- include "kubeast.customCAVolumeMount" . | nindent 12 }}
+          {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /api/v1/ai/health
@@ -225,13 +231,11 @@ metadata:
     {{- include "kubeast.labels" $ | nindent 4 }}
 spec:
   {{- if $api }}
-  {{- if gt (int $.Values.replicas.k8sService) 1 }}
-  {{- fail "replicas.k8sService must be 1: node drain progress and per-cluster client caches live in process memory" }}
-  {{- end }}
-  replicas: {{ $.Values.replicas.k8sService }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "k8sService") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
   {{- else }}
   {{- if gt (int $.Values.streams.replicas) 1 }}
-  {{- fail "streams.replicas must be 1: a stream server's client caches are not told of a cluster's change" }}
+  {{- fail "streams.replicas must be 1: more than one stream server is not supported yet" }}
   {{- end }}
   {{- if eq (toString $.Values.sessionRecording.storage) "file" }}
   {{- fail "sessionRecording.storage file and streams.enabled: the stream server writes the recordings and k8s-service reads them, and one file volume is mounted by one pod — use s3 or database" }}
@@ -255,10 +259,8 @@ spec:
         checksum/config: {{ include "kubeast.configChecksum" $ }}
     spec:
       serviceAccountName: k8s-service
-      {{- if $streams }}
-      # {{ if $api }}the drain (STREAM_DRAIN_SECONDS){{ else }}preStop, then the drain (STREAM_DRAIN_SECONDS){{ end }}, then the drain's close wait, the server's shutdown and the recorder's
-      terminationGracePeriodSeconds: {{ add (ternary 0 (int $.Values.streams.preStopSeconds) $api) (int $.Values.streams.drainSeconds) 30 }}
-      {{- end }}
+      # the preStop wait, {{ if $streams }}the drain (STREAM_DRAIN_SECONDS) and its close wait, {{ end }}the server's shutdown and the recorder's, 5 s to spare
+      terminationGracePeriodSeconds: {{ include "kubeast.graceSeconds" (dict "preStop" (ternary (include "kubeast.preStopSeconds" $) (int $.Values.streams.preStopSeconds) $api) "drain" (ternary (add (int $.Values.streams.drainSeconds) 5) 0 $streams)) }}
       # recording on: fsGroup lets uid 65532 read the 0440 recording Secret and write a spool/store PVC
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532 "fsGroup" (ternary 65532 0 $.Values.sessionRecording.enabled)) | nindent 6 }}
       {{- include "kubeast.topologySpread" (dict "root" $ "app" $name) | nindent 6 }}
@@ -322,6 +324,18 @@ spec:
               value: "{{ $.Values.multicluster.bigReadConcurrency | default 2 }}"
             - name: EVENT_LIST_CONCURRENCY
               value: "{{ $.Values.multicluster.eventListConcurrency | default 4 }}"
+            {{- if include "kubeast.redisAcl" $ }}
+            # Redis user k8s-service (redis.acl) in every role; this REDIS_PASSWORD takes the place of kubeast-secrets' one. optional:
+            # a Secret of secrets.existingSecret without the key leaves the cache in memory instead of the pod not starting.
+            - name: REDIS_USERNAME
+              value: k8s-service
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kubeast.redisUsersSecretName" $ }}
+                  key: REDIS_K8S_SERVICE_PASSWORD
+                  optional: true
+            {{- end }}
             {{- if $api }}
             {{- with $.Values.features.prometheus.auth.existingSecret }}
             - name: PROMETHEUS_AUTH_HEADER
@@ -377,23 +391,24 @@ spec:
             {{- end }}
           {{- end }}
           {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8002) | nindent 10 }}
+          {{- if $api }}
+          {{- include "kubeast.preStop" $ | nindent 10 }}
+          {{- end }}
           readinessProbe:
             httpGet:
-              {{- if not $api }}
-              # /ready answers 503 once the server is draining; /health stays 200 for the liveness probe
-              {{- end }}
-              path: {{ ternary "/health" "/ready" $api }}
+              path: /readyz
               port: 8002
             initialDelaySeconds: 3
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /health
+              path: /livez
               port: 8002
             initialDelaySeconds: 10
             periodSeconds: 30
           {{- if not $api }}
-          # out of the Service's endpoints before SIGTERM starts the drain (sleep action: the image has no shell)
+          # out of the Service's endpoints before SIGTERM starts the drain (sleep action: the image has no shell);
+          # streams.preStopSeconds is this container's one preStop wait, podShutdown.preStopSeconds is the api server's
           lifecycle:
             preStop:
               sleep:
@@ -426,7 +441,8 @@ metadata:
     app: session-service
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicas.sessionService }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "sessionService") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
   selector:
     matchLabels:
       app: session-service
@@ -438,6 +454,7 @@ spec:
         checksum/config: {{ include "kubeast.configChecksum" . }}
     spec:
       automountServiceAccountToken: false
+      {{- include "kubeast.terminationGrace" . | nindent 6 }}
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}
       {{- include "kubeast.topologySpread" (dict "root" $ "app" "session-service") | nindent 6 }}
       containers:
@@ -459,15 +476,16 @@ spec:
           {{- end }}
           {{- include "kubeast.serviceVolumeMountsBlock" . | nindent 10 }}
           {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8003) | nindent 10 }}
+          {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             httpGet:
-              path: /health
+              path: /readyz
               port: 8003
             initialDelaySeconds: 3
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /health
+              path: /livez
               port: 8003
             initialDelaySeconds: 10
             periodSeconds: 30
@@ -482,7 +500,8 @@ metadata:
     app: frontend
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicas.frontend }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "frontend") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
   selector:
     matchLabels:
       app: frontend
@@ -492,6 +511,7 @@ spec:
         app: frontend
     spec:
       automountServiceAccountToken: false
+      {{- include "kubeast.terminationGrace" . | nindent 6 }}
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 101) | nindent 6 }}
       {{- include "kubeast.topologySpread" (dict "root" $ "app" "frontend") | nindent 6 }}
       containers:
@@ -505,6 +525,7 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+          {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /
@@ -531,10 +552,8 @@ metadata:
     app: tool-server
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  {{- if gt (int .Values.replicas.toolServer) 1 }}
-  {{- fail "replicas.toolServer must be 1: the per-cluster kubeconfig cache and its invalidation endpoint are per process" }}
-  {{- end }}
-  replicas: {{ .Values.replicas.toolServer }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "toolServer") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" $ | nindent 2 }}
   selector:
     matchLabels:
       app: tool-server
@@ -546,6 +565,7 @@ spec:
         checksum/config: {{ include "kubeast.configChecksum" . }}
     spec:
       serviceAccountName: tool-server
+      {{- include "kubeast.terminationGrace" . | nindent 6 }}
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}
       {{- include "kubeast.topologySpread" (dict "root" $ "app" "tool-server") | nindent 6 }}
       containers:
@@ -577,21 +597,34 @@ spec:
               value: /tmp/kube-cache
             - name: TOOL_SERVER_KUBECTL_CONCURRENCY
               value: "{{ .Values.multicluster.toolServerKubectlConcurrency | default 3 }}"
+            {{- if include "kubeast.redisAcl" . }}
+            # Redis user tool-server (redis.acl): listens to the cluster change notices, reads no key. This REDIS_PASSWORD
+            # takes the place of kubeast-secrets' one; optional, as k8s-service's: without it the kubeconfigs still expire.
+            - name: REDIS_USERNAME
+              value: tool-server
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kubeast.redisUsersSecretName" . }}
+                  key: REDIS_TOOL_SERVER_PASSWORD
+                  optional: true
+            {{- end }}
             {{- with include "kubeast.awsEnv" . }}{{ nindent 12 . }}{{- end }}
             {{- with include "kubeast.customCAGoEnv" . }}{{ . | trim | nindent 12 }}{{ end }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp
             {{- include "kubeast.customCAVolumeMount" . | nindent 12 }}
+          {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             httpGet:
-              path: /health
+              path: /readyz
               port: 8086
             initialDelaySeconds: 2
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /health
+              path: /livez
               port: 8086
             initialDelaySeconds: 5
             periodSeconds: 30
@@ -610,6 +643,8 @@ metadata:
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
   replicas: 1
+  # Leader election keeps the new controller waiting until the old one lets go.
+  {{- include "kubeast.rollingUpdate" . | nindent 2 }}
   selector:
     matchLabels:
       app: model-config-controller-go

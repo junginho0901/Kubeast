@@ -75,6 +75,11 @@ type clientBundle struct {
 	metricsServed     atomic.Pointer[metricsVerdict]
 	metricsServedRead flight.Group[metricsServing]
 
+	// configVersion is the registry's config_version of the Info this bundle
+	// was built from (internal/clustersync drops it once the registry has
+	// another).
+	configVersion int64
+
 	// cacheClient is the identity the overview informers watch as; inf is the
 	// running set, if any (informer_cache.go). id names the cluster in logs.
 	id          cluster.ID
@@ -131,6 +136,9 @@ type Service struct {
 	watchEnabled bool
 
 	cache *cache.Cache
+
+	// changes tells the other replicas of a cluster this one invalidated (internal/clustersync).
+	changes ChangeNotifier
 
 	// These discovery caches are PER CLUSTER — Gateway/DRA CRD versions and the
 	// API-resource set differ between clusters, so they're keyed by cluster.ID to
@@ -342,20 +350,21 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	}
 	promExt, promSvc := promSourceFromInfo(info)
 	b := &clientBundle{
-		clientset:   clientset,
-		authz:       authz,
-		dynamic:     dynClient,
-		discovery:   clientset.Discovery(),
-		restConfig:  cfg,
-		prom:        &promCache{},
-		promExt:     promExt,
-		promSvc:     promSvc,
-		logStore:    logStoreFromInfo(info),
-		cost:        &costCache{},
-		id:          info.ID,
-		protected:   protected,
-		cacheClient: cacheClient,
-		noInformers: informersOff,
+		clientset:     clientset,
+		authz:         authz,
+		dynamic:       dynClient,
+		discovery:     clientset.Discovery(),
+		restConfig:    cfg,
+		prom:          &promCache{},
+		promExt:       promExt,
+		promSvc:       promSvc,
+		logStore:      logStoreFromInfo(info),
+		cost:          &costCache{},
+		configVersion: info.ConfigVersion,
+		id:            info.ID,
+		protected:     protected,
+		cacheClient:   cacheClient,
+		noInformers:   informersOff,
 	}
 	b.sharesChecks = sharesChecksOn(info.ID)
 	return b, nil
@@ -457,16 +466,66 @@ func (s *Service) ClusterKubeconfig(ctx context.Context, id cluster.ID) (blob st
 	return info.KubeconfigBlob, false, nil
 }
 
+// ChangeNotifier tells the other replicas that this one invalidated a cluster (internal/clustersync).
+type ChangeNotifier interface {
+	Changed(id cluster.ID)
+}
+
+// SetChangeNotifier makes Invalidate tell the other replicas; without one it acts on this replica only.
+func (s *Service) SetChangeNotifier(n ChangeNotifier) { s.changes = n }
+
 // Invalidate drops a cluster's cached bundle (e.g. after a kubeconfig rotation)
 // so the next access rebuilds it from the registry — no rollout required.
 func (s *Service) Invalidate(id cluster.ID) {
+	s.dropBundle(id)
+	s.invalidateCaches()
+	if s.changes != nil {
+		s.changes.Changed(id)
+	}
+}
+
+// DropCluster is Invalidate for a change another replica took. That replica flushed the cache in Redis, so this one
+// flushes only a cache of its own (Redis did not answer at start) and tells no one.
+func (s *Service) DropCluster(id cluster.ID) {
+	s.dropBundle(id)
+	s.dropDerivedCaches()
+	if s.cache != nil && !s.cache.IsConnected() {
+		_ = s.cache.FlushAll(context.Background())
+	}
+}
+
+// ClusterVersions is the config_version each cluster this process keeps a bundle of was built from.
+func (s *Service) ClusterVersions() map[cluster.ID]int64 {
+	p := s.pool()
+	out := make(map[cluster.ID]int64, p.Len())
+	for _, id := range p.Keys() {
+		if b, ok := p.Peek(id); ok {
+			out[id] = b.configVersion
+		}
+	}
+	return out
+}
+
+// DropStale is Invalidate for a change read from the registry's versions (internal/clustersync): the bundle of id built
+// from builtFrom goes, a bundle built since stays. No replica may have been told of the change, so the cache goes
+// everywhere, as on the replica auth-service tells; the others are not told, each reads the versions itself.
+func (s *Service) DropStale(id cluster.ID, builtFrom int64) {
+	p := s.pool()
+	if b, ok := p.Peek(id); ok && b.configVersion == builtFrom {
+		p.Remove(id) // evict callback Closes the bundle
+	}
+	s.defaultBundle.Store(nil)
+	s.MarkClusterUp(id)
+	s.invalidateCaches()
+}
+
+func (s *Service) dropBundle(id cluster.ID) {
 	s.pool().Remove(id) // evict callback Closes the bundle
 	s.defaultBundle.Store(nil)
 	// Reset the breaker: invalidation (e.g. a kubeconfig rotation that fixes a
 	// down cluster) gives the cluster a fresh chance, so the next request is
 	// actually tried instead of fail-fast 503'd until the next health poll.
 	s.MarkClusterUp(id)
-	s.invalidateCaches()
 	if sharedReadChecks.on && len(sharedReadChecks.exclude) > 0 {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -490,8 +549,17 @@ func (s *Service) defaultClientBundle() *clientBundle {
 	return b
 }
 
-// invalidateCaches clears state derived from a clientBundle.
+// invalidateCaches clears state derived from a clientBundle, and the cache.
 func (s *Service) invalidateCaches() {
+	s.dropDerivedCaches()
+	if s.cache != nil {
+		// Best-effort: ignore errors from Redis flush.
+		_ = s.cache.FlushAll(context.Background())
+	}
+}
+
+// dropDerivedCaches clears the discovery, Prometheus and access check answers this process keeps.
+func (s *Service) dropDerivedCaches() {
 	s.apiResourcesMu.Lock()
 	s.apiResourcesCache = map[cluster.ID][]metav1.APIResourceList{}
 	s.apiResourcesAt = map[cluster.ID]time.Time{}
@@ -504,11 +572,6 @@ func (s *Service) invalidateCaches() {
 
 	s.promQ.clear()
 	s.accessAnswers.clear()
-
-	if s.cache != nil {
-		// Best-effort: ignore errors from Redis flush.
-		_ = s.cache.FlushAll(context.Background())
-	}
 }
 
 // --- Context-less accessors (default cluster) ---

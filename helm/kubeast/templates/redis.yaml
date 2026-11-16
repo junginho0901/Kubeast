@@ -1,4 +1,9 @@
 {{- if .Values.redis.enabled }}
+{{- $acl := include "kubeast.redisAcl" . }}
+{{- $maxmemory := include "kubeast.redisMaxmemory" . }}
+{{- /* The probes sign in as probe (PING only) with REDISCLI_AUTH, or with requirepass as before. */ -}}
+{{- $probe := `["sh", "-c", "redis-cli --no-auth-warning -a \"$REDIS_PASSWORD\" ping | grep -q PONG"]` }}
+{{- if $acl }}{{ $probe = `["sh", "-c", "redis-cli --user probe ping | grep -q PONG"]` }}{{ end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -8,6 +13,14 @@ metadata:
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
   replicas: 1
+  # one Redis at a time: the old pod stops before the new one starts. RollingUpdate with maxSurge 0, not Recreate:
+  # a release of 0.7.7 or earlier has RollingUpdate with the API's defaulted rollingUpdate, which an upgrade could not
+  # switch to Recreate ("may not be specified when strategy type is 'Recreate'")
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: redis
@@ -15,41 +28,120 @@ spec:
     metadata:
       labels:
         app: redis
+      {{- if $acl }}
+      annotations:
+        # the users and their rules (no password): a change restarts Valkey, which reads the ACL file at start
+        checksum/redis-users: {{ include "kubeast.redisUsersAcl" . | sha256sum }}
+      {{- end }}
     spec:
       automountServiceAccountToken: false
+      {{- if $acl }}
+      # fsGroup 999 reads the 0440 password files
+      {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 999 "fsGroup" 999) | nindent 6 }}
+      initContainers:
+        # Writes the ACL file from the password files: each password's SHA-256 only, in memory, read-only to Valkey.
+        - name: acl
+          image: {{ .Values.images.redis }}
+          {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
+          {{- include "kubeast.resources" (dict "root" $ "key" "redis") | nindent 10 }}
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -eu
+              # not "hash", a shell builtin
+              pwhash() {
+                if [ ! -s "/run/kubeast/redis-passwords/$1" ]; then
+                  echo "redis users: $1 is not in Secret {{ include "kubeast.redisUsersSecretName" . }}; add it (docs/configuration.md \"Redis users\") or {{ include "kubeast.redisUsersWayOut" . }}" >&2
+                  exit 1
+                fi
+                sha256sum < "/run/kubeast/redis-passwords/$1" | cut -d' ' -f1
+              }
+              k8s_service=$(pwhash REDIS_K8S_SERVICE_PASSWORD)
+              probe=$(pwhash REDIS_PROBE_PASSWORD)
+              {{- if .Values.ai.enabled }}
+              tool_server=$(pwhash REDIS_TOOL_SERVER_PASSWORD)
+              {{- end }}
+              # a pod started again keeps its emptyDir, and the file in it is read-only
+              rm -f /run/kubeast/redis-acl/users.acl
+              cat > /run/kubeast/redis-acl/users.acl <<EOF
+              {{- include "kubeast.redisUsersAcl" . | nindent 14 }}
+              EOF
+              chmod 0444 /run/kubeast/redis-acl/users.acl
+          volumeMounts:
+            - name: passwords
+              mountPath: /run/kubeast/redis-passwords
+              readOnly: true
+            - name: acl
+              mountPath: /run/kubeast/redis-acl
+      {{- else }}
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 999) | nindent 6 }}
+      {{- end }}
       containers:
         - name: redis
           image: {{ .Values.images.redis }}
           {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
           {{- include "kubeast.resources" (dict "root" $ "key" "redis") | nindent 10 }}
+          {{- if $acl }}
+          # maxmemory: 80% of the memory limit; volatile-lru evicts only keys with a TTL (the cache), never the keys without one
+          args: ["--aclfile", "/run/kubeast/redis-acl/users.acl", "--maxmemory", "{{ $maxmemory }}", "--maxmemory-policy", "volatile-lru"]
+          env:
+            # valkey-cli (redis-cli) reads the password from this variable, not from its arguments
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kubeast.redisUsersSecretName" . }}
+                  key: REDIS_PROBE_PASSWORD
+          {{- else }}
           # requirepass from kubeast-secrets (REDIS_PASSWORD); the probes sign
           # in with the same value.
-          args: ["--requirepass", "$(REDIS_PASSWORD)"]
+          args: ["--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "{{ $maxmemory }}", "--maxmemory-policy", "volatile-lru"]
           env:
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ include "kubeast.secretsName" . }}
                   key: REDIS_PASSWORD
+          {{- end }}
           ports:
             - containerPort: 6379
           volumeMounts:
             - name: data
               mountPath: /data
+            {{- if $acl }}
+            - name: acl
+              mountPath: /run/kubeast/redis-acl
+              readOnly: true
+            {{- end }}
           readinessProbe:
             exec:
-              command: ["sh", "-c", "redis-cli --no-auth-warning -a \"$REDIS_PASSWORD\" ping | grep -q PONG"]
+              command: {{ $probe }}
             initialDelaySeconds: 2
             periodSeconds: 10
           livenessProbe:
             exec:
-              command: ["sh", "-c", "redis-cli --no-auth-warning -a \"$REDIS_PASSWORD\" ping | grep -q PONG"]
+              command: {{ $probe }}
             initialDelaySeconds: 10
             periodSeconds: 30
       volumes:
         - name: data
           emptyDir: {}
+        {{- if $acl }}
+        - name: acl
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: passwords
+          secret:
+            secretName: {{ include "kubeast.redisUsersSecretName" . }}
+            defaultMode: {{ include "kubeast.secretMode" . }}
+            # optional: a Secret of secrets.existingSecret without the keys stops the acl container with what to add
+            optional: true
+            items:
+              {{- range splitList " " (include "kubeast.redisUserKeys" .) }}
+              - key: {{ . }}
+                path: {{ . }}
+              {{- end }}
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service

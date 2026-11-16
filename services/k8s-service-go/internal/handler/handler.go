@@ -15,6 +15,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/alerts"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drain"
+	nodedrains "github.com/junginho0901/kubeast/services/k8s-service-go/internal/drains"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/flight"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/helm"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
@@ -30,6 +31,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/probe"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -40,10 +42,14 @@ type Handler struct {
 	auditStore audit.Writer
 	helmSvc    *helm.Service
 	recorder   *recording.Manager // nil or disabled: terminals are not recorded
+	// drains keeps node drain progress in the shared database (nil: drains answer 503).
+	drains *nodedrains.Tracker
 	// liveSessions ends long-lived answers with their session (nil: not checked).
 	liveSessions *auth.LiveSessions
 	// drain ends the terminals and followed logs when the server is replaced (nil: they are cut when it exits).
 	drain *drain.Drain
+	// leaving ends long-lived answers when the server starts to leave (nil: never).
+	leaving *probe.Probe
 	// hygieneStore keeps cluster hygiene sign-offs (nil in tests: no history).
 	hygieneStore hygiene.Store
 	// hygieneScan replaces svc.CollectHygiene in tests.
@@ -89,6 +95,9 @@ type Handler struct {
 // SetRecorder turns on terminal session recording (internal/recording).
 func (h *Handler) SetRecorder(m *recording.Manager) { h.recorder = m }
 
+// SetDrains sets where node drains keep their progress.
+func (h *Handler) SetDrains(t *nodedrains.Tracker) { h.drains = t }
+
 // SetWatchLimits holds the Helm releases' stream to the multiplexer's live watches and its places for starting one.
 func (h *Handler) SetWatchLimits(m *ws.Multiplexer) { h.watchLimits = m }
 
@@ -97,6 +106,9 @@ func (h *Handler) SetLiveSessions(s *auth.LiveSessions) { h.liveSessions = s }
 
 // SetDrain sets what holds the terminals and followed logs while the server is being replaced.
 func (h *Handler) SetDrain(d *drain.Drain) { h.drain = d }
+
+// SetLeaving sets what ends open terminals and followed streams when the server starts to leave (SIGTERM).
+func (h *Handler) SetLeaving(p *probe.Probe) { h.leaving = p }
 
 // New creates a new Handler. The helm service is derived from the same
 // k8s.Service and cache so Helm SDK calls observe the kubeconfig

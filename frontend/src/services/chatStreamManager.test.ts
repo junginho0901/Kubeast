@@ -319,6 +319,16 @@ describe('how an answer ends', () => {
     })
   })
 
+  it('a refused request whose server names the words for it keeps that key', async () => {
+    const state = await ended(new Response('{"detail":"the answer stream could not start","error_key":"streamStartFailed"}', { status: 500 }))
+    expect(state).toMatchObject({
+      status: 'error',
+      error: 'HTTP 500: the answer stream could not start',
+      errorKey: 'streamStartFailed',
+      errorArgs: { status: 500, detail: 'the answer stream could not start' },
+    })
+  })
+
   it.each([
     ['a page from a proxy', '<html><body>Bad Gateway</body></html>', 502],
     ['no body', '', 500],
@@ -806,5 +816,64 @@ describe('the cluster requests under the 🔐 line', () => {
     const both = accessSection(access, { requests: [LIST], total: 1 })
     expect(both).toBe(`${accessLine(access)}\n\n${requestsBlock({ requests: [LIST], total: 1 })}`)
     expect(accessSection(null, null)).toBe('')
+  })
+})
+
+describe('an answer that waits for its turn', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  const sse = (...events: unknown[]) => events.map((e) => `data: ${typeof e === 'string' ? e : JSON.stringify(e)}\n\n`).join('')
+
+  async function seen(body: string) {
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(body)))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    const queued: boolean[] = []
+    manager.subscribe((state) => {
+      if (queued[queued.length - 1] !== state.queued) queued.push(state.queued)
+    })
+    await manager.startSessionChat('s1', 'how many?')
+    await vi.runAllTimersAsync()
+    return { state: manager.getState(), queued }
+  }
+
+  it('is waiting from the server\'s queued true until its queued false, then the answer comes', async () => {
+    const { state, queued } = await seen(sse({ queued: true }, { queued: false }, { content: 'Two clusters.' }, '[DONE]'))
+    expect(queued).toEqual([false, true, false])
+    expect(state).toMatchObject({ status: 'completed', queued: false, content: 'Two clusters.', error: null })
+  })
+
+  it('is not waiting when the server sends no queued event', async () => {
+    const { queued } = await seen(sse({ content: 'Two clusters.' }, '[DONE]'))
+    expect(queued).toEqual([false])
+  })
+
+  it('that waits past the server\'s limit ends with the busy error and stops waiting', async () => {
+    const busy = { error: 'Claude Code is busy; ask again in a moment.', error_key: 'claudeCodeBusy', error_args: { provider: 'Claude subscription' } }
+    const { state, queued } = await seen(sse({ queued: true }, busy, '[DONE]'))
+    expect(queued).toEqual([false, true, false])
+    expect(state).toMatchObject({ status: 'error', isStreaming: false, queued: false, errorKey: 'claudeCodeBusy', error: busy.error })
+  })
+
+  it('stops waiting when the person presses Stop', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(sse({ queued: true })))
+        init.signal?.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')))
+      },
+    }))))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    void manager.startSessionChat('s1', 'how many?')
+    await vi.advanceTimersByTimeAsync(100)
+    expect(manager.getState().queued).toBe(true)
+    await manager.stop()
+    await vi.runAllTimersAsync()
+    expect(manager.getState()).toMatchObject({ status: 'aborted', queued: false })
   })
 })

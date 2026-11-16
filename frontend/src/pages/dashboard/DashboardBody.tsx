@@ -24,6 +24,8 @@ import { StorageModal } from './modals/StorageModal'
 import { useDashboardQueries } from './hooks/useDashboardQueries'
 import { useDashboardRefresh } from './hooks/useDashboardRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
+import { useMetricsNotReadForChat } from '@/hooks/useMetricsNotRead'
+import { topResourcesNotRead } from '@/utils/aiContext/metricsNotRead'
 import { useOptimizationStream } from './hooks/useOptimizationStream'
 import { useDashboardIssues } from './hooks/useDashboardIssues'
 import { useDashboardStorage } from './hooks/useDashboardStorage'
@@ -144,6 +146,7 @@ export function DashboardBody() {
     topResourcesError,
     modalNodes,
     isLoadingNodes,
+    windowListErrors,
     metricsUnavailable,
   } = useDashboardQueries({
     selectedResourceType,
@@ -161,6 +164,8 @@ export function DashboardBody() {
 
   // 플로팅 AI 위젯의 "현재 화면 컨텍스트" snapshot — useDashboardAIContext hook 으로 분리
   useDashboardAIContext({ overview, overviewError, nodes, topResources, problemPods })
+  // the top cards' numbers that could not be read go to the floating chat as the cards say it
+  useMetricsNotReadForChat(topResourcesNotRead(t, { loading: isLoadingTopResources, answer: topResources, failed: isTopResourcesError, error: topResourcesError, metricsUnavailable }))
 
   // Prometheus cluster-wide metrics
   const promCluster = usePrometheusQueries(
@@ -614,6 +619,7 @@ export function DashboardBody() {
         onClose={closeResourceModal}
         selectedStat={getSelectedStat()}
         isLoading={isLoadingResource()}
+        listError={selectedResourceType ? windowListErrors[selectedResourceType] : null}
         resourceCount={getResourceCount()}
         searchQuery={modalSearchQuery}
         setSearchQuery={setModalSearchQuery}

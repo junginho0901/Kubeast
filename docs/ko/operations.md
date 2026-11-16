@@ -228,7 +228,8 @@ AI 도구 `logfiles`는 같은 경로로 같은 파일의 목록을 보고 읽�
   - 컨테이너 런타임은 exec 클라이언트가 끊겨도 그 프로세스를 멈추지 않아서, 탭을 닫을 때마다 앱 컨테이너에 `tail`이 남기 때문입니다(실측).
   - 대신 2초마다 마지막으로 읽은 바이트 뒤만 `tail -c +<오프셋>`으로 읽고(탐색 방식이라 파일 크기와 무관), 가끔 `ls -lindL`로 크기와 inode를 확인해 잘림·교체(로그 회전)를 따라갑니다. 명령은 매번 바로 끝납니다.
   - 20초마다 SSE 주석을 보내 프록시가 유휴 연결을 끊지 않게 합니다(nginx 60초).
-  - 연결이 끊기면 브라우저가 스스로 다시 붙지 않습니다. 다시 붙으면 마지막 줄을 또 읽고 감사 행도 하나 더 생기기 때문입니다.
+  - 연결이 끊기면(업그레이드로 서버가 다시 시작될 때, 네트워크가 끊길 때) 브라우저가 스스로 다시 붙어 받은 마지막 줄의 표시(`Last-Event-ID` = `<inode>:<오프셋>`)를 보냅니다. 스트림은 마지막 줄들을 다시 읽지 않고 그 줄 다음부터 이어 보냅니다. 그사이 파일이 교체되거나 잘렸으면 알림과 함께 파일의 마지막 줄들을 보여 줍니다.
+  - 다시 붙을 때마다 감사 행이 하나씩 생기고, 그 행의 `after.resume_from`에 어디서부터 이어 받았는지 남습니다.
   - 한 번에 읽는 줄은 `maxLines`(기본 2000)까지입니다.
 
 ```yaml
@@ -345,7 +346,7 @@ features:
 `streams.enabled: true`이면 두 번째 Deployment `k8s-service-stream`이 k8s-service와 같은 이미지를 다른 역할(`SERVER_ROLE=stream`)로 돌립니다(Loki·Mimir가 한 바이너리를 `-target`으로 띄우는 것과 같은 방식).
 이 서버가 Pod exec, 노드 셸, 실시간 로그(컨테이너 출력, 로그 파일)를 맡고, k8s-service(`SERVER_ROLE=api`)가 실시간 목록을 포함한 나머지를 맡습니다.
 게이트웨이는 `files/nginx.conf`의 스트림 location 넷을 새 Service로 보내므로, 한쪽을 배포해도 다른 쪽 연결이 끊기지 않고 터미널이 많이 열려도 목록이 느려지지 않습니다.
-꺼져 있으면(기본) 예전처럼 k8s-service가 전부 맡고, 교체될 때 아래와 같은 방식으로 터미널을 차례로 끝냅니다(preStop 대기는 없음). `terminationGracePeriodSeconds`는 `drainSeconds + 30`(기본 90초)이고, 열린 터미널이 없으면 기다리지 않습니다.
+꺼져 있으면(기본) 예전처럼 k8s-service가 전부 맡고, 교체될 때 아래와 같은 방식으로 터미널을 차례로 끝냅니다(그 전에 `podShutdown.preStopSeconds`(5초) preStop 대기). `terminationGracePeriodSeconds`는 `podShutdown.preStopSeconds + drainSeconds + 35`(드레인 닫기 대기 5초, 노드 드레인 표시·서버 종료·녹화기 25초, 여유 5초 — 기본 100초)이고, 열린 터미널이 없으면 기다리지 않습니다.
 
 ```yaml
 streams:
@@ -358,7 +359,7 @@ resources:
     limits: { memory: 512Mi }
 ```
 
-- **k8s-service-stream이 교체될 때**(배포, 노드 비우기): 새 파드가 먼저 준비됩니다(`maxSurge: 1`, `maxUnavailable: 0`). 옛 파드는 `preStopSeconds`를 기다린 뒤 SIGTERM을 받으면 `/ready`에 503으로 답하고, 실시간 로그를 바로 끝내며(브라우저가 다시 붙어 마지막으로 받은 줄 다음부터 이어 받습니다), 터미널마다 언제 닫히는지 적습니다. `drainSeconds`가 지나도 열려 있는 터미널은 그 까닭과 함께 닫히고(close code 1001, `server_shutdown`) 다시 연결 버튼이 나옵니다. `terminationGracePeriodSeconds`는 `preStopSeconds + drainSeconds + 30`입니다.
+- **k8s-service-stream이 교체될 때**(배포, 노드 비우기): 새 파드가 먼저 준비됩니다(`maxSurge: 1`, `maxUnavailable: 0`). 옛 파드는 `preStopSeconds`를 기다린 뒤 SIGTERM을 받으면 `/readyz`에 503으로 답하고, 실시간 로그를 바로 끝내며(브라우저가 다시 붙어 마지막으로 받은 줄 다음부터 이어 받습니다), 터미널마다 언제 닫히는지 적습니다. `drainSeconds`가 지나도 열려 있는 터미널은 그 까닭과 함께 닫히고(close code 1001, `server_shutdown`) 다시 연결 버튼이 나옵니다. `terminationGracePeriodSeconds`는 `preStopSeconds + drainSeconds + 35`(기본 105초)입니다. k8s-service(api)는 `podShutdown.preStopSeconds`를 기다리고 그 + 30입니다.
 - **같은 신원**: 두 Deployment 모두 `k8s-service` 서비스 계정을 쓰므로 IRSA 역할과 녹화 저장소 자격 증명(`sessionRecording.secret`)이 둘 다에 적용됩니다. 녹화는 stream 서버가 쓰고 k8s-service가 읽습니다. 스풀 볼륨은 stream 서버에만 붙습니다.
 - **함께 쓸 수 없는 값**: `sessionRecording.storage: file`(볼륨 하나를 파드 둘이 붙일 수 없음)과 1보다 큰 `streams.replicas`.
 - **NetworkPolicy**: `k8s-service-stream`은 게이트웨이에서만 연결을 받고, 데이터베이스·Redis·auth-service·클러스터 API 서버·`sessionRecording.egress`로만 나갑니다.

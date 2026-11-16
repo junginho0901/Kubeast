@@ -15,13 +15,16 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/redis/go-redis/v9"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/alerts"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/clustersync"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drain"
+	nodedrains "github.com/junginho0901/kubeast/services/k8s-service-go/internal/drains"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
@@ -29,6 +32,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nfm"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/pglock"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/routes"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/sessioncheck"
@@ -39,11 +43,13 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
+	"github.com/junginho0901/kubeast/services/pkg/dbsession"
 	"github.com/junginho0901/kubeast/services/pkg/internalauth"
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 	"github.com/junginho0901/kubeast/services/pkg/logger"
 	"github.com/junginho0901/kubeast/services/pkg/memlimit"
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
+	"github.com/junginho0901/kubeast/services/pkg/probe"
 )
 
 // streamCloseWait is how long the drain waits, after the wait, for the cut terminals to say so and hang their shells up
@@ -77,13 +83,24 @@ func main() {
 		slog.Warn("INTERNAL_API_TOKEN is not set; /internal routes will answer 503")
 	}
 
-	// Init Redis cache
-	redisCache := cache.New(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisPassword)
+	// Init Redis cache. One whose Redis did not answer is in memory until Redis answers (asked every 5 s).
+	redisCache := cache.NewWithUser(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisUsername, cfg.RedisPassword)
+	cacheCtx, cacheCancel := context.WithCancel(context.Background())
+	defer cacheCancel()
+	go redisCache.Reconnect(cacheCtx, 5*time.Second)
 
 	// Shared Postgres pool: the audit log and the cluster registry.
 	bootCtx, bootCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer bootCancel()
-	pgPool, pgErr := pgxpool.New(bootCtx, cfg.DatabaseURLForPgx())
+	sessionLimits := dbsession.FromEnv()
+	pgCfg, pgErr := newPoolConfig(cfg.DatabaseURLForPgx(), sessionLimits)
+	if pgErr != nil {
+		slog.Error("failed to parse database URL", "error", pgErr)
+		os.Exit(1)
+	}
+	slog.Info("database session limits", "statement_timeout", sessionLimits.StatementTimeout,
+		"lock_timeout", sessionLimits.LockTimeout, "idle_in_transaction_session_timeout", sessionLimits.IdleInTransaction)
+	pgPool, pgErr := pgxpool.NewWithConfig(bootCtx, pgCfg)
 	if pgErr != nil {
 		slog.Error("failed to create postgres pool", "error", pgErr)
 		os.Exit(1)
@@ -153,6 +170,13 @@ func main() {
 		slog.Error("failed to initialize k8s service", "err", err)
 		os.Exit(1)
 	}
+	// A cluster changed in the registry is dropped on every replica (internal/clustersync): each reads the clusters'
+	// config_version every 5 s, and with Redis the replica auth-service tells notifies the others at once.
+	changes := clustersync.New(registry, clusterNotices(cfg))
+	k8sSvc.SetChangeNotifier(changes)
+	syncCtx, syncCancel := context.WithCancel(context.Background())
+	defer syncCancel()
+	go changes.Run(syncCtx, k8sSvc)
 	// Init JWT validator
 	jwtValidator := auth.NewJWTValidator(auth.JWKSConfig{
 		JWKSURL:         cfg.AuthJWKSURL,
@@ -168,12 +192,21 @@ func main() {
 		hcCtx, hcCancel := context.WithCancel(context.Background())
 		defer hcCancel()
 		hc := k8s.NewHealthChecker(k8sSvc, registry, time.Duration(cfg.HealthcheckIntervalSec)*time.Second)
+		// Every replica probes for its own breaker; the one holding this lock writes the column.
+		healthLock := pglock.New(pgPool, healthStatusLockKey)
+		defer healthLock.Close()
+		hc.WriteStatusWhen(healthLock)
 		go hc.Run(hcCtx)
 	}
 
 	// Init handler
 	h := handler.New(k8sSvc, cfg, auditStore)
 	h.SetHygieneStore(hygiene.NewStore(pgPool))
+	// Readiness: not from SIGTERM on, when open terminals, watches and followed logs are told to connect again. The
+	// database stays out of it: lists and reads go on while the audit store is down (writes answer 503), and a shared
+	// database would take every replica out of the Service at once.
+	ready := probe.New()
+	h.SetLeaving(ready)
 
 	// Log files view (off unless LOG_FILES_ENABLED): a bad path pattern stops
 	// the service instead of widening what can be read.
@@ -282,6 +315,18 @@ func main() {
 		os.Exit(1)
 	}
 	h.SetRecorder(recorder)
+
+	// Node drains keep their progress in the shared database, so any replica
+	// answers a drain's status and one whose server stopped reads as interrupted.
+	// A node drain is an API route: a server without the API runs no tracker.
+	var drainTracker *nodedrains.Tracker
+	if role.ServesAPI() {
+		drainTracker = nodedrains.NewTracker(nodedrains.PG{Pool: pgPool}, auditStore)
+		h.SetDrains(drainTracker)
+		drainCtx, drainCancel := context.WithCancel(context.Background())
+		defer drainCancel()
+		go drainTracker.Run(drainCtx)
+	}
 	recCtx, recCancel := context.WithCancel(context.Background())
 	defer recCancel()
 	// Only a server that opens terminals runs the recorder: an API server holds no recording to keep alive, and a row
@@ -304,11 +349,16 @@ func main() {
 		AbsoluteLifetime: time.Duration(cfg.SessionAbsoluteHours) * time.Hour,
 	})
 	wsMux.Sessions = liveSessions
+	wsMux.Leaving = ready
 	h.SetLiveSessions(liveSessions)
 
 	// Open terminals and followed logs, held so a server being replaced ends them in order (STREAM_DRAIN_SECONDS).
 	streams := drain.New()
 	h.SetDrain(streams)
+	if cfg.StreamDrainSeconds >= 0 {
+		// The drain warns each terminal and closes it in order; probe.Leave leaves the terminals to it (merge plan S21).
+		ready.HandOverTerminals()
+	}
 
 	// Console metrics (services/pkg/metrics): HTTP by route pattern, the audit
 	// store's readiness and write failures, live watches, open terminals and followed logs, the
@@ -366,6 +416,9 @@ func main() {
 	// Public routes
 	r.Get("/", h.HealthRoot)
 	r.Get("/health", h.HealthCheck)
+	r.Get("/livez", ready.Live)
+	// /ready is the name the drain gave readiness first: the same answer as /readyz (merge plan S22).
+	r.Get("/readyz", h.Ready)
 	r.Get("/ready", h.Ready)
 	r.Get("/metrics", m.Handler().ServeHTTP)
 
@@ -459,6 +512,10 @@ func main() {
 	<-done
 	slog.Info("shutting down server...")
 
+	// Not ready from here on, and the followed logs and live lists end with 1001 and connect again elsewhere
+	// (probe.Leave). Where the drain is set the terminals are its own (HandOverTerminals): it tells each when it closes.
+	ready.Leave()
+
 	// net/http's Shutdown neither closes nor waits for the terminals' hijacked sockets and waits on an event stream
 	// until its context ends: the drain ends both first, in order (internal/drain).
 	if cfg.StreamDrainSeconds >= 0 {
@@ -471,26 +528,55 @@ func main() {
 			"terminals_ended_in_time", res.TerminalsLeft, "terminals_cut", res.TerminalsCut, "not_released", res.Unreleased)
 	}
 
-	shutdown(srv, recorder, serverShutdownWait, recorderShutdownWait)
+	// The drains this process runs end with it: say so at once rather than when their heartbeat goes stale.
+	// A drain asked for from here on answers 503 (the server still takes requests until srv.Shutdown).
+	if drainTracker != nil {
+		drainShutdown, drainShutdownCancel := context.WithTimeout(context.Background(), drainShutdownWait)
+		drainTracker.Shutdown(drainShutdown)
+		drainShutdownCancel()
+	}
+	shutdown(srv, ready, recorder, serverShutdownWait, recorderShutdownWait)
 	slog.Info("server stopped")
 }
 
-// Both waits come after the drain and fit the pod's grace period: 30 s by default, or the drain's wait + 30 s
-// (streamCloseWait, then these two) where STREAM_DRAIN_SECONDS is set.
+// clusterNotices is clustersync's Redis client, signed in as the cache is (REDIS_USERNAME, the chart's redis.acl);
+// nil without Redis.
+func clusterNotices(cfg config.Config) *redis.Client {
+	if cfg.RedisHost == "" {
+		return nil
+	}
+	return redis.NewClient(cache.Options(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisUsername, cfg.RedisPassword))
+}
+
+// The waits run one after another from SIGTERM: where STREAM_DRAIN_SECONDS is set, the drain's wait and
+// streamCloseWait first, then these three, which add up to 25 s. The chart's grace period (kubeast.graceSeconds) is
+// the preStop wait + the drain's wait + streamCloseWait + 25 s + 5 s to spare. The drains' 3 s (marking and their
+// audit rows) came out of the server's wait, which was 15 s.
 const (
-	serverShutdownWait   = 15 * time.Second
+	drainShutdownWait    = 3 * time.Second
+	serverShutdownWait   = 12 * time.Second
 	recorderShutdownWait = 10 * time.Second
+	// shutdownWaitsMax is the grace period the chart gives after the preStop wait and the drain's wait:
+	// streamCloseWait, these three and 5 s.
+	shutdownWaitsMax = 35 * time.Second
 )
 
-// shutdown stops the server, then gives the recorder a wait of its own: an open
-// event stream (a followed log, the Helm releases stream) keeps srv.Shutdown
-// waiting until its context ends, and the recorder's last parts and rows would
-// get a spent one. The recorder takes its turn whatever srv.Shutdown returned.
-func shutdown(srv interface{ Shutdown(context.Context) error }, recorder interface{ Shutdown(context.Context) }, serverWait, recorderWait time.Duration) {
+// healthStatusLockKey is the advisory lock of the replica that writes
+// clusters.health_status (arbitrary constant: "kubeast-health-status").
+const healthStatusLockKey int64 = 0x6b62686c74687374
+
+// shutdown stops the server, waits within the same time for the connections it
+// leaves alone (WebSockets, which Leave closed with 1001 and whose shells hang
+// up), then gives the recorder a wait of its own: an open event stream that is
+// not held keeps srv.Shutdown waiting until its context ends, and the recorder's
+// last parts and rows would get a spent one. The recorder takes its turn
+// whatever srv.Shutdown returned.
+func shutdown(srv interface{ Shutdown(context.Context) error }, held interface{ Wait(context.Context) bool }, recorder interface{ Shutdown(context.Context) }, serverWait, recorderWait time.Duration) {
 	ctx, cancel := context.WithTimeout(context.Background(), serverWait)
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("server shutdown error", "err", err)
 	}
+	held.Wait(ctx)
 	cancel()
 	// End live recordings and upload what is left before the process goes.
 	ctx, cancel = context.WithTimeout(context.Background(), recorderWait)
