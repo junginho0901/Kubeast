@@ -46,7 +46,7 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - The chart's PostgreSQL starts with `max_connections` from `postgresql.maxConnections` and restarts once on this upgrade. The chart's Redis has a memory cap (80 % of its memory limit, `volatile-lru`).
 - Service Deployments roll one new pod at a time and stop an old one only once the new one is ready.
 - The migration Job runs each try in a pod of its own and ends at 10 minutes.
-- k8s-service's cluster breaker tries one request again after `multicluster.breakerOpenSec`, `multicluster.breakerConsecutiveFails: 0` turns it off, and only a request whose calls could not reach the API server counts as a failure.
+- k8s-service's cluster breaker tries one request again after `multicluster.breakerOpenSec`, `multicluster.breakerConsecutiveFails: 0` turns it off, and only a request whose calls could not reach the API server counts as a failure. Its health check reads each cluster's `/version` behind none of the people's requests, and an answer below 500 closes the breaker.
 - New live lists wait while k8s-service is short of memory, past 80 % of its Go memory limit, with a notice on the page.
 - A grant limited to namespaces opens the Dashboard with fewer requests to the cluster, and an idle live-list socket holds 18 KiB instead of 47 KiB.
 - Cache keys move under `kubeast:cache:`, and a cluster change deletes only those keys.
@@ -74,6 +74,6 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - Secret files stay readable with `podSecurity.enabled: false`.
 - A values file copied from 0.7.6 or earlier stops on its release image tag instead of keeping that release's images.
 - A chat answer whose stream was cut is saved once, under its question.
-- For development: tests that failed now and then on a busy runner, or read the log of one pod where a service can run two, wait on what they check, and the guard's build to compare with (`scripts/before-stack.sh up <tag>`) takes the probes of that tag's chart.
+- For development: tests that failed now and then on a busy runner, or read one pod where a service can run two, wait on what they check, and the guard's build to compare with (`scripts/before-stack.sh up <tag>`) takes the probes of that tag's chart.
 
 [0.7.8]: https://github.com/junginho0901/Kubeast/compare/v0.7.7...v0.7.8
