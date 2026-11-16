@@ -7,7 +7,9 @@ import (
 	"math/rand"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -234,7 +236,8 @@ func TestFourHundredPeopleOpeningFourHundredNodesListNoPods(t *testing.T) {
 }
 
 // Before the informers serve — not started, not yet synced, or stopped because kubeast:cache may not watch pods — a
-// box is the caller's own list of its node, at once, and no informer is started for it.
+// box is the caller's own list of its node; it neither waits for the informers nor uses them (a wait or a read of
+// them marks their last use, waitSynced and nodeRows), and no informer is started for it.
 func TestNodeBoxesAreTheCallersOwnListUntilTheInformersServe(t *testing.T) {
 	unsynced := func() *clusterInformers {
 		return &clusterInformers{stop: make(chan struct{}), synced: make(chan struct{})}
@@ -251,18 +254,24 @@ func TestNodeBoxesAreTheCallersOwnListUntilTheInformersServe(t *testing.T) {
 			// the informers hold another pod than the cluster has: an answer from them would show it
 			s, b := api.start(t, podObjects([]corev1.Pod{nodePod("a", "a-informer-only", "n1")})...)
 			cases[name](b)
+			used := func() int64 {
+				if b.inf == nil {
+					return -1
+				}
+				return b.inf.lastUse.Load()
+			}
 			for _, ctx := range []context.Context{wideCaller("wide@example.com"), grantCaller("ac@example.com", "a", "c")} {
-				start := time.Now()
+				before := used()
 				raw, err := s.GetPodsOnNodeJSON(ctx, "n1", "")
 				if err != nil {
 					t.Fatal(err)
 				}
+				if after := used(); after != before {
+					t.Errorf("the informers were waited for or read: last use %d, then %d", before, after)
+				}
 				want := ownBox(t, ctx, b, "n1", "")
 				if len(want) == 0 || answerJSON(t, decodeBox(t, raw)) != answerJSON(t, want) {
 					t.Errorf("got %s, the caller's own list %d pods", raw, len(want))
-				}
-				if took := time.Since(start); took > time.Second {
-					t.Errorf("took %v", took)
 				}
 			}
 			if name == "not started" && b.inf != nil {
@@ -513,6 +522,103 @@ func TestTheKeptBoxesHoldAtMostTheirBytes(t *testing.T) {
 	}
 }
 
+// A synced store without the node index (AddIndexers refused) answers with the caller's own list, never from the store.
+func TestANodeBoxWithoutTheNodeIndexIsTheCallersOwnList(t *testing.T) {
+	pods := podsOnNodes()
+	api := &clusterAPI{pods: pods, review: rbac(map[string][]string{"wide@example.com": {""}, "ac@example.com": {"a", "c"}})}
+	s, b := api.start(t)
+	idx := cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	only := nodePod("a", "a-informer-only", "n1")
+	_ = idx.Add(toPodRow(&only, newInterner()))
+	ci := &clusterInformers{pods: idx, stop: make(chan struct{}), synced: make(chan struct{})}
+	close(ci.synced)
+	b.inf = ci
+	for _, ctx := range []context.Context{wideCaller("wide@example.com"), grantCaller("ac@example.com", "a", "c")} {
+		raw, err := s.GetPodsOnNodeJSON(ctx, "n1", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := ownBox(t, ctx, b, "n1", "")
+		if len(want) == 0 || answerJSON(t, decodeBox(t, raw)) != answerJSON(t, want) {
+			t.Errorf("no node index: got %s, the caller's own list %d pods", raw, len(want))
+		}
+	}
+}
+
+// A person with no grant scope who picks a namespace its RBAC refuses gets the refusal, after one list of that
+// namespace's pods on the node as the person.
+func TestANodeBoxOfANamespaceTheCallerMayNotListIsRefused(t *testing.T) {
+	pods := podsOnNodes()
+	api := &clusterAPI{pods: pods, review: rbac(map[string][]string{"inb@example.com": {"b"}})}
+	s, _ := api.start(t, podObjects(pods)...)
+	before := api.seen()
+	raw, err := s.GetPodsOnNodeJSON(wideCaller("inb@example.com"), "n1", "a")
+	if !apierrors.IsForbidden(err) {
+		t.Errorf("namespace a for a reader of b: %s, %v", raw, err)
+	}
+	if got, want := api.listedSince(before), []string{"inb@example.com a spec.nodeName=n1"}; !slices.Equal(got, want) {
+		t.Errorf("lists %v, want %v", got, want)
+	}
+}
+
+// A pod not scheduled leaves the Unscheduled box for its node's once the scheduler gives it one.
+func TestAPodScheduledMovesFromTheUnscheduledBoxToItsNodes(t *testing.T) {
+	pods := podsOnNodes()
+	api := &clusterAPI{pods: pods, review: rbac(map[string][]string{"wide@example.com": {""}})}
+	s, b := api.start(t)
+	ci, cs := servingInformers(t, pods)
+	b.inf = ci
+	box := func(node string) []string {
+		raw, err := s.GetPodsOnNodeJSON(wideCaller("wide@example.com"), node, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return boxNames(t, raw)
+	}
+	if got := box(""); !slices.Equal(got, []string{"b/b-pending Running ok"}) {
+		t.Fatalf("not scheduled: %v", got)
+	}
+	if got := box("n2"); slices.ContainsFunc(got, func(s string) bool { return strings.HasPrefix(s, "b/b-pending ") }) {
+		t.Fatalf("n2 before: %v", got)
+	}
+	p, err := cs.CoreV1().Pods("b").Get(context.Background(), "b-pending", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Spec.NodeName, p.ResourceVersion = "n2", "9"
+	if _, err := cs.CoreV1().Pods("b").Update(context.Background(), p, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if !eventually(t, 5*time.Second, func() bool {
+		return len(box("")) == 0 && slices.ContainsFunc(box("n2"), func(s string) bool { return strings.HasPrefix(s, "b/b-pending ") })
+	}) {
+		t.Errorf("scheduled: Unscheduled %v, n2 %v", box(""), box("n2"))
+	}
+}
+
+// Namespaces of which one starts another's name ("a", "a-b", "a.b", "a0", "ab") come in the API's order, the
+// store key's (namespace/name), as the caller's own list gives them.
+func TestANodeBoxOfPrefixNamespacesIsInTheAPIsOrder(t *testing.T) {
+	var pods []corev1.Pod
+	for _, ns := range []string{"a", "a-b", "a.b", "ab", "a0"} {
+		pods = append(pods, nodePod(ns, "x", "n1"), nodePod(ns, "y", "n1"))
+	}
+	api := &clusterAPI{pods: pods, review: rbac(map[string][]string{"wide@example.com": {""}})}
+	s, b := api.start(t, podObjects(pods)...)
+	ctx := wideCaller("wide@example.com")
+	raw, err := s.GetPodsOnNodeJSON(ctx, "n1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, want := boxNames(t, raw), []string(nil)
+	for _, p := range ownBox(t, ctx, b, "n1", "") {
+		want = append(want, p.Namespace+"/"+p.Name+" "+p.Phase+" "+p.Health)
+	}
+	if !slices.Equal(got, want) || len(want) != 10 || want[0] != "a-b/x Running ok" {
+		t.Errorf("order\n got %v\nwant %v", got, want)
+	}
+}
+
 // A box served from the rows is in the call's trail as the Pods list's rows are: from Kubeast's cache.
 func TestANodeBoxIsInTheTrailAsTheRowsOfTheCache(t *testing.T) {
 	api := &clusterAPI{pods: podsOnNodes(), review: rbac(map[string][]string{"wide@example.com": {""}})}
@@ -542,12 +648,26 @@ func TestNodeBoxesWhileTheInformerTakesChanges(t *testing.T) {
 	s, b := api.start(t)
 	ci, cs := servingInformers(t, pods)
 	b.inf = ci
-	// 800 moves from node to node while sixteen callers read boxes, until the moves end
-	done := make(chan struct{})
+	// pods move from node to node while sixteen callers read boxes: at least 800 moves, and on until every caller has
+	// read two boxes while they moved, so a slow machine lengthens the run instead of failing it
+	var reads [16]atomic.Int64
+	readTwice := func() bool {
+		for r := range reads {
+			if reads[r].Load() < 2 {
+				return false
+			}
+		}
+		return true
+	}
+	moving, done := make(chan struct{}), make(chan struct{})
 	go func() {
 		defer close(done)
 		ctx := context.Background()
-		for i := 0; i < 800; i++ {
+		close(moving)
+		for i := 0; i < 800 || !readTwice(); i++ {
+			if i >= 200_000 {
+				return // the callers never got to read: the check below says so
+			}
 			p := pods[i%len(pods)]
 			got, err := cs.CoreV1().Pods(p.Namespace).Get(ctx, p.Name, metav1.GetOptions{})
 			if err != nil {
@@ -563,7 +683,7 @@ func TestNodeBoxesWhileTheInformerTakesChanges(t *testing.T) {
 		}
 	}()
 	var readers sync.WaitGroup
-	reads := make([]int, 16)
+	<-moving
 	for r := 0; r < 16; r++ {
 		readers.Add(1)
 		go func() {
@@ -578,7 +698,6 @@ func TestNodeBoxesWhileTheInformerTakesChanges(t *testing.T) {
 					return
 				default:
 				}
-				reads[r]++
 				node := fmt.Sprintf("n%d", (r+i)%5)
 				raw, err := s.GetPodsOnNodeJSON(ctx, node, "")
 				if err != nil {
@@ -591,13 +710,18 @@ func TestNodeBoxesWhileTheInformerTakesChanges(t *testing.T) {
 						return
 					}
 				}
+				reads[r].Add(1)
 			}
 		}()
 	}
 	readers.Wait()
-	t.Logf("boxes read during 800 moves: %v", reads)
-	if slices.Min(reads) < 2 {
-		t.Errorf("a caller read %d boxes while the pods moved", slices.Min(reads))
+	counts := make([]int64, len(reads))
+	for r := range reads {
+		counts[r] = reads[r].Load()
+	}
+	t.Logf("boxes read while the pods moved: %v", counts)
+	if !readTwice() {
+		t.Errorf("a caller read fewer than two boxes while the pods moved: %v", counts)
 	}
 	if n := podLists(api); n != 0 {
 		t.Errorf("%d lists of pods", n)
