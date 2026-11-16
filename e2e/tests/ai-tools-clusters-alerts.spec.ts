@@ -75,6 +75,16 @@ async function auditRows(request: APIRequestContext, admin: string, action: stri
 
 const pickerRow = (row: Obj) => Object.fromEntries(PICKER_FIELDS.map((f) => [f, row[f] ?? null]))
 
+// The screen's row the tool's row is, of the reads just before and just after the tool answered. The health check writes
+// health_status and last_healthcheck_at of a row once a minute (one replica writes), so one write may fall between the
+// two reads: the tool's row is then the screen's before it or after it, every field value for value.
+function screenRowOf(toolRow: Obj, before: Obj[], after: Obj[], what: string): Obj {
+  const got = pickerRow(toolRow ?? {})
+  const seen = [before, after].flatMap((rows) => rows.filter((r) => r.id === got.id)).map(pickerRow)
+  expect(seen, `${what}: ${got.id} as the screen read it just before or just after the answer`).toContainEqual(got)
+  return seen.find((row) => PICKER_FIELDS.every((f) => row[f] === got[f]))!
+}
+
 test.describe('AI tools: clusters_list and alert_investigate', () => {
   let admin = ''
   let adminEmail = ''
@@ -163,10 +173,14 @@ test.describe('AI tools: clusters_list and alert_investigate', () => {
 
   test('clusters_list answers the picker and the Admin screen value for value, and no credential', async ({ request }) => {
     const picker = (await (await request.get('/api/v1/clusters?accessibleOnly=true', { headers: bearer(admin) })).json()).items as Obj[]
-    const registry = (await (await request.get('/api/v1/clusters', { headers: bearer(admin) })).json()).items as Obj[]
+    const readRegistry = async () => (await (await request.get('/api/v1/clusters', { headers: bearer(admin) })).json()).items as Obj[]
+    const ownOf = async (token: string) => (await (await request.get('/api/v1/clusters?accessibleOnly=true', { headers: bearer(token) })).json()).items as Obj[]
+    const registry = await readRegistry()
     const answer = await answerOf(request, admin, 'clusters_list', {})
+    const registryAfter = await readRegistry()
     expect(answer.total).toBe(registry.length)
-    expect((answer.clusters as Obj[]).map(pickerRow)).toEqual(registry.map(pickerRow))
+    expect((answer.clusters as Obj[]).map((c) => c.id)).toEqual(registry.map((c) => c.id))
+    for (const row of answer.clusters as Obj[]) screenRowOf(row, registry, registryAfter, 'Admin → Clusters')
     expect((answer.clusters as Obj[]).filter((c) => c.current).map((c) => c.id)).toEqual([INBOX_CLUSTER])
     expect((answer.clusters as Obj[]).filter((c) => c.reachable).map((c) => c.id)).toEqual(picker.map((c) => c.id))
     for (const row of registry) {
@@ -176,10 +190,11 @@ test.describe('AI tools: clusters_list and alert_investigate', () => {
     expect(JSON.stringify(answer).toLowerCase()).not.toContain('kubeconfig')
 
     const reader = await user(request, 'cl-read', 'Read')
-    const own = (await (await request.get('/api/v1/clusters?accessibleOnly=true', { headers: bearer(reader.token) })).json()).items as Obj[]
+    const own = await ownOf(reader.token)
     expect(own.map((c) => c.id)).toEqual([INBOX_CLUSTER])
     const readerAnswer = await answerOf(request, reader.token, 'clusters_list', {})
-    expect(readerAnswer.clusters).toEqual([{ ...pickerRow(own[0]), current: true }])
+    const ownAfter = await ownOf(reader.token)
+    expect(readerAnswer.clusters).toEqual([{ ...screenRowOf(readerAnswer.clusters[0], own, ownAfter, 'Read'), current: true }])
     for (const c of registry) {
       if (c.api_server_url) expect(JSON.stringify(readerAnswer)).not.toContain(c.api_server_url)
     }
@@ -192,8 +207,10 @@ test.describe('AI tools: clusters_list and alert_investigate', () => {
     }
 
     const limited = await user(request, 'cl-limited', 'Read', ['default'])
+    const ownBefore = await ownOf(reader.token)
     const limitedAnswer = await answerOf(request, limited.token, 'clusters_list', {})
-    expect(limitedAnswer.clusters).toEqual([{ ...pickerRow(own[0]), current: true, namespaces: ['default'] }])
+    const ownLast = await ownOf(reader.token)
+    expect(limitedAnswer.clusters).toEqual([{ ...screenRowOf(limitedAnswer.clusters[0], ownBefore, ownLast, 'Read in default'), current: true, namespaces: ['default'] }])
   })
 
   test("an investigation's token reads its own cluster through clusters_list and opens no other auth-service route", async ({ request }) => {
@@ -232,16 +249,21 @@ print(json.dumps({
     },
 }))
 `
+    const readPicker = async () => ((await (await request.get('/api/v1/clusters?accessibleOnly=true', { headers: bearer(admin) })).json()).items as Obj[]).filter((c) => c.id === INBOX_CLUSTER)
+    const pickerBefore = await readPicker()
     const out = JSON.parse(execFileSync('kubectl', ['--kubeconfig', kc, '--context', 'kind-kubeast', '-n', 'kubeast', 'exec', '-i', 'deploy/ai-service', '--', 'python', '-'], { input: script, encoding: 'utf8' })) as Obj
-    const picker = ((await (await request.get('/api/v1/clusters?accessibleOnly=true', { headers: bearer(admin) })).json()).items as Obj[]).filter((c) => c.id === INBOX_CLUSTER)
+    const picker = await readPicker()
     expect(picker.map((c) => c.id), 'the admin reads that cluster').toEqual([INBOX_CLUSTER])
 
     expect(out.list.status, out.list.body).toBe(200)
-    expect((JSON.parse(out.list.body).items as Obj[]).map(pickerRow), 'the route: its own row').toEqual(picker.map(pickerRow))
+    const listed = JSON.parse(out.list.body).items as Obj[]
+    expect(listed.map((c) => c.id), 'the route: its own row').toEqual([INBOX_CLUSTER])
+    screenRowOf(listed[0], pickerBefore, picker, 'the route')
     expect(out.tool.status, out.tool.body).toBe(200)
     const answer = JSON.parse(JSON.parse(out.tool.body).content)
     expect(answer.total, 'the tool: one row').toBe(1)
-    expect((answer.clusters as Obj[]).map(pickerRow), 'the tool: its own row').toEqual(picker.map(pickerRow))
+    expect((answer.clusters as Obj[]).map((c) => c.id), 'the tool: its own row').toEqual([INBOX_CLUSTER])
+    screenRowOf(answer.clusters[0], pickerBefore, picker, 'the tool')
     expect(answer.clusters[0].current).toBe(true)
 
     expect(out.registry.status, 'the registry view takes admin.clusters.list').toBe(403)
