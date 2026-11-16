@@ -16,7 +16,7 @@ The commands below use the release name `kubeast` in the namespace `kubeast`; pu
 - Many replicas: the database connections must fit `postgresql.maxConnections` (300) or the upgrade stops (#868).
 - Custom roles whose names make the same role group as another role are renamed and lose their cluster grants, with an audit row for each change. Account levels of `Pending`'s group (`PENDING`) move to the built-in `Pending` (#865).
 - Role names with characters outside ASCII get groups of their own (`운영팀` acts as `kubeast:role:~c6b4~c601~d300`; in 0.7.7 it was `kubeast:role:---`), so RBAC bound to the old group on your clusters stops applying to them (#865).
-- Besides the services, the chart's PostgreSQL and Redis restart once, and the cache starts empty (#866, #868). For about 20 seconds from when the database stops, requests to the old pods can wait and a few can fail.
+- Besides the services, the chart's PostgreSQL and Redis restart once, and the cache starts empty (#866, #868). For about 20 seconds from when the database stops, requests to the old pods can wait and a few can fail. While the 0.7.7 pods are replaced, a few requests can fail too: 0.7.7 pods stop without waiting, and from 0.7.8 on pods wait before they stop (#856).
 - Back up the database first: a rollback does not undo the role renames.
 
 ## 1. Before you upgrade
