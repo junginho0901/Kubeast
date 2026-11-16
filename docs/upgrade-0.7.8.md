@@ -2,6 +2,8 @@
 
 # Upgrading from 0.7.7 to 0.7.8
 
+**Changes you must act on: yes, on some installs.** A cluster older than Kubernetes 1.30 needs `podShutdown.preStopSeconds: 0` ([1.3](#13-kubernetes-version)). Values that set `pdb.minAvailable` stop the upgrade until it is taken out ([3](#3-values-you-must-change)). Saved AI model settings that name `gpt-4o-mini` need another model before 2027-01-14 ([1.9](#19-the-default-ai-model)). With `secrets.existingSecret`, nothing has to change for this upgrade: the Redis users stay off until their keys are in a Secret ([1.7](#17-secretsexistingsecret-and-the-redis-users)). The other items below apply only to the installs they name.
+
 This page is for an install of 0.7.7 going to 0.7.8: what to check first, what changes by itself, which values to change, what the upgrade does once, and how to go back.
 The upgrade command is the one in [Getting started](getting-started.md#upgrade), with `--version 0.7.8`.
 Each item names the pull request that made the change.
@@ -17,6 +19,7 @@ The commands below use the release name `kubeast` in the namespace `kubeast`; pu
 - Custom roles whose names make the same role group as another role are renamed and lose their cluster grants, with an audit row for each change. Account levels of `Pending`'s group (`PENDING`) move to the built-in `Pending` (#865).
 - Role names with characters outside ASCII get groups of their own (`운영팀` acts as `kubeast:role:~c6b4~c601~d300`; in 0.7.7 it was `kubeast:role:---`), so RBAC bound to the old group on your clusters stops applying to them (#865).
 - Besides the services, the chart's PostgreSQL and Redis restart once, and the cache starts empty (#866, #868). For about 20 seconds from when the database stops, requests to the old pods can wait and a few can fail. While the 0.7.7 pods are replaced, a few requests can fail too: 0.7.7 pods stop without waiting, and from 0.7.8 on pods wait before they stop (#856).
+- The default AI model is `gpt-6-luna`, in place of `gpt-4o-mini`. Saved model settings keep their model, the `default-openai` setting made at the first start too ([1.9](#19-the-default-ai-model), #921, #924).
 - Back up the database first: a rollback does not undo the role renames.
 
 ## 1. Before you upgrade
@@ -167,7 +170,17 @@ If the namespace has a ResourceQuota or a LimitRange, check that ai-service fits
 kubectl -n kubeast get resourcequota,limitrange
 ```
 
-### 1.9 Back up the database
+### 1.9 The default AI model
+
+The chart's `ai.model` is `gpt-6-luna` from 0.7.8, in place of `gpt-4o-mini`: OpenAI shuts down `gpt-4o-mini-2024-07-18` on 2027-01-14 and names `gpt-6-luna` as its replacement (#924). The upgrade changes no saved setting.
+
+- **You set no model**: with an OpenAI key in the chart (`ai.openaiApiKey`), ai-service saved the setting `default-openai` with 0.7.7's default, `gpt-4o-mini`, at its first start, and that setting keeps it. So does every setting made in **Admin > AI Models**. Change their model there before 2027-01-14.
+- **No saved setting** (no key, a gateway at `ai.baseUrl`): the install sends `gpt-6-luna` from the upgrade on. A gateway (LiteLLM and the like) answers only the names it maps, so map `gpt-6-luna` there first, or set `ai.model` to a name it maps.
+- **`ai.model` in your values** (`gpt-4o-mini` in a file copied from `helm show values` of 0.7.7, for example) stays, and names the model only while no setting is saved.
+- **Tools**: `gpt-6-luna` takes tools in Chat Completions only at `reasoning_effort: "none"`. Kubeast sends it on every call to the names `gpt-6-sol` and `gpt-6-luna` on the OpenAI and Azure OpenAI providers (#923). A setting that reaches `gpt-6-luna` under another name (an Azure deployment, a gateway alias, provider `custom`) sends `none` once a tool call has been refused with OpenAI's 400 "Function tools with reasoning_effort are not supported"; put `"reasoning_effort": "none"` in that setting's options to send it from the first call.
+- **Price** per 1M tokens: `gpt-6-luna` $0.10 input and $0.50 output, `gpt-4o-mini` $0.15 and $0.60. [Getting started](getting-started.md#upgrade) "Upgrade" has the rest of the pricing, and [8](#8-docker-compose) has Docker Compose.
+
+### 1.10 Back up the database
 
 ```bash
 kubectl -n kubeast exec deploy/postgres -c postgres -- pg_dump -Fc -U kubeast kubeast > kubeast-before-0.7.8.dump
@@ -203,6 +216,7 @@ Only the rows that match your install. A row marked "stops" stops the upgrade, w
 | `images.redis` of your own | any Redis | Valkey, or Redis 6.2 or later | #866 |
 | Claude Code on, keep the memory limit | `resources.aiService.limits.memory` | `ai.providers.claudeCode.memoryLimit: ""` | #859 |
 | Claude Code on, keep one turn per server | `maxConcurrent: 1` (default) | `ai.providers.claudeCode.maxConcurrent: 1` (default 2) | #859 |
+| A saved AI model setting, or `ai.model` in your values, names `gpt-4o-mini` ([1.9](#19-the-default-ai-model)) | `gpt-4o-mini` | Another model before 2027-01-14, in **Admin > AI Models** or `ai.model` | #924 |
 | A chart setting names a renamed role ([1.5](#15-role-names)) | old name | The name of the role you mean: the new name, a name you give the role, or a built-in | #865 |
 | `auth.accessRequests.roles` spells a built-in in other capitals (`WRITE`) | a custom role of that name | Read as the built-in (`Write`): write the name of the role you mean | #865 |
 | `replicas` or `autoscaling` with a key other than the seven services | ignored | Stops. The keys are `authService`, `aiService`, `k8sService`, `sessionService`, `frontend`, `toolServer`, `gateway` | #867 |
@@ -253,6 +267,7 @@ New values whose defaults need nothing from you: `podShutdown.preStopSeconds` (5
 - An `auth.accessRequests.roles` entry that is a built-in's name in other capitals (`WRITE`) stands for the built-in (`Write`) (#865).
 - Claude Code turns take install-wide slots in the database (`maxConcurrentTotal`); a turn waits up to `queueWaitSeconds` for one (#859).
 - An alert's `startsAt` is stored in UTC, whatever offset the sender writes (#909).
+- The chart's default `ai.model` is `gpt-6-luna`, which an install with no saved model setting uses from the upgrade on, and a call to `gpt-6-sol` or `gpt-6-luna` sends `reasoning_effort: "none"` ([1.9](#19-the-default-ai-model), #923, #924).
 
 **Other**
 
@@ -332,7 +347,7 @@ helm rollback kubeast <revision> -n kubeast
 ```
 
 - **Database**: the 0.7.8 tables and columns stay, and 0.7.7 still starts. Its migrations find nothing to apply on a database that is ahead, and its services wait for schema 22 or later.
-- **Roles** (#865): the renames, the removed grants and the account levels moved to `Pending` stay, and so does the index that refuses a name making another role's group. Only restoring the dump from [1.9](#19-back-up-the-database) brings the old names and grants back, and it takes the whole database back to that moment.
+- **Roles** (#865): the renames, the removed grants and the account levels moved to `Pending` stay, and so does the index that refuses a name making another role's group. Only restoring the dump from [1.10](#110-back-up-the-database) brings the old names and grants back, and it takes the whole database back to that moment.
 - **Role groups** (#865): 0.7.7 makes the old groups again (`운영팀` acts as `kubeast:role:---`), so a binding made for a new group does not apply under it.
 - **Sign-outs** (#849): 0.7.7's auth-service does not read the signed-out sign-ins, so a token whose sign-in was signed out is taken again until it expires (`auth.tokenTTLMinutes`, 15 minutes by default).
 - **Redis** (#866): 0.7.7's Redis comes back with one password (`REDIS_PASSWORD`, still in `kubeast-secrets`), and its k8s-service signs in with it. A 0.7.7 k8s-service pod that starts before that Redis answers keeps its cache in memory until it restarts. `kubeast-redis-users` stays (`helm.sh/resource-policy: keep`), and the next upgrade reads its passwords again.
@@ -340,6 +355,7 @@ helm rollback kubeast <revision> -n kubeast
 - **PodDisruptionBudgets and HPAs** go with 0.7.7's values (#901, #867).
 - **Alerts** (#909): 0.7.7 drops a `startsAt` offset again, so an alert from a sender that writes another zone gets a new row again.
 - **Drains** (#858): a drain running at the rollback ends where it is and its node stays cordoned; 0.7.7 does not read `node_drains`.
+- **AI model** (#923, #924): 0.7.7 sends no `reasoning_effort`, so every tool call of a setting you changed to `gpt-6-luna` is refused under it. Set such a setting back to a model 0.7.7 can use before you roll back.
 
 ## 8. Docker Compose
 
@@ -358,6 +374,7 @@ What differs from the chart:
 
 - **Stop wait**: the seven Kubeast services get 35 s to stop and Redis and PostgreSQL 30 s, the Kubernetes default (`stop_grace_period`; Docker's default is 10 s), what the chart gives each with the defaults. `docker compose stop` and the upgrade can take that long per container. There is no `preStop` wait, terminal drain, PodDisruptionBudget or HPA (#856).
 - **Redis**: as before, with no users and no password, reachable only on the Compose network (#866 changes the chart only).
+- **AI model** (#921, #924): `install-docker.sh` run again keeps the `OPENAI_MODEL` and `OPENAI_BASE_URL` already in `.env`, and a `.env` written by 0.7.7 or earlier names `gpt-4o-mini`: change it before 2027-01-14. Like `ai.model`, it names the model only while no setting is saved, so a `default-openai` setting made from it is changed in **Admin > AI Models** ([1.9](#19-the-default-ai-model)). Without a `.env`, Compose now runs `gpt-6-luna`, where 0.7.7 ran `gpt-4`, which OpenAI has shut down. With `KUBEAST_TAG` at v0.7.7 or earlier, keep `OPENAI_MODEL` at a model those images can use: they send no `reasoning_effort`, so every tool call to `gpt-6-luna` is refused.
 - **Database limits**: the same session limits and pools apply by default. To change them, set `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS` (`0` sets nothing) or `DB_POOL_MAX_AUTH`, `DB_POOL_MAX_SESSION`, `DB_POOL_MAX_K8S`, `DB_POOL_MAX_AI` in `.env`. Compose's PostgreSQL keeps its default `max_connections` (100), which one container of each service fits (#868).
 - **Custom role bindings**: `IMPERSONATION_CUSTOM_ROLES` in `.env` takes role names, as before. Bind the new group of a name outside ASCII on your clusters ([6](#6-after-you-upgrade)).
 - **The same as the chart**: the migrations, the role renames (run the queries of [1.5](#15-role-names) and [6](#6-after-you-upgrade) with `docker compose exec -T postgres psql -U kubeast -d kubeast` in place of `kubectl -n kubeast exec -i deploy/postgres -c postgres -- psql -U kubeast -d kubeast`), the alert times in UTC, the cache starting empty and the drains ([1.4](#14-node-drains)).
