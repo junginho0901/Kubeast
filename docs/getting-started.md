@@ -79,12 +79,14 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 
 ### Upgrade
 
+Going from 0.7.7 to 0.7.8, read [Upgrading from 0.7.7 to 0.7.8](upgrade-0.7.8.md) first: what to check before, what changes, and how to go back.
+
 ```bash
 helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
   -n kubeast --reset-then-reuse-values
 ```
 
-`--reset-then-reuse-values` keeps the values you set and adds what the new version brings. `--reuse-values` keeps the defaults of the version you installed, so a value a later version added is missing and the images stay at that version; the chart stops such an upgrade with this hint and leaves the release as it was. A values file of your own copied from `helm show values` of 0.7.7 or later stops the same way. One copied from 0.7.6 or earlier holds no `chartVersion`, and stops on its `global.imageTag`, that version's tag, from 0.7.8 on. Leave `chartVersion` and `global.imageTag` out of a values file of your own. A `global.imageTag` of an image you built yourself, not a release's `vX.Y.Z`, is not stopped.
+`--reset-then-reuse-values` keeps the values you set and adds what the new version brings. `--reuse-values` keeps the defaults of the version you installed, so a value a later version added is missing and the images stay at that version; the chart stops such an upgrade with this hint and leaves the release as it was. A values file of your own copied from `helm show values` of 0.7.7 or later stops the same way. One copied from 0.7.6 or earlier holds no `chartVersion`, and stops on its `global.imageTag`, that version's tag, from 0.7.8 on. Leave `chartVersion` and `global.imageTag` out of a values file of your own. A `global.imageTag` of an image you built yourself, not a release's `vX.Y.Z`, is not stopped. A value you set that the new version no longer reads stops the upgrade too, saying what to set instead; take it out of your values.
 
 Upgrading to 0.7.8 renames the custom roles whose names make another role's group or a built-in's (`ADMIN` beside `Admin`) to `<name>-renamed-<id>` and removes their cluster grants, with an audit row for each change. [Features](features.md) "Role names" says what changes and what to do after. Before the upgrade, this query on Kubeast's database (it reads only) lists the roles it will rename, the role whose group each shares (`same_group_as`), and how many grants, restores of a temporary grant, pending or approved access requests and account levels each holds. The account levels of a role whose `same_group_as` is `Pending` move to the built-in `Pending`; the others stay on the renamed role.
 
@@ -150,6 +152,17 @@ SELECT name, 'kubeast:role:' || slug_0_7_7 AS group_0_7_7, 'kubeast:role:' || sl
 From 0.7.8 k8s-service and tool-server sign in to the chart's Redis as users of their own. With `secrets.existingSecret`, Redis keeps one password until you add `REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD` and, with the AI on, `REDIS_TOOL_SERVER_PASSWORD` to that Secret and set `redis.acl.existingSecretHasKeys: true` ([Redis users](configuration.md#redis-users)).
 
 From 0.7.8, `pdb.minAvailable` is gone: a service gets a PodDisruptionBudget only when it is set to two or more replicas or autoscales with `minReplicas` 2 or more, and `pdb.maxUnavailable` (1) says how many of them a node drain may evict at once. Values that still set `pdb.minAvailable` stop the upgrade and say so; take it out, and set `pdb.maxUnavailable` if you want another number.
+
+**The default model is `gpt-6-luna` from 0.7.8, in place of `gpt-4o-mini`.** OpenAI shuts down `gpt-4o-mini-2024-07-18` on 2027-01-14 and names `gpt-6-luna` as its replacement ([deprecations](https://developers.openai.com/api/docs/deprecations)).
+
+- An upgrade leaves the model of every saved setting as it is, also the `default-openai` setting ai-service made from `ai.model` at its first start. Change it in **Admin > AI Models** before 2027-01-14.
+- A gateway (LiteLLM and the like) answers only the model names it maps. Add `gpt-6-luna` there before a setting uses it.
+- `gpt-6-luna` takes tools in Chat Completions only at `reasoning_effort: "none"`. Kubeast sends it on every call to the names `gpt-6-sol` and `gpt-6-luna` on the OpenAI and Azure OpenAI providers. A setting that reaches `gpt-6-luna` under another name (a gateway alias, provider `custom`, an Azure deployment) gets a tool call that is refused with OpenAI's 400 "Function tools with reasoning_effort are not supported" again at `none` and sends `none` from then on, in each ai-service pod until it restarts ("AI assistant" in [Features](features.md)). A refusal worded otherwise is not sent again at `none`; whether Azure OpenAI and gateways use OpenAI's words has not been checked. To send it from the first call, put `"reasoning_effort": "none"` in that setting's options.
+- An install with no saved setting and no `ai.model` of its own (a gateway at `ai.baseUrl` with no key) sends `gpt-6-luna` from the upgrade on. Map it on the gateway first, or set `ai.model` to a name the gateway maps.
+- A values file of your own that sets `ai.model: gpt-4o-mini` (one copied from `helm show values` of 0.7.7, for example) keeps it. Change it before 2027-01-14.
+- Docker Compose reads `OPENAI_MODEL` from `.env`, and `install-docker.sh` run again keeps the `OPENAI_MODEL` and `OPENAI_BASE_URL` already there. A `.env` written by 0.7.7 or earlier names `gpt-4o-mini`: change it before 2027-01-14. Like `ai.model`, it names the model only while no setting is saved.
+- With `KUBEAST_TAG` set to v0.7.7 or earlier, keep `OPENAI_MODEL` at a model those images can use: they send no `reasoning_effort`, so every tool call to `gpt-6-luna` is refused.
+- Price per 1M tokens: `gpt-6-luna` $0.10 input and $0.50 output, `gpt-4o-mini` $0.15 and $0.60. A request of more than 272K input tokens to `gpt-6-luna` is billed at twice the input and cached input prices and 1.5 times the output price, for the whole request. Reasoning tokens are billed as output ([pricing](https://developers.openai.com/api/docs/pricing), [model](https://developers.openai.com/api/docs/models/gpt-6-luna), [reasoning](https://developers.openai.com/api/docs/guides/reasoning), read 2026-11-15).
 
 ### Uninstall
 

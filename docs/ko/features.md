@@ -147,6 +147,8 @@
   - 설정마다 **답 최대 길이**(`max_tokens`, 비우면 채팅 답 4,096 · 알림 조사 한 단계 2,048)와 **도구 결과 최대 길이**(`tool_result_chars`, 1,000~200,000자, 비우면 6,000)를 편집 창(모든 공급자)이나 `ModelConfig` 리소스의 `spec.maxTokens`·`spec.toolResultChars`로 정할 수 있습니다(리소스의 CA 인증서는 `spec.caCert`). 설정의 옵션에 저장하며, 도구 결과 최대 길이는 공급자에 보내지 않습니다. 더 긴 결과는 그 길이에서 잘려 모델이 앞부분을 읽습니다. `k8s_get_pod_logs`, `logfiles`, `nodes_log`는 최신 줄이 있는 끝부분을 남기고, tool-server의 상한(`TOOL_OUTPUT_MAX_BYTES`)을 넘을 때도 그렇습니다. 구독은 Claude Code가 답 길이를 정합니다.
   - 카드마다 서버가 지금 그 설정으로 돌리는 곳(채팅 · 플로팅 어시스턴트 · 이력 요약 · 알림 조사)을 ai-service가 모델을 고르는 규칙 그대로 계산해 보여 줍니다. "활성"은 채팅을 돌리는 설정입니다.
   - OpenAI·Azure OpenAI에는 답 길이를 `max_completion_tokens`로 보냅니다. 추론 모델(o 시리즈, GPT-5)은 `max_tokens`를 받지 않습니다. 모델이 받지 않는 매개변수를 400으로 지목하면(추론 모델은 `temperature`·`top_p` 등을 거부) 그것을 빼고 한 번 다시 보내고, 그 모델에는 이후로도 보내지 않습니다.
+  - OpenAI·Azure OpenAI의 GPT-6 Sol·GPT-6 Luna(`gpt-6-sol`, `gpt-6-luna`, 이름 뒤에 날짜가 붙은 것도)에 보내는 호출은 도구가 있든 없든 모두 `reasoning_effort: "none"`을 같이 보냅니다. OpenAI 문서에 따르면 이 모델들은 Chat Completions에서 `none`일 때만 함수 도구를 받습니다. 기본 effort(`medium`)에서는 추론이 답 길이를 먹어 이력 요약이 빈 글로 오고, `temperature`도 거부됩니다. 이름이 다른 배포 · 게이트웨이 · 별칭이 도구를 붙인 호출에 OpenAI의 400 "Function tools with reasoning_effort are not supported"로 답하면, 그 호출을 `none`으로 다시 보냅니다. 기본 effort에서 거부됐던 `temperature` · `top_p` · `top_logprobs` · `logprobs`도 다시 보냅니다. 그 뒤의 호출은 도구가 없는 호출까지 처음부터 `none`을 붙입니다. 그 거부가 이런 모델이라는 뜻이기 때문입니다(공급자 · 주소 · 모델마다, ai-service 파드마다 다시 시작할 때까지). 다른 모델에는 `reasoning_effort`를 보내지 않습니다. 엔드포인트가 이 값을 거부하면 위와 같이 빼고 다시 보냅니다. 설정의 옵션에 `reasoning_effort`가 있으면 그 값을 그대로 보냅니다(편집 창은 Azure OpenAI와 Custom에서 옵션 칸을 보여 줍니다). `ModelConfig` 리소스로는 아직 OpenAI·Azure OpenAI의 옵션을 넣을 수 없습니다. 컨트롤러가 `spec.ollama.options`만 옮기고, 동기화할 때마다 옵션을 덮어씁니다.
+  - OpenAI · OpenAI 호환 · Azure OpenAI 설정의 연결 테스트는 채팅 호출처럼 도구 정의 하나와 설정의 옵션을 같이 보냅니다. 그래서 도구를 받지 않는 모델은 공급자의 메시지와 함께 테스트에서 실패합니다. Anthropic · Gemini · Ollama 테스트는 도구도 옵션도 보내지 않습니다. 저장이 거부할 옵션(한도)은 테스트도 저장과 같은 문장으로 거부합니다.
 
 ## 🌐 멀티클러스터 & RBAC
 
@@ -219,7 +221,7 @@
   - 캐시가 동기화되기 전이나 `kubeast:cache`가 파드를 watch할 수 없을 때는 사용자 신원으로 500개씩 나눠 받고, 화면은 30초마다 다시 묻습니다.
 - **Cluster View**는 노드 지도에 노드마다 칸 하나, 파드마다 점 하나를 카드와 같은 색(오류·주의·정상)으로 그립니다. 서버가 같은 줄과 같은 사용자 확인으로 세어 주므로, 큰 클러스터도 파드 전체를 브라우저로 받지 않고 한눈에 봅니다.
   - 지도 아래 노드 상자는 화면에 들어올 때 그 노드의 파드를 받고 그 노드를 watch합니다(`fieldSelector=spec.nodeName`). 그래서 화면에 보이는 상자에서는 파드가 뜨고, 끝나고, 다른 노드에 다시 뜨는 것이 바로 보이고, 지도는 2초 안에 따라옵니다.
-  - 검색은 서버가 셉니다(이름·네임스페이스, 전과 같음). 맞는 파드가 있는 노드는 어디에 있든 지도와 상자에 나옵니다.
+  - 검색은 서버가 셉니다(파드 이름·네임스페이스·노드·IP, Pods 목록의 검색과 같음). 맞는 파드가 있는 노드는 어디에 있든 지도와 상자에 나옵니다.
 - **Resource Graph**는 파드가 10개 넘는 소유자(ReplicaSet·StatefulSet·DaemonSet·Job)의 파드를 묶습니다. 정상이고 선이 같은 파드는 상자 하나("Running 98", 파드마다 점 하나)가 되고, 그 상자의 선은 안의 파드 모두의 선이며 선에 개수가 붙습니다. 정상이 아니거나 선이 다른 파드는 따로 그립니다. 머리줄은 모든 파드 수(묶음·따로)를 보여 줍니다.
   - StatefulSet이 파드마다 만든 PVC와 그 PV도 파드와 함께 묶습니다. Node·Instance로 묶기는 그대로이며, 묶음은 그 경계를 넘지 않습니다.
   - 묶음을 누르면 그 소유자의 파드 전부(따로 그린 것도)가 카드 색별 개수·검색·문제 먼저로 나오고, 파드를 누르면 상세 창이 열립니다. 검색은 묶음 안의 파드도 찾습니다.

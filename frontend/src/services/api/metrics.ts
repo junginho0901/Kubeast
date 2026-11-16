@@ -1,7 +1,5 @@
 // Metrics API — wraps the metrics-server top endpoints.
-// Each call detects metrics_unavailable and re-throws as a structured
-// 'metrics_unavailable' Error so callers can flip the
-// `metricsDisabled` flag (in client.ts) instead of retrying forever.
+// Each call re-throws metrics_unavailable as an Error with that code, which isMetricsUnavailableError reads.
 
 import { client, isMetricsUnavailableResponse } from './client'
 import type { TopResources } from './types'
