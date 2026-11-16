@@ -43,7 +43,10 @@ func (s *Service) GetClusterOverview(ctx context.Context) (map[string]interface{
 			if err := s.keepListable(ctx, b, ci, scope, ov); err != nil {
 				return nil, err
 			}
-			ov["cluster_version"] = b.serverVersion(ctx)
+			ov["cluster_version"] = ""
+			if v, _ := b.serverVersionInfo(ctx, shownVersionTTL); v != nil {
+				ov["cluster_version"] = v.GitVersion
+			}
 			return ov, nil
 		}
 	}
@@ -312,7 +315,7 @@ func (s *Service) getClusterOverviewUncached(ctx context.Context) (map[string]in
 	}
 
 	clusterVersion := ""
-	sv, err := cs.Discovery().ServerVersion()
+	sv, err := s.clusterVersion(ctx)
 	if err == nil {
 		clusterVersion = sv.GitVersion
 	}

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
@@ -184,7 +185,7 @@ func (hc *HealthChecker) sweep(ctx context.Context) {
 
 // probe fetches /version against cluster id, bounded by a short timeout.
 func (hc *HealthChecker) probe(ctx context.Context, id cluster.ID) bool {
-	pctx, cancel := context.WithTimeout(cluster.WithID(ctx, id), 5*time.Second)
+	pctx, cancel := context.WithTimeout(auth.AsKubeast(cluster.WithID(ctx, id)), 5*time.Second)
 	defer cancel()
 	_, _, err := hc.svc.RawRequest(pctx, "GET", "/version")
 	return err == nil

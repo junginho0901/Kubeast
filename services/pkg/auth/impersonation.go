@@ -5,7 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"sort"
@@ -201,9 +203,31 @@ func WithPayload(ctx context.Context, p TokenPayload) context.Context {
 	return context.WithValue(ctx, tokenPayloadKey, p)
 }
 
+// ErrNoPerson is the cluster transport's answer to a request whose context names no person and is not marked
+// AsKubeast: it is not sent.
+var ErrNoPerson = errors.New("no signed-in person in the request context")
+
+type kubeastOwnKey struct{}
+
+type pinnedPersonKey struct{}
+
+// AsKubeast marks ctx for Kubeast's own requests to a cluster (health reads, a read kept once for everyone): with no
+// person in ctx they go out under Kubeast's credential. A person in ctx still decides who a request acts as.
+func AsKubeast(ctx context.Context) context.Context {
+	return context.WithValue(ctx, kubeastOwnKey{}, true)
+}
+
+// WithPinnedPerson is for a config pinned to one person whose callers send their own contexts (k8s-service
+// UserRESTConfigFor): the cluster transport acts as p for a request whose context names no person. FromContext does
+// not read it.
+func WithPinnedPerson(ctx context.Context, p TokenPayload) context.Context {
+	return context.WithValue(ctx, pinnedPersonKey{}, p)
+}
+
 // impersonatingRoundTripper adds impersonation headers for the user found in
-// the request context. Requests without a user (startup probes, health checks)
-// go out under the service credential unchanged.
+// the request context. A request without a user goes out under the service
+// credential only when its context is marked AsKubeast; any other is refused
+// with ErrNoPerson.
 type impersonatingRoundTripper struct {
 	base      http.RoundTripper
 	clusterID string
@@ -218,7 +242,17 @@ func ImpersonationRoundTripper(base http.RoundTripper, clusterID string) http.Ro
 func (t *impersonatingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	p, ok := FromContext(req.Context())
 	if !ok {
-		return t.base.RoundTrip(req)
+		p, ok = req.Context().Value(pinnedPersonKey{}).(TokenPayload)
+	}
+	if !ok {
+		if own, _ := req.Context().Value(kubeastOwnKey{}).(bool); own {
+			return t.base.RoundTrip(req)
+		}
+		if req.Body != nil {
+			_ = req.Body.Close()
+		}
+		slog.Warn("cluster request with no person refused", "cluster", t.clusterID, "method", req.Method, "path", req.URL.Path)
+		return nil, ErrNoPerson
 	}
 	user, groups := p.Impersonation(t.clusterID)
 	r2 := req.Clone(req.Context())

@@ -99,6 +99,42 @@ func TestHandleCallReturnsAccess(t *testing.T) {
 	}
 }
 
+// A registered kubectl tool called through handleCall runs kubectl as the caller the bearer token names: the context
+// handleCall builds carries that person, so errNoPerson never comes from a signed-in call.
+func TestARegisteredToolRunsKubectlAsTheCaller(t *testing.T) {
+	resetKubeconfigCache()
+	_, restore := mockK8sService(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"kubeconfig":"","in_cluster":true}`))
+	})
+	defer restore()
+	payload := auth.TokenPayload{UserID: "u1", Email: "a@example.com", Perms: auth.PermissionMatrix{"prod": {"ai.tool.*", "resource.objects.read"}}, Roles: map[string]string{"prod": "Read"}}
+	prevAuth, prevImp, prevExec, prevProxy := toolAuth, impersonationEnabled, kubectlExec, kubectlProxy
+	defer func() {
+		toolAuth, impersonationEnabled, kubectlExec, kubectlProxy = prevAuth, prevImp, prevExec, prevProxy
+	}()
+	toolAuth, impersonationEnabled, kubectlProxy = fakeValidator{payload: payload}, true, nil
+	var argv []string
+	kubectlExec = func(_ context.Context, args []string, _ *string) ([]byte, error) {
+		argv = args
+		return []byte("Name: web"), nil
+	}
+	req := httptest.NewRequest(http.MethodPost, "/call", strings.NewReader(`{"name":"k8s_describe_resource","arguments":{"cluster":"prod","resource_type":"deployments","resource_name":"web","namespace":"shop"}}`))
+	req.Header.Set("Authorization", "Bearer t")
+	rec := httptest.NewRecorder()
+	handleCall(rec, req, buildToolRegistry())
+	var resp ToolCallResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("status %d body %s: %v", rec.Code, rec.Body.String(), err)
+	}
+	if rec.Code != http.StatusOK || resp.Error != "" || !strings.Contains(resp.Content, "Name: web") {
+		t.Fatalf("status %d error %q content %q, want the describe answer", rec.Code, resp.Error, resp.Content)
+	}
+	want := auth.KubectlImpersonationArgs(payload, "prod")
+	if !strings.Contains(strings.Join(argv, " "), strings.Join(want, " ")) {
+		t.Fatalf("kubectl args %v, want %v among them", argv, want)
+	}
+}
+
 // A tool that reads through k8s-service asks it to record (X-Kubeast-Record)
 // and answers with the cluster requests k8s-service listed.
 func TestHandleCallReturnsTheRequestsK8sServiceMade(t *testing.T) {
