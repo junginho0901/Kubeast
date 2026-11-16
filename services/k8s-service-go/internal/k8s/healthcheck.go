@@ -2,9 +2,12 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
+	"net/http/httptrace"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -13,7 +16,7 @@ import (
 
 // clusterHealth is a per-cluster circuit breaker + reachability flag (step 15).
 // A request to an OPEN cluster fails fast (immediate 503) instead of waiting out
-// the API-server timeout. Live request errors count toward `threshold` before
+// the API-server timeout. Live requests that could not reach it count toward `threshold` before
 // opening (so a single transient blip doesn't trip it); a health-check failure
 // opens immediately (authoritative probe). Any success closes it. Absent =
 // unknown → treated as CLOSED (we never fail-fast a cluster we haven't seen fail).
@@ -147,29 +150,54 @@ func (s *Service) ClusterAnswered(id cluster.ID) {
 	}
 }
 
-type clusterAnswerKey struct{}
+type clusterCallsKey struct{}
 
-// OnClusterAnswer gives ctx a function its cluster requests call once, when the API server first answers one below 500.
-func OnClusterAnswer(ctx context.Context, answered func()) context.Context {
-	var once sync.Once
-	return context.WithValue(ctx, clusterAnswerKey{}, func() { once.Do(answered) })
+// ClusterCalls is what one request's calls to its cluster got, as answerNotice saw them.
+type ClusterCalls struct {
+	answered             func()
+	once                 sync.Once
+	responded, unreached atomic.Bool
 }
+
+// WithClusterCalls gives ctx a record of its cluster calls; answered runs once, at the API server's first answer below 500.
+func WithClusterCalls(ctx context.Context, answered func()) (context.Context, *ClusterCalls) {
+	calls := &ClusterCalls{answered: answered}
+	return context.WithValue(ctx, clusterCallsKey{}, calls), calls
+}
+
+// Unreached says a call could not reach the cluster and none got a response, of whatever status.
+func (c *ClusterCalls) Unreached() bool { return c.unreached.Load() && !c.responded.Load() }
 
 // answerNotice is the innermost cluster transport, under the namespace guard and the person check that answer on their own.
 type answerNotice struct{ base http.RoundTripper }
 
 func (t answerNotice) RoundTrip(req *http.Request) (*http.Response, error) {
+	calls, ok := req.Context().Value(clusterCallsKey{}).(*ClusterCalls)
+	if !ok {
+		return t.base.RoundTrip(req)
+	}
+	over := req.Context().Err() != nil
+	var sent atomic.Bool
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{
+		WroteRequest: func(w httptrace.WroteRequestInfo) { sent.Store(w.Err == nil) },
+	}))
 	resp, err := t.base.RoundTrip(req)
-	if err == nil && resp != nil && resp.StatusCode < http.StatusInternalServerError {
-		if notify, ok := req.Context().Value(clusterAnswerKey{}).(func()); ok {
-			notify()
+	switch ended := req.Context().Err(); {
+	case err == nil:
+		calls.responded.Store(true)
+		if resp.StatusCode < http.StatusInternalServerError {
+			calls.once.Do(calls.answered)
 		}
+	case ended != nil && (over || errors.Is(ended, context.Canceled) || sent.Load()):
+		// Kubeast stopped waiting (the caller left, or the API server had the request and was slow), not the cluster.
+	default:
+		calls.unreached.Store(true)
 	}
 	return resp, err
 }
 
-// MarkClusterDown records a live connectivity error (opens the breaker once the
-// failure threshold is reached). nil-safe.
+// MarkClusterDown records a request whose calls could not reach the cluster (ClusterCalls.Unreached); the breaker opens
+// once the failure threshold is reached. nil-safe.
 func (s *Service) MarkClusterDown(id cluster.ID) {
 	if s.health != nil {
 		s.health.recordFailure(id)

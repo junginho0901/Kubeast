@@ -25,10 +25,11 @@ import (
 //
 // Step 15 (failure isolation): a request to a cluster the health checker has
 // marked down returns 503 immediately (fail-fast) instead of waiting out the
-// API-server timeout — so one dead cluster can't tie up requests. The live
-// response then feeds the health state back: a connectivity 503 marks the
-// cluster down (so the next request fails fast before the periodic poll), an
-// answer of the API server clears the count. Open, among requests only the one let through after MC_BREAKER_OPEN_SEC closes it.
+// API-server timeout — so one dead cluster can't tie up requests. The calls a
+// request made then feed the health state back: calls that could not reach the
+// cluster, with no response to any, count a failure (so the next request fails
+// fast before the periodic poll), whatever the handler answered; an answer of
+// the API server clears the count. Open, among requests only the one let through after MC_BREAKER_OPEN_SEC closes it.
 func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		payload, ok := auth.FromContext(r.Context())
@@ -98,17 +99,18 @@ func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 		}
 		// The API server's first answer decides at once, so a terminal or a followed log trying the cluster closes it.
 		var answered atomic.Bool
-		r = r.WithContext(k8s.OnClusterAnswer(r.Context(), func() {
+		ctx, calls := k8s.WithClusterCalls(r.Context(), func() {
 			answered.Store(true)
 			if trial.IsZero() {
 				h.svc.ClusterAnswered(id)
 			} else {
 				h.svc.MarkClusterUp(id)
 			}
-		}))
+		})
+		r = r.WithContext(ctx)
 		defer func() {
 			switch {
-			case sr.clusterFailed:
+			case calls.Unreached():
 				h.svc.MarkClusterDown(id)
 			case !trial.IsZero() && !answered.Load():
 				h.svc.TrialAskedNothing(id, trial)
@@ -118,24 +120,16 @@ func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// clusterFailureNoter is the response writer ClusterMiddleware gives handlers: handleError tells it a call to the
-// cluster failed.
-type clusterFailureNoter interface{ noteClusterFailure() }
-
-// statusRecorder notes a failed call to the cluster for the breaker while
-// transparently forwarding Hijacker (WebSocket exec/logs) and Flusher (SSE
-// streams) so wrapping never breaks those long-lived connections.
+// statusRecorder stamps the access trail on the answer while transparently
+// forwarding Hijacker (WebSocket exec/logs) and Flusher (SSE streams) so
+// wrapping never breaks those long-lived connections.
 type statusRecorder struct {
 	http.ResponseWriter
 	// trail, when set, goes out in HeaderRequests with the response headers:
 	// the cluster requests made before the handler started its answer.
 	trail   *accesstrail.Recorder
 	stamped bool
-	// clusterFailed: the answer is a failed call to the cluster, not a 503 of Kubeast's own.
-	clusterFailed bool
 }
-
-func (s *statusRecorder) noteClusterFailure() { s.clusterFailed = true }
 
 func (s *statusRecorder) stamp() {
 	if s.trail == nil || s.stamped {

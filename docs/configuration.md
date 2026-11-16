@@ -227,7 +227,7 @@ multicluster:
   maxClusters: 20
   healthcheckIntervalSec: 60
   rateLimitQPS: 0           # 0 = off
-  breakerConsecutiveFails: 5  # failed requests in a row that open a cluster's breaker; 0 = off, no request fails fast
+  breakerConsecutiveFails: 5  # requests in a row that could not reach the API server (no response to any call) that open a cluster's breaker; 0 = off, no request fails fast
   breakerOpenSec: 30        # an open breaker answers 503 this long, then lets one request try the cluster (0 = 30)
   clientQPS: 100            # client-go's rate to each cluster's API server
   clientBurst: 200

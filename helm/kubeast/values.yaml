@@ -1199,6 +1199,8 @@ gitops:
 # cache, rate limit and circuit breaker. Safe defaults; rateLimitQPS=0 leaves
 # rate limiting off, healthcheckIntervalSec=0 disables the health checker.
 # breakerConsecutiveFails=0 turns the breaker off; an open one lets one request try the cluster after breakerOpenSec.
+# It counts requests whose calls got no response from the API server (refused, a dropped connection, a deadline while
+# connecting); a response of any status, such as an aggregated API's 503, counts nothing.
 multicluster:
   maxClusters: 20
   healthcheckIntervalSec: 60

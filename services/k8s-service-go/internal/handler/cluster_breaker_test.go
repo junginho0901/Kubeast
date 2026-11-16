@@ -13,17 +13,27 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
-// breakerHandler is a Handler on the cluster c1, whose API server answers /version and 503 for downAPIPath.
+// breakerHandler is a Handler on the cluster c1, whose API server answers /version, 503 for downAPIPath, 504 for
+// timeoutAPIPath, nothing until the client goes for slowAPIPath, and ends the connection of dropPath with no response.
 func breakerHandler(t *testing.T, opts k8s.ServiceOptions) *Handler {
 	t.Helper()
 	h, _ := countedBreakerHandler(t, opts)
 	return h
 }
 
-// downAPIPath is an aggregated API whose server is down: the API server answers it 503.
-const downAPIPath = "/apis/metrics.k8s.io/v1beta1/nodes"
+const (
+	// downAPIPath is an aggregated API whose server is down: the API server answers it 503.
+	downAPIPath = "/apis/metrics.k8s.io/v1beta1/nodes"
+	// timeoutAPIPath is a read past the API server's own time limit: it answers 504.
+	timeoutAPIPath = "/apis/apps/v1/replicasets"
+	// slowAPIPath is a list the API server is still reading when the screen's deadline passes.
+	slowAPIPath = "/api/v1/events"
+	// dropPath is an access check (a POST) whose connection ends with no response, as one to an API server going away.
+	dropPath = "/apis/authorization.k8s.io/v1/selfsubjectaccessreviews"
+)
 
 // countedBreakerHandler is breakerHandler with the number of requests its API server got.
 func countedBreakerHandler(t *testing.T, opts k8s.ServiceOptions) (*Handler, *atomic.Int32) {
@@ -31,10 +41,27 @@ func countedBreakerHandler(t *testing.T, opts k8s.ServiceOptions) (*Handler, *at
 	var hits atomic.Int32
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
-		if r.URL.Path == downAPIPath {
+		switch r.URL.Path {
+		case downAPIPath:
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"ServiceUnavailable","code":503}`))
+			return
+		case timeoutAPIPath:
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusGatewayTimeout)
+			_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","message":"Timeout: request did not complete within the allotted timeout","reason":"Timeout","code":504}`))
+			return
+		case slowAPIPath:
+			select {
+			case <-r.Context().Done():
+			case <-time.After(10 * time.Second):
+			}
+			return
+		case dropPath:
+			if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
+				_ = conn.Close()
+			}
 			return
 		}
 		if r.URL.Path != "/version" {
@@ -79,9 +106,15 @@ type breakerAnswers struct {
 	reached int
 }
 
-func (a *breakerAnswers) failAsTheCluster(w http.ResponseWriter, _ *http.Request) {
+// failAsTheCluster makes a call whose connection ends with no response (a POST, which client-go does not send again) and
+// answers 503, as a screen of a cluster it cannot reach.
+func (a *breakerAnswers) failAsTheCluster(w http.ResponseWriter, r *http.Request) {
 	a.reached++
-	a.h.handleError(w, errors.New("dial tcp 10.0.0.9:6443: connect: connection refused"))
+	_, _, err := a.h.svc.RawRequest(r.Context(), http.MethodPost, dropPath)
+	if err == nil {
+		err = errors.New("the dropped connection was answered")
+	}
+	response.Error(w, http.StatusServiceUnavailable, err.Error())
 }
 
 func (a *breakerAnswers) askTheCluster(w http.ResponseWriter, r *http.Request) {
@@ -435,4 +468,43 @@ func TestA5xxOfTheAPIServerIsNoAnswer(t *testing.T) {
 			t.Error("a 503 of the API server between two failures cleared the count")
 		}
 	})
+}
+
+// A cluster whose API server answers is not cut off by one group or one slow screen: an aggregated API whose server is
+// down (503), the API server's own timeout (504) and a screen's deadline that passed once its request was sent count no
+// failure, though each screen answers 503.
+func TestAClusterWhoseAPIServerAnswersIsNotCutOffByOneGroupOrOneSlowScreen(t *testing.T) {
+	for name, c := range map[string]struct {
+		path     string
+		deadline time.Duration
+	}{
+		"an aggregated API answering 503":           {downAPIPath, 0},
+		"the API server's 504":                      {timeoutAPIPath, 0},
+		"a screen's deadline once its request went": {slowAPIPath, 200 * time.Millisecond},
+	} {
+		t.Run(name, func(t *testing.T) {
+			a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 2, BreakerOpen: time.Minute})}
+			read := func(w http.ResponseWriter, r *http.Request) {
+				ctx := r.Context()
+				if c.deadline > 0 {
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithTimeout(ctx, c.deadline)
+					defer cancel()
+				}
+				if _, _, err := a.h.svc.RawRequest(ctx, http.MethodGet, c.path); err != nil {
+					a.h.handleError(w, err)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			}
+			for i := range 3 {
+				if rec := askC1(a.h, read); rec.Code != http.StatusServiceUnavailable {
+					t.Fatalf("read %d: %d %s, want the screen's 503", i+1, rec.Code, rec.Body.String())
+				}
+			}
+			if a.h.svc.ClusterDown("c1") {
+				t.Error("the breaker of a cluster whose API server answers opened")
+			}
+		})
+	}
 }
