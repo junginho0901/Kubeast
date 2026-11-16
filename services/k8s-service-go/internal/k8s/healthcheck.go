@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"k8s.io/client-go/discovery"
+
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
@@ -341,14 +343,17 @@ func (hc *HealthChecker) sweep(ctx context.Context) {
 		wg.Add(1)
 		go func(id cluster.ID) {
 			defer wg.Done()
-			up := hc.probe(ctx, id)
-			status := "healthy"
-			if !up {
-				status = "disconnected"
+			verdict := hc.probe(ctx, id)
+			if verdict == probeNone {
+				return
 			}
-			// Authoritative probe: open/close the breaker immediately.
+			status := "disconnected"
+			if verdict == probeUp {
+				status = "healthy"
+			}
+			// Authoritative probe: open/close the breaker immediately; any answer below 500 closes it, as a trial's does.
 			if hc.svc.health != nil {
-				hc.svc.health.setOpen(id, !up)
+				hc.svc.health.setOpen(id, verdict == probeDown)
 			}
 			if !write {
 				return
@@ -361,10 +366,56 @@ func (hc *HealthChecker) sweep(ctx context.Context) {
 	wg.Wait()
 }
 
-// probe fetches /version against cluster id, bounded by a short timeout.
-func (hc *HealthChecker) probe(ctx context.Context, id cluster.ID) bool {
-	pctx, cancel := context.WithTimeout(auth.AsKubeast(cluster.WithID(ctx, id)), 5*time.Second)
+// probeBudget is how long the probe of one cluster waits for /version.
+var probeBudget = 5 * time.Second
+
+// probeVerdict is what a probe found of its cluster.
+type probeVerdict int
+
+const (
+	// probeNone: its call did not go out before its time ended and ended with that time, or the sweep is stopping; the
+	// last verdict stays.
+	probeNone probeVerdict = iota
+	// probeUp: the API server gave its version.
+	probeUp
+	// probeAnswered: the API server answered below 500 with no version (a 401, a proxy's 404).
+	probeAnswered
+	// probeDown: no client for it, a call that could not reach it, a 5xx, no answer in probeBudget once it went out, or
+	// an error of Kubeast's own before any call that is not its time (a credential plugin that fails).
+	probeDown
+)
+
+// probe reads /version of cluster id as Kubeast itself, through the bundle's own client, which waits behind no one's
+// requests (as /health's read), and reads what its call got from the record of its calls.
+func (hc *HealthChecker) probe(ctx context.Context, id cluster.ID) probeVerdict {
+	var vr discovery.ServerVersionInterfaceWithContext
+	if b, err := hc.svc.For(ctx, id); err == nil {
+		vr = b.versionReader()
+	}
+	if vr == nil {
+		if ctx.Err() != nil {
+			return probeNone
+		}
+		return probeDown
+	}
+	pctx, cancel := context.WithTimeout(auth.AsKubeast(cluster.WithID(ctx, id)), probeBudget)
 	defer cancel()
-	_, _, err := hc.svc.RawRequest(pctx, "GET", "/version")
-	return err == nil
+	pctx, calls := WithClusterCalls(pctx, id, func() {})
+	_, err := vr.ServerVersionWithContext(pctx)
+	switch {
+	case ctx.Err() != nil:
+		return probeNone
+	case err == nil:
+		return probeUp
+	case calls.gotAnswer.Load():
+		return probeAnswered
+	case calls.responded.Load(), calls.unreached.Load(), calls.unanswered.Load():
+		return probeDown
+	case pctx.Err() != nil && errors.Is(err, context.DeadlineExceeded):
+		slog.Info("healthcheck: the probe's call did not go out within its time; keeping the last verdict", "id", id, "err", err)
+		return probeNone
+	}
+	// refused by Kubeast before any call with an error of its own, not its time (a credential plugin that fails, also
+	// after the probe's time: client-go runs it apart from the call's context)
+	return probeDown
 }
