@@ -123,6 +123,18 @@ func firstFrame(out <-chan *ResponseMessage, within time.Duration) string {
 	}
 }
 
+// frameWithin is the next frame of out, or fails the test after within.
+func frameWithin(t *testing.T, out <-chan *ResponseMessage, within time.Duration) *ResponseMessage {
+	t.Helper()
+	select {
+	case f := <-out:
+		return f
+	case <-time.After(within):
+		t.Fatalf("no frame within %v", within)
+		return nil
+	}
+}
+
 // watchOn runs a watch of cluster as the multiplexer does.
 func watchOn(ctx context.Context, m *Multiplexer, cluster, path, query string, out chan<- *ResponseMessage) {
 	m.runWatch(ctx, RequestMessage{ClusterID: cluster, Path: path, Query: query}, out)
@@ -420,7 +432,7 @@ func TestAnOpeningCutMidwayGivesItsPlaceBackAndOpensAgain(t *testing.T) {
 	}
 }
 
-// An opening whose RESYNC cannot be sent, its client gone, gives its place back at once.
+// An opening whose RESYNC cannot be queued gives its place back, while it waits and when its client is gone.
 func TestAnOpeningWhoseResyncCannotBeSentGivesItsPlaceBack(t *testing.T) {
 	api := &openingAPI{objects: 1}
 	m := muxOn(t, api.serve)
@@ -435,7 +447,8 @@ func TestAnOpeningWhoseResyncCannotBeSentGivesItsPlaceBack(t *testing.T) {
 		m.runWatch(ctx, RequestMessage{Path: "/api/v1/pods", Query: "watch=1", Resync: true}, out)
 	}()
 	eventually(t, "the watch to reach the API server", 5*time.Second, func() bool { return len(api.queries()) == 1 })
-	time.Sleep(20 * time.Millisecond)
+	// The RESYNC waits for a socket queue that has no room: the place goes back meanwhile.
+	eventually(t, "the opening place to come back while the RESYNC waits", 5*time.Second, func() bool { return m.openingPlaces().InUse() == 0 })
 	cancel()
 	waitEnded(t, done, 5*time.Second)
 	if n := m.openingPlaces().InUse(); n != 0 {
@@ -468,7 +481,7 @@ func TestAWatchThatWasOnOpensAgainWhileMemoryIsShort(t *testing.T) {
 	ctx := testCtx(t)
 	out := make(chan *ResponseMessage, 16)
 	go watchInto(ctx, m, "/api/v1/pods", "watch=1", out)
-	if f := <-out; f.Type != "DATA" {
+	if f := frameWithin(t, out, 5*time.Second); f.Type != "DATA" {
 		t.Fatalf("first frame %s, want DATA", f.Type)
 	}
 	short.Store(true)
@@ -510,7 +523,7 @@ func TestAWatchWhoseTurnComesWhileMemoryIsShortWaits(t *testing.T) {
 		watchInto(ctx, m, "/api/v1/pods", "watch=1", out)
 	}()
 	waitEnded(t, done, 5*time.Second)
-	f := <-out
+	f := frameWithin(t, out, 5*time.Second)
 	data, _ := f.Error.(map[string]string)
 	if f.Type != "ERROR" || data["reason"] != reasonLimit || data["limit_scope"] != limitScopeMemory {
 		t.Fatalf("a watch whose turn came while memory was short: %s %v", f.Type, f.Error)
@@ -529,19 +542,15 @@ func TestALongWaitForAnOpeningIsToldAsTheMemoryLimit(t *testing.T) {
 	m := muxOn(t, eventThenHold)
 	m.startNoticeAfter = 20 * time.Millisecond
 	places := m.openingPlaces()
-	places.setAnswering("other", true) // alone, it takes every place
+	answerAll(places, "other") // alone, it takes every place
 	held := make([]func(), 0, places.Cap())
 	for i := 0; i < places.Cap(); i++ {
-		release, err := places.take(context.Background(), "other")
-		if err != nil {
-			t.Fatal(err)
-		}
-		held = append(held, release)
+		held = append(held, takeNow(t, places, "other"))
 	}
 	ctx := testCtx(t)
 	out := make(chan *ResponseMessage, 8)
 	go watchInto(ctx, m, "/api/v1/pods", "watch=1", out)
-	f := <-out
+	f := frameWithin(t, out, 5*time.Second)
 	data, _ := f.Error.(map[string]string)
 	if f.Type != "ERROR" || data["reason"] != reasonLimit || data["limit_scope"] != limitScopeMemory || !strings.Contains(data["message"], "waits for its turn") {
 		t.Fatalf("after the long wait: %s %v", f.Type, f.Error)
@@ -550,7 +559,7 @@ func TestALongWaitForAnOpeningIsToldAsTheMemoryLimit(t *testing.T) {
 		release()
 	}
 	for _, want := range []string{"RESYNC", "DATA"} {
-		if f := <-out; f.Type != want {
+		if f := frameWithin(t, out, 5*time.Second); f.Type != want {
 			t.Fatalf("when its turn came: %s, want %s", f.Type, want)
 		}
 	}

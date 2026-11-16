@@ -228,6 +228,7 @@ type Multiplexer struct {
 	// servesWatchList.
 	startNoticeAfter time.Duration
 	startHoldFor     time.Duration
+	lentHoldFor      time.Duration
 	openingHoldFor   time.Duration
 	watchListRetry   time.Duration
 
@@ -330,6 +331,7 @@ func NewMultiplexer(p ClientProvider) *Multiplexer {
 		noWatchList:      make(map[string]time.Time),
 		startNoticeAfter: 10 * time.Second,
 		startHoldFor:     5 * time.Second,
+		lentHoldFor:      time.Second,
 		openingHoldFor:   2 * time.Second,
 		watchListRetry:   watchListRetryAfter,
 	}
@@ -598,14 +600,27 @@ const openingWaitMessage = "k8s-service opens a few lists at a time to keep its 
 
 // takeOpening waits for one of the opening places for cluster id before the watch's start, so the objects are read
 // as soon as the API server sends them: an answered watch left unread fills the API server's buffer for it, which
-// closes the watch past 100 ms (k8s.io/apiserver v0.37.2 pkg/storage/cacher/cache_watcher.go:180-214). A wait past
-// startNoticeAfter is told to the client as the memory limit (limit_scope memory), which is what the places are for,
-// and its list is read again once the watch is on. The place goes back after startHoldFor, and the cluster opens one
-// watch at a time from then on (openingQueue.setAnswering), unless followWatch keeps it once the API server has
-// answered; then once the opening is through, or at openingHoldFor.
-func (m *Multiplexer) takeOpening(ctx context.Context, id string, req RequestMessage, sendCh chan<- *ResponseMessage) (place *held, told, ok bool) {
+// closes the watch past a budget of up to 100 ms (k8s.io/apiserver v0.37.2 pkg/storage/cacher/cache_watcher.go:180-214,
+// time_budget.go:28). A wait past startNoticeAfter is told to the client as the memory limit (limit_scope memory),
+// which is what the places are for, and its list is read again once the watch is on. lent says the queue lent the
+// place (openingQueue); startOpening gives the place its clock once the watch's start place is taken.
+func (m *Multiplexer) takeOpening(ctx context.Context, id string, req RequestMessage, sendCh chan<- *ResponseMessage) (place *held, lent, told, ok bool) {
+	p := m.openingPlaces().placesFor(id)
+	// The backstop of a place whose start place does not come; startOpening sets its clock.
+	place, told, ok = m.takeTurn(ctx, m.openingNotice(ctx, req, sendCh), 2*m.startHoldFor, nil, p)
+	return place, p.lent, told, ok
+}
+
+// startOpening sets the clock of a watch's opening place as its start goes to the API server: startHoldFor, whose end
+// halves the cluster's limit (openingQueue.timedOut), or lentHoldFor for a lent place, whose end does not, so a
+// cluster that stops answering keeps the places lent to it for a moment only.
+func (m *Multiplexer) startOpening(place *held, lent bool, id string) {
+	if lent {
+		place.restart(m.lentHoldFor, nil)
+		return
+	}
 	q := m.openingPlaces()
-	return m.takeTurn(ctx, m.openingNotice(ctx, req, sendCh), m.startHoldFor, func() { q.setAnswering(id, false) }, q.placesFor(id))
+	place.restart(m.startHoldFor, func() { q.timedOut(id) })
 }
 
 func (m *Multiplexer) openingNotice(ctx context.Context, req RequestMessage, sendCh chan<- *ResponseMessage) func() {
@@ -679,6 +694,19 @@ func (h *held) release() {
 
 // keep holds the place with no time from now on, and says false when its time had come and the place is back.
 func (h *held) keep() bool { return h.timer.Stop() }
+
+// restart gives the place a new time, from now, unless its time had come; capped runs if the new time comes first.
+func (h *held) restart(at time.Duration, capped func()) {
+	if !h.timer.Stop() {
+		return
+	}
+	h.timer = time.AfterFunc(at, func() {
+		h.give()
+		if capped != nil {
+			capped()
+		}
+	})
+}
 
 // releaseFunc is h's release, nil when h is.
 func (h *held) releaseFunc() func() {
@@ -902,9 +930,10 @@ func (m *Multiplexer) followWatch(ctx context.Context, req RequestMessage, sendC
 		clusterID := effectiveClusterID(subscriptionCluster(ctx, req.ClusterID))
 		endPlace := func() {}
 		var place *held
+		var lent bool
 		if opening {
 			var told bool
-			if place, told, ok = m.takeOpening(ctx, clusterID, req, sendCh); !ok {
+			if place, lent, told, ok = m.takeOpening(ctx, clusterID, req, sendCh); !ok {
 				return
 			}
 			endPlace = place.release
@@ -932,6 +961,9 @@ func (m *Multiplexer) followWatch(ctx context.Context, req RequestMessage, sendC
 			return
 		}
 		resync = resync || told
+		if opening {
+			m.startOpening(place, lent, clusterID)
+		}
 		var watcher watch.Interface
 		watching := m.watchClient(ctx, dyn, notify)
 		if namespace != "" {
@@ -946,8 +978,13 @@ func (m *Multiplexer) followWatch(ctx context.Context, req RequestMessage, sendC
 			// The place is kept from the API server's answer on, for openingHoldFor at most; a start the API server kept
 			// waiting past startHoldFor gave it back, and its objects come in without one.
 			kept := place.keep()
-			if ctx.Err() == nil {
-				m.openingPlaces().setAnswering(clusterID, kept && answered(err))
+			switch q := m.openingPlaces(); {
+			case !kept || ctx.Err() != nil:
+				// a start past its place's time counted when the time came, a lent one not at all
+			case answered(err):
+				q.answered(clusterID)
+			default:
+				q.timedOut(clusterID)
 			}
 			if kept && err == nil {
 				cut := time.AfterFunc(m.openingHoldFor, func() {
@@ -993,10 +1030,16 @@ func (m *Multiplexer) followWatch(ctx context.Context, req RequestMessage, sendC
 		// Only now that the new watch is on: what is deleted after the client reads its list still reaches it as an event.
 		if resync {
 			resync = false
-			if !send(ctx, sendCh, req.frame("RESYNC")) {
+			// A socket queue too full to take it gives the opening place back first, as openingTurn.send does.
+			f := req.frame("RESYNC")
+			select {
+			case sendCh <- &f:
+			default:
 				endOpening()
-				watcher.Stop()
-				return
+				if !send(ctx, sendCh, f) {
+					watcher.Stop()
+					return
+				}
 			}
 		}
 

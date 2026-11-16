@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+// answerAll raises cluster's limit to every place, as as many starts answered in time do.
+func answerAll(q *openingQueue, cluster string) {
+	for i := 0; i < q.Cap(); i++ {
+		q.answered(cluster)
+	}
+}
+
 // takeNow takes a place of q for cluster, or fails the test after a second.
 func takeNow(t *testing.T, q *openingQueue, cluster string) func() {
 	t.Helper()
@@ -58,8 +65,8 @@ func notYet(t *testing.T, got <-chan func(), what string) {
 // holds half of them, then to whoever waits.
 func TestTheOpeningQueueLendsFreePlacesAndGivesThemBackToOthersFirst(t *testing.T) {
 	q := newOpeningQueue(4)
-	q.setAnswering("a", true)
-	q.setAnswering("b", true)
+	answerAll(q, "a")
+	answerAll(q, "b")
 	gives := []func(){takeNow(t, q, "a"), takeNow(t, q, "a"), takeNow(t, q, "a"), takeNow(t, q, "a")}
 	ctx := testCtx(t)
 	aNext := waitFor(ctx, q, "a")
@@ -126,7 +133,7 @@ func TestTheOpeningQueueServesEveryWaitingCluster(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 60; i++ {
 		c := fmt.Sprintf("c%d", i%6)
-		q.setAnswering(c, true)
+		answerAll(q, c)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -142,6 +149,70 @@ func TestTheOpeningQueueServesEveryWaitingCluster(t *testing.T) {
 	for i := 0; i < 6; i++ {
 		if n := served[fmt.Sprintf("c%d", i)]; n != 10 {
 			t.Errorf("c%d was served %d times, want 10", i, n)
+		}
+	}
+}
+
+// The clusters waiting take turns: a cluster that got a place goes to the back of the line, so one with many waiters
+// does not take every place given back while others wait.
+func TestTheOpeningQueueServesTheWaitingClustersInTurn(t *testing.T) {
+	q := newOpeningQueue(1)
+	held := takeNow(t, q, "x")
+	ctx := testCtx(t)
+	type waiter struct {
+		cluster string
+		got     <-chan func()
+	}
+	var ws []waiter
+	for _, c := range []string{"a", "a", "a", "b", "b", "b", "c", "c", "c"} {
+		ws = append(ws, waiter{c, waitFor(ctx, q, c)})
+	}
+	held()
+	var order []string
+	for range ws {
+		var give func()
+		for deadline := time.Now().Add(2 * time.Second); give == nil && time.Now().Before(deadline); {
+			for i := range ws {
+				select {
+				case give = <-ws[i].got:
+					order = append(order, ws[i].cluster)
+				default:
+				}
+				if give != nil {
+					break
+				}
+			}
+			if give == nil {
+				time.Sleep(time.Millisecond)
+			}
+		}
+		if give == nil {
+			t.Fatalf("no place given after %v", order)
+		}
+		give()
+	}
+	if got := fmt.Sprint(order); got != "[a b c a b c a b c]" {
+		t.Errorf("the waiting clusters were served %s, want in turn [a b c a b c a b c]", got)
+	}
+}
+
+// A cluster's limit goes up by one for each start answered in time and halves for each that was not, never below one.
+func TestTheOpeningQueueLimitClimbsAndHalves(t *testing.T) {
+	q := newOpeningQueue(8)
+	for _, c := range []struct {
+		step func()
+		want int
+	}{
+		{func() {}, 1}, {func() { q.answered("a") }, 2}, {func() { answerAll(q, "a") }, 8},
+		{func() { q.timedOut("a") }, 4}, {func() { q.answered("a") }, 5}, {func() { q.timedOut("a") }, 2},
+		{func() { q.timedOut("a") }, 1}, {func() { q.timedOut("a") }, 1},
+	} {
+		c.step()
+		q.mu.Lock()
+		got := q.limitOf("a")
+		q.mu.Unlock()
+		if got != c.want {
+			t.Fatalf("limit %d, want %d", got, c.want)
 		}
 	}
 }

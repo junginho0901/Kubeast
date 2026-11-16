@@ -429,7 +429,7 @@ func TestAnOpeningTakesItsPlaceBeforeItsStart(t *testing.T) {
 	api := &chanAPI{objects: 1}
 	m := NewMultiplexer(chanClusters{"alpha": api})
 	places := m.openingPlaces()
-	places.setAnswering("other", true)
+	answerAll(places, "other")
 	held := make([]func(), 0, places.Cap())
 	for i := 0; i < places.Cap(); i++ {
 		held = append(held, takeNow(t, places, "other"))
@@ -475,5 +475,69 @@ func TestAWatchWhoseContextEndsGivesItsPlaceBack(t *testing.T) {
 	}
 	if n, w := q.InUse(), q.waiters(); n != 0 || w != 0 {
 		t.Errorf("%d places in use and %d waiting after the sockets went, want none", n, w)
+	}
+}
+
+// A start over startHoldFor among starts answered in time halves the cluster's limit, which the next answers bring
+// back, instead of dropping the cluster to one place: on 0be16a4f (review probe P-F, one start in three 6 s late, 60
+// openings of 0.1 s) the last list opened after 22.0 s, the cluster at one place 70 % of the time, against 0.85 s.
+func TestASlowStartAmongAnsweredOnesCostsHalfTheLimit(t *testing.T) {
+	api := &chanAPI{objects: 5, slowEvery: 3, slowFor: 600 * time.Millisecond}
+	m := NewMultiplexer(chanClusters{"alpha": api})
+	m.startHoldFor = 300 * time.Millisecond
+	m.lentHoldFor = 60 * time.Millisecond
+	ctx := testCtx(t)
+	opened, last, limits := crowdOpens(ctx, m, "alpha", 60, 20*time.Second)
+	t.Logf("one start in three 600 ms late (startHoldFor 300 ms): %d/60 opened, the last after %v, %d limit frames", opened, last, limits)
+	if opened != 60 || last > 2*time.Second {
+		t.Errorf("%d of 60 lists opened, the last after %v; want all within 2 s", opened, last)
+	}
+}
+
+// A cluster that answered its starts and then stops answering keeps the places lent to it for lentHoldFor only, so
+// another cluster's first list opens after that, not after startHoldFor; and once its own places' time came its limit
+// is one, so it does not borrow them again. On 0be16a4f (review probe P-G, startHoldFor 5 s) the healthy cluster's
+// first list opened after 4.50 s.
+func TestAClusterThatGoesDarkGivesItsLentPlacesBackSoon(t *testing.T) {
+	dark, ok := &chanAPI{objects: 1, answerFirst: 8}, &chanAPI{objects: 1}
+	m := NewMultiplexer(chanClusters{"dark": dark, "ok": ok})
+	m.startHoldFor = 400 * time.Millisecond
+	m.lentHoldFor = 100 * time.Millisecond
+	ctx := testCtx(t)
+	q := m.openingPlaces()
+	if opened, _, _ := crowdOpens(ctx, m, "dark", 8, 5*time.Second); opened != 8 {
+		t.Fatalf("%d of the dark cluster's first 8 lists opened", opened)
+	}
+	eventually(t, "the dark cluster's limit to reach every place", 2*time.Second, func() bool {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+		return q.limitOf("dark") == q.size
+	})
+	for i := 0; i < 20; i++ {
+		out := make(chan *ResponseMessage, 4)
+		go drain(ctx, out)
+		go chanWatch(ctx, m, "dark", fmt.Sprintf("watch=1&labelSelector=late%%3D%d", i), out)
+	}
+	eventually(t, "the dark cluster to hold every place", 2*time.Second, func() bool { return q.heldBy("dark") == q.Cap() })
+	opened, last, _ := crowdOpens(ctx, m, "ok", 1, 5*time.Second)
+	t.Logf("beside a cluster gone dark holding every place: the first list opened after %v", last)
+	if opened != 1 || last > 300*time.Millisecond {
+		t.Errorf("the healthy cluster's first list: %d opened after %v, want within 300 ms (lentHoldFor 100 ms)", opened, last)
+	}
+	// The lent places' time came and went without lowering the limit: only the cluster's own places' does.
+	q.mu.Lock()
+	limit := q.limitOf("dark")
+	q.mu.Unlock()
+	if limit != q.size {
+		t.Errorf("the dark cluster's limit is %d once its lent places went back, before its own places' time, want %d", limit, q.size)
+	}
+	eventually(t, "the dark cluster's limit to come down to one", 3*time.Second, func() bool {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+		return q.limitOf("dark") == 1
+	})
+	time.Sleep(m.startHoldFor)
+	if n := q.heldBy("dark"); n > 1 {
+		t.Errorf("the dark cluster holds %d places after its own places' time came, want one at most", n)
 	}
 }

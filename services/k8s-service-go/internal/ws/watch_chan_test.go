@@ -35,6 +35,10 @@ type chanAPI struct {
 	failAfter   time.Duration
 	// also counts this cluster's receiving watches together with another's.
 	also *tally
+	// slowEvery: every slowEvery-th watch is answered after slowFor; answerFirst: past that many watches, none is.
+	slowEvery   int
+	slowFor     time.Duration
+	answerFirst int
 
 	mu              sync.Mutex
 	asked           []metav1.ListOptions
@@ -44,9 +48,17 @@ type chanAPI struct {
 func (a *chanAPI) watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
 	a.mu.Lock()
 	a.asked = append(a.asked, opts)
+	n := len(a.asked)
 	a.mu.Unlock()
+	if a.slowEvery > 0 && n%a.slowEvery == 0 {
+		select {
+		case <-time.After(a.slowFor):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
 	switch {
-	case a.hang:
+	case a.hang, a.answerFirst > 0 && n > a.answerFirst:
 		<-ctx.Done()
 		return nil, ctx.Err()
 	case a.failAfter > 0:
