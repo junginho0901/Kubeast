@@ -235,31 +235,28 @@ func TestFourHundredPeopleOpeningFourHundredNodesListNoPods(t *testing.T) {
 	}
 }
 
-// Before the informers serve — not started, not yet synced, or stopped because kubeast:cache may not watch pods — a
-// box is the caller's own list of its node; it neither waits for the informers nor uses them (a wait or a read of
-// them marks their last use, waitSynced and nodeRows), and no informer is started for it.
+// unsyncedInformers is an informer set that has started and not synced.
+func unsyncedInformers() *clusterInformers {
+	return &clusterInformers{stop: make(chan struct{}), synced: make(chan struct{})}
+}
+
+// Before the informers serve — not yet synced, or stopped because kubeast:cache may not watch pods — a box is the
+// caller's own list of its node; it neither waits for the informers nor uses them (a wait or a read of them marks
+// their last use, waitSynced and nodeRows), and starts no other set beside the one there.
 func TestNodeBoxesAreTheCallersOwnListUntilTheInformersServe(t *testing.T) {
-	unsynced := func() *clusterInformers {
-		return &clusterInformers{stop: make(chan struct{}), synced: make(chan struct{})}
-	}
 	cases := map[string]func(b *clientBundle){
-		"not started":    func(b *clientBundle) { b.inf = nil },
-		"not yet synced": func(b *clientBundle) { b.inf = unsynced() },
+		"not yet synced": func(b *clientBundle) { b.inf = unsyncedInformers() },
 		"stopped":        func(b *clientBundle) { b.inf.stopNow() },
 	}
-	for _, name := range []string{"not started", "not yet synced", "stopped"} {
+	for _, name := range []string{"not yet synced", "stopped"} {
 		t.Run(name, func(t *testing.T) {
 			pods := podsOnNodes()
 			api := &clusterAPI{pods: pods, review: rbac(map[string][]string{"wide@example.com": {""}, "ac@example.com": {"a", "c"}})}
 			// the informers hold another pod than the cluster has: an answer from them would show it
 			s, b := api.start(t, podObjects([]corev1.Pod{nodePod("a", "a-informer-only", "n1")})...)
 			cases[name](b)
-			used := func() int64 {
-				if b.inf == nil {
-					return -1
-				}
-				return b.inf.lastUse.Load()
-			}
+			set := b.inf
+			used := func() int64 { return set.lastUse.Load() }
 			for _, ctx := range []context.Context{wideCaller("wide@example.com"), grantCaller("ac@example.com", "a", "c")} {
 				before := used()
 				raw, err := s.GetPodsOnNodeJSON(ctx, "n1", "")
@@ -274,11 +271,106 @@ func TestNodeBoxesAreTheCallersOwnListUntilTheInformersServe(t *testing.T) {
 					t.Errorf("got %s, the caller's own list %d pods", raw, len(want))
 				}
 			}
-			if name == "not started" && b.inf != nil {
-				t.Error("an informer was started for a box")
+			if b.inf != set {
+				t.Error("another informer set was started beside the one there")
 			}
 			if n := api.count(func(c apiCall) bool { return c.user == overviewCacheUser }); n != 0 {
 				t.Errorf("%d reads as %s", n, overviewCacheUser)
+			}
+		})
+	}
+}
+
+func currentInformers(b *clientBundle) *clusterInformers {
+	b.infMu.Lock()
+	defer b.infMu.Unlock()
+	return b.inf
+}
+
+// With no informer set running — after a restart, or once one stopped for want of use — a box starts one, as the node
+// map does, and answers this once with the caller's own list without waiting for it; once the set has synced the
+// boxes are its rows and list nothing.
+func TestABoxStartsTheInformersAndUsesThemOnceTheySync(t *testing.T) {
+	pods := podsOnNodes()
+	api := &clusterAPI{pods: pods, review: rbac(map[string][]string{"wide@example.com": {""}})}
+	s, b := api.start(t)
+	b.inf = nil
+	b.cacheClient = fake.NewSimpleClientset(podObjects(pods)...)
+	t.Cleanup(func() {
+		if ci := currentInformers(b); ci != nil {
+			ci.stopNow()
+		}
+	})
+	ctx := wideCaller("wide@example.com")
+	read := func() (int, []string) {
+		before := podLists(api)
+		raw, err := s.GetPodsOnNodeJSON(ctx, "n1", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return podLists(api) - before, boxNames(t, raw)
+	}
+	var want []string
+	for _, p := range ownBox(t, ctx, b, "n1", "") {
+		want = append(want, p.Namespace+"/"+p.Name+" "+p.Phase+" "+p.Health)
+	}
+	for _, when := range []string{"none running", "after the set stopped unused"} {
+		var old *clusterInformers
+		if when != "none running" {
+			// what the set's onStop does when it stops unused (overviewInformers)
+			old = currentInformers(b)
+			old.stopNow()
+			b.infMu.Lock()
+			b.inf = nil
+			b.infMu.Unlock()
+		}
+		lists, got := read()
+		ci := currentInformers(b)
+		if ci == nil || ci == old {
+			t.Fatalf("%s: a box started no informer set", when)
+		}
+		if lists != 1 || !slices.Equal(got, want) {
+			t.Errorf("%s, the first box: %d lists of pods, %v; want the caller's own list %v", when, lists, got, want)
+		}
+		if !eventually(t, 5*time.Second, ci.isSynced) {
+			t.Fatalf("%s: the set never synced", when)
+		}
+		if lists, got := read(); lists != 0 || !slices.Equal(got, want) {
+			t.Errorf("%s, once synced: %d lists of pods, %v; want 0 and %v", when, lists, got, want)
+		}
+		if currentInformers(b) != ci {
+			t.Errorf("%s: another set started", when)
+		}
+	}
+}
+
+// Where no informer set may run — informers off, a refusal within overviewRetryAfter, no client of Kubeast's own — a box
+// starts none and is always the caller's own list.
+func TestABoxStartsNoInformersWhereNoneMayRun(t *testing.T) {
+	cases := map[string]func(b *clientBundle){
+		"informers off":       func(b *clientBundle) { b.noInformers = true },
+		"refused a while ago": func(b *clientBundle) { b.infFailedAt = time.Now() },
+		"no cache client":     func(b *clientBundle) { b.cacheClient = nil },
+	}
+	for _, name := range []string{"informers off", "refused a while ago", "no cache client"} {
+		t.Run(name, func(t *testing.T) {
+			pods := podsOnNodes()
+			api := &clusterAPI{pods: pods, review: rbac(map[string][]string{"wide@example.com": {""}})}
+			s, b := api.start(t)
+			b.inf = nil
+			cases[name](b)
+			for i := 0; i < 2; i++ {
+				before := podLists(api)
+				raw, err := s.GetPodsOnNodeJSON(wideCaller("wide@example.com"), "n1", "")
+				if err != nil || len(decodeBox(t, raw)) != 6 {
+					t.Fatalf("%s, read %d: %s, %v", name, i, raw, err)
+				}
+				if n := podLists(api) - before; n != 1 {
+					t.Errorf("%s, read %d: %d lists of pods, want the caller's one", name, i, n)
+				}
+			}
+			if currentInformers(b) != nil {
+				t.Errorf("%s: an informer set was started", name)
 			}
 		})
 	}
@@ -295,7 +387,7 @@ func TestNodeBoxesListedAsTheCallerTakeTheNodeReadPlaces(t *testing.T) {
 			s, b := api.start(t, podObjects(pods)...)
 			caller := func(i int) context.Context { return wideCaller(fmt.Sprintf("u%02d@example.com", i)) }
 			if name == "informers not serving" {
-				b.inf = nil
+				b.inf = unsyncedInformers()
 			} else {
 				api.review = rbac(map[string][]string{})
 				api.may = func(string, string, string, string, string) bool { return true }

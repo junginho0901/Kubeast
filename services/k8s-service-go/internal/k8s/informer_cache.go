@@ -456,6 +456,17 @@ func (b *clientBundle) overviewInformers() *clusterInformers {
 	return b.inf
 }
 
+// syncedOrStart returns the running, synced informer set, or nil after starting one when there is none
+// (overviewInformers: not without a cache client, with noInformers or within overviewRetryAfter of a refusal). It
+// never waits for the set to sync: its caller reads as the caller meanwhile.
+func (b *clientBundle) syncedOrStart() *clusterInformers {
+	ci := b.overviewInformers()
+	if ci == nil || !ci.isSynced() || ci.isStopped() {
+		return nil
+	}
+	return ci
+}
+
 // syncedInformers returns the running, synced informer set or nil. It never
 // starts one.
 func (b *clientBundle) syncedInformers() *clusterInformers {

@@ -89,8 +89,9 @@ func boxJSON(pods []nodeBoxPod) []byte {
 // GetPodsOnNodeJSON is a node box's answer: the pods on node ("" = not scheduled) the caller's own list shows in
 // namespace ("" = every namespace it may see), as nodeBoxPods in the API's order. With the overview informers synced
 // they are the rows on that node, kept to the namespaces the caller's identity may list pods in (podListAccess) and a
-// namespace that check refuses listed as the caller; before the informers sync, or once kubeast:cache may not watch
-// pods (they stop), the node is listed as the caller. Every list as the caller holds one of the node read places.
+// namespace that check refuses listed as the caller; with none running a box starts them, as the node map does, and
+// until they sync, or once kubeast:cache may not watch pods (they stop), the node is listed as the caller. Every list
+// as the caller holds one of the node read places.
 func (s *Service) GetPodsOnNodeJSON(ctx context.Context, node, namespace string) ([]byte, error) {
 	b := s.bundleForCtx(ctx)
 	if b == nil {
@@ -100,8 +101,8 @@ func (s *Service) GetPodsOnNodeJSON(ctx context.Context, node, namespace string)
 	if err != nil {
 		return nil, err
 	}
-	// running informers say kubeast:cache may watch pods; waiting for a start would make this read slower than the caller's own
-	if ci := b.syncedInformers(); ci != nil {
+	// a box starts the informers but does not wait for them: waiting would make it slower than the caller's own list
+	if ci := b.syncedOrStart(); ci != nil {
 		all, allowed, err := s.podListAccess(ctx, b, namespace)
 		if err == nil {
 			if raw, ok, err := s.nodeBoxOfRows(ctx, b, ci, node, namespaces, all, allowed); ok {
