@@ -96,6 +96,11 @@ test.describe('policy reports', () => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     // Kyverno writes a new object's reports ~20 s (Pod, Deployment) to ~40 s (ReplicaSet) after it is created
     // (raw step4-report-latency.log). force_refresh reads past the server's minute cache, as the refresh button does.
+    // The cluster first: a read made before Kyverno is done stays a minute on the k8s-service pod it reached.
+    await expect.poll(() => {
+      const items = JSON.parse(kubectl(`get policyreports -n ${NS} -o json`)).items as { scope?: { kind?: string }; results?: { result?: string }[] }[]
+      return ['Pod', 'Deployment', 'ReplicaSet'].map((k) => items.filter((i) => i.scope?.kind === k).flatMap((i) => i.results ?? []).filter((r) => r.result === 'fail').length).join(',')
+    }, { timeout: 150_000, intervals: [5000] }).toBe('2,2,2')
     await expect.poll(async () => {
       const res: Results = await (await request.get(`/api/v1/cluster/policyreports/results?cluster=default&namespace=${NS}&force_refresh=true`, { headers: bearer(admin) })).json()
       if (Array.isArray(res)) return -1
