@@ -53,7 +53,7 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - Cache keys move under `kubeast:cache:`, and a cluster change deletes only those keys.
 - Alert start times are kept in UTC, whatever offset the sender writes.
 - Docker Compose gives the Kubeast services 35 s to stop and PostgreSQL and Redis 30 s (Docker's default is 10 s).
-- API answers: a Deployment row carries `current_replicas`, event frames carry `involved_object.uid`, `/cluster/api-resources` lists resources in kubectl's order, and `GET /auth/roles` adds `same_group_as`.
+- API answers: a Deployment row carries `current_replicas`, event frames carry `involved_object.uid`, `/cluster/api-resources` lists resources in kubectl's order, `GET /auth/roles` adds `same_group_as`, and `GET /cluster/pods/on-node` answers a box row per pod: the full row's `name`, `namespace`, `node_name`, `pod_ip`, `status`, `phase`, `restart_count`, `created_at` and `labels`, with `health` and `health_reason`, and no containers.
 
 ### Deprecated
 
