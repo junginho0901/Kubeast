@@ -160,6 +160,7 @@ auth:
     # whose answer depends on the user name (ahead of RBAC or after it, a refusal or a pass for
     # named people) or that limits the user names Kubeast may act as, and never bind the name
     # (docs/cluster-requirements.md §1 has the checks).
+    # Stage: alpha, the whole e2e with it on has not run yet (docs/configuration.md "Stages of new values").
     sharedReadChecks:
       enabled: false
       excludeClusters: []
@@ -421,6 +422,8 @@ ai:
   # memory limit is the larger of resources.aiService.limits.memory and
   # memoryLimit: 2Gi holds the service and maxConcurrent 2 + the investigator
   # (about 300 MB each); raise it with maxConcurrent. "" leaves the limit as set.
+  # maxConcurrentTotal, queueWaitSeconds and memoryLimit: stage alpha, not run yet
+  # with the provider on in a test install (docs/configuration.md "Stages of new values").
   providers:
     claudeCode:
       enabled: false
@@ -582,6 +585,8 @@ postgresql:
   # PgBouncer use session pooling only: transaction pooling hands a server connection to other clients between
   # transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's) does not stay with
   # the client that made it.
+  # sessionLimits, pool and maxConnections: stage alpha, a long database outage has not been tested with them yet
+  # (docs/configuration.md "Stages of new values").
   sessionLimits:
     statementTimeoutMs: 30000
     lockTimeoutMs: 15000
@@ -624,6 +629,8 @@ podSecurity:
 # render otherwise. The ModelConfig controller runs one pod (one works at a time,
 # by leader election), and so do the chart's postgres and redis: they have no key.
 # A service with autoscaling.<service>.enabled takes its count from its HPA instead.
+# k8sService and toolServer above 1: stage alpha, the sizes for 2 and 3 k8s-service
+# pods are not measured yet (docs/configuration.md "Stages of new values").
 replicas:
   authService: 1
   aiService: 1
@@ -648,6 +655,7 @@ replicas:
 # server's shutdown 12 s and the recorder's last upload 10 s + 5 s to spare (100 s
 # by default).
 # sessionRecording.storage file is refused with it (s3 or database).
+# Stage: alpha, not run yet on the kind dev install (docs/configuration.md "Stages of new values").
 streams:
   enabled: false
   replicas: 1        # must stay 1 for now (more than one stream server is not supported yet)
@@ -656,6 +664,7 @@ streams:
 # A PodDisruptionBudget for each Deployment above with more than one replica, or with autoscaling on and minReplicas 2 or
 # more, allowing maxUnavailable of its pods to be evicted at once (unhealthy ones always); none where it can be down to one
 # pod, which would block node drains. enabled: false leaves them out.
+# Stage: alpha, node drains with them have not run yet on a real cluster (docs/configuration.md "Stages of new values").
 pdb:
   enabled: true
   maxUnavailable: 1
@@ -667,6 +676,7 @@ pdb:
 # from a load test. maxReplicas above 1 for k8sService and toolServer needs
 # redis.enabled. behavior goes into the HPA as written ({} = Kubernetes' defaults,
 # which scale down after 300 s of lower use).
+# Stage: alpha, no HPA has been turned on in a test install yet (docs/configuration.md "Stages of new values").
 autoscaling:
   authService: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
   aiService: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
@@ -679,6 +689,7 @@ autoscaling:
 topologySpread:
   enabled: true
 # Seconds a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, its deregistration delay plus a few seconds.
+# Stage: alpha, not run yet on Kubernetes older than 1.30 (docs/configuration.md "Stages of new values").
 podShutdown:
   preStopSeconds: 5
 
@@ -737,6 +748,8 @@ redis:
   # kept across upgrades in the Secret kubeast-redis-users
   # (REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD, REDIS_TOOL_SERVER_PASSWORD).
   # false = one password (requirepass) as before.
+  # Stage: alpha, turning the users off has not run yet in a test install
+  # (docs/configuration.md "Stages of new values").
   acl:
     enabled: true
     # With secrets.existingSecret the users stay off, and Redis keeps the one
@@ -777,6 +790,8 @@ gateway:
   # times in seconds ($request_time $upstream_connect_time
   # $upstream_header_time $upstream_response_time), the service's address and
   # the client's port. false = nginx's default lines.
+  # Stage: alpha, the gateway's config with it on has not been checked with
+  # nginx -t yet (docs/configuration.md "Stages of new values").
   accessLog:
     upstreamTimes: false
 
@@ -1217,6 +1232,8 @@ gitops:
 # breakerConsecutiveFails=0 turns the breaker off; an open one lets one request try the cluster after breakerOpenSec.
 # It counts requests whose calls got no response from the API server (refused, a dropped connection, a deadline while
 # connecting); a response of any status, such as an aggregated API's 503, counts nothing.
+# breakerConsecutiveFails (0 = off from 0.7.8) and breakerOpenSec (read from 0.7.8): stage alpha, not checked yet by
+# cutting a cluster off on the kind dev install (docs/configuration.md "Stages of new values").
 multicluster:
   maxClusters: 20
   healthcheckIntervalSec: 60
@@ -1249,11 +1266,13 @@ multicluster:
   # starts go unanswered. Each place is
   # about 5.5 MiB for a list of 1 000 nodes, so a raise takes k8s-service's
   # memory up with it.
+  # Stage: alpha, not in an upgrade rehearsal yet (docs/configuration.md "Stages of new values").
   wsWatchOpeningConcurrency: 8
   # The HTTP/2 window of each live list's stream, in KiB: what a watch whose
   # browser reads slowly holds unread, and what a stream reads a round trip.
   # 1024 reads a 26 MB list in 1.4 s over a 50 ms round trip (Go's 4096: 0.7 s)
   # and 16 slow browsers' watches hold 18 MiB (4096: 65 MiB).
+  # Stage: alpha, not in an upgrade rehearsal yet (docs/configuration.md "Stages of new values").
   wsWatchStreamWindowKiB: 1024
   # How many reads of more than one page (500 pods, ReplicaSets, ...) run at once
   # in one k8s-service; the rest wait, and a read of one page waits for none. One
