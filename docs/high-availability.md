@@ -108,6 +108,7 @@ Check it with `kubectl -n <namespace> get hpa`.
 - Each k8s-service pod watches the clusters for itself, so two requests that land on two pods can be a watch event apart for a moment.
 - Each k8s-service pod lists and watches the clusters it serves: the API server sees that once per pod.
 - Each k8s-service pod takes the memory one pod takes; the total grows with the pods.
+- Each k8s-service pod answers Cluster View's node boxes from its own informers and keeps the answers of at most 256 nodes for the people who may see every namespace (a few MB): a node's box is made once in each pod while the node's pods stay the same.
 - Limits that protect a pod — memory, work at once, live watches (`multicluster.wsMaxSubscriptions`) and their openings (`multicluster.wsWatchOpeningConcurrency`) — are per pod. So is the client rate to a cluster (`multicluster.clientQPS`): N pods can send N times as much.
 
 ## Sizing
