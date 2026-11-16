@@ -92,6 +92,9 @@ func newClusterInformers(client kubernetes.Interface, idle time.Duration, onStop
 		f.Core().V1().PersistentVolumes().Informer(),
 		f.Core().V1().Nodes().Informer(),
 	}
+	if err := infs[0].AddIndexers(cache.Indexers{podNodeIndex: podRowNode}); err != nil { // fails only once stopped
+		slog.Warn("overview informers: no node index on the pod rows", "err", err)
+	}
 	ci.pods, ci.namespaces, ci.services, ci.deployments, ci.pvcs, ci.pvs, ci.nodes =
 		infs[0].GetIndexer(), infs[1].GetStore(), infs[2].GetStore(), infs[3].GetStore(),
 		infs[4].GetStore(), infs[5].GetStore(), infs[6].GetStore()
