@@ -617,7 +617,14 @@ describe("a box's rows and the live frames that replace them", () => {
   const nodeView = (rows: NodeBoxRow[]) => render(summaryOf(['node-001'], () => rows.length), { nodeView: { node: 'node-001', page: null, pod: null }, pods: { 'node-001': rows as PodInfo[] } })
 
   it('draw the cards, colours and order the full rows draw', () => {
-    const full = podsFor('node-001', 70)
+    // a pod whose colour its containers give, not its phase: crashing, and running but not ready
+    const fromContainers = [
+      { ...pod('node-001', 'node-001-crash', 'ok'), containers: [{ name: 'c', ready: false, state: { waiting: { reason: 'CrashLoopBackOff' } } }] },
+      { ...pod('node-001', 'node-001-notready', 'ok'), containers: [{ name: 'c', ready: false, state: { running: {} } }] },
+    ] as PodInfo[]
+    const full = [...podsFor('node-001', 70), ...fromContainers]
+    expect(fromContainers.map((p) => short(p).health_reason)).toEqual(['CrashLoopBackOff', 'NotReady'])
+    expect(cards(box(full.map(short))).slice(0, 4)).toEqual(['node-001-crash', 'node-001-p005', 'node-001-p030', 'node-001-p055'])
     expect(cards(box(full.map(short)))).toEqual(cards(box(full)).slice(0, BOX_PREVIEW_CARDS))
     expect(box(full.map(short))).toBe(box(full))
     expect(nodeView(full.map(short))).toBe(nodeView(full))
