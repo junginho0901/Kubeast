@@ -94,6 +94,9 @@ HANG_GRACE=$(( ${PROBE_TIMEOUT%.*} + 5 ))
 # A: non-2xx of a target without the database while FROM_VERSION's pods go (no preStop before #856), at most ROLL_ALLOW each
 ROLL_ALLOW=3
 ROLL_GRACE=5
+# A: Redis refusals k8s-service may log while Redis is swapped (old one going to new one ready and this), then recover from
+REDIS_SWAP_ALLOW=3
+REDIS_SWAP_GRACE=5
 POOLER="${POOLER:-1}"
 POOLER_MODE="${POOLER_MODE:-session}"
 POOLER_IMAGE="${POOLER_IMAGE:-docker.io/edoburu/pgbouncer:v1.25.2-p0}"
@@ -1335,6 +1338,75 @@ redis_ping() { # redis_ping USER SECRET KEY — the first line of PING's answer 
     'IFS= read -r p; if [ "$0" = default ]; then REDISCLI_AUTH="$p" redis-cli --no-auth-warning ping; else REDISCLI_AUTH="$p" redis-cli --no-auth-warning --user "$0" ping; fi' "$1" 2>&1 | head -1
   pw=""
 }
+# redis_swap_check PHASE — the 10 minutes of each k8s-service pod's log (and its previous container's) kept in
+# PHASE-logs-<pod>-current|previous.log, masked; a Redis refusal passes only inside the Redis swap, up to
+# REDIS_SWAP_ALLOW, with "redis answered, the cache moves there from memory" or "redis connected" after it in that pod
+redis_swap_check() {
+  local a=$1 p v f prev r total inside secs at name="k8s-service logs no Redis refusal (10 min)"
+  for p in $(kc -n "$NS" get pods -l app=k8s-service -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+    for v in current previous; do
+      f="$OUT/$a-logs-$p-$v.log"; prev=()
+      [ "$v" = previous ] && prev=(--previous)
+      kc -n "$NS" logs "$p" --since=10m --timestamps ${prev[@]+"${prev[@]}"} 2>/dev/null | mask \
+        | sed -E 's/("[A-Za-z_]*([Pp]ass(word)?|[Ss]ecret|[Tt]oken)[A-Za-z_]*" *: *")[^"]*"/\1<masked>"/g; s#(://[^:/@ ]*:)[^@ ]*@#\1<masked>@#g' > "$f" || rm -f "$f"
+      [ -s "$f" ] || rm -f "$f"
+    done
+  done
+  r=$(python3 -I - "$OUT/$a-pods.txt" "$OUT/$a-pods-before.txt" "$REDIS_SWAP_GRACE" "$REDIS_SWAP_ALLOW" "$OUT/$a"-logs-*.log <<'EOF'
+import os, re, sys
+from datetime import datetime, timezone
+pods, before, grace, allow, logs = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), sys.argv[5:]
+def epoch(s, form):
+    return int(datetime.strptime(s, form).replace(tzinfo=timezone.utc).timestamp())
+old = {l.split()[0] for l in list(open(before))[1:] if l.split()}
+old_asked = old_last = new_ready = None
+for line in open(pods):
+    f = line.split()
+    for x in f[1:]:
+        x, _, pod = x.partition("#")
+        app, _, rest = x.partition("=")
+        ready, _, gone = rest.partition("@")
+        when, _, period = gone.partition("/")
+        if app != "redis":
+            continue
+        if pod in old:
+            old_last = int(f[0])
+            if when and old_asked is None:
+                old_asked = epoch(when, "%Y-%m-%dT%H:%M:%SZ") - int(period or 0)
+        elif ready == "true" and not when and new_ready is None:
+            new_ready = int(f[0])
+start = old_asked if old_asked is not None else old_last
+swap = (start - 1, new_ready + grace) if start is not None and new_ready is not None else None
+refused, recovered = {}, {}
+for path in logs:
+    if not os.path.isfile(path):
+        continue
+    pod = re.sub(r"-(current|previous)\.log$", "", path.rsplit("/", 1)[-1])
+    for line in open(path, errors="replace"):
+        try:
+            t = epoch(line[:19], "%Y-%m-%dT%H:%M:%S")
+        except ValueError:
+            continue
+        if re.search("WRONGPASS|NOAUTH|NOPERM", line, re.I):
+            refused.setdefault(pod, []).append(t)
+        elif "redis answered, the cache moves there from memory" in line or '"redis connected"' in line:
+            recovered.setdefault(pod, []).append(t)
+n = sum(len(v) for v in refused.values())
+inside = sum(1 for v in refused.values() for t in v if swap and swap[0] <= t <= swap[1])
+after = [min([r for r in recovered.get(p, []) if r >= max(v)], default=None) for p, v in refused.items()]
+ok = n == 0 or (inside == n and n <= allow and None not in after)
+when = max(after) if n and None not in after else None
+print(" ".join(["PASS" if ok else "FAIL", str(n), str(inside), str(swap[1] - swap[0] + 1 if swap else 0),
+                datetime.fromtimestamp(when, timezone.utc).strftime("%H:%M:%SZ") if when else "-"]))
+EOF
+)
+  read -r total inside secs at <<< "${r#* }"
+  case "$r" in
+    "PASS 0 "*) row "$a" "$name" PASS "0 ($a-logs-*.log)" ;;
+    PASS*) row "$a" "$name" PASS "$total refusals, all in the Redis swap window ($secs s: the old Redis going to the new one ready and $REDIS_SWAP_GRACE s), at most $REDIS_SWAP_ALLOW; recovered at $at ($a-logs-*.log)" ;;
+    *) row "$a" "$name" FAIL "want 0, got ${total:-?}: ${inside:-?} in the Redis swap window (${secs:-0} s), at most $REDIS_SWAP_ALLOW, recovery after them ${at:--} ($a-logs-*.log)" ;;
+  esac
+}
 redis_checks() { # redis_checks PHASE single|users USERS_SECRET
   local a=$1 want=$2 users=${3:-kubeast-redis-users} r n
   r=$(redis_ping default "$APP_SECRET" REDIS_PASSWORD)
@@ -1345,8 +1417,12 @@ redis_checks() { # redis_checks PHASE single|users USERS_SECRET
     else row "$a" "Redis: the default user is off" FAIL "REDIS_PASSWORD still answers PONG"; fi
     check "$a" "Redis: user probe answers PING (key in $users)" PONG "$(redis_ping probe "$users" REDIS_PROBE_PASSWORD)"
   fi
-  n=$(kc -n "$NS" logs deploy/k8s-service --since=10m 2>/dev/null | grep -ciE 'WRONGPASS|NOAUTH|NOPERM')
-  check "$a" "k8s-service logs no Redis refusal (10 min)" 0 "${n:-0}"
+  if [ "$a" = A ]; then
+    redis_swap_check A
+  else
+    n=$(kc -n "$NS" logs deploy/k8s-service --since=10m 2>/dev/null | grep -ciE 'WRONGPASS|NOAUTH|NOPERM')
+    check "$a" "k8s-service logs no Redis refusal (10 min)" 0 "${n:-0}"
+  fi
   if ai_on; then
     n=$(kc -n "$NS" logs deploy/tool-server --since=10m 2>/dev/null | grep -ciE 'WRONGPASS|NOAUTH|NOPERM')
     check "$a" "tool-server logs no Redis refusal (10 min)" 0 "${n:-0}"
