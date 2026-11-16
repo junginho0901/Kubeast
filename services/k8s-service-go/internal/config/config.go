@@ -101,6 +101,10 @@ type Config struct {
 	AuthCookieName   string
 	// Act as the signed-in user toward every cluster (Kubernetes impersonation).
 	ImpersonationEnabled bool
+	// A screen's allowed read check shared among people of the same groups (chart
+	// auth.impersonation.sharedReadChecks), but on the clusters listed.
+	SharedReadChecks        bool
+	SharedReadChecksExclude []string
 	// Credential plugins a registered kubeconfig may run (exec.command base
 	// names). They execute inside this pod, so only known binaries are allowed.
 	KubeconfigExecCommands []string
@@ -206,7 +210,9 @@ func Load() Config {
 		JWTAudience:          pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
 		AuthCookieName:       pkgconfig.GetEnv("AUTH_COOKIE_NAME", "kubeast.token"),
 
-		ImpersonationEnabled: pkgconfig.GetEnvBool("IMPERSONATION_ENABLED", true),
+		ImpersonationEnabled:    pkgconfig.GetEnvBool("IMPERSONATION_ENABLED", true),
+		SharedReadChecks:        pkgconfig.GetEnvBool("SHARED_READ_CHECKS", false),
+		SharedReadChecksExclude: pkgconfig.GetEnvList("SHARED_READ_CHECKS_EXCLUDE_CLUSTERS", ""),
 
 		KubeconfigExecCommands: pkgconfig.GetEnvList("KUBECONFIG_EXEC_COMMANDS", cluster.DefaultExecCommands),
 		GatewayPolicyKinds:     pkgconfig.GetEnvList("GATEWAY_POLICY_KINDS", ""),

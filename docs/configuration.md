@@ -56,6 +56,15 @@ auth:
     enabled: true
     clusterRoles: true
     userPrefix: ""  # e.g. kubeast:user: — before a person's address; moves User bindings to a new name (cluster-requirements §1)
+    # A screen served from kubeast:cache asks whether the person may list or get what it shows. On, that read check
+    # goes out once per group set as kubeast:group-check:<made at each start> and its allow stands for everyone with
+    # those groups up to a minute; a refusal is asked again as the person. The cluster's audit log then names that
+    # name for those checks. It relies on every authorizer allowing a person what it allows that name with the
+    # person's groups: list a cluster with an authorizer that answers by user name (ahead of RBAC or after it), or
+    # that limits the user names Kubeast may act as, and never bind the name (cluster-requirements §1).
+    sharedReadChecks:
+      enabled: false
+      excludeClusters: []  # registered cluster ids that keep asking each person
     customRoles: []
     #  - name: Read
     #    namespaces: [team-a, team-b]

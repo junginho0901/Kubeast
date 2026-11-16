@@ -95,6 +95,8 @@ type clientBundle struct {
 	infFailedAt time.Time
 	// noInformers: the overview informers never start here (ServiceOptions.NoInformers); readers list instead.
 	noInformers bool
+	// sharesChecks: this cluster's screens share an allowed read check by group (shared_read_checks.go).
+	sharesChecks bool
 }
 
 // Close stops the bundle's informers (LRU eviction, kubeconfig rotation).
@@ -190,6 +192,10 @@ type ServiceOptions struct {
 	InstallNamespace   string
 	NodeShellNamespace string
 	Gitops             gitops.Config // Argo CD guard (chart gitops.argocd)
+	// SharedReadChecks shares a screen's allowed read check among people of the same groups, but on the clusters
+	// SharedReadChecksExclude names (chart auth.impersonation.sharedReadChecks, shared_read_checks.go).
+	SharedReadChecks        bool
+	SharedReadChecksExclude []string
 	// NoInformers keeps the overview informers from starting: a server of role "stream" serves no list, and whatever
 	// would read them lists instead, as before the first sync.
 	NoInformers bool
@@ -216,6 +222,13 @@ func NewService(ctx context.Context, registry cluster.Registry, watchEnabled boo
 	clientRates = rates{opts.ClientQPS, opts.ClientBurst, opts.ReviewQPS, opts.ReviewBurst}
 	installNamespace, nodeShellNamespace = opts.InstallNamespace, opts.NodeShellNamespace
 	informersOff = opts.NoInformers
+	sharedReadChecks.on, sharedReadChecks.exclude = opts.SharedReadChecks, opts.SharedReadChecksExclude
+	switch {
+	case opts.SharedReadChecks && opts.Impersonation:
+		slog.Info("k8s: allowed read checks of screens are shared by group", "user_prefix", groupCheckUserPrefix, "excluded_clusters", opts.SharedReadChecksExclude)
+	case opts.SharedReadChecks:
+		slog.Warn("k8s: shared read checks need auth.impersonation.enabled; every check is asked as Kubeast's own credential, as before")
+	}
 	s := &Service{
 		registry:          registry,
 		gitops:            opts.Gitops,
@@ -231,6 +244,7 @@ func NewService(ctx context.Context, registry cluster.Registry, watchEnabled boo
 		apiResourcesRead:  map[cluster.ID]time.Time{},
 	}
 
+	s.warnUnknownExcludes(ctx)
 	defaultID, err := registry.Default(ctx)
 	if err != nil {
 		// Not configured yet: no clusters registered (ErrNotFound), the schema
@@ -304,7 +318,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	cacheCfg := rest.CopyConfig(cfg)
 	if impersonationEnabled {
 		id := string(info.ID)
-		cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, id) })
+		wrapPerson(cfg, id)
 		cacheCfg.Impersonate = rest.ImpersonationConfig{UserName: overviewCacheUser, Groups: []string{auth.GroupAuthenticated, auth.GroupViewer}}
 	}
 	cacheClient, err := kubernetes.NewForConfig(cacheCfg)
@@ -348,7 +362,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		return nil, fmt.Errorf("create own version client: %w", err)
 	}
 	promExt, promSvc := promSourceFromInfo(info)
-	return &clientBundle{
+	b := &clientBundle{
 		clientset:     clientset,
 		authz:         authz,
 		dynamic:       dynClient,
@@ -365,7 +379,16 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		protected:     protected,
 		cacheClient:   cacheClient,
 		noInformers:   informersOff,
-	}, nil
+	}
+	b.sharesChecks = sharesChecksOn(info.ID)
+	return b, nil
+}
+
+// wrapPerson makes cfg's requests go out as the person in their context, and a shared read check under it
+// (groupCheckTransport, wrapped first so it sees the person's headers).
+func wrapPerson(cfg *rest.Config, id string) {
+	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return groupCheckTransport{base: rt} })
+	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, id) })
 }
 
 // pool lazily builds the LRU client-bundle pool. Lazy so a zero-value Service
@@ -517,6 +540,13 @@ func (s *Service) dropBundle(id cluster.ID) {
 	// down cluster) gives the cluster a fresh chance, so the next request is
 	// actually tried instead of fail-fast 503'd until the next health poll.
 	s.MarkClusterUp(id)
+	if sharedReadChecks.on && len(sharedReadChecks.exclude) > 0 {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			s.warnUnknownExcludes(ctx)
+		}()
+	}
 }
 
 // defaultClientBundle resolves (and caches) the default cluster's bundle for the

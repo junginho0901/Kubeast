@@ -30,9 +30,10 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
-// apiCall is one request the cluster saw, with the identity it went out as ("" = Kubeast's own credential).
+// apiCall is one request the cluster saw, with the identity it went out as ("" = Kubeast's own credential), and a
+// review's body as sent.
 type apiCall struct {
-	user, groups, verb, resource, namespace, selector string
+	user, groups, verb, resource, namespace, selector, body string
 }
 
 // clusterAPI answers as an API server does, by the identity a request impersonates, and notes every request.
@@ -42,7 +43,9 @@ type clusterAPI struct {
 	namespaces []string
 	// review answers a SelfSubjectAccessReview; may decides a real request, as review does when nil
 	review func(user string, ra authorizationv1.ResourceAttributes) bool
-	may    func(user, verb, resource, namespace, fieldSelector string) bool
+	// reviewGroups, when set, answers a review in review's place with the groups it went out with
+	reviewGroups func(user string, groups []string, ra authorizationv1.ResourceAttributes) bool
+	may          func(user, verb, resource, namespace, fieldSelector string) bool
 	// holdCache, when set, holds every list as kubeast:cache until it is closed
 	holdCache chan struct{}
 	// holdCallers, when set, holds every list of a node's pods as a caller until it is closed
@@ -120,9 +123,13 @@ func (a *clusterAPI) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		ra := *review.Spec.ResourceAttributes
-		a.note(apiCall{user: user, groups: groups, verb: "review", resource: ra.Verb + " " + ra.Resource, namespace: ra.Namespace})
+		a.note(apiCall{user: user, groups: groups, verb: "review", resource: ra.Verb + " " + ra.Resource, namespace: ra.Namespace, body: string(body)})
 		review.APIVersion, review.Kind = "authorization.k8s.io/v1", "SelfSubjectAccessReview"
-		review.Status.Allowed = a.review(user, ra)
+		if a.reviewGroups != nil {
+			review.Status.Allowed = a.reviewGroups(user, r.Header.Values(auth.HeaderImpersonateGroup), ra)
+		} else {
+			review.Status.Allowed = a.review(user, ra)
+		}
 		writeJSON(w, review)
 		return
 	}
@@ -237,7 +244,7 @@ func (a *clusterAPI) start(t *testing.T, informerObjs ...k8sruntime.Object) (*Se
 	srv := httptest.NewServer(http.HandlerFunc(a.serve))
 	t.Cleanup(srv.Close)
 	userCfg := &rest.Config{Host: srv.URL, QPS: -1}
-	userCfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, "default") })
+	wrapPerson(userCfg, "default")
 	cs, err := kubernetes.NewForConfig(userCfg)
 	if err != nil {
 		t.Fatal(err)

@@ -121,6 +121,37 @@ kubectl --context <cluster> auth can-i get pods --subresource=log -A --as=kubeas
 kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator --as-group=kubeast:investigator                  # no
 ```
 
+**그룹끼리 나눠 쓰는 읽기 확인** (`auth.impersonation.sharedReadChecks.enabled`, 기본 꺼짐. compose는 `SHARED_READ_CHECKS`).
+Kubeast가 `kubeast:cache`로 지켜보는 것에서 보여 주는 화면 — 대시보드의 개수, 네임스페이스·노드 목록, 부여의 네임스페이스, Pods 페이지, Cluster View의 노드 — 은 그 사람이 보여 줄 것을 list·get할 수 있는지 클러스터에 먼저 묻습니다(SelfSubjectAccessReview, 최대 1분 기억).
+켜면 그 질문을 같은 그룹을 가진 모든 사람을 위해 한 번, 사용자 `kubeast:group-check:<16진수 여덟 자리>`와 그 그룹으로 보내고, 허용 답은 그 1분이 끝날 때까지 그 그룹의 사람마다 씁니다. 사람 자신의 답과 같습니다.
+접두어 뒤의 꼬리는 k8s-service가 시작할 때마다 만들고 로그에 남기지 않습니다. 시작 로그에는 접두어만 적습니다(`allowed read checks of screens are shared by group`). 클러스터 감사 로그를 읽을 수 있는 사람에게는 이름 전체가 보입니다.
+거절은 나눠 쓰지 않습니다. 지금처럼 그 사람으로 다시 물으므로 `User` 바인딩은 그 사람에게 그대로 적용됩니다.
+can-i, 쓰기, 로그, Secret, 하위 리소스, AI 도구 호출의 확인, 사람이 아닌 토큰, `system:` 사용자 이름은 늘 그 사람으로 묻습니다.
+
+기대는 조건은 클러스터의 모든 인가기에 대해 하나입니다. `kubeast:group-check:…`와 그 사람의 그룹에 허용한 것은, 같은 그룹을 가진 그 사람에게도 허용해야 합니다.
+RBAC는 더하기만 하므로 인가기가 `Node`와 `RBAC`뿐인 클러스터는 조건을 지킵니다. Amazon EKS가 더하는 액세스 정책은 허용하거나 넘기기만 하며, Kubeast가 대신하는 신원에는 쓰이지 않습니다.
+다음 중 하나라도 맞는 클러스터는 등록 ID를 `auth.impersonation.sharedReadChecks.excludeClusters`에 넣으세요.
+
+- RBAC 앞이든 뒤든, 사용자 이름에 따라 답하는 인가기가 있습니다. 사람을 이름으로 거절하거나, 그룹은 허용하면서 이름이 정해진 사람에게는 넘겨서("의견 없음") 그 사람이 결국 거절되는 경우입니다. Kubeast는 그 사람에게, 클러스터가 그 사람 자신의 요청으로는 거절하는 것을 보여 주게 됩니다.
+- 클러스터가 Kubeast가 대신할 수 있는 사용자 이름을 제한해서, 공유 이름은 허용되고 어떤 사람은 허용되지 않습니다. 그 사람 자신의 요청은 거절되지만 공유 허용은 거절되지 않습니다. 클러스터가 거절하는 쪽이 공유 이름이면 확인마다 그 사람으로 묻고 화면은 바뀌지 않습니다.
+- `kubeast:group-check:*` 이름의 `User`가 바인딩되어 있습니다. 그런 바인딩은 그 그룹의 모든 사람에게 적용됩니다. 이름은 시작마다 바뀌므로 한 번 시작 때 만든 바인딩은 다음 시작으로 이어지지 않습니다. 다만 Kubeast가 도는 동안에는 감사 로그에서 이름을 읽을 수 있으므로, 이 조건을 지키는 것은 아래의 바인딩 확인입니다.
+
+```bash
+# 인가기: Node와 RBAC뿐(kubeadm 등 직접 운영하는 API 서버. --authorization-config면 그 파일이 차례대로 적음)
+kubectl --context <cluster> -n kube-system get pod -l component=kube-apiserver -o yaml | grep -E 'authorization-(mode|config)'
+# Kubeast가 어떤 사용자 이름이든 대신할 수 있음: kubeast-impersonator의 users 규칙에 resourceNames 없음
+kubectl --context <cluster> get clusterrole kubeast-impersonator -o jsonpath='{.rules[?(@.resources[0]=="users")]}'
+# 공유 사용자를 가리키는 바인딩이 없음 — 등록 클러스터마다 RBAC 점검 때 돌리세요
+kubectl --context <cluster> get clusterrolebindings,rolebindings -A -o json | jq -r '.items[] | select(any(.subjects[]?; .kind == "User" and (.name | startswith("kubeast:group-check:")))) | .metadata.name'   # 없음
+# 공유 이름으로 물은 그룹 집합의 허용: 그 그룹의 사람과 같은 답
+kubectl --context <cluster> auth can-i list pods -A --as=kubeast:group-check:check --as-group=kubeast:authenticated --as-group=kubeast:viewer --as-group=system:authenticated   # yes
+```
+
+- 클러스터 감사 로그에는 그 허용된 확인이 사람이 아니라 `kubeast:group-check:…`와 그 그룹으로 남습니다. 거절, can-i, 그 사람으로 하는 읽기는 지금처럼 사람 이름으로 남습니다.
+- 한 사람의 화면이 그 사람으로 묻는 것은 여덟 개쯤에서 can-i 하나로 줄고, 네임스페이스 N개로 묶인 부여는 그 그룹의 질문을 같은 그룹 모두를 위해 한 번 묻습니다. 레플리카마다 따로 물으므로 R대면 나눠 쓰는 질문도 최대 R배입니다. 사람의 확인과 같은 클라이언트 속도(`multicluster.clientQPS`, 정했다면 `reviewQPS`)에서 차례를 기다리며, 속도를 더하지 않습니다.
+- `excludeClusters`에 등록 클러스터 ID가 아닌 항목이 있으면 k8s-service가 시작할 때와 클러스터가 바뀐 뒤 경고합니다. 그런 항목은 아무 클러스터도 빼지 않습니다. 시작할 때 레지스트리를 읽지 못했다면 다음 클러스터 변경 때 경고합니다.
+- `auth.impersonation.enabled`가 꺼져 있으면 이 스위치는 아무것도 하지 않습니다.
+
 ## 2. metrics-server
 
 노드 목록, Monitoring 화면, 노드 드로어의 사용량과, Prometheus가 없을 때 최적화 표에 나오는 사용량(순간값)은 `metrics.k8s.io`에서 읽습니다.
