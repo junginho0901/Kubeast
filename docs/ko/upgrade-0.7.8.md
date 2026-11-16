@@ -2,6 +2,8 @@
 
 # 0.7.7에서 0.7.8로 업그레이드
 
+**손 써야 하는 변경: 있음(설치에 따라 다름).** Kubernetes 1.30보다 오래된 클러스터는 `podShutdown.preStopSeconds: 0`이 필요합니다([1.3](#13-kubernetes-버전)). 값에 `pdb.minAvailable`이 있으면 그 값을 뺄 때까지 업그레이드가 멈춥니다([3](#3-바꿔야-하는-값)). `gpt-4o-mini`를 적은 저장된 AI 모델 설정은 2027-01-14 전에 다른 모델로 바꿉니다([1.9](#19-기본-ai-모델)). `secrets.existingSecret`을 쓰면 이번 업그레이드에서 바꿀 것은 없습니다. Redis 사용자는 그 키를 Secret에 넣을 때까지 꺼진 채입니다([1.7](#17-secretsexistingsecret과-redis-사용자)). 아래 다른 항목은 그 항목이 적은 설치에만 해당합니다.
+
 이 문서는 0.7.7 설치를 0.7.8로 올릴 때 먼저 확인할 것, 저절로 바뀌는 것, 바꿔야 하는 값, 업그레이드가 한 번 하는 일, 되돌리는 방법을 다룹니다.
 업그레이드 명령은 [설치와 첫 설정](getting-started.md#업그레이드)의 명령에 `--version 0.7.8`을 쓴 것입니다.
 항목마다 그 변경을 만든 풀 리퀘스트 번호를 붙였습니다.
@@ -17,6 +19,7 @@
 - 다른 역할과 같은 역할 그룹이 되는 이름의 사용자 정의 역할은 이름이 바뀌고 클러스터 부여를 잃으며, 바뀐 것마다 감사 행이 남습니다. `Pending` 그룹의 역할(`PENDING`)인 계정 등급은 기본 `Pending`으로 옮겨집니다(#865).
 - ASCII가 아닌 글자가 든 역할 이름은 자기 그룹을 받습니다(`운영팀`은 `kubeast:role:~c6b4~c601~d300`으로 동작하고, 0.7.7에서는 `kubeast:role:---`였습니다). 그래서 클러스터에서 옛 그룹에 바인딩한 RBAC는 그 역할에 더는 적용되지 않습니다(#865).
 - 서비스 말고도 차트의 PostgreSQL과 Redis가 한 번 다시 시작하고, 캐시는 비어서 시작합니다(#866, #868). 데이터베이스가 멈춘 때부터 20초쯤은 옛 파드로 가는 요청이 기다릴 수 있고 몇 개는 실패할 수 있습니다. 0.7.7 파드가 바뀌는 동안에도 요청 몇 개는 실패할 수 있습니다. 0.7.7 파드는 기다리지 않고 멈추고, 0.7.8부터는 파드가 멈추기 전에 기다립니다(#856).
+- 기본 AI 모델은 `gpt-4o-mini` 대신 `gpt-6-luna`입니다. 저장된 모델 설정은 처음 시작할 때 만든 `default-openai` 설정까지 자기 모델을 그대로 씁니다([1.9](#19-기본-ai-모델), #921, #924).
 - 먼저 데이터베이스를 백업합니다. 되돌려도 역할 이름 바꾸기는 되돌아가지 않습니다.
 
 ## 1. 업그레이드 전에
@@ -167,7 +170,17 @@ Secret을 읽을 수 있는 업그레이드는 키가 없거나 비어 있으면
 kubectl -n kubeast get resourcequota,limitrange
 ```
 
-### 1.9 데이터베이스 백업
+### 1.9 기본 AI 모델
+
+0.7.8부터 차트의 `ai.model`은 `gpt-4o-mini` 대신 `gpt-6-luna`입니다. OpenAI는 2027-01-14에 `gpt-4o-mini-2024-07-18`을 종료하고 대체 모델로 `gpt-6-luna`를 안내합니다(#924). 업그레이드는 저장된 설정을 하나도 바꾸지 않습니다.
+
+- **모델을 정하지 않은 설치**: 차트에 OpenAI 키(`ai.openaiApiKey`)를 넣었다면 ai-service가 처음 시작할 때 0.7.7의 기본값 `gpt-4o-mini`로 `default-openai` 설정을 저장했고, 그 설정은 그 모델을 그대로 씁니다. **Admin > AI Models**에서 만든 설정도 마찬가지입니다. 2027-01-14 전에 거기서 모델을 바꿉니다.
+- **저장된 설정이 없는 설치**(키 없이 `ai.baseUrl`의 게이트웨이를 쓰는 설치): 업그레이드한 때부터 `gpt-6-luna`를 보냅니다. 게이트웨이(LiteLLM 등)는 매핑한 이름에만 답하므로, 먼저 게이트웨이에 `gpt-6-luna`를 매핑하거나 `ai.model`을 게이트웨이가 매핑한 이름으로 둡니다.
+- **값에 적은 `ai.model`**(예: 0.7.7의 `helm show values`에서 복사한 파일의 `gpt-4o-mini`)은 그대로 남고, 저장된 설정이 없을 때만 모델을 정합니다.
+- **도구**: `gpt-6-luna`는 Chat Completions에서 `reasoning_effort: "none"`일 때만 도구를 받습니다. Kubeast는 OpenAI와 Azure OpenAI 프로바이더의 `gpt-6-sol`, `gpt-6-luna`라는 이름으로 가는 모든 호출에 이 값을 보냅니다(#923). 다른 이름(Azure 배포, 게이트웨이 별칭, 프로바이더 `custom`)으로 `gpt-6-luna`에 닿는 설정은 도구 호출이 OpenAI의 400 "Function tools with reasoning_effort are not supported"로 한 번 거절된 뒤부터 `none`을 보냅니다. 첫 호출부터 보내려면 그 설정의 옵션에 `"reasoning_effort": "none"`을 넣습니다.
+- **가격**(1M 토큰당): `gpt-6-luna` 입력 $0.10 · 출력 $0.50, `gpt-4o-mini` 입력 $0.15 · 출력 $0.60입니다. 그 밖의 가격 조건은 [설치와 첫 설정](getting-started.md#업그레이드)의 "업그레이드"에, Docker Compose는 [8](#8-docker-compose)에 있습니다.
+
+### 1.10 데이터베이스 백업
 
 ```bash
 kubectl -n kubeast exec deploy/postgres -c postgres -- pg_dump -Fc -U kubeast kubeast > kubeast-before-0.7.8.dump
@@ -203,6 +216,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 | 직접 고른 `images.redis` | 아무 Redis | Valkey나 Redis 6.2 이상 | #866 |
 | Claude Code를 켜고 메모리 limit을 그대로 둘 때 | `resources.aiService.limits.memory` | `ai.providers.claudeCode.memoryLimit: ""` | #859 |
 | Claude Code를 켜고 서버마다 한 턴만 둘 때 | `maxConcurrent: 1`(기본값) | `ai.providers.claudeCode.maxConcurrent: 1`(기본값 2) | #859 |
+| 저장된 AI 모델 설정이나 값의 `ai.model`이 `gpt-4o-mini`일 때([1.9](#19-기본-ai-모델)) | `gpt-4o-mini` | 2027-01-14 전에 **Admin > AI Models**나 `ai.model`에서 다른 모델로 | #924 |
 | 이름이 바뀐 역할을 차트 설정이 적고 있을 때([1.5](#15-역할-이름)) | 옛 이름 | 뜻한 역할의 이름. 새 이름, 역할에 새로 준 이름, 또는 기본 역할 | #865 |
 | `auth.accessRequests.roles`가 기본 역할 이름을 대소문자만 달리 적었을 때(`WRITE`) | 그 이름의 사용자 정의 역할 | 기본 역할(`Write`)로 읽힘. 뜻한 역할의 이름을 적습니다 | #865 |
 | `replicas`나 `autoscaling`에 서비스 일곱 개가 아닌 키가 있을 때 | 무시됨 | 멈춤. 키는 `authService`, `aiService`, `k8sService`, `sessionService`, `frontend`, `toolServer`, `gateway`입니다 | #867 |
@@ -253,9 +267,12 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 - 기본 역할 이름을 대소문자만 달리 쓴 `auth.accessRequests.roles` 항목(`WRITE`)은 기본 역할(`Write`)을 뜻합니다(#865).
 - Claude Code 턴은 데이터베이스의 설치 전체 자리(`maxConcurrentTotal`)를 씁니다. 턴은 자리를 `queueWaitSeconds`까지 기다립니다(#859).
 - 알림의 `startsAt`은 보낸 쪽이 어떤 오프셋을 쓰든 UTC로 저장됩니다(#909).
+- 차트의 기본 `ai.model`은 `gpt-6-luna`이고, 저장된 모델 설정이 없는 설치는 업그레이드한 때부터 이 모델을 씁니다. `gpt-6-sol`이나 `gpt-6-luna`로 가는 호출은 `reasoning_effort: "none"`을 보냅니다([1.9](#19-기본-ai-모델), #923, #924).
 
 **그 밖**
 
+- 클러스터 요청은 로그인한 사람으로 보내거나 아예 보내지 않습니다. 화면이 여는 서버 버전 · API discovery 읽기(Cluster config의 API 그룹, Cluster Hygiene, 개요의 버전)는 이제 대상 클러스터의 감사 로그에 그 사람 이름으로 남습니다. 기본 RBAC(`system:discovery`)에서는 누구나 같은 답을 받으므로 화면은 바뀌지 않습니다. 문맥에 사람이 없는 요청은 Kubeast 자신의 요청(클러스터마다 두는 서버 버전과 discovery, 상태 확인)이 아니면 보내지 않고, 500으로 답하며 k8s-service가 `cluster request with no person refused`를 로그에 남깁니다. 클러스터 감사 로그에 Kubeast 이름으로 남는 요청은 [클러스터 요구 사항](cluster-requirements.md) §1에 있습니다(#926).
+- 클러스터 차단기: `multicluster.breakerConsecutiveFails: 0`이면 차단기를 끕니다. 0.7.7은 이때 실패 하나에 차단기를 열었습니다. 열린 차단기는 `multicluster.breakerOpenSec`(30초)이 지나면 요청 하나를 클러스터로 보내 봅니다. 0.7.7은 이 값을 읽지 않았습니다. 실패는 이제 호출이 API 서버에 닿지 못한 요청(거부됨, 이름을 찾지 못함, TLS 핸드셰이크가 끝나지 않음, 응답 없이 끊긴 연결)입니다. 집계 API의 503, API 서버 자체의 시간 초과, 요청을 보낸 뒤 지난 화면의 기한, 호출 전에 난 Kubeast 자신의 오류로는 더 이상 열리지 않습니다(#930, #932). 클러스터마다 도는 건강 점검 요청은 사람들의 요청 뒤에서 기다리지 않습니다. API 서버가 500 아래로 답한 점검은 차단기를 닫고, 클러스터는 그대로 `disconnected`로 보입니다. 자격 증명 플러그인이 실패하면 0.7.7처럼 여전히 차단기가 열립니다(#936).
 - k8s-service가 Go 메모리 한도에 맞서 쥔 메모리(살아 있는 힙, 고루틴 스택, 런타임 자체 몫)가 그 한도의 80 %를 넘는 동안 새 실시간 목록은 화면에 안내를 띄우고 기다립니다. 이미 열린 목록은 그대로 돕니다. 있는 객체를 모두 받으며 여는 목록은 시작 전부터 그 객체가 다 지나갈 때까지 서버 전체 8개(`multicluster.wsWatchOpeningConcurrency`)인 자리 하나를 쥡니다. 한 클러스터는 API 서버가 답하기 전까지 하나씩, 답할수록 더 많이, 다른 클러스터가 기다리는 동안 절반까지 잡습니다. 그래서 재시작 뒤에는 몇 개씩 차례로 돌아오고, 답하지 않는 클러스터가 다른 클러스터를 기다리게 하지 않습니다. 목록 하나의 HTTP/2 창은 1 MiB입니다(`multicluster.wsWatchStreamWindowKiB`). 이런 목록은 watch list(`sendInitialEvents`)로 묻고, 이를 거절하는 API 서버(기본값으로 1.33, 1.27~1.31)의 클러스터는 예전 watch로 엽니다. 안내가 자주 보이면 `resources.k8sService.limits.memory`를 올립니다(#896).
 - 감사 앵커의 S3 다이제스트 객체 키 끝에 해시의 앞 16진수 8자리가 붙습니다(`…-<from>-<to>-<hash8>.json`). 다이제스트를 이름으로 읽는 스크립트는 새 꼴도 받게 고칩니다(#852).
 - 새 차트 객체는 Secret `kubeast-redis-users`, 파드 둘 이상인 서비스의 PodDisruptionBudget, 그리고 켰을 때 HPA와 `k8s-service-stream`의 Deployment·Service·PodDisruptionBudget·NetworkPolicy입니다. 새 ClusterRole이나 Role은 없습니다.
@@ -332,7 +349,7 @@ helm rollback kubeast <revision> -n kubeast
 ```
 
 - **데이터베이스**: 0.7.8의 표와 열은 남고 0.7.7은 그대로 시작합니다. 0.7.7의 마이그레이션은 앞선 데이터베이스에서 적용할 것을 찾지 못하고, 서비스는 스키마 22 이상을 기다립니다.
-- **역할**(#865): 바뀐 이름, 지워진 부여, `Pending`으로 옮겨진 계정 등급은 그대로 남고, 다른 역할의 그룹이 되는 이름을 거부하는 인덱스도 남습니다. [1.9](#19-데이터베이스-백업)의 덤프를 복원해야만 옛 이름과 부여가 돌아오며, 그러면 데이터베이스 전체가 그 시점으로 돌아갑니다.
+- **역할**(#865): 바뀐 이름, 지워진 부여, `Pending`으로 옮겨진 계정 등급은 그대로 남고, 다른 역할의 그룹이 되는 이름을 거부하는 인덱스도 남습니다. [1.10](#110-데이터베이스-백업)의 덤프를 복원해야만 옛 이름과 부여가 돌아오며, 그러면 데이터베이스 전체가 그 시점으로 돌아갑니다.
 - **역할 그룹**(#865): 0.7.7은 옛 그룹을 다시 만들므로(`운영팀`은 `kubeast:role:---`로 동작) 새 그룹에 만든 바인딩은 0.7.7에서 적용되지 않습니다.
 - **로그아웃**(#849): 0.7.7의 auth-service는 로그아웃한 로그인을 읽지 않으므로, 로그아웃한 로그인의 토큰도 만료될 때까지(`auth.tokenTTLMinutes`, 기본 15분) 다시 받아들입니다.
 - **Redis**(#866): 0.7.7의 Redis가 비밀번호 하나(`REDIS_PASSWORD`, `kubeast-secrets`에 그대로 있음)로 돌아오고, 그 k8s-service가 그 비밀번호로 로그인합니다. 그 Redis가 답하기 전에 뜬 0.7.7 k8s-service 파드는 다시 시작할 때까지 메모리에 캐시합니다. `kubeast-redis-users`는 남고(`helm.sh/resource-policy: keep`), 다음 업그레이드가 그 비밀번호를 다시 읽습니다.
@@ -340,6 +357,7 @@ helm rollback kubeast <revision> -n kubeast
 - **PodDisruptionBudget과 HPA**는 0.7.7의 값에 따라 사라집니다(#901, #867).
 - **알림**(#909): 0.7.7은 `startsAt`의 오프셋을 다시 버리므로, 다른 시간대를 쓰는 곳에서 온 알림은 다시 새 행이 생깁니다.
 - **드레인**(#858): 되돌릴 때 돌던 드레인은 그 자리에서 끝나고 노드는 cordon된 채 남습니다. 0.7.7은 `node_drains`를 읽지 않습니다.
+- **AI 모델**(#923, #924): 0.7.7은 `reasoning_effort`를 보내지 않으므로, `gpt-6-luna`로 바꾼 설정의 도구 호출은 0.7.7에서 모두 거절됩니다. 되돌리기 전에 그런 설정을 0.7.7이 쓸 수 있는 모델로 돌려 둡니다.
 
 ## 8. Docker Compose
 
@@ -358,6 +376,7 @@ git fetch --tags && git checkout v0.7.8
 
 - **멈출 때 기다림**: Kubeast 서비스 일곱 개에 멈출 시간을 35초, Redis와 PostgreSQL에 Kubernetes 기본값인 30초를 줍니다(`stop_grace_period`. Docker 기본값은 10초). 기본값일 때 차트가 각각에 주는 시간입니다. `docker compose stop`과 업그레이드는 컨테이너마다 그만큼 걸릴 수 있습니다. `preStop` 기다림, 터미널 드레인, PodDisruptionBudget, HPA는 없습니다(#856).
 - **Redis**: 전과 같이 사용자도 비밀번호도 없고 Compose 네트워크 안에서만 닿습니다(#866은 차트만 바꿉니다).
+- **AI 모델**(#921, #924): `install-docker.sh`를 다시 돌려도 `.env`에 이미 있는 `OPENAI_MODEL`과 `OPENAI_BASE_URL`은 그대로 두고, 0.7.7 이하가 쓴 `.env`에는 `gpt-4o-mini`가 있습니다. 2027-01-14 전에 바꿉니다. `ai.model`처럼 저장된 설정이 없을 때만 모델을 정하므로, 그 값으로 만든 `default-openai` 설정은 **Admin > AI Models**에서 바꿉니다([1.9](#19-기본-ai-모델)). `.env`가 없으면 이제 `gpt-6-luna`를 씁니다. 0.7.7은 OpenAI가 종료한 `gpt-4`를 썼습니다. `KUBEAST_TAG`를 v0.7.7 이하로 두면 `OPENAI_MODEL`도 그 이미지가 쓸 수 있는 모델로 둡니다. 그 이미지는 `reasoning_effort`를 보내지 않아 `gpt-6-luna`로 가는 도구 호출이 모두 거절됩니다.
 - **데이터베이스 한도**: 같은 세션 한도와 풀이 기본으로 적용됩니다. 바꾸려면 `.env`에 `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS`(`0`이면 두지 않음)나 `DB_POOL_MAX_AUTH`, `DB_POOL_MAX_SESSION`, `DB_POOL_MAX_K8S`, `DB_POOL_MAX_AI`를 넣습니다. Compose의 PostgreSQL은 기본 `max_connections`(100)를 그대로 쓰며, 서비스마다 컨테이너 하나면 그 안에 들어갑니다(#868).
 - **사용자 정의 역할 바인딩**: `.env`의 `IMPERSONATION_CUSTOM_ROLES`는 전과 같이 역할 이름을 받습니다. ASCII가 아닌 이름의 새 그룹은 클러스터에 바인딩합니다([6](#6-업그레이드한-뒤)).
 - **차트와 같은 것**: 마이그레이션, 역할 이름 바꾸기([1.5](#15-역할-이름)와 [6](#6-업그레이드한-뒤)의 쿼리는 `kubectl -n kubeast exec -i deploy/postgres -c postgres -- psql -U kubeast -d kubeast` 대신 `docker compose exec -T postgres psql -U kubeast -d kubeast`로 돌림), 알림 시간의 UTC 저장, 캐시가 비어서 시작하는 것, 드레인([1.4](#14-노드-드레인))은 차트와 같습니다.
