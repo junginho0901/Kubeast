@@ -33,7 +33,7 @@ import { useClusterView } from './ClusterViewContext'
 import type { ClusterViewContextValue } from './ClusterViewContext'
 import { usePodDetailQueries } from './hooks/usePodDetailQueries'
 import { filledDetail, openPodWindow, podReadState, readsPod, usePodDetailRead, type PodReadShown } from './podDetailRead'
-import { podToDetail } from './types'
+import { pickMainContainer, podToDetail } from './types'
 
 // a box's row (k8s-service nodeBoxPod) and the full row of the same pod (podrow.Info), as the describe answers it
 const SHORT: NodeBoxPod = {
@@ -142,6 +142,28 @@ describe("a card's pod window", () => {
     await open(row, 'logs')
     expect({ reads: reads.describe.length, container: view.selectedContainer }).toEqual({ reads: 0, container: 'web' })
   })
+
+  it("opened on Exec after another pod's window, with Logs pressed before the read, keeps none of that pod's containers", async () => {
+    await open(FULL, 'logs')
+    expect(view.selectedContainer).toBe('web')
+    await act(async () => { view.closeDetailModal(); await settled() })
+    const db = { ...SHORT, name: 'db-0', labels: { app: 'db' } }
+    await open(db, 'exec')
+    expect({ logs: view.selectedContainer, exec: view.execContainer }).toEqual({ logs: '', exec: '' })
+    // PodDetailTabs' Logs: the main container of a row with none is '', which leaves the one chosen
+    await act(async () => {
+      const main = pickMainContainer(view.selectedPod!)
+      if (main) view.setSelectedContainer(main)
+      view.selectTab('logs')
+      await settled()
+    })
+    const dbContainers = [
+      { name: 'postgres', image: 'example.test/postgres:17', ready: true, restart_count: 0, state: { running: { started_at: '' } } },
+      { name: 'metrics', image: 'example.test/exporter:1', ready: true, restart_count: 0, state: { running: { started_at: '' } } },
+    ]
+    await answer(0, { ...FULL, name: 'db-0', containers: dbContainers })
+    expect({ tab: view.activeTab, logs: view.selectedContainer, shown }).toEqual({ tab: 'logs', logs: 'postgres', shown: 'none' })
+  })
 })
 
 describe('the rules', () => {
@@ -159,5 +181,9 @@ describe('the rules', () => {
     expect({ container: kept?.container, known: kept?.pod.containersKnown }).toEqual({ container: undefined, known: true })
     const summary = filledDetail(pod, read(FULL), { activeTab: 'summary', selectedContainer: '', execContainer: '' })
     expect([summary?.container, summary?.execContainer, summary?.pod.containers.length]).toEqual([undefined, undefined, 2])
+    // a container chosen that the pod does not have (another window's) is chosen anew
+    const logs = filledDetail(pod, read(FULL), { activeTab: 'logs', selectedContainer: 'app', execContainer: '' })
+    const exec = filledDetail(pod, read(FULL), { activeTab: 'exec', selectedContainer: '', execContainer: 'app' })
+    expect([logs?.container, exec?.execContainer]).toEqual(['web', 'istio-proxy'])
   })
 })

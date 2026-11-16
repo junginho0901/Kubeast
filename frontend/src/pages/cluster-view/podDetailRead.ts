@@ -35,22 +35,23 @@ export interface DetailChoice {
 
 /**
  * The window once the pod's read has answered after it opened: the pod with its containers, and the container Logs or
- * Exec opens on when it is the tab shown and none is chosen yet. null until then.
+ * Exec opens on when it is the tab shown and none of the pod's is chosen yet. null until then.
  */
 export function filledDetail(pod: PodDetail, read: PodRead, choice: DetailChoice): { pod: PodDetail; container?: string; execContainer?: string } | null {
   const answer = read.data
   if (!answer || answer.name !== pod.name || answer.namespace !== pod.namespace || read.dataAt < (pod.openedAt ?? 0)) return null
   const filled: PodDetail = { ...podToDetail(answer), containersKnown: true }
+  const ofPod = (name: string) => filled.containers.some((c) => c.name === name)
   return {
     pod: filled,
-    container: choice.activeTab === 'logs' && !choice.selectedContainer ? pickMainContainer(filled) : undefined,
-    execContainer: choice.activeTab === 'exec' && !choice.execContainer ? (filled.containers[0]?.name ?? '') : undefined,
+    container: choice.activeTab === 'logs' && !ofPod(choice.selectedContainer) ? pickMainContainer(filled) : undefined,
+    execContainer: choice.activeTab === 'exec' && !ofPod(choice.execContainer) ? (filled.containers[0]?.name ?? '') : undefined,
   }
 }
 
 /**
- * openPodWindow opens a box card's pod on Logs (a click) or Exec (the menu): a full row chooses the container at once,
- * a box's row leaves it to the pod's read (usePodDetailRead).
+ * openPodWindow opens a box card's pod on Logs (a click) or Exec (the menu). It chooses both containers anew, so
+ * nothing of the window before stays: a full row's at once, a box's row none until the pod's read (usePodDetailRead).
  */
 export function openPodWindow(pod: any, tab: 'logs' | 'exec', view: {
   setSelectedPod: (p: PodDetail) => void
@@ -61,12 +62,9 @@ export function openPodWindow(pod: any, tab: 'logs' | 'exec', view: {
 }) {
   const detail = podToDetail(pod)
   view.setSelectedPod(detail)
-  if (tab === 'logs') {
-    view.setSelectedContainer(pickMainContainer(detail))
-    view.setContainerSearchQuery('')
-  } else {
-    view.setExecContainer(detail.containers[0]?.name ?? '')
-  }
+  view.setSelectedContainer(pickMainContainer(detail))
+  view.setExecContainer(detail.containers[0]?.name ?? '')
+  if (tab === 'logs') view.setContainerSearchQuery('')
   view.selectTab(tab)
 }
 
