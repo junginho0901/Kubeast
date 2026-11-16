@@ -91,7 +91,7 @@ PROBE_TIMEOUT="${PROBE_TIMEOUT:-10}"
 PG_GRACE="${PG_GRACE:-20}"
 # a hang that starts up to this long after the bundled PostgreSQL is ready again is a reconnect: the probe timeout and 5 s
 HANG_GRACE=$(( ${PROBE_TIMEOUT%.*} + 5 ))
-# A: non-2xx of a target without the database while FROM_VERSION's pods go (no preStop before #856), at most ROLL_ALLOW each
+# A: non-2xx or hangs of a target while a FROM_VERSION pod on its path goes (no preStop before #856), at most ROLL_ALLOW each
 ROLL_ALLOW=3
 ROLL_GRACE=5
 # A: Redis refusals k8s-service may log while Redis is swapped (old one going to new one ready and this), then recover from
@@ -1152,7 +1152,7 @@ pods_loop() { # pods_loop FILE — "<epoch> app=ready@deletionTimestamp/deletion
 }
 # probe_summary PHASE FILE PODSFILE SECONDS — rows per target; DB targets may fail while PostgreSQL is down. A target
 # passes with no hang outside that window and HANG_GRACE after it, no non-2xx outside that window (in A, up to
-# ROLL_ALLOW of a target without the database while FROM_VERSION's pods go), and requests sent in at least 80 % of the
+# ROLL_ALLOW non-2xx or hangs while a FROM_VERSION pod on its path goes), and requests sent in at least 80 % of the
 # SECONDS the probes ran (a loop that stopped or stalled part way does not pass).
 probe_summary() {
   local before=""
@@ -1163,6 +1163,9 @@ from datetime import datetime, timezone
 probe, pods, grace, timeout, hang_grace = sys.argv[1], sys.argv[2], int(sys.argv[3]), float(sys.argv[4]), int(sys.argv[5])
 before, roll_grace = sys.argv[6], int(sys.argv[7])
 db_targets = {"k8s-list", "sessions", "auth-me"}
+paths = {"gateway": {"gateway"}, "auth-jwks": {"gateway", "auth-service"}, "frontend": {"gateway", "frontend"},
+         "auth-me": {"gateway", "auth-service"}, "k8s-list": {"gateway", "k8s-service", "auth-service"},
+         "sessions": {"gateway", "session-service", "auth-service"}}
 def asked_at(gone):
     when, _, period = gone.partition("/")
     try:
@@ -1197,17 +1200,18 @@ for line in open(pods):
         down.append(t)
     for app, ready, gone, pod in listed:
         if pod in old:
-            o = old_seen.setdefault(pod, [None, t])
+            o = old_seen.setdefault(pod, [None, t, app])
             o[1] = t
             if o[0] is None:
                 o[0] = asked_at(gone)
-starts, ends = [], []
-for asked, last in old_seen.values():
+going = []  # (app, first second, last second) a request through a pod of old that is going can fail
+for asked, last, app in old_seen.values():
     later = [x for x in samples if x > last]
     if later or asked is not None:
-        starts.append(asked if asked is not None else last)
-        ends.append(later[0] if later else samples[-1])
-roll = (min(starts), max(ends) + roll_grace) if starts else None
+        going.append((app, (asked if asked is not None else last) - 1, (later[0] if later else samples[-1]) + roll_grace))
+roll = (min(a for _, a, _ in going) + 1, max(b for _, _, b in going)) if going else None
+def rolling(name, t):
+    return any(app in paths.get(name, ()) and a <= t <= b for app, a, b in going)
 windows = []
 for t in sorted(set(down)):
     if windows and t - windows[-1][1] <= 2:
@@ -1226,11 +1230,11 @@ for line in open(probe):
     s["n"] += 1
     s["max"] = max(s["max"], took)
     if rc == "28" or took >= timeout:
-        s["hang_window" if in_window(t, hang_grace) else "hang"] += 1
+        s["hang_window" if in_window(t, hang_grace) else "roll" if rolling(name, t) else "hang"] += 1
     elif not code.startswith("2"):
         if name in db_targets and in_window(t):
             s["expected"] += 1
-        elif name not in db_targets and roll and roll[0] <= t <= roll[1]:
+        elif rolling(name, t):
             s["roll"] += 1
         else:
             s["bad"] += 1
@@ -1252,9 +1256,9 @@ EOF
     case "$name" in window|rollout) continue ;; esac
     seen="$seen$name "
     if [ "$bad" = 0 ] && [ "$hang" = 0 ] && [ "$roll" -le "$ROLL_ALLOW" ] && [ "$n" -ge "$min" ]; then
-      row "$1" "requests to $name answered" PASS "$n sent in ${secs}s · non-2xx $exp (in the PostgreSQL window) · hangs 0 · hangs in window $hwin · rollout-window non-2xx $roll · slowest ${mx}s"
+      row "$1" "requests to $name answered" PASS "$n sent in ${secs}s · non-2xx $exp (in the PostgreSQL window) · hangs 0 · hangs in window $hwin · rollout-window non-2xx or hangs $roll · slowest ${mx}s"
     else
-      row "$1" "requests to $name answered" FAIL "$n sent in ${secs}s (want $min or more) · non-2xx outside the window $bad ($codes) · in it $exp · hangs $hang · hangs in window $hwin · rollout-window non-2xx $roll (at most $ROLL_ALLOW) · slowest ${mx}s"
+      row "$1" "requests to $name answered" FAIL "$n sent in ${secs}s (want $min or more) · non-2xx outside the window $bad ($codes) · in it $exp · hangs $hang · hangs in window $hwin · rollout-window non-2xx or hangs $roll (at most $ROLL_ALLOW) · slowest ${mx}s"
     fi
   done < "$OUT/$1-probe-summary.tsv"
   for name in gateway auth-jwks frontend k8s-list sessions auth-me; do

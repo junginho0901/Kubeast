@@ -69,13 +69,14 @@ class ProcessError(Exception):
 
 def make_sdk(script, *, record=None):
     """A stand-in claude_agent_sdk. `script` items: ("text", str) | ("call", tool, args) | ("result", ResultMessage)
-    | ("raise", Exception) | ("sleep", seconds) | ("stream", [pieces]). As Claude Code does, a tool call arrives as an
-    assistant message of its own (after the response's text) before the tool runs, and "stream" — with
-    include_partial_messages — sends a text block's start and its text_delta events before the whole block."""
+    | ("raise", Exception) | ("sleep", seconds) | ("stream", [pieces]) | ("hold",). As Claude Code does, a tool call
+    arrives as an assistant message of its own (after the response's text) before the tool runs, and "stream" — with
+    include_partial_messages — sends a text block's start and its text_delta events before the whole block. "hold"
+    keeps the run inside until the test sets state["release"]; state["log"] has each run's ("in"|"out", prompt)."""
     sdk = types.ModuleType("claude_agent_sdk")
     sdk.TextBlock, sdk.AssistantMessage, sdk.ResultMessage = TextBlock, AssistantMessage, ResultMessage
     sdk.StreamEvent, sdk.RateLimitEvent = StreamEvent, RateLimitEvent
-    state = {"options": [], "running": 0, "max_running": 0, "tool_results": []}
+    state = {"options": [], "running": 0, "max_running": 0, "tool_results": [], "log": [], "release": asyncio.Event()}
 
     class ClaudeAgentOptions:
         def __init__(self, **kw):
@@ -91,6 +92,7 @@ def make_sdk(script, *, record=None):
 
     async def query(*, prompt, options):
         state["options"].append((prompt, options))
+        state["log"].append(("in", prompt))
         state["cwd_existed"] = os.path.isdir(options.cwd)
         state["running"] += 1
         state["max_running"] = max(state["max_running"], state["running"])
@@ -123,8 +125,11 @@ def make_sdk(script, *, record=None):
                     raise step[1]
                 elif kind == "sleep":
                     await asyncio.sleep(step[1])
+                elif kind == "hold":
+                    await state["release"].wait()
         finally:
             state["running"] -= 1
+            state["log"].append(("out", prompt))
 
     sdk.ClaudeAgentOptions, sdk.tool, sdk.create_sdk_mcp_server, sdk.query = ClaudeAgentOptions, tool, create_sdk_mcp_server, query
     sdk.state = state
@@ -171,6 +176,13 @@ def on(monkeypatch, slots_db):
 
 def sse(events):
     return [json.loads(e.removeprefix("data: ").strip()) for e in events]
+
+
+async def until(check, seconds=5.0):
+    """Waits on the loop until check() holds; a TimeoutError past `seconds`."""
+    async with asyncio.timeout(seconds):
+        while not check():
+            await asyncio.sleep(0.01)
 
 
 def test_unavailable_until_switched_on_and_installed(monkeypatch):
@@ -429,14 +441,19 @@ async def test_runs_wait_for_the_concurrency_limit(on):
 @pytest.mark.asyncio
 async def test_an_investigation_has_its_own_slot_beside_the_chat(on):
     """The investigator's lane never takes the chat's slot: one chat run and one investigation run side by side."""
-    sdk = on([("sleep", 0.05), ("result", OK)])
-    ask = [{"role": "user", "content": "x"}]
-    await asyncio.gather(
-        claude_code.complete(ask, model="m", token="t"),
-        claude_code.complete(ask, model="m", token="t", lane="investigation"),
-        claude_code.complete(ask, model="m", token="t", lane="investigation"),
-    )
-    assert sdk.state["max_running"] == 2  # chat + one investigation; the second investigation waited
+    sdk = on([("hold",), ("result", OK)])
+
+    def ask(prompt, lane):
+        return claude_code.complete([{"role": "user", "content": prompt}], model="m", token="t", lane=lane)
+
+    runs = asyncio.gather(ask("chat", "chat"), ask("investigation 1", "investigation"),
+                          ask("investigation 2", "investigation"))
+    await until(lambda: sdk.state["running"] == 2)
+    assert {p for p, _ in sdk.state["options"]} == {"chat", "investigation 1"}  # the second investigation waits
+    sdk.state["release"].set()
+    await asyncio.wait_for(runs, 5)
+    log = sdk.state["log"]
+    assert sdk.state["max_running"] == 2 and log.index(("out", "investigation 1")) < log.index(("in", "investigation 2"))
 
 
 @pytest.mark.asyncio
@@ -462,7 +479,7 @@ async def test_the_investigators_loop_runs_its_tools_through_the_real_turn(on):
 
 @pytest.mark.asyncio
 async def test_an_investigation_turn_runs_in_its_own_lane(on):
-    sdk = on([("sleep", 0.05), ("result", OK)])
+    sdk = on([("hold",), ("result", OK)])
 
     async def run_tool(name, args, turn, call_id=None):
         return [], "[]"
@@ -472,7 +489,10 @@ async def test_an_investigation_turn_runs_in_its_own_lane(on):
         return [e async for e in claude_code.ClaudeCodeChat(model="m", token="t").turn(
             messages=[{"role": "user", "content": "x"}], tools=TOOLS, run_tool=run_tool, out=out, lane="investigation")]
 
-    await asyncio.gather(investigation_turn(), claude_code.complete([{"role": "user", "content": "x"}], model="m", token="t"))
+    runs = asyncio.gather(investigation_turn(), claude_code.complete([{"role": "user", "content": "x"}], model="m", token="t"))
+    await until(lambda: sdk.state["running"] == 2)  # the turn and the chat's completion inside at once
+    sdk.state["release"].set()
+    await asyncio.wait_for(runs, 5)
     assert sdk.state["max_running"] == 2
 
 
