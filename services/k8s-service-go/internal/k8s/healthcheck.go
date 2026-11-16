@@ -145,7 +145,7 @@ func (s *Service) AdmitToCluster(id cluster.ID) (ok bool, trial time.Time) {
 	return s.health.admit(id)
 }
 
-// TrialAskedNothing gives the next request the try: the trial made no call to the cluster (a cache's answer or Kubeast's own). nil-safe.
+// TrialAskedNothing gives the next request the try: the cluster took no call of the trial (a cache's answer, Kubeast's own, a caller gone before the headers). nil-safe.
 func (s *Service) TrialAskedNothing(id cluster.ID, trial time.Time) {
 	if s.health != nil {
 		s.health.unbook(id, trial)
@@ -173,9 +173,10 @@ type ClusterCalls struct {
 	id       cluster.ID
 	answered func()
 	once     sync.Once
-	// responded: a response of any status; unreached: a call that could not reach the cluster; unanswered: a call the
-	// cluster took and answered 500 or more, or not before the deadline once its headers were sent.
-	responded, unreached, unanswered atomic.Bool
+	// responded: a response of any status; gotAnswer: one below 500; unreached: a call that could not reach the cluster;
+	// unanswered: a call the cluster took and answered 500 or more, or not before the deadline or the caller's leaving
+	// once its headers went out.
+	responded, gotAnswer, unreached, unanswered atomic.Bool
 }
 
 // WithClusterCalls gives ctx a record of its calls to cluster id; answered runs once, at the API server's first answer
@@ -198,7 +199,7 @@ func carryClusterCalls(plain, from context.Context) context.Context {
 func (c *ClusterCalls) Unreached() bool { return c.unreached.Load() && !c.responded.Load() }
 
 // Unanswered says the cluster took a call and answered none below 500.
-func (c *ClusterCalls) Unanswered() bool { return c.unanswered.Load() }
+func (c *ClusterCalls) Unanswered() bool { return c.unanswered.Load() && !c.gotAnswer.Load() }
 
 // answerNotice is the innermost transport of cluster id, under the namespace guard and the person check that answer on
 // their own.
@@ -213,6 +214,8 @@ func (t answerNotice) RoundTrip(req *http.Request) (*http.Response, error) {
 		return t.base.RoundTrip(req)
 	}
 	over := req.Context().Err() != nil
+	// HTTP/2 also calls WroteHeaders when writing them failed, and its pool skips GetConn once on a connection net/http
+	// just handed it; both are rare, and read a call that did not reach the cluster as one it took.
 	var sent atomic.Bool
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{
 		GetConn:      func(string) { sent.Store(false) }, // each of the transport's own tries starts unsent
@@ -223,6 +226,7 @@ func (t answerNotice) RoundTrip(req *http.Request) (*http.Response, error) {
 	case resp != nil:
 		calls.responded.Store(true)
 		if resp.StatusCode < http.StatusInternalServerError {
+			calls.gotAnswer.Store(true)
 			calls.once.Do(calls.answered)
 		} else {
 			calls.unanswered.Store(true)
@@ -230,10 +234,13 @@ func (t answerNotice) RoundTrip(req *http.Request) (*http.Response, error) {
 	case err == nil:
 	case ended == nil:
 		calls.unreached.Store(true)
-	case over || errors.Is(ended, context.Canceled):
-		// Kubeast stopped waiting before the cluster could tell anything: the caller left, or the call came too late.
+	case over:
+		// the call came after Kubeast had stopped waiting
 	case sent.Load():
+		// the cluster had the call; the deadline passed or the caller left (or Kubeast cancelled it) before an answer
 		calls.unanswered.Store(true)
+	case errors.Is(ended, context.Canceled):
+		// the caller left before the call's headers went out
 	default:
 		calls.unreached.Store(true)
 	}

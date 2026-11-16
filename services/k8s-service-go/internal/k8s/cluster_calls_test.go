@@ -127,15 +127,16 @@ func TestOnlyACallThatCouldNotReachTheClusterIsUnreached(t *testing.T) {
 		answered   bool
 		unanswered bool
 	}{
-		"refused":                              {url: closedAddress, unreached: true},
-		"dropped without a response":           {url: func(t *testing.T) string { return apiStandIn(t, 0, false, true) }, unreached: true},
-		"a deadline while connecting":          {url: silentListener, ctx: deadline(200 * time.Millisecond), unreached: true},
-		"an aggregated API answering 503":      {url: answering(http.StatusServiceUnavailable), unanswered: true},
-		"the API server's 504":                 {url: answering(http.StatusGatewayTimeout), unanswered: true},
-		"a 404":                                {url: answering(http.StatusNotFound), answered: true},
-		"a deadline once the request was sent": {url: func(t *testing.T) string { return apiStandIn(t, 0, true, false) }, ctx: deadline(200 * time.Millisecond), unanswered: true},
-		"the caller left while connecting":     {url: silentListener, ctx: cancelledAfter(200 * time.Millisecond)},
-		"a context over before the call":       {url: closedAddress, ctx: deadline(-time.Second)},
+		"refused":                                   {url: closedAddress, unreached: true},
+		"dropped without a response":                {url: func(t *testing.T) string { return apiStandIn(t, 0, false, true) }, unreached: true},
+		"a deadline while connecting":               {url: silentListener, ctx: deadline(200 * time.Millisecond), unreached: true},
+		"an aggregated API answering 503":           {url: answering(http.StatusServiceUnavailable), unanswered: true},
+		"the API server's 504":                      {url: answering(http.StatusGatewayTimeout), unanswered: true},
+		"a 404":                                     {url: answering(http.StatusNotFound), answered: true},
+		"a deadline once the request was sent":      {url: func(t *testing.T) string { return apiStandIn(t, 0, true, false) }, ctx: deadline(200 * time.Millisecond), unanswered: true},
+		"the caller left while connecting":          {url: silentListener, ctx: cancelledAfter(200 * time.Millisecond)},
+		"the caller left once the request was sent": {url: func(t *testing.T) string { return apiStandIn(t, 0, true, false) }, ctx: cancelledAfter(200 * time.Millisecond), unanswered: true},
+		"a context over before the call":            {url: closedAddress, ctx: deadline(-time.Second)},
 	} {
 		t.Run(name, func(t *testing.T) {
 			base := context.Background()
@@ -168,6 +169,19 @@ func TestARequestWithAResponseToOneCallIsNotUnreached(t *testing.T) {
 				t.Error("a request one of whose calls got a response is unreached")
 			}
 		})
+	}
+}
+
+// A request one of whose calls the API server answered below 500 is not unanswered, whatever another call got.
+func TestARequestWithAnAnswerIsNotUnanswered(t *testing.T) {
+	ctx, calls := WithClusterCalls(context.Background(), "c1", func() {})
+	callThrough(t, ctx, apiStandIn(t, http.StatusServiceUnavailable, false, false))
+	if !calls.Unanswered() {
+		t.Fatal("a 503 alone is not unanswered")
+	}
+	callThrough(t, ctx, apiStandIn(t, http.StatusNotFound, false, false))
+	if calls.Unanswered() {
+		t.Error("a request with a 404 beside its 503 is unanswered")
 	}
 }
 

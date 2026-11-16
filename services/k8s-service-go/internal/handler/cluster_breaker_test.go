@@ -548,6 +548,45 @@ func TestATrialTheClusterTookAndDidNotAnswerHoldsThePeriod(t *testing.T) {
 	}
 }
 
+// A trial that outlasts its own booking (a proxy that answers after the open period) holds a whole period from its end:
+// the very next request fails fast.
+func TestATrialPastItsBookingHoldsAPeriodFromItsEnd(t *testing.T) {
+	const period = 200 * time.Millisecond
+	a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 1, BreakerOpen: period})}
+	openC1(t, a)
+	time.Sleep(period + 50*time.Millisecond)
+	a.reached = 0
+	if code := askC1(a.h, a.read(slowAPIPath, 2*period)).Code; code != http.StatusServiceUnavailable || a.reached != 1 {
+		t.Fatalf("the trial: %d with the handler run %d times", code, a.reached)
+	}
+	a.reached = 0
+	if code := askC1(a.h, a.askTheCluster).Code; code != http.StatusServiceUnavailable || a.reached != 0 {
+		t.Fatalf("right after the trial: %d with the handler run %d times, want a fast 503", code, a.reached)
+	}
+}
+
+// A trial whose caller left once its headers went out (the console gives up on a request after 10 s, and the gateway
+// passes that on) was a call the cluster took and did not answer: it holds the period too.
+func TestATrialWhoseCallerLeftAfterItsHeadersWentHoldsThePeriod(t *testing.T) {
+	const period = 500 * time.Millisecond
+	a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 1, BreakerOpen: period})}
+	openC1(t, a)
+	time.Sleep(period + 50*time.Millisecond)
+	ctx, cancel := context.WithCancel(auth.WithPayload(context.Background(), auth.TokenPayload{UserID: "u1", Perms: auth.PermissionMatrix{"*": {"*"}}}))
+	defer cancel()
+	time.AfterFunc(200*time.Millisecond, cancel) // the browser gives up
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/cluster/overview?cluster=c1", nil).WithContext(ctx)
+	a.reached = 0
+	a.h.ClusterMiddleware(a.read(slowAPIPath, 0)).ServeHTTP(httptest.NewRecorder(), req)
+	if a.reached != 1 {
+		t.Fatalf("the trial ran %d times", a.reached)
+	}
+	a.reached = 0
+	if code := askC1(a.h, a.askTheCluster).Code; code != http.StatusServiceUnavailable || a.reached != 0 {
+		t.Fatalf("right after a trial whose caller left once the cluster had its call: %d with the handler run %d times, want a fast 503", code, a.reached)
+	}
+}
+
 // A request's record is of its own cluster: calls to another (a live list socket opened on c1 subscribing to c2) neither
 // mark c1 down nor answer its trial.
 func TestACallToAnotherClusterCountsForNeither(t *testing.T) {
