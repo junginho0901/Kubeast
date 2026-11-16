@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -13,17 +14,28 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
-// breakerHandler is a Handler on the cluster c1, whose API server answers /version and 503 for downAPIPath.
+// breakerHandler is a Handler on the cluster c1, whose API server answers /version, 503 for downAPIPath, 504 for
+// timeoutAPIPath, nothing until the client goes for slowAPIPath, and ends the connection of dropPath with no response.
 func breakerHandler(t *testing.T, opts k8s.ServiceOptions) *Handler {
 	t.Helper()
 	h, _ := countedBreakerHandler(t, opts)
 	return h
 }
 
-// downAPIPath is an aggregated API whose server is down: the API server answers it 503.
-const downAPIPath = "/apis/metrics.k8s.io/v1beta1/nodes"
+const (
+	// downAPIPath is an aggregated API whose server is down: the API server answers it 503.
+	downAPIPath = "/apis/metrics.k8s.io/v1beta1/nodes"
+	// timeoutAPIPath is a read past the API server's own time limit: it answers 504.
+	timeoutAPIPath = "/apis/apps/v1/replicasets"
+	// slowAPIPath is a list the API server is still reading when the screen's deadline passes.
+	slowAPIPath = "/api/v1/events"
+	// dropPath is an access check (a POST) whose connection ends with no response, as one to an API server going away.
+	dropPath = "/apis/authorization.k8s.io/v1/selfsubjectaccessreviews"
+)
 
 // countedBreakerHandler is breakerHandler with the number of requests its API server got.
 func countedBreakerHandler(t *testing.T, opts k8s.ServiceOptions) (*Handler, *atomic.Int32) {
@@ -31,10 +43,27 @@ func countedBreakerHandler(t *testing.T, opts k8s.ServiceOptions) (*Handler, *at
 	var hits atomic.Int32
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
-		if r.URL.Path == downAPIPath {
+		switch r.URL.Path {
+		case downAPIPath:
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"ServiceUnavailable","code":503}`))
+			return
+		case timeoutAPIPath:
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusGatewayTimeout)
+			_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","message":"Timeout: request did not complete within the allotted timeout","reason":"Timeout","code":504}`))
+			return
+		case slowAPIPath:
+			select {
+			case <-r.Context().Done():
+			case <-time.After(10 * time.Second):
+			}
+			return
+		case dropPath:
+			if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
+				_ = conn.Close()
+			}
 			return
 		}
 		if r.URL.Path != "/version" {
@@ -79,9 +108,15 @@ type breakerAnswers struct {
 	reached int
 }
 
-func (a *breakerAnswers) failAsTheCluster(w http.ResponseWriter, _ *http.Request) {
+// failAsTheCluster makes a call whose connection ends with no response (a POST, which client-go does not send again) and
+// answers 503, as a screen of a cluster it cannot reach.
+func (a *breakerAnswers) failAsTheCluster(w http.ResponseWriter, r *http.Request) {
 	a.reached++
-	a.h.handleError(w, errors.New("dial tcp 10.0.0.9:6443: connect: connection refused"))
+	_, _, err := a.h.svc.RawRequest(r.Context(), http.MethodPost, dropPath)
+	if err == nil {
+		err = errors.New("the dropped connection was answered")
+	}
+	response.Error(w, http.StatusServiceUnavailable, err.Error())
 }
 
 func (a *breakerAnswers) askTheCluster(w http.ResponseWriter, r *http.Request) {
@@ -435,4 +470,208 @@ func TestA5xxOfTheAPIServerIsNoAnswer(t *testing.T) {
 			t.Error("a 503 of the API server between two failures cleared the count")
 		}
 	})
+}
+
+// A cluster whose API server answers is not cut off by one group or one slow screen: an aggregated API whose server is
+// down (503), the API server's own timeout (504) and a screen's deadline that passed once its request was sent count no
+// failure, though each screen answers 503.
+func TestAClusterWhoseAPIServerAnswersIsNotCutOffByOneGroupOrOneSlowScreen(t *testing.T) {
+	for name, c := range map[string]struct {
+		path     string
+		deadline time.Duration
+	}{
+		"an aggregated API answering 503":           {downAPIPath, 0},
+		"the API server's 504":                      {timeoutAPIPath, 0},
+		"a screen's deadline once its request went": {slowAPIPath, 200 * time.Millisecond},
+	} {
+		t.Run(name, func(t *testing.T) {
+			a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 2, BreakerOpen: time.Minute})}
+			for i := range 3 {
+				if rec := askC1(a.h, a.read(c.path, c.deadline)); rec.Code != http.StatusServiceUnavailable {
+					t.Fatalf("read %d: %d %s, want the screen's 503", i+1, rec.Code, rec.Body.String())
+				}
+			}
+			if a.h.svc.ClusterDown("c1") {
+				t.Error("the breaker of a cluster whose API server answers opened")
+			}
+		})
+	}
+}
+
+// read is a screen that GETs path from the cluster, within deadline when one is given, and answers what handleError
+// makes of a failure.
+func (a *breakerAnswers) read(path string, deadline time.Duration) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		a.reached++
+		ctx := r.Context()
+		if deadline > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, deadline)
+			defer cancel()
+		}
+		if _, _, err := a.h.svc.RawRequest(ctx, http.MethodGet, path); err != nil {
+			a.h.handleError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// A trial the cluster took and answered none below 500 holds the breaker another period, as a proxy in front of an API
+// server that is down answers: the next request still fails fast. A trial that made no call gives its try back.
+func TestATrialTheClusterTookAndDidNotAnswerHoldsThePeriod(t *testing.T) {
+	for name, c := range map[string]struct {
+		path     string
+		deadline time.Duration
+	}{
+		"a 503":                            {downAPIPath, 0},
+		"a deadline once its request went": {slowAPIPath, 200 * time.Millisecond},
+	} {
+		t.Run(name, func(t *testing.T) {
+			const period = 500 * time.Millisecond
+			a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 1, BreakerOpen: period})}
+			openC1(t, a)
+			time.Sleep(period + 50*time.Millisecond)
+			a.reached = 0
+			if code := askC1(a.h, a.read(c.path, c.deadline)).Code; code != http.StatusServiceUnavailable || a.reached != 1 {
+				t.Fatalf("the trial: %d with the handler run %d times", code, a.reached)
+			}
+			a.reached = 0
+			if code := askC1(a.h, a.askTheCluster).Code; code != http.StatusServiceUnavailable || a.reached != 0 {
+				t.Fatalf("right after the trial: %d with the handler run %d times, want a fast 503", code, a.reached)
+			}
+			time.Sleep(period + 50*time.Millisecond)
+			if code := askC1(a.h, a.askTheCluster).Code; code != http.StatusOK || a.reached != 1 || a.h.svc.ClusterDown("c1") {
+				t.Fatalf("a period after the trial: %d with the handler run %d times, open %v: want it tried and closed", code, a.reached, a.h.svc.ClusterDown("c1"))
+			}
+		})
+	}
+}
+
+// A trial that outlasts its own booking (a proxy that answers after the open period) holds a whole period from its end:
+// the very next request fails fast.
+func TestATrialPastItsBookingHoldsAPeriodFromItsEnd(t *testing.T) {
+	const period = 200 * time.Millisecond
+	a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 1, BreakerOpen: period})}
+	openC1(t, a)
+	time.Sleep(period + 50*time.Millisecond)
+	a.reached = 0
+	if code := askC1(a.h, a.read(slowAPIPath, 2*period)).Code; code != http.StatusServiceUnavailable || a.reached != 1 {
+		t.Fatalf("the trial: %d with the handler run %d times", code, a.reached)
+	}
+	a.reached = 0
+	if code := askC1(a.h, a.askTheCluster).Code; code != http.StatusServiceUnavailable || a.reached != 0 {
+		t.Fatalf("right after the trial: %d with the handler run %d times, want a fast 503", code, a.reached)
+	}
+}
+
+// A trial whose caller left once its headers went out (the console gives up on a request after 10 s, and the gateway
+// passes that on) was a call the cluster took and did not answer: it holds the period too.
+func TestATrialWhoseCallerLeftAfterItsHeadersWentHoldsThePeriod(t *testing.T) {
+	const period = 500 * time.Millisecond
+	a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 1, BreakerOpen: period})}
+	openC1(t, a)
+	time.Sleep(period + 50*time.Millisecond)
+	ctx, cancel := context.WithCancel(auth.WithPayload(context.Background(), auth.TokenPayload{UserID: "u1", Perms: auth.PermissionMatrix{"*": {"*"}}}))
+	defer cancel()
+	time.AfterFunc(200*time.Millisecond, cancel) // the browser gives up
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/cluster/overview?cluster=c1", nil).WithContext(ctx)
+	a.reached = 0
+	a.h.ClusterMiddleware(a.read(slowAPIPath, 0)).ServeHTTP(httptest.NewRecorder(), req)
+	if a.reached != 1 {
+		t.Fatalf("the trial ran %d times", a.reached)
+	}
+	a.reached = 0
+	if code := askC1(a.h, a.askTheCluster).Code; code != http.StatusServiceUnavailable || a.reached != 0 {
+		t.Fatalf("right after a trial whose caller left once the cluster had its call: %d with the handler run %d times, want a fast 503", code, a.reached)
+	}
+}
+
+// A request's record is of its own cluster: calls to another (a live list socket opened on c1 subscribing to c2) neither
+// mark c1 down nor answer its trial.
+func TestACallToAnotherClusterCountsForNeither(t *testing.T) {
+	askC2 := func(a *breakerAnswers) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			a.reached++
+			_, _, _ = a.h.svc.RawRequest(cluster.WithID(r.Context(), "c2"), http.MethodGet, "/version")
+			w.WriteHeader(http.StatusOK)
+		}
+	}
+	t.Run("refused", func(t *testing.T) {
+		refused := httptest.NewServer(http.NotFoundHandler())
+		url := refused.URL
+		refused.Close()
+		a := &breakerAnswers{h: handlerOn(t, url, k8s.ServiceOptions{BreakerFails: 1, BreakerOpen: time.Minute})}
+		if code := askC1(a.h, askC2(a)).Code; code != http.StatusOK || a.reached != 1 {
+			t.Fatalf("the request: %d with the handler run %d times", code, a.reached)
+		}
+		if a.h.svc.ClusterDown("c1") {
+			t.Error("a refused call to c2 marked c1 down")
+		}
+	})
+	t.Run("answered", func(t *testing.T) {
+		const period = 500 * time.Millisecond
+		a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 1, BreakerOpen: period})}
+		openC1(t, a)
+		time.Sleep(period + 50*time.Millisecond)
+		askC1(a.h, askC2(a))
+		if !a.h.svc.ClusterDown("c1") {
+			t.Error("c2's answer closed c1's breaker")
+		}
+	})
+}
+
+// A read several requests share counts once for each run: the request that found none under way reads for itself, and
+// those that came meanwhile wait on one more read, which counts for the first of them. Three such requests to a cluster
+// that refuses count two failures, where each waiting request counted one before.
+func TestASharedReadOfAClusterItCannotReachCountsOncePerRun(t *testing.T) {
+	refused := httptest.NewServer(http.NotFoundHandler())
+	url := refused.URL
+	refused.Close()
+	for name, c := range map[string]struct {
+		fails    int
+		wantOpen bool
+	}{
+		"two failures do not reach three": {3, false},
+		"two failures reach two":          {2, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := handlerOn(t, url, k8s.ServiceOptions{BreakerFails: c.fails, BreakerOpen: time.Minute})
+			release := make(chan struct{})
+			var runs atomic.Int32
+			read := h.Shared(func(w http.ResponseWriter, r *http.Request) {
+				if runs.Add(1) == 1 {
+					<-release
+				}
+				if _, _, err := h.svc.RawRequest(r.Context(), http.MethodGet, "/version"); err != nil {
+					h.handleError(w, err)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			})
+			var wg sync.WaitGroup
+			ask := func() {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					askC1(h, read)
+				}()
+			}
+			ask()
+			for deadline := time.Now().Add(5 * time.Second); runs.Load() == 0 && time.Now().Before(deadline); {
+				time.Sleep(5 * time.Millisecond)
+			}
+			ask()
+			ask()
+			time.Sleep(300 * time.Millisecond) // the two wait on the read under way
+			close(release)
+			wg.Wait()
+			if n := runs.Load(); n != 2 {
+				t.Fatalf("%d runs of the read, want the first request's own and one for the two after it", n)
+			}
+			if h.svc.ClusterDown("c1") != c.wantOpen {
+				t.Errorf("open %v after three requests sharing two reads, want %v", h.svc.ClusterDown("c1"), c.wantOpen)
+			}
+		})
+	}
 }

@@ -241,9 +241,10 @@ func (s *Service) podsOnNodeShared(ctx context.Context, b *clientBundle, node st
 	return out, nil
 }
 
-// readNodePods lists node's pods in every namespace as client, with none of the caller's values: client's own identity.
+// readNodePods lists node's pods in every namespace as client, with none of the caller's values but the record of its
+// calls: client's own identity.
 func readNodePods(ctx context.Context, client kubernetes.Interface, node string) (*nodePodList, error) {
-	plain, cancel := context.WithCancel(context.Background())
+	plain, cancel := context.WithCancel(carryClusterCalls(context.Background(), ctx))
 	defer context.AfterFunc(ctx, cancel)()
 	defer cancel()
 	l, err := client.CoreV1().Pods("").List(plain, metav1.ListOptions{FieldSelector: "spec.nodeName=" + node})

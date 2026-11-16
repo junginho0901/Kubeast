@@ -2,9 +2,12 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
+	"net/http/httptrace"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -13,7 +16,7 @@ import (
 
 // clusterHealth is a per-cluster circuit breaker + reachability flag (step 15).
 // A request to an OPEN cluster fails fast (immediate 503) instead of waiting out
-// the API-server timeout. Live request errors count toward `threshold` before
+// the API-server timeout. Live requests that could not reach it count toward `threshold` before
 // opening (so a single transient blip doesn't trip it); a health-check failure
 // opens immediately (authoritative probe). Any success closes it. Absent =
 // unknown → treated as CLOSED (we never fail-fast a cluster we haven't seen fail).
@@ -114,6 +117,15 @@ func (h *clusterHealth) unbook(id cluster.ID, booked time.Time) {
 	}
 }
 
+// rebook holds the open period again from now for the trial that booked until booked, as a failed trial does.
+func (h *clusterHealth) rebook(id cluster.ID, booked time.Time) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if next, open := h.open[id]; open && next.Equal(booked) {
+		h.open[id] = h.now().Add(h.openFor)
+	}
+}
+
 // --- Service accessors (used by the fail-fast middleware + handlers). All
 // nil-safe so a zero-value Service in unit tests behaves as "everything up". ---
 
@@ -133,10 +145,17 @@ func (s *Service) AdmitToCluster(id cluster.ID) (ok bool, trial time.Time) {
 	return s.health.admit(id)
 }
 
-// TrialAskedNothing gives the next request the try: no answer of the cluster came to the trial (a cache's or Kubeast's own). nil-safe.
+// TrialAskedNothing gives the next request the try: the cluster took no call of the trial (a cache's answer, Kubeast's own, a caller gone before the headers). nil-safe.
 func (s *Service) TrialAskedNothing(id cluster.ID, trial time.Time) {
 	if s.health != nil {
 		s.health.unbook(id, trial)
+	}
+}
+
+// TrialUnanswered holds the breaker open another period: the cluster took the trial's calls and answered none below 500. nil-safe.
+func (s *Service) TrialUnanswered(id cluster.ID, trial time.Time) {
+	if s.health != nil {
+		s.health.rebook(id, trial)
 	}
 }
 
@@ -147,29 +166,89 @@ func (s *Service) ClusterAnswered(id cluster.ID) {
 	}
 }
 
-type clusterAnswerKey struct{}
+type clusterCallsKey struct{}
 
-// OnClusterAnswer gives ctx a function its cluster requests call once, when the API server first answers one below 500.
-func OnClusterAnswer(ctx context.Context, answered func()) context.Context {
-	var once sync.Once
-	return context.WithValue(ctx, clusterAnswerKey{}, func() { once.Do(answered) })
+// ClusterCalls is what one request's calls to its cluster got, as answerNotice saw them.
+type ClusterCalls struct {
+	id       cluster.ID
+	answered func()
+	once     sync.Once
+	// responded: a response of any status; gotAnswer: one below 500; unreached: a call that could not reach the cluster;
+	// unanswered: a call the cluster took and answered 500 or more, or not before the deadline or the caller's leaving
+	// once its headers went out.
+	responded, gotAnswer, unreached, unanswered atomic.Bool
 }
 
-// answerNotice is the innermost cluster transport, under the namespace guard and the person check that answer on their own.
-type answerNotice struct{ base http.RoundTripper }
+// WithClusterCalls gives ctx a record of its calls to cluster id; answered runs once, at the API server's first answer
+// below 500.
+func WithClusterCalls(ctx context.Context, id cluster.ID, answered func()) (context.Context, *ClusterCalls) {
+	calls := &ClusterCalls{id: id, answered: answered}
+	return context.WithValue(ctx, clusterCallsKey{}, calls), calls
+}
+
+// carryClusterCalls gives plain the record of from and nothing else of it, for a read made apart from the request's
+// values (as Kubeast, or once for everyone).
+func carryClusterCalls(plain, from context.Context) context.Context {
+	if calls, ok := from.Value(clusterCallsKey{}).(*ClusterCalls); ok {
+		return context.WithValue(plain, clusterCallsKey{}, calls)
+	}
+	return plain
+}
+
+// Unreached says a call could not reach the cluster and none got a response, of whatever status.
+func (c *ClusterCalls) Unreached() bool { return c.unreached.Load() && !c.responded.Load() }
+
+// Unanswered says the cluster took a call and answered none below 500.
+func (c *ClusterCalls) Unanswered() bool { return c.unanswered.Load() && !c.gotAnswer.Load() }
+
+// answerNotice is the innermost transport of cluster id, under the namespace guard and the person check that answer on
+// their own.
+type answerNotice struct {
+	base http.RoundTripper
+	id   cluster.ID
+}
 
 func (t answerNotice) RoundTrip(req *http.Request) (*http.Response, error) {
+	calls, ok := req.Context().Value(clusterCallsKey{}).(*ClusterCalls)
+	if !ok || calls.id != t.id {
+		return t.base.RoundTrip(req)
+	}
+	over := req.Context().Err() != nil
+	// HTTP/2 also calls WroteHeaders when writing them failed, and its pool skips GetConn once on a connection net/http
+	// just handed it; both are rare, and read a call that did not reach the cluster as one it took.
+	var sent atomic.Bool
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{
+		GetConn:      func(string) { sent.Store(false) }, // each of the transport's own tries starts unsent
+		WroteHeaders: func() { sent.Store(true) },
+	}))
 	resp, err := t.base.RoundTrip(req)
-	if err == nil && resp != nil && resp.StatusCode < http.StatusInternalServerError {
-		if notify, ok := req.Context().Value(clusterAnswerKey{}).(func()); ok {
-			notify()
+	switch ended := req.Context().Err(); {
+	case resp != nil:
+		calls.responded.Store(true)
+		if resp.StatusCode < http.StatusInternalServerError {
+			calls.gotAnswer.Store(true)
+			calls.once.Do(calls.answered)
+		} else {
+			calls.unanswered.Store(true)
 		}
+	case err == nil:
+	case ended == nil:
+		calls.unreached.Store(true)
+	case over:
+		// the call came after Kubeast had stopped waiting
+	case sent.Load():
+		// the cluster had the call; the deadline passed or the caller left (or Kubeast cancelled it) before an answer
+		calls.unanswered.Store(true)
+	case errors.Is(ended, context.Canceled):
+		// the caller left before the call's headers went out
+	default:
+		calls.unreached.Store(true)
 	}
 	return resp, err
 }
 
-// MarkClusterDown records a live connectivity error (opens the breaker once the
-// failure threshold is reached). nil-safe.
+// MarkClusterDown records a request whose calls could not reach the cluster (ClusterCalls.Unreached); the breaker opens
+// once the failure threshold is reached. nil-safe.
 func (s *Service) MarkClusterDown(id cluster.ID) {
 	if s.health != nil {
 		s.health.recordFailure(id)

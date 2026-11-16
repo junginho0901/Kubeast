@@ -311,7 +311,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	if clientRates.burst > 0 {
 		cfg.Burst = clientRates.burst
 	}
-	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return answerNotice{base: rt} })
+	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return answerNotice{base: rt, id: info.ID} })
 	// The overview informers run outside any user request: with impersonation
 	// on they act as a fixed viewer identity instead of the per-request user
 	// the wrapped transport adds.
@@ -705,9 +705,11 @@ func (s *Service) UserRESTConfigFor(ctx context.Context) (*rest.Config, error) {
 		user, groups := p.Impersonation(string(b.id))
 		cfg.Impersonate = rest.ImpersonationConfig{UserName: user, Groups: groups}
 	}
-	// This config's callers send their own contexts, which the bundle's check cannot read a user from.
+	// This config's callers send their own contexts, which the bundle's check cannot read a user from, nor the breaker
+	// the request's record of its calls.
+	calls, _ := ctx.Value(clusterCallsKey{}).(*ClusterCalls)
 	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper {
-		return &guardedTransport{base: rt, rules: b.protected, clusterID: string(b.id), pinned: &p}
+		return &guardedTransport{base: rt, rules: b.protected, clusterID: string(b.id), pinned: &p, calls: calls}
 	})
 	return cfg, nil
 }

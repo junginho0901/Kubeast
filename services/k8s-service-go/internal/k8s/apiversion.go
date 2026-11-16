@@ -69,7 +69,7 @@ func (s *Service) discoverResource(ctx context.Context, group, resource string) 
 		return resolvedResource{}, false
 	}
 	// resolveCache keeps the answer per cluster for everyone: asked as Kubeast itself
-	disc, own := discovery.ToDiscoveryInterfaceWithContext(dc), auth.AsKubeast(context.Background())
+	disc, own := discovery.ToDiscoveryInterfaceWithContext(dc), auth.AsKubeast(carryClusterCalls(context.Background(), ctx))
 	groups, err := disc.ServerGroupsWithContext(own)
 	if err != nil || groups == nil {
 		return resolvedResource{}, false

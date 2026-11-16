@@ -216,10 +216,6 @@ func queryParamBool(r *http.Request, key string, defaultVal bool) bool {
 // handleError sends an appropriate error response based on the error message.
 func (h *Handler) handleError(w http.ResponseWriter, err error) {
 	status := statusForError(err)
-	// Only here does a 503 come from the cluster: the breaker counts these, not Kubeast's own (audit store and so on).
-	if failure, ok := w.(clusterFailureNoter); ok && status == http.StatusServiceUnavailable {
-		failure.noteClusterFailure()
-	}
 	if errors.Is(err, auth.ErrNoPerson) {
 		// Kubeast's own fault, not the cluster's: its words, without the request it would have sent
 		response.Error(w, status, auth.ErrNoPerson.Error())
