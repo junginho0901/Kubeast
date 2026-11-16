@@ -218,7 +218,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
   -n kubeast --reset-values -f my-values.yaml
 ```
 
-New values whose defaults need nothing from you: `podShutdown.preStopSeconds` (5), `pdb.maxUnavailable` (1), `streams.*` (off), `autoscaling.<service>` (off), `redis.acl.*` (on), `postgresql.sessionLimits.*`, `postgresql.pool.<service>.maxConns`, `postgresql.maxConnections` (300), `ai.providers.claudeCode.maxConcurrentTotal` (0), `queueWaitSeconds` (60), `memoryLimit` (2Gi), `gateway.accessLog.upstreamTimes` (off), `multicluster.wsWatchOpeningConcurrency` (8), `multicluster.wsWatchStreamWindowKiB` (1024). [Configuration](configuration.md) describes each.
+New values whose defaults need nothing from you: `podShutdown.preStopSeconds` (5), `pdb.maxUnavailable` (1), `streams.*` (off), `autoscaling.<service>` (off), `redis.acl.*` (on), `postgresql.sessionLimits.*`, `postgresql.pool.<service>.maxConns`, `postgresql.maxConnections` (300), `ai.providers.claudeCode.maxConcurrentTotal` (0), `queueWaitSeconds` (60), `memoryLimit` (2Gi), `gateway.accessLog.upstreamTimes` (off), `multicluster.wsWatchOpeningConcurrency` (8), `multicluster.wsWatchStreamWindowKiB` (1024), `auth.impersonation.sharedReadChecks.*` (off). [Configuration](configuration.md) describes each.
 
 ## 4. What changes by itself
 
