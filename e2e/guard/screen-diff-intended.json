@@ -17,8 +17,8 @@
     },
     {
       "screen": "^\\w+ · /cluster-view on ",
-      "why": "Cluster View pages its node boxes ten at a time, so the list footer (the range shown and Prev / Next) is under the boxes on every cluster; with more than one page the map outlines the cells of the page shown.",
-      "pr": "#869"
+      "why": "Cluster View pages its node boxes ten at a time, so the list footer (the range shown and Prev / Next) is under the boxes on every cluster; with more than one page the map outlines the cells of the page shown. The line under the map's legend, which names the cell the pointer or a key is on, says a count of one in the singular (\"1 pod\", \"1 error\", \"1 warning\"), where v0.7.7 said \"1 pods\".",
+      "pr": "#869, #929"
     },
     {
       "screen": "^\\w+ · /alerts on ",
