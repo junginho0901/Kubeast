@@ -89,6 +89,8 @@ CLUSTER_ID=default
 DOMAIN=rehearsal.local
 PROBE_TIMEOUT="${PROBE_TIMEOUT:-10}"
 PG_GRACE="${PG_GRACE:-20}"
+# a hang that starts up to this long after the bundled PostgreSQL is ready again is a reconnect: the probe timeout and 5 s
+HANG_GRACE=$(( ${PROBE_TIMEOUT%.*} + 5 ))
 POOLER="${POOLER:-1}"
 POOLER_MODE="${POOLER_MODE:-session}"
 POOLER_IMAGE="${POOLER_IMAGE:-docker.io/edoburu/pgbouncer:v1.25.2-p0}"
@@ -1136,50 +1138,58 @@ probe_loop() { # probe_loop FILE
     while [ "$(date +%s)" = "$now" ]; do sleep 0.2; done
   done
 }
-pods_loop() { # pods_loop FILE — "<epoch> app=ready ..." for the bundled PostgreSQL and Redis
+pods_loop() { # pods_loop FILE — "<epoch> app=ready@deletionTimestamp/deletionGracePeriodSeconds ..." for the bundled PostgreSQL and Redis
   while kill -0 "$$" 2> /dev/null; do
-    echo "$(date +%s) $(kc -n "$NS" get pods -l 'app in (postgres,redis)' -o jsonpath='{range .items[*]}{.metadata.labels.app}={.status.containerStatuses[0].ready}{" "}{end}' 2>/dev/null)" >> "$1"
+    echo "$(date +%s) $(kc -n "$NS" get pods -l 'app in (postgres,redis)' -o jsonpath='{range .items[*]}{.metadata.labels.app}={.status.containerStatuses[0].ready}@{.metadata.deletionTimestamp}/{.metadata.deletionGracePeriodSeconds}{" "}{end}' 2>/dev/null)" >> "$1"
     sleep 1
   done
 }
 # probe_summary PHASE FILE PODSFILE SECONDS — rows per target; DB targets may fail while PostgreSQL is down. A target
-# passes with no hang, no non-2xx outside that window, and requests sent in at least 80 % of the SECONDS the probes ran
-# (a loop that stopped or stalled part way does not pass).
+# passes with no hang outside that window and HANG_GRACE after it, no non-2xx outside that window, and requests sent in
+# at least 80 % of the SECONDS the probes ran (a loop that stopped or stalled part way does not pass).
 probe_summary() {
-  python3 -I - "$2" "$3" "$PG_GRACE" "$PROBE_TIMEOUT" > "$OUT/$1-probe-summary.tsv" <<'EOF'
+  python3 -I - "$2" "$3" "$PG_GRACE" "$PROBE_TIMEOUT" "$HANG_GRACE" > "$OUT/$1-probe-summary.tsv" <<'EOF'
 import sys
-probe, pods, grace, timeout = sys.argv[1], sys.argv[2], int(sys.argv[3]), float(sys.argv[4])
+from datetime import datetime, timezone
+probe, pods, grace, timeout, hang_grace = sys.argv[1], sys.argv[2], int(sys.argv[3]), float(sys.argv[4]), int(sys.argv[5])
 db_targets = {"k8s-list", "sessions", "auth-me"}
-down = []  # seconds where no postgres pod was ready
+down = []  # seconds where no postgres pod was ready and not being deleted, and those since a deletion was asked
 seen_pg = False
 for line in open(pods):
     f = line.split()
     if not f:
         continue
-    pg = [x for x in f[1:] if x.startswith("postgres=")]
+    pg = [x[len("postgres="):].partition("@")[::2] for x in f[1:] if x.startswith("postgres=")]
     if pg:
         seen_pg = True
-    if seen_pg and not any(x == "postgres=true" for x in pg):
+    for ready, gone in pg:
+        when, _, period = gone.partition("/")
+        try:
+            asked = int(datetime.strptime(when, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()) - int(period or 0)
+        except ValueError:
+            continue
+        down.extend(range(asked, int(f[0]) + 1))
+    if seen_pg and not any(ready == "true" and gone.partition("/")[0] == "" for ready, gone in pg):
         down.append(int(f[0]))
 windows = []
-for t in sorted(down):
+for t in sorted(set(down)):
     if windows and t - windows[-1][1] <= 2:
         windows[-1][1] = t
     else:
         windows.append([t, t])
-def in_window(t):
-    return any(a - 1 <= t <= b + grace for a, b in windows)
+def in_window(t, after=grace):
+    return any(a - 1 <= t <= b + after for a, b in windows)
 stats = {}
 for line in open(probe):
     f = line.split()
     if len(f) < 5:
         continue
     t, name, code, took, rc = int(f[0]), f[1], f[2], float(f[3]), f[4]
-    s = stats.setdefault(name, {"n": 0, "bad": 0, "expected": 0, "hang": 0, "max": 0.0, "codes": {}})
+    s = stats.setdefault(name, {"n": 0, "bad": 0, "expected": 0, "hang": 0, "hang_window": 0, "max": 0.0, "codes": {}})
     s["n"] += 1
     s["max"] = max(s["max"], took)
     if rc == "28" or took >= timeout:
-        s["hang"] += 1
+        s["hang_window" if in_window(t, hang_grace) else "hang"] += 1
     elif not code.startswith("2"):
         if name in db_targets and in_window(t):
             s["expected"] += 1
@@ -1191,19 +1201,19 @@ print(f"window\t{len(windows)}\t{win}")
 for name in sorted(stats):
     s = stats[name]
     codes = ",".join(f"{c}x{n}" for c, n in sorted(s["codes"].items()))
-    print(f"{name}\t{s['n']}\t{s['bad']}\t{s['expected']}\t{s['hang']}\t{s['max']:.2f}\t{codes}")
+    print(f"{name}\t{s['n']}\t{s['bad']}\t{s['expected']}\t{s['hang']}\t{s['hang_window']}\t{s['max']:.2f}\t{codes}")
 EOF
-  local w name n bad exp hang mx codes secs=$4 min seen=" "
+  local w name n bad exp hang hwin mx codes secs=$4 min seen=" "
   min=$(( secs * 8 / 10 ))
   w=$(awk -F'\t' '$1 == "window" {print $2 " PostgreSQL down: " $3}' "$OUT/$1-probe-summary.tsv")
   info "$1" "bundled PostgreSQL restarts during the upgrade" "$w"
-  while IFS=$'\t' read -r name n bad exp hang mx codes; do
+  while IFS=$'\t' read -r name n bad exp hang hwin mx codes; do
     [ "$name" = window ] && continue
     seen="$seen$name "
     if [ "$bad" = 0 ] && [ "$hang" = 0 ] && [ "$n" -ge "$min" ]; then
-      row "$1" "requests to $name answered" PASS "$n sent in ${secs}s · non-2xx $exp (in the PostgreSQL window) · hangs 0 · slowest ${mx}s"
+      row "$1" "requests to $name answered" PASS "$n sent in ${secs}s · non-2xx $exp (in the PostgreSQL window) · hangs 0 · hangs in window $hwin · slowest ${mx}s"
     else
-      row "$1" "requests to $name answered" FAIL "$n sent in ${secs}s (want $min or more) · non-2xx outside the window $bad ($codes) · in it $exp · hangs $hang · slowest ${mx}s"
+      row "$1" "requests to $name answered" FAIL "$n sent in ${secs}s (want $min or more) · non-2xx outside the window $bad ($codes) · in it $exp · hangs $hang · hangs in window $hwin · slowest ${mx}s"
     fi
   done < "$OUT/$1-probe-summary.tsv"
   for name in gateway auth-jwks frontend k8s-list sessions auth-me; do

@@ -16,7 +16,7 @@
 - 레플리카가 많으면 데이터베이스 연결 수가 `postgresql.maxConnections`(300) 안에 들어와야 하고, 아니면 업그레이드가 멈춥니다(#868).
 - 다른 역할과 같은 역할 그룹이 되는 이름의 사용자 정의 역할은 이름이 바뀌고 클러스터 부여를 잃으며, 바뀐 것마다 감사 행이 남습니다. `Pending` 그룹의 역할(`PENDING`)인 계정 등급은 기본 `Pending`으로 옮겨집니다(#865).
 - ASCII가 아닌 글자가 든 역할 이름은 자기 그룹을 받습니다(`운영팀`은 `kubeast:role:~c6b4~c601~d300`으로 동작하고, 0.7.7에서는 `kubeast:role:---`였습니다). 그래서 클러스터에서 옛 그룹에 바인딩한 RBAC는 그 역할에 더는 적용되지 않습니다(#865).
-- 서비스 말고도 차트의 PostgreSQL과 Redis가 한 번 다시 시작합니다. 데이터베이스가 잠깐 멈추고 캐시는 비어서 시작합니다(#866, #868).
+- 서비스 말고도 차트의 PostgreSQL과 Redis가 한 번 다시 시작하고, 캐시는 비어서 시작합니다(#866, #868). 데이터베이스가 멈춘 때부터 20초쯤은 옛 파드로 가는 요청이 기다릴 수 있고 몇 개는 실패할 수 있습니다.
 - 먼저 데이터베이스를 백업합니다. 되돌려도 역할 이름 바꾸기는 되돌아가지 않습니다.
 
 ## 1. 업그레이드 전에
@@ -42,10 +42,14 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 이 드라이런은 렌더와 차트의 검사만 봅니다. 객체를 API 서버에 보내지 않으므로, 업그레이드 때 API 서버가 거절할 것(바꿀 수 없는 필드, 다른 관리자가 가진 필드)은 여기서 걸리지 않습니다. 업그레이드가 서버 측으로 적용될 때(Helm 4에서 `--server-side=true`, 또는 기본값 `auto`이고 직전 릴리스를 서버 측으로 적용했을 때)는 아래처럼 렌더한 객체를 Helm의 이름으로 API 서버에 드라이런으로 보내 볼 수 있습니다. `helm template`은 클러스터에서 아무것도 읽지 않고, 값이 다른 네임스페이스에 두는 객체는 네임스페이스 오류로 멈추므로 그 `-n`으로 따로 보냅니다.
 
 ```bash
+chart=$(mktemp -d)
+helm pull oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 --untar --untardir "$chart"
 helm get values kubeast -n kubeast -o yaml \
-  | helm template kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 -n kubeast --no-hooks -f - \
+  | helm template kubeast "$chart/kubeast" -n kubeast --no-hooks -f - \
   | kubectl apply --server-side --dry-run=server --field-manager=helm -n kubeast -f -
 ```
+
+차트를 먼저 받는 것은 Helm 4.2.1~4.2.x가 OCI 레지스트리의 차트를 렌더할 때 YAML 앞에 `Pulled:`·`Digest:` 줄을 출력하고, `kubectl apply`가 그 줄을 읽지 못하기 때문입니다.
 
 설치 안내(예: [1.6](#16-데이터베이스-연결)의 바깥 데이터베이스 연결 합계)를 보려면 `helm upgrade` 드라이런을 `> /dev/null` 없이 돌리고 끝의 `NOTES:`를 읽습니다.
 

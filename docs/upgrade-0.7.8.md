@@ -16,7 +16,7 @@ The commands below use the release name `kubeast` in the namespace `kubeast`; pu
 - Many replicas: the database connections must fit `postgresql.maxConnections` (300) or the upgrade stops (#868).
 - Custom roles whose names make the same role group as another role are renamed and lose their cluster grants, with an audit row for each change. Account levels of `Pending`'s group (`PENDING`) move to the built-in `Pending` (#865).
 - Role names with characters outside ASCII get groups of their own (`운영팀` acts as `kubeast:role:~c6b4~c601~d300`; in 0.7.7 it was `kubeast:role:---`), so RBAC bound to the old group on your clusters stops applying to them (#865).
-- Besides the services, the chart's PostgreSQL and Redis restart once: the database pauses for a moment and the cache starts empty (#866, #868).
+- Besides the services, the chart's PostgreSQL and Redis restart once, and the cache starts empty (#866, #868). For about 20 seconds from when the database stops, requests to the old pods can wait and a few can fail.
 - Back up the database first: a rollback does not undo the role renames.
 
 ## 1. Before you upgrade
@@ -42,10 +42,14 @@ It renders 0.7.8 with your values and changes nothing. A check that stops it mak
 It checks the render and the chart's own checks only. It does not send the objects to the API server, so what the API server would refuse on the upgrade, a field it does not let change or a field another manager owns, passes it. When the upgrade applies server-side (Helm 4 with `--server-side=true`, or with its default `auto` when the release was last applied server-side), this sends the rendered objects to the API server as a dry run in Helm's name; `helm template` reads nothing from the cluster, and an object your values put in another namespace stops it with a namespace error, so send those with their own `-n`:
 
 ```bash
+chart=$(mktemp -d)
+helm pull oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 --untar --untardir "$chart"
 helm get values kubeast -n kubeast -o yaml \
-  | helm template kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 -n kubeast --no-hooks -f - \
+  | helm template kubeast "$chart/kubeast" -n kubeast --no-hooks -f - \
   | kubectl apply --server-side --dry-run=server --field-manager=helm -n kubeast -f -
 ```
+
+The chart is pulled first because Helm 4.2.1 to 4.2.x print `Pulled:` and `Digest:` lines before the YAML when they render a chart from an OCI registry, and `kubectl apply` cannot read them.
 
 To see the install notes, for example the connection sum for an external database ([1.6](#16-database-connections)), run the `helm upgrade` dry run without `> /dev/null` and read `NOTES:` at the end.
 
