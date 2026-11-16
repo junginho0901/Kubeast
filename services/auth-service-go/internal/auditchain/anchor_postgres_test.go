@@ -154,3 +154,39 @@ func TestPostgresReplicasWriteOneAnchorAPeriodEachOnTheOneBefore(t *testing.T) {
 		}
 	}
 }
+
+// An anchor's transaction waits for the lock and runs past the session limits each service's connections carry
+// (postgresql.sessionLimits): another replica holds the lock through its upload. The limits it sets end with it.
+func TestPostgresTheAnchorLockWaitsPastTheSessionLimits(t *testing.T) {
+	ctx := context.Background()
+	cfg, err := pgxpool.ParseConfig(freshMigratedDatabaseURL(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.MaxConns = 1
+	cfg.ConnConfig.RuntimeParams["lock_timeout"] = "15s"
+	cfg.ConnConfig.RuntimeParams["statement_timeout"] = "30s"
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+
+	var lockIn, statementIn string
+	err = PG{Pool: pool}.AnchorLocked(ctx, func(s Store) error {
+		return s.(PG).tx.QueryRow(ctx, `SELECT current_setting('lock_timeout'), current_setting('statement_timeout')`).Scan(&lockIn, &statementIn)
+	})
+	if err != nil {
+		t.Fatalf("AnchorLocked: %v", err)
+	}
+	if lockIn != anchorLockWait || statementIn != anchorLockWait {
+		t.Fatalf("in the anchor's transaction lock_timeout %s, statement_timeout %s, want %s for both", lockIn, statementIn, anchorLockWait)
+	}
+	var lockAfter, statementAfter string
+	if err := pool.QueryRow(ctx, `SELECT current_setting('lock_timeout'), current_setting('statement_timeout')`).Scan(&lockAfter, &statementAfter); err != nil {
+		t.Fatal(err)
+	}
+	if lockAfter != "15s" || statementAfter != "30s" {
+		t.Fatalf("after the anchor's transaction the connection has lock_timeout %s, statement_timeout %s, want its own 15s and 30s", lockAfter, statementAfter)
+	}
+}

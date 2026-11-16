@@ -45,12 +45,15 @@ NGINX 게이트웨이가 모든 요청을 받아 각 마이크로서비스로 �
 | `auth-service` | Go | 8004 | 인증, JWT/JWKS, 조직/팀/RBAC, 클러스터 레지스트리 |
 | `ai-service` | Python (FastAPI) | 8001 | LLM 연동, 스트리밍 채팅, 최적화 제안, Tool calling |
 | `k8s-service` | Go | 8002 | K8s 리소스 CRUD, WS 로그/exec, 토폴로지, Helm, GPU/DRA, 멀티클러스터 풀 |
+| `k8s-service-stream` | Go | 8002 | `streams.enabled`일 때만: k8s-service와 같은 이미지(`SERVER_ROLE=stream`)로 Pod exec·노드 셸·실시간 로그를 맡음 |
 | `session-service` | Go | 8003 | 채팅 세션 / 메시지 기록 |
 | `tool-server` | Go | — | AI 도구 호출 백엔드 (kubectl 실행) |
 | `model-config-controller` | Go (controller-runtime) | — | `ModelConfig` CRD 컨트롤러 |
 | `frontend` | React + Vite + TS | 5173 | UI (prod는 정적 빌드를 nginx로 서빙) |
 | `postgres` | — | 5432 | 메인 DB (durable state) — PostgreSQL 18 |
-| `redis` | — | 6379 | k8s-service 캐시 — Valkey 9.1(Redis 프로토콜). `redis.enabled: false`면 k8s-service가 메모리에 캐시합니다 |
+| `redis` | — | 6379 | k8s-service 캐시 — Valkey 9.1(Redis 프로토콜). k8s-service와 tool-server(클러스터 바뀜 알림만)가 각자 자기 Redis 사용자로 로그인하고, 이 둘만 연결할 수 있습니다([Redis 사용자](configuration.md#redis-사용자)). `redis.enabled: false`면 k8s-service가 메모리에 캐시합니다 |
+
+k8s-service는 Redis에 캐시를 키 앞머리 `kubeast:cache:` 아래에 쓰고, 모든 항목은 최대 1시간 뒤에 만료됩니다. 클러스터 등록이 바뀌면 그 앞머리의 키만 지우므로(`SCAN`과 `UNLINK`) 같은 Redis 데이터베이스의 다른 키는 남습니다. 시작할 때 Redis가 답하지 않은 k8s-service는 메모리에 캐시하고 5초마다 Redis에 다시 묻다가, 답하면 캐시를 Redis로 옮깁니다. 어느 클러스터가 바뀌었는지는 Redis가 아니라 PostgreSQL에 둡니다. auth-service가 kubeconfig를 바꾸거나 Prometheus·로그 저장소 설정을 바꾸는 데이터베이스 거래에서 클러스터의 `config_version`을 새 값으로 바꿉니다. 이 거래는 Secret을 쓴 뒤에만 반영됩니다. 실패하면 오류로 답합니다. 쓴 Secret은 클러스터 행을 잠근 채로 되돌리므로, 같은 클러스터를 바꾸려고 기다리던 변경은 그 값을 보지 않습니다. 그 뒤 클러스터의 `config_version`을 한 번 더 새 값으로 바꾸므로, 그사이 쓴 Secret으로 만든 연결도 버립니다. 되돌리지 못한 Secret은 응답과 감사 행에 이름이 남습니다. 모든 k8s-service가 5초마다 이 값을 읽어 다른 값으로 만든 연결과 지운 클러스터의 연결을 버립니다. Redis가 있으면 auth-service가 알린 k8s-service가 다른 k8s-service에도 바로 알립니다(채널 `kubeast:clusters:changed:<db>`).
 
 ## 컨테이너 이미지
 
@@ -105,7 +108,7 @@ ghcr.io/junginho0901/kubeast-model-config-controller-go
 | 켜는 것 | 늘어나는 파드 | 놀 때 메모리 | 백그라운드 작업 |
 | --- | --- | --- | --- |
 | `ai.enabled` (기본 켬) | 3 — ai-service · tool-server · ModelConfig 컨트롤러 | +약 155 MiB | 컨트롤러가 ModelConfig를 감시합니다. ai-service·tool-server는 요청이 올 때만 일합니다 |
-| `redis.enabled` (기본 켬) | 1 | +9 MiB | 없음 — 끄면 k8s-service가 메모리에 캐시합니다(Redis를 쓰는 곳은 k8s-service뿐) |
+| `redis.enabled` (기본 켬) | 1 | +9 MiB | 없음 — 끄면 k8s-service가 메모리에 캐시하고, tool-server의 kubeconfig는 클러스터 바뀜 알림 없이 10초에 만료됩니다 |
 | `mcp.enabled` | 0 | ai-service 안에서 약 +15 MiB(MCP SDK) | 없음 |
 | `features.alertInvestigation` | 0 | 0 | 없음 — 알림 웹훅이 올 때만 조사 |
 | `sessionRecording.enabled` | 0 | 0 | exec·노드 셸이 열려 있는 동안 녹화 조각을 업로드 |
@@ -121,8 +124,11 @@ ghcr.io/junginho0901/kubeast-model-config-controller-go
   - `dormantAccounts`를 켜면 24시간마다 휴면 계정 잠금
   - S3 싱크를 지정했다면 24시간마다 감사 앵커
 - k8s-service
-  - 60초마다 등록된 클러스터별 상태 확인(`multicluster.healthcheckIntervalSec`)
+  - 60초마다 등록된 클러스터별 상태 확인(`multicluster.healthcheckIntervalSec`). 확인은 서버마다 자기 빠른 실패 판단에 쓰고, `clusters.health_status`는 PostgreSQL advisory lock(따로 연 연결 하나)을 잡은 서버 한 대만 씀
   - 오래 쓰지 않은 클러스터의 informer 캐시 정리
+  - 레플리카마다 5초(앞뒤 1초)마다 DB에서 등록된 클러스터의 `config_version` 읽기, 쿼리 하나(`internal/clustersync`). Redis가 있으면 다른 레플리카의 클러스터 변경 알림도 구독
+  - 켜질 때 Redis가 답하지 않았으면 답할 때까지 5초마다 다시 묻기(답하면 캐시를 Redis로 옮김)
+  - 노드 드레인을 맡은 동안 5초마다 살아 있음을 적음 · 10초마다 맡은 서버가 멈춘 드레인을 중단됨으로 적음 · 1시간마다 하루 전에 끝난 드레인 지움(`node_drains`)
 
 표의 MCP, 알림 조사, 세션 녹화, 노드 셸, `features.*` 줄은 코드를 보고 적은 값입니다. 파드가 생기지 않아 따로 재지 않았고, MCP 값은 2026-10-13에 측정했습니다.
 

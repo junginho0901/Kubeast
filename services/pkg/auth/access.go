@@ -23,8 +23,11 @@ type Access struct {
 	// empty when impersonation is off and the service credential acts itself.
 	User   string   `json:"user,omitempty"`
 	Groups []string `json:"groups,omitempty"`
-	// Role is the Kubeast role in the cluster, "*" for the global admin entry.
+	// Role is the Kubeast role in the cluster as stored, "*" for the global admin entry.
 	Role string `json:"role,omitempty"`
+	// NoRoleGroup: Role is no built-in but has a built-in's name in other capitals or with spaces, so it gives no
+	// role group (TakesBuiltinSlug). The 🔐 line says so.
+	NoRoleGroup bool `json:"no_role_group,omitempty"`
 	// Namespaces limit the grant there; empty = the whole cluster.
 	Namespaces    []string `json:"namespaces,omitempty"`
 	Impersonation bool     `json:"impersonation"`
@@ -42,10 +45,15 @@ func (p TokenPayload) Access(clusterID string, impersonation bool) Access {
 		a.Kind, a.APIKey = "api_key", p.APIKeyID
 	}
 	if p.System == "" {
-		a.Role = strings.TrimSpace(p.Roles[clusterID])
-		if a.Role == "" && matchAny(p.Perms["*"], "*") {
-			a.Role = "*"
+		// the name as stored: " Admin " is not the built-in Admin, and the line must not read as if it were
+		a.Role = p.Roles[clusterID]
+		if strings.TrimSpace(a.Role) == "" {
+			a.Role = ""
+			if matchAny(p.Perms["*"], "*") {
+				a.Role = "*"
+			}
 		}
+		a.NoRoleGroup = TakesBuiltinSlug(a.Role)
 		a.Namespaces = p.Namespaces[clusterID]
 	}
 	if impersonation {

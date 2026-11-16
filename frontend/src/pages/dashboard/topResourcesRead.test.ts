@@ -9,7 +9,7 @@ vi.hoisted(() => {
 
 import { QueryClient, QueryObserver } from '@tanstack/react-query'
 import type { TopResources } from '@/services/api'
-import { isMetricsDisabled, isMetricsUnavailableError } from '@/services/api'
+import { isMetricsUnavailableError } from '@/services/api'
 import { forbiddenLabels, resetForbidden } from '@/services/forbiddenStore'
 import { METRICS_NOT_SERVED_MS } from '../monitoring/metricsRefresh'
 import { keepRefusals, readTopResources, skipOf, topResourcesPace, topResourcesPollMs, type TopRefusals } from './topResourcesRead'
@@ -85,14 +85,13 @@ describe('the Dashboard top pods and nodes read', () => {
     expect(refusals.current).toEqual({ ck: 'c1', pods: undefined, nodes: undefined })
   })
 
-  it('asks a cluster without metrics-server again after a minute, not every 5 s, and turns no metrics off for the session', async () => {
+  it('asks a cluster without metrics-server again after a minute, not every 5 s', async () => {
     let served = false
     const notServed = { top_pods: [], top_nodes: [], pod_metrics_error: NOT_SERVED, node_metrics_error: NOT_SERVED } as TopResources
     const { read, observer, stop, client } = watch(() => (served ? { top_pods: [], top_nodes: [node] } as TopResources : notServed))
     await vi.advanceTimersByTimeAsync(METRICS_NOT_SERVED_MS - 1_000)
     expect(read).toHaveBeenCalledTimes(1)
     expect(isMetricsUnavailableError(observer.getCurrentResult().error)).toBe(true)
-    expect(isMetricsDisabled()).toBe(false)
     // a metrics-server installed meanwhile shows at the minute, and the read goes back to its 5 s
     served = true
     await vi.advanceTimersByTimeAsync(1_500)

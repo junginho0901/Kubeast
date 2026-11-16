@@ -37,7 +37,7 @@ describe('what Advanced Search shows', () => {
 })
 
 describe('what Advanced Search tells the floating chat', () => {
-  const now = (namespace: string, read: { items: unknown[] } | undefined) => ({ namespace, types: ['pods'], read })
+  const now = (namespace: string, read: Parameters<typeof searchLayer>[2]['read']) => ({ namespace, types: ['pods'], read })
 
   it('gives the results with the expression they answer, and the one in the box as still searched', () => {
     const data = searchLayer(searchedOf(RUNNING), PENDING, now('shop', shopRead))?.data as Record<string, any>
@@ -65,6 +65,27 @@ describe('what Advanced Search tells the floating chat', () => {
     })
     expect(searchLayer(searchedOf(RUNNING), '', now('shop', shopRead))).toBeNull()
     expect(searchLayer(null, PENDING, now('shop', shopRead))?.data).toEqual({ query: PENDING, namespace: 'shop', selected_resource_types: ['pods'], searching: true })
+  })
+
+  it('says the types the read failed when every list failed, not a complete 0', () => {
+    const failedRead = { items: [], errors: [{ type: 'pods', error: 'pods is forbidden' }, { type: 'services', error: 'etcdserver: request timed out' }], cut: [] }
+    const layer = searchLayer(null, RUNNING, { namespace: '', types: ['pods', 'services'], read: failedRead })
+    expect(layer?.summary).toBe(`고급 검색 0건 — 쿼리: "${RUNNING}" · 2개 종류 실패: pods, services`)
+    expect(layer?.data).toMatchObject({
+      total: 0, complete: false,
+      failed_types: [{ type: 'pods', reason: 'pods is forbidden' }, { type: 'services', reason: 'etcdserver: request timed out' }],
+    })
+  })
+
+  it('says the types cut or failed in the read the results went over, and in the read still searched', () => {
+    const cutRead = { ...shopRead, errors: [], cut: [{ type: 'pods', limit: 2, remaining: 5 }] }
+    const done = searchLayer(searchedOf(RUNNING, cutRead), RUNNING, now('shop', cutRead))
+    expect(done?.summary).toContain(' · 처음 2개만 읽은 종류: pods')
+    expect(done?.data).toMatchObject({ total: 1, complete: false, cut_types: [{ type: 'pods', first: 2, of: 7 }] })
+    const failedRead = { ...shopRead, errors: [{ type: 'services', error: 'timed out', loaded: 0 }], cut: [] }
+    expect(searchLayer(null, RUNNING, now('shop', failedRead))?.data).toMatchObject({
+      searching: true, complete: false, failed_types: [{ type: 'services', reason: 'timed out', read_before_failure: 0 }],
+    })
   })
 
   it('is what the page shows and tells', () => {

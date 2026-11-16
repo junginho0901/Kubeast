@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 import httpx
 
 from app.security import require_admin, require_auth
+from app.services.ai import limits
 from app.services.ai.debug_dump import safe_error
 from app.services import claude_code, model_config_policy
 from app.services.anthropic_messages import API_VERSION as ANTHROPIC_VERSION, api_root as anthropic_root
@@ -58,6 +59,12 @@ def _provider_refusal(resp: httpx.Response, api_key: str) -> str:
     return f"HTTP {resp.status_code}: the server answered {kind}, {len(resp.content)} bytes, which is no model API's error"
 
 
+# Every chat call sends tools (tool_choice is left to the provider's default, as the chat's retry without it does):
+# a model that refuses them fails the test with the provider's message instead of passing it and failing the chat.
+_TEST_TOOLS = [{"type": "function", "function": {
+    "name": "noop", "description": "Not used: answer in text.", "parameters": {"type": "object", "properties": {}}}}]
+
+
 async def _test_openai_compatible(
     api_key: str,
     model: str,
@@ -65,9 +72,11 @@ async def _test_openai_compatible(
     verify: Union[bool, ssl.SSLContext] = True,
     provider: str = "",
     judged: bool = True,
+    options: Optional[dict] = None,
 ) -> dict:
     """Test OpenAI-compatible endpoints (OpenAI, Groq, DeepSeek, Mistral, etc.) — with the chat's parameter handling
-    (OpenAI's max_completion_tokens, a refused parameter left out), so a reasoning model passes as it chats."""
+    (OpenAI's max_completion_tokens, a refused parameter left out), the config's options and a tool, so a model passes
+    only as it chats."""
     from openai import AsyncOpenAI
     from app.services.provider_adapter import _CompletionsProxy
 
@@ -77,9 +86,10 @@ async def _test_openai_compatible(
         http_client=model_client(verify, judged=judged),
         timeout=15.0,
     )
-    resp = await _CompletionsProxy(client.chat.completions, provider, None, base_url).create(
+    resp = await _CompletionsProxy(client.chat.completions, provider, options, base_url).create(
         model=model,
         messages=[{"role": "user", "content": "ping"}],
+        tools=_TEST_TOOLS,
         max_tokens=5,
     )
     return {"success": True, "model": resp.model, "message": "Connection successful"}
@@ -176,16 +186,18 @@ async def _test_azure_openai(
     base_url: str,
     tls_verify: bool = True,
     ca_cert: Optional[str] = None,
+    options: Optional[dict] = None,
 ) -> dict:
-    """Azure OpenAI (v1 API): through the same ProviderAdapter the chat uses, so a passing
+    """Azure OpenAI (v1 API): through the same ProviderAdapter the chat uses, with the config's options, so a passing
     test means the chat reaches the deployment the same way."""
     from app.services.provider_adapter import ProviderAdapter
 
     adapter = ProviderAdapter(provider=provider, model=model, api_key=api_key, base_url=base_url,
-                              tls_verify=tls_verify, ca_cert=ca_cert)
+                              tls_verify=tls_verify, ca_cert=ca_cert, options=options)
     resp = await adapter.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": "ping"}],
+        tools=_TEST_TOOLS,
         max_tokens=5,
         timeout=15.0,
     )
@@ -256,7 +268,7 @@ async def test_model_connection(raw: Request, payload=Depends(require_auth), req
 async def _test_model_connection(request: dict) -> dict:
     """
     모델 연결 테스트 (admin.ai_models.*).
-    body: { provider, model, base_url?, api_key_env?, api_key?, tls_verify?, ca_cert? }
+    body: { provider, model, base_url?, api_key_env?, api_key?, tls_verify?, ca_cert?, options? }
     api_key_env names an environment variable of this service (how saved
     configs reference keys); api_key is a literal for ad-hoc API use.
     """
@@ -280,6 +292,14 @@ async def _test_model_connection(request: dict) -> dict:
         if not api_key:
             raise HTTPException(status_code=400, detail=f"environment variable {api_key_env} is not set in ai-service")
     model = body.get("model", "")
+    # The options the config saves, which the chat sends with every call (OpenAI-compatible and Azure tests)
+    options = body.get("options")
+    if options is not None and not isinstance(options, dict):
+        raise HTTPException(status_code=400, detail="options must be an object")
+    try:
+        limits.check(options)  # what a save of these options would refuse, in its words
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     ca_problem = ca_cert_problem(body.get("ca_cert"))
     if ca_problem:
         raise HTTPException(status_code=400, detail=ca_problem)
@@ -310,7 +330,7 @@ async def _test_model_connection(request: dict) -> dict:
 
         elif provider in model_config_policy.AZURE_PROVIDERS:
             return await _test_azure_openai(provider, api_key, model, user_base_url,
-                                            body.get("tls_verify", True), body.get("ca_cert"))
+                                            body.get("tls_verify", True), body.get("ca_cert"), options=options)
 
         elif provider == "ollama":
             return await _test_ollama(model, user_base_url or "http://localhost:11434", verify, judged=judged)
@@ -323,7 +343,8 @@ async def _test_model_connection(request: dict) -> dict:
                     status_code=400,
                     detail=f"base_url is required for provider '{provider}'",
                 )
-            return await _test_openai_compatible(api_key, model, base, verify, provider=provider, judged=judged)
+            return await _test_openai_compatible(api_key, model, base, verify, provider=provider, judged=judged,
+                                                 options=options)
 
     except HTTPException:
         raise
