@@ -54,7 +54,7 @@ func (s *Service) listNodes(ctx context.Context) ([]map[string]interface{}, erro
 }
 
 // cachedNodes is the informers' node list when they have synced and the caller
-// may list nodes (asked of the cluster as the caller, remembered
+// may list nodes (asked of the cluster through mayListShown, remembered
 // podAccessTTL). ok=false leaves it to a List as the caller, which brings the
 // cluster's own answer — its refusal too. A namespace-scoped grant lists as
 // itself, as before.
@@ -70,7 +70,7 @@ func (s *Service) cachedNodes(ctx context.Context) (*nodeList, bool) {
 	if ci == nil || !ci.waitSynced(ctx, podPageSyncWait) {
 		return nil, false
 	}
-	if ok, err := s.mayList(ctx, b, "nodes", ""); err != nil || !ok {
+	if ok, err := s.mayListShown(ctx, b, "", "nodes", ""); err != nil || !ok {
 		return nil, false
 	}
 	accesstrail.Cached(ctx, "nodes (watched as "+overviewCacheUser+")")

@@ -67,7 +67,7 @@ func (a *reviewAPI) bundle(t testing.TB) *clientBundle {
 	}))
 	t.Cleanup(srv.Close)
 	cfg := &rest.Config{Host: srv.URL, QPS: -1}
-	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, "default") })
+	wrapPerson(cfg, "default")
 	cs, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		t.Fatal(err)

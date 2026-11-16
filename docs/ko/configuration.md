@@ -53,6 +53,15 @@ auth:
     enabled: true
     clusterRoles: true
     userPrefix: ""  # 예: kubeast:user: — 사람의 주소 앞에 붙음. 주소로 묶은 User 바인딩은 적용되지 않게 됨(cluster-requirements §1)
+    # kubeast:cache로 읽어 보여 주는 화면은 그 사람이 그것을 list·get할 수 있는지 먼저 묻습니다. 켜면 그 읽기 확인을
+    # 그룹 집합마다 한 번 kubeast:group-check:<시작마다 만든 꼬리>로 묻고, 허용 답을 같은 그룹의 모든 사람에게 최대 1분
+    # 씁니다. 거절은 그 사람으로 다시 묻습니다. 그 확인은 클러스터 감사 로그에 그 이름으로 남습니다. 모든 인가기가
+    # 그 이름과 그 사람의 그룹에 허용한 것을 그 사람에게도 허용한다는 조건에 기댑니다. RBAC 앞이든 뒤든 사용자 이름에
+    # 따라 답하는 인가기가 있거나, Kubeast가 대신할 수 있는 사용자 이름을 제한한 클러스터는 목록에 넣고, 그 이름은
+    # 바인딩하지 마세요(cluster-requirements §1).
+    sharedReadChecks:
+      enabled: false
+      excludeClusters: []  # 사람마다 계속 묻는 등록 클러스터 ID
     customRoles: []
     #  - name: Read
     #    namespaces: [team-a, team-b]

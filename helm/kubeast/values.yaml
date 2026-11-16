@@ -147,6 +147,22 @@ auth:
     # Kubeast's requests and the cluster's audit log shows the longer name, so move
     # those bindings to groups first (docs/cluster-requirements.md §1).
     userPrefix: ""
+    # Read checks shared by group (k8s-service, off). A screen served from what Kubeast watches as
+    # kubeast:cache (the Dashboard's counts, the namespace and node lists, the Pods page, Cluster
+    # View's nodes) first asks the cluster whether the person may list or get it. On, that question
+    # goes out once for everyone with the same groups, as kubeast:group-check:<made at each start>
+    # in those groups, and its allow stands for each of them for up to a minute, as a person's own
+    # answer does; a refusal is asked again as the person, so a User binding still counts. Can-i,
+    # writes, logs, Secrets and AI tool calls are always asked as the person. Those allowed checks
+    # then show that name, not the person, in the cluster's audit log. It relies on every
+    # authorizer allowing a person what it allows that name with the person's groups (RBAC only
+    # adds). List in excludeClusters, by registered cluster id, a cluster with an authorizer
+    # whose answer depends on the user name (ahead of RBAC or after it, a refusal or a pass for
+    # named people) or that limits the user names Kubeast may act as, and never bind the name
+    # (docs/cluster-requirements.md §1 has the checks).
+    sharedReadChecks:
+      enabled: false
+      excludeClusters: []
     # A custom Kubeast role (anything but Read/Write/Admin) granted on a
     # cluster acts there as group kubeast:role:<slug> (A-Z lowercased, any other
     # ASCII character but a-z 0-9 . _ - becomes "-", any other character "~" and

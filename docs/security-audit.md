@@ -226,6 +226,7 @@ A write tool's arguments stay as written only while the call needs them. The ans
   - `auditID` is the ID Kubeast showed.
   - `user` is Kubeast's own credential.
   - `impersonatedUser` is the person, or `kubeast:investigator` for an alert investigation. Its groups are the ones Kubeast showed plus `system:authenticated`, which the API server adds to every impersonated user.
+  - A tool call's access checks are asked as the person even with `auth.impersonation.sharedReadChecks` on. The screens' read checks that setting shares are in the log under `kubeast:group-check:<made at each start>` with the person's groups, not under a person ([cluster requirements](cluster-requirements.md) §1).
 - The cluster keeps such a log only with API server auditing on.
   - kubeadm and self-managed clusters: `--audit-policy-file` and `--audit-log-path` on kube-apiserver.
   - Amazon EKS: control plane logging with the `audit` log type, in CloudWatch Logs `/aws/eks/<cluster>/cluster`.

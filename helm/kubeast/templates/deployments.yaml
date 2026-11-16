@@ -310,6 +310,10 @@ spec:
               value: "{{ $.Values.multicluster.reviewQPS | default 0 }}"
             - name: MC_REVIEW_BURST
               value: "{{ $.Values.multicluster.reviewBurst | default 0 }}"
+            - name: SHARED_READ_CHECKS
+              value: {{ dig "sharedReadChecks" "enabled" false $.Values.auth.impersonation | quote }}
+            - name: SHARED_READ_CHECKS_EXCLUDE_CLUSTERS
+              value: {{ join "," (dig "sharedReadChecks" "excludeClusters" (list) $.Values.auth.impersonation) | quote }}
             - name: WS_MAX_SUBSCRIPTIONS
               value: "{{ $.Values.multicluster.wsMaxSubscriptions | default 2000 }}"
             - name: WS_MAX_SUBSCRIPTIONS_PER_CONN

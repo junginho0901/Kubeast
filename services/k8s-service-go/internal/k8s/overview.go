@@ -354,9 +354,9 @@ func (s *Service) GetComponentStatuses(ctx context.Context) ([]map[string]interf
 var errOverviewForbidden = apierrors.NewForbidden(schema.GroupResource{Resource: "namespaces"}, "",
 	errors.New("your identity in this cluster may not list namespaces, so the cluster overview is not shown"))
 
-// overviewIdentityAllowed asks whether the caller may list namespaces (mayList, the namespace list's question too).
+// overviewIdentityAllowed asks whether the caller may list namespaces (mayListShown, the namespace list's question too).
 func (s *Service) overviewIdentityAllowed(ctx context.Context, b *clientBundle) error {
-	allowed, err := s.mayList(ctx, b, "namespaces", "")
+	allowed, err := s.mayListShown(ctx, b, "", "namespaces", "")
 	if err != nil {
 		return err
 	}
