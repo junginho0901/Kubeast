@@ -229,6 +229,8 @@ multicluster:
   clientBurst: 200
   reviewQPS: 0              # 0 = 권한 확인이 clientQPS를 같이 씀. architecture.md "Many users" 참고
   reviewBurst: 0
+  wsWatchOpeningConcurrency: 8  # 모든 클러스터를 합쳐 첫 객체를 한꺼번에 받는 실시간 목록 수, 다른 클러스터가 기다리는 동안 한 클러스터는 그 절반까지. architecture.md "Many users" 참고
+  wsWatchStreamWindowKiB: 1024  # 실시간 목록 스트림 하나의 HTTP/2 창: 느린 브라우저의 watch가 쥐는 메모리와, 왕복이 긴 망에서 목록이 오는 빠르기의 맞바꿈. architecture.md "Many users" 참고
 ```
 
 ## Redis 사용자

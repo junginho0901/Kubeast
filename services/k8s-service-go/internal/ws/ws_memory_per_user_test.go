@@ -55,17 +55,6 @@ func TestWSMemoryPerUser(t *testing.T) {
 
 	peer := startMemPeer(t)
 	cfg := &rest.Config{Host: peer.api, QPS: 100, Burst: 200, TLSClientConfig: rest.TLSClientConfig{Insecure: true}}
-	// WS_MEMORY_H2_STREAM_BUFFER caps what the API server may send on one watch before it is read (HTTP/2 flow
-	// control; Go's default is 4 MiB a stream).
-	streamBuffer, _ := strconv.Atoi(os.Getenv("WS_MEMORY_H2_STREAM_BUFFER"))
-	if streamBuffer > 0 {
-		cfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
-			if tr, ok := rt.(*http.Transport); ok {
-				tr.HTTP2 = &http.HTTP2Config{MaxReceiveBufferPerStream: streamBuffer}
-			}
-			return rt
-		}
-	}
 	d, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -76,18 +65,22 @@ func TestWSMemoryPerUser(t *testing.T) {
 		clients, decoder = fakeClients{d}, "whole"
 	}
 	m := NewMultiplexer(clients)
-	// Every watch is counted: with GOMEMLIMIT set the crowd's opening would pass the share at which new watches wait.
-	m.heap = func() (uint64, uint64) { return 0, 0 }
+	// The memory gate is on, as in k8s-service, and the watches it refuses are counted (refused); WS_MEMORY_GATE=0
+	// counts every watch instead.
+	gate := os.Getenv("WS_MEMORY_GATE") != "0"
+	if !gate {
+		m.heap = func() (uint64, uint64) { return 0, 0 }
+	}
 	wsURL := memMuxServer(t, m)
 
 	// One of each watch first: the HTTP/2 connection, the TLS session and the decoders' types are there before counting.
 	peer.crowd(t, m, wsURL, [][]memWatch{memWatches(memPodsOnNode(0), memNodes(), memDeployments(""))}, nil)
 
 	var summary strings.Builder
-	fmt.Fprintf(&summary, "%s, %s %s/%s, GOGC default, GOMEMLIMIT %q, HTTP/2 stream buffer %d (0 = Go's 4 MiB), %s decoder\n", time.Now().Format(time.RFC3339),
-		runtime.Version(), runtime.GOOS, runtime.GOARCH, os.Getenv("GOMEMLIMIT"), streamBuffer, decoder)
+	fmt.Fprintf(&summary, "%s, %s %s/%s, GOGC default, GOMEMLIMIT %q, the watches' HTTP/2 stream buffer %d, %s decoder, memory gate %v\n", time.Now().Format(time.RFC3339),
+		runtime.Version(), runtime.GOOS, runtime.GOARCH, os.Getenv("GOMEMLIMIT"), defaultWatchStreamWindow, decoder, gate)
 	fmt.Fprintf(&summary, "one event on the wire: pod %d bytes, node %d bytes, deployment %d bytes\n", len(watchPodJSON(0)), len(memNodeJSON(0)), len(memDeploymentJSON(0)))
-	fmt.Fprintf(&summary, "%-12s %6s %6s %9s %9s %9s %8s %9s %9s %9s %9s\n", "scenario", "people", "watch", "live/p", "stack/p", "gor/p", "inuse/p", "rss/p", "peak/p", "left/p", "alloc/p")
+	fmt.Fprintf(&summary, "%-12s %6s %6s %9s %9s %9s %8s %9s %9s %9s %9s %7s %7s %6s\n", "scenario", "people", "watch", "live/p", "stack/p", "gor/p", "inuse/p", "rss/p", "peak/p", "left/p", "alloc/p", "open", "refused", "waits")
 	for _, sc := range []struct {
 		name   string
 		people int
@@ -120,18 +113,20 @@ func TestWSMemoryPerUser(t *testing.T) {
 		})
 		after := takeMemSnapshot(true)
 		per := func(a, b uint64) float64 { return (float64(a) - float64(b)) / float64(sc.people) / 1024 }
-		line := fmt.Sprintf("%-12s %6d %6d %8.1fK %8.1fK %9.2f %7.1fK %8.1fK %8.1fK %8.1fK %8.1fK", sc.name, sc.people, watches,
+		line := fmt.Sprintf("%-12s %6d %6d %8.1fK %8.1fK %9.2f %7.1fK %8.1fK %8.1fK %8.1fK %8.1fK %6.1fs %7d %6d", sc.name, sc.people, watches,
 			per(held.heapAlloc, before.heapAlloc), per(held.stackInuse, before.stackInuse),
 			float64(held.goroutines-before.goroutines)/float64(sc.people), per(held.heapInuse, before.heapInuse),
 			per(held.rssLike, before.rssLike), per(peak, before.rssLike), per(after.heapAlloc, before.heapAlloc),
-			per(held.totalAlloc, before.totalAlloc))
+			per(held.totalAlloc, before.totalAlloc), peer.opened.Seconds(), peer.refused, peer.waits)
 		t.Log(line)
 		summary.WriteString(line + "\n")
 	}
 	summary.WriteString("live = heap of live objects after a GC; stack = goroutine stacks; gor = goroutines; inuse = heap spans in use and\n" +
 		"rss = memory the runtime holds and has not returned (Sys - HeapReleased), both before that GC; peak = the most rss while\n" +
 		"the crowd connected; left = live heap after the crowd left; alloc = bytes allocated from before the crowd came until it\n" +
-		"had its first objects. All per person, minus the same before the crowd came.\n")
+		"had its first objects. All per person, minus the same before the crowd came. open = from connecting until every watch\n" +
+		"had its first objects or was refused; refused = watches the memory gate (or another limit) refused; waits = notices\n" +
+		"of a watch waiting for its turn.\n")
 	t.Log("\n" + summary.String())
 	if out != "" {
 		if err := os.WriteFile(filepath.Join(out, "summary.txt"), []byte(summary.String()), 0o644); err != nil {
@@ -348,6 +343,10 @@ type memPeer struct {
 	api   string
 	in    io.Writer
 	lines chan string
+	// opened is how long the last crowd took from connecting until every watch had its first objects or was refused;
+	// refused and waits are the peer's count of refusals and of notices of a watch waiting for its turn.
+	opened         time.Duration
+	refused, waits int
 }
 
 // startMemPeer runs TestWSMemoryPeer in a second process and reads its API server's address.
@@ -427,11 +426,15 @@ func (p *memPeer) crowd(t *testing.T, m *Multiplexer, wsURL string, plan [][]mem
 			}
 		}
 	}()
+	start := time.Now()
 	fmt.Fprintf(p.in, "OPEN %s %s\n", wsURL, b)
-	if got := p.next(t); !strings.HasPrefix(got, "READY ") {
+	got := p.next(t)
+	var frames, want int
+	if _, err := fmt.Sscanf(got, "READY %d/%d refused %d waits %d", &frames, &want, &p.refused, &p.waits); err != nil {
 		t.Fatalf("peer: %s", got)
 	}
-	waitSubscriptions(t, m, watches)
+	p.opened = time.Since(start)
+	waitSubscriptions(t, m, watches-p.refused)
 	close(done)
 	time.Sleep(2 * time.Second)
 	if held != nil {
@@ -481,12 +484,35 @@ func TestWSMemoryPeer(t *testing.T) {
 				fmt.Printf("WSMEM ERROR %v\n", err)
 				continue
 			}
-			var frames, refused atomic.Int64
+			var frames, refused, waits atomic.Int64
 			want := int64(0)
-			for _, ws := range plan {
+			// each watch is done when its objects came or a limit refused it; a notice of a wait for its turn is not
+			type watchState struct {
+				mu      sync.Mutex
+				frames  map[string]int
+				refused map[string]bool
+			}
+			states := make([]*watchState, len(plan))
+			for i, ws := range plan {
+				states[i] = &watchState{frames: map[string]int{}, refused: map[string]bool{}}
 				for _, w := range ws {
 					want += int64(w.Frames)
 				}
+			}
+			allDone := func() bool {
+				for i, ws := range plan {
+					s := states[i]
+					s.mu.Lock()
+					for _, w := range ws {
+						key := w.Path + "?" + w.Query
+						if s.frames[key] < w.Frames && !s.refused[key] {
+							s.mu.Unlock()
+							return false
+						}
+					}
+					s.mu.Unlock()
+				}
+				return true
 			}
 			conns = make([]*websocket.Conn, len(plan))
 			var wg sync.WaitGroup
@@ -503,6 +529,7 @@ func TestWSMemoryPeer(t *testing.T) {
 						return
 					}
 					conns[i] = conn
+					s := states[i]
 					go func() {
 						for {
 							_, data, err := conn.ReadMessage()
@@ -512,8 +539,25 @@ func TestWSMemoryPeer(t *testing.T) {
 							switch {
 							case bytes.HasPrefix(data, []byte(`{"type":"DATA"`)):
 								frames.Add(1)
+								key := memFrameField(data, "path") + "?" + memFrameField(data, "query")
+								s.mu.Lock()
+								s.frames[key]++
+								s.mu.Unlock()
 							case bytes.HasPrefix(data, []byte(`{"type":"ERROR"`)):
+								var f struct {
+									Path  string            `json:"path"`
+									Query string            `json:"query"`
+									Error map[string]string `json:"error"`
+								}
+								_ = json.Unmarshal(data, &f)
+								if f.Error["reason"] != reasonLimit || strings.Contains(f.Error["message"], "waits for its turn") {
+									waits.Add(1)
+									continue
+								}
 								refused.Add(1)
+								s.mu.Lock()
+								s.refused[f.Path+"?"+f.Query] = true
+								s.mu.Unlock()
 							}
 						}
 					}()
@@ -524,10 +568,10 @@ func TestWSMemoryPeer(t *testing.T) {
 			}
 			wg.Wait()
 			deadline := time.Now().Add(4 * time.Minute)
-			for frames.Load() < want && refused.Load() == 0 && time.Now().Before(deadline) {
+			for !allDone() && time.Now().Before(deadline) {
 				time.Sleep(20 * time.Millisecond)
 			}
-			fmt.Printf("WSMEM READY %d/%d refused %d\n", frames.Load(), want, refused.Load())
+			fmt.Printf("WSMEM READY %d/%d refused %d waits %d\n", frames.Load(), want, refused.Load(), waits.Load())
 		case "CLOSE":
 			for _, c := range conns {
 				if c != nil {
@@ -574,8 +618,37 @@ func memAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	switch {
+	case strings.HasSuffix(r.URL.Path, "/nodes"):
+		endInitialEvents(w, r, "v1", "Node", "1")
+	case strings.HasSuffix(r.URL.Path, "/deployments"):
+		endInitialEvents(w, r, "apps/v1", "Deployment", "1")
+	default:
+		endInitialEvents(w, r, "v1", "Pod", "1")
+	}
 	w.(http.Flusher).Flush()
 	<-r.Context().Done()
+}
+
+// memFrameField is a top-level string field of a frame the server wrote, read without decoding the rest.
+func memFrameField(frame []byte, name string) string {
+	key := []byte(`"` + name + `":"`)
+	i := bytes.Index(frame, key)
+	if i < 0 {
+		return ""
+	}
+	start := i + len(key) - 1
+	for j := start + 1; j < len(frame); j++ {
+		switch frame[j] {
+		case '\\':
+			j++
+		case '"':
+			var s string
+			_ = json.Unmarshal(frame[start:j+1], &s)
+			return s
+		}
+	}
+	return ""
 }
 
 // memNodeJSON is a kwok node as the API server sends it on a watch.
