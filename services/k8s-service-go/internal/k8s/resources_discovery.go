@@ -55,7 +55,7 @@ func (s *Service) discover(ctx context.Context) (discovered, error) {
 			return nil, errNotLoaded
 		}
 		// one read per cluster kept for everyone for apiResourcesTTL: asked as Kubeast itself
-		groups, lists, err := discovery.ToDiscoveryInterfaceWithContext(dc).ServerGroupsAndResourcesWithContext(auth.AsKubeast(context.Background()))
+		groups, lists, err := discovery.ToDiscoveryInterfaceWithContext(dc).ServerGroupsAndResourcesWithContext(auth.AsKubeast(carryClusterCalls(context.Background(), ctx)))
 		// One aggregated API that does not answer leaves the others known, as kubectl goes on with them. A short cache:
 		// the kinds of that API come back when it does.
 		partial := discovery.IsGroupDiscoveryFailedError(err)

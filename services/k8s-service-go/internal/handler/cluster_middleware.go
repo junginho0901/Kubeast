@@ -99,7 +99,7 @@ func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 		}
 		// The API server's first answer decides at once, so a terminal or a followed log trying the cluster closes it.
 		var answered atomic.Bool
-		ctx, calls := k8s.WithClusterCalls(r.Context(), func() {
+		ctx, calls := k8s.WithClusterCalls(r.Context(), id, func() {
 			answered.Store(true)
 			if trial.IsZero() {
 				h.svc.ClusterAnswered(id)
@@ -112,7 +112,10 @@ func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 			switch {
 			case calls.Unreached():
 				h.svc.MarkClusterDown(id)
-			case !trial.IsZero() && !answered.Load():
+			case trial.IsZero() || answered.Load():
+			case calls.Unanswered():
+				h.svc.TrialUnanswered(id, trial)
+			default:
 				h.svc.TrialAskedNothing(id, trial)
 			}
 		}()

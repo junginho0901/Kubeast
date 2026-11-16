@@ -72,8 +72,8 @@ func (b *clientBundle) serverVersionInfo(ctx context.Context, maxAge time.Durati
 		return value, nil
 	}
 	got, _, err := c.asks.Do(ctx, "", func(ctx context.Context) (*version.Info, error) {
-		// none of the caller's values: the ask goes out as Kubeast itself
-		plain, cancel := context.WithCancel(context.Background())
+		// none of the caller's values but the record of its calls: the ask goes out as Kubeast itself
+		plain, cancel := context.WithCancel(carryClusterCalls(context.Background(), ctx))
 		defer context.AfterFunc(ctx, cancel)()
 		defer cancel()
 		return vr.ServerVersionWithContext(auth.AsKubeast(plain))

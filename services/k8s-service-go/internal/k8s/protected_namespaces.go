@@ -100,11 +100,17 @@ type guardedTransport struct {
 	rules     *guardedNamespaces
 	clusterID string
 	pinned    *auth.TokenPayload
+	// calls, with pinned: the record of the request the config was made for, given to a call whose context has none
+	calls *ClusterCalls
 }
 
 func (t *guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if t.pinned != nil {
-		req = req.WithContext(auth.WithPinnedPerson(req.Context(), *t.pinned))
+		ctx := auth.WithPinnedPerson(req.Context(), *t.pinned)
+		if _, has := ctx.Value(clusterCallsKey{}).(*ClusterCalls); !has && t.calls != nil {
+			ctx = context.WithValue(ctx, clusterCallsKey{}, t.calls)
+		}
+		req = req.WithContext(ctx)
 		return protectedns.Pinned(t.base, t.rules.get(), t.clusterID, *t.pinned).RoundTrip(req)
 	}
 	return protectedns.RoundTripper(t.base, t.rules.get(), t.clusterID).RoundTrip(req)
