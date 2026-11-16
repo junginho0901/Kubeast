@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import text
 
 from app.services import claude_code, claude_code_slots
-from tests.test_claude_code import OK, make_sdk
+from tests.test_claude_code import OK, make_sdk, until
 
 
 @pytest.fixture
@@ -60,26 +60,34 @@ async def test_a_slot_taken_between_another_servers_read_and_write_stays_with_th
 
 
 async def test_two_slots_let_two_servers_run_at_once_and_a_third_waits(servers):
-    running, most = 0, 0
+    running, most, ran = 0, 0, 0
+    release = asyncio.Event()
 
     async def run(db):
-        nonlocal running, most
+        nonlocal running, most, ran
         async with claude_code_slots.held(db, "chat", 2):
-            running += 1
+            running, ran = running + 1, ran + 1
             most = max(most, running)
-            await asyncio.sleep(0.1)
+            await release.wait()
             running -= 1
 
-    await asyncio.wait_for(asyncio.gather(run(servers[0]), run(servers[1]), run(servers[0])), 5)
-    assert most == 2
+    runs = asyncio.gather(run(servers[0]), run(servers[1]), run(servers[0]))
+    await until(lambda: running == 2)
+    await asyncio.sleep(0.1)  # longer than a poll: a third run let in would be inside by now
+    assert (running, ran) == (2, 2)
+    release.set()
+    await asyncio.wait_for(runs, 5)
+    assert most == 2 and ran == 3
 
 
 async def test_a_holder_that_stops_beating_is_set_free_after_the_stale_time(servers, monkeypatch):
     monkeypatch.setattr(claude_code_slots, "STALE_SECONDS", 0.3)
     loop = asyncio.get_running_loop()
-    # a server that died holding the slot: it took it and never beats or sets it free again
-    assert await claude_code_slots.take(servers[0], "chat", 1, "gone-server") == 0
+    # a server that died holding the slot: it took it and never beats or sets it free again. The wait is timed from
+    # before the take, so the heartbeat it writes is not older than the start (timed after, the take's own time came
+    # off the wait: 0.220 s under CI load)
     started = loop.time()
+    assert await claude_code_slots.take(servers[0], "chat", 1, "gone-server") == 0
     async with asyncio.timeout(5), claude_code_slots.held(servers[1], "chat", 1) as slot:
         waited = loop.time() - started
         assert slot == 0 and [owner for *_, owner in await rows(servers[1])] != ["gone-server"]
@@ -168,6 +176,13 @@ def on(monkeypatch, servers):
     return sdk
 
 
+def holding(monkeypatch):
+    """A fake SDK in place of the one installed, whose runs stay inside until the test sets state["release"]."""
+    sdk = make_sdk([("hold",), ("result", OK)])
+    monkeypatch.setitem(sys.modules, "claude_agent_sdk", sdk)
+    return sdk
+
+
 async def test_the_install_wide_limit_holds_where_the_server_would_run_more(on, monkeypatch, servers):
     """maxConcurrent 2 on this server, maxConcurrentTotal 1: one run at a time; with a total of 2, two."""
     async def database():
@@ -176,12 +191,17 @@ async def test_the_install_wide_limit_holds_where_the_server_would_run_more(on, 
     monkeypatch.setattr(claude_code, "_database", database)
     monkeypatch.setattr(claude_code.settings, "AI_CLAUDE_CODE_MAX_CONCURRENT", 2, raising=False)
     ask = [{"role": "user", "content": "x"}]
-    for total, most in ((1, 1), (2, 2)):
+    for total in (1, 2):
+        sdk = holding(monkeypatch)
         monkeypatch.setattr(claude_code, "_semaphores", {})
         monkeypatch.setattr(claude_code.settings, "AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL", total, raising=False)
-        on.state["max_running"] = 0
-        await asyncio.gather(*(claude_code.complete(ask, model="m", token="t") for _ in range(3)))
-        assert on.state["max_running"] == most
+        runs = asyncio.gather(*(claude_code.complete(ask, model="m", token="t") for _ in range(3)))
+        await until(lambda: sdk.state["running"] == total)
+        await asyncio.sleep(0.1)  # longer than a poll: a run past the limit would be inside by now
+        assert len(sdk.state["options"]) == total
+        sdk.state["release"].set()
+        await asyncio.wait_for(runs, 5)
+        assert sdk.state["max_running"] == total and len(sdk.state["options"]) == 3
 
 
 async def test_the_default_install_wide_limit_is_the_per_server_one(monkeypatch):
@@ -275,12 +295,14 @@ async def test_a_turn_with_a_free_slot_says_nothing_of_waiting(one_slot):
 
 async def test_a_turn_that_waits_past_the_queue_wait_ends_busy(one_slot, monkeypatch):
     monkeypatch.setattr(claude_code, "queue_wait", lambda: 0.05)
+    sdk = holding(monkeypatch)
     first = asyncio.create_task(claude_code.complete([{"role": "user", "content": "x"}], model="m", token="t"))
-    await asyncio.sleep(0.02)
+    await until(lambda: sdk.state["running"] == 1)  # the first run holds both slots until released
     with pytest.raises(claude_code.ClaudeCodeBusy, match="Claude Code is busy; ask again in a moment"):
         await asyncio.wait_for(chat_turn(), 5)
+    sdk.state["release"].set()
     await first
-    assert len(one_slot.state["options"]) == 1  # the busy turn never started Claude Code
+    assert len(sdk.state["options"]) == 1  # the busy turn never started Claude Code
 
 
 async def test_a_slot_another_server_holds_past_the_queue_wait_ends_busy_and_stays_its(one_slot, monkeypatch, servers):

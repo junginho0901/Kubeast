@@ -3,20 +3,24 @@ import { expect, type Locator, type Page } from '@playwright/test'
 // Reading a list that has the ListPager footer (components/ListPager.tsx) across its pages. The list pages page as
 // many rows as fit the screen (or the footer's fixed choice), so a row a test made is not always on the first page.
 
-// how long a footer may take to come: the chromium project sets no action timeout. expect.poll (Playwright 1.59) calls
-// its reader outside a try, so a reader that throws fails the poll at once: a footer that has not counted yet answers NaN
+// how long a footer may take to come: the chromium project sets no action timeout
 const WAIT = 15_000
 
-// The range and the total the footer says: "Showing 1-12 of 523" / "523개 중 1-12 표시".
-export async function pagerRange(page: Page, pagerId: string): Promise<{ start: number; end: number; total: number }> {
+// The range and the total the footer says: "Showing 1-12 of 523" / "523개 중 1-12 표시". A footer that has not counted
+// yet ("Showing - of -", the Pods list while its first read comes) throws, unless `uncounted: 'nan'`: expect.poll
+// (Playwright 1.59) calls its reader outside a try, so a poll's reader takes NaN there and the poll asks again, while
+// any other caller would compare NaN as a number (`toBe(NaN)` passes by Object.is, `NaN < x` is false).
+export async function pagerRange(page: Page, pagerId: string, { uncounted = 'throw' }: { uncounted?: 'throw' | 'nan' } = {}): Promise<{ start: number; end: number; total: number }> {
   const text = (await page.getByTestId(pagerId).innerText({ timeout: WAIT })).replace(/\s+/g, ' ')
   const en = /Showing (\d+)-(\d+) of (\d+)/.exec(text)
   if (en) return { start: Number(en[1]), end: Number(en[2]), total: Number(en[3]) }
   const ko = /(\d+)개 중 (\d+)-(\d+) 표시/.exec(text)
   if (ko) return { start: Number(ko[2]), end: Number(ko[3]), total: Number(ko[1]) }
   if (/Showing 0 of 0|0개 중 0 표시/.test(text)) return { start: 0, end: 0, total: 0 }
-  // not counted yet ("Showing - of -" while the first read comes): no number, so a poll asks again
-  if (/Showing - of -|-개 중 - 표시/.test(text)) return { start: NaN, end: NaN, total: NaN }
+  if (/Showing - of -|-개 중 - 표시/.test(text)) {
+    if (uncounted === 'nan') return { start: NaN, end: NaN, total: NaN }
+    throw new Error(`${pagerId}: not counted yet ("${text}")`)
+  }
   throw new Error(`${pagerId}: no range in "${text}"`)
 }
 

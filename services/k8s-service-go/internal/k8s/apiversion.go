@@ -6,6 +6,9 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
+
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 // resolvedResource is what API discovery says about one resource of a group:
@@ -61,11 +64,13 @@ func (s *Service) resolveResource(ctx context.Context, group, resource string) (
 }
 
 func (s *Service) discoverResource(ctx context.Context, group, resource string) (resolvedResource, bool) {
-	disc := s.discoveryCtx(ctx)
-	if disc == nil {
+	dc := s.discoveryCtx(ctx)
+	if dc == nil {
 		return resolvedResource{}, false
 	}
-	groups, err := disc.ServerGroups()
+	// resolveCache keeps the answer per cluster for everyone: asked as Kubeast itself
+	disc, own := discovery.ToDiscoveryInterfaceWithContext(dc), auth.AsKubeast(context.Background())
+	groups, err := disc.ServerGroupsWithContext(own)
 	if err != nil || groups == nil {
 		return resolvedResource{}, false
 	}
@@ -83,7 +88,7 @@ func (s *Service) discoverResource(ctx context.Context, group, resource string) 
 			}
 		}
 		for _, v := range versions {
-			list, err := disc.ServerResourcesForGroupVersion(schema.GroupVersion{Group: group, Version: v}.String())
+			list, err := disc.ServerResourcesForGroupVersionWithContext(own, schema.GroupVersion{Group: group, Version: v}.String())
 			if err != nil || list == nil {
 				continue
 			}

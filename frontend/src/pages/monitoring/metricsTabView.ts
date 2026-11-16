@@ -35,8 +35,9 @@ type Layer = { source: 'base'; summary: string; data: Record<string, unknown> }
 
 /**
  * The tab's layer while it shows no rows, in the words it shows: `metrics_error` with the reason, `metrics_unavailable`,
- * `no_samples`, or 0 pods in the chosen namespace, each after the page's notice while it shows. Null while it shows rows
- * or a refusal (the tab's own layers), and while it loads or waits for a namespace with no notice above it.
+ * `no_samples`, or 0 pods in the chosen namespace, each after the page's notice while it shows; with the notice, the
+ * notice alone while the tab loads and the notice with the namespace prompt while it waits for one. Null while it shows
+ * rows or a refusal (the tab's own layers), and while it loads or waits for a namespace with no notice above it.
  */
 export function metricsNotShownLayer(t: TFunction, tab: 'nodes' | 'pods', view: MetricsTabView, read: {
   error: unknown
@@ -69,6 +70,9 @@ export function metricsNotShownLayer(t: TFunction, tab: 'nodes' | 'pods', view: 
     case 'none_in_namespace':
       return { source: 'base', summary: said(t('monitoring.pods.noPodsInNamespace', { namespace: read.namespace })), data: { ...scope, total_count: 0 } }
     case 'prompt':
+      return notice
+        ? { source: 'base', summary: said(t('monitoring.namespace.promptTitle'), t('monitoring.namespace.promptSubtitle')), data: { ...scope, metrics_unavailable: true } }
+        : null
     case 'loading':
       return notice ? { source: 'base', summary: said(), data: { ...scope, metrics_unavailable: true } } : null
     default:
