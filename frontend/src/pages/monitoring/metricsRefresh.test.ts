@@ -8,7 +8,7 @@ vi.hoisted(() => {
 })
 
 import { QueryClient, QueryObserver } from '@tanstack/react-query'
-import { isMetricsDisabled, type TopResources } from '@/services/api'
+import type { TopResources } from '@/services/api'
 import { readTopResources, topResourcesPace, type TopRefusals } from '../dashboard/topResourcesRead'
 import { METRICS_NOT_SERVED_MS, metricsReadPace, metricsRefreshFailure, metricsRefusal } from './metricsRefresh'
 
@@ -20,14 +20,14 @@ const ROWS = [{ name: 'n1', cpu: '100m', cpu_percent: '5%', memory: '10Mi', memo
 const NOT_SERVED = () => httpError(404, { detail: 'the server could not find the requested resource' })
 
 // The Nodes tab's query (MonitoringNodes): its key and pace, on a client of its own, the cluster's answer standing in
-function watch(answer: (cluster: string) => unknown, off = false) {
+function watch(answer: (cluster: string) => unknown) {
   const read = vi.fn(async (cluster: string) => {
     const a = answer(cluster)
     if (a instanceof Error) throw a
     return a
   })
   const client = new QueryClient()
-  const options = (cluster: string) => ({ queryKey: ['node-metrics', cluster], queryFn: () => read(cluster), ...metricsReadPace(() => off) })
+  const options = (cluster: string) => ({ queryKey: ['node-metrics', cluster], queryFn: () => read(cluster), ...metricsReadPace() })
   const observer = new QueryObserver<unknown>(client, options('c1'))
   const stop = observer.subscribe(() => {})
   return { read, observer, options, done: () => { stop(); client.clear() } }
@@ -111,14 +111,13 @@ describe('the Monitoring tabs\' metrics read', () => {
     stopDashboard()
     dashboardClient.clear()
     // then the Nodes tab, with the options MonitoringNodes gives it
-    expect(isMetricsDisabled()).toBe(false)
     const read = vi.fn(async () => {
       if (!served) throw NOT_SERVED()
       return ROWS
     })
     const client = new QueryClient()
     const tab = new QueryObserver<unknown>(client, {
-      queryKey: ['node-metrics', 'c1'], queryFn: read, enabled: !isMetricsDisabled(), ...metricsReadPace(() => isMetricsDisabled()),
+      queryKey: ['node-metrics', 'c1'], queryFn: read, ...metricsReadPace(),
     })
     const stop = tab.subscribe(() => {})
     await vi.advanceTimersByTimeAsync(30_000)
@@ -131,12 +130,6 @@ describe('the Monitoring tabs\' metrics read', () => {
     client.clear()
   })
 
-  it('asks nothing again once metrics are off for the cluster', async () => {
-    const { read, done } = watch(() => ROWS, true)
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(read).toHaveBeenCalledTimes(1)
-    done()
-  })
 })
 
 describe('a refusal is not a failed refresh', () => {

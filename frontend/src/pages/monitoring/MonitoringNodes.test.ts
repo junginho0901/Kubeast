@@ -43,7 +43,7 @@ const failed = (error: unknown, data?: unknown) => {
   return qc
 }
 const render = (qc: QueryClient, lng = 'en') => renderToStaticMarkup(createElement(I18nextProvider, { i18n: i18n.cloneInstance({ lng }) },
-  createElement(QueryClientProvider, { client: qc }, createElement(MonitoringNodes, { metricsUnavailable: false, onMetricsUnavailable: () => {} }))))
+  createElement(QueryClientProvider, { client: qc }, createElement(MonitoringNodes, { pageNotice: false, onMetricsUnavailable: () => {} }))))
 
 const httpError = (status: number, data?: unknown) => Object.assign(new Error(`HTTP ${status}`), { response: { status, data } })
 const NOT_AVAILABLE = 'Node metrics are not available'
@@ -191,13 +191,6 @@ describe('the Monitoring Nodes tab', () => {
       expect(render(aged(httpError(502, { detail: 'the metrics API did not answer' })))).toContain('the metrics API did not answer')
     })
 
-    it('stop saying it retries once metrics are off for this cluster', () => {
-      const off = renderToStaticMarkup(createElement(I18nextProvider, { i18n: i18n.cloneInstance({ lng: 'en' }) },
-        createElement(QueryClientProvider, { client: aged(httpError(503)) }, createElement(MonitoringNodes, { metricsUnavailable: true, onMetricsUnavailable: () => {} }))))
-      expect(off).toContain('Refresh failed.')
-      expect(off).not.toContain('Retrying automatically')
-    })
-
     it('do not keep the green light', () => {
       expect(render(aged(null))).toContain('bg-green-500')
       expect(render(aged(httpError(503)))).not.toContain('bg-green-500')
@@ -267,7 +260,7 @@ describe('what the Nodes tab tells the floating chat in place of rows', () => {
   const HINT = en.monitoring.metricsServerHint
   const textOf = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/&amp;/g, '&').replace(/\s+/g, ' ')
   const renderWith = (qc: QueryClient, { notice = false, lng = 'en' } = {}) => renderToStaticMarkup(createElement(I18nextProvider, { i18n: i18n.cloneInstance({ lng }) },
-    createElement(QueryClientProvider, { client: qc }, createElement(MonitoringNodes, { metricsUnavailable: notice, onMetricsUnavailable: () => {} }))))
+    createElement(QueryClientProvider, { client: qc }, createElement(MonitoringNodes, { pageNotice: notice, onMetricsUnavailable: () => {} }))))
   const emptyThen = (error?: unknown) => {
     const qc = seeded()
     qc.setQueryData(KEY, [])
@@ -313,11 +306,12 @@ describe('what the Nodes tab tells the floating chat in place of rows', () => {
     const html = renderWith(failed(httpError(503, { detail: 'metrics_unavailable' })))
     expect(html).toContain('data-testid="node-metrics-not-available"')
     expect(chat.current?.data).toEqual({ tab: 'nodes', metrics_unavailable: true })
+    expect(chat.current?.summary).not.toContain(en.monitoring.metricsUnavailable)
     saysWhatTheTabShows(html)
   })
 
   it('the page\'s notice on: its words first, then the tab\'s', () => {
-    const html = renderWith(seeded(), { notice: true })
+    const html = renderWith(failed(httpError(503, { detail: 'metrics_unavailable' })), { notice: true })
     expect(html).toContain('data-testid="node-metrics-not-available"')
     expect(chat.current?.data).toEqual({ tab: 'nodes', metrics_unavailable: true })
     expect(chat.current?.summary).toBe(`${en.monitoring.nodes.title} — ${en.monitoring.metricsUnavailable} — ${NOT_AVAILABLE} — ${HINT}`)

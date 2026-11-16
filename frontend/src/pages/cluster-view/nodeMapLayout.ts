@@ -27,3 +27,12 @@ export function layoutMap(width: number, entries: NodeEntry[]): Layout {
   const dot = Math.max(1, Math.floor((cell - 4) / per))
   return { cell, cols, per, dot, height: rows * (cell + GAP) - GAP }
 }
+
+// A key on the focused map from cell `at` (null: none yet; past the cells: the last): the cell an arrow moves to, the cell Enter or Space opens, else null.
+export function mapKey(key: string, at: number | null, count: number, cols: number): { hover: number } | { open: number } | null {
+  if (count === 0) return null
+  const from = Math.min(Math.max(0, at ?? 0), count - 1)
+  const step: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: cols, ArrowUp: -cols }
+  if (Object.hasOwn(step, key)) return { hover: Math.min(count - 1, Math.max(0, from + step[key])) }
+  return key === 'Enter' || key === ' ' ? { open: from } : null
+}

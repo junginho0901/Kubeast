@@ -1,0 +1,171 @@
+suite: rollouts and disruptions — a new pod is ready before an old one stops, and a PDB only where a second pod can take over
+templates:
+  - deployments.yaml
+  - gateway.yaml
+  - postgres.yaml
+  - pdb.yaml
+  - configmap.yaml
+  - secret.yaml
+tests:
+  - it: starts the new pod first in every Deployment behind a Service and in the ModelConfig controller
+    template: deployments.yaml
+    asserts:
+      - equal:
+          path: spec.strategy
+          value: &surge
+            type: RollingUpdate
+            rollingUpdate:
+              maxSurge: 1
+              maxUnavailable: 0
+
+  - it: starts the new gateway first
+    template: gateway.yaml
+    documentSelector: { path: kind, value: Deployment }
+    asserts:
+      - equal:
+          path: spec.strategy
+          value: *surge
+
+  - it: keeps postgres on Recreate, where two pods would share one volume
+    template: postgres.yaml
+    documentSelector: { path: kind, value: Deployment }
+    asserts:
+      - equal:
+          path: spec.strategy.type
+          value: Recreate
+
+  - it: asks liveness of the process alone and readiness of the server not leaving, never of the database
+    template: deployments.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /livez
+        documentSelector: { path: metadata.name, value: tool-server }
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /readyz
+        documentSelector: { path: metadata.name, value: tool-server }
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /api/v1/ai/health
+        documentSelector: { path: metadata.name, value: ai-service }
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /api/v1/ai/health
+        documentSelector: { path: metadata.name, value: ai-service }
+
+  - it: renders no PDB while every Deployment has one replica
+    template: pdb.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders a PDB of maxUnavailable 1 for a Deployment with a second replica, and for no other
+    template: pdb.yaml
+    set:
+      replicas.authService: 2
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: auth-service
+      - equal:
+          path: spec
+          value:
+            maxUnavailable: 1
+            unhealthyPodEvictionPolicy: AlwaysAllow
+            selector:
+              matchLabels:
+                app: auth-service
+
+  - it: follows pdb.maxUnavailable
+    template: pdb.yaml
+    set:
+      replicas.gateway: 3
+      pdb.maxUnavailable: 2
+    asserts:
+      - equal:
+          path: spec.maxUnavailable
+          value: 2
+
+  - it: leaves the PDBs out with pdb.enabled false
+    template: pdb.yaml
+    set:
+      replicas.authService: 2
+      replicas.frontend: 2
+      pdb.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders no PDB for the AI services with ai.enabled false
+    template: pdb.yaml
+    set:
+      ai.enabled: false
+      replicas.aiService: 2
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders a PDB for a service whose autoscaling keeps at least two pods
+    template: pdb.yaml
+    set:
+      autoscaling.authService.enabled: true
+      autoscaling.authService.minReplicas: 2
+      autoscaling.authService.maxReplicas: 4
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: auth-service
+      - equal:
+          path: spec.maxUnavailable
+          value: 1
+
+  - it: renders none for a service whose autoscaling may go down to one pod, whatever replicas says
+    template: pdb.yaml
+    set:
+      replicas.gateway: 3
+      autoscaling.gateway.enabled: true
+      autoscaling.gateway.minReplicas: 1
+      autoscaling.gateway.maxReplicas: 4
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: reads minReplicas only while autoscaling is on
+    template: pdb.yaml
+    set:
+      autoscaling.sessionService.enabled: false
+      autoscaling.sessionService.minReplicas: 3
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders no PDB for the AI services' autoscaling with ai.enabled false
+    template: pdb.yaml
+    set:
+      ai.enabled: false
+      autoscaling.aiService.enabled: true
+      autoscaling.aiService.minReplicas: 2
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: refuses a maxUnavailable of 0, which would stop every node drain
+    template: pdb.yaml
+    set:
+      pdb.maxUnavailable: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: "pdb.maxUnavailable must be a whole number of pods, 1 or more"
+
+  - it: refuses a percentage, which the chart does not take
+    template: pdb.yaml
+    set:
+      pdb.maxUnavailable: "50%"
+    asserts:
+      - failedTemplate:
+          errorPattern: "pdb.maxUnavailable must be a whole number of pods, 1 or more"

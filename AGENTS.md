@@ -111,11 +111,31 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 
 - 클러스터에서 읽은 글은 도구 결과 자리로만 모델에 간다(채팅·알림 조사, 두 루프 모두). `ai.toolResultsJSON`이면 결과마다 JSON 객체 하나(`app/services/ai/tool_results.py`). 도구 결과가 아닌 자리 — 울타리 안의 조사 알림·떠 있는 채팅 화면, 기록이 읽는 assistant 메시지인 승인된 쓰기의 결과 — 는 docs/ai-alerts.md "Planted instructions"에 적고 `tests/test_tool_results_json.py`가 지킨다. MCP 서버는 바깥 에이전트에 답을 그대로 준다. 프롬프트·도구·루프를 바꾸면 심어 둔 지시 사례(`evals/ai-planted/`, `scripts/ai_eval_planted.py`)를 모델마다 돌린다.
 
+## 여러 레플리카
+
+- 서비스는 레플리카 여러 개로 돌 수 있다([docs/ko/high-availability.md](docs/ko/high-availability.md)). 한 파드만 해야 하는 일(주기 작업 · 큐)은 프로세스 메모리가 아니라 DB로 차례를 정한다:
+  작업 동안 자기 연결에 쥐는 advisory lock(`pg_try_advisory_lock`, auth-service `internal/auditsink`), 트랜잭션 하나 동안의 lock(`pg_try_advisory_xact_lock`, `internal/auditchain`),
+  또는 `FOR UPDATE SKIP LOCKED`로 행을 가져가기(권한 요청 · 휴면 계정 정리, ai-service 알림 조사 큐). lock을 못 잡은 파드는 그 차례를 넘긴다.
+- 프로세스 안의 한도 · 캐시 · 카운터는 파드마다다(설치 전체로는 레플리카 수만큼 곱해진다). 설치 전체에서 지켜야 하는 값은 DB나 Redis에 둔다.
+  그런 일이나 상태를 더하는 변경은 docs/high-availability.md(en · ko)에 파드가 무엇을 쥐는지 적는다.
+
 ## 빌드 / 배포
 
 - **빌드/배포는 항상 `scripts/rebuild-kind.sh` 를 통해 수행**한다. 직접 docker/kubectl 명령을 돌리지 않는다.
   게이트웨이(nginx.conf)는 `scripts/rebuild-kind.sh gateway` — 릴리스 값 그대로 `helm upgrade`로 다시 렌더한다.
   ConfigMap을 `kubectl apply`로 쓰면 kubectl이 필드 소유자가 돼 다음 `helm upgrade`(Helm 4 서버 측 적용)가 충돌로 멈춘다.
+- `docs/X.md`와 `docs/ko/X.md`(`README.md`·`README.ko.md`도)는 같은 PR에서 고치고, `helm/kubeast/values.yaml`에 새 값 경로를 넣으면 `docs/configuration.md`·`docs/ko/configuration.md`에 적는다. 일부러 한쪽만 고치면 그 PR 커밋 메시지의 마지막 문단에 `Co-Authored-By`와 빈 줄 없이 붙여 트레일러로 까닭을 단다: `Docs-Pair: en-only [<파일>...] <이유>`(또는 `ko-only`, `values-not-in-docs [<값 경로>...] <이유>`). 파일·경로를 적으면 그것만, 안 적으면 PR 전체가 빠진다 — CI `scripts/check-docs-pair.sh`.
+
+## Redis
+
+- 서비스마다 차트 Redis에 자기 사용자로 붙고, 그 사용자는 코드가 보내는 명령과 `kubeast:` 아래 키 · 채널만 쓸 수 있다(`helm/kubeast/templates/_helpers.tpl`의 `kubeast.redisUsersAcl`, `redis.acl`).
+- 서비스가 Redis에 새 명령을 보내기 시작하면 그 서비스 사용자 줄에 명령을 넣고 `tests/redis_test.yaml`에 케이스를 더한다. 빠뜨리면 Redis ACL을 켠 설치에서 그 명령이 거절(NOPERM)되고 캐시는 오류 없이 빈 것처럼 읽힌다.
+  `services/pkg/redisacl`로 서비스가 보내는 명령을 그 줄과 비교하는 시험이 있다(k8s-service `internal/cache`, tool-server 클러스터 변경 알림). Redis 명령을 보내는 새 곳에도 같은 시험을 붙인다.
+
+## 데이터베이스 연결
+
+- 서비스마다 연결한 뒤 SET으로 세션 한도(statement 30초 · lock 15초 · idle-in-transaction 5분, 차트 `postgresql.sessionLimits`)를 걸고(`services/pkg/dbsession`, ai-service는 롤백에 풀리지 않게 autocommit으로 `app/db_session.py`), 마이그레이션은 값과 상관없이 statement · lock을 항상 0으로 둔다(`ApplyMigrations`).
+- 풀 크기는 서비스별 `postgresql.pool.<svc>.maxConns`이고, 새 서비스나 새 풀(잠금 전용 연결 포함)은 합계식 `kubeast.dbConnections`에 더한다 — `templates/checks/db-connections.yaml`이 그 합을 `postgresql.maxConnections` 아래로 막는다(`tests/db_connections_test.yaml`). PgBouncer는 session 모드만 쓴다.
 
 ## 컨테이너 exec
 
@@ -128,3 +148,11 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 - 노드 셸 파드의 로그는 터미널에 찍힌 전부다. 네임스페이스 없는 로그 저장소 읽기(검색·LogQL·레이블·패턴)는 그 클러스터에 `resource.node.shell`이 없으면 질의의 매처로 노드 셸 네임스페이스를 뺀다(`hiddenLogNamespace`).
 - exec 명령은 인자 배열로 넘기고 셸을 거치지 않는다. 사용자 입력이 들어가는 인자는 허용 목록으로 검증하고 `--`로 옵션 파싱을 끝낸다.
 - 로컬 실행은 [docker-compose.yml](docker-compose.yml) 참고.
+
+## 종료(SIGTERM)
+
+- Go 서비스(auth · k8s · session · tool-server)는 SIGTERM을 받으면 먼저 준비 상태를 내린다: `services/pkg/probe`의 `Leave`로 `/readyz`가 503이 되고,
+  `probe.Hold`로 잡은 오래 열린 연결(WebSocket · 이벤트 스트림 · 따라가는 로그)을 끝낸 뒤 `probe.Wait`로 기다린다(차트 grace에서 preStop 뒤 남는 30초 안).
+- `/readyz`는 서버가 받고 있고 떠나는 중이 아닌지만 본다. DB나 다른 서비스는 묻지 않는다 — 모든 레플리카가 같이 쓰므로 하나가 죽으면 레플리카가 한꺼번에 Service에서 빠진다.
+- 이렇게 끝나는 WebSocket은 1001 `server_shutdown`(`probe.ShutdownCloseCode` · `ShutdownReason`)으로 닫고, 터미널은 그 이유로 `k8s.session.end` 행을 남긴다.
+  새 오래 열린 연결은 `probe.Hold`, 터미널(Pod exec · 노드 셸)은 `probe.HoldTerminal`을 쓴다. 스트림 drain이 켜져 시작 때 `probe.HandOverTerminals`를 부르면 터미널은 drain이 닫는다(merge plan S21).

@@ -14,6 +14,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/internalauth"
 	"github.com/junginho0901/kubeast/services/pkg/memlimit"
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
+	"github.com/junginho0901/kubeast/services/pkg/probe"
 )
 
 type ToolHandler func(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error)
@@ -70,8 +71,12 @@ func main() {
 
 	// Console metrics (services/pkg/metrics): the four fixed paths by name.
 	m := metrics.New("tool-server")
+	// Readiness: not from SIGTERM on. tool-server keeps no database; a call reaches k8s-service when it runs.
+	ready := probe.New()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", handleHealth)
+	mux.HandleFunc("/livez", ready.Live)
+	mux.HandleFunc("/readyz", ready.Ready)
 	mux.Handle("/metrics", m.Handler())
 	mux.HandleFunc("/tools/list", func(w http.ResponseWriter, r *http.Request) {
 		handleList(w, r, toolRegistry)
@@ -95,7 +100,13 @@ func main() {
 	// On SIGTERM a rollout lets the tool calls in flight finish (within the pod's grace period) instead of cutting them.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	// k8s-service's cluster change notices drop a cluster's kubeconfigs here too (cluster_notices.go).
+	if rdb := clusterNoticeClient(); rdb != nil {
+		defer rdb.Close()
+		go listenClusterNotices(ctx, rdb, invalidateClusterKubeconfig)
+	}
 	<-ctx.Done()
+	ready.Leave()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)

@@ -289,14 +289,20 @@ tests:
           path: data.MCP_WRITE_TOOLS
           value: "true"
 
-  - it: keeps the Claude subscription provider off by default with one run at a time
+  - it: keeps the Claude subscription provider off by default with two runs a server, as many in the install
     asserts:
       - equal:
           path: data.AI_CLAUDE_CODE_ENABLED
           value: "false"
       - equal:
           path: data.AI_CLAUDE_CODE_MAX_CONCURRENT
-          value: "1"
+          value: "2"
+      - equal:
+          path: data.AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL
+          value: "0"
+      - equal:
+          path: data.AI_CLAUDE_CODE_QUEUE_WAIT
+          value: "60"
       - equal:
           path: data.AI_CLAUDE_CODE_TURN_TIMEOUT
           value: "300"
@@ -307,7 +313,9 @@ tests:
   - it: takes the Claude subscription provider settings from ai.providers.claudeCode
     set:
       ai.providers.claudeCode.enabled: true
-      ai.providers.claudeCode.maxConcurrent: 2
+      ai.providers.claudeCode.maxConcurrent: 3
+      ai.providers.claudeCode.maxConcurrentTotal: 6
+      ai.providers.claudeCode.queueWaitSeconds: 0
       ai.providers.claudeCode.turnTimeoutSeconds: 600
       ai.providers.claudeCode.maxTurns: 20
     asserts:
@@ -316,13 +324,31 @@ tests:
           value: "true"
       - equal:
           path: data.AI_CLAUDE_CODE_MAX_CONCURRENT
-          value: "2"
+          value: "3"
+      - equal:
+          path: data.AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL
+          value: "6"
+      - equal:
+          path: data.AI_CLAUDE_CODE_QUEUE_WAIT
+          value: "0"
       - equal:
           path: data.AI_CLAUDE_CODE_TURN_TIMEOUT
           value: "600"
       - equal:
           path: data.AI_CLAUDE_CODE_MAX_TURNS
           value: "20"
+
+  - it: renders the Claude subscription limits of values from before they existed as their defaults
+    set:
+      ai.providers.claudeCode.maxConcurrentTotal: null
+      ai.providers.claudeCode.queueWaitSeconds: null
+    asserts:
+      - equal:
+          path: data.AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL
+          value: "0"
+      - equal:
+          path: data.AI_CLAUDE_CODE_QUEUE_WAIT
+          value: "60"
 
   - it: turns in-place resize on by default and off from features.inPlaceResize
     asserts:
@@ -648,3 +674,84 @@ tests:
       - equal:
           path: data.CLUSTER_STORE_ALLOWED_HOSTS
           value: prom.monitoring.svc,.corp.example.com
+
+  # auth-service makes each group from the names as the chart does (handler/role.go); a comma, which would split the
+  # list, goes as "-", which makes the same group.
+  - it: hands auth-service the names of the custom roles the chart binds
+    set:
+      auth.impersonation.customRoles:
+        - name: SRE Team
+          clusterRoles: [view]
+        - name: 운영팀
+          clusterRoles: [view]
+        - name: "a,b"
+          clusterRoles: [view]
+    asserts:
+      - equal:
+          path: data.IMPERSONATION_CUSTOM_ROLES
+          value: "SRE Team,운영팀,a-b"
+
+  - it: hands auth-service no names while auth.impersonation.enabled is false
+    set:
+      auth.impersonation.enabled: false
+      auth.impersonation.customRoles:
+        - name: SRE Team
+          clusterRoles: [view]
+    asserts:
+      - equal:
+          path: data.IMPERSONATION_CUSTOM_ROLES
+          value: ""
+
+  - it: hands the database session limits to every service, in milliseconds
+    asserts:
+      - equal:
+          path: data.DB_STATEMENT_TIMEOUT_MS
+          value: "30000"
+      - equal:
+          path: data.DB_LOCK_TIMEOUT_MS
+          value: "15000"
+      - equal:
+          path: data.DB_IDLE_IN_TRANSACTION_TIMEOUT_MS
+          value: "300000"
+
+  - it: passes 0 and changed session limits as they are set
+    set:
+      postgresql.sessionLimits.statementTimeoutMs: 0
+      postgresql.sessionLimits.lockTimeoutMs: 5000
+      postgresql.sessionLimits.idleInTransactionTimeoutMs: 600000
+    asserts:
+      - equal:
+          path: data.DB_STATEMENT_TIMEOUT_MS
+          value: "0"
+      - equal:
+          path: data.DB_LOCK_TIMEOUT_MS
+          value: "5000"
+      - equal:
+          path: data.DB_IDLE_IN_TRANSACTION_TIMEOUT_MS
+          value: "600000"
+
+  - it: hands each service its database pool size
+    asserts:
+      - equal:
+          path: data.DB_POOL_MAX_AUTH
+          value: "20"
+      - equal:
+          path: data.DB_POOL_MAX_SESSION
+          value: "20"
+      - equal:
+          path: data.DB_POOL_MAX_K8S
+          value: "10"
+      - equal:
+          path: data.DB_POOL_MAX_AI
+          value: "15"
+      - equal:
+          path: data.DB_POOL_MAX_MODEL_CONFIG
+          value: "4"
+
+  - it: passes a changed pool size as it is set
+    set:
+      postgresql.pool.k8sService.maxConns: 16
+    asserts:
+      - equal:
+          path: data.DB_POOL_MAX_K8S
+          value: "16"

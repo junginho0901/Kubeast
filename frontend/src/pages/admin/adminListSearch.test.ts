@@ -15,6 +15,9 @@ import AdminOrganizations from '../AdminOrganizations'
 import AdminRoles from '../AdminRoles'
 import AdminClusters from './Clusters'
 
+// the shared notices tell the floating chat; this test reads the screen
+vi.mock('@/hooks/useAIContext', () => ({ useAIContext: () => {} }))
+
 // Teams, Roles, Clusters and the Users page's Pending window page their rows, so the browser's find reaches only the
 // page shown: each has a search box whose text names the fields it reads, and the search reads those fields of every
 // row — a team on the twentieth page, a role by a permission past the five its row shows, the cluster Kubeast runs in
