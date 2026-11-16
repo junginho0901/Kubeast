@@ -517,10 +517,54 @@ func TestHealthReadWaitsBehindNoOnesRequests(t *testing.T) {
 	start := time.Now()
 	err := s.HealthCheck(context.Background())
 	took := time.Since(start)
+	// the version a screen shows is Kubeast's own read too
+	b := s.defaultClientBundle()
+	b.version.mu.Lock()
+	b.version.value = nil
+	b.version.mu.Unlock()
+	vctx, vdone := context.WithTimeout(context.Background(), healthReadBudget)
+	vstart := time.Now()
+	v, verr := s.clusterVersion(vctx)
+	vtook := time.Since(vstart)
+	vdone()
 	leave()
 	wg.Wait()
 	if err != nil || took > healthReadBudget {
-		t.Errorf("with the people's requests queued: %v after %v, want an answer within %v", err, took.Round(time.Millisecond), healthReadBudget)
+		t.Errorf("/health with the people's requests queued: %v after %v, want an answer within %v", err, took.Round(time.Millisecond), healthReadBudget)
+	}
+	if verr != nil || v == nil || v.GitVersion != "v1.35.0" {
+		t.Errorf("the shown version with the people's requests queued: %v %v after %v, want it read at once", v, verr, vtook.Round(time.Millisecond))
+	}
+}
+
+// A forgotten answer starts no second read while one is under way: those who come meanwhile wait on it, its answer
+// is not kept, and the next call reads again.
+func TestForgettingTheHealthAnswerStartsNoSecondRead(t *testing.T) {
+	api := &identityAPI{}
+	s := identityService(t, api)
+	api.slowVersion(500 * time.Millisecond)
+	first := make(chan error, 1)
+	go func() { first <- s.HealthCheck(context.Background()) }()
+	deadline := time.Now().Add(5 * time.Second)
+	for versionAsks(api.seenNow()) == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	s.forgetHealthRead() // a cluster dropped while the read is at the API server
+	if err := s.HealthCheck(context.Background()); err != nil {
+		t.Errorf("a call during the read: %v", err)
+	}
+	if err := <-first; err != nil {
+		t.Errorf("the first call: %v", err)
+	}
+	if n := versionAsks(api.take()); n != 1 {
+		t.Errorf("%d reads while one was under way, want 1", n)
+	}
+	api.slowVersion(0)
+	if err := s.HealthCheck(context.Background()); err != nil {
+		t.Errorf("the call after: %v", err)
+	}
+	if n := versionAsks(api.take()); n != 1 {
+		t.Errorf("the call after the forgotten read asked %d times, want once (its answer is not kept)", n)
 	}
 }
 

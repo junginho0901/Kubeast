@@ -19,7 +19,7 @@ const (
 	shownVersionTTL  = 30 * time.Second
 )
 
-// serverVersionCache is asked once for everyone: the version is the same whoever asks, and each ask waits in the clientset's rate limiter.
+// serverVersionCache is asked once for everyone: the version is the same whoever asks.
 type serverVersionCache struct {
 	mu    sync.Mutex
 	value *version.Info
@@ -45,6 +45,18 @@ func (s *Service) clusterVersion(ctx context.Context) (*version.Info, error) {
 	return b.serverVersionInfo(ctx, shownVersionTTL)
 }
 
+// versionReader reads the server version as Kubeast itself, waiting behind no one's requests (ownVersion); a bundle made
+// without it (tests) reads through its discovery client. nil when it has neither.
+func (b *clientBundle) versionReader() discovery.ServerVersionInterfaceWithContext {
+	switch {
+	case b.ownVersion != nil:
+		return b.ownVersion
+	case b.discovery != nil:
+		return discovery.ToServerVersionInterfaceWithContext(b.discovery)
+	}
+	return nil
+}
+
 // serverVersionInfo is the API server's version read at most maxAge ago, the last one known when an ask fails and the
 // error only when none is. Callers do not change what it points to: every caller shares it.
 func (b *clientBundle) serverVersionInfo(ctx context.Context, maxAge time.Duration) (*version.Info, error) {
@@ -52,7 +64,8 @@ func (b *clientBundle) serverVersionInfo(ctx context.Context, maxAge time.Durati
 	c.mu.Lock()
 	value, at := c.value, c.at
 	c.mu.Unlock()
-	if b.discovery == nil {
+	vr := b.versionReader()
+	if vr == nil {
 		return value, errNotLoaded
 	}
 	if value != nil && time.Since(at) < maxAge {
@@ -63,7 +76,7 @@ func (b *clientBundle) serverVersionInfo(ctx context.Context, maxAge time.Durati
 		plain, cancel := context.WithCancel(context.Background())
 		defer context.AfterFunc(ctx, cancel)()
 		defer cancel()
-		return discovery.ToServerVersionInterfaceWithContext(b.discovery).ServerVersionWithContext(auth.AsKubeast(plain))
+		return vr.ServerVersionWithContext(auth.AsKubeast(plain))
 	})
 	if err != nil {
 		if value != nil {
