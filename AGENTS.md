@@ -133,6 +133,10 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 - 서비스마다 연결한 뒤 SET으로 세션 한도(statement 30초 · lock 15초 · idle-in-transaction 5분, 차트 `postgresql.sessionLimits`)를 걸고(`services/pkg/dbsession`, ai-service는 롤백에 풀리지 않게 autocommit으로 `app/db_session.py`), 마이그레이션은 값과 상관없이 statement · lock을 항상 0으로 둔다(`ApplyMigrations`).
 - 풀 크기는 서비스별 `postgresql.pool.<svc>.maxConns`이고, 새 서비스나 새 풀(잠금 전용 연결 포함)은 합계식 `kubeast.dbConnections`에 더한다 — `templates/checks/db-connections.yaml`이 그 합을 `postgresql.maxConnections` 아래로 막는다(`tests/db_connections_test.yaml`). PgBouncer는 session 모드만 쓴다.
 
+## 클러스터 요청의 신원
+
+- `auth.impersonation.enabled`가 켜지면 k8s-service의 클러스터 transport(`auth.ImpersonationRoundTripper`)는 문맥의 사람으로 보내고, 사람이 없는 요청은 `auth.AsKubeast` 표시(서버 버전 · 클러스터마다 모두에게 쓰는 디스커버리 · 상태 확인)가 없으면 보내지 않는다(`auth.ErrNoPerson`). client-go 호출은 호출자 문맥을 넘긴다(`…WithContext(ctx)` — 문맥 없는 디스커버리 메서드는 안에서 `context.Background()`). 호출자가 자기 문맥으로 요청하는 config(Helm SDK · exec · 로그 파일)는 사람을 고정한다(`UserRESTConfigFor`, `auth.WithPinnedPerson`). informer · 공유 이벤트 · 노드 파드 읽기는 이 transport를 거치지 않는 `cacheClient`(고정 신원 `kubeast:cache`)로 읽는다. tool-server는 사람이 없으면 kubectl을 준비하지 않는다(`errNoPerson`). `TestEveryUserCallCarriesThePerson`이 개요 · 디스커버리 · cluster config · hygiene · watch · 고정 config · 상태 확인 읽기를 본다.
+
 ## 컨테이너 exec
 
 - **서버가 `pods/exec`로 띄운 프로세스는 클라이언트가 끊겨도 컨테이너에 남는다**(TTY 유무와 무관, 컨테이너 런타임이

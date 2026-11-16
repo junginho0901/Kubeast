@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
@@ -53,7 +54,8 @@ func (s *Service) discover(ctx context.Context) (discovered, error) {
 		if dc == nil {
 			return nil, errNotLoaded
 		}
-		groups, lists, err := dc.ServerGroupsAndResources()
+		// one read per cluster kept for everyone for apiResourcesTTL: asked as Kubeast itself
+		groups, lists, err := discovery.ToDiscoveryInterfaceWithContext(dc).ServerGroupsAndResourcesWithContext(auth.AsKubeast(context.Background()))
 		// One aggregated API that does not answer leaves the others known, as kubectl goes on with them. A short cache:
 		// the kinds of that API come back when it does.
 		partial := discovery.IsGroupDiscoveryFailedError(err)
@@ -393,9 +395,12 @@ func (s *Service) GetClusterConfig(ctx context.Context) (map[string]interface{},
 		result["server"] = cluster.WithoutURLUser(rc.Host)
 	}
 
-	// Cluster version
-	sv, err := s.clientsetCtx(ctx).Discovery().ServerVersion()
-	if err == nil {
+	b := s.bundleForCtx(ctx)
+	if b == nil {
+		return result, nil
+	}
+	// Cluster version, the one read kept for everyone
+	if sv, err := b.serverVersionInfo(ctx, shownVersionTTL); err == nil {
 		result["version"] = map[string]interface{}{
 			"major":       sv.Major,
 			"minor":       sv.Minor,
@@ -409,7 +414,7 @@ func (s *Service) GetClusterConfig(ctx context.Context) (map[string]interface{},
 	}
 
 	// API groups
-	groups, err := s.discoveryCtx(ctx).ServerGroups()
+	groups, err := discovery.ToDiscoveryInterfaceWithContext(b.discovery).ServerGroupsWithContext(ctx)
 	if err == nil {
 		groupNames := make([]string, 0, len(groups.Groups))
 		for _, g := range groups.Groups {

@@ -1198,6 +1198,7 @@ gitops:
 # Tunes the k8s-service per-cluster bundle pool, health checks, Prometheus query
 # cache, rate limit and circuit breaker. Safe defaults; rateLimitQPS=0 leaves
 # rate limiting off, healthcheckIntervalSec=0 disables the health checker.
+# breakerConsecutiveFails=0 turns the breaker off; an open one lets one request try the cluster after breakerOpenSec.
 multicluster:
   maxClusters: 20
   healthcheckIntervalSec: 60

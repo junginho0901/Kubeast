@@ -21,3 +21,12 @@ func TestMain(m *testing.M) {
 	}
 	os.Exit(m.Run())
 }
+
+// kubectlAsNoOne turns impersonationEnabled off for one test that calls a handler with a context holding no person
+// and reads kubectl's argv from its verb; the package's value comes back after it.
+func kubectlAsNoOne(t *testing.T) {
+	t.Helper()
+	was := impersonationEnabled
+	impersonationEnabled = false
+	t.Cleanup(func() { impersonationEnabled = was })
+}

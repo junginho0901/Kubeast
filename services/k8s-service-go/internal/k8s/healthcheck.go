@@ -3,9 +3,11 @@ package k8s
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"sync"
 	"time"
 
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
@@ -15,18 +17,28 @@ import (
 // opening (so a single transient blip doesn't trip it); a health-check failure
 // opens immediately (authoritative probe). Any success closes it. Absent =
 // unknown → treated as CLOSED (we never fail-fast a cluster we haven't seen fail).
+// After openFor one request tries the cluster (half-open) and holds the next openFor.
 type clusterHealth struct {
 	mu        sync.Mutex
 	threshold int
+	openFor   time.Duration
+	now       func() time.Time
 	fails     map[cluster.ID]int
-	open      map[cluster.ID]bool
+	open      map[cluster.ID]time.Time // an open cluster: when a request may next try it
 }
 
-func newClusterHealth(threshold int) *clusterHealth {
+// defaultBreakerOpen is the open period of a breaker given none (ServiceOptions.BreakerOpen 0).
+const defaultBreakerOpen = 30 * time.Second
+
+// newClusterHealth is nil, the breaker off, for a threshold below 1 (MC_BREAKER_CONSECUTIVE_FAILS 0).
+func newClusterHealth(threshold int, openFor time.Duration) *clusterHealth {
 	if threshold < 1 {
-		threshold = 1
+		return nil
 	}
-	return &clusterHealth{threshold: threshold, fails: map[cluster.ID]int{}, open: map[cluster.ID]bool{}}
+	if openFor <= 0 {
+		openFor = defaultBreakerOpen
+	}
+	return &clusterHealth{threshold: threshold, openFor: openFor, now: time.Now, fails: map[cluster.ID]int{}, open: map[cluster.ID]time.Time{}}
 }
 
 // recordFailure is a live request error: open the breaker once threshold is hit.
@@ -34,7 +46,16 @@ func (h *clusterHealth) recordFailure(id cluster.ID) {
 	h.mu.Lock()
 	h.fails[id]++
 	if h.fails[id] >= h.threshold {
-		h.open[id] = true
+		h.open[id] = h.now().Add(h.openFor)
+	}
+	h.mu.Unlock()
+}
+
+// answered forgets id's failures while its breaker is closed; an open one waits for its trial.
+func (h *clusterHealth) answered(id cluster.ID) {
+	h.mu.Lock()
+	if _, open := h.open[id]; !open {
+		delete(h.fails, id)
 	}
 	h.mu.Unlock()
 }
@@ -51,7 +72,7 @@ func (h *clusterHealth) recordSuccess(id cluster.ID) {
 func (h *clusterHealth) setOpen(id cluster.ID, open bool) {
 	h.mu.Lock()
 	if open {
-		h.open[id] = true
+		h.open[id] = h.now().Add(h.openFor)
 		h.fails[id] = h.threshold
 	} else {
 		delete(h.open, id)
@@ -63,7 +84,34 @@ func (h *clusterHealth) setOpen(id cluster.ID, open bool) {
 func (h *clusterHealth) isOpen(id cluster.ID) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return h.open[id]
+	_, open := h.open[id]
+	return open
+}
+
+// admit says whether a request to id may go; a trial (its period over) gets the end of the next period it books.
+func (h *clusterHealth) admit(id cluster.ID) (bool, time.Time) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	next, open := h.open[id]
+	if !open {
+		return true, time.Time{}
+	}
+	now := h.now()
+	if now.Before(next) {
+		return false, time.Time{}
+	}
+	booked := now.Add(h.openFor)
+	h.open[id] = booked
+	return true, booked
+}
+
+// unbook gives the next request the try that the trial which booked until booked did not use.
+func (h *clusterHealth) unbook(id cluster.ID, booked time.Time) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if next, open := h.open[id]; open && next.Equal(booked) {
+		h.open[id] = h.now()
+	}
 }
 
 // --- Service accessors (used by the fail-fast middleware + handlers). All
@@ -75,6 +123,49 @@ func (s *Service) ClusterDown(id cluster.ID) bool {
 		return false
 	}
 	return s.health.isOpen(id)
+}
+
+// AdmitToCluster reports whether a request to id may go; trial is non-zero for the one that tries an open breaker. nil-safe.
+func (s *Service) AdmitToCluster(id cluster.ID) (ok bool, trial time.Time) {
+	if s.health == nil {
+		return true, time.Time{}
+	}
+	return s.health.admit(id)
+}
+
+// TrialAskedNothing gives the next request the try: no answer of the cluster came to the trial (a cache's or Kubeast's own). nil-safe.
+func (s *Service) TrialAskedNothing(id cluster.ID, trial time.Time) {
+	if s.health != nil {
+		s.health.unbook(id, trial)
+	}
+}
+
+// ClusterAnswered: the API server answered a request to id that is no trial; the failures go, an open breaker stays. nil-safe.
+func (s *Service) ClusterAnswered(id cluster.ID) {
+	if s.health != nil {
+		s.health.answered(id)
+	}
+}
+
+type clusterAnswerKey struct{}
+
+// OnClusterAnswer gives ctx a function its cluster requests call once, when the API server first answers one below 500.
+func OnClusterAnswer(ctx context.Context, answered func()) context.Context {
+	var once sync.Once
+	return context.WithValue(ctx, clusterAnswerKey{}, func() { once.Do(answered) })
+}
+
+// answerNotice is the innermost cluster transport, under the namespace guard and the person check that answer on their own.
+type answerNotice struct{ base http.RoundTripper }
+
+func (t answerNotice) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := t.base.RoundTrip(req)
+	if err == nil && resp != nil && resp.StatusCode < http.StatusInternalServerError {
+		if notify, ok := req.Context().Value(clusterAnswerKey{}).(func()); ok {
+			notify()
+		}
+	}
+	return resp, err
 }
 
 // MarkClusterDown records a live connectivity error (opens the breaker once the
@@ -120,6 +211,8 @@ type HealthChecker struct {
 	// this sweep: of several replicas one does, so the column does not flip
 	// between their answers. Every replica still probes for its own breaker.
 	writer statusWriter
+	// listFailedAt: while the clusters cannot be listed (the database down), when that began; the verdicts stay as they were.
+	listFailedAt time.Time
 }
 
 // statusWriter is pglock.Lock: true while this process holds the lock.
@@ -153,8 +246,15 @@ func (hc *HealthChecker) Run(ctx context.Context) {
 func (hc *HealthChecker) sweep(ctx context.Context) {
 	metas, err := hc.registry.ListMeta(ctx)
 	if err != nil {
-		slog.Debug("healthcheck: list clusters failed", "err", err)
+		if hc.listFailedAt.IsZero() && ctx.Err() == nil {
+			hc.listFailedAt = time.Now()
+			slog.Warn("healthcheck: cannot list the clusters; keeping the last verdicts", "err", err, "since", hc.listFailedAt)
+		}
 		return
+	}
+	if !hc.listFailedAt.IsZero() {
+		slog.Info("healthcheck: listing the clusters again", "failed_for", time.Since(hc.listFailedAt).Round(time.Second))
+		hc.listFailedAt = time.Time{}
 	}
 	write := hc.writer == nil || hc.writer.Held(ctx)
 	var wg sync.WaitGroup
@@ -184,7 +284,7 @@ func (hc *HealthChecker) sweep(ctx context.Context) {
 
 // probe fetches /version against cluster id, bounded by a short timeout.
 func (hc *HealthChecker) probe(ctx context.Context, id cluster.ID) bool {
-	pctx, cancel := context.WithTimeout(cluster.WithID(ctx, id), 5*time.Second)
+	pctx, cancel := context.WithTimeout(auth.AsKubeast(cluster.WithID(ctx, id)), 5*time.Second)
 	defer cancel()
 	_, _, err := hc.svc.RawRequest(pctx, "GET", "/version")
 	return err == nil

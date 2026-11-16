@@ -220,6 +220,11 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 	if failure, ok := w.(clusterFailureNoter); ok && status == http.StatusServiceUnavailable {
 		failure.noteClusterFailure()
 	}
+	if errors.Is(err, auth.ErrNoPerson) {
+		// Kubeast's own fault, not the cluster's: its words, without the request it would have sent
+		response.Error(w, status, auth.ErrNoPerson.Error())
+		return
+	}
 	response.Error(w, status, response.Public(err))
 }
 
@@ -232,6 +237,8 @@ func statusForError(err error) int {
 	case errors.Is(err, k8s.ErrBadInput):
 		// the caller's own text, whatever words it holds ("forbidden" in a kind's name is not a refusal)
 		return http.StatusBadRequest
+	case errors.Is(err, auth.ErrNoPerson):
+		return http.StatusInternalServerError
 	case errors.Is(err, k8s.ErrNoUser), apierrors.IsUnauthorized(err):
 		return http.StatusUnauthorized
 	case apierrors.IsForbidden(err):
