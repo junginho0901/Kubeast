@@ -118,18 +118,21 @@ func (h *Handler) GetPodNodeSummary(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetPodsOnNode handles GET /api/v1/pods/on-node?node=<name>: the pods of one
-// node ("" = not scheduled), optionally in one namespace, listed as the caller.
+// node ("" = not scheduled), optionally in one namespace, as a Cluster View
+// box draws them — what the caller's own list shows.
 func (h *Handler) GetPodsOnNode(w http.ResponseWriter, r *http.Request) {
 	if !r.URL.Query().Has("node") {
 		response.Error(w, http.StatusBadRequest, "node is required (empty for the pods not scheduled)")
 		return
 	}
-	data, err := h.svc.GetPodsOnNode(r.Context(), r.URL.Query().Get("node"), queryParam(r, "namespace", ""))
+	raw, err := h.svc.GetPodsOnNodeJSON(r.Context(), r.URL.Query().Get("node"), queryParam(r, "namespace", ""))
 	if err != nil {
 		h.handleError(w, err)
 		return
 	}
-	response.JSON(w, http.StatusOK, data)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(raw)
 }
 
 // GetPods handles GET /api/v1/namespaces/{namespace}/pods.

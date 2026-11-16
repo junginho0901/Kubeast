@@ -215,10 +215,14 @@ func (s *Service) describeNode(ctx context.Context, name string, withEvents bool
 	return result, nil
 }
 
-// GetNodePods returns pods running on a node (GetPodsOnNode, every namespace
-// the caller may list).
+// GetNodePods returns pods running on a node in every namespace the caller may list, as the Node drawer's pod table
+// shows them (podsOnNodeOf).
 func (s *Service) GetNodePods(ctx context.Context, nodeName string) ([]map[string]interface{}, error) {
-	return s.GetPodsOnNode(ctx, nodeName, "")
+	list, err := s.podsOnNodeOf(ctx, nodeName, "")
+	if err != nil {
+		return nil, err
+	}
+	return list.rows, nil
 }
 
 // GetNodeEvents returns the events about a node: those naming its UID or its name, which the kubelet writes in place of

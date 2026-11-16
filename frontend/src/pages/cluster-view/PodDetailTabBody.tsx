@@ -5,6 +5,8 @@ import { PodRbacTab } from './PodRbacTab'
 import { DescribeFailure } from '@/components/resource-detail/DescribeFailure'
 import { PodExecPanel } from './PodExecPanel'
 import { useClusterView } from './ClusterViewContext'
+import { Loader2 } from 'lucide-react'
+import type { PodReadShown } from './podDetailRead'
 
 // 활성 탭에 해당하는 본문을 렌더. PodLogsTab 은 selectedPod 변경 시 강제 remount
 // (key) — dev/StrictMode/HMR 조합에서 'No logs available.' stuck 회피.
@@ -13,9 +15,10 @@ interface Props {
   manifest: string | undefined
   describeData: any
   describeError?: unknown
+  podRead?: PodReadShown
 }
 
-export function PodDetailTabBody({ manifest, describeData, describeError }: Props) {
+export function PodDetailTabBody({ manifest, describeData, describeError, podRead = 'none' }: Props) {
   const {
     tr,
     na,
@@ -30,6 +33,23 @@ export function PodDetailTabBody({ manifest, describeData, describeError }: Prop
   } = useClusterView()
 
   if (!selectedPod) return null
+
+  // Summary, Logs and Exec show the pod's containers, which a window opened from a box's row reads first
+  const waits = podRead !== 'none' && (activeTab === 'summary' || activeTab === 'logs' || activeTab === 'exec')
+  if (waits) {
+    return (
+      <div className="flex-1 p-6 overflow-y-auto" data-testid="cluster-view-pod-read">
+        {podRead === 'reading' ? (
+          <div className="flex items-center gap-2 text-sm text-slate-400">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            {tr('common.loading', 'Loading...')}
+          </div>
+        ) : (
+          <DescribeFailure error={podRead.error} className="py-4" about={{ kind: 'Pod', name: selectedPod.name, namespace: selectedPod.namespace }} />
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className={`flex-1 p-6 ${showExec ? 'overflow-hidden' : 'overflow-y-auto'}`}>

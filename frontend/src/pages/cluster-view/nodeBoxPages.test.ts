@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
 import ko from '@/i18n/locales/ko.json'
-import type { PodInfo, PodNodeSummary } from '@/services/api'
+import type { NodeBoxPod, NodeBoxRow, PodInfo, PodNodeSummary } from '@/services/api'
 import { pageOfItems } from '@/hooks/usePagedItems'
 import { getPodHealth } from './podHealth'
 import { ClusterViewContext, type ClusterViewContextValue } from './ClusterViewContext'
@@ -602,3 +602,58 @@ describe('the live node list on the screen', () => {
   })
 })
 
+
+// A box reads its node's pods as k8s-service's rows of them (nodeBoxPod: no containers, the colour the server gives),
+// and its live watch puts each pod's full row in their place as the pod changes.
+describe("a box's rows and the live frames that replace them", () => {
+  const short = (p: PodInfo): NodeBoxPod => {
+    const h = getPodHealth(p)
+    return {
+      name: p.name, namespace: p.namespace, node_name: p.node_name ?? '', pod_ip: p.pod_ip ?? '', status: p.status, phase: p.phase,
+      restart_count: p.restart_count, created_at: p.created_at, labels: p.labels ?? null, health: h.level, health_reason: h.reason,
+    }
+  }
+  const box = (rows: NodeBoxRow[]) => render(summaryOf(['node-001'], () => rows.length), { pods: { 'node-001': rows as PodInfo[] } })
+  const nodeView = (rows: NodeBoxRow[]) => render(summaryOf(['node-001'], () => rows.length), { nodeView: { node: 'node-001', page: null, pod: null }, pods: { 'node-001': rows as PodInfo[] } })
+
+  it('draw the cards, colours and order the full rows draw', () => {
+    // a pod whose colour its containers give, not its phase: crashing, and running but not ready
+    const fromContainers = [
+      { ...pod('node-001', 'node-001-crash', 'ok'), containers: [{ name: 'c', ready: false, state: { waiting: { reason: 'CrashLoopBackOff' } } }] },
+      { ...pod('node-001', 'node-001-notready', 'ok'), containers: [{ name: 'c', ready: false, state: { running: {} } }] },
+    ] as PodInfo[]
+    const full = [...podsFor('node-001', 70), ...fromContainers]
+    expect(fromContainers.map((p) => short(p).health_reason)).toEqual(['CrashLoopBackOff', 'NotReady'])
+    expect(cards(box(full.map(short))).slice(0, 4)).toEqual(['node-001-crash', 'node-001-p005', 'node-001-p030', 'node-001-p055'])
+    expect(cards(box(full.map(short)))).toEqual(cards(box(full)).slice(0, BOX_PREVIEW_CARDS))
+    expect(box(full.map(short))).toBe(box(full))
+    expect(nodeView(full.map(short))).toBe(nodeView(full))
+  })
+
+  it('mixed with frames of full rows draw what the same frames make of full rows', async () => {
+    const { applyWatchFrames } = await vi.importActual<typeof import('@/services/useKubeWatchList')>('@/services/useKubeWatchList')
+    const full = podsFor('node-001', 40)
+    const key = ['cluster-view', 'node-pods', 'node-001', 'all']
+    const crashed = { ...pod('node-001', 'node-001-p001', 'error'), restart_count: 4 }
+    const recovered = pod('node-001', 'node-001-p005', 'ok')
+    const frames = [
+      { type: 'DATA', data: { type: 'MODIFIED', object: crashed } },
+      { type: 'DATA', data: { type: 'MODIFIED', object: recovered } },
+      { type: 'DATA', data: { type: 'DELETED', object: pod('node-001', 'node-001-p002') } },
+      { type: 'DATA', data: { type: 'ADDED', object: pod('node-001', 'node-001-p0399', 'warn') } },
+    ]
+    const after = (rows: NodeBoxRow[]) => {
+      const c = new QueryClient()
+      c.setQueryData(key, rows)
+      applyWatchFrames(c, key, frames, undefined, undefined, undefined, false, () => {})
+      return c.getQueryData<NodeBoxRow[]>(key) ?? []
+    }
+    const mixed = after(full.map(short))
+    expect(mixed.map((r) => `${r.name} ${'containers' in r ? 'full' : 'short'}`).filter((s) => s.endsWith('full'))).toEqual([
+      'node-001-p001 full', 'node-001-p005 full', 'node-001-p0399 full',
+    ])
+    expect(box(mixed)).toBe(box(after(full)))
+    expect(nodeView(mixed)).toBe(nodeView(after(full)))
+    expect(cards(box(mixed)).slice(0, 2)).toEqual(['node-001-p001', 'node-001-p030'])
+  })
+})
