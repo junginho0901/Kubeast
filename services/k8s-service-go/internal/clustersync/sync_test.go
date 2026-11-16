@@ -3,9 +3,11 @@ package clustersync
 import (
 	"context"
 	"errors"
+	"net"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -315,14 +317,19 @@ func TestSpreadStaysWithinAFifth(t *testing.T) {
 // A replica whose Redis did not answer when it started listens for the notices once Redis answers (the client
 // subscribes again by itself) and reads the versions on subscribing, so what changed meanwhile is dropped then.
 func TestAReplicaStartedWithoutRedisHearsTheNoticesOnceRedisAnswers(t *testing.T) {
-	mr := miniredis.NewMiniRedis()
-	if err := mr.Start(); err != nil {
-		t.Fatal(err)
+	mr := miniredis.RunT(t)
+	// Redis does not answer this client until up is set. Not mr.Close and mr.Restart: Restart listens before it
+	// registers its commands, and a client that dials in between keeps a connection whose SUBSCRIBE was refused.
+	var up atomic.Bool
+	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if !up.Load() {
+			return nil, errors.New("redis down")
+		}
+		var d net.Dialer
+		return d.DialContext(ctx, network, addr)
 	}
-	t.Cleanup(mr.Close)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: -1}) // the address, before the stand-in stops
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: -1, Dialer: dial})
 	t.Cleanup(func() { _ = rdb.Close() })
-	mr.Close()
 	g := &registry{versions: map[cluster.ID]int64{"prod": 2, "dev": 1}}
 	b := &replica{Sync: New(g, rdb), kept: map[cluster.ID]int64{}}
 	b.Every = time.Hour // no timed read
@@ -334,9 +341,7 @@ func TestAReplicaStartedWithoutRedisHearsTheNoticesOnceRedisAnswers(t *testing.T
 		t.Fatalf("dropped %v before Redis answered", got)
 	}
 
-	if err := mr.Restart(); err != nil {
-		t.Fatal(err)
-	}
+	up.Store(true)
 	waitSubscribers(t, mr, 1)
 	eventually(t, func() bool { return equal(b.staleDrops(), []string{"prod"}) })
 	a := newReplica(t, g, mr, time.Hour)
