@@ -63,6 +63,13 @@ Kubeast cannot tell whether an address belongs to the person: anyone with `admin
 Prefer group bindings; if you bind a `User`, make sure that person's account exists, or that accounts come from your identity provider.
 `auth.impersonation.userPrefix` (empty by default), for example `kubeast:user:`, puts a name of Kubeast's own before the address, so a binding a cluster made of an address for its own sign-in (OIDC, IAM) is not opened by a Kubeast account of that address. Group bindings keep working. Setting it changes the name the cluster sees and writes in its audit log, and every binding of a `User` to an address stops applying to Kubeast's requests: move those to groups first, on every registered cluster.
 
+**Requests with no person behind them.** Some reads are Kubeast's own, and the cluster's audit log names Kubeast for them:
+
+- With no `Impersonate-User` header: the server version, the API discovery it keeps once per cluster for everyone, and its health checks.
+- As the fixed identity `kubeast:cache` (the `view` rights of §1): the overview informers, an object's events and a node's pods read once for everyone who may list them, the `kube-system` UID that tells the cluster Kubeast runs in, the `metrics.k8s.io` group check, and the search for Prometheus and OpenCost Services.
+
+Any other request whose signed-in person Kubeast cannot name is not sent, and a kubectl tool is not run.
+
 **Write = the Kubernetes default `edit`.** This is the same scope as someone given `edit` for kubectl. It includes:
 
 - reading and writing Secrets
@@ -497,7 +504,7 @@ service:
 | What | Requirement |
 | --- | --- |
 | User namespaces | `podSecurity.hostUsers: false` (default) needs Kubernetes 1.33 or later and a node kernel that supports it (6.3 or later). Otherwise `true` |
-| Pod shutdown | Kubernetes 1.30 or later: the chart's pods behind a Service wait `podShutdown.preStopSeconds` (5 s) before SIGTERM with the native `preStop` `sleep` action (beta and on by default in 1.30, GA in 1.34), so a rolling update sends no new connection to a pod that has exited; `0` leaves the wait out |
+| Pod shutdown | Kubernetes 1.30 or later: the chart's pods behind a Service, but for the bundled PostgreSQL and Redis, wait `podShutdown.preStopSeconds` (5 s) before SIGTERM with the native `preStop` `sleep` action (beta and on by default in 1.30, GA in 1.34), so a rolling update sends no new connection to a pod that has exited; `0` leaves the wait out |
 | Storage | With the built-in PostgreSQL, a PVC — the default StorageClass or `postgresql.storageClassName` |
 | Exposure | NodePort (default), LoadBalancer, or an Ingress controller (`ingress.enabled`) |
 | A proxy or load balancer in front | An idle timeout above 30 s (AWS ALB's default is 60 s). While quiet, a live list, terminal, node shell, followed log and AI answer send something every 25 s and the Helm releases stream every 30 s — a WebSocket ping, an SSE comment line — so they stay open; the gateway gives them 600 to 3 600 s itself |

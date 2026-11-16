@@ -105,17 +105,20 @@ ready_as_set() {
 
 # The documents that differ between the release's manifest and what this checkout's chart renders with the release's
 # values — a server dry run of the same upgrade, so lookup reads what is installed — Secrets left out of both. Empty
-# when the checkout's chart is the installed one; "not rendered" when the chart refuses the values.
+# when the checkout's chart is the installed one; "not rendered" when the chart refuses the values, with helm's error
+# lines (as a switch's dry run prints them).
 manifest_diff() {
-  local live rendered
-  live=$(mktemp); rendered=$(mktemp)
+  local live rendered err
+  live=$(mktemp); rendered=$(mktemp); err=$(mktemp)
   h get manifest "$RELEASE" > "$live"
-  if ! h upgrade "$RELEASE" "$CHART" --reset-then-reuse-values --dry-run=server --hide-secret 2>/dev/null \
+  if ! h upgrade "$RELEASE" "$CHART" --reset-then-reuse-values --dry-run=server --hide-secret 2>"$err" \
       | awk '/^MANIFEST:$/ {on=1; next} /^NOTES:$/ {on=0} on' > "$rendered" || [ ! -s "$rendered" ]; then
     echo "not rendered: $CHART refuses the release's values"
-    rm -f "$live" "$rendered"
+    { grep -E '^(Error|error)' "$err" || head -5 "$err"; } | sed 's/^/  helm: /'
+    rm -f "$live" "$rendered" "$err"
     return
   fi
+  rm -f "$err"
   python3 - "$live" "$rendered" <<'PY'
 import hashlib, re, sys
 def docs(path):
@@ -190,12 +193,20 @@ foreign_after() {
 CLAIMED=""
 claim_next() { CLAIMED=$(( $(revision) + 1 )); echo "$CLAIMED" >> "$MADE"; }
 # after helm: a claimed number helm did not use (it failed before making a revision) comes off the list, or another
-# tool's next revision would take it and count as this script's
+# tool's next revision would take it and count as this script's. A history that cannot be read, or reads empty, says
+# nothing of it: the number stays (helm got as far as the cluster, so it most likely made it), and the reason is printed
 settle_claim() {
   [ -n "$CLAIMED" ] || return 0
-  if ! history_json | jq -e --argjson r "$CLAIMED" 'any(.[]; .revision == $r)' >/dev/null; then
-    { grep -vx "$CLAIMED" "$MADE" || true; } > "$MADE.tmp" && mv "$MADE.tmp" "$MADE"
-  fi
+  local hist made why
+  hist=$(history_json) || hist=""
+  made=$(jq -r --argjson r "$CLAIMED" 'if length == 0 then "empty" else any(.[]; .revision == $r) end' <<<"$hist" 2>/dev/null) || made=""
+  case "$made" in
+    true) ;;
+    false) { grep -vx "$CLAIMED" "$MADE" || true; } > "$MADE.tmp" && mv "$MADE.tmp" "$MADE" ;;
+    *)
+      if [ "$made" = empty ]; then why="read empty"; else why="could not be read"; fi
+      echo "revision $CLAIMED stays listed as $TAG's in $MADE: helm history $why, so whether helm made it is not known. If helm history shows no revision $CLAIMED, take the line out of $MADE, or another tool's revision of that number counts as this script's." >&2 ;;
+  esac
   CLAIMED=""
 }
 

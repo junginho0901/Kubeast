@@ -19,7 +19,7 @@ async function headers(request: APIRequestContext) {
 // the page does not scroll, the footer's bottom is inside the window, and the rows on screen are the footer's range
 async function fits(page: Page, pagerId: string, rows: string) {
   await expect.poll(async () => {
-    const range = await pagerRange(page, pagerId)
+    const range = await pagerRange(page, pagerId, { uncounted: 'nan' })
     const box = await page.getByTestId(pagerId).boundingBox()
     const height = await page.evaluate(() => window.innerHeight)
     return {
@@ -73,19 +73,20 @@ test.describe('Lists sized to the screen', () => {
     await page.getByTestId('monitoring-namespace').click()
     await page.getByTestId('monitoring-namespace-opt-kube-system').click()
     await fits(page, 'monitoring-pod-pager', '[data-testid="monitoring-pod-row"]')
-    // Fit measures each row (useAdaptiveRowsPerPage rowsThatFit: a long pod name wraps to two lines), so with a next page
-    // the room left in the box under the last row would not hold one more at the height of the tallest drawn
-    const range = await pagerRange(page, 'monitoring-pod-pager')
-    if (range.end < range.total) {
-      const { left, tallest } = await page.locator('[data-testid="monitoring-pod-row"]').evaluateAll((rows) => {
-        const box = (rows[0] as HTMLElement).closest('table')!.parentElement!
-        const bottom = box.getBoundingClientRect().top + box.clientHeight
-        return { left: bottom - rows[rows.length - 1].getBoundingClientRect().bottom, tallest: Math.max(...rows.map((r) => r.getBoundingClientRect().height)) }
-      })
-      expect(left, 'room left under the last row of a fitted page').toBeLessThan(tallest + 1)
-    }
     const [picker, search] = await Promise.all([page.getByTestId('monitoring-namespace').boundingBox(), page.getByTestId('monitoring-pod-search').boundingBox()])
     expect({ top: picker?.y, height: picker?.height }, 'one row, one height').toEqual({ top: search?.y, height: search?.height })
+    // Fit measures each row (useAdaptiveRowsPerPage rowsThatFit: a long pod name wraps to two lines), so with a next page
+    // the rows end inside the box and the room left under the last one would not hold one more at the height of the
+    // tallest drawn
+    const range = await pagerRange(page, 'monitoring-pod-pager')
+    test.skip(range.end >= range.total, `kube-system on cluster default fits one page (${range.total} pods): no next page whose fit to read`)
+    const { left, tallest } = await page.locator('[data-testid="monitoring-pod-row"]').evaluateAll((rows) => {
+      const box = (rows[0] as HTMLElement).closest('table')!.parentElement!
+      const bottom = box.getBoundingClientRect().top + box.clientHeight
+      return { left: bottom - rows[rows.length - 1].getBoundingClientRect().bottom, tallest: Math.max(...rows.map((r) => r.getBoundingClientRect().height)) }
+    })
+    expect(left, 'the last row of a fitted page ends inside its box').toBeGreaterThanOrEqual(-0.5)
+    expect(left, 'room left under the last row of a fitted page').toBeLessThan(tallest + 1)
   })
 
   test('Alerts: with Fit the first page holds the rows that end inside the table, each as tall as its text', async ({ page }) => {

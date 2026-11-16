@@ -16,7 +16,7 @@
 - 레플리카가 많으면 데이터베이스 연결 수가 `postgresql.maxConnections`(300) 안에 들어와야 하고, 아니면 업그레이드가 멈춥니다(#868).
 - 다른 역할과 같은 역할 그룹이 되는 이름의 사용자 정의 역할은 이름이 바뀌고 클러스터 부여를 잃으며, 바뀐 것마다 감사 행이 남습니다. `Pending` 그룹의 역할(`PENDING`)인 계정 등급은 기본 `Pending`으로 옮겨집니다(#865).
 - ASCII가 아닌 글자가 든 역할 이름은 자기 그룹을 받습니다(`운영팀`은 `kubeast:role:~c6b4~c601~d300`으로 동작하고, 0.7.7에서는 `kubeast:role:---`였습니다). 그래서 클러스터에서 옛 그룹에 바인딩한 RBAC는 그 역할에 더는 적용되지 않습니다(#865).
-- 서비스 말고도 차트의 PostgreSQL과 Redis가 한 번 다시 시작합니다. 데이터베이스가 잠깐 멈추고 캐시는 비어서 시작합니다(#866, #868).
+- 서비스 말고도 차트의 PostgreSQL과 Redis가 한 번 다시 시작하고, 캐시는 비어서 시작합니다(#866, #868). 데이터베이스가 멈춘 때부터 20초쯤은 옛 파드로 가는 요청이 기다릴 수 있고 몇 개는 실패할 수 있습니다. 0.7.7 파드가 바뀌는 동안에도 요청 몇 개는 실패할 수 있습니다. 0.7.7 파드는 기다리지 않고 멈추고, 0.7.8부터는 파드가 멈추기 전에 기다립니다(#856).
 - 먼저 데이터베이스를 백업합니다. 되돌려도 역할 이름 바꾸기는 되돌아가지 않습니다.
 
 ## 1. 업그레이드 전에
@@ -39,7 +39,19 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 
 지금 값으로 0.7.8을 렌더하고 아무것도 바꾸지 않습니다. 검사가 멈추면 Helm이 무엇을 바꿔야 하는지 담은 오류를 출력하고, 그 목록은 [3](#3-바꿔야-하는-값)의 표에 있습니다. `--dry-run=server`(Helm 3.13 이상)는 차트가 Secret을 읽게 하므로 [1.7](#17-secretsexistingsecret과-redis-사용자)의 Redis 사용자 검사도 돕니다.
 
-설치 안내(예: [1.6](#16-데이터베이스-연결)의 바깥 데이터베이스 연결 합계)를 보려면 `> /dev/null` 없이 돌리고 끝의 `NOTES:`를 읽습니다.
+이 드라이런은 렌더와 차트의 검사만 봅니다. 객체를 API 서버에 보내지 않으므로, 업그레이드 때 API 서버가 거절할 것(바꿀 수 없는 필드, 다른 관리자가 가진 필드)은 여기서 걸리지 않습니다. 업그레이드가 서버 측으로 적용될 때(Helm 4에서 `--server-side=true`, 또는 기본값 `auto`이고 직전 릴리스를 서버 측으로 적용했을 때)는 아래처럼 렌더한 객체를 Helm의 이름으로 API 서버에 드라이런으로 보내 볼 수 있습니다. `helm template`은 클러스터에서 아무것도 읽지 않고, 값이 다른 네임스페이스에 두는 객체는 네임스페이스 오류로 멈추므로 그 `-n`으로 따로 보냅니다.
+
+```bash
+chart=$(mktemp -d)
+helm pull oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 --untar --untardir "$chart"
+helm get values kubeast -n kubeast -o yaml \
+  | helm template kubeast "$chart/kubeast" -n kubeast --no-hooks -f - \
+  | kubectl apply --server-side --dry-run=server --field-manager=helm -n kubeast -f -
+```
+
+차트를 먼저 받는 것은 Helm 4.2.1~4.2.x가 OCI 레지스트리의 차트를 렌더할 때 YAML 앞에 `Pulled:`·`Digest:` 줄을 출력하고, `kubectl apply`가 그 줄을 읽지 못하기 때문입니다.
+
+설치 안내(예: [1.6](#16-데이터베이스-연결)의 바깥 데이터베이스 연결 합계)를 보려면 `helm upgrade` 드라이런을 `> /dev/null` 없이 돌리고 끝의 `NOTES:`를 읽습니다.
 
 ### 1.3 Kubernetes 버전
 
@@ -47,7 +59,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 kubectl version    # Server Version: v1.30 이상
 ```
 
-Service 뒤에 있는 차트 파드는 이제 SIGTERM 전에 `preStop`에서 `podShutdown.preStopSeconds`(5초)를 기다리며, 이때 쿠버네티스 내장 `sleep` 동작(1.30에서 베타·기본 켜짐, 1.34에서 GA)을 씁니다. 더 낮은 클러스터에서는 `podShutdown.preStopSeconds: 0`으로 둡니다(#856).
+Service 뒤에 있는 차트 파드는(번들 PostgreSQL과 Redis는 빼고) 이제 SIGTERM 전에 `preStop`에서 `podShutdown.preStopSeconds`(5초)를 기다리며, 이때 쿠버네티스 내장 `sleep` 동작(1.30에서 베타·기본 켜짐, 1.34에서 GA)을 씁니다. 더 낮은 클러스터에서는 `podShutdown.preStopSeconds: 0`으로 둡니다(#856).
 
 ### 1.4 노드 드레인
 
@@ -212,9 +224,9 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 
 **파드와 롤아웃**
 
-- Service 뒤의 파드는 SIGTERM 전에 `podShutdown.preStopSeconds`를 기다립니다. 종료 유예는 그 기다림, SIGTERM 뒤 서비스가 기다리는 시간, 5초를 더한 것이고 기본값으로는 35초입니다. k8s-service는 열린 터미널이 끝나도록 `streams.drainSeconds`(60)와 닫을 시간 5초를 더 주므로, 기본값으로 종료 유예가 100초입니다(#856, #824, #825).
+- Service 뒤의 파드는 SIGTERM 전에 `podShutdown.preStopSeconds`를 기다립니다. 번들 PostgreSQL과 Redis는 예외로, preStop 기다림이 없고 Kubernetes 기본 종료 유예(30초)를 씁니다. 나머지 파드의 종료 유예는 그 기다림, SIGTERM 뒤 서비스가 기다리는 시간, 5초를 더한 것이고 기본값으로는 35초입니다. k8s-service는 열린 터미널이 끝나도록 `streams.drainSeconds`(60)와 닫을 시간 5초를 더 주므로, 기본값으로 종료 유예가 100초입니다(#856, #824, #825).
 - liveness는 다른 것을 읽지 않는 `/livez`를 묻습니다. readiness는 `/readyz`를 묻고, 이것은 SIGTERM부터 503을 답하며 데이터베이스는 묻지 않습니다(#901).
-- 롤아웃은 새 파드를 하나 띄우고 그 파드가 준비된 뒤에만 옛 파드를 멈춥니다(`maxSurge: 1`, `maxUnavailable: 0`). 그래서 Deployment마다 파드 하나가 더 들어갈 자리가 필요합니다. PostgreSQL은 `Recreate`를 유지하고, Redis는 옛 파드를 멈춘 뒤 새 파드를 띄웁니다(`maxSurge: 0`)(#901, #860).
+- 롤아웃은 새 파드를 하나 띄우고 그 파드가 준비된 뒤에만 옛 파드를 멈춥니다(`maxSurge: 1`, `maxUnavailable: 0`). 그래서 Deployment마다 파드 하나가 더 들어갈 자리가 필요합니다. PostgreSQL은 `Recreate`를 유지하고, Redis는 옛 파드를 먼저 내리기 시작한 뒤 새 파드를 만듭니다(`maxSurge: 0`). 옛 파드가 끝나는 몇 초 동안 둘이 같이 있을 수 있지만 데이터는 나누지 않습니다(emptyDir)(#901, #860).
 - `pdb.enabled`가 이제 `true`입니다. 파드가 둘 이상 남을 수 있는 Deployment(`replicas`, 또는 HPA를 켰을 때 `autoscaling.<service>.minReplicas`)는 `unhealthyPodEvictionPolicy: AlwaysAllow`인 PodDisruptionBudget을 받고, 파드 하나인 Deployment는 받지 않습니다(#901).
 - 멈추는 파드는 오래 열린 연결을 닫습니다. 실시간 목록과 따라가는 로그는 남는 파드로 다시 붙고, 터미널은 서버가 다시 시작한다는 줄과 함께 끝납니다(닫힘 코드 1001, `server_shutdown`)(#901).
 
@@ -344,7 +356,7 @@ git fetch --tags && git checkout v0.7.8
 
 차트와 다른 점은 다음과 같습니다.
 
-- **멈출 때 기다림**: Kubeast 서비스 일곱 개와 Redis에 멈출 시간을 35초 줍니다(`stop_grace_period`. Docker 기본값은 10초). 기본값일 때 차트가 서비스에 주는 시간입니다. `docker compose stop`과 업그레이드는 컨테이너마다 그만큼 걸릴 수 있습니다. `preStop` 기다림, 터미널 드레인, PodDisruptionBudget, HPA는 없습니다(#856).
+- **멈출 때 기다림**: Kubeast 서비스 일곱 개에 멈출 시간을 35초, Redis와 PostgreSQL에 Kubernetes 기본값인 30초를 줍니다(`stop_grace_period`. Docker 기본값은 10초). 기본값일 때 차트가 각각에 주는 시간입니다. `docker compose stop`과 업그레이드는 컨테이너마다 그만큼 걸릴 수 있습니다. `preStop` 기다림, 터미널 드레인, PodDisruptionBudget, HPA는 없습니다(#856).
 - **Redis**: 전과 같이 사용자도 비밀번호도 없고 Compose 네트워크 안에서만 닿습니다(#866은 차트만 바꿉니다).
 - **데이터베이스 한도**: 같은 세션 한도와 풀이 기본으로 적용됩니다. 바꾸려면 `.env`에 `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS`(`0`이면 두지 않음)나 `DB_POOL_MAX_AUTH`, `DB_POOL_MAX_SESSION`, `DB_POOL_MAX_K8S`, `DB_POOL_MAX_AI`를 넣습니다. Compose의 PostgreSQL은 기본 `max_connections`(100)를 그대로 쓰며, 서비스마다 컨테이너 하나면 그 안에 들어갑니다(#868).
 - **사용자 정의 역할 바인딩**: `.env`의 `IMPERSONATION_CUSTOM_ROLES`는 전과 같이 역할 이름을 받습니다. ASCII가 아닌 이름의 새 그룹은 클러스터에 바인딩합니다([6](#6-업그레이드한-뒤)).

@@ -105,9 +105,26 @@ export function followedPage(view: { page: number | null; pod: string | null }, 
   return { page: shown.page, pod: view.pod }
 }
 
-// The address of a node's own view following no pod (or one gone) whose page shown is not the page asked (past the last): the page shown, so pods coming back do not move the view; null when it already says it.
-export function shownPageAddress(view: { page: number | null; pod: string | null }, shown: { page: number; gone: boolean }): { page: number; pod: string | null } | null {
-  if ((view.pod !== null && !shown.gone) || (view.page ?? 1) === shown.page) return null
+// The read and page of a node's own view's last answer: `read` names the query (node, namespace) and Problem pods only.
+export interface NodeViewAnswer {
+  read: string
+  page: number
+}
+
+// The address of a node's own view following no pod (or one gone) whose page shown is not the page asked (past the
+// last): the page shown, so pods coming back do not move the view — only when the list shrank under the page asked
+// within one read (`before`, the last answer, showed that page) or on the view's first answer (`before` null: a link,
+// a reload); another namespace or Problem pods only leaves the page asked, which coming back shows again. Null when the
+// address already says it.
+export function shownPageAddress(
+  view: { page: number | null; pod: string | null },
+  shown: { page: number; gone: boolean },
+  read: string,
+  before: NodeViewAnswer | null,
+): { page: number; pod: string | null } | null {
+  const asked = view.page ?? 1
+  if ((view.pod !== null && !shown.gone) || asked === shown.page) return null
+  if (before !== null && (before.read !== read || before.page !== asked)) return null
   return { page: shown.page, pod: view.pod }
 }
 

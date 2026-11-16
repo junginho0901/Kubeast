@@ -67,7 +67,7 @@ vi.mock('react-i18next', () => ({
 vi.mock('@/hooks/useAIContext', () => ({ useAIContext: () => {} }))
 vi.mock('@/services/api', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/services/api')>()
-  return { ...real, api: { ...real.api, getNamespaces: async () => [] }, isMetricsDisabled: () => false }
+  return { ...real, api: { ...real.api, getNamespaces: async () => [] } }
 })
 // a tab holding its 5 s read, as MonitoringNodes does, drawn again by nothing of that read
 vi.mock('@/pages/monitoring/MonitoringNodes', async () => {

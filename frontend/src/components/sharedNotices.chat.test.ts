@@ -24,9 +24,12 @@ type Layer = { source?: string; summary: string; data?: Record<string, unknown> 
 const told: Layer[] = []
 vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: Layer | null | undefined) => { if (input) told.push(input) } }))
 vi.mock('react-router-dom', () => ({ useLocation: () => ({ pathname: '/workloads/deployments' }) }))
-const access = vi.hoisted(() => ({ namespaces: null as string[] | null }))
+const access = vi.hoisted(() => ({ namespaces: null as string[] | null, role: 'admin', permissions: { '*': ['*'] } as Record<string, string[]> }))
 vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ has: () => true, permissions: { '*': ['*'] }, clusterRole: 'admin', clusterNamespaces: access.namespaces }),
+  usePermission: () => ({
+    has: (key: string) => Object.values(access.permissions).some((keys) => keys.includes('*') || keys.includes(key)),
+    permissions: access.permissions, clusterRole: access.role, clusterNamespaces: access.namespaces,
+  }),
 }))
 
 const i18n = i18next.createInstance()
@@ -62,6 +65,8 @@ beforeEach(() => {
   resetForbidden()
   resetListStatus()
   access.namespaces = null
+  access.role = 'admin'
+  access.permissions = { '*': ['*'] }
 })
 
 describe('ForbiddenBanner', () => {
@@ -87,6 +92,24 @@ describe('ForbiddenBanner', () => {
     const layer = onlyLayer()
     expect(layer.summary).toContain(hint)
     expect(layer.data).toMatchObject({ notice: 'forbidden', refused: ['Node'], access_limited_to_namespaces: ['team-a', 'team-b'] })
+  })
+
+  it('says a role named as a built-in in other capitals acts as no role group, on screen and to the chat', () => {
+    recordForbidden('/cluster/deployments/all')
+    access.role = 'ADMIN'
+    access.permissions = { self: ['resource.objects.read'] }
+    const html = render(createElement(ForbiddenBanner, { clusterKey: 'self' }))
+    const hint = en.layout.forbidden.builtinName.replace('{{role}}', 'ADMIN')
+    expect(html).toContain('data-testid="forbidden-builtin-name-hint"')
+    expect(textOf(html)).toContain(hint)
+    const layer = onlyLayer()
+    expect(layer.summary).toContain(hint)
+    expect(layer.data).toEqual({ notice: 'forbidden', refused: ['Deployment'], role_named_as_builtin: true })
+    expect(layer.data).not.toHaveProperty('custom_role_group')
+    // the built-in itself, by its exact name, gets no such line
+    access.role = 'Admin'
+    const exact = render(createElement(ForbiddenBanner, { clusterKey: 'self' }))
+    expect({ hint: exact.includes('forbidden-builtin-name-hint'), data: onlyLayer().data }).toEqual({ hint: false, data: { notice: 'forbidden', refused: ['Deployment'] } })
   })
 
   it('tells the chat in the screen\'s language', () => {

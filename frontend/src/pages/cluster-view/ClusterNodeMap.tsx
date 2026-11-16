@@ -1,7 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { NodeEntry } from './hooks/useClusterDerived'
 import type { ClusterViewNode } from './hooks/useClusterPodsQuery'
-import { GAP, layoutMap, mapKey } from './nodeMapLayout'
+import { GAP, focusSpokenCell, layoutMap, mapKey, mapNodeCount, mapSpeech, pointerFocusAfter, spokenAfter, type MapSpoken } from './nodeMapLayout'
 import { nodeCordoned, nodeReadiness } from '@/utils/nodeStatus'
 
 // Every node at a glance: a cell per node in the boxes' order, a dot per pod in the cards' colour (errors first, then
@@ -11,7 +11,13 @@ import { nodeCordoned, nodeReadiness } from '@/utils/nodeStatus'
 // While a search is on, the nodes with no pod it matched are faded. A node not Ready (kubectl's NotReady or Unknown)
 // has a solid red border, a cordoned one (SchedulingDisabled) a dashed yellow one, drawn over the page's outline, from
 // the live node list; the legend counts both from that list and each count opens the first such node. A click, or
-// Enter on the cell the arrow keys reach, opens that node's own view; the line under the legend names that cell.
+// Enter on the cell the arrow keys reach, opens that node's own view; the line under the legend names that cell. The
+// canvas is an `application` (WAI-ARIA 1.2), so a screen reader in browse mode passes the arrow keys and Enter to it;
+// a visually hidden live region, polite from the first render, names the cell a keyboard move reached (a focus from
+// the keyboard, an arrow key), an arrow that could not move (that cell, "(end)") and the cell Enter opened; the line
+// under the legend is not live, so a mouse passing over the cells is not read out, and hidden from assistive technology,
+// as it shows what that region says. The map's name counts the nodes as `kubectl get nodes` does (mapNodeCount); the
+// hint is the canvas's description, outside that region.
 
 function cssColor(name: string, fallback: string): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
@@ -43,6 +49,9 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, nodeList
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [width, setWidth] = useState(0)
   const [hover, setHover] = useState<number | null>(null)
+  const [spoken, setSpoken] = useState<MapSpoken>({ text: '', said: 0 }) // the live region's text: what the last keyboard move did
+  const byPointer = useRef(false) // the canvas's next focus comes with a pointer, not a keyboard move (pointerFocusAfter)
+  const hintId = useId()
   const [mode, setMode] = useState(0) // bumps when the colour mode changes, to redraw
 
   useLayoutEffect(() => {
@@ -148,28 +157,46 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, nodeList
   const cordoned = cordonedNodes.length
   const marked = Object.fromEntries(entries.filter((e, i) => marks[i] || (e.status && nodeCordoned(e.status))).map((e) => [e.node, e.status]))
   const legendButton = 'inline-flex items-center gap-1.5 hover:text-ink underline-offset-2 hover:underline'
-  const aria = tr('clusterView.map.aria', 'Node map: {{nodes}} nodes, {{pods}} pods ({{error}} errors, {{warn}} warnings)', { nodes: entries.length, pods: totals.pods, error: totals.error, warn: totals.warn })
+  const speech = mapSpeech(tr)
+  const say = (text: string) => setSpoken((s) => spokenAfter(s, text))
+  const speak = (i: number | null) => say(i === null ? '' : speech.cell(entries[i]))
 
   return (
     <div className="card" data-testid="cluster-view-map" data-list-bounded="one canvas of every node: about 194 px tall at 1,000 nodes, about 1.5 screens at 5,000">
       <div ref={wrapRef} className="w-full">
         <canvas
           ref={canvasRef}
-          role="group"
+          role="application"
           aria-roledescription={tr('clusterView.map.roleDescription', 'Node map')}
-          aria-label={notReady + cordoned > 0 ? `${aria} ${tr('clusterView.map.ariaMarks', '{{notReady}} nodes not Ready, {{cordoned}} SchedulingDisabled.', { notReady, cordoned })}` : aria}
+          aria-label={speech.name({ nodes: mapNodeCount(entries, nodeList), pods: totals.pods, error: totals.error, warn: totals.warn, notReady, cordoned })}
+          aria-describedby={hintId}
           data-cells={JSON.stringify(entries.map((e) => [e.node, e.counts.ok, e.counts.warn, e.counts.error]))}
           data-dim-cells={entries.some((e) => e.dim) ? entries.filter((e) => e.dim).length : undefined}
           data-node-marks={Object.keys(marked).length > 0 ? JSON.stringify(marked) : undefined}
           tabIndex={0}
-          onFocus={() => setHover((h) => h ?? 0)}
-          onBlur={() => setHover(null)}
+          onPointerDown={() => { byPointer.current = pointerFocusAfter('pointerdown') }}
+          onPointerCancel={() => { byPointer.current = pointerFocusAfter('pointercancel') }}
+          onFocus={() => {
+            speak(focusSpokenCell(byPointer.current, cur, entries.length))
+            byPointer.current = pointerFocusAfter('focus')
+            setHover((h) => h ?? 0)
+          }}
+          onBlur={() => {
+            byPointer.current = pointerFocusAfter('blur')
+            setHover(null)
+            say('')
+          }}
           onKeyDown={(ev) => {
             const to = mapKey(ev.key, cur, entries.length, layout.cols)
             if (!to) return
             ev.preventDefault()
-            if ('open' in to) onSelect(to.open)
-            else setHover(to.hover)
+            if ('open' in to) {
+              onSelect(to.open)
+              say(speech.opened(entries[to.open]))
+            } else {
+              setHover(to.hover)
+              say(to.end ? speech.end(entries[to.hover]) : speech.cell(entries[to.hover]))
+            }
           }}
           data-page-cells={pageEnd > pageStart ? `${pageStart},${pageEnd}` : undefined}
           style={{ width: '100%', height: layout.height, cursor: h ? 'pointer' : 'default' }}
@@ -199,15 +226,15 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, nodeList
             </button>
           )}
         </div>
-        <p className={h ? 'min-h-[16px] text-ink' : 'min-h-[16px]'} aria-live="polite" data-testid="cluster-view-map-hover">
-          {h
-            ? h.status && h.status !== 'Ready'
-              ? tr('clusterView.map.hoverStatus', '{{node}} · {{status}} · {{total}} pods · {{error}} errors · {{warn}} warnings', { node: h.label, status: h.status, total: h.counts.total, error: h.counts.error, warn: h.counts.warn })
-              : tr('clusterView.map.hover', '{{node}} · {{total}} pods · {{error}} errors · {{warn}} warnings', { node: h.label, total: h.counts.total, error: h.counts.error, warn: h.counts.warn })
-            : pageEnd > pageStart
+        <div className="min-h-[16px]">
+          <p className={h ? 'text-ink' : undefined} aria-hidden="true" data-testid="cluster-view-map-hover">{h ? speech.cell(h) : ''}</p>
+          <p className="sr-only" aria-live="polite" data-testid="cluster-view-map-live">{spoken.text ? <span key={spoken.said}>{spoken.text}</span> : null}</p>
+          <p id={hintId} hidden={!!h} data-testid="cluster-view-map-hint">
+            {pageEnd > pageStart
               ? tr('clusterView.map.hintPaged', 'A cell is a Node, a dot a Pod; the outlined cells are the boxes below. Click a cell, or press Enter on it, to see all its Pods.')
               : tr('clusterView.map.hint', 'A cell is a Node, a dot a Pod. Click a cell, or press Enter on it, to see all its Pods.')}
-        </p>
+          </p>
+        </div>
       </div>
     </div>
   )

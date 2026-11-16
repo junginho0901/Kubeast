@@ -355,12 +355,16 @@ test.describe('floating chat — a new conversation', () => {
 })
 
 test.describe('floating chat — the keyboard shortcut', () => {
-  // ⌘/ on a Mac, Ctrl+/ elsewhere, as the page reads its platform (navigator.platform): the chromium project's Desktop
-  // Chrome device says Windows on any host, while Playwright's ControlOrMeta follows the host's OS, so the keys come from the page
+  // ⌘/ on a Mac, Ctrl+/ elsewhere, as the page reads its platform (useChatShortcut isMacPlatform: userAgentData.platform,
+  // else navigator.platform): the chromium project's Desktop Chrome device says Windows on any host, while Playwright's
+  // ControlOrMeta follows the host's OS, so the keys come from the page's own rule
   test('⌘/ or Ctrl+/ opens the chat from a text field with the focus in its input, and closes it with the focus back', async ({ page }) => {
     await page.goto('/admin/users')
     const toggle = page.getByTestId('floating-chat-toggle')
-    const mac = await page.evaluate(() => /mac|iphone|ipad/i.test(navigator.platform))
+    const mac = await page.evaluate(() => {
+      const nav = navigator as Navigator & { userAgentData?: { platform?: string } }
+      return /mac|iphone|ipad|ipod/i.test(nav.userAgentData?.platform || nav.platform || '')
+    })
     const shortcut = mac ? 'Meta+Slash' : 'Control+Slash'
     await expect(toggle).toHaveAttribute('aria-keyshortcuts', shortcut)
     await expect(toggle).toHaveAttribute('title', mac ? 'Open AI Chat (⌘/)' : 'Open AI Chat (Ctrl+/)')

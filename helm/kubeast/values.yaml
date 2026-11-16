@@ -662,7 +662,7 @@ autoscaling:
 # zone + hostname spread, soft (ScheduleAnyway)
 topologySpread:
   enabled: true
-# Seconds a pod behind a Service keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, its deregistration delay plus a few seconds.
+# Seconds a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, its deregistration delay plus a few seconds.
 podShutdown:
   preStopSeconds: 5
 
@@ -788,8 +788,8 @@ customCAs: []
 # Default-deny plus exactly the flows the services use (gateway → services,
 # services → database/cache/auth, apiserver and model APIs out). Enforced by
 # CNIs that implement NetworkPolicy (Calico, Cilium, EKS VPC CNI with network
-# policy on); on others (Flannel, kindnet) the objects are inert. Set false
-# only if the cluster's own policy tooling takes over.
+# policy on, kind's kindnet since kind 0.24); on others (Flannel) the objects
+# are inert. Set false only if the cluster's own policy tooling takes over.
 networkPolicy:
   enabled: true
   # CoreDNS namespace (DNS egress is allowed cluster-wide)
@@ -1198,6 +1198,7 @@ gitops:
 # Tunes the k8s-service per-cluster bundle pool, health checks, Prometheus query
 # cache, rate limit and circuit breaker. Safe defaults; rateLimitQPS=0 leaves
 # rate limiting off, healthcheckIntervalSec=0 disables the health checker.
+# breakerConsecutiveFails=0 turns the breaker off; an open one lets one request try the cluster after breakerOpenSec.
 multicluster:
   maxClusters: 20
   healthcheckIntervalSec: 60
