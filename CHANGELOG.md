@@ -15,7 +15,7 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - With auth-service, session-service and ai-service at 4 pods each, the database connections add up to 319, past the chart PostgreSQL's 300, and the upgrade stops at the render check. Raise `postgresql.maxConnections` or lower `postgresql.pool.<service>.maxConns` before you upgrade.
 - A custom role whose name makes another role's group (`a-b` beside `a b`, `ADMIN` beside the built-in `Admin`) is renamed and loses its cluster grants. Role names outside ASCII get new groups (`운영팀` acts as `kubeast:role:~c6b4~c601~d300`, it was `kubeast:role:---`), so RBAC bound to the old group on registered clusters has to be bound to the new one. Back up the database first: a rollback does not undo the renames.
 - Finish node drains in progress before you upgrade.
-- The default model is `gpt-6-luna`. Saved model settings, an `ai.model` in your values and a Compose `.env` keep `gpt-4o-mini`, which OpenAI shuts down on 2027-01-14. Change them before then.
+- The default model is `gpt-6-luna`. Saved model settings, an `ai.model` in your values and a Compose `.env` keep their model; change those that name `gpt-4o-mini`, which OpenAI shuts down on 2027-01-14, before then.
 - With `secrets.existingSecret`, Redis keeps one password until the per-service Redis users' passwords are in a Secret (`redis.acl.existingSecret`, or the main Secret with `redis.acl.existingSecretHasKeys: true`).
 - Upgrade with `--reset-then-reuse-values`. `--reuse-values` stops with that hint, as in 0.7.7.
 
@@ -49,7 +49,7 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - k8s-service's cluster breaker tries one request again after `multicluster.breakerOpenSec`, `multicluster.breakerConsecutiveFails: 0` turns it off, and only a request whose calls could not reach the API server counts as a failure. Its health check reads each cluster's `/version` behind none of the people's requests, and an answer below 500 closes the breaker.
 - New live lists wait while k8s-service is short of memory, past 80 % of its Go memory limit, with a notice on the page.
 - A grant limited to namespaces opens the Dashboard with fewer requests to the cluster, and an idle live-list socket holds 18 KiB instead of 47 KiB.
-- Cluster View's node boxes are answered from the pod rows k8s-service keeps instead of a list of the node's pods, and a pod's window opened from a box reads the pod before it shows its containers.
+- Cluster View's node boxes are answered from the pod rows k8s-service keeps, once its informers run, instead of a list of the node's pods, and a pod's window opened from a box reads the pod before it shows its containers.
 - Cache keys move under `kubeast:cache:`, and a cluster change deletes only those keys.
 - Alert start times are kept in UTC, whatever offset the sender writes.
 - Docker Compose gives the Kubeast services 35 s to stop and PostgreSQL and Redis 30 s (Docker's default is 10 s).
@@ -67,7 +67,7 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 ### Fixed
 
 - No list, window or drawer draws one read's rows as another's after a switch of filter, tab, namespace, object or cluster.
-- A list on Fit holds the rows that end inside its table, each measured at its own height, where 0.7.7 took the first row's height for every row: a list whose rows wrap holds another number of rows a page, and no last row sticks out past the table's bottom.
+- A list on Fit holds the rows that end inside its table, each measured at its own height, where 0.7.7 took the first row's height for every row: a list whose rows wrap holds another number of rows a page, and on the page it is counted on, no last row sticks out past the table's bottom.
 - A live socket that connects again reads its lists again, so rows deleted while it was closed go; frames that come while a list is read are applied to its answer; the Helm releases stream goes on from the last version it saw.
 - Session-end audit rows are written even when the browser has already closed the connection.
 - The floating chat is told what a screen says for a read that was refused, failed or is not installed, instead of zero.

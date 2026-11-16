@@ -2,7 +2,7 @@
 
 # 0.7.7에서 0.7.8로 업그레이드
 
-**손 써야 하는 변경: 있음(설치에 따라 다름).** Kubernetes 1.30보다 오래된 클러스터는 `podShutdown.preStopSeconds: 0`이 필요합니다([1.3](#13-kubernetes-버전)). 값에 `pdb.minAvailable`이 있으면 그 값을 뺄 때까지 업그레이드가 멈춥니다([3](#3-바꿔야-하는-값)). `gpt-4o-mini`를 적은 저장된 AI 모델 설정은 2027-01-14 전에 다른 모델로 바꿉니다([1.9](#19-기본-ai-모델)). `secrets.existingSecret`을 쓰면 이번 업그레이드에서 바꿀 것은 없습니다. Redis 사용자는 그 키를 Secret에 넣을 때까지 꺼진 채입니다([1.7](#17-secretsexistingsecret과-redis-사용자)). 아래 다른 항목은 그 항목이 적은 설치에만 해당합니다.
+**손 써야 하는 변경: 있음(설치에 따라 다름).** Kubernetes 1.30보다 오래된 클러스터는 `podShutdown.preStopSeconds: 0`이 필요합니다([1.3](#13-kubernetes-버전)). 값에 `pdb.minAvailable`이 있으면 그 값을 뺄 때까지 업그레이드가 멈춥니다([3](#3-바꿔야-하는-값)). `gpt-4o-mini`를 적은 저장된 AI 모델 설정은 2027-01-14 전에 다른 모델로 바꿉니다([1.9](#19-기본-ai-모델)). `secrets.existingSecret`을 쓰면 이번 업그레이드에서 바꿀 것은 없습니다. Redis 사용자는 그 키를 `redis.acl.existingSecret`이 가리키는 Secret에 넣거나, 주 Secret에 넣고 `redis.acl.existingSecretHasKeys: true`로 둘 때까지 꺼진 채입니다([1.7](#17-secretsexistingsecret과-redis-사용자)). 아래 다른 항목은 그 항목이 적은 설치에만 해당합니다.
 
 이 문서는 0.7.7 설치를 0.7.8로 올릴 때 먼저 확인할 것, 저절로 바뀌는 것, 바꿔야 하는 값, 업그레이드가 한 번 하는 일, 되돌리는 방법을 다룹니다.
 업그레이드 명령은 [설치와 첫 설정](getting-started.md#업그레이드)의 명령에 `--version 0.7.8`을 쓴 것입니다.
@@ -19,7 +19,7 @@
 - 다른 역할과 같은 역할 그룹이 되는 이름의 사용자 정의 역할은 이름이 바뀌고 클러스터 부여를 잃으며, 바뀐 것마다 감사 행이 남습니다. `Pending` 그룹의 역할(`PENDING`)인 계정 등급은 기본 `Pending`으로 옮겨집니다(#865).
 - ASCII가 아닌 글자가 든 역할 이름은 자기 그룹을 받습니다(`운영팀`은 `kubeast:role:~c6b4~c601~d300`으로 동작하고, 0.7.7에서는 `kubeast:role:---`였습니다). 그래서 클러스터에서 옛 그룹에 바인딩한 RBAC는 그 역할에 더는 적용되지 않습니다(#865).
 - 서비스 말고도 차트의 PostgreSQL과 Redis가 한 번 다시 시작하고, 캐시는 비어서 시작합니다(#866, #868). 데이터베이스가 멈춘 때부터 20초쯤은 옛 파드로 가는 요청이 기다릴 수 있고 몇 개는 실패할 수 있습니다. 0.7.7 파드가 바뀌는 동안에도 요청 몇 개는 실패할 수 있습니다. 0.7.7 파드는 기다리지 않고 멈추고, 0.7.8부터는 파드가 멈추기 전에 기다립니다(#856).
-- 기본 AI 모델은 `gpt-4o-mini` 대신 `gpt-6-luna`입니다. 저장된 모델 설정은 처음 시작할 때 만든 `default-openai` 설정까지 자기 모델을 그대로 씁니다([1.9](#19-기본-ai-모델), #921, #924).
+- 기본 AI 모델은 `gpt-4o-mini` 대신 `gpt-6-luna`입니다. 저장된 모델 설정은 처음 시작할 때 만든 `default-openai` 설정까지 자기 모델을 그대로 씁니다([1.9](#19-기본-ai-모델), #924).
 - 먼저 데이터베이스를 백업합니다. 되돌려도 역할 이름 바꾸기는 되돌아가지 않습니다.
 
 ## 1. 업그레이드 전에
@@ -272,8 +272,8 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 **그 밖**
 
 - 클러스터 요청은 로그인한 사람으로 보내거나 아예 보내지 않습니다. 화면이 여는 서버 버전 · API discovery 읽기(Cluster config의 API 그룹, Cluster Hygiene, 개요의 버전)는 이제 대상 클러스터의 감사 로그에 그 사람 이름으로 남습니다. 기본 RBAC(`system:discovery`)에서는 누구나 같은 답을 받으므로 화면은 바뀌지 않습니다. 문맥에 사람이 없는 요청은 Kubeast 자신의 요청(클러스터마다 두는 서버 버전과 discovery, 상태 확인)이 아니면 보내지 않고, 500으로 답하며 k8s-service가 `cluster request with no person refused`를 로그에 남깁니다. 클러스터 감사 로그에 Kubeast 이름으로 남는 요청은 [클러스터 요구 사항](cluster-requirements.md) §1에 있습니다(#926).
-- 클러스터 차단기: `multicluster.breakerConsecutiveFails: 0`이면 차단기를 끕니다. 0.7.7은 이때 실패 하나에 차단기를 열었습니다. 열린 차단기는 `multicluster.breakerOpenSec`(30초)이 지나면 요청 하나를 클러스터로 보내 봅니다. 0.7.7은 이 값을 읽지 않았습니다. 실패는 이제 호출이 API 서버에 닿지 못한 요청(거부됨, 이름을 찾지 못함, TLS 핸드셰이크가 끝나지 않음, 응답 없이 끊긴 연결)입니다. 집계 API의 503, API 서버 자체의 시간 초과, 요청을 보낸 뒤 지난 화면의 기한, 호출 전에 난 Kubeast 자신의 오류로는 더 이상 열리지 않습니다(#930, #932). 클러스터마다 도는 건강 점검 요청은 사람들의 요청 뒤에서 기다리지 않습니다. API 서버가 500 아래로 답한 점검은 차단기를 닫고, 클러스터는 그대로 `disconnected`로 보입니다. 자격 증명 플러그인이 실패하면 0.7.7처럼 여전히 차단기가 열립니다(#936).
-- k8s-service가 Go 메모리 한도에 맞서 쥔 메모리(살아 있는 힙, 고루틴 스택, 런타임 자체 몫)가 그 한도의 80 %를 넘는 동안 새 실시간 목록은 화면에 안내를 띄우고 기다립니다. 이미 열린 목록은 그대로 돕니다. 있는 객체를 모두 받으며 여는 목록은 시작 전부터 그 객체가 다 지나갈 때까지 서버 전체 8개(`multicluster.wsWatchOpeningConcurrency`)인 자리 하나를 쥡니다. 한 클러스터는 API 서버가 답하기 전까지 하나씩, 답할수록 더 많이, 다른 클러스터가 기다리는 동안 절반까지 잡습니다. 그래서 재시작 뒤에는 몇 개씩 차례로 돌아오고, 답하지 않는 클러스터가 다른 클러스터를 기다리게 하지 않습니다. 목록 하나의 HTTP/2 창은 1 MiB입니다(`multicluster.wsWatchStreamWindowKiB`). 이런 목록은 watch list(`sendInitialEvents`)로 묻고, 이를 거절하는 API 서버(기본값으로 1.33, 1.27~1.31)의 클러스터는 예전 watch로 엽니다. 안내가 자주 보이면 `resources.k8sService.limits.memory`를 올립니다(#896).
+- 클러스터 차단기: `multicluster.breakerConsecutiveFails: 0`이면 차단기를 끕니다. 0.7.7은 이때 실패 하나에 차단기를 열었습니다. 열린 차단기는 `multicluster.breakerOpenSec`(30초)이 지나면 요청 하나를 클러스터로 보내 봅니다. 0.7.7은 이 값을 읽지 않았습니다. 실패는 이제 호출이 API 서버에 닿지 못한 요청(거부됨, 이름을 찾지 못함, TLS 핸드셰이크가 끝나지 않음, 응답 없이 끊긴 연결)입니다. 집계 API의 503, API 서버 자체의 시간 초과, 요청을 보낸 뒤 지난 화면의 기한, 호출 전에 난 Kubeast 자신의 오류로는 더 이상 열리지 않습니다(#930, #932). 클러스터마다 도는 건강 점검 요청은 사람들의 요청 뒤에서 기다리지 않습니다. API 서버가 버전 없이 500 아래로 답한 점검(401, 프록시의 404)은 차단기를 닫고, 클러스터는 그대로 `disconnected`로 보입니다. 자격 증명 플러그인이 실패하면 0.7.7처럼 여전히 차단기가 열립니다(#936).
+- k8s-service가 Go 메모리 한도에 맞서 쥔 메모리(살아 있는 힙, 고루틴 스택, 런타임 자체 몫)가 그 한도의 80 %를 넘는 동안 새 실시간 목록은 화면에 안내를 띄우고 기다립니다. 이미 열린 목록은 그대로 돕니다. 있는 객체를 모두 받으며 여는 목록은 시작 전부터 그 객체가 다 지나갈 때까지 서버 전체 8개(`multicluster.wsWatchOpeningConcurrency`)인 자리 하나를 쥡니다. 한 클러스터는 API 서버가 답하기 전까지 하나씩, 답할수록 더 많이, 다른 클러스터가 기다리는 동안 절반까지 잡습니다. 그래서 재시작 뒤에는 몇 개씩 차례로 돌아오고, 답하지 않는 클러스터가 다른 클러스터를 기다리게 하지 않습니다. 목록 하나의 HTTP/2 창은 1 MiB입니다(`multicluster.wsWatchStreamWindowKiB`). 이런 목록은 watch list(`sendInitialEvents`)로 묻고, 이를 거절하는 API 서버(기본값으로 1.33, 1.27~1.31)의 클러스터는 예전 watch로 엽니다. 안내가 자주 보이면 `resources.k8sService.limits.memory`를 올립니다(#896, #931).
 - 감사 앵커의 S3 다이제스트 객체 키 끝에 해시의 앞 16진수 8자리가 붙습니다(`…-<from>-<to>-<hash8>.json`). 다이제스트를 이름으로 읽는 스크립트는 새 꼴도 받게 고칩니다(#852).
 - 새 차트 객체는 Secret `kubeast-redis-users`, 파드 둘 이상인 서비스의 PodDisruptionBudget, 그리고 켰을 때 HPA와 `k8s-service-stream`의 Deployment·Service·PodDisruptionBudget·NetworkPolicy입니다. 새 ClusterRole이나 Role은 없습니다.
 
@@ -334,7 +334,7 @@ kubectl -n kubeast logs deploy/auth-service | grep 'a chart setting names a role
 각 설정을 뜻한 역할의 이름으로 바꾸고 `--reset-then-reuse-values`로 다시 업그레이드합니다.
 
 **ASCII가 아닌 역할 이름의 그룹**(#865). 역할 관리의 역할 창이 각 역할이 이제 만드는 그룹을 보여 줍니다.
-등록한 클러스터마다 그 그룹을 impersonator에 허용하고, 옛 그룹을 바인딩했던 곳([1.5](#15-역할-이름)에서 나열한 바인딩)에 바인딩합니다. 둘 다 [클러스터 요구 사항](cluster-requirements.md) §1에 있습니다.
+등록한 클러스터마다 그 그룹을 ClusterRole `kubeast-impersonator`에 넣고, 옛 그룹을 바인딩했던 곳([1.5](#15-역할-이름)에서 나열한 바인딩)에 바인딩합니다. 둘 다 [클러스터 요구 사항](cluster-requirements.md) §1에 있습니다.
 `auth.impersonation.customRoles`의 이름은 Kubeast가 도는 클러스터를 뺀 등록 클러스터마다 0.7.8 렌더(`scripts/render-target-rbac.sh`)를 적용하고, 거기 남은 옛 그룹의 바인딩(`kubeast-role-<옛 slug>-<ClusterRole>`, `view`에 바인딩한 `운영팀`이면 `kubeast-role-----view`)을 지웁니다. `helm upgrade`는 Kubeast가 도는 클러스터에서만 그 바인딩을 바꿨습니다.
 
 **cordon된 노드**(#858). 등록한 클러스터마다 `kubectl get nodes`를 보고, 끊긴 드레인이 cordon된 채 남긴 노드는 `kubectl uncordon <node>`로 풉니다.
