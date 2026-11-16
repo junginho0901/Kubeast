@@ -378,6 +378,7 @@ CRD가 없으면 Kubeast는 빈 목록과 "설치 안 됨"(`X-Kubeast-Not-Instal
 | 재시작 없이 적용(Pod `resize` 하위 리소스) | API 서버 1.35 이상 |
 | DRA 화면 | 1.31 이상(§6) |
 | 업그레이드 준비 점검 | 대상 = 서버 마이너 + 1 (조건 없음) |
+| 실시간 목록을 watch list로 열기(`sendInitialEvents`, API 서버의 `WatchList` 기능, 1.32와 1.34부터 기본 켜짐) | 없음: 이를 거절하는 API 서버(기본값으로 1.27~1.31과 1.33)는 422로 답하고, 받아들이고도 북마크를 보내지 않는 서버는 watch list 셋을 연달아, 2초가 됐을 때 마지막 1초 동안 이벤트가 없는 채로 남깁니다. 어느 쪽이든 k8s-service는 그 클러스터의 실시간 목록을 10분 동안 보통 watch로 연 뒤 다시 묻습니다. 확인: `kubectl get --raw '/api/v1/namespaces/default/configmaps?watch=1&sendInitialEvents=true&resourceVersionMatch=NotOlderThan&resourceVersion=0&allowWatchBookmarks=true&timeoutSeconds=1'`의 끝에 annotations에 `k8s.io/initial-events-end`가 있는 `BOOKMARK`가 옵니다 |
 
 ## 9. 노드 셸
 

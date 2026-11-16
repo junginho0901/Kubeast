@@ -526,7 +526,7 @@ describe('the live node list on the screen', () => {
       notReady: 'Node not Ready 2', cordoned: 'SchedulingDisabled 2',
       b1: ['NotReady'], b2: ['SchedulingDisabled'], b3: ['NotReady', 'SchedulingDisabled'], b4: [],
     })
-    expect(attr(html, 'aria-label')).toBe('Node map: 1000 nodes, 3000 pods (0 errors, 0 warnings) 2 nodes not Ready, 2 SchedulingDisabled.')
+    expect(attr(html, 'aria-label')).toBe('Node map: 1000 nodes, 3000 pods (0 errors, 0 warnings). 2 nodes not Ready, 2 SchedulingDisabled.')
     const korean = show(nodesWith({ 'node-001': 'NotReady' }), summaryOf(NAMES), { lng: 'ko' })
     expect(korean.match(/data-testid="cluster-view-map-not-ready"[^>]*>[\s\S]*?<\/span>([^<]*)</)?.[1]).toBe('Ready가 아닌 Node 1')
     // the node's own view says it too
@@ -555,18 +555,42 @@ describe('the live node list on the screen', () => {
       cells: ['cp-0', 'node-001'], marks: null,
       notReady: 'Node not Ready 2', notReadyOpens: 'Open spare-1, the first of them', cordoned: 'SchedulingDisabled 1',
     })
-    // the map can be reached from the keyboard, says what it is, and the line under the legend names the cell reached
-    expect(html).toMatch(/<canvas role="application" aria-roledescription="Node map" aria-label="Node map: 2 nodes[^"]*"[^>]*tabindex="0"/)
-    // that line is no live region (a mouse over the cells is not read out) and holds no hint: the hint is the canvas's
+    // the map can be reached from the keyboard, says what it is, and the line under the legend names the cell reached;
+    // its name counts the four nodes listed, the two with no pod too, as kubectl get nodes does
+    expect(html).toMatch(/<canvas role="application" aria-roledescription="Node map" aria-label="Node map: 4 nodes[^"]*"[^>]*tabindex="0"/)
+    expect(attr(html, 'aria-label')).toBe('Node map: 4 nodes, 6 pods (0 errors, 0 warnings). 2 nodes not Ready, 1 SchedulingDisabled.')
+    // that line is no live region (a mouse over the cells is not read out), is hidden from assistive technology (it
+    // shows what the live region says, which would be read twice) and holds no hint: the hint is the canvas's
     // description, a line of its own. A hidden live region, polite from the first render, is there empty before a
     // keyboard move fills it, so the first cell a focus names is read out
-    expect(html).toMatch(/<p data-testid="cluster-view-map-hover"><\/p>/)
+    expect(html).toMatch(/<p aria-hidden="true" data-testid="cluster-view-map-hover"><\/p>/)
     expect(html).toMatch(/<p class="sr-only" aria-live="polite" data-testid="cluster-view-map-live"><\/p>/)
     const hintId = html.match(/<canvas [^>]*aria-describedby="([^"]+)"/)?.[1]
     expect(hintId).toBeTruthy()
     expect(html).toContain(`<p id="${hintId}" data-testid="cluster-view-map-hint">A cell is a Node, a dot a Pod.`)
     // the legend's buttons are not inside that line, so a cell reached does not take them away
     expect(html.match(/data-testid="cluster-view-map-hover">[^<]*<\/p>/)).not.toBeNull()
+  })
+
+  it('counts the nodes in the map\'s name as kubectl get nodes lists them, never the Unscheduled cell', () => {
+    const name = (summary: PodNodeSummary, nodeList?: { name: string; roles: string[]; status: string }[], lng = 'en') => {
+      const Listed: ComponentType = () => {
+        const entries = useClusterDerived({ summary, nodes: nodeList ?? NODES })
+        return createElement(PodNodeGrid, { entries, matched: summary.total, all: summary.all, isLoading: false, canDeletePod: false, nodeList })
+      }
+      return attr(renderWith(ClusterViewContext, createElement(Listed), { lng }), 'aria-label')
+    }
+    // dev's one node and an unscheduled pod: two cells, one node, before the node list is read and after
+    const one: PodNodeSummary = {
+      nodes: [{ node: 'cp-0', total: 31, ok: 30, warn: 0, error: 1 }, { node: '', total: 1, ok: 0, warn: 1, error: 0 }], total: 32, all: 32, revision: 'r1', source: 'index',
+    }
+    expect(name(one)).toBe('Node map: 1 node, 32 pods (1 error, 1 warning).')
+    expect(name(one, [{ name: 'cp-0', roles: ['control-plane'], status: 'Ready' }])).toBe('Node map: 1 node, 32 pods (1 error, 1 warning).')
+    expect(name(one, undefined, 'ko')).toBe('Node 지도: Node 1개, Pod 32개(오류 1, 주의 1).')
+    // 1 000 nodes and the Unscheduled cell, with a node of the list that has no pod and is NotReady
+    const listed = [{ name: 'cp-0', roles: ['control-plane'], status: 'Ready' }, ...NAMES.slice(1).map((n) => ({ name: n, roles: [], status: 'Ready' })), { name: 'spare', roles: [], status: 'NotReady' }]
+    expect(name(summaryOf([...NAMES, '']))).toBe('Node map: 1000 nodes, 3003 pods (0 errors, 0 warnings).')
+    expect(name(summaryOf([...NAMES, '']), listed, 'ko')).toBe('Node 지도: Node 1001개, Pod 3003개(오류 0, 주의 0). Ready가 아닌 Node 1개, SchedulingDisabled 0개입니다.')
   })
 
   it('drops the box of a node removed, the others keeping their places', () => {

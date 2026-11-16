@@ -1240,6 +1240,19 @@ multicluster:
   # to the API server at one moment. A start not answered in 5 s gives its place
   # to the next and stays open, so a slow API server can have more unanswered.
   wsWatchStartConcurrency: 16
+  # How many live lists of every cluster together may be receiving the objects
+  # they open with at once (a watch from no version); the rest wait before
+  # they start. One cluster takes half of them while another cluster waits,
+  # one at a time until its API server answers its starts, and fewer while
+  # starts go unanswered. Each place is
+  # about 5.5 MiB for a list of 1 000 nodes, so a raise takes k8s-service's
+  # memory up with it.
+  wsWatchOpeningConcurrency: 8
+  # The HTTP/2 window of each live list's stream, in KiB: what a watch whose
+  # browser reads slowly holds unread, and what a stream reads a round trip.
+  # 1024 reads a 26 MB list in 1.4 s over a 50 ms round trip (Go's 4096: 0.7 s)
+  # and 16 slow browsers' watches hold 18 MiB (4096: 65 MiB).
+  wsWatchStreamWindowKiB: 1024
   # How many reads of more than one page (500 pods, ReplicaSets, ...) run at once
   # in one k8s-service; the rest wait, and a read of one page waits for none. One
   # read of a 50 000-pod namespace asks 39 to 78 pages a second and holds up to
