@@ -109,6 +109,7 @@ Check it with `kubectl -n <namespace> get hpa`.
 - Each k8s-service pod keeps the policy reports it read in its own memory for 60 s. A new policy report can take up to a minute to show in a drawer or a list read from the other pod; Refresh on the Policy Reports page reads them again on the pod it reaches.
 - Each k8s-service pod lists and watches the clusters it serves: the API server sees that once per pod.
 - Each k8s-service pod takes the memory one pod takes; the total grows with the pods.
+- Each k8s-service pod answers Cluster View's node boxes from its own informers and keeps the answers it gave the people who may see every namespace: at most 256 nodes and 8 MiB of answers (about 300 bytes a pod), and no pod row. A node's box is made once in each pod while the node's pods stay the same.
 - Limits that protect a pod — memory, work at once, live watches (`multicluster.wsMaxSubscriptions`) and their openings (`multicluster.wsWatchOpeningConcurrency`) — are per pod. So is the client rate to a cluster (`multicluster.clientQPS`): N pods can send N times as much.
 
 ## Sizing

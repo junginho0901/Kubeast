@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { PodInfo } from '@/services/api'
+import type { NodeBoxRow } from '@/services/api'
 import type { PodDetail, DetailTab } from './types'
 
 // ClusterView 전용 state container — 모든 modal / tab / exec / delete state lift.
@@ -15,7 +15,7 @@ import type { PodDetail, DetailTab } from './types'
 export interface PodContextMenuPosition {
   x: number
   y: number
-  pod: PodInfo
+  pod: NodeBoxRow
 }
 
 export interface ClusterViewContextValue {
@@ -77,7 +77,7 @@ export interface ClusterViewContextValue {
   // context-menu + delete modal
   podContextMenu: PodContextMenuPosition | null
   setPodContextMenu: (m: PodContextMenuPosition | null) => void
-  deleteTargetPod: PodInfo | null
+  deleteTargetPod: NodeBoxRow | null
   deleteForce: boolean
   setDeleteForce: (b: boolean) => void
   deleteError: string | null
@@ -90,7 +90,7 @@ export interface ClusterViewContextValue {
   // close handlers (Dashboard 와 동일 패턴 — 모달 close 가 여러 state 한 번에 reset)
   closeDetailModal: () => void
   closeContextMenu: () => void
-  openDeleteModal: (pod: PodInfo) => void
+  openDeleteModal: (pod: NodeBoxRow) => void
   closeDeleteModal: () => void
 }
 

@@ -422,7 +422,7 @@ func TestOnlyTheChecksOfScreensServedFromKubeastCacheAreShared(t *testing.T) {
 		"mayListAll":          {"keepListable": 1, "keepListableIn": 1, "podListAccess": 1},
 		"mayListPods":         {"podListAccess": 1},
 		"mayGetNamespace":     {"cachedScopedNamespaces": 1},
-		"podListAccess":       {"callerPodRows": 1, "podsOnNodeOf": 1},
+		"podListAccess":       {"GetPodsOnNodeJSON": 1, "callerPodRows": 1, "podsOnNodeOf": 1},
 		"askAsGroups":         {"mayDoShown": 1},
 		"groupCheckCtx":       {"askAsGroups": 1, "groupCheckTransport.RoundTrip": 1},
 		"groupCheckTransport": {"wrapPerson": 1},

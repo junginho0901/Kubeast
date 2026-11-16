@@ -39,7 +39,7 @@ func openNodes(s *Service, from, to int) (wait func() ([][]map[string]interface{
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			answers[i-from], errs[i-from] = s.GetPodsOnNode(wideCaller(fmt.Sprintf("u%02d@example.com", i)), fmt.Sprintf("n%02d", i), "")
+			answers[i-from], errs[i-from] = s.drawerPodsOnNode(wideCaller(fmt.Sprintf("u%02d@example.com", i)), fmt.Sprintf("n%02d", i), "")
 		}()
 	}
 	return func() ([][]map[string]interface{}, []error) {
@@ -48,7 +48,7 @@ func openNodes(s *Service, from, to int) (wait func() ([][]map[string]interface{
 	}
 }
 
-// Sixty people opening sixty different nodes' boxes at one moment are read sixteen nodes at a time, and each gets what
+// Sixty people opening sixty different nodes' drawers at one moment are read sixteen nodes at a time, and each gets what
 // its own list shows.
 func TestPodsOnNodeOfManyNodesAreReadAFewAtATime(t *testing.T) {
 	pods, grants := manyNodes(60)
@@ -86,7 +86,7 @@ func TestPodsOnNodeACallerWaitingForANodeReadLeavesWithItsRequest(t *testing.T) 
 	ctx, cancel := context.WithTimeout(wideCaller("u16@example.com"), 100*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	_, err := s.GetPodsOnNode(ctx, "n16", "")
+	_, err := s.drawerPodsOnNode(ctx, "n16", "")
 	took := time.Since(start)
 	read := api.count(func(c apiCall) bool { return c.user == overviewCacheUser && c.selector == "spec.nodeName=n16" })
 	if !errors.Is(err, context.DeadlineExceeded) || took > 2*time.Second || read != 0 {
@@ -100,7 +100,7 @@ func (a *clusterAPI) callerReads() (now, most int) {
 	return a.callerNow, a.callerMost
 }
 
-// What a node read as each caller costs the API server is the shared read's: sixty people opening sixty nodes' boxes
+// What a node read as each caller costs the API server is the shared read's: sixty people opening sixty nodes' drawers
 // are read sixteen at a time when the shared read cannot answer them — informers not yet synced after a restart,
 // kubeast:cache refused, or a grant's namespaces its own access check refuses — and each gets its own list.
 func TestPodsOnNodeReadAsTheCallerTakeTheNodeReadPlacesToo(t *testing.T) {
@@ -132,7 +132,7 @@ func TestPodsOnNodeReadAsTheCallerTakeTheNodeReadPlacesToo(t *testing.T) {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					answers[i], errs[i] = s.GetPodsOnNode(caller(i), fmt.Sprintf("n%02d", i), "")
+					answers[i], errs[i] = s.drawerPodsOnNode(caller(i), fmt.Sprintf("n%02d", i), "")
 				}()
 			}
 			eventually(t, 5*time.Second, func() bool { now, _ := api.callerReads(); return now >= 16 })
@@ -168,7 +168,7 @@ func TestPodsOnNodeOfOneClusterWaitForNoOtherCluster(t *testing.T) {
 	otherBundle.id = "other"
 	ctx, cancel := context.WithTimeout(wideCaller("wide@example.com"), 2*time.Second)
 	defer cancel()
-	got, err := otherService.GetPodsOnNode(ctx, "n1", "")
+	got, err := otherService.drawerPodsOnNode(ctx, "n1", "")
 	if err != nil || len(got) != 6 {
 		t.Errorf("the other cluster's node: %d pods, %v", len(got), err)
 	}
