@@ -41,6 +41,10 @@ dependencies:
         match: 'kubeast-auth-service:v'
       - path: docs/ko/supply-chain.md
         match: 'kubeast-auth-service:v'
+      - path: docs/supply-chain.md
+        match: 'charts/kubeast:'
+      - path: docs/ko/supply-chain.md
+        match: 'charts/kubeast:'
 
   # Built from source into the tool-server and k8s-service images (their Dockerfiles), so the
   # release image scan sees this toolchain rather than the project's release binary.
