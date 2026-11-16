@@ -102,6 +102,12 @@
       "cell": "^\\$\\[[^\\]]+\\]\\.same_group_as$",
       "why": "A custom role whose name differs from another role's only in letter case, spaces or punctuation carries same_group_as, the role it acts as on a cluster (a built-in first, else the oldest), which the pickers name; v0.7.7 did not send it.",
       "pr": "#865"
+    },
+    {
+      "route": "^/api/v1/cluster/pods/on-node$",
+      "cell": "^\\$\\[[^\\]]+\\]\\.(?!(name|namespace|node_name|pod_ip|status|phase|restart_count|created_at|labels)(\\.|\\[|$))",
+      "why": "A Cluster View box's row is what the box draws and its menu reads, from the informers' rows of the node: health and health_reason in place of the containers and the rest of the full row, which the pod's window reads from the pod's describe. The fields it keeps are the full row's.",
+      "pr": "node-box (number when opened)"
     }
   ]
 }

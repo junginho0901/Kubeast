@@ -96,7 +96,9 @@ func randomSidecarPod(rng *rand.Rand, i int) *corev1.Pod {
 }
 
 type podHealthCase struct {
-	Pod    map[string]interface{} `json:"pod"`
+	Pod map[string]interface{} `json:"pod"`
+	// what a Cluster View box gets of the pod for its colour (nodeBoxPod): the page's boxPodHealth reads it
+	Box    map[string]interface{} `json:"box"`
 	Level  string                 `json:"level"`
 	Reason string                 `json:"reason"`
 }
@@ -106,6 +108,7 @@ func podHealthCases() []podHealthCase {
 	sidecars := rand.New(rand.NewSource(17))
 	levels := []string{"ok", "warn", "error"}
 	keep := []string{"phase", "status", "status_reason", "deletion_timestamp"}
+	in := newInterner()
 	var out []podHealthCase
 	for i := 0; i < 900; i++ {
 		var p *corev1.Pod
@@ -135,7 +138,14 @@ func podHealthCases() []podHealthCase {
 			slim[k] = cs
 		}
 		level, reason := podHealth(p)
-		out = append(out, podHealthCase{Pod: slim, Level: levels[level], Reason: reason})
+		var boxPod map[string]interface{}
+		raw, _ := json.Marshal(boxPodOf(toPodRow(p, in)))
+		_ = json.Unmarshal(raw, &boxPod)
+		box := map[string]interface{}{}
+		for _, k := range []string{"phase", "status", "health", "health_reason"} {
+			box[k] = boxPod[k]
+		}
+		out = append(out, podHealthCase{Pod: slim, Box: box, Level: levels[level], Reason: reason})
 	}
 	return out
 }

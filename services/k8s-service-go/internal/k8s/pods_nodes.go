@@ -19,8 +19,9 @@ import (
 // Cluster View draws every node with its pods as coloured dots (the node map)
 // and fetches the pods of the nodes on screen only. The map is counted from
 // the pod rows (pod_index.go) with the caller's access, the colours as the
-// page's cards (podHealth); a node's pods are read once for everyone asking
-// as kubeast:cache and kept to what the caller's identity may list.
+// page's cards (podHealth), and so are the boxes (pods_node_box.go). A Node
+// drawer's pods are read once for everyone asking as kubeast:cache and kept
+// to what the caller's identity may list.
 
 // PodNodeCount is one node's pods on the map; Node "" is the pods not yet
 // scheduled.
@@ -90,17 +91,10 @@ func podNodeSummary(rows []*podRow, q string) *PodNodeSummary {
 	return out
 }
 
-// GetPodsOnNode is the pods on node ("" = not scheduled) the caller's own list shows, from one read for everyone as kubeast:cache kept to what its identity may list (podListAccess), what that check refuses listed as the caller.
-func (s *Service) GetPodsOnNode(ctx context.Context, node, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.podsOnNodeOf(ctx, node, namespace)
-	if err != nil {
-		return nil, err
-	}
-	return list.rows, nil
-}
-
-// podsOnNodeOf is GetPodsOnNode's read with what kubectl describe node adds up of each pod, which the Node drawer's
-// Allocated Resources sum: one read of the node for everyone, as its pod table and Cluster View's box read it.
+// podsOnNodeOf is the pods on node ("" = not scheduled) the caller's own list shows, with what kubectl describe node
+// adds up of each pod, which the Node drawer's pod table and Allocated Resources show: one read of the node for
+// everyone as kubeast:cache, kept to what the caller's identity may list (podListAccess), what that check refuses
+// listed as the caller.
 func (s *Service) podsOnNodeOf(ctx context.Context, node, namespace string) (*nodePodList, error) {
 	b := s.bundleForCtx(ctx)
 	if b == nil {

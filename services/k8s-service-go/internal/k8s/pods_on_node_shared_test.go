@@ -305,6 +305,15 @@ func rbac(grants map[string][]string) func(string, authorizationv1.ResourceAttri
 	}
 }
 
+// drawerPodsOnNode is a Node drawer's pod table (GetNodePods, podsOnNodeOf), the read of a node shared as kubeast:cache.
+func (s *Service) drawerPodsOnNode(ctx context.Context, node, namespace string) ([]map[string]interface{}, error) {
+	list, err := s.podsOnNodeOf(ctx, node, namespace)
+	if err != nil {
+		return nil, err
+	}
+	return list.rows, nil
+}
+
 func answerJSON(t *testing.T, v interface{}) string {
 	t.Helper()
 	b, err := json.Marshal(v)
@@ -314,7 +323,7 @@ func answerJSON(t *testing.T, v interface{}) string {
 	return string(b)
 }
 
-// The pods of a node are what the caller's own list of them shows, row for row, in every way a caller asks.
+// A Node drawer's pods are what the caller's own list of them shows, row for row, in every way a caller asks.
 func TestPodsOnNodeAreWhatTheCallersOwnListShows(t *testing.T) {
 	grants := map[string][]string{"wide@example.com": {""}, "ac@example.com": {"a", "c"}, "b@example.com": {"b"}, "inb@example.com": {"b"}}
 	api := &clusterAPI{pods: podsOnNodes(), review: rbac(grants)}
@@ -332,7 +341,7 @@ func TestPodsOnNodeAreWhatTheCallersOwnListShows(t *testing.T) {
 		{"one namespace allowed of a wide grant", wideCaller("inb@example.com"), "n1", "b"},
 	}
 	for _, c := range cases {
-		got, err := s.GetPodsOnNode(c.ctx, c.node, c.namespace)
+		got, err := s.drawerPodsOnNode(c.ctx, c.node, c.namespace)
 		if err != nil {
 			t.Fatalf("%s: %v", c.name, err)
 		}
@@ -373,7 +382,7 @@ func TestPodsOnNodeOfACrowdAreListedAboutTwiceForEveryone(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			got, err := s.GetPodsOnNode(ctx, "n1", "")
+			got, err := s.drawerPodsOnNode(ctx, "n1", "")
 			if err != nil {
 				t.Errorf("%s: %v", users[i], err)
 			}
@@ -411,18 +420,18 @@ func TestPodsOnNodeKeepToWhatTheCallersIdentityMayList(t *testing.T) {
 		return out
 	}
 
-	got, err := s.GetPodsOnNode(grantCaller("ac@example.com", "a", "c"), "n1", "")
+	got, err := s.drawerPodsOnNode(grantCaller("ac@example.com", "a", "c"), "n1", "")
 	if err != nil || !reflect.DeepEqual(namespacesOf(got), []string{"a/a-db-0", "a/a-web-1"}) {
 		t.Errorf("grant a, c with c refused: %v %v", namespacesOf(got), err)
 	}
-	got, err = s.GetPodsOnNode(grantCaller("one@example.com", "b"), "n1", "")
+	got, err = s.drawerPodsOnNode(grantCaller("one@example.com", "b"), "n1", "")
 	if err != nil || !reflect.DeepEqual(namespacesOf(got), []string{"b/b-db-0", "b/b-web-1"}) {
 		t.Errorf("a grant of one namespace: %v %v", namespacesOf(got), err)
 	}
-	if _, err := s.GetPodsOnNode(grantCaller("one@example.com", "b"), "n1", "a"); !apierrors.IsForbidden(err) {
+	if _, err := s.drawerPodsOnNode(grantCaller("one@example.com", "b"), "n1", "a"); !apierrors.IsForbidden(err) {
 		t.Errorf("a namespace outside the grant: %v", err)
 	}
-	if _, err := s.GetPodsOnNode(wideCaller("none@example.com"), "n1", ""); !apierrors.IsForbidden(err) {
+	if _, err := s.drawerPodsOnNode(wideCaller("none@example.com"), "n1", ""); !apierrors.IsForbidden(err) {
 		t.Errorf("a caller with no right: %v", err)
 	}
 	if n := api.count(func(c apiCall) bool { return c.user == "none@example.com" && c.verb == "list" }); n != 1 {
@@ -448,7 +457,7 @@ func TestPodsOnNodeANamespaceTheReviewRefusesIsAskedOfTheCluster(t *testing.T) {
 		},
 	}
 	s, _ := api.start(t)
-	got, err := s.GetPodsOnNode(grantCaller("hook@example.com", "a", "b", "c"), "n1", "")
+	got, err := s.drawerPodsOnNode(grantCaller("hook@example.com", "a", "b", "c"), "n1", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -469,7 +478,7 @@ func TestPodsOnNodeAreTheCallersOwnListWhenTheCacheIdentityIsRefused(t *testing.
 	}}
 	s, b := api.start(t)
 	for _, ctx := range []context.Context{wideCaller("wide@example.com"), grantCaller("ac@example.com", "a", "c")} {
-		got, err := s.GetPodsOnNode(ctx, "n1", "")
+		got, err := s.drawerPodsOnNode(ctx, "n1", "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -488,7 +497,7 @@ func TestPodsOnNodeAndNamespacesWaitForNoInformers(t *testing.T) {
 	b.inf = nil
 	ctx := wideCaller("wide@example.com")
 	start := time.Now()
-	pods, err := s.GetPodsOnNode(ctx, "n1", "")
+	pods, err := s.drawerPodsOnNode(ctx, "n1", "")
 	if err != nil || len(pods) != 6 {
 		t.Fatalf("pods: %d %v", len(pods), err)
 	}
@@ -511,7 +520,7 @@ func TestPodsOnNodeReadStartedBeforeTheCallerDoesNotAnswerIt(t *testing.T) {
 	s, _ := api.start(t)
 	first := make(chan int, 1)
 	go func() {
-		got, _ := s.GetPodsOnNode(wideCaller("first@example.com"), "n1", "")
+		got, _ := s.drawerPodsOnNode(wideCaller("first@example.com"), "n1", "")
 		first <- len(got)
 	}()
 	started := func() bool {
@@ -527,7 +536,7 @@ func TestPodsOnNodeReadStartedBeforeTheCallerDoesNotAnswerIt(t *testing.T) {
 	api.mu.Unlock()
 	second := make(chan []map[string]interface{}, 1)
 	go func() {
-		got, _ := s.GetPodsOnNode(wideCaller("second@example.com"), "n1", "")
+		got, _ := s.drawerPodsOnNode(wideCaller("second@example.com"), "n1", "")
 		second <- got
 	}()
 	time.Sleep(200 * time.Millisecond)
@@ -554,7 +563,7 @@ func TestPodsOnNodeSharedReadCarriesNoCallersIdentity(t *testing.T) {
 	s := &Service{cache: cache.New("", 0, 0, "")}
 	s.defaultBundle.Store(b)
 	for _, ctx := range []context.Context{wideCaller("wide@example.com"), grantCaller("ac@example.com", "a", "c")} {
-		if _, err := s.GetPodsOnNode(ctx, "n1", ""); err != nil {
+		if _, err := s.drawerPodsOnNode(ctx, "n1", ""); err != nil {
 			t.Fatal(err)
 		}
 	}

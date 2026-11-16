@@ -60,6 +60,9 @@ type clusterInformers struct {
 	podRev atomic.Uint64
 	epoch  string
 
+	// boxes holds the Cluster View box answers of whole nodes (nodeBoxJSON)
+	boxes nodeBoxes
+
 	// nodeRev counts changes to what the node list shows; the list is built
 	// once per change and second and shared by every caller (nodeSummaries).
 	nodeRev     atomic.Uint64
