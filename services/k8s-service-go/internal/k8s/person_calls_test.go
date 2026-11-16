@@ -301,7 +301,7 @@ func TestEveryUserCallCarriesThePerson(t *testing.T) {
 		}},
 		{name: "/health", own: []string{"/version"}, run: func(context.Context) error { return s.HealthCheck(context.Background()) }},
 		{name: "health checker probe and sweep", own: []string{"/version"}, run: func(context.Context) error {
-			if !hc.probe(context.Background(), idc) {
+			if hc.probe(context.Background(), idc) != probeUp {
 				return errors.New("the probe failed")
 			}
 			hc.sweep(context.Background())
