@@ -54,9 +54,9 @@
     {
       "route": "^/api/v1/cluster/metrics/(nodes|pods)$",
       "cell": "^(\\$status|\\$\\.\\$length|\\$\\.detail)$",
-      "cluster": "^self$",
+      "cluster": "^(self|test2)$",
       "newStatus": "^404$",
-      "why": "self has no metrics-server: the reads say metrics.k8s.io is not served, a 404 \"the server could not find the requested resource\" as top-resources words it, where the old build answered an empty list. k8s-service reads it from the cluster's API discovery, the same for every user, so the namespace-limited Read user, whom the cluster refuses those lists, reads it too where the old build gave it the 403.",
+      "why": "self and test2 run no metrics-server: the reads say metrics.k8s.io is not served, a 404 \"the server could not find the requested resource\" as top-resources words it, where the old build answered an empty list. k8s-service reads it from the cluster's API discovery, the same for every user, so on self the namespace-limited Read user, whom the cluster refuses those lists, reads it too where the old build gave it the 403.",
       "pr": "#900"
     },
     {
