@@ -18,7 +18,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/podrow"
@@ -287,28 +289,113 @@ func currentInformers(b *clientBundle) *clusterInformers {
 	return b.inf
 }
 
+// syncGate holds a fake cluster's lists and watches of pods while shut, so an informer set on it cannot sync until the
+// test opens it. The fake runs its reactors under its own lock, so its other calls wait too.
+type syncGate struct {
+	mu   sync.Mutex
+	held chan struct{} // nil while open
+}
+
+func (g *syncGate) shut() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.held == nil {
+		g.held = make(chan struct{})
+	}
+}
+
+func (g *syncGate) open() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.held != nil {
+		close(g.held)
+		g.held = nil
+	}
+}
+
+func (g *syncGate) pass() {
+	g.mu.Lock()
+	held := g.held
+	g.mu.Unlock()
+	if held != nil {
+		<-held
+	}
+}
+
+// gatedCacheClient is a fake cluster of pods whose pod lists and watches wait at the gate, shut at first.
+func gatedCacheClient(t *testing.T, pods []corev1.Pod) (*fake.Clientset, *syncGate) {
+	t.Helper()
+	cs := fake.NewSimpleClientset(podObjects(pods)...)
+	g := &syncGate{}
+	g.shut()
+	cs.PrependReactor("list", "pods", func(k8stesting.Action) (bool, k8sruntime.Object, error) {
+		g.pass()
+		return false, nil, nil
+	})
+	cs.PrependWatchReactor("pods", func(k8stesting.Action) (bool, watch.Interface, error) {
+		g.pass()
+		return false, nil, nil
+	})
+	t.Cleanup(g.open)
+	return cs, g
+}
+
+// startedInformersBox runs a box read beside a check of the informer set's waiters: whether the read waited for the
+// set (waitSynced counts its waiters) before it answered.
+func startedInformersBox(t *testing.T, b *clientBundle, read func() error) (waited bool) {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() { done <- read() }()
+	deadline := time.After(30 * time.Second)
+	for {
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+			return waited
+		case <-deadline:
+			t.Fatal("the box read did not answer while the set could not sync")
+		case <-time.After(time.Millisecond):
+			if ci := currentInformers(b); ci != nil && ci.waiting.Load() > 0 {
+				waited = true
+			}
+		}
+	}
+}
+
 // With no informer set running — after a restart, or once one stopped for want of use — a box starts one, as the node
-// map does, and answers this once with the caller's own list without waiting for it; once the set has synced the
-// boxes are its rows and list nothing.
+// map does, and answers with the caller's own list without waiting for it: here the set cannot sync until the test
+// lets it. Once the set has synced the boxes are its rows and list nothing.
 func TestABoxStartsTheInformersAndUsesThemOnceTheySync(t *testing.T) {
 	pods := podsOnNodes()
 	api := &clusterAPI{pods: pods, review: rbac(map[string][]string{"wide@example.com": {""}})}
 	s, b := api.start(t)
 	b.inf = nil
-	b.cacheClient = fake.NewSimpleClientset(podObjects(pods)...)
+	cs, gate := gatedCacheClient(t, pods)
+	b.cacheClient = cs
 	t.Cleanup(func() {
+		gate.open()
 		if ci := currentInformers(b); ci != nil {
 			ci.stopNow()
 		}
 	})
 	ctx := wideCaller("wide@example.com")
-	read := func() (int, []string) {
+	read := func() (int, []string, error) {
 		before := podLists(api)
 		raw, err := s.GetPodsOnNodeJSON(ctx, "n1", "")
 		if err != nil {
-			t.Fatal(err)
+			return 0, nil, err
 		}
-		return podLists(api) - before, boxNames(t, raw)
+		var names []string
+		var pods []nodeBoxPod
+		if err := json.Unmarshal(raw, &pods); err != nil {
+			return 0, nil, err
+		}
+		for _, p := range pods {
+			names = append(names, p.Namespace+"/"+p.Name+" "+p.Phase+" "+p.Health)
+		}
+		return podLists(api) - before, names, nil
 	}
 	var want []string
 	for _, p := range ownBox(t, ctx, b, "n1", "") {
@@ -323,23 +410,132 @@ func TestABoxStartsTheInformersAndUsesThemOnceTheySync(t *testing.T) {
 			b.infMu.Lock()
 			b.inf = nil
 			b.infMu.Unlock()
+			gate.shut()
 		}
-		lists, got := read()
+		var lists int
+		var got []string
+		waited := startedInformersBox(t, b, func() (err error) {
+			lists, got, err = read()
+			return err
+		})
 		ci := currentInformers(b)
 		if ci == nil || ci == old {
 			t.Fatalf("%s: a box started no informer set", when)
 		}
+		if waited || ci.isSynced() {
+			t.Fatalf("%s, the first box: waited for the set %v, the set synced %v while it could not", when, waited, ci.isSynced())
+		}
 		if lists != 1 || !slices.Equal(got, want) {
 			t.Errorf("%s, the first box: %d lists of pods, %v; want the caller's own list %v", when, lists, got, want)
 		}
+		gate.open()
 		if !eventually(t, 5*time.Second, ci.isSynced) {
 			t.Fatalf("%s: the set never synced", when)
 		}
-		if lists, got := read(); lists != 0 || !slices.Equal(got, want) {
-			t.Errorf("%s, once synced: %d lists of pods, %v; want 0 and %v", when, lists, got, want)
+		lists, got, err := read()
+		if err != nil || lists != 0 || !slices.Equal(got, want) {
+			t.Errorf("%s, once synced: %d lists of pods, %v, %v; want 0 and %v", when, lists, got, err, want)
 		}
 		if currentInformers(b) != ci {
 			t.Errorf("%s: another set started", when)
+		}
+	}
+}
+
+// A person whose identity may list no pods, opening the first box, starts the set and gets the cluster's refusal of
+// their own list; after the set has synced they get it again, never rows of the set. A grant whose second namespace
+// the person may not list gets their own list before the sync and the set's rows of the first after it, the second
+// asked of the cluster as the person.
+func TestABoxForAPersonWithoutPodsAccessIsTheirRefusalBeforeAndAfterTheSync(t *testing.T) {
+	pods := podsOnNodes()
+	api := &clusterAPI{pods: pods, review: rbac(map[string][]string{"ac@example.com": {"a"}})}
+	s, b := api.start(t)
+	b.inf = nil
+	cs, gate := gatedCacheClient(t, pods)
+	b.cacheClient = cs
+	t.Cleanup(func() {
+		gate.open()
+		if ci := currentInformers(b); ci != nil {
+			ci.stopNow()
+		}
+	})
+	none, ac := wideCaller("none@example.com"), grantCaller("ac@example.com", "a", "c")
+	refused := func(when string) {
+		t.Helper()
+		before := api.seen()
+		raw, err := s.GetPodsOnNodeJSON(none, "n1", "")
+		if !apierrors.IsForbidden(err) || raw != nil {
+			t.Errorf("%s: a person with no pods access got %s, %v; want their refusal", when, raw, err)
+		}
+		if got := api.listedSince(before); !slices.Equal(got, []string{"none@example.com  spec.nodeName=n1"}) {
+			t.Errorf("%s: lists %v, want the person's own one", when, got)
+		}
+	}
+	grant := func(when string, lists []string) {
+		t.Helper()
+		before := api.seen()
+		raw, err := s.GetPodsOnNodeJSON(ac, "n1", "")
+		if err != nil {
+			t.Fatalf("%s: %v", when, err)
+		}
+		if got, want := answerJSON(t, decodeBox(t, raw)), answerJSON(t, ownBox(t, ac, b, "n1", "")); got != want {
+			t.Errorf("%s: got %s, the person's own list %s", when, got, want)
+		}
+		if got := api.listedSince(before); !slices.Equal(got, lists) {
+			t.Errorf("%s: lists %v, want %v", when, got, lists)
+		}
+	}
+	refused("before the sync")
+	if currentInformers(b) == nil {
+		t.Fatal("the first box started no informer set")
+	}
+	grant("before the sync", []string{
+		"ac@example.com a spec.nodeName=n1", "ac@example.com a spec.nodeName=n1", "ac@example.com c spec.nodeName=n1", "ac@example.com c spec.nodeName=n1",
+	})
+	gate.open()
+	if !eventually(t, 5*time.Second, currentInformers(b).isSynced) {
+		t.Fatal("the set never synced")
+	}
+	refused("after the sync")
+	grant("after the sync", []string{"ac@example.com a spec.nodeName=n1", "ac@example.com c spec.nodeName=n1", "ac@example.com c spec.nodeName=n1"})
+}
+
+// Sixty first boxes of one cluster at one moment start one informer set, which they all find.
+func TestManyFirstBoxesStartOneInformerSet(t *testing.T) {
+	pods := podsOnNodes()
+	api := &clusterAPI{pods: pods, review: rbac(map[string][]string{"wide@example.com": {""}})}
+	s, b := api.start(t)
+	b.inf = nil
+	cs, gate := gatedCacheClient(t, pods)
+	b.cacheClient = cs
+	t.Cleanup(func() {
+		gate.open()
+		if ci := currentInformers(b); ci != nil {
+			ci.stopNow()
+		}
+	})
+	seen := make([]*clusterInformers, 60)
+	errs := make([]error, 60)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := range 60 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			_, errs[i] = s.GetPodsOnNodeJSON(wideCaller("wide@example.com"), []string{"n1", "n2", ""}[i%3], "")
+			seen[i] = currentInformers(b)
+		}()
+	}
+	close(start)
+	wg.Wait()
+	first := currentInformers(b)
+	if first == nil {
+		t.Fatal("no informer set started")
+	}
+	for i := range 60 {
+		if errs[i] != nil || seen[i] != first {
+			t.Errorf("box %d: %v, its set %p, the set %p", i, errs[i], seen[i], first)
 		}
 	}
 }
