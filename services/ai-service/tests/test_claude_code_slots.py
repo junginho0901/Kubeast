@@ -83,9 +83,11 @@ async def test_two_slots_let_two_servers_run_at_once_and_a_third_waits(servers):
 async def test_a_holder_that_stops_beating_is_set_free_after_the_stale_time(servers, monkeypatch):
     monkeypatch.setattr(claude_code_slots, "STALE_SECONDS", 0.3)
     loop = asyncio.get_running_loop()
-    # a server that died holding the slot: it took it and never beats or sets it free again
-    assert await claude_code_slots.take(servers[0], "chat", 1, "gone-server") == 0
+    # a server that died holding the slot: it took it and never beats or sets it free again. The wait is timed from
+    # before the take, so the heartbeat it writes is not older than the start (timed after, the take's own time came
+    # off the wait: 0.220 s under CI load)
     started = loop.time()
+    assert await claude_code_slots.take(servers[0], "chat", 1, "gone-server") == 0
     async with asyncio.timeout(5), claude_code_slots.held(servers[1], "chat", 1) as slot:
         waited = loop.time() - started
         assert slot == 0 and [owner for *_, owner in await rows(servers[1])] != ["gone-server"]

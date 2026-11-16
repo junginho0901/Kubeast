@@ -428,12 +428,15 @@ describe('what the Pods tab tells the floating chat in place of rows', () => {
     expect(chat.current).toBeNull()
   })
 
-  it('before a namespace is chosen, with the page\'s notice on: the notice', () => {
-    renderOn('', answered('', null), { notice: true })
+  it('before a namespace is chosen, with the page\'s notice on: the notice, then the prompt the tab shows', () => {
+    const html = renderOn('', answered('', null), { notice: true })
     expect(chat.current).toEqual({
       source: 'base',
-      summary: `${en.monitoring.pods.title} — ${en.monitoring.metricsUnavailable}`,
+      summary: `${en.monitoring.pods.title} — ${en.monitoring.metricsUnavailable} — ${en.monitoring.namespace.promptTitle} — ${en.monitoring.namespace.promptSubtitle}`,
       data: { tab: 'pods', filters: { namespace: '' }, metrics_unavailable: true },
     })
+    saysWhatTheTabShows(html, [en.monitoring.metricsUnavailable])
+    renderOn('', answered('', null), { notice: true, lng: 'ko' })
+    expect(chat.current?.summary).toBe(`${ko.monitoring.pods.title} — ${ko.monitoring.metricsUnavailable} — ${ko.monitoring.namespace.promptTitle} — ${ko.monitoring.namespace.promptSubtitle}`)
   })
 })

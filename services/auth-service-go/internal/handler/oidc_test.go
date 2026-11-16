@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"encoding/base64"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,8 +23,24 @@ func TestOIDCStateCookie_RoundTripAndTamper(t *testing.T) {
 	if _, err := verifyState([]byte("other-key-other-key-other-key-00"), cookie, time.Now()); err == nil {
 		t.Fatal("different key must fail")
 	}
-	if _, err := verifyState(key, cookie[:len(cookie)-2]+"zz", time.Now()); err == nil {
+	// a bit of the MAC itself flipped: rewriting the encoded tail ("…zz") left the MAC's bytes as they were when it ended
+	// in "zw", since the last character's two unused bits are not read
+	body, sig, _ := strings.Cut(cookie, ".")
+	raw, err := base64.RawURLEncoding.DecodeString(sig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw[len(raw)-1] ^= 0x01
+	if _, err := verifyState(key, body+"."+base64.RawURLEncoding.EncodeToString(raw), time.Now()); err == nil {
 		t.Fatal("tampered signature must fail")
+	}
+	other, err := signState(key, oidcState{State: "s1", Nonce: "n1", Verifier: "v1", Next: "/admin", Exp: st.Exp})
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherBody, _, _ := strings.Cut(other, ".")
+	if _, err := verifyState(key, otherBody+"."+sig, time.Now()); err == nil {
+		t.Fatal("another payload under this signature must fail")
 	}
 	if _, err := verifyState(key, cookie, time.Now().Add(2*time.Minute)); err == nil {
 		t.Fatal("expired state must fail")
