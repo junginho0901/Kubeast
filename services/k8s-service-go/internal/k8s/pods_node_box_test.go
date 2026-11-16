@@ -462,6 +462,57 @@ func TestANodesBoxIsMadeOnceUntilItsRowsChange(t *testing.T) {
 	}
 }
 
+// The kept answers hold at most nodeBoxesKeepBytes, which the count of their bytes says, and a node whose answer alone
+// is past it is answered and not kept.
+func TestTheKeptBoxesHoldAtMostTheirBytes(t *testing.T) {
+	var pods []corev1.Pod
+	for i := 0; i < 40; i++ {
+		pods = append(pods, nodePod("a", fmt.Sprintf("p-%02d", i), fmt.Sprintf("n%d", i%4)))
+	}
+	pods = append(pods, nodePod("a", "big-0", "big"), nodePod("a", "big-1", "big"), nodePod("a", "big-2", "big"))
+	api := &clusterAPI{pods: pods, review: rbac(map[string][]string{"wide@example.com": {""}})}
+	s, b := api.start(t, podObjects(pods)...)
+	ctx := wideCaller("wide@example.com")
+	one, err := s.GetPodsOnNodeJSON(ctx, "n0", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keep := nodeBoxesKeepBytes
+	t.Cleanup(func() { nodeBoxesKeepBytes = keep })
+	nodeBoxesKeepBytes = 2*len(one) + len(one)/2 // two nodes' answers of ten pods, not three
+	ci := b.inf
+	kept := func() (n, bytes, sum int) {
+		ci.boxes.mu.Lock()
+		defer ci.boxes.mu.Unlock()
+		for _, box := range ci.boxes.nodes {
+			sum += len(box.raw)
+		}
+		return len(ci.boxes.nodes), ci.boxes.bytes, sum
+	}
+	for round := 0; round < 3; round++ {
+		for _, node := range []string{"n0", "n1", "n2", "n3"} {
+			raw, err := s.GetPodsOnNodeJSON(ctx, node, "")
+			if err != nil || len(decodeBox(t, raw)) != 10 {
+				t.Fatalf("%s: %s, %v", node, raw, err)
+			}
+			if n, bytes, sum := kept(); bytes != sum || bytes > nodeBoxesKeepBytes || n > 2 {
+				t.Fatalf("after %s: %d answers kept, %d bytes counted, %d held, at most %d", node, n, bytes, sum, nodeBoxesKeepBytes)
+			}
+		}
+	}
+	nodeBoxesKeepBytes = 16 // smaller than any answer of a pod
+	raw, err := s.GetPodsOnNodeJSON(ctx, "big", "")
+	if err != nil || len(decodeBox(t, raw)) != 3 {
+		t.Fatalf("big: %s, %v", raw, err)
+	}
+	ci.boxes.mu.Lock()
+	_, keptBig := ci.boxes.nodes["big"]
+	ci.boxes.mu.Unlock()
+	if keptBig {
+		t.Error("an answer past nodeBoxesKeepBytes was kept")
+	}
+}
+
 // A box served from the rows is in the call's trail as the Pods list's rows are: from Kubeast's cache.
 func TestANodeBoxIsInTheTrailAsTheRowsOfTheCache(t *testing.T) {
 	api := &clusterAPI{pods: podsOnNodes(), review: rbac(map[string][]string{"wide@example.com": {""}})}

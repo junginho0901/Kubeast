@@ -108,7 +108,7 @@ autoscaling:
 - k8s-service 파드는 저마다 클러스터를 감시하므로, 두 파드에 간 두 요청이 잠깐 감시 이벤트 하나만큼 다를 수 있습니다.
 - k8s-service 파드는 맡은 클러스터를 저마다 목록으로 읽고 감시합니다. API 서버는 이것을 파드 수만큼 받습니다.
 - k8s-service 파드 하나의 메모리는 1대일 때와 같고, 합은 파드 수만큼 늡니다.
-- k8s-service 파드는 Cluster View의 노드 칸을 저마다의 informer로 답하고, 모든 네임스페이스를 볼 수 있는 사람에게 줄 답을 노드 256개까지 들고 있습니다(몇 MB). 한 노드의 칸은 그 노드의 파드가 그대로인 동안 k8s-service 파드마다 한 번 만듭니다.
+- k8s-service 파드는 Cluster View의 노드 칸을 저마다의 informer로 답하고, 모든 네임스페이스를 볼 수 있는 사람에게 준 답을 들고 있습니다. 노드 256개와 답 8 MiB(파드당 약 300바이트)까지이고, 파드 행은 들고 있지 않습니다. 한 노드의 칸은 그 노드의 파드가 그대로인 동안 k8s-service 파드마다 한 번 만듭니다.
 - 파드를 지키는 한도(메모리, 동시 작업, 실시간 감시 `multicluster.wsMaxSubscriptions`와 그 열기 `multicluster.wsWatchOpeningConcurrency`)는 파드마다입니다. 클러스터로 보내는 요청 속도(`multicluster.clientQPS`)도 파드마다라, N대면 N배까지 보낼 수 있습니다.
 
 ## 크기 표

@@ -172,45 +172,80 @@ func (ci *clusterInformers) nodeRows(node string) ([]*podRow, bool) {
 
 // nodeBoxes keeps, per node, the box answer of every pod on it, which every caller who may see every namespace gets:
 // many people opening the same page of boxes get bytes made once, as the node list's (nodeList.JSON). An answer is
-// used while the node's rows are the ones it was made of; the informer stores a new row for every update it takes, so
-// a pod changed, added, moved away or deleted makes the next answer anew. At most nodeBoxesKept nodes are kept.
+// used while the node's rows are those it was made of, each the same namespace, name and resourceVersion (rowsPrint):
+// a pod changed, added, moved away or deleted makes the next answer anew. It holds no row, only its bytes: at most
+// nodeBoxesKept nodes and nodeBoxesKeepBytes, so it keeps no row the informer let go.
 type nodeBoxes struct {
 	mu    sync.Mutex
 	nodes map[string]*nodeBox
+	bytes int // the kept answers' bytes
 }
 
 type nodeBox struct {
-	rows []*podRow
-	raw  []byte
+	stamp uint64 // rowsPrint of the rows it was made of
+	raw   []byte
 }
 
-// nodeBoxesKept: an answer of 40 pods is about 12 KB, so a full set holds some 3 MB.
 const nodeBoxesKept = 256
+
+// nodeBoxesKeepBytes: a pod's part of an answer is about 300 bytes, so 8 MiB keeps about 28 000 pods', 110 nodes of
+// 250; a node whose answer alone is larger is answered and not kept. A variable so a test can make it small.
+var nodeBoxesKeepBytes = 8 << 20
+
+// rowsPrint is FNV-1a (64 bits) over each row's namespace, name and resourceVersion, in their order.
+func rowsPrint(rows []*podRow) uint64 {
+	h := uint64(14695981039346656037)
+	add := func(s string) {
+		for i := 0; i < len(s); i++ {
+			h ^= uint64(s[i])
+			h *= 1099511628211
+		}
+		h ^= 0xff // after each string, so "ab"+"c" is not "a"+"bc"
+		h *= 1099511628211
+	}
+	for _, r := range rows {
+		add(r.namespace)
+		add(r.name)
+		add(r.rv)
+	}
+	return h
+}
 
 // nodeBoxJSON is the answer of rows, the node's rows in the API's order, made once while they stay the same.
 func (ci *clusterInformers) nodeBoxJSON(node string, rows []*podRow) []byte {
+	stamp := rowsPrint(rows)
 	ci.boxes.mu.Lock()
 	kept := ci.boxes.nodes[node]
 	ci.boxes.mu.Unlock()
-	if kept != nil && slices.Equal(kept.rows, rows) {
+	if kept != nil && kept.stamp == stamp {
 		return kept.raw
 	}
 	pods := make([]nodeBoxPod, len(rows))
 	for i, r := range rows {
 		pods[i] = boxPodOf(r)
 	}
-	made := &nodeBox{rows: rows, raw: boxJSON(pods)}
+	made := &nodeBox{stamp: stamp, raw: boxJSON(pods)}
 	ci.boxes.mu.Lock()
 	defer ci.boxes.mu.Unlock()
-	if ci.boxes.nodes == nil {
-		ci.boxes.nodes = map[string]*nodeBox{}
+	b := &ci.boxes
+	if old, ok := b.nodes[node]; ok {
+		b.bytes -= len(old.raw)
+		delete(b.nodes, node)
 	}
-	if _, ok := ci.boxes.nodes[node]; !ok && len(ci.boxes.nodes) >= nodeBoxesKept {
-		for other := range ci.boxes.nodes {
-			delete(ci.boxes.nodes, other)
+	if len(made.raw) > nodeBoxesKeepBytes {
+		return made.raw
+	}
+	if b.nodes == nil {
+		b.nodes = map[string]*nodeBox{}
+	}
+	for other, box := range b.nodes {
+		if len(b.nodes) < nodeBoxesKept && b.bytes+len(made.raw) <= nodeBoxesKeepBytes {
 			break
 		}
+		b.bytes -= len(box.raw)
+		delete(b.nodes, other)
 	}
-	ci.boxes.nodes[node] = made
+	b.nodes[node] = made
+	b.bytes += len(made.raw)
 	return made.raw
 }
