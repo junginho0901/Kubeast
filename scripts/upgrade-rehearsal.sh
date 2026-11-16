@@ -104,6 +104,7 @@ OUT="${REH_OUT:-$ROOT/.rehearsal/$([ "$PLAN" = 1 ] && echo plan || echo "$SCENAR
 KC="$OUT/kubeconfig"
 RES="$OUT/results.tsv"
 CHART="$OUT/chart-rc"
+CHART_FROM="$OUT/chart-from/kubeast"
 CHART_VALUES="$OUT/chart-values.json"
 APP_SECRET=kubeast-secrets
 LOOKALIKE='rehearsal: stored before the name rule'
@@ -429,7 +430,7 @@ expected_images() {
 chart_has() { jq -e --arg p "$1" 'getpath($p | split(".")) != null' "$CHART_VALUES" > /dev/null; }
 chart_value() { jq -r --arg p "$1" 'getpath($p | split(".")) // empty' "$CHART_VALUES"; }
 migrations_have() { grep -qE "$1" "$MIGRATIONS"/*.sql 2>/dev/null; }
-value_of() { hc get values -a -o json 2>/dev/null | jq -r --arg p "$1" 'getpath($p | split(".")) // empty'; }
+value_of() { hc get values kubeast -a -o json 2>/dev/null | jq -r --arg p "$1" 'getpath($p | split(".")) // empty'; }
 newest_migration() { local f n=""; for f in "$MIGRATIONS"/[0-9][0-9][0-9][0-9][0-9]_*.sql; do n=${f##*/}; done; printf '%s' "${n%%_*}"; }
 db_version() { psql_q "SELECT version_id FROM goose_db_version WHERE is_applied ORDER BY id DESC LIMIT 1" 2>/dev/null; }
 
@@ -602,11 +603,14 @@ EOF
 install_from() {
   write_values_from
   local extra=()
+  # FROM_VERSION's chart on disk for the renders: Helm 4.2.1 to 4.2.x print an OCI chart's Pulled and Digest lines on stdout
+  rm -rf "${CHART_FROM%/*}"
+  helm pull "$CHART_OCI" --version "$FROM_VERSION" --untar -d "${CHART_FROM%/*}" > "$OUT/pull-from.log" 2>&1 || stop "helm pull $FROM_VERSION (pull-from.log)"
   if [ "$SCENARIO" = existing-secret ]; then
     # The Secret a user would manage: the chart's own render of kubeast-secrets, under another name.
     APP_SECRET=rh-app-secrets
     kc create namespace "$NS" > /dev/null 2>&1
-    helm template kubeast "$CHART_OCI" --version "$FROM_VERSION" -n "$NS" -f "$OUT/values-from.yaml" --show-only templates/secret.yaml 2>/dev/null \
+    helm template kubeast "$CHART_FROM" -n "$NS" -f "$OUT/values-from.yaml" --show-only templates/secret.yaml 2>/dev/null \
       | python3 -I -c '
 import re, sys
 for d in re.split(r"(?m)^---\s*$", sys.stdin.read()):
@@ -634,7 +638,7 @@ for d in re.split(r"(?m)^---\s*$", sys.stdin.read()):
   check install "chart $FROM_VERSION installed" "kubeast-$FROM_VERSION deployed" "$(hc list -o json | jq -r '.[] | select(.name == "kubeast") | "\(.chart) \(.status)"')"
   check install "every Kubeast image is v$FROM_VERSION" "$(expected_images)" "$(kubeast_images "v$FROM_VERSION")"
   admin_login
-  helm show values "$CHART_OCI" --version "$FROM_VERSION" > "$OUT/values-copied-from.yaml" 2>/dev/null || stop "helm show values $FROM_VERSION"
+  helm show values "$CHART_FROM" > "$OUT/values-copied-from.yaml" 2>/dev/null || stop "helm show values $FROM_VERSION"
 }
 
 # --- 4. data, through FROM_VERSION's API (and the rows no API makes, straight into the database) ---
@@ -839,7 +843,7 @@ live_checks() {
   call GET "/api/v1/cluster/namespaces/kube-system/configmaps?cluster=$CLUSTER_ID" "$T3"; check_code "$a" "rh-u3 is refused outside default" 403
   for n in 1 2 3 4; do printf -v "T$n" '%s' ""; done
   admin_login
-  call GET /api/v1/recordings "$ATOK"
+  call GET /api/v1/cluster/recordings "$ATOK"
   check "$a" "the uploaded recording lists" yes "$(jqb '[.. | objects | .id? // empty] | if any(.[]; . == "rec-reh-uploaded") then "yes" else "no" end')"
   for n in $(seq 1 30); do
     call GET /api/v1/auth/admin/audit/integrity "$ATOK"
@@ -1392,7 +1396,7 @@ seed_groups() {
 # release's; RBAC_WHY says why it returned 1.
 registered_rbac() {
   local f="$OUT/registered-rbac-$1.yaml" src=("$CHART") log="$OUT/registered-rbac-$1.log" live owned
-  [ "$1" = from ] && src=("$CHART_OCI" --version "$FROM_VERSION")
+  [ "$1" = from ] && src=("$CHART_FROM")
   RBAC_WHY="the template did not render (${log##*/})"
   hc template kubeast "${src[@]}" -s templates/impersonation-custom-roles.yaml -f "$OUT/registered-values.yaml" > "$f" 2> "$log" || return 1
   sed -i.bak 's/kubeast-impersonator-custom-roles/rehearsal-registered-custom-roles/g' "$f" && rm -f "$f.bak"
