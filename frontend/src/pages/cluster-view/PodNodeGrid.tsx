@@ -14,7 +14,8 @@ import { pickMainContainer, podToDetail } from './types'
 import { ClusterNodeMap } from './ClusterNodeMap'
 import {
   BOX_PREVIEW_CARDS, NODE_BOXES_PER_PAGE, NODE_PODS_PER_PAGE, boxPageLayer, boxPageOf, cellsOfPage, followedPage, keptOverview, nameOrder,
-  nodeMissingLayer, nodePageOf, nodeViewLayer, nodeViewPage, overviewPage, podKey, previewOrder, searchStart, shownPageAddress, type OverviewPageState,
+  nodeMissingLayer, nodePageOf, nodeViewLayer, nodeViewPage, overviewPage, podKey, previewOrder, searchStart, shownPageAddress, type NodeViewAnswer,
+  type OverviewPageState,
 } from './nodeBoxPages'
 import { UNSCHEDULED, type NodeEntry } from './hooks/useClusterDerived'
 import type { ClusterViewNode } from './hooks/useClusterPodsQuery'
@@ -323,14 +324,21 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
   useAIContext(viewLayer, [JSON.stringify(viewLayer)])
 
   // following the opened pod, the address keeps its page, so the page shown last is the one kept if it then goes;
-  // following none, a page asked past the last is written as the page shown
+  // following none, a page asked past the last is written as the page shown when the list shrank under it within the
+  // same read (lastAnswer: the query key and Problem pods only), not when another namespace or that toggle is chosen
+  const read = [...queryKey, problemsOnly ? 'problems' : 'all'].join('\n')
+  const lastAnswer = useRef<NodeViewAnswer | null>(null)
   const follow = mode === 'all' && nodeView ? followedPage({ page: nodeView.page, pod: focus }, shownPage) : null
-  const kept = follow ?? (mode === 'all' && nodeView && pods ? shownPageAddress(nodeView, shownPage) : null)
+  const kept = follow ?? (mode === 'all' && nodeView && pods ? shownPageAddress(nodeView, shownPage, read, lastAnswer.current) : null)
   const keptPage = kept?.page
   const keptPod = kept?.pod
   useEffect(() => {
     if (keptPage !== undefined) moveNodeView({ page: keptPage, pod: keptPod })
   }, [keptPage, keptPod, moveNodeView])
+  const answered = mode === 'all' && !!nodeView && !!pods
+  useEffect(() => {
+    if (answered) lastAnswer.current = { read, page: shownPage.page }
+  }, [answered, read, shownPage.page])
 
   // a search typed in this view goes to the page of its first match, that pod followed; cleared, it follows nothing
   const searched = useRef(q)

@@ -45,10 +45,10 @@ type clientBundle struct {
 	clientset *kubernetes.Clientset
 	dynamic   dynamic.Interface
 	discovery discovery.DiscoveryInterface
-	// ownDiscovery is Kubeast's own reads' client (/health): the same transports, no client-side rate limit, so it
-	// waits behind no one's requests in clientset's turn limiter.
-	ownDiscovery *discovery.DiscoveryClient
-	restConfig   *rest.Config
+	// ownVersion reads the server version for Kubeast's own reads (/health, the shared version): the same transports,
+	// no client-side rate limit, so it waits behind no one's requests in clientset's turn limiter; it reads nothing else.
+	ownVersion discovery.ServerVersionInterfaceWithContext
+	restConfig *rest.Config
 	// authz is clientset's authorization API (SelfSubjectAccessReview as the
 	// caller), kept as an interface so tests can answer it.
 	authz authorizationv1client.AuthorizationV1Interface
@@ -343,9 +343,9 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	}
 	ownCfg := rest.CopyConfig(cfg)
 	ownCfg.QPS, ownCfg.RateLimiter = -1, nil
-	ownDiscovery, err := discovery.NewDiscoveryClientForConfig(ownCfg)
+	ownVersion, err := discovery.NewDiscoveryClientForConfig(ownCfg)
 	if err != nil {
-		return nil, fmt.Errorf("create own discovery client: %w", err)
+		return nil, fmt.Errorf("create own version client: %w", err)
 	}
 	promExt, promSvc := promSourceFromInfo(info)
 	return &clientBundle{
@@ -353,7 +353,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		authz:         authz,
 		dynamic:       dynClient,
 		discovery:     clientset.Discovery(),
-		ownDiscovery:  ownDiscovery,
+		ownVersion:    ownVersion,
 		restConfig:    cfg,
 		prom:          &promCache{},
 		promExt:       promExt,
@@ -811,12 +811,14 @@ type healthReading struct {
 	at      time.Time
 	err     error
 	running *healthRun // nil when none is under way
+	gen     uint64     // forgetHealthRead's count: a read started before the last one keeps no answer
 }
 
 // healthRun is one read: err is set before done closes.
 type healthRun struct {
 	done chan struct{}
 	err  error
+	gen  uint64
 }
 
 // HealthCheck says whether the default cluster's API server answered GET /version, asked as Kubeast itself. One read
@@ -832,7 +834,7 @@ func (s *Service) HealthCheck(ctx context.Context) error {
 	}
 	run := h.running
 	if run == nil {
-		run = &healthRun{done: make(chan struct{})}
+		run = &healthRun{done: make(chan struct{}), gen: h.gen}
 		h.running = run
 		go s.runHealthRead(run)
 	}
@@ -855,19 +857,22 @@ func (s *Service) runHealthRead(run *healthRun) {
 		}
 		h := &s.healthRead
 		h.mu.Lock()
-		if h.running == run {
-			h.at, h.err, h.running = time.Now(), run.err, nil
+		h.running = nil
+		if run.gen == h.gen {
+			h.at, h.err = time.Now(), run.err
 		}
 		h.mu.Unlock()
 	}()
 	run.err = s.readHealth()
 }
 
-// forgetHealthRead drops the kept answer, for a default cluster that changed; a read under way answers its own callers.
+// forgetHealthRead drops the kept answer when a cluster is dropped, as the default may be the one: a read under way
+// still answers those waiting on it, and its answer is not kept, so the next call reads again — one read at a time.
 func (s *Service) forgetHealthRead() {
 	h := &s.healthRead
 	h.mu.Lock()
-	h.at, h.err, h.running = time.Time{}, nil, nil
+	h.at, h.err = time.Time{}, nil
+	h.gen++
 	h.mu.Unlock()
 }
 
@@ -878,13 +883,13 @@ func (s *Service) readHealth() error {
 	if b == nil {
 		return errNotLoaded
 	}
+	vr := b.versionReader()
+	if vr == nil {
+		return errNotLoaded
+	}
 	ctx, cancel := context.WithTimeout(auth.AsKubeast(context.Background()), healthReadBudget)
 	defer cancel()
-	var dc discovery.DiscoveryInterface = b.ownDiscovery
-	if b.ownDiscovery == nil {
-		dc = b.clientset.Discovery()
-	}
-	_, err := discovery.ToServerVersionInterfaceWithContext(dc).ServerVersionWithContext(ctx)
+	_, err := vr.ServerVersionWithContext(ctx)
 	return err
 }
 

@@ -126,7 +126,7 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 
 - 서비스마다 차트 Redis에 자기 사용자로 붙고, 그 사용자는 코드가 보내는 명령과 `kubeast:` 아래 키 · 채널만 쓸 수 있다(`helm/kubeast/templates/_helpers.tpl`의 `kubeast.redisUsersAcl`, `redis.acl`).
 - 서비스가 Redis에 새 명령을 보내기 시작하면 그 서비스 사용자 줄에 명령을 넣고 `tests/redis_test.yaml`에 케이스를 더한다. 빠뜨리면 Redis ACL을 켠 설치에서 그 명령이 거절(NOPERM)되고 캐시는 오류 없이 빈 것처럼 읽힌다.
-  `services/pkg/redisacl`로 서비스가 보내는 명령을 그 줄과 비교하는 시험이 있다(k8s-service `internal/cache`, tool-server 클러스터 변경 알림). Redis 명령을 보내는 새 곳에도 같은 시험을 붙인다.
+  `services/pkg/redisacl`로 서비스가 보내는 명령을 그 줄과 비교하는 시험이 있다(k8s-service `internal/cache`, k8s-service `internal/clustersync` 클러스터 변경 알림 보내기 · 듣기, tool-server 클러스터 변경 알림). Redis 명령을 보내는 새 곳에도 같은 시험을 붙인다.
 
 ## 데이터베이스 연결
 

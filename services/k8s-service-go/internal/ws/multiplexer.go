@@ -85,7 +85,7 @@ const (
 	reasonForbidden   = "forbidden"   // the app or the cluster refuses it
 	reasonLimit       = "limit"       // too many watches on this connection or this server
 	reasonUnreachable = "unreachable" // the cluster did not answer; the watch keeps trying
-	reasonFailed      = "failed"      // the cluster answered with an error; the watch keeps trying
+	reasonFailed      = "failed"      // the cluster answered with an error, or Kubeast did not send it (no person named); the watch keeps trying
 	reasonNotServed   = "not_served"  // the cluster does not serve the kind, which its list says
 	reasonUnsupported = "unsupported" // a resource this socket has no live updates for
 	reasonScope       = "scope"       // a kind no namespace holds, for a grant limited to namespaces

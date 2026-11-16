@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { GAP, layoutMap, mapKey } from './nodeMapLayout'
+import { GAP, focusSpokenCell, layoutMap, mapKey, pointerFocusAfter, type MapPointerEvent } from './nodeMapLayout'
 import type { NodeEntry } from './hooks/useClusterDerived'
 
 const nodes = (n: number, pods: (i: number) => number): NodeEntry[] =>
@@ -48,5 +48,19 @@ describe('the node map from the keyboard', () => {
     expect(mapKey('Enter', 24, 3, 10)).toEqual({ open: 2 })
     expect(mapKey('ArrowLeft', 24, 3, 10)).toEqual({ hover: 1 })
     expect(mapKey('Enter', 0, 0, 10)).toBeNull()
+  })
+
+  it("names the cell to start from in the live region on a focus from the keyboard, and none on a pointer's", () => {
+    expect([focusSpokenCell(false, null, 25), focusSpokenCell(false, 7, 25), focusSpokenCell(false, 24, 3)]).toEqual([0, 7, 2])
+    expect([focusSpokenCell(true, null, 25), focusSpokenCell(true, 7, 25), focusSpokenCell(false, null, 0)]).toEqual([null, null, null])
+  })
+
+  it('reads the focus a Tab gives after a touch that turned into a scroll, and not the focus of a click or tap', () => {
+    // the canvas's events in order, then what its next focus is read as
+    const nextFocusByPointer = (events: MapPointerEvent[]) => events.reduce((_, e) => pointerFocusAfter(e), false)
+    expect(focusSpokenCell(nextFocusByPointer(['pointerdown']), null, 25)).toBeNull()
+    expect(focusSpokenCell(nextFocusByPointer(['pointerdown', 'pointercancel']), null, 25)).toBe(0)
+    expect(focusSpokenCell(nextFocusByPointer(['pointerdown', 'focus', 'blur']), 3, 25)).toBe(3)
+    expect(focusSpokenCell(nextFocusByPointer(['focus', 'pointerdown', 'blur']), null, 25)).toBe(0)
   })
 })
