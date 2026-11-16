@@ -477,4 +477,40 @@ test.describe('the floating chat is sent what each screen shows', () => {
     }
     expect(sending, 'a screen named as sending nothing sends something').toEqual([])
   })
+
+  // Monitoring's own notice "Metrics server not available for this cluster", which no state above draws on cluster
+  // default (it runs metrics-server): the node and pod metrics reads are answered as k8s-service answers them for a
+  // cluster that serves no metrics.k8s.io (a 404 in the API server's words, ErrMetricsNotServed). The tab's layer says
+  // the notice, then what the tab draws in place of its rows (metricsTabView): on the Nodes tab "not available" with the
+  // hint, on the Pods tab before a namespace is chosen the prompt.
+  test('/monitoring: the page\'s notice that the cluster has no metrics-server reaches the floating chat', async ({ page }) => {
+    test.skip(!picked('/monitoring'), 'E2E_AI_LAYERS_ONLY does not match /monitoring')
+    test.setTimeout(120_000)
+    const sent = await captureFloating(page)
+    const notServed = { status: 404, json: { detail: 'the server could not find the requested resource' } }
+    await page.route('**/api/v1/cluster/metrics/nodes*', (route) => route.fulfill(notServed))
+    await page.route('**/api/v1/cluster/metrics/pods*', (route) => route.fulfill(notServed))
+    const tabLayer = (ctx: PageContext, tab: string) => {
+      const l = readLayers(ctx).find((x) => x.data?.tab === tab)
+      return l ? { summary: l.summary, data: l.data } : null
+    }
+    const m = EN.monitoring
+    await page.goto(visitUrl('/monitoring', clusterFor('/monitoring')))
+    const notice = page.getByText(m.metricsUnavailable, { exact: true })
+    await expect(notice).toBeVisible({ timeout: 20_000 })
+    expect(tabLayer(await ask(page, sent), 'nodes')).toEqual({
+      summary: `${m.nodes.title} — ${m.metricsUnavailable} — ${m.nodes.unavailable} — ${m.metricsServerHint}`,
+      data: { tab: 'nodes', metrics_unavailable: true },
+    })
+
+    await closeChat(page)
+    await page.getByRole('button', { name: m.tabs.pods, exact: true }).click()
+    // the prompt's subtitle: its title is also the namespace picker's label
+    await expect(page.getByText(m.namespace.promptSubtitle, { exact: true })).toBeVisible({ timeout: 20_000 })
+    await expect(notice).toBeVisible()
+    expect(tabLayer(await ask(page, sent), 'pods')).toEqual({
+      summary: `${m.pods.title} — ${m.metricsUnavailable} — ${m.namespace.promptTitle} — ${m.namespace.promptSubtitle}`,
+      data: { tab: 'pods', filters: { namespace: '' }, metrics_unavailable: true },
+    })
+  })
 })

@@ -79,8 +79,9 @@ async def test_replicas_taking_at_once_get_no_more_slots_than_the_limit(replicas
 async def test_a_replica_that_stops_beating_has_its_slot_set_free_after_the_stale_time(replicas, monkeypatch):
     monkeypatch.setattr(claude_code_slots, "STALE_SECONDS", 0.5)
     loop = asyncio.get_running_loop()
-    assert await claude_code_slots.take(replicas[0], "chat", 1, "gone-replica") == 0
+    # timed from before the take, so the heartbeat it writes is not older than the start (as in test_claude_code_slots.py)
     started = loop.time()
+    assert await claude_code_slots.take(replicas[0], "chat", 1, "gone-replica") == 0
     async with asyncio.timeout(5), claude_code_slots.held(replicas[1], "chat", 1) as slot:
         waited = loop.time() - started
         assert slot == 0 and await owners(replicas[1]) != ["gone-replica"]

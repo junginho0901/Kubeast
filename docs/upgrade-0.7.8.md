@@ -16,7 +16,7 @@ The commands below use the release name `kubeast` in the namespace `kubeast`; pu
 - Many replicas: the database connections must fit `postgresql.maxConnections` (300) or the upgrade stops (#868).
 - Custom roles whose names make the same role group as another role are renamed and lose their cluster grants, with an audit row for each change. Account levels of `Pending`'s group (`PENDING`) move to the built-in `Pending` (#865).
 - Role names with characters outside ASCII get groups of their own (`운영팀` acts as `kubeast:role:~c6b4~c601~d300`; in 0.7.7 it was `kubeast:role:---`), so RBAC bound to the old group on your clusters stops applying to them (#865).
-- Besides the services, the chart's PostgreSQL and Redis restart once: the database pauses for a moment and the cache starts empty (#866, #868).
+- Besides the services, the chart's PostgreSQL and Redis restart once, and the cache starts empty (#866, #868). For about 20 seconds from when the database stops, requests to the old pods can wait and a few can fail. While the 0.7.7 pods are replaced, a few requests can fail too: 0.7.7 pods stop without waiting, and from 0.7.8 on pods wait before they stop (#856).
 - Back up the database first: a rollback does not undo the role renames.
 
 ## 1. Before you upgrade
@@ -39,7 +39,19 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 
 It renders 0.7.8 with your values and changes nothing. A check that stops it makes Helm print an error saying what to change; the table in [3](#3-values-you-must-change) lists them. `--dry-run=server` (Helm 3.13 or later) lets the chart read your Secrets, so the Redis users check in [1.7](#17-secretsexistingsecret-and-the-redis-users) runs too.
 
-To see the install notes, for example the connection sum for an external database ([1.6](#16-database-connections)), run it without `> /dev/null` and read `NOTES:` at the end.
+It checks the render and the chart's own checks only. It does not send the objects to the API server, so what the API server would refuse on the upgrade, a field it does not let change or a field another manager owns, passes it. When the upgrade applies server-side (Helm 4 with `--server-side=true`, or with its default `auto` when the release was last applied server-side), this sends the rendered objects to the API server as a dry run in Helm's name; `helm template` reads nothing from the cluster, and an object your values put in another namespace stops it with a namespace error, so send those with their own `-n`:
+
+```bash
+chart=$(mktemp -d)
+helm pull oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 --untar --untardir "$chart"
+helm get values kubeast -n kubeast -o yaml \
+  | helm template kubeast "$chart/kubeast" -n kubeast --no-hooks -f - \
+  | kubectl apply --server-side --dry-run=server --field-manager=helm -n kubeast -f -
+```
+
+The chart is pulled first because Helm 4.2.1 to 4.2.x print `Pulled:` and `Digest:` lines before the YAML when they render a chart from an OCI registry, and `kubectl apply` cannot read them.
+
+To see the install notes, for example the connection sum for an external database ([1.6](#16-database-connections)), run the `helm upgrade` dry run without `> /dev/null` and read `NOTES:` at the end.
 
 ### 1.3 Kubernetes version
 
@@ -47,7 +59,7 @@ To see the install notes, for example the connection sum for an external databas
 kubectl version    # Server Version: v1.30 or later
 ```
 
-The chart's pods behind a Service now wait `podShutdown.preStopSeconds` (5 s) in `preStop` before SIGTERM, with the native `sleep` action (beta and on by default in 1.30, GA in 1.34). On an older cluster set `podShutdown.preStopSeconds: 0` (#856).
+The chart's pods behind a Service, but for the bundled PostgreSQL and Redis, now wait `podShutdown.preStopSeconds` (5 s) in `preStop` before SIGTERM, with the native `sleep` action (beta and on by default in 1.30, GA in 1.34). On an older cluster set `podShutdown.preStopSeconds: 0` (#856).
 
 ### 1.4 Node drains
 
@@ -212,9 +224,9 @@ New values whose defaults need nothing from you: `podShutdown.preStopSeconds` (5
 
 **Pods and rollouts**
 
-- Pods behind a Service wait `podShutdown.preStopSeconds` before SIGTERM. Their grace period is that wait, what the service waits for after SIGTERM, and 5 s: 35 s with the defaults. k8s-service also gives open terminals `streams.drainSeconds` (60) to end and 5 s to close, so its grace period is 100 s with the defaults (#856, #824, #825).
+- Pods behind a Service wait `podShutdown.preStopSeconds` before SIGTERM, except the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period (30 s). The other pods' grace period is that wait, what the service waits for after SIGTERM, and 5 s: 35 s with the defaults. k8s-service also gives open terminals `streams.drainSeconds` (60) to end and 5 s to close, so its grace period is 100 s with the defaults (#856, #824, #825).
 - Liveness asks `/livez`, which reads nothing else. Readiness asks `/readyz`, which answers 503 from SIGTERM on and never asks the database (#901).
-- A rollout starts one new pod and stops an old one only once the new one is ready (`maxSurge: 1`, `maxUnavailable: 0`), so it needs room for one more pod of each Deployment. PostgreSQL keeps `Recreate`, and Redis stops its old pod before the new one starts (`maxSurge: 0`) (#901, #860).
+- A rollout starts one new pod and stops an old one only once the new one is ready (`maxSurge: 1`, `maxUnavailable: 0`), so it needs room for one more pod of each Deployment. PostgreSQL keeps `Recreate`, and Redis starts stopping its old pod before the new one is made (`maxSurge: 0`): for the few seconds the old one takes to end both may exist, sharing no data (emptyDir) (#901, #860).
 - `pdb.enabled` is now `true`. A Deployment that can be down to two pods or more (`replicas`, or `autoscaling.<service>.minReplicas` while its HPA is on) gets a PodDisruptionBudget with `unhealthyPodEvictionPolicy: AlwaysAllow`; a Deployment of one pod gets none (#901).
 - A pod that stops closes its long-lived connections: live lists and followed logs connect again to a pod that stays; a terminal ends with a line saying the server is restarting (close code 1001, `server_shutdown`) (#901).
 
@@ -344,7 +356,7 @@ If you set `KUBEAST_TAG`, set it to `v0.7.8` or unset it.
 
 What differs from the chart:
 
-- **Stop wait**: the seven Kubeast services and Redis get 35 s to stop (`stop_grace_period`; Docker's default is 10 s), what the chart gives a service with the defaults. `docker compose stop` and the upgrade can take that long per container. There is no `preStop` wait, terminal drain, PodDisruptionBudget or HPA (#856).
+- **Stop wait**: the seven Kubeast services get 35 s to stop and Redis and PostgreSQL 30 s, the Kubernetes default (`stop_grace_period`; Docker's default is 10 s), what the chart gives each with the defaults. `docker compose stop` and the upgrade can take that long per container. There is no `preStop` wait, terminal drain, PodDisruptionBudget or HPA (#856).
 - **Redis**: as before, with no users and no password, reachable only on the Compose network (#866 changes the chart only).
 - **Database limits**: the same session limits and pools apply by default. To change them, set `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS` (`0` sets nothing) or `DB_POOL_MAX_AUTH`, `DB_POOL_MAX_SESSION`, `DB_POOL_MAX_K8S`, `DB_POOL_MAX_AI` in `.env`. Compose's PostgreSQL keeps its default `max_connections` (100), which one container of each service fits (#868).
 - **Custom role bindings**: `IMPERSONATION_CUSTOM_ROLES` in `.env` takes role names, as before. Bind the new group of a name outside ASCII on your clusters ([6](#6-after-you-upgrade)).

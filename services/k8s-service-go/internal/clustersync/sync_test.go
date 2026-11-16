@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/clusternotice"
 )
 
 // registry is the clusters table's versions; err makes a read fail.
@@ -131,7 +132,7 @@ func (r *replica) run(t *testing.T) {
 
 func waitSubscribers(t *testing.T, mr *miniredis.Miniredis, n int) {
 	t.Helper()
-	eventually(t, func() bool { return mr.PubSubNumSub(ChannelFor(0))[ChannelFor(0)] == n })
+	eventually(t, func() bool { return mr.PubSubNumSub(clusternotice.ChannelFor(0))[clusternotice.ChannelFor(0)] == n })
 }
 
 func eventually(t *testing.T, ok func() bool) {
@@ -276,7 +277,7 @@ func TestInstallsOnTwoDatabasesDoNotHearEachOther(t *testing.T) {
 	a, b := onDB(0), onDB(1)
 	eventually(t, func() bool { // both subscribed, whatever the channels' names
 		total := 0
-		for _, n := range mr.PubSubNumSub(mr.PubSubChannels(Channel + "*")...) {
+		for _, n := range mr.PubSubNumSub(mr.PubSubChannels(clusternotice.Channel + "*")...) {
 			total += n
 		}
 		return total == 2
@@ -295,8 +296,8 @@ func TestANoticeNotUnderstoodIsIgnored(t *testing.T) {
 	b := newReplica(t, g, mr, time.Hour)
 	b.run(t)
 	waitSubscribers(t, mr, 1)
-	mr.Publish(ChannelFor(0), "not json")
-	mr.Publish(ChannelFor(0), `{"from":"someone"}`)
+	mr.Publish(clusternotice.ChannelFor(0), "not json")
+	mr.Publish(clusternotice.ChannelFor(0), `{"from":"someone"}`)
 	time.Sleep(100 * time.Millisecond)
 	if got := b.noticeDrops(); len(got) != 0 {
 		t.Fatalf("dropped %v", got)
@@ -346,7 +347,7 @@ func TestAReplicaStartedWithoutRedisHearsTheNoticesOnceRedisAnswers(t *testing.T
 // The chart's Redis user k8s-service publishes and subscribes on channels under kubeast: only (&kubeast:*).
 func TestTheChannelIsWithinTheACLChannelPattern(t *testing.T) {
 	for _, db := range []int{0, 3, 15} {
-		if ch := ChannelFor(db); !strings.HasPrefix(ch, "kubeast:") {
+		if ch := clusternotice.ChannelFor(db); !strings.HasPrefix(ch, "kubeast:") {
 			t.Fatalf("channel %q for db %d is outside kubeast:", ch, db)
 		}
 	}

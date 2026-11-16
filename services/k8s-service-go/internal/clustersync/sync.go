@@ -9,7 +9,7 @@
 // auth-service also tells one replica (POST /internal/clusters/{id}/invalidate). With Redis that replica publishes a
 // notice and the others drop the cluster at once. Pub/sub delivers a message at most once; a notice lost costs only the
 // time until the next read. Nothing here reads a cluster: a dropped cluster's clients are built again from the registry
-// on their next use.
+// on their next use. The channel and the message are services/pkg/clusternotice's, which tool-server listens with.
 package clustersync
 
 import (
@@ -19,19 +19,16 @@ import (
 	"encoding/json"
 	"log/slog"
 	mathrand "math/rand/v2"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/clusternotice"
 )
 
 const (
-	// Channel, with the Redis database number after it (ChannelFor), carries one notice per change a replica took.
-	Channel = "kubeast:clusters:changed"
-
 	// DefaultEvery is how often a replica reads the versions: a change reaches every replica within this and a fifth.
 	DefaultEvery = 5 * time.Second
 	// callTimeout bounds one read of the versions or one publish.
@@ -55,16 +52,6 @@ type Replica interface {
 	DropCluster(id cluster.ID)
 }
 
-type notice struct {
-	Cluster string `json:"cluster"`
-	// From is the process that published it, which has dropped the cluster already.
-	From string `json:"from"`
-}
-
-// ChannelFor is the channel of the install whose keys are in database db. Pub/sub ignores database numbers, so two
-// installs sharing one Redis on two databases would otherwise hear each other's notices.
-func ChannelFor(db int) string { return Channel + ":" + strconv.Itoa(db) }
-
 // Sync follows the cluster versions for one replica.
 type Sync struct {
 	versions Versions
@@ -83,7 +70,7 @@ type Sync struct {
 func New(versions Versions, rdb *redis.Client) *Sync {
 	s := &Sync{versions: versions, rdb: rdb, self: processID()}
 	if rdb != nil {
-		s.channel = ChannelFor(rdb.Options().DB)
+		s.channel = clusternotice.ChannelFor(rdb.Options().DB)
 	}
 	return s
 }
@@ -96,7 +83,7 @@ func (s *Sync) Changed(id cluster.ID) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
 	defer cancel()
-	payload, _ := json.Marshal(notice{Cluster: string(id), From: s.self})
+	payload, _ := json.Marshal(clusternotice.Notice{Cluster: string(id), From: s.self})
 	if err := s.rdb.Publish(ctx, s.channel, payload).Err(); err != nil {
 		s.warn("clustersync: notice not published, the other replicas read the change from the versions", "cluster", id, "err", err)
 	}
@@ -162,8 +149,8 @@ func (s *Sync) Compare(ctx context.Context, r Replica) {
 }
 
 func (s *Sync) notice(payload string, r Replica) {
-	var n notice
-	if err := json.Unmarshal([]byte(payload), &n); err != nil || n.Cluster == "" {
+	n, err := clusternotice.Decode(payload)
+	if err != nil {
 		slog.Warn("clustersync: notice not understood", "payload_len", len(payload))
 		return
 	}
