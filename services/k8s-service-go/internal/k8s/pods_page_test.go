@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"reflect"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -377,7 +378,8 @@ func TestBuildPodPage_SearchSortAndCut(t *testing.T) {
 }
 
 // A pod costs at most podRowMaxBytes in the index, for 100 000 pods spread
-// like a large cluster's (Deployments of 50, 1 000 nodes).
+// like a large cluster's (Deployments of 50, 1 000 nodes), with the indexes
+// the informer's store has (podRowIndexers).
 func TestPodRowMemory(t *testing.T) {
 	if testing.Short() {
 		t.Skip("allocates 100 000 rows")
@@ -385,7 +387,7 @@ func TestPodRowMemory(t *testing.T) {
 	const n = 100_000
 	rng := rand.New(rand.NewSource(3))
 	in := newInterner()
-	idx := cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	idx := cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, podRowIndexers())
 	add := func(i int) {
 		rs := fmt.Sprintf("service-%04d-5f7b9c8d6", i/50)
 		p := &corev1.Pod{
@@ -422,6 +424,24 @@ func TestPodRowMemory(t *testing.T) {
 	}
 }
 
+// The informer's pod store has the indexes TestPodRowMemory measures: a box of Cluster View reads its node's rows by
+// podNodeIndex.
+func TestThePodStoreHasTheIndexesItsMemoryIsMeasuredWith(t *testing.T) {
+	ci := readyInformers(t)
+	var got, want []string
+	for name := range ci.pods.GetIndexers() {
+		got = append(got, name)
+	}
+	for name := range podRowIndexers() {
+		want = append(want, name)
+	}
+	sort.Strings(got)
+	sort.Strings(want)
+	if !reflect.DeepEqual(got, want) || !slices.Contains(got, podNodeIndex) {
+		t.Errorf("the store's indexes %v, the measured ones %v", got, want)
+	}
+}
+
 // A StatefulSet's pods each carry labels of their own (pod-name, pod-index), which the row keeps for the word
 // search: they cost what those labels take, at most podRowUniqueLabelsMaxBytes with the ones a StatefulSet sets.
 func TestPodRowMemory_LabelsOfTheirOwn(t *testing.T) {
@@ -430,7 +450,7 @@ func TestPodRowMemory_LabelsOfTheirOwn(t *testing.T) {
 	}
 	const n = 50_000
 	in := newInterner()
-	idx := cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	idx := cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, podRowIndexers())
 	add := func(i int) {
 		sts := fmt.Sprintf("service-%04d", i/50)
 		name := fmt.Sprintf("%s-%d", sts, i%50)

@@ -60,6 +60,9 @@ type clusterInformers struct {
 	podRev atomic.Uint64
 	epoch  string
 
+	// boxes holds the Cluster View box answers of whole nodes (nodeBoxJSON)
+	boxes nodeBoxes
+
 	// nodeRev counts changes to what the node list shows; the list is built
 	// once per change and second and shared by every caller (nodeSummaries).
 	nodeRev     atomic.Uint64
@@ -91,6 +94,10 @@ func newClusterInformers(client kubernetes.Interface, idle time.Duration, onStop
 		f.Core().V1().PersistentVolumeClaims().Informer(),
 		f.Core().V1().PersistentVolumes().Informer(),
 		f.Core().V1().Nodes().Informer(),
+	}
+	// fails once the informer has stopped or holds an index of that name ("indexer conflict"); this one is new and not started
+	if err := infs[0].AddIndexers(cache.Indexers{podNodeIndex: podRowNode}); err != nil {
+		slog.Warn("overview informers: no node index on the pod rows", "err", err)
 	}
 	ci.pods, ci.namespaces, ci.services, ci.deployments, ci.pvcs, ci.pvs, ci.nodes =
 		infs[0].GetIndexer(), infs[1].GetStore(), infs[2].GetStore(), infs[3].GetStore(),
@@ -447,6 +454,17 @@ func (b *clientBundle) overviewInformers() *clusterInformers {
 		}
 	})
 	return b.inf
+}
+
+// syncedOrStart returns the running, synced informer set, or nil after starting one when there is none
+// (overviewInformers: not without a cache client, with noInformers or within overviewRetryAfter of a refusal). It
+// never waits for the set to sync: its caller reads as the caller meanwhile.
+func (b *clientBundle) syncedOrStart() *clusterInformers {
+	ci := b.overviewInformers()
+	if ci == nil || !ci.isSynced() || ci.isStopped() {
+		return nil
+	}
+	return ci
 }
 
 // syncedInformers returns the running, synced informer set or nil. It never
