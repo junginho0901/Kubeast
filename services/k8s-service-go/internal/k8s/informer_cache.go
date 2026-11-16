@@ -95,7 +95,8 @@ func newClusterInformers(client kubernetes.Interface, idle time.Duration, onStop
 		f.Core().V1().PersistentVolumes().Informer(),
 		f.Core().V1().Nodes().Informer(),
 	}
-	if err := infs[0].AddIndexers(cache.Indexers{podNodeIndex: podRowNode}); err != nil { // fails only once stopped
+	// fails once the informer has stopped or holds an index of that name ("indexer conflict"); this one is new and not started
+	if err := infs[0].AddIndexers(cache.Indexers{podNodeIndex: podRowNode}); err != nil {
 		slog.Warn("overview informers: no node index on the pod rows", "err", err)
 	}
 	ci.pods, ci.namespaces, ci.services, ci.deployments, ci.pvcs, ci.pvs, ci.nodes =
