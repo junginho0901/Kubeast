@@ -49,6 +49,7 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - k8s-service's cluster breaker tries one request again after `multicluster.breakerOpenSec`, `multicluster.breakerConsecutiveFails: 0` turns it off, and only a request whose calls could not reach the API server counts as a failure. Its health check reads each cluster's `/version` behind none of the people's requests, and an answer below 500 closes the breaker.
 - New live lists wait while k8s-service is short of memory, past 80 % of its Go memory limit, with a notice on the page.
 - A grant limited to namespaces opens the Dashboard with fewer requests to the cluster, and an idle live-list socket holds 18 KiB instead of 47 KiB.
+- Cluster View's node boxes are answered from the pod rows k8s-service keeps instead of a list of the node's pods, and a pod's window opened from a box reads the pod before it shows its containers.
 - Cache keys move under `kubeast:cache:`, and a cluster change deletes only those keys.
 - Alert start times are kept in UTC, whatever offset the sender writes.
 - Docker Compose gives the Kubeast services 35 s to stop and PostgreSQL and Redis 30 s (Docker's default is 10 s).
