@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # The build to compare with, beside the dev install on kind (safety net e2e/guard/response-diff.spec.ts): the services
 # again as <name>-before Deployments in the same namespace, with the same Secrets, ConfigMap and database and only the
-# images changed. The old services call each other through hostAliases, because some of their addresses are in the code
-# (ai-service's K8S_SERVICE_URL) and nginx resolves its upstreams through /etc/hosts.
+# images changed, each with the probes the tag's chart gives it. The old services call each other through hostAliases,
+# because some of their addresses are in the code (ai-service's K8S_SERVICE_URL) and nginx resolves its upstreams
+# through /etc/hosts.
 #
 #   scripts/before-stack.sh up v0.7.7     # ghcr.io/junginho0901/kubeast-<service>:v0.7.7 (a released tag)
 #   scripts/before-stack.sh up local      # the images the dev install runs, to see a comparison of a build with itself
+#   scripts/before-stack.sh check v0.7.7  # no cluster: the probes up would give, from this checkout's and v0.7.7's chart
 #   scripts/before-stack.sh status
 #   scripts/before-stack.sh down          # run the usual e2e only after this: it counts what the namespace holds
 #
@@ -60,10 +62,16 @@ reseed() {
   kc rollout status deployment/auth-service --timeout=180s >/dev/null
 }
 
+manifests() {
+  local tag="$1"
+  shift
+  KC_NS="$NS" BEFORE_TAG="$tag" BEFORE_REGISTRY="$REGISTRY" BEFORE_REDIS_DB="$REDIS_DB_BEFORE" BEFORE_LABEL="$LABEL" \
+    KC_CONTEXT="$CTX" python3 "$ROOT/scripts/before-stack-manifests.py" "$@"
+}
+
 up() {
   local tag="$1"
-  KC_NS="$NS" BEFORE_TAG="$tag" BEFORE_REGISTRY="$REGISTRY" BEFORE_REDIS_DB="$REDIS_DB_BEFORE" BEFORE_LABEL="$LABEL" \
-    KC_CONTEXT="$CTX" python3 "$ROOT/scripts/before-stack-manifests.py" | kubectl --context "$CTX" apply -f -
+  manifests "$tag" | kubectl --context "$CTX" apply -f -
   for d in auth-service k8s-service session-service ai-service frontend gateway; do
     kc rollout status "deployment/$d-before" --timeout=600s
   done
@@ -93,7 +101,11 @@ case "${1:-}" in
     [ -n "${2:-}" ] || { echo "usage: $0 up <tag|local>" >&2; exit 2; }
     up "$2"
     ;;
+  check)
+    [ -n "${2:-}" ] || { echo "usage: $0 check <tag|local>" >&2; exit 2; }
+    manifests "$2" --check
+    ;;
   down) down ;;
   status) status ;;
-  *) echo "usage: $0 up <tag|local> | status | down" >&2; exit 2 ;;
+  *) echo "usage: $0 up <tag|local> | check <tag|local> | status | down" >&2; exit 2 ;;
 esac
