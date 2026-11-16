@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -104,18 +105,55 @@ func (waitForEnd) RoundTrip(r *http.Request) (*http.Response, error) {
 	return nil, r.Context().Err()
 }
 
-// A probe whose call did not go out gives no verdict: a wait of Kubeast's own that outlasts the probe's time, and a
-// sweep that is stopping, leave the breaker as it was, open or closed, and write no status. The first says so once in
-// the log; the second says nothing.
+// sendAtEnd is a wait of Kubeast's own in front of the cluster's transports that ends once its request's context has,
+// then sends the call through them, as a credential plugin that succeeds after the probe's time.
+type sendAtEnd struct{ base http.RoundTripper }
+
+func (t sendAtEnd) RoundTrip(r *http.Request) (*http.Response, error) {
+	<-r.Context().Done()
+	return t.base.RoundTrip(r)
+}
+
+// failingPlugin is a credential plugin in front of the cluster's transports that fails, with client-go's words, at
+// once or once its request's context has ended: client-go runs the plugin apart from that context, so one slower than
+// the probe's time, or one waiting behind the people's requests that run it, fails after it.
+type failingPlugin struct{ late bool }
+
+func (p failingPlugin) RoundTrip(r *http.Request) (*http.Response, error) {
+	if p.late {
+		<-r.Context().Done()
+	}
+	return nil, errors.New("getting credentials: exec: executable aws-iam-authenticator failed with exit code 1")
+}
+
+// frontVersionClient gives b's version client front in front of the cluster's transports.
+func frontVersionClient(t *testing.T, b *clientBundle, front func(http.RoundTripper) http.RoundTripper) {
+	t.Helper()
+	cfg := rest.CopyConfig(b.restConfig)
+	cfg.QPS, cfg.RateLimiter = -1, nil
+	cfg.Wrap(front)
+	own, err := discovery.NewDiscoveryClientForConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.ownVersion = own
+}
+
+// A probe whose call did not go out gives no verdict: a wait of Kubeast's own that outlasts the probe's time, whether
+// the call then goes out or not, and a sweep that is stopping, leave the breaker as it was, open or closed, and write no
+// status. The first two say so once in the log; the last says nothing.
 func TestAProbeWhoseCallDidNotGoOutGivesNoVerdict(t *testing.T) {
 	shortProbe(t, 200*time.Millisecond)
 	for name, c := range map[string]struct {
-		wait     bool // the version client waits in front of the cluster's transport
-		stopping bool // the sweep's context has ended
+		front    func(http.RoundTripper) http.RoundTripper // in front of the version client's transports
+		stopping bool                                      // the sweep's context has ended
 		logged   int
 	}{
-		"a wait of Kubeast's own past the probe's time": {wait: true, logged: 1},
-		"the sweep stopping":                            {stopping: true},
+		"a wait of Kubeast's own past the probe's time": {
+			front: func(http.RoundTripper) http.RoundTripper { return waitForEnd{} }, logged: 1},
+		"a wait of Kubeast's own past the probe's time, then the call": {
+			front: func(rt http.RoundTripper) http.RoundTripper { return sendAtEnd{base: rt} }, logged: 1},
+		"the sweep stopping": {stopping: true},
 	} {
 		for _, open := range []bool{false, true} {
 			logs := captureLogs(t)
@@ -126,15 +164,8 @@ func TestAProbeWhoseCallDidNotGoOutGivesNoVerdict(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if c.wait {
-				cfg := rest.CopyConfig(b.restConfig)
-				cfg.QPS, cfg.RateLimiter = -1, nil
-				cfg.Wrap(func(http.RoundTripper) http.RoundTripper { return waitForEnd{} })
-				own, err := discovery.NewDiscoveryClientForConfig(cfg)
-				if err != nil {
-					t.Fatal(err)
-				}
-				b.ownVersion = own
+			if c.front != nil {
+				frontVersionClient(t, b, c.front)
 			}
 			s.health.setOpen(idc, open)
 			ctx, stop := context.WithCancel(context.Background())
@@ -153,8 +184,42 @@ func TestAProbeWhoseCallDidNotGoOutGivesNoVerdict(t *testing.T) {
 			if n := strings.Count(lines, "keeping the last verdict"); n != c.logged || (n > 0 && !strings.Contains(lines, "id="+string(idc))) {
 				t.Errorf("%s, breaker open %v: %d log lines naming the probe, want %d naming the cluster:\n%s", name, open, n, c.logged, lines)
 			}
-			if c.wait && versionAsks(api.seenNow()) != 0 {
+			if c.front != nil && versionAsks(api.seenNow()) != 0 {
 				t.Errorf("%s: /version reached the cluster", name)
+			}
+		}
+	}
+}
+
+// A credential plugin that fails fails the probe however long it took, at once or after the probe's time: the
+// breaker opens and disconnected is written, from a breaker closed and from one open, and no line says the call did
+// not go out.
+func TestACredentialPluginThatFailsFailsTheProbe(t *testing.T) {
+	shortProbe(t, 200*time.Millisecond)
+	for name, late := range map[string]bool{"at once": false, "after the probe's time": true} {
+		for _, open := range []bool{false, true} {
+			logs := captureLogs(t)
+			api := &identityAPI{}
+			srv := httptest.NewServer(api)
+			s := probeService(t, srv.URL, ServiceOptions{})
+			b, err := s.For(context.Background(), idc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			frontVersionClient(t, b, func(http.RoundTripper) http.RoundTripper { return failingPlugin{late: late} })
+			s.health.setOpen(idc, open)
+			rows := &healthRows{metas: []cluster.Meta{{ID: idc}}, written: map[cluster.ID]string{}}
+			NewHealthChecker(s, rows, time.Hour).sweep(context.Background())
+			srv.Close()
+			if !s.ClusterDown(idc) || rows.written[idc] != "disconnected" {
+				t.Errorf("a plugin failing %s, breaker open %v: open %v, written %q after the sweep; want open, disconnected",
+					name, open, s.ClusterDown(idc), rows.written[idc])
+			}
+			if lines := logs.take(); strings.Contains(lines, "keeping the last verdict") {
+				t.Errorf("a plugin failing %s, breaker open %v: logged as a call that did not go out:\n%s", name, open, lines)
+			}
+			if versionAsks(api.seenNow()) != 0 {
+				t.Errorf("a plugin failing %s: /version reached the cluster", name)
 			}
 		}
 	}

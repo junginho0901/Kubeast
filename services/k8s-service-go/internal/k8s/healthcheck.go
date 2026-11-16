@@ -373,13 +373,15 @@ var probeBudget = 5 * time.Second
 type probeVerdict int
 
 const (
-	// probeNone: its call did not go out before its time ended, or the sweep is stopping; the last verdict stays.
+	// probeNone: its call did not go out before its time ended and ended with that time, or the sweep is stopping; the
+	// last verdict stays.
 	probeNone probeVerdict = iota
 	// probeUp: the API server gave its version.
 	probeUp
 	// probeAnswered: the API server answered below 500 with no version (a 401, a proxy's 404).
 	probeAnswered
-	// probeDown: no client for it, a call that could not reach it, a 5xx, or no answer in probeBudget once it went out.
+	// probeDown: no client for it, a call that could not reach it, a 5xx, no answer in probeBudget once it went out, or
+	// an error of Kubeast's own before any call that is not its time (a credential plugin that fails).
 	probeDown
 )
 
@@ -409,10 +411,11 @@ func (hc *HealthChecker) probe(ctx context.Context, id cluster.ID) probeVerdict 
 		return probeAnswered
 	case calls.responded.Load(), calls.unreached.Load(), calls.unanswered.Load():
 		return probeDown
-	case pctx.Err() != nil:
+	case pctx.Err() != nil && errors.Is(err, context.DeadlineExceeded):
 		slog.Info("healthcheck: the probe's call did not go out within its time; keeping the last verdict", "id", id, "err", err)
 		return probeNone
 	}
-	// refused by Kubeast before any call for another reason than its time (a credential plugin that fails)
+	// refused by Kubeast before any call with an error of its own, not its time (a credential plugin that fails, also
+	// after the probe's time: client-go runs it apart from the call's context)
 	return probeDown
 }
