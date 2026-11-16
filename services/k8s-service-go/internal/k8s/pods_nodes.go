@@ -205,26 +205,9 @@ func (s *Service) podsOnNodeShared(ctx context.Context, b *clientBundle, node st
 		return list, nil
 	}
 	refused := slices.DeleteFunc(slices.Clone(namespaces), func(ns string) bool { return slices.Contains(allowed, ns) })
-	own := make([]*nodePodList, len(refused))
-	if len(refused) > 0 {
-		if b.clientset == nil {
-			return nil, errNotLoaded
-		}
-		errs := make([]error, len(refused))
-		sideBySide(len(refused), func(i int) {
-			l, err := listNodePodsAsCaller(ctx, b.id, b.clientset.CoreV1(), node, refused[i])
-			switch {
-			case err == nil:
-				own[i] = nodePodListOf(l.Items)
-			case !apierrors.IsForbidden(err) && !apierrors.IsNotFound(err):
-				errs[i] = fmt.Errorf("list pods on node %q: %w", node, err)
-			}
-		})
-		for _, err := range errs {
-			if err != nil {
-				return nil, err
-			}
-		}
+	own, err := refusedAsCaller(ctx, b, node, refused, nodePodListOf)
+	if err != nil {
+		return nil, err
 	}
 	out := emptyNodePodList()
 	for _, ns := range namespaces {
@@ -239,6 +222,35 @@ func (s *Service) podsOnNodeShared(ctx context.Context, b *clientBundle, node st
 		}
 	}
 	return out, nil
+}
+
+// refusedAsCaller lists node's pods in each of refused as the caller, side by side, each list holding one of the node
+// read places, as of makes them: what the access check refused there is asked of the cluster, whose own refusal or
+// missing namespace leaves that one out (the zero T), and any other failure is the answer's.
+func refusedAsCaller[T any](ctx context.Context, b *clientBundle, node string, refused []string, of func([]corev1.Pod) T) ([]T, error) {
+	own := make([]T, len(refused))
+	if len(refused) == 0 {
+		return own, nil
+	}
+	if b.clientset == nil {
+		return nil, errNotLoaded
+	}
+	errs := make([]error, len(refused))
+	sideBySide(len(refused), func(i int) {
+		l, err := listNodePodsAsCaller(ctx, b.id, b.clientset.CoreV1(), node, refused[i])
+		switch {
+		case err == nil:
+			own[i] = of(l.Items)
+		case !apierrors.IsForbidden(err) && !apierrors.IsNotFound(err):
+			errs[i] = fmt.Errorf("list pods on node %q: %w", node, err)
+		}
+	})
+	for _, err := range errs {
+		if err != nil {
+			return nil, err
+		}
+	}
+	return own, nil
 }
 
 // readNodePods lists node's pods in every namespace as client, with none of the caller's values but the record of its
@@ -257,20 +269,7 @@ func readNodePods(ctx context.Context, client kubernetes.Interface, node string)
 // nodePodsOfCaller lists node's pods as the caller, across the cluster or in each of namespaces (one the cluster
 // refuses left out unless all are, as fanOutNamespaces does), each list holding one of the cluster's node read places.
 func nodePodsOfCaller(ctx context.Context, id cluster.ID, pods typedcorev1.PodsGetter, node string, namespaces []string) (*nodePodList, error) {
-	list := func(ns string) ([]*nodePodList, error) {
-		l, err := listNodePodsAsCaller(ctx, id, pods, node, ns)
-		if err != nil {
-			return nil, fmt.Errorf("list pods on node %q: %w", node, err)
-		}
-		return []*nodePodList{nodePodListOf(l.Items)}, nil
-	}
-	var parts []*nodePodList
-	var err error
-	if len(namespaces) == 0 {
-		parts, err = list("")
-	} else {
-		parts, err = fanOutNamespaces(namespaces, list)
-	}
+	parts, err := listNodePodsOfCaller(ctx, id, pods, node, namespaces, nodePodListOf)
 	if err != nil {
 		return nil, err
 	}
@@ -279,6 +278,21 @@ func nodePodsOfCaller(ctx context.Context, id cluster.ID, pods typedcorev1.PodsG
 		out.keepAll(part)
 	}
 	return out, nil
+}
+
+// listNodePodsOfCaller is nodePodsOfCaller's lists, each as of makes it, in the order of namespaces.
+func listNodePodsOfCaller[T any](ctx context.Context, id cluster.ID, pods typedcorev1.PodsGetter, node string, namespaces []string, of func([]corev1.Pod) T) ([]T, error) {
+	list := func(ns string) ([]T, error) {
+		l, err := listNodePodsAsCaller(ctx, id, pods, node, ns)
+		if err != nil {
+			return nil, fmt.Errorf("list pods on node %q: %w", node, err)
+		}
+		return []T{of(l.Items)}, nil
+	}
+	if len(namespaces) == 0 {
+		return list("")
+	}
+	return fanOutNamespaces(namespaces, list)
 }
 
 // listPodsOnNode is nodePodsOfCaller's rows.
