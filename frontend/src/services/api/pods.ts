@@ -3,7 +3,7 @@
 // the dedicated WebSocket multiplexer in /api/v1/ws).
 
 import { client } from './client'
-import type { LogFileContent, LogFileList, LogQLParams, LogSearchParams, LogSearchResult, LogSearchStatus, PodInfo, PodNodeSummary, PodPage, PodPageParams, PodRbacResponse } from './types'
+import type { LogFileContent, LogFileList, LogQLParams, LogSearchParams, LogSearchResult, LogSearchStatus, NodeBoxPod, PodInfo, PodNodeSummary, PodPage, PodPageParams, PodRbacResponse } from './types'
 
 export const podsApi = {
   getPods: async (namespace: string, labelSelector?: string, forceRefresh = false): Promise<PodInfo[]> => {
@@ -25,8 +25,8 @@ export const podsApi = {
     return data
   },
 
-  /** The pods on one node ("" = not scheduled), listed as the caller. */
-  getPodsOnNode: async (node: string, namespace?: string): Promise<PodInfo[]> => {
+  /** A Cluster View box: the pods on one node ("" = not scheduled) the caller may list, as the box draws them. */
+  getPodsOnNode: async (node: string, namespace?: string): Promise<NodeBoxPod[]> => {
     const { data } = await client.get('/cluster/pods/on-node', { params: { node, namespace } })
     return data
   },
