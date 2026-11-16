@@ -238,7 +238,7 @@ class KubeastTokenVerifier:
                     return None
         if payload is None:
             return None
-        if (payload.role or "").lower() == "pending":
+        if payload.role == "Pending":
             return None
         return AccessToken(
             token=jwt_token,

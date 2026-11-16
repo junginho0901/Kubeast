@@ -77,7 +77,8 @@ A listed group holds its ClusterRoles whether or not a role of that name exists,
 Kubeast cannot compare those ClusterRoles with what a person holds, so a new name or a rename that makes a listed group takes all permissions (`*`, the global Admin). Anyone else holding `admin.roles.create` or `admin.roles.update` gets 403 and an audit row.
 So list the name and have a global admin create the role, or create the role first and list it after. From then on it is a role like any other: `admin.roles.update` edits it, and a role already stored under a listed name keeps working.
 Granting it, directly or by approving an access request, takes a global admin or an Admin of that cluster not limited to namespaces: they act there as `kubeast:admin`, which is `cluster-admin`, so they already hold whatever the binding gives. Anyone else holding `admin.users.update` gets 403 and an audit row, and the Cluster access choice and the Approve button say so. Read, Write and Admin listed for their grants limited to namespaces are not held back this way.
-The chart hands the list to auth-service as `IMPERSONATION_CUSTOM_ROLES`. Docker Compose has no chart: put the names in that variable in `.env` if you apply such bindings to your clusters.
+The chart hands the names to auth-service as `IMPERSONATION_CUSTOM_ROLES`, a comma in a name written as `-` (the same group). Docker Compose has no chart: put the names in that variable in `.env` if you apply such bindings to your clusters.
+A role's group is `kubeast:role:` and the slug of its name, which the role window shows; a character outside ASCII is written as `~` and its code point (`운영팀` → `kubeast:role:~c6b4~c601~d300`, [Features](features.md) "Role names"). Bind that group as written.
 
 **Deleting a role does not remove its bindings.** They stay on every cluster they were applied to, and the next role of that name acts with them.
 While the name is on the list, the rule above still holds.
@@ -495,6 +496,7 @@ service:
 | What | Requirement |
 | --- | --- |
 | User namespaces | `podSecurity.hostUsers: false` (default) needs Kubernetes 1.33 or later and a node kernel that supports it (6.3 or later). Otherwise `true` |
+| Pod shutdown | Kubernetes 1.30 or later: the chart's pods behind a Service wait `podShutdown.preStopSeconds` (5 s) before SIGTERM with the native `preStop` `sleep` action (beta and on by default in 1.30, GA in 1.34), so a rolling update sends no new connection to a pod that has exited; `0` leaves the wait out |
 | Storage | With the built-in PostgreSQL, a PVC — the default StorageClass or `postgresql.storageClassName` |
 | Exposure | NodePort (default), LoadBalancer, or an Ingress controller (`ingress.enabled`) |
 | A proxy or load balancer in front | An idle timeout above 30 s (AWS ALB's default is 60 s). While quiet, a live list, terminal, node shell, followed log and AI answer send something every 25 s and the Helm releases stream every 30 s — a WebSocket ping, an SSE comment line — so they stay open; the gateway gives them 600 to 3 600 s itself |
