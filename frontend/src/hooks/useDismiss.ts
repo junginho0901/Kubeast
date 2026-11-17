@@ -31,3 +31,26 @@ export function useDismiss(open: boolean, ref: RefObject<HTMLElement | null>, se
     }
   }, [open, ref, setOpen])
 }
+
+/** An open panel with lists of its own: Escape closes it and gives the focus back to its button. It listens after the
+ *  lists (bubble, where useDismiss listens in capture), so while one is open Escape closes only that list. */
+export function panelEscape(
+  target: Pick<Document, 'addEventListener' | 'removeEventListener'>,
+  close: () => void,
+  opener: () => { focus(): void } | null,
+): () => void {
+  const { onKey } = dismissHandlers(() => null, () => {
+    close()
+    opener()?.focus()
+  })
+  target.addEventListener('keydown', onKey)
+  return () => target.removeEventListener('keydown', onKey)
+}
+
+/** While `open`, Escape sets it closed (`setOpen(false)`) and focuses `opener`. */
+export function usePanelEscape(open: boolean, opener: RefObject<HTMLElement | null>, setOpen: (open: boolean) => void): void {
+  useEffect(() => {
+    if (!open) return
+    return panelEscape(document, () => setOpen(false), () => opener.current)
+  }, [open, opener, setOpen])
+}
