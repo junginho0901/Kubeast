@@ -13,6 +13,30 @@ import { isForbiddenError, type Member } from '@/services/api'
 export const retryUnlessRefused = (times: number) => (failureCount: number, error: unknown): boolean =>
   failureCount < times && !isForbiddenError(error)
 
+type FailedRead = { response?: { status?: number; headers?: Record<string, unknown> & { get?: (name: string) => unknown } } } | null
+
+/** The wait a failed answer's Retry-After asks for (RFC 9110 §10.2.3: seconds or a date), in ms; null without one. */
+export function retryAfterMs(error: unknown): number | null {
+  const headers = (error as FailedRead)?.response?.headers
+  const value = headers?.get?.('retry-after') ?? headers?.['retry-after']
+  if (value == null || value === '') return null
+  const seconds = Number(value)
+  if (Number.isFinite(seconds)) return Math.max(0, seconds) * 1000
+  const at = Date.parse(String(value))
+  return Number.isFinite(at) ? Math.max(0, at - Date.now()) : null
+}
+
+/**
+ * retryUnlessRefused, and a failure whose answer carries Retry-After (a 503 while the session store's database
+ * restarts) asked again for as long as the answers say so, at retryAsAskedDelay.
+ */
+export const retryAsAsked = (times: number) => (failureCount: number, error: unknown): boolean =>
+  !isForbiddenError(error) && (retryAfterMs(error) !== null || failureCount < times)
+
+/** react-query's wait growing to 30 s, never shorter than the answer's Retry-After. */
+export const retryAsAskedDelay = (failureCount: number, error: unknown): number =>
+  Math.max(retryAfterMs(error) ?? 0, Math.min(1000 * 2 ** failureCount, 30_000))
+
 /** How long after a refusal the person's return to the tab asks the refused read once more. */
 export const REFUSED_ON_RETURN_MS = 60_000
 

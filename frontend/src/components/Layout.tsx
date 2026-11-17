@@ -33,7 +33,6 @@ import {
 } from 'lucide-react'
 import { KIND_ICONS as K } from './kindIcons'
 import { api } from '@/services/api'
-import { clustersApi } from '@/services/api/clusters'
 import { logoutSession } from '@/services/auth'
 import ForbiddenBanner from './ForbiddenBanner'
 import WatchProblemNotice from './WatchProblemNotice'
@@ -52,7 +51,8 @@ import { usePermission } from '@/hooks/usePermission'
 import { usePendingAccessRequestCount } from '@/hooks/usePendingAccessRequestCount'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { useAskRefusedOnAccessChange } from '@/services/queryDefaults'
-import { useClusterSettled } from '@/hooks/useAccessibleClusterSelection'
+import { useClusterList, useClusterSettled } from '@/hooks/useAccessibleClusterSelection'
+import ClusterGate from './ClusterGate'
 import { aiEnabled, alertInvestigationEnabled, alertStoreEnabledFor, costEnabled, policyReportsEnabled } from '@/utils/features'
 import { resolveRouteMeta } from '@/utils/aiContext/routeMatcher'
 import { ADMIN_PAGE_PERMISSIONS, isGlobalAdmin, readsHygiene } from '@/utils/adminAccess'
@@ -112,11 +112,7 @@ export default function Layout() {
   // none — we then show a "no accessible cluster" placeholder instead of the
   // resource pages, so the pages never mount and never fire cluster requests
   // that would all 403 (deny-by-default).
-  const { data: accessibleClusters = [], isLoading: isClustersLoading } = useQuery({
-    queryKey: ['clusters-accessible'],
-    queryFn: () => clustersApi.listClusters(true),
-    staleTime: 30_000,
-  })
+  const { data: accessibleClusters } = useClusterList()
 
   // The nav scrolls on short viewports: keep the current page's entry in view
   // (deep links into the ADMIN section land below the fold otherwise). The
@@ -193,8 +189,9 @@ export default function Layout() {
   const canOpen = useCallback((item: NavItem) => !item.permissions || item.permissions.some((p) => hasPermission(p)), [hasPermission])
   // Someone who reaches no cluster can't view any resource page;
   // the account page (profile, language, sign-out) needs no cluster.
-  const hasNoCluster = !globalAdmin && !isClustersLoading && accessibleClusters.length === 0
-  // the screens, the drawer and the cluster's reads here wait for the picker's selection (useClusterSettled)
+  // (an answer of none: a list that could not be read says nothing of it)
+  const hasNoCluster = !globalAdmin && accessibleClusters?.length === 0
+  // the drawer and the cluster's reads here wait for the selection, as the screens do (ClusterGate)
   const clusterSettled = useClusterSettled()
   const noAccessibleCluster = hasNoCluster && location.pathname !== '/account'
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ core: true })
@@ -629,34 +626,34 @@ export default function Layout() {
             {!noAccessibleCluster && <ForbiddenBanner clusterKey={currentCluster || 'default'} />}
             {!noAccessibleCluster && <WatchProblemNotice />}
             <CreatedNotice fallback pathname={location.pathname} />
-            {noAccessibleCluster ? (
-              <div
-                data-testid="no-accessible-cluster"
-                className="flex min-h-[60vh] flex-col items-center justify-center text-center px-6"
-              >
-                <div className="rounded-full bg-slate-800 border border-slate-700 p-4 mb-4">
-                  <Activity className="w-8 h-8 text-slate-500" />
+            {/* the selection is made here, and no page reads until it is settled: without a cluster chosen a read
+                goes without ?cluster= to the server's default cluster */}
+            <ClusterGate fallback={<RouteFallback />}>
+              {noAccessibleCluster ? (
+                <div
+                  data-testid="no-accessible-cluster"
+                  className="flex min-h-[60vh] flex-col items-center justify-center text-center px-6"
+                >
+                  <div className="rounded-full bg-slate-800 border border-slate-700 p-4 mb-4">
+                    <Activity className="w-8 h-8 text-slate-500" />
+                  </div>
+                  <h2 className="text-lg font-semibold text-ink">
+                    {t('cluster.noAccess.title', { defaultValue: 'No accessible cluster' })}
+                  </h2>
+                  <p className="mt-1 max-w-md text-sm text-slate-400">
+                    {t('cluster.noAccess.body', {
+                      defaultValue:
+                        'You have not been granted access to any cluster yet. Ask an administrator to grant you a role on a cluster.',
+                    })}
+                  </p>
+                  <AccessHelp className="mt-3 max-w-md text-sm" />
                 </div>
-                <h2 className="text-lg font-semibold text-ink">
-                  {t('cluster.noAccess.title', { defaultValue: 'No accessible cluster' })}
-                </h2>
-                <p className="mt-1 max-w-md text-sm text-slate-400">
-                  {t('cluster.noAccess.body', {
-                    defaultValue:
-                      'You have not been granted access to any cluster yet. Ask an administrator to grant you a role on a cluster.',
-                  })}
-                </p>
-                <AccessHelp className="mt-3 max-w-md text-sm" />
-              </div>
-            ) : !clusterSettled ? (
-              // Until the picker has chosen one of the person's clusters, a page
-              // would read without ?cluster= the server's default cluster.
-              <RouteFallback />
-            ) : (
-              <Suspense fallback={<RouteFallback />}>
-                <Outlet />
-              </Suspense>
-            )}
+              ) : (
+                <Suspense fallback={<RouteFallback />}>
+                  <Outlet />
+                </Suspense>
+              )}
+            </ClusterGate>
           </div>
         </main>
       </div>

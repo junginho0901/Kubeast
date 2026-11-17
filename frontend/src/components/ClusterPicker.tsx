@@ -6,12 +6,13 @@ import { type ClusterMeta } from '@/services/api/clusters'
 import { useCluster } from '@/contexts/ClusterContext'
 import { healthDotClass } from '@/utils/clusterHealth'
 import { useDismiss } from '@/hooks/useDismiss'
-import { useAccessibleClusterSelection } from '@/hooks/useAccessibleClusterSelection'
+import { useClusterList } from '@/hooks/useAccessibleClusterSelection'
 
 // Sidebar cluster picker (step 11). Lists only the clusters the user can access
 // (accessibleOnly — step 08 filter); selecting one drives ClusterContext, which
 // updates ?cluster= and clears cluster-scoped caches (steps 09/10). With no
-// accessible cluster it shows guidance; with one it just shows the label.
+// accessible cluster it shows guidance; with one it just shows the label. Layout's
+// ClusterGate keeps the selection to these clusters.
 
 export default function ClusterPicker() {
   const { t } = useTranslation()
@@ -20,14 +21,15 @@ export default function ClusterPicker() {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  const { clusters, isLoading } = useAccessibleClusterSelection()
+  const { data: list } = useClusterList()
+  const clusters = list ?? []
 
   // Close the dropdown on a press outside or Escape.
   useDismiss(open, ref, setOpen)
 
   const selected: ClusterMeta | undefined = clusters.find((c) => c.id === currentCluster)
 
-  if (!isLoading && clusters.length === 0) {
+  if (list && list.length === 0) {
     return (
       <div className="px-4 py-2 text-xs text-slate-400">
         {tr('cluster.picker.none', 'No accessible cluster')}

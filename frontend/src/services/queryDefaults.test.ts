@@ -15,7 +15,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider, QueryObserver, type QueryFunction } from '@tanstack/react-query'
 import type { Member } from '@/services/api'
-import { everyUntilRefused, queryDefaults, REFUSED_ON_RETURN_MS, unlessRefused, useAskRefusedOnAccessChange } from './queryDefaults'
+import { everyUntilRefused, queryDefaults, REFUSED_ON_RETURN_MS, retryAsAsked, retryAsAskedDelay, unlessRefused, useAskRefusedOnAccessChange } from './queryDefaults'
 
 // A read the cluster refused answers the same until the person's access changes. The app's defaults tried every read
 // once more a second later, so a refused node list went out twice each time a screen opened it.
@@ -38,6 +38,34 @@ describe('the app\'s query defaults', () => {
     await vi.advanceTimersByTimeAsync(30_000)
     expect({ refused: refused.mock.calls.length, failed: failed.mock.calls.length }).toEqual({ refused: 1, failed: 2 })
     stops.forEach((stop) => stop())
+  })
+})
+
+// A 503 with Retry-After (a session the server could not check while its database restarts) is asked again as long as
+// the answers carry it, at their pace; a refusal never; anything else as retryUnlessRefused.
+describe('a read asked again as its answer asks', () => {
+  const failed = (status: number, headers: Record<string, string> = {}) => Object.assign(httpError(status), { response: { status, data: {}, headers } })
+  it('asks again on Retry-After at any count, never a refusal, and once more anything else', () => {
+    const retry = retryAsAsked(1)
+    expect([
+      retry(0, failed(503, { 'retry-after': '5' })),
+      retry(12, failed(503, { 'retry-after': '5' })),
+      retry(0, failed(403, { 'retry-after': '5' })),
+      retry(0, failed(500)),
+      retry(1, failed(500)),
+      retry(0, failed(503)),
+      retry(1, failed(503)),
+    ]).toEqual([true, true, false, true, false, true, false])
+  })
+
+  it('waits the Retry-After at least, else the growing wait up to 30 s', () => {
+    expect([
+      retryAsAskedDelay(0, failed(503, { 'retry-after': '5' })),
+      retryAsAskedDelay(6, failed(503, { 'retry-after': '5' })),
+      retryAsAskedDelay(0, failed(503, { 'retry-after': '60' })),
+      retryAsAskedDelay(0, failed(500)),
+      retryAsAskedDelay(3, failed(500)),
+    ]).toEqual([5_000, 30_000, 60_000, 1_000, 8_000])
   })
 })
 

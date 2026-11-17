@@ -18,8 +18,8 @@ const CLUSTER_INDEPENDENT_KEYS = new Set<string>([
   'sessions',
   'session',
   'clusters',
-  // the registry as the person may reach it (/clusters answers the same whatever cluster is selected): a switch that
-  // emptied it without asking showed "No accessible cluster" and the picker cleared the selection it had just made
+  // the registry as the person may reach it (/clusters answers the same whatever cluster is selected), which the
+  // screens' gate waits on (ClusterGate): emptied without asking, the screens would wait with nothing asking it again
   'clusters-accessible',
   'clusters-all',
   'cluster-roles',
