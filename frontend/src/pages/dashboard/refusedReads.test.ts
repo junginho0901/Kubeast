@@ -97,4 +97,25 @@ describe('a read on a timer the cluster refused', () => {
     expect({ refused: refused.mock.calls.length, answered: answered.mock.calls.length }).toEqual({ refused: 1, answered: 3 })
     stop()
   })
+
+  // the cluster's RBAC edited with kubectl while the page stays open: /auth/me answers as before
+  it('nodes: allowed later, read again on the same screen when the person comes back to the tab, then every minute', async () => {
+    const client = clientOf()
+    client.mount()
+    let allowed = false
+    const read = vi.fn(async () => {
+      if (!allowed) throw httpError(403)
+      return []
+    })
+    const stop = onScreen(client, optionsOf('nodes', 'c1', useDashboard), read).subscribe(() => {})
+    await vi.advanceTimersByTimeAsync(WINDOW)
+    expect(read).toHaveBeenCalledTimes(1)
+
+    allowed = true
+    window.dispatchEvent(new Event('visibilitychange'))
+    await vi.advanceTimersByTimeAsync(61_000)
+    expect(read).toHaveBeenCalledTimes(3)
+    stop()
+    client.unmount()
+  })
 })

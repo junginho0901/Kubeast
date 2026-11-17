@@ -1,3 +1,7 @@
+import { execSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 
 // A-4 (records/ns-scope-20261012.md §6-9): the screens for namespace-scoped grants. An admin limits a grant to
@@ -127,6 +131,60 @@ test.describe('namespace-scoped grants in the UI', () => {
       expect({ nodeListAsked: asked.length, refusedMoreThanOnce: again }).toEqual({ nodeListAsked: 1, refusedMoreThanOnce: [] })
     } finally {
       if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
+    }
+  })
+
+  // The cluster's RBAC edited with kubectl leaves the account's access in Kubeast, and /auth/me, as they were. The
+  // refused node list asks once more when the person comes back to the tab a minute or more after the refusal, so the
+  // Dashboard reads it on the same screen; back within the minute, or not back at all, it asks nothing.
+  test('a scoped user\'s Dashboard reads the node list again on the same screen once the cluster allows it', async ({ page, request }) => {
+    test.setTimeout(240_000)
+    const kc = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-nsui-')), 'kubeconfig')
+    fs.writeFileSync(kc, execSync('kind get kubeconfig --name kubeast', { encoding: 'utf8' }), { mode: 0o600 })
+    const kubectl = (args: string) => execSync(`kubectl --kubeconfig ${kc} ${args}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const stamp = Date.now().toString(36)
+    const email = `e2e-nsui-${stamp}@kubeast.local`
+    // a grant limited to namespaces reaches the cluster in the group of its role, kubeast:role:read here
+    const nodesRole = `e2e-nsui-nodes-${stamp}`
+    let userId = ''
+    // the tab hidden and shown again, as when the person comes back to it from another tab or window
+    const backOnTab = () => page.evaluate(() => {
+      for (const state of ['hidden', 'visible']) {
+        Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state })
+        document.dispatchEvent(new Event('visibilitychange', { bubbles: true }))
+      }
+    })
+    try {
+      userId = await createUser(request, admin, email)
+      expect((await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: 'Read', namespaces: ['api', 'web'] } })).ok()).toBeTruthy()
+      await loginUI(page, email, PW)
+      await page.goto('/account')
+
+      const answered: number[] = []
+      page.on('response', (r) => {
+        const u = new URL(r.url())
+        if (u.pathname === '/api/v1/cluster/nodes' && u.searchParams.get('cluster') === CLUSTER) answered.push(r.status())
+      })
+      await page.goto('/')
+      await expect.poll(() => answered, { timeout: 20_000 }).toEqual([403])
+      await backOnTab()
+      await page.waitForTimeout(3_000)
+      expect(answered, 'back on the tab within the minute').toEqual([403])
+
+      kubectl(`create clusterrole ${nodesRole} --verb=get,list,watch --resource=nodes`)
+      kubectl(`create clusterrolebinding ${nodesRole} --clusterrole=${nodesRole} --group=kubeast:role:read`)
+      // past the minute, and past the 60 s k8s-service keeps an access answer, with no return to the tab
+      await page.waitForTimeout(65_000)
+      expect(answered, 'allowed, the person not back on the tab').toEqual([403])
+
+      await backOnTab()
+      await expect.poll(() => answered, { timeout: 20_000, message: 'back on the tab: the node list read on the same screen' }).toEqual([403, 200])
+    } finally {
+      if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
+      for (const kind of ['clusterrolebinding', 'clusterrole']) {
+        try { kubectl(`delete ${kind} ${nodesRole} --ignore-not-found`) } catch { /* a failed delete does not hide the test's own failure */ }
+      }
     }
   })
 

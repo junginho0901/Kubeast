@@ -5,15 +5,24 @@ import { isForbiddenError, type Member } from '@/services/api'
 
 // A read refused (403) answers the same until the person's access changes: it is not tried again, nor asked again on a
 // timer. Opening the screen again, choosing another cluster or a change of the person's access (another answer of
-// /auth/me) asks once more, as for a refused metrics read (metricsReadPace). Another failure is tried as before.
+// /auth/me) asks once more, as for a refused metrics read (metricsReadPace), and so does the person's return to the tab
+// a minute or more after the refusal, for access changed in the cluster itself (its RBAC edited, a role made again
+// during an upgrade), which /auth/me does not show. Another failure is tried as before.
 
 /** Tries a failed read again up to `times` more, a refused one never. */
 export const retryUnlessRefused = (times: number) => (failureCount: number, error: unknown): boolean =>
   failureCount < times && !isForbiddenError(error)
 
+/** How long after a refusal the person's return to the tab asks the refused read once more. */
+export const REFUSED_ON_RETURN_MS = 60_000
+
+/** TanStack Query's window focus refetch (the tab shown again) for a read refused a minute or more before, no other. */
+export const askRefusedOnReturn = (query: { state: { error: unknown; errorUpdatedAt: number } }): boolean =>
+  isForbiddenError(query.state.error) && Date.now() - query.state.errorUpdatedAt >= REFUSED_ON_RETURN_MS
+
 /** The app's query defaults (main.tsx). */
 export const queryDefaults = {
-  refetchOnWindowFocus: false,
+  refetchOnWindowFocus: askRefusedOnReturn,
   retry: retryUnlessRefused(1),
 }
 

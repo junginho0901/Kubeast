@@ -186,7 +186,7 @@ export function useDashboardQueries({
     refetchOnWindowFocus: false,
   })
 
-  // 노드 목록 (차트 표시용 - 항상 가져오기); a refused list is not asked again until the page opens again
+  // 노드 목록 (차트 표시용 - 항상 가져오기); a refused list stops its timer (services/queryDefaults)
   const { data: nodes } = useQuery({
     queryKey: ['nodes', ck],
     queryFn: () => api.getNodes(false), // 자동 갱신은 캐시 사용

@@ -15,7 +15,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider, QueryObserver, type QueryFunction } from '@tanstack/react-query'
 import type { Member } from '@/services/api'
-import { everyUntilRefused, queryDefaults, unlessRefused, useAskRefusedOnAccessChange } from './queryDefaults'
+import { everyUntilRefused, queryDefaults, REFUSED_ON_RETURN_MS, unlessRefused, useAskRefusedOnAccessChange } from './queryDefaults'
 
 // A read the cluster refused answers the same until the person's access changes. The app's defaults tried every read
 // once more a second later, so a refused node list went out twice each time a screen opened it.
@@ -48,6 +48,69 @@ describe('a timer that stops at a refusal', () => {
       .toEqual([60_000, false, 60_000])
     expect([unlessRefused(null, 5_000), unlessRefused(httpError(403), 5_000), unlessRefused(null, false), unlessRefused(null, undefined)])
       .toEqual([5_000, false, false, false])
+  })
+})
+
+// Access changed in the cluster itself (its RBAC edited with kubectl, a role made again during an upgrade) leaves
+// /auth/me as it was. A refused read asks once more when the person comes back to the tab (TanStack Query's window
+// focus: the tab shown again), a minute or more after the refusal, and only then; a read not refused is not asked there.
+describe('the person back on the tab', () => {
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+
+  // the tab hidden and shown again; the stand-in document is never 'hidden', so the event reads as shown
+  const backOnTab = async () => {
+    window.dispatchEvent(new Event('visibilitychange'))
+    await vi.advanceTimersByTimeAsync(0)
+  }
+  const clientOnScreen = () => {
+    const client = new QueryClient({ defaultOptions: { queries: queryDefaults } })
+    client.mount()
+    return client
+  }
+
+  it('asks a read refused a minute or more before once more, which then goes on its timer', async () => {
+    expect(REFUSED_ON_RETURN_MS).toBe(60_000)
+    let allowed = false
+    const read = vi.fn(async () => {
+      if (!allowed) throw httpError(403)
+      return ['node-1']
+    })
+    const client = clientOnScreen()
+    const stop = new QueryObserver(client, { queryKey: ['nodes', 'c1'], queryFn: read, refetchInterval: everyUntilRefused(60_000) }).subscribe(() => {})
+    await vi.advanceTimersByTimeAsync(30_000)
+    await backOnTab()
+    expect(read, 'back within the minute').toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(31_000)
+    await backOnTab()
+    expect(read, 'back a minute on').toHaveBeenCalledTimes(2)
+    await backOnTab()
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(read, 'refused again: back at once, then no timer').toHaveBeenCalledTimes(2)
+
+    allowed = true
+    await backOnTab()
+    expect(read, 'allowed now: read on the same screen').toHaveBeenCalledTimes(3)
+    await backOnTab()
+    expect(read, 'answered: not asked on the return').toHaveBeenCalledTimes(3)
+    await vi.advanceTimersByTimeAsync(61_000)
+    expect(read, 'back on its timer').toHaveBeenCalledTimes(4)
+    stop()
+    client.unmount()
+  })
+
+  it('asks nothing on the return of a read that answered or failed otherwise', async () => {
+    const answered = vi.fn(async () => ['node-1'])
+    const failed = vi.fn(async () => { throw httpError(503) })
+    const client = clientOnScreen()
+    const stops = [answered, failed].map((queryFn, i) => new QueryObserver(client, { queryKey: ['read', i], queryFn }).subscribe(() => {}))
+    await vi.advanceTimersByTimeAsync(120_000)
+    await backOnTab()
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect({ answered: answered.mock.calls.length, failed: failed.mock.calls.length }).toEqual({ answered: 1, failed: 2 })
+    stops.forEach((stop) => stop())
+    client.unmount()
   })
 })
 
