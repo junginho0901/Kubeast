@@ -96,7 +96,7 @@ export default function AdminOrganizations() {
             setNameMissing(true)
             // an earlier Add's failure is not about this press, so only this reason shows; an Add on its way is left be
             if (createMutation.isError) createMutation.reset()
-            e.currentTarget.querySelector('input')?.focus()
+            e.currentTarget.querySelector<HTMLInputElement>(`#${NAME_FIELD}`)?.focus()
             return
           }
           createMutation.mutate({ type, name })

@@ -67,11 +67,20 @@ const problems = (tree: unknown) => elementsOf(tree, (p) => p['data-testid'] ===
 const addFailures = (tree: unknown) => elementsOf(tree, (p) => p['data-testid'] === 'team-add-error')
 const alerts = (tree: unknown) => elementsOf(tree, (p) => p.role === 'alert')
 const enterName = (text: string) => (nameField(page()).onChange as (e: { target: { value: string } }) => void)({ target: { value: text } })
-// presses Add (Enter in the field submits the same form); answers whether the field was given the focus
+// presses Add (Enter in the field submits the same form); answers whether the name field was given the focus. The
+// form answers only the name field's own selector (its id) with an element, so the focus cannot land elsewhere.
 const pressAdd = () => {
+  const tree = page()
+  const nameSelector = `#${String(nameField(tree).id)}`
+  const asked: string[] = []
   const focus = vi.fn()
-  const form = one(page(), (_p, t) => t === 'form', 'the add form')
-  ;(form.onSubmit as (e: unknown) => void)({ preventDefault: () => {}, currentTarget: { querySelector: () => ({ focus }) } })
+  const querySelector = (selector: string) => {
+    asked.push(selector)
+    return selector === nameSelector ? { focus } : null
+  }
+  const form = one(tree, (_p, t) => t === 'form', 'the add form')
+  ;(form.onSubmit as (e: unknown) => void)({ preventDefault: () => {}, currentTarget: { querySelector } })
+  expect(asked.filter((s) => s !== nameSelector), 'the form looks for the name field only').toEqual([])
   return focus.mock.calls.length > 0
 }
 
