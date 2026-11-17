@@ -688,7 +688,7 @@ autoscaling:
 # zone + hostname spread, soft (ScheduleAnyway)
 topologySpread:
   enabled: true
-# Seconds a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, its deregistration delay plus a few seconds.
+# Seconds a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, longer than it takes to stop sending new requests to a leaving pod (behind an AWS ALB the default 5 s was enough).
 # Stage: beta, not run yet on Kubernetes older than 1.30 (docs/configuration.md "Stages of new values").
 podShutdown:
   preStopSeconds: 5
@@ -1266,13 +1266,13 @@ multicluster:
   # starts go unanswered. Each place is
   # about 5.5 MiB for a list of 1 000 nodes, so a raise takes k8s-service's
   # memory up with it.
-  # Stage: beta, not in an upgrade rehearsal yet (docs/configuration.md "Stages of new values").
+  # Stage: beta, tested: upgrade rehearsals from 0.7.7 on kind and EKS (docs/configuration.md "Stages of new values").
   wsWatchOpeningConcurrency: 8
   # The HTTP/2 window of each live list's stream, in KiB: what a watch whose
   # browser reads slowly holds unread, and what a stream reads a round trip.
   # 1024 reads a 26 MB list in 1.4 s over a 50 ms round trip (Go's 4096: 0.7 s)
   # and 16 slow browsers' watches hold 18 MiB (4096: 65 MiB).
-  # Stage: beta, not in an upgrade rehearsal yet (docs/configuration.md "Stages of new values").
+  # Stage: beta, tested: upgrade rehearsals from 0.7.7 on kind and EKS (docs/configuration.md "Stages of new values").
   wsWatchStreamWindowKiB: 1024
   # How many reads of more than one page (500 pods, ReplicaSets, ...) run at once
   # in one k8s-service; the rest wait, and a read of one page waits for none. One
