@@ -250,22 +250,22 @@ multicluster:
 - **beta**: 기능은 남습니다. 키나 세부는 바뀔 수 있고, 한 릴리스 앞서 알리고 옮기는 법을 적습니다.
 - **stable**: 키와 동작이 그대로 남습니다. 이름이 바뀐 키도 한 릴리스 동안은 경고와 함께 읽습니다.
 
-기본 설치가 쓰는 값은 모든 설치가 이미 그 값으로 돌기 때문에 beta이고, 직접 정하거나 그 값을 읽는 기능을 켜야 쓰이는 값은 alpha입니다. 마지막 칸은 값마다 아직 돌리지 않은 것입니다.
+기본 설치가 쓰는 값은 모든 설치가 이미 그 값으로 돌기 때문에 beta이고, 직접 정하거나 그 값을 읽는 기능을 켜야 쓰이는 값은 alpha입니다. 마지막 칸은 값마다 아직 돌리지 않은 것이고, "돌려 봄:"으로 시작하면 그 뒤에 돌린 것입니다.
 
 | 값 | 기본값 | 단계 | 아직 안 돌린 것 |
 | --- | --- | --- | --- |
 | `podShutdown.preStopSeconds` | 5 | beta | Kubernetes 1.30보다 오래된 클러스터 |
 | `redis.acl.enabled`, `redis.acl.existingSecretHasKeys`, `redis.acl.existingSecret` | true, false, "" | beta | 시험 설치에서 사용자를 끈 경우 |
 | 1보다 큰 `replicas.k8sService`와 `replicas.toolServer` | 1 | alpha | k8s-service 2대 · 3대의 크기 |
-| `autoscaling.<service>` | 끔 | alpha | 시험 설치에서 HPA를 켠 경우 |
+| `autoscaling.<service>` | 끔 | alpha | 돌려 봄: EKS 1.35에서 k8s-service와 게이트웨이의 HPA가 파드 2대에서 3대로 늘었다가 돌아오고 HPA를 켰다 끄는 동안, 로드 밸런서를 거친 요청 중 실패한 것 없음 |
 | `postgresql.sessionLimits.*`, `postgresql.pool.<service>.maxConns`, `postgresql.maxConnections` | 켬, 20 · 20 · 10 · 15 · 4, 300 | beta | 데이터베이스가 오래 멈춘 경우 |
-| `pdb.enabled`, `pdb.maxUnavailable` | true, 1 | beta | 실제 클러스터에서 PodDisruptionBudget과 함께 한 노드 드레인 |
+| `pdb.enabled`, `pdb.maxUnavailable` | true, 1 | beta | 돌려 봄: EKS 1.35에서 서비스마다 파드 둘을 두고 노드 하나를 드레인해 바꾸는 동안, 막힌 내보내기 없음 · 로드 밸런서를 거친 요청 중 실패한 것 없음 |
 | `streams.*` | 끔 | alpha | kind 개발 설치에서 한 번도 안 돌림 |
 | `ai.providers.claudeCode.maxConcurrentTotal`, `queueWaitSeconds`, `memoryLimit` | 0, 60, 2Gi | alpha | 프로바이더를 켠 시험 설치 |
 | `gateway.accessLog.upstreamTimes` | false | alpha | 켠 상태의 게이트웨이 설정을 `nginx -t`로 확인 |
 | `multicluster.breakerConsecutiveFails`(0.7.8부터 `0`이면 차단기 끔), `multicluster.breakerOpenSec`(0.7.8부터 읽음) | 5, 30 | beta | kind 개발 설치에서 클러스터를 끊어 본 경우 |
 | `multicluster.wsWatchOpeningConcurrency`, `multicluster.wsWatchStreamWindowKiB` | 8, 1024 | beta | 업그레이드 리허설 |
-| `auth` 설정의 `customRoles` 옆 `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters` | false, [] | alpha | 켠 상태의 전체 e2e |
+| `auth` 설정의 `customRoles` 옆 `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters` | false, [] | alpha | 돌려 봄: 켠 상태의 전체 e2e를 kind 개발 설치에서 두 번(실패 없음), 100명이 한꺼번에 화면을 연 부하(오류 없음) |
 
 ## Redis 사용자
 

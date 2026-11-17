@@ -160,7 +160,7 @@ auth:
     # whose answer depends on the user name (ahead of RBAC or after it, a refusal or a pass for
     # named people) or that limits the user names Kubeast may act as, and never bind the name
     # (docs/cluster-requirements.md §1 has the checks).
-    # Stage: alpha, the whole e2e with it on has not run yet (docs/configuration.md "Stages of new values").
+    # Stage: alpha, tested: the whole e2e and 100 people at once with it on (docs/configuration.md "Stages of new values").
     sharedReadChecks:
       enabled: false
       excludeClusters: []
@@ -664,7 +664,7 @@ streams:
 # A PodDisruptionBudget for each Deployment above with more than one replica, or with autoscaling on and minReplicas 2 or
 # more, allowing maxUnavailable of its pods to be evicted at once (unhealthy ones always); none where it can be down to one
 # pod, which would block node drains. enabled: false leaves them out.
-# Stage: beta, node drains with them have not run yet on a real cluster (docs/configuration.md "Stages of new values").
+# Stage: beta, tested: a node drained and replaced on EKS, no request failing (docs/configuration.md "Stages of new values").
 pdb:
   enabled: true
   maxUnavailable: 1
@@ -676,7 +676,7 @@ pdb:
 # from a load test. maxReplicas above 1 for k8sService and toolServer needs
 # redis.enabled. behavior goes into the HPA as written ({} = Kubernetes' defaults,
 # which scale down after 300 s of lower use).
-# Stage: alpha, no HPA has been turned on in a test install yet (docs/configuration.md "Stages of new values").
+# Stage: alpha, tested: HPAs on EKS 2 → 3 → 2 pods, on and off, no request failing (docs/configuration.md "Stages of new values").
 autoscaling:
   authService: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
   aiService: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
