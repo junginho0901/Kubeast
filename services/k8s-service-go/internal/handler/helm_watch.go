@@ -8,6 +8,9 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
+	"net/url"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,8 +33,9 @@ var helmLimitRetry = func() time.Duration { return 30*time.Second + rand.N(270*t
 // helmResumeDelay is the wait before a watch of the stream that ended goes on, spread as the sockets' watches are.
 var helmResumeDelay = ws.WatchResumeDelay
 
-// helmStreamID is the stream's event id. A browser that opens the stream again by itself sends it back as Last-Event-ID:
-// the stream before this one ended, and what was deleted between the two only a read of the list can tell.
+// helmStreamID starts the stream's event id, which a browser that opens the stream again by itself sends back as
+// Last-Event-ID (helmWatchVersions.id). Alone it names no version: the stream before this one ended, and what was
+// deleted between the two only a read of the list can tell.
 const helmStreamID = "helm-releases"
 
 // helmLimitFrame is what the page's watch problem notice reads of a socket's refusal for the server's limit.
@@ -63,8 +67,10 @@ var helmLimitFrame = func() string {
 //   - namespace empty → cluster-wide watch
 //   - cluster query selects the target cluster (ClientsetFor(ctx), via
 //     ClusterMiddleware); absent → default cluster.
-//   - resync=1 (the page's list was read before this stream) or a Last-Event-ID (the browser opened the stream again)
-//     asks for one 'resync' event once the watch is on, as a socket's REQUEST with resync gets one RESYNC.
+//   - a Last-Event-ID the stream wrote (the browser opened it again) names the version each of its watches goes on
+//     from, so only what changed since comes, on whichever server: the versions are the API server's.
+//   - resync=1 (the page's list was read before this stream) or a Last-Event-ID naming no version of this stream's
+//     watches asks for one 'resync' event once the watch is on, as a socket's REQUEST with resync gets one RESYNC.
 func (h *Handler) WatchHelmReleases(w http.ResponseWriter, r *http.Request) {
 	if err := h.requirePermissionForCluster(r, "resource.helm.read"); err != nil {
 		h.handleError(w, err)
@@ -83,16 +89,20 @@ func (h *Handler) WatchHelmReleases(w http.ResponseWriter, r *http.Request) {
 	// nginx ingress 의 proxy_buffering 을 응답 단위로 끔 — SSE 는 즉시 flush 필수.
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
-	// An id and no data: the browser keeps it for its next request of the stream and dispatches nothing.
-	fmt.Fprintf(w, "id: %s\n\n", helmStreamID)
-	flusher.Flush()
 
 	namespace := r.URL.Query().Get("namespace")
-	resync := r.URL.Query().Get("resync") == "1" || r.Header.Get("Last-Event-ID") != ""
+	from, resumed := parseHelmStreamID(r.Header.Get("Last-Event-ID"))
+	if resumed = resumed && from.fits(helmWatchNamespaces(r.Context(), namespace), namespace); !resumed {
+		from = helmWatchVersions{}
+	}
+	resync := !resumed && (r.URL.Query().Get("resync") == "1" || r.Header.Get("Last-Event-ID") != "")
+	// An id and no data: the browser keeps it for its next request of the stream and dispatches nothing.
+	fmt.Fprintf(w, "id: %s\n\n", from.id())
+	flusher.Flush()
 
 	ctx, release := h.holdSession(r.Context())
 	defer release()
-	if err := h.runHelmWatchSSE(ctx, w, flusher, namespace, resync); err != nil {
+	if err := h.runHelmWatchSSE(ctx, w, flusher, namespace, resync, from, resumed); err != nil {
 		slog.Warn("helm watch sse ended with error", "err", err, "namespace", namespace)
 	}
 	sayStreamEnded(ctx, w, flusher)
@@ -104,7 +114,8 @@ func (h *Handler) WatchHelmReleases(w http.ResponseWriter, r *http.Request) {
 // TimeoutSeconds 가 차면 자동으로 새 watcher 를 열어 transparent reconnect.
 // The next watch goes on from the last version the stream saw, so nothing between the two is lost; when that version
 // has expired it starts from none and the page is told to read its list again ('resync'), as forwardEvents does.
-func (h *Handler) runHelmWatchSSE(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, namespace string, resync bool) error {
+// The first watches go on from the versions in from, which resumed says the browser brought.
+func (h *Handler) runHelmWatchSSE(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, namespace string, resync bool, from helmWatchVersions, resumed bool) error {
 	// The same 25 s as the terminals and the other streams, under the 60 s idle cut of nginx and load balancers.
 	keepalive := time.NewTicker(keepalivePeriod)
 	defer keepalive.Stop()
@@ -119,11 +130,10 @@ func (h *Handler) runHelmWatchSSE(ctx context.Context, w http.ResponseWriter, fl
 	// The page was told the limit kept it from following: what changed meanwhile only a read can tell.
 	resync = resync || told
 
-	from := helmWatchVersions{}
 	// An event's watch is the namespace's asked for, or with one watch per namespace the event's own (watchNamespaces
-	// names a bookmark's).
+	// names a bookmark's). What is kept is the stream's id from then on.
 	perNamespace := helmWatchNamespaces(ctx, namespace) != nil
-	keep := func(secret *corev1.Secret) {
+	keep := func(secret *corev1.Secret) string {
 		watched := namespace
 		if perNamespace {
 			watched = secret.Namespace
@@ -131,6 +141,7 @@ func (h *Handler) runHelmWatchSSE(ctx context.Context, w http.ResponseWriter, fl
 		if secret.ResourceVersion != "" {
 			from[watched] = secret.ResourceVersion
 		}
+		return from.id()
 	}
 	for {
 		if ctx.Err() != nil {
@@ -142,8 +153,11 @@ func (h *Handler) runHelmWatchSSE(ctx context.Context, w http.ResponseWriter, fl
 			if ctx.Err() != nil {
 				return nil
 			}
-			if len(from) > 0 && ws.ResourceVersionExpired(err) {
+			// An expired version, or one the browser brought that the API server does not take (not this cluster's, too
+			// new for it) or could not be asked about: the watches start from none, as a stream that brought none.
+			if len(from) > 0 && (resumed || ws.ResourceVersionExpired(err)) {
 				clear(from)
+				resumed = false
 				resync = true
 				continue
 			}
@@ -156,6 +170,7 @@ func (h *Handler) runHelmWatchSSE(ctx context.Context, w http.ResponseWriter, fl
 			}
 			continue
 		}
+		resumed = false
 		// the page was told the limit kept it from following: it follows again
 		if told {
 			told = false
@@ -208,6 +223,55 @@ func helmWatchNamespaces(ctx context.Context, namespace string) []string {
 // or bookmark it brought, by the namespace it follows ("" for all). A watch with none starts from no version and sends
 // an ADDED for each release Secret there is.
 type helmWatchVersions map[string]string
+
+// id is the stream's event id at these versions: helmStreamID, then "?" and each watch's version by its namespace as a
+// query ("=<version>" for one watch of every namespace), helmStreamID alone while there is none. It holds only what
+// the API server gave, so two servers that brought the same events give the same id.
+func (v helmWatchVersions) id() string {
+	if len(v) == 0 {
+		return helmStreamID
+	}
+	q := url.Values{}
+	for namespace, version := range v {
+		q.Set(namespace, version)
+	}
+	return helmStreamID + "?" + q.Encode()
+}
+
+// parseHelmStreamID reads a Last-Event-ID the stream wrote with a version; anything else is no place to go on from.
+func parseHelmStreamID(s string) (helmWatchVersions, bool) {
+	rest, ok := strings.CutPrefix(s, helmStreamID+"?")
+	if !ok {
+		return nil, false
+	}
+	q, err := url.ParseQuery(rest)
+	if err != nil || len(q) == 0 {
+		return nil, false
+	}
+	v := helmWatchVersions{}
+	for namespace, versions := range q {
+		if len(versions) != 1 || versions[0] == "" {
+			return nil, false
+		}
+		v[namespace] = versions[0]
+	}
+	return v, true
+}
+
+// fits says the versions are of watches this stream opens: the namespace asked for, or namespaces of the grant
+// (helmWatchNamespaces' scope). One the grant no longer has is not: what the page shows of it only a read can tell.
+func (v helmWatchVersions) fits(scope []string, namespace string) bool {
+	if scope == nil {
+		_, ok := v[namespace]
+		return ok && len(v) == 1
+	}
+	for watched := range v {
+		if !slices.Contains(scope, watched) {
+			return false
+		}
+	}
+	return true
+}
 
 // holdHelmWatches takes n of the server's live watches, telling the page and asking again after retry() while they do
 // not fit. release is nil when the stream ended first; told says the page was told.
@@ -366,9 +430,9 @@ func (m *mergedWatch) Stop() {
 // consumeWatchSSE drains a single watcher until it ends or ctx is done.
 // Each ADDED/MODIFIED/DELETED Secret event is decoded into a ReleaseSummary
 // and pushed as an SSE 'data:' frame. Keepalive comments are interleaved.
-// Every Secret's version, a bookmark's too, goes to keep; expired says the API server ended the watch because the
-// version it went on from has expired.
-func (h *Handler) consumeWatchSSE(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, watcher watch.Interface, keepalive *time.Ticker, keep func(*corev1.Secret)) (expired bool, err error) {
+// Every Secret's version, a bookmark's too, goes to keep, whose answer is the stream's id that goes with the frame (a
+// bookmark's alone); expired says the API server ended the watch because the version it went on from has expired.
+func (h *Handler) consumeWatchSSE(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, watcher watch.Interface, keepalive *time.Ticker, keep func(*corev1.Secret) string) (expired bool, err error) {
 	results := watcher.ResultChan()
 	for {
 		select {
@@ -400,8 +464,13 @@ func (h *Handler) consumeWatchSSE(ctx context.Context, w http.ResponseWriter, fl
 			if !ok {
 				continue
 			}
-			keep(secret)
+			id := keep(secret)
 			if event.Type == watch.Bookmark {
+				// An id and no data: a quiet stream's id keeps up with the version, which expires.
+				if _, err := fmt.Fprintf(w, "id: %s\n\n", id); err != nil {
+					return false, err
+				}
+				flusher.Flush()
 				continue
 			}
 
@@ -422,7 +491,7 @@ func (h *Handler) consumeWatchSSE(ctx context.Context, w http.ResponseWriter, fl
 			if err != nil {
 				continue
 			}
-			if _, err := fmt.Fprintf(w, "data: %s\n\n", payload); err != nil {
+			if _, err := fmt.Fprintf(w, "id: %s\ndata: %s\n\n", id, payload); err != nil {
 				return false, err
 			}
 			flusher.Flush()

@@ -87,9 +87,12 @@ func bookmarkEvent(version string) string {
 
 const expiredEvent = `{"type":"ERROR","object":{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"too old resource version","reason":"Expired","code":410}}`
 
-// helmEvents opens a page's Helm releases stream with the request's header and query, and reads its events: a data
-// frame by its event's name ("" for a release's), an id line as "id".
-func helmEvents(t *testing.T, h *Handler, namespaces []string, query string, header http.Header) <-chan sseEvent {
+// helmFrame is one frame of the stream as the browser dispatches it: its event's name ("" for a release's), its data
+// ("" for a frame of an id alone) and the stream's id after it.
+type helmFrame struct{ name, data, id string }
+
+// helmFrames opens a page's Helm releases stream with the request's header and query, and reads its frames.
+func helmFrames(t *testing.T, h *Handler, namespaces []string, query string, header http.Header) <-chan helmFrame {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := cluster.WithID(auth.WithPayload(r.Context(), auth.TokenPayload{UserID: "u", Perms: auth.PermissionMatrix{"*": {"*"}}, Namespaces: map[string][]string{"c": namespaces}}), "c")
@@ -107,20 +110,44 @@ func helmEvents(t *testing.T, h *Handler, namespaces []string, query string, hea
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { resp.Body.Close() })
+	frames := make(chan helmFrame, 256)
+	go func() {
+		defer close(frames)
+		sc := bufio.NewScanner(resp.Body)
+		var f helmFrame
+		hasID := false
+		for sc.Scan() {
+			switch line := sc.Text(); {
+			case line == "":
+				if f.data != "" || hasID {
+					frames <- f
+				}
+				f, hasID = helmFrame{id: f.id}, false
+			case strings.HasPrefix(line, "id: "):
+				f.id, hasID = strings.TrimPrefix(line, "id: "), true
+			case strings.HasPrefix(line, "event: "):
+				f.name = strings.TrimPrefix(line, "event: ")
+			case strings.HasPrefix(line, "data: "):
+				f.data = strings.TrimPrefix(line, "data: ")
+			}
+		}
+	}()
+	return frames
+}
+
+// helmEvents reads a page's Helm releases stream as events: a data frame by its event's name ("" for a release's), a
+// frame of an id alone as "id".
+func helmEvents(t *testing.T, h *Handler, namespaces []string, query string, header http.Header) <-chan sseEvent {
+	t.Helper()
+	frames := helmFrames(t, h, namespaces, query, header)
 	events := make(chan sseEvent, 256)
 	go func() {
 		defer close(events)
-		sc := bufio.NewScanner(resp.Body)
-		name := ""
-		for sc.Scan() {
-			switch line := sc.Text(); {
-			case strings.HasPrefix(line, "id: "):
-				events <- sseEvent{"id", strings.TrimPrefix(line, "id: ")}
-			case strings.HasPrefix(line, "event: "):
-				name = strings.TrimPrefix(line, "event: ")
-			case strings.HasPrefix(line, "data: "):
-				events <- sseEvent{name, strings.TrimPrefix(line, "data: ")}
-				name = ""
+		for f := range frames {
+			if f.data == "" {
+				events <- sseEvent{"id", f.id}
+			} else {
+				events <- sseEvent{f.name, f.data}
 			}
 		}
 	}()
@@ -194,7 +221,7 @@ func TestAHelmStreamGoesOnFromItsVersionAndAsksForAReadOnlyWhenItExpired(t *test
 
 	got := what(eventsUntil(t, events, func(e sseEvent) bool { return e.name == "resync" }))
 	got = append(got, what(eventsUntil(t, events, func(e sseEvent) bool { return e.name == "" }))...)
-	want := []string{"id", "ADDED web", "ADDED db", "DELETED db", "resync", "ADDED web"}
+	want := []string{"id", "ADDED web", "ADDED db", "id", "DELETED db", "resync", "ADDED web"}
 	if strings.Join(got, ", ") != strings.Join(want, ", ") {
 		t.Errorf("the stream said %v, want %v", got, want)
 	}
@@ -238,9 +265,10 @@ func TestAHelmWatchRefusedForAnExpiredVersionStartsOverAndAsksForARead(t *testin
 	}
 }
 
-// A stream knows nothing of the one before it. The browser opening it again by itself sends the stream's id back, and a
-// page whose list was read before the stream opened says resync=1: either gets one resync once the watch is on, as a
-// socket's REQUEST with resync gets one RESYNC. A stream the page opened on a list it has just read gets none.
+// A stream opened again by the browser with an id that names no version (the one before ended before its first event,
+// or a server of 0.7.7 wrote it) knows nothing of the one before it, and a page whose list was read before the stream
+// opened says resync=1: either gets one resync once the watch is on, as a socket's REQUEST with resync gets one RESYNC.
+// A stream the page opened on a list it has just read gets none.
 func TestAHelmStreamOpenedAgainAsksForOneReadOnceItsWatchIsOn(t *testing.T) {
 	quickHelmResume(t)
 	for _, c := range []struct {
@@ -302,5 +330,208 @@ func TestEachNamespaceWatchOfAHelmStreamGoesOnFromItsOwnVersion(t *testing.T) {
 	}
 	if from["team-a"] != "20" || from["team-b"] != "25" {
 		t.Errorf("the second watches went on from %v, want team-a from 20 and team-b from 25", from)
+	}
+}
+
+// framesUntil reads frames until one done says so, and fails after five seconds.
+func framesUntil(t *testing.T, frames <-chan helmFrame, done func(helmFrame) bool) []helmFrame {
+	t.Helper()
+	var got []helmFrame
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case f, ok := <-frames:
+			if !ok {
+				t.Fatalf("stream closed after %+v", got)
+			}
+			got = append(got, f)
+			if done(f) {
+				return got
+			}
+		case <-deadline:
+			t.Fatalf("waited five seconds, got %+v", got)
+		}
+	}
+}
+
+// statusAnswer answers a watch with the API server's refusal.
+func statusAnswer(w http.ResponseWriter, code int, status string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	fmt.Fprint(w, status)
+}
+
+const (
+	goneStatus     = `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"too old resource version","reason":"Expired","code":410}`
+	tooLargeStatus = `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Too large resource version","reason":"Timeout","details":{"causes":[{"reason":"ResourceVersionTooLarge","message":"Too large resource version"}],"retryAfterSeconds":1},"code":504}`
+)
+
+// The stream's id is where its watches are, as the API server gave it: each release's frame carries it, a bookmark
+// moves it with an id alone, and two servers that brought the same events gave the same ids, since nothing of the
+// server is in it.
+func TestAHelmStreamsIDIsTheVersionItsWatchGoesOnFromTheSameOnEveryServer(t *testing.T) {
+	quickHelmResume(t)
+	ids := func() []string {
+		api := &scriptedSecretWatches{answer: func(w http.ResponseWriter, r *http.Request, call secretWatchCall, n int) {
+			watchEvents(w, releaseEvent("ADDED", "team", "web", 1, "10"), releaseEvent("ADDED", "team", "db", 1, "11"), bookmarkEvent("15"))
+			<-r.Context().Done()
+		}}
+		h, _ := liveHandler(t, api.serve, &atomic.Int32{})
+		got := framesUntil(t, helmFrames(t, h, nil, "", nil), func(f helmFrame) bool { return strings.HasSuffix(f.id, "=15") })
+		out := make([]string, 0, len(got))
+		for _, f := range got {
+			said := "id"
+			if f.data != "" {
+				said = what([]sseEvent{{f.name, f.data}})[0]
+			}
+			out = append(out, said+" @ "+f.id)
+		}
+		return out
+	}
+	want := []string{"id @ helm-releases", "ADDED web @ helm-releases?=10", "ADDED db @ helm-releases?=11", "id @ helm-releases?=15"}
+	for i, got := range [][]string{ids(), ids()} {
+		if strings.Join(got, ", ") != strings.Join(want, ", ") {
+			t.Errorf("server %d said %v, want %v", i+1, got, want)
+		}
+	}
+}
+
+// The browser opening the stream again, here on another server, sends the id the stream wrote: the watch goes on from
+// its version, so what changed since comes and the releases the page has are not sent again. The page followed the
+// stream up to that id, so it reads nothing again, even when the stream's address says its list was read before it.
+func TestAHelmStreamOpenedAgainWithItsIDGoesOnFromThereWithNothingSentAgain(t *testing.T) {
+	quickHelmResume(t)
+	for _, query := range []string{"", "resync=1"} {
+		t.Run("query "+query, func(t *testing.T) {
+			api := &scriptedSecretWatches{answer: func(w http.ResponseWriter, r *http.Request, call secretWatchCall, n int) {
+				if call.resourceVersion == "" {
+					watchEvents(w, releaseEvent("ADDED", "team", "web", 1, "10"), releaseEvent("ADDED", "team", "db", 1, "11"))
+				} else {
+					watchEvents(w, releaseEvent("DELETED", "team", "db", 1, "16"))
+				}
+				<-r.Context().Done()
+			}}
+			h, _ := liveHandler(t, api.serve, &atomic.Int32{})
+			got := framesUntil(t, helmFrames(t, h, nil, query, http.Header{"Last-Event-Id": {"helm-releases?=15"}}), func(f helmFrame) bool { return f.data != "" })
+			want := []helmFrame{{id: "helm-releases?=15"}, {data: `{"type":"DELETED"`, id: "helm-releases?=16"}}
+			if len(got) != len(want) || got[0] != want[0] || !strings.HasPrefix(got[1].data, want[1].data) || got[1].name != "" || got[1].id != want[1].id {
+				t.Errorf("the stream said %+v, want its id, then the DELETED of db with the id after it", got)
+			}
+			if calls := api.made(); len(calls) != 1 || calls[0].resourceVersion != "15" {
+				t.Errorf("watches %+v, want one from 15", calls)
+			}
+		})
+	}
+}
+
+// One watch per namespace of a grant goes on from its own version; a namespace the id does not name (no event of it
+// yet) starts from none, which sends what it has.
+func TestEachNamespaceWatchOfAHelmStreamOpenedAgainGoesOnFromTheVersionItsIDNames(t *testing.T) {
+	quickHelmResume(t)
+	for _, c := range []struct {
+		id, want string
+		from     map[string]string
+	}{
+		{"helm-releases?team-a=20&team-b=25", "id, MODIFIED web", map[string]string{"team-a": "20", "team-b": "25"}},
+		{"helm-releases?team-a=20", "id, ADDED api, MODIFIED web", map[string]string{"team-a": "20", "team-b": ""}},
+	} {
+		t.Run(c.id, func(t *testing.T) {
+			api := &scriptedSecretWatches{answer: func(w http.ResponseWriter, r *http.Request, call secretWatchCall, n int) {
+				switch {
+				case call.namespace == "team-b" && call.resourceVersion == "":
+					watchEvents(w, releaseEvent("ADDED", "team-b", "api", 1, "12"))
+				case call.namespace == "team-a" && call.resourceVersion == "":
+					watchEvents(w, releaseEvent("ADDED", "team-a", "web", 1, "10"))
+				case call.namespace == "team-a":
+					// after team-b's watch has answered, so the frames come in one order
+					watchEvents(w)
+					time.Sleep(100 * time.Millisecond)
+					watchEvents(w, releaseEvent("MODIFIED", "team-a", "web", 2, "21"))
+				default:
+					watchEvents(w)
+				}
+				<-r.Context().Done()
+			}}
+			h, _ := liveHandler(t, api.serve, &atomic.Int32{})
+			got := what(eventsUntil(t, helmEvents(t, h, []string{"team-a", "team-b"}, "", http.Header{"Last-Event-Id": {c.id}}), func(e sseEvent) bool {
+				return strings.Contains(e.data, `"MODIFIED"`)
+			}))
+			if strings.Join(got, ", ") != c.want {
+				t.Errorf("the stream said %v, want %s", got, c.want)
+			}
+			from := map[string]string{}
+			for _, call := range api.made() {
+				from[call.namespace] = call.resourceVersion
+			}
+			if len(from) != len(c.from) || from["team-a"] != c.from["team-a"] || from["team-b"] != c.from["team-b"] {
+				t.Errorf("the watches went on from %v, want %v", from, c.from)
+			}
+		})
+	}
+}
+
+// An id the stream cannot go on from — its version expired, the API server does not take it, or it names a namespace
+// the grant no longer has — starts as a stream with no id does: every release again, and one resync once the watch is
+// on, so the page reads its list.
+func TestAHelmStreamOpenedAgainWithAnIDItCannotGoOnFromSendsEverythingAndAsksForARead(t *testing.T) {
+	quickHelmResume(t)
+	for _, c := range []struct {
+		name, id   string
+		namespaces []string
+		first      string
+	}{
+		{"expired", "helm-releases?=15", nil, "15"},
+		{"not taken by the API server", "helm-releases?=99999", nil, "99999"},
+		{"another grant's namespace", "helm-releases?team-x=15", []string{"team-a"}, ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			api := &scriptedSecretWatches{answer: func(w http.ResponseWriter, r *http.Request, call secretWatchCall, n int) {
+				switch call.resourceVersion {
+				case "15":
+					statusAnswer(w, http.StatusGone, goneStatus)
+					return
+				case "99999":
+					statusAnswer(w, http.StatusGatewayTimeout, tooLargeStatus)
+					return
+				}
+				ns := call.namespace
+				if ns == "" {
+					ns = "team"
+				}
+				watchEvents(w, releaseEvent("ADDED", ns, "web", 1, "10"), releaseEvent("ADDED", ns, "db", 1, "11"))
+				<-r.Context().Done()
+			}}
+			h, _ := liveHandler(t, api.serve, &atomic.Int32{})
+			got := what(eventsUntil(t, helmEvents(t, h, c.namespaces, "", http.Header{"Last-Event-Id": {c.id}}), func(e sseEvent) bool {
+				return strings.Contains(e.data, `"name":"db"`)
+			}))
+			if want := "id, resync, ADDED web, ADDED db"; strings.Join(got, ", ") != want {
+				t.Errorf("the stream said %v, want %s", got, want)
+			}
+			calls := api.made()
+			if len(calls) == 0 || calls[0].resourceVersion != c.first || calls[len(calls)-1].resourceVersion != "" {
+				t.Errorf("watches %+v, want the first from %q and the last from none", calls, c.first)
+			}
+		})
+	}
+}
+
+// Only an id the stream wrote is a place to go on from.
+func TestParseHelmStreamIDReadsOnlyTheIDsTheStreamWrites(t *testing.T) {
+	for _, v := range []helmWatchVersions{{"": "15"}, {"team-a": "20", "team-b": "25"}, {"a": "1&b=2"}} {
+		got, ok := parseHelmStreamID(v.id())
+		if !ok || len(got) != len(v) {
+			t.Errorf("%q read as %v %v, want %v", v.id(), got, ok, v)
+		}
+		for ns, version := range v {
+			if got[ns] != version {
+				t.Errorf("%q read %q as %q, want %q", v.id(), ns, got[ns], version)
+			}
+		}
+	}
+	for _, id := range []string{"", "helm-releases", "helm-releases?", "helm-releases?=", "helm-releases?a=1&a=2", "helm-releases?a=1;b=2", "other?=15", "2026-11-17T00:00:00.000000000Z#1"} {
+		if got, ok := parseHelmStreamID(id); ok {
+			t.Errorf("%q read as %v, want no place to go on from", id, got)
+		}
 	}
 }

@@ -117,9 +117,11 @@ export function helmStreamFrame(name: string, data: string | undefined): StreamF
  * followHelmReleases follows the stream until the function it returns is called: each release event goes into the
  * list under queryKey and to onEvent, read as each event comes since they change between drawings.
  *
- * The server keeps no version past its stream. A stream opened again by the browser (it sends the stream's id back) or
- * opened on a list read before the last stream of that list stopped (resync=1) gets a 'resync' once its watch is on, as a
- * socket's watch gets a RESYNC, and the list is read again with its rows on screen, at its own moment (resyncReads).
+ * The stream's id is the version its watches go on from: the browser opening the stream again by itself sends it back,
+ * and the stream goes on from there, on whichever server, with only what changed since. One that cannot (the version
+ * expired, no event came yet) or a stream opened on a list read before the last stream of that list stopped (resync=1)
+ * gets a 'resync' once its watch is on, as a socket's watch gets a RESYNC, and the list is read again with its rows on
+ * screen, at its own moment (resyncReads).
  */
 export function followHelmReleases(
   queryClient: QueryClient,
