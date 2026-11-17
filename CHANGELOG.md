@@ -73,7 +73,8 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - The floating chat is told what a screen says for a read that was refused, failed or is not installed, instead of zero.
 - Monitoring's Nodes and Pods tabs no longer ask every 5 s on a cluster without metrics-server, and show a refused metrics read in the cluster's words.
 - Prometheus sections say when the cluster's Prometheus does not answer, and that no longer marks the whole cluster unreachable.
-- An audit log search or export and AI Usage given a time with an offset (such as `+09:00`) find the rows of the moment it names, where they read its clock time as UTC and missed them by the offset; the AI's `audit_search` and `ai_usage` too. The screens send UTC and were not affected.
+- A time with an offset (such as `+09:00`) now means the moment it names in an audit log search, its CSV export, an AI Usage period and the chat list API's `before_updated_at`. Before, its clock time was read as UTC, so the results were off by the offset. The console sends UTC and was not affected.
+- The AI tools read `until_time` the same way and refuse one that is not an RFC 3339 time, with the reason. An audit log search or export with a `since` or `until` that is not an RFC 3339 time now answers 400 instead of leaving that bound out and listing every row.
 - Secret files stay readable with `podSecurity.enabled: false`.
 - A values file copied from 0.7.6 or earlier stops on its release image tag instead of keeping that release's images.
 - A chat answer whose stream was cut is saved once, under its question.
