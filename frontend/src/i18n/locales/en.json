@@ -507,7 +507,8 @@
       "serverMemory": "The server is short of memory, so it starts following no more lists for now. The rows on this page are read about once a minute and go back to live updates by themselves when it has room.",
       "unreachable": "The cluster cannot be reached, so live updates are paused. They come back by themselves.",
       "failed": "Live updates are paused because the cluster answered with an error. They come back by themselves.",
-      "scope": "Your access is limited to namespaces, so objects of the whole cluster on this page do not update live. Rows may be out of date; refresh to read them again."
+      "scope": "Your access is limited to namespaces, so objects of the whole cluster on this page do not update live. Rows may be out of date; refresh to read them again.",
+      "serverOpening": "Many live lists are opening, a few at a time, so live updates for this page wait for their turn. They start by themselves in a few seconds and read the rows again then."
     },
     "clusterChecking": "Checking connection...",
     "clusterConnected": "Cluster connected",
