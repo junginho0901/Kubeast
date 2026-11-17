@@ -51,7 +51,8 @@ import { useForbiddenLabels } from '@/services/forbiddenStore'
 import { announceCreated, useCreatedNotice } from '@/services/createdNoticeStore'
 import { recordWatchFrame, useWatchProblem } from '@/services/watchProblemStore'
 import { ResourceDetailProvider } from '@/components/ResourceDetailProvider'
-import { useAccessibleClusterSelection } from '@/hooks/useAccessibleClusterSelection'
+import { useAccessibleClusterSelection, useClusterSettled } from '@/hooks/useAccessibleClusterSelection'
+import layoutSrc from '@/components/Layout.tsx?raw'
 import { everyUntilRefused, queryDefaults } from '@/services/queryDefaults'
 import { useResourceDetail, type ResourceDetailTarget } from '@/components/ResourceDetailContext'
 import LazyResourceDetailDrawer from '@/components/LazyResourceDetailDrawer'
@@ -61,13 +62,15 @@ const sentReads: string[] = []
 const NAMED_ANSWERS = ['/cluster/metrics/top-resources', '/cluster/features', '/cluster/namespaces']
 // a grant limited to namespaces on the one cluster it may reach: refused the node list and the pods across namespaces
 const ONLY_SELF = ['/clusters', '/cluster/overview', '/cluster/nodes', '/cluster/pods/page']
+// the clusters the person may reach, as /clusters?accessibleOnly answers
+let registry: string[] = ['self']
 client.defaults.adapter = async (config: InternalAxiosRequestConfig) => {
   const params = (config.params ?? {}) as Record<string, string>
   const cluster = String(params.cluster ?? '')
   if (String(config.method ?? 'get').toLowerCase() === 'get') sentReads.push(`${config.url} ${new URLSearchParams(params)}`)
   if (ONLY_SELF.includes(String(config.url))) {
     await new Promise((r) => setTimeout(r, 20))
-    if (config.url === '/clusters') return { data: { items: [{ id: 'self', display_name: 'self' }] }, status: 200, statusText: 'OK', headers: {}, config }
+    if (config.url === '/clusters') return { data: { items: registry.map((id) => ({ id, display_name: id })) }, status: 200, statusText: 'OK', headers: {}, config }
     if (config.url === '/cluster/overview') return { data: {}, status: 200, statusText: 'OK', headers: {}, config }
     throw new AxiosError('Request failed', 'ERR_BAD_REQUEST', config, null, { status: 403, statusText: '', data: {}, headers: {}, config })
   }
@@ -283,11 +286,12 @@ describe('the cluster context across navigations', () => {
   })
 })
 
-// The first selection after sign-in ('' → the one cluster the person may reach). The switch emptied the cluster list
-// without asking it again: Layout read "no accessible cluster" and took the page away, and the picker cleared the
-// selection it had just made. The screen went back and forth between the cluster and none, and each turn with none
-// drew the page again without `cluster=`: a grant limited to namespaces had its refused node list and problem pods
-// asked over and over, at no cluster.
+// The first selection after sign-in ('' → one of the person's clusters). The switch emptied the cluster list without
+// asking it again: Layout read "no accessible cluster" and took the page away, and the picker cleared the selection it
+// had just made. The screen went back and forth between the cluster and none, and each turn with none drew the page
+// again without `cluster=`: a grant limited to namespaces had its refused node list and problem pods asked over and
+// over, at no cluster. A page drawn before the selection read once without `cluster=` too, answered for the server's
+// default cluster: the screens wait for the selection (useClusterSettled), with or without one stored.
 describe('the first selection after sign-in', () => {
   const ck = (cluster: string) => cluster || 'default'
   // the Dashboard's reads on a timer: the overview every 15 s, the problem pods every 30 s, the node list every minute
@@ -298,11 +302,13 @@ describe('the first selection after sign-in', () => {
     useQuery({ queryKey: ['nodes', ck(currentCluster)], queryFn: async () => (await client.get('/cluster/nodes', { params: { force_refresh: false } })).data, refetchInterval: everyUntilRefused(60_000) })
     return null
   }
-  // as Layout draws it: the picker's selection, and the page under the cluster's key once the list has a cluster
+  // as Layout draws it: the picker's selection, no page with no cluster to reach, the page under the cluster's key once
+  // the selection is settled
   function Shell() {
     const { currentCluster } = useCluster()
-    const { clusters, isLoading } = useAccessibleClusterSelection()
-    return isLoading || clusters.length === 0 ? null : createElement(Page, { key: ck(currentCluster) })
+    const { clusters } = useAccessibleClusterSelection()
+    const settled = useClusterSettled()
+    return !settled || clusters.length === 0 ? null : createElement(Page, { key: ck(currentCluster) })
   }
   let shown = ''
   function Shown() {
@@ -310,34 +316,54 @@ describe('the first selection after sign-in', () => {
     return null
   }
 
-  it('stays on the cluster it chose, and reads each refused read of the page once with it and none again at no cluster', async () => {
-    vi.useFakeTimers()
-    try {
-      window.localStorage.removeItem('kubeast:current-cluster')
-      sentReads.length = 0
-      root = createRoot(container)
-      await act(async () => {
-        root.render(createElement(MemoryRouter, { initialEntries: ['/'] },
-          createElement(QueryClientProvider, { client: new QueryClient({ defaultOptions: { queries: queryDefaults } }) },
-            createElement(ClusterProvider, null, createElement(Shown), createElement(Shell)))))
-      })
-      const reads = (path: string) => {
-        const of = sentReads.filter((r) => r.startsWith(`${path} `))
-        return { atNone: of.filter((r) => !r.includes('cluster=')).length, atSelf: of.filter((r) => r.includes('cluster=self')).length }
-      }
-      const pass = async (ms: number) => { for (let t = 0; t < ms; t += 500) await act(async () => { await vi.advanceTimersByTimeAsync(500) }) }
-
-      await pass(5_000)
-      expect({ shown, stored: window.localStorage.getItem('kubeast:current-cluster'), nodes: reads('/cluster/nodes'), pods: reads('/cluster/pods/page') })
-        .toEqual({ shown: 'self', stored: 'self', nodes: { atNone: 1, atSelf: 1 }, pods: { atNone: 1, atSelf: 1 } })
-
-      // two minutes on: the overview's 15 s eight times over, no refused read asked again at either
-      await pass(120_000)
-      expect({ shown, nodes: reads('/cluster/nodes'), pods: reads('/cluster/pods/page'), overviewAtSelf: reads('/cluster/overview').atSelf > 8 })
-        .toEqual({ shown: 'self', nodes: { atNone: 1, atSelf: 1 }, pods: { atNone: 1, atSelf: 1 }, overviewAtSelf: true })
-    } finally {
-      await act(async () => root.unmount())
-      vi.useRealTimers()
-    }
+  it('Layout draws the page, the drawer and its own cluster read only once the selection is settled', () => {
+    expect(layoutSrc).toContain('const clusterSettled = useClusterSettled()')
+    expect(layoutSrc).toMatch(/\) : !clusterSettled \? \([\s\S]*?<RouteFallback \/>\s*\) : \(\s*<Suspense fallback=\{<RouteFallback \/>\}>\s*<Outlet \/>/)
+    expect(layoutSrc).toContain('{clusterSettled && <ResourceDetailDrawer />}')
+    expect(layoutSrc).toContain('enabled: canReadHygiene && clusterSettled,')
   })
+
+  for (const c of [
+    { install: 'one cluster', clusters: ['self'], stored: '', chosen: 'self' },
+    { install: 'two clusters', clusters: ['default', 'self'], stored: '', chosen: 'default' },
+    { install: 'one cluster, chosen before', clusters: ['self'], stored: 'self', chosen: 'self' },
+    { install: 'two clusters, chosen before', clusters: ['default', 'self'], stored: 'self', chosen: 'self' },
+  ]) {
+    it(`${c.install}: reads nothing without a cluster, each refused read once with the one chosen, none again`, async () => {
+      vi.useFakeTimers()
+      try {
+        registry = c.clusters
+        if (c.stored) window.localStorage.setItem('kubeast:current-cluster', c.stored)
+        else window.localStorage.removeItem('kubeast:current-cluster')
+        sentReads.length = 0
+        root = createRoot(container)
+        await act(async () => {
+          root.render(createElement(MemoryRouter, { initialEntries: ['/'] },
+            createElement(QueryClientProvider, { client: new QueryClient({ defaultOptions: { queries: queryDefaults } }) },
+              createElement(ClusterProvider, null, createElement(Shown), createElement(Shell)))))
+        })
+        const at = `cluster=${c.chosen}`
+        const reads = (path: string) => {
+          const of = sentReads.filter((r) => r.startsWith(`${path} `))
+          return { atNone: of.filter((r) => !r.includes('cluster=')).length, atChosen: of.filter((r) => r.includes(at)).length, elsewhere: of.filter((r) => r.includes('cluster=') && !r.includes(at)).length }
+        }
+        const pass = async (ms: number) => { for (let t = 0; t < ms; t += 500) await act(async () => { await vi.advanceTimersByTimeAsync(500) }) }
+        const once = { atNone: 0, atChosen: 1, elsewhere: 0 }
+
+        await pass(5_000)
+        expect({ shown, stored: window.localStorage.getItem('kubeast:current-cluster'), nodes: reads('/cluster/nodes'), pods: reads('/cluster/pods/page'), overview: reads('/cluster/overview') })
+          .toEqual({ shown: c.chosen, stored: c.chosen, nodes: once, pods: once, overview: once })
+
+        // two minutes on: the overview's 15 s eight times over, no refused read asked again anywhere
+        await pass(120_000)
+        const overview = reads('/cluster/overview')
+        expect({ shown, nodes: reads('/cluster/nodes'), pods: reads('/cluster/pods/page'), overviewAtNone: overview.atNone, overviewOnItsTimer: overview.atChosen > 8 })
+          .toEqual({ shown: c.chosen, nodes: once, pods: once, overviewAtNone: 0, overviewOnItsTimer: true })
+      } finally {
+        await act(async () => root.unmount())
+        vi.useRealTimers()
+        registry = ['self']
+      }
+    })
+  }
 })

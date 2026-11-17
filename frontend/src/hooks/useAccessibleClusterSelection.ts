@@ -34,3 +34,19 @@ export function useAccessibleClusterSelection(): { clusters: ClusterMeta[]; isLo
 
   return { clusters, isLoading }
 }
+
+/**
+ * Whether the screens may read the selected cluster: the cluster list has answered and the selection is one of its
+ * clusters, or it lists none. Before that a read would go without ?cluster= (or with a cluster left from another
+ * sign-in) and be answered for another cluster than the one about to be chosen. A list that could not be read leaves
+ * the screens reading with the selection they have, as before.
+ */
+export function useClusterSettled(): boolean {
+  const { currentCluster } = useCluster()
+  const { data: clusters, isSuccess, isError } = useQuery({
+    queryKey: ['clusters-accessible'],
+    queryFn: () => clustersApi.listClusters(true),
+    staleTime: 30_000,
+  })
+  return isError || (isSuccess && (clusters.length === 0 || clusters.some((c) => c.id === currentCluster)))
+}

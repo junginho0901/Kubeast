@@ -52,6 +52,7 @@ import { usePermission } from '@/hooks/usePermission'
 import { usePendingAccessRequestCount } from '@/hooks/usePendingAccessRequestCount'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { useAskRefusedOnAccessChange } from '@/services/queryDefaults'
+import { useClusterSettled } from '@/hooks/useAccessibleClusterSelection'
 import { aiEnabled, alertInvestigationEnabled, alertStoreEnabledFor, costEnabled, policyReportsEnabled } from '@/utils/features'
 import { resolveRouteMeta } from '@/utils/aiContext/routeMatcher'
 import { ADMIN_PAGE_PERMISSIONS, isGlobalAdmin, readsHygiene } from '@/utils/adminAccess'
@@ -193,6 +194,8 @@ export default function Layout() {
   // Someone who reaches no cluster can't view any resource page;
   // the account page (profile, language, sign-out) needs no cluster.
   const hasNoCluster = !globalAdmin && !isClustersLoading && accessibleClusters.length === 0
+  // the screens, the drawer and the cluster's reads here wait for the picker's selection (useClusterSettled)
+  const clusterSettled = useClusterSettled()
   const noAccessibleCluster = hasNoCluster && location.pathname !== '/account'
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ core: true })
 
@@ -225,7 +228,7 @@ export default function Layout() {
     queryFn: api.getHygieneConfig,
     staleTime: 60_000,
     retry: false,
-    enabled: canReadHygiene,
+    enabled: canReadHygiene && clusterSettled,
   })
   const hygieneOn = canReadHygiene && !!hygieneConfig?.enabled
 
@@ -487,7 +490,7 @@ export default function Layout() {
   return (
     <ResourceDetailProvider>
     <div className="min-h-screen bg-slate-900">
-      <ResourceDetailDrawer />
+      {clusterSettled && <ResourceDetailDrawer />}
       {aiOn && <FloatingAIChat />}
       <div className="fixed inset-y-0 left-0 w-64 bg-slate-800 border-r border-slate-700">
         <div className="flex flex-col h-full">
@@ -645,9 +648,9 @@ export default function Layout() {
                 </p>
                 <AccessHelp className="mt-3 max-w-md text-sm" />
               </div>
-            ) : !globalAdmin && isClustersLoading ? (
-              // Until the accessible-cluster list is known, a non-admin's
-              // page would mount and fire cluster requests that all 403.
+            ) : !clusterSettled ? (
+              // Until the picker has chosen one of the person's clusters, a page
+              // would read without ?cluster= the server's default cluster.
               <RouteFallback />
             ) : (
               <Suspense fallback={<RouteFallback />}>
