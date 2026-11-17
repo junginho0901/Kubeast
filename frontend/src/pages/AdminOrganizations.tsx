@@ -93,6 +93,8 @@ export default function AdminOrganizations() {
           const name = inputValue.trim()
           if (!name) {
             setNameMissing(true)
+            // an earlier Add's failure is not about this press, so only this reason shows; an Add on its way is left be
+            if (createMutation.isError) createMutation.reset()
             e.currentTarget.querySelector('input')?.focus()
             return
           }
@@ -105,6 +107,7 @@ export default function AdminOrganizations() {
           onChange={(e) => {
             setInputValue(e.target.value)
             if (e.target.value.trim()) setNameMissing(false)
+            if (createMutation.isError) createMutation.reset()
           }}
           aria-invalid={nameMissing || undefined}
           aria-describedby={nameMissing ? 'team-name-problem' : undefined}

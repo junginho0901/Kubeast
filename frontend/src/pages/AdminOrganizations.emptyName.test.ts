@@ -8,13 +8,29 @@ import { elementsOf, fakeRender, fakeUnmount, textsOf } from '@/testing/fakeHook
 // reason is said under the field, as the API key window says its name's, and the field is marked with it.
 
 const i18n = i18next.createInstance()
-const ui = vi.hoisted(() => ({ lang: 'en', mutate: vi.fn() }))
+// addFailed: an earlier Add came back refused, which TanStack keeps on the mutation until its reset()
+const ui = vi.hoisted(() => ({ lang: 'en', mutate: vi.fn(), addFailed: false, resets: 0 }))
 
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), ...(await import('@/testing/fakeHooks')).fakeHooks }))
 vi.mock('@tanstack/react-query', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-query')>()),
   useQuery: () => ({ data: [], error: null, errorUpdatedAt: 0, refetch: () => {} }),
-  useMutation: () => ({ mutate: ui.mutate, isPending: false, isError: false, variables: undefined, error: null }),
+  useMutation: (options: { mutationFn: unknown }) => {
+    const adds = String(options.mutationFn).includes('adminCreateOrganization')
+    const failed = adds && ui.addFailed
+    return {
+      mutate: ui.mutate,
+      reset: () => {
+        if (!adds) return
+        ui.resets++
+        ui.addFailed = false
+      },
+      isPending: false,
+      isError: failed,
+      variables: failed ? { type: 'team', name: 'ops' } : undefined,
+      error: failed ? new Error('a team named ops exists') : null,
+    }
+  },
   useQueryClient: () => ({ invalidateQueries: () => {} }),
 }))
 vi.mock('react-i18next', () => ({
@@ -34,6 +50,8 @@ beforeAll(async () => {
 beforeEach(() => {
   ui.lang = 'en'
   ui.mutate.mockClear()
+  ui.addFailed = false
+  ui.resets = 0
 })
 afterEach(() => fakeUnmount())
 
@@ -46,6 +64,8 @@ const one = (tree: unknown, match: (p: Props, type: unknown) => boolean, what: s
 }
 const nameField = (tree: unknown) => one(tree, (p, type) => type === 'input' && p.maxLength !== undefined, 'the name field')
 const problems = (tree: unknown) => elementsOf(tree, (p) => p['data-testid'] === 'team-name-problem')
+const addFailures = (tree: unknown) => elementsOf(tree, (p) => p['data-testid'] === 'team-add-error')
+const alerts = (tree: unknown) => elementsOf(tree, (p) => p.role === 'alert')
 const enterName = (text: string) => (nameField(page()).onChange as (e: { target: { value: string } }) => void)({ target: { value: text } })
 // presses Add (Enter in the field submits the same form); answers whether the field was given the focus
 const pressAdd = () => {
@@ -98,5 +118,35 @@ describe('Teams: Add with no name', () => {
     expect(pressAdd(), 'no focus move for a name').toBe(false)
     expect(ui.mutate).toHaveBeenCalledWith({ type: 'team', name: 'platform' })
     expect(problems(page())).toHaveLength(0)
+  })
+
+  it("an earlier Add's failure goes when Add is pressed with no name or a name is typed, so only the current reason shows", () => {
+    ui.addFailed = true
+    expect(addFailures(page()), 'the earlier failure shows').toHaveLength(1)
+    pressAdd()
+    let tree = page()
+    expect(addFailures(tree), 'Add with no name').toHaveLength(0)
+    expect(alerts(tree).map((a) => textsOf(a).join(''))).toEqual(['Enter a team name.'])
+
+    // the field was emptied to spaces while the Add was on its way, and its failure came after
+    enterName('   ')
+    ui.addFailed = true
+    pressAdd()
+    tree = page()
+    expect(addFailures(tree), 'Add with spaces only').toHaveLength(0)
+    expect(alerts(tree).map((a) => textsOf(a).join(''))).toEqual(['Enter a team name: spaces alone are not one.'])
+
+    ui.addFailed = true
+    enterName('ops2')
+    tree = page()
+    expect(addFailures(tree), 'a name typed').toHaveLength(0)
+    expect(alerts(tree)).toHaveLength(0)
+  })
+
+  it('leaves an Add that has not failed as it is when a name is typed or Add is pressed with none', () => {
+    enterName('o')
+    enterName('')
+    pressAdd()
+    expect(ui.resets).toBe(0)
   })
 })
