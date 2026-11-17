@@ -63,6 +63,8 @@ kubectl version    # Server Version: v1.30 이상
 ```
 
 Service 뒤에 있는 차트 파드는(번들 PostgreSQL과 Redis는 빼고) 이제 SIGTERM 전에 `preStop`에서 `podShutdown.preStopSeconds`(5초)를 기다리며, 이때 쿠버네티스 내장 `sleep` 동작(1.30에서 베타·기본 켜짐, 1.34에서 GA)을 씁니다. 더 낮은 클러스터에서는 `podShutdown.preStopSeconds: 0`으로 둡니다(#856).
+Helm의 확인은 이것을 잡지 않습니다. API 서버가 preStop 기다림이 있는 Deployment마다 `spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`로 거절합니다.
+[1.2](#12-드라이런으로-미리-해-보기)의 `kubectl apply` 드라이런이 업그레이드 전에 이것을 보여 줍니다. Kubernetes 1.29.14(kind, `PodLifecycleSleepAction` 기능 게이트 꺼짐)에서 preStop 기다림이 있는 Deployment 7개가 거절되었고, `podShutdown.preStopSeconds: 0`으로 두면 모든 객체를 받았습니다.
 
 ### 1.4 노드 드레인
 
@@ -207,7 +209,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 | 언제 | 0.7.7 | 0.7.8 | PR |
 | --- | --- | --- | --- |
 | 값에 `pdb.minAvailable`이 있을 때 | `pdb.minAvailable: 1` | 멈춤. `pdb.minAvailable`을 뺍니다. 한 서비스의 파드를 노드 드레인이 한 번에 몇 개 내보낼지는 `pdb.maxUnavailable`(1)이 정합니다 | #901, #908 |
-| Kubernetes 1.30 미만 | — | `podShutdown.preStopSeconds: 0` | #856 |
+| Kubernetes 1.30 미만([1.3](#13-kubernetes-버전)) | — | `podShutdown.preStopSeconds: 0` | #856 |
 | 파드 IP로 보내는 로드 밸런서 뒤 | — | `podShutdown.preStopSeconds`는 로드 밸런서가 떠나는 파드에 새 요청을 그만 보낼 때까지보다 길게 둡니다. AWS Application Load Balancer 뒤에서는 기본 5초로 충분했습니다(EKS 1.35, AWS Load Balancer Controller v3.6.2) | #856 |
 | 차트의 PostgreSQL에 레플리카가 많을 때([1.6](#16-데이터베이스-연결)) | PostgreSQL의 `max_connections` 100 | `postgresql.maxConnections`(300)를 넘으면 멈춤. 올리거나 `postgresql.pool.<service>.maxConns`를 줄입니다 | #868 |
 | 바깥 데이터베이스 | — | `max_connections`를 설치 안내가 출력한 합계보다 크게 | #868 |

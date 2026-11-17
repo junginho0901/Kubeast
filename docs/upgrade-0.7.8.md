@@ -63,6 +63,8 @@ kubectl version    # Server Version: v1.30 or later
 ```
 
 The chart's pods behind a Service, but for the bundled PostgreSQL and Redis, now wait `podShutdown.preStopSeconds` (5 s) in `preStop` before SIGTERM, with the native `sleep` action (beta and on by default in 1.30, GA in 1.34). On an older cluster set `podShutdown.preStopSeconds: 0` (#856).
+Helm's checks do not catch it: the API server refuses each Deployment with a preStop wait, with `spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`.
+The `kubectl apply` dry run in [1.2](#12-rehearse-with-a-dry-run) shows it before the upgrade: on Kubernetes 1.29.14 (kind, the `PodLifecycleSleepAction` feature gate off) it refused the seven Deployments with a preStop wait, and with `podShutdown.preStopSeconds: 0` it took every object.
 
 ### 1.4 Node drains
 
@@ -207,7 +209,7 @@ Only the rows that match your install. A row marked "stops" stops the upgrade, w
 | When | 0.7.7 | 0.7.8 | PR |
 | --- | --- | --- | --- |
 | Your values set `pdb.minAvailable` | `pdb.minAvailable: 1` | Stops. Take `pdb.minAvailable` out; `pdb.maxUnavailable` (1) says how many pods of one service a node drain may evict at once | #901, #908 |
-| Kubernetes older than 1.30 | — | `podShutdown.preStopSeconds: 0` | #856 |
+| Kubernetes older than 1.30 ([1.3](#13-kubernetes-version)) | — | `podShutdown.preStopSeconds: 0` | #856 |
 | Behind a load balancer that sends to pod IPs | — | `podShutdown.preStopSeconds` longer than the load balancer takes to stop sending new requests to a leaving pod; behind an AWS Application Load Balancer the default 5 s was enough (EKS 1.35, AWS Load Balancer Controller v3.6.2) | #856 |
 | Many replicas with the chart's PostgreSQL ([1.6](#16-database-connections)) | PostgreSQL's `max_connections` 100 | Stops past `postgresql.maxConnections` (300): raise it, or lower `postgresql.pool.<service>.maxConns` | #868 |
 | External database | — | Its `max_connections` above the sum the install notes print | #868 |
