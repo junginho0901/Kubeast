@@ -40,7 +40,8 @@ export function ListPager({ currentPage, totalPages, total, counted = true, rows
               defaultValue: 'Showing {{start}}-{{end}} of {{total}}',
             })}
       </div>
-      <div className="flex items-center gap-2">
+      {/* list-pager-pages: on a page with the floating chat button, kept clear of it (index.css) */}
+      <div className="list-pager-pages flex items-center gap-2">
         <button type="button" onClick={() => onPageChange(Math.max(1, currentPage - 1))} disabled={currentPage <= 1} className={pagerButton}>
           {t('common.prev', 'Prev')}
         </button>

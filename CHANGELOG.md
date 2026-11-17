@@ -71,6 +71,7 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - A live socket that connects again reads its lists again, so rows deleted while it was closed go; frames that come while a list is read are applied to its answer; the Helm releases stream goes on from the last version it saw.
 - Session-end audit rows are written even when the browser has already closed the connection.
 - The floating chat is told what a screen says for a read that was refused, failed or is not installed, instead of zero.
+- The floating chat button no longer sits over the Next button of a list's footer at the bottom of the screen: on a page, the footer's page buttons end clear of it.
 - Monitoring's Nodes and Pods tabs no longer ask every 5 s on a cluster without metrics-server, and show a refused metrics read in the cluster's words.
 - Prometheus sections say when the cluster's Prometheus does not answer, and that no longer marks the whole cluster unreachable.
 - Secret files stay readable with `podSecurity.enabled: false`.

@@ -614,7 +614,8 @@ export default function Layout() {
 
       <div className="pl-64">
         <ClusterSwitchProgress />
-        <main className={`min-h-screen ${location.pathname === '/ai-chat' ? '' : 'p-8'}`}>
+        {/* floating-chat-room: the list footers on a page keep their page buttons clear of the floating chat button (index.css) */}
+        <main className={`min-h-screen ${location.pathname === '/ai-chat' ? '' : 'p-8'}${aiOn ? ' floating-chat-room' : ''}`}>
           {/* Remount page content on cluster switch so cluster-specific local UI
               state (selected namespace, filters, open modals) never carries over
               to a different cluster — its namespaces/resources differ. */}

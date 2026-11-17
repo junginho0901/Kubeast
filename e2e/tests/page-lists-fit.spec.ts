@@ -1,11 +1,12 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
-import { pageScroll, pagerRange, readEveryPage } from './list-pages'
+import { pageScroll, pagerRange, readEveryPage, underChatButton } from './list-pages'
 
 // The lists of Change History, a Helm release's History and Resources tabs and Monitoring's two tabs are a page at a
 // time in a box sized to the screen (1440×900, the project's viewport): the page itself does not scroll, the footer
-// is on screen, the rows drawn are the range it says, and reading every page gives every item once — compared with
-// what the API answers. The Alerts inbox's first page, whose rows wrap to different heights, holds the rows that end
-// inside its table and no fewer, at one row count from the first frame with rows.
+// is on screen with none of its buttons under the floating chat button, the rows drawn are the range it says, and
+// reading every page gives every item once — compared with what the API answers. The Alerts inbox's first page, whose
+// rows wrap to different heights, holds the rows that end inside its table and no fewer, at one row count from the
+// first frame with rows.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -16,7 +17,8 @@ async function headers(request: APIRequestContext) {
   return { Authorization: `Bearer ${(await res.json()).access_token}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 
-// the page does not scroll, the footer's bottom is inside the window, and the rows on screen are the footer's range
+// the page does not scroll, the footer's bottom is inside the window, the rows on screen are the footer's range and
+// the floating chat button lies over none of the footer's buttons
 async function fits(page: Page, pagerId: string, rows: string) {
   await expect.poll(async () => {
     const range = await pagerRange(page, pagerId, { uncounted: 'nan' })
@@ -26,8 +28,9 @@ async function fits(page: Page, pagerId: string, rows: string) {
       scroll: (await pageScroll(page)) <= 1,
       footerOnScreen: !!box && box.y + box.height <= height,
       rows: (await page.locator(rows).count()) === (range.total === 0 ? 0 : range.end - range.start + 1),
+      underChat: await underChatButton(page, pagerId),
     }
-  }, { timeout: 20_000, message: `${pagerId}: the list and its footer fit the screen` }).toEqual({ scroll: true, footerOnScreen: true, rows: true })
+  }, { timeout: 20_000, message: `${pagerId}: the list and its footer fit the screen` }).toEqual({ scroll: true, footerOnScreen: true, rows: true, underChat: [] })
 }
 
 test.describe('Lists sized to the screen', () => {
