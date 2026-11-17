@@ -30,6 +30,8 @@ export default function AdminOrganizations() {
   const confirm = useConfirm()
 
   const [newTeam, setNewTeam] = useState('')
+  // Add pressed with no name: said under the field until a name is typed
+  const [nameMissing, setNameMissing] = useState(false)
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null)
 
   const { has: hasPerm } = usePermission()
@@ -90,6 +92,7 @@ export default function AdminOrganizations() {
           e.preventDefault()
           const name = inputValue.trim()
           if (!name) {
+            setNameMissing(true)
             e.currentTarget.querySelector('input')?.focus()
             return
           }
@@ -99,7 +102,12 @@ export default function AdminOrganizations() {
         <input
           value={inputValue}
           maxLength={NAME_MAX}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={(e) => {
+            setInputValue(e.target.value)
+            if (e.target.value.trim()) setNameMissing(false)
+          }}
+          aria-invalid={nameMissing || undefined}
+          aria-describedby={nameMissing ? 'team-name-problem' : undefined}
           className="flex-1 h-10 rounded-lg border border-slate-700 bg-slate-950/40 px-3 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
           placeholder={tr('adminOrg.inputPlaceholder', 'Enter name...')}
         />
@@ -112,6 +120,13 @@ export default function AdminOrganizations() {
           {tr('adminOrg.add', 'Add')}
         </button>
       </form>
+      {nameMissing && (
+        <p id="team-name-problem" role="alert" data-testid="team-name-problem" className="mt-1 shrink-0 text-[11px] text-red-400">
+          {inputValue === ''
+            ? tr('adminOrg.nameRequired', 'Enter a team name.')
+            : tr('adminOrg.nameBlank', 'Enter a team name: spaces alone are not one.')}
+        </p>
+      )}
 
       <div className="relative mt-3 shrink-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
