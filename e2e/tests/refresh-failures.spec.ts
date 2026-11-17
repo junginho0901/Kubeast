@@ -62,11 +62,16 @@ const ONE_READ: Array<[string, RegExp]> = [
 test.describe("a list's Refresh reads the list once", () => {
   for (const [screen, list] of ONE_READ) {
     test(screen, async ({ page }) => {
+      // The list's first answer, then the list drawn: its rows, or what it shows with none. Helm releases follows a
+      // stream that stays open, so the page never goes network-idle.
+      const firstRead = page.waitForResponse((response) => response.request().method() === 'GET' && list.test(new URL(response.url()).pathname), { timeout: 20_000 })
       await page.goto(screen)
+      await firstRead
       const refresh = page.locator('.page-head').first().getByRole('button', { name: /^(Refresh|새로고침)$/ }).first()
       // each of these screens has a Refresh: one not found is a failure, not a skip
       await expect(refresh, `${screen} shows its Refresh`).toBeVisible({ timeout: 20_000 })
-      await page.waitForLoadState('networkidle')
+      const drawn = page.locator('table tbody:not([aria-hidden="true"]) tr').or(page.getByText(EN.helmReleases.empty.title, { exact: true }))
+      await expect(drawn.first(), 'the list is drawn').toBeVisible({ timeout: 20_000 })
       const reads: string[] = []
       page.on('request', (request) => {
         const url = new URL(request.url())
