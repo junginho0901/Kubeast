@@ -95,9 +95,25 @@ type helmFrame struct{ name, data, id string }
 // helmFrames opens a page's Helm releases stream with the request's header and query, and reads its frames.
 func helmFrames(t *testing.T, h *Handler, namespaces []string, query string, header http.Header) <-chan helmFrame {
 	t.Helper()
+	return helmFramesAs(t, h, "u", namespaces, query, header)
+}
+
+// helmPerson is user's token with a grant on cluster c limited to namespaces, none being the whole cluster.
+func helmPerson(ctx context.Context, user string, namespaces []string) context.Context {
+	return cluster.WithID(auth.WithPayload(ctx, auth.TokenPayload{UserID: user, Perms: auth.PermissionMatrix{"*": {"*"}}, Namespaces: map[string][]string{"c": namespaces}}), "c")
+}
+
+// helmClient is how the stream names cluster c registered at version and the person reading it: an id's part before
+// its versions.
+func helmClient(version int64, user string, namespaces []string) string {
+	return helmStreamID + "/" + clientPlace("c", version) + "/" + personTag(helmPerson(context.Background(), user, namespaces), "c")
+}
+
+// helmFramesAs is helmFrames as user.
+func helmFramesAs(t *testing.T, h *Handler, user string, namespaces []string, query string, header http.Header) <-chan helmFrame {
+	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := cluster.WithID(auth.WithPayload(r.Context(), auth.TokenPayload{UserID: "u", Perms: auth.PermissionMatrix{"*": {"*"}}, Namespaces: map[string][]string{"c": namespaces}}), "c")
-		h.WatchHelmReleases(w, r.WithContext(ctx))
+		h.WatchHelmReleases(w, r.WithContext(helmPerson(r.Context(), user, namespaces)))
 	}))
 	t.Cleanup(srv.Close)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -444,7 +460,8 @@ func TestAHelmStreamsIDNamesAPlaceOnceItsWatchHasOneTheSameOnEveryServer(t *test
 		h := helmHandlerAt(t, api.serve, 3)
 		return said(framesUntil(t, helmFrames(t, h, nil, "", nil), func(f helmFrame) bool { return strings.Contains(f.data, `"MODIFIED"`) }))
 	}
-	want := "id helm-releases, ADDED web @ helm-releases, ADDED db @ helm-releases, id helm-releases/c/3?=15, MODIFIED web @ helm-releases/c/3?=16"
+	at := helmClient(3, "u", nil)
+	want := "id helm-releases, ADDED web @ helm-releases, ADDED db @ helm-releases, id " + at + "?=15, MODIFIED web @ " + at + "?=16"
 	for i, got := range []string{ids(), ids()} {
 		if got != want {
 			t.Errorf("server %d said %s\nwant %s", i+1, got, want)
@@ -494,8 +511,9 @@ func TestAHelmStreamOpenedAgainWithItsIDGoesOnFromThereWithNothingSentAgain(t *t
 				<-r.Context().Done()
 			}}
 			h := helmHandlerAt(t, api.serve, 3)
-			got := said(framesUntil(t, helmFrames(t, h, nil, query, http.Header{"Last-Event-Id": {"helm-releases/c/3?=15"}}), isRelease("db")))
-			if want := "id helm-releases/c/3?=15, DELETED db @ helm-releases/c/3?=16"; got != want {
+			at := helmClient(3, "u", nil)
+			got := said(framesUntil(t, helmFrames(t, h, nil, query, http.Header{"Last-Event-Id": {at + "?=15"}}), isRelease("db")))
+			if want := "id " + at + "?=15, DELETED db @ " + at + "?=16"; got != want {
 				t.Errorf("the stream said %s\nwant %s", got, want)
 			}
 			if calls := api.made(); len(calls) != 1 || calls[0].resourceVersion != "15" {
@@ -509,12 +527,13 @@ func TestAHelmStreamOpenedAgainWithItsIDGoesOnFromThereWithNothingSentAgain(t *t
 // starts from none, which sends what it has, and the id names no version until that watch has a place.
 func TestEachNamespaceWatchOfAHelmStreamOpenedAgainGoesOnFromTheVersionItsIDNames(t *testing.T) {
 	quickHelmResume(t)
+	at := helmClient(0, "u", []string{"team-a", "team-b"})
 	for _, c := range []struct {
 		id, want string
 		from     map[string]string
 	}{
-		{"helm-releases/c/0?team-a=20&team-b=25", "id helm-releases/c/0?team-a=20&team-b=25, MODIFIED web @ helm-releases/c/0?team-a=21&team-b=25", map[string]string{"team-a": "20", "team-b": "25"}},
-		{"helm-releases/c/0?team-a=20", "id helm-releases/c/0?team-a=20, ADDED api @ helm-releases, MODIFIED web @ helm-releases", map[string]string{"team-a": "20", "team-b": ""}},
+		{at + "?team-a=20&team-b=25", "id " + at + "?team-a=20&team-b=25, MODIFIED web @ " + at + "?team-a=21&team-b=25", map[string]string{"team-a": "20", "team-b": "25"}},
+		{at + "?team-a=20", "id " + at + "?team-a=20, ADDED api @ helm-releases, MODIFIED web @ helm-releases", map[string]string{"team-a": "20", "team-b": ""}},
 	} {
 		t.Run(c.id, func(t *testing.T) {
 			api := &scriptedSecretWatches{answer: func(w http.ResponseWriter, r *http.Request, call secretWatchCall, n int) {
@@ -557,17 +576,18 @@ func TestEachNamespaceWatchOfAHelmStreamOpenedAgainGoesOnFromTheVersionItsIDName
 func TestAHelmStreamOpenedAgainWithAnIDItCannotGoOnFromSendsEverythingAndAsksForARead(t *testing.T) {
 	quickHelmResume(t)
 	const told = "id helm-releases, "
+	at := helmClient(0, "u", nil)
 	for _, c := range []struct {
 		name, id, first, want string
 		namespaces            []string
 	}{
-		{"expired, as the watch's answer", "helm-releases/c/0?=15", "15", "id helm-releases/c/0?=15, " + told, nil},
-		{"expired, as an event of the watch", "helm-releases/c/0?=17", "17", "id helm-releases/c/0?=17, " + told, nil},
-		{"the watch could not start", "helm-releases/c/0?=18", "18", "id helm-releases/c/0?=18, " + told, nil},
-		{"another registration of the cluster", "helm-releases/c/7?=19", "", told, nil},
-		{"another cluster", "helm-releases/other/0?=19", "", told, nil},
-		{"another grant's namespace", "helm-releases/c/0?team-x=15", "", told, []string{"team-a"}},
-		{"version 0, which is any", "helm-releases/c/0?=0", "", told, nil},
+		{"expired, as the watch's answer", at + "?=15", "15", "id " + at + "?=15, " + told, nil},
+		{"expired, as an event of the watch", at + "?=17", "17", "id " + at + "?=17, " + told, nil},
+		{"the watch could not start", at + "?=18", "18", "id " + at + "?=18, " + told, nil},
+		{"another registration of the cluster", helmClient(7, "u", nil) + "?=19", "", told, nil},
+		{"another cluster", strings.Replace(at, "/c/", "/other/", 1) + "?=19", "", told, nil},
+		{"another grant's namespace", helmClient(0, "u", []string{"team-a"}) + "?team-x=15", "", told, []string{"team-a"}},
+		{"version 0, which is any", at + "?=0", "", told, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			api := &scriptedSecretWatches{answer: func(w http.ResponseWriter, r *http.Request, call secretWatchCall, n int) {
@@ -633,7 +653,7 @@ func TestAHelmStreamsIDPastItsLengthNamesNoVersion(t *testing.T) {
 			h, _ := liveHandler(t, api.serve, &atomic.Int32{})
 			got := framesUntil(t, helmFrames(t, h, grant, "", nil), isRelease("web"))
 			id := got[len(got)-1].id
-			if c.versions != strings.HasPrefix(id, helmStreamID+"/c/0?") || len(id) > helmStreamIDMax {
+			if c.versions != strings.HasPrefix(id, helmClient(0, "u", grant)+"?") || len(id) > helmStreamIDMax {
 				t.Errorf("the id after the release is %d bytes, %.60q…, want versions %v and at most %d bytes", len(id), id, c.versions, helmStreamIDMax)
 			}
 		})
@@ -643,9 +663,9 @@ func TestAHelmStreamsIDPastItsLengthNamesNoVersion(t *testing.T) {
 // Only an id the stream writes with versions is a place to go on from.
 func TestParseHelmStreamIDReadsOnlyTheIDsTheStreamWrites(t *testing.T) {
 	for _, p := range []*helmStreamPlace{
-		{client: clientPlace("c", 3), from: helmWatchVersions{"": "15"}},
-		{client: clientPlace("c", 3), from: helmWatchVersions{"team-a": "20", "team-b": "25"}},
-		{client: clientPlace("a/b?c", 12), from: helmWatchVersions{"a": "1"}},
+		{client: clientPlace("c", 3) + "/0123456789abcdef", from: helmWatchVersions{"": "15"}},
+		{client: clientPlace("c", 3) + "/0123456789abcdef", from: helmWatchVersions{"team-a": "20", "team-b": "25"}},
+		{client: clientPlace("a/b?c", 12) + "/0123456789abcdef", from: helmWatchVersions{"a": "1"}},
 	} {
 		client, got, ok := parseHelmStreamID(p.id())
 		if !ok || client != p.client || len(got) != len(p.from) {
@@ -664,6 +684,76 @@ func TestParseHelmStreamIDReadsOnlyTheIDsTheStreamWrites(t *testing.T) {
 	} {
 		if client, got, ok := parseHelmStreamID(id); ok {
 			t.Errorf("%q read as %q %v, want no place to go on from", id, client, got)
+		}
+	}
+}
+
+// The rows on a page came of what its person could see. A stream the browser opens again as someone else (a sign-in in
+// another tab), or for the same person with a narrower grant — whose id may name only namespaces the grant still has —
+// starts over with a resync, so rows the reader may no longer see go. The same person with the same grant goes on.
+func TestAHelmStreamOpenedAgainByAnotherPersonOrGrantStartsOver(t *testing.T) {
+	quickHelmResume(t)
+	for _, c := range []struct {
+		name, user string
+		before     []string // the grant the id was written for
+		now        []string
+		want       string
+	}{
+		{"the same person and grant", "u", []string{"team-a", "team-b"}, []string{"team-a", "team-b"}, "id {at}?team-a=15, MODIFIED web @ helm-releases"},
+		{"another person", "v", []string{"team-a", "team-b"}, []string{"team-a", "team-b"}, "id helm-releases, resync, ADDED web @ helm-releases"},
+		{"a narrower grant", "u", []string{"team-a", "team-b"}, []string{"team-a"}, "id helm-releases, resync, ADDED web @ helm-releases"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			api := &scriptedSecretWatches{answer: func(w http.ResponseWriter, r *http.Request, call secretWatchCall, n int) {
+				switch {
+				case call.namespace == "team-a" && call.resourceVersion == "15":
+					watchEvents(w, releaseEvent("MODIFIED", "team-a", "web", 2, "16"))
+				case call.namespace == "team-a":
+					watchEvents(w, releaseEvent("ADDED", "team-a", "web", 1, "10"))
+				default:
+					watchEvents(w)
+				}
+				<-r.Context().Done()
+			}}
+			h, _ := liveHandler(t, api.serve, &atomic.Int32{})
+			id := helmClient(0, "u", c.before) + "?team-a=15"
+			got := said(framesUntil(t, helmFramesAs(t, h, c.user, c.now, "", http.Header{"Last-Event-Id": {id}}), isRelease("web")))
+			if want := strings.ReplaceAll(c.want, "{at}", helmClient(0, "u", c.before)); got != want {
+				t.Errorf("the stream said %s\nwant %s", got, want)
+			}
+		})
+	}
+}
+
+// The person's tag is a short hash, the same for the same person and grant on any server, holding no name; another
+// person, role or grant has another.
+func TestPersonTagNamesThePersonAndGrantWithNoName(t *testing.T) {
+	as := func(p auth.TokenPayload) string {
+		return personTag(cluster.WithID(auth.WithPayload(context.Background(), p), "c"), "c")
+	}
+	base := auth.TokenPayload{UserID: "user-4711", Roles: map[string]string{"c": "Read"}, Namespaces: map[string][]string{"c": {"team-b", "team-a"}}}
+	same := base
+	same.Namespaces = map[string][]string{"c": {"team-a", "team-b"}}
+	same.AuthTime = 99
+	other := base
+	other.UserID = "user-4712"
+	role := base
+	role.Roles = map[string]string{"c": "Write"}
+	narrower := base
+	narrower.Namespaces = map[string][]string{"c": {"team-a"}}
+	whole := base
+	whole.Namespaces = nil
+
+	tag := as(base)
+	if len(tag) != 16 || strings.Trim(tag, "0123456789abcdef") != "" || strings.Contains(tag, "4711") {
+		t.Errorf("tag %q, want 16 hex digits and no name", tag)
+	}
+	if got := as(same); got != tag {
+		t.Errorf("the same person and grant, in another order and another sign-in: %q, want %q", got, tag)
+	}
+	for name, p := range map[string]auth.TokenPayload{"another person": other, "another role": role, "a narrower grant": narrower, "the whole cluster": whole} {
+		if as(p) == tag {
+			t.Errorf("%s has the same tag %q", name, tag)
 		}
 	}
 }

@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,6 +25,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/helm"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
@@ -99,7 +102,7 @@ func (h *Handler) WatchHelmReleases(w http.ResponseWriter, r *http.Request) {
 	scope := helmWatchNamespaces(r.Context(), namespace)
 	place := &helmStreamPlace{namespace: namespace, perNamespace: scope != nil, from: helmWatchVersions{}, unplaced: map[string]bool{}}
 	if id, version, ok := h.svc.ClientOf(r.Context()); ok {
-		place.client = clientPlace(id, version)
+		place.client = clientPlace(id, version) + "/" + personTag(r.Context(), id)
 	}
 	client, from, resumed := parseHelmStreamID(r.Header.Get("Last-Event-ID"))
 	if resumed = resumed && place.client != "" && client == place.client && from.fits(scope, namespace); resumed {
@@ -233,8 +236,9 @@ type helmWatchVersions map[string]string
 type helmStreamPlace struct {
 	namespace    string // asked for, "" for all
 	perNamespace bool   // one watch per namespace of a grant limited to them
-	// client names the cluster's client the watches read through (clientPlace). Versions are its API server's: another
-	// API server opens a watch from a version it has not reached and sends nothing until it does.
+	// client names the cluster's client the watches read through (clientPlace) and who reads them (personTag).
+	// Versions are its API server's: another API server opens a watch from a version it has not reached and sends
+	// nothing until it does. What the page shows came of what that person may see there.
 	client string
 	from   helmWatchVersions
 	// unplaced are the watches opened from no version whose first bookmark has not come: their first events are each
@@ -247,6 +251,20 @@ type helmStreamPlace struct {
 // every server that built it from the same registration.
 func clientPlace(id cluster.ID, version int64) string {
 	return url.PathEscape(string(id)) + "/" + strconv.FormatInt(version, 10)
+}
+
+// personTag names who reads a stream and what of the cluster they may see: the person (or API key, or system token),
+// their role there and the namespaces their grant is limited to, none being the whole cluster. It is a short hash, the
+// same on every server and holding no name, so a stream the browser opens again as someone else, or with another role
+// or grant, starts over: the rows on the page came of what the one before could see.
+func personTag(ctx context.Context, id cluster.ID) string {
+	p, _ := auth.FromContext(ctx)
+	a := p.Access(string(id), false)
+	scope := slices.Clone(a.Namespaces)
+	slices.Sort(scope)
+	who, _ := json.Marshal([]any{p.UserID, a.Kind, a.APIKey, p.System, a.Role, scope})
+	sum := sha256.Sum256(who)
+	return hex.EncodeToString(sum[:8])
 }
 
 // id is the stream's event id: helmStreamID, the client, then each watch's version by its namespace as a query
