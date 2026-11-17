@@ -37,6 +37,12 @@
       "pr": "#783"
     },
     {
+      "route": "^live /apis/coordination\\.k8s\\.io/v1/leases$",
+      "cell": "^\\$\\.items\\[/(kube-system/apiserver-[a-z0-9]+|kube-node-lease/[^\\]#]+)#[0-9]+\\]\\.",
+      "why": "kube-apiserver renews its identity lease (kube-system, apiserver-…) and the kubelet its node's lease (kube-node-lease) every 10 seconds, and a build's first live frame stays open up to 15 seconds: whether a second renewal falls inside it is timing, so one build's frame can hold such a lease three times where the other build's frames hold it twice. Each lease's first event, and a third event of any other lease, are still compared.",
+      "pr": "#946"
+    },
+    {
       "route": "^/api/v1/cluster/metrics/top-resources$",
       "cell": "^\\$\\.(pod|node)_metrics_(error|refused)$",
       "user": "^nsread$",
