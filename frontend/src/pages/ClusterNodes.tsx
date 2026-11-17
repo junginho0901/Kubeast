@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, isMetricsUnavailableError } from '@/services/api'
+import { retryUnlessRefused } from '@/services/queryDefaults'
 import { useDescribeReads } from '@/services/pacedReads'
 import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { Plus, RefreshCw, Search } from 'lucide-react'
@@ -62,8 +63,8 @@ export default function ClusterNodes() {
     queryKey: ['cluster', 'node-metrics'],
     queryFn: () => api.getNodeMetrics(),
     enabled: metricsAvailable,
-    // the answer that the cluster serves no metrics.k8s.io is not tried again
-    retry: (failureCount, error) => !isMetricsUnavailableError(error) && failureCount < 1,
+    // the answer that the cluster serves no metrics.k8s.io is not tried again, nor a refusal
+    retry: (failureCount, error) => !isMetricsUnavailableError(error) && retryUnlessRefused(1)(failureCount, error),
   })
 
   const metricsMap = useMemo(() => {

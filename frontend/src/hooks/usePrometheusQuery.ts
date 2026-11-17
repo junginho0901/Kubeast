@@ -28,7 +28,7 @@ export function useClusterFeatures() {
     queryFn: () => api.getClusterFeatures(),
     enabled: settled,
     staleTime: 5 * 60 * 1000, // 5 minutes — feature flags don't move
-    retry: 1,
+    retry: retryUnlessRefused(1),
     // If the endpoint is missing (older backend) treat Prometheus as enabled
     // so behavior matches pre-toggle deployments.
     placeholderData: { prometheus: { enabled: true } },

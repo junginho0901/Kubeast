@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import { retryUnlessRefused } from '@/services/queryDefaults'
 import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
@@ -19,7 +20,7 @@ export default function ResourceQuotaInfo({ name, namespace }: Props) {
     queryKey: ['resourcequota-describe', namespace, name],
     queryFn: () => api.describeResourceQuota(namespace, name),
     staleTime: 10_000,
-    retry: 1,
+    retry: retryUnlessRefused(1),
   })
   useDrawerFollowsObject({
     enabled: !!namespace && !!name,
