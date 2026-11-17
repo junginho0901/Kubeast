@@ -3,6 +3,7 @@ import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { waitUntilListed } from './number-check.cr-shared'
 
 // gitops_status (a read tool: Argo CD Applications as the user) and the Admin-only audit_search,
 // nodes_stats_summary and nodes_log. Driven through the MCP endpoint as the admin and a temporary
@@ -158,6 +159,7 @@ test.describe('AI admin tools: gitops_status, audit_search, nodes_stats_summary,
       if (!hadCRD) {
         kubectl.run('apply -f -', APP_CRD)
         kubectl.run('wait --for=condition=Established crd/applications.argoproj.io --timeout=60s')
+        await waitUntilListed(kubectl.run, ['applications.argoproj.io'])
       }
       kubectl.run('apply -f -', application(ok, 'e2e-shop', 'shop'))
       kubectl.run('apply -f -', application(bad, 'e2e-shop', 'api'))
