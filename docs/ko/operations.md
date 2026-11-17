@@ -366,6 +366,10 @@ resources:
 - **게이트웨이 앞단**: 로드밸런서의 등록 해제 지연은 게이트웨이 파드가 끝나기 전에 끝나야 하고(AWS ALB 기본 300초), 콘솔로 가는 Envoy Gateway 라우트는 요청 타임아웃(기본 15초)에 스트림을 끊지 않게 두세요.
 - **지표**: 스트림 서버마다(k8s-service-stream, `streams.enabled`가 꺼져 있으면 k8s-service) `kubeast_terminals_open`, `kubeast_followed_logs_open`.
 
+## 느린 요청이 기다린 곳 (게이트웨이 접근 로그)
+
+`gateway.accessLog.upstreamTimes`(기본 꺼짐)를 켜면 요청이 게이트웨이에서 보낸 시간과 뒤 서비스가 걸린 시간을 나눠 볼 수 있습니다. 접근 로그 줄마다 요청 시간, 서비스 연결·헤더·응답 시간, 서비스 주소, 클라이언트 포트가 더 붙습니다. 노트북 kind 클러스터에서 100명으로 한 부하 시험(2026-11-17)에서는 이 여섯 칸 때문에 줄 하나가 평균 49바이트(최대 53) 길어져, 163바이트에서 212바이트로 약 30 % 늘었습니다.
+
 ## 신뢰할 CA 추가 (사설 CA·TLS 가로채는 프록시)
 
 Kubeast 서비스는 밖으로 나가는 TLS 연결(Loki·외부 Prometheus·OIDC 발급자·Google API·감사 싱크·LLM 엔드포인트)에서 이미지에 든 공인 CA만 신뢰합니다.
