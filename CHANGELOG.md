@@ -40,7 +40,7 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 ### Changed
 
 - The default AI model is `gpt-6-luna`, in place of `gpt-4o-mini`. Docker Compose without `.env` runs it too, in place of `gpt-4`.
-- Cluster requests go as the signed-in person: the server version and API discovery reads a screen opens now name the person in the target cluster's audit log, and a request whose context names no person is not sent unless it is Kubeast's own.
+- Cluster requests go as the signed-in person: the server version and API discovery reads a screen opens now name the person in the target cluster's audit log, and a request whose context names no person is not sent unless it is Kubeast's own, which is only a `GET` of the server version or an API discovery path (`/version`, `/api`, `/apis`, `/api/v1`, `/apis/<group>/<version>`).
 - Signing out ends the sign-in on the server: its tokens are refused and cannot be refreshed, and its open connections in other tabs close.
 - No two roles share a group, and role names outside ASCII get distinct groups. A grant, an approval or an OIDC group sync of a role sharing another role's group is refused (400 `role_same_group`).
 - The chart's PostgreSQL starts with `max_connections` from `postgresql.maxConnections` and restarts once on this upgrade. The chart's Redis has a memory cap (80 % of its memory limit, `volatile-lru`).
@@ -76,7 +76,6 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - Secret files stay readable with `podSecurity.enabled: false`.
 - A values file copied from 0.7.6 or earlier stops on its release image tag instead of keeping that release's images.
 - A chat answer whose stream was cut is saved once, under its question.
-- A cluster request Kubeast sends as itself, with no signed-in person behind it, goes out only as a `GET` of the server version or an API discovery list (`/version`, `/api`, `/apis`, `/api/v1`, `/apis/<group>/<version>`, after the path of the cluster's server URL); any other is refused as one naming no person is.
 - For development: tests that failed now and then on a busy runner, or read one pod where a service can run two, wait on what they check, and the guard's build to compare with (`scripts/before-stack.sh up <tag>`) takes the probes of that tag's chart.
 
 [0.7.8]: https://github.com/junginho0901/Kubeast/compare/v0.7.7...v0.7.8
