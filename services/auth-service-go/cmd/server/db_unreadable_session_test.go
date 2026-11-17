@@ -85,8 +85,8 @@ func TestADatabaseThatCannotBeReadRefusesWith503AndSignsNobodyOut(t *testing.T) 
 		if w := api.call(tok, http.MethodGet, "/me", ""); w.Code != http.StatusUnauthorized {
 			t.Errorf("/me: %d %s, want 401", w.Code, w.Body.String())
 		}
-		if w := api.call(tok, http.MethodGet, "/internal/token-version/nobody", ""); w.Code != http.StatusNotFound {
-			t.Errorf("token-version: %d %s, want 404", w.Code, w.Body.String())
+		if w := api.call(tok, http.MethodGet, "/internal/token-version/nobody", ""); w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), `"code":"subject_gone"`) {
+			t.Errorf("token-version: %d %s, want 404 marked subject_gone", w.Code, w.Body.String())
 		}
 	})
 }
@@ -109,8 +109,8 @@ func TestATokenOfAKeyThatIsGoneIsRefusedNotBridged(t *testing.T) {
 			if w := api.call(tok, http.MethodGet, "/me", ""); w.Code != http.StatusUnauthorized {
 				t.Errorf("/me: %d %s, want 401", w.Code, w.Body.String())
 			}
-			if w := api.call(tok, http.MethodGet, "/internal/token-version/owner", ""); w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "API key revoked") {
-				t.Errorf("token-version: %d %s, want 404 API key revoked", w.Code, w.Body.String())
+			if w := api.call(tok, http.MethodGet, "/internal/token-version/owner", ""); w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), `{"code":"subject_gone","detail":"API key revoked"}`) {
+				t.Errorf("token-version: %d %s, want 404 API key revoked, marked subject_gone", w.Code, w.Body.String())
 			}
 			if w := api.call(api.sessionToken(), http.MethodGet, "/me", ""); w.Code != http.StatusOK {
 				t.Errorf("the owner's own sign-in: %d %s, want 200", w.Code, w.Body.String())

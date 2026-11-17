@@ -37,6 +37,7 @@ type tvServer struct {
 	version   atomic.Int32
 	signedOut atomic.Value // string: the JSON list, "" for an answer without the field (an older auth-service)
 	status    atomic.Int32 // 0 = 200 with the version
+	unmarked  atomic.Bool  // a 404 without SubjectGoneCode, as an auth-service before 0.7.8 answered a read that failed
 	calls     atomic.Int32
 	lastSub   string
 	lastTok   string
@@ -51,6 +52,10 @@ func newTVServer(t *testing.T, version int) *tvServer {
 		s.lastSub = strings.TrimPrefix(r.URL.Path, "/")
 		s.lastTok = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if st := s.status.Load(); st != 0 {
+			if st == http.StatusNotFound && !s.unmarked.Load() {
+				AnswerSubjectGone(w, "Unknown user")
+				return
+			}
 			w.WriteHeader(int(st))
 			return
 		}
@@ -236,7 +241,7 @@ func TestValidate_TokenVersionKeyTokenCachedApart(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tok, _ := jwt.Parse(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), func(*jwt.Token) (any, error) { return &j.key.PublicKey, nil })
 		if claims, ok := tok.Claims.(jwt.MapClaims); ok && claims["akid"] != nil && revokedKey.Load() {
-			w.WriteHeader(http.StatusNotFound)
+			AnswerSubjectGone(w, "API key revoked")
 			return
 		}
 		_, _ = w.Write([]byte(`{"tv":3}`))

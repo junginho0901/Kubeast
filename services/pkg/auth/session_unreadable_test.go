@@ -137,3 +137,45 @@ func TestValidate_AFailedLookupIsNotAskedAgainWithinThePause(t *testing.T) {
 		t.Fatalf("asks = %d, want one more after the pause", got)
 	}
 }
+
+// An auth-service before 0.7.8 answers a read of its database that failed with 404 "Unknown user", the answer of a
+// user who is gone. During an upgrade a 0.7.8 validator may ask it: a 404 without SubjectGoneCode is a read that
+// failed — refused with 503, not passed on the version read before and not revoked — and only the marked 404 revokes.
+func TestMiddleware_A404OfAnAuthServiceBefore078IsAReadThatFailed(t *testing.T) {
+	j := newJWKSServer(t, "k1")
+	tv := newTVServer(t, 3)
+	v := newTVValidator(j, tv, time.Millisecond, 5*time.Minute)
+	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	mw := v.MiddlewareWithCookie("kubeast.token", ok)
+	call := func(tvClaim int) int {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/namespaces", nil)
+		req.AddCookie(&http.Cookie{Name: "kubeast.token", Value: signWithTV(t, j.key, "k1", tvClaim)})
+		rec := httptest.NewRecorder()
+		mw.ServeHTTP(rec, req)
+		time.Sleep(2 * time.Millisecond) // past the cache: each call asks
+		return rec.Code
+	}
+	if got := call(3); got != http.StatusOK {
+		t.Fatalf("prime: %d", got)
+	}
+
+	tv.status.Store(http.StatusNotFound)
+	tv.unmarked.Store(true) // {"detail":"Unknown user"}, as 0.7.7 answers a read that failed
+	if got := call(3); got != http.StatusServiceUnavailable {
+		t.Fatalf("unmarked 404 = %d, want 503 (not revoked, not passed on the version read before)", got)
+	}
+	if _, err := v.Validate(signWithTV(t, j.key, "k1", 3)); !errors.Is(err, ErrSessionUnreadable) || errors.Is(err, ErrTokenRevoked) {
+		t.Fatalf("Validate = %v, want unreadable", err)
+	}
+
+	tv.unmarked.Store(false) // {"detail":"Unknown user","code":"subject_gone"}
+	if got := call(3); got != http.StatusUnauthorized {
+		t.Fatalf("marked 404 = %d, want 401", got)
+	}
+
+	tv.status.Store(0)
+	tv.version.Store(4)
+	if got := call(3); got != http.StatusUnauthorized {
+		t.Fatalf("a version that moved on = %d, want 401", got)
+	}
+}

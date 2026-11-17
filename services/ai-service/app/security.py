@@ -42,6 +42,23 @@ class TokenRevokedError(Exception):
     """The token's version is behind the user's current one, or the user is gone."""
 
 
+# auth-service marks its 404 for a user, key or system token that is gone (pkg/auth SubjectGoneCode). One before 0.7.8
+# answered a read of its database that failed with the same 404 unmarked: that is a read that failed, not a verdict.
+SUBJECT_GONE_CODE = "subject_gone"
+
+
+class UnmarkedNotFoundError(Exception):
+    """A 404 of the token-version lookup without SUBJECT_GONE_CODE."""
+
+
+def _says_subject_gone(error: urllib.error.HTTPError) -> bool:
+    try:
+        body = json.loads(error.read() or b"{}")
+    except Exception:
+        return False
+    return isinstance(body, dict) and body.get("code") == SUBJECT_GONE_CODE
+
+
 def _fetch_token_version(token: str, user_id: str) -> Tuple[int, FrozenSet[int]]:
     """GET <AUTH_TOKEN_VERSION_URL>/<user_id> as the bearer: the version and the
     signed-out sign-ins (none when an older auth-service leaves the list out).
@@ -54,8 +71,10 @@ def _fetch_token_version(token: str, user_id: str) -> Tuple[int, FrozenSet[int]]
         with urllib.request.urlopen(req, timeout=3) as resp:
             body = json.load(resp)
     except urllib.error.HTTPError as e:
-        if e.code in (401, 403, 404):
+        if e.code in (401, 403) or (e.code == 404 and _says_subject_gone(e)):
             raise TokenRevokedError(f"auth-service {e.code}") from e
+        if e.code == 404:
+            raise UnmarkedNotFoundError("auth-service 404 without " + SUBJECT_GONE_CODE) from e
         raise
     return int(body["tv"]), frozenset(int(t) for t in body.get("signed_out") or ())
 
@@ -114,6 +133,11 @@ def check_token_version(token: str, user_id: str, claimed: int, akid: str = "", 
             _tv_cache.pop(key, None)
             _tv_paused.pop(key, None)
         raise HTTPException(status_code=401, detail="Token revoked")
+    except UnmarkedNotFoundError:
+        # Neither a verdict nor bridged: an auth-service before 0.7.8 answers a user that is gone and a read that failed
+        # alike, so the token is refused as unreadable, not passed on the version read before.
+        _outage_verdict(claimed, sign_in, None, now)
+        return
     except Exception:
         _pause_after_failure(key)
         _outage_verdict(claimed, sign_in, cached, now)

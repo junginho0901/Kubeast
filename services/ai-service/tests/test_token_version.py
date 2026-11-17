@@ -1,6 +1,7 @@
 """Token revocation (H11): the token's "tv" is checked against auth-service's
 current token_version, cached 30 s, bridged from cache for 5 min when
 auth-service is down, refused with nothing cached."""
+import io
 import time
 import urllib.error
 
@@ -171,6 +172,32 @@ def test_http_status_mapping(monkeypatch):
     monkeypatch.setattr(security.urllib.request, "urlopen", urlopen_502)
     with pytest.raises(urllib.error.HTTPError):
         security._fetch_token_version("tok", "u9")
+
+    def urlopen_404(body):
+        def answer(req, timeout):
+            raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, io.BytesIO(body))
+        return answer
+
+    monkeypatch.setattr(security.urllib.request, "urlopen", urlopen_404(b'{"detail":"Unknown user","code":"subject_gone"}'))
+    with pytest.raises(security.TokenRevokedError):
+        security._fetch_token_version("tok", "u9")
+    # an auth-service before 0.7.8 answers a read that failed so: no verdict
+    for unmarked in (b'{"detail":"Unknown user"}', b"", b"not json"):
+        monkeypatch.setattr(security.urllib.request, "urlopen", urlopen_404(unmarked))
+        with pytest.raises(security.UnmarkedNotFoundError):
+            security._fetch_token_version("tok", "u9")
+
+
+def test_a_404_without_the_mark_is_refused_as_unreadable_not_bridged_nor_revoked(lookup):
+    """During an upgrade an auth-service before 0.7.8 may answer a read of its database that failed with 404
+    "Unknown user": 503, not passed on the version read before (it may be a user who is gone) and not 401."""
+    security.check_token_version("tok", "u1", 3)
+    security._tv_cache["u1"] = (3, time.monotonic() - security.TOKEN_VERSION_CACHE_SECONDS - 1, frozenset())
+    lookup.error = security.UnmarkedNotFoundError("auth-service 404 without subject_gone")
+    assert _status(security.check_token_version, "tok", "u1", 3) == UNREADABLE
+    assert "u1" in security._tv_cache, "no verdict: the version read before stays"
+    lookup.error = security.TokenRevokedError("auth-service 404")
+    assert _status(security.check_token_version, "tok", "u1", 3) == (401, "Token revoked")
 
 
 def test_check_is_off_without_a_url(monkeypatch):

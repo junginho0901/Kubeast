@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"time"
@@ -100,6 +101,10 @@ func (v *JWTValidator) checkTokenVersion(tokenStr, userID, akid string, claimed 
 		delete(v.tvPaused, key)
 		v.tvMu.Unlock()
 		return err
+	case errors.Is(err, errUnmarkedNotFound):
+		// Neither a verdict nor bridged: an auth-service before 0.7.8 answers a user that is gone and a read that
+		// failed alike, so the token is refused as unreadable, not passed on the version read before.
+		return fmt.Errorf("%w: token version unavailable: %w", ErrSessionUnreadable, err)
 	default:
 		v.pauseAfterFailure(key)
 		return v.outageVerdict(claimed, signIn, entry, cached, now, err)
@@ -184,9 +189,10 @@ func compareSession(claimed int, signIn int64, state SessionState) error {
 
 // fetchTokenVersion asks auth-service for the bearer's current version and
 // signed-out sign-ins. The endpoint only answers for the token's own subject,
-// so the token itself is the credential. 401/403/404 mean the token or user
-// is gone (revoked); any other failure is a transport problem the caller may
-// bridge from cache. An answer without "signed_out" lists none.
+// so the token itself is the credential. 401/403 and a 404 marked
+// SubjectGoneCode mean the token or user is gone (revoked); a 404 without the
+// mark is errUnmarkedNotFound; any other failure is a transport problem the
+// caller may bridge from cache. An answer without "signed_out" lists none.
 func (v *JWTValidator) fetchTokenVersion(tokenStr, userID string) (SessionState, error) {
 	req, err := http.NewRequest(http.MethodGet, v.cfg.TokenVersionURL+"/"+userID, nil)
 	if err != nil {
@@ -200,8 +206,16 @@ func (v *JWTValidator) fetchTokenVersion(tokenStr, userID string) (SessionState,
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case http.StatusOK:
-	case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
+	case http.StatusUnauthorized, http.StatusForbidden:
 		return SessionState{}, fmt.Errorf("%w (auth-service %d)", ErrTokenRevoked, resp.StatusCode)
+	case http.StatusNotFound:
+		var gone struct {
+			Code string `json:"code"`
+		}
+		if json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&gone) == nil && gone.Code == SubjectGoneCode {
+			return SessionState{}, fmt.Errorf("%w (auth-service 404)", ErrTokenRevoked)
+		}
+		return SessionState{}, errUnmarkedNotFound
 	default:
 		return SessionState{}, fmt.Errorf("auth-service token-version: status %d", resp.StatusCode)
 	}
@@ -213,4 +227,21 @@ func (v *JWTValidator) fetchTokenVersion(tokenStr, userID string) (SessionState,
 		return SessionState{}, fmt.Errorf("auth-service token-version: %w", err)
 	}
 	return SessionState{Version: body.TV, SignedOut: body.SignedOut}, nil
+}
+
+// SubjectGoneCode marks auth-service's token-version answer for a user, an API key or a system token that is gone: a
+// 404 with {"detail": …, "code": "subject_gone"}, the code beside detail as the API's other error codes are. An
+// auth-service before 0.7.8 answered a read of its database that failed with the same 404 and no code, so a 404
+// without it is a read that failed, not a verdict.
+const SubjectGoneCode = "subject_gone"
+
+// errUnmarkedNotFound is a 404 of the token-version lookup without SubjectGoneCode.
+var errUnmarkedNotFound = errors.New("auth-service token-version: 404 without " + SubjectGoneCode)
+
+// AnswerSubjectGone answers the token-version lookup of a subject that is gone, marked SubjectGoneCode.
+func AnswerSubjectGone(w http.ResponseWriter, detail string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNotFound)
+	b, _ := json.Marshal(map[string]string{"detail": detail, "code": SubjectGoneCode})
+	_, _ = w.Write(append(b, '\n'))
 }
