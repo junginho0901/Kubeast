@@ -86,8 +86,10 @@ test.describe('namespace-scoped grants in the UI', () => {
   })
 
   // The cluster refuses the node list to a grant limited to namespaces. The Dashboard asked it, tried it again a second
-  // later and asked it every minute; it now asks once while the page is open.
-  test('a scoped user\'s Dashboard asks the node list the cluster refuses once', async ({ page, request }) => {
+  // later and asked it every minute, as every read on a timer did; it now asks each refused read once while the page is
+  // open, two minutes here (the node list's timer twice over).
+  test('a scoped user\'s Dashboard asks each read the cluster refuses once while it stays open', async ({ page, request }) => {
+    test.setTimeout(240_000)
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const email = `e2e-nsui-${Date.now().toString(36)}@kubeast.local`
     let userId = ''
@@ -104,14 +106,25 @@ test.describe('namespace-scoped grants in the UI', () => {
       }
       const asked: string[] = []
       const answered: number[] = []
+      // each refused request of the page, by path and query, and how many times it went
+      const refused = new Map<string, number>()
       page.on('request', (r) => { if (isNodeList(r.url())) asked.push(r.url()) })
-      page.on('response', (r) => { if (isNodeList(r.url())) answered.push(r.status()) })
+      page.on('response', (r) => {
+        const u = new URL(r.url())
+        if (isNodeList(r.url())) answered.push(r.status())
+        if (r.status() === 403 && u.pathname.startsWith('/api/v1/')) refused.set(`${u.pathname}${u.search}`, (refused.get(`${u.pathname}${u.search}`) ?? 0) + 1)
+      })
       await page.goto('/')
       await expect(page.getByTestId('forbidden-banner')).toBeVisible({ timeout: 20_000 })
       await expect(page.getByTestId('stat-value-nodes')).toHaveText('—')
       // past the second a refused read was tried again after
       await page.waitForTimeout(3_000)
       expect({ asked: asked.length, answered }).toEqual({ asked: 1, answered: [403] })
+
+      // two minutes on the page: the node list's minute twice, the overview's 15 s and the Prometheus 30 s many times
+      await page.waitForTimeout(120_000)
+      const again = [...refused].filter(([, times]) => times > 1)
+      expect({ nodeListAsked: asked.length, refusedMoreThanOnce: again }).toEqual({ nodeListAsked: 1, refusedMoreThanOnce: [] })
     } finally {
       if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
     }

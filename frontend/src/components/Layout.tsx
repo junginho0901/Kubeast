@@ -51,6 +51,7 @@ import { useCluster } from '../contexts/ClusterContext'
 import { usePermission } from '@/hooks/usePermission'
 import { usePendingAccessRequestCount } from '@/hooks/usePendingAccessRequestCount'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
+import { useAskRefusedOnAccessChange } from '@/services/queryDefaults'
 import { aiEnabled, alertInvestigationEnabled, alertStoreEnabledFor, costEnabled, policyReportsEnabled } from '@/utils/features'
 import { resolveRouteMeta } from '@/utils/aiContext/routeMatcher'
 import { ADMIN_PAGE_PERMISSIONS, isGlobalAdmin, readsHygiene } from '@/utils/adminAccess'
@@ -103,6 +104,8 @@ export default function Layout() {
     retry: 1,
     staleTime: 30000,
   })
+  // another answer of the person's access asks once more each read on screen that was refused
+  useAskRefusedOnAccessChange(me)
 
   // The clusters this user can actually reach. A non-admin with no grants has
   // none — we then show a "no accessible cluster" placeholder instead of the

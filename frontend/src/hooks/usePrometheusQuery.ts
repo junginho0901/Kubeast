@@ -2,6 +2,7 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 import { api, type PrometheusQueryResponse, type PrometheusRangeResponse, type ClusterFeatures, type ServiceBackendUsage } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { useCluster } from '@/contexts/ClusterContext'
+import { everyUntilRefused, retryUnlessRefused } from '@/services/queryDefaults'
 import { aiState, type AIState } from '@/utils/features'
 
 /**
@@ -81,9 +82,9 @@ export function usePrometheusQuery(
   return useQuery<PrometheusQueryResponse>({
     queryKey: ['prometheus', currentCluster || 'default', ...queryKey],
     queryFn: () => api.prometheusQuery(promql),
-    refetchInterval: options?.refetchInterval ?? 30000,
+    refetchInterval: everyUntilRefused(options?.refetchInterval ?? 30000),
     enabled: (options?.enabled ?? true) && featuresIn && promEnabled,
-    retry: 1,
+    retry: retryUnlessRefused(1),
     retryDelay: 2000,
     staleTime: 10000,
     // Stub when the toggle is off so consumers see `available: false`
@@ -112,9 +113,9 @@ export function usePrometheusQueries(
     queries: queries.map((q) => ({
       queryKey: ['prometheus', currentCluster || 'default', ...queryKey, q.name],
       queryFn: () => api.prometheusQuery(q.promql),
-      refetchInterval: options?.refetchInterval ?? 30000,
+      refetchInterval: everyUntilRefused(options?.refetchInterval ?? 30000),
       enabled: (options?.enabled ?? true) && featuresIn && promEnabled,
-      retry: 1,
+      retry: retryUnlessRefused(1),
       retryDelay: 2000,
       staleTime: 10000,
       placeholderData: promEnabled ? undefined : ({ available: false, results: [] } as PrometheusQueryResponse),
@@ -167,9 +168,9 @@ export function usePrometheusRangeQuery(
       end: options?.end,
       step: options?.step,
     }),
-    refetchInterval: options?.refetchInterval ?? 5 * 60 * 1000, // 5 min — range data is slow-moving
+    refetchInterval: everyUntilRefused(options?.refetchInterval ?? 5 * 60 * 1000), // 5 min — range data is slow-moving
     enabled: (options?.enabled ?? true) && featuresIn && promEnabled,
-    retry: 1,
+    retry: retryUnlessRefused(1),
     retryDelay: 2000,
     staleTime: 60 * 1000,
     placeholderData: promEnabled ? undefined : { available: false, results: [] },
@@ -190,9 +191,9 @@ export function useServiceBackendUsage(namespace: string, name: string, options?
   const query = useQuery<ServiceBackendUsage>({
     queryKey: ['prometheus', currentCluster || 'default', 'service-backend-usage', namespace, name],
     queryFn: () => api.serviceBackendUsage(namespace, name),
-    refetchInterval: 30000,
+    refetchInterval: everyUntilRefused(30000),
     enabled: (options?.enabled ?? true) && featuresIn && promEnabled,
-    retry: 1,
+    retry: retryUnlessRefused(1),
     retryDelay: 2000,
     staleTime: 10000,
   })

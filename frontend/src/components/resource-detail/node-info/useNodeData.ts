@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, isForbiddenError, isMetricsUnavailableError } from '@/services/api'
 import { useNodeShellSettings } from '@/services/nodeShellSettings'
+import { unlessRefused } from '@/services/queryDefaults'
 import { applyWatchEvent, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useChangeReader } from '@/services/useWatchChanges'
 import { useAIContext } from '@/hooks/useAIContext'
@@ -93,7 +94,7 @@ export function useNodeData(name: string) {
     queryKey: ['cluster', 'nodes', 'drain-status', drainId],
     queryFn: () => api.getNodeDrainStatus(name, drainId as string),
     enabled: Boolean(drainId),
-    refetchInterval: drainId ? 1000 : false,
+    refetchInterval: (query) => (drainId ? unlessRefused(query.state.error, 1000) : false),
   })
 
   // 플로팅 AI 위젯용 overlay 스냅샷 — 노드 상세 + 이 노드의 Pod 목록 + 이벤트
