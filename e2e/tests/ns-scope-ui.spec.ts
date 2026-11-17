@@ -85,6 +85,38 @@ test.describe('namespace-scoped grants in the UI', () => {
     }
   })
 
+  // The cluster refuses the node list to a grant limited to namespaces. The Dashboard asked it, tried it again a second
+  // later and asked it every minute; it now asks once while the page is open.
+  test('a scoped user\'s Dashboard asks the node list the cluster refuses once', async ({ page, request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const email = `e2e-nsui-${Date.now().toString(36)}@kubeast.local`
+    let userId = ''
+    try {
+      userId = await createUser(request, admin, email)
+      expect((await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: 'Read', namespaces: ['api', 'web'] } })).ok()).toBeTruthy()
+      await loginUI(page, email, PW)
+      // a page that reads no node list, so nothing of the page signed in on is still on its way
+      await page.goto('/account')
+
+      const isNodeList = (url: string) => {
+        const u = new URL(url)
+        return u.pathname === '/api/v1/cluster/nodes' && u.searchParams.get('cluster') === CLUSTER
+      }
+      const asked: string[] = []
+      const answered: number[] = []
+      page.on('request', (r) => { if (isNodeList(r.url())) asked.push(r.url()) })
+      page.on('response', (r) => { if (isNodeList(r.url())) answered.push(r.status()) })
+      await page.goto('/')
+      await expect(page.getByTestId('forbidden-banner')).toBeVisible({ timeout: 20_000 })
+      await expect(page.getByTestId('stat-value-nodes')).toHaveText('—')
+      // past the second a refused read was tried again after
+      await page.waitForTimeout(3_000)
+      expect({ asked: asked.length, answered }).toEqual({ asked: 1, answered: [403] })
+    } finally {
+      if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
+    }
+  })
+
   test('a scoped user sees the limit in the notice and requests access within it', async ({ page, request }) => {
     test.setTimeout(90_000)
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)

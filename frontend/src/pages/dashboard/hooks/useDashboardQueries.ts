@@ -18,6 +18,7 @@ import {
   isMetricsUnavailableError,
 } from '@/services/api'
 import { readPodPageSince } from '@/services/podPageRead'
+import { everyUntilRefused } from '@/services/queryDefaults'
 import { useCluster } from '@/contexts/ClusterContext'
 import { keepSameRead } from '@/utils/keepSameRead'
 
@@ -185,12 +186,12 @@ export function useDashboardQueries({
     refetchOnWindowFocus: false,
   })
 
-  // 노드 목록 (차트 표시용 - 항상 가져오기)
+  // 노드 목록 (차트 표시용 - 항상 가져오기); a refused list is not asked again until the page opens again
   const { data: nodes } = useQuery({
     queryKey: ['nodes', ck],
     queryFn: () => api.getNodes(false), // 자동 갱신은 캐시 사용
     staleTime: 30000,
-    refetchInterval: 60000,
+    refetchInterval: everyUntilRefused(60000),
   })
 
   // Top 리소스 사용 파드/노드 (5초마다 갱신)
