@@ -41,7 +41,7 @@ A terminal, a followed log and a live list are authenticated when they open. The
 - k8s-service asks every 30 seconds whether the session behind each one still stands: the user's `token_version` is the same, the user or API key still exists, and the absolute session lifetime (`auth.sessionAbsoluteHours`) has not passed.
 - When it does not, the connection ends within that interval and says why: a terminal prints the reason and hangs up its shell, a followed log adds the reason as its last line, and a live list goes to the sign-in page unless the browser already holds a newer session.
 - A terminal or followed log ended this way leaves a `k8s.session.end` row.
-- If the version cannot be read (the database is down), connections keep running for 5 minutes and then end.
+- If the version cannot be read (the database is down), connections keep running for 5 minutes and then end without ending the sign-in: a live list connects again by itself, and a terminal or followed log says to open it again. Meanwhile a request whose session cannot be read is refused with 503 and `Retry-After`, never let through and never answered 401, which the console reads as signed out.
 - A session with no activity keeps its open connections while the above holds. The token's expiry alone ends nothing, or a followed log would stop every `auth.tokenTTLMinutes`.
 - Taking a permission from a custom role moves the `token_version` of the accounts holding it, so their open connections end within that interval; adding one or changing the description ends nothing.
 

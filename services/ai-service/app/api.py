@@ -77,6 +77,8 @@ async def _authorize_session_access(authorization: str, session_id: str) -> None
     try:
         token = authorization.split(" ", 1)[1] if " " in authorization else authorization
         payload = decode_access_token(token)
+    except HTTPException:
+        raise  # its own status: a session that could not be checked is a 503, not a 401
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 

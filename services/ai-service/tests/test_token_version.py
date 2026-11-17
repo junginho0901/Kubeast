@@ -70,9 +70,27 @@ def test_newer_token_refreshes_the_cache_at_once(lookup):
     assert _status(security.check_token_version, "tok9", "u1", 9) == (401, "Token revoked")
 
 
+UNREADABLE = (503, "Session could not be checked; try again")
+
+
 def test_unreachable_auth_service_fails_closed_without_cache(lookup):
+    """Refused, not taken on trust, but with 503 and Retry-After: a 401 would sign the console out."""
     lookup.error = urllib.error.URLError("connection refused")
-    assert _status(security.check_token_version, "tok", "u1", 3) == (401, "Token version unavailable")
+    assert _status(security.check_token_version, "tok", "u1", 3) == UNREADABLE
+    with pytest.raises(HTTPException) as refused:
+        security.check_token_version("tok", "u1", 3)
+    assert refused.value.headers == {"Retry-After": str(security.SESSION_UNREADABLE_RETRY_AFTER)}
+
+
+def test_auth_service_that_could_not_read_its_database_is_no_revocation(lookup):
+    """auth-service answers 503 when its database could not be read: bridged from cache, never revoked."""
+    security.check_token_version("tok", "u1", 3)
+    lookup.error = urllib.error.HTTPError("http://auth-service.test/tv/u1", 503, "Service Unavailable", {}, None)
+    security._tv_cache["u1"] = (3, time.monotonic() - security.TOKEN_VERSION_CACHE_SECONDS - 1, frozenset())
+    assert _status(security.check_token_version, "tok", "u1", 3) == (200, None)
+    assert "u1" in security._tv_cache, "the cached answer stays"
+    security._tv_cache.clear()
+    assert _status(security.check_token_version, "tok", "u1", 3) == UNREADABLE
 
 
 def test_stale_cache_bridges_an_outage_then_expires(lookup):
@@ -83,7 +101,7 @@ def test_stale_cache_bridges_an_outage_then_expires(lookup):
     assert _status(security.check_token_version, "tok", "u1", 2) == (401, "Token revoked"), "older than what was last seen"
     assert _status(security.check_token_version, "tok4", "u1", 4) == (200, None), "newer than the stale value is trusted (signature proves issue)"
     security._tv_cache["u1"] = (3, time.monotonic() - security.TOKEN_VERSION_STALE_SECONDS - 1, frozenset())
-    assert _status(security.check_token_version, "tok", "u1", 3) == (401, "Token version unavailable")
+    assert _status(security.check_token_version, "tok", "u1", 3) == UNREADABLE
 
 
 def test_deleted_user_is_revoked_not_bridged(lookup):

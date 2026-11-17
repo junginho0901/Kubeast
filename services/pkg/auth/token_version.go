@@ -56,7 +56,7 @@ func (e tokenVersionEntry) state() SessionState {
 // (sign-in right after a role change): that refreshes the cache instead of
 // waiting for it to expire. When auth-service cannot be reached, a version
 // fetched within the stale TTL still counts; with nothing cached the token is
-// refused rather than trusted.
+// refused rather than trusted, as ErrSessionUnreadable, not as revoked.
 //
 // A token an API key was exchanged for (akid) is cached apart from the user's
 // other tokens: auth-service answers "revoked" for it once the key is deleted
@@ -101,7 +101,7 @@ func (v *JWTValidator) checkTokenVersion(tokenStr, userID, akid string, claimed 
 		}
 		return nil
 	default:
-		return fmt.Errorf("invalid token: token version unavailable: %w", err)
+		return fmt.Errorf("%w: token version unavailable: %w", ErrSessionUnreadable, err)
 	}
 }
 

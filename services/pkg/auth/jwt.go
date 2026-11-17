@@ -489,6 +489,10 @@ func (v *JWTValidator) MiddlewareWithCookie(cookieName string, next http.Handler
 		}
 
 		payload, err := v.Validate(tokenStr)
+		if errors.Is(err, ErrSessionUnreadable) {
+			RefuseSessionUnreadable(w)
+			return
+		}
 		if err != nil {
 			http.Error(w, `{"detail":"Invalid token"}`, http.StatusUnauthorized)
 			return

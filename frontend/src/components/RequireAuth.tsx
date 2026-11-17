@@ -2,17 +2,19 @@ import { useEffect, type JSX } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { markSignedIn, noteSessionEnded, startSessionKeepalive } from '@/services/auth'
+import { markSignedIn, noteSessionEnded, retrySessionRead, signInAfterSessionRead, startSessionKeepalive } from '@/services/auth'
 
 // The session is an HttpOnly cookie the page cannot inspect, so "signed in"
 // means GET /auth/me succeeds. The result is shared (query key 'me') with the
-// layout and the permission hooks.
+// layout and the permission hooks. A read that failed without the server
+// saying the sign-in is over (a 5xx, no answer) is asked again and keeps the
+// page as it is.
 export default function RequireAuth({ children }: { children: JSX.Element }) {
   const location = useLocation()
-  const { data: me, isLoading, isError } = useQuery({
+  const { data: me, isLoading, isError, error } = useQuery({
     queryKey: ['me'],
     queryFn: api.me,
-    retry: false,
+    retry: retrySessionRead,
     staleTime: 30000,
   })
 
@@ -27,11 +29,12 @@ export default function RequireAuth({ children }: { children: JSX.Element }) {
   useEffect(() => {
     if (meId) markSignedIn()
   }, [meId])
+  const signIn = isError && signInAfterSessionRead(error, me !== undefined)
   useEffect(() => {
-    if (isError) noteSessionEnded()
-  }, [isError])
+    if (signIn) noteSessionEnded()
+  }, [signIn])
 
-  if (isError) {
+  if (signIn) {
     return <Navigate to="/login" state={{ from: location }} replace />
   }
   if (isLoading || !me) {

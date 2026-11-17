@@ -56,7 +56,12 @@ func (h *AuthHandler) TokenVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	// A token an API key was exchanged for goes with the key (revoked or expired).
 	akid, _ := claims["akid"].(string)
+	// A read that failed is no verdict: 503, which the validators bridge from what they last read, where 404 revokes.
 	state, err := h.repo.SessionStateFor(r.Context(), userID, akid)
+	if auth.ReadFailed(err) {
+		auth.RefuseSessionUnreadable(w)
+		return
+	}
 	if errors.Is(err, repository.ErrAPIKeyNotFound) {
 		response.Error(w, http.StatusNotFound, "API key revoked")
 		return

@@ -309,7 +309,11 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, err := h.repo.GetUserByID(r.Context(), payload.UserID)
-	if err != nil || user == nil {
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
+	}
+	if user == nil {
 		response.Error(w, http.StatusUnauthorized, "User not found")
 		return
 	}
@@ -462,7 +466,11 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := h.repo.GetUserByID(r.Context(), payload.UserID)
-	if err != nil || user == nil {
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
+	}
+	if user == nil {
 		response.Error(w, http.StatusUnauthorized, "User not found")
 		return
 	}
@@ -532,7 +540,11 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, err := h.repo.GetUserByID(r.Context(), payload.UserID)
-	if err != nil || user == nil {
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
+	}
+	if user == nil {
 		response.Error(w, http.StatusUnauthorized, "User not found")
 		return
 	}

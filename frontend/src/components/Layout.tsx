@@ -34,7 +34,7 @@ import {
 import { KIND_ICONS as K } from './kindIcons'
 import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
-import { logoutSession } from '@/services/auth'
+import { logoutSession, signInAfterSessionRead } from '@/services/auth'
 import ForbiddenBanner from './ForbiddenBanner'
 import WatchProblemNotice from './WatchProblemNotice'
 import { CreatedNotice } from './CreatedNotice'
@@ -97,6 +97,7 @@ export default function Layout() {
     data: me,
     isLoading: isMeLoading,
     isError: isMeError,
+    error: meError,
   } = useQuery({
     queryKey: ['me'],
     queryFn: api.me,
@@ -139,11 +140,13 @@ export default function Layout() {
     }
   }, [location.pathname, isMeLoading])
 
+  // a read the server could not answer keeps the page (services/auth signInAfterSessionRead)
+  const meSignIn = isMeError && signInAfterSessionRead(meError, me !== undefined)
   useEffect(() => {
-    if (!isMeError) return
+    if (!meSignIn) return
     queryClient.clear()
     navigate('/login')
-  }, [isMeError, navigate, queryClient])
+  }, [meSignIn, navigate, queryClient])
 
   useEffect(() => {
     const checkClusterStatus = async () => {

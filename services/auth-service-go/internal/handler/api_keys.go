@@ -135,7 +135,11 @@ func (h *AuthHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		ceiling = canonical
 	}
 	user, err := h.repo.GetUserByID(r.Context(), payload.UserID)
-	if err != nil || user == nil {
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
+	}
+	if user == nil {
 		response.Error(w, http.StatusUnauthorized, "User not found")
 		return
 	}
@@ -289,7 +293,11 @@ func (h *AuthHandler) ExchangeAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	user, uerr := h.repo.GetUserByID(r.Context(), key.UserID)
-	if uerr != nil || user == nil {
+	if uerr != nil {
+		response.InternalError(w, r, uerr)
+		return
+	}
+	if user == nil {
 		h.auditAPIKey(r, auditAPIKeyExchange, "", "", key.ID, "", apiKeyAuditFields(key), errors.New("owner not found"))
 		response.Error(w, http.StatusUnauthorized, "Invalid API key")
 		return

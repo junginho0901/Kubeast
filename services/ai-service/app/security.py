@@ -24,13 +24,15 @@ _jwk_client = jwt.PyJWKClient(AUTH_JWKS_URL)
 # that was signed out. Both are read from auth-service at most once per
 # TOKEN_VERSION_CACHE_SECONDS per user. When auth-service cannot be reached an
 # answer fetched within TOKEN_VERSION_STALE_SECONDS still counts; with nothing
-# cached the token is refused rather than trusted. Empty
-# AUTH_TOKEN_VERSION_URL turns the check off.
+# cached the token is refused rather than trusted, with 503 and Retry-After
+# (auth-service's 503 says its database could not be read), never as revoked.
+# Empty AUTH_TOKEN_VERSION_URL turns the check off.
 AUTH_TOKEN_VERSION_URL = os.getenv(
     "AUTH_TOKEN_VERSION_URL", "http://auth-service:8004/api/v1/auth/internal/token-version"
 )
 TOKEN_VERSION_CACHE_SECONDS = 30.0
 TOKEN_VERSION_STALE_SECONDS = 300.0
+SESSION_UNREADABLE_RETRY_AFTER = 5
 
 
 class TokenRevokedError(Exception):
@@ -110,7 +112,13 @@ def check_token_version(token: str, user_id: str, claimed: int, akid: str = "", 
             if claimed < cached[0] or (sign_in and sign_in in cached[2]):
                 raise HTTPException(status_code=401, detail="Token revoked")
             return
-        raise HTTPException(status_code=401, detail="Token version unavailable")
+        # Not taken on trust, nor revoked: 503 to be asked again, since a 401 signs the console out
+        # (services/pkg/auth RefuseSessionUnreadable).
+        raise HTTPException(
+            status_code=503,
+            detail="Session could not be checked; try again",
+            headers={"Retry-After": str(SESSION_UNREADABLE_RETRY_AFTER)},
+        )
     with _tv_lock:
         _tv_cache[key] = (current, now, signed_out)
     _compare_token_version(claimed, current, sign_in, signed_out)

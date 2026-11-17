@@ -404,7 +404,7 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			case <-ctx.Done():
 				if code := auth.SessionEndCode(ctx); code != "" {
 					slog.Info("ws closed: session ended", "id", wsID, "user", payload.UserID, "reason", code)
-					_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(auth.SessionEndedCloseCode, code), time.Now().Add(writeWait))
+					_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(auth.SessionEndCloseCode(code), code), time.Now().Add(writeWait))
 				} else if probe.IsLeaving(ctx) {
 					_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(probe.ShutdownCloseCode, probe.ShutdownReason), time.Now().Add(writeWait))
 				}
