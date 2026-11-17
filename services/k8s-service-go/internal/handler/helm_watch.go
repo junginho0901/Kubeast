@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -34,9 +35,13 @@ var helmLimitRetry = func() time.Duration { return 30*time.Second + rand.N(270*t
 var helmResumeDelay = ws.WatchResumeDelay
 
 // helmStreamID starts the stream's event id, which a browser that opens the stream again by itself sends back as
-// Last-Event-ID (helmWatchVersions.id). Alone it names no version: the stream before this one ended, and what was
+// Last-Event-ID (helmStreamPlace.id). Alone it names no version: the stream before this one ended, and what was
 // deleted between the two only a read of the list can tell.
 const helmStreamID = "helm-releases"
+
+// helmStreamIDMax is the longest id the stream writes with versions: the browser sends it back as a request header,
+// which nginx holds to a buffer of 8 KiB by default. A longer one is written as helmStreamID alone.
+var helmStreamIDMax = 4 << 10
 
 // helmLimitFrame is what the page's watch problem notice reads of a socket's refusal for the server's limit.
 var helmLimitFrame = func() string {
@@ -67,8 +72,8 @@ var helmLimitFrame = func() string {
 //   - namespace empty → cluster-wide watch
 //   - cluster query selects the target cluster (ClientsetFor(ctx), via
 //     ClusterMiddleware); absent → default cluster.
-//   - a Last-Event-ID the stream wrote (the browser opened it again) names the version each of its watches goes on
-//     from, so only what changed since comes, on whichever server: the versions are the API server's.
+//   - a Last-Event-ID the stream wrote (the browser opened it again) names the cluster's client and the version each
+//     of its watches goes on from, so only what changed since comes, on whichever server built the same client.
 //   - resync=1 (the page's list was read before this stream) or a Last-Event-ID naming no version of this stream's
 //     watches asks for one 'resync' event once the watch is on, as a socket's REQUEST with resync gets one RESYNC.
 func (h *Handler) WatchHelmReleases(w http.ResponseWriter, r *http.Request) {
@@ -91,18 +96,23 @@ func (h *Handler) WatchHelmReleases(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	namespace := r.URL.Query().Get("namespace")
-	from, resumed := parseHelmStreamID(r.Header.Get("Last-Event-ID"))
-	if resumed = resumed && from.fits(helmWatchNamespaces(r.Context(), namespace), namespace); !resumed {
-		from = helmWatchVersions{}
+	scope := helmWatchNamespaces(r.Context(), namespace)
+	place := &helmStreamPlace{namespace: namespace, perNamespace: scope != nil, from: helmWatchVersions{}, unplaced: map[string]bool{}}
+	if id, version, ok := h.svc.ClientOf(r.Context()); ok {
+		place.client = clientPlace(id, version)
+	}
+	client, from, resumed := parseHelmStreamID(r.Header.Get("Last-Event-ID"))
+	if resumed = resumed && place.client != "" && client == place.client && from.fits(scope, namespace); resumed {
+		place.from = from
 	}
 	resync := !resumed && (r.URL.Query().Get("resync") == "1" || r.Header.Get("Last-Event-ID") != "")
-	// An id and no data: the browser keeps it for its next request of the stream and dispatches nothing.
-	fmt.Fprintf(w, "id: %s\n\n", from.id())
-	flusher.Flush()
+	if err := place.tell(w, flusher); err != nil {
+		return
+	}
 
 	ctx, release := h.holdSession(r.Context())
 	defer release()
-	if err := h.runHelmWatchSSE(ctx, w, flusher, namespace, resync, from, resumed); err != nil {
+	if err := h.runHelmWatchSSE(ctx, w, flusher, place, resync, resumed); err != nil {
 		slog.Warn("helm watch sse ended with error", "err", err, "namespace", namespace)
 	}
 	sayStreamEnded(ctx, w, flusher)
@@ -114,8 +124,9 @@ func (h *Handler) WatchHelmReleases(w http.ResponseWriter, r *http.Request) {
 // TimeoutSeconds 가 차면 자동으로 새 watcher 를 열어 transparent reconnect.
 // The next watch goes on from the last version the stream saw, so nothing between the two is lost; when that version
 // has expired it starts from none and the page is told to read its list again ('resync'), as forwardEvents does.
-// The first watches go on from the versions in from, which resumed says the browser brought.
-func (h *Handler) runHelmWatchSSE(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, namespace string, resync bool, from helmWatchVersions, resumed bool) error {
+// The first watches go on from the versions in place, which resumed says the browser brought.
+func (h *Handler) runHelmWatchSSE(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, place *helmStreamPlace, resync, resumed bool) error {
+	namespace := place.namespace
 	// The same 25 s as the terminals and the other streams, under the 60 s idle cut of nginx and load balancers.
 	keepalive := time.NewTicker(keepalivePeriod)
 	defer keepalive.Stop()
@@ -130,35 +141,25 @@ func (h *Handler) runHelmWatchSSE(ctx context.Context, w http.ResponseWriter, fl
 	// The page was told the limit kept it from following: what changed meanwhile only a read can tell.
 	resync = resync || told
 
-	// An event's watch is the namespace's asked for, or with one watch per namespace the event's own (watchNamespaces
-	// names a bookmark's). What is kept is the stream's id from then on.
-	perNamespace := helmWatchNamespaces(ctx, namespace) != nil
-	keep := func(secret *corev1.Secret) string {
-		watched := namespace
-		if perNamespace {
-			watched = secret.Namespace
-		}
-		if secret.ResourceVersion != "" {
-			from[watched] = secret.ResourceVersion
-		}
-		return from.id()
-	}
 	for {
 		if ctx.Err() != nil {
 			return nil
 		}
 
-		watcher, err := h.startSecretWatch(ctx, namespace, from)
+		watcher, err := h.startSecretWatch(ctx, namespace, place.from)
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil
 			}
-			// An expired version, or one the browser brought that the API server does not take (not this cluster's, too
-			// new for it) or could not be asked about: the watches start from none, as a stream that brought none.
-			if len(from) > 0 && (resumed || ws.ResourceVersionExpired(err)) {
-				clear(from)
+			// An expired version, or a watch from the browser's versions that could not start: the watches start from
+			// none, as a stream that brought none, and the browser's id names no version until they have a place again.
+			if len(place.from) > 0 && (resumed || ws.ResourceVersionExpired(err)) {
+				place.restart()
 				resumed = false
 				resync = true
+				if err := place.tell(w, flusher); err != nil {
+					return err
+				}
 				continue
 			}
 			// transient kubeconfig hot-reload / API server hiccup — back off + retry
@@ -171,6 +172,7 @@ func (h *Handler) runHelmWatchSSE(ctx context.Context, w http.ResponseWriter, fl
 			continue
 		}
 		resumed = false
+		place.started(watcher)
 		// the page was told the limit kept it from following: it follows again
 		if told {
 			told = false
@@ -188,14 +190,17 @@ func (h *Handler) runHelmWatchSSE(ctx context.Context, w http.ResponseWriter, fl
 			}
 		}
 
-		expired, err := h.consumeWatchSSE(ctx, w, flusher, watcher, keepalive, keep)
+		expired, err := h.consumeWatchSSE(ctx, w, flusher, watcher, keepalive, place)
 		watcher.Stop()
 		if err != nil {
 			return err
 		}
-		if expired && len(from) > 0 {
-			clear(from)
+		if expired && len(place.from) > 0 {
+			place.restart()
 			resync = true
+			if err := place.tell(w, flusher); err != nil {
+				return err
+			}
 		}
 
 		// K8s 의 TimeoutSeconds 가 차서 watcher 가 닫혔다. A moment's spread, as the sockets' watches go on, then a new one.
@@ -224,38 +229,138 @@ func helmWatchNamespaces(ctx context.Context, namespace string) []string {
 // an ADDED for each release Secret there is.
 type helmWatchVersions map[string]string
 
-// id is the stream's event id at these versions: helmStreamID, then "?" and each watch's version by its namespace as a
-// query ("=<version>" for one watch of every namespace), helmStreamID alone while there is none. It holds only what
-// the API server gave, so two servers that brought the same events give the same id.
-func (v helmWatchVersions) id() string {
-	if len(v) == 0 {
+// helmStreamPlace is where a stream's watches are, and the event id the browser was last given of it.
+type helmStreamPlace struct {
+	namespace    string // asked for, "" for all
+	perNamespace bool   // one watch per namespace of a grant limited to them
+	// client names the cluster's client the watches read through (clientPlace). Versions are its API server's: another
+	// API server opens a watch from a version it has not reached and sends nothing until it does.
+	client string
+	from   helmWatchVersions
+	// unplaced are the watches opened from no version whose first bookmark has not come: their first events are each
+	// object's last version, in name order, which is no place in the stream to go on from
+	unplaced map[string]bool
+	said     string // the id the browser has
+}
+
+// clientPlace names a cluster's client by the cluster and the registry config_version it was built from, the same on
+// every server that built it from the same registration.
+func clientPlace(id cluster.ID, version int64) string {
+	return url.PathEscape(string(id)) + "/" + strconv.FormatInt(version, 10)
+}
+
+// id is the stream's event id: helmStreamID, the client, then each watch's version by its namespace as a query
+// ("=<version>" for one watch of every namespace). It holds only what the registry and the API server gave, so two
+// servers that brought the same events give the same id. While a watch has no place, or past helmStreamIDMax, it is
+// helmStreamID alone, which a stream opened again reads as no version.
+func (p *helmStreamPlace) id() string {
+	if p.client == "" || len(p.from) == 0 || len(p.unplaced) > 0 {
 		return helmStreamID
 	}
 	q := url.Values{}
-	for namespace, version := range v {
+	for namespace, version := range p.from {
 		q.Set(namespace, version)
 	}
-	return helmStreamID + "?" + q.Encode()
+	if id := helmStreamID + "/" + p.client + "?" + q.Encode(); len(id) <= helmStreamIDMax {
+		return id
+	}
+	return helmStreamID
 }
 
-// parseHelmStreamID reads a Last-Event-ID the stream wrote with a version; anything else is no place to go on from.
-func parseHelmStreamID(s string) (helmWatchVersions, bool) {
-	rest, ok := strings.CutPrefix(s, helmStreamID+"?")
-	if !ok {
-		return nil, false
+// started notes the watches a start opened: one from no version has no place until its first bookmark.
+func (p *helmStreamPlace) started(watcher watch.Interface) {
+	watched := []string{p.namespace}
+	if m, ok := watcher.(*mergedWatch); ok {
+		watched = m.namespaces
 	}
-	q, err := url.ParseQuery(rest)
-	if err != nil || len(q) == 0 {
-		return nil, false
-	}
-	v := helmWatchVersions{}
-	for namespace, versions := range q {
-		if len(versions) != 1 || versions[0] == "" {
-			return nil, false
+	for _, namespace := range watched {
+		if p.from[namespace] == "" {
+			p.unplaced[namespace] = true
 		}
-		v[namespace] = versions[0]
 	}
-	return v, true
+}
+
+// keep moves the place of an event's watch, the namespace asked for or with one watch per namespace the event's own
+// (watchNamespaces names a bookmark's), to its version. A bookmark places its watch: the API server sends it once the
+// events before it are out.
+func (p *helmStreamPlace) keep(secret *corev1.Secret, bookmark bool) {
+	watched := p.namespace
+	if p.perNamespace {
+		watched = secret.Namespace
+	}
+	if secret.ResourceVersion != "" {
+		p.from[watched] = secret.ResourceVersion
+	}
+	if bookmark {
+		delete(p.unplaced, watched)
+	}
+}
+
+// restart drops every place: the next watches start from no version.
+func (p *helmStreamPlace) restart() {
+	clear(p.from)
+	clear(p.unplaced)
+}
+
+// tell writes the id as an id with no data when the browser has another: it keeps it for its next request of the
+// stream and dispatches nothing.
+func (p *helmStreamPlace) tell(w io.Writer, flusher http.Flusher) error {
+	if p.id() == p.said {
+		return nil
+	}
+	if _, err := io.WriteString(w, p.idLine()+"\n"); err != nil {
+		return err
+	}
+	flusher.Flush()
+	return nil
+}
+
+// idLine is the id line of the next frame, empty when the browser has that id already.
+func (p *helmStreamPlace) idLine() string {
+	id := p.id()
+	if id == p.said {
+		return ""
+	}
+	p.said = id
+	return "id: " + id + "\n"
+}
+
+// parseHelmStreamID reads an id the stream wrote with versions: the client it names and each watch's version. Anything
+// else, a version that is not a whole number from 1 ("0" is any version) too, is no place to go on from.
+func parseHelmStreamID(s string) (client string, from helmWatchVersions, ok bool) {
+	rest, ok := strings.CutPrefix(s, helmStreamID+"/")
+	if !ok {
+		return "", nil, false
+	}
+	client, query, ok := strings.Cut(rest, "?")
+	if !ok || client == "" {
+		return "", nil, false
+	}
+	q, err := url.ParseQuery(query)
+	if err != nil || len(q) == 0 {
+		return "", nil, false
+	}
+	from = helmWatchVersions{}
+	for namespace, versions := range q {
+		if len(versions) != 1 || !wholeVersion(versions[0]) {
+			return "", nil, false
+		}
+		from[namespace] = versions[0]
+	}
+	return client, from, true
+}
+
+// wholeVersion is a resourceVersion as the API server writes one: a whole number from 1, in decimal.
+func wholeVersion(v string) bool {
+	if v == "" || v[0] < '1' || v[0] > '9' {
+		return false
+	}
+	for _, c := range v {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // fits says the versions are of watches this stream opens: the namespace asked for, or namespaces of the grant
@@ -430,9 +535,11 @@ func (m *mergedWatch) Stop() {
 // consumeWatchSSE drains a single watcher until it ends or ctx is done.
 // Each ADDED/MODIFIED/DELETED Secret event is decoded into a ReleaseSummary
 // and pushed as an SSE 'data:' frame. Keepalive comments are interleaved.
-// Every Secret's version, a bookmark's too, goes to keep, whose answer is the stream's id that goes with the frame (a
-// bookmark's alone); expired says the API server ended the watch because the version it went on from has expired.
-func (h *Handler) consumeWatchSSE(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, watcher watch.Interface, keepalive *time.Ticker, keep func(*corev1.Secret) string) (expired bool, err error) {
+// Every Secret's version, a bookmark's too, moves place; a release's frame carries the id when it moved, and the place
+// bookmarks moved it to goes with the next keepalive, so a quiet stream's id keeps up with the version, which expires,
+// at one line a keepalive however many namespaces it watches. expired says the API server ended the watch because the
+// version it went on from has expired.
+func (h *Handler) consumeWatchSSE(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, watcher watch.Interface, keepalive *time.Ticker, place *helmStreamPlace) (expired bool, err error) {
 	results := watcher.ResultChan()
 	for {
 		select {
@@ -440,6 +547,9 @@ func (h *Handler) consumeWatchSSE(ctx context.Context, w http.ResponseWriter, fl
 			return false, nil
 
 		case <-keepalive.C:
+			if err := place.tell(w, flusher); err != nil {
+				return false, err
+			}
 			// SSE comment 라인 — 브라우저 EventSource 가 무시. proxy/LB idle
 			// timeout 만 막아준다. 이전 WebSocket 의 ping/pong 대체.
 			if _, err := io.WriteString(w, ": keepalive\n\n"); err != nil {
@@ -464,13 +574,8 @@ func (h *Handler) consumeWatchSSE(ctx context.Context, w http.ResponseWriter, fl
 			if !ok {
 				continue
 			}
-			id := keep(secret)
+			place.keep(secret, event.Type == watch.Bookmark)
 			if event.Type == watch.Bookmark {
-				// An id and no data: a quiet stream's id keeps up with the version, which expires.
-				if _, err := fmt.Fprintf(w, "id: %s\n\n", id); err != nil {
-					return false, err
-				}
-				flusher.Flush()
 				continue
 			}
 
@@ -491,7 +596,7 @@ func (h *Handler) consumeWatchSSE(ctx context.Context, w http.ResponseWriter, fl
 			if err != nil {
 				continue
 			}
-			if _, err := fmt.Fprintf(w, "id: %s\ndata: %s\n\n", id, payload); err != nil {
+			if _, err := fmt.Fprintf(w, "%sdata: %s\n\n", place.idLine(), payload); err != nil {
 				return false, err
 			}
 			flusher.Flush()

@@ -520,6 +520,19 @@ func (s *Service) ClusterVersions() map[cluster.ID]int64 {
 	return out
 }
 
+// ClientOf is the cluster a request reads and the registry config_version its client was built from, the same on every
+// replica that built it from the same registration; false when no client is built.
+func (s *Service) ClientOf(ctx context.Context) (cluster.ID, int64, bool) {
+	if s == nil {
+		return "", 0, false
+	}
+	b := s.bundleForCtx(ctx)
+	if b == nil {
+		return "", 0, false
+	}
+	return b.id, b.configVersion, true
+}
+
 // DropStale is Invalidate for a change read from the registry's versions (internal/clustersync): the bundle of id built
 // from builtFrom goes, a bundle built since stays. No replica may have been told of the change, so the cache goes
 // everywhere, as on the replica auth-service tells; the others are not told, each reads the versions itself.
