@@ -2,12 +2,15 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import i18next from 'i18next'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { QueryClient, QueryClientProvider, QueryObserver } from '@tanstack/react-query'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import en from '@/i18n/locales/en.json'
 import ko from '@/i18n/locales/ko.json'
 import { ChatHeader } from './ChatHeader'
+import headerSrc from './ChatHeader.tsx?raw'
+import sidebarSrc from './SessionSidebar.tsx?raw'
+import { aiConfigRetry } from './utils'
 
 // The AI Chat header says why the model could not be read, in the server's words, where the model's name would be.
 
@@ -58,5 +61,39 @@ describe('the AI Chat header, when the model cannot be read', () => {
     const html = render({ data: { model: 'gpt-6-luna', app_name: 'Kubeast', version: '0.7.8' } })
     expect(alertOf(html)).toBeNull()
     expect(html).toMatch(/<span class="[^"]*rounded-full[^"]*">gpt-6-luna<\/span>/)
+  })
+})
+
+describe('a long reason', () => {
+  it('is cut at two lines with its whole text on hover, so the header stays as high as the conversation list\'s', () => {
+    const long = `${NO_MODEL} ${'More of what the server said about it. '.repeat(10)}`.trim()
+    const html = render({ error: refused(503, long) })
+    const attrs = /<p role="alert" data-testid="ai-config-failed"([^>]*)>/.exec(html)?.[1] ?? ''
+    expect(/title="([^"]*)"/.exec(attrs)?.[1].replace(/&#x27;/g, "'").replace(/&gt;/g, '>')).toBe(`Could not read the AI model: ${long}`)
+    expect(attrs).toMatch(/class="[^"]*\bline-clamp-2\b/)
+    // the title row (text-xl, 28 px), the subtitle and the reason (text-sm, 20 px a line, mt-1 each), two lines at most
+    const tallest = 28 + (4 + 20) + (4 + 2 * 20)
+    const header = Number(/min-h-\[(\d+)px\]/.exec(html)?.[1])
+    const list = Number(/isMultiSelectMode \? 'h-\[\d+px\]' : 'h-\[(\d+)px\]'/.exec(sidebarSrc)?.[1])
+    expect({ header, fits: tallest <= header }).toEqual({ header: list, fits: true })
+  })
+})
+
+// "No model set up yet" is a 503 that answers the same a second later: the header asks once, and its reason shows at
+// once instead of after the default retry's second. Another failure is tried once more, as before.
+describe('the AI model read', () => {
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+
+  it('is asked once on a 503 or a refusal, and twice on another failure', async () => {
+    const failing = (error: unknown) => vi.fn(async () => { throw error })
+    const reads = { noModel: failing(refused(503, NO_MODEL)), refused: failing(refused(403, 'no')), failed: failing(refused(500, 'boom')), network: failing(new Error('Network Error')) }
+    const client = new QueryClient()
+    const stops = Object.entries(reads).map(([name, queryFn]) => new QueryObserver(client, { queryKey: ['ai-config', name], queryFn, retry: aiConfigRetry }).subscribe(() => {}))
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(Object.fromEntries(Object.entries(reads).map(([name, read]) => [name, read.mock.calls.length])))
+      .toEqual({ noModel: 1, refused: 1, failed: 2, network: 2 })
+    stops.forEach((stop) => stop())
+    expect(headerSrc).toMatch(/queryKey: \['ai-config'\],[\s\S]*?retry: aiConfigRetry,/)
   })
 })

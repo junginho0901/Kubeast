@@ -25,9 +25,16 @@ test.describe("a refusal says the server's reason", () => {
 
   test('AI Chat: no AI model set up yet', async ({ page }) => {
     const noModel = 'No AI model is set up yet: an administrator adds one in Admin → AI Models.'
-    await page.route((u) => u.pathname === '/api/v1/ai/config', (route) => route.fulfill({ status: 503, json: { detail: noModel } }))
+    let asked = 0
+    await page.route((u) => u.pathname === '/api/v1/ai/config', (route) => {
+      asked += 1
+      return route.fulfill({ status: 503, json: { detail: noModel } })
+    })
     await page.goto('/ai-chat?cluster=self')
     await expect(page.getByTestId('ai-config-failed')).toHaveText(EN.aiChat.modelReadFailed.replace('{{reason}}', noModel), { timeout: 20_000 })
+    // a 503 that says no model is set up is not asked again a second later
+    await page.waitForTimeout(3_000)
+    expect(asked).toBe(1)
   })
 
   test('AI Optimization: refused before the stream began', async ({ page }) => {

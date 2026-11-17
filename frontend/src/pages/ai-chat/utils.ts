@@ -17,3 +17,12 @@ export function sessionListFailure(
   const last = del && ren ? (del.at >= ren.at ? del : ren) : del ?? ren
   return last ? { error: last.error, action: last.action } : null
 }
+
+/**
+ * The AI model read (`GET /ai/config`) tried again once, as the app's default, but not on a 503 — no model set up yet,
+ * or the AI service down, which a second later answers the same — nor on a refusal.
+ */
+export function aiConfigRetry(failureCount: number, error: unknown): boolean {
+  const status = (error as { response?: { status?: number } } | null)?.response?.status
+  return failureCount < 1 && status !== 503 && status !== 403
+}
