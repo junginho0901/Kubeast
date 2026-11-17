@@ -18,6 +18,10 @@ const CLUSTER_INDEPENDENT_KEYS = new Set<string>([
   'sessions',
   'session',
   'clusters',
+  // the registry as the person may reach it (/clusters answers the same whatever cluster is selected): a switch that
+  // emptied it without asking showed "No accessible cluster" and the picker cleared the selection it had just made
+  'clusters-accessible',
+  'clusters-all',
   'cluster-roles',
   'setup',
   'setup-status',

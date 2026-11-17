@@ -22,6 +22,8 @@ describe('isClusterScopedQueryKey', () => {
       'sessions',
       'session',
       'clusters',
+      'clusters-accessible',
+      'clusters-all',
       'cluster-roles',
       'setup',
       'setup-status',

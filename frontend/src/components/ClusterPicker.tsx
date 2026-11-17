@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, Server, Check } from 'lucide-react'
 
-import { clustersApi, type ClusterMeta } from '@/services/api/clusters'
+import { type ClusterMeta } from '@/services/api/clusters'
 import { useCluster } from '@/contexts/ClusterContext'
 import { healthDotClass } from '@/utils/clusterHealth'
 import { useDismiss } from '@/hooks/useDismiss'
+import { useAccessibleClusterSelection } from '@/hooks/useAccessibleClusterSelection'
 
 // Sidebar cluster picker (step 11). Lists only the clusters the user can access
 // (accessibleOnly — step 08 filter); selecting one drives ClusterContext, which
@@ -20,31 +20,7 @@ export default function ClusterPicker() {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  const { data: clusters = [], isLoading } = useQuery({
-    queryKey: ['clusters-accessible'],
-    queryFn: () => clustersApi.listClusters(true),
-    staleTime: 30_000,
-  })
-
-  // Reconcile the selection with what THIS user can access. Besides the initial
-  // auto-select, this corrects a selection left over from a previous login: a
-  // cluster the current user can't access (or any stale id) must not stay
-  // selected, or the axios interceptor keeps sending ?cluster=<it> and the
-  // server now 403s every read. Prefer the cluster the initial Setup registers
-  // (id "default") over registry order. With no accessible cluster, clear the
-  // selection so no ?cluster= is sent at all.
-  useEffect(() => {
-    if (isLoading) return
-    if (clusters.length === 0) {
-      if (currentCluster) setCurrentCluster('')
-      return
-    }
-    const accessible = clusters.some((c) => c.id === currentCluster)
-    if (!currentCluster || !accessible) {
-      const preferred = clusters.find((c) => c.id === 'default') ?? clusters[0]
-      if (preferred.id !== currentCluster) setCurrentCluster(preferred.id)
-    }
-  }, [currentCluster, clusters, isLoading, setCurrentCluster])
+  const { clusters, isLoading } = useAccessibleClusterSelection()
 
   // Close the dropdown on a press outside or Escape.
   useDismiss(open, ref, setOpen)

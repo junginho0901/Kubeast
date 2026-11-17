@@ -51,16 +51,26 @@ import { useForbiddenLabels } from '@/services/forbiddenStore'
 import { announceCreated, useCreatedNotice } from '@/services/createdNoticeStore'
 import { recordWatchFrame, useWatchProblem } from '@/services/watchProblemStore'
 import { ResourceDetailProvider } from '@/components/ResourceDetailProvider'
+import { useAccessibleClusterSelection } from '@/hooks/useAccessibleClusterSelection'
+import { everyUntilRefused, queryDefaults } from '@/services/queryDefaults'
 import { useResourceDetail, type ResourceDetailTarget } from '@/components/ResourceDetailContext'
 import LazyResourceDetailDrawer from '@/components/LazyResourceDetailDrawer'
 
 // every read that went out, with its parameters as sent; these answer with their path and cluster
 const sentReads: string[] = []
 const NAMED_ANSWERS = ['/cluster/metrics/top-resources', '/cluster/features', '/cluster/namespaces']
+// a grant limited to namespaces on the one cluster it may reach: refused the node list and the pods across namespaces
+const ONLY_SELF = ['/clusters', '/cluster/overview', '/cluster/nodes', '/cluster/pods/page']
 client.defaults.adapter = async (config: InternalAxiosRequestConfig) => {
   const params = (config.params ?? {}) as Record<string, string>
   const cluster = String(params.cluster ?? '')
   if (String(config.method ?? 'get').toLowerCase() === 'get') sentReads.push(`${config.url} ${new URLSearchParams(params)}`)
+  if (ONLY_SELF.includes(String(config.url))) {
+    await new Promise((r) => setTimeout(r, 20))
+    if (config.url === '/clusters') return { data: { items: [{ id: 'self', display_name: 'self' }] }, status: 200, statusText: 'OK', headers: {}, config }
+    if (config.url === '/cluster/overview') return { data: {}, status: 200, statusText: 'OK', headers: {}, config }
+    throw new AxiosError('Request failed', 'ERR_BAD_REQUEST', config, null, { status: 403, statusText: '', data: {}, headers: {}, config })
+  }
   if (config.url === '/cluster/secrets/all') {
     throw new AxiosError('Request failed', 'ERR_BAD_RESPONSE', config, null, { status: 403, statusText: '', data: {}, headers: {}, config })
   }
@@ -270,5 +280,64 @@ describe('the cluster context across navigations', () => {
     await act(async () => pick('b'))
     await settle()
     expect({ address, reads: [...new Set(reads)] }).toEqual({ address: '?cluster=b&namespace=ns1', reads: ['b'] })
+  })
+})
+
+// The first selection after sign-in ('' → the one cluster the person may reach). The switch emptied the cluster list
+// without asking it again: Layout read "no accessible cluster" and took the page away, and the picker cleared the
+// selection it had just made. The screen went back and forth between the cluster and none, and each turn with none
+// drew the page again without `cluster=`: a grant limited to namespaces had its refused node list and problem pods
+// asked over and over, at no cluster.
+describe('the first selection after sign-in', () => {
+  const ck = (cluster: string) => cluster || 'default'
+  // the Dashboard's reads on a timer: the overview every 15 s, the problem pods every 30 s, the node list every minute
+  function Page() {
+    const { currentCluster } = useCluster()
+    useQuery({ queryKey: ['cluster-overview', ck(currentCluster)], queryFn: async () => (await client.get('/cluster/overview')).data, refetchInterval: everyUntilRefused(15_000) })
+    useQuery({ queryKey: ['dashboard-problem-pods', ck(currentCluster)], queryFn: async () => (await client.get('/cluster/pods/page', { params: { sort: 'health' } })).data, refetchInterval: everyUntilRefused(30_000) })
+    useQuery({ queryKey: ['nodes', ck(currentCluster)], queryFn: async () => (await client.get('/cluster/nodes', { params: { force_refresh: false } })).data, refetchInterval: everyUntilRefused(60_000) })
+    return null
+  }
+  // as Layout draws it: the picker's selection, and the page under the cluster's key once the list has a cluster
+  function Shell() {
+    const { currentCluster } = useCluster()
+    const { clusters, isLoading } = useAccessibleClusterSelection()
+    return isLoading || clusters.length === 0 ? null : createElement(Page, { key: ck(currentCluster) })
+  }
+  let shown = ''
+  function Shown() {
+    shown = useCluster().currentCluster
+    return null
+  }
+
+  it('stays on the cluster it chose, and reads each refused read of the page once with it and none again at no cluster', async () => {
+    vi.useFakeTimers()
+    try {
+      window.localStorage.removeItem('kubeast:current-cluster')
+      sentReads.length = 0
+      root = createRoot(container)
+      await act(async () => {
+        root.render(createElement(MemoryRouter, { initialEntries: ['/'] },
+          createElement(QueryClientProvider, { client: new QueryClient({ defaultOptions: { queries: queryDefaults } }) },
+            createElement(ClusterProvider, null, createElement(Shown), createElement(Shell)))))
+      })
+      const reads = (path: string) => {
+        const of = sentReads.filter((r) => r.startsWith(`${path} `))
+        return { atNone: of.filter((r) => !r.includes('cluster=')).length, atSelf: of.filter((r) => r.includes('cluster=self')).length }
+      }
+      const pass = async (ms: number) => { for (let t = 0; t < ms; t += 500) await act(async () => { await vi.advanceTimersByTimeAsync(500) }) }
+
+      await pass(5_000)
+      expect({ shown, stored: window.localStorage.getItem('kubeast:current-cluster'), nodes: reads('/cluster/nodes'), pods: reads('/cluster/pods/page') })
+        .toEqual({ shown: 'self', stored: 'self', nodes: { atNone: 1, atSelf: 1 }, pods: { atNone: 1, atSelf: 1 } })
+
+      // two minutes on: the overview's 15 s eight times over, no refused read asked again at either
+      await pass(120_000)
+      expect({ shown, nodes: reads('/cluster/nodes'), pods: reads('/cluster/pods/page'), overviewAtSelf: reads('/cluster/overview').atSelf > 8 })
+        .toEqual({ shown: 'self', nodes: { atNone: 1, atSelf: 1 }, pods: { atNone: 1, atSelf: 1 }, overviewAtSelf: true })
+    } finally {
+      await act(async () => root.unmount())
+      vi.useRealTimers()
+    }
   })
 })
