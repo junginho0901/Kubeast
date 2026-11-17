@@ -252,7 +252,7 @@ multicluster:
 
 차트 기본값으로 설치하면 읽는 값은 beta이고, 직접 정하거나 그 값을 읽는 기능을 켜야 쓰이는 값은 alpha입니다. `pdb.*`는 서비스가 파드 둘 이상일 때만 PodDisruptionBudget을 만들며, 마지막 칸의 노드 드레인으로 beta입니다. `redis.acl.*`의 Redis 사용자는 `secrets.existingSecret` 설치에서는 `redis.acl.existingSecretHasKeys`나 `redis.acl.existingSecret`을 정하기 전까지 꺼져 있습니다. 마지막 칸은 값마다 아직 돌리지 않은 것이고, "돌려 봄:"으로 시작하면 그 뒤에 돌린 것입니다.
 
-| 값 | 기본값 | 단계 | 아직 안 돌린 것 |
+| 값 | 기본값 | 단계 | 아직 안 돌린 것 · 돌려 봄 |
 | --- | --- | --- | --- |
 | `podShutdown.preStopSeconds` | 5 | beta | 돌려 봄: Kubernetes 1.29.14(kind, `PodLifecycleSleepAction` 기능 게이트 꺼짐)에 기본 설치를 서버 dry-run으로 보내니 API 서버가 preStop 기다림이 있는 Deployment 7개를 거절함(`spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`). `0`이면 객체 58개를 모두 받음 |
 | `redis.acl.enabled`, `redis.acl.existingSecretHasKeys`, `redis.acl.existingSecret` | true, false, "" | beta | 시험 설치에서 사용자를 끈 경우 |

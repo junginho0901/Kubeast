@@ -256,7 +256,7 @@ Each value this release adds, or whose meaning it changes, has a stage, written 
 
 A value that an install with the chart's defaults reads is beta; a value used only once you set it, or turn on the feature that reads it, is alpha. `pdb.*` makes no PodDisruptionBudget until a service runs two pods, and is beta from the node drain in its last column; the Redis users of `redis.acl.*` stay off in an install with `secrets.existingSecret` until `redis.acl.existingSecretHasKeys` or `redis.acl.existingSecret` is set. The last column says what has not been run with each value yet, or, after "Tested:", what has been run since.
 
-| Value | Default | Stage | Not run yet |
+| Value | Default | Stage | Not run yet, or Tested |
 | --- | --- | --- | --- |
 | `podShutdown.preStopSeconds` | 5 | beta | Tested: a server-side dry run of the default install on Kubernetes 1.29.14 (kind, the `PodLifecycleSleepAction` feature gate off), where the API server refused the seven Deployments with a preStop wait (`spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`) and took all 58 objects with `0` |
 | `redis.acl.enabled`, `redis.acl.existingSecretHasKeys`, `redis.acl.existingSecret` | true, false, "" | beta | The users turned off in a test install |
