@@ -18,9 +18,11 @@ export default function WatchProblemNotice() {
     unreachable: t('layout.watchProblem.unreachable', 'The cluster cannot be reached, so live updates are paused. They come back by themselves.'),
     failed: t('layout.watchProblem.failed', 'Live updates are paused because the cluster answered with an error. They come back by themselves.'),
     scope: t('layout.watchProblem.scope', 'Your access is limited to namespaces, so objects of the whole cluster on this page do not update live. Rows may be out of date; refresh to read them again.'),
-    server_opening: t('layout.watchProblem.serverOpening', 'Many live lists are opening, a few at a time, so live updates for this page wait for their turn. They start by themselves in a few seconds and read the rows again then.'),
+    server_opening: t('layout.watchProblem.serverOpening', 'Many live lists are opening, a few at a time, so live updates for this page wait for their turn. They start by themselves shortly and read the rows again then.'),
   }[problem]
-  useAIContext(problem && text ? { source: 'WatchProblemNotice', summary: text, data: { live_updates: 'stopped', reason: problem } } : null, [problem, text])
+  // a list waiting for its turn to open has not stopped: it starts by itself
+  const liveUpdates = problem === 'server_opening' ? 'waiting' : 'stopped'
+  useAIContext(problem && text ? { source: 'WatchProblemNotice', summary: text, data: { live_updates: liveUpdates, reason: problem } } : null, [problem, text])
   if (!problem) return null
   return (
     <div
