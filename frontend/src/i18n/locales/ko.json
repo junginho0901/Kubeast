@@ -2106,6 +2106,8 @@
       "retrying": "자동으로 재시도 중입니다... (5초마다 갱신)",
       "unavailableAll": "Pod 메트릭을 사용할 수 없습니다",
       "noPodsInNamespace": "{{namespace}} Namespace에 Pod가 없습니다",
+      "noneInGrant": "볼 수 있는 Namespace에 Pod 메트릭이 없습니다",
+      "noneInGrantHint": "이 클러스터에서는 Namespace {{namespaces}}만 볼 수 있고, 지금 그 안의 Pod에는 메트릭이 없습니다. Namespace를 골라 Pod를 확인하세요.",
       "searchPlaceholder": "Pod 이름 검색..."
     },
     "autoRefresh": "5초마다 자동 갱신",
