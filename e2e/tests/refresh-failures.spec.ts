@@ -48,3 +48,35 @@ test.describe("a list's Refresh that fails says so", () => {
     })
   }
 })
+
+// One press of a list's Refresh is one read of the list, past the server's cache (force_refresh=true): the page's own
+// query reads nothing after it, where each press read the list a second time right after. The list's path, by screen.
+const ONE_READ: Array<[string, RegExp]> = [
+  ['/configuration/configmaps?cluster=self&namespace=kube-system', /^\/api\/v1\/cluster\/namespaces\/kube-system\/configmaps$/],
+  ['/workloads/deployments?cluster=self&namespace=kube-system', /^\/api\/v1\/cluster\/namespaces\/kube-system\/deployments$/],
+  ['/network/services?cluster=self&namespace=kube-system', /^\/api\/v1\/cluster\/namespaces\/kube-system\/services$/],
+  ['/cluster/nodes?cluster=self', /^\/api\/v1\/cluster\/nodes$/],
+  ['/helm/releases?cluster=self', /^\/api\/v1\/helm\/releases$/],
+]
+
+test.describe("a list's Refresh reads the list once", () => {
+  for (const [screen, list] of ONE_READ) {
+    test(screen, async ({ page }) => {
+      await page.goto(screen)
+      const refresh = page.locator('.page-head').first().getByRole('button', { name: /^(Refresh|새로고침)$/ }).first()
+      test.skip(!(await refresh.waitFor({ timeout: 20_000 }).then(() => true, () => false)), `${screen} shows no Refresh`)
+      await page.waitForLoadState('networkidle')
+      const reads: string[] = []
+      page.on('request', (request) => {
+        const url = new URL(request.url())
+        if (request.method() === 'GET' && list.test(url.pathname)) reads.push(url.searchParams.get('force_refresh') ?? '')
+      })
+      for (let press = 0; press < 3; press++) {
+        await refresh.click()
+        await expect(refresh, 'the read has ended').toBeEnabled({ timeout: 30_000 })
+        await page.waitForTimeout(2_000)
+      }
+      expect(reads, 'one read past the cache a press, and no other read of the list').toEqual(['true', 'true', 'true'])
+    })
+  }
+})
