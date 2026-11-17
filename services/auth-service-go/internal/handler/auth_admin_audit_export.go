@@ -117,7 +117,9 @@ func csvCells(cells ...string) []string {
 	return cells
 }
 
-// auditFilterFromQuery reads the list/export filter query params.
+// auditFilterFromQuery reads the list/export filter query params. since and
+// until are RFC 3339 times, an offset read as the instant it names, kept in
+// UTC as created_at keeps it.
 func auditFilterFromQuery(r *http.Request) audit.Filter {
 	q := r.URL.Query()
 	filter := audit.Filter{
@@ -134,12 +136,12 @@ func auditFilterFromQuery(r *http.Request) audit.Filter {
 	}
 	if s := q.Get("since"); s != "" {
 		if t, err := time.Parse(time.RFC3339, s); err == nil {
-			filter.Since = t
+			filter.Since = t.UTC()
 		}
 	}
 	if s := q.Get("until"); s != "" {
 		if t, err := time.Parse(time.RFC3339, s); err == nil {
-			filter.Until = t
+			filter.Until = t.UTC()
 		}
 	}
 	return filter
