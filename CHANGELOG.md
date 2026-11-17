@@ -74,9 +74,9 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - Monitoring's Nodes and Pods tabs no longer ask every 5 s on a cluster without metrics-server, and show a refused metrics read in the cluster's words.
 - Prometheus sections say when the cluster's Prometheus does not answer, and that no longer marks the whole cluster unreachable.
 - Secret files stay readable with `podSecurity.enabled: false`.
+- Teams says under the name field why Add did not add a team with no name, where it only moved the focus to the field.
 - A values file copied from 0.7.6 or earlier stops on its release image tag instead of keeping that release's images.
 - A chat answer whose stream was cut is saved once, under its question.
-- Teams says under the name field why Add did not add a team with no name, where it only moved the focus to the field.
 - For development: tests that failed now and then on a busy runner, or read one pod where a service can run two, wait on what they check, and the guard's build to compare with (`scripts/before-stack.sh up <tag>`) takes the probes of that tag's chart.
 
 [0.7.8]: https://github.com/junginho0901/Kubeast/compare/v0.7.7...v0.7.8
