@@ -8,9 +8,9 @@ import { test as teardown, expect } from '@playwright/test'
 import { REFUSAL_LINES, refusals, serverLogs } from './cluster-refusals'
 
 // Runs once every project that depends on setup has finished (the setup project's teardown): no line of
-// REFUSAL_LINES in the logs of SERVERS since the run started (E2E_RUN_STARTED, playwright.config.ts), every pod and a
-// restarted container's run before too. A screen read refused for want of a person is a blank on screen, which no
-// spec sees.
+// REFUSAL_LINES in the logs of SERVERS since the run started (E2E_RUN_STARTED, playwright.config.ts), each pod there at
+// the end and a restarted container's run before too; the install's logs, not this run's alone. A screen read refused
+// for want of a person is a blank on screen, which no spec sees.
 
 const KUBEAST_NS = 'kubeast'
 
@@ -34,4 +34,6 @@ teardown('no cluster request or kubectl run refused for want of a person during 
   expect(logs.some((l) => l.source.startsWith('k8s-service-')), `a k8s-service container read (${logs.map((l) => l.source).join(', ') || 'none'})`).toBe(true)
   const found = refusals(logs)
   expect(found.slice(0, 20), `${found.length} line(s) of "${REFUSAL_LINES.join('" or "')}" since ${since} in ${logs.map((l) => l.source).join(', ')}`).toEqual([])
+  const unreadable = logs.filter((l) => l.unreadable !== undefined).map((l) => `${l.source}: ${l.unreadable}`)
+  expect(unreadable, 'previous run not readable, so its lines were not counted').toEqual([])
 })

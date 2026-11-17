@@ -7,11 +7,12 @@
 export const REFUSAL_LINES = ['cluster request with no person refused', 'kubectl not run'] as const
 
 // The chart's app labels of the servers that write them (k8s-service-stream only when streams.enabled). tool-server
-// answers its refusal as the call's error without a log line; ai-service logs that error ("Error in <tool>: …",
-// app/services/ai/tool_dispatch.py).
+// logs its refusal whichever call made the run (chat, MCP, alert investigation) and answers it as the call's error,
+// which ai-service logs for a chat too ("Error in <tool>: …", app/services/ai/tool_dispatch.py).
 export const SERVERS = ['k8s-service', 'k8s-service-stream', 'tool-server', 'ai-service'] as const
 
-export type ContainerLog = { source: string; text: string }
+// unreadable: kubectl's first line when a container's run before could not be read; its lines were not counted
+export type ContainerLog = { source: string; text: string; unreadable?: string }
 
 type ContainerStatus = {
   name: string
@@ -28,7 +29,8 @@ export function refusals(logs: ContainerLog[]): string[] {
 }
 
 // The log since `since` (RFC 3339) of every container of every pod of SERVERS, and of the container's run before its
-// last restart when that run ended after `since`. A pod removed during the run (a rollout) is not read.
+// last restart when that run ended after `since`. A pod removed during the run (a rollout) is not read, and the pod that
+// replaced it only from its start.
 export function serverLogs(kubectl: (args: string[]) => string, ns: string, since: string): ContainerLog[] {
   const selector = `app in (${SERVERS.join(',')})`
   const pods = (JSON.parse(kubectl(['-n', ns, 'get', 'pods', '-l', selector, '-o', 'json'])) as { items: Pod[] }).items
@@ -39,7 +41,13 @@ export function serverLogs(kubectl: (args: string[]) => string, ns: string, sinc
     const logs: ContainerLog[] = c.state?.waiting ? [] : [{ source, text: kubectl(args) }]
     const ended = c.lastState?.terminated?.finishedAt
     if ((c.restartCount ?? 0) > 0 && (!ended || Date.parse(ended) >= sinceMs)) {
-      logs.push({ source: `${source} (previous)`, text: kubectl([...args, '--previous']) })
+      try {
+        logs.push({ source: `${source} (previous)`, text: kubectl([...args, '--previous']) })
+      } catch (e) {
+        // the kubelet keeps no run before (removed, or after a node restart)
+        const why = String((e as { stderr?: string }).stderr || (e as Error).message).trim().split('\n')[0]
+        logs.push({ source: `${source} (previous)`, text: '', unreadable: why })
+      }
     }
     return logs
   }))
