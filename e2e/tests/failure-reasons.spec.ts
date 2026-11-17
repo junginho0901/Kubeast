@@ -37,6 +37,21 @@ test.describe("a refusal says the server's reason", () => {
     expect(asked).toBe(1)
   })
 
+  // A 503 with Retry-After is a session the server could not check (its database unreadable): asked again at that
+  // pace, and not said as the AI model's failure.
+  test('AI Chat: a session the server could not check is asked again, not shown as the model\'s failure', async ({ page }) => {
+    let asked = 0
+    await page.route((u) => u.pathname === '/api/v1/ai/config', (route) => {
+      asked += 1
+      return asked === 1
+        ? route.fulfill({ status: 503, headers: { 'Retry-After': '1' }, json: { detail: 'Session could not be checked; try again' } })
+        : route.fulfill({ status: 200, json: { model: 'e2e-stand-in-model', app_name: 'Kubeast', version: '0' } })
+    })
+    await page.goto('/ai-chat?cluster=self')
+    await expect(page.getByText('e2e-stand-in-model', { exact: true })).toBeVisible({ timeout: 20_000 })
+    expect({ asked, failed: await page.getByTestId('ai-config-failed').count() }).toEqual({ asked: 2, failed: 0 })
+  })
+
   test('AI Optimization: refused before the stream began', async ({ page }) => {
     await page.route((u) => u.pathname === '/api/v1/ai/suggest-optimization/stream', (route) =>
       route.fulfill({ status: 403, json: { detail: REASON } }))
