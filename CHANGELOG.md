@@ -76,6 +76,7 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - Secret files stay readable with `podSecurity.enabled: false`.
 - A values file copied from 0.7.6 or earlier stops on its release image tag instead of keeping that release's images.
 - A chat answer whose stream was cut is saved once, under its question.
+- AI Chat says under its title why it could not read the AI model, such as no model set up yet, where it showed only "Start a new chat".
 - For development: tests that failed now and then on a busy runner, or read one pod where a service can run two, wait on what they check, and the guard's build to compare with (`scripts/before-stack.sh up <tag>`) takes the probes of that tag's chart.
 
 [0.7.8]: https://github.com/junginho0901/Kubeast/compare/v0.7.7...v0.7.8

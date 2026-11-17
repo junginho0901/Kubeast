@@ -1758,6 +1758,7 @@
     "delete": "Delete",
     "title": "AI Chat",
     "subtitle": "Ask the cluster in natural language and solve problems.",
+    "modelReadFailed": "Could not read the AI model: {{reason}}",
     "emptyTitle": "Start a new chat",
     "emptySubtitle": "Click a question below or type your own.",
     "resultZipDownload": "Download result ZIP",

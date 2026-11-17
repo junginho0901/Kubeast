@@ -4,9 +4,9 @@ import path from 'node:path'
 import { test, expect } from '@playwright/test'
 
 // A refusal says the server's reason, not the HTTP library's words ("AxiosError: Request failed with status code 409")
-// or a bare status ("HTTP 403"): AI Chat's first question when the conversation could not be made, and AI
-// Optimization refused before its stream began. Each refusal is answered in the browser with a reason of its own,
-// so no model is called and nothing on the cluster changes.
+// or a bare status ("HTTP 403"): AI Chat's first question when the conversation could not be made, AI Chat's model
+// name read with no model set up, and AI Optimization refused before its stream began. Each refusal is answered in the
+// browser with a reason of its own, so no model is called and nothing on the cluster changes.
 
 const EN = JSON.parse(fs.readFileSync(path.join(__dirname, '../../frontend/src/i18n/locales/en.json'), 'utf8'))
 const REASON = 'e2e stand-in: the conversation limit is reached'
@@ -21,6 +21,13 @@ test.describe("a refusal says the server's reason", () => {
     const said = EN.aiChat.errorSessionCreate.replace('{{error}}', REASON)
     await expect(page.getByText(said, { exact: true })).toHaveCount(1, { timeout: 20_000 })
     await expect(page.getByText(/AxiosError|status code 409/)).toHaveCount(0)
+  })
+
+  test('AI Chat: no AI model set up yet', async ({ page }) => {
+    const noModel = 'No AI model is set up yet: an administrator adds one in Admin → AI Models.'
+    await page.route((u) => u.pathname === '/api/v1/ai/config', (route) => route.fulfill({ status: 503, json: { detail: noModel } }))
+    await page.goto('/ai-chat?cluster=self')
+    await expect(page.getByTestId('ai-config-failed')).toHaveText(EN.aiChat.modelReadFailed.replace('{{reason}}', noModel), { timeout: 20_000 })
   })
 
   test('AI Optimization: refused before the stream began', async ({ page }) => {
