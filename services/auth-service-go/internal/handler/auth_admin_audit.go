@@ -18,6 +18,7 @@ import (
 //
 //	result, since (RFC3339), until (RFC3339), limit (default 100, max 1000),
 //	offset (default 0), as_of (the as_of of the first page's answer).
+//	A since or until that is not RFC 3339 is a 400, read and recorded as nothing.
 //
 // Without as_of the read pins itself to the rows written so far and answers
 // that bound as as_of; the next pages (and the CSV) pass it back so rows
@@ -29,8 +30,12 @@ func (h *AuthHandler) AdminListAuditLogs(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	filter, err := h.pinnedAuditFilter(r)
+	filter, err := auditFilterFromQuery(r)
 	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if filter, err = h.pinAuditFilter(r, filter); err != nil {
 		response.InternalError(w, r, err)
 		return
 	}
@@ -62,10 +67,8 @@ func (h *AuthHandler) AdminListAuditLogs(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// pinnedAuditFilter reads the filter and, without as_of, bounds it by the
-// highest id written now.
-func (h *AuthHandler) pinnedAuditFilter(r *http.Request) (audit.Filter, error) {
-	filter := auditFilterFromQuery(r)
+// pinAuditFilter bounds a filter without as_of by the highest id written now.
+func (h *AuthHandler) pinAuditFilter(r *http.Request, filter audit.Filter) (audit.Filter, error) {
 	if filter.AsOf > 0 {
 		return filter, nil
 	}
