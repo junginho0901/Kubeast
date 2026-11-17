@@ -18,7 +18,7 @@ The commands below use the release name `kubeast` in the namespace `kubeast`; pu
 - Many replicas: the database connections must fit `postgresql.maxConnections` (300) or the upgrade stops (#868).
 - Custom roles whose names make the same role group as another role are renamed and lose their cluster grants, with an audit row for each change. Account levels of `Pending`'s group (`PENDING`) move to the built-in `Pending` (#865).
 - Role names with characters outside ASCII get groups of their own (`운영팀` acts as `kubeast:role:~c6b4~c601~d300`; in 0.7.7 it was `kubeast:role:---`), so RBAC bound to the old group on your clusters stops applying to them (#865).
-- Besides the services, the chart's PostgreSQL and Redis restart once, and the cache starts empty (#866, #868). For about 20 seconds from when the database stops, requests to the old pods can wait and a few can fail. While the 0.7.7 pods are replaced, a few requests can fail too: 0.7.7 pods stop without waiting, and from 0.7.8 on pods wait before they stop (#856).
+- Besides the services, the chart's PostgreSQL and Redis restart once, and the cache starts empty (#866, #868). For about 20 seconds from when the database stops, requests to the old pods can wait and a few can fail. While the 0.7.7 pods are replaced, a few requests can fail too: 0.7.7 pods stop without waiting, and from 0.7.8 on pods wait before they stop (#856). Upgrade when few people use Kubeast ([2](#2-upgrade)).
 - The default AI model is `gpt-6-luna`, in place of `gpt-4o-mini`. Saved model settings keep their model, the `default-openai` setting made at the first start too ([1.9](#19-the-default-ai-model), #924).
 - Back up the database first: a rollback does not undo the role renames.
 
@@ -197,6 +197,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 
 - auth-service applies the migrations at boot, or the migration Job does with `migrations.mode: job`. The Job runs each try in a pod of its own and ends at 10 minutes (#829, #834).
 - The pods 0.7.7 started stop as 0.7.7 pods do. The `preStop` wait, the notice a terminal gets before it closes, and putting a running alert investigation back in the queue start with the pods 0.7.8 starts (#856, #901). Terminals and followed logs open during the upgrade end, so pick a quiet time.
+- Requests can fail for a short while during this upgrade, so upgrade when few people use Kubeast. It happens once, going from 0.7.7: the 0.7.7 pods stop without a `preStop` wait, the chart's PostgreSQL restarts once, and Redis is replaced (#856, #866, #868). On an EKS cluster of three t3.medium nodes, with one gateway pod behind an AWS Application Load Balancer that sends to pod IPs, requests through the load balancer got 502 for about 6 s while the 0.7.7 gateway pod stopped, and PostgreSQL, on an EBS volume, was back 16 s after it stopped. A 0.7.8 k8s-service pod that starts while Redis is replaced can be refused by it at start (`redis not available` in its log); it keeps its cache in memory and moves it to Redis once Redis answers (`redis answered`).
 - Turn on new features (`autoscaling`, `streams.enabled`) in a later upgrade, once this one has settled. [Running more than one replica](high-availability.md) says what each service needs before a second pod (#867).
 
 ## 3. Values you must change
