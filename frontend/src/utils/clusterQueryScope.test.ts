@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { QueryClient, QueryObserver, type QueryKey } from '@tanstack/react-query'
-import { dropClusterQueries, isClusterScopedQueryKey } from './clusterQueryScope'
+import { askClusterQueriesOnScreen, dropClusterQueries, isClusterScopedQueryKey } from './clusterQueryScope'
 
 describe('isClusterScopedQueryKey', () => {
   it('treats resource data keys as cluster-scoped (cleared on switch)', () => {
@@ -42,6 +42,8 @@ describe('isClusterScopedQueryKey', () => {
   })
 })
 
+// The cache is emptied when the cluster changes (dropClusterQueries) and what is on screen once the new cluster is
+// drawn asks then (askClusterQueriesOnScreen), as ClusterProvider runs them.
 describe('dropClusterQueries', () => {
   // A screen that does not render again when the cluster changes: only the observer's own updates reach it.
   const onScreen = (client: QueryClient, queryKey: QueryKey, queryFn: () => Promise<string>) => {
@@ -61,11 +63,47 @@ describe('dropClusterQueries', () => {
     const screen = onScreen(client, ['access-requests', 'mine'], fetch)
     expect(fetch).toHaveBeenCalledTimes(1)
 
-    await dropClusterQueries(client)
+    dropClusterQueries(client)
+    await askClusterQueriesOnScreen(client)
 
     await vi.waitFor(() => expect(screen.data()).toBe('answer 2'))
     expect(fetch).toHaveBeenCalledTimes(2)
     screen.stop()
+  })
+
+  // The screen of the cluster left is still subscribed when the cache is emptied and goes as the new cluster is drawn.
+  // Its query asked then went out as the new cluster with that screen's key and parameters, beside the new screen's.
+  it('asks nothing for the screen being left, and the new screen\'s query once', async () => {
+    const client = new QueryClient()
+    const left = counted()
+    const leaving = onScreen(client, ['top-resources', 'a'], left)
+    await vi.waitFor(() => expect(leaving.data()).toBe('answer 1'))
+
+    dropClusterQueries(client)
+    leaving.stop()
+    const read = counted()
+    const arriving = onScreen(client, ['top-resources', 'b'], read)
+    await askClusterQueriesOnScreen(client)
+
+    await vi.waitFor(() => expect(arriving.data()).toBe('answer 1'))
+    expect({ left: left.mock.calls.length, read: read.mock.calls.length }).toEqual({ left: 1, read: 1 })
+    arriving.stop()
+  })
+
+  it('does not ask again for a screen that started again under the new cluster and is asking', async () => {
+    const client = new QueryClient()
+    const fetch = counted()
+    const before = onScreen(client, ['cluster', 'nodes'], fetch)
+    await vi.waitFor(() => expect(before.data()).toBe('answer 1'))
+
+    dropClusterQueries(client)
+    before.stop()
+    const again = onScreen(client, ['cluster', 'nodes'], fetch)
+    await askClusterQueriesOnScreen(client)
+
+    await vi.waitFor(() => expect(again.data()).toBe('answer 2'))
+    expect(fetch).toHaveBeenCalledTimes(2)
+    again.stop()
   })
 
   it('takes the old cluster\'s data off a screen until the new cluster answers', async () => {
@@ -76,10 +114,11 @@ describe('dropClusterQueries', () => {
     answer('old cluster')
     await vi.waitFor(() => expect(screen.data()).toBe('old cluster'))
 
-    const dropped = dropClusterQueries(client)
+    dropClusterQueries(client)
     expect(screen.data()).toBeUndefined()
+    const asked = askClusterQueriesOnScreen(client)
     answer('new cluster')
-    await dropped
+    await asked
 
     await vi.waitFor(() => expect(screen.data()).toBe('new cluster'))
     screen.stop()
@@ -91,7 +130,8 @@ describe('dropClusterQueries', () => {
     const screen = onScreen(client, ['clusters'], fetch)
     await vi.waitFor(() => expect(screen.data()).toBe('answer 1'))
 
-    await dropClusterQueries(client)
+    dropClusterQueries(client)
+    await askClusterQueriesOnScreen(client)
 
     expect(screen.data()).toBe('answer 1')
     expect(fetch).toHaveBeenCalledTimes(1)
@@ -103,7 +143,8 @@ describe('dropClusterQueries', () => {
     const fetch = counted()
     await client.fetchQuery({ queryKey: ['network', 'services'], queryFn: fetch })
 
-    await dropClusterQueries(client)
+    dropClusterQueries(client)
+    await askClusterQueriesOnScreen(client)
 
     expect(client.getQueryData(['network', 'services'])).toBeUndefined()
     expect(fetch).toHaveBeenCalledTimes(1)

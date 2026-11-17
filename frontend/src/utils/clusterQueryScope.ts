@@ -1,4 +1,4 @@
-import type { QueryClient } from '@tanstack/react-query'
+import { notifyManager, type QueryClient } from '@tanstack/react-query'
 
 // Which TanStack Query keys are scoped to a specific cluster (step 10).
 //
@@ -37,8 +37,28 @@ export function isClusterScopedQueryKey(queryKey: unknown): boolean {
 }
 
 // dropClusterQueries empties the cluster-scoped cache when the selected cluster
-// changes. A query on screen asks again whether or not its component renders
-// again, so a fetch on its way at that moment does not leave the screen empty.
-export function dropClusterQueries(queryClient: QueryClient): Promise<void> {
-  return queryClient.resetQueries({ predicate: (q) => isClusterScopedQueryKey(q.queryKey) })
+// changes and asks for none of it: a query of the screen being left, asked then,
+// would go out as the new cluster with that screen's key and parameters, beside
+// the one the new screen asks for. A fetch on its way stops.
+export function dropClusterQueries(queryClient: QueryClient): void {
+  notifyManager.batch(() => {
+    for (const query of queryClient.getQueryCache().findAll({ predicate: (q) => isClusterScopedQueryKey(q.queryKey) })) {
+      query.reset()
+    }
+  })
+}
+
+// askClusterQueriesOnScreen runs once the new cluster is drawn: a cluster-scoped
+// query still on screen with no answer and nothing on its way asks — one whose
+// component did not render again under a key that names no cluster, or whose
+// fetch the switch stopped. A query that started again under the new cluster has
+// asked by itself, and those of the screen left have gone with it.
+export function askClusterQueriesOnScreen(queryClient: QueryClient): Promise<void> {
+  return queryClient.refetchQueries(
+    {
+      type: 'active',
+      predicate: (q) => isClusterScopedQueryKey(q.queryKey) && q.state.data === undefined && q.state.fetchStatus === 'idle',
+    },
+    { cancelRefetch: false },
+  )
 }

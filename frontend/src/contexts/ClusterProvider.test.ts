@@ -54,12 +54,18 @@ import { ResourceDetailProvider } from '@/components/ResourceDetailProvider'
 import { useResourceDetail, type ResourceDetailTarget } from '@/components/ResourceDetailContext'
 import LazyResourceDetailDrawer from '@/components/LazyResourceDetailDrawer'
 
+// every read that went out, with its parameters as sent; these answer with their path and cluster
+const sentReads: string[] = []
+const NAMED_ANSWERS = ['/cluster/metrics/top-resources', '/cluster/features', '/cluster/namespaces']
 client.defaults.adapter = async (config: InternalAxiosRequestConfig) => {
-  const cluster = String((config.params as { cluster?: string } | undefined)?.cluster ?? '')
+  const params = (config.params ?? {}) as Record<string, string>
+  const cluster = String(params.cluster ?? '')
+  if (String(config.method ?? 'get').toLowerCase() === 'get') sentReads.push(`${config.url} ${new URLSearchParams(params)}`)
   if (config.url === '/cluster/secrets/all') {
     throw new AxiosError('Request failed', 'ERR_BAD_RESPONSE', config, null, { status: 403, statusText: '', data: {}, headers: {}, config })
   }
-  return { data: config.url === '/cluster/pods/all' ? `pods of ${cluster}` : null, status: 200, statusText: 'OK', headers: {}, config }
+  const data = config.url === '/cluster/pods/all' ? `pods of ${cluster}` : NAMED_ANSWERS.includes(String(config.url)) ? `${config.url} of ${cluster}` : null
+  return { data, status: 200, statusText: 'OK', headers: {}, config }
 }
 
 const container = {
@@ -142,6 +148,56 @@ describe('a cluster switch', () => {
     expect(onB.filter((c) => c.rows === 'pods of a' || c.refused.length > 0 || c.notice !== null || c.watch !== undefined)).toEqual([])
     // and the cluster before is never drawn with the new one's rows
     expect(commits.filter((c) => c.cluster === 'a' && c.rows === 'pods of b')).toEqual([])
+  })
+})
+
+// A switch asks each read of the new cluster once. The cache was emptied with the queries of the screen being left still
+// on it, and asking them then sent them as the new cluster with that screen's key and parameters: the Dashboard's top
+// resources went to the new cluster twice, once with the `skip=nodes` the cluster left had refused it, and every read
+// keyed by the cluster went twice.
+describe('the reads a cluster switch makes', () => {
+  const shown: Record<string, unknown> = {}
+
+  // a page as Layout mounts it, under a key of the cluster, whose read leaves out what its own cluster refused before
+  function Page() {
+    const { currentCluster } = useCluster()
+    shown.top = useQuery({
+      queryKey: ['top-resources', currentCluster],
+      queryFn: async () => (await client.get('/cluster/metrics/top-resources', { params: currentCluster === 'a' ? { skip: 'nodes' } : {} })).data,
+    }).data
+    return null
+  }
+  // beside it, as Layout's own reads: one keyed by the cluster, one whose key names none
+  function Beside() {
+    const { currentCluster } = useCluster()
+    shown.features = useQuery({ queryKey: ['cluster-features', currentCluster], queryFn: async () => (await client.get('/cluster/features')).data }).data
+    shown.namespaces = useQuery({ queryKey: ['namespaces'], queryFn: async () => (await client.get('/cluster/namespaces')).data }).data
+    return null
+  }
+  function Screen() {
+    const { currentCluster } = useCluster()
+    return createElement(Fragment, null, createElement(Beside), createElement(Page, { key: currentCluster || 'default' }))
+  }
+  const on = (cluster: string) => () =>
+    shown.top === `/cluster/metrics/top-resources of ${cluster}` &&
+    shown.features === `/cluster/features of ${cluster}` &&
+    shown.namespaces === `/cluster/namespaces of ${cluster}`
+
+  it("asks each read of the new cluster once, with none of the cluster left's parameters", async () => {
+    await mount(createElement(Screen))
+    await until(on('a'))
+    expect(sentReads.filter((r) => r.includes('skip=nodes'))).toEqual(['/cluster/metrics/top-resources skip=nodes&cluster=a'])
+
+    sentReads.length = 0
+    await act(async () => pick('b'))
+    await until(on('b'))
+    await settle()
+
+    expect(sentReads.sort()).toEqual([
+      '/cluster/features cluster=b',
+      '/cluster/metrics/top-resources cluster=b',
+      '/cluster/namespaces cluster=b',
+    ])
   })
 })
 
