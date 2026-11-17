@@ -250,21 +250,21 @@ multicluster:
 - **beta**: 기능은 남습니다. 키나 세부는 바뀔 수 있고, 한 릴리스 앞서 알리고 옮기는 법을 적습니다.
 - **stable**: 키와 동작이 그대로 남습니다. 이름이 바뀐 키도 한 릴리스 동안은 경고와 함께 읽습니다.
 
-아래 값은 모두 alpha입니다. kind 개발 설치에서 값마다 켜고 끄는 시험과 0.7.7로 내렸다가 다시 올리는 시험을 아직 거치지 않았고, beta가 되려면 둘 다 거쳐야 합니다. 마지막 칸은 그 밖에 아직 돌리지 않은 것입니다.
+기본 설치가 쓰는 값은 모든 설치가 이미 그 값으로 돌기 때문에 beta이고, 직접 정하거나 그 값을 읽는 기능을 켜야 쓰이는 값은 alpha입니다. 마지막 칸은 값마다 아직 돌리지 않은 것입니다.
 
 | 값 | 기본값 | 단계 | 아직 안 돌린 것 |
 | --- | --- | --- | --- |
-| `podShutdown.preStopSeconds` | 5 | alpha | Kubernetes 1.30보다 오래된 클러스터 |
-| `redis.acl.enabled`, `redis.acl.existingSecretHasKeys`, `redis.acl.existingSecret` | true, false, "" | alpha | 시험 설치에서 사용자를 끈 경우 |
+| `podShutdown.preStopSeconds` | 5 | beta | Kubernetes 1.30보다 오래된 클러스터 |
+| `redis.acl.enabled`, `redis.acl.existingSecretHasKeys`, `redis.acl.existingSecret` | true, false, "" | beta | 시험 설치에서 사용자를 끈 경우 |
 | 1보다 큰 `replicas.k8sService`와 `replicas.toolServer` | 1 | alpha | k8s-service 2대 · 3대의 크기 |
 | `autoscaling.<service>` | 끔 | alpha | 시험 설치에서 HPA를 켠 경우 |
-| `postgresql.sessionLimits.*`, `postgresql.pool.<service>.maxConns`, `postgresql.maxConnections` | 켬, 20 · 20 · 10 · 15 · 4, 300 | alpha | 데이터베이스가 오래 멈춘 경우 |
-| `pdb.enabled`, `pdb.maxUnavailable` | true, 1 | alpha | 실제 클러스터에서 PodDisruptionBudget과 함께 한 노드 드레인 |
+| `postgresql.sessionLimits.*`, `postgresql.pool.<service>.maxConns`, `postgresql.maxConnections` | 켬, 20 · 20 · 10 · 15 · 4, 300 | beta | 데이터베이스가 오래 멈춘 경우 |
+| `pdb.enabled`, `pdb.maxUnavailable` | true, 1 | beta | 실제 클러스터에서 PodDisruptionBudget과 함께 한 노드 드레인 |
 | `streams.*` | 끔 | alpha | kind 개발 설치에서 한 번도 안 돌림 |
 | `ai.providers.claudeCode.maxConcurrentTotal`, `queueWaitSeconds`, `memoryLimit` | 0, 60, 2Gi | alpha | 프로바이더를 켠 시험 설치 |
 | `gateway.accessLog.upstreamTimes` | false | alpha | 켠 상태의 게이트웨이 설정을 `nginx -t`로 확인 |
-| `multicluster.breakerConsecutiveFails`(0.7.8부터 `0`이면 차단기 끔), `multicluster.breakerOpenSec`(0.7.8부터 읽음) | 5, 30 | alpha | kind 개발 설치에서 클러스터를 끊어 본 경우 |
-| `multicluster.wsWatchOpeningConcurrency`, `multicluster.wsWatchStreamWindowKiB` | 8, 1024 | alpha | 업그레이드 리허설 |
+| `multicluster.breakerConsecutiveFails`(0.7.8부터 `0`이면 차단기 끔), `multicluster.breakerOpenSec`(0.7.8부터 읽음) | 5, 30 | beta | kind 개발 설치에서 클러스터를 끊어 본 경우 |
+| `multicluster.wsWatchOpeningConcurrency`, `multicluster.wsWatchStreamWindowKiB` | 8, 1024 | beta | 업그레이드 리허설 |
 | `auth` 설정의 `customRoles` 옆 `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters` | false, [] | alpha | 켠 상태의 전체 e2e |
 
 ## Redis 사용자

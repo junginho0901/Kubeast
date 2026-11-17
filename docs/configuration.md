@@ -254,21 +254,21 @@ Each value this release adds, or whose meaning it changes, has a stage, written 
 - **beta**: the feature stays. A key or a detail may change, with a release's notice and how to move.
 - **stable**: the key and the behaviour stay. A renamed key is still read, with a warning, for one release.
 
-Every value below is alpha: none has been through the test that turns each value on and off on the kind dev install, or a rollback to 0.7.7 and back, which a value needs before it becomes beta. The last column says what else has not been run.
+A value that a default install uses is beta, since every install already runs with it; a value used only once you set it, or turn on the feature that reads it, is alpha. The last column says what has not been run with each value yet.
 
 | Value | Default | Stage | Not run yet |
 | --- | --- | --- | --- |
-| `podShutdown.preStopSeconds` | 5 | alpha | Kubernetes older than 1.30 |
-| `redis.acl.enabled`, `redis.acl.existingSecretHasKeys`, `redis.acl.existingSecret` | true, false, "" | alpha | The users turned off in a test install |
+| `podShutdown.preStopSeconds` | 5 | beta | Kubernetes older than 1.30 |
+| `redis.acl.enabled`, `redis.acl.existingSecretHasKeys`, `redis.acl.existingSecret` | true, false, "" | beta | The users turned off in a test install |
 | `replicas.k8sService` and `replicas.toolServer` above 1 | 1 | alpha | The sizes for 2 and 3 k8s-service pods |
 | `autoscaling.<service>` | off | alpha | An HPA turned on in a test install |
-| `postgresql.sessionLimits.*`, `postgresql.pool.<service>.maxConns`, `postgresql.maxConnections` | on, 20 · 20 · 10 · 15 · 4, 300 | alpha | A long database outage |
-| `pdb.enabled`, `pdb.maxUnavailable` | true, 1 | alpha | Node drains with the PodDisruptionBudgets on a real cluster |
+| `postgresql.sessionLimits.*`, `postgresql.pool.<service>.maxConns`, `postgresql.maxConnections` | on, 20 · 20 · 10 · 15 · 4, 300 | beta | A long database outage |
+| `pdb.enabled`, `pdb.maxUnavailable` | true, 1 | beta | Node drains with the PodDisruptionBudgets on a real cluster |
 | `streams.*` | off | alpha | Any run on the kind dev install |
 | `ai.providers.claudeCode.maxConcurrentTotal`, `queueWaitSeconds`, `memoryLimit` | 0, 60, 2Gi | alpha | A test install with the provider on |
 | `gateway.accessLog.upstreamTimes` | false | alpha | `nginx -t` of the gateway's config with it on |
-| `multicluster.breakerConsecutiveFails` (`0` turns the breaker off from 0.7.8), `multicluster.breakerOpenSec` (read from 0.7.8) | 5, 30 | alpha | A cluster cut off on the kind dev install |
-| `multicluster.wsWatchOpeningConcurrency`, `multicluster.wsWatchStreamWindowKiB` | 8, 1024 | alpha | An upgrade rehearsal |
+| `multicluster.breakerConsecutiveFails` (`0` turns the breaker off from 0.7.8), `multicluster.breakerOpenSec` (read from 0.7.8) | 5, 30 | beta | A cluster cut off on the kind dev install |
+| `multicluster.wsWatchOpeningConcurrency`, `multicluster.wsWatchStreamWindowKiB` | 8, 1024 | beta | An upgrade rehearsal |
 | `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters`, in the `auth` settings beside `customRoles` | false, [] | alpha | The whole e2e with it on |
 
 ## Redis users
