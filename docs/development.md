@@ -76,6 +76,8 @@ cd e2e && npx playwright test                 # all
 npx playwright test cluster-hygiene.spec.ts   # one spec
 ```
 
+After every project that depends on the sign-in (also when a test failed, also for one spec), `tests/refusals.teardown.ts` reads the logs of every k8s-service, k8s-service-stream, tool-server and ai-service pod since the run started, and a restarted container's run before, and fails with the lines when one says `cluster request with no person refused` (k8s-service) or `kubectl not run` (tool-server's refusal, which ai-service logs as the tool's error): a read refused for want of a person may show only as a blank on screen.
+
 Prerequisites (without them, the spec does not fail but skips and records the reason):
 
 - **Second cluster `default`** — created with `scripts/add-kind-cluster.sh default --addons`. It is a kind cluster with no `kubeast` namespace. It has:

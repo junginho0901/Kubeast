@@ -17,6 +17,8 @@ const AI_LAYERS_SPEC = /ai-layers-every-screen\.spec\.ts$/
 // Fault tests (e2e/fault, v0.7.8 step 4 §5): E2E_FAULT=1 adds the fault project. They kill pods and stop Redis or
 // PostgreSQL on the dev install, so they never run by default.
 const FAULT = process.env.E2E_FAULT === '1'
+// When the run started, for tests/refusals.teardown.ts: set once in the runner, which the workers inherit.
+process.env.E2E_RUN_STARTED ||= new Date().toISOString()
 
 // E2E config — runs against the kind cluster's gateway (port 8000).
 // Snapshots are committed-equivalent baselines that the refactor PRs
@@ -56,6 +58,12 @@ export default defineConfig({
     {
       name: 'setup',
       testMatch: /auth\.setup\.ts/,
+      // after every project that depends on setup, also when one failed
+      teardown: 'refusals',
+    },
+    {
+      name: 'refusals',
+      testMatch: /refusals\.teardown\.ts/,
     },
     {
       name: 'chromium',
