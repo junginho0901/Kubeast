@@ -146,4 +146,23 @@ test.describe('Lists sized to the screen', () => {
     const frames = await page.evaluate(() => (window as unknown as { __rows: number[] }).__rows)
     expect([...new Set(frames)], 'row counts painted from the first frame with rows').toEqual([geometry.bottoms.length])
   })
+
+  // The detail drawer open on a screen 1348 px wide or more moves the floating chat button to the drawer's left, over
+  // the footer's rows-per-page choice and range rather than its page buttons: none of the footer's buttons or fields
+  // is under it there either.
+  test('Namespaces with the detail drawer open: no footer button or field under the floating chat button', async ({ page }) => {
+    for (const width of [1348, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 })
+      await page.goto('/cluster/namespaces?cluster=self&detail=Namespace/kube-system')
+      await expect(page.locator('div[class*="fixed"][class*="inset-y-0"][class*="right-0"]').last()).toContainText('kube-system', { timeout: 20_000 })
+      await expect(page.getByTestId('list-pager'), `${width}: the footer says what it shows`).toContainText(/Showing \d+-\d+ of \d+/, { timeout: 20_000 })
+      const chat = page.getByTestId('floating-chat-toggle')
+      // the button left of the drawer (right-[756px]) once its move has ended
+      await expect.poll(async () => {
+        const b = await chat.boundingBox()
+        return b ? Math.round(width - b.x - b.width) : null
+      }, { timeout: 5_000, message: `${width}: the button left of the drawer` }).toBe(756)
+      expect(await underChatButton(page, 'list-pager'), `${width}×900`).toEqual([])
+    }
+  })
 })
