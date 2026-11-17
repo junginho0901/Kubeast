@@ -136,11 +136,14 @@ export function followHelmReleases(
   const url = buildHelmWatchURL(cluster, namespace)
   const problemKey = `${cluster}\n${url}`
   const reads = resyncReads()
-  // A stream whose answer was not one (a 503 while the session cannot be checked, a 502 while the server is replaced)
-  // is one the browser does not open again: it is opened again here, after a wait that grows as a socket's does, with
-  // resync=1 since it missed what changed meanwhile.
+  // A stream whose answer was not one is one the browser does not open again, and EventSource does not say the status.
+  // After a wait that grows as a socket's does, one GET of the stream (its headers only, then let go) says it: 200
+  // opens it again, with resync=1 since it missed what changed meanwhile and the browser's id is not sent again; a 401
+  // goes the way of a live connection whose session ended (liveSessionEnded); a 403 stops, said as a watch refused;
+  // anything else (a 503 while the session cannot be checked, a 502 while the server is replaced, no answer) waits again.
   let reopenAttempts = 0
   let reopenTimer: ReturnType<typeof setTimeout> | undefined
+  let probing: AbortController | undefined
   let stopped = false
   let lastSessionEnd = 0
   let es = openStream(follow?.missed === true)
@@ -151,8 +154,38 @@ export function followHelmReleases(
     reopenAttempts += 1
     reopenTimer = setTimeout(() => {
       reopenTimer = undefined
-      if (!stopped) es = openStream(true)
+      void probeThenOpen()
     }, ceiling / 2 + Math.random() * (ceiling / 2))
+  }
+
+  async function probeThenOpen() {
+    if (stopped) return
+    const probe = new AbortController()
+    probing = probe
+    let status: number | undefined
+    let detail: unknown
+    try {
+      const res = await fetch(`${url}&resync=1`, { credentials: 'same-origin', headers: { Accept: 'text/event-stream' }, signal: probe.signal })
+      status = res.status
+      if (status === 403) detail = ((await res.json().catch(() => null)) as { detail?: unknown } | null)?.detail
+    } catch {
+      // no answer: waits again
+    } finally {
+      probe.abort()
+      if (probing === probe) probing = undefined
+    }
+    if (stopped) return
+    if (status === 200) {
+      es = openStream(true)
+    } else if (status === 401) {
+      const lastEnd = lastSessionEnd
+      lastSessionEnd = Date.now()
+      if ((await liveSessionEnded(lastEnd)) && !stopped) reopenLater()
+    } else if (status === 403) {
+      recordWatchFrame(problemKey, { type: 'ERROR', error: { reason: 'forbidden', message: typeof detail === 'string' ? detail : undefined } })
+    } else {
+      reopenLater()
+    }
   }
 
   function openStream(resync: boolean): EventSource {
@@ -214,6 +247,7 @@ export function followHelmReleases(
   return () => {
     stopped = true
     if (reopenTimer !== undefined) clearTimeout(reopenTimer)
+    probing?.abort()
     es.close()
     reads.stop()
     follow?.stop()

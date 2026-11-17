@@ -75,6 +75,26 @@ func TestADatabaseThatCannotBeReadRefusesWith503AndSignsNobodyOut(t *testing.T) 
 		}
 	})
 
+	// /auth/me read in part answered 200 with less access than the person has, which the console drew as a change of
+	// access: any of its reads that failed answers 503.
+	t.Run("a read of the person's access", func(t *testing.T) {
+		for _, fails := range []string{
+			"SELECT permission FROM role_permissions",
+			"SELECT cluster_id, role_id, namespaces FROM user_cluster_roles",
+			"FROM user_cluster_roles ucr JOIN roles ro",
+			"namespaces IS NOT NULL",
+		} {
+			api := newAuthAPI(t, pendingRequest{owner: "requester"})
+			if w := api.call(api.sessionToken(), http.MethodGet, "/me", ""); w.Code != http.StatusOK {
+				t.Fatalf("before %q fails: %d %s", fails, w.Code, w.Body.String())
+			}
+			api.db.failOn(fails)
+			if w := api.call(api.sessionToken(), http.MethodGet, "/me", ""); w.Code != http.StatusServiceUnavailable || w.Header().Get("Retry-After") != retryAfter {
+				t.Errorf("/me with %q failing: %d (Retry-After %q) %s, want 503", fails, w.Code, w.Header().Get("Retry-After"), w.Body.String())
+			}
+		}
+	})
+
 	t.Run("a user who is gone", func(t *testing.T) {
 		nobody := pgRule{match: "'nobody'", oids: []uint32{uint32(pgtype.Int4OID), uint32(pgtype.Int8ArrayOID)}}
 		api := newAuthAPI(t, pendingRequest{owner: "requester"}, nobody)
