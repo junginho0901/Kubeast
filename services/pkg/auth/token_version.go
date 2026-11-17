@@ -56,7 +56,9 @@ func (e tokenVersionEntry) state() SessionState {
 // (sign-in right after a role change): that refreshes the cache instead of
 // waiting for it to expire. When auth-service cannot be reached, a version
 // fetched within the stale TTL still counts; with nothing cached the token is
-// refused rather than trusted, as ErrSessionUnreadable, not as revoked.
+// refused rather than trusted, as ErrSessionUnreadable, not as revoked. A
+// lookup that failed is not made again for that user within
+// TokenVersionFailurePause: the requests in between get the same answer.
 //
 // A token an API key was exchanged for (akid) is cached apart from the user's
 // other tokens: auth-service answers "revoked" for it once the key is deleted
@@ -74,9 +76,14 @@ func (v *JWTValidator) checkTokenVersion(tokenStr, userID, akid string, claimed 
 	}
 	v.tvMu.Lock()
 	entry, cached := v.tv[key]
+	pausedUntil := v.tvPaused[key]
 	v.tvMu.Unlock()
 	if cached && now.Sub(entry.fetched) < v.cfg.TokenVersionCacheTTL && claimed <= entry.version {
 		return compareSession(claimed, signIn, entry.state())
+	}
+	if now.Before(pausedUntil) {
+		// auth-service could not read this user's version a moment ago: answered as that failure, not asked again yet.
+		return v.outageVerdict(claimed, signIn, entry, cached, now, errLookupPaused)
 	}
 
 	current, fetched, err := v.fetchTokenVersionShared(tokenStr, userID, now)
@@ -84,25 +91,54 @@ func (v *JWTValidator) checkTokenVersion(tokenStr, userID, akid string, claimed 
 	case err == nil:
 		v.tvMu.Lock()
 		v.tv[key] = tokenVersionEntry{version: current.Version, signedOut: current.SignedOut, fetched: fetched}
+		delete(v.tvPaused, key)
 		v.tvMu.Unlock()
 		return compareSession(claimed, signIn, current)
 	case errors.Is(err, ErrTokenRevoked):
 		v.tvMu.Lock()
 		delete(v.tv, key)
+		delete(v.tvPaused, key)
 		v.tvMu.Unlock()
 		return err
-	case cached && now.Sub(entry.fetched) < v.cfg.TokenVersionStaleTTL:
-		// Outage: the signature proves auth-service issued the token at
-		// version claimed, so anything not older than what we last saw
-		// passes; an older one was revoked before the outage, and a sign-in
-		// seen signed out stays so.
+	default:
+		v.pauseAfterFailure(key)
+		return v.outageVerdict(claimed, signIn, entry, cached, now, err)
+	}
+}
+
+// errLookupPaused stands for the failed lookup of a user within TokenVersionFailurePause of it.
+var errLookupPaused = errors.New("auth-service could not read this version a moment ago")
+
+// outageVerdict answers a token whose version auth-service could not read. The signature proves auth-service issued
+// the token at version claimed, so with a version read within the stale TTL anything not older than it passes; an
+// older one was revoked before the outage, and a sign-in seen signed out stays so. With none, the token is refused as
+// ErrSessionUnreadable.
+func (v *JWTValidator) outageVerdict(claimed int, signIn int64, entry tokenVersionEntry, cached bool, now time.Time, err error) error {
+	if cached && now.Sub(entry.fetched) < v.cfg.TokenVersionStaleTTL {
 		if claimed < entry.version || entry.state().SignedOutAt(signIn) {
 			return fmt.Errorf("invalid token: %w", ErrTokenRevoked)
 		}
 		return nil
-	default:
-		return fmt.Errorf("%w: token version unavailable: %w", ErrSessionUnreadable, err)
 	}
+	return fmt.Errorf("%w: token version unavailable: %w", ErrSessionUnreadable, err)
+}
+
+// pauseAfterFailure keeps key from asking auth-service again for TokenVersionFailurePause, and lets go of the pauses
+// that have ended. A revocation is not held back by it: none can be read while the lookup fails, and the first lookup
+// after the pause reads it.
+func (v *JWTValidator) pauseAfterFailure(key string) {
+	if v.cfg.TokenVersionFailurePause < 0 {
+		return
+	}
+	now := time.Now()
+	v.tvMu.Lock()
+	defer v.tvMu.Unlock()
+	for k, until := range v.tvPaused {
+		if !now.Before(until) {
+			delete(v.tvPaused, k)
+		}
+	}
+	v.tvPaused[key] = now.Add(v.cfg.TokenVersionFailurePause)
 }
 
 type tokenVersionCall struct {

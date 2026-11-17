@@ -120,6 +120,7 @@ func newTVValidator(j *jwksServer, tv *tvServer, cacheTTL, staleTTL time.Duratio
 	return NewJWTValidator(JWKSConfig{
 		JWKSURL: j.srv.URL, Issuer: "iss", Audience: "aud",
 		TokenVersionURL: tv.srv.URL, TokenVersionCacheTTL: cacheTTL, TokenVersionStaleTTL: staleTTL,
+		TokenVersionFailurePause: -1, // every check asks; session_unreadable_test.go holds the pause
 	})
 }
 

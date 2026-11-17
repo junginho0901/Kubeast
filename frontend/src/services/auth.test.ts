@@ -108,25 +108,15 @@ describe('every sign-out in the screens says whether the person asked', () => {
 describe('a session the server could not check is no sign-out', () => {
   const answered = (status: number) => ({ response: { status } })
 
-  it('only an answer of 4xx to /auth/me sends the page to sign in', async () => {
-    const { retrySessionRead, sessionReadSaysSignedOut, signInAfterSessionRead } = await import('./auth')
+  it('only the server\'s 401 to /auth/me sends the page to sign in', async () => {
+    const { retrySessionRead, sessionReadSaysSignedOut } = await import('./auth')
     expect(sessionReadSaysSignedOut(answered(401))).toBe(true)
-    expect(sessionReadSaysSignedOut(answered(403))).toBe(true)
-    for (const unanswered of [answered(503), answered(502), answered(500), new Error('timeout of 10000ms exceeded'), undefined]) {
-      expect(sessionReadSaysSignedOut(unanswered)).toBe(false)
-      expect(signInAfterSessionRead(unanswered, true)).toBe(false)
-      expect(retrySessionRead(0, unanswered)).toBe(true)
-    }
-    expect(signInAfterSessionRead(answered(401), true)).toBe(true)
     expect(retrySessionRead(0, answered(401))).toBe(false)
-    // a page with no session read yet goes to sign in once the retries are spent, as before
-    expect(signInAfterSessionRead(answered(503), false)).toBe(true)
-  })
-
-  it('every screen that sends the page to sign in on a failed /auth/me read asks the same rule', () => {
-    const src = path.resolve(__dirname, '..')
-    for (const file of ['components/RequireAuth.tsx', 'components/RequirePermission.tsx', 'components/Layout.tsx']) {
-      expect(fs.readFileSync(path.join(src, file), 'utf8'), file).toContain('signInAfterSessionRead(')
+    const unanswered = [answered(503), answered(502), answered(500), answered(429), answered(408), answered(403), new Error('timeout of 10000ms exceeded'), undefined]
+    for (const failure of unanswered) {
+      expect(sessionReadSaysSignedOut(failure)).toBe(false)
+      expect(retrySessionRead(0, failure)).toBe(true)
+      expect(retrySessionRead(50, failure)).toBe(true) // asked again for as long as it takes
     }
   })
 

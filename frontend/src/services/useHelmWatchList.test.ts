@@ -187,6 +187,42 @@ describe('the Helm releases stream', () => {
     again()
   })
 
+  // The browser does not open again a stream whose answer was a 503 (the session could not be checked): it is opened
+  // again after a wait that grows, with resync=1, and the wait starts over once the stream follows.
+  it('a stream the browser closed for good is opened again after a wait that grows, and not after the page has gone', async () => {
+    const client = new QueryClient()
+    const queryFn = vi.fn(async () => [rel('web', 3)])
+    const stop = page(client, queryFn)
+    await vi.advanceTimersByTimeAsync(0)
+    const closedForGood = () => {
+      latest().readyState = FakeEventSource.CLOSED
+      latest().send('error', undefined)
+    }
+
+    closedForGood()
+    await vi.advanceTimersByTimeAsync(700)
+    expect(FakeEventSource.made).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(100) // 750 ms: half of 1 s and half of the other half
+    expect(FakeEventSource.made).toHaveLength(2)
+    expect(latest().url).toBe('/api/v1/helm/releases/stream?cluster=c&resync=1')
+
+    closedForGood()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(FakeEventSource.made).toHaveLength(2) // the second wait is longer: 1.5 s
+    await vi.advanceTimersByTimeAsync(500)
+    expect(FakeEventSource.made).toHaveLength(3)
+
+    latest().send('following', {})
+    closedForGood()
+    await vi.advanceTimersByTimeAsync(750)
+    expect(FakeEventSource.made).toHaveLength(4) // followed again: the wait starts over
+
+    closedForGood()
+    stop()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(FakeEventSource.made).toHaveLength(4)
+  })
+
   it('no read is left waiting once the page has gone', async () => {
     const client = new QueryClient()
     const queryFn = vi.fn(async () => [rel('web', 3)])

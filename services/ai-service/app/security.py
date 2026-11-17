@@ -33,6 +33,9 @@ AUTH_TOKEN_VERSION_URL = os.getenv(
 TOKEN_VERSION_CACHE_SECONDS = 30.0
 TOKEN_VERSION_STALE_SECONDS = 300.0
 SESSION_UNREADABLE_RETRY_AFTER = 5
+# A user whose version auth-service could not read is answered from that failure for this long without asking again
+# (pkg/auth TokenVersionFailurePause), so an outage does not send each of the user's requests to auth-service.
+TOKEN_VERSION_FAILURE_PAUSE_SECONDS = 2.0
 
 
 class TokenRevokedError(Exception):
@@ -59,6 +62,8 @@ def _fetch_token_version(token: str, user_id: str) -> Tuple[int, FrozenSet[int]]
 
 # user_id[|akid] -> (version, monotonic seconds fetched, signed-out sign-ins)
 _tv_cache: Dict[str, Tuple[int, float, FrozenSet[int]]] = {}
+# user_id[|akid] -> monotonic seconds until which a failed lookup is not made again
+_tv_paused: Dict[str, float] = {}
 _tv_lock = threading.Lock()
 
 
@@ -94,34 +99,57 @@ def check_token_version(token: str, user_id: str, claimed: int, akid: str = "", 
     key = f"{user_id}|{akid}" if akid else user_id
     with _tv_lock:
         cached = _tv_cache.get(key)
+        paused_until = _tv_paused.get(key, 0.0)
     if cached and now - cached[1] < TOKEN_VERSION_CACHE_SECONDS and claimed <= cached[0]:
         _compare_token_version(claimed, cached[0], sign_in, cached[2])
+        return
+    if now < paused_until:
+        # auth-service could not read this user's version a moment ago: answered as that failure, not asked again yet.
+        _outage_verdict(claimed, sign_in, cached, now)
         return
     try:
         current, signed_out = _fetch_token_version(token, user_id)
     except TokenRevokedError:
         with _tv_lock:
             _tv_cache.pop(key, None)
+            _tv_paused.pop(key, None)
         raise HTTPException(status_code=401, detail="Token revoked")
     except Exception:
-        if cached and now - cached[1] < TOKEN_VERSION_STALE_SECONDS:
-            # Outage: the signature proves auth-service issued the token at
-            # version `claimed`, so anything not older than what we last saw
-            # passes; an older one was revoked before the outage, and a sign-in
-            # seen signed out stays so.
-            if claimed < cached[0] or (sign_in and sign_in in cached[2]):
-                raise HTTPException(status_code=401, detail="Token revoked")
-            return
-        # Not taken on trust, nor revoked: 503 to be asked again, since a 401 signs the console out
-        # (services/pkg/auth RefuseSessionUnreadable).
-        raise HTTPException(
-            status_code=503,
-            detail="Session could not be checked; try again",
-            headers={"Retry-After": str(SESSION_UNREADABLE_RETRY_AFTER)},
-        )
+        _pause_after_failure(key)
+        _outage_verdict(claimed, sign_in, cached, now)
+        return
     with _tv_lock:
         _tv_cache[key] = (current, now, signed_out)
+        _tv_paused.pop(key, None)
     _compare_token_version(claimed, current, sign_in, signed_out)
+
+
+def _outage_verdict(claimed: int, sign_in: int, cached: Optional[Tuple[int, float, FrozenSet[int]]], now: float) -> None:
+    """A token whose version auth-service could not read. The signature proves auth-service issued it at version
+    `claimed`, so with a version read within the stale window anything not older passes; an older one was revoked
+    before the outage, and a sign-in seen signed out stays so. With none it is refused, not taken on trust, with 503 to
+    be asked again, since a 401 signs the console out (services/pkg/auth RefuseSessionUnreadable)."""
+    if cached and now - cached[1] < TOKEN_VERSION_STALE_SECONDS:
+        if claimed < cached[0] or (sign_in and sign_in in cached[2]):
+            raise HTTPException(status_code=401, detail="Token revoked")
+        return
+    raise HTTPException(
+        status_code=503,
+        detail="Session could not be checked; try again",
+        headers={"Retry-After": str(SESSION_UNREADABLE_RETRY_AFTER)},
+    )
+
+
+def _pause_after_failure(key: str) -> None:
+    """No lookup for key for TOKEN_VERSION_FAILURE_PAUSE_SECONDS, the ended pauses let go. A revocation is not held
+    back: none can be read while the lookup fails, and the first lookup after the pause reads it."""
+    if TOKEN_VERSION_FAILURE_PAUSE_SECONDS <= 0:
+        return
+    now = time.monotonic()
+    with _tv_lock:
+        for k in [k for k, until in _tv_paused.items() if until <= now]:
+            del _tv_paused[k]
+        _tv_paused[key] = now + TOKEN_VERSION_FAILURE_PAUSE_SECONDS
 
 # Cluster id the services fall back to when a request names none (mirrors
 # k8s-service ClusterMiddleware / tool-server resolveClusterKubeconfig).

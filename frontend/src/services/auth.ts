@@ -177,24 +177,16 @@ export function clearRedirectAfterLogin() {
   }
 }
 
-// What a failed read of the session (GET /auth/me) says. A 4xx is the server's answer that the sign-in is over; a 5xx,
-// a timeout or no answer (the server or its database restarting, a 503 with Retry-After) says nothing about it, so
-// the page keeps what it shows and asks again.
+// What a failed read of the session (GET /auth/me) says. A 401 is the server's answer that the sign-in is over, the
+// one every service gives a token that does not stand. Anything else (a 503 while the database restarts, a 429, a
+// timeout, no answer) says nothing about the sign-in: the page keeps what it shows and asks again.
 export function sessionReadSaysSignedOut(error: unknown): boolean {
-  const status = (error as { response?: { status?: unknown } } | null | undefined)?.response?.status
-  return typeof status === 'number' && status >= 400 && status < 500
+  return (error as { response?: { status?: unknown } } | null | undefined)?.response?.status === 401
 }
 
-// How many times RequireAuth asks /auth/me again after a failure that says nothing of the sign-in (about 30 s).
-export const SESSION_READ_RETRIES = 5
-
-/** The retry of RequireAuth's /auth/me read: never after the server's answer that the sign-in is over. */
-export const retrySessionRead = (failureCount: number, error: unknown): boolean =>
-  !sessionReadSaysSignedOut(error) && failureCount < SESSION_READ_RETRIES
-
-/** Whether a failed /auth/me read sends the page to sign in: the server said so, or there is no session read to keep. */
-export const signInAfterSessionRead = (error: unknown, hasSession: boolean): boolean =>
-  sessionReadSaysSignedOut(error) || !hasSession
+/** The retry of RequireAuth's /auth/me read: never after the server's answer that the sign-in is over, else on and on
+ * at react-query's growing waits (up to 30 s). */
+export const retrySessionRead = (_failureCount: number, error: unknown): boolean => !sessionReadSaysSignedOut(error)
 
 // A WebSocket the server closed because the session it opened with no longer stands (auth.SessionEndedCloseCode).
 // One the server closed because it could not check the session (1013, auth.SessionRetryCloseCode) connects again.

@@ -34,7 +34,8 @@ import {
 import { KIND_ICONS as K } from './kindIcons'
 import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
-import { logoutSession, signInAfterSessionRead } from '@/services/auth'
+import { logoutSession } from '@/services/auth'
+import { useSignInOnSessionEnd } from '@/hooks/useSignInOnSessionEnd'
 import ForbiddenBanner from './ForbiddenBanner'
 import WatchProblemNotice from './WatchProblemNotice'
 import { CreatedNotice } from './CreatedNotice'
@@ -140,13 +141,8 @@ export default function Layout() {
     }
   }, [location.pathname, isMeLoading])
 
-  // a read the server could not answer keeps the page (services/auth signInAfterSessionRead)
-  const meSignIn = isMeError && signInAfterSessionRead(meError, me !== undefined)
-  useEffect(() => {
-    if (!meSignIn) return
-    queryClient.clear()
-    navigate('/login')
-  }, [meSignIn, navigate, queryClient])
+  // only the server's 401 ends the sign-in; a read it could not answer keeps the page
+  useSignInOnSessionEnd(isMeError, meError)
 
   useEffect(() => {
     const checkClusterStatus = async () => {

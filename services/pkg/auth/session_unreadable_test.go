@@ -84,3 +84,56 @@ func TestSessionEndCloseCodeLetsAnUncheckedSessionConnectAgain(t *testing.T) {
 		}
 	}
 }
+
+// While auth-service cannot read a user's version, that user's requests within TokenVersionFailurePause get the
+// failure's answer without asking again; other users still ask, and the first ask after the pause reads a revocation
+// at once. A version seen older before the outage stays refused during the pause.
+func TestValidate_AFailedLookupIsNotAskedAgainWithinThePause(t *testing.T) {
+	j := newJWKSServer(t, "k1")
+	tv := newTVServer(t, 3)
+	const pause = 150 * time.Millisecond
+	v := NewJWTValidator(JWKSConfig{JWKSURL: j.srv.URL, Issuer: "iss", Audience: "aud", TokenVersionURL: tv.srv.URL,
+		TokenVersionCacheTTL: time.Millisecond, TokenVersionStaleTTL: time.Minute, TokenVersionFailurePause: pause})
+	u2 := func(tvClaim int) string {
+		return signClaims(t, j.key, "k1", map[string]any{"sub": "u2", "tv": tvClaim})
+	}
+
+	// u1 read once, then auth-service cannot read its database
+	if _, err := v.Validate(signWithTV(t, j.key, "k1", 3)); err != nil {
+		t.Fatalf("prime: %v", err)
+	}
+	time.Sleep(2 * time.Millisecond)
+	tv.status.Store(http.StatusServiceUnavailable)
+	before := tv.calls.Load()
+	for i := 0; i < 5; i++ {
+		if _, err := v.Validate(signWithTV(t, j.key, "k1", 3)); err != nil {
+			t.Fatalf("u1 bridged from its version read before: %v", err)
+		}
+	}
+	if _, err := v.Validate(signWithTV(t, j.key, "k1", 2)); !errors.Is(err, ErrTokenRevoked) {
+		t.Fatalf("a version older than the one read before, in the pause: %v, want revoked", err)
+	}
+	if got := tv.calls.Load() - before; got != 1 {
+		t.Fatalf("u1 asked auth-service %d times within the pause, want 1", got)
+	}
+
+	// another user is asked for, once, and refused as unreadable for its pause
+	for i := 0; i < 3; i++ {
+		if _, err := v.Validate(u2(0)); !errors.Is(err, ErrSessionUnreadable) {
+			t.Fatalf("u2 never read: %v, want unreadable", err)
+		}
+	}
+	if got := tv.calls.Load() - before; got != 2 {
+		t.Fatalf("asks = %d, want one more for u2", got)
+	}
+
+	// after the pause: the next request asks, and a revocation is read at once
+	time.Sleep(pause + 20*time.Millisecond)
+	tv.status.Store(http.StatusNotFound)
+	if _, err := v.Validate(signWithTV(t, j.key, "k1", 3)); !errors.Is(err, ErrTokenRevoked) {
+		t.Fatalf("after the pause, a user gone: %v, want revoked", err)
+	}
+	if got := tv.calls.Load() - before; got != 3 {
+		t.Fatalf("asks = %d, want one more after the pause", got)
+	}
+}
