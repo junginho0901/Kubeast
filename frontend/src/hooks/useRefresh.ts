@@ -27,10 +27,26 @@ export async function readFailure(read: () => Promise<unknown>, now: () => Date 
 // A list's Refresh: one read past the server's cache of the list, made as the list's own read. The list keeps its place
 // in the cache, so its screen has nothing left to read after it (a list taken out and written back is a new one, which
 // the screen reads again), and the frames of its watch that come while the read is on its way are applied again to the
-// answer (followList). A read of the list already on its way gives way to it; a failed one is not tried again.
+// answer (followList). A read of the list already on its way gives way to it; a failed one is not tried again. A read
+// asked for while it is on its way (a RESYNC, an invalidate after a delete) takes its place and answers for it with the
+// page's own read, from the server's cache: then it reads past the cache once more.
 export async function refreshList<T>(queryClient: QueryClient, queryKey: QueryKey, read: () => Promise<T>): Promise<T> {
-  await queryClient.cancelQueries({ queryKey, exact: true })
-  return queryClient.fetchQuery({ queryKey, queryFn: read, staleTime: 0, retry: false })
+  for (let again = false; ; again = true) {
+    await queryClient.cancelQueries({ queryKey, exact: true })
+    const own: { came: boolean; answer?: T } = { came: false }
+    const answer = await queryClient.fetchQuery({
+      queryKey,
+      queryFn: async () => {
+        const got = await read()
+        own.came = true
+        own.answer = got
+        return got
+      },
+      staleTime: 0,
+      retry: false,
+    })
+    if (again || (own.came && own.answer === answer)) return answer
+  }
 }
 
 // A page's Refresh: runs the read (which must reject when it fails — invalidateQueries and refetchQueries do so only

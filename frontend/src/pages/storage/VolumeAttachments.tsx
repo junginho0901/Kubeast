@@ -269,7 +269,8 @@ spec:
       </div>
 
       <div className="card flex-1 min-h-0 flex flex-col" ref={tableContainerRef}>
-        {isError && (
+        {/* a list with rows says a failed Refresh once, under the header */}
+        {isError && volumeAttachments === undefined && (
           <div className="px-4 py-3 border-b border-slate-800">
             <p className="text-xs text-amber-300 break-words" data-testid="volumeattachments-read-failed">
               {tr('common.readFailed', 'Could not read the list: {{reason}}', { reason: failureText(readError) })}

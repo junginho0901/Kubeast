@@ -64,7 +64,8 @@ test.describe("a list's Refresh reads the list once", () => {
     test(screen, async ({ page }) => {
       await page.goto(screen)
       const refresh = page.locator('.page-head').first().getByRole('button', { name: /^(Refresh|새로고침)$/ }).first()
-      test.skip(!(await refresh.waitFor({ timeout: 20_000 }).then(() => true, () => false)), `${screen} shows no Refresh`)
+      // each of these screens has a Refresh: one not found is a failure, not a skip
+      await expect(refresh, `${screen} shows its Refresh`).toBeVisible({ timeout: 20_000 })
       await page.waitForLoadState('networkidle')
       const reads: string[] = []
       page.on('request', (request) => {

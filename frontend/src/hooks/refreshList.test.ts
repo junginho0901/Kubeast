@@ -105,6 +105,42 @@ describe("a list's Refresh", () => {
     page.stop()
   })
 
+  // A RESYNC's read, a read on the clock or an invalidate after a delete, asked for while the Refresh reads, takes its
+  // place in the query and answers for it with the page's own read, from the server's cache.
+  it('ends on a read past the cache when another read of the list took its place on the way', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const answers: Array<(rows: unknown[]) => void> = []
+    const reads = vi.fn(() => new Promise<unknown[]>((resolve) => answers.push(resolve)))
+    const page = screen(client, reads)
+    await sleep(5)
+    answers.shift()!([row('web')])
+    await sleep(5)
+
+    const forcedAnswers: Array<(rows: unknown[]) => void> = []
+    const forced = vi.fn(() => new Promise<unknown[]>((resolve) => forcedAnswers.push(resolve)))
+    let ended = false
+    const done = refreshList(client, listKey, forced).then((rows) => {
+      ended = true
+      return rows
+    })
+    await sleep(5)
+    // a drawing while it reads gives the query the page's options again
+    page.draw()
+    void client.invalidateQueries({ queryKey: listKey })
+    await sleep(5)
+    expect(reads).toHaveBeenCalledTimes(2)
+    answers.shift()!([row('web')])
+    await sleep(5)
+    forcedAnswers.shift()?.([row('new'), row('web')])
+    await sleep(5)
+    expect(ended, 'the Refresh had not ended on the page\'s read').toBe(false)
+    forcedAnswers.shift()?.([row('new'), row('web')])
+    await done
+
+    expect(names(client.getQueryData(listKey))).toEqual(['new', 'web'])
+    page.stop()
+  })
+
   it('that fails is not tried again and keeps the rows', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false, retry: 1 } } })
     const page = screen(client, async () => [row('web')])
