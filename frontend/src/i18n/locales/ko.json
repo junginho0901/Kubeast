@@ -3889,6 +3889,7 @@
     "subtitle": "회원가입 시 선택할 수 있는 팀 목록을 관리합니다.",
     "teamTitle": "팀",
     "teamSubtitle": "팀 / 그룹",
+    "nameLabel": "팀 이름",
     "inputPlaceholder": "이름 입력...",
     "searchPlaceholder": "팀 이름으로 검색...",
     "add": "추가",

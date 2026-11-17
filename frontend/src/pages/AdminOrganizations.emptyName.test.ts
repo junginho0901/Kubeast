@@ -150,3 +150,17 @@ describe('Teams: Add with no name', () => {
     expect(ui.resets).toBe(0)
   })
 })
+
+describe('Teams: the name field', () => {
+  it('has a label naming it, in each language', () => {
+    for (const [lang, text] of [['en', 'Team name'], ['ko', '팀 이름']] as const) {
+      ui.lang = lang
+      const tree = page()
+      const id = nameField(tree).id
+      expect(typeof id === 'string' && id !== '', `${lang}: the field has an id`).toBe(true)
+      expect(elementsOf(tree, (p) => p.id === id), `${lang}: the id is the field's alone`).toHaveLength(1)
+      const labels = elementsOf(tree, (p, type) => type === 'label' && p.htmlFor === id)
+      expect(labels.map((l) => textsOf(l).join('')), `${lang}: the label for the field`).toEqual([text])
+    }
+  })
+})

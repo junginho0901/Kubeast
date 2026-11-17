@@ -3779,6 +3779,7 @@
     "subtitle": "Manage the list of Teams that users can select during registration.",
     "teamTitle": "Team",
     "teamSubtitle": "Teams / Groups",
+    "nameLabel": "Team name",
     "inputPlaceholder": "Enter name...",
     "searchPlaceholder": "Search teams by name...",
     "add": "Add",
