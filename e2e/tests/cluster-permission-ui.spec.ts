@@ -5,6 +5,8 @@ import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test'
 
+import { waitUntilListed } from './number-check.cr-shared'
+
 // What a Write user and a Read user limited to one namespace are shown is the cluster's answer for the identity Kubeast
 // acts as (X-Kubeast-Access, then kubectl auth can-i): a drawer's "Delete <Kind>" and the Create buttons of Endpoints,
 // EndpointSlices, ResourceQuotas and LimitRanges show only where the cluster allows the action, and the Node, Namespace
@@ -134,7 +136,8 @@ async function refusal(drawer: Locator): Promise<string> {
 }
 
 test.describe('buttons and drawers follow the cluster\'s answer', () => {
-  test.beforeAll(() => {
+  test.beforeAll(async () => {
+    test.setTimeout(120_000)
     const which = spawnSync('kind', ['get', 'kubeconfig', '--name', KIND_CLUSTER], { encoding: 'utf8' })
     if (which.status !== 0) {
       ready = `no kind cluster ${KIND_CLUSTER} (kind get kubeconfig)`
@@ -157,6 +160,7 @@ test.describe('buttons and drawers follow the cluster\'s answer', () => {
       { apiVersion: `${RBAC}/v1`, kind: 'RoleBinding', metadata: { name: `${PREFIX}-view`, namespace: NS_A, labels: LABELS }, roleRef: { apiGroup: RBAC, kind: 'ClusterRole', name: 'view' }, subjects: [{ apiGroup: RBAC, kind: 'Group', name: 'kubeast:role:read' }] },
     ]))
     kubectl(['wait', '--for', 'condition=Established', `crd/${CRD}`, '--timeout=60s'])
+    await waitUntilListed((args) => kubectl(args.split(' '), undefined, true), [CRD])
     for (let i = 0; ; i++) {
       const r = spawnSync('kubectl', ['--kubeconfig', kubeconfig, 'apply', '-f', '-'], { encoding: 'utf8', input: asList([{ apiVersion: `${CR_GROUP}/v1`, kind: 'PermCheck', metadata: { name: 'cpui-pc', namespace: NS_A, labels: LABELS }, spec: { note: 'cpui' } }]) })
       if (r.status === 0) break
