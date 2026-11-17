@@ -112,6 +112,14 @@ autoscaling:
 - k8s-service 파드는 Cluster View의 노드 칸을 저마다의 informer로 답하고, 모든 네임스페이스를 볼 수 있는 사람에게 준 답을 들고 있습니다. 노드 256개와 답 8 MiB(파드당 약 300바이트)까지이고, 파드 행은 들고 있지 않습니다. 한 노드의 칸은 그 노드의 파드가 그대로인 동안 k8s-service 파드마다 한 번 만듭니다.
 - 파드를 지키는 한도(메모리, 동시 작업, 실시간 감시 `multicluster.wsMaxSubscriptions`와 그 열기 `multicluster.wsWatchOpeningConcurrency`)는 파드마다입니다. 클러스터로 보내는 요청 속도(`multicluster.clientQPS`)도 파드마다라, N대면 N배까지 보낼 수 있습니다.
 
+## EKS에서 잰 것
+
+아래는 t3.medium 온디맨드 노드 3대의 EKS 1.35 클러스터를 파드 IP로 보내는 내부 AWS Application Load Balancer(AWS Load Balancer Controller v3.6.2) 뒤에 두고, 차트와 로드 밸런서의 기본값 그대로, 파드 준비 게이트 없이 잰 것입니다.
+같은 클러스터에서 0.7.7부터 올린 업그레이드의 숫자는 [0.7.7에서 0.7.8로 업그레이드](upgrade-0.7.8.md#2-업그레이드)에, `preStop` 기다림의 숫자는 [저절로 바뀌는 것](upgrade-0.7.8.md#4-저절로-바뀌는-것)에 있습니다.
+
+- **노드 드레인**: 2대 이상 띄울 수 있는 일곱 서비스를 2대씩과 그 PodDisruptionBudget으로 두고, 그 서비스마다 파드 하나씩과 Redis 파드가 있던 노드(차트 내장 PostgreSQL은 다른 노드에 있었음)를 `kubectl drain`으로 비우는 데 10초 걸렸고, PodDisruptionBudget이 막은 내보내기는 없었습니다. 노드를 비우고 그 인스턴스가 새 노드로 바뀌는 동안 로드 밸런서를 거친 요청 중 실패한 것은 없었고, 로드 밸런서를 거쳐 1초마다 `/healthz`와 대시보드 개요를 읽을 때 답이 없던 초는 없었으며, 실시간 목록은 1.1초 안에 다시 붙었습니다.
+- **HPA**: k8s-service와 gateway에 차트의 autoscaling 기본값(파드 2~3개, CPU 80 %, `behavior` 비움)으로 HPA를 켜고, 클러스터 안의 클라이언트 32개가 240초 동안 gateway를 거쳐 목록을 읽자 둘 다 58초 안에 파드 3개가 되었고, 부하가 끝나고 337초 뒤 둘 다 2개로 돌아왔습니다. HPA를 켜자 위에 적은 대로 HPA가 처음 맞출 때까지 Deployment마다 파드가 하나가 되었고, 실시간 목록이 한 번 닫혔다가 1.2초 안에 다시 붙었습니다. 파드가 늘고 주는 동안에도, HPA를 켜고 끌 때도 로드 밸런서를 거친 요청 중 실패한 것은 없었습니다.
+
 ## 크기 표
 
 아래 칸은 [아키텍처](architecture.md#많은-사람이-큰-클러스터를-쓸-때)의 "많은 사람이 큰 클러스터를 쓸 때"와 같은 방식으로 잰 부하 시험으로 채웁니다.

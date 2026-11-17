@@ -112,6 +112,14 @@ Check it with `kubectl -n <namespace> get hpa`.
 - Each k8s-service pod answers Cluster View's node boxes from its own informers and keeps the answers it gave the people who may see every namespace: at most 256 nodes and 8 MiB of answers (about 300 bytes a pod), and no pod row. A node's box is made once in each pod while the node's pods stay the same.
 - Limits that protect a pod — memory, work at once, live watches (`multicluster.wsMaxSubscriptions`) and their openings (`multicluster.wsWatchOpeningConcurrency`) — are per pod. So is the client rate to a cluster (`multicluster.clientQPS`): N pods can send N times as much.
 
+## Measured on EKS
+
+These were measured on an EKS 1.35 cluster of three t3.medium on-demand nodes, behind an internal AWS Application Load Balancer that sends to pod IPs (AWS Load Balancer Controller v3.6.2), with the chart's and the load balancer's defaults and no pod readiness gate.
+The same cluster's numbers for the upgrade from 0.7.7 are in [Upgrading from 0.7.7 to 0.7.8](upgrade-0.7.8.md#2-upgrade), and those for the `preStop` wait in [What changes by itself](upgrade-0.7.8.md#4-what-changes-by-itself).
+
+- **Node drain**: with two pods of each of the seven services that can run more than one, and their PodDisruptionBudgets, draining a node that held one pod of each and the Redis pod (the chart's PostgreSQL was on another node) with `kubectl drain` took 10 s, and the PodDisruptionBudgets held back no eviction. While the node was drained and its instance replaced by a new node, no request through the load balancer failed, reading `/healthz` and the dashboard overview through it once a second had no second without an answer, and the live list was back within 1.1 s.
+- **HPA**: with an HPA on k8s-service and gateway at the chart's autoscaling defaults (2 to 3 pods at 80 % CPU, `behavior` empty), 32 clients in the cluster reading lists through the gateway for 240 s took both to 3 pods within 58 s, and both were back to 2 pods 337 s after the load ended. Turning the HPAs on took each Deployment to one pod until the HPA's first sync, as above, and closed the live list once, which was back within 1.2 s. No request through the load balancer failed while pods were added and removed, nor when the HPAs were turned on and off.
+
 ## Sizing
 
 The rows below are filled from load runs measured the same way as "Many users" in [Architecture](architecture.md#many-users).
