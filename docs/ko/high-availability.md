@@ -28,7 +28,7 @@ Kubeast의 서비스는 기본으로 하나씩 파드 1개로 뜹니다.
 - **Redis**: k8s-service나 tool-server를 2대 이상 띄우려면 `redis.enabled: true`(차트 기본값)를 그대로 두세요.
 - **노드**: 차트는 한 서비스의 파드를 영역(zone)과 노드에 나눠 놓습니다(`topologySpread.enabled`). 강제가 아니라 권장(`ScheduleAnyway`)이라, 파드 2개가 노드 2개에 가려면 받을 수 있는 노드가 2개 있어야 합니다. 노드가 1개면 같은 노드에 갑니다.
 - **마이그레이션**: auth-service를 2대 이상 띄우거나 데이터베이스가 크면 `migrations.mode: job`으로 두세요. `startup`이면 같이 뜬 파드들이 마이그레이션 잠금을 서로 기다리고, 기다림이 시작 확인(startup probe) 180초를 넘으면 기다리던 파드가 재시작됩니다.
-- **로드 밸런서**: 파드 IP로 보내는 로드 밸런서(IP 모드의 AWS Load Balancer Controller) 뒤라면 네임스페이스에 `elbv2.k8s.aws/pod-readiness-gate-inject: enabled` 라벨을 붙여, 새 파드가 대상으로 정상이 된 뒤에만 요청을 받게 하세요. `podShutdown.preStopSeconds`는 로드 밸런서가 떠나는 파드에 새 요청을 그만 보낼 때까지보다 길게 두세요(docs/ko/configuration.md). 기본 해제 지연(deregistration delay, 300초)의 AWS Application Load Balancer 뒤에서 기본 5초로 게이트웨이 파드 하나나 둘을 바꾸는 동안 실패한 요청은 없었습니다(EKS 1.35, AWS Load Balancer Controller v3.6.2).
+- **로드 밸런서**: 파드 IP로 보내는 로드 밸런서(IP 모드의 AWS Load Balancer Controller) 뒤라면 네임스페이스에 `elbv2.k8s.aws/pod-readiness-gate-inject: enabled` 라벨을 붙여, 새 파드가 대상으로 정상이 된 뒤에만 요청을 받게 하세요. `podShutdown.preStopSeconds`는 로드 밸런서가 떠나는 파드에 새 요청을 그만 보낼 때까지보다 길게 두세요(docs/ko/configuration.md). 기본 해제 지연(deregistration delay, 300초)의 AWS Application Load Balancer 뒤에서 기본 5초로 게이트웨이 파드 하나나 둘을 바꾸는 동안 실패한 요청은 준비 게이트가 있을 때도 없을 때도 없었습니다. 준비 게이트가 있을 때는 정상인 게이트웨이 대상이 없던 초도 없었습니다(EKS 1.35, AWS Load Balancer Controller v3.6.2).
 - **데이터베이스 연결**: 파드마다 자기 연결 풀을 엽니다. 띄울 파드 수를 아래 표에 곱해 더하고, 합이 데이터베이스의 `max_connections`보다 작게 하세요.
 
 | 서비스 | 파드당 연결, 최대 | 수의 근거 |
