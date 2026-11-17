@@ -20,6 +20,12 @@ async function adminHeaders(request: APIRequestContext) {
 
 type ErrorEvent = { error: string; error_key: string; error_args: Record<string, string> }
 
+// Each ai-service replica reuses the economy config it read for 30 s, and a change clears it on the replica that took
+// the change only: a question that reaches another replica soon after a config is made can still run on the config
+// before it. That question is asked again, on a new conversation; one sent after this time is held to its answer.
+const CONFIG_REUSED_MS = 35_000
+const REFUSED = 'AI 모델을 호출하지 못했습니다'
+
 // One economy config on the stand-in for the call, with the time it was made; it and the session are removed after.
 async function withStubModel<T>(request: APIRequestContext, headers: Record<string, string>, path: string, fn: (configName: string, madeAt: number) => Promise<T>, endpoint = STUB) {
   const name = `e2e-refusal-${path.split('/')[0]}-${Date.now().toString(36)}`
@@ -36,25 +42,31 @@ async function withStubModel<T>(request: APIRequestContext, headers: Record<stri
   }
 }
 
-async function floatingError(request: APIRequestContext, headers: Record<string, string>): Promise<ErrorEvent> {
+// The events of one floating chat question on a new session
+async function floatingEvents(request: APIRequestContext, headers: Record<string, string>): Promise<Record<string, unknown>[]> {
   const session = await request.post('/api/v1/sessions?cluster=self', { headers, data: { title: `e2e-refusal-${Date.now().toString(36)}` } })
   const sid = (await session.json()).id as string
   try {
     const res = await request.post(`/api/v1/ai/sessions/${sid}/floating-chat?cluster=self`, { headers, data: { message: 'hi' }, timeout: 120_000 })
-    const events = (await res.text()).split('\n').filter((l) => l.startsWith('data: {')).map((l) => JSON.parse(l.slice(6)))
-    const err = events.find((e) => typeof e.error === 'string')
-    expect(err, JSON.stringify(events).slice(0, 500)).toBeTruthy()
-    return err as ErrorEvent
+    return (await res.text()).split('\n').filter((l) => l.startsWith('data: {')).map((l) => JSON.parse(l.slice(6)))
   } finally {
     await request.delete(`/api/v1/sessions/${sid}`, { headers })
   }
 }
 
-// Each ai-service replica reuses the economy config it read for 30 s, and a change clears it on the replica that took
-// the change only: a question that reaches another replica soon after a config is made can still run on the config
-// before it. That question is asked again in a new conversation; one sent after this time is held to its answer.
-const CONFIG_REUSED_MS = 35_000
-const REFUSED = 'AI 모델을 호출하지 못했습니다'
+// The floating chat's error on the config made at madeAt, asked until it is of the kind `key` or was asked after the
+// time a replica reuses the config before; that error is returned, and none fails.
+async function floatingError(request: APIRequestContext, headers: Record<string, string>, madeAt: number, key: string): Promise<ErrorEvent> {
+  for (;;) {
+    const sentAt = Date.now()
+    const events = await floatingEvents(request, headers)
+    const err = events.find((e) => typeof e.error === 'string') as ErrorEvent | undefined
+    if (err?.error_key === key || sentAt - madeAt > CONFIG_REUSED_MS) {
+      expect(err, JSON.stringify(events).slice(0, 500)).toBeTruthy()
+      return err as ErrorEvent
+    }
+  }
+}
 
 // The floating assistant on the home page in Korean, asked 안녕 until its answer has `expected` or was asked after the
 // time a replica reuses the config made at madeAt. The panel is returned with that answer under the question.
@@ -88,7 +100,7 @@ test.describe('AI provider refusals', () => {
       ['credit/v1', 'modelCredit', 'insufficient_quota'], ['rate/v1', 'modelRateLimit', 'Rate limit reached'],
       ['auth/v1', 'modelAuth', 'Incorrect API key'], ['down/v1', 'modelUnavailable', 'overloaded'],
     ]) {
-      const err = await withStubModel(request, headers, path, () => floatingError(request, headers))
+      const err = await withStubModel(request, headers, path, (_name, madeAt) => floatingError(request, headers, madeAt, key))
       expect(err.error_key, `${path}: ${err.error}`).toBe(key)
       expect(err.error_args.provider).toBe('OpenAI-compatible')
       expect(err.error_args.detail).toContain(words) // the provider's own words stay, masked
@@ -111,7 +123,7 @@ test.describe('AI provider refusals', () => {
   test('a model address refused when connecting says so to whoever asked, without the address', async ({ page, request }) => {
     test.skip(!hasStandIn(), STAND_IN_SKIP)
     const headers = await adminHeaders(request)
-    const err = await withStubModel(request, headers, 'v1', () => floatingError(request, headers), STAND_IN)
+    const err = await withStubModel(request, headers, 'v1', (_name, madeAt) => floatingError(request, headers, madeAt, 'modelAddress'), STAND_IN)
     expect(err.error_key, err.error).toBe('modelAddress')
     expect(err.error_args.provider).toBe('OpenAI-compatible')
     expect(JSON.stringify(err)).not.toContain(STAND_IN_ADDRESS)

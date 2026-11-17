@@ -6,6 +6,7 @@ import path from 'node:path'
 import { test, expect, type Locator, type Page } from '@playwright/test'
 
 import { everyPage } from './drawer-pages'
+import { waitUntilListed } from './number-check.cr-shared'
 
 // One Kind of two groups with one name, where a screen picked by Kind and name: on default, a StatefulSet of apps/v1
 // and one of a group of this run's own (as OpenKruise's Advanced StatefulSet is Kind StatefulSet of apps.kruise.io),
@@ -141,6 +142,7 @@ test.describe('number check — one Kind of two groups where a screen picked by 
     try {
       kc('apply --server-side --field-manager=e2e-two-group-refs -f -', JSON.stringify(crd(GROUP, 'StatefulSet', 'statefulsets', [{ name: 'v1beta1', storage: true }])))
       kc(`wait --for=condition=Established crd/statefulsets.${GROUP} --timeout=60s`)
+      await waitUntilListed(kc, [`statefulsets.${GROUP}`])
       kc(`create namespace ${NS}`)
       kc(`label namespace ${NS} ${LABEL}`)
       const container = { name: 'app', image: 'registry.k8s.io/pause:3.10', imagePullPolicy: 'IfNotPresent', resources: { requests: REQUESTS } }
@@ -308,6 +310,7 @@ test.describe('number check — one Kind of two groups where a screen picked by 
         ],
       }))
       kc(`wait --for=condition=Established ${GROUPS.map((g) => `crd/widgets.${g}`).join(' ')} --timeout=60s`)
+      await waitUntilListed(kc, GROUPS.map((g) => `widgets.${g}`))
       kc(`create namespace ${NS}`)
       kc(`label namespace ${NS} ${LABEL}`)
       const refs = {
