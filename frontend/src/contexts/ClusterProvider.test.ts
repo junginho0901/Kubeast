@@ -51,7 +51,7 @@ import { useForbiddenLabels } from '@/services/forbiddenStore'
 import { announceCreated, useCreatedNotice } from '@/services/createdNoticeStore'
 import { recordWatchFrame, useWatchProblem } from '@/services/watchProblemStore'
 import { ResourceDetailProvider } from '@/components/ResourceDetailProvider'
-import { selectionSettled } from '@/hooks/useAccessibleClusterSelection'
+import { selectionSettled, useClusterList } from '@/hooks/useAccessibleClusterSelection'
 import ClusterGate from '@/components/ClusterGate'
 import { everyUntilRefused, queryDefaults } from '@/services/queryDefaults'
 import { useResourceDetail, type ResourceDetailTarget } from '@/components/ResourceDetailContext'
@@ -64,6 +64,7 @@ const NAMED_ANSWERS = ['/cluster/metrics/top-resources', '/cluster/features', '/
 const ONLY_SELF = ['/clusters', '/cluster/overview', '/cluster/nodes', '/cluster/pods/page']
 // the clusters the person may reach, as /clusters?accessibleOnly answers, and failures it answers first, one a read
 let registry: string[] = ['self']
+let health: Record<string, string> = {}
 let listFailures: { status: number; retryAfter?: string }[] = []
 client.defaults.adapter = async (config: InternalAxiosRequestConfig) => {
   const params = (config.params ?? {}) as Record<string, string>
@@ -76,7 +77,7 @@ client.defaults.adapter = async (config: InternalAxiosRequestConfig) => {
       const headers = failure.retryAfter ? { 'retry-after': failure.retryAfter } : {}
       throw new AxiosError('Request failed', 'ERR_BAD_RESPONSE', config, null, { status: failure.status, statusText: '', data: { detail: 'Session could not be checked; try again' }, headers, config })
     }
-    if (config.url === '/clusters') return { data: { items: registry.map((id) => ({ id, display_name: id })) }, status: 200, statusText: 'OK', headers: {}, config }
+    if (config.url === '/clusters') return { data: { items: registry.map((id) => ({ id, display_name: id, health_status: health[id] ?? 'healthy' })) }, status: 200, statusText: 'OK', headers: {}, config }
     if (config.url === '/cluster/overview') return { data: {}, status: 200, statusText: 'OK', headers: {}, config }
     throw new AxiosError('Request failed', 'ERR_BAD_REQUEST', config, null, { status: 403, statusText: '', data: {}, headers: {}, config })
   }
@@ -324,6 +325,12 @@ describe('the screens and the selection of a cluster', () => {
     shown = useCluster().currentCluster
     return null
   }
+  // the picker's list: each cluster's health dot
+  let listed: Record<string, string | undefined> = {}
+  function Listed() {
+    listed = Object.fromEntries((useClusterList().data ?? []).map((c) => [c.id, c.health_status]))
+    return null
+  }
   let client_: QueryClient
   const stored = () => window.localStorage.getItem('kubeast:current-cluster')
   const reads = (path: string, cluster: string) => {
@@ -346,13 +353,14 @@ describe('the screens and the selection of a cluster', () => {
     await act(async () => {
       root.render(createElement(MemoryRouter, { initialEntries: ['/'] },
         createElement(QueryClientProvider, { client: client_ },
-          createElement(ClusterProvider, null, createElement(Shown), createElement(Picker), createElement(Body)))))
+          createElement(ClusterProvider, null, createElement(Shown), createElement(Listed), createElement(Picker), createElement(Body)))))
     })
   }
   const end = async () => {
     await act(async () => root.unmount())
     vi.useRealTimers()
     registry = ['self']
+    health = {}
     listFailures = []
   }
 
@@ -443,13 +451,15 @@ describe('the screens and the selection of a cluster', () => {
     try {
       await start({ clusters: ['default', 'self'], storedAs: 'default' })
       await pass(3_000)
-      expect(pageReads('default')).toEqual({ nodes: once, pods: once, overview: once })
+      expect({ ...pageReads('default'), listed }).toEqual({ nodes: once, pods: once, overview: once, listed: { default: 'healthy', self: 'healthy' } })
       sentReads.length = 0
       fallback.drawn = 0
+      // the cluster to switch to went unhealthy since the list was read: the switch reads the list again behind it
+      health = { self: 'unhealthy' }
       await act(async () => pick('self'))
       await pass(65_000)
-      expect({ shown, fallbackDrawn: fallback.drawn, nodes: reads('/cluster/nodes', 'self'), pods: reads('/cluster/pods/page', 'self'), leftBehind: sentReads.filter((r) => r.includes('cluster=default')) })
-        .toEqual({ shown: 'self', fallbackDrawn: 0, nodes: once, pods: once, leftBehind: [] })
+      expect({ shown, fallbackDrawn: fallback.drawn, listAsked: sentReads.filter((r) => r.startsWith('/clusters ')).length, listed, nodes: reads('/cluster/nodes', 'self'), pods: reads('/cluster/pods/page', 'self'), leftBehind: sentReads.filter((r) => r.includes('cluster=default')) })
+        .toEqual({ shown: 'self', fallbackDrawn: 0, listAsked: 1, listed: { default: 'healthy', self: 'unhealthy' }, nodes: once, pods: once, leftBehind: [] })
     } finally {
       await end()
     }

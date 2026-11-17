@@ -19,7 +19,8 @@ const CLUSTER_INDEPENDENT_KEYS = new Set<string>([
   'session',
   'clusters',
   // the registry as the person may reach it (/clusters answers the same whatever cluster is selected), which the
-  // screens' gate waits on (ClusterGate): emptied without asking, the screens would wait with nothing asking it again
+  // screens' gate waits on (ClusterGate): emptied without asking, the screens would wait with nothing asking it again.
+  // A switch reads it again behind its answer (REGISTRY_KEYS).
   'clusters-accessible',
   'clusters-all',
   'cluster-roles',
@@ -40,6 +41,9 @@ export function isClusterScopedQueryKey(queryKey: unknown): boolean {
   return !CLUSTER_INDEPENDENT_KEYS.has(head)
 }
 
+// The cluster registry's keys, kept on a switch but read again.
+const REGISTRY_KEYS = new Set<string>(['clusters-accessible', 'clusters-all'])
+
 // dropClusterQueries empties the cluster-scoped cache when the selected cluster
 // changes and asks for none of it: a query of the screen being left, asked then,
 // would go out as the new cluster with that screen's key and parameters, beside
@@ -50,6 +54,8 @@ export function dropClusterQueries(queryClient: QueryClient): void {
       query.reset()
     }
   })
+  // the registry keeps its answer and is read again on screen, so a switch shows the clusters' health as it is now
+  void queryClient.invalidateQueries({ predicate: (q) => REGISTRY_KEYS.has(String(q.queryKey[0])) })
 }
 
 // askClusterQueriesOnScreen runs once the new cluster is drawn: a cluster-scoped
