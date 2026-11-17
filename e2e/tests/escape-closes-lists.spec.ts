@@ -67,4 +67,18 @@ test.describe('Escape closes an open list', () => {
     await expect(settings).toBeFocused()
     await expect(page).toHaveURL(/\/cluster\/search/)
   })
+
+  test('Advanced Search Select Resources: Escape in the filter closes the panel and the focus goes back to the button', async ({ page }) => {
+    await page.goto('/cluster/search?cluster=self')
+    const picker = page.locator('main button').filter({ hasText: EN.advancedSearch.selectResources }).first()
+    const panel = openList(picker)
+    const filter = panel.getByPlaceholder(EN.advancedSearch.filterResources)
+    await picker.click()
+    await expect(filter).toBeFocused()
+    await filter.fill('pod')
+    await page.keyboard.press('Escape')
+    await expect(panel).toHaveCount(0)
+    await expect(picker).toBeFocused()
+    await expect(page).toHaveURL(/\/cluster\/search/)
+  })
 })
