@@ -579,6 +579,19 @@ test.describe('number check — VPA, CRD, custom resource and fallback drawers',
       k.kubectl('apply --server-side --field-manager=e2e-cr-drawers -f -', GWPOL_CRD)
       k.kubectl('apply --server-side --field-manager=e2e-cr-drawers -f -', JSON.stringify(ALT_CRD))
       k.kubectl(`wait --for=condition=Established crd/widgets.numbers.kubeast.io crd/backendtlspolicies.numbers.kubeast.io crd/${ALT_CRD_NAME} --timeout=60s`)
+      // an apply just after Established has found no Widget kind ("no matches for kind"): wait until discovery lists the
+      // three kinds (api-resources reads it again, not kubectl's cache). A group whose API does not answer fails the
+      // command but still prints the others.
+      const listed = (group: string) => {
+        try {
+          return k.kubectl(`api-resources --api-group=${group} -o name`)
+        } catch (e) {
+          return String((e as { stdout?: unknown }).stdout ?? '')
+        }
+      }
+      await expect.poll(() => ['numbers.kubeast.io', 'alt.kubeast.io'].flatMap((g) => listed(g).split('\n').map((s) => s.trim())).filter(Boolean).sort(), {
+        timeout: 30_000, intervals: [500, 1_000], message: 'discovery lists the kinds of the three CRDs',
+      }).toEqual(expect.arrayContaining(['backendtlspolicies.numbers.kubeast.io', 'widgets.numbers.kubeast.io', ALT_CRD_NAME]))
       k.kubectl('apply --server-side --field-manager=e2e-cr-drawers -f -', vpaFixture(NS))
       writeVpaStatus(k.kubectl, NS)
       k.kubectl(`patch verticalpodautoscaler num-vpa-b -n ${NS} --type=merge -p=${arg({ spec: { resourcePolicy: { containerPolicies: POLICIES } } })}`)

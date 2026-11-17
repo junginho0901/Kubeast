@@ -211,15 +211,18 @@ test.describe('number check — one Kind of two groups where a screen picked by 
         // the server's rows for the two StatefulSets, once the cluster's usage gives each a recommendation
         type Row = { kind: string; name: string; api_version?: string; pods: number; cpu_recommend_m?: number; mem_recommend_bytes?: number }
         const rowsOf = async () => ((await (await page.request.get(`/api/v1/cluster/optimization?namespace=${NS}&cluster=default`)).json()).rows ?? []) as Row[]
-        let rows: Row[] = []
         await expect.poll(async () => {
-          rows = (await rowsOf()).filter((r) => r.kind === 'StatefulSet' && r.name === STS)
+          const rows = (await rowsOf()).filter((r) => r.kind === 'StatefulSet' && r.name === STS)
           return rows.length === 2 && rows.every((r) => r.cpu_recommend_m != null && r.mem_recommend_bytes != null)
         }, { timeout: 300_000, intervals: [10_000], message: 'both StatefulSets\' Optimization rows carry a recommendation' }).toBe(true)
-        const recommended = (pods: number) => {
-          const r = rows.find((x) => x.pods === pods)!
-          return { cpu: quantity.cpu(r.cpu_recommend_m!), memory: quantity.mem(r.mem_recommend_bytes!) }
-        }
+        // The requests a pod takes from an Apply: what its request sent, the rest as they were. Each k8s-service replica
+        // keeps a Prometheus answer for 30 s, and a new pod's CPU comes a scrape after its memory, so the screen's row can
+        // recommend less than the rows read above; the pods are held to the request the screen sent.
+        type Sent = { cpu_request_m?: number; mem_request_bytes?: number }
+        const requestsFrom = (sent: Sent | null) => ({
+          cpu: sent?.cpu_request_m != null ? quantity.cpu(sent.cpu_request_m) : REQUESTS.cpu,
+          memory: sent?.mem_request_bytes != null ? quantity.mem(sent.mem_request_bytes) : REQUESTS.memory,
+        })
 
         // the Optimization window: the two rows read the same (StatefulSet/web-<run>, container app) but for their pods
         // (2 of the other group, 1 of apps/v1); Apply on one row, then kubectl reads every pod's requests
@@ -232,34 +235,43 @@ test.describe('number check — one Kind of two groups where a screen picked by 
           return page.getByTestId('optimization-row').filter({ hasText: `StatefulSet/${STS}` })
         }
         const rowOfPods = (all: Locator, pods: number) => all.filter({ has: page.locator('td:nth-child(3)', { hasText: new RegExp(`^${pods}$`) }) })
-        // Apply on the row of that many pods; the resize result's "<resized>/<total>" total (null without the button)
-        const apply = async (pods: number): Promise<number | null> => {
+        // Apply on the row of that many pods: the resize result's "<resized>/<total>" total and the request's body (both
+        // null without the button)
+        const apply = async (pods: number): Promise<{ total: number | null; sent: Sent | null }> => {
           const row = rowOfPods(await optimization(), pods)
           await expect(row, `a row of ${pods} pods`).toHaveCount(1, { timeout: 30_000 })
           const button = row.getByTestId('optimization-resize')
           // the button comes once the cluster's features have loaded; a row whose requests are its recommendation has none
-          if (!(await button.waitFor({ state: 'visible', timeout: 15_000 }).then(() => true, () => false))) return null
+          if (!(await button.waitFor({ state: 'visible', timeout: 15_000 }).then(() => true, () => false))) return { total: null, sent: null }
           await button.click()
           const dialog = page.getByRole('dialog')
-          await dialog.getByRole('button', { name: say('dashboard.optimization.resize.confirm', 'Apply'), exact: true }).click()
+          const [request] = await Promise.all([
+            page.waitForRequest((r) => r.method() === 'POST' && r.url().includes(`/namespaces/${NS}/optimization/resize`), { timeout: 30_000 }),
+            dialog.getByRole('button', { name: say('dashboard.optimization.resize.confirm', 'Apply'), exact: true }).click(),
+          ])
           const text = (await row.getByTestId('optimization-resize-result').innerText({ timeout: 60_000 })).trim()
           const m = /(\d+)\/(\d+)/.exec(text)
-          return m ? Number(m[2]) : null
+          return { total: m ? Number(m[2]) : null, sent: request.postDataJSON() as Sent }
         }
 
+        let otherTook = REQUESTS
         await test.step(`Optimization · Apply on the ${GROUP} StatefulSet's row`, async () => {
-          const total = await apply(2)
+          const { total, sent } = await apply(2)
           expect.soft(total, 'the resize names the row\'s 2 pods').toBe(2)
-          const want = { [BUILTIN_POD]: REQUESTS, ...Object.fromEntries(OTHER_PODS.map((p) => [p, recommended(2)])) }
+          otherTook = requestsFrom(sent)
+          expect.soft(otherTook, 'the Apply asks for other requests than the pods have').not.toEqual(REQUESTS)
+          const want = { [BUILTIN_POD]: REQUESTS, ...Object.fromEntries(OTHER_PODS.map((p) => [p, otherTook])) }
           await expect.poll(requestsOf, { timeout: 30_000 }).toEqual(want).catch(() => undefined)
-          expect.soft(requestsOf(), 'the other group\'s pods take the recommendation, the apps/v1 pod keeps its requests').toEqual(want)
+          expect.soft(requestsOf(), 'the other group\'s pods take what the Apply sent, the apps/v1 pod keeps its requests').toEqual(want)
         })
         await test.step('Optimization · Apply on the apps/v1 StatefulSet\'s row', async () => {
-          const total = await apply(1)
+          const { total, sent } = await apply(1)
           expect.soft(total, 'the resize names the row\'s 1 pod').toBe(1)
-          const want = { [BUILTIN_POD]: recommended(1), ...Object.fromEntries(OTHER_PODS.map((p) => [p, recommended(2)])) }
+          const builtinTakes = requestsFrom(sent)
+          expect.soft(builtinTakes, 'the Apply asks for other requests than the pod has').not.toEqual(REQUESTS)
+          const want = { [BUILTIN_POD]: builtinTakes, ...Object.fromEntries(OTHER_PODS.map((p) => [p, otherTook])) }
           await expect.poll(requestsOf, { timeout: 30_000 }).toEqual(want).catch(() => undefined)
-          expect.soft(requestsOf(), 'the apps/v1 pod takes the recommendation too').toEqual(want)
+          expect.soft(requestsOf(), 'the apps/v1 pod takes what its Apply sent, the other group\'s pods keep theirs').toEqual(want)
         })
       } else {
         test.info().annotations.push({ type: 'skip', description: 'Optimization: in-place resize is off (features.inPlaceResize) or default is older than 1.35' })
