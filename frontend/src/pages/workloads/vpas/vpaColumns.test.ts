@@ -3,12 +3,15 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import i18next from 'i18next'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import en from '../../../i18n/locales/en.json'
 import type { VPAInfo } from '@/services/api'
 import { VPATable } from './VPATable'
 import { vpaCount } from './vpaHelpers'
 import { normalizeWatchVPAObject } from './vpaWatchNormalize'
+
+// the shared notices tell the floating chat; this test reads the screen
+vi.mock('@/hooks/useAIContext', () => ({ useAIContext: () => {} }))
 
 // The VPA list shows the CRD's wide columns MinReplicas and OOMSeconds (VPA 1.7, spec.updatePolicy.minReplicas and
 // evictAfterOOMSeconds), from the server's row and from a live update's object.

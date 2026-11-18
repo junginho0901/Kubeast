@@ -60,7 +60,7 @@ test.describe('Recent flows and traffic lines from Retina', () => {
     admin = (await res.json()).access_token
     const features = await (await request.get(`/api/v1/cluster/features?cluster=${CLUSTER}`, { headers: bearer(admin) })).json()
     kubectl = retinaKubectl()
-    if (!kubectl) return
+    if (!kubectl || !(await registered(request, admin))) return
     ready = features?.networkFlows?.enabled === true && (features.networkFlows.clusters ?? []).includes(CLUSTER) && kubectl('-n kube-system get ds retina-agent -o name') !== ''
     try {
       podMetrics = promDirect(`sum(hubble_tcp_flags_total{flag="SYN",destination_namespace="${NS}",destination_pod!=""})`).length > 0
@@ -70,7 +70,7 @@ test.describe('Recent flows and traffic lines from Retina', () => {
   })
 
   test('a Deployment’s recent flows: its pods by name, with the workloads the cluster runs', async ({ request }) => {
-    test.skip(!ready, `no Retina cluster ${CLUSTER} with network flows (scripts/kind-retina.sh up)`)
+    test.skip(!ready, `cluster ${CLUSTER} is not registered in Kubeast or is no Retina cluster with network flows (scripts/kind-retina.sh up)`)
     const body = await get(request, `/api/v1/cluster/namespaces/${NS}/networkflows`, { kind: 'Deployment', name: 'web', since: '5m' })
     const groups = body.groups as Group[]
     // Retina's flows name no workload, so the Relay is asked for web's pods by name as well
@@ -85,7 +85,7 @@ test.describe('Recent flows and traffic lines from Retina', () => {
   })
 
   test('a connection to a Service is one line, counted where it arrives', async ({ request }) => {
-    test.skip(!ready, `no Retina cluster ${CLUSTER} with network flows (scripts/kind-retina.sh up)`)
+    test.skip(!ready, `cluster ${CLUSTER} is not registered in Kubeast or is no Retina cluster with network flows (scripts/kind-retina.sh up)`)
     // the namespace's flows: client sends to the Service's own address, which Kubeast marks
     const flows = await get(request, `/api/v1/cluster/namespaces/${NS}/networkflows`, { since: '5m' })
     const webIP = kubectl!(`-n ${NS} get svc web -o jsonpath={.spec.clusterIP}`)
@@ -102,7 +102,7 @@ test.describe('Recent flows and traffic lines from Retina', () => {
   })
 
   test('the metric lines name the pods’ workloads and are what the cluster’s Prometheus counts', async ({ request }) => {
-    test.skip(!podMetrics, `no Hubble TCP metric with pod labels on cluster ${CLUSTER} (scripts/kind-retina.sh up)`)
+    test.skip(!podMetrics, `cluster ${CLUSTER} is not registered in Kubeast or has no Hubble TCP metric with pod labels (scripts/kind-retina.sh up)`)
     const body = await get(request, '/api/v1/cluster/networktraffic', { namespaces: NS, source: 'metrics', range: '1h' })
     expect(body).toMatchObject({ available: true, source: 'metrics', style: 'labels' })
     // the SYNs leaving towards the Service's address name no destination: not drawn, and said so
@@ -131,7 +131,7 @@ test.describe('Recent flows and traffic lines from Retina', () => {
   })
 
   test('the graph draws the line between the Deployments', async ({ page }) => {
-    test.skip(!ready, `no Retina cluster ${CLUSTER} with network flows (scripts/kind-retina.sh up)`)
+    test.skip(!ready, `cluster ${CLUSTER} is not registered in Kubeast or is no Retina cluster with network flows (scripts/kind-retina.sh up)`)
     await page.goto(`/cluster/resource-graph?cluster=${CLUSTER}&namespace=${NS}`)
     await page.getByTestId('graph-view-traffic').click({ timeout: 20_000 })
     await expect(page.locator(`[aria-label="${NS}/client → ${NS}/web (TCP 80)"]`)).toHaveCount(1, { timeout: 30_000 })
@@ -139,3 +139,10 @@ test.describe('Recent flows and traffic lines from Retina', () => {
     await expect(page.getByTestId('traffic-peer').filter({ hasText: 'world' })).toHaveCount(0)
   })
 })
+
+// Kubeast has the kind cluster under its name (scripts/kind-*.sh up registers it, down removes it): the kind cluster
+// can be up without it, and every read of this spec names it
+async function registered(request: APIRequestContext, token: string): Promise<boolean> {
+  const body = await (await request.get('/api/v1/clusters', { headers: bearer(token) })).json()
+  return ((body.items ?? []) as { id: string }[]).some((c) => c.id === CLUSTER)
+}

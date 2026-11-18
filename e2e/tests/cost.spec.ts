@@ -49,7 +49,7 @@ async function createUser(request: APIRequestContext, admin: string, email: stri
   const member = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name.toLowerCase() === 'member')
   const res = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E cost', email, password: PW, role_id: member.id } })
   expect(res.status(), `create ${email}`).toBe(201)
-  return (await res.json()).id
+  return madeUser((await res.json()).id, bearer(admin))
 }
 
 // OpenCost's own answer on the second cluster, through its API server, to compare with Kubeast's.
@@ -230,4 +230,15 @@ test.describe('cost (OpenCost)', () => {
     await expect(page.getByTestId('optimization-pricing')).toHaveCount(0)
     await expect(page.getByTestId('optimization-cost')).toHaveCount(0)
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

@@ -1,0 +1,66 @@
+suite: auth.impersonation.sharedReadChecks — k8s-service shares an allowed read check by group, off by default
+templates:
+  - deployments.yaml
+  - configmap.yaml
+  - secret.yaml
+tests:
+  - it: is off by default, with no cluster listed out
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SHARED_READ_CHECKS, value: "false"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SHARED_READ_CHECKS_EXCLUDE_CLUSTERS, value: ""}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+
+  - it: hands the switch and the clusters listed out to k8s-service
+    set:
+      auth.impersonation.sharedReadChecks:
+        enabled: true
+        excludeClusters: [cedar-prod, lab]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SHARED_READ_CHECKS, value: "true"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SHARED_READ_CHECKS_EXCLUDE_CLUSTERS, value: "cedar-prod,lab"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+
+  - it: renders off on the values of a release before the switch (--reuse-values)
+    set:
+      auth.impersonation.sharedReadChecks: null
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SHARED_READ_CHECKS, value: "false"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SHARED_READ_CHECKS_EXCLUDE_CLUSTERS, value: ""}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+
+  - it: gives both k8s-service roles the same switch with streams on
+    set:
+      streams.enabled: true
+      auth.impersonation.sharedReadChecks.enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SHARED_READ_CHECKS, value: "true"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SHARED_READ_CHECKS, value: "true"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service-stream}

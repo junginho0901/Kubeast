@@ -64,6 +64,13 @@ Kubeast cannot tell whether an address belongs to the person: anyone with `admin
 Prefer group bindings; if you bind a `User`, make sure that person's account exists, or that accounts come from your identity provider.
 `auth.impersonation.userPrefix` (empty by default), for example `kubeast:user:`, puts a name of Kubeast's own before the address, so a binding a cluster made of an address for its own sign-in (OIDC, IAM) is not opened by a Kubeast account of that address. Group bindings keep working. Setting it changes the name the cluster sees and writes in its audit log, and every binding of a `User` to an address stops applying to Kubeast's requests: move those to groups first, on every registered cluster.
 
+**Requests with no person behind them.** Some reads are Kubeast's own, and the cluster's audit log names Kubeast for them:
+
+- With no `Impersonate-User` header: the server version, the API discovery it keeps once per cluster for everyone, and its health checks. Only a `GET` of `/version`, `/api`, `/apis`, `/api/v1` or `/apis/<group>/<version>` (after the path of the cluster's server URL, when it has one) goes out so.
+- As the fixed identity `kubeast:cache` (the `view` rights of §1): the overview informers, an object's events and a node's pods read once for everyone who may list them, the `kube-system` UID that tells the cluster Kubeast runs in, the `metrics.k8s.io` group check, and the search for Prometheus and OpenCost Services.
+
+Any other request whose signed-in person Kubeast cannot name is not sent, and a kubectl tool is not run.
+
 **Write = the Kubernetes default `edit`.** This is the same scope as someone given `edit` for kubectl. It includes:
 
 - reading and writing Secrets
@@ -78,7 +85,8 @@ A listed group holds its ClusterRoles whether or not a role of that name exists,
 Kubeast cannot compare those ClusterRoles with what a person holds, so a new name or a rename that makes a listed group takes all permissions (`*`, the global Admin). Anyone else holding `admin.roles.create` or `admin.roles.update` gets 403 and an audit row.
 So list the name and have a global admin create the role, or create the role first and list it after. From then on it is a role like any other: `admin.roles.update` edits it, and a role already stored under a listed name keeps working.
 Granting it, directly or by approving an access request, takes a global admin or an Admin of that cluster not limited to namespaces: they act there as `kubeast:admin`, which is `cluster-admin`, so they already hold whatever the binding gives. Anyone else holding `admin.users.update` gets 403 and an audit row, and the Cluster access choice and the Approve button say so. Read, Write and Admin listed for their grants limited to namespaces are not held back this way.
-The chart hands the list to auth-service as `IMPERSONATION_CUSTOM_ROLES`. Docker Compose has no chart: put the names in that variable in `.env` if you apply such bindings to your clusters.
+The chart hands the names to auth-service as `IMPERSONATION_CUSTOM_ROLES`, a comma in a name written as `-` (the same group). Docker Compose has no chart: put the names in that variable in `.env` if you apply such bindings to your clusters.
+A role's group is `kubeast:role:` and the slug of its name, which the role window shows; a character outside ASCII is written as `~` and its code point (`운영팀` → `kubeast:role:~c6b4~c601~d300`, [Features](features.md) "Role names"). Bind that group as written.
 
 **Deleting a role does not remove its bindings.** They stay on every cluster they were applied to, and the next role of that name acts with them.
 While the name is on the list, the rule above still holds.
@@ -109,6 +117,37 @@ kubectl --context <cluster> auth can-i get secrets -A --as=check --as-group=kube
 kubectl --context <cluster> auth can-i get pods --subresource=log -A --as=kubeast:investigator --as-group=kubeast:investigator # yes
 kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator --as-group=kubeast:investigator                  # no
 ```
+
+**Read checks shared by group** (`auth.impersonation.sharedReadChecks.enabled`, off by default; `SHARED_READ_CHECKS` in compose).
+The screens served from what Kubeast watches as `kubeast:cache` — the Dashboard's counts, the namespace and node lists, a grant's namespaces, the Pods page and Cluster View's nodes — first ask the cluster whether the person may list or get what they show (a SelfSubjectAccessReview, kept up to a minute).
+With the switch on, that question goes out once for everyone with the same groups, as the user `kubeast:group-check:<eight hex digits>` with those groups, and its allow stands for each of them for the rest of that minute, as a person's own answer does.
+The part after the prefix is made at each start of k8s-service and is not logged; the start log names the prefix (`allowed read checks of screens are shared by group`). The cluster's audit log shows the whole name to whoever can read it.
+A refusal is not shared: the person is asked again as before, so a binding of a `User` still counts for that person.
+Can-i, writes, logs, Secrets, subresources, the checks of an AI tool call, a token of no person and a `system:` user name are always asked as the person.
+
+What it relies on, for every authorizer of the cluster: what `kubeast:group-check:…` with a person's groups is allowed, that person with the same groups is allowed too.
+RBAC only adds, so a cluster whose authorizers are `Node` and `RBAC` holds it. Amazon EKS adds access policies, which allow or pass and are not used for an identity Kubeast acts as.
+List the registered id of a cluster where any of these is true in `auth.impersonation.sharedReadChecks.excludeClusters`:
+
+- An authorizer, ahead of RBAC or after it, answers by the user name: it refuses a person by name, or it allows a group but passes ("no opinion") for named people, so that the person ends refused. Kubeast would show that person what the cluster refuses its own requests.
+- The cluster limits the user names Kubeast may act as, so that the shared name is allowed and some person is not. That person's own requests are refused; the shared allow is not. Where it is the shared name the cluster refuses, every check is asked as the person and nothing changes on screen.
+- A `User` named `kubeast:group-check:*` is bound. Such a binding counts for everyone in the groups. The name changes at each start, so a binding made for one start does not carry to the next; while Kubeast runs the name can be read from the audit log, so the binding check below is what keeps this true.
+
+```bash
+# the authorizers: Node and RBAC only (kubeadm and other API servers you run; with --authorization-config the file lists them in order)
+kubectl --context <cluster> -n kube-system get pod -l component=kube-apiserver -o yaml | grep -E 'authorization-(mode|config)'
+# Kubeast may act as any user name: the users rule of kubeast-impersonator has no resourceNames
+kubectl --context <cluster> get clusterrole kubeast-impersonator -o jsonpath='{.rules[?(@.resources[0]=="users")]}'
+# no binding names the shared user — run it on each registered cluster with your RBAC review
+kubectl --context <cluster> get clusterrolebindings,rolebindings -A -o json | jq -r '.items[] | select(any(.subjects[]?; .kind == "User" and (.name | startswith("kubeast:group-check:")))) | .metadata.name'   # nothing
+# a group set's allow, asked under the shared name: the same answer as a person in that group
+kubectl --context <cluster> auth can-i list pods -A --as=kubeast:group-check:check --as-group=kubeast:authenticated --as-group=kubeast:viewer --as-group=system:authenticated   # yes
+```
+
+- The cluster's audit log names `kubeast:group-check:…` and the groups for those allowed checks, not the person. Refusals, can-i and the reads made as the person still name the person.
+- What one person's screens ask as itself drops from about eight to its can-i; a grant limited to N namespaces asks its groups' questions once for everyone with that grant's groups. Each replica asks for itself, so R replicas ask up to R times as many shared questions. They take their turn on the same client rate (`multicluster.clientQPS`, or `reviewQPS` when set) as the person's checks; no rate is added.
+- k8s-service warns at start, and after a cluster changes, of an `excludeClusters` entry that is no registered cluster's id: such an entry leaves nothing out. A start that could not read the registry warns at the next cluster change.
+- With `auth.impersonation.enabled` off the switch does nothing.
 
 ## 2. metrics-server
 
@@ -327,6 +366,7 @@ Without the CRD, Kubeast answers with an empty list and "not installed" (`X-Kube
 | Apply without restart (Pod `resize` subresource) | API server 1.35 or later |
 | DRA screens | 1.31 or later (§6) |
 | Upgrade readiness check | Target = server minor + 1 (no requirement) |
+| Live lists opened as a watch list (`sendInitialEvents`, the API server's `WatchList` feature, on by default in 1.32 and from 1.34) | None: an API server that refuses it (1.27–1.31 and 1.33 by default) answers 422, and one that takes it and sends no bookmark leaves three watch lists in a row at 2 s with no event in the last second; either way k8s-service opens that cluster's live lists as a plain watch for 10 minutes before it asks again. Check: `kubectl get --raw '/api/v1/namespaces/default/configmaps?watch=1&sendInitialEvents=true&resourceVersionMatch=NotOlderThan&resourceVersion=0&allowWatchBookmarks=true&timeoutSeconds=1'` ends with a `BOOKMARK` whose annotations hold `k8s.io/initial-events-end` |
 
 ## 9. Node shell
 
@@ -496,6 +536,7 @@ service:
 | What | Requirement |
 | --- | --- |
 | User namespaces | `podSecurity.hostUsers: false` (default) needs Kubernetes 1.33 or later and a node kernel that supports it (6.3 or later). Otherwise `true` |
+| Pod shutdown | Kubernetes 1.30 or later: the chart's pods behind a Service, but for the bundled PostgreSQL and Redis, wait `podShutdown.preStopSeconds` (5 s) before SIGTERM with the native `preStop` `sleep` action (beta and on by default in 1.30, GA in 1.34), so a rolling update sends no new connection to a pod that has exited; `0` leaves the wait out |
 | Storage | With the built-in PostgreSQL, a PVC — the default StorageClass or `postgresql.storageClassName` |
 | Exposure | NodePort (default), LoadBalancer, or an Ingress controller (`ingress.enabled`) |
 | A proxy or load balancer in front | An idle timeout above 30 s (AWS ALB's default is 60 s). While quiet, a live list, terminal, node shell, followed log and AI answer send something every 25 s and the Helm releases stream every 30 s — a WebSocket ping, an SSE comment line — so they stay open; the gateway gives them 600 to 3 600 s itself |

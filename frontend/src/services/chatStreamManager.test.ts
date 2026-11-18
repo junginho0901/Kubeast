@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ANSWERS from './chatAnswer.cases.json'
+import ACCESS_LINES from './toolAccess.cases.json'
 import { appendToolBlock, ChatStreamManager, resultTarget, withToolAccess, withToolResult, type ChatStreamState } from './chatStreamManager'
 import { stripToolDetails } from './chatTextUtils'
-import { accessLine, accessSection, requestsBlock } from './toolAccess'
+import { accessLine, accessSection, requestsBlock, type ToolAccess } from './toolAccess'
 
 describe('pairing a tool result with its call', () => {
   const calls = [
@@ -315,6 +316,16 @@ describe('how an answer ends', () => {
       error: 'HTTP 503: audit unavailable',
       errorKey: 'streamHttp',
       errorArgs: { status: 503, detail: 'audit unavailable' },
+    })
+  })
+
+  it('a refused request whose server names the words for it keeps that key', async () => {
+    const state = await ended(new Response('{"detail":"the answer stream could not start","error_key":"streamStartFailed"}', { status: 500 }))
+    expect(state).toMatchObject({
+      status: 'error',
+      error: 'HTTP 500: the answer stream could not start',
+      errorKey: 'streamStartFailed',
+      errorArgs: { status: 500, detail: 'the answer stream could not start' },
     })
   })
 
@@ -757,23 +768,9 @@ describe('each tool result and 🔐 line goes to its own block', () => {
 describe('the 🔐 line', () => {
   const read = { cluster: 'prod', kind: 'person', user: 'a@example.com', groups: ['kubeast:authenticated', 'kubeast:viewer'], role: 'Read', impersonation: true }
 
-  // The same cases and text as ai-service tests/test_tool_access.py: the saved answer and the live one must match.
-  it.each([
-    [{ ...read, mode: 'read' },
-      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> <code>kubeast:viewer</code> · role Read · whole cluster · read-only</p>'],
-    [{ ...read, role: 'Write', groups: ['kubeast:authenticated', 'kubeast:role:write'], namespaces: ['shop', 'payments'], mode: 'write' },
-      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> <code>kubeast:role:write</code> · role Write · namespaces shop, payments · write</p>'],
-    [{ ...read, role: '*', groups: ['kubeast:admin', 'kubeast:authenticated'] },
-      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:admin</code> <code>kubeast:authenticated</code> · global admin · whole cluster · read-only</p>'],
-    [{ ...read, kind: 'api_key', api_key: 'k-1' },
-      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> (API key) · groups <code>kubeast:authenticated</code> <code>kubeast:viewer</code> · role Read · whole cluster · read-only</p>'],
-    [{ cluster: 'prod', kind: 'investigator', user: 'kubeast:investigator', groups: ['kubeast:investigator'], impersonation: true },
-      '<p><strong>🔐 Ran as:</strong> <code>kubeast:investigator</code> · groups <code>kubeast:investigator</code> · alert investigator · read-only</p>'],
-    [{ cluster: 'prod', kind: 'person', role: 'Read', impersonation: false },
-      "<p><strong>🔐 Ran as:</strong> ⚠️ Kubeast's own credential, not this user's permissions (impersonation is off) · role Read · whole cluster · read-only</p>"],
-    [{ ...read, role: '' },
-      '<p><strong>🔐 Ran as:</strong> <code>a@example.com</code> · groups <code>kubeast:authenticated</code> <code>kubeast:viewer</code> · no role in this cluster · whole cluster · read-only</p>'],
-  ])('%#', (access, want) => {
+  // The cases ai-service tests/test_tool_access.py runs too (toolAccess.cases.json): the saved answer and the live one
+  // must match, a role of a built-in's name in other forms shown as stored and as giving no role group among them.
+  it.each(ACCESS_LINES.cases.map((c): [string, ToolAccess, string] => [c.name, c.access as ToolAccess, c.line]))('%s', (_name, access, want) => {
     expect(accessLine(access)).toBe(want)
   })
 
@@ -819,5 +816,64 @@ describe('the cluster requests under the 🔐 line', () => {
     const both = accessSection(access, { requests: [LIST], total: 1 })
     expect(both).toBe(`${accessLine(access)}\n\n${requestsBlock({ requests: [LIST], total: 1 })}`)
     expect(accessSection(null, null)).toBe('')
+  })
+})
+
+describe('an answer that waits for its turn', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  const sse = (...events: unknown[]) => events.map((e) => `data: ${typeof e === 'string' ? e : JSON.stringify(e)}\n\n`).join('')
+
+  async function seen(body: string) {
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(body)))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    const queued: boolean[] = []
+    manager.subscribe((state) => {
+      if (queued[queued.length - 1] !== state.queued) queued.push(state.queued)
+    })
+    await manager.startSessionChat('s1', 'how many?')
+    await vi.runAllTimersAsync()
+    return { state: manager.getState(), queued }
+  }
+
+  it('is waiting from the server\'s queued true until its queued false, then the answer comes', async () => {
+    const { state, queued } = await seen(sse({ queued: true }, { queued: false }, { content: 'Two clusters.' }, '[DONE]'))
+    expect(queued).toEqual([false, true, false])
+    expect(state).toMatchObject({ status: 'completed', queued: false, content: 'Two clusters.', error: null })
+  })
+
+  it('is not waiting when the server sends no queued event', async () => {
+    const { queued } = await seen(sse({ content: 'Two clusters.' }, '[DONE]'))
+    expect(queued).toEqual([false])
+  })
+
+  it('that waits past the server\'s limit ends with the busy error and stops waiting', async () => {
+    const busy = { error: 'Claude Code is busy; ask again in a moment.', error_key: 'claudeCodeBusy', error_args: { provider: 'Claude subscription' } }
+    const { state, queued } = await seen(sse({ queued: true }, busy, '[DONE]'))
+    expect(queued).toEqual([false, true, false])
+    expect(state).toMatchObject({ status: 'error', isStreaming: false, queued: false, errorKey: 'claudeCodeBusy', error: busy.error })
+  })
+
+  it('stops waiting when the person presses Stop', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(sse({ queued: true })))
+        init.signal?.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')))
+      },
+    }))))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    void manager.startSessionChat('s1', 'how many?')
+    await vi.advanceTimersByTimeAsync(100)
+    expect(manager.getState().queued).toBe(true)
+    await manager.stop()
+    await vi.runAllTimersAsync()
+    expect(manager.getState()).toMatchObject({ status: 'aborted', queued: false })
   })
 })

@@ -2,10 +2,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -102,6 +105,7 @@ func TestKubectlThroughTheProxyTakesDefaultWhenNoNamespaceIsNamed(t *testing.T) 
 	kubectlProxy = p
 	defer func() { kubectlProxy = prevProxy }()
 	ctx := withClusterID(withKubeconfigPath(context.Background(), clusterKubeconfig(t, api.URL)), "c")
+	ctx = auth.WithPayload(ctx, auth.TokenPayload{Email: "a@example.com"})
 	argv, done, err := kubectlCommand(ctx, []string{"get", "deployments"})
 	if err != nil {
 		t.Fatal(err)
@@ -248,6 +252,50 @@ func TestKubeProxyUpgradeCarriesTheIdentity(t *testing.T) {
 	}
 	if trail.Total != 1 || trail.Requests[0].Subresource != "exec" || trail.Requests[0].Status != 101 || trail.Requests[0].AuditID != s[0].auditID {
 		t.Fatalf("listed %+v", trail)
+	}
+}
+
+// With impersonationEnabled, a context naming no person prepares no kubectl run, through the proxy or direct, and
+// each refusal is a log line of the words the e2e teardown counts (e2e/tests/cluster-refusals.ts).
+func TestKubectlWithNoPersonIsNotPrepared(t *testing.T) {
+	var logs bytes.Buffer
+	prevLog := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	defer slog.SetDefault(prevLog)
+	api, seen := fakeAPIServer(t)
+	p, err := startKubeProxy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	prevProxy, prevExec, prevImp := kubectlProxy, kubectlExec, impersonationEnabled
+	impersonationEnabled = true
+	defer func() { kubectlProxy, kubectlExec, impersonationEnabled = prevProxy, prevExec, prevImp }()
+	ran := 0
+	kubectlExec = func(context.Context, []string, *string) ([]byte, error) {
+		ran++
+		return []byte("ok"), nil
+	}
+	ctx := withClusterID(withKubeconfigPath(context.Background(), clusterKubeconfig(t, api.URL)), "prod")
+	for _, via := range []struct {
+		name  string
+		proxy *kubeProxy
+	}{{"proxy", p}, {"direct", nil}} {
+		kubectlProxy = via.proxy
+		if argv, _, err := kubectlCommand(ctx, []string{"get", "pods"}); !errors.Is(err, auth.ErrNoPerson) || argv != nil {
+			t.Fatalf("%s: argv %v err %v, want errNoPerson", via.name, argv, err)
+		}
+		if _, err := runKubectl(ctx, http.Header{}, "get", "pods"); !errors.Is(err, auth.ErrNoPerson) {
+			t.Fatalf("%s: runKubectl err %v, want errNoPerson", via.name, err)
+		}
+	}
+	p.mu.Lock()
+	calls := len(p.calls)
+	p.mu.Unlock()
+	if calls != 0 || ran != 0 || len(seen()) != 0 {
+		t.Fatalf("proxy runs %d, kubectl runs %d, cluster requests %d: want none", calls, ran, len(seen()))
+	}
+	if n := strings.Count(logs.String(), `msg="kubectl not run"`); n != 4 {
+		t.Fatalf("%d log lines of the refusal for 4 refused runs:\n%s", n, logs.String())
 	}
 }
 

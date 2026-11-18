@@ -222,7 +222,8 @@ export default function AdminAIUsage() {
         </div>
         <ListPager currentPage={currentPage} totalPages={pageCount} total={rows.length} rowsPerPage={rowsPerPage} onPageChange={(p) => setFirstRow((p - 1) * rowsPerPage)} testId="ai-usage-pager" />
       </div>
-      <p className="shrink-0 text-xs text-slate-500">
+      {/* list-page-note: ends clear of the floating chat button, as the footer's page buttons do (index.css) */}
+      <p className="list-page-note shrink-0 text-xs text-slate-500" data-testid="ai-usage-note">
         {cuts.map((c) => (
           <span key={c.source} className="mr-1 text-amber-400" data-testid={`ai-usage-cut-${c.source}`}>
             {tr('adminAIUsage.cut', '{{source}} by {{group}}: {{shown}} of {{groups}} listed, most tokens first; the totals count all {{groups}}.', {

@@ -185,12 +185,13 @@ func buildAIUsageReport(scans []aiUsageScan, limit int) AIUsageReport {
 // between since (inclusive) and until (exclusive), each source apart, listing
 // at most limit groups of each. Token sums skip records with no token count
 // (JSON null), so TokenRequests tells how many requests the sums cover.
+// since and until go as UTC, the zone of created_at's clock reading.
 func (r *Repository) AIUsage(ctx context.Context, since, until time.Time, group string, limit int) (AIUsageReport, error) {
 	chatKey, invKey, ok := aiUsageKeyExpr(group)
 	if !ok {
 		return AIUsageReport{}, fmt.Errorf("unknown group %q", group)
 	}
-	rows, err := r.pool.Query(ctx, aiUsageQuery(chatKey, invKey), since, until, limit)
+	rows, err := r.pool.Query(ctx, aiUsageQuery(chatKey, invKey), since.UTC(), until.UTC(), limit)
 	if err != nil {
 		return AIUsageReport{}, fmt.Errorf("ai usage: %w", err)
 	}
