@@ -461,3 +461,221 @@ tests:
     asserts:
       - hasDocuments:
           count: 0
+
+  - it: leaves ai-service and tool-server open to any public or API server address by default
+    asserts:
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - ipBlock:
+                  cidr: 0.0.0.0/0
+                  except:
+                    - 10.0.0.0/8
+                    - 172.16.0.0/12
+                    - 192.168.0.0/16
+            ports:
+              - protocol: TCP
+                port: 443
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-ai-service
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - ipBlock:
+                  cidr: 0.0.0.0/0
+            ports:
+              - protocol: TCP
+                port: 443
+              - protocol: TCP
+                port: 6443
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+
+  - it: with aiEgress.allowListOnly, ai-service connects out only to allowExternalEgressCIDRs and tool-server only to clusterAPIs and apiserverCIDR
+    set:
+      networkPolicy.allowExternalEgressCIDRs:
+        - 160.79.104.0/23
+      networkPolicy.apiserverCIDR: 172.18.0.2/32
+      networkPolicy.aiEgress:
+        allowListOnly: true
+        clusterAPIs:
+          - 203.0.113.0/24
+          - cidr: 198.51.100.7/32
+            port: 8443
+    asserts:
+      - equal:
+          path: spec.egress[2]
+          value:
+            to:
+              - ipBlock:
+                  cidr: 160.79.104.0/23
+            ports:
+              - protocol: TCP
+                port: 443
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-ai-service
+      - lengthEqual:
+          path: spec.egress
+          count: 3
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-ai-service
+      - equal:
+          path: spec.egress[4]
+          value:
+            to:
+              - ipBlock:
+                  cidr: 203.0.113.0/24
+            ports:
+              - protocol: TCP
+                port: 443
+              - protocol: TCP
+                port: 6443
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+      - equal:
+          path: spec.egress[5]
+          value:
+            to:
+              - ipBlock:
+                  cidr: 198.51.100.7/32
+            ports:
+              - protocol: TCP
+                port: 8443
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+      - equal:
+          path: spec.egress[6]
+          value:
+            to:
+              - ipBlock:
+                  cidr: 172.18.0.2/32
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+      - lengthEqual:
+          path: spec.egress
+          count: 7
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+
+  - it: with aiEgress.allowListOnly, stops the install when ai-service would reach no model provider
+    set:
+      networkPolicy.aiEgress:
+        allowListOnly: true
+        clusterAPIs: [203.0.113.0/24]
+    asserts:
+      - failedTemplate:
+          errorPattern: needs networkPolicy.allowExternalEgressCIDRs
+
+  - it: with aiEgress.allowListOnly, stops the install when tool-server would reach no API server
+    set:
+      networkPolicy.allowExternalEgressCIDRs: [160.79.104.0/23]
+      networkPolicy.aiEgress.allowListOnly: true
+    asserts:
+      - failedTemplate:
+          errorPattern: needs networkPolicy.aiEgress.clusterAPIs or networkPolicy.apiserverCIDR
+
+  - it: with aiEgress.allowListOnly and the AI off, asks for no list
+    set:
+      ai.enabled: false
+      networkPolicy.aiEgress.allowListOnly: true
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: with aiEgress.allowListOnly, stops the install when NetworkPolicies are off
+    set:
+      networkPolicy.enabled: false
+      networkPolicy.aiEgress.allowListOnly: true
+    asserts:
+      - failedTemplate:
+          errorPattern: allowListOnly needs networkPolicy.enabled
+
+  - it: with aiEgress.allowListOnly and an IRSA role, stops the install until the STS endpoint is listed
+    set:
+      networkPolicy.allowExternalEgressCIDRs: [160.79.104.0/23]
+      networkPolicy.aiEgress.allowListOnly: true
+      networkPolicy.aiEgress.clusterAPIs: [10.20.0.0/16]
+      aws.irsaRoleArn: arn:aws:iam::111122223333:role/kubeast
+    asserts:
+      - failedTemplate:
+          errorPattern: needs networkPolicy.aiEgress.stsEndpoints
+
+  - it: with aiEgress.allowListOnly, an IRSA role in tool-server's own annotations asks for the STS endpoint too
+    set:
+      networkPolicy.allowExternalEgressCIDRs: [160.79.104.0/23]
+      networkPolicy.aiEgress.allowListOnly: true
+      networkPolicy.aiEgress.clusterAPIs: [10.20.0.0/16]
+      serviceAccounts.toolServer.annotations:
+        eks.amazonaws.com/role-arn: arn:aws:iam::111122223333:role/kubeast
+    asserts:
+      - failedTemplate:
+          errorPattern: needs networkPolicy.aiEgress.stsEndpoints
+
+  - it: with aiEgress.allowListOnly and an IRSA role, lets tool-server reach the listed STS endpoint subnets on 443
+    set:
+      networkPolicy.allowExternalEgressCIDRs: [160.79.104.0/23]
+      networkPolicy.aiEgress.allowListOnly: true
+      networkPolicy.aiEgress.clusterAPIs: [10.20.0.0/16]
+      networkPolicy.aiEgress.stsEndpoints: [10.20.8.0/22]
+      aws.irsaRoleArn: arn:aws:iam::111122223333:role/kubeast
+    asserts:
+      - equal:
+          path: spec.egress[5]
+          value:
+            to:
+              - ipBlock:
+                  cidr: 10.20.8.0/22
+            ports:
+              - protocol: TCP
+                port: 443
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+      - lengthEqual:
+          path: spec.egress
+          count: 6
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+
+  - it: with aiEgress.allowListOnly, an STS endpoint given as {cidr, port} opens that port
+    set:
+      networkPolicy.allowExternalEgressCIDRs: [160.79.104.0/23]
+      networkPolicy.aiEgress.allowListOnly: true
+      networkPolicy.aiEgress.clusterAPIs: [10.20.0.0/16]
+      networkPolicy.aiEgress.stsEndpoints:
+        - cidr: 10.20.8.0/22
+          port: 8443
+      aws.irsaRoleArn: arn:aws:iam::111122223333:role/kubeast
+    asserts:
+      - equal:
+          path: spec.egress[5]
+          value:
+            to:
+              - ipBlock:
+                  cidr: 10.20.8.0/22
+            ports:
+              - protocol: TCP
+                port: 8443
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+
+  - it: with aiEgress.allowListOnly, a role on k8s-service alone (S3 recordings, no EKS cluster) asks for no STS endpoint (serviceaccount_annotations_test.yaml holds that tool-server then has no role)
+    set:
+      networkPolicy.allowExternalEgressCIDRs: [160.79.104.0/23]
+      networkPolicy.aiEgress.allowListOnly: true
+      networkPolicy.aiEgress.clusterAPIs: [10.20.0.0/16]
+      serviceAccounts.k8sService.annotations:
+        eks.amazonaws.com/role-arn: arn:aws:iam::111122223333:role/kubeast-recordings
+    asserts:
+      - notFailedTemplate: {}

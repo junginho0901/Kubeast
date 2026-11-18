@@ -5,7 +5,7 @@ import { MarkdownLink } from '@/components/FloatingAIChat/MarkdownLink'
 import { MarkdownDetails, MarkdownSummary } from '@/components/MarkdownDisclosure'
 import { MarkdownTable } from '@/components/MarkdownTable'
 import { fenceReader } from '@/services/chatTextUtils'
-import { aiImageSrc, REMARK_PLUGINS } from '@/utils/markdown'
+import { aiImageSrc, imagesAsLinks, keepLinksInline, REMARK_PLUGINS } from '@/utils/markdown'
 
 // How a chat answer becomes elements, the same in AI Chat and the floating chat. An answer is text a model wrote after
 // reading the cluster, so it draws only these elements and attributes, and none of them acts outside the answer.
@@ -53,24 +53,6 @@ interface AnswerNode {
   value?: string
   children?: AnswerNode[]
 }
-
-const BLOCKS = new Set(['blockquote', 'details', 'div', 'dl', 'figure', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'ol', 'p', 'pre', 'section', 'summary', 'table', 'ul'])
-
-const holdsBlock = (node: AnswerNode): boolean =>
-  node.type === 'element' && (BLOCKS.has(node.tagName ?? '') || (node.children ?? []).some(holdsBlock))
-
-function unwrapLinks(parent: AnswerNode, inSummary: boolean) {
-  if (!parent.children) return
-  parent.children = parent.children.flatMap((child) => {
-    const head = inSummary || child.tagName === 'summary'
-    unwrapLinks(child, head)
-    return child.tagName === 'a' && (head || child.children?.some(holdsBlock)) ? child.children ?? [] : [child]
-  })
-}
-
-// An <a> left open takes in every block after it, which would make the rest of the answer and its tool blocks one link. And
-// the head of a disclosure is a button, whose press would open the link too.
-const keepLinksInline = () => (tree: AnswerNode) => unwrapLinks(tree, false)
 
 // CommonMark's HTML blocks that only their own closing ends: left open, one takes the rest of the answer as raw HTML.
 const OPEN_UNTIL_CLOSED: [RegExp, RegExp][] = [
@@ -155,7 +137,7 @@ function takersAsWords() {
 }
 
 // react-markdown blanks an address of a scheme it does not know; MarkdownLink checks each kubest:// link it gets. An
-// image keeps only another host's address (aiImageSrc).
+// image is a link or its text by then (imagesAsLinks); one left would keep only another host's address (aiImageSrc).
 function urlTransform(url: string, key: string): string | null {
   if (key === 'src') return aiImageSrc(url)
   return url.startsWith('kubest://') ? url : defaultUrlTransform(url)
@@ -164,7 +146,7 @@ function urlTransform(url: string, key: string): string | null {
 export const CHAT_MARKDOWN = {
   remarkPlugins: [...REMARK_PLUGINS, readOpenHtmlAsWords],
   // tagfilter: an element that reads what follows as its own text (style, textarea, …) shows as words instead of hiding it
-  rehypePlugins: [takersAsWords, [rehypeRaw, { tagfilter: true }], [rehypeSanitize, ANSWER_SCHEMA], keepLinksInline],
+  rehypePlugins: [takersAsWords, [rehypeRaw, { tagfilter: true }], [rehypeSanitize, ANSWER_SCHEMA], imagesAsLinks, keepLinksInline],
   urlTransform,
   components: { a: MarkdownLink, details: MarkdownDetails, summary: MarkdownSummary, table: MarkdownTable },
 } satisfies Options

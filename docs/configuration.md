@@ -213,6 +213,10 @@ redis:
     existingSecret: ""            # a Secret of the users' keys alone; each service then reads only its own key
 networkPolicy:
   enabled: true         # default deny, plus only the flows the services use. Harmless on CNIs that do not enforce NetworkPolicy (Flannel, etc.); kind's kindnet enforces it since kind 0.24
+  aiEgress:
+    allowListOnly: false  # true (needs networkPolicy.enabled): ai-service connects out only to allowExternalEgressCIDRs, tool-server only to clusterAPIs, stsEndpoints and apiserverCIDR (cluster-requirements.md §15)
+    clusterAPIs: []       # the API servers of the registered clusters, this one's too, as VPC or subnet CIDRs (never a /32 on EKS): a CIDR opens 443 and 6443, {cidr, port} another port
+    stsEndpoints: []      # when tool-server holds an IRSA role: the subnets of the STS VPC interface endpoint, {cidr, port: 443}
 
 # Gateway exposure
 gateway:

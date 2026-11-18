@@ -182,7 +182,7 @@ test.describe('What a chat answer may draw', () => {
     }
   })
 
-  test('AI Chat: an image on the console\'s own host keeps its text and asks the console nothing, another host\'s keeps its address', async ({ page }) => {
+  test('AI Chat: an image on the console\'s own host keeps its text, another host\'s is a link, and drawing the answer fetches neither', async ({ page }) => {
     const title = `${MARK}-img-${Date.now().toString(36)}`
     const own = `/api/v1/${MARK}/image`
     const created = await page.request.post('/api/v1/sessions?cluster=self', { headers: XRW, data: { title } })
@@ -205,11 +205,11 @@ test.describe('What a chat answer may draw', () => {
       const bubble = page.locator(ASSISTANT).last()
       await expect(bubble).toContainText('After the images.')
       await page.waitForTimeout(1000)
-      const images = await bubble.locator('img[alt]').evaluateAll((els) => els.map((el) => [el.getAttribute('alt'), el.getAttribute('src')]))
-      expect(images.filter(([alt]) => alt !== '')).toEqual([
-        ['relative', null], ['absolute', null], ['raw', null], ['other', `https://example.test/${MARK}.png`],
-      ])
-      expect(asked.filter((url) => url.startsWith(origin))).toEqual([])
+      const images = await bubble.locator('img').evaluateAll((els) => els.map((el) => el.getAttribute('src')))
+      expect(images.filter((src) => src !== '/icon.svg')).toEqual([])
+      await expect(bubble.locator(`a[href="https://example.test/${MARK}.png"]`)).toHaveText('other')
+      for (const text of ['relative', 'absolute', 'raw']) await expect(bubble.getByText(text, { exact: true })).toHaveCount(1)
+      expect(asked).toEqual([])
     } finally {
       await dropSession(page, id)
     }
