@@ -139,6 +139,6 @@ describe('how often a followed page of pods is read again', () => {
   })
 
   it('is the Pods page\'s, which a drawer\'s table of many pods follows too', () => {
-    expect(podsPageSrc).toContain('refetchInterval: (query) => podPagePollEvery(query.state.data),')
+    expect(podsPageSrc).toContain('refetchInterval: (query) => unlessRefused(query.state.error, podPagePollEvery(query.state.data)),')
   })
 })

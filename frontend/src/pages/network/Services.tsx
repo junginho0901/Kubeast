@@ -23,7 +23,7 @@ import { applyServiceWatchEvent } from './services/serviceWatchNormalize'
 import { ServiceFilters } from './services/ServiceFilters'
 import { ServiceTable } from './services/ServiceTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -202,13 +202,10 @@ export default function Services() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllServices(true)
-      : await api.getServices(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['network', 'services', selectedNamespace] })
-    queryClient.setQueryData(['network', 'services', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['network', 'services', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllServices(true)
+      : api.getServices(selectedNamespace, true)))
 
   const createServiceYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

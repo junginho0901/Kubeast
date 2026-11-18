@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -203,8 +204,8 @@ func WithPayload(ctx context.Context, p TokenPayload) context.Context {
 	return context.WithValue(ctx, tokenPayloadKey, p)
 }
 
-// ErrNoPerson is the cluster transport's answer to a request whose context names no person and is not marked
-// AsKubeast: it is not sent.
+// ErrNoPerson is the cluster transport's answer to a request whose context names no person and is not one of
+// Kubeast's own reads (AsKubeast): it is not sent.
 var ErrNoPerson = errors.New("no signed-in person in the request context")
 
 type kubeastOwnKey struct{}
@@ -212,7 +213,8 @@ type kubeastOwnKey struct{}
 type pinnedPersonKey struct{}
 
 // AsKubeast marks ctx for Kubeast's own requests to a cluster (health reads, a read kept once for everyone): with no
-// person in ctx they go out under Kubeast's credential. A person in ctx still decides who a request acts as.
+// person in ctx a GET of the version or of a discovery list goes out under Kubeast's credential, and any other request
+// is refused as one naming no person is. A person in ctx still decides who a request acts as.
 func AsKubeast(ctx context.Context) context.Context {
 	return context.WithValue(ctx, kubeastOwnKey{}, true)
 }
@@ -226,17 +228,52 @@ func WithPinnedPerson(ctx context.Context, p TokenPayload) context.Context {
 
 // impersonatingRoundTripper adds impersonation headers for the user found in
 // the request context. A request without a user goes out under the service
-// credential only when its context is marked AsKubeast; any other is refused
-// with ErrNoPerson.
+// credential only when its context is marked AsKubeast and it is a GET of the
+// version or a discovery list (kubeastOwnRead); any other is refused with
+// ErrNoPerson.
 type impersonatingRoundTripper struct {
 	base      http.RoundTripper
 	clusterID string
+	// serverPath is the path of the cluster's server URL, "" for none.
+	serverPath string
 }
 
-// ImpersonationRoundTripper wraps base for one cluster; use it as
+// ImpersonationRoundTripper wraps base for one cluster whose server URL has no path; use it as
 // rest.Config.Wrap(func(rt) { return ImpersonationRoundTripper(rt, id) }).
 func ImpersonationRoundTripper(base http.RoundTripper, clusterID string) http.RoundTripper {
-	return &impersonatingRoundTripper{base: base, clusterID: clusterID}
+	return ImpersonationRoundTripperAt(base, clusterID, "")
+}
+
+// ImpersonationRoundTripperAt is ImpersonationRoundTripper for a cluster whose server URL has a path, a proxy in front
+// of the API server (https://rancher.example/k8s/clusters/c-1): client-go puts serverPath, cleaned, before the path of
+// every request, so Kubeast's own reads are looked for under it.
+func ImpersonationRoundTripperAt(base http.RoundTripper, clusterID, serverPath string) http.RoundTripper {
+	serverPath = path.Clean("/" + serverPath)
+	if serverPath == "/" {
+		serverPath = ""
+	}
+	return &impersonatingRoundTripper{base: base, clusterID: clusterID, serverPath: serverPath}
+}
+
+// kubeastOwnRead reports whether req is a read Kubeast may send as itself: a GET of a path client-go's discovery
+// client asks (discovery_client.go: /version, /api, /apis, /api/v1 and /apis/<group>/<version>) under the server URL's
+// path, written as client-go writes it (path.Join, so clean). Every object, list and watch path is below /api/v1 or a
+// group version, and none of them is one.
+func (t *impersonatingRoundTripper) kubeastOwnRead(req *http.Request) bool {
+	if req.Method != http.MethodGet {
+		return false
+	}
+	p, ok := strings.CutPrefix(req.URL.Path, t.serverPath)
+	if !ok || p != path.Clean(p) {
+		return false
+	}
+	switch p {
+	case "/version", "/api", "/apis", "/api/v1":
+		return true
+	}
+	gv, ok := strings.CutPrefix(p, "/apis/")
+	group, version, two := strings.Cut(gv, "/")
+	return ok && two && group != "" && version != "" && !strings.Contains(version, "/")
 }
 
 func (t *impersonatingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -245,7 +282,7 @@ func (t *impersonatingRoundTripper) RoundTrip(req *http.Request) (*http.Response
 		p, ok = req.Context().Value(pinnedPersonKey{}).(TokenPayload)
 	}
 	if !ok {
-		if own, _ := req.Context().Value(kubeastOwnKey{}).(bool); own {
+		if own, _ := req.Context().Value(kubeastOwnKey{}).(bool); own && t.kubeastOwnRead(req) {
 			return t.base.RoundTrip(req)
 		}
 		if req.Body != nil {

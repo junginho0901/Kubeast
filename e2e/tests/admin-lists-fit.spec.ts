@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
-import { pageScrolls } from './list-pages'
+import { pageScrolls, underChatButton } from './list-pages'
 
 // The admin lists and the Settings page's lists that grow with the data are paged. A list page is as high as the
 // screen at 1440×900: its table, its footer (with the rows-per-page choice) and nothing below them, so the page
@@ -94,6 +94,22 @@ test.describe('admin lists page and fit the screen', () => {
       const box = await pager.boundingBox()
       expect(box ? box.y + box.height : Infinity, `${p.path}: the footer is on the screen`).toBeLessThanOrEqual(900)
       expect(await pageScrolls(page), `${p.path}: the page does not scroll`).toBeLessThanOrEqual(1)
+      expect(await underChatButton(page, p.pager), `${p.path}: the footer's buttons under the floating chat button`).toEqual([])
+    }
+  })
+
+  // The floating chat button sits a fixed distance from the screen's right and bottom edges, and so does the end of a
+  // list page's footer: the page buttons are kept clear of it at the narrower and the wider common screen too.
+  test('Users, Roles and Clusters: no footer button under the floating chat button at 1280×800 and 1920×1080', async ({ page }) => {
+    for (const size of [{ width: 1280, height: 800 }, { width: 1920, height: 1080 }]) {
+      await page.setViewportSize(size)
+      for (const p of [{ path: '/admin/users', pager: 'admin-users-pager' }, { path: '/admin/roles', pager: 'roles-pager' }, { path: '/admin/clusters', pager: 'clusters-pager' }]) {
+        await page.goto(p.path)
+        const pager = page.getByTestId(p.pager)
+        await expect(pager, `${p.path}: the footer says what it shows`).toContainText(/Showing \d+-\d+ of \d+|Showing 0 of 0/, { timeout: 20_000 })
+        await pager.scrollIntoViewIfNeeded()
+        expect(await underChatButton(page, p.pager), `${p.path} at ${size.width}×${size.height}`).toEqual([])
+      }
     }
   })
 

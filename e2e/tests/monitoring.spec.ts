@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 import { pagerRange, readEveryPage } from './list-pages'
+import { sidebarStill } from './sidebar-screens'
 
 // Monitoring page — split in Phase 0 (Monitoring.tsx 739 → 93 + 4
 // sub-files). Both tabs (Nodes / Pods) are mounted on demand so we
@@ -19,6 +20,7 @@ test.describe('Monitoring', () => {
     // strip — both update on every render. The surrounding page chrome
     // (header, layout, tab buttons) is what we want to catch
     // regressions on.
+    await sidebarStill(page)
     await expect(page).toHaveScreenshot('monitoring-nodes.png', {
       fullPage: true,
       animations: 'disabled',
@@ -49,6 +51,7 @@ test.describe('Monitoring', () => {
     await page.getByRole('button', { name: /pod resources|pod 리소스/i }).first().click()
     await page.waitForLoadState('networkidle')
 
+    await sidebarStill(page)
     await expect(page).toHaveScreenshot('monitoring-pods-empty.png', {
       fullPage: true,
       animations: 'disabled',

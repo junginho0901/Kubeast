@@ -1,7 +1,8 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { api, type PrometheusQueryResponse, type PrometheusRangeResponse, type ClusterFeatures, type ServiceBackendUsage } from '@/services/api'
-import { clustersApi } from '@/services/api/clusters'
+import { useClusterList, useClusterSettled } from '@/hooks/useAccessibleClusterSelection'
 import { useCluster } from '@/contexts/ClusterContext'
+import { everyUntilRefused, retryUnlessRefused } from '@/services/queryDefaults'
 import { aiState, type AIState } from '@/utils/features'
 
 /**
@@ -13,21 +14,16 @@ import { aiState, type AIState } from '@/utils/features'
  * fallback so local-dev / older deployments keep auto-discovery.
  */
 export function useClusterFeatures() {
-  // Asked once the picker has settled on one of this user's clusters: a request without ?cluster= is
+  // Asked once the selection is settled, as the screens are (useClusterSettled): a request without ?cluster= is
   // answered for the server's default cluster, which the user may not be allowed on (403, "No permission").
   const { currentCluster } = useCluster()
-  const { data: clusters, isSuccess } = useQuery({
-    queryKey: ['clusters-accessible'],
-    queryFn: () => clustersApi.listClusters(true),
-    staleTime: 30_000,
-  })
-  const settled = isSuccess && (clusters.length === 0 || clusters.some((c) => c.id === currentCluster))
+  const settled = useClusterSettled()
   return useQuery<ClusterFeatures>({
     queryKey: ['cluster-features', currentCluster],
     queryFn: () => api.getClusterFeatures(),
     enabled: settled,
     staleTime: 5 * 60 * 1000, // 5 minutes — feature flags don't move
-    retry: 1,
+    retry: retryUnlessRefused(1),
     // If the endpoint is missing (older backend) treat Prometheus as enabled
     // so behavior matches pre-toggle deployments.
     placeholderData: { prometheus: { enabled: true } },
@@ -37,7 +33,7 @@ export function useClusterFeatures() {
 // ai.enabled once the features have answered (aiState); the cluster list is the read the features wait for.
 export function useAIState(): AIState {
   const features = useClusterFeatures()
-  const clusters = useQuery({ queryKey: ['clusters-accessible'], queryFn: () => clustersApi.listClusters(true), staleTime: 30_000 })
+  const clusters = useClusterList()
   return aiState(features.data, features.isPlaceholderData, clusters.isError)
 }
 
@@ -81,9 +77,9 @@ export function usePrometheusQuery(
   return useQuery<PrometheusQueryResponse>({
     queryKey: ['prometheus', currentCluster || 'default', ...queryKey],
     queryFn: () => api.prometheusQuery(promql),
-    refetchInterval: options?.refetchInterval ?? 30000,
+    refetchInterval: everyUntilRefused(options?.refetchInterval ?? 30000),
     enabled: (options?.enabled ?? true) && featuresIn && promEnabled,
-    retry: 1,
+    retry: retryUnlessRefused(1),
     retryDelay: 2000,
     staleTime: 10000,
     // Stub when the toggle is off so consumers see `available: false`
@@ -112,9 +108,9 @@ export function usePrometheusQueries(
     queries: queries.map((q) => ({
       queryKey: ['prometheus', currentCluster || 'default', ...queryKey, q.name],
       queryFn: () => api.prometheusQuery(q.promql),
-      refetchInterval: options?.refetchInterval ?? 30000,
+      refetchInterval: everyUntilRefused(options?.refetchInterval ?? 30000),
       enabled: (options?.enabled ?? true) && featuresIn && promEnabled,
-      retry: 1,
+      retry: retryUnlessRefused(1),
       retryDelay: 2000,
       staleTime: 10000,
       placeholderData: promEnabled ? undefined : ({ available: false, results: [] } as PrometheusQueryResponse),
@@ -167,9 +163,9 @@ export function usePrometheusRangeQuery(
       end: options?.end,
       step: options?.step,
     }),
-    refetchInterval: options?.refetchInterval ?? 5 * 60 * 1000, // 5 min — range data is slow-moving
+    refetchInterval: everyUntilRefused(options?.refetchInterval ?? 5 * 60 * 1000), // 5 min — range data is slow-moving
     enabled: (options?.enabled ?? true) && featuresIn && promEnabled,
-    retry: 1,
+    retry: retryUnlessRefused(1),
     retryDelay: 2000,
     staleTime: 60 * 1000,
     placeholderData: promEnabled ? undefined : { available: false, results: [] },
@@ -190,9 +186,9 @@ export function useServiceBackendUsage(namespace: string, name: string, options?
   const query = useQuery<ServiceBackendUsage>({
     queryKey: ['prometheus', currentCluster || 'default', 'service-backend-usage', namespace, name],
     queryFn: () => api.serviceBackendUsage(namespace, name),
-    refetchInterval: 30000,
+    refetchInterval: everyUntilRefused(30000),
     enabled: (options?.enabled ?? true) && featuresIn && promEnabled,
-    retry: 1,
+    retry: retryUnlessRefused(1),
     retryDelay: 2000,
     staleTime: 10000,
   })
