@@ -270,7 +270,7 @@ func (s *Service) readTimelineChanges(ctx context.Context, namespace string, sin
 	for _, src := range namespaced {
 		if src.source == "pods" && namespace == "" && len(scopeFromCtx(ctx)) == 0 {
 			if b := s.bundleForCtx(ctx); b != nil {
-				if allowed, err := s.mayListPods(ctx, b, ""); err == nil && !allowed {
+				if allowed, err := s.mayList(ctx, b, "pods", ""); err == nil && !allowed {
 					sink.skip("pods", "the restarts of every namespace are read only for a caller who may list pods across the cluster; name a namespace")
 					continue
 				}
