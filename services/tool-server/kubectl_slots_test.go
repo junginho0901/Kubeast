@@ -12,6 +12,7 @@ import (
 // countingKubectl stands in for kubectl and counts the runs under way; each waits for release when one is given.
 func countingKubectl(t *testing.T, delay time.Duration, release chan struct{}) (most, started *atomic.Int64) {
 	t.Helper()
+	kubectlAsNoOne(t)
 	orig := kubectlExec
 	most, started = &atomic.Int64{}, &atomic.Int64{}
 	var running atomic.Int64

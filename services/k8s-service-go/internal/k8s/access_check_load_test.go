@@ -67,7 +67,7 @@ func (a *reviewAPI) bundle(t testing.TB) *clientBundle {
 	}))
 	t.Cleanup(srv.Close)
 	cfg := &rest.Config{Host: srv.URL, QPS: -1}
-	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, "default") })
+	wrapPerson(cfg, "default")
 	cs, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -155,8 +155,8 @@ func TestAccessChecksAreNotSharedBetweenIdentities(t *testing.T) {
 	}{
 		{"alice", callerCtx("alice"), true},
 		{"bob", callerCtx("bob"), false},
-		{"carol with Read", auth.WithPayload(context.Background(), auth.TokenPayload{UserID: "carol", Email: "carol", Roles: map[string]string{"default": "read"}}), false},
-		{"carol with Write", auth.WithPayload(context.Background(), auth.TokenPayload{UserID: "carol", Email: "carol", Roles: map[string]string{"default": "write"}}), true},
+		{"carol with Read", auth.WithPayload(context.Background(), auth.TokenPayload{UserID: "carol", Email: "carol", Roles: map[string]string{"default": "Read"}}), false},
+		{"carol with Write", auth.WithPayload(context.Background(), auth.TokenPayload{UserID: "carol", Email: "carol", Roles: map[string]string{"default": "Write"}}), true},
 	}
 	var wg sync.WaitGroup
 	for _, c := range cases {
@@ -227,8 +227,10 @@ func TestOverviewOfALimitedGrantAsksSideBySideAndAnswersTheSame(t *testing.T) {
 	if got := api.mostAtOnce(); got < 2 || got > 8 {
 		t.Errorf("%d questions at once, want side by side and at most 8", got)
 	}
-	if got := api.count("scoped"); got != 4*len(scope) {
-		t.Errorf("%d reviews, want one per kind and namespace (%d)", got, 4*len(scope))
+	// b, e and f hold pods, Deployments and Services (9 questions), the Services refused there ask a, c and d too (3), and
+	// the PVCs no namespace holds ask one namespace
+	if got, want := api.count("scoped"), 9+3+1; got != want {
+		t.Errorf("%d reviews, want one per kind in each namespace holding it, the rest of a kind refused there and one for the kind none holds (%d)", got, want)
 	}
 	refused, _ := ov["refused"].([]string)
 	if fmt.Sprint(refused) != "[services]" {

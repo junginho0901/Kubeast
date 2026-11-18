@@ -118,18 +118,21 @@ func (h *Handler) GetPodNodeSummary(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetPodsOnNode handles GET /api/v1/pods/on-node?node=<name>: the pods of one
-// node ("" = not scheduled), optionally in one namespace, listed as the caller.
+// node ("" = not scheduled), optionally in one namespace, as a Cluster View
+// box draws them — what the caller's own list shows.
 func (h *Handler) GetPodsOnNode(w http.ResponseWriter, r *http.Request) {
 	if !r.URL.Query().Has("node") {
 		response.Error(w, http.StatusBadRequest, "node is required (empty for the pods not scheduled)")
 		return
 	}
-	data, err := h.svc.GetPodsOnNode(r.Context(), r.URL.Query().Get("node"), queryParam(r, "namespace", ""))
+	raw, err := h.svc.GetPodsOnNodeJSON(r.Context(), r.URL.Query().Get("node"), queryParam(r, "namespace", ""))
 	if err != nil {
 		h.handleError(w, err)
 		return
 	}
-	response.JSON(w, http.StatusOK, data)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(raw)
 }
 
 // GetPods handles GET /api/v1/namespaces/{namespace}/pods.
@@ -265,6 +268,10 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 		h.handleError(w, err)
 		return
 	}
+	// A server being replaced sends the browser on before it reads or writes anything.
+	if h.refuseWhileLeaving(w) {
+		return
+	}
 	// A sensitive read: not served while the audit store cannot record it.
 	if rerr := h.auditReady(r); rerr != nil {
 		h.refuseUnaudited(w, r, rerr)
@@ -305,6 +312,8 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 
 	ctx, release := h.holdSession(r.Context())
 	defer release()
+	ctx, leave := h.drain.HoldStream(ctx)
+	defer leave()
 	slog.Info("pod logs sse connected", "namespace", namespace, "pod", name, "container", container, "resumed", resumed)
 
 	// Pod 가 초기화 중일 때 retry. SSE 헤더 이미 보냈으므로 retry 실패 시
@@ -312,7 +321,7 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 	stream, err := h.retryStreamPodLogs(ctx, w, flusher, namespace, name, container, tail, since)
 	if err != nil {
 		// 이미 client 에 error 이벤트 전송됨
-		_ = h.recordAuditWithPayload(r, "k8s.pod.logs.read", "pod", name, namespace, err, nil, after)
+		_ = h.recordAuditAfterClose(r, "k8s.pod.logs.read", "pod", name, namespace, err, nil, after)
 		sayStreamEnded(ctx, w, flusher)
 		return
 	}

@@ -228,7 +228,8 @@ AI 도구 `logfiles`는 같은 경로로 같은 파일의 목록을 보고 읽�
   - 컨테이너 런타임은 exec 클라이언트가 끊겨도 그 프로세스를 멈추지 않아서, 탭을 닫을 때마다 앱 컨테이너에 `tail`이 남기 때문입니다(실측).
   - 대신 2초마다 마지막으로 읽은 바이트 뒤만 `tail -c +<오프셋>`으로 읽고(탐색 방식이라 파일 크기와 무관), 가끔 `ls -lindL`로 크기와 inode를 확인해 잘림·교체(로그 회전)를 따라갑니다. 명령은 매번 바로 끝납니다.
   - 20초마다 SSE 주석을 보내 프록시가 유휴 연결을 끊지 않게 합니다(nginx 60초).
-  - 연결이 끊기면 브라우저가 스스로 다시 붙지 않습니다. 다시 붙으면 마지막 줄을 또 읽고 감사 행도 하나 더 생기기 때문입니다.
+  - 연결이 끊기면(업그레이드로 서버가 다시 시작될 때, 네트워크가 끊길 때) 브라우저가 스스로 다시 붙어 받은 마지막 줄의 표시(`Last-Event-ID` = `<inode>:<오프셋>`)를 보냅니다. 스트림은 마지막 줄들을 다시 읽지 않고 그 줄 다음부터 이어 보냅니다. 그사이 파일이 교체되거나 잘렸으면 알림과 함께 파일의 마지막 줄들을 보여 줍니다.
+  - 다시 붙을 때마다 감사 행이 하나씩 생기고, 그 행의 `after.resume_from`에 어디서부터 이어 받았는지 남습니다.
   - 한 번에 읽는 줄은 `maxLines`(기본 2000)까지입니다.
 
 ```yaml
@@ -339,6 +340,35 @@ features:
 
 개발용(kind): `scripts/kind-logsearch.sh up` 다음에 `scripts/kind-tracing.sh up`을 실행하면 2번 클러스터에 Jaeger 2.22가 뜹니다.
 링크는 `kubectl port-forward -n tracing svc/jaeger 16686`(kubeast-b)을 실행한 뒤 `localhost:16686`에서 열립니다.
+
+## 터미널과 실시간 로그를 따로 맡는 서버
+
+`streams.enabled: true`이면 두 번째 Deployment `k8s-service-stream`이 k8s-service와 같은 이미지를 다른 역할(`SERVER_ROLE=stream`)로 돌립니다(Loki·Mimir가 한 바이너리를 `-target`으로 띄우는 것과 같은 방식).
+이 서버가 Pod exec, 노드 셸, 실시간 로그(컨테이너 출력, 로그 파일)를 맡고, k8s-service(`SERVER_ROLE=api`)가 실시간 목록을 포함한 나머지를 맡습니다.
+게이트웨이는 `files/nginx.conf`의 스트림 location 넷을 새 Service로 보내므로, 한쪽을 배포해도 다른 쪽 연결이 끊기지 않고 터미널이 많이 열려도 목록이 느려지지 않습니다.
+꺼져 있으면(기본) 예전처럼 k8s-service가 전부 맡고, 교체될 때 아래와 같은 방식으로 터미널을 차례로 끝냅니다(그 전에 `podShutdown.preStopSeconds`(5초) preStop 대기). `terminationGracePeriodSeconds`는 `podShutdown.preStopSeconds + drainSeconds + 35`(드레인 닫기 대기 5초, 노드 드레인 표시·서버 종료·녹화기 25초, 여유 5초 — 기본 100초)이고, 열린 터미널이 없으면 기다리지 않습니다.
+
+```yaml
+streams:
+  enabled: true
+  drainSeconds: 60     # 열린 터미널이 스스로 끝나기를 기다리는 시간
+  preStopSeconds: 10   # 드레인 전에 Service 엔드포인트에서 빠지는 시간
+resources:
+  k8sServiceStream:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
+```
+
+- **k8s-service-stream이 교체될 때**(배포, 노드 비우기): 새 파드가 먼저 준비됩니다(`maxSurge: 1`, `maxUnavailable: 0`). 옛 파드는 `preStopSeconds`를 기다린 뒤 SIGTERM을 받으면 `/readyz`에 503으로 답하고, 실시간 로그를 바로 끝내며(브라우저가 다시 붙어 마지막으로 받은 줄 다음부터 이어 받습니다), 터미널마다 언제 닫히는지 적습니다. `drainSeconds`가 지나도 열려 있는 터미널은 그 까닭과 함께 닫히고(close code 1001, `server_shutdown`) 다시 연결 버튼이 나옵니다. `terminationGracePeriodSeconds`는 `preStopSeconds + drainSeconds + 35`(기본 105초)입니다. k8s-service(api)는 `podShutdown.preStopSeconds`를 기다리고 그 + 30입니다.
+- **같은 신원**: 두 Deployment 모두 `k8s-service` 서비스 계정을 쓰므로 IRSA 역할과 녹화 저장소 자격 증명(`sessionRecording.secret`)이 둘 다에 적용됩니다. 녹화는 stream 서버가 쓰고 k8s-service가 읽습니다. 스풀 볼륨은 stream 서버에만 붙습니다.
+- **함께 쓸 수 없는 값**: `sessionRecording.storage: file`(볼륨 하나를 파드 둘이 붙일 수 없음)과 1보다 큰 `streams.replicas`.
+- **NetworkPolicy**: `k8s-service-stream`은 게이트웨이에서만 연결을 받고, 데이터베이스·Redis·auth-service·클러스터 API 서버·`sessionRecording.egress`로만 나갑니다.
+- **게이트웨이 앞단**: 게이트웨이 파드의 preStop 기다림(`podShutdown.preStopSeconds`)은 파드 IP로 보내는 로드밸런서가 그 파드에 새 요청을 그만 보낼 때까지 이어져야 하고(AWS ALB의 기본 등록 해제 지연 300초에서 기본 5초로 충분했습니다), 콘솔로 가는 Envoy Gateway 라우트는 요청 타임아웃(기본 15초)에 스트림을 끊지 않게 두세요.
+- **지표**: 스트림 서버마다(k8s-service-stream, `streams.enabled`가 꺼져 있으면 k8s-service) `kubeast_terminals_open`, `kubeast_followed_logs_open`.
+
+## 느린 요청이 기다린 곳 (게이트웨이 접근 로그)
+
+`gateway.accessLog.upstreamTimes`(기본 꺼짐)를 켜면 요청이 게이트웨이에서 보낸 시간과 뒤 서비스가 걸린 시간을 나눠 볼 수 있습니다. 접근 로그 줄마다 요청 시간, 서비스 연결·헤더·응답 시간, 서비스 주소, 클라이언트 포트가 더 붙습니다. 노트북 kind 클러스터에서 100명으로 한 부하 시험(2026-11-17)에서는 이 여섯 칸 때문에 줄 하나가 평균 49바이트(최대 53) 길어져, 163바이트에서 212바이트로 약 30 % 늘었습니다.
 
 ## 신뢰할 CA 추가 (사설 CA·TLS 가로채는 프록시)
 

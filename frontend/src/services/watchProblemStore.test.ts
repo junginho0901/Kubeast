@@ -33,6 +33,18 @@ describe('what the screen says about its live updates', () => {
     recordWatchFrame('a', { type: 'ERROR', error: { message: 'max subscriptions', reason: 'limit', limit_scope: 'server' } })
     expect(getWatchProblem()).toBe('server_limit')
     resetWatchProblems()
+    // the server's memory, held by TestANewWatchWaitsWhileTheMemoryHeldIsPastItsShare
+    recordWatchFrame('a', { type: 'ERROR', error: { message: 'short of memory', reason: 'limit', limit_scope: 'memory' } })
+    expect(getWatchProblem()).toBe('server_memory')
+    resetWatchProblems()
+    // a list waiting for its turn to open, held by TestALongWaitForAnOpeningIsToldAsAWaitForItsTurn: not the memory
+    recordWatchFrame('a', { type: 'ERROR', error: { message: 'k8s-service opens a few lists at a time to keep its memory in bounds; this one waits for its turn', reason: 'limit', limit_scope: 'opening' } })
+    expect(getWatchProblem()).toBe('server_opening')
+    resetWatchProblems()
+    // a scope from a server newer than this screen, as a screen before `opening` read that one
+    recordWatchFrame('a', { type: 'ERROR', error: { message: 'm', reason: 'limit', limit_scope: 'not-yet-known' } })
+    expect(getWatchProblem()).toBe('limit')
+    resetWatchProblems()
     // a server older than the field, while an upgrade is under way
     recordWatchFrame('a', { type: 'ERROR', error: { message: 'max subscriptions reached for the server (2000), cannot create new watch', reason: 'limit' } })
     expect(getWatchProblem()).toBe('limit')
@@ -75,7 +87,7 @@ describe('what the screen says about its live updates', () => {
     expect(getWatchProblem()).toBe('forbidden')
   })
 
-  it('keeps the limit of a grant apart from a refusal, and below every other problem', () => {
+  it('keeps the limit of a grant apart from a refusal, and below every other problem but a list waiting for its turn', () => {
     recordWatchFrame('a', frame('scope'))
     expect(getWatchProblem()).toBe('scope')
     recordWatchFrame('b', frame('unreachable'))
@@ -83,6 +95,22 @@ describe('what the screen says about its live updates', () => {
     clearWatchProblem('b')
     recordWatchFrame('c', frame('failed'))
     expect(getWatchProblem()).toBe('failed')
+  })
+
+  // It starts by itself within seconds, so whatever else stopped a list on the page is what the page says.
+  it('names a list waiting for its turn to open last, and drops it when its watch is on', () => {
+    const opening = { type: 'ERROR', error: { message: 'm', reason: 'limit', limit_scope: 'opening' } }
+    recordWatchFrame('a', opening)
+    expect(getWatchProblem()).toBe('server_opening')
+    recordWatchFrame('b', frame('scope'))
+    expect(getWatchProblem()).toBe('scope')
+    clearWatchProblem('b')
+    recordWatchFrame('c', { type: 'ERROR', error: { message: 'm', reason: 'limit', limit_scope: 'memory' } })
+    expect(getWatchProblem()).toBe('server_memory')
+    clearWatchProblem('c')
+    expect(getWatchProblem()).toBe('server_opening')
+    recordWatchFrame('a', { type: 'RESYNC' })
+    expect(getWatchProblem()).toBeUndefined()
   })
 
   it('forgets a watch the screen closed', () => {

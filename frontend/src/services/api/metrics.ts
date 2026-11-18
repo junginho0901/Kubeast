@@ -1,7 +1,5 @@
 // Metrics API — wraps the metrics-server top endpoints.
-// Each call detects metrics_unavailable and re-throws as a structured
-// 'metrics_unavailable' Error so callers can flip the
-// `metricsDisabled` flag (in client.ts) instead of retrying forever.
+// Each call re-throws metrics_unavailable as an Error with that code, which isMetricsUnavailableError reads.
 
 import { client, isMetricsUnavailableResponse } from './client'
 import type { TopResources } from './types'
@@ -42,10 +40,11 @@ export const metricsApi = {
     }
   },
 
-  getTopResources: async (podLimit: number = 5, nodeLimit: number = 3): Promise<TopResources> => {
+  // skip: "pods", "nodes" or both, a part the cluster refused, which the dashboard keeps from that answer
+  getTopResources: async (podLimit: number = 5, nodeLimit: number = 3, skip?: string): Promise<TopResources> => {
     try {
       const { data } = await client.get('/cluster/metrics/top-resources', {
-        params: { pod_limit: podLimit, node_limit: nodeLimit },
+        params: { pod_limit: podLimit, node_limit: nodeLimit, ...(skip ? { skip } : {}) },
       })
       return data
     } catch (error: any) {

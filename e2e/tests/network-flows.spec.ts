@@ -81,7 +81,7 @@ test.describe('Network flows (Hubble Relay)', () => {
     admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const features = await (await request.get(`/api/v1/cluster/features?cluster=${CLUSTER}`, { headers: bearer(admin) })).json()
     kubectl = ciliumKubectl()
-    ready = !!kubectl && features?.networkFlows?.enabled === true && (features.networkFlows.clusters ?? []).includes(CLUSTER)
+    ready = !!kubectl && (await registered(request, admin)) && features?.networkFlows?.enabled === true && (features.networkFlows.clusters ?? []).includes(CLUSTER)
   })
 
   test.afterAll(async ({ request }) => {
@@ -89,7 +89,7 @@ test.describe('Network flows (Hubble Relay)', () => {
   })
 
   test('a Read user sees the allowed and the dropped connection, as the cluster has them', async ({ request }) => {
-    test.skip(!ready, `no network flows for cluster ${CLUSTER} (scripts/kind-cilium.sh up)`)
+    test.skip(!ready, `cluster ${CLUSTER} is not registered in Kubeast or has no network flows (scripts/kind-cilium.sh up)`)
     // what the cluster has: the policy and the three workloads
     expect(kubectl!(`-n ${NS} get networkpolicy web-only-client -o jsonpath={.spec.ingress[0].from[0].podSelector.matchLabels.app}`)).toBe('client')
     const reader = await user(request, 'read', { role: 'Read' })
@@ -124,7 +124,7 @@ test.describe('Network flows (Hubble Relay)', () => {
   })
 
   test('a user the cluster does not let use the Relay is refused before any read', async ({ request }) => {
-    test.skip(!ready, `no network flows for cluster ${CLUSTER} (scripts/kind-cilium.sh up)`)
+    test.skip(!ready, `cluster ${CLUSTER} is not registered in Kubeast or has no network flows (scripts/kind-cilium.sh up)`)
     // a namespace-limited grant acts as kubeast:role:read, which the Relay Role does not bind
     const scoped = await user(request, 'scoped', { role: 'Read', namespaces: [NS] })
     const { status, body } = await flows(request, scoped.token, { kind: 'Deployment', name: 'web' })
@@ -136,7 +136,7 @@ test.describe('Network flows (Hubble Relay)', () => {
   })
 
   test('the drawer shows the connections and a drop opens the NetworkPolicy check for it', async ({ page }) => {
-    test.skip(!ready, `no network flows for cluster ${CLUSTER} (scripts/kind-cilium.sh up)`)
+    test.skip(!ready, `cluster ${CLUSTER} is not registered in Kubeast or has no network flows (scripts/kind-cilium.sh up)`)
     const pod = kubectl!(`-n ${NS} get pod -l app=web -o jsonpath={.items[0].metadata.name}`)
     await page.goto(`/workloads/pods?cluster=${CLUSTER}&namespace=${NS}&detail=Pod/${NS}/${pod}`)
     const section = page.getByTestId('netflow-section')
@@ -155,7 +155,7 @@ test.describe('Network flows (Hubble Relay)', () => {
   })
 
   test('the AI tool reads the same connections over MCP', async ({ request }) => {
-    test.skip(!ready, `no network flows for cluster ${CLUSTER} (scripts/kind-cilium.sh up)`)
+    test.skip(!ready, `cluster ${CLUSTER} is not registered in Kubeast or has no network flows (scripts/kind-cilium.sh up)`)
     const config = await request.get('/api/v1/ai/mcp/config', { headers: bearer(admin) })
     test.skip(!(config.ok() && (await config.json()).enabled), 'the MCP server is off (mcp.enabled)')
     await settled(request)
@@ -172,3 +172,10 @@ test.describe('Network flows (Hubble Relay)', () => {
     expect(answer.note).toContain('network_policy_check')
   })
 })
+
+// Kubeast has the kind cluster under its name (scripts/kind-*.sh up registers it, down removes it): the kind cluster
+// can be up without it, and every read of this spec names it
+async function registered(request: APIRequestContext, token: string): Promise<boolean> {
+  const body = await (await request.get('/api/v1/clusters', { headers: bearer(token) })).json()
+  return ((body.items ?? []) as { id: string }[]).some((c) => c.id === CLUSTER)
+}

@@ -321,7 +321,7 @@ export default function NamespaceInfo({ name }: Props) {
               </div>
             ))}
           </div>
-        ) : quotasError ? <ListReadFailure error={quotasError} /> : <NoneText />}
+        ) : quotasError ? <ListReadFailure error={quotasError} list="Resource Quotas" /> : <NoneText />}
       </InfoSection>
 
       {/* Limit Ranges */}
@@ -353,7 +353,7 @@ export default function NamespaceInfo({ name }: Props) {
               </div>
             ))}
           </div>
-        ) : limitRangesError ? <ListReadFailure error={limitRangesError} /> : <NoneText />}
+        ) : limitRangesError ? <ListReadFailure error={limitRangesError} list="Limit Ranges" /> : <NoneText />}
       </InfoSection>
 
       {/* Pods */}
@@ -422,7 +422,7 @@ export default function NamespaceInfo({ name }: Props) {
               </div>
             </div>
           </div>
-        ) : podsError ? <ListReadFailure error={podsError} /> : <NoneText />}
+        ) : podsError ? <ListReadFailure error={podsError} list="Pods" /> : <NoneText />}
       </InfoSection>
 
       {/* Events */}

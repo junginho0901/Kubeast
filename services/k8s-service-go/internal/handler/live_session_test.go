@@ -206,6 +206,27 @@ func TestSessionEndNoticeFollowsTheScreenLanguageAndTheReason(t *testing.T) {
 	}
 }
 
+// A terminal whose session could not be checked closes with "try again later" and asks for a new terminal, not a new
+// sign-in; one whose session ended closes with 4401 as before.
+func TestATerminalWhoseSessionCannotBeCheckedClosesToOpenAgain(t *testing.T) {
+	for _, tc := range []struct {
+		code, lang string
+		close      int
+		says, not  string
+	}{
+		{auth.SessionUnverified, "en", auth.SessionRetryCloseCode, "Open the terminal again", "Sign in"},
+		{auth.SessionUnverified, "ko", auth.SessionRetryCloseCode, "터미널을 다시 여세요", "로그인"},
+		{auth.SessionRevoked, "en", auth.SessionEndedCloseCode, "Sign in again", "Open the terminal again"},
+	} {
+		ctx, cancel := context.WithCancelCause(context.Background())
+		cancel(&auth.SessionEndError{Code: tc.code})
+		notice, close, reason, ok := serverEnded(ctx, tc.lang)
+		if !ok || close != tc.close || reason != tc.code || !strings.Contains(notice, tc.says) || strings.Contains(notice, tc.not) {
+			t.Errorf("%s/%s: close %d %q ok=%v notice %q, want close %d, %q and not %q", tc.code, tc.lang, close, reason, ok, notice, tc.close, tc.says, tc.not)
+		}
+	}
+}
+
 // lockedAudit takes rows from a handler goroutine while a test waits for one.
 type lockedAudit struct {
 	mu   sync.Mutex
@@ -418,6 +439,63 @@ func TestAHelmWatchEndsWithTheReasonWhenItsSessionIsRevoked(t *testing.T) {
 	<-opened
 	version.Store(1)
 	waitForEvent(t, events, sseEvent{streamEndedEvent, auth.SessionRevoked})
+}
+
+// cancelAwareAudit refuses a write on a cancelled context, as the Postgres store does.
+type cancelAwareAudit struct {
+	audit.Reader
+	rows      []audit.Record
+	deadlines []time.Duration
+}
+
+func (a *cancelAwareAudit) Write(ctx context.Context, rec audit.Record) (int64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, fmt.Errorf("audit insert: %w", err)
+	}
+	if d, ok := ctx.Deadline(); ok {
+		a.deadlines = append(a.deadlines, time.Until(d))
+	}
+	a.rows = append(a.rows, rec)
+	return int64(len(a.rows)), nil
+}
+
+// probeRefused answers pings but refuses a probe write, so Ready fails only after a failed write.
+type probeRefused struct{}
+
+func (probeRefused) Ping(context.Context) error       { return nil }
+func (probeRefused) ProbeWrite(context.Context) error { return errors.New("probe refused") }
+
+func TestTheSessionEndRowIsStoredAfterTheBrowserClosed(t *testing.T) {
+	store := &cancelAwareAudit{}
+	guarded := audit.Guard(store, probeRefused{}, true)
+	h := &Handler{auditStore: guarded}
+
+	reqCtx, closeRequest := context.WithCancel(cluster.WithID(auth.WithPayload(context.Background(),
+		auth.TokenPayload{UserID: "u1", Email: "u1@example.com"}), "c"))
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/namespaces/ns/pods/p/logs/stream", nil).WithContext(reqCtx)
+	r.Header.Set("X-Request-ID", "req-1")
+	held, end := context.WithCancelCause(reqCtx)
+	end(&auth.SessionEndError{Code: auth.SessionRevoked})
+	closeRequest() // the browser closed on the end frame
+
+	h.auditSessionEnd(held, r, "pod", "p", "ns", "pod-logs")
+
+	if len(store.rows) != 1 {
+		t.Fatalf("rows = %d, want the session end row", len(store.rows))
+	}
+	row := store.rows[0]
+	if row.Action != auditSessionEndAction || row.ActorUserID != "u1" || row.ActorEmail != "u1@example.com" || row.Cluster != "c" || row.RequestID != "req-1" {
+		t.Fatalf("row = %+v", row)
+	}
+	if len(store.deadlines) != 1 || store.deadlines[0] <= 0 || store.deadlines[0] > auditAfterCloseTimeout {
+		t.Fatalf("write deadline = %v, want within %v", store.deadlines, auditAfterCloseTimeout)
+	}
+	if st := guarded.Status(context.Background()); st.WriteFailures != 0 {
+		t.Fatalf("write failures = %d (%s)", st.WriteFailures, st.LastError)
+	}
+	if err := guarded.Ready(context.Background()); err != nil {
+		t.Fatalf("store marked broken: %v", err)
+	}
 }
 
 func TestAStreamEndedByItsClientSaysNothing(t *testing.T) {
