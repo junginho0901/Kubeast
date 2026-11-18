@@ -60,7 +60,7 @@ export function PodDetailModal({ isAdmin, manifest, describeData, describeError,
           </div>
           <button
             onClick={closeDetailModal}
-            className="p-2 hover:bg-slate-700 rounded-lg transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-primary-500"
+            className="p-2 hover:bg-slate-700 rounded-lg transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-primary-500 hit-area-40"
             aria-label={tr('common.close', 'Close')}
           >
             <X className="w-5 h-5 text-slate-400" />

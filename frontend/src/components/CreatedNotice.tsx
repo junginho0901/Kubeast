@@ -35,7 +35,7 @@ export function CreatedNotice({ fallback = false, pathname: path }: { fallback?:
           </p>
         )}
       </div>
-      <button type="button" className="btn-row shrink-0" onClick={clearCreated} data-testid="yaml-created-close">
+      <button type="button" className="btn-row shrink-0 hit-area-40" onClick={clearCreated} data-testid="yaml-created-close">
         {t('common.close', { defaultValue: 'Close' })}
       </button>
     </div>

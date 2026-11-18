@@ -401,6 +401,22 @@ body {
 }
 
 @layer base {
+  /* Utilities keep positioned controls fixed or absolute; ordinary buttons anchor their hit box. */
+  button {
+    position: relative;
+  }
+
+  /* The transparent hit box does not grow the visible button or a table row. */
+  button:not(table button)::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 24px);
+    height: max(100%, 24px);
+    transform: translate(-50%, -50%);
+  }
+
   /* Controls without a local ring use the console's keyboard focus outline. */
   :where(button, input, select, textarea, [role='button']):focus-visible {
     outline: 2px solid var(--color-primary-400);
@@ -414,6 +430,11 @@ body {
 }
 
 @layer components {
+  button.hit-area-40::after {
+    width: max(100%, 40px);
+    height: max(100%, 40px);
+  }
+
   /* flat: depth comes from the ladder's steps and a hairline, not a shadow */
   .card {
     @apply bg-slate-800 rounded-xl p-5 border border-hairline;

@@ -232,7 +232,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
           )}
           <button
             type="button"
-            className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400"
+            className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 hit-area-40"
             aria-label={t('common.close', { defaultValue: 'Close' })}
             onClick={() => {
               try {

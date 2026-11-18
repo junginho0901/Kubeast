@@ -88,7 +88,7 @@ export default function RecordingPlayerModal({ recordingId, title, onClose }: Pr
               {downloading === 'text' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
               {downloading === 'text' ? tr('common.downloading', 'Downloading...') : tr('recordings.player.text', 'Text')}
             </button>
-            <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:text-ink hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400" aria-label={tr('recordings.player.close', 'Close')}>
+            <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:text-ink hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 hit-area-40" aria-label={tr('recordings.player.close', 'Close')}>
               <X className="w-5 h-5" />
             </button>
           </div>

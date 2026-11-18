@@ -495,7 +495,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
         onClose={onClose}
         busy={save.isPending || start.isPending}
         testId="alert-detail"
-        footer={<button type="button" onClick={onClose} className="btn btn-secondary">{tr('common.close', 'Close')}</button>}
+        footer={<button type="button" onClick={onClose} className="btn btn-secondary hit-area-40">{tr('common.close', 'Close')}</button>}
       >
         {isLoading && <div className="py-6 text-center text-slate-500">{tr('common.loading', 'Loading…')}</div>}
         {error && (

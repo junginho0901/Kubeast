@@ -199,7 +199,7 @@ export default function ApiKeysSection() {
       {revokedName && (
         <div role="status" data-testid="api-key-revoked" className="mb-3 flex items-start gap-3 text-sm text-emerald-300">
           <p className="min-w-0 break-words">{tr('apiKeys.revoked', 'Revoked: {{name}}', { name: revokedName })}</p>
-          <button type="button" className="btn-row shrink-0" onClick={() => setRevokedName(null)} data-testid="api-key-revoked-close">
+          <button type="button" className="btn-row shrink-0 hit-area-40" onClick={() => setRevokedName(null)} data-testid="api-key-revoked-close">
             {tr('common.close', 'Close')}
           </button>
         </div>

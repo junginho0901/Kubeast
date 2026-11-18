@@ -50,7 +50,7 @@ export function InputArea({ inputRef: ref, onSubmit, onStop, isStreaming, disabl
             ref.current?.focus()
           }}
           disabled={isStreaming}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 hit-area-40"
           aria-label={t('aiChat.newChat', { defaultValue: 'New Chat' })}
           title={t('aiChat.newChat', { defaultValue: 'New Chat' })}
         >
@@ -73,7 +73,7 @@ export function InputArea({ inputRef: ref, onSubmit, onStop, isStreaming, disabl
         <button
           type="button"
           onClick={onStop}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-700"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-700 hit-area-40"
           aria-label={t('floatingChat.stopAriaLabel', { defaultValue: 'Stop' })}
           title={t('floatingChat.stopAriaLabel', { defaultValue: 'Stop' })}
         >
@@ -83,7 +83,7 @@ export function InputArea({ inputRef: ref, onSubmit, onStop, isStreaming, disabl
         <button
           type="submit"
           disabled={disabled || value.trim().length === 0}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40 hit-area-40"
           aria-label={t('floatingChat.sendAriaLabel', { defaultValue: 'Send' })}
           title={t('floatingChat.sendAriaLabel', { defaultValue: 'Send' })}
         >

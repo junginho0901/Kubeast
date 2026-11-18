@@ -113,7 +113,7 @@ export function PodGroupList({ group, onClose, onExpand, onOpen }: Props) {
                 </p>
               </div>
             </div>
-            <button type="button" onClick={onClose} className="p-2 hover:bg-slate-700 rounded-lg transition-colors" aria-label={t('common.close', 'Close')}>
+            <button type="button" onClick={onClose} className="p-2 hover:bg-slate-700 rounded-lg transition-colors hit-area-40" aria-label={t('common.close', 'Close')}>
               <X className="w-5 h-5 text-slate-400" />
             </button>
           </div>
