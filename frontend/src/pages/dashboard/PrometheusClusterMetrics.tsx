@@ -6,6 +6,7 @@
 
 import { useTranslation } from 'react-i18next'
 
+import { useMetricsNotReadForChat } from '@/hooks/useMetricsNotRead'
 import { failureText } from '@/utils/failureText'
 import { podsShown } from './podsShown'
 
@@ -56,12 +57,16 @@ function Slot({ label, title, value, figure, normalClass, missing, testId }: {
 }
 
 // In the card's place when the cluster's Prometheus is set but did not answer: the server's reason, not an empty page.
+// The card in the place of the numbers when the cluster's Prometheus did not answer, told to the floating chat too.
 export function PrometheusClusterMetricsFailure({ title, failure }: { title: string; failure: unknown }) {
   const { t } = useTranslation()
+  const reason = failureText(failure)
+  const text = t('dashboard.prometheusNotAnswering', { defaultValue: 'Prometheus did not answer: {{reason}}', reason })
+  useMetricsNotReadForChat({ summary: `${title}: ${text}`, data: { section: title, prometheus_not_answering: reason } })
   return (
     <div className="card" data-testid="prometheus-not-answering">
       <h2 className="text-lg font-semibold text-ink mb-2">{title}</h2>
-      <p className="text-sm text-slate-400">{t('dashboard.prometheusNotAnswering', { defaultValue: 'Prometheus did not answer: {{reason}}', reason: failureText(failure) })}</p>
+      <p className="text-sm text-slate-400">{text}</p>
     </div>
   )
 }

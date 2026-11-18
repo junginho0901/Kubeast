@@ -62,6 +62,32 @@ in bash, zsh and PowerShell.
     Installed without ai-service, tool-server and the ModelConfig controller.
     To turn it on, upgrade with --reset-then-reuse-values --set ai.enabled=true.
 {{- end }}
+{{- if and .Values.redis.enabled .Values.redis.acl.enabled .Values.secrets.existingSecret (not (include "kubeast.redisAcl" .)) }}
+
+▸ Redis runs with one password for every service
+
+    With secrets.existingSecret, the Redis users stay off until you turn them on.
+    Add {{ include "kubeast.redisUserKeys" . | splitList " " | join ", " }} to Secret {{ .Values.secrets.existingSecret }}, then upgrade with
+    --reset-then-reuse-values --set redis.acl.existingSecretHasKeys=true,
+    or put them in a Secret of their own and set redis.acl.existingSecret instead
+    (docs/configuration.md "Redis users").
+{{- end }}
+{{- if and (include "kubeast.redisAcl" .) .Values.secrets.existingSecret (not .Values.redis.acl.existingSecret) }}
+
+▸ Every backend holds every Redis user's password
+
+    The Redis user keys are in Secret {{ .Values.secrets.existingSecret }}, which every backend reads whole as its
+    environment. To give each service its own key only, move them to a Secret of their own and upgrade with
+    --reset-then-reuse-values --set redis.acl.existingSecret=<that Secret> (docs/configuration.md "Redis users").
+{{- end }}
+{{- if not .Values.postgresql.enabled }}
+
+▸ Database connections
+
+    The pods can hold up to {{ include "kubeast.dbConnections" . }} connections to {{ .Values.postgresql.externalHost | default "the external database" }}
+    (postgresql.pool × the pods while a rollout runs, 4 for the migrations, 10 kept).
+    Keep its max_connections above that.
+{{- end }}
 
 ▸ Upgrading
 

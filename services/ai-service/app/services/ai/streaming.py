@@ -21,6 +21,7 @@ from app.services.ai import charts
 from app.services.ai import formatters
 from app.services.ai import history as history_mod
 from app.services.ai import limits
+from app.services.ai import tool_replay
 from app.services.ai import usage as usage_acct
 from app.services.ai.debug_dump import dump, log, safe_error
 
@@ -67,13 +68,15 @@ def model_error(service, err: Exception) -> dict:
     """The chat's error event for a failed model call: one wording on every provider, naming the one in use, with
     the kind of refusal (credit, rate, auth, unavailable) as its catalog key and values next to the English text so
     the screen shows it in its language."""
-    from app.services.ai.model_errors import classify, provider_code
+    from app.services.ai.model_errors import BUSY, classify, provider_code
     provider = (getattr(service, "provider", None) or "").strip().lower()
     label, detail = PROVIDER_LABELS.get(provider, provider or "unknown"), safe_error(err)
+    refusal = classify(err)
+    if refusal.kind == BUSY:  # nothing was sent: the subscription's slots stayed taken (claude_code.ClaudeCodeBusy)
+        return {"error": str(err), "error_key": refusal.key, "error_args": {"provider": label}}
     code = provider_code(err)
     if code and code.lower() not in detail.lower():
         detail = f"{detail} ({code})"  # the provider's code stays in its words whatever the SDK writes
-    refusal = classify(err)
     args = {"provider": label, "detail": detail}
     text = f"AI model call failed ({label}): {detail}"
     if refusal.kind in _REFUSAL_HINTS:
@@ -547,6 +550,8 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
                 'requests': call_requests,
                 **({'objects': target.objects} if target.objects else {}),
                 **tool_input,
+                # replay: true when the answer came from recorded tool answers, not the cluster (tool_replay)
+                **tool_replay.call_fields(service, ran),
             },
             request_ip=(audit_http or {}).get('ip'),
             user_agent=(audit_http or {}).get('user_agent'),
@@ -604,6 +609,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         payload["access"] = call_access
     if call_requests is not None:
         payload["requests"] = call_requests
+    payload.update(tool_replay.call_fields(service, ran))
     if display_preview is not None:
         payload["display"] = display_preview
         payload["display_format"] = "kubectl"

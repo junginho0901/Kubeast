@@ -567,7 +567,7 @@ test.describe('number check — DRA screens', () => {
     const password = `dra-${id}-pw`
     const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(adminToken), data: { name: `E2E dra ${id}`, email, password } })
     expect(created.status(), await created.text()).toBe(201)
-    const userId = (await created.json()).id
+    const userId = madeUser((await created.json()).id, bearer(adminToken))
     const binding = JSON.stringify({
       apiVersion: 'rbac.authorization.k8s.io/v1', kind: 'RoleBinding', metadata: { name: 'e2e-dra-num-read', namespace: NS },
       roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'ClusterRole', name: 'view' },
@@ -632,4 +632,15 @@ test.describe('number check — DRA screens', () => {
       await expect(page.getByRole('button', { name: /^Create / }), `${p}: no Create`).toHaveCount(0)
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

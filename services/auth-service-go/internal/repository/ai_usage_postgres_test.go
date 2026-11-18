@@ -158,3 +158,35 @@ func TestPostgresAIUsage_501GroupsAndInvestigations(t *testing.T) {
 		t.Fatalf("cluster rows %v, want %v", clusters, want)
 	}
 }
+
+// A period written with an offset is the instants it names: one turn at 19:58:51 UTC is in 04:58:51+09:00 to
+// 04:58:52+09:00 and not in the second after it, whatever zone the period is written in.
+func TestPostgresAIUsage_APeriodWithAnOffset(t *testing.T) {
+	pool := freshMigratedDatabase(t)
+	ctx := context.Background()
+	at := time.Date(2026, 11, 17, 19, 58, 51, 0, time.UTC)
+	if _, err := pool.Exec(ctx, `INSERT INTO auth_audit_logs (service, action, actor_email, result, after, created_at)
+		VALUES ('ai', 'ai.chat.complete', 'u1@example.com', 'success', '{"model": "m1", "total_tokens": 7}', $1)`, at); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	repo := New(pool)
+	seoul := time.FixedZone("+09:00", 9*60*60)
+	for _, c := range []struct {
+		name         string
+		since, until time.Time
+		requests     int64
+	}{
+		{"around it, +09:00", at.In(seoul), at.Add(time.Second).In(seoul), 1},
+		{"around it, UTC", at, at.Add(time.Second), 1},
+		{"the second after it, +09:00", at.Add(time.Second).In(seoul), at.Add(2 * time.Second).In(seoul), 0},
+		{"ending at it, +09:00", at.Add(-time.Second).In(seoul), at.In(seoul), 0},
+	} {
+		report, err := repo.AIUsage(ctx, c.since, c.until, "user", 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := report.Totals.Chat.Requests; got != c.requests {
+			t.Errorf("%s (%s … %s): %d requests, want %d", c.name, c.since.Format(time.RFC3339), c.until.Format(time.RFC3339), got, c.requests)
+		}
+	}
+}

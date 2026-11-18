@@ -86,9 +86,10 @@ func (s *Service) sharedObjectEvents(ctx context.Context, b *clientBundle, names
 	return &own, nil
 }
 
-// readEvents lists the events selector picks in namespace as client, with none of the caller's values: client's own identity.
+// readEvents lists the events selector picks in namespace as client, with none of the caller's values but the record of
+// its calls: client's own identity.
 func readEvents(ctx context.Context, client kubernetes.Interface, namespace, selector string) (*corev1.EventList, error) {
-	plain, cancel := context.WithCancel(context.Background())
+	plain, cancel := context.WithCancel(carryClusterCalls(context.Background(), ctx))
 	defer context.AfterFunc(ctx, cancel)()
 	defer cancel()
 	return client.CoreV1().Events(namespace).List(plain, metav1.ListOptions{FieldSelector: selector})

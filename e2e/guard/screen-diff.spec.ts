@@ -4,7 +4,7 @@ import path from 'node:path'
 import { test, expect, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test'
 
 import { comparePictures, compileIntended, type IntendedRule } from './screen-compare'
-import { CLUSTER, DRAWER, DRAWER_KINDS, DRAWERS, BASE, ROLES, SIDEBAR, applyFixtures, drawerTargets, openCluster, quiet, removeFixtures, track } from './shared'
+import { CLUSTER, DRAWER, DRAWER_KINDS, DRAWERS, BASE, ROLES, SIDEBAR, applyFixtures, drawerTargets, openCluster, quiet, removeFixtures, track, type Tracker } from './shared'
 
 // Safety net (b), the screen comparison: the build under test against the build it replaces, picture by picture. Every
 // sidebar screen, /account and a drawer of every kind on self in each colour mode, and the sidebar on default and
@@ -30,7 +30,7 @@ const ONLY = process.env.E2E_SCREEN_ONLY ? new RegExp(process.env.E2E_SCREEN_ONL
 
 type Mode = (typeof MODES)[number]
 type Job = { id: string; mode: Mode; url: string; drawer: boolean }
-type Row = { id: string; verdict: 'same' | 'noise' | 'real' | 'intended'; pixels: number; box: unknown; size: string; why?: string; pr?: string }
+type Row = { id: string; verdict: 'same' | 'noise' | 'real' | 'intended'; pixels: number; box: unknown; size: string; why?: string; pr?: string; unsettled?: string[] }
 
 test.use({ trace: 'off', screenshot: 'off' }) // this net's own pictures are its record
 
@@ -54,11 +54,24 @@ function jobs(node: string): Job[] {
   return list
 }
 
-async function open(page: Page, base: string, job: Job): Promise<void> {
+// Settings (also under every drawer) shows its sections and what follows them together, once their reads answered
+const SECTIONS = '[data-testid="account-sections"]'
+
+async function settled(page: Page, t: Tracker, job: Job): Promise<boolean> {
+  const drawn = !job.url.startsWith('/account') || await page.locator(`${SECTIONS}:not(.hidden)`).waitFor({ state: 'attached', timeout: 5_000 }).then(() => true, () => false)
+  return (await quiet(page, t, 500)) && drawn
+}
+
+// Whether the page had stopped reading before its picture, waiting once more when it had not
+async function open(page: Page, base: string, job: Job): Promise<boolean> {
   const t = track(page)
   await page.goto(base + job.url)
-  await quiet(page, t, 500)
-  if (job.drawer) await page.locator(DRAWER).last().waitFor({ state: 'visible', timeout: 20_000 }).then(() => quiet(page, t, 500))
+  t.last = Date.now()
+  if (job.drawer) {
+    await quiet(page, t, 500)
+    await page.locator(DRAWER).last().waitFor({ state: 'visible', timeout: 20_000 })
+  }
+  return (await settled(page, t, job)) || settled(page, t, job)
 }
 
 // A graph lays itself out some time after its data came, and on a busy machine two pictures can match before that.
@@ -103,22 +116,24 @@ function keepPictures(job: Job, pictures: Record<string, Buffer | null>): void {
 async function look(context: BrowserContext, compare: Page, job: Job): Promise<Row> {
   const [old, fresh] = [await context.newPage(), await context.newPage()]
   try {
-    await Promise.all([open(old, BEFORE, job), open(fresh, BASE, job)])
+    const done = await Promise.all([open(old, BEFORE, job), open(fresh, BASE, job)])
+    const unsettled = (['old', 'new'] as const).filter((_, i) => !done[i])
+    const kept = unsettled.length > 0 ? { unsettled } : {}
     // a screen that drew nothing is no comparison: both builds failing the same way must not pass
     const text = await fresh.locator('body').innerText()
     if (text.trim().length < 20) throw new Error('the new build drew nothing')
     const a = await steady(old, job)
     const b = await steady(fresh, job)
     const first = await comparePictures(compare, a, b)
-    if (first.pixels === 0) return { id: job.id, verdict: 'same', pixels: 0, box: null, size: first.size }
+    if (first.pixels === 0) return { id: job.id, verdict: 'same', pixels: 0, box: null, size: first.size, ...kept }
     const again = await steady(old, job)
     const self = await comparePictures(compare, a, again)
     if (self.pixels > 0) {
       keepPictures(job, { old: a, again, marked: self.marked })
-      return { id: job.id, verdict: 'noise', pixels: self.pixels, box: self.box, size: self.size }
+      return { id: job.id, verdict: 'noise', pixels: self.pixels, box: self.box, size: self.size, ...kept }
     }
     keepPictures(job, { old: a, new: b, marked: first.marked })
-    return { id: job.id, verdict: 'real', pixels: first.pixels, box: first.box, size: first.size }
+    return { id: job.id, verdict: 'real', pixels: first.pixels, box: first.box, size: first.size, ...kept }
   } finally {
     await Promise.all([old.close(), fresh.close()])
   }
@@ -126,17 +141,18 @@ async function look(context: BrowserContext, compare: Page, job: Job): Promise<R
 
 function table(rows: Row[], failed: string[]): string {
   const count = (v: Row['verdict']) => rows.filter((r) => r.verdict === v).length
+  const reading = rows.filter((r) => r.unsettled)
   const lines = [
-    `screens ${rows.length} · same ${count('same')} · real ${count('real')} · intended ${count('intended')} · noise ${count('noise')} · did not open ${failed.length}`,
+    `screens ${rows.length} · same ${count('same')} · real ${count('real')} · intended ${count('intended')} · noise ${count('noise')} · did not open ${failed.length} · still reading ${reading.length}`,
     '', '| screen | verdict | pixels | where | why |', '|---|---|---|---|---|',
   ]
   const order: Row['verdict'][] = ['real', 'intended', 'noise']
   for (const v of order) {
     for (const r of rows.filter((x) => x.verdict === v)) {
-      lines.push(`| ${r.id} | ${r.verdict} | ${r.pixels} | ${JSON.stringify(r.box)} | ${r.why ? `${r.why} (${r.pr})` : ''} |`)
+      lines.push(`| ${r.id} | ${r.verdict} | ${r.pixels} | ${JSON.stringify(r.box)} | ${r.why ? `${r.why} (${r.pr})` : ''}${r.unsettled ? ` still reading: ${r.unsettled.join(', ')}` : ''} |`)
     }
   }
-  lines.push('', `Did not open: ${failed.join(' · ') || 'none'}`)
+  lines.push('', `Did not open: ${failed.join(' · ') || 'none'}`, `Still reading when pictured: ${reading.map((r) => `${r.id} (${r.unsettled!.join(', ')})`).join(' · ') || 'none'}`)
   return lines.join('\n')
 }
 

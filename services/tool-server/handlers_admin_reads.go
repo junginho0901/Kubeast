@@ -395,8 +395,12 @@ func handleAIUsage(ctx context.Context, args map[string]interface{}, headers htt
 	if err := sinceQuery(args, q); err != nil {
 		return "", err
 	}
-	if v := argString(args, "until_time", ""); v != "" {
-		q.Set("until", v)
+	until, err := untilTimeUTC(args)
+	if err != nil {
+		return "", err
+	}
+	if until != "" {
+		q.Set("until", until)
 	}
 	status, body, err := authServiceGet(ctx, headers, "/admin/ai-usage", q)
 	if err != nil {

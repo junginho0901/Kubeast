@@ -9,21 +9,21 @@ import (
 	"time"
 )
 
-// A new watch waits while the heap the last collection found live is past watchMemoryShare of the collector's limit,
-// with the limit frame the page already asks again after (limit_scope "memory"); the watches already on go on.
-func TestANewWatchWaitsWhileTheLiveHeapIsPastItsShare(t *testing.T) {
+// A new watch waits while the memory held against the collector's limit is past watchMemoryShare of it, with the limit
+// frame the page already asks again after (limit_scope "memory"); the watches already on go on.
+func TestANewWatchWaitsWhileTheMemoryHeldIsPastItsShare(t *testing.T) {
 	var live atomic.Uint64
 	m := muxOn(t, eventThenHold)
 	m.heap = func() (uint64, uint64) { return live.Load(), 1000 }
 	conn := socketTo(t, m, everyCluster)
 
-	live.Store(750) // at the share, not past it
+	live.Store(800) // at the share, not past it
 	request(t, conn, "REQUEST", "default", "/api/v1/pods", "watch=1")
 	if f := nextFrame(t, conn); f.Type != "DATA" {
 		t.Fatalf("a watch under the share: %s, want DATA", f.Type)
 	}
 
-	live.Store(751)
+	live.Store(801)
 	request(t, conn, "REQUEST", "default", "/api/v1/pods", "watch=1&labelSelector=a%3D1")
 	_, raw, err := conn.ReadMessage()
 	if err != nil {
@@ -77,7 +77,7 @@ func TestTheHeapIsReadAtMostOnceASecond(t *testing.T) {
 	if live == 0 || limit == 0 {
 		t.Fatalf("read live %d, limit %d: want both from runtime/metrics", live, limit)
 	}
-	h.live = 1
+	h.held = 1
 	if again, _ := h.read(); again != 1 {
 		t.Errorf("read again within the second: %d, want the reading kept", again)
 	}

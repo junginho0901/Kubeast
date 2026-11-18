@@ -22,7 +22,7 @@ import { applyGRPCRouteWatchEvent } from './grpcroutes/grpcRouteWatchNormalize'
 import { GRPCRouteFilters } from './grpcroutes/GRPCRouteFilters'
 import { GRPCRouteTable } from './grpcroutes/GRPCRouteTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -195,13 +195,10 @@ export default function GRPCRoutes() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllGRPCRoutes(true)
-      : await api.getGRPCRoutes(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['gateway', 'grpcroutes', selectedNamespace] })
-    queryClient.setQueryData(['gateway', 'grpcroutes', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['gateway', 'grpcroutes', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllGRPCRoutes(true)
+      : api.getGRPCRoutes(selectedNamespace, true)))
 
   const createGRPCRouteYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

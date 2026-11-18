@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
-import { pageScrolls } from './list-pages'
+import { coveredByChatButton, pageScrolls, underChatButton } from './list-pages'
 
 // The admin lists and the Settings page's lists that grow with the data are paged. A list page is as high as the
 // screen at 1440×900: its table, its footer (with the rows-per-page choice) and nothing below them, so the page
@@ -53,7 +53,7 @@ async function makeUsers(request: APIRequestContext, admin: string, tag: string,
     const email = `${PREFIX}${tag}-${String(i).padStart(2, '0')}@kubeast.local`
     const res = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: `E2E fit ${tag} ${i}`, email, password: PW, role_id: roleId } })
     expect(res.status(), `create ${email}: ${await res.text()}`).toBe(201)
-    made.push({ id: (await res.json()).id, email })
+    made.push({ id: madeUser((await res.json()).id, bearer(admin)), email })
   }
   return made
 }
@@ -94,6 +94,22 @@ test.describe('admin lists page and fit the screen', () => {
       const box = await pager.boundingBox()
       expect(box ? box.y + box.height : Infinity, `${p.path}: the footer is on the screen`).toBeLessThanOrEqual(900)
       expect(await pageScrolls(page), `${p.path}: the page does not scroll`).toBeLessThanOrEqual(1)
+      expect(await underChatButton(page, p.pager), `${p.path}: the footer's buttons under the floating chat button`).toEqual([])
+    }
+  })
+
+  // The floating chat button sits a fixed distance from the screen's right and bottom edges, and so does the end of a
+  // list page's footer: the page buttons are kept clear of it at the narrower and the wider common screen too.
+  test('Users, Roles and Clusters: no footer button under the floating chat button at 1280×800 and 1920×1080', async ({ page }) => {
+    for (const size of [{ width: 1280, height: 800 }, { width: 1920, height: 1080 }]) {
+      await page.setViewportSize(size)
+      for (const p of [{ path: '/admin/users', pager: 'admin-users-pager' }, { path: '/admin/roles', pager: 'roles-pager' }, { path: '/admin/clusters', pager: 'clusters-pager' }]) {
+        await page.goto(p.path)
+        const pager = page.getByTestId(p.pager)
+        await expect(pager, `${p.path}: the footer says what it shows`).toContainText(/Showing \d+-\d+ of \d+|Showing 0 of 0/, { timeout: 20_000 })
+        await pager.scrollIntoViewIfNeeded()
+        expect(await underChatButton(page, p.pager), `${p.path} at ${size.width}×${size.height}`).toEqual([])
+      }
     }
   })
 
@@ -367,4 +383,43 @@ test.describe('admin lists page and fit the screen', () => {
       await cleanup(request, admin)
     }
   })
+
+  // The floating chat button lies over the screen's bottom-right corner. AI Usage's note under its list ends where the
+  // footer's page buttons end (the hand check of 11-18 found its last words under the button at all three sizes), and
+  // the AI Models page, longer than the screen with the last model's edit form open, leaves room under that form.
+  test('AI Usage note and AI Models edit form: nothing under the floating chat button at 1280×800, 1440×900 and 1920×1080', async ({ page }) => {
+    const chat = page.getByTestId('floating-chat-toggle')
+    for (const size of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }, { width: 1920, height: 1080 }]) {
+      const at = `${size.width}×${size.height}`
+      await page.setViewportSize(size)
+      await page.goto('/admin/ai-usage')
+      await expect(page.getByTestId('ai-usage-pager'), `${at}: the footer says what it shows`).toContainText(/Showing \d+-\d+ of \d+|Showing 0 of 0/, { timeout: 20_000 })
+      await expect(page.getByTestId('ai-usage-note')).toContainText('Token counts are added up only when')
+      await expect(chat, `${at}: the chat button shows`).toHaveAttribute('aria-hidden', 'false')
+      expect(await coveredByChatButton(page, 'ai-usage-note'), `AI Usage note at ${at}`).toEqual([])
+
+      await page.goto('/admin/ai-models')
+      const list = page.getByTestId('ai-model-list')
+      await expect(list.or(page.getByText(/^No models registered/)), `${at}: the models or none`).toBeVisible({ timeout: 20_000 })
+      if ((await list.count()) === 0) continue
+      await list.getByTitle('Edit', { exact: true }).last().click()
+      await expect(list.getByRole('button', { name: 'Update', exact: true })).toBeVisible()
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+      await expect(chat, `${at}: the chat button shows`).toHaveAttribute('aria-hidden', 'false')
+      expect(await coveredByChatButton(page, 'ai-model-list'), `AI Models edit form at the page's end at ${at}`).toEqual([])
+      await list.getByRole('button', { name: 'Cancel', exact: true }).click()
+      await expect(list.getByRole('button', { name: 'Update', exact: true }), `${at}: the form closed, nothing saved`).toHaveCount(0)
+    }
+  })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

@@ -4,14 +4,16 @@
 
 import { useSyncExternalStore } from 'react'
 
-export type WatchProblem = 'forbidden' | 'limit' | 'server_limit' | 'server_memory' | 'unreachable' | 'failed' | 'scope'
+export type WatchProblem = 'forbidden' | 'limit' | 'server_limit' | 'server_memory' | 'unreachable' | 'failed' | 'scope' | 'server_opening'
 
 type WatchFrame = { type: string; error?: { message?: string; reason?: string; limit_scope?: string } }
 
-const SERIOUS_FIRST: WatchProblem[] = ['forbidden', 'limit', 'server_limit', 'server_memory', 'unreachable', 'failed', 'scope']
+// A list waiting for its turn to open starts by itself in a moment, so any other problem says more.
+const SERIOUS_FIRST: WatchProblem[] = ['forbidden', 'limit', 'server_limit', 'server_memory', 'unreachable', 'failed', 'scope', 'server_opening']
 const SILENT = new Set(['not_served', 'unsupported'])
 
-const LIMIT_OF_SCOPE: Record<string, WatchProblem> = { server: 'server_limit', memory: 'server_memory' }
+// A scope this screen does not know, from a newer server, reads as the tab's limit, as one with no scope does.
+const LIMIT_OF_SCOPE: Record<string, WatchProblem> = { server: 'server_limit', memory: 'server_memory', opening: 'server_opening' }
 const limitOf = (frame: WatchFrame): WatchProblem => LIMIT_OF_SCOPE[frame.error?.limit_scope ?? ''] ?? 'limit'
 
 // The kinds a watch names otherwise than the REST list it feeds does (forbiddenStore's segments).

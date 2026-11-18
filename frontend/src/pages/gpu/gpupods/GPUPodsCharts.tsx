@@ -43,7 +43,7 @@ export function GPUPodsCharts({
             </h2>
             <Box className="w-4 h-4 text-slate-400" />
           </div>
-          <div className="space-y-3">
+          <div className="space-y-3" data-list="GPU nodes">
             {pagedNodes.map(([node, info]) => (
               <div key={node} className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-2.5" data-testid="gpu-pods-node-usage" data-node={node}>
                 <div>

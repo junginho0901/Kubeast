@@ -17,7 +17,7 @@ import { applyVPAWatchEvent } from './vpas/vpaWatchNormalize'
 import { VPAFilters } from './vpas/VPAFilters'
 import { VPATable } from './vpas/VPATable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -169,13 +169,10 @@ export default function VPAs() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllVPAs(true)
-      : await api.getVPAs(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['workloads', 'vpas', selectedNamespace] })
-    queryClient.setQueryData(['workloads', 'vpas', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['workloads', 'vpas', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllVPAs(true)
+      : api.getVPAs(selectedNamespace, true)))
 
   const createVPAYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

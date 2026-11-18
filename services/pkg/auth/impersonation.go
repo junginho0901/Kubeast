@@ -5,10 +5,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
+	"path"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // Kubernetes impersonation (Authenticating → User impersonation): every call a
@@ -26,6 +31,9 @@ import (
 //	kubeast:role:<name>    any other (custom) role — no rights until the cluster binds it;
 //	                       also a Read/Write/Admin grant limited to namespaces ("ns"
 //	                       claim), since viewer/operator/admin are bound cluster-wide
+//
+// A built-in role is known by its exact name (IsBuiltinRole). A custom role
+// whose name makes a built-in's slug ("ADMIN", "write") gets no role group.
 const (
 	GroupAuthenticated = "kubeast:authenticated"
 	GroupViewer        = "kubeast:viewer"
@@ -67,21 +75,18 @@ func (p TokenPayload) Impersonation(clusterID string) (user string, groups []str
 	if matchAny(p.Perms["*"], "*") {
 		set[GroupAdmin] = struct{}{}
 	}
-	if role := strings.TrimSpace(p.Roles[clusterID]); role != "" {
-		if len(p.Namespaces[clusterID]) > 0 {
-			set[groupRolePrefix+groupSlug(role)] = struct{}{}
-			role = ""
-		}
-		switch strings.ToLower(role) {
-		case "":
-		case "admin":
+	if role := p.Roles[clusterID]; strings.TrimSpace(role) != "" && !TakesBuiltinSlug(role) {
+		switch {
+		case len(p.Namespaces[clusterID]) > 0:
+			set[groupRolePrefix+RoleGroupSlug(role)] = struct{}{}
+		case role == "Admin":
 			set[GroupAdmin] = struct{}{}
-		case "write":
+		case role == "Write":
 			set[GroupOperator] = struct{}{}
-		case "read":
+		case role == "Read":
 			set[GroupViewer] = struct{}{}
 		default:
-			set[groupRolePrefix+groupSlug(role)] = struct{}{}
+			set[groupRolePrefix+RoleGroupSlug(role)] = struct{}{}
 		}
 	}
 	for g := range set {
@@ -114,21 +119,80 @@ func (p TokenPayload) ClaimsKey() string {
 	return hex.EncodeToString(sum[:16])
 }
 
+// builtinRoleSlugs are the built-in roles' names, exactly as auth-service's
+// SeedSystemRoles writes them (every release has seeded these spellings), and
+// their slugs. A token carries a grant's role name only; names are unique, so
+// the exact name tells a built-in apart from a custom role.
+var builtinRoleSlugs = map[string]string{"Pending": "pending", "Member": "member", "Read": "read", "Write": "write", "Admin": "admin"}
+
+// IsBuiltinRole reports whether name is a built-in role's name as seeded.
+func IsBuiltinRole(name string) bool {
+	_, ok := builtinRoleSlugs[name]
+	return ok
+}
+
+// BuiltinRoleNamed gives the built-in role whose name equals name ignoring case
+// and surrounding spaces, for a setting written by hand ("admin" in a chart
+// value stands for Admin). A role a token or a request names is read with
+// IsBuiltinRole, never with this.
+func BuiltinRoleNamed(name string) (string, bool) {
+	name = strings.TrimSpace(name)
+	for b := range builtinRoleSlugs {
+		if strings.EqualFold(b, name) {
+			return b, true
+		}
+	}
+	return "", false
+}
+
+// TakesBuiltinSlug reports whether name is not a built-in role's but makes a
+// built-in's slug ("ADMIN", " read ", "PENDING"): such a role acts on a cluster
+// as no role group, neither the built-in's nor kubeast:role:<slug>, so it is
+// never taken for the built-in. Migration 25 renamed the roles stored so and
+// the database refuses new ones, so this is a second check.
+func TakesBuiltinSlug(name string) bool {
+	if IsBuiltinRole(name) {
+		return false
+	}
+	slug := RoleGroupSlug(name)
+	for _, s := range builtinRoleSlugs {
+		if s == slug {
+			return true
+		}
+	}
+	return false
+}
+
 // RoleGroupSlug is the form of a role name its group is built from, trimmed as
-// Impersonation trims it: two names with one slug act as one group.
+// Impersonation trims it: two names with one slug act as one group. The
+// database's role_group_slug, the frontend's roleGroupSlug and the chart's
+// kubeast.roleSlug make the same (roleGroupSlug.cases.json).
 func RoleGroupSlug(name string) string {
 	return groupSlug(strings.TrimSpace(name))
 }
 
-// groupSlug makes a role name safe for a group: lowercase, [a-z0-9._-] only.
+// groupSlug makes a role name safe for a group, in ASCII: A-Z and the two letters Go lowers to ASCII (U+0130, U+212A)
+// lowered, a-z 0-9 . _ - kept, any other ASCII character "-", and any other character "~" and its code point in four
+// hex digits ("~~" and six above U+FFFF). No ASCII name makes a "~", so two names with other characters make one slug
+// only when they differ in letter case, spaces or punctuation.
 func groupSlug(s string) string {
 	var b strings.Builder
-	for _, r := range strings.ToLower(s) {
+	for _, r := range s {
 		switch {
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r + 'a' - 'A')
+		case r == '\u0130':
+			b.WriteByte('i')
+		case r == '\u212a':
+			b.WriteByte('k')
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '.', r == '_', r == '-':
 			b.WriteRune(r)
+		case r < utf8.RuneSelf:
+			b.WriteByte('-')
+		case r <= 0xffff:
+			fmt.Fprintf(&b, "~%04x", r)
 		default:
-			b.WriteRune('-')
+			fmt.Fprintf(&b, "~~%06x", r)
 		}
 	}
 	return b.String()
@@ -140,24 +204,92 @@ func WithPayload(ctx context.Context, p TokenPayload) context.Context {
 	return context.WithValue(ctx, tokenPayloadKey, p)
 }
 
+// ErrNoPerson is the cluster transport's answer to a request whose context names no person and is not one of
+// Kubeast's own reads (AsKubeast): it is not sent.
+var ErrNoPerson = errors.New("no signed-in person in the request context")
+
+type kubeastOwnKey struct{}
+
+type pinnedPersonKey struct{}
+
+// AsKubeast marks ctx for Kubeast's own requests to a cluster (health reads, a read kept once for everyone): with no
+// person in ctx a GET of the version or of a discovery list goes out under Kubeast's credential, and any other request
+// is refused as one naming no person is. A person in ctx still decides who a request acts as.
+func AsKubeast(ctx context.Context) context.Context {
+	return context.WithValue(ctx, kubeastOwnKey{}, true)
+}
+
+// WithPinnedPerson is for a config pinned to one person whose callers send their own contexts (k8s-service
+// UserRESTConfigFor): the cluster transport acts as p for a request whose context names no person. FromContext does
+// not read it.
+func WithPinnedPerson(ctx context.Context, p TokenPayload) context.Context {
+	return context.WithValue(ctx, pinnedPersonKey{}, p)
+}
+
 // impersonatingRoundTripper adds impersonation headers for the user found in
-// the request context. Requests without a user (startup probes, health checks)
-// go out under the service credential unchanged.
+// the request context. A request without a user goes out under the service
+// credential only when its context is marked AsKubeast and it is a GET of the
+// version or a discovery list (kubeastOwnRead); any other is refused with
+// ErrNoPerson.
 type impersonatingRoundTripper struct {
 	base      http.RoundTripper
 	clusterID string
+	// serverPath is the path of the cluster's server URL, "" for none.
+	serverPath string
 }
 
-// ImpersonationRoundTripper wraps base for one cluster; use it as
+// ImpersonationRoundTripper wraps base for one cluster whose server URL has no path; use it as
 // rest.Config.Wrap(func(rt) { return ImpersonationRoundTripper(rt, id) }).
 func ImpersonationRoundTripper(base http.RoundTripper, clusterID string) http.RoundTripper {
-	return &impersonatingRoundTripper{base: base, clusterID: clusterID}
+	return ImpersonationRoundTripperAt(base, clusterID, "")
+}
+
+// ImpersonationRoundTripperAt is ImpersonationRoundTripper for a cluster whose server URL has a path, a proxy in front
+// of the API server (https://rancher.example/k8s/clusters/c-1): client-go puts serverPath, cleaned, before the path of
+// every request, so Kubeast's own reads are looked for under it.
+func ImpersonationRoundTripperAt(base http.RoundTripper, clusterID, serverPath string) http.RoundTripper {
+	serverPath = path.Clean("/" + serverPath)
+	if serverPath == "/" {
+		serverPath = ""
+	}
+	return &impersonatingRoundTripper{base: base, clusterID: clusterID, serverPath: serverPath}
+}
+
+// kubeastOwnRead reports whether req is a read Kubeast may send as itself: a GET of a path client-go's discovery
+// client asks (discovery_client.go: /version, /api, /apis, /api/v1 and /apis/<group>/<version>) under the server URL's
+// path, written as client-go writes it (path.Join, so clean). Every object, list and watch path is below /api/v1 or a
+// group version, and none of them is one.
+func (t *impersonatingRoundTripper) kubeastOwnRead(req *http.Request) bool {
+	if req.Method != http.MethodGet {
+		return false
+	}
+	p, ok := strings.CutPrefix(req.URL.Path, t.serverPath)
+	if !ok || p != path.Clean(p) {
+		return false
+	}
+	switch p {
+	case "/version", "/api", "/apis", "/api/v1":
+		return true
+	}
+	gv, ok := strings.CutPrefix(p, "/apis/")
+	group, version, two := strings.Cut(gv, "/")
+	return ok && two && group != "" && version != "" && !strings.Contains(version, "/")
 }
 
 func (t *impersonatingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	p, ok := FromContext(req.Context())
 	if !ok {
-		return t.base.RoundTrip(req)
+		p, ok = req.Context().Value(pinnedPersonKey{}).(TokenPayload)
+	}
+	if !ok {
+		if own, _ := req.Context().Value(kubeastOwnKey{}).(bool); own && t.kubeastOwnRead(req) {
+			return t.base.RoundTrip(req)
+		}
+		if req.Body != nil {
+			_ = req.Body.Close()
+		}
+		slog.Warn("cluster request with no person refused", "cluster", t.clusterID, "method", req.Method, "path", req.URL.Path)
+		return nil, ErrNoPerson
 	}
 	user, groups := p.Impersonation(t.clusterID)
 	r2 := req.Clone(req.Context())
