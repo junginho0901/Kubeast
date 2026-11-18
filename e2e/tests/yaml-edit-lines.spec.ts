@@ -5,6 +5,8 @@ import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 
+import { waitUntilListed } from './number-check.cr-shared'
+
 // A save of a YAML window takes out of the object what left the text its edit began from, each kind in the patch its API
 // takes: a strategic merge patch by each list's merge key, a JSON merge patch for a custom resource, labels and annotations
 // for a Namespace. What someone else added since stays. Held on `self` against kubectl, through the API and the window; the
@@ -76,6 +78,7 @@ test.describe('a line taken out of a YAML window', () => {
     })
 
   test.beforeAll(async ({ request }) => {
+    test.setTimeout(120_000)
     headers = await login(request)
     kubectl(`create namespace ${NS}`)
     kubectl('create -f -', JSON.stringify({
@@ -93,6 +96,7 @@ test.describe('a line taken out of a YAML window', () => {
       },
     }))
     kubectl(`wait --for=condition=Established crd/${CRD} crd/${TWIN_CRD} --timeout=60s`)
+    await waitUntilListed(kubectl, [CRD, TWIN_CRD])
   })
 
   test.afterAll(async () => {

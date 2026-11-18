@@ -351,7 +351,8 @@
       "expired": "time elapsed",
       "not_reviewed": "not reviewed within 24 h",
       "revoked": "revoked by an admin",
-      "superseded": "role set by an admin"
+      "superseded": "role set by an admin",
+      "role_renamed": "role renamed by the upgrade"
     },
     "admin": {
       "subtitle": "Users ask for a higher role on a cluster for a limited time. Approving grants it until the time runs out, then the previous role comes back. You cannot decide your own request.",
@@ -495,6 +496,7 @@
       "title": "No permission",
       "body": "You do not have permission to view {{resources}} in this cluster. Ask an administrator for a role that includes it.",
       "customRole": "Your role \"{{role}}\" acts on this cluster as the Kubernetes group {{group}}. If every page shows this notice, the cluster has not allowed and bound that group yet (chart auth.impersonation.customRoles).",
+      "builtinName": "Your role \"{{role}}\" has a built-in role's name in other capitals or with spaces, so on this cluster it acts as no role group and the cluster refuses what it reads. Ask an administrator for a built-in role here, or to rename this one.",
       "readPermission": "Your role on this cluster holds neither resource.objects.read (lists and details) nor resource.*.read (All resources: read), so Kubeast reads no list for it. Ask an administrator to add one.",
       "namespaces": "Your access to this cluster is limited to the namespaces {{namespaces}}; cluster-wide pages and other namespaces are not shown."
     },
@@ -502,9 +504,11 @@
       "forbidden": "The cluster refuses live updates for part of this page. Rows may be out of date; refresh to read them again.",
       "limit": "This tab follows as many lists as one tab may. The rest are read about once a minute and go back to live updates by themselves when this tab has room.",
       "serverLimit": "The server follows as many lists as it can. The rows on this page are read about once a minute and go back to live updates by themselves when it has room.",
+      "serverMemory": "The server is short of memory, so it starts following no more lists for now. The rows on this page are read about once a minute and go back to live updates by themselves when it has room.",
       "unreachable": "The cluster cannot be reached, so live updates are paused. They come back by themselves.",
       "failed": "Live updates are paused because the cluster answered with an error. They come back by themselves.",
-      "scope": "Your access is limited to namespaces, so objects of the whole cluster on this page do not update live. Rows may be out of date; refresh to read them again."
+      "scope": "Your access is limited to namespaces, so objects of the whole cluster on this page do not update live. Rows may be out of date; refresh to read them again.",
+      "serverOpening": "Many live lists are opening, a few at a time, so live updates for this page wait for their turn. They start by themselves shortly and read the rows again then."
     },
     "clusterChecking": "Checking connection...",
     "clusterConnected": "Cluster connected",
@@ -1611,7 +1615,13 @@
         "progressMessage": "Evicting pods from the node...",
         "success": "Completed",
         "doneMessage": "Node drain completed.",
-        "error": "Failed"
+        "error": "Failed",
+        "interrupted": "Interrupted",
+        "interruptedMessage": "The server running this drain stopped before it finished. Pods may still be on the node.",
+        "stillCordoned": "Still cordoned: {{nodes}}",
+        "notCordoned": "No node is left cordoned.",
+        "startAgain": "Start again",
+        "pods": "{{done}} of {{total}} pods evicted"
       }
     },
     "detail": {
@@ -1749,6 +1759,7 @@
     "delete": "Delete",
     "title": "AI Chat",
     "subtitle": "Ask the cluster in natural language and solve problems.",
+    "modelReadFailed": "Could not read the AI model: {{reason}}",
     "emptyTitle": "Start a new chat",
     "emptySubtitle": "Click a question below or type your own.",
     "resultZipDownload": "Download result ZIP",
@@ -1776,6 +1787,7 @@
     "copied": "Copied",
     "inputPlaceholder": "Type a message...",
     "stop": "Stop",
+    "waitingTurn": "Waiting for a turn — another question is running",
     "send": "Send",
     "confirmDeleteStreaming": "An answer is still generating. Stop and delete this chat?",
     "confirmDelete": "Delete this chat?",
@@ -1796,9 +1808,11 @@
       "modelAddress": "AI model call failed ({{provider}}): the model's address is not allowed, so nothing was sent. An administrator runs Test on this model in Admin → AI Models to see why.",
       "streamHttp": "The chat request failed (HTTP {{status}}): {{detail}}",
       "streamHttpStatus": "The chat request failed (HTTP {{status}}).",
+      "streamStartFailed": "The answer stream could not start. Try again in a moment.",
       "streamCut": "The connection closed before the answer finished, so the text above may be incomplete. Ask again for the whole answer.",
       "streamEmpty": "The connection closed without an answer. Ask again.",
-      "sessionNotFound": "This conversation no longer exists. Start a new one."
+      "sessionNotFound": "This conversation no longer exists. Start a new one.",
+      "claudeCodeBusy": "Claude Code is busy; ask again in a moment."
     },
     "errorAnswer": "Sorry, an error occurred while generating the answer: {{error}}",
     "errorSessionCreate": "Failed to create session: {{error}}",
@@ -2101,6 +2115,8 @@
       "retrying": "Retrying automatically... (every 5 seconds)",
       "unavailableAll": "Pod metrics are not available",
       "noPodsInNamespace": "No pods in {{namespace}} namespace",
+      "noneInGrant": "No pod metrics in the namespaces you can see",
+      "noneInGrantHint": "Your access to this cluster is limited to the namespaces {{namespaces}}, and no pod in them has metrics now. Choose a namespace to see its pods.",
       "searchPlaceholder": "Search pods by name..."
     },
     "autoRefresh": "Auto refresh every 5 seconds",
@@ -2165,6 +2181,7 @@
     "next": "Next",
     "paginationRange": "Showing {{start}}-{{end}} of {{total}}",
     "paginationEmpty": "Showing 0 of 0",
+    "paginationNotCounted": "Showing - of -",
     "prev": "Previous",
     "readonly": "Read-only",
     "refresh": "Refresh",
@@ -2602,6 +2619,7 @@
       "waiting": "Waiting for new lines...",
       "streamEnded": "Following stopped.",
       "streamFailed": "Following stopped: {{reason}}",
+      "reconnecting": "The connection dropped; reconnecting and going on after the last line shown...",
       "errors": {
         "disabled": "The log files view is turned off.",
         "namespace": "The log files view is not enabled in this namespace.",
@@ -2665,6 +2683,21 @@
     "restarts": "Restarts: {{count}}",
     "podDeleting": "Deleting...",
     "noPods": "No pods found",
+    "box": {
+      "shown": "Showing {{shown}} of {{total}} Pods",
+      "more": "+{{count}} show all on this Node",
+      "moreMatching": "+{{count}} matching · show all Pods on this Node",
+      "open": "Show all Pods on this Node"
+    },
+    "nodeView": {
+      "path": "Cluster View path",
+      "all": "All Nodes",
+      "problemsOnly": "Problem Pods only",
+      "gone": "Pod {{pod}} is no longer on this Node; a search finds it if it runs on another.",
+      "filtered": "Pod {{pod}} is outside the namespace filter ({{namespace}}).",
+      "missing": "Node {{node}} is not in this cluster.",
+      "matches": "Pods matching \"{{query}}\" are outlined: {{count}} on this Node."
+    },
     "tabs": {
       "summary": "Summary",
       "logs": "Logs",
@@ -2729,12 +2762,31 @@
       "loading": "Loading..."
     },
     "map": {
-      "aria": "Node map: {{nodes}} nodes, {{pods}} pods ({{error}} errors, {{warn}} warnings)",
-      "hover": "{{node}} · {{total}} pods · {{error}} errors · {{warn}} warnings",
+      "aria": "Node map: {{nodes}}, {{pods}} ({{errors}}, {{warnings}}).",
+      "hover": "{{node}} · {{pods}} · {{errors}} · {{warnings}}",
+      "hoverStatus": "{{node}} · {{status}} · {{pods}} · {{errors}} · {{warnings}}",
+      "ariaMarks": "{{notReadyNodes}}, {{cordoned}} SchedulingDisabled.",
+      "nodes": "{{count}} nodes",
+      "nodes_one": "{{count}} node",
+      "pods": "{{count}} pods",
+      "pods_one": "{{count}} pod",
+      "errors": "{{count}} errors",
+      "errors_one": "{{count}} error",
+      "warnings": "{{count}} warnings",
+      "warnings_one": "{{count}} warning",
+      "notReadyNodes": "{{count}} nodes not Ready",
+      "notReadyNodes_one": "{{count}} node not Ready",
+      "end": "{{cell}} (end)",
+      "opened": "{{node}} opened · {{pods}}",
+      "notReady": "Node not Ready",
+      "cordoned": "SchedulingDisabled",
       "error": "Error",
       "warn": "Warning",
       "ok": "Healthy",
-      "hint": "A cell is a node, a dot a pod. Click a cell to go to the node."
+      "hint": "A cell is a Node, a dot a Pod. Click a cell, or press Enter on it, to see all its Pods.",
+      "hintPaged": "A cell is a Node, a dot a Pod; the outlined cells are the boxes below. Click a cell, or press Enter on it, to see all its Pods.",
+      "openFirst": "Open {{node}}, the first of them",
+      "roleDescription": "Node map"
     }
   },
   "namespaces": {
@@ -3097,7 +3149,15 @@
     "revoked": "Stopped: your account or access changed. Sign in again.",
     "expired": "Stopped: the session reached its maximum lifetime. Sign in again.",
     "signedOut": "Stopped: this sign-in was signed out. Sign in again.",
-    "unverified": "Stopped: the session could not be verified. Sign in again."
+    "unverified": "Stopped: the session could not be verified for a while. Open it again.",
+    "checking": "Could not check your sign-in: {{reason}}. Asking again…"
+  },
+  "serverShutdown": {
+    "terminalReplaced": "The server was replaced. Reconnect to open a new terminal.",
+    "terminalLost": "The connection to the server was lost. Reconnect to open a new terminal.",
+    "terminalUnchecked": "The session could not be checked for a while. Reconnect to open a new terminal.",
+    "reconnect": "Reconnect",
+    "followStopped": "Following stopped: the server was replaced. Turn Follow on again to go on."
   },
   "login": {
     "sessionEnded": "Your session ended: your account or access may have changed, or the session timed out. Sign in again.",
@@ -3113,6 +3173,7 @@
       "ssoEmailUnverified": "The identity provider has not verified this email address.",
       "ssoEmailInvalid": "This name cannot be used for an account: it may not contain a colon, a space or a control character.",
       "ssoNoEmail": "The identity provider did not return an email address.",
+      "ssoRoleMissing": "The role this sign-in gives (auth.oidc.roleMapping or auth.oidc.defaultRole) does not exist. Ask an administrator: the server log names the role.",
       "tokenTooLarge": "Your roles differ across too many clusters to fit in a sign-in token. Ask an administrator to align them."
     },
     "sso": {
@@ -3724,10 +3785,13 @@
     "subtitle": "Manage the list of Teams that users can select during registration.",
     "teamTitle": "Team",
     "teamSubtitle": "Teams / Groups",
+    "nameLabel": "Team name",
     "inputPlaceholder": "Enter name...",
     "searchPlaceholder": "Search teams by name...",
     "add": "Add",
     "addError": "Not added: {{reason}}",
+    "nameRequired": "Enter a team name.",
+    "nameBlank": "Enter a team name: spaces alone are not one.",
     "empty": "No items registered.",
     "deleteConfirm": "Delete team \"{{name}}\"?",
     "deleteDialogTitle": "Delete team",
@@ -3745,6 +3809,15 @@
   },
   "adminRoles": {
     "deleteInUse": "Role \"{{name}}\" is still in use (accounts {{accounts}}, cluster grants {{grants}}, access requests {{requests}}). Give them another role first.",
+    "nameTakenBuiltinSame": "Role \"{{role}}\" already exists: it is a built-in role.",
+    "nameTakenSame": "Role \"{{role}}\" already exists. Choose another name.",
+    "nameTakenBuiltin": "Taken: it is the built-in role {{role}} apart from letter case or spaces.",
+    "nameTakenGroup": "On a cluster this name acts as the same Kubernetes group as role \"{{role}}\" ({{group}}). Choose another name.",
+    "groupHintEncoded": "A character outside ASCII is written as ~ and its Unicode code point (운 → ~c6b4), so Korean names of one length still make different groups.",
+    "nameTakenOther": "Another role's name makes the same group. Choose another name.",
+    "sameGroupNote": "Its name differs from role \"{{role}}\" only in letter case, spaces or punctuation, so it is not given on a cluster any more. A grant it already has acts as no role group where the other is a built-in role. Rename it.",
+    "sameGroupHint": "not grantable: same name as {{role}} apart from letter case or spaces",
+    "sameGroupRefused": "Role \"{{role}}\" is not given on a cluster: its name differs from role \"{{other}}\" only in letter case, spaces or punctuation. Rename it in Role Management first.",
     "systemRoles": {
       "pending": "Awaiting approval",
       "member": "Regular user (access per cluster grant)",
@@ -4052,6 +4125,7 @@
   "floatingChat": {
     "title": "AI Chat",
     "openAriaLabel": "Open AI Chat",
+    "openTitle": "Open AI Chat ({{shortcut}})",
     "closeAriaLabel": "Close",
     "copy": "Copy",
     "copied": "Copied",

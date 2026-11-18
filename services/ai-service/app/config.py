@@ -3,7 +3,6 @@
 """
 from pydantic_settings import BaseSettings
 from typing import List
-import os
 from pathlib import Path
 
 
@@ -34,7 +33,7 @@ class Settings(BaseSettings):
 
     # OpenAI
     OPENAI_API_KEY: str = ""  # 선택적으로 변경 (AI 기능 사용시 필요)
-    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_MODEL: str = "gpt-6-luna"
     # OpenAI-compatible base URL (e.g. OpenRouter/local vLLM). Empty means default OpenAI endpoint.
     OPENAI_BASE_URL: str = ""
     OPENAI_OPTIMIZATION_MAX_TOKENS: int = 1800
@@ -73,7 +72,11 @@ class Settings(BaseSettings):
     # Provider claude-code: a Claude subscription's setup-token through Claude Code (app/services/claude_code.py,
     # chart ai.providers.claudeCode.*). Off by default; the image needs --build-arg WITH_CLAUDE_CODE=true.
     AI_CLAUDE_CODE_ENABLED: bool = False
-    AI_CLAUDE_CODE_MAX_CONCURRENT: int = 1
+    AI_CLAUDE_CODE_MAX_CONCURRENT: int = 2
+    # Runs of the chat across every replica (claude_code_slots table); 0 = AI_CLAUDE_CODE_MAX_CONCURRENT.
+    AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL: int = 0
+    # Seconds a chat run waits for those slots before it ends as busy.
+    AI_CLAUDE_CODE_QUEUE_WAIT: int = 60
     AI_CLAUDE_CODE_TURN_TIMEOUT: int = 300
     AI_CLAUDE_CODE_MAX_TURNS: int = 10
 

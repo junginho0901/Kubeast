@@ -230,6 +230,7 @@ export function PodLogsTab({
                         onContainerSearchChange('')
                       }}
                       className="absolute right-2 top-1/2 transform -translate-y-1/2 p-0.5 hover:bg-slate-500 rounded-sm transition-colors"
+                      aria-label={tr('common.clearSearch', 'Clear the search')}
                     >
                       <X className="w-3 h-3 text-slate-400" />
                     </button>

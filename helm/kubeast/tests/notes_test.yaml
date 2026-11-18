@@ -1,0 +1,81 @@
+suite: NOTES.txt — the notes that Redis keeps one password with secrets.existingSecret, and the database connections an external database must take
+templates:
+  - NOTES.txt
+tests:
+  - it: says Redis runs with one password and how to turn the users on, for secrets.existingSecret without redis.acl.existingSecretHasKeys
+    set:
+      secrets.existingSecret: company-kubeast
+    asserts:
+      - matchRegexRaw:
+          pattern: '▸ Redis runs with one password for every service'
+      - matchRegexRaw:
+          pattern: 'Add REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD, REDIS_TOOL_SERVER_PASSWORD to Secret company-kubeast, then upgrade with\n\s+--reset-then-reuse-values --set redis\.acl\.existingSecretHasKeys=true'
+
+  - it: says nothing of it once redis.acl.existingSecretHasKeys is true
+    set:
+      secrets.existingSecret: company-kubeast
+      redis.acl.existingSecretHasKeys: true
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Redis runs with one password
+
+  - it: says nothing of it when the chart makes the passwords
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Redis runs with one password
+
+  - it: says nothing of it with redis.acl.enabled=false
+    set:
+      secrets.existingSecret: company-kubeast
+      redis.acl.enabled: false
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Redis runs with one password
+
+  - it: with the users' keys in secrets.existingSecret says every backend holds every Redis password and how to separate them
+    set:
+      secrets.existingSecret: company-kubeast
+      redis.acl.existingSecretHasKeys: true
+    asserts:
+      - matchRegexRaw:
+          pattern: '▸ Every backend holds every Redis user''s password'
+      - matchRegexRaw:
+          pattern: 'The Redis user keys are in Secret company-kubeast, which every backend reads whole as its\n\s+environment\. To give each service its own key only, move them to a Secret of their own and upgrade with\n\s+--reset-then-reuse-values --set redis\.acl\.existingSecret=<that Secret>'
+
+  - it: says nothing of either with redis.acl.existingSecret
+    set:
+      secrets.existingSecret: company-kubeast
+      redis.acl.existingSecret: company-redis-users
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Every backend holds every Redis
+      - notMatchRegexRaw:
+          pattern: Redis runs with one password
+
+  - it: says nothing of the shared keys when the chart makes the passwords
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Every backend holds every Redis
+
+  - it: prints the pods' most connections for an external database
+    set:
+      postgresql.enabled: false
+      postgresql.externalHost: db.example.com
+    asserts:
+      - matchRegexRaw:
+          pattern: can hold up to 154 connections to db\.example\.com
+
+  - it: prints nothing of it for the chart's PostgreSQL, which the install checks
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Database connections
+
+  - it: adds k8s-service-stream's pods to the sum for an external database with streams.enabled
+    set:
+      postgresql.enabled: false
+      postgresql.externalHost: db.example.com
+      streams.enabled: true
+      streams.replicas: 1
+    asserts:
+      - matchRegexRaw:
+          pattern: can hold up to 174 connections to db\.example\.com

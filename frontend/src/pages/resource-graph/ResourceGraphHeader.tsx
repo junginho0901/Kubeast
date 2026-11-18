@@ -216,7 +216,7 @@ export function ResourceGraphHeader({
             className="h-9 w-full pl-8 pr-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500"
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2">
+            <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2" aria-label={t('common.clearSearch', 'Clear the search')}>
               <X className="w-3.5 h-3.5 text-slate-400 hover:text-ink" />
             </button>
           )}

@@ -146,9 +146,11 @@ test.describe.serial('open connections and what a global key opens', () => {
     expect(seen.log?.reason).toBe('session_revoked')
     expect(seen.log?.lines ?? 0).toBeGreaterThan(0)
 
-    const rows = (await (await request.get(`/api/v1/auth/admin/audit-logs?action=k8s.session.end&actor_email=${encodeURIComponent(email)}&limit=20`, { headers: bearer(admin) })).json()) as { items?: { ActorEmail?: string; After?: { stream?: string; reason?: string } }[] }
-    const streams = (rows.items ?? []).filter((r) => r.ActorEmail === email).map((r) => r.After?.stream).sort()
-    expect(streams).toEqual(['exec', 'pod-logs'])
+    // A terminal's row comes after its close: the shell is hung up first (remote_shell.go hangUp).
+    await expect.poll(async () => {
+      const rows = (await (await request.get(`/api/v1/auth/admin/audit-logs?action=k8s.session.end&actor_email=${encodeURIComponent(email)}&limit=20`, { headers: bearer(admin) })).json()) as { items?: { ActorEmail?: string; After?: { stream?: string; reason?: string } }[] }
+      return (rows.items ?? []).filter((r) => r.ActorEmail === email).map((r) => r.After?.stream).sort()
+    }, { timeout: 10_000 }).toEqual(['exec', 'pod-logs'])
     await page.context().close()
   })
 
@@ -213,7 +215,9 @@ test.describe.serial('open connections and what a global key opens', () => {
     const signOuts = await rows('user.logout')
     expect(signOuts.map((r) => r.Result)).toEqual(['success'])
     expect(signOuts[0].After?.auth_time, 'the row names the sign-in that ended').toMatch(/^\d{4}-\d{2}-\d{2}T/)
-    expect((await rows('k8s.session.end')).map((r) => [r.After?.stream, r.After?.reason]).sort()).toEqual([['exec', 'session_signed_out'], ['pod-logs', 'session_signed_out']])
+    // A terminal's row comes after its close: the shell is hung up first (remote_shell.go hangUp).
+    await expect.poll(async () => (await rows('k8s.session.end')).map((r) => [r.After?.stream, r.After?.reason]).sort(), { timeout: 10_000 })
+      .toEqual([['exec', 'session_signed_out'], ['pod-logs', 'session_signed_out']])
     expect((await rows('user.token.refresh')).filter((r) => r.Result === 'failure').map((r) => r.Error)).toEqual(['session_signed_out'])
     await page.context().close()
   })
@@ -380,7 +384,7 @@ test.describe('a list that does not follow, and what the floating chat is told',
     try {
       kubectl(`-n ${namespace} create role e2e-list-only --verb=list --resource=configmaps`)
       kubectl(`-n ${namespace} create rolebinding e2e-list-only --role=e2e-list-only --group=kubeast:role:read`)
-      id = await createUser(request, admin, email, roles.find((r) => r.name.toLowerCase() === 'member')!.id)
+      id = madeUser(await createUser(request, admin, email, roles.find((r) => r.name.toLowerCase() === 'member')!.id), bearer(admin))
       expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read', namespaces: [namespace] } })).ok()).toBeTruthy()
 
       const page = await signIn(browser, email)
@@ -420,7 +424,7 @@ test.describe('a list that does not follow, and what the floating chat is told',
     kubectl(`create namespace ${namespace}`)
     try {
       kubectl(`-n ${namespace} create rolebinding e2e-view --clusterrole=view --group=kubeast:role:read`)
-      id = await createUser(request, admin, email, roles.find((r) => r.name.toLowerCase() === 'member')!.id)
+      id = madeUser(await createUser(request, admin, email, roles.find((r) => r.name.toLowerCase() === 'member')!.id), bearer(admin))
       expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read', namespaces: [namespace] } })).ok()).toBeTruthy()
       const token = await login(request, email, PW)
 
@@ -464,4 +468,15 @@ test.describe('a list that does not follow, and what the floating chat is told',
       kubectl(`delete namespace ${namespace} --ignore-not-found --wait=false`)
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

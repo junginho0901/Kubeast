@@ -17,7 +17,7 @@ import { applyHPAWatchEvent } from './hpas/hpaWatchNormalize'
 import { HPAFilters } from './hpas/HPAFilters'
 import { HPATable } from './hpas/HPATable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -168,13 +168,10 @@ export default function HPAs() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllHPAs(true)
-      : await api.getHPAs(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['workloads', 'hpas', selectedNamespace] })
-    queryClient.setQueryData(['workloads', 'hpas', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['workloads', 'hpas', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllHPAs(true)
+      : api.getHPAs(selectedNamespace, true)))
 
   const createHPAYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

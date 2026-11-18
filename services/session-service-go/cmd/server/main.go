@@ -18,10 +18,12 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
+	"github.com/junginho0901/kubeast/services/pkg/dbsession"
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
 	"github.com/junginho0901/kubeast/services/pkg/memlimit"
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
+	"github.com/junginho0901/kubeast/services/pkg/probe"
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/repository"
@@ -60,13 +62,14 @@ func main() {
 
 	// Connect to database
 	dbURL := cfg.DatabaseURLForPgx()
-	poolCfg, err := pgxpool.ParseConfig(dbURL)
+	sessionLimits := dbsession.FromEnv()
+	poolCfg, err := newPoolConfig(dbURL, sessionLimits)
 	if err != nil {
 		slog.Error("failed to parse database URL", "error", err)
 		os.Exit(1)
 	}
-	poolCfg.MaxConns = 20
-	poolCfg.MinConns = 2
+	slog.Info("database session limits", "statement_timeout", sessionLimits.StatementTimeout,
+		"lock_timeout", sessionLimits.LockTimeout, "idle_in_transaction_session_timeout", sessionLimits.IdleInTransaction)
 
 	ctx := context.Background()
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
@@ -105,6 +108,9 @@ func main() {
 	auditStore := audit.Guard(audit.WithStdout(pgAudit, audit.StdoutEnabled()), pgAudit, audit.FailClosedEnabled())
 	sessionHandler := handler.NewSessionHandler(repo, auditStore)
 	healthHandler := handler.NewHealthHandler(pool)
+	// Readiness: from serving until SIGTERM. The database stays out of it (a shared database down would take every
+	// replica out at once); /health says whether it answers.
+	ready := probe.New()
 
 	// Setup router
 	r := chi.NewRouter()
@@ -143,6 +149,8 @@ func main() {
 	// Health endpoints (no auth)
 	r.Get("/", healthHandler.Root)
 	r.Get("/health", healthHandler.Health)
+	r.Get("/livez", ready.Live)
+	r.Get("/readyz", ready.Ready)
 	r.Get("/metrics", m.Handler().ServeHTTP)
 
 	// API routes (with auth)
@@ -183,7 +191,8 @@ func main() {
 	<-quit
 
 	slog.Info("shutting down server...")
-	shutdownCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ready.Leave()
+	shutdownCtx, cancel := context.WithTimeout(ctx, serverShutdownWait)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
@@ -191,3 +200,7 @@ func main() {
 	}
 	slog.Info("server stopped")
 }
+
+// serverShutdownWait lets the requests in flight finish inside the 30 s the chart's grace period leaves after its
+// preStop wait, with room for the pool to close after it.
+const serverShutdownWait = 20 * time.Second

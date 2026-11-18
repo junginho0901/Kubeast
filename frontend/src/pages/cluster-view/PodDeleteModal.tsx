@@ -12,10 +12,10 @@ import { modalButton } from '@/components/modalStyles'
 import { TypeToConfirm, WarningBox } from '@/components/TypeToConfirm'
 import { systemObject } from '@/components/resource-detail/systemObject'
 import { useAIContext } from '@/hooks/useAIContext'
-import type { PodInfo } from '@/services/api'
+import type { NodeBoxRow } from '@/services/api'
 
 interface Props {
-  pod: PodInfo | null
+  pod: NodeBoxRow | null
   force: boolean
   error: string | null
   isDeleting: boolean

@@ -17,12 +17,14 @@ const SEND_RE = /^전송$|^send$/i
 
 // kubectl reads the ai-service log on the kind cluster the suite runs against:
 // KUBECONFIG when set, else the repo-local .kubeconfig-kind, never the shell's
-// default kubeconfig.
+// default kubeconfig. It reads every ai-service pod (the chart's app label), as
+// the turn may land on any replica; with a label kubectl prints only the last
+// 10 lines of each unless --tail says otherwise.
 const LOCAL_KUBECONFIG = path.resolve(__dirname, '../../.kubeconfig-kind')
 const KUBECONFIG = process.env.KUBECONFIG || (fs.existsSync(LOCAL_KUBECONFIG) ? LOCAL_KUBECONFIG : '')
 function aiServiceLog(since: string): string {
   if (!KUBECONFIG) throw new Error('KUBECONFIG is unset and .kubeconfig-kind is missing: refusing to run kubectl against the default kubeconfig')
-  return execFileSync('kubectl', ['-n', NS, 'logs', 'deploy/ai-service', '--all-containers', `--since=${since}`], {
+  return execFileSync('kubectl', ['-n', NS, 'logs', '-l', 'app=ai-service', '--all-containers', '--prefix', '--tail=-1', `--since=${since}`], {
     encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, KUBECONFIG },
   })
 }
