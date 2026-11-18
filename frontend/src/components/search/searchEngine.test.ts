@@ -68,6 +68,17 @@ describe('an expression the engine cannot search', () => {
     expect((await search([withData], 'a; b')).unreadable).toBe('Unexpected node')
   })
 
+  it('asks simple-eval about the form once over no data when there is no object: its refusal only, not a data error', async () => {
+    const twice = await search([], '!!data')
+    expect(twice).toMatchObject({ results: [], unreadable: 'Unexpected operator' })
+    // over no data `data` and `spec` are not defined: an error of the data, as for an object without them
+    for (const query of ['data != null', 'spec.x > 1']) {
+      const searched = await search([], query)
+      expect(searched.results).toEqual([])
+      expect(searched.unreadable).toBeUndefined()
+    }
+  })
+
   it('leaves out an object whose data the expression cannot read, and searches the others', async () => {
     const searched = await search([pending, restarted], 'status.containerStatuses[0].restartCount > 5')
     expect(searched.unreadable).toBeUndefined()

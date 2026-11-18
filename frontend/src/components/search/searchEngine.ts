@@ -30,8 +30,8 @@ function tryParse(query: string): { tree: ReturnType<typeof jsep> } | { unreadab
 }
 
 // `unreadable`: why the expression cannot be searched — jsep could not parse it, or simple-eval refused its form with a
-// SyntaxError, which the form gives whatever an object holds. An error from an object's data (a field it lacks) only
-// leaves that object out.
+// SyntaxError, which the form gives whatever an object holds (with no object, asked once over no data). An error from an
+// object's data (a field it lacks) only leaves that object out.
 export async function searchWithExpression(
   items: Record<string, unknown>[],
   query: string,
@@ -42,6 +42,15 @@ export async function searchWithExpression(
 
   const parsed = tryParse(query)
   if ('unreadable' in parsed) return { results: [], timeMs: 0, unreadable: parsed.unreadable }
+
+  if (items.length === 0) {
+    try {
+      evaluate(parsed.tree as any, {})
+    } catch (err) {
+      if (err instanceof SyntaxError) return { results: [], timeMs: performance.now() - start, unreadable: err.message }
+    }
+    return { results: [], timeMs: performance.now() - start }
+  }
 
   const dummyKeys: Record<string, undefined> = {}
   getTopLevelKeys(items).forEach(k => { dummyKeys[k] = undefined })
