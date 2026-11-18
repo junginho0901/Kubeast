@@ -17,7 +17,7 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { applyRoleWatchEvent } from './roles/roleWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
@@ -179,13 +179,10 @@ export default function Roles() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllRoles(true)
-      : await api.getRoles(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['security', 'roles', selectedNamespace] })
-    queryClient.setQueryData(['security', 'roles', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['security', 'roles', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllRoles(true)
+      : api.getRoles(selectedNamespace, true)))
 
   const createYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

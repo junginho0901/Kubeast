@@ -8,7 +8,7 @@ import { Plus, RefreshCw, Search } from 'lucide-react'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useCanCreate } from '@/hooks/useCanCreate'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import {
@@ -134,12 +134,10 @@ export default function ClusterNodes() {
   // the nodes are the list: their read failing is the Refresh failing. The usage columns come from metrics-server,
   // which a cluster may not run; their read failing keeps the last usage and is not the list's failure
   const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const [nodesData, metricsData] = await Promise.all([
-      api.getNodes(true),
+    const [, metricsData] = await Promise.all([
+      refreshList(queryClient, ['cluster', 'nodes'], () => api.getNodes(true)),
       metricsAvailable ? api.getNodeMetrics().catch(() => null) : Promise.resolve(null),
     ])
-    queryClient.removeQueries({ queryKey: ['cluster', 'nodes'] })
-    queryClient.setQueryData(['cluster', 'nodes'], nodesData)
     if (metricsData) {
       queryClient.setQueryData(['cluster', 'node-metrics'], metricsData)
     }
