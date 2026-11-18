@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import { test, expect } from '@playwright/test'
 
-import { clusterOf, compileRules, flatten, sortCells, type Answer, type IgnoreRule } from './response-compare'
+import { clusterOf, compileRules, flatten, rowsLeftOut, sortCells, tailCopies, type Answer, type IgnoreRule } from './response-compare'
 
 // The comparison on its own: each kind of change must come out as what it is. No browser, no cluster.
 
@@ -83,6 +83,27 @@ test.describe('the response comparison', () => {
     expect(cells).toContain('$[Cluster].permissions[resource.hygiene.scan].key')
   })
 
+  test('discovery lists pair by their groupVersion: the same lists in another order are the order cell only', () => {
+    const list = (groupVersion: string, ...kinds: string[]) =>
+      ({ groupVersion, resources: kinds.map((kind) => ({ name: `${kind.toLowerCase()}s`, kind, namespaced: true, verbs: ['get', 'list'] })) })
+    const old = answer([list('apps/v1', 'Deployment'), list('v1', 'Pod', 'Service')])
+    const moved = sortCells(old, answer([list('v1', 'Pod', 'Service'), list('apps/v1', 'Deployment')]), old)
+    expect(moved.real.map((d) => d.cell)).toEqual(['$.$order'])
+    const changed = sortCells(old, answer([list('v1', 'Pod'), list('apps/v1', 'Deployment')]), old)
+    expect(changed.real.map((d) => d.cell).sort()).toEqual([
+      '$.$order',
+      '$[v1].resources.$length',
+      '$[v1].resources.$order',
+      '$[v1].resources[Service//services].kind',
+      '$[v1].resources[Service//services].name',
+      '$[v1].resources[Service//services].namespaced',
+      '$[v1].resources[Service//services].verbs.$length',
+      '$[v1].resources[Service//services].verbs.$order',
+      '$[v1].resources[Service//services].verbs[get]',
+      '$[v1].resources[Service//services].verbs[list]',
+    ])
+  })
+
   test('a rollout\'s revisions are rows of their own', () => {
     const rollout = (revision: number, replicas: number) => ({ name: 'web', namespace: 'n', revision, replicas })
     const s = sortCells(answer([rollout(1, 2), rollout(2, 3)]), answer([rollout(1, 2), rollout(2, 4)]), answer([rollout(1, 2), rollout(2, 3)]))
@@ -102,6 +123,64 @@ test.describe('the response comparison', () => {
     expect(match('/x', '$status', 'viewer', '404', clusterOf('/x'))).toBeNull()
     expect(clusterOf('live test2 /apis/apps/v1/deployments?namespace=a')).toBe('test2')
     expect(clusterOf('/api/v1/cluster/metrics/pods?namespace=web&cluster=self')).toBe('self')
+  })
+
+  test('a rule with rowsLeftOut takes an answer that is the old one with rows left out, and no other', () => {
+    const event = (reason: string, count = 1) => ({ type: 'Normal', reason, message: `${reason} m`, source: 'kubelet', count })
+    const old = answer([event('RegisteredNode'), event('Starting'), event('Rebooted'), event('NodeHasSufficientMemory', 8)])
+    const kept = (fresh: Answer, old2: Answer = old) => rowsLeftOut(old, fresh, old2)
+    expect(kept(answer([event('RegisteredNode'), event('Rebooted')]))).toBe(true)
+    expect(kept(answer([]))).toBe(true)
+    expect(kept(answer([event('Rebooted'), event('RegisteredNode')])), 'rows in another order').toBe(false)
+    expect(kept(answer([event('RegisteredNode'), event('Rebooted', 2)])), 'a kept row changed').toBe(false)
+    expect(kept(answer([event('RegisteredNode'), event('NodeReady')])), 'a row the old answers lack').toBe(false)
+    expect(kept(answer([event('RegisteredNode'), event('Rebooted')]), answer([event('RegisteredNode')])), 'a row one old answer lacks').toBe(false)
+    expect(kept(answer({ detail: 'failed' }, 500)), 'no list').toBe(false)
+
+    const match = compileRules([{ route: '^/x$', cell: '^\\$(\\.\\$length$|\\[[0-9]+\\]\\.)', rowsLeftOut: true, why: 'fewer rows', pr: '#1' }])
+    const real = (fresh: Answer) => {
+      const leftOut = rowsLeftOut(old, fresh, old)
+      return sortCells(old, fresh, old).real.filter((d) => !match('/x', d.cell, '', String(fresh.status), '', leftOut)).map((d) => d.cell)
+    }
+    expect(real(answer([event('RegisteredNode'), event('Rebooted')]))).toEqual([])
+    expect(real(answer([event('RegisteredNode'), event('Rebooted', 2)]))).toContain('$[1].count')
+    expect(match('/x', '$.$length')).toBeNull()
+  })
+
+  test('a rule with tailCopies takes the later events of a lease that one side holds past the other, and compares the ones both hold', () => {
+    const lease = (name: string, i: number, holder = 'h') => ({ name, namespace: 'kube-system', holder_identity: holder, watchEvent: i ? 'MODIFIED' : 'ADDED' })
+    const frame = (...leases: [string, number, string?][]) =>
+      ({ status: 'live', body: { items: leases.flatMap(([name, count, holder]) => Array.from({ length: count }, (_, i) => lease(name, i, i === 2 && holder ? holder : 'h'))) } }) as Answer
+    const match = compileRules([{ route: '^leases$', cell: '^\\$\\.items\\[/[^\\]#]+#[0-9]+\\]\\.', tailCopies: true, why: 'renewals in the frame', pr: '#1' }])
+    const real = (old: Answer, fresh: Answer, old2: Answer = old) => {
+      const tail = tailCopies(old, fresh, old2)
+      return sortCells(old, fresh, old2).real.filter((d) => !match('leases', d.cell, '', 'live', '', false, tail(d.cell)))
+        .map((d) => d.cell.replace(/\]\..*$/, ']')).filter((c, i, all) => all.indexOf(c) === i && !c.endsWith('$length') && !c.endsWith('$order'))
+    }
+    const s = 'kube-scheduler'
+    expect(real(frame([s, 9]), frame([s, 8])), 'the old frames hold a ninth event').toEqual([])
+    expect(real(frame([s, 8]), frame([s, 9])), 'the new frame holds a ninth event').toEqual([])
+    expect(real(frame([s, 9]), frame([s, 7])), 'two events past the new frame\'s last').toEqual([])
+    expect(real(frame([s, 3, 'old']), frame([s, 3, 'new'])), 'a third event all frames hold, changed').toEqual(['$.items[/kube-system/kube-scheduler#3]'])
+    expect(real(frame([s, 3, 'old']), frame([s, 4, 'new'])), 'the same with a fourth in the new frame').toEqual(['$.items[/kube-system/kube-scheduler#3]'])
+    expect(real(frame([s, 2]), frame()), 'a lease the new frame lacks').toEqual(['$.items[/kube-system/kube-scheduler]', '$.items[/kube-system/kube-scheduler#2]'])
+    expect(real(frame([s, 3]), frame([s, 2]), frame([s, 2])), 'the old frames disagree: noise, not a tail').toEqual([])
+    expect(match('leases', '$.items[/kube-system/kube-scheduler#9].name', '', 'live', '', false, false)).toBeNull()
+  })
+
+  test('the lease rules of the ignore list take a later event past the other side\'s last and keep one both sides hold compared', () => {
+    const file = JSON.parse(fs.readFileSync(path.join(__dirname, 'response-diff-ignore.json'), 'utf8')) as { rules: IgnoreRule[] }
+    const match = compileRules(file.rules)
+    const route = 'live /apis/coordination.k8s.io/v1/leases'
+    const frame = (count: number, third = 'h') => ({ status: 'live', body: { items: Array.from({ length: count }, (_, i) =>
+      ({ name: 'kyverno', namespace: 'kyverno', holder_identity: i === 2 ? third : 'h', watchEvent: i ? 'MODIFIED' : 'ADDED' })) } }) as Answer
+    const real = (old: Answer, fresh: Answer) => {
+      const tail = tailCopies(old, fresh, old)
+      return sortCells(old, fresh, old).real.filter((d) => !match(route, d.cell, 'global-admin', 'live', 'default', false, tail(d.cell))).map((d) => d.cell)
+    }
+    expect(real(frame(8), frame(9)).filter((c) => c.includes('#9')), 'a ninth event the new frame holds').toEqual([])
+    expect(real(frame(9), frame(8)).filter((c) => c.includes('#9')), 'a ninth event the old frames hold').toEqual([])
+    expect(real(frame(9, 'a'), frame(9, 'b')), 'a third event all frames hold, changed').toEqual(['$.items[/kyverno/kyverno#3].holder_identity'])
   })
 
   test('a rule for a route the old build did not have keeps a server error of the new build a real difference', () => {

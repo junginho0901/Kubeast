@@ -95,6 +95,8 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		offset = 0
 	}
 
+	// updated_at is a timestamp without time zone holding UTC, and pgx sends a
+	// time's clock reading without its zone: the cursor goes as UTC.
 	var beforeUpdatedAt *time.Time
 	if v := r.URL.Query().Get("before_updated_at"); v != "" {
 		t, err := time.Parse(time.RFC3339Nano, v)
@@ -102,6 +104,7 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 			t, err = time.Parse("2006-01-02T15:04:05", v)
 		}
 		if err == nil {
+			t = t.UTC()
 			beforeUpdatedAt = &t
 		}
 	}

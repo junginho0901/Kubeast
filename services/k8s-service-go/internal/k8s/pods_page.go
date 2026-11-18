@@ -501,9 +501,9 @@ func accessCheckTTL() time.Duration {
 }
 
 // mayListPods asks whether the caller may list pods in namespace ("" = every
-// namespace), from this process's answers or by a SelfSubjectAccessReview.
+// namespace), from this process's answers or by a SelfSubjectAccessReview, for the rows read as kubeast:cache (mayListShown).
 func (s *Service) mayListPods(ctx context.Context, b *clientBundle, namespace string) (bool, error) {
-	return s.mayList(ctx, b, "pods", namespace)
+	return s.mayListShown(ctx, b, "", "pods", namespace)
 }
 
 // mayList asks whether the caller may list resource (core group) in namespace
@@ -523,17 +523,15 @@ func (s *Service) MayListKind(ctx context.Context, group, resource string) (bool
 
 // mayListGroup is mayList for a resource of any API group.
 func (s *Service) mayListGroup(ctx context.Context, b *clientBundle, group, resource, namespace string) (bool, error) {
-	name := resource
-	if group != "" {
-		name = group + "/" + resource
-	}
-	return s.mayDo(ctx, b, name+"_list_allowed:"+namespace, authorizationv1.ResourceAttributes{Verb: "list", Group: group, Resource: resource, Namespace: namespace})
+	what, attrs := listCheck(group, resource, namespace)
+	return s.mayDo(ctx, b, what, attrs)
 }
 
 // mayGetNamespace asks whether the caller may read the namespace name, with the attributes the API server gives that
-// read (GET /api/v1/namespaces/<name> is in the namespace of its own name), remembered as mayList's answers.
+// read (GET /api/v1/namespaces/<name> is in the namespace of its own name), remembered as mayList's answers, for the
+// namespaces read as kubeast:cache (mayDoShown).
 func (s *Service) mayGetNamespace(ctx context.Context, b *clientBundle, name string) (bool, error) {
-	return s.mayDo(ctx, b, "namespaces_get_allowed:"+name, authorizationv1.ResourceAttributes{Verb: "get", Resource: "namespaces", Namespace: name, Name: name})
+	return s.mayDoShown(ctx, b, "namespaces_get_allowed:"+name, authorizationv1.ResourceAttributes{Verb: "get", Resource: "namespaces", Namespace: name, Name: name})
 }
 
 // mayDo asks whether the caller may do what attrs describe, from this process's answers or by a SelfSubjectAccessReview, remembered
@@ -554,6 +552,7 @@ func (s *Service) mayDo(ctx context.Context, b *clientBundle, what string, attrs
 		if known, ok := s.rememberedAccess(ctx, key, what); ok {
 			return known, nil
 		}
+		accessReviews.asPerson.Inc()
 		review, err := b.authz.SelfSubjectAccessReviews().Create(ctx, &authorizationv1.SelfSubjectAccessReview{
 			Spec: authorizationv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &attrs},
 		}, metav1.CreateOptions{})
@@ -589,8 +588,8 @@ func (s *Service) askOnce(ctx context.Context, key string, ask func(context.Cont
 // listQuestion is one "may the caller list this?".
 type listQuestion struct{ group, resource, namespace string }
 
-// mayListAll answers one request's questions side by side, listFanOutWorkers at a time, each by mayListGroup. A failed
-// question fails the whole, the first in order as they would have failed in turn.
+// mayListAll answers one request's questions side by side, listFanOutWorkers at a time, each by mayListShown, for what
+// is read as kubeast:cache. A failed question fails the whole, the first in order as they would have failed in turn.
 func (s *Service) mayListAll(ctx context.Context, b *clientBundle, questions []listQuestion) ([]bool, error) {
 	answers := make([]bool, len(questions))
 	errs := make([]error, len(questions))
@@ -602,7 +601,7 @@ func (s *Service) mayListAll(ctx context.Context, b *clientBundle, questions []l
 		go func() {
 			defer wg.Done()
 			defer func() { <-places }()
-			answers[i], errs[i] = s.mayListGroup(ctx, b, q.group, q.resource, q.namespace)
+			answers[i], errs[i] = s.mayListShown(ctx, b, q.group, q.resource, q.namespace)
 		}()
 	}
 	wg.Wait()

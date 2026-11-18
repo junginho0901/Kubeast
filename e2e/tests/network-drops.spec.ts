@@ -8,8 +8,8 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 // (kubeast-cilium: deploy/kind/cilium-values.yaml, the Prometheus of deploy/kind/cilium-prometheus.yaml, the traffic
 // of deploy/kind/cilium-demo.yaml — stranger is dropped by the NetworkPolicy web-only-client on its way to web).
 // The counts as Prometheus has them, read as a Read user; a user the cluster does not let read that Prometheus is
-// refused; the drawer section and its "Why?" into the NetworkPolicy check; the AI tool over MCP. Skips without
-// that cluster's drop metric.
+// refused; the drawer section and its "Why?" into the NetworkPolicy check; the AI tool over MCP. Skips unless that
+// cluster is registered in Kubeast and has the drop metric.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -73,7 +73,7 @@ test.describe('Network drops (Hubble metrics)', () => {
   test.beforeAll(async ({ request }) => {
     admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     kubectl = ciliumKubectl()
-    if (!kubectl) return
+    if (!kubectl || !(await registered(request, admin))) return
     try {
       ready = promDirect(`sum(hubble_drop_total{destination_namespace="${NS}",destination_workload="web"})`).length > 0
     } catch {
@@ -86,7 +86,7 @@ test.describe('Network drops (Hubble metrics)', () => {
   })
 
   test('a Read user sees the drops as the cluster’s Prometheus counts them', async ({ request }) => {
-    test.skip(!ready, `no Hubble drop metric on cluster ${CLUSTER} (scripts/kind-cilium.sh up)`)
+    test.skip(!ready, `cluster ${CLUSTER} is not registered in Kubeast or has no Hubble drop metric (scripts/kind-cilium.sh up)`)
     const reader = await user(request, 'read', { role: 'Read' })
     const { status, body } = await drops(request, reader.token, { kind: 'Deployment', name: 'web', range: '1h' })
     expect(status, JSON.stringify(body)).toBe(200)
@@ -117,7 +117,7 @@ test.describe('Network drops (Hubble metrics)', () => {
   })
 
   test('a user the cluster does not let read its Prometheus is refused', async ({ request }) => {
-    test.skip(!ready, `no Hubble drop metric on cluster ${CLUSTER} (scripts/kind-cilium.sh up)`)
+    test.skip(!ready, `cluster ${CLUSTER} is not registered in Kubeast or has no Hubble drop metric (scripts/kind-cilium.sh up)`)
     // a namespace-limited grant acts as kubeast:role:read, which the viewer proxy Role does not bind
     const scoped = await user(request, 'scoped', { role: 'Read', namespaces: [NS] })
     const { status, body } = await drops(request, scoped.token, { kind: 'Deployment', name: 'web' })
@@ -125,7 +125,7 @@ test.describe('Network drops (Hubble metrics)', () => {
   })
 
   test('the drawer shows the drops and a policy drop opens the NetworkPolicy check for it', async ({ page }) => {
-    test.skip(!ready, `no Hubble drop metric on cluster ${CLUSTER} (scripts/kind-cilium.sh up)`)
+    test.skip(!ready, `cluster ${CLUSTER} is not registered in Kubeast or has no Hubble drop metric (scripts/kind-cilium.sh up)`)
     const pod = kubectl!(`-n ${NS} get pod -l app=web -o jsonpath={.items[0].metadata.name}`)
     await page.goto(`/workloads/pods?cluster=${CLUSTER}&namespace=${NS}&detail=Pod/${NS}/${pod}`)
     const section = page.getByTestId('netdrop-section')
@@ -143,7 +143,7 @@ test.describe('Network drops (Hubble metrics)', () => {
   })
 
   test('the AI tool reads the same drops over MCP', async ({ request }) => {
-    test.skip(!ready, `no Hubble drop metric on cluster ${CLUSTER} (scripts/kind-cilium.sh up)`)
+    test.skip(!ready, `cluster ${CLUSTER} is not registered in Kubeast or has no Hubble drop metric (scripts/kind-cilium.sh up)`)
     const config = await request.get('/api/v1/ai/mcp/config', { headers: bearer(admin) })
     test.skip(!(config.ok() && (await config.json()).enabled), 'the MCP server is off (mcp.enabled)')
     const res = await request.post(MCP, {
@@ -159,3 +159,10 @@ test.describe('Network drops (Hubble metrics)', () => {
     expect(answer.note).toContain('network_policy_check')
   })
 })
+
+// Kubeast has the kind cluster under its name (scripts/kind-*.sh up registers it, down removes it): the kind cluster
+// can be up without it, and every read of this spec names it
+async function registered(request: APIRequestContext, token: string): Promise<boolean> {
+  const body = await (await request.get('/api/v1/clusters', { headers: bearer(token) })).json()
+  return ((body.items ?? []) as { id: string }[]).some((c) => c.id === CLUSTER)
+}

@@ -23,6 +23,19 @@ import (
 // range of RFC 6455 §7.4.2); the close reason is one of the Session* codes below.
 const SessionEndedCloseCode = 4401
 
+// SessionRetryCloseCode is the close code of a WebSocket ended because its session could not be checked for StaleTTL
+// (SessionUnverified): "Try Again Later" of the IANA WebSocket close code registry. The session did not end, so the
+// client connects again, and that connection is checked as any new one.
+const SessionRetryCloseCode = 1013
+
+// SessionEndCloseCode is the close code of a WebSocket ended for reason, one of the Session* codes below.
+func SessionEndCloseCode(reason string) int {
+	if reason == SessionUnverified {
+		return SessionRetryCloseCode
+	}
+	return SessionEndedCloseCode
+}
+
 // Why a session ended, as clients are told.
 const (
 	SessionRevoked    = "session_revoked"    // token_version moved on, or the user or API key is gone

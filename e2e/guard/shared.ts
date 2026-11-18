@@ -332,6 +332,8 @@ export function applyTest2Fixtures(): { node: string; served: Set<string> } {
       { apiVersion: `${GW}/${v('grpcroutes')}`, kind: 'GRPCRoute', metadata: meta('guard-grpc'), spec: { parentRefs: [{ name: 'guard-gw' }] } },
       { apiVersion: `${GW}/${v('referencegrants')}`, kind: 'ReferenceGrant', metadata: meta('guard-rg'), spec: { from: [{ group: GW, kind: 'HTTPRoute', namespace: ns }], to: [{ group: '', kind: 'Service' }] } },
       { apiVersion: `${GW}/${v('backendtlspolicies')}`, kind: 'BackendTLSPolicy', metadata: meta('guard-btls'), spec: { targetRefs: [{ group: '', kind: 'Service', name: 'guard-svc' }], validation: { hostname: 'guard.invalid', wellKnownCACertificates: 'System' } } },
+      // the VPA's target, so its drawer reads the target's status (no pod: no replicas)
+      { apiVersion: 'apps/v1', kind: 'Deployment', metadata: meta('guard-deploy'), spec: { replicas: 0, selector: { matchLabels: { app: 'guard-deploy' } }, template: { metadata: { labels: { app: 'guard-deploy' } }, spec: { nodeSelector: NOWHERE, containers: [PAUSE] } } } },
       { apiVersion: 'autoscaling.k8s.io/v1', kind: 'VerticalPodAutoscaler', metadata: meta('guard-vpa'), spec: { targetRef: { apiVersion: 'apps/v1', kind: 'Deployment', name: 'guard-deploy' }, updatePolicy: { updateMode: 'Off' } } },
     ]
   }

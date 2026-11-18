@@ -343,7 +343,8 @@ test.describe('switch guard: nothing of the condition before after a switch', ()
 
     await page.goto('/alerts?cluster=self')
     await expect(page.getByTestId('alert-tab-resolved'), 'the dev values turn the inbox on (features.alertInvestigation)').toHaveCount(1, { timeout: 20_000 })
-    await expect.poll(inboxRows, { timeout: 15_000 }).toEqual(all.map((a) => a.id))
+    // Fit draws the rows that end inside the table: the first of All, the firing ones the switch below watches among them
+    await expect.poll(async () => { const ids = await inboxRows(); return ids.length >= firing.length && ids.every((id, i) => id === all[i].id) }, { timeout: 15_000 }).toBe(true)
 
     await test.step('All → Resolved: no firing row while the Resolved answer is held', async () => {
       const { problems: found } = await watchSwitch(page, {

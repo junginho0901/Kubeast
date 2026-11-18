@@ -267,11 +267,13 @@ func buildWhere(f Filter) (string, []any) {
 	if f.Result != "" {
 		add(`result = $%d`, f.Result)
 	}
+	// created_at is a timestamp without time zone holding UTC, and pgx sends a
+	// time's clock reading without its zone: a bound goes as UTC.
 	if !f.Since.IsZero() {
-		add(`created_at >= $%d`, f.Since)
+		add(`created_at >= $%d`, f.Since.UTC())
 	}
 	if !f.Until.IsZero() {
-		add(`created_at <= $%d`, f.Until)
+		add(`created_at <= $%d`, f.Until.UTC())
 	}
 	if f.AsOf > 0 {
 		add(`id <= $%d`, f.AsOf)

@@ -9,7 +9,7 @@
 // jsdom 없이 node 환경에서 실행 — WebSocket 을 직접 mock 으로 교체.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { WebSocketMultiplexer } from './watchMultiplexer'
+import { STEADY_MS, WebSocketMultiplexer } from './watchMultiplexer'
 import { getWatchProblem, resetWatchProblems } from './watchProblemStore'
 
 // import.meta.env / window 는 vite 가 아니라 node 에서 실행되므로 직접 stub.
@@ -371,7 +371,8 @@ describe('WebSocketMultiplexer', () => {
     const ws2 = MockWebSocket.instances[1]
     ws2.simulateOpen()
     await flush()
-    expect(ws2.sent.map((m) => JSON.parse(m))).toEqual([a, b])
+    // each saying it missed the gap
+    expect(ws2.sent.map((m) => JSON.parse(m))).toEqual([{ ...a, resync: true }, { ...b, resync: true }])
 
     mux.unsubscribe(a, onA)
     expect(JSON.parse(ws2.sent[ws2.sent.length - 1])).toEqual({ ...a, type: 'CLOSE' })
@@ -555,9 +556,9 @@ describe('WebSocketMultiplexer', () => {
       expect(listener).toHaveBeenCalledWith(expect.objectContaining({ type: 'CHANGED' }))
     })
 
-    // It sends no objects as it opens, so nothing else would tell it what changed while the socket was gone. A list's
-    // watch sends its objects again and asks for nothing more.
-    it('alone says it missed something when its socket comes back', async () => {
+    // It sends no objects as it opens, and a list's watch sends the objects there are and not those deleted while the
+    // socket was gone: both say they missed something, and the server's RESYNC has the list read again.
+    it('says it missed something when its socket comes back, and so does a list\'s watch', async () => {
       const mux = new WebSocketMultiplexer()
       const listener = vi.fn()
       const subs = [mux.subscribe(changes, listener), mux.subscribe(list, listener)]
@@ -574,7 +575,252 @@ describe('WebSocketMultiplexer', () => {
       await flush()
       const asks = ws2.sent.map((raw) => JSON.parse(raw))
       expect(asks.find((m) => m.path === changes.path)).toMatchObject({ resync: true })
-      expect(asks.find((m) => m.path === list.path)?.resync).toBeUndefined()
+      expect(asks.find((m) => m.path === list.path)).toMatchObject({ resync: true })
+    })
+  })
+
+  // Only a watch an earlier socket carried missed something: one first asked for on this socket has its list read as it opens.
+  it('a socket that comes back asks a RESYNC for the watches it had, not for those first asked for since', async () => {
+    const mux = new WebSocketMultiplexer()
+    const pods = { type: 'REQUEST' as const, clusterId: 'self', path: '/api/v1/pods', query: 'watch=1' }
+    const nodes = { ...pods, path: '/api/v1/nodes' }
+    const services = { ...pods, path: '/api/v1/services' }
+    const p = mux.subscribe(pods, vi.fn())
+    await flush()
+    const ws1 = MockWebSocket.instances[0]
+    ws1.simulateOpen()
+    await p
+
+    ws1.simulateServerClose()
+    // asked for while the socket is closed
+    const n = mux.subscribe(nodes, vi.fn())
+    await vi.advanceTimersByTimeAsync(1000)
+    await flush()
+    const ws2 = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+    ws2.simulateOpen()
+    await n
+    // asked for once it is open
+    await mux.subscribe(services, vi.fn())
+    expect(ws2.sent.map((raw) => JSON.parse(raw))).toEqual([{ ...pods, resync: true }, nodes, services])
+  })
+
+  // What the reconnect asks of the server, through the list it feeds: the server answers resync with one RESYNC once the
+  // watch is on (k8s-service followWatch), and the list is read again, without the row deleted while the socket was gone.
+  describe('a list whose socket came back', () => {
+    const path = '/apis/apps/v1/namespaces/demo/deployments'
+    const listKey = ['workloads', 'deployments', 'demo']
+
+    const follow = async () => {
+      vi.resetModules()
+      const { followList } = await import('./useKubeWatchList')
+      const { QueryClient, QueryObserver } = await import('@tanstack/react-query')
+      const client = new QueryClient()
+      let rows = [{ name: 'api', namespace: 'demo' }, { name: 'web', namespace: 'demo' }]
+      const queryFn = vi.fn(async () => rows)
+      const stopObserver = new QueryObserver(client, { queryKey: listKey, queryFn }).subscribe(() => {})
+      const stopList = followList(client, { clusterId: 'self', paths: [path], query: 'watch=1', queryKey: listKey })
+      await flush()
+      const ws = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+      ws.simulateOpen()
+      await vi.advanceTimersByTimeAsync(0)
+      return {
+        ws,
+        queryFn,
+        rows: () => client.getQueryData(listKey),
+        deleteMeanwhile: (name: string) => (rows = rows.filter((row) => row.name !== name)),
+        stop: () => { stopList(); stopObserver() },
+      }
+    }
+    // The server: a frame per object as a watch from no version opens, and a RESYNC first when the request asks for one.
+    const serve = (ws: MockWebSocket, objects: string[]) => {
+      for (const raw of ws.sent) {
+        const ask = JSON.parse(raw)
+        if (ask.type !== 'REQUEST') continue
+        if (ask.resync) ws.simulateMessage({ type: 'RESYNC', clusterId: 'self', path, query: 'watch=1' })
+        for (const name of objects) ws.simulateMessage({ type: 'DATA', clusterId: 'self', path, query: 'watch=1', data: { type: 'ADDED', object: { name, namespace: 'demo' } } })
+      }
+    }
+
+    it('drops a row deleted while the socket was gone, once the list is read again', async () => {
+      const list = await follow()
+      serve(list.ws, ['api', 'web'])
+      expect(list.rows()).toEqual([{ name: 'api', namespace: 'demo' }, { name: 'web', namespace: 'demo' }])
+
+      list.ws.simulateServerClose()
+      list.deleteMeanwhile('api')
+      await vi.advanceTimersByTimeAsync(1000)
+      await flush()
+      const ws2 = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+      expect(ws2).not.toBe(list.ws)
+      ws2.simulateOpen()
+      await flush()
+      serve(ws2, ['web'])
+      // the read waits its share of five seconds, the rows on screen until then
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(list.queryFn).toHaveBeenCalledTimes(2)
+      expect(list.rows()).toEqual([{ name: 'web', namespace: 'demo' }])
+      list.stop()
+    })
+
+    it('a tab that is hidden reads it once it shows again', async () => {
+      const { focusManager } = await import('@tanstack/react-query')
+      const list = await follow()
+      serve(list.ws, ['api', 'web'])
+      list.ws.simulateServerClose()
+      list.deleteMeanwhile('api')
+      focusManager.setFocused(false)
+      try {
+        await vi.advanceTimersByTimeAsync(1000)
+        await flush()
+        const ws2 = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+        ws2.simulateOpen()
+        await flush()
+        serve(ws2, ['web'])
+        await vi.advanceTimersByTimeAsync(60_000)
+        expect(list.queryFn).toHaveBeenCalledTimes(1)
+        expect(list.rows()).toEqual([{ name: 'api', namespace: 'demo' }, { name: 'web', namespace: 'demo' }])
+        focusManager.setFocused(true)
+        await vi.advanceTimersByTimeAsync(0)
+        expect(list.queryFn).toHaveBeenCalledTimes(2)
+        expect(list.rows()).toEqual([{ name: 'web', namespace: 'demo' }])
+      } finally {
+        focusManager.setFocused(undefined)
+        list.stop()
+      }
+    })
+  })
+
+  // Cluster View's node boxes follow their pods the same way (a field selector per node, frames gathered) and have no
+  // polling: the read the RESYNC asks for is what takes a pod deleted while the socket was closed off the box.
+  describe('Cluster View node boxes whose socket came back', () => {
+    type Row = { name: string; namespace: string; node_name: string; status: string }
+    const queryOf = (node: string) => `watch=1&fieldSelector=${encodeURIComponent(`spec.nodeName=${node}`)}`
+    const pod = (name: string, node = 'node-1'): Row => ({ name, namespace: 'demo', node_name: node, status: 'Running' })
+    const keyOf = (node: string) => ['cluster-view', 'node-pods', node, 'all']
+
+    // the module's own multiplexer, new for each test, on the test's sockets
+    const load = async () => {
+      vi.resetModules()
+      const { followList, LIST_GATHER_MS } = await import('./useKubeWatchList')
+      const { QueryClient, QueryObserver } = await import('@tanstack/react-query')
+      // as PodNodeGrid follows a node's pods
+      const box = (node: string) => ({ clusterId: 'self', paths: ['/api/v1/pods'], query: queryOf(node), queryKey: keyOf(node), gatherEveryMs: LIST_GATHER_MS })
+      return { followList, LIST_GATHER_MS, QueryClient, QueryObserver, box }
+    }
+    // What the server's followWatch answers each REQUEST of a socket with: one RESYNC first when it says it missed
+    // something, then an ADDED for each object there is now.
+    const serve = (ws: MockWebSocket, names: Iterable<string>) => {
+      for (const msg of ws.sent.map((raw) => JSON.parse(raw))) {
+        if (msg.type !== 'REQUEST') continue
+        const frame = { clusterId: msg.clusterId, path: msg.path, query: msg.query }
+        if (msg.resync) ws.simulateMessage({ ...frame, type: 'RESYNC' })
+        for (const name of names) ws.simulateMessage({ ...frame, type: 'DATA', data: { type: 'ADDED', object: pod(name) } })
+      }
+    }
+    const lastSocket = () => MockWebSocket.instances[MockWebSocket.instances.length - 1]
+    const reconnect = async (ws: MockWebSocket, meanwhile = () => {}) => {
+      ws.simulateServerClose()
+      meanwhile()
+      await vi.advanceTimersByTimeAsync(1000)
+      await flush()
+      const next = lastSocket()
+      next.simulateOpen()
+      await flush()
+      return next
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('a pod deleted while the socket was closed is gone after the reconnect, its row on screen until the list answers', async () => {
+      const { followList, LIST_GATHER_MS, QueryClient, QueryObserver, box } = await load()
+      // the reconnect after 750 ms, the read 2.5 s after the RESYNC
+      vi.spyOn(Math, 'random').mockReturnValue(0.5)
+      const pods = new Set(['web-a', 'web-b', 'web-c'])
+      const key = keyOf('node-1')
+      const client = new QueryClient()
+      const queryFn = vi.fn(async () => [...pods].map((name) => pod(name)))
+      const shown: string[][] = []
+      let loaded = false
+      const stopObserver = new QueryObserver(client, { queryKey: key, queryFn }).subscribe((result) => {
+        if (loaded) shown.push(result.data?.map((row) => row.name) ?? [])
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      loaded = true
+      const names = () => (client.getQueryData(key) as Row[]).map((row) => row.name)
+      expect(names()).toEqual(['web-a', 'web-b', 'web-c'])
+
+      const stopList = followList(client, box('node-1'))
+      await flush()
+      const ws1 = lastSocket()
+      ws1.simulateOpen()
+      await flush()
+      serve(ws1, pods)
+      await vi.advanceTimersByTimeAsync(LIST_GATHER_MS)
+      expect(names()).toEqual(['web-a', 'web-b', 'web-c'])
+
+      const ws2 = await reconnect(ws1, () => pods.delete('web-b'))
+      expect(ws2.sent.map((raw) => JSON.parse(raw))).toEqual([{ type: 'REQUEST', clusterId: 'self', path: '/api/v1/pods', query: queryOf('node-1'), resync: true }])
+      serve(ws2, pods)
+      await vi.advanceTimersByTimeAsync(LIST_GATHER_MS)
+      // the new watch's ADDED frames do not take web-b away; the read the RESYNC asked for has not come yet
+      expect(names()).toEqual(['web-a', 'web-b', 'web-c'])
+      expect(queryFn).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(6000)
+      expect(queryFn).toHaveBeenCalledTimes(2)
+      expect(names()).toEqual(['web-a', 'web-c'])
+      // no drawing without the rows
+      expect(shown.length).toBeGreaterThan(0)
+      expect(shown.every((rows) => rows.length > 0)).toBe(true)
+      expect(shown[shown.length - 1]).toEqual(['web-a', 'web-c'])
+
+      stopList()
+      stopObserver()
+    })
+
+    // A restart closes every socket at one moment: the lists a reconnect asks to read again are read each at its own
+    // time within the RESYNC's spread, not together.
+    it('the boxes of a reconnect are read each at its own time within five seconds, not together', async () => {
+      const { followList, LIST_GATHER_MS, QueryClient, QueryObserver, box } = await load()
+      let draw = 0
+      vi.spyOn(Math, 'random').mockImplementation(() => (draw++ * 0.37) % 1)
+      const client = new QueryClient()
+      const readAt: number[] = []
+      const stops = Array.from({ length: 10 }, (_, i) => {
+        const node = `node-${i}`
+        const stopObserver = new QueryObserver(client, {
+          queryKey: keyOf(node),
+          queryFn: async () => {
+            readAt.push(Date.now())
+            return [pod(`${node}-p0`, node)]
+          },
+        }).subscribe(() => {})
+        const stopList = followList(client, box(node))
+        return () => {
+          stopList()
+          stopObserver()
+        }
+      })
+      await flush()
+      const ws1 = lastSocket()
+      ws1.simulateOpen()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(readAt).toHaveLength(10)
+      readAt.length = 0
+
+      const ws2 = await reconnect(ws1)
+      expect(ws2.sent.map((raw) => JSON.parse(raw).resync)).toEqual(Array.from({ length: 10 }, () => true))
+      const answered = Date.now()
+      serve(ws2, [])
+      await vi.advanceTimersByTimeAsync(LIST_GATHER_MS + 5000)
+      expect(readAt).toHaveLength(10)
+      expect(Math.min(...readAt) - answered).toBeGreaterThanOrEqual(LIST_GATHER_MS)
+      expect(Math.max(...readAt) - answered).toBeLessThan(LIST_GATHER_MS + 5000)
+      expect(new Set(readAt).size).toBe(10)
+      expect(Math.max(...readAt) - Math.min(...readAt)).toBeGreaterThanOrEqual(3000)
+      stops.forEach((stop) => stop())
     })
   })
 
@@ -959,6 +1205,52 @@ describe('WebSocketMultiplexer', () => {
       await vi.advanceTimersByTimeAsync(1000)
       await flush()
       expect(MockWebSocket.instances.length).toBe(2)
+    })
+
+    // 1013: the server could not check the session for a while, which ended nothing. The socket connects again with
+    // nothing asked and nobody signed out.
+    it('a socket closed because its session could not be checked connects again and asks nothing', async () => {
+      const fetchMe = vi.fn(async () => ({ status: 401 }))
+      vi.stubGlobal('fetch', fetchMe)
+      const mux = await freshMux()
+      const ws = await open(mux)
+
+      ws.simulateServerClose(1013)
+      await settle()
+      expect(fetchMe).not.toHaveBeenCalled()
+      expect((globalThis as any).window.location.assign).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1000)
+      await flush()
+      expect(MockWebSocket.instances.length).toBe(2)
+    })
+
+    // A socket the server closes as soon as it opens (a check that fails on every connection) is not opened again every
+    // second: the wait keeps growing until a socket has stayed open STEADY_MS.
+    it('a socket closed right after it opens waits longer each time, and the waits start over once one stays open', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => ({ status: 200 })))
+      const random = vi.spyOn(Math, 'random').mockReturnValue(0.9999)
+      const mux = await freshMux()
+      let ws = await open(mux)
+      const reopenAfter = async (wait: number) => {
+        ws.simulateServerClose(1013)
+        await settle()
+        const before = MockWebSocket.instances.length
+        await vi.advanceTimersByTimeAsync(wait - 50)
+        await flush()
+        expect(MockWebSocket.instances.length).toBe(before)
+        await vi.advanceTimersByTimeAsync(50)
+        await flush()
+        expect(MockWebSocket.instances.length).toBe(before + 1)
+        ws = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+        ws.simulateOpen()
+        await flush()
+      }
+      await reopenAfter(1000)
+      await reopenAfter(2000)
+      await reopenAfter(4000)
+      await vi.advanceTimersByTimeAsync(STEADY_MS)
+      await reopenAfter(1000)
+      random.mockRestore()
     })
   })
 })

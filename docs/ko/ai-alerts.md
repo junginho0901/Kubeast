@@ -56,6 +56,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 - **거르기**: `firing`이고 `severity` 라벨이 `severities`(기본 critical·warning)에 있는 알림만 받습니다.
   - 클러스터와 fingerprint가 같은 알림이 `dedupeHours`(24) 안에 다시 오면 `repeat_count`만 올립니다(Alertmanager는 4시간마다 다시 보냅니다).
   - 시간당 `maxPerHour`(6)나 하루 `dailyTokenBudget`(200,000 토큰, UTC 기준)을 넘으면 `skipped`로 남깁니다. 둘 다 웹훅이 시작한 조사만 셉니다. 받은편지함에서 사람이 요청한 조사(아래 "지금 조사")는 따로 `manualDailyTokenBudget`을 씁니다. 조사 한 번은 측정해 보니 약 6만 토큰이었습니다(dev 설치 657번). 200,000이면 하루 약 3번이고, 0은 한도 없음입니다.
+  - ai-service 복제본이 여럿이어도 시간당 한도는 지켜집니다. 여러 복제본에 동시에 온 알림이 개수 세기와 행 쓰기를 하나씩 차례로 하므로(PostgreSQL 트랜잭션 잠금) 한 시간에 `maxPerHour`보다 하나 더 들어가는 일이 없습니다.
   - `automatic: false`이면 웹훅이 조사를 시작하지 않고 알림은 전부 받은편지함에 저장합니다(`automatic_off`로 셈). 그 알림도 사람이 조사를 요청할 수 있습니다. `enabled: false`는 받은편지함까지 끕니다.
   - 웹훅 한 통에서 새 조사는 100개까지 시작합니다. 넘친 알림도 알림함에는 저장하고 `skipped`("investigation cap")로 남기며, 최근 조사에 접힌 알림·해결 알림·걸러진 알림은 자리를 쓰지 않습니다. Alertmanager가 그 묶음을 다시 보내면 조사한 알림은 접히고 다음 알림이 조사됩니다.
   - `dedupeHours` 안에 다시 건너뛴 알림은 새 행 대신 그 건너뜀 행에 접힙니다(반복 수, 마지막으로 본 시각, 마지막 이유).
@@ -110,6 +111,12 @@ Alertmanager(또는 Grafana 알림)가 보낸 알림을 **울리는 중인 것�
   - 상태는 울리는 중 · **상태 확인 안 됨** · 해결됨입니다.
   - 상태 확인 안 됨은 울리는 중인데 `inbox.staleAfterHours`(8) 동안 소식이 없는 알림입니다(Alertmanager는 울리는 알림의 `endsAt`을 웹훅으로 보내지 않습니다).
   - 웹훅 한 통에 알림이 몇 개든 전부 저장합니다.
+  - `startsAt`은 보낸 쪽이 어떤 시간대로 쓰든 UTC로 저장합니다. v0.7.7까지는 시간대를 버렸으므로, 다른 시간대로 쓰는 발신처의 알림이 업그레이드 뒤에도 울리고 있으면 새 줄로 옮겨 갑니다.
+    - 해결 알림은 새 줄로 가므로, 옛 줄은 `inbox.staleAfterHours` 뒤 상태 확인 안 됨이 되어 보존 기간이 지나 지워질 때까지 그대로 남습니다.
+    - 처리 표시(확인함, 담당, 메모, 조치 완료)는 옛 줄에 남고, 새 줄은 표시 없이 시작합니다.
+    - 옛 줄의 시작 시각은 발신처의 시간대만큼 어긋난 채로 남습니다.
+    - UTC보다 늦은 시간대(`-hh:mm`)의 발신처는 다음 알림이 이전 조사에 접히면서 새 줄에 그 조사가 붙습니다.
+    - UTC보다 빠른 시간대(`+hh:mm`)의 발신처는 새 줄에 조사가 생길 때까지 조사가 없다고 나옵니다. "지금 조사"를 누르거나 `dedupeHours`가 지난 뒤 웹훅이 만드는 다음 조사가 붙습니다.
   - 그 클러스터에 알림 저장소(`features.alertStore`)가 있으면 Alertmanager의 현재 상태(무음 중, 억제됨, Alertmanager에 없음)도 함께 표시합니다. 저장소 목록이 `alertStore.maxAlerts`에서 잘려 그 알림이 없으면 행은 "모름", 알림 창은 저장소의 수와 함께 모른다고 말합니다. 저장소가 아직 답하지 않았거나 실패했거나 그 클러스터에 저장소가 없을 때도 알림 창이 그렇게 말합니다.
 - **무음**: 그 클러스터에 알림 저장소가 있고 `features.alertStore.silences: true`이면 무음을 만들 수 있습니다.
   - 이 값은 기본으로 꺼져 있으며, 저장소 인증에 쓰기 권한이 필요합니다(Grafana면 Editor).

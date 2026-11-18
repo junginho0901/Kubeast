@@ -33,7 +33,7 @@ func firstScreens(s *Service, b *clientBundle, ctx context.Context, nodes []stri
 		}}, metav1.CreateOptions{})
 	})
 	for _, node := range nodes {
-		run(func() { _, _ = s.GetPodsOnNode(ctx, node, "") })
+		run(func() { _, _ = s.GetPodsOnNodeJSON(ctx, node, "") })
 	}
 	wg.Wait()
 }
@@ -86,6 +86,10 @@ func TestFirstScreensOfOnePersonListNoPodsAsThatPerson(t *testing.T) {
 		table = append(table, fmt.Sprintf("%-20s N=%-2d as the person %3d  as %s %d  (%s)", p.user, p.n, len(api.callsOf(p.user)), overviewCacheUser, asCache, strings.Join(kinds, " ")))
 		if n := byKind["list pods"]; n != 0 {
 			t.Errorf("%s: %d pod lists as the person, want 0", p.user, n)
+		}
+		// the boxes come from the informers' rows on each node
+		if n := api.count(func(c apiCall) bool { return c.user == overviewCacheUser && c.resource == "pods" }); n != 0 {
+			t.Errorf("%s: %d pod lists as %s, want 0", p.user, n, overviewCacheUser)
 		}
 		if n := len(api.callsOf(p.user)); n != p.want {
 			t.Errorf("%s: %d requests as the person, want %d", p.user, n, p.want)

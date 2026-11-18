@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -47,8 +48,12 @@ func (h *AuthHandler) AdminExportAuditLogs(w http.ResponseWriter, r *http.Reques
 		response.InternalError(w, r, err)
 	}
 
-	filter, err := h.pinnedAuditFilter(r)
+	filter, err := auditFilterFromQuery(r)
 	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if filter, err = h.pinAuditFilter(r, filter); err != nil {
 		fail(err)
 		return
 	}
@@ -117,8 +122,11 @@ func csvCells(cells ...string) []string {
 	return cells
 }
 
-// auditFilterFromQuery reads the list/export filter query params.
-func auditFilterFromQuery(r *http.Request) audit.Filter {
+// auditFilterFromQuery reads the list/export filter query params. since and
+// until are RFC 3339 times, an offset read as the instant it names, kept in
+// UTC as created_at keeps it; a value that does not parse is an error, so the
+// handler answers 400 instead of reading every row.
+func auditFilterFromQuery(r *http.Request) (audit.Filter, error) {
 	q := r.URL.Query()
 	filter := audit.Filter{
 		Service:    q.Get("service"),
@@ -132,15 +140,25 @@ func auditFilterFromQuery(r *http.Request) audit.Filter {
 		Limit:      queryInt(r, "limit", 100),
 		Offset:     queryInt(r, "offset", 0),
 	}
-	if s := q.Get("since"); s != "" {
-		if t, err := time.Parse(time.RFC3339, s); err == nil {
-			filter.Since = t
-		}
+	var err error
+	if filter.Since, err = windowBound(q, "since"); err != nil {
+		return audit.Filter{}, err
 	}
-	if s := q.Get("until"); s != "" {
-		if t, err := time.Parse(time.RFC3339, s); err == nil {
-			filter.Until = t
-		}
+	if filter.Until, err = windowBound(q, "until"); err != nil {
+		return audit.Filter{}, err
 	}
-	return filter
+	return filter, nil
+}
+
+// windowBound reads since or until: zero when absent, in UTC when RFC 3339.
+func windowBound(q url.Values, name string) (time.Time, error) {
+	s := q.Get(name)
+	if s == "" {
+		return time.Time{}, nil
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%s must be an RFC 3339 time", name)
+	}
+	return t.UTC(), nil
 }

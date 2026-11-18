@@ -14,7 +14,8 @@ import Timeline from './Timeline'
 
 vi.mock('@/components/ResourceDetailContext', () => ({ useResourceDetail: () => ({ open: () => {} }) }))
 const chat: { current: { summary?: string; data?: Record<string, any> } | null } = { current: null }
-vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: { summary?: string; data?: Record<string, any> } | null) => { chat.current = input } }))
+// the page's own layer; the shared notices under it register theirs beside it
+vi.mock('@/hooks/useAIContext', () => ({ useAIContext: (input: { source?: string; summary?: string; data?: Record<string, any> } | null) => { if (input && (input.source ?? 'base') === 'base') chat.current = input } }))
 
 const i18n = i18next.createInstance()
 beforeAll(async () => {

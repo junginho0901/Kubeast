@@ -16,7 +16,7 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { applyRoleBindingWatchEvent } from './rolebindings/roleBindingWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
@@ -171,13 +171,10 @@ export default function RoleBindings() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllRoleBindings(true)
-      : await api.getRoleBindings(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['security', 'rolebindings', selectedNamespace] })
-    queryClient.setQueryData(['security', 'rolebindings', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['security', 'rolebindings', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllRoleBindings(true)
+      : api.getRoleBindings(selectedNamespace, true)))
 
   const createYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

@@ -84,7 +84,7 @@ func (r *Repository) DeleteAPIKey(ctx context.Context, id, userID string) (*APIK
 
 // TouchAPIKey records a successful exchange.
 func (r *Repository) TouchAPIKey(ctx context.Context, id, ip string, now time.Time) error {
-	_, err := r.pool.Exec(ctx, `UPDATE api_keys SET last_used_at = $2, last_used_ip = NULLIF($3, '') WHERE id = $1`, id, now, ip)
+	_, err := r.pool.Exec(ctx, `UPDATE api_keys SET last_used_at = $2, last_used_ip = NULLIF($3, '') WHERE id = $1`, id, now.UTC(), ip)
 	return err
 }
 

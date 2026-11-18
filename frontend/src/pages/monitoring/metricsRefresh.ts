@@ -43,14 +43,13 @@ export const METRICS_NOT_SERVED_MS = 60_000
  * cluster serves no metrics.k8s.io is asked again after the minute k8s-service keeps that answer, so a
  * metrics-server installed since shows. Both are asked again when the tab is opened again or another cluster (or
  * namespace) is chosen, which is a query of its own, as the banner forgets its refusals on the route and the cluster.
- * `off`: metrics are off for this cluster.
  */
-export function metricsReadPace(off: () => boolean) {
+export function metricsReadPace() {
   return {
     staleTime: METRICS_POLL_MS,
     refetchInterval: (query: { state: { error: unknown } }): number | false => {
       const error = query.state.error
-      if (off() || isForbiddenError(error)) return false
+      if (isForbiddenError(error)) return false
       return isMetricsUnavailableError(error) ? METRICS_NOT_SERVED_MS : METRICS_POLL_MS
     },
     retry: (failureCount: number, error: unknown): boolean =>
