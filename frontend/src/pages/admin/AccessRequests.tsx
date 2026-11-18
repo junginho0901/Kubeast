@@ -15,7 +15,9 @@ import { usePendingAccessRequestCount } from '@/hooks/usePendingAccessRequestCou
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { utcTitle } from '@/utils/time'
 import { givesChartBoundRole } from '@/utils/adminAccess'
+import { sameGroupRefusal } from '@/utils/roleGroup'
 import { parsePermissions } from '@/utils/permissions'
+import { everyUntilRefused } from '@/services/queryDefaults'
 
 // Admin review of access requests (temporary per-cluster role grants):
 // pending requests to approve or reject with an optional note, and the
@@ -51,6 +53,10 @@ export default function AccessRequests() {
   const chartBound = new Set(roles.filter((role) => role.chart_bound).map((role) => role.name))
   const approvalHeld = (role: string, cluster: string) =>
     chartBound.has(role) && !givesChartBoundRole(parsePermissions(me?.permissions_matrix), me?.cluster_roles, me?.cluster_namespaces, cluster)
+  // a role whose name differs from another role's only in letter case or spaces is not approved (auth-service role_same_group)
+  const sharedGroup = new Map(roles.filter((role) => role.same_group_as).map((role) => [role.name, role.same_group_as ?? '']))
+  const sameGroupText = (role: string, other: string) =>
+    tr('adminRoles.sameGroupRefused', 'Role "{{role}}" is not given on a cluster: its name differs from role "{{other}}" only in letter case, spaces or punctuation. Rename it in Role Management first.', { role, other })
   const { data: config } = useQuery({ queryKey: ['access-requests', 'config'], queryFn: api.getAccessRequestsConfig, staleTime: 60_000 })
   const { data: pendingCount = 0 } = usePendingAccessRequestCount({ enabled: true, refetchInterval: 30_000 })
   // The table takes the screen's height left and the server is asked for the rows it fits: measured again once rows
@@ -68,7 +74,7 @@ export default function AccessRequests() {
       return { ...(await api.adminAccessRequestsPage(q)), offset: q.offset, limit: q.limit }
     },
     placeholderData: keepSameRead(pendingKey, ['offset', 'limit']),
-    refetchInterval: 30_000,
+    refetchInterval: everyUntilRefused(30_000),
   })
   const historyKey = ['access-requests', 'admin', 'list', 'history', tabQuery('history')]
   const historyList = useQuery({
@@ -104,7 +110,10 @@ export default function AccessRequests() {
   const approve = useMutation({
     mutationFn: (id: string) => api.adminApproveAccessRequest(id, notes[id] ?? ''),
     onSuccess: () => { setError(null); invalidate() },
-    onError: (err: any) => setError(err?.response?.data?.detail || tr('accessRequests.admin.failed', 'The decision was not saved.')),
+    onError: (err: any) => {
+      const shared = sameGroupRefusal(err)
+      setError(shared ? sameGroupText(shared.role, shared.other) : err?.response?.data?.detail || tr('accessRequests.admin.failed', 'The decision was not saved.'))
+    },
   })
   const reject = useMutation({
     mutationFn: (id: string) => api.adminRejectAccessRequest(id, notes[id] ?? ''),
@@ -226,7 +235,11 @@ export default function AccessRequests() {
                               placeholder={tr('accessRequests.admin.notePlaceholder', 'Note (optional)')}
                               className="w-40 rounded-lg border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-ink placeholder:text-slate-500"
                             />
-                            {approvalHeld(r.role, r.cluster_id) && (
+                            {sharedGroup.has(r.role) ? (
+                              <span className="max-w-56 whitespace-normal text-right text-xs text-amber-200" data-testid={`access-request-same-group-${r.id}`}>
+                                {sameGroupText(r.role, sharedGroup.get(r.role) ?? '')}
+                              </span>
+                            ) : approvalHeld(r.role, r.cluster_id) && (
                               <span className="max-w-56 whitespace-normal text-right text-xs text-amber-200" data-testid={`access-request-chart-bound-${r.id}`}>
                                 {tr('accessRequests.admin.chartBound', 'The chart binds this role on the cluster: only a global admin or an Admin of this cluster can approve it.')}
                               </span>
@@ -234,7 +247,7 @@ export default function AccessRequests() {
                             <button
                               type="button"
                               data-testid={`access-request-approve-${r.id}`}
-                              disabled={busy || approvalHeld(r.role, r.cluster_id)}
+                              disabled={busy || approvalHeld(r.role, r.cluster_id) || sharedGroup.has(r.role)}
                               onClick={() => approve.mutate(r.id)}
                               className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                             >

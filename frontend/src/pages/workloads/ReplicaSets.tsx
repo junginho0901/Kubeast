@@ -22,7 +22,7 @@ import { ReplicaSetFilters } from './replicasets/ReplicaSetFilters'
 import { ReplicaSetTable } from './replicasets/ReplicaSetTable'
 import { workloadStatusText } from '@/utils/workloadStatus'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -204,13 +204,10 @@ export default function ReplicaSets() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllReplicaSets(true)
-      : await api.getReplicaSets(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['workloads', 'replicasets', selectedNamespace] })
-    queryClient.setQueryData(['workloads', 'replicasets', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['workloads', 'replicasets', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllReplicaSets(true)
+      : api.getReplicaSets(selectedNamespace, true)))
 
   const createReplicaSetYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

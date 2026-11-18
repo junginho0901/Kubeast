@@ -78,13 +78,30 @@ func requestWithinGrant(grant *repository.UserClusterGrant, namespaces []string)
 	return nil
 }
 
-func roleRequestable(role string, allowed []string) bool {
+// requestedRole is the role a request names among those the chart lists, and
+// whether it is listed. An entry that names a built-in in other capitals
+// ("admin") stands for that built-in, so the request is for the built-in
+// (Admin) whatever capitals it sends, never for a custom role named so, which
+// acts as no role group. Any other entry matches by its exact name.
+func requestedRole(role string, allowed []string) (string, bool) {
 	for _, a := range allowed {
-		if strings.EqualFold(strings.TrimSpace(a), role) {
-			return true
+		a = strings.TrimSpace(a)
+		if b, ok := auth.BuiltinRoleNamed(a); ok {
+			if strings.EqualFold(strings.TrimSpace(role), b) {
+				return b, true
+			}
+			continue
+		}
+		if a == role {
+			return role, true
 		}
 	}
-	return false
+	return "", false
+}
+
+func roleRequestable(role string, allowed []string) bool {
+	_, ok := requestedRole(role, allowed)
+	return ok
 }
 
 // uncoveredPermissions returns the permissions in rolePerms that the ceiling

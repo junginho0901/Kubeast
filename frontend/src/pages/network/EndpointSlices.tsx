@@ -22,7 +22,7 @@ import { applyEndpointSliceWatchEvent } from './endpointslices/endpointSliceWatc
 import { EndpointSliceFilters } from './endpointslices/EndpointSliceFilters'
 import { EndpointSliceTable } from './endpointslices/EndpointSliceTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -220,13 +220,10 @@ export default function EndpointSlices() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllEndpointSlices(true)
-      : await api.getEndpointSlices(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['network', 'endpointslices', selectedNamespace] })
-    queryClient.setQueryData(['network', 'endpointslices', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['network', 'endpointslices', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllEndpointSlices(true)
+      : api.getEndpointSlices(selectedNamespace, true)))
 
   const createEndpointSliceYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

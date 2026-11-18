@@ -53,11 +53,11 @@ test.describe('Recent flows and traffic lines from Calico', () => {
     admin = (await res.json()).access_token
     const features = await (await request.get(`/api/v1/cluster/features?cluster=${CLUSTER}`, { headers: bearer(admin) })).json()
     kubectl = calicoKubectl()
-    ready = !!kubectl && features?.networkFlows?.providers?.[CLUSTER] === 'calico'
+    ready = !!kubectl && (await registered(request, admin)) && features?.networkFlows?.providers?.[CLUSTER] === 'calico'
   })
 
   test('a Deployment’s recent flows: what Calico allowed and denied, and the policy that allowed it', async ({ request }) => {
-    test.skip(!ready, `no Calico cluster ${CLUSTER} with network flows (scripts/kind-calico.sh up)`)
+    test.skip(!ready, `cluster ${CLUSTER} is not registered in Kubeast or is no Calico cluster with network flows (scripts/kind-calico.sh up)`)
     const body = await get(request, `/api/v1/cluster/namespaces/${NS}/networkflows`, { kind: 'Deployment', name: 'web', since: '5m' })
     expect(body).toMatchObject({ provider: 'calico', relay: 'calico-system/whisker:8443', mode: 'proxy' })
     const groups = body.groups as Group[]
@@ -81,7 +81,7 @@ test.describe('Recent flows and traffic lines from Calico', () => {
   })
 
   test('a web pod’s drawer reads its set’s flows as arriving from client and stranger', async ({ page }) => {
-    test.skip(!ready, `no Calico cluster ${CLUSTER} with network flows (scripts/kind-calico.sh up)`)
+    test.skip(!ready, `cluster ${CLUSTER} is not registered in Kubeast or is no Calico cluster with network flows (scripts/kind-calico.sh up)`)
     const pod = kubectl!(`-n ${NS} get pods -l app=web -o jsonpath={.items[0].metadata.name}`)
     await page.goto(`/workloads/pods?cluster=${CLUSTER}&namespace=${NS}&detail=Pod/${NS}/${pod}`)
     const section = page.getByTestId('netflow-section')
@@ -96,7 +96,7 @@ test.describe('Recent flows and traffic lines from Calico', () => {
   })
 
   test('the lines count a connection where it arrived', async ({ request }) => {
-    test.skip(!ready, `no Calico cluster ${CLUSTER} with network flows (scripts/kind-calico.sh up)`)
+    test.skip(!ready, `cluster ${CLUSTER} is not registered in Kubeast or is no Calico cluster with network flows (scripts/kind-calico.sh up)`)
     const body = await get(request, '/api/v1/cluster/networktraffic', { namespaces: NS, source: 'relay', since: '5m' })
     expect(body).toMatchObject({ available: true, source: 'relay', provider: 'calico' })
     const lines = body.lines as Line[]
@@ -111,7 +111,7 @@ test.describe('Recent flows and traffic lines from Calico', () => {
   })
 
   test('the graph draws the lines from Whisker, and a dropped one opens the NetworkPolicy check', async ({ page }) => {
-    test.skip(!ready, `no Calico cluster ${CLUSTER} with network flows (scripts/kind-calico.sh up)`)
+    test.skip(!ready, `cluster ${CLUSTER} is not registered in Kubeast or is no Calico cluster with network flows (scripts/kind-calico.sh up)`)
     await page.goto(`/cluster/resource-graph?cluster=${CLUSTER}&namespace=${NS}`)
     await page.getByTestId('graph-view-traffic').click({ timeout: 20_000 })
     await expect(page.locator(`[aria-label="${NS}/client → ${NS}/web (TCP 80)"]`)).toHaveCount(1, { timeout: 30_000 })
@@ -125,3 +125,10 @@ test.describe('Recent flows and traffic lines from Calico', () => {
     await expect(page.getByTestId('netpol-check-modal').getByTestId('netpol-check-overall')).toHaveText('Denied', { timeout: 20_000 })
   })
 })
+
+// Kubeast has the kind cluster under its name (scripts/kind-*.sh up registers it, down removes it): the kind cluster
+// can be up without it, and every read of this spec names it
+async function registered(request: APIRequestContext, token: string): Promise<boolean> {
+  const body = await (await request.get('/api/v1/clusters', { headers: bearer(token) })).json()
+  return ((body.items ?? []) as { id: string }[]).some((c) => c.id === CLUSTER)
+}

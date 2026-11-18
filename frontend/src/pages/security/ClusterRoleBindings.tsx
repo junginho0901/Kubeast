@@ -12,7 +12,7 @@ import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -149,11 +149,8 @@ export default function ClusterRoleBindings() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = await api.getClusterRoleBindings(true)
-    queryClient.removeQueries({ queryKey: ['security', 'clusterrolebindings'] })
-    queryClient.setQueryData(['security', 'clusterrolebindings'], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['security', 'clusterrolebindings'], () => api.getClusterRoleBindings(true)))
 
   const createYamlTemplate = `apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

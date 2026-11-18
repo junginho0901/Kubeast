@@ -56,6 +56,7 @@ The feature is off by default (`features.alertInvestigation.enabled`). Turning i
   - A wrong token gets 401, an unknown cluster 404, and 404 when the feature is off.
 - **Filtering**: only alerts that are `firing` and whose `severity` label is in `severities` (default critical, warning) pass. For the same cluster and fingerprint within `dedupeHours` (24), only `repeat_count` goes up (Alertmanager resends every 4 hours).
   - Past `maxPerHour` (6) per hour or the daily `dailyTokenBudget` (200,000 tokens, UTC), alerts are recorded as `skipped`. Both count the webhook's investigations only; the ones people ask for in the inbox ("Investigate now", below) have their own `manualDailyTokenBudget`. One investigation took about 60,000 tokens when measured (657 runs on a dev install), so 200,000 is about three a day (fewer with `evidenceCheck` or `ledger` on, below: their instruction goes with every model call and the report may be asked for once more); 0 means no cap or budget.
+  - With several ai-service replicas the hourly cap still holds: alerts arriving at once on different replicas take their count and their row one at a time (a PostgreSQL transaction lock), so the hour never gets one more than `maxPerHour`.
   - `automatic: false` stops the webhook's investigations and keeps every alert in the inbox (counted as `automatic_off`), where a person may still ask for one; `enabled: false` turns the inbox off too.
   - One webhook message starts at most 100 new investigations. The alerts past that are still kept in the inbox and recorded as `skipped` ("investigation cap"); alerts folded into a recent investigation, resolved or filtered take no place. When Alertmanager sends the group again, the investigated ones fold and the next alerts get their turn.
   - An alert skipped again within `dedupeHours` folds into its skipped row (repeats, last seen, the latest reason) instead of a new row.
@@ -121,6 +122,12 @@ Without it, or with AI off, a cluster with an alert store still has **Alerts** i
   - When Alertmanager resends every `repeat_interval`, "Received" goes up. When resolved arrives, the row becomes Resolved. If the alert fires again after resolving, it gets a new row.
   - Statuses are Firing, **Status unknown** and Resolved. Status unknown means firing, but nothing heard for `inbox.staleAfterHours` (8); Alertmanager does not send a firing alert's `endsAt` through the webhook.
   - Every alert of a message is kept, however many the message carries.
+  - `startsAt` is kept in UTC, whatever offset the sender writes. Up to v0.7.7 the offset was dropped, so an alert from a sender that writes another zone and is still firing after the upgrade moves to a new row:
+    - The old row reads Status unknown after `inbox.staleAfterHours` and stays so until retention removes it, since the resolution goes to the new row.
+    - Its handling marks (Acknowledge, assignee, Note, Mark done) stay on the old row; the new row starts without them.
+    - The old row's start time stays off by the sender's offset.
+    - For a sender behind UTC (`-hh:mm`), the new row shows the alert's earlier investigation once the next notification folds into it.
+    - For a sender ahead of UTC (`+hh:mm`), the new row shows no investigation until one is made for it: "Investigate now", or the webhook's next one after `dedupeHours`.
   - When the cluster has an alert store (`features.alertStore`), Alertmanager's current state (Silenced, Inhibited, Not in Alertmanager) is shown too. When the store's list was cut at `alertStore.maxAlerts` before the alert, the row says Unknown and the alert window says so with the store's numbers; the window also says when the store has not answered, failed, or the cluster has none.
 - **Silence**: needs an alert store on the cluster and `features.alertStore.silences: true`. This is off by default; the store credentials need write permission (Editor for Grafana).
   - People with the permission `resource.alert.silence` (Write and Admin by default, not Read) use **Silence** in the alert window, or **New silence** on the Silences tab, which starts from one empty condition.

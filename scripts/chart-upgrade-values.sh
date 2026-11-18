@@ -4,7 +4,7 @@
 # what the same values over this chart's defaults render — so nothing this chart added is lost silently.
 # Needs the release tags (CI fetches them). Run from anywhere in the checkout.
 set -uo pipefail
-cd "$(git rev-parse --show-toplevel)"
+cd "$(git rev-parse --show-toplevel)" || exit 1
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 # secret.yaml makes random passwords and a signing key; existing Secrets leave them out of both renders
@@ -16,8 +16,21 @@ for tag in $tags; do
   git show "$tag:helm/kubeast/values.yaml" > "$work/old.yaml" 2>/dev/null || continue
   rm -rf "$work/chart"
   cp -R helm/kubeast "$work/chart"
-  cp "$work/old.yaml" "$work/chart/values.yaml"
-  if reuse=$(helm template kubeast "$work/chart" "${args[@]}" 2>&1); then
+  # A path its defaults hold that this chart removed stops at templates/checks/removed-values.yaml. It is taken out of
+  # those values and both renders below run on the rest, so a renamed path still needs its new name in upgrade-values.yaml.
+  removed=""
+  while :; do
+    cp "$work/old.yaml" "$work/chart/values.yaml"
+    reuse=$(helm template kubeast "$work/chart" "${args[@]}" 2>&1)
+    rendered=$?
+    p=$(sed -n 's/.*: \([A-Za-z0-9_.-]*\) is no longer a Kubeast value: .*/\1/p' <<<"$reuse" | head -1)
+    if [ "$rendered" -eq 0 ] || [ -z "$p" ] || [[ " $removed " == *" $p "* ]]; then break; fi
+    removed="$removed $p"
+    scripts/values-paths.sh --json "$work/old.yaml" | jq --arg p "$p" 'delpaths([$p | split(".")])' > "$work/kept.json" || break
+    mv "$work/kept.json" "$work/old.yaml"
+  done
+  [ -z "$removed" ] || echo "$tag: its values hold$removed, which this chart removed — taken out for the comparison"
+  if [ "$rendered" -eq 0 ]; then
     if ! reset=$(helm template kubeast helm/kubeast -f "$work/old.yaml" "${args[@]}" 2>&1); then
       echo "$tag: its values do not render over this chart's defaults: $(grep -m1 Error <<<"$reset")"
       fail=1

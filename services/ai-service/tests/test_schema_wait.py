@@ -67,7 +67,11 @@ def test_required_version_matches_go_migrations():
     # columns or tables ai-service reads or writes — model_configs.tier, messages.usage, alert_inbox,
     # alert_investigations.requested_by; 22 gives custom roles the key the tools ask for the lists; 23 gives session
     # recordings an owner and a heartbeat, which only k8s-service reads; 24 adds ended_sign_ins, whose answer
-    # ai-service gets through auth-service's token-version route; 29 adds alert_investigations.result).
+    # ai-service gets through auth-service's token-version route; 25 keeps role names unique ignoring case; 26 gives
+    # clusters a config_version, which auth-service writes and k8s-service reads; 27 adds claude_code_slots, the
+    # install-wide Claude Code limit ai-service keeps; 28 adds node_drains, which only k8s-service reads; 29 counts
+    # how many times a stopping ai-service put a running investigation back in the queue; 29 adds
+    # alert_investigations.result).
     import pathlib
     import re
     go = (pathlib.Path(__file__).resolve().parents[2] / "pkg" / "dbmigrate" / "dbmigrate.go").read_text()
