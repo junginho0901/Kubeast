@@ -3149,11 +3149,13 @@
     "revoked": "Stopped: your account or access changed. Sign in again.",
     "expired": "Stopped: the session reached its maximum lifetime. Sign in again.",
     "signedOut": "Stopped: this sign-in was signed out. Sign in again.",
-    "unverified": "Stopped: the session could not be verified. Sign in again."
+    "unverified": "Stopped: the session could not be verified for a while. Open it again.",
+    "checking": "Could not check your sign-in: {{reason}}. Asking again…"
   },
   "serverShutdown": {
     "terminalReplaced": "The server was replaced. Reconnect to open a new terminal.",
     "terminalLost": "The connection to the server was lost. Reconnect to open a new terminal.",
+    "terminalUnchecked": "The session could not be checked for a while. Reconnect to open a new terminal.",
     "reconnect": "Reconnect",
     "followStopped": "Following stopped: the server was replaced. Turn Follow on again to go on."
   },
@@ -3783,10 +3785,13 @@
     "subtitle": "Manage the list of Teams that users can select during registration.",
     "teamTitle": "Team",
     "teamSubtitle": "Teams / Groups",
+    "nameLabel": "Team name",
     "inputPlaceholder": "Enter name...",
     "searchPlaceholder": "Search teams by name...",
     "add": "Add",
     "addError": "Not added: {{reason}}",
+    "nameRequired": "Enter a team name.",
+    "nameBlank": "Enter a team name: spaces alone are not one.",
     "empty": "No items registered.",
     "deleteConfirm": "Delete team \"{{name}}\"?",
     "deleteDialogTitle": "Delete team",

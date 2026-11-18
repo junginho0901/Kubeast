@@ -353,6 +353,7 @@ Claude Code가 부르는 도구는 채팅의 도구 코드가 이 프로세스 �
   - `maxConcurrent`(기본 2)는 ai-service 서버 한 대의 한도입니다. 서버 한 대가 동시에 띄우는 Claude Code 프로세스 수이므로 메모리를 정합니다.
   - `maxConcurrentTotal`(기본 0, `maxConcurrent`와 같은 수라는 뜻)은 설치 전체의 한도입니다. ai-service 복제본이 모두 DB로 함께 세므로, 서버가 몇 대든 구독 사용량이 이 수를 넘지 않습니다. 서버당 2 × 3대면 `maxConcurrentTotal`이 6 이상일 때만 6개가 동시에 실행됩니다.
   - 칸을 잡은 서버가 멈추면(장애, 노드 유실) 그 칸은 60초 뒤 저절로 풀립니다.
+  - 칸은 데이터베이스의 `claude_code_slots` 표(lane, slot, owner, heartbeat_at)에 있는 행입니다. 행에는 사람도 대화도 적히지 않습니다. owner는 ai-service 파드 이름 뒤에 무작위 16진수 12자리를 붙인 값이고, 실행마다 새로 만듭니다.
   - DB가 응답하지 않아 서버가 60초 동안 칸을 갱신하지 못하면 그 칸은 다음 차례가 가져가고, 이미 실행 중인 답변은 끝까지 갑니다. 그 답변이 끝날 때까지 설치 전체에서 `maxConcurrentTotal`보다 하나 더 실행될 수 있고, 서버마다의 `maxConcurrent`는 그대로 지켜집니다.
   - 한 턴은 `turnTimeoutSeconds`(기본 300초)와 `maxTurns`(기본 모델 호출 10회)를 넘지 않습니다.
   - 턴마다 Claude Code 프로세스(최대 약 300 MB)가 하나씩 뜹니다. 프로바이더가 켜져 있으면 ai-service의 메모리 한도는 `resources.aiService.limits.memory`(기본 1Gi)와 `ai.providers.claudeCode.memoryLimit`(기본 2Gi: 서비스 자체와 채팅 프로세스 2개, 조사 프로세스 1개) 중 큰 값입니다. `maxConcurrent`를 올리면 하나에 300 MB쯤씩 `memoryLimit`도 올리세요. `""`로 두면 `resources.aiService.limits.memory` 그대로 둡니다.
