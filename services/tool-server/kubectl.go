@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -174,11 +175,19 @@ func runKubectlWithInput(ctx context.Context, headers http.Header, input string,
 	return capOutput(output), nil
 }
 
+// errNoPerson refuses a kubectl run whose context names no person while impersonationEnabled, proxy or direct, with a
+// log line of its words whichever call (chat, MCP, alert investigation) made the run.
+var errNoPerson = fmt.Errorf("kubectl not run: %w", auth.ErrNoPerson)
+
 // kubectlCommand is the argv of one kubectl run and what to clean up after it.
 // Through the loopback proxy (kubeproxy.go) kubectl names only the proxy; the
 // proxy adds the cluster credential, the impersonated user and an Audit-ID per
 // request and lists the request for the call. Without it, kubectlArgs.
 func kubectlCommand(ctx context.Context, args []string) ([]string, func(), error) {
+	if _, ok := auth.FromContext(ctx); impersonationEnabled && !ok {
+		slog.Warn("kubectl not run", "reason", auth.ErrNoPerson.Error(), "cluster", clusterIDFromCtx(ctx))
+		return nil, nil, errNoPerson
+	}
 	if kubectlProxy == nil {
 		if kubectlProxyRefusal != nil {
 			return nil, nil, kubectlProxyRefusal

@@ -6,20 +6,20 @@
 
 import { Terminal, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { PodInfo } from '@/services/api'
+import type { NodeBoxRow } from '@/services/api'
 
 export interface PodContextMenuState {
   x: number
   y: number
-  pod: PodInfo
+  pod: NodeBoxRow
 }
 
 interface Props {
   menu: PodContextMenuState | null
   isAdmin: boolean
   onClose: () => void
-  onExec: (pod: PodInfo) => void
-  onDelete: (pod: PodInfo) => void
+  onExec: (pod: NodeBoxRow) => void
+  onDelete: (pod: NodeBoxRow) => void
 }
 
 export function PodContextMenu({ menu, isAdmin, onClose, onExec, onDelete }: Props) {

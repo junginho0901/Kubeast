@@ -9,7 +9,7 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -198,11 +198,8 @@ export default function PersistentVolumes() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = await api.getPVs()
-    queryClient.removeQueries({ queryKey: ['storage', 'pvs'] })
-    queryClient.setQueryData(['storage', 'pvs'], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['storage', 'pvs'], () => api.getPVs()))
 
   const createPvYamlTemplate = useMemo(() => {
     return `apiVersion: v1

@@ -14,6 +14,7 @@ export interface Message {
   isTemporary?: boolean
   toolCalls?: any[]
   streamingPhase?: 'waiting' | 'tools' | 'answer'
+  queued?: boolean            // waits for its turn before its first letter (chatStreamManager's queued)
   usage?: TurnUsage | null    // the answered turn's tokens (DB messages.usage)
   maskValues?: MaskValues | null  // the answer's placeholder values while it is the stream's (services/maskValues)
 }

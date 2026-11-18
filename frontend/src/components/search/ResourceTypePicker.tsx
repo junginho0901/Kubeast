@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, Check, Search } from 'lucide-react'
 import { NON_LISTABLE } from './nonListable'
 import { withSearchTypes } from './apiResources'
+import { usePanelEscape } from '@/hooks/useDismiss'
 
 export interface ResourceTypeOption {
   name: string
@@ -43,6 +44,8 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState('')
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  usePanelEscape(open, buttonRef, setOpen)
 
   const allResources = useMemo(() => {
     const extra = (extraResources ?? []).filter(r => !NON_LISTABLE.has(r.name) && (!r.verbs || r.verbs.includes('list')))
@@ -85,6 +88,7 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-ink text-sm font-medium transition-colors"
       >

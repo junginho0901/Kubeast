@@ -1,6 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { expect } from '@playwright/test'
+
 import { GW, ancestor, arg, condition } from './number-check.gateway-shared'
 
 // The number check's VPA, custom resource and Gateway policy objects on test2 — number-check.vpa-fixture.yaml,
@@ -62,6 +64,23 @@ export const vpa17 = (ns: string, name: string): Obj => ({
     },
   },
 })
+
+// An apply just after a CRD is Established has found no kind of it ("no matches for kind"): wait until discovery lists
+// each resource named as <plural>.<group> (api-resources reads it again, not kubectl's cache). A group whose API does
+// not answer fails the command but still prints the others.
+export async function waitUntilListed(kubectl: Kubectl, resources: string[]) {
+  const listed = (group: string) => {
+    try {
+      return kubectl(`api-resources --api-group=${group} -o name`)
+    } catch (e) {
+      return String((e as { stdout?: unknown }).stdout ?? '')
+    }
+  }
+  const groups = [...new Set(resources.map((r) => r.slice(r.indexOf('.') + 1)))]
+  await expect.poll(() => groups.flatMap((g) => listed(g).split('\n').map((s) => s.trim())).filter(Boolean).sort(), {
+    timeout: 30_000, intervals: [500, 1_000], message: `discovery lists ${resources.join(', ')}`,
+  }).toEqual(expect.arrayContaining(resources))
+}
 
 // the Widget kind (cluster-scoped CRD, one for both specs) and its instances in namespace ns
 export const CR_CRD = read('number-check.cr-crd.yaml')

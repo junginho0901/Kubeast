@@ -1010,6 +1010,6 @@ describe('the drawers that read a describe answer follow their object', () => {
 
   // A Lease's holder renews it every few seconds, faster than a read of its events is worth: the drawer reads on the clock.
   it('a Lease drawer reads its answer on the clock', () => {
-    expect(leaseInfoSrc).toContain('refetchInterval: 5_000')
+    expect(leaseInfoSrc).toContain('refetchInterval: everyUntilRefused(5_000)')
   })
 })

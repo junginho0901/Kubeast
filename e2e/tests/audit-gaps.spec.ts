@@ -76,7 +76,7 @@ test.describe('audit gaps', () => {
       const created = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E audit gaps', email, password: 'e2e-audit-gaps-throwaway', role_id: roleId('Member') } })
       expect(created.status(), await created.text()).toBe(201)
       const id = (await created.json()).id as string
-      users.push(id)
+      users.push(madeUser(id, admin))
       if (clusterRole) await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/${CLUSTER}`, { headers: admin, data: { role: clusterRole } })
       return login(request, email, 'e2e-audit-gaps-throwaway')
     }
@@ -118,7 +118,7 @@ test.describe('audit gaps', () => {
     const password = 'e2e-audit-auth-throwaway'
     const created = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E audit auth', email, password, role_id: memberRole } })
     expect(created.status(), await created.text()).toBe(201)
-    const userId = (await created.json()).id as string
+    const userId = madeUser((await created.json()).id as string, admin)
     try {
       const since = new Date(Date.now() - 2000).toISOString()
       const member = await login(request, email, password)
@@ -222,7 +222,7 @@ test.describe('audit gaps', () => {
     const password = 'e2e-audit-report-throwaway'
     const user = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E audit report', email, password, role_id: memberRole } })
     expect(user.status(), await user.text()).toBe(201)
-    const userId = (await user.json()).id as string
+    const userId = madeUser((await user.json()).id as string, admin)
     try {
       const member = await login(request, email, password)
       expect((await request.get('/api/v1/ai/investigations/e2e-audit-none', { headers: member, failOnStatusCode: false })).status()).toBe(403)
@@ -313,4 +313,15 @@ test.describe('audit gaps', () => {
       fs.rmSync(dir, { recursive: true, force: true })
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

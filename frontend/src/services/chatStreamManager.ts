@@ -35,6 +35,9 @@ export interface ChatStreamState {
   content: string
   toolCalls: any[]
   streamingPhase: StreamingPhase | null
+  // The answer waits for its turn (the server's `queued` event: every Claude Code slot is taken), shown as a line in
+  // both chats until the run starts
+  queued: boolean
   error: string | null
   // A refusal the server writes for the screen (token budget): catalog key and values (utils/chatError)
   errorKey: string | null
@@ -58,6 +61,7 @@ const initialState: ChatStreamState = {
   content: '',
   toolCalls: [],
   streamingPhase: null,
+  queued: false,
   error: null,
   errorKey: null,
   errorArgs: null,
@@ -149,21 +153,22 @@ export function withToolAccess(content: string, at: number, line: string): strin
   return `${content.substring(0, cut)}\n${line}\n${content.substring(cut)}`
 }
 
-// What a refused chat request says: its status and the server's reason. A body that is not the server's JSON (a proxy's
-// page) has nothing to show.
+// What a refused chat request says: its status and the server's reason, in the screen's words when the server names
+// them (error_key, as a stream refusal does). A body that is not the server's JSON (a proxy's page) has nothing to show.
 async function refusal(response: Response): Promise<Partial<ChatStreamState>> {
   const { status } = response
   const body = await response.text()
   let detail = ''
+  let key = ''
   try {
-    const parsed = JSON.parse(body)?.detail
-    if (typeof parsed === 'string') detail = parsed.slice(0, 300)
+    const parsed = JSON.parse(body)
+    if (typeof parsed?.detail === 'string') detail = parsed.detail.slice(0, 300)
+    if (typeof parsed?.error_key === 'string') key = parsed.error_key
   } catch {
     // not JSON
   }
-  return detail
-    ? { error: `HTTP ${status}: ${detail}`, errorKey: 'streamHttp', errorArgs: { status, detail } }
-    : { error: `HTTP ${status}`, errorKey: 'streamHttpStatus', errorArgs: { status } }
+  if (!detail) return { error: `HTTP ${status}`, errorKey: 'streamHttpStatus', errorArgs: { status } }
+  return { error: `HTTP ${status}: ${detail}`, errorKey: key || 'streamHttp', errorArgs: { status, detail } }
 }
 
 const STREAM_CUT = 'The connection closed before the answer finished, so the text above may be incomplete. Ask again for the whole answer.'
@@ -306,7 +311,7 @@ export class ChatStreamManager {
   // The answer failed: the letters that came stay in content, and an answer the user already stopped stays stopped.
   private _fail = (patch: Partial<ChatStreamState>) => {
     if (this.state.status !== 'streaming') return
-    this.setState({ status: 'error', isStreaming: false, streamingPhase: null, ...patch }, true)
+    this.setState({ status: 'error', isStreaming: false, streamingPhase: null, queued: false, ...patch }, true)
   }
 
   // The content with the n-th tool's result and 🔐 line in its block, once; the blocks after it move by what went in.
@@ -358,7 +363,7 @@ export class ChatStreamManager {
     }
 
     if (this.state.status === 'streaming') {
-      this.setState({ status: 'aborted', isStreaming: false }, true)
+      this.setState({ status: 'aborted', isStreaming: false, queued: false }, true)
     }
   }
 
@@ -404,6 +409,7 @@ export class ChatStreamManager {
       content: '',
       toolCalls: [],
       streamingPhase: 'waiting',
+      queued: false,
       error: null,
       errorKey: null,
       errorArgs: null,
@@ -483,12 +489,17 @@ export class ChatStreamManager {
 
           const dataStr = line.slice(6)
           if (dataStr === '[DONE]') {
-            this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null })
+            this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null, queued: false })
             return
           }
 
           try {
             const data = JSON.parse(dataStr)
+
+            if (typeof data.queued === 'boolean') {
+              this.setState({ queued: data.queued })
+              continue
+            }
 
             if (data.model_info) {
               console.info(
@@ -624,7 +635,7 @@ export class ChatStreamManager {
 
       // Every answer the server finishes ends with [DONE] or an error event: a stream without either was cut off.
       if (buffer.trim() === 'data: [DONE]') {
-        this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null })
+        this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null, queued: false })
       } else if (this.state.content || this._charQueue.length > 0) {
         this._fail({ error: STREAM_CUT, errorKey: 'streamCut' })
         this._keepCutAnswer()
@@ -635,7 +646,7 @@ export class ChatStreamManager {
       // reset cancelled this run: the state is a new tab's now
       if (run !== this._run) return
       if (error?.name === 'AbortError') {
-        this.setState({ status: 'aborted', isStreaming: false, streamingPhase: null }, true)
+        this.setState({ status: 'aborted', isStreaming: false, streamingPhase: null, queued: false }, true)
         return
       }
 

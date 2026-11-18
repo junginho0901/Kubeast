@@ -354,7 +354,7 @@ test.describe('Investigate now in the Alerts inbox', () => {
       const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: `E2E n4a2 ${label}`, email, password: PW, role_id: member.id } })
       expect(created.status(), await created.text()).toBe(201)
       const userId = (await created.json()).id
-      userIds.push(userId)
+      userIds.push(madeUser(userId, bearer(admin)))
       const put = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${INBOX.cluster}`, { headers: bearer(admin), data: { role } })
       expect(put.ok(), await put.text()).toBeTruthy()
       return { email, token: await login(request, email, PW) }
@@ -396,4 +396,15 @@ test.describe('Investigate now in the Alerts inbox', () => {
       await post(request, 'resolved', alert.labels, alert.fingerprint, { endsAt: new Date().toISOString() })
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

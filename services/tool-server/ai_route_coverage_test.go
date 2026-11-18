@@ -205,6 +205,7 @@ func callForCoverage(t *testing.T, row aiRouteCoverage, handler ToolHandler) (*c
 		_, _ = w.Write([]byte(answer))
 	}))
 	defer srv.Close()
+	kubectlAsNoOne(t)
 	origK8s, origAuth, origAI, origKubectl := k8sServiceURL, authServiceURL, aiServiceURL, kubectlExec
 	k8sServiceURL, authServiceURL, aiServiceURL = srv.URL, srv.URL, srv.URL
 	kubectlExec = func(_ context.Context, args []string, _ *string) ([]byte, error) {

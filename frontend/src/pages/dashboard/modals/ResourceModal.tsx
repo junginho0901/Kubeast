@@ -13,6 +13,7 @@ import { ModalOverlay } from '@/components/ModalOverlay'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAIContext } from '@/hooks/useAIContext'
 import { nodeStatusBadge, nodeStatusParts } from '@/utils/nodeStatus'
+import { classifyReadFailure, failureFields } from '@/utils/aiContext/readFailure'
 import type { NamespaceCounts } from '../namespaceCounts'
 import { buildResourceLink } from '@/utils/resourceLink'
 import type { ResourceType } from '../types'
@@ -36,6 +37,8 @@ interface Props {
   onClose: () => void
   selectedStat: SelectedStat | undefined
   isLoading: boolean
+  // the list was not read (refused or failed): the window says why where its rows would be, never "None" or a count
+  listError?: unknown
   resourceCount: number
   searchQuery: string
   setSearchQuery: (q: string) => void
@@ -51,6 +54,7 @@ export function ResourceModal({
   onClose,
   selectedStat,
   isLoading,
+  listError,
   resourceCount,
   searchQuery,
   setSearchQuery,
@@ -74,8 +78,13 @@ export function ResourceModal({
     if (page > totalPages) setPage(totalPages)
   }, [page, totalPages, setPage])
   const pageItems = serverPage ? filteredResources : filteredResources.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
+  const failure = !isLoading && listError ? classifyReadFailure(listError) : null
 
-  useAIContext(selectedResourceType && !isLoading ? {
+  useAIContext(selectedResourceType && !isLoading ? (failure ? {
+    source: 'ResourceModal',
+    summary: `${selectedStat?.name ?? selectedResourceType} 목록 — ${failure.refused ? '볼 권한 없음' : '불러오지 못함'}: ${failure.reason}`,
+    data: { kind: KIND_BY_TYPE[selectedResourceType], ...failureFields('', listError) },
+  } : {
     source: 'ResourceModal',
     summary: `${selectedStat?.name ?? selectedResourceType} 목록 — ${resourceCount}개${searchQuery ? ` (검색 "${searchQuery}")` : ''}`,
     data: {
@@ -85,11 +94,16 @@ export function ResourceModal({
         return { kind, name: r.name, namespace: r.namespace, ...fields, _link: buildResourceLink(kind, r.namespace, r.name) }
       }),
     },
-  } : null, [selectedResourceType, isLoading, selectedStat?.name, resourceCount, searchQuery, filteredResources])
+  }) : null, [selectedResourceType, isLoading, listError, selectedStat?.name, resourceCount, searchQuery, filteredResources])
 
   if (!selectedResourceType) return null
 
   const Icon = selectedStat?.icon || Box
+  const failureLine = failure
+    ? failure.refused
+      ? tr('common.forbiddenEmpty', 'You do not have permission to view {{resource}} in this cluster.', { resource: KIND_BY_TYPE[selectedResourceType] })
+      : tr('common.readFailed', 'Could not read the list: {{reason}}', { reason: failure.reason })
+    : null
 
   return (
     <ModalOverlay onClose={onClose}>
@@ -110,19 +124,22 @@ export function ResourceModal({
                 <h2 className="text-xl font-semibold text-ink">
                   {selectedStat?.name || selectedResourceType}
                 </h2>
-                <p className="text-sm text-slate-400" data-testid="resource-modal-total">
-                  {isLoading
-                    ? tr('dashboard.resourceModal.loading', 'Loading...')
-                    : listTotal !== resourceCount
-                      // a search or a chart bar narrows the list: how many it keeps of how many there are
-                      ? tr('dashboard.resourceModal.totalFiltered', '{{shown}} of {{count}}', { shown: listTotal, count: resourceCount })
-                      : tr('dashboard.resourceModal.total', 'Total {{count}}', { count: resourceCount })}
-                </p>
+                {!failure && (
+                  <p className="text-sm text-slate-400" data-testid="resource-modal-total">
+                    {isLoading
+                      ? tr('dashboard.resourceModal.loading', 'Loading...')
+                      : listTotal !== resourceCount
+                        // a search or a chart bar narrows the list: how many it keeps of how many there are
+                        ? tr('dashboard.resourceModal.totalFiltered', '{{shown}} of {{count}}', { shown: listTotal, count: resourceCount })
+                        : tr('dashboard.resourceModal.total', 'Total {{count}}', { count: resourceCount })}
+                  </p>
+                )}
               </div>
             </div>
             <button
               onClick={onClose}
               className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+              aria-label={tr('common.close', 'Close')}
             >
               <X className="w-5 h-5 text-slate-400" />
             </button>
@@ -141,6 +158,7 @@ export function ResourceModal({
               <button
                 onClick={() => setSearchQuery('')}
                 className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-slate-600 rounded-sm transition-colors"
+                aria-label={tr('common.clearSearch', 'Clear the search')}
               >
                 <X className="w-4 h-4 text-slate-400" />
               </button>
@@ -154,6 +172,12 @@ export function ResourceModal({
             <div className="flex flex-col items-center justify-center h-full min-h-[300px]">
               <RefreshCw className="w-8 h-8 text-primary-400 animate-spin mb-4" />
               <p className="text-slate-400">{tr('dashboard.loading', 'Loading data...')}</p>
+            </div>
+          ) : failure ? (
+            <div className="text-center py-12">
+              <p role="alert" className="text-red-400 break-words" data-testid={failure.refused ? 'resource-modal-refused' : 'resource-modal-read-failed'}>
+                {failureLine}
+              </p>
             </div>
           ) : (
             <>
@@ -392,7 +416,7 @@ export function ResourceModal({
             </>
           )}
         </div>
-        {!isLoading && (
+        {!isLoading && !failure && (
           <ListPager
             currentPage={page}
             totalPages={totalPages}

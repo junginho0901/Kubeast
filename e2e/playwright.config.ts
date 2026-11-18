@@ -7,6 +7,19 @@ const ACTIONS = process.env.E2E_ACTIONS === '1'
 const DEMO = process.env.E2E_DEMO === '1'
 // Safety nets (e2e/guard): E2E_GUARD=1 adds the guard project.
 const GUARD = process.env.E2E_GUARD === '1'
+// tests/rollout-in-use.spec.ts restarts the install's services: E2E_ROLLOUT=1 adds the rollout project, chromium leaves it out.
+const ROLLOUT = process.env.E2E_ROLLOUT === '1'
+const ROLLOUT_SPEC = /rollout-in-use\.spec\.ts$/
+// The floating chat's layers on every screen in refused, failed, not served and empty states: E2E_AI_LAYERS=1 adds the
+// ai-layers project (tests/ai-layers-every-screen.spec.ts, which the chromium project leaves out).
+const AI_LAYERS = process.env.E2E_AI_LAYERS === '1'
+const AI_LAYERS_SPEC = /ai-layers-every-screen\.spec\.ts$/
+// Fault tests (e2e/fault, v0.7.8 step 4 §5): E2E_FAULT=1 adds the fault project. They kill pods and stop Redis or
+// PostgreSQL on the dev install, so they never run by default.
+const FAULT = process.env.E2E_FAULT === '1'
+// When the run started, for tests/refusals.teardown.ts: set once in the runner, which the workers inherit. An
+// E2E_RUN_STARTED exported in the shell from an earlier run is reused.
+process.env.E2E_RUN_STARTED ||= new Date().toISOString()
 
 // E2E config — runs against the kind cluster's gateway (port 8000).
 // Snapshots are committed-equivalent baselines that the refactor PRs
@@ -46,6 +59,13 @@ export default defineConfig({
     {
       name: 'setup',
       testMatch: /auth\.setup\.ts/,
+      // after every project that depends on setup, also when one failed
+      teardown: 'refusals',
+    },
+    {
+      name: 'refusals',
+      testMatch: /refusals\.teardown\.ts/,
+      timeout: 300_000, // one kubectl logs read may take up to 120 s, past the 30 s default
     },
     {
       name: 'chromium',
@@ -57,8 +77,41 @@ export default defineConfig({
         permissions: ['clipboard-read', 'clipboard-write'],
       },
       dependencies: ['setup'],
-      testIgnore: /auth\.setup\.ts/,
+      testIgnore: [/auth\.setup\.ts/, ROLLOUT_SPEC, AI_LAYERS_SPEC],
     },
+    ...(ROLLOUT
+      ? [
+          {
+            name: 'rollout',
+            testMatch: ROLLOUT_SPEC,
+            use: {
+              ...devices['Desktop Chrome'],
+              viewport: { width: 1440, height: 900 },
+              locale: 'en-US',
+              storageState: '.auth/user.json',
+            },
+            dependencies: ['setup'],
+          },
+        ]
+      : []),
+    ...(AI_LAYERS
+      ? [
+          {
+            name: 'ai-layers',
+            testMatch: AI_LAYERS_SPEC,
+            use: {
+              ...devices['Desktop Chrome'],
+              // a missing element fails its step instead of the whole test timeout (Playwright Test defaults both to 0)
+              actionTimeout: 15_000,
+              navigationTimeout: 30_000,
+              viewport: { width: 1440, height: 900 },
+              locale: 'en-US', // the spec reads the screen's notices by the English catalog
+              storageState: '.auth/user.json',
+            },
+            dependencies: ['setup'],
+          },
+        ]
+      : []),
     ...(ACTIONS
       ? [
           {
@@ -116,6 +169,27 @@ export default defineConfig({
             use: {
               ...devices['Desktop Chrome'],
               // a missing element fails its step instead of the whole test timeout (Playwright Test defaults both to 0)
+              actionTimeout: 15_000,
+              navigationTimeout: 30_000,
+              viewport: { width: 1440, height: 900 },
+              locale: 'en-US',
+              storageState: '.auth/user.json',
+            },
+            dependencies: ['setup'],
+          },
+        ]
+      : []),
+    ...(FAULT
+      ? [
+          {
+            name: 'fault',
+            testDir: './fault',
+            testMatch: /\.spec\.ts$/,
+            use: {
+              ...devices['Desktop Chrome'],
+              // A trace would hold the admin password, tokens and the kind clusters' kubeconfigs the requests carry,
+              // and a run's artifacts are kept as a record: the attachments say what happened instead.
+              trace: 'off',
               actionTimeout: 15_000,
               navigationTimeout: 30_000,
               viewport: { width: 1440, height: 900 },

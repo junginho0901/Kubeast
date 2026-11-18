@@ -54,6 +54,7 @@ export function useChatStreamSync({
           toolCalls: streamState.toolCalls && streamState.toolCalls.length > 0 ? [...streamState.toolCalls] : undefined,
           streamingPhase: streamState.streamingPhase ?? updated[tempAssistantIndex].streamingPhase,
           maskValues: streamState.maskValues,
+          queued: coming && streamState.queued,
         }
         return updated
       }
@@ -75,6 +76,7 @@ export function useChatStreamSync({
         isTemporary: true,
         toolCalls: streamState.toolCalls && streamState.toolCalls.length > 0 ? [...streamState.toolCalls] : undefined,
         streamingPhase: streamState.streamingPhase ?? 'waiting',
+        queued: streamState.queued,
       })
       return nextMessages
     })

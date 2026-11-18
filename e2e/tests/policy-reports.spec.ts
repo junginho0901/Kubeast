@@ -42,7 +42,7 @@ async function createUser(request: APIRequestContext, admin: string, email: stri
   const member = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name.toLowerCase() === 'member')
   const res = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E policy reports', email, password: PW, role_id: member.id } })
   expect(res.status(), `create ${email}`).toBe(201)
-  return (await res.json()).id
+  return madeUser((await res.json()).id, bearer(admin))
 }
 
 // What the cluster holds: every result row of every PolicyReport in a namespace (or all), counted by result.
@@ -96,6 +96,11 @@ test.describe('policy reports', () => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     // Kyverno writes a new object's reports ~20 s (Pod, Deployment) to ~40 s (ReplicaSet) after it is created
     // (raw step4-report-latency.log). force_refresh reads past the server's minute cache, as the refresh button does.
+    // The cluster first: a read made before Kyverno is done stays a minute on the k8s-service pod it reached.
+    await expect.poll(() => {
+      const items = JSON.parse(kubectl(`get policyreports -n ${NS} -o json`)).items as { scope?: { kind?: string }; results?: { result?: string }[] }[]
+      return ['Pod', 'Deployment', 'ReplicaSet'].map((k) => items.filter((i) => i.scope?.kind === k).flatMap((i) => i.results ?? []).filter((r) => r.result === 'fail').length).join(',')
+    }, { timeout: 150_000, intervals: [5000] }).toBe('2,2,2')
     await expect.poll(async () => {
       const res: Results = await (await request.get(`/api/v1/cluster/policyreports/results?cluster=default&namespace=${NS}&force_refresh=true`, { headers: bearer(admin) })).json()
       if (Array.isArray(res)) return -1
@@ -206,4 +211,15 @@ test.describe('policy reports', () => {
     await expect(page.getByTestId('policy-reports-not-installed')).toBeVisible({ timeout: 15_000 })
     await expect(page.getByTestId('policy-reports-table')).toHaveCount(0)
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

@@ -92,7 +92,7 @@ func (m *Metrics) route(ctx context.Context) string {
 }
 
 func skip(path string) bool {
-	return path == "/metrics" || path == "/health" || path == "/"
+	return path == "/metrics" || path == "/health" || path == "/" || path == "/livez" || path == "/readyz"
 }
 
 // Middleware counts and times every request except the probes. The promhttp

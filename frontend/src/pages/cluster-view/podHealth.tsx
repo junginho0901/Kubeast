@@ -152,6 +152,17 @@ export const getPodHealth = (pod: any): PodHealth => {
   return { level: 'ok' as const, reason: phase, phase }
 }
 
+// A Cluster View box's row (k8s-service nodeBoxPod) carries the colour the server gives the pod by the same rule
+// (podHealth, held to getPodHealth by podHealth.cases.json); a full row — a live frame that took its place — has the
+// containers getPodHealth reads.
+export const boxPodHealth = (pod: any): PodHealth => {
+  const level = pod?.health
+  if (!Array.isArray(pod?.containers) && (level === 'ok' || level === 'warn' || level === 'error')) {
+    return { level, reason: pod?.health_reason ?? '', phase: pod?.phase || pod?.status || 'Unknown' }
+  }
+  return getPodHealth(pod)
+}
+
 export const getHealthIcon = (level: 'ok' | 'warn' | 'error', reason?: string) => {
   if (reason === 'Terminating') {
     return (
