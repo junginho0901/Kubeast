@@ -36,6 +36,7 @@
   --color-ink: #fff;
   --color-hairline: #303a49;
   --color-control: #718096;
+  --color-control-pressed-shade: rgb(0 0 0 / 10%);
 
   --font-sans: InterVariable, Inter, system-ui, sans-serif;
 
@@ -404,6 +405,11 @@ body {
   :where(button, input, select, textarea, [role='button']):focus-visible {
     outline: 2px solid var(--color-primary-400);
     outline-offset: 2px;
+  }
+
+  /* A press darkens the fill without changing text, borders, rings or layout. */
+  :where(button, [role='button']):not(:disabled):not([aria-disabled='true']):active {
+    background-image: linear-gradient(var(--color-control-pressed-shade), var(--color-control-pressed-shade));
   }
 }
 
