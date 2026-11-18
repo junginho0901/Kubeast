@@ -74,8 +74,9 @@ func TestRouteCoverage_EachToolIsRegisteredAndNotAWrite(t *testing.T) {
 }
 
 func TestRouteCoverage_EachRowTakesTheToolsArguments(t *testing.T) {
+	t.Setenv("AI_TIMELINE_CHANGES", "true") // the rows are the tools' arguments with every feature on (timeline's view)
 	for key, row := range coveredRoutes(t) {
-		if err := validateToolArgs(row.Args); err != nil {
+		if err := validateCallArgs(row.Tool, row.Args); err != nil {
 			t.Errorf("%s: %v", key, err)
 		}
 	}

@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+from app.services import switch
+
 
 def _int(name: str, default: int) -> int:
     try:
@@ -34,6 +36,16 @@ class InvestigationSettings:
     provider_pause_minutes: int = 30
     max_steps: int = 8
     timeout_seconds: int = 300
+    # The time windows, the scope groups, facts apart from hypotheses and the six report headings (investigation/prompt.py).
+    rules: bool = False
+    # Step 0: before the first model call, the timeline tool's changes view over the change window.
+    changes_first: bool = False
+    # Step 0: then anomaly_rank (features.anomalyRank) over the metrics window of the alert's namespace.
+    narrow_first: bool = False
+    # Counted from the alert's start: metrics either side of it, logs from before it, changes from before it.
+    metrics_window_minutes: int = 15
+    logs_window_minutes: int = 5
+    changes_window_hours: int = 4
     model: str = ""
     language: str = "en"
     console_url: str = ""
@@ -42,6 +54,8 @@ class InvestigationSettings:
     # A firing inbox alert with no notification for this long shows "status unknown" (Alertmanager resends a
     # firing alert every repeat_interval, 4 h by default, so two missed resends).
     inbox_stale_hours: int = 8
+    # features.callGraph: the prompt asks for who calls whom (resource_graph include calls) and the cause → … → symptom path.
+    call_paths: bool = False
 
 
 def _on(name: str) -> bool:
@@ -67,6 +81,13 @@ def load() -> InvestigationSettings:
         provider_pause_minutes=max(0, _int("ALERT_INVESTIGATION_PROVIDER_PAUSE_MINUTES", 30)),
         max_steps=min(20, max(1, _int("ALERT_INVESTIGATION_MAX_STEPS", 8))),
         timeout_seconds=min(1800, max(30, _int("ALERT_INVESTIGATION_TIMEOUT_SECONDS", 300))),
+        rules=os.getenv("ALERT_INVESTIGATION_RULES", "false").strip().lower() == "true",
+        changes_first=os.getenv("ALERT_INVESTIGATION_CHANGES_FIRST", "false").strip().lower() == "true",
+        narrow_first=switch.env_on("ALERT_INVESTIGATION_NARROW_FIRST"),
+        # Prometheus reads at most 168 h, Loki 24 h by default, timeline 90 days back.
+        metrics_window_minutes=min(360, max(1, _int("ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES", 15))),
+        logs_window_minutes=min(1440, max(0, _int("ALERT_INVESTIGATION_LOGS_WINDOW_MINUTES", 5))),
+        changes_window_hours=min(168, max(1, _int("ALERT_INVESTIGATION_CHANGES_WINDOW_HOURS", 4))),
         model=os.getenv("ALERT_INVESTIGATION_MODEL", "").strip(),
         language=(os.getenv("ALERT_INVESTIGATION_LANGUAGE", "en").strip().lower() or "en"),
         console_url=os.getenv("ALERT_INVESTIGATION_CONSOLE_URL", "").strip().rstrip("/"),
@@ -75,4 +96,5 @@ def load() -> InvestigationSettings:
         ).strip(),
         internal_token=os.getenv("INTERNAL_API_TOKEN", "").strip(),
         inbox_stale_hours=min(24 * 30, max(1, _int("ALERT_INBOX_STALE_HOURS", 8))),
+        call_paths=switch.env_on("CALL_GRAPH_ENABLED"),  # the one switch rule, as tools.call_graph_on
     )
