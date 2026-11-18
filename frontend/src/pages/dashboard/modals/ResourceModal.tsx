@@ -108,7 +108,7 @@ export function ResourceModal({
   return (
     <ModalOverlay onClose={onClose}>
       <div
-        className="bg-slate-800 rounded-xl border border-hairline shadow-xl max-w-4xl w-full h-[80vh] overflow-hidden flex flex-col"
+        className="bg-slate-800 rounded-xl border border-hairline shadow-xl max-w-4xl w-full h-[80vh] overflow-hidden flex flex-col [&_h3]:break-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 모달 헤더 */}
@@ -192,7 +192,7 @@ export function ResourceModal({
                       >
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div className="min-w-0 flex-1">
-                            <h3 className="break-all font-medium text-ink">{ns.name}</h3>
+                            <h3 className="font-medium text-ink">{ns.name}</h3>
                             <p className="text-sm text-slate-400 mt-1" data-testid="resource-modal-namespace-counts">
                               {tr('dashboard.resourceModal.namespaceSummary', 'Pods: {{pods}} | Services: {{services}} | Deployments: {{deployments}}', {
                                 pods: namespaceCounts?.[ns.name]?.pods ?? '-',
@@ -242,7 +242,7 @@ export function ResourceModal({
                                 <AlertCircle className="w-5 h-5 text-yellow-400" />
                               )}
                               <div className="min-w-0">
-                                <h3 className="break-all font-medium text-ink">{pod.name}</h3>
+                                <h3 className="font-medium text-ink">{pod.name}</h3>
                                 <p className="text-sm text-slate-400">{pod.namespace}</p>
                               </div>
                             </div>
@@ -285,7 +285,7 @@ export function ResourceModal({
                       >
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div className="min-w-0 flex-1">
-                            <h3 className="break-all font-medium text-ink">{svc.name}</h3>
+                            <h3 className="font-medium text-ink">{svc.name}</h3>
                             <p className="text-sm text-slate-400 mt-1">
                               {svc.namespace} | {tr('dashboard.resourceModal.typeLabel', 'Type')}: {svc.type} | {tr('dashboard.resourceModal.clusterIpLabel', 'Cluster IP')}: {svc.cluster_ip || none}
                             </p>
@@ -317,7 +317,7 @@ export function ResourceModal({
                       >
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div className="min-w-0 flex-1">
-                            <h3 className="break-all font-medium text-ink">{deploy.name}</h3>
+                            <h3 className="font-medium text-ink">{deploy.name}</h3>
                             <p className="text-sm text-slate-400 mt-1">
                               {deploy.namespace} | {tr('dashboard.resourceModal.replicasLabel', 'Replicas')}: {deploy.ready_replicas}/{deploy.replicas}
                             </p>
@@ -352,7 +352,7 @@ export function ResourceModal({
                       >
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div className="min-w-0 flex-1">
-                            <h3 className="break-all font-medium text-ink">{pvc.name}</h3>
+                            <h3 className="font-medium text-ink">{pvc.name}</h3>
                             <p className="text-sm text-slate-400 mt-1">
                               {pvc.namespace} | {pvc.capacity || na} | {pvc.storage_class || na}
                             </p>
@@ -387,7 +387,7 @@ export function ResourceModal({
                       >
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div className="min-w-0 flex-1">
-                            <h3 className="break-all font-medium text-ink">{node.name}</h3>
+                            <h3 className="font-medium text-ink">{node.name}</h3>
                             <p className="text-sm text-slate-400 mt-1">
                               {tr('dashboard.resourceModal.versionLabel', 'Version')}: {node.version || na} |
                               {tr('dashboard.resourceModal.internalIpLabel', 'Internal IP')}: {node.internal_ip || na}
