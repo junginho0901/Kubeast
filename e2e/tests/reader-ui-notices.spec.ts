@@ -23,7 +23,7 @@ async function createUser(request: APIRequestContext, admin: Record<string, stri
   const password = 'e2e-reader-throwaway'
   const created = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: `E2E ${tag}`, email, password } })
   expect(created.status()).toBe(201)
-  return { id: (await created.json()).id as string, email, password }
+  return { id: madeUser((await created.json()).id as string, admin), email, password }
 }
 
 // A fresh browser context whose session cookie belongs to the user.
@@ -209,4 +209,15 @@ test.describe('non-admin UI notices', () => {
       await request.delete(`/api/v1/auth/admin/users/${user.id}`, { headers: admin })
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

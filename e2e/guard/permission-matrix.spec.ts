@@ -860,11 +860,10 @@ async function walk(browser: Browser, request: APIRequestContext, role: Role, ce
           await page.waitForTimeout(100)
         }
         await quiet(page, t)
-        const text = await drawer.innerText()
         const unreadable = await drawer.getByTestId('detail-unreadable').count() > 0 ? await drawer.getByTestId('detail-unreadable').innerText() : ''
         let kubeast = 'timeout'
         if (unreadable) kubeast = unreadable.includes(tr('common.objectForbidden')) ? 'forbidden' : unreadable.includes(tr('common.objectNotFound')) ? 'notFound' : 'unreadable'
-        else if (refusals.some((x) => text.includes(x))) kubeast = 'error'
+        else if ((await drawer.getByTestId('describe-failed').count()) > 0) kubeast = 'error'
         else if (statuses.some((x) => x >= 200 && x < 300)) kubeast = 'shown'
         else if (statuses.some((x) => x >= 400)) kubeast = 'blank'
         const get = canI(who, 'get', d.resource, target.scope, target.name)

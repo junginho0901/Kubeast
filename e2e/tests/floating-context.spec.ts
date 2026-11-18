@@ -355,12 +355,16 @@ test.describe('floating chat — a new conversation', () => {
 })
 
 test.describe('floating chat — the keyboard shortcut', () => {
-  // ⌘/ on a Mac, Ctrl+/ elsewhere, as the page reads its platform (navigator.platform): the chromium project's Desktop
-  // Chrome device says Windows on any host, while Playwright's ControlOrMeta follows the host's OS, so the keys come from the page
+  // ⌘/ on a Mac, Ctrl+/ elsewhere, as the page reads its platform (useChatShortcut isMacPlatform: userAgentData.platform,
+  // else navigator.platform): the chromium project's Desktop Chrome device says Windows on any host, while Playwright's
+  // ControlOrMeta follows the host's OS, so the keys come from the page's own rule
   test('⌘/ or Ctrl+/ opens the chat from a text field with the focus in its input, and closes it with the focus back', async ({ page }) => {
     await page.goto('/admin/users')
     const toggle = page.getByTestId('floating-chat-toggle')
-    const mac = await page.evaluate(() => /mac|iphone|ipad/i.test(navigator.platform))
+    const mac = await page.evaluate(() => {
+      const nav = navigator as Navigator & { userAgentData?: { platform?: string } }
+      return /mac|iphone|ipad|ipod/i.test(nav.userAgentData?.platform || nav.platform || '')
+    })
     const shortcut = mac ? 'Meta+Slash' : 'Control+Slash'
     await expect(toggle).toHaveAttribute('aria-keyshortcuts', shortcut)
     await expect(toggle).toHaveAttribute('title', mac ? 'Open AI Chat (⌘/)' : 'Open AI Chat (Ctrl+/)')
@@ -409,7 +413,7 @@ test.describe('floating chat — signing out', () => {
     const password = 'E2e-floating-signout-throwaway-1!'
     const made = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E floating sign-out', email, password, role_id: roles.find((r) => r.name === 'Admin')!.id } })
     expect(made.status(), await made.text()).toBe(201)
-    const id = (await made.json()).id as string
+    const id = madeUser((await made.json()).id as string, admin)
     try {
       const login = await page.request.post('/api/v1/auth/login', { data: { email, password } })
       expect(login.ok()).toBeTruthy()
@@ -425,4 +429,15 @@ test.describe('floating chat — signing out', () => {
       await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

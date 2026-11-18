@@ -6,7 +6,7 @@ import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { useForbidden } from '@/services/forbiddenStore'
 import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -133,11 +133,8 @@ export function useDeviceClassesData({ searchQuery, sortKey, sortDir, currentPag
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = await api.getDeviceClasses(true)
-    queryClient.removeQueries({ queryKey: ['gpu', 'deviceclasses'] })
-    queryClient.setQueryData(['gpu', 'deviceclasses'], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['gpu', 'deviceclasses'], () => api.getDeviceClasses(true)))
 
   return {
     queryClient,

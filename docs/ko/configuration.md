@@ -53,6 +53,15 @@ auth:
     enabled: true
     clusterRoles: true
     userPrefix: ""  # 예: kubeast:user: — 사람의 주소 앞에 붙음. 주소로 묶은 User 바인딩은 적용되지 않게 됨(cluster-requirements §1)
+    # kubeast:cache로 읽어 보여 주는 화면은 그 사람이 그것을 list·get할 수 있는지 먼저 묻습니다. 켜면 그 읽기 확인을
+    # 그룹 집합마다 한 번 kubeast:group-check:<시작마다 만든 꼬리>로 묻고, 허용 답을 같은 그룹의 모든 사람에게 최대 1분
+    # 씁니다. 거절은 그 사람으로 다시 묻습니다. 그 확인은 클러스터 감사 로그에 그 이름으로 남습니다. 모든 인가기가
+    # 그 이름과 그 사람의 그룹에 허용한 것을 그 사람에게도 허용한다는 조건에 기댑니다. RBAC 앞이든 뒤든 사용자 이름에
+    # 따라 답하는 인가기가 있거나, Kubeast가 대신할 수 있는 사용자 이름을 제한한 클러스터는 목록에 넣고, 그 이름은
+    # 바인딩하지 마세요(cluster-requirements §1).
+    sharedReadChecks:
+      enabled: false
+      excludeClusters: []  # 사람마다 계속 묻는 등록 클러스터 ID
     customRoles: []
     #  - name: Read
     #    namespaces: [team-a, team-b]
@@ -133,9 +142,9 @@ podSecurity:
   hostUsers: false
   readOnlyRootFilesystem: true
 
-# 가용성 — replicas를 2 이상으로 올렸거나 autoscaling의 minReplicas가 2 이상인 Deployment에는 PodDisruptionBudget이 생깁니다(pdb.maxUnavailable, 1 · pdb.enabled: false면 만들지 않음). 판을 올릴 때는 새 파드를 먼저 띄우고, 새 파드가 준비된 뒤에 옛 파드를 멈춥니다(postgres·redis는 먼저 멈춤)
+# 가용성 — replicas를 2 이상으로 올렸거나 autoscaling의 minReplicas가 2 이상인 Deployment에는 PodDisruptionBudget이 생깁니다(pdb.maxUnavailable, 1 · pdb.enabled: false면 만들지 않음). 판을 올릴 때는 새 파드를 먼저 띄우고, 새 파드가 준비된 뒤에 옛 파드를 멈춥니다(postgres·redis는 옛 파드를 먼저 내리기 시작)
 # 프로브 — liveness는 /livez(다른 것은 안 봄), readiness는 /readyz(SIGTERM부터 503, DB는 보지 않음 — 모두가 쓰는 DB가 죽으면 모든 파드가 한꺼번에 빠지므로). DB 상태는 auth-service·session-service의 /health와 k8s-service의 kubeast_audit_store_up에서 봅니다
-# podShutdown.preStopSeconds: Service 뒤의 파드는 종료 요청 뒤 이 초만큼 더 응답하고(preStop sleep, Kubernetes 1.30 이상) 그다음 30초 안에 종료합니다(터미널을 맡은 서버는 드레인 대기와 닫기 대기만큼 더). 파드 IP로 보내는 로드 밸런서 뒤라면 그 해제 지연(deregistration delay)에 몇 초를 더해 두세요
+# podShutdown.preStopSeconds: Service 뒤의 파드는(번들 PostgreSQL과 Redis는 빼고 — 둘은 preStop 기다림이 없고 Kubernetes 기본 종료 유예 30초) 종료 요청 뒤 이 초만큼 더 응답하고(preStop sleep, Kubernetes 1.30 이상) 그다음 30초 안에 종료합니다(터미널을 맡은 서버는 드레인 대기와 닫기 대기만큼 더). 파드 IP로 보내는 로드 밸런서 뒤라면 로드 밸런서가 떠나는 파드에 새 요청을 그만 보낼 때까지보다 길게 두세요(AWS Application Load Balancer 뒤에서는 기본 5초로 충분했습니다)
 replicas:
   gateway: 1
 # 서비스마다 HPA 하나, 기본 꺼짐. k8sService · toolServer를 2대 이상으로 하려면 redis.enabled가 필요(docs/ko/high-availability.md)
@@ -190,7 +199,7 @@ postgresql:
   sessionLimits: { statementTimeoutMs: 30000, lockTimeoutMs: 15000, idleInTransactionTimeoutMs: 300000 }  # 각 서비스가 연결한 뒤 SET으로 거는 PostgreSQL statement_timeout, lock_timeout, idle_in_transaction_session_timeout입니다(마이그레이션은 역할(role)에 걸려 있어도 앞의 둘 없이 돕니다). 0이면 걸지 않습니다. RDS Proxy 뒤에서는 SET이 세션을 고정(pinning)하니 0으로 두고 프록시의 초기화 쿼리나 데이터베이스 역할(role)에 거세요. PgBouncer는 session 풀링으로만 쓰세요. transaction 풀링은 트랜잭션 사이에 서버 연결을 다른 클라이언트에게 넘기므로 SET이나 세션 advisory lock(마이그레이션, 감사 디스패처)이 그것을 건 클라이언트에 남지 않습니다
   pool: { authService: { maxConns: 20 }, sessionService: { maxConns: 20 }, k8sService: { maxConns: 10 }, aiService: { maxConns: 15 }, modelConfigController: { maxConns: 4 } }  # 파드 하나의 연결 수입니다. 차트의 PostgreSQL이면 파드들(롤아웃 때 하나 더, 오토스케일링의 maxReplicas 포함)이 maxConnections보다 많이 열 수 있을 때 설치가 멈추고, 외부 데이터베이스면 NOTES가 그 합을 보여 주니 그쪽 max_connections와 비교하세요
   maxConnections: 300   # 차트 PostgreSQL의 max_connections
-# 업그레이드할 때 Redis는 옛 파드를 멈춘 뒤 새 파드를 띄우므로(maxSurge 0) 몇 초 동안 캐시가 비어 있습니다.
+# 업그레이드할 때 Redis는 옛 파드를 먼저 내리기 시작한 뒤 새 파드를 만듭니다(maxSurge 0). 새 파드는 빈 캐시로 시작하고, 옛 파드가 끝나는 몇 초 동안 둘이 같이 있을 수 있지만 데이터는 나누지 않습니다(emptyDir).
 redis:
   enabled: true
   password: ""          # requirepass, Redis 사용자가 꺼져 있는 동안 씁니다 — 비우면 생성합니다(REDIS_PASSWORD)
@@ -199,7 +208,7 @@ redis:
     existingSecretHasKeys: false  # secrets.existingSecret을 쓸 때: 그 Secret에 사용자 비밀번호를 넣은 뒤 true
     existingSecret: ""            # 사용자 키만 든 Secret. 서비스마다 자기 키만 읽습니다
 networkPolicy:
-  enabled: true         # 기본 거부 + 서비스가 쓰는 흐름만 허용합니다. NetworkPolicy를 강제하지 않는 CNI(kindnet 등)에서는 영향이 없습니다
+  enabled: true         # 기본 거부 + 서비스가 쓰는 흐름만 허용합니다. NetworkPolicy를 강제하지 않는 CNI(Flannel 등)에서는 영향이 없습니다. kind의 kindnet은 kind 0.24부터 강제합니다
   aiEgress:
     allowListOnly: false  # true면(networkPolicy.enabled 필요) ai-service는 allowExternalEgressCIDRs로만, tool-server는 clusterAPIs·stsEndpoints·apiserverCIDR로만 나갑니다(cluster-requirements.md §15)
     clusterAPIs: []       # 등록한 클러스터(이 클러스터 포함)의 API 서버를 VPC·서브넷 CIDR로(EKS는 /32 금지) — CIDR은 443·6443, {cidr, port}는 그 포트
@@ -227,12 +236,40 @@ multicluster:
   maxClusters: 20
   healthcheckIntervalSec: 60
   rateLimitQPS: 0           # 0 = off
-  breakerConsecutiveFails: 5
+  breakerConsecutiveFails: 5  # 클러스터 차단기를 여는, API 서버에 닿지 못한(어느 호출도 응답을 받지 못한) 연속 요청 수. 0 = 끔, 어떤 요청도 바로 실패시키지 않음
+  breakerOpenSec: 30        # 열린 차단기가 503으로 답하는 시간. 지나면 요청 하나를 클러스터로 보내 봄(0 = 30)
   clientQPS: 100            # 클러스터 API 서버로 보내는 client-go 속도
   clientBurst: 200
   reviewQPS: 0              # 0 = 권한 확인이 clientQPS를 같이 씀. architecture.md "Many users" 참고
   reviewBurst: 0
+  wsWatchOpeningConcurrency: 8  # 모든 클러스터를 합쳐 첫 객체를 한꺼번에 받는 실시간 목록 수, 다른 클러스터가 기다리는 동안 한 클러스터는 그 절반까지. architecture.md "Many users" 참고
+  wsWatchStreamWindowKiB: 1024  # 실시간 목록 스트림 하나의 HTTP/2 창: 느린 브라우저의 watch가 쥐는 메모리와, 왕복이 긴 망에서 목록이 오는 빠르기의 맞바꿈. architecture.md "Many users" 참고
 ```
+
+## 새 값의 단계
+
+이번 릴리스가 더하거나 뜻을 바꾼 값마다 단계가 있고, 이 표와 그 값의 `values.yaml` 주석에 적습니다.
+
+- **alpha**: 새로 들어온 값입니다. 키나 동작이 뒤 릴리스에서 바뀌거나 없어질 수 있고, 그때는 그 릴리스 노트에 적습니다.
+- **beta**: 기능은 남습니다. 키나 세부는 바뀔 수 있고, 한 릴리스 앞서 알리고 옮기는 법을 적습니다.
+- **stable**: 키와 동작이 그대로 남습니다. 이름이 바뀐 키도 한 릴리스 동안은 경고와 함께 읽습니다.
+
+차트 기본값으로 설치하면 읽는 값은 beta이고, 직접 정하거나 그 값을 읽는 기능을 켜야 쓰이는 값은 alpha입니다. `pdb.*`는 서비스가 파드 둘 이상일 때만 PodDisruptionBudget을 만들며, 마지막 칸의 노드 드레인으로 beta입니다. `redis.acl.*`의 Redis 사용자는 `secrets.existingSecret` 설치에서는 `redis.acl.existingSecretHasKeys`나 `redis.acl.existingSecret`을 정하기 전까지 꺼져 있습니다. 마지막 칸은 값마다 아직 돌리지 않은 것이고, "돌려 봄:"으로 시작하면 그 뒤에 돌린 것입니다.
+
+| 값 | 기본값 | 단계 | 아직 안 돌린 것 · 돌려 봄 |
+| --- | --- | --- | --- |
+| `podShutdown.preStopSeconds` | 5 | beta | 돌려 봄: Kubernetes 1.29.14(kind, `PodLifecycleSleepAction` 기능 게이트 꺼짐)에 기본 설치를 서버 dry-run으로 보내니 API 서버가 preStop 기다림이 있는 Deployment 7개를 거절함(`spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`). `0`이면 객체 58개를 모두 받음 |
+| `redis.acl.enabled`, `redis.acl.existingSecretHasKeys`, `redis.acl.existingSecret` | true, false, "" | beta | 시험 설치에서 사용자를 끈 경우 |
+| 1보다 큰 `replicas.k8sService`와 `replicas.toolServer` | 1 | alpha | k8s-service 2대 · 3대의 크기 |
+| `autoscaling.<service>` | 끔 | alpha | 돌려 봄: EKS 1.35에서 k8s-service와 게이트웨이의 HPA가 파드 2대에서 3대로 늘었다가 돌아오고 HPA를 켰다 끄는 동안, 로드 밸런서를 거친 요청 중 실패한 것 없음 |
+| `postgresql.sessionLimits.*`, `postgresql.pool.<service>.maxConns`, `postgresql.maxConnections` | 켬, 20 · 20 · 10 · 15 · 4, 300 | beta | 데이터베이스가 오래 멈춘 경우 |
+| `pdb.enabled`, `pdb.maxUnavailable` | true, 1 | beta | 돌려 봄: EKS 1.35에서 서비스마다 파드 둘을 두고 노드 하나를 드레인해 바꾸는 동안, 막힌 내보내기 없음 · 로드 밸런서를 거친 요청 중 실패한 것 없음 |
+| `streams.*` | 끔 | alpha | kind 개발 설치에서 한 번도 안 돌림 |
+| `ai.providers.claudeCode.maxConcurrentTotal`, `queueWaitSeconds`, `memoryLimit` | 0, 60, 2Gi | alpha | 프로바이더를 켠 시험 설치 |
+| `gateway.accessLog.upstreamTimes` | false | alpha | 돌려 봄: kind 개발 설치에서 켠 상태로 100명이 한꺼번에 화면을 엶(2026-11-17), 접근 로그 줄마다 여섯 칸이 붙음 |
+| `multicluster.breakerConsecutiveFails`(0.7.8부터 `0`이면 차단기 끔), `multicluster.breakerOpenSec`(0.7.8부터 읽음) | 5, 30 | beta | kind 개발 설치에서 클러스터를 끊어 본 경우 |
+| `multicluster.wsWatchOpeningConcurrency`, `multicluster.wsWatchStreamWindowKiB` | 8, 1024 | beta | 돌려 봄: kind에서 0.7.7부터 업그레이드 리허설(기본 설치, 기존 Secret, 외부 데이터베이스, AI 끔, 2대 · 3대)과 EKS 1.35. EKS 1.35에서는 노드를 드레인할 때 실시간 목록이 한 번 닫혔다가 1.1초 안에 다시 붙고, HPA를 켜면서 k8s-service가 2대에서 1대로 줄 때 한 번 닫혔다가 1.2초 안에 다시 붙음. HPA가 파드를 늘리고 줄일 때는 닫히지 않음 |
+| `auth` 설정의 `customRoles` 옆 `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters` | false, [] | alpha | 돌려 봄: 켠 상태의 전체 e2e를 kind 개발 설치에서 두 번(실패 없음), 100명이 한꺼번에 화면을 연 부하(오류 없음) |
 
 ## Redis 사용자
 
@@ -283,7 +320,7 @@ multicluster:
 - 업그레이드가 `kubeast-redis-users`를 더하고 `kubeast-secrets`의 값은 `REDIS_PASSWORD`까지 모두 그대로 둡니다.
 - Redis와 k8s-service가 다시 시작합니다. Redis가 다시 시작할 때마다 그렇듯 캐시는 비어서 시작합니다.
 - 옛 k8s-service 파드가 내려갈 때까지 그 파드가 새 Redis에 보내는 요청은 거절되고 캐시에 없는 것으로 읽힙니다.
-- 새 Redis가 답하기 전에 뜬 새 k8s-service 파드(업그레이드는 옛 Redis를 먼저 멈춥니다, maxSurge 0)는 Redis가 답할 때까지 메모리에 캐시하고, 5초마다 다시 묻습니다. 답은 같고, 그동안 캐시만 나눠 쓰지 않습니다.
+- 새 Redis가 답하기 전에 뜬 새 k8s-service 파드(업그레이드할 때 Redis는 옛 파드를 먼저 내리기 시작한 뒤 새 파드를 만듭니다, maxSurge 0)는 Redis가 답할 때까지 메모리에 캐시하고, 5초마다 다시 묻습니다. 답은 같고, 그동안 캐시만 나눠 쓰지 않습니다.
 - `secrets.existingSecret`을 쓰면 업그레이드에서 바뀌는 것이 없습니다: `redis.acl.existingSecretHasKeys`가 true가 될 때까지 Redis는 비밀번호 하나를 씁니다.
 - 그 값을 켜면, Secret을 읽을 수 있는 업그레이드는 키가 없거나 비었을 때 그 키를 말하고 멈춥니다. `helm template`과 Argo CD는 Secret을 읽지 못합니다: 그때는 `acl` 컨테이너가 어느 키가 없는지 말하고 멈추며, k8s-service는 메모리에 캐시합니다.
 - `redis.acl.enabled: false`면 Redis는 예전 그대로(메모리 상한만 더해) 뜹니다.

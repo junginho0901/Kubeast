@@ -8,7 +8,7 @@ import zlib from 'node:zlib'
 import { test, expect, type Page, type WebSocket } from '@playwright/test'
 
 import { GW, ancestor, arg, condition, gatewayFixture, gatewayVersions, routeConds, summary, writeGatewayStatus } from './number-check.gateway-shared'
-import { CR_CRD, GWPOL_CRD, NUM_SVC, VPA17_MISSING, crInstances, numbersPolicies, vpa17, vpaFixture, vpaPrintsWideColumns, writeNumbersPolicyStatus, writeVpaStatus, writeWidgetStatus } from './number-check.cr-shared'
+import { CR_CRD, GWPOL_CRD, NUM_SVC, VPA17_MISSING, crInstances, numbersPolicies, vpa17, vpaFixture, vpaPrintsWideColumns, waitUntilListed, writeNumbersPolicyStatus, writeVpaStatus, writeWidgetStatus } from './number-check.cr-shared'
 
 // Every list screen's numbers are the cluster's: in namespace e2e-numbers of `self`, or of test2 for the Gateway API and VPA
 // (objects whose numbers are not zero and not alike, made here and removed after), each screen's rows are the cluster's objects, each column the
@@ -1118,6 +1118,7 @@ test.describe('number check — list screens', () => {
     t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', peerCrd)
     try {
       t2.kubectl(`wait --for=condition=Established crd/widgets.numbers.kubeast.io crd/${PEER_CRD} --timeout=60s`)
+      await waitUntilListed(t2.kubectl, ['widgets.numbers.kubeast.io', PEER_CRD])
       t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', crInstances(NS))
       t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', peerWidget)
       writeWidgetStatus(t2.kubectl, NS)
@@ -1291,6 +1292,7 @@ test.describe('number check — list screens', () => {
     t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', GWPOL_CRD)
     try {
       t2.kubectl('wait --for=condition=Established crd/backendtlspolicies.numbers.kubeast.io --timeout=60s')
+      await waitUntilListed(t2.kubectl, ['backendtlspolicies.numbers.kubeast.io'])
       const xbtp = policyKinds().find((k) => k.plural === 'xbackendtrafficpolicies')!
       const objects = [
         { apiVersion: 'v1', kind: 'Namespace', metadata: { name: NS } },

@@ -21,6 +21,7 @@ import { useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { NOT_COUNTED } from '@/utils/listCounts'
 import { keepSameRead } from '@/utils/keepSameRead'
+import { unlessRefused } from '@/services/queryDefaults'
 
 const PAGE_BLOCK = 50
 
@@ -82,7 +83,7 @@ export default function Pods() {
     queryKey: pageKey,
     queryFn: () => readPodPageSince(queryClient, pageKey, pageParams),
     placeholderData: keepSameRead(pageKey, ['offset', 'limit', 'sort', 'dir']),
-    refetchInterval: (query) => podPagePollEvery(query.state.data),
+    refetchInterval: (query) => unlessRefused(query.state.error, podPagePollEvery(query.state.data)),
   })
   // in the render the answer comes, so no frame counts its rows with the total of the answer before
   if (page && page.total !== totalRows) setTotalRows(page.total)

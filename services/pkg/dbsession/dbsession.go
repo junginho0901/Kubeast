@@ -9,8 +9,9 @@
 // own setting (server, database or role) applies. Behind RDS Proxy a SET pins the client connection to one database
 // connection; there the limits go to the proxy's initialization query or the role, and the variables to 0.
 //
-// The advisory-lock connections (audit sinks) sit idle outside a transaction and run short statements, so these
-// limits leave them alone; idle_session_timeout, which would close them, is never set. Schema migrations run
+// The session advisory-lock connections (auth-service's audit sinks, on a pool connection; k8s-service's pglock, on one
+// of its own made from the pool's settings, these limits with them) sit idle outside a transaction and run short
+// statements, so these limits leave them alone; idle_session_timeout, which would close them, is never set. Schema migrations run
 // without the statement and lock limits, also when the role or the database sets them (ApplyMigrations).
 package dbsession
 

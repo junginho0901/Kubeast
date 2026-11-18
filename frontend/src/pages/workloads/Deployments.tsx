@@ -23,7 +23,7 @@ import { DeploymentFilters } from './deployments/DeploymentFilters'
 import { DeploymentTable } from './deployments/DeploymentTable'
 import { workloadStatusText } from '@/utils/workloadStatus'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -217,13 +217,10 @@ export default function Deployments() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllDeployments(true)
-      : await api.getDeployments(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['workloads', 'deployments', selectedNamespace] })
-    queryClient.setQueryData(['workloads', 'deployments', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['workloads', 'deployments', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllDeployments(true)
+      : api.getDeployments(selectedNamespace, true)))
 
   const createDeploymentYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

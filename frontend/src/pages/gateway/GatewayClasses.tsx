@@ -9,7 +9,7 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -171,11 +171,8 @@ export default function GatewayClasses() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = await api.getGatewayClasses(true)
-    queryClient.removeQueries({ queryKey: ['gateway', 'gatewayclasses'] })
-    queryClient.setQueryData(['gateway', 'gatewayclasses'], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['gateway', 'gatewayclasses'], () => api.getGatewayClasses(true)))
 
   const createGatewayClassYamlTemplate = useMemo(() => {
     return `apiVersion: gateway.networking.k8s.io/v1

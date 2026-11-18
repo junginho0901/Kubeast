@@ -187,6 +187,107 @@ describe('the Helm releases stream', () => {
     again()
   })
 
+  // The browser does not open again a stream whose answer was not one, and EventSource does not say the status: one GET
+  // of the stream says it. 200 opens it again with resync=1, after a wait that grows and starts over once it follows.
+  const STREAM = '/api/v1/helm/releases/stream?cluster=c&resync=1'
+  const closedForGood = () => {
+    latest().readyState = FakeEventSource.CLOSED
+    latest().send('error', undefined)
+  }
+  function answering(stream: () => number, me = 200) {
+    const asked: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      asked.push(String(url))
+      if (url === '/api/v1/auth/me') return new Response('{}', { status: me })
+      if (url.startsWith('/api/v1/auth/logout')) return new Response('{}')
+      const status = stream()
+      return new Response(status === 403 ? '{"detail":"no resource.helm.read on cluster c"}' : null, { status })
+    }))
+    return asked
+  }
+
+  it('a stream the browser closed for good is opened again after a wait that grows, and not after the page has gone', async () => {
+    const asked = answering(() => 200)
+    const client = new QueryClient()
+    const queryFn = vi.fn(async () => [rel('web', 3)])
+    const stop = page(client, queryFn)
+    await vi.advanceTimersByTimeAsync(0)
+
+    closedForGood()
+    await vi.advanceTimersByTimeAsync(700)
+    expect(FakeEventSource.made).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(100) // 750 ms: half of 1 s and half of the other half
+    expect(asked).toEqual([STREAM])
+    expect(FakeEventSource.made).toHaveLength(2)
+    expect(latest().url).toBe(STREAM)
+
+    closedForGood()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(FakeEventSource.made).toHaveLength(2) // the second wait is longer: 1.5 s
+    await vi.advanceTimersByTimeAsync(500)
+    expect(FakeEventSource.made).toHaveLength(3)
+
+    latest().send('following', {})
+    closedForGood()
+    await vi.advanceTimersByTimeAsync(750)
+    expect(FakeEventSource.made).toHaveLength(4) // followed again: the wait starts over
+
+    closedForGood()
+    stop()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(FakeEventSource.made).toHaveLength(4)
+  })
+
+  it('a stream answered 503 (the session cannot be checked) waits again, longer, and opens once it is answered', async () => {
+    const answers = [503, 503, 200]
+    const asked = answering(() => answers.shift() ?? 200)
+    const stop = page(new QueryClient(), vi.fn(async () => [rel('web', 3)]))
+    await vi.advanceTimersByTimeAsync(0)
+    closedForGood()
+    await vi.advanceTimersByTimeAsync(750)
+    expect(FakeEventSource.made).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(FakeEventSource.made).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(asked).toEqual([STREAM, STREAM, STREAM])
+    expect(FakeEventSource.made).toHaveLength(2)
+    stop()
+  })
+
+  it('a stream refused (403) stops and says so as a watch refused, asked no more', async () => {
+    const asked = answering(() => 403)
+    const stop = page(new QueryClient(), vi.fn(async () => [rel('web', 3)]))
+    await vi.advanceTimersByTimeAsync(0)
+    closedForGood()
+    await vi.advanceTimersByTimeAsync(750)
+    expect(getWatchProblem()).toBe('forbidden')
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(asked).toEqual([STREAM])
+    expect(FakeEventSource.made).toHaveLength(1)
+    stop()
+    expect(getWatchProblem()).toBeUndefined()
+  })
+
+  it('a stream answered 401 asks whether the session is over, as a live connection ended by its session does', async () => {
+    const assign = vi.fn()
+    vi.stubGlobal('window', {
+      location: { pathname: '/helm/releases', search: '', assign },
+      localStorage: { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn() },
+      sessionStorage: { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn() },
+    })
+    const asked = answering(() => 401, 401)
+    const stop = page(new QueryClient(), vi.fn(async () => [rel('web', 3)]))
+    await vi.advanceTimersByTimeAsync(0)
+    closedForGood()
+    await vi.advanceTimersByTimeAsync(750)
+    expect(asked.slice(0, 2)).toEqual([STREAM, '/api/v1/auth/me'])
+    expect(assign).toHaveBeenCalledWith('/login')
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(asked.filter((u) => u === STREAM)).toHaveLength(1)
+    expect(FakeEventSource.made).toHaveLength(1)
+    stop()
+  })
+
   it('no read is left waiting once the page has gone', async () => {
     const client = new QueryClient()
     const queryFn = vi.fn(async () => [rel('web', 3)])

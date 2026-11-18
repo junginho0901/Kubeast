@@ -101,3 +101,17 @@ func TestInvestigationWindow(t *testing.T) {
 		t.Fatal("negative window should be rejected")
 	}
 }
+
+// A cut-off is in UTC, the same instant, whatever zone now is in: the TIMESTAMP columns hold UTC and pgx sends a
+// time's clock reading without its zone, so a pod with TZ=Asia/Seoul would keep or delete nine hours off.
+func TestCutoffsAreInUTC(t *testing.T) {
+	now := time.Date(2026, 11, 18, 5, 0, 0, 0, time.FixedZone("KST", 9*60*60))
+	c := Config{AuditDays: 1, ChatDays: 1, ReviewDays: 1, InvestigationDays: 1}
+	auditCut, chatCut := c.Cutoffs(now)
+	want := time.Date(2026, 11, 16, 20, 0, 0, 0, time.UTC)
+	for name, got := range map[string]time.Time{"audit": auditCut, "chat": chatCut, "review": c.ReviewCutoff(now), "investigation": c.InvestigationCutoff(now)} {
+		if got.Location() != time.UTC || !got.Equal(want) {
+			t.Errorf("%s cut-off = %v, want %v", name, got, want)
+		}
+	}
+}

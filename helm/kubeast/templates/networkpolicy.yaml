@@ -45,8 +45,8 @@
 # Phase 3: postgres / redis (clients only).
 # Phase 4: backend microservices + kube-apiserver + external LLM egress.
 #
-# Requires a CNI that enforces NetworkPolicy (Calico / Cilium / Weave).
-# Flannel and kindnet (kind default) silently ignore these resources.
+# Requires a CNI that enforces NetworkPolicy (Calico / Cilium / Weave / kind's
+# kindnet since kind 0.24). Flannel silently ignores these resources.
 
 # ───────────────────────────────────────────────────────────────────────────
 # Phase 1 — default-deny + DNS

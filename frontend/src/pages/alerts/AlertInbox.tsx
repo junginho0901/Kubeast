@@ -30,6 +30,7 @@ import { failureText } from '@/utils/failureText'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { failureOf } from '@/hooks/useRefresh'
 import { keepSameRead } from '@/utils/keepSameRead'
+import { everyUntilRefused, unlessRefused } from '@/services/queryDefaults'
 
 // Alerts: every alert Alertmanager sent for the selected cluster (features.alertInvestigation's webhook), firing or
 // resolved, for whoever reads the cluster as a whole. Resolving is the alert rule's: the marks here (acknowledged,
@@ -91,7 +92,7 @@ export default function AlertInbox() {
     queryKey: listKey,
     queryFn: async () => ({ ...(await api.listAlertInbox(filter)), filter, page }),
     placeholderData: keepSameRead(listKey, ['limit', 'offset']),
-    refetchInterval: 30_000,
+    refetchInterval: everyUntilRefused(30_000),
     retry: false,
     enabled: inbox === 'on',
   })
@@ -109,7 +110,7 @@ export default function AlertInbox() {
     queryFn: api.listAlertStoreAlerts,
     enabled: storeOn && !inboxOff,
     // read again when the server said after a refusal at the request limit, not at the next minute
-    refetchInterval: (q) => storeRefetchMs(q.state.error),
+    refetchInterval: (q) => unlessRefused(q.state.error, storeRefetchMs(q.state.error)),
     retry: false,
   })
   const store = storeQuery.data
@@ -426,7 +427,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
     queryFn: () => api.getAlertInboxItem(id),
     retry: false,
     // a queued or running investigation is read again until it ends (the window keeps what it shows meanwhile)
-    refetchInterval: (q) => (['queued', 'running'].includes(q.state.data?.investigation?.status ?? '') ? 5_000 : false),
+    refetchInterval: (q) => unlessRefused(q.state.error, ['queued', 'running'].includes(q.state.data?.investigation?.status ?? '') ? 5_000 : false),
   })
   // a save names its alert, and its answer goes to that alert's window
   const save = useMutation({

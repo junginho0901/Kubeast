@@ -37,6 +37,13 @@
       "pr": "#783"
     },
     {
+      "route": "^live /apis/coordination\\.k8s\\.io/v1/leases$",
+      "cell": "^\\$\\.items\\[/[^\\]#]+#[0-9]+\\]\\.",
+      "tailCopies": true,
+      "why": "A lease's holder renews it on a timer: kube-apiserver its identity lease and the kubelet its node's lease every 10 seconds, Kyverno its kyverno-health lease, and leader election (kube-scheduler, kube-controller-manager, Kyverno's controllers) every 2 seconds. A build's first live frame stays open up to 15 seconds, so how many renewals fall inside it is timing, and one build's frames can hold a lease's events past the other build's last. Only those events are taken, whole, and only while all three frames hold the lease's first event; an event both builds' frames hold is still compared cell by cell, and so is a lease one frame lacks.",
+      "pr": "#946"
+    },
+    {
       "route": "^/api/v1/cluster/metrics/top-resources$",
       "cell": "^\\$\\.(pod|node)_metrics_(error|refused)$",
       "user": "^nsread$",
@@ -54,9 +61,9 @@
     {
       "route": "^/api/v1/cluster/metrics/(nodes|pods)$",
       "cell": "^(\\$status|\\$\\.\\$length|\\$\\.detail)$",
-      "cluster": "^self$",
+      "cluster": "^(self|test2)$",
       "newStatus": "^404$",
-      "why": "self has no metrics-server: the reads say metrics.k8s.io is not served, a 404 \"the server could not find the requested resource\" as top-resources words it, where the old build answered an empty list. k8s-service reads it from the cluster's API discovery, the same for every user, so the namespace-limited Read user, whom the cluster refuses those lists, reads it too where the old build gave it the 403.",
+      "why": "self and test2 run no metrics-server: the reads say metrics.k8s.io is not served, a 404 \"the server could not find the requested resource\" as top-resources words it, where the old build answered an empty list. k8s-service reads it from the cluster's API discovery, the same for every user, so on self the namespace-limited Read user, whom the cluster refuses those lists, reads it too where the old build gave it the 403.",
       "pr": "#900"
     },
     {
@@ -92,6 +99,13 @@
       "pr": "#815"
     },
     {
+      "route": "^/api/v1/cluster/nodes/[^/]+/events$",
+      "cell": "^\\$(\\.\\$length$|\\[[0-9]+\\]\\.)",
+      "rowsLeftOut": true,
+      "why": "A Node's events are those naming its UID or its name, which the kubelet writes in place of the UID, as kubectl describe node lists them; v0.7.7 listed every event about the node by kind and name, those naming no UID too (after a node restart, the kubelet's Starting and NodeHas… events among them). The rows carry no UID, so the rule takes an answer only when it is the old one with rows left out: each row the new build lists is a row of both old answers, unchanged, in the same order.",
+      "pr": "#815"
+    },
+    {
       "route": "^/api/v1/cluster/nodes/[^/]+/drain/status$",
       "cell": "^\\$\\.(pods_total|pods_done|finished_at|cordoned_nodes)(\\.|\\[|$)",
       "why": "A drain's status answer is read from the node_drains table and carries pods_total, pods_done, finished_at and cordoned_nodes (null, or the drain's nodes still cordoned once it failed or was interrupted); v0.7.7 answered from the server's memory without them.",
@@ -102,6 +116,12 @@
       "cell": "^\\$\\[[^\\]]+\\]\\.same_group_as$",
       "why": "A custom role whose name differs from another role's only in letter case, spaces or punctuation carries same_group_as, the role it acts as on a cluster (a built-in first, else the oldest), which the pickers name; v0.7.7 did not send it.",
       "pr": "#865"
+    },
+    {
+      "route": "^/api/v1/cluster/pods/on-node$",
+      "cell": "^\\$\\[[^\\]]+\\]\\.(?!(name|namespace|node_name|pod_ip|status|phase|restart_count|created_at|labels)(\\.|\\[|$))",
+      "why": "A Cluster View box's row is what the box draws and its menu reads, from the informers' rows of the node: health and health_reason in place of the containers and the rest of the full row, which the pod's window reads from the pod's describe. The fields it keeps are the full row's.",
+      "pr": "#939"
     }
   ]
 }

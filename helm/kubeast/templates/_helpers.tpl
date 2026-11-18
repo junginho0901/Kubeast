@@ -413,7 +413,7 @@ lifecycle:
 terminationGracePeriodSeconds: {{ include "kubeast.graceSeconds" (dict "preStop" (include "kubeast.preStopSeconds" .)) }}
 {{- end -}}
 
-{{/* A rollout starts one new pod and stops an old one only once the new one is ready, so the Service always has a ready pod (postgres keeps Recreate and redis maxSurge 0: two must not share their data). */}}
+{{/* A rollout starts one new pod and stops an old one only once the new one is ready, so the Service always has a ready pod (postgres keeps Recreate, two must not share its volume; redis has maxSurge 0, see redis.yaml). */}}
 {{- define "kubeast.rollingUpdate" -}}
 strategy:
   type: RollingUpdate

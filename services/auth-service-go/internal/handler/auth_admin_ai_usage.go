@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -66,9 +67,7 @@ func (h *AuthHandler) AdminAIUsage(w http.ResponseWriter, r *http.Request) {
 	rec.ActorUserID = payload.UserID
 	rec.ActorEmail = payload.Email
 	rec.TargetType = "ai-usage"
-	rec.After = audit.MustJSON(map[string]interface{}{
-		"since": since, "until": until, "group": group, "rows": len(report.Rows), "truncated": report.Truncated,
-	})
+	rec.After = aiUsageReadAfter(since, until, group, len(report.Rows), report.Truncated)
 	_, _ = h.auditStore.Write(r.Context(), rec)
 
 	response.JSON(w, http.StatusOK, map[string]interface{}{
@@ -79,5 +78,13 @@ func (h *AuthHandler) AdminAIUsage(w http.ResponseWriter, r *http.Request) {
 		"limit":     report.Limit,
 		"truncated": report.Truncated,
 		"totals":    report.Totals,
+	})
+}
+
+// aiUsageReadAfter is the after of an AI Usage admin.audit.read row: the
+// period in UTC, the instant that was asked, as the audit list's filter shows it.
+func aiUsageReadAfter(since, until time.Time, group string, rows int, truncated bool) json.RawMessage {
+	return audit.MustJSON(map[string]interface{}{
+		"since": since.UTC(), "until": until.UTC(), "group": group, "rows": rows, "truncated": truncated,
 	})
 }

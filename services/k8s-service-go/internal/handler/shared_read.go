@@ -18,10 +18,9 @@ import (
 
 // sharedAnswer is a response as one run of a handler wrote it, which a client waiting on that run gets byte for byte.
 type sharedAnswer struct {
-	header        http.Header
-	status        int
-	body          bytes.Buffer
-	clusterFailed bool
+	header http.Header
+	status int
+	body   bytes.Buffer
 }
 
 func (a *sharedAnswer) Header() http.Header { return a.header }
@@ -37,14 +36,9 @@ func (a *sharedAnswer) Write(b []byte) (int, error) {
 	return a.body.Write(b)
 }
 
-func (a *sharedAnswer) noteClusterFailure() { a.clusterFailed = true }
-
 func (a *sharedAnswer) writeTo(w http.ResponseWriter) {
 	for k, v := range a.header {
 		w.Header()[k] = slices.Clone(v)
-	}
-	if failure, ok := w.(clusterFailureNoter); ok && a.clusterFailed {
-		failure.noteClusterFailure()
 	}
 	w.WriteHeader(a.status)
 	_, _ = w.Write(a.body.Bytes())

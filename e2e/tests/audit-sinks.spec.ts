@@ -110,7 +110,7 @@ test.describe('audit sinks', () => {
     try {
       const made = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E sink', email, password: pw, role_id: member.id } })
       expect(made.status()).toBe(201)
-      userId = (await made.json()).id
+      userId = madeUser((await made.json()).id, bearer(admin))
       await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: 'Read' } })
       const user = await login(request, email, pw)
       const req = await request.post('/api/v1/auth/access-requests', {
@@ -154,4 +154,15 @@ test.describe('audit sinks', () => {
       kubectl(['-n', 'kubeast-devtools', 'rollout', 'status', 'deploy/receiver', '--timeout=90s'])
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

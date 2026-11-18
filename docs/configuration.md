@@ -56,6 +56,15 @@ auth:
     enabled: true
     clusterRoles: true
     userPrefix: ""  # e.g. kubeast:user: — before a person's address; moves User bindings to a new name (cluster-requirements §1)
+    # A screen served from kubeast:cache asks whether the person may list or get what it shows. On, that read check
+    # goes out once per group set as kubeast:group-check:<made at each start> and its allow stands for everyone with
+    # those groups up to a minute; a refusal is asked again as the person. The cluster's audit log then names that
+    # name for those checks. It relies on every authorizer allowing a person what it allows that name with the
+    # person's groups: list a cluster with an authorizer that answers by user name (ahead of RBAC or after it), or
+    # that limits the user names Kubeast may act as, and never bind the name (cluster-requirements §1).
+    sharedReadChecks:
+      enabled: false
+      excludeClusters: []  # registered cluster ids that keep asking each person
     customRoles: []
     #  - name: Read
     #    namespaces: [team-a, team-b]
@@ -136,9 +145,9 @@ podSecurity:
   hostUsers: false
   readOnlyRootFilesystem: true
 
-# Availability: a Deployment you raise to 2 or more replicas, or whose autoscaling keeps minReplicas 2 or more, gets a PodDisruptionBudget (pdb.maxUnavailable, 1; pdb.enabled: false leaves them out), and every rollout starts the new pod and stops an old one only once the new one is ready (postgres and redis stop first)
+# Availability: a Deployment you raise to 2 or more replicas, or whose autoscaling keeps minReplicas 2 or more, gets a PodDisruptionBudget (pdb.maxUnavailable, 1; pdb.enabled: false leaves them out), and every rollout starts the new pod and stops an old one only once the new one is ready (the old postgres and redis pods start stopping first)
 # Probes: liveness asks /livez, which reads nothing else; readiness asks /readyz, which answers 503 from SIGTERM on and never asks the database (a shared database down would take every pod out at once); the database's state is in auth-service's and session-service's /health and k8s-service's kubeast_audit_store_up
-# podShutdown.preStopSeconds: a pod behind a Service answers that long after it is told to stop (preStop sleep, Kubernetes 1.30 or later), then has 30 s to shut down (a server holding terminals: the drain's wait and close wait more); behind a load balancer that sends to pod IPs, set its deregistration delay plus a few seconds
+# podShutdown.preStopSeconds: a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) answers that long after it is told to stop (preStop sleep, Kubernetes 1.30 or later), then has 30 s to shut down (a server holding terminals: the drain's wait and close wait more); behind a load balancer that sends to pod IPs, longer than the load balancer takes to stop sending new requests to a leaving pod (behind an AWS Application Load Balancer the default 5 s was enough)
 replicas:
   gateway: 1
 # One HPA per service, off by default; k8sService and toolServer above 1 pod need redis.enabled (docs/high-availability.md)
@@ -194,7 +203,7 @@ postgresql:
   sessionLimits: { statementTimeoutMs: 30000, lockTimeoutMs: 15000, idleInTransactionTimeoutMs: 300000 }  # PostgreSQL statement_timeout, lock_timeout and idle_in_transaction_session_timeout each service SETs on its connections once connected (migrations always run without the first two, also when the role sets them); 0 sets nothing. Behind RDS Proxy a SET pins the session: set 0 and put them in the proxy's initialization query or on the database role. Through PgBouncer use session pooling only: transaction pooling hands a server connection to other clients between transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's) does not stay with its client
   pool: { authService: { maxConns: 20 }, sessionService: { maxConns: 20 }, k8sService: { maxConns: 10 }, aiService: { maxConns: 15 }, modelConfigController: { maxConns: 4 } }  # connections per pod; with the chart's PostgreSQL the install stops when the pods (a rollout's extra pod and autoscaling's maxReplicas counted) could open more than maxConnections, for an external database NOTES prints the sum to compare with its max_connections
   maxConnections: 300   # the chart's PostgreSQL max_connections
-# An upgrade stops Redis before its new pod starts (maxSurge 0), so the cache is empty for a few seconds.
+# An upgrade starts stopping Redis before its new pod is made (maxSurge 0): the new pod starts with an empty cache, and for the few seconds the old one takes to end both may exist, sharing no data (emptyDir).
 redis:
   enabled: true
   password: ""          # requirepass while the Redis users are off — generated when empty (REDIS_PASSWORD)
@@ -203,7 +212,7 @@ redis:
     existingSecretHasKeys: false  # with secrets.existingSecret: true once that Secret holds the users' passwords
     existingSecret: ""            # a Secret of the users' keys alone; each service then reads only its own key
 networkPolicy:
-  enabled: true         # default deny, plus only the flows the services use. Harmless on CNIs that do not enforce NetworkPolicy (kindnet, etc.)
+  enabled: true         # default deny, plus only the flows the services use. Harmless on CNIs that do not enforce NetworkPolicy (Flannel, etc.); kind's kindnet enforces it since kind 0.24
   aiEgress:
     allowListOnly: false  # true (needs networkPolicy.enabled): ai-service connects out only to allowExternalEgressCIDRs, tool-server only to clusterAPIs, stsEndpoints and apiserverCIDR (cluster-requirements.md §15)
     clusterAPIs: []       # the API servers of the registered clusters, this one's too, as VPC or subnet CIDRs (never a /32 on EKS): a CIDR opens 443 and 6443, {cidr, port} another port
@@ -231,12 +240,40 @@ multicluster:
   maxClusters: 20
   healthcheckIntervalSec: 60
   rateLimitQPS: 0           # 0 = off
-  breakerConsecutiveFails: 5
+  breakerConsecutiveFails: 5  # requests in a row that could not reach the API server (no response to any call) that open a cluster's breaker; 0 = off, no request fails fast
+  breakerOpenSec: 30        # an open breaker answers 503 this long, then lets one request try the cluster (0 = 30)
   clientQPS: 100            # client-go's rate to each cluster's API server
   clientBurst: 200
   reviewQPS: 0              # 0 = the access checks share clientQPS; see architecture.md "Many users"
   reviewBurst: 0
+  wsWatchOpeningConcurrency: 8  # live lists of every cluster receiving their first objects at once, one cluster half of them while another waits; see architecture.md "Many users"
+  wsWatchStreamWindowKiB: 1024  # HTTP/2 window of each live list's stream: memory a slow browser's watch holds against how fast a list comes over a long round trip; see architecture.md "Many users"
 ```
+
+## Stages of new values
+
+Each value this release adds, or whose meaning it changes, has a stage, written here and in its `values.yaml` comment:
+
+- **alpha**: new. Its key or behaviour may change or go in a later release, which that release's notes say.
+- **beta**: the feature stays. A key or a detail may change, with a release's notice and how to move.
+- **stable**: the key and the behaviour stay. A renamed key is still read, with a warning, for one release.
+
+A value that an install with the chart's defaults reads is beta; a value used only once you set it, or turn on the feature that reads it, is alpha. `pdb.*` makes no PodDisruptionBudget until a service runs two pods, and is beta from the node drain in its last column; the Redis users of `redis.acl.*` stay off in an install with `secrets.existingSecret` until `redis.acl.existingSecretHasKeys` or `redis.acl.existingSecret` is set. The last column says what has not been run with each value yet, or, after "Tested:", what has been run since.
+
+| Value | Default | Stage | Not run yet, or Tested |
+| --- | --- | --- | --- |
+| `podShutdown.preStopSeconds` | 5 | beta | Tested: a server-side dry run of the default install on Kubernetes 1.29.14 (kind, the `PodLifecycleSleepAction` feature gate off), where the API server refused the seven Deployments with a preStop wait (`spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`) and took all 58 objects with `0` |
+| `redis.acl.enabled`, `redis.acl.existingSecretHasKeys`, `redis.acl.existingSecret` | true, false, "" | beta | The users turned off in a test install |
+| `replicas.k8sService` and `replicas.toolServer` above 1 | 1 | alpha | The sizes for 2 and 3 k8s-service pods |
+| `autoscaling.<service>` | off | alpha | Tested: on EKS 1.35, HPAs on k8s-service and the gateway went from 2 to 3 pods and back, and were turned on and off, with no request through the load balancer failing |
+| `postgresql.sessionLimits.*`, `postgresql.pool.<service>.maxConns`, `postgresql.maxConnections` | on, 20 · 20 · 10 · 15 · 4, 300 | beta | A long database outage |
+| `pdb.enabled`, `pdb.maxUnavailable` | true, 1 | beta | Tested: on EKS 1.35, with two pods of each service, a node drained and replaced with no eviction held back and no request through the load balancer failing |
+| `streams.*` | off | alpha | Any run on the kind dev install |
+| `ai.providers.claudeCode.maxConcurrentTotal`, `queueWaitSeconds`, `memoryLimit` | 0, 60, 2Gi | alpha | A test install with the provider on |
+| `gateway.accessLog.upstreamTimes` | false | alpha | Tested: 100 people opening the screens at once on the kind dev install with it on (2026-11-17), every access log line carrying the six fields |
+| `multicluster.breakerConsecutiveFails` (`0` turns the breaker off from 0.7.8), `multicluster.breakerOpenSec` (read from 0.7.8) | 5, 30 | beta | A cluster cut off on the kind dev install |
+| `multicluster.wsWatchOpeningConcurrency`, `multicluster.wsWatchStreamWindowKiB` | 8, 1024 | beta | Tested: upgrade rehearsals from 0.7.7 on kind (the default install, an existing Secret, an external database, AI off, 2 and 3 replicas) and on EKS 1.35, where a live list closed once and was back within 1.1 s when a node was drained, closed once and was back within 1.2 s when turning HPAs on took k8s-service from two pods to one, and did not close while the HPAs added and removed pods |
+| `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters`, in the `auth` settings beside `customRoles` | false, [] | alpha | Tested: the whole e2e with it on, twice on the kind dev install with no failure, and 100 people opening the screens at once with no error |
 
 ## Redis users
 
@@ -287,7 +324,7 @@ With `secrets.existingSecret`, Redis keeps one password (`REDIS_PASSWORD`) for e
 - The upgrade adds `kubeast-redis-users` and keeps every value of `kubeast-secrets`, `REDIS_PASSWORD` included.
 - Redis and k8s-service restart. The cache starts empty, as on any restart of Redis.
 - Until the old k8s-service pod has gone, its requests to the new Redis are refused and read as cache misses.
-- A new k8s-service pod that comes up before the new Redis answers (the upgrade stops the old Redis first, maxSurge 0) keeps its cache in memory until Redis answers; it asks again every 5 s. It answers the same; only the cache is not shared meanwhile.
+- A new k8s-service pod that comes up before the new Redis answers (on an upgrade the old Redis pod starts stopping before the new one is made, maxSurge 0) keeps its cache in memory until Redis answers; it asks again every 5 s. It answers the same; only the cache is not shared meanwhile.
 - With `secrets.existingSecret`, nothing changes on upgrade: Redis keeps the one password until `redis.acl.existingSecretHasKeys` is true.
 - With that set, an upgrade that can read the Secret stops when a key is missing or empty, and names it. `helm template` and Argo CD cannot read it: there the `acl` container stops and says which key is missing, and k8s-service keeps its cache in memory.
 - `redis.acl.enabled: false` renders Redis as before, with the memory cap.
