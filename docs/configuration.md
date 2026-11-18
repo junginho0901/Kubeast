@@ -254,22 +254,22 @@ Each value this release adds, or whose meaning it changes, has a stage, written 
 - **beta**: the feature stays. A key or a detail may change, with a release's notice and how to move.
 - **stable**: the key and the behaviour stay. A renamed key is still read, with a warning, for one release.
 
-Every value below is alpha: none has been through the test that turns each value on and off on the kind dev install, or a rollback to 0.7.7 and back, which a value needs before it becomes beta. The last column says what else has not been run.
+A value that an install with the chart's defaults reads is beta; a value used only once you set it, or turn on the feature that reads it, is alpha. `pdb.*` makes no PodDisruptionBudget until a service runs two pods, and is beta from the node drain in its last column; the Redis users of `redis.acl.*` stay off in an install with `secrets.existingSecret` until `redis.acl.existingSecretHasKeys` or `redis.acl.existingSecret` is set. The last column says what has not been run with each value yet, or, after "Tested:", what has been run since.
 
-| Value | Default | Stage | Not run yet |
+| Value | Default | Stage | Not run yet, or Tested |
 | --- | --- | --- | --- |
-| `podShutdown.preStopSeconds` | 5 | alpha | Kubernetes older than 1.30 |
-| `redis.acl.enabled`, `redis.acl.existingSecretHasKeys`, `redis.acl.existingSecret` | true, false, "" | alpha | The users turned off in a test install |
+| `podShutdown.preStopSeconds` | 5 | beta | Tested: a server-side dry run of the default install on Kubernetes 1.29.14 (kind, the `PodLifecycleSleepAction` feature gate off), where the API server refused the seven Deployments with a preStop wait (`spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`) and took all 58 objects with `0` |
+| `redis.acl.enabled`, `redis.acl.existingSecretHasKeys`, `redis.acl.existingSecret` | true, false, "" | beta | The users turned off in a test install |
 | `replicas.k8sService` and `replicas.toolServer` above 1 | 1 | alpha | The sizes for 2 and 3 k8s-service pods |
-| `autoscaling.<service>` | off | alpha | An HPA turned on in a test install |
-| `postgresql.sessionLimits.*`, `postgresql.pool.<service>.maxConns`, `postgresql.maxConnections` | on, 20 · 20 · 10 · 15 · 4, 300 | alpha | A long database outage |
-| `pdb.enabled`, `pdb.maxUnavailable` | true, 1 | alpha | Node drains with the PodDisruptionBudgets on a real cluster |
+| `autoscaling.<service>` | off | alpha | Tested: on EKS 1.35, HPAs on k8s-service and the gateway went from 2 to 3 pods and back, and were turned on and off, with no request through the load balancer failing |
+| `postgresql.sessionLimits.*`, `postgresql.pool.<service>.maxConns`, `postgresql.maxConnections` | on, 20 · 20 · 10 · 15 · 4, 300 | beta | A long database outage |
+| `pdb.enabled`, `pdb.maxUnavailable` | true, 1 | beta | Tested: on EKS 1.35, with two pods of each service, a node drained and replaced with no eviction held back and no request through the load balancer failing |
 | `streams.*` | off | alpha | Any run on the kind dev install |
 | `ai.providers.claudeCode.maxConcurrentTotal`, `queueWaitSeconds`, `memoryLimit` | 0, 60, 2Gi | alpha | A test install with the provider on |
-| `gateway.accessLog.upstreamTimes` | false | alpha | `nginx -t` of the gateway's config with it on |
-| `multicluster.breakerConsecutiveFails` (`0` turns the breaker off from 0.7.8), `multicluster.breakerOpenSec` (read from 0.7.8) | 5, 30 | alpha | A cluster cut off on the kind dev install |
-| `multicluster.wsWatchOpeningConcurrency`, `multicluster.wsWatchStreamWindowKiB` | 8, 1024 | alpha | An upgrade rehearsal |
-| `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters`, in the `auth` settings beside `customRoles` | false, [] | alpha | The whole e2e with it on |
+| `gateway.accessLog.upstreamTimes` | false | alpha | Tested: 100 people opening the screens at once on the kind dev install with it on (2026-11-17), every access log line carrying the six fields |
+| `multicluster.breakerConsecutiveFails` (`0` turns the breaker off from 0.7.8), `multicluster.breakerOpenSec` (read from 0.7.8) | 5, 30 | beta | A cluster cut off on the kind dev install |
+| `multicluster.wsWatchOpeningConcurrency`, `multicluster.wsWatchStreamWindowKiB` | 8, 1024 | beta | Tested: upgrade rehearsals from 0.7.7 on kind (the default install, an existing Secret, an external database, AI off, 2 and 3 replicas) and on EKS 1.35, where a live list closed once and was back within 1.1 s when a node was drained, closed once and was back within 1.2 s when turning HPAs on took k8s-service from two pods to one, and did not close while the HPAs added and removed pods |
+| `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters`, in the `auth` settings beside `customRoles` | false, [] | alpha | Tested: the whole e2e with it on, twice on the kind dev install with no failure, and 100 people opening the screens at once with no error |
 
 ## Redis users
 
