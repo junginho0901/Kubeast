@@ -435,6 +435,11 @@ body {
   .floating-chat-room .list-pager-pages {
     margin-right: 2.5rem;
   }
+  /* A line of text under a list page's footer (AI Usage's note) ends where those page buttons end, 5.5rem in from the
+     screen's edge: 3.5rem short of main's p-8, so its last words keep 1rem from the button too. */
+  .floating-chat-room .list-page-note {
+    margin-right: 3.5rem;
+  }
 
   /* A page's header row, the title block and its buttons: where both do not fit on one line (a portrait monitor,
      the longest titles), the buttons go to the next line, still on the right, instead of pushing the page sideways.
