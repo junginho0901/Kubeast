@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import { retryUnlessRefused } from '@/services/queryDefaults'
 import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { usePagination } from './usePagination'
@@ -23,7 +24,7 @@ export default function AdmissionPolicyInfo({ name, kind }: Props) {
     queryKey: ['admissionpolicy-describe', kind, name],
     queryFn: () => (validating ? api.describeValidatingAdmissionPolicy(name) : api.describeMutatingAdmissionPolicy(name)),
     staleTime: 10_000,
-    retry: 1,
+    retry: retryUnlessRefused(1),
   })
   useDrawerFollowsEvents({ describeKey: ['admissionpolicy-describe', kind, name], answer: desc, kind, name })
 

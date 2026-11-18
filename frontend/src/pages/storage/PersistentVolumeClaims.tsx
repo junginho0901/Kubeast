@@ -21,7 +21,7 @@ import { applyPvcWatchEvent } from './pvcs/pvcWatchNormalize'
 import { PVCFilters } from './pvcs/PVCFilters'
 import { PVCTable } from './pvcs/PVCTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -195,11 +195,8 @@ export default function PersistentVolumeClaims() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = await api.getPVCs(selectedNamespace === 'all' ? undefined : selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['storage', 'pvcs', selectedNamespace] })
-    queryClient.setQueryData(['storage', 'pvcs', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['storage', 'pvcs', selectedNamespace], () => api.getPVCs(selectedNamespace === 'all' ? undefined : selectedNamespace, true)))
 
   const createPvcYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

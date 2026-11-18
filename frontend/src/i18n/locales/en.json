@@ -507,7 +507,8 @@
       "serverMemory": "The server is short of memory, so it starts following no more lists for now. The rows on this page are read about once a minute and go back to live updates by themselves when it has room.",
       "unreachable": "The cluster cannot be reached, so live updates are paused. They come back by themselves.",
       "failed": "Live updates are paused because the cluster answered with an error. They come back by themselves.",
-      "scope": "Your access is limited to namespaces, so objects of the whole cluster on this page do not update live. Rows may be out of date; refresh to read them again."
+      "scope": "Your access is limited to namespaces, so objects of the whole cluster on this page do not update live. Rows may be out of date; refresh to read them again.",
+      "serverOpening": "Many live lists are opening, a few at a time, so live updates for this page wait for their turn. They start by themselves shortly and read the rows again then."
     },
     "clusterChecking": "Checking connection...",
     "clusterConnected": "Cluster connected",
@@ -1758,6 +1759,7 @@
     "delete": "Delete",
     "title": "AI Chat",
     "subtitle": "Ask the cluster in natural language and solve problems.",
+    "modelReadFailed": "Could not read the AI model: {{reason}}",
     "emptyTitle": "Start a new chat",
     "emptySubtitle": "Click a question below or type your own.",
     "resultZipDownload": "Download result ZIP",
@@ -2113,6 +2115,8 @@
       "retrying": "Retrying automatically... (every 5 seconds)",
       "unavailableAll": "Pod metrics are not available",
       "noPodsInNamespace": "No pods in {{namespace}} namespace",
+      "noneInGrant": "No pod metrics in the namespaces you can see",
+      "noneInGrantHint": "Your access to this cluster is limited to the namespaces {{namespaces}}, and no pod in them has metrics now. Choose a namespace to see its pods.",
       "searchPlaceholder": "Search pods by name..."
     },
     "autoRefresh": "Auto refresh every 5 seconds",
@@ -3145,11 +3149,13 @@
     "revoked": "Stopped: your account or access changed. Sign in again.",
     "expired": "Stopped: the session reached its maximum lifetime. Sign in again.",
     "signedOut": "Stopped: this sign-in was signed out. Sign in again.",
-    "unverified": "Stopped: the session could not be verified. Sign in again."
+    "unverified": "Stopped: the session could not be verified for a while. Open it again.",
+    "checking": "Could not check your sign-in: {{reason}}. Asking again…"
   },
   "serverShutdown": {
     "terminalReplaced": "The server was replaced. Reconnect to open a new terminal.",
     "terminalLost": "The connection to the server was lost. Reconnect to open a new terminal.",
+    "terminalUnchecked": "The session could not be checked for a while. Reconnect to open a new terminal.",
     "reconnect": "Reconnect",
     "followStopped": "Following stopped: the server was replaced. Turn Follow on again to go on."
   },

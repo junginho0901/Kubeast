@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -135,7 +136,11 @@ func (h *AuthHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		ceiling = canonical
 	}
 	user, err := h.repo.GetUserByID(r.Context(), payload.UserID)
-	if err != nil || user == nil {
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
+	}
+	if user == nil {
 		response.Error(w, http.StatusUnauthorized, "User not found")
 		return
 	}
@@ -261,7 +266,9 @@ type exchangeResponse struct {
 }
 
 // ExchangeAPIKey turns a key into an access token. Unknown, expired and
-// revoked keys all get the same 401; every attempt leaves an audit row.
+// revoked keys all get the same 401; a key or owner the database could not
+// read gets 503 with Retry-After, which no client takes as an invalid key;
+// every attempt leaves an audit row.
 func (h *AuthHandler) ExchangeAPIKey(w http.ResponseWriter, r *http.Request) {
 	raw := bearerAPIKey(r)
 	if raw == "" {
@@ -284,12 +291,20 @@ func (h *AuthHandler) ExchangeAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		response.InternalError(w, r, err)
+		slog.ErrorContext(r.Context(), "api key exchange: key could not be read", "err", err)
+		h.auditAPIKey(r, auditAPIKeyExchange, "", "", prefix, "", nil, errors.New("key unreadable"))
+		refuseKeyUnreadable(w)
 		return
 	}
 	now := time.Now()
 	user, uerr := h.repo.GetUserByID(r.Context(), key.UserID)
-	if uerr != nil || user == nil {
+	if uerr != nil {
+		slog.ErrorContext(r.Context(), "api key exchange: owner could not be read", "err", uerr)
+		h.auditAPIKey(r, auditAPIKeyExchange, "", "", key.ID, "", apiKeyAuditFields(key), errors.New("owner unreadable"))
+		refuseKeyUnreadable(w)
+		return
+	}
+	if user == nil {
 		h.auditAPIKey(r, auditAPIKeyExchange, "", "", key.ID, "", apiKeyAuditFields(key), errors.New("owner not found"))
 		response.Error(w, http.StatusUnauthorized, "Invalid API key")
 		return
@@ -418,6 +433,13 @@ func apiKeyAuditFields(key *repository.APIKey) map[string]any {
 
 // auditAPIKey writes one row: target = the key (id, or the presented prefix
 // when no key matched), target_email = its owner.
+// refuseKeyUnreadable answers an exchange whose key or owner could not be read: 503 with the Retry-After of a session
+// that could not be checked (auth.RefuseSessionUnreadable).
+func refuseKeyUnreadable(w http.ResponseWriter) {
+	w.Header().Set("Retry-After", strconv.Itoa(auth.SessionUnreadableRetryAfter))
+	response.Error(w, http.StatusServiceUnavailable, "API key could not be checked; try again")
+}
+
 func (h *AuthHandler) auditAPIKey(r *http.Request, action, actorID, actorEmail, targetID, ownerEmail string, after map[string]any, opErr error) {
 	rec := audit.FromHTTPRequest(r)
 	rec.Service = audit.ServiceAuth
