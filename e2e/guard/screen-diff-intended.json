@@ -7,8 +7,8 @@
     },
     {
       "screen": "^\\w+ · /admin/(organizations|roles|clusters) on ",
-      "why": "Teams, Roles and Clusters have a search box above their list, which takes a row of the fitted table.",
-      "pr": "#820"
+      "why": "Teams, Roles and Clusters have a search box above their list, which takes a row of the fitted table. Teams' name field has its label (\"Team name\") above it, so the field, the search box and the list sit lower.",
+      "pr": "#820, #955"
     },
     {
       "screen": "^\\w+ · /(monitoring|cluster/nodes) on (self|test2)$",
@@ -34,6 +34,11 @@
       "screen": "^\\w+ · drawer Ingress \\(",
       "why": "The Ingress drawer's Class Source, Class Controller and Class Default come from the describe answer, which reads the IngressClass the Ingress names; v0.7.7 read the controller and the default from the list's row, which never has them, and the source from the row the drawer was opened with, which a drawer opened from its address does not have, so all three said \"-\".",
       "pr": "#814"
+    },
+    {
+      "screen": "^\\w+ · /(admin/access\\-requests|admin/access\\-review|admin/ai\\-usage|admin/investigations|admin/users|cluster/leases|cluster/limitranges|cluster/mutatingadmissionpolicies|cluster/mutatingwebhookconfigurations|cluster/namespaces|cluster/nodes|cluster/priorityclasses|cluster/resourcequotas|cluster/runtimeclasses|cluster/validatingadmissionpolicies|cluster/validatingwebhookconfigurations|configuration/configmaps|configuration/secrets|cost|custom\\-resources/groups|custom\\-resources/instances|gateway/backendtlspolicies|gateway/gatewayclasses|gateway/gateways|gateway/grpcroutes|gateway/httproutes|gateway/policies|gateway/referencegrants|gpu/deviceclasses|gpu/nodes|gpu/pods|gpu/resourceclaims|gpu/resourceclaimtemplates|gpu/resourceslices|helm/releases|monitoring|network/endpoints|network/endpointslices|network/ingressclasses|network/ingresses|network/networkpolicies|network/services|security/clusterrolebindings|security/clusterroles|security/policyreports|security/rolebindings|security/roles|security/serviceaccounts|storage\\?tab=pvcs|storage\\?tab=pvs|storage\\?tab=storageclasses|storage\\?tab=volumeattachments|workloads/cronjobs|workloads/daemonsets|workloads/deployments|workloads/hpas|workloads/jobs|workloads/pdbs|workloads/pods|workloads/replicasets|workloads/statefulsets|workloads/vpas) on ",
+      "why": "A list footer's page buttons (Prev, the page, Next) sit 2.5rem further left when the floating AI chat button is drawn, so the button no longer covers Next; the rows, the range shown and the rest of the page are as in v0.7.7.",
+      "pr": "#949"
     }
   ]
 }
