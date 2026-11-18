@@ -84,7 +84,7 @@ async function tempUser(browser: Browser, request: APIRequestContext, admin: Rec
   const password = 'e2e-notices-throwaway'
   const created = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: `E2E notices ${tag}`, email, password } })
   expect(created.status()).toBe(201)
-  const id = (await created.json()).id as string
+  const id = madeUser((await created.json()).id as string, admin)
   if (clusterRole) {
     expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: admin, data: { role: clusterRole, ...(namespaces ? { namespaces } : {}) } })).status()).toBe(200)
   }
@@ -274,7 +274,7 @@ test.describe('notices instead of "nothing here"', () => {
     const password = 'e2e-notices-throwaway'
     const created = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E notices no self', email, password } })
     expect(created.status()).toBe(201)
-    const id = (await created.json()).id as string
+    const id = madeUser((await created.json()).id as string, admin)
     const ctx = await browser.newContext({ baseURL: BASE, storageState: { cookies: [], origins: [] } })
     try {
       expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/default`, { headers: admin, data: { role: 'Read' } })).status()).toBe(200)
@@ -350,7 +350,7 @@ test.describe('notices instead of "nothing here"', () => {
 
       const created = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E notices cr read', email, password } })
       expect(created.status()).toBe(201)
-      userId = (await created.json()).id as string
+      userId = madeUser((await created.json()).id as string, admin)
       expect((await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/self`, { headers: admin, data: { role: 'Read' } })).status()).toBe(200)
       expect((await ctx.request.post('/api/v1/auth/login', { data: { email, password } })).ok(), `login ${email}`).toBeTruthy()
       // whom Kubeast acts as for the user, so the cluster is asked the same question
@@ -433,4 +433,15 @@ test.describe('notices instead of "nothing here"', () => {
       kubectl(`delete namespace ${ns} --ignore-not-found --wait=false`)
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

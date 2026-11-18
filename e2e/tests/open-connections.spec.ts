@@ -384,7 +384,7 @@ test.describe('a list that does not follow, and what the floating chat is told',
     try {
       kubectl(`-n ${namespace} create role e2e-list-only --verb=list --resource=configmaps`)
       kubectl(`-n ${namespace} create rolebinding e2e-list-only --role=e2e-list-only --group=kubeast:role:read`)
-      id = await createUser(request, admin, email, roles.find((r) => r.name.toLowerCase() === 'member')!.id)
+      id = madeUser(await createUser(request, admin, email, roles.find((r) => r.name.toLowerCase() === 'member')!.id), bearer(admin))
       expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read', namespaces: [namespace] } })).ok()).toBeTruthy()
 
       const page = await signIn(browser, email)
@@ -424,7 +424,7 @@ test.describe('a list that does not follow, and what the floating chat is told',
     kubectl(`create namespace ${namespace}`)
     try {
       kubectl(`-n ${namespace} create rolebinding e2e-view --clusterrole=view --group=kubeast:role:read`)
-      id = await createUser(request, admin, email, roles.find((r) => r.name.toLowerCase() === 'member')!.id)
+      id = madeUser(await createUser(request, admin, email, roles.find((r) => r.name.toLowerCase() === 'member')!.id), bearer(admin))
       expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read', namespaces: [namespace] } })).ok()).toBeTruthy()
       const token = await login(request, email, PW)
 
@@ -468,4 +468,15 @@ test.describe('a list that does not follow, and what the floating chat is told',
       kubectl(`delete namespace ${namespace} --ignore-not-found --wait=false`)
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

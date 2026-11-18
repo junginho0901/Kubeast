@@ -83,7 +83,7 @@ async function signIn(browser: Browser, request: APIRequestContext, admin: strin
   const email = `${PREFIX}-${key}@kubeast.local`
   const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: `E2E cpui ${key}`, email, password: PW, role_id: member.id } })
   expect(created.status(), `create ${email}`).toBe(201)
-  const userId = (await created.json()).id as string
+  const userId = madeUser((await created.json()).id as string, bearer(admin))
   const granted = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: grant })
   expect(granted.status(), await granted.text()).toBe(200)
   const who = await identity(request, await login(request, email, PW))
@@ -358,4 +358,15 @@ test.describe('buttons and drawers follow the cluster\'s answer', () => {
     const passed = await texts()
     expect.soft(passed.filter((t) => t.includes('Basic Info') && !t.includes('apps/v1')), 'the drawer before the object arrived').toEqual([])
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

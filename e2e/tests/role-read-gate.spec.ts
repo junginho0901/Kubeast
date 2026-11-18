@@ -67,7 +67,7 @@ function people(request: APIRequestContext, admin: string) {
       const res = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E read gate', email, password: PW, role_id: member?.id } })
       expect(res.status(), `create ${email}`).toBe(201)
       const id = (await res.json()).id as string
-      users.push(id)
+      users.push(madeUser(id, bearer(admin)))
       const put = await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: grant, ...(namespaces ? { namespaces } : {}) } })
       expect(put.ok(), `grant ${grant}: ${await put.text()}`).toBeTruthy()
       return { email, token: await login(request, email, PW) }
@@ -476,4 +476,15 @@ print(json.dumps({
     await box(/^resource\.\*\.read/).check()
     await expect(hint).toHaveCount(0)
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })
