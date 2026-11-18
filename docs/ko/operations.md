@@ -363,7 +363,7 @@ resources:
 - **같은 신원**: 두 Deployment 모두 `k8s-service` 서비스 계정을 쓰므로 IRSA 역할과 녹화 저장소 자격 증명(`sessionRecording.secret`)이 둘 다에 적용됩니다. 녹화는 stream 서버가 쓰고 k8s-service가 읽습니다. 스풀 볼륨은 stream 서버에만 붙습니다.
 - **함께 쓸 수 없는 값**: `sessionRecording.storage: file`(볼륨 하나를 파드 둘이 붙일 수 없음)과 1보다 큰 `streams.replicas`.
 - **NetworkPolicy**: `k8s-service-stream`은 게이트웨이에서만 연결을 받고, 데이터베이스·Redis·auth-service·클러스터 API 서버·`sessionRecording.egress`로만 나갑니다.
-- **게이트웨이 앞단**: 로드밸런서의 등록 해제 지연은 게이트웨이 파드가 끝나기 전에 끝나야 하고(AWS ALB 기본 300초), 콘솔로 가는 Envoy Gateway 라우트는 요청 타임아웃(기본 15초)에 스트림을 끊지 않게 두세요.
+- **게이트웨이 앞단**: 게이트웨이 파드의 preStop 기다림(`podShutdown.preStopSeconds`)은 파드 IP로 보내는 로드밸런서가 그 파드에 새 요청을 그만 보낼 때까지 이어져야 하고(AWS ALB의 기본 등록 해제 지연 300초에서 기본 5초로 충분했습니다), 콘솔로 가는 Envoy Gateway 라우트는 요청 타임아웃(기본 15초)에 스트림을 끊지 않게 두세요.
 - **지표**: 스트림 서버마다(k8s-service-stream, `streams.enabled`가 꺼져 있으면 k8s-service) `kubeast_terminals_open`, `kubeast_followed_logs_open`.
 
 ## 신뢰할 CA 추가 (사설 CA·TLS 가로채는 프록시)

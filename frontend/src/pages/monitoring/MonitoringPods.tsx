@@ -23,6 +23,7 @@ import {
   isMetricsUnavailableError,
 } from '@/services/api'
 import { useAIContext } from '@/hooks/useAIContext'
+import { usePermission } from '@/hooks/usePermission'
 import { useCluster } from '@/contexts/ClusterContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -70,6 +71,8 @@ export default function MonitoringPods({
   const [search, setSearch] = useState('')
   const { currentCluster } = useCluster()
   const { open: openDetail } = useResourceDetail()
+  // a grant limited to namespaces: "All namespaces" reads only those (k8s-service narrows), so an empty answer is theirs
+  const limitedTo = usePermission().clusterNamespaces
 
   // Pod 리소스 사용량 (네임스페이스 선택 시에만 활성화, 5초마다 자동 갱신)
   const { data: podMetricsRead, isLoading, error, dataUpdatedAt } = useQuery<PodMetric[], Error>({
@@ -94,14 +97,14 @@ export default function MonitoringPods({
   const refreshFailure = useMemo(() => metricsRefreshFailure(error, podMetrics, dataUpdatedAt), [error, podMetrics, dataUpdatedAt])
 
   // what the tab draws in place of its rows, and the floating chat is told the same: no count of usage without rows
-  const view = metricsTabView({ namespace: selectedNamespace, isLoading, rows: podMetrics, refused: Boolean(refusal), error })
+  const view = metricsTabView({ namespace: selectedNamespace, limitedTo, isLoading, rows: podMetrics, refused: Boolean(refusal), error })
 
   // 플로팅 AI 위젯용 스냅샷 — Pod 메트릭 요약
   const aiSnapshot = useMemo(() => {
     if (view === 'refused') {
       return { source: 'base' as const, summary: `Pod 모니터링 — ${selectedNamespace === 'all' ? '전체' : selectedNamespace} 메트릭 볼 권한 없음`, data: { tab: 'pods', filters: { namespace: selectedNamespace }, metrics_refused: refusal } }
     }
-    if (view !== 'rows' || !podMetrics) return metricsNotShownLayer(t, 'pods', view, { error, namespace: selectedNamespace, notice: pageNotice })
+    if (view !== 'rows' || !podMetrics) return metricsNotShownLayer(t, 'pods', view, { error, namespace: selectedNamespace, limitedTo, notice: pageNotice })
     const items = [...podMetrics].sort((a, b) => {
       const aCpu = Number(String(a.cpu).replace(/[^0-9.]/g, '')) || 0
       const bCpu = Number(String(b.cpu).replace(/[^0-9.]/g, '')) || 0
@@ -125,7 +128,7 @@ export default function MonitoringPods({
         }),
       },
     }
-  }, [view, t, error, pageNotice, podMetrics, selectedNamespace, refreshFailure, refusal])
+  }, [view, t, error, pageNotice, podMetrics, selectedNamespace, limitedTo, refreshFailure, refusal])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -230,7 +233,7 @@ export default function MonitoringPods({
 
       {/* The cards keep their place with "-" while a read is under way, so the table below does not jump; one line
           each (icon, label, number), so the table keeps more of the screen */}
-      {(view === 'loading' || view === 'rows' || view === 'none_in_namespace') && (
+      {(view === 'loading' || view === 'rows' || view === 'none_in_namespace' || view === 'none_in_grant') && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 shrink-0">
           {([
             [Box, t('monitoring.pods.totalPods'), podStats ? String(podStats.totalPods) : '-'],
@@ -355,6 +358,11 @@ export default function MonitoringPods({
       ) : view === 'none_in_namespace' ? (
         <div className="text-center py-12">
           <p className="text-slate-400" data-testid="pod-metrics-none-in-namespace">{t('monitoring.pods.noPodsInNamespace', { namespace: selectedNamespace })}</p>
+        </div>
+      ) : view === 'none_in_grant' ? (
+        <div className="text-center py-12">
+          <p className="text-slate-400" data-testid="pod-metrics-none-in-grant">{t('monitoring.pods.noneInGrant')}</p>
+          <p className="text-sm text-slate-500 mt-2">{t('monitoring.pods.noneInGrantHint', { namespaces: limitedTo?.join(', ') })}</p>
         </div>
       ) : view === 'unavailable' || view === 'no_samples' ? (
         <div className="text-center py-12">

@@ -224,6 +224,7 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod, no
             rowsPerPage={NODE_BOXES_PER_PAGE}
             onPageChange={(p) => goTo(p, 0)}
             showPageSize={false}
+            endsPage
             testId="cluster-view-nodes-pager"
           />
         </>
@@ -510,6 +511,7 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
           onNavigate?.()
         }}
         showPageSize={false}
+        endsPage
         testId="cluster-view-node-pods-pager"
       />
     </>

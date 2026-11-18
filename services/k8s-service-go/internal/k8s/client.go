@@ -385,10 +385,17 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 }
 
 // wrapPerson makes cfg's requests go out as the person in their context, and a shared read check under it
-// (groupCheckTransport, wrapped first so it sees the person's headers).
+// (groupCheckTransport, wrapped first so it sees the person's headers). Kubeast's own reads are looked for under the
+// path of cfg's server URL, which client-go puts before every request's path (the base URL of its REST clients).
 func wrapPerson(cfg *rest.Config, id string) {
+	var serverPath string
+	if base, _, err := rest.DefaultServerUrlFor(cfg); err == nil {
+		serverPath = base.Path
+	}
 	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return groupCheckTransport{base: rt} })
-	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, id) })
+	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper {
+		return auth.ImpersonationRoundTripperAt(rt, id, serverPath)
+	})
 }
 
 // pool lazily builds the LRU client-bundle pool. Lazy so a zero-value Service
@@ -518,6 +525,19 @@ func (s *Service) ClusterVersions() map[cluster.ID]int64 {
 		}
 	}
 	return out
+}
+
+// ClientOf is the cluster a request reads and the registry config_version its client was built from, the same on every
+// replica that built it from the same registration; false when no client is built.
+func (s *Service) ClientOf(ctx context.Context) (cluster.ID, int64, bool) {
+	if s == nil {
+		return "", 0, false
+	}
+	b := s.bundleForCtx(ctx)
+	if b == nil {
+		return "", 0, false
+	}
+	return b.id, b.configVersion, true
 }
 
 // DropStale is Invalidate for a change read from the registry's versions (internal/clustersync): the bundle of id built

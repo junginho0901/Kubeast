@@ -20,7 +20,7 @@ import { applyCronJobWatchEvent } from './cronjobs/cronJobWatchNormalize'
 import { CronJobFilters } from './cronjobs/CronJobFilters'
 import { CronJobTable } from './cronjobs/CronJobTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -190,13 +190,10 @@ export default function CronJobs() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllCronJobs(true)
-      : await api.getCronJobs(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['workloads', 'cronjobs', selectedNamespace] })
-    queryClient.setQueryData(['workloads', 'cronjobs', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['workloads', 'cronjobs', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllCronJobs(true)
+      : api.getCronJobs(selectedNamespace, true)))
 
   const createCronJobYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

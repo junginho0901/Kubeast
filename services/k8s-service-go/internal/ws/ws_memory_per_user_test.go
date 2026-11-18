@@ -550,7 +550,7 @@ func TestWSMemoryPeer(t *testing.T) {
 									Error map[string]string `json:"error"`
 								}
 								_ = json.Unmarshal(data, &f)
-								if f.Error["reason"] != reasonLimit || strings.Contains(f.Error["message"], "waits for its turn") {
+								if f.Error["reason"] != reasonLimit || f.Error["limit_scope"] == limitScopeOpening {
 									waits.Add(1)
 									continue
 								}

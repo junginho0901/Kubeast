@@ -329,7 +329,8 @@ describe('what sits above the pod table', () => {
 
 // The floating chat is told what the tab draws where its rows go, never a count of usage the screen does not show, and the
 // cards say no number the tab contradicts: an empty answer for one namespace ("No pods in … namespace", the cards at 0),
-// for every namespace (not available, no cards), a failed read after an empty one, the answer that says metrics-server
+// for every namespace (not available, no cards; for a grant limited to namespaces none of their pods, the cards at 0),
+// a failed read after an empty one, the answer that says metrics-server
 // is missing, the page's notice and #900's not-served answer (404) each go as the tab says them.
 describe('what the Pods tab tells the floating chat in place of rows', () => {
   const HINT = en.monitoring.metricsServerHint
@@ -377,6 +378,32 @@ describe('what the Pods tab tells the floating chat in place of rows', () => {
     expect(chat.current?.data).toEqual({ tab: 'pods', filters: { namespace: 'all' }, no_samples: true })
     expect(chat.current?.summary).toBe(`${en.monitoring.pods.title} — ${NOT_AVAILABLE} — ${HINT}`)
     saysWhatTheTabShows(html)
+  })
+
+  // k8s-service reads every namespace of a grant limited to namespaces as those namespaces and answers 200 [] when
+  // none of their pods has metrics; metrics-server missing is its own answer (404 or 503), held above.
+  it('every namespace answered empty for a grant limited to namespaces: none of their pods, not metrics-server missing', () => {
+    const qc = answered('all', [])
+    qc.setQueryData(['me'], { cluster_namespaces: { c1: ['team-a', 'team-b'] } })
+    const html = renderOn('all', qc)
+    expect(html).toContain('data-testid="pod-metrics-none-in-grant"')
+    expect(html).not.toContain('data-testid="pod-metrics-not-available"')
+    expect(textOf(html)).not.toContain(HINT)
+    expect(textOf(html)).toContain('limited to the namespaces team-a, team-b')
+    expect(card(html, en.monitoring.pods.totalPods)).toBe('0')
+    expect(chat.current?.data).toEqual({ tab: 'pods', filters: { namespace: 'all' }, total_count: 0, access_limited_to_namespaces: ['team-a', 'team-b'] })
+    saysWhatTheTabShows(html)
+
+    renderOn('all', qc, { lng: 'ko' })
+    expect(chat.current?.summary).toBe(`${ko.monitoring.pods.title} — ${ko.monitoring.pods.noneInGrant} — ${ko.monitoring.pods.noneInGrantHint.replace('{{namespaces}}', 'team-a, team-b')}`)
+  })
+
+  it('a grant limited to namespaces, one of them chosen and answered empty: "No pods in … namespace", as for anyone', () => {
+    const qc = answered('team-a', [])
+    qc.setQueryData(['me'], { cluster_namespaces: { c1: ['team-a', 'team-b'] } })
+    const html = renderOn('team-a', qc)
+    expect(html).toContain('data-testid="pod-metrics-none-in-namespace"')
+    expect(chat.current?.data).toEqual({ tab: 'pods', filters: { namespace: 'team-a' }, total_count: 0 })
   })
 
   it('an empty answer, then a read that failed: the failure with its reason and no card of the empty answer', () => {

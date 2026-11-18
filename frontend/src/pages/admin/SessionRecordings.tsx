@@ -17,6 +17,7 @@ import { keepSameRead } from '@/utils/keepSameRead'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { failureOf } from '@/hooks/useRefresh'
+import { everyUntilRefused } from '@/services/queryDefaults'
 
 // Admin → Session recordings: recorded pod exec / node shell terminals (the
 // output the user saw). Opening one replays it; every read is audited.
@@ -64,7 +65,7 @@ export default function SessionRecordings() {
     queryKey: listKey,
     queryFn: async () => ({ page, limit: read.limit, ...(await api.listRecordings({ ...applied, ...read })) }),
     placeholderData: keepSameRead(listKey, [3, 4]),
-    refetchInterval: 15_000,
+    refetchInterval: everyUntilRefused(15_000),
   })
   const total = data?.total ?? 0
   const shownPage = data?.page ?? page

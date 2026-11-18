@@ -33,7 +33,8 @@
 # preStop and the rollout strategy of each Deployment; the requests sent every second during the upgrade (non-2xx and
 # hangs, apart from the bundled PostgreSQL's restart); that `--reuse-values` and a values file copied from FROM_VERSION
 # stop with the --reset-then-reuse-values hint, values setting pdb.minAvailable stop with what replaces it, and auth,
-# session and ai at 4 replicas stop at the database connection sum while 3 render; a drain running during the upgrade;
+# session and ai stop at the database connection sum at the replica count where it passes postgresql.maxConnections (4
+# with the default values) while one fewer renders; a drain running during the upgrade;
 # a second upgrade to the same chart with one value changed; and, with REPLICAS, more than one replica.
 #
 # Roles whose names have characters outside ASCII (W8 QA Q-61, Q-66; ROLE_GROUPS=0 leaves them out), made on
@@ -58,7 +59,8 @@
 # that has no answer by then is a hang), PG_GRACE (20 s after the bundled PostgreSQL is ready again), POOLER_IMAGE,
 # POOLER_MODE, POOLER, EXTRA_VALUES (a values file of no secret added to the FROM_VERSION install and to --plan's
 # renders, e.g. migrations.mode: job with SCENARIO=external-db, or ai.enabled: false, which the image and connection
-# sum rows follow), REQUIRE, KEEP, ALLOW_DIRTY, ALLOW_PARALLEL, ROLE_GROUPS (1).
+# sum rows follow, or streams.enabled and autoscaling, which the preStop and connection sum rows follow), REQUIRE, KEEP,
+# ALLOW_DIRTY, ALLOW_PARALLEL, ROLE_GROUPS (1).
 #
 # Safety: every kubectl and helm call names the rehearsal's kubeconfig file ($REH_OUT/kubeconfig) and its context;
 # the current context is never read. Cluster names must start with kubeast-reh. Passwords, tokens and keys are read
@@ -1069,19 +1071,28 @@ removed_value_checks() {
   fi
 }
 
-# db_connection_checks AREA — the services whose pools count in the sum, at one replica count, stop the render at the
-# chart's PostgreSQL connection check (templates/checks/db-connections.yaml) with the sum it works out; at one fewer
-# they render. With AI on: auth, session and ai at 4 (319 with the default pools) and 3 (264). With ai.enabled false the
-# chart renders no ai-service or ModelConfig controller and leaves their pools out (kubeast.dbConnections): auth and
-# session at 6 (316) and 5 (276). The numbers are the chart's: the sum from its message, the limit from
-# postgresql.maxConnections. With an external database the chart does not stop and NOTES.txt prints the sum.
+# replicas_set KEYS N — RSET holds --set replicas.<key>=N for each of KEYS
+replicas_set() { local k; RSET=(); for k in $1; do RSET+=(--set "replicas.$k=$2"); done; }
+# connection_sum — the sum in ERR, as the chart's connection check prints it
+connection_sum() { printf '%s' "$ERR" | sed -n 's/.*can hold up to \([0-9][0-9]*\) database connections.*/\1/p' | head -1; }
+
+# db_connection_checks AREA — the services whose pools count in the sum stop the render at the chart's PostgreSQL
+# connection check (templates/checks/db-connections.yaml) with the sum it works out, at the first replica count whose
+# sum passes postgresql.maxConnections, and render at one fewer: auth, session and ai, or auth and session with
+# ai.enabled false (the chart then renders no ai-service or ModelConfig controller and leaves their pools out,
+# kubeast.dbConnections). That count comes from the chart's own sum: each at 1, 2, … replicas, up to 12, rendered with
+# postgresql.maxConnections=20 so the check prints the sum, against the limit the upgrade takes (the release's
+# postgresql.maxConnections, else the checkout's values.yaml; --plan: the merged values). With the default values 4
+# (319) and 3 (264), with AI off 6 (316) and 5 (276); streams.enabled and autoscaling's maxReplicas add to the sum, so
+# the count can be lower. With an external database the chart does not stop and NOTES.txt prints the sum at 4 (6 with AI
+# off).
 db_connection_checks() {
-  local a=$1 k total max want set3=() set4=() keys="authService sessionService aiService" svc="auth, session and ai" over=4
+  local a=$1 n total="" max want under="" sums="" keys="authService sessionService aiService" svc="auth, session and ai" over=4
   if ! in_checkout 868; then skip "$a" "the connection sum stops a render past postgresql.maxConnections" 868 "checks/db-connections.yaml not in the chart"; return; fi
   ai_on || { keys="authService sessionService"; svc="auth and session (ai.enabled false)"; over=6; }
-  for k in $keys; do set3+=(--set "replicas.$k=$((over - 1))"); set4+=(--set "replicas.$k=$over"); done
   if [ "$SCENARIO" = external-db ] && [ "$PLAN" != 1 ]; then
-    render "${set4[@]}"
+    replicas_set "$keys" "$over"
+    render "${RSET[@]}"
     if [ "$RC" = 0 ] && [ -n "$NOTES_SUM" ]; then
       info "$a" "$svc at $over replicas, external database" "renders; NOTES.txt: the pods can hold up to $NOTES_SUM connections"
     else
@@ -1089,23 +1100,44 @@ db_connection_checks() {
     fi
     return
   fi
-  want=$(chart_value postgresql.maxConnections)
-  render "${set4[@]}"
+  if [ "$PLAN" = 1 ]; then want=$(jq -r '.postgresql.maxConnections // empty' "$OUT/plan-values.json")
+  else want=$(hc get values kubeast -o json 2>/dev/null | jq -r '.postgresql.maxConnections // empty'); fi
+  [ -n "$want" ] || want=$(chart_value postgresql.maxConnections)
+  case "$want" in ''|*[!0-9]*) row "$a" "$svc: the replica count whose connection sum passes postgresql.maxConnections" FAIL "postgresql.maxConnections '$want' is not a whole number"; return ;; esac
+  n=1
+  while [ "$n" -le 12 ]; do
+    replicas_set "$keys" "$n"
+    render "${RSET[@]}" --set postgresql.maxConnections=20
+    total=$(connection_sum)
+    [ -n "$total" ] || break
+    sums="$sums${sums:+, }$total"
+    [ "$total" -gt "$want" ] && break
+    under=$total
+    n=$((n + 1))
+  done
+  if [ -z "$total" ] || [ "$total" -le "$want" ] || [ "$n" = 1 ]; then
+    if [ -z "$total" ]; then total="no sum in the check's message at $n replicas (postgresql.maxConnections=20), helm exit $RC: $ERR"
+    elif [ "$n" = 1 ]; then total="already at 1 replica: $sums"
+    else total="none up to 12 replicas (sums from 1: $sums)"; fi
+    row "$a" "$svc: the replica count whose connection sum passes postgresql.maxConnections" FAIL "$total, postgresql.maxConnections $want"
+    return
+  fi
+  over=$n
+  replicas_set "$keys" "$over"
+  render "${RSET[@]}"
   printf '%s\n' "$ERR" > "$OUT/db-connections-$over.txt"
-  total=$(printf '%s' "$ERR" | sed -n 's/.*can hold up to \([0-9][0-9]*\) database connections.*/\1/p' | head -1)
+  total=$(connection_sum)
   max=$(printf '%s' "$ERR" | sed -n 's/.*postgresql\.maxConnections=\([0-9][0-9]*\).*/\1/p' | head -1)
   if [ "$RC" != 0 ] && [ -n "$total" ] && [ -n "$max" ] && [ "$max" = "$want" ] && [ "$total" -gt "$max" ]; then
     row "$a" "$svc at $over replicas stop at the connection sum" PASS "the pods can hold up to $total connections > postgresql.maxConnections $max"
   else
-    row "$a" "$svc at $over replicas stop at the connection sum" FAIL "helm exit $RC, sum '$total', limit '$max' (values.yaml $want): $ERR"
+    row "$a" "$svc at $over replicas stop at the connection sum" FAIL "helm exit $RC, sum '$total', limit '$max' (want $want): $ERR"
   fi
-  render "${set3[@]}"
+  replicas_set "$keys" $((over - 1))
+  render "${RSET[@]}"
   if [ "$RC" = 0 ]; then
     row "$a" "$svc at $((over - 1)) replicas render" PASS "helm exit 0"
-    # the sum at one fewer, as the same check prints it once the limit is below it
-    render "${set3[@]}" --set postgresql.maxConnections=20
-    total=$(printf '%s' "$ERR" | sed -n 's/.*can hold up to \([0-9][0-9]*\) database connections.*/\1/p' | head -1)
-    info "$a" "connection sum at $((over - 1)) replicas of $svc" "${total:-not printed} (postgresql.maxConnections $want)"
+    info "$a" "connection sum at $((over - 1)) replicas of $svc" "$under (postgresql.maxConnections $want; from 1 replica: $sums)"
   else
     row "$a" "$svc at $((over - 1)) replicas render" FAIL "helm exit $RC: $ERR"
   fi
@@ -1301,7 +1333,7 @@ upgrade_phase() {
 
 # --- 9. pod settings after the upgrade ---
 spec_checks() { # spec_checks PHASE
-  local a=$1 pre json bad
+  local a=$1 pre sp sd json bad
   kc -n "$NS" get deploy,svc,pdb -o json > "$OUT/$a-objects.json"
   json="$OUT/$a-objects.json"
   bad=$(jq -r '[.items[] | select(.kind == "Deployment") | select((.spec.template.spec.containers[0].readinessProbe == null) or (.spec.template.spec.containers[0].livenessProbe == null)) | .metadata.name] | join(" ")' "$json")
@@ -1323,11 +1355,20 @@ spec_checks() { # spec_checks PHASE
   fi
   if in_checkout 856; then
     pre=$(value_of podShutdown.preStopSeconds)
-    # every Deployment a Service selects, except the bundled PostgreSQL and Redis, which have no preStop wait
+    # every Deployment a Service selects, except the bundled PostgreSQL and Redis, which have no preStop wait, and the
+    # stream server (streams.enabled), whose wait and drain are its own: the row after
     bad=$(jq -r --argjson s "${pre:-0}" '[.items[] | select(.kind == "Service" and (.metadata.name | IN("postgres", "redis") | not)) | .spec.selector.app] as $apps
-      | [.items[] | select(.kind == "Deployment" and (.spec.template.metadata.labels.app | IN($apps[]))) | .spec.template.spec as $p
+      | [.items[] | select(.kind == "Deployment" and .metadata.name != "k8s-service-stream" and (.spec.template.metadata.labels.app | IN($apps[]))) | .spec.template.spec as $p
          | select(($p.containers[0].lifecycle.preStop.sleep.seconds // 0) != $s or ($p.terminationGracePeriodSeconds // 30) < ($s + 30)) | .metadata.name] | join(" ")' "$json")
     none_bad "$a" "preStop sleep $pre s and grace ≥ $((pre + 30)) s behind each Service" "$bad" "every Deployment behind a Service but postgres and redis" "not on:"
+    if jq -e 'any(.items[]; .kind == "Deployment" and .metadata.name == "k8s-service-stream")' "$json" > /dev/null; then
+      # streams.preStopSeconds, then SIGTERM starts the drain: streams.drainSeconds, its 5 s close wait, the 25 s shutdown, 5 s to spare
+      sp=$(value_of streams.preStopSeconds); sd=$(value_of streams.drainSeconds)
+      bad=$(jq -r --argjson s "${sp:-0}" --argjson d "${sd:-0}" '[.items[] | select(.kind == "Deployment" and .metadata.name == "k8s-service-stream") | .spec.template.spec
+        | select((.containers[0].lifecycle.preStop.sleep.seconds // 0) != $s or (.terminationGracePeriodSeconds // 30) < ($s + $d + 35))
+        | "preStop \(.containers[0].lifecycle.preStop.sleep.seconds // 0) s, grace \(.terminationGracePeriodSeconds // 30) s"] | join(" ")' "$json")
+      none_bad "$a" "k8s-service-stream: preStop sleep $sp s and grace ≥ $((${sp:-0} + ${sd:-0} + 35)) s (streams.preStopSeconds and drainSeconds)" "$bad" "drainSeconds $sd" "got"
+    fi
   else
     skip "$a" "preStop and grace period" 856 "podShutdown.preStopSeconds not in the chart"
   fi

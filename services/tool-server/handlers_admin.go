@@ -58,6 +58,20 @@ func parseFromTime(v string, now time.Time) (time.Time, error) {
 	return t, nil
 }
 
+// untilTimeUTC reads until_time, an RFC3339 time, as the same instant in UTC (fractions kept), as since_time is sent:
+// auth-service compares it with a column that keeps UTC. "" when it is not given.
+func untilTimeUTC(args map[string]interface{}) (string, error) {
+	v := argString(args, "until_time", "")
+	if v == "" {
+		return "", nil
+	}
+	t, err := time.Parse(time.RFC3339, v)
+	if err != nil {
+		return "", wrapBadRequest("until_time must be an RFC3339 time")
+	}
+	return t.UTC().Format(time.RFC3339Nano), nil
+}
+
 // authServiceGet calls auth-service with the user's own Authorization header;
 // auth-service applies its permission check and writes its own audit entry.
 func authServiceGet(ctx context.Context, headers http.Header, path string, q url.Values) (int, []byte, error) {
@@ -132,9 +146,13 @@ func handleAuditSearch(ctx context.Context, args map[string]interface{}, headers
 		q.Set("since", t.UTC().Format(time.RFC3339))
 		filter["since"] = t.UTC().Format(time.RFC3339)
 	}
-	if v := argString(args, "until_time", ""); v != "" {
-		q.Set("until", v)
-		filter["until"] = v
+	until, err := untilTimeUTC(args)
+	if err != nil {
+		return "", err
+	}
+	if until != "" {
+		q.Set("until", until)
+		filter["until"] = until
 	}
 	limit := argInt(args, "limit", auditItemsDefault)
 	if limit < 1 || limit > auditItemsCap {
@@ -567,8 +585,12 @@ func handleNodesLog(ctx context.Context, args map[string]interface{}, headers ht
 		}
 		q.Set("sinceTime", t.UTC().Format(time.RFC3339))
 	}
-	if v := argString(args, "until_time", ""); v != "" {
-		q.Set("untilTime", v)
+	until, err := untilTimeUTC(args)
+	if err != nil {
+		return "", err
+	}
+	if until != "" {
+		q.Set("untilTime", until)
 	}
 	if b := argInt(args, "boot", 0); b != 0 {
 		q.Set("boot", strconv.Itoa(b))

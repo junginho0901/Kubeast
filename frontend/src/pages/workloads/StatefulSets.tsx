@@ -16,7 +16,7 @@ import { parseAgeSeconds, type SortKey } from './statefulsets/statefulSetHelpers
 import { StatefulSetFilters } from './statefulsets/StatefulSetFilters'
 import { StatefulSetTable } from './statefulsets/StatefulSetTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -174,13 +174,10 @@ export default function StatefulSets() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllStatefulSets(true)
-      : await api.getStatefulSets(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: listQueryKey })
-    queryClient.setQueryData(listQueryKey, data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, listQueryKey, () => selectedNamespace === 'all'
+      ? api.getAllStatefulSets(true)
+      : api.getStatefulSets(selectedNamespace, true)))
 
   const initialYaml = useMemo(() => (
 `apiVersion: apps/v1
