@@ -1,4 +1,4 @@
-// Dashboard "Nodes" card — compact grid of node cards (status icon /
+// Dashboard "Nodes" card — compact information rows (status icon /
 // name / version / roles / IP / status badges as the Nodes list draws them).
 // Click a card to open the node detail drawer (handled by the parent). Nodes
 // that are not Ready come first, then cordoned ones, and the card shows at
@@ -38,14 +38,14 @@ export function DashboardNodeList({ nodes, onNodeClick }: Props) {
           </Link>
         )}
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[400px] overflow-y-auto">
+      <div className="divide-y divide-hairline max-h-[400px] overflow-y-auto">
         {shown.map((node) => (
           <button
             key={node.name}
             onClick={() => onNodeClick(node)}
-            className="p-3 border-l border-slate-700 hover:bg-slate-700/50 transition-colors text-left cursor-pointer min-w-0"
+            className="grid w-full grid-cols-1 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.8fr)_auto] items-center gap-x-6 gap-y-2 p-3 hover:bg-slate-700/50 transition-colors text-left cursor-pointer min-w-0"
           >
-            <div className="flex items-start gap-2 mb-2">
+            <div className="flex items-start gap-2 min-w-0">
               {nodeReadiness(node.status) === 'Ready' ? (
                 <CheckCircle className="w-4 h-4 text-green-400 shrink-0 mt-0.5" />
               ) : (
@@ -58,7 +58,7 @@ export function DashboardNodeList({ nodes, onNodeClick }: Props) {
               </div>
               <Info className="w-4 h-4 text-slate-400 shrink-0" />
             </div>
-            <div className="space-y-1">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-1 min-w-0 [&>p]:min-w-0 [&>p]:[overflow-wrap:anywhere]">
               <p className="text-xs text-slate-400">
                 <span className="font-medium">{tr('dashboard.nodeCard.versionLabel', 'Version')}:</span> {node.version || na}
               </p>
@@ -73,7 +73,7 @@ export function DashboardNodeList({ nodes, onNodeClick }: Props) {
                 </p>
               )}
             </div>
-            <div className="mt-2" data-testid="dashboard-node-status">
+            <div className="flex flex-wrap gap-y-1" data-testid="dashboard-node-status">
               {nodeStatusParts(node.status).map((part) => (
                 <span key={part} className={`badge text-xs mr-1 last:mr-0 ${nodeStatusBadge(part)}`}>{part}</span>
               ))}

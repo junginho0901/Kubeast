@@ -88,7 +88,7 @@ export function DashboardSkeleton() {
       </div>
 
       {/* Top resources — exact same card headers */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-ink">
@@ -157,16 +157,16 @@ export function DashboardSkeleton() {
       {/* Nodes — real title, card shape matches real layout */}
       <div className="card">
         <h2 className="text-lg font-semibold text-ink mb-4">{tr('dashboard.nodes.title', 'Nodes')}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[400px] overflow-y-auto">
+        <div className="divide-y divide-hairline max-h-[400px] overflow-y-auto">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="p-3 border-l border-slate-700">
-              <div className="flex items-start gap-2 mb-2">
+            <div key={i} className="grid w-full grid-cols-1 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.8fr)_auto] items-center gap-x-6 gap-y-2 p-3 min-w-0">
+              <div className="flex items-start gap-2 min-w-0">
                 <div className="w-4 h-4 rounded-full bg-slate-700 mt-0.5 animate-pulse" />
                 <div className="flex-1 min-w-0">
                   <div className="h-4 bg-slate-700 rounded-sm w-2/3 animate-pulse" />
                 </div>
               </div>
-              <div className="space-y-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-1 min-w-0">
                 <p className="text-xs text-slate-400">
                   <span className="font-medium">{tr('dashboard.nodeCard.versionLabel', 'Version')}:</span>{' '}
                   <span className="inline-block h-3 w-16 align-middle rounded-sm bg-slate-700 animate-pulse" />
@@ -180,7 +180,7 @@ export function DashboardSkeleton() {
                   <span className="inline-block h-3 w-24 align-middle rounded-sm bg-slate-700 animate-pulse" />
                 </p>
               </div>
-              <div className="mt-2">
+              <div className="flex flex-wrap gap-y-1">
                 <span className="inline-block h-5 w-14 rounded-sm bg-slate-700 animate-pulse" />
               </div>
             </div>
