@@ -27,6 +27,7 @@ import { RefreshFailure } from '@/components/RefreshFailure'
 import { failureOf } from '@/hooks/useRefresh'
 import { ActionFailure } from '@/components/ActionFailure'
 import { useDownload } from '@/hooks/useDownload'
+import { AccessReviewRolePermissions } from './AccessReviewRolePermissions'
 
 // Admin → Access review: the report of who has what (accounts, per-cluster
 // grants, API keys, temporary grants since the last review, roles) with the
@@ -162,12 +163,12 @@ export default function AccessReview() {
     roles: [
       { key: 'name', label: tr('accessReview.col.role', 'Role'), render: (r) => <span className="text-ink">{r.name}{r.is_system ? ` (${tr('accessReview.system', 'system')})` : ''}</span>, text: (r) => r.name },
       { key: 'description', label: tr('accessReview.col.description', 'Description'), render: (r) => r.description || '-', text: (r) => r.description },
-      { key: 'permissions', label: tr('accessReview.col.permissions', 'Permissions'), render: (r) => <span className="font-mono text-[11px] break-all">{r.permissions.join(', ') || '-'}</span>, text: (r) => r.permissions.join(' ') },
+      { key: 'permissions', label: tr('accessReview.col.permissions', 'Permissions'), render: (r) => <AccessReviewRolePermissions key={`${viewId ?? 'live'}:${r.name}`} role={r} />, text: (r) => r.permissions.join(' ') },
       { key: 'users', label: tr('accessReview.col.usersBindings', 'Users / bindings'), render: (r) => `${r.users} / ${r.cluster_bindings}` },
       { key: 'flags', label: tr('accessReview.col.flags', 'Flags'), render: (r) => flags(r.flags), text: (r) => r.flags.join(' ') },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [t])
+  }), [t, viewId])
 
   const rows = useMemo(() => {
     if (!report || tab === 'history') return []
