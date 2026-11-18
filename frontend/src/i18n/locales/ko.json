@@ -1758,6 +1758,7 @@
     "delete": "삭제",
     "title": "AI Chat",
     "subtitle": "자연어로 클러스터에 묻고 문제를 해결합니다.",
+    "modelReadFailed": "AI 모델을 읽지 못했습니다: {{reason}}",
     "emptyTitle": "새 대화를 시작하세요",
     "emptySubtitle": "아래 질문을 클릭하거나 직접 입력하세요.",
     "resultZipDownload": "Result ZIP 다운로드",
