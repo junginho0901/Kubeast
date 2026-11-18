@@ -67,6 +67,7 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 ### Fixed
 
 - No list, window or drawer draws one read's rows as another's after a switch of filter, tab, namespace, object or cluster.
+- Panels that closed only on a click outside, Advanced Search's Select Resources and Settings, also close on Escape and give the focus back to their button; with the Refetch interval list open, the first Escape closes only the list.
 - A list on Fit holds the rows that end inside its table, each measured at its own height, where 0.7.7 took the first row's height for every row: a list whose rows wrap holds another number of rows a page, and on the page it is counted on, no last row sticks out past the table's bottom.
 - A live socket that connects again reads its lists again, so rows deleted while it was closed go; frames that come while a list is read are applied to its answer; the Helm releases stream goes on from the last version it saw, also when the browser opens it again after a cut or on another k8s-service, instead of sending every release again with a read of the list.
 - A list's Refresh reads the list once, where each press read it a second time right after, and a change that comes while it reads stays on the list.
@@ -79,7 +80,10 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - A read the cluster refused is not tried again a second later, and a read on a timer (the Dashboard's overview, node list and problem pods, the Prometheus sections, the GPU screens, the Pods list, Cluster View, the admin lists, the Alerts inbox) stops once refused, until the screen is opened again, another cluster is chosen or the account's access changes; a refused read also asks once more when the browser tab is shown again a minute or more after the refusal, so access changed in the cluster itself shows on the same screen.
 - A cluster switch asks each read of the new cluster once, with none of the parameters of the cluster left: the Dashboard asked for its top resources twice, once leaving out what the cluster left had refused. After signing in, a screen waits until a cluster is chosen, where it read the server's default cluster first, and a cluster list that could not be read (a 503 while the database restarts, asked again as it says) keeps the cluster chosen before, where it cleared it.
 - Prometheus sections say when the cluster's Prometheus does not answer, and that no longer marks the whole cluster unreachable.
+- A time with an offset (such as `+09:00`) now means the moment it names in an audit log search, its CSV export, an AI Usage period and the chat list API's `before_updated_at`. Before, its clock time was read as UTC, so the results were off by the offset. The console sends UTC and was not affected.
+- The AI tools read `until_time` the same way, and refuse one of the right form that is no real time (such as `2026-02-30T00:00:00Z`) with the reason. An audit log search or export with a `since` or `until` that is not an RFC 3339 time now answers 400, where that bound was left out and every row on its side matched.
 - Secret files stay readable with `podSecurity.enabled: false`.
+- Teams says under the name field why Add did not add a team with no name, where it only moved the focus to the field, and the field has a label.
 - A values file copied from 0.7.6 or earlier stops on its release image tag instead of keeping that release's images.
 - A chat answer whose stream was cut is saved once, under its question.
 - AI Chat says under its title why it could not read the AI model, such as no model set up yet, where it showed only "Start a new chat": at once, in two lines at most with the whole reason on hover.

@@ -18,7 +18,7 @@
 - 레플리카가 많으면 데이터베이스 연결 수가 `postgresql.maxConnections`(300) 안에 들어와야 하고, 아니면 업그레이드가 멈춥니다(#868).
 - 다른 역할과 같은 역할 그룹이 되는 이름의 사용자 정의 역할은 이름이 바뀌고 클러스터 부여를 잃으며, 바뀐 것마다 감사 행이 남습니다. `Pending` 그룹의 역할(`PENDING`)인 계정 등급은 기본 `Pending`으로 옮겨집니다(#865).
 - ASCII가 아닌 글자가 든 역할 이름은 자기 그룹을 받습니다(`운영팀`은 `kubeast:role:~c6b4~c601~d300`으로 동작하고, 0.7.7에서는 `kubeast:role:---`였습니다). 그래서 클러스터에서 옛 그룹에 바인딩한 RBAC는 그 역할에 더는 적용되지 않습니다(#865).
-- 서비스 말고도 차트의 PostgreSQL과 Redis가 한 번 다시 시작하고, 캐시는 비어서 시작합니다(#866, #868). 데이터베이스가 멈춘 때부터 20초쯤은 옛 파드로 가는 요청이 기다릴 수 있고 몇 개는 실패할 수 있습니다. 0.7.7 파드가 바뀌는 동안에도 요청 몇 개는 실패할 수 있습니다. 0.7.7 파드는 기다리지 않고 멈추고, 0.7.8부터는 파드가 멈추기 전에 기다립니다(#856).
+- 서비스 말고도 차트의 PostgreSQL과 Redis가 한 번 다시 시작하고, 캐시는 비어서 시작합니다(#866, #868). 데이터베이스가 멈춘 때부터 20초쯤은 옛 파드로 가는 요청이 기다릴 수 있고 몇 개는 실패하고, 쓰던 사람은 다시 로그인해야 할 수 있습니다(로그인한 요청이 이 릴리스의 kind 리허설에서는 1~2초, #953 전 빌드의 EKS에서는 18초쯤 401을 받았습니다). 0.7.7 파드가 바뀌는 동안에도 요청 몇 개는 실패할 수 있습니다. 0.7.7 파드는 기다리지 않고 멈추고, 0.7.8부터는 파드가 멈추기 전에 기다립니다(#856). 사용자가 적은 때 업그레이드합니다([2](#2-업그레이드)).
 - 기본 AI 모델은 `gpt-4o-mini` 대신 `gpt-6-luna`입니다. 저장된 모델 설정은 처음 시작할 때 만든 `default-openai` 설정까지 자기 모델을 그대로 씁니다([1.9](#19-기본-ai-모델), #924).
 - 먼저 데이터베이스를 백업합니다. 되돌려도 역할 이름 바꾸기는 되돌아가지 않습니다.
 
@@ -63,6 +63,8 @@ kubectl version    # Server Version: v1.30 이상
 ```
 
 Service 뒤에 있는 차트 파드는(번들 PostgreSQL과 Redis는 빼고) 이제 SIGTERM 전에 `preStop`에서 `podShutdown.preStopSeconds`(5초)를 기다리며, 이때 쿠버네티스 내장 `sleep` 동작(1.30에서 베타·기본 켜짐, 1.34에서 GA)을 씁니다. 더 낮은 클러스터에서는 `podShutdown.preStopSeconds: 0`으로 둡니다(#856).
+Helm의 확인은 이것을 잡지 않습니다. API 서버가 preStop 기다림이 있는 Deployment마다 `spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`로 거절합니다.
+[1.2](#12-드라이런으로-미리-해-보기)의 `kubectl apply` 드라이런이 업그레이드 전에 이것을 보여 줍니다. Kubernetes 1.29.14(kind, `PodLifecycleSleepAction` 기능 게이트 꺼짐)에서 preStop 기다림이 있는 Deployment 7개가 거절되었고, `podShutdown.preStopSeconds: 0`으로 두면 모든 객체를 받았습니다.
 
 ### 1.4 노드 드레인
 
@@ -196,7 +198,8 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 ```
 
 - 마이그레이션은 auth-service가 시작할 때 적용하고, `migrations.mode: job`이면 마이그레이션 Job이 적용합니다. Job은 시도마다 파드를 따로 쓰고 10분에 끝납니다(#829, #834).
-- 0.7.7이 띄운 파드는 0.7.7 방식으로 멈춥니다. `preStop` 기다림, 터미널이 닫히기 전에 받는 안내, 돌던 알림 조사를 대기열에 되돌리는 일은 0.7.8이 띄운 파드부터 적용됩니다(#856, #901). 업그레이드 동안 열려 있던 터미널과 따라가던 로그는 끝나므로 한가한 때를 고릅니다.
+- 0.7.7이 띄운 파드는 0.7.7 방식으로 멈춥니다. `preStop` 기다림, 터미널이 닫히기 전에 받는 안내, 돌던 알림 조사를 대기열에 되돌리는 일은 0.7.8이 띄운 파드부터 적용됩니다(#856, #901). 업그레이드 동안 열려 있던 터미널과 따라가던 로그는 끝납니다.
+- 이번 업그레이드 동안 잠깐 요청이 실패할 수 있으므로 Kubeast를 쓰는 사람이 적은 때 업그레이드합니다. 0.7.7에서 올릴 때 한 번만 일어납니다. 0.7.7 파드는 `preStop` 기다림 없이 멈추고, 차트의 PostgreSQL은 한 번 다시 시작하고, Redis는 바뀝니다(#856, #866, #868). t3.medium 노드 3대의 EKS 1.35 클러스터에서 게이트웨이 파드 하나를 파드 IP로 보내는 AWS Application Load Balancer 뒤에 두었을 때, 0.7.7 게이트웨이 파드가 멈추는 동안 로드 밸런서를 거친 요청이 6초쯤 502를 받았고, EBS 볼륨의 PostgreSQL은 멈춘 뒤 16초에 다시 떴습니다. PostgreSQL이 다시 시작하는 동안 아직 바뀌지 않은 0.7.7 파드는 토큰 버전을 읽지 못해 401로 답하고, 화면은 로그인 화면으로 가므로 그때 Kubeast를 쓰던 사람은 다시 로그인해야 할 수 있습니다. 그 클러스터에서 #953 전의 0.7.8 빌드로는 로그인한 요청이 18초쯤 401을 받았습니다. 이 릴리스로 kind에서 리허설했을 때는 0.7.7 auth-service만 준비돼 있던 초에만 401을 받았습니다. 기본 설치에서 2초, 기존 Secret을 쓰는 설치에서 1초였습니다. Redis가 바뀌는 동안 시작한 0.7.8 k8s-service 파드는 시작할 때 Redis에 거절될 수 있습니다(로그에 `redis not available`). 그때는 캐시를 메모리에 두었다가 Redis가 답하면 Redis로 옮깁니다(`redis answered`). 0.7.8부터는 Service 뒤의 파드가 멈추기 전에 5초를 기다립니다([4](#4-저절로-바뀌는-것)). 같은 로드 밸런서 뒤에서 차트와 로드 밸런서의 기본값 그대로 0.7.8 게이트웨이를 파드 하나로 세 번, 파드 둘로 세 번 다시 띄웠을 때 로드 밸런서를 거친 요청 중 실패한 것은 없었습니다.
 - 새 기능(`autoscaling`, `streams.enabled`)은 이번 업그레이드가 자리 잡은 뒤 다음 업그레이드에서 켭니다. 서비스마다 두 번째 파드 전에 필요한 것은 [여러 대로 띄우기](high-availability.md)에 있습니다(#867).
 
 ## 3. 바꿔야 하는 값
@@ -206,8 +209,8 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 | 언제 | 0.7.7 | 0.7.8 | PR |
 | --- | --- | --- | --- |
 | 값에 `pdb.minAvailable`이 있을 때 | `pdb.minAvailable: 1` | 멈춤. `pdb.minAvailable`을 뺍니다. 한 서비스의 파드를 노드 드레인이 한 번에 몇 개 내보낼지는 `pdb.maxUnavailable`(1)이 정합니다 | #901, #908 |
-| Kubernetes 1.30 미만 | — | `podShutdown.preStopSeconds: 0` | #856 |
-| 파드 IP로 보내는 로드 밸런서 뒤 | — | `podShutdown.preStopSeconds`: 해제 지연(deregistration delay)에 몇 초를 더한 값 | #856 |
+| Kubernetes 1.30 미만([1.3](#13-kubernetes-버전)) | — | `podShutdown.preStopSeconds: 0` | #856 |
+| 파드 IP로 보내는 로드 밸런서 뒤 | — | `podShutdown.preStopSeconds`는 로드 밸런서가 떠나는 파드에 새 요청을 그만 보낼 때까지보다 길게 둡니다. AWS Application Load Balancer 뒤에서는 기본 5초로 충분했습니다(EKS 1.35, AWS Load Balancer Controller v3.6.2) | #856 |
 | 차트의 PostgreSQL에 레플리카가 많을 때([1.6](#16-데이터베이스-연결)) | PostgreSQL의 `max_connections` 100 | `postgresql.maxConnections`(300)를 넘으면 멈춤. 올리거나 `postgresql.pool.<service>.maxConns`를 줄입니다 | #868 |
 | 바깥 데이터베이스 | — | `max_connections`를 설치 안내가 출력한 합계보다 크게 | #868 |
 | RDS Proxy 뒤 | — | `postgresql.sessionLimits.*: 0`, 한도는 프록시나 역할에 | #868 |
@@ -238,7 +241,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 
 **파드와 롤아웃**
 
-- Service 뒤의 파드는 SIGTERM 전에 `podShutdown.preStopSeconds`를 기다립니다. 번들 PostgreSQL과 Redis는 예외로, preStop 기다림이 없고 Kubernetes 기본 종료 유예(30초)를 씁니다. 나머지 파드의 종료 유예는 그 기다림, SIGTERM 뒤 서비스가 기다리는 시간, 5초를 더한 것이고 기본값으로는 35초입니다. k8s-service는 열린 터미널이 끝나도록 `streams.drainSeconds`(60)와 닫을 시간 5초를 더 주므로, 기본값으로 종료 유예가 100초입니다(#856, #824, #825).
+- Service 뒤의 파드는 SIGTERM 전에 `podShutdown.preStopSeconds`를 기다립니다. 번들 PostgreSQL과 Redis는 예외로, preStop 기다림이 없고 Kubernetes 기본 종료 유예(30초)를 씁니다. 나머지 파드의 종료 유예는 그 기다림, SIGTERM 뒤 서비스가 기다리는 시간, 5초를 더한 것이고 기본값으로는 35초입니다. k8s-service는 열린 터미널이 끝나도록 `streams.drainSeconds`(60)와 닫을 시간 5초를 더 주므로, 기본값으로 종료 유예가 100초입니다(#856, #824, #825). 파드 IP로 보내는 로드 밸런서 뒤라면 이 기다림은 로드 밸런서가 그 파드에 새 요청을 그만 보낼 때까지 이어져야 합니다. EKS 1.35에서 파드 IP로 보내는 AWS Application Load Balancer(AWS Load Balancer Controller v3.6.2) 뒤에 두었을 때, 떠나는 게이트웨이 파드의 대상은 파드를 지운 뒤 1초 안에 draining이 되었고, 로드 밸런서의 기본 해제 지연(deregistration delay, 300초)과 준비 게이트 없이도 기본 5초로 충분했습니다([2](#2-업그레이드)).
 - liveness는 다른 것을 읽지 않는 `/livez`를 묻습니다. readiness는 `/readyz`를 묻고, 이것은 SIGTERM부터 503을 답하며 데이터베이스는 묻지 않습니다(#901).
 - 롤아웃은 새 파드를 하나 띄우고 그 파드가 준비된 뒤에만 옛 파드를 멈춥니다(`maxSurge: 1`, `maxUnavailable: 0`). 그래서 Deployment마다 파드 하나가 더 들어갈 자리가 필요합니다. PostgreSQL은 `Recreate`를 유지하고, Redis는 옛 파드를 먼저 내리기 시작한 뒤 새 파드를 만듭니다(`maxSurge: 0`). 옛 파드가 끝나는 몇 초 동안 둘이 같이 있을 수 있지만 데이터는 나누지 않습니다(emptyDir)(#901, #860).
 - `pdb.enabled`가 이제 `true`입니다. 파드가 둘 이상 남을 수 있는 Deployment(`replicas`, 또는 HPA를 켰을 때 `autoscaling.<service>.minReplicas`)는 `unhealthyPodEvictionPolicy: AlwaysAllow`인 PodDisruptionBudget을 받고, 파드 하나인 Deployment는 받지 않습니다(#901).
@@ -260,6 +263,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 **로그인, 역할, AI**
 
 - 로그아웃하면 서버에서 그 로그인이 끝납니다. 그 토큰은 거부되고 갱신할 수 없습니다(#849).
+- 데이터베이스가 다시 시작하는 동안처럼 세션을 읽을 수 없는 토큰은 401 대신 503으로 거절됩니다. 콘솔은 401을 로그아웃으로 읽었지만, 이제 화면은 그대로 있고 다시 묻습니다. auth-service, k8s-service, session-service, ai-service는 `Retry-After`를 함께 보냅니다. auth-service는 곧바로 거절하고, 다른 서비스는 최근 5분 안에 읽은 버전을 먼저 씁니다. API 키의 토큰으로 API를 부르는 스크립트는 0.7.7이 401로 답하던 곳에서 이 503을 받고, 키 교환(`POST /auth/token`)은 키나 그 주인을 읽을 수 없으면 0.7.7의 500이나 401 대신 503으로 답합니다. 키가 거절된 것으로 보지 말고 `Retry-After` 뒤에 다시 보내세요. 지난 버전, 로그아웃한 로그인, 사라진 사용자나 API 키는 그대로 401이고, ai-service의 MCP 끝점은 세션을 읽을 수 없는 동안에도 그대로 401로 답합니다. 세션을 5분 동안 확인하지 못한 실시간 목록이나 터미널은 4401 대신 1013으로 닫힙니다(이유는 둘 다 `session_unverified`). 목록은 다시 붙고 터미널은 Reconnect를 보여 줍니다. 이 503은 `KubeastHighErrorRate` 알림에 셉니다([메트릭](metrics.md))(#953).
 - 기본 역할은 정확한 이름(`Pending`, `Member`, `Read`, `Write`, `Admin`)으로만 알아보고, `Pending` 계정 등급도 서비스의 미들웨어, API 키 교환, ai-service, Admin Users 어디서나 정확한 이름으로만 알아봅니다. 다른 역할과 같은 그룹이 되는 역할의 부여, 승인, OIDC 그룹 동기화는 거부됩니다(400 `role_same_group`). 업그레이드 뒤에는 그런 역할이 저장되어 있지 않으므로 이것은 두 번째 확인입니다(#865).
 - 역할의 그룹은 ASCII를 전과 같이 두고, 그 밖의 글자는 `~`와 코드 포인트 16진수 네 자리로 적습니다(U+FFFF 위는 `~~`와 여섯 자리). `운영팀`은 `kubeast:role:~c6b4~c601~d300`, `개발팀`은 `kubeast:role:~ac1c~bc1c~d300`입니다. 두 이름은 `A`–`Z` 대소문자·공백·ASCII 기호만 다를 때만 같은 그룹이 됩니다(`Ops 팀`, `OPS-팀`). 역할 창이 이름이 만드는 그룹을 보여 줍니다(#865).
 - 차트는 `auth.impersonation.customRoles`의 그룹 대신 이름을 auth-service에 넘기고(`IMPERSONATION_CUSTOM_ROLES`, 이름 안의 쉼표는 `-`), auth-service가 그룹을 직접 만듭니다. 값은 바꾸지 않아도 됩니다(#865).
@@ -271,7 +275,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 
 **그 밖**
 
-- 클러스터 요청은 로그인한 사람으로 보내거나 아예 보내지 않습니다. 화면이 여는 서버 버전 · API discovery 읽기(Cluster config의 API 그룹, Cluster Hygiene, 개요의 버전)는 이제 대상 클러스터의 감사 로그에 그 사람 이름으로 남습니다. 기본 RBAC(`system:discovery`)에서는 누구나 같은 답을 받으므로 화면은 바뀌지 않습니다. 문맥에 사람이 없는 요청은 Kubeast 자신의 요청(클러스터마다 두는 서버 버전과 discovery, 상태 확인)이 아니면 보내지 않고, 500으로 답하며 k8s-service가 `cluster request with no person refused`를 로그에 남깁니다. 클러스터 감사 로그에 Kubeast 이름으로 남는 요청은 [클러스터 요구 사항](cluster-requirements.md) §1에 있습니다(#926).
+- 클러스터 요청은 로그인한 사람으로 보내거나 아예 보내지 않습니다. 화면이 여는 서버 버전 · API discovery 읽기(Cluster config의 API 그룹, Cluster Hygiene, 개요의 버전)는 이제 대상 클러스터의 감사 로그에 그 사람 이름으로 남습니다. 기본 RBAC(`system:discovery`)에서는 누구나 같은 답을 받으므로 화면은 바뀌지 않습니다. 문맥에 사람이 없는 요청은 Kubeast 자신의 요청(클러스터마다 두는 서버 버전과 discovery, 상태 확인)이면서 `/version`, `/api`, `/apis`, `/api/v1`, `/apis/<group>/<version>`의 `GET`인 것(#945)이 아니면 보내지 않고, 500으로 답하며 k8s-service가 `cluster request with no person refused`를 로그에 남깁니다. 클러스터 감사 로그에 Kubeast 이름으로 남는 요청은 [클러스터 요구 사항](cluster-requirements.md) §1에 있습니다(#926).
 - 클러스터 차단기: `multicluster.breakerConsecutiveFails: 0`이면 차단기를 끕니다. 0.7.7은 이때 실패 하나에 차단기를 열었습니다. 열린 차단기는 `multicluster.breakerOpenSec`(30초)이 지나면 요청 하나를 클러스터로 보내 봅니다. 0.7.7은 이 값을 읽지 않았습니다. 실패는 이제 호출이 API 서버에 닿지 못한 요청(거부됨, 이름을 찾지 못함, TLS 핸드셰이크가 끝나지 않음, 응답 없이 끊긴 연결)입니다. 집계 API의 503, API 서버 자체의 시간 초과, 요청을 보낸 뒤 지난 화면의 기한, 호출 전에 난 Kubeast 자신의 오류로는 더 이상 열리지 않습니다(#930, #932). 클러스터마다 도는 건강 점검 요청은 사람들의 요청 뒤에서 기다리지 않습니다. API 서버가 버전 없이 500 아래로 답한 점검(401, 프록시의 404)은 차단기를 닫고, 클러스터는 그대로 `disconnected`로 보입니다. 자격 증명 플러그인이 실패하면 0.7.7처럼 여전히 차단기가 열립니다(#936).
 - k8s-service가 Go 메모리 한도에 맞서 쥔 메모리(살아 있는 힙, 고루틴 스택, 런타임 자체 몫)가 그 한도의 80 %를 넘는 동안 새 실시간 목록은 화면에 안내를 띄우고 기다립니다. 이미 열린 목록은 그대로 돕니다. 있는 객체를 모두 받으며 여는 목록은 시작 전부터 그 객체가 다 지나갈 때까지 서버 전체 8개(`multicluster.wsWatchOpeningConcurrency`)인 자리 하나를 쥡니다. 한 클러스터는 API 서버가 답하기 전까지 하나씩, 답할수록 더 많이, 다른 클러스터가 기다리는 동안 절반까지 잡습니다. 그래서 재시작 뒤에는 몇 개씩 차례로 돌아오고, 답하지 않는 클러스터가 다른 클러스터를 기다리게 하지 않습니다. 자리를 10초 넘게 기다린 목록은 메모리 안내와 따로, 곧 시작한다고 화면에 알립니다. 목록 하나의 HTTP/2 창은 1 MiB입니다(`multicluster.wsWatchStreamWindowKiB`). 이런 목록은 watch list(`sendInitialEvents`)로 묻고, 이를 거절하는 API 서버(기본값으로 1.33, 1.27~1.31)의 클러스터는 예전 watch로 엽니다. 메모리 안내가 자주 보이면 `resources.k8sService.limits.memory`를 올립니다(#896, #931).
 - 감사 앵커의 S3 다이제스트 객체 키 끝에 해시의 앞 16진수 8자리가 붙습니다(`…-<from>-<to>-<hash8>.json`). 다이제스트를 이름으로 읽는 스크립트는 새 꼴도 받게 고칩니다(#852).
