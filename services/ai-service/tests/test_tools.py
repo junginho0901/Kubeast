@@ -164,9 +164,17 @@ def test_hygiene_history_says_it_tells_the_interval():
 def test_timeline_takes_time_arguments_tool_server_knows():
     """tool-server's argument rules are by name across every tool: since and from/to already mean something else there."""
     properties = _tool("timeline")["parameters"]["properties"]
-    assert set(properties) == {"namespace", "since_time", "until_time", "event_type", "kind", "name", "limit"}
+    assert set(properties) == {"view", "namespace", "since_time", "until_time", "event_type", "kind", "name", "limit"}
     assert properties["event_type"]["enum"] == ["Normal", "Warning"]
+    assert properties["view"]["enum"] == ["events", "changes"]
     assert _tool("gpu")["parameters"]["properties"] == {}
+
+
+def test_timeline_changes_view_says_it_reads_no_value():
+    """The changes view names keys and field managers; a model told so does not ask it for a ConfigMap's or env's value."""
+    description = _tool("timeline")["description"]
+    for words in ('view "changes"', "never a value", "metadata only", "summary.not_read", "only its last write"):
+        assert words in description, words
 
 
 def test_all_tools_are_function_type():

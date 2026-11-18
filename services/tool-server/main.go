@@ -421,7 +421,7 @@ func buildToolRegistry() map[string]ToolDefinition {
 	})
 	register(ToolDefinition{
 		Name:        "timeline",
-		Description: "The Timeline screen's change history: events and rollout revisions of a namespace, one object or every namespace in a time window",
+		Description: "The Timeline screen's change history: events and rollout revisions of a namespace, one object or every namespace in a time window; view changes lists what changed in it",
 		Handler:     handleTimeline,
 	})
 	register(ToolDefinition{

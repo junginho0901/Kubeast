@@ -2,11 +2,14 @@
 #
 # ai_service.py 의 `_get_system_message` 에서 추출. 단순 문자열 상수라 외부 의존
 # 없음 (self / instance 의존 X). 호출처에서 SYSTEM_MESSAGE 를 직접 import 해서
-# 사용하거나 system_prompt_override 로 덮어쓸 수 있다.
+# 사용하거나 system_prompt_override 로 덮어쓸 수 있다. 채팅은 system_message() 로
+# 받는다 (timeline 의 changes 보기 스위치, AI_TIMELINE_CHANGES).
 #
 # 변경 시 주의: AI 응답의 형식·언어·도구 호출 정책이 모두 이 프롬프트에 의존.
 # 키워드 ("Kubeast", "도구 호출", "Critical Rules" 등) 가 사라지면 행동이
 # 바뀐다 — tests/test_prompts.py 의 회귀 테스트로 보호.
+
+from app.services.ai.tools import timeline_changes_on
 
 SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 
@@ -326,3 +329,32 @@ Your thought process:
 
 Remember: You're not just answering questions - you're **solving production problems** and **teaching best practices**.
 """
+
+
+def _line(prefix: str) -> str:
+    """The one line of SYSTEM_MESSAGE that starts with prefix."""
+    (line,) = [line for line in SYSTEM_MESSAGE.split("\n") if line.startswith(prefix)]
+    return line
+
+
+# timeline's changes view in the prompt only while the model is offered it (AI_TIMELINE_CHANGES, chart
+# ai.timelineChanges, off by default): a line of SYSTEM_MESSAGE → what it reads with the view.
+_TIMELINE_GUIDE = _line("- `timeline`: ")
+_TIME_RULE = _line("- **시각으로 이으세요**")
+_TIMELINE_SIGNATURE = _line("- `timeline(")
+TIMELINE_CHANGES_LINES = {
+    _TIMELINE_GUIDE: _TIMELINE_GUIDE + '. `view: "changes"`는 기간 동안 바뀐 것만 시간순으로(롤아웃의 이미지·바뀐 필드·env 키, ConfigMap·Secret 마지막 쓰기, '
+    'Helm 리비전, HPA 크기, 노드 상태, Argo CD 동기화, 재시작 — 값은 읽지 않음)',
+    _TIME_RULE: _TIME_RULE + '\n- **고장 원인을 물으면 바뀐 것부터 보세요**: "왜 깨졌나·왜 안 되나"면 먼저 `timeline`을 `view: "changes"`로(증상이 시작된 시각 앞 '
+    '몇 시간을 `since_time`·`until_time`으로) 불러 그동안 바뀐 것을 보세요. 바뀐 것이 있어도 증상과 시각·대상이 맞지 않으면 원인으로 대지 마세요.',
+    _TIMELINE_SIGNATURE: "- `timeline(view, namespace, since_time, until_time, event_type, kind, name, limit)` - Change history: events and rollout revisions in "
+    "a window; the counts are in summary, the list holds the newest; view=\"changes\" lists what changed in the window instead (rollouts compared with the "
+    "revision before, ConfigMap/Secret writes, Helm revisions, HPA scales, node conditions, Argo CD syncs, restarts), never a value",
+}
+
+
+def system_message() -> str:
+    """The chat's system prompt: SYSTEM_MESSAGE, with timeline's changes view when the model is offered it."""
+    if not timeline_changes_on():
+        return SYSTEM_MESSAGE
+    return "\n".join(TIMELINE_CHANGES_LINES.get(line, line) for line in SYSTEM_MESSAGE.split("\n"))
