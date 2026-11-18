@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
+import type { QueryClient, QueryKey } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 
 import { failureText } from '@/utils/failureText'
@@ -20,6 +21,31 @@ export async function readFailure(read: () => Promise<unknown>, now: () => Date 
     return null
   } catch (e) {
     return { reason: failureText(e), at: now().toISOString() }
+  }
+}
+
+// A list's Refresh: one read past the server's cache of the list, made as the list's own read. The list keeps its place
+// in the cache, so its screen has nothing left to read after it (a list taken out and written back is a new one, which
+// the screen reads again), and the frames of its watch that come while the read is on its way are applied again to the
+// answer (followList). A read of the list already on its way gives way to it; a failed one is not tried again. A read
+// asked for while it is on its way (a RESYNC, an invalidate after a delete) takes its place and answers for it with the
+// page's own read, from the server's cache: then it reads past the cache once more.
+export async function refreshList<T>(queryClient: QueryClient, queryKey: QueryKey, read: () => Promise<T>): Promise<T> {
+  for (let again = false; ; again = true) {
+    await queryClient.cancelQueries({ queryKey, exact: true })
+    const own: { came: boolean; answer?: T } = { came: false }
+    const answer = await queryClient.fetchQuery({
+      queryKey,
+      queryFn: async () => {
+        const got = await read()
+        own.came = true
+        own.answer = got
+        return got
+      },
+      staleTime: 0,
+      retry: false,
+    })
+    if (again || (own.came && own.answer === answer)) return answer
   }
 }
 
