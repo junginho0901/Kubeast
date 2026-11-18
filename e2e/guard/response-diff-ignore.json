@@ -37,6 +37,13 @@
       "pr": "#783"
     },
     {
+      "route": "^live /apis/coordination\\.k8s\\.io/v1/leases$",
+      "cell": "^\\$\\.items\\[/[^\\]#]+#[0-9]+\\]\\.",
+      "tailCopies": true,
+      "why": "A lease's holder renews it on a timer: kube-apiserver its identity lease and the kubelet its node's lease every 10 seconds, Kyverno its kyverno-health lease, and leader election (kube-scheduler, kube-controller-manager, Kyverno's controllers) every 2 seconds. A build's first live frame stays open up to 15 seconds, so how many renewals fall inside it is timing, and one build's frames can hold a lease's events past the other build's last. Only those events are taken, whole, and only while all three frames hold the lease's first event; an event both builds' frames hold is still compared cell by cell, and so is a lease one frame lacks.",
+      "pr": "#946"
+    },
+    {
       "route": "^/api/v1/cluster/metrics/top-resources$",
       "cell": "^\\$\\.(pod|node)_metrics_(error|refused)$",
       "user": "^nsread$",
@@ -89,6 +96,13 @@
       "route": "^/api/v1/cluster/nodes/[^/]+/describe$",
       "cell": "^\\$\\.uid$",
       "why": "A Node's describe answer carries its UID, which the Node drawer keeps followed events to beside the node's name; v0.7.7 did not send it.",
+      "pr": "#815"
+    },
+    {
+      "route": "^/api/v1/cluster/nodes/[^/]+/events$",
+      "cell": "^\\$(\\.\\$length$|\\[[0-9]+\\]\\.)",
+      "rowsLeftOut": true,
+      "why": "A Node's events are those naming its UID or its name, which the kubelet writes in place of the UID, as kubectl describe node lists them; v0.7.7 listed every event about the node by kind and name, those naming no UID too (after a node restart, the kubelet's Starting and NodeHas… events among them). The rows carry no UID, so the rule takes an answer only when it is the old one with rows left out: each row the new build lists is a row of both old answers, unchanged, in the same order.",
       "pr": "#815"
     },
     {

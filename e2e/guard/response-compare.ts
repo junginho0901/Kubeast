@@ -91,12 +91,59 @@ export function sortCells(old1: Answer, fresh: Answer, old2: Answer): Sorted {
   return { cells: all.size, real, noise }
 }
 
+// The new answer is a list each old answer holds with some rows left out: every row the new build answered is a row of
+// both old answers, all its cells the same, in the same order.
+export function rowsLeftOut(old1: Answer, fresh: Answer, old2: Answer): boolean {
+  const rows = (a: Answer) => (Array.isArray(a.body) ? a.body.map((r) => JSON.stringify([...flatten(r)].sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)))) : null)
+  const kept = rows(fresh)
+  const within = (old: string[] | null) => {
+    if (!old || !kept) return false
+    let i = 0
+    for (const row of old) if (i < kept.length && row === kept[i]) i++
+    return i === kept.length
+  }
+  return within(rows(old1)) && within(rows(old2))
+}
+
+// Each named row's path in an answer, and for a later row of a name (`[name#2]`, `[name#3]` …) the path of its first.
+function rowPaths(value: unknown, path = '$', out = new Map<string, string | null>()): Map<string, string | null> {
+  if (Array.isArray(value)) {
+    const names = rowNames(value)
+    value.forEach((v, i) => {
+      const at = names ? `${path}[${names[i]}]` : `${path}[${i}]`
+      if (names) {
+        const own = v && typeof v === 'object' && !Array.isArray(v) ? nameOf(v as Record<string, unknown>) : String(v)
+        out.set(at, own !== null && own !== names[i] ? `${path}[${own}]` : null)
+      }
+      rowPaths(v, at, out)
+    })
+  } else if (value && typeof value === 'object') {
+    for (const [k, v] of Object.entries(value)) rowPaths(v, `${path}.${k}`, out)
+  }
+  return out
+}
+
+// The cells of a name's later rows that one side holds past the other's last: both old answers hold the row and the
+// new one does not, or the new one holds it and neither old one does, while all three hold the name's first row.
+export function tailCopies(old1: Answer, fresh: Answer, old2: Answer): (cell: string) => boolean {
+  const [a, n, b] = [old1, fresh, old2].map((x) => rowPaths(x.body))
+  const tails: string[] = []
+  for (const [row, first] of new Map([...a, ...n, ...b])) {
+    if (!first || !(a.has(first) && b.has(first) && n.has(first))) continue
+    if ((a.has(row) && b.has(row) && !n.has(row)) || (!a.has(row) && !b.has(row) && n.has(row))) tails.push(row)
+  }
+  return (cell) => tails.some((row) => cell.startsWith(`${row}.`))
+}
+
 // A known difference: which requests (route), which cells, optionally whose answers (user) and on which cluster
 // (cluster), why, and the PR that made it. A rule with no reason or PR is refused; the file's changes show in the diff of
 // whichever PR adds to it. A rule whose cells take in `$status` names the status the new build answers (newStatus), so a
-// server error is never a known difference.
-export type IgnoreRule = { route: string; cell: string; user?: string; cluster?: string; newStatus?: string; why: string; pr: string }
-export function compileRules(rules: IgnoreRule[]): ((route: string, cell: string, user?: string, newStatus?: string, cluster?: string) => IgnoreRule | null) {
+// server error is never a known difference. A rule with rowsLeftOut takes its cells only from an answer rowsLeftOut holds,
+// and one with tailCopies only the cells tailCopies names.
+export type IgnoreRule = {
+  route: string; cell: string; user?: string; cluster?: string; newStatus?: string; rowsLeftOut?: boolean; tailCopies?: boolean; why: string; pr: string
+}
+export function compileRules(rules: IgnoreRule[]): ((route: string, cell: string, user?: string, newStatus?: string, cluster?: string, leftOut?: boolean, tailCopy?: boolean) => IgnoreRule | null) {
   const compiled = rules.map((r) => {
     if (!r.why?.trim() || !r.pr?.trim()) throw new Error(`an ignore rule needs a reason and a PR: ${JSON.stringify(r)}`)
     const cell = new RegExp(r.cell)
@@ -104,8 +151,9 @@ export function compileRules(rules: IgnoreRule[]): ((route: string, cell: string
     const pattern = (p?: string) => (p ? new RegExp(p) : null)
     return { rule: r, route: new RegExp(r.route), cell, user: pattern(r.user), cluster: pattern(r.cluster), newStatus: pattern(r.newStatus) }
   })
-  return (route, cell, user = '', newStatus = '', cluster = '') => compiled.find((c) => c.route.test(route) && c.cell.test(cell)
-    && (!c.user || c.user.test(user)) && (!c.cluster || c.cluster.test(cluster)) && (!c.newStatus || c.newStatus.test(newStatus)))?.rule ?? null
+  return (route, cell, user = '', newStatus = '', cluster = '', leftOut = false, tailCopy = false) => compiled.find((c) => c.route.test(route)
+    && c.cell.test(cell) && (!c.user || c.user.test(user)) && (!c.cluster || c.cluster.test(cluster)) && (!c.newStatus || c.newStatus.test(newStatus))
+    && (!c.rule.rowsLeftOut || leftOut) && (!c.rule.tailCopies || tailCopy))?.rule ?? null
 }
 
 // The cluster a request asked: a GET's `cluster` parameter, a live request's cluster id ("live <cluster> <path>?<query>").

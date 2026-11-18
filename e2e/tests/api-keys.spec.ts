@@ -37,7 +37,7 @@ async function createUser(request: APIRequestContext, admin: string, email: stri
     data: { name: 'E2E api key', email, password: PW, role_id: await roleId(request, admin, 'Member') },
   })
   expect(res.status(), `create ${email}: ${await res.text()}`).toBe(201)
-  return (await res.json()).id
+  return madeUser((await res.json()).id, bearer(admin))
 }
 
 async function deleteUser(request: APIRequestContext, admin: string, userId: string): Promise<void> {
@@ -294,7 +294,7 @@ test.describe('API keys', () => {
       const auditorEmail = `e2e-apikey-a-${run}@example.com`
       const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E api key', email: auditorEmail, password: PW, role_id: auditorId } })
       expect(created.status(), `create: ${await created.text()}`).toBe(201)
-      const auditorUserId = (await created.json()).id as string
+      const auditorUserId = madeUser((await created.json()).id as string, bearer(admin))
       userIds.push(auditorUserId)
       await grantOn(auditorUserId, 'Admin')
       const auditorKey = await adminCeilingKey(await login(request, auditorEmail, PW))
@@ -344,4 +344,15 @@ test.describe('API keys', () => {
     const left = await (await request.get('/api/v1/auth/api-keys', { headers: bearer(admin) })).json()
     expect(left.map((k: any) => k.name)).not.toContain(name)
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

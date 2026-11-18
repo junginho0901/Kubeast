@@ -160,7 +160,7 @@ auth:
     # whose answer depends on the user name (ahead of RBAC or after it, a refusal or a pass for
     # named people) or that limits the user names Kubeast may act as, and never bind the name
     # (docs/cluster-requirements.md §1 has the checks).
-    # Stage: alpha, the whole e2e with it on has not run yet (docs/configuration.md "Stages of new values").
+    # Stage: alpha, tested: the whole e2e and 100 people at once with it on (docs/configuration.md "Stages of new values").
     sharedReadChecks:
       enabled: false
       excludeClusters: []
@@ -585,7 +585,7 @@ postgresql:
   # PgBouncer use session pooling only: transaction pooling hands a server connection to other clients between
   # transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's) does not stay with
   # the client that made it.
-  # sessionLimits, pool and maxConnections: stage alpha, a long database outage has not been tested with them yet
+  # sessionLimits, pool and maxConnections: stage beta, a long database outage has not been tested with them yet
   # (docs/configuration.md "Stages of new values").
   sessionLimits:
     statementTimeoutMs: 30000
@@ -601,8 +601,9 @@ postgresql:
     modelConfigController: { maxConns: 4 }
   # max_connections of the chart's PostgreSQL (postgresql.enabled; PostgreSQL's own default is 100). 300 holds the
   # default pools with 3 pods of each service: one more pod each while a rollout surges, so 4 × (20 + 20 + 10 + 15)
-  # = 260, the controller's 2 × 4 = 8, the migration pool's 4 and 10 kept for psql and PostgreSQL's 3 superuser
-  # slots: 282.
+  # = 260, 4 × 1 for k8s-service's health status lock, the controller's 2 × 4 = 8, the migration pool's 4 and 10 kept
+  # for psql and PostgreSQL's 3 superuser slots: 286. streams.enabled adds (streams.replicas + 1) ×
+  # pool.k8sService.maxConns, 20 by default: 306 with 3 pods of each, so raise maxConnections then.
   maxConnections: 300
 
 # --- Pod security (Pod Security Standards "restricted") ---
@@ -664,7 +665,7 @@ streams:
 # A PodDisruptionBudget for each Deployment above with more than one replica, or with autoscaling on and minReplicas 2 or
 # more, allowing maxUnavailable of its pods to be evicted at once (unhealthy ones always); none where it can be down to one
 # pod, which would block node drains. enabled: false leaves them out.
-# Stage: alpha, node drains with them have not run yet on a real cluster (docs/configuration.md "Stages of new values").
+# Stage: beta, tested: a node drained and replaced on EKS, no request failing (docs/configuration.md "Stages of new values").
 pdb:
   enabled: true
   maxUnavailable: 1
@@ -676,7 +677,7 @@ pdb:
 # from a load test. maxReplicas above 1 for k8sService and toolServer needs
 # redis.enabled. behavior goes into the HPA as written ({} = Kubernetes' defaults,
 # which scale down after 300 s of lower use).
-# Stage: alpha, no HPA has been turned on in a test install yet (docs/configuration.md "Stages of new values").
+# Stage: alpha, tested: HPAs on EKS 2 → 3 → 2 pods, on and off, no request failing (docs/configuration.md "Stages of new values").
 autoscaling:
   authService: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
   aiService: { enabled: false, minReplicas: 2, maxReplicas: 3, targetCPUUtilizationPercentage: 80, behavior: {} }
@@ -688,8 +689,8 @@ autoscaling:
 # zone + hostname spread, soft (ScheduleAnyway)
 topologySpread:
   enabled: true
-# Seconds a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, its deregistration delay plus a few seconds.
-# Stage: alpha, not run yet on Kubernetes older than 1.30 (docs/configuration.md "Stages of new values").
+# Seconds a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, longer than it takes to stop sending new requests to a leaving pod (behind an AWS ALB the default 5 s was enough).
+# Stage: beta, tested: Kubernetes 1.29 refuses the preStop wait, set 0 there (docs/configuration.md "Stages of new values").
 podShutdown:
   preStopSeconds: 5
 
@@ -748,7 +749,7 @@ redis:
   # kept across upgrades in the Secret kubeast-redis-users
   # (REDIS_K8S_SERVICE_PASSWORD, REDIS_PROBE_PASSWORD, REDIS_TOOL_SERVER_PASSWORD).
   # false = one password (requirepass) as before.
-  # Stage: alpha, turning the users off has not run yet in a test install
+  # Stage: beta, turning the users off has not run yet in a test install
   # (docs/configuration.md "Stages of new values").
   acl:
     enabled: true
@@ -790,8 +791,8 @@ gateway:
   # times in seconds ($request_time $upstream_connect_time
   # $upstream_header_time $upstream_response_time), the service's address and
   # the client's port. false = nginx's default lines.
-  # Stage: alpha, the gateway's config with it on has not been checked with
-  # nginx -t yet (docs/configuration.md "Stages of new values").
+  # Stage: alpha, tested: 100 people at once on the kind dev install with it on
+  # (docs/configuration.md "Stages of new values").
   accessLog:
     upstreamTimes: false
 
@@ -1232,7 +1233,7 @@ gitops:
 # breakerConsecutiveFails=0 turns the breaker off; an open one lets one request try the cluster after breakerOpenSec.
 # It counts requests whose calls got no response from the API server (refused, a dropped connection, a deadline while
 # connecting); a response of any status, such as an aggregated API's 503, counts nothing.
-# breakerConsecutiveFails (0 = off from 0.7.8) and breakerOpenSec (read from 0.7.8): stage alpha, not checked yet by
+# breakerConsecutiveFails (0 = off from 0.7.8) and breakerOpenSec (read from 0.7.8): stage beta, not checked yet by
 # cutting a cluster off on the kind dev install (docs/configuration.md "Stages of new values").
 multicluster:
   maxClusters: 20
@@ -1266,13 +1267,13 @@ multicluster:
   # starts go unanswered. Each place is
   # about 5.5 MiB for a list of 1 000 nodes, so a raise takes k8s-service's
   # memory up with it.
-  # Stage: alpha, not in an upgrade rehearsal yet (docs/configuration.md "Stages of new values").
+  # Stage: beta, tested: upgrade rehearsals from 0.7.7 on kind and EKS (docs/configuration.md "Stages of new values").
   wsWatchOpeningConcurrency: 8
   # The HTTP/2 window of each live list's stream, in KiB: what a watch whose
   # browser reads slowly holds unread, and what a stream reads a round trip.
   # 1024 reads a 26 MB list in 1.4 s over a 50 ms round trip (Go's 4096: 0.7 s)
   # and 16 slow browsers' watches hold 18 MiB (4096: 65 MiB).
-  # Stage: alpha, not in an upgrade rehearsal yet (docs/configuration.md "Stages of new values").
+  # Stage: beta, tested: upgrade rehearsals from 0.7.7 on kind and EKS (docs/configuration.md "Stages of new values").
   wsWatchStreamWindowKiB: 1024
   # How many reads of more than one page (500 pods, ReplicaSets, ...) run at once
   # in one k8s-service; the rest wait, and a read of one page waits for none. One
