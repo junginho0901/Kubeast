@@ -52,6 +52,7 @@ describe('what Advanced Search shows', () => {
     }
     expect(searchShown(await searchedOver('status.phase =='), 'status.phase ==', empty)).toEqual({ state: 'unreadable', reason: 'Expected expression after == at character 15' })
     expect(searchShown(await searchedOver('!!data'), '!!data', empty)).toEqual({ state: 'unreadable', reason: 'Unexpected operator' })
+    expect(searchShown(await searchedOver('spec.x && !!data'), 'spec.x && !!data', empty)).toEqual({ state: 'unreadable', reason: 'Unexpected operator' })
     // an expression whose form is computed stays nothing: there is no object to search
     expect(searchShown(await searchedOver('data != null'), 'data != null', empty)).toEqual({ state: 'idle' })
     expect(searchShown(await searchedOver('spec.x > 1'), 'spec.x > 1', empty)).toEqual({ state: 'idle' })
