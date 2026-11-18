@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareResults, rememberPrinterStatus, toSearchResult } from './searchEngine'
+import { compareResults, rememberPrinterStatus, searchWithExpression, toSearchResult } from './searchEngine'
 
 const NOW = Date.now()
 const made = (name: string, agoMs?: number) =>
@@ -43,5 +43,35 @@ describe('the Status column', () => {
     expect(toSearchResult(pod()).status).toBe('Running')
     const deploy = { kind: 'Deployment', metadata: { name: 'web' }, status: { conditions: [{ type: 'Available', status: 'False' }] } }
     expect(toSearchResult(deploy).status).toBe('NotReady')
+  })
+})
+
+describe('an expression the engine cannot search', () => {
+  const search = (items: Record<string, unknown>[], query: string) => searchWithExpression(items, query, { current: false })
+  const pending = { kind: 'Pod', metadata: { name: 'starting' }, status: { phase: 'Pending' } }
+  const restarted = { kind: 'Pod', metadata: { name: 'restarted' }, status: { phase: 'Running', containerStatuses: [{ restartCount: 6 }] } }
+  const withData = { kind: 'ConfigMap', metadata: { name: 'conf' }, data: { k: 'v' } }
+
+  it("is unreadable with jsep's words when it cannot be parsed, not 0 results", async () => {
+    expect(await search([restarted], 'status.containerStatuses?.some(c => c.restartCount > 5)')).toEqual({
+      results: [], timeMs: 0, unreadable: 'Expected comma at character 33',
+    })
+    expect((await search([pending], 'status.phase ==')).unreadable).toBe('Expected expression after == at character 15')
+  })
+
+  it("is unreadable with simple-eval's words when it refuses the form, whatever the objects hold", async () => {
+    const twice = await search([withData, pending], '!!data')
+    expect(twice.results).toEqual([])
+    expect(twice.unreadable).toBe('Unexpected operator')
+    expect((await search([withData], 'a; b')).unreadable).toBe('Unexpected node')
+  })
+
+  it('leaves out an object whose data the expression cannot read, and searches the others', async () => {
+    const searched = await search([pending, restarted], 'status.containerStatuses[0].restartCount > 5')
+    expect(searched.unreadable).toBeUndefined()
+    expect(searched.results).toEqual([restarted])
+    const none = await search([pending], 'metadata.labels.app === "web"')
+    expect(none).toMatchObject({ results: [] })
+    expect(none.unreadable).toBeUndefined()
   })
 })

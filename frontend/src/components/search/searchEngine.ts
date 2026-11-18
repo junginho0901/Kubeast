@@ -21,24 +21,27 @@ function getTopLevelKeys(items: Record<string, unknown>[]): string[] {
   return Array.from(keys)
 }
 
-function tryParse(query: string): ReturnType<typeof jsep> | null {
+function tryParse(query: string): { tree: ReturnType<typeof jsep> } | { unreadable: string } {
   try {
-    return jsep(query)
-  } catch {
-    return null
+    return { tree: jsep(query) }
+  } catch (err) {
+    return { unreadable: err instanceof Error ? err.message : String(err) }
   }
 }
 
+// `unreadable`: why the expression cannot be searched — jsep could not parse it, or simple-eval refused its form with a
+// SyntaxError, which the form gives whatever an object holds. An error from an object's data (a field it lacks) only
+// leaves that object out.
 export async function searchWithExpression(
   items: Record<string, unknown>[],
   query: string,
   interruptRef: { current: boolean },
-): Promise<{ results: Record<string, unknown>[]; timeMs: number }> {
+): Promise<{ results: Record<string, unknown>[]; timeMs: number; unreadable?: string }> {
   const start = performance.now()
   if (!query.trim()) return { results: [], timeMs: 0 }
 
   const parsed = tryParse(query)
-  if (!parsed) return { results: [], timeMs: 0 }
+  if ('unreadable' in parsed) return { results: [], timeMs: 0, unreadable: parsed.unreadable }
 
   const dummyKeys: Record<string, undefined> = {}
   getTopLevelKeys(items).forEach(k => { dummyKeys[k] = undefined })
@@ -56,9 +59,11 @@ export async function searchWithExpression(
       annotations: meta.annotations ?? {},
     }
     try {
-      const res = evaluate(parsed as any, { ...dummyKeys, ...shortcuts, ...item })
+      const res = evaluate(parsed.tree as any, { ...dummyKeys, ...shortcuts, ...item })
       if (res === true) results.push(item)
-    } catch { /* expression doesn't match this item */ }
+    } catch (err) {
+      if (err instanceof SyntaxError) return { results: [], timeMs: performance.now() - start, unreadable: err.message }
+    }
 
     if ((i + 1) % batchSize === 0 || i === items.length - 1) {
       await new Promise(r => setTimeout(r, 0))

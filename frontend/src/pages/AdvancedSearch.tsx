@@ -171,9 +171,9 @@ export default function AdvancedSearch() {
   useEffect(() => {
     if (!deferredQuery.trim() || !fetchResult || fetchResult.items.length === 0) return
     const cancelToken = { current: false }
-    searchWithExpression(fetchResult.items, deferredQuery, cancelToken).then(({ results, timeMs }) => {
+    searchWithExpression(fetchResult.items, deferredQuery, cancelToken).then(({ results, timeMs, unreadable }) => {
       if (!cancelToken.current) {
-        setSearched({ query: deferredQuery, over: fetchResult, namespace: fetchResult.namespace, types: fetchResult.types, results: results.map(toSearchResult), timeMs })
+        setSearched({ query: deferredQuery, over: fetchResult, namespace: fetchResult.namespace, types: fetchResult.types, results: results.map(toSearchResult), timeMs, unreadable })
       }
     })
     return () => { cancelToken.current = true }
@@ -312,7 +312,7 @@ export default function AdvancedSearch() {
         onChange={setRawQuery}
         onClear={() => setRawQuery('')}
         isSearching={isSearching}
-        resultCount={deferredQuery.trim() ? shownResults.length : null}
+        resultCount={deferredQuery.trim() && shown.state !== 'unreadable' ? shownResults.length : null}
         totalCount={items.length}
         searchTimeMs={shown.state === 'done' ? shown.timeMs : null}
         items={jsonItems}
@@ -338,6 +338,14 @@ export default function AdvancedSearch() {
 
       {!isLoadingResources && showExamples && (
         <SearchExamples onSelect={handleExampleSelect} />
+      )}
+
+      {/* The expression could not be read: why, in place of a count */}
+      {!isLoadingResources && shown.state === 'unreadable' && (
+        <div className="flex flex-col items-center gap-2 py-12 text-amber-400" data-testid="search-unreadable">
+          <AlertTriangle className="w-8 h-8" />
+          <p className="text-sm">{t('advancedSearch.unreadable', 'The expression could not be read: {{reason}}', { reason: shown.reason })}</p>
+        </div>
       )}
 
       {/* No results message */}

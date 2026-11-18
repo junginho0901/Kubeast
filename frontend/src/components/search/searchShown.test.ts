@@ -29,6 +29,13 @@ describe('what Advanced Search shows', () => {
     expect(searchShown(searchedOf(RUNNING), RUNNING, readOf('payments'))).toEqual({ state: 'searching' })
   })
 
+  it('is why the expression could not be read, not 0 results, until another expression is searched', () => {
+    const unreadable = { ...searchedOf('!!data', shopRead, []), unreadable: 'Unexpected operator' }
+    expect(searchShown(unreadable, '!!data', shopRead)).toEqual({ state: 'unreadable', reason: 'Unexpected operator' })
+    expect(searchShown(unreadable, 'data != null', shopRead)).toEqual({ state: 'searching' })
+    expect(searchShown(unreadable, '!!data', readOf('payments'))).toEqual({ state: 'searching' })
+  })
+
   it('is nothing with an empty box or nothing read to search', () => {
     expect(searchShown(searchedOf(RUNNING), '  ', shopRead)).toEqual({ state: 'idle' })
     expect(searchShown(searchedOf(RUNNING), RUNNING, undefined)).toEqual({ state: 'idle' })
@@ -67,6 +74,20 @@ describe('what Advanced Search tells the floating chat', () => {
     expect(searchLayer(null, PENDING, now('shop', shopRead))?.data).toEqual({ query: PENDING, namespace: 'shop', selected_resource_types: ['pods'], searching: true })
   })
 
+  it('says why the expression in the box could not be read, with no count', () => {
+    const unreadable = { ...searchedOf('!!data', shopRead, []), unreadable: 'Unexpected operator' }
+    const layer = searchLayer(unreadable, '!!data', now('shop', shopRead))
+    expect(layer?.summary).toBe('고급 검색 — 쿼리: "!!data" 식을 읽지 못했습니다: Unexpected operator')
+    expect(layer?.data).toEqual({ query: '!!data', namespace: 'shop', selected_resource_types: ['pods'], expression_unreadable: 'Unexpected operator' })
+  })
+
+  it('tells no 0 for an expression that could not be read while another is searched', () => {
+    const unreadable = { ...searchedOf('!!data', shopRead, []), unreadable: 'Unexpected operator' }
+    expect(searchLayer(unreadable, 'data != null', now('shop', shopRead))?.data).toEqual({
+      query: 'data != null', namespace: 'shop', selected_resource_types: ['pods'], searching: true,
+    })
+  })
+
   it('says the types the read failed when every list failed, not a complete 0', () => {
     const failedRead = { items: [], errors: [{ type: 'pods', error: 'pods is forbidden' }, { type: 'services', error: 'etcdserver: request timed out' }], cut: [] }
     const layer = searchLayer(null, RUNNING, { namespace: '', types: ['pods', 'services'], read: failedRead })
@@ -92,5 +113,9 @@ describe('what Advanced Search tells the floating chat', () => {
     expect(pageSource).toContain('const shown = searchShown(deferredSearched, deferredQuery, fetchResult)')
     expect(pageSource).toContain("searchLayer(searched, rawQuery, { namespace, types: Array.from(selectedResources), read: fetchResult })")
     expect(pageSource).toContain('<SearchResultTable results={shownResults} />')
+    expect(pageSource).toContain("shown.state === 'unreadable' && (")
+    expect(pageSource).toContain("t('advancedSearch.unreadable', 'The expression could not be read: {{reason}}', { reason: shown.reason })")
+    expect(pageSource).toContain("resultCount={deferredQuery.trim() && shown.state !== 'unreadable' ? shownResults.length : null}")
+    expect(pageSource).toContain("shown.state === 'done' && shown.results.length === 0 && (")
   })
 })

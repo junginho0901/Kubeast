@@ -3,7 +3,7 @@ import type { SearchResult } from './searchEngine'
 import { searchReadGaps, searchReadGapsText, type SearchRead } from './searchReadGaps'
 
 // One finished search of Advanced Search: the expression it answers, the read of the objects it went over (which says the
-// namespace and resource types it listed) and what it found.
+// namespace and resource types it listed) and what it found, or why the expression could not be read (`unreadable`).
 export interface Searched {
   query: string
   over: unknown
@@ -11,25 +11,32 @@ export interface Searched {
   types: string[]
   results: SearchResult[]
   timeMs: number
+  unreadable?: string
 }
 
 export type Shown =
   | { state: 'idle' }
   | { state: 'searching' }
   | { state: 'done'; results: SearchResult[]; timeMs: number }
+  | { state: 'unreadable'; reason: string }
 
 // What the page shows for the expression in the box over the objects it has read: the results of a search of that
-// expression over that read, else that it is searching — the results of the expression before do not stand for it.
+// expression over that read (or why the expression could not be read), else that it is searching — the results of the
+// expression before do not stand for it.
 export function searchShown(searched: Searched | null, query: string, read: { items: unknown[] } | undefined): Shown {
   if (!query.trim() || !read || read.items.length === 0) return { state: 'idle' }
-  if (searched && searched.query === query && searched.over === read) return { state: 'done', results: searched.results, timeMs: searched.timeMs }
+  if (searched && searched.query === query && searched.over === read) {
+    if (searched.unreadable !== undefined) return { state: 'unreadable', reason: searched.unreadable }
+    return { state: 'done', results: searched.results, timeMs: searched.timeMs }
+  }
   return { state: 'searching' }
 }
 
 // What the floating chat is told: the results with the expression, namespace and resource types they answer, and, while
 // a search of the expression in the box over the objects read now has not finished, what is being searched; nothing
 // once the box is emptied. The types the read behind the numbers failed or cut ("N failed", "the first N only" in the
-// toolbar) go with them, so a count over part of the objects is not told as complete.
+// toolbar) go with them, so a count over part of the objects is not told as complete. An expression that could not be
+// read is told with the reason and no count; an earlier one that could not be read gives no results to tell beside a new one.
 export function searchLayer(searched: Searched | null, typed: string, now: { namespace: string; types: string[]; read: ({ items: unknown[] } & Partial<SearchRead>) | undefined }) {
   if (!typed.trim()) return null
   const asked = { query: typed, namespace: now.namespace || undefined, selected_resource_types: now.types }
@@ -41,10 +48,17 @@ export function searchLayer(searched: Searched | null, typed: string, now: { nam
       data: { ...asked, total: 0, by_kind: {}, ...searchReadGaps(now.read), top_results: [] },
     }
   }
-  if (!searched) {
+  const current = !!searched && searched.query === typed && searched.over === now.read
+  if (searched && current && searched.unreadable !== undefined) {
+    return {
+      source: 'base' as const,
+      summary: `고급 검색 — 쿼리: "${typed}" 식을 읽지 못했습니다: ${searched.unreadable}`,
+      data: { ...asked, expression_unreadable: searched.unreadable },
+    }
+  }
+  if (!searched || searched.unreadable !== undefined) {
     return { source: 'base' as const, summary: `고급 검색 — 쿼리: "${typed}" 검색 중${searchReadGapsText(now.read)}`, data: { ...asked, searching: true, ...searchReadGaps(now.read) } }
   }
-  const current = searched.query === typed && searched.over === now.read
   const { results } = searched
   const over = searched.over as Partial<SearchRead> | undefined
   const byKind: Record<string, number> = {}
