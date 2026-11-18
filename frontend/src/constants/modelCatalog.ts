@@ -22,7 +22,7 @@ export interface ProviderDef {
   id: string
   label: string
   icon: string
-  /** Models pre-populated in the dropdown */
+  /** Models pre-populated in the dropdown; the first is the provider's default (getDefaultModel) */
   models: ModelDef[]
   /** Does this provider need an API key? */
   needsApiKey: boolean
@@ -54,14 +54,15 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     needsBaseUrl: false,
     defaultApiKeyEnv: 'OPENAI_API_KEY',
     models: [
+      // None that OpenAI shuts down before 2027 (developers.openai.com/api/docs/deprecations, read 2026-11-15). GPT-6 Astra,
+      // GPT-6.1 Sol and GPT-6.1 Terra are left out: in Chat Completions, which the chat uses, they take no tools.
+      { name: 'gpt-6-luna', functionCalling: true },
       { name: 'gpt-5.5', functionCalling: true },
+      { name: 'gpt-6-sol', functionCalling: true },
       { name: 'gpt-5.4', functionCalling: true },
       { name: 'gpt-5.4-mini', functionCalling: true },
-      { name: 'gpt-5', functionCalling: true },
-      { name: 'gpt-5-mini', functionCalling: true },
-      { name: 'gpt-4o', functionCalling: true },
-      { name: 'gpt-4o-mini', functionCalling: true },
-      { name: 'o4-mini', functionCalling: true },
+      { name: 'gpt-4o', note: 'deprecated', functionCalling: true },
+      { name: 'gpt-4o-mini', note: 'deprecated', functionCalling: true },
     ],
   },
   {
@@ -170,7 +171,7 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
 export const getProvider = (id: string): ProviderDef | undefined =>
   PROVIDER_CATALOG.find((p) => p.id === id)
 
-/** Get the first model name for a provider (for default selection) */
+/** The provider's default: its first model, which a screen picks when the provider or the list is chosen */
 export const getDefaultModel = (providerId: string): string => {
   const prov = getProvider(providerId)
   return prov?.models[0]?.name ?? ''

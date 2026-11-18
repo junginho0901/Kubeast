@@ -349,7 +349,7 @@ test.describe('RBAC tab of the pod window — number check', () => {
     const password = `pr-${id}-pw`
     const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: `E2E pod RBAC ${id}`, email, password } })
     expect(created.status(), await created.text()).toBe(201)
-    const userId = (await created.json()).id
+    const userId = madeUser((await created.json()).id, bearer(admin))
     const ctx = await browser.newContext({ baseURL: process.env.E2E_BASE_URL || 'http://localhost:30080' })
     const as = ['--as', email, '--as-group', 'kubeast:authenticated', '--as-group', READ_GROUP]
     try {
@@ -466,4 +466,15 @@ test.describe('RBAC tab of the pod window — number check', () => {
     expect(body).not.toContain(FAKE_SECRET)
     expect(body).not.toContain(Buffer.from(FAKE_SECRET).toString('base64'))
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

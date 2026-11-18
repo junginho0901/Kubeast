@@ -71,13 +71,22 @@ def test_a_quiet_answer_says_it_is_alive_between_its_parts(quiet_model, route):
 
 
 async def test_a_flowing_answer_has_no_keepalive():
+    period = 0.1
+
     async def answer():
         for i in range(20):
             yield f"data: {i}\n\n"
             await asyncio.sleep(0.01)
 
-    got = [chunk async for chunk in sse_keepalive.with_keepalive(answer(), period=0.1)]
-    assert got == [f"data: {i}\n\n" for i in range(20)]
+    clock = asyncio.get_running_loop().time
+    got, last = [], clock()
+    async for chunk in sse_keepalive.with_keepalive(answer(), period=period):
+        now = clock()
+        # Read on the clock the period runs on: a loop stalled past the period may send one, a flowing answer never.
+        assert chunk != KEEPALIVE or now - last >= period, f"a keepalive {now - last:.3f} s after the chunk before"
+        got.append(chunk)
+        last = now
+    assert [c for c in got if c != KEEPALIVE] == [f"data: {i}\n\n" for i in range(20)]
 
 
 async def test_an_answer_goes_on_only_when_the_client_asks_for_the_next_part():

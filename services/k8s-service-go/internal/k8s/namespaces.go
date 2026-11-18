@@ -111,7 +111,7 @@ func (s *Service) cachedNamespaces(ctx context.Context) ([]map[string]interface{
 	if ci == nil {
 		return nil, false
 	}
-	if ok, err := s.mayList(ctx, b, "namespaces", ""); err != nil || !ok {
+	if ok, err := s.mayListShown(ctx, b, "", "namespaces", ""); err != nil || !ok {
 		return nil, false
 	}
 	accesstrail.Cached(ctx, "namespaces (watched as "+overviewCacheUser+")")

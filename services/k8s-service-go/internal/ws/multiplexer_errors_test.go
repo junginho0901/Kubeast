@@ -3,6 +3,7 @@ package ws
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -40,6 +41,16 @@ func TestAWatchThatCannotReachTheClusterTellsTheClientNoAddress(t *testing.T) {
 	host := strings.TrimPrefix(addr, "http://")
 	if strings.Contains(f.Error.Message, host) || strings.Contains(f.Error.Message, "127.0.0.1") {
 		t.Fatalf("message names the API server: %q", f.Error.Message)
+	}
+}
+
+// A watch Kubeast did not send for naming no person reads as a failure in fixed words, not as a cluster gone quiet,
+// and names no address.
+func TestAWatchNamingNoPersonIsAFailureNotAnUnreachableCluster(t *testing.T) {
+	err := &url.Error{Op: "Get", URL: "https://10.0.0.9:6443/api/v1/pods?watch=1", Err: auth.ErrNoPerson}
+	message, reason := watchFailure(err)
+	if reason != reasonFailed || message != auth.ErrNoPerson.Error() {
+		t.Fatalf("watchFailure = %q, %q; want %q, %q", message, reason, auth.ErrNoPerson.Error(), reasonFailed)
 	}
 }
 

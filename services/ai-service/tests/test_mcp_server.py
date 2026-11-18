@@ -22,7 +22,7 @@ MATRIX_WRITE = {"self": ("ai.tool.*", "ai.mcp.use", "resource.*.read", "resource
 TOKENS = {
     "tok-write": TokenPayload(user_id="u-write", role="member", email="w@example.com", matrix=MATRIX_WRITE),
     "tok-read": TokenPayload(user_id="u-read", role="member", email="r@example.com", matrix={"self": ("resource.*.read",)}),
-    "tok-pending": TokenPayload(user_id="u-p", role="pending", email="p@example.com", matrix={}),
+    "tok-pending": TokenPayload(user_id="u-p", role="Pending", email="p@example.com", matrix={}),
     "tok-admin": TokenPayload(user_id="u-admin", role="admin", email="a@example.com", permissions=("*",), matrix={"*": ("*",)}),
     "tok-key": TokenPayload(user_id="u-write", role="member", email="w@example.com", matrix=MATRIX_WRITE, api_key_id="k-1"),
     # ai.mcp.use with read tools only (a custom role): may read, may not write.

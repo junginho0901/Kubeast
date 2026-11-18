@@ -148,4 +148,5 @@ auth:
 | `oidc_email_unverified` | `email_verified=false` | 공급자의 메일 확인 |
 | `oidc_domain` | `allowedDomains` 밖 | 값 |
 | `oidc_email_invalid` | 첫 로그인의 이름이 쿠버네티스 사용자 이름이 될 수 없음: 콜론(`system:`, `eks:`, `kubeast:` 등은 클러스터 자체 사용자의 몫입니다)·공백·제어 문자가 있습니다. 이미 있는 계정은 거절하지 않습니다 | `claims.email` |
-| `oidc_provision` | 계정 생성 또는 역할 반영 실패 | `roleMapping`의 역할 이름(없는 역할이면 실패), DB |
+| `oidc_role_missing` | `roleMapping`(그 사람의 그룹)이나 `defaultRole`이 주는 이름 그대로인 역할이 없음: 설정의 오타이거나 업그레이드로 역할 이름이 바뀜(0.7.8, [기능](features.md)의 "역할 이름"). 서버 로그와 실패 행(`after.role`, `after.setting`)에 둘 다 남습니다 | 그 값을 Admin → Roles와 비교. auth-service는 시작할 때 그런 이름마다 설정과 함께 경고를 남깁니다 |
+| `oidc_provision` | 계정 생성 또는 역할 반영 실패 | DB |

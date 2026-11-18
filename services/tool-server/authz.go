@@ -165,14 +165,18 @@ func namespaceGate(payload auth.TokenPayload, clusterID, tool string, args map[s
 }
 
 // authorizeToolCall returns the validated caller, or an HTTP status + error:
-// 401 when the token is missing/invalid, 403 when ai.tool.<tool>, or what a screen
-// asks for this call (screen_permissions.go), is not granted in clusterID ("" = the default cluster).
+// 401 when the token is missing/invalid, 503 when its session could not be checked (auth.ErrSessionUnreadable),
+// 403 when ai.tool.<tool>, or what a screen asks for this call (screen_permissions.go), is not granted in clusterID
+// ("" = the default cluster).
 func authorizeToolCall(v tokenValidator, headers http.Header, tool, clusterID string, args map[string]interface{}) (auth.TokenPayload, int, error) {
 	token := extractBearerToken(headers)
 	if token == "" {
 		return auth.TokenPayload{}, http.StatusUnauthorized, errNoToken
 	}
 	payload, err := v.Validate(token)
+	if errors.Is(err, auth.ErrSessionUnreadable) {
+		return auth.TokenPayload{}, http.StatusServiceUnavailable, err
+	}
 	if err != nil {
 		return auth.TokenPayload{}, http.StatusUnauthorized, err
 	}

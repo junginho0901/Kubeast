@@ -25,6 +25,7 @@ import { roleMenuOpensUp } from './admin-users/roleMenu'
 import { failureText } from '@/utils/failureText'
 import { copyText } from '@/utils/clipboard'
 import { allPendingSelected, toggleAllFound, toggleAllPending as toggleAllPendingIds, toggleOnePending } from './admin-users/pendingSelection'
+import { ownLevelChangeAsksSignIn } from './admin-users/ownLevel'
 import { usersMatching } from './admin/adminListSearch'
 import { useDismiss } from '@/hooks/useDismiss'
 import { announceCreated } from '@/services/createdNoticeStore'
@@ -87,7 +88,7 @@ export default function AdminUsers() {
     onMutate: () => setActionError(null),
     onSuccess: (_data, vars) => {
       const roleName = roles.find((r) => r.id === vars.roleId)?.name
-      if (me?.id && vars.userId === me.id && roleName !== 'admin') {
+      if (ownLevelChangeAsksSignIn(me?.id, vars.userId, roleName)) {
         setReauthModalOpen(true)
         return
       }
@@ -231,7 +232,7 @@ export default function AdminUsers() {
       const newRoleName = vars.payload.role_id != null
         ? roles.find((r) => r.id === vars.payload.role_id)?.name
         : undefined
-      if (me?.id && vars.userId === me.id && newRoleName && newRoleName !== 'admin') {
+      if (newRoleName && ownLevelChangeAsksSignIn(me?.id, vars.userId, newRoleName)) {
         setReauthModalOpen(true)
         setDetailUserId(null)
         setDetailEditing(false)
@@ -305,8 +306,8 @@ export default function AdminUsers() {
   // the table takes the screen's height left; its rows per page are what fits (or the footer's fixed choice)
   const { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: `${isLoading}:${filteredRows.length}` })
   const { rows: pagedRows, page: currentPage, pages: pageCount } = pageOf(filteredRows, page, rowsPerPage)
-  // role names are stored capitalized ("Pending"), so compare without case
-  const pendingRows = useMemo(() => rows.filter((u) => u.role?.name?.toLowerCase() === 'pending'), [rows])
+  // the built-in Pending by its exact name, as auth-service reads it (a custom role spelled otherwise is not it)
+  const pendingRows = useMemo(() => rows.filter((u) => u.role?.name === 'Pending'), [rows])
   const pendingIds = useMemo(() => pendingRows.map((u) => u.id), [pendingRows])
   // the window's search reads every pending account, not only the page shown
   const pendingFound = useMemo(() => usersMatching(pendingRows, pendingSearch), [pendingRows, pendingSearch])
@@ -514,7 +515,7 @@ export default function AdminUsers() {
               const currentRoleName = roles.find((r) => r.id === currentRoleId)?.name ?? u.role?.name ?? 'unknown'
               const isOpen = openRoleDropdownUserId === u.id
               const isSelf = !!me?.id && me.id === u.id
-              const isPending = currentRoleName.toLowerCase() === 'pending'
+              const isPending = currentRoleName === 'Pending'
               return (
                 <tr
                   key={u.id}

@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import i18next from 'i18next'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import en from '../../i18n/locales/en.json'
 import type { GPUDashboardData, GPUDeviceMetric, GPUMetricsData } from '@/services/api'
 import { DistributionsSection } from './gpu-dashboard/DistributionsSection'
@@ -16,6 +16,9 @@ import { SummaryCardsRow } from './gpu-dashboard/SummaryCardsRow'
 import GPUNodesRealtimeMetrics from './gpu-nodes/GPUNodesRealtimeMetrics'
 import { GPUPodsTable } from './gpupods/GPUPodsTable'
 import { devicePluginBadges, gpuRealtimeAverages, missingPluginVendors, type PodGpuUsage } from './gpuNumbers'
+
+// the shared notices tell the floating chat; this test reads the screen
+vi.mock('@/hooks/useAIContext', () => ({ useAIContext: () => {} }))
 
 const tr = (_key: string, fallback: string, options?: Record<string, unknown>) =>
   fallback.replace(/\{\{(\w+)\}\}/g, (_, name) => String(options?.[name] ?? ''))

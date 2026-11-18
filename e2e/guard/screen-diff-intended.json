@@ -3,17 +3,42 @@
     {
       "screen": "^\\w+ · drawer (Pod|PodDisruptionBudget|Deployment|StatefulSet|DaemonSet|ReplicaSet|Job|HorizontalPodAutoscaler|Service|PersistentVolumeClaim|PersistentVolume|StorageClass|Node|Namespace|VerticalPodAutoscaler|CustomResourceDefinition|Gateway|GatewayClass|HTTPRoute|GRPCRoute|BackendTLSPolicy) \\(",
       "why": "A drawer's tables fit the drawer: the Conditions table, a workload's, a claim's, a volume's and a node's pods, a StorageClass's claims, a Service's ports and EndpointSlices and a VPA's tables are 640 px at their narrowest with their columns rebalanced, where v0.7.7 cut their last columns and headers (\"Last Transiti\") at the drawer's edge.",
-      "pr": "fix/w3-screen-headers"
+      "pr": "#819"
     },
     {
       "screen": "^\\w+ · /admin/(organizations|roles|clusters) on ",
-      "why": "Teams, Roles and Clusters have a search box above their list, which takes a row of the fitted table.",
-      "pr": "fix/w3-screen-search"
+      "why": "Teams, Roles and Clusters have a search box above their list, which takes a row of the fitted table. Teams' name field has its label (\"Team name\") above it, so the field, the search box and the list sit lower.",
+      "pr": "#820, #955"
     },
     {
-      "screen": "^\\w+ · /(monitoring|cluster/nodes) on self$",
-      "why": "self has no metrics-server and its metrics reads now say so (a 404, not an empty list): Monitoring shows the page's \"Metrics server not available for this cluster\" above the tab's \"not available\", and the Nodes page's top card says it in place of \"No metrics available\".",
+      "screen": "^\\w+ · /(monitoring|cluster/nodes) on (self|test2)$",
+      "why": "self and test2 run no metrics-server and their metrics reads now say so (a 404, not an empty list): Monitoring shows the page's \"Metrics server not available for this cluster\" above the tab's \"not available\", and the Nodes page's top card says it in place of \"No metrics available\".",
       "pr": "#900"
+    },
+    {
+      "screen": "^\\w+ · /cluster-view on ",
+      "why": "Cluster View pages its node boxes ten at a time, so the list footer (the range shown and Prev / Next) is under the boxes on every cluster; with more than one page the map outlines the cells of the page shown. The line under the map's legend, which names the cell the pointer or a key is on, says a count of one in the singular (\"1 pod\", \"1 error\", \"1 warning\"), where v0.7.7 said \"1 pods\".",
+      "pr": "#869, #929"
+    },
+    {
+      "screen": "^\\w+ · /alerts on ",
+      "why": "With Fit the Alerts inbox's first page holds the rows that end inside its table, each at its own height (its rows wrap to different heights), where v0.7.7 took the first row's height for every row and held a page to five rows at least; the footer's range and pages are counted at that size.",
+      "pr": "#862"
+    },
+    {
+      "screen": "^\\w+ · /(cluster/hygiene|admin/session-recordings|timeline) on ",
+      "why": "With Fit a list's page holds the rows that end inside its table, each measured at its own height, where v0.7.7 took the first row's height for every row: a list whose rows wrap to other heights than its first (Cluster Hygiene's findings, Session Recordings' sizes, Change History's events) holds another number of rows, and a last row that stuck out past the table's bottom is no longer drawn. The footer's range and pages are counted at that size.",
+      "pr": "#862"
+    },
+    {
+      "screen": "^\\w+ · drawer Ingress \\(",
+      "why": "The Ingress drawer's Class Source, Class Controller and Class Default come from the describe answer, which reads the IngressClass the Ingress names; v0.7.7 read the controller and the default from the list's row, which never has them, and the source from the row the drawer was opened with, which a drawer opened from its address does not have, so all three said \"-\".",
+      "pr": "#814"
+    },
+    {
+      "screen": "^\\w+ · /(admin/access\\-requests|admin/access\\-review|admin/ai\\-usage|admin/investigations|admin/users|cluster/leases|cluster/limitranges|cluster/mutatingadmissionpolicies|cluster/mutatingwebhookconfigurations|cluster/namespaces|cluster/nodes|cluster/priorityclasses|cluster/resourcequotas|cluster/runtimeclasses|cluster/validatingadmissionpolicies|cluster/validatingwebhookconfigurations|configuration/configmaps|configuration/secrets|cost|custom\\-resources/groups|custom\\-resources/instances|gateway/backendtlspolicies|gateway/gatewayclasses|gateway/gateways|gateway/grpcroutes|gateway/httproutes|gateway/policies|gateway/referencegrants|gpu/deviceclasses|gpu/nodes|gpu/pods|gpu/resourceclaims|gpu/resourceclaimtemplates|gpu/resourceslices|helm/releases|monitoring|network/endpoints|network/endpointslices|network/ingressclasses|network/ingresses|network/networkpolicies|network/services|security/clusterrolebindings|security/clusterroles|security/policyreports|security/rolebindings|security/roles|security/serviceaccounts|storage\\?tab=pvcs|storage\\?tab=pvs|storage\\?tab=storageclasses|storage\\?tab=volumeattachments|workloads/cronjobs|workloads/daemonsets|workloads/deployments|workloads/hpas|workloads/jobs|workloads/pdbs|workloads/pods|workloads/replicasets|workloads/statefulsets|workloads/vpas) on ",
+      "why": "A list footer's page buttons (Prev, the page, Next) sit 2.5rem further left when the floating AI chat button is drawn, so the button no longer covers Next; the rows, the range shown and the rest of the page are as in v0.7.7.",
+      "pr": "#949"
     }
   ]
 }
