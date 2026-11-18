@@ -179,6 +179,15 @@ Cards 12px (`.card` is `rounded-xl`). Buttons, inputs, list rows, dropdowns and 
 - **Badges:** `badge-success`, `badge-warning`, `badge-error` for state, `badge-info` in the sky accent, `badge-neutral` for a state that needs no attention.
 - **Charts:** the dashboard's status charts use horizontal rows with the state name, a flat bar and the actual count. The full row remains clickable, including a zero state. Other charts keep their data and interaction; no gradient fills, glow or animation; grid lines use the neutral ladder. A usage bar (CPU, memory, GPU, disk) is the accent (`primary-bright`) while normal and turns yellow/amber, then red, past its thresholds; its number stays grey until then.
 - **Icons:** one tone (`slate-300`/`slate-400`); an icon is coloured only when it reports a state (a green Ready check, an amber warning).
+- **Result notices:** `notice-text-*` roles name failure, success, waiting, empty data and supporting text; `notice-icon-*`, `notice-surface-*` and `notice-border-*` keep those uses separate. Drain state roles distinguish queued, active, completed, interrupted and failed. These aliases follow each mode's existing palette and do not change notice wording or lifetime.
+
+## Interaction
+
+- Keyboard focus uses a 2px `primary-400` outline, 2px outside the control, unless the control already has its own visible ring. Scroll menus retain their inset ring.
+- Pressed buttons use a neutral 10% shade over their fill; text, borders and focus rings stay visible. Normal and hover colours stay the same.
+- Buttons outside dense table rows have a transparent hit area of at least 24×24px. Close, back and floating chat controls use `hit-area-40` for at least 40×40px without enlarging the visible button. Keep adjacent hit areas apart; the drawer's 24px back and close buttons have a 20px gap.
+- Reduced motion removes console menu, disclosure, chevron and meter transitions and the movement of waiting indicators. The original AI welcome particles and sign-in scene stay unchanged.
+- The floating chat launcher stays 48×48px at bottom/right 24px and moves left of an open detail drawer at 1348px and above. It hides while scrolling down and returns immediately on upward scrolling or keyboard focus, or 500ms after scrolling stops. It stays visible near the bottom-right 110px corner, near the displaced launcher, while chat is open and when there is no scroll room. A scroll-hidden launcher remains keyboard reachable. Reduced motion removes its visibility transition.
 
 ## Do's and Don'ts
 
