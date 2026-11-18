@@ -34,6 +34,7 @@ import {
 import { KIND_ICONS as K } from './kindIcons'
 import { api } from '@/services/api'
 import { logoutSession } from '@/services/auth'
+import { useSignInOnSessionEnd } from '@/hooks/useSignInOnSessionEnd'
 import ForbiddenBanner from './ForbiddenBanner'
 import WatchProblemNotice from './WatchProblemNotice'
 import { CreatedNotice } from './CreatedNotice'
@@ -99,6 +100,7 @@ export default function Layout() {
     data: me,
     isLoading: isMeLoading,
     isError: isMeError,
+    error: meError,
   } = useQuery({
     queryKey: ['me'],
     queryFn: api.me,
@@ -139,11 +141,8 @@ export default function Layout() {
     }
   }, [location.pathname, isMeLoading])
 
-  useEffect(() => {
-    if (!isMeError) return
-    queryClient.clear()
-    navigate('/login')
-  }, [isMeError, navigate, queryClient])
+  // only the server's 401 ends the sign-in; a read it could not answer keeps the page
+  useSignInOnSessionEnd(isMeError, meError)
 
   useEffect(() => {
     const checkClusterStatus = async () => {
