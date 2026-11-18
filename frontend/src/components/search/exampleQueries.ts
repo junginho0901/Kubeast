@@ -47,7 +47,8 @@ export const EXAMPLE_QUERIES: ExampleQuery[] = [
   {
     label: 'Job',
     types: ['jobs'],
-    query: 'spec.suspend === false && status.succeeded > 0',
+    // the API sets completionTime when the Job finishes successfully, and only then (its Complete condition)
+    query: 'spec.suspend === false && status.completionTime != null',
     key: 'completedJobs',
     description: 'Completed jobs (not suspended)',
   },

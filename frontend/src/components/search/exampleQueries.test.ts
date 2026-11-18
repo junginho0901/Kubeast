@@ -15,7 +15,18 @@ const SAMPLES: Record<string, { kind: string; matches: Record<string, unknown>; 
     misses: { status: { phase: 'Running', containerStatuses: [{ name: 'app', restartCount: 2 }] } },
   },
   configMapWithData: { kind: 'ConfigMap', matches: { data: { 'app.conf': 'port=80' } }, misses: {} },
-  completedJobs: { kind: 'Job', matches: { spec: { suspend: false }, status: { succeeded: 1 } }, misses: { spec: { suspend: false }, status: { active: 1 } } },
+  completedJobs: {
+    kind: 'Job',
+    matches: {
+      spec: { suspend: false, completions: 3 },
+      status: {
+        succeeded: 3, completionTime: '2026-11-18T01:00:00Z',
+        conditions: [{ type: 'SuccessCriteriaMet', status: 'True' }, { type: 'Complete', status: 'True' }],
+      },
+    },
+    // still running: one of its three completions done, two pods active
+    misses: { spec: { suspend: false, completions: 3 }, status: { succeeded: 1, active: 2 } },
+  },
   loadBalancerServices: { kind: 'Service', matches: { spec: { type: 'LoadBalancer' } }, misses: { spec: { type: 'ClusterIP' } } },
   pendingPvcs: { kind: 'PersistentVolumeClaim', matches: { status: { phase: 'Pending' } }, misses: { status: { phase: 'Bound' } } },
 }

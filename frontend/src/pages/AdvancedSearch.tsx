@@ -168,8 +168,9 @@ export default function AdvancedSearch() {
   // over the objects read now finishes, the page says it is searching instead of showing the results of the one before.
   const [searched, setSearched] = useState<Searched | null>(null)
 
+  // an empty read is searched too: the expression is read before the objects, so one that cannot be read says why
   useEffect(() => {
-    if (!deferredQuery.trim() || !fetchResult || fetchResult.items.length === 0) return
+    if (!deferredQuery.trim() || !fetchResult) return
     const cancelToken = { current: false }
     searchWithExpression(fetchResult.items, deferredQuery, cancelToken).then(({ results, timeMs, unreadable }) => {
       if (!cancelToken.current) {

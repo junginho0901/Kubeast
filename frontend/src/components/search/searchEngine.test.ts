@@ -57,6 +57,8 @@ describe('an expression the engine cannot search', () => {
       results: [], timeMs: 0, unreadable: 'Expected comma at character 33',
     })
     expect((await search([pending], 'status.phase ==')).unreadable).toBe('Expected expression after == at character 15')
+    // read before the objects: no object to search does not hide it
+    expect(await search([], 'status.phase ==')).toEqual({ results: [], timeMs: 0, unreadable: 'Expected expression after == at character 15' })
   })
 
   it("is unreadable with simple-eval's words when it refuses the form, whatever the objects hold", async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import pageSource from '@/pages/AdvancedSearch.tsx?raw'
-import type { SearchResult } from './searchEngine'
+import { searchWithExpression, toSearchResult, type SearchResult } from './searchEngine'
 import { searchLayer, searchShown, type Searched } from './searchShown'
 
 // Advanced Search runs an expression over the objects it read, a moment after it is typed. Until that search ends, the
@@ -40,6 +40,16 @@ describe('what Advanced Search shows', () => {
     expect(searchShown(searchedOf(RUNNING), '  ', shopRead)).toEqual({ state: 'idle' })
     expect(searchShown(searchedOf(RUNNING), RUNNING, undefined)).toEqual({ state: 'idle' })
     expect(searchShown(searchedOf(RUNNING), RUNNING, { items: [] })).toEqual({ state: 'idle' })
+    const empty = { items: [], namespace: 'empty', types: ['pods'] }
+    expect(searchShown(searchedOf(RUNNING, empty, []), RUNNING, empty)).toEqual({ state: 'idle' })
+  })
+
+  it('is why the expression could not be read over a read that listed nothing, not nothing', async () => {
+    const empty = { items: [], namespace: 'empty', types: ['pods'] }
+    const { results, timeMs, unreadable } = await searchWithExpression(empty.items, 'status.phase ==', { current: false })
+    expect(unreadable).toBe('Expected expression after == at character 15')
+    const searched: Searched = { query: 'status.phase ==', over: empty, namespace: 'empty', types: ['pods'], results: results.map(toSearchResult), timeMs, unreadable }
+    expect(searchShown(searched, 'status.phase ==', empty)).toEqual({ state: 'unreadable', reason: 'Expected expression after == at character 15' })
   })
 })
 
@@ -81,6 +91,29 @@ describe('what Advanced Search tells the floating chat', () => {
     expect(layer?.data).toEqual({ query: '!!data', namespace: 'shop', selected_resource_types: ['pods'], expression_unreadable: 'Unexpected operator' })
   })
 
+  it('says why the expression could not be read beside the types the read failed or cut, as the toolbar does', () => {
+    const gappedRead = { ...shopRead, errors: [{ type: 'services', error: 'services is forbidden' }], cut: [{ type: 'pods', limit: 2, remaining: 5 }] }
+    const unreadable = { ...searchedOf('!!data', gappedRead, []), unreadable: 'Unexpected operator' }
+    const layer = searchLayer(unreadable, '!!data', { namespace: 'shop', types: ['pods', 'services'], read: gappedRead })
+    expect(layer?.summary).toBe('고급 검색 — 쿼리: "!!data" 식을 읽지 못했습니다: Unexpected operator · 1개 종류 실패: services · 처음 2개만 읽은 종류: pods')
+    expect(layer?.data).toEqual({
+      query: '!!data', namespace: 'shop', selected_resource_types: ['pods', 'services'], expression_unreadable: 'Unexpected operator',
+      complete: false, failed_types: [{ type: 'services', reason: 'services is forbidden' }], cut_types: [{ type: 'pods', first: 2, of: 7 }],
+    })
+  })
+
+  it('says why the expression could not be read over a read that listed nothing, with no 0', () => {
+    const failedRead = { items: [], namespace: '', types: ['pods'], errors: [{ type: 'pods', error: 'pods is forbidden' }], cut: [] }
+    const unreadable = { ...searchedOf('status.phase ==', failedRead, []), unreadable: 'Expected expression after == at character 15' }
+    const layer = searchLayer(unreadable, 'status.phase ==', { namespace: '', types: ['pods'], read: failedRead })
+    expect(layer?.summary).toBe('고급 검색 — 쿼리: "status.phase ==" 식을 읽지 못했습니다: Expected expression after == at character 15 · 1개 종류 실패: pods')
+    expect(layer?.data).toEqual({
+      query: 'status.phase ==', selected_resource_types: ['pods'], expression_unreadable: 'Expected expression after == at character 15',
+      complete: false, failed_types: [{ type: 'pods', reason: 'pods is forbidden' }], cut_types: undefined,
+    })
+    expect(layer?.data).not.toHaveProperty('total')
+  })
+
   it('tells no 0 for an expression that could not be read while another is searched', () => {
     const unreadable = { ...searchedOf('!!data', shopRead, []), unreadable: 'Unexpected operator' }
     expect(searchLayer(unreadable, 'data != null', now('shop', shopRead))?.data).toEqual({
@@ -110,6 +143,8 @@ describe('what Advanced Search tells the floating chat', () => {
   })
 
   it('is what the page shows and tells', () => {
+    // a read that listed nothing is searched too, so an expression that cannot be read says why there
+    expect(pageSource).toContain('if (!deferredQuery.trim() || !fetchResult) return')
     expect(pageSource).toContain('const shown = searchShown(deferredSearched, deferredQuery, fetchResult)')
     expect(pageSource).toContain("searchLayer(searched, rawQuery, { namespace, types: Array.from(selectedResources), read: fetchResult })")
     expect(pageSource).toContain('<SearchResultTable results={shownResults} />')
