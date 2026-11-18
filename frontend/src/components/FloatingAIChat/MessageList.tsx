@@ -107,9 +107,9 @@ const MessageBubble = memo(function MessageBubble({ role, content, pending, queu
           </div>
         ) : (
           <div className="flex items-center gap-2 py-1" data-testid="floating-waiting">
-            <div className="h-2 w-2 animate-bounce rounded-full bg-slate-400" />
-            <div className="h-2 w-2 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: '0.1s' }} />
-            <div className="h-2 w-2 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: '0.2s' }} />
+            <div className="h-2 w-2 animate-bounce motion-reduce:animate-none rounded-full bg-slate-400" />
+            <div className="h-2 w-2 animate-bounce motion-reduce:animate-none rounded-full bg-slate-400" style={{ animationDelay: '0.1s' }} />
+            <div className="h-2 w-2 animate-bounce motion-reduce:animate-none rounded-full bg-slate-400" style={{ animationDelay: '0.2s' }} />
             {queued && (
               <span className="text-xs text-slate-400" role="status" data-testid="floating-waiting-turn">
                 {t('aiChat.waitingTurn', { defaultValue: 'Waiting for a turn — another question is running' })}

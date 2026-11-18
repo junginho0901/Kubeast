@@ -104,7 +104,7 @@ export function SessionSidebar({
   return (
     <>
       <div className="w-64 bg-slate-800 border-r border-slate-700 flex flex-col">
-        <div className={`p-4 border-b border-slate-700 space-y-2 flex flex-col justify-center transition-all ${
+        <div className={`p-4 border-b border-slate-700 space-y-2 flex flex-col justify-center transition-all motion-reduce:transition-none ${
           isMultiSelectMode ? 'h-[160px]' : 'h-[100px]'
         }`}>
           <button

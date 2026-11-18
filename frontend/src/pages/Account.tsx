@@ -161,7 +161,7 @@ export default function Account() {
                   : tr('account.language.english', 'English')}
               </span>
               <ChevronDown
-                className={`h-4 w-4 text-slate-400 transition-transform ${
+                className={`h-4 w-4 text-slate-400 transition-transform motion-reduce:transition-none ${
                   isLanguageDropdownOpen ? 'rotate-180' : ''
                 }`}
               />

@@ -347,7 +347,7 @@ export default function MonitoringPods({
       ) : view === 'failed' && error ? (
         <div className="text-center py-12">
           <div className="flex flex-col items-center gap-4">
-            <Activity className="w-12 h-12 text-red-400 animate-pulse" />
+            <Activity className="w-12 h-12 text-red-400 animate-pulse motion-reduce:animate-none" />
             <div>
               <p className="text-red-400 font-medium" data-testid="pod-metrics-error">{t('monitoring.pods.errorTitle')}</p>
               {(error as any).response?.data?.detail && <p className="text-sm text-slate-400 mt-2">{(error as any).response.data.detail}</p>}

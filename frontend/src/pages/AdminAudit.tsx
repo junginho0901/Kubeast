@@ -73,7 +73,7 @@ function CustomDropdown<T extends string | number>({
       >
         <span className="font-medium truncate">{selected?.label ?? '-'}</span>
         <ChevronDown
-          className={`w-3.5 h-3.5 text-slate-400 transition-transform shrink-0 ${open ? 'rotate-180' : ''}`}
+          className={`w-3.5 h-3.5 text-slate-400 transition-transform motion-reduce:transition-none shrink-0 ${open ? 'rotate-180' : ''}`}
         />
       </button>
       {open && (

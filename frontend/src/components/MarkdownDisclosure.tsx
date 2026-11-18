@@ -18,7 +18,7 @@ export function MarkdownDetails({ children, open }: { children?: ReactNode; open
         {summary}
       </button>
       <div
-        className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${
+        className={`grid transition-[grid-template-rows,opacity] motion-reduce:transition-none duration-200 ease-out ${
           isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
         }`}
         inert={!isOpen}

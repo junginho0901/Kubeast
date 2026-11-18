@@ -245,7 +245,7 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
                   : 'bg-slate-800 border-control text-ink hover:bg-slate-700'
               }`}
             >
-              <Radio className={`${sm ? 'w-3 h-3' : 'w-4 h-4'} ${follow ? 'animate-pulse' : ''}`} />
+              <Radio className={`${sm ? 'w-3 h-3' : 'w-4 h-4'} ${follow ? 'animate-pulse motion-reduce:animate-none' : ''}`} />
               {t('clusterView.logFiles.follow', 'Follow')}
             </button>
             <button

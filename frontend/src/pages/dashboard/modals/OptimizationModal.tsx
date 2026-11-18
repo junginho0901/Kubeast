@@ -321,7 +321,7 @@ export function OptimizationModal({
                     : tr('dashboard.optimization.selectNamespace', 'Select namespace'))}
                 </span>
                 <ChevronDown
-                  className={`w-4 h-4 text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
+                  className={`w-4 h-4 text-slate-400 transition-transform motion-reduce:transition-none ${isDropdownOpen ? 'rotate-180' : ''}`}
                 />
               </button>
 

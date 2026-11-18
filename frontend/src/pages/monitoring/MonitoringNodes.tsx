@@ -39,7 +39,7 @@ function UsageCell({ text, testId }: { text: string; testId: string }) {
   return (
     <div className="flex items-center gap-3">
       <div className="flex-1 h-2.5 bg-slate-700 rounded-full overflow-hidden">
-        <div className={`h-full transition-all duration-500 ${bar}`} style={{ width: `${Math.min(percent, 100)}%` }} />
+        <div className={`h-full transition-all motion-reduce:transition-none duration-500 ${bar}`} style={{ width: `${Math.min(percent, 100)}%` }} />
       </div>
       <span className={`w-12 text-right font-medium tabular-nums ${tone}`} data-testid={testId}>{text}</span>
     </div>
@@ -297,7 +297,7 @@ export default function MonitoringNodes({
       ) : view === 'failed' && error ? (
         <div className="text-center py-12">
           <div className="flex flex-col items-center gap-4">
-            <Activity className="w-12 h-12 text-red-400 animate-pulse" />
+            <Activity className="w-12 h-12 text-red-400 animate-pulse motion-reduce:animate-none" />
             <div>
               <p className="text-red-400 font-medium" data-testid="node-metrics-error">{t('monitoring.nodes.errorTitle')}</p>
               {(error as any).response?.data?.detail && <p className="text-sm text-slate-400 mt-2">{(error as any).response.data.detail}</p>}

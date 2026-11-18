@@ -61,7 +61,7 @@ export function NamespaceFilter({ namespaces, value, onChange }: NamespaceFilter
         >
           <span className="text-sm font-medium truncate min-w-0">{label}</span>
           <ChevronDown
-            className={`w-4 h-4 text-slate-400 transition-transform ${
+            className={`w-4 h-4 text-slate-400 transition-transform motion-reduce:transition-none ${
               isOpen ? 'rotate-180' : ''
             }`}
           />

@@ -177,7 +177,7 @@ export function ResourceGraphHeader({
                   ? [...selectedNamespaces][0]
                   : t('resourceGraph.namespacesChosen', { defaultValue: '{{first}} +{{more}}', first: [...selectedNamespaces][0], more: selectedNamespaces.size - 1 })}
             </span>
-            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isNsDropdownOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform motion-reduce:transition-none ${isNsDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
           {isNsDropdownOpen && (
             <div className="absolute top-full left-0 mt-1 min-w-full w-max max-w-[min(360px,90vw)] bg-slate-800 border border-control rounded-lg shadow-xl z-100 max-h-[280px] overflow-y-auto">

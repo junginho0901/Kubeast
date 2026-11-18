@@ -41,7 +41,7 @@ export function DashboardSkeleton() {
           </p>
           <p className="mt-1 text-sm text-slate-500">
             {tr('dashboard.clusterVersion', 'Cluster version: {{version}}', { version: '' })}
-            <span className="inline-block h-3.5 w-20 align-middle ml-0.5 rounded-sm bg-slate-700/60 animate-pulse" />
+            <span className="inline-block h-3.5 w-20 align-middle ml-0.5 rounded-sm bg-slate-700/60 animate-pulse motion-reduce:animate-none" />
           </p>
         </div>
         <button disabled className="btn btn-primary flex items-center gap-2 opacity-50 cursor-not-allowed">
@@ -59,7 +59,7 @@ export function DashboardSkeleton() {
                 <p className="text-xs font-medium text-slate-400">{s.label}</p>
                 {/* same as: <p className="mt-2 text-2xl font-semibold text-ink">12</p> */}
                 <p className="mt-2 text-2xl font-semibold leading-none">
-                  <span className="inline-block h-[1em] w-[1.6em] rounded-sm bg-slate-700 animate-pulse align-baseline" />
+                  <span className="inline-block h-[1em] w-[1.6em] rounded-sm bg-slate-700 animate-pulse motion-reduce:animate-none align-baseline" />
                 </p>
               </div>
               <s.icon className="w-5 h-5 text-slate-500" aria-hidden="true" />
@@ -80,7 +80,7 @@ export function DashboardSkeleton() {
             <svg width="100%" height={180} viewBox="0 0 540 180" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
               {chart.bars.map((pct, j) => {
                 const y = 8 + (j + 0.5) * 164 / chart.bars.length
-                return <rect key={j} className="animate-pulse" x={100} y={y - 3} width={(pct / 100) * 404} height={6} rx={3} fill="var(--color-slate-700)" />
+                return <rect key={j} className="animate-pulse motion-reduce:animate-none" x={100} y={y - 3} width={(pct / 100) * 404} height={6} rx={3} fill="var(--color-slate-700)" />
               })}
             </svg>
           </div>
@@ -102,13 +102,13 @@ export function DashboardSkeleton() {
                 <div className="flex items-center gap-3">
                   <span className="w-5 shrink-0 text-sm text-slate-500 tabular-nums">#{i + 1}</span>
                   <div className="flex-1 min-w-0 space-y-2">
-                    <div className="h-4 bg-slate-700 rounded-sm w-3/4 animate-pulse" />
-                    <div className="h-3.5 bg-slate-700/70 rounded-sm w-1/3 animate-pulse" />
+                    <div className="h-4 bg-slate-700 rounded-sm w-3/4 animate-pulse motion-reduce:animate-none" />
+                    <div className="h-3.5 bg-slate-700/70 rounded-sm w-1/3 animate-pulse motion-reduce:animate-none" />
                   </div>
                 </div>
                 <div className="flex items-center justify-end gap-5 mt-1 text-sm">
-                  <span className="text-slate-400">{tr('dashboard.cpu', 'CPU')}: <span className="inline-block h-3.5 w-10 align-middle rounded-sm bg-slate-700 animate-pulse" /></span>
-                  <span className="text-slate-400">{tr('dashboard.memory', 'Memory')}: <span className="inline-block h-3.5 w-12 align-middle rounded-sm bg-slate-700 animate-pulse" /></span>
+                  <span className="text-slate-400">{tr('dashboard.cpu', 'CPU')}: <span className="inline-block h-3.5 w-10 align-middle rounded-sm bg-slate-700 animate-pulse motion-reduce:animate-none" /></span>
+                  <span className="text-slate-400">{tr('dashboard.memory', 'Memory')}: <span className="inline-block h-3.5 w-12 align-middle rounded-sm bg-slate-700 animate-pulse motion-reduce:animate-none" /></span>
                 </div>
               </div>
             ))}
@@ -127,24 +127,24 @@ export function DashboardSkeleton() {
                 <div className="flex items-center gap-3">
                   <span className="w-5 shrink-0 text-sm text-slate-500 tabular-nums">#{i + 1}</span>
                   <div className="flex-1">
-                    <div className="h-4 bg-slate-700 rounded-sm w-1/2 animate-pulse mb-1.5" />
+                    <div className="h-4 bg-slate-700 rounded-sm w-1/2 animate-pulse motion-reduce:animate-none mb-1.5" />
                     <div className="flex items-center gap-4 text-sm text-slate-400">
-                      <span>{tr('dashboard.cpu', 'CPU')}: <span className="inline-block h-3 w-12 align-middle rounded-sm bg-slate-700 animate-pulse" /></span>
-                      <span>{tr('dashboard.memory', 'Memory')}: <span className="inline-block h-3 w-14 align-middle rounded-sm bg-slate-700 animate-pulse" /></span>
+                      <span>{tr('dashboard.cpu', 'CPU')}: <span className="inline-block h-3 w-12 align-middle rounded-sm bg-slate-700 animate-pulse motion-reduce:animate-none" /></span>
+                      <span>{tr('dashboard.memory', 'Memory')}: <span className="inline-block h-3 w-14 align-middle rounded-sm bg-slate-700 animate-pulse motion-reduce:animate-none" /></span>
                     </div>
                   </div>
                 </div>
                 <div className="space-y-1 pl-8">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-400">{tr('dashboard.cpu', 'CPU')}</span>
-                    <span className="inline-block h-3 w-10 rounded-sm bg-slate-700 animate-pulse" />
+                    <span className="inline-block h-3 w-10 rounded-sm bg-slate-700 animate-pulse motion-reduce:animate-none" />
                   </div>
                   <div className="w-full h-2 bg-slate-700 rounded-full" />
                 </div>
                 <div className="space-y-1 pl-8">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-400">{tr('dashboard.memory', 'Memory')}</span>
-                    <span className="inline-block h-3 w-10 rounded-sm bg-slate-700 animate-pulse" />
+                    <span className="inline-block h-3 w-10 rounded-sm bg-slate-700 animate-pulse motion-reduce:animate-none" />
                   </div>
                   <div className="w-full h-2 bg-slate-700 rounded-full" />
                 </div>
@@ -161,27 +161,27 @@ export function DashboardSkeleton() {
           {[...Array(4)].map((_, i) => (
             <div key={i} className="grid w-full grid-cols-1 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.8fr)_auto] items-center gap-x-6 gap-y-2 p-3 min-w-0">
               <div className="flex items-start gap-2 min-w-0">
-                <div className="w-4 h-4 rounded-full bg-slate-700 mt-0.5 animate-pulse" />
+                <div className="w-4 h-4 rounded-full bg-slate-700 mt-0.5 animate-pulse motion-reduce:animate-none" />
                 <div className="flex-1 min-w-0">
-                  <div className="h-4 bg-slate-700 rounded-sm w-2/3 animate-pulse" />
+                  <div className="h-4 bg-slate-700 rounded-sm w-2/3 animate-pulse motion-reduce:animate-none" />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-1 min-w-0">
                 <p className="text-xs text-slate-400">
                   <span className="font-medium">{tr('dashboard.nodeCard.versionLabel', 'Version')}:</span>{' '}
-                  <span className="inline-block h-3 w-16 align-middle rounded-sm bg-slate-700 animate-pulse" />
+                  <span className="inline-block h-3 w-16 align-middle rounded-sm bg-slate-700 animate-pulse motion-reduce:animate-none" />
                 </p>
                 <p className="text-xs text-slate-400">
                   <span className="font-medium">{tr('dashboard.nodeCard.rolesLabel', 'Roles')}:</span>{' '}
-                  <span className="inline-block h-3 w-20 align-middle rounded-sm bg-slate-700 animate-pulse" />
+                  <span className="inline-block h-3 w-20 align-middle rounded-sm bg-slate-700 animate-pulse motion-reduce:animate-none" />
                 </p>
                 <p className="text-xs text-slate-400">
                   <span className="font-medium">{tr('dashboard.nodeCard.ipLabel', 'IP')}:</span>{' '}
-                  <span className="inline-block h-3 w-24 align-middle rounded-sm bg-slate-700 animate-pulse" />
+                  <span className="inline-block h-3 w-24 align-middle rounded-sm bg-slate-700 animate-pulse motion-reduce:animate-none" />
                 </p>
               </div>
               <div className="flex flex-wrap gap-y-1">
-                <span className="inline-block h-5 w-14 rounded-sm bg-slate-700 animate-pulse" />
+                <span className="inline-block h-5 w-14 rounded-sm bg-slate-700 animate-pulse motion-reduce:animate-none" />
               </div>
             </div>
           ))}

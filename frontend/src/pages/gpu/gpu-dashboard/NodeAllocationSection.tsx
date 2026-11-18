@@ -88,7 +88,7 @@ export function NodeAllocationSection({ nodeAllocation, nodeReadyCount, nodeNotR
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-2.5 bg-slate-800 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${
+                      className={`h-full rounded-full transition-all motion-reduce:transition-none ${
                         usedPct >= 80 ? 'bg-red-500' : usedPct >= 50 ? 'bg-amber-500' : 'bg-primary-bright'
                       }`}
                       style={{ width: `${Math.min(usedPct, 100)}%` }}

@@ -203,7 +203,7 @@ export function PodLogsTab({
               {selectedContainer || tr('clusterView.logs.selectContainer', 'Select container')}
             </span>
             <ChevronDown
-              className={`w-4 h-4 text-slate-400 transition-transform ${
+              className={`w-4 h-4 text-slate-400 transition-transform motion-reduce:transition-none ${
                 isContainerDropdownOpen ? 'rotate-180' : ''
               }`}
             />
@@ -322,7 +322,7 @@ export function PodLogsTab({
               {tr('clusterView.logs.linesCount', '{{count}} lines', { count: downloadTailLines })}
             </span>
             <ChevronDown
-              className={`w-4 h-4 text-slate-400 transition-transform ${
+              className={`w-4 h-4 text-slate-400 transition-transform motion-reduce:transition-none ${
                 isTailLinesDropdownOpen ? 'rotate-180' : ''
               }`}
             />

@@ -656,6 +656,12 @@ body {
   transform: rotate(90deg);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .prose .md-summary::before {
+    transition: none;
+  }
+}
+
 .prose .md-details[data-open] > .md-summary {
   @apply border-b border-hairline;
 }

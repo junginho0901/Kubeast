@@ -32,7 +32,7 @@ export function PodExecPanel() {
             className="h-8 px-3 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[160px] justify-between"
           >
             <span className="text-xs font-medium truncate">{execContainer || '-'}</span>
-            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isExecContainerDropdownOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform motion-reduce:transition-none ${isExecContainerDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
           {isExecContainerDropdownOpen && (
             <div className="absolute top-full left-0 mt-1 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-50 max-h-[200px] overflow-y-auto">
@@ -62,7 +62,7 @@ export function PodExecPanel() {
             className="h-8 px-3 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[120px] justify-between"
           >
             <span className="text-xs font-medium">{execCommand}</span>
-            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isExecShellDropdownOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform motion-reduce:transition-none ${isExecShellDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
           {isExecShellDropdownOpen && (
             <div className="absolute top-full left-0 mt-1 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-50">

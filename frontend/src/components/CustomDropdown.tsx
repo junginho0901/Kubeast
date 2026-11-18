@@ -91,7 +91,7 @@ export default function CustomDropdown({
           )}
         </span>
         <ChevronDown
-          className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${
+          className={`w-4 h-4 text-slate-400 shrink-0 transition-transform motion-reduce:transition-none ${
             isOpen ? 'rotate-180' : ''
           }`}
         />
