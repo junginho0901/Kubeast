@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
-import { pageScroll, pagerRange, readEveryPage, underChatButton } from './list-pages'
+import { coveredByChatButton, pageScroll, pagerRange, readEveryPage, underChatButton } from './list-pages'
 
 // The lists of Change History, a Helm release's History and Resources tabs and Monitoring's two tabs are a page at a
 // time in a box sized to the screen (1440×900, the project's viewport): the page itself does not scroll, the footer
@@ -163,6 +163,24 @@ test.describe('Lists sized to the screen', () => {
         return b ? Math.round(width - b.x - b.width) : null
       }, { timeout: 5_000, message: `${width}: the button left of the drawer` }).toBe(756)
       expect(await underChatButton(page, 'list-pager'), `${width}×900`).toEqual([])
+    }
+  })
+
+  // Advanced Search's results end the page with page buttons of their own, which sat under the floating chat button
+  // on a screen narrower than the page's 1 200 px: they keep the list footer's room from it.
+  test('Advanced Search: no page button under the floating chat button at 1280×800, 1440×900 and 1920×1080', async ({ page }) => {
+    const chat = page.getByTestId('floating-chat-toggle')
+    for (const size of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }, { width: 1920, height: 1080 }]) {
+      const at = `${size.width}×${size.height}`
+      await page.setViewportSize(size)
+      await page.goto('/cluster/search?cluster=self')
+      const editor = page.locator('.monaco-editor').first()
+      await expect(editor, `${at}: the expression box`).toBeVisible({ timeout: 20_000 })
+      await editor.click()
+      await page.keyboard.type('true')
+      await expect(page.getByTestId('search-page-info'), `${at}: the results' footer`).toHaveText(/^Showing 1-\d+ of \d+/, { timeout: 30_000 })
+      await expect(chat, `${at}: the chat button shows`).toHaveAttribute('aria-hidden', 'false')
+      expect(await coveredByChatButton(page, 'search-pager'), `Advanced Search footer at ${at}`).toEqual([])
     }
   })
 })

@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
-import { pageScrolls, underChatButton } from './list-pages'
+import { coveredByChatButton, pageScrolls, underChatButton } from './list-pages'
 
 // The admin lists and the Settings page's lists that grow with the data are paged. A list page is as high as the
 // screen at 1440×900: its table, its footer (with the rows-per-page choice) and nothing below them, so the page
@@ -381,6 +381,34 @@ test.describe('admin lists page and fit the screen', () => {
     } finally {
       await ctx.close()
       await cleanup(request, admin)
+    }
+  })
+
+  // The floating chat button lies over the screen's bottom-right corner. AI Usage's note under its list ends where the
+  // footer's page buttons end (the hand check of 11-18 found its last words under the button at all three sizes), and
+  // the AI Models page, longer than the screen with the last model's edit form open, leaves room under that form.
+  test('AI Usage note and AI Models edit form: nothing under the floating chat button at 1280×800, 1440×900 and 1920×1080', async ({ page }) => {
+    const chat = page.getByTestId('floating-chat-toggle')
+    for (const size of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }, { width: 1920, height: 1080 }]) {
+      const at = `${size.width}×${size.height}`
+      await page.setViewportSize(size)
+      await page.goto('/admin/ai-usage')
+      await expect(page.getByTestId('ai-usage-pager'), `${at}: the footer says what it shows`).toContainText(/Showing \d+-\d+ of \d+|Showing 0 of 0/, { timeout: 20_000 })
+      await expect(page.getByTestId('ai-usage-note')).toContainText('Token counts are added up only when')
+      await expect(chat, `${at}: the chat button shows`).toHaveAttribute('aria-hidden', 'false')
+      expect(await coveredByChatButton(page, 'ai-usage-note'), `AI Usage note at ${at}`).toEqual([])
+
+      await page.goto('/admin/ai-models')
+      const list = page.getByTestId('ai-model-list')
+      await expect(list.or(page.getByText(/^No models registered/)), `${at}: the models or none`).toBeVisible({ timeout: 20_000 })
+      if ((await list.count()) === 0) continue
+      await list.getByTitle('Edit', { exact: true }).last().click()
+      await expect(list.getByRole('button', { name: 'Update', exact: true })).toBeVisible()
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+      await expect(chat, `${at}: the chat button shows`).toHaveAttribute('aria-hidden', 'false')
+      expect(await coveredByChatButton(page, 'ai-model-list'), `AI Models edit form at the page's end at ${at}`).toEqual([])
+      await list.getByRole('button', { name: 'Cancel', exact: true }).click()
+      await expect(list.getByRole('button', { name: 'Update', exact: true }), `${at}: the form closed, nothing saved`).toHaveCount(0)
     }
   })
 })

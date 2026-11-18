@@ -109,3 +109,51 @@ export async function underChatButton(page: Page, pagerId: string): Promise<stri
       .map((el) => el.innerText?.trim() || el.tagName)
   }, pagerId)
 }
+
+// What of the element `testId` the floating AI chat button lies over: its buttons, links and fields by their text, and
+// each run of its letters drawn under the button — counting only what shows, inside every box around it that clips
+// (a list scrolled in its box). None when no button shows (AI off, the chat open).
+export async function coveredByChatButton(page: Page, testId: string): Promise<string[]> {
+  return page.evaluate((id) => {
+    const chat = document.querySelector('[data-testid="floating-chat-toggle"]')
+    const root = document.querySelector(`[data-testid="${id}"]`)
+    if (!chat || !root || chat.getAttribute('aria-hidden') === 'true') return []
+    const c = chat.getBoundingClientRect()
+    const shown = (el: Element | null) => {
+      let r = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
+      for (let p = el; p; p = p.parentElement) {
+        const s = getComputedStyle(p)
+        if (s.overflowX === 'visible' && s.overflowY === 'visible') continue
+        const b = p.getBoundingClientRect()
+        r = { left: Math.max(r.left, b.left), top: Math.max(r.top, b.top), right: Math.min(r.right, b.right), bottom: Math.min(r.bottom, b.bottom) }
+      }
+      return r
+    }
+    const under = (b: DOMRect, clip: { left: number; top: number; right: number; bottom: number }) =>
+      b.width > 0 && Math.max(b.left, clip.left, c.left) < Math.min(b.right, clip.right, c.right) && Math.max(b.top, clip.top, c.top) < Math.min(b.bottom, clip.bottom, c.bottom)
+    const out: string[] = []
+    for (const el of root.querySelectorAll<HTMLElement>('button, a, select, input, textarea')) {
+      if (under(el.getBoundingClientRect(), shown(el.parentElement))) out.push(el.innerText?.trim() || el.tagName)
+    }
+    const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+    for (let n = walk.nextNode() as Text | null; n; n = walk.nextNode() as Text | null) {
+      const clip = shown(n.parentElement)
+      let run = ''
+      for (let i = 0; i <= n.data.length; i++) {
+        let hit = false
+        if (i < n.data.length) {
+          const letter = document.createRange()
+          letter.setStart(n, i)
+          letter.setEnd(n, i + 1)
+          hit = under(letter.getBoundingClientRect(), clip)
+        }
+        if (hit) run += n.data[i]
+        else {
+          if (run.trim()) out.push(run.trim())
+          run = ''
+        }
+      }
+    }
+    return out
+  }, testId)
+}
