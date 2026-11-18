@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -38,6 +39,9 @@ type identityAPI struct {
 	versionDelay  time.Duration
 	gitVersion    string // "" answers v1.35.0
 	versionStatus int    // 0 answers 200
+	// serverPath, set before identityServiceWith, puts the API server behind a proxy's path, which the cluster's
+	// server URL ends with: a request without it is answered 404 and not kept, a kept one is kept without it.
+	serverPath string
 }
 
 func (a *identityAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -199,9 +203,9 @@ func identityService(t *testing.T, api *identityAPI) *Service {
 // back after the test.
 func identityServiceWith(t *testing.T, api *identityAPI, opts ServiceOptions) (*Service, *identityRegistry) {
 	t.Helper()
-	srv := httptest.NewServer(api)
+	srv := httptest.NewServer(http.StripPrefix(api.serverPath, api))
 	t.Cleanup(srv.Close)
-	kc := strings.Replace(testKubeconfig, "https://127.0.0.1:6443", srv.URL, 1)
+	kc := strings.Replace(testKubeconfig, "https://127.0.0.1:6443", srv.URL+api.serverPath, 1)
 	reg := &identityRegistry{info: cluster.Info{ID: idc, Mode: cluster.ModeExternal, KubeconfigBlob: kc}}
 	opts.MaxClusters, opts.Impersonation, opts.NoInformers = 20, true, true
 	wasImpersonation, wasOff, wasRates := impersonationEnabled, informersOff, clientRates
@@ -215,10 +219,18 @@ func identityServiceWith(t *testing.T, api *identityAPI, opts ServiceOptions) (*
 
 // Every request a person's screen makes reaches the cluster as that person, but the reads Kubeast keeps once for
 // everyone (the version, the cluster's discovery lists, the served versions of a kind) and its health reads, which go
-// as Kubeast itself; a request whose context names no one is not sent, and says so in the log.
+// as Kubeast itself; a request whose context names no one is not sent, and says so in the log, nor is one marked as
+// Kubeast's own that is not a GET of the version or a discovery list. The same holds for a cluster whose server URL
+// has a path (a proxy in front of the API server), which every request's path starts with.
 func TestEveryUserCallCarriesThePerson(t *testing.T) {
+	for _, serverPath := range []string{"", "/k8s/clusters/c-1"} {
+		t.Run("server path "+strconv.Quote(serverPath), func(t *testing.T) { everyUserCallCarriesThePerson(t, serverPath) })
+	}
+}
+
+func everyUserCallCarriesThePerson(t *testing.T, serverPath string) {
 	logs := captureLogs(t)
-	api := &identityAPI{}
+	api := &identityAPI{serverPath: serverPath}
 	s := identityService(t, api)
 	const person = "reader@example.com"
 	callerCtx := auth.WithPayload(cluster.WithID(context.Background(), idc), auth.TokenPayload{UserID: "u1", Email: person, Roles: map[string]string{string(idc): "Read"}})
@@ -347,8 +359,38 @@ func TestEveryUserCallCarriesThePerson(t *testing.T) {
 	if seen := api.take(); len(seen) != 0 {
 		t.Errorf("a request naming no one reached the cluster: %+v", seen)
 	}
-	if lines := logs.take(); refusals(lines) != 1 || !strings.Contains(lines, "path=/version") {
-		t.Errorf("a request naming no one: log %q, want one refusal naming /version", lines)
+	if lines := logs.take(); refusals(lines) != 1 || !strings.Contains(lines, "path="+serverPath+"/version\n") {
+		t.Errorf("a request naming no one: log %q, want one refusal naming %s/version", lines, serverPath)
+	}
+
+	// marked as Kubeast's own, a read of an object or a list and a write still name no one
+	marked := auth.AsKubeast(bare)
+	configMaps := schema.GroupVersionResource{Version: "v1", Resource: "configmaps"}
+	for _, step := range []struct {
+		name string
+		run  func() error
+	}{
+		{"list", func() error { _, err := s.ListResources(marked, configMaps, "shop", metav1.ListOptions{}); return err }},
+		{"get", func() error { _, err := s.GetResource(marked, configMaps, "shop", "app"); return err }},
+		{"list of a group version's kind", func() error {
+			_, err := s.ListResources(marked, schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}, "", metav1.ListOptions{})
+			return err
+		}},
+		{"delete", func() error {
+			_, _, err := s.RawRequest(marked, "DELETE", "/api/v1/namespaces/shop/configmaps/app")
+			return err
+		}},
+		{"POST /version", func() error { _, _, err := s.RawRequest(marked, "POST", "/version"); return err }},
+	} {
+		if err := step.run(); !errors.Is(err, auth.ErrNoPerson) {
+			t.Errorf("a %s marked as Kubeast's own: err %v, want ErrNoPerson", step.name, err)
+		}
+		if seen := api.take(); len(seen) != 0 {
+			t.Errorf("a %s marked as Kubeast's own reached the cluster: %+v", step.name, seen)
+		}
+		if n := refusals(logs.take()); n != 1 {
+			t.Errorf("a %s marked as Kubeast's own: %d refusals in the log, want 1", step.name, n)
+		}
 	}
 	cfg, err := s.GetClusterConfig(bare)
 	if err != nil || cfg["api_groups"] != nil {

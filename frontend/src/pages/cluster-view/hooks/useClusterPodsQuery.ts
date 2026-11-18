@@ -3,6 +3,7 @@ import { api } from '@/services/api'
 import type { PodNodeSummary } from '@/services/api'
 import { keepSameRead } from '@/utils/keepSameRead'
 import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
+import { unlessRefused } from '@/services/queryDefaults'
 
 // The namespaces, the nodes and the node map: how many pods each node has and their colours, counted by k8s-service
 // (pods_nodes.go) so the page never holds every pod of a large cluster. Each node box fetches and watches its own
@@ -51,7 +52,7 @@ export function useClusterPodsQuery({ selectedNamespace, search }: Params) {
     refetchInterval: (query) => {
       const d = query.state.data
       if (!d) return false
-      return d.revision ? 2000 : 30000
+      return unlessRefused(query.state.error, d.revision ? 2000 : 30000)
     },
   })
 

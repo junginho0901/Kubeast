@@ -18,6 +18,7 @@ import {
   isMetricsUnavailableError,
 } from '@/services/api'
 import { readPodPageSince } from '@/services/podPageRead'
+import { everyUntilRefused } from '@/services/queryDefaults'
 import { useCluster } from '@/contexts/ClusterContext'
 import { keepSameRead } from '@/utils/keepSameRead'
 
@@ -68,9 +69,9 @@ export function useDashboardQueries({
   const { data: overview, isLoading, isError: isOverviewError, error: overviewError } = useQuery({
     queryKey: ['cluster-overview', ck],
     queryFn: () => api.getClusterOverview(false), // 자동 갱신은 캐시 사용
-    // k8s-service answers from its informer store (no API listing per poll).
+    // k8s-service answers from its informer store (no API listing per poll); a refused read is not asked again
     staleTime: 10000,
-    refetchInterval: 15000,
+    refetchInterval: everyUntilRefused(15000),
   })
 
   // 네임스페이스 목록
@@ -91,14 +92,14 @@ export function useDashboardQueries({
     }),
     enabled: selectedResourceType === 'pods' || selectedPodStatus !== null,
     placeholderData: keepSameRead(podPageKey, [4]),
-    refetchInterval: 15000,
+    refetchInterval: everyUntilRefused(15000),
   })
   // The problem pods the floating chat is told about: errors, then warnings, first (sort=health), with the counts.
   const { data: problemPods } = useQuery({
     queryKey: ['dashboard-problem-pods', ck],
     queryFn: () => readPodPageSince(queryClient, ['dashboard-problem-pods', ck], { sort: 'health', offset: 0, limit: 10 }),
     staleTime: 15000,
-    refetchInterval: 30000,
+    refetchInterval: everyUntilRefused(30000),
   })
 
   // Issues 모달 — k8s-service 가 파드·워크로드·노드·PVC·Warning 이벤트를 집계.
@@ -185,12 +186,12 @@ export function useDashboardQueries({
     refetchOnWindowFocus: false,
   })
 
-  // 노드 목록 (차트 표시용 - 항상 가져오기)
+  // 노드 목록 (차트 표시용 - 항상 가져오기); a refused list stops its timer (services/queryDefaults)
   const { data: nodes } = useQuery({
     queryKey: ['nodes', ck],
     queryFn: () => api.getNodes(false), // 자동 갱신은 캐시 사용
     staleTime: 30000,
-    refetchInterval: 60000,
+    refetchInterval: everyUntilRefused(60000),
   })
 
   // Top 리소스 사용 파드/노드 (5초마다 갱신)

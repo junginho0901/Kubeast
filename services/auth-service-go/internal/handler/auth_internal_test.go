@@ -177,7 +177,7 @@ func TestTokenVersion_Investigator(t *testing.T) {
 		t.Fatalf("on: got %d %s", rec.Code, rec.Body.String())
 	}
 	h.cfg.AlertInvestigationEnabled = false
-	if rec := get(h); rec.Code != http.StatusNotFound {
-		t.Fatalf("off: got %d", rec.Code)
+	if rec := get(h); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), `"code":"subject_gone"`) {
+		t.Fatalf("off: got %d %s, want 404 marked subject_gone", rec.Code, rec.Body.String())
 	}
 }

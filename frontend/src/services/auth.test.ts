@@ -102,3 +102,68 @@ describe('every sign-out in the screens says whether the person asked', () => {
     expect(found).toEqual(decided)
   })
 })
+
+// A server that could not check the session (a 503 while its database restarts, no answer) has said nothing about the
+// sign-in: nothing here signs the person out for it. The server's own answer that the sign-in is over still does.
+describe('a session the server could not check is no sign-out', () => {
+  const answered = (status: number) => ({ response: { status } })
+
+  it('only the server\'s 401 to /auth/me sends the page to sign in', async () => {
+    const { retrySessionRead, sessionReadSaysSignedOut } = await import('./auth')
+    expect(sessionReadSaysSignedOut(answered(401))).toBe(true)
+    expect(retrySessionRead(0, answered(401))).toBe(false)
+    const unanswered = [answered(503), answered(502), answered(500), answered(429), answered(408), answered(403), new Error('timeout of 10000ms exceeded'), undefined]
+    for (const failure of unanswered) {
+      expect(sessionReadSaysSignedOut(failure)).toBe(false)
+      expect(retrySessionRead(0, failure)).toBe(true)
+      expect(retrySessionRead(50, failure)).toBe(true) // asked again for as long as it takes
+    }
+  })
+
+  it('a live connection whose session could not be checked opens again', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      calls.push(String(url))
+      return new Response('{"detail":"Session could not be checked; try again"}', { status: 503 })
+    }))
+    const { liveSessionEnded } = await import('./auth')
+    expect(await liveSessionEnded(0)).toBe(true)
+    expect(calls).toEqual(['/api/v1/auth/me'])
+    expect(assigned).toEqual([])
+  })
+
+  it('a refresh the server could not make is asked again at the next minute, not half a token lifetime later', async () => {
+    vi.useFakeTimers()
+    try {
+      const answers = [503, 200]
+      vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+        calls.push(String(url))
+        return new Response('{}', { status: answers.shift() ?? 200 })
+      }))
+      const activity = new Map<string, () => void>()
+      vi.stubGlobal('window', {
+        ...window,
+        addEventListener: (ev: string, fn: () => void) => activity.set(ev, fn),
+        removeEventListener: () => undefined,
+        setInterval: (fn: () => void, ms: number) => setInterval(fn, ms),
+        clearInterval: (id: ReturnType<typeof setInterval>) => clearInterval(id),
+      })
+      vi.stubGlobal('document', { visibilityState: 'visible', addEventListener: () => undefined, removeEventListener: () => undefined })
+      const { startSessionKeepalive } = await import('./auth')
+      const refreshes = () => calls.filter((c) => c === '/api/v1/auth/refresh').length
+
+      const stop = startSessionKeepalive(15) // the token lives 15 minutes and is re-issued after 7.5
+      await vi.advanceTimersByTimeAsync(1000)
+      activity.get('keydown')?.()
+      await vi.advanceTimersByTimeAsync(8 * 60 * 1000)
+      expect(refreshes()).toBe(1) // the 503
+      await vi.advanceTimersByTimeAsync(60 * 1000)
+      expect(refreshes()).toBe(2) // asked again a minute later
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
+      expect(refreshes()).toBe(2) // re-issued: nothing more until the next activity
+      expect(assigned).toEqual([])
+      stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
