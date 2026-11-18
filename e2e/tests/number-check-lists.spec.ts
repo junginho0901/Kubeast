@@ -979,7 +979,7 @@ test.describe('number check — list screens', () => {
   // the cluster screens the same way, with the cluster-scoped fixture made for the test and removed after it
   test('every cluster list screen shows the rows, columns and cards the cluster has', async ({ page }) => {
     test.setTimeout(900_000)
-    kubectl('apply -f -', CLUSTER_FIXTURE)
+    withUndo(kubectl('apply -f -', CLUSTER_FIXTURE), () => kubectl('delete -f - --ignore-not-found --wait=false', CLUSTER_FIXTURE))
     try {
       await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
       const held = await page.context().newPage()
@@ -1007,7 +1007,7 @@ test.describe('number check — list screens', () => {
       const { heads, rows } = await readScreen(p)
       return rows.find((r) => r[heads.findIndex((h) => /^name$/i.test(h))] === name)?.[heads.indexOf(column)]
     }
-    t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', gatewayFixture(served!, NS))
+    withUndo(t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', gatewayFixture(served!, NS)), () => { t2.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`); t2.kubectl('delete gatewayclass/num-gc-ready gatewayclass/num-gc-plain --ignore-not-found') })
     try {
       writeGatewayStatus(t2.kubectl, NS)
       await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
@@ -1058,7 +1058,7 @@ test.describe('number check — list screens', () => {
       const { heads, rows } = await readScreen(p)
       return rows.find((r) => r[heads.findIndex((h) => /^name$/i.test(h))] === name)?.[heads.indexOf(column)]
     }
-    t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', vpaFixture(NS))
+    withUndo(t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', vpaFixture(NS)), () => t2.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`))
     try {
       writeVpaStatus(t2.kubectl, NS)
       // VPA 1.7's wide columns: a VPA that sets them, where the CRD has them; on an older CRD the two columns are left out
@@ -1113,7 +1113,7 @@ test.describe('number check — list screens', () => {
     test.setTimeout(300_000)
     test.skip(!(await registeredOn(page, 'test2')), 'needs the kind cluster test2, registered as test2')
     const t2 = on('test2')
-    t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', CR_CRD)
+    withUndo(t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', CR_CRD), () => { t2.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`); t2.kubectl(`delete crd/widgets.numbers.kubeast.io crd/${PEER_CRD} --ignore-not-found`) })
     const [peerCrd, peerWidget] = PEER(NS)
     t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', peerCrd)
     try {
@@ -1156,7 +1156,7 @@ test.describe('number check — list screens', () => {
     test.setTimeout(300_000)
     const b = on(POLR.cluster)
     test.skip(!b.kubectl('api-resources --api-group=wgpolicyk8s.io -o name').includes('policyreports'), 'needs the PolicyReport CRD on the second cluster')
-    b.kubectl('apply --server-side --field-manager=e2e-numbers -f -', POLR_FIXTURE)
+    withUndo(b.kubectl('apply --server-side --field-manager=e2e-numbers -f -', POLR_FIXTURE), () => b.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`))
     try {
       b.kubectl('apply --server-side --field-manager=e2e-numbers -f -', polrBulk())
       const reports: Obj[] = JSON.parse(b.kubectl(`get policyreports -n ${NS} -o json`)).items
@@ -1289,7 +1289,7 @@ test.describe('number check — list screens', () => {
     const served = gatewayVersions((args) => on('test2').kubectl(args))
     test.skip(!served || !policyKinds().some((k) => k.plural === 'xbackendtrafficpolicies'), 'needs the Gateway API experimental-channel CRDs on test2')
     const t2 = on(GWPOL.cluster)
-    t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', GWPOL_CRD)
+    withUndo(t2.kubectl('apply --server-side --field-manager=e2e-numbers -f -', GWPOL_CRD), () => { t2.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`); t2.kubectl('delete crd/backendtlspolicies.numbers.kubeast.io --ignore-not-found') })
     try {
       t2.kubectl('wait --for=condition=Established crd/backendtlspolicies.numbers.kubeast.io --timeout=60s')
       await waitUntilListed(t2.kubectl, ['backendtlspolicies.numbers.kubeast.io'])
@@ -1482,7 +1482,7 @@ test.describe('number check — list screens', () => {
     const ROLE = 'num-live-role'
     const DS = 'num-live-ds'
     const JOB = 'num-live-job'
-    const POD = 'num-live-pod'
+    const POD = withUndo('num-live-pod', () => { kubectl(`delete volumeattachment ${VA} --ignore-not-found --wait=false`); kubectl(`delete ingressclass ${CLASS} --ignore-not-found --wait=false`); kubectl(`delete persistentvolume ${PV} --ignore-not-found --wait=false`); if (kubectl(`get networkpolicy ${NP} -n ${NS} --ignore-not-found -o name`)) kubectl(`patch networkpolicy ${NP} -n ${NS} --type=merge -p=${arg({ metadata: { finalizers: null } })}`) })
     const ENV_VALUE = 'fake-env-value-for-tests'
     const SECRET_VALUE = 'fake-secret-value-for-tests'
     const SECRET_ENCODED = 'ZmFrZS1zZWNyZXQtdmFsdWUtZm9yLXRlc3Rz'
@@ -2047,7 +2047,7 @@ test.describe('number check — list screens', () => {
     const mergePatch = (patch: Obj) => `--type=merge -p=${arg(patch)}`
     // the kind as kubectl names it, its screen and list API, the object, the cells it should show, a change and the cells
     // that change leaves; another = a second object of the kind, which comes and goes on a screen short enough to hold it
-    const kinds: { kind: string; path: string; list: string; object: Obj; cells: Record<string, string>; change: string; changed: Record<string, string>; another?: boolean }[] = [
+    const kinds = withUndo<{ kind: string; path: string; list: string; object: Obj; cells: Record<string, string>; change: string; changed: Record<string, string>; another?: boolean }[]>([
       {
         kind: 'clusterrole', path: '/security/clusterroles', list: 'clusterroles',
         object: { apiVersion: RBAC, kind: 'ClusterRole', metadata: { name: 'num-live-cr' }, rules: [{ apiGroups: [''], resources: ['pods'], verbs: ['get'] }, { apiGroups: ['apps'], resources: ['deployments'], verbs: ['get'] }] },
@@ -2117,7 +2117,7 @@ test.describe('number check — list screens', () => {
         change: mergePatch({ spec: { versions: [crdVersion('v1', true, true), crdVersion('v1beta1', false, false)] } }),
         changed: { Versions: 'v1 (storage)' },
       },
-    ]
+    ], (list) => { for (const k of list) { kubectl(`delete ${k.kind} ${k.object.metadata.name} ${inNamespace(k.object)} --ignore-not-found --wait=false`); if (k.another) kubectl(`delete ${k.kind} ${k.object.metadata.name}-2 ${inNamespace(k.object)} --ignore-not-found --wait=false`) } })
     const screenOf = (path: string) => [...SCREENS, ...SCREENS_CLUSTER].find((s) => s.path === path) as Screen
     const inNamespace = (o: Obj) => (o.metadata.namespace ? `-n ${o.metadata.namespace}` : '')
 
@@ -2206,7 +2206,7 @@ test.describe('number check — list screens', () => {
     const subjects = [{ kind: 'ServiceAccount', name: 'num-sa', namespace: NS }]
     const roleRef = { apiGroup: 'rbac.authorization.k8s.io', kind: 'ClusterRole', name: 'view' }
     const hook = { name: 'one.num-follow.invalid', admissionReviewVersions: ['v1'], sideEffects: 'None', failurePolicy: 'Ignore', clientConfig: { url: 'https://num-follow.invalid/' }, rules: [{ apiGroups: ['num-follow.invalid'], apiVersions: ['v1'], operations: ['CREATE'], resources: ['things'] }] }
-    const objects: { kind: string; list: string; name: string; namespaced?: boolean; body: Obj }[] = [
+    const objects = withUndo<{ kind: string; list: string; name: string; namespaced?: boolean; body: Obj }[]>([
       { kind: 'ClusterRole', list: '/security/clusterroles', name: 'num-follow-cr', body: { apiVersion: 'rbac.authorization.k8s.io/v1', rules: [{ apiGroups: [''], resources: ['pods'], verbs: ['get'] }] } },
       { kind: 'ClusterRoleBinding', list: '/security/clusterrolebindings', name: 'num-follow-crb', body: { apiVersion: 'rbac.authorization.k8s.io/v1', roleRef, subjects } },
       { kind: 'RoleBinding', list: '/security/rolebindings', name: 'num-follow-rb', namespaced: true, body: { apiVersion: 'rbac.authorization.k8s.io/v1', roleRef, subjects } },
@@ -2224,7 +2224,7 @@ test.describe('number check — list screens', () => {
           spec: { group: 'numbers.kubeast.io', scope: 'Namespaced', names: { kind: 'NumFollow', plural: 'numfollows' }, versions: [{ name: 'v1', served: true, storage: true, schema: { openAPIV3Schema: { type: 'object', 'x-kubernetes-preserve-unknown-fields': true } } }] },
         },
       },
-    ]
+    ], (list) => { kubectl('delete clusterrolebinding num-follow-ref-crb --ignore-not-found --wait=false'); kubectl(`delete rolebinding num-follow-ref-rb num-follow-sa-rb -n ${NS} --ignore-not-found --wait=false`); for (const o of list) kubectl(`delete ${o.kind.toLowerCase()} ${o.name} ${inNamespace(o)} --ignore-not-found --wait=false`) })
     const inNamespace = (o: { namespaced?: boolean }) => (o.namespaced ? `-n ${NS}` : '')
     const label = (o: (typeof objects)[number], value: string) => kubectl(`label ${o.kind.toLowerCase()} ${o.name} ${inNamespace(o)} num-follow=${value} --overwrite`)
     const drawer = page.locator(DRAWER).last()
@@ -2437,7 +2437,7 @@ test.describe('number check — list screens', () => {
 
   // The finalizer keeps the Job while it is deleted; suspended, so no pod runs.
   test('a Job being deleted reads Terminating in its list and drawer, as kubectl prints it', async ({ page }) => {
-    const name = 'num-leaving-job'
+    const name = withUndo('num-leaving-job', (n) => { if (kubectl(`get job ${n} -n ${NS} --ignore-not-found -o name`)) kubectl(`patch job ${n} -n ${NS} --type=merge -p=${arg({ metadata: { finalizers: null } })}`) })
     try {
       kubectl('apply -f -', JSON.stringify({
         apiVersion: 'batch/v1',
@@ -2652,4 +2652,17 @@ test.describe('number check — list screens', () => {
     await expect(card).not.toContainText('PodInitializing')
     await expect(card.locator('svg.lucide-circle-check, svg.lucide-check-circle, svg.lucide-circle-check-big, svg.lucide-check-circle-2')).toHaveCount(1)
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

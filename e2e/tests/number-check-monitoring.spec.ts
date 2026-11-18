@@ -164,7 +164,7 @@ test.describe('Number check — node usage as kubectl top prints it', () => {
     try { k = kubectlFor('kubeast-b') } catch { test.skip(true, 'kind cluster kubeast-b not found'); return }
     // a run before this one leaves the namespace terminating: new pods, not its last ones
     k(`delete namespace/${NS} --ignore-not-found --timeout=120s`)
-    k('apply -f -', FIXTURE)
+    withUndo(k('apply -f -', FIXTURE), () => k(`delete namespace/${NS} --wait=false --ignore-not-found`))
     try {
       k(`wait --for=condition=Ready pod --all -n ${NS} --timeout=120s`)
       const pods = JSON.parse(k(`get pods -n ${NS} -o json`)).items as { metadata: { name: string; uid: string }; spec: { nodeName: string } }[]
@@ -196,4 +196,17 @@ test.describe('Number check — node usage as kubectl top prints it', () => {
       k(`delete namespace/${NS} --wait=false --ignore-not-found`)
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

@@ -94,7 +94,7 @@ async function issueKey(request: APIRequestContext, token: string, ceiling: stri
 
 // A Pod with a shell for exec, and a Deployment at its second revision for undo.
 function fixture(ns: string) {
-  kubectl(`create namespace ${ns}`)
+  withUndo(kubectl(`create namespace ${ns}`), () => tryKubectl(`delete namespace ${ns} --wait=false`))
   kubectl(`-n ${ns} run runner --image=${BUSYBOX} --command -- sleep 3600`)
   kubectl(`-n ${ns} wait --for=condition=Ready pod/runner --timeout=120s`)
   kubectl(`-n ${ns} create deployment web --image=registry.k8s.io/pause:3.10`)
@@ -241,7 +241,7 @@ test.describe('AI write tools ask for the screens permissions', () => {
     const stored = () => kubectl(`-n ${ns} get secret db -o 'jsonpath={.data.password}'`)
     const doc = (body: string) => `apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: ${ns}\n${body}\n`
     try {
-      kubectl(`create namespace ${ns}`)
+      withUndo(kubectl(`create namespace ${ns}`), () => tryKubectl(`delete namespace ${ns} --wait=false`))
       kubectl(`-n ${ns} create secret generic db --from-literal=password=${value}`)
       const read = await callTool(request, admin, 'k8s_get_resource_yaml', { resource_type: 'secret', resource_name: 'db', namespace: ns })
       expect(read.isError, read.content[0].text).toBeFalsy()
@@ -280,7 +280,7 @@ test.describe('AI write tools ask for the screens permissions', () => {
     const s = stamp()
     const ns = `e2e-aiw-c-${s}`
     const users: string[] = []
-    const roles: number[] = []
+    const roles = withUndo<number[]>([], async (ids) => { for (const id of ids) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: bearer(admin), failOnStatusCode: false }) })
     async function role(name: string, permissions: string[]) {
       const res = await request.post('/api/v1/auth/admin/roles', { headers: bearer(admin), data: { name, description: 'e2e', permissions } })
       expect(res.status(), await res.text()).toBeLessThan(300)
@@ -397,4 +397,17 @@ function madeUser<T>(id: T, headers: Record<string, string>): T {
 }
 test.afterEach(async ({ request }) => {
   for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

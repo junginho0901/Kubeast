@@ -295,7 +295,7 @@ test.describe('audit gaps', () => {
     const kc = path.join(dir, 'kubeconfig')
     fs.writeFileSync(kc, execSync('kind get kubeconfig --name kubeast', { encoding: 'utf8' }), { mode: 0o600 })
     const kubectl = (args: string, input?: string) => execSync(`kubectl --kubeconfig ${kc} -n kubeast ${args}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], input })
-    const name = `e2e-audit-cr-${Date.now().toString(36)}`
+    const name = withUndo(`e2e-audit-cr-${Date.now().toString(36)}`, (n) => kubectl(`delete modelconfig ${n} --ignore-not-found`))
     const since = new Date(Date.now() - 2000).toISOString()
     const ops = async () => (await rows(request, admin, { action: 'ai.model_config.sync', since })).filter((r) => r.TargetID === name)
       .map((r) => `${r.Result} ${r.ActorEmail} ${r.After?.op} ${(r.After?.after ?? r.After?.before)?.model}`)
@@ -324,4 +324,17 @@ function madeUser<T>(id: T, headers: Record<string, string>): T {
 }
 test.afterEach(async ({ request }) => {
   for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

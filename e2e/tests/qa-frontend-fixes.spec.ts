@@ -30,7 +30,7 @@ test.describe('QA sweep frontend fixes', () => {
   })
 
   test('deleting from the drawer leaves no 404 in the console', async ({ page }) => {
-    const name = `e2e-drawer-delete-${Date.now().toString(36)}`
+    const name = withUndo(`e2e-drawer-delete-${Date.now().toString(36)}`, (n) => kubectl(['delete', 'configmap', n, '-n', 'default', '--ignore-not-found']))
     kubectl(['create', 'configmap', name, '-n', 'default', '--from-literal=k=v'])
     const errors: string[] = []
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
@@ -76,4 +76,17 @@ test.describe('QA sweep frontend fixes', () => {
     await active.scrollIntoViewIfNeeded()
     await expect(active).toBeInViewport()
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

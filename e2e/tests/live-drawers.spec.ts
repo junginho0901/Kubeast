@@ -116,7 +116,7 @@ test.describe('what keeps up by itself', () => {
       apiVersion: 'networking.k8s.io/v1', kind: 'Ingress', metadata: { name: 'classed', namespace: NS, ...(annotations ? { annotations } : {}) },
       spec: { ...spec, rules: [{ host: 'classed.example.com', http: { paths: [{ path: '/', pathType: 'Prefix', backend: { service: { name: 'web', port: { number: 80 } } } }] } }] },
     })
-    kubectl('apply -f -', JSON.stringify({ apiVersion: 'networking.k8s.io/v1', kind: 'IngressClass', metadata: { name: CLASS }, spec: { controller: 'example.com/e2e-live' } }))
+    withUndo(kubectl('apply -f -', JSON.stringify({ apiVersion: 'networking.k8s.io/v1', kind: 'IngressClass', metadata: { name: CLASS }, spec: { controller: 'example.com/e2e-live' } })), () => kubectl(`delete ingressclass ${CLASS} --ignore-not-found`))
     try {
       kubectl('apply -f -', classed({ ingressClassName: CLASS }))
       await page.goto(`/network/ingresses?cluster=self&namespace=${NS}`)
@@ -208,7 +208,7 @@ test.describe('what keeps up by itself', () => {
     test(`a ${target.kind}'s Events count up while it stays as it is, and its answer is not read for that`, async ({ page }) => {
       test.setTimeout(120_000)
       const name = target.name()
-      if (target.kind === 'StorageClass') kubectl('apply -f -', JSON.stringify({ apiVersion: 'storage.k8s.io/v1', kind: 'StorageClass', metadata: { name }, provisioner: 'kubernetes.io/no-provisioner' }))
+      if (target.kind === 'StorageClass') withUndo(kubectl('apply -f -', JSON.stringify({ apiVersion: 'storage.k8s.io/v1', kind: 'StorageClass', metadata: { name }, provisioner: 'kubernetes.io/no-provisioner' })), () => kubectl(`delete storageclass ${name} --ignore-not-found`))
       const uid = kubectl(`${target.namespace ? `-n ${target.namespace} ` : ''}get ${target.kind.toLowerCase()} ${name} -o 'jsonpath={.metadata.uid}'`)
       // the API server keeps an event of a cluster object in default (involvedObject.namespace empty) and one about a
       // Namespace in that namespace, naming it there
@@ -323,7 +323,7 @@ test.describe('what keeps up by itself', () => {
     })
     const readsBefore = describes.length
     const label = `e2e-live-ready-${STAMP}`
-    kubectl(`label node ${node} ${label}=yes --overwrite`)
+    withUndo(kubectl(`label node ${node} ${label}=yes --overwrite`), () => kubectl(`label node ${node} ${label}-`))
     try {
       // the Labels section shows the key on its own, the frame's labels written over the answer's
       await expect(drawer.getByText(label, { exact: true })).toHaveCount(1, { timeout: 20_000 })
@@ -448,7 +448,7 @@ test.describe('what keeps up by itself', () => {
     const roles = (await (await request.get('/api/v1/auth/roles', { headers: bearer(admin) })).json()) as { id: number; name: string }[]
     const email = `e2e-live-${STAMP}@kubeast.local`
     let id = ''
-    kubectl(`create clusterrole ${CLUSTER_ROLE} --verb=get,list,watch --resource=storageclasses`)
+    withUndo(kubectl(`create clusterrole ${CLUSTER_ROLE} --verb=get,list,watch --resource=storageclasses`), () => { kubectl(`delete clusterrolebinding ${CLUSTER_ROLE} --ignore-not-found`); kubectl(`delete clusterrole ${CLUSTER_ROLE} --ignore-not-found`) })
     kubectl(`create clusterrolebinding ${CLUSTER_ROLE} --clusterrole=${CLUSTER_ROLE} --group=kubeast:role:read`)
     kubectl(`-n ${NS} create rolebinding e2e-live-view --clusterrole=view --group=kubeast:role:read`)
     try {
@@ -478,7 +478,7 @@ test.describe('what keeps up by itself', () => {
       const rows = page.locator('main tbody tr')
       await expect.poll(() => asked.length, { timeout: 20_000 }).toBeGreaterThan(0)
       expect(asked).toEqual(['/api/v1/storageclasses'])
-      kubectl(`apply -f -`, JSON.stringify({ apiVersion: 'storage.k8s.io/v1', kind: 'StorageClass', metadata: { name: SC }, provisioner: 'kubernetes.io/no-provisioner' }))
+      withUndo(kubectl(`apply -f -`, JSON.stringify({ apiVersion: 'storage.k8s.io/v1', kind: 'StorageClass', metadata: { name: SC }, provisioner: 'kubernetes.io/no-provisioner' })), () => kubectl(`delete storageclass ${SC} --ignore-not-found`))
       await expect(rows.filter({ hasText: SC })).toHaveCount(1, { timeout: 25_000 })
       expect(refused).toEqual([])
       await expect(page.getByTestId('watch-problem-notice')).toHaveCount(0)
@@ -501,4 +501,17 @@ function madeUser<T>(id: T, headers: Record<string, string>): T {
 }
 test.afterEach(async ({ request }) => {
   for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

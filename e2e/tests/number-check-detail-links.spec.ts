@@ -326,7 +326,7 @@ test.describe('number check — the drawer a screen opens for one Kind of two gr
             })),
           },
         })
-        expect((await post('firing')).ok(), 'the webhook took the alerts').toBe(true)
+        expect((await withUndo(post('firing'), () => post('resolved'))).ok(), 'the webhook took the alerts').toBe(true)
         try {
           const items = (await (await page.request.get('/api/v1/alerts/inbox', { params: { cluster: 'default', q: RUN, limit: 200 } })).json()).items as Obj[]
           for (const g of GROUPS) {
@@ -359,4 +359,17 @@ test.describe('number check — the drawer a screen opens for one Kind of two gr
       cleanup()
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

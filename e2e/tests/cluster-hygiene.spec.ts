@@ -60,7 +60,7 @@ test.describe('cluster hygiene report', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hygiene-'))
     try {
       await test.step('make a namespace that breaks checks', async () => {
-        kubectl(['create', 'namespace', NS])
+        withUndo(kubectl(['create', 'namespace', NS]), () => { kubectl(['delete', 'validatingwebhookconfiguration', `e2e-hygiene-${stamp}`, '--ignore-not-found']); kubectl(['delete', 'namespace', NS, '--wait=false', '--ignore-not-found']) })
         kubectl(['apply', '-n', NS, '-f', '-'], JSON.stringify({
           apiVersion: 'v1', kind: 'Pod', metadata: { name: 'untidy', namespace: NS },
           spec: {
@@ -228,4 +228,17 @@ function madeUser<T>(id: T, headers: Record<string, string>): T {
 }
 test.afterEach(async ({ request }) => {
   for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

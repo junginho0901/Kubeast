@@ -49,7 +49,7 @@ function answering(page: Page, path: RegExp, answer: (route: Route) => Promise<v
     await answer(route)
     done()
   })
-  return { ready, answered, session: () => sessionId }
+  return withUndo({ ready, answered, session: () => sessionId }, (c) => dropSession(page, c.session()))
 }
 
 async function openAIChat(page: Page) {
@@ -86,7 +86,7 @@ async function storedSession(page: Page, content: string) {
     headers: XRW, data: { messages: [{ role: 'user', content: QUESTION }, { role: 'assistant', content }] },
   })
   expect(saved.ok(), `save messages: ${saved.status()}`).toBeTruthy()
-  return { id, title }
+  return withUndo({ id, title }, (s) => dropSession(page, s.id))
 }
 
 async function openStored(page: Page, title: string) {
@@ -576,7 +576,7 @@ test.describe('The floating chat keeps each turn on screen', () => {
   })
 
   test('a conversation that is gone keeps the turn that found out, and the next question starts a new one', async ({ page }) => {
-    const sessions: string[] = []
+    const sessions = withUndo<string[]>([], async (ids) => { for (const id of ids) await dropSession(page, id) })
     const chat = answering(page, /\/api\/v1\/ai\/sessions\/[^/]+\/floating-chat/, async (route) => {
       const id = /sessions\/([^/]+)\//.exec(route.request().url())?.[1] ?? ''
       sessions.push(id)
@@ -692,4 +692,17 @@ test.describe('The floating chat keeps each turn on screen', () => {
       await dropSession(page, chat.session())
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

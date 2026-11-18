@@ -50,7 +50,7 @@ test.describe('number check — resource graph', () => {
     test.setTimeout(420_000)
     // a namespace left by an earlier run would hand over its settled objects: start from none
     kubectl(`delete namespace ${NS} --wait=true --timeout=120s --ignore-not-found`)
-    kubectl('apply -f -', FIXTURE)
+    withUndo(kubectl('apply -f -', FIXTURE), () => kubectl(`delete namespace ${NS} --wait=true --timeout=120s --ignore-not-found`))
     try {
       await test.step('the objects reach the states the check is about', async () => {
         const jp = (args: string) => { try { return kubectl(args) } catch { return '' } }
@@ -149,7 +149,7 @@ subjects:
 - {kind: ServiceAccount, name: refs-ghost, namespace: ${RNS}}
 `
     kubectl(`delete namespace/${RNS} --ignore-not-found --timeout=120s`)
-    kubectl('apply -f -', refs)
+    withUndo(kubectl('apply -f -', refs), () => kubectl(`delete namespace/${RNS} --wait=false --ignore-not-found`))
     try {
       // the cluster: which referenced objects exist
       await expect.poll(() => kubectl(`get serviceaccount/default -n ${RNS} -o name --ignore-not-found`), { timeout: 30_000 }).toBe('serviceaccount/default')
@@ -186,4 +186,17 @@ subjects:
       kubectl(`delete namespace/${RNS} --wait=false --ignore-not-found`)
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

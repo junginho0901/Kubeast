@@ -140,7 +140,7 @@ test.describe('the cluster\'s Prometheus and a grant limited to namespaces', () 
       test.skip(true, 'the second kind cluster has no Prometheus NodePort (deploy/kind/second-cluster.yaml)')
     }
     const patch = (body: object) => request.patch(`/api/v1/clusters/${SELF}`, { headers: bearer(admin), data: body, failOnStatusCode: false })
-    expect((await patch({ prometheus_url: `http://${nodeIP}:30090`, prometheus_cluster_label: 'kubeast-b', prometheus_auth: { type: 'none' } })).status()).toBe(200)
+    expect((await withUndo(patch({ prometheus_url: `http://${nodeIP}:30090`, prometheus_cluster_label: 'kubeast-b', prometheus_auth: { type: 'none' } }), () => patch({ prometheus_url: '', prometheus_cluster_label: '', prometheus_auth: { type: 'none' } }))).status()).toBe(200)
     try {
       const asFull = await request.get(`/api/v1/cluster/prometheus/query?cluster=${SELF}&query=${encodeURIComponent('count by (namespace) (kube_pod_info)')}`, { headers: bearer(full) })
       expect(asFull.status()).toBe(200)
@@ -160,14 +160,14 @@ test.describe('the cluster\'s Prometheus and a grant limited to namespaces', () 
     expect((await features(full)).namespaceLimited).toBe(false)
 
     // a pod the limited grant may open: the second cluster lets kubeast:role:read view namespace default for the test
-    kubectlSecond('apply -f -', JSON.stringify({
+    withUndo(kubectlSecond('apply -f -', JSON.stringify({
       apiVersion: 'v1', kind: 'List', items: [
         { apiVersion: 'v1', kind: 'Pod', metadata: { name: POD, namespace: NS }, spec: { terminationGracePeriodSeconds: 0, containers: [{ name: 'app', image: 'busybox:1.37', imagePullPolicy: 'IfNotPresent', command: ['sleep', '3600'] }] } },
         { apiVersion: 'rbac.authorization.k8s.io/v1', kind: 'RoleBinding', metadata: { name: BINDING, namespace: NS },
           roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'ClusterRole', name: 'view' },
           subjects: [{ apiGroup: 'rbac.authorization.k8s.io', kind: 'Group', name: 'kubeast:role:read' }] },
       ],
-    }))
+    })), () => kubectlSecond(`delete pod/${POD} rolebinding/${BINDING} -n ${NS} --ignore-not-found --wait=false`))
     const ctx = await browser.newContext({ baseURL: process.env.E2E_BASE_URL || 'http://localhost:30080' })
     try {
       const page = await ctx.newPage()
@@ -187,4 +187,17 @@ test.describe('the cluster\'s Prometheus and a grant limited to namespaces', () 
       kubectlSecond(`delete pod/${POD} rolebinding/${BINDING} -n ${NS} --ignore-not-found --wait=false`)
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })
