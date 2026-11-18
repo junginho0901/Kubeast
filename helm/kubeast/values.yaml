@@ -790,8 +790,8 @@ gateway:
   # times in seconds ($request_time $upstream_connect_time
   # $upstream_header_time $upstream_response_time), the service's address and
   # the client's port. false = nginx's default lines.
-  # Stage: alpha, the gateway's config with it on has not been checked with
-  # nginx -t yet (docs/configuration.md "Stages of new values").
+  # Stage: alpha, tested: 100 people at once on the kind dev install with it on
+  # (docs/configuration.md "Stages of new values").
   accessLog:
     upstreamTimes: false
 
