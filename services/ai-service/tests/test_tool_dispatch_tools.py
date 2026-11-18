@@ -168,7 +168,8 @@ async def test_feature_tools_pass_declared_arguments_only():
 
 
 @pytest.mark.asyncio
-async def test_second_batch_feature_tools_pass_declared_arguments_only():
+async def test_second_batch_feature_tools_pass_declared_arguments_only(monkeypatch):
+    monkeypatch.setenv("ANOMALY_RANK_ENABLED", "true")  # off, dispatch answers anomaly_rank as an unknown function
     service = _service()
     await execute_function_with_context(
         service, "helm_read", {"what": "diff", "namespace": "kubeast", "release": "kubeast", "from": "5", "to": 6, "section": "values", "cluster": "x", "values": {"a": 1}}, _ctx(),
@@ -211,6 +212,11 @@ async def test_second_batch_feature_tools_pass_declared_arguments_only():
             "network_top_flows",
             {"namespace": "shop", "workload_kind": "Deployment", "workload_name": "web", "metric": "retransmissions", "destination": "aws", "since": "2h", "limit": 5},
             {"namespace": "shop", "workload_kind": "Deployment", "workload_name": "web", "metric": "retransmissions", "destination": "aws", "since": "2h"},
+        ),
+        (
+            "anomaly_rank",
+            {"namespace": "shop", "since_time": "2h", "until_time": "2026-11-15T01:30:00Z", "workload_kind": "Deployment", "workload_name": "web", "limit": 5, "cluster": "x"},
+            {"namespace": "shop", "since_time": "2h", "until_time": "2026-11-15T01:30:00Z", "workload_kind": "Deployment", "workload_name": "web"},
         ),
         ("hygiene", {"severity": "critical", "check": "pss-level"}, {"severity": "critical", "check": "pss-level"}),
     ]:

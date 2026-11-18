@@ -402,6 +402,17 @@ ai:
   # log (redacted, length-capped). Debugging only — off keeps them out of the
   # cluster log pipeline.
   debugDump: false
+  # The AI tool timeline's changes view (view: changes — what changed in a
+  # window: rollouts compared with the revision before, ConfigMap and Secret
+  # writes as metadata, Helm revisions, HPA scales, node conditions, Argo CD
+  # syncs, restarts; no value read) and the chat's instruction to read it first
+  # when asked why something broke. Off: the chat, alert investigations and the
+  # MCP server are offered timeline without it, the chat's instructions do
+  # not name it, a call naming the view is sent without it and k8s-service's
+  # changes routes answer 404 — unless alert investigations are on with
+  # features.alertInvestigation.changesFirst, whose step 0 reads them; the chat
+  # still sends its calls without the view.
+  timelineChanges: false
   # Provider claude-code: the chat with a Claude Pro/Max subscription instead of
   # an API key. Claude Code makes each model call and the chat's own tools answer
   # its tool calls (same tools, approval card for writes, masking and audit).
@@ -971,6 +982,22 @@ features:
     #   resources: [policyreports, clusterpolicyreports]
     #   verbs: [get, list, watch]
     extraRules: []
+  # Narrowing for the AI (the tool anomaly_rank, GET
+  # /namespaces/{namespace}/anomalies, read as the caller like a list): what
+  # differs in one namespace between a window and the window of the same length
+  # before it — failing objects, terminations by reason, restarts, CPU
+  # throttling, memory against the limit, node pressure — ranked, at most ten.
+  # The metric checks read the cluster's Prometheus (kube-state-metrics and
+  # cAdvisor names); without it they are listed as not run. Off: the route
+  # answers 404, reads nothing, the AI is not offered the tool and the chat's
+  # system prompt and the MCP tool list do not name it.
+  anomalyRank:
+    enabled: false
+    maxQueries: 12           # store queries one answer may make
+    checkTimeoutSeconds: 5   # each check
+    timeoutSeconds: 20       # the whole answer
+    concurrency: 4           # checks at once
+    cacheSeconds: 60         # the same caller, namespace and window answered from memory
   # Cluster hygiene report (Cluster → Cluster Hygiene, permissions
   # resource.hygiene.scan on the cluster, admin.hygiene.read/export/signoff
   # globally): Pod Security Standards, image tags,
