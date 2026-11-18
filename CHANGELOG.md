@@ -40,7 +40,7 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 ### Changed
 
 - The default AI model is `gpt-6-luna`, in place of `gpt-4o-mini`. Docker Compose without `.env` runs it too, in place of `gpt-4`.
-- Cluster requests go as the signed-in person: the server version and API discovery reads a screen opens now name the person in the target cluster's audit log, and a request whose context names no person is not sent unless it is Kubeast's own.
+- Cluster requests go as the signed-in person: the server version and API discovery reads a screen opens now name the person in the target cluster's audit log, and a request whose context names no person is not sent unless it is Kubeast's own, which is only a `GET` of the server version or an API discovery path (`/version`, `/api`, `/apis`, `/api/v1`, `/apis/<group>/<version>`).
 - Signing out ends the sign-in on the server: its tokens are refused and cannot be refreshed, and its open connections in other tabs close.
 - No two roles share a group, and role names outside ASCII get distinct groups. A grant, an approval or an OIDC group sync of a role sharing another role's group is refused (400 `role_same_group`).
 - The chart's PostgreSQL starts with `max_connections` from `postgresql.maxConnections` and restarts once on this upgrade. The chart's Redis has a memory cap (80 % of its memory limit, `volatile-lru`).
@@ -68,7 +68,8 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 
 - No list, window or drawer draws one read's rows as another's after a switch of filter, tab, namespace, object or cluster.
 - A list on Fit holds the rows that end inside its table, each measured at its own height, where 0.7.7 took the first row's height for every row: a list whose rows wrap holds another number of rows a page, and on the page it is counted on, no last row sticks out past the table's bottom.
-- A live socket that connects again reads its lists again, so rows deleted while it was closed go; frames that come while a list is read are applied to its answer; the Helm releases stream goes on from the last version it saw.
+- A live socket that connects again reads its lists again, so rows deleted while it was closed go; frames that come while a list is read are applied to its answer; the Helm releases stream goes on from the last version it saw, also when the browser opens it again after a cut or on another k8s-service, instead of sending every release again with a read of the list.
+- A list's Refresh reads the list once, where each press read it a second time right after, and a change that comes while it reads stays on the list.
 - Session-end audit rows are written even when the browser has already closed the connection.
 - The floating chat is told what a screen says for a read that was refused, failed or is not installed, instead of zero.
 - Monitoring's Nodes and Pods tabs no longer ask every 5 s on a cluster without metrics-server, and show a refused metrics read in the cluster's words.
