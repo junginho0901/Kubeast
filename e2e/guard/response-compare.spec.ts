@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import { test, expect } from '@playwright/test'
 
-import { clusterOf, compileRules, flatten, sortCells, type Answer, type IgnoreRule } from './response-compare'
+import { clusterOf, compileRules, flatten, rowsLeftOut, sortCells, type Answer, type IgnoreRule } from './response-compare'
 
 // The comparison on its own: each kind of change must come out as what it is. No browser, no cluster.
 
@@ -123,6 +123,28 @@ test.describe('the response comparison', () => {
     expect(match('/x', '$status', 'viewer', '404', clusterOf('/x'))).toBeNull()
     expect(clusterOf('live test2 /apis/apps/v1/deployments?namespace=a')).toBe('test2')
     expect(clusterOf('/api/v1/cluster/metrics/pods?namespace=web&cluster=self')).toBe('self')
+  })
+
+  test('a rule with rowsLeftOut takes an answer that is the old one with rows left out, and no other', () => {
+    const event = (reason: string, count = 1) => ({ type: 'Normal', reason, message: `${reason} m`, source: 'kubelet', count })
+    const old = answer([event('RegisteredNode'), event('Starting'), event('Rebooted'), event('NodeHasSufficientMemory', 8)])
+    const kept = (fresh: Answer, old2: Answer = old) => rowsLeftOut(old, fresh, old2)
+    expect(kept(answer([event('RegisteredNode'), event('Rebooted')]))).toBe(true)
+    expect(kept(answer([]))).toBe(true)
+    expect(kept(answer([event('Rebooted'), event('RegisteredNode')])), 'rows in another order').toBe(false)
+    expect(kept(answer([event('RegisteredNode'), event('Rebooted', 2)])), 'a kept row changed').toBe(false)
+    expect(kept(answer([event('RegisteredNode'), event('NodeReady')])), 'a row the old answers lack').toBe(false)
+    expect(kept(answer([event('RegisteredNode'), event('Rebooted')]), answer([event('RegisteredNode')])), 'a row one old answer lacks').toBe(false)
+    expect(kept(answer({ detail: 'failed' }, 500)), 'no list').toBe(false)
+
+    const match = compileRules([{ route: '^/x$', cell: '^\\$(\\.\\$length$|\\[[0-9]+\\]\\.)', rowsLeftOut: true, why: 'fewer rows', pr: '#1' }])
+    const real = (fresh: Answer) => {
+      const leftOut = rowsLeftOut(old, fresh, old)
+      return sortCells(old, fresh, old).real.filter((d) => !match('/x', d.cell, '', String(fresh.status), '', leftOut)).map((d) => d.cell)
+    }
+    expect(real(answer([event('RegisteredNode'), event('Rebooted')]))).toEqual([])
+    expect(real(answer([event('RegisteredNode'), event('Rebooted', 2)]))).toContain('$[1].count')
+    expect(match('/x', '$.$length')).toBeNull()
   })
 
   test('a rule for a route the old build did not have keeps a server error of the new build a real difference', () => {
