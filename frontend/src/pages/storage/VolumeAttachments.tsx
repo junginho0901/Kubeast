@@ -9,7 +9,7 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -197,11 +197,8 @@ export default function VolumeAttachments() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = await api.getVolumeAttachments(true)
-    queryClient.removeQueries({ queryKey: ['storage', 'volumeattachments'] })
-    queryClient.setQueryData(['storage', 'volumeattachments'], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['storage', 'volumeattachments'], () => api.getVolumeAttachments(true)))
 
   const createVolumeAttachmentYamlTemplate = useMemo(() => {
     return `apiVersion: storage.k8s.io/v1
@@ -272,7 +269,8 @@ spec:
       </div>
 
       <div className="card flex-1 min-h-0 flex flex-col" ref={tableContainerRef}>
-        {isError && (
+        {/* a list with rows says a failed Refresh once, under the header */}
+        {isError && volumeAttachments === undefined && (
           <div className="px-4 py-3 border-b border-slate-800">
             <p className="text-xs text-amber-300 break-words" data-testid="volumeattachments-read-failed">
               {tr('common.readFailed', 'Could not read the list: {{reason}}', { reason: failureText(readError) })}

@@ -157,9 +157,9 @@ func sessionEndNotice(code, lang string) string {
 	case code == auth.SessionSignedOut:
 		return "\r\n[Kubeast] This terminal was closed: this sign-in was signed out. Sign in again.\r\n"
 	case code == auth.SessionUnverified && ko:
-		return "\r\n[Kubeast] 세션을 확인할 수 없어 이 터미널을 닫았습니다. 다시 로그인하세요.\r\n"
+		return "\r\n[Kubeast] 세션을 한동안 확인할 수 없어 이 터미널을 닫았습니다. 터미널을 다시 여세요.\r\n"
 	case code == auth.SessionUnverified:
-		return "\r\n[Kubeast] This terminal was closed: the session could not be verified. Sign in again.\r\n"
+		return "\r\n[Kubeast] This terminal was closed: the session could not be verified for a while. Open the terminal again.\r\n"
 	case ko:
 		return "\r\n[Kubeast] 계정이나 권한이 바뀌어 이 터미널을 닫았습니다. 다시 로그인하세요.\r\n"
 	default:
@@ -191,7 +191,7 @@ func serverLeftNotice(lang string) string {
 // false for any other end: the browser went away, the shell exited.
 func serverEnded(ctx context.Context, lang string) (notice string, closeCode int, reason string, ok bool) {
 	if code := auth.SessionEndCode(ctx); code != "" {
-		return sessionEndNotice(code, lang), auth.SessionEndedCloseCode, code, true
+		return sessionEndNotice(code, lang), auth.SessionEndCloseCode(code), code, true
 	}
 	if drain.Ended(ctx) {
 		return serverLeftNotice(lang), drain.CloseCode, drain.Code, true

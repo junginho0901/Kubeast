@@ -6,6 +6,7 @@
 
 import { isMetricsNotServedText, isMetricsUnavailableError, type TopResources } from '@/services/api'
 import { recordForbidden } from '@/services/forbiddenStore'
+import { retryUnlessRefused, unlessRefused } from '@/services/queryDefaults'
 import { METRICS_NOT_SERVED_MS } from '../monitoring/metricsRefresh'
 
 /** The parts the cluster refused since the page opened on cluster `ck`, each with the cluster's reason. */
@@ -45,13 +46,13 @@ export function topResourcesPollMs(refused: TopRefusals | undefined, ck: string,
  * The read's pace: every 5 s, never again once both parts are refused, and after a minute while the cluster serves no
  * metrics.k8s.io (METRICS_NOT_SERVED_MS, as metricsReadPace), so a metrics-server installed since shows. That answer
  * is no session-long flag: Monitoring's tabs keep asking it for themselves. Neither it nor a refusal is tried again;
- * another failure once.
+ * another failure once. The whole read refused (403) is not asked again either.
  */
 export function topResourcesPace(refused: () => TopRefusals | undefined, ck: string) {
   return {
     refetchInterval: (query: { state: { error: unknown } }): number | false =>
-      isMetricsUnavailableError(query.state.error) ? METRICS_NOT_SERVED_MS : topResourcesPollMs(refused(), ck, false),
-    retry: (failureCount: number, error: unknown): boolean => !isMetricsUnavailableError(error) && failureCount < 1,
+      unlessRefused(query.state.error, isMetricsUnavailableError(query.state.error) ? METRICS_NOT_SERVED_MS : topResourcesPollMs(refused(), ck, false)),
+    retry: (failureCount: number, error: unknown): boolean => !isMetricsUnavailableError(error) && retryUnlessRefused(1)(failureCount, error),
     retryDelay: 1000,
   }
 }

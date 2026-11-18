@@ -20,7 +20,7 @@ import { applyResourceQuotaWatchEvent } from './resourcequotas/resourceQuotaWatc
 import { ResourceQuotaFilters } from './resourcequotas/ResourceQuotaFilters'
 import { ResourceQuotaTable } from './resourcequotas/ResourceQuotaTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -176,13 +176,10 @@ export default function ResourceQuotas() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllResourceQuotas(true)
-      : await api.getResourceQuotas(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['cluster', 'resourcequotas', selectedNamespace] })
-    queryClient.setQueryData(['cluster', 'resourcequotas', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['cluster', 'resourcequotas', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllResourceQuotas(true)
+      : api.getResourceQuotas(selectedNamespace, true)))
 
   const createResourceQuotaYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

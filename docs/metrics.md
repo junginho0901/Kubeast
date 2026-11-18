@@ -66,7 +66,7 @@ One ServiceMonitor selects the five backend Services labelled `kubeast.io/metric
 | Name | Expression | Meaning |
 |---|---|---|
 | `KubeastAuditStoreDown` | `min by (service) (kubeast_audit_store_up) == 0` for 2 minutes | The audit DB cannot be used, so audited actions are being refused |
-| `KubeastHighErrorRate` | 5xx ratio > `errorRatio` (0.05) for 10 minutes | Console error rate |
+| `KubeastHighErrorRate` | 5xx ratio > `errorRatio` (0.05) for 10 minutes | Console error rate. A database outage longer than that now fires it from signed-in reads alone: a request whose session cannot be read is answered 503, where 0.7.7 answered 401, a 4xx it does not count |
 | `KubeastSlowRequests` | p95 > `p95Seconds` (2 s) for 10 minutes | Console latency |
 | `KubeastAuditSinkStalled` | `kubeast_audit_sink_pending > 0` and the last successful send more than 10 minutes ago, for 5 minutes | Audit sink sending has stopped (errors in the auth-service log; retention keeps the unsent rows) |
 | `KubeastSessionRecordingUploadStalled` | `kubeast_session_recording_pending_bytes > 0` and the last upload more than 10 minutes ago, for 5 minutes | Session recording upload has stopped (output piles up in the k8s-service spool; sessions are not blocked) |
