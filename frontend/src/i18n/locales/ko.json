@@ -506,7 +506,8 @@
       "serverMemory": "서버의 메모리가 모자라 지금은 목록을 더 따라가지 않습니다. 이 화면의 행은 약 1분마다 다시 읽고, 여유가 생기면 저절로 실시간 갱신으로 돌아갑니다.",
       "unreachable": "클러스터에 연결할 수 없어 실시간 갱신이 멈췄습니다. 다시 연결되면 저절로 이어집니다.",
       "failed": "클러스터가 오류로 답해 실시간 갱신이 멈췄습니다. 오류가 없어지면 저절로 이어집니다.",
-      "scope": "접근 권한이 Namespace로 한정되어 이 화면의 클러스터 범위 객체는 실시간으로 갱신되지 않습니다. 행이 오래된 값일 수 있습니다. 새로고침하면 다시 읽습니다."
+      "scope": "접근 권한이 Namespace로 한정되어 이 화면의 클러스터 범위 객체는 실시간으로 갱신되지 않습니다. 행이 오래된 값일 수 있습니다. 새로고침하면 다시 읽습니다.",
+      "serverOpening": "서버가 많은 실시간 목록을 몇 개씩 차례로 열고 있어 이 화면의 실시간 갱신이 차례를 기다립니다. 곧 저절로 시작하고, 그때 행을 다시 읽습니다."
     },
     "clusterChecking": "연결 확인 중...",
     "clusterConnected": "클러스터 연결됨",
@@ -1758,6 +1759,7 @@
     "delete": "삭제",
     "title": "AI Chat",
     "subtitle": "자연어로 클러스터에 묻고 문제를 해결합니다.",
+    "modelReadFailed": "AI 모델을 읽지 못했습니다: {{reason}}",
     "emptyTitle": "새 대화를 시작하세요",
     "emptySubtitle": "아래 질문을 클릭하거나 직접 입력하세요.",
     "resultZipDownload": "Result ZIP 다운로드",
@@ -2106,6 +2108,8 @@
       "retrying": "자동으로 재시도 중입니다... (5초마다 갱신)",
       "unavailableAll": "Pod 메트릭을 사용할 수 없습니다",
       "noPodsInNamespace": "{{namespace}} Namespace에 Pod가 없습니다",
+      "noneInGrant": "볼 수 있는 Namespace에 Pod 메트릭이 없습니다",
+      "noneInGrantHint": "이 클러스터에서는 Namespace {{namespaces}}만 볼 수 있고, 지금 그 안의 Pod에는 메트릭이 없습니다. Namespace를 골라 Pod를 확인하세요.",
       "searchPlaceholder": "Pod 이름 검색..."
     },
     "autoRefresh": "5초마다 자동 갱신",

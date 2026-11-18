@@ -12,6 +12,11 @@ interface Props {
   onPageChange: (page: number) => void
   /** Off for a fixed page size: a section of a page that scrolls by design (the GPU overview, chart panels) or a window's list */
   showPageSize?: boolean
+  /**
+   * The footer ends a page across its width (a list page, or the list a page scrolls to the end of), where the floating
+   * chat button rests on its right: its page buttons keep clear of it (index.css). A section or a window's list does not.
+   */
+  endsPage?: boolean
   testId?: string
 }
 
@@ -20,7 +25,7 @@ const pagerButton =
 
 // The footer of every list table: rows per page, the range shown and the page buttons — always there, also with
 // one page or no rows, so a list never changes shape with its row count.
-export function ListPager({ currentPage, totalPages, total, counted = true, rowsPerPage, onPageChange, showPageSize = true, testId = 'list-pager' }: Props) {
+export function ListPager({ currentPage, totalPages, total, counted = true, rowsPerPage, onPageChange, showPageSize = true, endsPage = showPageSize, testId = 'list-pager' }: Props) {
   const { t } = useTranslation()
   const pages = Math.max(1, totalPages)
   return (
@@ -40,7 +45,8 @@ export function ListPager({ currentPage, totalPages, total, counted = true, rows
               defaultValue: 'Showing {{start}}-{{end}} of {{total}}',
             })}
       </div>
-      <div className="flex items-center gap-2">
+      {/* list-pager-pages: a footer that ends a page, kept clear of the floating chat button (index.css) */}
+      <div className={`${endsPage ? 'list-pager-pages ' : ''}flex items-center gap-2`}>
         <button type="button" onClick={() => onPageChange(Math.max(1, currentPage - 1))} disabled={currentPage <= 1} className={pagerButton}>
           {t('common.prev', 'Prev')}
         </button>

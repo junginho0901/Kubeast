@@ -536,9 +536,10 @@ func TestAWatchWhoseTurnComesWhileMemoryIsShortWaits(t *testing.T) {
 	}
 }
 
-// A wait for an opening place past startNoticeAfter is told as the memory limit, once, not as a cluster that cannot be
-// reached, and the list is read again once its watch is on.
-func TestALongWaitForAnOpeningIsToldAsTheMemoryLimit(t *testing.T) {
+// A wait for an opening place past startNoticeAfter is told as a wait for its turn (limit_scope "opening"), once, not as
+// the memory limit, which the page reads as memory running short, nor as a cluster that cannot be reached, and the list
+// is read again once its watch is on.
+func TestALongWaitForAnOpeningIsToldAsAWaitForItsTurn(t *testing.T) {
 	m := muxOn(t, eventThenHold)
 	m.startNoticeAfter = 20 * time.Millisecond
 	places := m.openingPlaces()
@@ -552,8 +553,8 @@ func TestALongWaitForAnOpeningIsToldAsTheMemoryLimit(t *testing.T) {
 	go watchInto(ctx, m, "/api/v1/pods", "watch=1", out)
 	f := frameWithin(t, out, 5*time.Second)
 	data, _ := f.Error.(map[string]string)
-	if f.Type != "ERROR" || data["reason"] != reasonLimit || data["limit_scope"] != limitScopeMemory || !strings.Contains(data["message"], "waits for its turn") {
-		t.Fatalf("after the long wait: %s %v", f.Type, f.Error)
+	if f.Type != "ERROR" || data["reason"] != reasonLimit || data["limit_scope"] != limitScopeOpening || !strings.Contains(data["message"], "waits for its turn") {
+		t.Fatalf("after the long wait: %s %v, want the limit scope %q", f.Type, f.Error, limitScopeOpening)
 	}
 	for _, release := range held {
 		release()

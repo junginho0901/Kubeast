@@ -21,7 +21,7 @@ import { applyLimitRangeWatchEvent } from './limitranges/limitRangeWatchNormaliz
 import { LimitRangeFilters } from './limitranges/LimitRangeFilters'
 import { LimitRangeTable } from './limitranges/LimitRangeTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -178,13 +178,10 @@ export default function LimitRanges() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllLimitRanges(true)
-      : await api.getLimitRanges(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['cluster', 'limitranges', selectedNamespace] })
-    queryClient.setQueryData(['cluster', 'limitranges', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['cluster', 'limitranges', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllLimitRanges(true)
+      : api.getLimitRanges(selectedNamespace, true)))
 
   const createLimitRangeYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

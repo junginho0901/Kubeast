@@ -2,11 +2,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -253,8 +255,13 @@ func TestKubeProxyUpgradeCarriesTheIdentity(t *testing.T) {
 	}
 }
 
-// With impersonationEnabled, a context naming no person prepares no kubectl run, through the proxy or direct.
+// With impersonationEnabled, a context naming no person prepares no kubectl run, through the proxy or direct, and
+// each refusal is a log line of the words the e2e teardown counts (e2e/tests/cluster-refusals.ts).
 func TestKubectlWithNoPersonIsNotPrepared(t *testing.T) {
+	var logs bytes.Buffer
+	prevLog := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	defer slog.SetDefault(prevLog)
 	api, seen := fakeAPIServer(t)
 	p, err := startKubeProxy()
 	if err != nil {
@@ -286,6 +293,9 @@ func TestKubectlWithNoPersonIsNotPrepared(t *testing.T) {
 	p.mu.Unlock()
 	if calls != 0 || ran != 0 || len(seen()) != 0 {
 		t.Fatalf("proxy runs %d, kubectl runs %d, cluster requests %d: want none", calls, ran, len(seen()))
+	}
+	if n := strings.Count(logs.String(), `msg="kubectl not run"`); n != 4 {
+		t.Fatalf("%d log lines of the refusal for 4 refused runs:\n%s", n, logs.String())
 	}
 }
 
