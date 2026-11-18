@@ -11,21 +11,22 @@ import { api } from '@/services/api'
 import type { GPUDashboardData, GPUMetricsData, GPUDeviceMetric } from '@/services/api'
 import { prometheusNotAnswering } from '@/hooks/usePrometheusQuery'
 import { byNodeName, devicePluginBadges, gpuModels } from '../gpuNumbers'
+import { everyUntilRefused, retryUnlessRefused } from '@/services/queryDefaults'
 
 export function useGPUDashboardData() {
   const { data, isLoading, isError, error, refetch } = useQuery<GPUDashboardData>({
     queryKey: ['gpu', 'dashboard'],
     queryFn: () => api.getGPUDashboard(),
-    refetchInterval: 30000,
-    retry: 2,
+    refetchInterval: everyUntilRefused(30000),
+    retry: retryUnlessRefused(2),
     retryDelay: 1000,
   })
 
   const { data: metrics, error: metricsError } = useQuery<GPUMetricsData>({
     queryKey: ['gpu', 'metrics'],
     queryFn: () => api.getGPUMetrics(),
-    refetchInterval: 15000,
-    retry: 1,
+    refetchInterval: everyUntilRefused(15000),
+    retry: retryUnlessRefused(1),
     retryDelay: 2000,
   })
 

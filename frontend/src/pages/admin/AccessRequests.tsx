@@ -17,6 +17,7 @@ import { utcTitle } from '@/utils/time'
 import { givesChartBoundRole } from '@/utils/adminAccess'
 import { sameGroupRefusal } from '@/utils/roleGroup'
 import { parsePermissions } from '@/utils/permissions'
+import { everyUntilRefused } from '@/services/queryDefaults'
 
 // Admin review of access requests (temporary per-cluster role grants):
 // pending requests to approve or reject with an optional note, and the
@@ -73,7 +74,7 @@ export default function AccessRequests() {
       return { ...(await api.adminAccessRequestsPage(q)), offset: q.offset, limit: q.limit }
     },
     placeholderData: keepSameRead(pendingKey, ['offset', 'limit']),
-    refetchInterval: 30_000,
+    refetchInterval: everyUntilRefused(30_000),
   })
   const historyKey = ['access-requests', 'admin', 'list', 'history', tabQuery('history')]
   const historyList = useQuery({

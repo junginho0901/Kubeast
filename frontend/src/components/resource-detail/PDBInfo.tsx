@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import { retryUnlessRefused } from '@/services/queryDefaults'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, ConditionsTable, EventsSection, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
@@ -28,7 +29,7 @@ export default function PDBInfo({ name, namespace }: Props) {
     queryKey: ['pdb-describe', namespace, name],
     queryFn: () => api.describePDB(namespace, name),
     staleTime: 10_000,
-    retry: 1,
+    retry: retryUnlessRefused(1),
   })
   useDrawerFollowsObject({
     enabled: !!namespace && !!name,
