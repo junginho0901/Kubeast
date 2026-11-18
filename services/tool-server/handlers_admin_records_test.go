@@ -282,6 +282,22 @@ func TestInvestigations_OneReportReadsTheRouteThatRecordsItsView(t *testing.T) {
 	}
 }
 
+func TestInvestigations_AReportReadsItsResultOnlyWhenTheRowHasOne(t *testing.T) {
+	result := `{"version":1,"status":"ok","no_fault":false,"causes":[],"path":["Deployment/apps/web"],"ruled_out":[],` +
+		`"hypotheses":[{"id":"h1","statement":"web-1 runs out of memory","resource":"Pod/apps/web-1","state":"cause",` +
+		`"for":[{"call":1,"tool":"k8s_get_resources"}],"against":[],"closed":true}],"asked_again":false}`
+	fakeAIService(t, func(*http.Request) (int, string) {
+		return 200, strings.TrimSuffix(investigationDetail(), "}") + `,"result":` + result + `}`
+	})
+	out := runTool(t, ctxWithPayload("self", holderOf()), "investigations", args{"investigation_id": "inv-a"})
+	assertSame(t, "result", decode(t, out)["result"], result)
+	fakeAIService(t, func(*http.Request) (int, string) { return 200, investigationDetail() })
+	out = runTool(t, ctxWithPayload("self", holderOf()), "investigations", args{"investigation_id": "inv-a"})
+	if _, has := decode(t, out)["result"]; has {
+		t.Errorf("a report without a result reads one: %s", out)
+	}
+}
+
 func TestInvestigations_ARefusalIsAResult(t *testing.T) {
 	for _, c := range []struct {
 		status int

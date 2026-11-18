@@ -647,6 +647,63 @@ tests:
           path: data.ALERT_INVESTIGATION_MANUAL_DAILY_TOKEN_BUDGET
           value: "150000"
 
+  - it: keeps the investigation rules and step 0 off with the windows of 15 minutes, 5 minutes and 4 hours by default
+    asserts:
+      - equal:
+          path: data.ALERT_INVESTIGATION_RULES
+          value: "false"
+      - equal:
+          path: data.ALERT_INVESTIGATION_CHANGES_FIRST
+          value: "false"
+      - equal:
+          path: data.ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES
+          value: "15"
+      - equal:
+          path: data.ALERT_INVESTIGATION_LOGS_WINDOW_MINUTES
+          value: "5"
+      - equal:
+          path: data.ALERT_INVESTIGATION_CHANGES_WINDOW_HOURS
+          value: "4"
+
+  - it: passes the investigation rules, step 0 and the windows as they are set, numbers as integers
+    set:
+      features.alertInvestigation.rules: true
+      features.alertInvestigation.changesFirst: true
+      features.alertInvestigation.window:
+        metricsMinutes: 30
+        logsMinutes: 0
+        changesHours: 24
+    asserts:
+      - equal:
+          path: data.ALERT_INVESTIGATION_RULES
+          value: "true"
+      - equal:
+          path: data.ALERT_INVESTIGATION_CHANGES_FIRST
+          value: "true"
+      - equal:
+          path: data.ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES
+          value: "30"
+      - equal:
+          path: data.ALERT_INVESTIGATION_LOGS_WINDOW_MINUTES
+          value: "0"
+      - equal:
+          path: data.ALERT_INVESTIGATION_CHANGES_WINDOW_HOURS
+          value: "24"
+
+  - it: keeps the investigation ledger off by default
+    asserts:
+      - equal:
+          path: data.ALERT_INVESTIGATION_LEDGER
+          value: "false"
+
+  - it: passes the investigation ledger when it is on
+    set:
+      features.alertInvestigation.ledger: true
+    asserts:
+      - equal:
+          path: data.ALERT_INVESTIGATION_LEDGER
+          value: "true"
+
   - it: keeps the shared webhook token and leaves registered store URLs open by default
     asserts:
       - equal:
@@ -667,6 +724,27 @@ tests:
       - equal:
           path: data.CLUSTER_STORE_ALLOWED_HOSTS
           value: prom.monitoring.svc,.corp.example.com
+
+  - it: keeps the repeated read refusal and the investigation's evidence check off by default
+    asserts:
+      - equal:
+          path: data.AI_REFUSE_REPEATED_READS
+          value: "false"
+      - equal:
+          path: data.ALERT_INVESTIGATION_EVIDENCE_CHECK
+          value: "false"
+
+  - it: passes the repeated read refusal and the evidence check as they are set
+    set:
+      ai.refuseRepeatedReads: true
+      features.alertInvestigation.evidenceCheck: true
+    asserts:
+      - equal:
+          path: data.AI_REFUSE_REPEATED_READS
+          value: "true"
+      - equal:
+          path: data.ALERT_INVESTIGATION_EVIDENCE_CHECK
+          value: "true"
 
   # auth-service makes each group from the names as the chart does (handler/role.go); a comma, which would split the
   # list, goes as "-", which makes the same group.

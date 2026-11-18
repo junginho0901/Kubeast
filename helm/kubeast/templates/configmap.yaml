@@ -128,6 +128,7 @@ data:
   KUBECONFIG_EXEC_COMMANDS: {{ join "," .Values.multicluster.execCommands | quote }}
   GATEWAY_POLICY_KINDS: {{ join "," .Values.gatewayApi.policyKinds | quote }}
   AI_WRITE_APPROVAL: {{ .Values.ai.writeApproval | quote }}
+  AI_REFUSE_REPEATED_READS: {{ .Values.ai.refuseRepeatedReads | quote }}
   AI_BASE_URL_ALLOWED_HOSTS: {{ join "," .Values.ai.baseUrlAllowedHosts | quote }}
   COOKIE_SECURE: {{ .Values.auth.cookieSecure | quote }}
   REDACTION_ENABLED: {{ .Values.ai.redaction.enabled | quote }}
@@ -194,9 +195,16 @@ data:
   ALERT_INVESTIGATION_PROVIDER_PAUSE_MINUTES: {{ .providerPauseMinutes | int64 | quote }}
   ALERT_INVESTIGATION_MAX_STEPS: {{ .maxSteps | int64 | quote }}
   ALERT_INVESTIGATION_TIMEOUT_SECONDS: {{ .timeoutSeconds | int64 | quote }}
+  ALERT_INVESTIGATION_RULES: {{ .rules | quote }}
+  ALERT_INVESTIGATION_CHANGES_FIRST: {{ .changesFirst | quote }}
+  ALERT_INVESTIGATION_LEDGER: {{ .ledger | quote }}
+  ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES: {{ .window.metricsMinutes | int64 | quote }}
+  ALERT_INVESTIGATION_LOGS_WINDOW_MINUTES: {{ .window.logsMinutes | int64 | quote }}
+  ALERT_INVESTIGATION_CHANGES_WINDOW_HOURS: {{ .window.changesHours | int64 | quote }}
   ALERT_INVESTIGATION_MODEL: {{ .model | quote }}
   ALERT_INVESTIGATION_LANGUAGE: {{ .language | quote }}
   ALERT_INVESTIGATION_CONSOLE_URL: {{ .consoleUrl | quote }}
+  ALERT_INVESTIGATION_EVIDENCE_CHECK: {{ .evidenceCheck | quote }}
   ALERT_INBOX_STALE_HOURS: {{ .inbox.staleAfterHours | int64 | quote }}
   {{- end }}
   AUTH_INVESTIGATOR_TOKEN_URL: "http://auth-service:8004/api/v1/auth/internal/investigator-token"

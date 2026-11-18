@@ -366,6 +366,14 @@ ai:
   # AI tools that change a cluster (delete/scale/apply/...) are never run from
   # the model's call directly: the user approves each one in the chat first.
   writeApproval: true
+  # A read the model makes again with the same tool and arguments within one
+  # chat answer or one alert investigation, less than 60 seconds after the
+  # first answered, is not run again: the model is told at which step it
+  # already has the result and to change the arguments to read anything new.
+  # Its ai.tool.call row has status repeated and repeat_of (that step). An
+  # investigation with call numbers names the call instead ([call N]) and the
+  # row adds repeat_of_call.
+  refuseRepeatedReads: false
   # What leaves for the model is masked first: credentials by key name
   # (password, token, api_key, dsn, ...) and by shape (AWS keys, private keys,
   # JWTs, credentials in URLs, Authorization values, API keys with a known
@@ -939,7 +947,8 @@ features:
   # it is not held to maxPerHour and has its own daily budget, none by
   # default. One investigation took about 60,000 tokens when measured (657
   # runs on a dev install, Claude Haiku 5.5 averaged 66,424), so 200000 is
-  # about three a day.
+  # about three a day — fewer with evidenceCheck or ledger on, whose
+  # instruction goes with every model call and which may ask once more.
   alertInvestigation:
     enabled: false
     # true refuses the shared token: every receiver must send its cluster's own.
@@ -952,11 +961,38 @@ features:
     dailyTokenBudget: 200000  # the webhook's investigations, per UTC day; 0 = no budget
     manualDailyTokenBudget: 0  # "Investigate now" investigations, per UTC day; 0 = no budget (the permission decides who)
     providerPauseMinutes: 30  # after the model provider refuses for credit or the key, new alerts are skipped this long; 0 = no pause
-    maxSteps: 8               # model calls per investigation; the last one gets no tools
+    maxSteps: 8               # model calls per investigation (+1 when evidenceCheck or ledger asks again); the last one gets no tools
     timeoutSeconds: 300
+    # The time windows below, the scope groups (affected, checked and normal,
+    # changed for another reason, not looked at), facts kept apart from
+    # hypotheses and the report's six headings, in the prompt.
+    rules: false
+    # Step 0: before the first model call, the timeline tool's changes view
+    # over the change window goes into the first message (an audited tool call,
+    # no model step). Writes the windows too.
+    changesFirst: false
+    # The report ends with a block the server takes out and keeps: the causes,
+    # the path from cause to symptom, what was ruled out and the hypotheses
+    # weighed, each closed as cause, symptom, ruled out or blocked with the
+    # calls for and against it (asked once more without tools while one is
+    # open). The report window shows them under the report. One block with
+    # evidenceCheck: both on, the model is asked again at most once.
+    ledger: false
+    window:                   # counted from the alert's start; ends are never past now
+      metricsMinutes: 15      # metrics this long either side of the start (1–360)
+      logsMinutes: 5          # logs from this long before the start (0–1440)
+      changesHours: 4         # changes from this long before the start (1–168)
     model: ""                 # ModelConfig name; empty = the default model
     language: en              # report language (en, ko, …)
     consoleUrl: ""            # e.g. https://kubeast.example.com — links in the audit summary; empty = no link
+    # The report ends with a block of its causes, each with the numbers of the
+    # tool calls that show it; before the report is kept, the server checks
+    # that those calls answered, hold the cause's name and that it does not
+    # start after the alert. Otherwise one more model call without tools asks
+    # for the report again, and what still fails is listed under the report as
+    # not verified. The block is taken out of the kept report and kept as the
+    # report's result. One block with ledger: both on, one second ask.
+    evidenceCheck: false
     inbox:
       staleAfterHours: 8      # a firing alert with no notification for this long shows "status unknown"; twice your repeat_interval
     # More read-only rules for the investigator, appended to the
