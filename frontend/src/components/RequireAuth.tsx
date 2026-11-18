@@ -44,7 +44,7 @@ export default function RequireAuth({ children }: { children: JSX.Element }) {
   if (!me) {
     if (failureCount > 0 && failureReason) {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-slate-900 px-4 text-sm text-slate-400" role="status" data-testid="session-check-waiting">
+        <div className="flex min-h-screen items-center justify-center bg-slate-900 px-4 text-sm text-notice-text-session-waiting" role="status" data-testid="session-check-waiting">
           {t('liveSession.checking', {
             defaultValue: 'Could not check your sign-in: {{reason}}. Asking again…',
             reason: failureText(failureReason),

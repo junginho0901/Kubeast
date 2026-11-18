@@ -131,7 +131,7 @@ export default function AdminOrganizations() {
         </div>
       </form>
       {nameMissing && (
-        <p id="team-name-problem" role="alert" data-testid="team-name-problem" className="mt-1 shrink-0 text-[11px] text-red-400">
+        <p id="team-name-problem" role="alert" data-testid="team-name-problem" className="mt-1 shrink-0 text-[11px] text-notice-text-failed">
           {inputValue === ''
             ? tr('adminOrg.nameRequired', 'Enter a team name.')
             : tr('adminOrg.nameBlank', 'Enter a team name: spaces alone are not one.')}

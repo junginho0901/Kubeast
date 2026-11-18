@@ -21,7 +21,7 @@ export function ActionFailure({ error, action, testId, className = '' }: { error
   const { t } = useTranslation()
   if (!error) return null
   return (
-    <p role="alert" data-testid={testId} className={`text-sm text-red-400 break-words ${className}`}>
+    <p role="alert" data-testid={testId} className={`text-sm text-notice-text-failed break-words ${className}`}>
       {t(`common.failed.${action}`, { defaultValue: FALLBACK[action], reason: failureText(error) })}
     </p>
   )

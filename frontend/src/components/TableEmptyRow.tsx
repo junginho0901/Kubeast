@@ -30,7 +30,7 @@ interface Props {
 // A failed list and a kind the cluster does not have are told to the floating
 // chat in the row's words (a refusal is the ForbiddenBanner's to tell), so the
 // chat does not read the empty table as a list with nothing in it.
-export function TableEmptyRow({ colSpan, resource, searching = false, children, className = 'py-6 px-4 text-center text-slate-400', error, onRetry }: Props) {
+export function TableEmptyRow({ colSpan, resource, searching = false, children, className = 'py-6 px-4 text-center text-notice-text-empty', error, onRetry }: Props) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const forbidden = useForbidden(resource)

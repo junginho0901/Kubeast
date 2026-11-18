@@ -112,7 +112,7 @@ export const MessageBubble = memo(function MessageBubble({ message, idx, copyRes
                   style={{ animationDelay: '0.2s' }}
                 />
                 {message.isTemporary && message.queued && (
-                  <span className="ml-1 text-sm text-slate-300" role="status" data-testid="chat-waiting-turn">
+                  <span className="ml-1 text-sm text-notice-text-waiting" role="status" data-testid="chat-waiting-turn">
                     {t('aiChat.waitingTurn', { defaultValue: 'Waiting for a turn — another question is running' })}
                   </span>
                 )}

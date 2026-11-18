@@ -466,7 +466,7 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
           </span>
           {statusBadges}
           {focusHidden && focus !== null && (
-            <span className="text-xs text-amber-300" data-testid="cluster-view-node-pod-gone" data-reason={focusHidden}>
+            <span className="text-xs text-notice-text-warning" data-testid="cluster-view-node-pod-gone" data-reason={focusHidden}>
               {focusHidden === 'filtered'
                 ? tr('clusterView.nodeView.filtered', 'Pod {{pod}} is outside the namespace filter ({{namespace}}).', { pod: focus, namespace: selectedNamespace })
                 : tr('clusterView.nodeView.gone', 'Pod {{pod}} is no longer on this Node; a search finds it if it runs on another.', { pod: focus })}
@@ -492,7 +492,7 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
           </label>
         </div>
         {pods && ordered.length === 0 ? (
-          <p className="text-sm text-slate-400" data-testid="cluster-view-node-empty">
+          <p className="text-sm text-notice-text-empty" data-testid="cluster-view-node-empty">
             {problemsOnly ? tr('common.noSearchResults', 'No results found.') : tr('common.listEmpty', 'No items.')}
           </p>
         ) : (

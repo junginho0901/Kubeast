@@ -60,6 +60,38 @@
   }
 }
 
+/* Notice roles follow the existing mode palettes; equal colours keep separate meanings. */
+@theme inline {
+  --color-notice-text-failed: var(--color-red-400);
+  --color-notice-text-failed-detail: var(--color-red-300);
+  --color-notice-text-succeeded: var(--color-emerald-300);
+  --color-notice-text-warning: var(--color-amber-300);
+  --color-notice-text-warning-heading: var(--color-amber-100);
+  --color-notice-text-warning-detail: var(--color-amber-200);
+  --color-notice-icon-warning: var(--color-amber-300);
+  --color-notice-surface-warning: var(--color-amber-900);
+  --color-notice-border-warning: var(--color-amber-700);
+  --color-notice-text-empty: var(--color-slate-400);
+  --color-notice-text-muted: var(--color-slate-500);
+  --color-notice-text-waiting: var(--color-slate-300);
+  --color-notice-text-session-waiting: var(--color-slate-400);
+  --color-notice-text-reconnecting: var(--color-slate-500);
+
+  --color-drain-status-completed: var(--color-emerald-400);
+  --color-drain-surface-completed: var(--color-emerald-500);
+  --color-drain-border-completed: var(--color-emerald-500);
+  --color-drain-status-failed: var(--color-red-400);
+  --color-drain-surface-failed: var(--color-red-500);
+  --color-drain-border-failed: var(--color-red-500);
+  --color-drain-status-interrupted: var(--color-amber-300);
+  --color-drain-status-queued: var(--color-amber-300);
+  --color-drain-surface-warning: var(--color-amber-500);
+  --color-drain-border-warning: var(--color-amber-500);
+  --color-drain-status-active: var(--color-primary-300);
+  --color-drain-surface-active: var(--color-primary-500);
+  --color-drain-border-active: var(--color-primary-500);
+}
+
 /* Colour modes (DESIGN.md, utils/colorMode.ts): the data-color-mode attribute on <html> swaps the neutral ladders;
    utilities read the variables, so class names stay the same in every mode. gray-* takes the same ladder.
    default — deep navy: Tailwind's slate with the surfaces one step down, so the page is the sign-in ground

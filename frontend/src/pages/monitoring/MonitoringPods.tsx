@@ -361,8 +361,8 @@ export default function MonitoringPods({
         </div>
       ) : view === 'none_in_grant' ? (
         <div className="text-center py-12">
-          <p className="text-slate-400" data-testid="pod-metrics-none-in-grant">{t('monitoring.pods.noneInGrant')}</p>
-          <p className="text-sm text-slate-500 mt-2">{t('monitoring.pods.noneInGrantHint', { namespaces: limitedTo?.join(', ') })}</p>
+          <p className="text-notice-text-empty" data-testid="pod-metrics-none-in-grant">{t('monitoring.pods.noneInGrant')}</p>
+          <p className="text-sm text-notice-text-muted mt-2">{t('monitoring.pods.noneInGrantHint', { namespaces: limitedTo?.join(', ') })}</p>
         </div>
       ) : view === 'unavailable' || view === 'no_samples' ? (
         <div className="text-center py-12">

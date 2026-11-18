@@ -40,7 +40,7 @@ export function DescribeFailure({ error, showingRow = false, className = '', abo
   useNoticeLayer('DescribeFailure', text, { notice: 'describe_failed', reason, ...(showingRow ? { showing: 'list_row' } : {}) }, object)
   if (!error) return null
   return (
-    <p role="alert" data-testid="describe-failed" className={`text-xs text-red-400 break-words ${className}`}>
+    <p role="alert" data-testid="describe-failed" className={`text-xs text-notice-text-failed break-words ${className}`}>
       {text}
     </p>
   )
@@ -56,7 +56,7 @@ export function ListReadFailure({ error, testId = 'list-read-failed', list }: { 
   useNoticeLayer('ListReadFailure', text, { notice: 'beside_list_failed', ...(list ? { list } : {}), reason }, object)
   if (!error) return null
   return (
-    <p role="alert" data-testid={testId} className="text-xs text-red-400 break-words">
+    <p role="alert" data-testid={testId} className="text-xs text-notice-text-failed break-words">
       {text}
     </p>
   )
@@ -80,7 +80,7 @@ export function DescribeStale({ error, readAt }: { error: unknown; readAt: numbe
   useNoticeLayer('DescribeStale', text, { notice: 'stale', read_at: shown ? new Date(readAt).toISOString() : null, reason }, object)
   if (!shown) return null
   return (
-    <p role="alert" data-testid="describe-stale" className="mb-2 text-xs text-amber-300 break-words">
+    <p role="alert" data-testid="describe-stale" className="mb-2 text-xs text-notice-text-warning break-words">
       {text}
     </p>
   )

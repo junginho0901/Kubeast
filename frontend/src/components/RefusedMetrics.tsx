@@ -11,11 +11,11 @@ export function RefusedMetrics({ path, reason, testId }: { path: string; reason?
   return (
     <div className="text-center py-12" data-testid={testId}>
       <div className="flex flex-col items-center gap-2">
-        <ShieldAlert className="w-8 h-8 text-amber-300" />
-        <p className="text-slate-400">
+        <ShieldAlert className="w-8 h-8 text-notice-icon-warning" />
+        <p className="text-notice-text-empty">
           {t('common.forbiddenEmpty', { resource: forbiddenResourceFromUrl(path), defaultValue: 'You do not have permission to view {{resource}} in this cluster.' })}
         </p>
-        {reason && <p className="text-xs text-slate-500 break-words">{reason}</p>}
+        {reason && <p className="text-xs text-notice-text-muted break-words">{reason}</p>}
       </div>
     </div>
   )

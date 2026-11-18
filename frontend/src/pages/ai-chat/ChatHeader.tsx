@@ -39,7 +39,7 @@ export function ChatHeader() {
           {t('aiChat.subtitle')}
         </p>
         {reason && (
-          <p role="alert" data-testid="ai-config-failed" title={reason} className="mt-1 text-sm text-red-400 break-words line-clamp-2">
+          <p role="alert" data-testid="ai-config-failed" title={reason} className="mt-1 text-sm text-notice-text-failed break-words line-clamp-2">
             {reason}
           </p>
         )}
