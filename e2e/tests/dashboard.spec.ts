@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test'
 
+import { sidebarStill } from './sidebar-screens'
+
 // Dashboard regression — the page is the largest target of the
 // refactor (Phase 0 split + planned Phase 2). We capture the full
 // rendered surface plus a few interactive steps to detect both visual
@@ -19,6 +21,7 @@ test.describe('Dashboard', () => {
     // utilization card too, when the cluster has Prometheus), and the
     // object counts and the pod status bars move with whatever the dev
     // clusters run. We compare layout, not values.
+    await sidebarStill(page)
     await expect(page).toHaveScreenshot('dashboard-initial.png', {
       fullPage: true,
       animations: 'disabled',
