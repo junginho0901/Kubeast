@@ -206,6 +206,27 @@ func TestSessionEndNoticeFollowsTheScreenLanguageAndTheReason(t *testing.T) {
 	}
 }
 
+// A terminal whose session could not be checked closes with "try again later" and asks for a new terminal, not a new
+// sign-in; one whose session ended closes with 4401 as before.
+func TestATerminalWhoseSessionCannotBeCheckedClosesToOpenAgain(t *testing.T) {
+	for _, tc := range []struct {
+		code, lang string
+		close      int
+		says, not  string
+	}{
+		{auth.SessionUnverified, "en", auth.SessionRetryCloseCode, "Open the terminal again", "Sign in"},
+		{auth.SessionUnverified, "ko", auth.SessionRetryCloseCode, "터미널을 다시 여세요", "로그인"},
+		{auth.SessionRevoked, "en", auth.SessionEndedCloseCode, "Sign in again", "Open the terminal again"},
+	} {
+		ctx, cancel := context.WithCancelCause(context.Background())
+		cancel(&auth.SessionEndError{Code: tc.code})
+		notice, close, reason, ok := serverEnded(ctx, tc.lang)
+		if !ok || close != tc.close || reason != tc.code || !strings.Contains(notice, tc.says) || strings.Contains(notice, tc.not) {
+			t.Errorf("%s/%s: close %d %q ok=%v notice %q, want close %d, %q and not %q", tc.code, tc.lang, close, reason, ok, notice, tc.close, tc.says, tc.not)
+		}
+	}
+}
+
 // lockedAudit takes rows from a handler goroutine while a test waits for one.
 type lockedAudit struct {
 	mu   sync.Mutex

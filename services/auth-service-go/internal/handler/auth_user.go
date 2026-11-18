@@ -309,7 +309,11 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, err := h.repo.GetUserByID(r.Context(), payload.UserID)
-	if err != nil || user == nil {
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
+	}
+	if user == nil {
 		response.Error(w, http.StatusUnauthorized, "User not found")
 		return
 	}
@@ -462,12 +466,22 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := h.repo.GetUserByID(r.Context(), payload.UserID)
-	if err != nil || user == nil {
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
+	}
+	if user == nil {
 		response.Error(w, http.StatusUnauthorized, "User not found")
 		return
 	}
 
-	permissions, _ := h.repo.GetPermissionsByRoleID(r.Context(), user.RoleID)
+	// Each read below is the person's access: one that failed answers 503 like the account read above, never an answer
+	// with less access than the person has, which the console would draw as a change of access.
+	permissions, err := h.repo.GetPermissionsByRoleID(r.Context(), user.RoleID)
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
+	}
 	// A key's token carries what that key can do, which is what its holder asks here, and a key cut down to one cluster
 	// says nothing of the owner's others.
 	if payload.APIKeyID != "" {
@@ -477,19 +491,22 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	// The browser holds the token only as an HttpOnly cookie, so it cannot
 	// read the per-cluster matrix from the JWT; hand it over here (same
 	// buildPermissionMatrix the token is issued from).
-	matrix, _ := h.buildPermissionMatrix(r.Context(), user.ID, permissions)
-	if matrix == nil {
-		matrix = auth.PermissionMatrix{}
+	matrix, err := h.buildPermissionMatrix(r.Context(), user.ID, permissions)
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
 	}
-	clusterRoles, _ := h.repo.ListUserClusterRoleNames(r.Context(), user.ID)
-	if clusterRoles == nil {
-		clusterRoles = map[string]string{}
+	clusterRoles, err := h.repo.ListUserClusterRoleNames(r.Context(), user.ID)
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
 	}
 	// Namespace-scoped grants: the namespace selector and the notices read
 	// the same map the token carries ("ns" claim).
-	clusterNamespaces, _ := h.repo.ListUserClusterNamespaces(r.Context(), user.ID)
-	if clusterNamespaces == nil {
-		clusterNamespaces = map[string][]string{}
+	clusterNamespaces, err := h.repo.ListUserClusterNamespaces(r.Context(), user.ID)
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
 	}
 	h.writeMe(w, user, permissions, matrix, clusterRoles, clusterNamespaces)
 }
@@ -532,7 +549,11 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, err := h.repo.GetUserByID(r.Context(), payload.UserID)
-	if err != nil || user == nil {
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
+	}
+	if user == nil {
 		response.Error(w, http.StatusUnauthorized, "User not found")
 		return
 	}
