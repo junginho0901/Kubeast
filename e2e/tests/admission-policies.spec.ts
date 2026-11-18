@@ -141,7 +141,7 @@ test.describe('admission policies', () => {
     const password = 'e2e-reader-throwaway'
     const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E VAP reader', email, password } })
     expect(created.status()).toBe(201)
-    const id = (await created.json()).id as string
+    const id = madeUser((await created.json()).id as string, bearer(admin))
     try {
       expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read' } })).status()).toBe(200)
       const reader = await login(request, email, password)
@@ -153,4 +153,15 @@ test.describe('admission policies', () => {
       await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: bearer(admin), failOnStatusCode: false })
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

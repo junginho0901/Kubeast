@@ -42,6 +42,11 @@ const lockKey int64 = 7_432_119_027
 // anchorLockKey is the advisory lock an anchor's transaction takes.
 const anchorLockKey int64 = 7_432_119_028
 
+// anchorLockWait is the lock_timeout and statement_timeout of an anchor's transaction: another replica holds the lock
+// through its whole anchor, the sink upload included (putTimeout, 60 s), which is longer than the session limits every
+// connection carries (postgresql.sessionLimits: lock_timeout 15 s, statement_timeout 30 s).
+const anchorLockWait = "90s"
+
 // PG is the Store over the shared database. In AnchorLocked's fn its queries
 // run in the lock's transaction (tx).
 type PG struct {
@@ -196,6 +201,10 @@ func (p PG) AnchorLocked(ctx context.Context, fn func(Store) error) error {
 		return err
 	}
 	defer tx.Rollback(ctx)
+	// is_local: the two settings end with this transaction, and the connection goes back to the pool as it came
+	if _, err := tx.Exec(ctx, `SELECT set_config('lock_timeout', $1, true), set_config('statement_timeout', $1, true)`, anchorLockWait); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, anchorLockKey); err != nil {
 		return err
 	}

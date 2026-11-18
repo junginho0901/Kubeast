@@ -13,28 +13,31 @@ import {
 import { ListPager } from '@/components/ListPager'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { RefusedMetrics } from '@/components/RefusedMetrics'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { usePagedItems } from '@/hooks/usePagedItems'
 import { cpuToMillis, memoryToBytes } from '@/utils/resourceQuantity'
 import { usageTone } from './podUsage'
 import {
   api,
-  disableMetrics,
-  isMetricsDisabled,
   isMetricsUnavailableError,
 } from '@/services/api'
 import { useAIContext } from '@/hooks/useAIContext'
+import { usePermission } from '@/hooks/usePermission'
 import { useCluster } from '@/contexts/ClusterContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { MonitoringSearch, NamespaceFilter } from './MonitoringFilters'
 import { MetricsRefreshFailed } from './MetricsRefreshFailed'
-import { metricsRefreshFailure, refreshFailureForChat } from './metricsRefresh'
+import { metricsReadPace, metricsRefreshFailure, metricsRefusal, refreshFailureForChat } from './metricsRefresh'
+import { metricsNotShownLayer, metricsTabView } from './metricsTabView'
 import type { PodMetric } from './types'
 
 interface MonitoringPodsProps {
-  metricsUnavailable: boolean
-  onMetricsUnavailable: () => void
+  /** the page's notice "Metrics server not available for this cluster" is on screen */
+  pageNotice: boolean
+  /** whether the tab's last answer says the cluster serves no metrics.k8s.io (the page's notice) */
+  onMetricsUnavailable: (unavailable: boolean) => void
   namespaces: { name: string }[] | undefined
 }
 
@@ -59,7 +62,7 @@ const getLatestMetricTimestamp = (
 }
 
 export default function MonitoringPods({
-  metricsUnavailable,
+  pageNotice,
   onMetricsUnavailable,
   namespaces,
 }: MonitoringPodsProps) {
@@ -68,37 +71,40 @@ export default function MonitoringPods({
   const [search, setSearch] = useState('')
   const { currentCluster } = useCluster()
   const { open: openDetail } = useResourceDetail()
+  // a grant limited to namespaces: "All namespaces" reads only those (k8s-service narrows), so an empty answer is theirs
+  const limitedTo = usePermission().clusterNamespaces
 
   // Pod 리소스 사용량 (네임스페이스 선택 시에만 활성화, 5초마다 자동 갱신)
-  const { data: podMetrics, isLoading, error, dataUpdatedAt } = useQuery<PodMetric[], Error>({
+  const { data: podMetricsRead, isLoading, error, dataUpdatedAt } = useQuery<PodMetric[], Error>({
     queryKey: ['pod-metrics', currentCluster, selectedNamespace],
     // with each pod's limits from k8s-service's pod rows, so the page takes no pod list
     queryFn: () => api.getPodMetrics(selectedNamespace === 'all' ? undefined : selectedNamespace, true),
-    staleTime: 5000,
-    refetchInterval: () => {
-      if (metricsUnavailable || isMetricsDisabled()) return false
-      return 5000
-    },
-    enabled: !!selectedNamespace && !metricsUnavailable && !isMetricsDisabled(),
-    retry: (failureCount, err) => {
-      if (isMetricsUnavailableError(err)) return false
-      return failureCount < 2
-    },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
+    // every 5 s, not again once the cluster refused it, once a minute while it serves no metrics.k8s.io (metricsReadPace)
+    ...metricsReadPace(),
+    enabled: !!selectedNamespace,
   })
+  // a refusal shows in place of the numbers, those read before it too, and so does no metrics.k8s.io; the floating chat is told the same
+  const refusal = useMemo(() => metricsRefusal(error), [error])
+  const notServed = isMetricsUnavailableError(error)
+  const podMetrics = refusal || notServed ? undefined : podMetricsRead
 
+  // a tab that has not answered yet (the Pods tab before a namespace is chosen) leaves the page's notice as it is
+  const answered = Boolean(error) || dataUpdatedAt > 0
   useEffect(() => {
-    if (error && isMetricsUnavailableError(error)) {
-      disableMetrics()
-      onMetricsUnavailable()
-    }
-  }, [error, onMetricsUnavailable])
+    if (answered) onMetricsUnavailable(notServed)
+  }, [answered, notServed, onMetricsUnavailable])
 
   const refreshFailure = useMemo(() => metricsRefreshFailure(error, podMetrics, dataUpdatedAt), [error, podMetrics, dataUpdatedAt])
 
+  // what the tab draws in place of its rows, and the floating chat is told the same: no count of usage without rows
+  const view = metricsTabView({ namespace: selectedNamespace, limitedTo, isLoading, rows: podMetrics, refused: Boolean(refusal), error })
+
   // 플로팅 AI 위젯용 스냅샷 — Pod 메트릭 요약
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(podMetrics)) return null
+    if (view === 'refused') {
+      return { source: 'base' as const, summary: `Pod 모니터링 — ${selectedNamespace === 'all' ? '전체' : selectedNamespace} 메트릭 볼 권한 없음`, data: { tab: 'pods', filters: { namespace: selectedNamespace }, metrics_refused: refusal } }
+    }
+    if (view !== 'rows' || !podMetrics) return metricsNotShownLayer(t, 'pods', view, { error, namespace: selectedNamespace, limitedTo, notice: pageNotice })
     const items = [...podMetrics].sort((a, b) => {
       const aCpu = Number(String(a.cpu).replace(/[^0-9.]/g, '')) || 0
       const bCpu = Number(String(b.cpu).replace(/[^0-9.]/g, '')) || 0
@@ -122,7 +128,7 @@ export default function MonitoringPods({
         }),
       },
     }
-  }, [podMetrics, selectedNamespace, refreshFailure])
+  }, [view, t, error, pageNotice, podMetrics, selectedNamespace, limitedTo, refreshFailure, refusal])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -223,11 +229,11 @@ export default function MonitoringPods({
         </div>
       )}
 
-      {selectedNamespace && refreshFailure && <MetricsRefreshFailed failure={refreshFailure} retrying={!metricsUnavailable} testId="pod-metrics-refresh-failed" />}
+      {selectedNamespace && refreshFailure && <MetricsRefreshFailed failure={refreshFailure} testId="pod-metrics-refresh-failed" />}
 
       {/* The cards keep their place with "-" while a read is under way, so the table below does not jump; one line
           each (icon, label, number), so the table keeps more of the screen */}
-      {selectedNamespace && (podStats || isLoading) && (
+      {(view === 'loading' || view === 'rows' || view === 'none_in_namespace' || view === 'none_in_grant') && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 shrink-0">
           {([
             [Box, t('monitoring.pods.totalPods'), podStats ? String(podStats.totalPods) : '-'],
@@ -243,12 +249,12 @@ export default function MonitoringPods({
         </div>
       )}
 
-      {selectedNamespace && isLoading ? (
+      {view === 'loading' ? (
         <div className="flex flex-col items-center justify-center py-12">
           <RefreshCw className="w-8 h-8 text-primary-400 animate-spin mb-4" />
           <p className="text-slate-400">{t('monitoring.loading')}</p>
         </div>
-      ) : selectedNamespace && podMetrics && podMetrics.length > 0 ? (
+      ) : view === 'rows' ? (
         <div ref={containerRef} className="flex-1 min-h-0 flex flex-col">
           <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
           <table className="w-full">
@@ -336,7 +342,9 @@ export default function MonitoringPods({
           </div>
           <ListPager currentPage={page} totalPages={totalPages} total={total} rowsPerPage={rowsPerPage} onPageChange={setPage} testId="monitoring-pod-pager" />
         </div>
-      ) : selectedNamespace && error && !isMetricsUnavailableError(error) ? (
+      ) : view === 'refused' && refusal ? (
+        <RefusedMetrics path="/cluster/metrics/pods" reason={refusal.reason} testId="pod-metrics-forbidden" />
+      ) : view === 'failed' && error ? (
         <div className="text-center py-12">
           <div className="flex flex-col items-center gap-4">
             <Activity className="w-12 h-12 text-red-400 animate-pulse" />
@@ -347,16 +355,19 @@ export default function MonitoringPods({
             </div>
           </div>
         </div>
-      ) : selectedNamespace ? (
+      ) : view === 'none_in_namespace' ? (
         <div className="text-center py-12">
-          <p className="text-slate-400">
-            {selectedNamespace === 'all'
-              ? t('monitoring.pods.unavailableAll')
-              : t('monitoring.pods.noPodsInNamespace', { namespace: selectedNamespace })}
-          </p>
-          {selectedNamespace === 'all' && (
-            <p className="text-sm text-slate-500 mt-2">{t('monitoring.metricsServerHint')}</p>
-          )}
+          <p className="text-slate-400" data-testid="pod-metrics-none-in-namespace">{t('monitoring.pods.noPodsInNamespace', { namespace: selectedNamespace })}</p>
+        </div>
+      ) : view === 'none_in_grant' ? (
+        <div className="text-center py-12">
+          <p className="text-slate-400" data-testid="pod-metrics-none-in-grant">{t('monitoring.pods.noneInGrant')}</p>
+          <p className="text-sm text-slate-500 mt-2">{t('monitoring.pods.noneInGrantHint', { namespaces: limitedTo?.join(', ') })}</p>
+        </div>
+      ) : view === 'unavailable' || view === 'no_samples' ? (
+        <div className="text-center py-12">
+          <p className="text-slate-400" data-testid="pod-metrics-not-available">{t('monitoring.pods.unavailableAll')}</p>
+          <p className="text-sm text-slate-500 mt-2">{t('monitoring.metricsServerHint')}</p>
         </div>
       ) : null}
     </div>

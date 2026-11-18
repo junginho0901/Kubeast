@@ -16,6 +16,35 @@ The model is the dev install's default: `scripts/kind-model-subscription.sh up <
 `deploy/kind/modelconfig-ollama.yaml` for the local model. Run once per model; each run writes
 `<time>-<model>.json` (every tool call with its arguments, the answer, usage) and `<time>-<model>.md` (the table).
 
+## Recorded tool answers
+
+To compare two models or two instructions on the same cluster data, one run can record each read tool's answer and
+later runs get the same answers back (`services/ai-service/app/services/ai/tool_replay.py`). ai-service reads three
+environment variables at start; they are not chart values and are off by default:
+
+| Variable | |
+|---|---|
+| `AI_TOOL_REPLAY_MODE` | `off` (default), `record` or `replay` |
+| `AI_TOOL_REPLAY_DIR` | the directory of recordings, one `<tool>-<key>.json` per call, made when missing |
+| `AI_TOOL_REPLAY_TEST_INSTALL` | must be `true` for `record` or `replay`, or ai-service does not start, so a normal install never serves recorded answers |
+
+The key is the SHA-256 of the cluster, the tool and the arguments with sorted keys, after dropping the model's
+`cluster` argument (the call is pinned to the chat's cluster), empty (`null`) values and the spaces around strings.
+Nothing else is normalized: a PromQL written another way or another time is another key. `record` runs each call as
+usual, masks the answer again with the shared rules (on whatever `REDACTION_ENABLED` says) and writes it; the model
+reads that same text, so a replay returns what the recording run saw. `replay` returns the recording without calling
+tool-server; a call with no recording gets an error answer (`status: replay_miss`) and never runs live, and write and
+action tools are not recorded and are refused in replay. The chat (both loops and Claude Code) and the alert
+investigator all go through it. Each call's `ai.tool.call` audit row is written as before, with `replay: true` and
+`replay_hit`, and with no `access` or `requests` since no cluster was reached; the chat's tool result event and an
+investigation's tool call carry the same two fields, so a run can count its hits — measure the hit rate first, and
+compare with replay only when it is high.
+
+The variables go on the ai-service Deployment of the dev install (record, then replay with the same user and cluster).
+Its `/tmp` is an `emptyDir` and a new pod starts with it empty: copy the directory out of the recording pod before
+switching modes and into the replaying pod once it runs. A call reads its file when it comes, so the copy needs no
+restart; the start line in the log says how many recordings the directory held then.
+
 ## A case
 
 `<NN>_<name>/case.json`:

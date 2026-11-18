@@ -44,7 +44,7 @@ async function createReadUser(request: APIRequestContext, admin: string, email: 
   const member = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name.toLowerCase() === 'member')
   const res = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E query', email, password: PW, role_id: member.id } })
   expect(res.status(), `create ${email}`).toBe(201)
-  const id = (await res.json()).id as string
+  const id = madeUser((await res.json()).id as string, bearer(admin))
   const grant = await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read' } })
   expect(grant.ok(), 'grant Read on self').toBeTruthy()
   return id
@@ -321,4 +321,15 @@ test.describe('AI query tools: jq, tabular, count, and the k8s_diff preview', ()
       if (readerId) await request.delete(`/api/v1/auth/admin/users/${readerId}`, { headers: bearer(admin) })
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

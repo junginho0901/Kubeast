@@ -147,3 +147,7 @@ func volumeNames(v map[string]interface{}) map[string]interface{} {
 func int64Ptr(i int64) *int64 {
 	return &i
 }
+
+func boolPtr(b bool) *bool {
+	return &b
+}

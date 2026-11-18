@@ -13,7 +13,7 @@ import { usePermission } from '@/hooks/usePermission'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { pageOf } from '@/utils/listPages'
 import { newRolePermissions, roleReadsNoList } from '@/utils/permissions'
-import { customRoleGroup, roleEditEndsSessions } from '@/utils/roleGroup'
+import { customRoleGroup, roleEditEndsSessions, roleGroupSlug, takenRoleName, type TakenRoleName } from '@/utils/roleGroup'
 import { useConfirm } from '@/services/confirm'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { announceCreated } from '@/services/createdNoticeStore'
@@ -80,6 +80,24 @@ export default function AdminRoles() {
     queryFn: api.listPermissions,
   })
 
+  // why a name is taken, in the viewer's language: the field's own check and auth-service's role_name_taken answer
+  const takenText = (taken: TakenRoleName, name: string) => {
+    if (taken.builtin && taken.sameName) return tr('adminRoles.nameTakenBuiltinSame', 'Role "{{role}}" already exists: it is a built-in role.', { role: taken.role })
+    if (taken.sameName) return tr('adminRoles.nameTakenSame', 'Role "{{role}}" already exists. Choose another name.', { role: taken.role })
+    if (taken.builtin) return tr('adminRoles.nameTakenBuiltin', 'Taken: it is the built-in role {{role}} apart from letter case or spaces.', { role: taken.role })
+    if (taken.role) {
+      return tr('adminRoles.nameTakenGroup', 'On a cluster this name acts as the same Kubernetes group as role "{{role}}" ({{group}}). Choose another name.', {
+        role: taken.role, group: `kubeast:role:${roleGroupSlug(name)}`,
+      })
+    }
+    return tr('adminRoles.nameTakenOther', "Another role's name makes the same group. Choose another name.")
+  }
+  const serverRefusal = (err: any, fallback: string) => {
+    const data = err?.response?.data
+    if (data?.code === 'role_name_taken') return takenText({ role: data.role ?? '', builtin: !!data.builtin, sameName: !!data.same_name }, formName)
+    return data?.detail || fallback
+  }
+
   const createMutation = useMutation({
     mutationFn: (req: { name: string; description: string; permissions: string[] }) => api.adminCreateRole(req),
     onSuccess: (_, req) => {
@@ -88,8 +106,8 @@ export default function AdminRoles() {
       // the new role may sit on another page of the list: the line under the header names it
       announceCreated(window.location.pathname, [{ kind: 'Role', name: req.name }])
     },
-    // The server says why (unknown permission, permission ceiling): show it.
-    onError: (err: any) => setFormError(err?.response?.data?.detail || tr('adminRoles.createError', 'Failed to create role')),
+    // The server says why (unknown permission, permission ceiling, a taken name): show it.
+    onError: (err: any) => setFormError(serverRefusal(err, tr('adminRoles.createError', 'Failed to create role'))),
   })
 
   const updateMutation = useMutation({
@@ -99,7 +117,7 @@ export default function AdminRoles() {
       queryClient.invalidateQueries({ queryKey: ['roles'] })
       closeModal()
     },
-    onError: (err: any) => setFormError(err?.response?.data?.detail || tr('adminRoles.updateError', 'Failed to update role')),
+    onError: (err: any) => setFormError(serverRefusal(err, tr('adminRoles.updateError', 'Failed to update role'))),
   })
 
   const deleteMutation = useMutation({
@@ -172,6 +190,8 @@ export default function AdminRoles() {
 
   const isModalOpen = isCreating || editingRole !== null
   const isSaving = createMutation.isPending || updateMutation.isPending
+  // a name another role holds or acts as on a cluster: said under the field, and Save waits (auth-service refuses it)
+  const nameTaken = isModalOpen && !editingRole?.is_system ? takenRoleName(formName, roles, editingRole) : null
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
@@ -250,6 +270,15 @@ export default function AdminRoles() {
                         </span>
                       )}
                     </button>
+                    {role.same_group_as && (
+                      <span
+                        data-testid="role-same-group"
+                        className="ml-2 inline-block rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-normal text-amber-300"
+                        title={tr('adminRoles.sameGroupNote', 'Its name differs from role "{{role}}" only in letter case, spaces or punctuation, so it is not given on a cluster any more. A grant it already has acts as no role group where the other is a built-in role. Rename it.', { role: role.same_group_as })}
+                      >
+                        {tr('adminRoles.sameGroupHint', 'not grantable: same name as {{role}} apart from letter case or spaces', { role: role.same_group_as })}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-slate-400">
                     {shownDescription(role)}
@@ -357,6 +386,7 @@ export default function AdminRoles() {
                 type="button"
                 onClick={() => setUsersRole(null)}
                 className="rounded-sm p-1.5 text-slate-400 hover:text-ink hover:bg-slate-800"
+                aria-label={tr('common.close', 'Close')}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -425,7 +455,7 @@ export default function AdminRoles() {
               <button type="button" onClick={closeModal} className={modalButton.cancel} disabled={isSaving}>
                 {tr('adminRoles.cancel', 'Cancel')}
               </button>
-              <button type="button" onClick={handleSubmit} disabled={isSaving} className={modalButton.primary}>
+              <button type="button" onClick={handleSubmit} disabled={isSaving || !!nameTaken} className={modalButton.primary}>
                 <Check className="w-4 h-4" />
                 {isSaving
                   ? tr('adminRoles.saving', 'Saving...')
@@ -450,6 +480,11 @@ export default function AdminRoles() {
                   className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
                   placeholder={tr('adminRoles.form.namePh', 'e.g. InfraManager')}
                 />
+                {nameTaken && (
+                  <p role="alert" data-testid="role-name-taken" className="mt-1 text-[11px] text-red-400">
+                    {takenText(nameTaken, formName)}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">
@@ -470,6 +505,15 @@ export default function AdminRoles() {
                   'adminRoles.groupHint',
                   'On a cluster this role acts as the Kubernetes group {{group}}. Each cluster must allow and bind that group (chart auth.impersonation.customRoles), or every request there is refused.',
                   { group: customRoleGroup(formName) },
+                )}
+                {customRoleGroup(formName)?.includes('~') && (
+                  <>
+                    {' '}
+                    {tr(
+                      'adminRoles.groupHintEncoded',
+                      'A character outside ASCII is written as ~ and its Unicode code point (운 → ~c6b4), so Korean names of one length still make different groups.',
+                    )}
+                  </>
                 )}
               </p>
             )}

@@ -61,9 +61,10 @@ func (c Config) Validate() error {
 }
 
 // ReviewCutoff returns the timestamp before which sign-offs are deleted (zero when off).
+// Every cut-off is in UTC, as the TIMESTAMP columns it is compared with hold it.
 func (c Config) ReviewCutoff(now time.Time) time.Time {
 	if c.ReviewDays > 0 {
-		return now.AddDate(0, 0, -c.ReviewDays)
+		return now.UTC().AddDate(0, 0, -c.ReviewDays)
 	}
 	return time.Time{}
 }
@@ -72,7 +73,7 @@ func (c Config) ReviewCutoff(now time.Time) time.Time {
 // are deleted (zero when off).
 func (c Config) InvestigationCutoff(now time.Time) time.Time {
 	if c.InvestigationDays > 0 {
-		return now.AddDate(0, 0, -c.InvestigationDays)
+		return now.UTC().AddDate(0, 0, -c.InvestigationDays)
 	}
 	return time.Time{}
 }
@@ -80,10 +81,10 @@ func (c Config) InvestigationCutoff(now time.Time) time.Time {
 // Cutoffs returns the timestamps before which rows are deleted (zero when off).
 func (c Config) Cutoffs(now time.Time) (audit, chat time.Time) {
 	if c.AuditDays > 0 {
-		audit = now.AddDate(0, 0, -c.AuditDays)
+		audit = now.UTC().AddDate(0, 0, -c.AuditDays)
 	}
 	if c.ChatDays > 0 {
-		chat = now.AddDate(0, 0, -c.ChatDays)
+		chat = now.UTC().AddDate(0, 0, -c.ChatDays)
 	}
 	return audit, chat
 }

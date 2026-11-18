@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { getProvider } from '@/constants/modelCatalog'
-import { buildOptions, modelListError, modelOptions, splitLimits } from './helpers'
+import { getDefaultModel, getProvider } from '@/constants/modelCatalog'
+import { buildOptions, listDefault, modelListError, modelOptions, splitLimits } from './helpers'
+
+describe('listDefault', () => {
+  it("starts on the provider's default where the list has it, whatever the list's order", () => {
+    const openai = getDefaultModel('openai')
+    expect(listDefault('openai', ['chatgpt-4o-latest', 'gpt-5.5', openai])).toBe(openai)
+    expect(listDefault('openai', getProvider('openai')!.models.map((m) => m.name))).toBe(openai)
+  })
+
+  it("takes the list's first when the provider does not list its default, and nothing from an empty list", () => {
+    expect(listDefault('openai', ['gpt-5.5', 'gpt-5.4'])).toBe('gpt-5.5')
+    expect(listDefault('azure', ['my-deployment'])).toBe('my-deployment')
+    expect(listDefault('openai', [])).toBe('')
+  })
+})
 
 describe('modelListError', () => {
   const refused = Object.assign(new Error('Request failed with status code 503'), {

@@ -6,6 +6,8 @@ import zlib from 'node:zlib'
 
 import { test, expect } from '@playwright/test'
 
+import { sidebarStill } from './sidebar-screens'
+
 // Helm Releases page — streams release updates over a long-lived SSE
 // connection (helm/releases/stream). Since step 04b made that stream
 // cluster-aware and actually long-lived, the page never reaches
@@ -27,6 +29,7 @@ test.describe('Helm Releases', () => {
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('h1.text-3xl').first()).toContainText(/helm/i)
 
+    await sidebarStill(page)
     await expect(page).toHaveScreenshot('helm-releases-list.png', {
       fullPage: true,
       animations: 'disabled',

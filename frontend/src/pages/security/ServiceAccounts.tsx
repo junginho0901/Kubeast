@@ -18,7 +18,7 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { applyServiceAccountWatchEvent } from './serviceaccounts/serviceAccountWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
@@ -194,13 +194,10 @@ export default function ServiceAccounts() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllServiceAccounts(true)
-      : await api.getServiceAccounts(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['security', 'serviceaccounts', selectedNamespace] })
-    queryClient.setQueryData(['security', 'serviceaccounts', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['security', 'serviceaccounts', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllServiceAccounts(true)
+      : api.getServiceAccounts(selectedNamespace, true)))
 
   const createYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

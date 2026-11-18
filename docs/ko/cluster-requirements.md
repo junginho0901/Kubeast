@@ -23,7 +23,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 예
 | --- | --- | --- | --- |
 | 전체 | Kubeast 권한(RBAC) — §1 | `auth.impersonation.enabled`(켬) | 클러스터가 사용자 요청을 403으로 거부 |
 | 알림 → AI 조사 | 조사 신원 RBAC — §1, Kubeast로 웹훅을 보내는 Alertmanager 또는 Grafana 알림 — §13 | `features.alertInvestigation.enabled`(끔) | 알림이 오지 않거나, 조사용 읽기 도구가 클러스터에서 403 |
-| 노드·파드 사용량, Monitoring, 최적화(대체 수단) | metrics-server — §2 | — | 사용량 칸이 비고, 최적화는 "없음" |
+| 노드·파드 사용량, Monitoring, 최적화(대체 수단) | metrics-server — §2 | — | 대시보드 상위 리소스, Monitoring, 노드 페이지 상단 카드가 모든 사용자에게 "이 클러스터에 메트릭 서버가 없습니다"를 표시(클러스터의 API discovery로 판정, §2), 노드 드로어의 사용량은 비고, 최적화는 "없음" |
 | 드로어·대시보드 그래프, 최적화, 스토리지 분석 | Prometheus + 지표 수집기 — §3 | `features.prometheus.enabled`(**끔**) | 그래프 영역이 숨겨지고, 최적화는 metrics-server 순간값 사용 |
 | 비용(Cost), 최적화 비용 열 | OpenCost — §4 | `features.cost.enabled`(켬) | "OpenCost 없음" 안내, 비용 열 없음 |
 | 정책 보고서 | PolicyReport CRD와 보고서를 만드는 도구 — §5 | `features.policyReports.enabled`(켬) | "설치 안 됨" 안내 |
@@ -63,6 +63,13 @@ Kubeast는 주소가 그 사람의 것인지 알 수 없습니다. `admin.users.
 그룹 바인딩을 권합니다. `User`를 묶는다면 그 사람의 계정이 이미 있는지, 계정이 ID 공급자에서 오는지 확인하세요.
 `auth.impersonation.userPrefix`(기본 비어 있음, 예: `kubeast:user:`)를 정하면 주소 앞에 Kubeast만의 이름이 붙습니다. 그러면 클러스터가 자기 로그인(OIDC, IAM)을 위해 주소로 묶은 바인딩이 같은 주소의 Kubeast 계정에 열리지 않습니다. 그룹 바인딩은 그대로 동작합니다. 정하면 클러스터가 보고 감사 로그에 적는 이름이 바뀌고, 주소로 묶은 `User` 바인딩은 Kubeast 요청에 더 이상 적용되지 않습니다. 등록한 모든 클러스터에서 그 바인딩을 먼저 그룹으로 옮기세요.
 
+**사람이 없는 요청.** 몇몇 읽기는 Kubeast 자체 읽기이고, 클러스터 감사 로그에는 Kubeast가 남습니다.
+
+- `Impersonate-User` 헤더 없이: 서버 버전, 클러스터마다 한 번 읽어 모두에게 쓰는 API 디스커버리, 상태 확인. `/version`, `/api`, `/apis`, `/api/v1`, `/apis/<group>/<version>`(클러스터 서버 URL에 경로가 있으면 그 뒤)의 `GET`만 이렇게 나갑니다.
+- 고정 신원 `kubeast:cache`(§1의 `view` 권한)로: 개요 informer, 목록을 볼 수 있는 모두에게 한 번 읽어 쓰는 객체 이벤트와 노드의 파드, Kubeast가 도는 클러스터를 가리는 `kube-system` UID, `metrics.k8s.io` 그룹 확인, Prometheus·OpenCost Service 찾기.
+
+그 밖의 요청은 로그인한 사람을 알 수 없으면 보내지 않고, kubectl 도구도 실행하지 않습니다.
+
 **Write = Kubernetes 기본 `edit`**: kubectl로 `edit`을 받은 사람과 범위가 같으며, 다음 권한까지 포함합니다.
 
 - Secret 읽기·쓰기
@@ -77,7 +84,8 @@ Kubeast 화면에서 셸은 Admin만 열 수 있지만, 클러스터 권한으�
 Kubeast는 그 ClusterRole과 사람이 가진 권한을 비교할 수 없으므로, 목록의 그룹이 되는 새 이름과 이름 바꾸기에는 모든 권한(`*`, 전역 Admin)이 필요합니다. `admin.roles.create`나 `admin.roles.update`를 가진 다른 사람은 403을 받고 감사 행이 남습니다.
 그러니 이름을 목록에 적고 전역 Admin이 역할을 만들거나, 역할을 먼저 만들고 나서 목록에 적으세요. 그 뒤로는 다른 역할과 같습니다. `admin.roles.update`로 고칠 수 있고, 목록의 이름으로 이미 저장된 역할은 그대로 동작합니다.
 그 역할의 부여(직접 부여나 접근 요청 승인)는 전역 관리자나 그 클러스터의 Admin(Namespace 한정 없음)만 할 수 있습니다. 이들은 그 클러스터에서 `kubeast:admin`, 곧 `cluster-admin`으로 동작하므로 바인딩이 주는 것을 이미 가졌습니다. `admin.users.update`를 가진 다른 사람은 403을 받고 감사 행이 남으며, 클러스터 접근 선택지와 승인 버튼도 그렇게 보입니다. Namespace 한정 부여를 위해 목록에 적은 Read·Write·Admin은 이렇게 막지 않습니다.
-차트는 이 목록을 `IMPERSONATION_CUSTOM_ROLES`로 auth-service에 넘깁니다. Docker Compose에는 차트가 없으므로, 클러스터에 이런 바인딩을 적용했다면 `.env`의 이 변수에 이름을 적으세요.
+차트는 이 이름들을 `IMPERSONATION_CUSTOM_ROLES`로 auth-service에 넘깁니다. 이름 안의 쉼표는 `-`로 넘깁니다(같은 그룹). Docker Compose에는 차트가 없으므로, 클러스터에 이런 바인딩을 적용했다면 `.env`의 이 변수에 이름을 적으세요.
+역할의 그룹은 `kubeast:role:`에 이름의 slug를 붙인 것이고, 역할 창에 나옵니다. ASCII가 아닌 글자는 `~`와 코드 포인트로 적습니다(`운영팀` → `kubeast:role:~c6b4~c601~d300`, [기능](features.md) "역할 이름"). 그 그룹을 적힌 그대로 바인딩하세요.
 
 **역할을 지워도 바인딩은 지워지지 않습니다.** 적용된 모든 클러스터에 남고, 다음에 그 이름으로 만든 역할이 그 바인딩으로 동작합니다.
 이름이 목록에 있는 동안은 위 규칙이 그대로 걸립니다.
@@ -113,9 +121,42 @@ kubectl --context <cluster> auth can-i get pods --subresource=log -A --as=kubeas
 kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator --as-group=kubeast:investigator                  # no
 ```
 
+**그룹끼리 나눠 쓰는 읽기 확인** (`auth.impersonation.sharedReadChecks.enabled`, 기본 꺼짐. compose는 `SHARED_READ_CHECKS`).
+Kubeast가 `kubeast:cache`로 지켜보는 것에서 보여 주는 화면 — 대시보드의 개수, 네임스페이스·노드 목록, 부여의 네임스페이스, Pods 페이지, Cluster View의 노드 — 은 그 사람이 보여 줄 것을 list·get할 수 있는지 클러스터에 먼저 묻습니다(SelfSubjectAccessReview, 최대 1분 기억).
+켜면 그 질문을 같은 그룹을 가진 모든 사람을 위해 한 번, 사용자 `kubeast:group-check:<16진수 여덟 자리>`와 그 그룹으로 보내고, 허용 답은 그 1분이 끝날 때까지 그 그룹의 사람마다 씁니다. 사람 자신의 답과 같습니다.
+접두어 뒤의 꼬리는 k8s-service가 시작할 때마다 만들고 로그에 남기지 않습니다. 시작 로그에는 접두어만 적습니다(`allowed read checks of screens are shared by group`). 클러스터 감사 로그를 읽을 수 있는 사람에게는 이름 전체가 보입니다.
+거절은 나눠 쓰지 않습니다. 지금처럼 그 사람으로 다시 물으므로 `User` 바인딩은 그 사람에게 그대로 적용됩니다.
+can-i, 쓰기, 로그, Secret, 하위 리소스, AI 도구 호출의 확인, 사람이 아닌 토큰, `system:` 사용자 이름은 늘 그 사람으로 묻습니다.
+
+기대는 조건은 클러스터의 모든 인가기에 대해 하나입니다. `kubeast:group-check:…`와 그 사람의 그룹에 허용한 것은, 같은 그룹을 가진 그 사람에게도 허용해야 합니다.
+RBAC는 더하기만 하므로 인가기가 `Node`와 `RBAC`뿐인 클러스터는 조건을 지킵니다. Amazon EKS가 더하는 액세스 정책은 허용하거나 넘기기만 하며, Kubeast가 대신하는 신원에는 쓰이지 않습니다.
+다음 중 하나라도 맞는 클러스터는 등록 ID를 `auth.impersonation.sharedReadChecks.excludeClusters`에 넣으세요.
+
+- RBAC 앞이든 뒤든, 사용자 이름에 따라 답하는 인가기가 있습니다. 사람을 이름으로 거절하거나, 그룹은 허용하면서 이름이 정해진 사람에게는 넘겨서("의견 없음") 그 사람이 결국 거절되는 경우입니다. Kubeast는 그 사람에게, 클러스터가 그 사람 자신의 요청으로는 거절하는 것을 보여 주게 됩니다.
+- 클러스터가 Kubeast가 대신할 수 있는 사용자 이름을 제한해서, 공유 이름은 허용되고 어떤 사람은 허용되지 않습니다. 그 사람 자신의 요청은 거절되지만 공유 허용은 거절되지 않습니다. 클러스터가 거절하는 쪽이 공유 이름이면 확인마다 그 사람으로 묻고 화면은 바뀌지 않습니다.
+- `kubeast:group-check:*` 이름의 `User`가 바인딩되어 있습니다. 그런 바인딩은 그 그룹의 모든 사람에게 적용됩니다. 이름은 시작마다 바뀌므로 한 번 시작 때 만든 바인딩은 다음 시작으로 이어지지 않습니다. 다만 Kubeast가 도는 동안에는 감사 로그에서 이름을 읽을 수 있으므로, 이 조건을 지키는 것은 아래의 바인딩 확인입니다.
+
+```bash
+# 인가기: Node와 RBAC뿐(kubeadm 등 직접 운영하는 API 서버. --authorization-config면 그 파일이 차례대로 적음)
+kubectl --context <cluster> -n kube-system get pod -l component=kube-apiserver -o yaml | grep -E 'authorization-(mode|config)'
+# Kubeast가 어떤 사용자 이름이든 대신할 수 있음: kubeast-impersonator의 users 규칙에 resourceNames 없음
+kubectl --context <cluster> get clusterrole kubeast-impersonator -o jsonpath='{.rules[?(@.resources[0]=="users")]}'
+# 공유 사용자를 가리키는 바인딩이 없음 — 등록 클러스터마다 RBAC 점검 때 돌리세요
+kubectl --context <cluster> get clusterrolebindings,rolebindings -A -o json | jq -r '.items[] | select(any(.subjects[]?; .kind == "User" and (.name | startswith("kubeast:group-check:")))) | .metadata.name'   # 없음
+# 공유 이름으로 물은 그룹 집합의 허용: 그 그룹의 사람과 같은 답
+kubectl --context <cluster> auth can-i list pods -A --as=kubeast:group-check:check --as-group=kubeast:authenticated --as-group=kubeast:viewer --as-group=system:authenticated   # yes
+```
+
+- 클러스터 감사 로그에는 그 허용된 확인이 사람이 아니라 `kubeast:group-check:…`와 그 그룹으로 남습니다. 거절, can-i, 그 사람으로 하는 읽기는 지금처럼 사람 이름으로 남습니다.
+- 한 사람의 화면이 그 사람으로 묻는 것은 여덟 개쯤에서 can-i 하나로 줄고, 네임스페이스 N개로 묶인 부여는 그 그룹의 질문을 같은 그룹 모두를 위해 한 번 묻습니다. 레플리카마다 따로 물으므로 R대면 나눠 쓰는 질문도 최대 R배입니다. 사람의 확인과 같은 클라이언트 속도(`multicluster.clientQPS`, 정했다면 `reviewQPS`)에서 차례를 기다리며, 속도를 더하지 않습니다.
+- `excludeClusters`에 등록 클러스터 ID가 아닌 항목이 있으면 k8s-service가 시작할 때와 클러스터가 바뀐 뒤 경고합니다. 그런 항목은 아무 클러스터도 빼지 않습니다. 시작할 때 레지스트리를 읽지 못했다면 다음 클러스터 변경 때 경고합니다.
+- `auth.impersonation.enabled`가 꺼져 있으면 이 스위치는 아무것도 하지 않습니다.
+
 ## 2. metrics-server
 
 노드 목록, Monitoring 화면, 노드 드로어의 사용량과, Prometheus가 없을 때 최적화 표에 나오는 사용량(순간값)은 `metrics.k8s.io`에서 읽습니다.
+Kubeast는 metrics 목록을 먼저 묻습니다. 그래서 목록이 답하는 클러스터에는 더 묻는 것이 없습니다. 목록이 404나 403을 답할 때만 클러스터의 API discovery에서 `metrics.k8s.io`를 찾습니다. 1분 안에 읽은 discovery가 있으면 그것을 쓰고, 없으면 `kubeast:cache`로 `GET /apis/metrics.k8s.io`를 한 번 읽습니다. 기본 `system:discovery` ClusterRole이 이 읽기를 허용합니다. 그 답과 읽기 실패는 클러스터마다 1분 동안 씁니다.
+discovery에 `metrics.k8s.io`가 없으면 모든 사용자에게 metrics-server를 사용할 수 없다고 알리고, 그 1분 동안 metrics 목록은 묻지 않습니다. discovery를 읽지 못하는 동안에는 사용자마다 클러스터가 준 답을 그대로 받습니다. 나중에 설치한 metrics-server는 2분 안에 보입니다. 확인: metrics-server가 없는 클러스터에서는 `kubectl get --raw /apis/metrics.k8s.io`가 404를 답합니다.
 
 - 설치: [metrics-server 차트](https://artifacthub.io/packages/helm/metrics-server/metrics-server) `3.14.0`(앱 0.9.0)
   - `helm install metrics-server metrics-server/metrics-server --version 3.14.0 -n kube-system`
@@ -337,6 +378,7 @@ CRD가 없으면 Kubeast는 빈 목록과 "설치 안 됨"(`X-Kubeast-Not-Instal
 | 재시작 없이 적용(Pod `resize` 하위 리소스) | API 서버 1.35 이상 |
 | DRA 화면 | 1.31 이상(§6) |
 | 업그레이드 준비 점검 | 대상 = 서버 마이너 + 1 (조건 없음) |
+| 실시간 목록을 watch list로 열기(`sendInitialEvents`, API 서버의 `WatchList` 기능, 1.32와 1.34부터 기본 켜짐) | 없음: 이를 거절하는 API 서버(기본값으로 1.27~1.31과 1.33)는 422로 답하고, 받아들이고도 북마크를 보내지 않는 서버는 watch list 셋을 연달아, 2초가 됐을 때 마지막 1초 동안 이벤트가 없는 채로 남깁니다. 어느 쪽이든 k8s-service는 그 클러스터의 실시간 목록을 10분 동안 보통 watch로 연 뒤 다시 묻습니다. 확인: `kubectl get --raw '/api/v1/namespaces/default/configmaps?watch=1&sendInitialEvents=true&resourceVersionMatch=NotOlderThan&resourceVersion=0&allowWatchBookmarks=true&timeoutSeconds=1'`의 끝에 annotations에 `k8s.io/initial-events-end`가 있는 `BOOKMARK`가 옵니다 |
 
 ## 9. 노드 셸
 
@@ -509,6 +551,7 @@ service:
 | 항목 | 조건 |
 | --- | --- |
 | 사용자 네임스페이스 | `podSecurity.hostUsers: false`(기본)를 쓰려면 Kubernetes 1.33 이상과 이를 지원하는 노드 커널(6.3 이상)이 필요합니다. 조건이 맞지 않으면 `true` |
+| 파드 종료 | Kubernetes 1.30 이상: 차트의 Service 뒤 파드는(번들 PostgreSQL과 Redis는 빼고) 기본 `preStop` `sleep` 동작(1.30 베타·기본 켜짐, 1.34 GA)으로 SIGTERM 전에 `podShutdown.preStopSeconds`(5초) 기다리므로, 롤링 업데이트 중 이미 종료한 파드로 새 연결이 가지 않습니다. `0`이면 기다리지 않습니다 |
 | 저장소 | 내장 PostgreSQL을 쓰면 PVC — 기본 StorageClass 또는 `postgresql.storageClassName` |
 | 노출 | NodePort(기본)·LoadBalancer, 또는 Ingress 컨트롤러(`ingress.enabled`) |
 | 앞단 프록시·로드 밸런서 | 유휴 시간 제한 30초 초과(AWS ALB 기본값은 60초). 조용한 동안 실시간 목록·터미널·노드 셸·로그 실시간 보기·AI 답은 25초마다, Helm 릴리스 스트림은 30초마다 무언가를 보내므로(WebSocket 핑, SSE 주석 줄) 열린 채 유지됩니다. 게이트웨이 자체는 이들에 600~3 600초를 줍니다 |

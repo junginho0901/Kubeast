@@ -23,7 +23,7 @@ test('cluster Access modal grants + revokes a per-cluster role', async ({ page, 
       data: { name: 'E2E Access Modal', email, password: 'e2e-access-modal-throwaway' },
     })
     expect(created.status(), 'create throwaway user').toBe(201)
-    userId = (await created.json()).id
+    userId = madeUser((await created.json()).id, auth)
 
     await page.goto('/admin/clusters')
     await page.waitForLoadState('domcontentloaded')
@@ -73,4 +73,15 @@ test('cluster Access modal grants + revokes a per-cluster role', async ({ page, 
       await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: auth, failOnStatusCode: false })
     }
   }
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

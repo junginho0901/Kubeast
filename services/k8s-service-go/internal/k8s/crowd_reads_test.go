@@ -33,7 +33,7 @@ func firstScreens(s *Service, b *clientBundle, ctx context.Context, nodes []stri
 		}}, metav1.CreateOptions{})
 	})
 	for _, node := range nodes {
-		run(func() { _, _ = s.GetPodsOnNode(ctx, node, "") })
+		run(func() { _, _ = s.GetPodsOnNodeJSON(ctx, node, "") })
 	}
 	wg.Wait()
 }
@@ -56,15 +56,17 @@ func TestFirstScreensOfOnePersonListNoPodsAsThatPerson(t *testing.T) {
 			overviewPod(ns, "p", corev1.PodRunning))
 	}
 	grants := map[string][]string{"wide@example.com": {""}, "five@example.com": namespaces[:5], "twenty@example.com": namespaces}
-	// what is left is a question per thing shown (7 for the overview, the can-i), and a grant's namespaces and nodes
+	// what is left is a question per thing shown (7 for the overview, the can-i); a grant asks per namespace about the
+	// kinds it holds there (pods, a Deployment) and reading it, once about each kind none holds (Services, PVCs), and
+	// lists the nodes
 	people := []struct {
 		user    string
 		ctx     context.Context
 		n, want int
 	}{
 		{"wide@example.com", wideCaller("wide@example.com"), 0, 8},
-		{"five@example.com", grantCaller("five@example.com", namespaces[:5]...), 5, 5*5 + 2},
-		{"twenty@example.com", grantCaller("twenty@example.com", namespaces...), 20, 5*20 + 2},
+		{"five@example.com", grantCaller("five@example.com", namespaces[:5]...), 5, 3*5 + 4},
+		{"twenty@example.com", grantCaller("twenty@example.com", namespaces...), 20, 3*20 + 4},
 	}
 	var table []string
 	for _, p := range people {
@@ -84,6 +86,10 @@ func TestFirstScreensOfOnePersonListNoPodsAsThatPerson(t *testing.T) {
 		table = append(table, fmt.Sprintf("%-20s N=%-2d as the person %3d  as %s %d  (%s)", p.user, p.n, len(api.callsOf(p.user)), overviewCacheUser, asCache, strings.Join(kinds, " ")))
 		if n := byKind["list pods"]; n != 0 {
 			t.Errorf("%s: %d pod lists as the person, want 0", p.user, n)
+		}
+		// the boxes come from the informers' rows on each node
+		if n := api.count(func(c apiCall) bool { return c.user == overviewCacheUser && c.resource == "pods" }); n != 0 {
+			t.Errorf("%s: %d pod lists as %s, want 0", p.user, n, overviewCacheUser)
 		}
 		if n := len(api.callsOf(p.user)); n != p.want {
 			t.Errorf("%s: %d requests as the person, want %d", p.user, n, p.want)
