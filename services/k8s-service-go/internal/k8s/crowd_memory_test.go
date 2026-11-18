@@ -215,12 +215,13 @@ func heldWhileAnswersWait(t testing.TB, k int, request func(ctx context.Context,
 // podsOnNodeRequest is the on-node handler's work: the pods listed as the caller, answered as JSON.
 func podsOnNodeRequest(s *Service) func(ctx context.Context, w http.ResponseWriter) {
 	return func(ctx context.Context, w http.ResponseWriter) {
-		data, err := s.GetPodsOnNode(ctx, "node-0001", "")
+		raw, err := s.GetPodsOnNodeJSON(ctx, "node-0001", "")
 		if err != nil {
 			response.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		response.JSON(w, http.StatusOK, data)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(raw)
 	}
 }
 

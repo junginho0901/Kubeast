@@ -23,13 +23,16 @@ if [ $# -eq 0 ]; then
   exit 2
 fi
 
+err=$(mktemp)
+trap 'rm -f "$err"' EXIT
 for t in "${TEMPLATES[@]}"; do
-  if out=$(helm template kubeast "$CHART" --show-only "templates/$t.yaml" "$@" 2>&1); then
-    printf '%s\n' "$out"
-  elif grep -q "could not find template templates/$t.yaml" <<<"$out"; then
+  if out=$(helm template kubeast "$CHART" --show-only "templates/$t.yaml" "$@" 2>"$err"); then
+    # from the first document: Helm 4.2.1 to 4.2.x print an OCI chart's Pulled and Digest lines on stdout before it
+    printf '%s\n' "$out" | sed -n '/^---/,$p'
+  elif grep -q "could not find template templates/$t.yaml" "$err"; then
     echo "skipped templates/$t.yaml: renders nothing for these values" >&2
   else
-    printf '%s\n' "$out" >&2
+    cat "$err" >&2
     exit 1
   fi
 done

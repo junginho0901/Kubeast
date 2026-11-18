@@ -97,7 +97,7 @@ async function readerFollowsTheLink(request: APIRequestContext, browser: Browser
   const password = 'E2e-alerts-throwaway-1!'
   const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E alerts link', email, password, role_id: member.id } })
   expect(created.status()).toBe(201)
-  const userId = (await created.json()).id as string
+  const userId = madeUser((await created.json()).id as string, bearer(admin))
   const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] }, locale: 'en-US' })
   try {
     await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read' } })
@@ -205,7 +205,7 @@ test.describe('alert investigation', () => {
     const email = `e2e-alerts-${Date.now().toString(36)}@kubeast.local`
     const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E alerts reader', email, password: 'E2e-alerts-throwaway-1!', role_id: member.id } })
     expect(created.status()).toBe(201)
-    const userId = (await created.json()).id as string
+    const userId = madeUser((await created.json()).id as string, bearer(admin))
     try {
       await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read' } })
       const reader = await login(request, email, 'E2e-alerts-throwaway-1!')
@@ -231,4 +231,15 @@ test.describe('alert investigation', () => {
     expect(d.fingerprint).toMatch(/^[0-9a-f]{16}$/)
     expect(d.namespace).toBe('kube-system')
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

@@ -3,9 +3,11 @@ package clustersync
 import (
 	"context"
 	"errors"
+	"net"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/clusternotice"
 )
 
 // registry is the clusters table's versions; err makes a read fail.
@@ -131,7 +134,7 @@ func (r *replica) run(t *testing.T) {
 
 func waitSubscribers(t *testing.T, mr *miniredis.Miniredis, n int) {
 	t.Helper()
-	eventually(t, func() bool { return mr.PubSubNumSub(ChannelFor(0))[ChannelFor(0)] == n })
+	eventually(t, func() bool { return mr.PubSubNumSub(clusternotice.ChannelFor(0))[clusternotice.ChannelFor(0)] == n })
 }
 
 func eventually(t *testing.T, ok func() bool) {
@@ -276,7 +279,7 @@ func TestInstallsOnTwoDatabasesDoNotHearEachOther(t *testing.T) {
 	a, b := onDB(0), onDB(1)
 	eventually(t, func() bool { // both subscribed, whatever the channels' names
 		total := 0
-		for _, n := range mr.PubSubNumSub(mr.PubSubChannels(Channel + "*")...) {
+		for _, n := range mr.PubSubNumSub(mr.PubSubChannels(clusternotice.Channel + "*")...) {
 			total += n
 		}
 		return total == 2
@@ -295,8 +298,8 @@ func TestANoticeNotUnderstoodIsIgnored(t *testing.T) {
 	b := newReplica(t, g, mr, time.Hour)
 	b.run(t)
 	waitSubscribers(t, mr, 1)
-	mr.Publish(ChannelFor(0), "not json")
-	mr.Publish(ChannelFor(0), `{"from":"someone"}`)
+	mr.Publish(clusternotice.ChannelFor(0), "not json")
+	mr.Publish(clusternotice.ChannelFor(0), `{"from":"someone"}`)
 	time.Sleep(100 * time.Millisecond)
 	if got := b.noticeDrops(); len(got) != 0 {
 		t.Fatalf("dropped %v", got)
@@ -314,14 +317,19 @@ func TestSpreadStaysWithinAFifth(t *testing.T) {
 // A replica whose Redis did not answer when it started listens for the notices once Redis answers (the client
 // subscribes again by itself) and reads the versions on subscribing, so what changed meanwhile is dropped then.
 func TestAReplicaStartedWithoutRedisHearsTheNoticesOnceRedisAnswers(t *testing.T) {
-	mr := miniredis.NewMiniRedis()
-	if err := mr.Start(); err != nil {
-		t.Fatal(err)
+	mr := miniredis.RunT(t)
+	// Redis does not answer this client until up is set. Not mr.Close and mr.Restart: Restart listens before it
+	// registers its commands, and a client that dials in between keeps a connection whose SUBSCRIBE was refused.
+	var up atomic.Bool
+	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if !up.Load() {
+			return nil, errors.New("redis down")
+		}
+		var d net.Dialer
+		return d.DialContext(ctx, network, addr)
 	}
-	t.Cleanup(mr.Close)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: -1}) // the address, before the stand-in stops
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: -1, Dialer: dial})
 	t.Cleanup(func() { _ = rdb.Close() })
-	mr.Close()
 	g := &registry{versions: map[cluster.ID]int64{"prod": 2, "dev": 1}}
 	b := &replica{Sync: New(g, rdb), kept: map[cluster.ID]int64{}}
 	b.Every = time.Hour // no timed read
@@ -333,9 +341,7 @@ func TestAReplicaStartedWithoutRedisHearsTheNoticesOnceRedisAnswers(t *testing.T
 		t.Fatalf("dropped %v before Redis answered", got)
 	}
 
-	if err := mr.Restart(); err != nil {
-		t.Fatal(err)
-	}
+	up.Store(true)
 	waitSubscribers(t, mr, 1)
 	eventually(t, func() bool { return equal(b.staleDrops(), []string{"prod"}) })
 	a := newReplica(t, g, mr, time.Hour)
@@ -346,7 +352,7 @@ func TestAReplicaStartedWithoutRedisHearsTheNoticesOnceRedisAnswers(t *testing.T
 // The chart's Redis user k8s-service publishes and subscribes on channels under kubeast: only (&kubeast:*).
 func TestTheChannelIsWithinTheACLChannelPattern(t *testing.T) {
 	for _, db := range []int{0, 3, 15} {
-		if ch := ChannelFor(db); !strings.HasPrefix(ch, "kubeast:") {
+		if ch := clusternotice.ChannelFor(db); !strings.HasPrefix(ch, "kubeast:") {
 			t.Fatalf("channel %q for db %d is outside kubeast:", ch, db)
 		}
 	}

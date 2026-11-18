@@ -2,6 +2,8 @@
 
 # Upgrading from 0.7.7 to 0.7.8
 
+**Changes you must act on: yes, on some installs.** A cluster older than Kubernetes 1.30 needs `podShutdown.preStopSeconds: 0` ([1.3](#13-kubernetes-version)). Values that set `pdb.minAvailable` stop the upgrade until it is taken out ([3](#3-values-you-must-change)). Saved AI model settings that name `gpt-4o-mini` need another model before 2027-01-14 ([1.9](#19-the-default-ai-model)). With `secrets.existingSecret`, nothing has to change for this upgrade: the Redis users stay off until their keys are in a Secret named by `redis.acl.existingSecret`, or in the main Secret with `redis.acl.existingSecretHasKeys: true` ([1.7](#17-secretsexistingsecret-and-the-redis-users)). The other items below apply only to the installs they name.
+
 This page is for an install of 0.7.7 going to 0.7.8: what to check first, what changes by itself, which values to change, what the upgrade does once, and how to go back.
 The upgrade command is the one in [Getting started](getting-started.md#upgrade), with `--version 0.7.8`.
 Each item names the pull request that made the change.
@@ -16,7 +18,8 @@ The commands below use the release name `kubeast` in the namespace `kubeast`; pu
 - Many replicas: the database connections must fit `postgresql.maxConnections` (300) or the upgrade stops (#868).
 - Custom roles whose names make the same role group as another role are renamed and lose their cluster grants, with an audit row for each change. Account levels of `Pending`'s group (`PENDING`) move to the built-in `Pending` (#865).
 - Role names with characters outside ASCII get groups of their own (`운영팀` acts as `kubeast:role:~c6b4~c601~d300`; in 0.7.7 it was `kubeast:role:---`), so RBAC bound to the old group on your clusters stops applying to them (#865).
-- Besides the services, the chart's PostgreSQL and Redis restart once: the database pauses for a moment and the cache starts empty (#866, #868).
+- Besides the services, the chart's PostgreSQL and Redis restart once, and the cache starts empty (#866, #868). For about 20 seconds from when the database stops, requests to the old pods can wait and a few can fail, and people using Kubeast may have to sign in again (signed-in requests got 401 for 1 to 2 s in rehearsals of this release on kind, and for about 18 s on EKS with a build from before #953). While the 0.7.7 pods are replaced, a few requests can fail too: 0.7.7 pods stop without waiting, and from 0.7.8 on pods wait before they stop (#856). Upgrade when few people use Kubeast ([2](#2-upgrade)).
+- The default AI model is `gpt-6-luna`, in place of `gpt-4o-mini`. Saved model settings keep their model, the `default-openai` setting made at the first start too ([1.9](#19-the-default-ai-model), #924).
 - Back up the database first: a rollback does not undo the role renames.
 
 ## 1. Before you upgrade
@@ -39,7 +42,19 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 
 It renders 0.7.8 with your values and changes nothing. A check that stops it makes Helm print an error saying what to change; the table in [3](#3-values-you-must-change) lists them. `--dry-run=server` (Helm 3.13 or later) lets the chart read your Secrets, so the Redis users check in [1.7](#17-secretsexistingsecret-and-the-redis-users) runs too.
 
-To see the install notes, for example the connection sum for an external database ([1.6](#16-database-connections)), run it without `> /dev/null` and read `NOTES:` at the end.
+It checks the render and the chart's own checks only. It does not send the objects to the API server, so what the API server would refuse on the upgrade, a field it does not let change or a field another manager owns, passes it. When the upgrade applies server-side (Helm 4 with `--server-side=true`, or with its default `auto` when the release was last applied server-side), this sends the rendered objects to the API server as a dry run in Helm's name; `helm template` reads nothing from the cluster, and an object your values put in another namespace stops it with a namespace error, so send those with their own `-n`:
+
+```bash
+chart=$(mktemp -d)
+helm pull oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 --untar --untardir "$chart"
+helm get values kubeast -n kubeast -o yaml \
+  | helm template kubeast "$chart/kubeast" -n kubeast --no-hooks -f - \
+  | kubectl apply --server-side --dry-run=server --field-manager=helm -n kubeast -f -
+```
+
+The chart is pulled first because Helm 4.2.1 to 4.2.x print `Pulled:` and `Digest:` lines before the YAML when they render a chart from an OCI registry, and `kubectl apply` cannot read them.
+
+To see the install notes, for example the connection sum for an external database ([1.6](#16-database-connections)), run the `helm upgrade` dry run without `> /dev/null` and read `NOTES:` at the end.
 
 ### 1.3 Kubernetes version
 
@@ -47,7 +62,9 @@ To see the install notes, for example the connection sum for an external databas
 kubectl version    # Server Version: v1.30 or later
 ```
 
-The chart's pods behind a Service now wait `podShutdown.preStopSeconds` (5 s) in `preStop` before SIGTERM, with the native `sleep` action (beta and on by default in 1.30, GA in 1.34). On an older cluster set `podShutdown.preStopSeconds: 0` (#856).
+The chart's pods behind a Service, but for the bundled PostgreSQL and Redis, now wait `podShutdown.preStopSeconds` (5 s) in `preStop` before SIGTERM, with the native `sleep` action (beta and on by default in 1.30, GA in 1.34). On an older cluster set `podShutdown.preStopSeconds: 0` (#856).
+Helm's checks do not catch it: the API server refuses each Deployment with a preStop wait, with `spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`.
+The `kubectl apply` dry run in [1.2](#12-rehearse-with-a-dry-run) shows it before the upgrade: on Kubernetes 1.29.14 (kind, the `PodLifecycleSleepAction` feature gate off) it refused the seven Deployments with a preStop wait, and with `podShutdown.preStopSeconds: 0` it took every object.
 
 ### 1.4 Node drains
 
@@ -155,7 +172,17 @@ If the namespace has a ResourceQuota or a LimitRange, check that ai-service fits
 kubectl -n kubeast get resourcequota,limitrange
 ```
 
-### 1.9 Back up the database
+### 1.9 The default AI model
+
+The chart's `ai.model` is `gpt-6-luna` from 0.7.8, in place of `gpt-4o-mini`: OpenAI shuts down `gpt-4o-mini-2024-07-18` on 2027-01-14 and names `gpt-6-luna` as its replacement (#924). The upgrade changes no saved setting.
+
+- **You set no model**: with an OpenAI key in the chart (`ai.openaiApiKey`), ai-service saved the setting `default-openai` with 0.7.7's default, `gpt-4o-mini`, at its first start, and that setting keeps it. So does every setting made in **Admin > AI Models**. Change their model there before 2027-01-14.
+- **No saved setting** (no key, a gateway at `ai.baseUrl`): the install sends `gpt-6-luna` from the upgrade on. A gateway (LiteLLM and the like) answers only the names it maps, so map `gpt-6-luna` there first, or set `ai.model` to a name it maps.
+- **`ai.model` in your values** (`gpt-4o-mini` in a file copied from `helm show values` of 0.7.7, for example) stays, and names the model only while no setting is saved.
+- **Tools**: `gpt-6-luna` takes tools in Chat Completions only at `reasoning_effort: "none"`. Kubeast sends it on every call to the names `gpt-6-sol` and `gpt-6-luna` on the OpenAI and Azure OpenAI providers (#923). A setting that reaches `gpt-6-luna` under another name (an Azure deployment, a gateway alias, provider `custom`) sends `none` once a tool call has been refused with OpenAI's 400 "Function tools with reasoning_effort are not supported"; put `"reasoning_effort": "none"` in that setting's options to send it from the first call.
+- **Price** per 1M tokens: `gpt-6-luna` $0.10 input and $0.50 output, `gpt-4o-mini` $0.15 and $0.60. [Getting started](getting-started.md#upgrade) "Upgrade" has the rest of the pricing, and [8](#8-docker-compose) has Docker Compose.
+
+### 1.10 Back up the database
 
 ```bash
 kubectl -n kubeast exec deploy/postgres -c postgres -- pg_dump -Fc -U kubeast kubeast > kubeast-before-0.7.8.dump
@@ -171,7 +198,8 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 ```
 
 - auth-service applies the migrations at boot, or the migration Job does with `migrations.mode: job`. The Job runs each try in a pod of its own and ends at 10 minutes (#829, #834).
-- The pods 0.7.7 started stop as 0.7.7 pods do. The `preStop` wait, the notice a terminal gets before it closes, and putting a running alert investigation back in the queue start with the pods 0.7.8 starts (#856, #901). Terminals and followed logs open during the upgrade end, so pick a quiet time.
+- The pods 0.7.7 started stop as 0.7.7 pods do. The `preStop` wait, the notice a terminal gets before it closes, and putting a running alert investigation back in the queue start with the pods 0.7.8 starts (#856, #901). Terminals and followed logs open during the upgrade end.
+- Requests can fail for a short while during this upgrade, so upgrade when few people use Kubeast. It happens once, going from 0.7.7: the 0.7.7 pods stop without a `preStop` wait, the chart's PostgreSQL restarts once, and Redis is replaced (#856, #866, #868). On an EKS 1.35 cluster of three t3.medium nodes, with one gateway pod behind an AWS Application Load Balancer that sends to pod IPs, requests through the load balancer got 502 for about 6 s while the 0.7.7 gateway pod stopped, and PostgreSQL, on an EBS volume, was back 16 s after it stopped. While PostgreSQL restarts, the 0.7.7 pods not yet replaced cannot read a token's version and answer 401, and the page then goes to the sign-in page, so people using Kubeast at that moment may have to sign in again. On that cluster, with a 0.7.8 build from before #953, signed-in requests got 401 for about 18 s. In rehearsals of this release on kind they got 401 only in the seconds when the 0.7.7 auth-service was the only one ready: 2 s with the default install and 1 s with an existing Secret. A 0.7.8 k8s-service pod that starts while Redis is replaced can be refused by it at start (`redis not available` in its log); it keeps its cache in memory and moves it to Redis once Redis answers (`redis answered`). From 0.7.8 on, pods behind a Service wait 5 s before they stop ([4](#4-what-changes-by-itself)): restarting the 0.7.8 gateway behind the same load balancer three times with one pod and three times with two, with the chart's and the load balancer's defaults, no request through it failed.
 - Turn on new features (`autoscaling`, `streams.enabled`) in a later upgrade, once this one has settled. [Running more than one replica](high-availability.md) says what each service needs before a second pod (#867).
 
 ## 3. Values you must change
@@ -181,8 +209,8 @@ Only the rows that match your install. A row marked "stops" stops the upgrade, w
 | When | 0.7.7 | 0.7.8 | PR |
 | --- | --- | --- | --- |
 | Your values set `pdb.minAvailable` | `pdb.minAvailable: 1` | Stops. Take `pdb.minAvailable` out; `pdb.maxUnavailable` (1) says how many pods of one service a node drain may evict at once | #901, #908 |
-| Kubernetes older than 1.30 | — | `podShutdown.preStopSeconds: 0` | #856 |
-| Behind a load balancer that sends to pod IPs | — | `podShutdown.preStopSeconds`: its deregistration delay plus a few seconds | #856 |
+| Kubernetes older than 1.30 ([1.3](#13-kubernetes-version)) | — | `podShutdown.preStopSeconds: 0` | #856 |
+| Behind a load balancer that sends to pod IPs | — | `podShutdown.preStopSeconds` longer than the load balancer takes to stop sending new requests to a leaving pod; behind an AWS Application Load Balancer the default 5 s was enough (EKS 1.35, AWS Load Balancer Controller v3.6.2) | #856 |
 | Many replicas with the chart's PostgreSQL ([1.6](#16-database-connections)) | PostgreSQL's `max_connections` 100 | Stops past `postgresql.maxConnections` (300): raise it, or lower `postgresql.pool.<service>.maxConns` | #868 |
 | External database | — | Its `max_connections` above the sum the install notes print | #868 |
 | Behind RDS Proxy | — | `postgresql.sessionLimits.*: 0`, limits in the proxy or on the role | #868 |
@@ -191,6 +219,7 @@ Only the rows that match your install. A row marked "stops" stops the upgrade, w
 | `images.redis` of your own | any Redis | Valkey, or Redis 6.2 or later | #866 |
 | Claude Code on, keep the memory limit | `resources.aiService.limits.memory` | `ai.providers.claudeCode.memoryLimit: ""` | #859 |
 | Claude Code on, keep one turn per server | `maxConcurrent: 1` (default) | `ai.providers.claudeCode.maxConcurrent: 1` (default 2) | #859 |
+| A saved AI model setting, or `ai.model` in your values, names `gpt-4o-mini` ([1.9](#19-the-default-ai-model)) | `gpt-4o-mini` | Another model before 2027-01-14, in **Admin > AI Models** or `ai.model` | #924 |
 | A chart setting names a renamed role ([1.5](#15-role-names)) | old name | The name of the role you mean: the new name, a name you give the role, or a built-in | #865 |
 | `auth.accessRequests.roles` spells a built-in in other capitals (`WRITE`) | a custom role of that name | Read as the built-in (`Write`): write the name of the role you mean | #865 |
 | `replicas` or `autoscaling` with a key other than the seven services | ignored | Stops. The keys are `authService`, `aiService`, `k8sService`, `sessionService`, `frontend`, `toolServer`, `gateway` | #867 |
@@ -206,15 +235,15 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
   -n kubeast --reset-values -f my-values.yaml
 ```
 
-New values whose defaults need nothing from you: `podShutdown.preStopSeconds` (5), `pdb.maxUnavailable` (1), `streams.*` (off), `autoscaling.<service>` (off), `redis.acl.*` (on), `postgresql.sessionLimits.*`, `postgresql.pool.<service>.maxConns`, `postgresql.maxConnections` (300), `ai.providers.claudeCode.maxConcurrentTotal` (0), `queueWaitSeconds` (60), `memoryLimit` (2Gi), `gateway.accessLog.upstreamTimes` (off). [Configuration](configuration.md) describes each.
+New values whose defaults need nothing from you: `podShutdown.preStopSeconds` (5), `pdb.maxUnavailable` (1), `streams.*` (off), `autoscaling.<service>` (off), `redis.acl.*` (on), `postgresql.sessionLimits.*`, `postgresql.pool.<service>.maxConns`, `postgresql.maxConnections` (300), `ai.providers.claudeCode.maxConcurrentTotal` (0), `queueWaitSeconds` (60), `memoryLimit` (2Gi), `gateway.accessLog.upstreamTimes` (off), `multicluster.wsWatchOpeningConcurrency` (8), `multicluster.wsWatchStreamWindowKiB` (1024), `auth.impersonation.sharedReadChecks.*` (off). [Configuration](configuration.md) describes each.
 
 ## 4. What changes by itself
 
 **Pods and rollouts**
 
-- Pods behind a Service wait `podShutdown.preStopSeconds` before SIGTERM. Their grace period is that wait, what the service waits for after SIGTERM, and 5 s: 35 s with the defaults. k8s-service also gives open terminals `streams.drainSeconds` (60) to end and 5 s to close, so its grace period is 100 s with the defaults (#856, #824, #825).
+- Pods behind a Service wait `podShutdown.preStopSeconds` before SIGTERM, except the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period (30 s). The other pods' grace period is that wait, what the service waits for after SIGTERM, and 5 s: 35 s with the defaults. k8s-service also gives open terminals `streams.drainSeconds` (60) to end and 5 s to close, so its grace period is 100 s with the defaults (#856, #824, #825). Behind a load balancer that sends to pod IPs, the wait has to last until the load balancer stops sending new requests to the pod: on EKS 1.35 behind an AWS Application Load Balancer (AWS Load Balancer Controller v3.6.2, pod IPs), a leaving gateway pod's target was draining within 1 s of its deletion, and the default 5 s was enough with the load balancer's default deregistration delay (300 s) and no pod readiness gate ([2](#2-upgrade)).
 - Liveness asks `/livez`, which reads nothing else. Readiness asks `/readyz`, which answers 503 from SIGTERM on and never asks the database (#901).
-- A rollout starts one new pod and stops an old one only once the new one is ready (`maxSurge: 1`, `maxUnavailable: 0`), so it needs room for one more pod of each Deployment. PostgreSQL keeps `Recreate`, and Redis stops its old pod before the new one starts (`maxSurge: 0`) (#901, #860).
+- A rollout starts one new pod and stops an old one only once the new one is ready (`maxSurge: 1`, `maxUnavailable: 0`), so it needs room for one more pod of each Deployment. PostgreSQL keeps `Recreate`, and Redis starts stopping its old pod before the new one is made (`maxSurge: 0`): for the few seconds the old one takes to end both may exist, sharing no data (emptyDir) (#901, #860).
 - `pdb.enabled` is now `true`. A Deployment that can be down to two pods or more (`replicas`, or `autoscaling.<service>.minReplicas` while its HPA is on) gets a PodDisruptionBudget with `unhealthyPodEvictionPolicy: AlwaysAllow`; a Deployment of one pod gets none (#901).
 - A pod that stops closes its long-lived connections: live lists and followed logs connect again to a pod that stays; a terminal ends with a line saying the server is restarting (close code 1001, `server_shutdown`) (#901).
 
@@ -234,6 +263,7 @@ New values whose defaults need nothing from you: `podShutdown.preStopSeconds` (5
 **Sign-in, roles and AI**
 
 - Signing out ends the sign-in on the server: its tokens are refused and cannot be refreshed (#849).
+- A token whose session cannot be read, as while the database restarts, is refused with 503 instead of 401, which the console read as signed out: the page now stays and asks again. auth-service, k8s-service, session-service and ai-service send `Retry-After` with it; auth-service refuses at once, and the other services first take the version they read in the last 5 minutes. A script calling the API with an API key's token gets that 503 where 0.7.7 answered 401, and the key exchange (`POST /auth/token`) answers 503 when the key or its owner cannot be read, where 0.7.7 answered 500 or 401: send again after `Retry-After` rather than taking it as a refused key. A version that moved on, a signed-out sign-in and a user or API key that is gone still get 401, and ai-service's MCP endpoint still answers 401 while the session cannot be read. A live list or terminal whose session could not be checked for 5 minutes closes with 1013 instead of 4401 (reason `session_unverified` in both): the list connects again and the terminal offers Reconnect. These 503s count in the `KubeastHighErrorRate` alert ([Metrics](metrics.md)) (#953).
 - A built-in role is known by its exact name (`Pending`, `Member`, `Read`, `Write`, `Admin`), and so is the `Pending` account level everywhere: the services' middleware, the API key exchange, ai-service and Admin Users. A grant, an approval or an OIDC group sync of a role sharing another role's group is refused (400 `role_same_group`); after the upgrade no such role is stored, so this is a second check (#865).
 - A role's group keeps ASCII as before and writes any other character as `~` and its code point in four hex digits (`~~` and six above U+FFFF): `운영팀` is `kubeast:role:~c6b4~c601~d300`, `개발팀` `kubeast:role:~ac1c~bc1c~d300`. Two names share a group only when they differ in `A`–`Z` letter case, spaces or ASCII punctuation (`Ops 팀`, `OPS-팀`). The role window shows the group a name makes (#865).
 - The chart hands auth-service the names in `auth.impersonation.customRoles` (`IMPERSONATION_CUSTOM_ROLES`, a comma in a name written as `-`) instead of their groups, and auth-service makes each group itself. Your values need no change (#865).
@@ -241,10 +271,13 @@ New values whose defaults need nothing from you: `podShutdown.preStopSeconds` (5
 - An `auth.accessRequests.roles` entry that is a built-in's name in other capitals (`WRITE`) stands for the built-in (`Write`) (#865).
 - Claude Code turns take install-wide slots in the database (`maxConcurrentTotal`); a turn waits up to `queueWaitSeconds` for one (#859).
 - An alert's `startsAt` is stored in UTC, whatever offset the sender writes (#909).
+- The chart's default `ai.model` is `gpt-6-luna`, which an install with no saved model setting uses from the upgrade on, and a call to `gpt-6-sol` or `gpt-6-luna` sends `reasoning_effort: "none"` ([1.9](#19-the-default-ai-model), #923, #924).
 
 **Other**
 
-- New live lists wait while k8s-service's live heap is past 75 % of its memory limit, with a notice on the page; open ones go on. If you see the notice often, raise `resources.k8sService.limits.memory` (#896).
+- Cluster requests go as the signed-in person, or not at all. The server version and API discovery reads a screen opens (Cluster config's API groups, Cluster Hygiene, the overview's version) now name the person in the target cluster's audit log; with the default RBAC (`system:discovery`) everyone gets the same answer, so no screen changes. A request whose context names no person is not sent unless it is Kubeast's own (the server version and the discovery kept per cluster, the health checks) and a `GET` of `/version`, `/api`, `/apis`, `/api/v1` or `/apis/<group>/<version>` (#945): it answers 500 and k8s-service logs `cluster request with no person refused`. [Cluster requirements](cluster-requirements.md) §1 lists the requests that name Kubeast in a cluster's audit log (#926).
+- The cluster breaker: `multicluster.breakerConsecutiveFails: 0` turns it off, where 0.7.7 opened it on one failure, and an open breaker lets one request try the cluster after `multicluster.breakerOpenSec` (30 s), which 0.7.7 did not read. A failure is now a request whose calls could not reach the API server (refused, a name that does not resolve, a TLS handshake that did not end, a connection that ended with no response); an aggregated API's 503, the API server's own timeout, a screen's deadline once its request went out and Kubeast's own errors before any call no longer open it (#930, #932). The health check's probe of each cluster waits behind none of the people's requests; a probe the API server answers below 500 with no version (a 401, a proxy's 404) closes the breaker while the cluster still reads disconnected, and a credential plugin that fails still opens it, as in 0.7.7 (#936).
+- New live lists wait while what k8s-service holds against its Go memory limit (the live heap, the goroutine stacks and the runtime's own) is past 80 % of it, with a notice on the page; open ones go on. Lists that open with every object there is take one of eight places for the whole server (`multicluster.wsWatchOpeningConcurrency`) before they start and until those objects are through — one at a time for a cluster until its API server has answered, more as it answers, half of them while another cluster waits — so after a restart they come back a few at a time and a cluster that does not answer keeps no other waiting, and a list that waits more than 10 s for its place says on the page that it starts shortly, apart from the memory notice; each list's HTTP/2 window is 1 MiB (`multicluster.wsWatchStreamWindowKiB`); they are asked as a watch list (`sendInitialEvents`), and a cluster whose API server refuses that (1.33, or 1.27–1.31, by default) gets the earlier watch. If you see the memory notice often, raise `resources.k8sService.limits.memory` (#896, #931).
 - The S3 digest object key of an audit anchor ends with the first 8 hex digits of its hash (`…-<from>-<to>-<hash8>.json`). A script that reads digests by name should take the new form (#852).
 - New chart objects: the Secret `kubeast-redis-users`, the PodDisruptionBudgets past one pod, and, when you turn them on, the HPAs and the `k8s-service-stream` Deployment, Service, PodDisruptionBudget and NetworkPolicy. No new ClusterRole or Role.
 
@@ -305,7 +338,7 @@ Until you change it, a setting naming a renamed role by its old name works out a
 Change each to the name of the role you mean and upgrade again with `--reset-then-reuse-values`.
 
 **Groups of role names outside ASCII** (#865). Role Management's role window shows the group each role now makes.
-On each registered cluster, allow the impersonator that group and bind it where the old group was bound (the bindings you listed in [1.5](#15-role-names)); [Cluster requirements](cluster-requirements.md) §1 has both.
+On each registered cluster, add that group to the ClusterRole `kubeast-impersonator` and bind it where the old group was bound (the bindings you listed in [1.5](#15-role-names)); [Cluster requirements](cluster-requirements.md) §1 has both.
 For names in `auth.impersonation.customRoles`, apply the 0.7.8 render (`scripts/render-target-rbac.sh`) to each registered cluster other than the one Kubeast runs in, and delete the old group's bindings there, named `kubeast-role-<old slug>-<ClusterRole>` (`kubeast-role-----view` for `운영팀` bound to `view`). `helm upgrade` replaced them only on the cluster Kubeast runs in.
 
 **Cordoned nodes** (#858). On each registered cluster, `kubectl get nodes`; run `kubectl uncordon <node>` for a node a drain cut short left cordoned.
@@ -320,7 +353,7 @@ helm rollback kubeast <revision> -n kubeast
 ```
 
 - **Database**: the 0.7.8 tables and columns stay, and 0.7.7 still starts. Its migrations find nothing to apply on a database that is ahead, and its services wait for schema 22 or later.
-- **Roles** (#865): the renames, the removed grants and the account levels moved to `Pending` stay, and so does the index that refuses a name making another role's group. Only restoring the dump from [1.9](#19-back-up-the-database) brings the old names and grants back, and it takes the whole database back to that moment.
+- **Roles** (#865): the renames, the removed grants and the account levels moved to `Pending` stay, and so does the index that refuses a name making another role's group. Only restoring the dump from [1.10](#110-back-up-the-database) brings the old names and grants back, and it takes the whole database back to that moment.
 - **Role groups** (#865): 0.7.7 makes the old groups again (`운영팀` acts as `kubeast:role:---`), so a binding made for a new group does not apply under it.
 - **Sign-outs** (#849): 0.7.7's auth-service does not read the signed-out sign-ins, so a token whose sign-in was signed out is taken again until it expires (`auth.tokenTTLMinutes`, 15 minutes by default).
 - **Redis** (#866): 0.7.7's Redis comes back with one password (`REDIS_PASSWORD`, still in `kubeast-secrets`), and its k8s-service signs in with it. A 0.7.7 k8s-service pod that starts before that Redis answers keeps its cache in memory until it restarts. `kubeast-redis-users` stays (`helm.sh/resource-policy: keep`), and the next upgrade reads its passwords again.
@@ -328,6 +361,7 @@ helm rollback kubeast <revision> -n kubeast
 - **PodDisruptionBudgets and HPAs** go with 0.7.7's values (#901, #867).
 - **Alerts** (#909): 0.7.7 drops a `startsAt` offset again, so an alert from a sender that writes another zone gets a new row again.
 - **Drains** (#858): a drain running at the rollback ends where it is and its node stays cordoned; 0.7.7 does not read `node_drains`.
+- **AI model** (#923, #924): 0.7.7 sends no `reasoning_effort`, so every tool call of a setting you changed to `gpt-6-luna` is refused under it. Set such a setting back to a model 0.7.7 can use before you roll back.
 
 ## 8. Docker Compose
 
@@ -344,8 +378,9 @@ If you set `KUBEAST_TAG`, set it to `v0.7.8` or unset it.
 
 What differs from the chart:
 
-- **Stop wait**: the seven Kubeast services and Redis get 35 s to stop (`stop_grace_period`; Docker's default is 10 s), what the chart gives a service with the defaults. `docker compose stop` and the upgrade can take that long per container. There is no `preStop` wait, terminal drain, PodDisruptionBudget or HPA (#856).
+- **Stop wait**: the seven Kubeast services get 35 s to stop and Redis and PostgreSQL 30 s, the Kubernetes default (`stop_grace_period`; Docker's default is 10 s), what the chart gives each with the defaults. `docker compose stop` and the upgrade can take that long per container. There is no `preStop` wait, terminal drain, PodDisruptionBudget or HPA (#856).
 - **Redis**: as before, with no users and no password, reachable only on the Compose network (#866 changes the chart only).
+- **AI model** (#921, #924): `install-docker.sh` run again keeps the `OPENAI_MODEL` and `OPENAI_BASE_URL` already in `.env`, and a `.env` written by 0.7.7 or earlier names `gpt-4o-mini`: change it before 2027-01-14. Like `ai.model`, it names the model only while no setting is saved, so a `default-openai` setting made from it is changed in **Admin > AI Models** ([1.9](#19-the-default-ai-model)). Without a `.env`, Compose now runs `gpt-6-luna`, where 0.7.7 ran `gpt-4`, which OpenAI has shut down. With `KUBEAST_TAG` at v0.7.7 or earlier, keep `OPENAI_MODEL` at a model those images can use: they send no `reasoning_effort`, so every tool call to `gpt-6-luna` is refused.
 - **Database limits**: the same session limits and pools apply by default. To change them, set `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS` (`0` sets nothing) or `DB_POOL_MAX_AUTH`, `DB_POOL_MAX_SESSION`, `DB_POOL_MAX_K8S`, `DB_POOL_MAX_AI` in `.env`. Compose's PostgreSQL keeps its default `max_connections` (100), which one container of each service fits (#868).
 - **Custom role bindings**: `IMPERSONATION_CUSTOM_ROLES` in `.env` takes role names, as before. Bind the new group of a name outside ASCII on your clusters ([6](#6-after-you-upgrade)).
 - **The same as the chart**: the migrations, the role renames (run the queries of [1.5](#15-role-names) and [6](#6-after-you-upgrade) with `docker compose exec -T postgres psql -U kubeast -d kubeast` in place of `kubectl -n kubeast exec -i deploy/postgres -c postgres -- psql -U kubeast -d kubeast`), the alert times in UTC, the cache starting empty and the drains ([1.4](#14-node-drains)).

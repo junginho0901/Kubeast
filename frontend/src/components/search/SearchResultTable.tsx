@@ -194,7 +194,7 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
       </div>
 
       {/* Pagination */}
-      <div className="shrink-0 flex items-center justify-between pt-2 px-1">
+      <div className="shrink-0 flex items-center justify-between pt-2 px-1" data-testid="search-pager">
         <span className="text-xs text-slate-500" data-testid="search-page-info">
           {t('common.paginationRange', {
             start: safePage * pageSize + 1,
@@ -204,7 +204,8 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
           })}
           {totalPages > 1 && ` (${t('advancedSearch.page', 'Page {{current}} of {{total}}', { current: safePage + 1, total: totalPages })})`}
         </span>
-        <div className="flex items-center gap-1">
+        {/* list-pager-pages: the page buttons end clear of the floating chat button, as a list footer's do (index.css) */}
+        <div className="list-pager-pages flex items-center gap-1">
           <button
             onClick={() => setPage(p => Math.max(0, p - 1))}
             disabled={safePage === 0}

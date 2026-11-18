@@ -124,3 +124,26 @@ func TestASocketWhoseSessionEndsClosesWithinTheCheckInterval(t *testing.T) {
 		t.Fatalf("the other socket after the checks: %+v", f)
 	}
 }
+
+// A session whose state cannot be read (the database restarting) is tolerated for StaleTTL; past it the socket closes
+// with "try again later", which the page answers by connecting again, not with 4401, which asks whether to sign out.
+func TestASocketWhoseSessionCannotBeCheckedClosesToConnectAgain(t *testing.T) {
+	m := muxOn(t, eventThenHold)
+	m.Sessions = auth.NewLiveSessions(auth.LiveSessionConfig{
+		Lookup: func(context.Context, string, string) (auth.SessionState, error) {
+			return auth.SessionState{}, errors.New("dial tcp 10.0.0.5:5432: connect: connection refused")
+		},
+		CheckEvery: 5 * time.Millisecond, CacheTTL: time.Millisecond, StaleTTL: 50 * time.Millisecond,
+	})
+	conn := socketTo(t, m, everyCluster)
+	request(t, conn, "REQUEST", "c1", "/api/v1/pods", "watch=1")
+	if f := nextFrame(t, conn); f.Type != "DATA" {
+		t.Fatalf("first frame = %+v", f)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_, _, err := conn.ReadMessage()
+	var closed *websocket.CloseError
+	if !errors.As(err, &closed) || closed.Code != auth.SessionRetryCloseCode || closed.Text != auth.SessionUnverified {
+		t.Fatalf("read after the session could not be checked = %v, want close %d %q", err, auth.SessionRetryCloseCode, auth.SessionUnverified)
+	}
+}

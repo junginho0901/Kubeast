@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
 import ko from '@/i18n/locales/ko.json'
-import type { PodInfo, PodNodeSummary } from '@/services/api'
+import type { NodeBoxPod, NodeBoxRow, PodInfo, PodNodeSummary } from '@/services/api'
 import { pageOfItems } from '@/hooks/usePagedItems'
 import { getPodHealth } from './podHealth'
 import { ClusterViewContext, type ClusterViewContextValue } from './ClusterViewContext'
@@ -384,15 +384,48 @@ describe('the node\'s own view: its pods by name, sixty a page', () => {
     const asked = { page: 5, pod: null }
     const drained = nodeViewPage(keysOf(40), asked, -1)
     expect(drained.page).toBe(1)
-    expect(shownPageAddress(asked, drained)).toEqual({ page: 1, pod: null })
+    const all = 'n\nall\nall'
+    expect(shownPageAddress(asked, drained, all, { read: all, page: 5 })).toEqual({ page: 1, pod: null })
     // 300 back: page 1 still, where it was page 5 before
     expect({ before: nodeViewPage(keysOf(300), asked, -1).page, now: nodeViewPage(keysOf(300), { page: 1, pod: null }, -1).page }).toEqual({ before: 5, now: 1 })
     // the page shown is the page asked (no page asked reads as 1): nothing to write
-    expect(shownPageAddress({ page: 1, pod: null }, nodeViewPage(keysOf(300), { page: 1, pod: null }, -1))).toBeNull()
-    expect(shownPageAddress({ page: null, pod: null }, nodeViewPage(keysOf(40), { page: null, pod: null }, -1))).toBeNull()
+    expect(shownPageAddress({ page: 1, pod: null }, nodeViewPage(keysOf(300), { page: 1, pod: null }, -1), all, { read: all, page: 1 })).toBeNull()
+    expect(shownPageAddress({ page: null, pod: null }, nodeViewPage(keysOf(40), { page: null, pod: null }, -1), all, null)).toBeNull()
     // a pod followed is followedPage's; a pod gone keeps its note with the page shown
-    expect(shownPageAddress({ page: 5, pod: 'a/n-p001' }, nodeViewPage(keysOf(40), { page: 5, pod: 'a/n-p001' }, -1))).toBeNull()
-    expect(shownPageAddress({ page: 5, pod: 'a/n-p299' }, nodeViewPage(keysOf(40), { page: 5, pod: 'a/n-p299' }, -1))).toEqual({ page: 1, pod: 'a/n-p299' })
+    expect(shownPageAddress({ page: 5, pod: 'a/n-p001' }, nodeViewPage(keysOf(40), { page: 5, pod: 'a/n-p001' }, -1), all, { read: all, page: 5 })).toBeNull()
+    expect(shownPageAddress({ page: 5, pod: 'a/n-p299' }, nodeViewPage(keysOf(40), { page: 5, pod: 'a/n-p299' }, -1), all, { read: all, page: 5 })).toEqual({ page: 1, pod: 'a/n-p299' })
+    // the view's first answer (a link or a reload asking a page past the last) writes the page shown too
+    expect(shownPageAddress(asked, drained, all, null)).toEqual({ page: 1, pod: null })
+  })
+
+  it('keeps the page asked when another namespace or Problem pods only shows fewer pods, so coming back shows it again', () => {
+    const keysOf = (n: number) => nameOrder(podsFor('n', n)).map(podKey)
+    // the view as PodNodeGrid runs it: each answer may write the address (the effect), then becomes the last answer
+    let address: { page: number | null; pod: string | null } = { page: 4, pod: null }
+    let before: { read: string; page: number } | null = null
+    const answer = (count: number, read: string) => {
+      const shown = nodeViewPage(keysOf(count), address, -1)
+      const kept = shownPageAddress(address, shown, read, before)
+      if (kept) address = kept
+      before = { read, page: shown.page }
+      return { shown: shown.page, address: address.page }
+    }
+    // All namespaces on page 4 of 300 → a namespace of 30 pods → All again: page 4 kept in the address and shown again
+    expect(answer(300, 'n\nall\nall')).toEqual({ shown: 4, address: 4 })
+    expect(answer(30, 'n\nteam-a\nall')).toEqual({ shown: 1, address: 4 })
+    expect(answer(30, 'n\nteam-a\nall')).toEqual({ shown: 1, address: 4 })
+    expect(answer(300, 'n\nall\nall')).toEqual({ shown: 4, address: 4 })
+    // Problem pods only (12 of them) and off again: the same
+    expect(answer(12, 'n\nall\nproblems')).toEqual({ shown: 1, address: 4 })
+    expect(answer(300, 'n\nall\nall')).toEqual({ shown: 4, address: 4 })
+    // the same read shrinking under page 4 writes the page shown, and pods coming back keep it
+    expect(answer(150, 'n\nall\nall')).toEqual({ shown: 3, address: 3 })
+    expect(answer(150, 'n\nall\nall')).toEqual({ shown: 3, address: 3 })
+    expect(answer(300, 'n\nall\nall')).toEqual({ shown: 3, address: 3 })
+    // a namespace already past the address's page: its own shrinking does not write either
+    expect(answer(30, 'n\nteam-a\nall')).toEqual({ shown: 1, address: 3 })
+    expect(answer(20, 'n\nteam-a\nall')).toEqual({ shown: 1, address: 3 })
+    expect(answer(300, 'n\nall\nall')).toEqual({ shown: 3, address: 3 })
   })
 
   it('says the namespace filter leaves the opened pod out, not that it left the node', () => {
@@ -493,7 +526,7 @@ describe('the live node list on the screen', () => {
       notReady: 'Node not Ready 2', cordoned: 'SchedulingDisabled 2',
       b1: ['NotReady'], b2: ['SchedulingDisabled'], b3: ['NotReady', 'SchedulingDisabled'], b4: [],
     })
-    expect(attr(html, 'aria-label')).toBe('Node map: 1000 nodes, 3000 pods (0 errors, 0 warnings) 2 nodes not Ready, 2 SchedulingDisabled.')
+    expect(attr(html, 'aria-label')).toBe('Node map: 1000 nodes, 3000 pods (0 errors, 0 warnings). 2 nodes not Ready, 2 SchedulingDisabled.')
     const korean = show(nodesWith({ 'node-001': 'NotReady' }), summaryOf(NAMES), { lng: 'ko' })
     expect(korean.match(/data-testid="cluster-view-map-not-ready"[^>]*>[\s\S]*?<\/span>([^<]*)</)?.[1]).toBe('Ready가 아닌 Node 1')
     // the node's own view says it too
@@ -522,11 +555,42 @@ describe('the live node list on the screen', () => {
       cells: ['cp-0', 'node-001'], marks: null,
       notReady: 'Node not Ready 2', notReadyOpens: 'Open spare-1, the first of them', cordoned: 'SchedulingDisabled 1',
     })
-    // the map can be reached from the keyboard, says what it is, and the line under the legend names the cell reached
-    expect(html).toMatch(/<canvas role="group" aria-roledescription="Node map" aria-label="Node map: 2 nodes[^"]*"[^>]*tabindex="0"/)
-    expect(html).toMatch(/<p class="min-h-\[16px\]" aria-live="polite" data-testid="cluster-view-map-hover">A cell is a Node/)
+    // the map can be reached from the keyboard, says what it is, and the line under the legend names the cell reached;
+    // its name counts the four nodes listed, the two with no pod too, as kubectl get nodes does
+    expect(html).toMatch(/<canvas role="application" aria-roledescription="Node map" aria-label="Node map: 4 nodes[^"]*"[^>]*tabindex="0"/)
+    expect(attr(html, 'aria-label')).toBe('Node map: 4 nodes, 6 pods (0 errors, 0 warnings). 2 nodes not Ready, 1 SchedulingDisabled.')
+    // that line is no live region (a mouse over the cells is not read out), is hidden from assistive technology (it
+    // shows what the live region says, which would be read twice) and holds no hint: the hint is the canvas's
+    // description, a line of its own. A hidden live region, polite from the first render, is there empty before a
+    // keyboard move fills it, so the first cell a focus names is read out
+    expect(html).toMatch(/<p aria-hidden="true" data-testid="cluster-view-map-hover"><\/p>/)
+    expect(html).toMatch(/<p class="sr-only" aria-live="polite" data-testid="cluster-view-map-live"><\/p>/)
+    const hintId = html.match(/<canvas [^>]*aria-describedby="([^"]+)"/)?.[1]
+    expect(hintId).toBeTruthy()
+    expect(html).toContain(`<p id="${hintId}" data-testid="cluster-view-map-hint">A cell is a Node, a dot a Pod.`)
     // the legend's buttons are not inside that line, so a cell reached does not take them away
     expect(html.match(/data-testid="cluster-view-map-hover">[^<]*<\/p>/)).not.toBeNull()
+  })
+
+  it('counts the nodes in the map\'s name as kubectl get nodes lists them, never the Unscheduled cell', () => {
+    const name = (summary: PodNodeSummary, nodeList?: { name: string; roles: string[]; status: string }[], lng = 'en') => {
+      const Listed: ComponentType = () => {
+        const entries = useClusterDerived({ summary, nodes: nodeList ?? NODES })
+        return createElement(PodNodeGrid, { entries, matched: summary.total, all: summary.all, isLoading: false, canDeletePod: false, nodeList })
+      }
+      return attr(renderWith(ClusterViewContext, createElement(Listed), { lng }), 'aria-label')
+    }
+    // dev's one node and an unscheduled pod: two cells, one node, before the node list is read and after
+    const one: PodNodeSummary = {
+      nodes: [{ node: 'cp-0', total: 31, ok: 30, warn: 0, error: 1 }, { node: '', total: 1, ok: 0, warn: 1, error: 0 }], total: 32, all: 32, revision: 'r1', source: 'index',
+    }
+    expect(name(one)).toBe('Node map: 1 node, 32 pods (1 error, 1 warning).')
+    expect(name(one, [{ name: 'cp-0', roles: ['control-plane'], status: 'Ready' }])).toBe('Node map: 1 node, 32 pods (1 error, 1 warning).')
+    expect(name(one, undefined, 'ko')).toBe('Node 지도: Node 1개, Pod 32개(오류 1, 주의 1).')
+    // 1 000 nodes and the Unscheduled cell, with a node of the list that has no pod and is NotReady
+    const listed = [{ name: 'cp-0', roles: ['control-plane'], status: 'Ready' }, ...NAMES.slice(1).map((n) => ({ name: n, roles: [], status: 'Ready' })), { name: 'spare', roles: [], status: 'NotReady' }]
+    expect(name(summaryOf([...NAMES, '']))).toBe('Node map: 1000 nodes, 3003 pods (0 errors, 0 warnings).')
+    expect(name(summaryOf([...NAMES, '']), listed, 'ko')).toBe('Node 지도: Node 1001개, Pod 3003개(오류 0, 주의 0). Ready가 아닌 Node 1개, SchedulingDisabled 0개입니다.')
   })
 
   it('drops the box of a node removed, the others keeping their places', () => {
@@ -538,3 +602,58 @@ describe('the live node list on the screen', () => {
   })
 })
 
+
+// A box reads its node's pods as k8s-service's rows of them (nodeBoxPod: no containers, the colour the server gives),
+// and its live watch puts each pod's full row in their place as the pod changes.
+describe("a box's rows and the live frames that replace them", () => {
+  const short = (p: PodInfo): NodeBoxPod => {
+    const h = getPodHealth(p)
+    return {
+      name: p.name, namespace: p.namespace, node_name: p.node_name ?? '', pod_ip: p.pod_ip ?? '', status: p.status, phase: p.phase,
+      restart_count: p.restart_count, created_at: p.created_at, labels: p.labels ?? null, health: h.level, health_reason: h.reason,
+    }
+  }
+  const box = (rows: NodeBoxRow[]) => render(summaryOf(['node-001'], () => rows.length), { pods: { 'node-001': rows as PodInfo[] } })
+  const nodeView = (rows: NodeBoxRow[]) => render(summaryOf(['node-001'], () => rows.length), { nodeView: { node: 'node-001', page: null, pod: null }, pods: { 'node-001': rows as PodInfo[] } })
+
+  it('draw the cards, colours and order the full rows draw', () => {
+    // a pod whose colour its containers give, not its phase: crashing, and running but not ready
+    const fromContainers = [
+      { ...pod('node-001', 'node-001-crash', 'ok'), containers: [{ name: 'c', ready: false, state: { waiting: { reason: 'CrashLoopBackOff' } } }] },
+      { ...pod('node-001', 'node-001-notready', 'ok'), containers: [{ name: 'c', ready: false, state: { running: {} } }] },
+    ] as PodInfo[]
+    const full = [...podsFor('node-001', 70), ...fromContainers]
+    expect(fromContainers.map((p) => short(p).health_reason)).toEqual(['CrashLoopBackOff', 'NotReady'])
+    expect(cards(box(full.map(short))).slice(0, 4)).toEqual(['node-001-crash', 'node-001-p005', 'node-001-p030', 'node-001-p055'])
+    expect(cards(box(full.map(short)))).toEqual(cards(box(full)).slice(0, BOX_PREVIEW_CARDS))
+    expect(box(full.map(short))).toBe(box(full))
+    expect(nodeView(full.map(short))).toBe(nodeView(full))
+  })
+
+  it('mixed with frames of full rows draw what the same frames make of full rows', async () => {
+    const { applyWatchFrames } = await vi.importActual<typeof import('@/services/useKubeWatchList')>('@/services/useKubeWatchList')
+    const full = podsFor('node-001', 40)
+    const key = ['cluster-view', 'node-pods', 'node-001', 'all']
+    const crashed = { ...pod('node-001', 'node-001-p001', 'error'), restart_count: 4 }
+    const recovered = pod('node-001', 'node-001-p005', 'ok')
+    const frames = [
+      { type: 'DATA', data: { type: 'MODIFIED', object: crashed } },
+      { type: 'DATA', data: { type: 'MODIFIED', object: recovered } },
+      { type: 'DATA', data: { type: 'DELETED', object: pod('node-001', 'node-001-p002') } },
+      { type: 'DATA', data: { type: 'ADDED', object: pod('node-001', 'node-001-p0399', 'warn') } },
+    ]
+    const after = (rows: NodeBoxRow[]) => {
+      const c = new QueryClient()
+      c.setQueryData(key, rows)
+      applyWatchFrames(c, key, frames, undefined, undefined, undefined, false, () => {})
+      return c.getQueryData<NodeBoxRow[]>(key) ?? []
+    }
+    const mixed = after(full.map(short))
+    expect(mixed.map((r) => `${r.name} ${'containers' in r ? 'full' : 'short'}`).filter((s) => s.endsWith('full'))).toEqual([
+      'node-001-p001 full', 'node-001-p005 full', 'node-001-p0399 full',
+    ])
+    expect(box(mixed)).toBe(box(after(full)))
+    expect(nodeView(mixed)).toBe(nodeView(after(full)))
+    expect(cards(box(mixed)).slice(0, 2)).toEqual(['node-001-p001', 'node-001-p030'])
+  })
+})

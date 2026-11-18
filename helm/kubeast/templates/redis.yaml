@@ -13,9 +13,10 @@ metadata:
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
   replicas: 1
-  # one Redis at a time: the old pod stops before the new one starts. RollingUpdate with maxSurge 0, not Recreate:
-  # a release of 0.7.7 or earlier has RollingUpdate with the API's defaulted rollingUpdate, which an upgrade could not
-  # switch to Recreate ("may not be specified when strategy type is 'Recreate'")
+  # maxSurge 0: the old pod starts stopping before the new one is made; for the few seconds the old one takes to end
+  # both may exist, sharing no data (emptyDir). RollingUpdate, not Recreate: a release of 0.7.7 or earlier has
+  # RollingUpdate with the API's defaulted rollingUpdate, which an upgrade could not switch to Recreate ("may not be
+  # specified when strategy type is 'Recreate'")
   strategy:
     type: RollingUpdate
     rollingUpdate:

@@ -15,7 +15,7 @@ Install from the released chart (`oci://ghcr.io/junginho0901/charts/kubeast`), w
 Download the tagged script, check its contents, then run it (do not run an unreviewed script directly with `curl | bash`).
 
 ```bash
-curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.7/install.sh
+curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.8/install.sh
 less install.sh
 bash install.sh
 ```
@@ -33,7 +33,7 @@ bash install.sh --load-balancer
 bash install.sh --namespace my-ns
 
 # Set the chart version
-bash install.sh --version 0.7.7
+bash install.sh --version 0.7.8
 ```
 
 > Prerequisites: `kubectl`, `helm`, and a reachable Kubernetes cluster.
@@ -41,19 +41,19 @@ bash install.sh --version 0.7.7
 ### Option 2. Using Helm directly
 
 ```bash
-helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
+helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
   --namespace kubeast --create-namespace \
   --set ai.openaiApiKey=$OPENAI_API_KEY     # optional: can also be registered in the UI later
 
 # Lightest: console, management and audit only, without AI or cache (6 pods, docs/architecture.md "Resource usage")
-helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 -n kubeast --create-namespace \
-  -f https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.7/helm/kubeast/values-minimal.yaml
+helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 -n kubeast --create-namespace \
+  -f https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.8/helm/kubeast/values-minimal.yaml
 ```
 
 ### Option 3. Docker Compose (single host, no cluster)
 
 ```bash
-git clone --branch v0.7.7 --depth 1 https://github.com/junginho0901/Kubeast.git
+git clone --branch v0.7.8 --depth 1 https://github.com/junginho0901/Kubeast.git
 cd Kubeast
 
 ./install-docker.sh
@@ -82,7 +82,7 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 Going from 0.7.7 to 0.7.8, read [Upgrading from 0.7.7 to 0.7.8](upgrade-0.7.8.md) first: what to check before, what changes, and how to go back.
 
 ```bash
-helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
+helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
   -n kubeast --reset-then-reuse-values
 ```
 
@@ -354,6 +354,7 @@ So these are the same as on the API key path: the tool list, approval cards for 
   - `maxConcurrent` (default 2) is per ai-service server: how many Claude Code processes one server runs at once, which sets its memory.
   - `maxConcurrentTotal` (default 0, which means the same number as `maxConcurrent`) is for the whole install: every ai-service replica shares it through the database, so the subscription's use stays within it however many servers run. With 2 per server and 3 servers, 6 turns run at once only when `maxConcurrentTotal` is 6 or more.
   - A server that stops holding a slot (a crash, a node lost) frees it by itself after 60 seconds.
+  - The slots are rows of the `claude_code_slots` table in the database (lane, slot, owner, heartbeat_at). A row names no person and no conversation: its owner is the ai-service pod's name followed by 12 random hex characters, new for each run.
   - A run whose server could not refresh its slot for 60 seconds (the database did not answer) loses the slot to the next taker and still finishes. Until it ends the install runs one more than `maxConcurrentTotal`; `maxConcurrent` on each server still holds.
   - One turn is capped at `turnTimeoutSeconds` (default 300 seconds) and `maxTurns` (default 10 model calls).
   - Each turn starts one Claude Code process (up to about 300 MB). While the provider is on, ai-service's memory limit is the larger of `resources.aiService.limits.memory` (default 1Gi) and `ai.providers.claudeCode.memoryLimit` (default 2Gi: the service and 2 chat processes with the investigator's). Raise `memoryLimit` with `maxConcurrent`, about 300 MB for each more; `""` leaves the limit as `resources.aiService.limits.memory` sets it.

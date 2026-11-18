@@ -17,7 +17,7 @@ import { applyPDBWatchEvent } from './pdbs/pdbWatchNormalize'
 import { PDBFilters } from './pdbs/PDBFilters'
 import { PDBTable } from './pdbs/PDBTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -172,13 +172,10 @@ export default function PDBs() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllPDBs(true)
-      : await api.getPDBs(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['workloads', 'pdbs', selectedNamespace] })
-    queryClient.setQueryData(['workloads', 'pdbs', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['workloads', 'pdbs', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllPDBs(true)
+      : api.getPDBs(selectedNamespace, true)))
 
   const createPDBYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

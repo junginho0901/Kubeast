@@ -22,7 +22,7 @@ import { applyHTTPRouteWatchEvent } from './httproutes/httpRouteWatchNormalize'
 import { HTTPRouteFilters } from './httproutes/HTTPRouteFilters'
 import { HTTPRouteTable } from './httproutes/HTTPRouteTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -198,13 +198,10 @@ export default function HTTPRoutes() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllHTTPRoutes(true)
-      : await api.getHTTPRoutes(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['gateway', 'httproutes', selectedNamespace] })
-    queryClient.setQueryData(['gateway', 'httproutes', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['gateway', 'httproutes', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllHTTPRoutes(true)
+      : api.getHTTPRoutes(selectedNamespace, true)))
 
   const createHTTPRouteYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

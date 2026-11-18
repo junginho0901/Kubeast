@@ -10,9 +10,11 @@ import (
 )
 
 // TokenVersionLookup returns the user's current revocation counter and
-// signed-out sign-ins (auth.SessionStateQuery). An error (unknown user, or for
-// a token an API key was exchanged for, a key revoked or expired since)
-// rejects the token.
+// signed-out sign-ins (auth.SessionStateQuery), as an auth.VersionLookup does.
+// auth.ErrSubjectGone (unknown user, or for a token an API key was exchanged
+// for, a key revoked or expired since) revokes the token: 401. Any other error
+// is a read that failed (auth.ReadFailed): the token is refused with 503, to be
+// asked again, since a 401 signs the console out.
 type TokenVersionLookup func(ctx context.Context, userID, apiKeyID string) (auth.SessionState, error)
 
 // RefreshPath is the one route a token of a signed-out sign-in reaches: the
@@ -122,6 +124,10 @@ func tokenMiddleware(jwtMgr *JWTManager, tokenVersion TokenVersionLookup, cookie
 				claimed, _ := claims["tv"].(float64) // JSON numbers decode as float64; missing claim = 0
 				akid, _ := claims["akid"].(string)
 				current, err := tokenVersion(r.Context(), userID, akid)
+				if auth.ReadFailed(err) {
+					auth.RefuseSessionUnreadable(w)
+					return
+				}
 				if err != nil || int(claimed) != current.Version {
 					http.Error(w, `{"detail":"Token revoked"}`, http.StatusUnauthorized)
 					return

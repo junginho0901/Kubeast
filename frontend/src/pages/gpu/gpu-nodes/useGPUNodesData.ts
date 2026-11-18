@@ -13,6 +13,7 @@ import { sortGPUNodes, type SortKey, type SummaryCard } from './gpuNodesHelpers'
 import { NOT_COUNTED } from '@/utils/listCounts'
 import { gpuModels, gpuNodeCounts, gpuVendorCounts, vendorNames } from '../gpuNumbers'
 import { nodeReadiness } from '@/utils/nodeStatus'
+import { everyUntilRefused, retryUnlessRefused } from '@/services/queryDefaults'
 
 interface UseGPUNodesDataParams {
   searchQuery: string
@@ -28,16 +29,16 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
   const { data, isLoading, error, refetch } = useQuery<GPUDashboardData>({
     queryKey: ['gpu', 'dashboard'],
     queryFn: () => api.getGPUDashboard(),
-    refetchInterval: 30000,
-    retry: 2,
+    refetchInterval: everyUntilRefused(30000),
+    retry: retryUnlessRefused(2),
     retryDelay: 1000,
   })
 
   const { data: metrics, error: metricsError } = useQuery<GPUMetricsData>({
     queryKey: ['gpu', 'metrics'],
     queryFn: () => api.getGPUMetrics(),
-    refetchInterval: 15000,
-    retry: 1,
+    refetchInterval: everyUntilRefused(15000),
+    retry: retryUnlessRefused(1),
   })
 
   const metricsAvailable = metrics?.available ?? false

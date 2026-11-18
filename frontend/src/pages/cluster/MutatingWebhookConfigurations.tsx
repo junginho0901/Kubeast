@@ -12,7 +12,7 @@ import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -173,11 +173,8 @@ export default function MutatingWebhookConfigurations() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = await api.getMutatingWebhookConfigurations(true)
-    queryClient.removeQueries({ queryKey: ['cluster', 'mutatingwebhookconfigurations'] })
-    queryClient.setQueryData(['cluster', 'mutatingwebhookconfigurations'], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['cluster', 'mutatingwebhookconfigurations'], () => api.getMutatingWebhookConfigurations(true)))
 
   const createYamlTemplate = `apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration

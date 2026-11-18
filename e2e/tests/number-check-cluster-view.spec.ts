@@ -244,7 +244,7 @@ test.describe('Cluster View — number check', () => {
     const password = `cv-${id}-pw`
     const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(adminToken), data: { name: `E2E cluster view ${id}`, email, password } })
     expect(created.status(), await created.text()).toBe(201)
-    const userId = (await created.json()).id
+    const userId = madeUser((await created.json()).id, bearer(adminToken))
     const ctx = await browser.newContext({ baseURL: process.env.E2E_BASE_URL || 'http://localhost:30080' })
     try {
       // the scoped group may be impersonated on self and reads (view) in NS only
@@ -325,4 +325,15 @@ test.describe('Cluster View — number check', () => {
       return { filters: data?.filters, matched: data?.stats?.matched_pods, total: data?.stats?.total_pods, error: data?.stats?.error_pods }
     }, { timeout: 15_000 }).toEqual({ filters: { namespace: NS, search: 'cv-run' }, matched: 2, total: 6, error: 0 })
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

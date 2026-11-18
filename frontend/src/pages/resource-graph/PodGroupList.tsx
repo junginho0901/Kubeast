@@ -15,6 +15,7 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { formatAge, utcTitle } from '@/utils/time'
 import { getStatusColor } from '../workloads/pods/podHelpers'
 import { kindIcon } from './constants'
+import { unlessRefused } from '@/services/queryDefaults'
 
 const ROWS = 20
 
@@ -51,7 +52,7 @@ export function PodGroupList({ group, onClose, onExpand, onOpen }: Props) {
     }),
     enabled: isPods,
     // listed rows (no revision) cost the cluster a list: ask less often
-    refetchInterval: (query) => (query.state.data && !query.state.data.revision ? 30000 : 5000),
+    refetchInterval: (query) => unlessRefused(query.state.error, query.state.data && !query.state.data.revision ? 30000 : 5000),
   })
 
   // a PVC or PV group: its members, searched here

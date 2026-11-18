@@ -336,8 +336,10 @@ export async function stopFor(deploy: string, seconds: number, during: (offAt: n
   return { offAt: down.offAt, onAt: down.bringBack() }
 }
 
-export function serverLog(deploy: string, sinceIso: string): string {
-  return kubectlOk(['-n', NS, 'logs', `deploy/${deploy}`, '--all-containers', `--since-time=${sinceIso}`]).out
+// Every pod of the service (the chart's app label), as a request may land on any replica; with a label kubectl prints
+// only the last 10 lines of each unless --tail says otherwise.
+export function serverLog(app: string, sinceIso: string): string {
+  return kubectlOk(['-n', NS, 'logs', '-l', `app=${app}`, '--all-containers', '--prefix', '--tail=-1', `--since-time=${sinceIso}`]).out
 }
 
 export function podLog(pod: string, sinceIso: string): string {

@@ -2,19 +2,20 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import { Box, Loader2, Search, Server } from 'lucide-react'
-import { api, type PodInfo } from '@/services/api'
+import { api, type NodeBoxRow } from '@/services/api'
 import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useWritesRefusedIn } from '@/hooks/useCanCreate'
 import { useAIContext } from '@/hooks/useAIContext'
 import { ListPager } from '@/components/ListPager'
 import { nodeStatusBadge, nodeStatusParts } from '@/utils/nodeStatus'
-import { getPodHealth, getHealthIcon } from './podHealth'
+import { boxPodHealth, getHealthIcon } from './podHealth'
 import { useClusterView } from './ClusterViewContext'
-import { pickMainContainer, podToDetail } from './types'
+import { openPodWindow } from './podDetailRead'
 import { ClusterNodeMap } from './ClusterNodeMap'
 import {
   BOX_PREVIEW_CARDS, NODE_BOXES_PER_PAGE, NODE_PODS_PER_PAGE, boxPageLayer, boxPageOf, cellsOfPage, followedPage, keptOverview, nameOrder,
-  nodeMissingLayer, nodePageOf, nodeViewLayer, nodeViewPage, overviewPage, podKey, previewOrder, searchStart, shownPageAddress, type OverviewPageState,
+  nodeMissingLayer, nodePageOf, nodeViewLayer, nodeViewPage, overviewPage, podKey, previewOrder, searchStart, shownPageAddress, type NodeViewAnswer,
+  type OverviewPageState,
 } from './nodeBoxPages'
 import { UNSCHEDULED, type NodeEntry } from './hooks/useClusterDerived'
 import type { ClusterViewNode } from './hooks/useClusterPodsQuery'
@@ -46,7 +47,7 @@ const SUBSCRIBE_AFTER_MS = 150 // a box scrolled past does not open a watch
 const keyOf = (e: NodeEntry) => e.node || UNSCHEDULED
 
 // The fields the server's search reads (pods_page.go): name, namespace, node and pod IP.
-const podMatches = (pod: PodInfo, q: string, node: string) => pod.name.toLowerCase().includes(q) || pod.namespace.toLowerCase().includes(q)
+const podMatches = (pod: NodeBoxRow, q: string, node: string) => pod.name.toLowerCase().includes(q) || pod.namespace.toLowerCase().includes(q)
   || String(pod.node_name || node).toLowerCase().includes(q) || String(pod.pod_ip || '').toLowerCase().includes(q)
 
 export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod, nodeList }: Props) {
@@ -223,6 +224,7 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod, no
             rowsPerPage={NODE_BOXES_PER_PAGE}
             onPageChange={(p) => goTo(p, 0)}
             showPageSize={false}
+            endsPage
             testId="cluster-view-nodes-pager"
           />
         </>
@@ -244,6 +246,7 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
     setDeletingPods,
     setSelectedPod,
     setSelectedContainer,
+    setExecContainer,
     selectTab,
     setContainerSearchQuery,
     setPodContextMenu,
@@ -261,7 +264,8 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
 
   const namespace = selectedNamespace === 'all' ? undefined : selectedNamespace
   const queryKey = useMemo(() => ['cluster-view', 'node-pods', entry.node, namespace ?? 'all'], [entry.node, namespace])
-  const { data: pods } = useQuery({
+  // the box's rows, which its live frames replace with the pods' full rows as they change
+  const { data: pods } = useQuery<NodeBoxRow[]>({
     queryKey,
     queryFn: () => api.getPodsOnNode(entry.node, namespace),
     enabled: active,
@@ -295,16 +299,16 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
 
   const q = searchQuery.trim().toLowerCase()
   const list = useMemo(() => (Array.isArray(pods) ? pods : []), [pods])
-  const matches = (pod: PodInfo) => q !== '' && podMatches(pod, q, entry.node)
+  const matches = (pod: NodeBoxRow) => q !== '' && podMatches(pod, q, entry.node)
 
   // the overview: the pods the search matches (all without one), problems first, the first BOX_PREVIEW_CARDS drawn
   const found = useMemo(() => (q ? list.filter((pod) => podMatches(pod, q, entry.node)) : list), [list, q, entry.node])
-  const preview = useMemo(() => previewOrder(found, (pod) => getPodHealth(pod).level).slice(0, BOX_PREVIEW_CARDS), [found])
+  const preview = useMemo(() => previewOrder(found, (pod) => boxPodHealth(pod).level).slice(0, BOX_PREVIEW_CARDS), [found])
 
   // the node's own view: every pod by name (problems only when asked), a page of NODE_PODS_PER_PAGE that follows the pod
   // a search opened it on (nodeViewPage); a pod coming or going moves at most a card or two over a page's edge
   const [problemsOnly, setProblemsOnly] = useState(false)
-  const ordered = useMemo(() => nameOrder(problemsOnly ? list.filter((pod) => getPodHealth(pod).level !== 'ok') : list), [list, problemsOnly])
+  const ordered = useMemo(() => nameOrder(problemsOnly ? list.filter((pod) => boxPodHealth(pod).level !== 'ok') : list), [list, problemsOnly])
   const orderedKeys = useMemo(() => ordered.map(podKey), [ordered])
   const focus = mode === 'all' && pods ? nodeView?.pod ?? null : null
   const shownPage = nodeViewPage(orderedKeys, { page: nodeView?.page ?? null, pod: focus }, q ? ordered.findIndex((pod) => podMatches(pod, q, entry.node)) : -1)
@@ -323,14 +327,21 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
   useAIContext(viewLayer, [JSON.stringify(viewLayer)])
 
   // following the opened pod, the address keeps its page, so the page shown last is the one kept if it then goes;
-  // following none, a page asked past the last is written as the page shown
+  // following none, a page asked past the last is written as the page shown when the list shrank under it within the
+  // same read (lastAnswer: the query key and Problem pods only), not when another namespace or that toggle is chosen
+  const read = [...queryKey, problemsOnly ? 'problems' : 'all'].join('\n')
+  const lastAnswer = useRef<NodeViewAnswer | null>(null)
   const follow = mode === 'all' && nodeView ? followedPage({ page: nodeView.page, pod: focus }, shownPage) : null
-  const kept = follow ?? (mode === 'all' && nodeView && pods ? shownPageAddress(nodeView, shownPage) : null)
+  const kept = follow ?? (mode === 'all' && nodeView && pods ? shownPageAddress(nodeView, shownPage, read, lastAnswer.current) : null)
   const keptPage = kept?.page
   const keptPod = kept?.pod
   useEffect(() => {
     if (keptPage !== undefined) moveNodeView({ page: keptPage, pod: keptPod })
   }, [keptPage, keptPod, moveNodeView])
+  const answered = mode === 'all' && !!nodeView && !!pods
+  useEffect(() => {
+    if (answered) lastAnswer.current = { read, page: shownPage.page }
+  }, [answered, read, shownPage.page])
 
   // a search typed in this view goes to the page of its first match, that pod followed; cleared, it follows nothing
   const searched = useRef(q)
@@ -341,24 +352,19 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
     moveNodeView(start ?? { page: shownPage.page })
   }, [mode, pods, q, ordered, entry.node, shownPage.page, moveNodeView])
 
-  const handlePodClick = (pod: any) => {
-    const detail = podToDetail(pod)
-    setSelectedPod(detail)
-    setSelectedContainer(pickMainContainer(pod))
-    setContainerSearchQuery('')
-    selectTab('logs')
-  }
+  // a row without containers (the box's read) opens the window, which reads the pod before Logs opens (podDetailRead)
+  const handlePodClick = (pod: NodeBoxRow) => openPodWindow(pod, 'logs', { setSelectedPod, setSelectedContainer, setContainerSearchQuery, setExecContainer, selectTab })
 
-  const handlePodContextMenu = (event: React.MouseEvent, pod: PodInfo) => {
+  const handlePodContextMenu = (event: React.MouseEvent, pod: NodeBoxRow) => {
     if (!canDeletePod || writesRefused(pod.namespace)) return
     event.preventDefault()
     setPodContextMenu({ x: event.clientX, y: event.clientY, pod })
   }
 
-  const card = (pod: PodInfo, idx: number) => {
+  const card = (pod: NodeBoxRow, idx: number) => {
     const key = podKey(pod)
     const isDeleting = deletingPods.has(key)
-    const health = getPodHealth(pod)
+    const health = boxPodHealth(pod)
     const hit = mode === 'all' && matches(pod)
     const focused = focus !== null && key === focus
     return (
@@ -505,6 +511,7 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
           onNavigate?.()
         }}
         showPageSize={false}
+        endsPage
         testId="cluster-view-node-pods-pager"
       />
     </>

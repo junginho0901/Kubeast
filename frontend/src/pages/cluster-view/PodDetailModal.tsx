@@ -5,6 +5,7 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { PodDetailTabs } from './PodDetailTabs'
 import { PodDetailTabBody } from './PodDetailTabBody'
 import { useClusterView } from './ClusterViewContext'
+import type { PodReadShown } from './podDetailRead'
 
 // Pod 상세 모달 — 헤더 / 탭 바 / 탭 본문 3 영역.
 // selectedPod 가 없으면 mount 안 함.
@@ -14,11 +15,16 @@ interface Props {
   manifest: string | undefined
   describeData: any
   describeError?: unknown
+  /** the pod's own read of a window opened from a box's row (podDetailRead) */
+  podRead?: PodReadShown
 }
 
-export function PodDetailModal({ isAdmin, manifest, describeData, describeError }: Props) {
+export function PodDetailModal({ isAdmin, manifest, describeData, describeError, podRead = 'none' }: Props) {
   const { selectedPod, closeDetailModal, activeTab, tr } = useClusterView()
 
+  // containers not read yet are no containers: the layer says they are being read, and a failed read says itself
+  // (DescribeFailure)
+  const reading = podRead === 'reading'
   useAIContext(selectedPod ? {
     source: 'PodDetailModal',
     summary: `Pod ${selectedPod.name} (${selectedPod.namespace}) 상세 — ${activeTab} 탭`,
@@ -27,11 +33,14 @@ export function PodDetailModal({ isAdmin, manifest, describeData, describeError 
       _link: buildResourceLink('Pod', selectedPod.namespace, selectedPod.name),
       node: selectedPod.node, status: selectedPod.status, phase: selectedPod.phase, restart_count: selectedPod.restart_count,
       created_at: selectedPod.created_at,
-      containers: selectedPod.containers.map((c) => ({ name: c.name, image: c.image, ready: c.ready, state: c.state, restart_count: c.restart_count })),
+      containers: selectedPod.containersKnown
+        ? selectedPod.containers.map((c) => ({ name: c.name, image: c.image, ready: c.ready, state: c.state, restart_count: c.restart_count }))
+        : undefined,
+      containers_loading: reading || undefined,
       describe: activeTab === 'describe' ? describeData : undefined,
       manifest: activeTab === 'manifest' && manifest ? manifest.slice(0, 4096) : undefined,
     },
-  } : null, [selectedPod, activeTab, describeData, manifest])
+  } : null, [selectedPod, activeTab, describeData, manifest, reading])
 
   if (!selectedPod) return null
 
@@ -59,7 +68,7 @@ export function PodDetailModal({ isAdmin, manifest, describeData, describeError 
         </div>
 
         <PodDetailTabs isAdmin={isAdmin} />
-        <PodDetailTabBody manifest={manifest} describeData={describeData} describeError={describeError} />
+        <PodDetailTabBody manifest={manifest} describeData={describeData} describeError={describeError} podRead={podRead} />
       </div>
     </ModalOverlay>
   )
