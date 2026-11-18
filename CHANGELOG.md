@@ -67,6 +67,7 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 ### Fixed
 
 - No list, window or drawer draws one read's rows as another's after a switch of filter, tab, namespace, object or cluster.
+- Panels that closed only on a click outside, Advanced Search's Select Resources and Settings, also close on Escape and give the focus back to their button; with the Refetch interval list open, the first Escape closes only the list.
 - A list on Fit holds the rows that end inside its table, each measured at its own height, where 0.7.7 took the first row's height for every row: a list whose rows wrap holds another number of rows a page, and on the page it is counted on, no last row sticks out past the table's bottom.
 - A live socket that connects again reads its lists again, so rows deleted while it was closed go; frames that come while a list is read are applied to its answer; the Helm releases stream goes on from the last version it saw, also when the browser opens it again after a cut or on another k8s-service, instead of sending every release again with a read of the list.
 - A list's Refresh reads the list once, where each press read it a second time right after, and a change that comes while it reads stays on the list.
