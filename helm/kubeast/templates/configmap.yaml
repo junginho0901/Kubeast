@@ -90,6 +90,14 @@ data:
   KEY_DIR: "/app/.keys"
   POSTGRES_USER: {{ .Values.postgresql.user | quote }}
   POSTGRES_DB: {{ .Values.postgresql.database | quote }}
+  DB_STATEMENT_TIMEOUT_MS: {{ .Values.postgresql.sessionLimits.statementTimeoutMs | int64 | quote }}
+  DB_LOCK_TIMEOUT_MS: {{ .Values.postgresql.sessionLimits.lockTimeoutMs | int64 | quote }}
+  DB_IDLE_IN_TRANSACTION_TIMEOUT_MS: {{ .Values.postgresql.sessionLimits.idleInTransactionTimeoutMs | int64 | quote }}
+  DB_POOL_MAX_AUTH: {{ .Values.postgresql.pool.authService.maxConns | int64 | quote }}
+  DB_POOL_MAX_SESSION: {{ .Values.postgresql.pool.sessionService.maxConns | int64 | quote }}
+  DB_POOL_MAX_K8S: {{ .Values.postgresql.pool.k8sService.maxConns | int64 | quote }}
+  DB_POOL_MAX_AI: {{ .Values.postgresql.pool.aiService.maxConns | int64 | quote }}
+  DB_POOL_MAX_MODEL_CONFIG: {{ .Values.postgresql.pool.modelConfigController.maxConns | int64 | quote }}
   REDIS_HOST: {{ ternary "redis" "" .Values.redis.enabled | quote }}
   REDIS_PORT: "6379"
   REDIS_DB: "0"
@@ -102,16 +110,18 @@ data:
   POD_NAMESPACE: {{ include "kubeast.namespace" . | quote }}
   SETUP_KUBECONFIG_SECRET: "k8s-kubeconfig"
   SETUP_CONFIGMAP_NAME: "kubeast-config"
-  SETUP_RESTART_DEPLOYMENTS: {{ ternary "k8s-service,tool-server" "k8s-service" .Values.ai.enabled | quote }}
+  SETUP_RESTART_DEPLOYMENTS: {{ print (ternary "k8s-service,tool-server" "k8s-service" .Values.ai.enabled) (ternary ",k8s-service-stream" "" .Values.streams.enabled) | quote }}
   AI_ENABLED: {{ .Values.ai.enabled | quote }}
   AUTH_JWKS_URL: "http://auth-service:8004/api/v1/auth/jwks.json"
   AUTH_TOKEN_VERSION_URL: "http://auth-service:8004/api/v1/auth/internal/token-version"
   TOOL_SERVER_URL: "http://tool-server:8086"
   IMPERSONATION_ENABLED: {{ .Values.auth.impersonation.enabled | quote }}
-  {{- /* The groups templates/impersonation-custom-roles.yaml binds: auth-service holds their names back (handler/role.go). */}}
+  {{- /* The role names templates/impersonation-custom-roles.yaml binds the groups of: auth-service holds them back
+         (handler/role.go) and makes each group as the chart does. A comma, which would split the list, is a "-",
+         which makes the same group. */}}
   {{- $boundRoles := list }}
   {{- if .Values.auth.impersonation.enabled }}
-  {{- range .Values.auth.impersonation.customRoles }}{{ $boundRoles = append $boundRoles (include "kubeast.roleSlug" .name) }}{{ end }}
+  {{- range .Values.auth.impersonation.customRoles }}{{ $boundRoles = append $boundRoles (replace "," "-" .name) }}{{ end }}
   {{- end }}
   IMPERSONATION_CUSTOM_ROLES: {{ join "," $boundRoles | quote }}
   IMPERSONATION_USER_PREFIX: {{ .Values.auth.impersonation.userPrefix | default "" | quote }}
@@ -131,6 +141,8 @@ data:
   AI_CHAT_BUDGET_USER_DAILY_TOKENS: {{ .Values.ai.chat.budget.userDailyTokens | quote }}
   AI_CLAUDE_CODE_ENABLED: {{ .Values.ai.providers.claudeCode.enabled | quote }}
   AI_CLAUDE_CODE_MAX_CONCURRENT: {{ .Values.ai.providers.claudeCode.maxConcurrent | quote }}
+  AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL: {{ dig "maxConcurrentTotal" 0 .Values.ai.providers.claudeCode | int64 | quote }}
+  AI_CLAUDE_CODE_QUEUE_WAIT: {{ dig "queueWaitSeconds" 60 .Values.ai.providers.claudeCode | int64 | quote }}
   AI_CLAUDE_CODE_TURN_TIMEOUT: {{ .Values.ai.providers.claudeCode.turnTimeoutSeconds | quote }}
   AI_CLAUDE_CODE_MAX_TURNS: {{ .Values.ai.providers.claudeCode.maxTurns | quote }}
   MCP_ENABLED: {{ .Values.mcp.enabled | quote }}

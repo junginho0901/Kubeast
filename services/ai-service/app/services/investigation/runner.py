@@ -26,6 +26,7 @@ import httpx
 from app.database import get_db_service, utcnow
 from app.services.ai import access as access_mod
 from app.services.ai import limits
+from app.services.ai import tool_replay
 from app.services.ai.debug_dump import safe_error
 from app.services.ai.model_errors import classify
 from app.services.audit_target import tool_target
@@ -198,6 +199,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
                 entry["access"] = access
             if (requests := access_mod.requests_of_call(service)) is not None:
                 entry["requests"] = requests
+        entry.update(tool_replay.call_fields(service, ran))
         tool_log.append(entry)
         target = tool_target(name, args)
         stored = await write_audit(
@@ -216,6 +218,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
                 "redacted": getattr(service.tool_server, "last_redacted", None),
                 "access": entry.get("access"),
                 "requests": entry.get("requests"),
+                **tool_replay.call_fields(service, ran),
             },
             result="failure" if entry.get("error") else "success",
             error=entry.get("error"),
@@ -321,6 +324,20 @@ async def fail_stale(cfg: inv_settings.InvestigationSettings, db) -> int:
     return await store.fail_stale_running(db, utcnow() - timedelta(seconds=cfg.timeout_seconds + 60))
 
 
+async def requeue_on_stop(db, inv_id: str) -> None:
+    """Puts a row the stopping worker held back in the queue, or ends it failed when it went back once already
+    (store.requeue_or_fail), within REQUEUE_SECONDS."""
+    try:
+        outcome = await asyncio.wait_for(store.requeue_or_fail(db, inv_id), timeout=REQUEUE_SECONDS)
+        log.info("investigation %s %s: ai-service is stopping", inv_id, outcome or "unchanged")
+    except Exception:
+        log.exception("investigation %s: could not put it back in the queue; fail_stale ends it after its time limit", inv_id)
+
+
+# The requeue's share of the shutdown: the lifespan waits for the worker WORKER_STOP_SECONDS (main.py).
+REQUEUE_SECONDS = 3
+
+
 async def worker(stop: asyncio.Event) -> None:
     log.info("alert investigation worker started")
     while not stop.is_set():
@@ -337,7 +354,12 @@ async def worker(stop: asyncio.Event) -> None:
             if reason:  # queued before the provider refused or the budget was spent: it would cross it too
                 await store.skip(db, row.id, reason)
             else:
-                await run_one(cfg, db, row)
+                try:
+                    await run_one(cfg, db, row)
+                except asyncio.CancelledError:
+                    # ai-service is stopping (lifespan): give the row back instead of leaving it running until fail_stale.
+                    await requeue_on_stop(db, row.id)
+                    raise
             continue
         webhook.wake.clear()
         try:

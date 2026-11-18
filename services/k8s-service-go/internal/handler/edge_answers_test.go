@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/helm"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
@@ -47,16 +50,92 @@ func TestAnAnswerFromKubeastItselfDoesNotMarkTheClusterDown(t *testing.T) {
 	}
 }
 
+// A call that could not reach the cluster marks it down, whatever the screen answers: refused, a connection that ended
+// with no response, a deadline that passed while it was still connecting.
 func TestAFailedCallToTheClusterStillMarksItDown(t *testing.T) {
+	refused := httptest.NewServer(http.NotFoundHandler())
+	closed := refused.URL
+	refused.Close()
+	for name, c := range map[string]struct {
+		h        *Handler
+		method   string
+		path     string
+		deadline time.Duration
+	}{
+		"refused":                     {handlerOn(t, closed, k8s.ServiceOptions{BreakerFails: 1}), http.MethodGet, "/version", 0},
+		"ended with no response":      {breakerHandler(t, k8s.ServiceOptions{BreakerFails: 1}), http.MethodPost, dropPath, 0},
+		"a deadline while connecting": {handlerOn(t, silentTLSAddress(t), k8s.ServiceOptions{BreakerFails: 1}), http.MethodGet, "/version", 200 * time.Millisecond},
+	} {
+		askC1(c.h, func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			if c.deadline > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, c.deadline)
+				defer cancel()
+			}
+			if _, _, err := c.h.svc.RawRequest(ctx, c.method, c.path); err == nil {
+				t.Errorf("%s: the call was answered", name)
+			}
+			w.WriteHeader(http.StatusOK)
+		})
+		if !c.h.svc.ClusterDown("c1") {
+			t.Errorf("%s: the cluster was not marked down", name)
+		}
+	}
+}
+
+// An error Kubeast met before any call went (the database behind the registry, the client's own rate limit, a cluster
+// not loaded) is no failure of the cluster, though its words name a refused connection or a deadline and the screen
+// answers it 503.
+func TestAnErrorOfKubeastBeforeAnyCallIsNoClusterFailure(t *testing.T) {
 	h := &Handler{}
-	for _, msg := range []string{"dial tcp 10.0.0.9:6443: connect: connection refused", "connection refused", "i/o timeout"} {
+	for _, msg := range []string{
+		"registry.Get(known): dial tcp 10.0.0.5:5432: connect: connection refused",
+		"client rate limiter Wait returned an error: context deadline exceeded",
+		"kubeconfig not loaded",
+	} {
+		if status := statusForError(errors.New(msg)); status != http.StatusServiceUnavailable {
+			t.Fatalf("%q: %d, want the screen's 503", msg, status)
+		}
 		down := breakerAfter(t, func(w http.ResponseWriter, _ *http.Request) {
 			h.handleError(w, errors.New(msg))
 		})
-		if !down {
-			t.Errorf("%q did not mark the cluster down", msg)
+		if down {
+			t.Errorf("%q marked the cluster down", msg)
 		}
 	}
+}
+
+// silentTLSAddress is an https address that takes TCP connections and never answers on them: a TLS handshake to it
+// lasts until its caller gives up.
+func silentTLSAddress(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var held []net.Conn
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			held = append(held, c)
+			mu.Unlock()
+		}
+	}()
+	t.Cleanup(func() {
+		_ = ln.Close()
+		mu.Lock()
+		defer mu.Unlock()
+		for _, c := range held {
+			_ = c.Close()
+		}
+	})
+	return "https://" + ln.Addr().String()
 }
 
 func TestAFailedHelmTestKeepsItsHookResults(t *testing.T) {

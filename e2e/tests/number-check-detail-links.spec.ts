@@ -5,6 +5,8 @@ import path from 'node:path'
 
 import { test, expect, type Locator, type Page } from '@playwright/test'
 
+import { waitUntilListed } from './number-check.cr-shared'
+
 // Every screen that opens a drawer for an object it names passes the object's apiVersion, so one Kind of two groups
 // opens the right group's object with its own CRD: on default, in a namespace of this run's own, a Widget of
 // links-a.kubeast.io and one of links-b.kubeast.io with the same name, each controlling a pod, Warning events about
@@ -184,6 +186,7 @@ test.describe('number check — the drawer a screen opens for one Kind of two gr
     try {
       kc('apply --server-side --field-manager=e2e-detail-links -f -', JSON.stringify({ apiVersion: 'v1', kind: 'List', items: GROUPS.flatMap((g) => [crd(g, 'Widget', 'widgets', 'Namespaced'), crd(g, 'Gizmo', 'gizmos', 'Cluster')]) }))
       kc(`wait --for=condition=Established ${CRDS.map((c) => `crd/${c}`).join(' ')} --timeout=60s`)
+      await waitUntilListed(kc, CRDS)
       kc(`create namespace ${NS}`)
       kc(`label namespace ${NS} ${LABEL}`)
       kc('apply --server-side --field-manager=e2e-detail-links -f -', JSON.stringify({

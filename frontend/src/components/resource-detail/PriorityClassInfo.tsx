@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api, type PriorityClassInfo as PriorityClassRow } from '@/services/api'
+import { retryUnlessRefused } from '@/services/queryDefaults'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { applyPriorityClassWatchEvent } from '@/pages/cluster/priorityclasses/priorityClassWatchNormalize'
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
@@ -24,7 +25,7 @@ export default function PriorityClassInfo({ name }: Props) {
     queryKey: ['priorityclass-describe', name],
     queryFn: () => api.describePriorityClass(name),
     staleTime: 10_000,
-    retry: 1,
+    retry: retryUnlessRefused(1),
   })
   useDrawerFollowsObject({
     enabled: !!name,

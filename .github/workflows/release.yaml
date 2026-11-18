@@ -4,9 +4,10 @@ on:
   push:
     tags:
       - 'v*'
-  # Dry run: build every image for both platforms without pushing anything
-  # (no scan, attestation, signature or chart), to check the workflow and the
-  # Dockerfiles before a tag.
+  # Dry run: build every image for both platforms without pushing anything, scan
+  # the amd64 build with the same trivy gate and start Docker Compose on the
+  # same Dockerfiles (no architecture check, SBOM, attestation, signature, tag or
+  # chart), to check the workflow and the Dockerfiles before a tag.
   workflow_dispatch:
 
 # Each image is pushed by digest, checked (architecture, trivy: fixed

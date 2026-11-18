@@ -198,6 +198,10 @@ type JWKSConfig struct {
 	// version still counts when auth-service cannot be reached (default 5m).
 	TokenVersionCacheTTL time.Duration
 	TokenVersionStaleTTL time.Duration
+	// TokenVersionFailurePause is how long a user whose version auth-service could not read is answered from that
+	// failure without asking again (default 2s, below auth-service's Retry-After; negative asks every time), so an
+	// outage does not send every request of the user to auth-service and its database.
+	TokenVersionFailurePause time.Duration
 }
 
 // JWTValidator validates JWTs using JWKS public keys.
@@ -209,9 +213,10 @@ type JWTValidator struct {
 	fetchMu    sync.Mutex // serializes refetches
 	httpClient *http.Client
 
-	tvMu    sync.Mutex
-	tv      map[string]tokenVersionEntry // per subject (token_version.go)
-	tvCalls map[string]*tokenVersionCall // per token, the lookups under way
+	tvMu     sync.Mutex
+	tv       map[string]tokenVersionEntry // per subject (token_version.go)
+	tvCalls  map[string]*tokenVersionCall // per token, the lookups under way
+	tvPaused map[string]time.Time         // per subject, until when a failed lookup is not asked again
 }
 
 // NewJWTValidator creates a new validator.
@@ -222,12 +227,16 @@ func NewJWTValidator(cfg JWKSConfig) *JWTValidator {
 	if cfg.TokenVersionStaleTTL <= 0 {
 		cfg.TokenVersionStaleTTL = 5 * time.Minute
 	}
+	if cfg.TokenVersionFailurePause == 0 {
+		cfg.TokenVersionFailurePause = 2 * time.Second
+	}
 	return &JWTValidator{
 		cfg:        cfg,
 		keys:       make(map[string]*rsa.PublicKey),
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 		tv:         make(map[string]tokenVersionEntry),
 		tvCalls:    make(map[string]*tokenVersionCall),
+		tvPaused:   make(map[string]time.Time),
 	}
 }
 
@@ -382,7 +391,8 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 		email = ""
 	}
 
-	role := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", claims["role"])))
+	// The account level's name as stored: a built-in is known by its exact name (IsBuiltinRole).
+	role := strings.TrimSpace(fmt.Sprintf("%v", claims["role"]))
 	if role == "" || role == "<nil>" {
 		role = "read"
 	}
@@ -488,11 +498,15 @@ func (v *JWTValidator) MiddlewareWithCookie(cookieName string, next http.Handler
 		}
 
 		payload, err := v.Validate(tokenStr)
+		if errors.Is(err, ErrSessionUnreadable) {
+			RefuseSessionUnreadable(w)
+			return
+		}
 		if err != nil {
 			http.Error(w, `{"detail":"Invalid token"}`, http.StatusUnauthorized)
 			return
 		}
-		if payload.Role == "pending" && !pendingAllowed(r) {
+		if payload.Role == "Pending" && !pendingAllowed(r) {
 			http.Error(w, `{"detail":"Account pending approval"}`, http.StatusForbidden)
 			return
 		}

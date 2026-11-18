@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { PodInfo } from '@/services/api'
+import type { NodeBoxRow } from '@/services/api'
 import type { PodDetail, DetailTab } from './types'
 
 // ClusterView 전용 state container — 모든 modal / tab / exec / delete state lift.
@@ -15,7 +15,7 @@ import type { PodDetail, DetailTab } from './types'
 export interface PodContextMenuPosition {
   x: number
   y: number
-  pod: PodInfo
+  pod: NodeBoxRow
 }
 
 export interface ClusterViewContextValue {
@@ -33,6 +33,16 @@ export interface ClusterViewContextValue {
   namespaceDropdownRef: React.RefObject<HTMLDivElement | null>
   searchQuery: string
   setSearchQuery: (s: string) => void
+  // the node's own view (a map cell or a box's "show all"), kept in the address as ?node=, ?nodePage= and ?pod= so a
+  // link opens it; null is the overview of every node. `pod` (namespace/name) is the pod a search opened it on, which
+  // the page follows; a page of null is chosen by the view (the search's first match, else 1). Opening and closing it
+  // are history entries (Back returns to every node); turning a page (which drops `pod`) and moving with the pod
+  // followed replace the entry.
+  nodeView: { node: string; page: number | null; pod: string | null } | null
+  openNodeView: (node: string, at?: { page?: number; pod?: string }) => void
+  setNodeViewPage: (page: number) => void
+  moveNodeView: (at: { page: number; pod?: string | null }) => void
+  closeNodeView: () => void
 
   // pod detail modal
   selectedPod: PodDetail | null
@@ -67,7 +77,7 @@ export interface ClusterViewContextValue {
   // context-menu + delete modal
   podContextMenu: PodContextMenuPosition | null
   setPodContextMenu: (m: PodContextMenuPosition | null) => void
-  deleteTargetPod: PodInfo | null
+  deleteTargetPod: NodeBoxRow | null
   deleteForce: boolean
   setDeleteForce: (b: boolean) => void
   deleteError: string | null
@@ -80,7 +90,7 @@ export interface ClusterViewContextValue {
   // close handlers (Dashboard 와 동일 패턴 — 모달 close 가 여러 state 한 번에 reset)
   closeDetailModal: () => void
   closeContextMenu: () => void
-  openDeleteModal: (pod: PodInfo) => void
+  openDeleteModal: (pod: NodeBoxRow) => void
   closeDeleteModal: () => void
 }
 

@@ -351,7 +351,7 @@ func TestPodRowMemory_WithReferences(t *testing.T) {
 	const n = 50_000
 	rng := rand.New(rand.NewSource(5))
 	in := newInterner()
-	idx := cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	idx := cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, podRowIndexers())
 	add := func(i int) {
 		p := typicalPod(rng, i)
 		if err := idx.Add(toPodRow(p, in)); err != nil {
