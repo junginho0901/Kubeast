@@ -40,13 +40,19 @@ func TestGetPodPage_SaysTheOwnerItKept(t *testing.T) {
 		func(string) bool { return true })
 	q := PodPageQuery{Namespace: "a", OwnerKind: "DaemonSet", OwnerName: "ds", Limit: 10}
 	first, err := s.GetPodPage(ctx, q)
-	if err != nil || first.Filters != (PodPageFilters{Namespace: "a", Owner: "DaemonSet/ds"}) || first.Total != 1 {
-		t.Fatalf("filters %+v total %d (%v), want owner DaemonSet/ds and one pod", first.Filters, first.Total, err)
+	if err != nil || first == nil {
+		t.Fatalf("the first page: %+v (%v)", first, err)
+	}
+	if first.Filters != (PodPageFilters{Namespace: "a", Owner: "DaemonSet/ds"}) || first.Total != 1 {
+		t.Fatalf("filters %+v total %d, want owner DaemonSet/ds and one pod", first.Filters, first.Total)
 	}
 	q.Revision = first.Revision
 	again, err := s.GetPodPage(ctx, q)
-	if err != nil || !again.Unchanged || again.Filters.Owner != "DaemonSet/ds" {
-		t.Fatalf("unchanged answer %+v (%v), want the owner named", again, err)
+	if err != nil || again == nil {
+		t.Fatalf("the unchanged answer: %+v (%v)", again, err)
+	}
+	if !again.Unchanged || again.Filters.Owner != "DaemonSet/ds" {
+		t.Fatalf("unchanged answer %+v, want the owner named", again)
 	}
 }
 

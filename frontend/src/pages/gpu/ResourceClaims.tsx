@@ -21,7 +21,7 @@ import { applyResourceClaimWatchEvent } from './resourceclaims/resourceClaimsWat
 import { ResourceClaimsFilters } from './resourceclaims/ResourceClaimsFilters'
 import { ResourceClaimsTable } from './resourceclaims/ResourceClaimsTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 
 export default function ResourceClaims() {
@@ -176,13 +176,10 @@ export default function ResourceClaims() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllResourceClaims(true)
-      : await api.getResourceClaims(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['gpu', 'resourceclaims', selectedNamespace] })
-    queryClient.setQueryData(['gpu', 'resourceclaims', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['gpu', 'resourceclaims', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllResourceClaims(true)
+      : api.getResourceClaims(selectedNamespace, true)))
 
   const createResourceClaimYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

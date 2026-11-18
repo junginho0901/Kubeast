@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/protectedns"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -37,19 +38,41 @@ func muxOn(t *testing.T, api http.HandlerFunc) *Multiplexer {
 	t.Helper()
 	server := httptest.NewServer(api)
 	t.Cleanup(server.Close)
-	d, err := dynamic.NewForConfig(&rest.Config{Host: server.URL, QPS: -1})
+	cfg := &rest.Config{Host: server.URL, QPS: -1}
+	d, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewMultiplexer(fakeClients{d})
+	return NewMultiplexer(configClients{fakeClients{d}, cfg})
 }
 
-// eventThenHold sends one pod event and keeps the watch open, as a quiet cluster does.
+// configClients is fakeClients with the REST config its client was made of, as the k8s Service gives it, so the watches
+// go through the client that decodes what the rows read (watchClient).
+type configClients struct {
+	fakeClients
+	cfg *rest.Config
+}
+
+func (p configClients) RESTConfigFor(context.Context) (*rest.Config, error) { return p.cfg, nil }
+
+// eventThenHold sends one pod event and keeps the watch open, as a quiet cluster does; a watch list's ends in its
+// bookmark.
 func eventThenHold(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintln(w, podEvent)
+	endInitialEvents(w, r, "v1", "Pod", "10")
 	w.(http.Flusher).Flush()
 	<-r.Context().Done()
+}
+
+// endInitialEvents writes, for a watch list (sendInitialEvents=true), the bookmark kube-apiserver sends after the
+// objects it opens with (metav1.InitialEventsAnnotationKey).
+func endInitialEvents(w http.ResponseWriter, r *http.Request, apiVersion, kind, resourceVersion string) {
+	if r.URL.Query().Get("sendInitialEvents") != "true" {
+		return
+	}
+	fmt.Fprintf(w, `{"type":"BOOKMARK","object":{"apiVersion":%q,"kind":%q,"metadata":{"resourceVersion":%q,"annotations":{%q:"true"}}}}`+"\n",
+		apiVersion, kind, resourceVersion, metav1.InitialEventsAnnotationKey)
 }
 
 // frame is a message as a browser reads it.
@@ -227,27 +250,30 @@ func (v versionsAsked) next(t *testing.T) string {
 	}
 }
 
-// The two ways the API server says a version has expired; the watch after them, asked with no version, holds.
+// The two ways the API server says a version has expired; the watch after them, asked with no version, holds. A watch
+// from no version is a watch list from the watch cache's version ("0"), whose objects end in a bookmark.
 var expiryCases = []struct {
 	name  string
-	serve func(w http.ResponseWriter, call int)
+	serve func(w http.ResponseWriter, r *http.Request, call int)
 	// the versions asked for, the last with none
 	want []string
 }{
-	{"in the watch stream", func(w http.ResponseWriter, _ int) {
+	{"in the watch stream", func(w http.ResponseWriter, r *http.Request, _ int) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintln(w, podEvent)
+		endInitialEvents(w, r, "v1", "Pod", "10")
 		fmt.Fprintln(w, expiredEvent)
-	}, []string{"", ""}},
-	{"as the answer to resuming", func(w http.ResponseWriter, call int) {
+	}, []string{"0", "0"}},
+	{"as the answer to resuming", func(w http.ResponseWriter, r *http.Request, call int) {
 		w.Header().Set("Content-Type", "application/json")
 		if call == 1 {
 			fmt.Fprintln(w, podEvent)
+			endInitialEvents(w, r, "v1", "Pod", "10")
 			return
 		}
 		w.WriteHeader(http.StatusGone)
 		fmt.Fprintln(w, goneStatus)
-	}, []string{"", "10", ""}},
+	}, []string{"0", "10", "0"}},
 }
 
 func TestExpiredResourceVersionIsNotAskedForAgain(t *testing.T) {
@@ -259,14 +285,14 @@ func TestExpiredResourceVersionIsNotAskedForAgain(t *testing.T) {
 				n := int(calls.Add(1))
 				asked <- r.URL.Query().Get("resourceVersion")
 				if n < len(c.want) {
-					c.serve(w, n)
+					c.serve(w, r, n)
 					return
 				}
 				eventThenHold(w, r)
 			})
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			out := make(chan ResponseMessage, 100)
+			out := make(chan *ResponseMessage, 100)
 			done := make(chan struct{})
 			go func() { defer close(done); watchInto(ctx, m, "/api/v1/pods", "watch=1", out) }()
 
@@ -293,14 +319,14 @@ func TestExpiredResourceVersionAsksTheClientToReadTheListAgain(t *testing.T) {
 			m := muxOn(t, func(w http.ResponseWriter, r *http.Request) {
 				n := int(calls.Add(1))
 				if n < len(c.want) {
-					c.serve(w, n)
+					c.serve(w, r, n)
 					return
 				}
 				eventThenHold(w, r)
 			})
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			out := make(chan ResponseMessage, 100)
+			out := make(chan *ResponseMessage, 100)
 			done := make(chan struct{})
 			go func() { defer close(done); watchInto(ctx, m, "/api/v1/pods", "watch=1", out) }()
 
@@ -347,7 +373,7 @@ func TestBookmarkMovesTheResumePointAndStaysOnTheServer(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	out := make(chan ResponseMessage, 100)
+	out := make(chan *ResponseMessage, 100)
 	done := make(chan struct{})
 	go func() { defer close(done); watchInto(ctx, m, "/api/v1/pods", "watch=1", out) }()
 
@@ -400,9 +426,9 @@ func TestCanceledWatchEndsWithItsSendQueueFull(t *testing.T) {
 			m := muxOn(t, c.api)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			out := make(chan ResponseMessage, 256)
+			out := make(chan *ResponseMessage, 256)
 			for len(out) < cap(out) {
-				out <- ResponseMessage{Type: "ALREADY-QUEUED"}
+				out <- &ResponseMessage{Type: "ALREADY-QUEUED"}
 			}
 			done := make(chan struct{})
 			go func() { defer close(done); watchInto(ctx, m, c.path, "watch=1", out) }()
@@ -432,7 +458,7 @@ func TestCanceledWatchDoesNotWaitOutItsRetryDelay(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	out := make(chan ResponseMessage, 256)
+	out := make(chan *ResponseMessage, 256)
 	done := make(chan struct{})
 	go func() { defer close(done); watchInto(ctx, m, "/api/v1/pods", "watch=1", out) }()
 	<-failed
@@ -546,7 +572,7 @@ func TestFramesNameNoClusterWhenTheRequestNamedNone(t *testing.T) {
 }
 
 // watchInto runs a watch of the default cluster as the multiplexer does.
-func watchInto(ctx context.Context, m *Multiplexer, path, query string, out chan<- ResponseMessage) {
+func watchInto(ctx context.Context, m *Multiplexer, path, query string, out chan<- *ResponseMessage) {
 	m.runWatch(ctx, RequestMessage{Path: path, Query: query}, out)
 }
 

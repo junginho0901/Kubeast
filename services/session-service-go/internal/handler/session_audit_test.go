@@ -31,6 +31,8 @@ type fakeSessions struct {
 	messages []model.Message
 	// what GetMessagesBefore was asked
 	askedBefore, askedLimit int
+	// the cursor ListSessionsWithMessageCounts was given
+	askedBeforeUpdatedAt *time.Time
 }
 
 func (f *fakeSessions) CreateSession(context.Context, string, string, string, string) (*model.Session, error) {
@@ -39,7 +41,8 @@ func (f *fakeSessions) CreateSession(context.Context, string, string, string, st
 func (f *fakeSessions) GetSession(_ context.Context, id string) (*model.Session, error) {
 	return f.sessions[id], nil
 }
-func (f *fakeSessions) ListSessionsWithMessageCounts(context.Context, string, string, int, int, *time.Time, *string) ([]model.Session, error) {
+func (f *fakeSessions) ListSessionsWithMessageCounts(_ context.Context, _, _ string, _, _ int, beforeUpdatedAt *time.Time, _ *string) ([]model.Session, error) {
+	f.askedBeforeUpdatedAt = beforeUpdatedAt
 	return nil, nil
 }
 func (f *fakeSessions) UpdateSessionTitle(_ context.Context, id, title string) error {

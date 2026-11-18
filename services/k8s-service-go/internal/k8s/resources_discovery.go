@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
@@ -24,12 +26,18 @@ func (s *Service) GetAPIResources(ctx context.Context) ([]metav1.APIResourceList
 
 // apiResources is GetAPIResources with the time its lists were read from the cluster.
 func (s *Service) apiResources(ctx context.Context) ([]metav1.APIResourceList, time.Time, error) {
+	d, err := s.discover(ctx)
+	return d.lists, d.read, err
+}
+
+// discover is the cluster's discovery as apiResources keeps it: the last read while it stands, otherwise a new one.
+func (s *Service) discover(ctx context.Context) (discovered, error) {
 	cid := ctxClusterID(ctx)
 	s.apiResourcesMu.RLock()
 	if cached := s.apiResourcesCache[cid]; cached != nil && time.Since(s.apiResourcesAt[cid]) < apiResourcesTTL {
-		read := s.apiResourcesRead[cid]
+		d := discovered{cached, s.apiResourcesRead[cid], s.apiResourcesFailed[cid]}
 		s.apiResourcesMu.RUnlock()
-		return cached, read, nil
+		return d, nil
 	}
 	s.apiResourcesMu.RUnlock()
 
@@ -37,26 +45,33 @@ func (s *Service) apiResources(ctx context.Context) ([]metav1.APIResourceList, t
 	// requests waiting on it (TestOneClustersSlowDiscoveryKeepsNoOtherClusterWaiting).
 	v, err, _ := s.apiResourcesSF.Do(string(cid), func() (interface{}, error) {
 		s.apiResourcesMu.RLock()
-		cached, at, read, gen := s.apiResourcesCache[cid], s.apiResourcesAt[cid], s.apiResourcesRead[cid], s.apiResourcesGen
+		cached, at, read, failed, gen := s.apiResourcesCache[cid], s.apiResourcesAt[cid], s.apiResourcesRead[cid], s.apiResourcesFailed[cid], s.apiResourcesGen
 		s.apiResourcesMu.RUnlock()
 		if cached != nil && time.Since(at) < apiResourcesTTL {
-			return discovered{cached, read}, nil
+			return discovered{cached, read, failed}, nil
 		}
 		dc := s.discoveryCtx(ctx)
 		if dc == nil {
 			return nil, errNotLoaded
 		}
-		groups, lists, err := dc.ServerGroupsAndResources()
+		// one read per cluster kept for everyone for apiResourcesTTL: asked as Kubeast itself
+		groups, lists, err := discovery.ToDiscoveryInterfaceWithContext(dc).ServerGroupsAndResourcesWithContext(auth.AsKubeast(carryClusterCalls(context.Background(), ctx)))
 		// One aggregated API that does not answer leaves the others known, as kubectl goes on with them. A short cache:
 		// the kinds of that API come back when it does.
 		partial := discovery.IsGroupDiscoveryFailedError(err)
 		if err != nil && !partial {
 			return nil, fmt.Errorf("discover API resources: %w", err)
 		}
+		result := discovered{lists: preferredFirst(groups, lists), read: time.Now()}
 		if partial {
 			slog.Warn("some API groups are not answering", "cluster", cid, "err", err)
+			var failedErr *discovery.ErrGroupDiscoveryFailed
+			if errors.As(err, &failedErr) {
+				for gv := range failedErr.Groups {
+					result.failed = append(result.failed, gv.Group)
+				}
+			}
 		}
-		result := discovered{preferredFirst(groups, lists), time.Now()}
 		s.apiResourcesMu.Lock()
 		defer s.apiResourcesMu.Unlock()
 		// lists read from a bundle that was replaced meanwhile are not kept
@@ -68,8 +83,12 @@ func (s *Service) apiResources(ctx context.Context) ([]metav1.APIResourceList, t
 			s.apiResourcesAt = map[cluster.ID]time.Time{}
 			s.apiResourcesRead = map[cluster.ID]time.Time{}
 		}
+		if s.apiResourcesFailed == nil {
+			s.apiResourcesFailed = map[cluster.ID][]string{}
+		}
 		s.apiResourcesCache[cid] = result.lists
 		s.apiResourcesRead[cid] = result.read
+		s.apiResourcesFailed[cid] = result.failed
 		s.apiResourcesAt[cid] = result.read
 		if partial {
 			s.apiResourcesAt[cid] = result.read.Add(-apiResourcesTTL + apiResourcesPartialTTL)
@@ -77,16 +96,42 @@ func (s *Service) apiResources(ctx context.Context) ([]metav1.APIResourceList, t
 		return result, nil
 	})
 	if err != nil {
-		return nil, time.Time{}, err
+		return discovered{}, err
 	}
-	d := v.(discovered)
-	return d.lists, d.read, nil
+	return v.(discovered), nil
 }
 
-// discovered is one read of a cluster's API resources and when it was read.
+// discovered is one read of a cluster's API resources, when it was read, and the API groups it names that did not
+// answer (an aggregated API registered whose server is down: in the group list, its resources not read).
 type discovered struct {
-	lists []metav1.APIResourceList
-	read  time.Time
+	lists  []metav1.APIResourceList
+	read   time.Time
+	failed []string
+}
+
+// servesGroup says whether this discovery read serves an API group: the read lists it, or names it as not answering
+// (registered, its server down).
+func (d discovered) servesGroup(group string) bool {
+	if slices.Contains(d.failed, group) {
+		return true
+	}
+	for _, l := range d.lists {
+		if gv, err := schema.ParseGroupVersion(l.GroupVersion); err == nil && gv.Group == group {
+			return true
+		}
+	}
+	return false
+}
+
+// lastDiscovery is the cluster's last discovery read while it is younger than apiResourcesTTL, partial or not.
+func (s *Service) lastDiscovery(cid cluster.ID) (discovered, bool) {
+	s.apiResourcesMu.RLock()
+	defer s.apiResourcesMu.RUnlock()
+	lists, read := s.apiResourcesCache[cid], s.apiResourcesRead[cid]
+	if lists == nil || time.Since(read) >= apiResourcesTTL {
+		return discovered{}, false
+	}
+	return discovered{lists, read, s.apiResourcesFailed[cid]}, true
 }
 
 const (
@@ -350,9 +395,12 @@ func (s *Service) GetClusterConfig(ctx context.Context) (map[string]interface{},
 		result["server"] = cluster.WithoutURLUser(rc.Host)
 	}
 
-	// Cluster version
-	sv, err := s.clientsetCtx(ctx).Discovery().ServerVersion()
-	if err == nil {
+	b := s.bundleForCtx(ctx)
+	if b == nil {
+		return result, nil
+	}
+	// Cluster version, the one read kept for everyone
+	if sv, err := b.serverVersionInfo(ctx, shownVersionTTL); err == nil {
 		result["version"] = map[string]interface{}{
 			"major":       sv.Major,
 			"minor":       sv.Minor,
@@ -366,7 +414,7 @@ func (s *Service) GetClusterConfig(ctx context.Context) (map[string]interface{},
 	}
 
 	// API groups
-	groups, err := s.discoveryCtx(ctx).ServerGroups()
+	groups, err := discovery.ToDiscoveryInterfaceWithContext(b.discovery).ServerGroupsWithContext(ctx)
 	if err == nil {
 		groupNames := make([]string, 0, len(groups.Groups))
 		for _, g := range groups.Groups {

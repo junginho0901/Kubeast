@@ -30,6 +30,17 @@ func TestAuthMiddleware_PendingRoleIsScoped(t *testing.T) {
 			t.Errorf("pending → %s: got %d, want %d", path, rec.Code, want)
 		}
 	}
+	// the built-in is known by its exact name: another spelling is not that account level
+	for _, role := range []string{"PENDING", "pending"} {
+		other, _ := m.CreateToken("u1", "u1@example.com", role, auth.PermissionMatrix{"*": {}}, nil, nil, 1)
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/v1/clusters", nil)
+		req.Header.Set("Authorization", "Bearer "+other)
+		mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })).ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("%q → /api/v1/clusters: got %d, want it not read as Pending", role, rec.Code)
+		}
+	}
 }
 
 // auth_time reaches the handler (Refresh enforces the absolute lifetime from it)

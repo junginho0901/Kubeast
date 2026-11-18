@@ -43,4 +43,8 @@ USER 65532:65532
 
 EXPOSE 8001
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
+# On SIGTERM uvicorn stops accepting at once, lets the answers in flight go on for 20 s and then cuts them (a chat stream
+# cut there is saved as ended by an error), then the lifespan puts a held investigation back in the queue: inside the 30 s
+# the chart's grace period leaves after its preStop wait. The investigation worker takes no new run from the signal on
+# (main.stop_on_shutdown_signal).
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--timeout-graceful-shutdown", "20"]

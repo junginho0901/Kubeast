@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/cache"
 	resourcehelper "k8s.io/component-helpers/resource"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/podrow"
@@ -73,6 +74,22 @@ func refsHold(refs, name string) bool {
 // GetObjectMeta lets the store key and index the row (meta.Accessor).
 func (r *podRow) GetObjectMeta() metav1.Object {
 	return &metav1.ObjectMeta{Name: r.name, Namespace: r.namespace, ResourceVersion: r.rv}
+}
+
+// podNodeIndex keys the rows by their node, "" for the pods not scheduled: a Cluster View box reads its node's rows
+// through it, as Kubernetes' DaemonSet and node lifecycle controllers look up a node's pods (AddPodNodeNameIndexer).
+const podNodeIndex = "node"
+
+func podRowNode(obj interface{}) ([]string, error) {
+	if r, ok := obj.(*podRow); ok {
+		return []string{r.node}, nil
+	}
+	return nil, nil
+}
+
+// podRowIndexers are the pod store's indexes: the namespace index every informer of the factory has and podNodeIndex.
+func podRowIndexers() cache.Indexers {
+	return cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc, podNodeIndex: podRowNode}
 }
 
 // sameView reports whether two rows show the same thing; a new

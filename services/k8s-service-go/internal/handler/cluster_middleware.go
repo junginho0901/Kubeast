@@ -7,7 +7,9 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync/atomic"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -23,10 +25,11 @@ import (
 //
 // Step 15 (failure isolation): a request to a cluster the health checker has
 // marked down returns 503 immediately (fail-fast) instead of waiting out the
-// API-server timeout — so one dead cluster can't tie up requests. The live
-// response then feeds the health state back: a connectivity 503 marks the
-// cluster down (so the next request fails fast before the periodic poll), any
-// success clears it.
+// API-server timeout — so one dead cluster can't tie up requests. The calls a
+// request made then feed the health state back: calls that could not reach the
+// cluster, with no response to any, count a failure (so the next request fails
+// fast before the periodic poll), whatever the handler answered; an answer of
+// the API server clears the count. Open, among requests only the one let through after MC_BREAKER_OPEN_SEC closes it.
 func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		payload, ok := auth.FromContext(r.Context())
@@ -74,11 +77,13 @@ func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 			response.Error(w, http.StatusNotFound, "cluster not found")
 			return
 		}
-		if h.svc.ClusterDown(id) {
+		admitted, trial := h.svc.AdmitToCluster(id)
+		if !admitted {
 			response.Error(w, http.StatusServiceUnavailable, "cluster "+c+" is currently unreachable")
 			return
 		}
 		if !h.svc.AllowRequest(id) {
+			h.svc.TrialAskedNothing(id, trial)
 			response.Error(w, http.StatusTooManyRequests, "rate limit exceeded for cluster "+c)
 			return
 		}
@@ -86,42 +91,48 @@ func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 		// The identity this request's cluster calls go out as, which the AI
 		// chat shows next to a tool call that came through here.
 		w.Header().Set(auth.HeaderAccess, payload.Access(c, h.cfg.ImpersonationEnabled).Header())
-		sr := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		sr := &statusRecorder{ResponseWriter: w}
 		// An AI tool call asks for the cluster requests it caused, each with its Audit-ID.
 		if r.Header.Get(accesstrail.HeaderRecord) != "" {
 			sr.trail = &accesstrail.Recorder{}
 			r = r.WithContext(accesstrail.NewContext(r.Context(), sr.trail))
 		}
+		// The API server's first answer decides at once, so a terminal or a followed log trying the cluster closes it.
+		var answered atomic.Bool
+		ctx, calls := k8s.WithClusterCalls(r.Context(), id, func() {
+			answered.Store(true)
+			if trial.IsZero() {
+				h.svc.ClusterAnswered(id)
+			} else {
+				h.svc.MarkClusterUp(id)
+			}
+		})
+		r = r.WithContext(ctx)
+		defer func() {
+			switch {
+			case calls.Unreached():
+				h.svc.MarkClusterDown(id)
+			case trial.IsZero() || answered.Load():
+			case calls.Unanswered():
+				h.svc.TrialUnanswered(id, trial)
+			default:
+				h.svc.TrialAskedNothing(id, trial)
+			}
+		}()
 		next.ServeHTTP(sr, r)
-
-		switch {
-		case sr.clusterFailed:
-			h.svc.MarkClusterDown(id)
-		case sr.status < http.StatusInternalServerError:
-			h.svc.MarkClusterUp(id)
-		}
 	})
 }
 
-// clusterFailureNoter is the response writer ClusterMiddleware gives handlers: handleError tells it a call to the
-// cluster failed.
-type clusterFailureNoter interface{ noteClusterFailure() }
-
-// statusRecorder captures the response status for the health signal while
-// transparently forwarding Hijacker (WebSocket exec/logs) and Flusher (SSE
-// streams) so wrapping never breaks those long-lived connections.
+// statusRecorder stamps the access trail on the answer while transparently
+// forwarding Hijacker (WebSocket exec/logs) and Flusher (SSE streams) so
+// wrapping never breaks those long-lived connections.
 type statusRecorder struct {
 	http.ResponseWriter
-	status int
 	// trail, when set, goes out in HeaderRequests with the response headers:
 	// the cluster requests made before the handler started its answer.
 	trail   *accesstrail.Recorder
 	stamped bool
-	// clusterFailed: the answer is a failed call to the cluster, not a 503 of Kubeast's own.
-	clusterFailed bool
 }
-
-func (s *statusRecorder) noteClusterFailure() { s.clusterFailed = true }
 
 func (s *statusRecorder) stamp() {
 	if s.trail == nil || s.stamped {
@@ -133,7 +144,6 @@ func (s *statusRecorder) stamp() {
 
 func (s *statusRecorder) WriteHeader(code int) {
 	s.stamp()
-	s.status = code
 	s.ResponseWriter.WriteHeader(code)
 }
 

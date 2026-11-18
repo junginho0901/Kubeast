@@ -18,7 +18,7 @@ import { DaemonSetFilters } from './daemonsets/DaemonSetFilters'
 import { DaemonSetTable } from './daemonsets/DaemonSetTable'
 import { workloadStatusText } from '@/utils/workloadStatus'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -201,13 +201,10 @@ export default function DaemonSets() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllDaemonSets(true)
-      : await api.getDaemonSets(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['workloads', 'daemonsets', selectedNamespace] })
-    queryClient.setQueryData(['workloads', 'daemonsets', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['workloads', 'daemonsets', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllDaemonSets(true)
+      : api.getDaemonSets(selectedNamespace, true)))
 
   const createDaemonSetYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

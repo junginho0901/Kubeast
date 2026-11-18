@@ -131,8 +131,11 @@ async def get(db, item_id: str) -> Optional[AlertInboxItem]:
 
 
 async def investigations_for(db, rows: list[AlertInboxItem]) -> dict[str, AlertInvestigation]:
-    """The newest investigation of each row's alert since it started (a repeat folded into an older investigation
-    within the dedupe window counts: its last_seen_at moved on)."""
+    """Each row's investigation: the newest holding the row's starts_at (the webhook and "Investigate now" store it),
+    else the newest of an earlier or unknown start received or seen again since the row's first notification (a later
+    firing folded into an older investigation within the dedupe window moved its last_seen_at on; a message without
+    startsAt), so a later firing's investigation never takes an older row. Each comparison is of one clock: starts_at
+    with starts_at (the sender's), received_at and last_seen_at with first_received_at (ai-service's)."""
     if not rows:
         return {}
     async with db.async_session() as s:
@@ -144,10 +147,14 @@ async def investigations_for(db, rows: list[AlertInboxItem]) -> dict[str, AlertI
         found = list((await s.execute(q)).scalars().all())
     out = {}
     for r in rows:
-        for inv in found:
-            if inv.fingerprint == r.fingerprint and (inv.received_at >= r.starts_at or inv.last_seen_at >= r.starts_at):
-                out[r.id] = inv
-                break
+        alerts = [inv for inv in found if inv.fingerprint == r.fingerprint]
+        inv = next((inv for inv in alerts if inv.starts_at == r.starts_at), None) or next((
+            inv for inv in alerts
+            if (inv.starts_at is None or inv.starts_at <= r.starts_at)
+            and (inv.received_at >= r.first_received_at or inv.last_seen_at >= r.first_received_at)
+        ), None)
+        if inv is not None:
+            out[r.id] = inv
     return out
 
 

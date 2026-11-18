@@ -20,22 +20,24 @@ import (
 func (s *Service) GetNamespaces(ctx context.Context) ([]map[string]interface{}, error) {
 	// A namespace-scoped grant: the list is the grant itself (the cluster would
 	// refuse "list namespaces" for a group bound per namespace). Each entry is
-	// read as the user when the cluster allows it, so status and labels show.
+	// what the user's own read of it gives when the cluster allows it, so status
+	// and labels show.
 	if scope := scopeFromCtx(ctx); len(scope) > 0 {
-		cs := s.clientsetCtx(ctx)
-		if cs == nil {
-			return nil, errNotLoaded
-		}
-		result := make([]map[string]interface{}, len(scope))
-		sideBySide(len(scope), func(i int) {
-			entry := map[string]interface{}{"name": scope[i], "status": "Active", "created_at": "", "labels": map[string]string{}}
-			if ns, err := cs.CoreV1().Namespaces().Get(ctx, scope[i], metav1.GetOptions{}); err == nil {
-				entry["status"] = string(ns.Status.Phase)
-				entry["created_at"] = toISO(&ns.CreationTimestamp)
-				entry["labels"] = ns.Labels
+		result, ok := s.cachedScopedNamespaces(ctx, scope)
+		if !ok {
+			cs := s.clientsetCtx(ctx)
+			if cs == nil {
+				return nil, errNotLoaded
 			}
-			result[i] = entry
-		})
+			result = make([]map[string]interface{}, len(scope))
+			sideBySide(len(scope), func(i int) {
+				var read *corev1.Namespace
+				if ns, err := cs.CoreV1().Namespaces().Get(ctx, scope[i], metav1.GetOptions{}); err == nil {
+					read = ns
+				}
+				result[i] = grantNamespaceRow(scope[i], read)
+			})
+		}
 		// rows of a request that left are the grant's guesses, not what the cluster said
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -62,6 +64,43 @@ func (s *Service) GetNamespaces(ctx context.Context) ([]map[string]interface{}, 
 	return result, nil
 }
 
+// grantNamespaceRow is a grant's namespace as the user's read of it gave it, or with what the grant says when the
+// cluster gave nothing (nil: refused, missing or failed).
+func grantNamespaceRow(name string, ns *corev1.Namespace) map[string]interface{} {
+	if ns == nil {
+		return map[string]interface{}{"name": name, "status": "Active", "created_at": "", "labels": map[string]string{}}
+	}
+	return map[string]interface{}{"name": name, "status": string(ns.Status.Phase), "created_at": toISO(&ns.CreationTimestamp), "labels": ns.Labels}
+}
+
+// cachedScopedNamespaces is a grant's namespaces from the informers, each one the user's own read of it would give:
+// the namespace as the informers hold it where the cluster lets the user read it (mayGetNamespace, the read's own
+// question, remembered as the other checks), else the grant's row, as a refused, missing or failed read leaves it.
+// ok=false, when the informers have not synced, leaves them to reads as the user.
+func (s *Service) cachedScopedNamespaces(ctx context.Context, scope []string) ([]map[string]interface{}, bool) {
+	b := s.bundleForCtx(ctx)
+	if b == nil || b.authz == nil {
+		return nil, false
+	}
+	ci := b.syncedInformers() // not started or waited for here, as for cachedNamespaces
+	if ci == nil {
+		return nil, false
+	}
+	accesstrail.Cached(ctx, "namespaces (watched as "+overviewCacheUser+")")
+	ci.touch()
+	rows := make([]map[string]interface{}, len(scope))
+	sideBySide(len(scope), func(i int) {
+		var held *corev1.Namespace
+		if ok, err := s.mayGetNamespace(ctx, b, scope[i]); err == nil && ok {
+			if o, exists, _ := ci.namespaces.GetByKey(scope[i]); exists {
+				held, _ = o.(*corev1.Namespace)
+			}
+		}
+		rows[i] = grantNamespaceRow(scope[i], held)
+	})
+	return rows, true
+}
+
 // cachedNamespaces is the informers' namespaces by name, as a list returns them, for a caller the cluster lets list namespaces; ok=false leaves it to a list as the caller.
 func (s *Service) cachedNamespaces(ctx context.Context) ([]map[string]interface{}, bool) {
 	b := s.bundleForCtx(ctx)
@@ -72,7 +111,7 @@ func (s *Service) cachedNamespaces(ctx context.Context) ([]map[string]interface{
 	if ci == nil {
 		return nil, false
 	}
-	if ok, err := s.mayList(ctx, b, "namespaces", ""); err != nil || !ok {
+	if ok, err := s.mayListShown(ctx, b, "", "namespaces", ""); err != nil || !ok {
 		return nil, false
 	}
 	accesstrail.Cached(ctx, "namespaces (watched as "+overviewCacheUser+")")
