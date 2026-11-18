@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import type { HelmReleaseSummary } from './api'
 import { liveSessionEnded, SESSION_ENDED_EVENT } from './auth'
+import { followQuery, resyncReads } from './useKubeWatchList'
 import { clearWatchProblem, recordWatchFrame } from './watchProblemStore'
 
 // Helm release watch — Server-Sent Events 로 cluster + namespace 별 release
@@ -44,6 +45,11 @@ export interface UseHelmWatchListOptions {
    * Captured by ref so changing this prop does not tear down the stream.
    */
   onEvent?: (event: HelmWatchEvent) => void
+  /**
+   * The stream started over and cannot say what changed meanwhile ('resync'): reads again what the page shows, in place
+   * of reading the list under queryKey again. Captured by ref as onEvent is.
+   */
+  onResync?: () => void
 }
 
 export type { HelmWatchEvent }
@@ -108,8 +114,154 @@ export function helmStreamFrame(name: string, data: string | undefined): StreamF
 }
 
 /**
+ * followHelmReleases follows the stream until the function it returns is called: each release event goes into the
+ * list under queryKey and to onEvent, read as each event comes since they change between drawings.
+ *
+ * The stream's id is the cluster's client, who reads it and the version its watches go on from: the browser opening the
+ * stream again by itself sends it back, and the stream goes on from there, on whichever server built the same client,
+ * with only what changed since. One that cannot (the version expired, another cluster or registration, another person
+ * or grant, a watch with no place yet) or
+ * a stream opened on a list read before the last stream of that list stopped (resync=1) gets a 'resync' once its watch
+ * is on, as a socket's watch gets a RESYNC, and the list is read again with its rows on screen, at its own moment
+ * (resyncReads).
+ */
+export function followHelmReleases(
+  queryClient: QueryClient,
+  options: {
+    cluster: string
+    namespace?: string
+    queryKey: readonly unknown[] | null
+    onEvent?: () => ((event: HelmWatchEvent) => void) | undefined
+    onResync?: () => (() => void) | undefined
+  },
+): () => void {
+  const { cluster, namespace, queryKey } = options
+  const follow = queryKey === null ? undefined : followQuery(queryClient, queryKey)
+  const url = buildHelmWatchURL(cluster, namespace)
+  const problemKey = `${cluster}\n${url}`
+  const reads = resyncReads()
+  // A stream whose answer was not one is one the browser does not open again, and EventSource does not say the status.
+  // After a wait that grows as a socket's does, one GET of the stream (its headers only, then let go) says it: 200
+  // opens it again, with resync=1 since it missed what changed meanwhile and the browser's id is not sent again; a 401
+  // goes the way of a live connection whose session ended (liveSessionEnded); a 403 stops, said as a watch refused;
+  // anything else (a 503 while the session cannot be checked, a 502 while the server is replaced, no answer) waits again.
+  let reopenAttempts = 0
+  let reopenTimer: ReturnType<typeof setTimeout> | undefined
+  let probing: AbortController | undefined
+  let stopped = false
+  let lastSessionEnd = 0
+  let es = openStream(follow?.missed === true)
+
+  function reopenLater() {
+    if (stopped || reopenTimer !== undefined) return
+    const ceiling = Math.min(1000 * 2 ** reopenAttempts, 30_000)
+    reopenAttempts += 1
+    reopenTimer = setTimeout(() => {
+      reopenTimer = undefined
+      void probeThenOpen()
+    }, ceiling / 2 + Math.random() * (ceiling / 2))
+  }
+
+  async function probeThenOpen() {
+    if (stopped) return
+    const probe = new AbortController()
+    probing = probe
+    let status: number | undefined
+    let detail: unknown
+    try {
+      const res = await fetch(`${url}&resync=1`, { credentials: 'same-origin', headers: { Accept: 'text/event-stream' }, signal: probe.signal })
+      status = res.status
+      if (status === 403) detail = ((await res.json().catch(() => null)) as { detail?: unknown } | null)?.detail
+    } catch {
+      // no answer: waits again
+    } finally {
+      probe.abort()
+      if (probing === probe) probing = undefined
+    }
+    if (stopped) return
+    if (status === 200) {
+      es = openStream(true)
+    } else if (status === 401) {
+      const lastEnd = lastSessionEnd
+      lastSessionEnd = Date.now()
+      if ((await liveSessionEnded(lastEnd)) && !stopped) reopenLater()
+    } else if (status === 403) {
+      recordWatchFrame(problemKey, { type: 'ERROR', error: { reason: 'forbidden', message: typeof detail === 'string' ? detail : undefined } })
+    } else {
+      reopenLater()
+    }
+  }
+
+  function openStream(resync: boolean): EventSource {
+    const source = new EventSource(resync ? `${url}&resync=1` : url, { withCredentials: true })
+    source.addEventListener('following', () => {
+      reopenAttempts = 0
+      recordWatchFrame(problemKey, { type: 'DATA' })
+    })
+    source.addEventListener('resync', () => {
+      reads.later(() => {
+        const readAgain = options.onResync?.()
+        if (readAgain) readAgain()
+        else if (queryKey !== null) void queryClient.invalidateQueries({ queryKey })
+      })
+    })
+
+    source.onmessage = (raw: MessageEvent) => {
+      recordWatchFrame(problemKey, { type: 'DATA' })
+      try {
+        const msg = JSON.parse(raw.data) as HelmWatchEvent
+        if (queryKey !== null) {
+          queryClient.setQueryData(queryKey, (prev: HelmReleaseSummary[] | undefined) =>
+            applyHelmWatchEvent(prev, msg),
+          )
+        }
+        options.onEvent?.()?.(msg)
+      } catch (err) {
+        console.warn('helm watch parse error', err)
+      }
+    }
+
+    // The stream's session ended. The browser reopens the stream by itself with the current cookie; when that session
+    // is over too, the sign-in page says so.
+    source.addEventListener(SESSION_ENDED_EVENT, () => {
+      const lastEnd = lastSessionEnd
+      lastSessionEnd = Date.now()
+      void liveSessionEnded(lastEnd)
+    })
+
+    // backend 가 startSecretWatch 실패 시 보내는 named 'error' 이벤트.
+    source.addEventListener('error', (e) => {
+      // EventSource 의 onerror 도 같은 핸들러로 들어옴 — readyState 로 구분.
+      // CLOSED = the browser does not try again: opened again later (reopenLater). CONNECTING = 일시 끊김.
+      if (source.readyState === EventSource.CLOSED) {
+        reopenLater()
+        return
+      }
+      // CONNECTING 은 brower 가 알아서 재시도 — 우리가 할 일 0.
+      const errData = (e as MessageEvent).data
+      if (errData) {
+        console.warn('helm watch sse error frame', errData)
+      }
+      const frame = helmStreamFrame('error', errData)
+      if (frame) recordWatchFrame(problemKey, frame)
+    })
+    return source
+  }
+
+  return () => {
+    stopped = true
+    if (reopenTimer !== undefined) clearTimeout(reopenTimer)
+    probing?.abort()
+    es.close()
+    reads.stop()
+    follow?.stop()
+    clearWatchProblem(problemKey)
+  }
+}
+
+/**
  * useHelmWatchList — /api/v1/helm/releases/stream 에 SSE 로 구독하고 named
- * react-query cache 를 Helm release Secret 변화에 따라 갱신.
+ * react-query cache 를 Helm release Secret 변화에 따라 갱신 (followHelmReleases).
  *
  * EventSource 가 자동 reconnect 처리 (idle timeout / 네트워크 일시 끊김).
  * JWT auth 는 cookie 로 자동 (withCredentials).
@@ -121,68 +273,26 @@ export function useHelmWatchList(options: UseHelmWatchListOptions): void {
   // Stringify queryKey — array identity 가 매 render 마다 다르지만 contents 만 중요.
   const queryKeyDep = JSON.stringify(queryKey)
 
-  // onEvent·queryKey 를 ref 로 받아 prop 변경이 stream 을 끊지 않게
+  // onEvent·onResync·queryKey 를 ref 로 받아 prop 변경이 stream 을 끊지 않게
   // (queryKey 는 contents 가 바뀔 때만 queryKeyDep 으로 재연결).
   const onEventRef = useRef(options.onEvent)
+  const onResyncRef = useRef(options.onResync)
   const queryKeyRef = useRef(queryKey)
   useEffect(() => {
     onEventRef.current = options.onEvent
+    onResyncRef.current = options.onResync
     queryKeyRef.current = queryKey
-  }, [options.onEvent, queryKey])
+  }, [options.onEvent, options.onResync, queryKey])
 
   useEffect(() => {
     if (!enabled) return
-
-    const url = buildHelmWatchURL(cluster, namespace)
-    const es = new EventSource(url, { withCredentials: true })
-    const problemKey = `${cluster}\n${url}`
-    es.addEventListener('following', () => recordWatchFrame(problemKey, { type: 'DATA' }))
-
-    es.onmessage = (raw: MessageEvent) => {
-      recordWatchFrame(problemKey, { type: 'DATA' })
-      try {
-        const msg = JSON.parse(raw.data) as HelmWatchEvent
-        const key = queryKeyRef.current
-        if (key !== null) {
-          queryClient.setQueryData(key, (prev: HelmReleaseSummary[] | undefined) =>
-            applyHelmWatchEvent(prev, msg),
-          )
-        }
-        onEventRef.current?.(msg)
-      } catch (err) {
-        console.warn('helm watch parse error', err)
-      }
-    }
-
-    // The stream's session ended. The browser reopens the stream by itself with the current cookie; when that session
-    // is over too, the sign-in page says so.
-    let lastSessionEnd = 0
-    es.addEventListener(SESSION_ENDED_EVENT, () => {
-      const lastEnd = lastSessionEnd
-      lastSessionEnd = Date.now()
-      void liveSessionEnded(lastEnd)
+    return followHelmReleases(queryClient, {
+      cluster,
+      namespace,
+      // the list this stream feeds; a later key gets its own stream
+      queryKey: queryKeyRef.current,
+      onEvent: () => onEventRef.current,
+      onResync: () => onResyncRef.current,
     })
-
-    // backend 가 startSecretWatch 실패 시 보내는 named 'error' 이벤트.
-    es.addEventListener('error', (e) => {
-      // EventSource 의 onerror 도 같은 핸들러로 들어옴 — readyState 로 구분.
-      // CLOSED = 영구 실패 (autoreconnect 안 함). CONNECTING = 일시 끊김.
-      if (es.readyState === EventSource.CLOSED) {
-        console.warn('helm watch sse closed (permanent)')
-        return
-      }
-      // CONNECTING 은 brower 가 알아서 재시도 — 우리가 할 일 0.
-      const errData = (e as MessageEvent).data
-      if (errData) {
-        console.warn('helm watch sse error frame', errData)
-      }
-      const frame = helmStreamFrame('error', errData)
-      if (frame) recordWatchFrame(problemKey, frame)
-    })
-
-    return () => {
-      es.close()
-      clearWatchProblem(problemKey)
-    }
   }, [cluster, namespace, enabled, queryClient, queryKeyDep])
 }

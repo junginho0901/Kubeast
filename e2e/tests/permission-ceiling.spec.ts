@@ -63,10 +63,10 @@ test.describe('permission ceiling (M16)', () => {
     const laEmail = `e2e-la-${ts}@kubeast.local`
     const la = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E limited admin', email: laEmail, password: 'e2e-ceiling-throwaway-1', role_id: limitedRoleId } })
     expect(la.status(), await la.text()).toBe(201)
-    const laId = (await la.json()).id as string
+    const laId = madeUser((await la.json()).id as string, admin)
     const victim = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E victim', email: `e2e-victim-${ts}@kubeast.local`, password: 'e2e-ceiling-throwaway-2' } })
     expect(victim.status()).toBe(201)
-    const victimId = (await victim.json()).id as string
+    const victimId = madeUser((await victim.json()).id as string, admin)
     const created: number[] = []
     try {
       // The limited admin is a viewer on `self`: cluster-scoped permissions
@@ -130,7 +130,7 @@ test.describe('permission ceiling (M16)', () => {
       const caEmail = `e2e-ceiling-ca-${ts}@kubeast.local`
       const ca = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E cluster admin', email: caEmail, password: 'e2e-ceiling-throwaway-3', role_id: roles[0] } })
       expect(ca.status(), await ca.text()).toBe(201)
-      users.push((await ca.json()).id as string)
+      users.push(madeUser((await ca.json()).id as string, admin))
       expect((await request.put(`/api/v1/auth/admin/users/${users[0]}/cluster-roles/self`, { headers: admin, data: { role: 'Admin', namespaces: [] } })).status()).toBeLessThan(300)
       const mine = await login(request, caEmail, 'e2e-ceiling-throwaway-3')
 
@@ -168,7 +168,7 @@ test.describe('permission ceiling (M16)', () => {
       const res = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: `E2E ${tag}`, email, password, role_id: role } })
       expect(res.status(), await res.text()).toBe(201)
       const id = (await res.json()).id as string
-      users.push(id)
+      users.push(madeUser(id, admin))
       return { id, email, password }
     }
     const grant = async (id: string, role: string) =>
@@ -252,7 +252,12 @@ test.describe('permission ceiling (M16)', () => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const ts = Date.now().toString(36)
     const roles: number[] = []
-    const create = (name: string) => request.post('/api/v1/auth/admin/roles', { headers: admin, data: { name, permissions: ['menu.dashboard'] }, failOnStatusCode: false })
+    // every role this test makes is removed after it, also one made where a refusal was expected (a build without the rule)
+    const create = async (name: string) => {
+      const res = await request.post('/api/v1/auth/admin/roles', { headers: admin, data: { name, permissions: ['menu.dashboard'] }, failOnStatusCode: false })
+      if (res.status() === 201) roles.push((await res.json()).id)
+      return res
+    }
     const update = (id: number, name: string) => request.put(`/api/v1/auth/admin/roles/${id}`, { headers: admin, data: { name, description: 'e2e', permissions: ['menu.dashboard'] }, failOnStatusCode: false })
     try {
       const before = await (await request.get('/api/v1/auth/roles', { headers: admin })).json()
@@ -263,7 +268,6 @@ test.describe('permission ceiling (M16)', () => {
       }
       const first = await create(`e2e name ${ts}`)
       expect(first.status(), await first.text()).toBe(201)
-      roles.push((await first.json()).id)
       const folded = await create(`e2e-name-${ts}`)
       expect.soft(folded.status(), 'the same group as another role').toBe(400)
       expect.soft(await folded.text(), 'it names that role').toContain(`e2e name ${ts}`)
@@ -271,11 +275,13 @@ test.describe('permission ceiling (M16)', () => {
       expect.soft(same.status(), 'the same name again').toBe(400)
       expect.soft((await same.json()).detail, 'it says the role exists').toBe(`Role "e2e name ${ts}" already exists. Choose another name`)
       expect.soft((await (await create('Read')).json()).detail, 'a built-in name as written').toBe('Role "Read" already exists: it is a built-in role')
+      // what the role form says under its field comes with the refusal
+      const { code, role: holder, builtin, same_name: sameName } = await (await create('ADMIN')).json()
+      expect.soft({ code, holder, builtin, sameName }, 'the role holding the name').toEqual({ code: 'role_name_taken', holder: 'Admin', builtin: true, sameName: false })
 
       const normal = await create(`e2e-other-${ts}`)
       expect(normal.status(), await normal.text()).toBe(201)
       const otherId = (await normal.json()).id as number
-      roles.push(otherId)
       expect.soft((await update(otherId, 'ADMIN')).status(), 'rename to a built-in in capitals').toBe(400)
       expect.soft((await update(otherId, `E2E-NAME-${ts}`)).status(), 'rename to another role\'s group').toBe(400)
       expect.soft((await update(otherId, `e2e-other-${ts}`)).status(), 'the same name').toBe(200)
@@ -318,7 +324,7 @@ test.describe('permission ceiling (M16)', () => {
       roles.push(adminRoleId)
       const made = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E role admin', email, password, role_id: adminRoleId } })
       expect(made.status(), await made.text()).toBe(201)
-      userId = (await made.json()).id
+      userId = madeUser((await made.json()).id, admin)
       expect((await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/self`, { headers: admin, data: { role: 'Read' } })).status()).toBe(200)
       const roleAdmin = await login(request, email, password)
 
@@ -383,7 +389,7 @@ test.describe('permission ceiling (M16)', () => {
       const made = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name, email: `${name}@kubeast.local`, password, role_id: roleId } })
       expect(made.status(), await made.text()).toBe(201)
       const id = (await made.json()).id as string
-      users.push(id)
+      users.push(madeUser(id, admin))
       return id
     }
     try {
@@ -436,7 +442,7 @@ test.describe('permission ceiling (M16)', () => {
       const res = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: `E2E ${tag}`, email, password: `e2e-edit-${tag}-throwaway-1`, role_id: role } })
       expect(res.status(), await res.text()).toBe(201)
       const id = (await res.json()).id as string
-      users.push(id)
+      users.push(madeUser(id, admin))
       return { id, email, password: `e2e-edit-${tag}-throwaway-1` }
     }
     const setGrant = async (id: string, cluster: string, role: string) =>
@@ -498,12 +504,12 @@ test.describe('permission ceiling (M16)', () => {
       for (const email of [`system:anonymous-${ts}@kubeast.local`, `kubeast:cache-${ts}@kubeast.local`, ` e2e-space-${ts}@kubeast.local`, `e2e-space-${ts}@kubeast.local `, `e2e space-${ts}@kubeast.local`]) {
         const res = await request.post('/api/v1/auth/admin/users', { headers: admin, data: account(email), failOnStatusCode: false })
         // a build that takes the name leaves no account behind
-        if (res.ok()) made.push((await res.json()).id)
+        if (res.ok()) made.push(madeUser((await res.json()).id, admin))
         expect.soft(res.status(), `create ${JSON.stringify(email)}`).toBe(400)
         expect.soft(await res.text(), `${JSON.stringify(email)} says why`).toContain('colon')
         const bulk = await request.post('/api/v1/auth/admin/users/bulk', { headers: admin, data: { users: [account(email)] }, failOnStatusCode: false })
         const body = await bulk.json()
-        for (const u of body.created ?? []) if (u?.id) made.push(u.id)
+        for (const u of body.created ?? []) if (u?.id) made.push(madeUser(u.id, admin))
         expect.soft(body.errors?.length, `bulk ${JSON.stringify(email)}`).toBe(1)
         expect.soft(body.created ?? [], `bulk ${JSON.stringify(email)} made nothing`).toEqual([])
       }
@@ -513,7 +519,7 @@ test.describe('permission ceiling (M16)', () => {
       for (const email of [`e2e.first+tag-${ts}@kubeast.local`, `e2e-홍길동-${ts}@kubeast.local`]) {
         const res = await request.post('/api/v1/auth/admin/users', { headers: admin, data: account(email), failOnStatusCode: false })
         expect(res.status(), `${email}: ${await res.text()}`).toBe(201)
-        made.push((await res.json()).id)
+        made.push(madeUser((await res.json()).id, admin))
         expect((await request.post('/api/v1/auth/login', { data: { email, password: 'e2e-ceiling-throwaway-9' } })).status(), `${email} signs in`).toBe(200)
       }
       expect((await request.get('/api/v1/auth/me', { headers: admin })).status(), 'the default admin signs in as before').toBe(200)
@@ -540,7 +546,7 @@ test.describe('permission ceiling (M16)', () => {
       const res = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E holder', email, password, role_id: role } })
       expect(res.status(), await res.text()).toBe(201)
       const id = (await res.json()).id as string
-      users.push(id)
+      users.push(madeUser(id, admin))
       return id
     }
     const alive = async (headers: Record<string, string>) => (await request.get('/api/v1/auth/me', { headers, failOnStatusCode: false })).status()
@@ -591,7 +597,7 @@ test.describe('permission ceiling (M16)', () => {
     const email = `e2e-rollout-${ts}@kubeast.local`
     const made = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E rollout', email, password: 'e2e-ceiling-throwaway-7', role_id: await roleId(request, admin, 'Member') } })
     expect(made.status(), await made.text()).toBe(201)
-    const id = (await made.json()).id as string
+    const id = madeUser((await made.json()).id as string, admin)
     try {
       const res = await request.get('/api/v1/auth/setup/rollout-status', { headers: await login(request, email, 'e2e-ceiling-throwaway-7'), failOnStatusCode: false })
       expect(res.status(), 'without admin.clusters.create').toBe(403)
@@ -619,13 +625,13 @@ test.describe('permission ceiling (M16)', () => {
       const holderEmail = `e2e-ai-holder-${ts}@kubeast.local`
       const holder = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E holder', email: holderEmail, password: 'e2e-ai-throwaway-1', role_id: roles[0] } })
       expect(holder.status(), await holder.text()).toBe(201)
-      users.push((await holder.json()).id)
+      users.push(madeUser((await holder.json()).id, admin))
       expect((await settings(await login(request, holderEmail, 'e2e-ai-throwaway-1'))).status(), 'a role holding the permission').toBe(200)
 
       const clusterEmail = `e2e-ai-cluster-${ts}@kubeast.local`
       const clusterUser = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E cluster admin', email: clusterEmail, password: 'e2e-ai-throwaway-2', role_id: await roleId(request, admin, 'Member') } })
       expect(clusterUser.status(), await clusterUser.text()).toBe(201)
-      users.push((await clusterUser.json()).id)
+      users.push(madeUser((await clusterUser.json()).id, admin))
       expect((await request.put(`/api/v1/auth/admin/users/${users[1]}/cluster-roles/self`, { headers: admin, data: { role: 'Admin' } })).status()).toBe(200)
       expect((await settings(await login(request, clusterEmail, 'e2e-ai-throwaway-2'))).status(), 'Admin on one cluster').toBe(403)
 
@@ -646,4 +652,15 @@ test.describe('permission ceiling (M16)', () => {
       for (const id of roles) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: admin, failOnStatusCode: false })
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

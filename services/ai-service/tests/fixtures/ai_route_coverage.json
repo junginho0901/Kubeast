@@ -2,6 +2,9 @@
  "k8s-service": {
   "/": {"excluded": "The service saying it runs, for whoever opens its address: no cluster data and no screen reads it."},
   "/health": {"excluded": "The kubelet's probe of this service: no cluster data and no screen reads it."},
+  "/ready": {"excluded": "The readiness probe of this service, unready while it is being replaced: no cluster data and no screen reads it."},
+  "/livez": {"excluded": "The kubelet's liveness probe of this service: it asks nothing of the database or a cluster, and no screen reads it."},
+  "/readyz": {"excluded": "The kubelet's readiness probe of this service: whether it takes new requests now, and no screen reads it."},
   "/metrics": {"excluded": "Prometheus scraping this service's own request counters, not what a screen shows of a cluster."},
   "/api/v1/alertstore/alerts": {"tool": "alerts_list", "args": {}},
   "/api/v1/alertstore/silences": {"tool": "alerts_list", "args": {"silences": true}},
@@ -299,6 +302,8 @@
  "auth-service": {
   "/": {"excluded": "The service saying it runs, for whoever opens its address: no screen reads it."},
   "/health": {"excluded": "The kubelet's probe of this service: no screen reads it."},
+  "/livez": {"excluded": "The kubelet's liveness probe of this service: it asks nothing of the database or a cluster, and no screen reads it."},
+  "/readyz": {"excluded": "The kubelet's readiness probe of this service: whether it takes new requests now, and no screen reads it."},
   "/metrics": {"excluded": "Prometheus scraping this service's own request counters, not what a screen shows."},
   "/api/v1/auth/oidc/config": {"excluded": "What the sign-in page needs to show its button, before anyone is signed in."},
   "/api/v1/auth/oidc/login": {"excluded": "The browser's redirect to the identity provider: a step of signing in, with nothing to read."},
@@ -363,6 +368,8 @@
  "session-service": {
   "/": {"excluded": "The service saying it runs, for whoever opens its address: no screen reads it."},
   "/health": {"excluded": "The kubelet's probe of this service: no screen reads it."},
+  "/livez": {"excluded": "The kubelet's liveness probe of this service: it asks nothing of the database or a cluster, and no screen reads it."},
+  "/readyz": {"excluded": "The kubelet's readiness probe of this service: whether it takes new requests now, and no screen reads it."},
   "/metrics": {"excluded": "Prometheus scraping this service's own request counters, not what a screen shows."},
   "/api/v1/sessions": {"excluded": "The caller's own conversations in AI Chat's list: the chat itself, nothing about a cluster or about anyone else. A tool would read a person's questions back to the model that answered them."},
   "/api/v1/sessions/{session_id}": {"excluded": "One of the caller's own conversations as AI Chat opens it. The chat gives the model this history itself, so a tool would only read it back."},

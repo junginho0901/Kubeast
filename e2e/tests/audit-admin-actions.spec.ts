@@ -31,7 +31,7 @@ test.describe('audit — admin actions (M15, M27)', () => {
       const res = await request.post('/api/v1/auth/admin/users/bulk', { headers: admin, data: { users: [row(fine), row(noTeam, { team: `no-such-team-${stamp}` }), row(weak, { password: 'short' }), row(fine)] } })
       expect(res.status(), await res.text()).toBe(207)
       const body = await res.json()
-      made.push(...body.created.map((u: any) => u.id))
+      made.push(...body.created.map((u: any) => madeUser(u.id, admin)))
       expect(body.created.map((u: any) => u.email)).toEqual([fine])
       expect(body.failed.map((f: any) => [f.email, f.reason])).toEqual([[noTeam, 'team'], [weak, 'password'], [fine, 'exists']])
       expect(body.failed[0].detail).toBe(`no-such-team-${stamp}`)
@@ -55,7 +55,7 @@ test.describe('audit — admin actions (M15, M27)', () => {
       const all = await request.post('/api/v1/auth/admin/users/bulk', { headers: admin, data: { users: [row(everyone)] } })
       expect(all.status(), await all.text()).toBe(200)
       const allBody = await all.json()
-      made.push(...allBody.created.map((u: any) => u.id))
+      made.push(...allBody.created.map((u: any) => madeUser(u.id, admin)))
       expect(allBody.failed).toEqual([])
     } finally {
       for (const id of made) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
@@ -68,7 +68,7 @@ test.describe('audit — admin actions (M15, M27)', () => {
     const [fine, taken, odd, empty] = ['fine', 'taken', 'odd', 'empty'].map((w) => `e2e-bulkw-${w}-${stamp}@kubeast.local`)
     const existing = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E bulk taken', email: taken, password: 'e2e-bulk-throwaway-1' } })
     expect(existing.status(), await existing.text()).toBe(201)
-    const made = [(await existing.json()).id as string]
+    const made = [madeUser((await existing.json()).id as string, admin)]
     try {
       await page.goto('/admin/users')
       await page.getByRole('button', { name: /Bulk upload|일괄 업로드/ }).first().click()
@@ -94,7 +94,7 @@ test.describe('audit — admin actions (M15, M27)', () => {
         more = onePage.length === 200
       }
       const created = users.filter((u) => [fine, odd, empty].includes(u.email))
-      made.push(...created.map((u) => u.id))
+      made.push(...created.map((u) => madeUser(u.id, admin)))
       expect(created.map((u) => u.email)).toEqual([fine])
     } finally {
       for (const id of made) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
@@ -144,7 +144,7 @@ test.describe('audit — admin actions (M15, M27)', () => {
     const password = 'e2e-bulk-throwaway-1'
     const made = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E create why', email: taken, password } })
     expect(made.status(), await made.text()).toBe(201)
-    const id = (await made.json()).id as string
+    const id = madeUser((await made.json()).id as string, admin)
     try {
       const again = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E create why', email: taken, password }, failOnStatusCode: false })
       expect(again.status()).toBe(409)
@@ -173,7 +173,7 @@ test.describe('audit — admin actions (M15, M27)', () => {
     const taken = `e2e-create-taken-${Date.now()}@kubeast.local`
     const existing = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E create taken', email: taken, password: 'e2e-bulk-throwaway-1' } })
     expect(existing.status(), await existing.text()).toBe(201)
-    const id = (await existing.json()).id as string
+    const id = madeUser((await existing.json()).id as string, admin)
     try {
       await page.goto('/admin/users')
       await page.getByRole('button', { name: /^(Add user|사용자 추가)$/ }).first().click()
@@ -237,7 +237,7 @@ test.describe('audit — admin actions (M15, M27)', () => {
     const email = `e2e-bulk-${Date.now()}@kubeast.local`
     const user = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E bulk', email, password: 'e2e-bulk-throwaway-1' } })
     expect(user.status()).toBe(201)
-    const userId = (await user.json()).id as string
+    const userId = madeUser((await user.json()).id as string, admin)
     try {
       const roles = await request.get('/api/v1/auth/roles', { headers: admin })
       const list = (await roles.json()) as any[]
@@ -262,7 +262,7 @@ test.describe('audit — admin actions (M15, M27)', () => {
     const gone = `e2e-gone-${Date.now()}`
     const user = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E bulk part', email, password: 'e2e-bulk-throwaway-1' } })
     expect(user.status()).toBe(201)
-    const userId = (await user.json()).id as string
+    const userId = madeUser((await user.json()).id as string, admin)
     try {
       const raw = await (await request.get('/api/v1/auth/roles', { headers: admin })).json()
       const member = (Array.isArray(raw) ? raw : raw.items || []).find((r: any) => r.name === 'Member')
@@ -289,7 +289,7 @@ test.describe('audit — admin actions (M15, M27)', () => {
     const make = async (email: string) => {
       const res = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: email.split('@')[0], email, password: 'e2e-bulk-throwaway-1', role_id: pending.id } })
       expect(res.status(), await res.text()).toBe(201)
-      return (await res.json()).id as string
+      return madeUser((await res.json()).id as string, admin)
     }
     const stays = await make(staysEmail)
     const goes = await make(goesEmail)
@@ -333,4 +333,15 @@ test.describe('audit — admin actions (M15, M27)', () => {
     expect(row.Cluster).toBe('self')
     expect(row.Namespace).toBe('default')
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

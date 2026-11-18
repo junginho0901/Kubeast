@@ -61,6 +61,29 @@ describe('AI Models: the Test answer', () => {
     }
   })
 
+  it('sends the options a save would store, and goes once they are edited', async () => {
+    const test = vi.spyOn(api, 'testModelConnection').mockResolvedValue(OK)
+    const render = () => fakeRender(useModelForm)
+    render().openCreateForm()
+    render().setFormOptions('{"reasoning_effort": "none"}')
+    render().setFormMaxTokens('8000')
+    await render().handleTest()
+    expect(test.mock.calls[0][0].options).toEqual({ reasoning_effort: 'none', max_tokens: 8000 })
+    expect(render().testResult).toEqual(OK)
+    render().setFormOptions('{"reasoning_effort": "low"}')
+    expect(render().testResult, 'the answer for other options').toBeNull()
+  })
+
+  it('does not test options a save would refuse, and says why as Save does', async () => {
+    const test = vi.spyOn(api, 'testModelConnection').mockResolvedValue(OK)
+    const render = () => fakeRender(useModelForm)
+    render().openCreateForm()
+    render().setFormOptions('{"reasoning_effort": ')
+    await render().handleTest()
+    expect(test).not.toHaveBeenCalled()
+    expect([render().formOptionsError, render().testResult]).toEqual(['Invalid JSON', null])
+  })
+
   it('is not shown for values edited while the test ran', async () => {
     let answer = (_: typeof OK) => {}
     vi.spyOn(api, 'testModelConnection').mockReturnValue(new Promise((resolve) => { answer = resolve }))

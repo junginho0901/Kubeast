@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import { retryUnlessRefused } from '@/services/queryDefaults'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { failureText } from '@/utils/failureText'
 import { normalizeBinding, referencingBindings, type ReverseBinding } from './referencedBy'
@@ -45,7 +46,7 @@ export function useReverseRoleBindings({ kind, namespace, name, via = 'ClusterRo
     },
     enabled,
     staleTime: 5_000,
-    retry: 1,
+    retry: retryUnlessRefused(1),
   })
 
   useKubeWatchList({

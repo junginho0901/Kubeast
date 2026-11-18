@@ -24,7 +24,7 @@ Key features:
 ## Quick start
 
 ```bash
-helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
+helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
   --namespace kubeast --create-namespace
 ```
 
@@ -37,6 +37,8 @@ The chart gives k8s-service 512 Mi. If many people will use a large cluster at o
 | Document | Contents |
 | --- | --- |
 | [Installation and first setup](docs/getting-started.md) | 3 install methods, uninstall, first access, connecting a cluster, turning on AI |
+| [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) | What to check before, the values to change, what the upgrade does once, rolling back |
+| [Changelog](CHANGELOG.md) | What changed in each release, from 0.7.8 on |
 | [Features at a glance](docs/features.md) | AI assistant, multi-cluster with roles and permissions, resource management, Helm, GPU, observability, authentication and audit |
 | [AI and alerts](docs/ai-alerts.md) | MCP server, alert → AI investigation, Alerts inbox, reading traces and alerts, AI analysis evaluation |
 | [Security and audit](docs/security-audit.md) | API keys, access review, dormant account lockout, audit sinks, audit log integrity, session recording |
@@ -46,6 +48,7 @@ The chart gives k8s-service 512 Mi. If many people will use a large cluster at o
 | [Architecture](docs/architecture.md) | Services, container images, resource usage, sizing for many users |
 | [Configuration (values.yaml)](docs/configuration.md) | Chart values explained |
 | [Database: TLS, backup and restore](docs/database-backup-restore.md) | DB connection TLS, backup and restore, retention |
+| [Running more than one replica](docs/high-availability.md) | Which services run more than one pod, Redis and database connections, replicas and autoscaling, sizing |
 | [Console metrics](docs/metrics.md) | Kubeast's own `/metrics` |
 | [Supply chain](docs/supply-chain.md) | Image scanning, SBOM, provenance attestation, signing |
 | [Audit log plan](docs/audit-log-plan.md) | Audit action catalog and permission mapping |

@@ -11,7 +11,7 @@ data:
   # mounted directly by docker-compose). Do NOT inline routes here — edit the
   # canonical file so every deploy path stays in sync.
   nginx.conf: |
-{{ .Files.Get "files/nginx.conf" | indent 4 }}
+{{ include "kubeast.gatewayNginxConf" . | indent 4 }}
 {{- if .Values.gateway.trustedProxies }}
   # The proxies in front of the gateway (Ingress controller, load balancer):
   # nginx takes the client address from the X-Forwarded-For they append,
@@ -29,6 +29,13 @@ data:
   accesslog.conf: |
     {{- $accessLog | nindent 4 }}
 {{- end }}
+{{- if .Values.streams.enabled }}
+  # The terminals and followed logs go to k8s-service-stream (streams.enabled).
+  streams.conf: |
+    upstream k8s-service-stream {
+        server k8s-service-stream:8002;
+    }
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -38,7 +45,8 @@ metadata:
     app: gateway
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicas.gateway }}
+  {{- include "kubeast.replicas" (dict "root" $ "key" "gateway") | nindent 2 }}
+  {{- include "kubeast.rollingUpdate" . | nindent 2 }}
   selector:
     matchLabels:
       app: gateway
@@ -47,9 +55,10 @@ spec:
       labels:
         app: gateway
       annotations:
-        checksum/nginx-config: {{ print (.Files.Get "files/nginx.conf") (toJson .Values.gateway.trustedProxies) $accessLog | sha256sum }}
+        checksum/nginx-config: {{ print (include "kubeast.gatewayNginxConf" .) (toJson .Values.gateway.trustedProxies) $accessLog | sha256sum }}
     spec:
       automountServiceAccountToken: false
+      {{- include "kubeast.terminationGrace" . | nindent 6 }}
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 101) | nindent 6 }}
       {{- include "kubeast.topologySpread" (dict "root" $ "app" "gateway") | nindent 6 }}
       containers:
@@ -73,8 +82,14 @@ spec:
               mountPath: /etc/nginx/conf.d/kubeast/accesslog.conf
               subPath: accesslog.conf
             {{- end }}
+            {{- if .Values.streams.enabled }}
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/kubeast/streams.conf
+              subPath: streams.conf
+            {{- end }}
             - name: tmp
               mountPath: /tmp
+          {{- include "kubeast.preStop" . | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /healthz

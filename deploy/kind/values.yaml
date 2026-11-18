@@ -32,6 +32,9 @@ auth:
     customRoles:
       - name: e2e-chart-bound
         clusterRoles: [view]
+    # on in dev (off in the chart): kind authorizes with Node and RBAC only (docs/cluster-requirements.md §1)
+    sharedReadChecks:
+      enabled: true
   accessRequests:
     enabled: true
     sweepSeconds: 5

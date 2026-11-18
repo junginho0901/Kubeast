@@ -26,9 +26,12 @@ With `METRICS_ENABLED=false` (chart `metrics.enabled`), it returns 404.
 | `kubeast_http_requests_in_flight` | gauge | `service` | Requests being handled |
 | `kubeast_audit_store_up` | gauge 0/1 | `service` | Whether the audit store takes rows (k8s-service: `audit.Guarded.Ready`, 2 s cache). At 0, writes, Secret reveals, exec and AI write tools are refused with 503 |
 | `kubeast_audit_write_failures_total` | counter | `service` | Audit rows that could not be stored since start |
-| `kubeast_ws_subscriptions` | gauge | `service` | Live WebSocket subscriptions (logs, exec, watch) in k8s-service |
+| `kubeast_ws_subscriptions` | gauge | `service` | Live watches in k8s-service, counted against `multicluster.wsMaxSubscriptions`: the live lists' WebSocket subscriptions and the Helm releases streams' Secret watches. Terminals and followed logs are the next two rows |
+| `kubeast_terminals_open` | gauge | `service` | Open terminals (pod exec, node shell) in k8s-service |
+| `kubeast_followed_logs_open` | gauge | `service` | Open followed logs (a container's output, a log file) in k8s-service |
 | `kubeast_k8s_client_rate_wait_seconds` | histogram | `service`, `limiter`, `passed_over` | How long a request from k8s-service to a cluster's API server waited for the client's rate before it was sent, 0 when it went at once, summed over clusters (buckets 1 ms to 60 s). `limiter` is `user` (the clients' rate, `multicluster.clientQPS` and `clientBurst`) or `review` (the access checks' own rate, only with `multicluster.reviewQPS` set). `passed_over` is `true` for an access check asked again that let a later request go first, at most 10 s. A request that stopped waiting counts the time it waited. The dynamic client (custom resources, applies) keeps client-go's own rate and is not counted |
 | `kubeast_k8s_client_rate_waits_total` | counter | `service`, `limiter` | Requests to a cluster that waited for that rate at all, given their turn or not |
+| `kubeast_k8s_access_reviews_total` | counter | `service`, `asked_as` | SelfSubjectAccessReviews k8s-service sent for the access checks it remembers for a minute (the screens' list and get checks), summed over clusters. `asked_as` is `person`, or `groups` for a read check one review answered for everyone with the person's groups (`auth.impersonation.sharedReadChecks`, [cluster requirements](cluster-requirements.md) §1). Can-i, the log search, flows and Top Talkers send theirs as the person and are not counted |
 | `kubeast_audit_sink_pending` | gauge | `service`, `sink`, `type` | Audit rows an audit sink (`audit.sinks`) has not sent yet. Only the auth-service replica that does the sending exposes it |
 | `kubeast_audit_sink_failures_total` | counter | same | Failed sends since that replica started sending |
 | `kubeast_audit_sink_last_success_timestamp_seconds` | gauge | same | When the sink cursor last moved forward (starting from the time sending began) |
@@ -63,7 +66,7 @@ One ServiceMonitor selects the five backend Services labelled `kubeast.io/metric
 | Name | Expression | Meaning |
 |---|---|---|
 | `KubeastAuditStoreDown` | `min by (service) (kubeast_audit_store_up) == 0` for 2 minutes | The audit DB cannot be used, so audited actions are being refused |
-| `KubeastHighErrorRate` | 5xx ratio > `errorRatio` (0.05) for 10 minutes | Console error rate |
+| `KubeastHighErrorRate` | 5xx ratio > `errorRatio` (0.05) for 10 minutes | Console error rate. A database outage longer than that now fires it from signed-in reads alone: a request whose session cannot be read is answered 503, where 0.7.7 answered 401, a 4xx it does not count |
 | `KubeastSlowRequests` | p95 > `p95Seconds` (2 s) for 10 minutes | Console latency |
 | `KubeastAuditSinkStalled` | `kubeast_audit_sink_pending > 0` and the last successful send more than 10 minutes ago, for 5 minutes | Audit sink sending has stopped (errors in the auth-service log; retention keeps the unsent rows) |
 | `KubeastSessionRecordingUploadStalled` | `kubeast_session_recording_pending_bytes > 0` and the last upload more than 10 minutes ago, for 5 minutes | Session recording upload has stopped (output piles up in the k8s-service spool; sessions are not blocked) |

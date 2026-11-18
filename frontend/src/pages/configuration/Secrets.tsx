@@ -18,7 +18,7 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { isProtectedNamespaceError } from '@/utils/protectedNamespace'
 import { applySecretWatchEvent } from './secrets/secretWatchNormalize'
@@ -200,13 +200,10 @@ export default function Secrets() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllSecrets(true)
-      : await api.getSecrets(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['configuration', 'secrets', selectedNamespace] })
-    queryClient.setQueryData(['configuration', 'secrets', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['configuration', 'secrets', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllSecrets(true)
+      : api.getSecrets(selectedNamespace, true)))
 
   const createYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

@@ -22,7 +22,7 @@ import { applyEndpointWatchEvent } from './endpoints/endpointWatchNormalize'
 import { EndpointFilters } from './endpoints/EndpointFilters'
 import { EndpointTable } from './endpoints/EndpointTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -196,13 +196,10 @@ export default function Endpoints() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllEndpoints(true)
-      : await api.getEndpoints(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['network', 'endpoints', selectedNamespace] })
-    queryClient.setQueryData(['network', 'endpoints', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['network', 'endpoints', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllEndpoints(true)
+      : api.getEndpoints(selectedNamespace, true)))
 
   const createEndpointYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

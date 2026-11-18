@@ -1,15 +1,25 @@
 import { describe, it, expect } from 'vitest'
-import { getPodHealth } from './podHealth'
+import { boxPodHealth, getPodHealth } from './podHealth'
 import cases from './podHealth.cases.json'
 
 // k8s-service colours the node map with the same rule (internal/k8s/pod_index.go podHealth); its test writes these
-// cases from random pods, as formatPodDetail sends them, with the level and reason it gives.
+// cases from random pods, as formatPodDetail sends them, with the level and reason it gives, and what a node box's
+// row (nodeBoxPod) says of the same pod.
 describe('getPodHealth gives what k8s-service gives', () => {
   it('for every case the server wrote', () => {
     expect(cases.length).toBeGreaterThan(500)
     for (const [i, c] of cases.entries()) {
       const got = getPodHealth(c.pod)
       expect({ i, level: got.level, reason: got.reason }).toEqual({ i, level: c.level, reason: c.reason })
+    }
+  })
+
+  it("a box's row and the full row that replaces it colour the card alike", () => {
+    for (const [i, c] of cases.entries()) {
+      const short = boxPodHealth(c.box)
+      const full = boxPodHealth(c.pod)
+      expect({ i, short: [short.level, short.reason, short.phase], full: [full.level, full.reason] })
+        .toEqual({ i, short: [c.level, c.reason, getPodHealth(c.pod).phase], full: [c.level, c.reason] })
     }
   })
 

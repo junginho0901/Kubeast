@@ -28,6 +28,7 @@ spec:
           image: {{ .Values.images.postgres }}
           {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
           {{- include "kubeast.resources" (dict "root" $ "key" "postgres") | nindent 10 }}
+          args: ["postgres", "-c", "max_connections={{ int .Values.postgresql.maxConnections }}"]
           ports:
             - containerPort: 5432
           env:
