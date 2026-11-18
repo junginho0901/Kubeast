@@ -5,6 +5,8 @@ import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test'
 
+import { waitUntilListed } from './number-check.cr-shared'
+
 // What a Write user and a Read user limited to one namespace are shown is the cluster's answer for the identity Kubeast
 // acts as (X-Kubeast-Access, then kubectl auth can-i): a drawer's "Delete <Kind>" and the Create buttons of Endpoints,
 // EndpointSlices, ResourceQuotas and LimitRanges show only where the cluster allows the action, and the Node, Namespace
@@ -81,7 +83,7 @@ async function signIn(browser: Browser, request: APIRequestContext, admin: strin
   const email = `${PREFIX}-${key}@kubeast.local`
   const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: `E2E cpui ${key}`, email, password: PW, role_id: member.id } })
   expect(created.status(), `create ${email}`).toBe(201)
-  const userId = (await created.json()).id as string
+  const userId = madeUser((await created.json()).id as string, bearer(admin))
   const granted = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: grant })
   expect(granted.status(), await granted.text()).toBe(200)
   const who = await identity(request, await login(request, email, PW))
@@ -134,7 +136,8 @@ async function refusal(drawer: Locator): Promise<string> {
 }
 
 test.describe('buttons and drawers follow the cluster\'s answer', () => {
-  test.beforeAll(() => {
+  test.beforeAll(async () => {
+    test.setTimeout(120_000)
     const which = spawnSync('kind', ['get', 'kubeconfig', '--name', KIND_CLUSTER], { encoding: 'utf8' })
     if (which.status !== 0) {
       ready = `no kind cluster ${KIND_CLUSTER} (kind get kubeconfig)`
@@ -157,6 +160,7 @@ test.describe('buttons and drawers follow the cluster\'s answer', () => {
       { apiVersion: `${RBAC}/v1`, kind: 'RoleBinding', metadata: { name: `${PREFIX}-view`, namespace: NS_A, labels: LABELS }, roleRef: { apiGroup: RBAC, kind: 'ClusterRole', name: 'view' }, subjects: [{ apiGroup: RBAC, kind: 'Group', name: 'kubeast:role:read' }] },
     ]))
     kubectl(['wait', '--for', 'condition=Established', `crd/${CRD}`, '--timeout=60s'])
+    await waitUntilListed((args) => kubectl(args.split(' '), undefined, true), [CRD])
     for (let i = 0; ; i++) {
       const r = spawnSync('kubectl', ['--kubeconfig', kubeconfig, 'apply', '-f', '-'], { encoding: 'utf8', input: asList([{ apiVersion: `${CR_GROUP}/v1`, kind: 'PermCheck', metadata: { name: 'cpui-pc', namespace: NS_A, labels: LABELS }, spec: { note: 'cpui' } }]) })
       if (r.status === 0) break
@@ -354,4 +358,15 @@ test.describe('buttons and drawers follow the cluster\'s answer', () => {
     const passed = await texts()
     expect.soft(passed.filter((t) => t.includes('Basic Info') && !t.includes('apps/v1')), 'the drawer before the object arrived').toEqual([])
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

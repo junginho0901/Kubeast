@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import { retryUnlessRefused } from '@/services/queryDefaults'
 import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
@@ -26,7 +27,7 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
         ? api.describeMutatingWebhookConfiguration(name)
         : api.describeValidatingWebhookConfiguration(name),
     staleTime: 10_000,
-    retry: 1,
+    retry: retryUnlessRefused(1),
   })
   useDrawerFollowsObject({
     enabled: !!name,

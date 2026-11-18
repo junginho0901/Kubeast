@@ -5,6 +5,8 @@ import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Browser, type Page } from '@playwright/test'
 
+import { waitUntilListed } from './number-check.cr-shared'
+
 // What an open window and a list keep up with by themselves, on cluster `self` in a namespace of this run's, and what that
 // costs the server: an Ingress drawer follows its object on the read it already makes, a workload's Events move on their
 // own frames, a pod's RBAC tab and a CRD's instances read again only when something changed, a Node's Allocated Resources
@@ -73,12 +75,13 @@ const requests = (page: Page, match: RegExp) => {
 }
 
 test.describe('what keeps up by itself', () => {
-  test.beforeAll(() => {
+  test.beforeAll(async () => {
     test.setTimeout(240_000)
     kubectl(`delete namespace ${NS} --ignore-not-found --timeout=120s`)
     kubectl(`delete crd ${CRD} --ignore-not-found --timeout=120s`)
     kubectl('apply -f -', FIXTURE)
     kubectl(`wait --for=condition=Established crd/${CRD} --timeout=60s`)
+    await waitUntilListed(kubectl, [CRD])
     kubectl(`-n ${NS} rollout status deployment/web --timeout=120s`)
     kubectl('apply -f -', widget('first'))
   })
@@ -451,7 +454,7 @@ test.describe('what keeps up by itself', () => {
     try {
       const made = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E live drawers', email, password: PW, role_id: roles.find((r) => r.name.toLowerCase() === 'member')!.id } })
       expect(made.status(), `create ${email}`).toBe(201)
-      id = (await made.json()).id
+      id = madeUser((await made.json()).id, bearer(admin))
       expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read', namespaces: [NS] } })).ok()).toBeTruthy()
 
       const { page, go } = await signIn(browser, email)
@@ -487,4 +490,15 @@ test.describe('what keeps up by itself', () => {
       kubectl(`delete clusterrole ${CLUSTER_ROLE} --ignore-not-found`)
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

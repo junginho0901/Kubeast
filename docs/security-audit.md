@@ -41,7 +41,8 @@ A terminal, a followed log and a live list are authenticated when they open. The
 - k8s-service asks every 30 seconds whether the session behind each one still stands: the user's `token_version` is the same, the user or API key still exists, and the absolute session lifetime (`auth.sessionAbsoluteHours`) has not passed.
 - When it does not, the connection ends within that interval and says why: a terminal prints the reason and hangs up its shell, a followed log adds the reason as its last line, and a live list goes to the sign-in page unless the browser already holds a newer session.
 - A terminal or followed log ended this way leaves a `k8s.session.end` row.
-- If the version cannot be read (the database is down), connections keep running for 5 minutes and then end.
+- If the version cannot be read (the database is down), connections keep running for 5 minutes and then end without ending the sign-in: a live list connects again by itself, a terminal offers Reconnect, and a followed log says to open it again.
+- New requests while the version cannot be read: auth-service refuses them at once with 503 and `Retry-After`. The other services take a request on the version they read in the last 5 minutes, and refuse it with 503 once that is older. A token older than the version read, or of a sign-in seen signed out, stays refused. None answers a token it could not check with 401, which the console reads as signed out; ai-service's MCP endpoint does, so an MCP client takes a database restart as an invalid token.
 - A session with no activity keeps its open connections while the above holds. The token's expiry alone ends nothing, or a followed log would stop every `auth.tokenTTLMinutes`.
 - Taking a permission from a custom role moves the `token_version` of the accounts holding it, so their open connections end within that interval; adding one or changing the description ends nothing.
 
@@ -226,6 +227,7 @@ A write tool's arguments stay as written only while the call needs them. The ans
   - `auditID` is the ID Kubeast showed.
   - `user` is Kubeast's own credential.
   - `impersonatedUser` is the person, or `kubeast:investigator` for an alert investigation. Its groups are the ones Kubeast showed plus `system:authenticated`, which the API server adds to every impersonated user.
+  - A tool call's access checks are asked as the person even with `auth.impersonation.sharedReadChecks` on. The screens' read checks that setting shares are in the log under `kubeast:group-check:<made at each start>` with the person's groups, not under a person ([cluster requirements](cluster-requirements.md) §1).
 - The cluster keeps such a log only with API server auditing on.
   - kubeadm and self-managed clusters: `--audit-policy-file` and `--audit-log-path` on kube-apiserver.
   - Amazon EKS: control plane logging with the `audit` log type, in CloudWatch Logs `/aws/eks/<cluster>/cluster`.

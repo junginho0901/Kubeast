@@ -1,5 +1,11 @@
-import { PROVIDER_CATALOG, type ProviderDef } from '@/constants/modelCatalog'
+import { PROVIDER_CATALOG, getDefaultModel, type ProviderDef } from '@/constants/modelCatalog'
 import { DropdownOption } from '@/components/CustomDropdown'
+
+/** The model a pick from a list starts on: the provider's default where the list has it, else the list's first. */
+export function listDefault(providerId: string, names: string[]): string {
+  const preferred = getDefaultModel(providerId)
+  return preferred && names.includes(preferred) ? preferred : names[0] ?? ''
+}
 
 export const providerOptions: DropdownOption[] = PROVIDER_CATALOG.map((p) => ({
   value: p.id,

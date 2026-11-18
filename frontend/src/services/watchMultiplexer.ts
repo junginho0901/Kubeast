@@ -40,11 +40,10 @@ const getWsBase = () => {
 
 const makeKey = (clusterId: string, path: string, query: string) => `${clusterId}\n${path}?${query}`
 
-// A watch of changes sends no objects as it opens, so after a socket's gap only a read can say what it missed.
-const watchesChanges = (query: string) => new URLSearchParams(query).get('notify') === '1'
-
 // How long a watch refused a place waits to ask again: doubling up to the cap, each wait somewhere between half and one
 // and a half of that, since the tabs a full server refuses were refused together.
+// How long a socket stays open before the reconnect waits start over (watchMultiplexer.steadyTimer).
+export const STEADY_MS = 10_000
 const REFUSED_WAIT_MS = 30_000
 const REFUSED_WAIT_MAX_MS = 300_000
 const refusedWait = (tries: number) => Math.min(REFUSED_WAIT_MS * 2 ** tries, REFUSED_WAIT_MAX_MS) * (0.5 + Math.random())
@@ -60,6 +59,9 @@ class WebSocketMultiplexer {
   private connecting: Promise<WebSocket> | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private reconnectAttempts = 0
+  // A socket that stays open STEADY_MS starts the waits over; one the server closes sooner (a check that fails on every
+  // connection) keeps them growing, so it is not opened again every second.
+  private steadyTimer: ReturnType<typeof setTimeout> | null = null
   private lastSessionEnd = 0
   // the watches the server refused a place, and how many times
   private refused = new Map<string, number>()
@@ -76,6 +78,11 @@ class WebSocketMultiplexer {
     const max = 30000
     const ceiling = Math.min(base * Math.pow(2, this.reconnectAttempts), max)
     return ceiling / 2 + Math.random() * (ceiling / 2)
+  }
+
+  private stopSteadyTimer() {
+    if (this.steadyTimer) clearTimeout(this.steadyTimer)
+    this.steadyTimer = null
   }
 
   private scheduleReconnect() {
@@ -218,6 +225,7 @@ class WebSocketMultiplexer {
     socket.onclose = (event) => {
       this.socket = null
       this.connecting = null
+      this.stopSteadyTimer()
       this.answered.clear()
       this.closeListeners.forEach((listener) => listener())
       if (event?.code === SESSION_ENDED_CLOSE_CODE) {
@@ -234,14 +242,20 @@ class WebSocketMultiplexer {
 
     this.connecting = (async () => {
       await this.waitForOpen(socket)
-      // 연결 성공 시 backoff counter reset + 기존 구독 전부 재전송.
-      this.reconnectAttempts = 0
+      // 연결 성공: 기존 구독 전부 재전송, and the backoff counter starts over once the socket has stayed open.
+      this.stopSteadyTimer()
+      this.steadyTimer = setTimeout(() => {
+        this.steadyTimer = null
+        if (this.socket === socket) this.reconnectAttempts = 0
+      }, STEADY_MS)
       // A watch that still cannot start says so again.
       for (const key of this.subscriptions.keys()) clearWatchProblem(key)
       this.forgetRefused()
+      // A watch an earlier socket carried says it missed the gap, and the server answers a RESYNC once it is on: a list's
+      // watch opens with the objects there are, not those deleted meanwhile, and a watch of changes opens with nothing.
       for (const [key, msg] of this.subscriptions) {
         try {
-          socket.send(JSON.stringify(this.carried.has(key) && watchesChanges(msg.query) ? { ...msg, resync: true } : msg))
+          socket.send(JSON.stringify(this.carried.has(key) ? { ...msg, resync: true } : msg))
           this.carried.add(key)
         } catch {
           // send 실패는 onclose 가 처리.
@@ -268,6 +282,7 @@ class WebSocketMultiplexer {
     this.forgetRefused()
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
     this.reconnectTimer = null
+    this.stopSteadyTimer()
     this.reconnectAttempts = 0
     this.lastSessionEnd = 0
     this.connecting = null

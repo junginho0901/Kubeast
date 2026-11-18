@@ -10,6 +10,10 @@ export interface PodDetail {
   phase: string
   restart_count: number
   created_at: string
+  /** false when opened from a box's row, which has none: the window reads the pod (podDetailRead) */
+  containersKnown: boolean
+  /** when such a window opened: only a read answered after it fills it */
+  openedAt?: number
   containers: Array<{
     name: string
     image: string
@@ -48,7 +52,9 @@ export function pickMainContainer(pod: { name: string; containers?: Array<{ name
 export type DetailTab = 'summary' | 'logs' | 'describe' | 'rbac' | 'manifest' | 'exec'
 
 export function podToDetail(pod: any): PodDetail {
+  const containersKnown = Array.isArray(pod.containers)
   return {
+    ...(containersKnown ? {} : { openedAt: Date.now() }),
     name: pod.name,
     namespace: pod.namespace,
     node: pod.node_name || '',
@@ -56,6 +62,7 @@ export function podToDetail(pod: any): PodDetail {
     phase: pod.phase || pod.status || '',
     restart_count: pod.restart_count || 0,
     created_at: pod.created_at || '',
+    containersKnown,
     containers: pod.containers || [],
   }
 }

@@ -21,6 +21,7 @@ import { teamsMatching } from './admin/adminListSearch'
 // Admin → Teams: the teams users pick from, each with its member count. The page is as high as the screen and the
 // list pages the teams, as many as fit (or the footer's fixed choice); the search reads every team's name.
 const TEAM_COLUMNS = 2
+const NAME_FIELD = 'team-name'
 
 export default function AdminOrganizations() {
   const queryClient = useQueryClient()
@@ -30,6 +31,8 @@ export default function AdminOrganizations() {
   const confirm = useConfirm()
 
   const [newTeam, setNewTeam] = useState('')
+  // Add pressed with no name: said under the field until a name is typed
+  const [nameMissing, setNameMissing] = useState(false)
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null)
 
   const { has: hasPerm } = usePermission()
@@ -85,33 +88,55 @@ export default function AdminOrganizations() {
       <p className="mt-1 text-sm text-slate-400 shrink-0">{subtitle}</p>
 
       <form
-        className="mt-4 flex gap-2 shrink-0"
+        className="mt-4 shrink-0"
         onSubmit={(e) => {
           e.preventDefault()
           const name = inputValue.trim()
           if (!name) {
-            e.currentTarget.querySelector('input')?.focus()
+            setNameMissing(true)
+            // an earlier Add's failure is not about this press, so only this reason shows; an Add on its way is left be
+            if (createMutation.isError) createMutation.reset()
+            e.currentTarget.querySelector<HTMLInputElement>(`#${NAME_FIELD}`)?.focus()
             return
           }
           createMutation.mutate({ type, name })
         }}
       >
-        <input
-          value={inputValue}
-          maxLength={NAME_MAX}
-          onChange={(e) => setInputValue(e.target.value)}
-          className="flex-1 h-10 rounded-lg border border-slate-700 bg-slate-950/40 px-3 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
-          placeholder={tr('adminOrg.inputPlaceholder', 'Enter name...')}
-        />
-        <button
-          type="submit"
-          disabled={createMutation.isPending}
-          className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
-        >
-          <Plus className="w-4 h-4" />
-          {tr('adminOrg.add', 'Add')}
-        </button>
+        <label htmlFor={NAME_FIELD} className="block text-xs font-semibold text-slate-400 mb-1">
+          {tr('adminOrg.nameLabel', 'Team name')}
+        </label>
+        <div className="flex gap-2">
+          <input
+            id={NAME_FIELD}
+            value={inputValue}
+            maxLength={NAME_MAX}
+            onChange={(e) => {
+              setInputValue(e.target.value)
+              if (e.target.value.trim()) setNameMissing(false)
+              if (createMutation.isError) createMutation.reset()
+            }}
+            aria-invalid={nameMissing || undefined}
+            aria-describedby={nameMissing ? 'team-name-problem' : undefined}
+            className="flex-1 h-10 rounded-lg border border-slate-700 bg-slate-950/40 px-3 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+            placeholder={tr('adminOrg.inputPlaceholder', 'Enter name...')}
+          />
+          <button
+            type="submit"
+            disabled={createMutation.isPending}
+            className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
+          >
+            <Plus className="w-4 h-4" />
+            {tr('adminOrg.add', 'Add')}
+          </button>
+        </div>
       </form>
+      {nameMissing && (
+        <p id="team-name-problem" role="alert" data-testid="team-name-problem" className="mt-1 shrink-0 text-[11px] text-red-400">
+          {inputValue === ''
+            ? tr('adminOrg.nameRequired', 'Enter a team name.')
+            : tr('adminOrg.nameBlank', 'Enter a team name: spaces alone are not one.')}
+        </p>
+      )}
 
       <div className="relative mt-3 shrink-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -254,6 +279,7 @@ export default function AdminOrganizations() {
                 type="button"
                 onClick={() => setSelectedOrg(null)}
                 className="rounded-sm p-1.5 text-slate-400 hover:text-ink hover:bg-slate-800"
+                aria-label={tr('common.close', 'Close')}
               >
                 <X className="w-5 h-5" />
               </button>

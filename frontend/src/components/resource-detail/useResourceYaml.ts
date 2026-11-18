@@ -8,6 +8,7 @@ import { useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/services/api'
+import { retryUnlessRefused } from '@/services/queryDefaults'
 
 import { objectResourceType } from './crDetail'
 import { encodeSecretYaml, yamlOpenedOf } from './utils'
@@ -51,7 +52,7 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
     },
     enabled: !!target && tab === 'yaml',
     staleTime: 10_000,
-    retry: 1,
+    retry: retryUnlessRefused(1),
   })
 
   // Answers how many of a Secret's masked values the server left as they were, and whether the object was already

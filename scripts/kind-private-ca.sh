@@ -6,6 +6,8 @@
 #
 #   scripts/kind-private-ca.sh up     # a new CA each time
 #   scripts/kind-private-ca.sh down   # back to the dev and log search values; the front and the CA Secret removed
+#
+# CA_DAYS (default 30): how many days the CA and the front's certificate are valid from `up`.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,6 +18,7 @@ NAMESPACE="${NAMESPACE:-kubeast}"
 RELEASE="${RELEASE:-kubeast}"
 DIR="${TMPDIR:-/tmp}/kubeast-private-ca"
 SERVICES="auth-service k8s-service ai-service session-service tool-server model-config-controller-go"
+CA_DAYS="${CA_DAYS:-30}"
 
 main_kubectl() { kubectl --kubeconfig "$KUBECONFIG_PATH" --context "kind-$MAIN" "$@"; }
 store_kubectl() { kubectl --kubeconfig <(kind get kubeconfig --name "$STORE") "$@"; }
@@ -26,15 +29,18 @@ upgrade() {
 
 case "${1:-}" in
   up)
-    echo "═══ CA and the front's certificate ($DIR) ═══"
+    case "$CA_DAYS" in
+      '' | *[!0-9]* | 0*) echo "CA_DAYS must be a whole number of days above 0, not '$CA_DAYS'" >&2; exit 2 ;;
+    esac
+    echo "═══ CA and the front's certificate ($DIR, $CA_DAYS days) ═══"
     mkdir -p "$DIR"
     # Key identifiers and key usage as a real CA has them: Python 3.13+ verifies strictly.
-    openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 30 -subj "/CN=Kubeast dev CA" \
+    openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days "$CA_DAYS" -subj "/CN=Kubeast dev CA" \
       -addext "keyUsage=critical,keyCertSign,cRLSign" -keyout "$DIR/ca.key" -out "$DIR/ca.crt" 2>/dev/null
     openssl req -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -subj "/CN=$STORE-control-plane" \
       -keyout "$DIR/tls.key" -out "$DIR/tls.csr" 2>/dev/null
     printf 'subjectAltName=DNS:%s-control-plane\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\nauthorityKeyIdentifier=keyid\nsubjectKeyIdentifier=hash\n' "$STORE" > "$DIR/server.ext"
-    openssl x509 -req -in "$DIR/tls.csr" -CA "$DIR/ca.crt" -CAkey "$DIR/ca.key" -CAcreateserial -days 30 \
+    openssl x509 -req -in "$DIR/tls.csr" -CA "$DIR/ca.crt" -CAkey "$DIR/ca.key" -CAcreateserial -days "$CA_DAYS" \
       -extfile "$DIR/server.ext" -out "$DIR/tls.crt" 2>/dev/null
     echo "═══ HTTPS front in $STORE ═══"
     store_kubectl apply -f "$ROOT/deploy/kind/private-ca-front.yaml" >/dev/null
@@ -57,7 +63,7 @@ case "${1:-}" in
     store_kubectl delete namespace ca-front --ignore-not-found
     ;;
   *)
-    echo "usage: $0 up|down" >&2
+    echo "usage: [CA_DAYS=30] $0 up|down" >&2
     exit 2
     ;;
 esac

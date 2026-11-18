@@ -1056,7 +1056,7 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     const password = `gpu-${id}-pw`
     const created = await request.post('/api/v1/auth/admin/users', { headers, data: { name: `E2E gpu ${id}`, email, password } })
     expect(created.status(), await created.text()).toBe(201)
-    const userId = (await created.json()).id
+    const userId = madeUser((await created.json()).id, headers)
     const binding = JSON.stringify({
       apiVersion: 'rbac.authorization.k8s.io/v1', kind: 'RoleBinding', metadata: { name: 'e2e-gpu-num-read', namespace: NS },
       roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'ClusterRole', name: 'view' },
@@ -1114,4 +1114,15 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
       kubectl(`delete rolebinding e2e-gpu-num-read -n ${NS} --ignore-not-found`)
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

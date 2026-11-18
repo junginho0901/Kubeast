@@ -3,6 +3,7 @@ package auditsink
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -84,16 +85,22 @@ func (p PG) Fail(ctx context.Context, sink, msg string) error {
 	return err
 }
 
-// TryLock takes the advisory lock on a dedicated connection and watches it;
-// the lock lives as long as that connection.
+// keepaliveSQL asks the server for TCP keepalives on the lock's connection
+// (after 10 s quiet, every 5 s, 3 probes), so a holder whose node is gone
+// loses the lock in about 25 s, not after the operating system's two hours;
+// keepaliveReset gives the connection its own values back before it returns
+// to the pool. The holder's side is the 15 s ping in TryLock.
+const (
+	keepaliveSQL = `SELECT set_config('tcp_keepalives_idle', '10', false), set_config('tcp_keepalives_interval', '5', false),
+	set_config('tcp_keepalives_count', '3', false)`
+	keepaliveReset = `RESET tcp_keepalives_idle; RESET tcp_keepalives_interval; RESET tcp_keepalives_count`
+)
+
+// TryLock takes the advisory lock on a connection of the pool, kept until
+// release, and watches it; the lock lives as long as that connection.
 func (p PG) TryLock(ctx context.Context) (func(), <-chan struct{}, bool, error) {
-	conn, err := p.Pool.Acquire(ctx)
-	if err != nil {
-		return nil, nil, false, err
-	}
-	var ok bool
-	if err := conn.QueryRow(ctx, `SELECT pg_try_advisory_lock($1)`, lockKey).Scan(&ok); err != nil || !ok {
-		conn.Release()
+	conn, err := p.lockConn(ctx)
+	if conn == nil {
 		return nil, nil, false, err
 	}
 	lost := make(chan struct{})
@@ -125,10 +132,30 @@ func (p PG) TryLock(ctx context.Context) (func(), <-chan struct{}, bool, error) 
 		close(stop)
 		uctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		_, _ = conn.Exec(uctx, `SELECT pg_advisory_unlock($1)`, lockKey)
+		_, _ = conn.Exec(uctx, keepaliveReset)
 		cancel()
 		conn.Release()
 	}
 	return release, lost, true, nil
+}
+
+// lockConn takes the lock on a connection of the pool and sets the
+// keepalives on it; nil while another replica holds the lock.
+func (p PG) lockConn(ctx context.Context) (*pgxpool.Conn, error) {
+	conn, err := p.Pool.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var ok bool
+	if err := conn.QueryRow(ctx, `SELECT pg_try_advisory_lock($1)`, lockKey).Scan(&ok); err != nil || !ok {
+		conn.Release()
+		return nil, err
+	}
+	// Without them the lock still works; a holder that vanished is only noticed later.
+	if _, err := conn.Exec(ctx, keepaliveSQL); err != nil {
+		slog.Warn("audit sinks: server keepalives not set on the lock's connection", "err", err)
+	}
+	return conn, nil
 }
 
 // Floor is the highest audit id every configured sink has handled — what

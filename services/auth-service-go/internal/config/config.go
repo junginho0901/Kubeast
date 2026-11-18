@@ -120,6 +120,8 @@ type Config struct {
 	InvestigatorTokenMinutes int
 	// ImpersonationCustomRoles is what auth.impersonation.customRoles binds on the
 	// clusters: a role of such a name acts as a group that already holds ClusterRoles.
+	// The chart hands over the role names (a comma as "-", the same group), and each
+	// reader makes the group with auth.RoleGroupSlug.
 	ImpersonationCustomRoles []string
 	// Credential plugins a registered kubeconfig may name (exec.command base names).
 	KubeconfigExecCommands []string
