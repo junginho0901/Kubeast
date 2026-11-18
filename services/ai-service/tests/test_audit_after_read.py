@@ -63,6 +63,18 @@ async def test_a_chat_read_whose_row_was_stored_gives_its_answer(monkeypatch):
     assert FAKE_LOG in llm_text and FAKE_LOG in "".join(events) and FAKE_LOG in entry["result"]
 
 
+async def test_the_narrowing_is_a_read_whose_row_comes_before_its_answer(monkeypatch):
+    rows = _chat_audit(monkeypatch, stored=True)
+    _events, _entry, llm_text = await _chat("anomaly_rank", {"namespace": "shop", "since_time": "1h"})
+    assert FAKE_LOG in llm_text
+    row = rows[-1]
+    assert row["action"] == "ai.tool.call" and row["after"]["tool"] == "anomaly_rank"
+    assert row["namespace"] == "shop" and row["target_id"] == "anomaly_rank"
+    _chat_audit(monkeypatch, stored=False)
+    _events, _entry, llm_text = await _chat("anomaly_rank", {"namespace": "shop"})
+    assert FAKE_LOG not in llm_text and json.loads(llm_text)["status"] == "audit_unavailable"
+
+
 async def test_a_chat_read_with_fail_closed_off_keeps_its_answer(monkeypatch):
     monkeypatch.setenv("AUDIT_FAIL_CLOSED", "false")
     _chat_audit(monkeypatch, stored=False)

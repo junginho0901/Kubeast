@@ -83,6 +83,12 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no features.networkFlowMonitor
+  - it: stops values without ai.timelineChanges, which this chart added
+    set:
+      ai.timelineChanges: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.timelineChanges
   - it: stops values without streams (the stream server), as v0.7.7's are
     set:
       streams: null

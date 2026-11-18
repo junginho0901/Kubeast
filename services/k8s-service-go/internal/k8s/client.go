@@ -164,6 +164,9 @@ type Service struct {
 	// a read that started before is not kept.
 	apiResourcesSF  singleflight.Group
 	apiResourcesGen uint64
+
+	// changesFlight is one read of the Timeline's changes per identity, grant and window at a time (timeline_changes.go).
+	changesFlight singleflight.Group
 }
 
 var errNotLoaded = fmt.Errorf("kubeconfig not loaded")

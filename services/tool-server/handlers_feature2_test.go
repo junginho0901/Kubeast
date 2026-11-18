@@ -334,6 +334,40 @@ func TestCanI_And_ResourceGraph(t *testing.T) {
 	}
 }
 
+// timeline's view words pass the argument check only in a timeline call while k8s-service serves the changes view;
+// otherwise, and in any other tool's call, a view other than summary or results is refused with the words of before.
+func TestViewWordsFollowTheChangesViewSwitches(t *testing.T) {
+	for _, c := range []struct {
+		chat, investigations, stepZero string
+		passes                         bool
+	}{
+		{"", "", "", false}, {"true", "", "", true}, {"", "", "true", false}, {"", "true", "true", true}, {"", " TRUE ", "on", true},
+		{"", "1", "true", false}, {"", "yes", "true", false}, // ALERT_INVESTIGATION_ENABLED as ai-service reads it
+	} {
+		t.Setenv("AI_TIMELINE_CHANGES", c.chat)
+		t.Setenv("ALERT_INVESTIGATION_ENABLED", c.investigations)
+		t.Setenv("ALERT_INVESTIGATION_CHANGES_FIRST", c.stepZero)
+		for _, tool := range []string{"timeline", "policy_reports"} {
+			for _, view := range []string{"events", "changes"} {
+				err := validateCallArgs(tool, map[string]interface{}{"view": view, "namespace": "shop"})
+				if (err == nil) != (c.passes && tool == "timeline") {
+					t.Errorf("%s view %s with %+v: %v", tool, view, c, err)
+				}
+				if err != nil && !strings.Contains(err.Error(), "one of summary, results") {
+					t.Errorf("%s view %s refused with other words: %v", tool, view, err)
+				}
+			}
+			if err := validateCallArgs(tool, map[string]interface{}{"view": "results"}); err != nil {
+				t.Errorf("%s results with %+v: %v", tool, c, err)
+			}
+		}
+		// the other arguments of a timeline call naming the view are still checked
+		if err := validateCallArgs("timeline", map[string]interface{}{"view": "changes", "namespace": "--all"}); err == nil {
+			t.Errorf("a bad namespace beside view changes passed with %+v", c)
+		}
+	}
+}
+
 func TestFeatureArgs2AndGate(t *testing.T) {
 	for _, args := range []map[string]interface{}{
 		{"what": "diff", "section": "values"}, {"view": "results"}, {"aggregate": "controller", "window": "7d"}, {"release": "kubeast"},

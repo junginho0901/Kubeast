@@ -7,7 +7,7 @@
 # 정확한 byte 비교는 의도적으로 안 함 — trailing whitespace 같은 noise 변경에
 # 깨지면 안 되고, 의미가 살아있는지만 본다.
 
-from app.services.ai.prompts import SYSTEM_MESSAGE
+from app.services.ai.prompts import SYSTEM_MESSAGE, system_message
 
 
 def test_system_message_is_string():
@@ -102,6 +102,20 @@ def test_tool_usage_guide():
         "get_node_metrics",
     ]:
         assert tool in SYSTEM_MESSAGE, f"도구 이름 {tool} 이 프롬프트에서 사라짐"
+
+
+def test_a_why_question_reads_the_changes_first(monkeypatch):
+    """Asked why something broke, the chat reads what changed before it, and does not blame a change that does not match —
+    with AI_TIMELINE_CHANGES on; off, the prompt does not name the view."""
+    monkeypatch.setenv("AI_TIMELINE_CHANGES", "true")
+    prompt = system_message()
+    assert "고장 원인을 물으면 바뀐 것부터 보세요" in prompt
+    assert 'view: "changes"' in prompt
+    assert 'timeline(view, namespace' in prompt
+    monkeypatch.delenv("AI_TIMELINE_CHANGES")
+    for words in ("고장 원인을 물으면 바뀐 것부터 보세요", 'view: "changes"', "timeline(view, namespace"):
+        assert words not in system_message()
+        assert words not in SYSTEM_MESSAGE
 
 
 def test_not_found_protocol():

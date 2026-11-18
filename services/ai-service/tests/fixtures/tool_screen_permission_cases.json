@@ -7,6 +7,7 @@
   "alert_investigate",
   "alerts_inbox",
   "alerts_list",
+  "anomaly_rank",
   "audit_integrity",
   "audit_search",
   "can_i",
@@ -350,7 +351,8 @@
   "ai.tool.limit_range_violations",
   "ai.tool.alerts_inbox",
   "ai.tool.timeline",
-  "ai.tool.gpu"
+  "ai.tool.gpu",
+  "ai.tool.anomaly_rank"
  ],
  "cases": [
   {
@@ -625,6 +627,15 @@
   },
   {
    "tool": "gpu",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "anomaly_rank",
    "args": {},
    "want": [
     "resource.objects.read"
