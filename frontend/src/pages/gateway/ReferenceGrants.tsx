@@ -23,7 +23,7 @@ import { applyReferenceGrantWatchEvent } from './referencegrants/referenceGrantW
 import { ReferenceGrantFilters } from './referencegrants/ReferenceGrantFilters'
 import { ReferenceGrantTable } from './referencegrants/ReferenceGrantTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -187,13 +187,10 @@ export default function ReferenceGrants() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllReferenceGrants(true)
-      : await api.getReferenceGrants(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['gateway', 'referencegrants', selectedNamespace] })
-    queryClient.setQueryData(['gateway', 'referencegrants', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['gateway', 'referencegrants', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllReferenceGrants(true)
+      : api.getReferenceGrants(selectedNamespace, true)))
 
   const createReferenceGrantYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

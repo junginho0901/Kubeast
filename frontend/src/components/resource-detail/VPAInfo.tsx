@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import { retryUnlessRefused } from '@/services/queryDefaults'
 import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, ConditionsTable, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
@@ -19,7 +20,7 @@ export default function VPAInfo({ name, namespace }: Props) {
     queryKey: ['vpa-describe', namespace, name],
     queryFn: () => api.describeVPA(namespace, name),
     staleTime: 10_000,
-    retry: 1,
+    retry: retryUnlessRefused(1),
   })
   useDrawerFollowsEvents({ describeKey: ['vpa-describe', namespace, name], answer: desc, kind: 'VerticalPodAutoscaler', namespace, name })
 

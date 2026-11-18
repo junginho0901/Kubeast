@@ -196,6 +196,7 @@ func TestAStartThatHangsGivesUpItsPlaceAfterAWhile(t *testing.T) {
 		}
 	})
 	m.startHoldFor = 20 * time.Millisecond
+	m.openingHoldFor = 20 * time.Millisecond
 	defer close(release)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

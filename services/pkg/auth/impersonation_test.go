@@ -1,12 +1,19 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -97,16 +104,171 @@ func TestImpersonationRoundTripper(t *testing.T) {
 		t.Fatal("the caller's request must not be mutated")
 	}
 
-	// Without a user: no impersonation headers (service identity).
+	// Without a user and unmarked: refused, nothing sent.
 	base.req = nil
-	plain := httptest.NewRequest("GET", "https://k8s/healthz", nil)
-	if _, err := rt.RoundTrip(plain); err != nil {
+	body := &closeRecorder{}
+	plain := httptest.NewRequest("POST", "https://k8s/api/v1/namespaces/default/configmaps", body)
+	if _, err := rt.RoundTrip(plain); !errors.Is(err, ErrNoPerson) {
+		t.Fatalf("no user, no mark: err = %v, want ErrNoPerson", err)
+	}
+	if base.req != nil {
+		t.Fatal("no user, no mark: the request must not reach the cluster")
+	}
+	if !body.closed {
+		t.Fatal("a refused request's body must be closed")
+	}
+
+	// Kubeast's own call: sent under the service credential, no Impersonate-* headers.
+	own := httptest.NewRequest("GET", "https://k8s/version", nil).WithContext(AsKubeast(context.Background()))
+	if _, err := rt.RoundTrip(own); err != nil {
 		t.Fatal(err)
 	}
+	if base.req == nil {
+		t.Fatal("a call marked AsKubeast must be sent")
+	}
 	if base.req.Header.Get(HeaderImpersonateUser) != "" || len(base.req.Header.Values(HeaderImpersonateGroup)) != 0 {
-		t.Fatal("no user in ctx must mean no impersonation headers")
+		t.Fatal("a call marked AsKubeast must carry no Impersonate-* headers")
+	}
+
+	// The mark does not stand for the person a context carries.
+	base.req = nil
+	both := httptest.NewRequest("GET", "https://k8s/api", nil).WithContext(AsKubeast(WithPayload(context.Background(), p)))
+	if _, err := rt.RoundTrip(both); err != nil {
+		t.Fatal(err)
+	}
+	if got := base.req.Header.Get(HeaderImpersonateUser); got != "a@example.com" {
+		t.Fatalf("person and mark: Impersonate-User = %q, want the person", got)
+	}
+
+	// A pinned person stands for a context that names none, and only then.
+	base.req = nil
+	pinned := httptest.NewRequest("GET", "https://k8s/api", nil).WithContext(WithPinnedPerson(context.Background(), p))
+	if _, err := rt.RoundTrip(pinned); err != nil {
+		t.Fatal(err)
+	}
+	if got := base.req.Header.Get(HeaderImpersonateUser); got != "a@example.com" {
+		t.Fatalf("pinned: Impersonate-User = %q, want the pinned person", got)
+	}
+	if _, ok := FromContext(pinned.Context()); ok {
+		t.Fatal("FromContext must not read a pinned person")
+	}
+	other := TokenPayload{Email: "b@example.com"}
+	mixed := httptest.NewRequest("GET", "https://k8s/api", nil).WithContext(WithPinnedPerson(WithPayload(context.Background(), other), p))
+	if _, err := rt.RoundTrip(mixed); err != nil {
+		t.Fatal(err)
+	}
+	if got := base.req.Header.Get(HeaderImpersonateUser); got != "b@example.com" {
+		t.Fatalf("person and pinned: Impersonate-User = %q, want the context's person", got)
 	}
 }
+
+// A request marked as Kubeast's own and naming no person goes out only as a GET of a path client-go's discovery client
+// asks (/version, /api, /apis, /api/v1, /apis/<group>/<version>) under the server URL's path; any other is refused as
+// one naming no person is, with the same log line. A person in its context is never held to that.
+func TestKubeastOwnRequestsAreVersionAndDiscoveryReadsOnly(t *testing.T) {
+	var logs bytes.Buffer
+	was := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(was) })
+	const rancher = "/k8s/clusters/c-1"
+	for _, c := range []struct {
+		method, serverPath, path string
+		sent                     bool
+	}{
+		// the server version (/health, the health probe, the version a screen shows) and the discovery reads
+		// (ServerGroupsAndResources, ServerGroups, ServerResourcesForGroupVersion) as client-go writes them
+		{"GET", "", "/version", true},
+		{"GET", "", "/api", true},
+		{"GET", "", "/apis", true},
+		{"GET", "", "/api/v1", true},
+		{"GET", "", "/apis/apps/v1", true},
+		{"GET", "", "/apis/scheduling.k8s.io/v1alpha2", true},
+		{"GET", "/", "/version", true},
+		{"GET", rancher, rancher + "/version", true},
+		{"GET", rancher, rancher + "/api", true},
+		{"GET", rancher + "/", rancher + "/apis", true},
+		{"GET", rancher, rancher + "/api/v1", true},
+		{"GET", rancher, rancher + "/apis/metrics.k8s.io/v1beta1", true},
+		{"GET", "k8s//clusters/c-1/", rancher + "/apis/apps/v1", true},
+
+		{"GET", "", "/api/v1/namespaces/shop/configmaps/app", false},
+		{"GET", "", "/api/v1/namespaces/shop/secrets", false},
+		{"GET", "", "/api/v1/pods", false},
+		{"GET", "", "/api/v1/nodes?watch=true", false},
+		{"GET", "", "/api/v1/namespaces", false},
+		{"GET", "", "/apis/apps/v1/deployments", false},
+		{"GET", "", "/apis/apps/v1/namespaces/shop/deployments/web", false},
+		{"GET", "", "/apis/apps/v1/namespaces/shop/deployments?watch=true", false},
+		{"GET", "", "/api/v1/namespaces/shop/services/web:80/proxy/version", false},
+		{"GET", "", "/api/v1/namespaces/shop/pods/web-0/proxy/apis/apps/v1", false},
+		{"GET", "", "/apis/apps", false},
+		{"GET", "", "/apis/apps/v1/", false},
+		{"GET", "", "/apis//v1", false},
+		{"GET", "", "/apis/apps/..", false},
+		{"GET", "", "/api/v2", false},
+		{"GET", "", "/openapi/v2", false},
+		{"GET", "", "/", false},
+		{"POST", "", "/api/v1/namespaces/shop/configmaps", false},
+		{"PUT", "", "/api/v1/namespaces/shop/configmaps/app", false},
+		{"PATCH", "", "/apis/apps/v1/namespaces/shop/deployments/web", false},
+		{"DELETE", "", "/api/v1/namespaces/shop/pods/web-0", false},
+		{"POST", "", "/version", false},
+		{"POST", "", "/apis/apps/v1", false},
+		{"DELETE", "", "/api", false},
+		{"HEAD", "", "/version", false},
+		{"GET", rancher, "/version", false},
+		{"GET", rancher, "/k8s/clusters/c-10/version", false},
+		{"GET", rancher, "/k8s/clusters/c-2/apis/apps/v1", false},
+		{"GET", rancher, rancher + "/api/v1/namespaces/shop/services/web:80/proxy/version", false},
+		{"GET", rancher, "/api/v1/namespaces/shop/services/web:80/proxy" + rancher + "/version", false},
+		{"GET", rancher, rancher + "/apis/apps/v1/namespaces/shop/deployments", false},
+		{"GET", rancher, rancher, false},
+	} {
+		name := c.method + " " + c.path + " under " + strconv.Quote(c.serverPath)
+		base := &captureRT{}
+		rt := ImpersonationRoundTripperAt(base, "prod", c.serverPath)
+		body := &closeRecorder{}
+		req := httptest.NewRequest(c.method, "https://k8s"+c.path, body).WithContext(AsKubeast(context.Background()))
+		logs.Reset()
+		_, err := rt.RoundTrip(req)
+		if c.sent {
+			if err != nil || base.req == nil {
+				t.Errorf("%s: err %v, sent %v; want sent as Kubeast itself", name, err, base.req != nil)
+				continue
+			}
+			if base.req.Header.Get(HeaderImpersonateUser) != "" || len(base.req.Header.Values(HeaderImpersonateGroup)) != 0 {
+				t.Errorf("%s: sent with Impersonate-* headers", name)
+			}
+			continue
+		}
+		if !errors.Is(err, ErrNoPerson) || base.req != nil {
+			t.Errorf("%s: err %v, sent %v; want ErrNoPerson and nothing sent", name, err, base.req != nil)
+			continue
+		}
+		if !body.closed {
+			t.Errorf("%s: the refused request's body was not closed", name)
+		}
+		want := fmt.Sprintf("msg=\"cluster request with no person refused\" cluster=prod method=%s path=%s\n", c.method, req.URL.Path)
+		if line := logs.String(); !strings.HasSuffix(line, want) || strings.Count(line, "\n") != 1 {
+			t.Errorf("%s: log %q, want one line ending %q", name, line, want)
+		}
+	}
+
+	// the person in the context goes on deciding: a read or a write of an object, marked or not, goes as the person
+	p := TokenPayload{Email: "a@example.com", Roles: map[string]string{"prod": "Read"}}
+	for _, method := range []string{"GET", "DELETE"} {
+		base := &captureRT{}
+		req := httptest.NewRequest(method, "https://k8s"+rancher+"/api/v1/namespaces/shop/configmaps/app", nil).WithContext(AsKubeast(WithPayload(context.Background(), p)))
+		if _, err := ImpersonationRoundTripperAt(base, "prod", rancher).RoundTrip(req); err != nil || base.req == nil || base.req.Header.Get(HeaderImpersonateUser) != "a@example.com" {
+			t.Errorf("%s of an object by a person, marked: err %v, sent %v", method, err, base.req != nil)
+		}
+	}
+}
+
+type closeRecorder struct{ closed bool }
+
+func (c *closeRecorder) Read([]byte) (int, error) { return 0, io.EOF }
+func (c *closeRecorder) Close() error             { c.closed = true; return nil }
 
 func TestKubectlImpersonationArgs(t *testing.T) {
 	p := TokenPayload{Email: "a@example.com", Roles: map[string]string{"test2": "Read"}}

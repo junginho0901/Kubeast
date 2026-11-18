@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
-import type { PodInfo } from '@/services/api'
+import type { NodeBoxRow } from '@/services/api'
 import type { PodDetail, DetailTab } from './types'
 import { ClusterViewContext, type ClusterViewContextValue, type PodContextMenuPosition } from './ClusterViewContext'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
@@ -65,7 +65,7 @@ export function ClusterViewProvider({ children }: { children: ReactNode }) {
   const execShellDropdownRef = useRef<HTMLDivElement>(null)
 
   const [podContextMenu, setPodContextMenu] = useState<PodContextMenuPosition | null>(null)
-  const [deleteTargetPod, setDeleteTargetPod] = useState<PodInfo | null>(null)
+  const [deleteTargetPod, setDeleteTargetPod] = useState<NodeBoxRow | null>(null)
   const [deleteForce, setDeleteForce] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [isDeletingPod, setIsDeletingPod] = useState(false)
@@ -75,7 +75,7 @@ export function ClusterViewProvider({ children }: { children: ReactNode }) {
 
   const closeContextMenu = useCallback(() => setPodContextMenu(null), [])
 
-  const openDeleteModal = useCallback((pod: PodInfo) => {
+  const openDeleteModal = useCallback((pod: NodeBoxRow) => {
     setDeleteTargetPod(pod)
     setDeleteForce(false)
     setDeleteError(null)

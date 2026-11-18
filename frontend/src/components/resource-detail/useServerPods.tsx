@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { PodListRow, PodPage, PodPageParams } from '@/services/api'
 import { readPodPageSince } from '@/services/podPageRead'
+import { unlessRefused } from '@/services/queryDefaults'
 import { keepSameRead } from '@/utils/keepSameRead'
 import { Tx } from './DetailCommon'
 
@@ -56,7 +57,7 @@ export function useServerPodPage(
     enabled: filter !== null,
     staleTime: 30_000,
     placeholderData: keepSameRead(queryKey, [2, 3]),
-    refetchInterval: readEvery ? (query) => readEvery(query.state.data, query.state.error) : undefined,
+    refetchInterval: readEvery ? (query) => unlessRefused(query.state.error, readEvery(query.state.data, query.state.error)) : undefined,
     ...(retry ? { retry } : {}),
   })
 }

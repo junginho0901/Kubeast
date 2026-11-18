@@ -48,7 +48,7 @@ func (h *AuthHandler) TokenVersion(w http.ResponseWriter, r *http.Request) {
 	// on; off, the answer is "gone", so validators refuse a token already out.
 	if sys, _ := claims["sys"].(string); sys != "" {
 		if sys != auth.SystemInvestigator || sub != security.InvestigatorSubject || !h.cfg.AlertInvestigationEnabled {
-			response.Error(w, http.StatusNotFound, "Unknown user")
+			auth.AnswerSubjectGone(w, "Unknown user")
 			return
 		}
 		response.JSON(w, http.StatusOK, map[string]int{"tv": 0})
@@ -56,13 +56,20 @@ func (h *AuthHandler) TokenVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	// A token an API key was exchanged for goes with the key (revoked or expired).
 	akid, _ := claims["akid"].(string)
+	// A read that failed is no verdict: 503, which the validators bridge from what they last read, where 404 revokes.
 	state, err := h.repo.SessionStateFor(r.Context(), userID, akid)
+	if auth.ReadFailed(err) {
+		auth.RefuseSessionUnreadable(w)
+		return
+	}
+	// A subject that is gone is marked (auth.SubjectGoneCode): an auth-service before 0.7.8 gave a read that failed the
+	// same 404 unmarked.
 	if errors.Is(err, repository.ErrAPIKeyNotFound) {
-		response.Error(w, http.StatusNotFound, "API key revoked")
+		auth.AnswerSubjectGone(w, "API key revoked")
 		return
 	}
 	if err != nil {
-		response.Error(w, http.StatusNotFound, "Unknown user")
+		auth.AnswerSubjectGone(w, "Unknown user")
 		return
 	}
 	signedOut := state.SignedOut

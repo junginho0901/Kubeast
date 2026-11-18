@@ -83,7 +83,7 @@ type Config struct {
 	ReviewQPS               int // the callers' access checks on a rate of their own; 0 = the client's
 	ReviewBurst             int
 	BreakerConsecutiveFails int // open the per-cluster breaker after N fails; 0 = off
-	BreakerOpenSec          int // breaker open duration before half-open
+	BreakerOpenSec          int // breaker open duration before half-open; 0 = 30
 
 	// Auth
 	AuthJWKSURL string
@@ -101,6 +101,10 @@ type Config struct {
 	AuthCookieName   string
 	// Act as the signed-in user toward every cluster (Kubernetes impersonation).
 	ImpersonationEnabled bool
+	// A screen's allowed read check shared among people of the same groups (chart
+	// auth.impersonation.sharedReadChecks), but on the clusters listed.
+	SharedReadChecks        bool
+	SharedReadChecksExclude []string
 	// Credential plugins a registered kubeconfig may run (exec.command base
 	// names). They execute inside this pod, so only known binaries are allowed.
 	KubeconfigExecCommands []string
@@ -126,6 +130,8 @@ type Config struct {
 	WSMaxSubscriptions        int
 	WSMaxSubscriptionsPerConn int
 	WSWatchStartConcurrency   int
+	WSWatchOpeningConcurrency int
+	WSWatchStreamWindowKiB    int
 	// MaxRequestBodyBytes caps every request body; YAML apply/create of large
 	// manifests fit well under the default 4 MiB.
 	MaxRequestBodyBytes int
@@ -204,7 +210,9 @@ func Load() Config {
 		JWTAudience:          pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
 		AuthCookieName:       pkgconfig.GetEnv("AUTH_COOKIE_NAME", "kubeast.token"),
 
-		ImpersonationEnabled: pkgconfig.GetEnvBool("IMPERSONATION_ENABLED", true),
+		ImpersonationEnabled:    pkgconfig.GetEnvBool("IMPERSONATION_ENABLED", true),
+		SharedReadChecks:        pkgconfig.GetEnvBool("SHARED_READ_CHECKS", false),
+		SharedReadChecksExclude: pkgconfig.GetEnvList("SHARED_READ_CHECKS_EXCLUDE_CLUSTERS", ""),
 
 		KubeconfigExecCommands: pkgconfig.GetEnvList("KUBECONFIG_EXEC_COMMANDS", cluster.DefaultExecCommands),
 		GatewayPolicyKinds:     pkgconfig.GetEnvList("GATEWAY_POLICY_KINDS", ""),
@@ -221,6 +229,8 @@ func Load() Config {
 		WSMaxSubscriptions:        pkgconfig.GetEnvInt("WS_MAX_SUBSCRIPTIONS", 2000),
 		WSMaxSubscriptionsPerConn: pkgconfig.GetEnvInt("WS_MAX_SUBSCRIPTIONS_PER_CONN", 50),
 		WSWatchStartConcurrency:   pkgconfig.GetEnvInt("WS_WATCH_START_CONCURRENCY", 16),
+		WSWatchOpeningConcurrency: pkgconfig.GetEnvInt("WS_WATCH_OPENING_CONCURRENCY", 8),
+		WSWatchStreamWindowKiB:    pkgconfig.GetEnvInt("WS_WATCH_STREAM_WINDOW_KIB", 1024),
 		MaxRequestBodyBytes:       pkgconfig.GetEnvInt("MAX_REQUEST_BODY_BYTES", 4<<20),
 
 		StreamDrainSeconds: pkgconfig.GetEnvInt("STREAM_DRAIN_SECONDS", -1),

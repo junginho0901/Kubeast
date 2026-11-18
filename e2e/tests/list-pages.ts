@@ -3,20 +3,24 @@ import { expect, type Locator, type Page } from '@playwright/test'
 // Reading a list that has the ListPager footer (components/ListPager.tsx) across its pages. The list pages page as
 // many rows as fit the screen (or the footer's fixed choice), so a row a test made is not always on the first page.
 
-// how long a footer may take to come: the chromium project sets no action timeout. expect.poll (Playwright 1.59) calls
-// its reader outside a try, so a reader that throws fails the poll at once: a footer that has not counted yet answers NaN
+// how long a footer may take to come: the chromium project sets no action timeout
 const WAIT = 15_000
 
-// The range and the total the footer says: "Showing 1-12 of 523" / "523개 중 1-12 표시".
-export async function pagerRange(page: Page, pagerId: string): Promise<{ start: number; end: number; total: number }> {
+// The range and the total the footer says: "Showing 1-12 of 523" / "523개 중 1-12 표시". A footer that has not counted
+// yet ("Showing - of -", the Pods list while its first read comes) throws, unless `uncounted: 'nan'`: expect.poll
+// (Playwright 1.59) calls its reader outside a try, so a poll's reader takes NaN there and the poll asks again, while
+// any other caller would compare NaN as a number (`toBe(NaN)` passes by Object.is, `NaN < x` is false).
+export async function pagerRange(page: Page, pagerId: string, { uncounted = 'throw' }: { uncounted?: 'throw' | 'nan' } = {}): Promise<{ start: number; end: number; total: number }> {
   const text = (await page.getByTestId(pagerId).innerText({ timeout: WAIT })).replace(/\s+/g, ' ')
   const en = /Showing (\d+)-(\d+) of (\d+)/.exec(text)
   if (en) return { start: Number(en[1]), end: Number(en[2]), total: Number(en[3]) }
   const ko = /(\d+)개 중 (\d+)-(\d+) 표시/.exec(text)
   if (ko) return { start: Number(ko[2]), end: Number(ko[3]), total: Number(ko[1]) }
   if (/Showing 0 of 0|0개 중 0 표시/.test(text)) return { start: 0, end: 0, total: 0 }
-  // not counted yet ("Showing - of -" while the first read comes): no number, so a poll asks again
-  if (/Showing - of -|-개 중 - 표시/.test(text)) return { start: NaN, end: NaN, total: NaN }
+  if (/Showing - of -|-개 중 - 표시/.test(text)) {
+    if (uncounted === 'nan') return { start: NaN, end: NaN, total: NaN }
+    throw new Error(`${pagerId}: not counted yet ("${text}")`)
+  }
   throw new Error(`${pagerId}: no range in "${text}"`)
 }
 
@@ -88,3 +92,72 @@ export async function pageScroll(page: Page): Promise<number> {
 }
 
 export const pageScrolls = pageScroll
+
+// The footer's buttons and fields the floating AI chat button (fixed, bottom-right) lies over, by their text: none
+// when the list's footer keeps its page buttons clear of it, or when no button shows (AI off, the chat open).
+export async function underChatButton(page: Page, pagerId: string): Promise<string[]> {
+  return page.evaluate((id) => {
+    const chat = document.querySelector('[data-testid="floating-chat-toggle"]')
+    const pager = document.querySelector(`[data-testid="${id}"]`)
+    if (!chat || !pager || chat.getAttribute('aria-hidden') === 'true') return []
+    const c = chat.getBoundingClientRect()
+    return [...pager.querySelectorAll<HTMLElement>('button, select, input')]
+      .filter((el) => {
+        const b = el.getBoundingClientRect()
+        return b.width > 0 && b.left < c.right && b.right > c.left && b.top < c.bottom && b.bottom > c.top
+      })
+      .map((el) => el.innerText?.trim() || el.tagName)
+  }, pagerId)
+}
+
+// What of the element `testId` the floating AI chat button lies over: its buttons, links and fields by their text, and
+// each run of its letters drawn under the button — counting only what shows: an element with a box (list-guard's
+// rule) that the browser draws (checkVisibility: not inside a closed <details>, not visibility: hidden or opacity 0),
+// inside every box around it that clips (a list scrolled in its box). None when no button shows (AI off, the chat open).
+export async function coveredByChatButton(page: Page, testId: string): Promise<string[]> {
+  return page.evaluate((id) => {
+    const chat = document.querySelector('[data-testid="floating-chat-toggle"]')
+    const root = document.querySelector(`[data-testid="${id}"]`)
+    if (!chat || !root || chat.getAttribute('aria-hidden') === 'true') return []
+    const c = chat.getBoundingClientRect()
+    const shown = (el: Element | null) => {
+      let r = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
+      for (let p = el; p; p = p.parentElement) {
+        const s = getComputedStyle(p)
+        if (s.overflowX === 'visible' && s.overflowY === 'visible') continue
+        const b = p.getBoundingClientRect()
+        r = { left: Math.max(r.left, b.left), top: Math.max(r.top, b.top), right: Math.min(r.right, b.right), bottom: Math.min(r.bottom, b.bottom) }
+      }
+      return r
+    }
+    const under = (b: DOMRect, clip: { left: number; top: number; right: number; bottom: number }) =>
+      b.width > 0 && Math.max(b.left, clip.left, c.left) < Math.min(b.right, clip.right, c.right) && Math.max(b.top, clip.top, c.top) < Math.min(b.bottom, clip.bottom, c.bottom)
+    const drawn = (el: Element | null) =>
+      !!el && el.getClientRects().length > 0 && el.checkVisibility({ visibilityProperty: true, opacityProperty: true })
+    const out: string[] = []
+    for (const el of root.querySelectorAll<HTMLElement>('button, a, select, input, textarea')) {
+      if (drawn(el) && under(el.getBoundingClientRect(), shown(el.parentElement))) out.push(el.innerText?.trim() || el.tagName)
+    }
+    const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+    for (let n = walk.nextNode() as Text | null; n; n = walk.nextNode() as Text | null) {
+      if (!drawn(n.parentElement)) continue
+      const clip = shown(n.parentElement)
+      let run = ''
+      for (let i = 0; i <= n.data.length; i++) {
+        let hit = false
+        if (i < n.data.length) {
+          const letter = document.createRange()
+          letter.setStart(n, i)
+          letter.setEnd(n, i + 1)
+          hit = under(letter.getBoundingClientRect(), clip)
+        }
+        if (hit) run += n.data[i]
+        else {
+          if (run.trim()) out.push(run.trim())
+          run = ''
+        }
+      }
+    }
+    return out
+  }, testId)
+}

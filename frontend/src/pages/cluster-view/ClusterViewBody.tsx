@@ -13,7 +13,7 @@ import { PodNodeGrid } from './PodNodeGrid'
 import { PodContextMenu } from './PodContextMenu'
 import { PodDetailModal } from './PodDetailModal'
 import { PodDeleteModal } from './PodDeleteModal'
-import { podToDetail } from './types'
+import { openPodWindow, podReadState, usePodDetailRead } from './podDetailRead'
 
 // ClusterView 본체 — ClusterViewProvider 안에서만 mount. 모든 hook 을 순서대로
 // 호출하고 sub-component 들 render. 모든 hook 은 early-return 보다 먼저 호출.
@@ -27,7 +27,8 @@ export function ClusterViewBody() {
     showManifest, showDescribe,
     podContextMenu,
     deleteTargetPod, deleteForce, setDeleteForce, deleteError, isDeletingPod,
-    setSelectedPod, setExecContainer,
+    setSelectedPod, setExecContainer, setSelectedContainer, setContainerSearchQuery,
+    activeTab, selectedContainer, execContainer,
     selectTab,
     closeContextMenu, openDeleteModal, closeDeleteModal,
   } = useClusterView()
@@ -45,7 +46,9 @@ export function ClusterViewBody() {
 
   // Data queries
   const { namespaces, summary, nodes, isLoading } = useClusterPodsQuery({ selectedNamespace, search })
-  const { manifest, describeData, describeError } = usePodDetailQueries({ selectedPod, showManifest, showDescribe })
+  const { manifest, describeData, describeError, podRead } = usePodDetailQueries({ selectedPod, showManifest, showDescribe })
+  // a window opened from a box's row reads the pod before it shows its containers
+  usePodDetailRead({ selectedPod, read: podRead, choice: { activeTab, selectedContainer, execContainer }, setSelectedPod, setSelectedContainer, setExecContainer })
 
   // AI floating widget snapshot
   useClusterAIContext({ nodes, summary, selectedNamespace, search })
@@ -83,16 +86,11 @@ export function ClusterViewBody() {
         menu={podContextMenu}
         isAdmin={isAdmin}
         onClose={closeContextMenu}
-        onExec={(pod) => {
-          const detail = podToDetail(pod)
-          setSelectedPod(detail)
-          setExecContainer(detail.containers?.[0]?.name || '')
-          selectTab('exec')
-        }}
+        onExec={(pod) => openPodWindow(pod, 'exec', { setSelectedPod, setSelectedContainer, setContainerSearchQuery, setExecContainer, selectTab })}
         onDelete={openDeleteModal}
       />
 
-      <PodDetailModal isAdmin={isAdmin} manifest={manifest} describeData={describeData} describeError={describeError} />
+      <PodDetailModal isAdmin={isAdmin} manifest={manifest} describeData={describeData} describeError={describeError} podRead={podReadState(selectedPod, podRead)} />
 
       <PodDeleteModal
         pod={deleteTargetPod}

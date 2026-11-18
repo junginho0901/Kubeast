@@ -11,9 +11,10 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
-// fakeKubectl scripts kubectlExec for one test and records every argv.
+// fakeKubectl scripts kubectlExec for one test and records every argv, run as no one (kubectlAsNoOne).
 func fakeKubectl(t *testing.T, respond func(args []string) (string, error)) *[][]string {
 	t.Helper()
+	kubectlAsNoOne(t)
 	orig := kubectlExec
 	var calls [][]string
 	kubectlExec = func(_ context.Context, args []string, _ *string) ([]byte, error) {

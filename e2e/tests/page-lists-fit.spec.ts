@@ -1,11 +1,12 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
-import { pageScroll, pagerRange, readEveryPage } from './list-pages'
+import { coveredByChatButton, pageScroll, pagerRange, readEveryPage, underChatButton } from './list-pages'
 
 // The lists of Change History, a Helm release's History and Resources tabs and Monitoring's two tabs are a page at a
 // time in a box sized to the screen (1440×900, the project's viewport): the page itself does not scroll, the footer
-// is on screen, the rows drawn are the range it says, and reading every page gives every item once — compared with
-// what the API answers. The Alerts inbox's first page, whose rows wrap to different heights, holds the rows that end
-// inside its table and no fewer, at one row count from the first frame with rows.
+// is on screen with none of its buttons under the floating chat button, the rows drawn are the range it says, and
+// reading every page gives every item once — compared with what the API answers. The Alerts inbox's first page, whose
+// rows wrap to different heights, holds the rows that end inside its table and no fewer, at one row count from the
+// first frame with rows.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -16,18 +17,20 @@ async function headers(request: APIRequestContext) {
   return { Authorization: `Bearer ${(await res.json()).access_token}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 
-// the page does not scroll, the footer's bottom is inside the window, and the rows on screen are the footer's range
+// the page does not scroll, the footer's bottom is inside the window, the rows on screen are the footer's range and
+// the floating chat button lies over none of the footer's buttons
 async function fits(page: Page, pagerId: string, rows: string) {
   await expect.poll(async () => {
-    const range = await pagerRange(page, pagerId)
+    const range = await pagerRange(page, pagerId, { uncounted: 'nan' })
     const box = await page.getByTestId(pagerId).boundingBox()
     const height = await page.evaluate(() => window.innerHeight)
     return {
       scroll: (await pageScroll(page)) <= 1,
       footerOnScreen: !!box && box.y + box.height <= height,
       rows: (await page.locator(rows).count()) === (range.total === 0 ? 0 : range.end - range.start + 1),
+      underChat: await underChatButton(page, pagerId),
     }
-  }, { timeout: 20_000, message: `${pagerId}: the list and its footer fit the screen` }).toEqual({ scroll: true, footerOnScreen: true, rows: true })
+  }, { timeout: 20_000, message: `${pagerId}: the list and its footer fit the screen` }).toEqual({ scroll: true, footerOnScreen: true, rows: true, underChat: [] })
 }
 
 test.describe('Lists sized to the screen', () => {
@@ -73,19 +76,20 @@ test.describe('Lists sized to the screen', () => {
     await page.getByTestId('monitoring-namespace').click()
     await page.getByTestId('monitoring-namespace-opt-kube-system').click()
     await fits(page, 'monitoring-pod-pager', '[data-testid="monitoring-pod-row"]')
-    // Fit measures each row (useAdaptiveRowsPerPage rowsThatFit: a long pod name wraps to two lines), so with a next page
-    // the room left in the box under the last row would not hold one more at the height of the tallest drawn
-    const range = await pagerRange(page, 'monitoring-pod-pager')
-    if (range.end < range.total) {
-      const { left, tallest } = await page.locator('[data-testid="monitoring-pod-row"]').evaluateAll((rows) => {
-        const box = (rows[0] as HTMLElement).closest('table')!.parentElement!
-        const bottom = box.getBoundingClientRect().top + box.clientHeight
-        return { left: bottom - rows[rows.length - 1].getBoundingClientRect().bottom, tallest: Math.max(...rows.map((r) => r.getBoundingClientRect().height)) }
-      })
-      expect(left, 'room left under the last row of a fitted page').toBeLessThan(tallest + 1)
-    }
     const [picker, search] = await Promise.all([page.getByTestId('monitoring-namespace').boundingBox(), page.getByTestId('monitoring-pod-search').boundingBox()])
     expect({ top: picker?.y, height: picker?.height }, 'one row, one height').toEqual({ top: search?.y, height: search?.height })
+    // Fit measures each row (useAdaptiveRowsPerPage rowsThatFit: a long pod name wraps to two lines), so with a next page
+    // the rows end inside the box and the room left under the last one would not hold one more at the height of the
+    // tallest drawn
+    const range = await pagerRange(page, 'monitoring-pod-pager')
+    test.skip(range.end >= range.total, `kube-system on cluster default fits one page (${range.total} pods): no next page whose fit to read`)
+    const { left, tallest } = await page.locator('[data-testid="monitoring-pod-row"]').evaluateAll((rows) => {
+      const box = (rows[0] as HTMLElement).closest('table')!.parentElement!
+      const bottom = box.getBoundingClientRect().top + box.clientHeight
+      return { left: bottom - rows[rows.length - 1].getBoundingClientRect().bottom, tallest: Math.max(...rows.map((r) => r.getBoundingClientRect().height)) }
+    })
+    expect(left, 'the last row of a fitted page ends inside its box').toBeGreaterThanOrEqual(-0.5)
+    expect(left, 'room left under the last row of a fitted page').toBeLessThan(tallest + 1)
   })
 
   test('Alerts: with Fit the first page holds the rows that end inside the table, each as tall as its text', async ({ page }) => {
@@ -141,5 +145,42 @@ test.describe('Lists sized to the screen', () => {
     expect({ start: range.start, end: range.end }, 'the footer\'s range is the rows drawn').toEqual({ start: 1, end: geometry.bottoms.length })
     const frames = await page.evaluate(() => (window as unknown as { __rows: number[] }).__rows)
     expect([...new Set(frames)], 'row counts painted from the first frame with rows').toEqual([geometry.bottoms.length])
+  })
+
+  // The detail drawer open on a screen 1348 px wide or more moves the floating chat button to the drawer's left, over
+  // the footer's rows-per-page choice and range rather than its page buttons: none of the footer's buttons or fields
+  // is under it there either.
+  test('Namespaces with the detail drawer open: no footer button or field under the floating chat button', async ({ page }) => {
+    for (const width of [1348, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 })
+      await page.goto('/cluster/namespaces?cluster=self&detail=Namespace/kube-system')
+      await expect(page.locator('div[class*="fixed"][class*="inset-y-0"][class*="right-0"]').last()).toContainText('kube-system', { timeout: 20_000 })
+      await expect(page.getByTestId('list-pager'), `${width}: the footer says what it shows`).toContainText(/Showing \d+-\d+ of \d+/, { timeout: 20_000 })
+      const chat = page.getByTestId('floating-chat-toggle')
+      // the button left of the drawer (right-[756px]) once its move has ended
+      await expect.poll(async () => {
+        const b = await chat.boundingBox()
+        return b ? Math.round(width - b.x - b.width) : null
+      }, { timeout: 5_000, message: `${width}: the button left of the drawer` }).toBe(756)
+      expect(await underChatButton(page, 'list-pager'), `${width}×900`).toEqual([])
+    }
+  })
+
+  // Advanced Search's results end the page with page buttons of their own, which sat under the floating chat button
+  // on a screen narrower than the page's 1 200 px: they keep the list footer's room from it.
+  test('Advanced Search: no page button under the floating chat button at 1280×800, 1440×900 and 1920×1080', async ({ page }) => {
+    const chat = page.getByTestId('floating-chat-toggle')
+    for (const size of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }, { width: 1920, height: 1080 }]) {
+      const at = `${size.width}×${size.height}`
+      await page.setViewportSize(size)
+      await page.goto('/cluster/search?cluster=self')
+      const editor = page.locator('.monaco-editor').first()
+      await expect(editor, `${at}: the expression box`).toBeVisible({ timeout: 20_000 })
+      await editor.click()
+      await page.keyboard.type('true')
+      await expect(page.getByTestId('search-page-info'), `${at}: the results' footer`).toHaveText(/^Showing 1-\d+ of \d+/, { timeout: 30_000 })
+      await expect(chat, `${at}: the chat button shows`).toHaveAttribute('aria-hidden', 'false')
+      expect(await coveredByChatButton(page, 'search-pager'), `Advanced Search footer at ${at}`).toEqual([])
+    }
   })
 })

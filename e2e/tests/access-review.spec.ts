@@ -74,7 +74,7 @@ test.describe('Access review', () => {
       data: { name: 'E2E review exec', email: `e2e-review-exec-${stamp}@example.com`, password: PW, role_id: await roleId(request, admin, 'Member') },
     })
     expect(holder.status(), await holder.text()).toBe(201)
-    const holderId = (await holder.json()).id
+    const holderId = madeUser((await holder.json()).id, bearer(admin))
     try {
       const grant = await request.put(`/api/v1/auth/admin/users/${holderId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: name } })
       expect(grant.ok(), await grant.text()).toBeTruthy()
@@ -285,4 +285,15 @@ test.describe('Access review', () => {
     await expect(page.getByTestId('access-review-history-pager')).toContainText(/Showing \d+-\d+ of \d+|Showing 0 of 0/)
     expect(await pageScrolls(page), 'Past reviews: the page does not scroll').toBeLessThanOrEqual(1)
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

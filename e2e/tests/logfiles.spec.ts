@@ -123,7 +123,7 @@ test.describe('Log files view', () => {
         data: { name: 'E2E log files', email, password: PASSWORD, role_id: member!.id },
       })
       expect(created.status(), await created.text()).toBe(201)
-      userId = (await created.json()).id as string
+      userId = madeUser((await created.json()).id as string, admin)
       const grant = async (role: string) => {
         const res = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: admin, data: { role } })
         expect(res.ok(), `grant ${role}: ${await res.text()}`).toBeTruthy()
@@ -250,4 +250,15 @@ test.describe('Log files view', () => {
     await expect(output).toContainText('resource.node.shell')
     await expect(output).not.toContainText('forbidden:')
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

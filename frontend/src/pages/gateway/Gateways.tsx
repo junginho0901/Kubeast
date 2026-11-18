@@ -21,7 +21,7 @@ import { applyGatewayWatchEvent } from './gateways/gatewayWatchNormalize'
 import { GatewayFilters } from './gateways/GatewayFilters'
 import { GatewayTable } from './gateways/GatewayTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -195,13 +195,10 @@ export default function Gateways() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllGateways(true)
-      : await api.getGateways(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['gateway', 'gateways', selectedNamespace] })
-    queryClient.setQueryData(['gateway', 'gateways', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['gateway', 'gateways', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllGateways(true)
+      : api.getGateways(selectedNamespace, true)))
 
   const createGatewayYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

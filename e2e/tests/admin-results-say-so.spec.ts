@@ -31,7 +31,7 @@ test.describe('an admin press says what it made or took away', () => {
       await dialog.locator('button[type="submit"]').click()
       const res = await answer
       expect(res.status()).toBe(201)
-      id = (await res.json()).id
+      id = madeUser((await res.json()).id, XRW)
       await expect(dialog).toHaveCount(0)
       const line = page.getByTestId('yaml-created')
       await expect(line).toContainText(created(`User/${name} (${email})`))
@@ -117,4 +117,15 @@ test.describe('an admin press says what it made or took away', () => {
     await expect(page.getByTestId('api-key-days-problem')).toHaveCount(0)
     await page.getByTestId('api-key-modal').getByRole('button', { name: 'Cancel', exact: true }).click()
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

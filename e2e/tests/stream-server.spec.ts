@@ -37,7 +37,9 @@ const drainSeconds = (): number => {
   return Number(env.find((e) => e.name === 'STREAM_DRAIN_SECONDS')?.value ?? '60')
 }
 
-const serverLog = (deploy: string, since: string) => kubectl(`-n ${KUBEAST_NS} logs deploy/${deploy} --all-containers --since-time=${since}`)
+// Every pod of the server (the chart's app label: k8s-service may run more than one); with a label kubectl prints only
+// the last 10 lines of each unless --tail says otherwise.
+const serverLog = (app: string, since: string) => kubectl(`-n ${KUBEAST_NS} logs -l app=${app} --all-containers --prefix --tail=-1 --since-time=${since}`)
 
 type Row = { Action: string; TargetID: string; After: Record<string, unknown> | null }
 
