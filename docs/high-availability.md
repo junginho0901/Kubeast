@@ -43,7 +43,7 @@ The chart refuses `replicas.k8sService` or `replicas.toolServer` above 1 with `r
 
 The chart's postgres sets `max_connections` to `postgresql.maxConnections` (300), and an install stops when the pods could hold more: each pool times the pods while a rollout runs (one more than the count, each Deployment's `maxSurge` being 1, and autoscaling's `maxReplicas` where it is on), plus 4 for the migrations and 10 kept for psql and PostgreSQL's superuser slots (`templates/checks/db-connections.yaml`).
 An external database has its own limit, which the chart cannot read: NOTES prints the same sum to compare with it. When the Kubeast user is not a superuser, 3 of its connections are kept for superusers by default.
-For example, one pod of each service can hold up to 154 connections with a rollout's extra pod counted, and three pods of each 286.
+For example, one pod of each service can hold up to 154 connections with a rollout's extra pod counted, and three pods of each 286; `streams.enabled` adds k8s-service's pool for the stream server and its rollout's extra pod (20 by default), 306 with three pods of each, past the default 300.
 Raise `postgresql.maxConnections`, lower the pools or the pod counts, or use a database that takes more connections.
 
 ## Set the count
