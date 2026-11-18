@@ -81,6 +81,7 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - A cluster switch asks each read of the new cluster once, with none of the parameters of the cluster left: the Dashboard asked for its top resources twice, once leaving out what the cluster left had refused. After signing in, a screen waits until a cluster is chosen, where it read the server's default cluster first, and a cluster list that could not be read (a 503 while the database restarts, asked again as it says) keeps the cluster chosen before, where it cleared it.
 - Prometheus sections say when the cluster's Prometheus does not answer, and that no longer marks the whole cluster unreachable.
 - Secret files stay readable with `podSecurity.enabled: false`.
+- Teams says under the name field why Add did not add a team with no name, where it only moved the focus to the field, and the field has a label.
 - A values file copied from 0.7.6 or earlier stops on its release image tag instead of keeping that release's images.
 - A chat answer whose stream was cut is saved once, under its question.
 - AI Chat says under its title why it could not read the AI model, such as no model set up yet, where it showed only "Start a new chat": at once, in two lines at most with the whole reason on hover.
