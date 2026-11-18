@@ -1,4 +1,4 @@
-suite: deployments — replica guards for the single-process services
+suite: deployments — replicas, the database CA and the ai-service image
 # deployments.yaml includes configmap.yaml and secret.yaml for its checksum
 # annotation, so they must be rendered alongside; every assertion targets
 # deployments.yaml.
@@ -20,20 +20,18 @@ tests:
           value: 1
         template: deployments.yaml
 
-  - it: refuses replicas.k8sService above 1 (drain progress and client caches are in process memory)
+  # replicas.k8sService and replicas.toolServer above 1 need Redis: templates/checks/replicas.yaml, replicas_test.yaml
+  - it: renders replicas.k8sService and replicas.toolServer above 1
     set:
       replicas.k8sService: 2
-    asserts:
-      - failedTemplate:
-          errorPattern: replicas.k8sService must be 1
-        template: deployments.yaml
-
-  - it: refuses replicas.toolServer above 1 (per-process kubeconfig cache)
-    set:
       replicas.toolServer: 3
+    documentSelector:
+      path: metadata.name
+      value: tool-server
     asserts:
-      - failedTemplate:
-          errorPattern: replicas.toolServer must be 1
+      - equal:
+          path: spec.replicas
+          value: 3
         template: deployments.yaml
 
   - it: still lets stateless services scale
@@ -83,6 +81,58 @@ tests:
               secretName: rds-ca
         template: deployments.yaml
 
+  - it: gives k8s-service the live lists' opening places, 8 by default
+    documentSelector:
+      path: metadata.name
+      value: k8s-service
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WS_WATCH_OPENING_CONCURRENCY
+            value: "8"
+        template: deployments.yaml
+
+  - it: gives k8s-service the opening places multicluster.wsWatchOpeningConcurrency sets
+    set:
+      multicluster.wsWatchOpeningConcurrency: 4
+    documentSelector:
+      path: metadata.name
+      value: k8s-service
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WS_WATCH_OPENING_CONCURRENCY
+            value: "4"
+        template: deployments.yaml
+
+  - it: gives k8s-service the live lists' stream window, 1024 KiB by default
+    documentSelector:
+      path: metadata.name
+      value: k8s-service
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WS_WATCH_STREAM_WINDOW_KIB
+            value: "1024"
+        template: deployments.yaml
+
+  - it: gives k8s-service the stream window multicluster.wsWatchStreamWindowKiB sets
+    set:
+      multicluster.wsWatchStreamWindowKiB: 2048
+    documentSelector:
+      path: metadata.name
+      value: k8s-service
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WS_WATCH_STREAM_WINDOW_KIB
+            value: "2048"
+        template: deployments.yaml
+
   - it: keeps the CA out of pods that do not talk to the database
     set:
       postgresql.sslRootCert.secretName: rds-ca
@@ -118,6 +168,135 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].image
           value: ghcr.io/junginho0901/kubeast-ai-service:v1.2.3-claude-code
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: keeps ai-service at its own memory limit while the Claude subscription provider is off
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 1Gi
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.memory
+          value: 256Mi
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: gives ai-service the Claude subscription's memory limit when the provider is on
+    set:
+      ai.providers.claudeCode.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 2Gi
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.memory
+          value: 256Mi
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: keeps a larger ai-service memory limit when the provider is on
+    set:
+      ai.providers.claudeCode.enabled: true
+      resources.aiService.limits.memory: 3Gi
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 3Gi
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: compares the limits as quantities, not as text
+    set:
+      ai.providers.claudeCode.enabled: true
+      resources.aiService.limits.memory: 2500M
+      ai.providers.claudeCode.memoryLimit: 2Gi
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 2500M
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: raises a limit written in decimal units below the provider's
+    set:
+      ai.providers.claudeCode.enabled: true
+      resources.aiService.limits.memory: 1500M
+      ai.providers.claudeCode.memoryLimit: 1.5Gi
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 1.5Gi
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: follows a raised memoryLimit for more Claude Code runs
+    set:
+      ai.providers.claudeCode.enabled: true
+      ai.providers.claudeCode.maxConcurrent: 4
+      ai.providers.claudeCode.memoryLimit: 3Gi
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 3Gi
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: leaves the limit as set when memoryLimit is cleared
+    set:
+      ai.providers.claudeCode.enabled: true
+      ai.providers.claudeCode.memoryLimit: ""
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 1Gi
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: adds no limit to an ai-service that has none
+    set:
+      ai.providers.claudeCode.enabled: true
+      resources.aiService.limits: null
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].resources.limits.memory
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: takes 2Gi for values from before memoryLimit existed
+    set:
+      ai.providers.claudeCode.enabled: true
+      ai.providers.claudeCode.memoryLimit: null
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 2Gi
         template: deployments.yaml
         documentSelector:
           path: metadata.name

@@ -58,7 +58,7 @@ func (r *Repository) DeleteOrganization(ctx context.Context, id int) (name strin
 		return "", 0, err
 	}
 	if orgType == "team" {
-		tag, err := tx.Exec(ctx, `UPDATE auth_users SET team = NULL, updated_at = $1 WHERE team = $2`, time.Now(), name)
+		tag, err := tx.Exec(ctx, `UPDATE auth_users SET team = NULL, updated_at = $1 WHERE team = $2`, time.Now().UTC(), name)
 		if err != nil {
 			return "", 0, err
 		}

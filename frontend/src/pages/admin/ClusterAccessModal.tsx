@@ -11,6 +11,7 @@ import { api } from '@/services/api'
 import type { ClusterMeta } from '@/services/api/clusters'
 import { formatTime } from '@/utils/time'
 import { refusalText } from './clusterAccessRefusal'
+import { sameGroupRefusal } from '@/utils/roleGroup'
 import { grantsMatching } from './clusterAccessView'
 
 // Per-cluster access management (the inverse of the user-detail ClusterRoleMatrix):
@@ -55,16 +56,26 @@ export default function ClusterAccessModal({
   const [refusal, setRefusal] = useState<string | null>(null)
 
   const grantRoles = useMemo(() => roles.filter((r) => !ACCOUNT_LEVEL_ROLES.has(r.name)), [roles])
+  // a role stored with another role's name in other capitals is not given (auth-service role_same_group): the list says so
+  const sameGroupHint = (r: { same_group_as?: string }) =>
+    r.same_group_as ? tr('adminRoles.sameGroupHint', 'not grantable: same name as {{role}} apart from letter case or spaces', { role: r.same_group_as }) : undefined
   const invalidate = () => queryClient.invalidateQueries({ queryKey: grantsKey })
   const [search, setSearch] = useState('')
   const matching = useMemo(() => grantsMatching(grants, search), [grants, search])
 
+  // a role sharing another role's group is refused with role_same_group: said in the viewer's language
+  const grantRefusal = (err: unknown) => {
+    const shared = sameGroupRefusal(err)
+    return shared
+      ? tr('adminRoles.sameGroupRefused', 'Role "{{role}}" is not given on a cluster: its name differs from role "{{other}}" only in letter case, spaces or punctuation. Rename it in Role Management first.', shared)
+      : refusalText(err)
+  }
   const setMutation = useMutation({
     mutationFn: ({ userId, role, namespaces }: { userId: string; role: string; namespaces?: string[] }) =>
       api.setUserClusterRole(userId, cluster.id, role, namespaces ?? grants.find((g) => g.user_id === userId)?.namespaces),
     onMutate: () => setRefusal(null),
     onSuccess: invalidate,
-    onError: (err) => setRefusal(refusalText(err)),
+    onError: (err) => setRefusal(grantRefusal(err)),
   })
   const removeMutation = useMutation({
     mutationFn: (userId: string) => api.removeUserClusterRole(userId, cluster.id),
@@ -113,7 +124,7 @@ export default function ClusterAccessModal({
               </p>
             </div>
           </div>
-          <button type="button" onClick={() => pending || onClose()} className="text-slate-400 hover:text-ink">
+          <button type="button" onClick={() => pending || onClose()} className="text-slate-400 hover:text-ink" aria-label={tr('common.close', 'Close')}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -189,6 +200,8 @@ export default function ClusterAccessModal({
                       value: r.name,
                       label: r.name,
                       testId: `cluster-access-role-${g.user_id}-opt-${r.name}`,
+                      disabled: !!r.same_group_as,
+                      listHint: sameGroupHint(r),
                     }))}
                   />
                   <button
@@ -263,6 +276,8 @@ export default function ClusterAccessModal({
               value: r.name,
               label: r.name,
               testId: `cluster-access-add-role-opt-${r.name}`,
+              disabled: !!r.same_group_as,
+              listHint: sameGroupHint(r),
             }))}
           />
           <button

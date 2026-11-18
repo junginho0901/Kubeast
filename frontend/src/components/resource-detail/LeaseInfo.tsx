@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import { everyUntilRefused, retryUnlessRefused } from '@/services/queryDefaults'
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, EventsSection, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { leaseHolderState } from './clusterDetail'
@@ -23,8 +24,8 @@ export default function LeaseInfo({ name, namespace }: Props) {
     queryKey: ['lease-describe', namespace, name],
     queryFn: () => api.describeLease(namespace, name),
     staleTime: 5_000,
-    refetchInterval: 5_000,
-    retry: 1,
+    refetchInterval: everyUntilRefused(5_000),
+    retry: retryUnlessRefused(1),
   })
   const [nowMs, setNowMs] = useState(() => Date.now())
   useEffect(() => {

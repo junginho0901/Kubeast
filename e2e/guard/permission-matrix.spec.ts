@@ -844,12 +844,12 @@ async function walk(browser: Browser, request: APIRequestContext, role: Role, ce
         await page.goto(`/account?cluster=${on.cluster}&detail=${encodeURIComponent(target.ref)}${target.api ? `&detailApi=${encodeURIComponent(target.api)}` : ''}`)
         const drawer = page.locator(DRAWER).last()
         await expect(drawer).toBeVisible({ timeout: 20_000 })
-        const refusals = [tr('nodes.detail.error'), tr('namespaces.detail.error')]
         const end = Date.now() + 20_000
         let refusedAt = 0
         for (;;) {
           const text = await drawer.innerText()
-          if ((await drawer.getByTestId('detail-unreadable').count()) > 0 || refusals.some((x) => text.includes(x))) break
+          // a refusal reads as the object's own notice (ObjectUnreadable) or as a describe that failed (DescribeFailure)
+          if ((await drawer.getByTestId('detail-unreadable').count()) > 0 || (await drawer.getByTestId('describe-failed').count()) > 0) break
           if (statuses.some((x) => x >= 200 && x < 300) && !(target.loading && text.includes(target.loading))) break
           // refused twice (the retry) and nothing said so: wait a moment for a notice, then read what is there
           if (statuses.filter((x) => x >= 400).length >= 2) {
@@ -860,11 +860,10 @@ async function walk(browser: Browser, request: APIRequestContext, role: Role, ce
           await page.waitForTimeout(100)
         }
         await quiet(page, t)
-        const text = await drawer.innerText()
         const unreadable = await drawer.getByTestId('detail-unreadable').count() > 0 ? await drawer.getByTestId('detail-unreadable').innerText() : ''
         let kubeast = 'timeout'
         if (unreadable) kubeast = unreadable.includes(tr('common.objectForbidden')) ? 'forbidden' : unreadable.includes(tr('common.objectNotFound')) ? 'notFound' : 'unreadable'
-        else if (refusals.some((x) => text.includes(x))) kubeast = 'error'
+        else if ((await drawer.getByTestId('describe-failed').count()) > 0) kubeast = 'error'
         else if (statuses.some((x) => x >= 200 && x < 300)) kubeast = 'shown'
         else if (statuses.some((x) => x >= 400)) kubeast = 'blank'
         const get = canI(who, 'get', d.resource, target.scope, target.name)

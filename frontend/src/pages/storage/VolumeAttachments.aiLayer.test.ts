@@ -61,3 +61,23 @@ describe('VolumeAttachments floating chat layer', () => {
     expect(layer.data?.problematic_items ?? []).toEqual([])
   })
 })
+
+// A failed Refresh leaves the list's query failed with its rows: the screen says so once, in the Refresh failure line
+// under the header, and the table's line about a list it could not read is for a list with no rows yet.
+describe('VolumeAttachments read failure', () => {
+  function failed(rows: unknown[] | undefined): string {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, retryOnMount: false, staleTime: Infinity } } })
+    if (rows) client.setQueryData(['storage', 'volumeattachments'], rows)
+    const query = client.getQueryCache().build(client, { queryKey: ['storage', 'volumeattachments'] })
+    query.setState({ ...query.state, status: 'error', error: new Error('k8s-service unreachable'), errorUpdatedAt: Date.now(), fetchStatus: 'idle' })
+    return renderToStaticMarkup(createElement(MemoryRouter, null, createElement(I18nextProvider, { i18n }, createElement(QueryClientProvider, { client }, createElement(VolumeAttachments)))))
+  }
+
+  it('is not said again above the rows of a list whose Refresh failed', () => {
+    expect(failed([healthy])).not.toContain('volumeattachments-read-failed')
+  })
+
+  it('is said for a list that could not be read at all', () => {
+    expect(failed(undefined)).toMatch(/data-testid="volumeattachments-read-failed">Could not read the list: k8s-service unreachable</)
+  })
+})

@@ -101,9 +101,7 @@ export type {
 // Re-export client helpers used by feature pages
 // (Dashboard / Monitoring etc.).
 export {
-  disableMetrics,
   isForbiddenError,
-  isMetricsDisabled,
   isMetricsNotServedText,
   isMetricsUnavailableError,
 } from './client'

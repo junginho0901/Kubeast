@@ -103,6 +103,9 @@ test.describe('Number check — a rollout past its progress deadline', () => {
     })
 
     k!(`patch deployment/stuck -n ${NS} --type=json -p='[{"op":"remove","path":"/spec/template/spec/nodeSelector"}]'`)
+    // The controller's first sync of the change observes it with the Pending pod still counted, so it keeps
+    // ProgressDeadlineExceeded, which kubectl rollout status reads as failed: wait for the condition the finished rollout sets.
+    k!(`wait deployment/stuck -n ${NS} --for=jsonpath='{.status.conditions[?(@.type=="Progressing")].reason}'=NewReplicaSetAvailable --timeout=120s`)
     k!(`rollout status deployment/stuck -n ${NS} --timeout=120s`)
 
     await expect(badge).toHaveAttribute('title', 'Available', { timeout: 20_000 })

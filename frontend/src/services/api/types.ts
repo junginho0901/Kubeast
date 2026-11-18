@@ -1728,6 +1728,26 @@ export interface PodNodeCount {
   error: number
 }
 
+/** A pod as a Cluster View node box draws it (k8s-service nodeBoxPod): the full row's fields of the same names, and the
+ * card colour the server gives it (podHealth, the page's getPodHealth). No containers: the pod's window reads the pod.
+ * The labels are for the menu's Delete, which asks for the name of a pod Helm manages (systemObject). */
+export interface NodeBoxPod {
+  name: string
+  namespace: string
+  node_name: string
+  pod_ip: string
+  status: string
+  phase: string
+  restart_count: number
+  created_at: string
+  labels: Record<string, string> | null
+  health: 'ok' | 'warn' | 'error'
+  health_reason: string
+}
+
+/** A box's rows: its read's NodeBoxPods, and the full rows its live watch sends in their place as they change. */
+export type NodeBoxRow = NodeBoxPod | PodInfo
+
 export interface PodNodeSummary {
   /** nodes with at least one pod the search matched, by name */
   nodes: PodNodeCount[]
@@ -2122,6 +2142,9 @@ export interface RoleWithDetails {
   updated_at: string
   // The chart binds this custom role's group: only a global admin or an Admin of the cluster gives it.
   chart_bound?: boolean
+  // Another role this custom role acts as on a cluster: its name, stored before such names were refused, differs only
+  // in letter case, spaces or punctuation (a built-in named first).
+  same_group_as?: string
 }
 
 export interface Member {
@@ -2412,3 +2435,15 @@ export interface SessionDetail {
   messages_before?: number
 }
 
+// GET /cluster/nodes/{name}/drain/status. Any server answers it from the database: `interrupted` is a drain whose
+// server stopped before it ended, `cordoned_nodes` the drain's nodes the cluster still has cordoned once it failed or
+// was interrupted ([] when none is, null when they could not be read).
+export interface DrainStatusAnswer {
+  id: string
+  node: string
+  status: string
+  message?: string | null
+  pods_total?: number | null
+  pods_done?: number | null
+  cordoned_nodes?: string[] | null
+}
