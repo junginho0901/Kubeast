@@ -93,11 +93,13 @@ const (
 )
 
 // Which limit a reasonLimit frame hit (limit_scope): closing a tab frees the tab's, not the server's; memory is the
-// server's room to open more (watchMemoryFull), which comes back by itself.
+// server's room to open more (watchMemoryFull), which comes back by itself; opening is a watch waiting for one of the
+// opening places (takeOpening), which starts by itself when its turn comes.
 const (
-	limitScopeTab    = "tab"
-	limitScopeServer = "server"
-	limitScopeMemory = "memory"
+	limitScopeTab     = "tab"
+	limitScopeServer  = "server"
+	limitScopeMemory  = "memory"
+	limitScopeOpening = "opening"
 )
 
 func (r RequestMessage) errorFrame(message, reason string) ResponseMessage {
@@ -404,7 +406,7 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			case <-ctx.Done():
 				if code := auth.SessionEndCode(ctx); code != "" {
 					slog.Info("ws closed: session ended", "id", wsID, "user", payload.UserID, "reason", code)
-					_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(auth.SessionEndedCloseCode, code), time.Now().Add(writeWait))
+					_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(auth.SessionEndCloseCode(code), code), time.Now().Add(writeWait))
 				} else if probe.IsLeaving(ctx) {
 					_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(probe.ShutdownCloseCode, probe.ShutdownReason), time.Now().Add(writeWait))
 				}
@@ -604,9 +606,10 @@ const openingWaitMessage = "k8s-service opens a few lists at a time to keep its 
 // takeOpening waits for one of the opening places for cluster id before the watch's start, so the objects are read
 // as soon as the API server sends them: an answered watch left unread fills the API server's buffer for it, which
 // closes the watch past a budget of up to 100 ms (k8s.io/apiserver v0.37.2 pkg/storage/cacher/cache_watcher.go:180-214,
-// time_budget.go:28). A wait past startNoticeAfter is told to the client as the memory limit (limit_scope memory),
-// which is what the places are for, and its list is read again once the watch is on. lent says the queue lent the
-// place (openingQueue); startOpening gives the place its clock once the watch's start place is taken.
+// time_budget.go:28). A wait past startNoticeAfter is told to the client as a wait for its turn (limit_scope opening),
+// not as the memory limit, which only watchMemoryFull tells, and its list is read again once the watch is on. lent
+// says the queue lent the place (openingQueue); startOpening gives the place its clock once the watch's start place is
+// taken.
 func (m *Multiplexer) takeOpening(ctx context.Context, id string, req RequestMessage, sendCh chan<- *ResponseMessage) (place *held, lent, told, ok bool) {
 	p := m.openingPlaces().placesFor(id)
 	// The backstop of a place whose start place does not come; startOpening sets its clock.
@@ -627,7 +630,7 @@ func (m *Multiplexer) startOpening(place *held, lent bool, id string) {
 }
 
 func (m *Multiplexer) openingNotice(ctx context.Context, req RequestMessage, sendCh chan<- *ResponseMessage) func() {
-	return func() { send(ctx, sendCh, req.limitFrame(openingWaitMessage, limitScopeMemory)) }
+	return func() { send(ctx, sendCh, req.limitFrame(openingWaitMessage, limitScopeOpening)) }
 }
 
 // takeTurn waits for one of each of places, in that order and in a single place of each queue, calling notice once the

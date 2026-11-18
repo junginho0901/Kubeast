@@ -24,7 +24,7 @@ import { applyNetworkPolicyWatchEvent } from './networkpolicies/networkPolicyWat
 import { NetworkPolicyFilters } from './networkpolicies/NetworkPolicyFilters'
 import { NetworkPolicyTable } from './networkpolicies/NetworkPolicyTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -210,13 +210,10 @@ export default function NetworkPolicies() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllNetworkPolicies(true)
-      : await api.getNetworkPolicies(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['network', 'networkpolicies', selectedNamespace] })
-    queryClient.setQueryData(['network', 'networkpolicies', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['network', 'networkpolicies', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllNetworkPolicies(true)
+      : api.getNetworkPolicies(selectedNamespace, true)))
 
   const createNetworkPolicyYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

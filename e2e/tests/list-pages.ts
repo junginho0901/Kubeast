@@ -92,3 +92,20 @@ export async function pageScroll(page: Page): Promise<number> {
 }
 
 export const pageScrolls = pageScroll
+
+// The footer's buttons and fields the floating AI chat button (fixed, bottom-right) lies over, by their text: none
+// when the list's footer keeps its page buttons clear of it, or when no button shows (AI off, the chat open).
+export async function underChatButton(page: Page, pagerId: string): Promise<string[]> {
+  return page.evaluate((id) => {
+    const chat = document.querySelector('[data-testid="floating-chat-toggle"]')
+    const pager = document.querySelector(`[data-testid="${id}"]`)
+    if (!chat || !pager || chat.getAttribute('aria-hidden') === 'true') return []
+    const c = chat.getBoundingClientRect()
+    return [...pager.querySelectorAll<HTMLElement>('button, select, input')]
+      .filter((el) => {
+        const b = el.getBoundingClientRect()
+        return b.width > 0 && b.left < c.right && b.right > c.left && b.top < c.bottom && b.bottom > c.top
+      })
+      .map((el) => el.innerText?.trim() || el.tagName)
+  }, pagerId)
+}

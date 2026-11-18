@@ -9,7 +9,7 @@
 // jsdom 없이 node 환경에서 실행 — WebSocket 을 직접 mock 으로 교체.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { WebSocketMultiplexer } from './watchMultiplexer'
+import { STEADY_MS, WebSocketMultiplexer } from './watchMultiplexer'
 import { getWatchProblem, resetWatchProblems } from './watchProblemStore'
 
 // import.meta.env / window 는 vite 가 아니라 node 에서 실행되므로 직접 stub.
@@ -1205,6 +1205,52 @@ describe('WebSocketMultiplexer', () => {
       await vi.advanceTimersByTimeAsync(1000)
       await flush()
       expect(MockWebSocket.instances.length).toBe(2)
+    })
+
+    // 1013: the server could not check the session for a while, which ended nothing. The socket connects again with
+    // nothing asked and nobody signed out.
+    it('a socket closed because its session could not be checked connects again and asks nothing', async () => {
+      const fetchMe = vi.fn(async () => ({ status: 401 }))
+      vi.stubGlobal('fetch', fetchMe)
+      const mux = await freshMux()
+      const ws = await open(mux)
+
+      ws.simulateServerClose(1013)
+      await settle()
+      expect(fetchMe).not.toHaveBeenCalled()
+      expect((globalThis as any).window.location.assign).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1000)
+      await flush()
+      expect(MockWebSocket.instances.length).toBe(2)
+    })
+
+    // A socket the server closes as soon as it opens (a check that fails on every connection) is not opened again every
+    // second: the wait keeps growing until a socket has stayed open STEADY_MS.
+    it('a socket closed right after it opens waits longer each time, and the waits start over once one stays open', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => ({ status: 200 })))
+      const random = vi.spyOn(Math, 'random').mockReturnValue(0.9999)
+      const mux = await freshMux()
+      let ws = await open(mux)
+      const reopenAfter = async (wait: number) => {
+        ws.simulateServerClose(1013)
+        await settle()
+        const before = MockWebSocket.instances.length
+        await vi.advanceTimersByTimeAsync(wait - 50)
+        await flush()
+        expect(MockWebSocket.instances.length).toBe(before)
+        await vi.advanceTimersByTimeAsync(50)
+        await flush()
+        expect(MockWebSocket.instances.length).toBe(before + 1)
+        ws = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+        ws.simulateOpen()
+        await flush()
+      }
+      await reopenAfter(1000)
+      await reopenAfter(2000)
+      await reopenAfter(4000)
+      await vi.advanceTimersByTimeAsync(STEADY_MS)
+      await reopenAfter(1000)
+      random.mockRestore()
     })
   })
 })

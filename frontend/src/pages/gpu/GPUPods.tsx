@@ -21,6 +21,7 @@ import { GPUPodsFilters } from './gpupods/GPUPodsFilters'
 import { GPUPodsTable } from './gpupods/GPUPodsTable'
 import { GPUPodsCharts } from './gpupods/GPUPodsCharts'
 import { gpuPodCounts, gpuPodStatuses, gpuPodsByNode, gpuPodsNotRunning, gpuPodVendorCounts, podGpuUsage, vendorNames } from './gpuNumbers'
+import { everyUntilRefused, retryUnlessRefused } from '@/services/queryDefaults'
 
 export default function GPUPods() {
   const { t } = useTranslation()
@@ -39,8 +40,8 @@ export default function GPUPods() {
   const { data, isLoading, error, refetch } = useQuery<GPUDashboardData>({
     queryKey: limited ? ['gpu', 'dashboard', 'pods'] : ['gpu', 'dashboard'],
     queryFn: () => api.getGPUDashboard(limited),
-    refetchInterval: 30000,
-    retry: 2,
+    refetchInterval: everyUntilRefused(30000),
+    retry: retryUnlessRefused(2),
     retryDelay: 1000,
   })
 
@@ -48,8 +49,8 @@ export default function GPUPods() {
     queryKey: ['gpu', 'metrics'],
     queryFn: () => api.getGPUMetrics(),
     enabled: !limited,
-    refetchInterval: 15000,
-    retry: 1,
+    refetchInterval: everyUntilRefused(15000),
+    retry: retryUnlessRefused(1),
   })
 
   const metricsAvailable = metrics?.available ?? false

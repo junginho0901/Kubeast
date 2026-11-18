@@ -6,7 +6,7 @@ import { LIST_GATHER_MS, useKubeWatchList } from '@/services/useKubeWatchList'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { useKindServed } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -174,13 +174,10 @@ export function useBackendPoliciesData<T extends BackendPolicyLike>({
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await config.listAll(true)
-      : await config.list(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey })
-    queryClient.setQueryData(queryKey, data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, queryKey, () => selectedNamespace === 'all'
+      ? config.listAll(true)
+      : config.list(selectedNamespace, true)))
 
   return {
     namespaces,

@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Settings } from 'lucide-react'
 import CustomDropdown from '@/components/CustomDropdown'
+import { usePanelEscape } from '@/hooks/useDismiss'
 
 interface Props {
   maxItemsPerResource: number
@@ -19,7 +20,9 @@ export default function SearchSettings({
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const maxItemsRef = useRef<HTMLInputElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
   const [refetchDraft, setRefetchDraft] = useState(refetchIntervalMs)
+  usePanelEscape(open, buttonRef, setOpen)
 
   const save = () => {
     if (maxItemsRef.current) setMaxItemsPerResource(Math.min(10000, Math.max(1, parseInt(maxItemsRef.current.value) || 10000)))
@@ -30,6 +33,7 @@ export default function SearchSettings({
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm text-slate-300 transition-colors"
       >

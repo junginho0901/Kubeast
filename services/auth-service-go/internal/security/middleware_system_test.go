@@ -2,7 +2,7 @@ package security
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -92,7 +92,7 @@ func TestInvestigatorReadMiddleware(t *testing.T) {
 	}
 	lookup := func(_ context.Context, userID, _ string) (auth.SessionState, error) {
 		if userID != "u1" {
-			return auth.SessionState{}, errors.New("no such user")
+			return auth.SessionState{}, fmt.Errorf("%w: no such user", auth.ErrSubjectGone)
 		}
 		return auth.SessionState{Version: 3}, nil
 	}
@@ -140,7 +140,7 @@ func TestInvestigatorReadMiddleware_KeepsTheTokensLimits(t *testing.T) {
 		t.Fatal(err)
 	}
 	lookup := func(context.Context, string, string) (auth.SessionState, error) {
-		return auth.SessionState{}, errors.New("no such user")
+		return auth.SessionState{}, fmt.Errorf("%w: no such user", auth.ErrSubjectGone)
 	}
 	w, seen := serve(InvestigatorReadMiddleware(m, lookup, "kubeast.token", true), withBearer(tok))
 	if w.Code != http.StatusOK || seen == nil {
