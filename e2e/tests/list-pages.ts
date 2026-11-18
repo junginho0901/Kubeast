@@ -111,8 +111,9 @@ export async function underChatButton(page: Page, pagerId: string): Promise<stri
 }
 
 // What of the element `testId` the floating AI chat button lies over: its buttons, links and fields by their text, and
-// each run of its letters drawn under the button — counting only what shows, inside every box around it that clips
-// (a list scrolled in its box). None when no button shows (AI off, the chat open).
+// each run of its letters drawn under the button — counting only what shows: an element with a box (list-guard's
+// rule) that the browser draws (checkVisibility: not inside a closed <details>, not visibility: hidden or opacity 0),
+// inside every box around it that clips (a list scrolled in its box). None when no button shows (AI off, the chat open).
 export async function coveredByChatButton(page: Page, testId: string): Promise<string[]> {
   return page.evaluate((id) => {
     const chat = document.querySelector('[data-testid="floating-chat-toggle"]')
@@ -131,12 +132,15 @@ export async function coveredByChatButton(page: Page, testId: string): Promise<s
     }
     const under = (b: DOMRect, clip: { left: number; top: number; right: number; bottom: number }) =>
       b.width > 0 && Math.max(b.left, clip.left, c.left) < Math.min(b.right, clip.right, c.right) && Math.max(b.top, clip.top, c.top) < Math.min(b.bottom, clip.bottom, c.bottom)
+    const drawn = (el: Element | null) =>
+      !!el && el.getClientRects().length > 0 && el.checkVisibility({ visibilityProperty: true, opacityProperty: true })
     const out: string[] = []
     for (const el of root.querySelectorAll<HTMLElement>('button, a, select, input, textarea')) {
-      if (under(el.getBoundingClientRect(), shown(el.parentElement))) out.push(el.innerText?.trim() || el.tagName)
+      if (drawn(el) && under(el.getBoundingClientRect(), shown(el.parentElement))) out.push(el.innerText?.trim() || el.tagName)
     }
     const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
     for (let n = walk.nextNode() as Text | null; n; n = walk.nextNode() as Text | null) {
+      if (!drawn(n.parentElement)) continue
       const clip = shown(n.parentElement)
       let run = ''
       for (let i = 0; i <= n.data.length; i++) {
