@@ -36,7 +36,7 @@ test('reset-admin gives a locked, demoted account the Secret password and the Ad
   const email = `e2e-recover-${Date.now().toString(36)}@kubeast.local`
   const created = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E recover', email, password: 'e2e-recover-old-pw', role_id: member } })
   expect(created.status(), await created.text()).toBe(201)
-  const id = (await created.json()).id as string
+  const id = madeUser((await created.json()).id as string, admin)
   try {
     for (let i = 0; i < 6; i++) await login(request, email, 'wrong-password')
     expect((await login(request, email, 'e2e-recover-old-pw')).status(), 'locked').toBe(401)
@@ -57,4 +57,15 @@ test('reset-admin gives a locked, demoted account the Secret password and the Ad
   } finally {
     await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
   }
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })
