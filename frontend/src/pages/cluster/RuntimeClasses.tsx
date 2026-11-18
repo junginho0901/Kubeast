@@ -12,7 +12,7 @@ import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useCanCreate } from '@/hooks/useCanCreate'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -175,11 +175,8 @@ export default function RuntimeClasses() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = await api.getRuntimeClasses(true)
-    queryClient.removeQueries({ queryKey: ['cluster', 'runtimeclasses'] })
-    queryClient.setQueryData(['cluster', 'runtimeclasses'], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['cluster', 'runtimeclasses'], () => api.getRuntimeClasses(true)))
 
   const createRCYamlTemplate = `apiVersion: node.k8s.io/v1
 kind: RuntimeClass

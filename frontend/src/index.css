@@ -426,6 +426,16 @@ body {
     padding-bottom: 4rem;
   }
 
+  /* The same button and a list's footer: where a list ends a page at the bottom of the screen (a list page sized to
+     it, Cluster View scrolled to its end), the button sat on the right of the footer's Next. On a page with the
+     floating chat (Layout marks main), the page buttons of a footer that ends a page (ListPager `endsPage`) end 2.5rem
+     short of the footer's edge: the button reaches 4.5rem in from the screen's edge (1.5rem off it, 3rem across), the
+     buttons ended 3rem in (main's p-8, the footer's px-4), so 1rem stays between them. A section's footer (the GPU
+     cards and panels), windows and the detail drawer keep their buttons at their edge. */
+  .floating-chat-room .list-pager-pages {
+    margin-right: 2.5rem;
+  }
+
   /* A page's header row, the title block and its buttons: where both do not fit on one line (a portrait monitor,
      the longest titles), the buttons go to the next line, still on the right, instead of pushing the page sideways.
      The title block keeps 20rem, or its longest word if wider, before they go; on a wide window nothing moves. */

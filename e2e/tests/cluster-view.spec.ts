@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test'
 
+import { sidebarStill } from './sidebar-screens'
+
 // ClusterView 회귀 baseline — Phase 3.1 분할 (2,564줄 → 6+ sub-file) 의 안전망.
 // 각 sub-PR (Context Menu / Delete / Summary / Logs / RBAC) 마다 이 spec 가
 // 자동 cover. 데이터 변화 (pod 갱신) 에 robust 하게 mask + maxDiffPixels 여유.
@@ -26,6 +28,7 @@ test.describe('ClusterView', () => {
 
     // pod 카드 / 노드 카드 영역 mask: pod restart count / age / 사용량 같은
     // 동적 데이터로 매번 픽셀 변화가 있음. 헤더 + 레이아웃만 비교.
+    await sidebarStill(page)
     await expect(page).toHaveScreenshot('cluster-view-initial.png', {
       fullPage: true,
       animations: 'disabled',

@@ -11,7 +11,7 @@ import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -159,11 +159,8 @@ export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind 
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = await fetchList(true)
-    queryClient.removeQueries({ queryKey: ['cluster', plural] })
-    queryClient.setQueryData(['cluster', plural], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['cluster', plural], () => fetchList(true)))
 
   const columnCount = 6
   return (

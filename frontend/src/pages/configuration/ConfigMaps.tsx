@@ -18,7 +18,7 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { applyConfigMapWatchEvent } from './configmaps/configMapWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
@@ -182,13 +182,10 @@ export default function ConfigMaps() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllConfigMaps(true)
-      : await api.getConfigMaps(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['configuration', 'configmaps', selectedNamespace] })
-    queryClient.setQueryData(['configuration', 'configmaps', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['configuration', 'configmaps', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllConfigMaps(true)
+      : api.getConfigMaps(selectedNamespace, true)))
 
   const createYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

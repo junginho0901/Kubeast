@@ -33,7 +33,6 @@ import {
 } from 'lucide-react'
 import { KIND_ICONS as K } from './kindIcons'
 import { api } from '@/services/api'
-import { clustersApi } from '@/services/api/clusters'
 import { logoutSession } from '@/services/auth'
 import ForbiddenBanner from './ForbiddenBanner'
 import WatchProblemNotice from './WatchProblemNotice'
@@ -51,6 +50,9 @@ import { useCluster } from '../contexts/ClusterContext'
 import { usePermission } from '@/hooks/usePermission'
 import { usePendingAccessRequestCount } from '@/hooks/usePendingAccessRequestCount'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
+import { useAskRefusedOnAccessChange } from '@/services/queryDefaults'
+import { useClusterList, useClusterSettled } from '@/hooks/useAccessibleClusterSelection'
+import ClusterGate from './ClusterGate'
 import { aiEnabled, alertInvestigationEnabled, alertStoreEnabledFor, costEnabled, policyReportsEnabled } from '@/utils/features'
 import { resolveRouteMeta } from '@/utils/aiContext/routeMatcher'
 import { ADMIN_PAGE_PERMISSIONS, isGlobalAdmin, readsHygiene } from '@/utils/adminAccess'
@@ -103,16 +105,14 @@ export default function Layout() {
     retry: 1,
     staleTime: 30000,
   })
+  // another answer of the person's access asks once more each read on screen that was refused
+  useAskRefusedOnAccessChange(me)
 
   // The clusters this user can actually reach. A non-admin with no grants has
   // none — we then show a "no accessible cluster" placeholder instead of the
   // resource pages, so the pages never mount and never fire cluster requests
   // that would all 403 (deny-by-default).
-  const { data: accessibleClusters = [], isLoading: isClustersLoading } = useQuery({
-    queryKey: ['clusters-accessible'],
-    queryFn: () => clustersApi.listClusters(true),
-    staleTime: 30_000,
-  })
+  const { data: accessibleClusters } = useClusterList()
 
   // The nav scrolls on short viewports: keep the current page's entry in view
   // (deep links into the ADMIN section land below the fold otherwise). The
@@ -189,7 +189,10 @@ export default function Layout() {
   const canOpen = useCallback((item: NavItem) => !item.permissions || item.permissions.some((p) => hasPermission(p)), [hasPermission])
   // Someone who reaches no cluster can't view any resource page;
   // the account page (profile, language, sign-out) needs no cluster.
-  const hasNoCluster = !globalAdmin && !isClustersLoading && accessibleClusters.length === 0
+  // (an answer of none: a list that could not be read says nothing of it)
+  const hasNoCluster = !globalAdmin && accessibleClusters?.length === 0
+  // the drawer and the cluster's reads here wait for the selection, as the screens do (ClusterGate)
+  const clusterSettled = useClusterSettled()
   const noAccessibleCluster = hasNoCluster && location.pathname !== '/account'
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ core: true })
 
@@ -222,7 +225,7 @@ export default function Layout() {
     queryFn: api.getHygieneConfig,
     staleTime: 60_000,
     retry: false,
-    enabled: canReadHygiene,
+    enabled: canReadHygiene && clusterSettled,
   })
   const hygieneOn = canReadHygiene && !!hygieneConfig?.enabled
 
@@ -484,7 +487,7 @@ export default function Layout() {
   return (
     <ResourceDetailProvider>
     <div className="min-h-screen bg-slate-900">
-      <ResourceDetailDrawer />
+      {clusterSettled && <ResourceDetailDrawer />}
       {aiOn && <FloatingAIChat />}
       <div className="fixed inset-y-0 left-0 w-64 bg-slate-800 border-r border-slate-700">
         <div className="flex flex-col h-full">
@@ -614,7 +617,8 @@ export default function Layout() {
 
       <div className="pl-64">
         <ClusterSwitchProgress />
-        <main className={`min-h-screen ${location.pathname === '/ai-chat' ? '' : 'p-8'}`}>
+        {/* floating-chat-room: the list footers on a page keep their page buttons clear of the floating chat button (index.css) */}
+        <main className={`min-h-screen ${location.pathname === '/ai-chat' ? '' : 'p-8'}${aiOn ? ' floating-chat-room' : ''}`}>
           {/* Remount page content on cluster switch so cluster-specific local UI
               state (selected namespace, filters, open modals) never carries over
               to a different cluster — its namespaces/resources differ. */}
@@ -623,34 +627,34 @@ export default function Layout() {
             {!noAccessibleCluster && <ForbiddenBanner clusterKey={currentCluster || 'default'} />}
             {!noAccessibleCluster && <WatchProblemNotice />}
             <CreatedNotice fallback pathname={location.pathname} />
-            {noAccessibleCluster ? (
-              <div
-                data-testid="no-accessible-cluster"
-                className="flex min-h-[60vh] flex-col items-center justify-center text-center px-6"
-              >
-                <div className="rounded-full bg-slate-800 border border-slate-700 p-4 mb-4">
-                  <Activity className="w-8 h-8 text-slate-500" />
+            {/* the selection is made here, and no page reads until it is settled: without a cluster chosen a read
+                goes without ?cluster= to the server's default cluster */}
+            <ClusterGate fallback={<RouteFallback />}>
+              {noAccessibleCluster ? (
+                <div
+                  data-testid="no-accessible-cluster"
+                  className="flex min-h-[60vh] flex-col items-center justify-center text-center px-6"
+                >
+                  <div className="rounded-full bg-slate-800 border border-slate-700 p-4 mb-4">
+                    <Activity className="w-8 h-8 text-slate-500" />
+                  </div>
+                  <h2 className="text-lg font-semibold text-ink">
+                    {t('cluster.noAccess.title', { defaultValue: 'No accessible cluster' })}
+                  </h2>
+                  <p className="mt-1 max-w-md text-sm text-slate-400">
+                    {t('cluster.noAccess.body', {
+                      defaultValue:
+                        'You have not been granted access to any cluster yet. Ask an administrator to grant you a role on a cluster.',
+                    })}
+                  </p>
+                  <AccessHelp className="mt-3 max-w-md text-sm" />
                 </div>
-                <h2 className="text-lg font-semibold text-ink">
-                  {t('cluster.noAccess.title', { defaultValue: 'No accessible cluster' })}
-                </h2>
-                <p className="mt-1 max-w-md text-sm text-slate-400">
-                  {t('cluster.noAccess.body', {
-                    defaultValue:
-                      'You have not been granted access to any cluster yet. Ask an administrator to grant you a role on a cluster.',
-                  })}
-                </p>
-                <AccessHelp className="mt-3 max-w-md text-sm" />
-              </div>
-            ) : !globalAdmin && isClustersLoading ? (
-              // Until the accessible-cluster list is known, a non-admin's
-              // page would mount and fire cluster requests that all 403.
-              <RouteFallback />
-            ) : (
-              <Suspense fallback={<RouteFallback />}>
-                <Outlet />
-              </Suspense>
-            )}
+              ) : (
+                <Suspense fallback={<RouteFallback />}>
+                  <Outlet />
+                </Suspense>
+              )}
+            </ClusterGate>
           </div>
         </main>
       </div>
