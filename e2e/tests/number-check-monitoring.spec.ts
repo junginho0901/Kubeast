@@ -164,7 +164,7 @@ test.describe('Number check — node usage as kubectl top prints it', () => {
     try { k = kubectlFor('kubeast-b') } catch { test.skip(true, 'kind cluster kubeast-b not found'); return }
     // a run before this one leaves the namespace terminating: new pods, not its last ones
     k(`delete namespace/${NS} --ignore-not-found --timeout=120s`)
-    withUndo(k('apply -f -', FIXTURE), () => k(`delete namespace/${NS} --wait=false --ignore-not-found`))
+    k('apply -f -', withUndo(FIXTURE, () => k(`delete namespace/${NS} --wait=false --ignore-not-found`)))
     try {
       k(`wait --for=condition=Ready pod --all -n ${NS} --timeout=120s`)
       const pods = JSON.parse(k(`get pods -n ${NS} -o json`)).items as { metadata: { name: string; uid: string }; spec: { nodeName: string } }[]

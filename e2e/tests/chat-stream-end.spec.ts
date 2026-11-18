@@ -81,12 +81,12 @@ async function storedSession(page: Page, content: string) {
   const title = `e2e-stream-end-${Date.now().toString(36)}`
   const created = await page.request.post('/api/v1/sessions?cluster=self', { headers: XRW, data: { title } })
   expect(created.ok()).toBeTruthy()
-  const { id } = await created.json() as { id: string }
+  const { id } = withUndo(await created.json() as { id: string }, (s) => dropSession(page, s.id))
   const saved = await page.request.post(`/api/v1/sessions/${id}/messages?cluster=self`, {
     headers: XRW, data: { messages: [{ role: 'user', content: QUESTION }, { role: 'assistant', content }] },
   })
   expect(saved.ok(), `save messages: ${saved.status()}`).toBeTruthy()
-  return withUndo({ id, title }, (s) => dropSession(page, s.id))
+  return { id, title }
 }
 
 async function openStored(page: Page, title: string) {

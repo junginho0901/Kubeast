@@ -979,7 +979,7 @@ test.describe('number check — list screens', () => {
   // the cluster screens the same way, with the cluster-scoped fixture made for the test and removed after it
   test('every cluster list screen shows the rows, columns and cards the cluster has', async ({ page }) => {
     test.setTimeout(900_000)
-    withUndo(kubectl('apply -f -', CLUSTER_FIXTURE), () => kubectl('delete -f - --ignore-not-found --wait=false', CLUSTER_FIXTURE))
+    kubectl('apply -f -', withUndo(CLUSTER_FIXTURE, (f) => kubectl('delete -f - --ignore-not-found --wait=false', f)))
     try {
       await page.context().addInitScript(() => localStorage.setItem('kubeast.listPageSize', '100'))
       const held = await page.context().newPage()
@@ -1156,7 +1156,7 @@ test.describe('number check — list screens', () => {
     test.setTimeout(300_000)
     const b = on(POLR.cluster)
     test.skip(!b.kubectl('api-resources --api-group=wgpolicyk8s.io -o name').includes('policyreports'), 'needs the PolicyReport CRD on the second cluster')
-    withUndo(b.kubectl('apply --server-side --field-manager=e2e-numbers -f -', POLR_FIXTURE), () => b.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`))
+    b.kubectl('apply --server-side --field-manager=e2e-numbers -f -', withUndo(POLR_FIXTURE, () => b.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`)))
     try {
       b.kubectl('apply --server-side --field-manager=e2e-numbers -f -', polrBulk())
       const reports: Obj[] = JSON.parse(b.kubectl(`get policyreports -n ${NS} -o json`)).items

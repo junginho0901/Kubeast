@@ -165,7 +165,7 @@ test.describe('audit gaps', () => {
     const target = { provider: 'ollama', model: 'granite4.1:3b', base_url: 'http://host.docker.internal:11434/v1' }
     const created = await request.post('/api/v1/ai/model-configs', { headers: admin, data: { name, ...target, enabled: false, extra_headers: { 'X-E2E': 'e2e-header-value' } } })
     expect(created.status(), await created.text()).toBe(200)
-    const id = (await created.json()).id as number
+    const id = withUndo((await created.json()).id as number, (i) => request.delete(`/api/v1/ai/model-configs/${i}`, { headers: admin, failOnStatusCode: false }))
     try {
       expect((await request.patch(`/api/v1/ai/model-configs/${id}`, { headers: admin, data: { model: 'granite4.1:8b' } })).status()).toBe(200)
       const tested = await request.post('/api/v1/ai/model-configs/test', { headers: admin, data: target })
@@ -194,7 +194,7 @@ test.describe('audit gaps', () => {
     const since = new Date(Date.now() - 2000).toISOString()
     const created = await request.post('/api/v1/sessions', { headers: admin, data: { title: 'e2e audit session' } })
     expect(created.ok(), await created.text()).toBeTruthy()
-    const id = (await created.json()).id as string
+    const id = withUndo((await created.json()).id as string, (i) => request.delete(`/api/v1/sessions/${i}`, { headers: admin, failOnStatusCode: false }))
     expect((await request.patch(`/api/v1/sessions/${id}`, { headers: admin, data: { title: 'e2e audit session renamed' } })).status()).toBe(200)
     expect((await request.delete(`/api/v1/sessions/${id}`, { headers: admin })).status()).toBe(200)
     expect((await request.get(`/api/v1/sessions/${id}`, { headers: admin, failOnStatusCode: false })).status()).toBe(404)

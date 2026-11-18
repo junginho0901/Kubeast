@@ -299,7 +299,7 @@ test.describe('the AI reads what the Admin screens read of Kubeast\'s own record
       },
     })
     test.skip(!made.ok(), `the dev install does not take this model (${made.status()}): deploy/kind/devtools.yaml and ai.baseUrlAllowedHosts`)
-    const id = (await made.json()).id as number
+    const id = withUndo((await made.json()).id as number, (i) => request.delete(`/api/v1/ai/model-configs/${i}`, { headers: bearer(admin), failOnStatusCode: false }))
     try {
       const res = await call(request, admin, 'ai_models')
       expect(res.isError, res.text).toBe(false)

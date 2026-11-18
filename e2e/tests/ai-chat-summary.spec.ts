@@ -56,7 +56,7 @@ test.describe('AI chat history summary', () => {
     const codename = `TANGERINE-${stamp()}`
     const created = await request.post('/api/v1/sessions', { headers: bearer(token), data: { title: `e2e-summary-${stamp()}` } })
     expect(created.ok()).toBeTruthy()
-    const sessionId = (await created.json()).id as string
+    const sessionId = withUndo((await created.json()).id as string, (i) => request.delete(`/api/v1/sessions/${i}`, { headers: bearer(token), failOnStatusCode: false }))
     try {
       // Twelve earlier messages, the fact to remember in the very first one.
       const seeded: Array<{ role: string; content: string }> = []
@@ -108,7 +108,7 @@ test.describe('AI chat history summary', () => {
     const token = await login(request)
     const created = await request.post('/api/v1/sessions', { headers: bearer(token), data: { title: `e2e-nosummary-${stamp()}` } })
     expect(created.ok()).toBeTruthy()
-    const sessionId = (await created.json()).id as string
+    const sessionId = withUndo((await created.json()).id as string, (i) => request.delete(`/api/v1/sessions/${i}`, { headers: bearer(token), failOnStatusCode: false }))
     try {
       const saved = await request.post(`/api/v1/sessions/${sessionId}/messages`, {
         headers: bearer(token),
@@ -123,4 +123,17 @@ test.describe('AI chat history summary', () => {
       await request.delete(`/api/v1/sessions/${sessionId}`, { headers: bearer(token) })
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

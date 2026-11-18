@@ -160,14 +160,14 @@ test.describe('the cluster\'s Prometheus and a grant limited to namespaces', () 
     expect((await features(full)).namespaceLimited).toBe(false)
 
     // a pod the limited grant may open: the second cluster lets kubeast:role:read view namespace default for the test
-    withUndo(kubectlSecond('apply -f -', JSON.stringify({
+    kubectlSecond('apply -f -', withUndo(JSON.stringify({
       apiVersion: 'v1', kind: 'List', items: [
         { apiVersion: 'v1', kind: 'Pod', metadata: { name: POD, namespace: NS }, spec: { terminationGracePeriodSeconds: 0, containers: [{ name: 'app', image: 'busybox:1.37', imagePullPolicy: 'IfNotPresent', command: ['sleep', '3600'] }] } },
         { apiVersion: 'rbac.authorization.k8s.io/v1', kind: 'RoleBinding', metadata: { name: BINDING, namespace: NS },
           roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'ClusterRole', name: 'view' },
           subjects: [{ apiGroup: 'rbac.authorization.k8s.io', kind: 'Group', name: 'kubeast:role:read' }] },
       ],
-    })), () => kubectlSecond(`delete pod/${POD} rolebinding/${BINDING} -n ${NS} --ignore-not-found --wait=false`))
+    }), () => kubectlSecond(`delete pod/${POD} rolebinding/${BINDING} -n ${NS} --ignore-not-found --wait=false`)))
     const ctx = await browser.newContext({ baseURL: process.env.E2E_BASE_URL || 'http://localhost:30080' })
     try {
       const page = await ctx.newPage()

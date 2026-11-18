@@ -154,7 +154,7 @@ test.describe('a refused write says why where it was pressed', () => {
     // the list is the conversations of the cluster on screen, so the conversation is made on that cluster
     const made = await request.post('/api/v1/sessions?cluster=self', { headers: bearer(admin), data: { title: `e2e-af-${RUN}` }, failOnStatusCode: false })
     test.skip(!made.ok(), `no conversation could be made: ${made.status()}`)
-    const id = (await made.json()).id as string
+    const id = withUndo((await made.json()).id as string, (i) => request.delete(`/api/v1/sessions/${i}`, { headers: bearer(admin), failOnStatusCode: false }))
     try {
       await refuse(page, (p) => p === `/api/v1/sessions/${id}`, ['PATCH', 'DELETE'])
       await page.goto('/ai-chat?cluster=self')

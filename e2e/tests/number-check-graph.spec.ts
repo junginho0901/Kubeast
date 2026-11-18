@@ -50,7 +50,7 @@ test.describe('number check — resource graph', () => {
     test.setTimeout(420_000)
     // a namespace left by an earlier run would hand over its settled objects: start from none
     kubectl(`delete namespace ${NS} --wait=true --timeout=120s --ignore-not-found`)
-    withUndo(kubectl('apply -f -', FIXTURE), () => kubectl(`delete namespace ${NS} --wait=true --timeout=120s --ignore-not-found`))
+    kubectl('apply -f -', withUndo(FIXTURE, () => kubectl(`delete namespace ${NS} --wait=true --timeout=120s --ignore-not-found`)))
     try {
       await test.step('the objects reach the states the check is about', async () => {
         const jp = (args: string) => { try { return kubectl(args) } catch { return '' } }
@@ -149,7 +149,7 @@ subjects:
 - {kind: ServiceAccount, name: refs-ghost, namespace: ${RNS}}
 `
     kubectl(`delete namespace/${RNS} --ignore-not-found --timeout=120s`)
-    withUndo(kubectl('apply -f -', refs), () => kubectl(`delete namespace/${RNS} --wait=false --ignore-not-found`))
+    kubectl('apply -f -', withUndo(refs, () => kubectl(`delete namespace/${RNS} --wait=false --ignore-not-found`)))
     try {
       // the cluster: which referenced objects exist
       await expect.poll(() => kubectl(`get serviceaccount/default -n ${RNS} -o name --ignore-not-found`), { timeout: 30_000 }).toBe('serviceaccount/default')

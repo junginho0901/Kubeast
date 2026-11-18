@@ -97,7 +97,7 @@ async function auditRows(request: APIRequestContext, admin: string, actorEmail: 
 
 // A namespace with a Deployment to scale and a ConfigMap to delete; replicas changes need no running pods.
 function fixture(s: string) {
-  const ns = `e2e-mcpw-${s}`
+  const ns = withUndo(`e2e-mcpw-${s}`, (n) => tryKubectl(`delete namespace ${n} --wait=false`))
   kubectl(`create namespace ${ns}`)
   kubectl(`-n ${ns} create deployment web --image=registry.k8s.io/pause:3.10 --replicas=1`)
   kubectl(`-n ${ns} create configmap scratch --from-literal=a=b`)
@@ -122,7 +122,7 @@ test.describe('MCP write tools', () => {
     let writerId = ''
     let ns = ''
     try {
-      ns = withUndo(fixture(s), (n) => tryKubectl(`delete namespace ${n} --wait=false`))
+      ns = fixture(s)
       writerId = await createUser(request, admin, writer)
       await grant(request, admin, writerId, 'self', 'Write')
       const writerToken = await login(request, writer, PW)
@@ -216,7 +216,7 @@ test.describe('MCP write tools', () => {
     let writerId = ''
     let ns = ''
     try {
-      ns = withUndo(fixture(s), (n) => tryKubectl(`delete namespace ${n} --wait=false`))
+      ns = fixture(s)
       writerId = await createUser(request, admin, writer)
       await grant(request, admin, writerId, 'self', 'Write')
       const key = await issueKey(request, await login(request, writer, PW), 'Write')
@@ -290,7 +290,7 @@ test.describe('MCP write tools', () => {
     let readerId = ''
     let ns = ''
     try {
-      ns = withUndo(fixture(s), (n) => tryKubectl(`delete namespace ${n} --wait=false`))
+      ns = fixture(s)
       readerId = await createUser(request, admin, reader)
       await grant(request, admin, readerId, 'self', 'Read')
       const readerToken = await login(request, reader, PW)

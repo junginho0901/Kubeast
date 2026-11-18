@@ -117,7 +117,7 @@ test.describe('Investigate now in the Alerts inbox', () => {
   // one inbox row of a new info alert (kept, not investigated by the webhook)
   async function newAlert(request: APIRequestContext, run: string, label: string): Promise<{ id: string; labels: Obj; fingerprint: string }> {
     const labels = { alertname: `E2EN4a2${label}${run}`, severity: 'info', namespace: badNamespace(run) }
-    const fingerprint = `n4a2-${label.toLowerCase()}-${run}`
+    const fingerprint = withUndo(`n4a2-${label.toLowerCase()}-${run}`, (f) => post(request, 'resolved', labels, f, { endsAt: new Date().toISOString() }))
     expect((await (await post(request, 'firing', labels, fingerprint)).json()).stored).toBe(1)
     const list = await (await request.get('/api/v1/alerts/inbox', { headers: bearer(admin), params: { cluster: INBOX.cluster, q: run, limit: 50 } })).json()
     const item = (list.items as Obj[]).find((i) => i.fingerprint === fingerprint)

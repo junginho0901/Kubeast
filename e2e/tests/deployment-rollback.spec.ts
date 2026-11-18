@@ -56,7 +56,7 @@ test.describe('deployment rollback (whole-template replace)', () => {
   test('an env var added in revision 2 is gone after rolling back to 1; rolling back to the current template is refused', async ({ request }) => {
     test.setTimeout(120_000)
     const kubectl = kubectlFor(CLUSTER)
-    withUndo(kubectl('apply -f -', manifest), () => kubectl(`delete ns ${NS} --ignore-not-found --wait=false`))
+    kubectl('apply -f -', withUndo(manifest, () => kubectl(`delete ns ${NS} --ignore-not-found --wait=false`)))
     try {
       const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
       const rollback = (revision: number) => request.post(
