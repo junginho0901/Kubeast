@@ -66,13 +66,15 @@ func (r *Repository) GetTokenVersion(ctx context.Context, id string) (int, error
 // (auth.SessionStateQuery). A token an API key was exchanged for (apiKeyID
 // set) is revoked with the key, so a key deleted or past its expiry answers
 // ErrAPIKeyNotFound and the token stops working on the validators' next check
-// instead of at its own expiry.
+// instead of at its own expiry. As every auth.VersionLookup, a user or key that
+// is gone answers auth.ErrSubjectGone too; any other error is a read that
+// failed (auth.ReadFailed), not a verdict on the token.
 func (r *Repository) SessionStateFor(ctx context.Context, userID, apiKeyID string) (auth.SessionState, error) {
 	if apiKeyID != "" {
 		var expires time.Time
 		err := r.pool.QueryRow(ctx, `SELECT expires_at FROM api_keys WHERE id = $1 AND user_id = $2`, apiKeyID, userID).Scan(&expires)
 		if errors.Is(err, pgx.ErrNoRows) || (err == nil && !expires.After(time.Now())) {
-			return auth.SessionState{}, ErrAPIKeyNotFound
+			return auth.SessionState{}, fmt.Errorf("%w: %w", auth.ErrSubjectGone, ErrAPIKeyNotFound)
 		}
 		if err != nil {
 			return auth.SessionState{}, err
@@ -80,6 +82,9 @@ func (r *Repository) SessionStateFor(ctx context.Context, userID, apiKeyID strin
 	}
 	var state auth.SessionState
 	err := r.pool.QueryRow(ctx, auth.SessionStateQuery, userID).Scan(&state.Version, &state.SignedOut)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return auth.SessionState{}, fmt.Errorf("%w: %w", auth.ErrSubjectGone, err)
+	}
 	return state, err
 }
 

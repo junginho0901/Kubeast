@@ -2,11 +2,14 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import i18next from 'i18next'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 import en from '../../i18n/locales/en.json'
 import ko from '../../i18n/locales/ko.json'
 import { DescribeFailure } from './DescribeFailure'
+
+// what the notice tells the floating chat: sharedNotices.chat.test.ts
+vi.mock('@/hooks/useAIContext', () => ({ useAIContext: () => {} }))
 
 const i18n = i18next.createInstance()
 beforeAll(async () => {

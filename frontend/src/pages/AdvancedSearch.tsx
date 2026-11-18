@@ -18,6 +18,7 @@ import { rememberPrinterStatus, searchWithExpression, toSearchResult, SearchResu
 import { searchLayer, searchShown, type Searched } from '@/components/search/searchShown'
 import { useAIContext } from '@/hooks/useAIContext'
 import { failureText } from '@/utils/failureText'
+import { everyUntilRefused } from '@/services/queryDefaults'
 
 const STORAGE_KEY_RESOURCES = 'advanced-search-resources'
 const NO_RESULTS: SearchResult[] = []
@@ -143,7 +144,7 @@ export default function AdvancedSearch() {
     },
     enabled: resourceTypes.length > 0,
     staleTime: 30_000,
-    refetchInterval: refetchIntervalMs > 0 ? refetchIntervalMs : false,
+    refetchInterval: refetchIntervalMs > 0 ? everyUntilRefused(refetchIntervalMs) : false,
   })
 
   const items = useMemo(() => fetchResult?.items ?? [], [fetchResult])

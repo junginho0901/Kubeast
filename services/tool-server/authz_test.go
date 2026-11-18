@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -51,6 +52,8 @@ func TestAuthorizeToolCall(t *testing.T) {
 		{"empty cluster = default, no grant", "k8s_get_resources", "", "t", v, http.StatusForbidden},
 		{"missing token", "k8s_get_resources", "alpha", "", v, http.StatusUnauthorized},
 		{"invalid token", "k8s_get_resources", "alpha", "t", fakeValidator{err: errors.New("bad")}, http.StatusUnauthorized},
+		{"revoked token", "k8s_get_resources", "alpha", "t", fakeValidator{err: fmt.Errorf("invalid token: %w", auth.ErrTokenRevoked)}, http.StatusUnauthorized},
+		{"session not readable: refused, not signed out", "k8s_get_resources", "alpha", "t", fakeValidator{err: fmt.Errorf("%w: token version unavailable: status 503", auth.ErrSessionUnreadable)}, http.StatusServiceUnavailable},
 		{"global admin any cluster", "k8s_execute_command", "prod", "t", fakeValidator{payload: auth.TokenPayload{Perms: auth.PermissionMatrix{"*": {"*"}}}}, 0},
 	}
 	for _, c := range cases {

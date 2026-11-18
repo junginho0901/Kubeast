@@ -17,6 +17,7 @@
 # become cluster-admin anywhere.
 # The dashboard overview cache (k8s-service informer_cache.go) watches as user
 # kubeast:cache in kubeast:viewer, so it needs nothing beyond these bindings.
+# auth.impersonation.sharedReadChecks: allowed screen read checks go out as kubeast:group-check:<per start> in the person's groups; never bind that user.
 # A Read/Write/Admin grant limited to namespaces acts as kubeast:role:read /
 # write / admin instead (the fixed groups are bound cluster-wide), so those
 # three are allowed here; bind them per namespace through

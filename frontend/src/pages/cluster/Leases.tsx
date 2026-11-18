@@ -21,7 +21,7 @@ import { applyLeaseWatchEvent } from './leases/leaseWatchNormalize'
 import { LeaseFilters } from './leases/LeaseFilters'
 import { LeaseTable } from './leases/LeaseTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -178,13 +178,10 @@ export default function Leases() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllLeases(true)
-      : await api.getLeases(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['cluster', 'leases', selectedNamespace] })
-    queryClient.setQueryData(['cluster', 'leases', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['cluster', 'leases', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllLeases(true)
+      : api.getLeases(selectedNamespace, true)))
 
   const createLeaseYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

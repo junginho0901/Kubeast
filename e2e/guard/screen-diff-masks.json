@@ -29,6 +29,26 @@
       "screen": "/admin/audit on",
       "selector": "[data-testid=\"audit-pager\"]",
       "why": "The pager's total, which every look raises."
+    },
+    {
+      "screen": "/admin/audit on",
+      "selector": "[data-testid=\"audit-integrity\"]",
+      "why": "The integrity line's unsealed count, which each look raises until the sealer's next turn, and the text after it, which its width moves."
+    },
+    {
+      "screen": "/admin/access-review on",
+      "selector": "span.text-slate-500:has-text(\"Report as of\")",
+      "why": "When the server made the report, which the two builds can read a second apart."
+    },
+    {
+      "screen": "/cluster/hygiene on",
+      "selector": "span.text-slate-500:has-text(\"Scanned\")",
+      "why": "When the scan the page shows was made, which the two builds can read a second apart."
+    },
+    {
+      "screen": "/security/policyreports on",
+      "selector": "[data-testid=\"policy-reports-source\"]",
+      "why": "When the server summed the reports, which the two builds can read a second apart."
     }
   ]
 }

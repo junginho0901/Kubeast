@@ -41,7 +41,8 @@ export function givesChartBoundRole(
   clusterNamespaces: Record<string, string[]> | null | undefined,
   cluster: string,
 ): boolean {
-  return isGlobalAdmin(matrix) || (clusterRoles?.[cluster]?.trim().toLowerCase() === 'admin' && !clusterNamespaces?.[cluster]?.length)
+  // the built-in Admin by its exact name: a custom role named "ADMIN" acts as no role group (auth.TakesBuiltinSlug)
+  return isGlobalAdmin(matrix) || (clusterRoles?.[cluster] === 'Admin' && !clusterNamespaces?.[cluster]?.length)
 }
 
 // A role's permission list (not a token matrix): the same rule for the person a page shows.

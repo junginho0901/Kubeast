@@ -20,6 +20,7 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import InvestigationReportModal from '@/components/InvestigationReportModal'
 import SilenceList from './SilenceList'
 import SilenceModal from './SilenceModal'
+import { inboxPage } from './inboxPage'
 import { alertStoreEnabledFor } from '@/utils/features'
 import { alertResource, inboxState, liveLineOf, liveStateOf, severityChoices, silenceStart, storeCut, storeLimited, storeLimitedSeconds, storeRefetchMs, type LiveState } from '@/utils/alertInbox'
 import { severityClass, skipReason, statusClass as investigationClass } from '@/utils/investigationFormat'
@@ -29,6 +30,7 @@ import { failureText } from '@/utils/failureText'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { failureOf } from '@/hooks/useRefresh'
 import { keepSameRead } from '@/utils/keepSameRead'
+import { everyUntilRefused, unlessRefused } from '@/services/queryDefaults'
 
 // Alerts: every alert Alertmanager sent for the selected cluster (features.alertInvestigation's webhook), firing or
 // resolved, for whoever reads the cluster as a whole. Resolving is the alert rule's: the marks here (acknowledged,
@@ -90,7 +92,7 @@ export default function AlertInbox() {
     queryKey: listKey,
     queryFn: async () => ({ ...(await api.listAlertInbox(filter)), filter, page }),
     placeholderData: keepSameRead(listKey, ['limit', 'offset']),
-    refetchInterval: 30_000,
+    refetchInterval: everyUntilRefused(30_000),
     retry: false,
     enabled: inbox === 'on',
   })
@@ -108,7 +110,7 @@ export default function AlertInbox() {
     queryFn: api.listAlertStoreAlerts,
     enabled: storeOn && !inboxOff,
     // read again when the server said after a refusal at the request limit, not at the next minute
-    refetchInterval: (q) => storeRefetchMs(q.state.error),
+    refetchInterval: (q) => unlessRefused(q.state.error, storeRefetchMs(q.state.error)),
     retry: false,
   })
   const store = storeQuery.data
@@ -136,10 +138,10 @@ export default function AlertInbox() {
     ? { reason: failureText(storeQuery.error), shownFrom: store ? storeQuery.dataUpdatedAt : null }
     : null
   const cut = storeCut(store)
-  const rows = data?.items ?? []
+  const { rows, limit: shownLimit } = inboxPage(data, rowsPerPage)
   const total = data?.total ?? 0
   const counts = data?.counts ?? { firing: 0, stale: 0, resolved: 0 }
-  const shown = data ? { ...data.filter, page: data.page } : { ...filter, page }
+  const shown = data ? { ...data.filter, limit: shownLimit, page: data.page } : { ...filter, page }
   const totalPages = Math.max(1, Math.ceil(total / shown.limit))
   const severities = severityChoices(data?.severities, severity)
   const forbidden = (error as { response?: { status?: number } } | null)?.response?.status === 403
@@ -425,7 +427,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
     queryFn: () => api.getAlertInboxItem(id),
     retry: false,
     // a queued or running investigation is read again until it ends (the window keeps what it shows meanwhile)
-    refetchInterval: (q) => (['queued', 'running'].includes(q.state.data?.investigation?.status ?? '') ? 5_000 : false),
+    refetchInterval: (q) => unlessRefused(q.state.error, ['queued', 'running'].includes(q.state.data?.investigation?.status ?? '') ? 5_000 : false),
   })
   // a save names its alert, and its answer goes to that alert's window
   const save = useMutation({

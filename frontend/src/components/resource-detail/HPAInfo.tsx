@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import { retryUnlessRefused } from '@/services/queryDefaults'
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, ConditionsTable, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
@@ -23,7 +24,7 @@ export default function HPAInfo({ name, namespace }: Props) {
     queryKey: ['hpa-describe', namespace, name],
     queryFn: () => api.describeHPA(namespace, name),
     staleTime: 10_000,
-    retry: 1,
+    retry: retryUnlessRefused(1),
   })
   useDrawerFollowsObject({
     enabled: !!namespace && !!name,

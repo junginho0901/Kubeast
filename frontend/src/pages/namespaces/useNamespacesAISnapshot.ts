@@ -22,7 +22,8 @@ export function useNamespacesAISnapshot({
   searchQuery,
 }: Params) {
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(namespaces) || namespaces.length === 0) return null
+    // a list read empty is 0 namespaces; only one not read (loading, refused, failed) registers nothing
+    if (!Array.isArray(namespaces)) return null
     const total = namespaces.length
     const inactive = namespaces.filter((n) => !/active/i.test(n.status)).length
     const prefix = inactive > 0 ? '⚠️ ' : ''
