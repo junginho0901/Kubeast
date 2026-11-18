@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Browser, type Page } from '@playwright/test'
 
-import { clusterOf, compileRules, routeOf, rowsLeftOut, sortCells, type Answer, type Difference, type IgnoreRule } from './response-compare'
+import { clusterOf, compileRules, routeOf, rowsLeftOut, sortCells, tailCopies, type Answer, type Difference, type IgnoreRule } from './response-compare'
 import {
   ADMIN_EMAIL, ADMIN_PASSWORD, BASE, CLUSTER, DRAWER, DRAWER_KINDS, DRAWERS, NS_A, PW, ROLES, SIDEBAR,
   applyFixtures, bearer, drawerTargets, kubectl, login, loginUI, openCluster, quiet, removeFixtures, roleTable, track,
@@ -213,8 +213,9 @@ function rowOf(user: string, request: string, route: string, screens: Set<string
   const real: Difference[] = []
   const known: Row['known'] = []
   const leftOut = sorted.real.length > 0 && rowsLeftOut(a, n, b)
+  const tail = sorted.real.length > 0 ? tailCopies(a, n, b) : () => false
   for (const d of sorted.real) {
-    const rule = ignored(route, d.cell, user, String(n.status), clusterOf(request), leftOut)
+    const rule = ignored(route, d.cell, user, String(n.status), clusterOf(request), leftOut, tail(d.cell))
     if (rule) known.push({ ...d, why: rule.why, pr: rule.pr })
     else real.push(d)
   }

@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import { test, expect } from '@playwright/test'
 
-import { clusterOf, compileRules, flatten, rowsLeftOut, sortCells, type Answer, type IgnoreRule } from './response-compare'
+import { clusterOf, compileRules, flatten, rowsLeftOut, sortCells, tailCopies, type Answer, type IgnoreRule } from './response-compare'
 
 // The comparison on its own: each kind of change must come out as what it is. No browser, no cluster.
 
@@ -145,6 +145,42 @@ test.describe('the response comparison', () => {
     expect(real(answer([event('RegisteredNode'), event('Rebooted')]))).toEqual([])
     expect(real(answer([event('RegisteredNode'), event('Rebooted', 2)]))).toContain('$[1].count')
     expect(match('/x', '$.$length')).toBeNull()
+  })
+
+  test('a rule with tailCopies takes the later events of a lease that one side holds past the other, and compares the ones both hold', () => {
+    const lease = (name: string, i: number, holder = 'h') => ({ name, namespace: 'kube-system', holder_identity: holder, watchEvent: i ? 'MODIFIED' : 'ADDED' })
+    const frame = (...leases: [string, number, string?][]) =>
+      ({ status: 'live', body: { items: leases.flatMap(([name, count, holder]) => Array.from({ length: count }, (_, i) => lease(name, i, i === 2 && holder ? holder : 'h'))) } }) as Answer
+    const match = compileRules([{ route: '^leases$', cell: '^\\$\\.items\\[/[^\\]#]+#[0-9]+\\]\\.', tailCopies: true, why: 'renewals in the frame', pr: '#1' }])
+    const real = (old: Answer, fresh: Answer, old2: Answer = old) => {
+      const tail = tailCopies(old, fresh, old2)
+      return sortCells(old, fresh, old2).real.filter((d) => !match('leases', d.cell, '', 'live', '', false, tail(d.cell)))
+        .map((d) => d.cell.replace(/\]\..*$/, ']')).filter((c, i, all) => all.indexOf(c) === i && !c.endsWith('$length') && !c.endsWith('$order'))
+    }
+    const s = 'kube-scheduler'
+    expect(real(frame([s, 9]), frame([s, 8])), 'the old frames hold a ninth event').toEqual([])
+    expect(real(frame([s, 8]), frame([s, 9])), 'the new frame holds a ninth event').toEqual([])
+    expect(real(frame([s, 9]), frame([s, 7])), 'two events past the new frame\'s last').toEqual([])
+    expect(real(frame([s, 3, 'old']), frame([s, 3, 'new'])), 'a third event all frames hold, changed').toEqual(['$.items[/kube-system/kube-scheduler#3]'])
+    expect(real(frame([s, 3, 'old']), frame([s, 4, 'new'])), 'the same with a fourth in the new frame').toEqual(['$.items[/kube-system/kube-scheduler#3]'])
+    expect(real(frame([s, 2]), frame()), 'a lease the new frame lacks').toEqual(['$.items[/kube-system/kube-scheduler]', '$.items[/kube-system/kube-scheduler#2]'])
+    expect(real(frame([s, 3]), frame([s, 2]), frame([s, 2])), 'the old frames disagree: noise, not a tail').toEqual([])
+    expect(match('leases', '$.items[/kube-system/kube-scheduler#9].name', '', 'live', '', false, false)).toBeNull()
+  })
+
+  test('the lease rules of the ignore list take a later event past the other side\'s last and keep one both sides hold compared', () => {
+    const file = JSON.parse(fs.readFileSync(path.join(__dirname, 'response-diff-ignore.json'), 'utf8')) as { rules: IgnoreRule[] }
+    const match = compileRules(file.rules)
+    const route = 'live /apis/coordination.k8s.io/v1/leases'
+    const frame = (count: number, third = 'h') => ({ status: 'live', body: { items: Array.from({ length: count }, (_, i) =>
+      ({ name: 'kyverno', namespace: 'kyverno', holder_identity: i === 2 ? third : 'h', watchEvent: i ? 'MODIFIED' : 'ADDED' })) } }) as Answer
+    const real = (old: Answer, fresh: Answer) => {
+      const tail = tailCopies(old, fresh, old)
+      return sortCells(old, fresh, old).real.filter((d) => !match(route, d.cell, 'global-admin', 'live', 'default', false, tail(d.cell))).map((d) => d.cell)
+    }
+    expect(real(frame(8), frame(9)).filter((c) => c.includes('#9')), 'a ninth event the new frame holds').toEqual([])
+    expect(real(frame(9), frame(8)).filter((c) => c.includes('#9')), 'a ninth event the old frames hold').toEqual([])
+    expect(real(frame(9, 'a'), frame(9, 'b')), 'a third event all frames hold, changed').toEqual(['$.items[/kyverno/kyverno#3].holder_identity'])
   })
 
   test('a rule for a route the old build did not have keeps a server error of the new build a real difference', () => {

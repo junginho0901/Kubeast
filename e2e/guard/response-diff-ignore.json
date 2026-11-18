@@ -38,8 +38,9 @@
     },
     {
       "route": "^live /apis/coordination\\.k8s\\.io/v1/leases$",
-      "cell": "^\\$\\.items\\[/((kube-system/apiserver-[a-z0-9]+|kube-node-lease/[^\\]#]+)#[0-9]+|[^\\]#]+#3)\\]\\.",
-      "why": "kube-apiserver renews its identity lease (kube-system, apiserver-…) and the kubelet its node's lease (kube-node-lease) every 10 seconds, Kyverno its kyverno-health lease on a timer too, and a build's first live frame stays open up to 15 seconds: whether a second renewal falls inside it is timing, so one build's frames can hold a lease three times where the other build's hold it twice. Each lease's first event, and a fourth or later event of any lease but those two kinds, are still compared.",
+      "cell": "^\\$\\.items\\[/[^\\]#]+#[0-9]+\\]\\.",
+      "tailCopies": true,
+      "why": "A lease's holder renews it on a timer: kube-apiserver its identity lease and the kubelet its node's lease every 10 seconds, Kyverno its kyverno-health lease, and leader election (kube-scheduler, kube-controller-manager, Kyverno's controllers) every 2 seconds. A build's first live frame stays open up to 15 seconds, so how many renewals fall inside it is timing, and one build's frames can hold a lease's events past the other build's last. Only those events are taken, whole, and only while all three frames hold the lease's first event; an event both builds' frames hold is still compared cell by cell, and so is a lease one frame lacks.",
       "pr": "#946"
     },
     {
