@@ -82,7 +82,7 @@ test.describe('Resource Graph traffic lines (Hubble)', () => {
     admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const features = await (await request.get(`/api/v1/cluster/features?cluster=${CLUSTER}`, { headers: bearer(admin) })).json()
     kubectl = ciliumKubectl()
-    if (!kubectl) return
+    if (!kubectl || !(await registered(request, admin))) return
     relayReady = features?.networkFlows?.enabled === true && (features.networkFlows.clusters ?? []).includes(CLUSTER)
     try {
       metricsReady = promDirect(`sum(hubble_tcp_flags_total{flag="SYN",destination_namespace="${NS}"})`).length > 0
@@ -96,7 +96,7 @@ test.describe('Resource Graph traffic lines (Hubble)', () => {
   })
 
   test('a Read user’s lines from the Relay are the demo’s connections, recorded once in the audit log', async ({ request }) => {
-    test.skip(!relayReady, `no network flows for cluster ${CLUSTER} (scripts/kind-cilium.sh up)`)
+    test.skip(!relayReady, `cluster ${CLUSTER} is not registered in Kubeast or has no network flows (scripts/kind-cilium.sh up)`)
     const reader = await user(request, 'read', { role: 'Read' })
     const { status, body } = await traffic(request, reader.token, { source: 'relay' })
     expect(status, JSON.stringify(body)).toBe(200)
@@ -130,7 +130,7 @@ test.describe('Resource Graph traffic lines (Hubble)', () => {
   })
 
   test('the metric lines are what the cluster’s Prometheus counts', async ({ request }) => {
-    test.skip(!metricsReady, `no Hubble TCP metric on cluster ${CLUSTER} (scripts/kind-cilium.sh up)`)
+    test.skip(!metricsReady, `cluster ${CLUSTER} is not registered in Kubeast or has no Hubble TCP metric (scripts/kind-cilium.sh up)`)
     const reader = await user(request, 'metrics', { role: 'Read' })
     const { status, body } = await traffic(request, reader.token, { source: 'metrics', range: '1h' })
     expect(status, JSON.stringify(body)).toBe(200)
@@ -154,7 +154,7 @@ test.describe('Resource Graph traffic lines (Hubble)', () => {
   })
 
   test('a namespace-limited user is kept to their namespaces, and the cluster decides the rest', async ({ request }) => {
-    test.skip(!relayReady, `no network flows for cluster ${CLUSTER} (scripts/kind-cilium.sh up)`)
+    test.skip(!relayReady, `cluster ${CLUSTER} is not registered in Kubeast or has no network flows (scripts/kind-cilium.sh up)`)
     const scoped = await user(request, 'scoped', { role: 'Read', namespaces: [NS] })
     // a namespace outside the grant: refused by Kubeast before any read, nothing recorded
     const outside = await traffic(request, scoped.token, { source: 'relay', namespaces: `${NS},kube-system` })
@@ -170,7 +170,7 @@ test.describe('Resource Graph traffic lines (Hubble)', () => {
   })
 
   test('the graph draws the lines, and a dropped one opens the NetworkPolicy check', async ({ page, request }) => {
-    test.skip(!relayReady, `no network flows for cluster ${CLUSTER} (scripts/kind-cilium.sh up)`)
+    test.skip(!relayReady, `cluster ${CLUSTER} is not registered in Kubeast or has no network flows (scripts/kind-cilium.sh up)`)
     await page.goto(`/cluster/resource-graph?cluster=${CLUSTER}&namespace=${NS}`)
     await expect(page.getByTestId('graph-view-structure')).toHaveAttribute('aria-pressed', 'true', { timeout: 20_000 })
     // off until switched on
@@ -232,3 +232,10 @@ test.describe('Resource Graph traffic lines (Hubble)', () => {
     await expect(page.getByTestId('traffic-empty')).toContainText('no Hubble TCP or drop metric', { timeout: 20_000 })
   })
 })
+
+// Kubeast has the kind cluster under its name (scripts/kind-*.sh up registers it, down removes it): the kind cluster
+// can be up without it, and every read of this spec names it
+async function registered(request: APIRequestContext, token: string): Promise<boolean> {
+  const body = await (await request.get('/api/v1/clusters', { headers: bearer(token) })).json()
+  return ((body.items ?? []) as { id: string }[]).some((c) => c.id === CLUSTER)
+}
