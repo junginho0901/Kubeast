@@ -134,6 +134,7 @@ data:
   REDACTION_PII: {{ .Values.ai.redaction.pii | quote }}
   REDACTION_DISABLE: {{ join "," .Values.ai.redaction.disable | quote }}
   AI_DEBUG_DUMP: {{ .Values.ai.debugDump | quote }}
+  AI_TIMELINE_CHANGES: {{ .Values.ai.timelineChanges | quote }}
   AI_CHAT_HISTORY_MESSAGES: {{ .Values.ai.chat.historyMessages | quote }}
   AI_CHAT_SUMMARY_ENABLED: {{ .Values.ai.chat.summary.enabled | quote }}
   AI_CHAT_SUMMARY_MAX_CHARS: {{ .Values.ai.chat.summary.maxChars | quote }}
@@ -181,6 +182,15 @@ data:
   COST_ENABLED: {{ .Values.features.cost.enabled | quote }}
   POLICY_REPORTS_ENABLED: {{ .Values.features.policyReports.enabled | quote }}
   ALERT_INVESTIGATION_ENABLED: {{ .Values.features.alertInvestigation.enabled | quote }}
+  {{- /* dig: values an earlier chart's --reuse-values lacks render as this chart's defaults */}}
+  {{- $anomalyRank := dig "anomalyRank" (dict) .Values.features }}
+  ANOMALY_RANK_ENABLED: {{ dig "enabled" false $anomalyRank | quote }}
+  ANOMALY_RANK_MAX_QUERIES: {{ dig "maxQueries" 12 $anomalyRank | int64 | quote }}
+  ANOMALY_RANK_CHECK_TIMEOUT_SEC: {{ dig "checkTimeoutSeconds" 5 $anomalyRank | int64 | quote }}
+  ANOMALY_RANK_TIMEOUT_SEC: {{ dig "timeoutSeconds" 20 $anomalyRank | int64 | quote }}
+  ANOMALY_RANK_CONCURRENCY: {{ dig "concurrency" 4 $anomalyRank | int64 | quote }}
+  ANOMALY_RANK_CACHE_SEC: {{ dig "cacheSeconds" 60 $anomalyRank | int64 | quote }}
+  ANOMALY_RANK_LOG_MAX_BYTES: {{ dig "logMaxBytes" 10737418240 $anomalyRank | int64 | quote }}
   {{- with .Values.features.alertInvestigation }}
   ALERT_INVESTIGATION_SEVERITIES: {{ join "," .severities | quote }}
   ALERT_INVESTIGATION_DEDUPE_HOURS: {{ .dedupeHours | int64 | quote }}
@@ -194,6 +204,12 @@ data:
   ALERT_INVESTIGATION_PROVIDER_PAUSE_MINUTES: {{ .providerPauseMinutes | int64 | quote }}
   ALERT_INVESTIGATION_MAX_STEPS: {{ .maxSteps | int64 | quote }}
   ALERT_INVESTIGATION_TIMEOUT_SECONDS: {{ .timeoutSeconds | int64 | quote }}
+  ALERT_INVESTIGATION_RULES: {{ .rules | quote }}
+  ALERT_INVESTIGATION_CHANGES_FIRST: {{ .changesFirst | quote }}
+  ALERT_INVESTIGATION_NARROW_FIRST: {{ dig "narrowFirst" false . | quote }}
+  ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES: {{ .window.metricsMinutes | int64 | quote }}
+  ALERT_INVESTIGATION_LOGS_WINDOW_MINUTES: {{ .window.logsMinutes | int64 | quote }}
+  ALERT_INVESTIGATION_CHANGES_WINDOW_HOURS: {{ .window.changesHours | int64 | quote }}
   ALERT_INVESTIGATION_MODEL: {{ .model | quote }}
   ALERT_INVESTIGATION_LANGUAGE: {{ .language | quote }}
   ALERT_INVESTIGATION_CONSOLE_URL: {{ .consoleUrl | quote }}
@@ -242,6 +258,7 @@ data:
   LOG_SEARCH_TIMEOUT: {{ .timeout | quote }}
   LOG_SEARCH_PER_USER_PER_MINUTE: {{ .perUserPerMinute | quote }}
   LOG_SEARCH_LOGQL: {{ .logql | default false | quote }}
+  LOG_SEARCH_QUERY_MAX_BYTES: {{ dig "queryMaxBytes" 0 . | int64 | quote }}
 {{- end }}
 {{- end }}
 {{- with .Values.features.tracing }}
@@ -345,6 +362,7 @@ data:
 {{- end }}
 {{- end }}
 {{- end }}
+  CALL_GRAPH_ENABLED: {{ .Values.features.callGraph.enabled | quote }}
 {{- with .Values.features.alertStore }}
   ALERT_STORE_ENABLED: {{ .enabled | quote }}
 {{- if .enabled }}

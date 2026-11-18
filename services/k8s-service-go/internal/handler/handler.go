@@ -81,6 +81,14 @@ type Handler struct {
 	netdropsSrc netdropsSource
 	// backendUsageSrc replaces the Prometheus and EndpointSlice reads of ServiceBackendUsage in tests (nil: svc).
 	backendUsageSrc backendUsageSource
+	// anomalySrc replaces the cluster and Prometheus reads of the narrowing in tests (nil: svc), anomalyNow its clock;
+	// anomalyAnswers keeps its answers for features.anomalyRank.cacheSeconds.
+	anomalySrc     anomalySource
+	anomalyNow     func() time.Time
+	anomalyAnswers anomalyAnswers
+	// anomalyGraph replaces the narrowing's read of the namespace's Resource Graph in tests (nil: svc), read for the
+	// call graph's order when features.callGraph is on.
+	anomalyGraph func(ctx context.Context, namespace string) (map[string]interface{}, error)
 	// alertStore reads the alert store (nil: alert reads off).
 	alertStore *alerts.Store
 	// logSearchCanI replaces the pods/log access review in tests.

@@ -37,11 +37,14 @@ A "target cluster" is a cluster Kubeast manages, including the cluster it is ins
 | AI trace reading | A collector that sends spans to Tempo (resource attributes `k8s.cluster.name`, `k8s.namespace.name`), `pods/log` read permission — end of §14 | `features.traceStore.enabled` (off) | The `traces_*` tools are left out and the API returns 404 |
 | Deprecated API item of the hygiene and upgrade checks | Read permission on the API server's `/metrics` — §11 | `features.hygiene.enabled` (on) | Only that item shows "collection failed" |
 | Argo CD guard | Argo CD tracking annotation — §12 | `gitops.argocd.enabled` (off) | No badge or warning |
+| AI `timeline` with `view: "changes"` (`ai.timelineChanges`) | The user's `list` on ReplicaSets, ControllerRevisions, ConfigMaps, Secrets (asked as metadata only, `as=PartialObjectMetadataList`), HPAs, pods and nodes, and on Argo CD's `applications.argoproj.io` where it runs — §1. `view` leaves Secrets out, so for Read the Secrets and Helm releases are not read. Without a namespace, the restarts of every namespace need `list` on pods across the cluster (an access review) | — | Each source the user may not list is named in `summary.not_read` (the cluster-wide restarts in `summary.skipped`) and counted null; the others still answer |
 | NetworkPolicy view and check | A network plugin that enforces NetworkPolicy, read permission on the namespaces involved — §7 | — | The answer is what the policies say, not what the cluster does; "unknown" where a rule needs namespace labels the user cannot read |
 | Recent flows (drawers, AI `network_flows`) | Cilium Hubble Relay serving TLS, `create` on `services/proxy` for the Relay Service — §16 | `features.networkFlows.enabled` (off) | The section and the tool are left out and the API returns 404; without the cluster permission, 403 |
 | Network drops (drawers, AI `network_drops`) | The Hubble drop metric with workload labels in the cluster's Prometheus — §17 | Prometheus (§3) | The section is not shown; the tool says the metric is missing |
 | Resource Graph traffic lines | Recent flows (§16), or the Hubble TCP and drop metrics with workload labels in the cluster's Prometheus — §18 | `features.networkFlows` or Prometheus | The switch is not shown; a missing metric is named in the graph |
+| Narrowing (AI `anomaly_rank`) | The pods, workloads, events and nodes it reads as the issue check does; for the metric checks, kube-state-metrics and cAdvisor series in the cluster's Prometheus — §3; for the log checks, the log store with index stats and patterns, for the trace checks, the trace store with TraceQL metrics — §14 | `features.anomalyRank.enabled` (off) | The tool is left out and the API returns 404; without Prometheus or those series the metric checks are listed as not run, and a grant limited to namespaces gets them as not run too; without a log or trace store, or without `get pods/log`, those checks are listed as not run; with `features.callGraph` on, the call graph's sources (§20) order the findings when the query budget leaves room |
 | Top talkers (drawers, AI `network_top_flows`) | An Amazon CloudWatch Network Flow Monitor monitor for the EKS cluster, Kubeast's AWS identity allowed to query it, the user's `list` on pods — §19 | `features.networkFlowMonitor.enabled` (off) | The section and the tool are left out and the API returns 404; without `list` on pods, 403; when AWS refuses Kubeast's identity, 502 |
+| AI call graph (`resource_graph` with include calls) | The traces' service graph metrics (Tempo metrics-generator or the OpenTelemetry Collector's servicegraph connector) and the Hubble metrics of §18 in the cluster's Prometheus — §20 | `features.callGraph.enabled` (off) | The tool is offered without include calls; a missing metric or permission is named per source in the answer |
 
 ## 1. Permissions (RBAC) — every target cluster
 
@@ -230,6 +233,7 @@ The list below covers only the differences.
 | `container_cpu_usage_seconds_total`, `container_memory_working_set_bytes` (labels `namespace`, `pod`, `container`) | The kubelet's cAdvisor (`/metrics/cadvisor`) | Optimization table, Pod, workload, Service and Namespace drawers |
 | `node_cpu_seconds_total`, `node_memory_MemAvailable_bytes`/`MemTotal_bytes`, `node_filesystem_avail_bytes`/`size_bytes` (`mountpoint="/"`), `node_load1`, `node_network_*_bytes_total`, `node_disk_*_bytes_total`, or the hostmetrics names below | node-exporter or OpenTelemetry Collector `hostmetrics` | Dashboard, node drawer |
 | `kube_pod_info`, `kube_pod_container_status_restarts_total`, `kube_horizontalpodautoscaler_status_current_replicas` | kube-state-metrics | Dashboard, Namespace, workload and HPA drawers |
+| `kube_pod_container_status_restarts_total`, `kube_pod_container_resource_limits` (`resource="memory"`) from kube-state-metrics; `container_cpu_cfs_periods_total`, `container_cpu_cfs_throttled_periods_total`, `container_memory_working_set_bytes` from cAdvisor (labels `namespace`, `pod`, `container`) | kube-state-metrics, the kubelet's cAdvisor | The AI's narrowing (`anomaly_rank`): restarts, CPU throttling, memory against the limit |
 | `kubelet_volume_stats_used_bytes`/`capacity_bytes`/`available_bytes` | kubelet `/metrics`. The CSI driver must report volume stats; hostPath and local-path do not (N/A) | Storage analysis |
 | `DCGM_FI_DEV_GPU_UTIL`, `DCGM_FI_DEV_FB_USED`/`FB_FREE`, `DCGM_FI_DEV_MEMORY_TEMP` | NVIDIA DCGM exporter | GPU screens |
 | `nginx_ingress_controller_request_duration_seconds_bucket` | ingress-nginx controller | Ingress drawer latency (P50/P95/P99) |
@@ -462,11 +466,20 @@ Kubeast only reads these Loki APIs, all with GET, so the Grafana data source pro
 - `labels`
 - `label/<name>/values`
 - `patterns`
+- `index/stats`, for the AI's narrowing (`anomaly_rank`) before its log checks, and for `loki_query` when `features.logSearch.queryMaxBytes` is set
 
 It does not install Loki or a collector.
 
 Patterns (`loki_patterns`) need `pattern_ingester: enabled: true` in Loki. Without it, only that tool answers "none".
 Loki returns only patterns with 30 or more lines in the window, for the last 3 hours.
+
+The narrowing's log checks (`anomaly_rank`):
+
+- They ask `index/stats` for the namespace's streams over the window and the one before first. Past `features.anomalyRank.logMaxBytes` (10 GiB), with no line there, or when Loki does not serve it, both checks are listed as not run.
+- The error shape check reads `patterns` for the same streams over both windows. A shape counts as an error when Loki's `level` is error, fatal or critical, or when there is no level and the shape holds `error`, `exception`, `fatal` or `panic`. When Loki holds no pattern for the window before (the last 3 hours, above), the check is listed as not run.
+- The error line check runs `sum by (<container label>) (count_over_time({…} |~ "(?i)(error|exception|fatal|panic)" [<window>]))` once, with a step of the window's length. It needs the container label of `features.logSearch.labels` on the streams.
+- With a workload, both narrow to its pods by the pod label (`<name>-.*`).
+- They pass the log tools' door: `resource.pod.read`, `get pods/log` in the namespace, the node shell namespace only for holders of `resource.node.shell`, and both windows within `features.logSearch.maxRange`. Each answer is one search of the per-user rate and one `k8s.pod.logs.logql` audit row.
 
 - **Collector**: something that sends the target cluster's container logs to Loki.
   - The label names must match `features.logSearch.labels`. The defaults are `k8s_cluster_name`, `k8s_namespace_name`, `k8s_pod_name` and `k8s_container_name`, which Loki puts on logs it receives over OTLP.
@@ -491,6 +504,10 @@ Loki returns only patterns with 30 or more lines in the window, for the last 3 h
   - TraceQL metrics (`traces_metrics`) are built in on Tempo 3.x. Tempo 2.x needs the metrics-generator `local-blocks`.
   - Metrics leave out the most recent part of the range, by Tempo's `query_frontend.query_end_cutoff` (default 30 seconds) and the step. To check, see that value in `/status/config`.
   - Read permission is the same as for log search: `get pods/log` as the user's identity.
+  - The narrowing's trace checks (`anomaly_rank`) run three TraceQL metrics queries over the window and the one before: `{ kind = server } | count_over_time()`, the same with `status = error`, and `quantile_over_time(duration, .9)`, each `by (resource.service.name)`.
+    The spans need their span kind and `service.name`; with a workload, `k8s.pod.name` on the resource (`<name>-.*`).
+    The step cuts each window into 4 to 120 steps on whole minutes, and the steps on a window's bound are not read.
+    Without TraceQL metrics, or past `features.traceStore.maxRange` over both windows, they are listed as not run. Each answer is one `k8s.traces.query` audit row.
 - **AI alert reading** (`features.alertStore`, when used): Kubeast reads the alert store's `/api/v2/alerts` (matcher `filter`) and `/api/v2/silences` with GET. When silence writing is on, it also writes (next item).
   - The store can be Alertmanager API v2, an Alertmanager through the Grafana data source proxy, or Grafana alerting's Alertmanager-compatible API (`/api/alertmanager/grafana/api/v2/…`).
   - On Grafana 13.2.4 and again on 13.3.0, that API was confirmed to answer 200 with Viewer. `…/status` is 403 for Viewer, so it is not used.
@@ -717,6 +734,17 @@ For the drawers' "Top Talkers" and the AI tool `network_top_flows` (`features.ne
 - **Who may read**: holders of `resource.networkflow.read` whom the cluster lets `list` pods in the namespace (Kubeast asks with a SelfSubjectAccessReview as the user). A peer in a namespace whose pods the user cannot list, or outside a namespace-limited grant, shows its namespace and address only. Each read is recorded as `k8s.networkflows.query` with `provider: nfm`.
 - **Check**: `aws networkflowmonitor list-monitors --region <region>` shows the monitor, and a Pod drawer → Top Talkers → Show top talkers lists rows.
 - **Verified**: against a stand-in of the API in the development cluster (`deploy/kind/devtools.yaml`, e2e `network-top-flows.spec.ts`) with the AWS SDK for Go v2 client; not yet against a real monitor.
+
+## 20. Call graph (AI `resource_graph` with include calls)
+
+With `features.callGraph.enabled` (off by default), the AI tool `resource_graph` takes `include: ["calls"]` and `since` (1m–24h, default 1h) or a fixed window `since_time`–`until_time` (1m–24h; every query is then evaluated at the window's end and the label names read over the window) and adds who calls whom among the namespace's workloads, the failing ones that call nothing failing first, and the paths from them to the failing workloads that call them (cause → … → symptom). Alert investigations are told to read it when several workloads fail. Two sources, both from the cluster's Prometheus (§3), read as the user; each one missing is named in the answer and the other is still read.
+
+- **Traces**: the service graph metrics `traces_service_graph_request_total`, `traces_service_graph_request_failed_total` and `traces_service_graph_request_server_seconds_bucket` (labels `client`, `server`). Tempo's metrics-generator (`service-graphs` processor, remote write to that Prometheus) and the OpenTelemetry Collector's or Grafana Alloy's `servicegraph` connector write them. With the namespace on both sides of the metric (`client_k8s_namespace_name`, `server_k8s_namespace_name`) the queries keep to the namespace. Tempo writes it with `metrics_generator.processor.service_graphs.dimensions: [k8s.namespace.name]` and `enable_client_server_prefix: true` (neither is set by default, and without the prefix the single `k8s_namespace_name` label does not say which side it is); the OpenTelemetry Collector's `servicegraph` connector and Alloy's `otelcol.connector.servicegraph` with `dimensions: [k8s.namespace.name]` (they always add both prefixes). The spans need the resource attribute `k8s.namespace.name` (the Collector's `k8sattributes` processor sets it). Without it Kubeast reads the busiest 500 edges and keeps those touching the namespace; an end placed by name then has a `matched_by` ending in `_unscoped`, since a service of the same name in another namespace is counted there too, and the trace source's `detail` says so. A service name is placed on a workload by the dimensions `k8s.deployment.name`, `k8s.statefulset.name` or `k8s.daemonset.name` when present, else by a workload of that name, else by a Service of that name and the workloads its selector picks; one that fits none keeps its service name. A grant limited to namespaces does not get this source, as it gets no Prometheus read (§3): without the namespace dimension the metric names every namespace's services.
+- **Network**: the Hubble TCP and drop metrics the traffic lines read (§18), for holders of `resource.networkflow.read`. The Relay's recent flows are not read here (the AI reads them with `network_flows`).
+- **Latency**: `p90_ms` (from `traces_service_graph_request_server_seconds_bucket`) is shown only and does not decide which workloads fail, so a failure that only slows calls may leave the failing list empty. Tempo's default buckets (`histogram_buckets`: 0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6.4 and 12.8 s) are coarse below 100 ms: a p90 there is interpolated inside the first bucket. Without the namespace dimension it is read for the slowest 500 edges.
+- **Answer**: `errors` counts the calls a span of either side marked as an error, so a 4xx the caller saw counts too; the model is told to check for 5xx before naming a cause. At most 10 failing workloads (`suspects`, the count before the cap in `suspects_total`). Each names the ends outside the graph its calls fail to (`failing_outside`: a database, another namespace), whose health Kubeast does not read. When every failing workload calls another failing one, `no_start: cycle` says why there is no path. An edge with drops carries Hubble's reasons (`drop_reasons`, `POLICY_DENIED` for a NetworkPolicy).
+- Reads per call: one label read and three queries for the traces, the traffic lines' reads (§18). Nothing is read with the switch off.
+- **Check**: `topk(10, sum by (client, server) (increase(traces_service_graph_request_total[1h])))` in Prometheus.
 
 ## Verified versions (2026-10-13)
 

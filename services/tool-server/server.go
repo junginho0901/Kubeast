@@ -109,7 +109,7 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 
 	// The arguments are the model's: refuse anything that kubectl would read
 	// as a flag instead of a name (argcheck.go) before touching the cluster.
-	if err := validateToolArgs(req.Arguments); err != nil {
+	if err := validateCallArgs(req.Name, req.Arguments); err != nil {
 		respondToolError(w, http.StatusBadRequest, err.Error(), nil, nil)
 		return
 	}

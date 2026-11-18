@@ -402,6 +402,17 @@ ai:
   # log (redacted, length-capped). Debugging only — off keeps them out of the
   # cluster log pipeline.
   debugDump: false
+  # The AI tool timeline's changes view (view: changes — what changed in a
+  # window: rollouts compared with the revision before, ConfigMap and Secret
+  # writes as metadata, Helm revisions, HPA scales, node conditions, Argo CD
+  # syncs, restarts; no value read) and the chat's instruction to read it first
+  # when asked why something broke. Off: the chat, alert investigations and the
+  # MCP server are offered timeline without it, the chat's instructions do
+  # not name it, a call naming the view is sent without it and k8s-service's
+  # changes routes answer 404 — unless alert investigations are on with
+  # features.alertInvestigation.changesFirst, whose step 0 reads them; the chat
+  # still sends its calls without the view.
+  timelineChanges: false
   # Provider claude-code: the chat with a Claude Pro/Max subscription instead of
   # an API key. Claude Code makes each model call and the chat's own tools answer
   # its tool calls (same tools, approval card for writes, masking and audit).
@@ -954,6 +965,23 @@ features:
     providerPauseMinutes: 30  # after the model provider refuses for credit or the key, new alerts are skipped this long; 0 = no pause
     maxSteps: 8               # model calls per investigation; the last one gets no tools
     timeoutSeconds: 300
+    # The time windows below, the scope groups (affected, checked and normal,
+    # changed for another reason, not looked at), facts kept apart from
+    # hypotheses and the report's six headings, in the prompt.
+    rules: false
+    # Step 0: before the first model call, the timeline tool's changes view
+    # over the change window goes into the first message (an audited tool call,
+    # no model step). Writes the windows too.
+    changesFirst: false
+    # Step 0, after the changes: anomaly_rank (features.anomalyRank) over the
+    # metrics window of the alert's namespace goes into the first message (an
+    # audited tool call, no model step; its store queries and seconds are
+    # features.anomalyRank's). Writes the windows too.
+    narrowFirst: false
+    window:                   # counted from the alert's start; ends are never past now
+      metricsMinutes: 15      # metrics this long either side of the start (1–360)
+      logsMinutes: 5          # logs from this long before the start (0–1440)
+      changesHours: 4         # changes from this long before the start (1–168)
     model: ""                 # ModelConfig name; empty = the default model
     language: en              # report language (en, ko, …)
     consoleUrl: ""            # e.g. https://kubeast.example.com — links in the audit summary; empty = no link
@@ -971,6 +999,30 @@ features:
     #   resources: [policyreports, clusterpolicyreports]
     #   verbs: [get, list, watch]
     extraRules: []
+  # Narrowing for the AI (the tool anomaly_rank, GET
+  # /namespaces/{namespace}/anomalies, read as the caller like a list): what
+  # differs in one namespace between a window and the window of the same length
+  # before it — failing objects, terminations by reason, restarts, CPU
+  # throttling, memory against the limit, error log shapes and counts, the
+  # services' requests, failed requests and p90 from their server spans, node
+  # pressure — ranked, at most ten. The metric checks read the cluster's
+  # Prometheus (kube-state-metrics and cAdvisor names), the log checks the log
+  # store (features.logSearch) and the trace checks the trace store
+  # (features.traceStore), each through the door of its own tools
+  # (resource.pod.read, get pods/log, audited as k8s.pod.logs.logql and
+  # k8s.traces.query); without one, its checks are listed as not run. Off: the
+  # route answers 404, reads nothing, the AI is not offered the tool and the
+  # chat's system prompt and the MCP tool list do not name it.
+  anomalyRank:
+    enabled: false
+    maxQueries: 12           # store queries one answer may make
+    checkTimeoutSeconds: 5   # each check
+    timeoutSeconds: 20       # the whole answer
+    concurrency: 4           # checks at once
+    cacheSeconds: 60         # the same caller, namespace and window answered from memory
+    # The log checks ask the log store's index first (Loki's index stats) and
+    # do not read past this many bytes over both windows (10 GiB).
+    logMaxBytes: 10737418240
   # Cluster hygiene report (Cluster → Cluster Hygiene, permissions
   # resource.hygiene.scan on the cluster, admin.hygiene.read/export/signoff
   # globally): Pod Security Standards, image tags,
@@ -1057,6 +1109,10 @@ features:
     # k8s.pod.logs.logql. Off unless asked. (The AI's loki_* tools do not
     # depend on this switch.)
     logql: false
+    # The AI's loki_query asks the store's index first (Loki's index stats,
+    # mcp-grafana's lokiguard way) and is refused, with how to narrow it, past
+    # this many bytes. 0 = not asked: the query runs as it always did.
+    queryMaxBytes: 0
     # With networkPolicy on, k8s-service reaches outside the cluster on 443
     # and 6443 only; a store on another port needs {cidr, port} here. A store
     # behind a Service of this cluster: on EKS VPC CNI its ClusterIP (§15).
@@ -1181,6 +1237,21 @@ features:
     timeout: 15s
     perUserPerMinute: 20
     egress: []
+  # Who calls whom for the AI (off by default): resource_graph with include
+  # calls adds the calls between a namespace's workloads over a range (1m-24h)
+  # from the traces' service graph metrics (traces_service_graph_request_total,
+  # _failed_total, _server_seconds — Tempo's metrics-generator or the
+  # servicegraph connector of the OpenTelemetry Collector or Alloy, written to
+  # the cluster's Prometheus) and the Hubble metrics the Resource Graph's lines
+  # read, with the failing workloads that call nothing failing first and the
+  # paths from them to their failing callers; alert investigations are told to
+  # read it when several workloads fail and to write the cause → … → symptom
+  # path with the step of each link. Read as the user: the traces need a grant
+  # on the whole cluster (as the Prometheus reads), the Hubble lines
+  # resource.networkflow.read. Off: include calls reads nothing and says so,
+  # and the AI (the chat, investigations and the MCP tool list) is not offered it.
+  callGraph:
+    enabled: false
   # Alert store reads for the AI's alerts_list (off by default): an
   # Alertmanager's API v2 at url (http://alertmanager.monitoring:9093), a
   # Grafana data source proxy to one (https://<grafana>/api/datasources/proxy/uid/<Alertmanager UID>)

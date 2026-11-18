@@ -23,6 +23,9 @@ const (
 	timelineDefaultSpan = 24 * time.Hour
 	// parseFromTime's longest window and the API's, which answers 400 past it
 	timelineMaxBack = 90 * 24 * time.Hour
+	// the changes view: the most it lists, the newest kept, and its window when no start is given
+	timelineChangesMax  = 50
+	timelineChangesSpan = 4 * time.Hour
 )
 
 type timelineWindow struct {
@@ -88,8 +91,16 @@ func timelineEventsNote(listed, read, matching int, inRange interface{}, narrowe
 	return ""
 }
 
-// handleTimeline answers events and rollout revisions of a namespace, one object, or every namespace the caller reads.
+// handleTimeline answers events and rollout revisions of a namespace, one object, or every namespace the caller reads;
+// view changes answers what changed instead (handleTimelineChanges).
 func handleTimeline(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	switch argString(args, "view", "events") {
+	case "events":
+	case "changes":
+		return handleTimelineChanges(ctx, args, headers)
+	default:
+		return "", wrapBadRequest("view is events or changes")
+	}
 	namespace := argString(args, "namespace", "")
 	kind := eventKindName(argString(args, "kind", ""))
 	name := argString(args, "name", "")
@@ -242,4 +253,92 @@ func handleTimeline(ctx context.Context, args map[string]interface{}, headers ht
 	return marshalOrdered(result,
 		[]string{"namespace", "object", "event_type", "window_note", "summary", "events_note", "narrowed", "rollouts_total", "rollouts_note", "hint"},
 		[]string{"rollout_history", "events"})
+}
+
+// handleTimelineChanges answers what changed from since_time to until_time (default the four hours before now), the
+// newest timelineChangesMax at most: k8s-service reads the objects as the caller, inside a grant limited to namespaces,
+// and counts every change of the window by source. The window is exact, not rounded to hours.
+func handleTimelineChanges(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	namespace := argString(args, "namespace", "")
+	if argString(args, "kind", "") != "" || argString(args, "name", "") != "" || argString(args, "event_type", "") != "" {
+		return "", wrapBadRequest("view changes takes namespace, since_time, until_time and limit; kind, name and event_type narrow the events view")
+	}
+	now := time.Now()
+	until := now
+	if raw := argString(args, "until_time", ""); raw != "" {
+		t, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			return "", wrapBadRequest("until_time must be an RFC3339 time")
+		}
+		if t.Before(now) {
+			until = t
+		}
+	}
+	since := until.Add(-timelineChangesSpan)
+	if raw := argString(args, "since_time", ""); raw != "" {
+		t, err := parseFromTime(raw, until)
+		if err != nil {
+			return "", wrapBadRequest("since_time: " + err.Error())
+		}
+		since = t
+	}
+	if !since.Before(until) {
+		return "", wrapBadRequest("since_time must be before until_time and before now")
+	}
+	if now.Sub(since) > timelineMaxBack {
+		return "", wrapBadRequest("since_time reaches at most 90 days back")
+	}
+	limit := argInt(args, "limit", timelineChangesMax)
+	if limit <= 0 || limit > timelineChangesMax {
+		limit = timelineChangesMax
+	}
+
+	q := url.Values{
+		"since": {since.UTC().Format(time.RFC3339)},
+		"until": {until.UTC().Format(time.RFC3339)},
+		"limit": {strconv.Itoa(limit)},
+	}
+	path := "/timeline/changes"
+	if namespace != "" {
+		path = "/namespaces/" + url.PathEscape(namespace) + "/timeline/changes"
+	}
+	status, body, err := k8sServiceGet(ctx, headers, path, q)
+	if err != nil {
+		return "", err
+	}
+	reply, out, err := featureReply("timeline", "", status, body)
+	if err != nil || out != "" {
+		return out, err
+	}
+
+	summary, _ := reply["summary"].(map[string]interface{})
+	changes, _ := reply["changes"].([]interface{})
+	if changes == nil {
+		changes = []interface{}{}
+	}
+	result := map[string]interface{}{
+		"view":      "changes",
+		"namespace": namespaceOrAll(namespace),
+		"summary":   summary,
+		"changes":   changes,
+	}
+	if scope := scopedNamespaces(ctx); len(scope) > 0 && namespace == "" {
+		result["namespace"] = scope
+	}
+	total, _ := summary["changes_total"].(float64)
+	if int(total) > len(changes) {
+		result["changes_note"] = fmt.Sprintf("The newest %d of the %d changes in this window are listed; summary.by_source counts them by source.", len(changes), int(total))
+	}
+	notRead, _ := summary["not_read"].(map[string]interface{})
+	if len(notRead) > 0 {
+		result["not_read_note"] = "The sources in summary.not_read could not be read: their changes are not counted, not zero (by_source is null for them)."
+	}
+	skipped, _ := summary["skipped"].(map[string]interface{})
+	if len(skipped) > 0 {
+		result["skipped_note"] = "The sources in summary.skipped were not read, for the reason given: their changes are not counted, not zero."
+	}
+	if total == 0 && len(notRead) == 0 && len(skipped) == 0 {
+		result["hint"] = "Nothing changed in this window as far as the objects keep it. Each ConfigMap, Secret, HPA and container keeps only its last change; older ones are in events, which live about an hour."
+	}
+	return marshalOrdered(result, []string{"view", "namespace", "summary", "changes_note", "not_read_note", "skipped_note", "hint"}, []string{"changes"})
 }
