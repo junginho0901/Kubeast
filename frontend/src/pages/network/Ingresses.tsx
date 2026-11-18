@@ -24,7 +24,7 @@ import { applyIngressWatchEvent } from './ingresses/ingressWatchNormalize'
 import { IngressFilters } from './ingresses/IngressFilters'
 import { IngressTable } from './ingresses/IngressTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -193,13 +193,10 @@ export default function Ingresses() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllIngresses(true)
-      : await api.getIngresses(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['network', 'ingresses', selectedNamespace] })
-    queryClient.setQueryData(['network', 'ingresses', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['network', 'ingresses', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllIngresses(true)
+      : api.getIngresses(selectedNamespace, true)))
 
   const createIngressYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

@@ -23,6 +23,7 @@ import { utcTitle } from '@/utils/time'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { failureOf } from '@/hooks/useRefresh'
+import { unlessRefused } from '@/services/queryDefaults'
 
 // Admin → Investigations: the reports the alert investigator wrote (features.alertInvestigation).
 // Opening one is audited server-side (ai.investigation.view).
@@ -60,7 +61,7 @@ export default function Investigations() {
     }),
     placeholderData: keepSameRead(listKey, [3, 4]),
     // while something is queued or running, follow it
-    refetchInterval: (q) => ((q.state.data?.items ?? []).some((r) => r.status === 'queued' || r.status === 'running') ? 5_000 : 30_000),
+    refetchInterval: (q) => unlessRefused(q.state.error, (q.state.data?.items ?? []).some((r) => r.status === 'queued' || r.status === 'running') ? 5_000 : 30_000),
   })
   const view = investigationsView(data, page, rowsPerPage)
   const { rows, total, shownPage, shownFilter } = view

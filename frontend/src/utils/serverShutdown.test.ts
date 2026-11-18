@@ -16,6 +16,14 @@ describe('why a terminal closed', () => {
     expect(terminalEndText('connectionLost', echo)).toContain('connection to the server was lost')
   })
 
+  it('reads a session the server could not check as one a new terminal may open, never as a sign-out', () => {
+    expect(terminalEnd(1013, 'session_unverified')).toBe('sessionUnchecked')
+    expect(terminalEndText('sessionUnchecked', echo)).toBe((en as any).serverShutdown.terminalUnchecked)
+    expect(terminalEndText('sessionUnchecked', echo)).not.toMatch(/sign in/i)
+    expect((ko as any).serverShutdown.terminalUnchecked).not.toContain('로그인')
+    expect(terminalEnd(1013, '')).toBeNull()
+  })
+
   it('leaves the ends that say why themselves alone', () => {
     expect(terminalEnd(1000, '')).toBeNull() // the shell exited
     expect(terminalEnd(1001, '')).toBeNull() // a browser leaving the page
@@ -24,7 +32,7 @@ describe('why a terminal closed', () => {
   })
 
   it('has every line in both languages, and the English one is the fallback', () => {
-    for (const key of ['terminalReplaced', 'terminalLost', 'reconnect', 'followStopped'] as const) {
+    for (const key of ['terminalReplaced', 'terminalLost', 'terminalUnchecked', 'reconnect', 'followStopped'] as const) {
       expect((en as any).serverShutdown[key]).toBeTruthy()
       expect((ko as any).serverShutdown[key]).toBeTruthy()
     }

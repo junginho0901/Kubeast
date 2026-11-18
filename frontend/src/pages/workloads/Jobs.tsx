@@ -26,7 +26,7 @@ import { applyJobWatchEvent } from './jobs/jobWatchNormalize'
 import { JobFilters } from './jobs/JobFilters'
 import { JobTable } from './jobs/JobTable'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { countsOf } from '@/utils/listCounts'
 
@@ -185,13 +185,10 @@ export default function Jobs() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = selectedNamespace === 'all'
-      ? await api.getAllJobs(true)
-      : await api.getJobs(selectedNamespace, true)
-    queryClient.removeQueries({ queryKey: ['workloads', 'jobs', selectedNamespace] })
-    queryClient.setQueryData(['workloads', 'jobs', selectedNamespace], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['workloads', 'jobs', selectedNamespace], () => selectedNamespace === 'all'
+      ? api.getAllJobs(true)
+      : api.getJobs(selectedNamespace, true)))
 
   const createJobYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'

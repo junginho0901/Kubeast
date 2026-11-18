@@ -78,6 +78,8 @@ cd e2e && npx playwright test                 # 전체
 npx playwright test cluster-hygiene.spec.ts   # 스펙 하나
 ```
 
+로그인에 기대는 프로젝트가 모두 끝나면(테스트가 실패해도, 스펙 하나만 돌려도) `tests/refusals.teardown.ts`가 실행 시작 뒤 k8s-service · k8s-service-stream · tool-server · ai-service 파드의 로그와 재시작한 컨테이너의 앞 실행 로그를 읽고, `cluster request with no person refused`(k8s-service)나 `kubectl not run`(tool-server, 채팅 · MCP · 알림 조사 도구 호출의 kubectl 실행. 채팅의 것은 ai-service도 도구 오류로 로그에 남김) 줄이 있으면 그 줄을 보여 주며 실패합니다. 사람이 없어 거절된 읽기는 화면에 빈칸으로만 보일 수 있기 때문입니다. 실행 중 바뀐 파드(rollout, fault · rollout 프로젝트)는 새로 뜬 뒤부터만 읽습니다. 이 실행만이 아니라 설치 전체의 로그를 읽으므로 그동안 dev 설치에서 다른 일을 돌리지 않습니다.
+
 전제 조건은 다음과 같습니다. 없으면 그 스펙은 실패하지 않고 사유를 남긴 채 건너뜁니다.
 
 - **두 번째 클러스터 `default`** — `scripts/add-kind-cluster.sh default --addons`로 만드는 kind 클러스터입니다. `kubeast` 네임스페이스는 없습니다.
