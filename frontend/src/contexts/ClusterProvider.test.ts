@@ -51,15 +51,41 @@ import { useForbiddenLabels } from '@/services/forbiddenStore'
 import { announceCreated, useCreatedNotice } from '@/services/createdNoticeStore'
 import { recordWatchFrame, useWatchProblem } from '@/services/watchProblemStore'
 import { ResourceDetailProvider } from '@/components/ResourceDetailProvider'
+import { selectionSettled, useClusterList } from '@/hooks/useAccessibleClusterSelection'
+import ClusterGate from '@/components/ClusterGate'
+import { everyUntilRefused, queryDefaults } from '@/services/queryDefaults'
 import { useResourceDetail, type ResourceDetailTarget } from '@/components/ResourceDetailContext'
 import LazyResourceDetailDrawer from '@/components/LazyResourceDetailDrawer'
 
+// every read that went out, with its parameters as sent; these answer with their path and cluster
+const sentReads: string[] = []
+const NAMED_ANSWERS = ['/cluster/metrics/top-resources', '/cluster/features', '/cluster/namespaces']
+// a grant limited to namespaces on the one cluster it may reach: refused the node list and the pods across namespaces
+const ONLY_SELF = ['/clusters', '/cluster/overview', '/cluster/nodes', '/cluster/pods/page']
+// the clusters the person may reach, as /clusters?accessibleOnly answers, and failures it answers first, one a read
+let registry: string[] = ['self']
+let health: Record<string, string> = {}
+let listFailures: { status: number; retryAfter?: string }[] = []
 client.defaults.adapter = async (config: InternalAxiosRequestConfig) => {
-  const cluster = String((config.params as { cluster?: string } | undefined)?.cluster ?? '')
+  const params = (config.params ?? {}) as Record<string, string>
+  const cluster = String(params.cluster ?? '')
+  if (String(config.method ?? 'get').toLowerCase() === 'get') sentReads.push(`${config.url} ${new URLSearchParams(params)}`)
+  if (ONLY_SELF.includes(String(config.url))) {
+    await new Promise((r) => setTimeout(r, 20))
+    const failure = config.url === '/clusters' ? listFailures.shift() : undefined
+    if (failure) {
+      const headers = failure.retryAfter ? { 'retry-after': failure.retryAfter } : {}
+      throw new AxiosError('Request failed', 'ERR_BAD_RESPONSE', config, null, { status: failure.status, statusText: '', data: { detail: 'Session could not be checked; try again' }, headers, config })
+    }
+    if (config.url === '/clusters') return { data: { items: registry.map((id) => ({ id, display_name: id, health_status: health[id] ?? 'healthy' })) }, status: 200, statusText: 'OK', headers: {}, config }
+    if (config.url === '/cluster/overview') return { data: {}, status: 200, statusText: 'OK', headers: {}, config }
+    throw new AxiosError('Request failed', 'ERR_BAD_REQUEST', config, null, { status: 403, statusText: '', data: {}, headers: {}, config })
+  }
   if (config.url === '/cluster/secrets/all') {
     throw new AxiosError('Request failed', 'ERR_BAD_RESPONSE', config, null, { status: 403, statusText: '', data: {}, headers: {}, config })
   }
-  return { data: config.url === '/cluster/pods/all' ? `pods of ${cluster}` : null, status: 200, statusText: 'OK', headers: {}, config }
+  const data = config.url === '/cluster/pods/all' ? `pods of ${cluster}` : NAMED_ANSWERS.includes(String(config.url)) ? `${config.url} of ${cluster}` : null
+  return { data, status: 200, statusText: 'OK', headers: {}, config }
 }
 
 const container = {
@@ -145,6 +171,56 @@ describe('a cluster switch', () => {
   })
 })
 
+// A switch asks each read of the new cluster once. The cache was emptied with the queries of the screen being left still
+// on it, and asking them then sent them as the new cluster with that screen's key and parameters: the Dashboard's top
+// resources went to the new cluster twice, once with the `skip=nodes` the cluster left had refused it, and every read
+// keyed by the cluster went twice.
+describe('the reads a cluster switch makes', () => {
+  const shown: Record<string, unknown> = {}
+
+  // a page as Layout mounts it, under a key of the cluster, whose read leaves out what its own cluster refused before
+  function Page() {
+    const { currentCluster } = useCluster()
+    shown.top = useQuery({
+      queryKey: ['top-resources', currentCluster],
+      queryFn: async () => (await client.get('/cluster/metrics/top-resources', { params: currentCluster === 'a' ? { skip: 'nodes' } : {} })).data,
+    }).data
+    return null
+  }
+  // beside it, as Layout's own reads: one keyed by the cluster, one whose key names none
+  function Beside() {
+    const { currentCluster } = useCluster()
+    shown.features = useQuery({ queryKey: ['cluster-features', currentCluster], queryFn: async () => (await client.get('/cluster/features')).data }).data
+    shown.namespaces = useQuery({ queryKey: ['namespaces'], queryFn: async () => (await client.get('/cluster/namespaces')).data }).data
+    return null
+  }
+  function Screen() {
+    const { currentCluster } = useCluster()
+    return createElement(Fragment, null, createElement(Beside), createElement(Page, { key: currentCluster || 'default' }))
+  }
+  const on = (cluster: string) => () =>
+    shown.top === `/cluster/metrics/top-resources of ${cluster}` &&
+    shown.features === `/cluster/features of ${cluster}` &&
+    shown.namespaces === `/cluster/namespaces of ${cluster}`
+
+  it("asks each read of the new cluster once, with none of the cluster left's parameters", async () => {
+    await mount(createElement(Screen))
+    await until(on('a'))
+    expect(sentReads.filter((r) => r.includes('skip=nodes'))).toEqual(['/cluster/metrics/top-resources skip=nodes&cluster=a'])
+
+    sentReads.length = 0
+    await act(async () => pick('b'))
+    await until(on('b'))
+    await settle()
+
+    expect(sentReads.sort()).toEqual([
+      '/cluster/features cluster=b',
+      '/cluster/metrics/top-resources cluster=b',
+      '/cluster/namespaces cluster=b',
+    ])
+  })
+})
+
 describe('an open drawer on a cluster switch', () => {
   type Shown = { cluster: string; target: ResourceDetailTarget | null; canGoBack: boolean }
   const commits: Shown[] = []
@@ -214,5 +290,195 @@ describe('the cluster context across navigations', () => {
     await act(async () => pick('b'))
     await settle()
     expect({ address, reads: [...new Set(reads)] }).toEqual({ address: '?cluster=b&namespace=ns1', reads: ['b'] })
+  })
+})
+
+// The first selection after sign-in ('' → one of the person's clusters), and the gate the screens wait at (ClusterGate,
+// as Layout draws it). The switch emptied the cluster list without asking it again: Layout read "no accessible cluster"
+// and took the page away, and the picker cleared the selection it had just made, so the screen went back and forth
+// between the cluster and none and each turn with none read the page again without `cluster=`. A page drawn before the
+// selection read once without `cluster=` too, answered for the server's default cluster. A list whose first read failed
+// cleared a stored selection, and the screens read the default cluster.
+describe('the screens and the selection of a cluster', () => {
+  const ck = (cluster: string) => cluster || 'default'
+  // the Dashboard's reads on a timer: the overview every 15 s, the problem pods every 30 s, the node list every minute
+  function Page() {
+    const { currentCluster } = useCluster()
+    useQuery({ queryKey: ['cluster-overview', ck(currentCluster)], queryFn: async () => (await client.get('/cluster/overview')).data, refetchInterval: everyUntilRefused(15_000) })
+    useQuery({ queryKey: ['dashboard-problem-pods', ck(currentCluster)], queryFn: async () => (await client.get('/cluster/pods/page', { params: { sort: 'health' } })).data, refetchInterval: everyUntilRefused(30_000) })
+    useQuery({ queryKey: ['nodes', ck(currentCluster)], queryFn: async () => (await client.get('/cluster/nodes', { params: { force_refresh: false } })).data, refetchInterval: everyUntilRefused(60_000) })
+    return null
+  }
+  // the gate's fallback: how many times it was drawn
+  const fallback = { drawn: 0 }
+  function Fallback() {
+    useLayoutEffect(() => { fallback.drawn += 1 })
+    return null
+  }
+  // as Layout draws it: under the cluster's key, the gate and the page in it
+  function Body() {
+    const { currentCluster } = useCluster()
+    return createElement(Fragment, { key: ck(currentCluster) }, createElement(ClusterGate, { fallback: createElement(Fallback), children: createElement(Page) }))
+  }
+  let shown = ''
+  function Shown() {
+    shown = useCluster().currentCluster
+    return null
+  }
+  // the picker's list: each cluster's health dot
+  let listed: Record<string, string | undefined> = {}
+  function Listed() {
+    listed = Object.fromEntries((useClusterList().data ?? []).map((c) => [c.id, c.health_status]))
+    return null
+  }
+  let client_: QueryClient
+  const stored = () => window.localStorage.getItem('kubeast:current-cluster')
+  const reads = (path: string, cluster: string) => {
+    const of = sentReads.filter((r) => r.startsWith(`${path} `))
+    return { atNone: of.filter((r) => !r.includes('cluster=')).length, at: of.filter((r) => r.includes(`cluster=${cluster}`)).length, elsewhere: of.filter((r) => r.includes('cluster=') && !r.includes(`cluster=${cluster}`)).length }
+  }
+  // the page's three reads at one cluster: each once with it, none without a cluster or at another
+  const pageReads = (cluster: string) => ({ nodes: reads('/cluster/nodes', cluster), pods: reads('/cluster/pods/page', cluster), overview: reads('/cluster/overview', cluster) })
+  const once = { atNone: 0, at: 1, elsewhere: 0 }
+  const pass = async (ms: number) => { for (let t = 0; t < ms; t += 500) await act(async () => { await vi.advanceTimersByTimeAsync(500) }) }
+  const start = async ({ clusters, storedAs = '', failures = [] }: { clusters: string[]; storedAs?: string; failures?: typeof listFailures }) => {
+    registry = clusters
+    listFailures = [...failures]
+    if (storedAs) window.localStorage.setItem('kubeast:current-cluster', storedAs)
+    else window.localStorage.removeItem('kubeast:current-cluster')
+    sentReads.length = 0
+    fallback.drawn = 0
+    client_ = new QueryClient({ defaultOptions: { queries: queryDefaults } })
+    root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(MemoryRouter, { initialEntries: ['/'] },
+        createElement(QueryClientProvider, { client: client_ },
+          createElement(ClusterProvider, null, createElement(Shown), createElement(Listed), createElement(Picker), createElement(Body)))))
+    })
+  }
+  const end = async () => {
+    await act(async () => root.unmount())
+    vi.useRealTimers()
+    registry = ['self']
+    health = {}
+    listFailures = []
+  }
+
+  it('settles the screens once the selection is one of the clusters the list answered, or on a selection the list could not answer for', () => {
+    const list = (data: string[] | undefined, isError = false, failureCount = 0) => ({ data: data?.map((id) => ({ id }) as never), isError, failureCount })
+    expect([
+      selectionSettled(list(['a', 'b']), 'a'),
+      selectionSettled(list(['a', 'b']), 'gone'),
+      selectionSettled(list(['a']), ''),
+      selectionSettled(list([]), ''),
+      selectionSettled(list([]), 'a'),
+      selectionSettled(list(undefined), 'a'),
+      selectionSettled(list(undefined, false, 1), 'a'),
+      selectionSettled(list(undefined, false, 1), ''),
+      selectionSettled(list(undefined, true, 2), 'a'),
+      selectionSettled(list(undefined, true, 2), ''),
+    ]).toEqual([true, false, false, true, true, false, true, false, true, true])
+  })
+
+  for (const c of [
+    { install: 'one cluster', clusters: ['self'], storedAs: '', chosen: 'self' },
+    { install: 'two clusters', clusters: ['default', 'self'], storedAs: '', chosen: 'default' },
+    { install: 'one cluster, chosen before', clusters: ['self'], storedAs: 'self', chosen: 'self' },
+    { install: 'two clusters, chosen before', clusters: ['default', 'self'], storedAs: 'self', chosen: 'self' },
+    { install: 'a stored cluster since removed', clusters: ['self'], storedAs: 'gone', chosen: 'self' },
+  ]) {
+    it(`${c.install}: reads nothing without a cluster or at another, each refused read once with the one chosen, none again`, async () => {
+      vi.useFakeTimers()
+      try {
+        await start(c)
+        await pass(5_000)
+        expect({ shown, stored: stored(), ...pageReads(c.chosen) }).toEqual({ shown: c.chosen, stored: c.chosen, nodes: once, pods: once, overview: once })
+
+        // two minutes on: the overview's 15 s eight times over, no refused read asked again anywhere
+        await pass(120_000)
+        const overview = reads('/cluster/overview', c.chosen)
+        expect({ shown, nodes: reads('/cluster/nodes', c.chosen), pods: reads('/cluster/pods/page', c.chosen), overviewElsewhere: overview.atNone + overview.elsewhere, overviewOnItsTimer: overview.at > 8 })
+          .toEqual({ shown: c.chosen, nodes: once, pods: once, overviewElsewhere: 0, overviewOnItsTimer: true })
+      } finally {
+        await end()
+      }
+    })
+  }
+
+  // The session store's database restarting: /clusters answers 503 with Retry-After for a while, then its list.
+  it('a list answered "ask again" keeps a stored selection, which the screens read, and stays on it once the list answers', async () => {
+    vi.useFakeTimers()
+    try {
+      await start({ clusters: ['default', 'self'], storedAs: 'self', failures: [{ status: 503, retryAfter: '5' }, { status: 503, retryAfter: '5' }] })
+      await pass(3_000)
+      expect({ shown, stored: stored(), listAsked: sentReads.filter((r) => r.startsWith('/clusters ')).length, ...pageReads('self') })
+        .toEqual({ shown: 'self', stored: 'self', listAsked: 1, nodes: once, pods: once, overview: once })
+      await pass(15_000)
+      expect({ shown, stored: stored(), listAsked: sentReads.filter((r) => r.startsWith('/clusters ')).length, nodes: reads('/cluster/nodes', 'self'), pods: reads('/cluster/pods/page', 'self') })
+        .toEqual({ shown: 'self', stored: 'self', listAsked: 3, nodes: once, pods: once })
+    } finally {
+      await end()
+    }
+  })
+
+  it('with nothing stored, the screens wait while the list answers "ask again", then read the cluster it gives once', async () => {
+    vi.useFakeTimers()
+    try {
+      await start({ clusters: ['default', 'self'], failures: [{ status: 503, retryAfter: '5' }, { status: 503, retryAfter: '5' }] })
+      await pass(8_000)
+      expect({ shown, nodes: reads('/cluster/nodes', 'default'), overview: reads('/cluster/overview', 'default') })
+        .toEqual({ shown: '', nodes: { atNone: 0, at: 0, elsewhere: 0 }, overview: { atNone: 0, at: 0, elsewhere: 0 } })
+      await pass(15_000)
+      expect({ shown, stored: stored(), ...pageReads('default') }).toEqual({ shown: 'default', stored: 'default', nodes: once, pods: once, overview: once })
+    } finally {
+      await end()
+    }
+  })
+
+  it('with nothing stored and a list that failed for good, the screens read as before, at the server\'s default cluster', async () => {
+    vi.useFakeTimers()
+    try {
+      await start({ clusters: ['self'], failures: [{ status: 500 }, { status: 500 }] })
+      await pass(5_000)
+      expect({ shown, nodes: reads('/cluster/nodes', 'self') }).toEqual({ shown: '', nodes: { atNone: 1, at: 0, elsewhere: 0 } })
+    } finally {
+      await end()
+    }
+  })
+
+  it('a switch in the picker keeps the gate open: no fallback drawn, each read once at the cluster chosen, none again at the one left', async () => {
+    vi.useFakeTimers()
+    try {
+      await start({ clusters: ['default', 'self'], storedAs: 'default' })
+      await pass(3_000)
+      expect({ ...pageReads('default'), listed }).toEqual({ nodes: once, pods: once, overview: once, listed: { default: 'healthy', self: 'healthy' } })
+      sentReads.length = 0
+      fallback.drawn = 0
+      // the cluster to switch to went unhealthy since the list was read: the switch reads the list again behind it
+      health = { self: 'unhealthy' }
+      await act(async () => pick('self'))
+      await pass(65_000)
+      expect({ shown, fallbackDrawn: fallback.drawn, listAsked: sentReads.filter((r) => r.startsWith('/clusters ')).length, listed, nodes: reads('/cluster/nodes', 'self'), pods: reads('/cluster/pods/page', 'self'), leftBehind: sentReads.filter((r) => r.includes('cluster=default')) })
+        .toEqual({ shown: 'self', fallbackDrawn: 0, listAsked: 1, listed: { default: 'healthy', self: 'unhealthy' }, nodes: once, pods: once, leftBehind: [] })
+    } finally {
+      await end()
+    }
+  })
+
+  it('the selected cluster gone from the list: the screens wait, read none of it, and read the cluster chosen in its place once', async () => {
+    vi.useFakeTimers()
+    try {
+      await start({ clusters: ['default', 'self'], storedAs: 'self' })
+      await pass(3_000)
+      expect(pageReads('self')).toEqual({ nodes: once, pods: once, overview: once })
+      sentReads.length = 0
+      registry = ['default']
+      await act(async () => { void client_.invalidateQueries({ queryKey: ['clusters-accessible'] }) })
+      await pass(65_000)
+      expect({ shown, stored: stored(), atSelf: sentReads.filter((r) => r.includes('cluster=self') && !r.startsWith('/clusters ')), nodes: reads('/cluster/nodes', 'default'), pods: reads('/cluster/pods/page', 'default') })
+        .toEqual({ shown: 'default', stored: 'default', atSelf: [], nodes: once, pods: once })
+    } finally {
+      await end()
+    }
   })
 })

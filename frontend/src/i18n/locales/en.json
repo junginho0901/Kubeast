@@ -1759,6 +1759,7 @@
     "delete": "Delete",
     "title": "AI Chat",
     "subtitle": "Ask the cluster in natural language and solve problems.",
+    "modelReadFailed": "Could not read the AI model: {{reason}}",
     "emptyTitle": "Start a new chat",
     "emptySubtitle": "Click a question below or type your own.",
     "resultZipDownload": "Download result ZIP",
@@ -2114,6 +2115,8 @@
       "retrying": "Retrying automatically... (every 5 seconds)",
       "unavailableAll": "Pod metrics are not available",
       "noPodsInNamespace": "No pods in {{namespace}} namespace",
+      "noneInGrant": "No pod metrics in the namespaces you can see",
+      "noneInGrantHint": "Your access to this cluster is limited to the namespaces {{namespaces}}, and no pod in them has metrics now. Choose a namespace to see its pods.",
       "searchPlaceholder": "Search pods by name..."
     },
     "autoRefresh": "Auto refresh every 5 seconds",

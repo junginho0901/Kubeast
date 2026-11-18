@@ -65,7 +65,7 @@ Kubeast는 주소가 그 사람의 것인지 알 수 없습니다. `admin.users.
 
 **사람이 없는 요청.** 몇몇 읽기는 Kubeast 자체 읽기이고, 클러스터 감사 로그에는 Kubeast가 남습니다.
 
-- `Impersonate-User` 헤더 없이: 서버 버전, 클러스터마다 한 번 읽어 모두에게 쓰는 API 디스커버리, 상태 확인.
+- `Impersonate-User` 헤더 없이: 서버 버전, 클러스터마다 한 번 읽어 모두에게 쓰는 API 디스커버리, 상태 확인. `/version`, `/api`, `/apis`, `/api/v1`, `/apis/<group>/<version>`(클러스터 서버 URL에 경로가 있으면 그 뒤)의 `GET`만 이렇게 나갑니다.
 - 고정 신원 `kubeast:cache`(§1의 `view` 권한)로: 개요 informer, 목록을 볼 수 있는 모두에게 한 번 읽어 쓰는 객체 이벤트와 노드의 파드, Kubeast가 도는 클러스터를 가리는 `kube-system` UID, `metrics.k8s.io` 그룹 확인, Prometheus·OpenCost Service 찾기.
 
 그 밖의 요청은 로그인한 사람을 알 수 없으면 보내지 않고, kubectl 도구도 실행하지 않습니다.

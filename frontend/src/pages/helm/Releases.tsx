@@ -18,7 +18,7 @@ import ReleaseFilters from './releases/ReleaseFilters'
 import ReleaseTable from './releases/ReleaseTable'
 import { isProtectedNamespaceError } from '@/utils/protectedNamespace'
 import { RefreshFailure } from '@/components/RefreshFailure'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { NOT_COUNTED } from '@/utils/listCounts'
 import { failureText } from '@/utils/failureText'
 
@@ -46,11 +46,8 @@ export default function HelmReleasesPage() {
     [cluster, namespace],
   )
   const queryClient = useQueryClient()
-  const { refresh, failure: refreshFailure } = useRefresh(() => queryClient.fetchQuery({
-    queryKey,
-    queryFn: () => api.helm.listReleases({ ...(namespace ? { namespace } : {}), force_refresh: true }),
-    staleTime: 0,
-  }))
+  const { refresh, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, queryKey, () => api.helm.listReleases({ ...(namespace ? { namespace } : {}), force_refresh: true })))
 
   // Another namespace or cluster waits for its own answer, as on first open: the releases of the one before are not
   // its releases.

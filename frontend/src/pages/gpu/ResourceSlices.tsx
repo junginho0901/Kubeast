@@ -14,7 +14,7 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -184,11 +184,8 @@ export default function ResourceSlices() {
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = await api.getResourceSlices(true)
-    queryClient.removeQueries({ queryKey: ['gpu', 'resourceslices'] })
-    queryClient.setQueryData(['gpu', 'resourceslices'], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['gpu', 'resourceslices'], () => api.getResourceSlices(true)))
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
