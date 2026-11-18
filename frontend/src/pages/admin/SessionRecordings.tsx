@@ -119,7 +119,7 @@ export default function SessionRecordings() {
               value={user}
               onChange={(e) => setUser(e.target.value)}
               placeholder="user@example.com"
-              className="w-60 h-10 rounded-lg border border-control bg-slate-900 px-3 text-sm text-ink focus:outline-none focus:border-primary-500"
+              className="w-60 h-10 rounded-lg border border-control bg-slate-900 px-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500"
             />
           </div>
           <div className="w-44">

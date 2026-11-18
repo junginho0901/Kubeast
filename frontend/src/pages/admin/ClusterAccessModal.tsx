@@ -146,7 +146,7 @@ export default function ClusterAccessModal({
               placeholder={tr('cluster.access.search', 'Search by name or email…')}
               aria-label={tr('cluster.access.search', 'Search by name or email…')}
               data-testid="cluster-access-search"
-              className="h-10 w-full pl-9 pr-3 bg-slate-900/40 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:border-primary-500"
+              className="h-10 w-full pl-9 pr-3 bg-slate-900/40 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500"
             />
           </div>
         )}

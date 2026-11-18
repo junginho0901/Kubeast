@@ -221,7 +221,7 @@ export function PodLogsTab({
                     value={containerSearchQuery}
                     onChange={(e) => onContainerSearchChange(e.target.value)}
                     onClick={(e) => e.stopPropagation()}
-                    className="w-full h-8 pl-8 pr-8 bg-slate-600 text-ink rounded-lg text-sm border border-control focus:outline-hidden focus:border-primary-500 transition-colors"
+                    className="w-full h-8 pl-8 pr-8 bg-slate-600 text-ink rounded-lg text-sm border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors"
                   />
                   {containerSearchQuery && (
                     <button
@@ -359,7 +359,7 @@ export function PodLogsTab({
           <button
             onClick={handleDownloadLogs}
             disabled={isDownloading}
-            className="h-10 px-4 bg-primary-600 hover:bg-primary-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg border border-primary-500 focus:outline-hidden focus:border-primary-400 transition-colors flex items-center gap-2"
+            className="h-10 px-4 bg-primary-600 hover:bg-primary-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg border border-primary-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-400 transition-colors flex items-center gap-2"
           >
             <Download className="w-4 h-4" />
             {isDownloading

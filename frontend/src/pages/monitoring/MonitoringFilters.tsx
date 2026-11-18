@@ -57,7 +57,7 @@ export function NamespaceFilter({ namespaces, value, onChange }: NamespaceFilter
           data-testid="monitoring-namespace"
           aria-label={`${t('monitoring.namespace.label')}: ${label}`}
           title={t('monitoring.namespace.label')}
-          className="h-12 w-full px-4 bg-slate-900 hover:bg-slate-700 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
+          className="h-12 w-full px-4 bg-slate-900 hover:bg-slate-700 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
         >
           <span className="text-sm font-medium truncate min-w-0">{label}</span>
           <ChevronDown

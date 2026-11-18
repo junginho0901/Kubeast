@@ -368,7 +368,7 @@ export default function NamespaceInfo({ name }: Props) {
               value={podFilter}
               onChange={e => setPodFilter(e.target.value)}
               placeholder={dl('Filter...')}
-              className="h-8 pl-6 pr-2 text-xs bg-slate-800 border border-control rounded-lg text-ink placeholder-slate-500 focus:outline-hidden w-36"
+              className="h-8 pl-6 pr-2 text-xs bg-slate-800 border border-control rounded-lg text-ink placeholder-slate-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 w-36"
             />
           </div>
         }

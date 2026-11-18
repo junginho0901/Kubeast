@@ -147,7 +147,7 @@ export default function Investigations() {
                 if (e.key === 'Enter' && !e.nativeEvent.isComposing) applyCluster()
               }}
               placeholder={tr('investigations.filter.clusterPlaceholder', 'cluster ID')}
-              className="w-48 h-10 rounded-lg border border-control bg-slate-900 px-3 text-sm text-ink focus:outline-none focus:border-primary-500"
+              className="w-48 h-10 rounded-lg border border-control bg-slate-900 px-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500"
               data-testid="investigations-cluster-filter"
             />
           </div>

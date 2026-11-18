@@ -311,7 +311,7 @@ export function OptimizationModal({
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="h-10 px-4 bg-slate-900 hover:bg-slate-700 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 w-[240px] max-w-full justify-between disabled:opacity-60 disabled:cursor-not-allowed"
+                className="h-10 px-4 bg-slate-900 hover:bg-slate-700 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors flex items-center gap-2 w-[240px] max-w-full justify-between disabled:opacity-60 disabled:cursor-not-allowed"
                 title={tr('dashboard.optimization.selectNamespaceTitle', 'Select namespace')}
                 disabled={isLoadingNamespaces}
               >

@@ -143,7 +143,7 @@ export function PodGroupList({ group, onClose, onExpand, onOpen }: Props) {
               onChange={(e) => setSearch(e.target.value)}
               placeholder={isPods ? t('resourceGraph.group.searchPods', 'Search name, node or IP') : t('resourceGraph.group.searchMembers', 'Search name')}
               aria-label={t('resourceGraph.group.search', 'Search this group')}
-              className="w-full h-10 pl-10 pr-3 bg-slate-900 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-400 transition-colors"
+              className="w-full h-10 pl-10 pr-3 bg-slate-900 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-400 transition-colors"
             />
           </div>
         </div>

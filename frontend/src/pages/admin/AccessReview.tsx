@@ -352,7 +352,7 @@ export default function AccessReview() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={tr('accessReview.search', 'Search...')}
-              className="ml-auto h-10 px-3 bg-slate-900 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 text-sm"
+              className="ml-auto h-10 px-3 bg-slate-900 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 text-sm"
             />
             <button
               onClick={() => download(tab)}
@@ -493,7 +493,7 @@ export default function AccessReview() {
             autoFocus
             placeholder={tr('accessReview.signoff.notePlaceholder', 'Findings and actions taken (optional)')}
             data-testid="access-review-signoff-note"
-            className="w-full px-3 py-2 bg-slate-900 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 text-sm"
+            className="w-full px-3 py-2 bg-slate-900 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 text-sm"
           />
         </ModalFrame>
       )}

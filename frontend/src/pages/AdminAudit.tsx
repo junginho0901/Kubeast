@@ -69,7 +69,7 @@ function CustomDropdown<T extends string | number>({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className={`w-full ${minWidth} h-10 px-2 bg-slate-900 hover:bg-slate-800 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between text-sm`}
+        className={`w-full ${minWidth} h-10 px-2 bg-slate-900 hover:bg-slate-800 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors flex items-center gap-2 justify-between text-sm`}
       >
         <span className="font-medium truncate">{selected?.label ?? '-'}</span>
         <ChevronDown
@@ -423,7 +423,7 @@ export default function AdminAudit() {
             <input
               type="text"
               placeholder="k8s.pod.delete"
-              className="mt-1 h-10 rounded-lg bg-slate-900 border border-control px-2 text-sm text-ink focus:outline-none focus:border-primary-500"
+              className="mt-1 h-10 rounded-lg bg-slate-900 border border-control px-2 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500"
               value={draft.action ?? ''}
               onChange={(e) => setDraft({ ...draft, action: e.target.value || undefined })}
             />
@@ -434,7 +434,7 @@ export default function AdminAudit() {
             <input
               type="text"
               placeholder="user@example.com"
-              className="mt-1 h-10 rounded-lg bg-slate-900 border border-control px-2 text-sm text-ink focus:outline-none focus:border-primary-500"
+              className="mt-1 h-10 rounded-lg bg-slate-900 border border-control px-2 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500"
               value={draft.actor_email ?? ''}
               onChange={(e) => setDraft({ ...draft, actor_email: e.target.value || undefined })}
             />
@@ -462,7 +462,7 @@ export default function AdminAudit() {
             {tr('adminAudit.filter.namespace', 'Namespace')}
             <input
               type="text"
-              className="mt-1 h-10 rounded-lg bg-slate-900 border border-control px-2 text-sm text-ink focus:outline-none focus:border-primary-500"
+              className="mt-1 h-10 rounded-lg bg-slate-900 border border-control px-2 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500"
               value={draft.namespace ?? ''}
               onChange={(e) => setDraft({ ...draft, namespace: e.target.value || undefined })}
             />

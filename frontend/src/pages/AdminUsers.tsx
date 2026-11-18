@@ -773,7 +773,7 @@ export default function AdminUsers() {
                     placeholder={tr('adminUsers.searchPlaceholder', 'Search by name, email or team...')}
                     aria-label={tr('adminUsers.searchPlaceholder', 'Search by name, email or team...')}
                     data-testid="admin-users-pending-search"
-                    className="h-10 w-full pl-9 pr-3 bg-slate-900/40 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:border-primary-500"
+                    className="h-10 w-full pl-9 pr-3 bg-slate-900/40 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500"
                   />
                 </div>
                 <div className="mt-3 rounded-lg border border-hairline overflow-x-auto">

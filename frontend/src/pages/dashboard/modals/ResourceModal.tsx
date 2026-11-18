@@ -152,7 +152,7 @@ export function ResourceModal({
               placeholder={tr('dashboard.resourceModal.searchPlaceholder', 'Search...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-10 pr-10 bg-slate-900 text-sm text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 transition-colors"
+              className="w-full h-10 pl-10 pr-10 bg-slate-900 text-sm text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors"
             />
             {searchQuery && (
               <button

@@ -399,6 +399,14 @@ body {
   min-height: 100vh;
 }
 
+@layer base {
+  /* Controls without a local ring use the console's keyboard focus outline. */
+  :where(button, input, select, textarea, [role='button']):focus-visible {
+    outline: 2px solid var(--color-primary-400);
+    outline-offset: 2px;
+  }
+}
+
 @layer components {
   /* flat: depth comes from the ladder's steps and a hairline, not a shadow */
   .card {

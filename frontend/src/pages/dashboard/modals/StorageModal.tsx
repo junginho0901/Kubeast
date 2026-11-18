@@ -186,7 +186,7 @@ export function StorageModal({
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="h-10 px-4 bg-slate-900 hover:bg-slate-700 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 w-[220px] max-w-full justify-between"
+                className="h-10 px-4 bg-slate-900 hover:bg-slate-700 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors flex items-center gap-2 w-[220px] max-w-full justify-between"
                 title={tr('dashboard.storage.namespaceFilter', 'Namespace filter')}
               >
                 <span className="text-sm font-medium truncate min-w-0" title={namespaceFilter}>
@@ -244,7 +244,7 @@ export function StorageModal({
                 : tr('dashboard.storage.searchPvsPlaceholder', 'Search (name/status/capacity/StorageClass/reclaim policy/claim)...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-10 pr-10 bg-slate-900 text-sm text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 transition-colors"
+              className="w-full h-10 pl-10 pr-10 bg-slate-900 text-sm text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors"
             />
             {searchQuery && (
               <button

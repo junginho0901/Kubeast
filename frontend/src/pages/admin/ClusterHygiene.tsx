@@ -408,7 +408,7 @@ export default function ClusterHygiene() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={tr('clusterHygiene.search', 'Search Namespace, name, message, kind, container, exemption reason...')}
-              className="h-10 px-3 bg-slate-900 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 text-sm flex-1 min-w-48"
+              className="h-10 px-3 bg-slate-900 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 text-sm flex-1 min-w-48"
             />
           </div>
           {report?.truncated && (
@@ -595,7 +595,7 @@ export default function ClusterHygiene() {
             rows={4}
             placeholder={tr('clusterHygiene.signoff.notePlaceholder', 'Findings and actions taken (optional)')}
             data-testid="hygiene-signoff-note"
-            className="w-full px-3 py-2 bg-slate-900 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 text-sm"
+            className="w-full px-3 py-2 bg-slate-900 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 text-sm"
           />
         </ModalFrame>
       )}
