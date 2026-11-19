@@ -100,6 +100,7 @@ func TestEveryKeyTheCacheSendsIsWithinTheACLKeyPattern(t *testing.T) {
 	c := cacheOn(t, mr)
 	sent := &sentCommands{}
 	c.rdb.Load().AddHook(sent)
+	c.inv.AddHook(sent) // the invalidations' client
 	ctx := context.Background()
 	for _, k := range callerKeys {
 		c.Set(ctx, k, 1, time.Minute)
