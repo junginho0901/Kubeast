@@ -297,7 +297,8 @@ def _caller(authorization: str):
 
 
 async def _expire_if_due(db, approval):
-    """A waiting call past its time can no longer run, so only a masked copy of its arguments stays."""
+    """A waiting call past its time can no longer run, so only a masked copy of its arguments stays. An approved one whose
+    run outlived its time was cut with its ai-service and ends failed (close_interrupted_tool_approvals)."""
     from app.database import utcnow
     from app.services.audit_target import kept_tool_args
 
@@ -305,6 +306,8 @@ async def _expire_if_due(db, approval):
         return await db.transition_tool_approval(
             approval.id, "pending", status="expired", decided_at=utcnow(), args=kept_tool_args(approval.args),
         ) or await db.get_tool_approval(approval.id)
+    if approval.status == "approved" and await db.close_interrupted_tool_approvals(approval_id=approval.id):
+        return await db.get_tool_approval(approval.id) or approval
     return approval
 
 
