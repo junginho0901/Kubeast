@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
+	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
@@ -39,6 +40,8 @@ type identityAPI struct {
 	versionDelay  time.Duration
 	gitVersion    string // "" answers v1.35.0
 	versionStatus int    // 0 answers 200
+	// versionInFront: /version is answered by a proxy in front of the API server, with no Audit-ID.
+	versionInFront bool
 	// serverPath, set before identityServiceWith, puts the API server behind a proxy's path, which the cluster's
 	// server URL ends with: a request without it is answered 404 and not kept, a kept one is kept without it.
 	serverPath string
@@ -47,10 +50,13 @@ type identityAPI struct {
 func (a *identityAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	a.seen = append(a.seen, identitySeen{r.Method, r.URL.Path, r.Header.Get(auth.HeaderImpersonateUser)})
-	delay, gitVersion, status := a.versionDelay, a.gitVersion, a.versionStatus
+	delay, gitVersion, status, inFront := a.versionDelay, a.gitVersion, a.versionStatus, a.versionInFront
 	a.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	p := r.URL.Path
+	if !inFront || p != "/version" {
+		w.Header().Set(accesstrail.HeaderAuditID, "stand-in") // as kube-apiserver's WithAuditInit
+	}
 	switch {
 	case p == "/version":
 		select {

@@ -12,6 +12,7 @@ import (
 
 	"k8s.io/client-go/discovery"
 
+	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
@@ -154,7 +155,7 @@ func (s *Service) TrialAskedNothing(id cluster.ID, trial time.Time) {
 	}
 }
 
-// TrialUnanswered holds the breaker open another period: the cluster took the trial's calls and answered none below 500. nil-safe.
+// TrialUnanswered holds the breaker open another period: the cluster took the trial's calls and the API server answered none. nil-safe.
 func (s *Service) TrialUnanswered(id cluster.ID, trial time.Time) {
 	if s.health != nil {
 		s.health.rebook(id, trial)
@@ -175,14 +176,13 @@ type ClusterCalls struct {
 	id       cluster.ID
 	answered func()
 	once     sync.Once
-	// responded: a response of any status; gotAnswer: one below 500; unreached: a call that could not reach the cluster;
-	// unanswered: a call the cluster took and answered 500 or more, or not before the deadline or the caller's leaving
-	// once its headers went out.
+	// responded: a response of any status; gotAnswer: one of the API server (apiServerAnswered); unreached: a call that
+	// could not reach the cluster; unanswered: an error status from in front of the API server, or no answer before the
+	// deadline or the caller's leaving once the call's headers went out.
 	responded, gotAnswer, unreached, unanswered atomic.Bool
 }
 
-// WithClusterCalls gives ctx a record of its calls to cluster id; answered runs once, at the API server's first answer
-// below 500.
+// WithClusterCalls gives ctx a record of its calls to cluster id; answered runs once, at the API server's first answer.
 func WithClusterCalls(ctx context.Context, id cluster.ID, answered func()) (context.Context, *ClusterCalls) {
 	calls := &ClusterCalls{id: id, answered: answered}
 	return context.WithValue(ctx, clusterCallsKey{}, calls), calls
@@ -200,8 +200,15 @@ func carryClusterCalls(plain, from context.Context) context.Context {
 // Unreached says a call could not reach the cluster and none got a response, of whatever status.
 func (c *ClusterCalls) Unreached() bool { return c.unreached.Load() && !c.responded.Load() }
 
-// Unanswered says the cluster took a call and answered none below 500.
+// Unanswered says the cluster took a call and the API server answered none.
 func (c *ClusterCalls) Unanswered() bool { return c.unanswered.Load() && !c.gotAnswer.Load() }
+
+// apiServerAnswered: a status below 400, or any status with the Audit-ID kube-apiserver puts on every answer it writes
+// (WithAuditInit, the outermost filter of its handler chain). An error status without it came from in front of the
+// API server: a proxy, an ingress, a load balancer, or the kubelet's refusal of an upgrade, which comes back as written.
+func apiServerAnswered(resp *http.Response) bool {
+	return resp.StatusCode < http.StatusBadRequest || resp.Header.Get(accesstrail.HeaderAuditID) != ""
+}
 
 // answerNotice is the innermost transport of cluster id, under the namespace guard and the person check that answer on
 // their own.
@@ -227,7 +234,7 @@ func (t answerNotice) RoundTrip(req *http.Request) (*http.Response, error) {
 	switch ended := req.Context().Err(); {
 	case resp != nil:
 		calls.responded.Store(true)
-		if resp.StatusCode < http.StatusInternalServerError {
+		if apiServerAnswered(resp) {
 			calls.gotAnswer.Store(true)
 			calls.once.Do(calls.answered)
 		} else {
@@ -351,7 +358,7 @@ func (hc *HealthChecker) sweep(ctx context.Context) {
 			if verdict == probeUp {
 				status = "healthy"
 			}
-			// Authoritative probe: open/close the breaker immediately; any answer below 500 closes it, as a trial's does.
+			// Authoritative probe: open/close the breaker immediately; any answer of the API server closes it, as a trial's does.
 			if hc.svc.health != nil {
 				hc.svc.health.setOpen(id, verdict == probeDown)
 			}
@@ -378,10 +385,11 @@ const (
 	probeNone probeVerdict = iota
 	// probeUp: the API server gave its version.
 	probeUp
-	// probeAnswered: the API server answered below 500 with no version (a 401, a proxy's 404).
+	// probeAnswered: the API server answered with no version (a 401, a 5xx of its own).
 	probeAnswered
-	// probeDown: no client for it, a call that could not reach it, a 5xx, no answer in probeBudget once it went out, or
-	// an error of Kubeast's own before any call that is not its time (a credential plugin that fails).
+	// probeDown: no client for it, a call that could not reach it, an error status from in front of the API server, no
+	// answer in probeBudget once it went out, or an error of Kubeast's own before any call that is not its time (a
+	// credential plugin that fails).
 	probeDown
 )
 
