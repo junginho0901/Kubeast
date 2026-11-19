@@ -123,22 +123,23 @@ type Images struct {
 
 // DefaultImages are pinned by tag and by the digest the tag named on
 // 2026-11-19: the multi-platform index, so amd64 and arm64 profiles run the
-// same build. alpine/git rebuilds its tags every week, so the tag alone moves.
-// A new release changes the tag and the digest together;
+// same build. alpine/git rebuilds its tags every week; the pin stays on one
+// build until a new release. A new release changes the tag and the digest
+// together;
 // deploy/dependencies.yaml checks that these lines name its versions and
 // looks upstream for newer releases every week.
-//   - alpine/git v2.54.0 (git 2.54.0; the tag as rebuilt on 2026-11-08):
+//   - alpine/git v2.54.1 (git 2.54.1; the tag as built on 2026-11-15):
 //     https://hub.docker.com/r/alpine/git
-//   - BuildKit v0.34.1 (2026-10-20):
-//     https://github.com/moby/buildkit/releases/tag/v0.34.1
-//   - Trivy 0.76.1 (2026-10-21):
-//     https://github.com/aquasecurity/trivy/releases/tag/v0.76.1
+//   - BuildKit v0.35.0 (2026-11-11):
+//     https://github.com/moby/buildkit/releases/tag/v0.35.0
+//   - Trivy 0.76.2 (2026-11-05):
+//     https://github.com/aquasecurity/trivy/releases/tag/v0.76.2
 func DefaultImages() Images {
 	return Images{
-		Git:              "docker.io/alpine/git:v2.54.0@sha256:6a1fdb962814ca11508ca8d1bab94375b5b7ac4e4a9a40981c29fc32c02f095d",
-		BuildKit:         "docker.io/moby/buildkit:v0.34.1@sha256:99368f3e46177c6405b9740e4461d91cee004128daeecca78d4ceac50ec1da5c",
-		BuildKitRootless: "docker.io/moby/buildkit:v0.34.1-rootless@sha256:f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89",
-		Trivy:            "docker.io/aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c",
+		Git:              "docker.io/alpine/git:v2.54.1@sha256:2306e2b05ee0ef99f5d25b0779f645b24ae9f91ba187107503592fcdfe78da3a",
+		BuildKit:         "docker.io/moby/buildkit:v0.35.0@sha256:aa632b921ef07411d2cb77292cd34213d4f7b384001d6fceef1e1f25bf9752bb",
+		BuildKitRootless: "docker.io/moby/buildkit:v0.35.0-rootless@sha256:5987568f92dafbfb679879de59c1cd8d26597f5f6635c314e166164e2615870c",
+		Trivy:            "docker.io/aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb",
 	}
 }
 

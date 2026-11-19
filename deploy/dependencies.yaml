@@ -63,7 +63,7 @@ dependencies:
   # services/ci-controller-go), each pinned by tag and digest. A bump takes the new tag's digest too, that of the
   # multi-platform index (`crane digest docker.io/<image>:<tag>`).
   - name: alpine-git
-    version: v2.54.0
+    version: v2.54.1
     upstream:
       flavour: container
       registry: docker.io/alpine/git
@@ -74,7 +74,7 @@ dependencies:
         match: 'alpine/git v[0-9]'
 
   - name: buildkit
-    version: v0.34.1
+    version: v0.35.0
     upstream:
       flavour: github
       url: moby/buildkit
@@ -88,7 +88,7 @@ dependencies:
         match: 'examples/kubernetes/job\.rootless\.yaml'
 
   - name: trivy
-    version: 0.76.1
+    version: 0.76.2
     upstream:
       flavour: github
       url: aquasecurity/trivy

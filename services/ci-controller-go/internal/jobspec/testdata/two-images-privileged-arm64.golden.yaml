@@ -38,7 +38,7 @@ spec:
           done > /tmp/result
           cat /tmp/result
           cat /tmp/result 2>/dev/null >/dev/termination-log || echo "kubeast: the termination log is not writable; the result is in the log above" >&2
-        image: docker.io/alpine/git:v2.54.0@sha256:6a1fdb962814ca11508ca8d1bab94375b5b7ac4e4a9a40981c29fc32c02f095d
+        image: docker.io/alpine/git:v2.54.1@sha256:2306e2b05ee0ef99f5d25b0779f645b24ae9f91ba187107503592fcdfe78da3a
         name: report
         resources:
           limits:
@@ -93,7 +93,7 @@ spec:
           value: 0123456789abcdef0123456789abcdef01234567
         - name: KUBEAST_REPO_URL
           value: https://github.com/example/web.git
-        image: docker.io/alpine/git:v2.54.0@sha256:6a1fdb962814ca11508ca8d1bab94375b5b7ac4e4a9a40981c29fc32c02f095d
+        image: docker.io/alpine/git:v2.54.1@sha256:2306e2b05ee0ef99f5d25b0779f645b24ae9f91ba187107503592fcdfe78da3a
         name: checkout
         resources:
           limits:
@@ -142,7 +142,7 @@ spec:
         env:
         - name: DOCKER_CONFIG
           value: /run/kubeast/registry/registry
-        image: docker.io/moby/buildkit:v0.34.1@sha256:99368f3e46177c6405b9740e4461d91cee004128daeecca78d4ceac50ec1da5c
+        image: docker.io/moby/buildkit:v0.35.0@sha256:aa632b921ef07411d2cb77292cd34213d4f7b384001d6fceef1e1f25bf9752bb
         name: api
         resources:
           limits:
@@ -187,7 +187,7 @@ spec:
         - /kubeast/out/worker.json
         command:
         - buildctl-daemonless.sh
-        image: docker.io/moby/buildkit:v0.34.1@sha256:99368f3e46177c6405b9740e4461d91cee004128daeecca78d4ceac50ec1da5c
+        image: docker.io/moby/buildkit:v0.35.0@sha256:aa632b921ef07411d2cb77292cd34213d4f7b384001d6fceef1e1f25bf9752bb
         name: worker
         resources:
           limits:
@@ -222,7 +222,7 @@ spec:
         env:
         - name: DOCKER_CONFIG
           value: /run/kubeast/registry/registry
-        image: docker.io/aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+        image: docker.io/aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
         name: scan-api
         resources:
           limits:
