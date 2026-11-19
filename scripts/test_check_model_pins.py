@@ -113,7 +113,8 @@ class ThisTree(unittest.TestCase):
     def test_a_list_it_cannot_read_is_not_found_rather_than_another_providers(self):
         for change in (
             lambda t: t.replace("return prov?.models[0]?.name ?? ''", "return prov?.models.find((m) => !m.note)?.name ?? ''", 1),
-            lambda t: t.replace("models: [", "models: OPENAI_MODELS,\n    legacy: [", 1),
+            lambda t: t[:t.index("models: [", t.index("id: 'openai',"))] + "models: OPENAI_MODELS,\n    legacy: ["
+            + t[t.index("models: [", t.index("id: 'openai',")) + len("models: ["):],
         ):
             with self.subTest(change=change):
                 root = self.copy()
@@ -121,3 +122,14 @@ class ThisTree(unittest.TestCase):
                 catalog.write_text(change(catalog.read_text(encoding="utf-8")), encoding="utf-8")
                 self.assertIsNone(pins.read_default(self.setup_entry(), root))
                 self.assertIn("first-run setup page model not found", "".join(pins.check(root)))
+
+    def test_a_default_that_moved_fails(self):
+        root = self.copy()
+        (root / "services/ai-service/app/config.py").write_text("OPENAI_MODEL = settings_default()\n", encoding="utf-8")
+        problems = pins.check(root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("ai-service OPENAI_MODEL not found", problems[0])
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
