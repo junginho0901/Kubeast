@@ -1,5 +1,6 @@
 // UI helpers shared by the action drivers. Selectors come from the i18n strings and
-// data-testids of the frontend; Kubeast's modals are a custom overlay without role=dialog.
+// data-testids of the frontend; a window is a role=dialog, and so is the detail drawer (data-testid="resource-drawer"), which
+// the selectors of a window leave out.
 import type { Locator, Page } from '@playwright/test'
 import { TARGET_CLUSTER, sleep } from './env'
 
@@ -74,10 +75,10 @@ export async function clickButton(page: Page, re: RegExp, scope?: Locator): Prom
   await b.click()
 }
 
-/** The open modal: a role=dialog when there is one, otherwise the last fixed full-screen overlay with buttons. */
+/** The open modal: a role=dialog that is not the drawer when there is one, otherwise the last fixed full-screen overlay with buttons. */
 export function dialog(page: Page): Locator {
   return page
-    .locator('[role="dialog"], [role="alertdialog"], div.fixed.inset-0:has(button), div[class*="fixed"][class*="inset-0"]:has(button)')
+    .locator('[role="dialog"]:not([data-testid="resource-drawer"]), [role="alertdialog"], div.fixed.inset-0:has(button), div[class*="fixed"][class*="inset-0"]:has(button)')
     .last()
 }
 
@@ -104,10 +105,10 @@ export async function clickTab(page: Page, re: RegExp): Promise<void> {
   await page.getByRole('button', { name: re }).first().click()
 }
 
-/** Dialog / toast / alert texts currently on screen (what the user was told). */
+/** Dialog / toast / alert texts currently on screen (what the user was told), not the drawer's whole text. */
 export async function uiText(page: Page): Promise<string[]> {
   const parts = await page
-    .locator('[role="dialog"], [role="alertdialog"], [role="alert"], [role="status"], [data-sonner-toast], .toast')
+    .locator('[role="dialog"]:not([data-testid="resource-drawer"]), [role="alertdialog"], [role="alert"], [role="status"], [data-sonner-toast], .toast')
     .allInnerTexts()
     .catch(() => [] as string[])
   return parts.map((s) => s.replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 6)

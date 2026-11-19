@@ -39,7 +39,7 @@ test.describe('QA sweep frontend fixes', () => {
       await page.getByPlaceholder(/search/i).first().fill(name)
       await page.getByRole('cell', { name, exact: true }).first().click()
       await page.getByRole('button', { name: /^delete\b/i }).first().click()
-      const dialog = page.locator('[role="dialog"], [role="alertdialog"], div.fixed.inset-0:has(button)').last()
+      const dialog = page.locator('[role="dialog"]:not([data-testid="resource-drawer"]), [role="alertdialog"], div.fixed.inset-0:has(button)').last()
       await dialog.getByRole('button', { name: /^delete$/i }).last().click()
       await expect.poll(() => {
         try { kubectl(['get', 'configmap', name, '-n', 'default']); return 'present' } catch { return 'gone' }

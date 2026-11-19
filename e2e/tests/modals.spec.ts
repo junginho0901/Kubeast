@@ -17,16 +17,19 @@ async function adminHeaders(request: APIRequestContext) {
   return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 
-const topDialog = (page: Page) => page.locator('[role="dialog"]').last()
+// the detail drawer is a role=dialog too: a window is any other
+const WINDOW = '[role="dialog"]:not([data-testid="resource-drawer"])'
+const DRAWER = '[data-testid="resource-drawer"]'
+const topDialog = (page: Page) => page.locator(WINDOW).last()
 
-async function tabStaysInside(page: Page, presses = 15) {
+async function tabStaysInside(page: Page, presses = 15, selector = WINDOW, key = 'Tab') {
   for (let i = 0; i < presses; i++) {
-    await page.keyboard.press('Tab')
-    const inside = await page.evaluate(() => {
-      const dialogs = document.querySelectorAll('[role="dialog"]')
+    await page.keyboard.press(key)
+    const inside = await page.evaluate((selector) => {
+      const dialogs = document.querySelectorAll(selector)
       return dialogs.length > 0 && dialogs[dialogs.length - 1].contains(document.activeElement)
-    })
-    expect(inside, `Tab #${i + 1} left the window`).toBe(true)
+    }, selector)
+    expect(inside, `${key} #${i + 1} left ${selector === WINDOW ? 'the window' : 'the drawer'}`).toBe(true)
   }
 }
 
@@ -56,14 +59,53 @@ test.describe('modal windows', () => {
       await expect(topDialog(page)).toBeVisible()
       await tabStaysInside(page)
       await page.keyboard.press('Escape')
-      await expect(page.locator('[role="dialog"]')).toHaveCount(0)
+      await expect(page.locator(WINDOW)).toHaveCount(0)
     })
   }
+
+  test('the drawer is a modal dialog named by its kind and name: Tab stays in it, a Delete window over it takes Tab, ⌘/ or Ctrl+/ reaches the chat', async ({ page }) => {
+    await page.goto('/configuration/configmaps?cluster=self')
+    await page.locator('tbody tr').filter({ has: page.getByText('kube-root-ca.crt', { exact: true }) }).first().click()
+    const drawer = page.getByRole('dialog', { name: 'ConfigMap kube-root-ca.crt', exact: true })
+    await expect(drawer).toHaveAttribute('aria-modal', 'true')
+    await expect(drawer).toHaveAttribute('data-testid', 'resource-drawer')
+    await expect(drawer.locator('h2')).toBeFocused()
+    // from the title it opens on, both ways round, never to the page behind
+    await tabStaysInside(page, 15, DRAWER, 'Shift+Tab')
+    await tabStaysInside(page, 15, DRAWER)
+
+    // the floating chat is beside the drawer, not in its Tab order: its shortcut opens it and Escape comes back
+    const mac = await page.evaluate(() => {
+      const nav = navigator as Navigator & { userAgentData?: { platform?: string } }
+      return /mac|iphone|ipad|ipod/i.test(nav.userAgentData?.platform || nav.platform || '')
+    })
+    const back = await page.evaluate(() => (document.activeElement as HTMLElement).outerHTML)
+    await page.keyboard.press(mac ? 'Meta+Slash' : 'Control+Slash')
+    const input = page.getByTestId('floating-chat-input')
+    await expect(input, 'the chat opens with the focus in its input').toBeFocused()
+    for (let i = 0; i < 6; i++) {
+      await page.keyboard.press('Tab')
+      expect(await page.getByTestId('floating-chat-panel').evaluate((p) => p.contains(document.activeElement)), `Tab #${i + 1} in the chat`).toBe(true)
+    }
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('floating-chat-panel')).toHaveCount(0)
+    await expect(drawer, 'Escape in the chat leaves the drawer open').toHaveCount(1)
+    expect(await page.evaluate(() => (document.activeElement as HTMLElement).outerHTML), 'the focus is back where it was in the drawer').toBe(back)
+
+    await page.getByRole('button', { name: 'Delete ConfigMap' }).click()
+    await expect(page.getByTestId('delete-dialog')).toBeVisible()
+    await tabStaysInside(page, 8)
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('delete-dialog')).toHaveCount(0)
+    await tabStaysInside(page, 8, DRAWER)
+    await page.keyboard.press('Escape')
+    await expect(page.locator(DRAWER)).toHaveCount(0)
+  })
 
   test("Escape on a drawer's Delete window closes that window and leaves the drawer; the next one closes the drawer", async ({ page }) => {
     // Codex QA Q14: the window left the stack on its Escape, and the same key then closed the drawer under it
     await openDrawerDelete(page, '/configuration/configmaps?cluster=self', 'kube-root-ca.crt', 'ConfigMap')
-    const drawer = page.locator('[class*="max-w-[740px]"]')
+    const drawer = page.locator(DRAWER)
     await page.keyboard.press('Escape')
     await expect(page.getByTestId('delete-dialog')).toHaveCount(0)
     await page.waitForTimeout(1_000)

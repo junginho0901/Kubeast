@@ -182,7 +182,7 @@ test.describe('number check — the alert store limit', () => {
       }
       const noticeOf = (l: Obj) => (l.truncated ? [cutNote('inbox', l.alerts.length, l.total)] : [])
       const notices = () => page.evaluate(() => [...document.querySelectorAll('div.shrink-0')]
-        .filter((d) => d.className.includes('border-amber-800/60') && !d.closest('[role="dialog"]'))
+        .filter((d) => d.className.includes('border-amber-800/60') && !d.closest('[role="dialog"]:not([data-testid="resource-drawer"])'))
         .map((d) => (d as HTMLElement).innerText.replace(/\s+/g, ' ').trim()))
 
       await test.step("the Alerts page: the store's list for the cluster was cut", async () => {

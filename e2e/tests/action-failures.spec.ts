@@ -112,7 +112,7 @@ test.describe('a refused write says why where it was pressed', () => {
     await toggle.click()
     await stays(page, 'cronjob-suspend-error', failed('change'))
     await page.getByRole('button', { name: EN.cronjob.runNow, exact: true }).first().click()
-    await page.locator('[role=dialog],div.fixed.inset-0').getByRole('button', { name: EN.cronjob.runNow, exact: true }).click()
+    await page.locator('[role="dialog"]:not([data-testid="resource-drawer"]),div.fixed.inset-0').getByRole('button', { name: EN.cronjob.runNow, exact: true }).click()
     await stays(page, 'workload-action-toast', `${EN.cronjob.runNowFailed.replace('{{reason}}', REASON)}✕`)
     await page.getByTestId('workload-action-toast').getByRole('button', { name: EN.common.close }).click()
     await expect(page.getByTestId('workload-action-toast'), 'closed when the person closes it').toHaveCount(0)
