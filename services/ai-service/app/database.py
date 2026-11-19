@@ -543,19 +543,24 @@ class DatabaseService:
     async def close_interrupted_tool_approvals(self, approval_id: Optional[str] = None, limit: int = 50) -> int:
         """Approved calls whose run never wrote its outcome, because the ai-service running it stopped (out of memory, a
         lost node, the shutdown cutting the request), end failed with a masked copy of their arguments and an
-        ai.tool.interrupt row. Only past APPROVED_RUN_LIMIT_SECONDS, so no server ends a run another is still on, and
-        each row moves in one statement, so of two servers one ends it and writes the row. approval_id: that one only.
-        A new card and an opened card do this, and the first database use of the process. A failure here must not stop
-        them. Returns how many it ended."""
+        ai.tool.interrupt row. Only past APPROVED_RUN_LIMIT_SECONDS, so no server ends a run another is still on.
+        The row moves and its audit row is written in one transaction: the UPDATE holds the row, so of two servers one
+        ends it and writes the row, and with AUDIT_FAIL_CLOSED an audit row that cannot be stored leaves the approval
+        approved for a later sweep (with it off the row is ended and the audit row written after, as elsewhere).
+        approval_id: that one only. A new card and an opened card do this, and the first database use of the process.
+        A failure here must not stop them. Returns how many it ended."""
         from datetime import timedelta
 
-        from sqlalchemy import select
+        from sqlalchemy import select, update
 
+        from app.services import audit_writer
         from app.services.audit_target import ToolTarget, kept_tool_args, tool_target
-        from app.services.audit_writer import write_audit
 
+        strict = audit_writer.fail_closed_enabled()
         ended = 0
         try:
+            if strict and not (await audit_writer.audit_ready())[0]:
+                return 0  # no row could be written now
             query = select(ToolApproval).where(
                 ToolApproval.status == "approved",
                 ToolApproval.decided_at < utcnow() - timedelta(seconds=APPROVED_RUN_LIMIT_SECONDS),
@@ -570,18 +575,30 @@ class DatabaseService:
                     target = tool_target(row.tool, args)
                 except Exception:
                     target = ToolTarget("tool", row.tool, None, None)
-                if await self.transition_tool_approval(
-                    row.id, "approved", status="failed", result=INTERRUPTED_RESULT, decided_at=utcnow(), args=kept_tool_args(args),
-                ) is None:
-                    continue  # its run ended meanwhile, or another server ended it
-                ended += 1
-                await write_audit(
+                record = dict(
                     action="ai.tool.interrupt", actor_user_id="system", actor_email="system", cluster=row.cluster,
                     target_type=target.type, target_id=target.id, namespace=target.namespace,
                     after={"approval_id": row.id, "session_id": row.session_id, "cluster": row.cluster, "tool": row.tool,
                            "approved_by": row.user_id, "approved_by_email": row.user_email,
                            "approved_at": row.decided_at.isoformat() + "Z", "end_reason": "interrupted"},
                 )
+                async with self.engine.connect() as conn:
+                    await conn.begin()
+                    moved = await conn.execute(
+                        update(ToolApproval)
+                        .where(ToolApproval.id == row.id, ToolApproval.status == "approved")
+                        .values(status="failed", result=INTERRUPTED_RESULT, decided_at=utcnow(), args=kept_tool_args(args))
+                    )
+                    if moved.rowcount != 1:
+                        await conn.rollback()
+                        continue  # its run ended meanwhile, or another server ended it
+                    if strict and not await audit_writer.write_audit(**record, conn=conn):
+                        await conn.rollback()
+                        continue  # stays approved until a sweep can write the row
+                    await conn.commit()
+                if not strict:
+                    await audit_writer.write_audit(**record)
+                ended += 1
         except Exception as e:
             logger.warning("tool approvals: could not end interrupted runs: %s", e.__class__.__name__)
         return ended

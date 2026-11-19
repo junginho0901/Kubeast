@@ -192,13 +192,55 @@ async def test_an_interrupted_approval_never_runs_again(db, rows, monkeypatch):
 
 
 async def test_a_new_card_is_made_when_ending_them_fails(db, rows, monkeypatch):
-    async def broken(*_a, **_k):
-        raise RuntimeError("database gone")
+    def broken(_args):
+        raise RuntimeError("cannot mask")
 
     left = await _left_by_a_stopped_server(db, APPROVED_RUN_LIMIT_SECONDS + 60)
-    monkeypatch.setattr(db, "transition_tool_approval", broken)
+    monkeypatch.setattr("app.services.audit_target.kept_tool_args", broken)
     assert (await _card(db)).status == "pending"
     assert (await db.get_tool_approval(left.id)).status == "approved" and not _interrupts(rows)
+
+
+async def test_an_interrupt_row_that_cannot_be_stored_leaves_the_approval_for_the_next_sweep(db, rows, monkeypatch):
+    answers = [False, True]
+
+    async def write(**kw):
+        rows.append(kw)
+        return answers.pop(0)
+
+    monkeypatch.setattr(audit_writer, "write_audit", write)
+    left = await _left_by_a_stopped_server(db, APPROVED_RUN_LIMIT_SECONDS + 60)
+    assert await db.close_interrupted_tool_approvals() == 0
+    kept = await db.get_tool_approval(left.id)
+    assert kept.status == "approved" and kept.result is None and kept.args == PATCH, "nothing of the row moved"
+    assert await db.close_interrupted_tool_approvals() == 1
+    ended = await db.get_tool_approval(left.id)
+    assert ended.status == "failed" and ended.result == INTERRUPTED_RESULT and FAKE not in json.dumps(ended.args)
+    assert len(_interrupts(rows)) == 2 and all(r["conn"] is not None for r in rows), "written in the row's transaction"
+
+
+async def test_no_sweep_while_the_audit_store_cannot_take_a_row(db, rows, monkeypatch):
+    async def not_ready():
+        return False, "audit table refuses rows"
+
+    monkeypatch.setattr(audit_writer, "audit_ready", not_ready)
+    left = await _left_by_a_stopped_server(db, APPROVED_RUN_LIMIT_SECONDS + 60)
+    assert await db.close_interrupted_tool_approvals() == 0
+    assert (await db.get_tool_approval(left.id)).status == "approved" and rows == []
+
+
+async def test_with_fail_closed_off_the_row_ends_and_its_audit_row_follows(db, rows, monkeypatch):
+    async def refused(**kw):
+        rows.append(kw)
+        return False
+
+    monkeypatch.setenv("AUDIT_FAIL_CLOSED", "false")
+    monkeypatch.setattr(audit_writer, "write_audit", refused)
+    left = await _left_by_a_stopped_server(db, APPROVED_RUN_LIMIT_SECONDS + 60)
+    assert await db.close_interrupted_tool_approvals() == 1
+    assert (await db.get_tool_approval(left.id)).status == "failed"
+    [row] = _interrupts(rows)
+    assert row.get("conn") is None, "its own transaction, after the row moved"
 
 
 async def test_a_model_setting_that_cannot_be_used_leaves_the_card_waiting(db, rows, monkeypatch):
