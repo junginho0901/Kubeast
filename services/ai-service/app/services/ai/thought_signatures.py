@@ -4,9 +4,10 @@ Gemini 3 and later sign the first function call of each step, and refuse with a 
 the last user message; a tool result is not one) holds a step whose first call comes back without its signature. Through
 the OpenAI-compatible endpoint the signature is the call's `extra_content.google.thought_signature`. The two tool loops
 (tool_turn.run_tool_turn, streaming.session_chat_stream) keep a call's `extra_content` in the history as received, and
-provider_adapter sends a google request through `sent`, which gives a step of the current turn with no signature on its
-first call the placeholder Google documents for calls the model did not make (the server's own reads before the first
-model call, a model that signs nothing). Other providers keep their calls as before: id, type and function.
+provider_adapter sends a google request through `sent`, which gives the calls the server made itself (ids starting with
+SERVER_CALL_ID, the investigator's step 0) the placeholder Google documents for calls the model did not make. A call of
+the model's that came without a signature goes back as it came: Google calls the placeholder a last resort that costs the
+model's reasoning. Other providers keep their calls as before: id, type and function.
 """
 
 from __future__ import annotations
@@ -16,6 +17,8 @@ from typing import Any
 PROVIDERS = frozenset({"google", "gemini"})
 # ai.google.dev and Vertex AI "Thought signatures": a function call the model did not make skips the check with this.
 PLACEHOLDER = "skip_thought_signature_validator"
+# The id of a call the server made before the first model call is this and its number.
+SERVER_CALL_ID = "kubeast_step0_"
 
 
 def is_google(provider: Any) -> bool:
@@ -53,9 +56,13 @@ def _signed(call: dict[str, Any]) -> bool:
     return isinstance(google, dict) and bool(google.get("thought_signature"))
 
 
+def _server_made(call: dict[str, Any]) -> bool:
+    return str(call.get("id") or "").startswith(SERVER_CALL_ID)
+
+
 def sent(messages: Any) -> Any:
-    """The messages of a google request: each step of the current turn whose first call has no signature carries the
-    placeholder on that call. The caller's list and messages stay as they are."""
+    """The messages of a google request: a step of the current turn the server made, whose first call has no signature,
+    carries the placeholder on that call. The caller's list and messages stay as they are."""
     if not isinstance(messages, list):
         return messages
     start = next((i + 1 for i in range(len(messages) - 1, -1, -1)
@@ -66,7 +73,7 @@ def sent(messages: Any) -> Any:
         if not isinstance(message, dict) or message.get("role") != "assistant":
             continue
         calls = message.get("tool_calls") or []
-        if not calls or not isinstance(calls[0], dict) or _signed(calls[0]):
+        if not calls or not isinstance(calls[0], dict) or _signed(calls[0]) or not _server_made(calls[0]):
             continue
         first = dict(calls[0])
         extra = first.get("extra_content") if isinstance(first.get("extra_content"), dict) else {}

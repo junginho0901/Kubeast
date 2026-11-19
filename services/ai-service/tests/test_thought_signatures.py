@@ -2,8 +2,8 @@
 holds a step whose first call comes back unsigned (ai.google.dev and Vertex AI "Thought signatures"; through the
 OpenAI-compatible endpoint the signature is the call's `extra_content.google.thought_signature`). On provider google a
 call's `extra_content` stays on it in the history, as received, and goes back in the next request body, in both tool
-loops; a step of the current turn the model did not sign (the server's own reads) gets Google's placeholder. Other
-providers' request bodies are as before. A fake endpoint stands for each provider: these tests make no model call."""
+loops; the calls the server made itself (the investigator's step 0) get Google's placeholder, and a call of the model's
+that came without a signature goes back as it came. Other providers' request bodies are as before. A fake endpoint stands for each provider: these tests make no model call."""
 import copy
 import json
 from types import SimpleNamespace
@@ -13,7 +13,7 @@ import pytest
 
 from app.services import provider_adapter
 from app.services.ai import thought_signatures
-from app.services.ai.thought_signatures import PLACEHOLDER
+from app.services.ai.thought_signatures import PLACEHOLDER, SERVER_CALL_ID
 from app.services.ai.tool_turn import run_tool_turn
 from app.services.provider_adapter import ProviderAdapter
 
@@ -123,6 +123,16 @@ async def test_parallel_calls_go_back_as_received_the_first_signed_then_every_ca
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("model", ["gemini-2.5-flash", "gemini-3-pro-preview"])
+async def test_a_call_the_model_made_without_a_signature_goes_back_as_it_came_with_no_placeholder(monkeypatch, model):
+    """Gemini 2.5 with thinking off signs nothing; Google calls the placeholder a last resort, for calls the model did not make."""
+    bodies = serve(monkeypatch, [answer(call("fc-1")), answer(call("fc-2", "list_pods")), answer(content="Done.")])
+    await turn(service_for("google", model=model))
+    assert len(bodies) == 3
+    assert [s["tool_calls"] for s in assistant_steps(bodies[2])] == [[call("fc-1")], [call("fc-2", "list_pods")]]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("provider,base_url,model", [
     ("openai", None, "gpt-4o-mini"), ("ollama", None, "llama3.1"), ("azure", AZURE, "prod-chat"),
     ("custom", "https://gw.internal/v1", "team-default")])
@@ -141,11 +151,11 @@ def step_zero_messages():
         {"role": "system", "content": "You investigate."},
         {"role": "user", "content": "Pod web-1 restarts. Step 0 read the changes as [call 1] and the ranking as [call 2]."},
         {"role": "assistant", "content": "", "tool_calls": [
-            {"id": "kubeast_step0_1", "type": "function", "function": {"name": "timeline", "arguments": '{"view": "changes"}'}},
-            {"id": "kubeast_step0_2", "type": "function", "function": {"name": "anomaly_rank", "arguments": "{}"}},
+            {"id": f"{SERVER_CALL_ID}1", "type": "function", "function": {"name": "timeline", "arguments": '{"view": "changes"}'}},
+            {"id": f"{SERVER_CALL_ID}2", "type": "function", "function": {"name": "anomaly_rank", "arguments": "{}"}},
         ]},
-        {"role": "tool", "tool_call_id": "kubeast_step0_1", "content": "[call 1] no changes"},
-        {"role": "tool", "tool_call_id": "kubeast_step0_2", "content": "[call 2] web-1 first"},
+        {"role": "tool", "tool_call_id": f"{SERVER_CALL_ID}1", "content": "[call 1] no changes"},
+        {"role": "tool", "tool_call_id": f"{SERVER_CALL_ID}2", "content": "[call 2] web-1 first"},
     ]
 
 
@@ -166,27 +176,31 @@ async def test_reads_the_server_made_before_the_first_model_call_carry_googles_p
     assert bodies[1]["messages"] == kept
 
 
-def test_only_the_current_turn_gets_the_placeholder_and_a_real_signature_stays():
-    older = {"role": "assistant", "content": "", "tool_calls": [call("old-1")]}
+def test_only_the_servers_calls_of_the_current_turn_get_the_placeholder():
+    older = {"role": "assistant", "content": "", "tool_calls": [call(f"{SERVER_CALL_ID}1")]}
+    server = {"role": "assistant", "content": "", "tool_calls": [call(f"{SERVER_CALL_ID}1"), call(f"{SERVER_CALL_ID}2")]}
     signed = {"role": "assistant", "content": "", "tool_calls": [call("fc-1", signature="SIG_A")]}
     unsigned = {"role": "assistant", "content": "", "tool_calls": [call("fc-2")]}
-    messages = [{"role": "user", "content": "first question"}, older, {"role": "tool", "tool_call_id": "old-1", "content": "x"},
+    messages = [{"role": "user", "content": "first question"}, older, {"role": "tool", "tool_call_id": f"{SERVER_CALL_ID}1", "content": "x"},
                 {"role": "assistant", "content": "An answer."}, {"role": "user", "content": "second question"},
+                server, {"role": "tool", "tool_call_id": f"{SERVER_CALL_ID}1", "content": "w"},
                 signed, {"role": "tool", "tool_call_id": "fc-1", "content": "y"},
                 unsigned, {"role": "tool", "tool_call_id": "fc-2", "content": "z"}]
     out = thought_signatures.sent(messages)
     assert out[1] is older  # before the last user message: not checked by Google, sent as it is
-    assert out[5] is signed
-    assert out[7]["tool_calls"][0]["extra_content"] == {"google": {"thought_signature": PLACEHOLDER}}
-    assert "extra_content" not in unsigned["tool_calls"][0]
-    # a turn whose every step is signed, or with no step yet, goes as the same list
-    signed_turn, no_step = messages[:7], messages[:5]
-    assert thought_signatures.sent(signed_turn) is signed_turn
+    assert out[5]["tool_calls"][0]["extra_content"] == {"google": {"thought_signature": PLACEHOLDER}}
+    assert out[5]["tool_calls"][1] == call(f"{SERVER_CALL_ID}2")  # the first call of a step only
+    assert out[7] is signed  # a real signature is never replaced
+    assert out[9] is unsigned  # the model's own call without a signature goes as it came
+    assert "extra_content" not in server["tool_calls"][0]
+    # a turn with no call of the server's, or with no step yet, goes as the same list
+    model_turn, no_step = messages[:5] + messages[7:], messages[:5]
+    assert thought_signatures.sent(model_turn) is model_turn
     assert thought_signatures.sent(no_step) is no_step
 
 
 def test_a_placeholder_keeps_what_else_the_call_carried_and_the_history_is_kept_for_other_providers():
-    step = {"role": "assistant", "content": "", "tool_calls": [{**call("fc-1"), "extra_content": {"google": {"other": 1}, "x": 2}}]}
+    step = {"role": "assistant", "content": "", "tool_calls": [{**call(f"{SERVER_CALL_ID}1"), "extra_content": {"google": {"other": 1}, "x": 2}}]}
     [out] = thought_signatures.sent([step])
     assert out["tool_calls"][0]["extra_content"] == {"google": {"other": 1, "thought_signature": PLACEHOLDER}, "x": 2}
     assert step["tool_calls"][0]["extra_content"] == {"google": {"other": 1}, "x": 2}
