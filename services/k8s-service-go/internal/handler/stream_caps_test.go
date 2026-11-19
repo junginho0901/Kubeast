@@ -359,7 +359,6 @@ func TestAnEndedNodeShellGivesItsPlaceBackBeforeThePodDeleteAnswers(t *testing.T
 	t.Cleanup(func() { newShellExecutor = orig })
 	unblock := make(chan struct{})
 	var unblockOnce sync.Once
-	t.Cleanup(func() { unblockOnce.Do(func() { close(unblock) }) })
 	api := nodeShellAPI("Running", &deleted)
 	h, _ := liveHandler(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
@@ -375,6 +374,8 @@ func TestAnEndedNodeShellGivesItsPlaceBackBeforeThePodDeleteAnswers(t *testing.T
 	srv := streamServer(t, func(w http.ResponseWriter, r *http.Request) {
 		h.NodeDebugShellWS(w, asAccount(r, "apps", "resource.node.shell"))
 	})
+	// after the server's cleanup is registered, so it runs first: the handler's delete answers before the server waits
+	t.Cleanup(func() { unblockOnce.Do(func() { close(unblock) }) })
 	c := dialTerminal(t, srv, "as=u1")
 	readShellStatus(t, c) // waiting
 	readShellStatus(t, c) // starting
