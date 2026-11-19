@@ -68,9 +68,17 @@ async function floatingError(request: APIRequestContext, headers: Record<string,
   }
 }
 
+// The floating chat makes a conversation for its first question and for each question after a new chat; they are
+// removed after the test, passed or not.
+const conversationMade = (page: Page) =>
+  page.waitForResponse((r) => /\/api\/v1\/sessions(\?|$)/.test(r.url()) && r.request().method() === 'POST', { timeout: 15_000 })
+async function deleteConversations(page: Page, ids: string[]) {
+  for (const id of ids) await page.request.delete(`/api/v1/sessions/${id}`, { headers: XRW, failOnStatusCode: false })
+}
+
 // The floating assistant on the home page in Korean, asked 안녕 until its answer has `expected` or was asked after the
 // time a replica reuses the config made at madeAt. The panel is returned with that answer under the question.
-async function askFloating(page: Page, madeAt: number, expected: string) {
+async function askFloating(page: Page, madeAt: number, expected: string, made: string[]) {
   await page.goto('/')
   await page.evaluate(() => localStorage.setItem('i18nextLng', 'ko'))
   await page.goto('/')
@@ -84,7 +92,9 @@ async function askFloating(page: Page, madeAt: number, expected: string) {
     await expect(answered).toHaveCount(0)
     const sentAt = Date.now()
     await input.fill('안녕')
+    const created = conversationMade(page)
     await input.press('Enter')
+    made.push((await (await created).json()).id as string)
     await expect(answered).toBeVisible({ timeout: 90_000 })
     if ((await panel.innerText()).includes(expected) || sentAt - madeAt > CONFIG_REUSED_MS) return panel
   }
@@ -109,15 +119,20 @@ test.describe('AI provider refusals', () => {
 
   test('the floating assistant says it in the screen language, with who acts on it', async ({ page, request }) => {
     const headers = await adminHeaders(request)
-    await withStubModel(request, headers, 'credit/v1', async (_name, madeAt) => {
-      const panel = await askFloating(page, madeAt, '공급자 계정의 크레딧이나 사용 한도가 다 떨어졌습니다')
-      // the question stays and the refusal comes under it, also on a new conversation's first question
-      await expect(panel).toContainText('공급자 계정의 크레딧이나 사용 한도가 다 떨어졌습니다')
-      await expect(panel).toContainText('안녕')
-      await expect(panel).toContainText('관리자가 Admin → AI Models에서 확인하거나 다른 모델을 고르세요')
-      await expect(panel).toContainText('(OpenAI-compatible)')
-      await page.evaluate(() => localStorage.setItem('i18nextLng', 'en'))
-    })
+    const made = withUndo<string[]>([], (ids) => deleteConversations(page, ids))
+    try {
+      await withStubModel(request, headers, 'credit/v1', async (_name, madeAt) => {
+        const panel = await askFloating(page, madeAt, '공급자 계정의 크레딧이나 사용 한도가 다 떨어졌습니다', made)
+        // the question stays and the refusal comes under it, also on a new conversation's first question
+        await expect(panel).toContainText('공급자 계정의 크레딧이나 사용 한도가 다 떨어졌습니다')
+        await expect(panel).toContainText('안녕')
+        await expect(panel).toContainText('관리자가 Admin → AI Models에서 확인하거나 다른 모델을 고르세요')
+        await expect(panel).toContainText('(OpenAI-compatible)')
+        await page.evaluate(() => localStorage.setItem('i18nextLng', 'en'))
+      })
+    } finally {
+      await deleteConversations(page, made)
+    }
   })
 
   test('a model address refused when connecting says so to whoever asked, without the address', async ({ page, request }) => {
@@ -128,13 +143,18 @@ test.describe('AI provider refusals', () => {
     expect(err.error_args.provider).toBe('OpenAI-compatible')
     expect(JSON.stringify(err)).not.toContain(STAND_IN_ADDRESS)
 
-    await withStubModel(request, headers, 'v1', async (_name, madeAt) => {
-      const panel = await askFloating(page, madeAt, '모델 주소가 허용되지 않아 아무것도 보내지 않았습니다')
-      await expect(panel).toContainText('모델 주소가 허용되지 않아 아무것도 보내지 않았습니다')
-      await expect(panel).toContainText('Admin → AI Models에서 이 모델의 연결 테스트로')
-      await expect(panel).not.toContainText(STAND_IN_ADDRESS)
-      await page.evaluate(() => localStorage.setItem('i18nextLng', 'en'))
-    }, STAND_IN)
+    const made = withUndo<string[]>([], (ids) => deleteConversations(page, ids))
+    try {
+      await withStubModel(request, headers, 'v1', async (_name, madeAt) => {
+        const panel = await askFloating(page, madeAt, '모델 주소가 허용되지 않아 아무것도 보내지 않았습니다', made)
+        await expect(panel).toContainText('모델 주소가 허용되지 않아 아무것도 보내지 않았습니다')
+        await expect(panel).toContainText('Admin → AI Models에서 이 모델의 연결 테스트로')
+        await expect(panel).not.toContainText(STAND_IN_ADDRESS)
+        await page.evaluate(() => localStorage.setItem('i18nextLng', 'en'))
+      }, STAND_IN)
+    } finally {
+      await deleteConversations(page, made)
+    }
   })
 })
 

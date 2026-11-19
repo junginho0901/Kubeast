@@ -19,12 +19,22 @@ async function login(request: APIRequestContext, email: string, password: string
   return (await res.json()).access_token as string
 }
 
-async function chatReply(page: Page, cluster: string): Promise<string> {
+// The chat screen makes a conversation for the first question on a page just opened, one per chatReply. Only its
+// owner can delete one, so they are deleted with the new user's token, before the account.
+const conversationMade = (page: Page) =>
+  page.waitForResponse((r) => /\/api\/v1\/sessions(\?|$)/.test(r.url()) && r.request().method() === 'POST', { timeout: 15_000 })
+async function deleteConversations(request: APIRequestContext, headers: Record<string, string>, ids: string[]) {
+  for (const id of ids) await request.delete(`/api/v1/sessions/${id}`, { headers, failOnStatusCode: false })
+}
+
+async function chatReply(page: Page, cluster: string, made: string[]): Promise<string> {
   await page.goto(`/ai-chat?cluster=${cluster}`)
   await page.waitForLoadState('networkidle')
   const input = page.getByPlaceholder(PLACEHOLDER_RE)
   await input.fill(LIST_PODS_QUERY)
+  const created = conversationMade(page)
   await page.getByRole('button', { name: SEND_RE }).click()
+  made.push((await (await created).json()).id as string)
   await expect(input).toBeDisabled({ timeout: 15_000 })
   await expect(input).toBeEnabled({ timeout: 120_000 })
   return (await page.locator(ASSISTANT_MSG).last().innerText()).trim()
@@ -38,6 +48,8 @@ test.describe('AI tool permissions are per cluster (C1)', () => {
     const email = `e2e-toolscope-${Date.now()}@kubeast.local`
     const password = 'toolscope1234'
     let userId = ''
+    let owner: Record<string, string> = {}
+    const made = withUndo<string[]>([], (ids) => deleteConversations(request, owner, ids))
     try {
       const created = await request.post('/api/v1/auth/admin/users', {
         headers: admin,
@@ -52,6 +64,7 @@ test.describe('AI tool permissions are per cluster (C1)', () => {
         })
         expect(r.status(), `grant ${role} on ${cluster}`).toBe(200)
       }
+      owner = { Authorization: `Bearer ${await login(request, email, password)}` }
 
       const ctx = await browser.newContext({ baseURL: process.env.E2E_BASE_URL || 'http://localhost:30080' })
       const page = await ctx.newPage()
@@ -64,14 +77,14 @@ test.describe('AI tool permissions are per cluster (C1)', () => {
       // test2 (Write → ai.tool.*): the model is offered tools and uses one.
       let toolOnTest2 = ''
       for (let attempt = 1; attempt <= 3 && !toolOnTest2.includes('🔧'); attempt++) {
-        toolOnTest2 = await chatReply(page, 'test2')
+        toolOnTest2 = await chatReply(page, 'test2', made)
       }
       expect(toolOnTest2, 'test2 reply should carry a tool call marker').toContain('🔧')
 
       // self (Read → the read tools only): the same list question is answered with a tool call too.
       let replyOnSelf = ''
       for (let attempt = 1; attempt <= 3 && !replyOnSelf.includes('🔧'); attempt++) {
-        replyOnSelf = await chatReply(page, 'self')
+        replyOnSelf = await chatReply(page, 'self', made)
       }
       expect(replyOnSelf, 'self reply should carry a tool call marker (read tools)').toContain('🔧')
 
@@ -90,9 +103,25 @@ test.describe('AI tool permissions are per cluster (C1)', () => {
       }
       await ctx.close()
     } finally {
+      await deleteConversations(request, owner, made)
       if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: admin })
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+// Declared before the accounts' hook below, since hooks run in the order they are declared: a conversation's owner
+// deletes it, so the conversations go before the account.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })
 
 // Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
