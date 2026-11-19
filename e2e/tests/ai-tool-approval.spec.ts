@@ -32,12 +32,22 @@ async function replicas(request: APIRequestContext, auth: Record<string, string>
   return typeof n === 'number' ? n : null
 }
 
-async function askForScale(page: Page): Promise<void> {
+// The chat screen makes a conversation for the first question on a page just opened, one per askForScale; they are
+// removed after the test, passed or not.
+const conversationMade = (page: Page) =>
+  page.waitForResponse((r) => /\/api\/v1\/sessions(\?|$)/.test(r.url()) && r.request().method() === 'POST', { timeout: 15_000 })
+async function deleteConversations(request: APIRequestContext, headers: Record<string, string>, ids: string[]) {
+  for (const id of ids) await request.delete(`/api/v1/sessions/${id}`, { headers, failOnStatusCode: false })
+}
+
+async function askForScale(page: Page, made: string[]): Promise<void> {
   await page.goto('/ai-chat?cluster=test2')
   await page.waitForLoadState('networkidle')
   const input = page.getByPlaceholder(PLACEHOLDER_RE)
   await input.fill(SCALE_QUERY)
+  const created = conversationMade(page)
   await page.getByRole('button', { name: SEND_RE }).click()
+  made.push((await (await created).json()).id as string)
   await expect(input).toBeDisabled({ timeout: 15_000 })
   await expect(input).toBeEnabled({ timeout: 120_000 })
 }
@@ -68,11 +78,12 @@ test.describe('AI write tools need approval (H2)', () => {
     await page.locator('button[type="submit"]').first().click()
     await page.waitForFunction(() => !document.querySelector('input[autocomplete="email"]'), { timeout: 20000 })
 
+    const made = withUndo<string[]>([], (ids) => deleteConversations(request, admin, ids))
     try {
       // 1) The model asks for k8s_scale → card, replicas untouched.
       let card = page.locator(CARD).last()
       for (let attempt = 1; attempt <= 3 && (await page.locator(CARD).count()) === 0; attempt++) {
-        await askForScale(page)
+        await askForScale(page, made)
         card = page.locator(CARD).last()
       }
       await expect(card, 'approval card for the write tool').toBeVisible({ timeout: 10_000 })
@@ -88,7 +99,7 @@ test.describe('AI write tools need approval (H2)', () => {
       // 3) Ask again and approve → executed, replicas 2.
       const before = await page.locator(CARD).count()
       for (let attempt = 1; attempt <= 3 && (await page.locator(CARD).count()) <= before; attempt++) {
-        await askForScale(page)
+        await askForScale(page, made)
       }
       const card2 = page.locator(CARD).last()
       await expect(card2).toHaveAttribute('data-approval-status', 'pending', { timeout: 10_000 })
@@ -108,6 +119,7 @@ test.describe('AI write tools need approval (H2)', () => {
       }
     } finally {
       await ctx.close()
+      await deleteConversations(request, admin, made)
       try {
         execSync(`kubectl --kubeconfig ${kcPath} delete namespace f3approve --wait=false`, { stdio: 'ignore' })
       } catch {
