@@ -80,8 +80,12 @@ func (a *shellPodAPI) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, pods+"/"):
 		a.deletes.Add(1)
 		if a.deleteStatus != 0 {
+			reason, message := "InternalError", "etcdserver: request timed out"
+			if a.deleteStatus == http.StatusNotFound {
+				reason, message = "NotFound", `pods "p" not found`
+			}
 			w.WriteHeader(a.deleteStatus)
-			_, _ = w.Write([]byte(`{"apiVersion":"v1","kind":"Status","status":"Failure","message":"etcdserver: request timed out","code":500}`))
+			_, _ = fmt.Fprintf(w, `{"apiVersion":"v1","kind":"Status","status":"Failure","reason":%q,"message":%q,"code":%d}`, reason, message, a.deleteStatus)
 			return
 		}
 		_, _ = w.Write([]byte(pod))
@@ -222,14 +226,14 @@ func TestARefusedCreateEndsTheRow(t *testing.T) {
 	}
 }
 
-// A create whose answer was cut may have made the pod: the handler deletes it, and ends the row when the delete went
-// through or leaves it released to a sweep when it did not.
+// A create whose answer was cut may have made the pod, or may make it after: the handler deletes it and ends the row
+// when the delete went through; it leaves the row released to a sweep when the delete failed or found no pod yet.
 func TestACreateCutBeforeItsAnswerDeletesThePodOrLeavesTheRow(t *testing.T) {
 	for _, c := range []struct {
 		name         string
 		deleteStatus int
 		rowLeft      bool
-	}{{"deleted", 0, false}, {"not deleted", http.StatusInternalServerError, true}} {
+	}{{"deleted", 0, false}, {"not deleted", http.StatusInternalServerError, true}, {"not found yet", http.StatusNotFound, true}} {
 		t.Run(c.name, func(t *testing.T) {
 			store := nodeshells.NewMemory(nil)
 			tracker := newTracker(store)
@@ -279,5 +283,75 @@ func TestAHeartbeatNotSavedEndsTheNodeShellWithItsNoticeAndRow(t *testing.T) {
 	_ = json.Unmarshal(store.rows[0].After, &after)
 	if store.rows[0].Action != auditSessionEndAction || store.rows[0].Result != audit.ResultSuccess || after["reason"] != nodeshells.ReasonHeartbeatLost || after["stream"] != "node-shell" {
 		t.Fatalf("row %+v after %v", store.rows[0], after)
+	}
+}
+
+// The chain from the tracker to the screen: a server whose heartbeat stops being saved stops its node shell within
+// the self-stop time; the handler then tells the terminal why, closes it with 1001 and heartbeat_lost, deletes the pod
+// and writes the attempt's failure row with that cause.
+func TestATrackerThatCannotSaveTheHeartbeatClosesTheNodeShellAndDeletesItsPod(t *testing.T) {
+	store := nodeshells.NewMemory(nil)
+	tracker := newTracker(store).WithTimes(20*time.Millisecond, 120*time.Millisecond, time.Hour)
+	runCtx, stopRun := context.WithCancel(context.Background())
+	t.Cleanup(stopRun)
+	go tracker.Run(runCtx)
+
+	api := &shellPodAPI{}
+	var version atomic.Int32
+	h, audits := liveHandler(t, api.serve, &version)
+	h.cfg = config.Config{NodeShellEnabled: true, NodeShellNamespace: nodeShellTestNamespace, NodeShellImages: []string{"example.test/shell:1"}, NodeShellTimeoutSec: 60}
+	h.SetNodeShells(tracker)
+	interval := nodeShellPollInterval
+	nodeShellPollInterval = 5 * time.Millisecond
+	t.Cleanup(func() { nodeShellPollInterval = interval })
+	served := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer close(served)
+		h.NodeDebugShellWS(w, withLogFileContext(r, "apps", "resource.node.shell"))
+	}))
+	t.Cleanup(srv.Close)
+	c, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"?lang=en", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { c.Close(); <-served })
+	if s := readShellStatus(t, c); s.Status != shellWaiting {
+		t.Fatalf("first status = %+v", s)
+	}
+
+	store.SetFail(errors.New("dial tcp: i/o timeout")) // this server's database calls fail from here
+	cutAt := time.Now()
+	var text strings.Builder
+	var closed *websocket.CloseError
+	for closed == nil {
+		_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
+		_, data, err := c.ReadMessage()
+		if err != nil {
+			if !errors.As(err, &closed) {
+				t.Fatalf("read: %v (text so far %q)", err, text.String())
+			}
+			break
+		}
+		text.Write(data)
+	}
+	if closed.Code != probe.ShutdownCloseCode || closed.Text != nodeshells.ReasonHeartbeatLost {
+		t.Fatalf("closed %d %q, want 1001 heartbeat_lost", closed.Code, closed.Text)
+	}
+	if !strings.Contains(text.String(), "could not write it to the database") {
+		t.Fatalf("the terminal read %q, want the notice", text.String())
+	}
+	if since := time.Since(cutAt); since > 2*time.Second {
+		t.Fatalf("closed %s after the heartbeat stopped being saved", since)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for api.deletes.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if api.deletes.Load() != 1 {
+		t.Fatalf("pod deletes = %d, want 1", api.deletes.Load())
+	}
+	row := audits.shellRow(t)
+	if row.Result != audit.ResultFailure || !strings.Contains(row.Error, nodeshells.ErrHeartbeatLost.Error()) {
+		t.Fatalf("k8s.node.shell row %+v, want a failure naming the heartbeat", row)
 	}
 }

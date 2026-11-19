@@ -161,6 +161,44 @@ func TestPostgres_TheHeartbeatGoesOutWithThePoolFull(t *testing.T) {
 	}
 }
 
+// A tracker whose Run ends while it holds a shell gives the heartbeat's connection back, so the pool's Close, which
+// waits for every connection taken from it, returns at once (the server's shutdown closes the pool last).
+func TestPostgres_ARunThatEndsGivesTheConnectionBack(t *testing.T) {
+	pool := freshDB(t)
+	ctx := context.Background()
+	pg := NewPG(pool)
+	t.Cleanup(pg.Idle) // before freshDB's cleanup closes the pool: a failure here leaves it no connection to wait for
+	tr := NewTracker(pg, func(context.Context, Row) (bool, error) { return false, nil }, nil, time.Hour)
+	if err := tr.Begin(ctx, pgRow("s1"), base("n1"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if st := pool.Stat(); st.AcquiredConns() != 1 {
+		t.Fatalf("acquired connections while holding a shell = %d, want 1", st.AcquiredConns())
+	}
+	runCtx, stop := context.WithCancel(ctx)
+	ran := make(chan struct{})
+	go func() {
+		defer close(ran)
+		tr.Run(runCtx)
+	}()
+	stop()
+	select {
+	case <-ran:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not end")
+	}
+	closed := make(chan struct{})
+	go func() {
+		pool.Close()
+		close(closed)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("pool.Close still waits a second after Run ended: the heartbeat's connection was not given back")
+	}
+}
+
 // Of many sweeps at once each silent row is taken by exactly one, and a row whose owner beats in between is taken by
 // none.
 func TestPostgres_OneTakerPerRow(t *testing.T) {

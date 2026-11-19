@@ -31,3 +31,22 @@ func TestNodeShellRowsRunOnlyWhereNodeShellsOpen(t *testing.T) {
 		}
 	}
 }
+
+type idleCount struct{ n int }
+
+func (i *idleCount) Idle() { i.n++ }
+
+// At shutdown the tracker's context ends and the heartbeat's connection goes back to the pool right away, before the
+// pool's Close (registered first, so it runs last), and nothing is waited for.
+func TestStopNodeShellsEndsTheTrackerAndGivesItsConnectionBack(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	store := &idleCount{}
+	start := time.Now()
+	stopNodeShells(cancel, store)
+	if ctx.Err() == nil || store.n != 1 {
+		t.Fatalf("context %v, Idle calls %d; want cancelled and 1", ctx.Err(), store.n)
+	}
+	if d := time.Since(start); d > 100*time.Millisecond {
+		t.Fatalf("stopNodeShells took %s, want no wait", d)
+	}
+}

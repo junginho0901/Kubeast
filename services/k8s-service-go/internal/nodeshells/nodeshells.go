@@ -174,6 +174,14 @@ func processOwner() string {
 	return id
 }
 
+// WithTimes sets the heartbeat, the stale time (the owner stops its shells
+// one beat before it) and the sweep, for tests of other packages; a server
+// runs the defaults.
+func (t *Tracker) WithTimes(beat, stale, sweep time.Duration) *Tracker {
+	t.beatEvery, t.staleAfter, t.selfStopAfter, t.contactGap, t.sweepEvery, t.workFor = beat, stale, stale-beat, stale-beat, sweep, stale/2
+	return t
+}
+
 // Owner is the name this process writes in its rows and on its pods.
 func (t *Tracker) Owner() string { return t.owner }
 
@@ -297,9 +305,21 @@ func (t *Tracker) activeIDs() []string {
 
 // Run beats for this process's shells and sweeps, the first time at once,
 // until ctx ends. The heartbeat has a goroutine of its own, so a slow sweep
-// cannot hold it past staleAfter.
+// cannot hold it past staleAfter. Before it returns it waits for that
+// goroutine and gives the store's held connection back (Idle): the pool's
+// Close waits for every connection taken from it.
 func (t *Tracker) Run(ctx context.Context) {
-	go t.beatLoop(ctx)
+	beats := make(chan struct{})
+	go func() {
+		defer close(beats)
+		t.beatLoop(ctx)
+	}()
+	defer func() {
+		<-beats
+		if i, ok := t.store.(idler); ok {
+			i.Idle()
+		}
+	}()
 	sweep := time.NewTicker(t.sweepEvery)
 	defer sweep.Stop()
 	t.sweep(ctx)
@@ -415,16 +435,16 @@ func (t *Tracker) clean(ctx context.Context, r Row) {
 		return
 	}
 	rctx, cancel := context.WithTimeout(ctx, removeTimeout)
-	deleted, err := t.remove(rctx, r)
+	deleted, rerr := t.remove(rctx, r)
 	cancel()
-	if err != nil && !r.Expired {
+	if rerr != nil && !r.Expired {
 		slog.Warn("node shell: pod of a stopped server not deleted; a later sweep tries again",
-			"pod", r.Pod, "namespace", r.Namespace, "cluster", r.Cluster, "err", err)
+			"pod", r.Pod, "namespace", r.Namespace, "cluster", r.Cluster, "err", rerr)
 		return
 	}
-	if err != nil {
+	if rerr != nil {
 		slog.Warn("node shell: pod not deleted and its deadline has passed; the row is dropped",
-			"pod", r.Pod, "namespace", r.Namespace, "cluster", r.Cluster, "err", err)
+			"pod", r.Pod, "namespace", r.Namespace, "cluster", r.Cluster, "err", rerr)
 	} else {
 		slog.Info("node shell: pod of a stopped server handled", "pod", r.Pod, "namespace", r.Namespace,
 			"cluster", r.Cluster, "previous_owner", r.Owner, "deleted", deleted)
@@ -441,9 +461,9 @@ func (t *Tracker) clean(ctx context.Context, r Row) {
 		return
 	}
 	switch {
-	case r.Expired:
+	case r.Expired && (deleted || rerr != nil): // a pod already gone writes nothing, as below
 		t.recordEnd(context.WithoutCancel(ctx), r, ReasonDeadlinePassed, deleted)
-	case deleted:
+	case deleted && !r.Expired:
 		t.recordEnd(context.WithoutCancel(ctx), r, ReasonServerGone, deleted)
 	}
 }

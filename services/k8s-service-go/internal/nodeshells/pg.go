@@ -12,10 +12,12 @@ import (
 // are compared with the database's clock (NOW()), so replicas' clocks do not
 // matter.
 //
-// While this process holds a shell, its inserts and heartbeats go over one
-// connection taken from the pool and kept (held): requests that fill the pool
-// cannot hold the heartbeat back. It goes back to the pool once the process
-// holds no shell (Idle), and one that failed is closed and taken again.
+// While this process holds a shell, its heartbeats go over one connection
+// taken from the pool and kept (held), which an insert takes first: requests
+// that fill the pool cannot hold the heartbeat back, and inserts, which go over
+// the pool, do not queue in front of it. It goes back to the pool once the
+// process holds no shell or stops (Idle), and one that failed is closed and
+// taken again.
 type PG struct {
 	Pool *pgxpool.Pool
 
@@ -26,8 +28,33 @@ type PG struct {
 // NewPG is node_shells over pool.
 func NewPG(pool *pgxpool.Pool) *PG { return &PG{Pool: pool} }
 
+// hold takes the heartbeat's connection from the pool when none is held, without
+// holding the lock while it waits for the pool.
+func (p *PG) hold(ctx context.Context) error {
+	p.mu.Lock()
+	has := p.held != nil
+	p.mu.Unlock()
+	if has {
+		return nil
+	}
+	c, err := p.Pool.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	p.mu.Lock()
+	if p.held == nil {
+		p.held, c = c, nil
+	}
+	p.mu.Unlock()
+	if c != nil {
+		c.Release()
+	}
+	return nil
+}
+
 // onHeld runs fn on the held connection, taking one from the pool first when
-// none is held; a failure closes it so the next call takes a fresh one.
+// none is held; a failure closes it so the next call takes a fresh one. Only
+// the heartbeat and Idle take its lock.
 func (p *PG) onHeld(ctx context.Context, fn func(c *pgxpool.Conn) error) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -58,13 +85,14 @@ func (p *PG) Idle() {
 }
 
 func (p *PG) Insert(ctx context.Context, r Row) error {
-	return p.onHeld(ctx, func(c *pgxpool.Conn) error {
-		_, err := c.Exec(ctx, `
-			INSERT INTO node_shells (id, cluster, namespace, pod, node, owner, person, audit, heartbeat_at, opened_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())`,
-			r.ID, r.Cluster, r.Namespace, r.Pod, r.Node, r.Owner, []byte(r.Person), []byte(r.Audit))
+	if err := p.hold(ctx); err != nil {
 		return err
-	})
+	}
+	_, err := p.Pool.Exec(ctx, `
+		INSERT INTO node_shells (id, cluster, namespace, pod, node, owner, person, audit, heartbeat_at, opened_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())`,
+		r.ID, r.Cluster, r.Namespace, r.Pod, r.Node, r.Owner, []byte(r.Person), []byte(r.Audit))
+	return err
 }
 
 func (p *PG) Beat(ctx context.Context, owner string, ids []string) ([]string, error) {

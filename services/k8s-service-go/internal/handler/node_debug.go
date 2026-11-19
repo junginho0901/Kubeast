@@ -209,16 +209,19 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	// deletePod deletes the pod and ends its row; a pod it could not delete leaves the row to a sweep.
-	deletePod := func() {
+	// deletePod deletes the pod and ends its row; a pod it could not delete leaves the row to a sweep, and so does
+	// one not found after a create that may still land (unsure).
+	deletePod := func(unsure bool) {
 		grace := int64(0)
 		bg := metav1.DeletePropagationBackground
 		err := clientset.CoreV1().Pods(namespace).Delete(cleanupCtx, podName, metav1.DeleteOptions{
 			GracePeriodSeconds: &grace,
 			PropagationPolicy:  &bg,
 		})
-		if err != nil && !apierrors.IsNotFound(err) {
-			slog.Warn("debug shell pod not deleted", "pod", podName, "err", err)
+		if (err != nil && !apierrors.IsNotFound(err)) || (unsure && apierrors.IsNotFound(err)) {
+			if !apierrors.IsNotFound(err) {
+				slog.Warn("debug shell pod not deleted", "pod", podName, "err", err)
+			}
 			if shellID != "" {
 				h.nodeShells.Release(shellID)
 			}
@@ -236,8 +239,8 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 			if shellID != "" {
 				h.nodeShells.End(shellID)
 			}
-		default: // cancelled, cut or timed out: the pod may have been made
-			deletePod()
+		default: // cancelled, cut or timed out: the pod may have been made, or may be made after this delete
+			deletePod(true)
 		}
 		err = fmt.Errorf("create debug pod: %w", err)
 		slog.Error("debug shell", "err", err)
@@ -245,7 +248,7 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: response.Public(err)})
 		return
 	}
-	defer deletePod()
+	defer deletePod(false)
 
 	// Wait for the pod to run, telling the terminal why it is not yet
 	// (ContainerCreating, ImagePullBackOff, …) each time the reason changes.

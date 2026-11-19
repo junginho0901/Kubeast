@@ -17,7 +17,7 @@ import {
 //   cleanup), its row is gone, and exactly one k8s.session.end row names it with server_gone.
 // - NS-2 (two ready servers): the killed server's shell pods go within 150 s; each shell of the server that stays keeps
 //   its pod Running, its own socket open and its row's owner through the same 150 s.
-// - NS-3a (PostgreSQL frozen 30 s, a shell open): through the freeze and 150 s after it the pod stays Running, the
+// - NS-3a (PostgreSQL frozen 20 s, a shell open): through the freeze and 150 s after it the pod stays Running, the
 //   socket open and the row's owner the same.
 // - NS-3b (PostgreSQL stopped 60 s, a shell open): the shell's own server closes it while PostgreSQL is off, not
 //   before 30 s after the stop was asked (45 s from its last saved beat), with the notice and the close reason
@@ -34,6 +34,9 @@ const PG_DOCKER = process.env.E2E_FAULT_PG_DOCKER || ''
 const GONE_WITHIN_MS = 150_000
 const NOT_BEFORE_MS = 40_000
 const SELF_STOP_MS = 45_000
+// Under the 30 s a break may last with no shell closed (the owner closes only once 45 s pass from its last saved beat,
+// which can be 15 s before the freeze), with room for the thaw's own delay.
+const FREEZE_S = 20
 
 type Shell = { statuses: string[]; text: string; closed?: { code: number; reason: string; at: number } }
 
@@ -126,6 +129,8 @@ test.describe('Node shell pods of a killed server (threat model 1.9, F-1 with a 
     test.skip(!deploymentExists(SERVER), `no ${SERVER} Deployment`)
     test.skip(envOf(SERVER, 'NODE_SHELL_ENABLED') !== 'true', `node shell is off on ${SERVER} (nodeShell.enabled false, the default): turn it on for this run and back after`)
     test.skip(psql(`SELECT COALESCE(to_regclass('node_shells')::text, '')`).trim() !== 'node_shells', 'no table node_shells (migration 00030)')
+    test.skip(psql(`SELECT count(*) FROM information_schema.columns WHERE table_name = 'node_shells' AND column_name = 'released_at'`).trim() !== '1',
+      'node_shells has no released_at: the database took an earlier build of migration 00030 — drop the table and goose_db_version row 30, then upgrade again')
     node = kubectl(['get', 'nodes', '-o', 'jsonpath={.items[0].metadata.name}']).trim()
     expect(node, 'a node of self').not.toBe('')
   })
@@ -200,7 +205,7 @@ test.describe('Node shell pods of a killed server (threat model 1.9, F-1 with a 
     }
   })
 
-  test('NS-3a: PostgreSQL frozen 30 s with a node shell open — the shell, its pod and its row\'s owner stay through the freeze and 150 s after', async ({ page, request }) => {
+  test('NS-3a: PostgreSQL frozen 20 s with a node shell open — the shell, its pod and its row\'s owner stay through the freeze and 150 s after', async ({ page, request }) => {
     test.setTimeout(420_000)
     const target = PG_DOCKER ? dockerFreezeTarget(PG_DOCKER)
       : deploymentExists('postgres') ? freezeTargetOf('postgres')
@@ -209,8 +214,8 @@ test.describe('Node shell pods of a killed server (threat model 1.9, F-1 with a 
     await login(request)
     await page.goto('/color-mode.js')
     const pod = await openShellPod(page, 'frozen', node)
-    const ice = freeze(target as FreezeTarget, 30)
-    await sleep(30_000)
+    const ice = freeze(target as FreezeTarget, FREEZE_S)
+    await sleep(FREEZE_S * 1000)
     const thawedAt = ice.thaw()
     await staysLive(page, 'frozen', pod, ice.at, (thawedAt - ice.at) + GONE_WITHIN_MS)
   })

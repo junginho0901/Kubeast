@@ -612,6 +612,29 @@ func TestARowPastTheDeadlineIsDroppedWhateverTheDelete(t *testing.T) {
 	}
 }
 
+// A row past the deadline whose pod is already gone is dropped with no end row, as any row whose pod was gone.
+func TestAnExpiredRowWhosePodIsGoneWritesNoEndRow(t *testing.T) {
+	c, store, p, rows := newWorld()
+	a, b := server(c, store, p, rows, "a"), server(c, store, p, rows, "b")
+	open(t, a, p, "s1", nil)
+	p.mu.Lock()
+	delete(p.exist, "s1")
+	p.mu.Unlock()
+	a.Release("s1")
+	store.mu.Lock()
+	store.rows["s1"].Released = false // as if the release had not reached the database
+	store.mu.Unlock()
+	c.add(shellTimeout + expireSlack + time.Minute)
+	inContact(b)
+	b.sweep(context.Background())
+	if _, ok := store.Rows()["s1"]; ok {
+		t.Fatal("the row stays past the deadline")
+	}
+	if len(rows.all()) != 0 {
+		t.Fatalf("end rows %v for an expired row whose pod was gone", rows.reasons())
+	}
+}
+
 // Run sweeps from the start: a row left by a server killed before this one started is deleted once this server has
 // been in contact for staleAfter.
 func TestRunDeletesWhatAKilledServerLeftFromItsStart(t *testing.T) {

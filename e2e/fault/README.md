@@ -64,7 +64,7 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
 | `claude-code-slots.spec.ts` | #859 Claude Code slots | M-4 "the cap holds on two servers; a server killed → its slot free within 60 s" | two ready `ai-service` pods (`replicas.aiService: 2`); the default model on provider `claude-code` (`scripts/kind-model-subscription.sh up`); table `claude_code_slots` | rows of `claude_code_slots` owned `e2e-w6-*` (set free after), conversations of the run (deleted), kills one ai-service pod; up to five short chat turns of the subscription |
 | `redis-users.spec.ts` | #866 Redis users per service | M-6b "ACL refusal test" and "test 6 (tool-server 10 s)"; F-8 | the chart's Redis with `redis.acl` on; tool-server cases `mcp.enabled` and kind clusters `kubeast-b`, `test2`; the last case also #857 | one `kubeast:cache:e2e-w6-*` key (30 s TTL), clusters `e2e-w6-tool-*` (deleted), Redis stopped 60 s and about 20 s, one `rollout restart` of k8s-service while Redis is stopped |
 | `w4-stream-split.spec.ts` | #823 `SERVER_ROLE`, #824 the stream server's drain, #825 `streams.enabled` | F-1, F-2 (the part `stream-server.spec.ts` does not hold), F-3 | `streams.enabled: true` (Deployment `k8s-service-stream`); F-3 one `k8s-service` replica | a busybox pod `e2e-w6-seq-*` in `default` (deleted), kills the stream server and the api server, one `rollout restart` of the stream server |
-| `node-shell-cleanup.spec.ts` | threat model v0.7.8 row 1.9 (`node_shells`) | F-1 with a node shell open; PostgreSQL frozen and stopped with one open | `nodeShell.enabled` on the server that opens terminals (`NODE_SHELL_ENABLED`); NS-2 two ready servers of that Deployment; NS-3a a PostgreSQL to freeze (the chart's or `E2E_FAULT_PG_DOCKER`), NS-3b the chart's PostgreSQL with a PersistentVolumeClaim; `docker exec` into the kind node | node shells on the first node of self (only the pods it made are deleted after), kills one server with no signal, freezes PostgreSQL 30 s, stops it 60 s; waits for the rollouts |
+| `node-shell-cleanup.spec.ts` | threat model v0.7.8 row 1.9 (`node_shells`) | F-1 with a node shell open; PostgreSQL frozen and stopped with one open | `nodeShell.enabled` on the server that opens terminals (`NODE_SHELL_ENABLED`); NS-2 two ready servers of that Deployment; NS-3a a PostgreSQL to freeze (the chart's or `E2E_FAULT_PG_DOCKER`), NS-3b the chart's PostgreSQL with a PersistentVolumeClaim; `docker exec` into the kind node | node shells on the first node of self (only the pods it made are deleted after), kills one server with no signal, freezes PostgreSQL 20 s, stops it 60 s; waits for the rollouts |
 
 ### Pass lines and what each test depends on
 
@@ -154,7 +154,7 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
 - NS-2: with two servers each holding a shell, the killed server's shell pods go within 150 s; each shell of the other
   server, paired with its own socket, stays Running with that socket open and its row's owner the same through the
   whole 150 s.
-- NS-3a: PostgreSQL frozen 30 s: through the freeze and 150 s after it the shell's pod stays Running, its socket open
+- NS-3a: PostgreSQL frozen 20 s (under the 30 s a break may last with no shell closed): through the freeze and 150 s after it the shell's pod stays Running, its socket open
   and its row's owner the same.
 - NS-3b: PostgreSQL stopped 60 s: the shell's own server closes it while PostgreSQL is off, not before 30 s after the
   stop was asked (45 s from its last saved beat), with the terminal's notice and the close reason `heartbeat_lost`; its

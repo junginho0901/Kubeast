@@ -337,12 +337,14 @@ func main() {
 		}
 		return cs, nil
 	})
-	if shells := nodeShellTracker(cfg.NodeShellEnabled, role, nodeshells.NewPG(pgPool), nodeShellPods, auditStore,
+	shellStore := nodeshells.NewPG(pgPool)
+	if shells := nodeShellTracker(cfg.NodeShellEnabled, role, shellStore, nodeShellPods, auditStore,
 		time.Duration(cfg.NodeShellTimeoutSec)*time.Second); shells != nil {
 		h.SetNodeShells(shells)
 		shellCtx, shellCancel := context.WithCancel(context.Background())
-		defer shellCancel()
 		go shells.Run(shellCtx)
+		// Deferred after pgPool.Close, so it runs before it: Close waits for every connection, the heartbeat's held one too.
+		defer stopNodeShells(shellCancel, shellStore)
 	}
 	recCtx, recCancel := context.WithCancel(context.Background())
 	defer recCancel()
@@ -556,6 +558,14 @@ func main() {
 	}
 	shutdown(srv, ready, recorder, serverShutdownWait, recorderShutdownWait)
 	slog.Info("server stopped")
+}
+
+// stopNodeShells ends the node shells' tracker and gives the heartbeat's connection back to the pool at once: a beat
+// under way ends with the cancelled context (pgx closes its connection), and one that starts after finds no context to
+// take a connection with. It waits for nothing, so the shutdown waits stay as they are.
+func stopNodeShells(cancel context.CancelFunc, store interface{ Idle() }) {
+	cancel()
+	store.Idle()
 }
 
 // nodeShellTracker is the tracker of the node shells this server opens: none when node shell is off or the server
