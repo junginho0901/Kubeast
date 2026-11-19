@@ -39,32 +39,36 @@ const waiting = (pastCache: boolean) => reads.filter((read) => read.pastCache ==
 const fromCache = () => [release('db'), release('web')]
 const fromCluster = () => [release('web')]
 
-function open() {
+// The page drawn with its list read before; `stale` marks that list as the detail page and the rollback, upgrade and
+// uninstall windows do (invalidateQueries while the list is not on screen) before the page is shown again.
+function open({ stale = false } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   client.setQueryData(['namespaces'], [])
   client.setQueryData(KEY, fromCache())
+  if (stale) void client.invalidateQueries({ queryKey: ['helm-releases'] })
   renderToStaticMarkup(createElement(MemoryRouter, { initialEntries: ['/helm/releases'] },
     createElement(I18nextProvider, { i18n }, createElement(QueryClientProvider, { client }, createElement(HelmReleasesPage)))))
-  // the page's list query as useQuery keeps it once drawn: its own read, never stale, its options given again on every
-  // drawing (one comes as a read starts, isFetching)
-  const options = { queryKey: KEY, queryFn: () => api.helm.listReleases(undefined), staleTime: Infinity }
+  // the page's list query as useQuery keeps it once drawn: the page's own read, never stale, its options given again on
+  // every drawing (one comes as a read starts, isFetching); subscribing is the page shown, which reads a stale list
+  const queryFn = client.getQueryCache().find({ queryKey: KEY, exact: true })!.options.queryFn as () => Promise<HelmReleaseSummary[]>
+  const options = { queryKey: KEY, queryFn, staleTime: Infinity }
   const observer = new QueryObserver(client, options)
   const stop = observer.subscribe(() => {})
   const names = () => (client.getQueryData(KEY) as HelmReleaseSummary[]).map((row) => row.name)
   return { client, observer, draw: () => observer.setOptions(options), stop, readAgain: stream.onResync!, names }
 }
 
-describe("the Helm Releases page's read after the stream's resync", () => {
-  beforeEach(() => {
-    reads = []
-    stream.onResync = undefined
-    vi.spyOn(api.helm, 'listReleases').mockImplementation((params) =>
-      new Promise((resolve) => reads.push({ pastCache: params?.force_refresh === true, answer: resolve })))
-  })
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
+beforeEach(() => {
+  reads = []
+  stream.onResync = undefined
+  vi.spyOn(api.helm, 'listReleases').mockImplementation((params) =>
+    new Promise((resolve) => reads.push({ pastCache: params?.force_refresh === true, answer: resolve })))
+})
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
+describe("the Helm Releases page's read after the stream's resync", () => {
   it('reads past the cache once, and nothing else, when no read of the list is on its way', async () => {
     const page = open()
     page.readAgain()
@@ -100,8 +104,9 @@ describe("the Helm Releases page's read after the stream's resync", () => {
     page.readAgain()
     await sleep(5)
     page.draw()
-    // the list asked for again while the resync's read is on its way: react-query stops that one and answers for it
-    void page.client.invalidateQueries({ queryKey: KEY })
+    // the list's own read asked for again while the resync's read is on its way: react-query stops that one and answers
+    // for it
+    void page.observer.refetch()
     await sleep(5)
     expect(waiting(false)).toHaveLength(1)
     // the read that gave way answers late, and its answer is not kept
@@ -135,6 +140,28 @@ describe("the Helm Releases page's read after the stream's resync", () => {
 
     expect(waiting(false)).toHaveLength(0)
     expect(page.names()).toEqual(['web'])
+    page.stop()
+  })
+})
+
+// The stream opens while the page's own read of a stale list is on its way, so it asks for no resync (followQuery): that
+// read is the one that has to go past the cache.
+describe('the Helm Releases page shown again', () => {
+  it('reads a list marked stale past the cache, and its next read from the cache', async () => {
+    const page = open({ stale: true })
+    await sleep(5)
+    expect(waiting(true), 'the read of the list shown again went past the cache').toHaveLength(1)
+    expect(waiting(false)).toHaveLength(0)
+    waiting(true)[0].answer(fromCluster())
+    await sleep(5)
+    expect(page.names(), 'db, uninstalled outside Kubeast, is gone').toEqual(['web'])
+
+    // read since, the list is no longer stale
+    void page.observer.refetch()
+    await sleep(5)
+    expect(waiting(false)).toHaveLength(1)
+    waiting(false)[0].answer(fromCluster())
+    await sleep(5)
     page.stop()
   })
 })

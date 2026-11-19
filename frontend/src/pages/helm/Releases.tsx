@@ -50,10 +50,14 @@ export default function HelmReleasesPage() {
     refreshList(queryClient, queryKey, () => api.helm.listReleases({ ...(namespace ? { namespace } : {}), force_refresh: true })))
 
   // Another namespace or cluster waits for its own answer, as on first open: the releases of the one before are not
-  // its releases.
+  // its releases. A list marked stale (its release changed on the detail page, a rollback, upgrade or uninstall, a read
+  // that failed) is read past the server's 30 s cache when it is shown again: that read is on its way as the stream
+  // opens, so the stream asks for no resync, and a release uninstalled outside Kubeast meanwhile stays in that cache.
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey,
-    queryFn: () => api.helm.listReleases(namespace ? { namespace } : undefined),
+    queryFn: () => queryClient.getQueryState(queryKey)?.isInvalidated
+      ? api.helm.listReleases({ ...(namespace ? { namespace } : {}), force_refresh: true })
+      : api.helm.listReleases(namespace ? { namespace } : undefined),
     staleTime: Infinity,
   })
 
