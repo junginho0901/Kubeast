@@ -135,3 +135,53 @@ describe('panelEscape', () => {
     expect(close).toHaveBeenCalledTimes(1)
   })
 })
+
+// The Resource Graph's traffic panel closed only on its X. It is drawn in the page, so a window it opens (the
+// NetworkPolicy check) or the drawer of a line's end stands over it and takes the first Escape.
+describe('panelEscape under a window or the drawer', () => {
+  // a window as ModalOverlay listens (document, bubble) or the drawer (window): it closes on Escape and, as React
+  // commits the close before the next listener runs, is off the page by then
+  function over(p: ReturnType<typeof page>, where: 'document' | 'window', shown = { open: true }) {
+    const onKey = (e: Key) => { if (e.key === 'Escape' && shown.open) { e.stopPropagation(); shown.open = false } }
+    if (where === 'window') p.win.push(onKey)
+    else p.document.addEventListener('keydown', onKey as unknown as EventListener)
+    return shown
+  }
+
+  it.each(['document', 'window'] as const)('the first Escape closes the one over it (%s) and the panel stays, the second closes the panel', (where) => {
+    const p = page()
+    const close = vi.fn()
+    const line = { focus: vi.fn() }
+    const windowOver = { open: true }
+    panelEscape(p.document, close, () => line, () => windowOver.open)
+    // opened from the panel, so it listens after it
+    over(p, where, windowOver)
+    p.press('Escape')
+    expect(windowOver.open).toBe(false)
+    expect(close).not.toHaveBeenCalled()
+    expect(line.focus).not.toHaveBeenCalled()
+    p.press('Escape')
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(line.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('a window that listened before the panel and is gone by the time the panel hears the key still had it', () => {
+    const p = page()
+    const close = vi.fn()
+    const shown = over(p, 'document')
+    panelEscape(p.document, close, () => null, () => shown.open)
+    p.press('Escape')
+    expect(shown.open).toBe(false)
+    expect(close).not.toHaveBeenCalled()
+    p.press('Escape')
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops listening in both phases when the panel closes', () => {
+    const p = page()
+    const stop = panelEscape(p.document, vi.fn(), () => null, () => false)
+    expect(p.listening()).toBe(2)
+    stop()
+    expect(p.listening()).toBe(0)
+  })
+})
