@@ -58,6 +58,7 @@ replicas:
 ```
 
 - `pdb.enabled`(기본 켜짐)는 2대 이상으로 돌거나 autoscaling의 `minReplicas`가 2 이상인 서비스마다, 한 번에 `pdb.maxUnavailable`개(1)까지 내보낼 수 있는 PodDisruptionBudget을 만듭니다. 1대인 서비스에는 만들지 않아 드레인을 막지 않습니다.
+- 1대로 도는 서비스는 그 파드가 지워지거나 내보내질 때(노드 드레인 포함) preStop 대기가 끝난 때부터 새 파드가 Ready가 될 때까지 받을 파드가 없습니다. rollout과 달리 지워진 파드는 새 파드를 먼저 띄우지 않기 때문입니다. kind 실측으로 auth-service · k8s-service · session-service는 약 1초, readiness probe가 10초마다 묻는 ai-service · frontend · gateway는 약 6초(새 파드가 뜨기 전에 첫 probe가 오면 약 16초)이고, 그동안 화면은 502 · 503 · 504를 받습니다. 2대 이상이면 새 파드가 뜨는 동안 나머지가 답하고, PDB가 드레인이 그 파드들을 한꺼번에 내보내지 않게 합니다.
 
 ## HPA에 대수 맡기기
 

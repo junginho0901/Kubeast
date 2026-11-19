@@ -58,6 +58,7 @@ replicas:
 ```
 
 - `pdb.enabled` (on by default) gives each service that runs two or more pods, or whose autoscaling keeps `minReplicas` 2 or more, a PodDisruptionBudget that lets `pdb.maxUnavailable` (1) of its pods be evicted at once; a service of one pod gets none, so it never blocks a drain.
+- A service of one pod has nothing to answer from the moment that pod is deleted or evicted (a node drain too) and its preStop wait ends until the new pod is ready, since a deleted pod is not replaced first as a rollout's is: measured on kind, about 1 s for auth-service, k8s-service and session-service and about 6 s for ai-service, the frontend and the gateway, whose readiness probe asks every 10 s (about 16 s when the new pod's first probe comes before it is up); screens get 502, 503 or 504 meanwhile. With two or more pods the others answer while the new one starts, and the PDB keeps a drain from taking them together.
 
 ## Let an HPA set the count
 

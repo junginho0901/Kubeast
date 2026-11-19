@@ -1,4 +1,4 @@
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
+import { execFile, execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -31,6 +31,17 @@ export function kubectl(args: string[], opts: { input?: string; timeout?: number
   return execFileSync('kubectl', ['--kubeconfig', KUBECONFIG, '--context', `kind-${KIND}`, ...args], {
     encoding: 'utf8', input: opts.input, timeout: opts.timeout ?? 120_000, stdio: ['pipe', 'pipe', 'pipe'],
   }).trim()
+}
+
+// kubectl that leaves the worker's event loop running, for calls made while a Probe sends: kubectl() (execFileSync)
+// holds the loop until it returns, so the Probe sends nothing meanwhile and the request it had started is timed with
+// the whole wait added (four rollout restarts of auth-service held it 24 s, and a 200 sent before them read 24 281 ms).
+export function kubectlAsync(args: string[], opts: { timeout?: number } = {}): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile('kubectl', ['--kubeconfig', KUBECONFIG, '--context', `kind-${KIND}`, ...args], {
+      encoding: 'utf8', timeout: opts.timeout ?? 120_000,
+    }, (err, stdout) => (err ? reject(err) : resolve(stdout.trim())))
+  })
 }
 
 export function kubectlOk(args: string[], opts: { input?: string; timeout?: number } = {}): { ok: boolean; out: string } {
@@ -83,7 +94,11 @@ export type Pod = { name: string; ready: boolean; restarts: number; deleting: bo
 
 // The pods of one app label in the install's namespace.
 export function podsOf(app: string): Pod[] {
-  const raw = JSON.parse(kubectl(['-n', NS, 'get', 'pods', '-l', `app=${app}`, '-o', 'json'])) as {
+  return podRows(kubectl(['-n', NS, 'get', 'pods', '-l', `app=${app}`, '-o', 'json']))
+}
+
+function podRows(json: string): Pod[] {
+  const raw = JSON.parse(json) as {
     items: { metadata: { name: string; deletionTimestamp?: string }; status: { podIP?: string; conditions?: { type: string; status: string }[]; containerStatuses?: { restartCount: number }[] } }[]
   }
   return raw.items.map((p) => ({
@@ -96,6 +111,10 @@ export function podsOf(app: string): Pod[] {
 }
 
 export const readyPods = (app: string) => podsOf(app).filter((p) => p.ready && !p.deleting)
+
+// podsOf and readyPods while a Probe sends (kubectlAsync).
+export const podsOfAsync = async (app: string) => podRows(await kubectlAsync(['-n', NS, 'get', 'pods', '-l', `app=${app}`, '-o', 'json']))
+export const readyPodsAsync = async (app: string) => (await podsOfAsync(app)).filter((p) => p.ready && !p.deleting)
 
 export function deploymentExists(name: string): boolean {
   return kubectlOk(['-n', NS, 'get', 'deploy', name, '-o', 'name']).ok
@@ -145,6 +164,13 @@ export function restartsSince(before: Record<string, number>): Record<string, nu
 export function killPod(name: string): number {
   const at = Date.now()
   kubectl(['-n', NS, 'delete', 'pod', name, '--grace-period=0', '--force', '--wait=false'])
+  return at
+}
+
+// killPod while a Probe sends (kubectlAsync).
+export async function killPodAsync(name: string): Promise<number> {
+  const at = Date.now()
+  await kubectlAsync(['-n', NS, 'delete', 'pod', name, '--grace-period=0', '--force', '--wait=false'])
   return at
 }
 
@@ -300,31 +326,35 @@ export function rolledOut(deploy: string, timeoutSeconds = 180) {
   kubectl(['-n', NS, 'rollout', 'status', `deploy/${deploy}`, `--timeout=${timeoutSeconds}s`], { timeout: (timeoutSeconds + 10) * 1000 })
 }
 
+// rolledOut while a Probe sends (kubectlAsync).
+export async function rolledOutAsync(deploy: string, timeoutSeconds = 180) {
+  await kubectlAsync(['-n', NS, 'rollout', 'status', `deploy/${deploy}`, `--timeout=${timeoutSeconds}s`], { timeout: (timeoutSeconds + 10) * 1000 })
+}
+
 // Scales a Deployment to 0 and waits until none of its pods is left (podsOf counts a pod being deleted, which still
 // answers through its preStop and grace: the bundled Redis has no preStop, only the 30 s default grace), so what a
 // test does "with it off" starts only then.
 // The scale back is registered with atExit and given to whenGone before the scale to 0; bringBack scales back, waits
 // for the rollout and returns when.
-export async function takeDown(deploy: string, goneWithinMs = 120_000): Promise<{ offAt: number; bringBack: () => number }> {
-  const had = replicasOf(deploy)
+export async function takeDown(deploy: string, goneWithinMs = 120_000): Promise<{ offAt: number; bringBack: () => Promise<number> }> {
+  // its kubectl goes through kubectlAsync: a Probe may be sending (stopFor)
+  const had = Number(await kubectlAsync(['-n', NS, 'get', 'deploy', deploy, '-o', 'jsonpath={.spec.replicas}']) || '0')
   if (had < 1) throw new Error(`${deploy} is already at 0 replicas — left by an interrupted run? Scale it back first (README "After a run that stopped half way")`)
   const stopWatcher = whenGone([['-n', NS, 'scale', `deploy/${deploy}`, `--replicas=${had}`]])
   const drop = atExit(`scale ${deploy} back to ${had}`, () => { scale(deploy, had); stopWatcher() })
-  let onAt = 0
-  const bringBack = () => {
-    if (onAt) return onAt
-    scale(deploy, had)
+  let back: Promise<number> | null = null
+  const bringBack = () => (back ??= (async () => {
+    await kubectlAsync(['-n', NS, 'scale', `deploy/${deploy}`, `--replicas=${had}`])
     drop()
     stopWatcher()
-    rolledOut(deploy)
-    onAt = Date.now()
-    return onAt
-  }
+    await rolledOutAsync(deploy)
+    return Date.now()
+  })())
   try {
-    scale(deploy, 0)
-    await expect.poll(() => podsOf(deploy).length, { message: `every ${deploy} pod gone`, timeout: goneWithinMs, intervals: [250] }).toBe(0)
+    await kubectlAsync(['-n', NS, 'scale', `deploy/${deploy}`, '--replicas=0'])
+    await expect.poll(async () => (await podsOfAsync(deploy)).length, { message: `every ${deploy} pod gone`, timeout: goneWithinMs, intervals: [250] }).toBe(0)
   } catch (e) {
-    bringBack()
+    await bringBack()
     throw e
   }
   return { offAt: Date.now(), bringBack }
@@ -337,9 +367,9 @@ export async function stopFor(deploy: string, seconds: number, during: (offAt: n
   try {
     await Promise.all([sleep(seconds * 1000), during(down.offAt)])
   } finally {
-    down.bringBack()
+    await down.bringBack()
   }
-  return { offAt: down.offAt, onAt: down.bringBack() }
+  return { offAt: down.offAt, onAt: await down.bringBack() }
 }
 
 // Every pod of the service (the chart's app label), as a request may land on any replica; with a label kubectl prints
@@ -351,6 +381,9 @@ export function serverLog(app: string, sinceIso: string): string {
 export function podLog(pod: string, sinceIso: string): string {
   return kubectlOk(['-n', NS, 'logs', pod, '--all-containers', `--since-time=${sinceIso}`]).out
 }
+
+// podLog while a Probe sends (kubectlAsync); a failed read is empty.
+export const podLogAsync = (pod: string, sinceIso: string) => kubectlAsync(['-n', NS, 'logs', pod, '--all-containers', `--since-time=${sinceIso}`]).catch(() => '')
 
 // A port-forward to one pod, so a request reaches that server and no other. kubectl runs under a small shell that ends
 // it when told (close, the worker's exit or signal) and also when the worker is gone however it went (it looks every
@@ -418,7 +451,71 @@ export class Probe {
   }
 }
 
+// The gateway's NodePort as a kind node reaches it: the node (the container `docker exec` names) and the URL, or null
+// when the gateway Service has no NodePort or the node no InternalIP.
+export function gatewayOnNode(node: string): { node: string; url: string } | null {
+  const port = kubectlOk(['-n', NS, 'get', 'svc', 'gateway', '-o', 'jsonpath={.spec.ports[0].nodePort}']).out
+  const ip = kubectlOk(['get', 'node', node, '-o', 'jsonpath={.status.addresses[?(@.type=="InternalIP")].address}']).out
+  return /^\d+$/.test(port) && /^[\d.]+$/.test(ip) ? { node, url: `http://${ip}:${port}` } : null
+}
+
+// $1 base URL, $2 seconds at most, $3 seconds between requests, $4 each request's timeout, $5 stop file, then the paths.
+// The token comes on stdin and goes to a 0600 header file the script removes.
+const NODE_PROBE_SCRIPT = `IFS= read -r t
+umask 077
+h=$(mktemp); printf 'Authorization: Bearer %s\\nX-Requested-With: XMLHttpRequest\\n' "$t" > "$h"; t=
+base=$1; end=$(( $(date +%s) + $2 )); every=$3; tmo=$4; stop=$5; shift 5
+i=0
+while [ ! -e "$stop" ] && [ "$(date +%s)" -lt "$end" ]; do
+  n=$(( i % $# + 1 )); eval p=\\\${$n}; i=$(( i + 1 ))
+  ( at=$(date +%s%3N); r=$(curl -s -o /dev/null -m "$tmo" -H @"$h" -w '%{http_code} %{time_total}' "$base$p"); echo "$at $p $r $?" ) &
+  sleep "$every"
+done
+wait
+rm -f "$h" "$stop"`
+
+// A Probe that sends from inside a kind node (curl through `docker exec`), for an address the laptop reaches only
+// through Docker Desktop's published port, which takes a connection while nothing behind it answers and passes it on
+// later: a slow 200 the node itself never sees (kind on Docker Desktop only). Its times are the node's clock, compared
+// only with each other; it ends at stop() or after maxSeconds.
+export class NodeProbe {
+  private out = ''
+  private readonly stopFile = `/tmp/e2e-fault-node-probe-${STAMP}-${Math.random().toString(36).slice(2, 8)}`
+  private readonly done: Promise<void>
+  private readonly undo: () => void
+
+  constructor(private node: string, base: string, paths: string[], token: string, everyMs = 100, timeoutMs = 10_000, maxSeconds = 600) {
+    const child = spawn(DOCKER, ['exec', '-i', node, 'sh', '-c', NODE_PROBE_SCRIPT, 'sh', base, String(maxSeconds), String(everyMs / 1000), String(timeoutMs / 1000), this.stopFile, ...paths], { stdio: ['pipe', 'pipe', 'ignore'] })
+    child.stdout!.on('data', (b: Buffer) => { this.out += b.toString() })
+    this.done = new Promise((resolve) => child.on('close', () => resolve()))
+    child.stdin!.end(`${token}\n`)
+    this.undo = atExit(`stop the node probe on ${node}`, () => run([DOCKER, 'exec', node, 'touch', this.stopFile]))
+  }
+
+  async stop(): Promise<Answer[]> {
+    await new Promise<void>((resolve) => execFile(DOCKER, ['exec', this.node, 'touch', this.stopFile], () => resolve()))
+    await this.done
+    this.undo()
+    return this.out.split('\n').flatMap((line) => {
+      const [at, path, code, total, rc] = line.trim().split(' ')
+      if (!rc) return []
+      return [{ at: Number(at), path, status: Number(code), ms: Math.round(Number(total) * 1000), ...(rc !== '0' ? { error: `curl exit ${rc}` } : {}) }]
+    }).sort((a, b) => a.at - b.at)
+  }
+}
+
 export const notOk = (answers: Answer[], ok: (a: Answer) => boolean = (a) => a.status === 200) => answers.filter((a) => !ok(a))
+
+// The longest time between two requests of a Probe (answers in send order). Well past its everyMs, something held the
+// worker's event loop: nothing was sent then, and the answer on its way was timed with the hold added.
+export const longestGap = (answers: Answer[]) => answers.reduce((m, a, i) => (i ? Math.max(m, a.at - answers[i - 1].at) : m), 0)
+
+// The longest gap a test lets a Probe have: below the 5 s a test calls a hang, so a hold alone cannot make an answer
+// read as one.
+export const SEND_GAP_MS = 2_000
+export function expectProbeKeptSending(answers: Answer[]) {
+  expect(longestGap(answers), `ms between two requests of the probe (more than ${SEND_GAP_MS}: the worker's event loop was held)`).toBeLessThanOrEqual(SEND_GAP_MS)
+}
 
 // The answers as one line each, for a failure message.
 export const show = (answers: Answer[], limit = 20) => answers.slice(0, limit)
