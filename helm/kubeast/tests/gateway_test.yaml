@@ -26,6 +26,19 @@ tests:
         template: gateway.yaml
         documentIndex: 0
 
+  - it: gives every upstream one 3 s connect timeout, which no location sets again
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: '\n    proxy_connect_timeout 3s;\n'
+        template: gateway.yaml
+        documentIndex: 0
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'location [^{]*\{[^}]*proxy_connect_timeout'
+        template: gateway.yaml
+        documentIndex: 0
+
   - it: forwards every node sub-path to k8s-service, not only the ones with their own location
     asserts:
       - matchRegex:
