@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: queue-data}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: fast-ssd-z9
+  resources: {requests: {storage: 1Gi}}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: queue-0, labels: {app: queue-0}}
+spec:
+  terminationGracePeriodSeconds: 1
+  containers:
+    - name: main
+      image: docker.io/library/busybox:1.38.0
+      imagePullPolicy: IfNotPresent
+      command: ["sh", "-c", "sleep 86400"]
+      volumeMounts:
+        - {name: data, mountPath: /data}
+  volumes:
+    - name: data
+      persistentVolumeClaim: {claimName: queue-data}
