@@ -75,28 +75,49 @@ class ThisTree(unittest.TestCase):
                 script.write_text(text.replace(line, f"OPENAI_MODEL={value}", 1), encoding="utf-8")
                 self.assertEqual(len(pins.check(root)), problems)
 
-    def test_the_setup_page_may_start_at_its_lists_first_entry(self):
-        root = self.copy()
+    def setup_entry(self):
+        return next(e for e in pins.DEFAULTS if e[0].endswith("SetupAIModelPage.tsx"))
+
+    def on_the_catalog(self, root: Path) -> Path:
+        """The copy's setup page starting at its list's first entry, as #924 writes it."""
         page = root / "frontend/src/pages/setup/SetupAIModelPage.tsx"
         text = page.read_text(encoding="utf-8")
-        start = re.search(r"useState\('[^']*'\)", text[text.index("const [aiModel, setAiModel]"):]).group(0)
-        page.write_text(text.replace(f"setAiModel] = {start}", "setAiModel] = useState(() => getDefaultModel('openai'))", 1), encoding="utf-8")
-        catalog = root / pins.CATALOG
+        if "useState(() => getDefaultModel('openai'))" not in text:
+            line = next(ln for ln in text.splitlines() if "const [aiModel, setAiModel] = useState(" in ln)
+            page.write_text(text.replace(line, "  const [aiModel, setAiModel] = useState(() => getDefaultModel('openai'))", 1), encoding="utf-8")
+        return root / pins.CATALOG
+
+    def first_openai_entry(self, catalog: Path, head: str) -> None:
         listed = catalog.read_text(encoding="utf-8")
-        first = re.search(r"id: 'openai',.*?\{ name: '([^']+)'", listed, re.S).group(1)
+        at = listed.index("id: 'openai',")
+        models = listed.index("models: [", at) + len("models: [")
+        catalog.write_text(listed[:models] + head + listed[models:], encoding="utf-8")
+
+    def test_the_setup_page_may_start_at_its_lists_first_entry(self):
         for model, problems in (("gpt-6-luna", 0), ("gpt-5.5", 1)):
             with self.subTest(model=model):
-                catalog.write_text(listed.replace(f"{{ name: '{first}'", f"{{ name: '{model}'", 1), encoding="utf-8")
-                self.assertEqual(pins.read_default(next(e for e in pins.DEFAULTS if e[0].endswith("SetupAIModelPage.tsx")), root), model)
+                root = self.copy()
+                catalog = self.on_the_catalog(root)
+                self.first_openai_entry(catalog, f"\n      {{ name: '{model}', functionCalling: true }},")
+                self.assertEqual(pins.read_default(self.setup_entry(), root), model)
                 self.assertEqual(len(pins.check(root)), problems)
 
-    def test_a_default_that_moved_fails(self):
+    def test_comment_lines_before_the_first_entry_are_passed_over(self):
         root = self.copy()
-        (root / "services/ai-service/app/config.py").write_text("OPENAI_MODEL = settings_default()\n", encoding="utf-8")
-        problems = pins.check(root)
-        self.assertEqual(len(problems), 1)
-        self.assertIn("ai-service OPENAI_MODEL not found", problems[0])
+        catalog = self.on_the_catalog(root)
+        self.first_openai_entry(catalog, "\n      // the models OpenAI keeps past 2027 (read 2026-11-15); some are left out:\n"
+                                         "      // they take no tools in Chat Completions.\n      { name: 'gpt-6-luna', functionCalling: true },")
+        self.assertEqual(pins.read_default(self.setup_entry(), root), "gpt-6-luna")
+        self.assertEqual(pins.check(root), [])
 
-
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    def test_a_list_it_cannot_read_is_not_found_rather_than_another_providers(self):
+        for change in (
+            lambda t: t.replace("return prov?.models[0]?.name ?? ''", "return prov?.models.find((m) => !m.note)?.name ?? ''", 1),
+            lambda t: t.replace("models: [", "models: OPENAI_MODELS,\n    legacy: [", 1),
+        ):
+            with self.subTest(change=change):
+                root = self.copy()
+                catalog = self.on_the_catalog(root)
+                catalog.write_text(change(catalog.read_text(encoding="utf-8")), encoding="utf-8")
+                self.assertIsNone(pins.read_default(self.setup_entry(), root))
+                self.assertIn("first-run setup page model not found", "".join(pins.check(root)))
