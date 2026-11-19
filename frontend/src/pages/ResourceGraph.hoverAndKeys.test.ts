@@ -37,6 +37,8 @@ vi.mock('./resource-graph/useResourceGraphLayout', () => ({
 
 import ResourceGraph from './ResourceGraph'
 import { Glance } from './resource-graph/Glance'
+import { ResourceGraphHeader } from './resource-graph/ResourceGraphHeader'
+import { TrafficPanel } from './resource-graph/TrafficPanel'
 
 const { install } = fakeDocument()
 const line: TrafficLine = {
@@ -102,5 +104,38 @@ describe('Resource Graph glance', () => {
     expect(glance.position).toMatchObject({ x: 500, y: 40 })
     ;(flow(page()).onBlur as () => void)()
     expect(glanceProps(page()).node).toBeNull()
+  })
+})
+
+// A traffic line takes the keyboard focus but Enter opened nothing (onEdgeClick hears the pointer only).
+describe('Resource Graph traffic line on Enter', () => {
+  const trafficView = () => {
+    const header = elementsOf(page(), (_p, type) => type === ResourceGraphHeader)[0].props as Props
+    ;((header.extra as { props: Props }).props.setView as (v: string) => void)('traffic')
+  }
+  const key = (key: string, target: unknown, isComposing = false) =>
+    (flow(page()).onKeyDown as (e: unknown) => void)({ key, target, nativeEvent: { isComposing } })
+  const panel = (tree: unknown) => elementsOf(tree, (_p, type) => type === TrafficPanel)[0]?.props as Props | undefined
+
+  it('opens the panel of the line with the focus, which Escape gives the focus back to', () => {
+    trafficView()
+    expect(panel(page())).toBeUndefined()
+    const g = drawn('.react-flow__edge', 'line-1')
+    key('Enter', g)
+    const open = panel(page())
+    expect(open?.line).toBe(line)
+    expect((open?.opener as { current: unknown }).current, 'the line Escape focuses again').toBe(g)
+    ;(open?.onClose as () => void)()
+    expect(panel(page())).toBeUndefined()
+  })
+
+  it('opens nothing for a line of the structure, another key or an input method composing', () => {
+    trafficView()
+    key('Enter', drawn('.react-flow__edge', 'owns-1'))
+    key(' ', drawn('.react-flow__edge', 'line-1'))
+    key('Enter', drawn('.react-flow__edge', 'line-1'), true)
+    expect(panel(page())).toBeUndefined()
+    key('Enter', drawn('.react-flow__edge', 'line-1'))
+    expect(panel(page())?.line, 'the same page opens it on Enter').toBe(line)
   })
 })

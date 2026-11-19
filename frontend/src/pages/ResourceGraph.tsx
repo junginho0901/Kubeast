@@ -33,6 +33,7 @@ import {
 } from './resource-graph/constants'
 import { Glance } from './resource-graph/Glance'
 import { useGlance } from './resource-graph/useGlance'
+import { lineForKey } from './resource-graph/lineKey'
 import { PodGroupList } from './resource-graph/PodGroupList'
 import { ResourceGraphHeader } from './resource-graph/ResourceGraphHeader'
 import { useResourceGraphLayout } from './resource-graph/useResourceGraphLayout'
@@ -115,7 +116,7 @@ export default function ResourceGraph() {
   const view: GraphView = sources.length > 0 || metricsDown ? pickedView : 'structure'
   const source = pickedSource && sources.includes(pickedSource) ? pickedSource : sources[0]
   const [selected, setSelected] = useState<{ id: string; line: TrafficLine } | null>(null)
-  // the line pressed to open the traffic panel, which Escape gives the focus back to
+  // the line pressed, or opened with Enter, to open the traffic panel, which Escape gives the focus back to
   const lineOpener = useRef<{ focus(): void } | null>(null)
   const closeLine = useCallback(() => setSelected(null), [])
   const [hoverEdge, setHoverEdge] = useState<string | null>(null)
@@ -329,6 +330,14 @@ export default function ResourceGraph() {
     setSelected({ id: edge.id, line })
   }, [])
 
+  // Enter on a line with the keyboard focus opens its panel as a press does, and Escape gives the focus back to it
+  const onLineKey = useCallback((e: React.KeyboardEvent) => {
+    const hit = lineForKey({ key: e.key, isComposing: e.nativeEvent.isComposing, target: e.target }, edges)
+    if (!hit) return
+    lineOpener.current = hit.element
+    setSelected({ id: hit.id, line: hit.line })
+  }, [edges])
+
   const onEdgeMouseEnter = useCallback((_: React.MouseEvent, edge: Edge) => {
     if (edge.data?.line) setHoverEdge(edge.id)
   }, [])
@@ -500,6 +509,7 @@ export default function ResourceGraph() {
               // on React Flow's own box: a box with the keyboard focus shows its glance
               onFocus={glance.onFocus}
               onBlur={glance.onBlur}
+              onKeyDown={onLineKey}
               fitView
               // with lines on screen, room for the status box above and the open legend on the left, so they cover no box
               fitViewOptions={{ padding: routed ? { top: '64px', right: 0.1, bottom: 0.1, left: legendOpen ? '180px' : 0.1 } : 0.2 }}
