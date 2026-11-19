@@ -21,7 +21,7 @@ With `METRICS_ENABLED=false` (chart `metrics.enabled`), it returns 404.
 
 | Name | Type | Labels | Meaning |
 |---|---|---|---|
-| `kubeast_http_requests_total` | counter | `service`, `method`, `route`, `code` | HTTP requests handled. `route` is the router's **pattern** (`/api/v1/namespaces/{namespace}/pods/{name}`), not the actual path (fixed cardinality). `/metrics`, `/health` and `/` are not counted |
+| `kubeast_http_requests_total` | counter | `service`, `method`, `route`, `code` | HTTP requests handled. `route` is the router's **pattern** (`/api/v1/namespaces/{namespace}/pods/{name}`), not the actual path (fixed cardinality). `/metrics` and the probe paths are not counted: `/health`, `/`, `/livez`, `/readyz` and ai-service's `/api/v1/ai/health`, which the kubelet asks every few seconds and would otherwise fill the denominator of `KubeastHighErrorRate` and `KubeastSlowRequests` |
 | `kubeast_http_request_duration_seconds` | histogram | same | Request handling time (default buckets). For ai-service streaming responses, the time until the headers |
 | `kubeast_http_requests_in_flight` | gauge | `service` | Requests being handled |
 | `kubeast_audit_store_up` | gauge 0/1 | `service` | Whether the audit store takes rows (k8s-service: `audit.Guarded.Ready`, 2 s cache). At 0, writes, Secret reveals, exec and AI write tools are refused with 503 |

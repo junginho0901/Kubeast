@@ -1,12 +1,27 @@
 # /metrics on ai-service: the Prometheus text format with the shared
 # kubeast_http_* names, the route label as a template, probes not counted.
 import os
+import re
+from pathlib import Path
 
 import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
 
 from app import metrics
+
+ROOT = Path(__file__).resolve().parents[3]
+
+
+def chart_probe_paths(port: int) -> set[str]:
+    """The paths the chart's kubelet probes ask on this port: httpGet blocks and the probe helpers' dict arguments."""
+    text = (ROOT / "helm/kubeast/templates/deployments.yaml").read_text()
+    found = {path for path, num in re.findall(r"httpGet:\s*\n\s*path:\s*(\S+)\s*\n\s*port:\s*(\d+)", text) if int(num) == port}
+    for args in re.findall(r'include "kubeast\.\w+" \(dict ([^)]*)\)', text):
+        path, num = re.search(r'"path" "([^"]+)"', args), re.search(r'"port" (\d+)', args)
+        if path and num and int(num.group(1)) == port:
+            found.add(path.group(1))
+    return found
 
 
 def build(enabled: bool) -> FastAPI:
@@ -24,6 +39,11 @@ def build(enabled: bool) -> FastAPI:
     @router.get("/sessions/{session_id}/history")
     async def history(session_id: str):
         return {"session": session_id}
+
+    # app.api_public's probe route, under the same prefix.
+    @router.get("/health")
+    async def ai_health():
+        return {"status": "healthy"}
 
     app.include_router(router, prefix="/api/v1/ai")
     metrics.install(app, enabled)
@@ -46,6 +66,20 @@ def test_metrics_count_routes_by_template_not_path():
     assert 'route="/api/v1/ai/sessions/a/history"' not in body
     # prometheus_client's default collectors are served with ours; python_info is there on every system.
     assert "python_info{" in body
+
+
+# The kubelet asks these every few seconds: counted, they would fill the denominator of KubeastHighErrorRate and KubeastSlowRequests.
+def test_the_charts_probe_paths_are_not_counted():
+    paths = chart_probe_paths(8001)
+    assert "/api/v1/ai/health" in paths
+    assert paths <= metrics.SKIP, f"probe paths the middleware counts: {sorted(paths - metrics.SKIP)}"
+
+    client = TestClient(build(True))
+    for path in sorted(paths):
+        assert client.get(path).status_code == 200
+    body = client.get("/metrics").text
+    for path in paths:
+        assert f'route="{path}"' not in body
 
 
 # prometheus_client's process collector reads /proc: Linux, as the image runs, has it and macOS does not.

@@ -13,7 +13,7 @@ Kubeast **자신**의 상태를 Prometheus 텍스트 포맷으로 노출합니�
 
 | 이름 | 종류 | 라벨 | 뜻 |
 |---|---|---|---|
-| `kubeast_http_requests_total` | counter | `service`, `method`, `route`, `code` | 처리한 HTTP 요청 수. `route`에는 실제 경로가 아니라 라우터의 **패턴**(`/api/v1/namespaces/{namespace}/pods/{name}`)이 들어가므로 카디널리티가 고정됩니다. `/metrics`·`/health`·`/`는 세지 않습니다 |
+| `kubeast_http_requests_total` | counter | `service`, `method`, `route`, `code` | 처리한 HTTP 요청 수. `route`에는 실제 경로가 아니라 라우터의 **패턴**(`/api/v1/namespaces/{namespace}/pods/{name}`)이 들어가므로 카디널리티가 고정됩니다. `/metrics`와 확인(probe) 경로는 세지 않습니다: `/health`·`/`·`/livez`·`/readyz`와 ai-service의 `/api/v1/ai/health`입니다. kubelet이 몇 초마다 묻는 경로라, 세면 `KubeastHighErrorRate`·`KubeastSlowRequests`의 분모를 채웁니다 |
 | `kubeast_http_request_duration_seconds` | histogram | 같음 | 요청 처리 시간(기본 버킷). ai-service의 스트리밍 응답은 헤더를 보낼 때까지의 시간입니다 |
 | `kubeast_http_requests_in_flight` | gauge | `service` | 처리 중인 요청 수 |
 | `kubeast_audit_store_up` | gauge 0/1 | `service` | 감사 저장소가 행을 받을 수 있는지 나타냅니다(k8s-service: `audit.Guarded.Ready`, 2 s 캐시). 0이면 쓰기, Secret 열람, exec, AI 쓰기 툴이 503으로 거부됩니다 |
