@@ -133,7 +133,8 @@ auth:
   # Kubernetes user impersonation: k8s-service and tool-server act toward every
   # cluster as the signed-in user (email) in groups kubeast:viewer/operator/admin,
   # so the cluster's RBAC decides and its audit log names the person. The
-  # Kubeast credential then only needs the "impersonate" verb.
+  # Kubeast credential then only needs the "impersonate" verb, and get on the
+  # kube-system Namespace, whose UID refuses registering one cluster twice.
   # clusterRoles renders files/impersonation-rbac.yaml (group → view/edit/
   # cluster-admin bindings) into this cluster; apply the same file to every
   # external cluster you register.
