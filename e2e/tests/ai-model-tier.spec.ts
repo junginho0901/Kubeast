@@ -111,18 +111,22 @@ test.afterEach(async ({}, testInfo) => {
 
 // Before the next test, no model config made during this one is still there, passed or not: an economy config left
 // enabled is what every later floating chat runs on. Hooks run in the order they are declared, so this reads the list
-// after the undos above.
-let configsBefore = { headers: {} as Record<string, string>, ids: [] as number[] }
+// after the undos above; it fails on what it finds, and removes those named e2e- so the next test starts without them.
+let configsBefore: { headers: Record<string, string>; ids: number[] } | undefined
 async function modelConfigs(request: APIRequestContext, headers: Record<string, string>) {
   const res = await request.get('/api/v1/ai/model-configs', { headers })
   expect(res.ok(), `model configs: ${res.status()}`).toBeTruthy()
   return (await res.json()) as { id: number; name: string }[]
 }
 test.beforeEach(async ({ request }) => {
+  configsBefore = undefined
   const headers = await adminHeaders(request)
   configsBefore = { headers, ids: (await modelConfigs(request, headers)).map((c) => c.id) }
 })
 test.afterEach(async ({ request }) => {
-  const left = (await modelConfigs(request, configsBefore.headers)).filter((c) => !configsBefore.ids.includes(c.id))
-  expect(left.map((c) => c.name), 'model configs this test made').toEqual([])
+  if (!configsBefore) return // the list was not read before this test
+  const { headers, ids } = configsBefore
+  const left = (await modelConfigs(request, headers)).filter((c) => !ids.includes(c.id))
+  for (const c of left) if (c.name.startsWith('e2e-')) await request.delete(`/api/v1/ai/model-configs/${c.id}`, { headers, failOnStatusCode: false })
+  expect(left.map((c) => c.name), 'model configs this test made and left').toEqual([])
 })
