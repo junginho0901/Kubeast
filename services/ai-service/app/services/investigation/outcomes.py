@@ -1,9 +1,10 @@
 """kubeast_ai_investigations_total: the alert investigations this ai-service ended, by outcome.
 
-done and failed are a run's end (runner.run_one), a failed one also a row the stopping worker put back once already
-(store.requeue_or_fail) or a running row past its time limit (store.fail_stale_running); skipped is a row the webhook
-stored skipped (a cap, the daily budget, a provider pause) or the worker skipped when it claimed it. No cluster,
-alert or user label: the series are made at import (KubeastAIInvestigationsFailing reads failed against done).
+Counted where the row's end is stored: done or failed with a run's end (store.finish), failed also for a row the
+stopping worker had put back once already (store.requeue_or_fail) and for running rows past their time limit
+(store.fail_stale_running), skipped for a row the worker skipped when it took it (store.skip) or the webhook stored
+skipped (a cap, the daily budget, a provider pause). No cluster, alert or user label: the series are made at import
+(KubeastAIInvestigationsFailing reads failed against done).
 """
 from __future__ import annotations
 

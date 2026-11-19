@@ -7,7 +7,7 @@ import pytest
 
 from app.services import provider_adapter
 from app.services.ai import model_errors, model_requests
-from app.services.investigation import outcomes, runner
+from app.services.investigation import outcomes, store
 from app.services.provider_adapter import ProviderAdapter
 
 MSG = [{"role": "user", "content": "hi"}]
@@ -78,46 +78,61 @@ def investigations():
     return {o: sample("kubeast_ai_investigations_total", outcome=o) for o in ("done", "failed", "skipped")}
 
 
+class FakeSession:
+    """db.async_session(): each execute answers the next rowcount."""
+
+    def __init__(self, rowcounts):
+        self.rowcounts = list(rowcounts)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_exc):
+        return False
+
+    async def execute(self, _stmt):
+        return SimpleNamespace(rowcount=self.rowcounts.pop(0) if self.rowcounts else 1)
+
+    async def commit(self):
+        pass
+
+
+def fake_db(*rowcounts):
+    return SimpleNamespace(async_session=lambda: FakeSession(rowcounts))
+
+
 @pytest.mark.asyncio
-@pytest.mark.parametrize("fails,want", [(False, "done"), (True, "failed")])
-async def test_a_run_counts_its_end(monkeypatch, fails, want):
-    async def investigate(cfg, row, progress=None):
-        if fails:
-            raise runner.InvestigationError("no tools answered")
-        return {"report": "r"}
-
-    async def nothing(*_a, **_kw):
-        return None
-
-    monkeypatch.setattr(runner, "investigate", investigate)
-    monkeypatch.setattr(runner.store, "finish", nothing)
-    monkeypatch.setattr(runner, "link_for", nothing)
-    monkeypatch.setattr(runner, "write_audit", nothing)
+@pytest.mark.parametrize("status", ["done", "failed"])
+async def test_a_runs_end_stored_counts_its_status(status):
     before = investigations()
-    row = SimpleNamespace(id="i1", fingerprint="f", namespace="", cluster="c", alertname="A", severity="warning")
-    assert await runner.run_one(SimpleNamespace(timeout_seconds=60), None, row) == want
+    await store.finish(fake_db(), "i1", status=status, error="")
     after = investigations()
-    assert after[want] == before[want] + 1 and sum(after.values()) == sum(before.values()) + 1
+    assert after[status] == before[status] + 1 and sum(after.values()) == sum(before.values()) + 1
 
 
 @pytest.mark.asyncio
-async def test_rows_failed_as_stale_or_stopped_twice_count_failed_and_a_requeue_nothing(monkeypatch):
-    async def stale(db, before):
-        return 2
+async def test_an_end_the_store_refused_counts_nothing():
+    class Refusing(FakeSession):
+        async def execute(self, _stmt):
+            raise RuntimeError("invalid byte sequence")
 
-    answers = iter(["failed", "queued", ""])
-
-    async def requeue(db, inv_id):
-        return next(answers)
-
-    monkeypatch.setattr(runner.store, "fail_stale_running", stale)
-    monkeypatch.setattr(runner.store, "requeue_or_fail", requeue)
     before = investigations()
-    assert await runner.fail_stale(SimpleNamespace(timeout_seconds=60), None) == 2
-    for _ in range(3):
-        await runner.requeue_on_stop(None, "i1")
+    with pytest.raises(RuntimeError):
+        await store.finish(SimpleNamespace(async_session=lambda: Refusing([])), "i1", status="done", error="")
+    assert investigations() == before
+
+
+@pytest.mark.asyncio
+async def test_skipped_stale_and_stopped_twice_rows_count_and_a_requeue_does_not():
+    before = investigations()
+    await store.skip(fake_db(), "i1", "the hourly cap")
+    assert await store.fail_stale_running(fake_db(2), store.utcnow()) == 2
+    assert await store.requeue_or_fail(fake_db(0, 1), "i2") == "failed"  # went back once already: failed
+    assert await store.requeue_or_fail(fake_db(1), "i3") == "queued"
+    assert await store.requeue_or_fail(fake_db(0, 0), "i4") == ""  # ended meanwhile
     after = investigations()
-    assert after["failed"] == before["failed"] + 3 and after["done"] == before["done"] and after["skipped"] == before["skipped"]
+    assert after["skipped"] == before["skipped"] + 1
+    assert after["failed"] == before["failed"] + 3 and after["done"] == before["done"]
 
 
 def test_ended_counts_only_the_three_outcomes():

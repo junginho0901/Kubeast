@@ -33,7 +33,7 @@ from app.services.audit_target import tool_target
 from app.services.audit_writer import audit_ready, fail_closed_enabled, write_audit
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import settings as inv_settings
-from app.services.investigation import inbox, outcomes, skip_reasons, store
+from app.services.investigation import inbox, skip_reasons, store
 from app.services.investigation import webhook
 
 log = logging.getLogger(__name__)
@@ -268,7 +268,6 @@ async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:
         fields = used_fields(progress)
     duration_ms = int((time.monotonic() - started) * 1000)
     await store.finish(db, row.id, status=status, error=error, **fields)
-    outcomes.ended(status)
     report = fields.get("report") or ""
     link = await link_for(cfg, db, row)
     await write_audit(
@@ -322,9 +321,7 @@ async def claim_refusal(cfg: inv_settings.InvestigationSettings, db, row, now) -
 
 async def fail_stale(cfg: inv_settings.InvestigationSettings, db) -> int:
     """Running rows older than the time limit belong to a process that stopped."""
-    failed = await store.fail_stale_running(db, utcnow() - timedelta(seconds=cfg.timeout_seconds + 60))
-    outcomes.ended(outcomes.FAILED, failed)
-    return failed
+    return await store.fail_stale_running(db, utcnow() - timedelta(seconds=cfg.timeout_seconds + 60))
 
 
 async def requeue_on_stop(db, inv_id: str) -> None:
@@ -332,7 +329,6 @@ async def requeue_on_stop(db, inv_id: str) -> None:
     (store.requeue_or_fail), within REQUEUE_SECONDS."""
     try:
         outcome = await asyncio.wait_for(store.requeue_or_fail(db, inv_id), timeout=REQUEUE_SECONDS)
-        outcomes.ended(outcome)  # "failed" only: "queued" and "" are no end
         log.info("investigation %s %s: ai-service is stopping", inv_id, outcome or "unchanged")
     except Exception:
         log.exception("investigation %s: could not put it back in the queue; fail_stale ends it after its time limit", inv_id)
@@ -357,7 +353,6 @@ async def worker(stop: asyncio.Event) -> None:
             reason = await claim_refusal(cfg, db, row, utcnow())
             if reason:  # queued before the provider refused or the budget was spent: it would cross it too
                 await store.skip(db, row.id, reason)
-                outcomes.ended(outcomes.SKIPPED)
             else:
                 try:
                     await run_one(cfg, db, row)
