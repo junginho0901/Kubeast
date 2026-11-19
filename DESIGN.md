@@ -187,6 +187,7 @@ Cards 12px (`.card` is `rounded-xl`). Buttons, inputs, list rows, dropdowns and 
 - Pressed buttons use a neutral 10% shade over their fill; text, borders and focus rings stay visible. Normal and hover colours stay the same.
 - Buttons outside dense table rows have a transparent hit area of at least 24×24px. Close, back and floating chat controls use `hit-area-40` for at least 40×40px without enlarging the visible button. Keep adjacent hit areas apart; the drawer's 24px back and close buttons have a 20px gap.
 - Reduced motion removes console menu, disclosure, chevron and meter transitions and the movement of waiting indicators. The original AI welcome particles and sign-in scene stay unchanged.
+- A Resource Graph box or traffic line with the keyboard focus opens on Enter what a press opens; Space keeps React Flow's selection. Closing a box's drawer or pod list, or Escape on a line's panel, puts the focus back on it.
 - The floating chat launcher stays 48×48px at bottom/right 24px and moves left of an open detail drawer at 1348px and above. It hides while scrolling down and returns immediately on upward scrolling or keyboard focus, or 500ms after scrolling stops. It stays visible near the bottom-right 110px corner, near the displaced launcher, while chat is open and when there is no scroll room. A scroll-hidden launcher remains keyboard reachable. Reduced motion removes its visibility transition.
 
 ## Do's and Don'ts

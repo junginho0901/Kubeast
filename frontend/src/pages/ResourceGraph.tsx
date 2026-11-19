@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef, type SetStateAction } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef, type SetStateAction } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   ReactFlow,
@@ -34,6 +34,7 @@ import {
 import { Glance } from './resource-graph/Glance'
 import { useGlance } from './resource-graph/useGlance'
 import { lineForKey } from './resource-graph/lineKey'
+import { focusBoxBack, nodeForKey } from './resource-graph/nodeKey'
 import { PodGroupList } from './resource-graph/PodGroupList'
 import { ResourceGraphHeader } from './resource-graph/ResourceGraphHeader'
 import { useResourceGraphLayout } from './resource-graph/useResourceGraphLayout'
@@ -118,6 +119,8 @@ export default function ResourceGraph() {
   const [selected, setSelected] = useState<{ id: string; line: TrafficLine } | null>(null)
   // the line pressed, or opened with Enter, to open the traffic panel, which Escape gives the focus back to
   const lineOpener = useRef<{ focus(): void } | null>(null)
+  // the box that opened the drawer with Enter, which closing the drawer gives the focus back to
+  const boxOpener = useRef<{ focus(): void; isConnected: boolean } | null>(null)
   const closeLine = useCallback(() => setSelected(null), [])
   const [hoverEdge, setHoverEdge] = useState<string | null>(null)
   const [hoverNode, setHoverNode] = useState<string | null>(null)
@@ -313,14 +316,38 @@ export default function ResourceGraph() {
     if (openableEnd(e)) openDetail({ kind: e.kind, name: e.name, namespace: e.namespace })
   }, [openDetail])
 
+  // what a box opens, pressed or on Enter: a peer's drawer, a group's pods window, else the object's drawer
+  const openNode = useCallback((raw: ResourceGraphNode): 'drawer' | 'group' | null => {
+    if (isPeer(raw)) {
+      if (!openableEnd(raw.end)) return null
+      openEnd(raw.end)
+      return 'drawer'
+    }
+    if (raw.group) {
+      setOpenGroup(raw)
+      return 'group'
+    }
+    openDetail({ kind: raw.kind, name: raw.name, namespace: raw.namespace })
+    return 'drawer'
+  }, [openDetail, openEnd])
+
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     const raw = node.data?.raw as ResourceGraphNode | undefined
-    if (raw && isPeer(raw)) openEnd(raw.end)
-    else if (raw?.group) setOpenGroup(raw)
-    else if (raw) {
-      openDetail({ kind: raw.kind, name: raw.name, namespace: raw.namespace })
-    }
-  }, [openDetail, openEnd])
+    if (raw) openNode(raw)
+  }, [openNode])
+
+  // Enter on a box with the keyboard focus opens what a press does; the group window gives the focus back to the box
+  // itself (ModalOverlay), and the drawer's close does through `boxOpener`
+  const onNodeKey = useCallback((e: React.KeyboardEvent) => {
+    const hit = nodeForKey({ key: e.key, isComposing: e.nativeEvent.isComposing, target: e.target }, nodes)
+    if (hit) boxOpener.current = openNode(hit.raw) === 'drawer' ? hit.element : null
+  }, [nodes, openNode])
+  const drawerOpen = !!drawerTarget
+  useEffect(() => {
+    if (drawerOpen) return
+    focusBoxBack(document, boxOpener.current)
+    boxOpener.current = null
+  }, [drawerOpen])
 
   const onEdgeClick = useCallback((e: React.MouseEvent, edge: Edge) => {
     const line = edge.data?.line as TrafficLine | undefined
@@ -337,6 +364,10 @@ export default function ResourceGraph() {
     lineOpener.current = hit.element
     setSelected({ id: hit.id, line: hit.line })
   }, [edges])
+  const onGraphKey = useCallback((e: React.KeyboardEvent) => {
+    onLineKey(e)
+    onNodeKey(e)
+  }, [onLineKey, onNodeKey])
 
   const onEdgeMouseEnter = useCallback((_: React.MouseEvent, edge: Edge) => {
     if (edge.data?.line) setHoverEdge(edge.id)
@@ -509,7 +540,7 @@ export default function ResourceGraph() {
               // on React Flow's own box: a box with the keyboard focus shows its glance
               onFocus={glance.onFocus}
               onBlur={glance.onBlur}
-              onKeyDown={onLineKey}
+              onKeyDown={onGraphKey}
               fitView
               // with lines on screen, room for the status box above and the open legend on the left, so they cover no box
               fitViewOptions={{ padding: routed ? { top: '64px', right: 0.1, bottom: 0.1, left: legendOpen ? '180px' : 0.1 } : 0.2 }}
