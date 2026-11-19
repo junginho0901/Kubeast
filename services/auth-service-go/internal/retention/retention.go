@@ -7,9 +7,9 @@
 //     every record (services/pkg/audit StdoutTee) lives in the cluster log
 //     pipeline with its own retention, so the database is not the only copy.
 //   - ChatDays: AI chat sessions by last activity (sessions.updated_at) with
-//     their messages and session_contexts (FK ON DELETE CASCADE), and tool
-//     approval requests by created_at (their decisions are already in the
-//     audit log as ai.tool.approve / ai.tool.reject).
+//     their messages, session_contexts and tool approvals, and tool approval
+//     requests by created_at (their decisions are already in the audit log as
+//     ai.tool.approve / ai.tool.reject).
 //
 // Deletes run in batches so a first purge on an old database does not hold a
 // long lock; PostgreSQL's autovacuum reclaims the space for reuse. Every run is
@@ -24,6 +24,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
@@ -194,23 +195,15 @@ func (p Purger) Purge(ctx context.Context, now time.Time) (Result, error) {
 		}
 	}
 	if !chatCutoff.IsZero() {
-		// tool_approvals reference sessions without ON DELETE CASCADE: drop the
-		// old ones and the ones whose session is about to go, then the sessions
-		// (messages and session_contexts cascade).
 		n, err := deleteBatched(ctx, p.Pool,
 			`DELETE FROM tool_approvals WHERE id IN (SELECT id FROM tool_approvals WHERE created_at < $1 ORDER BY id LIMIT $2)`, chatCutoff)
 		if err != nil {
 			return res, fmt.Errorf("tool approvals: %w", err)
 		}
 		res.ToolApprovals += n
-		n, err = deleteBatched(ctx, p.Pool,
-			`DELETE FROM tool_approvals WHERE id IN (SELECT t.id FROM tool_approvals t JOIN sessions s ON s.id = t.session_id WHERE s.updated_at < $1 ORDER BY t.id LIMIT $2)`, chatCutoff)
-		if err != nil {
-			return res, fmt.Errorf("tool approvals of expired sessions: %w", err)
-		}
-		res.ToolApprovals += n
-		res.Sessions, err = deleteBatched(ctx, p.Pool,
-			`DELETE FROM sessions WHERE id IN (SELECT id FROM sessions WHERE updated_at < $1 ORDER BY updated_at LIMIT $2)`, chatCutoff)
+		sessions, approvals, err := deleteExpiredSessions(ctx, p.Pool, chatCutoff)
+		res.Sessions += sessions
+		res.ToolApprovals += approvals
 		if err != nil {
 			return res, fmt.Errorf("sessions: %w", err)
 		}
@@ -256,6 +249,59 @@ func deleteBatched(ctx context.Context, pool *pgxpool.Pool, sql string, cutoff t
 			return total, nil
 		}
 	}
+}
+
+// expiredSessionStatements delete a batch of conversations ($1, their ids), the rows that name them first:
+// tool_approvals reference sessions without ON DELETE CASCADE, and tables the SQLAlchemy ORM created before the
+// migrations lack it on messages and session_contexts too (as session-service's DeleteSession). The tool_approvals
+// statement is first and the sessions one last, as deleteSessionBatch counts them.
+var expiredSessionStatements = []string{
+	`DELETE FROM tool_approvals WHERE session_id = ANY($1)`,
+	`DELETE FROM session_contexts WHERE session_id = ANY($1)`,
+	`DELETE FROM messages WHERE session_id = ANY($1)`,
+	`DELETE FROM sessions WHERE id = ANY($1)`,
+}
+
+// deleteExpiredSessions deletes the conversations last active before cutoff, BatchSize at a time.
+func deleteExpiredSessions(ctx context.Context, pool *pgxpool.Pool, cutoff time.Time) (sessions, approvals int64, err error) {
+	for {
+		taken, s, a, err := deleteSessionBatch(ctx, pool, cutoff)
+		sessions += s
+		approvals += a
+		if err != nil || taken < BatchSize {
+			return sessions, approvals, err
+		}
+	}
+}
+
+// deleteSessionBatch deletes one batch in one transaction. Its sessions are locked first, so no row naming one is
+// added before it goes, whether or not the tables cascade.
+func deleteSessionBatch(ctx context.Context, pool *pgxpool.Pool, cutoff time.Time) (taken int, sessions, approvals int64, err error) {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	defer tx.Rollback(ctx)
+	rows, err := tx.Query(ctx, `SELECT id FROM sessions WHERE updated_at < $1 ORDER BY updated_at LIMIT $2 FOR UPDATE`, cutoff, BatchSize)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil || len(ids) == 0 {
+		return 0, 0, 0, err
+	}
+	deleted := make([]int64, len(expiredSessionStatements))
+	for i, stmt := range expiredSessionStatements {
+		tag, err := tx.Exec(ctx, stmt, ids)
+		if err != nil {
+			return 0, 0, 0, err
+		}
+		deleted[i] = tag.RowsAffected()
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, 0, 0, err
+	}
+	return len(ids), deleted[len(deleted)-1], deleted[0], nil
 }
 
 func (p Purger) record(ctx context.Context, now time.Time, res Result, runErr error) {
