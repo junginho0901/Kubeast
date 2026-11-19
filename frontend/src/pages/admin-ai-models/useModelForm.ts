@@ -98,7 +98,10 @@ export function useModelForm() {
     retry: false,
   })
   const fetchedModels = providerModels.data?.models
-  const currentModelOptions = useMemo(() => modelOptions(currentProviderDef, fetchedModels), [currentProviderDef, fetchedModels])
+  const currentModelOptions = useMemo(
+    () => modelOptions(currentProviderDef, fetchedModels, (key, fallback) => t(key, { defaultValue: fallback })),
+    [currentProviderDef, fetchedModels, t],
+  )
   // A new config starts on the provider's default when the provider lists it, else on the first listed model;
   // an edited config keeps its stored model.
   useEffect(() => {

@@ -4356,6 +4356,17 @@
       "optionsInvalidJson": "Invalid JSON",
       "apiKeyEnvMissing": "Enter the name of the env var that holds the API key",
       "testFailed": "Test failed",
+      "note": {
+        "deprecated": "deprecated",
+        "recommended": "recommended",
+        "lowestCost": "lowest cost",
+        "mostCapable": "most capable",
+        "usesTheLeast": "uses the least",
+        "legacy": "legacy",
+        "tools7b": "7b, tools",
+        "tools14b": "14b, tools"
+      },
+      "noTools": "no tools",
       "usedFor": "Used for",
       "usedForNone": "Not used now",
       "use": {

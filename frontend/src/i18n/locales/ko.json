@@ -2927,6 +2927,17 @@
       "optionsInvalidJson": "JSON 형식이 올바르지 않습니다.",
       "apiKeyEnvMissing": "API 키를 담고 있는 환경변수 이름을 입력하세요.",
       "testFailed": "연결 테스트에 실패했습니다.",
+      "note": {
+        "deprecated": "지원 종료 예정",
+        "recommended": "권장",
+        "lowestCost": "비용이 가장 낮음",
+        "mostCapable": "성능이 가장 높음",
+        "usesTheLeast": "사용량이 가장 적음",
+        "legacy": "이전 모델",
+        "tools7b": "7b, 도구 지원",
+        "tools14b": "14b, 도구 지원"
+      },
+      "noTools": "도구 미지원",
       "usedFor": "쓰는 곳",
       "usedForNone": "지금 쓰는 곳 없음",
       "use": {

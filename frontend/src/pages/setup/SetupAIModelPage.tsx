@@ -6,6 +6,8 @@ import {
   PROVIDER_CATALOG,
   getDefaultModel,
   getProvider,
+  modelNoteText,
+  noToolsText,
   type ProviderDef,
 } from '@/constants/modelCatalog'
 import CustomDropdown, { type DropdownOption } from '@/components/CustomDropdown'
@@ -61,10 +63,10 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
       currentProviderDef.models.map((m) => ({
         value: m.name,
         label: m.label ?? m.name,
-        listHint: m.note,
-        hint: !m.functionCalling ? 'no tools' : undefined,
+        listHint: m.note && modelNoteText(m.note, tr),
+        hint: !m.functionCalling ? noToolsText(tr) : undefined,
       })),
-    [currentProviderDef],
+    [currentProviderDef, tr],
   )
 
   const handleTestConnection = async () => {

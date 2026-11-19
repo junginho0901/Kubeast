@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultModel, getProvider } from '@/constants/modelCatalog'
 import { buildOptions, listDefault, modelListError, modelOptions, splitLimits } from './helpers'
+import ko from '@/i18n/locales/ko.json'
 
 describe('listDefault', () => {
   it("starts on the provider's default where the list has it, whatever the list's order", () => {
@@ -55,6 +56,14 @@ describe('modelOptions', () => {
     expect(opts[1].hint).toBe('no tools')
     expect([opts[2].label, opts[2].listHint]).toEqual(['qwen2.5', '7b, tools'])
     expect(modelOptions(getProvider('anthropic')!, [{ name: 'claude-haiku-5-5', label: 'Claude Haiku 5.5' }])[0].label).toBe('Claude Haiku 5.5')
+  })
+
+  it("says a model's note and its lack of tools in the screen's language", () => {
+    const koText = (key: string, fallback: string) =>
+      (key.split('.').reduce<unknown>((o, p) => (o as Record<string, unknown> | undefined)?.[p], ko) as string | undefined) ?? fallback
+    const [sonnet] = modelOptions(getProvider('claude-code')!, undefined, koText)
+    const gemma = modelOptions(getProvider('ollama')!, [{ name: 'gemma2' }, { name: 'qwen2.5' }], koText)
+    expect([sonnet.listHint, gemma[0].hint, gemma[1].listHint]).toEqual(['권장', '도구 미지원', '7b, 도구 지원'])
   })
 
   it('keeps a note such as "recommended" out of the closed field: the label is the name, the note shows in the list', () => {

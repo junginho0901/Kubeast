@@ -1,4 +1,4 @@
-import { PROVIDER_CATALOG, getDefaultModel, type ProviderDef } from '@/constants/modelCatalog'
+import { PROVIDER_CATALOG, getDefaultModel, modelNoteText, noToolsText, type ProviderDef } from '@/constants/modelCatalog'
 import { DropdownOption } from '@/components/CustomDropdown'
 
 /** The model a pick from a list starts on: the provider's default where the list has it, else the list's first. */
@@ -23,13 +23,19 @@ export function modelListError(answered: string | undefined, failed: unknown): s
   return (typeof detail === 'string' && detail) || message || String(failed)
 }
 
-export function modelOptions(provDef: ProviderDef, fetched?: { name: string; label?: string }[]): DropdownOption[] {
+const fallbackText = (_key: string, fallback: string) => fallback
+
+export function modelOptions(
+  provDef: ProviderDef,
+  fetched?: { name: string; label?: string }[],
+  tr: (key: string, fallback: string) => string = fallbackText,
+): DropdownOption[] {
   if (!fetched?.length) {
     return provDef.models.map((m) => ({
       value: m.name,
       label: m.label ?? m.name,
-      listHint: m.note,
-      hint: !m.functionCalling ? 'no tools' : undefined,
+      listHint: m.note && modelNoteText(m.note, tr),
+      hint: !m.functionCalling ? noToolsText(tr) : undefined,
       testId: `model-option-${m.name}`,
     }))
   }
@@ -39,8 +45,8 @@ export function modelOptions(provDef: ProviderDef, fetched?: { name: string; lab
     return {
       value: f.name,
       label: f.label ?? known?.label ?? f.name,
-      listHint: f.label ? undefined : known?.note,
-      hint: known && !known.functionCalling ? 'no tools' : undefined,
+      listHint: f.label || !known?.note ? undefined : modelNoteText(known.note, tr),
+      hint: known && !known.functionCalling ? noToolsText(tr) : undefined,
       testId: `model-option-${f.name}`,
     }
   })
