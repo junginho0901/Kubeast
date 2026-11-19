@@ -8,7 +8,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
 import ko from '@/i18n/locales/ko.json'
 import { ToggleButton } from './ToggleButton'
-import { focusOrigin, returnFocus } from './focusReturn'
+import { focusChat, focusOrigin, returnFocus, shortcutStep } from './focusReturn'
 import indexSrc from './index.tsx?raw'
 import chatPanelSrc from './ChatPanel.tsx?raw'
 import layoutSrc from '@/components/Layout.tsx?raw'
@@ -109,16 +109,90 @@ describe('the floating chat shortcut is wired where the button is', () => {
     expect(callers.sort()).toEqual(['components/FloatingAIChat/index.tsx', 'hooks/useChatShortcut.ts'])
   })
 
-  it('opens and closes through the button’s and the window’s own paths, and not on the AI Chat page', () => {
-    expect(indexSrc).toContain("useChatShortcut(pageType !== 'ai-chat', () => (isOpen ? close() : open()))")
+  it('opens, closes or brings the focus in through the button’s and the window’s own paths, and not on the AI Chat page', () => {
+    const wiring = indexSrc.slice(indexSrc.indexOf("useChatShortcut(pageType !== 'ai-chat', () => {"))
+    expect(wiring).toMatch(/^useChatShortcut\(pageType !== 'ai-chat', \(\) => \{\s+const step = shortcutStep\(isOpen, document, panelRef\.current\)\s+if \(step === 'open'\) open\(\)\s+else if \(step === 'close'\) close\(\)\s+else focusIn\(\)\s+\}\)/)
+    const focusIn = indexSrc.slice(indexSrc.indexOf('const focusIn = useCallback'), indexSrc.indexOf('useChatShortcut('))
+    expect(focusIn, 'what had the focus is where closing gives it back, once the chat took it').toMatch(/const from = focusOrigin\(document\)\s+if \(focusChat\(document, inputRef\.current, panelRef\.current\) !== 'none'\) openedFrom\.current = from/)
     expect(indexSrc).toContain('<ToggleButton onClick={open}')
     expect(indexSrc).toContain('onClose={close}')
+    expect(indexSrc).toContain('inputRef={inputRef}')
     expect([indexSrc.match(/setIsOpen\(/g)?.length, indexSrc.match(/useState\(/g)?.length], 'one open state, set in open and close only').toEqual([2, 4])
   })
 
-  it('opens with the focus in the input', () => {
-    const effect = chatPanelSrc.slice(chatPanelSrc.indexOf('const inputRef = useRef'), chatPanelSrc.indexOf('const handleKeyDown'))
-    expect(effect).toMatch(/if \(!visible\) return[\s\S]*inputRef\.current\?\.focus\(\)[\s\S]*\}, \[visible\]\)/)
+  it('opens with the focus in the input, the one the shortcut focuses', () => {
+    const effect = chatPanelSrc.slice(chatPanelSrc.indexOf('const ownInput = useRef'), chatPanelSrc.indexOf('const handleKeyDown'))
+    expect(effect).toContain('const inputRef = givenInput ?? ownInput')
+    expect(effect).toMatch(/if \(!visible\) return[\s\S]*inputRef\.current\?\.focus\(\)[\s\S]*\}, \[visible, inputRef\]\)/)
     expect(chatPanelSrc).toContain('inputRef={inputRef}')
+  })
+})
+
+// The first press while the chat is open and the focus is elsewhere (a drawer, a window, the page) closed the chat, and
+// only a second one opened it again with the focus in its input. Now that press brings the focus in.
+describe('the shortcut while the chat is open', () => {
+  // the chat's window (which can take the focus, tabIndex -1) holding its input
+  function chatPage() {
+    const p = page()
+    const el = p.el()
+    const box = Object.assign(el, { contains: (n: unknown) => n === p.input || n === el })
+    return { ...p, box }
+  }
+
+  it('opens the closed chat, wherever the focus is', () => {
+    const p = chatPage()
+    p.raw.activeElement = p.input
+    expect(shortcutStep(false, p.doc, p.box)).toBe('open')
+    expect(shortcutStep(false, p.doc, null)).toBe('open')
+  })
+
+  it('closes the chat the focus is in, its input or the window itself', () => {
+    const p = chatPage()
+    p.raw.activeElement = p.input
+    expect(shortcutStep(true, p.doc, p.box)).toBe('close')
+    p.raw.activeElement = p.box
+    expect(shortcutStep(true, p.doc, p.box)).toBe('close')
+  })
+
+  it('brings the focus in from a drawer, a window or the page, also before the window is drawn', () => {
+    const p = chatPage()
+    const outside: [string, object | null][] = [['a drawer control', p.field], ['a window control', p.elsewhere], ['the page', p.raw.body], ['nothing', null]]
+    for (const [where, el] of outside) {
+      p.raw.activeElement = el
+      expect(shortcutStep(true, p.doc, p.box), `focus on ${where}`).toBe('focus')
+    }
+    p.raw.activeElement = p.field
+    expect(shortcutStep(true, p.doc, null), 'the window not drawn yet').toBe('focus')
+  })
+
+  it('focuses the input, else the window while the input takes none, else nothing', () => {
+    const p = chatPage()
+    p.raw.activeElement = p.field
+    expect(focusChat(p.doc, p.input, p.box)).toBe('input')
+    expect(p.raw.activeElement).toBe(p.input)
+
+    const q = chatPage()
+    q.raw.activeElement = q.field
+    const disabled = q.el(false)
+    expect(focusChat(q.doc, disabled, q.box), 'a conversation being made: the input is disabled').toBe('window')
+    expect(q.raw.activeElement).toBe(q.box)
+
+    const r = chatPage()
+    r.raw.activeElement = r.field
+    expect(focusChat(r.doc, null, null), 'the window is still loading').toBe('none')
+    expect(r.raw.activeElement).toBe(r.field)
+  })
+
+  it('gives the focus back, as the chat closes, to where the press found it', () => {
+    const p = chatPage()
+    // the chat opened from the field; the reader went on in a drawer control (elsewhere) with the chat still open
+    p.raw.activeElement = p.elsewhere
+    const from = focusOrigin(p.doc)
+    expect(shortcutStep(true, p.doc, p.box)).toBe('focus')
+    expect(focusChat(p.doc, p.input, p.box)).toBe('input')
+    // Escape (or the shortcut again) in the input closes it
+    expect(shortcutStep(true, p.doc, p.box)).toBe('close')
+    expect(returnFocus(p.doc, p.box, from, p.toggle)).toBe('back')
+    expect(p.raw.activeElement).toBe(p.elsewhere)
   })
 })

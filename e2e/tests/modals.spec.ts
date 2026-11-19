@@ -92,6 +92,18 @@ test.describe('modal windows', () => {
     await expect(drawer, 'Escape in the chat leaves the drawer open').toHaveCount(1)
     expect(await page.evaluate(() => (document.activeElement as HTMLElement).outerHTML), 'the focus is back where it was in the drawer').toBe(back)
 
+    // with the chat open and the focus back in the drawer, the first press takes the focus to the chat and closes nothing
+    await page.keyboard.press(mac ? 'Meta+Slash' : 'Control+Slash')
+    await expect(input).toBeFocused()
+    const title = drawer.locator('h2')
+    await title.focus()
+    await page.keyboard.press(mac ? 'Meta+Slash' : 'Control+Slash')
+    await expect(input, 'the press from the drawer moves the focus to the open chat').toBeFocused()
+    await expect(page.getByTestId('floating-chat-panel'), 'and leaves the chat open').toHaveCount(1)
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('floating-chat-panel')).toHaveCount(0)
+    await expect(title, 'the focus goes back where that press found it').toBeFocused()
+
     await page.getByRole('button', { name: 'Delete ConfigMap' }).click()
     await expect(page.getByTestId('delete-dialog')).toBeVisible()
     await tabStaysInside(page, 8)

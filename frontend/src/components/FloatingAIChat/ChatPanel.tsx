@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
+import { useEffect, useMemo, useRef, useState, type Ref, type RefObject } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { X, Loader2 } from 'lucide-react'
@@ -42,6 +42,8 @@ interface ChatPanelProps {
   onSessionIdChange: (id: string | null) => void
   /** the window's box: where the focus is decides whether closing moves it */
   panelRef?: Ref<HTMLDivElement>
+  /** its input, which the shortcut focuses while the window is open and the focus is elsewhere */
+  inputRef?: RefObject<HTMLTextAreaElement | null>
 }
 
 /**
@@ -63,6 +65,7 @@ export function ChatPanel({
   sessionId,
   onSessionIdChange,
   panelRef,
+  inputRef: givenInput,
 }: ChatPanelProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -259,12 +262,13 @@ export function ChatPanel({
   // Once Escape has closed it they pass on, also before the fade starts: a second Escape closes the window under it.
   const closing = useRef(false)
   // the window opens with the focus in its input, by the button or the shortcut
-  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const ownInput = useRef<HTMLTextAreaElement>(null)
+  const inputRef = givenInput ?? ownInput
   useEffect(() => {
     if (!visible) return
     closing.current = false
     inputRef.current?.focus()
-  }, [visible])
+  }, [visible, inputRef])
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!visible || closing.current) return
     if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
