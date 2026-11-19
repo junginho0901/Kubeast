@@ -4377,6 +4377,10 @@
         "tools14b": "14b, tools"
       },
       "noTools": "no tools",
+      "providerName": {
+        "ollama": "Ollama (Local)",
+        "custom": "Custom / Other"
+      },
       "usedFor": "Used for",
       "usedForNone": "Not used now",
       "use": {

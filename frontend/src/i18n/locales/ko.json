@@ -2941,6 +2941,10 @@
         "tools14b": "14b, 도구 지원"
       },
       "noTools": "도구 미지원",
+      "providerName": {
+        "ollama": "Ollama (로컬)",
+        "custom": "사용자 정의 / 기타"
+      },
       "usedFor": "쓰는 곳",
       "usedForNone": "지금 쓰는 곳 없음",
       "use": {

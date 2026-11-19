@@ -1,4 +1,4 @@
-import { PROVIDER_CATALOG, getDefaultModel, modelNoteText, noToolsText, type ProviderDef } from '@/constants/modelCatalog'
+import { PROVIDER_CATALOG, getDefaultModel, modelNoteText, noToolsText, providerLabel, type ProviderDef } from '@/constants/modelCatalog'
 import { DropdownOption } from '@/components/CustomDropdown'
 
 /** The model a pick from a list starts on: the provider's default where the list has it, else the list's first. */
@@ -7,12 +7,15 @@ export function listDefault(providerId: string, names: string[]): string {
   return preferred && names.includes(preferred) ? preferred : names[0] ?? ''
 }
 
-export const providerOptions: DropdownOption[] = PROVIDER_CATALOG.map((p) => ({
-  value: p.id,
-  label: p.label,
-  icon: p.icon,
-  testId: `provider-option-${p.id}`,
-}))
+const fallbackText = (_key: string, fallback: string) => fallback
+
+export const providerOptions = (tr: (key: string, fallback: string) => string = fallbackText): DropdownOption[] =>
+  PROVIDER_CATALOG.map((p) => ({
+    value: p.id,
+    label: providerLabel(p, tr),
+    icon: p.icon,
+    testId: `provider-option-${p.id}`,
+  }))
 
 // ai-service says why in detail (e.g. audit unavailable); axios' own message only has the status code.
 export function modelListError(answered: string | undefined, failed: unknown): string | undefined {
@@ -22,8 +25,6 @@ export function modelListError(answered: string | undefined, failed: unknown): s
   const detail = response?.data?.detail
   return (typeof detail === 'string' && detail) || message || String(failed)
 }
-
-const fallbackText = (_key: string, fallback: string) => fallback
 
 export function modelOptions(
   provDef: ProviderDef,

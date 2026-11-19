@@ -58,7 +58,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
   } = form
   const unavailable = useProviderAvailability()
   const unavailableReason = unavailable[formProvider] ?? null
-  const providerChoices = providerOptions.map((o) =>
+  const providerChoices = providerOptions(tr).map((o) =>
     unavailable[o.value] ? { ...o, muted: true, hint: tr('admin.aiModels.providerNotSetUp', 'Not set up') } : o)
 
   return (

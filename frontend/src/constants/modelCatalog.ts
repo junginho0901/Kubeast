@@ -22,6 +22,11 @@ export type ModelNote = keyof typeof MODEL_NOTES
 export const modelNoteText = (note: ModelNote, tr: (key: string, fallback: string) => string): string =>
   tr(`admin.aiModels.note.${note}`, MODEL_NOTES[note])
 
+/** A provider's name in the screen's language: what Kubeast adds to a name ("Local", "Custom / Other") is
+ * admin.aiModels.providerName.<id>; the id, which requests and saves carry, stays */
+export const providerLabel = (p: ProviderDef, tr: (key: string, fallback: string) => string): string =>
+  tr(`admin.aiModels.providerName.${p.id}`, p.label)
+
 /** The hint of a model that takes no tools, in the screen's language */
 export const noToolsText = (tr: (key: string, fallback: string) => string): string => tr('admin.aiModels.noTools', 'no tools')
 

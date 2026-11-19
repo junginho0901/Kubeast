@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultModel, getProvider } from '@/constants/modelCatalog'
-import { buildOptions, listDefault, modelListError, modelOptions, splitLimits } from './helpers'
+import { buildOptions, listDefault, modelListError, modelOptions, providerOptions, splitLimits } from './helpers'
 import ko from '@/i18n/locales/ko.json'
 
 describe('listDefault', () => {
@@ -73,6 +73,20 @@ describe('modelOptions', () => {
     for (const p of ['openai', 'anthropic', 'claude-code', 'gemini', 'ollama']) {
       for (const o of modelOptions(getProvider(p)!)) expect(o.label, `${p} ${o.value}`).not.toMatch(/\(/)
     }
+  })
+})
+
+describe('providerOptions', () => {
+  const koText = (key: string, fallback: string) =>
+    (key.split('.').reduce<unknown>((o, p) => (o as Record<string, unknown> | undefined)?.[p], ko) as string | undefined) ?? fallback
+  const labels = (opts: ReturnType<typeof providerOptions>) => Object.fromEntries(opts.map((o) => [o.value, o.label]))
+
+  it("names what Kubeast adds to a provider in the screen's language, and keeps the ids and the product names", () => {
+    expect(labels(providerOptions(koText))).toEqual({
+      openai: 'OpenAI', anthropic: 'Anthropic', 'claude-code': 'Claude subscription', gemini: 'Google Gemini',
+      azure: 'Azure OpenAI', ollama: 'Ollama (로컬)', custom: '사용자 정의 / 기타',
+    })
+    expect(labels(providerOptions())).toMatchObject({ ollama: 'Ollama (Local)', custom: 'Custom / Other' })
   })
 })
 
