@@ -110,9 +110,10 @@ test.describe('pod shutdown: a rollout with requests in flight (PR #856, F-6 on 
   }
 
   // A pod deleted is not replaced first (maxSurge is for rollouts), so with one pod nothing answers from its SIGTERM,
-  // after the preStop wait, until the new pod is ready: that gap is held to the readiness probe's period + 5 s, and no
-  // answer, in it or out of it, takes longer than HANG_MS. With two or more pods every answer is 200 within HANG_MS.
-  test('a pod deleted by hand: with two or more pods no 5xx and no hang, with one answers other than 200 only for the readiness period + 5 s and none slower than HANG_MS — each Service-backed Deployment once', async ({ request }) => {
+  // after the preStop wait, until the new pod is ready: that gap is held to the readiness probe's initialDelaySeconds +
+  // 2 × periodSeconds + 5 s, and no answer, in it or out of it, takes longer than HANG_MS. With two or more pods every
+  // answer is 200 within HANG_MS.
+  test('a pod deleted by hand: with two or more pods no 5xx and no hang, with one answers other than 200 only until the new pod\'s second readiness probe + 5 s and none slower than HANG_MS — each Service-backed Deployment once', async ({ request }) => {
     test.setTimeout(CASES.length * 120_000)
     const token = await login(request)
     const headers = bearer(token)
@@ -124,7 +125,9 @@ test.describe('pod shutdown: a rollout with requests in flight (PR #856, F-6 on 
       const pod = podsOf(c.deploy).find((p) => p.ready && !p.deleting)
       if (!pod) { misses.push(`${c.deploy}: no ready pod`); continue }
       const replicas = replicasOf(c.deploy)
-      const periodS = Number(kubectl(['-n', NS, 'get', 'deploy', c.deploy, '-o', 'jsonpath={.spec.template.spec.containers[0].readinessProbe.periodSeconds}']) || '0')
+      const readiness = JSON.parse(kubectl(['-n', NS, 'get', 'deploy', c.deploy, '-o', 'jsonpath={.spec.template.spec.containers[0].readinessProbe}']) || '{}') as { initialDelaySeconds?: number; periodSeconds?: number }
+      const delayS = readiness.initialDelaySeconds ?? 0
+      const periodS = readiness.periodSeconds ?? 0
       // the gateway's own pod is read from the kind node: Docker Desktop's published port holds a laptop's request while no gateway answers
       const onNode = c.deploy === 'gateway' ? gatewayOnNode(containerOf(pod.name).node) : null
       if (c.deploy === 'gateway' && !onNode) { misses.push('gateway: no NodePort or node address to send from the kind node'); continue }
@@ -147,9 +150,10 @@ test.describe('pod shutdown: a rollout with requests in flight (PR #856, F-6 on 
       }
       // one pod: from the start of the first answer other than 200 to the end of the last
       const spanMs = failed.length ? Math.max(...failed.map((a) => a.at + a.ms)) - failed[0].at : 0
-      const limitMs = (periodS + 5) * 1000
+      // the new pod is ready at its first readiness probe after initialDelaySeconds, or at the next one when that came too early
+      const limitMs = (delayS + periodS * 2 + 5) * 1000
       const kinds = Object.entries(failed.reduce<Record<string, number>>((m, a) => ({ ...m, [a.status]: (m[a.status] ?? 0) + 1 }), {})).map(([s, n]) => `${s} ×${n}`).join(', ')
-      test.info().annotations.push({ type: 'gap with one pod', description: `${c.deploy}${onNode ? ' (sent from the kind node)' : ''}: ${spanMs} ms of answers other than 200 (limit ${limitMs} ms = readiness period ${periodS} s + 5 s), ${failed.length} of ${answers.length}${kinds ? `: ${kinds}` : ''}` })
+      test.info().annotations.push({ type: 'gap with one pod', description: `${c.deploy}${onNode ? ' (sent from the kind node)' : ''}: ${spanMs} ms of answers other than 200 (limit ${limitMs} ms = readiness initialDelaySeconds ${delayS} + 2 × periodSeconds ${periodS} + 5 s), ${failed.length} of ${answers.length}${kinds ? `: ${kinds}` : ''}` })
       if (spanMs > limitMs) misses.push(`${c.deploy} (1 pod): answers other than 200 for ${spanMs} ms, past ${limitMs} ms:\n${show(failed)}`)
     }
     expect(misses, 'Deployments whose deleted pod left a request failed or slow past what the pod count allows').toEqual([])

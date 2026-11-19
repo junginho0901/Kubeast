@@ -77,10 +77,11 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
 - Every answer during the rollouts is 200 and comes within 5 s (`E2E_FAULT_HANG_MS`); the bug held one for 30 s.
 - A pod deleted by hand: with two or more pods, the same. With one, nothing answers from its SIGTERM (after the preStop
   wait) until the new pod is ready — a pod deleted is not replaced first — so the answers other than 200, from the
-  start of the first to the end of the last, are held to the readiness probe's period + 5 s, none slower than 5 s;
-  the test writes the gap, the count and the statuses down per Deployment. Measured on kind: about 1 s for
-  auth-service, k8s-service and session-service, about 6 s for ai-service, frontend and the gateway (readiness every
-  10 s).
+  start of the first to the end of the last, are held to the readiness probe's `initialDelaySeconds` + 2 ×
+  `periodSeconds` + 5 s (the new pod is ready at its first probe, or at the next one when the server was not up yet
+  for the first), none slower than 5 s; the test writes the gap, the limit, the count and the statuses down per
+  Deployment. Measured on kind: about 1 s for auth-service, k8s-service and session-service, about 6 s for ai-service
+  and frontend, and up to 15.5 s for the gateway when its first readiness probe came too early (readiness every 10 s).
 - The gateway's own pod is read from inside the kind node (`NodeProbe`: curl through `docker exec` to the gateway's
   NodePort), the other Deployments through the gateway as before. From the laptop, Docker Desktop's published port
   takes the request while no gateway pod answers and passes it on once one does, a 200 after 5 s or more, where the
