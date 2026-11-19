@@ -16,6 +16,7 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 import CustomDropdown from '@/components/CustomDropdown'
 import { countsOf } from '@/utils/listCounts'
+import { openOnPress } from '@/components/openOnPress'
 
 // Gateway → Policies: one table of every policy object attached to Gateway
 // API resources, whichever implementation owns the kind (label-discovered
@@ -305,14 +306,14 @@ export default function Policies() {
                   ref={idx === 0 ? firstRowRef : undefined}
                   key={`${item.group}/${item.kind}/${item.namespace || '-'}/${item.name}`}
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail(item.group === 'gateway.networking.k8s.io' && item.kind === 'BackendTLSPolicy'
+                  {...openOnPress(() => openDetail(item.group === 'gateway.networking.k8s.io' && item.kind === 'BackendTLSPolicy'
                     ? { kind: 'BackendTLSPolicy', name: item.name, namespace: item.namespace }
                     : {
                         kind: 'CustomResourceInstance',
                         name: item.name,
                         namespace: item.namespace || undefined,
                         rawJson: { kind: item.kind, group: item.group, version: item.version, crd_name: `${item.plural}.${item.group}`, scope: item.scope },
-                      })}
+                      }))}
                 >
                   <td className="py-3 px-4 text-xs font-mono" title={`${item.plural}.${item.group}/${item.version}`}><span className="block truncate">{kindLabel(item)}</span></td>
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>

@@ -17,6 +17,7 @@ import {
 } from './helpers'
 import { useBackendPoliciesData, type BackendPolicyConfig } from './useBackendPoliciesData'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
+import { openOnPress } from '@/components/openOnPress'
 
 interface PageStrings {
   title: string
@@ -242,12 +243,12 @@ ${yamlBodyTemplate}`
                   ref={idx === 0 ? firstRowRef : undefined}
                   key={`${item.namespace}/${item.name}`}
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail({
+                  {...openOnPress(() => openDetail({
                     kind: config.kind,
                     name: item.name,
                     namespace: item.namespace,
                     rawJson: toRawJson(item, apiVersion, config.kind),
-                  })}
+                  }))}
                 >
                   {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={item.namespace}><span className="block truncate">{item.namespace}</span></td>}
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>

@@ -18,6 +18,7 @@ import type { NamespaceCounts } from '../namespaceCounts'
 import { buildResourceLink } from '@/utils/resourceLink'
 import type { ResourceType } from '../types'
 import { podWindowAIFields, podWindowBadge } from './podWindowBadge'
+import { openOnPress } from '@/components/openOnPress'
 
 const ITEMS_PER_PAGE = 50
 
@@ -187,7 +188,7 @@ export function ResourceModal({
                     pageItems.map((ns) => (
                       <div
                         key={ns.name}
-                        onClick={() => openDetail({ kind: 'Namespace', name: ns.name })}
+                        {...openOnPress(() => openDetail({ kind: 'Namespace', name: ns.name }), { button: true })}
                         className="p-3 border-b border-hairline hover:bg-slate-700/50 transition-colors cursor-pointer break-words"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -229,7 +230,7 @@ export function ResourceModal({
                       return (
                         <div
                           key={`${pod.namespace}-${pod.name}`}
-                          onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
+                          {...openOnPress(() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace }), { button: true })}
                           className="p-3 border-b border-hairline hover:bg-slate-700/50 transition-colors cursor-pointer break-words"
                         >
                           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -280,7 +281,7 @@ export function ResourceModal({
                     pageItems.map((svc) => (
                       <div
                         key={`${svc.namespace}-${svc.name}`}
-                        onClick={() => openDetail({ kind: 'Service', name: svc.name, namespace: svc.namespace })}
+                        {...openOnPress(() => openDetail({ kind: 'Service', name: svc.name, namespace: svc.namespace }), { button: true })}
                         className="p-3 border-b border-hairline hover:bg-slate-700/50 transition-colors cursor-pointer break-words"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -312,7 +313,7 @@ export function ResourceModal({
                     pageItems.map((deploy) => (
                       <div
                         key={`${deploy.namespace}-${deploy.name}`}
-                        onClick={() => openDetail({ kind: 'Deployment', name: deploy.name, namespace: deploy.namespace })}
+                        {...openOnPress(() => openDetail({ kind: 'Deployment', name: deploy.name, namespace: deploy.namespace }), { button: true })}
                         className="p-3 border-b border-hairline hover:bg-slate-700/50 transition-colors cursor-pointer break-words"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -347,7 +348,7 @@ export function ResourceModal({
                     pageItems.map((pvc) => (
                       <div
                         key={`${pvc.namespace}-${pvc.name}`}
-                        onClick={() => openDetail({ kind: 'PersistentVolumeClaim', name: pvc.name, namespace: pvc.namespace })}
+                        {...openOnPress(() => openDetail({ kind: 'PersistentVolumeClaim', name: pvc.name, namespace: pvc.namespace }), { button: true })}
                         className="p-3 border-b border-hairline hover:bg-slate-700/50 transition-colors cursor-pointer break-words"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -382,7 +383,7 @@ export function ResourceModal({
                     pageItems.map((node) => (
                       <div
                         key={node.name}
-                        onClick={() => openDetail({ kind: 'Node', name: node.name })}
+                        {...openOnPress(() => openDetail({ kind: 'Node', name: node.name }), { button: true })}
                         className="p-3 border-b border-hairline hover:bg-slate-700/50 transition-colors cursor-pointer break-words"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-3">

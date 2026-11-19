@@ -15,6 +15,7 @@ import {
   formatAge,
   type SortKey,
 } from './limitRangeHelpers'
+import { openOnPress } from '@/components/openOnPress'
 
 interface LimitRangeTableProps {
   pagedLimitRanges: LimitRangeInfo[]
@@ -102,7 +103,7 @@ export function LimitRangeTable({
                 ref={idx === 0 ? firstRowRef : undefined}
                 key={`${lr.namespace}/${lr.name}`}
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                onClick={() => onOpenDetail(lr)}
+                {...openOnPress(() => onOpenDetail(lr))}
               >
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{lr.name}</span></td>
                 {showNamespaceColumn && (

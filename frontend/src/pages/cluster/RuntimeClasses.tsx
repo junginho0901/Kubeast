@@ -19,6 +19,7 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { applyRuntimeClassWatchEvent } from './runtimeclasses/runtimeClassWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
+import { openOnPress } from '@/components/openOnPress'
 
 type SortKey = null | 'name' | 'handler' | 'age'
 
@@ -281,11 +282,11 @@ handler: runc
                       ref={idx === 0 ? firstRowRef : undefined}
                   key={rc.name}
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail({
+                  {...openOnPress(() => openDetail({
                     kind: 'RuntimeClass',
                     name: rc.name,
                     rawJson: runtimeClassToRawJson(rc),
-                  })}
+                  }))}
                 >
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{rc.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{rc.handler}</td>

@@ -20,6 +20,7 @@ import { withRowsOfKind } from './rowsOfKind'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search, ShieldAlert, AlertTriangle } from 'lucide-react'
 import CustomDropdown from '@/components/CustomDropdown'
 import { countsOf } from '@/utils/listCounts'
+import { openOnPress } from '@/components/openOnPress'
 
 type SortKey = null | 'name' | 'namespace' | 'kind' | 'group' | 'age' | string
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -345,12 +346,12 @@ export default function CustomResourceInstances() {
                       ref={idx === 0 ? firstRowRef : undefined}
                   key={`${inst.group}/${inst.kind}/${inst.namespace || '-'}/${inst.name}`}
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail({
+                  {...openOnPress(() => openDetail({
                     kind: 'CustomResourceInstance',
                     name: inst.name,
                     namespace: inst.namespace || undefined,
                     rawJson: { kind: inst.kind, group: inst.group, version: inst.version, crd_name: inst.crd_name, scope: inst.scope },
-                  })}
+                  }))}
                 >
                   <td className="col-low py-3 px-4 text-xs font-mono" title={inst.namespace || undefined}>{inst.namespace || '-'}</td>
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{inst.name}</span></td>

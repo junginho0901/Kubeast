@@ -19,6 +19,7 @@ import {
   type SortKey,
 } from './ingressHelpers'
 import { Trans } from 'react-i18next'
+import { openOnPress } from '@/components/openOnPress'
 
 interface OpenDetailArgs {
   kind: string
@@ -127,12 +128,12 @@ export function IngressTable({
                     ref={idx === 0 ? firstRowRef : undefined}
                 key={`${ing.namespace}/${ing.name}`}
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                onClick={() => openDetail({
+                {...openOnPress(() => openDetail({
                   kind: 'Ingress',
                   name: ing.name,
                   namespace: ing.namespace,
                   rawJson: ingressToRawJson(ing),
-                })}
+                }))}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={ing.namespace}>{ing.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{ing.name}</span></td>

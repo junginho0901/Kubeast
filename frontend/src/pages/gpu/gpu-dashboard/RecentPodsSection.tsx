@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom'
 import { Box, ArrowRight } from 'lucide-react'
 import type { GPUPodInfo } from '@/services/api'
 import { formatAge, getStatusColor } from './helpers'
+import { openOnPress } from '@/components/openOnPress'
 
 interface Props {
   recentPods: GPUPodInfo[]
@@ -51,7 +52,7 @@ export function RecentPodsSection({ recentPods, openDetail, tr }: Props) {
               <tr
                 key={`${pod.namespace}/${pod.name}`}
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
+                {...openOnPress(() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace }))}
               >
                 <td className="truncate px-5 py-3 text-xs font-mono">{pod.namespace}</td>
                 <td className="truncate px-5 py-3 font-medium text-ink">{pod.name}</td>

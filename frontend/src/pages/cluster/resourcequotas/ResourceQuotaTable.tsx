@@ -9,6 +9,7 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, type SortKey } from './resourceQuotaHelpers'
+import { openOnPress } from '@/components/openOnPress'
 
 interface ResourceQuotaTableProps {
   pagedResourceQuotas: ResourceQuotaInfo[]
@@ -96,7 +97,7 @@ export function ResourceQuotaTable({
                 ref={idx === 0 ? firstRowRef : undefined}
                 key={`${rq.namespace}/${rq.name}`}
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                onClick={() => onOpenDetail(rq)}
+                {...openOnPress(() => onOpenDetail(rq))}
               >
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{rq.name}</span></td>
                 {showNamespaceColumn && (

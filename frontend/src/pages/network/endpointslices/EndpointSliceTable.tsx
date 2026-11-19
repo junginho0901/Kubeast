@@ -20,6 +20,7 @@ import {
   type SortKey,
 } from './endpointSliceHelpers'
 import { Trans } from 'react-i18next'
+import { openOnPress } from '@/components/openOnPress'
 
 interface OpenDetailArgs {
   kind: string
@@ -139,12 +140,12 @@ export function EndpointSliceTable({
                     ref={idx === 0 ? firstRowRef : undefined}
                   key={`${es.namespace}/${es.name}`}
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail({
+                  {...openOnPress(() => openDetail({
                     kind: 'EndpointSlice',
                     name: es.name,
                     namespace: es.namespace,
                     rawJson: endpointSliceToRawJson(es),
-                  })}
+                  }))}
                 >
                   {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={es.namespace}>{es.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{es.name}</span></td>

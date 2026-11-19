@@ -6,6 +6,7 @@ import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatRelative, getStatusColor } from './namespaceHelpers'
 import type { NamespaceInfo, SortKey, SortDir } from './namespaceHelpers'
 import { Trans } from 'react-i18next'
+import { openOnPress } from '@/components/openOnPress'
 
 interface Props {
   pagedNamespaces: NamespaceInfo[]
@@ -90,7 +91,7 @@ export default function NamespaceTable({
                   ref={idx === 0 ? firstRowRef : undefined}
                   key={ns.name}
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => onRowClick(ns.name)}
+                  {...openOnPress(() => onRowClick(ns.name))}
                 >
                   <td className="py-3 px-4 font-medium text-ink">
                     <span className="block truncate">{ns.name}</span>

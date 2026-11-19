@@ -19,6 +19,7 @@ import {
   type SortKey,
 } from './networkPolicyHelpers'
 import { Trans } from 'react-i18next'
+import { openOnPress } from '@/components/openOnPress'
 
 interface OpenDetailArgs {
   kind: string
@@ -130,12 +131,12 @@ export function NetworkPolicyTable({
                     ref={idx === 0 ? firstRowRef : undefined}
                 key={`${policy.namespace}/${policy.name}`}
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                onClick={() => openDetail({
+                {...openOnPress(() => openDetail({
                   kind: 'NetworkPolicy',
                   name: policy.name,
                   namespace: policy.namespace,
                   rawJson: networkPolicyToRawJson(policy),
-                })}
+                }))}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={policy.namespace}><span className="block truncate">{policy.namespace}</span></td>}
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{policy.name}</span></td>

@@ -23,6 +23,7 @@ import { RefreshFailure } from '@/components/RefreshFailure'
 import { applyConfigMapWatchEvent } from './configmaps/configMapWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
 import { useDismiss } from '@/hooks/useDismiss'
+import { openOnPress } from '@/components/openOnPress'
 
 type SortKey = null | 'name' | 'namespace' | 'dataCount' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -293,7 +294,7 @@ data:
             <tbody className="divide-y divide-slate-700">
               {pagedItems.map((cm, idx) => (
                 <tr
-                      ref={idx === 0 ? firstRowRef : undefined} key={`${cm.namespace}/${cm.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'ConfigMap', name: cm.name, namespace: cm.namespace })}>
+                      ref={idx === 0 ? firstRowRef : undefined} key={`${cm.namespace}/${cm.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" {...openOnPress(() => openDetail({ kind: 'ConfigMap', name: cm.name, namespace: cm.namespace }))}>
                   {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={cm.namespace}>{cm.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{cm.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{cm.data_count}</td>

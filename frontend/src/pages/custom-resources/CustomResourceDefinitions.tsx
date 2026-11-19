@@ -20,6 +20,7 @@ import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide
 import { crdVersionsText } from './crdVersions'
 import { applyCRDWatchEvent } from './crdWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
+import { openOnPress } from '@/components/openOnPress'
 
 type SortKey = null | 'name' | 'group' | 'version' | 'scope' | 'kind' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -261,7 +262,7 @@ spec:
             <tbody className="divide-y divide-slate-700">
               {pagedItems.map((crd, idx) => (
                 <tr
-                      ref={idx === 0 ? firstRowRef : undefined} key={crd.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'CustomResourceDefinition', name: crd.name })}>
+                      ref={idx === 0 ? firstRowRef : undefined} key={crd.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" {...openOnPress(() => openDetail({ kind: 'CustomResourceDefinition', name: crd.name }))}>
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{crd.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{crd.group}</span></td>
                   <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate" title={crdVersionsText(crd)}>{crdVersionsText(crd)}</span></td>

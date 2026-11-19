@@ -24,6 +24,7 @@ import {
   type SortKey,
 } from './volumeAttachmentHelpers'
 import { Trans } from 'react-i18next'
+import { openOnPress } from '@/components/openOnPress'
 
 interface OpenDetailArgs {
   kind: string
@@ -129,7 +130,7 @@ export function VolumeAttachmentTable({
                   key={va.name}
                   ref={idx === 0 ? firstRowRef : undefined}
                   className="hover:bg-slate-800/30 cursor-pointer"
-                  onClick={() => openDetail({ kind: 'VolumeAttachment', name: va.name, rawJson: volumeAttachmentToRawJson(va) })}
+                  {...openOnPress(() => openDetail({ kind: 'VolumeAttachment', name: va.name, rawJson: volumeAttachmentToRawJson(va) }))}
                 >
                   <td className="py-3 px-4 text-ink font-mono break-all">{va.name}</td>
                   <td className="py-3 px-4 text-slate-300 break-all">{va.attacher || '-'}</td>

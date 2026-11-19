@@ -17,6 +17,7 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 import { countsOf } from '@/utils/listCounts'
+import { openOnPress } from '@/components/openOnPress'
 
 // Cluster → Validating / Mutating Admission Policies: the admissionregistration.k8s.io/v1
 // policies with their bindings, read-only (create and edit go through YAML).
@@ -263,7 +264,7 @@ export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind 
                   key={item.name}
                   data-testid="admission-policy-row"
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail({ kind, name: item.name, rawJson: toRawJson(kind, item) })}
+                  {...openOnPress(() => openDetail({ kind, name: item.name, rawJson: toRawJson(kind, item) }))}
                 >
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{rulesOf(item)}</td>
