@@ -19,7 +19,8 @@ import {
   decodeSecretYaml,
 } from './resource-detail/utils'
 import { useResourceDelete } from './resource-detail/useResourceDelete'
-import { drawerKeydown, useDrawerFocus } from './resource-detail/drawerFocus'
+import { useDrawerFocus } from './resource-detail/drawerFocus'
+import { drawerKeydown } from './resource-detail/drawerDialog'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { argoAppUrl, detectArgoApp } from './resource-detail/gitops'
 import { useResourceYaml } from './resource-detail/useResourceYaml'

@@ -184,12 +184,13 @@ Cards 12px (`.card` is `rounded-xl`). Buttons, inputs, list rows, dropdowns and 
 ## Interaction
 
 - Keyboard focus uses a 2px `primary-400` outline, 2px outside the control, unless the control already has its own visible ring. Scroll menus retain their inset ring.
-- A list row that opens a drawer takes the Tab order, opens on Enter or Space and shows the same `primary-400` as a 2px ring inside the row, which the list's scroll box does not cut. The drawer's title takes the focus as it opens; as it closes the focus goes back to the row, or to the row's list when the row has gone, with the same inside ring. While it is open Tab stays inside it, as in a window; the floating chat is reached with its shortcut.
+- A list row that opens a drawer takes the Tab order, opens on Enter or Space and shows the same `primary-400` as a 2px ring inside the row, which the list's scroll box does not cut. The drawer's title takes the focus as it opens; as it closes the focus goes back to the row, or to the row's list when the row has gone, with the same inside ring.
 - Pressed buttons use a neutral 10% shade over their fill; text, borders and focus rings stay visible. Normal and hover colours stay the same.
 - Buttons outside dense table rows have a transparent hit area of at least 24×24px. Close, back and floating chat controls use `hit-area-40` for at least 40×40px without enlarging the visible button. Keep adjacent hit areas apart; the drawer's 24px back and close buttons have a 20px gap.
 - Reduced motion removes console menu, disclosure, chevron and meter transitions and the movement of waiting indicators. The original AI welcome particles and sign-in scene stay unchanged.
 - A Resource Graph box or traffic line with the keyboard focus opens on Enter what a press opens; Space keeps React Flow's selection. A line's panel opened with Enter takes the focus to its title. Closing a box's drawer or pod list, or a line's panel by Escape or its X, puts the focus back on it.
 - The floating chat launcher stays 48×48px at bottom/right 24px and moves left of an open detail drawer at 1348px and above. It hides while scrolling down and returns immediately on upward scrolling or keyboard focus, or 500ms after scrolling stops. It stays visible near the bottom-right 110px corner, near the displaced launcher, while chat is open and when there is no scroll room. A scroll-hidden launcher remains keyboard reachable. Reduced motion removes its visibility transition.
+- The open detail drawer keeps Tab inside it, as a window does; the floating chat beside it is reached with its shortcut (⌘/ or Ctrl+/).
 
 ## Do's and Don'ts
 

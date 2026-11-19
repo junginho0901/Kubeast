@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { elementsOf, fakeRender, fakeUnmount, textsOf } from '@/testing/fakeHooks'
-import { drawerKeydown, keepTabIn } from './drawerFocus'
+import { drawerKeydown, keepTabIn } from './drawerDialog'
 import { ResourceDetailHeader } from './ResourceDetailHeader'
 import { chatShortcutKeydown } from '@/hooks/useChatShortcut'
 import drawerSrc from '../ResourceDetailDrawer.tsx?raw'
