@@ -4352,6 +4352,10 @@
         "tool_result_chars": "Enter the tool result length as a whole number from 1,000 to 200,000.",
         "in_json": "Set max_tokens and tool_result_chars in the fields above, not in the generation options."
       },
+      "optionsNotObject": "Options must be a JSON object, e.g. {\"temperature\": 0.7}",
+      "optionsInvalidJson": "Invalid JSON",
+      "apiKeyEnvMissing": "Enter the name of the env var that holds the API key",
+      "testFailed": "Test failed",
       "usedFor": "Used for",
       "usedForNone": "Not used now",
       "use": {

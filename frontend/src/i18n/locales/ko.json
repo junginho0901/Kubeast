@@ -2923,6 +2923,10 @@
         "tool_result_chars": "도구 결과 최대 길이는 1,000~200,000 사이의 정수로 입력하세요.",
         "in_json": "max_tokens와 tool_result_chars는 생성 옵션이 아니라 위 칸에서 정하세요."
       },
+      "optionsNotObject": "옵션은 JSON 객체로 입력하세요. 예: {\"temperature\": 0.7}",
+      "optionsInvalidJson": "JSON 형식이 올바르지 않습니다.",
+      "apiKeyEnvMissing": "API 키를 담고 있는 환경변수 이름을 입력하세요.",
+      "testFailed": "연결 테스트에 실패했습니다.",
       "usedFor": "쓰는 곳",
       "usedForNone": "지금 쓰는 곳 없음",
       "use": {
