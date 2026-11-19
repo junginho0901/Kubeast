@@ -17,6 +17,8 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - Finish node drains in progress before you upgrade.
 - The default model is `gpt-6-luna`. Saved model settings, an `ai.model` in your values and a Compose `.env` keep their model; change those that name `gpt-4o-mini`, which OpenAI shuts down on 2027-01-14, before then.
 - With `secrets.existingSecret`, Redis keeps one password until the per-service Redis users' passwords are in a Secret (`redis.acl.existingSecret`, or the main Secret with `redis.acl.existingSecretHasKeys: true`).
+- On each registered cluster other than the one Kubeast runs in, apply the RBAC again ([Cluster requirements](docs/cluster-requirements.md) §1): the ClusterRole the docs give a registered cluster's credential now also gets the `kube-system` Namespace, whose UID refuses a second entry for a cluster and another cluster's kubeconfig in a registered cluster's place. Until it is applied, both checks are skipped for that cluster.
+- One account may hold 20 terminals and 20 followed logs open on each k8s-service, and one past either is refused before it opens. Where one account needs more (a shared account, or a script with an API key, which counts with its owner), raise `multicluster.maxTerminalsPerAccount` or `multicluster.maxFollowedLogsPerAccount`; `0` turns a cap off.
 - Upgrade with `--reset-then-reuse-values`. `--reuse-values` stops with that hint, as in 0.7.7.
 
 ### Added
