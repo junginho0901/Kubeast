@@ -111,7 +111,7 @@ Check it with `kubectl -n <namespace> get hpa`.
 - Each k8s-service pod takes the memory one pod takes; the total grows with the pods.
 - Each k8s-service pod answers Cluster View's node boxes from its own informers and keeps the answers it gave the people who may see every namespace: at most 256 nodes and 8 MiB of answers (about 300 bytes a pod), and no pod row. A node's box is made once in each pod while the node's pods stay the same.
 - Limits that protect a pod — memory, work at once, live watches (`multicluster.wsMaxSubscriptions`) and their openings (`multicluster.wsWatchOpeningConcurrency`) — are per pod. So is the client rate to a cluster (`multicluster.clientQPS`): N pods can send N times as much.
-- Each k8s-service pod counts the terminals (pod exec, node shell) and followed logs each account holds open on it, and refuses one past `multicluster.maxTerminalsPerAccount` or `multicluster.maxFollowedLogsPerAccount` (20 each). The count is not shared: with N pods taking them (k8s-service, or k8s-service-stream with `streams.enabled`) an account may hold up to N times as many.
+- Each k8s-service pod counts the terminals (pod exec, node shell) and followed logs each account holds open on it, and refuses one past `multicluster.maxTerminalsPerAccount` or `multicluster.maxFollowedLogsPerAccount` (20 each). The count is not shared: with N pods taking them (k8s-service, or k8s-service-stream with `streams.enabled`) an account may hold up to N times as many, as the Service spreads them. A pod that leaves (a rollout, a scale down, a node lost) sends its followed logs to the pods that stay, where one past the cap is refused: count on the cap, not on N times it.
 
 ## Measured on EKS
 

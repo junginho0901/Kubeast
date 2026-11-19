@@ -71,6 +71,9 @@ jobs:
       - name: internal/ws
         working-directory: services/k8s-service-go
         run: go test -race ./internal/ws/
+      - name: internal/streamcap
+        working-directory: services/k8s-service-go
+        run: go test -race ./internal/streamcap/
       - name: internal/handler
         working-directory: services/k8s-service-go
         run: go test -race ./internal/handler/

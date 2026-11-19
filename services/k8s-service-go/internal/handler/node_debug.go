@@ -278,7 +278,9 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	writeShellStatus(conn, shellStatus{Status: shellStarting})
 
 	slog.Info("debug shell attached", "pod", podName, "node", nodeName)
-	if err := streamShell(ctx, conn, in, restConfig, attachURL(clientset, namespace, podName, "debugger"), rec, r.URL.Query().Get("lang")); err != nil {
+	err = streamShell(ctx, conn, in, restConfig, attachURL(clientset, namespace, podName, "debugger"), rec, r.URL.Query().Get("lang"))
+	releasePlace() // the shell is over: its account's place comes back before the pod's delete, which waits on the API server
+	if err != nil {
 		slog.Error("failed to connect to K8s API", "err", err)
 		conn.WriteMessage(websocket.TextMessage, []byte("failed to connect to K8s API: "+response.Public(err)+"\r\n"))
 		return

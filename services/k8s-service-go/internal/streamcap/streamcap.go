@@ -6,7 +6,10 @@
 // account may hold the cap on each pod (docs/high-availability.md).
 package streamcap
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 // Kind is what a place is taken for.
 type Kind int
@@ -36,13 +39,14 @@ type key struct {
 
 // Caps holds the places of one server. A nil *Caps refuses nothing.
 type Caps struct {
-	mu   sync.Mutex
-	max  [2]int
-	open map[key]int
+	mu      sync.Mutex
+	max     [2]int
+	open    map[key]int
+	refused [2]atomic.Uint64
 }
 
-// New returns Caps allowing each account terminals terminals and followedLogs followed logs at once; 0 (or less) is no
-// cap for that kind.
+// New returns Caps allowing each account terminals terminals and followedLogs followed logs at once; 0 is no cap for
+// that kind (the chart refuses a value below 0, which counts as 0 here).
 func New(terminals, followedLogs int) *Caps {
 	return &Caps{max: [2]int{max(0, terminals), max(0, followedLogs)}, open: map[key]int{}}
 }
@@ -65,6 +69,7 @@ func (c *Caps) Take(account string, kind Kind) (release func(), ok bool) {
 	c.mu.Lock()
 	if c.max[kind] > 0 && c.open[k] >= c.max[kind] {
 		c.mu.Unlock()
+		c.refused[kind].Add(1)
 		return func() {}, false
 	}
 	c.open[k]++
@@ -105,4 +110,12 @@ func (c *Caps) Accounts() int {
 		seen[k.account] = struct{}{}
 	}
 	return len(seen)
+}
+
+// Refused is how many places of kind were refused since start (kubeast_stream_cap_refusals_total).
+func (c *Caps) Refused(kind Kind) uint64 {
+	if c == nil {
+		return 0
+	}
+	return c.refused[kind].Load()
 }

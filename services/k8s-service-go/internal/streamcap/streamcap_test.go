@@ -18,6 +18,9 @@ func TestAnAccountIsRefusedPastItsCapAndGetsThePlaceBackWhenOneEnds(t *testing.T
 	if got := c.Open("u1", Terminal); got != 2 {
 		t.Fatalf("open = %d after a refusal, want 2 (a refusal holds nothing)", got)
 	}
+	if c.Refused(Terminal) != 1 || c.Refused(FollowedLog) != 0 {
+		t.Fatalf("refused = %d terminals, %d followed logs, want 1 and 0", c.Refused(Terminal), c.Refused(FollowedLog))
+	}
 	r1()
 	r1() // given back once
 	if got := c.Open("u1", Terminal); got != 1 {
@@ -81,7 +84,7 @@ func TestANilCapsRefusesNothing(t *testing.T) {
 		t.Fatal("refused")
 	}
 	release()
-	if c.Open("u1", Terminal) != 0 || c.Max(Terminal) != 0 || c.Accounts() != 0 {
+	if c.Open("u1", Terminal) != 0 || c.Max(Terminal) != 0 || c.Accounts() != 0 || c.Refused(Terminal) != 0 {
 		t.Fatal("a nil Caps counts")
 	}
 }

@@ -1,9 +1,34 @@
 suite: multicluster.maxTerminalsPerAccount and maxFollowedLogsPerAccount — each account's open terminals and followed logs on each k8s-service
 templates:
+  - checks/stream-caps.yaml
   - deployments.yaml
   - configmap.yaml
   - secret.yaml
 tests:
+  - it: refuses nothing on the chart's defaults, nor 0
+    set:
+      multicluster.maxFollowedLogsPerAccount: 0
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/stream-caps.yaml
+
+  - it: refuses a cap below 0 instead of turning it off without a word
+    set:
+      multicluster.maxTerminalsPerAccount: -1
+    asserts:
+      - failedTemplate:
+          errorPattern: "multicluster.maxTerminalsPerAccount must be a whole number, 0 \\(no cap\\) or more \\(got -1\\)"
+        template: checks/stream-caps.yaml
+
+  - it: refuses a cap that is not a whole number
+    set:
+      multicluster.maxFollowedLogsPerAccount: 2.5
+    asserts:
+      - failedTemplate:
+          errorPattern: "multicluster.maxFollowedLogsPerAccount must be a whole number, 0 \\(no cap\\) or more \\(got 2.5\\)"
+        template: checks/stream-caps.yaml
+
   - it: gives k8s-service 20 of each by default
     asserts:
       - contains:

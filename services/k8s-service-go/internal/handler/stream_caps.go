@@ -17,6 +17,9 @@ import (
 // browser's few seconds.
 const followedLogLimitRetryMs = 30000
 
+// StreamCaps are the server's counts of each account's open terminals and followed logs, for its metrics.
+func (h *Handler) StreamCaps() *streamcap.Caps { return h.streamCaps }
+
 // streamAccount is the account a terminal or a followed log is counted for: the signed-in person, whose API keys count
 // with their sign-ins.
 func streamAccount(r *http.Request) string {

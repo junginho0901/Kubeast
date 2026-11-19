@@ -201,6 +201,9 @@ func TestANodeShellPastItsAccountsCapMakesNoPod(t *testing.T) {
 		t.Fatalf("first status = %+v", s)
 	}
 	wantCapClose(t, dialTerminal(t, srv, "as=u1"))
+	if got := h.streamCaps.Open("u1", streamcap.Terminal); got != 1 {
+		t.Fatalf("u1 holds %d after the refusal, want 1", got)
+	}
 	if got := made.Load(); got != 1 {
 		t.Fatalf("debug pods made = %d, want 1", got)
 	}
@@ -311,7 +314,11 @@ func TestAFollowedLogFilePastItsAccountsCapGetsTheEvent(t *testing.T) {
 	logFilePollInterval = 5 * time.Millisecond
 	t.Cleanup(func() { logFilePollInterval = orig })
 	file := &fakeFile{inode: "11", data: "l1\n"}
-	h, _, _ := logFileHandler(t, true, file.run)
+	var commands atomic.Int32
+	h, _, _ := logFileHandler(t, true, func(argv []string) fakeCommand {
+		commands.Add(1)
+		return file.run(argv)
+	})
 	store := &lockedAudit{}
 	h.auditStore = store
 	var version atomic.Int32
@@ -321,14 +328,67 @@ func TestAFollowedLogFilePastItsAccountsCapGetsTheEvent(t *testing.T) {
 		h.LogFileStream(w, asAccount(r, "apps", "resource.pod.logfile"))
 	})
 	const target = "/x?container=app&path=/var/log/app/app.log&lines=2&as=u1"
-	first, dropFirst := openFollow(t, srv, target)
-	if first.data != "l1" {
-		t.Fatalf("first event %+v", first)
+	// The account's one place is held, as by a stream open on another tab.
+	held, ok := h.streamCaps.Take("u1", streamcap.FollowedLog)
+	if !ok {
+		t.Fatal("the first place was refused")
 	}
-	refusedFollow(t, srv, target) // refused before any command runs in the container
+	refusedFollow(t, srv, target)
+	if got := commands.Load(); got != 0 {
+		t.Fatalf("%d commands ran in the container for the refused stream, want 0", got)
+	}
 	if rows := store.failedRows(auditLogFileRead); len(rows) != 1 || !strings.Contains(rows[0].Error, "multicluster.maxFollowedLogsPerAccount") {
 		t.Fatalf("failed rows = %+v", rows)
 	}
+	held()
+	first, dropFirst := openFollow(t, srv, target)
+	if first.data != "l1" {
+		t.Fatalf("first event after the place came back %+v", first)
+	}
 	dropFirst()
 	waitOpen(t, h.streamCaps, "u1", streamcap.FollowedLog, 0)
+}
+
+// A node shell that ended gives its place back before its pod's delete answers: a delete that waits on the API server
+// does not hold one of the account's terminals.
+func TestAnEndedNodeShellGivesItsPlaceBackBeforeThePodDeleteAnswers(t *testing.T) {
+	var version, deleted atomic.Int32
+	fake := &fakeExecutor{endOnEOT: true}
+	orig := newShellExecutor
+	newShellExecutor = func(*rest.Config, *url.URL) (remotecommand.Executor, error) { return fake, nil }
+	t.Cleanup(func() { newShellExecutor = orig })
+	unblock := make(chan struct{})
+	var unblockOnce sync.Once
+	t.Cleanup(func() { unblockOnce.Do(func() { close(unblock) }) })
+	api := nodeShellAPI("Running", &deleted)
+	h, _ := liveHandler(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			<-unblock // the API server does not answer the delete yet
+		}
+		api(w, r)
+	}, &version)
+	h.cfg = config.Config{NodeShellEnabled: true, NodeShellNamespace: nodeShellTestNamespace, NodeShellImages: []string{"example.test/shell:1"}, NodeShellTimeoutSec: 60}
+	h.streamCaps = streamcap.New(1, 0)
+	interval := nodeShellPollInterval
+	nodeShellPollInterval = 5 * time.Millisecond
+	t.Cleanup(func() { nodeShellPollInterval = interval })
+	srv := streamServer(t, func(w http.ResponseWriter, r *http.Request) {
+		h.NodeDebugShellWS(w, asAccount(r, "apps", "resource.node.shell"))
+	})
+	c := dialTerminal(t, srv, "as=u1")
+	readShellStatus(t, c) // waiting
+	readShellStatus(t, c) // starting
+	readFrame(t, c)       // ready
+	readFrame(t, c)       // prompt
+	waitOpen(t, h.streamCaps, "u1", streamcap.Terminal, 1)
+
+	if err := c.WriteMessage(websocket.TextMessage, []byte{0x04}); err != nil { // the shell exits
+		t.Fatal(err)
+	}
+	waitOpen(t, h.streamCaps, "u1", streamcap.Terminal, 0)
+	if got := deleted.Load(); got != 0 {
+		t.Fatalf("debug pod deletes answered = %d, want 0 while the API server holds the delete", got)
+	}
+	unblockOnce.Do(func() { close(unblock) })
+	wantDebugPodDeleted(t, &deleted)
 }

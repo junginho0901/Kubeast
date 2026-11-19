@@ -111,7 +111,7 @@ autoscaling:
 - k8s-service 파드 하나의 메모리는 1대일 때와 같고, 합은 파드 수만큼 늡니다.
 - k8s-service 파드는 Cluster View의 노드 칸을 저마다의 informer로 답하고, 모든 네임스페이스를 볼 수 있는 사람에게 준 답을 들고 있습니다. 노드 256개와 답 8 MiB(파드당 약 300바이트)까지이고, 파드 행은 들고 있지 않습니다. 한 노드의 칸은 그 노드의 파드가 그대로인 동안 k8s-service 파드마다 한 번 만듭니다.
 - 파드를 지키는 한도(메모리, 동시 작업, 실시간 감시 `multicluster.wsMaxSubscriptions`와 그 열기 `multicluster.wsWatchOpeningConcurrency`)는 파드마다입니다. 클러스터로 보내는 요청 속도(`multicluster.clientQPS`)도 파드마다라, N대면 N배까지 보낼 수 있습니다.
-- k8s-service 파드는 계정마다 자기에게 열린 터미널(파드 exec, 노드 셸)과 실시간 로그 수를 세고, `multicluster.maxTerminalsPerAccount`나 `multicluster.maxFollowedLogsPerAccount`(각 20)를 넘는 것을 거절합니다. 이 수는 파드끼리 나누지 않으므로, 이것을 받는 파드(k8s-service, `streams.enabled`면 k8s-service-stream)가 N대면 한 계정이 N배까지 열 수 있습니다.
+- k8s-service 파드는 계정마다 자기에게 열린 터미널(파드 exec, 노드 셸)과 실시간 로그 수를 세고, `multicluster.maxTerminalsPerAccount`나 `multicluster.maxFollowedLogsPerAccount`(각 20)를 넘는 것을 거절합니다. 이 수는 파드끼리 나누지 않으므로, 이것을 받는 파드(k8s-service, `streams.enabled`면 k8s-service-stream)가 N대면 Service가 나누는 대로 한 계정이 N배까지 열 수 있습니다. 파드가 떠나면(롤아웃, 축소, 노드 잃음) 그 파드의 실시간 로그는 남은 파드로 다시 붙고, 거기서 상한을 넘는 것은 거절됩니다. N배가 아니라 상한을 기준으로 잡으세요.
 
 ## EKS에서 잰 것
 
