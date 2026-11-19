@@ -343,7 +343,7 @@ kubectl -n kubeast logs deploy/auth-service | grep 'a chart setting names a role
 
 **cordon된 노드**(#858). 등록한 클러스터마다 `kubectl get nodes`를 보고, 끊긴 드레인이 cordon된 채 남긴 노드는 `kubectl uncordon <node>`로 풉니다.
 
-**`kubeast-impersonator`의 `kube-system` 읽기**. Kubeast가 도는 클러스터를 뺀 등록 클러스터마다 RBAC을 다시 적용합니다(`helm template kubeast helm/kubeast -s templates/impersonation-rbac.yaml | kubectl --context <cluster> apply -f -`, [클러스터 요구 사항](cluster-requirements.md) §1). 이제 이 ClusterRole로 자격 증명이 `kube-system` Namespace를 읽을(get) 수 있고, 그 UID로 한 클러스터의 두 번째 등록과 등록된 클러스터에 다른 클러스터의 kubeconfig를 주는 것을 거절합니다.
+**`kubeast-impersonator`의 `kube-system` 읽기**(#970). Kubeast가 도는 클러스터를 뺀 등록 클러스터마다 RBAC을 다시 적용합니다(`helm template kubeast helm/kubeast -s templates/impersonation-rbac.yaml | kubectl --context <cluster> apply -f -`, [클러스터 요구 사항](cluster-requirements.md) §1). 이제 이 ClusterRole로 자격 증명이 `kube-system` Namespace를 읽을(get) 수 있고, 그 UID로 한 클러스터의 두 번째 등록과 등록된 클러스터에 다른 클러스터의 kubeconfig를 주는 것을 거절합니다.
 UID 없이 등록된 클러스터는 다음에 UID를 읽을 수 있는 자격 증명의 kubeconfig로 바꿀 때 UID를 얻습니다. 그 전까지는 그 클러스터를 다시 등록해도 거절하지 않습니다.
 
 **Redis 사용자**(#866). `secrets.existingSecret`을 쓰면 사용자를 켤 때까지 Redis가 비밀번호 하나로 돈다고 설치 안내가 알려 줍니다([1.7](#17-secretsexistingsecret과-redis-사용자)).

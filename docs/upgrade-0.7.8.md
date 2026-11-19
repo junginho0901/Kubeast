@@ -343,7 +343,7 @@ For names in `auth.impersonation.customRoles`, apply the 0.7.8 render (`scripts/
 
 **Cordoned nodes** (#858). On each registered cluster, `kubectl get nodes`; run `kubectl uncordon <node>` for a node a drain cut short left cordoned.
 
-**The `kube-system` read of `kubeast-impersonator`**. On each registered cluster other than the one Kubeast runs in, apply the RBAC again (`helm template kubeast helm/kubeast -s templates/impersonation-rbac.yaml | kubectl --context <cluster> apply -f -`, [Cluster requirements](cluster-requirements.md) §1): the ClusterRole now lets the credential get the `kube-system` Namespace, whose UID refuses a second entry for a cluster and a kubeconfig of another cluster given to a registered one.
+**The `kube-system` read of `kubeast-impersonator`** (#970). On each registered cluster other than the one Kubeast runs in, apply the RBAC again (`helm template kubeast helm/kubeast -s templates/impersonation-rbac.yaml | kubectl --context <cluster> apply -f -`, [Cluster requirements](cluster-requirements.md) §1): the ClusterRole now lets the credential get the `kube-system` Namespace, whose UID refuses a second entry for a cluster and a kubeconfig of another cluster given to a registered one.
 A cluster registered without a UID gets one the next time its kubeconfig is replaced by a credential that reads it; until then a second entry for it is not refused.
 
 **Redis users** (#866). With `secrets.existingSecret`, the install notes say Redis still runs with one password until you turn the users on ([1.7](#17-secretsexistingsecret-and-the-redis-users)).
