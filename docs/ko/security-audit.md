@@ -138,7 +138,7 @@ retention:
 
 감사 행을 나중에 고치거나 지웠는지 확인할 수 있게 합니다.
 auth-service는 `audit.integrity.sealSeconds`(기본 10초)마다 새 행을 앞 행의 해시를 포함한 sha256으로 묶습니다(`chain_seq`·`prev_hash`·`row_hash`).
-`audit.integrity.anchor.sink`에 S3 싱크 이름을 적으면 `anchor.hours`(기본 24)마다 체인의 머리를 다이제스트 JSON으로 만들어 그 버킷의 `<prefix>digests/`에 씁니다.
+`audit.integrity.anchor.sink`에 S3 싱크 이름을 적으면 `anchor.hours`(정수 시간, 기본 24)마다 체인의 머리를 다이제스트 JSON으로 만들어 그 버킷의 `<prefix>digests/`에 씁니다.
 Admin → 감사 로그 상단 띠에서 봉인 위치와 마지막 앵커를 보고, **검증**(기본은 마지막 앵커부터, 싱크 객체 대조 포함)과 **지금 앵커** 버튼을 누를 수 있습니다.
 두 동작 모두 감사 행(`admin.audit.verify`·`admin.audit.anchor`)으로 남고, 주기 앵커는 `audit.chain.anchor`(actor `system`)로 남습니다.
 

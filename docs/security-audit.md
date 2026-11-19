@@ -137,7 +137,7 @@ To open the mail inbox, run `kubectl -n kubeast-devtools port-forward svc/mailpi
 This feature makes it possible to tell whether audit rows were changed or deleted later.
 
 - Every `audit.integrity.sealSeconds` (default 10 seconds), auth-service chains new rows with a sha256 that includes the previous row's hash (`chain_seq`, `prev_hash`, `row_hash`).
-- When `audit.integrity.anchor.sink` names an S3 sink, auth-service writes the chain head as a digest JSON to `<prefix>digests/` in that bucket every `anchor.hours` (default 24).
+- When `audit.integrity.anchor.sink` names an S3 sink, auth-service writes the chain head as a digest JSON to `<prefix>digests/` in that bucket every `anchor.hours` (whole hours, default 24).
 - The bar at the top of Admin → Audit Logs shows the seal position and the last anchor. It has a **Verify** button (by default from the last anchor, including a check against the sink objects) and an **Anchor now** button.
 - Both buttons are recorded as audit rows (`admin.audit.verify`, `admin.audit.anchor`). The periodic anchor is recorded as `audit.chain.anchor` (actor `system`).
 
