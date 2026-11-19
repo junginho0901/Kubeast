@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { QueryClient, QueryObserver } from '@tanstack/react-query'
+import { QueryClient, QueryObserver, notifyManager } from '@tanstack/react-query'
 import { applyHelmWatchEvent, followHelmReleases, helmStreamFrame } from './useHelmWatchList'
 import type { HelmReleaseSummary } from './api'
 import { clearWatchProblem, getWatchProblem, recordWatchFrame } from './watchProblemStore'
+import { refreshList } from '@/hooks/useRefresh'
 
 describe('what the Helm releases stream tells the watch problem notice', () => {
   const key = 'c\n/api/v1/helm/releases/stream?cluster=c'
@@ -298,5 +299,143 @@ describe('the Helm releases stream', () => {
     await vi.advanceTimersByTimeAsync(10_000)
     expect(queryFn).toHaveBeenCalledTimes(1)
     expect(latest().readyState).toBe(FakeEventSource.CLOSED)
+  })
+})
+
+// A read's answer replaces the rows, and it may have been made before a frame that came while the read was on its way:
+// the Releases page reads on resync and on Refresh past the server's cache, and reads its own way when opened again on a
+// list marked stale.
+describe('frames that come while the releases are read', () => {
+  const listKey = ['helm-releases', 'c', '']
+  const latest = () => FakeEventSource.made[FakeEventSource.made.length - 1]
+  const shownAs = (rows: HelmReleaseSummary[] | undefined) => rows?.map((row) => `${row.name}@${row.revision} ${row.status}`)
+
+  beforeEach(() => {
+    FakeEventSource.made = []
+    vi.stubGlobal('EventSource', FakeEventSource)
+    vi.useFakeTimers()
+    // the reads a resync asks for at 2.5 s
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  // The page's query and its first answer, then the stream, which the page opens once the list has answered. Each read
+  // waits for the answer the test gives it, so a frame can come while it is on its way.
+  async function open(first: HelmReleaseSummary[]) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const answers: Array<{ resolve: (rows: HelmReleaseSummary[]) => void; reject: (err: Error) => void }> = []
+    const read = vi.fn(() => new Promise<HelmReleaseSummary[]>((resolve, reject) => answers.push({ resolve, reject })))
+    // what React draws: the query as it is once the notifications of a change are out
+    const observer = new QueryObserver(client, { queryKey: listKey, queryFn: read, staleTime: Infinity })
+    const drawn: (string[] | undefined)[] = []
+    const stopObserver = observer.subscribe(notifyManager.batchCalls(() => drawn.push(shownAs(observer.getCurrentResult().data))))
+    await vi.advanceTimersByTimeAsync(0)
+    answers.shift()!.resolve(first)
+    await vi.advanceTimersByTimeAsync(0)
+    // the Releases page's read on resync, as its readAgain makes it
+    const readPastCache = () => void client.fetchQuery({ queryKey: listKey, queryFn: read, staleTime: 0 }).catch(() => {})
+    const stopStream = followHelmReleases(client, { cluster: 'c', queryKey: listKey, onResync: () => readPastCache })
+    return {
+      client,
+      read,
+      drawn,
+      rows: () => shownAs(client.getQueryData(listKey)),
+      send: async (type: string, object: HelmReleaseSummary) => {
+        latest().send('message', { type, object })
+        await vi.advanceTimersByTimeAsync(0)
+      },
+      answer: async (rows: HelmReleaseSummary[]) => {
+        answers.shift()!.resolve(rows)
+        await vi.advanceTimersByTimeAsync(0)
+      },
+      // the page's own read, as when it opens again on a list marked stale
+      readAgain: async () => {
+        void client.invalidateQueries({ queryKey: listKey })
+        await vi.advanceTimersByTimeAsync(0)
+      },
+      leave: () => stopStream(),
+      stop: () => {
+        stopStream()
+        stopObserver()
+      },
+    }
+  }
+
+  it('a release uninstalled while the list is read again on resync is gone once the answer made before it comes, and never drawn again', async () => {
+    const list = await open([rel('db', 1), rel('web', 3)])
+    latest().send('resync', {})
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(list.read).toHaveBeenCalledTimes(2)
+    await list.send('DELETED', rel('db', 1))
+    expect(list.rows()).toEqual(['web@3 deployed'])
+    list.drawn.length = 0
+    await list.answer([rel('db', 1), rel('web', 3)])
+    expect(list.rows()).toEqual(['web@3 deployed'])
+    expect(list.drawn.length).toBeGreaterThan(0)
+    expect(list.drawn.every((rows) => !rows?.some((row) => row.startsWith('db@')))).toBe(true)
+    list.stop()
+  })
+
+  it('a release installed while a Refresh reads is there once the answer comes, as its last frame left it', async () => {
+    const list = await open([rel('web', 3)])
+    const refreshed = refreshList(list.client, listKey, list.read)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(list.read).toHaveBeenCalledTimes(2)
+    await list.send('ADDED', rel('db', 1, 'pending-install'))
+    await list.send('MODIFIED', rel('db', 1))
+    await list.answer([rel('web', 3)])
+    await expect(refreshed).resolves.toEqual([rel('web', 3)])
+    expect(list.rows()).toEqual(['web@3 deployed', 'db@1 deployed'])
+    list.stop()
+  })
+
+  it('an upgrade while the page reads its list keeps its new revision once the answer made before it comes', async () => {
+    const list = await open([rel('web', 3)])
+    await list.readAgain()
+    expect(list.read).toHaveBeenCalledTimes(2)
+    await list.send('ADDED', rel('web', 4, 'pending-upgrade'))
+    await list.send('MODIFIED', rel('web', 3, 'superseded'))
+    await list.send('MODIFIED', rel('web', 4))
+    await list.answer([rel('web', 3)])
+    expect(list.rows()).toEqual(['web@4 deployed'])
+    list.stop()
+  })
+
+  // A release's revision says which of the answer and a frame is newer: an older frame does not take the answer back.
+  it('a frame of an older revision that came while the list was read leaves the answer\'s newer revision', async () => {
+    const list = await open([rel('web', 3)])
+    await list.readAgain()
+    await list.send('MODIFIED', rel('web', 3, 'superseded'))
+    await list.answer([rel('web', 4)])
+    expect(list.rows()).toEqual(['web@4 deployed'])
+    list.stop()
+  })
+
+  // A release the answer no longer has carries no revision to compare: a frame from before its uninstall brings it back
+  // until its DELETED, which comes next on the same stream.
+  it('a frame older than the answer brings an uninstalled release back only until its DELETED', async () => {
+    const list = await open([rel('db', 1), rel('web', 3)])
+    await list.readAgain()
+    await list.send('MODIFIED', rel('db', 1, 'uninstalling'))
+    await list.answer([rel('web', 3)])
+    expect(list.rows()).toEqual(['web@3 deployed', 'db@1 uninstalling'])
+    await list.send('DELETED', rel('db', 1, 'uninstalling'))
+    expect(list.rows()).toEqual(['web@3 deployed'])
+    list.stop()
+  })
+
+  it('applies nothing once the stream is gone', async () => {
+    const list = await open([rel('db', 1), rel('web', 3)])
+    await list.readAgain()
+    await list.send('DELETED', rel('db', 1))
+    // the page's query stays, so the read goes on without the stream
+    list.leave()
+    await list.answer([rel('db', 1), rel('web', 3)])
+    expect(list.rows()).toEqual(['db@1 deployed', 'web@3 deployed'])
+    list.stop()
   })
 })
