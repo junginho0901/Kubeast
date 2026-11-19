@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Upgrade rehearsal: the published chart of the release before (FROM_VERSION, 0.7.7) installed the way a user installs
+# Upgrade rehearsal: the published chart of the release before (FROM_VERSION, 0.7.8) installed the way a user installs
 # it, on a kind cluster of the rehearsal's own (kubeast-reh: one control-plane, one worker that only a drain test pod
 # may use), data made through its API, the database backed up as docs/database-backup-restore.md says, then upgraded
 # to the chart and images of this checkout the way docs/getting-started.md "Upgrade" says
@@ -56,8 +56,8 @@
 # when the checkout lacks one, and a SKIP of one is a FAIL row. --plan prints that list against the checkout and runs
 # the render stops with `helm template` on the install's values, without a cluster.
 #
-# Inputs (environment): SCENARIO, FROM_VERSION (0.7.7), RC_TAG (the tag the release workflow's chart edits run with,
-# v0.7.8-rc.1), IMAGE_TAG (rc-<HEAD, 8>), REPLICAS (1), HOST_PORT (30392), REH_CLUSTER (kubeast-reh), REH_OUT
+# Inputs (environment): SCENARIO, FROM_VERSION (0.7.8), RC_TAG (the tag the release workflow's chart edits run with,
+# v0.7.9-rc.1), IMAGE_TAG (rc-<HEAD, 8>), REPLICAS (1), HOST_PORT (30392), REH_CLUSTER (kubeast-reh), REH_OUT
 # (.rehearsal/<scenario>-<time>), KIND_NODE_HOOK (a command that gets a node container's name, run on each node once
 # the cluster is made — behind a TLS-inspecting proxy, one that makes the node trust its CA and restarts containerd,
 # as CALICO_NODE_HOOK), DOCKER_BUILD_ARGS (with --build), PROBE_TIMEOUT (10 s: a request
@@ -79,8 +79,8 @@ export PATH=/opt/homebrew/bin:$PATH
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCENARIO="${SCENARIO:-default}"
-FROM_VERSION="${FROM_VERSION:-0.7.7}"
-RC_TAG="${RC_TAG:-v0.7.8-rc.1}"
+FROM_VERSION="${FROM_VERSION:-0.7.8}"
+RC_TAG="${RC_TAG:-v0.7.9-rc.1}"
 REPLICAS="${REPLICAS:-1}"
 CLUSTER="${REH_CLUSTER:-kubeast-reh}"
 CTX="kind-$CLUSTER"
