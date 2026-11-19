@@ -47,10 +47,11 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
   socket the page opens (opened, first frame, closed) for `listSocketBack`.
 - "Server restarts 0" compares the container restart counts of the pods present before and after.
 - `takeDown(deploy)` scales a Deployment to 0 and waits until none of its pods is left — `podsOf` counts a pod being
-  deleted, which still answers through its preStop and grace (Redis has a 5 s preStop) — so what a test does with it
-  "off" starts only then; `stopFor(deploy, seconds)` keeps it off `seconds` from that moment and brings it back,
-  waiting for the rollout, and returns when it went off and came back for the test's `timeline.json`. A Deployment
-  already at 0 replicas (left by an interrupted run) stops the test: it would "bring it back" to 0.
+  deleted, which still answers through its preStop and grace (the bundled Redis has no preStop, only the 30 s default
+  grace) — so what a test does with it "off" starts only then; `stopFor(deploy, seconds)` keeps it off `seconds` from
+  that moment and brings it back, waiting for the rollout, and returns when it went off and came back for the test's
+  `timeline.json`. A Deployment already at 0 replicas (left by an interrupted run) stops the test: it would "bring it
+  back" to 0.
 - Passwords (the Redis users') are read from their Secret and given to `valkey-cli` on stdin, never on a command line.
 
 ## Files

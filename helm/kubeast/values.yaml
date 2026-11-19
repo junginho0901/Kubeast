@@ -583,8 +583,8 @@ postgresql:
   # connection: set 0 there and put the limits in the proxy's initialization query or on the database role. The
   # schema migrations always run without the statement and lock limits, also when the role sets them. Through
   # PgBouncer use session pooling only: transaction pooling hands a server connection to other clients between
-  # transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's) does not stay with
-  # the client that made it.
+  # transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's, k8s-service's health
+  # status lock) does not stay with the client that made it.
   # sessionLimits, pool and maxConnections: stage beta, a long database outage has not been tested with them yet
   # (docs/configuration.md "Stages of new values").
   sessionLimits:
