@@ -130,6 +130,7 @@ Work that always runs:
   - on each replica, reads every registered cluster's `config_version` from the database every 5 seconds, give or take a second, one query (`internal/clustersync`); with Redis it also follows the other replicas' cluster change notices
   - when Redis did not answer at start, asks it again every 5 seconds until it answers, then moves the cache there
   - while it runs a node drain, writes that it is alive every 5 seconds; every 10 seconds marks the drains whose server stopped as interrupted; every hour deletes drains that finished a day ago (`node_drains`)
+  - with `nodeShell.enabled` on, on a server that opens terminals: while it holds a node shell, writes that it is alive every 15 seconds; every 30 seconds, the first time at start, reads the node shells whose server has not written so for a minute (one query, nothing else while there are none) and deletes their pods as the person who opened each (`node_shells`). Node shell off (the default), none of this runs
 
 The MCP, alert investigation, session recording, node shell and `features.*` rows are based on the code. They create no pods, so they were not measured separately. The MCP value was measured on 2026-10-13.
 

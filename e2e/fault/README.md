@@ -64,6 +64,7 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
 | `claude-code-slots.spec.ts` | #859 Claude Code slots | M-4 "the cap holds on two servers; a server killed → its slot free within 60 s" | two ready `ai-service` pods (`replicas.aiService: 2`); the default model on provider `claude-code` (`scripts/kind-model-subscription.sh up`); table `claude_code_slots` | rows of `claude_code_slots` owned `e2e-w6-*` (set free after), conversations of the run (deleted), kills one ai-service pod; up to five short chat turns of the subscription |
 | `redis-users.spec.ts` | #866 Redis users per service | M-6b "ACL refusal test" and "test 6 (tool-server 10 s)"; F-8 | the chart's Redis with `redis.acl` on; tool-server cases `mcp.enabled` and kind clusters `kubeast-b`, `test2`; the last case also #857 | one `kubeast:cache:e2e-w6-*` key (30 s TTL), clusters `e2e-w6-tool-*` (deleted), Redis stopped 60 s and about 20 s, one `rollout restart` of k8s-service while Redis is stopped |
 | `w4-stream-split.spec.ts` | #823 `SERVER_ROLE`, #824 the stream server's drain, #825 `streams.enabled` | F-1, F-2 (the part `stream-server.spec.ts` does not hold), F-3 | `streams.enabled: true` (Deployment `k8s-service-stream`); F-3 one `k8s-service` replica | a busybox pod `e2e-w6-seq-*` in `default` (deleted), kills the stream server and the api server, one `rollout restart` of the stream server |
+| `node-shell-cleanup.spec.ts` | threat model v0.7.8 row 1.9 (`node_shells`) | F-1 with a node shell open | `nodeShell.enabled` on the server that opens terminals (`NODE_SHELL_ENABLED`); NS-2 two ready servers of that Deployment; `docker exec` into the kind node | node shells on the first node of self (their pods deleted after), kills one server with no signal; waits for the rollout |
 
 ### Pass lines and what each test depends on
 
@@ -145,6 +146,16 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
 - Depends on: the ACL file of #866 (`kubeast.redisUsersAcl`), the Secret `kubeast-redis-users` (or the one the redis
   pod's `REDISCLI_AUTH` names), tool-server's 10 s kubeconfig keep and change notice listener, the log lines of #857's
   `cache.Reconnect`, and #856's preStop for the restart without Redis.
+
+`node-shell-cleanup.spec.ts`
+- NS-1: the node shell pod of a server killed with no SIGTERM is gone within 150 s of the kill and not before 40 s (the
+  sweep, not the server's own cleanup), its `node_shells` row is gone, and exactly one `k8s.session.end` row names the
+  pod with `after.reason: server_gone`.
+- NS-2: with two servers each holding a shell, the killed server's shell pods go within 150 s and the other server's
+  stay Running with their sockets open through the whole 150 s.
+- Depends on: `node_shells` (migration 00030) and its 15 s heartbeat / 60 s stale rule with a sweep every 30 s, the
+  pod label `kubeast.io/node-shell-id` and annotation `kubeast.io/node-shell-owner` (the owner's host name first), the
+  `k8s.session.end` row of the sweep.
 
 `w4-stream-split.spec.ts`
 - F-1: list reads through the gateway all 200; the raw terminal socket closes within 5 s of the kill and the terminal

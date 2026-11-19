@@ -10,7 +10,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nodeshells"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
 	corev1 "k8s.io/api/core/v1"
@@ -177,8 +179,31 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: response.Public(err)})
 		return
 	}
+	// The row comes before the pod: a server killed from here on leaves a row whose heartbeat stops, and another
+	// server deletes the pod it names (internal/nodeshells).
+	shellID := ""
+	if h.nodeShells != nil {
+		shellID = nodeshells.NewID()
+		debugPod.Labels[nodeshells.LabelID] = shellID
+		debugPod.Annotations = map[string]string{nodeshells.AnnotationOwner: h.nodeShells.Owner()}
+		clusterID, _ := cluster.FromContext(ctx)
+		person, _ := auth.FromContext(ctx)
+		row := nodeshells.Row{ID: shellID, Cluster: string(clusterID), Namespace: namespace, Pod: podName, Node: nodeName,
+			Person: nodeshells.PersonFor(person, string(clusterID))}
+		end := auditBase(r, audit.ServiceK8s, auditSessionEndAction, "node", nodeName, namespace)
+		if err := h.nodeShells.Begin(ctx, row, end); err != nil {
+			err = fmt.Errorf("node shell row not saved: %w", err)
+			slog.Error("debug shell", "err", err)
+			fail(err)
+			writeShellStatus(conn, shellStatus{Status: shellFailed, Message: "node shell row not saved"})
+			return
+		}
+	}
 	_, err = clientset.CoreV1().Pods(namespace).Create(ctx, debugPod, metav1.CreateOptions{})
 	if err != nil {
+		if shellID != "" {
+			h.nodeShells.End(shellID)
+		}
 		err = fmt.Errorf("create debug pod: %w", err)
 		slog.Error("debug shell", "err", err)
 		fail(err)
@@ -198,10 +223,20 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		grace := int64(0)
 		bg := metav1.DeletePropagationBackground
-		_ = clientset.CoreV1().Pods(namespace).Delete(cleanupCtx, podName, metav1.DeleteOptions{
+		err := clientset.CoreV1().Pods(namespace).Delete(cleanupCtx, podName, metav1.DeleteOptions{
 			GracePeriodSeconds: &grace,
 			PropagationPolicy:  &bg,
 		})
+		if err != nil && !apierrors.IsNotFound(err) {
+			slog.Warn("debug shell pod not deleted", "pod", podName, "err", err)
+			if shellID != "" {
+				h.nodeShells.Release(shellID)
+			}
+			return
+		}
+		if shellID != "" {
+			h.nodeShells.End(shellID)
+		}
 		slog.Info("debug shell pod deleted", "pod", podName)
 	}()
 

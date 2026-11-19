@@ -32,6 +32,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nfm"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nodeshells"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/pglock"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/routes"
@@ -327,6 +328,21 @@ func main() {
 		defer drainCancel()
 		go drainTracker.Run(drainCtx)
 	}
+	// Node shells keep a row per open shell in the shared database, so the pod of a shell whose server was killed is
+	// deleted by another server instead of running until its deadline. Node shell off: no heartbeat and no sweep.
+	nodeShellPods := nodeshells.PodRemover(func(ctx context.Context) (kubernetes.Interface, error) {
+		cs, err := k8sSvc.ClientsetFor(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return cs, nil
+	})
+	if shells := nodeShellTracker(cfg.NodeShellEnabled, role, nodeshells.PG{Pool: pgPool}, nodeShellPods, auditStore); shells != nil {
+		h.SetNodeShells(shells)
+		shellCtx, shellCancel := context.WithCancel(context.Background())
+		defer shellCancel()
+		go shells.Run(shellCtx)
+	}
 	recCtx, recCancel := context.WithCancel(context.Background())
 	defer recCancel()
 	// Only a server that opens terminals runs the recorder: an API server holds no recording to keep alive, and a row
@@ -539,6 +555,15 @@ func main() {
 	}
 	shutdown(srv, ready, recorder, serverShutdownWait, recorderShutdownWait)
 	slog.Info("server stopped")
+}
+
+// nodeShellTracker is the tracker of the node shells this server opens: none when node shell is off or the server
+// opens no terminals (role api), so such a server neither beats nor sweeps.
+func nodeShellTracker(enabled bool, role config.Role, store nodeshells.Store, remove nodeshells.Remover, w audit.Writer) *nodeshells.Tracker {
+	if !enabled || !role.ServesStreams() {
+		return nil
+	}
+	return nodeshells.NewTracker(store, remove, w)
 }
 
 // clusterNotices is clustersync's Redis client, signed in as the cache is (REDIS_USERNAME, the chart's redis.acl);

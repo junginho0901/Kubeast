@@ -128,6 +128,8 @@ metrics:
 # 노드 셸(특권 디버그 파드) — 기본으로 꺼져 있습니다.
 # 켜면 전용 네임스페이스와 이미지 허용 목록(첫 항목이 기본)을 씁니다.
 # 이미지는 IfNotPresent로 받으므로 버전을 고정하세요(또는 사내 미러 주소). 이미 받은 노드는 레지스트리에 가지 않습니다.
+# 셸이 끝나면 그 파드를 지웁니다. 연 k8s-service가 죽으면(메모리 부족, 노드 잃음) 1~2분 뒤에 다른 k8s-service가
+# 지우고(표 node_shells), 늦어도 nodeShell.timeoutSeconds(3600)에 끝납니다.
 nodeShell:
   enabled: false
   images:

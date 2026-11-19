@@ -24,6 +24,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nfm"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nodeshells"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/traces"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/tracing"
@@ -44,6 +45,9 @@ type Handler struct {
 	recorder   *recording.Manager // nil or disabled: terminals are not recorded
 	// drains keeps node drain progress in the shared database (nil: drains answer 503).
 	drains *nodedrains.Tracker
+	// nodeShells keeps a row per open node shell, so another server deletes the pod of one whose server was killed
+	// (nil: no rows, the pod ends at its deadline).
+	nodeShells *nodeshells.Tracker
 	// liveSessions ends long-lived answers with their session (nil: not checked).
 	liveSessions *auth.LiveSessions
 	// drain ends the terminals and followed logs when the server is replaced (nil: they are cut when it exits).
@@ -97,6 +101,9 @@ func (h *Handler) SetRecorder(m *recording.Manager) { h.recorder = m }
 
 // SetDrains sets where node drains keep their progress.
 func (h *Handler) SetDrains(t *nodedrains.Tracker) { h.drains = t }
+
+// SetNodeShells sets where node shells keep their rows.
+func (h *Handler) SetNodeShells(t *nodeshells.Tracker) { h.nodeShells = t }
 
 // SetWatchLimits holds the Helm releases' stream to the multiplexer's live watches and its places for starting one.
 func (h *Handler) SetWatchLimits(m *ws.Multiplexer) { h.watchLimits = m }

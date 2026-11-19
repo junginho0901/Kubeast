@@ -130,6 +130,9 @@ metrics:
 # Node shell (privileged debug pod), off by default. When on, it uses a dedicated namespace and an image
 # allow list (the first entry is the default). Images are pulled with IfNotPresent, so pin the version
 # (or use an internal mirror address): nodes that already have the image do not go to the registry.
+# A shell's pod is deleted when the shell ends. When the k8s-service that opened it is killed (out of memory,
+# a node lost), another k8s-service deletes it one to two minutes later (table node_shells); at the latest
+# it ends at nodeShell.timeoutSeconds (3600).
 nodeShell:
   enabled: false
   images:
