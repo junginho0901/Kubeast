@@ -335,6 +335,7 @@
 | **Custom Resources** | CRD 동적 탐색 및 인스턴스 편집. 인스턴스의 출력 열은 목록과 상세 창 모두 API 서버가 CRD 열로 만든 Table(읽은 버전, 서버 함수 하나)이고, 상세 창은 링크로도 열립니다(`detailApi=<group>/<version>/<plural>`). 고급 검색·Timeline·Helm 릴리스의 리소스·Policy Reports·대시보드의 Issues와 Optimization 창·Cluster Hygiene·Alerts inbox(kube-state-metrics 커스텀 리소스 상태 알림)·상세 창의 소유자와 스케일 대상 링크·HTTPRoute와 GRPCRoute의 parentRef·backendRef 링크(그룹과 Kind — CRD가 우선하는 버전으로)는 개체를 apiVersion과 함께 열고, 상세 창은 kubectl describe처럼 그룹과 Kind로 고릅니다: 전용 창의 그룹이 아닌 Kind를 CRD가 내면(두 그룹의 같은 Kind, Istio의 Gateway) 그 CRD의 커스텀 리소스로 엽니다. 상세 창은 spec·status 밖 필드(PolicyReport의 results·scope·summary)도 보여 주고, CRD 상세 창은 이벤트도 보여 줍니다 |
 
 - **YAML 편집** (Monaco), **Pod Exec / 로그** (xterm.js, WebSocket)
+  - 키보드: 터미널(Pod Exec, Node Shell)에서 Tab과 Esc는 셸로 가고, Ctrl+M(Mac은 Ctrl+Shift+M)을 누르면 Tab이 초점을 터미널 밖으로 옮깁니다(다시 누르면 셸로) — 터미널 아래 줄이 알려 줍니다. YAML 편집기에서 Tab은 들여쓰기이고 Monaco의 같은 키로 초점 이동으로 바뀌며, 편집 중에 편집기 아래 줄이 알려 줍니다. Edit 뒤 초점은 편집기로, Apply · Cancel 뒤에는 Edit로 가고, 고르거나 Esc로 닫은 목록은 초점을 그 단추로 돌려줍니다.
 - **실시간 갱신** — WebSocket 멀티플렉서로 리소스 변경 스트리밍
 
 ### NetworkPolicy 보기와 연결 확인
