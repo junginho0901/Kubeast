@@ -37,7 +37,7 @@ from pydantic import BaseModel, Field, ValidationError
 from app.database import get_db_service, utcnow
 from app.services.audit_writer import write_audit
 from app.services.investigation import settings as inv_settings
-from app.services.investigation import inbox, skip_reasons, store
+from app.services.investigation import inbox, outcomes, skip_reasons, store
 
 log = logging.getLogger(__name__)
 
@@ -153,6 +153,7 @@ async def gate_and_queue(db, cfg: inv_settings.InvestigationSettings, cluster: s
                     if earlier is not None:
                         await store.fold_skip(db, earlier.id, skip_reason, now, held=lock)
                         counts["capped" if capped else "skipped"] += 1
+                        outcomes.ended(outcomes.SKIPPED)
                         continue
                 await store.insert(
                     db,
@@ -173,6 +174,8 @@ async def gate_and_queue(db, cfg: inv_settings.InvestigationSettings, cluster: s
                     received_at=now,
                 )
                 counts["capped" if capped else "skipped" if skip_reason else "accepted"] += 1
+                if skip_reason:
+                    outcomes.ended(outcomes.SKIPPED)
     return counts
 
 

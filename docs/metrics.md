@@ -24,6 +24,8 @@ With `METRICS_ENABLED=false` (chart `metrics.enabled`), it returns 404.
 | `kubeast_http_requests_total` | counter | `service`, `method`, `route`, `code` | HTTP requests handled. `route` is the router's **pattern** (`/api/v1/namespaces/{namespace}/pods/{name}`), not the actual path (fixed cardinality). `/metrics`, `/health` and `/` are not counted |
 | `kubeast_http_request_duration_seconds` | histogram | same | Request handling time (default buckets). For ai-service streaming responses, the time until the headers |
 | `kubeast_http_requests_in_flight` | gauge | `service` | Requests being handled |
+| `kubeast_ai_model_requests_total` | counter | `service`, `outcome` | Requests ai-service sent a model provider since start (the chat, the floating assistant, alert investigations, history summaries, the connection test): `outcome` is `ok` when the provider answered (a stream that fails later is still `ok`), else the refusal kind it answered with, `credit`, `rate`, `auth`, `unavailable`, `address` (Kubeast refused the model's address and sent nothing) or `other`. A Claude Code run that never got its slot sent nothing and is not counted (`kubeast_claude_code_busy_total`). No provider or model label |
+| `kubeast_ai_investigations_total` | counter | `service`, `outcome` | Alert investigations this ai-service ended since start: `done`, `failed` (a run that failed, also one interrupted twice by a stopping server or past its time limit), or `skipped` (stored skipped by the webhook, or skipped when the worker took it: a cap, the daily budget, a provider pause) |
 | `kubeast_audit_store_up` | gauge 0/1 | `service` | Whether the audit store takes rows (k8s-service: `audit.Guarded.Ready`, 2 s cache). At 0, writes, Secret reveals, exec and AI write tools are refused with 503 |
 | `kubeast_audit_write_failures_total` | counter | `service` | Audit rows that could not be stored since start |
 | `kubeast_ws_subscriptions` | gauge | `service` | Live watches in k8s-service, counted against `multicluster.wsMaxSubscriptions`: the live lists' WebSocket subscriptions and the Helm releases streams' Secret watches. Terminals and followed logs are the next two rows |
@@ -57,7 +59,7 @@ metrics:
     from:
       - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
   prometheusRule:
-    enabled: true           # five alerts, six with an audit anchor sink
+    enabled: true           # five alerts, one more each with the AI on (the default), an audit anchor sink and alert investigations
 ```
 
 One ServiceMonitor selects the five backend Services labelled `kubeast.io/metrics: "true"`, with port name `http` and path `/metrics`. A Prometheus without the Operator can select the same label with `kubernetes_sd_configs` (role `endpoints`).
@@ -67,11 +69,13 @@ One ServiceMonitor selects the five backend Services labelled `kubeast.io/metric
 | Name | Expression | Meaning |
 |---|---|---|
 | `KubeastAuditStoreDown` | `min by (service) (kubeast_audit_store_up) == 0` for 2 minutes | The audit DB cannot be used, so audited actions are being refused |
-| `KubeastHighErrorRate` | 5xx ratio > `errorRatio` (0.05) for 10 minutes | Console error rate. A database outage longer than that now fires it from signed-in reads alone: a request whose session cannot be read is answered 503, where 0.7.7 answered 401, a 4xx it does not count |
+| `KubeastHighErrorRate` | 5xx ratio > `errorRatio` (0.05) for 10 minutes | Console error rate. A database outage longer than that now fires it from signed-in reads alone: a request whose session cannot be read is answered 503, where 0.7.7 answered 401, a 4xx it does not count. A read of a cluster whose API server does not start its answer within 20 s is a 503 of k8s-service too, so people keeping the screens of one cut-off cluster open can fire it alone |
 | `KubeastSlowRequests` | p95 > `p95Seconds` (2 s) for 10 minutes | Console latency |
 | `KubeastAuditSinkStalled` | `kubeast_audit_sink_pending > 0` and the last successful send more than 10 minutes ago, for 5 minutes | Audit sink sending has stopped (errors in the auth-service log; retention keeps the unsent rows) |
 | `KubeastSessionRecordingUploadStalled` | `kubeast_session_recording_pending_bytes > 0` and the last upload more than 10 minutes ago, for 5 minutes | Session recording upload has stopped (output piles up in the k8s-service spool; sessions are not blocked) |
 | `KubeastAuditAnchorStalled` | `time() - max by (service) (kubeast_audit_anchor_last_timestamp_seconds)` above twice `audit.integrity.anchor.hours`, for 30 minutes. Only with `audit.integrity.anchor.sink` set | No audit anchor has been written for two periods: the writes fail, or the anchor job does not run. A failed anchor is in the auth-service log and an `audit.chain.anchor` row ([security-audit.md](security-audit.md)) |
+| `KubeastAIModelUnreachable` | `kubeast_ai_model_requests_total` over 10 minutes: 3 or more not `ok` and none `ok`, for 10 minutes. Only with `ai.enabled` | No request to a model provider was answered: a key or token that expired, no credit, the provider down, or its address left out (`networkPolicy.aiEgress`). The `outcome` label says which; chats end with the model's error and alert investigations fail |
+| `KubeastAIInvestigationsFailing` | `kubeast_ai_investigations_total` over 1 hour: 3 or more `failed`, more than half of `done` and `failed`, for 15 minutes. Only with `features.alertInvestigation.enabled` | Most alert investigations fail. Admin → Investigations shows each one's error; `skipped` ones are not counted |
 
 Useful expressions:
 

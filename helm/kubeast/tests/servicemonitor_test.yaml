@@ -59,7 +59,7 @@ tests:
           path: metadata.name
           value: frontend
 
-  - it: carries five alerts with the configured thresholds when the rule is enabled
+  - it: carries six alerts with the configured thresholds when the rule is enabled
     template: prometheusrule.yaml
     set:
       metrics.prometheusRule.enabled: true
@@ -69,7 +69,15 @@ tests:
           of: PrometheusRule
       - lengthEqual:
           path: spec.groups[0].rules
-          count: 5
+          count: 6
+      - equal:
+          path: spec.groups[0].rules[5].alert
+          value: KubeastAIModelUnreachable
+      - notContains:
+          path: spec.groups[0].rules
+          content:
+            alert: KubeastAIInvestigationsFailing
+          any: true
       - equal:
           path: spec.groups[0].rules[0].alert
           value: KubeastAuditStoreDown
@@ -93,7 +101,7 @@ tests:
     asserts:
       - lengthEqual:
           path: spec.groups[0].rules
-          count: 6
+          count: 7
       - equal:
           path: spec.groups[0].rules[5].alert
           value: KubeastAuditAnchorStalled
@@ -118,7 +126,47 @@ tests:
     asserts:
       - lengthEqual:
           path: spec.groups[0].rules
+          count: 6
+
+  - it: adds the failing investigations alert with alert investigations on
+    template: prometheusrule.yaml
+    set:
+      metrics.prometheusRule.enabled: true
+      features.alertInvestigation.enabled: true
+    asserts:
+      - lengthEqual:
+          path: spec.groups[0].rules
+          count: 7
+      - equal:
+          path: spec.groups[0].rules[6].alert
+          value: KubeastAIInvestigationsFailing
+      - equal:
+          path: spec.groups[0].rules[6].for
+          value: 15m
+      - matchRegex:
+          path: spec.groups[0].rules[6].expr
+          pattern: 'kubeast_ai_investigations_total\{outcome="failed"\}\[1h\]\)\) >= 3'
+      - equal:
+          path: spec.groups[0].rules[5].for
+          value: 10m
+      - matchRegex:
+          path: spec.groups[0].rules[5].expr
+          pattern: 'kubeast_ai_model_requests_total\{outcome="ok"\}\[10m\]\)\) == 0'
+
+  - it: leaves the model alert out with the AI off
+    template: prometheusrule.yaml
+    set:
+      metrics.prometheusRule.enabled: true
+      ai.enabled: false
+    asserts:
+      - lengthEqual:
+          path: spec.groups[0].rules
           count: 5
+      - notContains:
+          path: spec.groups[0].rules
+          content:
+            alert: KubeastAIModelUnreachable
+          any: true
 
   - it: opens the backend ports to the listed scrapers under the network policy
     template: networkpolicy.yaml
