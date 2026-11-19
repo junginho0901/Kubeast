@@ -485,7 +485,8 @@ describe('the screens and the selection of a cluster', () => {
 
 // A page opened fresh with nothing stored and no ?cluster= (signed in, then a link): the first selection goes into the
 // address, which React Router applies in a transition. Here the router never applies it, with and without a
-// cluster-scoped read changing afterwards (the provider renders again on useIsFetching).
+// cluster-scoped read changing afterwards (the provider renders again on useIsFetching). A stored cluster the list no
+// longer has (removed, or no longer the person's) is replaced the same way, and the gate stays closed until it is.
 describe('the first selection when the address change does not land', () => {
   const seen = { opened: false, shown: '' }
   function Page() {
@@ -500,12 +501,13 @@ describe('the first selection when the address change does not land', () => {
     useClusterList()
     return null
   }
-  const run = async (laterRead: boolean) => {
+  const run = async (laterRead: boolean, storedAs = '') => {
     registry = ['default']
     sentReads.length = 0
     seen.opened = false
     seen.shown = ''
-    window.localStorage.removeItem('kubeast:current-cluster')
+    if (storedAs) window.localStorage.setItem('kubeast:current-cluster', storedAs)
+    else window.localStorage.removeItem('kubeast:current-cluster')
     const asked: string[] = []
     const path = (to: To) => (typeof to === 'string' ? to : createPath(to))
     const navigator = {
@@ -537,6 +539,8 @@ describe('the first selection when the address change does not land', () => {
     for (let i = 0; i < 60 && !seen.opened; i += 1) await settle()
     const out = { opened: seen.opened, shown: seen.shown, stored: window.localStorage.getItem('kubeast:current-cluster'), asked }
     await act(async () => root.unmount())
+    // the notifications TanStack Query queued on a timer go now, not after afterAll has taken the window stub away
+    await settle()
     registry = ['self']
     return out
   }
@@ -548,5 +552,9 @@ describe('the first selection when the address change does not land', () => {
   it('opens it the same when a cluster-scoped read changes afterwards', async () => {
     const r = await run(true)
     expect({ opened: r.opened, shown: r.shown, stored: r.stored }).toEqual({ opened: true, shown: 'default', stored: 'default' })
+  })
+
+  it('opens it the same on the cluster the list gave in place of a stored one it no longer has', async () => {
+    expect(await run(false, 'gone')).toEqual({ opened: true, shown: 'default', stored: 'default', asked: ['/admin/users?cluster=default'] })
   })
 })
