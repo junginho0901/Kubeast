@@ -8,8 +8,9 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from prometheus_client import REGISTRY
 
-from app.services.investigation import inbox, store, webhook
+from app.services.investigation import inbox, outcomes, store, webhook
 from app.services.investigation.settings import InvestigationSettings
 
 CASES = json.loads(
@@ -95,6 +96,28 @@ async def test_http_and_https_addresses_are_stored_as_sent_without_a_log_line(mo
     expected = {"fp0": ("http://[::1]:9090/graph?g0.expr=up", sender), "fp1": ("", sender)}
     assert await stored(sqlite_db) == (expected, expected)
     assert [r for r in caplog.records if r.name == webhook.log.name and r.levelno == logging.WARNING] == []
+
+
+def skipped_investigations():
+    return REGISTRY.get_sample_value("kubeast_ai_investigations_total", {"service": "ai", "outcome": outcomes.SKIPPED}) or 0.0
+
+
+@pytest.mark.asyncio
+async def test_alerts_stored_skipped_are_counted_and_the_dropped_addresses_logged_once_per_message(monkeypatch, sqlite_db, caplog):
+    monkeypatch.setattr(store, "utcnow", lambda: NOW)
+    monkeypatch.setattr(webhook, "MAX_INVESTIGATIONS_PER_MESSAGE", 1)
+    before = skipped_investigations()
+    msg = message("http://alertmanager:9093", "javascript:alert(1)", "data:text/html,x", "http://prometheus:9090/graph?g0.expr=up")
+    with caplog.at_level(logging.WARNING, logger=webhook.log.name):
+        counts = await webhook.gate_and_queue(sqlite_db, SETTINGS, "self", msg, NOW)
+    assert (counts["stored"], counts["accepted"], counts["capped"]) == (3, 1, 2)
+    assert skipped_investigations() == before + 2
+    rows, _ = await store.list_rows(sqlite_db)
+    assert sorted((r.fingerprint, r.status, r.generator_url) for r in rows) == [
+        ("fp0", "queued", ""), ("fp1", "skipped", ""), ("fp2", "skipped", "http://prometheus:9090/graph?g0.expr=up"),
+    ]
+    lines = [r.getMessage() for r in caplog.records if r.name == webhook.log.name and r.levelno == logging.WARNING]
+    assert lines == ["alert webhook: cluster=self generatorURL stored empty: not an http or https URL with a host (scheme data,javascript)"]
 
 
 @pytest.mark.parametrize(("value", "scheme"), [
