@@ -3758,7 +3758,6 @@
     "dataKeys": "데이터 키 수",
     "data": "데이터",
     "searchKeys": "키 검색...",
-    "noData": "데이터 항목이 없습니다.",
     "ownerReferences": "소유자 참조",
     "maskedHint": "resource.secret.reveal 권한이 없으면 값이 숨겨집니다.",
     "yamlMaskedNote": "***로 보이는 값은 줄을 그대로 두면 저장해도 그대로입니다. 바꾸려면 그 자리에 새 값을 쓰고, 없애려면 그 줄을 지우세요.",

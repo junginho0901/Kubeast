@@ -3640,7 +3640,6 @@
     "dataKeys": "Data Keys",
     "data": "Data",
     "searchKeys": "Search keys...",
-    "noData": "No data entries.",
     "ownerReferences": "Owner References",
     "maskedHint": "Values are hidden without the resource.secret.reveal permission.",
     "yamlMaskedNote": "A value shown as *** stays as it is when you save, as long as its line is there. To change one, write the new value over it. To remove one, delete its line.",
