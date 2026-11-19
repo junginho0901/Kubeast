@@ -18,6 +18,11 @@ Kubeast **자신**의 상태를 Prometheus 텍스트 포맷으로 노출합니�
 | `kubeast_http_requests_in_flight` | gauge | `service` | 처리 중인 요청 수 |
 | `kubeast_audit_store_up` | gauge 0/1 | `service` | 감사 저장소가 행을 받을 수 있는지 나타냅니다(k8s-service: `audit.Guarded.Ready`, 2 s 캐시). 0이면 쓰기, Secret 열람, exec, AI 쓰기 툴이 503으로 거부됩니다 |
 | `kubeast_audit_write_failures_total` | counter | `service` | 기동 뒤 저장하지 못한 감사 행 수 |
+| `kubeast_db_pool_connections` | gauge | `service`, `state` | 서비스(auth · ai · k8s · session)의 데이터베이스 풀 연결 수, 긁을 때마다 읽음: `in_use`, `idle`, 그리고 Go 서비스는 `opening`(여는 중). 풀과 따로 연 연결(k8s-service가 클러스터 상태를 쓰는 잠금)은 세지 않고, 풀에서 가져가 쥔 연결(auth-service 감사 싱크의 리더 잠금)은 `in_use`입니다 |
+| `kubeast_db_pool_max_connections` | gauge | `service` | 그 풀이 쥘 수 있는 최대 연결 수(`postgresql.pool.<service>.maxConns`) |
+| `kubeast_db_pool_empty_acquires_total` | counter | `service` | 기동 뒤 연결을 가져가려다 쉬는 연결이 없어 돌려받거나 새로 열릴 때까지 기다린 수. Go 서비스만 — SQLAlchemy 풀(ai-service)은 이 수를 세지 않습니다 |
+| `kubeast_db_pool_empty_acquire_wait_seconds_total` | counter | `service` | 그렇게 기다린 시간의 합, 초(Go 서비스) |
+| `kubeast_db_pool_canceled_acquires_total` | counter | `service` | 연결이 오기 전에 요청이 끝나(시간이 다 됨, 호출자가 떠남) 그만둔 가져가기 수(Go 서비스) |
 | `kubeast_ws_subscriptions` | gauge | `service` | k8s-service에 살아 있는 watch 수(`multicluster.wsMaxSubscriptions`에 세는 것): 실시간 목록의 WebSocket 구독과 Helm 릴리스 스트림의 Secret watch. 터미널·실시간 로그는 다음 두 줄 |
 | `kubeast_terminals_open` | gauge | `service` | k8s-service에 열려 있는 터미널(Pod exec, 노드 셸) 수 |
 | `kubeast_followed_logs_open` | gauge | `service` | k8s-service에 열려 있는 실시간 로그(컨테이너 출력, 로그 파일) 수 |
@@ -69,6 +74,7 @@ Operator 없이 Prometheus를 쓴다면 `kubernetes_sd_configs`(role `endpoints`
 자주 쓰는 식:
 
 - 서비스별 요청률 `sum by (service) (rate(kubeast_http_requests_total[5m]))`
+- 파드마다 쓰는 데이터베이스 풀 비율 `kubeast_db_pool_connections{state="in_use"} / ignoring(state) kubeast_db_pool_max_connections`. 몇 분째 1에 가깝고 `rate(kubeast_db_pool_empty_acquire_wait_seconds_total[5m])`가 0보다 크면 요청이 연결을 기다리는 중입니다. `postgresql.pool.<service>.maxConns`와 `postgresql.maxConnections`를 보세요
 - 라우트별 p95 `histogram_quantile(0.95, sum by (route, le) (rate(kubeast_http_request_duration_seconds_bucket{service="k8s"}[5m])))`
 - 클러스터로 가는 클라이언트 속도 대기 p95 `histogram_quantile(0.95, sum by (limiter, le) (rate(kubeast_k8s_client_rate_wait_seconds_bucket[5m])))`. 0에 가까우면 화면을 늦추는 것은 이 속도가 아닙니다. API 서버가 429 없이 답하는데 몇 초씩 나오면 `multicluster.clientQPS`·`clientBurst`(접근 확인이면 `reviewQPS`)를 보세요
 

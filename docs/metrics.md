@@ -26,6 +26,11 @@ With `METRICS_ENABLED=false` (chart `metrics.enabled`), it returns 404.
 | `kubeast_http_requests_in_flight` | gauge | `service` | Requests being handled |
 | `kubeast_audit_store_up` | gauge 0/1 | `service` | Whether the audit store takes rows (k8s-service: `audit.Guarded.Ready`, 2 s cache). At 0, writes, Secret reveals, exec and AI write tools are refused with 503 |
 | `kubeast_audit_write_failures_total` | counter | `service` | Audit rows that could not be stored since start |
+| `kubeast_db_pool_connections` | gauge | `service`, `state` | The connections of the service's database pool (auth, ai, k8s, session), read at each scrape: `in_use`, `idle` and, in the Go services, `opening`. A connection opened apart from the pool, as k8s-service's lock for writing the clusters' health, is not counted; one taken from the pool and held, as an audit sink's leader lock in auth-service, is `in_use` |
+| `kubeast_db_pool_max_connections` | gauge | `service` | The most connections that pool may hold (`postgresql.pool.<service>.maxConns`) |
+| `kubeast_db_pool_empty_acquires_total` | counter | `service` | Takes of a connection that found none idle and waited for one to be given back or opened, since start. Go services only: SQLAlchemy's pool (ai-service) keeps no such count |
+| `kubeast_db_pool_empty_acquire_wait_seconds_total` | counter | `service` | Seconds those takes waited, summed (Go services) |
+| `kubeast_db_pool_canceled_acquires_total` | counter | `service` | Takes of a connection whose request ended (its time, or the caller gone) before one came (Go services) |
 | `kubeast_ws_subscriptions` | gauge | `service` | Live watches in k8s-service, counted against `multicluster.wsMaxSubscriptions`: the live lists' WebSocket subscriptions and the Helm releases streams' Secret watches. Terminals and followed logs are the next two rows |
 | `kubeast_terminals_open` | gauge | `service` | Open terminals (pod exec, node shell) in k8s-service |
 | `kubeast_followed_logs_open` | gauge | `service` | Open followed logs (a container's output, a log file) in k8s-service |
@@ -76,6 +81,7 @@ One ServiceMonitor selects the five backend Services labelled `kubeast.io/metric
 Useful expressions:
 
 - Request rate per service: `sum by (service) (rate(kubeast_http_requests_total[5m]))`
+- Share of each pod's database pool in use: `kubeast_db_pool_connections{state="in_use"} / ignoring(state) kubeast_db_pool_max_connections`. Near 1 for minutes, with `rate(kubeast_db_pool_empty_acquire_wait_seconds_total[5m])` above 0, requests wait for a connection: see `postgresql.pool.<service>.maxConns` and `postgresql.maxConnections`
 - p95 per route: `histogram_quantile(0.95, sum by (route, le) (rate(kubeast_http_request_duration_seconds_bucket{service="k8s"}[5m])))`
 - p95 wait for the client's rate to the clusters: `histogram_quantile(0.95, sum by (limiter, le) (rate(kubeast_k8s_client_rate_wait_seconds_bucket[5m])))`. Near 0 the rate is not what slows the screens; seconds while the API server answers without 429 point at `multicluster.clientQPS` and `clientBurst` (or `reviewQPS` for the access checks)
 
