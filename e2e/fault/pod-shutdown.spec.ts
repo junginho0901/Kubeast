@@ -51,7 +51,8 @@ async function mcpProbe(request: APIRequestContext, token: string, stop: { done:
     try {
       const res = await request.post(path, {
         headers: { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'clusters_list', arguments: {} } },
+        // the MCP server refuses a tool call naming no cluster before tool-server ("cluster is required")
+        data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'clusters_list', arguments: { cluster: CLUSTER } } },
         timeout: 10_000, failOnStatusCode: false,
       })
       const body = res.ok() ? await res.json() : null
