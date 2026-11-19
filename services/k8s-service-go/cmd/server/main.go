@@ -32,6 +32,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nfm"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nodeshells"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/pglock"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/routes"
@@ -327,6 +328,24 @@ func main() {
 		defer drainCancel()
 		go drainTracker.Run(drainCtx)
 	}
+	// Node shells keep a row per open shell in the shared database, so the pod of a shell whose server was killed is
+	// deleted by another server instead of running until its deadline. Node shell off: no heartbeat and no sweep.
+	nodeShellPods := nodeshells.PodRemover(func(ctx context.Context) (kubernetes.Interface, error) {
+		cs, err := k8sSvc.ClientsetFor(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return cs, nil
+	})
+	shellStore := nodeshells.NewPG(pgPool)
+	if shells := nodeShellTracker(cfg.NodeShellEnabled, role, shellStore, nodeShellPods, auditStore,
+		time.Duration(cfg.NodeShellTimeoutSec)*time.Second); shells != nil {
+		h.SetNodeShells(shells)
+		shellCtx, shellCancel := context.WithCancel(context.Background())
+		go shells.Run(shellCtx)
+		// Deferred after pgPool.Close, so it runs before it: Close waits for every connection, the heartbeat's held one too.
+		defer stopNodeShells(shellCancel, shellStore)
+	}
 	recCtx, recCancel := context.WithCancel(context.Background())
 	defer recCancel()
 	// Only a server that opens terminals runs the recorder: an API server holds no recording to keep alive, and a row
@@ -539,6 +558,23 @@ func main() {
 	}
 	shutdown(srv, ready, recorder, serverShutdownWait, recorderShutdownWait)
 	slog.Info("server stopped")
+}
+
+// stopNodeShells ends the node shells' tracker and gives the heartbeat's connection back to the pool at once: a beat
+// under way ends with the cancelled context (pgx closes its connection), and one that starts after finds no context to
+// take a connection with. It waits for nothing, so the shutdown waits stay as they are.
+func stopNodeShells(cancel context.CancelFunc, store interface{ Idle() }) {
+	cancel()
+	store.Idle()
+}
+
+// nodeShellTracker is the tracker of the node shells this server opens: none when node shell is off or the server
+// opens no terminals (role api), so such a server neither beats nor sweeps.
+func nodeShellTracker(enabled bool, role config.Role, store nodeshells.Store, remove nodeshells.Remover, w audit.Writer, shellTimeout time.Duration) *nodeshells.Tracker {
+	if !enabled || !role.ServesStreams() {
+		return nil
+	}
+	return nodeshells.NewTracker(store, remove, w, shellTimeout)
 }
 
 // clusterNotices is clustersync's Redis client, signed in as the cache is (REDIS_USERNAME, the chart's redis.acl);

@@ -376,6 +376,8 @@ It then starts a privileged pod on the chosen node, with hostPID, hostIPC, hostN
 - The node must be able to pull the image (`nodeShell.images`, default `docker.io/library/busybox:1.38.0`). On an air-gapped network, enter your internal mirror address.
 - The user must be an Admin (cluster-admin) of that cluster.
 
+A shell's pod is deleted when the shell ends. It carries the label `kubeast.io/node-shell-id` and the annotation `kubeast.io/node-shell-owner`, the k8s-service pod that opened it. When that k8s-service pod is killed before it can delete the shell's pod (out of memory, a node lost), another k8s-service pod deletes it one to two minutes later, as the person who opened the shell, with the same `get` and `delete` on pods in this namespace the shell used. A k8s-service pod that cannot write its node shells to the database for 45 s closes them itself first, so no other pod deletes a shell in use. While the cluster cannot be reached, or refuses that delete (the person's binding removed), k8s-service logs a line and tries again later; the pod ends at `nodeShell.timeoutSeconds` (3600 s) at the latest, and the row is dropped, with no more tries, 150 s after that. A cluster removed from Kubeast drops its rows at once, and its node shell pods end at their deadline. With the node shell on, a shell whose row the database does not take is refused ("node shell row not saved") before its pod is made.
+
 The namespace stays after the first shell, still `privileged`.
 
 - On any cluster, Kubeast refuses with a 403 anyone without `resource.node.shell` who tries to change anything in it (a pod, a workload, the Namespace object) or to exec, attach or read log files in its pods, on screens, the API, AI tools and MCP. Reads stay.

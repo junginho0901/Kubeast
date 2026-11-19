@@ -388,6 +388,8 @@ CRD가 없으면 Kubeast는 빈 목록과 "설치 안 됨"(`X-Kubeast-Not-Instal
 - 노드가 이미지(`nodeShell.images`, 기본 `docker.io/library/busybox:1.38.0`)를 내려받을 수 있어야 합니다. 폐쇄망이라면 사내 미러 주소를 적으세요.
 - 사용자는 그 클러스터의 Admin(cluster-admin)이어야 합니다.
 
+셸 파드는 셸이 끝나면 지웁니다. 그 파드에는 라벨 `kubeast.io/node-shell-id`와, 연 k8s-service 파드를 적은 애너테이션 `kubeast.io/node-shell-owner`가 붙습니다. 그 k8s-service 파드가 셸 파드를 지우기 전에 죽으면(메모리 부족, 노드 잃음) 1~2분 뒤에 다른 k8s-service 파드가 셸을 연 사람으로, 셸이 쓴 것과 같은 이 Namespace 파드의 `get`·`delete`로 지웁니다. 45초 동안 데이터베이스에 노드 셸을 적지 못한 k8s-service 파드는 자기 노드 셸을 먼저 스스로 닫으므로, 쓰고 있는 셸을 다른 파드가 지우지 않습니다. 클러스터에 닿지 못하거나 그 삭제를 거절하면(그 사람의 바인딩이 지워짐) k8s-service는 로그 한 줄을 남기고 나중에 다시 해 보며, 파드는 늦어도 `nodeShell.timeoutSeconds`(3600초)에 끝나고 행은 그 150초 뒤에 더 해 보지 않고 지웁니다. Kubeast에서 지운 클러스터의 행은 바로 지우고, 그 클러스터의 노드 셸 파드는 deadline에 끝납니다. 노드 셸이 켜져 있을 때 데이터베이스가 행을 받지 못한 셸은 파드를 만들기 전에 거절합니다("node shell row not saved").
+
 이 Namespace는 첫 셸 뒤에도 `privileged`인 채로 남습니다.
 
 - Kubeast는 어느 클러스터에서든 `resource.node.shell`이 없는 사람이 그 안의 무엇이든 바꾸거나(파드, 워크로드, Namespace 객체) 그 안의 파드에 exec·attach하거나 로그 파일을 읽으면 화면, API, AI 도구, MCP에서 403으로 거절합니다. 읽기는 그대로입니다.
