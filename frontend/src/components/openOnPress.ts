@@ -12,7 +12,7 @@ export function opensOnKey(e: RowKey): boolean {
 /**
  * What a list row that opens something on a press spreads on itself (WCAG 2.1.1): the click as before, a place in the
  * Tab order and Enter or Space for the keyboard. A `<tr>` keeps its row role; `button` reads a box outside a table as
- * a button. `data-open-row` draws the focus ring (index.css).
+ * a button. `data-open-row` draws the focus ring (index.css) and lets the drawer find the row's list (drawerFocus).
  */
 export function openOnPress(open: () => void, options: { button?: boolean } = {}) {
   return {

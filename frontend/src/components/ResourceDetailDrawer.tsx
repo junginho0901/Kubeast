@@ -19,6 +19,7 @@ import {
   decodeSecretYaml,
 } from './resource-detail/utils'
 import { useResourceDelete } from './resource-detail/useResourceDelete'
+import { useDrawerFocus } from './resource-detail/drawerFocus'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { argoAppUrl, detectArgoApp } from './resource-detail/gitops'
 import { useResourceYaml } from './resource-detail/useResourceYaml'
@@ -121,6 +122,9 @@ export default function ResourceDetailDrawer() {
   const mayDelete = useCanI(`resource.${permResource(kind)}.delete`, 'delete',
     readOnlyKind || resolving ? undefined : deleteTarget(kind, ns, name, target?.rawJson))
   const canDelete = !readOnlyKind && !resolving && mayDelete
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const titleRef = useRef<HTMLHeadingElement | null>(null)
+  const focusListOnClose = useDrawerFocus(objectId, panelRef, titleRef)
 
   const {
     deleteDialogOpen,
@@ -131,7 +135,11 @@ export default function ResourceDetailDrawer() {
     deletePending,
   } = useResourceDelete({
     target: target ? { kind: target.kind, namespace: target.namespace ?? null, name: target.name, apiVersion: target.apiVersion, rawJson: (target as any).rawJson } : null,
-    close,
+    // the object the drawer was opened on is gone with its row: the focus goes to the list
+    close: () => {
+      if (!canGoBack) focusListOnClose()
+      close()
+    },
   })
   // the Delete window is for the object it was opened on: the drawer moved to another (back, forward, a link) closes it
   const [deleteFor, setDeleteFor] = useState('')
@@ -388,6 +396,7 @@ export default function ResourceDetailDrawer() {
         }}
       />
       <div
+        ref={panelRef}
         className="fixed inset-y-0 right-0 w-full max-w-[740px] bg-slate-900 border-l border-hairline flex flex-col shadow-2xl chat-scroll-surface"
         style={{ zIndex: zIndex + 1 }}
       >
@@ -401,6 +410,7 @@ export default function ResourceDetailDrawer() {
           canDelete={canDelete && !argoBlocked && !unreadable && !linkPending}
           argo={argo}
           tab={tab}
+          titleRef={titleRef}
           onClose={handleClose}
           onGoBack={async () => {
             if (!(await confirmDiscardYaml())) return

@@ -579,9 +579,9 @@ body {
     outline-offset: 2px;
   }
 
-  /* A list row Enter or Space opens (components/openOnPress) takes the ring inside its box, as the Monitoring rows:
-     the list's scroll box cuts one outside. */
-  :where([data-open-row]):focus-visible {
+  /* A list row Enter or Space opens (components/openOnPress) and a list the focus lands on once its row has gone
+     (drawerFocus) take the ring inside their box, as the Monitoring rows: the list's scroll box cuts one outside. */
+  :where([data-open-row], [data-focus-landing]):focus-visible {
     outline: 2px solid transparent;
     outline-offset: 2px;
     box-shadow: inset 0 0 0 2px var(--color-primary-400);
