@@ -374,6 +374,7 @@ ai:
   # Its ai.tool.call row has status repeated and repeat_of (that step). An
   # investigation with call numbers names the call instead ([call N]) and the
   # row adds repeat_of_call.
+  # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
   refuseRepeatedReads: false
   # The metrics, log, trace and timeline tools say why an empty answer may be
   # empty where they did not, "M of N" for a cut answer (or that the total is
@@ -381,6 +382,7 @@ ai:
   # result in the chat and in an alert investigation starts with the console
   # paths of the objects it names (a drawer's ?detail=, an alert, a namespace's
   # Resource Graph). Nothing more is read for them.
+  # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
   toolResultDetails: false
   # What leaves for the model is masked first: credentials by key name
   # (password, token, api_key, dsn, ...) and by shape (AWS keys, private keys,
@@ -405,6 +407,8 @@ ai:
   redaction:
     enabled: true
     pii: false
+    # numbered: stage alpha, not run yet: a chat with it and pii on, and the AI evaluation with it off and on
+    # (docs/configuration.md "Stages of new values").
     numbered: false
     disable: []
   # Chat history sent to the model: the last historyMessages user/assistant
@@ -443,6 +447,7 @@ ai:
   #           tools: [prometheus_query]
   #   remove: [network_policy]
   # At most 6 checks a card, 3 tools a check, 200 characters a check.
+  # Stage: alpha, not run yet: the AI evaluation with chat and investigations off and on (docs/configuration.md "Stages of new values").
   ruleCards:
     chat: false
     investigations: false
@@ -452,6 +457,7 @@ ai:
   # log (redacted, length-capped). Debugging only — off keeps them out of the
   # cluster log pipeline.
   debugDump: false
+  # Stage: alpha, not run yet: the planted instruction cases against a model (docs/configuration.md "Stages of new values").
   toolResultsJSON: false  # true: the model reads each tool result as one JSON object naming its tool, cluster text as JSON strings (docs/ai-alerts.md "Planted instructions")
   # The AI tool timeline's changes view (view: changes — what changed in a
   # window: rollouts compared with the revision before, ConfigMap and Secret
@@ -463,6 +469,7 @@ ai:
   # changes routes answer 404 — unless alert investigations are on with
   # features.alertInvestigation.changesFirst, whose step 0 reads them; the chat
   # still sends its calls without the view.
+  # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
   timelineChanges: false
   # Provider claude-code: the chat with a Claude Pro/Max subscription instead of
   # an API key. Claude Code makes each model call and the chat's own tools answer
@@ -902,6 +909,7 @@ networkPolicy:
   # egress. Ports 443 and 6443 are already open to every address, private and
   # public; set this only for an API server on another port.
   apiserverCIDR: ""
+  # Stage: alpha, not run yet: allowListOnly on a cluster whose network plugin enforces egress rules (docs/configuration.md "Stages of new values").
   aiEgress:
     allowListOnly: false  # true (needs networkPolicy.enabled): ai-service connects out only to allowExternalEgressCIDRs, tool-server only to the lists below and apiserverCIDR (docs/cluster-requirements.md §15)
     clusterAPIs: []       # API servers of the registered clusters, for tool-server, as VPC or subnet CIDRs (EKS endpoint addresses change, never a /32): a CIDR opens 443 and 6443, {cidr, port} another port
@@ -1024,6 +1032,8 @@ features:
     # The time windows below, the scope groups (affected, checked and normal,
     # changed for another reason, not looked at), facts kept apart from
     # hypotheses and the report's six headings, in the prompt.
+    # rules, changesFirst, narrowFirst, ledger, evidenceCheck and window: stage alpha, not run yet: the AI
+    # evaluation's alert investigations with each off and on (docs/configuration.md "Stages of new values").
     rules: false
     # Step 0: before the first model call, the timeline tool's changes view
     # over the change window goes into the first message (an audited tool call,
@@ -1084,6 +1094,7 @@ features:
   # k8s.traces.query); without one, its checks are listed as not run. Off: the
   # route answers 404, reads nothing, the AI is not offered the tool and the
   # chat's system prompt and the MCP tool list do not name it.
+  # Stage: alpha, not run yet: the e2e ai-anomaly-rank.spec.ts on the kind dev install (docs/configuration.md "Stages of new values").
   anomalyRank:
     enabled: false
     maxQueries: 12           # store queries one answer may make
@@ -1183,6 +1194,7 @@ features:
     # The AI's loki_query asks the store's index first (Loki's index stats,
     # mcp-grafana's lokiguard way) and is refused, with how to narrow it, past
     # this many bytes. 0 = not asked: the query runs as it always did.
+    # Stage: alpha, not run yet: a loki_query on the kind dev install with it set (docs/configuration.md "Stages of new values").
     queryMaxBytes: 0
     # With networkPolicy on, k8s-service reaches outside the cluster on 443
     # and 6443 only; a store on another port needs {cidr, port} here. A store
@@ -1321,6 +1333,7 @@ features:
   # on the whole cluster (as the Prometheus reads), the Hubble lines
   # resource.networkflow.read. Off: include calls reads nothing and says so,
   # and the AI (the chat, investigations and the MCP tool list) is not offered it.
+  # Stage: alpha, not run yet: the e2e ai-call-graph.spec.ts on the kind dev install (docs/configuration.md "Stages of new values").
   callGraph:
     enabled: false
   # Alert store reads for the AI's alerts_list (off by default): an

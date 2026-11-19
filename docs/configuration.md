@@ -314,7 +314,7 @@ multicluster:
 
 ## Stages of new values
 
-Each value this release adds, or whose meaning it changes, has a stage, written here and in its `values.yaml` comment:
+Each value a release adds from 0.7.8 on, or whose meaning it changes, has a stage, written here and in its `values.yaml` comment:
 
 - **alpha**: new. Its key or behaviour may change or go in a later release, which that release's notes say.
 - **beta**: the feature stays. A key or a detail may change, with a release's notice and how to move.
@@ -337,6 +337,18 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | `multicluster.wsWatchOpeningConcurrency`, `multicluster.wsWatchStreamWindowKiB` | 8, 1024 | beta | Tested: upgrade rehearsals from 0.7.7 on kind (the default install, an existing Secret, an external database, AI off, 2 and 3 replicas) and on EKS 1.35, where a live list closed once and was back within 1.1 s when a node was drained, closed once and was back within 1.2 s when turning HPAs on took k8s-service from two pods to one, and did not close while the HPAs added and removed pods |
 | `multicluster.maxTerminalsPerAccount`, `multicluster.maxFollowedLogsPerAccount` | 20, 20 | beta | Tested: the stream-caps e2e on the kind dev install with the defaults (2026-11-19): the 21st terminal and followed log of one account refused, the screen saying why, and a new one opened once one closed |
 | `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters`, in the `auth` settings beside `customRoles` | false, [] | alpha | Tested: the whole e2e with it on, twice on the kind dev install with no failure, and 100 people opening the screens at once with no error |
+| `ai.refuseRepeatedReads` | false | alpha | The AI evaluation (`scripts/ai-eval.py`) with it off and on, and a run on the kind dev install with it on |
+| `ai.toolResultDetails` | false | alpha | The AI evaluation with it off and on, and a run on the kind dev install with it on |
+| `ai.redaction.numbered` | false | alpha | A chat on the kind dev install with it and `ai.redaction.pii` on, and the AI evaluation with it off and on |
+| `ai.ruleCards.chat`, `ai.ruleCards.investigations`, `ai.ruleCards.cards`, `ai.ruleCards.remove` | false, false, [], [] | alpha | The AI evaluation with `chat` and `investigations` each off and on, and a run on the kind dev install with them on |
+| `ai.toolResultsJSON` | false | alpha | The planted instruction cases (`evals/ai-planted/`) with it off and on and the AI evaluation with it on, against a model |
+| `ai.timelineChanges` | false | alpha | The AI evaluation with it off and on, and a run on the kind dev install with it on |
+| `networkPolicy.aiEgress.allowListOnly`, `networkPolicy.aiEgress.clusterAPIs`, `networkPolicy.aiEgress.stsEndpoints` | false, [], [] | alpha | `allowListOnly` on a cluster whose network plugin enforces egress rules (kind with Calico or Cilium): the chat with the model provider's address listed and without it |
+| `features.alertInvestigation.rules`, `changesFirst`, `narrowFirst`, `window.metricsMinutes`, `window.logsMinutes`, `window.changesHours` | false, false, false, 15, 5, 4 | alpha | The alert investigations of the AI evaluation (`scripts/ai-eval.py --alerts`) with each switch off and on, and a run on the kind dev install with them on |
+| `features.alertInvestigation.ledger`, `evidenceCheck` (on, either adds one model call to `maxSteps` when it asks again) | false, false | alpha | The alert investigations of the AI evaluation with each off and on, and a run on the kind dev install with them on |
+| `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | false, 12, 5, 20, 4, 60, 10737418240 | alpha | The e2e `ai-anomaly-rank.spec.ts` on the kind dev install, and the AI evaluation with it off and on |
+| `features.logSearch.queryMaxBytes` | 0 | alpha | A `loki_query` on the kind dev install with it set |
+| `features.callGraph.enabled` | false | alpha | The e2e `ai-call-graph.spec.ts` on the kind dev install, and the AI evaluation with it off and on |
 
 ## Redis users
 
