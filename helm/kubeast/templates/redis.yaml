@@ -83,8 +83,9 @@ spec:
           {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
           {{- include "kubeast.resources" (dict "root" $ "key" "redis") | nindent 10 }}
           {{- if $acl }}
-          # maxmemory: 80% of the memory limit; volatile-lru evicts only keys with a TTL (the cache), never the keys without one
-          args: ["--aclfile", "/run/kubeast/redis-acl/users.acl", "--maxmemory", "{{ $maxmemory }}", "--maxmemory-policy", "volatile-lru"]
+          # maxmemory: 80% of the memory limit; volatile-lru evicts only keys with a TTL (the cache), never the keys without one.
+          # save "": no snapshot in /data, so a container started again in the same pod does not load entries deleted since.
+          args: ["--aclfile", "/run/kubeast/redis-acl/users.acl", "--maxmemory", "{{ $maxmemory }}", "--maxmemory-policy", "volatile-lru", "--save", ""]
           env:
             # valkey-cli (redis-cli) reads the password from this variable, not from its arguments
             - name: REDISCLI_AUTH
@@ -95,7 +96,7 @@ spec:
           {{- else }}
           # requirepass from kubeast-secrets (REDIS_PASSWORD); the probes sign
           # in with the same value.
-          args: ["--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "{{ $maxmemory }}", "--maxmemory-policy", "volatile-lru"]
+          args: ["--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "{{ $maxmemory }}", "--maxmemory-policy", "volatile-lru", "--save", ""]
           env:
             - name: REDIS_PASSWORD
               valueFrom:

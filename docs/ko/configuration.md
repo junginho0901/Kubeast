@@ -311,6 +311,8 @@ multicluster:
 - 한도가 없으면 128Mi의 80%에서 멈춥니다.
 - 정책은 `volatile-lru`입니다: TTL이 있는 키만 내보냅니다. 캐시 키는 모두 TTL이 있습니다. TTL이 없는 키는 내보내지 않습니다.
 
+**담는 것.** k8s-service의 캐시 항목(10~30초, Helm 목록의 세대 표시는 1시간)과 지나가는 클러스터 변경 알림뿐입니다. 디스크에 쓰지 않습니다(`--save ""`): 다시 시작한 Redis는 같은 파드에서도 비어서 시작합니다.
+
 **0.7.7 이하에서 올릴 때**(비밀번호 하나 `REDIS_PASSWORD`를 쓰던 판):
 
 - 업그레이드가 `kubeast-redis-users`를 더하고 `kubeast-secrets`의 값은 `REDIS_PASSWORD`까지 모두 그대로 둡니다.

@@ -315,6 +315,8 @@ With `secrets.existingSecret`, Redis keeps one password (`REDIS_PASSWORD`) for e
 - Without a limit it stops at 80% of 128Mi.
 - The policy is `volatile-lru`: only keys with a TTL are evicted. The cache's keys all have one. A key without one is never evicted.
 
+**What it holds.** k8s-service's cache entries (10 s to 30 s; the Helm list's generation mark an hour) and the cluster change notices it passes on. Nothing is written to disk (`--save ""`): a Redis started again, also in the same pod, starts empty.
+
 **Upgrading from 0.7.7 or earlier**, which had one password (`REDIS_PASSWORD`):
 
 - The upgrade adds `kubeast-redis-users` and keeps every value of `kubeast-secrets`, `REDIS_PASSWORD` included.

@@ -14,12 +14,14 @@ import (
 
 // silentRedis passes a cache's connections to a Redis stand-in until silence: from then on it answers nothing and
 // keeps every connection open, old and new, as a Redis whose packets are dropped does (a Service with no endpoints
-// behind a NetworkPolicy). sent counts the bytes that came from the cache meanwhile.
+// behind a NetworkPolicy). sent counts the bytes that came from the cache meanwhile. delay holds each answer that long
+// (a slow Redis that still answers).
 type silentRedis struct {
 	ln     net.Listener
 	to     string
 	silent atomic.Bool
 	sent   atomic.Int64
+	delay  atomic.Int64
 	mu     sync.Mutex
 	conns  []net.Conn
 }
@@ -81,8 +83,13 @@ func (s *silentRedis) pass(from, to net.Conn, fromCache bool) {
 				if fromCache {
 					s.sent.Add(int64(n))
 				}
-			} else if _, werr := to.Write(buf[:n]); werr != nil {
-				return
+			} else {
+				if d := time.Duration(s.delay.Load()); d > 0 && !fromCache {
+					time.Sleep(d)
+				}
+				if _, werr := to.Write(buf[:n]); werr != nil {
+					return
+				}
 			}
 		}
 		if err != nil {

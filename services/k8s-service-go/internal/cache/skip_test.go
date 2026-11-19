@@ -4,11 +4,24 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
 )
+
+// testClock is a cache's clock a test moves on itself (Cache.clock).
+type testClock struct{ at atomic.Int64 }
+
+func (k *testClock) elapsed() time.Duration  { return time.Duration(k.at.Load()) }
+func (k *testClock) advance(d time.Duration) { k.at.Add(int64(d)) }
+
+func clocked(c *Cache) *testClock {
+	k := &testClock{}
+	c.clock = k.elapsed
+	return k
+}
 
 // onStandIn is a cache connected to a Redis stand-in; Close and Restart stop and start it on the same address.
 func onStandIn(t *testing.T, skip time.Duration) (*miniredis.Miniredis, *Cache) {
@@ -44,7 +57,8 @@ func skipping(t *testing.T, mr *miniredis.Miniredis, c *Cache) {
 
 func TestReadsAndStoresLeaveRedisOutForAWhileAfterItDidNotAnswerAndUseItAgainAfter(t *testing.T) {
 	buf := logs(t)
-	mr, c := onStandIn(t, 300*time.Millisecond)
+	mr, c := onStandIn(t, redisSkip)
+	clock := clocked(c)
 	skipping(t, mr, c)
 	ctx := context.Background()
 	var got string
@@ -65,8 +79,15 @@ func TestReadsAndStoresLeaveRedisOutForAWhileAfterItDidNotAnswerAndUseItAgainAft
 		t.Fatal("the skip left Redis for the map")
 	}
 
+	// still not over just before its end
+	clock.advance(redisSkip - time.Millisecond)
+	c.Set(ctx, "during", "v", time.Minute)
+	if mr.Exists(Prefix + "during") {
+		t.Fatal("a store before the skip's end reached Redis")
+	}
+
 	// once it is over the next store goes to Redis and is read from there; no entry went to the map
-	time.Sleep(350 * time.Millisecond)
+	clock.advance(time.Millisecond)
 	c.Set(ctx, "back", "v", time.Minute)
 	if !mr.Exists(Prefix + "back") {
 		t.Fatal("the store after the skip did not reach Redis")
