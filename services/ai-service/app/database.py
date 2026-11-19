@@ -397,15 +397,6 @@ class DatabaseService:
             messages.reverse()
             return messages
 
-    async def get_message_count(self, session_id: str) -> int:
-        """세션의 전체 메시지 개수 조회"""
-        async with self.async_session() as db:
-            from sqlalchemy import select
-            result = await db.execute(
-                select(func.count(Message.id)).where(Message.session_id == session_id)
-            )
-            return int(result.scalar_one())
-    
     async def get_context(self, session_id: str) -> Optional[SessionContext]:
         """세션 컨텍스트 조회"""
         async with self.async_session() as db:
