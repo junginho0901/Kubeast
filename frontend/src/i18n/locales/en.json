@@ -3161,7 +3161,9 @@
     "terminalLost": "The connection to the server was lost. Reconnect to open a new terminal.",
     "terminalUnchecked": "The session could not be checked for a while. Reconnect to open a new terminal.",
     "reconnect": "Reconnect",
-    "followStopped": "Following stopped: the server was replaced. Turn Follow on again to go on."
+    "followStopped": "Following stopped: the server was replaced. Turn Follow on again to go on.",
+    "terminalLimit": "This account already has as many terminals open on this server as it may. Close one, then reconnect.",
+    "followLimit": "Not followed: this account already follows as many logs on this server as it may. Stop one it follows elsewhere, then open this one again."
   },
   "login": {
     "sessionEnded": "Your session ended: your account or access may have changed, or the session timed out. Sign in again.",

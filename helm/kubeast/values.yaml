@@ -1256,6 +1256,17 @@ multicluster:
   # wsMaxSubscriptionsPerConn those of one browser tab.
   wsMaxSubscriptions: 2000
   wsMaxSubscriptionsPerConn: 50
+  # Terminals (pod exec, node shell) and followed logs (a container's output, a
+  # log file) one account may hold open at once on each k8s-service (on
+  # k8s-service-stream with streams on); one past it is refused before it opens,
+  # and the screen says why. 0 = no cap; the chart refuses a value below 0. A
+  # screen opens at most two of each at once (Cluster View's pod window and a
+  # drawer): 20 is ten browser tabs of that. Counted in each pod: with N pods an
+  # account may hold up to N times as many, but the followed logs of a pod that
+  # leaves move to the pods that stay, so count on the cap.
+  # Stage: beta, tested: the stream-caps e2e on the kind dev install with the defaults (2026-11-19) (docs/configuration.md "Stages of new values").
+  maxTerminalsPerAccount: 20
+  maxFollowedLogsPerAccount: 20
   # How many watches of one cluster may be waiting for the API server's first
   # answer at once; the rest wait, so a restart does not bring every subscription
   # to the API server at one moment. A start not answered in 5 s gives its place

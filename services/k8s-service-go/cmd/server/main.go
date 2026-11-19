@@ -37,6 +37,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/routes"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/sessioncheck"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/streamcap"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/traces"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/tracing"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
@@ -398,6 +399,12 @@ func main() {
 			func() float64 { terminals, _ := streams.Open(); return float64(terminals) })
 		m.Gauge("kubeast_followed_logs_open", "Open followed logs (a container's output, a log file).",
 			func() float64 { _, logs := streams.Open(); return float64(logs) })
+		for kind, label := range map[streamcap.Kind]string{streamcap.Terminal: "terminal", streamcap.FollowedLog: "followed_log"} {
+			m.Registry.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "kubeast_stream_cap_refusals_total", Help: "Terminals and followed logs refused at their account's cap (multicluster.maxTerminalsPerAccount, maxFollowedLogsPerAccount) since start-up.",
+				ConstLabels: prometheus.Labels{"service": "k8s", "kind": label},
+			}, func() float64 { return float64(h.StreamCaps().Refused(kind)) }))
+		}
 	}
 	if recorder.Enabled() && role.ServesStreams() {
 		m.Gauge("kubeast_session_recording_pending_bytes", "Recorded terminal output not uploaded to the recording store yet.",
