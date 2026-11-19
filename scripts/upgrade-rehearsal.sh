@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # Upgrade rehearsal: the published chart of the release before (FROM_VERSION, 0.7.7) installed the way a user installs
 # it, on a kind cluster of the rehearsal's own (kubeast-reh: one control-plane, one worker that only a drain test pod
-# may use), data made through its API, then upgraded to the chart and images of this checkout the way
-# docs/getting-started.md "Upgrade" says (`helm upgrade --reset-then-reuse-values`). Prints a table of checks and
-# deletes its cluster at the end.
+# may use), data made through its API, the database backed up as docs/database-backup-restore.md says, then upgraded
+# to the chart and images of this checkout the way docs/getting-started.md "Upgrade" says
+# (`helm upgrade --reset-then-reuse-values`). Prints a table of checks and deletes its cluster at the end.
 #
 #   scripts/upgrade-rehearsal.sh                       # images kubeast/<name>:$IMAGE_TAG already built on the host
 #   scripts/upgrade-rehearsal.sh --build               # build the seven images from this checkout first
 #   SCENARIO=existing-secret scripts/upgrade-rehearsal.sh
 #   SCENARIO=external-db scripts/upgrade-rehearsal.sh
 #   REPLICAS=3 scripts/upgrade-rehearsal.sh            # after the upgrade, every service at 3 replicas
-#   KEEP=1 scripts/upgrade-rehearsal.sh                # leave the cluster (scripts/upgrade-rehearsal.sh --delete removes it)
+#   KEEP=1 scripts/upgrade-rehearsal.sh                # leave the cluster and the backup (--delete removes both)
 #   REQUIRE=all scripts/upgrade-rehearsal.sh --build   # a release run: a check waiting for a change not in the checkout fails
 #   scripts/upgrade-rehearsal.sh --plan                # no cluster: which change each check waits for, and the render stops
 #
@@ -36,6 +36,11 @@
 # session and ai stop at the database connection sum at the replica count where it passes postgresql.maxConnections (4
 # with the default values) while one fewer renders; a drain running during the upgrade;
 # a second upgrade to the same chart with one value changed; and, with REPLICAS, more than one replica.
+#
+# Before the upgrade (section 12): the bundled PostgreSQL dumped with the command of docs/database-backup-restore.md
+# "Logical dump" (its en and ko pages must give that command as the script runs it) and the dump read back with
+# pg_restore --list. An external database is backed up by its operator (a snapshot or its own pg_dump), so
+# SCENARIO=external-db takes no backup and says so.
 #
 # Roles whose names have characters outside ASCII (W8 QA Q-61, Q-66; ROLE_GROUPS=0 leaves them out), made on
 # FROM_VERSION: one bound by the chart, one by the custom roles template applied with kubectl as on a registered cluster
@@ -66,7 +71,9 @@
 # the current context is never read. Cluster names must start with kubeast-reh. Passwords, tokens and keys are read
 # from the cluster's Secrets into variables and never printed or written to a file (one exception: SCENARIO=external-db
 # writes the database password into a 0600 values file that is removed right after the install). Tokens reach curl
-# through a header file descriptor and bodies through stdin, so they are not in the process list.
+# through a header file descriptor and bodies through stdin, so they are not in the process list. The dump of the
+# bundled database (the rehearsal's own data) is a 0600 file in $REH_OUT, removed at the end unless KEEP=1, and then
+# by --delete.
 set -uo pipefail
 export PATH=/opt/homebrew/bin:$PATH
 
@@ -116,6 +123,7 @@ RES="$OUT/results.tsv"
 CHART="$OUT/chart-rc"
 CHART_FROM="$OUT/chart-from/kubeast"
 CHART_VALUES="$OUT/chart-values.json"
+DUMP_FILE="$OUT/before-upgrade.dump"
 APP_SECRET=kubeast-secrets
 LOOKALIKE='rehearsal: stored before the name rule'
 # The roles of the group checks (section 11): FROM_VERSION writes each character outside ASCII as "-" in a role's
@@ -146,6 +154,7 @@ stop() { echo "$(now) STOP: $*"; exit 1; }
 mask() { sed -E 's/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9._-]+/<jwt>/g; s/kbk_[A-Za-z0-9_-]{8,}/kbk_<masked>/g'; }
 
 kc() { kubectl --kubeconfig "$KC" --context "$CTX" --request-timeout=60s "$@"; }
+kc_stream() { kubectl --kubeconfig "$KC" --context "$CTX" "$@"; } # no request timeout: pg_dump and pg_restore stream
 hc() { helm --kubeconfig "$KC" --kube-context "$CTX" -n "$NS" "$@"; }
 psql_q() {
   if [ "$SCENARIO" = external-db ]; then
@@ -252,6 +261,7 @@ cleanup() {
   stop_bg
   [ -n "$TMP_VALUES" ] && rm -f "$TMP_VALUES"
   [ -n "$TMP_REQ" ] && rm -rf "$TMP_REQ"
+  if [ "${KEEP:-0}" != 1 ]; then rm -f "$DUMP_FILE"; elif [ -s "$DUMP_FILE" ]; then say "KEEP=1: the backup stays at $DUMP_FILE"; fi
   print_table
   # the exit status says the verdict too
   [ "$rc" = 0 ] && [ -s "$OUT/verdict.txt" ] && grep -q ': FAIL' "$OUT/verdict.txt" && rc=1
@@ -396,6 +406,7 @@ plan() { # --plan: the changes against the checkout, and the render stops on the
   removed_value_checks render
   db_connection_checks render
   if [ "$GROUPS_ON" = 1 ]; then groups_docs_queries plan; else groups_left_out plan; fi
+  backup_docs plan
 }
 # values_json OUT FILE... — the values those files give, merged in order as Helm merges -f files, as JSON
 values_json() {
@@ -1783,11 +1794,42 @@ groups_after() {
   t6=""; t7=""; BODY=""
 }
 
+# --- 12. the database backup before the upgrade: docs/database-backup-restore.md "Logical dump" ---
+# That page's command without its namespace and file name, run as the page writes it.
+DUMP_CMD=(exec deploy/postgres -c postgres -- pg_dump -Fc -U kubeast kubeast)
+backup_docs() { # backup_docs AREA — the en and ko pages give the dump command the rehearsal runs
+  local doc missing=""
+  for doc in docs/database-backup-restore.md docs/ko/database-backup-restore.md; do
+    grep -qF "kubectl -n <ns> ${DUMP_CMD[*]} >" "$ROOT/$doc" || missing="${missing:+$missing }$doc"
+  done
+  none_bad "$1" "database-backup-restore.md gives the dump command (en, ko)" "$missing" \
+    "kubectl -n <ns> ${DUMP_CMD[*]}" "not in"
+}
+backup_before() {
+  local rc bytes entries what="pg_dump before the upgrade, read back with pg_restore --list"
+  if [ "$SCENARIO" = external-db ]; then
+    info backup "$what" "an external database: its operator takes a snapshot or its own pg_dump, none taken here"
+    return 0
+  fi
+  backup_docs backup
+  info backup "at the backup: schema · auth_users auth_audit_logs clusters" \
+    "$(db_version) · $(psql_q "SELECT (SELECT count(*) FROM auth_users) || ' ' || (SELECT count(*) FROM auth_audit_logs) || ' ' || (SELECT count(*) FROM clusters)")"
+  ( umask 077; kc_stream -n "$NS" "${DUMP_CMD[@]}" > "$DUMP_FILE" 2> "$OUT/backup.err" )
+  rc=$?
+  bytes=$(wc -c < "$DUMP_FILE" | tr -d ' ')
+  entries=$(kc_stream -n "$NS" exec -i deploy/postgres -c postgres -- pg_restore --list < "$DUMP_FILE" 2> /dev/null | grep -Ec '^[0-9]+;')
+  if [ "$rc" = 0 ] && [ "${bytes:-0}" -gt 0 ] && [ "${entries:-0}" -gt 0 ]; then
+    row backup "$what" PASS "$bytes bytes · $entries entries · sha256 $(openssl dgst -sha256 -r "$DUMP_FILE" | cut -c1-16)"
+  else
+    row backup "$what" FAIL "exit $rc · ${bytes:-0} bytes · ${entries:-0} entries (backup.err)"
+  fi
+}
+
 # --- main ---
 case "${1:-}" in
   --delete)
     [ -n "${REH_OUT:-}" ] || { echo "REH_OUT=<the run's folder> scripts/upgrade-rehearsal.sh --delete"; exit 2; }
-    delete_cluster && echo "deleted $CLUSTER"; exit $? ;;
+    delete_cluster && rm -f "$DUMP_FILE" && echo "deleted $CLUSTER and the backup"; exit $? ;;
   --build|--plan|"") ;;
   *) awk 'NR > 1 && /^#/ {sub(/^# ?/, ""); print; next} NR > 1 {exit}' "$0"; exit 2 ;;
 esac
@@ -1820,6 +1862,7 @@ PG_UID_BEFORE=$(kc -n "$NS" get pods -l app=postgres -o jsonpath='{.items[0].met
 make_blocker
 prepare_candidate
 upgrade_values_checks
+backup_before
 
 # A: FROM_VERSION -> candidate, a drain of the worker running meanwhile
 start_drain; DRAIN_A=$DRAIN_ID; DRAIN_A_T=$(date +%s)
