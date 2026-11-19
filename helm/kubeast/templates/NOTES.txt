@@ -74,9 +74,9 @@ in bash, zsh and PowerShell.
 {{- end }}
 {{- if and (include "kubeast.redisAcl" .) .Values.secrets.existingSecret (not .Values.redis.acl.existingSecret) }}
 
-▸ Every backend holds every Redis user's password
+▸ Every backend but k8s-service holds every Redis user's password
 
-    The Redis user keys are in Secret {{ .Values.secrets.existingSecret }}, which every backend reads whole as its
+    The Redis user keys are in Secret {{ .Values.secrets.existingSecret }}, which every backend but k8s-service reads whole as its
     environment. To give each service its own key only, move them to a Secret of their own and upgrade with
     --reset-then-reuse-values --set redis.acl.existingSecret=<that Secret> (docs/configuration.md "Redis users").
 {{- end }}

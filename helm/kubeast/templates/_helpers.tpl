@@ -313,7 +313,7 @@ topologySpreadConstraints:
 {{- end -}}
 
 {{/*
-Pods that read kubeast-config / kubeast-secrets through envFrom roll when either
+Pods that read kubeast-config / kubeast-secrets (envFrom, or keys by name) roll when either
 changes (Helm "automatically roll deployments" pattern). The Secret template's
 generated values (admin password, signing key) are reused across upgrades, so
 the checksum only moves when a value really changed.
