@@ -49,7 +49,7 @@ Kubeast는 **로그인한 사람의 신원으로**(impersonation) 클러스터�
 
 | 항목 | 필요한 이유 | 위치 |
 | --- | --- | --- |
-| ClusterRole `kubeast-impersonator` + 바인딩(그룹 `kubeast:impersonator`) | Kubeast 자격 증명이 사용자와 정해진 그룹으로만 가장하도록 제한 | [`helm/kubeast/files/impersonation-rbac.yaml`](../../helm/kubeast/files/impersonation-rbac.yaml) |
+| ClusterRole `kubeast-impersonator` + 바인딩(그룹 `kubeast:impersonator`) | Kubeast 자격 증명이 사용자와 정해진 그룹으로만 가장하도록 제한. `kube-system` Namespace `get`도 줍니다(그 하나만). 그 UID로 한 클러스터의 두 번째 등록과, 등록된 클러스터의 kubeconfig를 다른 클러스터 것으로 바꾸는 것을 거절합니다([설치와 첫 설정 — 클러스터 연결](getting-started.md#3-로그인-후-클러스터-연결-connect-your-cluster)). 이 권한이 없으면 kubeconfig가 UID 없이 등록되고 두 검사를 건너뜁니다(2026-11-19부터 — 그 전에 RBAC를 적용한 클러스터는 다시 적용하세요) | [`helm/kubeast/files/impersonation-rbac.yaml`](../../helm/kubeast/files/impersonation-rbac.yaml) |
 | 그룹 바인딩 `kubeast:viewer`(view + `kubeast:cluster-reader`) · `kubeast:operator`(edit) · `kubeast:admin`(cluster-admin) | Read·Write·Admin 역할이 클러스터에서 할 수 있는 범위. `kubeast:cluster-reader`는 `view`에 없는 클러스터 범위 객체와 Role·RoleBinding을 더합니다(Role·RoleBinding은 2026-10-27부터 — 그 전에 RBAC를 적용한 클러스터는 다시 적용하세요). 설치하는 쪽이 `view`에 넣지 않는 Lease·IngressClass·DeviceClass·ResourceSlice와 Gateway API·VPA·정책 보고서 종류도 더합니다(2026-11-01부터 — 그 전에 RBAC를 적용한 클러스터는 다시 적용하세요). Secret은 넣지 않습니다 | 같은 파일 |
 | 커스텀 역할 그룹 `kubeast:role:<이름>`, Namespace 범위 부여 | 커스텀 역할이나 Namespace 한정 부여를 쓸 때. 목록 화면은 그 종류의 `watch`로 객체를 따라갑니다. list만 되고 watch가 안 되는 역할은 화면을 연 때 읽은 값을 보여 주고, 화면 위 안내가 그렇다고 말합니다. 열린 창도 보여 주는 것을 같이 따라갑니다: 워크로드·HPA의 이벤트, Node의 파드, Namespace 서랍의 그 Namespace(Namespace 한정 부여는 Namespace watch가 거절되므로 빼고), 파드 RBAC 탭의 바인딩과 역할, CRD나 고른 Kind의 커스텀 리소스(이쪽은 항목 하나짜리 `list` 뒤 `watch`, 브라우저에 객체를 보내지 않음) | `auth.impersonation.customRoles` → `templates/impersonation-custom-roles.yaml` |
 | Read의 Prometheus·OpenCost 프록시 GET | Read 역할이 비용과 그래프를 볼 때 | `auth.impersonation.viewerProxyServices` → `templates/impersonation-viewer-proxy.yaml` |
@@ -65,7 +65,7 @@ Kubeast는 주소가 그 사람의 것인지 알 수 없습니다. `admin.users.
 
 **사람이 없는 요청.** 몇몇 읽기는 Kubeast 자체 읽기이고, 클러스터 감사 로그에는 Kubeast가 남습니다.
 
-- `Impersonate-User` 헤더 없이: 서버 버전, 클러스터마다 한 번 읽어 모두에게 쓰는 API 디스커버리, 상태 확인. `/version`, `/api`, `/apis`, `/api/v1`, `/apis/<group>/<version>`(클러스터 서버 URL에 경로가 있으면 그 뒤)의 `GET`만 이렇게 나갑니다.
+- `Impersonate-User` 헤더 없이: 서버 버전, 클러스터마다 한 번 읽어 모두에게 쓰는 API 디스커버리, 상태 확인. `/version`, `/api`, `/apis`, `/api/v1`, `/apis/<group>/<version>`(클러스터 서버 URL에 경로가 있으면 그 뒤)의 `GET`만 이렇게 나갑니다. 그 밖에는 연결 확인(클러스터 등록, 새 kubeconfig, 연결 테스트)이 UID를 얻으려고 `kube-system` Namespace를 자격 증명 자신의 권한으로 이렇게 읽습니다(§1).
 - 고정 신원 `kubeast:cache`(§1의 `view` 권한)로: 개요 informer, 목록을 볼 수 있는 모두에게 한 번 읽어 쓰는 객체 이벤트와 노드의 파드, Kubeast가 도는 클러스터를 가리는 `kube-system` UID, `metrics.k8s.io` 그룹 확인, Prometheus·OpenCost Service 찾기.
 
 그 밖의 요청은 로그인한 사람을 알 수 없으면 보내지 않고, kubectl 도구도 실행하지 않습니다.
