@@ -109,7 +109,7 @@ serviceAccounts:
 # The console's own metrics. The 5 backends each expose Prometheus metrics at /metrics on their own port:
 # request count, latency, requests in flight, audit store status and WebSocket subscriptions (docs/metrics.md).
 # The gateway does not proxy /metrics. With prometheus-operator, use a ServiceMonitor.
-# With networkPolicy.enabled, list the scraper in from to open the port. The 5 alerts are in prometheusRule.
+# With networkPolicy.enabled, list the scraper in from to open the port. The 5 alerts are in prometheusRule, 6 with an audit anchor sink.
 metrics:
   enabled: true
   serviceMonitor:

@@ -56,7 +56,7 @@ metrics:
     from:
       - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
   prometheusRule:
-    enabled: true           # five alerts
+    enabled: true           # five alerts, six with an audit anchor sink
 ```
 
 One ServiceMonitor selects the five backend Services labelled `kubeast.io/metrics: "true"`, with port name `http` and path `/metrics`. A Prometheus without the Operator can select the same label with `kubernetes_sd_configs` (role `endpoints`).
@@ -70,6 +70,7 @@ One ServiceMonitor selects the five backend Services labelled `kubeast.io/metric
 | `KubeastSlowRequests` | p95 > `p95Seconds` (2 s) for 10 minutes | Console latency |
 | `KubeastAuditSinkStalled` | `kubeast_audit_sink_pending > 0` and the last successful send more than 10 minutes ago, for 5 minutes | Audit sink sending has stopped (errors in the auth-service log; retention keeps the unsent rows) |
 | `KubeastSessionRecordingUploadStalled` | `kubeast_session_recording_pending_bytes > 0` and the last upload more than 10 minutes ago, for 5 minutes | Session recording upload has stopped (output piles up in the k8s-service spool; sessions are not blocked) |
+| `KubeastAuditAnchorStalled` | `time() - max by (service) (kubeast_audit_anchor_last_timestamp_seconds)` above twice `audit.integrity.anchor.hours`, for 30 minutes. Only with `audit.integrity.anchor.sink` set | No audit anchor has been written for two periods: the writes fail, or the anchor job does not run. A failed anchor is in the auth-service log and an `audit.chain.anchor` row ([security-audit.md](security-audit.md)) |
 
 Useful expressions:
 

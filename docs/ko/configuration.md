@@ -107,7 +107,7 @@ serviceAccounts:
 # 콘솔 자체 메트릭 — 백엔드 5개가 각자 포트의 /metrics로 Prometheus 메트릭을 냅니다.
 # 내용은 요청 수, 지연, 진행 중 요청, 감사 저장소 상태, WebSocket 구독입니다(docs/ko/metrics.md).
 # 게이트웨이는 /metrics를 프록시하지 않습니다. prometheus-operator가 있으면 ServiceMonitor를 쓰세요.
-# networkPolicy.enabled면 스크레이퍼를 from에 적어 열어 줍니다. 알람 5개는 prometheusRule에 있습니다.
+# networkPolicy.enabled면 스크레이퍼를 from에 적어 열어 줍니다. 알람 5개는 prometheusRule에 있습니다(감사 앵커 싱크가 있으면 6개).
 metrics:
   enabled: true
   serviceMonitor:

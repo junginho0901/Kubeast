@@ -48,7 +48,7 @@ metrics:
     from:
       - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
   prometheusRule:
-    enabled: true           # 알람 5개
+    enabled: true           # 알람 5개, 감사 앵커 싱크가 있으면 6개
 ```
 
 ServiceMonitor 하나가 라벨 `kubeast.io/metrics: "true"`가 붙은 백엔드 Service 다섯 개를 포트 이름 `http`, 경로 `/metrics`로 고릅니다.
@@ -63,6 +63,7 @@ Operator 없이 Prometheus를 쓴다면 `kubernetes_sd_configs`(role `endpoints`
 | `KubeastSlowRequests` | p95 > `p95Seconds`(2 s) 10분 | 콘솔 지연 |
 | `KubeastAuditSinkStalled` | `kubeast_audit_sink_pending > 0`이고 마지막 전송 성공 뒤 10분이 넘게 지남, 5분 | 감사 싱크 전송이 멈춤(auth-service 로그에 오류가 남고, 보내지 못한 행은 보존 작업이 지우지 않고 남겨 둠) |
 | `KubeastSessionRecordingUploadStalled` | `kubeast_session_recording_pending_bytes > 0`이고 마지막 업로드 뒤 10분이 넘게 지남, 5분 | 세션 녹화 업로드가 멈춤(출력은 k8s-service 스풀에 쌓이고, 세션은 막지 않음) |
+| `KubeastAuditAnchorStalled` | `time() - max by (service) (kubeast_audit_anchor_last_timestamp_seconds)`가 `audit.integrity.anchor.hours`의 두 배를 넘음, 30분. `audit.integrity.anchor.sink`가 있을 때만 | 두 주기 동안 감사 앵커가 쓰이지 않음: 쓰기가 실패하거나 앵커 작업이 돌지 않음. 실패한 앵커는 auth-service 로그와 `audit.chain.anchor` 행에 남음([security-audit.md](security-audit.md)) |
 
 자주 쓰는 식:
 
