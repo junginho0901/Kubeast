@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { openOnPress } from '@/components/openOnPress'
 import { EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
@@ -178,10 +179,10 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
                     <tr
                       key={`${pv.name || '-'}-${idx}`}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
-                      onClick={() => {
+                      {...openOnPress(() => {
                         if (!pv.name) return
                         openDetail({ kind: 'PersistentVolume', name: String(pv.name) })
-                      }}
+                      })}
                     >
                       <td className="py-2 pr-2">
                         <span className="block truncate font-mono" title={String(pv.name || '-')}>{String(pv.name || '-')}</span>
@@ -218,10 +219,10 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
                   <tr
                     key={`${pvc.namespace || '-'}-${pvc.name || '-'}-${idx}`}
                     className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
-                    onClick={() => {
+                    {...openOnPress(() => {
                       if (!pvc.name || !pvc.namespace) return
                       openDetail({ kind: 'PersistentVolumeClaim', name: String(pvc.name), namespace: String(pvc.namespace) })
-                    }}
+                    })}
                   >
                     <td className="py-2 pr-2">
                       <span className="block truncate font-mono" title={`${pvc.namespace || '-'}/${pvc.name || '-'}`}>

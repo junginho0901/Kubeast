@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { openOnPress } from '@/components/openOnPress'
 import { networkPolicyToRawJson } from '@/pages/network/networkpolicies/networkPolicyHelpers'
 import { applyNetworkPolicyToDrawer } from '@/pages/network/networkpolicies/networkPolicyWatchNormalize'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -185,7 +186,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
                     <tr
                       key={`${p.namespace}/${p.name}`}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
-                      onClick={() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace })}
+                      {...openOnPress(() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace }))}
                     >
                       <td className="py-1 pr-2 font-mono">{p.name}</td>
                       <td className="py-1 pr-2"><StatusBadge status={podTableStatus(p as any)} /></td>

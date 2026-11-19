@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { openOnPress } from '@/components/openOnPress'
 import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, NoneText, StatusBadge, SummaryBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useNamespacePodTable } from './useNamespacePodTable'
@@ -398,7 +399,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
                     <tr
                       key={`${p.namespace}/${p.name}`}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
-                      onClick={() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace })}
+                      {...openOnPress(() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace }))}
                     >
                       <td className="py-1 pr-2 font-mono">{p.name}</td>
                       <td className="py-1 pr-2"><StatusBadge status={podTableStatus(p as any)} /></td>

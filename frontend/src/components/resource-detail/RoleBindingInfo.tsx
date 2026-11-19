@@ -9,6 +9,7 @@ import { useNamespacePodTable } from './useNamespacePodTable'
 import { ResourceLink } from './ResourceLink'
 import { BindingSubjects } from './role-info/BindingSubjects'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { openOnPress } from '@/components/openOnPress'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
@@ -113,7 +114,7 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
                     <tr
                       key={`${p.namespace}/${p.name}`}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
-                      onClick={() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace })}
+                      {...openOnPress(() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace }))}
                     >
                       <td className="py-1 pr-2 font-mono">{p.name}</td>
                       <td className="py-1 pr-2 font-mono text-slate-400">{p.service_account_name}</td>

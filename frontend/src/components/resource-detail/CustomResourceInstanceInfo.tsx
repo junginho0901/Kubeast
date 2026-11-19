@@ -11,6 +11,7 @@ import { otherFields } from './crDetail'
 
 const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { openOnPress } from '@/components/openOnPress'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { LIVE_ROWS_MAX, useWatchChanges } from '@/services/useWatchChanges'
 import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
@@ -354,7 +355,7 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
                       <tr
                         key={`${itNs}/${itName}`}
                         className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
-                        onClick={() => openDetail({ kind: 'CustomResourceInstance', name: itName, namespace: itNs, rawJson: { ...it, kind: crKind, group, version, crd_name: crdName } as any })}
+                        {...openOnPress(() => openDetail({ kind: 'CustomResourceInstance', name: itName, namespace: itNs, rawJson: { ...it, kind: crKind, group, version, crd_name: crdName } as any }))}
                       >
                         <td className="py-1 pr-2 font-mono">{itNs || '-'}</td>
                         <td className="py-1 pr-2 font-mono">{itName}</td>

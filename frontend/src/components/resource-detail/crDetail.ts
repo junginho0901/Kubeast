@@ -72,6 +72,19 @@ export function drawerObjectKey(t: ObjectNamed): string {
   return JSON.stringify([t.kind, t.namespace ?? '', t.name, objectResourceType(t), t.apiVersion ?? ''])
 }
 
+// The namespace and name a key of drawerObjectKey holds; none for a text of another shape.
+export function namedByKey(key: string): { namespace: string; name: string } | null {
+  let parts: unknown
+  try {
+    parts = JSON.parse(key)
+  } catch {
+    return null
+  }
+  return Array.isArray(parts) && typeof parts[1] === 'string' && typeof parts[2] === 'string' && parts[2]
+    ? { namespace: parts[1], name: parts[2] }
+    : null
+}
+
 // What a drawer's delete acts on, for the cluster's answer (SelfSubjectAccessReview): the group and resource, the
 // object's namespace — a Namespace's own name, the namespace the API server authorizes it in — and its name. A custom
 // resource carries its group and plural (crd_name = <plural>.<group>); none for a kind without a drawer of its own.

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { elementsOf, fakeRender, fakeUnmount } from '@/testing/fakeHooks'
-import { landOn, listOf, moveIn, returnFocus, useDrawerFocus } from './drawerFocus'
+import { landOn, listOf, moveIn, returnFocus, rowOpening, useDrawerFocus } from './drawerFocus'
+import { drawerObjectKey, namedByKey } from './crDetail'
 import { ResourceDetailHeader } from './ResourceDetailHeader'
 import drawerSrc from '../ResourceDetailDrawer.tsx?raw'
 
@@ -38,9 +39,19 @@ class El {
       if (before !== this) before.blurs.splice(0).forEach((fn) => fn())
     }
   })
+  text = ''
   constructor(public page: Page, public tag: string, public parentElement: El | null, attrs: Record<string, string> = {}, public focusable = false) {
     for (const [k, v] of Object.entries(attrs)) this.attrs.set(k, v)
     page.all.push(this)
+  }
+  get children(): El[] {
+    return this.page.all.filter((el) => el.parentElement === this && el.isConnected)
+  }
+  get textContent(): string {
+    return this.text + this.children.map((el) => el.textContent).join('')
+  }
+  querySelectorAll(selector: string): El[] {
+    return this.page.all.filter((el) => el !== this && el.isConnected && this.contains(el) && el.matches(selector))
   }
   matches(selector: string): boolean {
     return selector.split(',').map((s) => s.trim()).some((s) => (s.startsWith('[') ? this.attrs.has(s.slice(1, -1)) : this.tag === s))
@@ -212,6 +223,150 @@ describe('the drawer\'s focus as it renders', () => {
   it('reads no document on a render without one', () => {
     expect(() => fakeRender(() => useDrawerFocus('ConfigMap/shop/a', { current: null }, { current: null }, null))).not.toThrow()
     fakeUnmount()
+  })
+})
+
+// A row of a table inside the drawer opens another object in the same drawer (a ConfigMap's pod row opens the Pod), and
+// Back shows the object before again, drawn anew. The focus goes to the next object's title, and on Back to the row
+// that opens the object it left, as a closing drawer gives it back to the list's row.
+describe('a drawer moved on by a row inside it', () => {
+  const render = (s: ReturnType<typeof scene>, key: string) => fakeRender(() => useDrawerFocus(key, { current: as(s.panel) }, { current: as(s.title) }, docOf(s.page)))
+  const key = (kind: string, name: string, namespace?: string) => drawerObjectKey({ kind, name, namespace })
+
+  // one object's view in the drawer: a table whose rows have a cell per text
+  function view(s: ReturnType<typeof scene>, rows: string[][]) {
+    const box = new El(s.page, 'div', s.panel)
+    const table = new El(s.page, 'table', box)
+    const made = rows.map((cells) => {
+      const row = new El(s.page, 'tr', table, { 'data-open-row': '', tabindex: '0' })
+      for (const text of cells) Object.assign(new El(s.page, 'td', row), { text })
+      return row
+    })
+    return { box, rows: made }
+  }
+  // Enter on a row: the drawer moves on and the view the row was in goes
+  const press = (s: ReturnType<typeof scene>, row: El, box: El) => {
+    row.focus()
+    s.page.remove(box)
+  }
+
+  it('goes to the next object\'s title, on Back to that row of the object before, and as it closes to the page\'s row', () => {
+    const s = scene()
+    s.page.remove(s.back) // the first object has no Back
+    s.row.focus()
+    const configMap = key('ConfigMap', 'a', 'shop')
+    render(s, configMap)
+    expect(s.page.activeElement).toBe(s.title)
+
+    const pods = view(s, [['web-0', 'Running', '5m'], ['web-1', 'Running', '5m']])
+    press(s, pods.rows[1], pods.box)
+    const pod = view(s, [])
+    render(s, key('Pod', 'web-1', 'shop'))
+    expect(s.page.activeElement).toBe(s.title)
+
+    // the ConfigMap's rows are new elements, and their ages moved on
+    s.page.remove(pod.box)
+    const again = view(s, [['web-0', 'Running', '6m'], ['web-1', 'Running', '6m']])
+    render(s, configMap)
+    expect(s.page.activeElement).toBe(again.rows[1])
+
+    // Escape, X or the backdrop close the drawer whatever object it shows
+    s.page.remove(s.panel)
+    fakeUnmount()
+    expect(s.page.activeElement).toBe(s.row)
+  })
+
+  it('two objects deep, each Back finds the row of the object before, from the Back button too', () => {
+    const s = scene()
+    s.row.focus()
+    const storageClass = key('StorageClass', 'fast')
+    const claim = key('PersistentVolumeClaim', 'data', 'shop')
+    render(s, storageClass)
+    const claims = view(s, [['ops/data', 'Bound'], ['shop/data', 'Bound']])
+    press(s, claims.rows[1], claims.box)
+    render(s, claim)
+    const pods = view(s, [['web-0', 'Running'], ['web-1', 'Running']])
+    press(s, pods.rows[0], pods.box)
+    render(s, key('Pod', 'web-0', 'shop'))
+    expect(s.page.activeElement).toBe(s.title)
+
+    // Back pressed on the Back button, which stays: the focus still goes to the row
+    s.back.focus()
+    const podsAgain = view(s, [['web-0', 'Running'], ['web-1', 'Running']])
+    render(s, claim)
+    expect(s.page.activeElement).toBe(podsAgain.rows[0])
+
+    // Back again to the first object, where the Back button goes
+    s.back.focus()
+    s.page.remove(s.back)
+    s.page.remove(podsAgain.box)
+    const claimsAgain = view(s, [['ops/data', 'Bound'], ['shop/data', 'Bound']])
+    render(s, storageClass)
+    expect(s.page.activeElement).toBe(claimsAgain.rows[1])
+
+    s.page.remove(s.panel)
+    fakeUnmount()
+    expect(s.page.activeElement).toBe(s.row)
+  })
+
+  it('a move that is not Back, to an object whose table has a row of the one before, goes to the title', () => {
+    const s = scene()
+    s.row.focus()
+    render(s, key('Pod', 'web-1', 'shop'))
+    // a link in the Pod's view opens its ConfigMap, whose pods table has this pod
+    s.link.focus()
+    s.page.remove(s.link)
+    view(s, [['web-1', 'Running']])
+    render(s, key('ConfigMap', 'a', 'shop'))
+    expect(s.page.activeElement).toBe(s.title)
+    fakeUnmount()
+  })
+
+  it('on Back to a view that does not show that row (another page, not read yet), the rule before holds', () => {
+    const s = scene()
+    s.page.remove(s.back)
+    s.row.focus()
+    const configMap = key('ConfigMap', 'a', 'shop')
+    render(s, configMap)
+    const pods = view(s, [['web-11', 'Running']])
+    press(s, pods.rows[0], pods.box)
+    render(s, key('Pod', 'web-11', 'shop'))
+    view(s, [['web-0', 'Running']])
+    render(s, configMap)
+    expect(s.page.activeElement).toBe(s.title)
+    fakeUnmount()
+  })
+})
+
+describe('the row that opens the object Back left', () => {
+  const s = scene()
+  const table = new El(s.page, 'table', s.panel)
+  const row = (...texts: string[]) => {
+    const r = new El(s.page, 'tr', table, { 'data-open-row': '', tabindex: '0' })
+    for (const text of texts) Object.assign(new El(s.page, 'td', r), { text })
+    return r
+  }
+  const shop = row('shop', 'web-1')
+  const ops = row('ops', 'web-1')
+  // a StorageClass's PV row names its claim in a later cell, the claim's own row in its first
+  const pv = row('pv-1', 'Bound', 'ops/data')
+  const claim = row('ops/data', 'Bound')
+
+  it('is the row with its name and namespace, the name\'s cell first, else one with its name, else none', () => {
+    expect(rowOpening(as(s.panel), { namespace: 'ops', name: 'web-1' })).toBe(ops)
+    expect(rowOpening(as(s.panel), { namespace: 'shop', name: 'web-1' })).toBe(shop)
+    expect(rowOpening(as(s.panel), { namespace: 'ops', name: 'data' })).toBe(claim)
+    expect(rowOpening(as(s.panel), { namespace: '', name: 'pv-1' })).toBe(pv)
+    expect(rowOpening(as(s.panel), { namespace: 'other', name: 'web-1' })).toBe(shop)
+    expect(rowOpening(as(s.panel), { namespace: 'shop', name: 'web' })).toBeNull()
+    expect(rowOpening(null, { namespace: 'shop', name: 'web-1' })).toBeNull()
+  })
+
+  it('is looked for by the namespace and name the drawer\'s key holds', () => {
+    expect(namedByKey(drawerObjectKey({ kind: 'Pod', namespace: 'shop', name: 'web-1' }))).toEqual({ namespace: 'shop', name: 'web-1' })
+    expect(namedByKey(drawerObjectKey({ kind: 'PersistentVolume', name: 'pv-1' }))).toEqual({ namespace: '', name: 'pv-1' })
+    expect(namedByKey('ConfigMap/shop/a')).toBeNull()
+    expect(namedByKey('["Pod","shop",""]')).toBeNull()
   })
 })
 

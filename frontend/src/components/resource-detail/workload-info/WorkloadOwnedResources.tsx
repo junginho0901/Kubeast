@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { openOnPress } from '@/components/openOnPress'
 import { formatDuration, jobDurationSeconds } from '@/pages/workloads/jobs/jobHelpers'
 import { workloadStatusLabel } from '@/utils/workloadStatus'
 import { InfoSection, StatusBadge, Th, Tx } from '../DetailCommon'
@@ -125,7 +126,7 @@ export default function WorkloadOwnedResources({
                     <tr
                       key={`${pod.namespace || namespace}/${pod.name}`}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
-                      onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace || namespace || '' })}
+                      {...openOnPress(() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace || namespace || '' }))}
                     >
                       <td className="py-2 pr-2 font-mono">{pod.name}</td>
                       <td className="py-2 pr-2"><StatusBadge status={pod.status || pod.phase || '-'} /></td>
