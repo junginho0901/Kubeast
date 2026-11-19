@@ -102,22 +102,29 @@ test.describe('AI chat — tool disclosure and the action row', () => {
     await page.waitForLoadState('networkidle')
     const input = page.getByPlaceholder(/메시지|message|질문|ask/i)
     await input.fill('한 문장으로 인사해줘')
+    // the screen makes the conversation for the first question; it is removed after, as the test above removes its own
+    const created = page.waitForResponse((r) => /\/api\/v1\/sessions(\?|$)/.test(r.url()) && r.request().method() === 'POST', { timeout: 15_000 })
     await page.getByRole('button', { name: /전송|send/i }).click()
-    await expect(input).toBeDisabled({ timeout: 15_000 })
+    const sessionId = withUndo((await (await created).json()).id as string, (i) => page.request.delete(`/api/v1/sessions/${i}`, { headers: XRW, failOnStatusCode: false }))
+    try {
+      await expect(input).toBeDisabled({ timeout: 15_000 })
 
-    const bubble = page.locator(ASSISTANT).last()
-    const row = bubble.getByTestId('message-actions-row')
-    const actions = bubble.getByTestId('message-actions')
-    // no space kept for it while the answer comes, and nothing in it can be reached
-    expect(await row.evaluate((el) => el.getBoundingClientRect().height)).toBe(0)
-    expect(await actions.evaluate((el) => (el as HTMLElement).inert)).toBe(true)
+      const bubble = page.locator(ASSISTANT).last()
+      const row = bubble.getByTestId('message-actions-row')
+      const actions = bubble.getByTestId('message-actions')
+      // no space kept for it while the answer comes, and nothing in it can be reached
+      expect(await row.evaluate((el) => el.getBoundingClientRect().height)).toBe(0)
+      expect(await actions.evaluate((el) => (el as HTMLElement).inert)).toBe(true)
 
-    await expect(input).toBeEnabled({ timeout: 120_000 })
-    // the space opens (mt-3 + the 28 px row) and then the row fades in where it stands
-    await expect.poll(() => row.evaluate((el) => Math.round(el.getBoundingClientRect().height))).toBe(40)
-    await expect.poll(() => actions.evaluate((el) => getComputedStyle(el).opacity)).toBe('1')
-    await expect(actions.getByRole('button', { name: /^copy$|^복사$/i })).toBeVisible()
-    await expect(actions.getByTestId('turn-usage')).toHaveText(/tokens|토큰/)
+      await expect(input).toBeEnabled({ timeout: 120_000 })
+      // the space opens (mt-3 + the 28 px row) and then the row fades in where it stands
+      await expect.poll(() => row.evaluate((el) => Math.round(el.getBoundingClientRect().height))).toBe(40)
+      await expect.poll(() => actions.evaluate((el) => getComputedStyle(el).opacity)).toBe('1')
+      await expect(actions.getByRole('button', { name: /^copy$|^복사$/i })).toBeVisible()
+      await expect(actions.getByTestId('turn-usage')).toHaveText(/tokens|토큰/)
+    } finally {
+      await page.request.delete(`/api/v1/sessions/${sessionId}`, { headers: XRW, failOnStatusCode: false })
+    }
   })
 })
 

@@ -108,3 +108,21 @@ test.afterEach(async ({}, testInfo) => {
   if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
   for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })
+
+// Before the next test, no model config made during this one is still there, passed or not: an economy config left
+// enabled is what every later floating chat runs on. Hooks run in the order they are declared, so this reads the list
+// after the undos above.
+let configsBefore = { headers: {} as Record<string, string>, ids: [] as number[] }
+async function modelConfigs(request: APIRequestContext, headers: Record<string, string>) {
+  const res = await request.get('/api/v1/ai/model-configs', { headers })
+  expect(res.ok(), `model configs: ${res.status()}`).toBeTruthy()
+  return (await res.json()) as { id: number; name: string }[]
+}
+test.beforeEach(async ({ request }) => {
+  const headers = await adminHeaders(request)
+  configsBefore = { headers, ids: (await modelConfigs(request, headers)).map((c) => c.id) }
+})
+test.afterEach(async ({ request }) => {
+  const left = (await modelConfigs(request, configsBefore.headers)).filter((c) => !configsBefore.ids.includes(c.id))
+  expect(left.map((c) => c.name), 'model configs this test made').toEqual([])
+})
