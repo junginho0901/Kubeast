@@ -49,8 +49,9 @@ type Profile struct {
 	MaxTimeout time.Duration `json:"maxTimeout"`
 }
 
-// DefaultProfile is the profile named "default": the values of the company
-// CI runner design (P13) — 2 CPU and 8 GiB per build, amd64, on-demand.
+// DefaultProfile is the profile named "default": 2 CPU and 8 GiB per build on
+// amd64, the size of GitHub's standard hosted Linux runner for private
+// repositories, on on-demand nodes, since a reclaimed spot node ends the build.
 func DefaultProfile() Profile {
 	return Profile{
 		Name:         "default",
@@ -120,14 +121,24 @@ type Images struct {
 	TrivyDBRepositories []string `json:"trivyDBRepositories,omitempty"`
 }
 
-// DefaultImages are the newest releases on 2026-11-01: alpine/git v2.54.0
-// (2026-10-25), BuildKit v0.34.1 (2026-10-20), Trivy 0.76.1 (2026-10-21).
+// DefaultImages are pinned by tag and by the digest the tag named on
+// 2026-11-19: the multi-platform index, so amd64 and arm64 profiles run the
+// same build. alpine/git rebuilds its tags every week, so the tag alone moves.
+// A new release changes the tag and the digest together;
+// deploy/dependencies.yaml checks that these lines name its versions and
+// looks upstream for newer releases every week.
+//   - alpine/git v2.54.0 (git 2.54.0; the tag as rebuilt on 2026-11-08):
+//     https://hub.docker.com/r/alpine/git
+//   - BuildKit v0.34.1 (2026-10-20):
+//     https://github.com/moby/buildkit/releases/tag/v0.34.1
+//   - Trivy 0.76.1 (2026-10-21):
+//     https://github.com/aquasecurity/trivy/releases/tag/v0.76.1
 func DefaultImages() Images {
 	return Images{
-		Git:              "docker.io/alpine/git:v2.54.0",
-		BuildKit:         "docker.io/moby/buildkit:v0.34.1",
-		BuildKitRootless: "docker.io/moby/buildkit:v0.34.1-rootless",
-		Trivy:            "docker.io/aquasec/trivy:0.76.1",
+		Git:              "docker.io/alpine/git:v2.54.0@sha256:6a1fdb962814ca11508ca8d1bab94375b5b7ac4e4a9a40981c29fc32c02f095d",
+		BuildKit:         "docker.io/moby/buildkit:v0.34.1@sha256:99368f3e46177c6405b9740e4461d91cee004128daeecca78d4ceac50ec1da5c",
+		BuildKitRootless: "docker.io/moby/buildkit:v0.34.1-rootless@sha256:f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89",
+		Trivy:            "docker.io/aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c",
 	}
 }
 

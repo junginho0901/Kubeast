@@ -59,6 +59,45 @@ dependencies:
       - path: services/k8s-service-go/Dockerfile
         match: 'ARG AWS_IAM_AUTHENTICATOR_VERSION='
 
+  # The images the CI module's build pods run unless an installer sets others (runner.DefaultImages in
+  # services/ci-controller-go), each pinned by tag and digest. A bump takes the new tag's digest too, that of the
+  # multi-platform index (`crane digest docker.io/<image>:<tag>`).
+  - name: alpine-git
+    version: v2.54.0
+    upstream:
+      flavour: container
+      registry: docker.io/alpine/git
+    refPaths:
+      - path: services/ci-controller-go/internal/runner/runner.go
+        match: 'docker\.io/alpine/git:v'
+      - path: services/ci-controller-go/internal/runner/runner.go
+        match: 'alpine/git v[0-9]'
+
+  - name: buildkit
+    version: v0.34.1
+    upstream:
+      flavour: github
+      url: moby/buildkit
+    refPaths:
+      - path: services/ci-controller-go/internal/runner/runner.go
+        match: 'docker\.io/moby/buildkit:v'
+      - path: services/ci-controller-go/internal/runner/runner.go
+        match: '(BuildKit v[0-9]|moby/buildkit/releases/tag/v)'
+      # the build Job follows BuildKit's Kubernetes Job examples: a new BuildKit means re-checking it against them
+      - path: services/ci-controller-go/internal/jobspec/jobspec.go
+        match: 'examples/kubernetes/job\.rootless\.yaml'
+
+  - name: trivy
+    version: 0.76.1
+    upstream:
+      flavour: github
+      url: aquasecurity/trivy
+    refPaths:
+      - path: services/ci-controller-go/internal/runner/runner.go
+        match: 'docker\.io/aquasec/trivy:'
+      - path: services/ci-controller-go/internal/runner/runner.go
+        match: '(Trivy [0-9]|aquasecurity/trivy/releases/tag/v)'
+
   - name: zeitgeist
     version: v0.8.0
     upstream:

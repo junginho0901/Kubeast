@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -11,6 +12,17 @@ func TestDefaults(t *testing.T) {
 	}
 	if err := DefaultImages().Validate(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A new release keeps the digest beside the tag.
+func TestDefaultImagesArePinnedByTagAndDigest(t *testing.T) {
+	pinned := regexp.MustCompile(`^docker\.io/[a-z0-9./-]+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$`)
+	im := DefaultImages()
+	for name, ref := range map[string]string{"git": im.Git, "buildkit": im.BuildKit, "buildkitRootless": im.BuildKitRootless, "trivy": im.Trivy} {
+		if !pinned.MatchString(ref) {
+			t.Errorf("%s = %q, want <name>:<tag>@sha256:<digest>", name, ref)
+		}
 	}
 }
 
