@@ -551,6 +551,7 @@ func (s *Service) DropStale(id cluster.ID, builtFrom int64) {
 	s.defaultBundle.Store(nil)
 	s.MarkClusterUp(id)
 	s.invalidateCaches()
+	s.warnUnknownExcludesSoon()
 }
 
 func (s *Service) dropBundle(id cluster.ID) {
@@ -560,13 +561,7 @@ func (s *Service) dropBundle(id cluster.ID) {
 	// down cluster) gives the cluster a fresh chance, so the next request is
 	// actually tried instead of fail-fast 503'd until the next health poll.
 	s.MarkClusterUp(id)
-	if sharedReadChecks.on && len(sharedReadChecks.exclude) > 0 {
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			s.warnUnknownExcludes(ctx)
-		}()
-	}
+	s.warnUnknownExcludesSoon()
 }
 
 // defaultClientBundle resolves (and caches) the default cluster's bundle for the
