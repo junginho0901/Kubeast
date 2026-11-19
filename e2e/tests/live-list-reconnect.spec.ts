@@ -9,10 +9,12 @@ import { test, expect, type Page, type Request, type WebSocketRoute } from '@pla
 // A live list that missed changes while it was not following reads itself again once it follows again, so it ends
 // equal to the cluster within the RESYNC spread and never shows an empty frame on the way. On cluster `self`, each case
 // in a namespace of its own: a Cluster View node box scrolled away while its pods change and back within its 10 s
-// staleTime; the Helm releases stream the browser opens again by itself after a release was uninstalled (Last-Event-ID,
-// then a read past the server's 30 s list cache); and frames that come while a list is read again, applied onto an
-// answer made before them. A list whose socket came back is `reads-on-change.spec.ts`'s. It skips without the kind
-// cluster `kubeast`; the namespaces are removed after.
+// staleTime; the Helm releases stream the browser opens again by itself, cut before its id named a version, after a
+// release was uninstalled (a Last-Event-ID naming no version, a resync, then a read past the server's 30 s list cache);
+// and frames that come while a list is read again, applied onto an answer made before them. A Helm stream whose id names
+// its watches' versions goes on from them with only what changed and no read (`helm_watch_resync_test.go`). A list
+// whose socket came back is `reads-on-change.spec.ts`'s. It skips without the kind cluster `kubeast`; the namespaces are
+// removed after.
 //
 // The Pods screen reads its page from the server every few seconds and follows no watch, so the frames case runs on
 // ConfigMaps, a list `useKubeWatchList` keeps.
@@ -159,10 +161,11 @@ const pinnedPods = (ns: string, node: string, names: string[]) => JSON.stringify
     },
   })),
 })
-// the six pods a stood-in node box shows
+// the six pods a stood-in node box shows, as the box's route answers them (k8s-service nodeBoxPod: no containers, the
+// colour given)
 const fakePods = (node: string, ns: string) => Array.from({ length: 6 }, (_, i) => ({
-  name: `${node}-p${i}`, namespace: ns, node_name: node, phase: 'Running', status: 'Running', ready: '1/1', restart_count: 0,
-  containers: [{ name: 'c', ready: true, state: { running: {} } }], init_containers: [], created_at: new Date().toISOString(),
+  name: `${node}-p${i}`, namespace: ns, node_name: node, pod_ip: '', status: 'Running', phase: 'Running', restart_count: 0,
+  created_at: new Date().toISOString(), labels: null, health: 'ok', health_reason: 'Running',
 }))
 
 // Helm keeps a release's revision in a Secret (type helm.sh/release.v1, labels name, owner=helm, status, version), the
@@ -211,7 +214,8 @@ test.describe('live lists that missed changes read themselves again', () => {
 
       await probe(page)
       const socket = await routeSocket(page)
-      // forty stood-in boxes after this node's, so its box can leave the screen: in the map's answer and with six pods each
+      // forty stood-in boxes after this node's, nine of them on its page of ten (NODE_BOXES_PER_PAGE), so its box can leave
+      // the screen: in the map's answer and with six pods each
       const fakes = Array.from({ length: 40 }, (_, i) => `zz-e2e-reconnect-${String(i).padStart(2, '0')}`)
       await page.route('**/api/v1/cluster/pods/nodes?**', async (route) => {
         const response = await route.fetch()
@@ -273,7 +277,7 @@ test.describe('live lists that missed changes read themselves again', () => {
     }
   })
 
-  test('the Helm releases stream the browser opens again after a release was uninstalled reads the list past the server\'s cache, with no empty frame', async ({ page }) => {
+  test('the Helm releases stream the browser opens again, cut before its id named a version, after a release was uninstalled reads the list past the server\'s cache, with no empty frame', async ({ page }) => {
     test.setTimeout(120_000)
     const ns = `${RUN}-helm`
     let letGo = () => {}
@@ -283,6 +287,9 @@ test.describe('live lists that missed changes read themselves again', () => {
       await probe(page)
       // The page's first stream ends right after the stream's opening line (its id), as a stream the network cut does. The
       // browser opens it again by itself, sending that id as Last-Event-ID, and that request waits here until let go.
+      // The opening id is `helm-releases` alone, as the server writes it until every watch of the stream has had a
+      // bookmark (helmStreamPlace.id): it names no version to go on from, so the stream opened again starts over and says
+      // resync once its watch is on.
       const reopened: Request[] = []
       const released = new Promise<void>((resolve) => {
         letGo = resolve
