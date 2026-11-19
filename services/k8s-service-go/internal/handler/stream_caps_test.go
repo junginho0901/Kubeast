@@ -259,7 +259,7 @@ func refusedFollow(t *testing.T, srv *httptest.Server, target string) {
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		t.Fatalf("the answer did not end: %v, read %q", err, body)
+		t.Fatalf("the answer did not end: %v, began %q", err, body[:min(len(body), 120)])
 	}
 	want := "retry: 30000\nevent: " + streamcap.Event + "\ndata: " + streamcap.FollowedLogReason + "\n\n"
 	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Type") != "text/event-stream" || string(body) != want {
