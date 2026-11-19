@@ -39,8 +39,14 @@
 #
 # Before the upgrade (section 12): the bundled PostgreSQL dumped with the command of docs/database-backup-restore.md
 # "Logical dump" (its en and ko pages must give that command as the script runs it) and the dump read back with
-# pg_restore --list. An external database is backed up by its operator (a snapshot or its own pg_dump), so
-# SCENARIO=external-db takes no backup and says so.
+# pg_restore --list; a backup that fails stops the run before the upgrade. An external database is backed up by its
+# operator (a snapshot or its own pg_dump), so SCENARIO=external-db takes no backup and says so.
+#
+# A change FROM_VERSION holds already (856 858 865 866 867 868 901, read once it is installed from its chart and its
+# schema version, as the checkout's are read) is not checked as something the upgrade brings: its rows say
+# "<FROM_VERSION> holds #N already" as INFO. From 0.7.8: no role is stored before the name rule (its database refuses
+# them) and the roles outside ASCII are left out (#865), the bundled PostgreSQL is checked to be replaced only if the
+# candidate changed its pod template (#868), and phase A allows no non-2xx while a FROM_VERSION pod goes (#856).
 #
 # Roles whose names have characters outside ASCII (W8 QA Q-61, Q-66; ROLE_GROUPS=0 leaves them out), made on
 # FROM_VERSION: one bound by the chart, one by the custom roles template applied with kubectl as on a registered cluster
@@ -100,7 +106,8 @@ PROBE_TIMEOUT="${PROBE_TIMEOUT:-10}"
 PG_GRACE="${PG_GRACE:-20}"
 # a hang that starts up to this long after the bundled PostgreSQL is ready again is a reconnect: the probe timeout and 5 s
 HANG_GRACE=$(( ${PROBE_TIMEOUT%.*} + 5 ))
-# A: non-2xx or hangs of a target while a FROM_VERSION pod on its path goes (no preStop before #856), at most ROLL_ALLOW each
+# A: non-2xx or hangs of a target while a FROM_VERSION pod on its path goes (no preStop before #856), at most ROLL_ALLOW each;
+# from_holds makes it 0 when FROM_VERSION holds #856, as phase B allows none
 ROLL_ALLOW=3
 ROLL_GRACE=5
 # A: Redis refusals k8s-service may log while Redis is swapped (old one going to new one ready and this), then recover from
@@ -138,6 +145,7 @@ GROUPS_ON=0
 GROUPS_READY=0
 REQUIRE_LIST=" $(printf '%s' "${REQUIRE:-}" | tr ',#' '  ') "
 CREATED=0
+FROM_DB="" # FROM_VERSION's schema version, read once it is installed (in_from reads it)
 BG_PIDS=""
 FG_PID=""
 TMP_VALUES=""
@@ -366,17 +374,62 @@ change_says() { # change_says CHANGE — the checks that wait for it
     901) echo "probe paths, rollout strategy, PDBs; values setting pdb.minAvailable stop" ;;
   esac
 }
-in_checkout() { # in_checkout CHANGE
+# change_held CHANGE VALUES_JSON CHART_DIR MIGRATED — what shows CHANGE in a chart (its values as JSON, its templates)
+# and in a schema (MIGRATED REGEX: a migration holding it is applied), for the checkout and for FROM_VERSION alike
+change_held() {
   case $1 in
-    856) chart_has podShutdown.preStopSeconds ;;
-    858) migrations_have 'CREATE TABLE[^(]*node_drains' ;;
-    865) migrations_have 'roles_name_group_key' ;;
-    866) chart_has redis.acl.enabled ;;
-    867) chart_has autoscaling ;;
-    868) chart_has postgresql.maxConnections && [ -f "$ROOT/helm/kubeast/templates/checks/db-connections.yaml" ] ;;
-    901) chart_has pdb.maxUnavailable ;;
+    856) chart_has podShutdown.preStopSeconds "$2" ;;
+    858) "$4" 'CREATE TABLE[^(]*node_drains' ;;
+    865) "$4" 'roles_name_group_key' ;;
+    866) chart_has redis.acl.enabled "$2" ;;
+    867) chart_has autoscaling "$2" ;;
+    868) chart_has postgresql.maxConnections "$2" && [ -f "$3/templates/checks/db-connections.yaml" ] ;;
+    901) chart_has pdb.maxUnavailable "$2" ;;
     *) return 1 ;;
   esac
+}
+in_checkout() { change_held "$1" "$CHART_VALUES" "$ROOT/helm/kubeast" migrations_have; } # in_checkout CHANGE
+# in_from CHANGE — FROM_VERSION holds it: its chart pulled for the install and its database's schema version, read once
+# it is installed (from_holds); false before, and with --plan
+FROM_VALUES=""
+in_from() { [ -n "$FROM_VALUES" ] && change_held "$1" "$FROM_VALUES" "$CHART_FROM" from_migrated; }
+from_migrated() { # from_migrated REGEX — FROM_DB is at or past the checkout's first migration holding REGEX
+  local f n
+  f=$(grep -lE "$1" "$MIGRATIONS"/*.sql 2>/dev/null | head -1); n=${f##*/}; n=${n%%_*}
+  case "$n:$FROM_DB" in [0-9]*:[0-9]*) [ $((10#$FROM_DB)) -ge $((10#$n)) ] ;; *) return 1 ;; esac
+}
+# from_holds — after the install: the changes FROM_VERSION holds already. Their checks of what the upgrade brings read
+# "FROM_VERSION holds #N already" (INFO): the section 11 group checks are left out, phase A allows no non-2xx while a
+# FROM_VERSION pod goes (ROLL_ALLOW 0, its pods have the preStop wait of #856, as in phase B). One row when it holds any.
+from_holds() {
+  local c held=""
+  FROM_DB=$(db_version)
+  values_json "$OUT/from-values.json" "$CHART_FROM/values.yaml" || stop "$FROM_VERSION's values.yaml did not render as JSON"
+  FROM_VALUES="$OUT/from-values.json"
+  for c in $CHANGES; do in_from "$c" && held="$held #$c"; done
+  [ -n "$held" ] || return 0
+  in_from 856 && ROLL_ALLOW=0
+  in_from 865 && GROUPS_ON=0
+  info install "changes $FROM_VERSION holds already" "${held# } (schema $FROM_DB): their rows say so · ROLL_ALLOW $ROLL_ALLOW"
+}
+held_note() { printf '%s holds #%s already' "$FROM_VERSION" "$1"; } # held_note CHANGE — the start of such a row's detail
+pg_template_hash() { kc -n "$NS" get pods -l app=postgres -o jsonpath='{.items[0].metadata.labels.pod-template-hash}' 2>/dev/null; }
+# pg_restart_row — phase A, bundled PostgreSQL: restarted once by #868's settings, or, when FROM_VERSION holds #868,
+# replaced only if the candidate changed its pod template (pod-template-hash before and after the upgrade)
+pg_restart_row() {
+  local uid hash want got name="bundled PostgreSQL replaced only if its pod template changed"
+  uid=$(kc -n "$NS" get pods -l app=postgres -o jsonpath='{.items[0].metadata.uid}' 2>/dev/null)
+  if in_from 868; then
+    hash=$(pg_template_hash)
+    want="same pod"; [ "$PG_HASH_BEFORE" != "$hash" ] && want="new pod"
+    got="same pod"; [ "$PG_UID_BEFORE" != "$uid" ] && got="new pod"
+    if [ "$want" = "$got" ]; then row A "$name" PASS "$got · pod-template-hash $PG_HASH_BEFORE → $hash · $(held_note 868)"
+    else row A "$name" FAIL "want $want, got $got · pod-template-hash $PG_HASH_BEFORE → $hash · $(held_note 868)"; fi
+  elif [ "$PG_UID_BEFORE" != "$uid" ]; then
+    row A "bundled PostgreSQL restarted once (#868)" PASS "new pod, restarts $(kc -n "$NS" get pods -l app=postgres -o jsonpath='{.items[0].status.containerStatuses[0].restartCount}')"
+  else
+    row A "bundled PostgreSQL restarted once (#868)" FAIL "same pod as before the upgrade"
+  fi
 }
 required() { case "$REQUIRE_LIST" in *" all "*|*" $1 "*) return 0 ;; esac; return 1; }
 require_names() { # REQUIRE names only changes some check waits for
@@ -448,7 +501,7 @@ expected_images() {
   done
   printf '%s' "$out" | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//'
 }
-chart_has() { jq -e --arg p "$1" 'getpath($p | split(".")) != null' "$CHART_VALUES" > /dev/null; }
+chart_has() { jq -e --arg p "$1" 'getpath($p | split(".")) != null' "${2:-$CHART_VALUES}" > /dev/null; } # chart_has PATH [VALUES_JSON]
 chart_value() { jq -r --arg p "$1" 'getpath($p | split(".")) // empty' "$CHART_VALUES"; }
 migrations_have() { grep -qE "$1" "$MIGRATIONS"/*.sql 2>/dev/null; }
 value_of() { hc get values kubeast -a -o json 2>/dev/null | jq -r --arg p "$1" 'getpath($p | split(".")) // empty'; }
@@ -694,17 +747,24 @@ seed() {
   grant 1 Read; expect 200 "grant Read to rh-u1"
   grant 2 rh-ops; expect 200 "grant rh-ops to rh-u2"
   grant 3 Write '["default"]'; expect 200 "grant Write in default to rh-u3"
-  seed_lookalikes
-  # The grant through the API when FROM_VERSION takes the name as that role; else (refused, or given to the
-  # built-in) the row goes into the table.
-  grant 4 ADMIN
-  local api=$CODE
-  if [ "$(psql_q "SELECT role_id FROM user_cluster_roles WHERE user_id = '$ID4' AND cluster_id = '$CLUSTER_ID'")" = "$R_ADMIN_LIKE" ]; then
-    info seed "grant of the stored role ADMIN to rh-u4" "through the API (HTTP $api)"
+  local api lookalikes="stored ADMIN, ' read ', RH-OPS, ' PENDING ' (rh-u5's account level) · grants (rh-u4 ADMIN)"
+  if in_from 865; then
+    # its database refuses a role whose group another role has (roles_name_group_key), so none can be stored
+    info seed "roles stored before the name rule" "$(held_note 865): none of ADMIN, ' read ', RH-OPS, ' PENDING ' made, rh-u4 has no grant"
+    lookalikes="no role stored before the name rule ($(held_note 865))"
   else
-    psql_q "INSERT INTO user_cluster_roles (user_id, cluster_id, role_id) VALUES ('$ID4', '$CLUSTER_ID', $R_ADMIN_LIKE)
-            ON CONFLICT (user_id, cluster_id) DO UPDATE SET role_id = EXCLUDED.role_id" > /dev/null || stop "grant row of ADMIN to rh-u4"
-    info seed "grant of the stored role ADMIN to rh-u4" "API answered $api without granting that role, so the grant row went into the table"
+    seed_lookalikes
+    # The grant through the API when FROM_VERSION takes the name as that role; else (refused, or given to the
+    # built-in) the row goes into the table.
+    grant 4 ADMIN
+    api=$CODE
+    if [ "$(psql_q "SELECT role_id FROM user_cluster_roles WHERE user_id = '$ID4' AND cluster_id = '$CLUSTER_ID'")" = "$R_ADMIN_LIKE" ]; then
+      info seed "grant of the stored role ADMIN to rh-u4" "through the API (HTTP $api)"
+    else
+      psql_q "INSERT INTO user_cluster_roles (user_id, cluster_id, role_id) VALUES ('$ID4', '$CLUSTER_ID', $R_ADMIN_LIKE)
+              ON CONFLICT (user_id, cluster_id) DO UPDATE SET role_id = EXCLUDED.role_id" > /dev/null || stop "grant row of ADMIN to rh-u4"
+      info seed "grant of the stored role ADMIN to rh-u4" "API answered $api without granting that role, so the grant row went into the table"
+    fi
   fi
   for n in 1 2 3 4; do v="U${n}_PW"; login "rh-u$n@$DOMAIN" "${!v}"; expect 200 "rh-u$n signs in"; printf -v "T$n" '%s' "$TOKEN"; done
   call POST /api/v1/auth/api-keys "$T1" "{\"name\":\"rh-key-u1\",\"expires_in_days\":30,\"cluster_ids\":[\"$CLUSTER_ID\"],\"role_ceiling\":\"Read\"}"
@@ -734,7 +794,9 @@ seed() {
   # 5 users, 7 with section 11's rh-u6 and rh-u7
   local users
   users=$(psql_q "SELECT count(*) FROM auth_users WHERE email LIKE 'rh-u%@$DOMAIN'")
-  info seed "data on $FROM_VERSION" "${users:-?} users · roles rh-ops rh-reader + stored ADMIN, ' read ', RH-OPS, ' PENDING ' (rh-u5's account level) · grants (rh-u4 ADMIN) · 2 keys (1 revoked) · 3 access requests (1 pending for RH-OPS) · 1 conversation · 2 recordings"
+  local requests="3 access requests (1 pending for RH-OPS)"
+  in_from 865 && requests="2 access requests"
+  info seed "data on $FROM_VERSION" "${users:-?} users · roles rh-ops rh-reader + $lookalikes · 2 keys (1 revoked) · $requests · 1 conversation · 2 recordings"
 }
 
 # seed_lookalikes: custom roles whose names a built-in or another role has in other letters or with spaces around.
@@ -814,6 +876,7 @@ expected_after() {
   local e="$OUT/expected" ids
   rm -rf "$e"
   in_checkout 865 || return 0
+  in_from 865 && return 0 # nothing was stored before the rule, so the upgrade renames nothing
   mkdir -p "$e"
   ids=$(awk '{print $1}' "$OUT/before/lookalike-roles.txt" | tr '\n' ' ')
   [ "$GROUPS_ON" = 1 ] && [ -s "$OUT/groups-renamed-ids.txt" ] && ids="$ids$(tr '\n' ' ' < "$OUT/groups-renamed-ids.txt")"
@@ -883,7 +946,8 @@ live_checks() {
 # schema it adds, each stored look-alike renamed "<name trimmed>-renamed-<id>" while rh-ops (made first, through the
 # API) keeps its name, their grants removed, their pending and approved requests ended role_renamed, an account level
 # of Pending's group (rh-u5) moved to the built-in Pending with its tokens ended, the audit rows by system/migration
-# counted per action against what the before snapshot held, and the name rule on a new role.
+# counted per action against what the before snapshot held, and the name rule on a new role. From a FROM_VERSION that
+# holds #865 the renames are one INFO row; the schema and the name rule are checked all the same.
 role_checks() {
   if ! in_checkout 865; then
     skip roles "role names one per group: renames, grants, requests, audit rows" 865 "no migration makes roles_name_group_key"
@@ -895,6 +959,11 @@ role_checks() {
   n_renamed=$(grep -c . "$OUT/before/lookalike-roles.txt")
   check roles "the database has role_group_slug(text) and the unique index roles_name_group_key" "t t" \
     "$(psql_q "SELECT (to_regprocedure('role_group_slug(text)') IS NOT NULL)::text || ' ' || EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'roles_name_group_key')::text" | sed 's/true/t/g; s/false/f/g')"
+  if in_from 865; then
+    info roles "renames of the roles stored before the rule" "$(held_note 865): its database refused such roles, so none was stored and the upgrade renames none"
+    role_rule_checks
+    return
+  fi
   want=$(awk '{ s = $0; sub(/^[0-9]+ \[/, "", s); sub(/\]$/, "", s); gsub(/^ +| +$/, "", s); printf "%s%s [%s-renamed-%s]", (NR > 1 ? "," : ""), $1, s, $1 }' "$OUT/before/lookalike-roles.txt")
   check roles "the $n_renamed roles stored before the rule are <name>-renamed-<id>" "$want" \
     "$(psql_q "SELECT string_agg(id || ' [' || name || ']', ',' ORDER BY id) FROM roles WHERE id IN $l")"
@@ -921,6 +990,9 @@ role_checks() {
                   || ' · access.request.expire ' || count(*) FILTER (WHERE action = 'access.request.expire' AND after->>'end_reason' = 'role_renamed')
                   || ' · user.role.update ' || count(*) FILTER (WHERE action = 'user.role.update' AND after->>'reason' = 'role_renamed')
                FROM auth_audit_logs WHERE actor_user_id = 'system' AND actor_email = 'migration'")"
+  role_rule_checks
+}
+role_rule_checks() { # the name rule as the upgraded install keeps it, whatever FROM_VERSION held
   admin_login
   call GET /api/v1/auth/roles "$ATOK"
   check roles "GET /auth/roles: no role shares a group (same_group_as)" 0 "$(jqb "$LIST | map(select((.same_group_as // \"\") != \"\")) | length")"
@@ -1493,7 +1565,9 @@ redis_checks() { # redis_checks PHASE single|users USERS_SECRET
 LIST_CM="/api/v1/cluster/namespaces/default/configmaps?cluster=$CLUSTER_ID"
 groups_left_out() { # groups_left_out AREA — the row for a run without the group checks
   local name="roles outside ASCII: groups, renames, bindings (W8 QA Q-61, Q-66)"
-  if [ "${ROLE_GROUPS:-1}" != 0 ]; then skip "$1" "$name" 865 "no migration makes roles_name_group_key"
+  if [ "${ROLE_GROUPS:-1}" != 0 ] && in_from 865; then
+    info "$1" "$name" "$(held_note 865): its roles already go out as the groups the candidate gives them"
+  elif [ "${ROLE_GROUPS:-1}" != 0 ]; then skip "$1" "$name" 865 "no migration makes roles_name_group_key"
   elif required 865; then row "$1" "$name" FAIL "REQUIRE names #865 and ROLE_GROUPS=0 leaves these checks out"
   else row "$1" "$name" SKIP "#865's checks: ROLE_GROUPS=0 leaves them out"; fi
 }
@@ -1822,6 +1896,7 @@ backup_before() {
     row backup "$what" PASS "$bytes bytes · $entries entries · sha256 $(openssl dgst -sha256 -r "$DUMP_FILE" | cut -c1-16)"
   else
     row backup "$what" FAIL "exit $rc · ${bytes:-0} bytes · ${entries:-0} entries (backup.err)"
+    stop "no backup to go back to: not upgrading"
   fi
 }
 
@@ -1852,13 +1927,14 @@ say "upgrade rehearsal: scenario $SCENARIO, $FROM_VERSION -> $HEAD8 (chart ${RC_
 make_cluster
 [ "$SCENARIO" = external-db ] && make_external_db
 install_from
+from_holds
 seed
-FROM_DB=$(db_version)
 snapshot before
 live_checks before
 if [ "$(awk -F'\t' '$1 == "before" && $3 == "FAIL"' "$RES" | wc -l | tr -d ' ')" != 0 ]; then stop "checks failed on $FROM_VERSION itself — fix the data before upgrading"; fi
 groups_before
 PG_UID_BEFORE=$(kc -n "$NS" get pods -l app=postgres -o jsonpath='{.items[0].metadata.uid}' 2>/dev/null)
+PG_HASH_BEFORE=$(pg_template_hash)
 make_blocker
 prepare_candidate
 upgrade_values_checks
@@ -1874,13 +1950,8 @@ kc -n "$NS" logs deploy/auth-service --since=30m 2>/dev/null | grep -i 'dbmigrat
 info A "auth-service migration lines" "$(wc -l < "$OUT/A-migrations.log" | tr -d ' ') (A-migrations.log)"
 check A "every Kubeast image is $IMAGE_TAG" "$(expected_images)" "$(kubeast_images "$IMAGE_TAG")"
 if [ "$SCENARIO" != external-db ]; then
-  PG_UID_AFTER=$(kc -n "$NS" get pods -l app=postgres -o jsonpath='{.items[0].metadata.uid}' 2>/dev/null)
   if in_checkout 868; then
-    if [ "$PG_UID_BEFORE" != "$PG_UID_AFTER" ]; then
-      row A "bundled PostgreSQL restarted once (#868)" PASS "new pod, restarts $(kc -n "$NS" get pods -l app=postgres -o jsonpath='{.items[0].status.containerStatuses[0].restartCount}')"
-    else
-      row A "bundled PostgreSQL restarted once (#868)" FAIL "same pod as before the upgrade"
-    fi
+    pg_restart_row
     check A "PostgreSQL max_connections = postgresql.maxConnections" "$(value_of postgresql.maxConnections)" "$(psql_q 'SHOW max_connections')"
   else
     skip A "bundled PostgreSQL restart and max_connections" 868 "postgresql.maxConnections not in the chart"
@@ -1896,8 +1967,10 @@ role_checks
 groups_after
 admin_login
 call GET "/api/v1/nodes/$WORKER/drain/status?cluster=$CLUSTER_ID&drain_id=$DRAIN_A" "$ATOK"
+DRAIN_WHERE="its progress was in the replaced pod's memory"
+in_from 858 && DRAIN_WHERE="$(held_note 858): its progress is in node_drains"
 if [ $(( PHASE_T0 - DRAIN_A_T )) -lt 240 ]; then
-  info A "the $FROM_VERSION drain after the upgrade" "status HTTP $CODE $(jqb '.status // .detail // empty') · $WORKER unschedulable=$(cordoned) (its progress was in the replaced pod's memory)"
+  info A "the $FROM_VERSION drain after the upgrade" "status HTTP $CODE $(jqb '.status // .detail // empty') · $WORKER unschedulable=$(cordoned) ($DRAIN_WHERE)"
 else
   warn "the drain had run $(( PHASE_T0 - DRAIN_A_T ))s before the upgrade began"
   info A "the $FROM_VERSION drain after the upgrade" "not in flight at the replacement (started $(( PHASE_T0 - DRAIN_A_T ))s before)"
