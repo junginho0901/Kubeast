@@ -31,6 +31,10 @@ Kubeast **자신**의 상태를 Prometheus 텍스트 포맷으로 노출합니�
 | `kubeast_session_recording_pending_bytes` | gauge | `service` | 녹화했지만 아직 저장소에 올리지 못한 터미널 출력 바이트(`sessionRecording`) |
 | `kubeast_session_recording_upload_failures_total` | counter | `service` | 기동 뒤 실패한 녹화 조각 업로드 수 |
 | `kubeast_session_recording_last_upload_timestamp_seconds` | gauge | `service` | 녹화 조각을 마지막으로 올린 시각(처음 값은 기동 시각) |
+| `kubeast_claude_code_runs` | gauge | `service`, `lane` | 지금 이 ai-service에서 자리를 쥐고 도는 Claude Code 실행(공급자 `claude-code`) 수. `lane`은 `chat`(이 서버의 자리 `AI_CLAUDE_CODE_MAX_CONCURRENT`와 설치 전체의 자리 하나 `AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL`) 또는 `investigation`(서버마다 하나인 조사 자리)입니다. 첫 실행 때 이 계열이 생깁니다 |
+| `kubeast_claude_code_waiting` | gauge | `service` | 지금 자리를 기다리는 채팅 실행 수(그 채팅 스트림이 `{"queued": true}`를 보냄) |
+| `kubeast_claude_code_slot_wait_seconds` | histogram | `service` | 채팅 실행이 이 서버의 자리와 설치 전체의 자리를 기다린 시간, 둘 다 비어 있었으면 0. 바쁨으로 끝났거나 기다리다 멈춘 실행도 기다린 시간만큼 셉니다 |
+| `kubeast_claude_code_busy_total` | counter | `service` | 기동 뒤 바쁨으로 끝난 채팅 실행 수: `AI_CLAUDE_CODE_QUEUE_WAIT` 안에 자리가 나지 않음(채팅의 "Claude Code is busy") |
 | `go_*`, `process_*` / `python_*` | 기본 수집기 | | 런타임·프로세스 |
 
 `service` = `auth` · `ai` · `k8s` · `session` · `tool-server`.
