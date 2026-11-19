@@ -132,7 +132,9 @@ metrics:
 # (or use an internal mirror address): nodes that already have the image do not go to the registry.
 # A shell's pod is deleted when the shell ends. When the k8s-service that opened it is killed (out of memory,
 # a node lost), another k8s-service deletes it one to two minutes later (table node_shells); at the latest
-# it ends at nodeShell.timeoutSeconds (3600).
+# it ends at nodeShell.timeoutSeconds (3600), and its row goes 150 s after that. A k8s-service that cannot
+# write its node shells to the database for 45 s closes them itself, and a shell whose row the database
+# does not take is refused before its pod is made.
 nodeShell:
   enabled: false
   images:

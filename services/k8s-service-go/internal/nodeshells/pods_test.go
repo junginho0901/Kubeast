@@ -6,10 +6,14 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
@@ -85,5 +89,32 @@ func TestThePodRemoverOnClustersItCannotReach(t *testing.T) {
 	remove = PodRemover(func(context.Context) (kubernetes.Interface, error) { return nil, cluster.ErrNotFound })
 	if deleted, err := remove(context.Background(), row("s1", "p")); err != nil || deleted {
 		t.Fatalf("removed cluster = %v %v, want (false, nil)", deleted, err)
+	}
+}
+
+// The opener's binding removed: the cluster refuses the read as forbidden, which is an error (the row waits, until
+// its deadline). A pod replaced under the same name between the read and the delete fails the UID precondition with
+// 409: nothing of this row to delete.
+func TestThePodRemoverOnARefusalAndAReplacedPod(t *testing.T) {
+	podsGR := schema.GroupResource{Resource: "pods"}
+	refusing := fake.NewSimpleClientset(shellPod("node-debugger-n1-aaaaa", "s1"))
+	refusing.PrependReactor("get", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewForbidden(podsGR, "node-debugger-n1-aaaaa", errors.New("binding removed"))
+	})
+	remove := PodRemover(func(context.Context) (kubernetes.Interface, error) { return refusing, nil })
+	if deleted, err := remove(context.Background(), row("s1", "node-debugger-n1-aaaaa")); !apierrors.IsForbidden(err) || deleted {
+		t.Fatalf("forbidden read = %v %v, want the refusal as an error", deleted, err)
+	}
+
+	replaced := fake.NewSimpleClientset(shellPod("node-debugger-n1-aaaaa", "s1"))
+	replaced.PrependReactor("delete", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewConflict(podsGR, "node-debugger-n1-aaaaa", errors.New("Precondition failed: UID in precondition: uid-node-debugger-n1-aaaaa, UID in object meta: other"))
+	})
+	remove = PodRemover(func(context.Context) (kubernetes.Interface, error) { return replaced, nil })
+	if deleted, err := remove(context.Background(), row("s1", "node-debugger-n1-aaaaa")); err != nil || deleted {
+		t.Fatalf("a replaced pod = %v %v, want (false, nil)", deleted, err)
+	}
+	if !podNames(t, replaced)["node-debugger-n1-aaaaa"] {
+		t.Fatal("the pod that replaced it is gone")
 	}
 }

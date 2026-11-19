@@ -8,7 +8,9 @@
 -- UPDATE, deletes the pod (label kubeast.io/node-shell-id = id) in cluster as
 -- the person in person (the opener's claims for that cluster), writes the
 -- shell's k8s.session.end row from audit (the opening request's audit record,
--- without payload) and deletes the row.
+-- without payload) and deletes the row. released_at: the owner gave the row up
+-- after the shell ended without deleting the pod. A row opened longer ago than
+-- the shell's deadline and its slack is dropped whatever its pod's delete gave.
 -- +goose StatementBegin
 CREATE TABLE IF NOT EXISTS node_shells (
     id           VARCHAR     PRIMARY KEY,
@@ -20,7 +22,8 @@ CREATE TABLE IF NOT EXISTS node_shells (
     heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     person       JSONB,
     audit        JSONB,
-    opened_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    opened_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    released_at  TIMESTAMPTZ
 );
 -- +goose StatementEnd
 CREATE INDEX IF NOT EXISTS idx_node_shells_heartbeat_at ON node_shells(heartbeat_at);

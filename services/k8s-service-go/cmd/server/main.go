@@ -337,7 +337,8 @@ func main() {
 		}
 		return cs, nil
 	})
-	if shells := nodeShellTracker(cfg.NodeShellEnabled, role, nodeshells.PG{Pool: pgPool}, nodeShellPods, auditStore); shells != nil {
+	if shells := nodeShellTracker(cfg.NodeShellEnabled, role, nodeshells.NewPG(pgPool), nodeShellPods, auditStore,
+		time.Duration(cfg.NodeShellTimeoutSec)*time.Second); shells != nil {
 		h.SetNodeShells(shells)
 		shellCtx, shellCancel := context.WithCancel(context.Background())
 		defer shellCancel()
@@ -559,11 +560,11 @@ func main() {
 
 // nodeShellTracker is the tracker of the node shells this server opens: none when node shell is off or the server
 // opens no terminals (role api), so such a server neither beats nor sweeps.
-func nodeShellTracker(enabled bool, role config.Role, store nodeshells.Store, remove nodeshells.Remover, w audit.Writer) *nodeshells.Tracker {
+func nodeShellTracker(enabled bool, role config.Role, store nodeshells.Store, remove nodeshells.Remover, w audit.Writer, shellTimeout time.Duration) *nodeshells.Tracker {
 	if !enabled || !role.ServesStreams() {
 		return nil
 	}
-	return nodeshells.NewTracker(store, remove, w)
+	return nodeshells.NewTracker(store, remove, w, shellTimeout)
 }
 
 // clusterNotices is clustersync's Redis client, signed in as the cache is (REDIS_USERNAME, the chart's redis.acl);

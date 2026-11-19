@@ -64,51 +64,100 @@ func pgRow(id string) Row {
 }
 
 // The statements against PostgreSQL: a beating owner's row is not taken, a silent one is taken once with the owner it
-// had, a row in skip is not taken, Remove deletes only for the owner holding the row.
+// had, a row in skip is not taken, Claim and Remove answer for the holder only, Release marks the row and stops its
+// beats, and Take says which rows are past the deadline by the database's clock.
 func TestPostgres_NodeShellRows(t *testing.T) {
 	pool := freshDB(t)
 	ctx := context.Background()
-	pg := PG{Pool: pool}
-	for _, id := range []string{"live", "dead", "mine"} {
+	pg := NewPG(pool)
+	defer pg.Idle()
+	for _, id := range []string{"live", "dead", "mine", "old"} {
 		if err := pg.Insert(ctx, pgRow(id)); err != nil {
 			t.Fatal(err)
 		}
+		silence(t, pool, id, 2*staleAfter)
 	}
-	silence(t, pool, "live", 2*staleAfter)
-	silence(t, pool, "dead", 2*staleAfter)
-	silence(t, pool, "mine", 2*staleAfter)
+	if _, err := pool.Exec(ctx, `UPDATE node_shells SET opened_at = opened_at - make_interval(secs => 7200) WHERE id = 'old'`); err != nil {
+		t.Fatal(err)
+	}
 	found, err := pg.Beat(ctx, "a/1", []string{"live", "gone"})
 	if err != nil || len(found) != 1 || found[0] != "live" {
 		t.Fatalf("beat = %v %v, want [live]", found, err)
 	}
 
-	taken, err := pg.Take(ctx, "b/2", staleAfter, []string{"mine"}, takeBatch)
+	taken, err := pg.Take(ctx, "b/2", staleAfter, time.Hour, []string{"mine"}, takeBatch)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(taken) != 1 || taken[0].ID != "dead" || taken[0].Owner != "a/1" || taken[0].Pod != "node-debugger-n1-dead" ||
-		string(taken[0].Person) == "" || string(taken[0].Audit) == "" {
-		t.Fatalf("taken %+v, want dead with its previous owner, person and audit", taken)
+	byID := map[string]Row{}
+	for _, r := range taken {
+		byID[r.ID] = r
 	}
-	again, err := pg.Take(ctx, "c/3", staleAfter, nil, takeBatch)
+	if len(taken) != 2 || byID["dead"].Owner != "a/1" || byID["dead"].Pod != "node-debugger-n1-dead" || byID["dead"].Expired ||
+		string(byID["dead"].Person) == "" || string(byID["dead"].Audit) == "" || !byID["old"].Expired {
+		t.Fatalf("taken %+v, want dead (not expired) and old (expired) with their previous owner, person and audit", taken)
+	}
+	again, err := pg.Take(ctx, "c/3", staleAfter, time.Hour, nil, takeBatch)
 	if err != nil || len(again) != 1 || again[0].ID != "mine" {
-		t.Fatalf("second take = %+v %v, want only mine (dead was taken with a fresh heartbeat, live beat)", again, err)
+		t.Fatalf("second take = %+v %v, want only mine", again, err)
 	}
 
-	if err := pg.Remove(ctx, "dead", "a/1"); err != nil {
+	if ok, err := pg.Claim(ctx, "dead", "a/1"); err != nil || ok {
+		t.Fatalf("claim by the owner before the take = %v %v, want false", ok, err)
+	}
+	if ok, err := pg.Claim(ctx, "dead", "b/2"); err != nil || !ok {
+		t.Fatalf("claim by the holder = %v %v, want true", ok, err)
+	}
+	if removed, err := pg.Remove(ctx, "dead", "a/1"); err != nil || removed {
+		t.Fatalf("remove by the owner before the take = %v %v, want false", removed, err)
+	}
+	if removed, err := pg.Remove(ctx, "dead", "b/2"); err != nil || !removed {
+		t.Fatalf("remove by the holder = %v %v, want true", removed, err)
+	}
+
+	if err := pg.Release(ctx, "live", "a/1"); err != nil {
 		t.Fatal(err)
 	}
-	var n int
-	_ = pool.QueryRow(ctx, `SELECT count(*) FROM node_shells WHERE id = 'dead'`).Scan(&n)
-	if n != 1 {
-		t.Fatal("Remove by the owner before the take deleted the row b holds")
+	if found, err := pg.Beat(ctx, "a/1", []string{"live"}); err != nil || len(found) != 0 {
+		t.Fatalf("beat of a released row = %v %v, want none", found, err)
 	}
-	if err := pg.Remove(ctx, "dead", "b/2"); err != nil {
+	silence(t, pool, "live", 2*staleAfter)
+	rel, err := pg.Take(ctx, "b/2", staleAfter, time.Hour, nil, takeBatch)
+	if err != nil || len(rel) != 1 || rel[0].ID != "live" || !rel[0].Released {
+		t.Fatalf("take of the released row = %+v %v", rel, err)
+	}
+}
+
+// The heartbeat goes over the connection the store holds: requests that take every other connection of the pool do
+// not hold it back.
+func TestPostgres_TheHeartbeatGoesOutWithThePoolFull(t *testing.T) {
+	small := freshDB(t)
+	cfg := small.Config().Copy()
+	cfg.MaxConns = 2
+	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
 		t.Fatal(err)
 	}
-	_ = pool.QueryRow(ctx, `SELECT count(*) FROM node_shells WHERE id = 'dead'`).Scan(&n)
-	if n != 0 {
-		t.Fatal("Remove by the holder left the row")
+	defer pool.Close()
+	ctx := context.Background()
+	pg := NewPG(pool)
+	if err := pg.Insert(ctx, pgRow("s1")); err != nil { // takes the held connection
+		t.Fatal(err)
+	}
+	busy, err := pool.Acquire(ctx) // the requests take the other
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer busy.Release()
+	bctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	found, err := pg.Beat(bctx, "a/1", []string{"s1"})
+	if err != nil || len(found) != 1 {
+		t.Fatalf("beat with the pool full = %v %v, want it saved", found, err)
+	}
+	pg.Idle()
+	if st := pool.Stat(); st.AcquiredConns() != 1 {
+		t.Fatalf("acquired connections after Idle = %d, want 1 (the test's)", st.AcquiredConns())
 	}
 }
 
@@ -117,7 +166,8 @@ func TestPostgres_NodeShellRows(t *testing.T) {
 func TestPostgres_OneTakerPerRow(t *testing.T) {
 	pool := freshDB(t)
 	ctx := context.Background()
-	pg := PG{Pool: pool}
+	pg := NewPG(pool)
+	defer pg.Idle()
 	const rows = 30
 	for i := 0; i < rows; i++ {
 		id := fmt.Sprintf("s%02d", i)
@@ -138,7 +188,7 @@ func TestPostgres_OneTakerPerRow(t *testing.T) {
 			defer wg.Done()
 			owner := fmt.Sprintf("sweeper/%d", w)
 			for {
-				got, err := pg.Take(ctx, owner, staleAfter, nil, 4)
+				got, err := pg.Take(ctx, owner, staleAfter, time.Hour, nil, 4)
 				if err != nil {
 					t.Error(err)
 					return
@@ -174,15 +224,20 @@ func TestPostgres_SweepDeletesOnlyTheSilentShell(t *testing.T) {
 	ctx := context.Background()
 	p := &pods{exist: map[string]bool{}}
 	rows := &auditRows{}
-	a := NewTracker(PG{Pool: pool}, p.remover(), rows)
-	b := NewTracker(PG{Pool: pool}, p.remover(), rows)
+	pgA, pgB := NewPG(pool), NewPG(pool)
+	defer pgA.Idle()
+	a := NewTracker(pgA, p.remover(), rows, time.Hour)
+	b := NewTracker(pgB, p.remover(), rows, time.Hour)
 	for _, id := range []string{"beating", "silent"} {
-		if err := a.Begin(ctx, Row{ID: id, Cluster: "self", Namespace: "kubeast-node-shell", Pod: "node-debugger-n1-" + id, Node: "n1"}, base("n1")); err != nil {
+		if err := a.Begin(ctx, Row{ID: id, Cluster: "self", Namespace: "kubeast-node-shell", Pod: "node-debugger-n1-" + id, Node: "n1"}, base("n1"), nil); err != nil {
 			t.Fatal(err)
 		}
 		p.exist[id] = true
 	}
-	a.Release("silent") // a no longer beats it, as a killed server would not
+	// a stops beating "silent" as a killed server would: drop it from a's shells without telling the database
+	a.mu.Lock()
+	delete(a.active, "silent")
+	a.mu.Unlock()
 	silence(t, pool, "silent", 2*staleAfter)
 	silence(t, pool, "beating", 2*staleAfter)
 	a.beat(ctx)
@@ -202,7 +257,7 @@ func TestPostgres_SweepDeletesOnlyTheSilentShell(t *testing.T) {
 	if len(left) != 1 || left[0] != "beating" {
 		t.Fatalf("rows left %v, want [beating]", left)
 	}
-	if len(rows.all()) != 1 {
-		t.Fatalf("audit rows %d, want 1", len(rows.all()))
+	if got := rows.reasons(); len(got) != 1 || got[0] != ReasonServerGone {
+		t.Fatalf("end rows %v, want [server_gone]", got)
 	}
 }

@@ -30,13 +30,20 @@ func NewMemory(now func() time.Time) *Memory {
 	return &Memory{now: now, rows: map[string]*memRow{}}
 }
 
+// SetFail sets the answer of every call (nil: the database answers).
+func (m *Memory) SetFail(err error) {
+	m.mu.Lock()
+	m.Fail = err
+	m.mu.Unlock()
+}
+
 func (m *Memory) Insert(_ context.Context, r Row) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.Fail != nil {
 		return m.Fail
 	}
-	r.OpenedAt = m.now()
+	r.OpenedAt, r.Released, r.Expired = m.now(), false, false
 	m.rows[r.ID] = &memRow{Row: r, heartbeat: r.OpenedAt}
 	return nil
 }
@@ -49,7 +56,7 @@ func (m *Memory) Beat(_ context.Context, owner string, ids []string) ([]string, 
 	}
 	var found []string
 	for _, id := range ids {
-		if r := m.rows[id]; r != nil && r.Owner == owner {
+		if r := m.rows[id]; r != nil && r.Owner == owner && !r.Released {
 			r.heartbeat = m.now()
 			found = append(found, id)
 		}
@@ -57,7 +64,7 @@ func (m *Memory) Beat(_ context.Context, owner string, ids []string) ([]string, 
 	return found, nil
 }
 
-func (m *Memory) Take(_ context.Context, owner string, staleAfter time.Duration, skip []string, limit int) ([]Row, error) {
+func (m *Memory) Take(_ context.Context, owner string, staleAfter, expireAfter time.Duration, skip []string, limit int) ([]Row, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.Fail != nil {
@@ -79,22 +86,51 @@ func (m *Memory) Take(_ context.Context, owner string, staleAfter time.Duration,
 		if len(out) == limit {
 			break
 		}
-		out = append(out, r.Row) // with the owner it had
+		got := r.Row // with the owner it had
+		got.Expired = m.now().Sub(r.OpenedAt) > expireAfter
+		out = append(out, got)
 		r.Owner, r.heartbeat = owner, m.now()
 	}
 	return out, nil
 }
 
-func (m *Memory) Remove(_ context.Context, id, owner string) error {
+func (m *Memory) Claim(_ context.Context, id, owner string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.Fail != nil {
+		return false, m.Fail
+	}
+	r := m.rows[id]
+	if r == nil || r.Owner != owner {
+		return false, nil
+	}
+	r.heartbeat = m.now()
+	return true, nil
+}
+
+func (m *Memory) Release(_ context.Context, id, owner string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.Fail != nil {
 		return m.Fail
 	}
 	if r := m.rows[id]; r != nil && r.Owner == owner {
-		delete(m.rows, id)
+		r.Released = true
 	}
 	return nil
+}
+
+func (m *Memory) Remove(_ context.Context, id, owner string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.Fail != nil {
+		return false, m.Fail
+	}
+	if r := m.rows[id]; r != nil && r.Owner == owner {
+		delete(m.rows, id)
+		return true, nil
+	}
+	return false, nil
 }
 
 func (m *Memory) Ping(context.Context) error {

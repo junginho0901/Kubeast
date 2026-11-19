@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nodeshells"
@@ -25,7 +26,7 @@ func TestNodeShellRowsRunOnlyWhereNodeShellsOpen(t *testing.T) {
 		{true, config.RoleStream, true},
 		{true, config.RoleAPI, false},
 	} {
-		if got := nodeShellTracker(c.enabled, c.role, store, remove, nil) != nil; got != c.want {
+		if got := nodeShellTracker(c.enabled, c.role, store, remove, nil, time.Hour) != nil; got != c.want {
 			t.Errorf("node shell %v, role %s: tracker %v, want %v", c.enabled, c.role, got, c.want)
 		}
 	}

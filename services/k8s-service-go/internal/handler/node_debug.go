@@ -95,8 +95,9 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
+	// stopShell(nodeshells.ErrHeartbeatLost) ends the shell when this server cannot save its row's heartbeat.
+	ctx, stopShell := context.WithCancelCause(r.Context())
+	defer stopShell(nil)
 	ctx, release := h.holdTerminal(ctx)
 	defer release()
 	ctx, leave := h.drain.HoldTerminal(ctx)
@@ -179,6 +180,15 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: response.Public(err)})
 		return
 	}
+	// The cleanup outlives the request (ctx is cancelled by then) but still
+	// acts as the user who created the pod, like the drain goroutine.
+	cleanupCtx := context.Background()
+	if id, ok := cluster.FromContext(ctx); ok {
+		cleanupCtx = cluster.WithID(cleanupCtx, id)
+	}
+	if p, ok := auth.FromContext(ctx); ok {
+		cleanupCtx = auth.WithPayload(cleanupCtx, p)
+	}
 	// The row comes before the pod: a server killed from here on leaves a row whose heartbeat stops, and another
 	// server deletes the pod it names (internal/nodeshells).
 	shellID := ""
@@ -191,7 +201,7 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		row := nodeshells.Row{ID: shellID, Cluster: string(clusterID), Namespace: namespace, Pod: podName, Node: nodeName,
 			Person: nodeshells.PersonFor(person, string(clusterID))}
 		end := auditBase(r, audit.ServiceK8s, auditSessionEndAction, "node", nodeName, namespace)
-		if err := h.nodeShells.Begin(ctx, row, end); err != nil {
+		if err := h.nodeShells.Begin(ctx, row, end, func() { stopShell(nodeshells.ErrHeartbeatLost) }); err != nil {
 			err = fmt.Errorf("node shell row not saved: %w", err)
 			slog.Error("debug shell", "err", err)
 			fail(err)
@@ -199,28 +209,8 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	_, err = clientset.CoreV1().Pods(namespace).Create(ctx, debugPod, metav1.CreateOptions{})
-	if err != nil {
-		if shellID != "" {
-			h.nodeShells.End(shellID)
-		}
-		err = fmt.Errorf("create debug pod: %w", err)
-		slog.Error("debug shell", "err", err)
-		fail(err)
-		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: response.Public(err)})
-		return
-	}
-
-	// The cleanup outlives the request (ctx is cancelled by then) but still
-	// acts as the user who created the pod, like the drain goroutine.
-	cleanupCtx := context.Background()
-	if id, ok := cluster.FromContext(ctx); ok {
-		cleanupCtx = cluster.WithID(cleanupCtx, id)
-	}
-	if p, ok := auth.FromContext(ctx); ok {
-		cleanupCtx = auth.WithPayload(cleanupCtx, p)
-	}
-	defer func() {
+	// deletePod deletes the pod and ends its row; a pod it could not delete leaves the row to a sweep.
+	deletePod := func() {
 		grace := int64(0)
 		bg := metav1.DeletePropagationBackground
 		err := clientset.CoreV1().Pods(namespace).Delete(cleanupCtx, podName, metav1.DeleteOptions{
@@ -238,7 +228,24 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 			h.nodeShells.End(shellID)
 		}
 		slog.Info("debug shell pod deleted", "pod", podName)
-	}()
+	}
+	_, err = clientset.CoreV1().Pods(namespace).Create(ctx, debugPod, metav1.CreateOptions{})
+	if err != nil {
+		switch {
+		case createRefused(err): // the API server answered and made nothing
+			if shellID != "" {
+				h.nodeShells.End(shellID)
+			}
+		default: // cancelled, cut or timed out: the pod may have been made
+			deletePod()
+		}
+		err = fmt.Errorf("create debug pod: %w", err)
+		slog.Error("debug shell", "err", err)
+		fail(err)
+		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: response.Public(err)})
+		return
+	}
+	defer deletePod()
 
 	// Wait for the pod to run, telling the terminal why it is not yet
 	// (ContainerCreating, ImagePullBackOff, …) each time the reason changes.
@@ -313,6 +320,14 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	}
 	h.auditSessionEnd(ctx, r, "node", nodeName, namespace, "node-shell")
 	slog.Info("debug shell ended", "pod", podName, "node", nodeName)
+}
+
+// createRefused says whether a pod create's error is the API server's answer that it made nothing: a refusal of the
+// request (forbidden, unauthorized, invalid, bad request, a name already taken, a namespace not found). A cancelled,
+// cut or timed-out request (a 504 too) may have made the pod.
+func createRefused(err error) bool {
+	return apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err) || apierrors.IsInvalid(err) ||
+		apierrors.IsBadRequest(err) || apierrors.IsAlreadyExists(err) || apierrors.IsNotFound(err) || apierrors.IsMethodNotSupported(err)
 }
 
 func boolPtr(b bool) *bool {
