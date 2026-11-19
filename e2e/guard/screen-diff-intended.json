@@ -44,6 +44,11 @@
       "screen": "^\\w+ · /cluster/search on ",
       "why": "Advanced Search opens on its examples, and three of them changed so that each one evaluates and picks what its title says: Restarts over 5 reads status.containerStatuses[0].restartCount, ConfigMap with data asks data != null, and Completed Jobs asks spec.suspend === false && status.completionTime != null (a Job with one finished pod and others running is not complete).",
       "pr": "#962"
+    },
+    {
+      "screen": "^\\w+ · drawer PriorityClass \\(cluster\\)$",
+      "why": "The PriorityClass drawer's Global Default, between the Value and Preemption badges, reads Yes or No as plain text (SummaryText), where v0.7.7 drew it as a badge, since a yes/no is text and not a badge.",
+      "pr": "#966"
     }
   ]
 }
