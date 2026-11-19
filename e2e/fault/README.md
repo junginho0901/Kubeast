@@ -165,7 +165,9 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
   Redis at start stays on it: while Redis is off its cache reads miss and its writes fail, and the next miss after Redis
   answers writes there again. The probe's reads (pods page, overview, nodes, ConfigMaps, clusters) come from the
   informers, the cluster or auth-service and write no key, so the check reads the release list (30 s in the cache,
-  `internal/helm/releases.go`).
+  `internal/helm/releases.go`). The probe reads that list too, and each of its reads answers 200 within 5 s: while
+  Redis does not answer, a cache command gives up within 0.5 s and the cache leaves Redis out for 3 s, reading the
+  cluster (`internal/cache/redis.go`).
 - F-8 for #857: a k8s-service started while Redis was down logs that it runs on the in-memory cache, logs within 15 s
   of Redis answering that its cache moves to Redis, and reads answer 200 throughout.
 - Depends on: the ACL file of #866 (`kubeast.redisUsersAcl`), the Secret `kubeast-redis-users` (or the one the redis

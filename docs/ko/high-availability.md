@@ -18,7 +18,7 @@ Kubeast의 서비스는 기본으로 하나씩 파드 1개로 뜹니다.
 | tool-server | Redis가 있으면 됨 | 클러스터의 kubeconfig를 길어야 10초. 클러스터가 바뀐 것을 Redis로 듣습니다 | `redis.enabled: true` |
 | ModelConfig controller | 안 됨, 1대 | 없음. 한 번에 한 파드만 일하므로(리더 선출) 차트는 1대를 띄웁니다 | — |
 | postgres(차트 내장) | 안 됨, 1대 | 데이터 | 노드가 죽어도 남는 데이터베이스가 필요하면 바깥 PostgreSQL을 쓰세요(`postgresql.enabled: false`) |
-| redis(차트 내장) | 안 됨, 1대 | 캐시와 바뀜 알림뿐. 새 파드는 비어서 시작하고 캐시는 다시 찹니다 | — |
+| redis(차트 내장) | 안 됨, 1대 | 캐시와 바뀜 알림뿐. 새 파드는 비어서 시작하고 캐시는 다시 찹니다. Redis가 답하지 않는 동안 k8s-service의 화면은 클러스터에서 읽습니다. 캐시 명령은 0.5초 안에 그만두고, 그 뒤 3초 동안 캐시는 Redis를 건너뜁니다. Redis가 받지 못한 캐시 항목 지우기는 캐시가 Redis를 다시 읽기 전에 통째로 비워서 메웁니다 | — |
 
 `redis.enabled: false`인데 `replicas.k8sService`나 `replicas.toolServer`가 1보다 크면 차트가 까닭을 말하고 설치를 막습니다.
 `sessionRecording.storage: file`인데 k8s-service가 2대 이상이어도(1보다 큰 `replicas.k8sService`, 또는 `maxReplicas`가 1보다 큰 `autoscaling.k8sService`) 막습니다. 모든 파드가 파일 볼륨 하나를 붙이게 되므로 `s3`나 `database`에 녹화하세요(파일 저장소의 배포 때 모습은 [운영](operations.md#터미널과-실시간-로그를-따로-맡는-서버)에 있습니다).

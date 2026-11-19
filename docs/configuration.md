@@ -213,7 +213,7 @@ postgresql:
   sessionLimits: { statementTimeoutMs: 30000, lockTimeoutMs: 15000, idleInTransactionTimeoutMs: 300000 }  # PostgreSQL statement_timeout, lock_timeout and idle_in_transaction_session_timeout each service SETs on its connections once connected (migrations always run without the first two, also when the role sets them); 0 sets nothing. Behind RDS Proxy a SET pins the session: set 0 and put them in the proxy's initialization query or on the database role. Through PgBouncer use session pooling only: transaction pooling hands a server connection to other clients between transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's, k8s-service's health status lock) does not stay with its client
   pool: { authService: { maxConns: 20 }, sessionService: { maxConns: 20 }, k8sService: { maxConns: 10 }, aiService: { maxConns: 15 }, modelConfigController: { maxConns: 4 } }  # connections per pod; with the chart's PostgreSQL the install stops when the pods (a rollout's extra pod and autoscaling's maxReplicas counted) could open more than maxConnections, for an external database NOTES prints the sum to compare with its max_connections
   maxConnections: 300   # the chart's PostgreSQL max_connections
-# An upgrade starts stopping Redis before its new pod is made (maxSurge 0): the new pod starts with an empty cache, and for the few seconds the old one takes to end both may exist, sharing no data (emptyDir).
+# An upgrade starts stopping Redis before its new pod is made (maxSurge 0): the new pod starts with an empty cache, and for the few seconds the old one takes to end both may exist, sharing no data (emptyDir). While Redis does not answer, k8s-service reads the cluster: a cache command gives up within 0.5 s, then the cache leaves Redis out for 3 s.
 redis:
   enabled: true
   password: ""          # requirepass while the Redis users are off — generated when empty (REDIS_PASSWORD)
@@ -327,6 +327,8 @@ With `secrets.existingSecret`, Redis keeps one password (`REDIS_PASSWORD`) for e
 - Valkey evicts at 80% of `resources.redis.limits.memory` (`maxmemory`, 107374182 bytes for the default 128Mi), so it evicts before the container reaches its limit.
 - Without a limit it stops at 80% of 128Mi.
 - The policy is `volatile-lru`: only keys with a TTL are evicted. The cache's keys all have one. A key without one is never evicted.
+
+**What it holds.** k8s-service's cache entries (10 s to 30 s; the Helm list's generation mark an hour) and the cluster change notices it passes on. Nothing is written to disk (`--save ""`): a Redis started again, also in the same pod, starts empty.
 
 **Upgrading from 0.7.7 or earlier**, which had one password (`REDIS_PASSWORD`):
 

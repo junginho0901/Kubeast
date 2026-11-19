@@ -210,6 +210,8 @@ test.describe('Redis users per service (PR #866)', () => {
       `/api/v1/cluster/nodes?cluster=${CLUSTER}`,
       `/api/v1/cluster/namespaces/${NS}/configmaps?cluster=${CLUSTER}`,
       '/api/v1/clusters',
+      // through k8s-service's Redis cache: while Redis does not answer it reads the cluster
+      HELM_LIST,
     ]
     const before = restartCounts()
     const probe = new Probe(request, reads, headers, 100, 10_000)
@@ -229,6 +231,10 @@ test.describe('Redis users per service (PR #866)', () => {
     expect(answers.length, 'the probe kept sending').toBeGreaterThan(500)
     expectProbeKeptSending(answers)
     expect(bad.length, `screen reads not answered 200 while Redis was off or coming back:\n${show(bad)}`).toBe(0)
+    const helmOff = answers.filter((a) => a.path === HELM_LIST && a.at >= outage.offAt && a.at < outage.onAt)
+    expect(helmOff.length, 'Helm release list reads sent while Redis was off').toBeGreaterThan(50)
+    const helmSlow = answers.filter((a) => a.path === HELM_LIST && a.ms >= 5_000)
+    expect(helmSlow.length, `Helm release list reads that took 5 s or more:\n${show(helmSlow)}`).toBe(0)
     expect(restartsSince(before), 'restarts of the pods that stayed (Redis itself is replaced)').toEqual({})
     // the cache is written to Redis again (k8s-service's user may SCAN kubeast:*)
     if (!acl) {
