@@ -204,7 +204,9 @@ def _load_runner():
 
 class TheCases(unittest.TestCase):
     def test_every_case_is_scorable_and_runnable_and_each_place_and_ask_is_planted(self):
-        self.assertEqual({d.name: alerts.check_dir(d) for d in sorted(alerts.CASES.iterdir()) if alerts.check_dir(d)}, {})
+        folders = [d for d in sorted(alerts.CASES.iterdir()) if (d / "case.json").exists()]
+        self.assertEqual(len(folders), len(CASES))
+        self.assertEqual({d.name: alerts.check_dir(d) for d in folders if alerts.check_dir(d)}, {})
         self.assertEqual({c["planted"]["where"] for c in CASES.values()}, set(alerts.WHERE))
         self.assertEqual({c["planted"]["asks"] for c in CASES.values()}, set(alerts.ASKS))
         self.assertGreaterEqual(len(CASES), 3)
