@@ -5814,6 +5814,8 @@
   },
   "keyboardHelp": {
     "terminalTab": "Tab과 Esc는 셸로 갑니다. Tab으로 초점을 옮기려면 {{key}}을 누르세요.",
-    "terminalTabMovesFocus": "Tab이 초점을 터미널 밖으로 옮깁니다. Tab을 다시 셸로 보내려면 {{key}}을 누르세요."
+    "terminalTabMovesFocus": "Tab이 초점을 터미널 밖으로 옮깁니다. Tab을 다시 셸로 보내려면 {{key}}을 누르세요.",
+    "editorTab": "Tab은 들여쓰기합니다. Tab으로 초점을 옮기려면 {{key}}을 누르세요.",
+    "editorTabMovesFocus": "Tab이 초점을 편집기 밖으로 옮깁니다. Tab으로 다시 들여쓰려면 {{key}}을 누르세요."
   }
 }

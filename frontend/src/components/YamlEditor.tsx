@@ -1,7 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import Editor from '@/components/monaco/CodeEditor'
+import Editor, { type OnMount } from '@/components/monaco/CodeEditor'
+import { isMacPlatform } from '@/hooks/useChatShortcut'
 import { copyText } from '@/utils/clipboard'
+import { refocusIfDropped } from '@/utils/focusDrop'
+import { tabFocusKeyNames } from '@/utils/terminalTabFocus'
+
+// Where the focus goes once the buttons have changed: the editor after Edit, Edit after a save or Cancel, Apply when
+// nothing was saved.
+export type YamlFocusNext = 'editor' | 'edit' | 'apply'
 
 type Labels = {
   title: string
@@ -64,6 +71,12 @@ export default function YamlEditor({
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
   const [opened, setOpened] = useState('')
+  const [focusNext, setFocusNext] = useState<YamlFocusNext | null>(null)
+  // Monaco's own Tab switch (Ctrl+M, Ctrl+Shift+M on a Mac), read back from the editor so the hint follows it.
+  const [tabMovesFocus, setTabMovesFocus] = useState(false)
+  const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
+  const editButtonRef = useRef<HTMLButtonElement>(null)
+  const applyButtonRef = useRef<HTMLButtonElement>(null)
   const isReady = !isLoading && !error && value !== undefined
   const editorOptions = useMemo(
     () => ({
@@ -104,6 +117,23 @@ export default function YamlEditor({
     onDirtyChange(dirty)
   }, [draft, isEditing, onDirtyChange, value])
 
+  // The pressed button is gone (or was disabled while applying), so the focus fell to the page (WCAG 2.4.3).
+  useEffect(() => {
+    if (!focusNext || isApplying) return
+    const next = focusNext === 'editor' ? editorRef.current : focusNext === 'edit' ? editButtonRef.current : applyButtonRef.current
+    refocusIfDropped(document, next)
+    setFocusNext(null)
+  }, [focusNext, isApplying])
+
+  const handleEditorMount: OnMount = (editor, monaco) => {
+    editorRef.current = editor
+    const option = monaco.editor.EditorOption.tabFocusMode
+    setTabMovesFocus(editor.getOption(option))
+    editor.onDidChangeConfiguration((e) => {
+      if (e.hasChanged(option)) setTabMovesFocus(editor.getOption(option))
+    })
+  }
+
   const handleCopy = async () => {
     if (!draft) return
     const ok = await copyText(draft)
@@ -124,13 +154,18 @@ export default function YamlEditor({
       setDraft(sanitized)
     }
     try {
-      if (!(await onApply(sanitized, opened))) return
+      if (!(await onApply(sanitized, opened))) {
+        setFocusNext('apply')
+        return
+      }
       setIsEditing(false)
       setApplySuccess(true)
+      setFocusNext('edit')
       onApplySuccess?.()
     } catch (err: any) {
       const detail = err?.response?.data?.detail || err?.message || labels.error
       setApplyError(String(detail))
+      setFocusNext('apply')
       onApplyError?.(String(detail))
     } finally {
       setIsApplying(false)
@@ -168,6 +203,7 @@ export default function YamlEditor({
               {isEditing ? (
                 <>
                   <button
+                    ref={applyButtonRef}
                     type="button"
                     onClick={handleApply}
                     disabled={isApplying || !isReady}
@@ -180,6 +216,7 @@ export default function YamlEditor({
                     onClick={() => {
                       setIsEditing(false)
                       setDraft(value || '')
+                      setFocusNext('edit')
                     }}
                     disabled={!isReady}
                     className="btn-row"
@@ -189,10 +226,12 @@ export default function YamlEditor({
                 </>
               ) : (
                 <button
+                  ref={editButtonRef}
                   type="button"
                   onClick={() => {
                     setOpened(draft)
                     setIsEditing(true)
+                    setFocusNext('editor')
                   }}
                   disabled={!isReady}
                   className="btn-row"
@@ -216,6 +255,7 @@ export default function YamlEditor({
             <div
               data-testid="yaml-apply-toast"
               data-type={toast.type}
+              role={toast.type === 'error' ? 'alert' : 'status'}
               className={`pointer-events-none absolute right-3 top-3 z-10 max-w-[calc(100%-1.5rem)] rounded-lg border px-3 py-1.5 text-xs [overflow-wrap:anywhere] shadow-lg ${
                 toast.type === 'success'
                   ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'
@@ -232,6 +272,7 @@ export default function YamlEditor({
               language="yaml"
               value={draft}
               onChange={handleEditorChange}
+              onMount={handleEditorMount}
               options={editorOptions}
               loading={<div className="p-3 text-xs text-slate-400">{labels.loading}</div>}
             />
@@ -247,10 +288,17 @@ export default function YamlEditor({
         <p className="text-xs text-slate-400">
           {canEdit && isEditing ? labels.editHint : labels.readonly}
         </p>
+        {canEdit && isEditing && (
+          <p className="text-xs text-slate-400" data-testid="yaml-editor-tab-hint" data-tab-moves-focus={tabMovesFocus ? 'true' : 'false'}>
+            {tabMovesFocus
+              ? t('keyboardHelp.editorTabMovesFocus', { key: tabFocusKeyNames(isMacPlatform()).label, defaultValue: 'Tab moves the focus out of the editor. Press {{key}} to indent with Tab again.' })
+              : t('keyboardHelp.editorTab', { key: tabFocusKeyNames(isMacPlatform()).label, defaultValue: 'Tab indents. Press {{key}} to move the focus with Tab instead.' })}
+          </p>
+        )}
         {note && <p className="text-xs text-slate-400" data-testid="yaml-editor-note">{note}</p>}
-        {applyError && <p className="text-xs text-red-400">{applyError}</p>}
+        {applyError && <p className="text-xs text-red-400" role="alert">{applyError}</p>}
         {showInlineApplied && applySuccess && !toast && (
-          <p className="text-xs text-emerald-300">{labels.applied}</p>
+          <p className="text-xs text-emerald-300" role="status">{labels.applied}</p>
         )}
       </div>
     </div>

@@ -1,4 +1,5 @@
-import { useEffect, type RefObject } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
+import { refocusIfDropped } from '@/utils/focusDrop'
 
 type Inside = { contains(node: Node | null): boolean } | null
 
@@ -17,11 +18,44 @@ export function dismissHandlers(inside: () => Inside, close: () => void) {
   }
 }
 
-/** While `open`, a press outside `ref` or Escape sets it closed (`setOpen(false)`). */
+type Doc = { activeElement: Element | null; body: Element | null }
+
+/**
+ * What had the focus when a list opened (its button) gets it back when the list closes with the focus gone along — an
+ * option picked, Escape — and not after a press outside, which put the focus where it pressed (WCAG 2.4.3).
+ */
+export function focusKeeper(doc: Doc) {
+  let opener: { focus(): void } | null = null
+  let pressedOutside = false
+  return {
+    opened: () => {
+      const active = doc.activeElement as (Element & { focus(): void }) | null
+      opener = active && active !== doc.body ? active : null
+      pressedOutside = false
+    },
+    pressedOutside: () => { pressedOutside = true },
+    closed: () => {
+      const back = opener
+      opener = null
+      if (!pressedOutside) refocusIfDropped(doc, back)
+    },
+  }
+}
+
+/** While `open`, a press outside `ref` or Escape sets it closed (`setOpen(false)`); the focus goes back as `focusKeeper` says. */
 export function useDismiss(open: boolean, ref: RefObject<HTMLElement | null>, setOpen: (open: boolean) => void): void {
+  const keeper = useRef<ReturnType<typeof focusKeeper> | null>(null)
+  useEffect(() => {
+    if (open) (keeper.current ??= focusKeeper(document)).opened()
+    else keeper.current?.closed()
+  }, [open])
   useEffect(() => {
     if (!open) return
-    const { onPress, onKey } = dismissHandlers(() => ref.current, () => setOpen(false))
+    const { onKey } = dismissHandlers(() => ref.current, () => setOpen(false))
+    const { onPress } = dismissHandlers(() => ref.current, () => {
+      keeper.current?.pressedOutside()
+      setOpen(false)
+    })
     document.addEventListener('mousedown', onPress)
     // capture: before ModalOverlay's and the drawer's Escape, which listen on the document too
     document.addEventListener('keydown', onKey, true)
