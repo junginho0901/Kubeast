@@ -135,6 +135,7 @@ docker-compose에서는 다음 순서로 옮깁니다.
 기본은 꺼져 있으며, 기간을 정하지 않으면 아무것도 지우지 않습니다.
 스키마 소유자인 auth-service가 부팅할 때 한 번, 그 뒤 24시간마다 5000행씩 나눠 지웁니다.
 실행할 때마다 감사 액션 `admin.retention.purge`를 남깁니다(actor `system`, `after`에 기간, 기준 시각, 지운 개수).
+기간마다 따로 지웁니다. 실패한 기간은 `after.failed_windows`에 이름이 남고 레코드가 `failure`가 되며, 뒤의 기간은 그대로 지웁니다.
 비워진 공간은 PostgreSQL의 autovacuum이 다시 쓰며, 파일 크기는 줄지 않습니다.
 
 | 값 | env | 지우는 것 |

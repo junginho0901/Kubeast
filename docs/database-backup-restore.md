@@ -159,6 +159,8 @@ Off by default: nothing is deleted unless you set a window. auth-service (the
 schema owner) purges once at boot and then every 24 hours, in batches of 5000
 rows, and records every run as the audit action `admin.retention.purge`
 (actor `system`, with the windows, cutoffs and deleted counts in `after`).
+Each window runs on its own: one that fails is named in `after.failed_windows`
+and makes the record a `failure`, and the windows after it still delete.
 PostgreSQL's autovacuum reuses the freed space; the files do not shrink.
 
 | values | env | deletes |

@@ -12,8 +12,9 @@
 //     ai.tool.approve / ai.tool.reject).
 //
 // Deletes run in batches so a first purge on an old database does not hold a
-// long lock; PostgreSQL's autovacuum reclaims the space for reuse. Every run is
-// recorded as an audit record admin.retention.purge (actor "system").
+// long lock; PostgreSQL's autovacuum reclaims the space for reuse. Each window
+// runs whether or not one before it failed. Every run is recorded as an audit
+// record admin.retention.purge (actor "system") naming the windows that failed.
 package retention
 
 import (
@@ -25,7 +26,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 )
@@ -102,9 +103,16 @@ type Result struct {
 	InboxAlerts       int64 `json:"alert_inbox"`
 }
 
+// DB is what the purge uses of the database: the service's *pgxpool.Pool.
+type DB interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
 // Purger executes the policy against a database.
 type Purger struct {
-	Pool  *pgxpool.Pool
+	Pool  DB
 	Cfg   Config
 	Audit audit.Writer // may be nil (tests)
 	Now   func() time.Time
@@ -139,108 +147,144 @@ func (p Purger) RunOnce(ctx context.Context) Result {
 	if p.Now != nil {
 		now = p.Now()
 	}
-	res, err := p.Purge(ctx, now)
+	res, failed, err := p.purge(ctx, now)
 	if err != nil {
-		slog.Error("retention: purge failed", "error", err, "deleted", res)
+		slog.Error("retention: purge failed", "error", err, "failed_windows", failed, "deleted", res)
 	} else {
 		slog.Info("retention: purge done", "audit_rows", res.AuditRows, "sessions", res.Sessions, "tool_approvals", res.ToolApprovals, "session_recordings", res.SessionRecordings,
 			"access_reviews", res.AccessReviews, "hygiene_reviews", res.HygieneReviews, "alert_investigations", res.Investigations, "alert_inbox", res.InboxAlerts,
 			"audit_days", p.Cfg.AuditDays, "chat_days", p.Cfg.ChatDays, "review_days", p.Cfg.ReviewDays, "investigation_days", p.Cfg.InvestigationDays)
 	}
-	p.record(ctx, now, res, err)
+	p.record(ctx, now, res, failed, err)
 	return res
 }
 
-// Purge deletes everything older than the configured windows as of now.
+// Purge deletes everything older than the configured windows as of now. The
+// windows run apart: the error joins those of the windows that failed, and a
+// window after a failed one still runs.
 func (p Purger) Purge(ctx context.Context, now time.Time) (Result, error) {
-	var res Result
+	res, _, err := p.purge(ctx, now)
+	return res, err
+}
+
+// purge is Purge that also names the windows that failed, in the order they ran.
+func (p Purger) purge(ctx context.Context, now time.Time) (res Result, failed []string, err error) {
 	if err := p.Cfg.Validate(); err != nil {
-		return res, err
+		return res, nil, err
 	}
 	if !p.Cfg.Enabled() {
-		return res, nil
+		return res, nil, nil
 	}
 	if p.Pool == nil {
-		return res, errors.New("retention: no database pool")
+		return res, nil, errors.New("retention: no database pool")
 	}
 	auditCutoff, chatCutoff := p.Cfg.Cutoffs(now)
+	var errs []error
+	for _, w := range []struct {
+		name   string
+		cutoff time.Time
+		purge  func(context.Context, time.Time, *Result) error
+	}{
+		{"audit", auditCutoff, p.purgeAudit},
+		{"chat", chatCutoff, p.purgeChat},
+		{"review", p.Cfg.ReviewCutoff(now), p.purgeReviews},
+		{"investigation", p.Cfg.InvestigationCutoff(now), p.purgeInvestigations},
+	} {
+		if w.cutoff.IsZero() {
+			continue
+		}
+		if err := w.purge(ctx, w.cutoff, &res); err != nil {
+			failed = append(failed, w.name)
+			errs = append(errs, err)
+		}
+	}
+	return res, failed, errors.Join(errs...)
+}
+
+func (p Purger) purgeAudit(ctx context.Context, cutoff time.Time, res *Result) error {
+	// Only the prefix of the hash chain goes: a row sealed after newer rows
+	// (chain_seq above the oldest kept one) stays until the chain reaches it,
+	// so the kept range verifies without a gap (internal/auditchain).
+	var minKept int64
+	if err := p.Pool.QueryRow(ctx, `SELECT COALESCE(MIN(chain_seq), 9223372036854775807) FROM auth_audit_logs WHERE created_at >= $1`, cutoff).Scan(&minKept); err != nil {
+		return fmt.Errorf("audit log: chain floor: %w", err)
+	}
 	var err error
-	if !auditCutoff.IsZero() {
-		// Only the prefix of the hash chain goes: a row sealed after newer rows
-		// (chain_seq above the oldest kept one) stays until the chain reaches it,
-		// so the kept range verifies without a gap (internal/auditchain).
-		var minKept int64
-		if err := p.Pool.QueryRow(ctx, `SELECT COALESCE(MIN(chain_seq), 9223372036854775807) FROM auth_audit_logs WHERE created_at >= $1`, auditCutoff).Scan(&minKept); err != nil {
-			return res, fmt.Errorf("audit log: chain floor: %w", err)
+	if p.AuditFloor != nil {
+		floor, ferr := p.AuditFloor(ctx)
+		if ferr != nil {
+			return fmt.Errorf("audit log: sink floor: %w", ferr)
 		}
-		if p.AuditFloor != nil {
-			floor, ferr := p.AuditFloor(ctx)
-			if ferr != nil {
-				return res, fmt.Errorf("audit log: sink floor: %w", ferr)
-			}
-			res.AuditRows, err = deleteBatched(ctx, p.Pool,
-				`DELETE FROM auth_audit_logs WHERE id IN (SELECT id FROM auth_audit_logs WHERE created_at < $1 AND id <= $3 AND (chain_seq IS NULL OR chain_seq < $4) ORDER BY id LIMIT $2)`, auditCutoff, floor, minKept)
-		} else {
-			res.AuditRows, err = deleteBatched(ctx, p.Pool,
-				`DELETE FROM auth_audit_logs WHERE id IN (SELECT id FROM auth_audit_logs WHERE created_at < $1 AND (chain_seq IS NULL OR chain_seq < $3) ORDER BY id LIMIT $2)`, auditCutoff, minKept)
-		}
-		if err != nil {
-			return res, fmt.Errorf("audit log: %w", err)
-		}
-		// Terminal recordings follow the audit window; finished ones only.
-		res.SessionRecordings, err = deleteBatched(ctx, p.Pool,
-			`DELETE FROM session_recordings WHERE id IN (SELECT id FROM session_recordings WHERE started_at < $1 AND status IN ('uploaded', 'interrupted') ORDER BY started_at LIMIT $2)`, auditCutoff)
-		if err != nil {
-			return res, fmt.Errorf("session recordings: %w", err)
-		}
+		res.AuditRows, err = deleteBatched(ctx, p.Pool,
+			`DELETE FROM auth_audit_logs WHERE id IN (SELECT id FROM auth_audit_logs WHERE created_at < $1 AND id <= $3 AND (chain_seq IS NULL OR chain_seq < $4) ORDER BY id LIMIT $2)`, cutoff, floor, minKept)
+	} else {
+		res.AuditRows, err = deleteBatched(ctx, p.Pool,
+			`DELETE FROM auth_audit_logs WHERE id IN (SELECT id FROM auth_audit_logs WHERE created_at < $1 AND (chain_seq IS NULL OR chain_seq < $3) ORDER BY id LIMIT $2)`, cutoff, minKept)
 	}
-	if !chatCutoff.IsZero() {
-		n, err := deleteBatched(ctx, p.Pool,
-			`DELETE FROM tool_approvals WHERE id IN (SELECT id FROM tool_approvals WHERE created_at < $1 ORDER BY id LIMIT $2)`, chatCutoff)
-		if err != nil {
-			return res, fmt.Errorf("tool approvals: %w", err)
-		}
-		res.ToolApprovals += n
-		sessions, approvals, err := deleteExpiredSessions(ctx, p.Pool, chatCutoff)
-		res.Sessions += sessions
-		res.ToolApprovals += approvals
-		if err != nil {
-			return res, fmt.Errorf("sessions: %w", err)
-		}
+	if err != nil {
+		return fmt.Errorf("audit log: %w", err)
 	}
-	if reviewCutoff := p.Cfg.ReviewCutoff(now); !reviewCutoff.IsZero() {
-		res.AccessReviews, err = deleteBatched(ctx, p.Pool,
-			`DELETE FROM access_reviews WHERE id IN (SELECT id FROM access_reviews WHERE reviewed_at < $1 ORDER BY reviewed_at LIMIT $2)`, reviewCutoff)
-		if err != nil {
-			return res, fmt.Errorf("access reviews: %w", err)
-		}
-		res.HygieneReviews, err = deleteBatched(ctx, p.Pool,
-			`DELETE FROM hygiene_reviews WHERE id IN (SELECT id FROM hygiene_reviews WHERE reviewed_at < $1 ORDER BY reviewed_at LIMIT $2)`, reviewCutoff)
-		if err != nil {
-			return res, fmt.Errorf("hygiene reviews: %w", err)
-		}
+	// Terminal recordings follow the audit window; finished ones only.
+	res.SessionRecordings, err = deleteBatched(ctx, p.Pool,
+		`DELETE FROM session_recordings WHERE id IN (SELECT id FROM session_recordings WHERE started_at < $1 AND status IN ('uploaded', 'interrupted') ORDER BY started_at LIMIT $2)`, cutoff)
+	if err != nil {
+		return fmt.Errorf("session recordings: %w", err)
 	}
-	if cutoff := p.Cfg.InvestigationCutoff(now); !cutoff.IsZero() {
-		res.Investigations, err = deleteBatched(ctx, p.Pool,
-			`DELETE FROM alert_investigations WHERE id IN (SELECT id FROM alert_investigations WHERE received_at < $1 ORDER BY received_at LIMIT $2)`, cutoff)
-		if err != nil {
-			return res, fmt.Errorf("alert investigations: %w", err)
-		}
-		res.InboxAlerts, err = deleteBatched(ctx, p.Pool,
-			`DELETE FROM alert_inbox WHERE id IN (SELECT id FROM alert_inbox WHERE last_received_at < $1 ORDER BY last_received_at LIMIT $2)`, cutoff)
-		if err != nil {
-			return res, fmt.Errorf("alert inbox: %w", err)
-		}
+	return nil
+}
+
+func (p Purger) purgeChat(ctx context.Context, cutoff time.Time, res *Result) error {
+	n, err := deleteBatched(ctx, p.Pool,
+		`DELETE FROM tool_approvals WHERE id IN (SELECT id FROM tool_approvals WHERE created_at < $1 ORDER BY id LIMIT $2)`, cutoff)
+	if err != nil {
+		return fmt.Errorf("tool approvals: %w", err)
 	}
-	return res, nil
+	res.ToolApprovals += n
+	sessions, approvals, err := deleteExpiredSessions(ctx, p.Pool, cutoff)
+	res.Sessions += sessions
+	res.ToolApprovals += approvals
+	if err != nil {
+		return fmt.Errorf("sessions: %w", err)
+	}
+	return nil
+}
+
+func (p Purger) purgeReviews(ctx context.Context, cutoff time.Time, res *Result) error {
+	var err error
+	res.AccessReviews, err = deleteBatched(ctx, p.Pool,
+		`DELETE FROM access_reviews WHERE id IN (SELECT id FROM access_reviews WHERE reviewed_at < $1 ORDER BY reviewed_at LIMIT $2)`, cutoff)
+	if err != nil {
+		return fmt.Errorf("access reviews: %w", err)
+	}
+	res.HygieneReviews, err = deleteBatched(ctx, p.Pool,
+		`DELETE FROM hygiene_reviews WHERE id IN (SELECT id FROM hygiene_reviews WHERE reviewed_at < $1 ORDER BY reviewed_at LIMIT $2)`, cutoff)
+	if err != nil {
+		return fmt.Errorf("hygiene reviews: %w", err)
+	}
+	return nil
+}
+
+func (p Purger) purgeInvestigations(ctx context.Context, cutoff time.Time, res *Result) error {
+	var err error
+	res.Investigations, err = deleteBatched(ctx, p.Pool,
+		`DELETE FROM alert_investigations WHERE id IN (SELECT id FROM alert_investigations WHERE received_at < $1 ORDER BY received_at LIMIT $2)`, cutoff)
+	if err != nil {
+		return fmt.Errorf("alert investigations: %w", err)
+	}
+	res.InboxAlerts, err = deleteBatched(ctx, p.Pool,
+		`DELETE FROM alert_inbox WHERE id IN (SELECT id FROM alert_inbox WHERE last_received_at < $1 ORDER BY last_received_at LIMIT $2)`, cutoff)
+	if err != nil {
+		return fmt.Errorf("alert inbox: %w", err)
+	}
+	return nil
 }
 
 // deleteBatched repeats a batched DELETE until it deletes nothing.
-func deleteBatched(ctx context.Context, pool *pgxpool.Pool, sql string, cutoff time.Time, extra ...any) (int64, error) {
+func deleteBatched(ctx context.Context, db DB, sql string, cutoff time.Time, extra ...any) (int64, error) {
 	var total int64
 	args := append([]any{cutoff, BatchSize}, extra...)
 	for {
-		tag, err := pool.Exec(ctx, sql, args...)
+		tag, err := db.Exec(ctx, sql, args...)
 		if err != nil {
 			return total, err
 		}
@@ -263,9 +307,9 @@ var expiredSessionStatements = []string{
 }
 
 // deleteExpiredSessions deletes the conversations last active before cutoff, BatchSize at a time.
-func deleteExpiredSessions(ctx context.Context, pool *pgxpool.Pool, cutoff time.Time) (sessions, approvals int64, err error) {
+func deleteExpiredSessions(ctx context.Context, db DB, cutoff time.Time) (sessions, approvals int64, err error) {
 	for {
-		taken, s, a, err := deleteSessionBatch(ctx, pool, cutoff)
+		taken, s, a, err := deleteSessionBatch(ctx, db, cutoff)
 		sessions += s
 		approvals += a
 		if err != nil || taken < BatchSize {
@@ -276,8 +320,8 @@ func deleteExpiredSessions(ctx context.Context, pool *pgxpool.Pool, cutoff time.
 
 // deleteSessionBatch deletes one batch in one transaction. Its sessions are locked first, so no row naming one is
 // added before it goes, whether or not the tables cascade.
-func deleteSessionBatch(ctx context.Context, pool *pgxpool.Pool, cutoff time.Time) (taken int, sessions, approvals int64, err error) {
-	tx, err := pool.Begin(ctx)
+func deleteSessionBatch(ctx context.Context, db DB, cutoff time.Time) (taken int, sessions, approvals int64, err error) {
+	tx, err := db.Begin(ctx)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -304,9 +348,12 @@ func deleteSessionBatch(ctx context.Context, pool *pgxpool.Pool, cutoff time.Tim
 	return len(ids), deleted[len(deleted)-1], deleted[0], nil
 }
 
-func (p Purger) record(ctx context.Context, now time.Time, res Result, runErr error) {
+func (p Purger) record(ctx context.Context, now time.Time, res Result, failed []string, runErr error) {
 	if p.Audit == nil {
 		return
+	}
+	if failed == nil {
+		failed = []string{}
 	}
 	auditCutoff, chatCutoff := p.Cfg.Cutoffs(now)
 	after, _ := json.Marshal(map[string]any{
@@ -325,6 +372,7 @@ func (p Purger) record(ctx context.Context, now time.Time, res Result, runErr er
 		"investigation_days":   p.Cfg.InvestigationDays,
 		"alert_investigations": res.Investigations,
 		"alert_inbox":          res.InboxAlerts,
+		"failed_windows":       failed,
 	})
 	rec := audit.Record{
 		Service:    audit.ServiceAdmin,
