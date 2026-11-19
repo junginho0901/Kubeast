@@ -1775,6 +1775,7 @@
       "approve": "승인하고 실행",
       "reject": "거부",
       "hint": "위에 보이는 인자 그대로, 본인 권한으로 실행됩니다.",
+      "requestFailed": "요청을 처리하지 못했습니다.",
       "status": {
         "pending": "승인 대기",
         "approved": "실행 중",
@@ -2151,6 +2152,8 @@
     "loadErrorEmptyNetworkReason": "{{resource}}: 불러오지 못했습니다(서버 응답 없음): {{reason}}",
     "retry": "다시 시도",
     "deleteKind": "{{kind}} 삭제",
+    "deleteNotSupported": "이 리소스는 삭제를 지원하지 않습니다.",
+    "deleteFailed": "리소스를 삭제하지 못했습니다.",
     "deleteKindConfirm": "{{kind}} \"{{name}}\" 삭제를 진행할까요?",
     "deleteKindConfirmNs": "\"{{namespace}}\" Namespace의 {{kind}} \"{{name}}\" 삭제를 진행할까요?",
     "unknown": "알 수 없음",
@@ -3030,6 +3033,7 @@
     "sweepDone": "점검 완료: {{count}}개 계정을 잠갔습니다.",
     "sweepFailed": "점검에 실패했습니다: {{reason}}",
     "actionFailed": "작업에 실패했습니다.",
+    "updateFailed": "사용자 정보를 수정하지 못했습니다.",
     "loading": "불러오는 중...",
     "title": "User Management",
     "subtitle": "계정 등급(Pending·Member·Admin)을 바꿉니다. Read·Write는 클러스터마다 줍니다.",
@@ -4460,7 +4464,9 @@
       "noChangeMasked": "볼 수 있는 범위에서 두 리비전의 manifest는 같습니다. 숨겨진 값은 여기서 비교하지 않습니다. 롤백해도 그 리비전의 values로 새 리비전이 기록됩니다.",
       "cancel": "취소",
       "apply": "롤백 실행",
-      "applying": "롤백 중..."
+      "applying": "롤백 중...",
+      "dryRunFailed": "변경 미리보기(dry-run)에 실패했습니다.",
+      "rollbackFailed": "롤백에 실패했습니다."
     },
     "upgrade": {
       "edit": "Values 편집",
@@ -4471,6 +4477,8 @@
       "noChange": "적용될 변경이 없습니다.",
       "apply": "업그레이드 실행",
       "applying": "업그레이드 중...",
+      "dryRunFailed": "변경 미리보기(dry-run)에 실패했습니다.",
+      "upgradeFailed": "업그레이드에 실패했습니다.",
       "maskedNote": "<REDACTED:…>로 보이는 값은 그 줄을 그대로 두면 유지됩니다. 바꾸려면 그 자리에 새 값을 쓰고, 없애려면 줄을 지우세요.",
       "keptMasked": "숨겨진 값은 그대로 둡니다: {{names}}",
       "changedMasked": "새 값을 쓰거나 지운 숨겨진 값: {{names}}",
@@ -4484,6 +4492,7 @@
       "passed": "모든 테스트 통과",
       "failed": "테스트 실패 - hook 별 상세는 아래 참조",
       "noHooks": "이 chart 에는 test hook 이 정의되어 있지 않습니다.",
+      "runFailed": "테스트를 실행하지 못했습니다.",
       "close": "닫기"
     },
     "uninstall": {
@@ -4494,7 +4503,9 @@
       "confirmLabel": "확인을 위해 Release 이름 \"{{name}}\"을 그대로 입력하세요.",
       "cancel": "취소",
       "apply": "삭제",
-      "applying": "삭제 중..."
+      "applying": "삭제 중...",
+      "dryRunFailed": "변경 미리보기(dry-run)에 실패했습니다.",
+      "uninstallFailed": "삭제에 실패했습니다."
     },
     "error": {
       "notFound": "{{cluster}} 클러스터에는 {{namespace}} Namespace의 {{name}} Release가 없습니다. 다른 클러스터를 고르거나 Release 목록에서 찾으세요.",
@@ -5379,7 +5390,8 @@
     "player": {
       "title": "세션 기록",
       "text": "텍스트",
-      "close": "닫기"
+      "close": "닫기",
+      "loadFailed": "재생기를 불러오지 못했습니다."
     }
   },
   "alertInbox": {
