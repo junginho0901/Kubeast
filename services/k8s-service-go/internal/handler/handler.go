@@ -25,6 +25,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nfm"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/streamcap"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/traces"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/tracing"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
@@ -90,6 +91,8 @@ type Handler struct {
 	// watchLimits are the sockets' limits of live watches and watch starts, which the Helm releases' stream keeps to
 	// too (nil in tests: none).
 	watchLimits *ws.Multiplexer
+	// streamCaps count each account's open terminals and followed logs on this server (nil in tests: no cap).
+	streamCaps *streamcap.Caps
 }
 
 // SetRecorder turns on terminal session recording (internal/recording).
@@ -119,6 +122,7 @@ func New(svc *k8s.Service, cfg config.Config, auditStore audit.Writer) *Handler 
 		cfg:        cfg,
 		auditStore: auditStore,
 		helmSvc:    helm.NewService(svc, svc.Cache()),
+		streamCaps: streamcap.New(cfg.MaxTerminalsPerAccount, cfg.MaxFollowedLogsPerAccount),
 	}
 }
 

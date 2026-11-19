@@ -244,6 +244,8 @@ multicluster:
   reviewBurst: 0
   wsWatchOpeningConcurrency: 8  # live lists of every cluster receiving their first objects at once, one cluster half of them while another waits; see architecture.md "Many users"
   wsWatchStreamWindowKiB: 1024  # HTTP/2 window of each live list's stream: memory a slow browser's watch holds against how fast a list comes over a long round trip; see architecture.md "Many users"
+  maxTerminalsPerAccount: 20     # terminals (pod exec, node shell) one account may hold open at once on each k8s-service (k8s-service-stream with streams on); one past it is refused before it opens and the screen says why; 0 = no cap
+  maxFollowedLogsPerAccount: 20  # followed logs (a container's output, a log file) the same way
 ```
 
 ## Stages of new values
@@ -269,6 +271,7 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | `gateway.accessLog.upstreamTimes` | false | alpha | Tested: 100 people opening the screens at once on the kind dev install with it on (2026-11-17), every access log line carrying the six fields |
 | `multicluster.breakerConsecutiveFails` (`0` turns the breaker off from 0.7.8), `multicluster.breakerOpenSec` (read from 0.7.8) | 5, 30 | beta | A cluster cut off on the kind dev install |
 | `multicluster.wsWatchOpeningConcurrency`, `multicluster.wsWatchStreamWindowKiB` | 8, 1024 | beta | Tested: upgrade rehearsals from 0.7.7 on kind (the default install, an existing Secret, an external database, AI off, 2 and 3 replicas) and on EKS 1.35, where a live list closed once and was back within 1.1 s when a node was drained, closed once and was back within 1.2 s when turning HPAs on took k8s-service from two pods to one, and did not close while the HPAs added and removed pods |
+| `multicluster.maxTerminalsPerAccount`, `multicluster.maxFollowedLogsPerAccount` | 20, 20 | beta | A run on the kind dev install |
 | `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters`, in the `auth` settings beside `customRoles` | false, [] | alpha | Tested: the whole e2e with it on, twice on the kind dev install with no failure, and 100 people opening the screens at once with no error |
 
 ## Redis users

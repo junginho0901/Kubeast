@@ -364,6 +364,13 @@ func (h *Handler) LogFileStream(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
 		return
 	}
+	releasePlace, ok := h.takeFollowedLog(w, r, func(err error) {
+		_ = h.recordAuditWithPayload(r, auditLogFileRead, "pod", pod, namespace, err, nil, after)
+	})
+	if !ok {
+		return
+	}
+	defer releasePlace()
 	ctx, release := h.holdSession(r.Context())
 	defer release()
 	ctx, leave := h.drain.HoldStream(ctx)

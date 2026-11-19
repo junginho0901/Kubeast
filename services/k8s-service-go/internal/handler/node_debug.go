@@ -66,6 +66,13 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	payload := map[string]interface{}{"image": image}
+	releasePlace, ok := h.takeTerminal(w, r, &debugUpgrader, func(err error) {
+		_ = h.recordAuditWithPayload(r, "k8s.node.shell", "node", nodeName, namespace, err, nil, audit.MustJSON(payload))
+	})
+	if !ok {
+		return
+	}
+	defer releasePlace()
 	var rec *recording.Session
 	if imageErr == nil { // a rejected image never opens a shell: nothing to record
 		var ok bool
