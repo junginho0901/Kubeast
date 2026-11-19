@@ -296,7 +296,8 @@ export function rolledOut(deploy: string, timeoutSeconds = 180) {
 }
 
 // Scales a Deployment to 0 and waits until none of its pods is left (podsOf counts a pod being deleted, which still
-// answers through its preStop and grace: Redis has a 5 s preStop), so what a test does "with it off" starts only then.
+// answers through its preStop and grace: the bundled Redis has no preStop, only the 30 s default grace), so what a
+// test does "with it off" starts only then.
 // The scale back is registered with atExit and given to whenGone before the scale to 0; bringBack scales back, waits
 // for the rollout and returns when.
 export async function takeDown(deploy: string, goneWithinMs = 120_000): Promise<{ offAt: number; bringBack: () => number }> {
