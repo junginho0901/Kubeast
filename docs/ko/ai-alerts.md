@@ -102,6 +102,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 - **화면**: Admin → **Investigations**. 기능과 AI가 켜져 있을 때 메뉴에 보이며, 권한은 `admin.investigations.read`입니다.
   - 받은 시각, 클러스터, 알림, 심각도, Namespace, 상태, 반복, 토큰, 소요 시간을 표로 보여 주고, 상태와 클러스터로 거를 수 있습니다.
   - "보고서"를 누르면 창에 보고서, 알림 라벨/주석, 알림 보낸 곳(Alertmanager·Grafana) 링크, 도구 호출(인자·결과 길이)이 나옵니다.
+  - "원본 쿼리"(알림의 `generatorURL`)와 "알림 보낸 곳"(메시지의 `externalURL`)은 메시지가 호스트가 있는 http·https 주소를 줬을 때만 링크입니다. 다른 주소(`javascript:`, `data:`, 경로)는 글로 보이고, 주소는 마우스를 올리면 나옵니다.
   - 이때 주소가 `?id=<조사 ID>`로 바뀌어, 권한이 있는 사람에게 그 보고서로 가는 링크가 됩니다.
   - 보고서는 외부 알림을 읽은 모델이 쓴 글이므로 원시 HTML 없이 Markdown으로만 그립니다.
 - **모델**: 보고서의 품질은 모델에 달려 있습니다. 작은 로컬 모델은 근거가 약한 인과 관계를 "Likely cause"에 적기도 하므로, 운영 환경에서는 도구 호출을 잘하는 큰 모델을 `model`로 따로 지정하기를 권합니다.
@@ -159,6 +160,7 @@ Alertmanager(또는 Grafana 알림)가 보낸 알림을 **울리는 중인 것�
   - 건너뛴 조사는 행, 알림 창, 보고서에 이유를 보입니다("조사 한도로 건너뜀"과 수).
   - 대상(라벨 `pod`·`deployment`·`node` 등)을 누르면 리소스 상세 창이 열립니다.
   - 한 건을 열면 라벨, 주석, 알림 보낸 곳 링크, 처리 칸, AI 조사가 나옵니다.
+  - 이 창의 "원본 쿼리"와 "알림 보낸 곳"도 보고서 창과 같습니다: http·https 주소만 링크이고 다른 주소는 글로 보입니다.
   - API는 `GET /api/v1/alerts/inbox?cluster=`·`/{id}`(`investigate_now`: 되는지, 안 되면 `reason`·`until`)·`PATCH /{id}`·`/{id}/investigation`·`POST /{id}/investigate`(403 `forbidden`·`manual_off`, 429 `provider_paused`·`manual_budget`와 `until`·`Retry-After`, 감사 행을 못 남기면 503)입니다.
   - 보존 기간은 조사와 같은 `retention.investigationDays`이며, 마지막으로 받은 시각부터 셉니다.
 
