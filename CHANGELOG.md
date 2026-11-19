@@ -88,6 +88,7 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - A values file copied from 0.7.6 or earlier stops on its release image tag instead of keeping that release's images.
 - A chat answer whose stream was cut is saved once, under its question.
 - AI Chat says under its title why it could not read the AI model, such as no model set up yet, where it showed only "Start a new chat": at once, in two lines at most with the whole reason on hover.
+- Advanced Search's examples "Pods whose first container restarted more than 5 times" (`status.containerStatuses[0].restartCount > 5`) and "ConfigMaps that carry data" (`data != null`) find what they say, where `status.containerStatuses?.some(c => c.restartCount > 5)` and `!!data` matched nothing, and "Completed jobs (not suspended)" reads `status.completionTime != null`, where `status.succeeded > 0` also took a running Job with one pod done; an expression the search cannot read or compute says so with the reason in place of the results ("The expression could not be read: Unexpected operator"), also when the read listed no objects, and tells the floating chat the same with the types the read failed or cut, where it showed 0 results.
 - For development: tests that failed now and then on a busy runner, or read one pod where a service can run two, wait on what they check, and the guard's build to compare with (`scripts/before-stack.sh up <tag>`) takes the probes of that tag's chart.
 
 [0.7.8]: https://github.com/junginho0901/Kubeast/compare/v0.7.7...v0.7.8

@@ -39,6 +39,11 @@
       "screen": "^\\w+ · /(admin/access\\-requests|admin/access\\-review|admin/ai\\-usage|admin/investigations|admin/users|cluster/leases|cluster/limitranges|cluster/mutatingadmissionpolicies|cluster/mutatingwebhookconfigurations|cluster/namespaces|cluster/nodes|cluster/priorityclasses|cluster/resourcequotas|cluster/runtimeclasses|cluster/validatingadmissionpolicies|cluster/validatingwebhookconfigurations|configuration/configmaps|configuration/secrets|cost|custom\\-resources/groups|custom\\-resources/instances|gateway/backendtlspolicies|gateway/gatewayclasses|gateway/gateways|gateway/grpcroutes|gateway/httproutes|gateway/policies|gateway/referencegrants|gpu/deviceclasses|gpu/nodes|gpu/pods|gpu/resourceclaims|gpu/resourceclaimtemplates|gpu/resourceslices|helm/releases|monitoring|network/endpoints|network/endpointslices|network/ingressclasses|network/ingresses|network/networkpolicies|network/services|security/clusterrolebindings|security/clusterroles|security/policyreports|security/rolebindings|security/roles|security/serviceaccounts|storage\\?tab=pvcs|storage\\?tab=pvs|storage\\?tab=storageclasses|storage\\?tab=volumeattachments|workloads/cronjobs|workloads/daemonsets|workloads/deployments|workloads/hpas|workloads/jobs|workloads/pdbs|workloads/pods|workloads/replicasets|workloads/statefulsets|workloads/vpas) on ",
       "why": "A list footer's page buttons (Prev, the page, Next) sit 2.5rem further left when the floating AI chat button is drawn, so the button no longer covers Next; the rows, the range shown and the rest of the page are as in v0.7.7.",
       "pr": "#949"
+    },
+    {
+      "screen": "^\\w+ · /cluster/search on ",
+      "why": "Advanced Search opens on its examples, and three of them changed so that each one evaluates and picks what its title says: Restarts over 5 reads status.containerStatuses[0].restartCount, ConfigMap with data asks data != null, and Completed Jobs asks spec.suspend === false && status.completionTime != null (a Job with one finished pod and others running is not complete).",
+      "pr": "#962"
     }
   ]
 }
