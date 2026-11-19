@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
 
-import { CLUSTER, Probe, type Answer, bearer, deploymentExists, kubectl, login, notOk, podsOf, restartCounts, restartsSince, rolledOut, show, sleep, NS } from './shared'
+import { CLUSTER, Probe, type Answer, bearer, deploymentExists, kubectl, kubectlAsync, login, longestGap, notOk, podsOf, restartCounts, restartsSince, rolledOutAsync, show, sleep, NS } from './shared'
 
 // PR #856 (chart podShutdown.preStopSeconds): the Deployments a Service sends to wait in preStop before SIGTERM, so a
 // rollout with requests in flight answers no 5xx and does not hang (before it, a request right after
@@ -11,10 +11,15 @@ import { CLUSTER, Probe, type Answer, bearer, deploymentExists, kubectl, login, 
 // to 200 and to the probe's own time limit (no answer = status 0). The restart counts of the pods that stayed are held
 // to 0. A Deployment the install does not run, or a route the install does not serve (the AI off, MCP off), skips its
 // case with the reason. What it changes: four rollouts per Deployment; each case waits for its rollout to end.
+// kubectl runs through kubectlAsync while the probe sends: a synchronous kubectl holds the worker's event loop, so the
+// probe would send nothing during the rollouts and time the request it had started with the whole wait.
 
 // A request that takes longer than this counts as a hang (the bug held one for 30 s).
 const HANG_MS = Number(process.env.E2E_FAULT_HANG_MS || 5_000)
 const ROUNDS = Number(process.env.E2E_FAULT_ROLLOUTS || 4)
+// The probe sends every 100 ms; a longer time between two of its requests means the loop was held (see above). Below
+// HANG_MS, so a hold alone cannot make an answer read as a hang.
+const SEND_GAP_MS = 2_000
 
 type Case = { deploy: string; why: string; paths: (h: Record<string, string>, request: APIRequestContext) => Promise<string[] | string> }
 
@@ -80,8 +85,8 @@ test.describe('pod shutdown: a rollout with requests in flight (PR #856, F-6 on 
       let answers: Answer[] = []
       try {
         for (let i = 0; i < ROUNDS; i++) {
-          kubectl(['-n', NS, 'rollout', 'restart', `deploy/${c.deploy}`])
-          rolledOut(c.deploy)
+          await kubectlAsync(['-n', NS, 'rollout', 'restart', `deploy/${c.deploy}`])
+          await rolledOutAsync(c.deploy)
         }
         // the old pods' preStop and shutdown run past `rollout status`
         await sleep(15_000)
@@ -94,6 +99,8 @@ test.describe('pod shutdown: a rollout with requests in flight (PR #856, F-6 on 
       test.info().attach('answers.json', { body: JSON.stringify(answers), contentType: 'application/json' })
 
       expect(answers.length, 'the probe kept sending').toBeGreaterThan(ROUNDS * 20)
+      // the MCP loop waits for each answer, so its gaps hold the answers' times
+      if (!mcp) expect(longestGap(answers), 'ms between two requests of the probe while the rollouts ran').toBeLessThanOrEqual(SEND_GAP_MS)
       expect(failed.length, `answers other than 200:\n${show(failed)}`).toBe(0)
       expect(slow.length, `answers slower than ${HANG_MS} ms:\n${show(slow)}`).toBe(0)
       expect(restartsSince(before), 'restarts of the pods that stayed').toEqual({})
@@ -114,13 +121,15 @@ test.describe('pod shutdown: a rollout with requests in flight (PR #856, F-6 on 
       if (!pod) { misses.push(`${c.deploy}: no ready pod`); continue }
       const probe = new Probe(request, paths, headers, 100, HANG_MS * 2)
       await sleep(1_000)
-      kubectl(['-n', NS, 'delete', 'pod', pod.name, '--wait=false'])
+      await kubectlAsync(['-n', NS, 'delete', 'pod', pod.name, '--wait=false'])
       await sleep(5_000)
-      rolledOut(c.deploy)
+      await rolledOutAsync(c.deploy)
       await sleep(10_000)
       const answers = await probe.stop()
       const bad = notOk(answers, (a) => a.status === 200 && a.ms <= HANG_MS)
       if (bad.length) misses.push(`${c.deploy}:\n${show(bad)}`)
+      const gap = longestGap(answers)
+      if (gap > SEND_GAP_MS) misses.push(`${c.deploy}: the probe sent nothing for ${gap} ms`)
     }
     expect(misses, 'Deployments whose deleted pod left a request unanswered, failed or slow').toEqual([])
   })

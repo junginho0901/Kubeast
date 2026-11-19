@@ -26,6 +26,10 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
 - A request meant for one server goes through `kubectl port-forward pod/<name>`, so the answer is that server's.
 - `Probe` sends a request about every 100 ms through the gateway (step 3 §6 "about 10 a second") and keeps every
   answer: status 0 = no answer within its timeout or a broken connection. Each test attaches the answers as JSON.
+  The Probe sends and times its requests on the worker's event loop, which `kubectl()` (synchronous) holds until it
+  returns: nothing is sent meanwhile and the request already started is timed with the wait added. kubectl run while a
+  Probe sends goes through `kubectlAsync` / `rolledOutAsync`, and `longestGap` gives the longest time between two of
+  its requests (`pod-shutdown` holds it to 2 s).
 - "Kill" is `kubectl delete pod --grace-period=0 --force`; "stop" is a plain `kubectl delete pod` (preStop, SIGTERM).
   A force delete still gives the process a SIGTERM about 2 s before SIGKILL (the kubelet's shortest grace), so a
   server can still run part of its shutdown; where that changes what is read, the test says so.

@@ -1,4 +1,4 @@
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
+import { execFile, execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -31,6 +31,17 @@ export function kubectl(args: string[], opts: { input?: string; timeout?: number
   return execFileSync('kubectl', ['--kubeconfig', KUBECONFIG, '--context', `kind-${KIND}`, ...args], {
     encoding: 'utf8', input: opts.input, timeout: opts.timeout ?? 120_000, stdio: ['pipe', 'pipe', 'pipe'],
   }).trim()
+}
+
+// kubectl that leaves the worker's event loop running, for calls made while a Probe sends: kubectl() (execFileSync)
+// holds the loop until it returns, so the Probe sends nothing meanwhile and the request it had started is timed with
+// the whole wait added (four rollout restarts of auth-service held it 24 s, and a 200 sent before them read 24 281 ms).
+export function kubectlAsync(args: string[], opts: { timeout?: number } = {}): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile('kubectl', ['--kubeconfig', KUBECONFIG, '--context', `kind-${KIND}`, ...args], {
+      encoding: 'utf8', timeout: opts.timeout ?? 120_000,
+    }, (err, stdout) => (err ? reject(err) : resolve(stdout.trim())))
+  })
 }
 
 export function kubectlOk(args: string[], opts: { input?: string; timeout?: number } = {}): { ok: boolean; out: string } {
@@ -295,6 +306,11 @@ export function rolledOut(deploy: string, timeoutSeconds = 180) {
   kubectl(['-n', NS, 'rollout', 'status', `deploy/${deploy}`, `--timeout=${timeoutSeconds}s`], { timeout: (timeoutSeconds + 10) * 1000 })
 }
 
+// rolledOut while a Probe sends (kubectlAsync).
+export async function rolledOutAsync(deploy: string, timeoutSeconds = 180) {
+  await kubectlAsync(['-n', NS, 'rollout', 'status', `deploy/${deploy}`, `--timeout=${timeoutSeconds}s`], { timeout: (timeoutSeconds + 10) * 1000 })
+}
+
 // Scales a Deployment to 0 and waits until none of its pods is left (podsOf counts a pod being deleted, which still
 // answers through its preStop and grace: Redis has a 5 s preStop), so what a test does "with it off" starts only then.
 // The scale back is registered with atExit and given to whenGone before the scale to 0; bringBack scales back, waits
@@ -413,6 +429,10 @@ export class Probe {
 }
 
 export const notOk = (answers: Answer[], ok: (a: Answer) => boolean = (a) => a.status === 200) => answers.filter((a) => !ok(a))
+
+// The longest time between two requests of a Probe (answers in send order). Well past its everyMs, something held the
+// worker's event loop: nothing was sent then, and the answer on its way was timed with the hold added.
+export const longestGap = (answers: Answer[]) => answers.reduce((m, a, i) => (i ? Math.max(m, a.at - answers[i - 1].at) : m), 0)
 
 // The answers as one line each, for a failure message.
 export const show = (answers: Answer[], limit = 20) => answers.slice(0, limit)
