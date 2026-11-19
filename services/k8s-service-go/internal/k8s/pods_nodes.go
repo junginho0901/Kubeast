@@ -167,7 +167,7 @@ const nodeReadsAtOnce = 16
 
 // nodeReadPlaces bound the reads of a node's pods of each cluster at once, shared or as a caller; without them the
 // client's burst let 200 through together.
-var nodeReadPlaces = newClusterPlaces("node pods read", nodeReadsAtOnce)
+var nodeReadPlaces = newClusterPlaces("node pods read", nodeReadsAtOnce, clientWait.forPlaces(placesNodePods))
 
 // listNodePodsAsCaller is one list of node's pods in namespace ("" = every namespace) as the caller, holding one of
 // the cluster's node read places: before the informers sync, or when the shared read is refused, a crowd of callers

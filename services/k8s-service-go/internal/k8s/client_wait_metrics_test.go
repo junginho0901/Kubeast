@@ -25,6 +25,9 @@ func gatherWaits(t *testing.T, m *clientWaitMetrics) (map[string]waitSeries, map
 	}
 	seconds, waited := map[string]waitSeries{}, map[string]float64{}
 	for _, f := range families {
+		if f.GetName() == "kubeast_k8s_read_place_wait_seconds" {
+			continue // gatherPlaceWaits
+		}
 		for _, s := range f.GetMetric() {
 			labels := map[string]string{}
 			var names []string

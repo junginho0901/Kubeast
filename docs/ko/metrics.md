@@ -22,8 +22,9 @@ Kubeast **자신**의 상태를 Prometheus 텍스트 포맷으로 노출합니�
 | `kubeast_terminals_open` | gauge | `service` | k8s-service에 열려 있는 터미널(Pod exec, 노드 셸) 수 |
 | `kubeast_followed_logs_open` | gauge | `service` | k8s-service에 열려 있는 실시간 로그(컨테이너 출력, 로그 파일) 수 |
 | `kubeast_stream_cap_refusals_total` | counter | `service`, `kind` | 기동 뒤 k8s-service가 계정 상한(`multicluster.maxTerminalsPerAccount`, `maxFollowedLogsPerAccount`)에서 거절한 터미널(`kind="terminal"`)과 실시간 로그(`followed_log`) 수. 거절마다 실패 감사 행도 남습니다. 실시간 로그 거절은 200이라 요청 지표에는 안 보입니다 |
-| `kubeast_k8s_client_rate_wait_seconds` | histogram | `service`, `limiter`, `passed_over` | k8s-service가 클러스터 API 서버로 보내는 요청이 보내기 전에 클라이언트 속도를 기다린 시간입니다. 바로 나간 요청은 0이고, 클러스터를 모두 더한 값입니다(버킷 1 ms~60 s). `limiter`는 `user`(클라이언트 속도, `multicluster.clientQPS`·`clientBurst`) 또는 `review`(접근 확인 전용 속도, `multicluster.reviewQPS`를 정했을 때만)입니다. `passed_over`는 다시 묻는 접근 확인이 나중에 온 요청을 먼저 보낸 경우 `true`이며, 그렇게 양보하는 시간은 최대 10초입니다. 기다리다 그만둔 요청도 기다린 시간만큼 셉니다. dynamic 클라이언트(커스텀 리소스, apply)는 client-go의 자체 속도를 쓰므로 세지 않습니다 |
+| `kubeast_k8s_client_rate_wait_seconds` | histogram | `service`, `limiter`, `passed_over` | k8s-service가 클러스터 API 서버로 보내는 요청이 보내기 전에 클라이언트 속도를 기다린 시간입니다. 바로 나간 요청은 0이고, 클러스터를 모두 더한 값입니다(버킷 1 ms~60 s). `limiter`는 `user`(클라이언트 속도, `multicluster.clientQPS`·`clientBurst`), `review`(접근 확인 전용 속도, `multicluster.reviewQPS`를 정했을 때만) 또는 `cache`(k8s-service가 모두의 몫으로 한 번 `kubeast:cache`로 읽는 것 — 개요 informer의 목록, 노드의 파드, 객체의 이벤트. client-go는 watch에는 토큰을 쓰지 않음 — 가 같은 `clientQPS`·`clientBurst`의 client-go 토큰 통에서 기다린 시간)입니다. `passed_over`는 다시 묻는 접근 확인이 나중에 온 요청을 먼저 보낸 경우 `true`이며, 그렇게 양보하는 시간은 최대 10초입니다. `cache`에는 이 계열이 없습니다. 기다리다 그만둔 요청도 기다린 시간만큼 셉니다. dynamic 클라이언트(커스텀 리소스, apply)는 client-go의 자체 속도를 쓰므로 세지 않습니다 |
 | `kubeast_k8s_client_rate_waits_total` | counter | `service`, `limiter` | 그 속도를 조금이라도 기다린 클러스터 요청 수(차례를 받았든 못 받았든) |
+| `kubeast_k8s_read_place_wait_seconds` | histogram | `service`, `places` | 클러스터 읽기가 그 클러스터의 같은 종류 읽기 자리 하나를 기다린 시간입니다. 클러스터를 모두 더한 값입니다(버킷 1 ms~60 s, 자리가 비어 있으면 몇 마이크로초). `places`는 `node_pods`(노드의 파드 읽기 자리 16개, 모두의 몫이든 호출자로든 — Cluster View 노드 상자, 노드 서랍) 또는 `event_list`(`EVENT_LIST_CONCURRENCY`, 4: 서랍이 읽는 객체 이벤트)입니다. 기다리다 그만둔 읽기도 기다린 시간만큼 셉니다 |
 | `kubeast_k8s_access_reviews_total` | counter | `service`, `asked_as` | k8s-service가 1분 기억하는 접근 확인(화면의 list·get 확인)에 보낸 SelfSubjectAccessReview 수, 클러스터를 합친 값. `asked_as`는 `person`, 또는 리뷰 하나로 그 사람의 그룹을 가진 모두에게 답한 읽기 확인이면 `groups`(`auth.impersonation.sharedReadChecks`, [클러스터 요구 사항](cluster-requirements.md) §1). can-i, 로그 검색, 흐름, Top Talkers는 그 사람으로 따로 보내며 여기 세지 않습니다 |
 | `kubeast_shared_writes_without_place_total` | counter | `service` | 256 KiB 넘는 노드 목록 · 노드 칸 답과 묶인 읽기 답 가운데 쓰기 자리 16개를 기다린 시간이 합쳐 1초에 닿아 남은 본문을 자리 없이 쓴 수, 시작한 뒤로([아키텍처](architecture.md)). 자리가 1초 안에 내보낼 수 있는 것보다 큰 몰림 때와, 차례 기다림이 합쳐 1초가 된 느린 읽는 이 때 오릅니다. 조용할 때 오르면 자리를 쥔 채 읽지 않는 읽는 이가 있다는 뜻입니다 |
 | `kubeast_audit_sink_pending` | gauge | `service`, `sink`, `type` | 감사 싱크(`audit.sinks`)가 아직 보내지 않은 감사 행 수. 전송을 맡은 auth-service 레플리카만 냅니다 |
@@ -72,6 +73,7 @@ Operator 없이 Prometheus를 쓴다면 `kubernetes_sd_configs`(role `endpoints`
 - 서비스별 요청률 `sum by (service) (rate(kubeast_http_requests_total[5m]))`
 - 라우트별 p95 `histogram_quantile(0.95, sum by (route, le) (rate(kubeast_http_request_duration_seconds_bucket{service="k8s"}[5m])))`
 - 클러스터로 가는 클라이언트 속도 대기 p95 `histogram_quantile(0.95, sum by (limiter, le) (rate(kubeast_k8s_client_rate_wait_seconds_bucket[5m])))`. 0에 가까우면 화면을 늦추는 것은 이 속도가 아닙니다. API 서버가 429 없이 답하는데 몇 초씩 나오면 `multicluster.clientQPS`·`clientBurst`(접근 확인이면 `reviewQPS`)를 보세요
+- 클러스터 읽기 자리 대기 p95 `histogram_quantile(0.95, sum by (places, le) (rate(kubeast_k8s_read_place_wait_seconds_bucket[5m])))`. `limiter="cache"` 대기는 0에 가까운데 `node_pods`가 몇 초씩이면 노드 상자의 속도를 정하는 것은 토큰 통이 아니라 자리입니다
 
 ## 확인
 
