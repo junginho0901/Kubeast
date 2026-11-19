@@ -251,12 +251,16 @@ func openFollow(t *testing.T, srv *httptest.Server, target string) (sseEvent, co
 // refusedFollow reads a whole answer that should be the refusal at the account's cap.
 func refusedFollow(t *testing.T, srv *httptest.Server, target string) {
 	t.Helper()
-	resp, err := http.Get(srv.URL + target)
+	// the refusal ends at once; a stream that stays open is no refusal
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(srv.URL + target)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("the answer did not end: %v, read %q", err, body)
+	}
 	want := "retry: 30000\nevent: " + streamcap.Event + "\ndata: " + streamcap.FollowedLogReason + "\n\n"
 	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Type") != "text/event-stream" || string(body) != want {
 		t.Fatalf("status %d %q body %q, want the event alone", resp.StatusCode, resp.Header.Get("Content-Type"), body)
