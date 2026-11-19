@@ -1886,7 +1886,7 @@
     "window": "최근 {{w}}",
     "all": "전체",
     "droppedOnly": "차단만",
-    "refresh": "새로 고침",
+    "refresh": "새로고침",
     "verdict": "판정",
     "peer": "상대",
     "port": "포트",
@@ -1905,7 +1905,7 @@
   },
   "netdrops": {
     "range": "최근 {{w}}",
-    "refresh": "새로 고침",
+    "refresh": "새로고침",
     "totals": "최근 {{w}} 동안 들어옴 {{in}} · 나감 {{out}}",
     "none": "최근 {{w}} 동안 차단이 없습니다.",
     "peer": "상대",
@@ -1925,7 +1925,7 @@
   "toptalkers": {
     "intro": "클러스터의 Network Flow Monitor(AWS)가 잰, 이 {{kind}}와 가장 많이 주고받는 상대와 재전송이 나는 곳입니다. 읽으면 감사 로그에 남습니다.",
     "load": "상위 통신 보기",
-    "refresh": "새로 고침",
+    "refresh": "새로고침",
     "range": "최근 {{w}}",
     "view": {
       "cluster": "클러스터 안",
