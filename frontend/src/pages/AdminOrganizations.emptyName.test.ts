@@ -67,22 +67,17 @@ const problems = (tree: unknown) => elementsOf(tree, (p) => p['data-testid'] ===
 const addFailures = (tree: unknown) => elementsOf(tree, (p) => p['data-testid'] === 'team-add-error')
 const alerts = (tree: unknown) => elementsOf(tree, (p) => p.role === 'alert')
 const enterName = (text: string) => (nameField(page()).onChange as (e: { target: { value: string } }) => void)({ target: { value: text } })
-// presses Add (Enter in the field submits the same form); answers whether the name field was given the focus. The
-// form answers only the name field's own selector (its id) with an element, so the focus cannot land elsewhere.
+// presses Add (Enter in the field submits the same form); answers whether the name field was given the focus, through
+// the ref the field itself holds, so the focus cannot land elsewhere
 const pressAdd = () => {
   const tree = page()
-  const nameSelector = `#${String(nameField(tree).id)}`
-  const asked: string[] = []
   const focus = vi.fn()
-  const querySelector = (selector: string) => {
-    asked.push(selector)
-    return selector === nameSelector ? { focus } : null
-  }
+  ;(nameField(tree).ref as { current: unknown }).current = { focus }
   const form = one(tree, (_p, t) => t === 'form', 'the add form')
-  ;(form.onSubmit as (e: unknown) => void)({ preventDefault: () => {}, currentTarget: { querySelector } })
-  expect(asked.filter((s) => s !== nameSelector), 'the form looks for the name field only').toEqual([])
+  ;(form.onSubmit as (e: unknown) => void)({ preventDefault: () => {} })
   return focus.mock.calls.length > 0
 }
+const problemKey = () => (elementsOf(page(), (p) => p['data-testid'] === 'team-name-problem')[0] as unknown as { key: string | null }).key
 
 describe('Teams: Add with no name', () => {
   it('says under the field that a name is needed, marks the field with it and sends nothing', () => {
@@ -112,7 +107,30 @@ describe('Teams: Add with no name', () => {
     pressAdd()
     expect(textsOf(problems(page())).join('')).toBe('팀 이름을 입력하세요.')
     enterName(' ')
+    pressAdd()
     expect(textsOf(problems(page())).join('')).toBe('팀 이름을 입력하세요. 공백만으로는 이름이 되지 않습니다.')
+  })
+
+  // #955 review L1: the line followed what the field held, so typing spaces or deleting after Add changed it and a
+  // screen reader read it again, while a second Add with the same reason said nothing
+  it('says why as the field was at the press, and says it again at each press', () => {
+    pressAdd()
+    const first = problemKey()
+    enterName('  ')
+    expect(textsOf(problems(page())).join(''), 'typing spaces after Add').toBe('Enter a team name.')
+    expect(problemKey(), 'the same line, not read again').toBe(first)
+    enterName('')
+    expect(textsOf(problems(page())).join(''), 'deleting them').toBe('Enter a team name.')
+    expect(problemKey()).toBe(first)
+
+    pressAdd()
+    const second = problemKey()
+    expect(textsOf(problems(page())).join(''), 'Add again, the field empty').toBe('Enter a team name.')
+    expect(second, 'drawn anew, so read again').not.toBe(first)
+    enterName(' ')
+    pressAdd()
+    expect(textsOf(problems(page())).join(''), 'Add with a space').toBe('Enter a team name: spaces alone are not one.')
+    expect(problemKey()).not.toBe(second)
   })
 
   it('the reason goes once a name is typed, and Add sends that name without its spaces', () => {
@@ -171,5 +189,17 @@ describe('Teams: the name field', () => {
       const labels = elementsOf(tree, (p, type) => type === 'label' && p.htmlFor === id)
       expect(labels.map((l) => textsOf(l).join('')), `${lang}: the label for the field`).toEqual([text])
     }
+  })
+
+  // #955 review L6: the field and its reason had fixed ids; they are React's (useId), as ClusterNodeMap's hint is
+  it("takes its id and its reason's id from useId", () => {
+    pressAdd()
+    const tree = page()
+    const id = nameField(tree).id
+    const [problem] = problems(tree)
+    expect(id).toMatch(/^_r_\w+_$/)
+    expect(problem.props.id).toMatch(/^_r_\w+_$/)
+    expect(problem.props.id).not.toBe(id)
+    expect(nameField(page()).id, 'the same id on the next render').toBe(id)
   })
 })

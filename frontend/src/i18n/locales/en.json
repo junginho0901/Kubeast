@@ -3835,6 +3835,8 @@
     "nameTakenGroup": "On a cluster this name acts as the same Kubernetes group as role \"{{role}}\" ({{group}}). Choose another name.",
     "groupHintEncoded": "A character outside ASCII is written as ~ and its Unicode code point (운 → ~c6b4), so Korean names of one length still make different groups.",
     "nameTakenOther": "Another role's name makes the same group. Choose another name.",
+    "nameRequired": "Enter a role name.",
+    "nameBlank": "Enter a role name: spaces alone are not one.",
     "sameGroupNote": "Its name differs from role \"{{role}}\" only in letter case, spaces or punctuation, so it is not given on a cluster any more. A grant it already has acts as no role group where the other is a built-in role. Rename it.",
     "sameGroupHint": "not grantable: same name as {{role}} apart from letter case or spaces",
     "sameGroupRefused": "Role \"{{role}}\" is not given on a cluster: its name differs from role \"{{other}}\" only in letter case, spaces or punctuation. Rename it in Role Management first.",

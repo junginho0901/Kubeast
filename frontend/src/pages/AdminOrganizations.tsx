@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, Member, Organization } from '@/services/api'
 import { Plus, Search, Trash2, Users, X } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActionFailure } from '@/components/ActionFailure'
 import { ModalOverlay } from '@/components/ModalOverlay'
@@ -21,7 +21,6 @@ import { teamsMatching } from './admin/adminListSearch'
 // Admin → Teams: the teams users pick from, each with its member count. The page is as high as the screen and the
 // list pages the teams, as many as fit (or the footer's fixed choice); the search reads every team's name.
 const TEAM_COLUMNS = 2
-const NAME_FIELD = 'team-name'
 
 export default function AdminOrganizations() {
   const queryClient = useQueryClient()
@@ -31,8 +30,12 @@ export default function AdminOrganizations() {
   const confirm = useConfirm()
 
   const [newTeam, setNewTeam] = useState('')
-  // Add pressed with no name: said under the field until a name is typed
-  const [nameMissing, setNameMissing] = useState(false)
+  // Add pressed with no name: why, as the field was at the press, said under it until a name is typed; each press
+  // draws the line anew, so a screen reader says it again
+  const [nameProblem, setNameProblem] = useState<{ blank: boolean; press: number } | null>(null)
+  const nameId = useId()
+  const nameProblemId = useId()
+  const nameRef = useRef<HTMLInputElement>(null)
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null)
 
   const { has: hasPerm } = usePermission()
@@ -93,30 +96,31 @@ export default function AdminOrganizations() {
           e.preventDefault()
           const name = inputValue.trim()
           if (!name) {
-            setNameMissing(true)
+            setNameProblem((p) => ({ blank: inputValue !== '', press: (p?.press ?? 0) + 1 }))
             // an earlier Add's failure is not about this press, so only this reason shows; an Add on its way is left be
             if (createMutation.isError) createMutation.reset()
-            e.currentTarget.querySelector<HTMLInputElement>(`#${NAME_FIELD}`)?.focus()
+            nameRef.current?.focus()
             return
           }
           createMutation.mutate({ type, name })
         }}
       >
-        <label htmlFor={NAME_FIELD} className="block text-xs font-semibold text-slate-400 mb-1">
+        <label htmlFor={nameId} className="block text-xs font-semibold text-slate-400 mb-1">
           {tr('adminOrg.nameLabel', 'Team name')}
         </label>
         <div className="flex gap-2">
           <input
-            id={NAME_FIELD}
+            id={nameId}
+            ref={nameRef}
             value={inputValue}
             maxLength={NAME_MAX}
             onChange={(e) => {
               setInputValue(e.target.value)
-              if (e.target.value.trim()) setNameMissing(false)
+              if (e.target.value.trim()) setNameProblem(null)
               if (createMutation.isError) createMutation.reset()
             }}
-            aria-invalid={nameMissing || undefined}
-            aria-describedby={nameMissing ? 'team-name-problem' : undefined}
+            aria-invalid={nameProblem ? true : undefined}
+            aria-describedby={nameProblem ? nameProblemId : undefined}
             className="min-w-0 flex-1 h-10 rounded-lg border border-control bg-slate-900 px-3 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             placeholder={tr('adminOrg.inputPlaceholder', 'Enter name...')}
           />
@@ -130,11 +134,11 @@ export default function AdminOrganizations() {
           </button>
         </div>
       </form>
-      {nameMissing && (
-        <p id="team-name-problem" role="alert" data-testid="team-name-problem" className="mt-1 shrink-0 text-[11px] text-notice-text-failed">
-          {inputValue === ''
-            ? tr('adminOrg.nameRequired', 'Enter a team name.')
-            : tr('adminOrg.nameBlank', 'Enter a team name: spaces alone are not one.')}
+      {nameProblem && (
+        <p key={nameProblem.press} id={nameProblemId} role="alert" data-testid="team-name-problem" className="mt-1 shrink-0 text-[11px] text-notice-text-failed">
+          {nameProblem.blank
+            ? tr('adminOrg.nameBlank', 'Enter a team name: spaces alone are not one.')
+            : tr('adminOrg.nameRequired', 'Enter a team name.')}
         </p>
       )}
 

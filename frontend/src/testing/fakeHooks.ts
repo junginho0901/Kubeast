@@ -11,7 +11,7 @@ const rt = {
   memos: [] as { deps?: readonly unknown[]; value: unknown }[],
   effects: [] as EffectSlot[],
   pending: [] as (() => void)[],
-  at: { s: 0, r: 0, m: 0, e: 0 },
+  at: { s: 0, r: 0, m: 0, e: 0, i: 0 },
   dirty: false,
 }
 
@@ -59,12 +59,16 @@ export const fakeHooks = {
   },
   useEffect: effectSlot,
   useLayoutEffect: effectSlot,
+  // one id per call, the same across renders, in React's form
+  useId() {
+    return `_r_${(rt.at.i++).toString(32)}_`
+  },
 }
 
 // Calls `run` as React renders it: again while a state changed, effects after each pass. Returns the last output.
 export function fakeRender<T>(run: () => T): T {
   for (let pass = 0; pass < 25; pass++) {
-    rt.at = { s: 0, r: 0, m: 0, e: 0 }
+    rt.at = { s: 0, r: 0, m: 0, e: 0, i: 0 }
     rt.dirty = false
     rt.pending = []
     const out = run()
