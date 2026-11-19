@@ -86,6 +86,7 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - A time with an offset (such as `+09:00`) now means the moment it names in an audit log search, its CSV export, an AI Usage period and the chat list API's `before_updated_at`. Before, its clock time was read as UTC, so the results were off by the offset. The console sends UTC and was not affected.
 - The AI tools read `until_time` the same way, and refuse one of the right form that is no real time (such as `2026-02-30T00:00:00Z`) with the reason. An audit log search or export with a `since` or `until` that is not an RFC 3339 time now answers 400, where that bound was left out and every row on its side matched.
 - Secret files stay readable with `podSecurity.enabled: false`.
+- The chart refuses `sessionRecording.storage: file` with more than one k8s-service pod (`replicas.k8sService` above 1, or `autoscaling.k8sService` with `maxReplicas` above 1), as it does with `streams.enabled`: every pod mounted the one file volume. Use `s3` or `database`.
 - Teams says under the name field why Add did not add a team with no name, where it only moved the focus to the field, and the field has a label.
 - A values file copied from 0.7.6 or earlier stops on its release image tag instead of keeping that release's images.
 - A chat answer whose stream was cut is saved once, under its question.
