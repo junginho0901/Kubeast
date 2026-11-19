@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ModelConfigResponse } from '@/services/api'
 import { PROVIDER_CATALOG, getDefaultModel, getProvider, type ProviderDef } from '@/constants/modelCatalog'
@@ -7,6 +8,7 @@ import { useResultFor } from '@/hooks/useResultFor'
 import { buildOptions, listDefault, modelListError, modelOptions, splitLimits, type LimitsError } from './helpers'
 
 export function useModelForm() {
+  const { t } = useTranslation()
   const qc = useQueryClient()
 
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -96,7 +98,10 @@ export function useModelForm() {
     retry: false,
   })
   const fetchedModels = providerModels.data?.models
-  const currentModelOptions = useMemo(() => modelOptions(currentProviderDef, fetchedModels), [currentProviderDef, fetchedModels])
+  const currentModelOptions = useMemo(
+    () => modelOptions(currentProviderDef, fetchedModels, (key, fallback) => t(key, { defaultValue: fallback })),
+    [currentProviderDef, fetchedModels, t],
+  )
   // A new config starts on the provider's default when the provider lists it, else on the first listed model;
   // an edited config keeps its stored model.
   useEffect(() => {
@@ -184,13 +189,13 @@ export function useModelForm() {
       try {
         const parsed = JSON.parse(optsRaw)
         if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-          setFormOptionsError('Options must be a JSON object, e.g. {"temperature": 0.7}')
+          setFormOptionsError(t('admin.aiModels.optionsNotObject', { defaultValue: 'Options must be a JSON object, e.g. {"temperature": 0.7}' }))
           return undefined
         }
         rest = parsed
         setFormOptionsError(null)
       } catch {
-        setFormOptionsError('Invalid JSON')
+        setFormOptionsError(t('admin.aiModels.optionsInvalidJson', { defaultValue: 'Invalid JSON' }))
         return undefined
       }
     }
@@ -239,7 +244,7 @@ export function useModelForm() {
 
   const handleTest = async () => {
     if (!formApiKeyEnv.trim() && currentProviderDef.needsApiKey !== false) {
-      setTestResult({ success: false, message: 'Enter the name of the env var that holds the API key' })
+      setTestResult({ success: false, message: t('admin.aiModels.apiKeyEnvMissing', { defaultValue: 'Enter the name of the env var that holds the API key' }) })
       return
     }
     // the chat sends the saved options with every call, so the test sends them too
@@ -260,7 +265,7 @@ export function useModelForm() {
     } catch (e: any) {
       // ai-service says why in detail (e.g. the key variable is not set); axios' message only has the status
       const detail = e?.response?.data?.detail
-      setTestResult({ success: false, message: (typeof detail === 'string' && detail) || e?.message || 'Test failed' })
+      setTestResult({ success: false, message: (typeof detail === 'string' && detail) || e?.message || t('admin.aiModels.testFailed', { defaultValue: 'Test failed' }) })
     } finally {
       setTesting(false)
     }

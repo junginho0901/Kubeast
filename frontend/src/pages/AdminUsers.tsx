@@ -245,7 +245,7 @@ export default function AdminUsers() {
     },
     onError: (err: any) => {
       // The server answers {detail}: e.g. a permission-ceiling refusal.
-      setDetailError(err?.response?.data?.detail || err?.response?.data?.error || err?.message || 'Failed to update user')
+      setDetailError(err?.response?.data?.detail || err?.response?.data?.error || err?.message || tr('adminUsers.updateFailed', 'Failed to update user'))
     },
   })
 
