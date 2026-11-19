@@ -7,6 +7,8 @@ import '@xterm/xterm/css/xterm.css'
 import { handleUnauthorized } from '@/services/auth'
 import { getCurrentClusterID } from '@/services/clusterRef'
 import { uiLang } from '@/utils/uiLang'
+import { useTerminalTabFocus } from '@/hooks/useTerminalTabFocus'
+import TerminalKeyHint from '@/components/TerminalKeyHint'
 import { terminalEnd, terminalEndText, type TerminalEnd } from '@/utils/serverShutdown'
 
 /*
@@ -73,6 +75,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
   // A terminal the server could not keep (replaced, or the connection dropped) offers a new one; attempt opens it.
   const [ended, setEnded] = useState<TerminalEnd | null>(null)
   const [attempt, setAttempt] = useState(0)
+  const { tabMovesFocus, attach, hintId } = useTerminalTabFocus()
 
   useEffect(() => {
     const term = new Terminal({
@@ -90,6 +93,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
       term.open(containerRef.current)
       fit.fit()
     }
+    attach(term)
 
     term.writeln(tRef.current('pods.exec.connectingTo', {
       defaultValue: 'Connecting to {{pod}}/{{container}}...',
@@ -198,7 +202,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
       }
       term.dispose()
     }
-  }, [podName, namespace, container, command, attempt])
+  }, [podName, namespace, container, command, attempt, attach])
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col">
@@ -253,6 +257,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
         </div>
       </div>
       <div className="min-h-0 min-w-0 flex-1 bg-slate-950" ref={containerRef} />
+      <TerminalKeyHint id={hintId} tabMovesFocus={tabMovesFocus} />
     </div>
   )
 }

@@ -5164,5 +5164,9 @@
   "namespaceScope": {
     "placeholder": "All namespaces — or list some, comma-separated",
     "hint": "Empty = the whole cluster. Up to 50 namespaces; the cluster must bind the role in each (chart auth.impersonation.customRoles)."
+  },
+  "keyboardHelp": {
+    "terminalTab": "Tab and Esc go to the shell. Press {{key}} to move the focus with Tab instead.",
+    "terminalTabMovesFocus": "Tab moves the focus out of the terminal. Press {{key}} to send Tab to the shell again."
   }
 }
