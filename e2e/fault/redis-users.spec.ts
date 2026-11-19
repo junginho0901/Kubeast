@@ -56,6 +56,21 @@ function asUser(user: string | null, pw: string, cmd: string[]): string {
   return r.out.trim()
 }
 
+// The Helm release list is a read k8s-service keeps in Redis (30 s, internal/helm/releases.go); the screen reads of F-8's
+// probe come from its informers, the cluster or auth-service and write no key there.
+const HELM_LIST = `/api/v1/helm/releases?cluster=${CLUSTER}`
+const HELM_KEYS = 'kubeast:cache:helm|releases|'
+
+// A read of the Helm release list, then its key in Redis within 20 s; each try reads the list again, which a miss writes.
+async function helmListKeyInRedis(request: APIRequestContext, headers: Record<string, string>, pw: string, when: string) {
+  const res = await request.get(HELM_LIST, { headers, failOnStatusCode: false })
+  expect(res.status(), `the Helm release list ${when}`).toBe(200)
+  await expect.poll(async () => {
+    await request.get(HELM_LIST, { headers, failOnStatusCode: false })
+    return asUser('k8s-service', pw, ['--scan', '--pattern', `${HELM_KEYS}*`]).split('\n').filter((l) => l.startsWith(HELM_KEYS)).length
+  }, { message: `${HELM_KEYS} keys in Redis ${when}`, timeout: 20_000 }).toBeGreaterThan(0)
+}
+
 // An answer as one word: the refusal's code, or ok.
 const kind = (whole: string) => kindOf(whole.split('\n')[0].trim().replace(/^\(error\) /, ''))
 const kindOf = (answer: string) => /^NOPERM/.test(answer) ? 'NOPERM' : /^NOAUTH/.test(answer) ? 'NOAUTH' : /^WRONGPASS/.test(answer) ? 'WRONGPASS' : /^(ERR|WRONGTYPE)/.test(answer) ? `error: ${answer}` : 'ok'
@@ -185,6 +200,10 @@ test.describe('Redis users per service (PR #866)', () => {
     test.setTimeout(300_000)
     const token = await login(request)
     const headers = bearer(token)
+    // the read the end checks writes its key before the outage too, so a key missing after it is the outage's
+    const acl = aclOn()
+    const k8s = acl ? password('REDIS_K8S_SERVICE_PASSWORD') : ''
+    if (acl) await helmListKeyInRedis(request, headers, k8s, 'before Redis is stopped')
     const reads = [
       `/api/v1/cluster/pods/page?cluster=${CLUSTER}&namespace=${NS}&limit=5`,
       `/api/v1/cluster/overview?cluster=${CLUSTER}`,
@@ -212,14 +231,11 @@ test.describe('Redis users per service (PR #866)', () => {
     expect(bad.length, `screen reads not answered 200 while Redis was off or coming back:\n${show(bad)}`).toBe(0)
     expect(restartsSince(before), 'restarts of the pods that stayed (Redis itself is replaced)').toEqual({})
     // the cache is written to Redis again (k8s-service's user may SCAN kubeast:*)
-    if (!aclOn()) {
+    if (!acl) {
       test.info().annotations.push({ type: 'not checked', description: 'Redis keys after the outage: no Redis users to read them with (redis.acl off)' })
       return
     }
-    const k8s = password('REDIS_K8S_SERVICE_PASSWORD')
-    for (const p of reads) await request.get(p, { headers, failOnStatusCode: false })
-    await expect.poll(() => asUser('k8s-service', k8s, ['--scan', '--pattern', 'kubeast:cache:*']).split('\n').filter((l) => l.startsWith('kubeast:cache:')).length,
-      { message: 'kubeast:cache: keys in Redis again', timeout: 60_000 }).toBeGreaterThan(0)
+    await helmListKeyInRedis(request, headers, k8s, 'after Redis is back')
   })
 
   test('F-8 (PR #857): a k8s-service started while Redis was down moves its cache to Redis within 15 s of Redis answering', async ({ request }) => {
