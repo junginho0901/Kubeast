@@ -65,13 +65,25 @@ export default function HelmReleasesPage() {
   const listFailed = !helmForbidden && !!error && !Array.isArray(data)
 
   // When the stream says it missed something, the list is read past the server's 30 s cache of it, as Refresh reads it:
-  // a release uninstalled outside Kubeast stays in that cache.
+  // a release uninstalled outside Kubeast stays in that cache. A read of the list on its way answers for this one, and
+  // one asked for while this one is on its way takes its place — the page's own read, from that cache: an answer that
+  // is not this read's own is followed by one more read past the cache, as refreshList does, without stopping a Refresh.
   const readAgain = useCallback(() => {
-    void queryClient.fetchQuery({
-      queryKey,
-      queryFn: () => api.helm.listReleases({ ...(namespace ? { namespace } : {}), force_refresh: true }),
-      staleTime: 0,
-    }).catch(() => {})
+    const read = async () => {
+      for (let again = false; ; again = true) {
+        const own: { answer?: HelmReleaseSummary[] } = {}
+        const answer = await queryClient.fetchQuery({
+          queryKey,
+          queryFn: async () => {
+            own.answer = await api.helm.listReleases({ ...(namespace ? { namespace } : {}), force_refresh: true })
+            return own.answer
+          },
+          staleTime: 0,
+        })
+        if (again || answer === own.answer) return
+      }
+    }
+    void read().catch(() => {})
   }, [queryClient, queryKey, namespace])
 
   useHelmWatchList({
