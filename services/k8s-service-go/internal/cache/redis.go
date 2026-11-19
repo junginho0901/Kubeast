@@ -31,6 +31,10 @@ type Cache struct {
 	owed   atomic.Bool
 	owes   atomic.Int64
 	paying atomic.Bool
+	// payWarned: the flush owed failed once and said so; the next failures of the same debt say nothing.
+	payWarned atomic.Bool
+	// clearing, set by a test only, runs between the check that no debt came since the flush and clearing owed.
+	clearing func()
 	// noTTL logs once that an entry came without a positive TTL (Set).
 	noTTL sync.Once
 	// skipUntil (on the cache's clock, 0 = none): a command Redis did not answer leaves Redis out of reads and stores
@@ -230,6 +234,9 @@ func (c *Cache) set(ctx context.Context, key string, value interface{}, ttl time
 	c.mem[key] = memEntry{data: data, expires: now.Add(ttl)}
 	c.dropExpired(now)
 	c.mu.Unlock()
+	if mark {
+		c.oweStandby()
+	}
 }
 
 // memSweepMin is how many entries the in-memory cache holds before Set looks for expired ones. Get drops only a key it
@@ -287,6 +294,29 @@ func (c *Cache) owe() {
 	c.owed.Store(true)
 }
 
+// oweStandby: an invalidation taken in memory while a Redis is set up but not in use (standby) is owed there, as
+// FlushAll's is, since the other replicas may have stored in that Redis what it removes. The move pays it, and a read
+// after a move that came meanwhile pays it first (ready).
+func (c *Cache) oweStandby() {
+	if c.standby != nil {
+		c.owe()
+	}
+}
+
+// paid clears owed after a flush that began with owes debts, unless one came since, also right while it clears.
+func (c *Cache) paid(owes int64) {
+	if c.owes.Load() != owes {
+		return
+	}
+	if c.clearing != nil {
+		c.clearing()
+	}
+	c.owed.Store(false)
+	if c.owes.Load() != owes {
+		c.owed.Store(true)
+	}
+}
+
 func (c *Cache) Delete(ctx context.Context, key string) {
 	if rdb := c.rdb.Load(); rdb != nil {
 		c.invalidate(ctx, rdb, func(ctx context.Context, inv *redis.Client) error {
@@ -297,6 +327,7 @@ func (c *Cache) Delete(ctx context.Context, key string) {
 	c.mu.Lock()
 	delete(c.mem, key)
 	c.mu.Unlock()
+	c.oweStandby()
 }
 
 func (c *Cache) DeletePattern(ctx context.Context, pattern string) {
@@ -317,6 +348,7 @@ func (c *Cache) DeletePattern(ctx context.Context, pattern string) {
 		return
 	}
 	// One lock over the scan (a few ms at 100,000 keys, writes are rare); expired entries go too, as only a read of that key would remove them.
+	defer c.oweStandby()
 	now := time.Now()
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -387,11 +419,14 @@ func (c *Cache) payOwed(ctx context.Context, rdb *redis.Client) bool {
 	err := flushPrefix(ctx, rdb)
 	c.answered(context.Background(), err)
 	if err != nil {
-		slog.Warn("cache: the flush owed for changes Redis did not take failed; reads and stores leave Redis out until it is done", "err", err)
+		if c.payWarned.CompareAndSwap(false, true) {
+			slog.Warn("cache: the flush owed for changes Redis did not take failed; reads and stores leave Redis out until it is done", "err", err)
+		}
 		return false
 	}
-	if c.owes.Load() == owes {
-		c.owed.Store(false)
+	c.paid(owes)
+	if !c.owed.Load() {
+		c.payWarned.Store(false)
 		slog.Info("cache: flushed for changes Redis did not take")
 	}
 	return !c.owed.Load()
@@ -463,8 +498,8 @@ func (c *Cache) FlushAll(ctx context.Context) error {
 			err = flushPrefix(ctx, inv)
 			return err
 		})
-		if err == nil && c.owed.Load() && c.owes.Load() == owes {
-			c.owed.Store(false) // this flush paid what was owed before it
+		if err == nil && c.owed.Load() {
+			c.paid(owes) // this flush paid what was owed before it
 		}
 		if err == nil && c.owed.Load() {
 			err = errOwed

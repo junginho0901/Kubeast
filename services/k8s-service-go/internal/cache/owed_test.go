@@ -2,11 +2,14 @@ package cache
 
 import (
 	"context"
+	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 )
 
 // throughSilent is a cache connected to a Redis stand-in through a silentRedis, and the stand-in.
@@ -149,5 +152,140 @@ func TestARequestEndingDuringACommandStartsNoSkip(t *testing.T) {
 	timed(t, 3*time.Second, "a read whose request ended", func() { c.Get(ctx, "k", &got) })
 	if c.skipUntil.Load() != 0 {
 		t.Fatal("a read whose request ended started a skip")
+	}
+}
+
+// While a debt is owed and Redis is left out, an invalidation is only counted: nothing goes to Redis, FlushAll says the
+// flush is owed, and the flush that pays the debt removes what they would have.
+func TestAnInvalidationWhileOwingAndLeftOutIsCountedAndTheFlushTakesItsEntries(t *testing.T) {
+	mr, s, c := throughSilent(t)
+	ctx := context.Background()
+	c.Set(ctx, "a1", 1, time.Minute)
+	s.silent.Store(true)
+	var got int
+	c.Get(ctx, "k", &got)  // left out
+	c.Delete(ctx, "other") // not taken: owed
+	if !c.owed.Load() {
+		t.Fatal("an invalidation Redis did not take is not owed")
+	}
+	s.silent.Store(false)
+	sent, owes := s.sent.Load(), c.owes.Load()
+	c.DeletePattern(ctx, "a*")
+	if err := c.FlushAll(ctx); !errors.Is(err, errOwed) {
+		t.Fatalf("FlushAll while owing and left out: %v, want errOwed", err)
+	}
+	if s.sent.Load() != sent {
+		t.Fatal("an invalidation while owing and left out went to Redis")
+	}
+	if c.owes.Load() != owes+2 {
+		t.Fatalf("owes %d, want %d", c.owes.Load(), owes+2)
+	}
+	if !mr.Exists(Prefix + "a1") {
+		t.Fatal("the entry went before the flush")
+	}
+	c.skipUntil.Store(1)
+	if c.Get(ctx, "a1", &got) {
+		t.Fatal("a hit for an entry an owed invalidation removes")
+	}
+	if mr.Exists(Prefix+"a1") || c.owed.Load() {
+		t.Fatalf("the flush did not pay the debt (entry %v, owed %v)", mr.Exists(Prefix+"a1"), c.owed.Load())
+	}
+}
+
+// A debt taken while the flush runs stays owed: the flush may have passed the entries it was for.
+func TestADebtTakenDuringTheFlushStaysOwed(t *testing.T) {
+	_, s, c := throughSilent(t)
+	ctx := context.Background()
+	c.owe()
+	s.delay.Store(int64(300 * time.Millisecond))
+	time.AfterFunc(100*time.Millisecond, c.owe)
+	var got int
+	if c.Get(ctx, "k", &got) {
+		t.Fatal("a hit")
+	}
+	if !c.owed.Load() {
+		t.Fatal("a debt taken during the flush was cleared with the one before it")
+	}
+	s.delay.Store(0)
+	c.Get(ctx, "k", &got)
+	if c.owed.Load() {
+		t.Fatal("the next flush did not pay it")
+	}
+}
+
+// A debt taken right while owed is cleared stays: the check that none came since and the clearing are two steps.
+func TestADebtTakenRightWhileOwedIsClearedStays(t *testing.T) {
+	c := cacheOn(t, miniredis.RunT(t))
+	c.owe()
+	c.clearing = c.owe
+	c.payOwed(context.Background(), c.rdb.Load())
+	if !c.owed.Load() {
+		t.Fatal("a debt taken while owed was cleared is lost")
+	}
+}
+
+// While the debt cannot be paid, reads and stores miss at each try, and the failure is said once until it is paid.
+func TestReadsAndStoresMissWhileTheDebtCannotBePaid(t *testing.T) {
+	buf := logs(t)
+	mr, s, c := throughSilent(t)
+	ctx := context.Background()
+	c.Set(ctx, "old", 1, time.Minute)
+	s.silent.Store(true)
+	var got int
+	c.Get(ctx, "k", &got)
+	c.DeletePattern(ctx, "ol*")
+	for i := 0; i < 3; i++ {
+		c.skipUntil.Store(1)
+		if c.Get(ctx, "old", &got) {
+			t.Fatalf("try %d: a hit while the debt is not paid", i)
+		}
+		c.Set(ctx, "new", 1, time.Minute)
+	}
+	s.silent.Store(false)
+	if !c.owed.Load() || mr.Exists(Prefix+"new") {
+		t.Fatalf("owed %v, a store went to Redis %v", c.owed.Load(), mr.Exists(Prefix+"new"))
+	}
+	c.skipUntil.Store(1)
+	if c.Get(ctx, "old", &got) || mr.Exists(Prefix+"old") {
+		t.Fatal("the entry stayed after the debt was paid")
+	}
+	out := buf.String()
+	if n := strings.Count(out, "the flush owed for changes Redis did not take failed"); n != 1 {
+		t.Errorf("%d lines for three failed flushes of one debt, want 1:\n%s", n, out)
+	}
+	if n := strings.Count(out, "flushed for changes Redis did not take"); n != 1 {
+		t.Errorf("%d lines for the debt paid, want 1:\n%s", n, out)
+	}
+}
+
+// A replica that started while Redis did not answer keeps its cache in memory; an invalidation it takes there is owed
+// in Redis, where another replica may have stored what it removes, and is flushed when it moves there.
+func TestAnInvalidationTakenInMemoryWhileRedisWasSetUpIsFlushedWhenTheCacheMovesThere(t *testing.T) {
+	ctx := context.Background()
+	for name, run := range map[string]func(*Cache){
+		"Delete":        func(c *Cache) { c.Delete(ctx, "helm|releases|x") },
+		"DeletePattern": func(c *Cache) { c.DeletePattern(ctx, "helm|releases|*") },
+		"Mark":          func(c *Cache) { c.Mark(ctx, "helm|releases-generation", "m2", time.Hour) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			mr := miniredis.RunT(t)
+			port, err := strconv.Atoi(mr.Port())
+			if err != nil {
+				t.Fatal(err)
+			}
+			a := &Cache{mem: map[string]memEntry{}, skipFor: redisSkip, base: time.Now(),
+				standby: redis.NewClient(cacheOptions(mr.Host(), port, 0, "", ""))}
+			t.Cleanup(func() { _ = a.standby.Close() })
+			b := cacheOn(t, mr)
+			b.Set(ctx, "helm|releases|x", []string{"old"}, time.Minute)
+			run(a)
+			if !a.moveToRedis(ctx) {
+				t.Fatal("did not move")
+			}
+			var got []string
+			if a.Get(ctx, "helm|releases|x", &got) || mr.Exists(Prefix+"helm|releases|x") {
+				t.Fatalf("the replica that took the change in memory read the list from before it: %v", got)
+			}
+		})
 	}
 }

@@ -3,7 +3,9 @@ package helm
 import (
 	"context"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 
@@ -65,5 +67,32 @@ func TestTheGenerationMarkMovesAfterTheRequestEnded(t *testing.T) {
 	var mark string
 	if !b.cache.Peek(identity("admin"), listGenerationKey, &mark) || mark == "" {
 		t.Fatalf("the mark did not move for the other replica (%q; keys %v)", mark, mr.Keys())
+	}
+}
+
+// A list read while the generation mark could not be read (Redis left out) is not kept, even when Redis answers again
+// before the list is stored: a write of another replica meanwhile could not be told from none.
+func TestAListReadWhileTheMarkCouldNotBeReadIsNotKept(t *testing.T) {
+	mr := miniredis.RunT(t)
+	port, err := strconv.Atoi(mr.Port())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := newHelmFixture(t)
+	a.svc.cache = cache.New(mr.Host(), port, 0, "")
+	mr.Close() // the next read is not answered: the cache leaves Redis out for 3 s
+	a.store.Driver = &lateListDriver{Driver: a.mem, during: func() {
+		if err := mr.Restart(); err != nil {
+			t.Error(err)
+		}
+		time.Sleep(3100 * time.Millisecond) // past the skip, before the list is stored
+	}}
+	if _, err := a.svc.ListReleases(identity("admin"), testNS, "", false); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range mr.Keys() {
+		if strings.HasPrefix(k, cache.Prefix+"helm|releases|") {
+			t.Fatalf("a list read without the mark was kept: %s", k)
+		}
 	}
 }
