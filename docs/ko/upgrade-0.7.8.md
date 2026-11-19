@@ -279,6 +279,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 - 클러스터 차단기: `multicluster.breakerConsecutiveFails: 0`이면 차단기를 끕니다. 0.7.7은 이때 실패 하나에 차단기를 열었습니다. 열린 차단기는 `multicluster.breakerOpenSec`(30초)이 지나면 요청 하나를 클러스터로 보내 봅니다. 0.7.7은 이 값을 읽지 않았습니다. 실패는 이제 호출이 API 서버에 닿지 못한 요청(거부됨, 이름을 찾지 못함, TLS 핸드셰이크가 끝나지 않음, 응답 없이 끊긴 연결)입니다. 집계 API의 503, API 서버 자체의 시간 초과, 요청을 보낸 뒤 지난 화면의 기한, 호출 전에 난 Kubeast 자신의 오류로는 더 이상 열리지 않습니다(#930, #932). 클러스터마다 도는 건강 점검 요청은 사람들의 요청 뒤에서 기다리지 않습니다. API 서버가 버전 없이 500 아래로 답한 점검(401, 프록시의 404)은 차단기를 닫고, 클러스터는 그대로 `disconnected`로 보입니다. 자격 증명 플러그인이 실패하면 0.7.7처럼 여전히 차단기가 열립니다(#936).
 - k8s-service가 Go 메모리 한도에 맞서 쥔 메모리(살아 있는 힙, 고루틴 스택, 런타임 자체 몫)가 그 한도의 80 %를 넘는 동안 새 실시간 목록은 화면에 안내를 띄우고 기다립니다. 이미 열린 목록은 그대로 돕니다. 있는 객체를 모두 받으며 여는 목록은 시작 전부터 그 객체가 다 지나갈 때까지 서버 전체 8개(`multicluster.wsWatchOpeningConcurrency`)인 자리 하나를 쥡니다. 한 클러스터는 API 서버가 답하기 전까지 하나씩, 답할수록 더 많이, 다른 클러스터가 기다리는 동안 절반까지 잡습니다. 그래서 재시작 뒤에는 몇 개씩 차례로 돌아오고, 답하지 않는 클러스터가 다른 클러스터를 기다리게 하지 않습니다. 자리를 10초 넘게 기다린 목록은 메모리 안내와 따로, 곧 시작한다고 화면에 알립니다. 목록 하나의 HTTP/2 창은 1 MiB입니다(`multicluster.wsWatchStreamWindowKiB`). 이런 목록은 watch list(`sendInitialEvents`)로 묻고, 이를 거절하는 API 서버(기본값으로 1.33, 1.27~1.31)의 클러스터는 예전 watch로 엽니다. 메모리 안내가 자주 보이면 `resources.k8sService.limits.memory`를 올립니다(#896, #931).
 - 감사 앵커의 S3 다이제스트 객체 키 끝에 해시의 앞 16진수 8자리가 붙습니다(`…-<from>-<to>-<hash8>.json`). 다이제스트를 이름으로 읽는 스크립트는 새 꼴도 받게 고칩니다(#852).
+- 감사 로그 검색과 그 내보내기, AI Usage 기간, 채팅 목록 API의 `before_updated_at`은 오프셋이 붙은 시각(`+09:00`)을 그것이 가리키는 시각으로 읽습니다. 0.7.7은 그 시계 시각을 UTC로 읽었습니다. 감사 로그 검색과 내보내기는 RFC 3339 시각이 아닌 `since`나 `until`에 400으로 답합니다. 0.7.7은 그 경계를 빼고 읽었습니다. 콘솔은 UTC로 보냅니다(#956).
 - 새 차트 객체는 Secret `kubeast-redis-users`, 파드 둘 이상인 서비스의 PodDisruptionBudget, 그리고 켰을 때 HPA와 `k8s-service-stream`의 Deployment·Service·PodDisruptionBudget·NetworkPolicy입니다. 새 ClusterRole이나 Role은 없습니다.
 
 ## 5. 이번 업그레이드에서 한 번 일어나는 일
@@ -291,6 +292,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
 - **중간에 끊긴 드레인**(#858). 0.7.7 k8s-service가 멈출 때 돌던 드레인은 노드를 cordon된 채 두고, 뒤에 화면에 나오지 않습니다. `kubectl uncordon <node>`를 하거나 다시 드레인합니다.
 - **진행 중이던 세션 기록**(#851). 0.7.7 파드가 쓰던 기록에는 소유자가 없습니다. 0.7.8 파드는 처음 5분 동안 그 기록을 두었다가 가져가며, 스풀 파일을 갖고 있으면 올리고 없으면 interrupted로 표시합니다.
 - **Claude Code 자리**(#859). 롤링 업데이트의 몇 분 동안 0.7.7 ai-service 파드는 설치 전체 자리를 세지 않으므로 합계가 `maxConcurrentTotal`을 넘을 수 있습니다.
+- **새로 고치지 않은 페이지**(#952). 열어 둔 0.7.7 페이지는 다시 불러올 때까지, 여는 자리를 기다리는 실시간 목록을 탭의 한도로 보여 줍니다.
 
 ## 6. 업그레이드한 뒤
 

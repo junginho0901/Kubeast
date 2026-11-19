@@ -21,6 +21,7 @@ This page says which services can run more, what they need, how to set the count
 | redis (the chart's) | no, one pod | caches and change notices only; a new pod starts empty and the caches fill again | — |
 
 The chart refuses `replicas.k8sService` or `replicas.toolServer` above 1 with `redis.enabled: false`, and says why.
+It refuses more than one k8s-service pod (`replicas.k8sService` above 1, or `autoscaling.k8sService` with `maxReplicas` above 1) with `sessionRecording.storage: file` too: every pod would mount the one file volume, so record to `s3` or `database` ([Operations](operations.md#terminals-and-followed-logs-on-their-own-server) has the file store's rollout).
 `values-minimal.yaml` turns Redis off, so it runs one of each.
 
 ## Before you start
