@@ -102,7 +102,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 - **화면**: Admin → **Investigations**. 기능과 AI가 켜져 있을 때 메뉴에 보이며, 권한은 `admin.investigations.read`입니다.
   - 받은 시각, 클러스터, 알림, 심각도, Namespace, 상태, 반복, 토큰, 소요 시간을 표로 보여 주고, 상태와 클러스터로 거를 수 있습니다.
   - "보고서"를 누르면 창에 보고서, 알림 라벨/주석, 알림 보낸 곳(Alertmanager·Grafana) 링크, 도구 호출(인자·결과 길이)이 나옵니다.
-  - "원본 쿼리"(알림의 `generatorURL`)와 "알림 보낸 곳"(메시지의 `externalURL`)은 메시지가 호스트가 있는 http·https 주소를 줬을 때만 링크입니다. 다른 주소(`javascript:`, `data:`, 경로)는 글로 보이고, 주소는 마우스를 올리면 나옵니다.
+  - "원본 쿼리"(알림의 `generatorURL`)와 "알림 보낸 곳"(메시지의 `externalURL`)은 호스트가 있는 http·https 주소일 때만 링크입니다. 웹훅은 다른 값(`javascript:`, `data:`, 경로)을 빈 값으로 저장하므로 그 알림에는 둘 다 나오지 않습니다. 이전 버전이 그런 주소로 저장한 알림은 주소를 글로 보여 주고, 마우스를 올리면 주소가 나옵니다.
   - 이때 주소가 `?id=<조사 ID>`로 바뀌어, 권한이 있는 사람에게 그 보고서로 가는 링크가 됩니다.
   - 보고서는 외부 알림을 읽은 모델이 쓴 글이므로 원시 HTML 없이 Markdown으로만 그립니다.
 - **모델**: 보고서의 품질은 모델에 달려 있습니다. 작은 로컬 모델은 근거가 약한 인과 관계를 "Likely cause"에 적기도 하므로, 운영 환경에서는 도구 호출을 잘하는 큰 모델을 `model`로 따로 지정하기를 권합니다.

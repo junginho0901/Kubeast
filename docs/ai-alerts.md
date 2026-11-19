@@ -103,7 +103,7 @@ The feature is off by default (`features.alertInvestigation.enabled`). Turning i
 - **Screen**: Admin → **Investigations**, in the menu when the feature and AI are on (permission `admin.investigations.read`).
   - A table shows received time, cluster, alert, severity, Namespace, status, repeats, tokens and duration, filtered by status and cluster.
   - Pressing "Report" opens a window with the report, the alert labels/annotations, a link to the alert sender (Alertmanager, Grafana) and the tool calls (arguments, result length).
-  - "Source query" (the alert's `generatorURL`) and "Alert sender" (the message's `externalURL`) are links only when the message gave an http or https address with a host. Any other address (`javascript:`, `data:`, a path) shows as words, with the address on hover.
+  - "Source query" (the alert's `generatorURL`) and "Alert sender" (the message's `externalURL`) are links only to an http or https address with a host. The webhook stores any other value (`javascript:`, `data:`, a path) empty, so neither shows for it; an alert an earlier version stored with such an address shows it as words, with the address on hover.
   - The URL becomes `?id=<investigation ID>`, a link to that report for those who hold the permission.
   - The report is text written by a model that read an external alert, so it is rendered as Markdown only, without raw HTML.
 - **Model**: report quality follows the model. Small local models sometimes put weakly supported causation under "Likely cause", so in production we recommend setting a larger model that is good at tool calling as `model`.

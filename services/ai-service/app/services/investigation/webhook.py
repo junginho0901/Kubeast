@@ -28,8 +28,10 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any, Optional
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field, ValidationError
@@ -103,17 +105,49 @@ def parse_time(value: Optional[str]) -> Optional[datetime]:
         return None
 
 
+def stored_address(value: str) -> str:
+    """An alert's generatorURL or the message's externalURL as the inbox and the investigations keep it: the text, without
+    the spaces around it, when it is an absolute http or https URL with a host and no space or control character in it;
+    otherwise "". The screens link only such an address too (frontend utils/safeHttpHref), and both are held to
+    frontend/src/utils/safeHttpHref.cases.json; rows stored before keep what they hold."""
+    text = (value or "").strip()
+    if not text or any(ch <= " " or ch == "\x7f" for ch in text):
+        return ""
+    try:
+        parts = urlsplit(text)
+        parts.port  # a port that is not a number from 0 to 65535 raises ValueError, as the browser refuses it
+    except ValueError:
+        return ""
+    return text if parts.scheme in ("http", "https") and parts.hostname else ""
+
+
+_SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]{0,31}")
+
+
+def scheme_of(value: str) -> str:
+    """What the log says of an address it did not keep: its scheme, or "none" when it names none."""
+    scheme, colon, _ = (value or "").strip().partition(":")
+    return scheme.lower() if colon and _SCHEME.fullmatch(scheme) else "none"
+
+
 async def gate_and_queue(db, cfg: inv_settings.InvestigationSettings, cluster: str, msg: AmWebhook, now: datetime) -> dict[str, int]:
     """Each alert lands in exactly one of resolved, automatic_off, filtered, duplicate, capped, skipped and accepted;
     all are stored."""
     counts = {"accepted": 0, "duplicate": 0, "filtered": 0, "skipped": 0, "capped": 0, "resolved": 0, "automatic_off": 0, "stored": 0}
+    sender = stored_address(msg.externalURL)
+    dropped: dict[str, set[str]] = {}
+    if msg.externalURL and not sender:
+        dropped["externalURL"] = {scheme_of(msg.externalURL)}
     for alert in msg.alerts:
+        source = stored_address(alert.generatorURL)
+        if alert.generatorURL and not source:
+            dropped.setdefault("generatorURL", set()).add(scheme_of(alert.generatorURL))
         status = (alert.status or msg.status or "").lower()
         starts_at = parse_time(alert.startsAt)
         await inbox.record(
             db, cluster=cluster, fingerprint=fingerprint_of(alert), firing=status == "firing",
             starts_at=starts_at, ends_at=parse_time(alert.endsAt), labels=alert.labels,
-            annotations=alert.annotations, generator_url=alert.generatorURL, alertmanager_url=msg.externalURL,
+            annotations=alert.annotations, generator_url=source, alertmanager_url=sender,
             receiver=msg.receiver, group_key=msg.groupKey, now=now,
         )
         counts["stored"] += 1
@@ -168,14 +202,17 @@ async def gate_and_queue(db, cfg: inv_settings.InvestigationSettings, cluster: s
                     labels=dict(alert.labels),
                     annotations=dict(alert.annotations),
                     starts_at=starts_at,
-                    generator_url=alert.generatorURL[:2000],
-                    alertmanager_url=msg.externalURL[:2000],
+                    generator_url=source[:2000],
+                    alertmanager_url=sender[:2000],
                     group_key=msg.groupKey[:2000],
                     received_at=now,
                 )
                 counts["capped" if capped else "skipped" if skip_reason else "accepted"] += 1
                 if skip_reason:
                     outcomes.ended(outcomes.SKIPPED)
+    for field, schemes in sorted(dropped.items()):
+        log.warning("alert webhook: cluster=%s %s stored empty: not an http or https URL with a host (scheme %s)",
+                    cluster, field, ",".join(sorted(schemes)))
     return counts
 
 

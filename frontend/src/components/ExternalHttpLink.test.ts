@@ -4,52 +4,33 @@ import { describe, expect, it } from 'vitest'
 
 import { ExternalHttpLink } from './ExternalHttpLink'
 import { safeHttpHref } from '@/utils/safeHttpHref'
+import CASES from '@/utils/safeHttpHref.cases.json'
 import reportModal from '@/components/InvestigationReportModal.tsx?raw'
 import alertWindow from '@/pages/alerts/AlertInbox.tsx?raw'
 
 const draw = (url: string) => renderToStaticMarkup(createElement(ExternalHttpLink, { url, children: 'Alert sender' }))
 
-// what an Alertmanager message may hold, and the href the browser would open for it
-const LINKS: Array<[string, string]> = [
-  ['http://prometheus:9090/graph?g0.expr=up%3D%3D0&g0.tab=1', 'http://prometheus:9090/graph?g0.expr=up%3D%3D0&g0.tab=1'],
-  ['https://alertmanager.example.com', 'https://alertmanager.example.com/'],
-  ['HTTPS://Alertmanager.Example.com/#/alerts', 'https://alertmanager.example.com/#/alerts'],
-  ['http://[::1]:9093/', 'http://[::1]:9093/'],
-  ['  https://am.example.com/ ', 'https://am.example.com/'],
-  ['https://am.exa\tmple.com/', 'https://am.example.com/'],
-]
-
-const WORDS = [
-  'javascript:alert(1)',
-  'JavaScript:alert(1)',
-  'java\tscript:alert(1)',
-  'java\nscript:alert(1)',
-  ' \u0001javascript:alert(1)',
-  'data:text/html,<script>alert(1)</script>',
-  'data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==',
-  'vbscript:msgbox(1)',
-  'file:///etc/passwd',
-  'ftp://files.example.com/',
-  '/graph?g0.expr=up',
-  '//other.example.com/graph',
-  'graph?g0.expr=up',
-  'https://',
-  '   ',
-  '',
-]
+// what an Alertmanager message may hold, and the href the browser would open for it (the webhook's answers are
+// tests/test_alert_webhook_addresses.py's)
+const LINKS = CASES.cases.flatMap((c) => (c.href === null ? [] : [{ name: c.name, address: c.address, href: c.href }]))
+const WORDS = CASES.cases.filter((c) => c.href === null)
 
 describe('an address the console did not write', () => {
-  it.each(LINKS)('%j is a link to %s, opened in a new tab', (url, href) => {
-    expect(safeHttpHref(url)).toBe(href)
-    const html = draw(url)
+  it('has cases of both kinds', () => {
+    expect([LINKS.length, WORDS.length]).toEqual([8, 19])
+  })
+
+  it.each(LINKS)('$name is a link to its address as the browser reads it, opened in a new tab', ({ address, href }) => {
+    expect(safeHttpHref(address)).toBe(href)
+    const html = draw(address)
     expect(html).toContain(`<a href="${href.replace(/&/g, '&amp;')}" target="_blank" rel="noreferrer noopener"`)
     expect(html).toContain('Alert sender')
     expect(html).not.toContain('address-as-text')
   })
 
-  it.each(WORDS)('%j is words, not a link', (url) => {
-    expect(safeHttpHref(url)).toBeNull()
-    const html = draw(url)
+  it.each(WORDS)('$name is words, not a link', ({ address }) => {
+    expect(safeHttpHref(address)).toBeNull()
+    const html = draw(address)
     expect(html).not.toContain('<a')
     expect(html).not.toContain('href=')
     expect(html).toMatch(/^<span [^>]*data-testid="address-as-text">Alert sender<\/span>$/)
@@ -65,7 +46,7 @@ describe('an address the console did not write', () => {
   })
 })
 
-// The webhook keeps generatorURL and externalURL as Alertmanager sent them.
+// Rows the webhook stored before it kept only http and https addresses hold what Alertmanager sent.
 describe("the windows that show an alert's Alertmanager addresses", () => {
   it.each([
     ['the investigation report', reportModal],

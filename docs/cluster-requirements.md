@@ -459,6 +459,7 @@ receivers:
   - Put `severity` (and `namespace` if needed) in the rule labels.
 - **Check** whether the alert appears in the Kubeast Alerts menu, and whether an investigation row appears in Admin → Investigations. If the severity filter drops the alert, there is no investigation row.
   - The webhook response `{accepted, duplicate, filtered, skipped, capped, resolved, automatic_off, stored}` is left in the Alertmanager log.
+  - An alert's `generatorURL` and the message's `externalURL` are kept only when they are http or https URLs with a host. Any other value is stored empty, and ai-service logs a warning naming the field and its scheme.
   - Leave `max_alerts` unset (0 = every alert). Kubeast keeps every alert of a message and starts at most 100 new investigations per message itself; the alerts Alertmanager cuts with `max_alerts` never reach the inbox.
   - The full development example is [`deploy/kind/alertmanager.yaml`](../deploy/kind/alertmanager.yaml).
   - For Grafana, see `scripts/kind-grafana.sh` and e2e `grafana.spec.ts`, where an alert sent by a contact point test is investigated.
