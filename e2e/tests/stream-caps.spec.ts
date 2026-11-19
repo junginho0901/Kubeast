@@ -14,6 +14,7 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
+const BASE = process.env.E2E_BASE_URL || 'http://localhost:30080'
 const KNS = process.env.E2E_KUBEAST_NAMESPACE || 'kubeast'
 const MAX_TERMINALS = Number(process.env.E2E_MAX_TERMINALS_PER_ACCOUNT || 0)
 const MAX_LOGS = Number(process.env.E2E_MAX_FOLLOWED_LOGS_PER_ACCOUNT || 0)
@@ -45,10 +46,14 @@ function streamPods(): number {
 
 type Row = { TargetID: string; Result?: string; Error?: string }
 
-async function failedRows(request: APIRequestContext, action: string, since: string): Promise<Row[]> {
+async function accessToken(request: APIRequestContext): Promise<string> {
   const login = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(login.ok(), 'admin login').toBeTruthy()
-  const headers = { Authorization: `Bearer ${(await login.json()).access_token as string}`, 'X-Requested-With': 'XMLHttpRequest' }
+  return (await login.json()).access_token as string
+}
+
+async function failedRows(request: APIRequestContext, action: string, since: string): Promise<Row[]> {
+  const headers = { Authorization: `Bearer ${await accessToken(request)}`, 'X-Requested-With': 'XMLHttpRequest' }
   const res = await request.get('/api/v1/auth/admin/audit-logs', { headers, params: { cluster: '', limit: '100', action, since } })
   expect(res.ok()).toBeTruthy()
   return (((await res.json()).items || []) as Row[]).filter((r) => r.TargetID === POD && r.Result === 'failure')
@@ -78,25 +83,43 @@ async function openTerminals(page: Page, n: number) {
 
 const terminals = (page: Page) => page.evaluate(() => ((window as unknown as { __terms: { seen: Held }[] }).__terms).map((t) => t.seen))
 
-// Opens n followed logs of the pod as the Logs tab does, kept on window.__logs.
-async function openLogs(page: Page, n: number) {
-  await page.evaluate(
-    ({ ns, pod, cluster, n }) => {
-      const w = window as unknown as { __logs?: { es: EventSource; seen: { lines: number; limit: string | null } }[] }
-      w.__logs = w.__logs || []
-      for (let i = 0; i < n; i++) {
-        const seen = { lines: 0, limit: null as string | null }
-        const es = new EventSource(`/api/v1/cluster/namespaces/${ns}/pods/${pod}/logs/stream?container=${pod}&tail_lines=5&cluster=${cluster}`, { withCredentials: true })
-        es.onmessage = () => { seen.lines++ }
-        es.addEventListener('stream-limit', (e) => { seen.limit = (e as MessageEvent).data; es.close() })
-        w.__logs.push({ es, seen })
-      }
-    },
-    { ns: NS, pod: POD, cluster: CLUSTER, n },
-  )
-}
+type Follow = { lines: number; limit: string | null; ended: boolean; stop: () => void }
 
-const logs = (page: Page) => page.evaluate(() => ((window as unknown as { __logs: { seen: { lines: number; limit: string | null } }[] }).__logs).map((l) => l.seen))
+// Follows the pod's log as the Logs tab asks for it, from this process as the same account (its token): a browser keeps
+// at most six connections to one host over HTTP/1.1, the kind gateway's, so twenty EventSources would wait there.
+function follow(token: string): Follow {
+  const abort = new AbortController()
+  const f: Follow = { lines: 0, limit: null, ended: false, stop: () => abort.abort() }
+  void (async () => {
+    try {
+      const res = await fetch(`${BASE}/api/v1/cluster/namespaces/${NS}/pods/${POD}/logs/stream?container=${POD}&tail_lines=5&cluster=${CLUSTER}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
+        signal: abort.signal,
+      })
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let buf = ''
+      let event = ''
+      for (;;) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        for (let i = buf.indexOf('\n'); i >= 0; i = buf.indexOf('\n')) {
+          const line = buf.slice(0, i)
+          buf = buf.slice(i + 1)
+          if (line.startsWith('event: ')) event = line.slice(7)
+          if (line.startsWith('data: ')) {
+            if (event === 'stream-limit') f.limit = line.slice(6)
+            else f.lines++
+            event = ''
+          }
+        }
+      }
+    } catch { /* stopped */ }
+    f.ended = true
+  })()
+  return f
+}
 
 test.describe('terminals and followed logs past an account\'s cap', () => {
   test.beforeAll(() => {
@@ -156,38 +179,40 @@ test.describe('terminals and followed logs past an account\'s cap', () => {
     test.setTimeout(180_000)
     const since = new Date(Date.now() - 2000).toISOString()
 
-    const raw = await page.context().newPage()
-    await raw.goto('/color-mode.js')
-    await openLogs(raw, MAX_LOGS)
-    await expect.poll(async () => (await logs(raw)).filter((l) => l.lines >= 5).length, { timeout: 60_000 }).toBe(MAX_LOGS)
+    const token = await accessToken(request)
+    const held = Array.from({ length: MAX_LOGS }, () => follow(token))
+    try {
+      await expect.poll(() => held.filter((f) => f.lines >= 5 && !f.ended).length, { timeout: 60_000 }).toBe(MAX_LOGS)
 
-    await openLogs(raw, 1)
-    await expect.poll(async () => (await logs(raw))[MAX_LOGS].limit, { timeout: 20_000 }).toBe('followed_log_limit')
-    expect((await logs(raw))[MAX_LOGS].lines).toBe(0)
+      // One more, as the API sees it: the event alone, then the answer ends.
+      const extra = follow(token)
+      await expect.poll(() => extra.ended, { timeout: 20_000 }).toBe(true)
+      expect(extra.limit).toBe('followed_log_limit')
+      expect(extra.lines).toBe(0)
 
-    // The Cluster View Logs tab says why in place of the lines.
-    await page.goto(`/cluster-view?cluster=${CLUSTER}`)
-    await page.getByPlaceholder(/Search pod name|Pod 이름/i).fill(POD)
-    await page.locator('div.card button', { hasText: POD }).first().click()
-    const area = page.locator('pre.whitespace-pre-wrap').first()
-    await expect(area).toContainText(`» ${tr('serverShutdown.followLimit')}`, { timeout: 20_000 })
-    expect(await area.innerText()).not.toContain('caps-line-')
-
-    const failed = await failedRows(request, 'k8s.pod.logs.read', since)
-    expect(failed.length, JSON.stringify(failed)).toBe(2)
-    for (const r of failed) expect(r.Error).toContain(`this account has ${MAX_LOGS} open on this server`)
-
-    // One of them closes; the tab opened again follows the log.
-    await raw.evaluate(() => (window as unknown as { __logs: { es: EventSource }[] }).__logs[0].es.close())
-    await expect.poll(async () => {
-      await page.reload()
+      // The Cluster View Logs tab says why in place of the lines.
+      await page.goto(`/cluster-view?cluster=${CLUSTER}`)
       await page.getByPlaceholder(/Search pod name|Pod 이름/i).fill(POD)
       await page.locator('div.card button', { hasText: POD }).first().click()
-      await page.waitForTimeout(1_000)
-      return (await page.locator('pre.whitespace-pre-wrap').first().innerText()).includes('caps-line-5')
-    }, { timeout: 45_000, intervals: [3_000] }).toBe(true)
+      const area = page.locator('pre.whitespace-pre-wrap').first()
+      await expect(area).toContainText(`» ${tr('serverShutdown.followLimit')}`, { timeout: 20_000 })
+      expect(await area.innerText()).not.toContain('caps-line-')
 
-    await raw.evaluate(() => (window as unknown as { __logs: { es: EventSource }[] }).__logs.forEach((l) => l.es.close()))
-    await raw.close()
+      const failed = await failedRows(request, 'k8s.pod.logs.read', since)
+      expect(failed.length, JSON.stringify(failed)).toBe(2)
+      for (const r of failed) expect(r.Error).toContain(`this account has ${MAX_LOGS} open on this server`)
+
+      // One of them closes; the tab opened again follows the log.
+      held[0].stop()
+      await expect.poll(async () => {
+        await page.reload()
+        await page.getByPlaceholder(/Search pod name|Pod 이름/i).fill(POD)
+        await page.locator('div.card button', { hasText: POD }).first().click()
+        await page.waitForTimeout(1_000)
+        return (await page.locator('pre.whitespace-pre-wrap').first().innerText()).includes('caps-line-5')
+      }, { timeout: 45_000, intervals: [3_000] }).toBe(true)
+    } finally {
+      held.forEach((f) => f.stop())
+    }
   })
 })
