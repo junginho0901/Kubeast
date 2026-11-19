@@ -201,7 +201,7 @@ postgresql:
   user: kubeast
   password: ""          # when empty, generated at install and kept across upgrades (look it up in the secret). Required for an external DB (enabled: false)
   database: kubeast
-  sessionLimits: { statementTimeoutMs: 30000, lockTimeoutMs: 15000, idleInTransactionTimeoutMs: 300000 }  # PostgreSQL statement_timeout, lock_timeout and idle_in_transaction_session_timeout each service SETs on its connections once connected (migrations always run without the first two, also when the role sets them); 0 sets nothing. Behind RDS Proxy a SET pins the session: set 0 and put them in the proxy's initialization query or on the database role. Through PgBouncer use session pooling only: transaction pooling hands a server connection to other clients between transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's) does not stay with its client
+  sessionLimits: { statementTimeoutMs: 30000, lockTimeoutMs: 15000, idleInTransactionTimeoutMs: 300000 }  # PostgreSQL statement_timeout, lock_timeout and idle_in_transaction_session_timeout each service SETs on its connections once connected (migrations always run without the first two, also when the role sets them); 0 sets nothing. Behind RDS Proxy a SET pins the session: set 0 and put them in the proxy's initialization query or on the database role. Through PgBouncer use session pooling only: transaction pooling hands a server connection to other clients between transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's, k8s-service's health status lock) does not stay with its client
   pool: { authService: { maxConns: 20 }, sessionService: { maxConns: 20 }, k8sService: { maxConns: 10 }, aiService: { maxConns: 15 }, modelConfigController: { maxConns: 4 } }  # connections per pod; with the chart's PostgreSQL the install stops when the pods (a rollout's extra pod and autoscaling's maxReplicas counted) could open more than maxConnections, for an external database NOTES prints the sum to compare with its max_connections
   maxConnections: 300   # the chart's PostgreSQL max_connections
 # An upgrade starts stopping Redis before its new pod is made (maxSurge 0): the new pod starts with an empty cache, and for the few seconds the old one takes to end both may exist, sharing no data (emptyDir).
@@ -276,7 +276,7 @@ A value that an install with the chart's defaults reads is beta; a value used on
 
 The chart's Redis (Valkey) gives each service that uses it a user of its own (`redis.acl.enabled`, on by default).
 
-With `secrets.existingSecret`, Redis keeps one password (`REDIS_PASSWORD`) for every service until you turn the users on: put `REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD` and, with the AI on, `REDIS_TOOL_SERVER_PASSWORD` in that Secret, then set `redis.acl.existingSecretHasKeys: true`. Until then the install notes say so.
+With `secrets.existingSecret`, Redis keeps one password (`REDIS_PASSWORD`) for every service until you turn the users on: put `REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD` and, with the AI on, `REDIS_TOOL_SERVER_PASSWORD` in that Secret, then set `redis.acl.existingSecretHasKeys: true`, or put them in a Secret of their own and set `redis.acl.existingSecret` to it. Until then the install notes say so.
 
 | User | Can | Cannot |
 |---|---|---|
@@ -322,7 +322,7 @@ With `secrets.existingSecret`, Redis keeps one password (`REDIS_PASSWORD`) for e
 - Redis and k8s-service restart. The cache starts empty, as on any restart of Redis.
 - Until the old k8s-service pod has gone, its requests to the new Redis are refused and read as cache misses.
 - A new k8s-service pod that comes up before the new Redis answers (on an upgrade the old Redis pod starts stopping before the new one is made, maxSurge 0) keeps its cache in memory until Redis answers; it asks again every 5 s. It answers the same; only the cache is not shared meanwhile.
-- With `secrets.existingSecret`, nothing changes on upgrade: Redis keeps the one password until `redis.acl.existingSecretHasKeys` is true.
+- With `secrets.existingSecret`, nothing changes on upgrade: Redis keeps the one password until `redis.acl.existingSecretHasKeys` is true or `redis.acl.existingSecret` names a Secret of the users' keys.
 - With that set, an upgrade that can read the Secret stops when a key is missing or empty, and names it. `helm template` and Argo CD cannot read it: there the `acl` container stops and says which key is missing, and k8s-service keeps its cache in memory.
 - `redis.acl.enabled: false` renders Redis as before, with the memory cap.
 - `helm rollback` to 0.7.7 brings back its Redis with the one password, which `kubeast-secrets` still holds, and its k8s-service signs in with it. A 0.7.7 k8s-service pod that comes up before that Redis answers keeps its cache in memory until it restarts. `kubeast-redis-users` stays, and the next upgrade uses its passwords again.
