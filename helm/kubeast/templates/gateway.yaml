@@ -90,12 +90,7 @@ spec:
             - name: tmp
               mountPath: /tmp
           {{- include "kubeast.preStop" . | nindent 10 }}
-          readinessProbe:
-            httpGet:
-              path: /healthz
-              port: 8000
-            initialDelaySeconds: 2
-            periodSeconds: 10
+          {{- include "kubeast.quickReadiness" (dict "root" $ "path" "/healthz" "port" 8000 "delay" 2) | nindent 10 }}
           livenessProbe:
             httpGet:
               path: /healthz

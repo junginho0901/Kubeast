@@ -755,6 +755,10 @@ topologySpread:
 # Stage: beta, tested: Kubernetes 1.29 refuses the preStop wait, set 0 there (docs/configuration.md "Stages of new values").
 podShutdown:
   preStopSeconds: 5
+# quickReady: ai-service, the frontend and the gateway get a startup probe asked every second and readiness every 3 s, so a pod that replaces the only one (deleted, or evicted by a node drain) is ready about a second after it listens; false keeps 0.7.8's probes (no startup probe, readiness every 10 s), which left about 6 s with nothing to answer.
+# Stage: beta, not run yet: the one-pod delete and a node drain on the kind dev install (docs/configuration.md "Stages of new values").
+podStartup:
+  quickReady: true
 
 # --- Resources (requests always; memory limits so a leak is contained) ---
 resources:

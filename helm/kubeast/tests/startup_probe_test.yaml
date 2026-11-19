@@ -126,14 +126,9 @@ tests:
           path: metadata.name
           value: session-service
 
-  - it: leaves the services that answer without waiting for the database as they were
+  - it: leaves tool-server and the ModelConfig controller without a startup probe (ai-service and the frontend in pod_startup_test.yaml)
     template: deployments.yaml
     asserts:
-      - notExists:
-          path: spec.template.spec.containers[0].startupProbe
-        documentSelector:
-          path: metadata.name
-          value: ai-service
       - notExists:
           path: spec.template.spec.containers[0].startupProbe
         documentSelector:
@@ -144,20 +139,12 @@ tests:
         documentSelector:
           path: metadata.name
           value: model-config-controller-go
-      - notExists:
-          path: spec.template.spec.containers[0].startupProbe
-        documentSelector:
-          path: metadata.name
-          value: frontend
 
-  - it: leaves gateway, postgres and redis without a startup probe
+  - it: leaves postgres and redis without a startup probe (the gateway in pod_startup_test.yaml)
     documentSelector:
       path: kind
       value: Deployment
     asserts:
-      - notExists:
-          path: spec.template.spec.containers[0].startupProbe
-        template: gateway.yaml
       - notExists:
           path: spec.template.spec.containers[0].startupProbe
         template: postgres.yaml

@@ -158,6 +158,7 @@ podSecurity:
 # So sessionRecording.fileVolume (storage: file) is mounted by two k8s-service pods while one is replaced: a ReadWriteOnce volume is mounted on one node at a time, so on more than one node give it a ReadWriteMany volume, or use storage s3 or database (docs/operations.md)
 # Probes: liveness asks /livez, which reads nothing else; readiness asks /readyz, which answers 503 from SIGTERM on and never asks the database (a shared database down would take every pod out at once); the database's state is in auth-service's and session-service's /health and k8s-service's kubeast_audit_store_up
 # podShutdown.preStopSeconds: a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) answers that long after it is told to stop (preStop sleep, Kubernetes 1.30 or later), then has 30 s to shut down (a server holding terminals: the drain's wait and close wait more); behind a load balancer that sends to pod IPs, longer than the load balancer takes to stop sending new requests to a leaving pod (behind an AWS Application Load Balancer, 25 with the target group's deregistration delay at 20 s: with these no request failed in 18 gateway pod replacements, and with the default 5 s and the default delay of 300 s requests failed in 3 of 18, and in none of 12 more with the pod readiness gate on; see docs/high-availability.md)
+# podStartup.quickReady: ai-service, the frontend and the gateway get a startup probe asked every second and readiness every 3 s; the kubelet asks readiness the moment the startup probe passes, so a pod that replaces the only one (deleted, or evicted by a node drain) is ready about a second after it listens. false keeps 0.7.8's probes (no startup probe, readiness every 10 s), which left about 6 s with nothing to answer
 replicas:
   gateway: 1
 # One HPA per service, off by default; k8sService and toolServer above 1 pod need redis.enabled (docs/high-availability.md)
@@ -177,6 +178,8 @@ topologySpread:
   enabled: true
 podShutdown:
   preStopSeconds: 5
+podStartup:
+  quickReady: true
 resources:               # per-container requests / memory limit (the full list is in values.yaml)
   aiService:
     requests: { cpu: 100m, memory: 256Mi }
@@ -325,6 +328,7 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | Value | Default | Stage | Not run yet, or Tested |
 | --- | --- | --- | --- |
 | `podShutdown.preStopSeconds` | 5 | beta | Tested: a server-side dry run of the default install on Kubernetes 1.29.14 (kind, the `PodLifecycleSleepAction` feature gate off), where the API server refused the seven Deployments with a preStop wait (`spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`) and took all 58 objects with `0`. That run had `streams.enabled` off: with it on, `k8s-service-stream` has a preStop `sleep` of `streams.preStopSeconds` whatever `podShutdown.preStopSeconds` is, so streams need Kubernetes 1.30 or later and, below 1.33, a `streams.preStopSeconds` of 1 or more ([cluster requirements](cluster-requirements.md) §15) |
+| `podStartup.quickReady` | true | beta | A pod of ai-service, the frontend and the gateway deleted by hand and a node drain on the kind dev install, and the probes' requests and log lines over a quiet day |
 | `redis.acl.enabled`, `redis.acl.existingSecretHasKeys`, `redis.acl.existingSecret` | true, false, "" | beta | The users turned off in a test install |
 | `replicas.k8sService` and `replicas.toolServer` above 1 | 1 | alpha | The sizes for 2 and 3 k8s-service pods |
 | `autoscaling.<service>` | off | alpha | Tested: on EKS 1.35, HPAs on k8s-service and the gateway went from 2 to 3 pods and back, and were turned on and off, with no request through the load balancer failing |
