@@ -392,8 +392,14 @@ func main() {
 	}
 	m.Gauge("kubeast_ws_subscriptions", "Live watches counted against WS_MAX_SUBSCRIPTIONS: the live lists' WebSocket subscriptions across all connections and the Helm releases streams' Secret watches.",
 		func() float64 { return float64(wsMux.SubscriptionCount()) })
+	m.Registry.MustRegister(ws.WatchWaitCollectors()...)
 	m.Registry.MustRegister(k8s.ClientWaitCollectors()...)
 	m.Registry.MustRegister(k8s.AccessReviewCollectors()...)
+	m.Registry.MustRegister(k8s.BreakerCollectors(k8sSvc)...)
+	m.Registry.MustRegister(cache.RefusalCollectors()...)
+	if drainTracker != nil {
+		m.Registry.MustRegister(nodedrains.Collectors(drainTracker)...)
+	}
 	if role.ServesStreams() {
 		m.Gauge("kubeast_terminals_open", "Open terminals (pod exec, node shell).",
 			func() float64 { terminals, _ := streams.Open(); return float64(terminals) })
@@ -590,7 +596,7 @@ func clusterNotices(cfg config.Config) *redis.Client {
 	if cfg.RedisHost == "" {
 		return nil
 	}
-	return redis.NewClient(cache.Options(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisUsername, cfg.RedisPassword))
+	return cache.CountRefusals(redis.NewClient(cache.Options(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisUsername, cfg.RedisPassword)))
 }
 
 // The waits run one after another from SIGTERM: where STREAM_DRAIN_SECONDS is set, the drain's wait and

@@ -30,6 +30,7 @@ type clusterHealth struct {
 	now       func() time.Time
 	fails     map[cluster.ID]int
 	open      map[cluster.ID]time.Time // an open cluster: when a request may next try it
+	counts    *breakerMetrics
 }
 
 // defaultBreakerOpen is the open period of a breaker given none (ServiceOptions.BreakerOpen 0).
@@ -43,7 +44,8 @@ func newClusterHealth(threshold int, openFor time.Duration) *clusterHealth {
 	if openFor <= 0 {
 		openFor = defaultBreakerOpen
 	}
-	return &clusterHealth{threshold: threshold, openFor: openFor, now: time.Now, fails: map[cluster.ID]int{}, open: map[cluster.ID]time.Time{}}
+	return &clusterHealth{threshold: threshold, openFor: openFor, now: time.Now, fails: map[cluster.ID]int{}, open: map[cluster.ID]time.Time{},
+		counts: breakerCounts}
 }
 
 // recordFailure is a live request error: open the breaker once threshold is hit.
@@ -51,9 +53,24 @@ func (h *clusterHealth) recordFailure(id cluster.ID) {
 	h.mu.Lock()
 	h.fails[id]++
 	if h.fails[id] >= h.threshold {
-		h.open[id] = h.now().Add(h.openFor)
+		h.openNow(id, breakerOpenedByRequests)
 	}
 	h.mu.Unlock()
+}
+
+// openNow holds id's breaker open for openFor from now, counting it as opened by by when it was closed. h.mu is held.
+func (h *clusterHealth) openNow(id cluster.ID, by string) {
+	if _, open := h.open[id]; !open {
+		h.counts.opens.WithLabelValues(by).Inc()
+	}
+	h.open[id] = h.now().Add(h.openFor)
+}
+
+// openCount is how many clusters have an open breaker.
+func (h *clusterHealth) openCount() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.open)
 }
 
 // answered forgets id's failures while its breaker is closed; an open one waits for its trial.
@@ -77,7 +94,7 @@ func (h *clusterHealth) recordSuccess(id cluster.ID) {
 func (h *clusterHealth) setOpen(id cluster.ID, open bool) {
 	h.mu.Lock()
 	if open {
-		h.open[id] = h.now().Add(h.openFor)
+		h.openNow(id, breakerOpenedByHealthCheck)
 		h.fails[id] = h.threshold
 	} else {
 		delete(h.open, id)
@@ -103,6 +120,7 @@ func (h *clusterHealth) admit(id cluster.ID) (bool, time.Time) {
 	}
 	now := h.now()
 	if now.Before(next) {
+		h.counts.refusals.Inc()
 		return false, time.Time{}
 	}
 	booked := now.Add(h.openFor)

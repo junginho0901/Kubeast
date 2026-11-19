@@ -18,13 +18,23 @@ Kubeast **자신**의 상태를 Prometheus 텍스트 포맷으로 노출합니�
 | `kubeast_http_requests_in_flight` | gauge | `service` | 처리 중인 요청 수 |
 | `kubeast_audit_store_up` | gauge 0/1 | `service` | 감사 저장소가 행을 받을 수 있는지 나타냅니다(k8s-service: `audit.Guarded.Ready`, 2 s 캐시). 0이면 쓰기, Secret 열람, exec, AI 쓰기 툴이 503으로 거부됩니다 |
 | `kubeast_audit_write_failures_total` | counter | `service` | 기동 뒤 저장하지 못한 감사 행 수 |
-| `kubeast_ws_subscriptions` | gauge | `service` | k8s-service에 살아 있는 watch 수(`multicluster.wsMaxSubscriptions`에 세는 것): 실시간 목록의 WebSocket 구독과 Helm 릴리스 스트림의 Secret watch. 터미널·실시간 로그는 다음 두 줄 |
+| `kubeast_ws_subscriptions` | gauge | `service` | k8s-service에 살아 있는 watch 수(`multicluster.wsMaxSubscriptions`에 세는 것): 실시간 목록의 WebSocket 구독과 Helm 릴리스 스트림의 Secret watch. 터미널·실시간 로그는 watch 기다림 줄 다음 두 줄 |
+| `kubeast_ws_watch_place_wait_seconds` | histogram | `service`, `places` | k8s-service의 watch가 시작하기 전에 자기 자리 하나를 기다린 시간, 클러스터를 모두 더한 값(버킷 1 ms~60 s, 자리가 비어 있으면 몇 마이크로초). `places`는 `start`(그 클러스터의 watch 시작 자리, `multicluster.wsWatchStartConcurrency` — Helm 릴리스 스트림의 Secret watch도 씀) 또는 `opening`(버전 없이 여는 watch가 처음 받는 객체를 위한 서버의 자리, `multicluster.wsWatchOpeningConcurrency`)입니다. 기다리다 그만둔 watch도 기다린 시간만큼 셉니다 |
+| `kubeast_ws_watches_waiting_for_place` | gauge | `service`, `places` | 지금 그 자리를 기다리는 watch 수. 10초 넘는 기다림은 화면에 알리고, 그동안 그 목록은 따라가지 않습니다 |
+| `kubeast_ws_watch_memory_waits_total` | counter | `service` | k8s-service의 메모리가 모자라 기다리라고 한 새 watch 수(수집기 한도에 대해 쥔 메모리가 그 80 %를 넘음 — `limit_scope` `memory`의 한도 프레임, 화면이 잠시 뒤 다시 요청함). 로그에는 10초에 한 번까지, 그동안 기다리라고 한 수와 쥔 메모리를 적습니다 |
 | `kubeast_terminals_open` | gauge | `service` | k8s-service에 열려 있는 터미널(Pod exec, 노드 셸) 수 |
 | `kubeast_followed_logs_open` | gauge | `service` | k8s-service에 열려 있는 실시간 로그(컨테이너 출력, 로그 파일) 수 |
 | `kubeast_stream_cap_refusals_total` | counter | `service`, `kind` | 기동 뒤 k8s-service가 계정 상한(`multicluster.maxTerminalsPerAccount`, `maxFollowedLogsPerAccount`)에서 거절한 터미널(`kind="terminal"`)과 실시간 로그(`followed_log`) 수. 거절마다 실패 감사 행도 남습니다. 실시간 로그 거절은 200이라 요청 지표에는 안 보입니다 |
 | `kubeast_k8s_client_rate_wait_seconds` | histogram | `service`, `limiter`, `passed_over` | k8s-service가 클러스터 API 서버로 보내는 요청이 보내기 전에 클라이언트 속도를 기다린 시간입니다. 바로 나간 요청은 0이고, 클러스터를 모두 더한 값입니다(버킷 1 ms~60 s). `limiter`는 `user`(클라이언트 속도, `multicluster.clientQPS`·`clientBurst`) 또는 `review`(접근 확인 전용 속도, `multicluster.reviewQPS`를 정했을 때만)입니다. `passed_over`는 다시 묻는 접근 확인이 나중에 온 요청을 먼저 보낸 경우 `true`이며, 그렇게 양보하는 시간은 최대 10초입니다. 기다리다 그만둔 요청도 기다린 시간만큼 셉니다. dynamic 클라이언트(커스텀 리소스, apply)는 client-go의 자체 속도를 쓰므로 세지 않습니다 |
 | `kubeast_k8s_client_rate_waits_total` | counter | `service`, `limiter` | 그 속도를 조금이라도 기다린 클러스터 요청 수(차례를 받았든 못 받았든) |
 | `kubeast_k8s_access_reviews_total` | counter | `service`, `asked_as` | k8s-service가 1분 기억하는 접근 확인(화면의 list·get 확인)에 보낸 SelfSubjectAccessReview 수, 클러스터를 합친 값. `asked_as`는 `person`, 또는 리뷰 하나로 그 사람의 그룹을 가진 모두에게 답한 읽기 확인이면 `groups`(`auth.impersonation.sharedReadChecks`, [클러스터 요구 사항](cluster-requirements.md) §1). can-i, 로그 검색, 흐름, Top Talkers는 그 사람으로 따로 보내며 여기 세지 않습니다 |
+| `kubeast_k8s_cluster_breakers_open` | gauge | `service` | 지금 차단기가 열린 클러스터 수. 그 클러스터로 가는 요청은 바로 503으로 답하고, `multicluster.breakerOpenSec`마다 하나만 클러스터를 시험합니다. `multicluster.breakerConsecutiveFails` 0(차단기 끔)이면 늘 0입니다. 레플리카마다 자기 차단기를 따로 둡니다 |
+| `kubeast_k8s_cluster_breaker_opens_total` | counter | `service`, `by` | 기동 뒤 클러스터 차단기가 열린 횟수, 클러스터를 합친 값. `by`는 `requests`(`breakerConsecutiveFails`개 요청이 연달아 클러스터에 닿지 못함) 또는 `health_check`(`multicluster.healthcheckIntervalSec`마다 하는 확인이 닿지 못했거나 5xx를 받음)입니다. 이미 열린 차단기는 다시 세지 않습니다 |
+| `kubeast_k8s_cluster_breaker_refusals_total` | counter | `service` | 기동 뒤 열린 차단기가 바로 503 "currently unreachable"로 답한 요청 수 |
+| `kubeast_k8s_node_drains_running` | gauge | `service` | 이 레플리카가 지금 돌리는 노드 드레인 수(자기가 주인인 `node_drains` 행) |
+| `kubeast_k8s_node_drains_holding` | gauge 0/1 | `service` | 이 레플리카의 드레인이 쫓아내기를 멈추고 있으면 1: 드레인을 돌리는데 15초 동안 생존 신호를 저장하지 못함(데이터베이스가 받지 않음). 생존 신호가 다시 저장되면 이어 가고, 그사이 다른 레플리카가 중단 표시를 했으면 멈춥니다 |
+| `kubeast_k8s_node_drains_ended_total` | counter | `service`, `status` | 기동 뒤 이 레플리카가 끝을 적은 노드 드레인 수(끝 `k8s.node.drain` 행), `status`별: `success`, `error`, `interrupted`(자기가 내려갈 때의 자기 드레인과, 낡은 행으로 찾은 사라진 서버의 드레인) |
+| `kubeast_redis_refusals_total` | counter | `service`, `command` | 기동 뒤 k8s-service가 보낸 Redis 명령 가운데 Redis가 그 사용자의 ACL로 거절한 수(`NOPERM`, `redis.acl`), 명령별. 캐시는 이 거절을 없는 항목으로 읽고 클러스터에 물으므로 화면은 캐시 없이 돌고 다른 데에는 드러나지 않습니다. 로그에는 10초에 한 번까지 그 명령을 적습니다([Redis 사용자](configuration.md#redis-사용자)) |
 | `kubeast_audit_sink_pending` | gauge | `service`, `sink`, `type` | 감사 싱크(`audit.sinks`)가 아직 보내지 않은 감사 행 수. 전송을 맡은 auth-service 레플리카만 냅니다 |
 | `kubeast_audit_sink_failures_total` | counter | 같음 | 그 레플리카가 전송을 시작한 뒤 실패한 전송 수 |
 | `kubeast_audit_sink_last_success_timestamp_seconds` | gauge | 같음 | 싱크 커서가 마지막으로 앞으로 나아간 시각(처음 값은 전송을 시작한 시각) |

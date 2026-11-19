@@ -250,6 +250,8 @@ type Multiplexer struct {
 
 	// heap reads the memory held against the collector's limit (heldBytes) and that limit; nil = heapNow.
 	heap func() (held, limit uint64)
+	// waits counts the watches' waits; nil = watchWaits.
+	waits *watchWaitMetrics
 
 	// rowClients are the clients the watches go through, which decode what the rows read (watchClient).
 	rowClients rowClientCache
@@ -285,7 +287,7 @@ func (m *Multiplexer) HoldWatches(n int) (release func(), ok bool) {
 // StartWatch waits for one of the cluster's places for starting a watch, as a socket's watch does (takeWatchStart), for a
 // stream outside the sockets. The place goes back by release or after startHoldFor, whichever comes first.
 func (m *Multiplexer) StartWatch(ctx context.Context, clusterID string) (release func(), err error) {
-	give, err := m.watchStartPlaces(effectiveClusterID(clusterID)).Take(ctx)
+	give, err := m.timed(placesStart, m.watchStartPlaces(effectiveClusterID(clusterID))).Take(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -498,6 +500,7 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			// The watches already on go on; a new one waits, as the page asks again after half a minute to five.
 			if m.watchMemoryFull() {
 				m.mu.Unlock()
+				m.toldMemoryShort()
 				send(ctx, sendCh, req.limitFrame(memoryShortMessage, limitScopeMemory))
 				continue
 			}
@@ -576,7 +579,7 @@ func (m *Multiplexer) takeWatchStart(ctx context.Context, req RequestMessage, se
 	places := m.watchStartPlaces(effectiveClusterID(subscriptionCluster(ctx, req.ClusterID)))
 	h, told, ok := m.takeTurn(ctx, func() {
 		send(ctx, sendCh, req.errorFrame("waiting for a turn to start following the cluster", reasonUnreachable))
-	}, m.startHoldFor, nil, places)
+	}, m.startHoldFor, nil, m.timed(placesStart, places))
 	return h.releaseFunc(), told, ok
 }
 
@@ -613,7 +616,7 @@ const openingWaitMessage = "k8s-service opens a few lists at a time to keep its 
 func (m *Multiplexer) takeOpening(ctx context.Context, id string, req RequestMessage, sendCh chan<- *ResponseMessage) (place *held, lent, told, ok bool) {
 	p := m.openingPlaces().placesFor(id)
 	// The backstop of a place whose start place does not come; startOpening sets its clock.
-	place, told, ok = m.takeTurn(ctx, m.openingNotice(ctx, req, sendCh), 2*m.startHoldFor, nil, p)
+	place, told, ok = m.takeTurn(ctx, m.openingNotice(ctx, req, sendCh), 2*m.startHoldFor, nil, m.timed(placesOpening, p))
 	return place, p.lent, told, ok
 }
 
@@ -963,6 +966,7 @@ func (m *Multiplexer) followWatch(ctx context.Context, req RequestMessage, sendC
 		if opening && !progress.on && m.watchMemoryFull() {
 			release()
 			endPlace()
+			m.toldMemoryShort()
 			send(ctx, sendCh, req.limitFrame(memoryShortMessage, limitScopeMemory))
 			return
 		}
