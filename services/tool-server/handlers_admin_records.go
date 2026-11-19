@@ -29,9 +29,10 @@ var investigationRowFields = []string{
 	"repeat_count", "last_seen_at", "requested_by", "model", "total_tokens", "iterations", "tool_call_count", "duration_ms",
 }
 
-// What the report window adds. The report comes after what says what it is about, for a result cut at the model's limit.
+// What the report window adds, but its two links: of those the model reads the rule's expression (keepRuleExpression).
+// The report comes after what says what it is about, for a result cut at the model's limit.
 var (
-	investigationDetailFields   = []string{"fingerprint", "starts_at", "generator_url", "alertmanager_url", "provider", "prompt_tokens", "completion_tokens", "error", "result", "report", "labels", "annotations"}
+	investigationDetailFields   = []string{"fingerprint", "starts_at", "provider", "prompt_tokens", "completion_tokens", "error", "result", "report", "labels", "annotations"}
 	investigationToolCallFields = []string{"tool", "args", "step", "result_chars", "error", "access"}
 	investigationAnswerLast     = []string{"report", "tool_calls", "labels", "annotations"}
 )
@@ -76,6 +77,7 @@ func marshalInvestigationReport(detail map[string]interface{}) (string, error) {
 	for field, value := range pickFields(detail, investigationDetailFields...) {
 		out[field] = value
 	}
+	keepRuleExpression(out, detail["generator_url"])
 	calls, _ := detail["tool_calls"].([]interface{})
 	out["tool_calls"] = pickRows(calls, investigationToolCallFields)
 	return marshalOrdered(out, investigationRowFields, investigationAnswerLast)

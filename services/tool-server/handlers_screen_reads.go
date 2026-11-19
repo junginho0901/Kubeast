@@ -396,14 +396,15 @@ func addWindowReport(ctx context.Context, headers http.Header, id string, window
 	return nil
 }
 
-// handleAlertsInbox reads the Alerts inbox: a page of the list, or with alert_id one alert as its window opens, with
-// the note the list leaves out, and with_report the report its Report button opens. Reading only: a mark or a press stays on the screen.
+// handleAlertsInbox reads the Alerts inbox: a page of the list, or with alert_id one alert as its window opens (its two
+// links as the rule's expression), with the note the list leaves out, and with_report the report its Report button opens. Reading only: a mark or a press stays on the screen.
 func handleAlertsInbox(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
 	if id := argString(args, "alert_id", ""); id != "" {
 		window, out, err := inboxWindowOf(ctx, headers, id)
 		if err != nil || out != "" {
 			return out, err
 		}
+		keepRuleExpression(window, window["generator_url"])
 		window["alert_link"] = consoleURL + "/alerts?" + url.Values{"alert": {id}, "cluster": {clusterIDFromCtx(ctx)}}.Encode()
 		if argBool(args, "with_report") {
 			if err := addWindowReport(ctx, headers, id, window); err != nil {

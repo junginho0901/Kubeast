@@ -35,7 +35,7 @@ import re
 import time
 from datetime import timedelta
 from typing import Any, Optional, Sequence
-from urllib.parse import parse_qsl, urlencode, urlsplit
+from urllib.parse import parse_qsl, urlencode
 
 import httpx
 
@@ -123,16 +123,14 @@ async def build_service(cfg: inv_settings.InvestigationSettings, token: str, clu
 
 
 # A graph link's query names each panel's expression g0.expr, g1.expr, … (Prometheus, Thanos and the rulers made like them).
-_EXPR_KEY = re.compile(r"g(\d{1,3})\.expr")
+_EXPR_KEY = re.compile(r"g([0-9]{1,3})\.expr")
 
 
 def rule_expressions(generator_url: str) -> list[str]:
-    """The expressions an alert's generatorURL holds in its query, in panel order. None for an empty value, text that is
-    not a link, or a link of another form (a Grafana rule's page); the address itself is never returned."""
-    try:
-        query = urlsplit(generator_url or "").query
-    except ValueError:  # a broken address, such as an unclosed IPv6 bracket
-        return []
+    """The expressions an alert's generatorURL holds in its query — the text after its first "?" and before its "#" — in
+    panel order. None for an empty value, text that is not a link, or a link of another form (a Grafana rule's page);
+    the address is never read. tool-server's ruleExpressions is the same rule (tests/fixtures/alert_expr_cases.json)."""
+    query = (generator_url or "").split("#", 1)[0].partition("?")[2]
     found: dict[int, str] = {}
     for key, value in parse_qsl(query):
         match = _EXPR_KEY.fullmatch(key)
