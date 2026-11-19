@@ -511,10 +511,10 @@ audit:
   # Tamper evidence for the audit rows (internal/auditchain): auth-service
   # chains every row to the one sealed before it (sha256, every sealSeconds)
   # and, when anchor.sink names an s3 sink above, writes the chain head there
-  # as a digest every anchor.hours (under <prefix>digests/). Admin → Audit log
-  # shows the chain state, verifies a range and anchors on demand. Turn on
-  # Object Lock on that bucket: the digest outside the database is what a
-  # rewritten database cannot match.
+  # as a digest every anchor.hours, a whole number (under <prefix>digests/).
+  # Admin → Audit log shows the chain state, verifies a range and anchors on
+  # demand. Turn on Object Lock on that bucket: the digest outside the
+  # database is what a rewritten database cannot match.
   integrity:
     enabled: true
     sealSeconds: 10
