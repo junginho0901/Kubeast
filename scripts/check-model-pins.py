@@ -18,15 +18,32 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# (file, pattern whose first group is the model, what the default is)
+CATALOG = "frontend/src/constants/modelCatalog.ts"
+
+
+def catalog_first(provider: str, root: Path) -> str | None:
+    """The first model the screens' list gives a provider (modelCatalog.ts getDefaultModel), or None."""
+    text = (root / CATALOG).read_text(encoding="utf-8")
+    at = text.find(f"id: '{provider}',")
+    models = text.find("models: [", at) if at >= 0 else -1
+    first = re.match(r"\s*\{ name: '([^']+)'", text[models + len("models: ["):]) if models >= 0 else None
+    return first.group(1) if first else None
+
+
+def _setup_model(found: re.Match, root: Path) -> str | None:
+    return found.group(1) if found.group(1) is not None else catalog_first(found.group(2), root)
+
+
+# (file, pattern whose first matched group is the model, what the default is[, how a match names the model])
 DEFAULTS = [
     ("helm/kubeast/values.yaml", r'(?m)^ai:\n(?:(?: .*|#.*|)\n)*?  model: "([^"]*)"', "chart ai.model"),
     ("services/ai-service/app/config.py", r'OPENAI_MODEL: str = "([^"]*)"', "ai-service OPENAI_MODEL"),
     ("services/ai-service/app/services/provider_adapter.py", r'\n        model: str = "([^"]*)",', "ProviderAdapter model"),
-    ("install-docker.sh", r"\nOPENAI_MODEL=(\S*)\n", "install-docker.sh OPENAI_MODEL"),
+    ("install-docker.sh", r"(?m)^OPENAI_MODEL=(?:\$\{MODEL:-([^}]*)\}|([^\s$]\S*))$", "install-docker.sh OPENAI_MODEL"),
     (".env.example", r"(?m)^OPENAI_MODEL=(\S*)$", ".env.example OPENAI_MODEL"),
     ("docker-compose.yml", r"OPENAI_MODEL=\$\{OPENAI_MODEL:-([^}]*)\}", "docker-compose.yml OPENAI_MODEL"),
-    ("frontend/src/pages/setup/SetupAIModelPage.tsx", r"const \[aiModel, setAiModel\] = useState\('([^']*)'\)", "first-run setup page model"),
+    ("frontend/src/pages/setup/SetupAIModelPage.tsx",
+     r"const \[aiModel, setAiModel\] = useState\((?:'([^']*)'|\(\) => getDefaultModel\('([\w-]+)'\))\)", "first-run setup page model", _setup_model),
     ("scripts/kind-model-haiku.sh", r'MODEL="\$\{HAIKU_MODEL:-([^}]*)\}"', "kind-model-haiku.sh model"),
     ("scripts/kind-model-subscription.sh", r'MODEL="\$\{SUBSCRIPTION_MODEL:-([^}]*)\}"', "kind-model-subscription.sh model"),
 ]
@@ -34,7 +51,7 @@ DEFAULTS = [
 _CLAUDE = re.compile(r"claude-(?:opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d+))?")
 _CLAUDE_DATED = re.compile(r"claude-[a-z0-9-]+-\d{8}")
 _OPENAI = re.compile(r"(?:gpt|chatgpt|o\d)[a-z0-9.-]*")
-_OPENAI_DATED = re.compile(r"(?:gpt|chatgpt|o\d)[a-z0-9.-]*-(?:\d{4}-\d{2}-\d{2}|\d{4})(?:-preview)?")
+_OPENAI_DATED = re.compile(rf"(?:gpt|chatgpt|o\d)[a-z0-9.-]*-(?:20\d\d-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])|(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01]))(?:-preview)?")
 # OpenAI models whose own ID is their only snapshot: developers.openai.com/api/docs/models/<id> "Snapshots" (read 2026-11-15).
 _OPENAI_OWN_SNAPSHOT = frozenset({"gpt-6-luna"})
 
@@ -59,18 +76,30 @@ def why_not_pinned(model: str) -> str | None:
     return "no pin rule for this provider: add one from its documentation"
 
 
+def read_default(entry: tuple, root: Path = ROOT) -> str | None:
+    """The model a DEFAULTS entry names in the tree at root, or None when its place is not found."""
+    rel, pattern = entry[0], entry[1]
+    path = root / rel
+    found = re.search(pattern, path.read_text(encoding="utf-8")) if path.exists() else None
+    if found is None:
+        return None
+    if len(entry) > 3:
+        return entry[3](found, root)
+    return next((g for g in found.groups() if g is not None), None)
+
+
 def check(root: Path = ROOT) -> list[str]:
     """One line per default that is not a pinned snapshot or was not found."""
     problems = []
-    for rel, pattern, what in DEFAULTS:
-        path = root / rel
-        found = re.search(pattern, path.read_text(encoding="utf-8")) if path.exists() else None
-        if found is None:
+    for entry in DEFAULTS:
+        rel, what = entry[0], entry[2]
+        model = read_default(entry, root)
+        if model is None:
             problems.append(f"{rel}: {what} not found — the default moved; point scripts/check-model-pins.py at it")
             continue
-        why = why_not_pinned(found.group(1))
+        why = why_not_pinned(model)
         if why:
-            problems.append(f"{rel}: {what} {found.group(1)!r} is not pinned ({why})")
+            problems.append(f"{rel}: {what} {model!r} is not pinned ({why})")
     return problems
 
 
