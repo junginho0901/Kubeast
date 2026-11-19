@@ -3,7 +3,7 @@ import { api, type PriorityClassInfo as PriorityClassRow } from '@/services/api'
 import { retryUnlessRefused } from '@/services/queryDefaults'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { applyPriorityClassWatchEvent } from '@/pages/cluster/priorityclasses/priorityClassWatchNormalize'
-import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, SummaryText, StatusBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
@@ -82,7 +82,7 @@ export default function PriorityClassInfo({ name }: Props) {
       {/* Summary Badges */}
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Value" value={value} color={value > 0 ? 'green' : 'default'} />
-        <SummaryBadge label="Global Default" value={globalDefault ? 'Yes' : 'No'} />
+        <SummaryText label="Global Default" value={globalDefault ? 'Yes' : 'No'} />
         <SummaryBadge label="Preemption" value={preemption} color={preemption === 'PreemptLowerPriority' ? 'green' : 'default'} />
       </div>
 

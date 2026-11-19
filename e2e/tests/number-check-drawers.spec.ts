@@ -159,7 +159,7 @@ async function readDrawer(page: Page): Promise<Drawer> {
       total: evPager ? Number(evPager[1]) : null,
       text: evTable ? '' : (evSec as HTMLElement).innerText.replace(/^\s*Events\s*/, '').trim(),
     }
-    return { rows, pairs: labelled('span[class*="rounded-full"]'), phases: labelled('span[class*="rounded-sm"][class*="border"]'), counts, text, tables, events, addresses }
+    return { rows, pairs: labelled('span[class*="rounded-full"], span[data-summary-text]'), phases: labelled('span[class*="rounded-sm"][class*="border"]'), counts, text, tables, events, addresses }
   })
 }
 const table = (d: Drawer, ...head: string[]) => d.tables.filter((t) => head.every((h, i) => t.head[i] === h))

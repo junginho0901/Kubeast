@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsSection, SummaryBadge, Th, NoneText, Tx, ObjectUnreadable } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsSection, SummaryBadge, SummaryText, Th, NoneText, Tx, ObjectUnreadable } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { DescribeFailure } from './DescribeFailure'
@@ -59,7 +59,7 @@ export default function NodeInfo({ name }: Props) {
           const isReady = ready?.status === 'True'
           return (
             <>
-              <SummaryBadge label="Ready" value={isReady ? 'Yes' : 'No'} color={isReady ? 'green' : 'red'} />
+              <SummaryText label="Ready" value={isReady ? 'Yes' : 'No'} />
               <SummaryBadge label="Taints" value={nodeDescribe.taints?.length || 0} color={nodeDescribe.taints?.length > 0 ? 'amber' : 'default'} />
               <SummaryBadge label="Conditions" value={nodeDescribe.conditions?.length || 0} />
               <SummaryBadge label="Roles" value={nodeRoles.length > 0 ? nodeRoles.join(', ') : 'worker'} />
