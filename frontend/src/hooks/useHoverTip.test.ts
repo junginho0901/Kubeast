@@ -37,6 +37,12 @@ describe('tipStep and tipShown', () => {
     expect(tipShown(run<string>({ type: 'enter', value: 'a' }, { type: 'escape' }, { type: 'focus', value: 'c' }))).toBe('c')
   })
 
+  it('changes nothing on enter again from the trigger the pointer is on, so a move after Escape keeps it hidden', () => {
+    const hidden = run<string>({ type: 'enter', value: 'a' }, { type: 'escape' })
+    expect(tipStep(hidden, { type: 'enter', value: 'a' })).toBe(hidden)
+    expect(tipShown(tipStep(hidden, { type: 'enter', value: 'b' })), 'another trigger is a new hover').toBe('b')
+  })
+
   it('shows the last of the pointer and the focus, and the other once that one leaves', () => {
     expect(tipShown(run<string>({ type: 'focus', value: 'b' }, { type: 'enter', value: 'a' }))).toBe('a')
     expect(tipShown(run<string>({ type: 'enter', value: 'a' }, { type: 'focus', value: 'b' }))).toBe('b')

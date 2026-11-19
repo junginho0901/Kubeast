@@ -129,6 +129,8 @@ export function KeyValueTags({ data, emptyText = 'None' }: { data?: Record<strin
           data-detail-tag=""
           tabIndex={0}
           onMouseEnter={() => tip.enter(key)}
+          // a tag drawn under a resting pointer has had no mouseenter
+          onMouseMove={() => tip.enter(key)}
           onMouseLeave={tip.leave}
           onFocus={() => tip.focus(key)}
           onBlur={tip.blur}

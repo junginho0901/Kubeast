@@ -52,6 +52,11 @@ describe('a chat graph’s values box', () => {
     expect(boxText()).toBeNull()
   })
 
+  it('shows for a pointer resting where the graph is drawn at its first move', () => {
+    pointAt(0.9)
+    expect(boxText()).toContain('300 MiB')
+  })
+
   it('takes the pointer, so a pointer moved onto it keeps it where it is', () => {
     ;(wrap(draw()).onMouseEnter as () => void)()
     pointAt(0.5)

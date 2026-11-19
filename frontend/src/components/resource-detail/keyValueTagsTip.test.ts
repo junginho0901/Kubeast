@@ -42,6 +42,14 @@ describe('a drawer tag’s whole value', () => {
     expect(shownTips()).toEqual([])
   })
 
+  it('shows for a pointer resting where the tag is drawn at its first move, and moving after Escape keeps it hidden', () => {
+    ;(tags(draw())[0].onMouseMove as () => void)()
+    expect(shownTips()).toEqual(['app.kubernetes.io/name: web'])
+    pressKey('Escape')
+    ;(tags(draw())[0].onMouseMove as () => void)()
+    expect(shownTips()).toEqual([])
+  })
+
   it('takes the pointer and touches the tag, so the pointer can move onto it', () => {
     const tip = tipOf(tags(draw())[0])
     const classes = String(tip.className).split(/\s+/)

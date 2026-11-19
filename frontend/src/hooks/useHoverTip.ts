@@ -25,10 +25,13 @@ export interface TipState<T> {
 
 export const noTip: TipState<never> = { pointer: null, onTrigger: false, onTip: false, focus: null, lead: 'pointer', hidden: false }
 
-/** A new hover or focus shows the tip again after Escape; moving inside the trigger does not. */
+/** A new hover or focus shows the tip again after Escape; moving inside the trigger does not. `enter` again on the
+ *  trigger the pointer is on changes nothing, so a trigger drawn under a resting pointer can send it on a move. */
 export function tipStep<T>(s: TipState<T>, e: TipEvent<T>): TipState<T> {
   switch (e.type) {
-    case 'enter': return { ...s, pointer: e.value, onTrigger: true, lead: 'pointer', hidden: false }
+    case 'enter':
+      if (s.onTrigger && Object.is(s.pointer, e.value)) return s
+      return { ...s, pointer: e.value, onTrigger: true, lead: 'pointer', hidden: false }
     case 'leave': return { ...s, onTrigger: false }
     case 'tipEnter': return { ...s, onTip: true }
     case 'tipLeave': return { ...s, onTip: false }

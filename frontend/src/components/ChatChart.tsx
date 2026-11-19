@@ -68,6 +68,8 @@ export function Plot({ chart, width, height }: PlotProps) {
         onBlur={tip.blur}
         className="block select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400"
         onMouseMove={(e) => {
+          // a graph drawn under a resting pointer has had no mouseenter
+          tip.enter('pointer')
           const rect = e.currentTarget.getBoundingClientRect()
           const px = e.clientX - rect.left
           setHoverT(px < m.left || px > m.left + w ? null : t0 + ((px - m.left) / w) * (t1 - t0))
