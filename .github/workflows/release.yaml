@@ -202,8 +202,8 @@ jobs:
           done
 
       # Supply chain: the attestations and the signature refer to the pushed
-      # manifest list by digest, which names both variants. The vulnerability
-      # gate reads each variant by its own digest from the registry (trivy's
+      # manifest list by digest, which names both variants. The trivy gate
+      # reads each variant by its own digest from the registry (trivy's
       # image source remote), so neither is left to the runner's platform.
       - name: Vulnerability gate (trivy, amd64)
         if: github.event_name == 'push'
