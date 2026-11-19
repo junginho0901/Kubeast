@@ -101,6 +101,7 @@ func TestTheCachesRedisCommandsAreThoseItsChartUserMayRun(t *testing.T) {
 		"Get":           func() { c.Get(ctx, "k:x1", &read) },
 		"Peek":          func() { c.Peek(ctx, "k:x1", &read) },
 		"Set":           func() { c.Set(ctx, "k:x1", map[string]string{"a": "b"}, time.Minute) },
+		"Mark":          func() { c.Mark(ctx, "k:x1", "m", time.Minute) },
 		"Delete":        func() { c.Delete(ctx, "k:x1") },
 		"DeletePattern": func() { c.DeletePattern(ctx, "k:*") },
 		"IsConnected":   func() { c.IsConnected() },

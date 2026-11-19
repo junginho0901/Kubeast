@@ -18,7 +18,7 @@ This page says which services can run more, what they need, how to set the count
 | tool-server | yes, with Redis | a cluster's kubeconfig for up to 10 s; it hears of a cluster's change through Redis | `redis.enabled: true` |
 | ModelConfig controller | no, one pod | nothing; one pod works at a time (leader election), so the chart runs one | — |
 | postgres (the chart's) | no, one pod | the data | for a database that outlives a node, use an external PostgreSQL (`postgresql.enabled: false`) |
-| redis (the chart's) | no, one pod | caches and change notices only; a new pod starts empty and the caches fill again | — |
+| redis (the chart's) | no, one pod | caches and change notices only; a new pod starts empty and the caches fill again. While it does not answer, k8s-service's screens read the cluster: a cache command gives up within 0.5 s, and the cache then leaves Redis out for 3 s | — |
 
 The chart refuses `replicas.k8sService` or `replicas.toolServer` above 1 with `redis.enabled: false`, and says why.
 `values-minimal.yaml` turns Redis off, so it runs one of each.

@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -26,6 +27,10 @@ type Cache struct {
 	owed atomic.Bool
 	// noTTL logs once that an entry came without a positive TTL (Set).
 	noTTL sync.Once
+	// skipUntil (UnixNano, 0 = none): a command Redis did not answer leaves Redis out of reads and stores until then,
+	// skipFor after it, and they miss (useRedis).
+	skipUntil atomic.Int64
+	skipFor   time.Duration
 
 	mu      sync.RWMutex
 	mem     map[string]memEntry
@@ -48,7 +53,8 @@ const Prefix = "kubeast:cache:"
 // TTL is kept this long: nothing the cache writes stays in Redis for ever.
 const MaxTTL = time.Hour
 
-// Options is the connection NewWithUser makes, for another client of the same Redis signing in as the same user.
+// Options is a connection to the cache's Redis signing in as the cache does, for another client of it (the cluster
+// change notices). The cache's own client waits less (cacheOptions).
 func Options(host string, port, db int, username, password string) *redis.Options {
 	return &redis.Options{
 		Addr:        fmt.Sprintf("%s:%d", host, port),
@@ -58,6 +64,28 @@ func Options(host string, port, db int, username, password string) *redis.Option
 		DialTimeout: 5 * time.Second,
 		ReadTimeout: 5 * time.Second,
 	}
+}
+
+// cacheTimeout bounds a cache command's dial, its wait for a connection of the pool and its write and read: a Redis in
+// the cluster answers in a millisecond or two, so a command it has not answered by then misses, and the request reads
+// the cluster.
+const cacheTimeout = 500 * time.Millisecond
+
+// redisSkip is how long reads and stores leave Redis out after a command it did not answer.
+const redisSkip = 3 * time.Second
+
+// cacheOptions is Options for the cache's client: one dial, no second try of a command, each step within cacheTimeout.
+// go-redis's defaults (5 dials, 3 more tries) kept a Helm list waiting more than 30 s on a Redis whose packets were
+// dropped.
+func cacheOptions(host string, port, db int, username, password string) *redis.Options {
+	o := Options(host, port, db, username, password)
+	o.DialTimeout = cacheTimeout
+	o.DialerRetries = 1
+	o.PoolTimeout = cacheTimeout
+	o.ReadTimeout = cacheTimeout
+	o.WriteTimeout = cacheTimeout
+	o.MaxRetries = -1
+	return o
 }
 
 // New connects to Redis at host:port (password empty = no AUTH, the local
@@ -71,14 +99,15 @@ func New(host string, port, db int, password string) *Cache {
 // in with the password alone, as New does.
 func NewWithUser(host string, port, db int, username, password string) *Cache {
 	c := &Cache{
-		mem: make(map[string]memEntry),
+		mem:     make(map[string]memEntry),
+		skipFor: redisSkip,
 	}
 	if host == "" {
 		slog.Info("redis off (REDIS_HOST empty), using in-memory cache")
 		return c
 	}
 
-	rdb := redis.NewClient(Options(host, port, db, username, password))
+	rdb := redis.NewClient(cacheOptions(host, port, db, username, password))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -111,7 +140,11 @@ func (c *Cache) Peek(ctx context.Context, key string, dest interface{}) bool {
 
 func (c *Cache) get(ctx context.Context, key string, dest interface{}) bool {
 	if rdb := c.rdb.Load(); rdb != nil {
+		if !c.useRedis() {
+			return false
+		}
 		data, err := rdb.Get(ctx, Prefix+key).Bytes()
+		c.answered(ctx, err)
 		if err != nil {
 			return false
 		}
@@ -137,6 +170,16 @@ func (c *Cache) get(ctx context.Context, key string, dest interface{}) bool {
 
 // Set keeps value under key for ttl; a ttl that is not positive keeps it for MaxTTL.
 func (c *Cache) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) {
+	c.set(ctx, key, value, ttl, false)
+}
+
+// Mark is Set for what an invalidation writes (the Helm list's generation mark): like Delete, it goes to Redis also
+// while reads and stores leave Redis out.
+func (c *Cache) Mark(ctx context.Context, key string, value interface{}, ttl time.Duration) {
+	c.set(ctx, key, value, ttl, true)
+}
+
+func (c *Cache) set(ctx context.Context, key string, value interface{}, ttl time.Duration, always bool) {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return
@@ -149,7 +192,9 @@ func (c *Cache) Set(ctx context.Context, key string, value interface{}, ttl time
 	}
 
 	if rdb := c.rdb.Load(); rdb != nil {
-		rdb.Set(ctx, Prefix+key, data, ttl)
+		if always || c.useRedis() {
+			c.answered(ctx, rdb.Set(ctx, Prefix+key, data, ttl).Err())
+		}
 		return
 	}
 
@@ -190,7 +235,7 @@ func (c *Cache) Delete(ctx context.Context, key string) {
 	if rdb := c.rdb.Load(); rdb != nil {
 		ctx, cancel := invalidationContext(ctx)
 		defer cancel()
-		rdb.Del(ctx, Prefix+key)
+		c.answered(ctx, rdb.Del(ctx, Prefix+key).Err())
 		return
 	}
 	c.mu.Lock()
@@ -206,6 +251,7 @@ func (c *Cache) DeletePattern(ctx context.Context, pattern string) {
 		for iter.Next(ctx) {
 			rdb.Del(ctx, iter.Val())
 		}
+		c.answered(ctx, iter.Err())
 		return
 	}
 	// One lock over the scan (a few ms at 100,000 keys, writes are rare); expired entries go too, as only a read of that key would remove them.
@@ -221,6 +267,35 @@ func (c *Cache) DeletePattern(ctx context.Context, pattern string) {
 
 func (c *Cache) IsConnected() bool {
 	return c.rdb.Load() != nil
+}
+
+// useRedis is whether a read or store goes to Redis now: not until skipUntil. Once that has passed one caller tries
+// Redis, and the others leave it out until that try ends (answered).
+func (c *Cache) useRedis() bool {
+	until := c.skipUntil.Load()
+	if until == 0 {
+		return true
+	}
+	now := time.Now().UnixNano()
+	return now >= until && c.skipUntil.CompareAndSwap(until, now+int64(c.skipFor))
+}
+
+// answered ends the skip when Redis answered the command (a miss and an error Redis sent count) and starts it when it
+// did not; a command whose own context ended says nothing about Redis.
+func (c *Cache) answered(ctx context.Context, err error) {
+	var fromRedis redis.Error
+	if err == nil || errors.As(err, &fromRedis) {
+		if c.skipUntil.Load() != 0 && c.skipUntil.Swap(0) != 0 {
+			slog.Info("redis answers the cache again")
+		}
+		return
+	}
+	if ctx.Err() != nil {
+		return
+	}
+	if c.skipUntil.Swap(time.Now().Add(c.skipFor).UnixNano()) == 0 {
+		slog.Warn("redis did not answer the cache; reads and stores leave it out and ask the cluster", "err", err, "for", c.skipFor)
+	}
 }
 
 // Reconnect, for a cache whose Redis did not answer at start, asks Redis every interval until it answers and then
@@ -267,7 +342,9 @@ func (c *Cache) moveToRedis(ctx context.Context) bool {
 // In Redis it deletes the keys under Prefix and no other.
 func (c *Cache) FlushAll(ctx context.Context) error {
 	if rdb := c.rdb.Load(); rdb != nil {
-		return flushPrefix(ctx, rdb)
+		err := flushPrefix(ctx, rdb)
+		c.answered(ctx, err)
+		return err
 	}
 	c.mu.Lock()
 	c.mem = make(map[string]memEntry)

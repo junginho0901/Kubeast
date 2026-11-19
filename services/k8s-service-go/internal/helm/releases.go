@@ -138,7 +138,7 @@ func (s *Service) invalidateListCache(ctx context.Context) {
 		return
 	}
 	// The mark goes first: a read under way that stores its older list after the delete below finds the mark moved.
-	s.cache.Set(ctx, listGenerationKey, strconv.FormatInt(time.Now().UnixNano(), 36), listGenerationTTL)
+	s.cache.Mark(ctx, listGenerationKey, strconv.FormatInt(time.Now().UnixNano(), 36), listGenerationTTL)
 	s.cache.DeletePattern(ctx, "helm|releases|*")
 }
 
