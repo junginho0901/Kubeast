@@ -4,6 +4,8 @@ import {
   CLUSTER, NS, Probe, STAMP, bearer, deploymentExists, internalKubeconfig, kubectl, kubectlOk, login, podLog, readyPods, restartCounts,
   podsOf, restartsSince, rolledOut, show, sleep, stopFor, takeDown, undoPending, type Answer,
 } from './shared'
+// kubectl while a Probe sends, and the probe held to sending all through
+import { expectProbeKeptSending, kubectlAsync, podLogAsync, readyPodsAsync, rolledOutAsync } from './shared'
 
 // PR #866 (one Redis user per service): the chart's Valkey runs an ACL file — k8s-service reaches kubeast:* keys and
 // channels with the commands its cache and the cluster notices send, tool-server only subscribes to the cluster change
@@ -199,6 +201,7 @@ test.describe('Redis users per service (PR #866)', () => {
     test.info().attach('timeline.json', { body: JSON.stringify({ redisGone: new Date(outage.offAt).toISOString(), redisBack: new Date(outage.onAt).toISOString(), offMs: outage.onAt - outage.offAt }, null, 2), contentType: 'application/json' })
     const bad = answers.filter((a) => a.status !== 200)
     expect(answers.length, 'the probe kept sending').toBeGreaterThan(500)
+    expectProbeKeptSending(answers)
     expect(bad.length, `screen reads not answered 200 while Redis was off or coming back:\n${show(bad)}`).toBe(0)
     expect(restartsSince(before), 'restarts of the pods that stayed (Redis itself is replaced)').toEqual({})
     // the cache is written to Redis again (k8s-service's user may SCAN kubeast:*)
@@ -225,14 +228,14 @@ test.describe('Redis users per service (PR #866)', () => {
     try {
       // k8s-service restarts only once every Redis pod is gone: a terminating one still answers through its preStop
       down = await takeDown(REDIS)
-      const old = new Set(readyPods(K8S).map((p) => p.name))
-      kubectl(['-n', NS, 'rollout', 'restart', `deploy/${K8S}`])
-      rolledOut(K8S, 240)
-      started = readyPods(K8S).map((p) => p.name).filter((n) => !old.has(n))
+      const old = new Set((await readyPodsAsync(K8S)).map((p) => p.name))
+      await kubectlAsync(['-n', NS, 'rollout', 'restart', `deploy/${K8S}`])
+      await rolledOutAsync(K8S, 240)
+      started = (await readyPodsAsync(K8S)).map((p) => p.name).filter((n) => !old.has(n))
       const since = new Date(Date.now() - 300_000).toISOString()
-      for (const pod of started) expect(podLog(pod, since), `${pod} started on the in-memory cache`).toContain('redis not available, using in-memory cache until it answers')
+      for (const pod of started) expect(await podLogAsync(pod, since), `${pod} started on the in-memory cache`).toContain('redis not available, using in-memory cache until it answers')
     } finally {
-      backAt = down ? down.bringBack() : Date.now()
+      backAt = down ? await down.bringBack() : Date.now()
       answers = await probe.stop()
     }
     test.info().attach('reads.json', { body: JSON.stringify(answers), contentType: 'application/json' })
@@ -243,6 +246,7 @@ test.describe('Redis users per service (PR #866)', () => {
       await expect.poll(() => podLog(pod, since).includes('redis answered, the cache moves there from memory'), { message: `${pod} moves its cache to Redis`, timeout: 15_000 }).toBe(true)
     }
     const bad = answers.filter((a) => a.status !== 200)
+    expectProbeKeptSending(answers)
     expect(bad.length, `reads not answered 200 while k8s-service restarted without Redis:\n${show(bad)}`).toBe(0)
   })
 })

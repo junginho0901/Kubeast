@@ -89,7 +89,11 @@ export type Pod = { name: string; ready: boolean; restarts: number; deleting: bo
 
 // The pods of one app label in the install's namespace.
 export function podsOf(app: string): Pod[] {
-  const raw = JSON.parse(kubectl(['-n', NS, 'get', 'pods', '-l', `app=${app}`, '-o', 'json'])) as {
+  return podRows(kubectl(['-n', NS, 'get', 'pods', '-l', `app=${app}`, '-o', 'json']))
+}
+
+function podRows(json: string): Pod[] {
+  const raw = JSON.parse(json) as {
     items: { metadata: { name: string; deletionTimestamp?: string }; status: { podIP?: string; conditions?: { type: string; status: string }[]; containerStatuses?: { restartCount: number }[] } }[]
   }
   return raw.items.map((p) => ({
@@ -102,6 +106,10 @@ export function podsOf(app: string): Pod[] {
 }
 
 export const readyPods = (app: string) => podsOf(app).filter((p) => p.ready && !p.deleting)
+
+// podsOf and readyPods while a Probe sends (kubectlAsync).
+export const podsOfAsync = async (app: string) => podRows(await kubectlAsync(['-n', NS, 'get', 'pods', '-l', `app=${app}`, '-o', 'json']))
+export const readyPodsAsync = async (app: string) => (await podsOfAsync(app)).filter((p) => p.ready && !p.deleting)
 
 export function deploymentExists(name: string): boolean {
   return kubectlOk(['-n', NS, 'get', 'deploy', name, '-o', 'name']).ok
@@ -151,6 +159,13 @@ export function restartsSince(before: Record<string, number>): Record<string, nu
 export function killPod(name: string): number {
   const at = Date.now()
   kubectl(['-n', NS, 'delete', 'pod', name, '--grace-period=0', '--force', '--wait=false'])
+  return at
+}
+
+// killPod while a Probe sends (kubectlAsync).
+export async function killPodAsync(name: string): Promise<number> {
+  const at = Date.now()
+  await kubectlAsync(['-n', NS, 'delete', 'pod', name, '--grace-period=0', '--force', '--wait=false'])
   return at
 }
 
@@ -315,26 +330,25 @@ export async function rolledOutAsync(deploy: string, timeoutSeconds = 180) {
 // answers through its preStop and grace: Redis has a 5 s preStop), so what a test does "with it off" starts only then.
 // The scale back is registered with atExit and given to whenGone before the scale to 0; bringBack scales back, waits
 // for the rollout and returns when.
-export async function takeDown(deploy: string, goneWithinMs = 120_000): Promise<{ offAt: number; bringBack: () => number }> {
-  const had = replicasOf(deploy)
+export async function takeDown(deploy: string, goneWithinMs = 120_000): Promise<{ offAt: number; bringBack: () => Promise<number> }> {
+  // its kubectl goes through kubectlAsync: a Probe may be sending (stopFor)
+  const had = Number(await kubectlAsync(['-n', NS, 'get', 'deploy', deploy, '-o', 'jsonpath={.spec.replicas}']) || '0')
   if (had < 1) throw new Error(`${deploy} is already at 0 replicas — left by an interrupted run? Scale it back first (README "After a run that stopped half way")`)
   const stopWatcher = whenGone([['-n', NS, 'scale', `deploy/${deploy}`, `--replicas=${had}`]])
   const drop = atExit(`scale ${deploy} back to ${had}`, () => { scale(deploy, had); stopWatcher() })
-  let onAt = 0
-  const bringBack = () => {
-    if (onAt) return onAt
-    scale(deploy, had)
+  let back: Promise<number> | null = null
+  const bringBack = () => (back ??= (async () => {
+    await kubectlAsync(['-n', NS, 'scale', `deploy/${deploy}`, `--replicas=${had}`])
     drop()
     stopWatcher()
-    rolledOut(deploy)
-    onAt = Date.now()
-    return onAt
-  }
+    await rolledOutAsync(deploy)
+    return Date.now()
+  })())
   try {
-    scale(deploy, 0)
-    await expect.poll(() => podsOf(deploy).length, { message: `every ${deploy} pod gone`, timeout: goneWithinMs, intervals: [250] }).toBe(0)
+    await kubectlAsync(['-n', NS, 'scale', `deploy/${deploy}`, '--replicas=0'])
+    await expect.poll(async () => (await podsOfAsync(deploy)).length, { message: `every ${deploy} pod gone`, timeout: goneWithinMs, intervals: [250] }).toBe(0)
   } catch (e) {
-    bringBack()
+    await bringBack()
     throw e
   }
   return { offAt: Date.now(), bringBack }
@@ -347,9 +361,9 @@ export async function stopFor(deploy: string, seconds: number, during: (offAt: n
   try {
     await Promise.all([sleep(seconds * 1000), during(down.offAt)])
   } finally {
-    down.bringBack()
+    await down.bringBack()
   }
-  return { offAt: down.offAt, onAt: down.bringBack() }
+  return { offAt: down.offAt, onAt: await down.bringBack() }
 }
 
 // Every pod of the service (the chart's app label), as a request may land on any replica; with a label kubectl prints
@@ -361,6 +375,9 @@ export function serverLog(app: string, sinceIso: string): string {
 export function podLog(pod: string, sinceIso: string): string {
   return kubectlOk(['-n', NS, 'logs', pod, '--all-containers', `--since-time=${sinceIso}`]).out
 }
+
+// podLog while a Probe sends (kubectlAsync); a failed read is empty.
+export const podLogAsync = (pod: string, sinceIso: string) => kubectlAsync(['-n', NS, 'logs', pod, '--all-containers', `--since-time=${sinceIso}`]).catch(() => '')
 
 // A port-forward to one pod, so a request reaches that server and no other. kubectl runs under a small shell that ends
 // it when told (close, the worker's exit or signal) and also when the worker is gone however it went (it looks every
@@ -433,6 +450,13 @@ export const notOk = (answers: Answer[], ok: (a: Answer) => boolean = (a) => a.s
 // The longest time between two requests of a Probe (answers in send order). Well past its everyMs, something held the
 // worker's event loop: nothing was sent then, and the answer on its way was timed with the hold added.
 export const longestGap = (answers: Answer[]) => answers.reduce((m, a, i) => (i ? Math.max(m, a.at - answers[i - 1].at) : m), 0)
+
+// The longest gap a test lets a Probe have: below the 5 s a test calls a hang, so a hold alone cannot make an answer
+// read as one.
+export const SEND_GAP_MS = 2_000
+export function expectProbeKeptSending(answers: Answer[]) {
+  expect(longestGap(answers), `ms between two requests of the probe (more than ${SEND_GAP_MS}: the worker's event loop was held)`).toBeLessThanOrEqual(SEND_GAP_MS)
+}
 
 // The answers as one line each, for a failure message.
 export const show = (answers: Answer[], limit = 20) => answers.slice(0, limit)

@@ -28,8 +28,10 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
   answer: status 0 = no answer within its timeout or a broken connection. Each test attaches the answers as JSON.
   The Probe sends and times its requests on the worker's event loop, which `kubectl()` (synchronous) holds until it
   returns: nothing is sent meanwhile and the request already started is timed with the wait added. kubectl run while a
-  Probe sends goes through `kubectlAsync` / `rolledOutAsync`, and `longestGap` gives the longest time between two of
-  its requests (`pod-shutdown` holds it to 2 s).
+  Probe sends goes through `kubectlAsync` (`rolledOutAsync`, `killPodAsync`, `podsOfAsync`, `readyPodsAsync`,
+  `podLogAsync`; `takeDown` and `stopFor` use it throughout), and `expectProbeKeptSending` holds the longest time
+  between two of its requests (`longestGap`) to `SEND_GAP_MS` (2 s) in `pod-shutdown`, `force-kill`, `redis-users`
+  F-8 and `drain-in-db` F-9.
 - "Kill" is `kubectl delete pod --grace-period=0 --force`; "stop" is a plain `kubectl delete pod` (preStop, SIGTERM).
   A force delete still gives the process a SIGTERM about 2 s before SIGKILL (the kubelet's shortest grace), so a
   server can still run part of its shutdown; where that changes what is read, the test says so.
@@ -73,6 +75,12 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
 
 `pod-shutdown.spec.ts`
 - Every answer during the rollouts is 200 and comes within 5 s (`E2E_FAULT_HANG_MS`); the bug held one for 30 s.
+- A pod deleted by hand: with two or more pods, the same. With one, nothing answers from its SIGTERM (after the preStop
+  wait) until the new pod is ready — a pod deleted is not replaced first — so the answers other than 200, from the
+  start of the first to the end of the last, are held to the readiness probe's period + 5 s, none slower than 5 s;
+  the test writes the gap, the count and the statuses down per Deployment. Measured on kind: about 1 s for
+  auth-service, k8s-service and session-service, about 6 s for ai-service, frontend and the gateway (readiness every
+  10 s).
 - Depends on: the preStop sleep and grace of #856 on all eight Deployments (the test records the preStop it found);
   `ROUNDS` = `E2E_FAULT_ROLLOUTS` (4).
 
