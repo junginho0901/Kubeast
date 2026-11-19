@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 from typing import Optional, Dict, Any
 
+from app.services.ai import thought_signatures
 from app.services.ai.debug_dump import log as logger
 from app.services.ai.limits import KUBEAST_KEYS
 from app.services.model_config_policy import AZURE_PROVIDERS, AZURE_V1_URL_HINT
@@ -105,6 +106,8 @@ class _CompletionsProxy:
         self._base_url = base_url
 
     async def create(self, **kwargs: Any):
+        if "messages" in kwargs and thought_signatures.is_google(self._provider):
+            kwargs["messages"] = thought_signatures.sent(kwargs["messages"])
         if self._default_options:
             extra_body = dict(kwargs.get("extra_body") or {})
             for key, value in self._default_options.items():
