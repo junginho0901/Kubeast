@@ -198,7 +198,7 @@ test.describe('terminals and followed logs past an account\'s cap', () => {
       return shown.includes(squash(tr('pods.exec.connected'))) ? 'open' : 'connecting'
     }, { timeout: 30_000, intervals: [1_000] }).toBe('open')
     const marker = `caps-ok-${STAMP}`
-    await rows.click()
+    await page.locator('.xterm').last().click() // focuses the terminal as e2e/demo/terminal.demo.ts does; its rows do not take the click
     await page.keyboard.type(`echo ${marker}`)
     await page.keyboard.press('Enter')
     // the line typed (the terminal's echo) and the shell's answer
