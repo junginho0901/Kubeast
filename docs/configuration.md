@@ -40,8 +40,9 @@ auth:
   # namespace, whose UID refuses a second entry for one cluster and a registered cluster's kubeconfig replaced
   # by another cluster's; a credential without that get is registered without a UID and both checks are skipped.
   # The k8s-service and tool-server ServiceAccounts in the cluster Kubeast is installed in also get only this,
-  # plus a Role to read the kubeconfig Secret. When false, they get cluster-admin as before. auth-service may get the kube-system
-  # namespace of that cluster (its UID, so a kubeconfig of the same cluster is not registered twice).
+  # plus a Role to read the kubeconfig Secret. When false, they get cluster-admin as before. auth-service may
+  # get the kube-system namespace of that cluster (its UID, so a kubeconfig of the same cluster is not
+  # registered twice).
   # A custom role (other than Read/Write/Admin) granted on a cluster acts as the group kubeast:role:<slug>.
   # The RBAC above allows impersonating only the 4 fixed groups, so list the role in customRoles:
   # that group is then allowed and bound to the listed ClusterRoles.

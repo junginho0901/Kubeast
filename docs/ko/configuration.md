@@ -36,7 +36,8 @@ auth:
   # 쓰지 않는 템플릿은 건너뜁니다(docs/ko/cluster-requirements.md §1).
   #   scripts/render-target-rbac.sh -f values.yaml -f <그 클러스터 값> | kubectl --context <cluster> apply -f -
   # Kubeast 자격증명에는 ClusterRole kubeast-impersonator만 있으면 됩니다.
-  # 이 ClusterRole로 kube-system 네임스페이스도 읽을(get) 수 있습니다. 그 UID로 한 클러스터의 두 번째 등록과, 등록된 클러스터의 kubeconfig를 다른 클러스터 것으로 바꾸는 것을 거절합니다.
+  # 이 ClusterRole로 kube-system 네임스페이스도 읽을(get) 수 있습니다.
+  # 그 UID로 한 클러스터의 두 번째 등록과, 등록된 클러스터의 kubeconfig를 다른 클러스터 것으로 바꾸는 것을 거절합니다.
   # 이 get이 없는 자격증명은 UID 없이 등록되고 두 검사를 건너뜁니다.
   # 설치된 클러스터의 k8s-service와 tool-server ServiceAccount도 이 ClusterRole과 kubeconfig Secret 읽기 Role만 받습니다.
   # false면 예전처럼 cluster-admin을 받습니다.
