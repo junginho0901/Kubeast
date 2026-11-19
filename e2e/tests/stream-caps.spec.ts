@@ -1,5 +1,8 @@
 import { execSync } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 import fs from 'node:fs'
+import http from 'node:http'
+import https from 'node:https'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -101,6 +104,29 @@ const reopenRefused = (page: Page) => page.evaluate(() => {
 
 const terminals = (page: Page) => page.evaluate(() => ((window as unknown as { __terms: { seen: Held }[] }).__terms).map((t) => t.seen))
 
+// Asks for a terminal on the pod as a page of another site would (its Origin), from this process with the account's
+// token: the status of the answer, 101 when a socket opened.
+function terminalFromAnotherSite(token: string): Promise<number> {
+  const url = new URL(`${BASE}/api/v1/cluster/namespaces/${NS}/pods/${POD}/exec/ws?container=${POD}&command=/bin/sh&cluster=${CLUSTER}&lang=en`)
+  return new Promise((resolve, reject) => {
+    const req = (url.protocol === 'https:' ? https : http).request(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Origin: 'https://other.example',
+        Connection: 'Upgrade',
+        Upgrade: 'websocket',
+        'Sec-WebSocket-Version': '13',
+        'Sec-WebSocket-Key': randomBytes(16).toString('base64'),
+      },
+    })
+    req.setTimeout(10_000, () => req.destroy(new Error('no answer in 10 s')))
+    req.on('response', (res) => { res.resume(); resolve(res.statusCode ?? 0) })
+    req.on('upgrade', (_res, socket) => { socket.destroy(); resolve(101) })
+    req.on('error', reject)
+    req.end()
+  })
+}
+
 type Follow = { lines: number; limit: string | null; ended: boolean; stop: () => void }
 
 // Follows the pod's log as the Logs tab asks for it, from this process as the same account (its token): a browser keeps
@@ -171,6 +197,10 @@ test.describe('terminals and followed logs past an account\'s cap', () => {
     await expect.poll(async () => (await terminals(raw))[MAX_TERMINALS].closed, { timeout: 20_000 }).toEqual({ code: 4429, reason: 'terminal_limit' })
     expect((await terminals(raw))[MAX_TERMINALS].text).toBe('')
 
+    // One more from another site's page: the 403 any terminal from another site gets through the gateway, not a socket.
+    // The cap's failed row is written before the Origin is read.
+    expect(await terminalFromAnotherSite(await accessToken(request))).toBe(403)
+
     // One more from the Pod drawer: the terminal says why and offers Reconnect.
     await page.goto(`/workloads/pods?cluster=${CLUSTER}&namespace=${NS}&detail=${encodeURIComponent(`Pod/${NS}/${POD}`)}`)
     const drawer = page.locator(DRAWER).last()
@@ -181,7 +211,7 @@ test.describe('terminals and followed logs past an account\'s cap', () => {
     await expect(reconnect).toHaveCount(1)
 
     const failed = await failedRows(request, 'k8s.pod.exec')
-    expect(failed.length - failedBefore, JSON.stringify(failed)).toBe(2) // the socket above and the drawer's terminal
+    expect(failed.length - failedBefore, JSON.stringify(failed)).toBe(3) // the socket above, the other site's and the drawer's terminal
     for (const r of failed) expect(r.Error).toContain(`this account has ${MAX_TERMINALS} open on this server`)
 
     // One of the open terminals closes. The server gives its place back once the shell has hung up, a moment later, so
