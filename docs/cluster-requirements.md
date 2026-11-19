@@ -536,6 +536,7 @@ service:
 
 | What | Requirement |
 | --- | --- |
+| Kubernetes version | The chart stops at the render, before Helm changes anything, where the API server would refuse a pod's `preStop` `sleep` (Pod shutdown below): below 1.30 while `podShutdown.preStopSeconds` is above 0 or `streams.enabled` is on, and below 1.33 with `streams.enabled` and `streams.preStopSeconds: 0`. `helm install` and `helm upgrade` check the cluster's version. `helm template`, with `--show-only` too (`scripts/render-target-rbac.sh`), checks `--kube-version`, else Helm's own default, which is v1.20.0 on Helm 4.0.0 and 1.29 or older on Helm 3.14 and older: pass your cluster's version there |
 | User namespaces | `podSecurity.hostUsers: false` (default) needs Kubernetes 1.33 or later and a node kernel that supports it (6.3 or later). Otherwise `true` |
 | Pod shutdown | Kubernetes 1.30 or later: the chart's pods behind a Service, but for the bundled PostgreSQL and Redis, wait `podShutdown.preStopSeconds` (5 s) before SIGTERM with the native `preStop` `sleep` action (beta and on by default in 1.30, GA in 1.34), so a rolling update sends no new connection to a pod that has exited; `0` leaves the wait out |
 | Storage | With the built-in PostgreSQL, a PVC — the default StorageClass or `postgresql.storageClassName` |

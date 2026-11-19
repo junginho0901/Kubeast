@@ -552,6 +552,7 @@ service:
 
 | 항목 | 조건 |
 | --- | --- |
+| Kubernetes 버전 | API 서버가 파드의 `preStop` `sleep`을 거절할 자리에서는 Helm이 아무것도 바꾸기 전에 차트가 렌더에서 멈춥니다(아래 파드 종료): 1.30 아래에서는 `podShutdown.preStopSeconds`가 0보다 크거나 `streams.enabled`가 켜져 있을 때, 1.33 아래에서는 `streams.enabled`와 `streams.preStopSeconds: 0`을 같이 둘 때입니다. `helm install`과 `helm upgrade`는 클러스터의 버전을 봅니다. `helm template`은 `--show-only`를 써도(`scripts/render-target-rbac.sh`) `--kube-version`을, 없으면 Helm 자체 기본값을 봅니다. Helm 4.0.0의 기본값은 v1.20.0, Helm 3.14 이하는 1.29 이하이므로 거기서는 클러스터의 버전을 넘깁니다 |
 | 사용자 네임스페이스 | `podSecurity.hostUsers: false`(기본)를 쓰려면 Kubernetes 1.33 이상과 이를 지원하는 노드 커널(6.3 이상)이 필요합니다. 조건이 맞지 않으면 `true` |
 | 파드 종료 | Kubernetes 1.30 이상: 차트의 Service 뒤 파드는(번들 PostgreSQL과 Redis는 빼고) 기본 `preStop` `sleep` 동작(1.30 베타·기본 켜짐, 1.34 GA)으로 SIGTERM 전에 `podShutdown.preStopSeconds`(5초) 기다리므로, 롤링 업데이트 중 이미 종료한 파드로 새 연결이 가지 않습니다. `0`이면 기다리지 않습니다 |
 | 저장소 | 내장 PostgreSQL을 쓰면 PVC — 기본 StorageClass 또는 `postgresql.storageClassName` |
