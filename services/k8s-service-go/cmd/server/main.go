@@ -32,10 +32,12 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nfm"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nodeshells"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/pglock"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/routes"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/sessioncheck"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/streamcap"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/traces"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/tracing"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
@@ -327,6 +329,24 @@ func main() {
 		defer drainCancel()
 		go drainTracker.Run(drainCtx)
 	}
+	// Node shells keep a row per open shell in the shared database, so the pod of a shell whose server was killed is
+	// deleted by another server instead of running until its deadline. Node shell off: no heartbeat and no sweep.
+	nodeShellPods := nodeshells.PodRemover(func(ctx context.Context) (kubernetes.Interface, error) {
+		cs, err := k8sSvc.ClientsetFor(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return cs, nil
+	})
+	shellStore := nodeshells.NewPG(pgPool)
+	if shells := nodeShellTracker(cfg.NodeShellEnabled, role, shellStore, nodeShellPods, auditStore,
+		time.Duration(cfg.NodeShellTimeoutSec)*time.Second); shells != nil {
+		h.SetNodeShells(shells)
+		shellCtx, shellCancel := context.WithCancel(context.Background())
+		go shells.Run(shellCtx)
+		// Deferred after pgPool.Close, so it runs before it: Close waits for every connection, the heartbeat's held one too.
+		defer stopNodeShells(shellCancel, shellStore)
+	}
 	recCtx, recCancel := context.WithCancel(context.Background())
 	defer recCancel()
 	// Only a server that opens terminals runs the recorder: an API server holds no recording to keep alive, and a row
@@ -379,6 +399,12 @@ func main() {
 			func() float64 { terminals, _ := streams.Open(); return float64(terminals) })
 		m.Gauge("kubeast_followed_logs_open", "Open followed logs (a container's output, a log file).",
 			func() float64 { _, logs := streams.Open(); return float64(logs) })
+		for kind, label := range map[streamcap.Kind]string{streamcap.Terminal: "terminal", streamcap.FollowedLog: "followed_log"} {
+			m.Registry.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "kubeast_stream_cap_refusals_total", Help: "Terminals and followed logs refused at their account's cap (multicluster.maxTerminalsPerAccount, maxFollowedLogsPerAccount) since start-up.",
+				ConstLabels: prometheus.Labels{"service": "k8s", "kind": label},
+			}, func() float64 { return float64(h.StreamCaps().Refused(kind)) }))
+		}
 	}
 	if recorder.Enabled() && role.ServesStreams() {
 		m.Gauge("kubeast_session_recording_pending_bytes", "Recorded terminal output not uploaded to the recording store yet.",
@@ -539,6 +565,23 @@ func main() {
 	}
 	shutdown(srv, ready, recorder, serverShutdownWait, recorderShutdownWait)
 	slog.Info("server stopped")
+}
+
+// stopNodeShells ends the node shells' tracker and gives the heartbeat's connection back to the pool at once: a beat
+// under way ends with the cancelled context (pgx closes its connection), and one that starts after finds no context to
+// take a connection with. It waits for nothing, so the shutdown waits stay as they are.
+func stopNodeShells(cancel context.CancelFunc, store interface{ Idle() }) {
+	cancel()
+	store.Idle()
+}
+
+// nodeShellTracker is the tracker of the node shells this server opens: none when node shell is off or the server
+// opens no terminals (role api), so such a server neither beats nor sweeps.
+func nodeShellTracker(enabled bool, role config.Role, store nodeshells.Store, remove nodeshells.Remover, w audit.Writer, shellTimeout time.Duration) *nodeshells.Tracker {
+	if !enabled || !role.ServesStreams() {
+		return nil
+	}
+	return nodeshells.NewTracker(store, remove, w, shellTimeout)
 }
 
 // clusterNotices is clustersync's Redis client, signed in as the cache is (REDIS_USERNAME, the chart's redis.acl);

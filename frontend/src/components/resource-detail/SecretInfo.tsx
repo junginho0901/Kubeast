@@ -8,7 +8,7 @@ import type { ServiceAccountInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyServiceAccountWatchEvent } from '@/pages/security/serviceaccounts/serviceAccountWatchNormalize'
-import { InfoSection, InfoRow, KeyValueTags, EventsSection, StatusBadge, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, EventsSection, NoneText, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
 import { usePagination } from './usePagination'
@@ -272,8 +272,10 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
               />
             ))}
           </div>
+        ) : dataSearch ? (
+          <p className="text-xs text-slate-500">{tr('common.noSearchResults', 'No results found.')}</p>
         ) : (
-          <p className="text-xs text-slate-500">{dataSearch ? tr('common.noSearchResults', 'No results found.') : tr('secretInfo.noData', 'No data entries.')}</p>
+          <NoneText />
         )}
 
         {filteredDataKeys.length > DATA_PER_PAGE && (

@@ -29,6 +29,7 @@ With `METRICS_ENABLED=false` (chart `metrics.enabled`), it returns 404.
 | `kubeast_ws_subscriptions` | gauge | `service` | Live watches in k8s-service, counted against `multicluster.wsMaxSubscriptions`: the live lists' WebSocket subscriptions and the Helm releases streams' Secret watches. Terminals and followed logs are the next two rows |
 | `kubeast_terminals_open` | gauge | `service` | Open terminals (pod exec, node shell) in k8s-service |
 | `kubeast_followed_logs_open` | gauge | `service` | Open followed logs (a container's output, a log file) in k8s-service |
+| `kubeast_stream_cap_refusals_total` | counter | `service`, `kind` | Terminals (`kind="terminal"`) and followed logs (`followed_log`) k8s-service refused at their account's cap since start (`multicluster.maxTerminalsPerAccount`, `maxFollowedLogsPerAccount`); each also leaves a failed audit row. A followed log's refusal is a 200, so request metrics do not show it |
 | `kubeast_k8s_client_rate_wait_seconds` | histogram | `service`, `limiter`, `passed_over` | How long a request from k8s-service to a cluster's API server waited for the client's rate before it was sent, 0 when it went at once, summed over clusters (buckets 1 ms to 60 s). `limiter` is `user` (the clients' rate, `multicluster.clientQPS` and `clientBurst`) or `review` (the access checks' own rate, only with `multicluster.reviewQPS` set). `passed_over` is `true` for an access check asked again that let a later request go first, at most 10 s. A request that stopped waiting counts the time it waited. The dynamic client (custom resources, applies) keeps client-go's own rate and is not counted |
 | `kubeast_k8s_client_rate_waits_total` | counter | `service`, `limiter` | Requests to a cluster that waited for that rate at all, given their turn or not |
 | `kubeast_k8s_access_reviews_total` | counter | `service`, `asked_as` | SelfSubjectAccessReviews k8s-service sent for the access checks it remembers for a minute (the screens' list and get checks), summed over clusters. `asked_as` is `person`, or `groups` for a read check one review answered for everyone with the person's groups (`auth.impersonation.sharedReadChecks`, [cluster requirements](cluster-requirements.md) §1). Can-i, the log search, flows and Top Talkers send theirs as the person and are not counted |
@@ -56,7 +57,7 @@ metrics:
     from:
       - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
   prometheusRule:
-    enabled: true           # five alerts
+    enabled: true           # five alerts, six with an audit anchor sink
 ```
 
 One ServiceMonitor selects the five backend Services labelled `kubeast.io/metrics: "true"`, with port name `http` and path `/metrics`. A Prometheus without the Operator can select the same label with `kubernetes_sd_configs` (role `endpoints`).
@@ -70,6 +71,7 @@ One ServiceMonitor selects the five backend Services labelled `kubeast.io/metric
 | `KubeastSlowRequests` | p95 > `p95Seconds` (2 s) for 10 minutes | Console latency |
 | `KubeastAuditSinkStalled` | `kubeast_audit_sink_pending > 0` and the last successful send more than 10 minutes ago, for 5 minutes | Audit sink sending has stopped (errors in the auth-service log; retention keeps the unsent rows) |
 | `KubeastSessionRecordingUploadStalled` | `kubeast_session_recording_pending_bytes > 0` and the last upload more than 10 minutes ago, for 5 minutes | Session recording upload has stopped (output piles up in the k8s-service spool; sessions are not blocked) |
+| `KubeastAuditAnchorStalled` | `time() - max by (service) (kubeast_audit_anchor_last_timestamp_seconds)` above twice `audit.integrity.anchor.hours`, for 30 minutes. Only with `audit.integrity.anchor.sink` set | No audit anchor has been written for two periods: the writes fail, or the anchor job does not run. A failed anchor is in the auth-service log and an `audit.chain.anchor` row ([security-audit.md](security-audit.md)) |
 
 Useful expressions:
 

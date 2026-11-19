@@ -1,9 +1,11 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
 
 import {
-  CLUSTER, NS, Probe, STAMP, bearer, deploymentExists, internalKubeconfig, kubectl, kubectlOk, login, podLog, readyPods, restartCounts,
-  podsOf, restartsSince, rolledOut, show, sleep, stopFor, takeDown, undoPending, type Answer,
+  CLUSTER, NS, Probe, ROTATION_NEEDS, STAMP, bearer, deploymentExists, items, kubectl, kubectlOk, login, podLog, readyPods, restartCounts,
+  podsOf, restartsSince, rolledOut, rotationCluster, show, sleep, stopFor, takeDown, undoPending, type Answer,
 } from './shared'
+// kubectl while a Probe sends, and the probe held to sending all through
+import { expectProbeKeptSending, kubectlAsync, podLogAsync, readyPodsAsync, rolledOutAsync } from './shared'
 
 // PR #866 (one Redis user per service): the chart's Valkey runs an ACL file — k8s-service reaches kubeast:* keys and
 // channels with the commands its cache and the cluster notices send, tool-server only subscribes to the cluster change
@@ -15,12 +17,12 @@ import {
 //
 // The passwords are read from the Secret the redis pod reads them from and go to valkey-cli on stdin, never on a command
 // line. Each case skips with the reason: no Redis, the users off (redis.acl.enabled false or an existingSecret without
-// the keys), MCP off for the tool-server case, the kind clusters kubeast-b and test2 missing.
+// the keys), MCP off for the tool-server case, no cluster for the credential change (E2E_FAULT_ROTATE_*: the change is
+// a cluster's admin kubeconfig replaced with the same cluster's ServiceAccount, which may not list nodes).
 
 const REDIS = 'redis'
 const K8S = 'k8s-service'
-const OLD_KIND = process.env.E2E_FAULT_OLD_KIND || 'kubeast-b'
-const NEW_KIND = process.env.E2E_FAULT_NEW_KIND || 'test2'
+const rotation = rotationCluster()
 
 type RedisContainer = { args?: string[]; env?: { name: string; valueFrom?: { secretKeyRef?: { name: string; key: string } } }[] }
 const redisSpec = (): RedisContainer | null => {
@@ -89,6 +91,11 @@ async function nodesByTool(request: APIRequestContext, token: string, cluster: s
   return result?.isError ? `error ${result?.content?.[0]?.text ?? ''}` : String(result?.content?.[0]?.text ?? '')
 }
 
+async function listedNodes(request: APIRequestContext, token: string, cluster: string): Promise<string[]> {
+  const res = await request.get(`/api/v1/nodes?cluster=${encodeURIComponent(cluster)}`, { headers: bearer(token), failOnStatusCode: false, timeout: 20_000 })
+  return res.ok() ? items<{ name?: string }>(await res.json()).map((n) => n.name ?? '').filter(Boolean) : []
+}
+
 test.afterEach(() => undoPending())
 
 test.describe('Redis users per service (PR #866)', () => {
@@ -145,11 +152,11 @@ test.describe('Redis users per service (PR #866)', () => {
       test.skip(!deploymentExists('tool-server'), 'the install runs no tool-server (ai.enabled false)')
       test.skip(!(await mcpOn(request, token)), 'mcp.enabled is off: the tool is called over MCP')
       test.skip(redisDown && !deploymentExists(REDIS), 'the install runs no Redis')
-      const oldKc = internalKubeconfig(OLD_KIND)
-      const newKc = internalKubeconfig(NEW_KIND)
-      test.skip(!oldKc || !newKc, `needs the kind clusters ${OLD_KIND} and ${NEW_KIND}`)
+      test.skip(!rotation, ROTATION_NEEDS)
+      const { admin: adminKc, limited, limitedUser } = rotation!
+      const asLimited = (text: string) => /forbidden/i.test(text) && text.includes(limitedUser)
       const admin = bearer(token)
-      const reg = await request.post('/api/v1/clusters', { headers: admin, data: { mode: 'external', display_name: `e2e-w6-tool-${STAMP}-${redisDown ? 'r' : 'n'}`, kubeconfig: oldKc }, timeout: 60_000 })
+      const reg = await request.post('/api/v1/clusters', { headers: admin, data: { mode: 'external', display_name: `e2e-w6-tool-${STAMP}-${redisDown ? 'r' : 'n'}`, kubeconfig: adminKc }, timeout: 60_000 })
       expect(reg.status(), await reg.text()).toBe(201)
       const id = (await reg.json()).id as string
       const replicas = readyPods('tool-server').length
@@ -158,12 +165,14 @@ test.describe('Redis users per service (PR #866)', () => {
       let outage: { offAt: number; onAt: number } | null = null
       let redisAtPatch: { pods: number; endpoints: number } | null = null
       try {
-        // every tool-server replica keeps the first kubeconfig: as many calls as replicas and more, through the Service
-        for (let i = 0; i < replicas * 4; i++) expect(await nodesByTool(request, token, id), 'the tool reads the first cluster').toContain(`${OLD_KIND}-`)
+        let nodes: string[] = []
+        await expect.poll(async () => (nodes = await listedNodes(request, token, id)).length, { message: 'the API lists the nodes with the admin credential', timeout: 30_000 }).toBeGreaterThan(0)
+        // every tool-server replica keeps the admin kubeconfig: as many calls as replicas and more, through the Service
+        for (let i = 0; i < replicas * 4; i++) expect(await nodesByTool(request, token, id), 'the tool reads with the admin credential').toContain(nodes[0])
         const follow = async () => {
           // what could answer as Redis right before the change: its pods (terminating ones too) and ready endpoints
           if (redisDown) redisAtPatch = { pods: podsOf(REDIS).length, endpoints: readyEndpoints(REDIS) }
-          const patch = await request.patch(`/api/v1/clusters/${id}`, { headers: admin, data: { kubeconfig: newKc }, timeout: 60_000 })
+          const patch = await request.patch(`/api/v1/clusters/${id}`, { headers: admin, data: { kubeconfig: limited }, timeout: 60_000 })
           patchedAt = Date.now()
           expect(patch.status(), await patch.text()).toBe(200)
           while (Date.now() - patchedAt < 15_000) {
@@ -180,9 +189,9 @@ test.describe('Redis users per service (PR #866)', () => {
       test.info().attach('tool-answers.json', { body: JSON.stringify(seen), contentType: 'application/json' })
       if (outage) test.info().attach('timeline.json', { body: JSON.stringify({ redisGone: new Date(outage.offAt).toISOString(), patched: new Date(patchedAt).toISOString(), redisBack: new Date(outage.onAt).toISOString(), redisAtPatch }, null, 2), contentType: 'application/json' })
       if (redisDown) expect(redisAtPatch, 'Redis pods and ready endpoints right before the change').toEqual({ pods: 0, endpoints: 0 })
-      const late = seen.filter((s) => s.at > 10_000 && !s.text.includes(`${NEW_KIND}-`))
+      const late = seen.filter((s) => s.at > 10_000 && !asLimited(s.text))
       expect(seen.filter((s) => s.at > 10_000).length, 'calls after the first 10 s').toBeGreaterThan(replicas * 4)
-      expect(late.map((s) => `+${s.at}ms ${s.text.slice(0, 80)}`), `answers not from ${NEW_KIND} later than 10 s after the change`).toEqual([])
+      expect(late.map((s) => `+${s.at}ms ${s.text.slice(0, 80)}`), `answers not refused as ${limitedUser} later than 10 s after the change`).toEqual([])
     })
   }
 
@@ -220,6 +229,7 @@ test.describe('Redis users per service (PR #866)', () => {
     test.info().attach('timeline.json', { body: JSON.stringify({ redisGone: new Date(outage.offAt).toISOString(), redisBack: new Date(outage.onAt).toISOString(), offMs: outage.onAt - outage.offAt }, null, 2), contentType: 'application/json' })
     const bad = answers.filter((a) => a.status !== 200)
     expect(answers.length, 'the probe kept sending').toBeGreaterThan(500)
+    expectProbeKeptSending(answers)
     expect(bad.length, `screen reads not answered 200 while Redis was off or coming back:\n${show(bad)}`).toBe(0)
     const helmOff = answers.filter((a) => a.path === HELM_LIST && a.at >= outage.offAt && a.at < outage.onAt)
     expect(helmOff.length, 'Helm release list reads sent while Redis was off').toBeGreaterThan(50)
@@ -247,14 +257,14 @@ test.describe('Redis users per service (PR #866)', () => {
     try {
       // k8s-service restarts only once every Redis pod is gone: a terminating one still answers through its preStop
       down = await takeDown(REDIS)
-      const old = new Set(readyPods(K8S).map((p) => p.name))
-      kubectl(['-n', NS, 'rollout', 'restart', `deploy/${K8S}`])
-      rolledOut(K8S, 240)
-      started = readyPods(K8S).map((p) => p.name).filter((n) => !old.has(n))
+      const old = new Set((await readyPodsAsync(K8S)).map((p) => p.name))
+      await kubectlAsync(['-n', NS, 'rollout', 'restart', `deploy/${K8S}`])
+      await rolledOutAsync(K8S, 240)
+      started = (await readyPodsAsync(K8S)).map((p) => p.name).filter((n) => !old.has(n))
       const since = new Date(Date.now() - 300_000).toISOString()
-      for (const pod of started) expect(podLog(pod, since), `${pod} started on the in-memory cache`).toContain('redis not available, using in-memory cache until it answers')
+      for (const pod of started) expect(await podLogAsync(pod, since), `${pod} started on the in-memory cache`).toContain('redis not available, using in-memory cache until it answers')
     } finally {
-      backAt = down ? down.bringBack() : Date.now()
+      backAt = down ? await down.bringBack() : Date.now()
       answers = await probe.stop()
     }
     test.info().attach('reads.json', { body: JSON.stringify(answers), contentType: 'application/json' })
@@ -265,6 +275,7 @@ test.describe('Redis users per service (PR #866)', () => {
       await expect.poll(() => podLog(pod, since).includes('redis answered, the cache moves there from memory'), { message: `${pod} moves its cache to Redis`, timeout: 15_000 }).toBe(true)
     }
     const bad = answers.filter((a) => a.status !== 200)
+    expectProbeKeptSending(answers)
     expect(bad.length, `reads not answered 200 while k8s-service restarted without Redis:\n${show(bad)}`).toBe(0)
   })
 })

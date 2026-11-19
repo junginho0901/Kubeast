@@ -21,6 +21,7 @@ This page says which services can run more, what they need, how to set the count
 | redis (the chart's) | no, one pod | caches and change notices only; a new pod starts empty and the caches fill again. While it does not answer, k8s-service's screens read the cluster: a cache command gives up within 0.5 s, and the cache then leaves Redis out for 3 s; a removal of cached entries Redis did not take is made up for by a flush before the cache reads Redis again | — |
 
 The chart refuses `replicas.k8sService` or `replicas.toolServer` above 1 with `redis.enabled: false`, and says why.
+It refuses more than one k8s-service pod (`replicas.k8sService` above 1, or `autoscaling.k8sService` with `maxReplicas` above 1) with `sessionRecording.storage: file` too: every pod would mount the one file volume, so record to `s3` or `database` ([Operations](operations.md#terminals-and-followed-logs-on-their-own-server) has the file store's rollout).
 `values-minimal.yaml` turns Redis off, so it runs one of each.
 
 ## Before you start
@@ -57,6 +58,7 @@ replicas:
 ```
 
 - `pdb.enabled` (on by default) gives each service that runs two or more pods, or whose autoscaling keeps `minReplicas` 2 or more, a PodDisruptionBudget that lets `pdb.maxUnavailable` (1) of its pods be evicted at once; a service of one pod gets none, so it never blocks a drain.
+- A service of one pod has nothing to answer from the moment that pod is deleted or evicted (a node drain too) and its preStop wait ends until the new pod is ready, since a deleted pod is not replaced first as a rollout's is: measured on kind, about 1 s for auth-service, k8s-service and session-service and about 6 s for ai-service, the frontend and the gateway, whose readiness probe asks every 10 s (about 16 s when the new pod's first probe comes before it is up); screens get 502, 503 or 504 meanwhile. With two or more pods the others answer while the new one starts, and the PDB keeps a drain from taking them together.
 
 ## Let an HPA set the count
 
@@ -105,12 +107,14 @@ Check it with `kubectl -n <namespace> get hpa`.
 
 - No sticky sessions: any pod answers any request, and the gateway and a load balancer in front need no session affinity.
 - A WebSocket (the live lists, a terminal) stays on the pod it opened. When that pod leaves — a rollout, a scale-down, a node drain — the browser connects again and reads the lists again; a followed log goes on after the last line it showed; a terminal ends, as it does on a restart with one pod.
+- A node shell's pod is written in the database (`node_shells`) with the k8s-service pod that opened it, which writes every 15 s that it is alive, over one connection it keeps from its pool while it holds a node shell. When that pod is killed (out of memory, a node lost), another k8s-service pod, or the restarted container of the same pod, deletes the shell's pod once the row has had no such write for a minute, looking every 30 s. A shell whose k8s-service pod is alive and reaches the database is never deleted by another: a pod that cannot write the heartbeat for 45 s (the database down, or its own way to it cut) closes its node shells itself first.
 - Each k8s-service pod watches the clusters for itself, so two requests that land on two pods can be a watch event apart for a moment.
 - Each k8s-service pod keeps the policy reports it read in its own memory for 60 s. A new policy report can take up to a minute to show in a drawer or a list read from the other pod; Refresh on the Policy Reports page reads them again on the pod it reaches.
 - Each k8s-service pod lists and watches the clusters it serves: the API server sees that once per pod.
 - Each k8s-service pod takes the memory one pod takes; the total grows with the pods.
 - Each k8s-service pod answers Cluster View's node boxes from its own informers and keeps the answers it gave the people who may see every namespace: at most 256 nodes and 8 MiB of answers (about 300 bytes a pod), and no pod row. A node's box is made once in each pod while the node's pods stay the same.
 - Limits that protect a pod — memory, work at once, live watches (`multicluster.wsMaxSubscriptions`) and their openings (`multicluster.wsWatchOpeningConcurrency`) — are per pod. So is the client rate to a cluster (`multicluster.clientQPS`): N pods can send N times as much.
+- Each k8s-service pod counts the terminals (pod exec, node shell) and followed logs each account holds open on it, and refuses one past `multicluster.maxTerminalsPerAccount` or `multicluster.maxFollowedLogsPerAccount` (20 each). The count is not shared: with N pods taking them (k8s-service, or k8s-service-stream with `streams.enabled`) an account may hold up to N times as many, as the Service spreads them. A pod that leaves (a rollout, a scale down, a node lost) sends its followed logs to the pods that stay, where one past the cap is refused: count on the cap, not on N times it.
 
 ## Measured on EKS
 

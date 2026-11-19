@@ -2,11 +2,13 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drain"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nodeshells"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/probe"
@@ -125,6 +127,9 @@ func (h *Handler) auditSessionEnd(ctx context.Context, r *http.Request, targetTy
 	}
 	if code == "" && probe.IsLeaving(ctx) && (stream == "exec" || stream == "node-shell") {
 		code, why = probe.ShutdownReason, "connection closed: server shutting down"
+	}
+	if code == "" && stream == "node-shell" && errors.Is(context.Cause(ctx), nodeshells.ErrHeartbeatLost) {
+		code, why = nodeshells.ReasonHeartbeatLost, "connection closed: node shell heartbeat not saved"
 	}
 	if code == "" {
 		return

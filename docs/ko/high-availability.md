@@ -21,6 +21,7 @@ Kubeast의 서비스는 기본으로 하나씩 파드 1개로 뜹니다.
 | redis(차트 내장) | 안 됨, 1대 | 캐시와 바뀜 알림뿐. 새 파드는 비어서 시작하고 캐시는 다시 찹니다. Redis가 답하지 않는 동안 k8s-service의 화면은 클러스터에서 읽습니다. 캐시 명령은 0.5초 안에 그만두고, 그 뒤 3초 동안 캐시는 Redis를 건너뜁니다. Redis가 받지 못한 캐시 항목 지우기는 캐시가 Redis를 다시 읽기 전에 통째로 비워서 메웁니다 | — |
 
 `redis.enabled: false`인데 `replicas.k8sService`나 `replicas.toolServer`가 1보다 크면 차트가 까닭을 말하고 설치를 막습니다.
+`sessionRecording.storage: file`인데 k8s-service가 2대 이상이어도(1보다 큰 `replicas.k8sService`, 또는 `maxReplicas`가 1보다 큰 `autoscaling.k8sService`) 막습니다. 모든 파드가 파일 볼륨 하나를 붙이게 되므로 `s3`나 `database`에 녹화하세요(파일 저장소의 배포 때 모습은 [운영](operations.md#터미널과-실시간-로그를-따로-맡는-서버)에 있습니다).
 `values-minimal.yaml`은 Redis를 끄므로 모두 1대입니다.
 
 ## 시작하기 전에
@@ -57,6 +58,7 @@ replicas:
 ```
 
 - `pdb.enabled`(기본 켜짐)는 2대 이상으로 돌거나 autoscaling의 `minReplicas`가 2 이상인 서비스마다, 한 번에 `pdb.maxUnavailable`개(1)까지 내보낼 수 있는 PodDisruptionBudget을 만듭니다. 1대인 서비스에는 만들지 않아 드레인을 막지 않습니다.
+- 1대로 도는 서비스는 그 파드가 지워지거나 내보내질 때(노드 드레인 포함) preStop 대기가 끝난 때부터 새 파드가 Ready가 될 때까지 받을 파드가 없습니다. rollout과 달리 지워진 파드는 새 파드를 먼저 띄우지 않기 때문입니다. kind 실측으로 auth-service · k8s-service · session-service는 약 1초, readiness probe가 10초마다 묻는 ai-service · frontend · gateway는 약 6초(새 파드가 뜨기 전에 첫 probe가 오면 약 16초)이고, 그동안 화면은 502 · 503 · 504를 받습니다. 2대 이상이면 새 파드가 뜨는 동안 나머지가 답하고, PDB가 드레인이 그 파드들을 한꺼번에 내보내지 않게 합니다.
 
 ## HPA에 대수 맡기기
 
@@ -105,12 +107,14 @@ autoscaling:
 
 - 세션 고정이 필요 없습니다. 어느 파드든 어느 요청에나 답하고, 게이트웨이와 앞단 로드 밸런서에 session affinity를 둘 필요가 없습니다.
 - WebSocket(실시간 목록, 터미널)은 연 파드에 계속 붙어 있습니다. 그 파드가 나가면(판 올리기, 대수 줄이기, 노드 드레인) 브라우저가 다시 붙고 목록을 다시 읽습니다. 따라가던 로그는 마지막으로 보인 줄 다음부터 이어집니다. 터미널은 1대일 때 재시작하면 그렇듯 끝납니다.
+- 노드 셸 파드는 그것을 연 k8s-service 파드와 함께 데이터베이스(`node_shells`)에 적히고, 연 파드가 노드 셸을 연 동안 풀에서 하나 떼어 둔 연결로 15초마다 살아 있음을 적습니다. 그 파드가 죽으면(메모리 부족, 노드 잃음) 1분 동안 그렇게 적히지 않은 행을 다른 k8s-service 파드나 같은 파드에서 다시 뜬 컨테이너가 30초마다 찾아 그 셸 파드를 지웁니다. 살아 있고 데이터베이스에 닿는 k8s-service 파드의 셸은 다른 파드가 지우지 않습니다. 45초 동안 살아 있음을 적지 못한 파드(데이터베이스가 멈췄거나 그 파드에서 가는 길만 끊김)는 자기 노드 셸을 먼저 스스로 닫습니다.
 - k8s-service 파드는 저마다 클러스터를 감시하므로, 두 파드에 간 두 요청이 잠깐 감시 이벤트 하나만큼 다를 수 있습니다.
 - k8s-service 파드는 읽은 정책 보고서를 자기 메모리에 60초 동안 둡니다. 새 정책 보고서가 다른 파드에서 읽은 드로어나 목록에 보이기까지 1분까지 걸릴 수 있습니다. Policy Reports 화면의 Refresh는 요청이 닿은 파드에서 새로 읽습니다.
 - k8s-service 파드는 맡은 클러스터를 저마다 목록으로 읽고 감시합니다. API 서버는 이것을 파드 수만큼 받습니다.
 - k8s-service 파드 하나의 메모리는 1대일 때와 같고, 합은 파드 수만큼 늡니다.
 - k8s-service 파드는 Cluster View의 노드 칸을 저마다의 informer로 답하고, 모든 네임스페이스를 볼 수 있는 사람에게 준 답을 들고 있습니다. 노드 256개와 답 8 MiB(파드당 약 300바이트)까지이고, 파드 행은 들고 있지 않습니다. 한 노드의 칸은 그 노드의 파드가 그대로인 동안 k8s-service 파드마다 한 번 만듭니다.
 - 파드를 지키는 한도(메모리, 동시 작업, 실시간 감시 `multicluster.wsMaxSubscriptions`와 그 열기 `multicluster.wsWatchOpeningConcurrency`)는 파드마다입니다. 클러스터로 보내는 요청 속도(`multicluster.clientQPS`)도 파드마다라, N대면 N배까지 보낼 수 있습니다.
+- k8s-service 파드는 계정마다 자기에게 열린 터미널(파드 exec, 노드 셸)과 실시간 로그 수를 세고, `multicluster.maxTerminalsPerAccount`나 `multicluster.maxFollowedLogsPerAccount`(각 20)를 넘는 것을 거절합니다. 이 수는 파드끼리 나누지 않으므로, 이것을 받는 파드(k8s-service, `streams.enabled`면 k8s-service-stream)가 N대면 Service가 나누는 대로 한 계정이 N배까지 열 수 있습니다. 파드가 떠나면(롤아웃, 축소, 노드 잃음) 그 파드의 실시간 로그는 남은 파드로 다시 붙고, 거기서 상한을 넘는 것은 거절됩니다. N배가 아니라 상한을 기준으로 잡으세요.
 
 ## EKS에서 잰 것
 

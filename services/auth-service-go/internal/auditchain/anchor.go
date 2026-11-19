@@ -1,6 +1,7 @@
 package auditchain
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -76,6 +77,8 @@ type Anchorer struct {
 
 	lastAt atomic.Int64 // unix seconds of the newest anchor this replica knows of
 	ownID  atomic.Int64 // id of the last scheduled anchor this replica wrote
+
+	readRetry time.Duration // Run's read of the last anchor again; 0 = a minute
 }
 
 func (a *Anchorer) now() time.Time {
@@ -86,14 +89,27 @@ func (a *Anchorer) now() time.Time {
 }
 
 // Run anchors right away when the last anchor is older than `every` (or
-// there is none), then every `every`, until ctx is done.
+// there is none), then every `every`, until ctx is done. While the last
+// anchor cannot be read it reads it again every minute (at most `every`), so
+// the anchor gauge does not stay 0 until the first tick.
 func (a *Anchorer) Run(ctx context.Context, every time.Duration) {
-	if last, err := a.Store.LastAnchor(ctx); err != nil {
+	retry := min(cmp.Or(a.readRetry, time.Minute), every)
+	for {
+		last, err := a.Store.LastAnchor(ctx)
+		if err == nil {
+			if last == nil || a.now().Sub(last.CreatedAt) >= every {
+				a.RunOnce(ctx, every)
+			} else {
+				a.lastAt.Store(last.CreatedAt.Unix())
+			}
+			break
+		}
 		slog.Error("audit chain: last anchor", "error", err)
-	} else if last == nil || a.now().Sub(last.CreatedAt) >= every {
-		a.RunOnce(ctx, every)
-	} else {
-		a.lastAt.Store(last.CreatedAt.Unix())
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(retry):
+		}
 	}
 	t := time.NewTicker(every)
 	defer t.Stop()

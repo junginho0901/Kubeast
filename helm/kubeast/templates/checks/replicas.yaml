@@ -2,8 +2,9 @@
 Pods per service: replicas.<service>, or autoscaling.<service> (templates/hpa.yaml) in its place
 (docs/high-availability.md). k8s-service and tool-server run more than one pod only with the chart's Redis: k8s-service's
 pods share their list, YAML and Helm caches through it, and both hear of a cluster's change there; without it each pod
-answers from what it alone holds. The ModelConfig controller (one works at a time, by leader election), postgres and
-redis run one pod and have no key.
+answers from what it alone holds. With sessionRecording.storage file k8s-service runs one pod: every pod mounts the
+store, one file volume (the same refusal as with streams.enabled, deployments.yaml). The ModelConfig controller (one
+works at a time, by leader election), postgres and redis run one pod and have no key.
 */}}
 {{- $services := list "authService" "aiService" "k8sService" "sessionService" "frontend" "toolServer" "gateway" }}
 {{- $single := "the ModelConfig controller runs one pod (one works at a time, by leader election), and so do the chart's postgres and redis" }}
@@ -36,5 +37,19 @@ redis run one pod and have no key.
 {{- end }}
 {{- else if and (hasKey $redis $key) (not $.Values.redis.enabled) (gt (int (index $.Values.replicas $key)) 1) }}
 {{- fail (printf "replicas.%s is %d and redis.enabled is false: %s. Set redis.enabled: true, or keep replicas.%s at 1 (docs/high-availability.md)." $key (int (index $.Values.replicas $key)) (index $redis $key) $key) }}
+{{- end }}
+{{- end }}
+{{- if and .Values.sessionRecording.enabled (eq (toString .Values.sessionRecording.storage) "file") }}
+{{- $hpa := index .Values.autoscaling "k8sService" | default dict }}
+{{- $pods := "" }}
+{{- if $hpa.enabled }}
+{{- if gt (int $hpa.maxReplicas) 1 }}
+{{- $pods = printf "autoscaling.k8sService up to %d pods" (int $hpa.maxReplicas) }}
+{{- end }}
+{{- else if gt (int .Values.replicas.k8sService) 1 }}
+{{- $pods = printf "replicas.k8sService %d" (int .Values.replicas.k8sService) }}
+{{- end }}
+{{- if $pods }}
+{{- fail (printf "sessionRecording.storage file and %s: every k8s-service pod mounts the store, and one file volume is mounted by one pod — use s3 or database" $pods) }}
 {{- end }}
 {{- end }}

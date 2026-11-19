@@ -298,6 +298,13 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 		read["tail_lines"] = tailLines
 	}
 	after, _ := json.Marshal(read)
+	releasePlace, ok := h.takeFollowedLog(w, r, func(err error) {
+		_ = h.recordAuditWithPayload(r, "k8s.pod.logs.read", "pod", name, namespace, err, nil, after)
+	})
+	if !ok {
+		return
+	}
+	defer releasePlace()
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")

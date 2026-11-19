@@ -49,7 +49,7 @@ Kubeast는 **로그인한 사람의 신원으로**(impersonation) 클러스터�
 
 | 항목 | 필요한 이유 | 위치 |
 | --- | --- | --- |
-| ClusterRole `kubeast-impersonator` + 바인딩(그룹 `kubeast:impersonator`) | Kubeast 자격 증명이 사용자와 정해진 그룹으로만 가장하도록 제한 | [`helm/kubeast/files/impersonation-rbac.yaml`](../../helm/kubeast/files/impersonation-rbac.yaml) |
+| ClusterRole `kubeast-impersonator` + 바인딩(그룹 `kubeast:impersonator`) | Kubeast 자격 증명이 사용자와 정해진 그룹으로만 가장하도록 제한. `kube-system` Namespace `get`도 줍니다(그 하나만). 그 UID로 한 클러스터의 두 번째 등록과, 등록된 클러스터의 kubeconfig를 다른 클러스터 것으로 바꾸는 것을 거절합니다([설치와 첫 설정 — 클러스터 연결](getting-started.md#3-로그인-후-클러스터-연결-connect-your-cluster)). 이 권한이 없으면 kubeconfig가 UID 없이 등록되고 두 검사를 건너뜁니다(2026-11-19부터 — 그 전에 RBAC를 적용한 클러스터는 다시 적용하세요) | [`helm/kubeast/files/impersonation-rbac.yaml`](../../helm/kubeast/files/impersonation-rbac.yaml) |
 | 그룹 바인딩 `kubeast:viewer`(view + `kubeast:cluster-reader`) · `kubeast:operator`(edit) · `kubeast:admin`(cluster-admin) | Read·Write·Admin 역할이 클러스터에서 할 수 있는 범위. `kubeast:cluster-reader`는 `view`에 없는 클러스터 범위 객체와 Role·RoleBinding을 더합니다(Role·RoleBinding은 2026-10-27부터 — 그 전에 RBAC를 적용한 클러스터는 다시 적용하세요). 설치하는 쪽이 `view`에 넣지 않는 Lease·IngressClass·DeviceClass·ResourceSlice와 Gateway API·VPA·정책 보고서 종류도 더합니다(2026-11-01부터 — 그 전에 RBAC를 적용한 클러스터는 다시 적용하세요). Secret은 넣지 않습니다 | 같은 파일 |
 | 커스텀 역할 그룹 `kubeast:role:<이름>`, Namespace 범위 부여 | 커스텀 역할이나 Namespace 한정 부여를 쓸 때. 목록 화면은 그 종류의 `watch`로 객체를 따라갑니다. list만 되고 watch가 안 되는 역할은 화면을 연 때 읽은 값을 보여 주고, 화면 위 안내가 그렇다고 말합니다. 열린 창도 보여 주는 것을 같이 따라갑니다: 워크로드·HPA의 이벤트, Node의 파드, Namespace 서랍의 그 Namespace(Namespace 한정 부여는 Namespace watch가 거절되므로 빼고), 파드 RBAC 탭의 바인딩과 역할, CRD나 고른 Kind의 커스텀 리소스(이쪽은 항목 하나짜리 `list` 뒤 `watch`, 브라우저에 객체를 보내지 않음) | `auth.impersonation.customRoles` → `templates/impersonation-custom-roles.yaml` |
 | Read의 Prometheus·OpenCost 프록시 GET | Read 역할이 비용과 그래프를 볼 때 | `auth.impersonation.viewerProxyServices` → `templates/impersonation-viewer-proxy.yaml` |
@@ -65,7 +65,7 @@ Kubeast는 주소가 그 사람의 것인지 알 수 없습니다. `admin.users.
 
 **사람이 없는 요청.** 몇몇 읽기는 Kubeast 자체 읽기이고, 클러스터 감사 로그에는 Kubeast가 남습니다.
 
-- `Impersonate-User` 헤더 없이: 서버 버전, 클러스터마다 한 번 읽어 모두에게 쓰는 API 디스커버리, 상태 확인. `/version`, `/api`, `/apis`, `/api/v1`, `/apis/<group>/<version>`(클러스터 서버 URL에 경로가 있으면 그 뒤)의 `GET`만 이렇게 나갑니다.
+- `Impersonate-User` 헤더 없이: 서버 버전, 클러스터마다 한 번 읽어 모두에게 쓰는 API 디스커버리, 상태 확인. `/version`, `/api`, `/apis`, `/api/v1`, `/apis/<group>/<version>`(클러스터 서버 URL에 경로가 있으면 그 뒤)의 `GET`만 이렇게 나갑니다. 그 밖에는 연결 확인(클러스터 등록, 새 kubeconfig, 연결 테스트)이 UID를 얻으려고 `kube-system` Namespace를 자격 증명 자신의 권한으로 이렇게 읽습니다(§1).
 - 고정 신원 `kubeast:cache`(§1의 `view` 권한)로: 개요 informer, 목록을 볼 수 있는 모두에게 한 번 읽어 쓰는 객체 이벤트와 노드의 파드, Kubeast가 도는 클러스터를 가리는 `kube-system` UID, `metrics.k8s.io` 그룹 확인, Prometheus·OpenCost Service 찾기.
 
 그 밖의 요청은 로그인한 사람을 알 수 없으면 보내지 않고, kubectl 도구도 실행하지 않습니다.
@@ -387,6 +387,8 @@ CRD가 없으면 Kubeast는 빈 목록과 "설치 안 됨"(`X-Kubeast-Not-Instal
 - 그 Namespace에서 특권 파드를 막는 정책(Kyverno·Gatekeeper 등)이 있다면 그 정책에 예외를 두어야 합니다.
 - 노드가 이미지(`nodeShell.images`, 기본 `docker.io/library/busybox:1.38.0`)를 내려받을 수 있어야 합니다. 폐쇄망이라면 사내 미러 주소를 적으세요.
 - 사용자는 그 클러스터의 Admin(cluster-admin)이어야 합니다.
+
+셸 파드는 셸이 끝나면 지웁니다. 그 파드에는 라벨 `kubeast.io/node-shell-id`와, 연 k8s-service 파드를 적은 애너테이션 `kubeast.io/node-shell-owner`가 붙습니다. 그 k8s-service 파드가 셸 파드를 지우기 전에 죽으면(메모리 부족, 노드 잃음) 1~2분 뒤에 다른 k8s-service 파드가 셸을 연 사람으로, 셸이 쓴 것과 같은 이 Namespace 파드의 `get`·`delete`로 지웁니다. 45초 동안 데이터베이스에 노드 셸을 적지 못한 k8s-service 파드는 자기 노드 셸을 먼저 스스로 닫으므로, 쓰고 있는 셸을 다른 파드가 지우지 않습니다. 클러스터에 닿지 못하거나 그 삭제를 거절하면(그 사람의 바인딩이 지워짐) k8s-service는 로그 한 줄을 남기고 나중에 다시 해 보며, 파드는 늦어도 `nodeShell.timeoutSeconds`(3600초)에 끝나고 행은 그 150초 뒤에 더 해 보지 않고 지웁니다. Kubeast에서 지운 클러스터의 행은 바로 지우고, 그 클러스터의 노드 셸 파드는 deadline에 끝납니다. 노드 셸이 켜져 있을 때 데이터베이스가 행을 받지 못한 셸은 파드를 만들기 전에 거절합니다("node shell row not saved").
 
 이 Namespace는 첫 셸 뒤에도 `privileged`인 채로 남습니다.
 

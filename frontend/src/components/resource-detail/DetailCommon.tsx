@@ -103,6 +103,16 @@ export function SummaryBadge({ label, value, color }: { label: string; value: st
   )
 }
 
+// A yes/no beside the summary badges: plain text, since a boolean is Yes/No text, not a badge
+export function SummaryText({ label, value }: { label: string; value: string }) {
+  const dl = useDetailLabel()
+  return (
+    <span data-summary-text="" className="inline-flex items-center gap-1 border border-transparent px-2 py-0.5 text-[11px] font-medium text-slate-300">
+      {dl(label)}: {isYesNo(value) ? dl(value) : value}
+    </span>
+  )
+}
+
 export function KeyValueTags({ data, emptyText = 'None' }: { data?: Record<string, string>; emptyText?: string }) {
   const dl = useDetailLabel()
   const entries = data ? Object.entries(data) : []

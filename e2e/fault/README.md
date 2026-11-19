@@ -26,6 +26,12 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
 - A request meant for one server goes through `kubectl port-forward pod/<name>`, so the answer is that server's.
 - `Probe` sends a request about every 100 ms through the gateway (step 3 §6 "about 10 a second") and keeps every
   answer: status 0 = no answer within its timeout or a broken connection. Each test attaches the answers as JSON.
+  The Probe sends and times its requests on the worker's event loop, which `kubectl()` (synchronous) holds until it
+  returns: nothing is sent meanwhile and the request already started is timed with the wait added. kubectl run while a
+  Probe sends goes through `kubectlAsync` (`rolledOutAsync`, `killPodAsync`, `podsOfAsync`, `readyPodsAsync`,
+  `podLogAsync`; `takeDown` and `stopFor` use it throughout), and `expectProbeKeptSending` holds the longest time
+  between two of its requests (`longestGap`) to `SEND_GAP_MS` (2 s) in `pod-shutdown`, `force-kill`, `redis-users`
+  F-8 and `drain-in-db` F-9.
 - "Kill" is `kubectl delete pod --grace-period=0 --force`; "stop" is a plain `kubectl delete pod` (preStop, SIGTERM).
   A force delete still gives the process a SIGTERM about 2 s before SIGKILL (the kubelet's shortest grace), so a
   server can still run part of its shutdown; where that changes what is read, the test says so.
@@ -47,10 +53,11 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
   socket the page opens (opened, first frame, closed) for `listSocketBack`.
 - "Server restarts 0" compares the container restart counts of the pods present before and after.
 - `takeDown(deploy)` scales a Deployment to 0 and waits until none of its pods is left — `podsOf` counts a pod being
-  deleted, which still answers through its preStop and grace (Redis has a 5 s preStop) — so what a test does with it
-  "off" starts only then; `stopFor(deploy, seconds)` keeps it off `seconds` from that moment and brings it back,
-  waiting for the rollout, and returns when it went off and came back for the test's `timeline.json`. A Deployment
-  already at 0 replicas (left by an interrupted run) stops the test: it would "bring it back" to 0.
+  deleted, which still answers through its preStop and grace (the bundled Redis has no preStop, only the 30 s default
+  grace) — so what a test does with it "off" starts only then; `stopFor(deploy, seconds)` keeps it off `seconds` from
+  that moment and brings it back, waiting for the rollout, and returns when it went off and came back for the test's
+  `timeline.json`. A Deployment already at 0 replicas (left by an interrupted run) stops the test: it would "bring it
+  back" to 0.
 - Passwords (the Redis users') are read from their Secret and given to `valkey-cli` on stdin, never on a command line.
 
 ## Files
@@ -58,23 +65,36 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
 | File | Pull request | Step 4 / step 3 rows | Needs | Changes and puts back |
 | --- | --- | --- | --- | --- |
 | `pod-shutdown.spec.ts` | #856 `podShutdown.preStopSeconds` | F-6 on one replica; the PR's "four rollout restarts of each service with a request right after each" | nothing beyond the install; tool-server's case needs `mcp.enabled` | four `rollout restart`s of each of the eight Service-backed Deployments, one deleted pod each; waits for every rollout |
-| `cluster-versions.spec.ts` | #857 cluster versions in the database | step 3 test 6; F-8 for M-2 | two ready `k8s-service` pods; kind clusters `kubeast-b` and `test2` | registers a cluster `e2e-w6-sync-*`, replaces its kubeconfig, deletes it; the second case stops Redis for about 20 s |
+| `cluster-versions.spec.ts` | #857 cluster versions in the database | step 3 test 6; F-8 for M-2 | two ready `k8s-service` pods; a cluster for the credential change (below) | registers a cluster `e2e-w6-sync-*` with the admin kubeconfig, replaces it with the ServiceAccount's, deletes it; the second case stops Redis for about 20 s |
 | `drain-in-db.spec.ts` | #858 drain progress in the database | step 3 tests 4, 5 and 11, F-7, F-9, W6-1, Q-52 | `test2` registered; tests 4, 5 and W6-1 two ready `k8s-service` pods; W6-1 and Q-52 `docker exec` into the kind node; F-9 a PostgreSQL with a PersistentVolumeClaim; Q-52 the chart's PostgreSQL or `E2E_FAULT_PG_DOCKER` | namespace `e2e-w6-drain*` / `e2e-w6-nosig-*` / `e2e-w6-pgoff-*` / `e2e-w6-pgfreeze*` on test2 (a pod under a PDB that refuses eviction), drains its node (test2's other pods are evicted and wait for the uncordon, as the action suite's `node-drain` leaves them), kills or stops one k8s-service pod (W6-1: with no signal, a busybox pod `e2e-w6-nosig-*` in `default` for its terminal), stops PostgreSQL 60 s, freezes it 20 s and 30 s; deletes the namespace and uncordons the node |
 | `force-kill.spec.ts` | — (W5 rows no pull request changes) | F-5, F-14 | F-5 two ready `k8s-service` pods; F-14 one or two ready gateway pods | force-kills one k8s-service pod or one gateway pod, a busybox pod `e2e-w6-gw-*` in `default` (deleted); waits for the rollout |
 | `claude-code-slots.spec.ts` | #859 Claude Code slots | M-4 "the cap holds on two servers; a server killed → its slot free within 60 s" | two ready `ai-service` pods (`replicas.aiService: 2`); the default model on provider `claude-code` (`scripts/kind-model-subscription.sh up`); table `claude_code_slots` | rows of `claude_code_slots` owned `e2e-w6-*` (set free after), conversations of the run (deleted), kills one ai-service pod; up to five short chat turns of the subscription |
-| `redis-users.spec.ts` | #866 Redis users per service | M-6b "ACL refusal test" and "test 6 (tool-server 10 s)"; F-8 | the chart's Redis with `redis.acl` on; tool-server cases `mcp.enabled` and kind clusters `kubeast-b`, `test2`; the last case also #857 | one `kubeast:cache:e2e-w6-*` key (30 s TTL), clusters `e2e-w6-tool-*` (deleted), Redis stopped 60 s and about 20 s, one `rollout restart` of k8s-service while Redis is stopped |
+| `redis-users.spec.ts` | #866 Redis users per service | M-6b "ACL refusal test" and "test 6 (tool-server 10 s)"; F-8 | the chart's Redis with `redis.acl` on; tool-server cases `mcp.enabled` and a cluster for the credential change (below); the last case also #857 | one `kubeast:cache:e2e-w6-*` key (30 s TTL), clusters `e2e-w6-tool-*` registered with the admin kubeconfig, then the ServiceAccount's (deleted), Redis stopped 60 s and about 20 s, one `rollout restart` of k8s-service while Redis is stopped |
 | `w4-stream-split.spec.ts` | #823 `SERVER_ROLE`, #824 the stream server's drain, #825 `streams.enabled` | F-1, F-2 (the part `stream-server.spec.ts` does not hold), F-3 | `streams.enabled: true` (Deployment `k8s-service-stream`); F-3 one `k8s-service` replica | a busybox pod `e2e-w6-seq-*` in `default` (deleted), kills the stream server and the api server, one `rollout restart` of the stream server |
+| `node-shell-cleanup.spec.ts` | threat model v0.7.8 row 1.9 (`node_shells`) | F-1 with a node shell open; PostgreSQL frozen and stopped with one open | `nodeShell.enabled` on the server that opens terminals (`NODE_SHELL_ENABLED`); NS-2 two ready servers of that Deployment; NS-3a a PostgreSQL to freeze (the chart's or `E2E_FAULT_PG_DOCKER`), NS-3b the chart's PostgreSQL with a PersistentVolumeClaim; `docker exec` into the kind node | node shells on the first node of self (only the pods it made are deleted after), kills one server with no signal, freezes PostgreSQL 20 s, stops it 60 s; waits for the rollouts |
 
 ### Pass lines and what each test depends on
 
 `pod-shutdown.spec.ts`
 - Every answer during the rollouts is 200 and comes within 5 s (`E2E_FAULT_HANG_MS`); the bug held one for 30 s.
+- A pod deleted by hand: with two or more pods, the same. With one, nothing answers from its SIGTERM (after the preStop
+  wait) until the new pod is ready — a pod deleted is not replaced first — so the answers other than 200, from the
+  start of the first to the end of the last, are held to the readiness probe's `initialDelaySeconds` + 2 ×
+  `periodSeconds` + 5 s (the new pod is ready at its first probe, or at the next one when the server was not up yet
+  for the first), none slower than 5 s; the test writes the gap, the limit, the count and the statuses down per
+  Deployment. Measured on kind: about 1 s for auth-service, k8s-service and session-service, about 6 s for ai-service
+  and frontend, and up to 15.5 s for the gateway when its first readiness probe came too early (readiness every 10 s).
+- The gateway's own pod is read from inside the kind node (`NodeProbe`: curl through `docker exec` to the gateway's
+  NodePort), the other Deployments through the gateway as before. From the laptop, Docker Desktop's published port
+  takes the request while no gateway pod answers and passes it on once one does, a 200 after 5 s or more, where the
+  node's own NodePort refuses at once (at most 1.7 ms) — a kind-on-Docker-Desktop effect, not the gateway's.
 - Depends on: the preStop sleep and grace of #856 on all eight Deployments (the test records the preStop it found);
   `ROUNDS` = `E2E_FAULT_ROLLOUTS` (4).
 
 `cluster-versions.spec.ts`
-- Each k8s-service pod answers from the new kubeconfig within 10 s of the PATCH's answer, and no pod answers from the
-  old one after it switched or after 10 s; the same with Redis stopped.
+- Each k8s-service pod answers from the new kubeconfig (the cluster's 403 naming the ServiceAccount) within 10 s of the
+  PATCH's answer, and no pod answers from the old one (a node list) after it switched or after 10 s; the same with
+  Redis stopped.
 - Depends on: `clusters.config_version` set by auth-service in the same statement as the kubeconfig (#857
   `services/pkg/cluster`), the 5 s version read in every replica (`internal/clustersync`), `GET /api/v1/nodes?cluster=`.
 
@@ -135,9 +155,10 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
 - The default user gets NOAUTH; probe may PING and nothing else; tool-server is refused GET, SET, FLUSHDB, PUBLISH,
   KEYS and SCAN and may PING; k8s-service may SET, GET and PUBLISH under `kubeast:` and is refused keys and channels
   outside it, FLUSHALL, FLUSHDB, KEYS, CONFIG, EVAL, HSET and ACL.
-- tool-server answers from the new kubeconfig on every call later than 10 s after the change, with the change notice
-  and with Redis stopped (its 10 s keep alone): right before the change Redis has no pod, terminating ones included,
-  and no ready endpoint.
+- tool-server answers from the new kubeconfig (kubectl's Forbidden naming the ServiceAccount) on every call later than
+  10 s after the change, with the change notice and with Redis stopped (its 10 s keep alone): right before the change
+  Redis has no pod, terminating ones included, and no ready endpoint. Before the change every call lists a node the
+  API lists with the admin kubeconfig.
 - F-8: every screen read answers 200 while Redis is off for 60 s (from the moment its last pod is gone) and while it
   comes back, no restart of the pods that stayed, and a read of the Helm release list puts a
   `kubeast:cache:helm|releases|` key in Redis within 20 s, before the outage and after it. A k8s-service connected to
@@ -153,6 +174,23 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
   pod's `REDISCLI_AUTH` names), tool-server's 10 s kubeconfig keep and change notice listener, the log lines of #857's
   `cache.Reconnect`, and #856's preStop for the restart without Redis.
 
+`node-shell-cleanup.spec.ts`
+- NS-1: the node shell pod of a server killed with no SIGTERM is gone within 150 s of the kill and not before 40 s (the
+  sweep, not the server's own cleanup), its `node_shells` row is gone, and exactly one `k8s.session.end` row names the
+  pod with `after.reason: server_gone`.
+- NS-2: with two servers each holding a shell, the killed server's shell pods go within 150 s; each shell of the other
+  server, paired with its own socket, stays Running with that socket open and its row's owner the same through the
+  whole 150 s.
+- NS-3a: PostgreSQL frozen 20 s (under the 30 s a break may last with no shell closed): through the freeze and 150 s after it the shell's pod stays Running, its socket open
+  and its row's owner the same.
+- NS-3b: PostgreSQL stopped 60 s: the shell's own server closes it while PostgreSQL is off, not before 30 s after the
+  stop was asked (45 s from its last saved beat), with the terminal's notice and the close reason `heartbeat_lost`; its
+  pod goes, and its row is gone within 150 s of PostgreSQL coming back.
+- Depends on: `node_shells` (migration 00030), its 15 s heartbeat on a connection kept from the pool, the owner's own
+  stop at 45 s, the 60 s stale rule with a sweep every 30 s, the pod label `kubeast.io/node-shell-id` and annotation
+  `kubeast.io/node-shell-owner` (the owner's host name first), the `k8s.session.end` rows of the sweep and of the
+  owner's stop.
+
 `w4-stream-split.spec.ts`
 - F-1: list reads through the gateway all 200; the raw terminal socket closes within 5 s of the kill and the terminal
   window shows `pods.exec.disconnected` within 5 s; a line printed after the kill reaches the Logs tab within 10 s,
@@ -164,6 +202,41 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
   the Pods list page, never reloaded, shows a pod made after the server came back within 30 s.
 - Depends on: `SERVER_ROLE` stream/api (#823), `STREAM_DRAIN_SECONDS` and the notice text (#824), the gateway sending
   the four stream locations to `k8s-service-stream` (#825), `Last-Event-ID` resume of the followed log.
+
+## A cluster for the credential change
+
+`cluster-versions.spec.ts` and the tool-server cases of `redis-users.spec.ts` change the kubeconfig of a cluster they
+register. auth-service answers 409 to a registration of a cluster already registered and to a new kubeconfig that
+points at another cluster, both told by the kube-system namespace UID (`services/auth-service-go/internal/handler/clusters.go`
+`RegisterCluster`, `UpdateCluster`). So the change is one cluster's credential: a cluster the install has not
+registered is registered with an admin kubeconfig, then given the same cluster's ServiceAccount, which may get the
+namespace `kube-system` (the probe reads its UID) and nothing else. The admin credential's answer is the node list; the
+ServiceAccount's is the cluster's 403 naming it. The tests take three values and skip with the reason without them:
+
+| Value | What |
+| --- | --- |
+| `E2E_FAULT_ROTATE_ADMIN_KUBECONFIG` | a file: the cluster's kubeconfig with an admin credential, its server as the install's pods reach it |
+| `E2E_FAULT_ROTATE_SA_KUBECONFIG` | a file: the same cluster and server with the ServiceAccount's token |
+| `E2E_FAULT_ROTATE_SA_USER` | the ServiceAccount's user name, `system:serviceaccount:<namespace>:<name>` |
+
+With the kind cluster `kubeast-np`, which the dev install does not register (`docker start kubeast-np-control-plane`
+first when it is stopped):
+
+```bash
+d=$(mktemp -d); kind get kubeconfig --name kubeast-np > "$d/ext"; kind get kubeconfig --internal --name kubeast-np > "$d/admin"
+k() { kubectl --kubeconfig "$d/ext" --context kind-kubeast-np "$@"; }
+k -n default create serviceaccount e2e-w6-rotate
+k create clusterrole e2e-w6-rotate --verb=get --resource=namespaces --resource-name=kube-system
+k create clusterrolebinding e2e-w6-rotate --clusterrole=e2e-w6-rotate --serviceaccount=default:e2e-w6-rotate
+k -n default create token e2e-w6-rotate --duration=2h > "$d/token"
+kubectl config view --kubeconfig "$d/admin" --raw -o json \
+  | jq --rawfile t "$d/token" '.users = [{name: "e2e-w6-rotate", user: {token: ($t | rtrimstr("\n"))}}] | .contexts[0].context.user = "e2e-w6-rotate"' > "$d/sa"
+rm "$d/token"
+export E2E_FAULT_ROTATE_ADMIN_KUBECONFIG=$d/admin E2E_FAULT_ROTATE_SA_KUBECONFIG=$d/sa E2E_FAULT_ROTATE_SA_USER=system:serviceaccount:default:e2e-w6-rotate
+```
+
+Afterwards `k delete clusterrolebinding,clusterrole e2e-w6-rotate`, `k -n default delete serviceaccount e2e-w6-rotate`,
+`rm -rf "$d"`, and stop the kind node again if it was stopped.
 
 ## How the faults are made (checked on a throwaway kind cluster)
 
@@ -284,6 +357,8 @@ the laptop went away before that could run:
 - `$TMPDIR/e2e-fault-*` — the kubeconfig copy of a worker killed outright (any other run removes its own on exit).
 - `kubectl --context kind-test2 get ns | grep e2e-w6` — delete them, then `kubectl --context kind-test2 uncordon <node>`.
 - Clusters named `e2e-w6-*` in the cluster list — delete them.
+- ServiceAccount, ClusterRole and ClusterRoleBinding `e2e-w6-rotate` on the cluster of the credential change — delete
+  them.
 - AI Chat conversations titled `e2e-w6-slots-*` — delete them.
 - `UPDATE claude_code_slots SET owner = '', heartbeat_at = NULL WHERE owner LIKE 'e2e-w6-%'` on the dev database.
 - Pods `e2e-w6-seq-*` / `e2e-w6-after-*` / `e2e-w6-nosig-*` / `e2e-w6-gw-*` in `default` on `self` — delete them.
