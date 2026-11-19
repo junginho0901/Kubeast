@@ -118,15 +118,19 @@ describe("the Helm Releases page's read after the stream's resync", () => {
 
   it("does not stop a Refresh on its way, and ends on a read past the cache", async () => {
     const page = open()
-    const pressed = refreshList(page.client, KEY, () => api.helm.listReleases({ force_refresh: true }))
+    let ended: HelmReleaseSummary[] | undefined
+    const pressed = refreshList(page.client, KEY, () => api.helm.listReleases({ force_refresh: true })).then((rows) => {
+      ended = rows
+    })
     await sleep(5)
     page.readAgain()
     await sleep(5)
     const refreshed = fromCluster()
     waiting(true)[0].answer(refreshed)
-    expect(await pressed, "the Refresh ended on its own answer").toBe(refreshed)
     await sleep(5)
+    expect(ended, 'the Refresh ended on its own answer').toBe(refreshed)
     for (const read of waiting(true).slice(1)) read.answer(fromCluster())
+    await pressed
     await sleep(5)
 
     expect(waiting(false)).toHaveLength(0)
