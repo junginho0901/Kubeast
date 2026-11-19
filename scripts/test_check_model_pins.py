@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import shutil
 import tempfile
 import unittest
@@ -17,7 +18,8 @@ spec.loader.exec_module(pins)
 class PinRule(unittest.TestCase):
     def test_pinned_snapshots(self):
         for model in ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5", "claude-opus-4-6", "claude-fable-5-1",
-                      "claude-haiku-4-5-20251001", "claude-sonnet-4-5-20250929", "gpt-4o-mini-2024-07-18", "o3-mini-2025-01-31", "gpt-4-0613"]:
+                      "claude-haiku-4-5-20251001", "claude-sonnet-4-5-20250929", "gpt-4o-mini-2024-07-18", "o3-mini-2025-01-31", "gpt-4-0613",
+                      "gpt-4-1106-preview", "claude-opus-4-10"]:
             with self.subTest(model=model):
                 self.assertIsNone(pins.why_not_pinned(model))
 
@@ -45,9 +47,25 @@ class ThisTree(unittest.TestCase):
         root = self.copy()
         values = root / "helm/kubeast/values.yaml"
         text = values.read_text(encoding="utf-8")
-        model = next(line for line in text.splitlines() if line.startswith('  model: "'))
-        values.write_text(text.replace(model, '  model: "gpt-4o-mini"', 1), encoding="utf-8")
+        pattern = next(p for rel, p, _what in pins.DEFAULTS if rel == "helm/kubeast/values.yaml")
+        found = re.search(pattern, text)
+        values.write_text(text[:found.start(1)] + "gpt-4o-mini" + text[found.end(1):], encoding="utf-8")
         self.assertEqual(pins.check(root), ["helm/kubeast/values.yaml: chart ai.model 'gpt-4o-mini' is not pinned (an OpenAI alias: write the snapshot with its date)"])
+
+    def test_the_chart_pattern_stays_inside_the_ai_block(self):
+        root = self.copy()
+        values = root / "helm/kubeast/values.yaml"
+        text = values.read_text(encoding="utf-8")
+        pattern = next(p for rel, p, _what in pins.DEFAULTS if rel == "helm/kubeast/values.yaml")
+        found = re.search(pattern, text)
+        values.write_text(text[:found.start(0)] + 'ai:\n  enabled: true\nnext:\n  model: "gpt-4o-mini-2024-07-18"\n' + text[found.end(0):], encoding="utf-8")
+        self.assertIn("chart ai.model not found", "".join(pins.check(root)))
+
+    def test_the_setup_pages_model_is_an_entry_of_its_list(self):
+        page = (pins.ROOT / "frontend/src/pages/setup/SetupAIModelPage.tsx").read_text(encoding="utf-8")
+        pattern = next(p for rel, p, _what in pins.DEFAULTS if rel.endswith("SetupAIModelPage.tsx"))
+        model = re.search(pattern, page).group(1)
+        self.assertIn(f"name: '{model}'", (pins.ROOT / "frontend/src/constants/modelCatalog.ts").read_text(encoding="utf-8"))
 
     def test_a_default_that_moved_fails(self):
         root = self.copy()

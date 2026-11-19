@@ -2,8 +2,8 @@
 """Every default model Kubeast ships is written as a pinned snapshot ID, so the model behind a default does not change
 under an install (docs/development.md "Default models").
 
-A default is a model an install or a dev script uses when nobody chose one (the screens' model picker is a list to
-choose from, not checked here). A place its pattern no longer finds fails
+A default is a model an install, the first-run setup page or a dev script uses when nobody chose one (the model picker's
+other entries are a list to choose from, not checked here). A place its pattern no longer finds fails
 too, so a default that moved is added here instead of going unchecked. Claude IDs from the 4.6 generation on are their
 own snapshot, earlier ones only with their date; OpenAI IDs with their date; "latest" never; another provider needs a rule.
 
@@ -19,19 +19,21 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # (file, pattern whose first group is the model, what the default is)
 DEFAULTS = [
-    ("helm/kubeast/values.yaml", r'(?ms)^ai:\n.*?^  model: "([^"]*)"', "chart ai.model"),
+    ("helm/kubeast/values.yaml", r'(?m)^ai:\n(?:(?: .*|#.*|)\n)*?  model: "([^"]*)"', "chart ai.model"),
     ("services/ai-service/app/config.py", r'OPENAI_MODEL: str = "([^"]*)"', "ai-service OPENAI_MODEL"),
     ("services/ai-service/app/services/provider_adapter.py", r'\n        model: str = "([^"]*)",', "ProviderAdapter model"),
     ("install-docker.sh", r"\nOPENAI_MODEL=(\S*)\n", "install-docker.sh OPENAI_MODEL"),
+    (".env.example", r"(?m)^OPENAI_MODEL=(\S*)$", ".env.example OPENAI_MODEL"),
     ("docker-compose.yml", r"OPENAI_MODEL=\$\{OPENAI_MODEL:-([^}]*)\}", "docker-compose.yml OPENAI_MODEL"),
+    ("frontend/src/pages/setup/SetupAIModelPage.tsx", r"const \[aiModel, setAiModel\] = useState\('([^']*)'\)", "first-run setup page model"),
     ("scripts/kind-model-haiku.sh", r'MODEL="\$\{HAIKU_MODEL:-([^}]*)\}"', "kind-model-haiku.sh model"),
     ("scripts/kind-model-subscription.sh", r'MODEL="\$\{SUBSCRIPTION_MODEL:-([^}]*)\}"', "kind-model-subscription.sh model"),
 ]
 
-_CLAUDE = re.compile(r"claude-(?:opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d))?")
+_CLAUDE = re.compile(r"claude-(?:opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d+))?")
 _CLAUDE_DATED = re.compile(r"claude-[a-z0-9-]+-\d{8}")
 _OPENAI = re.compile(r"(?:gpt|chatgpt|o\d)[a-z0-9.-]*")
-_OPENAI_DATED = re.compile(r"(?:gpt|chatgpt|o\d)[a-z0-9.-]*-(?:\d{4}-\d{2}-\d{2}|\d{4})")
+_OPENAI_DATED = re.compile(r"(?:gpt|chatgpt|o\d)[a-z0-9.-]*-(?:\d{4}-\d{2}-\d{2}|\d{4})(?:-preview)?")
 
 
 def why_not_pinned(model: str) -> str | None:
