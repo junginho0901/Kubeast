@@ -32,6 +32,7 @@ import {
   type GroupBy,
 } from './resource-graph/constants'
 import { Glance } from './resource-graph/Glance'
+import { useGlance } from './resource-graph/useGlance'
 import { PodGroupList } from './resource-graph/PodGroupList'
 import { ResourceGraphHeader } from './resource-graph/ResourceGraphHeader'
 import { useResourceGraphLayout } from './resource-graph/useResourceGraphLayout'
@@ -90,8 +91,6 @@ export default function ResourceGraph() {
   const [searchQuery, setSearchQuery] = useState('')
   const [groupBy, setGroupBy] = useState<GroupBy>('none')
   const [statusFilter, setStatusFilter] = useState<'all' | 'issues'>('all')
-  const [glanceNode, setGlanceNode] = useState<ResourceGraphNode | null>(null)
-  const [glancePos, setGlancePos] = useState({ x: 0, y: 0 })
   // Traffic lines (off until switched on): the sources this cluster has and the user may read
   const { currentCluster } = useCluster()
   const features = useClusterFeatures().data
@@ -306,6 +305,7 @@ export default function ResourceGraph() {
         : picked ? { edge: picked.id }
           : drawerNode ? { node: drawerNode } : null
   const { nodes, edges } = useMemo(() => focusLines(laidNodes, laidEdges, focus), [laidNodes, laidEdges, focus?.edge, focus?.node]) // eslint-disable-line react-hooks/exhaustive-deps
+  const glance = useGlance(nodes)
 
   // Interactions
   const openEnd = useCallback((e: TrafficEnd) => {
@@ -334,21 +334,16 @@ export default function ResourceGraph() {
   }, [])
   const onEdgeMouseLeave = useCallback(() => setHoverEdge(null), [])
 
-  const onNodeMouseEnter = useCallback((_: React.MouseEvent, node: Node) => {
+  const { onNodeMouseEnter: glanceEnter, onNodeMouseLeave: glanceLeave } = glance
+  const onNodeMouseEnter = useCallback((e: React.MouseEvent, node: Node) => {
     setHoverNode(node.id)
-    const raw = node.data?.raw as ResourceGraphNode | undefined
-    if (raw && !isPeer(raw)) {
-      setGlanceNode(raw)
-      // Position relative to viewport
-      const rect = (_.target as HTMLElement).getBoundingClientRect()
-      setGlancePos({ x: rect.right, y: rect.top })
-    }
-  }, [])
+    glanceEnter(e, node)
+  }, [glanceEnter])
 
   const onNodeMouseLeave = useCallback(() => {
-    setGlanceNode(null)
+    glanceLeave()
     setHoverNode(null)
-  }, [])
+  }, [glanceLeave])
 
   const setGrouping = useCallback(async (on: boolean) => {
     if (on) {
@@ -502,6 +497,9 @@ export default function ResourceGraph() {
               nodesDraggable={!routed}
               onNodeMouseEnter={onNodeMouseEnter}
               onNodeMouseLeave={onNodeMouseLeave}
+              // on React Flow's own box: a box with the keyboard focus shows its glance
+              onFocus={glance.onFocus}
+              onBlur={glance.onBlur}
               fitView
               // with lines on screen, room for the status box above and the open legend on the left, so they cover no box
               fitViewOptions={{ padding: routed ? { top: '64px', right: 0.1, bottom: 0.1, left: legendOpen ? '180px' : 0.1 } : 0.2 }}
@@ -562,7 +560,7 @@ export default function ResourceGraph() {
         )}
 
         {/* Glance */}
-        <Glance node={glanceNode} position={glancePos} />
+        <Glance node={glance.shown?.node ?? null} position={glance.shown ?? { x: 0, y: 0 }} {...glance.tip} />
 
         {/* Legend (bottom left) — only with a graph on screen (the empty state
             has nothing to decode and the panel overlapped its cards at 1024px),

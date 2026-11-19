@@ -3,6 +3,7 @@ import { Maximize2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
+import { useHoverTip } from '@/hooks/useHoverTip'
 import {
   SERIES_COLORS, chartsOf, extent, formatTimeTick, formatValue, nearest, niceTicks, type ChatChartData,
 } from '@/utils/chatChart'
@@ -33,8 +34,11 @@ interface PlotProps {
   height: number
 }
 
-function Plot({ chart, width, height }: PlotProps) {
+// The values box shows where the pointer is over the graph, and the newest values while the graph has the keyboard
+// focus (WCAG 2.2 1.4.13, useHoverTip): Escape hides it, and the pointer moved onto it keeps it where it is.
+export function Plot({ chart, width, height }: PlotProps) {
   const [hoverT, setHoverT] = useState<number | null>(null)
+  const tip = useHoverTip<'pointer' | 'focus'>()
   const narrow = width < NARROW
   const m = { top: 6, right: 8, bottom: 18, left: narrow ? 44 : 60 }
   const w = Math.max(10, width - m.left - m.right)
@@ -44,21 +48,25 @@ function Plot({ chart, width, height }: PlotProps) {
   const y = (v: number) => m.top + h - ((v - v0) / (v1 - v0)) * h
   const vTicks = niceTicks(v0, v1, narrow ? 3 : 4)
   const tTicks = niceTicks(t0, t1, Math.max(2, Math.floor(w / 90)))
-  const hover = hoverT === null ? null : chart.series
-    .map((s, i) => ({ label: s.label, color: SERIES_COLORS[i % SERIES_COLORS.length], p: nearest(s.points, hoverT) }))
+  const at = tip.shown === 'pointer' ? hoverT : tip.shown === 'focus' ? hoverT ?? t1 : null
+  const hover = at === null ? null : chart.series
+    .map((s, i) => ({ label: s.label, color: SERIES_COLORS[i % SERIES_COLORS.length], p: nearest(s.points, at) }))
     .filter((s) => s.p !== null)
     .sort((a, b) => (b.p![1] - a.p![1]))
   const hoverX = hover && hover[0] ? x(hover[0].p![0]) : 0
 
   return (
-    <div className="relative" onMouseLeave={() => setHoverT(null)}>
+    <div className="relative" onMouseEnter={() => tip.enter('pointer')} onMouseLeave={() => { tip.leave(); setHoverT(null) }}>
       <svg
         width={width}
         height={height}
         role="img"
         aria-label={chart.title}
         data-testid="chat-chart-plot"
-        className="block select-none"
+        tabIndex={0}
+        onFocus={() => tip.focus('focus')}
+        onBlur={tip.blur}
+        className="block select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400"
         onMouseMove={(e) => {
           const rect = e.currentTarget.getBoundingClientRect()
           const px = e.clientX - rect.left
@@ -90,7 +98,7 @@ function Plot({ chart, width, height }: PlotProps) {
       </svg>
       {hover && hover.length > 0 && (
         <div
-          className="pointer-events-none absolute top-1 z-10 max-w-[70%] rounded-md border border-slate-600 bg-slate-900/95 px-2 py-1.5 text-[11px] text-slate-200 shadow-lg"
+          className="absolute top-1 z-10 max-w-[70%] rounded-md border border-slate-600 bg-slate-900/95 px-2 py-1.5 text-[11px] text-slate-200 shadow-lg"
           style={hoverX > width / 2 ? { right: width - hoverX + 8 } : { left: hoverX + 8 }}
           data-testid="chat-chart-tooltip"
         >
