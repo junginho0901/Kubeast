@@ -88,6 +88,7 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - A values file copied from 0.7.6 or earlier stops on its release image tag instead of keeping that release's images.
 - A chat answer whose stream was cut is saved once, under its question.
 - AI Chat says under its title why it could not read the AI model, such as no model set up yet, where it showed only "Start a new chat": at once, in two lines at most with the whole reason on hover.
+- Screen text follows the language rules in more places: Korean names Pod, Node, Namespace, Service and ServiceAccount in English and Role Management by its menu name; AI model notes, the AI Models form's own messages and the text a window writes when a failure carries no reason are in the screen's language; empty fields of the dashboard windows and the Cluster View pod show `-`; the PriorityClasses list says Global Default as Yes or No; a Secret with no data says None.
 - For development: tests that failed now and then on a busy runner, or read one pod where a service can run two, wait on what they check, and the guard's build to compare with (`scripts/before-stack.sh up <tag>`) takes the probes of that tag's chart.
 
 [0.7.8]: https://github.com/junginho0901/Kubeast/compare/v0.7.7...v0.7.8
