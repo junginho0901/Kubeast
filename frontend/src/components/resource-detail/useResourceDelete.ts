@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 
 import { api } from '@/services/api'
 import { announceDeleted } from '@/services/createdNoticeStore'
@@ -40,6 +41,7 @@ interface Args {
 }
 
 export function useResourceDelete({ target, close }: Args) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -255,7 +257,7 @@ export function useResourceDelete({ target, close }: Args) {
           return
         }
       }
-      throw new Error('Delete is not supported for this resource.')
+      throw new Error(t('common.deleteNotSupported', 'Delete is not supported for this resource.'))
     },
     onSuccess: async (_data, { kind, ns, name, target: deleted }) => {
       // Unmount the drawer before invalidating: the describe queries below
@@ -553,7 +555,7 @@ export function useResourceDelete({ target, close }: Args) {
     onError: (err: any, { target: refused }) => {
       // the reason goes to the Delete window of the object refused, not to one of the object the drawer moved to
       if (objectOf(refused) !== shownRef.current) return
-      const detail = err?.response?.data?.detail || err?.message || 'Failed to delete resource.'
+      const detail = err?.response?.data?.detail || err?.message || t('common.deleteFailed', 'Failed to delete resource.')
       setDeleteError(String(detail))
     },
   })

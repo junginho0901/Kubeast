@@ -335,3 +335,70 @@ tests:
       - failedTemplate:
           errorPattern: "resources.aiService.requests.cpu, which is not set"
         template: checks/replicas.yaml
+
+  - it: refuses the file recording store on two k8s-service pods, which would mount the one volume
+    set:
+      sessionRecording.enabled: true
+      sessionRecording.storage: file
+      sessionRecording.fileVolume: {persistentVolumeClaim: {claimName: kubeast-recordings}}
+      replicas.k8sService: 2
+    asserts:
+      - failedTemplate:
+          errorPattern: "sessionRecording.storage file and replicas.k8sService 2: every k8s-service pod mounts the store, and one file volume is mounted by one pod — use s3 or database"
+        template: checks/replicas.yaml
+
+  - it: refuses the file recording store with autoscaling on k8s-service, as it can grow to maxReplicas
+    set:
+      sessionRecording.enabled: true
+      sessionRecording.storage: file
+      sessionRecording.fileVolume: {persistentVolumeClaim: {claimName: kubeast-recordings}}
+      autoscaling.k8sService.enabled: true
+      autoscaling.k8sService.minReplicas: 1
+    asserts:
+      - failedTemplate:
+          errorPattern: "sessionRecording.storage file and autoscaling.k8sService up to 3 pods: .* use s3 or database"
+        template: checks/replicas.yaml
+
+  - it: lets one k8s-service pod keep the file recording store
+    set:
+      sessionRecording.enabled: true
+      sessionRecording.storage: file
+      sessionRecording.fileVolume: {persistentVolumeClaim: {claimName: kubeast-recordings}}
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/replicas.yaml
+
+  - it: lets an HPA of one k8s-service pod at most keep the file recording store
+    set:
+      sessionRecording.enabled: true
+      sessionRecording.storage: file
+      sessionRecording.fileVolume: {persistentVolumeClaim: {claimName: kubeast-recordings}}
+      autoscaling.k8sService.enabled: true
+      autoscaling.k8sService.minReplicas: 1
+      autoscaling.k8sService.maxReplicas: 1
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/replicas.yaml
+
+  - it: lets two k8s-service pods record to s3
+    set:
+      sessionRecording.enabled: true
+      sessionRecording.storage: s3
+      sessionRecording.s3.bucket: kubeast-sessions
+      replicas.k8sService: 2
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/replicas.yaml
+
+  - it: lets autoscaling run k8s-service recording to the database
+    set:
+      sessionRecording.enabled: true
+      sessionRecording.storage: database
+      autoscaling.k8sService.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/replicas.yaml

@@ -1775,6 +1775,7 @@
       "approve": "Approve and run",
       "reject": "Reject",
       "hint": "Runs as you, with the arguments shown above.",
+      "requestFailed": "request failed",
       "status": {
         "pending": "awaiting approval",
         "approved": "running",
@@ -2158,6 +2159,8 @@
     "loadErrorEmptyNetworkReason": "Could not load {{resource}} (no response from the server): {{reason}}",
     "retry": "Retry",
     "deleteKind": "Delete {{kind}}",
+    "deleteNotSupported": "Delete is not supported for this resource.",
+    "deleteFailed": "Failed to delete resource.",
     "deleteKindConfirm": "Are you sure you want to delete {{kind}} \"{{name}}\"?",
     "deleteKindConfirmNs": "Are you sure you want to delete {{kind}} \"{{name}}\" in \"{{namespace}}\"?",
     "unknown": "Unknown",
@@ -2927,6 +2930,7 @@
     "sweepDone": "Sweep done: {{count}} account(s) locked.",
     "sweepFailed": "The sweep failed: {{reason}}",
     "actionFailed": "The action failed.",
+    "updateFailed": "Failed to update user",
     "loading": "Loading...",
     "title": "User Management",
     "subtitle": "Change account levels (Pending, Member, Admin). Read and Write are granted per cluster.",
@@ -3401,6 +3405,7 @@
     "refresh": "Refresh",
     "noResults": "No resources match your query",
     "noResultsHint": "Check your expression syntax or try a different query",
+    "unreadable": "The expression could not be read: {{reason}}",
     "noResources": "Select resource types to search",
     "tooManyResults": "Found {{total}} results. Showing first {{max}}.",
     "examplesTitle": "Example Queries",
@@ -3408,7 +3413,7 @@
       "podsNotRunning": "Pods that are not Running",
       "labelApp": "Everything labelled app=nginx",
       "replicasOver3": "Deployments with more than 3 replicas",
-      "restartsOver5": "Pods restarted more than 5 times",
+      "restartsOver5": "Pods whose first container restarted more than 5 times",
       "configMapWithData": "ConfigMaps that carry data",
       "completedJobs": "Completed jobs (not suspended)",
       "loadBalancerServices": "Services of type LoadBalancer",
@@ -3640,7 +3645,6 @@
     "dataKeys": "Data Keys",
     "data": "Data",
     "searchKeys": "Search keys...",
-    "noData": "No data entries.",
     "ownerReferences": "Owner References",
     "maskedHint": "Values are hidden without the resource.secret.reveal permission.",
     "yamlMaskedNote": "A value shown as *** stays as it is when you save, as long as its line is there. To change one, write the new value over it. To remove one, delete its line.",
@@ -4077,7 +4081,9 @@
       "noChangeMasked": "The manifests of these two revisions read the same as far as you can see: values hidden from you are not compared here. Rolling back still records a new revision with that revision's values.",
       "cancel": "Cancel",
       "apply": "Apply rollback",
-      "applying": "Rolling back..."
+      "applying": "Rolling back...",
+      "dryRunFailed": "dry-run failed",
+      "rollbackFailed": "rollback failed"
     },
     "upgrade": {
       "edit": "Edit values",
@@ -4088,6 +4094,8 @@
       "noChange": "No changes will be applied.",
       "apply": "Apply upgrade",
       "applying": "Upgrading...",
+      "dryRunFailed": "dry-run failed",
+      "upgradeFailed": "upgrade failed",
       "maskedNote": "A value shown as <REDACTED:…> stays as it is while its line does. Write over it to change it, or delete the line to remove it.",
       "keptMasked": "Hidden values stay as they are: {{names}}",
       "changedMasked": "Hidden values you wrote over or removed: {{names}}",
@@ -4101,6 +4109,7 @@
       "passed": "All tests passed",
       "failed": "Tests failed — see per-hook details below",
       "noHooks": "This chart defines no test hooks.",
+      "runFailed": "test failed",
       "close": "Close"
     },
     "uninstall": {
@@ -4112,7 +4121,9 @@
       "confirmLabel": "Type the release name \"{{name}}\" to confirm.",
       "cancel": "Cancel",
       "apply": "Uninstall",
-      "applying": "Uninstalling..."
+      "applying": "Uninstalling...",
+      "dryRunFailed": "dry-run failed",
+      "uninstallFailed": "uninstall failed"
     },
     "error": {
       "notFound": "Cluster {{cluster}} has no release {{name}} in namespace {{namespace}}. Pick another cluster or find it in the release list.",
@@ -4351,6 +4362,25 @@
         "max_tokens": "Enter the answer length as a whole number from 1 to 1,000,000.",
         "tool_result_chars": "Enter the tool result length as a whole number from 1,000 to 200,000.",
         "in_json": "Set max_tokens and tool_result_chars in the fields above, not in the generation options."
+      },
+      "optionsNotObject": "Options must be a JSON object, e.g. {\"temperature\": 0.7}",
+      "optionsInvalidJson": "Invalid JSON",
+      "apiKeyEnvMissing": "Enter the name of the env var that holds the API key",
+      "testFailed": "Test failed",
+      "note": {
+        "deprecated": "deprecated",
+        "recommended": "recommended",
+        "lowestCost": "lowest cost",
+        "mostCapable": "most capable",
+        "usesTheLeast": "uses the least",
+        "legacy": "legacy",
+        "tools7b": "7b, tools",
+        "tools14b": "14b, tools"
+      },
+      "noTools": "no tools",
+      "providerName": {
+        "ollama": "Ollama (Local)",
+        "custom": "Custom / Other"
       },
       "usedFor": "Used for",
       "usedForNone": "Not used now",
@@ -4752,7 +4782,8 @@
     "player": {
       "title": "Session recording",
       "text": "Text",
-      "close": "Close"
+      "close": "Close",
+      "loadFailed": "player failed to load"
     }
   },
   "alertInbox": {

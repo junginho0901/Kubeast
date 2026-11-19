@@ -89,7 +89,7 @@ describe('the Node drawer', () => {
   it('reads in Korean', () => {
     const html = render('ko', { ...NODE, allocated_resources: ROWS, allocated_scope: ['a'] })
     expect(html).toContain('할당된 리소스')
-    expect(html).toContain('네임스페이스')
+    expect(html).toContain('내 Namespace(a)의 Pod만 셉니다.')
   })
 
   it('names the time since the Ready condition changed for what it is, not an uptime', () => {

@@ -53,13 +53,18 @@ export function kubectlOk(args: string[], opts: { input?: string; timeout?: numb
   }
 }
 
-// Another kind cluster's kubeconfig as the install's pods reach it (`--internal`: the control-plane container's name).
-export function internalKubeconfig(kind: string): string | null {
-  try {
-    return execFileSync('kind', ['get', 'kubeconfig', '--internal', '--name', kind], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] })
-  } catch {
-    return null
-  }
+// A cluster the install has not registered, as two kubeconfigs its pods can use: an admin credential and a
+// ServiceAccount token that may get namespace kube-system and nothing else. auth-service takes a new kubeconfig only for
+// the cluster a registration points at (kube-system UID), so the cluster change these tests make is a credential change.
+export type RotationCluster = { admin: string; limited: string; limitedUser: string }
+export const ROTATION_NEEDS = 'needs E2E_FAULT_ROTATE_ADMIN_KUBECONFIG, E2E_FAULT_ROTATE_SA_KUBECONFIG and E2E_FAULT_ROTATE_SA_USER: '
+  + 'a cluster the install has not registered, as admin and as a ServiceAccount that may get namespace kube-system only (README "A cluster for the credential change")'
+export function rotationCluster(): RotationCluster | null {
+  const admin = process.env.E2E_FAULT_ROTATE_ADMIN_KUBECONFIG
+  const limited = process.env.E2E_FAULT_ROTATE_SA_KUBECONFIG
+  const limitedUser = process.env.E2E_FAULT_ROTATE_SA_USER
+  if (!admin || !limited || !limitedUser) return null
+  return { admin: fs.readFileSync(admin, 'utf8'), limited: fs.readFileSync(limited, 'utf8'), limitedUser }
 }
 
 // kubectl on another kind cluster (the one a test drains or registers), null when there is no such kind cluster.
@@ -327,7 +332,8 @@ export async function rolledOutAsync(deploy: string, timeoutSeconds = 180) {
 }
 
 // Scales a Deployment to 0 and waits until none of its pods is left (podsOf counts a pod being deleted, which still
-// answers through its preStop and grace: Redis has a 5 s preStop), so what a test does "with it off" starts only then.
+// answers through its preStop and grace: the bundled Redis has no preStop, only the 30 s default grace), so what a
+// test does "with it off" starts only then.
 // The scale back is registered with atExit and given to whenGone before the scale to 0; bringBack scales back, waits
 // for the rollout and returns when.
 export async function takeDown(deploy: string, goneWithinMs = 120_000): Promise<{ offAt: number; bringBack: () => Promise<number> }> {

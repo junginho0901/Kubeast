@@ -21,7 +21,6 @@ interface Props {
 export function PodDetailTabBody({ manifest, describeData, describeError, podRead = 'none' }: Props) {
   const {
     tr,
-    na,
     emptyValue,
     selectedPod,
     selectedContainer,
@@ -58,7 +57,6 @@ export function PodDetailTabBody({ manifest, describeData, describeError, podRea
           pod={selectedPod}
           containerSearchQuery={containerSearchQuery}
           onContainerSearchChange={setContainerSearchQuery}
-          na={na}
           emptyValue={emptyValue}
           tr={tr}
         />
@@ -85,7 +83,7 @@ export function PodDetailTabBody({ manifest, describeData, describeError, podRea
 
       {activeTab === 'describe' && !describeData && <DescribeFailure error={describeError} className="py-4" about={{ kind: 'Pod', name: selectedPod.name, namespace: selectedPod.namespace }} />}
       {activeTab === 'describe' && describeData && (
-        <PodDescribeTab data={describeData} na={na} tr={tr} />
+        <PodDescribeTab data={describeData} emptyValue={emptyValue} tr={tr} />
       )}
 
       {activeTab === 'rbac' && <PodRbacTab pod={selectedPod} tr={tr} />}

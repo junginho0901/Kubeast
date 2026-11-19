@@ -21,6 +21,7 @@ Kubeast의 서비스는 기본으로 하나씩 파드 1개로 뜹니다.
 | redis(차트 내장) | 안 됨, 1대 | 캐시와 바뀜 알림뿐. 새 파드는 비어서 시작하고 캐시는 다시 찹니다 | — |
 
 `redis.enabled: false`인데 `replicas.k8sService`나 `replicas.toolServer`가 1보다 크면 차트가 까닭을 말하고 설치를 막습니다.
+`sessionRecording.storage: file`인데 k8s-service가 2대 이상이어도(1보다 큰 `replicas.k8sService`, 또는 `maxReplicas`가 1보다 큰 `autoscaling.k8sService`) 막습니다. 모든 파드가 파일 볼륨 하나를 붙이게 되므로 `s3`나 `database`에 녹화하세요(파일 저장소의 배포 때 모습은 [운영](operations.md#터미널과-실시간-로그를-따로-맡는-서버)에 있습니다).
 `values-minimal.yaml`은 Redis를 끄므로 모두 1대입니다.
 
 ## 시작하기 전에
