@@ -133,9 +133,10 @@ CHART_VALUES="$OUT/chart-values.json"
 DUMP_FILE="$OUT/before-upgrade.dump"
 APP_SECRET=kubeast-secrets
 LOOKALIKE='rehearsal: stored before the name rule'
-# The roles of the group checks (section 11): FROM_VERSION writes each character outside ASCII as "-" in a role's
-# group, #865 as "~" and its code point. GR_CHART is bound by the chart (view), GR_REG by the template as on a
-# registered cluster (edit); GR_KEEP and GR_RENAMED make one group with #865, so the later is renamed.
+# The roles of the group checks (section 11, run only from a FROM_VERSION without #865): FROM_VERSION writes each
+# character outside ASCII as "-" in a role's group, #865 as "~" and its code point. GR_CHART is bound by the chart
+# (view), GR_REG by the template as on a registered cluster (edit); GR_KEEP and GR_RENAMED make one group with #865,
+# so the later is renamed.
 GROUPS_DESC='rehearsal: a name outside ASCII'
 GR_OLD='kubeast:role:---'
 GR_CHART='운영팀'; GR_CHART_NEW='kubeast:role:~c6b4~c601~d300'
@@ -413,6 +414,12 @@ from_holds() {
   info install "changes $FROM_VERSION holds already" "${held# } (schema $FROM_DB): their rows say so · ROLL_ALLOW $ROLL_ALLOW"
 }
 held_note() { printf '%s holds #%s already' "$FROM_VERSION" "$1"; } # held_note CHANGE — the start of such a row's detail
+# recording_owners_note — the end of the recording status row when FROM_VERSION's schema has session_recordings.owner:
+# its own k8s-service may have ended rec-reh-open (stored with no owner) before the upgrade. Nothing for 0.7.7.
+recording_owners_note() {
+  [ -n "$FROM_VALUES" ] && from_migrated 'session_recordings ADD COLUMN IF NOT EXISTS owner' \
+    && printf '· %s has recording owners: rec-reh-open, stored with none, is a row from before them there' "$FROM_VERSION"
+}
 pg_template_hash() { kc -n "$NS" get pods -l app=postgres -o jsonpath='{.items[0].metadata.labels.pod-template-hash}' 2>/dev/null; }
 # pg_restart_row — phase A, bundled PostgreSQL: restarted once by #868's settings, or, when FROM_VERSION holds #868,
 # replaced only if the candidate changed its pod template (pod-template-hash before and after the upgrade)
@@ -650,6 +657,8 @@ EOF
 # --- 3. install FROM_VERSION as a user does ---
 write_values_from() {
   local chart_role=""
+  # GROUPS_ON comes from the checkout here: from_holds turns section 11 off only once FROM_VERSION is installed, so a
+  # FROM_VERSION holding #865 keeps GR_CHART's chart role in the release's values, bound and not checked
   [ "$GROUPS_ON" = 1 ] && chart_role=$(printf '      - name: "%s"\n        clusterRoles: [view]' "$GR_CHART")
   cat > "$OUT/values-from.yaml" <<EOF
 # What install.sh sets, plus what the test data needs: access requests, custom roles that act on the cluster (one with
@@ -732,7 +741,8 @@ seed() {
   U1_PW=$(newpw); U2_PW=$(newpw); U3_PW=$(newpw); U4_PW=$(newpw); U5_PW=$(newpw)
   seed_write U1_PW U2_PW U3_PW U4_PW
   local n v body
-  # rh-u5 never signs in: seed_lookalikes makes its account level a role FROM_VERSION reads as Pending
+  # rh-u5 never signs in: seed_lookalikes makes its account level a role FROM_VERSION reads as Pending (from a
+  # FROM_VERSION holding #865 it stays an account of no role)
   for n in 1 2 3 4 5; do
     v="U${n}_PW"
     body=$(printf '{"name":"Rh User %s","email":"rh-u%s@%s","password":"%s","role_id":0,"team":"rh-team-a"}' "$n" "$n" "$DOMAIN" "${!v}")
@@ -784,7 +794,9 @@ seed() {
   call POST "/api/v1/sessions?cluster=$CLUSTER_ID" "$ATOK" '{"title":"rh-conversation-1"}'; expect "200 201" "the admin's conversation"
   seed_model_config
   login "rh-u2@$DOMAIN" "Wrong$(newpw)"
-  # Recordings stored in the database: one uploaded, one still open (written by FROM_VERSION, no owner) at the upgrade.
+  # Recordings stored in the database: one uploaded, one still open at the upgrade with no owner, as 0.7.7 wrote it. A
+  # FROM_VERSION whose schema has owners (session_recordings.owner) reads it as a row from before them and may end it
+  # itself before the upgrade (recording_owners_note).
   psql_q "INSERT INTO session_recordings (id, kind, user_email, cluster, namespace, target, container, storage, status, started_at, ended_at, bytes, uploaded_bytes, parts, truncated, location)
           VALUES ('rec-reh-uploaded', 'exec', 'rh-u3@$DOMAIN', '$CLUSTER_ID', 'default', 'web-1', 'app', 'database', 'uploaded', now() - interval '30 minutes', now() - interval '29 minutes', 0, 0, 0, false, ''),
                  ('rec-reh-open', 'exec', 'rh-u3@$DOMAIN', '$CLUSTER_ID', 'default', 'web-1', 'app', 'database', 'recording', now() - interval '2 minutes', NULL, 0, 0, 0, false, '')" > /dev/null \
@@ -903,7 +915,7 @@ compare_snapshots() {
   done
   [ -s "$OUT/before/users.txt" ] || row data "users snapshot has rows" FAIL "empty before snapshot"
   info data "chart ai.model, a new config's default (before → after)" "$(cat "$OUT/before/chart-ai-model.txt") → $(cat "$OUT/after/chart-ai-model.txt") · stored: $(tr '\n' ' ' < "$OUT/after/model-configs.txt")"
-  info data "recording status (before → after)" "$(paste -d' ' "$OUT/before/recording-status.txt" "$OUT/after/recording-status.txt" | awk '{print $1 ": " $2 " → " $4}' | tr '\n' ' ')"
+  info data "recording status (before → after)" "$(paste -d' ' "$OUT/before/recording-status.txt" "$OUT/after/recording-status.txt" | awk '{print $1 ": " $2 " → " $4}' | tr '\n' ' ')$(recording_owners_note)"
 }
 
 # live_checks PHASE: the stored passwords and key sign in, grants act as before, the audit chain verifies
