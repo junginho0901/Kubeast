@@ -445,6 +445,59 @@ export class Probe {
   }
 }
 
+// The gateway's NodePort as a kind node reaches it: the node (the container `docker exec` names) and the URL, or null
+// when the gateway Service has no NodePort or the node no InternalIP.
+export function gatewayOnNode(node: string): { node: string; url: string } | null {
+  const port = kubectlOk(['-n', NS, 'get', 'svc', 'gateway', '-o', 'jsonpath={.spec.ports[0].nodePort}']).out
+  const ip = kubectlOk(['get', 'node', node, '-o', 'jsonpath={.status.addresses[?(@.type=="InternalIP")].address}']).out
+  return /^\d+$/.test(port) && /^[\d.]+$/.test(ip) ? { node, url: `http://${ip}:${port}` } : null
+}
+
+// $1 base URL, $2 seconds at most, $3 seconds between requests, $4 each request's timeout, $5 stop file, then the paths.
+// The token comes on stdin and goes to a 0600 header file the script removes.
+const NODE_PROBE_SCRIPT = `IFS= read -r t
+umask 077
+h=$(mktemp); printf 'Authorization: Bearer %s\\nX-Requested-With: XMLHttpRequest\\n' "$t" > "$h"; t=
+base=$1; end=$(( $(date +%s) + $2 )); every=$3; tmo=$4; stop=$5; shift 5
+i=0
+while [ ! -e "$stop" ] && [ "$(date +%s)" -lt "$end" ]; do
+  n=$(( i % $# + 1 )); eval p=\\\${$n}; i=$(( i + 1 ))
+  ( at=$(date +%s%3N); r=$(curl -s -o /dev/null -m "$tmo" -H @"$h" -w '%{http_code} %{time_total}' "$base$p"); echo "$at $p $r $?" ) &
+  sleep "$every"
+done
+wait
+rm -f "$h" "$stop"`
+
+// A Probe that sends from inside a kind node (curl through `docker exec`), for an address the laptop reaches only
+// through Docker Desktop's published port, which takes a connection while nothing behind it answers and passes it on
+// later: a slow 200 the node itself never sees (kind on Docker Desktop only). Its times are the node's clock, compared
+// only with each other; it ends at stop() or after maxSeconds.
+export class NodeProbe {
+  private out = ''
+  private readonly stopFile = `/tmp/e2e-fault-node-probe-${STAMP}-${Math.random().toString(36).slice(2, 8)}`
+  private readonly done: Promise<void>
+  private readonly undo: () => void
+
+  constructor(private node: string, base: string, paths: string[], token: string, everyMs = 100, timeoutMs = 10_000, maxSeconds = 600) {
+    const child = spawn(DOCKER, ['exec', '-i', node, 'sh', '-c', NODE_PROBE_SCRIPT, 'sh', base, String(maxSeconds), String(everyMs / 1000), String(timeoutMs / 1000), this.stopFile, ...paths], { stdio: ['pipe', 'pipe', 'ignore'] })
+    child.stdout!.on('data', (b: Buffer) => { this.out += b.toString() })
+    this.done = new Promise((resolve) => child.on('close', () => resolve()))
+    child.stdin!.end(`${token}\n`)
+    this.undo = atExit(`stop the node probe on ${node}`, () => run([DOCKER, 'exec', node, 'touch', this.stopFile]))
+  }
+
+  async stop(): Promise<Answer[]> {
+    await new Promise<void>((resolve) => execFile(DOCKER, ['exec', this.node, 'touch', this.stopFile], () => resolve()))
+    await this.done
+    this.undo()
+    return this.out.split('\n').flatMap((line) => {
+      const [at, path, code, total, rc] = line.trim().split(' ')
+      if (!rc) return []
+      return [{ at: Number(at), path, status: Number(code), ms: Math.round(Number(total) * 1000), ...(rc !== '0' ? { error: `curl exit ${rc}` } : {}) }]
+    }).sort((a, b) => a.at - b.at)
+  }
+}
+
 export const notOk = (answers: Answer[], ok: (a: Answer) => boolean = (a) => a.status === 200) => answers.filter((a) => !ok(a))
 
 // The longest time between two requests of a Probe (answers in send order). Well past its everyMs, something held the

@@ -1,8 +1,8 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
 
 import {
-  CLUSTER, Probe, SEND_GAP_MS, type Answer, bearer, deploymentExists, expectProbeKeptSending, kubectl, kubectlAsync, login, longestGap, notOk, podsOf,
-  replicasOf, restartCounts, restartsSince, rolledOutAsync, show, sleep, NS,
+  CLUSTER, NodeProbe, Probe, SEND_GAP_MS, type Answer, bearer, containerOf, deploymentExists, expectProbeKeptSending, gatewayOnNode, kubectl, kubectlAsync,
+  login, longestGap, notOk, podsOf, replicasOf, restartCounts, restartsSince, rolledOutAsync, show, sleep, NS,
 } from './shared'
 
 // PR #856 (chart podShutdown.preStopSeconds): the Deployments a Service sends to wait in preStop before SIGTERM, so a
@@ -125,7 +125,10 @@ test.describe('pod shutdown: a rollout with requests in flight (PR #856, F-6 on 
       if (!pod) { misses.push(`${c.deploy}: no ready pod`); continue }
       const replicas = replicasOf(c.deploy)
       const periodS = Number(kubectl(['-n', NS, 'get', 'deploy', c.deploy, '-o', 'jsonpath={.spec.template.spec.containers[0].readinessProbe.periodSeconds}']) || '0')
-      const probe = new Probe(request, paths, headers, 100, HANG_MS * 2)
+      // the gateway's own pod is read from the kind node: Docker Desktop's published port holds a laptop's request while no gateway answers
+      const onNode = c.deploy === 'gateway' ? gatewayOnNode(containerOf(pod.name).node) : null
+      if (c.deploy === 'gateway' && !onNode) { misses.push('gateway: no NodePort or node address to send from the kind node'); continue }
+      const probe = onNode ? new NodeProbe(onNode.node, onNode.url, paths, token, 100, HANG_MS * 2) : new Probe(request, paths, headers, 100, HANG_MS * 2)
       await sleep(1_000)
       await kubectlAsync(['-n', NS, 'delete', 'pod', pod.name, '--wait=false'])
       await sleep(5_000)
@@ -146,7 +149,7 @@ test.describe('pod shutdown: a rollout with requests in flight (PR #856, F-6 on 
       const spanMs = failed.length ? Math.max(...failed.map((a) => a.at + a.ms)) - failed[0].at : 0
       const limitMs = (periodS + 5) * 1000
       const kinds = Object.entries(failed.reduce<Record<string, number>>((m, a) => ({ ...m, [a.status]: (m[a.status] ?? 0) + 1 }), {})).map(([s, n]) => `${s} ×${n}`).join(', ')
-      test.info().annotations.push({ type: 'gap with one pod', description: `${c.deploy}: ${spanMs} ms of answers other than 200 (limit ${limitMs} ms = readiness period ${periodS} s + 5 s), ${failed.length} of ${answers.length}${kinds ? `: ${kinds}` : ''}` })
+      test.info().annotations.push({ type: 'gap with one pod', description: `${c.deploy}${onNode ? ' (sent from the kind node)' : ''}: ${spanMs} ms of answers other than 200 (limit ${limitMs} ms = readiness period ${periodS} s + 5 s), ${failed.length} of ${answers.length}${kinds ? `: ${kinds}` : ''}` })
       if (spanMs > limitMs) misses.push(`${c.deploy} (1 pod): answers other than 200 for ${spanMs} ms, past ${limitMs} ms:\n${show(failed)}`)
     }
     expect(misses, 'Deployments whose deleted pod left a request failed or slow past what the pod count allows').toEqual([])
