@@ -139,7 +139,12 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
   and with Redis stopped (its 10 s keep alone): right before the change Redis has no pod, terminating ones included,
   and no ready endpoint.
 - F-8: every screen read answers 200 while Redis is off for 60 s (from the moment its last pod is gone) and while it
-  comes back, no restart of the pods that stayed, `kubeast:cache:` keys are in Redis again afterwards.
+  comes back, no restart of the pods that stayed, and a read of the Helm release list puts a
+  `kubeast:cache:helm|releases|` key in Redis within 20 s, before the outage and after it. A k8s-service connected to
+  Redis at start stays on it: while Redis is off its cache reads miss and its writes fail, and the next miss after Redis
+  answers writes there again. The probe's reads (pods page, overview, nodes, ConfigMaps, clusters) come from the
+  informers, the cluster or auth-service and write no key, so the check reads the release list (30 s in the cache,
+  `internal/helm/releases.go`).
 - F-8 for #857: a k8s-service started while Redis was down logs that it runs on the in-memory cache, logs within 15 s
   of Redis answering that its cache moves to Redis, and reads answer 200 throughout.
 - Depends on: the ACL file of #866 (`kubeast.redisUsersAcl`), the Secret `kubeast-redis-users` (or the one the redis
