@@ -179,6 +179,8 @@ type ClusterCalls struct {
 	// unanswered: a call the cluster took and answered 500 or more, or not before the deadline or the caller's leaving
 	// once its headers went out.
 	responded, gotAnswer, unreached, unanswered atomic.Bool
+	// waitedOut: a read ran out its clusterReadWait; readWait sends the request's other reads of the cluster no more.
+	waitedOut atomic.Bool
 }
 
 // WithClusterCalls gives ctx a record of its calls to cluster id; answered runs once, at the API server's first answer
@@ -224,7 +226,11 @@ func (t answerNotice) RoundTrip(req *http.Request) (*http.Response, error) {
 		WroteHeaders: func() { sent.Store(true) },
 	}))
 	resp, err := t.base.RoundTrip(req)
-	switch ended := req.Context().Err(); {
+	ended := req.Context().Err()
+	if errors.Is(context.Cause(req.Context()), errReadWaitOver) {
+		ended = context.DeadlineExceeded // readWait stopped waiting: a deadline, not a caller leaving
+	}
+	switch {
 	case resp != nil:
 		calls.responded.Store(true)
 		if resp.StatusCode < http.StatusInternalServerError {
