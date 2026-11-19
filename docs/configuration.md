@@ -199,10 +199,10 @@ ai:
                            # (in-cluster Ollama, internal LLM gateway).
                            # api_key_env is OPENAI/ANTHROPIC/GEMINI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN (claude-code only) or KUBEAST_AI_KEY_*
   redaction:
-    numbered: false        # with redaction.pii: every personal-data kind as its kind and a number per chat answer or investigation (<PHONE_1>),
+    numbered: false        # (alpha) with redaction.pii: every personal-data kind as its kind and a number per chat answer or investigation (<PHONE_1>),
                            # writes holding those refused, the asker's chat answer shows the values in their place;
                            # off: <EMAIL_n> within one text, <REDACTED:phone>, <REDACTED:rrn>, <REDACTED:card>, no value shown
-  timelineChanges: false   # offer the AI tool timeline's changes view (what changed in a window, no value read) and the chat's instruction to read it first
+  timelineChanges: false   # (alpha) offer the AI tool timeline's changes view (what changed in a window, no value read) and the chat's instruction to read it first
   refuseRepeatedReads: false # (alpha) true: a read made again with the same tool and arguments in one chat answer or investigation, less
                              # than 60 s after the first answered, is not run and the model is told where it has the result; off: as before
   toolResultDetails: false # (alpha) true: tool results say "M of N" for a cut answer, the window read when the call named none, why an empty
@@ -218,7 +218,7 @@ ai:
     # maxConcurrent: Claude Code runs per ai-service server (memory); maxConcurrentTotal: across every replica
     # (0 = maxConcurrent); queueWaitSeconds: how long a turn waits for a slot before it ends as busy;
     # memoryLimit: ai-service's memory limit while the provider is on, if larger than resources.aiService.limits.memory
-  toolResultsJSON: false   # true: the model reads each tool result as one JSON object, cluster text as JSON strings (ai-alerts.md "Planted instructions")
+  toolResultsJSON: false   # (alpha) true: the model reads each tool result as one JSON object, cluster text as JSON strings (ai-alerts.md "Planted instructions")
 
 # Built-in PostgreSQL (false = external DB) and Redis (false = k8s-service caches in memory; tool-server only listens there for cluster changes)
 postgresql:
@@ -240,7 +240,7 @@ redis:
 networkPolicy:
   enabled: true         # default deny, plus only the flows the services use. Harmless on CNIs that do not enforce NetworkPolicy (Flannel, etc.); kind's kindnet enforces it since kind 0.24
   aiEgress:
-    allowListOnly: false  # true (needs networkPolicy.enabled): ai-service connects out only to allowExternalEgressCIDRs, tool-server only to clusterAPIs, stsEndpoints and apiserverCIDR (cluster-requirements.md §15)
+    allowListOnly: false  # (alpha) true (needs networkPolicy.enabled): ai-service connects out only to allowExternalEgressCIDRs, tool-server only to clusterAPIs, stsEndpoints and apiserverCIDR (cluster-requirements.md §15)
     clusterAPIs: []       # the API servers of the registered clusters, this one's too, as VPC or subnet CIDRs (never a /32 on EKS): a CIDR opens 443 and 6443, {cidr, port} another port
     stsEndpoints: []      # when tool-server holds an IRSA role: the subnets of the STS VPC interface endpoint, {cidr, port: 443}
 

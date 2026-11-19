@@ -192,9 +192,9 @@ ai:
   model: "gpt-6-luna"
   baseUrlAllowedHosts: []  # 모델 설정의 base_url이 사설 주소(클러스터 안 Ollama, 사내 LLM 게이트웨이)면 여기에 등록하세요
   redaction:
-    numbered: false        # redaction.pii와 함께: 개인 값 네 종류를 채팅 답·조사마다 종류와 번호로(<PHONE_1>), 그 글자를 담은 쓰기는 거절.
+    numbered: false        # (alpha) redaction.pii와 함께: 개인 값 네 종류를 채팅 답·조사마다 종류와 번호로(<PHONE_1>), 그 글자를 담은 쓰기는 거절.
                            # 물은 사람의 채팅 답에는 그 자리에 값이 보임. 끄면 한 글 안의 <EMAIL_n>과 <REDACTED:phone>·<REDACTED:rrn>·<REDACTED:card>, 값 안 보임
-  timelineChanges: false   # AI 도구 timeline의 changes 보기(기간 동안 바뀐 것, 값은 읽지 않음)와 그것을 먼저 보라는 채팅 지시를 켭니다
+  timelineChanges: false   # (alpha) AI 도구 timeline의 changes 보기(기간 동안 바뀐 것, 값은 읽지 않음)와 그것을 먼저 보라는 채팅 지시를 켭니다
   refuseRepeatedReads: false # (alpha) true면 채팅 답·조사 하나 안에서 같은 도구·같은 인자의 읽기를 앞 호출이 답한 지 60초 안에 또 하면
                              # 실행하지 않고 그 결과가 어디 있는지 모델에 알려 줍니다. 끄면 전과 같습니다
   toolResultDetails: false # (alpha) true면 도구 결과에 잘린 답의 "M of N", 범위를 정하지 않았을 때 읽은 시간 범위, 빈 결과의 까닭,
@@ -210,7 +210,7 @@ ai:
     # maxConcurrent: 서버 한 대의 Claude Code 실행 수(메모리), maxConcurrentTotal: 복제본 전체(0 = maxConcurrent),
     # queueWaitSeconds: 칸을 기다리는 최대 시간. 넘으면 "바쁨"으로 끝납니다.
     # memoryLimit: 프로바이더가 켜져 있을 때 ai-service 메모리 한도. resources.aiService.limits.memory보다 클 때 씁니다
-  toolResultsJSON: false   # true면 모델이 도구 결과를 하나의 JSON 객체로, 클러스터 글을 JSON 문자열로 읽습니다(ai-alerts.md "심어 둔 지시")
+  toolResultsJSON: false   # (alpha) true면 모델이 도구 결과를 하나의 JSON 객체로, 클러스터 글을 JSON 문자열로 읽습니다(ai-alerts.md "심어 둔 지시")
 
 # 내장 PostgreSQL(false면 외부 DB)과 Redis(false면 k8s-service가 메모리에 캐시).
 # Redis에 캐시하는 곳은 k8s-service 하나이고, tool-server는 클러스터 바뀜 알림만 듣습니다.
@@ -233,7 +233,7 @@ redis:
 networkPolicy:
   enabled: true         # 기본 거부 + 서비스가 쓰는 흐름만 허용합니다. NetworkPolicy를 강제하지 않는 CNI(Flannel 등)에서는 영향이 없습니다. kind의 kindnet은 kind 0.24부터 강제합니다
   aiEgress:
-    allowListOnly: false  # true면(networkPolicy.enabled 필요) ai-service는 allowExternalEgressCIDRs로만, tool-server는 clusterAPIs·stsEndpoints·apiserverCIDR로만 나갑니다(cluster-requirements.md §15)
+    allowListOnly: false  # (alpha) true면(networkPolicy.enabled 필요) ai-service는 allowExternalEgressCIDRs로만, tool-server는 clusterAPIs·stsEndpoints·apiserverCIDR로만 나갑니다(cluster-requirements.md §15)
     clusterAPIs: []       # 등록한 클러스터(이 클러스터 포함)의 API 서버를 VPC·서브넷 CIDR로(EKS는 /32 금지) — CIDR은 443·6443, {cidr, port}는 그 포트
     stsEndpoints: []      # tool-server에 IRSA 롤이 있으면 STS VPC 인터페이스 엔드포인트의 서브넷, {cidr, port: 443}
 
