@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useId, useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useResourceDetail } from './ResourceDetailContext'
@@ -19,7 +19,7 @@ import {
   decodeSecretYaml,
 } from './resource-detail/utils'
 import { useResourceDelete } from './resource-detail/useResourceDelete'
-import { useDrawerFocus } from './resource-detail/drawerFocus'
+import { drawerKeydown, useDrawerFocus } from './resource-detail/drawerFocus'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { argoAppUrl, detectArgoApp } from './resource-detail/gitops'
 import { useResourceYaml } from './resource-detail/useResourceYaml'
@@ -124,6 +124,7 @@ export default function ResourceDetailDrawer() {
   const canDelete = !readOnlyKind && !resolving && mayDelete
   const panelRef = useRef<HTMLDivElement | null>(null)
   const titleRef = useRef<HTMLHeadingElement | null>(null)
+  const labelId = useId()
   const focusListOnClose = useDrawerFocus(objectId, panelRef, titleRef)
 
   const {
@@ -324,14 +325,7 @@ export default function ResourceDetailDrawer() {
 
   useEffect(() => {
     if (!target) return
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        // 위에 중첩된 모달(예: Delete 확인)이 떠 있으면 그 모달이 처리해야 한다.
-        if (!isTopModal()) return
-        e.stopPropagation()
-        handleCloseRef.current()
-      }
-    }
+    const onKeyDown = drawerKeydown(() => panelRef.current, isTopModal, () => handleCloseRef.current(), document)
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [target, isYamlDirty, isTopModal])
@@ -397,6 +391,10 @@ export default function ResourceDetailDrawer() {
       />
       <div
         ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`${labelId}-kind ${labelId}-title`}
+        data-testid="resource-drawer"
         className="fixed inset-y-0 right-0 w-full max-w-[740px] bg-slate-900 border-l border-hairline flex flex-col shadow-2xl chat-scroll-surface"
         style={{ zIndex: zIndex + 1 }}
       >
@@ -411,6 +409,7 @@ export default function ResourceDetailDrawer() {
           argo={argo}
           tab={tab}
           titleRef={titleRef}
+          labelId={labelId}
           onClose={handleClose}
           onGoBack={async () => {
             if (!(await confirmDiscardYaml())) return
