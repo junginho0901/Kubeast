@@ -89,6 +89,12 @@ cosign verify \
 and both commands work offline against a digest pinned in your values
 (`global.imageTag` may be a digest-pinned tag once the chart supports it).
 
+`scripts/verify-release.sh vX.Y.Z` runs these commands over every image and the
+chart of one release. It also runs each check narrowed to that release's tag,
+commit and workflow and against the attestations' copy in the registry, opens
+the SBOMs, and checks that a wrong ref, repository, identity or issuer is
+refused. It only reads (`gh`, `cosign`, `crane`, `helm`, `jq`).
+
 ## Enforcing it in a cluster
 
 The workflow only produces the evidence. To refuse unsigned images at admission,
