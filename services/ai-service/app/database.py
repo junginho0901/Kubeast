@@ -340,18 +340,6 @@ class DatabaseService:
             )
             return result.scalar_one_or_none()
     
-    async def list_sessions(self, user_id: str = "default", limit: int = 50) -> List[Session]:
-        """세션 목록 조회"""
-        async with self.async_session() as db:
-            from sqlalchemy import select
-            result = await db.execute(
-                select(Session)
-                .where(Session.user_id == user_id)
-                .order_by(Session.updated_at.desc())
-                .limit(limit)
-            )
-            return list(result.scalars().all())
-    
     async def update_session_title(self, session_id: str, title: str):
         """세션 제목 업데이트"""
         async with self.async_session() as db:
