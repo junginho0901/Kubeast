@@ -5,12 +5,14 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from app.services import provider_adapter
+from app.services import claude_code, provider_adapter
 from app.services.ai import model_errors, model_requests
 from app.services.investigation import outcomes, store
 from app.services.provider_adapter import ProviderAdapter
 
 MSG = [{"role": "user", "content": "hi"}]
+# The client before any test replaced it: a second serve() in one test must not build on the first one's Fake.
+_REAL_CLIENT = httpx.AsyncClient
 COMPLETION = {"id": "c", "object": "chat.completion", "created": 0, "model": "m",
               "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}]}
 
@@ -30,7 +32,7 @@ def serve(monkeypatch, status=200, body=None):
     def handler(request):
         return httpx.Response(status, json=body if body is not None else COMPLETION)
 
-    class Fake(httpx.AsyncClient):
+    class Fake(_REAL_CLIENT):
         def __init__(self, **_kw):
             super().__init__(transport=httpx.MockTransport(handler))
 
@@ -66,12 +68,13 @@ async def test_an_answered_call_counts_ok_and_a_refused_key_counts_auth(monkeypa
 
 def test_a_busy_claude_code_run_sends_nothing_and_counts_nothing():
     before = requests_by_outcome()
-    model_requests.failed(SimpleNamespace(busy=True))
+    busy = claude_code.ClaudeCodeBusy()
+    assert model_errors.classify(busy).kind == model_errors.BUSY
+    model_requests.failed(busy)
     model_requests.failed(TimeoutError("timed out"))
     after = requests_by_outcome()
     assert after["unavailable"] == before["unavailable"] + 1
     assert sum(after.values()) == sum(before.values()) + 1
-    assert model_errors.classify(SimpleNamespace(busy=True)).kind == model_errors.BUSY
 
 
 def investigations():
