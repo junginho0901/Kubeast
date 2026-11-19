@@ -199,3 +199,20 @@ async def test_a_new_card_is_made_when_ending_them_fails(db, rows, monkeypatch):
     monkeypatch.setattr(db, "transition_tool_approval", broken)
     assert (await _card(db)).status == "pending"
     assert (await db.get_tool_approval(left.id)).status == "approved" and not _interrupts(rows)
+
+
+async def test_a_model_setting_that_cannot_be_used_leaves_the_card_waiting(db, rows, monkeypatch):
+    async def unusable():
+        raise HTTPException(status_code=503, detail="No model is configured.")
+
+    ran = []
+    api = _api(monkeypatch, build=unusable, ran=ran)
+    row = await _card(db)
+    with pytest.raises(HTTPException) as e:
+        await api.approve_tool_approval(row.id, request=SimpleNamespace(), authorization="Bearer x")
+    assert e.value.status_code == 503
+    assert (await db.get_tool_approval(row.id)).status == "pending" and rows == [] and ran == []
+
+    api = _api(monkeypatch, ran=ran)
+    answer = await api.approve_tool_approval(row.id, request=SimpleNamespace(), authorization="Bearer x")
+    assert answer["status"] == "executed" and ran == ["k8s_patch_resource"]

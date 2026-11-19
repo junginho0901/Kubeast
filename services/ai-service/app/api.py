@@ -414,6 +414,10 @@ async def approve_tool_approval(
         # The reason names the database host; it stays in the log.
         logger.warning("audit: refusing unrecorded tool run (approval=%s tool=%s): %s", approval.id, approval.tool, e)
         raise HTTPException(status_code=503, detail="audit unavailable")
+    # Run with the stored arguments as the approving user: tool-server re-checks
+    # ai.tool.<name> in the cluster (C1) and sends the call as the user (C2). Built while
+    # the approval is pending: a model setting that cannot be used (503) leaves the card to approve later.
+    ai_service = await _build_ai_service(authorization, cluster_name=approval.cluster)
     # One statement moves pending → approved; a second click, or two clicks
     # racing, finds the row no longer pending and stops here.
     approval = await db.transition_tool_approval(approval.id, "pending", status="approved", decided_at=utcnow())
@@ -435,9 +439,6 @@ async def approve_tool_approval(
         _invalidate_caches()
         raise HTTPException(status_code=503, detail="audit unavailable")
 
-    # Run with the stored arguments as the approving user: tool-server re-checks
-    # ai.tool.<name> in the cluster (C1) and impersonates the user (C2).
-    ai_service = await _build_ai_service(authorization, cluster_name=approval.cluster)
     args = dict(approval.args or {})
     status, error = "executed", None
     # A card from before the role lost the permission: tool-server would refuse too, this says why without calling it.
