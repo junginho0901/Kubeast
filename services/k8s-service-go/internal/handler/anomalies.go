@@ -504,7 +504,9 @@ func (h *Handler) traceChecksRefusal(r *http.Request, namespace string, win anom
 
 // logChecks estimates the namespace's log volume over both windows from the store's index, then, under
 // features.anomalyRank.logMaxBytes and with lines there, reads the error shapes and counts. Three store queries were
-// taken; those not made go back.
+// taken; those not made go back. When the index counts no line, a read of one line over the same range, made under the
+// estimate's query, says whether there is one: Loki's index leaves out the lines its ingesters hold and have not
+// flushed, and a Loki run as one process (-target=all) asks no ingester for it, so a recent window can count none.
 func (h *Handler) logChecks(r *http.Request, run func(func(context.Context)), budget *anomalyBudget, reads *storeReads, namespace string, wl *anomaly.Workload, win anomaly.Window) []anomaly.CheckResult {
 	id, _ := cluster.FromContext(r.Context())
 	cfg := h.logSearch.Config()
@@ -537,7 +539,18 @@ func (h *Handler) logChecks(r *http.Request, run func(func(context.Context)), bu
 		return both(fmt.Sprintf("too large: the log store's index puts these logs over the window and the one before at %s, past features.anomalyRank.logMaxBytes (%s); narrow with workload_kind and workload_name or a shorter window",
 			logsearch.Size(vol.Bytes), logsearch.Size(limit)))
 	case vol.Entries == 0:
-		return both("the log store holds no lines for this namespace (or workload) in the window or the one before")
+		var res logsearch.Result
+		var qerr error
+		run(func(c context.Context) {
+			res, qerr = h.logSearch.Query(c, logsearch.QueryRequest{Cluster: string(id), Namespace: namespace, Query: selector, Start: before.Start, End: win.End, Limit: 1})
+			reads.sent(res.EffectiveQuery, qerr)
+		})
+		switch {
+		case qerr != nil:
+			return both(readFailure("the log store", qerr))
+		case len(res.Lines) == 0:
+			return both("the log store holds no lines for this namespace (or workload) in the window or the one before")
+		}
 	}
 
 	var (

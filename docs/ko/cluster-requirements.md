@@ -490,7 +490,8 @@ Loki는 최근 3시간치 중 창 안에서 30줄 이상 나온 패턴만 돌려
 
 미리 좁히기의 로그 검사(`anomaly_rank`):
 
-- 먼저 `index/stats`로 기간과 그 앞 구간의 그 네임스페이스 스트림 양을 묻습니다. `features.anomalyRank.logMaxBytes`(10 GiB)를 넘거나, 줄이 하나도 없거나, Loki가 그 API를 주지 않으면 두 검사 모두 못 함으로 적힙니다.
+- 먼저 `index/stats`로 기간과 그 앞 구간의 그 네임스페이스 스트림 양을 묻습니다. `features.anomalyRank.logMaxBytes`(10 GiB)를 넘거나 Loki가 그 API를 주지 않으면 두 검사 모두 못 함으로 적힙니다.
+- `index/stats`가 줄을 하나도 세지 않으면 같은 두 구간을 `query_range`로 한 줄만 읽어 줄이 있는지 보고, 거기에도 줄이 없으면 두 검사 모두 못 함으로 적힙니다. 색인은 Loki의 ingester가 들고 있고 아직 flush하지 않은 줄을 빼고 세며, 한 프로세스로 도는 Loki(`-target=all`)는 ingester에 묻지 않으므로 최근 구간은 0으로 나올 수 있습니다(Loki 3.7.9 `pkg/loki/modules.go` `setupAsyncStore`). 이 읽기는 그때만, 답 하나에 한 번, 어림의 저장소 질의 안에서 합니다.
 - 오류 모양 검사는 같은 스트림의 `patterns`를 두 구간에 걸쳐 읽습니다. Loki의 `level`이 error·fatal·critical이거나, level이 없고 모양에 `error`·`exception`·`fatal`·`panic`이 있으면 오류 모양으로 칩니다. 앞 구간의 패턴이 Loki에 없으면(위의 최근 3시간) 못 함으로 적힙니다.
 - 오류 줄 수 검사는 `sum by (<컨테이너 라벨>) (count_over_time({…} |~ "(?i)(error|exception|fatal|panic)" [<기간>]))`를 기간 길이를 step으로 한 번 돌립니다. 스트림에 `features.logSearch.labels`의 컨테이너 라벨이 있어야 합니다.
 - 워크로드를 주면 두 검사 모두 파드 라벨(`<이름>-.*`)로 그 파드만 봅니다.
