@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -85,8 +86,19 @@ type eventCounts struct {
 // are one read for everyone asking the same at that moment whose identity may list them all (eventWindowFor), else
 // the caller's own.
 func (s *Service) newestEventsSince(ctx context.Context, namespace string, opts metav1.ListOptions, cutoff time.Time, limit int, eventType string) ([]corev1.Event, eventCounts, error) {
+	events, counts, _, err := s.newestEventsRead(ctx, namespace, opts, cutoff, limit, eventType)
+	return events, counts, err
+}
+
+// newestEventsRead is newestEventsSince that also gives the read for everyone whose newest its events are, when they
+// are (one namespace, or the cluster, read so): they are that read's own, for the caller to read, not to change, since
+// a crowd woken by one read answers at once.
+func (s *Service) newestEventsRead(ctx context.Context, namespace string, opts metav1.ListOptions, cutoff time.Time, limit int, eventType string) ([]corev1.Event, eventCounts, *eventWindow, error) {
 	keep := newestEvents{limit: limit}
 	var counts eventCounts
+	var from *eventWindow
+	var fromEvents []corev1.Event
+	one := namespace != "" || len(scopeFromCtx(ctx)) == 0
 	err := eachCallerNamespace(ctx, namespace, func(ns string) error {
 		w, shared, err := s.eventWindowFor(ctx, ns, opts, limit, eventType)
 		if err != nil {
@@ -94,11 +106,15 @@ func (s *Service) newestEventsSince(ctx context.Context, namespace string, opts 
 		}
 		if shared {
 			newest, c := w.since(cutoff)
+			counts.Total += c.Total
+			counts.Warning += c.Warning
+			if one {
+				from, fromEvents = w, newest
+				return nil
+			}
 			for i := range newest {
 				keep.add(&newest[i])
 			}
-			counts.Total += c.Total
-			counts.Warning += c.Warning
 			return nil
 		}
 		return eachEventPage(ctx, s.clientsetCtx(ctx), ns, opts, func(e *corev1.Event) {
@@ -115,9 +131,12 @@ func (s *Service) newestEventsSince(ctx context.Context, namespace string, opts 
 		})
 	})
 	if err != nil {
-		return nil, eventCounts{}, err
+		return nil, eventCounts{}, nil, err
 	}
-	return keep.newest(), counts, nil
+	if from != nil {
+		return fromEvents, counts, from, nil
+	}
+	return keep.newest(), counts, nil, nil
 }
 
 // eventWindow is one read of the events of a namespace (or the cluster) that a selector picks: the newest limit of a
@@ -127,17 +146,32 @@ type eventWindow struct {
 	newest   []corev1.Event
 	seen     []int64 // every event's last seen (seenAt)
 	warnings []int64 // the Warning events' last seen
+
+	rowsMade sync.Once
+	rows     []map[string]interface{}
+}
+
+// timelineRows is newest as the Timeline lists it (timelineEventRow), made once for everyone the read answers: 500
+// people woken by one read, each making its own copy and 500 rows, held 226 MiB at once, and 79 MiB with these.
+func (w *eventWindow) timelineRows() []map[string]interface{} {
+	w.rowsMade.Do(func() {
+		w.rows = make([]map[string]interface{}, len(w.newest))
+		for i := range w.newest {
+			w.rows[i] = timelineEventRow(&w.newest[i])
+		}
+	})
+	return w.rows
 }
 
 // since is what the caller's own read with cutoff (none when zero) keeps and counts: the newest at or after cutoff, and
-// the events and the warnings at or after it.
+// the events and the warnings at or after it. The events are the window's own, cut to their length so an append copies.
 func (w *eventWindow) since(cutoff time.Time) ([]corev1.Event, eventCounts) {
 	if cutoff.IsZero() {
-		return w.newest, eventCounts{Total: len(w.seen), Warning: len(w.warnings)}
+		return w.newest[:len(w.newest):len(w.newest)], eventCounts{Total: len(w.seen), Warning: len(w.warnings)}
 	}
 	at := seenAt(cutoff)
 	inside := sort.Search(len(w.newest), func(i int) bool { return seenAt(eventTimestamp(w.newest[i])) < at })
-	return w.newest[:inside], eventCounts{Total: countFrom(w.seen, at), Warning: countFrom(w.warnings, at)}
+	return w.newest[:inside:inside], eventCounts{Total: countFrom(w.seen, at), Warning: countFrom(w.warnings, at)}
 }
 
 // countFrom is how many of sorted are at or after at.

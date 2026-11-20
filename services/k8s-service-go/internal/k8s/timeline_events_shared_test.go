@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -35,12 +36,22 @@ type windowCluster struct {
 	// cacheRefused refuses the events to kubeast:cache; hold holds its first pages until closed
 	cacheRefused bool
 	hold         chan struct{}
+	released     sync.Once
 	events       []corev1.Event
 
 	mu         sync.Mutex
 	pages      map[string]int // every page of events asked, by user
 	firstPages map[string]int // the first pages, one a read, by user
 	reviews    int
+}
+
+// release lets the held pages go, once; start makes it run before the server closes, which waits for them.
+func (a *windowCluster) release() {
+	a.released.Do(func() {
+		if a.hold != nil {
+			close(a.hold)
+		}
+	})
 }
 
 func (a *windowCluster) count(user string) (pages, reads int) {
@@ -225,6 +236,7 @@ func (a *windowCluster) start(t *testing.T) (shared, own *Service) {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(a.serve))
 	t.Cleanup(srv.Close)
+	t.Cleanup(a.release)
 	userCfg := &rest.Config{Host: srv.URL, QPS: -1}
 	userCfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, "default") })
 	cs, err := kubernetes.NewForConfig(userCfg)
@@ -288,6 +300,8 @@ func TestACrowdOpeningTheTimelineReadsTheEventsOnceForEveryoneWhoMayListThem(t *
 		}()
 	}
 	if !eventually(t, 5*time.Second, func() bool { _, reads := api.count(overviewCacheUser); return api.reviewsSeen() >= n && reads >= 1 }) {
+		api.release()
+		wg.Wait()
 		t.Fatalf("%d reviews, the shared read not started", api.reviewsSeen())
 	}
 	ctx, cancel := context.WithTimeout(wideCaller("late@example.com"), 100*time.Millisecond)
@@ -298,7 +312,7 @@ func TestACrowdOpeningTheTimelineReadsTheEventsOnceForEveryoneWhoMayListThem(t *
 		t.Errorf("the timeline whose request ended while it waited: %v after %v", err, took)
 	}
 	time.Sleep(100 * time.Millisecond)
-	close(api.hold)
+	api.release()
 	wg.Wait()
 
 	pages, reads := api.count(overviewCacheUser)
@@ -413,5 +427,53 @@ func TestTimelineEventsAreTheCallersOwnWhenTheCacheIdentityIsRefused(t *testing.
 	}
 	if _, reads := api.count(overviewCacheUser); reads != 2 {
 		t.Errorf("kubeast:cache was asked for the events %d times, want once in each of the two places: its refusal holds for the next reads", reads)
+	}
+}
+
+// People woken by one read take its events and the Timeline's rows as that read made them, once: no copy each.
+func TestPeopleAnsweredByOneEventReadShareItsEventsAndRows(t *testing.T) {
+	api := &windowCluster{may: func(string, string) bool { return true }, hold: make(chan struct{}), events: windowEvents(time.Now().Truncate(time.Second))}
+	s, _ := api.start(t)
+	const n = 12
+	rows := make([]uintptr, n)
+	events := make([]*corev1.Event, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			res, err := s.GetNamespaceTimeline(wideCaller(fmt.Sprintf("t%02d@example.com", i)), "", 24, 500, "")
+			if err != nil || len(res.Events) != 500 {
+				t.Errorf("timeline %d: %v", i, err)
+				return
+			}
+			rows[i] = reflect.ValueOf(res.Events[0]).Pointer()
+		}()
+		go func() {
+			defer wg.Done()
+			evs, _, err := s.newestEventsSince(wideCaller(fmt.Sprintf("e%02d@example.com", i)), "", metav1.ListOptions{}, time.Time{}, 500, "")
+			if err != nil || len(evs) != 500 {
+				t.Errorf("events %d: %v", i, err)
+				return
+			}
+			events[i] = &evs[0]
+		}()
+	}
+	// the first read is held at its first page; the others wait for the one after it
+	if !eventually(t, 5*time.Second, func() bool { _, reads := api.count(overviewCacheUser); return api.reviewsSeen() >= 2*n && reads >= 1 }) {
+		api.release()
+		wg.Wait()
+		t.Fatalf("%d reviews, the shared read not started", api.reviewsSeen())
+	}
+	time.Sleep(100 * time.Millisecond)
+	api.release()
+	wg.Wait()
+	distinctRows, distinctEvents := map[uintptr]bool{}, map[*corev1.Event]bool{}
+	for i := 0; i < n; i++ {
+		distinctRows[rows[i]], distinctEvents[events[i]] = true, true
+	}
+	t.Logf("%d timelines: %d sets of rows; %d event lists: %d sets of events", n, len(distinctRows), n, len(distinctEvents))
+	if len(distinctRows) > 2 || len(distinctEvents) > 2 {
+		t.Errorf("%d sets of rows and %d sets of events for two reads each, want at most 2 each", len(distinctRows), len(distinctEvents))
 	}
 }

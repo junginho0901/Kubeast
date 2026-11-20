@@ -174,9 +174,14 @@ func (s *Service) getTimelineEvents(ctx context.Context, namespace, kind, name s
 		opts.FieldSelector = fmt.Sprintf("involvedObject.name=%s", name)
 	}
 
-	filtered, counts, err := s.newestEventsSince(ctx, namespace, opts, cutoff, limit, eventType)
+	filtered, counts, from, err := s.newestEventsRead(ctx, namespace, opts, cutoff, limit, eventType)
 	if err != nil {
 		return nil, eventCounts{}, fmt.Errorf("list timeline events: %w", err)
+	}
+	if from != nil {
+		// the read's own rows, for the answer to write; cut to their length so an append copies
+		n := len(filtered)
+		return from.timelineRows()[:n:n], counts, nil
 	}
 
 	result := make([]map[string]interface{}, 0, len(filtered))
