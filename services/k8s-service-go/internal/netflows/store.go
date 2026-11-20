@@ -587,11 +587,22 @@ func sendError(err error) error {
 	return fmt.Errorf("%w: %v", ErrUnavailable, err)
 }
 
+// failedAnswer is the start of a flow source's failed answer, for a message, and whether the answer is the API
+// server's own (a Kubernetes Status, proxypath.APIServerAnswer). A 401 or 403 with any other body is one the Relay or
+// Whisker, or an authenticating proxy in front of it, wrote itself — at an address no API server is in between.
+func failedAnswer(resp *http.Response) (detail string, cluster bool) {
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, proxypath.MaxStatusBytes+1))
+	_, cluster = proxypath.APIServerAnswer(resp.StatusCode, body)
+	return strings.TrimSpace(string(body[:min(len(body), 512)])), cluster
+}
+
 func statusError(resp *http.Response) error {
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-	detail := strings.TrimSpace(string(body))
+	detail, cluster := failedAnswer(resp)
 	switch resp.StatusCode {
 	case http.StatusUnauthorized, http.StatusForbidden:
+		if !cluster {
+			return fmt.Errorf("%w: the Relay (or a proxy in front of it) answered %d itself, not the cluster: %s", ErrUnavailable, resp.StatusCode, detail)
+		}
 		return fmt.Errorf("%w: the cluster refused the Relay read (%d): %s", ErrForbidden, resp.StatusCode, detail)
 	case http.StatusNotFound:
 		return fmt.Errorf("%w: no Hubble Relay Service there (404): %s", ErrRelayMissing, detail)
