@@ -14,8 +14,7 @@ import (
 // it the garbage collector lets the heap reach twice what is live before it
 // runs: 200 people opening Cluster View at once left about 100 MB live and
 // took the pod past 512 Mi. Set gives the collector 90 % of the cgroup limit,
-// the share the Go GC guide and that proposal suggest, unless GOMEMLIMIT is set;
-// SetShare gives another share (k8s-service 80 %).
+// the share the Go GC guide and that proposal suggest, unless GOMEMLIMIT is set.
 const memoryLimitShare = 0.9
 
 // A share of the limit stays for the service however much its children take: under it the collector would run all the
@@ -29,11 +28,7 @@ var cgroupMemoryFiles = []string{
 
 // Set gives the collector its share of the container's limit, less reserved bytes for what else runs in the container
 // (kubectl, for tool-server): the runtime knows nothing of a child's memory, and the cgroup counts it.
-func Set(reserved int64) { SetShare(memoryLimitShare, reserved) }
-
-// SetShare is Set with share of the container's limit in place of 90 %, for a service whose kernel memory (socket
-// buffers) the cgroup counts and the runtime does not.
-func SetShare(share float64, reserved int64) {
+func Set(reserved int64) {
 	if os.Getenv("GOMEMLIMIT") != "" {
 		return
 	}
@@ -41,13 +36,13 @@ func SetShare(share float64, reserved int64) {
 	if !ok {
 		return
 	}
-	n := goMemLimitShare(limit, share, reserved)
+	n := goMemLimit(limit, reserved)
 	debug.SetMemoryLimit(n)
-	slog.Info("memory limit from the container", "cgroup_bytes", limit, "share", share, "reserved_bytes", reserved, "gomemlimit_bytes", n)
+	slog.Info("memory limit from the container", "cgroup_bytes", limit, "reserved_bytes", reserved, "gomemlimit_bytes", n)
 }
 
-func goMemLimitShare(limit int64, share float64, reserved int64) int64 {
-	n := int64(float64(limit)*share) - reserved
+func goMemLimit(limit, reserved int64) int64 {
+	n := int64(float64(limit)*memoryLimitShare) - reserved
 	if least := int64(float64(limit) * leastShareOfLimit); n < least {
 		return least
 	}

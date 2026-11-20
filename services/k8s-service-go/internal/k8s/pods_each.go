@@ -13,7 +13,7 @@ import (
 )
 
 // defaultBigReads: one read of a 50 000-pod namespace asked 39 to 78 pages a second of the client's 100 and held up to
-// about 110 MiB, so two stay inside the GC's 410 MiB with the 90 MiB k8s-service holds anyway; three do not.
+// about 110 MiB, so two stay inside the GC's 461 MiB with the 90 MiB k8s-service holds anyway; three come near it.
 const defaultBigReads = 2
 
 // bigReadSlots bounds the reads of more than one page at once (BIG_READ_CONCURRENCY); the others wait their turn. It
