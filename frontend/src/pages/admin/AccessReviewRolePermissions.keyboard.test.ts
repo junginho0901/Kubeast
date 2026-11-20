@@ -15,19 +15,24 @@ vi.mock('@/hooks/useModalStack', () => ({ useModalStackEntry: () => ({ isTop: ()
 import { ModalFrame } from '@/components/ModalFrame'
 import { ModalOverlay } from '@/components/ModalOverlay'
 
-type Control = { focus: () => void; getClientRects: () => object[]; isConnected: boolean }
+type Control = { focus: () => void; getClientRects: () => object[]; isConnected: boolean; compareDocumentPosition: (other: Control) => number }
 let active: Control | null
 let opener: Control
 let first: Control
 let last: Control
+let order: Control[]
 let listeners: Set<(event: unknown) => void>
 const control = (): Control => {
-  const el = { focus: vi.fn(() => { active = el }), getClientRects: () => [{}], isConnected: true }
+  // in document order as made: Node.DOCUMENT_POSITION_FOLLOWING (4) or _PRECEDING (2)
+  const el: Control = { focus: vi.fn(() => { active = el }), getClientRects: () => [{}], isConnected: true,
+    compareDocumentPosition: (other) => (order.indexOf(other) > order.indexOf(el) ? 4 : 2) }
+  order.push(el)
   return el
 }
 beforeEach(() => {
   ui.top = true
   listeners = new Set()
+  order = []
   opener = control(); first = control(); last = control(); active = opener
   ui.overlay = { querySelectorAll: () => [first, last], contains: (el: unknown) => el === first || el === last }
   vi.stubGlobal('document', {

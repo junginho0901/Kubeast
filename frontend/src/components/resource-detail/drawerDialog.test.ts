@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { elementsOf, fakeRender, fakeUnmount, textsOf } from '@/testing/fakeHooks'
-import { drawerKeydown, keepTabIn } from './drawerDialog'
+import { drawerKeydown } from './drawerDialog'
+import { keepTabIn } from '@/utils/focusables'
 import { ResourceDetailHeader } from './ResourceDetailHeader'
 import { chatShortcutKeydown } from '@/hooks/useChatShortcut'
 import { focusChat, focusOrigin, returnFocus as returnChatFocus, shortcutStep } from '@/components/FloatingAIChat/focusReturn'
@@ -225,6 +226,7 @@ describe('a window opened over the drawer', () => {
   let doc: ((e: unknown) => void)[]
   let win: ((e: unknown) => void)[]
   let s: ReturnType<typeof scene>
+  let windowTitle: El
   let windowFirst: El
   let windowLast: El
   beforeEach(() => {
@@ -232,6 +234,7 @@ describe('a window opened over the drawer', () => {
     win = []
     s = scene()
     const box = s.page.el('window', null)
+    windowTitle = s.page.el('window title', box, { focusable: true })
     windowFirst = s.page.el('cancel', box, { tabbable: true })
     windowLast = s.page.el('confirm', box, { tabbable: true })
     ui.overlay = box
@@ -281,6 +284,19 @@ describe('a window opened over the drawer', () => {
     s.page.active = s.link
     press(tabKey())
     expect(s.page.active, 'with the window gone Tab goes round the drawer again').toBe(s.close)
+  })
+
+  it('keeps Tab in from a place in it out of the Tab order, as the drawer does from its title', () => {
+    fakeRender(() => ModalOverlay({ children: as<ReactNode>(null), onClose: vi.fn() }))
+    s.page.active = windowTitle
+    const back = press(tabKey(true))
+    expect(back.preventDefault).toHaveBeenCalledOnce()
+    expect(s.page.active, 'Shift+Tab from the title goes round to the last control, not out to the drawer').toBe(windowLast)
+
+    s.page.active = windowTitle
+    const e = press(tabKey())
+    expect(e.preventDefault, 'Tab from the title to the first control is the browser\'s').not.toHaveBeenCalled()
+    expect(s.page.active).toBe(windowTitle)
   })
 })
 
