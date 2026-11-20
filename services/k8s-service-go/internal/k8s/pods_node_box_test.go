@@ -947,11 +947,21 @@ func TestNodeBoxesWhileTheInformerTakesChanges(t *testing.T) {
 		}
 		return true
 	}
+	// the fake cluster's watch holds 100 events and panics past them: every 50 updates the loop below waits until the
+	// informer's store has the last one it made, so no more than 50 are ever unread however slowly the informer reads
+	informerRead := func(key, rv string) bool {
+		return eventually(t, 30*time.Second, func() bool {
+			obj, ok, _ := ci.pods.GetByKey(key)
+			r, _ := obj.(*podRow)
+			return ok && r != nil && r.rv == rv
+		})
+	}
 	moving, done := make(chan struct{}), make(chan struct{})
 	go func() {
 		defer close(done)
 		ctx := context.Background()
 		close(moving)
+		var lastKey, lastRV string
 		for i := 0; i < 800 || !readTwice(); i++ {
 			if i >= 200_000 {
 				return // the callers never got to read: the check below says so
@@ -963,10 +973,12 @@ func TestNodeBoxesWhileTheInformerTakesChanges(t *testing.T) {
 			}
 			got.Spec.NodeName = fmt.Sprintf("n%d", (i+1)%5)
 			got.ResourceVersion = fmt.Sprint(100 + i)
-			_, _ = cs.CoreV1().Pods(p.Namespace).Update(ctx, got, metav1.UpdateOptions{})
-			// the fake cluster's watch holds 100 events and panics past them: an API server's pace, not a flood
-			if i%5 == 4 {
-				time.Sleep(time.Millisecond)
+			if _, err := cs.CoreV1().Pods(p.Namespace).Update(ctx, got, metav1.UpdateOptions{}); err == nil {
+				lastKey, lastRV = p.Namespace+"/"+p.Name, got.ResourceVersion
+			}
+			if i%50 == 49 && lastKey != "" && !informerRead(lastKey, lastRV) {
+				t.Errorf("the informer did not read the update of %s to %s in 30 s", lastKey, lastRV)
+				return
 			}
 		}
 	}()
